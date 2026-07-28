@@ -1,6 +1,11 @@
 # Upstream source checkouts -- clone with tools/bootstrap_sources.py, never commit
 vendor/
 
+# Tournament results, and the engine scratch dirs (write dirs, archive
+# caches, demos) the harness runs matches in.
+tournaments/
+runtime/
+
 # Match harness output: start scripts, infologs, replays, result JSON.
 # matches/* rather than matches/ so the negation below actually applies -- git
 # does not descend into an ignored directory, so !matches/.gitkeep would be dead.

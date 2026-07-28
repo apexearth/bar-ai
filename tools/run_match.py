@@ -245,11 +245,20 @@ def run(args) -> int:
                 )
             game_name = sdd[0]["name"]
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    slug = "_vs_".join(a.label() for a in ais)[:60]
-    outdir = MATCHES / f"{stamp}-{slug}"
+    # Both directories are overridable so run_tournament.py can drive several
+    # matches at once: concurrent runs must not share a write dir (they would
+    # clobber each other's infolog and race on the archive cache) and must not
+    # race on an auto-generated output name.
+    if args.out:
+        outdir = Path(args.out)
+    else:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        slug = "_vs_".join(a.label() for a in ais)[:60]
+        outdir = MATCHES / f"{stamp}-{slug}"
+    write_dir = Path(args.write_dir) if args.write_dir else ENGINE_WRITE_DIR
+
     outdir.mkdir(parents=True, exist_ok=True)
-    ENGINE_WRITE_DIR.mkdir(parents=True, exist_ok=True)
+    write_dir.mkdir(parents=True, exist_ok=True)
 
     script = build_script(
         ais, map_name, game_name, args.minutes, args.seed,
@@ -273,9 +282,9 @@ def run(args) -> int:
     exe = env.spring if args.windowed else env.headless
     # BAR's tools/headless_testing/start.sh removes this before every run:
     # stale widget config silently enables/disables widgets between runs.
-    shutil.rmtree(ENGINE_WRITE_DIR / "LuaUI" / "Config", ignore_errors=True)
+    shutil.rmtree(write_dir / "LuaUI" / "Config", ignore_errors=True)
 
-    cmd = [str(exe), "--write-dir", str(ENGINE_WRITE_DIR)]
+    cmd = [str(exe), "--write-dir", str(write_dir)]
     cfg = REPO / "tools" / "headless.cfg"
     if cfg.exists():
         cmd += ["--config", str(cfg)]
@@ -312,7 +321,7 @@ def run(args) -> int:
 
     wall = time.time() - started
 
-    infolog_src = ENGINE_WRITE_DIR / "infolog.txt"
+    infolog_src = write_dir / "infolog.txt"
     infolog_text = ""
     if infolog_src.exists():
         infolog_text = infolog_src.read_text("utf-8", errors="replace")
@@ -327,7 +336,7 @@ def run(args) -> int:
     if result.reason == "unknown" and exit_code is None:
         result.reason = "walltimeout"
 
-    demo = _latest_demo(ENGINE_WRITE_DIR / "demos", started)
+    demo = _latest_demo(write_dir / "demos", started)
     if demo:
         shutil.copy2(demo, outdir / demo.name)
 
@@ -403,6 +412,10 @@ def main() -> int:
                     help="record a .sdfz replay (off by default: large and slows batches)")
     ap.add_argument("--windowed", action="store_true",
                     help="use spring.exe instead of spring-headless.exe to watch it")
+    ap.add_argument("--out", help="output directory (default: matches/<stamp>-<slug>)")
+    ap.add_argument("--write-dir", dest="write_dir",
+                    help="engine write dir; give concurrent runs separate ones "
+                         "(default: matches/_engine)")
     ap.add_argument("--dry-run", action="store_true", help="print the script and stop")
     return run(ap.parse_args())
 
