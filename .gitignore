@@ -1,8 +1,10 @@
 # Upstream source checkouts -- clone with tools/bootstrap_sources.py, never commit
 vendor/
 
-# Match harness output: start scripts, infologs, replays, result JSON
-matches/
+# Match harness output: start scripts, infologs, replays, result JSON.
+# matches/* rather than matches/ so the negation below actually applies -- git
+# does not descend into an ignored directory, so !matches/.gitkeep would be dead.
+matches/*
 !matches/.gitkeep
 
 # Build output for the C++ path
