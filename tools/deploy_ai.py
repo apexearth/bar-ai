@@ -88,7 +88,11 @@ def deploy(env: bar_env.BarEnv, variant: str, force: bool = False) -> None:
 
     engine_side = src / "engine-side"
     overlaid = []
-    for name in ("AIInfo.lua", "AIOptions.lua"):
+    # A variant may ship its own SkirmishAI.dll (a custom C++ build). It must be
+    # built against the SAME engine tag that is installed -- the AI boundary is a
+    # raw struct of ~596 function pointers with no version negotiation, so a
+    # mismatch fails at runtime with no diagnostic.
+    for name in ("AIInfo.lua", "AIOptions.lua", "SkirmishAI.dll"):
         f = engine_side / name
         if f.exists():
             shutil.copy2(f, target / name)
