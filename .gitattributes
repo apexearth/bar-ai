@@ -1,0 +1,11 @@
+# Keep everything LF in the repo. The AI config/script trees are diffed against
+# upstream BAR and CircuitAI checkouts, which are LF -- CRLF here turns every
+# comparison into a whole-file diff.
+* text=auto eol=lf
+
+*.png binary
+*.dll binary
+*.7z binary
+*.sd7 binary
+*.sdz binary
+*.sdfz binary
