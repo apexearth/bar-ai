@@ -1,0 +1,164 @@
+"""Minimal ctypes binding for the engine's unitsync.dll.
+
+Start scripts identify content by its *display* name -- "Comet Catcher Remake
+1.8", "Beyond All Reason $VERSION" -- not by filename. Guessing those from
+`maps/comet_catcher_remake_1.8.sd7` works often enough to be dangerous, so ask
+the engine's own archive scanner instead.
+
+    python tools/unitsync.py maps comet
+    python tools/unitsync.py games
+    python tools/unitsync.py ais
+
+Note: unitsync builds its archive cache on first use, so the very first call
+after an engine upgrade can take a while.
+"""
+
+from __future__ import annotations
+
+import ctypes
+import os
+import sys
+from pathlib import Path
+
+import bar_env
+
+
+class UnitSync:
+    def __init__(self, env: bar_env.BarEnv | None = None):
+        self.env = env or bar_env.load()
+        dll = self.env.engine_dir / "unitsync.dll"
+        if not dll.exists():
+            raise FileNotFoundError(dll)
+
+        # unitsync links against the engine's sibling DLLs (libcurl, zlib, ...),
+        # so the engine dir has to be searchable before the load.
+        os.add_dll_directory(str(self.env.engine_dir))
+        # Tells unitsync which data dir to scan; without it, it guesses.
+        os.environ.setdefault("SPRING_DATADIR", str(self.env.data))
+
+        self.lib = ctypes.CDLL(str(dll))
+        self._declare()
+        if not self.lib.Init(False, 0):
+            raise RuntimeError(f"unitsync Init failed: {self.error()}")
+
+    def _declare(self) -> None:
+        L = self.lib
+        cs = ctypes.c_char_p
+        ci = ctypes.c_int
+
+        L.Init.argtypes, L.Init.restype = [ctypes.c_bool, ci], ci
+        L.UnInit.argtypes, L.UnInit.restype = [], None
+        L.GetNextError.argtypes, L.GetNextError.restype = [], cs
+
+        L.GetMapCount.argtypes, L.GetMapCount.restype = [], ci
+        L.GetMapName.argtypes, L.GetMapName.restype = [ci], cs
+        L.GetMapFileName.argtypes, L.GetMapFileName.restype = [ci], cs
+
+        L.GetPrimaryModCount.argtypes, L.GetPrimaryModCount.restype = [], ci
+        L.GetPrimaryModArchive.argtypes, L.GetPrimaryModArchive.restype = [ci], cs
+        L.GetPrimaryModInfoCount.argtypes, L.GetPrimaryModInfoCount.restype = [ci], ci
+
+        L.GetSkirmishAICount.argtypes, L.GetSkirmishAICount.restype = [], ci
+        L.GetSkirmishAIInfoCount.argtypes, L.GetSkirmishAIInfoCount.restype = [ci], ci
+
+        L.GetInfoKey.argtypes, L.GetInfoKey.restype = [ci], cs
+        L.GetInfoValueString.argtypes, L.GetInfoValueString.restype = [ci], cs
+
+    # --- helpers --------------------------------------------------------
+    @staticmethod
+    def _s(raw) -> str:
+        return raw.decode("utf-8", "replace") if raw else ""
+
+    def error(self) -> str:
+        msgs = []
+        while True:
+            e = self.lib.GetNextError()
+            if not e:
+                return " | ".join(msgs)
+            msgs.append(self._s(e))
+
+    def _info_block(self, count: int) -> dict[str, str]:
+        """GetInfoKey/GetInfoValueString index into the *last* queried block."""
+        out = {}
+        for i in range(count):
+            out[self._s(self.lib.GetInfoKey(i))] = self._s(self.lib.GetInfoValueString(i))
+        return out
+
+    # --- queries --------------------------------------------------------
+    def maps(self) -> list[tuple[str, str]]:
+        """[(display name, archive filename)] -- the display name goes in the script."""
+        return [
+            (self._s(self.lib.GetMapName(i)), self._s(self.lib.GetMapFileName(i)))
+            for i in range(self.lib.GetMapCount())
+        ]
+
+    def games(self) -> list[dict[str, str]]:
+        out = []
+        for i in range(self.lib.GetPrimaryModCount()):
+            archive = self._s(self.lib.GetPrimaryModArchive(i))
+            info = self._info_block(self.lib.GetPrimaryModInfoCount(i))
+            info["archive"] = archive
+            out.append(info)
+        return out
+
+    def ais(self) -> list[dict[str, str]]:
+        return [
+            self._info_block(self.lib.GetSkirmishAIInfoCount(i))
+            for i in range(self.lib.GetSkirmishAICount())
+        ]
+
+    def close(self) -> None:
+        try:
+            self.lib.UnInit()
+        except Exception:
+            pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
+def resolve_map(query: str, us: UnitSync) -> str:
+    """Accept a display name, a filename, or a substring; return the display name."""
+    entries = us.maps()
+    q = query.lower().strip()
+    for name, fname in entries:
+        if name.lower() == q or fname.lower() == q:
+            return name
+    matches = [n for n, f in entries if q in n.lower() or q in f.lower()]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise SystemExit(f"no map matching {query!r} (scanned {len(entries)})")
+    raise SystemExit(
+        f"{query!r} is ambiguous, matches {len(matches)}:\n  "
+        + "\n  ".join(sorted(matches)[:15])
+    )
+
+
+def main() -> int:
+    what = sys.argv[1] if len(sys.argv) > 1 else "games"
+    needle = sys.argv[2].lower() if len(sys.argv) > 2 else ""
+
+    with UnitSync() as us:
+        if what == "maps":
+            rows = [(n, f) for n, f in us.maps() if needle in n.lower() or needle in f.lower()]
+            print(f"{len(rows)} map(s)")
+            for name, fname in sorted(rows):
+                print(f"  {name}\n      {fname}")
+        elif what == "games":
+            for g in us.games():
+                print(f"  {g.get('name', '?')}   [archive: {g.get('archive', '?')}]")
+        elif what == "ais":
+            for a in us.ais():
+                print(f"  {a.get('shortName','?'):<12} {a.get('version','?'):<10} {a.get('name','')}")
+        else:
+            print(__doc__)
+            return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

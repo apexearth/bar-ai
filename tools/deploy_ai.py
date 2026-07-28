@@ -219,6 +219,30 @@ def apply_patches(env: bar_env.BarEnv, revert: bool = False) -> None:
             print(f"  {p.name}: FAILED\n{r.stderr.strip()}")
 
 
+def deploy_gadgets(env: bar_env.BarEnv, remove: bool = False) -> None:
+    """Install the dev gadgets used by the match harness into BAR.sdd.
+
+    These are additive files (not patches) and each one self-disables unless the
+    start script asks for it, so leaving them installed is harmless.
+    """
+    src_dir = PATCH_DIR / "gadgets"
+    dst_dir = env.game_sdd / "luarules" / "gadgets"
+    if not dst_dir.is_dir():
+        raise SystemExit(f"not a BAR checkout: {dst_dir} missing")
+    for src in sorted(src_dir.glob("*.lua")):
+        dst = dst_dir / src.name
+        if remove:
+            if dst.exists():
+                dst.unlink()
+                print(f"  removed {dst}")
+            continue
+        if dst.exists() and filecmp.cmp(src, dst, shallow=False):
+            print(f"  {src.name}: up to date")
+            continue
+        shutil.copy2(src, dst)
+        print(f"  installed {dst}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--engine", help="engine version dir name (default: launcher's active engine)")
@@ -236,6 +260,9 @@ def main() -> int:
 
     pt = sub.add_parser("patches", help="apply game-patches/*.patch to BAR.sdd")
     pt.add_argument("--revert", action="store_true")
+
+    g = sub.add_parser("gadgets", help="install dev gadgets (autoquit) into BAR.sdd")
+    g.add_argument("--remove", action="store_true")
 
     args = ap.parse_args()
 
@@ -255,6 +282,8 @@ def main() -> int:
         pull(env, args.variant)
     elif args.cmd == "patches":
         apply_patches(env, args.revert)
+    elif args.cmd == "gadgets":
+        deploy_gadgets(env, args.remove)
     return 0
 
 
