@@ -1,0 +1,46 @@
+diff --git a/luarules/gadgets/ai_namer.lua b/luarules/gadgets/ai_namer.lua
+index 3952b8b0a0..18024153d8 100644
+--- a/luarules/gadgets/ai_namer.lua
++++ b/luarules/gadgets/ai_namer.lua
+@@ -143,11 +143,39 @@ if gadgetHandler:IsSyncedCode() then
+ 			return confirmedAIName
+ 		end
+ 
+-		--function gadget:Initialize()
++			-- Get AI prefix based on AI type/version
++		local function getAIPrefix(teamID)
++			-- Spring.GetAIInfo returns multiple values: hostingPlayerID, shortName, version, options
++			local _, shortName, version, options = Spring.GetAIInfo(teamID)
++			shortName = tostring(shortName or "")
++
++			-- shortName format is like "BARbapex(3)" or "BARbstable(3)"
++			-- Parse out the version from the shortName
++			if string.find(shortName, "BARbapex") then
++				return "[APEX] "
++			elseif string.find(shortName, "BARbstable") then
++				return "[BARb] "
++			elseif string.find(shortName, "BARb") then
++				return "[BARb] "
++			end
++
++			-- Check for Lua AIs
++			local luaAI = Spring.GetTeamLuaAI(teamID) or ''
++			if string.find(luaAI, "Raptors") then
++				return "[Raptor] "
++			elseif string.find(luaAI, "Scavenger") then
++				return "[Scav] "
++			end
++			return ""
++		end
++
++	--function gadget:Initialize()
+ 			local t = Spring.GetTeamList()
+ 			for _,teamID in ipairs(t) do
+ 				if select(4,Spring.GetTeamInfo(teamID,false)) then	-- is AI?
+-					Spring.SetGameRulesParam('ainame_'..teamID, getName(teamID, string.find(Spring.GetTeamLuaAI(teamID) or '', "Raptors"), string.find(Spring.GetTeamLuaAI(teamID) or '', "Scavenger")))
++					local prefix = getAIPrefix(teamID)
++					local baseName = getName(teamID, string.find(Spring.GetTeamLuaAI(teamID) or '', "Raptors"), string.find(Spring.GetTeamLuaAI(teamID) or '', "Scavenger"))
++					Spring.SetGameRulesParam('ainame_'..teamID, prefix .. baseName)
+ 				end
+ 			end
+ 			gadgetHandler:RemoveGadget(self)

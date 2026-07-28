@@ -1,0 +1,24 @@
+# Upstream source checkouts -- clone with tools/bootstrap_sources.py, never commit
+vendor/
+
+# Match harness output: start scripts, infologs, replays, result JSON
+matches/
+!matches/.gitkeep
+
+# Build output for the C++ path
+build/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+desktop.ini
