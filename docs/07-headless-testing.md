@@ -243,3 +243,35 @@ append to `matches/tournament.jsonl`.
 At ~45 s per match, 10 games is ~8 minutes. Parallelising is possible with
 separate write dirs plus `--only-local`, at the cost of contended CPU; the sim is
 already CPU-bound, so expect sublinear gains.
+
+## Sample size: 10 games is not enough
+
+Learned the hard way. The same variant (`apex6`, unchanged) was measured twice:
+
+```
+batch 1, mixed faction     6-4   60%   CI 31-83%
+batch 4, Cortex v Cortex   1-9   10%   CI  2-40%
+pooled                     7-13  35%
+```
+
+A **50-point swing on the same AI**. A stable-vs-stable control run in the same
+configuration came out 4-6 for ally team 0 (CI 17-69%), so the harness is fair --
+the swing is pure sampling variance.
+
+Consequences for anyone using this harness:
+
+- **Always run a self-play control** (`--a X --b X`) before trusting a
+  comparison. It gives you the noise floor and proves the side swap actually
+  cancels start-position bias. Do this first, not last.
+- **10 games resolves nothing** short of a landslide. Separating 60% from 50% at
+  95% confidence needs roughly 100+ decided games; 10 games has a CI about 30
+  points wide in each direction. Use 10-game runs to catch *catastrophic*
+  regressions (apex3's 0-10 was real), never to confirm an improvement.
+- **Pin the faction with `--sides`.** Mixed factions add variance for no benefit,
+  and any faction-specific unit only appears in half the games.
+- **Do not stack changes selected on small samples.** Building apex7 on top of
+  apex6's apparent 60% compounded a result that turned out to be noise.
+
+Rough costs on a 12-core machine, 4v4, 60-minute cap, 3 workers:
+10 games ~25 min, 100 games ~4 hours. Screen wide and shallow for breakage;
+confirm narrow and deep for improvement.
