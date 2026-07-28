@@ -125,7 +125,8 @@ def worker_dirs(n: int) -> queue.Queue:
 
 
 def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
-         match_root: Path, per_side: int = 1) -> dict | None:
+         match_root: Path, per_side: int = 1,
+         sides: str | None = None) -> dict | None:
     """Run one match in its own process and read back its result.json.
 
     Output and write dirs are passed explicitly rather than letting run_match
@@ -141,6 +142,8 @@ def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
         "--out", str(outdir), "--write-dir", str(write_dir),
         "--per-side", str(per_side),
     ]
+    if sides:
+        cmd += ["--sides", sides]
     if engine:
         cmd += ["--engine", engine]
 
@@ -237,6 +240,10 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=60, help="in-game minute cap")
     ap.add_argument("--workers", type=int, default=1,
                     help="concurrent matches; ~1 core and ~4.4 GB each in steady state")
+    ap.add_argument("--sides", default="Cortex,Cortex",
+                    help="faction per side; defaults to the SAME faction on both "
+                         "sides so the faction matchup is not confounded with the "
+                         "variant under test")
     ap.add_argument("--per-side", dest="per_side", type=int, default=1,
                     help="AIs per side; 4 makes every match a 4v4")
     ap.add_argument("--engine", help="engine version dir")
@@ -291,7 +298,7 @@ def main() -> int:
     (run_dir / "config.json").write_text(json.dumps({
         "ais": args.ais, "maps": maps, "games_per_pairing": per_pair,
         "minutes": args.minutes, "workers": args.workers, "engine": args.engine,
-        "per_side": args.per_side,
+        "per_side": args.per_side, "sides": args.sides,
         "jobs": [asdict(j) for j in jobs],
     }, indent=2), encoding="utf-8")
 
@@ -308,7 +315,7 @@ def main() -> int:
         nonlocal done
         wd = pool.get()
         try:
-            row = play(job, args.minutes, args.engine, wd, match_root, args.per_side)
+            row = play(job, args.minutes, args.engine, wd, match_root, args.per_side, args.sides)
         finally:
             pool.put(wd)
         with _lock:

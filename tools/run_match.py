@@ -101,13 +101,13 @@ def _script_section(name: str, body: dict, indent: int = 1) -> str:
     return "\n".join(lines)
 
 
-def _ai_and_team(ai: AISpec, team_id: int, ally: int) -> str:
+def _ai_and_team(ai: AISpec, team_id: int, ally: int, side: str) -> str:
     """One [AI]/[TEAM] pair (or a LuaAI [TEAM]) for the given ally team."""
     team = {
         "TeamLeader": 0,
         "AllyTeam": ally,
         "RGBColor": COLORS[ally % len(COLORS)],
-        "Side": SIDES[ally % len(SIDES)],
+        "Side": side,
         "Handicap": 0,
     }
     if ai.is_lua:
@@ -140,6 +140,7 @@ def build_script(
     record_demo: bool = False,
     speed: int = 9999,
     per_side: int = 1,
+    sides: list[str] | None = None,
     extra_modoptions: dict[str, str] | None = None,
 ) -> str:
     """Emit a Spring start script for N AIs, each alone on its own ally team.
@@ -173,10 +174,19 @@ def build_script(
 
     # Each entry in `ais` is one SIDE. per_side copies of it share an ally team,
     # so --a X --b Y --per-side 4 is a 4v4 of X against Y.
+    # Faction per ally team. Default alternates Armada/Cortex, but for A/B
+    # testing both sides should normally be the SAME faction: otherwise the
+    # faction matchup is confounded with the variant under test, and any
+    # faction-specific unit (Cortex Dragons, Armada Liche) only appears in
+    # half the games.
+    side_for = list(sides) if sides else [SIDES[i % len(SIDES)] for i in range(len(ais))]
+    while len(side_for) < len(ais):
+        side_for.append(side_for[-1])
+
     team_id = 0
     for ally, ai in enumerate(ais):
         for _ in range(per_side):
-            body.append(_ai_and_team(ai, team_id, ally))
+            body.append(_ai_and_team(ai, team_id, ally, side_for[ally]))
             team_id += 1
         body.append(_script_section(f"ALLYTEAM{ally}", {"NumAllies": 0}))
 
@@ -269,6 +279,7 @@ def run(args) -> int:
     script = build_script(
         ais, map_name, game_name, args.minutes, args.seed,
         record_demo=args.replay, speed=args.speed, per_side=args.per_side,
+        sides=[x.strip() for x in args.sides.split(',')] if args.sides else None,
     )
     script_path = outdir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
@@ -412,6 +423,10 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=30, help="in-game minute cap")
     ap.add_argument("--timeout", type=int, help="wall-clock seconds before kill")
     ap.add_argument("--seed", type=int, help="RandomSeed for reproducibility")
+    ap.add_argument("--sides",
+                    help="comma-separated faction per side, e.g. 'Cortex,Cortex'. "
+                         "Default alternates Armada/Cortex; same-faction is preferred "
+                         "for A/B tests")
     ap.add_argument("--per-side", dest="per_side", type=int, default=1,
                     help="AIs per side; --per-side 4 with two specs is a 4v4")
     ap.add_argument("--speed", type=int, default=9999,
