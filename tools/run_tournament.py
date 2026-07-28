@@ -125,7 +125,7 @@ def worker_dirs(n: int) -> queue.Queue:
 
 
 def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
-         match_root: Path) -> dict | None:
+         match_root: Path, per_side: int = 1) -> dict | None:
     """Run one match in its own process and read back its result.json.
 
     Output and write dirs are passed explicitly rather than letting run_match
@@ -139,6 +139,7 @@ def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
         "--a", job.first, "--b", job.second, "--map", job.map_name,
         "--minutes", str(minutes), "--seed", str(job.seed),
         "--out", str(outdir), "--write-dir", str(write_dir),
+        "--per-side", str(per_side),
     ]
     if engine:
         cmd += ["--engine", engine]
@@ -236,6 +237,8 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=60, help="in-game minute cap")
     ap.add_argument("--workers", type=int, default=1,
                     help="concurrent matches; ~1 core and ~4.4 GB each in steady state")
+    ap.add_argument("--per-side", dest="per_side", type=int, default=1,
+                    help="AIs per side; 4 makes every match a 4v4")
     ap.add_argument("--engine", help="engine version dir")
     ap.add_argument("--name", help="label for this run's output directory")
     ap.add_argument("--report", nargs="?", const="", metavar="RUN_DIR",
@@ -288,6 +291,7 @@ def main() -> int:
     (run_dir / "config.json").write_text(json.dumps({
         "ais": args.ais, "maps": maps, "games_per_pairing": per_pair,
         "minutes": args.minutes, "workers": args.workers, "engine": args.engine,
+        "per_side": args.per_side,
         "jobs": [asdict(j) for j in jobs],
     }, indent=2), encoding="utf-8")
 
@@ -304,7 +308,7 @@ def main() -> int:
         nonlocal done
         wd = pool.get()
         try:
-            row = play(job, args.minutes, args.engine, wd, match_root)
+            row = play(job, args.minutes, args.engine, wd, match_root, args.per_side)
         finally:
             pool.put(wd)
         with _lock:

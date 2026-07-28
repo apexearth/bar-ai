@@ -101,6 +101,35 @@ def _script_section(name: str, body: dict, indent: int = 1) -> str:
     return "\n".join(lines)
 
 
+def _ai_and_team(ai: AISpec, team_id: int, ally: int) -> str:
+    """One [AI]/[TEAM] pair (or a LuaAI [TEAM]) for the given ally team."""
+    team = {
+        "TeamLeader": 0,
+        "AllyTeam": ally,
+        "RGBColor": COLORS[ally % len(COLORS)],
+        "Side": SIDES[ally % len(SIDES)],
+        "Handicap": 0,
+    }
+    if ai.is_lua:
+        # LuaAI is selected on the TEAM, not via an [AI] section.
+        team["LuaAI"] = ai.short_name
+        return _script_section(f"TEAM{team_id}", team)
+
+    ai_body: dict = {
+        "Name": f"{ai.label()}_{team_id}",
+        "ShortName": ai.short_name,
+        "Version": ai.version,
+        "Team": team_id,
+        "Host": 0,  # player number that runs this AI
+    }
+    if ai.profile:
+        ai_body["OPTIONS"] = {"profile": ai.profile}
+    return "\n".join([
+        _script_section(f"AI{team_id}", ai_body),
+        _script_section(f"TEAM{team_id}", team),
+    ])
+
+
 def build_script(
     ais: list[AISpec],
     map_name: str,
@@ -110,6 +139,7 @@ def build_script(
     host_name: str = "BenchHost",
     record_demo: bool = False,
     speed: int = 9999,
+    per_side: int = 1,
     extra_modoptions: dict[str, str] | None = None,
 ) -> str:
     """Emit a Spring start script for N AIs, each alone on its own ally team.
@@ -141,38 +171,14 @@ def build_script(
     # has to name a player that hosts it.
     body.append(_script_section("PLAYER0", {"Name": host_name, "Spectator": 1}))
 
-    for i, ai in enumerate(ais):
-        team_id = i
-        if ai.is_lua:
-            # LuaAI is selected on the TEAM, not via an [AI] section.
-            team = {
-                "TeamLeader": 0,
-                "AllyTeam": i,
-                "RGBColor": COLORS[i % len(COLORS)],
-                "Side": SIDES[i % len(SIDES)],
-                "Handicap": 0,
-                "LuaAI": ai.short_name,
-            }
-        else:
-            ai_body: dict = {
-                "Name": f"{ai.label()}_{i}",
-                "ShortName": ai.short_name,
-                "Version": ai.version,
-                "Team": team_id,
-                "Host": 0,  # player number that runs this AI
-            }
-            if ai.profile:
-                ai_body["OPTIONS"] = {"profile": ai.profile}
-            body.append(_script_section(f"AI{i}", ai_body))
-            team = {
-                "TeamLeader": 0,
-                "AllyTeam": i,
-                "RGBColor": COLORS[i % len(COLORS)],
-                "Side": SIDES[i % len(SIDES)],
-                "Handicap": 0,
-            }
-        body.append(_script_section(f"TEAM{team_id}", team))
-        body.append(_script_section(f"ALLYTEAM{i}", {"NumAllies": 0}))
+    # Each entry in `ais` is one SIDE. per_side copies of it share an ally team,
+    # so --a X --b Y --per-side 4 is a 4v4 of X against Y.
+    team_id = 0
+    for ally, ai in enumerate(ais):
+        for _ in range(per_side):
+            body.append(_ai_and_team(ai, team_id, ally))
+            team_id += 1
+        body.append(_script_section(f"ALLYTEAM{ally}", {"NumAllies": 0}))
 
     cap_frames = minutes * 60 * 30  # 30 sim frames per second
 
@@ -262,7 +268,7 @@ def run(args) -> int:
 
     script = build_script(
         ais, map_name, game_name, args.minutes, args.seed,
-        record_demo=args.replay, speed=args.speed,
+        record_demo=args.replay, speed=args.speed, per_side=args.per_side,
     )
     script_path = outdir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
@@ -406,6 +412,8 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=30, help="in-game minute cap")
     ap.add_argument("--timeout", type=int, help="wall-clock seconds before kill")
     ap.add_argument("--seed", type=int, help="RandomSeed for reproducibility")
+    ap.add_argument("--per-side", dest="per_side", type=int, default=1,
+                    help="AIs per side; --per-side 4 with two specs is a 4v4")
     ap.add_argument("--speed", type=int, default=9999,
                     help="sim speed cap; MinSpeed is what actually raises it (default 9999)")
     ap.add_argument("--replay", action="store_true",

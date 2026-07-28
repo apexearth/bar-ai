@@ -191,3 +191,63 @@ otherwise `return aiMilitaryMgr.DefaultMakeTask(unit);`.
   `hard`.
 - There is no hot reload for AngelScript — it loads at AI init, so a new match
   is required. That's what the headless harness is for.
+
+## Hard-won limits of the script layer
+
+Found by running it, not by reading docs. All verified against
+`vendor/circuitai/src/circuit/script/` (clone with
+`python tools/bootstrap_sources.py circuitai`).
+
+**`aiMilitaryMgr` exposes much more than the shipped scripts use**
+(`MilitaryScript.cpp`):
+
+```
+IUnitTask@+ DefaultMakeTask(CCircuitUnit@)
+IUnitTask@+ Enqueue(const SFightTask& in)
+IUnitTask@+ EnqueueRetreat()
+void        DefaultMakeDefence(int, const AIFloat3& in)
+uint        GetGuardTaskNum() const
+const float armyCost
+SQuotaMilitary quota { uint scout; float attack; SRaidQuota raid{min,avg}; }
+SResponseInfo@ GetResponseInfo(Type)   // { float maxPercent; float factor; }
+```
+
+`quota.scout` and `quota.attack` are **writable at runtime**, which is what
+makes dynamic behaviour possible without touching JSON. `quota.scout` maps to
+`maxScouts`, `quota.attack` to `minAttackers`.
+
+**Three things that do not work:**
+
+1. **`Enqueue(TaskF::Common(Task::FightType::ATTACK))` crashes the AI.** It
+   faulted inside `SkirmishAI.dll` ~3 sim frames after firing, in 4 of 12
+   matches. `CMilitaryManager::Enqueue` builds `new CAttackTask(this,
+   minAttackers, ...)`, and the manager already creates attack tasks itself
+   against that same threshold — so enqueueing one by hand is both redundant and
+   unsafe. **Change `quota.attack` instead** and let the manager form the task.
+2. **`SResponseInfo` is not a visible data type inside `main.as`.** The
+   managers are `#include`d into main's module, but each manager registers its
+   types against its own module namespace, so the type resolves in
+   `military.as` and not in `main.as`. The global *property* `aiMilitaryMgr`
+   does resolve there — only the type name fails. Tune anti-air in
+   `response.json` unless you move the code into `military.as`.
+3. **There is no enemy unit enumeration.** `CEnemyManager` exposes only
+   `GetEnemyThreat(Type)`, `GetEnemyCost(Type)`, `mobileThreat` and
+   `maxAAThreat`. No positions, no unit list, no commander handle. So
+   "scout, find the enemy commander, snipe it" **cannot be written in
+   AngelScript** — target selection lives in C++.
+
+   The one escape hatch: `ai.CallRules(string)`, `ai.CallUI(string)` and
+   `ai.GetGameRulesParam(...)` are exposed, so a game-side LuaRules gadget could
+   compute a target and hand it back through a rules param. That only works in a
+   game archive you control.
+
+**Debugging loop.** A script that fails to compile logs
+`Script: Fix compilation errors!` and the AI then dies on its INIT event, which
+looks like an instant loss (~200 frames). The real error is a few lines above:
+
+```
+main.as (95, 2) : ERR : Identifier 'SResponseInfo' is not a data type
+```
+
+So after any script change, run one short headless match and grep the infolog
+for `Fix compilation errors` before trusting a tournament result.
