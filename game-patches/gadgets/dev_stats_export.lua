@@ -1,0 +1,145 @@
+--------------------------------------------------------------------------------
+-- dev_stats_export.lua -- per-team benchmark telemetry.
+--
+-- Win/loss is one bit per match, so a 10-point effect needs ~100 games to see.
+-- These counters are continuous and paired (both sides observed on the same map
+-- and seed), so a change can be judged on far fewer matches -- and they say
+-- *why* it helped, which a win rate never does.
+--
+-- Deliberately NOT simplified to unit counts. Engine TeamStats reports
+-- unitsKilled/unitsDied as raw counts, which scores ten dead Fleas the same as
+-- a dead Titan and would reward exactly the wrong behaviour. So this gadget
+-- hooks UnitDestroyed and accumulates METAL VALUE, split into:
+--
+--   cheap  (metalCost <  SPAM_COST)  -- chaff; losing these is not a real loss,
+--                                       and killing them is not an achievement
+--   real   (metalCost >= SPAM_COST)  -- the number that actually matters
+--
+-- Damage received is reported but should be read with care: a high figure can
+-- mean the AI is tanking behind con-turret repair and wasting enemy effort,
+-- which is good play. Prefer real-value K/D and economic efficiency.
+--
+-- Inert unless the start script sets `dev_stats=1`.
+--------------------------------------------------------------------------------
+
+local modOptions = Spring.GetModOptions() or {}
+local enabled = tostring(modOptions.dev_stats or "") == "1"
+
+function gadget:GetInfo()
+	return {
+		name    = "Dev Stats Export",
+		desc    = "Per-team economic and value-weighted combat telemetry.",
+		author  = "bar-ai",
+		date    = "2026",
+		license = "GNU GPL, v2 or later",
+		layer   = 1001,
+		enabled = enabled,
+	}
+end
+
+if not gadgetHandler:IsSyncedCode() then
+	return  -- synced only: UnitDestroyed and UnitDefs live here
+end
+
+-- Roughly "costs less than a T1 raider". Flea ~40, Tick ~55, Pawn ~50.
+local SPAM_COST = tonumber(modOptions.dev_spamcost or 0) or 0
+if SPAM_COST <= 0 then
+	SPAM_COST = 120
+end
+
+local ECON = {
+	"metalProduced", "metalUsed", "metalExcess",
+	"energyProduced", "energyUsed", "energyExcess",
+	"damageDealt", "damageReceived",
+}
+
+local DUMP_INTERVAL = 30 * 60 * 2  -- every 2 game-minutes
+local nextDump = DUMP_INTERVAL
+
+-- team -> accumulated metal value
+local lostReal, lostCheap = {}, {}
+local killReal, killCheap = {}, {}
+local builtReal = {}
+
+local function bump(t, team, v)
+	t[team] = (t[team] or 0) + v
+end
+
+function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam)
+	local ud = UnitDefs[unitDefID]
+	if ud == nil then
+		return
+	end
+	local cost = ud.metalCost or 0
+	local cheap = cost < SPAM_COST
+
+	if cheap then
+		bump(lostCheap, unitTeam, cost)
+	else
+		bump(lostReal, unitTeam, cost)
+	end
+
+	-- attackerTeam is nil for self-destructs, reclaim and terrain deaths; those
+	-- are losses but nobody's kill.
+	if attackerTeam ~= nil and attackerTeam ~= unitTeam then
+		if cheap then
+			bump(killCheap, attackerTeam, cost)
+		else
+			bump(killReal, attackerTeam, cost)
+		end
+	end
+end
+
+function gadget:UnitFinished(unitID, unitDefID, unitTeam)
+	local ud = UnitDefs[unitDefID]
+	if ud ~= nil and (ud.metalCost or 0) >= SPAM_COST then
+		bump(builtReal, unitTeam, ud.metalCost)
+	end
+end
+
+-- `io` is nil in the gadget sandbox, so emit through Spring.Echo and let the
+-- harness parse the infolog it already collects. Last line per team wins.
+local function dump(reason)
+	for _, teamID in ipairs(Spring.GetTeamList()) do
+		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
+		if isAI then
+			local parts = {
+				string.format("team=%d", teamID),
+				string.format("ally=%d", select(6, Spring.GetTeamInfo(teamID, false)) or 0),
+				"reason=" .. reason,
+				string.format("spamCost=%d", SPAM_COST),
+				string.format("mLostReal=%.0f", lostReal[teamID] or 0),
+				string.format("mLostCheap=%.0f", lostCheap[teamID] or 0),
+				string.format("mKillReal=%.0f", killReal[teamID] or 0),
+				string.format("mKillCheap=%.0f", killCheap[teamID] or 0),
+				string.format("mBuiltReal=%.0f", builtReal[teamID] or 0),
+			}
+			local n = Spring.GetTeamStatsHistory(teamID)
+			if n and n > 0 then
+				local hist = Spring.GetTeamStatsHistory(teamID, n - 1, n - 1)
+				local st = hist and hist[1]
+				if st then
+					for _, f in ipairs(ECON) do
+						parts[#parts + 1] = string.format("%s=%.1f", f, st[f] or 0)
+					end
+				end
+			end
+			Spring.Echo("[BARAI_STATS] " .. table.concat(parts, " "))
+		end
+	end
+end
+
+function gadget:GameFrame(frame)
+	if frame >= nextDump then
+		nextDump = frame + DUMP_INTERVAL
+		dump("periodic")
+	end
+end
+
+function gadget:GameOver()
+	dump("gameover")
+end
+
+function gadget:Shutdown()
+	dump("shutdown")
+end

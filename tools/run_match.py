@@ -207,6 +207,9 @@ def build_script(
         # ends the run at game over instead of at the cap and prints the winner.
         # Harmless when the gadget is absent.
         "dev_autoquit": 1,
+        # Collected by game-patches/gadgets/dev_stats_export.lua: per-team
+        # metal/damage/unit counters. Continuous signal beats a win/loss bit.
+        "dev_stats": 1,
         "dev_maxgameminutes": minutes,
     }
     modoptions.update(extra_modoptions or {})
@@ -217,6 +220,31 @@ def build_script(
 
 RESULT_RE = re.compile(r"\[BARAI_RESULT\]\s+reason=(\w+)\s+frame=(\d+)\s+winners=([\d,]*)")
 FRAME_RE = re.compile(r"\[f=(\d+)\]")
+
+
+STATS_RE = re.compile(r"\[BARAI_STATS\]\s+(.*)")
+
+
+def parse_stats(text: str) -> list[dict] | None:
+    """Pull the per-team counters the dev_stats_export gadget echoes.
+
+    The gadget emits periodically as well as at game over, so later lines for a
+    team supersede earlier ones -- keyed by team id, last write wins.
+    """
+    latest: dict[int, dict] = {}
+    for m in STATS_RE.finditer(text):
+        row: dict = {}
+        for tok in m.group(1).split():
+            if "=" not in tok:
+                continue
+            k, _, v = tok.partition("=")
+            try:
+                row[k] = float(v)
+            except ValueError:
+                row[k] = v
+        if "team" in row:
+            latest[int(row["team"])] = row
+    return [latest[k] for k in sorted(latest)] or None
 
 
 def parse_infolog(text: str, result: MatchResult) -> MatchResult:
@@ -353,6 +381,8 @@ def run(args) -> int:
     if result.reason == "unknown" and exit_code is None:
         result.reason = "walltimeout"
 
+    stats = parse_stats(infolog_text)
+
     demo = _latest_demo(write_dir / "demos", started)
     if demo:
         shutil.copy2(demo, outdir / demo.name)
@@ -380,6 +410,7 @@ def run(args) -> int:
             "ai_errors": result.ai_errors[:10],
         },
         "replay": demo.name if demo else None,
+        "stats": stats,
     }
     (outdir / "result.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 

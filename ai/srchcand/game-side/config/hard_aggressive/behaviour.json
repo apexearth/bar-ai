@@ -6,7 +6,7 @@
 		//But there's possibility that AI will just run from enemy till it has big enough group, but it may loose its base. So if with attack=0.8..1.0 AI is not loosing base then everything is ok and i think this range is optimal.
 	
 		"quota": {
-			"scout": 2,  // max scout units out of raiders
+			"scout": 14,  // max scout units out of raiders
 			"raid": [10.0, 65.0],  // [<min>, <avg>] power of raider squad
 			"attack": 8.0,  // min power of attack group
 			"thr_mod": {				//AI attacks everything with final threat (after all calculations) <= 1
