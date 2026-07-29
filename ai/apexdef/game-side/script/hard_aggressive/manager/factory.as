@@ -117,6 +117,25 @@ const float FOLLOWER_TECH_INCOME = 28.f;   // followers wait for a running econo
 // still has to hold the ground -- which is the "4 AI all trying to make T2 =
 // SLOW" failure this whole pooling strategy exists to avoid. Followers get T2
 // from the constructors the lead hands them, not from their own factories.
+// THE economy bottleneck, found by comparing composition: stock builds 14,625
+// metal of T2 units to apexdef's 4,595 and upgrades 2.9 mexes to our 1.4. The
+// pooling design gets ONE player to T2 quickly, but stock's everyone-techs-
+// independently ends up with far more T2 economy in total -- measured, three of
+// four followers still read haveT2=0 at eighteen minutes while earning 30-73
+// metal/s. A fast tech lead is worthless if it is the team's only one.
+//
+// 9 minutes was tried before and looked bad, but that measurement contained the
+// duplicate-factory bug (AiIsSwitchTime held permanently open), so it is void.
+// Tried 10 minutes to unblock follower teching. It did NOT work: t2Mex moved
+// 1.4 -> 1.5 and T2 unit spend 4,595 -> 4,652, i.e. nothing, while the run lost
+// 4-13 with the CI excluding 50%. So the clock was never the blocker.
+//
+// What actually blocks a follower is the SAME stock gate that once blocked the
+// lead, in AiIsSwitchAllowed below: armyCost > 1.2 x cost x facCount, or the
+// full plant cost banked. A follower never holds 2800 metal, so it never techs
+// whatever the clock says. The lead only escapes because the rush branch above
+// grants it a no-bank switch. Giving followers an equivalent -- place it and
+// pour income in -- is the actual fix, and is untested.
 const int   FOLLOWER_TECH_FRAME  = 13 * MINUTE;
 
 
