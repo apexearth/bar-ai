@@ -381,6 +381,12 @@ bool AiIsSwitchTime(int lastSwitchFrame)
 		gNextSwitchProbe = ai.frame + 10 * SECOND;
 		return true;
 	}
+	// NOTE: do not probe for T3 here. Forcing AiIsSwitchTime true whenever income
+	// clears the gantry threshold DID get the gantry requested (18 times in one
+	// match, up from 0) but crashed the AI mid-game -- an error inside
+	// SkirmishAI.dll at frame 47226. A permanently-open switch window is the same
+	// shape as the bug that produced three T1 labs, and evidently worse. The T3
+	// decision needs a mechanism that does not hold the switch gate open.
 	// Everyone should at least be trying for T2 by ~20 minutes.
 	if (!gHaveT2 && (ai.frame > 20 * MINUTE))
 		return true;
@@ -437,6 +443,23 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	}
 	if (Military::gTurtle && (aiEconomyMgr.metal.current > facDef.costM * 0.6f)) {
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = false;
+		return true;
+	}
+	// T3 is this variant's declared win condition and it has NEVER been fielded:
+	// zero across every measured game, while stock manages 670 with no T3 logic
+	// at all. AiGetFactoryToBuild already asks for the gantry -- the request dies
+	// here. The stock gate wants either armyCost > 1.2x cost x facCount or the
+	// full cost banked, and a gantry runs several thousand metal, so neither is
+	// reachable for an eco variant that deliberately holds a modest army.
+	//
+	// Same reasoning as the T2 plant: you do not bank for a factory in BAR, you
+	// place it and pour income into it. Require a real economy behind it rather
+	// than a pile of metal, and turn assist ON so builders actually finish it --
+	// with no bank, build power is the only thing that closes the gap.
+	if (!gHaveT3 && ((userData[facDef.id].attr & Attr::T3) != 0)
+		&& (aiEconomyMgr.metal.income > T3_METAL_INCOME))
+	{
+		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
 		return true;
 	}
 	const bool isOK = (aiMilitaryMgr.armyCost > 1.2f * facDef.costM * aiFactoryMgr.GetFactoryCount())
@@ -573,7 +596,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// The rusher builds the advanced plant directly rather than waiting for a
 	// production switch that never comes.
 	// Once the economy carries it, tech to T3 rather than adding another T2 line.
-	if (gHaveT2 && !gHaveT3 && (aiEconomyMgr.metal.income > T3_METAL_INCOME)) {
+	if (!gHaveT3 && (aiEconomyMgr.metal.income > T3_METAL_INCOME)) {
 		CCircuitDef@ gant = T3Gantry();
 		if (gant !is null) {
 			AiLog(T() + "apex: building T3 gantry " + gant.GetName()
