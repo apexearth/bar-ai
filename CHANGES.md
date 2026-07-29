@@ -110,8 +110,13 @@ porcupine entries ship `on: false` and are built inert.
   as "build in base radius, not on front" and is already set on every factory —
   but there is no `IsAttrSupport` in the source, so it is unclear anything reads
   it. Unsolved.
-- **Commander retreat.** The signal now works (`GetBuilderThreatAt`); the
-  threshold is not yet set from data.
+- **Commander retreat.** Three approaches tried, none worked. `commander.json`
+  hide levers moved losses not at all and cost 10-20k metal; `GetEnemyCostAt`
+  crashed and returned zeros; `GetBuilderThreatAt` works but **does not predict
+  death** — across 10 games, readings within 30 s of a commander dying were
+  *lower* than baseline (3% nonzero vs 8%). Commander survival is still the
+  strongest outcome correlate measured here, so it is worth pursuing, but not
+  through a sampled position-threat signal.
 - **Sling guard when under attack.** Followers give away metal with no check on
   their own safety.
 - **Nuke bomber massing, progressive scout quotas, all-in timing scaled to T3.**
