@@ -185,7 +185,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// converters go up faster, which is the thing the gate is actually waiting
 	// on. Those constructors are also exactly what we need afterwards to upgrade
 	// mexes and to hand to allies.
-	if (IsTechLead() && !gHaveT2 && RushReady()) {
+	if (IsTechLead() && !gHaveT2 && RushReady() && !IsSmallTeam()) {
 		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
 		if (con !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
@@ -203,7 +203,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// and every one handed to an ally lets them upgrade theirs -- T2 mexes are
 	// four times the metal, across the whole team, for the rest of the game.
 	// So build nothing but build power until every teammate has one.
-	if (gHaveT2 && IsTechLead() && Builder::OwesAdvCons()) {
+	// Both overrides are for BIG teams only. On a four-player team the rusher
+	// producing no army at all is a quarter of the team's army missing -- the
+	// same arithmetic that rules out an air player on a 4v4. Measured across 5
+	// maps: standing army 17.8k against stock's 25.4k and real K/D 0.70 against
+	// 1.24, while the tech lead itself was up 8 minutes. A tech lead that cannot
+	// hold the ground it techs on does not convert. Small teams keep stock
+	// production and lean on quota.attack = RUSH_SKIP_T1_SMALL to stay eco-first.
+	if (gHaveT2 && IsTechLead() && !IsSmallTeam() && Builder::OwesAdvCons()) {
 		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER2.type);
 		if (con !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(

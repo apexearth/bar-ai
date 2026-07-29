@@ -177,6 +177,12 @@ share a shape: the thing didn't work, and nothing said so.
 - **Run Python with `-u` when redirecting to a log.** Without it the log stays
   empty for the whole run and looks exactly like a dead process.
 - **Tournament output lands in `tournaments/<stamp>-<name>/`, not `matches/`.**
+- **Never chain a deploy into a backgrounded run.** `deploy && run_tournament &`
+  hides the deploy's failure: the run proceeds against a half-written AI folder
+  and every match reports `FetchSkirmishAILibrary: unknown skirmish AI`, which
+  shows up in telemetry as the variant scoring zero on everything. That reads
+  exactly like a catastrophic regression and is not one. Deploy, verify, then
+  launch.
 - **Deploying while BAR is open fails with `WinError 5`** and leaves the AI
   folder half-written (`FetchSkirmishAILibrary: unknown skirmish AI`). Check for
   `spring.exe` / `Beyond-All-Reason.exe` first, and redeploy after closing.
