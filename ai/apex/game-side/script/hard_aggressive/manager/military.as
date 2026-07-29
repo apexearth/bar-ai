@@ -71,6 +71,7 @@ const int   RUSH_GIVEUP = 15 * MINUTE;
 const float SLING_KEEP  = 220.f;         // early banks are small; keep little
 const int   SLING_FROM  = 5 * MINUTE;    // nothing worth pooling before this
 const float SLING_LUMP  = 450.f;         // enough to pay for the lead's T2 constructor
+const float SLING_FLOOD_FRAC = 0.5f;     // above this share of storage, send it all
 int gSlingNext = 0;
 int gSlingBlocked = 0;
 int gSlingSent = 0;
@@ -191,12 +192,23 @@ void UpdateSling()
 	// any test tonight. Observed live: it logged fill=1 while the lead sat under
 	// half metal. Drop the dependency; the feeder already only gives away what
 	// it holds above SLING_KEEP, so it cannot starve itself.
-	const float spare = aiEconomyMgr.metal.current - SLING_KEEP;
-	if (spare <= 0.f)
-		return;
-	// Hand over a lump big enough to actually buy the T2 constructor rather
-	// than dribbling small amounts that get spent on T1.
-	const float amount = (spare < SLING_LUMP) ? spare : SLING_LUMP;
+	// Over half full while the lead is still paying for its plant: that metal is
+	// doing nothing, and the lead is the only thing the team is waiting on. Send
+	// the whole excess instead of trickling a lump -- observed live, a follower
+	// sat on a full bank at 9 min while the plant crawled to 75%.
+	const float store = aiEconomyMgr.metal.storage;
+	const float flood = store * SLING_FLOOD_FRAC;
+	float amount = 0.f;
+	if ((store > 0.f) && (aiEconomyMgr.metal.current > flood)) {
+		amount = aiEconomyMgr.metal.current - flood;
+	} else {
+		const float spare = aiEconomyMgr.metal.current - SLING_KEEP;
+		if (spare <= 0.f)
+			return;
+		// Otherwise a lump big enough to buy the T2 constructor, rather than
+		// dribbling amounts that get spent on T1.
+		amount = (spare < SLING_LUMP) ? spare : SLING_LUMP;
+	}
 	ai.SendResources(amount, 0.f, lead);
 	if (gSlingSent++ % 8 == 0)
 		AiLog(Factory::T() + "apex: sent " + amount + " metal to lead " + lead);

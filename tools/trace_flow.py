@@ -126,7 +126,7 @@ def parse(path: Path) -> Match:
         minute, team, rest = float(hit.group(1)), int(hit.group(2)), hit.group(3)
         m.events.append((minute, team, rest))
 
-        lead = re.search(r"rush lead = team (\d+)", rest)
+        lead = re.search(r"tech lead (?:= team|CHANGED team \d+ -> ) ?(\d+)", rest)
         if lead:
             m.claims[team].add(int(lead.group(1)))
         role = re.search(r"rush team=(\d+) (LEAD|follower)", rest)

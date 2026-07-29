@@ -135,10 +135,15 @@ local function pickLead(teams)
 	return best, bestInc
 end
 
-local function setLead(allyID, teamID, inc, frame, why)
+-- Keyed by the READING team's id, not by ally. ai.allyTeamId reads 0 for every
+-- instance in the shipped DLL, so an ally-keyed param had ally 1's followers
+-- adopt ally 0's lead and sling their metal to an enemy team.
+local function setLead(allyID, teams, teamID, inc, frame, why)
 	leadOf[allyID] = teamID
 	judgeAt[allyID] = frame + TAKEOVER_GRACE
-	Spring.SetGameRulesParam("ai_lead_" .. allyID, teamID)
+	for _, t in ipairs(teams) do
+		Spring.SetGameRulesParam("ai_lead_" .. t, teamID)
+	end
 	Spring.Echo(string.format(
 		"[BARAI_LEAD] ally=%d team=%d inc=%.1f frame=%d min=%.1f why=%s",
 		allyID, teamID, inc, frame, frame / 1800, why))
@@ -161,7 +166,7 @@ local function updateLeads(frame)
 		if cur == nil then
 			local best, inc = pickLead(teams)
 			if best ~= nil and (frame >= DECIDE_FRAME or inc >= DECIDE_INCOME) then
-				setLead(allyID, best, inc, frame, "elected")
+				setLead(allyID, teams, best, inc, frame, "elected")
 			end
 		elseif frame <= TAKEOVER_UNTIL and not abandoned[allyID] then
 			local why = nil
@@ -175,7 +180,7 @@ local function updateLeads(frame)
 				failed[cur] = true
 				local best, inc = pickLead(teams)
 				if best ~= nil then
-					setLead(allyID, best, inc, frame, why .. "-took-over-from-" .. cur)
+					setLead(allyID, teams, best, inc, frame, why .. "-took-over-from-" .. cur)
 				else
 					-- Nobody eligible left. Leave the param as-is and stop trying,
 					-- or the same dead lead re-triggers every check.

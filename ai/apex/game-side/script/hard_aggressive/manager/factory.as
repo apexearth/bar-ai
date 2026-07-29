@@ -27,7 +27,7 @@ const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
 // behind it. Merely vetoing a poor lead is not enough -- that just cancels the
 // rush and nobody else takes it. The richest ally has to be picked outright.
 //
-// The election runs in synced Lua and is published as "ai_lead_<allyTeamId>";
+// The election runs in synced Lua and is published as "ai_lead_<teamId>";
 // dev_team_income.lua owns the policy, this side only reads the result. It used
 // to run per-instance over ai.GetTeamMetalIncome, but the instances do not read
 // the income table at the same instant, so they could disagree and elect two
@@ -65,7 +65,9 @@ bool RushWindowOpen()
 
 int RushLeadTeamId()
 {
-	const int lead = int(ai.GetGameRulesParam(LEAD_PARAM + ai.allyTeamId, -1.f));
+	// Keyed on teamId, NOT allyTeamId: ai.allyTeamId reads 0 for every instance
+	// in the shipped DLL, which had ally 1 pooling behind ally 0's lead.
+	const int lead = int(ai.GetGameRulesParam(LEAD_PARAM + ai.teamId, -1.f));
 	// Not elected yet (before the decision frame), or the gadget is not
 	// installed. Defer to the engine's own pick, and to the last known lead if
 	// we ever had one, rather than reporting "nobody".
@@ -77,8 +79,7 @@ int RushLeadTeamId()
 	if (lead != gRushLead) {
 		AiLog(T() + "apex: tech lead "
 			+ ((gRushLead < 0) ? "= team " + lead
-			                   : "CHANGED team " + gRushLead + " -> " + lead)
-			+ " (ally " + ai.allyTeamId + ")");
+			                   : "CHANGED team " + gRushLead + " -> " + lead));
 		gRushLead = lead;
 		// gT1Reclaimed is deliberately NOT cleared: the reclaim stays one-shot
 		// per instance.
