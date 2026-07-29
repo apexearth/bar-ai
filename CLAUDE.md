@@ -156,6 +156,13 @@ share a shape: the thing didn't work, and nothing said so.
   that these Lua/AngelScript files are **tab-indented** — a space-indented anchor
   will never match.
 
+- **Aggregate over the right unit.** The T2 rush was reported as "not firing"
+  from a median first-T2 of 14.9 min. That was the median across ALL FOUR
+  players, dominated by followers who tech late by design. The rusher's own time
+  — `min(techStart)` per side — was 6.3 min, under 10 in 20 of 20 games. A team
+  strategy that deliberately treats one player differently cannot be judged by a
+  team-wide average.
+
 ## Harness discipline
 
 - **Never edit a file a running tournament uses.** Editing `run_match.py`

@@ -105,7 +105,12 @@ bool RushReady()
 }
 
 const float FOLLOWER_TECH_INCOME = 28.f;   // followers wait for a running economy
-const int   FOLLOWER_TECH_FRAME  = 13 * MINUTE;  // ...but never past this
+// Was 13 min, tuned when the lead itself only reached T2 around 20. The lead now
+// has its plant at a median of 6.3 min and starts handing out advanced
+// constructors well before 13, so holding followers that long leaves them
+// sitting on cons they are not allowed to use. Measured: followers teched at
+// 15-21 min while the rusher was done at 5.4.
+const int   FOLLOWER_TECH_FRAME  = 9 * MINUTE;
 
 
 enum Attr {
