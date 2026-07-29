@@ -356,6 +356,8 @@ void LogRushState()
 		+ " army=" + formatFloat(aiMilitaryMgr.armyCost, "", 0, 0));
 }
 
+int gNextSwitchProbe = 0;
+
 bool AiIsSwitchTime(int lastSwitchFrame)
 {
 	// THE bug behind late teching: MakeSwitchInterval() is AiRandom(550,900)
@@ -363,8 +365,20 @@ bool AiIsSwitchTime(int lastSwitchFrame)
 	// The rush override was correct but never got asked -- hence T2 at 22.9m
 	// instead of before 10. While the designated rusher still lacks T2, let it
 	// reconsider every tick.
-	if (IsTechLead() && !gHaveT2)
+	// Returning true on EVERY call was a real bug, not just noise. In
+	// EconomyManager the same flag disables the metal gate:
+	//   if ((metalFactor < factoryPower) && !isSwitchTime && ...) return nullptr;
+	// so a permanently-true isSwitchTime means the AI starts another factory
+	// whenever it holds any metal at all. Observed live: one AI with THREE T1
+	// bot labs. The intent was only to stop the stock 9-15 minute reconsider
+	// interval from making the rush unreachable, which a short probe interval
+	// achieves without leaving the gate open.
+	if (IsTechLead() && !gHaveT2) {
+		if (ai.frame < gNextSwitchProbe)
+			return false;
+		gNextSwitchProbe = ai.frame + 10 * SECOND;
 		return true;
+	}
 	// Everyone should at least be trying for T2 by ~20 minutes.
 	if (!gHaveT2 && (ai.frame > 20 * MINUTE))
 		return true;
