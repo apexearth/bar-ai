@@ -83,6 +83,29 @@ float RushAttackQuota()
 	return (size >= 6) ? RUSH_SKIP_T1_BIG : RUSH_SKIP_T1_SMALL;
 }
 
+// While the team is paying for one player's tech, everyone else is deliberately
+// poorer than the enemy and should not be picking fights on those terms. Hold,
+// let static defence do the trading, and stall until the T2 lands -- then the
+// tech advantage decides the game instead of a T1 fight we funded ourselves out
+// of. Followers only; the rusher has its own, stricter quota.
+//
+// Deliberately not the full turtle value (400 = never attack). Sitting entirely
+// passive hands the enemy the map, and the map is where the reclaim is. This is
+// "defend and stall", not "do nothing".
+const float RUSH_TEAM_DEFEND = 60.f;
+
+void UpdateRushDefence()
+{
+	if ((ai.frame < SLING_FROM) || (ai.frame > SLING_UNTIL))
+		return;
+	if (ai.teamId == Factory::RushLeadTeamId())
+		return;          // the lead is handled by UpdateRushRole
+	if (gTurtle)
+		return;          // an active turtle hold is stricter; do not loosen it
+	if (aiMilitaryMgr.quota.attack < RUSH_TEAM_DEFEND)
+		aiMilitaryMgr.quota.attack = RUSH_TEAM_DEFEND;
+}
+
 void UpdateRushRole()
 {
 	if (ai.frame > SLING_UNTIL)
@@ -133,6 +156,7 @@ void UpdateSling()
 void UpdatePosture()
 {
 	UpdateSling();
+	UpdateRushDefence();
 	UpdateRushRole();
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;

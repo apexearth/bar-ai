@@ -67,6 +67,18 @@ CCircuitUnit@ energizer2 = null;
 // AIFloat3 lastPos;
 // int gPauseCnt = 0;
 
+// Eating the field after a won fight is a large metal swing, and while the team
+// is funding one player's tech it is the cheapest metal going -- nobody has to
+// pay for it. But a plain area reclaim takes whatever is inside the circle, so
+// a builder sent to a battlefield is as likely to chew a 12-metal tree as a
+// dead Gollum. ai.GetBestWreckPos finds the richest body and we centre the
+// circle on that, so corpses get valued rather than merely counted.
+const float WRECK_SEARCH  = 1400.f;  // how far a builder will look
+const float WRECK_MIN     = 90.f;    // not worth walking for less
+const float WRECK_RADIUS  = 260.f;   // circle centred on the body we found
+const int   WRECK_TIMEOUT = 1 * MINUTE;
+int gNextWreck = 0;
+
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 // 	AiDelPoint(lastPos);
@@ -87,7 +99,23 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // 		}
 // 	}
 // 	return task;
-	return aiBuilderMgr.DefaultMakeTask(unit);
+	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+	if (task !is null)
+		return task;   // strictly additive: never displace real work
+
+	// Only an idle builder reaches here. Rate-limited so a field of idle
+	// builders does not each run their own scan every tick.
+	if (ai.frame < gNextWreck)
+		return task;
+	gNextWreck = ai.frame + 5 * SECOND;
+
+	const AIFloat3 pos = unit.GetPos(ai.frame);
+	const AIFloat3 wreck = ai.GetBestWreckPos(pos, WRECK_SEARCH, WRECK_MIN);
+	if (wreck.x < 0.f)
+		return task;   // nothing worth the trip
+
+	return aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, wreck,
+			1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
 }
 
 void AiTaskAdded(IUnitTask@ task)
