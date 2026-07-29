@@ -155,10 +155,46 @@ void UpdateSling()
 		AiLog("apex: sent " + amount + " metal to lead " + lead);
 }
 
+// Attack in a mass, not a trickle.
+//
+// quota.attack is a MINIMUM: the AI will not launch until it has that much
+// army. Stock sits low, so it attacks with whatever happens to be to hand and
+// feeds units into fights piecemeal -- which is exactly how an army gets ground
+// down without ever threatening anything. apexearth: "store up an army until
+// it's a really nice size and then attack with a big mass".
+//
+// The threshold grows with the game rather than being one number: a 12-unit
+// push is a real threat at 8 minutes and an irrelevance at 25, when the enemy
+// fields T2 and T3. Growing it also means the accumulated mass keeps pace with
+// what it has to break through.
+//
+// Direction matters and is already measured: lowering minAttackers 15 -> 6 was
+// catastrophic (0-10). This moves the other way.
+const int   MASS_FROM   = 8 * MINUTE;   // before this, early aggression is fine
+const float MASS_START  = 30.f;
+const float MASS_PER_MIN = 3.5f;        // ~100 by 28 min
+const float MASS_CAP    = 140.f;
+
+void UpdateMassing()
+{
+	if (gTurtle || (ai.frame < MASS_FROM))
+		return;   // an active hold is stricter; do not loosen it
+	if (ai.teamId == Factory::RushLeadTeamId() && !Factory::gHaveT2)
+		return;   // the rusher has its own quota while teching
+
+	const float mins = float(ai.frame - MASS_FROM) / float(MINUTE);
+	float want = MASS_START + mins * MASS_PER_MIN;
+	if (want > MASS_CAP)
+		want = MASS_CAP;
+	if (aiMilitaryMgr.quota.attack < want)
+		aiMilitaryMgr.quota.attack = want;
+}
+
 void UpdatePosture()
 {
 	UpdateSling();
 	UpdateRushDefence();
+	UpdateMassing();
 	UpdateRushRole();
 	Commander::UpdateCaution();
 	if (gAttackBase < 0.f)
