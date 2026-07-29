@@ -116,7 +116,9 @@ def _ai_and_team(ai: AISpec, team_id: int, ally: int, side: str) -> str:
         return _script_section(f"TEAM{team_id}", team)
 
     ai_body: dict = {
-        "Name": f"{ai.label()}_{team_id}",
+        # Prefix the version so the two sides are tellable apart in-game and in
+        # replays -- otherwise every team just reads "BARbarIAn".
+        "Name": f"[{ai.version.upper()}] {ai.label()}_{team_id}",
         "ShortName": ai.short_name,
         "Version": ai.version,
         "Team": team_id,
@@ -141,6 +143,7 @@ def build_script(
     speed: int = 9999,
     per_side: int = 1,
     sides: list[str] | None = None,
+    boxes: str = "lr",
     extra_modoptions: dict[str, str] | None = None,
 ) -> str:
     """Emit a Spring start script for N AIs, each alone on its own ally team.
@@ -152,9 +155,11 @@ def build_script(
     body: list[str] = []
     body.append(f"\tMapName={map_name};")
     body.append(f"\tGameType={game_name};")
-    # 0 = fixed: engine hands out the map's own start positions in team order,
-    # which keeps repeated runs on the same map comparable.
-    body.append("\tStartPosType=0;")
+    # 2 = choose in game, which respects the per-ally start boxes emitted below.
+    # Type 0 hands out the map's own start positions in team order, which on a
+    # large map interleaves the two ally teams -- enemies spawn beside each other
+    # and the match is not a real game.
+    body.append("\tStartPosType=2;")
     body.append("\tGameStartDelay=0;")
     body.append("\tIsHost=1;")
     body.append("\tHostIP=127.0.0.1;")
@@ -188,7 +193,19 @@ def build_script(
         for _ in range(per_side):
             body.append(_ai_and_team(ai, team_id, ally, side_for[ally]))
             team_id += 1
-        body.append(_script_section(f"ALLYTEAM{ally}", {"NumAllies": 0}))
+        box = {"NumAllies": 0}
+        if len(ais) == 2:
+            # Opposite halves with a gap between, so allies spawn together and
+            # enemies do not land beside each other. Which axis matters: Glitters
+            # plays top vs bottom, Comet Catcher left vs right.
+            near, far = (0.0, 0.38) if ally == 0 else (0.62, 1.0)
+            if boxes == "tb":
+                box.update({"StartRectLeft": 0.0, "StartRectRight": 1.0,
+                            "StartRectTop": near, "StartRectBottom": far})
+            else:
+                box.update({"StartRectTop": 0.0, "StartRectBottom": 1.0,
+                            "StartRectLeft": near, "StartRectRight": far})
+        body.append(_script_section(f"ALLYTEAM{ally}", box))
 
     cap_frames = minutes * 60 * 30  # 30 sim frames per second
 
@@ -309,6 +326,7 @@ def run(args) -> int:
         ais, map_name, game_name, args.minutes, args.seed,
         record_demo=args.replay, speed=args.speed, per_side=args.per_side,
         sides=[x.strip() for x in args.sides.split(',')] if args.sides else None,
+        boxes=args.boxes,
     )
     script_path = outdir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
@@ -455,6 +473,9 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=30, help="in-game minute cap")
     ap.add_argument("--timeout", type=int, help="wall-clock seconds before kill")
     ap.add_argument("--seed", type=int, help="RandomSeed for reproducibility")
+    ap.add_argument("--boxes", choices=["lr", "tb"], default="lr",
+                    help="start-box axis: left/right or top/bottom. Glitters is tb, "
+                         "Comet Catcher is lr")
     ap.add_argument("--sides",
                     help="comma-separated faction per side, e.g. 'Cortex,Cortex'. "
                          "Default alternates Armada/Cortex; same-faction is preferred "

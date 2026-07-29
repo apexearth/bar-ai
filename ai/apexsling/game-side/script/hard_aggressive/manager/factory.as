@@ -192,6 +192,10 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// The designated player is rushing: buy T2 as soon as the metal is on hand,
 	// without the stock army-value requirement. It is not meant to be
 	// contributing T1 army at all, so that requirement can never be met.
+	// Was 0.5 * factory cost banked (~1450 metal). The rusher never holds that
+	// much because it spends as the slings arrive, so the plant did not start
+	// until 12 min. It does not need the whole cost up front -- construction
+	// draws from income, and seven feeders keep paying into it.
 	if (IsTechLead() && ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
 		&& (aiEconomyMgr.metal.current > facDef.costM * 0.5f))
 	{

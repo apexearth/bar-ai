@@ -126,7 +126,7 @@ def worker_dirs(n: int) -> queue.Queue:
 
 def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
          match_root: Path, per_side: int = 1,
-         sides: str | None = None) -> dict | None:
+         sides: str | None = None, boxes: str = "lr") -> dict | None:
     """Run one match in its own process and read back its result.json.
 
     Output and write dirs are passed explicitly rather than letting run_match
@@ -141,6 +141,7 @@ def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
         "--minutes", str(minutes), "--seed", str(job.seed),
         "--out", str(outdir), "--write-dir", str(write_dir),
         "--per-side", str(per_side), "--replay",   # keep .sdfz for review
+        "--boxes", boxes,
     ]
     if sides:
         cmd += ["--sides", sides]
@@ -240,6 +241,8 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=60, help="in-game minute cap")
     ap.add_argument("--workers", type=int, default=1,
                     help="concurrent matches; ~1 core and ~4.4 GB each in steady state")
+    ap.add_argument("--boxes", choices=["lr", "tb"], default="lr",
+                    help="start-box axis; Glitters is tb, Comet Catcher lr")
     ap.add_argument("--sides", default="Cortex,Cortex",
                     help="faction per side; defaults to the SAME faction on both "
                          "sides so the faction matchup is not confounded with the "
@@ -315,7 +318,7 @@ def main() -> int:
         nonlocal done
         wd = pool.get()
         try:
-            row = play(job, args.minutes, args.engine, wd, match_root, args.per_side, args.sides)
+            row = play(job, args.minutes, args.engine, wd, match_root, args.per_side, args.sides, args.boxes)
         finally:
             pool.put(wd)
         with _lock:
