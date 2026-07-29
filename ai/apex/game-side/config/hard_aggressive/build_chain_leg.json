@@ -106,11 +106,13 @@
 			},
 			"legalab": {
 				"hub": [[
+					{"unit": "leglht", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
+					{"unit": "leglht", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 10}, "priority": "now"},
-					{"unit": "legnanotc", "category": "nano", "offset": {"back": 5}, "priority": "now"},
-					{"unit": "legnanotc", "category": "nano", "offset": {"back": 10}, "priority": "now"},
-					{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
+					{"unit": "legnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 30}},
+					{"unit": "legnanotc", "category": "nano", "offset": {"back": 10}, "priority": "normal", "condition": {"m_inc>": 38}},
+					{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 12}},
 					{"unit": "legadvestore", "category": "store", "offset": {"back": 40}, "priority": "now"}
 				]]
 			},
@@ -121,11 +123,13 @@
 			},
 			"legavp": {
 				"hub": [[
+					{"unit": "leglht", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
+					{"unit": "leglht", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 10}, "priority": "now"},
-					{"unit": "legnanotc", "category": "nano", "offset": {"back": 5}, "priority": "now"},
-					{"unit": "legnanotc", "category": "nano", "offset": {"back": 10}, "priority": "now"},
-					{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
+					{"unit": "legnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 30}},
+					{"unit": "legnanotc", "category": "nano", "offset": {"back": 10}, "priority": "normal", "condition": {"m_inc>": 38}},
+					{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 12}},
 					{"unit": "legadvestore", "category": "store", "offset": {"back": 40}, "priority": "now"}
 				]]
 			},
