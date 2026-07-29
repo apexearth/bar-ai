@@ -75,6 +75,11 @@ local techLvl = {}        -- unitDefID -> techlevel (cached)
 -- What each side actually fielded, so a win can be attributed to a composition
 -- (a T2 mass, a T3 push) rather than guessed at.
 local builtByTech = {}    -- team -> {tech -> metal built}
+-- The entire economic case for teching first is 4x metal from upgraded mexes.
+-- Holding T2 for eight minutes and still finishing BEHIND stock on metal means
+-- those upgrades are probably not happening -- but nothing measured them, so it
+-- could only be guessed at.
+local t2Mex = {}          -- team -> advanced extractors finished
 local builtTop = {}       -- team -> {unitName -> metal built}
 
 local function techOf(ud)
@@ -166,6 +171,9 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 		builtTop[unitTeam] = builtTop[unitTeam] or {}
 		builtTop[unitTeam][ud.name] = (builtTop[unitTeam][ud.name] or 0) + ud.metalCost
 	end
+	if (ud.extractsMetal or 0) > 0 and techOf(ud) >= 2 then
+		t2Mex[unitTeam] = (t2Mex[unitTeam] or 0) + 1
+	end
 	if ud.isFactory then
 		bump(facSpend, unitTeam, ud.metalCost or 0)
 		if techOf(ud) >= 2 and techFrame[unitTeam] == nil then
@@ -215,6 +223,7 @@ local function dump(reason)
 				string.format("mRezSpend=%.0f", mRezSpend[teamID] or 0),
 				string.format("techFrame=%d", techFrame[teamID] or -1),
 				string.format("techStart=%d", techStart[teamID] or -1),
+				string.format("t2Mex=%d", t2Mex[teamID] or 0),
 			}
 			local bt = builtByTech[teamID] or {}
 			parts[#parts + 1] = string.format("mT1=%.0f", bt[1] or 0)
