@@ -184,7 +184,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // 	lastPos = unit.GetPos(ai.frame);
 // 	AiAddPoint(lastPos, "task");
 
-// 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+// 	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 // 	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)) {
 // 		switch (task.GetBuildType()) {
 // 		case Task::BuildType::MEX:
@@ -207,6 +207,8 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			return eat;
 	}
 
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		LogCommanderThreat(unit);
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 	// Observed: a commander stands next to reclaimable metal with an empty bank
 	// and keeps its build task instead of eating it. It is not IDLE -- it holds a
@@ -346,6 +348,24 @@ int gNextComMove = 0;
 // GetEnemyUnitsIn walk. Both bindings remain registered but nothing calls them,
 // so no script path can reach either. They need isolating and testing one at a
 // time in a throwaway variant before anything depends on them again.
+
+// Diagnostic only. ai.GetBuilderThreatAt reads the engine's own per-position
+// threat map -- the thing mobileThreat (a global scalar) and GetEnemyCostAt (a
+// unit count, which crashed) were both standing in for. Log it where the
+// commander actually is, so a retreat threshold can be set from measurement
+// rather than invented. Nothing acts on this yet: the last two attempts to act
+// immediately on a new signal cost 0-20 and four days of wrong conclusions.
+int gNextThreatLog = 0;
+
+void LogCommanderThreat(CCircuitUnit@ unit)
+{
+	if (ai.frame < gNextThreatLog)
+		return;
+	gNextThreatLog = ai.frame + 30 * SECOND;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	AiLog("apex: comm threat=" + formatFloat(ai.GetBuilderThreatAt(here), "", 0, 2)
+		+ " frame=" + ai.frame);
+}
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {

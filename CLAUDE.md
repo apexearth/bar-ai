@@ -81,6 +81,9 @@ This is what makes the variant survive BAR engine updates — the previous
 hand-copied approach broke on each one (the `apex` variant existed only in
 `recoil_2025.06.11` and had been dead ever since).
 
+See **`CHANGES.md`** for everything this AI does differently from stock BARb,
+which layer each change lives in, and how well each is actually measured.
+
 ## Commands
 
 ```bash
