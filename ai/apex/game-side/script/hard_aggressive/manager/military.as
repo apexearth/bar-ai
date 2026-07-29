@@ -32,7 +32,12 @@ const int   TURTLE_MIN_HOLD = 45 * SECOND;   // avoid flapping between postures
 // and lost, while all three clean wins never held and teched at 15.6-19.6m. An
 // 18% army dip at minute 6 is two dead raiders, not a losing position -- holding
 // then just stalls the opening.
-const int   TURTLE_EARLIEST = 11 * MINUTE;
+// 11 minutes was tuned for a TEMPO variant, where an early hold just stalled
+// the opening. This variant's plan is the opposite -- let them attack into
+// static defence and die there -- so holding early is the intended behaviour,
+// not a failure state. It still requires the army to actually be losing value,
+// so it cannot fire in a quiet opening.
+const int   TURTLE_EARLIEST = 5 * MINUTE;
 
 bool  gTurtle        = false;
 float gAttackBase    = -1.f;
@@ -170,10 +175,37 @@ void UpdateSling()
 //
 // Direction matters and is already measured: lowering minAttackers 15 -> 6 was
 // catastrophic (0-10). This moves the other way.
-const int   MASS_FROM   = 8 * MINUTE;   // before this, early aggression is fine
+// Timeline of eleven LOST games, sampled every 2 game-minutes: apex and stock
+// are level on army and metal through minute 8, then diverge hard -- army 10.4k
+// vs 15.9k at ten minutes, 9.9k vs 22.4k at fourteen. And apex's army PEAKS
+// at minute 4 and declines from there (11.8k -> 9.9k -> 7.0k) while stock's
+// grows continuously. We stop replacing losses exactly as the T2 transition
+// begins, and never recover.
+//
+// Massing started at 8 minutes, precisely where the divergence begins: holding
+// units back during the transition, when the army is already shrinking, compounds
+// it. Push it past the transition so the force is rebuilt first and massed after.
+const int   MASS_FROM   = 14 * MINUTE;
 const float MASS_START  = 30.f;
 const float MASS_PER_MIN = 3.5f;        // ~100 by 28 min
-const float MASS_CAP    = 140.f;
+// Was 140. Measured: apex finished on 92k metal against stock's 125k while
+// holding a smaller army, which is what happens when the army never leaves home
+// -- the enemy takes the map and we hold a wall around too few mexes. The plan
+// is capture territory THEN wall it, not wall an empty base. 80 still refuses
+// piecemeal trickle attacks while letting a real force move and take ground.
+const float MASS_CAP    = 80.f;
+// Calibrated from a live match rather than invented. mobileThreat and armyCost
+// are different units, so the ratio has no natural 1.0 parity point; measured
+// values were 0.82 at 8 min (when we are relatively weakest), then 0.20-0.35
+// once our army out-massed theirs. 0.70 therefore holds through the early
+// window where trading is worst and releases once we are clearly ahead --
+// which is exactly this variant's plan: let them come to the defences first.
+// Was 0.70, which held through most of the game given measured ratios of
+// 0.20-0.82. Combined with the mass cap it meant almost never attacking. 0.95
+// still refuses fights where they clearly out-mass us -- the thing worth
+// avoiding -- without conceding the map by default.
+const float ATTACK_EDGE = 0.95f;
+int gNextMassLog = 0;
 
 void UpdateMassing()
 {
@@ -186,6 +218,31 @@ void UpdateMassing()
 	float want = MASS_START + mins * MASS_PER_MIN;
 	if (want > MASS_CAP)
 		want = MASS_CAP;
+
+	// Do not trade into a stronger army. Nothing in the AI compares our force to
+	// the enemy's before committing, so it will walk into a losing fight as
+	// readily as a winning one -- observed: "we are trying to have our armies go
+	// toe to toe with the enemy who is dedicating everything just on aggression".
+	// When they out-mass us, demand a bigger mass before moving, which in
+	// practice means holding behind the defences and continuing to build while
+	// they break themselves on static defence.
+	//
+	// mobileThreat and armyCost are different units (threat vs metal), so the
+	// ratio is NOT calibrated yet -- hence the log line. Read it from a real
+	// match before tuning ATTACK_EDGE; guessing at a constant has gone badly
+	// several times in this project.
+	const float ours = aiMilitaryMgr.armyCost;
+	const float theirs = aiEnemyMgr.mobileThreat;
+	if ((ours > 0.f) && (theirs > ours * ATTACK_EDGE)) {
+		want = MASS_CAP;   // hold: let them come to the defences instead
+	}
+	if (ai.frame >= gNextMassLog) {
+		gNextMassLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: mass want=" + formatFloat(want, "", 0, 0)
+			+ " army=" + formatFloat(ours, "", 0, 0)
+			+ " enemyThreat=" + formatFloat(theirs, "", 0, 0)
+			+ " ratio=" + formatFloat((ours > 0.f) ? theirs / ours : 0.f, "", 0, 2));
+	}
 	if (aiMilitaryMgr.quota.attack < want)
 		aiMilitaryMgr.quota.attack = want;
 }
@@ -196,6 +253,14 @@ void UpdatePosture()
 	UpdateRushDefence();
 	UpdateMassing();
 	UpdateRushRole();
+	Commander::UpdateCaution();
+	// DISABLED. Exit-code audit: aborts (exit -1003) jumped from 0-2 per 20-game
+	// run to 14-17 the moment this landed, and stayed there. The engine is dying,
+	// not stalemating -- which means the "3-1, commanders solved" reading was
+	// drawn from the handful of games that survived, and the 82% I reported as
+	// mutual turtling was 82% aborted. Either CmdMoveTo issued outside a task
+	// context or GetEnemyCostAt's GetEnemyUnitsIn walk is unsafe here.
+	// Builder::UpdateCommanderSafety();
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
@@ -262,18 +327,119 @@ void AiSave(OStream& ostream)
 {
 }
 
+//------------------------------------------------------------------------------
+// Defence gating.
+//
+// First, what is not available. Checked against CircuitAI's script/*.cpp:
+// CThreatMap is registered but exposes only ApplyRange(), CInfluenceMap is not
+// registered at all, CMetalManager is not registered so the `cluster` argument
+// cannot be resolved into anything, and CEnemyManager exposes four global scalars
+// -- GetEnemyPos() and GetEnemyGroups() exist in C++ and are not bound. There is
+// no way to ask "how close is the enemy to this position" from AngelScript.
+// mobileThreat is a whole-map sum over every known enemy mobile unit; using it as
+// a stand-in for proximity would be the same class of error as reading
+// GetTeamMetalFill() == 1 as "the lead is rich".
+//
+// Second, what the C++ underneath already does. DefaultMakeDefence bails on ally
+// zones, raises a cluster to the full defender list when two neighbouring
+// clusters read hot on the threat map or when our influence at the site is zero,
+// caps spend at amountFactor * min(avg metal income, avg energy income) * eco
+// factor, only adds AA once enemy air cost is nonzero, and orients the towers
+// along GetEnemyPos(). The positional judgement
+// exists -- it sits one level below this hook. So the hook's real job is deciding
+// whether to ask at all, and its honest inputs for that are global.
+//
+// Hence: ask once the enemy actually fields an army, and skip while it does not,
+// which is the user's "if enemies are really far away then probably not needed
+// right away". Sites outside our own footprint bypass that gate; see below for
+// why that is a proxy rather than proximity.
+//------------------------------------------------------------------------------
+// behaviour.json sets quota.attack = 15 -- the group threat at which BARb itself
+// rates a force worth attacking. Read that as one enemy player's worth of fielded
+// army and scale it by the number of enemy teams, because mobileThreat sums the
+// whole enemy team: an unscaled constant is met by one scouting wave in an 8v8
+// and by a genuine push in a 1v1, which is backwards.
+const float PORC_THREAT_PER_ENEMY = 15.f;
+// Deadband on the way back down. Without it the gate flips every time a raider
+// dies and porc tasks get enqueued and aborted in alternation.
+const float PORC_RELEASE = 0.8f;
+
+// DefaultMakeDefence calls a cluster front-line when it sits further than 1000
+// elmos from GetBasePos(). That accessor is not bound, so approximate the base
+// with the mean of the sites this hook is handed in the opening: those are metal
+// clusters we own or have queued, so early on their mean is our own ground.
+//
+// Be clear about what this measures -- distance from OUR mass, not distance to
+// the enemy. It is a proxy and it can be wrong on a map where we expand away from
+// the fight. It is therefore only ever allowed to let defence through, never to
+// suppress it, so a bad reading costs metal and not a base.
+const int   PORC_ANCHOR_UNTIL = 4 * MINUTE;
+const float PORC_FRONTIER     = 1000.f;
+
+float gAnchorX   = 0.f;
+float gAnchorZ   = 0.f;
+int   gAnchorN   = 0;
+bool  gPorcArmed = false;
+
+void NoteDefenceSite(const AIFloat3& in pos)
+{
+	if ((gAnchorN > 0) && (ai.frame > PORC_ANCHOR_UNTIL))
+		return;
+	gAnchorX += pos.x;
+	gAnchorZ += pos.z;
+	++gAnchorN;
+}
+
+bool IsFrontierSite(const AIFloat3& in pos)
+{
+	if (gAnchorN == 0)
+		return false;
+	const float n = float(gAnchorN);
+	const float dx = pos.x - gAnchorX / n;
+	const float dz = pos.z - gAnchorZ / n;
+	return (dx * dx + dz * dz) > (PORC_FRONTIER * PORC_FRONTIER);
+}
+
+float EnemyArmyFloor()
+{
+	// A refused query is "unknown", never "no enemies" -- reading a refusal as a
+	// meaningful zero is what silently disabled slinging once already.
+	const int teams = ai.GetEnemyTeamSize();
+	return PORC_THREAT_PER_ENEMY * float((teams > 0) ? teams : 1);
+}
+
 void AiMakeDefence(int cluster, const AIFloat3& in pos)
 {
+	NoteDefenceSite(pos);
+
 	if (gTurtle) {
 		aiMilitaryMgr.DefaultMakeDefence(cluster, pos);  // porc hard while holding
 		return;
 	}
-	if ((ai.frame > 5 * MINUTE)
-		|| (aiEconomyMgr.metal.income > 10.f)
-		|| (aiEnemyMgr.mobileThreat > 0.f))
-	{
-		aiMilitaryMgr.DefaultMakeDefence(cluster, pos);
+
+	const float armyFloor = EnemyArmyFloor();
+	const float threat = aiEnemyMgr.mobileThreat;
+	if (gPorcArmed ? (threat < armyFloor * PORC_RELEASE) : (threat >= armyFloor)) {
+		gPorcArmed = !gPorcArmed;
+		AiLog("apex: porc " + (gPorcArmed ? "ON" : "OFF") + " frame=" + ai.frame
+			+ " mobileThreat=" + formatFloat(threat, "", 0, 1)
+			+ "/" + formatFloat(armyFloor, "", 0, 1)
+			+ " enemies=" + ai.GetEnemyTeamSize());
 	}
+
+	// Something to defend against. Frontier sites skip this test, and so does the
+	// opening: before either side has an army a single known raider still justifies
+	// one tower, which is what the old gate's `mobileThreat > 0` clause bought.
+	const bool early = (ai.frame <= 5 * MINUTE) && (threat > 0.f);
+	if (!gPorcArmed && !early && !IsFrontierSite(pos))
+		return;
+
+	// Something to pay with. Unchanged from the old gate, including the way that
+	// same opening clause bypassed the income requirement outright.
+	if ((ai.frame <= 5 * MINUTE) && (aiEconomyMgr.metal.income <= 10.f) && !early)
+		return;
+
+	aiMilitaryMgr.DefaultMakeDefence(cluster, pos);
 }
 
 /*

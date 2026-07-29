@@ -48,6 +48,11 @@ const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
 const int   RUSH_DECIDE_FRAME  = 5 * MINUTE;
 const float RUSH_DECIDE_INCOME = 15.f;
 
+// Total builders the tech lead may hold while rushing. Enough to finish an
+// advanced plant fast; beyond that each constructor is metal that buys nothing
+// while the whole team is funding this one player.
+const uint  RUSH_CON_CAP = 6;
+
 int gRushLead = -1;   // latched once chosen: a dip must not hand the role over
 
 int RushLeadTeamId()
@@ -117,7 +122,32 @@ const float FOLLOWER_TECH_INCOME = 28.f;   // followers wait for a running econo
 // still has to hold the ground -- which is the "4 AI all trying to make T2 =
 // SLOW" failure this whole pooling strategy exists to avoid. Followers get T2
 // from the constructors the lead hands them, not from their own factories.
-const int   FOLLOWER_TECH_FRAME  = 13 * MINUTE;
+// THE economy bottleneck, found by comparing composition: stock builds 14,625
+// metal of T2 units to apex's 4,595 and upgrades 2.9 mexes to our 1.4. The
+// pooling design gets ONE player to T2 quickly, but stock's everyone-techs-
+// independently ends up with far more T2 economy in total -- measured, three of
+// four followers still read haveT2=0 at eighteen minutes while earning 30-73
+// metal/s. A fast tech lead is worthless if it is the team's only one.
+//
+// 9 minutes was tried before and looked bad, but that measurement contained the
+// duplicate-factory bug (AiIsSwitchTime held permanently open), so it is void.
+// Tried 10 minutes to unblock follower teching. It did NOT work: t2Mex moved
+// 1.4 -> 1.5 and T2 unit spend 4,595 -> 4,652, i.e. nothing, while the run lost
+// 4-13 with the CI excluding 50%. So the clock was never the blocker.
+//
+// What actually blocks a follower is the SAME stock gate that once blocked the
+// lead, in AiIsSwitchAllowed below: armyCost > 1.2 x cost x facCount, or the
+// full plant cost banked. A follower never holds 2800 metal, so it never techs
+// whatever the clock says. The lead only escapes because the rush branch above
+// grants it a no-bank switch. Giving followers an equivalent -- place it and
+// pour income in -- is the actual fix, and is untested.
+// Retested at 10 now that the metal gate below is released. The earlier 10-min
+// test was CONFOUNDED: followers were blocked by AiIsSwitchAllowed's bank
+// requirement whatever the clock said, so moving the clock could not show an
+// effect and t2Mex went 1.4 -> 1.5. With the gate open the clock is finally the
+// binding constraint, and followers still convert only 7.7k of T2 against
+// stock's 12.2k -- they tech, but too late to compound.
+const int   FOLLOWER_TECH_FRAME  = 10 * MINUTE;
 
 
 enum Attr {
@@ -185,7 +215,19 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// converters go up faster, which is the thing the gate is actually waiting
 	// on. Those constructors are also exactly what we need afterwards to upgrade
 	// mexes and to hand to allies.
-	if (IsTechLead() && !gHaveT2 && RushReady() && !IsSmallTeam()) {
+	// CAPPED. This had no limit at all: it recruited a constructor on every
+	// factory decision from RushReady until the advanced plant existed, which on
+	// an 8v8 is the entire rush window. Observed live -- the player going for T2
+	// sitting on 15-20 T1 constructors. That is thousands of metal in build power
+	// that cannot be spent, buying nothing, at exactly the moment the team has
+	// pooled everything behind this player.
+	//
+	// A handful is enough to finish a plant quickly; past that each one is pure
+	// waste. GetWorkerCount() is the engine's own count of our builders, so this
+	// counts what we actually hold rather than what we have ever ordered.
+	if (IsTechLead() && !gHaveT2 && RushReady() && !IsSmallTeam()
+		&& (aiBuilderMgr.GetWorkerCount() < RUSH_CON_CAP))
+	{
 		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
 		if (con !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
@@ -210,11 +252,48 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// 1.24, while the tech lead itself was up 8 minutes. A tech lead that cannot
 	// hold the ground it techs on does not convert. Small teams keep stock
 	// production and lean on quota.attack = RUSH_SKIP_T1_SMALL to stay eco-first.
-	if (gHaveT2 && IsTechLead() && !IsSmallTeam() && Builder::OwesAdvCons()) {
-		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER2.type);
+	// Small teams were excluded after enabling this at NOW priority lost 3-13 with
+	// t2Mex falling 3.2 -> 1.8. That test conflated two separate things: sharing
+	// constructors at all, versus MONOPOLISING the factory line to do it. NOW
+	// means the lead builds nothing else, which a four-player team cannot afford.
+	// Observed live with sharing off: "we went t2 but didn't share any cons" and
+	// then all four built their own advanced plants late -- the expensive outcome
+	// that sharing exists to prevent. So share everywhere, but only pre-empt the
+	// line on a big team.
+	// Two reasons to build an advanced constructor, and the second was missing.
+	// The lead builds them to SHARE, which is the design. But anyone who reaches
+	// T2 and holds no advanced con needs one for themselves -- otherwise a
+	// follower that techs while the designated lead does not ends up with a T2
+	// plant and nothing to upgrade mexes with. Observed in an 8v8: a player
+	// finished its advanced lab at 10:01 and immediately built Banishers, mobile
+	// radars and a Tiger, while the team upgraded ZERO mexes in 45 minutes.
+	// Instrumented because four mex upgrades across eight players (stock: 96) and
+	// zero gifts means this branch is barely firing, and guessing which of five
+	// conditions fails has already wasted a run. Log every input, once per 30s.
+	if (ai.frame >= gNextConLog) {
+		gNextConLog = ai.frame + 30 * SECOND;
+		CCircuitDef@ probe = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
+		AiLog(T() + "conbranch fac=" + unit.circuitDef.GetName()
+			+ " haveT2=" + (gHaveT2 ? "1" : "0")
+			+ " lead=" + (IsTechLead() ? "1" : "0")
+			+ " owes=" + (Builder::OwesAdvCons() ? "1" : "0")
+			+ " haveCon=" + (Builder::gHaveAdvCon ? "1" : "0")
+			+ " roleDef=" + ((probe is null) ? "NULL" : probe.GetName()));
+	}
+	if (gHaveT2 && ((IsTechLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
+		// BUILDER, not BUILDER2. builderT2 is registered as a SUBROLE of builder
+		// (AiAddRole("builderT2", BUILDER.type)) and the factory role map is
+		// indexed by BASE roles only -- FactoryManager.cpp:1057 looks up
+		// ROLE_TYPE(BUILDER) itself. Asking for BUILDER2 returned NULL every time,
+		// so this branch silently fell through to normal production: a plant would
+		// finish and immediately build Banishers and radars while the team upgraded
+		// no mexes at all. For an advanced plant the base builder IS the advanced
+		// constructor -- coravp's only builder is coracv.
+		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
 		if (con !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
-					Task::RecruitType::BUILDPOWER, Task::Priority::NOW,
+					Task::RecruitType::BUILDPOWER,
+					IsSmallTeam() ? Task::Priority::NORMAL : Task::Priority::NOW,
 					con, unit.GetPos(ai.frame), 0.f));
 			if (rec !is null)
 				return rec;
@@ -242,6 +321,8 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) != 0)
 		gHaveT2 = true;
+	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T3) != 0)
+		gHaveT3 = true;
 	if ((usage == Unit::UseAs::FACTORY)
 		&& ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) == 0))
 	{
@@ -357,6 +438,10 @@ void LogRushState()
 }
 
 int gNextSwitchProbe = 0;
+int gNextConLog = 0;
+const int T3_MAX_PROBES = 4;   // bounded: enough to place one gantry, never a pile
+int gT3Probes = 0;
+int gNextT3Probe = 0;
 
 bool AiIsSwitchTime(int lastSwitchFrame)
 {
@@ -379,6 +464,17 @@ bool AiIsSwitchTime(int lastSwitchFrame)
 		gNextSwitchProbe = ai.frame + 10 * SECOND;
 		return true;
 	}
+	// T3 probe REMOVED after measurement, not after theorising. Bounded probing
+	// worked mechanically -- 3645 metal of T3 fielded, the first time this AI has
+	// ever reached T3, against stock's 0 -- and lost 4-12 with the CI excluding
+	// 50%. Metal fell 136k -> 88k and army 25k -> 13k: a gantry plus its units
+	// costs more than the game gives back at these income levels, and the match
+	// is decided long before the investment pays.
+	//
+	// The doctrine is not wrong; the economy is not yet big enough to afford its
+	// win condition. T3 belongs behind an economy that can carry it, which means
+	// the eco half has to come good FIRST. Re-enable this only alongside a
+	// measured economy that outpaces stock's ~136k.
 	// Everyone should at least be trying for T2 by ~20 minutes.
 	if (!gHaveT2 && (ai.frame > 20 * MINUTE))
 		return true;
@@ -435,6 +531,52 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	}
 	if (Military::gTurtle && (aiEconomyMgr.metal.current > facDef.costM * 0.6f)) {
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = false;
+		return true;
+	}
+	// T3 is this variant's declared win condition and it has NEVER been fielded:
+	// zero across every measured game, while stock manages 670 with no T3 logic
+	// at all. AiGetFactoryToBuild already asks for the gantry -- the request dies
+	// here. The stock gate wants either armyCost > 1.2x cost x facCount or the
+	// full cost banked, and a gantry runs several thousand metal, so neither is
+	// reachable for an eco variant that deliberately holds a modest army.
+	//
+	// Same reasoning as the T2 plant: you do not bank for a factory in BAR, you
+	// place it and pour income into it. Require a real economy behind it rather
+	// than a pile of metal, and turn assist ON so builders actually finish it --
+	// with no bank, build power is the only thing that closes the gap.
+	if (!gHaveT3 && ((userData[facDef.id].attr & Attr::T3) != 0)
+		&& (aiEconomyMgr.metal.income > T3_METAL_INCOME))
+	{
+		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
+		return true;
+	}
+	// Followers could never tech. Measured: 4.6k of T2 unit spend against stock's
+	// 11-14k, 1.4 mex upgrades against 2.5-2.9, and three of four followers still
+	// reading haveT2=0 at eighteen minutes while earning 30-73 metal/s. Releasing
+	// the clock changed nothing, which proved the clock was never the blocker --
+	// this gate is. It wants armyCost > 1.2x cost x facCount or the full plant
+	// cost banked, and a follower holds neither.
+	//
+	// The lead escapes this via the rush branch above. Give followers the same
+	// once the pooling window has closed: place the plant on income rather than
+	// banking for it, with assist on so build power finishes it. Pooling behind
+	// one player is only worth it if the others follow afterwards.
+	// Staggering by team id was tried and LOST 2-14 (CI 71-100%). It did flatten
+	// the army curve slightly -- 10.9k vs 17.8k at fourteen minutes, up from 8.9k
+	// vs 25.1k -- but pushing the last follower to minute 16 costs more T2
+	// economy than the smoother curve is worth. The synchronised transition is a
+	// real cost; delaying teching is not the way to pay it.
+	// !gHaveT2 was missing here, so a follower that ALREADY owned an advanced
+	// plant kept being granted a no-bank switch to build ANOTHER one. Observed
+	// live: a player with a T2 vehicle plant went and built a T2 bot lab as well,
+	// and all four teched simultaneously late in the game. One advanced plant per
+	// follower is the whole point -- the second is metal that should have been
+	// army or mex upgrades, spent at the worst possible moment.
+	if (!IsTechLead() && !gHaveT2 && (ai.frame >= FOLLOWER_TECH_FRAME)
+		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
+		&& (aiEconomyMgr.metal.income > 18.f))
+	{
+		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
 		return true;
 	}
 	const bool isOK = (aiMilitaryMgr.armyCost > 1.2f * facDef.costM * aiFactoryMgr.GetFactoryCount())
@@ -521,6 +663,42 @@ CCircuitDef@ AdvCounterpart()
 	return null;
 }
 
+// T3 is this variant's WIN CONDITION, and it has never once been reached: mean
+// T3 metal across 36 measured player-games is exactly zero. The doctrine is
+// hold cheaply, out-eco behind the wall, then finish with T3 -- but nothing ever
+// decided to build the gantry, so every game was decided at T2 by whoever had
+// more army. Without this the rest of the plan has no ending.
+//
+// Gated on a real economy rather than a clock: the gantry is expensive and
+// starting one the economy cannot finish is the same trap that starting an
+// unaffordable T2 plant was.
+// Was 38. apex's economy runs poorer than stock's by design-cost, so 38 was
+// reached only near game end -- 420 metal of T3 fielded, a token rather than the
+// hammer the doctrine calls for. 26 is still a real economy and leaves time to
+// actually build a T3 force with it.
+// apexearth, on when a human commits to T3: "you shouldn't really be making big
+// T3 until you're usually over 100m per second. That's after having 1 or 2 afus
+// usually." That matches the arithmetic measured here -- a Korgoth is ~11,000
+// metal, so at 40 m/s one unit costs 275 seconds of the whole team's income, and
+// the two or three we ever fielded were exactly what that affords.
+//
+// The gate was 26, roughly four times too low: it committed to a gantry the
+// economy could not feed, which is why T3 spend sat near 3,500 for a whole game
+// while the metal would have bought a real T2 force instead. 100 is the real
+// bar, and reaching it is an ECONOMY problem -- advanced fusion first.
+const float T3_METAL_INCOME = 100.f;
+bool gHaveT3 = false;
+
+CCircuitDef@ T3Gantry()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(corgant);
+	if (side == "legion")
+		return ai.GetCircuitDef(leggant);
+	return ai.GetCircuitDef(armshltx);
+}
+
 CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isReset)
 {
 	CCircuitDef@ pick = aiFactoryMgr.DefaultGetFactoryToBuild(pos, isStart, isReset);
@@ -544,6 +722,16 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 
 	// The rusher builds the advanced plant directly rather than waiting for a
 	// production switch that never comes.
+	// Once the economy carries it, tech to T3 rather than adding another T2 line.
+	if (!gHaveT3 && (aiEconomyMgr.metal.income > T3_METAL_INCOME)) {
+		CCircuitDef@ gant = T3Gantry();
+		if (gant !is null) {
+			AiLog(T() + "apex: building T3 gantry " + gant.GetName()
+				+ " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s");
+			return gant;
+		}
+	}
+
 	if (IsTechLead() && !gHaveT2 && RushReady()) {
 		CCircuitDef@ adv = AdvCounterpart();
 		if (adv !is null) {

@@ -5,7 +5,10 @@ namespace Builder {
 
 // The lead techs first, then hands advanced constructors to teammates so they
 // can build T2 without each paying for their own advanced factory.
-const float ADV_CON_COST = 300.f;   // T1 cons are ~110, T2 ~600
+// Checked against BAR's unit defs for all three factions rather than assumed:
+// the dearest T1 constructor is 200 (armcs, armch, corcs) and the cheapest
+// advanced one 330 (legaca), so one threshold separates them everywhere.
+const float ADV_CON_COST = 300.f;   // T1 cons are 100-200, T2 330-700
 int gAdvConsMade = 0;
 int gAdvConsGifted = 0;
 
@@ -27,6 +30,11 @@ array<int> gGifted;   // teams that already received their advanced con
 // out, which is just donating our economy away.
 bool gGotAdvCon = false;
 
+// True once we hold an advanced constructor of our own, however we came by it --
+// built or gifted. A player with T2 and no advanced con should build one; a
+// player that already has one should not build a second.
+bool gHaveAdvCon = false;
+
 bool OwesAdvCons()
 {
 	array<Id>@ mates = ai.GetTeamIds();
@@ -40,30 +48,37 @@ bool OwesAdvCons()
 	return false;
 }
 
-void ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
+// Returns true when the unit was handed to an ally, i.e. is no longer ours.
+bool ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
 {
-	if (ai.teamId != Factory::RushLeadTeamId())
-		return;
 	// Actual constructors only -- not commanders, not expensive tanks.
 	if (usage != Unit::UseAs::BUILDER)
-		return;
-	if ((ai.teamId != Factory::RushLeadTeamId()) && (unit.circuitDef.costM >= ADV_CON_COST))
-		gGotAdvCon = true;   // we have ours; stop paying for the lead's
+		return false;
 	const CCircuitDef@ cdef = unit.circuitDef;
 	if (cdef.IsRoleAny(Unit::Role::COMM.mask))
-		return;
+		return false;
 	if (cdef.costM < ADV_CON_COST)
-		return;
+		return false;
+
+	// The follower half of the test used to sit BELOW a lead-only early return,
+	// so it could never once be true and gGotAdvCon was never set. That is why
+	// the symptom its own comment describes -- allies still slinging metal at 17
+	// minutes -- survived the fix: Military::UpdateSling reads this flag to stop
+	// donating, and it was permanently false.
+	if (ai.teamId != Factory::RushLeadTeamId()) {
+		gGotAdvCon = true;   // we have ours; stop paying for the lead's
+		return false;
+	}
 
 	++gAdvConsMade;
 	// Keep at least one for ourselves at all times: the lead is the player whose
 	// job it is to upgrade mexes, and it cannot do that with no constructor.
 	if ((gAdvConsMade - gAdvConsGifted) <= 1)
-		return;
+		return false;
 
 	array<Id>@ mates = ai.GetTeamIds();
 	if (mates is null)
-		return;
+		return false;
 	// One each and then stop. Every teammate needs a T2 con to start upgrading
 	// its own mexes; past that we are just giving our build power away.
 	for (uint i = 0; i < mates.length(); ++i) {
@@ -78,8 +93,9 @@ void ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
 		AiLog("apex: gave adv con to team " + cand + " (held "
 			+ (gAdvConsMade - gAdvConsGifted + 1) + ", keeping "
 			+ (gAdvConsMade - gAdvConsGifted) + ")");
-		return;
+		return true;
 	}
+	return false;
 }
 
 
@@ -95,11 +111,77 @@ CCircuitUnit@ energizer2 = null;
 // a builder sent to a battlefield is as likely to chew a 12-metal tree as a
 // dead Gollum. ai.GetBestWreckPos finds the richest body and we centre the
 // circle on that, so corpses get valued rather than merely counted.
-const float WRECK_SEARCH  = 1400.f;  // how far a builder will look
-const float WRECK_MIN     = 90.f;    // not worth walking for less
-const float WRECK_RADIUS  = 260.f;   // circle centred on the body we found
+// This variant's whole plan is to make the enemy pay for our economy: let them
+// attack into static defence backed by a massed army, and then eat the bodies.
+// The third step is the one that funds everything, so it is worth reaching
+// further and accepting smaller bodies than a tempo variant would -- after a
+// repelled push the field is dense with wrecks and every one of them is metal
+// the enemy bought for us.
+const float WRECK_SEARCH  = 2200.f;  // reach the whole approach, not just home
+const float WRECK_MIN     = 55.f;    // a repelled push leaves many small bodies
+const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
 const int   WRECK_TIMEOUT = 1 * MINUTE;
 int gNextWreck = 0;
+
+IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
+{
+	const AIFloat3 pos = unit.GetPos(ai.frame);
+	const AIFloat3 wreck = ai.GetBestWreckPos(pos, WRECK_SEARCH, WRECK_MIN);
+	if (wreck.x < 0.f)
+		return null;   // nothing worth the trip
+	return aiBuilderMgr.Enqueue(TaskB::Reclaim(priority, wreck,
+			1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+}
+
+// Rez bots are the only units in BAR that can resurrect at all -- armrectr,
+// cornecro and legrezbot plus their three ship counterparts are the whole list,
+// and every faction's T1 bot lab builds one. The engine hands them a resurrect
+// unconditionally: CEconomyManager::UpdateReclaimTasks takes isResurrect
+// straight from IsAbleToResurrect() with no economy test, so for those units it
+// only ever queues RESURRECT and never a feature RECLAIM. Resurrecting spends to
+// turn a corpse back into a unit; reclaiming turns it into metal, and the field
+// after a won fight is the cheapest metal in the game -- which is exactly what a
+// team pooling its income behind one player's tech is short of.
+//
+// The flag is not reachable from here, so pre-empt the task instead: hand the
+// bot a wreck reclaim ourselves and DefaultMakeTask, the thing that would have
+// created the resurrect, never runs. It cannot cost us build work: these bots
+// are builder=true with no buildoptions, so the most it displaces is a repair.
+// Only rez bots need this. Every other constructor already gets a RECLAIM from
+// the same function, because for them isResurrect is false.
+//
+// The gate is deliberately short. A bot that loses this race is given a
+// resurrect task with a 300-second timeout and is out of the metal business
+// until it expires, which costs far more than the feature scan does.
+const int REZ_WRECK_PERIOD = 1 * SECOND;
+int gNextRezWreck = 0;
+
+// Which defs resurrect, learned from the engine rather than named: BuilderManager
+// routes exactly the canresurrect units through UseAs::REZZER. A name list would
+// need armrectr/armrecl, cornecro/correcl and legrezbot/legnavyrezsub kept in
+// sync, and the config roles cannot stand in for it either -- they disagree
+// across factions ("support" for Armada and Legion, "rezzer" for Cortex).
+// Both ends of the index are range-checked: the array is sized once at load, and
+// an id past it raises a script exception that kills the enclosing callback
+// without saying so.
+array<bool> gRezzerDefs(ai.GetDefCount() + 1);
+
+bool IsRezzer(CCircuitUnit@ unit)
+{
+	const int id = unit.circuitDef.id;
+	return (id >= 0) && (uint(id) < gRezzerDefs.length()) && gRezzerDefs[id];
+}
+
+// Rezzing spends metal to get a unit back; reclaiming yields metal. Prefer the
+// metal whenever metal is the constraint -- until we own an advanced factory it
+// always is, because the whole team is funding one player's tech and nobody has
+// to pay for a corpse. Afterwards, only while the bank is not already full: a
+// full bank is the one case where turning corpses back into units is the better
+// trade.
+bool PreferReclaim()
+{
+	return !Factory::gHaveT2 || !aiEconomyMgr.isMetalFull;
+}
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
@@ -107,7 +189,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // 	lastPos = unit.GetPos(ai.frame);
 // 	AiAddPoint(lastPos, "task");
 
-// 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+// 	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 // 	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)) {
 // 		switch (task.GetBuildType()) {
 // 		case Task::BuildType::MEX:
@@ -121,6 +203,29 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // 		}
 // 	}
 // 	return task;
+	// Eat the corpse rather than rebuild it, before the engine gets the chance
+	// to queue a resurrect for this bot.
+	if (IsRezzer(unit) && (ai.frame >= gNextRezWreck) && PreferReclaim()) {
+		gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
+		IUnitTask@ eat = EnqueueWreckReclaim(unit, Task::Priority::HIGH);
+		if (eat !is null)
+			return eat;
+	}
+
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
+		LogCommanderThreat(unit);
+		const float hp = unit.GetHealthPercent();
+		if (hp < COM_RETREAT_HEALTH) {
+			if (ai.frame >= gNextRetreatLog) {
+				gNextRetreatLog = ai.frame + 20 * SECOND;
+				AiLog("apex: commander retreating at "
+					+ formatFloat(hp * 100.f, "", 0, 0) + "% health, frame=" + ai.frame);
+			}
+			IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+			if (flee !is null)
+				return flee;
+		}
+	}
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 	// Observed: a commander stands next to reclaimable metal with an empty bank
 	// and keeps its build task instead of eating it. It is not IDLE -- it holds a
@@ -145,15 +250,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// builders does not each run their own scan every tick.
 	if (ai.frame < gNextWreck)
 		return task;
-	gNextWreck = ai.frame + 5 * SECOND;
+	gNextWreck = ai.frame + 3 * SECOND;   // corpses decay; do not dawdle
 
-	const AIFloat3 pos = unit.GetPos(ai.frame);
-	const AIFloat3 wreck = ai.GetBestWreckPos(pos, WRECK_SEARCH, WRECK_MIN);
-	if (wreck.x < 0.f)
-		return task;   // nothing worth the trip
-
-	return aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, wreck,
-			1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+	return EnqueueWreckReclaim(unit, Task::Priority::NORMAL);
 }
 
 void AiTaskAdded(IUnitTask@ task)
@@ -235,12 +334,137 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 // 	}
 }
 
+// Commander safety, issued as a raw move order rather than a task.
+//
+// Commander survival is the measured determinant of these games: 2.3-3.0 lost
+// when we lose, 0.0-1.3 when we win, across four runs. Every commander.json
+// lever was tried individually and none moved it, because `hide` needs elapsed
+// time AND a global threat bar while these deaths happen with the commander out
+// working somewhere specific.
+//
+// Expressing the response as a task returned from AiMakeTask lost 0-20 with
+// metal at 6,631 -- that hook is the ONLY place the commander gets work, so a
+// retreat task replaces everything it would have built. CmdMoveTo issues the
+// order directly and leaves the task slot alone, so it keeps its job and simply
+// walks away from the danger first.
+CCircuitUnit@ gComm = null;
+AIFloat3 gHomePos;
+bool gHomeSet = false;
+const float COM_DANGER_RADIUS = 800.f;
+const float COM_DANGER_FOES   = 3.f;   // a lone scout reads 1; a raid is 3+
+int gNextComMove = 0;
+
+// UpdateCommanderSafety() REMOVED, not merely disabled.
+//
+// Exit-code audit: aborts (exit -1003) went from 0-2 per 20-game run to 14-17
+// the moment it landed, and stayed there for four consecutive runs. The engine
+// was dying, so the "3-1, commanders solved" result came from the few games that
+// survived, and the 82% I reported as mutual turtling was 82% aborted.
+//
+// Unsafe is one of: CmdMoveTo issued outside a task context, or GetEnemyCostAt's
+// GetEnemyUnitsIn walk. Both bindings remain registered but nothing calls them,
+// so no script path can reach either. They need isolating and testing one at a
+// time in a throwaway variant before anything depends on them again.
+
+// Diagnostic only. ai.GetBuilderThreatAt reads the engine's own per-position
+// threat map -- the thing mobileThreat (a global scalar) and GetEnemyCostAt (a
+// unit count, which crashed) were both standing in for. Log it where the
+// commander actually is, so a retreat threshold can be set from measurement
+// rather than invented. Nothing acts on this yet: the last two attempts to act
+// immediately on a new signal cost 0-20 and four days of wrong conclusions.
+// Commander retreat, triggered on HEALTH rather than position threat.
+//
+// Measured across 10 games: ai.GetBuilderThreatAt readings within 30s of a
+// commander dying were LOWER than baseline (3% nonzero vs 8%). The map is not
+// broken -- it is being sampled in the wrong place. apexearth: "sometimes a com
+// dies to that 1 or 2 last plasma shots from a distance while it is running
+// away". The killer is at range, so the victim's own position reads clean right
+// up until it dies.
+//
+// Health loss is unambiguous and fires whether the shooter is adjacent or 800
+// elmos off. 60% is a reasoned starting point, not a measured one: retreating at
+// 25% is too late when the last two shots can finish you mid-flight, so the bar
+// has to leave enough health to escape ON. Also: "the risk should probably be
+// divided by their % of health" -- at 60% the same incoming fire is already
+// worth far more than at full.
+//
+// Unlike the earlier position-based attempt -- which fired whenever 3+ enemies
+// were within 800, returned a Patrol task from AiMakeTask, and destroyed the
+// economy (0-20, metal 6,631) -- this fires only when the commander has actually
+// been hurt, which is rare. A commander that is being shot SHOULD stop building.
+const float COM_RETREAT_HEALTH = 0.60f;
+int gNextRetreatLog = 0;
+
+int gNextThreatLog = 0;
+
+void LogCommanderThreat(CCircuitUnit@ unit)
+{
+	if (ai.frame < gNextThreatLog)
+		return;
+	gNextThreatLog = ai.frame + 30 * SECOND;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	AiLog("apex: comm threat=" + formatFloat(ai.GetBuilderThreatAt(here), "", 0, 2)
+		+ " frame=" + ai.frame);
+}
+
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
-	ShareAdvCon(unit, usage);
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && (gComm is null)) {
+		@gComm = unit;
+		gHomePos = unit.GetPos(ai.frame);
+		gHomeSet = true;
+	}
+	// ai.GiveUnits unregisters the unit and fires its removal event from inside
+	// the call, so once it returns true this unit is already gone. Recording it
+	// below would park a foreign unit in an energizer slot whose AiUnitRemoved
+	// has been and gone, wedging that slot for the rest of the game.
+	// Anything advanced-constructor sized that we KEEP means we are covered.
+	// Tracked separately from gGotAdvCon, which only records a gift arriving: a
+	// player that built its own is equally covered and must not build more.
+	if ((usage == Unit::UseAs::BUILDER)
+		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+		&& (unit.circuitDef.costM >= ADV_CON_COST))
+	{
+		gHaveAdvCon = true;
+	}
+	if (ShareAdvCon(unit, usage))
+		return;
+
+	if (usage == Unit::UseAs::REZZER) {
+		const int rid = unit.circuitDef.id;
+		if ((rid >= 0) && (uint(rid) < gRezzerDefs.length()))
+			gRezzerDefs[rid] = true;
+		return;
+	}
+
 	const CCircuitDef@ cdef = unit.circuitDef;
 	if (usage != Unit::UseAs::BUILDER || cdef.IsRoleAny(Unit::Role::COMM.mask))
 		return;
+
+	// A gifted advanced constructor materialises where it stood, in the lead's
+	// base, and the receiving AI then picks its own work -- observed live, an
+	// ally used one to start a mex on the front line. Nothing on the giving side
+	// can prevent that: the whole binding surface has no way to move, order or
+	// otherwise steer a unit, ai.GiveUnits takes no position, and the receiver's
+	// UnitGiven issues CmdStop on arrival anyway.
+	//
+	// The receiver runs this same script, though, and it can tell the unit was a
+	// gift: with no advanced factory of our own we cannot have built an advanced
+	// constructor. Unit::Attr::BASE is the one lever that changes what it then
+	// does. DefaultMakeTask routes a BASE unit to MakeEnergizerTask, which walks
+	// task types in a fixed order instead of picking purely by distance -- energy,
+	// storage, factory and nano first, then MEXUP ahead of MEX -- caps everything
+	// after those four to 2000 elmos of the unit and of base, and drops any
+	// position under enemy influence outright, where the ordinary builder path
+	// only drops it when threat and influence and low build-power all coincide.
+	// Upgrading the mexes we already hold is what the gift was for; opening a new
+	// spot at the front is what it was not.
+	if (!Factory::gHaveT2 && (cdef.costM >= ADV_CON_COST)) {
+		unit.AddAttribute(Unit::Attr::BASE.type);
+		AiLog(Factory::T() + "apex: received adv con " + cdef.GetName()
+			+ " -- holding it to base work");
+		return;
+	}
 
 	// constructor with BASE attribute is assigned to tasks near base
 	if (cdef.costM < 200.f) {
