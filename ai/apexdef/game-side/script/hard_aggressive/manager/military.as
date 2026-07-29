@@ -32,7 +32,12 @@ const int   TURTLE_MIN_HOLD = 45 * SECOND;   // avoid flapping between postures
 // and lost, while all three clean wins never held and teched at 15.6-19.6m. An
 // 18% army dip at minute 6 is two dead raiders, not a losing position -- holding
 // then just stalls the opening.
-const int   TURTLE_EARLIEST = 11 * MINUTE;
+// 11 minutes was tuned for a TEMPO variant, where an early hold just stalled
+// the opening. This variant's plan is the opposite -- let them attack into
+// static defence and die there -- so holding early is the intended behaviour,
+// not a failure state. It still requires the army to actually be losing value,
+// so it cannot fire in a quiet opening.
+const int   TURTLE_EARLIEST = 5 * MINUTE;
 
 bool  gTurtle        = false;
 float gAttackBase    = -1.f;
@@ -174,6 +179,14 @@ const int   MASS_FROM   = 8 * MINUTE;   // before this, early aggression is fine
 const float MASS_START  = 30.f;
 const float MASS_PER_MIN = 3.5f;        // ~100 by 28 min
 const float MASS_CAP    = 140.f;
+// Calibrated from a live match rather than invented. mobileThreat and armyCost
+// are different units, so the ratio has no natural 1.0 parity point; measured
+// values were 0.82 at 8 min (when we are relatively weakest), then 0.20-0.35
+// once our army out-massed theirs. 0.70 therefore holds through the early
+// window where trading is worst and releases once we are clearly ahead --
+// which is exactly this variant's plan: let them come to the defences first.
+const float ATTACK_EDGE = 0.70f;
+int gNextMassLog = 0;
 
 void UpdateMassing()
 {
@@ -186,6 +199,31 @@ void UpdateMassing()
 	float want = MASS_START + mins * MASS_PER_MIN;
 	if (want > MASS_CAP)
 		want = MASS_CAP;
+
+	// Do not trade into a stronger army. Nothing in the AI compares our force to
+	// the enemy's before committing, so it will walk into a losing fight as
+	// readily as a winning one -- observed: "we are trying to have our armies go
+	// toe to toe with the enemy who is dedicating everything just on aggression".
+	// When they out-mass us, demand a bigger mass before moving, which in
+	// practice means holding behind the defences and continuing to build while
+	// they break themselves on static defence.
+	//
+	// mobileThreat and armyCost are different units (threat vs metal), so the
+	// ratio is NOT calibrated yet -- hence the log line. Read it from a real
+	// match before tuning ATTACK_EDGE; guessing at a constant has gone badly
+	// several times in this project.
+	const float ours = aiMilitaryMgr.armyCost;
+	const float theirs = aiEnemyMgr.mobileThreat;
+	if ((ours > 0.f) && (theirs > ours * ATTACK_EDGE)) {
+		want = MASS_CAP;   // hold: let them come to the defences instead
+	}
+	if (ai.frame >= gNextMassLog) {
+		gNextMassLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: mass want=" + formatFloat(want, "", 0, 0)
+			+ " army=" + formatFloat(ours, "", 0, 0)
+			+ " enemyThreat=" + formatFloat(theirs, "", 0, 0)
+			+ " ratio=" + formatFloat((ours > 0.f) ? theirs / ours : 0.f, "", 0, 2));
+	}
 	if (aiMilitaryMgr.quota.attack < want)
 		aiMilitaryMgr.quota.attack = want;
 }
