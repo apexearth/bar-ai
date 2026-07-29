@@ -478,6 +478,15 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 		return;
 	}
 
+	// Our own advanced constructor, before any mex has been upgraded. Same
+	// reason: MakeEnergizerTask puts MEXUP ahead of MEX and caps the search to
+	// 2000 elmos of base, so it upgrades what we already hold nearby instead of
+	// walking off to open a new spot.
+	if ((cdef.costM >= ADV_CON_COST) && !Factory::HaveT2Mex()) {
+		unit.AddAttribute(Unit::Attr::BASE.type);
+		return;
+	}
+
 	// constructor with BASE attribute is assigned to tasks near base
 	if (cdef.costM < 200.f) {
 		if (energizer1 is null

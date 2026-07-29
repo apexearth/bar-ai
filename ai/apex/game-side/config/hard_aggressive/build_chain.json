@@ -144,7 +144,6 @@
 					// seven other buildings. A fusion means energy is no longer the constraint,
 					// which is the only point at which armjamt's 8500e is cheap.
 					[
-						{"unit": "armjamt", "category": "defence", "offset": [-130, 0], "priority": "low"}
 					]
 				]
 			},
@@ -211,7 +210,6 @@
 					// Own chain so it starts at once; a fusion is the point where corjamt's 5200e
 					// stops competing with the rest of the build.
 					[
-						{"unit": "corjamt", "category": "defence", "offset": [-130, 0], "priority": "low"}
 					]
 				]
 			},
@@ -258,12 +256,12 @@
 			// parts of the game instead of stacking two jammers on one position.
 			"armhlt": {
 				"hub": [[
-					{"unit": "armjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 14}, "priority": "low"}
+					{"unit": "armjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 35}, "priority": "low"}
 				]]
 			},
 			"corhlt": {
 				"hub": [[
-					{"unit": "corjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 14}, "priority": "low"}
+					{"unit": "corjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 35}, "priority": "low"}
 				]]
 			},
 			"armanni": {
@@ -288,8 +286,7 @@
 			"armalab": {
 				"hub": [
 					[
-						{"unit": "armbeamer", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
-						{"unit": "armbeamer", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
+						{"unit": "armbeamer", "category": "defence", "offset": {"front": 60}, "priority": "low"},
 						{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						// apex reaches T2 at ~5.7 min, when income is ~10-15. The old 14/22 gates were
@@ -304,8 +301,8 @@
 					// T1 con can build, armpb the next a T2 con can. Own chain so the towers do not
 					// queue behind four nanos and a fusion.
 					[
-						{"unit": "armhlt", "category": "defence", "offset": {"front": 120}, "priority": "normal"},
-						{"unit": "armpb", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 10}}
+						{"unit": "armhlt", "category": "defence", "offset": {"front": 120}, "priority": "low", "condition": {"m_inc>": 20}},
+						{"unit": "armpb", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 30}}
 					]
 				]
 			},
@@ -317,8 +314,7 @@
 			"armavp": {
 				"hub": [
 					[
-						{"unit": "armbeamer", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
-						{"unit": "armbeamer", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
+						{"unit": "armbeamer", "category": "defence", "offset": {"front": 60}, "priority": "low"},
 						{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
@@ -327,8 +323,8 @@
 						{"unit": "armuwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
 					],
 					[
-						{"unit": "armhlt", "category": "defence", "offset": {"front": 120}, "priority": "normal"},
-						{"unit": "armpb", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 10}}
+						{"unit": "armhlt", "category": "defence", "offset": {"front": 120}, "priority": "low", "condition": {"m_inc>": 20}},
+						{"unit": "armpb", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 30}}
 					]
 				]
 			},
@@ -377,8 +373,7 @@
 			"coralab": {
 				"hub": [
 					[
-						{"unit": "corhllt", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
-						{"unit": "corhllt", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
+						{"unit": "corhllt", "category": "defence", "offset": {"front": 60}, "priority": "low"},
 						{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
@@ -389,8 +384,8 @@
 					// corhllt is T1.5; corhlt is the next rung a T1 con can build, corvipe the next a
 					// T2 con can. Own chain so they do not queue behind the nanos and the fusion.
 					[
-						{"unit": "corhlt", "category": "defence", "offset": {"front": 120}, "priority": "normal"},
-						{"unit": "corvipe", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 10}}
+						{"unit": "corhlt", "category": "defence", "offset": {"front": 120}, "priority": "low", "condition": {"m_inc>": 20}},
+						{"unit": "corvipe", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 30}}
 					]
 				]
 			},
@@ -402,8 +397,7 @@
 			"coravp": {
 				"hub": [
 					[
-						{"unit": "corhllt", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
-						{"unit": "corhllt", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
+						{"unit": "corhllt", "category": "defence", "offset": {"front": 60}, "priority": "low"},
 						{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
@@ -412,8 +406,8 @@
 						{"unit": "coruwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
 					],
 					[
-						{"unit": "corhlt", "category": "defence", "offset": {"front": 120}, "priority": "normal"},
-						{"unit": "corvipe", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 10}}
+						{"unit": "corhlt", "category": "defence", "offset": {"front": 120}, "priority": "low", "condition": {"m_inc>": 20}},
+						{"unit": "corvipe", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 30}}
 					]
 				]
 			},
@@ -474,25 +468,25 @@
 		"radar": {
 			"armrad": {
 				"hub": [
-					[{"unit": "armjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
+					[{"unit": "armjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "armhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			},
 			"armarad": {
 				"hub": [
-					[{"unit": "armjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
+					[{"unit": "armjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "armhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			},
 			"corrad": {
 				"hub": [
-					[{"unit": "corjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
+					[{"unit": "corjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "corhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			},
 			"corarad": {
 				"hub": [
-					[{"unit": "corjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
+					[{"unit": "corjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "corhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			}

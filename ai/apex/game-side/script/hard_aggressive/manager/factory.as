@@ -54,7 +54,6 @@ int gNextConOrder = 0;
 
 int gRushLead = -1;   // last lead this instance saw published
 bool gT1Reclaimed = false;   // one-shot: we fed our T1 lab into the plant
-bool gPlantPlaced = false;   // the advanced plant has actually been requested
 
 // False once the pooling strategy has been given up on (Military::RUSH_GIVEUP).
 // The rush branch below returns null rather than producing army, so a lead that
@@ -86,6 +85,21 @@ int RushLeadTeamId()
 		// per instance.
 	}
 	return gRushLead;
+}
+
+string armmoho ("armmoho");
+string cormoho ("cormoho");
+string legmoho ("legmoho");
+
+// One advanced extractor standing. A T2 mex is roughly a 300% increase on that
+// spot's metal and pays for the next constructor by itself, so it comes before
+// a second constructor and before the T1.5 defence rung.
+bool HaveT2Mex()
+{
+	const string side = ai.GetSideName();
+	CCircuitDef@ moho = ai.GetCircuitDef((side == "cortex") ? cormoho
+	                                   : ((side == "legion") ? legmoho : armmoho));
+	return (moho !is null) && (moho.count > 0);
 }
 
 bool IsTechLead()
@@ -278,7 +292,13 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			+ " haveCon=" + (Builder::gHaveAdvCon ? "1" : "0")
 			+ " roleDef=" + ((probe is null) ? "NULL" : probe.GetName()));
 	}
-	if (gHaveT2 && ((IsTechLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
+	// One constructor, then a mex upgrade, THEN more constructors. Stacking
+	// constructors before the first upgrade lands makes all of them slow, and the
+	// upgrade is what pays for the next one.
+	const bool waitForMex = Builder::gHaveAdvCon && !HaveT2Mex();
+	if (gHaveT2 && !waitForMex
+		&& ((IsTechLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon))
+	{
 		// BUILDER, not BUILDER2. builderT2 is registered as a SUBROLE of builder
 		// (AiAddRole("builderT2", BUILDER.type)) and the factory role map is
 		// indexed by BASE roles only -- FactoryManager.cpp:1057 looks up
@@ -411,12 +431,19 @@ string T()
 // is being replaced by; a T1 lab can be rebuilt later once T2 economy is up.
 void UpdateRushReclaim()
 {
-	// Only once the plant has actually been requested. RushReady() alone can be
-	// true minutes earlier, and eating the lab before there is anything to spend
-	// it on just removes the lead's unit production for nothing.
-	if (gT1Reclaimed || gHaveT2 || !IsTechLead() || !gPlantPlaced || !RushWindowOpen())
+	if (gT1Reclaimed || gHaveT2 || !IsTechLead() || !RushWindowOpen())
 		return;
 	if (gT1FacUnit is null)
+		return;
+	// The advanced plant must EXIST, not merely have been chosen.
+	// AiGetFactoryToBuild returning it is a preference; placement came minutes
+	// later. Eating the T1 lab in that gap leaves the lead with no factory, and
+	// CircuitAI answers by building a fresh T1 one -- observed live: vehicle lab
+	// reclaimed, bot lab built, T2 plant only minutes after that.
+	// CCircuitDef::count is incremented in RegisterTeamUnit, which runs for the
+	// nanoframe, so this is true as soon as construction actually starts.
+	CCircuitDef@ adv = AdvCounterpart();
+	if ((adv is null) || (adv.count <= 0))
 		return;
 	gT1Reclaimed = true;
 	AiLog(T() + "apex: reclaiming T1 lab " + gT1FacUnit.circuitDef.GetName()
@@ -783,7 +810,6 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	if (IsTechLead() && !gHaveT2 && RushReady() && RushWindowOpen()) {
 		CCircuitDef@ adv = AdvCounterpart();
 		if (adv !is null) {
-			gPlantPlaced = true;
 			AiLog(T() + "apex: rusher building advanced plant " + adv.GetName()
 				+ " (from " + gT1Fac.GetName() + ")");
 			return adv;
