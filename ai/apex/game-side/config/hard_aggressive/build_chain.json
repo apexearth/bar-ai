@@ -215,11 +215,13 @@
 			},
 			"armalab": {
 				"hub": [[
-					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "now"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "now"},
-					{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
+					{"unit": "armbeamer", "category": "defence", "offset": {"front": 60}, "priority": "now"},
+					{"unit": "armbeamer", "category": "defence", "offset": {"front": -60}, "priority": "now"},
+					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "normal", "condition": {"m_inc>": 22}},
+					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "normal", "condition": {"m_inc>": 30}},
+					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 38}},
+					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 46}},
+					{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 45}},
 					{"unit": "armuwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
 				]]
 			},
@@ -230,11 +232,13 @@
 			},
 			"armavp": {
 				"hub": [[
-					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "now"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "now"},
-					{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
+					{"unit": "armbeamer", "category": "defence", "offset": {"front": 60}, "priority": "now"},
+					{"unit": "armbeamer", "category": "defence", "offset": {"front": -60}, "priority": "now"},
+					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "normal", "condition": {"m_inc>": 22}},
+					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "normal", "condition": {"m_inc>": 30}},
+					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 38}},
+					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 46}},
+					{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 45}},
 					{"unit": "armuwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
 				]]
 			},
@@ -276,11 +280,13 @@
 			},
 			"coralab": {
 				"hub": [[
-					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "now"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "now"},
-					{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
+					{"unit": "corhllt", "category": "defence", "offset": {"front": 60}, "priority": "now"},
+					{"unit": "corhllt", "category": "defence", "offset": {"front": -60}, "priority": "now"},
+					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "normal", "condition": {"m_inc>": 22}},
+					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "normal", "condition": {"m_inc>": 30}},
+					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 38}},
+					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 46}},
+					{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 45}},
 					{"unit": "coruwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
 				]]
 			},
@@ -291,11 +297,13 @@
 			},
 			"coravp": {
 				"hub": [[
-					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "now"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "now"},
-					{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
+					{"unit": "corhllt", "category": "defence", "offset": {"front": 60}, "priority": "now"},
+					{"unit": "corhllt", "category": "defence", "offset": {"front": -60}, "priority": "now"},
+					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "normal", "condition": {"m_inc>": 22}},
+					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "normal", "condition": {"m_inc>": 30}},
+					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 38}},
+					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 46}},
+					{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 45}},
 					{"unit": "coruwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
 				]]
 			},

@@ -200,7 +200,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER2.type);
 		if (con !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
-					Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
+					Task::RecruitType::BUILDPOWER, Task::Priority::NOW,
 					con, unit.GetPos(ai.frame), 0.f));
 			if (rec !is null)
 				return rec;
