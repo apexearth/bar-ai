@@ -359,6 +359,9 @@ void LogRushState()
 }
 
 int gNextSwitchProbe = 0;
+const int T3_MAX_PROBES = 4;   // bounded: enough to place one gantry, never a pile
+int gT3Probes = 0;
+int gNextT3Probe = 0;
 
 bool AiIsSwitchTime(int lastSwitchFrame)
 {
@@ -381,12 +384,24 @@ bool AiIsSwitchTime(int lastSwitchFrame)
 		gNextSwitchProbe = ai.frame + 10 * SECOND;
 		return true;
 	}
-	// NOTE: do not probe for T3 here. Forcing AiIsSwitchTime true whenever income
-	// clears the gantry threshold DID get the gantry requested (18 times in one
-	// match, up from 0) but crashed the AI mid-game -- an error inside
-	// SkirmishAI.dll at frame 47226. A permanently-open switch window is the same
-	// shape as the bug that produced three T1 labs, and evidently worse. The T3
-	// decision needs a mechanism that does not hold the switch gate open.
+	// Getting the gantry considered at all requires forcing a switch window,
+	// because after T2 this otherwise falls back to MakeSwitchInterval's 9-15
+	// minutes and the gantry was requested ZERO times across a full match. An
+	// unbounded window did work (18 requests) but crashed the AI at frame 47226,
+	// which is the same shape as the three-T1-labs bug: a gate held permanently
+	// open lets factory tasks pile up. So bound it -- a handful of well-spaced
+	// probes is enough to place one gantry, and cannot accumulate.
+	if (!gHaveT3 && (gT3Probes < T3_MAX_PROBES)
+		&& (aiEconomyMgr.metal.income > T3_METAL_INCOME))
+	{
+		if (ai.frame < gNextT3Probe)
+			return false;
+		gNextT3Probe = ai.frame + 90 * SECOND;
+		++gT3Probes;
+		AiLog(T() + "apex: T3 probe " + gT3Probes + "/" + T3_MAX_PROBES
+			+ " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s");
+		return true;
+	}
 	// Everyone should at least be trying for T2 by ~20 minutes.
 	if (!gHaveT2 && (ai.frame > 20 * MINUTE))
 		return true;
