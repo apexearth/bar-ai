@@ -160,7 +160,6 @@ void UpdatePosture()
 	UpdateSling();
 	UpdateRushDefence();
 	UpdateRushRole();
-	Commander::UpdateCaution();
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
@@ -227,119 +226,18 @@ void AiSave(OStream& ostream)
 {
 }
 
-//------------------------------------------------------------------------------
-// Defence gating.
-//
-// First, what is not available. Checked against CircuitAI's script/*.cpp:
-// CThreatMap is registered but exposes only ApplyRange(), CInfluenceMap is not
-// registered at all, CMetalManager is not registered so the `cluster` argument
-// cannot be resolved into anything, and CEnemyManager exposes four global scalars
-// -- GetEnemyPos() and GetEnemyGroups() exist in C++ and are not bound. There is
-// no way to ask "how close is the enemy to this position" from AngelScript.
-// mobileThreat is a whole-map sum over every known enemy mobile unit; using it as
-// a stand-in for proximity would be the same class of error as reading
-// GetTeamMetalFill() == 1 as "the lead is rich".
-//
-// Second, what the C++ underneath already does. DefaultMakeDefence bails on ally
-// zones, raises a cluster to the full defender list when two neighbouring
-// clusters read hot on the threat map or when our influence at the site is zero,
-// caps spend at amountFactor * min(avg metal income, avg energy income) * eco
-// factor, only adds AA once enemy air cost is nonzero, and orients the towers
-// along GetEnemyPos(). The positional judgement
-// exists -- it sits one level below this hook. So the hook's real job is deciding
-// whether to ask at all, and its honest inputs for that are global.
-//
-// Hence: ask once the enemy actually fields an army, and skip while it does not,
-// which is the user's "if enemies are really far away then probably not needed
-// right away". Sites outside our own footprint bypass that gate; see below for
-// why that is a proxy rather than proximity.
-//------------------------------------------------------------------------------
-// behaviour.json sets quota.attack = 15 -- the group threat at which BARb itself
-// rates a force worth attacking. Read that as one enemy player's worth of fielded
-// army and scale it by the number of enemy teams, because mobileThreat sums the
-// whole enemy team: an unscaled constant is met by one scouting wave in an 8v8
-// and by a genuine push in a 1v1, which is backwards.
-const float PORC_THREAT_PER_ENEMY = 15.f;
-// Deadband on the way back down. Without it the gate flips every time a raider
-// dies and porc tasks get enqueued and aborted in alternation.
-const float PORC_RELEASE = 0.8f;
-
-// DefaultMakeDefence calls a cluster front-line when it sits further than 1000
-// elmos from GetBasePos(). That accessor is not bound, so approximate the base
-// with the mean of the sites this hook is handed in the opening: those are metal
-// clusters we own or have queued, so early on their mean is our own ground.
-//
-// Be clear about what this measures -- distance from OUR mass, not distance to
-// the enemy. It is a proxy and it can be wrong on a map where we expand away from
-// the fight. It is therefore only ever allowed to let defence through, never to
-// suppress it, so a bad reading costs metal and not a base.
-const int   PORC_ANCHOR_UNTIL = 4 * MINUTE;
-const float PORC_FRONTIER     = 1000.f;
-
-float gAnchorX   = 0.f;
-float gAnchorZ   = 0.f;
-int   gAnchorN   = 0;
-bool  gPorcArmed = false;
-
-void NoteDefenceSite(const AIFloat3& in pos)
-{
-	if ((gAnchorN > 0) && (ai.frame > PORC_ANCHOR_UNTIL))
-		return;
-	gAnchorX += pos.x;
-	gAnchorZ += pos.z;
-	++gAnchorN;
-}
-
-bool IsFrontierSite(const AIFloat3& in pos)
-{
-	if (gAnchorN == 0)
-		return false;
-	const float n = float(gAnchorN);
-	const float dx = pos.x - gAnchorX / n;
-	const float dz = pos.z - gAnchorZ / n;
-	return (dx * dx + dz * dz) > (PORC_FRONTIER * PORC_FRONTIER);
-}
-
-float EnemyArmyFloor()
-{
-	// A refused query is "unknown", never "no enemies" -- reading a refusal as a
-	// meaningful zero is what silently disabled slinging once already.
-	const int teams = ai.GetEnemyTeamSize();
-	return PORC_THREAT_PER_ENEMY * float((teams > 0) ? teams : 1);
-}
-
 void AiMakeDefence(int cluster, const AIFloat3& in pos)
 {
-	NoteDefenceSite(pos);
-
 	if (gTurtle) {
 		aiMilitaryMgr.DefaultMakeDefence(cluster, pos);  // porc hard while holding
 		return;
 	}
-
-	const float armyFloor = EnemyArmyFloor();
-	const float threat = aiEnemyMgr.mobileThreat;
-	if (gPorcArmed ? (threat < armyFloor * PORC_RELEASE) : (threat >= armyFloor)) {
-		gPorcArmed = !gPorcArmed;
-		AiLog("apex: porc " + (gPorcArmed ? "ON" : "OFF") + " frame=" + ai.frame
-			+ " mobileThreat=" + formatFloat(threat, "", 0, 1)
-			+ "/" + formatFloat(armyFloor, "", 0, 1)
-			+ " enemies=" + ai.GetEnemyTeamSize());
+	if ((ai.frame > 5 * MINUTE)
+		|| (aiEconomyMgr.metal.income > 10.f)
+		|| (aiEnemyMgr.mobileThreat > 0.f))
+	{
+		aiMilitaryMgr.DefaultMakeDefence(cluster, pos);
 	}
-
-	// Something to defend against. Frontier sites skip this test, and so does the
-	// opening: before either side has an army a single known raider still justifies
-	// one tower, which is what the old gate's `mobileThreat > 0` clause bought.
-	const bool early = (ai.frame <= 5 * MINUTE) && (threat > 0.f);
-	if (!gPorcArmed && !early && !IsFrontierSite(pos))
-		return;
-
-	// Something to pay with. Unchanged from the old gate, including the way that
-	// same opening clause bypassed the income requirement outright.
-	if ((ai.frame <= 5 * MINUTE) && (aiEconomyMgr.metal.income <= 10.f) && !early)
-		return;
-
-	aiMilitaryMgr.DefaultMakeDefence(cluster, pos);
 }
 
 /*

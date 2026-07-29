@@ -1,13 +1,9 @@
 // Mono-space font required
 {
 	"porcupine": {
-		// Index 8 was "legbombard", which no constructor in the game can build (it is absent from
-		// legck/legcv/legack/legacv buildoptions), so both porcupine.land and porcupine.base
-		// silently skipped it for Legion while Armada got armpb and Cortex corvipe. legapopupdef
-		// is the matching rung: 750m, legack/legacv, and it activates when built.
 		"unit": {
 		//             0          1           		2          		3          		4         5          6                7		   		8          	 	9
-			"legion": ["leglht",  "legtl",    		"legrl",   		"leghive", 		"legmg",  "legdtr",  "legrhapsis",    "leglupara", 	"legapopupdef", "coratl",
+			"legion": ["leglht",  "legtl",    		"legrl",   		"leghive", 		"legmg",  "legdtr",  "legrhapsis",    "leglupara", 	"legbombard", 	"coratl",
 					   "legflak", "legacluster", 	"legbastion", 	"legcluster",  	"legabm", "legtarg", "legdeflector"]
 		},
 	
@@ -52,12 +48,7 @@
 	//				],  // chain1
 	//				[
 	//					{"unit": "cormakr", "category": "convert", "offset": [80, 80], "condition": {"energy": true}}
-					],  // chain2
-					// Densest hook onto the energy farm: one assist turret per advanced solar once
-					// income is genuinely large. Mirrors armadvsol/coradvsol in build_chain.json.
-					[
-						{"unit": "legnanotc", "category": "nano", "offset": {"back": 70}, "condition": {"m_inc>": 16}, "priority": "normal"}
-					]
+					]  // chain2
 				]
 			},
 			"legfus": {
@@ -66,15 +57,7 @@
 						{"unit": "legnanotc", "category": "nano", "offset": {"front": 5}, "priority": "now"},
 						{"unit": "legnanotc", "category": "nano", "offset": {"front": 10}, "priority": "now"},
 						{"unit": "legnanotc", "category": "nano", "offset": {"front": 15}, "priority": "now"},
-						{"unit": "legnanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 14}},
-						{"unit": "legnanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 18}},
 						{"unit": "legrhapsis", "category": "defence", "offset": {"front": 80}, "condition": {"air": true}}
-					],
-					// Own chain so it starts at once. A fusion is the point where legjam's 7200e
-					// stops competing with the rest of the build. legjam is the T1-con jammer;
-					// legajam (T2 con, 19000e) goes on the advanced fusion and radar hubs below.
-					[
-						{"unit": "legjam", "category": "defence", "offset": [-130, 0], "priority": "low"}
 					]
 				]
 			},
@@ -95,9 +78,6 @@
 						{"unit": "legflak", "category": "defence", "offset": {"front": 40}, "priority": "now"},
 						{"unit": "leglupara", "category": "defence", "offset": {"front": 50}, "priority": "now"},
 						{"unit": "leglupara", "category": "defence", "offset": {"front": 60}, "priority": "now"}
-					],
-					[
-						{"unit": "legajam", "category": "defence", "offset": [-160, 0], "priority": "low"}
 					]
 				]
 			}
@@ -108,21 +88,12 @@
 			}
 		},
 		"defence": {
-			// Legion's counterpart to defence.armhlt/corhlt in build_chain.json: legmg is the first
-			// heavy tower Legion actually finishes (base index 4, the T2 factory hubs, the radar
-			// hubs), so it is the reliable marker for "this position is worth hiding". Gated later
-			// than the radar-hub jammers so the two hooks do not stack on one spot.
-			"legmg": {
-				"hub": [[
-					{"unit": "legjam", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 14}, "priority": "low"}
-				]]
-			},
 			"legbastion" : {
 				"hub": [[
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "legajam", "category": "defence", "offset": {"back": 80}, "condition": {"energy": 1}},
+					{"unit": "legajam", "category": "defence", "offset": {"back": 80}},
 					{"unit": "legdeflector", "category": "defence", "offset": {"back": 160}}
 				]]
 			}
@@ -134,28 +105,16 @@
 				]]
 			},
 			"legalab": {
-				"hub": [
-					[
-						{"unit": "leglht", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
-						{"unit": "leglht", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
-						{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-						{"unit": "legnanotc", "category": "nano", "offset": {"left": 10}, "priority": "now"},
-						// Was 30 and 38. Conditions are sampled once, when the T2 lab finishes at
-						// ~5.7 min with income around 10-15, and measured income never exceeds 25,
-						// so both of these were dead entries.
-						{"unit": "legnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
-						{"unit": "legnanotc", "category": "nano", "offset": {"back": 10}, "priority": "normal", "condition": {"m_inc>": 28}},
-						{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
-						{"unit": "legadvestore", "category": "store", "offset": {"back": 40}, "priority": "now"}
-					],
-					// leglht is the 70m light tower; legmg is the next rung a T1 con can build and
-					// legapopupdef the next a T2 con can. Own chain so they do not queue behind the
-					// nanos and the fusion.
-					[
-						{"unit": "legmg", "category": "defence", "offset": {"front": 120}, "priority": "normal"},
-						{"unit": "legapopupdef", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 10}}
-					]
-				]
+				"hub": [[
+					{"unit": "leglht", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
+					{"unit": "leglht", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
+					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+					{"unit": "legnanotc", "category": "nano", "offset": {"left": 10}, "priority": "now"},
+					{"unit": "legnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 30}},
+					{"unit": "legnanotc", "category": "nano", "offset": {"back": 10}, "priority": "normal", "condition": {"m_inc>": 38}},
+					{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 12}},
+					{"unit": "legadvestore", "category": "store", "offset": {"back": 40}, "priority": "now"}
+				]]
 			},
 			"legvp": {
 				"hub": [[
@@ -163,22 +122,16 @@
 				]]
 			},
 			"legavp": {
-				"hub": [
-					[
-						{"unit": "leglht", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
-						{"unit": "leglht", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
-						{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-						{"unit": "legnanotc", "category": "nano", "offset": {"left": 10}, "priority": "now"},
-						{"unit": "legnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
-						{"unit": "legnanotc", "category": "nano", "offset": {"back": 10}, "priority": "normal", "condition": {"m_inc>": 28}},
-						{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
-						{"unit": "legadvestore", "category": "store", "offset": {"back": 40}, "priority": "now"}
-					],
-					[
-						{"unit": "legmg", "category": "defence", "offset": {"front": 120}, "priority": "normal"},
-						{"unit": "legapopupdef", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 10}}
-					]
-				]
+				"hub": [[
+					{"unit": "leglht", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
+					{"unit": "leglht", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
+					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+					{"unit": "legnanotc", "category": "nano", "offset": {"left": 10}, "priority": "now"},
+					{"unit": "legnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 30}},
+					{"unit": "legnanotc", "category": "nano", "offset": {"back": 10}, "priority": "normal", "condition": {"m_inc>": 38}},
+					{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 12}},
+					{"unit": "legadvestore", "category": "store", "offset": {"back": 40}, "priority": "now"}
+				]]
 			},
 			"legap": {
 				"hub": [[
@@ -209,37 +162,13 @@
 					{"unit": "legnanotc", "category": "nano", "offset": {"right": 10}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"right": 15}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"right": 15}, "priority": "now"}
-					],
-					// A gantry means T3 is affordable; this is the only place legbastion gets built
-					// other than base index 12, and it puts it where the army spawns.
-					[
-						{"unit": "legbastion", "category": "defence", "offset": {"front": 200}, "priority": "low", "condition": {"m_inc>": 18}}
-					]
-				]
+					]]
 			}
 		},
 		"mex": {
 			"legmex": {
 	//			"energy": [200, true],
 				"porc": true
-			}
-		},
-
-		// Merges into the "radar" category added in build_chain.json - see the note there.
-		// MakeDefence puts a radar behind every defence point it lays out, so this is the hook that
-		// reaches the forward clusters; away from a "porc" cluster it is otherwise a lone leglht.
-		"radar": {
-			"legrad": {
-				"hub": [
-					[{"unit": "legjam", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
-					[{"unit": "legmg", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
-				]
-			},
-			"legarad": {
-				"hub": [
-					[{"unit": "legajam", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
-					[{"unit": "legmg", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
-				]
 			}
 		}
 	}
