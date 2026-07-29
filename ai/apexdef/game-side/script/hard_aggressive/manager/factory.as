@@ -532,7 +532,11 @@ CCircuitDef@ AdvCounterpart()
 // Gated on a real economy rather than a clock: the gantry is expensive and
 // starting one the economy cannot finish is the same trap that starting an
 // unaffordable T2 plant was.
-const float T3_METAL_INCOME = 38.f;
+// Was 38. apexdef's economy runs poorer than stock's by design-cost, so 38 was
+// reached only near game end -- 420 metal of T3 fielded, a token rather than the
+// hammer the doctrine calls for. 26 is still a real economy and leaves time to
+// actually build a T3 force with it.
+const float T3_METAL_INCOME = 26.f;
 bool gHaveT3 = false;
 
 CCircuitDef@ T3Gantry()

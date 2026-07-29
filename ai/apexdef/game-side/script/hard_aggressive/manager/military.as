@@ -178,14 +178,23 @@ void UpdateSling()
 const int   MASS_FROM   = 8 * MINUTE;   // before this, early aggression is fine
 const float MASS_START  = 30.f;
 const float MASS_PER_MIN = 3.5f;        // ~100 by 28 min
-const float MASS_CAP    = 140.f;
+// Was 140. Measured: apexdef finished on 92k metal against stock's 125k while
+// holding a smaller army, which is what happens when the army never leaves home
+// -- the enemy takes the map and we hold a wall around too few mexes. The plan
+// is capture territory THEN wall it, not wall an empty base. 80 still refuses
+// piecemeal trickle attacks while letting a real force move and take ground.
+const float MASS_CAP    = 80.f;
 // Calibrated from a live match rather than invented. mobileThreat and armyCost
 // are different units, so the ratio has no natural 1.0 parity point; measured
 // values were 0.82 at 8 min (when we are relatively weakest), then 0.20-0.35
 // once our army out-massed theirs. 0.70 therefore holds through the early
 // window where trading is worst and releases once we are clearly ahead --
 // which is exactly this variant's plan: let them come to the defences first.
-const float ATTACK_EDGE = 0.70f;
+// Was 0.70, which held through most of the game given measured ratios of
+// 0.20-0.82. Combined with the mass cap it meant almost never attacking. 0.95
+// still refuses fights where they clearly out-mass us -- the thing worth
+// avoiding -- without conceding the map by default.
+const float ATTACK_EDGE = 0.95f;
 int gNextMassLog = 0;
 
 void UpdateMassing()
