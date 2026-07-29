@@ -243,7 +243,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// then all four built their own advanced plants late -- the expensive outcome
 	// that sharing exists to prevent. So share everywhere, but only pre-empt the
 	// line on a big team.
-	if (gHaveT2 && IsTechLead() && Builder::OwesAdvCons()) {
+	// Two reasons to build an advanced constructor, and the second was missing.
+	// The lead builds them to SHARE, which is the design. But anyone who reaches
+	// T2 and holds no advanced con needs one for themselves -- otherwise a
+	// follower that techs while the designated lead does not ends up with a T2
+	// plant and nothing to upgrade mexes with. Observed in an 8v8: a player
+	// finished its advanced lab at 10:01 and immediately built Banishers, mobile
+	// radars and a Tiger, while the team upgraded ZERO mexes in 45 minutes.
+	if (gHaveT2 && ((IsTechLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
 		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER2.type);
 		if (con !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(

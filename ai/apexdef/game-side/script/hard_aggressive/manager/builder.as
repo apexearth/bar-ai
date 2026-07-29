@@ -30,6 +30,11 @@ array<int> gGifted;   // teams that already received their advanced con
 // out, which is just donating our economy away.
 bool gGotAdvCon = false;
 
+// True once we hold an advanced constructor of our own, however we came by it --
+// built or gifted. A player with T2 and no advanced con should build one; a
+// player that already has one should not build a second.
+bool gHaveAdvCon = false;
+
 bool OwesAdvCons()
 {
 	array<Id>@ mates = ai.GetTeamIds();
@@ -413,6 +418,15 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 	// the call, so once it returns true this unit is already gone. Recording it
 	// below would park a foreign unit in an energizer slot whose AiUnitRemoved
 	// has been and gone, wedging that slot for the rest of the game.
+	// Anything advanced-constructor sized that we KEEP means we are covered.
+	// Tracked separately from gGotAdvCon, which only records a gift arriving: a
+	// player that built its own is equally covered and must not build more.
+	if ((usage == Unit::UseAs::BUILDER)
+		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+		&& (unit.circuitDef.costM >= ADV_CON_COST))
+	{
+		gHaveAdvCon = true;
+	}
 	if (ShareAdvCon(unit, usage))
 		return;
 

@@ -25,6 +25,13 @@ new code — import `bar_env` instead. Override with `BAR_ROOT` / `BAR_DATA` /
 **The BAR.sdd checkout is stale** — its `origin/master` ref is from 2025-11-28.
 `git fetch` in it before comparing against upstream.
 
+**Read `docs/10-bar-game-concepts.md` before diagnosing anything.** Reasoning
+about this AI from telemetry without the game model has repeatedly produced
+confident nonsense — T3 treated as affordable at 40 metal/s, a broken run
+reported as a "scaling" property, a D-gun's effect on our own buildings not
+understood. The economic thresholds there are real numbers from someone who
+plays the game.
+
 ## The three layers you can work at
 
 BAR's shipped AI, **BARb** ("BARbarIAn"), *is* CircuitAI: `rlcevg/CircuitAI`
