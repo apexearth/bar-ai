@@ -110,7 +110,14 @@ const float FOLLOWER_TECH_INCOME = 28.f;   // followers wait for a running econo
 // constructors well before 13, so holding followers that long leaves them
 // sitting on cons they are not allowed to use. Measured: followers teched at
 // 15-21 min while the rusher was done at 5.4.
-const int   FOLLOWER_TECH_FRAME  = 9 * MINUTE;
+// Tried 9 minutes, on the reasoning that the lead now techs at 6.3 so followers
+// should not wait until 13. Measured across 5 maps it went the wrong way: real
+// K/D fell from ~1.00 to 0.64 and standing army from 19.3k to 15.9k, because
+// each follower started its OWN advanced plant during the window where the team
+// still has to hold the ground -- which is the "4 AI all trying to make T2 =
+// SLOW" failure this whole pooling strategy exists to avoid. Followers get T2
+// from the constructors the lead hands them, not from their own factories.
+const int   FOLLOWER_TECH_FRAME  = 13 * MINUTE;
 
 
 enum Attr {
