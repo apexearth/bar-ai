@@ -162,8 +162,28 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// its allies sent was converted straight into T1 units instead of into the
 	// plant. Idle the line outright once the rush window is open, until the
 	// advanced plant exists.
-	if (IsTechLead() && !gHaveT2 && RushReady())
-		return null;
+	// Do NOT simply idle here. Measured on Comet Catcher: the lead sat with
+	// rushReady since 5.0 min and its bank climbing to 2261 unspent metal, and
+	// still placed no plant until 13.9 min. The blocker is ENERGY, not metal --
+	// EconomyManager checks (engyFactor < energyPower) and returns before it ever
+	// consults IsSwitchAllowed, and unlike the metal check that branch is not
+	// bypassed by isSwitchTime. So banked metal is simply wasted metal here.
+	//
+	// Turn it into build power instead: more constructors means solars and
+	// converters go up faster, which is the thing the gate is actually waiting
+	// on. Those constructors are also exactly what we need afterwards to upgrade
+	// mexes and to hand to allies.
+	if (IsTechLead() && !gHaveT2 && RushReady()) {
+		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
+		if (con !is null) {
+			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+					Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
+					con, unit.GetPos(ai.frame), 0.f));
+			if (rec !is null)
+				return rec;
+		}
+		return null;   // never fall through to army production during the rush
+	}
 
 	// The tech lead buys roughly four or five minutes of T2 before the enemy
 	// catches up, and spending that on one advanced tank is close to wasting it.
