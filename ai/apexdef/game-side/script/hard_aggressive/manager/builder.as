@@ -106,9 +106,15 @@ CCircuitUnit@ energizer2 = null;
 // a builder sent to a battlefield is as likely to chew a 12-metal tree as a
 // dead Gollum. ai.GetBestWreckPos finds the richest body and we centre the
 // circle on that, so corpses get valued rather than merely counted.
-const float WRECK_SEARCH  = 1400.f;  // how far a builder will look
-const float WRECK_MIN     = 90.f;    // not worth walking for less
-const float WRECK_RADIUS  = 260.f;   // circle centred on the body we found
+// This variant's whole plan is to make the enemy pay for our economy: let them
+// attack into static defence backed by a massed army, and then eat the bodies.
+// The third step is the one that funds everything, so it is worth reaching
+// further and accepting smaller bodies than a tempo variant would -- after a
+// repelled push the field is dense with wrecks and every one of them is metal
+// the enemy bought for us.
+const float WRECK_SEARCH  = 2200.f;  // reach the whole approach, not just home
+const float WRECK_MIN     = 55.f;    // a repelled push leaves many small bodies
+const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
 const int   WRECK_TIMEOUT = 1 * MINUTE;
 int gNextWreck = 0;
 
@@ -209,7 +215,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// builders does not each run their own scan every tick.
 	if (ai.frame < gNextWreck)
 		return task;
-	gNextWreck = ai.frame + 5 * SECOND;
+	gNextWreck = ai.frame + 3 * SECOND;   // corpses decay; do not dawdle
 
 	return EnqueueWreckReclaim(unit, Task::Priority::NORMAL);
 }
