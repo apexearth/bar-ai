@@ -117,6 +117,11 @@ const float WRECK_MIN     = 55.f;    // a repelled push leaves many small bodies
 const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
 const int   WRECK_TIMEOUT = 1 * MINUTE;
 int gNextWreck = 0;
+// A raider pair is ~200 metal and not worth abandoning work for; a real push is
+// four figures. 700 within 800 elmos is "something is actually here for me".
+const float COM_DANGER_RADIUS = 800.f;
+const float COM_DANGER_COST   = 700.f;
+int gNextComLog = 0;
 
 IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
 {
@@ -184,7 +189,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // 	lastPos = unit.GetPos(ai.frame);
 // 	AiAddPoint(lastPos, "task");
 
-// 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+// 	// NOTE: ai.GetEnemyCostAt(pos, radius) now exists in the DLL and gives the
+	// positional threat query commander.json could not express -- but calling
+	// aiBuilderMgr.EnqueueRetreat() from inside AiMakeTask crashes the AI at
+	// frame ~8106. AiMakeTask is expected to RETURN a task, and enqueuing another
+	// from within it re-enters the manager. The retreat has to be issued from a
+	// hook that is not itself producing a task -- AiUpdate, via Commander::
+	// UpdateCaution, which currently only logs.
+	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 // 	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)) {
 // 		switch (task.GetBuildType()) {
 // 		case Task::BuildType::MEX:
@@ -207,7 +219,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			return eat;
 	}
 
-	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+	@task = aiBuilderMgr.DefaultMakeTask(unit);
 	// Observed: a commander stands next to reclaimable metal with an empty bank
 	// and keeps its build task instead of eating it. It is not IDLE -- it holds a
 	// task it cannot afford -- so the idle-only path below never fired. When
