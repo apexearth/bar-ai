@@ -189,13 +189,20 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // 	lastPos = unit.GetPos(ai.frame);
 // 	AiAddPoint(lastPos, "task");
 
-// 	// NOTE: ai.GetEnemyCostAt(pos, radius) now exists in the DLL and gives the
-	// positional threat query commander.json could not express -- but calling
-	// aiBuilderMgr.EnqueueRetreat() from inside AiMakeTask crashes the AI at
-	// frame ~8106. AiMakeTask is expected to RETURN a task, and enqueuing another
-	// from within it re-enters the manager. The retreat has to be issued from a
-	// hook that is not itself producing a task -- AiUpdate, via Commander::
-	// UpdateCaution, which currently only logs.
+// 	// ai.GetEnemyCostAt(pos, radius) is registered in the DLL but is NOT SAFE to
+	// call: it crashes at SkirmishAI.dll+0x2f3326 within ~8400 frames, and it
+	// returned 0 every time before crashing. My earlier note blamed
+	// EnqueueRetreat() for that crash -- wrong, the same address recurs with the
+	// retreat removed, so the fault is in GetEnemyCostAt itself. Most likely the
+	// GetEnemyUnitsIn result handling: the returned Unit/UnitDef wrappers may not
+	// be ours to delete, or GetCost(metalRes) is invalid for an enemy def.
+	//
+	// Also learned here: Factory::gT1FacUnit is null in this variant, so it is not
+	// a usable "home" anchor for a guard task.
+	//
+	// The capability is still the right one -- commander survival decides these
+	// games and no commander.json lever moves it -- but the binding needs fixing
+	// and verifying in isolation before any script calls it.
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 // 	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)) {
 // 		switch (task.GetBuildType()) {
