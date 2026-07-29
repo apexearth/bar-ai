@@ -127,6 +127,8 @@ void UpdateSling()
 		return;
 	gSlingNext = ai.frame + 10 * SECOND;
 
+	if (Builder::gGotAdvCon)
+		return;   // we already got our advanced con; the pooling is done
 	const int lead = Factory::RushLeadTeamId();
 	if (lead == ai.teamId)
 		return;                        // the lead is the one being fed

@@ -21,6 +21,12 @@ array<int> gGifted;   // teams that already received their advanced con
 //
 // Rule: never give one away while we hold only one ourselves.
 // True while teammates are still waiting on an advanced constructor of their own.
+// Set on a follower the moment the lead's gifted constructor arrives. That is
+// the local signal that the pooling has paid off for us -- observed live, allies
+// were still sending metal at 17 minutes, long after every con had been handed
+// out, which is just donating our economy away.
+bool gGotAdvCon = false;
+
 bool OwesAdvCons()
 {
 	array<Id>@ mates = ai.GetTeamIds();
@@ -41,6 +47,8 @@ void ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
 	// Actual constructors only -- not commanders, not expensive tanks.
 	if (usage != Unit::UseAs::BUILDER)
 		return;
+	if ((ai.teamId != Factory::RushLeadTeamId()) && (unit.circuitDef.costM >= ADV_CON_COST))
+		gGotAdvCon = true;   // we have ours; stop paying for the lead's
 	const CCircuitDef@ cdef = unit.circuitDef;
 	if (cdef.IsRoleAny(Unit::Role::COMM.mask))
 		return;
