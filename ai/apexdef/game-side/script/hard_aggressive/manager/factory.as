@@ -48,6 +48,11 @@ const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
 const int   RUSH_DECIDE_FRAME  = 5 * MINUTE;
 const float RUSH_DECIDE_INCOME = 15.f;
 
+// Total builders the tech lead may hold while rushing. Enough to finish an
+// advanced plant fast; beyond that each constructor is metal that buys nothing
+// while the whole team is funding this one player.
+const uint  RUSH_CON_CAP = 6;
+
 int gRushLead = -1;   // latched once chosen: a dip must not hand the role over
 
 int RushLeadTeamId()
@@ -210,7 +215,19 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// converters go up faster, which is the thing the gate is actually waiting
 	// on. Those constructors are also exactly what we need afterwards to upgrade
 	// mexes and to hand to allies.
-	if (IsTechLead() && !gHaveT2 && RushReady() && !IsSmallTeam()) {
+	// CAPPED. This had no limit at all: it recruited a constructor on every
+	// factory decision from RushReady until the advanced plant existed, which on
+	// an 8v8 is the entire rush window. Observed live -- the player going for T2
+	// sitting on 15-20 T1 constructors. That is thousands of metal in build power
+	// that cannot be spent, buying nothing, at exactly the moment the team has
+	// pooled everything behind this player.
+	//
+	// A handful is enough to finish a plant quickly; past that each one is pure
+	// waste. GetWorkerCount() is the engine's own count of our builders, so this
+	// counts what we actually hold rather than what we have ever ordered.
+	if (IsTechLead() && !gHaveT2 && RushReady() && !IsSmallTeam()
+		&& (aiBuilderMgr.GetWorkerCount() < RUSH_CON_CAP))
+	{
 		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
 		if (con !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(

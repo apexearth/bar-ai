@@ -321,7 +321,11 @@
 		"unit":      ["corack", "cortermite", "corpyro", "corsumo", "corcan", "corfast", "cormort", "corhrk", "coraak", "cormando", "corsktl", "corvoyr", "coramph", "corspy", "corroach"],
 		"land": {
 			"tier0": [ 0.01,     0.01,         0.48,      0.01,      0.13,     0.02,      0.15,      0.07,     0.01,     0.00,       0.00,      0.04,      0.02,      0.01,      0.04],
-			"tier1": [ 0.02,     0.05,         0.35,      0.14,      0.05,     0.02,      0.07,      0.09,     0.02,     0.01,       0.02,      0.03,      0.02,      0.05,      0.06]
+			// cormando (Commando, index 9) zeroed. It is stock at 1%, not something
+			// added here, but observed being built immediately after teching -- an
+			// expensive specialist the AI has no use for, bought with metal the
+			// whole team pooled to reach T2. Its share goes to corsumo.
+			"tier1": [ 0.02,     0.05,         0.35,      0.15,      0.05,     0.02,      0.07,      0.09,     0.02,     0.00,       0.02,      0.03,      0.02,      0.05,      0.06]
 		},
 		"air": {
 			"tier0": [ 0.01,     0.18,         0.31,      0.01,      0.07,     0.02,      0.12,      0.05,     0.12,     0.02,       0.01,      0.02,      0.02,      0.01,      0.03],
