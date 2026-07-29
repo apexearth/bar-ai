@@ -198,7 +198,12 @@ def build_script(
             # Opposite halves with a gap between, so allies spawn together and
             # enemies do not land beside each other. Which axis matters: Glitters
             # plays top vs bottom, Comet Catcher left vs right.
-            near, far = (0.0, 0.38) if ally == 0 else (0.62, 1.0)
+            # Depth is scaled to the team size. A box 38% of the map deep gives
+            # eight players a long column strung down the map instead of a line
+            # across it; a shallower box spreads them into roughly two rows, which
+            # is how a human team of eight actually deploys.
+            depth = 0.38 if per_side <= 4 else 0.20
+            near, far = (0.0, depth) if ally == 0 else (1.0 - depth, 1.0)
             if boxes == "tb":
                 box.update({"StartRectLeft": 0.0, "StartRectRight": 1.0,
                             "StartRectTop": near, "StartRectBottom": far})
