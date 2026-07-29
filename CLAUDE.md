@@ -124,6 +124,63 @@ Measured on this machine: a 27 game-minute match completes in ~44 s wall
   (that is why `ai/apex/engine-side/AIOptions.lua` un-comments them).
 - Engine dirs are wiped on BAR update. Re-run `deploy_ai.py deploy` afterwards.
 
+## Failure modes that are SILENT — check for these before believing a result
+
+Every one of these has produced a confident, wrong conclusion in this repo. They
+share a shape: the thing didn't work, and nothing said so.
+
+- **An AngelScript compile error disables the whole variant, and the match still
+  runs.** It plays as near-stock and reports a normal result. A 12-minute "the
+  rush never fires" investigation was really a one-line syntax error. **Always**
+  grep the infolog after a run:
+  `grep -oiE "[a-z_]+\.as \([0-9]+, [0-9]+\) : ERR .{0,80}" infolog.txt`
+- **AngelScript has no forward declarations.** `CCircuitDef@ Foo();` parses as a
+  *global property* and yields `Name conflict`. The module sees all its own
+  functions regardless of order — just call it. (Globals and types *do* need to
+  be declared before use.)
+- **Asking a unit to build something no constructor of ours can build is a
+  no-op.** Forcing `coravp` while owning only a bot lab produced 33 dropped
+  requests and zero errors. Constructor build options are per-unit: `corck`
+  builds only `coralab`, `corcv` only `coravp`. Check the unit's `.lua` def.
+- **`aiMilitaryMgr.quota.attack` caps units SENT to attack, not units BUILT.**
+  Setting it to suppress army production does nothing; the factory keeps going.
+- **Engine callbacks can be silently dead.** Every `Game_getTeamResource*` call
+  returns -1 for all teams — including the AI's own — because
+  `AI_TEAM_IDS` in `rts/ExternalAI/SSkirmishAICallbackImpl.cpp` is declared
+  `= {{-1}}` and never assigned. Before building logic on a binding, log its
+  raw return once and confirm it is real data. Route around via a synced gadget
+  publishing a game rules param (`Game_getRulesParamFloat` is not gated); see
+  `game-patches/gadgets/dev_team_income.lua`.
+- **`str.replace` anchors that don't match do nothing, quietly.** This has eaten
+  edits at least five times. Always `assert old in s` before replacing, and note
+  that these Lua/AngelScript files are **tab-indented** — a space-indented anchor
+  will never match.
+
+## Harness discipline
+
+- **Never edit a file a running tournament uses.** Editing `run_match.py`
+  mid-run killed 17 matches with an `AttributeError`. The repo `ai/<variant>/`
+  tree is safe to edit while running; deploying is what swaps live files.
+- **Kill the waiter with the run.** Twice now, killing a tournament has left
+  `until ...; sleep; done` shells polling forever for a file that will never be
+  written. Stop the background task, not just the processes.
+- **`pkill -f` silently does nothing on Windows.** Use
+  `powershell -NoProfile -Command "Get-Process python,spring-headless -ErrorAction SilentlyContinue | Stop-Process -Force"`,
+  then verify the count is zero.
+- **Run Python with `-u` when redirecting to a log.** Without it the log stays
+  empty for the whole run and looks exactly like a dead process.
+- **Tournament output lands in `tournaments/<stamp>-<name>/`, not `matches/`.**
+- **Deploying while BAR is open fails with `WinError 5`** and leaves the AI
+  folder half-written (`FetchSkirmishAILibrary: unknown skirmish AI`). Check for
+  `spring.exe` / `Beyond-All-Reason.exe` first, and redeploy after closing.
+- **`FixedRNGSeed` does not make runs reproducible.** The AI DLL is
+  multithreaded: the same seed produced first-T2 at 5.2, 6.9, 9.1 and 9.8
+  minutes. Never read a single-run delta as an effect.
+- **Confirm the AI under test is actually the one running**, via
+  `Load script: LuaRules\Configs\BARb\<variant>\...` in the infolog. A replay
+  cannot tell you this — in a replay AIs are "remote", `AiLog` output does not
+  appear at all, and `Spring.GetAIInfo` reports `SYNCED_NOSHORTNAME`.
+
 ## Conventions
 
 - Python 3.13, standard library only. No new dependencies without a reason.
