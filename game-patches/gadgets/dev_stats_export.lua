@@ -80,6 +80,10 @@ local builtByTech = {}    -- team -> {tech -> metal built}
 -- those upgrades are probably not happening -- but nothing measured them, so it
 -- could only be guessed at.
 local t2Mex = {}          -- team -> advanced extractors finished
+-- Losing a commander usually loses the game, and nothing here recorded it -- so
+-- an attrition loss and a decapitation looked identical in the telemetry. Games
+-- ending at 12-13 minutes are commander-death timing, not attrition timing.
+local commLost = {}       -- team -> frame its commander died (-1 if alive)
 local builtTop = {}       -- team -> {unitName -> metal built}
 
 local function techOf(ud)
@@ -117,6 +121,15 @@ function gadget:AllowFeatureBuildStep(builderID, builderTeam, featureID, feature
 end
 
 function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam)
+	do
+		local cd = UnitDefs[unitDefID]
+		if cd ~= nil and (cd.customParams or {}).iscommander and commLost[unitTeam] == nil then
+			commLost[unitTeam] = Spring.GetGameFrame()
+			Spring.Echo(string.format("[BARAI_COMMLOST] team=%d ally=%d frame=%d min=%.1f",
+				unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
+				commLost[unitTeam], commLost[unitTeam] / 1800))
+		end
+	end
 	local ud = UnitDefs[unitDefID]
 	if ud == nil then
 		return
@@ -224,6 +237,7 @@ local function dump(reason)
 				string.format("techFrame=%d", techFrame[teamID] or -1),
 				string.format("techStart=%d", techStart[teamID] or -1),
 				string.format("t2Mex=%d", t2Mex[teamID] or 0),
+				string.format("commLost=%d", commLost[teamID] or -1),
 			}
 			local bt = builtByTech[teamID] or {}
 			parts[#parts + 1] = string.format("mT1=%.0f", bt[1] or 0)
