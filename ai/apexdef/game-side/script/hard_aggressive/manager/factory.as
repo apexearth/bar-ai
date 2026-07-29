@@ -235,11 +235,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// 1.24, while the tech lead itself was up 8 minutes. A tech lead that cannot
 	// hold the ground it techs on does not convert. Small teams keep stock
 	// production and lean on quota.attack = RUSH_SKIP_T1_SMALL to stay eco-first.
-	// Enabling con-sharing on small teams was tried and LOST 3-13 (CI 62-100%),
-	// with t2Mex falling 3.2 -> 1.8. Prioritising constructor production costs
-	// more mex upgrades than the shared constructors return: the lead's factory
-	// is the same line that would otherwise be producing, and on a four-player
-	// team there is no slack for it. Keep it to teams of six or more.
 	if (gHaveT2 && IsTechLead() && !IsSmallTeam() && Builder::OwesAdvCons()) {
 		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER2.type);
 		if (con !is null) {

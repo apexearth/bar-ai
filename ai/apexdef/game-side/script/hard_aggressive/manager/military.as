@@ -101,10 +101,6 @@ const float RUSH_TEAM_DEFEND = 60.f;
 
 void UpdateRushDefence()
 {
-	// Confining this to minutes 5-10 was tried: army at minute 10 came level
-	// (12.4k vs 12.4k) but the 12-14 collapse was untouched (9.8k vs 22.3k) and
-	// the record went 7-12 -> 5-11. So follower passivity is not what causes the
-	// decline either. Restored to the original window.
 	if ((ai.frame < SLING_FROM) || (ai.frame > SLING_UNTIL))
 		return;
 	if (ai.teamId == Factory::RushLeadTeamId())
