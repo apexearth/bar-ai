@@ -20,9 +20,59 @@ const float RUSH_ENERGY_TARGET = 150.f;      // measured: BARb hits this ~5.5 mi
 const float RUSH_ENERGY_FLOOR  = 90.f;       // fallback: reached before 4 min
 const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
 
+// The whole team pools metal behind the rusher, so it must not be the poorest
+// player on it -- feeding a starved economy just moves the starvation around.
+// Require the designated lead to sit in the top half of ally metal incomes.
+//
+// Every instance evaluates this over the same synced data (allied team incomes
+// are readable; the engine returns -1 only when it refuses), so lead and
+// followers agree on the answer without needing to talk to each other. A refusal
+// is treated as "unknown", never as "poor" -- otherwise a permissions quirk
+// would silently disable the rush the way it once disabled slinging.
+bool gLeadRichLatch = false;
+
+bool LeadIsRichEnough()
+{
+	if (gLeadRichLatch)
+		return true;              // do not abandon a rush already under way
+
+	const int lead = ai.GetLeadTeamId();
+	if (lead < 0)
+		return false;
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() < 2))
+		return true;              // no one to compare against
+
+	const float leadInc = ai.GetTeamMetalIncome(lead);
+	if (leadInc < 0.f)
+		return true;
+
+	uint known = 0;
+	uint poorer = 0;
+	for (uint i = 0; i < mates.length(); ++i) {
+		if (mates[i] == lead)
+			continue;
+		const float inc = ai.GetTeamMetalIncome(mates[i]);
+		if (inc < 0.f)
+			continue;
+		++known;
+		if (inc <= leadInc)
+			++poorer;
+	}
+	if (known == 0)
+		return true;
+	// Top half: at least as many allies below us as above.
+	return (poorer * 2) >= known;
+}
+
 bool IsTechLead()
 {
-	return ai.teamId == ai.GetLeadTeamId();
+	if (ai.teamId != ai.GetLeadTeamId())
+		return false;
+	if (!LeadIsRichEnough())
+		return false;
+	gLeadRichLatch = true;
+	return true;
 }
 
 bool RushReady()
