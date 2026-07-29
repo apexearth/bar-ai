@@ -1,5 +1,5 @@
 diff --git a/luarules/gadgets/ai_namer.lua b/luarules/gadgets/ai_namer.lua
-index 18024153d8..cddd8699ec 100644
+index 18024153d8..b7827c039a 100644
 --- a/luarules/gadgets/ai_namer.lua
 +++ b/luarules/gadgets/ai_namer.lua
 @@ -145,18 +145,19 @@ if gadgetHandler:IsSyncedCode() then
@@ -8,15 +8,8 @@ index 18024153d8..cddd8699ec 100644
  		local function getAIPrefix(teamID)
 -			-- Spring.GetAIInfo returns multiple values: hostingPlayerID, shortName, version, options
 -			local _, shortName, version, options = Spring.GetAIInfo(teamID)
-+			-- Spring.GetAIInfo returns, in order:
-+			--   skirmishAIID, name, hostingPlayerID, shortName, version, options
-+			-- Binding fewer names than that silently shifts all of them. The old
-+			-- code here read `name` into `shortName`, and since every AI name
-+			-- contains "BARb", every variant rendered as "[BARb]".
-+			local _, _, _, shortName, version = Spring.GetAIInfo(teamID)
- 			shortName = tostring(shortName or "")
-+			version = tostring(version or "")
- 
+-			shortName = tostring(shortName or "")
+-
 -			-- shortName format is like "BARbapex(3)" or "BARbstable(3)"
 -			-- Parse out the version from the shortName
 -			if string.find(shortName, "BARbapex") then
@@ -25,10 +18,19 @@ index 18024153d8..cddd8699ec 100644
 -				return "[BARb] "
 -			elseif string.find(shortName, "BARb") then
 -				return "[BARb] "
-+			-- `version` is the AI/Skirmish/<shortName>/<version>/ folder, i.e.
-+			-- exactly the variant under test: "stable", "apexsling", ...
-+			if string.find(shortName, "BARb") then
-+				return "[" .. string.upper(version) .. "] "
++			-- Spring.GetAIInfo returns, in order:
++			--   skirmishAIID, name, hostingPlayerID, shortName, version, options
++			-- Binding fewer names than that silently shifts all of them, which is
++			-- what the first version of this patch did. It does not matter though:
++			-- in SYNCED code the engine returns the literal strings
++			-- "SYNCED_NOSHORTNAME" / "SYNCED_NOVERSION" for fields 4 and 5, so a
++			-- gadget can never see which variant is playing. Only `name` -- the
++			-- start script's AI Name -- survives, so the benchmark harness writes
++			-- the variant into it as a "[TAG] " prefix and we lift it back out.
++			local _, name = Spring.GetAIInfo(teamID)
++			local tag = string.match(tostring(name or ""), "^%s*(%[[^%]]+%])")
++			if tag then
++				return tag .. " "
  			end
  
  			-- Check for Lua AIs

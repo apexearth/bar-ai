@@ -57,7 +57,7 @@
 		"cortex": "cormex",
 		"legion": "armmex"
 	},
-	"mex_up": 3,  // maximum number of simultaneous mex upgrades
+	"mex_up": 10,  // maximum number of simultaneous mex upgrades
 
 	"calc_mex": false,  // always calculate mex spots (global)
 

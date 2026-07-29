@@ -54,10 +54,7 @@ int   gTurtleStarted = 0;
 // command (COMMAND_SEND_RESOURCES) always existed; CircuitAI only used it when
 // resigning, so a team of AIs had no way to pool anything.
 //------------------------------------------------------------------------------
-// Measured: the plant is placed ~8 min and takes ~5.5 min to build, so a window
-// closing at 12 min cut the feed off half way through the thing it was paying
-// for. Cover the construction instead of the run-up to it.
-const int   SLING_UNTIL = 20 * MINUTE;
+const int   SLING_UNTIL = 12 * MINUTE;   // rush window only
 const float SLING_KEEP  = 220.f;         // early banks are small; keep little
 const int   SLING_FROM  = 5 * MINUTE;    // nothing worth pooling before this
 const float SLING_LUMP  = 450.f;         // enough to pay for the lead's T2 constructor
@@ -74,7 +71,7 @@ bool gRushLogged = false;
 // contributing nothing is a quarter of the army missing and the team folds
 // before the tech lands; on an 8v8 it is an eighth and the tech pays for itself.
 const float RUSH_SKIP_T1_BIG   = 400.f;  // large team: effectively no attacking
-const float RUSH_SKIP_T1_SMALL = 30.f;   // small team: minimal army, eco first
+const float RUSH_SKIP_T1_SMALL = 45.f;   // small team: reluctant, but still fights
 
 float RushAttackQuota()
 {
