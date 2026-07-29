@@ -199,6 +199,23 @@ Armada and Legion, and terrain blocks are a second axis of the same trap — a
 `land` ratio fix leaves `air` and `water` at stock values, so the change simply
 does not exist on those maps.
 
+## Why "mass T3" does not happen: arithmetic, not plumbing
+
+Gantry placement is fine — 79 requests across 20 games, median 23.9 min. Adding
+gantry caretakers changed nothing (T3 3,725 → 3,488), so build power is not the
+constraint either.
+
+**A Korgoth is ~11,000 metal. apexdef produces ~110,000 metal across a
+45-minute 4v4 — about 40 metal/second for the whole team. One T3 unit is
+therefore ~275 seconds of the entire team's income.** Two or three per game is
+the arithmetic ceiling, and that is exactly what gets fielded. Stock BARb fields
+none at all.
+
+So a T3 win condition needs an economy several times larger than either AI
+reaches. Before treating "no T3 mass" as a bug, check whether the economy could
+pay for one. The alternatives are to grow the economy to afford it, or to accept
+that at this scale the deciding force is massed T2.
+
 ## Harness discipline
 
 - **Never edit a file a running tournament uses.** Editing `run_match.py`
