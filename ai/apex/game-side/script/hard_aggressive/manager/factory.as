@@ -29,50 +29,73 @@ const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
 // followers agree on the answer without needing to talk to each other. A refusal
 // is treated as "unknown", never as "poor" -- otherwise a permissions quirk
 // would silently disable the rush the way it once disabled slinging.
-bool gLeadRichLatch = false;
+// Observed live: on a map where some starts have a single mex, the AI's own
+// GetLeadTeamId() picked a player on 4 metal/sec and the whole team pooled
+// behind it. Merely vetoing a poor lead is not enough -- that just cancels the
+// rush and nobody else takes it. Pick the richest ally outright.
+//
+// Every instance evaluates this over the same synced data, so lead and
+// followers reach the same answer with no cross-team signalling. Ties break on
+// lowest team id so the choice is deterministic. A -1 means the engine refused
+// the query; that is "unknown", never "poor" -- reading a refusal as a
+// meaningful zero is what silently disabled slinging once already.
+// Choosing a lead early is choosing it on noise: at 2 minutes every ally reads
+// a near-identical trickle and the "richest" is whoever happened to finish a mex
+// first. Wait for 5 minutes, by which point the economies have actually
+// separated. The exception is accelerated settings -- some games hand out enough
+// income that the picture is clear well before then -- so an ally already over
+// 15 metal/s is decisive evidence and we commit immediately.
+const int   RUSH_DECIDE_FRAME  = 5 * MINUTE;
+const float RUSH_DECIDE_INCOME = 15.f;
 
-bool LeadIsRichEnough()
+int gRushLead = -1;   // latched once chosen: a dip must not hand the role over
+
+int RushLeadTeamId()
 {
-	if (gLeadRichLatch)
-		return true;              // do not abandon a rush already under way
+	if (gRushLead >= 0)
+		return gRushLead;
 
-	const int lead = ai.GetLeadTeamId();
-	if (lead < 0)
-		return false;
 	array<Id>@ mates = ai.GetTeamIds();
-	if ((mates is null) || (mates.length() < 2))
-		return true;              // no one to compare against
+	if ((mates is null) || (mates.length() == 0))
+		return ai.GetLeadTeamId();
 
-	const float leadInc = ai.GetTeamMetalIncome(lead);
-	if (leadInc < 0.f)
-		return true;
-
+	int best = -1;
+	float bestInc = -1.f;
 	uint known = 0;
-	uint poorer = 0;
 	for (uint i = 0; i < mates.length(); ++i) {
-		if (mates[i] == lead)
-			continue;
-		const float inc = ai.GetTeamMetalIncome(mates[i]);
+		const int t = mates[i];
+		const float inc = ai.GetTeamMetalIncome(t);
 		if (inc < 0.f)
 			continue;
 		++known;
-		if (inc <= leadInc)
-			++poorer;
+		if ((inc > bestInc) || ((inc == bestInc) && (t < best))) {
+			bestInc = inc;
+			best = t;
+		}
 	}
-	if (known == 0)
-		return true;
-	// Top half: at least as many allies below us as above.
-	return (poorer * 2) >= known;
+	// Nothing readable yet (very early game): fall back to the engine's pick,
+	// but do not latch it -- re-decide once incomes exist.
+	if ((known == 0) || (best < 0))
+		return ai.GetLeadTeamId();
+
+	if ((ai.frame < RUSH_DECIDE_FRAME) && (bestInc < RUSH_DECIDE_INCOME))
+		return best;   // provisional -- keep re-deciding until the field settles
+
+	gRushLead = best;
+	AiLog(T() + "apex: rush lead = team " + best + " at "
+		+ formatFloat(bestInc, "", 0, 1) + " metal/s (richest of "
+		+ known + " allies)");
+	return best;
+}
+
+bool LeadIsRichEnough()
+{
+	return RushLeadTeamId() >= 0;
 }
 
 bool IsTechLead()
 {
-	if (ai.teamId != ai.GetLeadTeamId())
-		return false;
-	if (!LeadIsRichEnough())
-		return false;
-	gLeadRichLatch = true;
-	return true;
+	return ai.teamId == RushLeadTeamId();
 }
 
 bool RushReady()
@@ -265,6 +288,16 @@ void LogRushState()
 	CCircuitDef@ adv = AdvCounterpart();
 	const float advCost = (adv is null) ? 0.f : adv.costM;
 
+	if (lead) {
+		array<Id>@ dbg = ai.GetTeamIds();
+		string row = "";
+		if (dbg !is null) {
+			for (uint i = 0; i < dbg.length(); ++i)
+				row += " t" + dbg[i] + "=" + formatFloat(ai.GetTeamMetalIncome(dbg[i]), "", 0, 1);
+		}
+		AiLog(T() + "incomes:" + row + " | self=" + ai.teamId
+			+ " engineLead=" + ai.GetLeadTeamId());
+	}
 	AiLog(T() + "rush team=" + ai.teamId + (lead ? " LEAD" : " follower")
 		+ " haveT2=" + (gHaveT2 ? "1" : "0")
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)

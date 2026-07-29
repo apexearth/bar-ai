@@ -12,7 +12,7 @@ array<int> gGifted;   // teams that already received their advanced con
 
 void ShareAdvCon(CCircuitUnit@ unit)
 {
-	if (ai.teamId != ai.GetLeadTeamId())
+	if (ai.teamId != Factory::RushLeadTeamId())
 		return;
 	if (unit.circuitDef.costM < ADV_CON_COST)
 		return;

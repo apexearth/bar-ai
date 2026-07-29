@@ -87,7 +87,7 @@ void UpdateRushRole()
 {
 	if (ai.frame > SLING_UNTIL)
 		return;
-	if (ai.teamId != ai.GetLeadTeamId())
+	if (ai.teamId != Factory::RushLeadTeamId())
 		return;
 	if (!gRushLogged) {
 		gRushLogged = true;
@@ -104,17 +104,13 @@ void UpdateSling()
 		return;
 	gSlingNext = ai.frame + 10 * SECOND;
 
-	const int lead = ai.GetLeadTeamId();
+	const int lead = Factory::RushLeadTeamId();
 	if (lead == ai.teamId)
 		return;                        // the lead is the one being fed
 
 	if (lead < 0)
 		return;
-	// Do not pool the team's metal behind a lead that is in the bottom half of
-	// ally incomes -- same test the lead applies to itself, over the same synced
-	// data, so both sides agree on whether the rush is on.
-	if (!Factory::LeadIsRichEnough())
-		return;
+
 	// Do not feed someone who is already banking metal -- that is just moving
 	// waste around. Only sling while the lead is actually spending everything.
 	// ai.GetTeamMetalFill() reports 1.0 unconditionally: the engine does not
