@@ -60,9 +60,51 @@ local nextDump = DUMP_INTERVAL
 local lostReal, lostCheap = {}, {}
 local killReal, killCheap = {}, {}
 local builtReal = {}
+-- Testing whether the ~10 min collapse is a tech-transition problem: teching too
+-- early leaves you too poor to hold the line, too late leaves you outclassed.
+local mReclaim = {}       -- team -> metal gained from reclaiming wrecks
+local mRezSpend = {}      -- team -> metal invested resurrecting wrecks
+local featMetal = {}      -- featureDefID -> metal (cached)
+local techFrame = {}      -- team -> frame its first techlevel>=2 factory finished
+local facSpend = {}       -- team -> cumulative metal sunk into factories
+local techLvl = {}        -- unitDefID -> techlevel (cached)
+-- What each side actually fielded, so a win can be attributed to a composition
+-- (a T2 mass, a T3 push) rather than guessed at.
+local builtByTech = {}    -- team -> {tech -> metal built}
+local builtTop = {}       -- team -> {unitName -> metal built}
+
+local function techOf(ud)
+    local t = techLvl[ud.id]
+    if t == nil then
+        t = tonumber((ud.customParams or {}).techlevel or 1) or 1
+        techLvl[ud.id] = t
+    end
+    return t
+end
 
 local function bump(t, team, v)
 	t[team] = (t[team] or 0) + v
+end
+
+-- Reclaim and resurrect both flow through this callin: part < 0 is reclaim,
+-- part > 0 is refill/resurrect. Holding the field after a won fight and eating
+-- the wrecks is a large metal swing that metalProduced alone hides, because it
+-- folds reclaim in with mex and converter income.
+function gadget:AllowFeatureBuildStep(builderID, builderTeam, featureID, featureDefID, part)
+	local m = featMetal[featureDefID]
+	if m == nil then
+		local fd = FeatureDefs[featureDefID]
+		m = (fd and fd.metal) or 0
+		featMetal[featureDefID] = m
+	end
+	if m > 0 then
+		if part < 0 then
+			bump(mReclaim, builderTeam, -part * m)
+		else
+			bump(mRezSpend, builderTeam, part * m)
+		end
+	end
+	return true
 end
 
 function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam)
@@ -92,9 +134,40 @@ end
 
 function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	local ud = UnitDefs[unitDefID]
-	if ud ~= nil and (ud.metalCost or 0) >= SPAM_COST then
-		bump(builtReal, unitTeam, ud.metalCost)
+	if ud == nil then
+		return
 	end
+	if (ud.metalCost or 0) >= SPAM_COST then
+		bump(builtReal, unitTeam, ud.metalCost)
+		-- Record composition so a win can be attributed to what was actually
+		-- fielded (a T2 mass, a T3 push) instead of guessed at.
+		local tl = techOf(ud)
+		builtByTech[unitTeam] = builtByTech[unitTeam] or {}
+		builtByTech[unitTeam][tl] = (builtByTech[unitTeam][tl] or 0) + ud.metalCost
+		builtTop[unitTeam] = builtTop[unitTeam] or {}
+		builtTop[unitTeam][ud.name] = (builtTop[unitTeam][ud.name] or 0) + ud.metalCost
+	end
+	if ud.isFactory then
+		bump(facSpend, unitTeam, ud.metalCost or 0)
+		if techOf(ud) >= 2 and techFrame[unitTeam] == nil then
+			techFrame[unitTeam] = Spring.GetGameFrame()
+		end
+	end
+end
+
+-- Standing army value: kills and losses say how trades went, but not whether
+-- you actually had an army at the moment of the fight. Mobile, armed, non-chaff.
+local function armyValue(teamID)
+	local total, cheap = 0, 0
+	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+		local udid = Spring.GetUnitDefID(uid)
+		local ud = udid and UnitDefs[udid]
+		if ud ~= nil and ud.speed and ud.speed > 0 and #ud.weapons > 0 then
+			local c = ud.metalCost or 0
+			if c >= SPAM_COST then total = total + c else cheap = cheap + c end
+		end
+	end
+	return total, cheap
 end
 
 -- `io` is nil in the gadget sandbox, so emit through Spring.Echo and let the
@@ -107,13 +180,38 @@ local function dump(reason)
 				string.format("team=%d", teamID),
 				string.format("ally=%d", select(6, Spring.GetTeamInfo(teamID, false)) or 0),
 				"reason=" .. reason,
+				string.format("frame=%d", Spring.GetGameFrame()),
 				string.format("spamCost=%d", SPAM_COST),
 				string.format("mLostReal=%.0f", lostReal[teamID] or 0),
 				string.format("mLostCheap=%.0f", lostCheap[teamID] or 0),
 				string.format("mKillReal=%.0f", killReal[teamID] or 0),
 				string.format("mKillCheap=%.0f", killCheap[teamID] or 0),
 				string.format("mBuiltReal=%.0f", builtReal[teamID] or 0),
+				string.format("mFactories=%.0f", facSpend[teamID] or 0),
+				string.format("mReclaim=%.0f", mReclaim[teamID] or 0),
+				string.format("mRezSpend=%.0f", mRezSpend[teamID] or 0),
+				string.format("techFrame=%d", techFrame[teamID] or -1),
 			}
+			local bt = builtByTech[teamID] or {}
+			parts[#parts + 1] = string.format("mT1=%.0f", bt[1] or 0)
+			parts[#parts + 1] = string.format("mT2=%.0f", bt[2] or 0)
+			parts[#parts + 1] = string.format("mT3=%.0f", (bt[3] or 0) + (bt[4] or 0))
+			-- top few unit types by metal invested
+			local names = {}
+			for n, v in pairs(builtTop[teamID] or {}) do names[#names + 1] = {n, v} end
+			table.sort(names, function(a, b) return a[2] > b[2] end)
+			local top = {}
+			for i = 1, math.min(4, #names) do
+				top[#top + 1] = string.format("%s:%.0f", names[i][1], names[i][2])
+			end
+			if #top > 0 then
+				parts[#parts + 1] = "top=" .. table.concat(top, ",")
+			end
+
+			local av, ac = armyValue(teamID)
+			parts[#parts + 1] = string.format("armyReal=%.0f", av)
+			parts[#parts + 1] = string.format("armyCheap=%.0f", ac)
+
 			local n = Spring.GetTeamStatsHistory(teamID)
 			if n and n > 0 then
 				local hist = Spring.GetTeamStatsHistory(teamID, n - 1, n - 1)

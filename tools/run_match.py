@@ -226,25 +226,26 @@ STATS_RE = re.compile(r"\[BARAI_STATS\]\s+(.*)")
 
 
 def parse_stats(text: str) -> list[dict] | None:
-    """Pull the per-team counters the dev_stats_export gadget echoes.
+    """Every sample the dev_stats_export gadget echoed, in order.
 
-    The gadget emits periodically as well as at game over, so later lines for a
-    team supersede earlier ones -- keyed by team id, last write wins.
+    The gadget emits every 2 game-minutes plus at game over, so this is a time
+    series per team rather than a single end-state. Knowing *when* a match went
+    wrong is far more actionable than knowing that it did.
     """
-    latest: dict[int, dict] = {}
+    out: list[dict] = []
     for m in STATS_RE.finditer(text):
         row: dict = {}
         for tok in m.group(1).split():
-            if "=" not in tok:
-                continue
             k, _, v = tok.partition("=")
+            if not k:
+                continue
             try:
                 row[k] = float(v)
             except ValueError:
                 row[k] = v
         if "team" in row:
-            latest[int(row["team"])] = row
-    return [latest[k] for k in sorted(latest)] or None
+            out.append(row)
+    return out or None
 
 
 def parse_infolog(text: str, result: MatchResult) -> MatchResult:

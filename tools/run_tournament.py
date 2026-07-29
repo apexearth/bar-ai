@@ -140,7 +140,7 @@ def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
         "--a", job.first, "--b", job.second, "--map", job.map_name,
         "--minutes", str(minutes), "--seed", str(job.seed),
         "--out", str(outdir), "--write-dir", str(write_dir),
-        "--per-side", str(per_side),
+        "--per-side", str(per_side), "--replay",   # keep .sdfz for review
     ]
     if sides:
         cmd += ["--sides", sides]
