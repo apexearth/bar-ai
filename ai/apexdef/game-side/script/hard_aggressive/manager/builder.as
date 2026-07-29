@@ -207,8 +207,20 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			return eat;
 	}
 
-	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
 		LogCommanderThreat(unit);
+		const float hp = unit.GetHealthPercent();
+		if (hp < COM_RETREAT_HEALTH) {
+			if (ai.frame >= gNextRetreatLog) {
+				gNextRetreatLog = ai.frame + 20 * SECOND;
+				AiLog("apex: commander retreating at "
+					+ formatFloat(hp * 100.f, "", 0, 0) + "% health, frame=" + ai.frame);
+			}
+			IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+			if (flee !is null)
+				return flee;
+		}
+	}
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 	// Observed: a commander stands next to reclaimable metal with an empty bank
 	// and keeps its build task instead of eating it. It is not IDLE -- it holds a
@@ -355,6 +367,29 @@ int gNextComMove = 0;
 // commander actually is, so a retreat threshold can be set from measurement
 // rather than invented. Nothing acts on this yet: the last two attempts to act
 // immediately on a new signal cost 0-20 and four days of wrong conclusions.
+// Commander retreat, triggered on HEALTH rather than position threat.
+//
+// Measured across 10 games: ai.GetBuilderThreatAt readings within 30s of a
+// commander dying were LOWER than baseline (3% nonzero vs 8%). The map is not
+// broken -- it is being sampled in the wrong place. apexearth: "sometimes a com
+// dies to that 1 or 2 last plasma shots from a distance while it is running
+// away". The killer is at range, so the victim's own position reads clean right
+// up until it dies.
+//
+// Health loss is unambiguous and fires whether the shooter is adjacent or 800
+// elmos off. 60% is a reasoned starting point, not a measured one: retreating at
+// 25% is too late when the last two shots can finish you mid-flight, so the bar
+// has to leave enough health to escape ON. Also: "the risk should probably be
+// divided by their % of health" -- at 60% the same incoming fire is already
+// worth far more than at full.
+//
+// Unlike the earlier position-based attempt -- which fired whenever 3+ enemies
+// were within 800, returned a Patrol task from AiMakeTask, and destroyed the
+// economy (0-20, metal 6,631) -- this fires only when the commander has actually
+// been hurt, which is rare. A commander that is being shot SHOULD stop building.
+const float COM_RETREAT_HEALTH = 0.60f;
+int gNextRetreatLog = 0;
+
 int gNextThreatLog = 0;
 
 void LogCommanderThreat(CCircuitUnit@ unit)
