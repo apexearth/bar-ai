@@ -36,9 +36,22 @@ if not gadgetHandler:IsSyncedCode() then
 	return
 end
 
--- Income is a smoothed per-second figure already; a 1s refresh is plenty and
--- keeps this off the per-frame path.
-local INTERVAL = 30
+local INTERVAL = 30   -- 1s; keeps this off the per-frame path
+
+-- The raw figure is NOT a usable measure of economic strength. Spring's income
+-- (resPrevIncome) counts reclaim, so a builder eating one wreck spikes it for a
+-- few seconds. The consumer picks which player the whole team will pool its
+-- metal behind and then latches that choice, so a spike would hand the role to
+-- whoever happened to be chewing a rock at that instant -- observed live: a team
+-- read 25.8 metal/s at 2 minutes on what was almost certainly a reclaim event.
+--
+-- So publish an exponential moving average instead. ALPHA 0.03 at 1s samples is
+-- roughly a 30-second time constant: a brief reclaim barely moves it, while a
+-- genuinely better economy -- more mexes, more converters -- shows through.
+-- Sustained reclaim is real economic strength and correctly still counts.
+local ALPHA = 0.03
+
+local avg = {}   -- teamID -> smoothed metal income
 local next_at = 0
 
 function gadget:GameFrame(frame)
@@ -52,7 +65,15 @@ function gadget:GameFrame(frame)
 		-- share, sent, received
 		local _, _, _, income = Spring.GetTeamResources(teamID, "metal")
 		if income ~= nil then
-			Spring.SetGameRulesParam("ai_minc_" .. teamID, income)
+			local prev = avg[teamID]
+			if prev == nil then
+				avg[teamID] = income
+			else
+				avg[teamID] = prev + ALPHA * (income - prev)
+			end
+			Spring.SetGameRulesParam("ai_minc_" .. teamID, avg[teamID])
+			-- Raw value kept alongside for diagnostics.
+			Spring.SetGameRulesParam("ai_mincraw_" .. teamID, income)
 		end
 	end
 end
