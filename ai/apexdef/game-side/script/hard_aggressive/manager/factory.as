@@ -242,6 +242,8 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) != 0)
 		gHaveT2 = true;
+	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T3) != 0)
+		gHaveT3 = true;
 	if ((usage == Unit::UseAs::FACTORY)
 		&& ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) == 0))
 	{
@@ -521,6 +523,28 @@ CCircuitDef@ AdvCounterpart()
 	return null;
 }
 
+// T3 is this variant's WIN CONDITION, and it has never once been reached: mean
+// T3 metal across 36 measured player-games is exactly zero. The doctrine is
+// hold cheaply, out-eco behind the wall, then finish with T3 -- but nothing ever
+// decided to build the gantry, so every game was decided at T2 by whoever had
+// more army. Without this the rest of the plan has no ending.
+//
+// Gated on a real economy rather than a clock: the gantry is expensive and
+// starting one the economy cannot finish is the same trap that starting an
+// unaffordable T2 plant was.
+const float T3_METAL_INCOME = 38.f;
+bool gHaveT3 = false;
+
+CCircuitDef@ T3Gantry()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(corgant);
+	if (side == "legion")
+		return ai.GetCircuitDef(leggant);
+	return ai.GetCircuitDef(armshltx);
+}
+
 CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isReset)
 {
 	CCircuitDef@ pick = aiFactoryMgr.DefaultGetFactoryToBuild(pos, isStart, isReset);
@@ -544,6 +568,16 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 
 	// The rusher builds the advanced plant directly rather than waiting for a
 	// production switch that never comes.
+	// Once the economy carries it, tech to T3 rather than adding another T2 line.
+	if (gHaveT2 && !gHaveT3 && (aiEconomyMgr.metal.income > T3_METAL_INCOME)) {
+		CCircuitDef@ gant = T3Gantry();
+		if (gant !is null) {
+			AiLog(T() + "apex: building T3 gantry " + gant.GetName()
+				+ " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s");
+			return gant;
+		}
+	}
+
 	if (IsTechLead() && !gHaveT2 && RushReady()) {
 		CCircuitDef@ adv = AdvCounterpart();
 		if (adv !is null) {

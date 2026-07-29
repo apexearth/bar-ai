@@ -132,7 +132,7 @@
 	"armshltx": {
 		"importance": [0.0, 1.0],
 		"require_energy": true,
-		"income_tier": [100, 200],
+		"income_tier": [45, 90],
 		"unit":      ["armmar", "armraz", "armvang", "armbanth", "armlun", "armthor"],
 		"land": {
 			"tier0": [ 0.05,     0.40,     0.45,      0.00,       0.00,     0.10],
@@ -372,7 +372,7 @@
 	"corgant": {
 		"importance": [0.0, 1.0],
 		"require_energy": false,
-		"income_tier": [100, 200],
+		"income_tier": [45, 90],
 		"unit":      ["corsok", "corshiva", "corkarg", "corcat", "corkorg", "corjugg"],
 		"land": {
 			"tier0": [ 0.50,     0.25,       0.15,      0.10,     0.00,      0.00],
