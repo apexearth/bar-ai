@@ -235,11 +235,20 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// 1.24, while the tech lead itself was up 8 minutes. A tech lead that cannot
 	// hold the ground it techs on does not convert. Small teams keep stock
 	// production and lean on quota.attack = RUSH_SKIP_T1_SMALL to stay eco-first.
-	if (gHaveT2 && IsTechLead() && !IsSmallTeam() && Builder::OwesAdvCons()) {
+	// Small teams were excluded after enabling this at NOW priority lost 3-13 with
+	// t2Mex falling 3.2 -> 1.8. That test conflated two separate things: sharing
+	// constructors at all, versus MONOPOLISING the factory line to do it. NOW
+	// means the lead builds nothing else, which a four-player team cannot afford.
+	// Observed live with sharing off: "we went t2 but didn't share any cons" and
+	// then all four built their own advanced plants late -- the expensive outcome
+	// that sharing exists to prevent. So share everywhere, but only pre-empt the
+	// line on a big team.
+	if (gHaveT2 && IsTechLead() && Builder::OwesAdvCons()) {
 		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER2.type);
 		if (con !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
-					Task::RecruitType::BUILDPOWER, Task::Priority::NOW,
+					Task::RecruitType::BUILDPOWER,
+					IsSmallTeam() ? Task::Priority::NORMAL : Task::Priority::NOW,
 					con, unit.GetPos(ai.frame), 0.f));
 			if (rec !is null)
 				return rec;
@@ -511,7 +520,13 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// vs 25.1k -- but pushing the last follower to minute 16 costs more T2
 	// economy than the smoother curve is worth. The synchronised transition is a
 	// real cost; delaying teching is not the way to pay it.
-	if (!IsTechLead() && (ai.frame >= FOLLOWER_TECH_FRAME)
+	// !gHaveT2 was missing here, so a follower that ALREADY owned an advanced
+	// plant kept being granted a no-bank switch to build ANOTHER one. Observed
+	// live: a player with a T2 vehicle plant went and built a T2 bot lab as well,
+	// and all four teched simultaneously late in the game. One advanced plant per
+	// follower is the whole point -- the second is metal that should have been
+	// army or mex upgrades, spent at the worst possible moment.
+	if (!IsTechLead() && !gHaveT2 && (ai.frame >= FOLLOWER_TECH_FRAME)
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
 		&& (aiEconomyMgr.metal.income > 18.f))
 	{

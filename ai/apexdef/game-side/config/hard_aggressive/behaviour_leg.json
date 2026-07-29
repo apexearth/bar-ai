@@ -476,7 +476,7 @@
 			},
 			"legmstor" : {
 				"role": ["static"],
-				"since": 300,
+				"since": 1200,
 				"limit": 1
 			},
 			"legwin": {
