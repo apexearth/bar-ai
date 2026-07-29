@@ -189,20 +189,16 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // 	lastPos = unit.GetPos(ai.frame);
 // 	AiAddPoint(lastPos, "task");
 
-// 	// ai.GetEnemyCostAt(pos, radius) is registered in the DLL but is NOT SAFE to
-	// call: it crashes at SkirmishAI.dll+0x2f3326 within ~8400 frames, and it
-	// returned 0 every time before crashing. My earlier note blamed
-	// EnqueueRetreat() for that crash -- wrong, the same address recurs with the
-	// retreat removed, so the fault is in GetEnemyCostAt itself. Most likely the
-	// GetEnemyUnitsIn result handling: the returned Unit/UnitDef wrappers may not
-	// be ours to delete, or GetCost(metalRes) is invalid for an enemy def.
-	//
-	// Also learned here: Factory::gT1FacUnit is null in this variant, so it is not
-	// a usable "home" anchor for a guard task.
-	//
-	// The capability is still the right one -- commander survival decides these
-	// games and no commander.json lever moves it -- but the binding needs fixing
-	// and verifying in isolation before any script calls it.
+// 	// Diagnostic only for now: report how many enemy units are within
+	// COM_DANGER_RADIUS of the commander, so the retreat threshold can be set
+	// from measurement rather than invented. The previous attempt fired zero
+	// times against a guessed value of 700 metal while four commanders died.
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && (ai.frame >= gNextComLog)) {
+		gNextComLog = ai.frame + 45 * SECOND;
+		AiLog("apex: comm foes=" + formatFloat(
+			ai.GetEnemyCostAt(unit.GetPos(ai.frame), COM_DANGER_RADIUS), "", 0, 0)
+			+ " within " + formatFloat(COM_DANGER_RADIUS, "", 0, 0));
+	}
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 // 	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)) {
 // 		switch (task.GetBuildType()) {
