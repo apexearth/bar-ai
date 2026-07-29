@@ -250,8 +250,29 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// plant and nothing to upgrade mexes with. Observed in an 8v8: a player
 	// finished its advanced lab at 10:01 and immediately built Banishers, mobile
 	// radars and a Tiger, while the team upgraded ZERO mexes in 45 minutes.
+	// Instrumented because four mex upgrades across eight players (stock: 96) and
+	// zero gifts means this branch is barely firing, and guessing which of five
+	// conditions fails has already wasted a run. Log every input, once per 30s.
+	if (ai.frame >= gNextConLog) {
+		gNextConLog = ai.frame + 30 * SECOND;
+		CCircuitDef@ probe = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
+		AiLog(T() + "conbranch fac=" + unit.circuitDef.GetName()
+			+ " haveT2=" + (gHaveT2 ? "1" : "0")
+			+ " lead=" + (IsTechLead() ? "1" : "0")
+			+ " owes=" + (Builder::OwesAdvCons() ? "1" : "0")
+			+ " haveCon=" + (Builder::gHaveAdvCon ? "1" : "0")
+			+ " roleDef=" + ((probe is null) ? "NULL" : probe.GetName()));
+	}
 	if (gHaveT2 && ((IsTechLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
-		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER2.type);
+		// BUILDER, not BUILDER2. builderT2 is registered as a SUBROLE of builder
+		// (AiAddRole("builderT2", BUILDER.type)) and the factory role map is
+		// indexed by BASE roles only -- FactoryManager.cpp:1057 looks up
+		// ROLE_TYPE(BUILDER) itself. Asking for BUILDER2 returned NULL every time,
+		// so this branch silently fell through to normal production: a plant would
+		// finish and immediately build Banishers and radars while the team upgraded
+		// no mexes at all. For an advanced plant the base builder IS the advanced
+		// constructor -- coravp's only builder is coracv.
+		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
 		if (con !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
 					Task::RecruitType::BUILDPOWER,
@@ -400,6 +421,7 @@ void LogRushState()
 }
 
 int gNextSwitchProbe = 0;
+int gNextConLog = 0;
 const int T3_MAX_PROBES = 4;   // bounded: enough to place one gantry, never a pile
 int gT3Probes = 0;
 int gNextT3Probe = 0;
