@@ -615,7 +615,17 @@ CCircuitDef@ AdvCounterpart()
 // reached only near game end -- 420 metal of T3 fielded, a token rather than the
 // hammer the doctrine calls for. 26 is still a real economy and leaves time to
 // actually build a T3 force with it.
-const float T3_METAL_INCOME = 26.f;
+// apexearth, on when a human commits to T3: "you shouldn't really be making big
+// T3 until you're usually over 100m per second. That's after having 1 or 2 afus
+// usually." That matches the arithmetic measured here -- a Korgoth is ~11,000
+// metal, so at 40 m/s one unit costs 275 seconds of the whole team's income, and
+// the two or three we ever fielded were exactly what that affords.
+//
+// The gate was 26, roughly four times too low: it committed to a gantry the
+// economy could not feed, which is why T3 spend sat near 3,500 for a whole game
+// while the metal would have bought a real T2 force instead. 100 is the real
+// bar, and reaching it is an ECONOMY problem -- advanced fusion first.
+const float T3_METAL_INCOME = 100.f;
 bool gHaveT3 = false;
 
 CCircuitDef@ T3Gantry()

@@ -254,7 +254,13 @@ void UpdatePosture()
 	UpdateMassing();
 	UpdateRushRole();
 	Commander::UpdateCaution();
-	Builder::UpdateCommanderSafety();
+	// DISABLED. Exit-code audit: aborts (exit -1003) jumped from 0-2 per 20-game
+	// run to 14-17 the moment this landed, and stayed there. The engine is dying,
+	// not stalemating -- which means the "3-1, commanders solved" reading was
+	// drawn from the handful of games that survived, and the 82% I reported as
+	// mutual turtling was 82% aborted. Either CmdMoveTo issued outside a task
+	// context or GetEnemyCostAt's GetEnemyUnitsIn walk is unsafe here.
+	// Builder::UpdateCommanderSafety();
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;
 

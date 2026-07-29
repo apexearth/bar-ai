@@ -335,17 +335,17 @@ const float COM_DANGER_RADIUS = 800.f;
 const float COM_DANGER_FOES   = 3.f;   // a lone scout reads 1; a raid is 3+
 int gNextComMove = 0;
 
-void UpdateCommanderSafety()
-{
-	if ((gComm is null) || !gHomeSet || (ai.frame < gNextComMove))
-		return;
-	const AIFloat3 here = gComm.GetPos(ai.frame);
-	if (ai.GetEnemyCostAt(here, COM_DANGER_RADIUS) < COM_DANGER_FOES)
-		return;
-	gNextComMove = ai.frame + 15 * SECOND;
-	gComm.CmdMoveTo(gHomePos);
-	AiLog("apex: commander walking home from danger, frame=" + ai.frame);
-}
+// UpdateCommanderSafety() REMOVED, not merely disabled.
+//
+// Exit-code audit: aborts (exit -1003) went from 0-2 per 20-game run to 14-17
+// the moment it landed, and stayed there for four consecutive runs. The engine
+// was dying, so the "3-1, commanders solved" result came from the few games that
+// survived, and the 82% I reported as mutual turtling was 82% aborted.
+//
+// Unsafe is one of: CmdMoveTo issued outside a task context, or GetEnemyCostAt's
+// GetEnemyUnitsIn walk. Both bindings remain registered but nothing calls them,
+// so no script path can reach either. They need isolating and testing one at a
+// time in a throwaway variant before anything depends on them again.
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
