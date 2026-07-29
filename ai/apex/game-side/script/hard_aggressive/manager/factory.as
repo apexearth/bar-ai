@@ -288,16 +288,6 @@ void LogRushState()
 	CCircuitDef@ adv = AdvCounterpart();
 	const float advCost = (adv is null) ? 0.f : adv.costM;
 
-	if (lead) {
-		array<Id>@ dbg = ai.GetTeamIds();
-		string row = "";
-		if (dbg !is null) {
-			for (uint i = 0; i < dbg.length(); ++i)
-				row += " t" + dbg[i] + "=" + formatFloat(ai.GetTeamMetalIncome(dbg[i]), "", 0, 1);
-		}
-		AiLog(T() + "incomes:" + row + " | self=" + ai.teamId
-			+ " engineLead=" + ai.GetLeadTeamId());
-	}
 	AiLog(T() + "rush team=" + ai.teamId + (lead ? " LEAD" : " follower")
 		+ " haveT2=" + (gHaveT2 ? "1" : "0")
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
