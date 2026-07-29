@@ -119,8 +119,10 @@ const int   WRECK_TIMEOUT = 1 * MINUTE;
 int gNextWreck = 0;
 // A raider pair is ~200 metal and not worth abandoning work for; a real push is
 // four figures. 700 within 800 elmos is "something is actually here for me".
+AIFloat3 gHomePos;        // commander's start position -- our base, by definition
+bool gHomeSet = false;
 const float COM_DANGER_RADIUS = 800.f;
-const float COM_DANGER_COST   = 700.f;
+const float COM_DANGER_FOES   = 3.f;   // a lone scout is 1; a raid is 3+
 int gNextComLog = 0;
 
 IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
@@ -193,11 +195,35 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// COM_DANGER_RADIUS of the commander, so the retreat threshold can be set
 	// from measurement rather than invented. The previous attempt fired zero
 	// times against a guessed value of 700 metal while four commanders died.
-	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && (ai.frame >= gNextComLog)) {
-		gNextComLog = ai.frame + 45 * SECOND;
-		AiLog("apex: comm foes=" + formatFloat(
-			ai.GetEnemyCostAt(unit.GetPos(ai.frame), COM_DANGER_RADIUS), "", 0, 0)
-			+ " within " + formatFloat(COM_DANGER_RADIUS, "", 0, 0));
+	// Sample on EVERY commander task decision, and report only when something is
+	// actually near. A 45-second timer reported foes=0 throughout while
+	// commanders died, which cannot distinguish "it died between samples" from
+	// "GetEnemyUnitsIn is LOS-limited and we never see them coming". If any
+	// non-zero reading appears here, the query works and the cadence was the
+	// problem; if none ever does, the query cannot support commander safety and
+	// the signal has to come from damage taken instead.
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
+		const AIFloat3 here = unit.GetPos(ai.frame);
+		if (!gHomeSet) {
+			gHomeSet = true;
+			gHomePos = here;   // first decision is at our start position
+		}
+		// Per-decision sampling showed 49 non-zero readings from 4.1 minutes, so
+		// the query works and the earlier 45s timer was simply too coarse. A lone
+		// scout reads 1 and is not worth abandoning work for; three or more is a
+		// raiding party, and commanders were dying at 12.8-13.8 minutes.
+		const float foes = ai.GetEnemyCostAt(here, COM_DANGER_RADIUS);
+		if (foes >= COM_DANGER_FOES) {
+			if (ai.frame >= gNextComLog) {
+				gNextComLog = ai.frame + 20 * SECOND;
+				AiLog("apex: commander pulling home, foes="
+					+ formatFloat(foes, "", 0, 0) + " frame=" + ai.frame);
+			}
+			IUnitTask@ home = aiBuilderMgr.Enqueue(TaskB::Patrol(
+					Task::Priority::HIGH, gHomePos, 1 * MINUTE));
+			if (home !is null)
+				return home;
+		}
 	}
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 // 	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)) {
