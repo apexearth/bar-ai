@@ -62,14 +62,19 @@ int   gTurtleStarted = 0;
 // Measured: the plant is placed ~8 min and takes ~5.5 min to build, so a window
 // closing at 12 min cut the feed off half way through the thing it was paying
 // for. Cover the construction instead of the run-up to it.
-const int   SLING_UNTIL = 20 * MINUTE;
+// Deadline for the WHOLE pooling strategy, not just the metal transfers.
+// Pooling is a bet: the team runs poor and the lead runs armyless on the promise
+// of an early T2. If that has not landed by now the bet has lost, and keeping it
+// running only compounds the loss -- so every part of it stops here and play
+// reverts to stock. Matches TAKEOVER_UNTIL in dev_team_income.lua.
+const int   RUSH_GIVEUP = 15 * MINUTE;
 const float SLING_KEEP  = 220.f;         // early banks are small; keep little
 const int   SLING_FROM  = 5 * MINUTE;    // nothing worth pooling before this
 const float SLING_LUMP  = 450.f;         // enough to pay for the lead's T2 constructor
 int gSlingNext = 0;
 int gSlingBlocked = 0;
 int gSlingSent = 0;
-bool gRushLogged = false;
+int gRushLoggedFor = -1;   // team we last announced ourselves rusher for
 
 // "One AI should focus on reaching T2 and expanding eco -- they shouldn't help
 // T1 much at all." Suppress the lead's attack formation during the rush so its
@@ -99,28 +104,65 @@ float RushAttackQuota()
 // "defend and stall", not "do nothing".
 const float RUSH_TEAM_DEFEND = 60.f;
 
+bool gRushDefenceHeld = false;
+
 void UpdateRushDefence()
 {
-	if ((ai.frame < SLING_FROM) || (ai.frame > SLING_UNTIL))
+	if (ai.frame > RUSH_GIVEUP) {
+		// Hand the follower quota back too, or "give up on the strategy" leaves
+		// everyone still holding its passive value. Only if nothing else has
+		// since claimed the field -- a turtle hold or a massing target outranks
+		// this and must not be clobbered.
+		if (gRushDefenceHeld) {
+			gRushDefenceHeld = false;
+			if ((aiMilitaryMgr.quota.attack == RUSH_TEAM_DEFEND) && (gAttackBase >= 0.f)) {
+				aiMilitaryMgr.quota.attack = gAttackBase;
+				AiLog(Factory::T() + "apex: rush over, attack quota -> " + gAttackBase);
+			}
+		}
+		return;
+	}
+	if (ai.frame < SLING_FROM)
 		return;
 	if (ai.teamId == Factory::RushLeadTeamId())
 		return;          // the lead is handled by UpdateRushRole
 	if (gTurtle)
 		return;          // an active turtle hold is stricter; do not loosen it
-	if (aiMilitaryMgr.quota.attack < RUSH_TEAM_DEFEND)
+	if (aiMilitaryMgr.quota.attack < RUSH_TEAM_DEFEND) {
 		aiMilitaryMgr.quota.attack = RUSH_TEAM_DEFEND;
+		gRushDefenceHeld = true;
+	}
 }
+
+// Set while we hold the rusher's attack quota, so it can be handed back.
+bool gRushQuotaHeld = false;
 
 void UpdateRushRole()
 {
-	if (ai.frame > SLING_UNTIL)
+	// Past the deadline this must still run, to hand the quota back. Returning
+	// early instead left the lead pinned at RushAttackQuota() -- 400, i.e. never
+	// attack -- for the entire rest of the game.
+	if ((ai.frame > RUSH_GIVEUP) || (ai.teamId != Factory::RushLeadTeamId())) {
+		// The role can move -- before the election lands this falls back to the
+		// engine's pick, usually a different team. quota.attack was assigned and
+		// never undone, so a team that was briefly the rusher kept the
+		// do-not-attack quota all game (measured: lowest army on its team by 4x).
+		if (gRushQuotaHeld) {
+			gRushQuotaHeld = false;
+			// Back to the stock value, not RUSH_TEAM_DEFEND: past the deadline
+			// there is no strategy left to defend, and before it UpdateRushDefence
+			// re-raises a follower to 60 on its own.
+			aiMilitaryMgr.quota.attack = (gAttackBase >= 0.f) ? gAttackBase : RUSH_TEAM_DEFEND;
+			AiLog(Factory::T() + "apex: rusher role released, attack quota -> "
+				+ aiMilitaryMgr.quota.attack);
+		}
 		return;
-	if (ai.teamId != Factory::RushLeadTeamId())
-		return;
-	if (!gRushLogged) {
-		gRushLogged = true;
-		AiLog("apex: designated T2 rusher -- skipping T1 army until " + (SLING_UNTIL / MINUTE) + "m");
 	}
+	if (gRushLoggedFor != ai.teamId) {
+		gRushLoggedFor = ai.teamId;
+		AiLog(Factory::T() + "apex: designated T2 rusher -- skipping T1 army until " + (RUSH_GIVEUP / MINUTE) + "m");
+	}
+	gRushQuotaHeld = true;
 	aiMilitaryMgr.quota.attack = RushAttackQuota();
 }
 
@@ -128,7 +170,7 @@ void UpdateSling()
 {
 	// Nothing to pool in the first half-minute, and the engine has not settled
 	// team ids that early either.
-	if ((ai.frame < SLING_FROM) || (ai.frame > SLING_UNTIL) || (ai.frame < gSlingNext))
+	if ((ai.frame < SLING_FROM) || (ai.frame > RUSH_GIVEUP) || (ai.frame < gSlingNext))
 		return;
 	gSlingNext = ai.frame + 10 * SECOND;
 
@@ -157,7 +199,7 @@ void UpdateSling()
 	const float amount = (spare < SLING_LUMP) ? spare : SLING_LUMP;
 	ai.SendResources(amount, 0.f, lead);
 	if (gSlingSent++ % 8 == 0)
-		AiLog("apex: sent " + amount + " metal to lead " + lead);
+		AiLog(Factory::T() + "apex: sent " + amount + " metal to lead " + lead);
 }
 
 // Attack in a mass, not a trickle.
@@ -249,6 +291,12 @@ void UpdateMassing()
 
 void UpdatePosture()
 {
+	// Before UpdateRushRole, which overwrites quota.attack on the lead. Captured
+	// after it, this recorded the rusher's own suppressed value as the baseline,
+	// so every later "restore" restored 400 (never attack).
+	if (gAttackBase < 0.f)
+		gAttackBase = aiMilitaryMgr.quota.attack;
+
 	UpdateSling();
 	UpdateRushDefence();
 	UpdateMassing();
@@ -261,9 +309,6 @@ void UpdatePosture()
 	// mutual turtling was 82% aborted. Either CmdMoveTo issued outside a task
 	// context or GetEnemyCostAt's GetEnemyUnitsIn walk is unsafe here.
 	// Builder::UpdateCommanderSafety();
-	if (gAttackBase < 0.f)
-		gAttackBase = aiMilitaryMgr.quota.attack;
-
 	if (ai.frame < gNextSample)
 		return;
 	gNextSample = ai.frame + POSTURE_SAMPLE;
@@ -285,7 +330,7 @@ void UpdatePosture()
 			gTurtleStarted = ai.frame;
 			gPostureUntil = ai.frame + TURTLE_MIN_HOLD;
 			aiMilitaryMgr.quota.attack = TURTLE_ATTACK;
-			AiLog("apexturtle: HOLD #" + gTurtleCount + " frame=" + ai.frame
+			AiLog(Factory::T() + "apexturtle: HOLD #" + gTurtleCount + " frame=" + ai.frame
 				+ " army " + prev + " -> " + army);
 		}
 	} else if ((army >= gArmyAtHold * RECOVER_OF_PEAK)
@@ -293,7 +338,7 @@ void UpdatePosture()
 		gTurtle = false;
 		gPostureUntil = ai.frame + TURTLE_MIN_HOLD;
 		aiMilitaryMgr.quota.attack = gAttackBase;
-		AiLog("apexturtle: RESUME frame=" + ai.frame + " army=" + army
+		AiLog(Factory::T() + "apexturtle: RESUME frame=" + ai.frame + " army=" + army
 			+ " (held from " + gArmyAtHold + ")");
 	}
 }
@@ -421,7 +466,7 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	const float threat = aiEnemyMgr.mobileThreat;
 	if (gPorcArmed ? (threat < armyFloor * PORC_RELEASE) : (threat >= armyFloor)) {
 		gPorcArmed = !gPorcArmed;
-		AiLog("apex: porc " + (gPorcArmed ? "ON" : "OFF") + " frame=" + ai.frame
+		AiLog(Factory::T() + "apex: porc " + (gPorcArmed ? "ON" : "OFF") + " frame=" + ai.frame
 			+ " mobileThreat=" + formatFloat(threat, "", 0, 1)
 			+ "/" + formatFloat(armyFloor, "", 0, 1)
 			+ " enemies=" + ai.GetEnemyTeamSize());

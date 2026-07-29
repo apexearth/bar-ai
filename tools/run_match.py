@@ -348,15 +348,22 @@ def run(args) -> int:
         print(script)
         return 0
 
-    exe = env.spring if args.windowed else env.headless
+    watching = args.watch or args.windowed
+    exe = env.spring if watching else env.headless
     # BAR's tools/headless_testing/start.sh removes this before every run:
     # stale widget config silently enables/disables widgets between runs.
     shutil.rmtree(write_dir / "LuaUI" / "Config", ignore_errors=True)
 
     cmd = [str(exe), "--write-dir", str(write_dir)]
-    cfg = REPO / "tools" / "headless.cfg"
+    # headless.cfg forces an 8x8 window, which is right for a batch and useless
+    # to watch. Spring also REWRITES whatever config it is handed -- that is what
+    # kept corrupting the tracked file into keys like "ersion = 8" -- so give it
+    # a throwaway copy in the write dir and leave the repo's copy alone.
+    cfg = REPO / "tools" / ("watch.cfg" if watching else "headless.cfg")
     if cfg.exists():
-        cmd += ["--config", str(cfg)]
+        run_cfg = write_dir / "run.cfg"
+        shutil.copy2(cfg, run_cfg)
+        cmd += ["--config", str(run_cfg)]
     cmd.append(str(script_path))
 
     # SPRING_DATADIR keeps maps/games/pool discoverable while the engine writes
@@ -487,18 +494,27 @@ def main() -> int:
                          "for A/B tests")
     ap.add_argument("--per-side", dest="per_side", type=int, default=1,
                     help="AIs per side; --per-side 4 with two specs is a 4v4")
-    ap.add_argument("--speed", type=int, default=9999,
-                    help="sim speed cap; MinSpeed is what actually raises it (default 9999)")
+    ap.add_argument("--speed", type=int, default=0,
+                    help="sim speed cap; MinSpeed is what actually raises it "
+                         "(default 9999, or 1 with --watch)")
     ap.add_argument("--replay", action="store_true",
                     help="record a .sdfz replay (off by default: large and slows batches)")
     ap.add_argument("--windowed", action="store_true",
-                    help="use spring.exe instead of spring-headless.exe to watch it")
+                    help="use spring.exe instead of spring-headless.exe")
+    ap.add_argument("--watch", action="store_true",
+                    help="watch it play: windowed at 1600x900, real-time speed, "
+                         "replay recorded. Implies --windowed --speed 1")
     ap.add_argument("--out", help="output directory (default: matches/<stamp>-<slug>)")
     ap.add_argument("--write-dir", dest="write_dir",
                     help="engine write dir; give concurrent runs separate ones "
                          "(default: matches/_engine)")
     ap.add_argument("--dry-run", action="store_true", help="print the script and stop")
-    return run(ap.parse_args())
+    args = ap.parse_args()
+    if args.speed == 0:
+        args.speed = 1 if args.watch else 9999
+    if args.watch:
+        args.replay = True
+    return run(args)
 
 
 if __name__ == "__main__":

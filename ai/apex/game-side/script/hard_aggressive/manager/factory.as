@@ -22,80 +22,68 @@ const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
 
 // The whole team pools metal behind the rusher, so it must not be the poorest
 // player on it -- feeding a starved economy just moves the starvation around.
-// Require the designated lead to sit in the top half of ally metal incomes.
-//
-// Every instance evaluates this over the same synced data (allied team incomes
-// are readable; the engine returns -1 only when it refuses), so lead and
-// followers agree on the answer without needing to talk to each other. A refusal
-// is treated as "unknown", never as "poor" -- otherwise a permissions quirk
-// would silently disable the rush the way it once disabled slinging.
 // Observed live: on a map where some starts have a single mex, the AI's own
 // GetLeadTeamId() picked a player on 4 metal/sec and the whole team pooled
 // behind it. Merely vetoing a poor lead is not enough -- that just cancels the
-// rush and nobody else takes it. Pick the richest ally outright.
+// rush and nobody else takes it. The richest ally has to be picked outright.
 //
-// Every instance evaluates this over the same synced data, so lead and
-// followers reach the same answer with no cross-team signalling. Ties break on
-// lowest team id so the choice is deterministic. A -1 means the engine refused
-// the query; that is "unknown", never "poor" -- reading a refusal as a
-// meaningful zero is what silently disabled slinging once already.
-// Choosing a lead early is choosing it on noise: at 2 minutes every ally reads
-// a near-identical trickle and the "richest" is whoever happened to finish a mex
-// first. Wait for 5 minutes, by which point the economies have actually
-// separated. The exception is accelerated settings -- some games hand out enough
-// income that the picture is clear well before then -- so an ally already over
-// 15 metal/s is decisive evidence and we commit immediately.
-const int   RUSH_DECIDE_FRAME  = 5 * MINUTE;
-const float RUSH_DECIDE_INCOME = 15.f;
+// The election runs in synced Lua and is published as "ai_lead_<allyTeamId>";
+// dev_team_income.lua owns the policy, this side only reads the result. It used
+// to run per-instance over ai.GetTeamMetalIncome, but the instances do not read
+// the income table at the same instant, so they could disagree and elect two
+// leads (seen in 1 of 533 archived matches).
+//
+// Param missing (before the decision frame, or no gadget) => fall back to the
+// engine's own pick.
+const string LEAD_PARAM = "ai_lead_";
 
 // Total builders the tech lead may hold while rushing. Enough to finish an
 // advanced plant fast; beyond that each constructor is metal that buys nothing
 // while the whole team is funding this one player.
 const uint  RUSH_CON_CAP = 6;
 
-int gRushLead = -1;   // latched once chosen: a dip must not hand the role over
+// Minimum gap between two constructor orders during the rush.
+//
+// RUSH_CON_CAP reads GetWorkerCount(), which counts FINISHED builders only, and
+// Enqueue does not dedup -- so without spacing the cap can be overshot by
+// however many orders fit in one constructor's build time. An interval is used
+// rather than an in-flight counter because an aborted recruit would leak a
+// counter permanently and silently stop constructor production.
+const int   RUSH_CON_SPACING = 12 * SECOND;
+int gNextConOrder = 0;
+
+int gRushLead = -1;   // last lead this instance saw published
+bool gT1Reclaimed = false;   // one-shot: we fed our T1 lab into the plant
+
+// False once the pooling strategy has been given up on (Military::RUSH_GIVEUP).
+// The rush branch below returns null rather than producing army, so a lead that
+// never reaches T2 would otherwise sit out the entire game building nothing.
+bool RushWindowOpen()
+{
+	return ai.frame <= Military::RUSH_GIVEUP;
+}
 
 int RushLeadTeamId()
 {
-	if (gRushLead >= 0)
-		return gRushLead;
+	const int lead = int(ai.GetGameRulesParam(LEAD_PARAM + ai.allyTeamId, -1.f));
+	// Not elected yet (before the decision frame), or the gadget is not
+	// installed. Defer to the engine's own pick, and to the last known lead if
+	// we ever had one, rather than reporting "nobody".
+	if (lead < 0)
+		return (gRushLead >= 0) ? gRushLead : ai.GetLeadTeamId();
 
-	array<Id>@ mates = ai.GetTeamIds();
-	if ((mates is null) || (mates.length() == 0))
-		return ai.GetLeadTeamId();
-
-	int best = -1;
-	float bestInc = -1.f;
-	uint known = 0;
-	for (uint i = 0; i < mates.length(); ++i) {
-		const int t = mates[i];
-		const float inc = ai.GetTeamMetalIncome(t);
-		if (inc < 0.f)
-			continue;
-		++known;
-		if ((inc > bestInc) || ((inc == bestInc) && (t < best))) {
-			bestInc = inc;
-			best = t;
-		}
+	// Not latched: the gadget can hand the role over if the lead dies or misses
+	// its tech deadline.
+	if (lead != gRushLead) {
+		AiLog(T() + "apex: tech lead "
+			+ ((gRushLead < 0) ? "= team " + lead
+			                   : "CHANGED team " + gRushLead + " -> " + lead)
+			+ " (ally " + ai.allyTeamId + ")");
+		gRushLead = lead;
+		// gT1Reclaimed is deliberately NOT cleared: the reclaim stays one-shot
+		// per instance.
 	}
-	// Nothing readable yet (very early game): fall back to the engine's pick,
-	// but do not latch it -- re-decide once incomes exist.
-	if ((known == 0) || (best < 0))
-		return ai.GetLeadTeamId();
-
-	if ((ai.frame < RUSH_DECIDE_FRAME) && (bestInc < RUSH_DECIDE_INCOME))
-		return best;   // provisional -- keep re-deciding until the field settles
-
-	gRushLead = best;
-	AiLog(T() + "apex: rush lead = team " + best + " at "
-		+ formatFloat(bestInc, "", 0, 1) + " metal/s (richest of "
-		+ known + " allies)");
-	return best;
-}
-
-bool LeadIsRichEnough()
-{
-	return RushLeadTeamId() >= 0;
+	return gRushLead;
 }
 
 bool IsTechLead()
@@ -226,15 +214,23 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// waste. GetWorkerCount() is the engine's own count of our builders, so this
 	// counts what we actually hold rather than what we have ever ordered.
 	if (IsTechLead() && !gHaveT2 && RushReady() && !IsSmallTeam()
-		&& (aiBuilderMgr.GetWorkerCount() < RUSH_CON_CAP))
+		&& RushWindowOpen())
 	{
-		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
-		if (con !is null) {
-			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
-					Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
-					con, unit.GetPos(ai.frame), 0.f));
-			if (rec !is null)
-				return rec;
+		// Cap AND spacing: the cap alone cannot hold, because GetWorkerCount()
+		// only sees finished builders (see RUSH_CON_SPACING above).
+		if ((aiBuilderMgr.GetWorkerCount() < RUSH_CON_CAP)
+			&& (ai.frame >= gNextConOrder))
+		{
+			CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
+			if (con !is null) {
+				IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+						Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
+						con, unit.GetPos(ai.frame), 0.f));
+				if (rec !is null) {
+					gNextConOrder = ai.frame + RUSH_CON_SPACING;
+					return rec;
+				}
+			}
 		}
 		return null;   // never fall through to army production during the rush
 	}
@@ -311,11 +307,10 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 }
 
 // The lead's own T1 lab, kept so it can be fed back into the T2 plant.
+// gT1Reclaimed is declared with the other rush state above, because
+// RushLeadTeamId() clears it on a handover and AngelScript resolves globals in
+// declaration order.
 CCircuitUnit@ gT1FacUnit = null;
-bool gT1Reclaimed = false;
-// Set once the rusher has actually asked for the advanced plant, so we never
-// eat the T1 lab before there is something to spend it on.
-bool gRushCommitted = false;
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
@@ -372,6 +367,11 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	// CCircuitUnit is registered NOCOUNT, so a handle is not nulled when the
+	// engine destroys the unit and `is null` stays false on freed memory.
+	// Leaving this unset crashed UpdateRushReclaim's Enqueue (0xc0000005).
+	if (gT1FacUnit is unit)
+		@gT1FacUnit = null;
 }
 
 void AiLoad(IStream& istream)
@@ -388,9 +388,18 @@ void AiSave(OStream& ostream)
 // Every AiLog line was unanchored in time, so a log could show the rush firing
 // while saying nothing about *when* -- which is the only thing that matters for a
 // deadline of "T2 before 10 minutes". Stamp everything.
+// Log prefix: game time AND team id.
+//
+// Every AI instance on the map writes to one infolog behind the same
+// "Skirmish AI <BARbarIAn Apex-apex>:" prefix, so without the team id four
+// players' lines are indistinguishable. That made the questions this strategy
+// actually raises -- who is the lead, who is slinging, who teched first --
+// unanswerable from a log, and forced them to be guessed at instead. Prefix
+// every line and they become a per-team timeline. tools/trace_flow.py parses it.
 string T()
 {
-	return "[" + formatFloat(float(ai.frame) / float(MINUTE), "", 0, 1) + "m] ";
+	return "[" + formatFloat(float(ai.frame) / float(MINUTE), "", 0, 1) + "m t"
+		+ ai.teamId + "] ";
 }
 
 // Periodic dump of every input the rush decision reads, so a slow tech can be
@@ -400,7 +409,7 @@ string T()
 // is being replaced by; a T1 lab can be rebuilt later once T2 economy is up.
 void UpdateRushReclaim()
 {
-	if (gT1Reclaimed || gHaveT2 || !IsTechLead() || !RushReady())
+	if (gT1Reclaimed || gHaveT2 || !IsTechLead() || !RushReady() || !RushWindowOpen())
 		return;
 	if (gT1FacUnit is null)
 		return;
@@ -635,6 +644,39 @@ bool IsAirFactory(CCircuitDef@ def)
 	return false;
 }
 
+// At most ONE air opening per ally team on a big team.
+//
+// Each instance decides its opening alone from the same map data, so on an 8v8
+// several would pick air independently. One slot is chosen deterministically
+// from the ally roster instead -- every instance computes the same answer at
+// frame 0, with no signalling. Highest team id, to avoid landing on the same
+// player as the engine's GetLeadTeamId (the early tech lead).
+//
+// A cap, not a quota: if the slot holder does not want air, the team opens
+// none.
+int AirSlotTeamId()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() == 0))
+		return -1;
+	int slot = -1;
+	for (uint i = 0; i < mates.length(); ++i) {
+		if (int(mates[i]) > slot)
+			slot = int(mates[i]);
+	}
+	return slot;
+}
+
+// May this instance open with an air factory at all?
+bool MayOpenAir()
+{
+	if (IsSmallTeam())
+		return false;             // under BIG_TEAM: nobody opens air
+	if (IsTechLead())
+		return false;             // the rusher techs on the ground
+	return ai.teamId == AirSlotTeamId();
+}
+
 // Ground opening for the tech lead when the default picks air. Vehicles over
 // bots: the construction vehicle builds the advanced vehicle plant, and its
 // heavy assault line (Gollum) pushes where the bot line (Sumo) holds.
@@ -703,13 +745,14 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 {
 	CCircuitDef@ pick = aiFactoryMgr.DefaultGetFactoryToBuild(pos, isStart, isReset);
 	if (isStart || (pick is null)) {
-		if (isStart && IsAirFactory(pick) && (IsSmallTeam() || IsTechLead())) {
+		if (isStart && IsAirFactory(pick) && !MayOpenAir()) {
 			CCircuitDef@ ground = GroundOpening();
 			if (ground !is null) {
 				AiLog(T() + "apex: opening " + pick.GetName() + " -> "
 					+ ground.GetName()
 					+ (IsSmallTeam() ? " (no air on a small team)"
-					                 : " (no air tech lead)"));
+					 : IsTechLead()  ? " (no air tech lead)"
+					                 : " (air slot is team " + AirSlotTeamId() + ")"));
 				@pick = ground;
 			}
 		}
@@ -732,10 +775,9 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 		}
 	}
 
-	if (IsTechLead() && !gHaveT2 && RushReady()) {
+	if (IsTechLead() && !gHaveT2 && RushReady() && RushWindowOpen()) {
 		CCircuitDef@ adv = AdvCounterpart();
 		if (adv !is null) {
-			gRushCommitted = true;
 			AiLog(T() + "apex: rusher building advanced plant " + adv.GetName()
 				+ " (from " + gT1Fac.GetName() + ")");
 			return adv;

@@ -125,7 +125,7 @@
 						{"unit": "armmmkr", "category": "convert", "offset": [120, -120]},
 						{"unit": "armmmkr", "category": "convert", "offset": [150, 120]},
 						{"unit": "armmmkr", "category": "convert", "offset": [120, 150]},
-						{"unit": "armfmd", "category": "defence", "offset": [180, 0]},
+						{"unit": "armamd", "category": "defence", "offset": [180, 0]},
 						{"unit": "armflak", "category": "defence", "offset": {"front": 120}, "priority": "now"},
 						{"unit": "armflak", "category": "defence", "offset": {"front": 130}, "priority": "now"},
 						{"unit": "armflak", "category": "defence", "offset": {"front": 140}, "priority": "now"},

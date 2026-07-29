@@ -63,11 +63,52 @@ def _copy_tree(src: Path, dst: Path) -> None:
     shutil.copytree(src, dst, dirs_exist_ok=True)
 
 
-def deploy(env: bar_env.BarEnv, variant: str, force: bool = False) -> None:
+# Anything that holds an open handle on engine/<ver>/AI/Skirmish/**/SkirmishAI.dll.
+LOCKERS = ("spring.exe", "spring-headless.exe", "spring-dedicated.exe",
+           "Beyond-All-Reason.exe")
+
+
+def _running_lockers() -> list[str]:
+    """BAR processes that will make the engine-side deploy fail halfway.
+
+    Windows refuses to replace a loaded DLL. deploy() removes the target folder
+    first and then rewrites it, so a lock does not merely abort the deploy -- it
+    leaves the variant with its AIInfo.lua deleted and only the stale DLL
+    behind, and every subsequent match reports
+    'FetchSkirmishAILibrary: unknown skirmish AI'. That reads as the variant
+    scoring zero on everything, which looks exactly like a catastrophic
+    regression and is not one. Refuse up front instead.
+    """
+    if sys.platform != "win32":
+        return []
+    try:
+        out = subprocess.run(["tasklist", "/fo", "csv", "/nh"],
+                             capture_output=True, text=True, timeout=30).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []   # cannot tell; do not block on a broken probe
+    wanted = {n.lower() for n in LOCKERS}
+    found = {line.split('","')[0].lstrip('"')
+             for line in out.splitlines()
+             if line.split('","')[0].lstrip('"').lower() in wanted}
+    return sorted(found)
+
+
+def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> None:
     src = AI_DIR / variant
     if not (src / "game-side").is_dir():
         raise SystemExit(
             f"no variant '{variant}' in {AI_DIR} (have: {', '.join(variants()) or 'none'})"
+        )
+
+    busy = _running_lockers()
+    if busy and not allow_running:
+        raise SystemExit(
+            f"{', '.join(busy)} is running -- refusing to deploy.\n"
+            f"Windows will not let the loaded SkirmishAI.dll be replaced, and this\n"
+            f"deploy deletes the engine-side folder before rewriting it, so going\n"
+            f"ahead would leave '{variant}' unloadable.\n"
+            f"Close BAR (and any running match) and retry, or pass --allow-running\n"
+            f"if you are certain nothing has the engine directory open."
         )
 
     stable = env.skirmish_dir(SHORT_NAME, "stable")
@@ -80,9 +121,8 @@ def deploy(env: bar_env.BarEnv, variant: str, force: bool = False) -> None:
 
     # 1. Engine side: fresh copy of stable (DLL + baseline config/script), then
     #    overlay this repo's AIInfo/AIOptions so the version string says <variant>.
-    if target.exists() and not force:
-        print(f"  engine-side  refreshing {target}")
     if target.exists():
+        print(f"  engine-side  refreshing {target}")
         shutil.rmtree(target)
     _copy_tree(stable, target)
 
@@ -98,6 +138,12 @@ def deploy(env: bar_env.BarEnv, variant: str, force: bool = False) -> None:
             shutil.copy2(f, target / name)
             overlaid.append(name)
 
+    for required in ("AIInfo.lua", "SkirmishAI.dll"):
+        if not (target / required).exists():
+            raise SystemExit(
+                f"engine-side deploy incomplete: {target / required} is missing.\n"
+                f"The variant will not load. Close BAR and redeploy."
+            )
     _assert_version_matches(target / "AIInfo.lua", variant)
     print(f"  engine-side  {target}")
     print(f"               derived from BARb/stable, overlaid {', '.join(overlaid)}")
@@ -257,7 +303,9 @@ def main() -> int:
 
     d = sub.add_parser("deploy", help="repo -> live install")
     d.add_argument("variant")
-    d.add_argument("--force", action="store_true")
+    d.add_argument("--allow-running", dest="allow_running", action="store_true",
+                   help="deploy even though BAR appears to be running (it will "
+                        "probably fail on the locked SkirmishAI.dll)")
 
     p = sub.add_parser("pull", help="live install -> repo")
     p.add_argument("variant")
@@ -281,7 +329,7 @@ def main() -> int:
     elif args.cmd == "list":
         print("\n".join(variants()) or "(none)")
     elif args.cmd == "deploy":
-        deploy(env, args.variant, args.force)
+        deploy(env, args.variant, args.allow_running)
     elif args.cmd == "pull":
         pull(env, args.variant)
     elif args.cmd == "patches":

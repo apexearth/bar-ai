@@ -199,6 +199,26 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	end
 end
 
+-- Constructors held, split by tech. The tech lead deliberately converts the
+-- team's pooled metal into build power, so this is the number that separates
+-- "enough to finish the plant" from "metal that cannot be spent". Held rather
+-- than built, to match the quantity RUSH_CON_CAP thinks it is capping.
+-- Commanders excluded: not a production choice.
+local function builderCounts(teamID)
+	local t1, t2, metal = 0, 0, 0
+	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+		local udid = Spring.GetUnitDefID(uid)
+		local ud = udid and UnitDefs[udid]
+		if ud ~= nil and ud.isBuilder and ud.speed and ud.speed > 0
+			and not (ud.customParams or {}).iscommander
+		then
+			metal = metal + (ud.metalCost or 0)
+			if techOf(ud) >= 2 then t2 = t2 + 1 else t1 = t1 + 1 end
+		end
+	end
+	return t1, t2, metal
+end
+
 -- Standing army value: kills and losses say how trades went, but not whether
 -- you actually had an army at the moment of the fight. Mobile, armed, non-chaff.
 local function armyValue(teamID)
@@ -258,6 +278,11 @@ local function dump(reason)
 			local av, ac = armyValue(teamID)
 			parts[#parts + 1] = string.format("armyReal=%.0f", av)
 			parts[#parts + 1] = string.format("armyCheap=%.0f", ac)
+
+			local c1, c2, cm = builderCounts(teamID)
+			parts[#parts + 1] = string.format("conT1=%d", c1)
+			parts[#parts + 1] = string.format("conT2=%d", c2)
+			parts[#parts + 1] = string.format("mCon=%.0f", cm)
 
 			local n = Spring.GetTeamStatsHistory(teamID)
 			if n and n > 0 then

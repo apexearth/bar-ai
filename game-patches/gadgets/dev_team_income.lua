@@ -54,6 +54,141 @@ local ALPHA = 0.03
 local avg = {}   -- teamID -> smoothed metal income
 local next_at = 0
 
+--------------------------------------------------------------------------------
+-- Tech-lead election.
+--
+-- Elected here, not per-AI. Each AI instance reads this table at a different
+-- frame (SlowUpdate is offset by skirmishAIId), and the table is rewritten every
+-- INTERVAL frames, so instances scanning it themselves could disagree and elect
+-- two leads -- seen in 1 of 533 archived matches. One synced writer removes the
+-- race by construction.
+--
+-- Factory::RushLeadTeamId() only reads the result; the policy lives here.
+local DECIDE_FRAME  = 5 * 60 * 30   -- 5 minutes: before this, income is noise
+local DECIDE_INCOME = 15.0          -- ...unless someone is already clearly ahead
+
+-- Takeover: the team's whole investment rides on the lead, so replace one that
+-- cannot deliver. Two triggers -- dead (immediate), and no advanced factory by
+-- TECH_DEADLINE. hasAdvancedFactory() counts nanoframes, so a lead that has
+-- committed and is building passes; only "never started" fails.
+local TECH_DEADLINE  = 10 * 60 * 30
+-- Past this, a takeover cannot pay for itself: every follower has had its own
+-- no-bank switch since FOLLOWER_TECH_FRAME (10 min) and is teching anyway, so
+-- starting a fresh pooling round just takes a second player out of the fight.
+local TAKEOVER_UNTIL = 15 * 60 * 30
+-- Grace before a new appointee is judged. Without it one missed deadline
+-- cascaded through all eight teams in 210 frames (seen in an 8v8). Death is
+-- exempt.
+local TAKEOVER_GRACE = 3 * 60 * 30
+
+local leadOf = {}      -- allyTeamID -> current lead teamID
+local failed = {}      -- teamID -> true; never elected again
+local abandoned = {}   -- allyTeamID -> true; no eligible successor, stop trying
+local judgeAt = {}     -- allyTeamID -> frame the current lead may first be judged
+
+local techLvl = {}  -- unitDefID -> techlevel (cached)
+local function techOf(ud)
+	local t = techLvl[ud.id]
+	if t == nil then
+		t = tonumber((ud.customParams or {}).techlevel or 1) or 1
+		techLvl[ud.id] = t
+	end
+	return t
+end
+
+local function isAlive(teamID)
+	local _, _, isDead = Spring.GetTeamInfo(teamID, false)
+	if isDead then
+		return false
+	end
+	-- Formally alive but stripped of every unit counts as gone.
+	local units = Spring.GetTeamUnits(teamID)
+	return units ~= nil and #units > 0
+end
+
+-- Counts nanoframes: GetTeamUnits includes units under construction, which is
+-- exactly the distinction between "slow" and "never committed".
+local function hasAdvancedFactory(teamID)
+	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+		local ud = UnitDefs[Spring.GetUnitDefID(uid)]
+		if ud ~= nil and ud.isFactory and techOf(ud) >= 2 then
+			return true
+		end
+	end
+	return false
+end
+
+local function pickLead(teams)
+	local best, bestInc = nil, -1
+	for _, teamID in ipairs(teams) do
+		if not failed[teamID] and isAlive(teamID) then
+			local inc = avg[teamID]
+			-- Ties break on lowest team id. `best == nil` first: comparing against
+			-- a nil best would throw and silently kill the election.
+			if inc ~= nil and (best == nil or inc > bestInc
+				or (inc == bestInc and teamID < best))
+			then
+				best, bestInc = teamID, inc
+			end
+		end
+	end
+	return best, bestInc
+end
+
+local function setLead(allyID, teamID, inc, frame, why)
+	leadOf[allyID] = teamID
+	judgeAt[allyID] = frame + TAKEOVER_GRACE
+	Spring.SetGameRulesParam("ai_lead_" .. allyID, teamID)
+	Spring.Echo(string.format(
+		"[BARAI_LEAD] ally=%d team=%d inc=%.1f frame=%d min=%.1f why=%s",
+		allyID, teamID, inc, frame, frame / 1800, why))
+end
+
+local function updateLeads(frame)
+	-- Group AI teams by ally. Non-AI teams are excluded: a human is not running
+	-- this strategy and cannot be pooled behind.
+	local byAlly = {}
+	for _, teamID in ipairs(Spring.GetTeamList()) do
+		local _, _, _, isAI, _, allyID = Spring.GetTeamInfo(teamID, false)
+		if isAI and allyID ~= nil then
+			byAlly[allyID] = byAlly[allyID] or {}
+			byAlly[allyID][#byAlly[allyID] + 1] = teamID
+		end
+	end
+
+	for allyID, teams in pairs(byAlly) do
+		local cur = leadOf[allyID]
+		if cur == nil then
+			local best, inc = pickLead(teams)
+			if best ~= nil and (frame >= DECIDE_FRAME or inc >= DECIDE_INCOME) then
+				setLead(allyID, best, inc, frame, "elected")
+			end
+		elseif frame <= TAKEOVER_UNTIL and not abandoned[allyID] then
+			local why = nil
+			if not isAlive(cur) then
+				why = "lead-lost"
+			elseif frame >= TECH_DEADLINE and frame >= (judgeAt[allyID] or 0)
+				and not hasAdvancedFactory(cur) then
+				why = "no-t2-by-deadline"
+			end
+			if why ~= nil then
+				failed[cur] = true
+				local best, inc = pickLead(teams)
+				if best ~= nil then
+					setLead(allyID, best, inc, frame, why .. "-took-over-from-" .. cur)
+				else
+					-- Nobody eligible left. Leave the param as-is and stop trying,
+					-- or the same dead lead re-triggers every check.
+					abandoned[allyID] = true
+					Spring.Echo(string.format(
+						"[BARAI_LEAD] ally=%d team=-1 inc=0.0 frame=%d min=%.1f why=%s-no-successor",
+						allyID, frame, frame / 1800, why))
+				end
+			end
+		end
+	end
+end
+
 function gadget:GameFrame(frame)
 	if frame < next_at then
 		return
@@ -76,4 +211,7 @@ function gadget:GameFrame(frame)
 			Spring.SetGameRulesParam("ai_mincraw_" .. teamID, income)
 		end
 	end
+
+	-- After the incomes above are current, never against a half-updated table.
+	updateLeads(frame)
 end

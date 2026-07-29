@@ -41,8 +41,27 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
 - **One designated tech lead**, chosen as the **richest ally by smoothed metal
   income**, latched at 5 min (or immediately once anyone clears 15 m/s).
   Stock has no team coordination at all — each instance decides alone.
+  **The election runs in synced Lua** (`dev_team_income.lua`), not in each AI.
+  It used to run per-instance on the assumption that identical synced inputs
+  give identical answers; they do, but the *read instants* differ (SlowUpdate is
+  offset by `skirmishAIId` and the lookup is lazy), and the income table is
+  rewritten inside that window. 1 archived match in 533 elected two leads and
+  ran the whole game with both idling army production and both teching. One
+  writer, one published answer, `ai_lead_<allyTeamId>`. **measured**
+- **The lead is replaced if it dies or fails to tech.** Two triggers in the
+  gadget: dead (immediate, counting a team stripped of all units), and no
+  advanced factory by 10 min -- nanoframes count, so a lead that has committed
+  and is building passes. A 3-min grace applies per appointee; without it one
+  missed deadline cascaded through all 8 teams in 210 frames. No takeover after
+  15 min. **measured**
 - **Slinging**: followers send 450-metal lumps to the lead, keeping 220, from
   5 min until they receive their own advanced constructor.
+- **The whole strategy is abandoned at 15 min** (`Military::RUSH_GIVEUP`).
+  Pooling is a bet -- the team runs poor and the lead runs armyless -- so if T2
+  has not landed by then it has lost, and continuing compounds it. Slinging, the
+  rusher's factory pre-emption, the T1-lab reclaim and both suppressed attack
+  quotas all stop, and play reverts to stock. **measured**: all release paths fire
+  at 15.0m and restore quota.attack to the stock 15.
 - **The lead techs on zero bank**: stock requires `0.5 x plant cost` banked,
   which is never reachable. It places the plant and pours income in.
 - **Followers get the same no-bank switch** once past 13 min — and **only one
@@ -96,9 +115,18 @@ porcupine entries ship `on: false` and are built inert.
 
 `game-patches/gadgets/` — installed into `BAR.sdd`, inert in normal play.
 - `dev_stats_export.lua` — value-weighted telemetry: real vs chaff kills, T2
-  placement *and* completion, T2 mex count, reclaim, **commander losses**.
+  placement *and* completion, T2 mex count, reclaim, **commander losses**,
+  **constructors held (T1/T2) and metal tied up in them**.
 - `dev_team_income.lua` — publishes smoothed per-team metal income as a game
-  rules param, because the engine's own ally-income callback is broken.
+  rules param, because the engine's own ally-income callback is broken. **Also
+  elects the tech lead** and publishes it as `ai_lead_<allyTeamId>`; this file
+  owns that policy, the AI only reads the result.
+- `tools/trace_flow.py` — reconstructs the pooling sequence (elect → pool →
+  rush → tech → share → follow) per ally team from an infolog and names the
+  first step that broke. Needs the `[3.9m t2]` team-tagged log prefix.
+- `tools/check.py` — pre-deploy gate: invalid JSON, non-existent unit names,
+  multi-key `condition` objects, version/profile mismatches. Baseline-aware, so
+  it reports our breakage and not the ~31 quirks inherited from stock.
 - `ai_namer.lua` patch — prefixes AI names with their variant so replays are
   readable.
 

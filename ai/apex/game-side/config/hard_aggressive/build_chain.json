@@ -242,8 +242,6 @@
 		"geo": {
 			"armgeo": {
 				"hub": [[{"unit": "armbeamer", "category": "defence", "offset": {"front": 64}}]]
-					{"unit": "armafus", "category": "energy", "offset": {"back": 60}, "condition": {"m_inc>": 45}},
-					{"unit": "corafus", "category": "energy", "offset": {"back": 60}, "condition": {"m_inc>": 45}},
 			},
 			"corgeo": {
 				"hub": [[{"unit": "corhllt", "category": "defence", "offset": {"front": 64}}]]

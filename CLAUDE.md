@@ -106,6 +106,11 @@ python tools/unitsync.py ais                 # what the engine sees
 
 python tools/run_match.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1
+python tools/run_match.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
+    --map "Comet Catcher" --per-side 8 --watch   # windowed, real time, watchable
+
+python tools/check.py                        # pre-deploy: bad JSON, dead unit names
+python tools/trace_flow.py <match-or-run-dir> # did the pooling strategy actually work
 python tools/run_tournament.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
     --maps "Comet Catcher" --games 10
 python tools/run_tournament.py --report
@@ -266,6 +271,26 @@ that at this scale the deciding force is massed T2.
   inside `BAR.sdd` while iterating, run `deploy_ai.py pull <variant>` afterwards
   or the work will be lost on the next deploy.
 - Line endings are LF (`.gitattributes`) so diffs against upstream stay readable.
+
+### Comments — write far fewer than feels natural here
+
+The long "tried X, measured Y, reverted" blocks already in `factory.as` are
+load-bearing: they stop a failed experiment being retried. That is not licence
+to add more of them. Three rules, each from a real mistake:
+
+- **Never state a cause you did not measure.** A spacing fix was annotated "that
+  is how a cap of 6 produced 15-20 constructors" — the cap holding at ≤6 had
+  been measured; the claim about the overshoot never was. If it was reasoning,
+  say so or leave it out. Wrong comments are worse than none.
+- **Don't inline the commit message.** What was tried, what it scored, why it
+  was reverted goes in `CHANGES.md`. A comment earns its place by explaining a
+  mechanism that is not visible in the code — a NOCOUNT handle, a jsoncpp
+  parsing quirk, an engine gate that returns before the check you are reading.
+- **Change the code, change the comment.** A declaration still read "cleared on
+  a handover" after the clearing was removed. Re-read every comment attached to
+  a line you touch.
+
+Default to none. Three lines is a lot; ten needs a reason.
 
 ## If contributing upstream
 

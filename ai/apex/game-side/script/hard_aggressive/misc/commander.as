@@ -58,7 +58,7 @@ void UpdateCaution()
 	const bool careful = (heavy >= COM_HEAVY_METAL);
 	if (careful != gCautious) {
 		gCautious = careful;
-		AiLog("apex: commander " + (careful ? "CAUTIOUS" : "loose")
+		AiLog(Factory::T() + "apex: commander " + (careful ? "CAUTIOUS" : "loose")
 			+ " frame=" + ai.frame
 			+ " enemyHeavy=" + formatFloat(heavy, "", 0, 0));
 	}
@@ -69,7 +69,7 @@ void UpdateCaution()
 	// GetWorkerCount() > 2 before any commander caution applies at all.
 	if (ai.frame >= gNextLog) {
 		gNextLog = ai.frame + 2 * MINUTE;
-		AiLog("apex: comm heavy=" + formatFloat(heavy, "", 0, 0)
+		AiLog(Factory::T() + "apex: comm heavy=" + formatFloat(heavy, "", 0, 0)
 			+ "/" + formatFloat(COM_HEAVY_METAL, "", 0, 0)
 			+ " mobileThr=" + formatFloat(aiEnemyMgr.mobileThreat, "", 0, 1)
 			+ " workers=" + int(aiBuilderMgr.GetWorkerCount())

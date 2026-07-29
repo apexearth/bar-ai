@@ -90,7 +90,7 @@ bool ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
 		array<CCircuitUnit@> gift;
 		gift.insertLast(unit);
 		ai.GiveUnits(gift, cand);
-		AiLog("apex: gave adv con to team " + cand + " (held "
+		AiLog(Factory::T() + "apex: gave adv con to team " + cand + " (held "
 			+ (gAdvConsMade - gAdvConsGifted + 1) + ", keeping "
 			+ (gAdvConsMade - gAdvConsGifted) + ")");
 		return true;
@@ -218,7 +218,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		if (hp < COM_RETREAT_HEALTH) {
 			if (ai.frame >= gNextRetreatLog) {
 				gNextRetreatLog = ai.frame + 20 * SECOND;
-				AiLog("apex: commander retreating at "
+				AiLog(Factory::T() + "apex: commander retreating at "
 					+ formatFloat(hp * 100.f, "", 0, 0) + "% health, frame=" + ai.frame);
 			}
 			IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
@@ -403,7 +403,7 @@ void LogCommanderThreat(CCircuitUnit@ unit)
 		return;
 	gNextThreatLog = ai.frame + 30 * SECOND;
 	const AIFloat3 here = unit.GetPos(ai.frame);
-	AiLog("apex: comm threat=" + formatFloat(ai.GetBuilderThreatAt(here), "", 0, 2)
+	AiLog(Factory::T() + "apex: comm threat=" + formatFloat(ai.GetBuilderThreatAt(here), "", 0, 2)
 		+ " frame=" + ai.frame);
 }
 
@@ -488,6 +488,9 @@ void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 		@energizer1 = null;
 	else if (energizer2 is unit)
 		@energizer2 = null;
+	// Same NOCOUNT hazard as gT1FacUnit: a dangling handle reads as non-null.
+	if (gComm is unit)
+		@gComm = null;
 }
 
 void AiLoad(IStream& istream)
