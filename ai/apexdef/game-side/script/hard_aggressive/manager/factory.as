@@ -489,6 +489,24 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
 		return true;
 	}
+	// Followers could never tech. Measured: 4.6k of T2 unit spend against stock's
+	// 11-14k, 1.4 mex upgrades against 2.5-2.9, and three of four followers still
+	// reading haveT2=0 at eighteen minutes while earning 30-73 metal/s. Releasing
+	// the clock changed nothing, which proved the clock was never the blocker --
+	// this gate is. It wants armyCost > 1.2x cost x facCount or the full plant
+	// cost banked, and a follower holds neither.
+	//
+	// The lead escapes this via the rush branch above. Give followers the same
+	// once the pooling window has closed: place the plant on income rather than
+	// banking for it, with assist on so build power finishes it. Pooling behind
+	// one player is only worth it if the others follow afterwards.
+	if (!IsTechLead() && (ai.frame >= FOLLOWER_TECH_FRAME)
+		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
+		&& (aiEconomyMgr.metal.income > 18.f))
+	{
+		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
+		return true;
+	}
 	const bool isOK = (aiMilitaryMgr.armyCost > 1.2f * facDef.costM * aiFactoryMgr.GetFactoryCount())
 		|| (aiEconomyMgr.metal.current > facDef.costM);
 	aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = !isOK;
