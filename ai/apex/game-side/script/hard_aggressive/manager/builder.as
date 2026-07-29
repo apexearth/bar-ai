@@ -7,18 +7,37 @@ namespace Builder {
 // can build T2 without each paying for their own advanced factory.
 const float ADV_CON_COST = 300.f;   // T1 cons are ~110, T2 ~600
 int gAdvConsMade = 0;
+int gAdvConsGifted = 0;
 
 array<int> gGifted;   // teams that already received their advanced con
 
-void ShareAdvCon(CCircuitUnit@ unit)
+// Observed live: the lead built its first T2 constructor and handed it straight
+// over, leaving itself none. Two bugs behind it. This was called for EVERY unit
+// added with no role filter, so any unit costing 300+ metal bumped the counter
+// -- and the unit actually given away was whatever triggered the call, which
+// need not be a constructor at all. And the guard counted cons ever MADE rather
+// than cons currently HELD, so once the count was used up by combat units the
+// next real constructor went out the door.
+//
+// Rule: never give one away while we hold only one ourselves.
+void ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	if (ai.teamId != Factory::RushLeadTeamId())
 		return;
-	if (unit.circuitDef.costM < ADV_CON_COST)
+	// Actual constructors only -- not commanders, not expensive tanks.
+	if (usage != Unit::UseAs::BUILDER)
 		return;
+	const CCircuitDef@ cdef = unit.circuitDef;
+	if (cdef.IsRoleAny(Unit::Role::COMM.mask))
+		return;
+	if (cdef.costM < ADV_CON_COST)
+		return;
+
 	++gAdvConsMade;
-	if (gAdvConsMade <= 1)
-		return;                        // keep the first for ourselves
+	// Keep at least one for ourselves at all times: the lead is the player whose
+	// job it is to upgrade mexes, and it cannot do that with no constructor.
+	if ((gAdvConsMade - gAdvConsGifted) <= 1)
+		return;
 
 	array<Id>@ mates = ai.GetTeamIds();
 	if (mates is null)
@@ -30,10 +49,13 @@ void ShareAdvCon(CCircuitUnit@ unit)
 		if ((cand == ai.teamId) || (gGifted.find(cand) >= 0))
 			continue;
 		gGifted.insertLast(cand);
+		++gAdvConsGifted;
 		array<CCircuitUnit@> gift;
 		gift.insertLast(unit);
 		ai.GiveUnits(gift, cand);
-		AiLog("apex: gave adv con to team " + cand);
+		AiLog("apex: gave adv con to team " + cand + " (held "
+			+ (gAdvConsMade - gAdvConsGifted + 1) + ", keeping "
+			+ (gAdvConsMade - gAdvConsGifted) + ")");
 		return;
 	}
 }
@@ -149,7 +171,7 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
-	ShareAdvCon(unit);
+	ShareAdvCon(unit, usage);
 	const CCircuitDef@ cdef = unit.circuitDef;
 	if (usage != Unit::UseAs::BUILDER || cdef.IsRoleAny(Unit::Role::COMM.mask))
 		return;
