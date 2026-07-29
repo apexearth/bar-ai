@@ -384,24 +384,17 @@ bool AiIsSwitchTime(int lastSwitchFrame)
 		gNextSwitchProbe = ai.frame + 10 * SECOND;
 		return true;
 	}
-	// Getting the gantry considered at all requires forcing a switch window,
-	// because after T2 this otherwise falls back to MakeSwitchInterval's 9-15
-	// minutes and the gantry was requested ZERO times across a full match. An
-	// unbounded window did work (18 requests) but crashed the AI at frame 47226,
-	// which is the same shape as the three-T1-labs bug: a gate held permanently
-	// open lets factory tasks pile up. So bound it -- a handful of well-spaced
-	// probes is enough to place one gantry, and cannot accumulate.
-	if (!gHaveT3 && (gT3Probes < T3_MAX_PROBES)
-		&& (aiEconomyMgr.metal.income > T3_METAL_INCOME))
-	{
-		if (ai.frame < gNextT3Probe)
-			return false;
-		gNextT3Probe = ai.frame + 90 * SECOND;
-		++gT3Probes;
-		AiLog(T() + "apex: T3 probe " + gT3Probes + "/" + T3_MAX_PROBES
-			+ " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s");
-		return true;
-	}
+	// T3 probe REMOVED after measurement, not after theorising. Bounded probing
+	// worked mechanically -- 3645 metal of T3 fielded, the first time this AI has
+	// ever reached T3, against stock's 0 -- and lost 4-12 with the CI excluding
+	// 50%. Metal fell 136k -> 88k and army 25k -> 13k: a gantry plus its units
+	// costs more than the game gives back at these income levels, and the match
+	// is decided long before the investment pays.
+	//
+	// The doctrine is not wrong; the economy is not yet big enough to afford its
+	// win condition. T3 belongs behind an economy that can carry it, which means
+	// the eco half has to come good FIRST. Re-enable this only alongside a
+	// measured economy that outpaces stock's ~136k.
 	// Everyone should at least be trying for T2 by ~20 minutes.
 	if (!gHaveT2 && (ai.frame > 20 * MINUTE))
 		return true;
