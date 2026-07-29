@@ -388,11 +388,28 @@ array<string> T2_FAC = {armalab, armavp, armasy, armaap,
                         coralab, coravp, corasy, coraap,
                         legalab, legavp};
 
-// Air is a bad sling target: the team pools its metal into one player expecting
-// a T2 ground push out of it, and an air opening cannot give them one. Rather
-// than teach every follower to recognise an air lead -- which needs a cross-team
-// signal AngelScript does not have -- just make sure the lead never opens air.
+// Two separate reasons to refuse an air OPENING.
+//
+// 1. On a small team it is simply a losing choice: "on a 4v4 nobody should go
+//    air, to main air on a 4v4 is a recipe for loss -- we'd beat BARb if we just
+//    did 4x ground". One of four players contributing no ground army is a
+//    quarter of the team missing. On a big team one air player is affordable and
+//    can be useful, so only the lead is barred there.
+// 2. Air is a bad sling target regardless of team size: the team pools its metal
+//    into one player expecting a T2 ground push, and an air opening cannot give
+//    them one.
+//
+// This gates the opening factory only. A later air plant, once the ground game
+// is established, is fine and is left alone.
+const uint BIG_TEAM = 6;   // same threshold the rush attack quota uses
+
 array<string> AIR_FAC = {armap, armaap, corap, coraap, legap, legaap};
+
+bool IsSmallTeam()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	return (mates is null) || (mates.length() < BIG_TEAM);
+}
 
 bool IsAirFactory(CCircuitDef@ def)
 {
@@ -438,11 +455,13 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 {
 	CCircuitDef@ pick = aiFactoryMgr.DefaultGetFactoryToBuild(pos, isStart, isReset);
 	if (isStart || (pick is null)) {
-		if (isStart && IsTechLead() && IsAirFactory(pick)) {
+		if (isStart && IsAirFactory(pick) && (IsSmallTeam() || IsTechLead())) {
 			CCircuitDef@ ground = GroundOpening();
 			if (ground !is null) {
-				AiLog(T() + "apex: lead opening " + pick.GetName()
-					+ " -> " + ground.GetName() + " (no air tech lead)");
+				AiLog(T() + "apex: opening " + pick.GetName() + " -> "
+					+ ground.GetName()
+					+ (IsSmallTeam() ? " (no air on a small team)"
+					                 : " (no air tech lead)"));
 				@pick = ground;
 			}
 		}
