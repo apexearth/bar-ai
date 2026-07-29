@@ -315,8 +315,45 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 // 	}
 }
 
+// Commander safety, issued as a raw move order rather than a task.
+//
+// Commander survival is the measured determinant of these games: 2.3-3.0 lost
+// when we lose, 0.0-1.3 when we win, across four runs. Every commander.json
+// lever was tried individually and none moved it, because `hide` needs elapsed
+// time AND a global threat bar while these deaths happen with the commander out
+// working somewhere specific.
+//
+// Expressing the response as a task returned from AiMakeTask lost 0-20 with
+// metal at 6,631 -- that hook is the ONLY place the commander gets work, so a
+// retreat task replaces everything it would have built. CmdMoveTo issues the
+// order directly and leaves the task slot alone, so it keeps its job and simply
+// walks away from the danger first.
+CCircuitUnit@ gComm = null;
+AIFloat3 gHomePos;
+bool gHomeSet = false;
+const float COM_DANGER_RADIUS = 800.f;
+const float COM_DANGER_FOES   = 3.f;   // a lone scout reads 1; a raid is 3+
+int gNextComMove = 0;
+
+void UpdateCommanderSafety()
+{
+	if ((gComm is null) || !gHomeSet || (ai.frame < gNextComMove))
+		return;
+	const AIFloat3 here = gComm.GetPos(ai.frame);
+	if (ai.GetEnemyCostAt(here, COM_DANGER_RADIUS) < COM_DANGER_FOES)
+		return;
+	gNextComMove = ai.frame + 15 * SECOND;
+	gComm.CmdMoveTo(gHomePos);
+	AiLog("apex: commander walking home from danger, frame=" + ai.frame);
+}
+
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && (gComm is null)) {
+		@gComm = unit;
+		gHomePos = unit.GetPos(ai.frame);
+		gHomeSet = true;
+	}
 	// ai.GiveUnits unregisters the unit and fires its removal event from inside
 	// the call, so once it returns true this unit is already gone. Recording it
 	// below would park a foreign unit in an energizer slot whose AiUnitRemoved

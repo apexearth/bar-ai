@@ -254,6 +254,7 @@ void UpdatePosture()
 	UpdateMassing();
 	UpdateRushRole();
 	Commander::UpdateCaution();
+	Builder::UpdateCommanderSafety();
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
