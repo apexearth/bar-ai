@@ -136,7 +136,13 @@ const float FOLLOWER_TECH_INCOME = 28.f;   // followers wait for a running econo
 // whatever the clock says. The lead only escapes because the rush branch above
 // grants it a no-bank switch. Giving followers an equivalent -- place it and
 // pour income in -- is the actual fix, and is untested.
-const int   FOLLOWER_TECH_FRAME  = 13 * MINUTE;
+// Retested at 10 now that the metal gate below is released. The earlier 10-min
+// test was CONFOUNDED: followers were blocked by AiIsSwitchAllowed's bank
+// requirement whatever the clock said, so moving the clock could not show an
+// effect and t2Mex went 1.4 -> 1.5. With the gate open the clock is finally the
+// binding constraint, and followers still convert only 7.7k of T2 against
+// stock's 12.2k -- they tech, but too late to compound.
+const int   FOLLOWER_TECH_FRAME  = 10 * MINUTE;
 
 
 enum Attr {
