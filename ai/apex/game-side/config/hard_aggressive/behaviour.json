@@ -1169,12 +1169,15 @@
 			},
 
 			"armfark": {
-				"role": ["builder"],
+				// support, not builder: this is an assist bot, and while it carried the
+				// builder role the T2 lab handed it back as the advanced constructor.
+				"role": ["support"],
 				"build_speed": 10.0,  //bp 140
 				"limit": 20
 			},
 			"corfast": {
-				"role": ["builder"],
+				// support, not builder -- see armfark.
+				"role": ["support"],
 				"limit": 10,
 				"build_speed": 7.0,
 				"since": 1500
@@ -1819,7 +1822,8 @@
 				"power": 1.0
 			},
 			"cormando": {
-				"role": ["builder"],
+				// raider, not builder: a 1200-metal infiltrator with 7 build options.
+				"role": ["raider"],
 				"limit": 2,
 				"build_speed": 10.0,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},

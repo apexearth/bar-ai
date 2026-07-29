@@ -474,6 +474,15 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 		return;
 	}
 
+	// The lead is spending the whole team's pooled metal on one nanoframe, so a
+	// tower at its own cluster competes directly with finishing it. Exposed
+	// frontier sites still get one -- losing the lead's base loses the game.
+	if (Factory::IsTechLead() && !Factory::gHaveT2 && Factory::RushWindowOpen()
+		&& !IsFrontierSite(pos))
+	{
+		return;
+	}
+
 	const float armyFloor = EnemyArmyFloor();
 	const float threat = aiEnemyMgr.mobileThreat;
 	if (gPorcArmed ? (threat < armyFloor * PORC_RELEASE) : (threat >= armyFloor)) {

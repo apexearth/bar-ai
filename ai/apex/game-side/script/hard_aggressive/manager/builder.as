@@ -466,6 +466,18 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 		return;
 	}
 
+	// While we are the lead paying for the advanced plant, our constructors
+	// belong at home finishing it. Unit::Attr::BASE routes them through
+	// MakeEnergizerTask, which walks task types in a fixed order -- energy,
+	// storage, factory, nano before MEXUP, and MEX last -- so the nanoframe wins
+	// over opening a new mex. Observed live: the lead's cons were out at the
+	// front making mexes while the plant crawled and 300+ metal of wreckage sat
+	// unreclaimed beside it.
+	if (Factory::IsTechLead() && !Factory::gHaveT2 && Factory::RushWindowOpen()) {
+		unit.AddAttribute(Unit::Attr::BASE.type);
+		return;
+	}
+
 	// constructor with BASE attribute is assigned to tasks near base
 	if (cdef.costM < 200.f) {
 		if (energizer1 is null

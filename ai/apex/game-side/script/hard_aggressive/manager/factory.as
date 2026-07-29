@@ -54,6 +54,7 @@ int gNextConOrder = 0;
 
 int gRushLead = -1;   // last lead this instance saw published
 bool gT1Reclaimed = false;   // one-shot: we fed our T1 lab into the plant
+bool gPlantPlaced = false;   // the advanced plant has actually been requested
 
 // False once the pooling strategy has been given up on (Military::RUSH_GIVEUP).
 // The rush branch below returns null rather than producing army, so a lead that
@@ -410,7 +411,10 @@ string T()
 // is being replaced by; a T1 lab can be rebuilt later once T2 economy is up.
 void UpdateRushReclaim()
 {
-	if (gT1Reclaimed || gHaveT2 || !IsTechLead() || !RushReady() || !RushWindowOpen())
+	// Only once the plant has actually been requested. RushReady() alone can be
+	// true minutes earlier, and eating the lab before there is anything to spend
+	// it on just removes the lead's unit production for nothing.
+	if (gT1Reclaimed || gHaveT2 || !IsTechLead() || !gPlantPlaced || !RushWindowOpen())
 		return;
 	if (gT1FacUnit is null)
 		return;
@@ -779,6 +783,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	if (IsTechLead() && !gHaveT2 && RushReady() && RushWindowOpen()) {
 		CCircuitDef@ adv = AdvCounterpart();
 		if (adv !is null) {
+			gPlantPlaced = true;
 			AiLog(T() + "apex: rusher building advanced plant " + adv.GetName()
 				+ " (from " + gT1Fac.GetName() + ")");
 			return adv;
