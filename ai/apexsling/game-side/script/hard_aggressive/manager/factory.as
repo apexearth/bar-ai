@@ -25,6 +25,12 @@ bool IsTechLead()
 	return ai.teamId == ai.GetLeadTeamId();
 }
 
+bool RushReady()
+{
+	return (aiEconomyMgr.energy.income > RUSH_ENERGY_TARGET)
+		|| ((ai.frame > RUSH_LATEST) && (aiEconomyMgr.energy.income > RUSH_ENERGY_FLOOR));
+}
+
 const float FOLLOWER_TECH_INCOME = 28.f;   // followers wait for a running economy
 const int   FOLLOWER_TECH_FRAME  = 13 * MINUTE;  // ...but never past this
 
@@ -77,6 +83,14 @@ int switchInterval = MakeSwitchInterval();
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
+	// aiMilitaryMgr.quota.attack only caps how many units get SENT to attack; it
+	// does not stop the factory building them. Measured: the rusher's standing
+	// army grew 240 -> 3400 metal while its bank sat at 1 metal, so every sling
+	// its allies sent was converted straight into T1 units instead of into the
+	// plant. Idle the line outright once the rush window is open, until the
+	// advanced plant exists.
+	if (IsTechLead() && !gHaveT2 && RushReady())
+		return null;
 	return aiFactoryMgr.DefaultMakeTask(unit);
 }
 
@@ -88,10 +102,23 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 {
 }
 
+// The lead's own T1 lab, kept so it can be fed back into the T2 plant.
+CCircuitUnit@ gT1FacUnit = null;
+bool gT1Reclaimed = false;
+// Set once the rusher has actually asked for the advanced plant, so we never
+// eat the T1 lab before there is something to spend it on.
+bool gRushCommitted = false;
+
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) != 0)
 		gHaveT2 = true;
+	if ((usage == Unit::UseAs::FACTORY)
+		&& ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) == 0))
+	{
+		@gT1FacUnit = unit;
+		AiLog(T() + "apexsling: T1 lab on field: " + unit.circuitDef.GetName());
+	}
 //	if (!factories.empty() || (this->circuit->GetBuilderManager()->GetWorkerCount() > 2)) return;
 	if (usage != Unit::UseAs::FACTORY)
 		return;
@@ -148,6 +175,58 @@ void AiSave(OStream& ostream)
 /*
  * New factory switch condition; switch event is also based on eco + caretakers.
  */
+// Every AiLog line was unanchored in time, so a log could show the rush firing
+// while saying nothing about *when* -- which is the only thing that matters for a
+// deadline of "T2 before 10 minutes". Stamp everything.
+string T()
+{
+	return "[" + formatFloat(float(ai.frame) / float(MINUTE), "", 0, 1) + "m] ";
+}
+
+// Periodic dump of every input the rush decision reads, so a slow tech can be
+// attributed to a specific gate rather than guessed at. One line per 30s.
+// The T1 lab is ~600-900 metal standing idle -- the rush already stops it
+// producing, so it is pure banked metal doing nothing. Feed it into the plant it
+// is being replaced by; a T1 lab can be rebuilt later once T2 economy is up.
+void UpdateRushReclaim()
+{
+	if (gT1Reclaimed || gHaveT2 || !IsTechLead() || !RushReady())
+		return;
+	if (gT1FacUnit is null)
+		return;
+	gT1Reclaimed = true;
+	AiLog(T() + "apexsling: reclaiming T1 lab " + gT1FacUnit.circuitDef.GetName()
+		+ " into the advanced plant");
+	aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, gT1FacUnit));
+}
+
+int gNextRushLog = 0;
+void LogRushState()
+{
+	if (ai.frame < gNextRushLog)
+		return;
+	gNextRushLog = ai.frame + 30 * SECOND;
+
+	const bool lead = IsTechLead();
+	if (!lead && gHaveT2)
+		return;   // followers that already teched are not interesting
+
+	const bool rushReady = RushReady();
+	CCircuitDef@ adv = AdvCounterpart();
+	const float advCost = (adv is null) ? 0.f : adv.costM;
+
+	AiLog(T() + "rush team=" + ai.teamId + (lead ? " LEAD" : " follower")
+		+ " haveT2=" + (gHaveT2 ? "1" : "0")
+		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
+		+ "/" + formatFloat(RUSH_ENERGY_TARGET, "", 0, 0)
+		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+		+ " mCur=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
+		+ "/" + formatFloat(advCost * 0.5f, "", 0, 0)
+		+ " rushReady=" + (rushReady ? "1" : "0")
+		+ " facs=" + aiFactoryMgr.GetFactoryCount()
+		+ " army=" + formatFloat(aiMilitaryMgr.armyCost, "", 0, 0));
+}
+
 bool AiIsSwitchTime(int lastSwitchFrame)
 {
 	// THE bug behind late teching: MakeSwitchInterval() is AiRandom(550,900)
@@ -196,10 +275,19 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// much because it spends as the slings arrive, so the plant did not start
 	// until 12 min. It does not need the whole cost up front -- construction
 	// draws from income, and seven feeders keep paying into it.
-	if (IsTechLead() && ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
-		&& (aiEconomyMgr.metal.current > facDef.costM * 0.5f))
+	// Measured, 8v8 Glitters: energy cleared the rush bar at 5.0 min and stayed
+	// clear, but the bank sat at 1-120 metal for the entire game against a
+	// required 1400 (0.5 * plant cost), so this branch never once fired. The
+	// requirement was never reachable -- metal income is ~13/s and every point of
+	// it is spent as it arrives. Banking is the wrong model anyway: in BAR you
+	// place the plant and pour income into the nanoframe. So place it on zero
+	// metal and let income, seven slinging allies and assisting builders finish
+	// it. isAssistRequired is now true for exactly that reason -- with no bank,
+	// build power is the only thing that closes the gap.
+	if (IsTechLead() && !gHaveT2 && RushReady()
+		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0))
 	{
-		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = false;
+		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
 		return true;
 	}
 	if (Military::gTurtle && (aiEconomyMgr.metal.current > facDef.costM * 0.6f)) {
@@ -212,47 +300,100 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	return isOK;
 }
 
-// Composition telemetry from a lost game: we put 54k metal into T2 and still
-// lost to stock's 43k, because the mix differed. We teched into the advanced
-// BOT lab (corsumo -- slow, defensive) while stock teched into the advanced
-// VEHICLE plant (corgol -- heavy assault). Gollums push; Sumos hold. Since we
-// already out-produce, bias the T2 choice toward the assault option.
-CCircuitDef@ PickAdvVehicle()
+// The advanced plant has to be one our own constructors can actually build.
+// Measured: the rusher opened a BOT lab, whose constructor (corck) can build
+// only coralab, while this function forced coravp -- the advanced VEHICLE plant.
+// All 33 rush requests in a 14-minute game asked for a factory nothing on the
+// field could place, were silently dropped, and T2 never started. The earlier
+// "prefer Gollums over Sumos" bias that introduced coravp here was measured on
+// games where a vehicle plant happened to be the opening, so it never showed up
+// as a failure -- it just quietly disabled the whole rush on bot openings.
+array<string> T1_FAC = {armlab, armvp, armsy, armap,
+                        corlab, corvp, corsy, corap,
+                        leglab, legvp};
+array<string> T2_FAC = {armalab, armavp, armasy, armaap,
+                        coralab, coravp, corasy, coraap,
+                        legalab, legavp};
+
+// Air is a bad sling target: the team pools its metal into one player expecting
+// a T2 ground push out of it, and an air opening cannot give them one. Rather
+// than teach every follower to recognise an air lead -- which needs a cross-team
+// signal AngelScript does not have -- just make sure the lead never opens air.
+array<string> AIR_FAC = {armap, armaap, corap, coraap, legap, legaap};
+
+bool IsAirFactory(CCircuitDef@ def)
 {
-	string side = ai.GetSideName();
+	if (def is null)
+		return false;
+	const string name = def.GetName();
+	for (uint i = 0; i < AIR_FAC.length(); ++i) {
+		if (AIR_FAC[i] == name)
+			return true;
+	}
+	return false;
+}
+
+// Ground opening for the tech lead when the default picks air. Vehicles over
+// bots: the construction vehicle builds the advanced vehicle plant, and its
+// heavy assault line (Gollum) pushes where the bot line (Sumo) holds.
+CCircuitDef@ GroundOpening()
+{
+	const string side = ai.GetSideName();
 	if (side == "cortex")
-		return ai.GetCircuitDef(coravp);
+		return ai.GetCircuitDef(corvp);
 	if (side == "legion")
-		return ai.GetCircuitDef(legavp);
-	return ai.GetCircuitDef(armavp);
+		return ai.GetCircuitDef(legvp);
+	return ai.GetCircuitDef(armvp);
+}
+
+// The opening factory, remembered so we can tech into its own advanced version.
+CCircuitDef@ gT1Fac = null;
+
+CCircuitDef@ AdvCounterpart()
+{
+	if (gT1Fac is null)
+		return null;
+	const string name = gT1Fac.GetName();
+	for (uint i = 0; i < T1_FAC.length(); ++i) {
+		if (T1_FAC[i] == name)
+			return ai.GetCircuitDef(T2_FAC[i]);
+	}
+	return null;
 }
 
 CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isReset)
 {
 	CCircuitDef@ pick = aiFactoryMgr.DefaultGetFactoryToBuild(pos, isStart, isReset);
-	if (isStart || (pick is null))
+	if (isStart || (pick is null)) {
+		if (isStart && IsTechLead() && IsAirFactory(pick)) {
+			CCircuitDef@ ground = GroundOpening();
+			if (ground !is null) {
+				AiLog(T() + "apexsling: lead opening " + pick.GetName()
+					+ " -> " + ground.GetName() + " (no air tech lead)");
+				@pick = ground;
+			}
+		}
+		if (pick !is null)
+			@gT1Fac = pick;
 		return pick;   // opening factory is always T1
+	}
+	if ((gT1Fac is null) && ((Factory::userData[pick.id].attr & Factory::Attr::T2) == 0))
+		@gT1Fac = pick;
 
 	// The rusher builds the advanced plant directly rather than waiting for a
 	// production switch that never comes.
-	const bool rushReady = (aiEconomyMgr.energy.income > RUSH_ENERGY_TARGET)
-			|| ((ai.frame > RUSH_LATEST) && (aiEconomyMgr.energy.income > RUSH_ENERGY_FLOOR));
-	if (IsTechLead() && !gHaveT2 && rushReady) {
-		CCircuitDef@ adv = PickAdvVehicle();
+	if (IsTechLead() && !gHaveT2 && RushReady()) {
+		CCircuitDef@ adv = AdvCounterpart();
 		if (adv !is null) {
-			AiLog("apexsling: rusher building advanced plant " + adv.GetName());
+			gRushCommitted = true;
+			AiLog(T() + "apexsling: rusher building advanced plant " + adv.GetName()
+				+ " (from " + gT1Fac.GetName() + ")");
 			return adv;
 		}
+		AiLog(T() + "apexsling: rush WANTS T2 but no counterpart for "
+			+ ((gT1Fac is null) ? "<unknown T1 factory>" : gT1Fac.GetName()));
 	}
 
-	// Only redirect the T2 choice, and only away from the bot lab.
-	if (Factory::userData[pick.id].attr & Factory::Attr::T2 != 0) {
-		CCircuitDef@ avp = PickAdvVehicle();
-		if ((avp !is null) && (avp.id != pick.id)) {
-			AiLog("apexvp: T2 choice " + pick.GetName() + " -> " + avp.GetName());
-			return avp;
-		}
-	}
 	return pick;
 }
 

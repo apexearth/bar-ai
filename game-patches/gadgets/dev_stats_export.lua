@@ -66,6 +66,10 @@ local mReclaim = {}       -- team -> metal gained from reclaiming wrecks
 local mRezSpend = {}      -- team -> metal invested resurrecting wrecks
 local featMetal = {}      -- featureDefID -> metal (cached)
 local techFrame = {}      -- team -> frame its first techlevel>=2 factory finished
+local techStart = {}      -- team -> frame its first techlevel>=2 factory was PLACED
+-- Finish time conflates three very different failures: never deciding to tech,
+-- deciding late, and deciding on time but taking forever to build. Only the
+-- placement frame separates them.
 local facSpend = {}       -- team -> cumulative metal sunk into factories
 local techLvl = {}        -- unitDefID -> techlevel (cached)
 -- What each side actually fielded, so a win can be attributed to a composition
@@ -132,6 +136,21 @@ function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerD
 	end
 end
 
+-- Fires when the nanoframe is placed, i.e. the moment the AI commits to T2.
+function gadget:UnitCreated(unitID, unitDefID, unitTeam, builderID)
+	local ud = UnitDefs[unitDefID]
+	if ud == nil or not ud.isFactory or techOf(ud) < 2 then
+		return
+	end
+	if techStart[unitTeam] == nil then
+		local f = Spring.GetGameFrame()
+		techStart[unitTeam] = f
+		Spring.Echo(string.format("[BARAI_T2START] team=%d ally=%d frame=%d min=%.1f unit=%s cost=%d",
+			unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
+			f, f / 1800, ud.name, ud.metalCost or 0))
+	end
+end
+
 function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	local ud = UnitDefs[unitDefID]
 	if ud == nil then
@@ -150,7 +169,11 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	if ud.isFactory then
 		bump(facSpend, unitTeam, ud.metalCost or 0)
 		if techOf(ud) >= 2 and techFrame[unitTeam] == nil then
-			techFrame[unitTeam] = Spring.GetGameFrame()
+			local f = Spring.GetGameFrame()
+			techFrame[unitTeam] = f
+			Spring.Echo(string.format("[BARAI_T2DONE] team=%d ally=%d frame=%d min=%.1f unit=%s build=%.1fm",
+				unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
+				f, f / 1800, ud.name, (f - (techStart[unitTeam] or f)) / 1800))
 		end
 	end
 end
@@ -191,6 +214,7 @@ local function dump(reason)
 				string.format("mReclaim=%.0f", mReclaim[teamID] or 0),
 				string.format("mRezSpend=%.0f", mRezSpend[teamID] or 0),
 				string.format("techFrame=%d", techFrame[teamID] or -1),
+				string.format("techStart=%d", techStart[teamID] or -1),
 			}
 			local bt = builtByTech[teamID] or {}
 			parts[#parts + 1] = string.format("mT1=%.0f", bt[1] or 0)

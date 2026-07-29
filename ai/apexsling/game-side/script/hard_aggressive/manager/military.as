@@ -54,7 +54,10 @@ int   gTurtleStarted = 0;
 // command (COMMAND_SEND_RESOURCES) always existed; CircuitAI only used it when
 // resigning, so a team of AIs had no way to pool anything.
 //------------------------------------------------------------------------------
-const int   SLING_UNTIL = 12 * MINUTE;   // rush window only
+// Measured: the plant is placed ~8 min and takes ~5.5 min to build, so a window
+// closing at 12 min cut the feed off half way through the thing it was paying
+// for. Cover the construction instead of the run-up to it.
+const int   SLING_UNTIL = 20 * MINUTE;
 const float SLING_KEEP  = 220.f;         // early banks are small; keep little
 const int   SLING_FROM  = 5 * MINUTE;    // nothing worth pooling before this
 const float SLING_LUMP  = 450.f;         // enough to pay for the lead's T2 constructor

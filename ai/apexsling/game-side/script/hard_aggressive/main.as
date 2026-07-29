@@ -44,6 +44,8 @@ void AiMain()
 void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishAIId
 {
 	Military::UpdatePosture();
+	Factory::UpdateRushReclaim();
+	Factory::LogRushState();
 }
 
 }  // namespace Main
