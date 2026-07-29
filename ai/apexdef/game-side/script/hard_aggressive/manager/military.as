@@ -175,7 +175,17 @@ void UpdateSling()
 //
 // Direction matters and is already measured: lowering minAttackers 15 -> 6 was
 // catastrophic (0-10). This moves the other way.
-const int   MASS_FROM   = 8 * MINUTE;   // before this, early aggression is fine
+// Timeline of eleven LOST games, sampled every 2 game-minutes: apexdef and stock
+// are level on army and metal through minute 8, then diverge hard -- army 10.4k
+// vs 15.9k at ten minutes, 9.9k vs 22.4k at fourteen. And apexdef's army PEAKS
+// at minute 4 and declines from there (11.8k -> 9.9k -> 7.0k) while stock's
+// grows continuously. We stop replacing losses exactly as the T2 transition
+// begins, and never recover.
+//
+// Massing started at 8 minutes, precisely where the divergence begins: holding
+// units back during the transition, when the army is already shrinking, compounds
+// it. Push it past the transition so the force is rebuilt first and massed after.
+const int   MASS_FROM   = 14 * MINUTE;
 const float MASS_START  = 30.f;
 const float MASS_PER_MIN = 3.5f;        // ~100 by 28 min
 // Was 140. Measured: apexdef finished on 92k metal against stock's 125k while

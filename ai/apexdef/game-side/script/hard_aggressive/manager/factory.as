@@ -506,6 +506,11 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// once the pooling window has closed: place the plant on income rather than
 	// banking for it, with assist on so build power finishes it. Pooling behind
 	// one player is only worth it if the others follow afterwards.
+	// Staggering by team id was tried and LOST 2-14 (CI 71-100%). It did flatten
+	// the army curve slightly -- 10.9k vs 17.8k at fourteen minutes, up from 8.9k
+	// vs 25.1k -- but pushing the last follower to minute 16 costs more T2
+	// economy than the smoother curve is worth. The synchronised transition is a
+	// real cost; delaying teching is not the way to pay it.
 	if (!IsTechLead() && (ai.frame >= FOLLOWER_TECH_FRAME)
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
 		&& (aiEconomyMgr.metal.income > 18.f))
