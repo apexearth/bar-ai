@@ -20,6 +20,20 @@ array<int> gGifted;   // teams that already received their advanced con
 // next real constructor went out the door.
 //
 // Rule: never give one away while we hold only one ourselves.
+// True while teammates are still waiting on an advanced constructor of their own.
+bool OwesAdvCons()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return false;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int cand = int(mates[i]);
+		if ((cand != ai.teamId) && (gGifted.find(cand) < 0))
+			return true;
+	}
+	return false;
+}
+
 void ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	if (ai.teamId != Factory::RushLeadTeamId())

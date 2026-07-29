@@ -164,6 +164,23 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// advanced plant exists.
 	if (IsTechLead() && !gHaveT2 && RushReady())
 		return null;
+
+	// The tech lead buys roughly four or five minutes of T2 before the enemy
+	// catches up, and spending that on one advanced tank is close to wasting it.
+	// Spent on constructors it compounds instead: ours upgrades our own mexes,
+	// and every one handed to an ally lets them upgrade theirs -- T2 mexes are
+	// four times the metal, across the whole team, for the rest of the game.
+	// So build nothing but build power until every teammate has one.
+	if (gHaveT2 && IsTechLead() && Builder::OwesAdvCons()) {
+		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER2.type);
+		if (con !is null) {
+			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+					Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
+					con, unit.GetPos(ai.frame), 0.f));
+			if (rec !is null)
+				return rec;
+		}
+	}
 	return aiFactoryMgr.DefaultMakeTask(unit);
 }
 
