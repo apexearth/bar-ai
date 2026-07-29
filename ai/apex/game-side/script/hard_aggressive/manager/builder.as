@@ -122,6 +122,22 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // 	}
 // 	return task;
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+	// Observed: a commander stands next to reclaimable metal with an empty bank
+	// and keeps its build task instead of eating it. It is not IDLE -- it holds a
+	// task it cannot afford -- so the idle-only path below never fired. When
+	// metal is actually empty, reclaiming beats standing still: it is the only
+	// thing that unblocks the task it is already holding.
+	if (aiEconomyMgr.isMetalEmpty && (ai.frame >= gNextWreck)) {
+		gNextWreck = ai.frame + 3 * SECOND;
+		const AIFloat3 here = unit.GetPos(ai.frame);
+		const AIFloat3 near = ai.GetBestWreckPos(here, WRECK_SEARCH, 15.f);
+		if (near.x >= 0.f) {
+			IUnitTask@ rec = aiBuilderMgr.Enqueue(TaskB::Reclaim(
+					Task::Priority::HIGH, near, 400.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+			if (rec !is null)
+				return rec;
+		}
+	}
 	if (task !is null)
 		return task;   // strictly additive: never displace real work
 

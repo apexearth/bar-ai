@@ -122,7 +122,7 @@
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "legajam", "category": "defence", "offset": {"back": 80}, "condition": {"energy": 1}},
+					{"unit": "legajam", "category": "defence", "offset": {"back": 80}, "condition": {"sensor": 900}},
 					{"unit": "legdeflector", "category": "defence", "offset": {"back": 160}}
 				]]
 			}
