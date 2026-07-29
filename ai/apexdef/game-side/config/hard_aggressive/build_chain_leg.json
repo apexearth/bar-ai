@@ -145,7 +145,7 @@
 						// so both of these were dead entries.
 						{"unit": "legnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
 						{"unit": "legnanotc", "category": "nano", "offset": {"back": 10}, "priority": "normal", "condition": {"m_inc>": 28}},
-						{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
+						{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
 						{"unit": "legadvestore", "category": "store", "offset": {"back": 40}, "priority": "now"}
 					],
 					// leglht is the 70m light tower; legmg is the next rung a T1 con can build and
@@ -171,7 +171,7 @@
 						{"unit": "legnanotc", "category": "nano", "offset": {"left": 10}, "priority": "now"},
 						{"unit": "legnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
 						{"unit": "legnanotc", "category": "nano", "offset": {"back": 10}, "priority": "normal", "condition": {"m_inc>": 28}},
-						{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
+						{"unit": "legfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
 						{"unit": "legadvestore", "category": "store", "offset": {"back": 40}, "priority": "now"}
 					],
 					[

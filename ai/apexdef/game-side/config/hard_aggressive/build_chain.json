@@ -297,7 +297,7 @@
 						// appeared next to a full metal bank.
 						{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
 						{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 28}},
-						{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
+						{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
 						{"unit": "armuwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
 					],
 					// The beamers above are T1.5 and fold to anything T2. armhlt is the next rung a
@@ -323,7 +323,7 @@
 						{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
 						{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 28}},
-						{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
+						{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
 						{"unit": "armuwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
 					],
 					[
@@ -383,7 +383,7 @@
 						{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
 						{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 28}},
-						{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
+						{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
 						{"unit": "coruwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
 					],
 					// corhllt is T1.5; corhlt is the next rung a T1 con can build, corvipe the next a
@@ -408,7 +408,7 @@
 						{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 						{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
 						{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 28}},
-						{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
+						{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "now"},
 						{"unit": "coruwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
 					],
 					[
