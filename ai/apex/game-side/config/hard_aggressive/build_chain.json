@@ -21,9 +21,17 @@
 		},
 		"point_range": 600.0,  // maximum distance between 2 points in hierarchical cluster within economy cluster
 	
-		// Base defence and time to build it, in seconds
+		// Base defence and time to build it, in seconds.
+		// This list is the only unconditional defence path (CMilitaryManager::MakeBaseDefence fires
+		// once, when the first factory finishes, and UpdateDefence then enqueues each entry at its
+		// frame with no cost or income test). Stock had exactly one real tower before 20 min and
+		// then nothing until index 12 at 30 min, which is why 30 games showed no static defence.
+		// Filled with the mid tiers: idx 4 = armhlt/corhlt/legmg, idx 8 = armpb/corvipe/legapopupdef.
+		// Indices 11 and 13 are deliberately skipped - armamb/cortoast/legacluster and
+		// armguard/corpun/legcluster all carry "on": false in behaviour.json, so the AI switches
+		// them off the moment they finish and they never fire.
 		"base": [
-			[3, 420], [10, 1200], [15,1220], [14, 1300], [15, 1320], [12, 1800]
+			[3, 420], [4, 600], [10, 1200], [15,1220], [14, 1300], [15, 1320], [8, 1360], [12, 1500]
 		],
 	
 		"superweapon": {
@@ -78,6 +86,20 @@
 				// <condition>: air:<bool>, energy:<bool>, wind:<float>, m_inc>:<float>, m_inc<:<float>,
 				//              sensor:<float>, chance:0.0~1.0
 				// <priority>: low, normal, high, now
+				//
+				// Two things about hubs that are easy to get wrong (both read off
+				// IBuilderTask::ExecuteChain / CBuilderManager::ReadConfig):
+				// 1. Exactly ONE condition per entry. The parser takes
+				//    condition.getMemberNames().front(), and jsoncpp orders keys alphabetically, so
+				//    {"m_inc>": 10, "chance": 0.5} silently becomes chance-only. Never pair them.
+				// 2. Every condition in a hub is evaluated ONCE, at the instant the parent building
+				//    finishes - not re-checked later. So an m_inc> threshold must match the income
+				//    at that moment. Measured income in these games is 7-25 m/s, so anything above
+				//    ~25 never passes; the old 32 gates here and the 30/38 gates in
+				//    build_chain_leg.json were dead entries.
+				// Only the first entry of each chain enters the build queue; the rest are activated
+				// one at a time as the previous one finishes. Put things that should start now in
+				// separate chains, not later in the same chain.
 	
 				// Build pylon in direction of nearby mex cluster
 	//			"pylon": true,
@@ -89,6 +111,13 @@
 	//				],
 	//				[  // chain2
 	//					{"unit": "armmakr", "category": "convert", "offset": [80, 80], "condition": {"energy": true}}
+					],
+					// coradvsol measured at 10% of spend and armadvsol is its counterpart, so this
+					// is the densest hook we have onto the energy farm. One assist turret per solar
+					// once income is genuinely large gives the human-style ring of nanos around the
+					// eco without spamming them early, when the T2 rush needs the metal.
+					[
+						{"unit": "armnanotc", "category": "nano", "offset": {"back": 70}, "condition": {"m_inc>": 16}, "priority": "normal"}
 					]
 				]
 			},
@@ -104,12 +133,18 @@
 					[  
 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 5}, "priority": "now"},
 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 10}, "priority": "now"},
-						{"unit": "armnanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 14}},
-						{"unit": "armnanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 22}},
-						{"unit": "armnanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 32}},
+						{"unit": "armnanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 10}},
+						{"unit": "armnanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 14}},
+						{"unit": "armnanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 18}},
 						{"unit": "armmmkr", "category": "convert", "offset": [110, 110]},
 						{"unit": "armmmkr", "category": "convert", "offset": [110, -110]},
 						{"unit": "armflak", "category": "defence", "offset": {"front": 120}, "condition": {"air": true}}
+					],
+					// Separate chain so the jammer starts immediately instead of queueing behind
+					// seven other buildings. A fusion means energy is no longer the constraint,
+					// which is the only point at which armjamt's 8500e is cheap.
+					[
+						{"unit": "armjamt", "category": "defence", "offset": [-130, 0], "priority": "low"}
 					]
 				]
 			},
@@ -118,18 +153,24 @@
 					[ 
 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 5}, "priority": "now"},
 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 10}, "priority": "now"},
-						{"unit": "armnanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 14}},
-						{"unit": "armnanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 22}},
-						{"unit": "armnanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 32}},
+						{"unit": "armnanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 28}},
+						{"unit": "armnanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 16}},
+						{"unit": "armnanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 20}},
 						{"unit": "armmmkr", "category": "convert", "offset": [120, 120]},
 						{"unit": "armmmkr", "category": "convert", "offset": [120, -120]},
 						{"unit": "armmmkr", "category": "convert", "offset": [150, 120]},
 						{"unit": "armmmkr", "category": "convert", "offset": [120, 150]},
-						{"unit": "armfmd", "category": "defence", "offset": [180, 0]},
+						// Was "armfmd", which is not a unit def - Armada's anti-nuke is armamd, and
+						// "fmd" only exists as the Cortex name. CBuilderManager::ReadConfig logs
+						// "has unknown UnitDef" and drops the entry, so this slot did nothing.
+						{"unit": "armamd", "category": "defence", "offset": [180, 0]},
 						{"unit": "armflak", "category": "defence", "offset": {"front": 120}, "priority": "now"},
 						{"unit": "armflak", "category": "defence", "offset": {"front": 130}, "priority": "now"},
 						{"unit": "armflak", "category": "defence", "offset": {"front": 140}, "priority": "now"},
 						{"unit": "armflak", "category": "defence", "offset": {"front": 150}, "priority": "now"}
+					],
+					[
+						{"unit": "armjamt", "category": "defence", "offset": [-160, 0], "priority": "low"}
 					]
 				]
 			},
@@ -147,7 +188,12 @@
 	//				],  // chain1
 	//				[
 	//					{"unit": "cormakr", "category": "convert", "offset": [80, 80], "condition": {"energy": true}}
-					]  // chain2
+					],  // chain2
+					// coradvsol alone is 10% of measured spend, so this is the densest hook onto
+					// the energy farm - one assist turret per solar once income is genuinely large.
+					[
+						{"unit": "cornanotc", "category": "nano", "offset": {"back": 70}, "condition": {"m_inc>": 16}, "priority": "normal"}
+					]
 				]
 			},
 			"corfus": {
@@ -155,12 +201,17 @@
 					[  
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 5}, "priority": "now"},
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 10}, "priority": "now"},
-						{"unit": "cornanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 14}},
-						{"unit": "cornanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 22}},
-						{"unit": "cornanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 32}},
+						{"unit": "cornanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 10}},
+						{"unit": "cornanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 14}},
+						{"unit": "cornanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 18}},
 						{"unit": "cormmkr", "category": "convert", "offset": [110, 110]},
 						{"unit": "cormmkr", "category": "convert", "offset": [110, -110]},
 						{"unit": "corflak", "category": "defence", "offset": {"front": 120}, "condition": {"air": true}}
+					],
+					// Own chain so it starts at once; a fusion is the point where corjamt's 5200e
+					// stops competing with the rest of the build.
+					[
+						{"unit": "corjamt", "category": "defence", "offset": [-130, 0], "priority": "low"}
 					]
 				]
 			},
@@ -169,9 +220,9 @@
 					[  
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 5}, "priority": "now"},
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 10}, "priority": "now"},
-						{"unit": "cornanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 14}},
-						{"unit": "cornanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 22}},
-						{"unit": "cornanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 32}},
+						{"unit": "cornanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 28}},
+						{"unit": "cornanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 16}},
+						{"unit": "cornanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 20}},
 						{"unit": "cormmkr", "category": "convert", "offset": [120, 120]},
 						{"unit": "cormmkr", "category": "convert", "offset": [120, -120]},
 						{"unit": "cormmkr", "category": "convert", "offset": [150, 120]},
@@ -181,6 +232,9 @@
 						{"unit": "corflak", "category": "defence", "offset": {"front": 130}, "priority": "now"},
 						{"unit": "corflak", "category": "defence", "offset": {"front": 140}, "priority": "now"},
 						{"unit": "corflak", "category": "defence", "offset": {"front": 150}, "priority": "now"}
+					],
+					[
+						{"unit": "corjamt", "category": "defence", "offset": [-160, 0], "priority": "low"}
 					]
 				]
 			}
@@ -194,15 +248,33 @@
 			}
 		},
 		"defence": {
+			// The only jammers in this profile used to hang off armanni/cordoom, which are
+			// porcupine index 12 - last in "land" and, until this edit, 30 min into "base".
+			// Neither ever completed in 30 measured games, so the 0.8 chance below was never
+			// rolled even once. armhlt/corhlt are the first heavy tower every side actually
+			// finishes (base index 4, the T2 factory hubs and the radar hubs below), which makes
+			// them the reliable marker for "this is a defended position, hide it".
+			// Gated later than the radar-hub jammers below so the two hooks mostly cover different
+			// parts of the game instead of stacking two jammers on one position.
+			"armhlt": {
+				"hub": [[
+					{"unit": "armjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 14}, "priority": "low"}
+				]]
+			},
+			"corhlt": {
+				"hub": [[
+					{"unit": "corjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 14}, "priority": "low"}
+				]]
+			},
 			"armanni": {
 				"hub": [[
-					{"unit": "armjamt", "category": "defence", "offset": {"back": 80}, "condition": {"chance": 0.8}},
+					{"unit": "armjamt", "category": "defence", "offset": {"back": 80}, "condition": {"energy": 1}},
 					{"unit": "armgate", "category": "defence", "offset": {"back": 160}, "condition": {"chance": 0.8}}
 				]]
 			},
 			"cordoom" : {
 				"hub": [[
-					{"unit": "corjamt", "category": "defence", "offset": {"back": 80}, "condition": {"chance": 0.8}},
+					{"unit": "corjamt", "category": "defence", "offset": {"back": 80}, "condition": {"energy": 1}},
 					{"unit": "corgate", "category": "defence", "offset": {"back": 160}, "condition": {"chance": 0.8}}
 				]]
 			}
@@ -214,16 +286,28 @@
 				]]
 			},
 			"armalab": {
-				"hub": [[
-					{"unit": "armbeamer", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
-					{"unit": "armbeamer", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 14}},
-					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 22}},
-					{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 12}},
-					{"unit": "armuwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
-				]]
+				"hub": [
+					[
+						{"unit": "armbeamer", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
+						{"unit": "armbeamer", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
+						{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+						{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+						// apex reaches T2 at ~5.7 min, when income is ~10-15. The old 14/22 gates were
+						// sampled at exactly that moment and mostly failed, which is why nanos never
+						// appeared next to a full metal bank.
+						{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
+						{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 28}},
+						{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
+						{"unit": "armuwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
+					],
+					// The beamers above are T1.5 and fold to anything T2. armhlt is the next rung a
+					// T1 con can build, armpb the next a T2 con can. Own chain so the towers do not
+					// queue behind four nanos and a fusion.
+					[
+						{"unit": "armhlt", "category": "defence", "offset": {"front": 120}, "priority": "normal"},
+						{"unit": "armpb", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 10}}
+					]
+				]
 			},
 			"armvp": {
 				"hub": [[
@@ -231,16 +315,22 @@
 				]]
 			},
 			"armavp": {
-				"hub": [[
-					{"unit": "armbeamer", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
-					{"unit": "armbeamer", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 14}},
-					{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 22}},
-					{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 12}},
-					{"unit": "armuwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
-				]]
+				"hub": [
+					[
+						{"unit": "armbeamer", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
+						{"unit": "armbeamer", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
+						{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+						{"unit": "armnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+						{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
+						{"unit": "armnanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 28}},
+						{"unit": "armfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
+						{"unit": "armuwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
+					],
+					[
+						{"unit": "armhlt", "category": "defence", "offset": {"front": 120}, "priority": "normal"},
+						{"unit": "armpb", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 10}}
+					]
+				]
 			},
 			"armap": {
 				"hub": [[
@@ -271,7 +361,13 @@
 					{"unit": "armnanotc", "category": "nano", "offset": {"right": 5}, "priority": "now"},
 					{"unit": "armnanotc", "category": "nano", "offset": {"right": 5}, "priority": "now"},
 					{"unit": "armnanotc", "category": "nano", "offset": {"right": 5}, "priority": "now"}
-					]]
+					],
+					// A gantry means T3 is affordable; this is the only place armanni gets built
+					// other than base index 12, and it puts it where the army spawns.
+					[
+						{"unit": "armanni", "category": "defence", "offset": {"front": 200}, "priority": "low", "condition": {"m_inc>": 18}}
+					]
+				]
 			},
 			"corlab": {
 				"hub": [[
@@ -279,16 +375,24 @@
 				]]
 			},
 			"coralab": {
-				"hub": [[
-					{"unit": "corhllt", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
-					{"unit": "corhllt", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 14}},
-					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 22}},
-					{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 12}},
-					{"unit": "coruwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
-				]]
+				"hub": [
+					[
+						{"unit": "corhllt", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
+						{"unit": "corhllt", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
+						{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+						{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+						{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
+						{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 28}},
+						{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
+						{"unit": "coruwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
+					],
+					// corhllt is T1.5; corhlt is the next rung a T1 con can build, corvipe the next a
+					// T2 con can. Own chain so they do not queue behind the nanos and the fusion.
+					[
+						{"unit": "corhlt", "category": "defence", "offset": {"front": 120}, "priority": "normal"},
+						{"unit": "corvipe", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 10}}
+					]
+				]
 			},
 			"corvp": {
 				"hub": [[
@@ -296,16 +400,22 @@
 				]]
 			},
 			"coravp": {
-				"hub": [[
-					{"unit": "corhllt", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
-					{"unit": "corhllt", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 14}},
-					{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 22}},
-					{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 12}},
-					{"unit": "coruwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
-				]]
+				"hub": [
+					[
+						{"unit": "corhllt", "category": "defence", "offset": {"front": 60}, "priority": "normal"},
+						{"unit": "corhllt", "category": "defence", "offset": {"front": -60}, "priority": "normal"},
+						{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+						{"unit": "cornanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+						{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 8}},
+						{"unit": "cornanotc", "category": "nano", "offset": {"back": 5}, "priority": "normal", "condition": {"m_inc>": 28}},
+						{"unit": "corfus", "category": "energy", "offset": {"back": 40}, "priority": "normal", "condition": {"m_inc>": 10}},
+						{"unit": "coruwadves", "category": "store", "offset": {"back": 40}, "priority": "now"}
+					],
+					[
+						{"unit": "corhlt", "category": "defence", "offset": {"front": 120}, "priority": "normal"},
+						{"unit": "corvipe", "category": "defence", "offset": {"front": 170}, "priority": "low", "condition": {"m_inc>": 10}}
+					]
+				]
 			},
 			"corap": {
 				"hub": [[
@@ -336,7 +446,11 @@
 					{"unit": "cornanotc", "category": "nano", "offset": {"right": 5}, "priority": "now"},
 					{"unit": "cornanotc", "category": "nano", "offset": {"right": 5}, "priority": "now"},
 					{"unit": "cornanotc", "category": "nano", "offset": {"right": 5}, "priority": "now"}
-					]]
+					],
+					[
+						{"unit": "cordoom", "category": "defence", "offset": {"front": 200}, "priority": "low", "condition": {"m_inc>": 18}}
+					]
+				]
 			}
 		},
 		"mex": {
@@ -348,6 +462,39 @@
 			"cormex": {
 	//			"energy": [200, true],
 				"porc": true
+			}
+		},
+
+		// New category for this profile; the stock "hard" profile already uses it.
+		// CMilitaryManager::DefaultMakeDefence enqueues a RADAR at backPos - immediately behind the
+		// defence point it has just laid out - for every cluster it defends, so a hub hung off the
+		// radar lands exactly on the defensive clusters. It is also the only lever that upgrades a
+		// FORWARD cluster: away from a "porc" cluster MakeDefence only ever considers
+		// landDefenders[0] (an LLT), because porcupine.prevent is 1.
+		"radar": {
+			"armrad": {
+				"hub": [
+					[{"unit": "armjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
+					[{"unit": "armhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
+				]
+			},
+			"armarad": {
+				"hub": [
+					[{"unit": "armjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
+					[{"unit": "armhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
+				]
+			},
+			"corrad": {
+				"hub": [
+					[{"unit": "corjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
+					[{"unit": "corhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
+				]
+			},
+			"corarad": {
+				"hub": [
+					[{"unit": "corjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
+					[{"unit": "corhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
+				]
 			}
 		}
 	}
