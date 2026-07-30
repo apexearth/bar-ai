@@ -177,14 +177,21 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
     # A locally built DLL wins over the repo copy. The repo carries a stripped
     # build for convenience, but it goes stale the moment the C++ is touched --
     # and a deploy silently reinstating it looked exactly like the C++ fix never
-    # working. Prefer the build output whenever it is newer.
+    # working.
+    # This used to compare mtimes, which inverts in a fresh clone or worktree:
+    # git stamps checked-out files with the checkout time, so the repo copy
+    # always looks newer than any earlier build and always won -- the stale-DLL
+    # trap, back again and hardest to spot on a machine set up from scratch. The
+    # build output is generated from vendor/ as it stands, so prefer it whenever
+    # it exists and say which one went out.
     built_dll = REPO / "vendor/engine/build-amd64-windows/AI/Skirmish/BARb/data/SkirmishAI.dll"
     for name in ("AIInfo.lua", "AIOptions.lua", "SkirmishAI.dll"):
         f = engine_side / name
-        if (name == "SkirmishAI.dll" and built_dll.exists()
-                and (not f.exists() or built_dll.stat().st_mtime > f.stat().st_mtime)):
+        if name == "SkirmishAI.dll" and built_dll.exists():
             f = built_dll
             name += " (local build)"
+        elif name == "SkirmishAI.dll":
+            name += " (repo copy -- no local build in vendor/)"
         if f.exists():
             shutil.copy2(f, target / name.split(" ")[0])
             overlaid.append(name)
