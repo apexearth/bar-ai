@@ -154,12 +154,23 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
     # behind. Left in place it is a second lobby entry for the same AI that still
     # loses the empty-version resolution to stable, i.e. the exact bug this
     # rename fixes, still selectable.
+    # Never fatal. Windows can hold a directory handle open well after the
+    # process that owned it exits, and rmtree deletes as it walks -- so a lock
+    # here once emptied the old folder and then aborted the deploy, leaving no
+    # working AI at all. An emptied folder is harmless: the engine's scan does
+    # FindFiles(dir, "AIInfo.lua") and skips a directory that has none, so it
+    # never reaches the lobby. Getting the new folder written is what matters.
     if short != BASE_SHORT_NAME:
         for stale in (env.skirmish_dir(BASE_SHORT_NAME, variant),
                       env.game_config_dir(BASE_SHORT_NAME, variant)):
-            if stale.exists():
+            if not stale.exists():
+                continue
+            try:
                 shutil.rmtree(stale)
                 print(f"  removed      stale {stale}")
+            except OSError as e:
+                print(f"  WARNING      could not remove stale {stale}: {e}")
+                print(f"               harmless if it has no AIInfo.lua; delete it later")
 
     # 1. Engine side: fresh copy of stable (DLL + baseline config/script), then
     #    overlay this repo's AIInfo/AIOptions so the version string says <variant>.
