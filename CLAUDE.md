@@ -15,8 +15,8 @@ otherwise. Re-verify paths before relying on them — engine versions change.
 | Spring data / write dir | `…\Beyond-All-Reason\data` |
 | Active engine | `…\data\engine\recoil_2026.06.12` (from `launcher_cfg.json` → `config.json`) |
 | Game (dev checkout) | `…\data\games\BAR.sdd` — git clone of `beyond-all-reason/Beyond-All-Reason`, on branch `apex` |
-| Engine-side AIs | `…\data\engine\<ver>\AI\Skirmish\{BARb,CircuitAI,NullAI}\<version>\` |
-| Game-side AI config | `BAR.sdd\luarules\configs\BARb\<version>\{config,script}` |
+| Engine-side AIs | `…\data\engine\<ver>\AI\Skirmish\{BARb,BARbApex,CircuitAI,NullAI}\<version>\` |
+| Game-side AI config | `BAR.sdd\luarules\configs\<shortName>\<version>\{config,script}` |
 
 `tools/bar_env.py` resolves all of this at runtime. Never hardcode these paths in
 new code — import `bar_env` instead. Override with `BAR_ROOT` / `BAR_DATA` /
@@ -51,19 +51,34 @@ the engine archive.
 Layers 1 and 2 both live in the **game archive** and are hot-swappable. Prefer
 them. Reach for C++ only when you need a mechanism that doesn't exist yet.
 
-## Two orthogonal axes — do not confuse them
+## Three axes — do not confuse them
 
-- **AI version** → a separate entry in the lobby AI list.
-  `AI/Skirmish/BARb/<version>/` (engine side, needs `SkirmishAI.dll`) **and**
-  `luarules/configs/BARb/<version>/` (game side). `AIInfo.lua`'s `version` value
-  must equal the folder name.
+- **shortName** → the AI's identity. **This is the only one multiplayer keeps.**
+  `AI/Skirmish/<shortName>/<version>/`. Ours is `BARbApex`, so the harness spec
+  is `BARbApex:apex`, not `BARb:apex`.
+- **AI version** → a variant within one shortName.
+  `AIInfo.lua`'s `version` value must equal the folder name.
 - **profile** → a difficulty/playstyle within one version, chosen by the
   `profile` AI option declared in that version's `AIOptions.lua`.
   `config/<profile>/*.json` + `script/<profile>/*.as`.
 
+**A variant must never be just a version of `BARb`.** The lobby protocol's
+`ADDBOT` carries a single `aiLib` field and no version — Chobby's `AddAi` sends
+`concat("ADDBOT", aiName, battleStatus, teamColor, aiLib)` and `_OnAddBot` sets
+only `status.aiLib`. So a hosted game's start script has **`Version` empty**, and
+`AILibraryManager::FittingSkirmishAIKeys` filters on version only "if one is
+specified i.e. non-empty"; `ResolveSkirmishAIKey` then takes the highest by
+`VersionCompare`, and `"apex" < "stable"`. A version-only variant therefore loads
+**stock BARb in every multiplayer game**, with no error anywhere. Single-player
+is not affected: `interface_skirmish.lua` writes the script locally and does pass
+`Version = data.aiVersion`, which is why this only ever showed up when hosting.
+
+Reproduce it locally with `run_match.py --drop-ai-version`, which omits `Version`
+from every `[AI]` block exactly as a hosted game does.
+
 Config lookup falls back: `config/<profile>/x.json` → `config/x.json`.
 Confirmed at runtime in an infolog:
-`Load script: LuaRules\Configs\BARb\apex\script\hard_aggressive\init.as`
+`Load script: LuaRules\Configs\BARbApex\apex\script\hard_aggressive\init.as`
 
 Corresponding C++ (CircuitAI `util/FileSystem.h`):
 `"LuaRules/Configs/" + shortName + "/" + version + "/" + subdir + "/"`,
@@ -72,8 +87,8 @@ gated on the `game_config` AI option (default **true**).
 ## This repo
 
 ```
-ai/<variant>/engine-side/   AIInfo.lua, AIOptions.lua        -> engine AI/Skirmish/BARb/<variant>/
-ai/<variant>/game-side/     config/*.json, script/**/*.as    -> BAR.sdd/luarules/configs/BARb/<variant>/
+ai/<variant>/engine-side/   AIInfo.lua, AIOptions.lua        -> engine AI/Skirmish/<shortName>/<variant>/
+ai/<variant>/game-side/     config/*.json, script/**/*.as    -> BAR.sdd/luarules/configs/<shortName>/<variant>/
 reference/barb-stable/      pristine BARb stable, for diffing (do not edit)
 game-patches/               patches + dev gadgets applied to BAR.sdd
 tools/                      python harness (see below)
@@ -104,14 +119,14 @@ python tools/deploy_ai.py patches            # apply game-patches/*.patch to BAR
 python tools/unitsync.py maps comet          # resolve map display names
 python tools/unitsync.py ais                 # what the engine sees
 
-python tools/run_match.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_match.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1
-python tools/run_match.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_match.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
     --map "Comet Catcher" --per-side 8 --watch   # windowed, real time, watchable
 
 python tools/check.py                        # pre-deploy: bad JSON, dead unit names
 python tools/trace_flow.py <match-or-run-dir> # did the pooling strategy actually work
-python tools/run_tournament.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_tournament.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
     --maps "Comet Catcher" --games 10
 python tools/run_tournament.py --report
 ```
@@ -144,6 +159,11 @@ Measured on this machine: a 27 game-minute match completes in ~44 s wall
 Every one of these has produced a confident, wrong conclusion in this repo. They
 share a shape: the thing didn't work, and nothing said so.
 
+- **In multiplayer the engine silently runs stock BARb unless the variant has its
+  own shortName.** The lobby drops the AI version, and empty-version resolution
+  picks the highest by `VersionCompare` — `stable` beats `apex`. Nothing logs a
+  problem; the AI simply plays like stock. See "Three axes" above, and test with
+  `run_match.py --drop-ai-version`.
 - **An AngelScript compile error disables the whole variant, and the match still
   runs.** It plays as near-stock and reports a normal result. A 12-minute "the
   rush never fires" investigation was really a one-line syntax error. **Always**

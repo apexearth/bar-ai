@@ -15,8 +15,15 @@
 
 local infos = {
 	{
+		-- Distinct shortName, NOT a distinct version of 'BARb'. The lobby
+		-- protocol's ADDBOT carries only `aiLib` -- there is no version field --
+		-- so in multiplayer the start script arrives with Version empty.
+		-- AILibraryManager::FittingSkirmishAIKeys filters on version only "if one
+		-- is specified i.e. non-empty", then ResolveSkirmishAIKey takes the
+		-- highest by VersionCompare, and "apex" < "stable". Shipping as a version
+		-- therefore silently loads stock BARb in every hosted game.
 		key    = 'shortName',
-		value  = 'BARb', -- AI name - !This comment is used for parsing!
+		value  = 'BARbApex', -- AI name - !This comment is used for parsing!
 		desc   = 'machine conform name.',
 	},
 	{

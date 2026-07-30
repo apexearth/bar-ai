@@ -1,13 +1,17 @@
 """Deploy a BARb AI variant from this repo into the live BAR installation.
 
-A BARb variant has two halves that must agree on the same version string:
+A variant has two halves. Both are keyed on the shortName declared in the
+variant's own AIInfo.lua -- 'BARbApex', not 'BARb' -- because a variant must be a
+distinct AI, not a distinct version of BARb. The lobby's ADDBOT carries no
+version field, so in multiplayer a version-only variant resolves to stock BARb.
 
-  engine-side   engine/<ver>/AI/Skirmish/BARb/<variant>/
+  engine-side   engine/<ver>/AI/Skirmish/<ShortName>/<variant>/
                 AIInfo.lua (version = '<variant>'), AIOptions.lua, SkirmishAI.dll,
                 plus a baseline config/ and script/ tree.
-  game-side     BAR.sdd/luarules/configs/BARb/<variant>/{config,script}
+  game-side     BAR.sdd/luarules/configs/<ShortName>/<variant>/{config,script}
                 Loaded through the engine VFS because BARb's `game_config`
-                option defaults to true. This is where the real tuning lives.
+                option defaults to true. Convenient for local iteration; a hosted
+                game has no such folder and falls back to the engine-side copy.
 
 The engine-side half is derived from the engine's own BARb/stable folder every
 time you deploy, so the SkirmishAI.dll always matches the engine you are
@@ -27,6 +31,7 @@ from __future__ import annotations
 import argparse
 import filecmp
 import hashlib
+import re
 import shutil
 import subprocess
 import sys
@@ -37,13 +42,38 @@ from bar_env import REPO, BarEnvError
 
 AI_DIR = REPO / "ai"
 PATCH_DIR = REPO / "game-patches"
-SHORT_NAME = "BARb"
+
+# The engine's own BARb folder. Only ever a SOURCE: every deploy derives the
+# variant from BARb/stable so the bundled SkirmishAI.dll matches the installed
+# engine. A variant is never written under this name -- see short_name().
+BASE_SHORT_NAME = "BARb"
 
 
 def variants() -> list[str]:
     if not AI_DIR.is_dir():
         return []
     return sorted(p.name for p in AI_DIR.iterdir() if (p / "game-side").is_dir())
+
+
+def short_name(variant: str) -> str:
+    """The variant's own shortName, read from its AIInfo.lua.
+
+    A variant must own a distinct shortName rather than be a version of 'BARb'.
+    The lobby protocol's ADDBOT carries only `aiLib` and has no version field, so
+    a multiplayer start script arrives with Version empty; the engine then keeps
+    every key matching the shortName and picks the highest by VersionCompare,
+    which is "stable". Shipping as a version loads stock BARb in every hosted
+    game, silently. Keying the deploy paths off shortName is what keeps the
+    engine-side folder, the game-side folder and CircuitAI's own
+    GetAIDataGameDir() ("LuaRules/Configs/<shortName>/<version>/") in agreement.
+    """
+    info = AI_DIR / variant / "engine-side" / "AIInfo.lua"
+    if info.is_file():
+        m = re.search(r"key\s*=\s*'shortName'\s*,\s*\n\s*value\s*=\s*'([^']*)'",
+                      info.read_text("utf-8", errors="replace"))
+        if m:
+            return m.group(1)
+    return BASE_SHORT_NAME
 
 
 def _tree_digest(root: Path) -> str:
@@ -111,13 +141,25 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
             f"if you are certain nothing has the engine directory open."
         )
 
-    stable = env.skirmish_dir(SHORT_NAME, "stable")
+    stable = env.skirmish_dir(BASE_SHORT_NAME, "stable")
     if not (stable / "SkirmishAI.dll").exists():
         raise SystemExit(
             f"engine {env.engine_version} has no BARb/stable to derive from:\n  {stable}"
         )
 
-    target = env.skirmish_dir(SHORT_NAME, variant)
+    short = short_name(variant)
+    target = env.skirmish_dir(short, variant)
+
+    # A variant that used to ship as a version of BARb leaves BARb/<variant>
+    # behind. Left in place it is a second lobby entry for the same AI that still
+    # loses the empty-version resolution to stable, i.e. the exact bug this
+    # rename fixes, still selectable.
+    if short != BASE_SHORT_NAME:
+        for stale in (env.skirmish_dir(BASE_SHORT_NAME, variant),
+                      env.game_config_dir(BASE_SHORT_NAME, variant)):
+            if stale.exists():
+                shutil.rmtree(stale)
+                print(f"  removed      stale {stale}")
 
     # 1. Engine side: fresh copy of stable (DLL + baseline config/script), then
     #    overlay this repo's AIInfo/AIOptions so the version string says <variant>.
@@ -157,7 +199,7 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
 
     # The variant must also run with NO game-archive support at all. In a real
     # multiplayer game every client is on the released BAR, which has no
-    # LuaRules/Configs/BARb/<variant>/ -- CircuitAI logs "Game-side config:
+    # LuaRules/Configs/<shortName>/<variant>/ -- CircuitAI logs "Game-side config:
     # missing!" and falls back to LocatePath("config/") over the AI data dirs,
     # which resolves here. Verified against a packaged .sdp archive: config and
     # script both load from this directory and the AngelScript runs.
@@ -174,7 +216,7 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
     print(f"               derived from BARb/stable, overlaid {', '.join(overlaid)}")
 
     # 2. Game side: the actual tuning. Replace wholesale so deletions propagate.
-    game_target = env.game_config_dir(SHORT_NAME, variant)
+    game_target = env.game_config_dir(short, variant)
     if game_target.exists():
         shutil.rmtree(game_target)
     for sub in ("config", "script"):
@@ -185,8 +227,9 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
     print(f"               digest {_tree_digest(game_target)}")
 
     print(
-        f"\nDeployed '{variant}' to engine {env.engine_version}.\n"
-        f"It should appear in the lobby AI list as the name in AIInfo.lua."
+        f"\nDeployed '{variant}' to engine {env.engine_version} as shortName '{short}'.\n"
+        f"It should appear in the lobby AI list as the name in AIInfo.lua.\n"
+        f"Harness spec: {short}:{variant}"
     )
 
 
@@ -216,7 +259,7 @@ def pull(env: bar_env.BarEnv, variant: str) -> None:
     Use after editing configs directly inside BAR.sdd (e.g. while iterating
     in-game) so the repo stays the source of truth.
     """
-    live = env.game_config_dir(SHORT_NAME, variant)
+    live = env.game_config_dir(short_name(variant), variant)
     if not live.is_dir():
         raise SystemExit(f"nothing deployed at {live}")
     dst = AI_DIR / variant / "game-side"
@@ -239,8 +282,8 @@ def status(env: bar_env.BarEnv) -> None:
     print()
     for v in variants():
         repo_game = AI_DIR / v / "game-side"
-        live_game = env.game_config_dir(SHORT_NAME, v)
-        engine_ok = (env.skirmish_dir(SHORT_NAME, v) / "SkirmishAI.dll").exists()
+        live_game = env.game_config_dir(short_name(v), v)
+        engine_ok = (env.skirmish_dir(short_name(v), v) / "SkirmishAI.dll").exists()
 
         repo_d, live_d = _tree_digest(repo_game), _tree_digest(live_game)
         if not engine_ok and live_d == "(absent)":
@@ -256,6 +299,7 @@ def status(env: bar_env.BarEnv) -> None:
 
         print(f"  {v:<12} {state}")
         print(f"               repo {repo_d}   live {live_d}")
+        print(f"               shortName {short_name(v)}   spec {short_name(v)}:{v}")
 
 
 def apply_patches(env: bar_env.BarEnv, revert: bool = False) -> None:

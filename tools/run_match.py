@@ -1,10 +1,10 @@
 """Run a headless AI-vs-AI match and record the result.
 
-    python tools/run_match.py --a BARb:apex --b BARb:stable --map "Comet Catcher"
-    python tools/run_match.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
+    python tools/run_match.py --a BARbApex:apex --b BARb:stable --map "Comet Catcher"
+    python tools/run_match.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
         --map "Red Comet Remake 1.8" --minutes 30 --seed 7
 
-AI spec format:  ShortName[:Version[:profile]]      e.g. BARb:apex:hard_aggressive
+AI spec format:  ShortName[:Version[:profile]]      e.g. BARbApex:apex:hard_aggressive
 LuaAI spec:      lua:Name                           e.g. lua:SimpleAI
 
 Each run produces matches/<stamp>-<slug>/ containing script.txt, infolog.txt,
@@ -103,7 +103,7 @@ def _script_section(name: str, body: dict, indent: int = 1) -> str:
 
 
 def _ai_and_team(ai: AISpec, team_id: int, ally: int, side: str,
-                 handicap: int = 0) -> str:
+                 handicap: int = 0, drop_version: bool = False) -> str:
     """One [AI]/[TEAM] pair (or a LuaAI [TEAM]) for the given ally team."""
     team = {
         "TeamLeader": 0,
@@ -126,6 +126,13 @@ def _ai_and_team(ai: AISpec, team_id: int, ally: int, side: str,
         "Team": team_id,
         "Host": 0,  # player number that runs this AI
     }
+    if drop_version:
+        # Reproduce a hosted multiplayer game. The lobby's ADDBOT command carries
+        # only `aiLib`, so the start script the host writes has no Version at all;
+        # FittingSkirmishAIKeys then filters on version only when it is non-empty
+        # and ResolveSkirmishAIKey takes the highest by VersionCompare. This is
+        # the ONLY local way to catch a variant that resolves to stock BARb.
+        del ai_body["Version"]
     if ai.profile:
         ai_body["OPTIONS"] = {"profile": ai.profile}
     return "\n".join([
@@ -150,6 +157,7 @@ def build_script(
     box_size: float = 0.0,
     handicap: int = 0,
     extra_modoptions: dict[str, str] | None = None,
+    drop_ai_version: bool = False,
 ) -> str:
     """Emit a Spring start script for N AIs, each alone on its own ally team.
 
@@ -196,7 +204,8 @@ def build_script(
     team_id = 0
     for ally, ai in enumerate(ais):
         for _ in range(per_side):
-            body.append(_ai_and_team(ai, team_id, ally, side_for[ally], handicap))
+            body.append(_ai_and_team(ai, team_id, ally, side_for[ally], handicap,
+                                     drop_ai_version))
             team_id += 1
         box = {"NumAllies": 0}
         if len(ais) == 2:
@@ -361,6 +370,7 @@ def run(args) -> int:
         max_speed=20 if args.watch else args.speed, per_side=args.per_side,
         sides=[x.strip() for x in args.sides.split(',')] if args.sides else None,
         boxes=args.boxes, box_size=args.box_size, handicap=args.handicap,
+        drop_ai_version=args.drop_ai_version,
     )
     script_path = outdir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
@@ -546,6 +556,10 @@ def main() -> int:
                     help="start-box size as a fraction of the map, e.g. 0.35; 0 = auto (0.38 for <=4 per side, 0.20 above)")
     ap.add_argument("--handicap", type=int, default=0,
                     help="percent resource bonus for EVERY AI, e.g. 50; speeds games up so 8v8s reach game over instead of timing out undecided")
+    ap.add_argument("--drop-ai-version", dest="drop_ai_version", action="store_true",
+                    help="omit Version from every [AI] block, as a lobby-hosted "
+                         "multiplayer game does; use with --game to test the AI "
+                         "exactly as a hosted match will load it")
     ap.add_argument("--dry-run", action="store_true", help="print the script and stop")
     args = ap.parse_args()
     if args.speed == 0:

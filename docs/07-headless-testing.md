@@ -231,7 +231,7 @@ landmine.
 ## Batch runs
 
 ```bash
-python tools/run_tournament.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_tournament.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
     --maps "Comet Catcher,Supreme Isthmus" --games 10
 python tools/run_tournament.py --report
 ```

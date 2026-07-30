@@ -36,14 +36,25 @@ the game archive. That is the whole reason layers 1 and 2 need no compiler.
 
 ## Version vs profile
 
-Two separate dimensions, easy to conflate:
+Three separate dimensions, easy to conflate:
 
-**AI version** — a distinct entry in the lobby AI list. Needs both halves:
+**shortName** — the AI's identity, and the only one that survives the lobby.
+`ADDBOT` carries a single `aiLib` field with no version, so in a hosted game the
+start script's `Version` is empty and the engine resolves the shortName to its
+highest version by `VersionCompare` — `stable` beats `apex`. A variant shipped as
+a *version* of `BARb` therefore plays as stock BARb in multiplayer, silently.
+Ours is `BARbApex`.
+
+**AI version** — a variant within one shortName. Needs both halves:
 
 ```
-engine/<ver>/AI/Skirmish/BARb/apex/     AIInfo.lua (version='apex') + SkirmishAI.dll + fallbacks
-BAR.sdd/luarules/configs/BARb/apex/     config/ + script/
+engine/<ver>/AI/Skirmish/BARbApex/apex/     AIInfo.lua (version='apex') + SkirmishAI.dll + config/ + script/
+BAR.sdd/luarules/configs/BARbApex/apex/     config/ + script/   (local iteration only)
 ```
+
+The engine-side `config/`+`script/` are what a hosted game actually loads: other
+players are on released BAR, which has no `luarules/configs/` for us, so
+CircuitAI logs "Game-side config: missing!" and falls back to the AI data dir.
 
 **Profile** — a difficulty/playstyle *inside* one version, selected by the
 `profile` AI option that version's `AIOptions.lua` declares:

@@ -124,6 +124,22 @@ Upstream bugs found and worked around: `legbombard` has no builder, `armfmd` is
 not a unit def, three `nanotct2` variants are buildable by nobody, several
 porcupine entries ship `on: false` and are built inert.
 
+## Packaging — what makes it load in a hosted game
+
+- **Ships under its own shortName, `BARbApex`**, rather than as version `apex` of
+  `BARb`. The lobby's `ADDBOT` carries only `aiLib`, with no version field, so a
+  hosted game's start script has `Version` empty; the engine then keeps every key
+  matching the shortName and picks the highest by `VersionCompare`, and
+  `"apex" < "stable"`. As a version, the variant loaded **stock BARb in every
+  multiplayer game** and said nothing. Single-player was unaffected, because
+  Chobby writes that start script itself and does pass the version — which is
+  why it only appeared when hosting. **measured**: reproduced and fixed under
+  `run_match.py --drop-ai-version`, which omits `Version` exactly as a host does.
+- **Config and script are deployed engine-side as well**, into
+  `AI/Skirmish/BARbApex/apex/`. Other players are on released BAR, which has no
+  `LuaRules/Configs/...` for us; CircuitAI logs "Game-side config: missing!" and
+  falls back to `LocatePath("config/")` over the AI data dirs. **measured**
+
 ## Dev instrumentation (not part of the AI)
 
 `game-patches/gadgets/` — installed into `BAR.sdd`, inert in normal play.

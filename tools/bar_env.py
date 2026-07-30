@@ -75,6 +75,20 @@ class BarEnv:
             return []
         return sorted(p.name for p in base.iterdir() if p.is_dir())
 
+    def installed_ais(self) -> list[str]:
+        """Every engine-side AI as 'shortName:version'.
+
+        Variants live under their own shortName, not under BARb, so listing one
+        folder no longer shows what is installed.
+        """
+        base = self.engine_dir / "AI" / "Skirmish"
+        if not base.is_dir():
+            return []
+        return sorted(f"{s.name}:{v.name}"
+                      for s in base.iterdir() if s.is_dir()
+                      for v in s.iterdir()
+                      if v.is_dir() and (v / "AIInfo.lua").is_file())
+
     # --- misc -----------------------------------------------------------
     @property
     def infolog(self) -> Path:
@@ -92,7 +106,7 @@ class BarEnv:
             f"engine dir    {self.engine_dir}",
             f"headless      {self.headless}  {'OK' if self.headless.exists() else 'MISSING'}",
             f"game (.sdd)   {self.game_sdd}  {'OK' if self.game_sdd.is_dir() else 'MISSING'}",
-            f"BARb variants {', '.join(self.installed_variants()) or '(none)'}",
+            f"engine AIs    {', '.join(self.installed_ais()) or '(none)'}",
         ]
         return "\n".join(lines)
 

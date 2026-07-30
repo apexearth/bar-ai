@@ -30,14 +30,14 @@ To benchmark it against stock BARb without opening the game:
 
 ```bash
 python tools/deploy_ai.py gadgets   # one-time: installs the autoquit/result gadget
-python tools/run_match.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_match.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1
 ```
 
 A full match takes well under a minute of wall time. For statistics:
 
 ```bash
-python tools/run_tournament.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_tournament.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
     --maps "Comet Catcher,Supreme Isthmus" --games 10
 python tools/run_tournament.py --report
 ```
