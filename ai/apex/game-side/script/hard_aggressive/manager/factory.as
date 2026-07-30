@@ -16,8 +16,19 @@ bool gHaveT2 = false;   // set once we own an advanced factory
 // 500 energy/sec, then commit to T2. That lands around 5 minutes, and T2 should
 // exist before 10. Gating on metal income 12 held the rusher on T1 until minute
 // 12 and the plant only finished at 20 -- later than stock reached it unaided.
-const float RUSH_ENERGY_TARGET = 150.f;      // measured: BARb hits this ~5.5 min
-const float RUSH_ENERGY_FLOOR  = 90.f;       // fallback: reached before 4 min
+// Raised 150 -> 400, and the floor with it. 150 was far under this comment's own
+// stated design of "roughly 500 energy/sec": it let the rusher commit to an
+// advanced plant on a grid that could not run it, and the plant then crawled.
+// The rusher is the one player the whole team is funding, so it is the last one
+// that should be teching on thin energy -- and it should keep scaling energy
+// afterwards, which is what the raised economy.energy.factor is for.
+//
+// This DELAYS the rush at today's energy curve: measured ~130 e/s at 5 min and
+// ~290 at 8, so 400 is not cleared until roughly 8-9 min against 5.5 today. The
+// bet is that the factor change pulls that curve up to meet it. If first-T2
+// slips badly, the factor is too low -- raise it before lowering these.
+const float RUSH_ENERGY_TARGET = 400.f;
+const float RUSH_ENERGY_FLOOR  = 240.f;      // same 0.6 ratio to target as before
 const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
 
 // The whole team pools metal behind the rusher, so it must not be the poorest
@@ -288,6 +299,19 @@ const float FOLLOWER_TECH_INCOME = 28.f;   // followers wait for a running econo
 // binding constraint, and followers still convert only 7.7k of T2 against
 // stock's 12.2k -- they tech, but too late to compound.
 const int   FOLLOWER_TECH_FRAME  = 10 * MINUTE;
+
+// Energy a FOLLOWER must be making before it may take T2. An advanced plant and
+// its units are energy-hungry, and teching on a thin grid stalls the base rather
+// than growing it -- followers were being granted T2 on metal alone.
+//
+// Deliberately above what the AI currently reaches: measured across a 20-minute
+// 4v4, energy income ran ~130/s at 5 min, ~290 at 8 and ~415 at 14. Those peaks
+// are low BECAUSE energy was under-prioritised, which the raised
+// economy.energy.factor is meant to correct; this bar is what the economy should
+// clear, not what it clears today. If followers stop teching at all, that is the
+// factor being too low, not this number being wrong -- check eInc in the T2GATE
+// log before lowering it.
+const float FOLLOWER_TECH_ENERGY = 800.f;
 
 
 enum Attr {
@@ -725,6 +749,24 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	if (LeadIsDesignated() && !IsDesignatedLead()
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
 		&& (ai.frame < FOLLOWER_TECH_FRAME))
+	{
+		return false;
+	}
+	// A follower needs real energy behind the plant, not just metal.
+	//
+	// This is a single early guard rather than another clause on the no-bank
+	// branch below, because a follower has FOUR routes to T2 in this function --
+	// the no-bank branch, the turtle branch, and both halves of the stock
+	// fallback -- and every one of them grants it on metal alone. Gating one
+	// leaves the others open.
+	//
+	// LeadIsDesignated() is required here for the same reason it is above: gate
+	// every non-lead on energy before anyone has been elected and nobody can
+	// start a plant, so nobody becomes lead, so nobody can start a plant. The
+	// energy bar applies once the team has a lead to pool behind.
+	if (LeadIsDesignated() && !IsDesignatedLead()
+		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
+		&& (aiEconomyMgr.energy.income < FOLLOWER_TECH_ENERGY))
 	{
 		return false;
 	}
