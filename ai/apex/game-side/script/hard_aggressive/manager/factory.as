@@ -1027,6 +1027,18 @@ const float T3_METAL_INCOME = 100.f;
 //                    merely have stopped bleeding.
 const float T3_ARMY_RATIO = 1.0f;
 
+// Metal income above which the gTurtle and army-ratio vetoes stop applying, so a
+// gantry gets placed while we are LOSING -- which is the case they were refusing.
+// See T3Worthwhile().
+//
+// 150, only 50 above the T3_METAL_INCOME floor, because the point is to catch
+// the situation early rather than to mark an elite economy. At 150 m/s a gantry
+// is 56 seconds of income and a Shiva is 10; if enemy T3 is in the base, that is
+// already worth spending whatever the army ratio says. The live observation that
+// prompted this was a player at 398 m/s building nothing, so the bar only has to
+// sit far enough below that to trigger well before the game is decided.
+const float T3_INCOME_URGENT = 150.f;
+
 // A T1 bot lab is wanted for the whole game, not just the opening: it is the
 // cheap assault spam and the only source of rez bots. apexearth: "one T2
 // assault unit costs like 5 or 6 T1 assault units, and that many T1s can kill
@@ -1051,8 +1063,25 @@ bool HaveT1BotLab()
 
 bool T3Worthwhile()
 {
-	if (aiEconomyMgr.metal.income <= T3_METAL_INCOME)
+	const float inc = aiEconomyMgr.metal.income;
+	if (inc <= T3_METAL_INCOME)
 		return false;
+	// Above a large economy the two vetoes below block exactly the case they
+	// should permit, so they stop applying.
+	//
+	// Observed live in a hosted +40% game: the best player was on 398 metal/s
+	// with enemy T3 already in the base, and built no gantry at all. gTurtle was
+	// set -- that is what "their army is on our doorstep" looks like -- and our
+	// armyCost was below theirs precisely because they had T3 and we did not. So
+	// both vetoes fired for the same reason, and the AI stood still.
+	//
+	// Those vetoes were calibrated when a gantry was a large, irreversible bet.
+	// It is not at this income. Real costs: corgant 8400, corshiva 1550,
+	// armbanth 13500. At 398 m/s that is 21 s, 4 s and 34 s of income. Refusing
+	// to spend 21 seconds of income on the counter to the thing killing you is
+	// the wrong answer at any army ratio.
+	if (inc >= T3_INCOME_URGENT)
+		return true;
 	if (Military::gTurtle)
 		return false;
 	return aiMilitaryMgr.armyCost >= Military::EnemyArmyCost() * T3_ARMY_RATIO;

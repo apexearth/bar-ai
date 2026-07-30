@@ -240,16 +240,25 @@ Gantry placement is fine — 79 requests across 20 games, median 23.9 min. Addin
 gantry caretakers changed nothing (T3 3,725 → 3,488), so build power is not the
 constraint either.
 
-**A Korgoth is ~11,000 metal. apexdef produces ~110,000 metal across a
-45-minute 4v4 — about 40 metal/second for the whole team. One T3 unit is
-therefore ~275 seconds of the entire team's income.** Two or three per game is
-the arithmetic ceiling, and that is exactly what gets fielded. Stock BARb fields
-none at all.
+**This section's conclusion holds only at benchmark scale. It does not hold in
+the games this AI is actually hosted in — re-check the income before applying
+it.**
 
-So a T3 win condition needs an economy several times larger than either AI
-reaches. Before treating "no T3 mass" as a bug, check whether the economy could
-pay for one. The alternatives are to grow the economy to afford it, or to accept
-that at this scale the deciding force is massed T2.
+At benchmark scale: apexdef produces ~110,000 metal across a 45-minute 4v4 —
+about 40 metal/second for the whole team. Against that, T3 is two or three units
+a game, and that is what gets fielded. Stock BARb fields none.
+
+But the numbers above were partly wrong and the scale was unrepresentative. Real
+costs, read from the unit defs 2026-07-30: **corgant 8400, corshiva 1550,
+corcat 4900, armbanth 13500, corjugg 20000, corkorg 29000** — a Korgoth is 29k,
+not the ~11,000 previously claimed here. And hosted games run with a resource
+bonus (+40% is normal online) and go long: a player was observed live at **398
+metal/second**, where a gantry is 21 seconds of income and a Shiva is 4.
+
+So "the economy cannot pay for T3" is a statement about a 40 m/s benchmark, not
+about BAR. Before treating "no T3" as affordable-but-broken *or* as unaffordable,
+read the actual income. Above ~250 m/s the affordability argument inverts
+completely, which is why `T3Worthwhile()` drops its vetoes there.
 
 ## Harness discipline
 
