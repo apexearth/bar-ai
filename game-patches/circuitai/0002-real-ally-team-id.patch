@@ -1,0 +1,260 @@
+diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
+index aeea933..60b1edb 100644
+--- a/src/circuit/CircuitAI.cpp
++++ b/src/circuit/CircuitAI.cpp
+@@ -44,6 +44,10 @@
+ #include "Drawer.h"
+ #include "Economy.h"
+ #include "Resource.h"
++#include "Feature.h"
++#include "Unit.h"
++#include "UnitDef.h"
++#include "FeatureDef.h"
+ #include "SkirmishAI.h"
+ #include "WrappUnit.h"
+ #include "WrappTeam.h"
+@@ -602,6 +606,17 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
+ //		return ERROR_INIT;
+ //	}
+ 
++	// Repair allyTeamId before GetAllyTeam() indexes with it. The constructor
++	// took it from game->GetMyAllyTeam(), which returns 0 for every instance,
++	// so every AI believed it was in ally team 0 -- GetTeamIds() then answered
++	// with ally 0's roster for everyone, and any rule keyed on team size or
++	// team membership was reading the wrong team's data.
++	{
++		const int realAlly = setupManager->FindAllyTeamOf(teamId);
++		if (realAlly >= 0) {
++			allyTeamId = realAlly;
++		}
++	}
+ 	allyTeam = setupManager->GetAllyTeam();
+ 	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
+ 	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
+@@ -1488,6 +1503,153 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+ 	delete unit;
+ }
+ 
++float CCircuitAI::GetTeamMetalFill(int otherTeamId) const
++{
++	if ((otherTeamId < 0) || (game == nullptr) || (metalRes == nullptr)) {
++		return 0.f;
++	}
++	const int mId = metalRes->GetResourceId();
++	const float storage = game->GetTeamResourceStorage(otherTeamId, mId);
++	// The engine does not report another team's storage to us -- it comes back
++	// as 0, and the old code read that as "full" and withheld every transfer,
++	// silently disabling slinging entirely. Treat unknown as "needs it": the
++	// caller is only ever sending surplus it has already decided to give away.
++	if (storage <= 0.f) {
++		return 0.f;
++	}
++	return game->GetTeamResourceCurrent(otherTeamId, mId) / storage;
++}
++
++// Metal income of any team, read from a game rules param published by the
++// dev_team_income gadget.
++//
++// The obvious API does not work. Game_getTeamResourceIncome and every sibling
++// route through aiGetTeamResource() in SSkirmishAICallbackImpl.cpp, which gates
++// on AI_TEAM_IDS[skirmishAIId]. That array is declared
++//     static std::array<int, MAX_AIS> AI_TEAM_IDS = {{-1}};
++// and is never assigned anywhere in the engine, so element 0 holds -1 and the
++// rest hold 0; the alliance check then fails and the call returns -1.0.
++// Confirmed live: an AI asking for its OWN team's income got -1.0 back, for all
++// eight allied teams, every tick.
++//
++// Game_getRulesParamFloat has no such gate, so synced Lua publishes the numbers
++// and we read them here. Returns -1 when the gadget is absent, which callers
++// must treat as "unknown" rather than "poor".
++float CCircuitAI::GetTeamMetalIncome(int otherTeamId) const
++{
++	if ((otherTeamId < 0) || (game == nullptr)) {
++		return -1.f;
++	}
++	const std::string key = "ai_minc_" + utils::int_to_string(otherTeamId);
++	return game->GetRulesParamFloat(key.c_str(), -1.f);
++}
++
++// Position of the most valuable reclaimable wreck within radius, or -RgtVector
++// if there is nothing worth the trip.
++//
++// Area reclaim (CmdReclaimInArea, which is what a RECLAIM task issues) takes
++// whatever happens to be inside the circle, so a builder sent to a battlefield
++// is as likely to eat a 12-metal tree as a dead Gollum. Winning a fight and
++// then eating the field is a large metal swing, and it only pays if we aim at
++// the bodies. So: find the richest wreck, and let the caller centre the reclaim
++// circle on it.
++//
++// Unlike the Game_getTeamResource* family, the features API is not gated on the
++// broken AI_TEAM_IDS array -- its non-cheating path goes through CAICallback,
++// which holds a real team id. Verified in SSkirmishAICallbackImpl.cpp.
++springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal) const
++{
++	springai::AIFloat3 best(-RgtVector);
++	if ((callback == nullptr) || (metalRes == nullptr) || (radius <= 0.f)) {
++		return best;
++	}
++
++	float bestMetal = minMetal;
++	const std::vector<springai::Feature*> feats = callback->GetFeaturesIn(pos, radius, false);
++	for (springai::Feature* f : feats) {
++		if (f == nullptr) {
++			continue;
++		}
++		springai::FeatureDef* fd = f->GetDef();
++		if (fd != nullptr) {
++			// Reclaim left is a fraction of the def's contained metal; a wreck
++			// someone else is already half way through is worth less to us.
++			const float metal = fd->GetContainedResource(metalRes) * f->GetReclaimLeft();
++			if (metal > bestMetal) {
++				bestMetal = metal;
++				best = f->GetPosition();
++			}
++			delete fd;
++		}
++		delete f;
++	}
++	return best;
++}
++
++// Count of visible enemy units within radius of a position.
++//
++// The first version summed metal value via u->GetDef()->GetCost(metalRes) and
++// deleted the UnitDef. That crashed at +0x2f3326 within ~8400 frames and
++// returned 0 throughout: unlike Feature::GetDef(), Unit::GetDef() hands back a
++// pointer that is not ours to free. A count needs no defs at all, so there is
++// nothing to get wrong -- and "how many enemies are on top of me" is the signal
++// the commander actually needs.
++float CCircuitAI::GetEnemyCostAt(const springai::AIFloat3& pos, float radius) const
++{
++	if ((callback == nullptr) || (radius <= 0.f)) {
++		return 0.f;
++	}
++	const std::vector<springai::Unit*> foes = callback->GetEnemyUnitsIn(pos, radius, false);
++	const float count = float(foes.size());
++	for (springai::Unit* u : foes) {
++		delete u;
++	}
++	return count;
++}
++
++// Threat at a position, from the engine-maintained threat map.
++//
++// This is what the earlier attempts were reaching for and missing. mobileThreat
++// is a global scalar with no location, and GetEnemyCostAt counted units in a
++// radius (and crashed). CThreatMap is a real per-position map the AI already
++// maintains, and GetBuilderThreatAt asks precisely "how dangerous is this spot
++// for something being built here" -- the question behind both bad factory
++// placement and commander deaths.
++float CCircuitAI::GetBuilderThreatAt(const springai::AIFloat3& pos) const
++{
++	CMapManager* mm = GetMapManager();
++	if (mm == nullptr) {
++		return 0.f;
++	}
++	CThreatMap* tm = mm->GetThreatMap();
++	return (tm == nullptr) ? 0.f : tm->GetBuilderThreatAt(pos);
++}
++
++void CCircuitAI::SendResources(float metal, float energy, int toTeamId)
++{
++	// Crashed at frame 1 when called before the economy interface was ready, or
++	// with a team id the engine had not resolved yet. Validate everything.
++	if ((toTeamId < 0) || (toTeamId == teamId)
++		|| (economy == nullptr) || (metalRes == nullptr) || (energyRes == nullptr))
++	{
++		return;
++	}
++	// Never send more than is actually held, or the command is a no-op that
++	// still costs a callback.
++	if (metal > 0.f) {
++		const float have = economy->GetCurrent(metalRes);
++		if (have > 0.f) {
++			economy->SendResource(metalRes, std::min(metal, have), toTeamId);
++		}
++	}
++	if (energy > 0.f) {
++		const float have = economy->GetCurrent(energyRes);
++		if (have > 0.f) {
++			economy->SendResource(energyRes, std::min(energy, have), toTeamId);
++		}
++	}
++}
++
+ void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
+ {
+ 	// NOTE: See notes in MobileSlave or other economy->SendUnits places
+diff --git a/src/circuit/setup/SetupData.cpp b/src/circuit/setup/SetupData.cpp
+index b0cbe19..5bab20e 100644
+--- a/src/circuit/setup/SetupData.cpp
++++ b/src/circuit/setup/SetupData.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include "setup/SetupData.h"
+ #include "CircuitAI.h"
++#include "unit/ally/AllyTeam.h"
+ #include "util/math/Region.h"
+ #include "util/Utils.h"
+ 
+@@ -226,4 +227,14 @@ CSetupData::BoxMap CSetupData::ReadStartBoxes(const std::string& script, CMap* m
+ 	return boxes;
+ }
+ 
++int CSetupData::FindAllyTeamOf(int teamId) const
++{
++	for (size_t i = 0; i < allyTeams.size(); ++i) {
++		if ((allyTeams[i] != nullptr) && (allyTeams[i]->GetTeamIds().count(teamId) > 0)) {
++			return int(i);
++		}
++	}
++	return -1;
++}
++
+ } // namespace circuit
+diff --git a/src/circuit/setup/SetupData.h b/src/circuit/setup/SetupData.h
+index 66b8c22..ed1ec49 100644
+--- a/src/circuit/setup/SetupData.h
++++ b/src/circuit/setup/SetupData.h
+@@ -39,6 +39,13 @@ public:
+ 	bool CanChooseStartPos() const { return false/*startPosType == CGameSetup::StartPos_ChooseInGame*/; }
+ 
+ 	CAllyTeam* GetAllyTeam(int allyTeamId) { return allyTeams[allyTeamId]; }
++
++	// game->GetMyAllyTeam() answers 0 for every AI: aiGetTeamResource()'s gate,
++	// AI_TEAM_IDS in rts/ExternalAI/SSkirmishAICallbackImpl.cpp, is declared
++	// {{-1}} and never assigned. The start script carries the real assignment
++	// and ParseSetupScript already read it, so look our own teamId up instead.
++	// Defined in the .cpp: CAllyTeam is only forward-declared here.
++	int FindAllyTeamOf(int teamId) const;
+ 	const utils::CRegion& GetStartBox(int boxId) { return boxes[boxId]; }
+ 
+ 	const ModOptions& GetModOptions() const { return modoptions; }
+diff --git a/src/circuit/setup/SetupManager.cpp b/src/circuit/setup/SetupManager.cpp
+index 3df26d7..e7b07e8 100644
+--- a/src/circuit/setup/SetupManager.cpp
++++ b/src/circuit/setup/SetupManager.cpp
+@@ -328,6 +328,11 @@ CAllyTeam* CSetupManager::GetAllyTeam() const
+ 	return setupData->GetAllyTeam(circuit->GetAllyTeamId());
+ }
+ 
++int CSetupManager::FindAllyTeamOf(int teamId) const
++{
++	return setupData->FindAllyTeamOf(teamId);
++}
++
+ void CSetupManager::ReadConfig()
+ {
+ 	const Json::Value& root = GetConfig();
+diff --git a/src/circuit/setup/SetupManager.h b/src/circuit/setup/SetupManager.h
+index 4863ac9..e509c6d 100644
+--- a/src/circuit/setup/SetupManager.h
++++ b/src/circuit/setup/SetupManager.h
+@@ -78,6 +78,7 @@ public:
+ 	CCircuitUnit* GetCommander() const { return commander; }
+ 
+ 	CAllyTeam* GetAllyTeam() const;
++	int FindAllyTeamOf(int teamId) const;
+ 
+ 	void ReadConfig();
+ 	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }

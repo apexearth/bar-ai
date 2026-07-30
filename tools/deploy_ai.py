@@ -132,10 +132,19 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
     # built against the SAME engine tag that is installed -- the AI boundary is a
     # raw struct of ~596 function pointers with no version negotiation, so a
     # mismatch fails at runtime with no diagnostic.
+    # A locally built DLL wins over the repo copy. The repo carries a stripped
+    # build for convenience, but it goes stale the moment the C++ is touched --
+    # and a deploy silently reinstating it looked exactly like the C++ fix never
+    # working. Prefer the build output whenever it is newer.
+    built_dll = REPO / "vendor/engine/build-amd64-windows/AI/Skirmish/BARb/data/SkirmishAI.dll"
     for name in ("AIInfo.lua", "AIOptions.lua", "SkirmishAI.dll"):
         f = engine_side / name
+        if (name == "SkirmishAI.dll" and built_dll.exists()
+                and (not f.exists() or built_dll.stat().st_mtime > f.stat().st_mtime)):
+            f = built_dll
+            name += " (local build)"
         if f.exists():
-            shutil.copy2(f, target / name)
+            shutil.copy2(f, target / name.split(" ")[0])
             overlaid.append(name)
 
     for required in ("AIInfo.lua", "SkirmishAI.dll"):
@@ -145,7 +154,23 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
                 f"The variant will not load. Close BAR and redeploy."
             )
     _assert_version_matches(target / "AIInfo.lua", variant)
+
+    # The variant must also run with NO game-archive support at all. In a real
+    # multiplayer game every client is on the released BAR, which has no
+    # LuaRules/Configs/BARb/<variant>/ -- CircuitAI logs "Game-side config:
+    # missing!" and falls back to LocatePath("config/") over the AI data dirs,
+    # which resolves here. Verified against a packaged .sdp archive: config and
+    # script both load from this directory and the AngelScript runs.
+    for sub in ("config", "script"):
+        s_dir = src / "game-side" / sub
+        if s_dir.is_dir():
+            for f in s_dir.rglob("*"):
+                if f.is_file():
+                    q = target / sub / f.relative_to(s_dir)
+                    q.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(f, q)
     print(f"  engine-side  {target}")
+    print(f"               + config/ and script/ overlaid for archive-free play")
     print(f"               derived from BARb/stable, overlaid {', '.join(overlaid)}")
 
     # 2. Game side: the actual tuning. Replace wholesale so deletions propagate.
