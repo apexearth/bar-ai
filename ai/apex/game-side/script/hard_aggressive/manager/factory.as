@@ -129,6 +129,41 @@ bool IsTechLead()
 	return ai.teamId == RushLeadTeamId();
 }
 
+// Has anyone actually been designated yet?
+//
+// Until the gadget publishes one, RushLeadTeamId falls back to
+// ai.GetLeadTeamId() -- the engine's ally leader, which is always the lowest
+// team id. That made team 0 declare itself the rusher at frame 0, so it was the
+// only player that ever tried to tech, so it was always first to commit, so it
+// was always elected. Observed live: blue built the first advanced plant every
+// single game, even when green was richer and ready sooner. "Whoever commits
+// first" had quietly collapsed into "team 0".
+bool LeadIsDesignated()
+{
+	return ai.GetGameRulesParam(LEAD_PARAM + ai.teamId, -1.f) >= 0.f;
+}
+
+// May THIS instance pursue the advanced plant?
+//
+// Before anyone is designated the answer is "whoever is ready" -- that is the
+// whole point of selecting on commitment rather than prediction, and RushReady
+// already demands a real economy behind it. Once someone is designated, only
+// they continue, so the team pools behind one player instead of four.
+bool MayPursueT2()
+{
+	return !LeadIsDesignated() || IsTechLead();
+}
+
+// Am I the ACTUAL designated lead? Distinct from IsTechLead(), which is true for
+// team 0 from frame 0 via the fallback. Role behaviour -- suppressing our army,
+// being the sling target, skipping defence -- must key on this, or team 0 idles
+// its army from the opening and the whole team feeds it before anyone has
+// earned the role.
+bool IsDesignatedLead()
+{
+	return LeadIsDesignated() && IsTechLead();
+}
+
 // Minimum METAL income before committing to T2. The energy gates below say
 // "can we power a plant"; nothing said "can we afford to be the player the whole
 // team pools behind". Measured on Quicksilver 4v4: apex committed at 2.9 min on
@@ -262,7 +297,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// A handful is enough to finish a plant quickly; past that each one is pure
 	// waste. GetWorkerCount() is the engine's own count of our builders, so this
 	// counts what we actually hold rather than what we have ever ordered.
-	if (IsTechLead() && !gHaveT2 && RushReady() && !IsSmallTeam()
+	if (MayPursueT2() && !gHaveT2 && RushReady() && !IsSmallTeam()
 		&& RushWindowOpen())
 	{
 		// Cap AND spacing: the cap alone cannot hold, because GetWorkerCount()
@@ -361,7 +396,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		}
 	}
 
-	if (gHaveT2 && ((IsTechLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
+	if (gHaveT2 && ((IsDesignatedLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
 		// BUILDER, not BUILDER2. builderT2 is registered as a SUBROLE of builder
 		// (AiAddRole("builderT2", BUILDER.type)) and the factory role map is
 		// indexed by BASE roles only -- FactoryManager.cpp:1057 looks up
@@ -562,7 +597,13 @@ bool AiIsSwitchTime(int lastSwitchFrame)
 	// bot labs. The intent was only to stop the stock 9-15 minute reconsider
 	// interval from making the rush unreachable, which a short probe interval
 	// achieves without leaving the gate open.
-	if (IsTechLead() && !gHaveT2) {
+	// MayPursueT2, not IsTechLead. This probe is what makes teching reachable at
+	// all -- the stock interval is AiRandom(550,900) seconds -- and gating it on
+	// IsTechLead handed team 0 a probe every 10s while everyone else waited 9-15
+	// minutes. Blue therefore built the first advanced plant in every game
+	// regardless of income, because nobody else was ever asked. RushReady still
+	// demands >= 14 metal/s before anything is actually placed.
+	if (MayPursueT2() && !gHaveT2) {
 		if (ai.frame < gNextSwitchProbe)
 			return false;
 		gNextSwitchProbe = ai.frame + 10 * SECOND;
@@ -606,7 +647,7 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// slinging is what suppresses that income -- so donating blocked the tech it
 	// was paying for. Release on elapsed time instead, and only hold them during
 	// the pooling window.
-	if (!IsTechLead() && ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
+	if (!IsDesignatedLead() && ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
 		&& (ai.frame < FOLLOWER_TECH_FRAME))
 	{
 		return false;
@@ -627,9 +668,15 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// metal and let income, seven slinging allies and assisting builders finish
 	// it. isAssistRequired is now true for exactly that reason -- with no bank,
 	// build power is the only thing that closes the gap.
-	if (IsTechLead() && !gHaveT2 && RushReady()
+	if (MayPursueT2() && !gHaveT2 && RushReady()
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0))
 	{
+		// EconomyManager returns before this on (engyFactor < energyPower) and on
+		// the sticky isEnergyRequired, neither of which isSwitchTime bypasses.
+		// This line marks the frame we were actually reached on.
+		AiLog(T() + "T2GATE reached IsSwitchAllowed"
+			+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
+			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1));
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
 		return true;
 	}
@@ -676,7 +723,7 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// and all four teched simultaneously late in the game. One advanced plant per
 	// follower is the whole point -- the second is metal that should have been
 	// army or mex upgrades, spent at the worst possible moment.
-	if (!IsTechLead() && !gHaveT2 && (ai.frame >= FOLLOWER_TECH_FRAME)
+	if (!IsDesignatedLead() && !gHaveT2 && (ai.frame >= FOLLOWER_TECH_FRAME)
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
 		&& (aiEconomyMgr.metal.income > 18.f))
 	{
@@ -767,7 +814,7 @@ bool MayOpenAir()
 {
 	if (IsSmallTeam())
 		return false;             // under BIG_TEAM: nobody opens air
-	if (IsTechLead())
+	if (IsDesignatedLead())
 		return false;             // the rusher techs on the ground
 	return ai.teamId == AirSlotTeamId();
 }
@@ -934,7 +981,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 		}
 	}
 
-	if (IsTechLead() && !gHaveT2 && RushReady() && RushWindowOpen()) {
+	if (MayPursueT2() && !gHaveT2 && RushReady() && RushWindowOpen()) {
 		CCircuitDef@ adv = AdvCounterpart();
 		if (adv !is null) {
 			AiLog(T() + "apex: rusher building advanced plant " + adv.GetName()

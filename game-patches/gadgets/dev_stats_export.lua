@@ -80,6 +80,17 @@ local builtByTech = {}    -- team -> {tech -> metal built}
 -- those upgrades are probably not happening -- but nothing measured them, so it
 -- could only be guessed at.
 local t2Mex = {}          -- team -> advanced extractors finished
+-- Mex COUNT over time, not just the T2 upgrades above. apexearth, watching:
+-- "we often accept having just 1 mex for too long". Nothing measured the
+-- early expansion curve, so how long a team sat on one extractor was
+-- invisible. mexAt[n] is the frame the nth extractor finished.
+-- T1 AA turrets are 80 metal, so they never reach the top= list and the
+-- infolog does not record defence construction at all -- the change that
+-- added them could not be confirmed either way. Count them explicitly.
+local AA_T1 = {armrl = true, corrl = true, legrl = true}
+local aaT1 = {}           -- team -> T1 AA turrets finished
+local mexCount = {}       -- team -> extractors finished, any tier
+local mexAt = {}          -- team -> {n -> frame the nth finished}
 -- Losing a commander usually loses the game, and nothing here recorded it -- so
 -- an attrition loss and a decapitation looked identical in the telemetry. Games
 -- ending at 12-13 minutes are commander-death timing, not attrition timing.
@@ -184,8 +195,17 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 		builtTop[unitTeam] = builtTop[unitTeam] or {}
 		builtTop[unitTeam][ud.name] = (builtTop[unitTeam][ud.name] or 0) + ud.metalCost
 	end
-	if (ud.extractsMetal or 0) > 0 and techOf(ud) >= 2 then
-		t2Mex[unitTeam] = (t2Mex[unitTeam] or 0) + 1
+	if AA_T1[ud.name] then
+		aaT1[unitTeam] = (aaT1[unitTeam] or 0) + 1
+	end
+	if (ud.extractsMetal or 0) > 0 then
+		local n = (mexCount[unitTeam] or 0) + 1
+		mexCount[unitTeam] = n
+		mexAt[unitTeam] = mexAt[unitTeam] or {}
+		mexAt[unitTeam][n] = Spring.GetGameFrame()
+		if techOf(ud) >= 2 then
+			t2Mex[unitTeam] = (t2Mex[unitTeam] or 0) + 1
+		end
 	end
 	if ud.isFactory then
 		bump(facSpend, unitTeam, ud.metalCost or 0)
@@ -257,6 +277,11 @@ local function dump(reason)
 				string.format("techFrame=%d", techFrame[teamID] or -1),
 				string.format("techStart=%d", techStart[teamID] or -1),
 				string.format("t2Mex=%d", t2Mex[teamID] or 0),
+				string.format("mex=%d", mexCount[teamID] or 0),
+				string.format("aaT1=%d", aaT1[teamID] or 0),
+				string.format("mex2=%d", (mexAt[teamID] or {})[2] or -1),
+				string.format("mex4=%d", (mexAt[teamID] or {})[4] or -1),
+				string.format("mex8=%d", (mexAt[teamID] or {})[8] or -1),
 				string.format("commLost=%d", commLost[teamID] or -1),
 			}
 			local bt = builtByTech[teamID] or {}

@@ -172,6 +172,32 @@ def is_unit(name: str, units: set[str]) -> bool:
             or (name.endswith("_scav") and name[:-5] in units))
 
 
+def check_hubs(node, rel: str, rep: Report, path: str = "") -> None:
+    """A `hub` list must hold either all objects or all lists, never both.
+
+    Both spellings are legal and both appear upstream: `"hub": [ {..}, {..} ]`
+    and `"hub": [[ {..}, {..} ]]`, the latter grouping alternatives. Mixing them
+    is still valid JSON, so the syntax check passes -- but BuildChain calls
+    Json::Value::find on each element, that throws on an array, and the AI logs
+    "requires objectValue or nullValue" and loads NO build chain at all.
+    Symptom is commanders standing idle from frame 0.
+    """
+    if isinstance(node, dict):
+        for k, v in node.items():
+            here = f"{path}.{k}" if path else k
+            if k == "hub" and isinstance(v, list) and v:
+                kinds = {type(e).__name__ for e in v}
+                if len(kinds) > 1:
+                    rep.error(
+                        f"{rel}: {here} mixes {sorted(kinds)} -- BuildChain calls "
+                        f"Json::Value::find on each element and throws on a list. "
+                        f"The whole build chain fails to load.")
+            check_hubs(v, rel, rep, here)
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            check_hubs(v, rel, rep, f"{path}[{i}]")
+
+
 def check_configs(cfg_root: Path, units: set[str], rep: Report,
                   baseline: Path | None = None) -> None:
     """Findings in a file byte-identical to the baseline belong to upstream.
@@ -198,6 +224,7 @@ def check_configs(cfg_root: Path, units: set[str], rep: Report,
             continue
 
         check_conditions(data, rel, rep if ours else _NoteOnly(rep))
+        check_hubs(data, rel, rep if ours else _NoteOnly(rep))
 
         if units:
             seen: set[str] = set()

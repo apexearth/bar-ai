@@ -133,7 +133,7 @@ void UpdateRushDefence()
 	}
 	if (ai.frame < SLING_FROM)
 		return;
-	if (ai.teamId == Factory::RushLeadTeamId())
+	if (Factory::IsDesignatedLead())
 		return;          // the lead is handled by UpdateRushRole
 	if (gTurtle)
 		return;          // an active turtle hold is stricter; do not loosen it
@@ -151,7 +151,7 @@ void UpdateRushRole()
 	// Past the deadline this must still run, to hand the quota back. Returning
 	// early instead left the lead pinned at RushAttackQuota() -- 400, i.e. never
 	// attack -- for the entire rest of the game.
-	if ((ai.frame > RUSH_GIVEUP) || (ai.teamId != Factory::RushLeadTeamId())) {
+	if ((ai.frame > RUSH_GIVEUP) || !Factory::IsDesignatedLead()) {
 		// The role can move -- before the election lands this falls back to the
 		// engine's pick, usually a different team. quota.attack was assigned and
 		// never undone, so a team that was briefly the rusher kept the
@@ -187,6 +187,8 @@ void UpdateSling()
 
 	if (Builder::gGotAdvCon)
 		return;   // we already got our advanced con; the pooling is done
+	if (!Factory::LeadIsDesignated())
+		return;   // nobody has earned the role yet -- do not feed the fallback
 	const int lead = Factory::RushLeadTeamId();
 	if (lead == ai.teamId)
 		return;                        // the lead is the one being fed
@@ -601,7 +603,7 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	// on eco and the T2". Every tower it builds is metal the team pooled for tech
 	// spent on something else. Threat still overrides: staying alive is the one
 	// early job it does have.
-	if (Factory::IsTechLead() && !gPorcArmed && !gTurtle && !LosingGround())
+	if (Factory::IsDesignatedLead() && !gPorcArmed && !gTurtle && !LosingGround())
 		return;
 
 	const bool onLine = NearFront(pos);

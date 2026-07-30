@@ -282,6 +282,7 @@
 		"factory": {
 			"armlab": {
 				"hub": [[
+					{"unit": "armrl", "category": "defence", "offset": {"back": 70}, "priority": "normal"},
 					{"unit": "armllt", "category": "defence", "offset": {"back": 5}, "priority": "normal"}
 				]]
 			},
@@ -310,6 +311,7 @@
 			},
 			"armvp": {
 				"hub": [[
+					{"unit": "armrl", "category": "defence", "offset": {"back": 70}, "priority": "normal"},
 					{"unit": "armllt", "category": "defence", "offset": {"back": 5}, "priority": "normal"}
 				]]
 			},
@@ -332,6 +334,7 @@
 			},
 			"armap": {
 				"hub": [[
+					{"unit": "armrl", "category": "defence", "offset": {"back": 70}, "priority": "normal"},
 					{"unit": "armllt", "category": "defence", "offset": {"front": 5}, "priority": "normal"}
 				]]
 			},
@@ -368,6 +371,7 @@
 			},
 			"corlab": {
 				"hub": [[
+					{"unit": "corrl", "category": "defence", "offset": {"back": 70}, "priority": "normal"},
 					{"unit": "corllt", "category": "defence", "offset": {"back": 5}, "priority": "normal"}
 				]]
 			},
@@ -392,6 +396,7 @@
 			},
 			"corvp": {
 				"hub": [[
+					{"unit": "corrl", "category": "defence", "offset": {"back": 70}, "priority": "normal"},
 					{"unit": "corllt", "category": "defence", "offset": {"back": 5}, "priority": "normal"}
 				]]
 			},
@@ -414,6 +419,7 @@
 			},
 			"corap": {
 				"hub": [[
+					{"unit": "corrl", "category": "defence", "offset": {"back": 70}, "priority": "normal"},
 					{"unit": "corllt", "category": "defence", "offset": {"front": 5}, "priority": "normal"}
 				]]
 			},

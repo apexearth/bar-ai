@@ -143,6 +143,7 @@ def build_script(
     host_name: str = "BenchHost",
     record_demo: bool = False,
     speed: int = 9999,
+    max_speed: int = 0,
     per_side: int = 1,
     sides: list[str] | None = None,
     boxes: str = "lr",
@@ -236,8 +237,10 @@ def build_script(
         # starting speed into [MinSpeed, MaxSpeed], so raising MaxSpeed alone does
         # nothing -- MinSpeed is what actually pushes the sim above 1x. The
         # adaptive throttle then runs as fast as the CPU allows up to MaxSpeed.
+        # MaxSpeed must stay ABOVE MinSpeed when a human is watching, or the
+        # in-game +/- keys do nothing: both bounds equal pins the sim.
         "MinSpeed": speed,
-        "MaxSpeed": speed,
+        "MaxSpeed": max(speed, max_speed),
         # BAR's own dev hook (see modoptions.lua "debugcommands", implemented by
         # luarules/gadgets/cmd_dev_helpers.lua): "<frame>:<command>|<frame>:<command>".
         # This is the guaranteed cap and needs nothing installed into the game.
@@ -354,7 +357,8 @@ def run(args) -> int:
 
     script = build_script(
         ais, map_name, game_name, args.minutes, args.seed,
-        record_demo=args.replay, speed=args.speed, per_side=args.per_side,
+        record_demo=args.replay, speed=args.speed,
+        max_speed=20 if args.watch else args.speed, per_side=args.per_side,
         sides=[x.strip() for x in args.sides.split(',')] if args.sides else None,
         boxes=args.boxes, box_size=args.box_size, handicap=args.handicap,
     )
@@ -532,8 +536,8 @@ def main() -> int:
     ap.add_argument("--windowed", action="store_true",
                     help="use spring.exe instead of spring-headless.exe")
     ap.add_argument("--watch", action="store_true",
-                    help="watch it play: windowed at 1600x900, real-time speed, "
-                         "replay recorded. Implies --windowed --speed 1")
+                    help="watch it play: windowed at 1600x900, replay recorded. "
+                         "Implies --windowed --speed 3; +/- adjust live up to 20x")
     ap.add_argument("--out", help="output directory (default: matches/<stamp>-<slug>)")
     ap.add_argument("--write-dir", dest="write_dir",
                     help="engine write dir; give concurrent runs separate ones "
@@ -545,7 +549,7 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="print the script and stop")
     args = ap.parse_args()
     if args.speed == 0:
-        args.speed = 1 if args.watch else 9999
+        args.speed = 3 if args.watch else 9999
     if args.watch:
         args.replay = True
     return run(args)
