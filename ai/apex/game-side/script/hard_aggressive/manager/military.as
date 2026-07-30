@@ -457,6 +457,106 @@ bool IsFrontierSite(const AIFloat3& in pos)
 	return (dx * dx + dz * dz) > (PORC_FRONTIER * PORC_FRONTIER);
 }
 
+//------------------------------------------------------------------------------
+// Enemy bearing, and defence scaled to how the fight is actually going.
+//
+// GetEnemyPos() is not bound to AngelScript, so dev_team_income.lua publishes
+// the opposing start-position centroid as ai_enemyx_/ai_enemyz_<teamId>.
+// DefaultMakeDefence already orients the towers it places along the C++ side's
+// own GetEnemyPos(); what the script could not do until now is decide WHICH
+// clusters are worth defending, which is the part that was spending metal on
+// towers behind the base.
+bool  gEnemyKnown = false;
+float gEnemyX = 0.f;
+float gEnemyZ = 0.f;
+
+bool LoadEnemyPos()
+{
+	if (gEnemyKnown)
+		return true;
+	const float x = ai.GetGameRulesParam("ai_enemyx_" + ai.teamId, -1.f);
+	const float z = ai.GetGameRulesParam("ai_enemyz_" + ai.teamId, -1.f);
+	if ((x < 0.f) || (z < 0.f))
+		return false;      // gadget absent, or not published yet
+	gEnemyX = x;
+	gEnemyZ = z;
+	gEnemyKnown = true;
+	return true;
+}
+
+// Our own ground, as accumulated by NoteDefenceSite.
+bool BaseCentre(AIFloat3& out c)
+{
+	if (gAnchorN == 0)
+		return false;
+	const float n = float(gAnchorN);
+	c = AIFloat3(gAnchorX / n, 0.f, gAnchorZ / n);
+	return true;
+}
+
+// Degrees between "base -> site" and "base -> enemy". 0 means the site sits
+// directly on the line of attack; 180 means it is behind us.
+const float DEG = 57.29578f;
+
+float BearingOffFromEnemy(const AIFloat3& in pos)
+{
+	AIFloat3 base;
+	if (!LoadEnemyPos() || !BaseCentre(base))
+		return -1.f;   // unknown: callers must not treat this as "behind"
+	const float ex = gEnemyX - base.x;
+	const float ez = gEnemyZ - base.z;
+	const float sx = pos.x - base.x;
+	const float sz = pos.z - base.z;
+	if (((ex * ex + ez * ez) < 1.f) || ((sx * sx + sz * sz) < 1.f))
+		return -1.f;
+	// Signed angle between the two bearings, folded to 0..180.
+	float d = atan2(sz, sx) - atan2(ez, ex);
+	while (d > 3.14159265f) d -= 6.28318531f;
+	while (d < -3.14159265f) d += 6.28318531f;
+	return abs(d) * DEG;
+}
+
+// "Put my defences ninety degrees around that area" -- a site more than this far
+// off the line of attack is not on the way in, so it gets defended only when we
+// are actually losing.
+const float DEFEND_ARC = 90.f;
+
+// How badly we are losing, as enemy mobile threat over our own army value.
+// Below EASY we are comfortably ahead and can spend on economy instead; above
+// HARD the towers are what is keeping us alive.
+//
+// Scale matters more than it looks. Measured over a 20-minute 8v8 the ratio
+// sits at 0.00-0.06 for almost the whole game and only spikes past 1 when a
+// team is being overrun. A first attempt at 0.7/1.6 therefore read as "skip
+// defence unless already losing badly", suppressed nearly every tower, and lost
+// on the same seed: metal 130k -> 105k, army 42.6k -> 31.9k, real K/D
+// 0.87 -> 0.71. These are set from that observed distribution instead.
+const float DEFEND_EASY = 0.03f;
+const float DEFEND_HARD = 0.50f;
+
+float ThreatRatio()
+{
+	const float army = aiMilitaryMgr.armyCost;
+	if (army <= 1.f)
+		return (aiEnemyMgr.mobileThreat > 0.f) ? DEFEND_HARD : 0.f;
+	return aiEnemyMgr.mobileThreat / army;
+}
+
+int gNextBearingLog = 0;
+
+void LogBearing(const AIFloat3& in pos)
+{
+	if (ai.frame < gNextBearingLog)
+		return;
+	gNextBearingLog = ai.frame + 60 * SECOND;
+	AiLog(Factory::T() + "apex: defence bearing off=" 
+		+ formatFloat(BearingOffFromEnemy(pos), "", 0, 0)
+		+ "deg ratio=" + formatFloat(ThreatRatio(), "", 0, 2)
+		+ " army=" + formatFloat(aiMilitaryMgr.armyCost, "", 0, 0)
+		+ " enemyThr=" + formatFloat(aiEnemyMgr.mobileThreat, "", 0, 0)
+		+ " enemyKnown=" + (gEnemyKnown ? "1" : "0"));
+}
+
 float EnemyArmyFloor()
 {
 	// A refused query is "unknown", never "no enemies" -- reading a refusal as a
@@ -493,11 +593,24 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 			+ " enemies=" + ai.GetEnemyTeamSize());
 	}
 
+	LogBearing(pos);
+
+	// MEASURED AND NOT SHIPPED. Skipping sites more than DEFEND_ARC off the line
+	// of attack, and skipping them again while ThreatRatio() said we were ahead,
+	// was tested against an otherwise identical control over 12 paired 8v8 games:
+	// real K/D log-ratio -0.156 (t=-1.12) in the CONTROL's favour, and metal was
+	// a coin flip -- so it did not buy the economy it was meant to buy. The
+	// bearing itself reads correctly; acting on it this way does not help.
+	// Left in place, unused, because the signal is sound and the next attempt
+	// should not have to rebuild it.
+	const float ratio = ThreatRatio();
+
 	// Something to defend against. Frontier sites skip this test, and so does the
 	// opening: before either side has an army a single known raider still justifies
 	// one tower, which is what the old gate's `mobileThreat > 0` clause bought.
 	const bool early = (ai.frame <= 5 * MINUTE) && (threat > 0.f);
-	if (!gPorcArmed && !early && !IsFrontierSite(pos))
+	const bool losing = (ratio >= DEFEND_HARD);
+	if (!gPorcArmed && !early && !losing && !IsFrontierSite(pos))
 		return;
 
 	// Something to pay with. Unchanged from the old gate, including the way that

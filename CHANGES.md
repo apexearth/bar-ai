@@ -74,6 +74,19 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
 - **The tech lead never opens air**, and on teams under 6 **nobody** does.
 
 ### Combat posture
+- **Enemy bearing is published, not derived.** `CEnemyManager::GetEnemyPos()`
+  exists in C++ (`DefaultMakeDefence` already orients towers along it) but is
+  not bound to AngelScript, so the script was blind to direction.
+  `dev_team_income.lua` publishes the opposing start-position centroid as
+  `ai_enemyx_/ai_enemyz_<teamId>`; `Military::BearingOffFromEnemy()` turns it
+  into degrees off the line of attack. **measured** — reads correctly, plausible
+  0-53° distribution.
+- **Acting on that bearing did NOT work.** Skipping defence sites >90° off the
+  line, and skipping them again while ahead on `mobileThreat/armyCost`, lost to
+  an otherwise identical control over 12 paired 8v8 games: real K/D log-ratio
+  −0.156 (t=−1.12) in the control's favour, metal a coin flip. The helpers are
+  left in place unused so the next attempt need not rebuild them. **suspect —
+  do not re-enable without a fresh A/B**
 - **Mass before attacking**: attack quota grows 30 at 8 min → +3.5/min → cap 80.
   Stock attacks with whatever is to hand.
 - **Refuse bad trades**: hold when enemy threat exceeds 0.95x our army cost.

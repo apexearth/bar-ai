@@ -149,6 +149,53 @@ local function setLead(allyID, teams, teamID, inc, frame, why)
 		allyID, teamID, inc, frame, frame / 1800, why))
 end
 
+--------------------------------------------------------------------------------
+-- Enemy bearing.
+--
+-- CEnemyManager::GetEnemyPos() exists in C++ and DefaultMakeDefence already
+-- orients towers along it, but it is not bound to AngelScript -- so the script
+-- cannot tell which way the enemy is. Publish it here, same pattern as the
+-- income table.
+--
+-- Start positions, not live unit centroids: bases do not move, roaming armies
+-- do, and what defence wants is "which way is their base", not "where is their
+-- raiding party this second".
+local enemyPos = {}   -- teamID -> {x, z}, computed once
+
+local function publishEnemyPos()
+	if next(enemyPos) ~= nil then
+		return
+	end
+	local byAlly = {}
+	for _, t in ipairs(Spring.GetTeamList()) do
+		local _, _, _, _, _, allyID = Spring.GetTeamInfo(t, false)
+		local x, y, z = Spring.GetTeamStartPosition(t)
+		if allyID ~= nil and x ~= nil then
+			byAlly[allyID] = byAlly[allyID] or {}
+			table.insert(byAlly[allyID], {x = x, z = z})
+		end
+	end
+	for _, t in ipairs(Spring.GetTeamList()) do
+		local _, _, _, isAI, _, allyID = Spring.GetTeamInfo(t, false)
+		if isAI and allyID ~= nil then
+			local sx, sz, n = 0, 0, 0
+			for a, list in pairs(byAlly) do
+				if a ~= allyID then
+					for _, q in ipairs(list) do sx, sz, n = sx + q.x, sz + q.z, n + 1 end
+				end
+			end
+			if n > 0 then
+				enemyPos[t] = true
+				Spring.SetGameRulesParam("ai_enemyx_" .. t, sx / n)
+				Spring.SetGameRulesParam("ai_enemyz_" .. t, sz / n)
+			end
+		end
+	end
+	if next(enemyPos) ~= nil then
+		Spring.Echo("[BARAI_ENEMYPOS] published for " .. tostring(#Spring.GetTeamList()) .. " teams")
+	end
+end
+
 local function updateLeads(frame)
 	-- Group AI teams by ally. Non-AI teams are excluded: a human is not running
 	-- this strategy and cannot be pooled behind.
@@ -219,4 +266,5 @@ function gadget:GameFrame(frame)
 
 	-- After the incomes above are current, never against a half-updated table.
 	updateLeads(frame)
+	publishEnemyPos()
 end
