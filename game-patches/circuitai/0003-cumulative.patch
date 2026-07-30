@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..09c07f8 100644
+index aeea933..20849c0 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -44,6 +44,10 @@
@@ -31,7 +31,7 @@ index aeea933..09c07f8 100644
  	allyTeam = setupManager->GetAllyTeam();
  	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
  	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
-@@ -1488,6 +1503,212 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1488,6 +1503,214 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -119,9 +119,11 @@ index aeea933..09c07f8 100644
 +// Shared blackboard. Process-wide, so it reaches exactly the AIs this host is
 +// running and nobody else's -- which is the whole scope the team strategy has.
 +//
-+// Not guarded by a mutex: the engine drives each AI's events from the one
-+// callback thread, in turn, and both accessors are only ever reached from
-+// AngelScript running inside those events.
++// Unguarded. Both accessors are only reached from AngelScript, which runs inside
++// the AI's event handlers; those appeared to be serialised in every run so far
++// (four instances logged elections 1 frame apart, never interleaved). That is an
++// observation, not a proof -- this DLL is multithreaded elsewhere. If a torn
++// read ever shows up here, a mutex is the fix; the map is tiny and cold.
 +static std::map<std::pair<int, std::string>, float> teamValues;
 +
 +void CCircuitAI::PublishTeamValue(const std::string& key, float value)

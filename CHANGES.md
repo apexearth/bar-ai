@@ -38,22 +38,29 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
 ## AngelScript (`script/hard_aggressive/`)
 
 ### Team tech coordination — the core of both variants
-- **One designated tech lead**, chosen as the **richest ally by smoothed metal
-  income**, latched at 5 min (or immediately once anyone clears 15 m/s).
-  Stock has no team coordination at all — each instance decides alone.
-  **The election runs in synced Lua** (`dev_team_income.lua`), not in each AI.
-  It used to run per-instance on the assumption that identical synced inputs
-  give identical answers; they do, but the *read instants* differ (SlowUpdate is
-  offset by `skirmishAIId` and the lookup is lazy), and the income table is
-  rewritten inside that window. 1 archived match in 533 elected two leads and
-  ran the whole game with both idling army production and both teching. One
-  writer, one published answer, `ai_lead_<allyTeamId>`. **measured**
-- **The lead is replaced if it dies or fails to tech.** Two triggers in the
-  gadget: dead (immediate, counting a team stripped of all units), and no
-  advanced factory by 10 min -- nanoframes count, so a lead that has committed
-  and is building passes. A 3-min grace applies per appointee; without it one
-  missed deadline cascaded through all 8 teams in 210 frames. No takeover after
-  15 min. **measured**
+- **One designated tech lead**, chosen by **commitment**: whoever is building an
+  advanced plant, and when two are, whichever plant is nearest done. Nanoframes
+  count and the fractional build progress is the tie-break. Stock has no team
+  coordination at all — each instance decides alone.
+  **The election runs in the AI, over an in-process blackboard** — not in synced
+  Lua, and not on income. Synced Lua cannot ship to a hosted multiplayer game;
+  every AI the host adds shares one process, so the instances read each other via
+  `PublishTeamValue`/`ReadTeamValue`. **measured**: with the released archive and
+  no gadget present, all four instances elected the same lead within four frames
+  and it never flapped across 20 minutes.
+  It once ran per-instance on the assumption that identical synced inputs give
+  identical answers; they do, but the *read instants* differ (SlowUpdate is
+  offset by `skirmishAIId`), and 1 archived match in 533 elected two leads. The
+  property that fixed it is kept — **one writer**: the lowest team id in the ally
+  roster elects and publishes, everyone else only reads that slot.
+- **The lead is replaced if it loses its plant**, and the title stops moving
+  entirely past `RUSH_GIVEUP`, so the lead stays tech lead after sharing ends.
+- **The commitment rule deadlocks against the follower gate unless the gate is
+  conditioned on a lead existing.** The gate forbids any non-lead from starting a
+  T2 factory before `FOLLOWER_TECH_FRAME`; if the lead *is* whoever started one,
+  nobody may start, so nobody leads, so nobody may start. **measured**: first
+  election at 10.5 min in two runs — the exact frame the gate opens — against a
+  5.7 min baseline; gating on `LeadIsDesignated()` moved it to 6.9 min.
 - **Slinging**: followers send 450-metal lumps to the lead, keeping 220, from
   5 min until they receive their own advanced constructor.
 - **The whole strategy is abandoned at 15 min** (`Military::RUSH_GIVEUP`).
@@ -74,19 +81,16 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
 - **The tech lead never opens air**, and on teams under 6 **nobody** does.
 
 ### Combat posture
-- **Enemy bearing is published, not derived.** `CEnemyManager::GetEnemyPos()`
-  exists in C++ (`DefaultMakeDefence` already orients towers along it) but is
-  not bound to AngelScript, so the script was blind to direction.
-  `dev_team_income.lua` publishes the opposing start-position centroid as
-  `ai_enemyx_/ai_enemyz_<teamId>`; `Military::BearingOffFromEnemy()` turns it
-  into degrees off the line of attack. **measured** — reads correctly, plausible
-  0-53° distribution.
-- **Acting on that bearing did NOT work.** Skipping defence sites >90° off the
-  line, and skipping them again while ahead on `mobileThreat/armyCost`, lost to
-  an otherwise identical control over 12 paired 8v8 games: real K/D log-ratio
-  −0.156 (t=−1.12) in the control's favour, metal a coin flip. The helpers are
-  left in place unused so the next attempt need not rebuild them. **suspect —
-  do not re-enable without a fresh A/B**
+- **Acting on enemy bearing did NOT work, and the machinery is gone.** The
+  gadget used to publish the opposing start-position centroid as
+  `ai_enemyx_/ai_enemyz_<teamId>` and `Military::BearingOffFromEnemy()` turned it
+  into degrees off the line of attack. Skipping defence sites >90° off the line,
+  and skipping them again while ahead on `mobileThreat/armyCost`, lost to an
+  otherwise identical control over 12 paired 8v8 games: real K/D log-ratio
+  −0.156 (t=−1.12) in the control's favour, metal a coin flip. Both the param and
+  the helper have since been deleted — nothing in the script computes bearing
+  today. `CEnemyManager::GetEnemyPos()` still exists in C++, unbound, if the idea
+  is ever retried. **suspect — do not rebuild without a fresh A/B**
 - **Mass before attacking**: attack quota grows 30 at 8 min → +3.5/min → cap 80.
   Stock attacks with whatever is to hand.
 - **Refuse bad trades**: hold when enemy threat exceeds 0.95x our army cost.
@@ -146,10 +150,12 @@ porcupine entries ship `on: false` and are built inert.
 - `dev_stats_export.lua` — value-weighted telemetry: real vs chaff kills, T2
   placement *and* completion, T2 mex count, reclaim, **commander losses**,
   **constructors held (T1/T2) and metal tied up in them**.
-- `dev_team_income.lua` — publishes smoothed per-team metal income as a game
-  rules param, because the engine's own ally-income callback is broken. **Also
-  elects the tech lead** and publishes it as `ai_lead_<allyTeamId>`; this file
-  owns that policy, the AI only reads the result.
+- `dev_team_income.lua` — **mostly dead, and deliberately still running.** The AI
+  no longer reads its income table or its `ai_lead_` election; both moved
+  in-process so they survive a hosted game. The only live reader left is the team
+  front (`ai_frontx_`/`ai_frontz_`). Its `[BARAI_LEAD]` echo still fires and no
+  longer reflects what the AI believes — read `apex: tech lead` from the AI's own
+  log instead. Delete the dead half once the front is ported.
 - `tools/trace_flow.py` — reconstructs the pooling sequence (elect → pool →
   rush → tech → share → follow) per ally team from an infolog and names the
   first step that broke. Needs the `[3.9m t2]` team-tagged log prefix.
