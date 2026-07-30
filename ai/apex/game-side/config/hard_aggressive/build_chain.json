@@ -256,12 +256,14 @@
 			// parts of the game instead of stacking two jammers on one position.
 			"armhlt": {
 				"hub": [[
-					{"unit": "armjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 35}, "priority": "low"}
+					{"unit": "armnanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"},
+					{"unit": "armjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 20}, "priority": "low"}
 				]]
 			},
 			"corhlt": {
 				"hub": [[
-					{"unit": "corjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 35}, "priority": "low"}
+					{"unit": "cornanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"},
+					{"unit": "corjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 20}, "priority": "low"}
 				]]
 			},
 			"armanni": {
@@ -361,7 +363,6 @@
 					// A gantry means T3 is affordable; this is the only place armanni gets built
 					// other than base index 12, and it puts it where the army spawns.
 					[
-						{"unit": "armanni", "category": "defence", "offset": {"front": 200}, "priority": "low", "condition": {"m_inc>": 18}}
 					]
 				]
 			},
@@ -442,7 +443,6 @@
 					{"unit": "cornanotc", "category": "nano", "offset": {"right": 5}, "priority": "now"}
 					],
 					[
-						{"unit": "cordoom", "category": "defence", "offset": {"front": 200}, "priority": "low", "condition": {"m_inc>": 18}}
 					]
 				]
 			}

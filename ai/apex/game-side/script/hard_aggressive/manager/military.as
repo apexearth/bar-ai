@@ -325,6 +325,7 @@ void UpdatePosture()
 	UpdateRushDefence();
 	UpdateMassing();
 	UpdateRushRole();
+	UpdateFrontGun();
 	Commander::UpdateCaution();
 	// DISABLED. Exit-code audit: aborts (exit -1003) jumped from 0-2 per 20-game
 	// run to 14-17 the moment this landed, and stayed there. The engine is dying,
@@ -469,12 +470,87 @@ bool IsFrontierSite(const AIFloat3& in pos)
 	return (dx * dx + dz * dz) > (PORC_FRONTIER * PORC_FRONTIER);
 }
 
+// What the enemy's mobile army is WORTH, in metal.
+//
+// Not mobileThreat: UpdateMassing's own comment already warns that threat and
+// armyCost are different units, and it is right -- observed army=10727 against
+// enemyThr=296, so a threat-vs-metal comparison reads "we are ahead" almost
+// always and any gate built on it never fires. GetEnemyCost returns
+// enemyInfos[type].cost, a metal sum, which is directly comparable to armyCost
+// (accumulated from GetCostM). Summed over the roles that actually fight.
+float EnemyArmyCost()
+{
+	return aiEnemyMgr.GetEnemyCost(Unit::Role::ASSAULT.type)
+	     + aiEnemyMgr.GetEnemyCost(Unit::Role::RAIDER.type)
+	     + aiEnemyMgr.GetEnemyCost(Unit::Role::RIOT.type)
+	     + aiEnemyMgr.GetEnemyCost(Unit::Role::SKIRM.type)
+	     + aiEnemyMgr.GetEnemyCost(Unit::Role::ARTY.type)
+	     + aiEnemyMgr.GetEnemyCost(Unit::Role::AH.type);
+}
+
+// Behind on the field: they field more army value than we do.
+const float BEHIND_RATIO = 1.0f;
+
+bool LosingGround()
+{
+	return EnemyArmyCost() > aiMilitaryMgr.armyCost * BEHIND_RATIO;
+}
+
 float EnemyArmyFloor()
 {
 	// A refused query is "unknown", never "no enemies" -- reading a refusal as a
 	// meaningful zero is what silently disabled slinging once already.
 	const int teams = ai.GetEnemyTeamSize();
 	return PORC_THREAT_PER_ENEMY * float((teams > 0) ? teams : 1);
+}
+
+// The team front, published by dev_team_income.lua at 78% of the way from our
+// own centroid to the enemy's.
+bool FrontPos(AIFloat3& out p)
+{
+	const float x = ai.GetGameRulesParam("ai_frontx_" + ai.teamId, -1.f);
+	const float z = ai.GetGameRulesParam("ai_frontz_" + ai.teamId, -1.f);
+	if ((x < 0.f) || (z < 0.f))
+		return false;
+	p = AIFloat3(x, 0.f, z);
+	return true;
+}
+
+string armanni("armanni");
+string cordoom("cordoom");
+
+CCircuitDef@ BigGun()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(cordoom);
+	return ai.GetCircuitDef(armanni);
+}
+
+// The big gun used to hang off the T3 gantry's build chain, so it was placed
+// beside whichever base owned the gantry -- a back-line player walling its own
+// empty base while the front player got nothing. Same unit, same trigger, but
+// put it where the fighting is.
+const float BIGGUN_INCOME = 18.f;
+bool gBigGunPlaced = false;
+
+void UpdateFrontGun()
+{
+	if (gBigGunPlaced || !Factory::gHaveT3)
+		return;
+	if (aiEconomyMgr.metal.income <= BIGGUN_INCOME)
+		return;
+	CCircuitDef@ gun = BigGun();
+	if (gun is null)
+		return;
+	AIFloat3 front;
+	if (!FrontPos(front))
+		return;
+	gBigGunPlaced = true;
+	AiLog(Factory::T() + "apex: big gun " + gun.GetName() + " at the team front");
+	// BUNKER takes only a def and a position -- no target, no spot id.
+	aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::BUNKER,
+			Task::Priority::NORMAL, gun, front, 0.f));
 }
 
 void AiMakeDefence(int cluster, const AIFloat3& in pos)

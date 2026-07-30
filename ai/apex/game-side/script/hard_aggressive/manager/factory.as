@@ -52,6 +52,12 @@ const uint  RUSH_CON_CAP = 6;
 const int   RUSH_CON_SPACING = 12 * SECOND;
 int gNextConOrder = 0;
 
+// Army catch-up production when behind. Short: this is the thing we want a
+// lot of, and the units are cheap.
+const int   ARMY_PUSH_SPACING = 3 * SECOND;
+int gNextArmyPush = 0;
+int gNextArmyLog = 0;
+
 int gRushLead = -1;   // last lead this instance saw published
 bool gT1Reclaimed = false;   // one-shot: we fed our T1 lab into the plant
 
@@ -308,6 +314,42 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			+ " haveCon=" + (Builder::gHaveAdvCon ? "1" : "0")
 			+ " roleDef=" + ((probe is null) ? "NULL" : probe.GetName()));
 	}
+	// Behind on the field, with T2 and a mex upgraded: pour income into the cheap
+	// mainstay rather than anything else. apexearth, watching a game lost from a
+	// winning tech position: "if we just built T1 labs and spammed out a lot of
+	// those Thug units, that would be enough to turn the tide, and it would be
+	// way cheaper". GetRoleDef(ASSAULT) returns whatever THIS factory can make --
+	// Thug from a bot lab, Brute from a vehicle plant -- so it never asks for a
+	// unit the factory cannot build.
+	//
+	// Spaced, for the same reason RUSH_CON_SPACING exists: Enqueue does not dedup
+	// and the cap it would otherwise respect only counts finished units.
+	// T1 factories only. Asking the ADVANCED plant for its assault unit returned
+	// Reaper and Bulldog -- exactly the expensive T2 units this is meant to
+	// avoid buying while behind.
+	const bool isT1Fac =
+		((Factory::userData[unit.circuitDef.id].attr & (Factory::Attr::T2 | Factory::Attr::T3)) == 0);
+	if (isT1Fac && gHaveT2 && HaveT2Mex() && Military::LosingGround()
+		&& (ai.frame >= gNextArmyPush))
+	{
+		CCircuitDef@ mainstay = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::ASSAULT.type);
+		if (mainstay !is null) {
+			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+					Task::RecruitType::FIREPOWER, Task::Priority::HIGH,
+					mainstay, unit.GetPos(ai.frame), 0.f));
+			if (rec !is null) {
+				gNextArmyPush = ai.frame + ARMY_PUSH_SPACING;
+				if (ai.frame >= gNextArmyLog) {
+					gNextArmyLog = ai.frame + 30 * SECOND;
+					AiLog(T() + "apex: behind on the field, massing " + mainstay.GetName()
+						+ " army=" + formatFloat(aiMilitaryMgr.armyCost, "", 0, 0)
+						+ " enemyArmy=" + formatFloat(Military::EnemyArmyCost(), "", 0, 0));
+				}
+				return rec;
+			}
+		}
+	}
+
 	if (gHaveT2 && ((IsTechLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
 		// BUILDER, not BUILDER2. builderT2 is registered as a SUBROLE of builder
 		// (AiAddRole("builderT2", BUILDER.type)) and the factory role map is
@@ -596,7 +638,7 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// than a pile of metal, and turn assist ON so builders actually finish it --
 	// with no bank, build power is the only thing that closes the gap.
 	if (!gHaveT3 && ((userData[facDef.id].attr & Attr::T3) != 0)
-		&& (aiEconomyMgr.metal.income > T3_METAL_INCOME))
+		&& T3Worthwhile())
 	{
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
 		return true;
@@ -771,6 +813,50 @@ CCircuitDef@ AdvCounterpart()
 // while the metal would have bought a real T2 force instead. 100 is the real
 // bar, and reaching it is an ECONOMY problem -- advanced fusion first.
 const float T3_METAL_INCOME = 100.f;
+
+// Income alone is the wrong gate. Observed live: the team reached 100 metal/s,
+// committed to an ~8000-metal gantry, and lost every engagement on the map
+// while it built -- the same metal spent on T2 units would have held the line.
+// A gantry is only worth starting from a position that is not collapsing.
+//
+// Two conditions, both from signals already maintained here:
+//   gTurtle       -- Military sets this when our army value fell 18% in 20s
+//                    while the enemy still fields a mobile force. That is
+//                    precisely "we are losing trades right now".
+//   army vs threat -- and we should at least be matching what they field, not
+//                    merely have stopped bleeding.
+const float T3_ARMY_RATIO = 1.0f;
+
+// A T1 bot lab is wanted for the whole game, not just the opening: it is the
+// cheap assault spam and the only source of rez bots. apexearth: "one T2
+// assault unit costs like 5 or 6 T1 assault units, and that many T1s can kill
+// the T2 if the T2 doesn't have a good mass".
+CCircuitDef@ T1BotLab()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(corlab);
+	if (side == "legion")
+		return ai.GetCircuitDef(leglab);
+	return ai.GetCircuitDef(armlab);
+}
+
+bool HaveT1BotLab()
+{
+	CCircuitDef@ lab = T1BotLab();
+	// count is incremented in RegisterTeamUnit, which runs for the nanoframe, so
+	// a lab already under construction counts and this cannot re-request one.
+	return (lab !is null) && (lab.count > 0);
+}
+
+bool T3Worthwhile()
+{
+	if (aiEconomyMgr.metal.income <= T3_METAL_INCOME)
+		return false;
+	if (Military::gTurtle)
+		return false;
+	return aiMilitaryMgr.armyCost >= Military::EnemyArmyCost() * T3_ARMY_RATIO;
+}
 bool gHaveT3 = false;
 
 CCircuitDef@ T3Gantry()
@@ -808,11 +894,31 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// The rusher builds the advanced plant directly rather than waiting for a
 	// production switch that never comes.
 	// Once the economy carries it, tech to T3 rather than adding another T2 line.
-	if (!gHaveT3 && (aiEconomyMgr.metal.income > T3_METAL_INCOME)) {
+	// No bot lab: get one. It is the ONLY source of ground rez bots -- corlab ->
+	// cornecro, armlab -> armrectr; the vehicle plant and the advanced plant
+	// cannot build them at all. A team that opens vehicles and stays there has no
+	// reclaim or resurrect capability whatsoever, which is what happened: 6 of 8
+	// teams opened corvp and the side resurrected nothing all game.
+	//
+	// Not gated on gHaveT2 alone, or a player that never techs never gets one.
+	// Past FOLLOWER_TECH_FRAME the rush window is over and a second factory is
+	// affordable regardless.
+	if (!HaveT1BotLab() && (gHaveT2 || (ai.frame > FOLLOWER_TECH_FRAME))) {
+		CCircuitDef@ lab = T1BotLab();
+		if (lab !is null) {
+			AiLog(T() + "apex: no T1 bot lab -- building " + lab.GetName()
+				+ " for spam and rez bots");
+			return lab;
+		}
+	}
+
+	if (!gHaveT3 && T3Worthwhile()) {
 		CCircuitDef@ gant = T3Gantry();
 		if (gant !is null) {
 			AiLog(T() + "apex: building T3 gantry " + gant.GetName()
-				+ " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s");
+				+ " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s"
+				+ " army=" + formatFloat(aiMilitaryMgr.armyCost, "", 0, 0)
+				+ " enemyArmy=" + formatFloat(Military::EnemyArmyCost(), "", 0, 0));
 			return gant;
 		}
 	}

@@ -172,15 +172,21 @@ bool IsRezzer(CCircuitUnit@ unit)
 	return (id >= 0) && (uint(id) < gRezzerDefs.length()) && gRezzerDefs[id];
 }
 
-// Rezzing spends metal to get a unit back; reclaiming yields metal. Prefer the
-// metal whenever metal is the constraint -- until we own an advanced factory it
-// always is, because the whole team is funding one player's tech and nobody has
-// to pay for a corpse. Afterwards, only while the bank is not already full: a
-// full bank is the one case where turning corpses back into units is the better
-// trade.
+// Reclaim turns a corpse into raw metal; resurrect returns the WHOLE unit for a
+// fraction of its build cost. That is the same efficiency argument that makes
+// T1 spam good -- a resurrected Thug is far cheaper than a built one.
+//
+// This used to require a FULL bank before it would allow a resurrect, which in
+// practice never happened, so rez bots only ever reclaimed. Measured on
+// Glitters: stock spent 27,385 metal resurrecting in a game it dominated on
+// army 96k to 23.6k, while apex spent 0.
+//
+// Reclaim is now preferred only while metal is genuinely the binding
+// constraint: before we own an advanced factory, or when the bank is actually
+// empty and a build is stalled on it.
 bool PreferReclaim()
 {
-	return !Factory::gHaveT2 || !aiEconomyMgr.isMetalFull;
+	return !Factory::gHaveT2 || aiEconomyMgr.isMetalEmpty;
 }
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
@@ -203,6 +209,27 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // 		}
 // 	}
 // 	return task;
+	// Rez bots work the DEFENCE LINE, not wherever they happen to stand.
+	//
+	// apexearth: "if we are losing then reclaim becomes even more important, as
+	// those defenses kill enemies on our border -- we can resurrect or reclaim
+	// the metal". The corpses pile up where the fighting is, and the search below
+	// only reaches 2200 elmos from the bot itself, so a bot idling at home never
+	// finds them. Search from the front instead while we are behind.
+	if (IsRezzer(unit) && Military::LosingGround() && (ai.frame >= gNextRezWreck)) {
+		AIFloat3 front;
+		if (Military::FrontPos(front)) {
+			gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
+			const AIFloat3 spoil = ai.GetBestWreckPos(front, WRECK_SEARCH, WRECK_MIN);
+			if (spoil.x >= 0.f) {
+				IUnitTask@ harvest = aiBuilderMgr.Enqueue(TaskB::Reclaim(
+						Task::Priority::HIGH, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+				if (harvest !is null)
+					return harvest;
+			}
+		}
+	}
+
 	// Eat the corpse rather than rebuild it, before the engine gets the chance
 	// to queue a resurrect for this bot.
 	if (IsRezzer(unit) && (ai.frame >= gNextRezWreck) && PreferReclaim()) {

@@ -146,6 +146,60 @@ local function updateLeads(frame)
 	end
 end
 
+--------------------------------------------------------------------------------
+-- Team front.
+--
+-- Every AI reasons only about its own clusters, so a back-line player builds its
+-- big guns in its own base where nothing is attacking -- apexearth, watching:
+-- "he makes a T3 defence in his base, instead of going to the front player's
+-- base and placing it there to protect them ... T3 is good kinda like at the
+-- 75% or 80% edge of the TEAM border, not just their own border".
+--
+-- Publish that point: from the ally's own centroid, FRONT_FRAC of the way toward
+-- the enemy's. Start positions, because bases do not move and this must be
+-- stable -- a front that wanders makes placement flap.
+local FRONT_FRAC = 0.78
+local frontDone = false
+
+local function publishFront()
+	if frontDone then
+		return
+	end
+	local byAlly = {}
+	for _, t in ipairs(Spring.GetTeamList()) do
+		local _, _, _, _, _, allyID = Spring.GetTeamInfo(t, false)
+		local x, _, z = Spring.GetTeamStartPosition(t)
+		if allyID ~= nil and x ~= nil then
+			local a = byAlly[allyID] or {x = 0, z = 0, n = 0}
+			a.x, a.z, a.n = a.x + x, a.z + z, a.n + 1
+			byAlly[allyID] = a
+		end
+	end
+	if next(byAlly) == nil then
+		return
+	end
+	for _, t in ipairs(Spring.GetTeamList()) do
+		local _, _, _, isAI, _, allyID = Spring.GetTeamInfo(t, false)
+		local mine = allyID ~= nil and byAlly[allyID]
+		if isAI and mine and mine.n > 0 then
+			local ex, ez, en = 0, 0, 0
+			for a, v in pairs(byAlly) do
+				if a ~= allyID then ex, ez, en = ex + v.x, ez + v.z, en + v.n end
+			end
+			if en > 0 then
+				local mx, mz = mine.x / mine.n, mine.z / mine.n
+				local tx, tz = ex / en, ez / en
+				Spring.SetGameRulesParam("ai_frontx_" .. t, mx + (tx - mx) * FRONT_FRAC)
+				Spring.SetGameRulesParam("ai_frontz_" .. t, mz + (tz - mz) * FRONT_FRAC)
+				frontDone = true
+			end
+		end
+	end
+	if frontDone then
+		Spring.Echo("[BARAI_FRONT] published at " .. FRONT_FRAC .. " toward the enemy")
+	end
+end
+
 function gadget:GameFrame(frame)
 	if frame < next_at then
 		return
@@ -171,4 +225,5 @@ function gadget:GameFrame(frame)
 
 	-- After the incomes above are current, never against a half-updated table.
 	updateLeads(frame)
+	publishFront()
 end
