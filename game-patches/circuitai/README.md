@@ -7,10 +7,18 @@ re-clones or redeploys. They are kept here so they are reproducible.
 
 ## Applying
 
-The source is a submodule of the vendored engine:
+The source is a submodule of the vendored engine. Apply **only the cumulative
+patch** -- it carries the entire C++ delta, including everything 0001 and 0002
+did:
 
     cd vendor/engine/AI/Skirmish/BARb
-    git apply /path/to/bar-ai/game-patches/circuitai/*.patch
+    git apply /path/to/bar-ai/game-patches/circuitai/0003-cumulative.patch
+
+`0001-guardtasks-use-after-free.patch` and `0002-real-ally-team-id.patch` are
+kept for the reasoning in their headers, not to be applied. They are subsumed:
+0002 and the later in-process coordination work both edit `CircuitAI.{h,cpp}`,
+so applying them in sequence conflicts. One cumulative patch regenerated from
+the working tree is the thing that actually reproduces the shipped DLL.
 
 ## Rebuilding
 

@@ -1,0 +1,689 @@
+diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
+index aeea933..09c07f8 100644
+--- a/src/circuit/CircuitAI.cpp
++++ b/src/circuit/CircuitAI.cpp
+@@ -44,6 +44,10 @@
+ #include "Drawer.h"
+ #include "Economy.h"
+ #include "Resource.h"
++#include "Feature.h"
++#include "Unit.h"
++#include "UnitDef.h"
++#include "FeatureDef.h"
+ #include "SkirmishAI.h"
+ #include "WrappUnit.h"
+ #include "WrappTeam.h"
+@@ -602,6 +606,17 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
+ //		return ERROR_INIT;
+ //	}
+ 
++	// Repair allyTeamId before GetAllyTeam() indexes with it. The constructor
++	// took it from game->GetMyAllyTeam(), which returns 0 for every instance,
++	// so every AI believed it was in ally team 0 -- GetTeamIds() then answered
++	// with ally 0's roster for everyone, and any rule keyed on team size or
++	// team membership was reading the wrong team's data.
++	{
++		const int realAlly = setupManager->FindAllyTeamOf(teamId);
++		if (realAlly >= 0) {
++			allyTeamId = realAlly;
++		}
++	}
+ 	allyTeam = setupManager->GetAllyTeam();
+ 	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
+ 	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
+@@ -1488,6 +1503,212 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+ 	delete unit;
+ }
+ 
++float CCircuitAI::GetTeamMetalFill(int otherTeamId) const
++{
++	if ((otherTeamId < 0) || (game == nullptr) || (metalRes == nullptr)) {
++		return 0.f;
++	}
++	const int mId = metalRes->GetResourceId();
++	const float storage = game->GetTeamResourceStorage(otherTeamId, mId);
++	// The engine does not report another team's storage to us -- it comes back
++	// as 0, and the old code read that as "full" and withheld every transfer,
++	// silently disabling slinging entirely. Treat unknown as "needs it": the
++	// caller is only ever sending surplus it has already decided to give away.
++	if (storage <= 0.f) {
++		return 0.f;
++	}
++	return game->GetTeamResourceCurrent(otherTeamId, mId) / storage;
++}
++
++// Metal income of any team, read from a game rules param published by the
++// dev_team_income gadget.
++//
++// The obvious API does not work. Game_getTeamResourceIncome and every sibling
++// route through aiGetTeamResource() in SSkirmishAICallbackImpl.cpp, which gates
++// on AI_TEAM_IDS[skirmishAIId]. That array is declared
++//     static std::array<int, MAX_AIS> AI_TEAM_IDS = {{-1}};
++// and is never assigned anywhere in the engine, so element 0 holds -1 and the
++// rest hold 0; the alliance check then fails and the call returns -1.0.
++// Confirmed live: an AI asking for its OWN team's income got -1.0 back, for all
++// eight allied teams, every tick.
++//
++// Game_getRulesParamFloat has no such gate, so synced Lua publishes the numbers
++// and we read them here. Returns -1 when the gadget is absent, which callers
++// must treat as "unknown" rather than "poor".
++// Prefer the ally instance's own figure. Every AI the host adds shares this
++// process, so a teammate's CEconomyManager already holds the exact smoothed
++// income -- no gadget, no round trip, and it works in a hosted multiplayer game
++// where synced Lua cannot be shipped. The rules param stays as a fallback so a
++// local run with dev_team_income.lua still answers for non-AI teams.
++float CCircuitAI::GetTeamMetalIncome(int otherTeamId) const
++{
++	if (otherTeamId < 0) {
++		return -1.f;
++	}
++	for (CCircuitAI* peer : GetGameAttribute()->GetCircuits()) {
++		if ((peer != nullptr) && (peer->GetTeamId() == otherTeamId)
++			&& (peer->GetEconomyManager() != nullptr))
++		{
++			return peer->GetEconomyManager()->GetAvgMetalIncome();
++		}
++	}
++	if (game == nullptr) {
++		return -1.f;
++	}
++	const std::string key = "ai_minc_" + utils::int_to_string(otherTeamId);
++	return game->GetRulesParamFloat(key.c_str(), -1.f);
++}
++
++// Highest build progress among our own units of `def`, or -1 if we hold none.
++//
++// teamUnits carries nanoframes as well as finished units -- other call sites
++// here filter them out with IsBeingBuilt(), which is what makes this usable:
++// "has committed to an advanced plant" is the question the tech-lead election
++// actually asks, and a plant that is 5% built already answers it yes.
++float CCircuitAI::GetDefBuildProgress(CCircuitDef* def) const
++{
++	if (def == nullptr) {
++		return -1.f;
++	}
++	float best = -1.f;
++	for (const auto& kv : teamUnits) {
++		CCircuitUnit* u = kv.second;
++		if ((u == nullptr) || (u->GetCircuitDef() != def)) {
++			continue;
++		}
++		const float p = u->GetUnit()->GetBuildProgress();
++		if (p > best) {
++			best = p;
++		}
++	}
++	return best;
++}
++
++// Shared blackboard. Process-wide, so it reaches exactly the AIs this host is
++// running and nobody else's -- which is the whole scope the team strategy has.
++//
++// Not guarded by a mutex: the engine drives each AI's events from the one
++// callback thread, in turn, and both accessors are only ever reached from
++// AngelScript running inside those events.
++static std::map<std::pair<int, std::string>, float> teamValues;
++
++void CCircuitAI::PublishTeamValue(const std::string& key, float value)
++{
++	teamValues[std::make_pair(teamId, key)] = value;
++}
++
++float CCircuitAI::ReadTeamValue(int otherTeamId, const std::string& key, float defVal) const
++{
++	auto it = teamValues.find(std::make_pair(otherTeamId, key));
++	return (it == teamValues.end()) ? defVal : it->second;
++}
++
++// Position of the most valuable reclaimable wreck within radius, or -RgtVector
++// if there is nothing worth the trip.
++//
++// Area reclaim (CmdReclaimInArea, which is what a RECLAIM task issues) takes
++// whatever happens to be inside the circle, so a builder sent to a battlefield
++// is as likely to eat a 12-metal tree as a dead Gollum. Winning a fight and
++// then eating the field is a large metal swing, and it only pays if we aim at
++// the bodies. So: find the richest wreck, and let the caller centre the reclaim
++// circle on it.
++//
++// Unlike the Game_getTeamResource* family, the features API is not gated on the
++// broken AI_TEAM_IDS array -- its non-cheating path goes through CAICallback,
++// which holds a real team id. Verified in SSkirmishAICallbackImpl.cpp.
++springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal) const
++{
++	springai::AIFloat3 best(-RgtVector);
++	if ((callback == nullptr) || (metalRes == nullptr) || (radius <= 0.f)) {
++		return best;
++	}
++
++	float bestMetal = minMetal;
++	const std::vector<springai::Feature*> feats = callback->GetFeaturesIn(pos, radius, false);
++	for (springai::Feature* f : feats) {
++		if (f == nullptr) {
++			continue;
++		}
++		springai::FeatureDef* fd = f->GetDef();
++		if (fd != nullptr) {
++			// Reclaim left is a fraction of the def's contained metal; a wreck
++			// someone else is already half way through is worth less to us.
++			const float metal = fd->GetContainedResource(metalRes) * f->GetReclaimLeft();
++			if (metal > bestMetal) {
++				bestMetal = metal;
++				best = f->GetPosition();
++			}
++			delete fd;
++		}
++		delete f;
++	}
++	return best;
++}
++
++// Count of visible enemy units within radius of a position.
++//
++// The first version summed metal value via u->GetDef()->GetCost(metalRes) and
++// deleted the UnitDef. That crashed at +0x2f3326 within ~8400 frames and
++// returned 0 throughout: unlike Feature::GetDef(), Unit::GetDef() hands back a
++// pointer that is not ours to free. A count needs no defs at all, so there is
++// nothing to get wrong -- and "how many enemies are on top of me" is the signal
++// the commander actually needs.
++float CCircuitAI::GetEnemyCostAt(const springai::AIFloat3& pos, float radius) const
++{
++	if ((callback == nullptr) || (radius <= 0.f)) {
++		return 0.f;
++	}
++	const std::vector<springai::Unit*> foes = callback->GetEnemyUnitsIn(pos, radius, false);
++	const float count = float(foes.size());
++	for (springai::Unit* u : foes) {
++		delete u;
++	}
++	return count;
++}
++
++// Threat at a position, from the engine-maintained threat map.
++//
++// This is what the earlier attempts were reaching for and missing. mobileThreat
++// is a global scalar with no location, and GetEnemyCostAt counted units in a
++// radius (and crashed). CThreatMap is a real per-position map the AI already
++// maintains, and GetBuilderThreatAt asks precisely "how dangerous is this spot
++// for something being built here" -- the question behind both bad factory
++// placement and commander deaths.
++float CCircuitAI::GetBuilderThreatAt(const springai::AIFloat3& pos) const
++{
++	CMapManager* mm = GetMapManager();
++	if (mm == nullptr) {
++		return 0.f;
++	}
++	CThreatMap* tm = mm->GetThreatMap();
++	return (tm == nullptr) ? 0.f : tm->GetBuilderThreatAt(pos);
++}
++
++void CCircuitAI::SendResources(float metal, float energy, int toTeamId)
++{
++	// Crashed at frame 1 when called before the economy interface was ready, or
++	// with a team id the engine had not resolved yet. Validate everything.
++	if ((toTeamId < 0) || (toTeamId == teamId)
++		|| (economy == nullptr) || (metalRes == nullptr) || (energyRes == nullptr))
++	{
++		return;
++	}
++	// Never send more than is actually held, or the command is a no-op that
++	// still costs a callback.
++	if (metal > 0.f) {
++		const float have = economy->GetCurrent(metalRes);
++		if (have > 0.f) {
++			economy->SendResource(metalRes, std::min(metal, have), toTeamId);
++		}
++	}
++	if (energy > 0.f) {
++		const float have = economy->GetCurrent(energyRes);
++		if (have > 0.f) {
++			economy->SendResource(energyRes, std::min(energy, have), toTeamId);
++		}
++	}
++}
++
+ void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
+ {
+ 	// NOTE: See notes in MobileSlave or other economy->SendUnits places
+diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
+index b4f4f40..a72fadd 100644
+--- a/src/circuit/CircuitAI.h
++++ b/src/circuit/CircuitAI.h
+@@ -149,6 +149,39 @@ private:
+ 	void DeleteTeamUnit(CCircuitUnit* unit);
+ public:
+ 	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
++	// apex: send metal/energy to an allied team. The engine command has always
++	// existed (COMMAND_SEND_RESOURCES) and CircuitAI already uses it when
++	// resigning, but it was never reachable from AngelScript -- so a team of
++	// AIs had no way to pool resources behind one player. Enables "slinging":
++	// feed one commander so it reaches T2 far sooner than four independent
++	// economies would.
++	void SendResources(float metal, float energy, int toTeamId);
++	// How full another team's metal storage is, 0..1. Needed so a feeder can
++	// tell whether the player it is slinging to actually needs the metal --
++	// sending to someone already near cap just wastes it.
++	float GetTeamMetalFill(int otherTeamId) const;
++	float GetTeamMetalIncome(int otherTeamId) const;
++
++	// --- in-process team coordination -----------------------------------
++	// Every AI the host adds lives in ONE process (AIExport.cpp keeps them in
++	// `myAIs`, and CGameAttribute::GetCircuits() hands out the live set), so
++	// instances can read each other directly. That matters because the only
++	// other channel -- game rules params published by a synced gadget -- cannot
++	// ship to a multiplayer game: synced Lua must exist on every client.
++	// These replace that channel. Policy stays in AngelScript; C++ supplies only
++	// the facts a script cannot otherwise reach.
++
++	// Highest build progress among OUR units of `def`, 0..1, or -1 when we own
++	// none. Counts nanoframes, which is the point: the tech lead is whoever has
++	// committed to an advanced plant, not whoever has finished one.
++	float GetDefBuildProgress(CCircuitDef* def) const;
++	// Shared blackboard, keyed (teamId, key), written under our own teamId.
++	// Plain floats, and they never leave this process.
++	void PublishTeamValue(const std::string& key, float value);
++	float ReadTeamValue(int otherTeamId, const std::string& key, float defVal) const;
++	springai::AIFloat3 GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal) const;
++	float GetEnemyCostAt(const springai::AIFloat3& pos, float radius) const;
++	float GetBuilderThreatAt(const springai::AIFloat3& pos) const;
+ 	void Garbage(CCircuitUnit* unit, const char* reason);
+ 	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
+ 	const Units& GetTeamUnits() const { return teamUnits; }
+diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
+index 2b84e90..cc23687 100644
+--- a/src/circuit/module/EconomyManager.cpp
++++ b/src/circuit/module/EconomyManager.cpp
+@@ -1026,6 +1026,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+ 		return nullptr;
+ 	}
+ 
++	// NOTE: do not "improve" this by letting mex upgrades pre-empt the stall.
++	// Tried exactly that -- on the reasoning that a 4x extractor is a better
++	// answer than another solar -- and it lost 1-7. The short-circuit is load
++	// bearing: skipping it means the stall is never fixed, and an upgrade needs
++	// energy to build, so the AI stalls out with upgrades queued and no power to
++	// run them. The mex/energy ordering is not the reason the tech lead fails to
++	// snowball.
+ 	if (IsEnergyStalling()) {
+ 		return UpdateEnergyTasks(position, unit);
+ 	}
+diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
+index a44c20b..c0ffaf4 100644
+--- a/src/circuit/module/MilitaryManager.cpp
++++ b/src/circuit/module/MilitaryManager.cpp
+@@ -301,6 +301,9 @@ void CMilitaryManager::InitHandlers()
+ 				radarDefs.AddDef(&cdef);
+ 				cdef.SetIsRadar(true);
+ 			}
++			if (cdef.GetDef()->GetJammerRadius() > 1.f) {
++				cdef.SetIsJammer(true);
++			}
+ 			if (cdef.GetDef()->GetSonarRadius() > 1.f) {
+ 				sonarDefs.AddDef(&cdef);
+ 				cdef.SetIsSonar(true);
+@@ -582,7 +585,12 @@ int CMilitaryManager::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+ 
+ 	auto itgt = guardTasks.find(unit);
+ 	if (itgt != guardTasks.end()) {
+-		AbortTask(itgt->second);
++		// Drop the entry BEFORE aborting: the abort path re-enters DequeueTask,
++		// and leaving the mapping live across that gave a second route to the
++		// same dangling pointer.
++		CFGuardTask* guard = itgt->second;
++		guardTasks.erase(itgt);
++		AbortTask(guard);
+ 	}
+ 
+ 	auto search = destroyedHandler.find(unit->GetCircuitDef()->GetId());
+@@ -676,7 +684,16 @@ void CMilitaryManager::DequeueTask(IUnitTask* task, bool done)
+ 			IFighterTask* taskF = static_cast<IFighterTask*>(task);
+ 			fightTasks[static_cast<IFighterTask::FT>(taskF->GetFightType())].erase(taskF);
+ 			if (taskF->GetFightType() == IFighterTask::FightType::GUARD) {
+-				guardTasks.erase(circuit->GetTeamUnit(static_cast<CFGuardTask*>(taskF)->GetVipId()));
++				// Erase by VALUE, not by a unit lookup. GetTeamUnit() returns
++				// nullptr once the VIP has been unregistered, so erase(nullptr)
++				// removed nothing and left an entry keyed by a freed
++				// CCircuitUnit*. When the allocator reused that address for a
++				// new unit, UnitDestroyed's guardTasks.find(unit) hit the stale
++				// entry and called AbortTask on an already-deleted task --
++				// task->Dead() then dispatched through a garbage vtable.
++				for (auto it = guardTasks.begin(); it != guardTasks.end(); ) {
++					it = (it->second == taskF) ? guardTasks.erase(it) : std::next(it);
++				}
+ 			}
+ 		} break;
+ 		default: break;
+diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
+index 2839b72..acb8d19 100644
+--- a/src/circuit/script/InitScript.cpp
++++ b/src/circuit/script/InitScript.cpp
+@@ -195,6 +195,56 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+ 	circuit->GiveUnits(std::move(units), newTeamId);
+ }
+ 
++static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
++{
++	unit->CmdMoveTo(pos);
++}
++
++static float CCircuitAI_GetBuilderThreatAt(CCircuitAI* circuit, const AIFloat3& pos)
++{
++	return circuit->GetBuilderThreatAt(pos);
++}
++
++static float CCircuitAI_GetEnemyCostAt(CCircuitAI* circuit, const AIFloat3& pos, float radius)
++{
++	return circuit->GetEnemyCostAt(pos, radius);
++}
++
++static AIFloat3 CCircuitAI_GetBestWreckPos(CCircuitAI* circuit, const AIFloat3& pos, float radius, float minMetal)
++{
++	return circuit->GetBestWreckPos(pos, radius, minMetal);
++}
++
++static float CCircuitAI_GetTeamMetalIncome(CCircuitAI* circuit, int otherTeamId)
++{
++	return circuit->GetTeamMetalIncome(otherTeamId);
++}
++
++static float CCircuitAI_GetTeamMetalFill(CCircuitAI* circuit, int otherTeamId)
++{
++	return circuit->GetTeamMetalFill(otherTeamId);
++}
++
++static float CCircuitAI_GetDefBuildProgress(CCircuitAI* circuit, CCircuitDef* def)
++{
++	return circuit->GetDefBuildProgress(def);
++}
++
++static void CCircuitAI_PublishTeamValue(CCircuitAI* circuit, const std::string& key, float value)
++{
++	circuit->PublishTeamValue(key, value);
++}
++
++static float CCircuitAI_ReadTeamValue(CCircuitAI* circuit, int otherTeamId, const std::string& key, float defVal)
++{
++	return circuit->ReadTeamValue(otherTeamId, key, defVal);
++}
++
++static void CCircuitAI_SendResources(CCircuitAI* circuit, float metal, float energy, int toTeamId)
++{
++	circuit->SendResources(metal, energy, toTeamId);
++}
++
+ static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
+ {
+ 	return circuit->GetLua()->CallRules(data.c_str(), data.size());
+@@ -499,6 +549,18 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+ 	gIdArrayType = engine->GetTypeInfoByDecl("array<Id>");
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "array<Id>@ GetTeamIds() const", asFUNCTION(CCircuitAI_GetTeamIds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void SendResources(float, float, int)", asFUNCTION(CCircuitAI_SendResources), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamMetalFill(int) const", asFUNCTION(CCircuitAI_GetTeamMetalFill), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamMetalIncome(int) const", asFUNCTION(CCircuitAI_GetTeamMetalIncome), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	// In-process team coordination, replacing the synced-gadget rules params.
++	// A hosted multiplayer game cannot carry synced Lua, but every AI the host
++	// adds shares this process, so they can simply read each other.
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetDefBuildProgress(CCircuitDef@) const", asFUNCTION(CCircuitAI_GetDefBuildProgress), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void PublishTeamValue(const string& in, float)", asFUNCTION(CCircuitAI_PublishTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float ReadTeamValue(int, const string& in, float) const", asFUNCTION(CCircuitAI_ReadTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestWreckPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestWreckPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
+ 	// Lua<-->AI communications [in Spring 0.83+]
+@@ -573,6 +635,21 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+ 	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
++	// Issue a move order DIRECTLY, bypassing the task system. Expressing commander
++	// retreat as a task returned from AiMakeTask lost 0-20 with metal at 6,631:
++	// AiMakeTask is the only place the commander gets work, so substituting a
++	// retreat task substitutes for everything it would otherwise build. A raw
++	// command moves the unit without consuming its task slot.
++	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	// Health is the missing half of "is this risky". Threat alone said commanders
++	// die where the map reads ZERO, because the killer is often at range -- the
++	// last plasma shots landing on a commander already running. Health loss is
++	// unambiguous and fires whether the shooter is adjacent or far away.
++	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetHealthPercent()", asMETHOD(CCircuitUnit, GetHealthPercent), asCALL_THISCALL); ASSERT(r >= 0);
++	// Health is the missing half of "is this position risky". Threat alone said
++	// commanders die where the map reads ZERO -- because a hurt commander does
++	// something ordinary and does not survive it. Risk has to be threat relative
++	// to what the unit can still absorb.
+ 	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
+diff --git a/src/circuit/setup/SetupData.cpp b/src/circuit/setup/SetupData.cpp
+index b0cbe19..5bab20e 100644
+--- a/src/circuit/setup/SetupData.cpp
++++ b/src/circuit/setup/SetupData.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include "setup/SetupData.h"
+ #include "CircuitAI.h"
++#include "unit/ally/AllyTeam.h"
+ #include "util/math/Region.h"
+ #include "util/Utils.h"
+ 
+@@ -226,4 +227,14 @@ CSetupData::BoxMap CSetupData::ReadStartBoxes(const std::string& script, CMap* m
+ 	return boxes;
+ }
+ 
++int CSetupData::FindAllyTeamOf(int teamId) const
++{
++	for (size_t i = 0; i < allyTeams.size(); ++i) {
++		if ((allyTeams[i] != nullptr) && (allyTeams[i]->GetTeamIds().count(teamId) > 0)) {
++			return int(i);
++		}
++	}
++	return -1;
++}
++
+ } // namespace circuit
+diff --git a/src/circuit/setup/SetupData.h b/src/circuit/setup/SetupData.h
+index 66b8c22..ed1ec49 100644
+--- a/src/circuit/setup/SetupData.h
++++ b/src/circuit/setup/SetupData.h
+@@ -39,6 +39,13 @@ public:
+ 	bool CanChooseStartPos() const { return false/*startPosType == CGameSetup::StartPos_ChooseInGame*/; }
+ 
+ 	CAllyTeam* GetAllyTeam(int allyTeamId) { return allyTeams[allyTeamId]; }
++
++	// game->GetMyAllyTeam() answers 0 for every AI: aiGetTeamResource()'s gate,
++	// AI_TEAM_IDS in rts/ExternalAI/SSkirmishAICallbackImpl.cpp, is declared
++	// {{-1}} and never assigned. The start script carries the real assignment
++	// and ParseSetupScript already read it, so look our own teamId up instead.
++	// Defined in the .cpp: CAllyTeam is only forward-declared here.
++	int FindAllyTeamOf(int teamId) const;
+ 	const utils::CRegion& GetStartBox(int boxId) { return boxes[boxId]; }
+ 
+ 	const ModOptions& GetModOptions() const { return modoptions; }
+diff --git a/src/circuit/setup/SetupManager.cpp b/src/circuit/setup/SetupManager.cpp
+index 3df26d7..e7b07e8 100644
+--- a/src/circuit/setup/SetupManager.cpp
++++ b/src/circuit/setup/SetupManager.cpp
+@@ -328,6 +328,11 @@ CAllyTeam* CSetupManager::GetAllyTeam() const
+ 	return setupData->GetAllyTeam(circuit->GetAllyTeamId());
+ }
+ 
++int CSetupManager::FindAllyTeamOf(int teamId) const
++{
++	return setupData->FindAllyTeamOf(teamId);
++}
++
+ void CSetupManager::ReadConfig()
+ {
+ 	const Json::Value& root = GetConfig();
+diff --git a/src/circuit/setup/SetupManager.h b/src/circuit/setup/SetupManager.h
+index 4863ac9..e509c6d 100644
+--- a/src/circuit/setup/SetupManager.h
++++ b/src/circuit/setup/SetupManager.h
+@@ -78,6 +78,7 @@ public:
+ 	CCircuitUnit* GetCommander() const { return commander; }
+ 
+ 	CAllyTeam* GetAllyTeam() const;
++	int FindAllyTeamOf(int teamId) const;
+ 
+ 	void ReadConfig();
+ 	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
+diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
+index bc8ff11..c0017c8 100644
+--- a/src/circuit/task/builder/BuilderTask.cpp
++++ b/src/circuit/task/builder/BuilderTask.cpp
+@@ -799,6 +799,8 @@ void IBuilderTask::ExecuteChain(SBuildChain* chain)
+ 							isSensor = [](CCircuitDef* cdef) { return cdef->IsRadar(); };
+ 						} else if (bi.cdef->IsSonar()) {
+ 							isSensor = [](CCircuitDef* cdef) { return cdef->IsSonar(); };
++						} else if (bi.cdef->IsJammer()) {
++							isSensor = [](CCircuitDef* cdef) { return cdef->IsJammer(); };
+ 						} else {
+ 							isValid = false;
+ 							break;
+diff --git a/src/circuit/task/fighter/AntiAirTask.cpp b/src/circuit/task/fighter/AntiAirTask.cpp
+index fac55c7..81a7f68 100644
+--- a/src/circuit/task/fighter/AntiAirTask.cpp
++++ b/src/circuit/task/fighter/AntiAirTask.cpp
+@@ -5,6 +5,7 @@
+  *      Author: rlcevg
+  */
+ 
++#include <algorithm>
+ #include "task/fighter/AntiAirTask.h"
+ #include "map/ThreatMap.h"
+ #include "module/MilitaryManager.h"
+@@ -44,13 +45,24 @@ CAntiAirTask::~CAntiAirTask()
+ 
+ bool CAntiAirTask::CanAssignTo(CCircuitUnit* unit) const
+ {
+-	if (!unit->GetCircuitDef()->IsRoleAA() ||
+-		(unit->GetCircuitDef() != leader->GetCircuitDef()))
+-	{
++	if (!unit->GetCircuitDef()->IsRoleAA()) {
++		return false;
++	}
++	// apex: was `unit->GetCircuitDef() != leader->GetCircuitDef()`, i.e. only the
++	// identical unit type could join. Use the same speed-compatibility rule
++	// CAttackTask applies to ground instead, so mixed AA/fighter types can mass.
++	float speedLeader = leader->GetCircuitDef()->GetSpeed();
++	float speedUnit = unit->GetCircuitDef()->GetSpeed();
++	if (speedLeader > speedUnit) {
++		std::swap(speedLeader, speedUnit);
++	}
++	if (speedLeader * 1.5f < speedUnit) {
+ 		return false;
+ 	}
+ 	const int frame = manager->GetCircuit()->GetLastFrame();
+-	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(1000.f)) {
++	// apex: was SQUARE(1000.f). Aircraft cover that in seconds, so newly built
++	// bombers were always out of range and formed solo tasks instead.
++	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(4000.f)) {
+ 		return false;
+ 	}
+ 	return true;
+diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
+index 9e6bfd8..2f44266 100644
+--- a/src/circuit/task/fighter/BombTask.cpp
++++ b/src/circuit/task/fighter/BombTask.cpp
+@@ -5,6 +5,7 @@
+  *      Author: rlcevg
+  */
+ 
++#include <algorithm>
+ #include "task/fighter/BombTask.h"
+ #include "map/ThreatMap.h"
+ #include "module/MilitaryManager.h"
+@@ -39,13 +40,22 @@ CBombTask::~CBombTask()
+ 
+ bool CBombTask::CanAssignTo(CCircuitUnit* unit) const
+ {
+-	if (!unit->GetCircuitDef()->IsRoleBomber() ||
+-		(unit->GetCircuitDef() != leader->GetCircuitDef()))
+-	{
++	if (!unit->GetCircuitDef()->IsRoleBomber()) {
++		return false;
++	}
++	// apex: was an exact CircuitDef match, so only the identical unit type could
++	// join. Use the speed rule CAttackTask applies to ground instead.
++	float speedLeader = leader->GetCircuitDef()->GetSpeed();
++	float speedUnit = unit->GetCircuitDef()->GetSpeed();
++	if (speedLeader > speedUnit) {
++		std::swap(speedLeader, speedUnit);
++	}
++	if (speedLeader * 1.5f < speedUnit) {
+ 		return false;
+ 	}
+ 	const int frame = manager->GetCircuit()->GetLastFrame();
+-	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(1000.f)) {
++	// apex: was SQUARE(1000.f); aircraft cross that in seconds.
++	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(4000.f)) {
+ 		return false;
+ 	}
+ 	return true;
+diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
+index 0d59b65..27b6ab8 100644
+--- a/src/circuit/task/fighter/SquadTask.cpp
++++ b/src/circuit/task/fighter/SquadTask.cpp
+@@ -231,7 +231,9 @@ bool ISquadTask::IsMustRegroup()
+ 		return false;
+ 	}
+ 
+-	if (!IsMergeSafe()) {  // (circuit->GetInflMap()->GetEnemyInflAt(leader->GetPos(frame)) > INFL_EPS) ?
++	// apex: ground squads may now regroup outside friendly influence. Refusing
++	// to re-cohere in contested ground is what makes them arrive piecemeal.
++	if (!leader->GetCircuitDef()->IsAbleToFly() ? false : !IsMergeSafe()) {
+ 		state = State::ROAM;
+ 		return false;
+ 	}
+@@ -296,7 +298,13 @@ bool ISquadTask::IsMustRegroup()
+ 		return false;
+ 	}
+ 
+-	if (threatMap->GetThreatAt(groupPos) >= THREAT_MIN) {
++	// apex: was `>= THREAT_MIN`, i.e. abandon regrouping at the faintest hint of
++	// threat. Allow it under moderate threat so the squad can still form up on
++	// the approach; only a genuinely hot position aborts.
++	const float regroupThreatCap = leader->GetCircuitDef()->IsAbleToFly()
++			? THREAT_MIN
++			: THREAT_MIN * 8.f;
++	if (threatMap->GetThreatAt(groupPos) >= regroupThreatCap) {
+ 		validUnits.clear();
+ 		state = State::ROAM;
+ 		return false;
+diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
+index a1ac882..15324db 100644
+--- a/src/circuit/unit/CircuitDef.cpp
++++ b/src/circuit/unit/CircuitDef.cpp
+@@ -164,6 +164,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 		, isPylon(false)
+ 		, isAssist(false)
+ 		, isRadar(false)
++		, isJammer(false)
+ 		, isSonar(false)
+ 		, isDecoy(false)
+ 		, isOnSlow(false)
+diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
+index cd0b54a..08de77a 100644
+--- a/src/circuit/unit/CircuitDef.h
++++ b/src/circuit/unit/CircuitDef.h
+@@ -326,6 +326,12 @@ public:
+ 	bool IsAssist() const { return isAssist; }
+ 	void SetIsRadar(bool value) { isRadar = value; }
+ 	bool IsRadar() const { return isRadar; }
++	// Jammers were not classified at all, so the SENSOR build condition -- which
++	// exists precisely to stop a second sensor going up inside an existing one's
++	// coverage -- fell through to isValid=false for them and could not be used.
++	// Result: two jammers built side by side, doubling upkeep for no extra area.
++	void SetIsJammer(bool value) { isJammer = value; }
++	bool IsJammer() const { return isJammer; }
+ 	void SetIsSonar(bool value) { isSonar = value ; }
+ 	bool IsSonar() const { return isSonar; }
+ 	void SetIsDecoy(bool value) { isDecoy = value; }
+@@ -478,6 +484,7 @@ private:
+ 	bool isPylon : 1;
+ 	bool isAssist : 1;
+ 	bool isRadar : 1;
++	bool isJammer : 1;
+ 	bool isSonar : 1;
+ 	bool isDecoy : 1;
+ 	bool isOnSlow : 1;

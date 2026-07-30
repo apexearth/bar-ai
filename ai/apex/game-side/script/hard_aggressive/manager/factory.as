@@ -27,15 +27,23 @@ const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
 // behind it. Merely vetoing a poor lead is not enough -- that just cancels the
 // rush and nobody else takes it. The richest ally has to be picked outright.
 //
-// The election runs in synced Lua and is published as "ai_lead_<teamId>";
-// dev_team_income.lua owns the policy, this side only reads the result. It used
-// to run per-instance over ai.GetTeamMetalIncome, but the instances do not read
-// the income table at the same instant, so they could disagree and elect two
-// leads (seen in 1 of 533 archived matches).
+// The election runs here, over the in-process blackboard. It used to run in
+// synced Lua (dev_team_income.lua) because a per-instance election elected two
+// leads in 1 of 533 archived matches -- not because the instances disagreed on
+// the facts, but because they sampled them at different instants. Synced Lua
+// cannot ship to a hosted multiplayer game, though: it has to exist on every
+// client. Every AI the host adds shares one process, so the blackboard reaches
+// exactly the same set of instances the gadget did, and nothing else.
 //
-// Param missing (before the decision frame, or no gadget) => fall back to the
-// engine's own pick.
-const string LEAD_PARAM = "ai_lead_";
+// The property that fixed the double election is kept: ONE writer. The lowest
+// team id in the ally roster elects and publishes; everyone else only reads.
+//
+// The rule itself is now commitment, not income: the lead is whoever is
+// building an advanced plant, and if two are building, whichever plant is
+// closest to finished. Nanoframes count -- ai.GetDefBuildProgress returns
+// fractional progress, which is exactly the tie-break.
+const string TV_ADV  = "adv";    // this team's best advanced-plant progress
+const string TV_LEAD = "lead";   // the elector's answer, read by everyone
 
 // Total builders the tech lead may hold while rushing. Enough to finish an
 // advanced plant fast; beyond that each constructor is metal that buys nothing
@@ -76,23 +84,83 @@ bool RushWindowOpen()
 // than any takeover deadline, so the role still moves promptly.
 int gLeadCheckedAt = -1000;
 
+// Lowest team id in the ally roster. Every instance computes the same answer
+// from the same roster with no signalling, so all of them know whose blackboard
+// slot carries the election result.
+int ElectorTeamId()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() == 0))
+		return ai.teamId;
+	int low = int(mates[0]);
+	for (uint i = 1; i < mates.length(); ++i) {
+		if (int(mates[i]) < low)
+			low = int(mates[i]);
+	}
+	return low;
+}
+
+// Only the elector runs this, and it publishes under its OWN slot.
+void RunElection()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return;
+
+	const int held = int(ai.ReadTeamValue(ai.teamId, TV_LEAD, -1.f));
+	// Past the give-up frame the title stops moving. Sharing has stopped by then
+	// anyway; the team keeps its tech lead rather than handing the role around.
+	if ((held >= 0) && (ai.frame > Military::RUSH_GIVEUP))
+		return;
+	// Keep the incumbent while it still holds a plant or a nanoframe. Reopening
+	// only when it has genuinely lost one is what stops the role flapping
+	// between two teams whose progress is neck and neck.
+	if ((held >= 0) && (ai.ReadTeamValue(held, TV_ADV, -1.f) > 0.f))
+		return;
+
+	int best = -1;
+	float bestProgress = 0.f;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		const float p = ai.ReadTeamValue(t, TV_ADV, -1.f);
+		if (p <= 0.f)
+			continue;   // has not committed to an advanced plant
+		if ((p > bestProgress) || ((p == bestProgress) && (t < best))) {
+			bestProgress = p;
+			best = t;
+		}
+	}
+	ai.PublishTeamValue(TV_LEAD, float(best));
+}
+
+// Driven from AiUpdate, so every instance publishes on a fixed cadence.
+// Publishing as a side effect of RushLeadTeamId() instead would make a team's
+// visibility depend on which code paths happened to ask for the lead that tick,
+// and a team that went quiet would look like it had lost its plant.
+void UpdateTeamCoord()
+{
+	ai.PublishTeamValue(TV_ADV, OwnAdvProgress());
+	if (ElectorTeamId() == ai.teamId)
+		RunElection();
+}
+
 int RushLeadTeamId()
 {
 	if (ai.frame < gLeadCheckedAt + 1 * SECOND)
 		return (gRushLead >= 0) ? gRushLead : ai.GetLeadTeamId();
 	gLeadCheckedAt = ai.frame;
 
-	// Keyed on teamId, NOT allyTeamId: ai.allyTeamId reads 0 for every instance
-	// in the shipped DLL, which had ally 1 pooling behind ally 0's lead.
-	const int lead = int(ai.GetGameRulesParam(LEAD_PARAM + ai.teamId, -1.f));
-	// Not elected yet (before the decision frame), or the gadget is not
-	// installed. Defer to the engine's own pick, and to the last known lead if
-	// we ever had one, rather than reporting "nobody".
+	// Read the ELECTOR's slot, not our own, and never anything keyed on
+	// ai.allyTeamId: that read 0 for every instance in the shipped DLL, which
+	// had ally 1 pooling behind ally 0's lead.
+	const int lead = int(ai.ReadTeamValue(ElectorTeamId(), TV_LEAD, -1.f));
+	// Nobody has committed yet. Defer to the engine's own pick, and to the last
+	// known lead if we ever had one, rather than reporting "nobody".
 	if (lead < 0)
 		return (gRushLead >= 0) ? gRushLead : ai.GetLeadTeamId();
 
-	// Not latched: the gadget can hand the role over if the lead dies or misses
-	// its tech deadline.
+	// Not latched here: the elector can hand the role over if the lead loses its
+	// plant before the give-up frame.
 	if (lead != gRushLead) {
 		AiLog(T() + "apex: tech lead "
 			+ ((gRushLead < 0) ? "= team " + lead
@@ -140,7 +208,7 @@ bool IsTechLead()
 // first" had quietly collapsed into "team 0".
 bool LeadIsDesignated()
 {
-	return ai.GetGameRulesParam(LEAD_PARAM + ai.teamId, -1.f) >= 0.f;
+	return ai.ReadTeamValue(ElectorTeamId(), TV_LEAD, -1.f) >= 0.f;
 }
 
 // May THIS instance pursue the advanced plant?
@@ -647,7 +715,15 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// slinging is what suppresses that income -- so donating blocked the tech it
 	// was paying for. Release on elapsed time instead, and only hold them during
 	// the pooling window.
-	if (!IsDesignatedLead() && ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
+	// LeadIsDesignated() is load-bearing, not belt-and-braces. The lead is now
+	// "whoever is building an advanced plant", so holding every non-lead back
+	// until FOLLOWER_TECH_FRAME deadlocks: nobody may start a plant, so nobody
+	// becomes lead, so nobody may start a plant. Measured -- the first election
+	// landed at 10.5 min in two runs, the frame the gate opens, against a 5.7 min
+	// baseline. Before anyone has committed the slot is open and whoever is ready
+	// races for it; once someone holds it, the rest are followers again.
+	if (LeadIsDesignated() && !IsDesignatedLead()
+		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
 		&& (ai.frame < FOLLOWER_TECH_FRAME))
 	{
 		return false;
@@ -750,6 +826,30 @@ array<string> T1_FAC = {armlab, armvp, armsy, armap,
 array<string> T2_FAC = {armalab, armavp, armasy, armaap,
                         coralab, coravp, corasy, coraap,
                         legalab, legavp};
+
+// Our best progress toward an advanced plant, 0..1, or -1 if we hold none.
+// Nanoframes count -- commitment is the question the election asks, and the
+// fraction is what separates two teams that have both committed.
+//
+// Air plants are skipped: the team pools its metal expecting a T2 ground push,
+// which an air plant cannot deliver. The previous election excluded air leads
+// for the same reason.
+//
+// Declared here rather than beside the election because T2_FAC is a global, and
+// AngelScript needs globals declared before use. Functions are order-free.
+float OwnAdvProgress()
+{
+	float best = -1.f;
+	for (uint i = 0; i < T2_FAC.length(); ++i) {
+		CCircuitDef@ def = ai.GetCircuitDef(T2_FAC[i]);
+		if ((def is null) || IsAirFactory(def))
+			continue;
+		const float p = ai.GetDefBuildProgress(def);
+		if (p > best)
+			best = p;
+	}
+	return best;
+}
 
 // Two separate reasons to refuse an air OPENING.
 //
