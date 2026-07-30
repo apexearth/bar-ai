@@ -248,6 +248,11 @@ At benchmark scale: apexdef produces ~110,000 metal across a 45-minute 4v4 —
 about 40 metal/second for the whole team. Against that, T3 is two or three units
 a game, and that is what gets fielded. Stock BARb fields none.
 
+**Stock fielding none is also benchmark-only.** In a +40% 40-minute 4v4, stock
+BARb put **146,850 metal** into T3 on one side, 126,150 of it on a single player.
+If a game runs long enough on a bonused economy, stock out-T3s us by default —
+which is what losing to "loads of T3" looks like from the inside.
+
 But the numbers above were partly wrong and the scale was unrepresentative. Real
 costs, read from the unit defs 2026-07-30: **corgant 8400, corshiva 1550,
 corcat 4900, armbanth 13500, corjugg 20000, corkorg 29000** — a Korgoth is 29k,
