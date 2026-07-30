@@ -225,6 +225,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			if (flee !is null)
 				return flee;
 		}
+		// Commander-assists-the-first-T2-mex REMOVED, and it must not be rebuilt
+		// this way. TaskB::Common leaves SBuildTask.ref.target null, and
+		// CBuilderManager::Enqueue's REPAIR case dereferences it immediately:
+		//   auto it = repairUnits.find(ti.ref.target->GetId());
+		// so a positional REPAIR is an instant access violation. Only
+		// TaskB::Repair(priority, target) is safe, and the script cannot obtain
+		// the mex nanoframe -- IUnitTask exposes GetBuildPos() and the assigned
+		// builders, never the thing being built.
 	}
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 	// Observed: a commander stands next to reclaimable metal with an empty bank
@@ -255,8 +263,24 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	return EnqueueWreckReclaim(unit, Task::Priority::NORMAL);
 }
 
+// The first T2 mex is what pays for everything after it, so put the commander on
+// it until it is up. The script cannot address the nanoframe directly -- IUnitTask
+// exposes only the build position, and a MEXUP task carries a spot id we cannot
+// read -- so this is a positional REPAIR, which in Spring is exactly what
+// assisting a nanoframe is. Same shape as the wreck reclaim above, which already
+// enqueues a positional task with no buildDef.
+AIFloat3 gMexUpPos;
+bool gMexUpActive = false;
+int  gCommAssistNext = 0;
+
 void AiTaskAdded(IUnitTask@ task)
 {
+	if ((task.GetType() == Task::Type::BUILDER)
+		&& (task.GetBuildType() == Task::BuildType::MEXUP))
+	{
+		gMexUpPos = task.GetBuildPos();
+		gMexUpActive = true;
+	}
 // 	if (task.GetType() != Task::Type::BUILDER)
 // 		return;
 // 	switch (task.GetBuildType()) {
@@ -305,6 +329,11 @@ void AiTaskAdded(IUnitTask@ task)
 
 void AiTaskRemoved(IUnitTask@ task, bool done)
 {
+	if ((task.GetType() == Task::Type::BUILDER)
+		&& (task.GetBuildType() == Task::BuildType::MEXUP))
+	{
+		gMexUpActive = false;
+	}
 // 	if (task.GetType() != Task::Type::BUILDER)
 // 		return;
 // 	switch (task.GetBuildType()) {
@@ -463,27 +492,6 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 		unit.AddAttribute(Unit::Attr::BASE.type);
 		AiLog(Factory::T() + "apex: received adv con " + cdef.GetName()
 			+ " -- holding it to base work");
-		return;
-	}
-
-	// While we are the lead paying for the advanced plant, our constructors
-	// belong at home finishing it. Unit::Attr::BASE routes them through
-	// MakeEnergizerTask, which walks task types in a fixed order -- energy,
-	// storage, factory, nano before MEXUP, and MEX last -- so the nanoframe wins
-	// over opening a new mex. Observed live: the lead's cons were out at the
-	// front making mexes while the plant crawled and 300+ metal of wreckage sat
-	// unreclaimed beside it.
-	if (Factory::IsTechLead() && !Factory::gHaveT2 && Factory::RushWindowOpen()) {
-		unit.AddAttribute(Unit::Attr::BASE.type);
-		return;
-	}
-
-	// Our own advanced constructor, before any mex has been upgraded. Same
-	// reason: MakeEnergizerTask puts MEXUP ahead of MEX and caps the search to
-	// 2000 elmos of base, so it upgrades what we already hold nearby instead of
-	// walking off to open a new spot.
-	if ((cdef.costM >= ADV_CON_COST) && !Factory::HaveT2Mex()) {
-		unit.AddAttribute(Unit::Attr::BASE.type);
 		return;
 	}
 

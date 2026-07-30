@@ -137,7 +137,7 @@ def parse(path: Path) -> Match:
             m.gifts.append((minute, team, int(gift.group(1))))
         if "received adv con" in rest:
             m.received.setdefault(team, minute)
-        sling = re.search(r"sent ([\d.]+) metal to lead", rest)
+        sling = re.search(r"sent ([\d.]+) (?:metal )?to lead", rest)
         if sling:
             m.slings[team].append((minute, float(sling.group(1))))
 
@@ -151,11 +151,14 @@ def allies(m: Match) -> dict[int, list[int]]:
     return out
 
 
-def report(m: Match, show_timeline: bool = False) -> int:
+def report(m: Match, show_timeline: bool = False, _raw: str = "") -> int:
     """Returns the number of broken links found."""
     print(f"\n{'=' * 78}\n{m.name}")
     broken = 0
 
+    if "has crashed" in _raw or "problem with a skirmish AI" in _raw:
+        print(chr(10) + "  *** THIS MATCH CRASHED -- results below are "
+              "truncated and must not be compared against clean runs")
     if m.as_errors:
         # This one outranks everything: a compile error disables the variant and
         # the match still runs and reports a normal result.
@@ -328,7 +331,8 @@ def main() -> int:
 
     total = 0
     for log in logs[: args.limit]:
-        total += report(parse(log), args.timeline)
+        total += report(parse(log), args.timeline,
+                        log.read_text('utf-8', errors='replace'))
     if len(logs) > args.limit:
         print(f"\n({len(logs) - args.limit} more matches not shown; --limit to raise)")
     print(f"\n{total} broken link(s) across {min(len(logs), args.limit)} match(es)\n")

@@ -82,6 +82,7 @@ class MatchResult:
     wall_seconds: float = 0.0
     exit_code: int | None = None
     desync: bool = False
+    crashed: bool = False
     ai_errors: list[str] = field(default_factory=list)
 
     @property
@@ -283,6 +284,10 @@ def parse_infolog(text: str, result: MatchResult) -> MatchResult:
 
     if "Sync error" in text or "desync" in text.lower():
         result.desync = True
+    # An engine crash is not the same as "the AI logged an error", and reading
+    # one run's log while believing it is another's is exactly how a crash gets
+    # reported as a clean run. Make it a field.
+    result.crashed = ("has crashed" in text) or ("problem with a skirmish AI" in text)
     for line in text.splitlines():
         if "SkirmishAI" in line and ("error" in line.lower() or "exception" in line.lower()):
             result.ai_errors.append(line.strip()[:300])
@@ -317,7 +322,11 @@ def run(args) -> int:
     # clobber each other's infolog and race on the archive cache) and must not
     # race on an auto-generated output name.
     if args.out:
+        # Relative to the repo, not the caller's cwd: a backgrounded shell
+        # resolved it somewhere else entirely and the results vanished.
         outdir = Path(args.out)
+        if not outdir.is_absolute():
+            outdir = REPO / outdir
     else:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         slug = "_vs_".join(a.label() for a in ais)[:60]
@@ -438,6 +447,7 @@ def run(args) -> int:
             "wall_seconds": result.wall_seconds,
             "exit_code": result.exit_code,
             "desync": result.desync,
+            "crashed": result.crashed,
             "ai_errors": result.ai_errors[:10],
         },
         "replay": demo.name if demo else None,
@@ -446,12 +456,16 @@ def run(args) -> int:
     (outdir / "result.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     print()
+    print(f"out      {outdir}")
     print(f"reason   {result.reason}")
     print(f"winners  {payload['result']['winner_specs'] or '(none)'}")
     print(f"game     {result.game_minutes} min ({result.game_frames} frames)")
     print(f"wall     {result.wall_seconds}s")
     if result.desync:
         print("DESYNC detected")
+    if result.crashed:
+        print(f"*** ENGINE/AI CRASH at frame {result.game_frames} "
+              f"-- see {outdir / 'infolog.txt'}")
     for e in result.ai_errors[:3]:
         print(f"ai error {e}")
     return 0

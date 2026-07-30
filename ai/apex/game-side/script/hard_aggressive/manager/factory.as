@@ -63,8 +63,19 @@ bool RushWindowOpen()
 	return ai.frame <= Military::RUSH_GIVEUP;
 }
 
+// Re-read at most once a second. Un-cached, this ran a string concatenation and
+// an engine callback on EVERY IsTechLead() -- 15 call sites, several on hot
+// paths -- including from inside Builder::AiUnitAdded, which ai.GiveUnits
+// invokes re-entrantly while it is transferring a unit. A second is far shorter
+// than any takeover deadline, so the role still moves promptly.
+int gLeadCheckedAt = -1000;
+
 int RushLeadTeamId()
 {
+	if (ai.frame < gLeadCheckedAt + 1 * SECOND)
+		return (gRushLead >= 0) ? gRushLead : ai.GetLeadTeamId();
+	gLeadCheckedAt = ai.frame;
+
 	// Keyed on teamId, NOT allyTeamId: ai.allyTeamId reads 0 for every instance
 	// in the shipped DLL, which had ally 1 pooling behind ally 0's lead.
 	const int lead = int(ai.GetGameRulesParam(LEAD_PARAM + ai.teamId, -1.f));
@@ -94,12 +105,17 @@ string legmoho ("legmoho");
 // One advanced extractor standing. A T2 mex is roughly a 300% increase on that
 // spot's metal and pays for the next constructor by itself, so it comes before
 // a second constructor and before the T1.5 defence rung.
+bool gHaveT2Mex = false;   // latched: an upgraded mex does not un-upgrade
+
 bool HaveT2Mex()
 {
+	if (gHaveT2Mex)
+		return true;
 	const string side = ai.GetSideName();
 	CCircuitDef@ moho = ai.GetCircuitDef((side == "cortex") ? cormoho
 	                                   : ((side == "legion") ? legmoho : armmoho));
-	return (moho !is null) && (moho.count > 0);
+	gHaveT2Mex = (moho !is null) && (moho.count > 0);
+	return gHaveT2Mex;
 }
 
 bool IsTechLead()
@@ -292,13 +308,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			+ " haveCon=" + (Builder::gHaveAdvCon ? "1" : "0")
 			+ " roleDef=" + ((probe is null) ? "NULL" : probe.GetName()));
 	}
-	// One constructor, then a mex upgrade, THEN more constructors. Stacking
-	// constructors before the first upgrade lands makes all of them slow, and the
-	// upgrade is what pays for the next one.
-	const bool waitForMex = Builder::gHaveAdvCon && !HaveT2Mex();
-	if (gHaveT2 && !waitForMex
-		&& ((IsTechLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon))
-	{
+	if (gHaveT2 && ((IsTechLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
 		// BUILDER, not BUILDER2. builderT2 is registered as a SUBROLE of builder
 		// (AiAddRole("builderT2", BUILDER.type)) and the factory role map is
 		// indexed by BASE roles only -- FactoryManager.cpp:1057 looks up
