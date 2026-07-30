@@ -33,7 +33,17 @@
 		},
 		// income factor for energy, time is in seconds
 		// [[<start_factor>, <start_time>], [<end_factor>, <end_time>]]
-		"factor": [[1.0, 300], [30.0, 7200]],
+		// Start factor raised 1.0 -> 2.0. It is FLAT at the start factor until
+		// start_time, so stock spends the whole first 5 minutes at 1.0 and is
+		// only at ~2.3 by minute 10 -- the ramp to 30 is nearly all after a game
+		// has been decided. CEconomyManager does
+		//   metalIncome = min(metalIncome, energyIncome) * energyFactor
+		// and then uses that inflated figure twice: to cap how many ENERGY tasks
+		// may be queued at once (taskSize < buildPower / cost * 4 + 1), and to
+		// decide which generator tier counts as affordable. So this is directly
+		// "how hard to invest in energy", and the early game is where it was
+		// pinned lowest.
+		"factor": [[2.0, 300], [30.0, 7200]],
 
 		"min_income": 5,  // minimum energy income to filter out generators
 
