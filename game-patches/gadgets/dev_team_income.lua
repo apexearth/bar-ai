@@ -102,6 +102,8 @@ local function teching(teamID)
 	return adv, air
 end
 
+local LEAD_MIN_INCOME = 14.0   -- must match Factory::RUSH_MIN_METAL
+
 local leadOf = {}   -- allyTeamID -> current target, or nil
 
 local function updateLeads(frame)
@@ -128,10 +130,14 @@ local function updateLeads(frame)
 			-- Lowest team id among those committed and not on air, so every
 			-- reader agrees and the choice cannot flap between two simultaneous
 			-- starters.
+				-- Income floor. Commitment alone is not enough: a player that slaps
+			-- down a lab at 3 minutes on 6 metal/s becomes the team's sink and
+			-- everyone pools behind someone who cannot build anything with it.
 			local pick = nil
 			for _, t in ipairs(teams) do
 				local adv, air = teching(t)
-				if adv and not air and (pick == nil or t < pick) then pick = t end
+				if adv and not air and (avg[t] or 0) >= LEAD_MIN_INCOME
+					and (pick == nil or t < pick) then pick = t end
 			end
 			if pick ~= nil then
 				leadOf[allyID] = pick
@@ -170,8 +176,9 @@ local function publishFront()
 		local _, _, _, _, _, allyID = Spring.GetTeamInfo(t, false)
 		local x, _, z = Spring.GetTeamStartPosition(t)
 		if allyID ~= nil and x ~= nil then
-			local a = byAlly[allyID] or {x = 0, z = 0, n = 0}
+			local a = byAlly[allyID] or {x = 0, z = 0, n = 0, pts = {}}
 			a.x, a.z, a.n = a.x + x, a.z + z, a.n + 1
+			a.pts[#a.pts + 1] = {x = x, z = z}
 			byAlly[allyID] = a
 		end
 	end
@@ -189,9 +196,34 @@ local function publishFront()
 			if en > 0 then
 				local mx, mz = mine.x / mine.n, mine.z / mine.n
 				local tx, tz = ex / en, ez / en
-				Spring.SetGameRulesParam("ai_frontx_" .. t, mx + (tx - mx) * FRONT_FRAC)
-				Spring.SetGameRulesParam("ai_frontz_" .. t, mz + (tz - mz) * FRONT_FRAC)
-				frontDone = true
+				-- The front is a LINE, not a point. A single centroid sends every
+				-- player's defence to the same spot and leaves the flanks open.
+				-- Project each team's own start onto the axis perpendicular to
+				-- "toward the enemy", and give it a front point at the same
+				-- lateral offset -- so a left-flank player defends the left of the
+				-- line and a right-flank player the right, each covering its own
+				-- stretch rather than piling onto one spot.
+				local dx, dz = tx - mx, tz - mz
+				local len = math.sqrt(dx * dx + dz * dz)
+				if len > 1 then
+					local px, pz = -dz / len, dx / len   -- perpendicular, unit
+					-- team half-width along that perpendicular
+					local half = 0
+					for _, q in ipairs(mine.pts) do
+						local d = math.abs((q.x - mx) * px + (q.z - mz) * pz)
+						if d > half then half = d end
+					end
+					if half < 256 then half = 256 end
+					local bx = mx + dx * FRONT_FRAC
+					local bz = mz + dz * FRONT_FRAC
+					-- Which slot is this team's? Nearest by its own offset.
+					local mine_x, _, mine_z = Spring.GetTeamStartPosition(t)
+					local off = ((mine_x or mx) - mx) * px + ((mine_z or mz) - mz) * pz
+					local frac = math.max(-1, math.min(1, off / half))
+					Spring.SetGameRulesParam("ai_frontx_" .. t, bx + px * half * frac)
+					Spring.SetGameRulesParam("ai_frontz_" .. t, bz + pz * half * frac)
+					frontDone = true
+				end
 			end
 		end
 	end

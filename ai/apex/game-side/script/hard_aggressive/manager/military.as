@@ -553,6 +553,21 @@ void UpdateFrontGun()
 			Task::Priority::NORMAL, gun, front, 0.f));
 }
 
+// Is this cluster on the team's defence line? IsFrontierSite only measures
+// distance from OUR OWN mass, which says nothing about where the fighting is.
+// The published front does.
+const float FRONT_RADIUS = 1600.f;
+
+bool NearFront(const AIFloat3& in pos)
+{
+	AIFloat3 f;
+	if (!FrontPos(f))
+		return false;
+	const float dx = pos.x - f.x;
+	const float dz = pos.z - f.z;
+	return (dx * dx + dz * dz) < (FRONT_RADIUS * FRONT_RADIUS);
+}
+
 void AiMakeDefence(int cluster, const AIFloat3& in pos)
 {
 	NoteDefenceSite(pos);
@@ -575,13 +590,30 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	// Something to defend against. Frontier sites skip this test, and so does the
 	// opening: before either side has an army a single known raider still justifies
 	// one tower, which is what the old gate's `mobileThreat > 0` clause bought.
+	// A site on the team's defence line is worth building whatever the global
+	// threat gate says: that is where the attacks land, and a tower there that
+	// arrives late is a tower that arrives never. apexearth: "treat defenses
+	// more important, at least when they're at that team defense area in the
+	// middle".
+	// The tech lead's job is narrow: get the plant up, make advanced cons, make
+	// T2 mexes, then keep scaling economy. apexearth: "they shouldn't even really
+	// be building too many defenses unless they are feeling threatened -- focus
+	// on eco and the T2". Every tower it builds is metal the team pooled for tech
+	// spent on something else. Threat still overrides: staying alive is the one
+	// early job it does have.
+	if (Factory::IsTechLead() && !gPorcArmed && !gTurtle && !LosingGround())
+		return;
+
+	const bool onLine = NearFront(pos);
+
 	const bool early = (ai.frame <= 5 * MINUTE) && (threat > 0.f);
-	if (!gPorcArmed && !early && !IsFrontierSite(pos))
+	if (!gPorcArmed && !early && !onLine && !IsFrontierSite(pos))
 		return;
 
 	// Something to pay with. Unchanged from the old gate, including the way that
 	// same opening clause bypassed the income requirement outright.
-	if ((ai.frame <= 5 * MINUTE) && (aiEconomyMgr.metal.income <= 10.f) && !early)
+	if ((ai.frame <= 5 * MINUTE) && (aiEconomyMgr.metal.income <= 10.f)
+		&& !early && !onLine)
 		return;
 
 	aiMilitaryMgr.DefaultMakeDefence(cluster, pos);

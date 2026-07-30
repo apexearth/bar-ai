@@ -1,0 +1,46 @@
+diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
+index a44c20b..c0ffaf4 100644
+--- a/src/circuit/module/MilitaryManager.cpp
++++ b/src/circuit/module/MilitaryManager.cpp
+@@ -301,6 +301,9 @@ void CMilitaryManager::InitHandlers()
+ 				radarDefs.AddDef(&cdef);
+ 				cdef.SetIsRadar(true);
+ 			}
++			if (cdef.GetDef()->GetJammerRadius() > 1.f) {
++				cdef.SetIsJammer(true);
++			}
+ 			if (cdef.GetDef()->GetSonarRadius() > 1.f) {
+ 				sonarDefs.AddDef(&cdef);
+ 				cdef.SetIsSonar(true);
+@@ -582,7 +585,12 @@ int CMilitaryManager::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+ 
+ 	auto itgt = guardTasks.find(unit);
+ 	if (itgt != guardTasks.end()) {
+-		AbortTask(itgt->second);
++		// Drop the entry BEFORE aborting: the abort path re-enters DequeueTask,
++		// and leaving the mapping live across that gave a second route to the
++		// same dangling pointer.
++		CFGuardTask* guard = itgt->second;
++		guardTasks.erase(itgt);
++		AbortTask(guard);
+ 	}
+ 
+ 	auto search = destroyedHandler.find(unit->GetCircuitDef()->GetId());
+@@ -676,7 +684,16 @@ void CMilitaryManager::DequeueTask(IUnitTask* task, bool done)
+ 			IFighterTask* taskF = static_cast<IFighterTask*>(task);
+ 			fightTasks[static_cast<IFighterTask::FT>(taskF->GetFightType())].erase(taskF);
+ 			if (taskF->GetFightType() == IFighterTask::FightType::GUARD) {
+-				guardTasks.erase(circuit->GetTeamUnit(static_cast<CFGuardTask*>(taskF)->GetVipId()));
++				// Erase by VALUE, not by a unit lookup. GetTeamUnit() returns
++				// nullptr once the VIP has been unregistered, so erase(nullptr)
++				// removed nothing and left an entry keyed by a freed
++				// CCircuitUnit*. When the allocator reused that address for a
++				// new unit, UnitDestroyed's guardTasks.find(unit) hit the stale
++				// entry and called AbortTask on an already-deleted task --
++				// task->Dead() then dispatched through a garbage vtable.
++				for (auto it = guardTasks.begin(); it != guardTasks.end(); ) {
++					it = (it->second == taskF) ? guardTasks.erase(it) : std::next(it);
++				}
+ 			}
+ 		} break;
+ 		default: break;

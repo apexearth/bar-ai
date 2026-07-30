@@ -129,8 +129,19 @@ bool IsTechLead()
 	return ai.teamId == RushLeadTeamId();
 }
 
+// Minimum METAL income before committing to T2. The energy gates below say
+// "can we power a plant"; nothing said "can we afford to be the player the whole
+// team pools behind". Measured on Quicksilver 4v4: apex committed at 2.9 min on
+// 6.0 metal/s while stock waited until 9.1 min on 35.9, and apex lost. A lead
+// that cannot feed itself turns the pooling into one starving player plus three
+// donors. apexearth: "don't do T2 unless you got like fourteen metal per second
+// ... instead we just have one useless team member".
+const float RUSH_MIN_METAL = 14.f;
+
 bool RushReady()
 {
+	if (aiEconomyMgr.metal.income < RUSH_MIN_METAL)
+		return false;
 	return (aiEconomyMgr.energy.income > RUSH_ENERGY_TARGET)
 		|| ((ai.frame > RUSH_LATEST) && (aiEconomyMgr.energy.income > RUSH_ENERGY_FLOOR));
 }

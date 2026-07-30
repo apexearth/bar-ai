@@ -533,16 +533,19 @@
 			},
 			"armbeamer": {
 				"role": ["static"],
+				"build_mod": 60,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"armhlt": {
 				"role": ["static"],
+				"build_mod": 60,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"armguard": {
 				"role": ["static"],
+				"build_mod": 60,
 				"on": false,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
@@ -602,6 +605,7 @@
 			},
 			"armpb": {
 				"role": ["static"],
+				"build_mod": 60,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
@@ -613,6 +617,7 @@
 			},
 			"armanni": {
 				"role": ["static"],
+				"build_mod": 60,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
@@ -738,16 +743,19 @@
 			},
 			"corhllt": {
 				"role": ["static"],
+				"build_mod": 60,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"corhlt": {
 				"role": ["static"],
+				"build_mod": 60,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"corpun": {
 				"role": ["static"],
+				"build_mod": 60,
 				"on": false,
 				"limit": 3,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
@@ -803,6 +811,7 @@
 			},
 			"corvipe": {
 				"role": ["static"],
+				"build_mod": 60,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
@@ -814,6 +823,7 @@
 			},
 			"cordoom": {
 				"role": ["static"],
+				"build_mod": 60,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},

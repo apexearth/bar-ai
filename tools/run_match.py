@@ -102,14 +102,15 @@ def _script_section(name: str, body: dict, indent: int = 1) -> str:
     return "\n".join(lines)
 
 
-def _ai_and_team(ai: AISpec, team_id: int, ally: int, side: str) -> str:
+def _ai_and_team(ai: AISpec, team_id: int, ally: int, side: str,
+                 handicap: int = 0) -> str:
     """One [AI]/[TEAM] pair (or a LuaAI [TEAM]) for the given ally team."""
     team = {
         "TeamLeader": 0,
         "AllyTeam": ally,
         "RGBColor": COLORS[ally % len(COLORS)],
         "Side": side,
-        "Handicap": 0,
+        "Handicap": handicap,
     }
     if ai.is_lua:
         # LuaAI is selected on the TEAM, not via an [AI] section.
@@ -145,6 +146,8 @@ def build_script(
     per_side: int = 1,
     sides: list[str] | None = None,
     boxes: str = "lr",
+    box_size: float = 0.0,
+    handicap: int = 0,
     extra_modoptions: dict[str, str] | None = None,
 ) -> str:
     """Emit a Spring start script for N AIs, each alone on its own ally team.
@@ -192,7 +195,7 @@ def build_script(
     team_id = 0
     for ally, ai in enumerate(ais):
         for _ in range(per_side):
-            body.append(_ai_and_team(ai, team_id, ally, side_for[ally]))
+            body.append(_ai_and_team(ai, team_id, ally, side_for[ally], handicap))
             team_id += 1
         box = {"NumAllies": 0}
         if len(ais) == 2:
@@ -203,11 +206,24 @@ def build_script(
             # eight players a long column strung down the map instead of a line
             # across it; a shallower box spreads them into roughly two rows, which
             # is how a human team of eight actually deploys.
-            depth = 0.38 if per_side <= 4 else 0.20
+            depth = box_size if box_size > 0 else (0.38 if per_side <= 4 else 0.20)
             near, far = (0.0, depth) if ally == 0 else (1.0 - depth, 1.0)
             if boxes == "tb":
                 box.update({"StartRectLeft": 0.0, "StartRectRight": 1.0,
                             "StartRectTop": near, "StartRectBottom": far})
+            elif boxes in ("trbl", "tlbr"):
+                # Diagonal corners. Both axes are constrained, so the box is a
+                # square of `depth` on a side rather than a full-width band --
+                # which is why box_size wants to be larger here than for lr/tb.
+                if boxes == "trbl":
+                    # ally 0 top-right, ally 1 bottom-left
+                    l, r = (1.0 - depth, 1.0) if ally == 0 else (0.0, depth)
+                    t, b = (0.0, depth) if ally == 0 else (1.0 - depth, 1.0)
+                else:
+                    l, r = (0.0, depth) if ally == 0 else (1.0 - depth, 1.0)
+                    t, b = (0.0, depth) if ally == 0 else (1.0 - depth, 1.0)
+                box.update({"StartRectLeft": l, "StartRectRight": r,
+                            "StartRectTop": t, "StartRectBottom": b})
             else:
                 box.update({"StartRectTop": 0.0, "StartRectBottom": 1.0,
                             "StartRectLeft": near, "StartRectRight": far})
@@ -340,7 +356,7 @@ def run(args) -> int:
         ais, map_name, game_name, args.minutes, args.seed,
         record_demo=args.replay, speed=args.speed, per_side=args.per_side,
         sides=[x.strip() for x in args.sides.split(',')] if args.sides else None,
-        boxes=args.boxes,
+        boxes=args.boxes, box_size=args.box_size, handicap=args.handicap,
     )
     script_path = outdir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
@@ -499,7 +515,7 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=30, help="in-game minute cap")
     ap.add_argument("--timeout", type=int, help="wall-clock seconds before kill")
     ap.add_argument("--seed", type=int, help="RandomSeed for reproducibility")
-    ap.add_argument("--boxes", choices=["lr", "tb"], default="lr",
+    ap.add_argument("--boxes", choices=["lr", "tb", "trbl", "tlbr"], default="lr",
                     help="start-box axis: left/right or top/bottom. Glitters is tb, "
                          "Comet Catcher is lr")
     ap.add_argument("--sides",
@@ -522,6 +538,10 @@ def main() -> int:
     ap.add_argument("--write-dir", dest="write_dir",
                     help="engine write dir; give concurrent runs separate ones "
                          "(default: matches/_engine)")
+    ap.add_argument("--box-size", dest="box_size", type=float, default=0.0,
+                    help="start-box size as a fraction of the map, e.g. 0.35; 0 = auto (0.38 for <=4 per side, 0.20 above)")
+    ap.add_argument("--handicap", type=int, default=0,
+                    help="percent resource bonus for EVERY AI, e.g. 50; speeds games up so 8v8s reach game over instead of timing out undecided")
     ap.add_argument("--dry-run", action="store_true", help="print the script and stop")
     args = ap.parse_args()
     if args.speed == 0:

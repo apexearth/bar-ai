@@ -184,9 +184,21 @@ bool IsRezzer(CCircuitUnit@ unit)
 // Reclaim is now preferred only while metal is genuinely the binding
 // constraint: before we own an advanced factory, or when the bank is actually
 // empty and a build is stalled on it.
+// apexearth: "requiring full is a bit nuts, I think 90% is a good limit", and
+// earlier "if we have absolutely no metal, then reclaim". Read together: keep
+// resurrecting across almost the whole band and fall back to reclaim only when
+// the bank is genuinely scarce.
+//
+// Note isMetalFull is already storage*0.8 and isMetalEmpty storage*0.2
+// (economy.as), so the original gate was "above 80%", not literally full.
+const float REZ_METAL_FLOOR = 0.10f;   // reclaim below this share of storage
+
 bool PreferReclaim()
 {
-	return !Factory::gHaveT2 || aiEconomyMgr.isMetalEmpty;
+	if (!Factory::gHaveT2)
+		return true;
+	return aiEconomyMgr.metal.current
+	     < aiEconomyMgr.metal.storage * REZ_METAL_FLOOR;
 }
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)

@@ -126,7 +126,8 @@ def worker_dirs(n: int) -> queue.Queue:
 
 def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
          match_root: Path, per_side: int = 1,
-         sides: str | None = None, boxes: str = "lr") -> dict | None:
+         sides: str | None = None, boxes: str = "lr",
+         box_size: float = 0.0, handicap: int = 0) -> dict | None:
     """Run one match in its own process and read back its result.json.
 
     Output and write dirs are passed explicitly rather than letting run_match
@@ -143,6 +144,10 @@ def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
         "--per-side", str(per_side), "--replay",   # keep .sdfz for review
         "--boxes", boxes,
     ]
+    if box_size > 0:
+        cmd += ["--box-size", str(box_size)]
+    if handicap:
+        cmd += ["--handicap", str(handicap)]
     if sides:
         cmd += ["--sides", sides]
     if engine:
@@ -241,7 +246,11 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=60, help="in-game minute cap")
     ap.add_argument("--workers", type=int, default=1,
                     help="concurrent matches; ~1 core and ~4.4 GB each in steady state")
-    ap.add_argument("--boxes", choices=["lr", "tb"], default="lr",
+    ap.add_argument("--box-size", dest="box_size", type=float, default=0.0,
+                    help="start-box size as a map fraction, e.g. 0.35")
+    ap.add_argument("--handicap", type=int, default=0,
+                    help="percent resource bonus for every AI; gets 8v8s to game over")
+    ap.add_argument("--boxes", choices=["lr", "tb", "trbl", "tlbr"], default="lr",
                     help="start-box axis; Glitters is tb, Comet Catcher lr")
     ap.add_argument("--sides", default="Cortex,Cortex",
                     help="faction per side; defaults to the SAME faction on both "
@@ -318,7 +327,8 @@ def main() -> int:
         nonlocal done
         wd = pool.get()
         try:
-            row = play(job, args.minutes, args.engine, wd, match_root, args.per_side, args.sides, args.boxes)
+            row = play(job, args.minutes, args.engine, wd, match_root, args.per_side,
+                       args.sides, args.boxes, args.box_size, args.handicap)
         finally:
             pool.put(wd)
         with _lock:
