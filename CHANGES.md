@@ -128,6 +128,27 @@ Upstream bugs found and worked around: `legbombard` has no builder, `armfmd` is
 not a unit def, three `nanotct2` variants are buildable by nobody, several
 porcupine entries ship `on: false` and are built inert.
 
+## T3 urgency gate — implemented, NOT shown to work
+
+`T3Worthwhile()` used to refuse a gantry whenever `gTurtle` was set or our army
+was smaller than the enemy's, so it only ever allowed T3 from a winning position.
+Above `T3_INCOME_URGENT` (150 m/s) both vetoes are skipped. Motivated by a live
+hosted game: a player on 398 m/s with enemy T3 in the base built nothing.
+
+**8 paired +40% 40-minute 4v4s say the change is not measurable.** Win rate 2/4
+treatment vs 1/4 control (2 draws). apex T3 median 40,265 vs 13,720, but the
+ranges are 0-86,810 and 0-205,200 -- the single largest T3 game in the whole set
+was a CONTROL run, because the old gate happily builds T3 when winning.
+
+What actually predicts T3 spend is economy scale, not the gate: the four runs
+above ~400 m/s peak built 86.8k/205.2k/64.0k/11.8k, the four below ~230 m/s built
+0/16.6k/0/15.7k, with both arms on both sides. An earlier 1-vs-1 pair looked
+decisive and was luck.
+
+Kept because it only relaxes a veto in a case observed live and costs nothing
+otherwise. The case it targets -- big economy AND losing -- is barely sampled by
+random games, so testing it needs a scenario, not more matches. **unmeasured**
+
 ## Packaging — what makes it load in a hosted game
 
 - **Ships under its own shortName, `BARbApex`**, rather than as version `apex` of
