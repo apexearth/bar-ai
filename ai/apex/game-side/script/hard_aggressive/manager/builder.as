@@ -277,11 +277,8 @@ void LogConVeto(CCircuitUnit@ unit, const string& in what,
 		+ " rerouted=" + gConRerouted + " defended=" + gConDefended);
 }
 
-// Live MEX build tasks, so a refused one can be traded for a colder one.
-//
-// The script cannot enumerate metal spots -- no CMetalManager type is registered
-// -- and a MEX task built here would carry spotId -1, which CBMexTask hands
-// straight to mexSpots[spotId]. AiTaskAdded is the only place a MEX task is ever
+// Live MEX build tasks, so a refused one can be traded for a colder one when no
+// unclaimed spot is left. AiTaskAdded is the only place a MEX task is ever
 // visible. IUnitTask is refcounted, so a held handle keeps the object alive, and
 // every removal funnels through DequeueTask, which calls AiTaskRemoved.
 array<IUnitTask@> gMexTasks;
@@ -290,15 +287,48 @@ array<IUnitTask@> gMexTasks;
 // map usually is not.
 const float REROUTE_RANGE = 3000.f;
 
-// Same buildDef as the task the engine just offered this unit is the only proof
-// available that the unit can build it: CCircuitDef exposes no CanBuild binding,
-// and mex defs are per-constructor -- armck builds armmex, armack only armmoho.
+void LogReroute(CCircuitUnit@ unit, const string& in how, int spot, float threat, float dist)
+{
+	if (ai.frame < gNextRerouteLog)
+		return;
+	gNextRerouteLog = ai.frame + 5 * SECOND;
+	AiLog(Factory::T() + "apex: con-reroute " + how + " " + unit.circuitDef.GetName()
+		+ " -> mex spot=" + spot
+		+ " threat=" + formatFloat(threat, "", 0, 0)
+		+ " dist=" + formatFloat(dist, "", 0, 0)
+		+ " rerouted=" + gConRerouted);
+}
+
+// Prefer a spot the engine has not claimed. FindOpenMexSpot applies the guards
+// UpdateMetalTasks does, and EnqueueMexAt is the only enqueue carrying a real
+// spotId -- a hand-built SBuildTask is POD, so a forgotten spotId means spot 0.
 IUnitTask@ SaferMex(CCircuitUnit@ unit, IUnitTask@ refused)
 {
+	const AIFloat3 here = unit.GetPos(ai.frame);
+
+	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, here);
+	if (spot >= 0) {
+		const AIFloat3 open = aiEconomyMgr.GetMexSpotPos(spot);
+		if (OnMap(open)) {
+			const float cold = ThreatFor(unit, open);
+			if (cold <= CON_THREAT_VETO) {
+				IUnitTask@ made = aiEconomyMgr.EnqueueMexAt(unit, spot);
+				if (made !is null) {
+					++gConRerouted;
+					LogReroute(unit, "spot", spot, cold, here.distance2D(open));
+					return made;
+				}
+			}
+		}
+	}
+
+	// Same buildDef as the task the engine just offered this unit is the only
+	// proof available that the unit can build it: CCircuitDef exposes no CanBuild
+	// binding, and mex defs are per-constructor -- armck builds armmex, armack
+	// only armmoho.
 	const CCircuitDef@ want = refused.buildDef;
 	if (want is null)
 		return null;
-	const AIFloat3 here = unit.GetPos(ai.frame);
 	IUnitTask@ best = null;
 	float bestDist = REROUTE_RANGE;
 	float bestThreat = 0.f;
@@ -329,13 +359,7 @@ IUnitTask@ SaferMex(CCircuitUnit@ unit, IUnitTask@ refused)
 	if (best is null)
 		return null;
 	++gConRerouted;
-	if (ai.frame >= gNextRerouteLog) {
-		gNextRerouteLog = ai.frame + 5 * SECOND;
-		AiLog(Factory::T() + "apex: con-reroute " + unit.circuitDef.GetName()
-			+ " -> mex threat=" + formatFloat(bestThreat, "", 0, 0)
-			+ " dist=" + formatFloat(bestDist, "", 0, 0)
-			+ " rerouted=" + gConRerouted);
-	}
+	LogReroute(unit, "trade", spot, bestThreat, bestDist);
 	return best;
 }
 
@@ -399,9 +423,19 @@ bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)
 	return false;
 }
 
+// Ground worth holding. A radar, pylon or nano can be rebuilt behind the line;
+// a mex, a factory or a fusion is the reason to contest the ground at all.
+bool WorthContesting(const string& in kind)
+{
+	return (kind == "mex") || (kind == "mexup") || (kind == "factory")
+		|| (kind == "energy") || (kind == "geo") || (kind == "geoup");
+}
+
 IUnitTask@ ContestDefence(CCircuitUnit@ unit, const string& in kind,
 		float heat, const AIFloat3& in hot)
 {
+	if (!WorthContesting(kind))
+		return null;
 	// A tower is 680-15,000 energy, and handing a task over directly bypasses
 	// CanAssignTo, which is where the engine's own energy test lives.
 	if ((ai.frame < gNextConDef) || aiEconomyMgr.isEnergyStalling)

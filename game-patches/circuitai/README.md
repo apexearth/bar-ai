@@ -52,6 +52,8 @@ before it. Getting that backwards cost a wrong diagnosis here.
 
 ## Caveat
 
-A `deploy_ai.py deploy` overwrites the engine-side DLL with the stripped copy
-from `ai/<variant>/engine-side/`, dropping both the symbols and any fix in this
-directory. Re-copy the built DLL after every deploy until that is automated.
+`deploy_ai.py deploy` prefers the local build whenever
+`vendor/engine/build-amd64-windows/.../SkirmishAI.dll` exists, and says which
+copy went out -- `SkirmishAI.dll (local build)` vs `(repo copy -- no local build
+in vendor/)`. Check that line: a deploy silently reinstating the stripped repo
+copy looks exactly like the C++ fix never working.

@@ -15,7 +15,13 @@
 		// running. DefaultMakeDefence walks the list until totalCost passes
 		// amountFactor * min(metal, energy income), so on a hosted game's income that is
 		// 5,740 metal of flak per hot cluster and the heavy guns at 11/12 are never reached.
-		"land":  [0, 2, 3, 5, 6, 4, 7, 13, 8, 10, 10, 11, 12],
+		//
+		// Index 13 is dropped: armguard/corpun/legcluster all carry "on": false in
+		// behaviour, and with no "slow_target" they never gain ATTR ONOFF, so nothing
+		// switches them back on -- built, paid for, and left inert. Index 12 now precedes
+		// 11 because armamb/cortoast are inert the same way while legacluster is not, so
+		// the working gun is reached first without costing Legion its tower.
+		"land":  [0, 2, 3, 5, 6, 4, 7, 8, 10, 10, 12, 11],
 		"water": [1, 1, 1, 1, 4, 9, 10, 9, 10],
 		"prevent": 1,  // number of preventive defences
 		"amount": {  // income bound factor

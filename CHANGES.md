@@ -27,6 +27,43 @@ from source and stripped; see `docs/06-building-the-dll.md`.
 | `ai.GetBuilderThreatAt(pos)` | per-position danger from the engine's `CThreatMap` | drives the constructor build-site veto; **unmeasured** |
 | `CCircuitUnit::CmdMoveTo(pos)` | raw move order, outside the task system | **not called** |
 | `ai.GetEnemyCostAt(pos, r)` | enemy count in radius | **not called — unsafe** |
+| `aiEconomyMgr.FindOpenMexSpot(unit, pos)` | nearest open metal spot, using the guards `UpdateMetalTasks` applies | measured |
+| `aiEconomyMgr.GetMexSpotPos(spotId)` | validated spot position, `-RgtVector` when invalid | measured |
+| `aiEconomyMgr.EnqueueMexAt(unit, spotId)` | the only MEX enqueue carrying a real `spotId` | measured |
+
+**measured**: 46 `con-reroute spot` events in one 40-minute 4v4, each moving a
+constructor off a vetoed site onto a spot the threat map read at 0.
+
+### Mex-spot indexing was an out-of-bounds write
+
+`CBMexTask`'s constructor calls `SetOpenMexSpot(spotId, false)`, which indexed
+`mexSpots[spotId]` with no bounds check, and `TaskB::Common` leaves that field at
+`-1` (it aliases `pointId` in a union). Script could not safely enqueue a MEX
+task at all. `mexSpots` is also sized in a deferred `Init()`, so before that runs
+every id is out of range.
+
+Guarded at the leaves — `CEconomyManager`'s mex/geo spot accessors and
+`CMetalManager::IsOpenSpot`/`SetOpenSpot`/`GetCluster` — rather than at the call
+sites, so the hazard closes for every caller. `SetOpenSpot` separately indexed
+`clusterInfos[clusterId]` with a `clusterId` that is `-1` until clusterization
+assigns it; that write is now guarded too.
+
+Upstream bug found in the same pass: `CBMexTask::Reevaluate` set `spotId = 0` to
+"prevent spot opening on Cancel", but `Cancel` guards on `spotId >= 0`, so `0`
+passed and re-opened spot 0. Now `-1`.
+
+### `FindFacing` orients on the enemy, not the map centre
+
+`IBuilderTask::FindFacing` picked facing purely geometrically, facing the centre
+of the map. `BuildPos` rotates `build_chain.json`'s `front` offset by that
+facing, so every front-offset placement — flak, defences, nanos — pointed at the
+map centre regardless of where the threat was. It now uses
+`CEnemyManager::GetEnemyPos()`.
+
+`enemyPos` initialises to the terrain centre, so before an enemy is located the
+new code reproduces the old behaviour exactly. **unmeasured** — it compiles and
+runs clean for 40 game-minutes on a hot path, but no placement outcome has been
+measured against stock.
 
 `ai.GetTeamMetalFill` also exists but returns nothing useful; see the engine bug
 note in `CLAUDE.md`.
@@ -183,9 +220,14 @@ conditions are evaluated once, when the parent finishes.
 - **Refusal is a ladder, not just a veto**, per apexearth: "when a mex is too
   dangerous to build, they should try to find a safer mex to build instead. And
   if there are none, then they probably should be making some defenses."
-  1. *Safer mex.* `Builder::SaferMex` picks the nearest live MEX task the same
-     unit reads as cold, within 3000 elmos, with no assignee yet, and returns it.
-     Only from the refuse path — see below.
+  1. *Safer mex.* `Builder::SaferMex` asks `aiEconomyMgr.FindOpenMexSpot` for the
+     nearest spot the engine has not claimed, and builds there via
+     `EnqueueMexAt`. If no open spot survives the threat bar it falls back to
+     trading for the nearest live MEX task the same unit reads as cold, within
+     3000 elmos and with no assignee yet. Only from the refuse path — see below.
+     Both outcomes are distinguishable in the log (`con-reroute spot` vs
+     `con-reroute trade`); in one 40-minute 4v4 the split was 46 spot / 60 trade,
+     so the fallback still carries real traffic.
   2. *Defence a distance back.* `Builder::ContestDefence` walks from the hot site
      toward our own start in 160-elmo steps until the threat map reads clear (up
      to 6 steps) and enqueues a tower there. apexearth: "build defenses a safe
@@ -193,6 +235,9 @@ conditions are evaluated once, when the parent finishes.
      500 elmos of the last one; skipped while energy is stalling, because handing
      a task over directly bypasses `CanAssignTo`, which is where the engine's own
      energy test lives.
+     **Only for ground worth holding** — mex, mexup, factory (gantry included),
+     energy, geo, geoup. A radar, sonar, store, pylon, nano or convert can be
+     rebuilt behind the line and does not justify a tower.
   3. Otherwise the previous behaviour: retreat if walking, wreck reclaim if idle.
 - **The two paths differ, and it matters.** From `CIdleTask` the returned task is
   simply assigned, so an alternative mex can be handed over. From
@@ -215,21 +260,19 @@ conditions are evaluated once, when the parent finishes.
   carrying running totals. **unmeasured** beyond that the paths fire.
   - `grep "apex: con-veto" infolog.txt` — refusals and abandons, with
     `refused= abandoned= rerouted= defended=`.
-  - `grep "apex: con-reroute" infolog.txt` — rung 1, with the alternative's
-    threat and distance.
+  - `grep "apex: con-reroute" infolog.txt` — rung 1, tagged `spot` or `trade`,
+    with the spot id, the alternative's threat and the distance.
   - `grep "apex: con-defend" infolog.txt` — rung 2, with the tower def and how
     far back it was placed.
-- **The reroute needs the engine's own MEX tasks**, because the script cannot
-  enumerate metal spots: no `CMetalManager` type is registered at all, and a MEX
-  task enqueued from AngelScript carries `spotId` -1, which `CBMexTask`'s
-  constructor hands straight to `mexSpots[spotId]`. So `AiTaskAdded` /
-  `AiTaskRemoved` keep a list of live MEX task handles instead. `IUnitTask` is
+- **The reroute's fallback keeps a list of the engine's own MEX tasks.**
+  `AiTaskAdded` / `AiTaskRemoved` hold live MEX task handles; `IUnitTask` is
   refcounted and every removal funnels through `ITaskModule::DequeueTask`, which
-  calls `AiTaskRemoved`, so the list cannot go stale. The alternative must carry
-  the *same* `buildDef` as the refused task — that is the only proof available
+  calls `AiTaskRemoved`, so the list cannot go stale. A traded task must carry
+  the *same* `buildDef` as the refused one — that is the only proof available
   that the unit can build it, since `CCircuitDef` exposes no `CanBuild` binding
   and mex defs are per-constructor (`armck` builds `armmex`, `armack` only
-  `armmoho`).
+  `armmoho`). The spot query has no such limit: `EnqueueMexAt` picks a def from
+  the unit's own build options.
 
 ## Config (`config/hard_aggressive/`)
 
@@ -244,6 +287,42 @@ conditions are evaluated once, when the parent finishes.
 | Jammer towers rehung + `sensor: 900` | parent was porcupine index 12, never built, so `chance` never rolled | unmeasured |
 | Commanders get `dg_cost` | stop D-gunning our own lab to kill one raider | unmeasured |
 | Spam kept at high tiers (all factions) | cheap units for vision and distraction vs long-range T2 | unmeasured |
+| `porcupine.land` index 13 removed, 12 moved ahead of 11 | inert towers were eating the cluster budget before the real guns | unmeasured |
+
+### `porcupine.land` was spending its budget on towers that never fire
+
+`DefaultMakeDefence` walks the list until cost passes a fraction of income, so
+anything late in the list is unreachable on a normal budget. Two things were
+wasting it.
+
+Flak (index 10) appeared **seven times consecutively** in `rush` — ~5,740 metal
+of flak per hot cluster at hosted-game income. Now 2×, matching what
+`hard_aggressive` already carried.
+
+Index 13 (`armguard`/`corpun`/`legcluster`) carries `"on": false` in behaviour,
+and `SetOn(false)` is issued to the unit when it finishes
+(`CircuitAI::UnitFinished`). The only thing that switches such a unit back on is
+`CCircuitUnit::Attack`, and only when the def has `ATTR ONOFF` — which
+`FactoryManager` sets only if the def declares `slow_target`. None of these do.
+So they were built, paid for, and left switched off. Removed from the list.
+
+Index 11 is the same defect for `armamb`/`cortoast` but **not** for Legion:
+`legacluster` has no `on` flag and works. One list is shared by all three sides
+(`ReadConfig` indexes each side's own `unit` array), so it is reordered rather
+than cut — 12 (`armanni`/`cordoom`/`legbastion`, all functional) now precedes 11,
+which reaches the working gun first without costing Legion its tower.
+
+## One profile
+
+`easy`, `medium`, `hard` and `rush` are gone — config and script both. They were
+stock BARb trees carrying none of this AI's work (zero `apex:` markers between
+them), and `AIOptions.lua` had already stopped offering them, so they were
+unreachable in the lobby while still needing every change made four more times.
+Deleting them also cleared 23 inherited dead-unit-name warnings from
+`tools/check.py`.
+
+`hard_aggressive` is the only profile. The shared fallback layer
+(`config/*.json`, `script/{common,define,task,unit}.as`) is unchanged.
 | Radar + mobile jammer paired | `coreter` beside `corvrad` (Cortex only so far) | unmeasured |
 | Gantry `income_tier` 100/200 → 45/90 | unreachable, so a built gantry sat in its last tier | unmeasured |
 | Converters moved to their own hub chain | they sat 6th-10th in the fusion/afus chain, so the first one started only after five nano turrets finished — and `~IBuilderTask` deletes `nextTask`, so a nano that failed placement took every converter behind it | unmeasured |

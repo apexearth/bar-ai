@@ -10,7 +10,10 @@
 		           "corflak", "cortoast", "cordoom", "corpun",  "corfmd", "cortarg", "corgate"]
 	},
 	// Actual number of defences per cluster bounded by income - the order of defenses that should be build with numbers as above.
-	"land":  [0, 2, 3, 5, 6, 4, 7, 13, 8, 10, 11, 12],
+	// 13 is inert for every side ("on": false with no "slow_target", so nothing turns
+	// it back on); 12 precedes 11 because armamb/cortoast are inert the same way while
+	// legacluster is not.
+	"land":  [0, 2, 3, 5, 6, 4, 7, 8, 10, 12, 11],
 	"water": [1, 1, 1, 1, 4, 9, 10, 9, 10],
 	"prevent": 1,  // number of preventive defences
 	"amount": {  // income bound factor

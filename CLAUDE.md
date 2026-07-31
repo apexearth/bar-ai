@@ -61,6 +61,10 @@ them. Reach for C++ only when you need a mechanism that doesn't exist yet.
 - **profile** → a difficulty/playstyle within one version, chosen by the
   `profile` AI option declared in that version's `AIOptions.lua`.
   `config/<profile>/*.json` + `script/<profile>/*.as`.
+  **`apex` ships exactly one: `hard_aggressive`.** The stock easy/medium/hard/
+  rush trees were deleted — they carried none of this AI's work, so every change
+  either had to be made four more times or silently did not exist there. Do not
+  add a profile back without a reason that is not "difficulty".
 
 **A variant must never be just a version of `BARb`.** The lobby protocol's
 `ADDBOT` carries a single `aiLib` field and no version — Chobby's `AddAi` sends
@@ -150,8 +154,9 @@ Measured on this machine: a 27 game-minute match completes in ~44 s wall
 - Delete `<writedir>/LuaUI/Config` between headless runs; stale widget config
   silently changes which widgets load. The harness does this.
 - Custom AI versions are **not** in Chobby's `aiCustomData.lua`, so the lobby
-  shows them uncurated. Declare your profiles in your own `AIOptions.lua`
-  (that is why `ai/apex/engine-side/AIOptions.lua` un-comments them).
+  shows them uncurated. Any profile you want selectable must be declared in your
+  own `AIOptions.lua`; `ai/apex/engine-side/AIOptions.lua` declares the single
+  `hard_aggressive` entry.
 - Engine dirs are wiped on BAR update. Re-run `deploy_ai.py deploy` afterwards.
 
 ## Failure modes that are SILENT — check for these before believing a result

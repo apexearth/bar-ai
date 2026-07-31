@@ -69,6 +69,9 @@ local options = {
 		type    = 'bool',
 		def     = true,
 	},
+	-- One profile on purpose. The easy/medium/hard/rush trees were stock BARb
+	-- variants carrying none of this AI's work, and maintaining them meant every
+	-- change had to be made four more times or silently not exist there.
 	{ -- list
 		key     = 'profile',
 		name    = 'Difficulty profile',
@@ -79,28 +82,8 @@ local options = {
 			{
 				key  = 'hard_aggressive',
 				name = 'Hard | Aggressive',
-				desc = 'Difficulty: Hard |Playstyle: Aggressive |Made by Flaka',
+				desc = 'Difficulty: Hard |Playstyle: Aggressive',
 			},
--- 			{
--- 				key  = 'hard',
--- 				name = 'Hard | Balanced',
--- 				desc = 'Difficulty: Hard |Playstyle: Balanced |Made by Flaka',
--- 			},
--- 			{
--- 				key  = 'medium',
--- 				name = 'Medium | Lazy',
--- 				desc = 'Difficulty: Medium |Playstyle: Learning mechanics',
--- 			},
--- 			{
--- 				key  = 'easy',
--- 				name = 'Easy | Slow',
--- 				desc = 'Difficulty: Easy |Playstyle: First launch',
--- 			},
-			-- {
-			-- 	key  = 'dev',
-			-- 	name = 'Testing AI',
-			-- 	desc = 'Testing config',
-			-- },
 		},
 	},
 }

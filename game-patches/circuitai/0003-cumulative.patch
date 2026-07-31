@@ -306,10 +306,127 @@ index b4f4f40..8638af3 100644
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e90..cc23687 100644
+index 2b84e90..7b8b903 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
-@@ -1026,6 +1026,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -9,6 +9,7 @@
+ #include "module/BuilderManager.h"
+ #include "module/FactoryManager.h"
+ #include "module/MilitaryManager.h"
++#include "map/ThreatMap.h"
+ #include "scheduler/Scheduler.h"
+ #include "script/EconomyScript.h"
+ #include "setup/SetupManager.h"
+@@ -922,11 +923,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
+ 
+ bool CEconomyManager::IsOpenMexSpot(int spotId) const
+ {
++	if (!IsValidMexSpot(spotId)) {
++		return false;
++	}
+ 	return mexSpots[spotId].isOpen && ((isAllyMexMax ? circuit->GetMetalManager()->GetMexCount() : mexCount) < mexMax);
+ }
+ 
+ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
+ {
++	if (!IsValidMexSpot(spotId)) {
++		return;
++	}
+ 	if (mexSpots[spotId].isOpen == value) {
+ 		return;
+ 	}
+@@ -934,6 +941,90 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
+ 	value ? --mexCount : ++mexCount;
+ }
+ 
++// apex: the spot queries a script can reach. Script had no way to name a metal
++// spot, so a reroute could only trade between MEX tasks the engine had already
++// created.
++int CEconomyManager::FindOpenMexSpot(CCircuitUnit* unit, const AIFloat3& pos)
++{
++	CMetalManager* metalMgr = circuit->GetMetalManager();
++	if ((unit == nullptr) || !metalMgr->HasMetalSpots()
++		|| !metalMgr->IsInitialized() || metalMgr->IsClusterizing())
++	{
++		return -1;
++	}
++
++	const int frame = circuit->GetLastFrame();
++	std::vector<CCircuitDef*> mexDefs;
++	for (CCircuitDef* mDef : metalDefs.GetBuildDefs(unit->GetCircuitDef())) {
++		if (mDef->IsAvailable(frame)) {
++			mexDefs.push_back(mDef);
++		}
++	}
++	if (mexDefs.empty()) {
++		return -1;
++	}
++
++	// CanReachAtSafe reads whichever threat layer was selected last. The builder
++	// manager sets it before its own picks; nothing does on the script path.
++	circuit->GetThreatMap()->SetThreatType(unit);
++
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	const CMetalData::Metals& spots = metalMgr->GetSpots();
++	CMap* map = circuit->GetMap();
++	CMetalData::PointPredicate predicate = [this, &spots, map, &mexDefs, terrainMgr, unit](int index) {
++		const AIFloat3& p = spots[index].position;
++		if (IsAllyOpenMexSpot(index) && !terrainMgr->IsZoneAlly(p)
++			&& terrainMgr->CanReachAtSafe(unit, p, unit->GetCircuitDef()->GetBuildDistance()))
++		{
++			for (CCircuitDef* mDef : mexDefs) {
++				if (terrainMgr->CanBeBuiltAt(mDef, p)
++					&& map->IsPossibleToBuildAt(mDef->GetDef(), p, UNIT_NO_FACING))
++				{
++					return true;
++				}
++			}
++		}
++		return false;
++	};
++	return metalMgr->GetSpotToBuild(pos, predicate);
++}
++
++AIFloat3 CEconomyManager::GetMexSpotPos(int spotId) const
++{
++	CMetalManager* metalMgr = circuit->GetMetalManager();
++	if (!metalMgr->IsValidSpot(spotId)) {
++		return -RgtVector;
++	}
++	return metalMgr->GetSpots()[spotId].position;
++}
++
++IBuilderTask* CEconomyManager::EnqueueMexAt(CCircuitUnit* unit, int spotId)
++{
++	CMetalManager* metalMgr = circuit->GetMetalManager();
++	if ((unit == nullptr) || !metalMgr->IsValidSpot(spotId) || !IsAllyOpenMexSpot(spotId)) {
++		return nullptr;
++	}
++
++	const AIFloat3& pos = metalMgr->GetSpots()[spotId].position;
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	CMap* map = circuit->GetMap();
++	const int frame = circuit->GetLastFrame();
++	CCircuitDef* mexDef = nullptr;
++	for (CCircuitDef* mDef : metalDefs.GetBuildDefs(unit->GetCircuitDef())) {
++		if (mDef->IsAvailable(frame) && terrainMgr->CanBeBuiltAt(mDef, pos)
++			&& map->IsPossibleToBuildAt(mDef->GetDef(), pos, UNIT_NO_FACING))
++		{
++			mexDef = mDef;
++			break;
++		}
++	}
++	if (mexDef == nullptr) {
++		return nullptr;
++	}
++	return circuit->GetBuilderManager()->Enqueue(TaskB::Spot(IBuilderTask::BuildType::MEX,
++			IBuilderTask::Priority::HIGH, mexDef, pos, spotId));
++}
++
+ bool CEconomyManager::IsIgnorePull(const IBuilderTask* task) const
+ {
+ 	if (mexMax != std::numeric_limits<decltype(mexMax)>::max()) {
+@@ -1026,6 +1117,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  		return nullptr;
  	}
  
@@ -323,6 +440,43 @@ index 2b84e90..cc23687 100644
  	if (IsEnergyStalling()) {
  		return UpdateEnergyTasks(position, unit);
  	}
+diff --git a/src/circuit/module/EconomyManager.h b/src/circuit/module/EconomyManager.h
+index 2925da7..f1b8ee8 100644
+--- a/src/circuit/module/EconomyManager.h
++++ b/src/circuit/module/EconomyManager.h
+@@ -107,15 +107,26 @@ public:
+ 	bool IsExcessed() const { return metalProduced > metalUsed; }
+ 	int GetBuildDelay() const { return buildDelay; }
+ 
++	// mexSpots/geoSpots are sized in Init(), which is deferred -- before it runs
++	// they are empty and every id is out of range.
++	bool IsValidMexSpot(int spotId) const { return (spotId >= 0) && ((size_t)spotId < mexSpots.size()); }
++	bool IsValidGeoSpot(int spotId) const { return (spotId >= 0) && ((size_t)spotId < geoSpots.size()); }
+ 	bool IsAllyOpenMexSpot(int spotId) const;
+ 	bool IsOpenMexSpot(int spotId) const;
+ 	void SetOpenMexSpot(int spotId, bool value);
+-	bool IsUpgradingMexSpot(int spotId) const { return mexSpots[spotId].isUp; }
+-	void SetUpgradingMexSpot(int spotId, bool value) { mexSpots[spotId].isUp = value; }
+-	bool IsOpenGeoSpot(int spotId) const { return geoSpots[spotId].isOpen; }
+-	void SetOpenGeoSpot(int spotId, bool value) { geoSpots[spotId].isOpen = value; }
+-	bool IsUpgradingGeoSpot(int spotId) const { return geoSpots[spotId].isUp; }
+-	void SetUpgradingGeoSpot(int spotId, bool value) { geoSpots[spotId].isUp = value; }
++	bool IsUpgradingMexSpot(int spotId) const { return IsValidMexSpot(spotId) && mexSpots[spotId].isUp; }
++	void SetUpgradingMexSpot(int spotId, bool value) { if (IsValidMexSpot(spotId)) mexSpots[spotId].isUp = value; }
++	bool IsOpenGeoSpot(int spotId) const { return IsValidGeoSpot(spotId) && geoSpots[spotId].isOpen; }
++	void SetOpenGeoSpot(int spotId, bool value) { if (IsValidGeoSpot(spotId)) geoSpots[spotId].isOpen = value; }
++	bool IsUpgradingGeoSpot(int spotId) const { return IsValidGeoSpot(spotId) && geoSpots[spotId].isUp; }
++	void SetUpgradingGeoSpot(int spotId, bool value) { if (IsValidGeoSpot(spotId)) geoSpots[spotId].isUp = value; }
++
++	// apex: spot queries a script can call safely. FindOpenMexSpot applies the
++	// same guards UpdateMetalTasks does; EnqueueMexAt is the only way to create
++	// a MEX task from script that carries a real spotId.
++	int FindOpenMexSpot(CCircuitUnit* unit, const springai::AIFloat3& pos);
++	springai::AIFloat3 GetMexSpotPos(int spotId) const;
++	IBuilderTask* EnqueueMexAt(CCircuitUnit* unit, int spotId);
+ 	bool IsIgnorePull(const IBuilderTask* task) const;
+ 	bool IsIgnoreStallingPull(const IBuilderTask* task) const;
+ 	void CorrectResourcePull(float metal, float energy);
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
 index a44c20b..c0ffaf4 100644
 --- a/src/circuit/module/MilitaryManager.cpp
@@ -369,8 +523,111 @@ index a44c20b..c0ffaf4 100644
  			}
  		} break;
  		default: break;
+diff --git a/src/circuit/resource/MetalManager.cpp b/src/circuit/resource/MetalManager.cpp
+index d5e10a6..0f8898d 100644
+--- a/src/circuit/resource/MetalManager.cpp
++++ b/src/circuit/resource/MetalManager.cpp
+@@ -262,9 +262,16 @@ void CMetalManager::FindWithinRangeSpots(const AIFloat3& posFrom, const AIFloat3
+ 
+ void CMetalManager::SetOpenSpot(int index, bool value)
+ {
++	if (!IsValidSpot(index)) {
++		return;
++	}
+ 	if (metalInfos[index].isOpen != value) {
+ 		metalInfos[index].isOpen = value;
+-		clusterInfos[metalInfos[index].clusterId].queuedCount += value ? -1 : 1;
++		// clusterId stays -1 until clusterization assigns it.
++		const int clusterId = metalInfos[index].clusterId;
++		if ((clusterId >= 0) && ((size_t)clusterId < clusterInfos.size())) {
++			clusterInfos[clusterId].queuedCount += value ? -1 : 1;
++		}
+ 	}
+ }
+ 
+diff --git a/src/circuit/resource/MetalManager.h b/src/circuit/resource/MetalManager.h
+index ff81f9f..3c1961a 100644
+--- a/src/circuit/resource/MetalManager.h
++++ b/src/circuit/resource/MetalManager.h
+@@ -34,6 +34,9 @@ public:
+ 	bool HasMetalSpots() const { return (metalData->IsInitialized() && !metalData->IsEmpty()); }
+ 	bool HasMetalClusters() const { return !metalData->GetClusters().empty(); }
+ 	bool IsClusterizing() const { return metalData->IsClusterizing(); }
++	// Init() is deferred via RunOnInit; GetSpotToBuild/Upgrade dereference
++	// members it creates.
++	bool IsInitialized() const { return shortPath != nullptr; }
+ 
+ 	void ClusterizeMetal(CCircuitDef* commDef);
+ 	void SetAuthority(CCircuitAI* authority) { circuit = authority; }
+@@ -66,7 +69,8 @@ public:
+ public:
+ 	void SetOpenSpot(int index, bool value);
+ 	void SetOpenSpot(const springai::AIFloat3& pos, bool value);
+-	bool IsOpenSpot(int index) const { return metalInfos[index].isOpen; }
++	bool IsValidSpot(int index) const { return (index >= 0) && ((size_t)index < metalInfos.size()); }
++	bool IsOpenSpot(int index) const { return IsValidSpot(index) && metalInfos[index].isOpen; }
+ 	bool IsOpenSpot(const springai::AIFloat3& pos) const;
+ 	void MarkAllyMexes();
+ 	void MarkAllyMexes(const std::vector<CAllyUnit*>& mexes);
+@@ -78,7 +82,7 @@ public:
+ 		return clusterInfos[index].queuedCount >= GetClusters()[index].idxSpots.size();
+ 	}
+ 	bool IsMexInFinished(int index) const;
+-	int GetCluster(int index) const { return metalInfos[index].clusterId; }
++	int GetCluster(int index) const { return IsValidSpot(index) ? metalInfos[index].clusterId : -1; }
+ 
+ 	int GetSpotToBuild(const springai::AIFloat3& pos, CMetalData::PointPredicate& predicate);
+ 	int GetSpotToUpgrade(const springai::AIFloat3& pos, CMetalData::PointPredicate& predicate);
+diff --git a/src/circuit/script/EconomyScript.cpp b/src/circuit/script/EconomyScript.cpp
+index 193efa9..954669b 100644
+--- a/src/circuit/script/EconomyScript.cpp
++++ b/src/circuit/script/EconomyScript.cpp
+@@ -8,6 +8,8 @@
+ #include "script/EconomyScript.h"
+ #include "script/ScriptManager.h"
+ #include "module/EconomyManager.h"
++#include "task/builder/BuilderTask.h"
++#include "unit/CircuitUnit.h"
+ #include "util/Utils.h"
+ #include "angelscript/include/angelscript.h"
+ 
+@@ -15,6 +17,21 @@ namespace circuit {
+ 
+ using namespace springai;
+ 
++static int CEconomyManager_FindOpenMexSpot(CEconomyManager* mgr, CCircuitUnit* unit, const AIFloat3& pos)
++{
++	return mgr->FindOpenMexSpot(unit, pos);
++}
++
++static AIFloat3 CEconomyManager_GetMexSpotPos(CEconomyManager* mgr, int spotId)
++{
++	return mgr->GetMexSpotPos(spotId);
++}
++
++static IUnitTask* CEconomyManager_EnqueueMexAt(CEconomyManager* mgr, CCircuitUnit* unit, int spotId)
++{
++	return mgr->EnqueueMexAt(unit, spotId);
++}
++
+ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
+ 		: IModuleScript(scr, mgr)
+ {
+@@ -40,6 +57,12 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
+ 	r = engine->RegisterObjectProperty("CEconomyManager", "float reclEnergyEff", asOFFSET(CEconomyManager, reclEnergyEff)); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CEconomyManager", "float GetMetalMake(const CCircuitDef@) const", asMETHOD(CEconomyManager, GetMetalMake), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CEconomyManager", "float GetEnergyMake(const CCircuitDef@) const", asMETHOD(CEconomyManager, GetEnergyMake), asCALL_THISCALL); ASSERT(r >= 0);
++	// apex: mex spots, addressable from script. EnqueueMexAt is the only way to
++	// build a MEX task carrying a real spotId -- a hand-built SBuildTask is POD
++	// and zero-inits, so a forgotten spotId silently means spot 0.
++	r = engine->RegisterObjectMethod("CEconomyManager", "int FindOpenMexSpot(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CEconomyManager_FindOpenMexSpot), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CEconomyManager", "AIFloat3 GetMexSpotPos(int) const", asFUNCTION(CEconomyManager_GetMexSpotPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CEconomyManager", "IUnitTask@+ EnqueueMexAt(CCircuitUnit@, int)", asFUNCTION(CEconomyManager_EnqueueMexAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ }
+ 
+ CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..3ab788a 100644
+index 2839b72..8c01353 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -195,6 +195,61 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
@@ -466,7 +723,7 @@ index 2839b72..3ab788a 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +645,21 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +645,17 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -481,10 +738,6 @@ index 2839b72..3ab788a 100644
 +	// last plasma shots landing on a commander already running. Health loss is
 +	// unambiguous and fires whether the shooter is adjacent or far away.
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetHealthPercent()", asMETHOD(CCircuitUnit, GetHealthPercent), asCALL_THISCALL); ASSERT(r >= 0);
-+	// Health is the missing half of "is this position risky". Threat alone said
-+	// commanders die where the map reads ZERO -- because a hurt commander does
-+	// something ordinary and does not survive it. Risk has to be threat relative
-+	// to what the unit can still absorb.
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
@@ -562,10 +815,44 @@ index 4863ac9..e509c6d 100644
  	void ReadConfig();
  	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..c0017c8 100644
+index bc8ff11..662af4a 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
-@@ -799,6 +799,8 @@ void IBuilderTask::ExecuteChain(SBuildChain* chain)
+@@ -20,6 +20,7 @@
+ #include "terrain/TerrainManager.h"
+ #include "terrain/path/PathFinder.h"
+ #include "terrain/path/QueryPathSingle.h"
++#include "unit/enemy/EnemyManager.h"
+ #include "unit/action/DGunAction.h"
+ #include "unit/action/CaptureAction.h"
+ #include "unit/action/FightAction.h"
+@@ -645,15 +646,17 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+ 
+ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+ {
+-	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
+-
+-//	facing = UNIT_NO_FACING;
+-	float terWidth = terrainMgr->GetTerrainWidth();
+-	float terHeight = terrainMgr->GetTerrainHeight();
+-	if (std::fabs(terWidth - 2 * pos.x) > std::fabs(terHeight - 2 * pos.z)) {
+-		facing = (2 * pos.x > terWidth) ? UNIT_FACING_WEST : UNIT_FACING_EAST;
++	// Face the enemy, not the map centre. BuildPos rotates build_chain.json's
++	// `front` offset by this facing, so it decides which side of a parent its
++	// children land on. CEnemyManager reports the terrain centre until an enemy
++	// is located, which is exactly the geometric behaviour this replaces.
++	const AIFloat3& target = manager->GetCircuit()->GetEnemyManager()->GetEnemyPos();
++	const float dx = target.x - pos.x;
++	const float dz = target.z - pos.z;
++	if (std::fabs(dx) > std::fabs(dz)) {
++		facing = (dx < 0) ? UNIT_FACING_WEST : UNIT_FACING_EAST;
+ 	} else {
+-		facing = (2 * pos.z > terHeight) ? UNIT_FACING_NORTH : UNIT_FACING_SOUTH;
++		facing = (dz < 0) ? UNIT_FACING_NORTH : UNIT_FACING_SOUTH;
+ 	}
+ }
+ 
+@@ -799,6 +802,8 @@ void IBuilderTask::ExecuteChain(SBuildChain* chain)
  							isSensor = [](CCircuitDef* cdef) { return cdef->IsRadar(); };
  						} else if (bi.cdef->IsSonar()) {
  							isSensor = [](CCircuitDef* cdef) { return cdef->IsSonar(); };
@@ -574,6 +861,19 @@ index bc8ff11..c0017c8 100644
  						} else {
  							isValid = false;
  							break;
+diff --git a/src/circuit/task/builder/MexTask.cpp b/src/circuit/task/builder/MexTask.cpp
+index e49a5b3..d788199 100644
+--- a/src/circuit/task/builder/MexTask.cpp
++++ b/src/circuit/task/builder/MexTask.cpp
+@@ -128,7 +128,7 @@ bool CBMexTask::Reevaluate(CCircuitUnit* unit)
+ 	if (circuit->IsAllyAware()) {
+ 		auto closeTask = [this, circuit]() {
+ 			circuit->GetEconomyManager()->SetOpenMexSpot(spotId, true);
+-			spotId = 0;  // prevent spot opening on Cancel
++			spotId = -1;  // prevent spot opening on Cancel, which guards on spotId >= 0
+ 			manager->AbortTask(this);
+ 			return false;
+ 		};
 diff --git a/src/circuit/task/fighter/AntiAirTask.cpp b/src/circuit/task/fighter/AntiAirTask.cpp
 index fac55c7..81a7f68 100644
 --- a/src/circuit/task/fighter/AntiAirTask.cpp
