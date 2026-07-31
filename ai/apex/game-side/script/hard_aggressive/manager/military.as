@@ -264,7 +264,9 @@ const float MASS_PER_MIN = 3.5f;        // ~100 by 28 min
 // -- the enemy takes the map and we hold a wall around too few mexes. The plan
 // is capture territory THEN wall it, not wall an empty base. 80 still refuses
 // piecemeal trickle attacks while letting a real force move and take ground.
-const float MASS_CAP    = 80.f;
+// 80 was set while CDefendTask's promote shortcut made this unenforceable. Now
+// that it binds, 80 is not reachable under pressure and the army never attacks.
+const float MASS_CAP    = 36.f;
 // Now a metal-vs-metal ratio, so 1.0 is a real parity point. It used to compare
 // aiEnemyMgr.mobileThreat against armyCost; across eight 4v4 infologs that ratio
 // logged 0.02-0.14 and never once approached 0.95, so the clause below could not
