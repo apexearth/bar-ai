@@ -24,7 +24,7 @@ from source and stripped; see `docs/06-building-the-dll.md`.
 | `ai.SendResources(m, e, team)` | give metal to an ally — makes slinging possible at all | measured |
 | `ai.GetTeamMetalIncome(team)` | ally income, for ranking the tech lead | measured |
 | `ai.GetBestWreckPos(pos, r, min)` | richest wreck nearby, so reclaim is *valued* | measured |
-| `ai.GetBuilderThreatAt(pos)` | per-position danger from the engine's `CThreatMap` | diagnostic only |
+| `ai.GetBuilderThreatAt(pos)` | per-position danger from the engine's `CThreatMap` | drives the constructor build-site veto; **unmeasured** |
 | `CCircuitUnit::CmdMoveTo(pos)` | raw move order, outside the task system | **not called** |
 | `ai.GetEnemyCostAt(pos, r)` | enemy count in radius | **not called — unsafe** |
 
@@ -135,6 +135,33 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
 - **Reclaim when broke**: a builder standing on metal with an empty bank eats it
   rather than holding an unaffordable build task.
 - **T3 gantry** is an explicit tech goal above 100 metal/s (apexdef).
+
+### Constructor survivability
+- **Threatened build sites are refused.** `AiMakeTask` reads
+  `ai.GetBuilderThreatAt` at the build position of whatever `DefaultMakeTask`
+  hands back, and drops the task above `CON_THREAT_VETO` (4.0) for economy and
+  utility builds — mex, mexup, energy, geo, convert, store, pylon, radar, sonar,
+  nano, factory. Defence, bunkers, big guns, repair and reclaim are deliberately
+  exempt: those belong at the front.
+  Stock's own check (`BuilderManager::MakeBuilderTask`) needs threat AND negative
+  influence AND a powerless buildDef all at once, so contested ground the enemy
+  has not yet painted with influence passes it. That is the ground a constructor
+  walks into and dies on.
+- **Constructors already walking to one abandon it.** `IBuilderTask::Reevaluate`
+  calls `AiMakeTask` on every task update while a builder is away from its build
+  position, so the check re-runs the whole way there; it only swaps the unit's
+  task when the returned one differs in build type, so the refusal hands back
+  `EnqueueRetreat()`. `CRetreatTask::Update` releases a builder-role unit as soon
+  as it is out of enemy influence, so the diversion is self-terminating.
+- Commanders are exempt — they have their own health-based retreat, and position
+  threat was measured not to predict commander death.
+- **Verify with** `grep "apex: con-veto" infolog.txt`. One line per event, rate
+  limited to one per 5 s, each carrying the running `refused=` / `abandoned=`
+  totals. **unmeasured** beyond that the path fires.
+- **Air constructors are not covered.** `GetBuilderThreatAt` reads the *surface*
+  threat layer; a pure AA turret contributes only to the air layer
+  (`ThreatMap::AddEnemyUnit`), so nothing here sees the thing that actually kills
+  an air con. Needs a binding — see Known not done.
 
 ## Config (`config/hard_aggressive/`)
 
@@ -324,6 +351,11 @@ i.e. effectively disabled.
   *lower* than baseline (3% nonzero vs 8%). Commander survival is still the
   strongest outcome correlate measured here, so it is worth pursuing, but not
   through a sampled position-threat signal.
+- **Air constructors near enemy AA.** The build-site veto uses the surface threat
+  layer, which pure AA does not contribute to. The missing binding is the air
+  layer at a position — `CThreatMap::GetThreatAt(CCircuitUnit*, pos)` already
+  exists in C++ and picks the right layer per unit; it is simply not registered.
+  Until it is, nothing in script can tell an air con that a spot is covered by AA.
 - **Sling guard when under attack.** Followers give away metal with no check on
   their own safety.
 - **Nuke bomber massing, progressive scout quotas, all-in timing scaled to T3.**
