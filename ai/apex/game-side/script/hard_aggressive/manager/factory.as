@@ -813,7 +813,7 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// place it and pour income into it. Require a real economy behind it rather
 	// than a pile of metal, and turn assist ON so builders actually finish it --
 	// with no bank, build power is the only thing that closes the gap.
-	if (!gHaveT3 && ((userData[facDef.id].attr & Attr::T3) != 0)
+	if (WantMoreGantries() && ((userData[facDef.id].attr & Attr::T3) != 0)
 		&& T3Worthwhile())
 	{
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
@@ -1039,6 +1039,20 @@ const float T3_ARMY_RATIO = 1.0f;
 // sit far enough below that to trigger well before the game is decided.
 const float T3_INCOME_URGENT = 150.f;
 
+// One gantry per this much metal income, floor 1, cap GANTRY_MAX.
+//
+// gHaveT3 is a latch set the moment the first gantry appears, and both build
+// decisions tested !gHaveT3 -- so the AI built exactly ONE gantry per game at any
+// income. Reported from a hosted game: "for a very long time no gantries were
+// being made, except for the first one." A gantry builds one unit at a time, so
+// at the 400 m/s these games reach that single plant is the throughput ceiling on
+// the whole T3 win condition.
+//
+// gHaveT3 itself stays -- military.as reads it for big-gun placement -- it just
+// no longer decides whether to build another.
+const float GANTRY_PER_INCOME = 150.f;
+const int   GANTRY_MAX        = 4;
+
 // A T1 bot lab is wanted for the whole game, not just the opening: it is the
 // cheap assault spam and the only source of rez bots. apexearth: "one T2
 // assault unit costs like 5 or 6 T1 assault units, and that many T1s can kill
@@ -1059,6 +1073,22 @@ bool HaveT1BotLab()
 	// count is incremented in RegisterTeamUnit, which runs for the nanoframe, so
 	// a lab already under construction counts and this cannot re-request one.
 	return (lab !is null) && (lab.count > 0);
+}
+
+// Do we want another gantry? Counts nanoframes: CCircuitDef::count is
+// incremented in RegisterTeamUnit, which runs for the nanoframe, so one already
+// under construction is counted and this cannot double-request.
+bool WantMoreGantries()
+{
+	CCircuitDef@ gant = T3Gantry();
+	if (gant is null)
+		return false;
+	int want = int(aiEconomyMgr.metal.income / GANTRY_PER_INCOME);
+	if (want < 1)
+		want = 1;
+	else if (want > GANTRY_MAX)
+		want = GANTRY_MAX;
+	return int(gant.count) < want;
 }
 
 bool T3Worthwhile()
@@ -1141,7 +1171,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 		}
 	}
 
-	if (!gHaveT3 && T3Worthwhile()) {
+	if (WantMoreGantries() && T3Worthwhile()) {
 		CCircuitDef@ gant = T3Gantry();
 		if (gant !is null) {
 			AiLog(T() + "apex: building T3 gantry " + gant.GetName()
