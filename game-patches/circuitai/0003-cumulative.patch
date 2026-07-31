@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..20849c0 100644
+index aeea933..334cb54 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -44,6 +44,10 @@
@@ -31,7 +31,7 @@ index aeea933..20849c0 100644
  	allyTeam = setupManager->GetAllyTeam();
  	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
  	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
-@@ -1488,6 +1503,214 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1488,6 +1503,228 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -218,6 +218,20 @@ index aeea933..20849c0 100644
 +	return (tm == nullptr) ? 0.f : tm->GetBuilderThreatAt(pos);
 +}
 +
++// Threat for THIS unit's movement type. GetBuilderThreatAt reads the surface
++// layer only, so AddEnemyUnit routing HasSurfToAir enemies into the air layer
++// means an AA turret contributes zero to it -- air constructors cannot see what
++// kills them. CThreatMap picks the layer from the unit itself.
++float CCircuitAI::GetUnitThreatAt(CCircuitUnit* unit, const springai::AIFloat3& pos) const
++{
++	CMapManager* mm = GetMapManager();
++	if ((unit == nullptr) || (mm == nullptr)) {
++		return 0.f;
++	}
++	CThreatMap* tm = mm->GetThreatMap();
++	return (tm == nullptr) ? 0.f : tm->GetThreatAt(unit, pos);
++}
++
 +void CCircuitAI::SendResources(float metal, float energy, int toTeamId)
 +{
 +	// Crashed at frame 1 when called before the economy interface was ready, or
@@ -247,10 +261,10 @@ index aeea933..20849c0 100644
  {
  	// NOTE: See notes in MobileSlave or other economy->SendUnits places
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..a72fadd 100644
+index b4f4f40..8638af3 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -149,6 +149,39 @@ private:
+@@ -149,6 +149,40 @@ private:
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
  	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
@@ -287,6 +301,7 @@ index b4f4f40..a72fadd 100644
 +	springai::AIFloat3 GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal) const;
 +	float GetEnemyCostAt(const springai::AIFloat3& pos, float radius) const;
 +	float GetBuilderThreatAt(const springai::AIFloat3& pos) const;
++	float GetUnitThreatAt(CCircuitUnit* unit, const springai::AIFloat3& pos) const;
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
@@ -355,16 +370,21 @@ index a44c20b..c0ffaf4 100644
  		} break;
  		default: break;
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..d0d9f17 100644
+index 2839b72..3ab788a 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
-@@ -195,6 +195,56 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +195,61 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
 +static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 +{
 +	unit->CmdMoveTo(pos);
++}
++
++static float CCircuitAI_GetUnitThreatAt(CCircuitAI* circuit, CCircuitUnit* unit, const AIFloat3& pos)
++{
++	return circuit->GetUnitThreatAt(unit, pos);
 +}
 +
 +static float CCircuitAI_GetBuilderThreatAt(CCircuitAI* circuit, const AIFloat3& pos)
@@ -415,7 +435,7 @@ index 2839b72..d0d9f17 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -499,6 +549,18 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -499,6 +554,19 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	gIdArrayType = engine->GetTypeInfoByDecl("array<Id>");
  	r = engine->RegisterObjectMethod("CCircuitAI", "array<Id>@ GetTeamIds() const", asFUNCTION(CCircuitAI_GetTeamIds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -431,10 +451,11 @@ index 2839b72..d0d9f17 100644
 +	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestWreckPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestWreckPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetUnitThreatAt(CCircuitUnit@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetUnitThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -564,6 +626,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +632,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -445,7 +466,7 @@ index 2839b72..d0d9f17 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +639,21 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +645,21 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);

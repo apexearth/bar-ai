@@ -717,7 +717,6 @@ const int   AA_HEAVY_MAX = 6;
 
 int  gNextAirLog   = 0;
 bool gAAResolved   = false;
-float gAAFactor0   = -1.f;   // response.json's own eps, before we scale it
 CCircuitDef@ gFlak = null;   // the faction's flak turret
 CCircuitDef@ gHeavy = null;  // its other heavy static AA
 
@@ -783,16 +782,11 @@ void UpdateAirThreat()
 	// enemyAir * ratio >= aaCost * factor, so aaCost tops out at
 	// ratio/factor * enemyAir. That gate, not maxPercent, is what binds while the
 	// enemy's air is small -- and it counts their air constructors as air.
-	SResponseInfo@ aa = aiMilitaryMgr.GetResponseInfo(RT::AA);
-	if (aa !is null) {
-		if (gAAFactor0 < 0.f)
-			gAAFactor0 = aa.factor;
-		aa.factor = (scale > 0.f) ? (gAAFactor0 / scale) : (gAAFactor0 / AA_SCALE_MIN);
-		float pct = share;
-		if (pct > AA_MAX_PCT)
-			pct = AA_MAX_PCT;
-		aa.maxPercent = worth ? pct : 0.f;
-	}
+	// The mobile-AA lever does not exist. GetResponseInfo/SResponseInfo are not
+	// registered on CMilitaryManager -- only DefaultMakeTask, Enqueue,
+	// EnqueueRetreat, DefaultMakeDefence and GetGuardTaskNum are. response.json's
+	// anti_air weighting is therefore unreachable from script and needs a binding
+	// before it can be scaled. Static AA below is real.
 
 	// count includes nanoframes, so a turret still building holds its own slot.
 	int heavyWant = int(air * scale / AA_HEAVY_PER);
