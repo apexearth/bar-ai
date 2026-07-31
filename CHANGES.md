@@ -170,31 +170,66 @@ conditions are evaluated once, when the parent finishes.
 - **T3 gantry** is an explicit tech goal above 100 metal/s (apexdef).
 
 ### Constructor survivability
-- **Threatened build sites are refused.** `AiMakeTask` reads
-  `ai.GetBuilderThreatAt` at the build position of whatever `DefaultMakeTask`
-  hands back, and drops the task above `CON_THREAT_VETO` (4.0) for economy and
-  utility builds — mex, mexup, energy, geo, convert, store, pylon, radar, sonar,
-  nano, factory. Defence, bunkers, big guns, repair and reclaim are deliberately
-  exempt: those belong at the front.
+- **Threatened build sites are refused.** `AiMakeTask` reads the threat map at
+  the build position of whatever `DefaultMakeTask` hands back, and drops the task
+  above `CON_THREAT_VETO` (4.0) for economy and utility builds — mex, mexup,
+  energy, geo, convert, store, pylon, radar, sonar, nano, factory. Defence,
+  bunkers, big guns, repair and reclaim are deliberately exempt: those belong at
+  the front.
   Stock's own check (`BuilderManager::MakeBuilderTask`) needs threat AND negative
   influence AND a powerless buildDef all at once, so contested ground the enemy
   has not yet painted with influence passes it. That is the ground a constructor
   walks into and dies on.
-- **Constructors already walking to one abandon it.** `IBuilderTask::Reevaluate`
-  calls `AiMakeTask` on every task update while a builder is away from its build
-  position, so the check re-runs the whole way there; it only swaps the unit's
-  task when the returned one differs in build type, so the refusal hands back
-  `EnqueueRetreat()`. `CRetreatTask::Update` releases a builder-role unit as soon
-  as it is out of enemy influence, so the diversion is self-terminating.
+- **Refusal is a ladder, not just a veto**, per apexearth: "when a mex is too
+  dangerous to build, they should try to find a safer mex to build instead. And
+  if there are none, then they probably should be making some defenses."
+  1. *Safer mex.* `Builder::SaferMex` picks the nearest live MEX task the same
+     unit reads as cold, within 3000 elmos, with no assignee yet, and returns it.
+     Only from the refuse path — see below.
+  2. *Defence a distance back.* `Builder::ContestDefence` walks from the hot site
+     toward our own start in 160-elmo steps until the threat map reads clear (up
+     to 6 steps) and enqueues a tower there. apexearth: "build defenses a safe
+     distance from the mex we desire to control." One per 30 s, and never within
+     500 elmos of the last one; skipped while energy is stalling, because handing
+     a task over directly bypasses `CanAssignTo`, which is where the engine's own
+     energy test lives.
+  3. Otherwise the previous behaviour: retreat if walking, wreck reclaim if idle.
+- **The two paths differ, and it matters.** From `CIdleTask` the returned task is
+  simply assigned, so an alternative mex can be handed over. From
+  `IBuilderTask::Reevaluate` the swap happens *only when the returned task
+  differs in build type*, so a mex-for-mex trade is silently discarded and the
+  unit keeps walking; only the defence post and the retreat take effect there.
+- **Tier split on the tower.** T2 constructors share no defence with T1:
+  `armack`/`armacv` have neither `armllt` nor `armmex` in their buildoptions.
+  Read from the unit defs: T1 gets `armllt`/`corllt`/`leglht`, T2 gets
+  `armpb`/`corvipe`/`legapopupdef` (all three are porcupine index 8).
 - Commanders are exempt — they have their own health-based retreat, and position
   threat was measured not to predict commander death.
-- **Verify with** `grep "apex: con-veto" infolog.txt`. One line per event, rate
-  limited to one per 5 s, each carrying the running `refused=` / `abandoned=`
-  totals. **unmeasured** beyond that the path fires.
-- **Air constructors are not covered.** `GetBuilderThreatAt` reads the *surface*
-  threat layer; a pure AA turret contributes only to the air layer
-  (`ThreatMap::AddEnemyUnit`), so nothing here sees the thing that actually kills
-  an air con. Needs a binding — see Known not done.
+- **Air constructors are covered now.** The site check uses
+  `ai.GetUnitThreatAt(unit, pos)`, which picks the threat layer from the unit's
+  own movement type; `GetBuilderThreatAt` is the BUILDER-role *surface* layer,
+  and `ThreatMap::AddEnemyUnit` routes AA into the air layer, so a pure AA turret
+  contributed nothing to it. For a ground constructor the two read the same
+  array, so the 4.0 bar is unchanged.
+- **Verify with** three greps, each rate limited to one line per 5 s and each
+  carrying running totals. **unmeasured** beyond that the paths fire.
+  - `grep "apex: con-veto" infolog.txt` — refusals and abandons, with
+    `refused= abandoned= rerouted= defended=`.
+  - `grep "apex: con-reroute" infolog.txt` — rung 1, with the alternative's
+    threat and distance.
+  - `grep "apex: con-defend" infolog.txt` — rung 2, with the tower def and how
+    far back it was placed.
+- **The reroute needs the engine's own MEX tasks**, because the script cannot
+  enumerate metal spots: no `CMetalManager` type is registered at all, and a MEX
+  task enqueued from AngelScript carries `spotId` -1, which `CBMexTask`'s
+  constructor hands straight to `mexSpots[spotId]`. So `AiTaskAdded` /
+  `AiTaskRemoved` keep a list of live MEX task handles instead. `IUnitTask` is
+  refcounted and every removal funnels through `ITaskModule::DequeueTask`, which
+  calls `AiTaskRemoved`, so the list cannot go stale. The alternative must carry
+  the *same* `buildDef` as the refused task — that is the only proof available
+  that the unit can build it, since `CCircuitDef` exposes no `CanBuild` binding
+  and mex defs are per-constructor (`armck` builds `armmex`, `armack` only
+  `armmoho`).
 
 ## Config (`config/hard_aggressive/`)
 
@@ -386,11 +421,18 @@ i.e. effectively disabled.
   *lower* than baseline (3% nonzero vs 8%). Commander survival is still the
   strongest outcome correlate measured here, so it is worth pursuing, but not
   through a sampled position-threat signal.
-- **Air constructors near enemy AA.** The build-site veto uses the surface threat
-  layer, which pure AA does not contribute to. The missing binding is the air
-  layer at a position — `CThreatMap::GetThreatAt(CCircuitUnit*, pos)` already
-  exists in C++ and picks the right layer per unit; it is simply not registered.
-  Until it is, nothing in script can tell an air con that a spot is covered by AA.
+- **Choosing a metal spot from script.** Nothing in the binding surface can
+  enumerate metal spots or clusters — `CMetalManager` and `CMetalData` are not
+  registered at all — and `TaskB::Common` leaves `spotId` at -1, which
+  `CBMexTask` indexes `mexSpots` with. So the constructor ladder can only reroute
+  between MEX tasks the engine has already created, and cannot open a spot the
+  engine has not picked. Wanted: `int aiEconomyMgr.FindOpenMexSpot(CCircuitUnit@,
+  const AIFloat3& in)` returning a spot id, plus `AIFloat3 GetMexSpotPos(int)`,
+  so `TaskB::Spot(MEX, ...)` becomes usable from script.
+- **Reachability from script.** `CTerrainManager::CanReachAt(unit, pos, dist)`
+  decides whether a builder can path to a position and is used all over
+  `MakeBuilderTask`; it is not registered. The reroute is distance-bounded as a
+  stand-in for it.
 - **Sling guard when under attack.** Followers give away metal with no check on
   their own safety.
 - **Nuke bomber massing, progressive scout quotas, all-in timing scaled to T3.**
