@@ -10,7 +10,12 @@
 					   "corflak", "cortoast", "cordoom", "corpun",  "corfmd", "cortarg", "corgate"]
 		},
 		// Actual number of defences per cluster bounded by income - the order of defenses that should be build with numbers as above.
-		"land":  [0, 2, 3, 5, 6, 4, 7, 13, 8, 10, 10, 10, 10, 10, 10, 10, 11, 12],
+		// One list, shared by every side: CMilitaryManager::ReadConfig indexes each side's
+		// own "unit" array with it. Index 10 (armflak/corflak/legflak) appeared seven times
+		// running. DefaultMakeDefence walks the list until totalCost passes
+		// amountFactor * min(metal, energy income), so on a hosted game's income that is
+		// 5,740 metal of flak per hot cluster and the heavy guns at 11/12 are never reached.
+		"land":  [0, 2, 3, 5, 6, 4, 7, 13, 8, 10, 10, 11, 12],
 		"water": [1, 1, 1, 1, 4, 9, 10, 9, 10],
 		"prevent": 1,  // number of preventive defences
 		"amount": {  // income bound factor
@@ -161,10 +166,12 @@
 						// "fmd" only exists as the Cortex name. CBuilderManager::ReadConfig logs
 						// "has unknown UnitDef" and drops the entry, so this slot did nothing.
 						{"unit": "armamd", "category": "defence", "offset": [180, 0]},
-						{"unit": "armflak", "category": "defence", "offset": {"front": 120}, "priority": "now"},
-						{"unit": "armflak", "category": "defence", "offset": {"front": 130}, "priority": "now"},
-						{"unit": "armflak", "category": "defence", "offset": {"front": 140}, "priority": "now"},
-						{"unit": "armflak", "category": "defence", "offset": {"front": 150}, "priority": "now"}
+						// Was four of these, unconditional, at "now": 3,280 metal and 52,000
+						// energy of flak per advanced fusion whether or not the enemy owns a
+						// single aircraft. The one that is left is gated -- BuilderTask's AIR
+						// condition reads armflak.costM < GetEnemyCost(AIR), so it needs 820
+						// metal of enemy air -- and Military::UpdateAirThreat caps the total.
+						{"unit": "armflak", "category": "defence", "offset": {"front": 120}, "priority": "now", "condition": {"air": true}}
 					],
 					[
 						{"unit": "armjamt", "category": "defence", "offset": [-160, 0], "priority": "low"}
@@ -228,10 +235,8 @@
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 16}},
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 20}},
 						{"unit": "corfmd", "category": "defence", "offset": [180, 0]},
-						{"unit": "corflak", "category": "defence", "offset": {"front": 120}, "priority": "now"},
-						{"unit": "corflak", "category": "defence", "offset": {"front": 130}, "priority": "now"},
-						{"unit": "corflak", "category": "defence", "offset": {"front": 140}, "priority": "now"},
-						{"unit": "corflak", "category": "defence", "offset": {"front": 150}, "priority": "now"}
+						// Four unconditional flak, as on armafus. See the note there.
+						{"unit": "corflak", "category": "defence", "offset": {"front": 120}, "priority": "now", "condition": {"air": true}}
 					],
 					[
 						{"unit": "corjamt", "category": "defence", "offset": [-160, 0], "priority": "low"}

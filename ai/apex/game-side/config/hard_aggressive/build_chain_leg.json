@@ -95,10 +95,10 @@
 						{"unit": "legnanotc", "category": "nano", "offset": {"front": 15}, "priority": "now"},
 						{"unit": "legnanotc", "category": "nano", "offset": {"front": 20}, "priority": "now"},
 						{"unit": "legnanotc", "category": "nano", "offset": {"front": 25}, "priority": "now"},
-						{"unit": "legflak", "category": "defence", "offset": {"front": 30}, "priority": "now"},
-						{"unit": "legflak", "category": "defence", "offset": {"front": 40}, "priority": "now"},
-						{"unit": "leglupara", "category": "defence", "offset": {"front": 50}, "priority": "now"},
-						{"unit": "leglupara", "category": "defence", "offset": {"front": 60}, "priority": "now"}
+						// leglupara is anti_air too, so this was four AA turrets per advanced
+						// fusion (3,440 metal) with no condition at all -- Legion's copy of the
+						// armafus/corafus problem. Gated and cut to one; see build_chain.json.
+						{"unit": "legflak", "category": "defence", "offset": {"front": 30}, "priority": "now", "condition": {"air": true}}
 					],
 					[
 						{"unit": "legajam", "category": "defence", "offset": [-160, 0], "priority": "low"}
