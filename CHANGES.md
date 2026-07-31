@@ -126,6 +126,39 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
   minute 14 on** (851 vs 3,727 at minute 18) while total army value was
   comparable. **unmeasured**
 
+### Anti-air sized to the enemy's ground-vs-air mix
+`Military::UpdateAirThreat()`, run every `AiUpdate`. Stock decides AA from raw
+`GetEnemyCost(AIR)`, and nothing in the JSON layer can re-decide: build-chain
+conditions are evaluated once, when the parent finishes.
+- **`GetEnemyCost(AIR)` counts air constructors and scouts.** They carry
+  `["builder", "air"]` / `["scout", "air"]` in `behaviour.json`, and
+  `CFactoryManager`'s constructor adds the AIR *enemy* role to every def that
+  `IsAbleToFly`. Two enemy air cons are 680 metal of "air" with no aircraft on
+  the field. That is the input every AA path was reacting to.
+- **`share = enemyAir / (enemyAir + enemyGround)`** drives one `scale` in
+  `[0.1, 1]`, full strength at a quarter of their army flying. `scale` never
+  exceeds 1, so this only ever builds *less* AA than stock.
+- **Mobile AA**: `GetResponseInfo(AA).factor /= scale` and `.maxPercent = share`.
+  `factor`, not `maxPercent`, is what binds while their air is small —
+  `RoleProbability` builds AA while `enemyAir * ratio >= aaCost * factor`, so
+  `aaCost` tops out at `ratio/factor * enemyAir` (0.268× on a 4-man team).
+  `response.json` itself is untouched and still matches stock.
+- **Static AA**: `armflak`/`armcir`, `corflak`/`corerad`, `legflak` get
+  `maxThisUnit = count + spare` for `spare = enemyAir * scale / 1500`, capped at
+  6 between them. `IsAvailable()` is checked on every path that can place one —
+  build-chain hub, `DefaultMakeDefence`, base defence, factory — so one lever
+  closes all four, and it gates task *creation* only, so anything already
+  building finishes. The cheap tiers (`armrl`/`corrl`/`legrl` at 80 metal,
+  `armferret`/`cormadsam`/`legrhapsis`) stay uncapped. `leglupara` is left out:
+  it is Legion's superweapon entry as well, and `DiceBigGun` only re-rolls when a
+  big gun finishes, so capping a def it had already picked denies Legion any
+  superweapon for the rest of the game.
+- Grep `apexaa:` for the measurement and the decision, once a minute per player.
+- Removed `Military::AiIsAirValid()`: no C++ path looks that hook up (the engine
+  reads `CEnemyManager::IsAirValid()` directly in `FactoryManager`/`FactoryData`),
+  and `behaviour.json`'s `aa_threat` puts `maxAAThreat` above 100,000, so that
+  gate is off in this profile regardless. **unmeasured**
+
 ### Economy
 - **Reclaim over resurrect**: rez bots are handed a wreck reclaim before
   `DefaultMakeTask` can give them a resurrect. Resurrecting spends metal;
@@ -181,6 +214,8 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
 | Converters moved to their own hub chain | they sat 6th-10th in the fusion/afus chain, so the first one started only after five nano turrets finished — and `~IBuilderTask` deletes `nextTask`, so a nano that failed placement took every converter behind it | unmeasured |
 | Converters sized to the generator: fus 2, afus 5 (`legafus` 6) | one adv converter eats 600 e/s; armfus makes 1000, corfus 1100, legfus 1200, arm/corafus 3000, legafus 3300. `legfus` had none at all while armfus/corfus had two | unmeasured |
 | `limit: 1` on `armuwadvms`, `armuwms`, `leguwmstore` | the last uncapped metal storages, and `limit` is the only cap there is | unmeasured |
+| Advanced-fusion hub: 4 flak → 1, gated `air` (all three factions) | 3,280 metal / 52,000 energy of flak per `armafus`, unconditional and at `now` priority; `legafus` was 2 `legflak` + 2 `leglupara`, and `leglupara` is `anti_air` too | unmeasured |
+| `porcupine.land`: flak listed 7× → 2× | `DefaultMakeDefence` walks the list until `totalCost` passes the income cap, so at hosted-game income a hot cluster spent 5,740 metal on flak and never reached indices 11/12 | unmeasured |
 
 Upstream bugs found and worked around: `legbombard` has no builder, `armfmd` is
 not a unit def, three `nanotct2` variants are buildable by nobody, several

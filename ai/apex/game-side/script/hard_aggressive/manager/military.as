@@ -323,6 +323,7 @@ void UpdatePosture()
 	UpdateMassing();
 	UpdateRushRole();
 	UpdateFrontGun();
+	UpdateAirThreat();
 	Commander::UpdateCaution();
 	// DISABLED. Exit-code audit: aborts (exit -1003) jumped from 0-2 per 20-game
 	// run to 14-17 the moment this landed, and stayed there. The engine is dying,
@@ -684,14 +685,132 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	aiMilitaryMgr.DefaultMakeDefence(cluster, pos);
 }
 
-/*
- * anti-air threat threshold;
- * air factories will stop production when AA threat exceeds
- */
-// FIXME: Remove/replace, deprecated.
-bool AiIsAirValid()
+//------------------------------------------------------------------------------
+// Anti-air, sized to the enemy's actual ground-vs-air mix.
+//
+// Static and mobile AA are counted separately and need separate levers: only
+// mobile units reach CMilitaryManager::AddResponse, so the response table's
+// figures are mobile-only. Static AA is bounded through CCircuitDef::maxThisUnit,
+// which IsAvailable() gates on in every path that can place one -- build chain
+// hubs, DefaultMakeDefence, base defence, factory. Neither lever exists in
+// build_chain.json, whose conditions are sampled once when the parent finishes
+// and never re-checked.
+//
+// GetEnemyCost(AIR) is not "enemy aircraft". Air constructors and scouts carry
+// ["builder", "air"] / ["scout", "air"] in behaviour.json, and CFactoryManager
+// gives the AIR enemy role to every def that IsAbleToFly. Two enemy air
+// constructors read as 680 metal of "air".
+//------------------------------------------------------------------------------
+// Enemy air value below which we build no AA at all beyond the cheap tiers.
+// One Armada air constructor is 340 metal, one Cortex 360.
+const float AA_IGNORE    = 500.f;
+// Air share at which we answer their air at full stock strength. Below it, scale
+// down; scale is never above 1, so this only ever builds less AA than stock.
+const float AA_SHARE_REF = 0.25f;
+const float AA_SCALE_MIN = 0.10f;
+// Ceiling on AA as a share of our own army. response.json's own max_percent.
+const float AA_MAX_PCT   = 0.50f;
+// Enemy air metal, scaled, that buys one heavy AA turret (armflak/armcir
+// 820/750, corflak/corerad 850/800, legflak 820).
+const float AA_HEAVY_PER = 1500.f;
+const int   AA_HEAVY_MAX = 6;
+
+int  gNextAirLog   = 0;
+bool gAAResolved   = false;
+float gAAFactor0   = -1.f;   // response.json's own eps, before we scale it
+CCircuitDef@ gFlak = null;   // the faction's flak turret
+CCircuitDef@ gHeavy = null;  // its other heavy static AA
+
+void ResolveHeavyAA()
 {
-	return aiEnemyMgr.GetEnemyThreat(Unit::Role::AA.type) <= 999999.f;
+	if (gAAResolved)
+		return;
+	gAAResolved = true;
+	const string side = ai.GetSideName();
+	if (side == "cortex") {
+		@gFlak = ai.GetCircuitDef("corflak");  @gHeavy = ai.GetCircuitDef("corerad");
+	} else if (side == "legion") {
+		// leglupara is Legion's counterpart to armcir/corerad but is also its
+		// superweapon entry, and DiceBigGun only re-rolls when a big gun finishes:
+		// capping a def it had already picked would deny Legion any superweapon.
+		@gFlak = ai.GetCircuitDef("legflak");
+	} else {
+		@gFlak = ai.GetCircuitDef("armflak");  @gHeavy = ai.GetCircuitDef("armcir");
+	}
+}
+
+// Deliberately wider than EnemyArmyCost(), which omits HEAVY: leaving enemy T3
+// out of the denominator inflates the air share exactly in the late game.
+float EnemyGroundCost()
+{
+	return EnemyArmyCost() + aiEnemyMgr.GetEnemyCost(RT::HEAVY);
+}
+
+int LiveCount(CCircuitDef@ def)
+{
+	return (def is null) ? 0 : def.count;
+}
+
+void CapHeavyAA(CCircuitDef@ def, int spare)
+{
+	if (def !is null)
+		def.maxThisUnit = def.count + spare;
+}
+
+// How seriously to take their air, 0..1. One number, used by both levers.
+float AirScale(float share)
+{
+	float s = share / AA_SHARE_REF;
+	if (s > 1.f)
+		s = 1.f;
+	if (s < AA_SCALE_MIN)
+		s = AA_SCALE_MIN;
+	return s;
+}
+
+void UpdateAirThreat()
+{
+	ResolveHeavyAA();
+
+	const float air = aiEnemyMgr.GetEnemyCost(RT::AIR);
+	const float ground = EnemyGroundCost();
+	const float total = air + ground;
+	const float share = (total > 0.f) ? air / total : 0.f;
+	const bool worth = (air >= AA_IGNORE);
+	const float scale = worth ? AirScale(share) : 0.f;
+
+	// factor is the divisor in RoleProbability's first gate: AA is built while
+	// enemyAir * ratio >= aaCost * factor, so aaCost tops out at
+	// ratio/factor * enemyAir. That gate, not maxPercent, is what binds while the
+	// enemy's air is small -- and it counts their air constructors as air.
+	SResponseInfo@ aa = aiMilitaryMgr.GetResponseInfo(RT::AA);
+	if (aa !is null) {
+		if (gAAFactor0 < 0.f)
+			gAAFactor0 = aa.factor;
+		aa.factor = (scale > 0.f) ? (gAAFactor0 / scale) : (gAAFactor0 / AA_SCALE_MIN);
+		float pct = share;
+		if (pct > AA_MAX_PCT)
+			pct = AA_MAX_PCT;
+		aa.maxPercent = worth ? pct : 0.f;
+	}
+
+	// count includes nanoframes, so a turret still building holds its own slot.
+	int heavyWant = int(air * scale / AA_HEAVY_PER);
+	if (heavyWant > AA_HEAVY_MAX)
+		heavyWant = AA_HEAVY_MAX;
+	const int heavyHave = LiveCount(gFlak) + LiveCount(gHeavy);
+	const int spare = (heavyWant > heavyHave) ? (heavyWant - heavyHave) : 0;
+	CapHeavyAA(gFlak, spare);
+	CapHeavyAA(gHeavy, spare);
+
+	if (ai.frame >= gNextAirLog) {
+		gNextAirLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apexaa: air=" + formatFloat(air, "", 0, 0)
+			+ " ground=" + formatFloat(ground, "", 0, 0)
+			+ " share=" + formatFloat(share, "", 0, 3)
+			+ " scale=" + formatFloat(scale, "", 0, 2)
+			+ " heavy=" + heavyHave + "/" + heavyWant);
+	}
 }
 
 }  // namespace Military
