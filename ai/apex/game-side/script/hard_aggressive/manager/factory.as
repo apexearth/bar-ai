@@ -362,6 +362,12 @@ int switchInterval = MakeSwitchInterval();
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
+	// Safe to sit first: this answers only for the advanced air plant, so the
+	// ground line's branches below are untouched.
+	IUnitTask@ air = Air::MakeFactoryTask(unit);
+	if (air !is null)
+		return air;
+
 	// aiMilitaryMgr.quota.attack only caps how many units get SENT to attack; it
 	// does not stop the factory building them. Measured: the rusher's standing
 	// army grew 240 -> 3400 metal while its bank sat at 1 metal, so every sling
@@ -553,6 +559,9 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 		}
 	}
 
+	if (Air::SuppressesOpener(facDef))
+		return;
+
 	const array<Opener::SO>@ opener = Opener::GetOpener(facDef);
 	if (opener is null)
 		return;
@@ -715,6 +724,8 @@ bool AiIsSwitchTime(int lastSwitchFrame)
 	// Everyone should at least be trying for T2 by ~20 minutes.
 	if (!gHaveT2 && (ai.frame > 20 * MINUTE))
 		return true;
+	if (Air::WantsSwitchProbe())
+		return true;
 	if (lastSwitchFrame + switchInterval <= ai.frame) {
 		switchInterval = MakeSwitchInterval();
 		return true;
@@ -724,6 +735,15 @@ bool AiIsSwitchTime(int lastSwitchFrame)
 
 bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 {
+	// First, ahead of the follower gates below. The advanced air plant carries the
+	// T2 attribute, so the FOLLOWER_TECH_ENERGY gate would refuse it on any grid
+	// under 800 energy/sec -- and the air assassin is by construction not the
+	// designated tech lead, so that gate applies to it. Place it and pour income
+	// in, same as the rush plant.
+	if (Air::WantsFactory(facDef)) {
+		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
+		return true;
+	}
 	// "Defend, hold, tech up to turn the tide" -- the holding half was
 	// implemented and the teching half was not, so the AI sat on banked metal
 	// instead of spending it. Holding is exactly when tech should be bought:
@@ -1191,6 +1211,15 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 		}
 		AiLog(T() + "apex: rush WANTS T2 but no counterpart for "
 			+ ((gT1Fac is null) ? "<unknown T1 factory>" : gT1Fac.GetName()));
+	}
+
+	// Last, so it never pre-empts the tech rush, the bot lab or the gantry.
+	if (Air::Armed()) {
+		CCircuitDef@ airFac = Air::FactoryToBuild();
+		if (airFac !is null) {
+			AiLog(T() + "apex: air assassin building " + airFac.GetName());
+			return airFac;
+		}
 	}
 
 	return pick;

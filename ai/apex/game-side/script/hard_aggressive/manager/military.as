@@ -372,6 +372,12 @@ void UpdatePosture()
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
+	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask
+	// does nothing when MakeTask gives it nothing, and CIdleTask::Start is a
+	// no-op. The unit keeps no orders and stays where it was built. That is how
+	// the air force is held at home until Air::Release().
+	if (Air::HoldsUnit(unit))
+		return null;
 	return aiMilitaryMgr.DefaultMakeTask(unit);
 }
 

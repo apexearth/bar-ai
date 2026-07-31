@@ -1012,11 +1012,13 @@
 			},
 			"legvenator": {
 				"role": ["anti_air", "air"],
+				"retreat": 0.0,  // air-assassin strike is one-way; see manager/air.as
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legphoenix": {
 				"role": ["bomber", "air"],
+				"retreat": 0.0,  // air-assassin strike is one-way; see manager/air.as
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
