@@ -502,9 +502,12 @@
 			"legfeconv" : {
 				"role": ["static"]
 			},
+			// legmstor and legamstor already carry limit 1; this one did not. See the note
+			// on armuwadvms in behaviour.json for why `limit` is the only cap there is.
 			"leguwmstore" : {
 				"role": ["static"],
-				"since": 9999
+				"since": 9999,
+				"limit": 1
 			},
 			"legtide": {
 				"role": ["static"]

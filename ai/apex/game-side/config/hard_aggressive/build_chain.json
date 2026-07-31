@@ -136,14 +136,16 @@
 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 10}},
 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 14}},
 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 18}},
-						{"unit": "armmmkr", "category": "convert", "offset": [110, 110]},
-						{"unit": "armmmkr", "category": "convert", "offset": [110, -110]},
 						{"unit": "armflak", "category": "defence", "offset": {"front": 120}, "condition": {"air": true}}
 					],
-					// Separate chain so the jammer starts immediately instead of queueing behind
-					// seven other buildings. A fusion means energy is no longer the constraint,
-					// which is the only point at which armjamt's 8500e is cheap.
+					// Converters get their own chain for two reasons. Chain entries activate one
+					// at a time, so behind five nanos the first converter started minutes after
+					// the fusion did; and ~IBuilderTask deletes nextTask, so a nano that fails
+					// placement took every converter behind it with it.
+					// armfus makes 1000 e/s and armmmkr converts 600, so two cover it.
 					[
+						{"unit": "armmmkr", "category": "convert", "offset": [110, 110]},
+						{"unit": "armmmkr", "category": "convert", "offset": [110, -110]}
 					]
 				]
 			},
@@ -155,10 +157,6 @@
 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 28}},
 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 16}},
 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 20}},
-						{"unit": "armmmkr", "category": "convert", "offset": [120, 120]},
-						{"unit": "armmmkr", "category": "convert", "offset": [120, -120]},
-						{"unit": "armmmkr", "category": "convert", "offset": [150, 120]},
-						{"unit": "armmmkr", "category": "convert", "offset": [120, 150]},
 						// Was "armfmd", which is not a unit def - Armada's anti-nuke is armamd, and
 						// "fmd" only exists as the Cortex name. CBuilderManager::ReadConfig logs
 						// "has unknown UnitDef" and drops the entry, so this slot did nothing.
@@ -170,6 +168,15 @@
 					],
 					[
 						{"unit": "armjamt", "category": "defence", "offset": [-160, 0], "priority": "low"}
+					],
+					// armafus makes 3000 e/s, armmmkr converts 600, so five cover it. Own chain,
+					// same reasoning as armfus.
+					[
+						{"unit": "armmmkr", "category": "convert", "offset": [120, 120]},
+						{"unit": "armmmkr", "category": "convert", "offset": [120, -120]},
+						{"unit": "armmmkr", "category": "convert", "offset": [150, 120]},
+						{"unit": "armmmkr", "category": "convert", "offset": [120, 150]},
+						{"unit": "armmmkr", "category": "convert", "offset": [150, 150]}
 					]
 				]
 			},
@@ -203,13 +210,12 @@
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 10}},
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 14}},
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 18}},
-						{"unit": "cormmkr", "category": "convert", "offset": [110, 110]},
-						{"unit": "cormmkr", "category": "convert", "offset": [110, -110]},
 						{"unit": "corflak", "category": "defence", "offset": {"front": 120}, "condition": {"air": true}}
 					],
-					// Own chain so it starts at once; a fusion is the point where corjamt's 5200e
-					// stops competing with the rest of the build.
+					// corfus makes 1100 e/s and cormmkr converts 600. Own chain -- see armfus.
 					[
+						{"unit": "cormmkr", "category": "convert", "offset": [110, 110]},
+						{"unit": "cormmkr", "category": "convert", "offset": [110, -110]}
 					]
 				]
 			},
@@ -221,10 +227,6 @@
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 15}, "priority": "now", "condition": {"m_inc>": 28}},
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 20}, "priority": "now", "condition": {"m_inc>": 16}},
 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 25}, "priority": "now", "condition": {"m_inc>": 20}},
-						{"unit": "cormmkr", "category": "convert", "offset": [120, 120]},
-						{"unit": "cormmkr", "category": "convert", "offset": [120, -120]},
-						{"unit": "cormmkr", "category": "convert", "offset": [150, 120]},
-						{"unit": "cormmkr", "category": "convert", "offset": [120, 150]},
 						{"unit": "corfmd", "category": "defence", "offset": [180, 0]},
 						{"unit": "corflak", "category": "defence", "offset": {"front": 120}, "priority": "now"},
 						{"unit": "corflak", "category": "defence", "offset": {"front": 130}, "priority": "now"},
@@ -233,6 +235,14 @@
 					],
 					[
 						{"unit": "corjamt", "category": "defence", "offset": [-160, 0], "priority": "low"}
+					],
+					// corafus makes 3000 e/s; five cormmkr cover it. Own chain -- see armfus.
+					[
+						{"unit": "cormmkr", "category": "convert", "offset": [120, 120]},
+						{"unit": "cormmkr", "category": "convert", "offset": [120, -120]},
+						{"unit": "cormmkr", "category": "convert", "offset": [150, 120]},
+						{"unit": "cormmkr", "category": "convert", "offset": [120, 150]},
+						{"unit": "cormmkr", "category": "convert", "offset": [150, 150]}
 					]
 				]
 			}
