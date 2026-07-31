@@ -93,10 +93,38 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
   is ever retried. **suspect — do not rebuild without a fresh A/B**
 - **Mass before attacking**: attack quota grows 30 at 8 min → +3.5/min → cap 80.
   Stock attacks with whatever is to hand.
-- **Refuse bad trades**: hold when enemy threat exceeds 0.95x our army cost.
-  Calibrated from live ratios, not invented.
+- **The attack quota did nothing until the promote shortcut was closed.**
+  `CDefendTask::Update` promotes on
+  `(attackPower >= maxPower) || !GetTasks(check).empty()`, and `DefaultMakeTask`
+  builds the task with `check == ATTACK`. So the instant one attack task existed,
+  every DEFEND task handed its units over on the next tick holding one unit or
+  twenty — no value of `quota.attack` could close that. `Military::AiMakeTask`
+  now enqueues `TaskF::Defend(MELEE, ATTACK, quota.attack)` for the units stock
+  would route into the default branch; `MELEE` is a declared FightType nothing in
+  CircuitAI ever enqueues, so `GetTasks(MELEE)` is permanently empty and only the
+  mass test remains. Riot units with a live guard task, and support, keep stock
+  routing. **unmeasured — and it makes `TURTLE_ATTACK`/`MASS_CAP` load-bearing
+  for the first time, so those constants need a fresh read before they are
+  trusted.**
+- **Refuse bad trades** now compares metal to metal. It read
+  `aiEnemyMgr.mobileThreat` against `armyCost`, which are different units; across
+  eight 4v4 infologs that ratio logged **0.02–0.14** and never approached the 0.95
+  threshold, so the clause had never fired. It now uses `EnemyArmyCost()`, the
+  same `GetEnemyCost` sum `LosingGround()` already used. **unmeasured**
 - **Reactive turtling**: hold when our army value drops 18% in 20 s, resume at
   85% of the pre-collapse peak, max 6 min, not before 5 min (apexdef).
+  The hold itself fires and releases correctly — 7–22 HOLD/RESUME pairs per 40-min
+  4v4 — it simply had no grip on dispatch until the item above.
+- **Fodder is never grouped, and is bought while behind.** Cheap scout/raider
+  units (`costM < 100`: Tick 21, Rascal 26, Wheelie/Goblin 25, Rover 31, Grunt 42,
+  Pawn 54) skip the massing path entirely; cheap raiders also skip the
+  `Defend(RAID, quota.raid[0])` staging and go straight to a RAID task. Every
+  third "behind on the field" catch-up push now buys the cheapest body the
+  factory can make instead of the assault mainstay — about 7% of the metal, since
+  a Tick is 21 and a Hammer 130. Motivation, measured over the same eight
+  infologs: apex's standing cheap-unit value ran **3–6× below stock BARb's from
+  minute 14 on** (851 vs 3,727 at minute 18) while total army value was
+  comparable. **unmeasured**
 
 ### Economy
 - **Reclaim over resurrect**: rez bots are handed a wreck reclaim before
