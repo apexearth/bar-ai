@@ -201,6 +201,70 @@ bool PreferReclaim()
 	     < aiEconomyMgr.metal.storage * REZ_METAL_FLOOR;
 }
 
+// The engine's own build-site safety check is an AND of three terms
+// (BuilderManager::MakeBuilderTask): near-zero power in the thing being built,
+// hot threat map, AND influence already reading enemy-owned. Contested ground
+// no enemy structure has claimed yet fails the third, so the task stays
+// selectable and a constructor walks to it. This is the middle term alone.
+//
+// ai.GetBuilderThreatAt reads CThreatMap's BUILDER-role SURFACE layer: enemy
+// damage-vs-builder times sqrt(health), painted over each enemy's weapon range
+// and still half its peak at the rim -- so a covered tile reads in the hundreds
+// and an uncovered one reads zero, while an unidentified radar blip contributes
+// 0.1. 4.0 is THREAT_MIN * 4, the engine's own "an enemy holds this ground" bar
+// in MilitaryManager::DefaultMakeDefence. Surface means a pure AA turret adds
+// nothing here (AddEnemyUnit routes HasSurfToAir into the air layer), so this
+// does not answer "is it safe to fly a con here".
+const float CON_THREAT_VETO = 4.0f;
+
+int gConRefused = 0;
+int gConAbandoned = 0;
+int gNextConVetoLog = 0;
+
+// Empty means "not a build this rule covers". Defence, bunkers and big guns
+// belong at the front by definition, and this variant reclaims battlefields on
+// purpose, so none of them appear here.
+string SiteBuildName(IUnitTask@ task)
+{
+	if ((task is null) || (task.GetType() != Task::Type::BUILDER))
+		return "";
+	const int bt = task.GetBuildType();
+	if (bt == Task::BuildType::MEX)     return "mex";
+	if (bt == Task::BuildType::MEXUP)   return "mexup";
+	if (bt == Task::BuildType::ENERGY)  return "energy";
+	if (bt == Task::BuildType::GEO)     return "geo";
+	if (bt == Task::BuildType::GEOUP)   return "geoup";
+	if (bt == Task::BuildType::CONVERT) return "convert";
+	if (bt == Task::BuildType::STORE)   return "store";
+	if (bt == Task::BuildType::PYLON)   return "pylon";
+	if (bt == Task::BuildType::RADAR)   return "radar";
+	if (bt == Task::BuildType::SONAR)   return "sonar";
+	if (bt == Task::BuildType::NANO)    return "nano";
+	if (bt == Task::BuildType::FACTORY) return "factory";
+	return "";
+}
+
+float SiteThreat(IUnitTask@ task)
+{
+	const AIFloat3 where = task.GetBuildPos();
+	// -RgtVector is the engine's "no position", and GetBuilderThreatAt indexes
+	// the threat map with no range check in a release build.
+	if ((where.x < 0.f) || (where.z < 0.f))
+		return 0.f;
+	return ai.GetBuilderThreatAt(where);
+}
+
+void LogConVeto(CCircuitUnit@ unit, const string& in what,
+		const string& in kind, float threat)
+{
+	if (ai.frame < gNextConVetoLog)
+		return;
+	gNextConVetoLog = ai.frame + 5 * SECOND;
+	AiLog(Factory::T() + "apex: con-veto " + what + " " + unit.circuitDef.GetName()
+		+ " -> " + kind + " threat=" + formatFloat(threat, "", 0, 0)
+		+ " refused=" + gConRefused + " abandoned=" + gConAbandoned);
+}
+
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 // 	AiDelPoint(lastPos);
@@ -251,7 +315,8 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			return eat;
 	}
 
-	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
+	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	if (isComm) {
 		LogCommanderThreat(unit);
 		const float hp = unit.GetHealthPercent();
 		if (hp < COM_RETREAT_HEALTH) {
@@ -273,7 +338,40 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// the mex nanoframe -- IUnitTask exposes GetBuildPos() and the assigned
 		// builders, never the thing being built.
 	}
+	// Already walking to a site that is now inside enemy fire. IBuilderTask::
+	// Reevaluate calls this hook on every task update for as long as the builder
+	// is away from its build position, so the whole walk is covered -- but it
+	// swaps the unit's task only when what we hand back differs in build type,
+	// so a refusal here has to be a real task rather than null.
+	if (!isComm) {
+		IUnitTask@ held = unit.task;
+		const string kind = SiteBuildName(held);
+		if (kind != "") {
+			const float heat = SiteThreat(held);
+			if (heat > CON_THREAT_VETO) {
+				++gConAbandoned;
+				LogConVeto(unit, "abandon", kind, heat);
+				IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+				if (flee !is null)
+					return flee;
+			}
+		}
+	}
+
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+	// Refusing to accept the job in the first place. Reached from CIdleTask, where
+	// returning null simply leaves the unit idle until the next idle sweep.
+	if (!isComm) {
+		const string kind = SiteBuildName(task);
+		if (kind != "") {
+			const float heat = SiteThreat(task);
+			if (heat > CON_THREAT_VETO) {
+				++gConRefused;
+				LogConVeto(unit, "refuse", kind, heat);
+				@task = null;
+			}
+		}
+	}
 	// Observed: a commander stands next to reclaimable metal with an empty bank
 	// and keeps its build task instead of eating it. It is not IDLE -- it holds a
 	// task it cannot afford -- so the idle-only path below never fired. When
@@ -293,8 +391,8 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (task !is null)
 		return task;   // strictly additive: never displace real work
 
-	// Only an idle builder reaches here. Rate-limited so a field of idle
-	// builders does not each run their own scan every tick.
+	// Reached by an idle builder, and by one whose only offer was refused above.
+	// Rate-limited so a field of them does not each run their own scan every tick.
 	if (ai.frame < gNextWreck)
 		return task;
 	gNextWreck = ai.frame + 3 * SECOND;   // corpses decay; do not dawdle
