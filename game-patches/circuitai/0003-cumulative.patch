@@ -355,7 +355,7 @@ index a44c20b..c0ffaf4 100644
  		} break;
  		default: break;
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..acb8d19 100644
+index 2839b72..d0d9f17 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -195,6 +195,56 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
@@ -434,7 +434,18 @@ index 2839b72..acb8d19 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -573,6 +635,21 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +626,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+ 	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
++	// CCircuitDef is owned per CCircuitAI, so this scopes to one instance --
++	// unlike behaviour.json's retreat, which applies to every player.
++	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRetreat(float)", asMETHOD(CCircuitDef, SetRetreat), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRetreat() const", asMETHOD(CCircuitDef, GetRetreat), asCALL_THISCALL); ASSERT(r >= 0);
+ 
+ 	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
+@@ -573,6 +639,21 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -584,7 +595,7 @@ index fac55c7..81a7f68 100644
  	}
  	return true;
 diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
-index 9e6bfd8..2f44266 100644
+index 9e6bfd8..c785896 100644
 --- a/src/circuit/task/fighter/BombTask.cpp
 +++ b/src/circuit/task/fighter/BombTask.cpp
 @@ -5,6 +5,7 @@
@@ -622,6 +633,21 @@ index 9e6bfd8..2f44266 100644
  		return false;
  	}
  	return true;
+@@ -281,8 +291,13 @@ void CBombTask::FindTarget()
+ //		float altitude;
+ 		CCircuitDef* edef = enemy->GetCircuitDef();
+ 		if (edef != nullptr) {
++			// apex: ANTI_STAT skipped every mobile enemy, which excluded
++			// constructors -- the highest-value target for an eco raid. Builders
++			// and commanders stay eligible; other mobiles are still skipped.
++			const bool skipMobile = isAntiStatic && edef->IsMobile()
++					&& !edef->IsRoleBuilder() && !edef->IsRoleComm();
+ 			if ((edef->GetSpeed() > speed)
+-				|| (isAntiStatic && edef->IsMobile())
++				|| skipMobile
+ 				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore())
+ 			{
+ 				continue;
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
 index 0d59b65..27b6ab8 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp

@@ -314,12 +314,15 @@ bool HoldsUnit(CCircuitUnit@ unit)
 void Release(const string& in why)
 {
 	gStrike = true;
-	// ANTI_STAT makes CBombTask::FindTarget skip every mobile enemy, so the
-	// bombers pick only static targets -- the enemy's economy -- and fly past its
-	// army instead of trading with it. CCircuitDef is owned per CCircuitAI
-	// instance, so this changes nothing for our allies.
-	if (gBomber !is null)
+	// ANTI_STAT makes CBombTask::FindTarget skip enemy army but keep static eco,
+	// builders and commanders. CCircuitDef is owned per CCircuitAI instance, so
+	// this and the retreat below change nothing for our allies.
+	if (gBomber !is null) {
 		gBomber.AddAttribute(Unit::Attr::ANTI_STAT.type);
+		gBomber.SetRetreat(0.f);
+	}
+	if (gFighter !is null)
+		gFighter.SetRetreat(0.f);
 	AiLog(Factory::T() + "apex: air strike -- " + why
 		+ " bombers=" + Have(gBomber) + " fighters=" + Have(gFighter)
 		+ " enemyAA=" + formatFloat(EnemyAACost(), "", 0, 0));
