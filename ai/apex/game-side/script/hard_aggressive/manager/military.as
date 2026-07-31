@@ -715,6 +715,20 @@ const float AA_MAX_PCT   = 0.50f;
 const float AA_HEAVY_PER = 1500.f;
 const int   AA_HEAVY_MAX = 6;
 
+// Air is over-counted and ground under-counted by simple visibility: aircraft
+// fly over us constantly, ground sits in fog. Weight ground up, and average both
+// so a single overflight does not swing the answer.
+const float GROUND_UNSEEN  = 3.0f;
+const float AIR_AVG_SECONDS = 240.f;
+// Enemy air builders and scouts are counted as AIR. They cannot be separated
+// from ground ones by role, so discount by the most that could plausibly be air.
+const float SOFT_AIR_WEIGHT = 0.10f;
+// Cap the discount: enemy builders+scouts include ground ones, so an uncapped
+// subtraction erases a real bomber fleet. ~7 air constructors' worth.
+const float SOFT_AIR_CAP = 2500.f;
+float gAirAvg    = -1.f;
+float gGroundAvg = -1.f;
+
 int  gNextAirLog   = 0;
 bool gAAResolved   = false;
 CCircuitDef@ gFlak = null;   // the faction's flak turret
@@ -771,11 +785,29 @@ void UpdateAirThreat()
 {
 	ResolveHeavyAA();
 
-	const float air = aiEnemyMgr.GetEnemyCost(RT::AIR);
-	const float ground = EnemyGroundCost();
-	const float total = air + ground;
-	const float share = (total > 0.f) ? air / total : 0.f;
-	const bool worth = (air >= AA_IGNORE);
+	const float airRaw = aiEnemyMgr.GetEnemyCost(RT::AIR);
+	const float soft = aiEnemyMgr.GetEnemyCost(Unit::Role::BUILDER.type)
+	                 + aiEnemyMgr.GetEnemyCost(Unit::Role::SCOUT.type);
+	float softAir = (airRaw < soft) ? airRaw : soft;
+	if (softAir > SOFT_AIR_CAP)
+		softAir = SOFT_AIR_CAP;
+	float air = airRaw - softAir * (1.f - SOFT_AIR_WEIGHT);
+	if (air < 0.f)
+		air = 0.f;
+	const float ground = EnemyGroundCost() * GROUND_UNSEEN;
+
+	if (gAirAvg < 0.f) {
+		gAirAvg = air;
+		gGroundAvg = ground;
+	} else {
+		const float k = 1.f / AIR_AVG_SECONDS;
+		gAirAvg += (air - gAirAvg) * k;
+		gGroundAvg += (ground - gGroundAvg) * k;
+	}
+
+	const float total = gAirAvg + gGroundAvg;
+	const float share = (total > 0.f) ? gAirAvg / total : 0.f;
+	const bool worth = (gAirAvg >= AA_IGNORE);
 	const float scale = worth ? AirScale(share) : 0.f;
 
 	// factor is the divisor in RoleProbability's first gate: AA is built while
@@ -789,7 +821,7 @@ void UpdateAirThreat()
 	// before it can be scaled. Static AA below is real.
 
 	// count includes nanoframes, so a turret still building holds its own slot.
-	int heavyWant = int(air * scale / AA_HEAVY_PER);
+	int heavyWant = int(gAirAvg * scale / AA_HEAVY_PER);
 	if (heavyWant > AA_HEAVY_MAX)
 		heavyWant = AA_HEAVY_MAX;
 	const int heavyHave = LiveCount(gFlak) + LiveCount(gHeavy);
@@ -799,8 +831,9 @@ void UpdateAirThreat()
 
 	if (ai.frame >= gNextAirLog) {
 		gNextAirLog = ai.frame + 60 * SECOND;
-		AiLog(Factory::T() + "apexaa: air=" + formatFloat(air, "", 0, 0)
-			+ " ground=" + formatFloat(ground, "", 0, 0)
+		AiLog(Factory::T() + "apexaa: airRaw=" + formatFloat(airRaw, "", 0, 0)
+			+ " air=" + formatFloat(gAirAvg, "", 0, 0)
+			+ " ground=" + formatFloat(gGroundAvg, "", 0, 0)
 			+ " share=" + formatFloat(share, "", 0, 3)
 			+ " scale=" + formatFloat(scale, "", 0, 2)
 			+ " heavy=" + heavyHave + "/" + heavyWant);
