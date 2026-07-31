@@ -77,6 +77,20 @@ const int   ARMY_PUSH_SPACING = 3 * SECOND;
 int gNextArmyPush = 0;
 int gNextArmyLog = 0;
 
+// Every third catch-up push buys fodder instead of the assault mainstay.
+//
+// Measured over eight 4v4 infologs: apex's standing cheap-unit value (mobile,
+// armed, under 120 metal) runs 3-6x below stock BARb's from minute 14 on -- 851
+// against 3,727 at eighteen minutes -- while its total army value is comparable.
+// The factory weights are not the cause; they still carry 10-17% cheap. This
+// branch is: it overrides the configured mix every 3 seconds while behind, and
+// it only ever asks for ASSAULT.
+//
+// One in three REQUESTS is about 7% of the metal, because a Tick is 21 and a
+// Hammer 130. The stream of bodies is what is wanted, not the spend.
+const int   FODDER_EVERY = 3;
+int gArmyPushCount = 0;
+
 int gRushLead = -1;   // last lead this instance saw published
 bool gT1Reclaimed = false;   // one-shot: we fed our T1 lab into the plant
 
@@ -360,6 +374,22 @@ string leggant ("leggant");
 
 int switchInterval = MakeSwitchInterval();
 
+// The cheapest body THIS factory can actually make. Scout first, then raider:
+// armlab answers armflea, corlab has no scout unit and falls through to corak,
+// leglab answers leggob. Military::IsFodder is the gate, so a factory whose
+// cheapest option is not actually cheap returns null and the caller buys the
+// assault mainstay as before.
+CCircuitDef@ Fodder(const CCircuitDef@ facDef)
+{
+	CCircuitDef@ d = aiFactoryMgr.GetRoleDef(facDef, Unit::Role::SCOUT.type);
+	if (Military::IsFodder(d))
+		return d;
+	@d = aiFactoryMgr.GetRoleDef(facDef, Unit::Role::RAIDER.type);
+	if (Military::IsFodder(d))
+		return d;
+	return null;
+}
+
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 	// aiMilitaryMgr.quota.attack only caps how many units get SENT to attack; it
@@ -470,16 +500,20 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (isT1Fac && gHaveT2 && HaveT2Mex() && Military::LosingGround()
 		&& (ai.frame >= gNextArmyPush))
 	{
-		CCircuitDef@ mainstay = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::ASSAULT.type);
-		if (mainstay !is null) {
+		CCircuitDef@ want = null;
+		if ((++gArmyPushCount % FODDER_EVERY) == 0)
+			@want = Fodder(unit.circuitDef);
+		if (want is null)
+			@want = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::ASSAULT.type);
+		if (want !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
 					Task::RecruitType::FIREPOWER, Task::Priority::HIGH,
-					mainstay, unit.GetPos(ai.frame), 0.f));
+					want, unit.GetPos(ai.frame), 0.f));
 			if (rec !is null) {
 				gNextArmyPush = ai.frame + ARMY_PUSH_SPACING;
 				if (ai.frame >= gNextArmyLog) {
 					gNextArmyLog = ai.frame + 30 * SECOND;
-					AiLog(T() + "apex: behind on the field, massing " + mainstay.GetName()
+					AiLog(T() + "apex: behind on the field, massing " + want.GetName()
 						+ " army=" + formatFloat(aiMilitaryMgr.armyCost, "", 0, 0)
 						+ " enemyArmy=" + formatFloat(Military::EnemyArmyCost(), "", 0, 0));
 				}

@@ -26,7 +26,10 @@ const float LOSING_RATIO    = 0.82f;         // army fell to this share -> turtl
 // was losing. Capped so a hopeless position does not turtle forever.
 const float RECOVER_OF_PEAK = 0.85f;
 const int   TURTLE_MAX_HOLD = 6 * MINUTE;
-const float TURTLE_ATTACK   = 400.f;         // minAttackers while turtling
+// minAttackers while turtling. Deliberately NOT retuned alongside the AiMakeTask
+// change that finally puts it in force -- see the note there. Until then this is
+// a number picked when it could not bite, and it is the first thing to measure.
+const float TURTLE_ATTACK   = 400.f;
 const int   TURTLE_MIN_HOLD = 45 * SECOND;   // avoid flapping between postures
 // Six-match read: the only game that held at 6 min also teched latest (22.4m)
 // and lost, while all three clean wins never held and teched at 15.6-19.6m. An
@@ -262,16 +265,11 @@ const float MASS_PER_MIN = 3.5f;        // ~100 by 28 min
 // is capture territory THEN wall it, not wall an empty base. 80 still refuses
 // piecemeal trickle attacks while letting a real force move and take ground.
 const float MASS_CAP    = 80.f;
-// Calibrated from a live match rather than invented. mobileThreat and armyCost
-// are different units, so the ratio has no natural 1.0 parity point; measured
-// values were 0.82 at 8 min (when we are relatively weakest), then 0.20-0.35
-// once our army out-massed theirs. 0.70 therefore holds through the early
-// window where trading is worst and releases once we are clearly ahead --
-// which is exactly this variant's plan: let them come to the defences first.
-// Was 0.70, which held through most of the game given measured ratios of
-// 0.20-0.82. Combined with the mass cap it meant almost never attacking. 0.95
-// still refuses fights where they clearly out-mass us -- the thing worth
-// avoiding -- without conceding the map by default.
+// Now a metal-vs-metal ratio, so 1.0 is a real parity point. It used to compare
+// aiEnemyMgr.mobileThreat against armyCost; across eight 4v4 infologs that ratio
+// logged 0.02-0.14 and never once approached 0.95, so the clause below could not
+// fire and "refuse bad trades" did nothing all game. EnemyArmyCost() sums
+// GetEnemyCost over the fighting roles, which is the same unit as armyCost.
 const float ATTACK_EDGE = 0.95f;
 int gNextMassLog = 0;
 
@@ -294,13 +292,8 @@ void UpdateMassing()
 	// When they out-mass us, demand a bigger mass before moving, which in
 	// practice means holding behind the defences and continuing to build while
 	// they break themselves on static defence.
-	//
-	// mobileThreat and armyCost are different units (threat vs metal), so the
-	// ratio is NOT calibrated yet -- hence the log line. Read it from a real
-	// match before tuning ATTACK_EDGE; guessing at a constant has gone badly
-	// several times in this project.
 	const float ours = aiMilitaryMgr.armyCost;
-	const float theirs = aiEnemyMgr.mobileThreat;
+	const float theirs = EnemyArmyCost();
 	if ((ours > 0.f) && (theirs > ours * ATTACK_EDGE)) {
 		want = MASS_CAP;   // hold: let them come to the defences instead
 	}
@@ -308,7 +301,7 @@ void UpdateMassing()
 		gNextMassLog = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: mass want=" + formatFloat(want, "", 0, 0)
 			+ " army=" + formatFloat(ours, "", 0, 0)
-			+ " enemyThreat=" + formatFloat(theirs, "", 0, 0)
+			+ " enemyArmy=" + formatFloat(theirs, "", 0, 0)
 			+ " ratio=" + formatFloat((ours > 0.f) ? theirs / ours : 0.f, "", 0, 2));
 	}
 	if (aiMilitaryMgr.quota.attack < want)
@@ -370,8 +363,70 @@ void UpdatePosture()
 	}
 }
 
+//------------------------------------------------------------------------------
+// Why raising quota.attack never produced a mass.
+//
+// A unit that should mass is parked in a DEFEND task that promotes to ATTACK.
+// CDefendTask::Update promotes on
+//     (attackPower >= maxPower) || !GetTasks(check).empty()
+// and DefaultMakeTask builds that task with check == ATTACK. So the moment one
+// attack task exists anywhere, every DEFEND task hands its units over on its
+// next tick holding one unit or twenty -- the quota is bypassed by the second
+// clause, and no value of it can close the gap. That is the trickle.
+//
+// TaskF::Defend's three-argument form lets us choose `check`. MELEE is a
+// declared FightType that nothing in CircuitAI ever enqueues, so GetTasks(MELEE)
+// is permanently empty and promotion is left with only the mass test.
+//
+// The power passed here is superseded within 5s: UpdateDefenceTasks rewrites
+// maxPower to max(minAttackers, PreMaxGroupThreat) for every DEFEND task that
+// promotes to ATTACK, which is the value DefaultMakeTask would have used.
+//------------------------------------------------------------------------------
+
+// Fodder is exempt. apexearth: "we don't care about grouping these up ... they
+// are fodder." Holding a 21-metal Tick back to build a mass buys nothing; its
+// job is vision and pulled fire, and both only happen forward. Cost AND role,
+// so a cheap AA or bomber is not swept in: the units meant here are Tick
+// (armflea 21), Rascal (corfav 26), Wheelie (legscout 25), Rover (armfav 31),
+// Grunt (corak 42) and Pawn (armpw 54).
+const float FODDER_COST = 100.f;
+
+bool IsFodder(const CCircuitDef@ cdef)
+{
+	return (cdef !is null) && (cdef.costM < FODDER_COST)
+		&& cdef.IsRoleAny(Unit::Role::SCOUT.mask | Unit::Role::RAIDER.mask);
+}
+
+// True for the units DefaultMakeTask would route into Defend(ATTACK, ...).
+// That is its default branch -- every role absent from its role->fight-type map,
+// which is assault, skirmish and the custom roles bound to assault -- plus riot
+// when no guard task can take the unit. Everything else keeps stock routing.
+bool WantsMassing(const CCircuitDef@ cdef)
+{
+	if (cdef.IsRoleAny(Unit::Role::SCOUT.mask | Unit::Role::SUPPORT.mask))
+		return false;
+	const Type role = ai.GetBindedRole(cdef.GetMainRole());
+	if (role == RT::RIOT)
+		return aiMilitaryMgr.GetGuardTaskNum() == 0;
+	return (role != RT::RAIDER) && (role != RT::ARTY) && (role != RT::AA)
+		&& (role != RT::AH) && (role != RT::BOMBER) && (role != RT::MINE)
+		&& (role != RT::SUPER) && (role != RT::SCOUT) && (role != RT::SUPPORT);
+}
+
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
+	const CCircuitDef@ cdef = unit.circuitDef;
+	if (IsFodder(cdef)) {
+		// Scouts already get an ungrouped SCOUT task from stock. Raiders are
+		// first parked in Defend(RAID, quota.raid[0]); skip straight past that.
+		if (cdef.IsRoleAny(Unit::Role::RAIDER.mask))
+			return aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::RAID));
+		return aiMilitaryMgr.DefaultMakeTask(unit);
+	}
+	if (WantsMassing(cdef)) {
+		return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+				Task::FightType::ATTACK, aiMilitaryMgr.quota.attack));
+	}
 	return aiMilitaryMgr.DefaultMakeTask(unit);
 }
 
