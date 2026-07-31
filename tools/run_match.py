@@ -84,6 +84,7 @@ class MatchResult:
     desync: bool = False
     crashed: bool = False
     ai_errors: list[str] = field(default_factory=list)
+    script_errors: list[str] = field(default_factory=list)
 
     @property
     def game_minutes(self) -> float:
@@ -319,6 +320,12 @@ def parse_infolog(text: str, result: MatchResult) -> MatchResult:
     for line in text.splitlines():
         if "SkirmishAI" in line and ("error" in line.lower() or "exception" in line.lower()):
             result.ai_errors.append(line.strip()[:300])
+    # An AngelScript compile error disables the variant while the match still
+    # runs to completion and reports a normal winner. The loop above cannot see
+    # it: the engine writes "Skirmish AI" with a space, and the severity is
+    # "ERR", so neither substring test matches. Three 40-minute runs were read as
+    # results before this was noticed.
+    result.script_errors = re.findall(r"[A-Za-z_]+\.as \(\d+, \d+\) : ERR.{0,160}", text)
     return result
 
 
@@ -479,6 +486,8 @@ def run(args) -> int:
             "desync": result.desync,
             "crashed": result.crashed,
             "ai_errors": result.ai_errors[:10],
+            "script_errors": result.script_errors[:10],
+            "valid": not result.script_errors,
         },
         "replay": demo.name if demo else None,
         "stats": stats,
@@ -498,6 +507,14 @@ def run(args) -> int:
               f"-- see {outdir / 'infolog.txt'}")
     for e in result.ai_errors[:3]:
         print(f"ai error {e}")
+    if result.script_errors:
+        print()
+        print("*** RUN INVALID -- AngelScript failed to compile ***")
+        print("    The variant was disabled; it played as near-stock and still")
+        print("    reported a winner. Do not read any number from this run.")
+        for e in result.script_errors[:5]:
+            print(f"    {e}")
+        return 2
     return 0
 
 
