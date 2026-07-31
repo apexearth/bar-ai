@@ -627,16 +627,26 @@ index 193efa9..954669b 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..8c01353 100644
+index 2839b72..7fa4506 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
-@@ -195,6 +195,61 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +195,71 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
 +static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 +{
 +	unit->CmdMoveTo(pos);
++}
++
++static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
++{
++	unit->CmdRepeat(repeat);
++}
++
++static AIFloat3 CEnemyManager_GetEnemyPos(CEnemyManager* mgr)
++{
++	return mgr->GetEnemyPos();
 +}
 +
 +static float CCircuitAI_GetUnitThreatAt(CCircuitAI* circuit, CCircuitUnit* unit, const AIFloat3& pos)
@@ -692,7 +702,7 @@ index 2839b72..8c01353 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -499,6 +554,19 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -499,6 +564,19 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	gIdArrayType = engine->GetTypeInfoByDecl("array<Id>");
  	r = engine->RegisterObjectMethod("CCircuitAI", "array<Id>@ GetTeamIds() const", asFUNCTION(CCircuitAI_GetTeamIds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -712,7 +722,7 @@ index 2839b72..8c01353 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -564,6 +632,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +642,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -720,10 +730,23 @@ index 2839b72..8c01353 100644
 +	// unlike behaviour.json's retreat, which applies to every player.
 +	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRetreat(float)", asMETHOD(CCircuitDef, SetRetreat), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRetreat() const", asMETHOD(CCircuitDef, GetRetreat), asCALL_THISCALL); ASSERT(r >= 0);
++	// Rule a def out entirely. IsAvailable() is maxThisUnit > count, so zero makes
++	// every availability check fail wherever it is asked -- factory weights, build
++	// chains, role lookups -- rather than needing each of them taught a new rule.
++	r = engine->RegisterObjectMethod("CCircuitDef", "void SetMaxThisUnit(int)", asMETHOD(CCircuitDef, SetMaxThisUnit), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "int GetMaxThisUnit() const", asMETHOD(CCircuitDef, GetMaxThisUnit), asCALL_THISCALL); ASSERT(r >= 0);
++	// Surface class, so script can ask what a unit needs water FOR. Hover is
++	// isSurfer, not isAmphibious -- CircuitDef::fillSurface carries a standing
++	// FIXME that it cannot filter hover out, and classifies it by elevation range
++	// instead: below water and high above it.
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAmphibious() const", asMETHOD(CCircuitDef, IsAmphibious), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsFloater() const", asMETHOD(CCircuitDef, IsFloater), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsSurfer() const", asMETHOD(CCircuitDef, IsSurfer), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsSubmarine() const", asMETHOD(CCircuitDef, IsSubmarine), asCALL_THISCALL); ASSERT(r >= 0);
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +645,17 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +668,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -733,6 +756,9 @@ index 2839b72..8c01353 100644
 +	// retreat task substitutes for everything it would otherwise build. A raw
 +	// command moves the unit without consuming its task slot.
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	// A factory told to repeat re-queues what it finishes, so a spam lab keeps
++	// producing instead of waiting to be handed each unit as a separate task.
++	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdRepeat(bool)", asFUNCTION(CCircuitUnit_CmdRepeat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	// Health is the missing half of "is this risky". Threat alone said commanders
 +	// die where the map reads ZERO, because the killer is often at range -- the
 +	// last plasma shots landing on a commander already running. Health loss is
@@ -741,6 +767,16 @@ index 2839b72..8c01353 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
+@@ -703,6 +812,9 @@ void CInitScript::RegisterMgr()
+ 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
++	// Centroid of the enemy groups we can see. Noisy by nature -- raiders in our
++	// own base pull it backwards -- so it suits a rally point, not a facing.
++	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyPos() const", asFUNCTION(CEnemyManager_GetEnemyPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
+ 
+ 	CThreatMap* thrMap = circuit->GetThreatMap();
 diff --git a/src/circuit/setup/SetupData.cpp b/src/circuit/setup/SetupData.cpp
 index b0cbe19..5bab20e 100644
 --- a/src/circuit/setup/SetupData.cpp
@@ -815,7 +851,7 @@ index 4863ac9..e509c6d 100644
  	void ReadConfig();
  	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..662af4a 100644
+index bc8ff11..1c559d0 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -20,6 +20,7 @@
@@ -826,7 +862,7 @@ index bc8ff11..662af4a 100644
  #include "unit/action/DGunAction.h"
  #include "unit/action/CaptureAction.h"
  #include "unit/action/FightAction.h"
-@@ -645,15 +646,17 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -645,15 +646,26 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  
  void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  {
@@ -837,13 +873,22 @@ index bc8ff11..662af4a 100644
 -	float terHeight = terrainMgr->GetTerrainHeight();
 -	if (std::fabs(terWidth - 2 * pos.x) > std::fabs(terHeight - 2 * pos.z)) {
 -		facing = (2 * pos.x > terWidth) ? UNIT_FACING_WEST : UNIT_FACING_EAST;
-+	// Face the enemy, not the map centre. BuildPos rotates build_chain.json's
++	// Face the front, not the map centre. BuildPos rotates build_chain.json's
 +	// `front` offset by this facing, so it decides which side of a parent its
-+	// children land on. CEnemyManager reports the terrain centre until an enemy
-+	// is located, which is exactly the geometric behaviour this replaces.
-+	const AIFloat3& target = manager->GetCircuit()->GetEnemyManager()->GetEnemyPos();
-+	const float dx = target.x - pos.x;
-+	const float dz = target.z - pos.z;
++	// children land on.
++	//
++	// Measured from OUR BASE to the enemy, not from the building being placed.
++	// GetEnemyPos is a centroid of observed enemy groups, so raiders inside our
++	// own territory drag it behind us -- and then a building placed past it faces
++	// backwards. Observed live: a gantry near mid-map pointing home. Anchoring on
++	// the base gives every building the same "toward the enemy side" orientation,
++	// which is also what a human does. Before an enemy is seen CEnemyManager
++	// reports the terrain centre, reproducing the geometric behaviour replaced.
++	CCircuitAI* circuit = manager->GetCircuit();
++	const AIFloat3& target = circuit->GetEnemyManager()->GetEnemyPos();
++	const AIFloat3& from = circuit->GetSetupManager()->GetBasePos();
++	const float dx = target.x - from.x;
++	const float dz = target.z - from.z;
 +	if (std::fabs(dx) > std::fabs(dz)) {
 +		facing = (dx < 0) ? UNIT_FACING_WEST : UNIT_FACING_EAST;
  	} else {
@@ -852,7 +897,7 @@ index bc8ff11..662af4a 100644
  	}
  }
  
-@@ -799,6 +802,8 @@ void IBuilderTask::ExecuteChain(SBuildChain* chain)
+@@ -799,6 +811,8 @@ void IBuilderTask::ExecuteChain(SBuildChain* chain)
  							isSensor = [](CCircuitDef* cdef) { return cdef->IsRadar(); };
  						} else if (bi.cdef->IsSonar()) {
  							isSensor = [](CCircuitDef* cdef) { return cdef->IsSonar(); };
@@ -915,6 +960,81 @@ index fac55c7..81a7f68 100644
  		return false;
  	}
  	return true;
+diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
+index cd063e4..02f2452 100644
+--- a/src/circuit/task/fighter/AttackTask.cpp
++++ b/src/circuit/task/fighter/AttackTask.cpp
+@@ -25,12 +25,23 @@
+ #include "spring/SpringMap.h"
+ 
+ #include "AISCommands.h"
++#include "Log.h"
+ 
+ namespace circuit {
+ 
+ using namespace springai;
+ using namespace terrain;
+ 
++// How much more an attack path pays for threatened ground than any other path.
++//
++// maxThreat is only a CEILING -- it refuses tiles above it, and a strong squad
++// gets a high one, so the cheapest route stays the short one straight up the
++// middle. What decides the shape of the route is the per-tile cost, which was a
++// flat 2x threat for every query in the AI. Attacks now pay far more for
++// defended ground, so a longer quiet route wins on cost. That is what going
++// round the edge is: the middle is where the defences are.
++static constexpr float ATTACK_THREAT_MOD = 4.f;
++
+ CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
+ 		: ISquadTask(mgr, FightType::ATTACK, powerMod)
+ 		, minPower(minPower)
+@@ -208,7 +219,8 @@ void CAttackTask::Update()
+ 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
+ 			leader, circuit->GetThreatMap(),
+ 			startPos, endPos, pathRange, GetHitTest(),
+-			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
++			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale(),
++			false, ATTACK_THREAT_MOD);
+ 	pathQueries[leader] = query;
+ 
+ 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
+@@ -340,6 +352,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+ 	pPath = query->GetPathInfo();
+ 
+ 	if (!pPath->posPath.empty()) {
++		// Whether the squad went round or straight through is otherwise invisible:
++		// walked/direct near 1.0 is a charge up the middle, well above 1.0 is a
++		// flank. Rate limited because attack paths are re-queried constantly.
++		CCircuitAI* circuit = manager->GetCircuit();
++		if (circuit->GetLastFrame() >= lastDetourLog + FRAMES_PER_SEC * 20) {
++			lastDetourLog = circuit->GetLastFrame();
++			const AIFloat3& from = pPath->posPath.front();
++			const AIFloat3& to = pPath->posPath.back();
++			float walked = 0.f;
++			for (size_t i = 1; i < pPath->posPath.size(); ++i) {
++				walked += pPath->posPath[i - 1].distance2D(pPath->posPath[i]);
++			}
++			const float direct = from.distance2D(to);
++			if (direct > 1.f) {
++				circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f",
++						walked, direct, walked / direct);
++			}
++		}
+ 		ActivePath(lowestSpeed);
+ 	} else {
+ 		FallbackFrontPos();
+diff --git a/src/circuit/task/fighter/AttackTask.h b/src/circuit/task/fighter/AttackTask.h
+index 8585fc2..1f1b1a2 100644
+--- a/src/circuit/task/fighter/AttackTask.h
++++ b/src/circuit/task/fighter/AttackTask.h
+@@ -36,6 +36,7 @@ private:
+ 	void Fallback();
+ 
+ 	float minPower;
++	int lastDetourLog = -1000000;
+ };
+ 
+ } // namespace circuit
 diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
 index 9e6bfd8..c785896 100644
 --- a/src/circuit/task/fighter/BombTask.cpp
@@ -969,6 +1089,170 @@ index 9e6bfd8..c785896 100644
  				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore())
  			{
  				continue;
+diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
+index 9af0698..9f39c1f 100644
+--- a/src/circuit/task/fighter/RaidTask.cpp
++++ b/src/circuit/task/fighter/RaidTask.cpp
+@@ -24,12 +24,72 @@
+ #include "spring/SpringMap.h"
+ 
+ #include "AISCommands.h"
++#include "Log.h"
+ 
+ namespace circuit {
+ 
+ using namespace springai;
+ using namespace terrain;
+ 
++// Raids are where this AI's aggression actually lives, so this is the constant
++// that decides whether it goes round or straight up the middle. maxThreat is
++// only a ceiling; the per-tile cost is what shapes the route, and it was a flat
++// 2x threat for every query in the AI -- a builder walking to a mex valued
++// danger exactly as an army walking to the enemy base. apexearth: "AI prefers to
++// attack through center, and usually humans will kill AI by attacking around the
++// edges slowly over time."
++static constexpr float RAID_THREAT_MOD = 4.f;
++
++// Going round, rather than hoping a cost function discovers it.
++//
++// Weighting threat in the path cost was tried first and measured: 138 raid paths
++// came back with walked/direct between 1.00 and 1.08, i.e. straight lines. The
++// threat map is near-zero except right beside enemy units, so there is no
++// gradient across the middle to climb and distance always wins. A flank has to be
++// asked for explicitly.
++//
++// Pick a waypoint pushed sideways off the straight line, on whichever side is
++// quieter, then raid the real targets once it is reached.
++static constexpr float FLANK_MIN_DIST = 2000.f;  // shorter raids go straight
++static constexpr float FLANK_OFFSET   = 1800.f;  // how far off the line to swing
++static constexpr float FLANK_MARGIN   = 400.f;   // stay off the very edge
++static constexpr float FLANK_REACHED  = 700.f;
++
++static AIFloat3 ChooseFlankPos(CCircuitAI* circuit, const AIFloat3& from, const AIFloat3& to)
++{
++	if (from.distance2D(to) < FLANK_MIN_DIST) {
++		return -RgtVector;
++	}
++	AIFloat3 dir = to - from;
++	dir.y = 0.f;
++	if (dir.SqLength2D() < 1.f) {
++		return -RgtVector;
++	}
++	dir.Normalize2D();
++	const AIFloat3 perp(-dir.z, 0.f, dir.x);
++	const AIFloat3 mid = (from + to) * 0.5f;
++
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	const float w = terrainMgr->GetTerrainWidth();
++	const float h = terrainMgr->GetTerrainHeight();
++	CThreatMap* threatMap = circuit->GetThreatMap();
++
++	AIFloat3 best = -RgtVector;
++	float bestThreat = std::numeric_limits<float>::max();
++	for (int side = -1; side <= 1; side += 2) {
++		AIFloat3 cand = mid + perp * (FLANK_OFFSET * float(side));
++		cand.x = std::max(FLANK_MARGIN, std::min(w - FLANK_MARGIN, cand.x));
++		cand.z = std::max(FLANK_MARGIN, std::min(h - FLANK_MARGIN, cand.z));
++		cand.y = circuit->GetMap()->GetElevationAt(cand.x, cand.z);
++		const float threat = threatMap->GetThreatAt(cand);
++		if (threat < bestThreat) {
++			bestThreat = threat;
++			best = cand;
++		}
++	}
++	return best;
++}
++
+ CRaidTask::CRaidTask(ITaskModule* mgr, float maxPower, float powerMod)
+ 		: ISquadTask(mgr, FightType::RAID, powerMod)
+ 		, maxPower(maxPower)
+@@ -206,11 +266,42 @@ void CRaidTask::Update()
+ 	const AIFloat3& startPos = leader->GetPos(frame);
+ 	const float pathRange = std::max(std::min(cdef->GetMaxRange(), cdef->GetLosRadius()), (float)threatMap->GetSquareSize());
+ 
++	const F3Vec& realTargets = !urgentPositions.empty() ? urgentPositions : enemyPositions;
++	F3Vec flankTargets;
++	const F3Vec* targets = &realTargets;
++	if (!flankDone && !realTargets.empty()) {
++		if (!flankSet) {
++			flankPos = ChooseFlankPos(circuit, startPos, realTargets.front());
++			flankSet = true;
++			if (!utils::is_valid(flankPos)) {
++				flankDone = true;  // too close to be worth going round
++			}
++		}
++		if (!flankDone) {
++			if (startPos.SqDistance2D(flankPos) < SQUARE(FLANK_REACHED)) {
++				flankDone = true;  // out on the flank; turn in
++			} else {
++				flankTargets.push_back(flankPos);
++				targets = &flankTargets;
++				// The detour ratio cannot show this: the leg TO the waypoint is
++				// itself a straight path, so walked/direct stays ~1.0 while the
++				// journey as a whole goes round. Log the decision instead.
++				if (circuit->GetLastFrame() >= lastFlankLog + FRAMES_PER_SEC * 20) {
++					lastFlankLog = circuit->GetLastFrame();
++					const AIFloat3& tgt = realTargets.front();
++					circuit->LOG("apex: raid flank via (%.0f,%.0f) instead of straight to (%.0f,%.0f), lateral=%.0f",
++							flankPos.x, flankPos.z, tgt.x, tgt.z, startPos.distance2D(flankPos));
++				}
++			}
++		}
++	}
++
+ 	CPathFinder* pathfinder = circuit->GetPathfinder();
+ 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
+ 			leader, threatMap,
+-			startPos, pathRange, !urgentPositions.empty() ? urgentPositions : enemyPositions, GetHitTest(), true,
+-			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
++			startPos, pathRange, *targets, GetHitTest(), true,
++			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale(),
++			false, RAID_THREAT_MOD);
+ 	pathQueries[leader] = query;
+ 
+ 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
+@@ -392,7 +483,25 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
+ {
+ 	pPath = query->GetPathInfo();
+ 
++	if (pPath->posPath.empty() && !flankDone) {
++		flankDone = true;  // cannot reach the flank point; go straight rather than stall
++	}
+ 	if (!pPath->posPath.empty()) {
++		// walked/direct near 1.0 is a charge up the middle; well above 1.0 is a
++		// flank. Without this the route shape is invisible in a log.
++		CCircuitAI* circuit = manager->GetCircuit();
++		if (circuit->GetLastFrame() >= lastDetourLog + FRAMES_PER_SEC * 20) {
++			lastDetourLog = circuit->GetLastFrame();
++			float walked = 0.f;
++			for (size_t i = 1; i < pPath->posPath.size(); ++i) {
++				walked += pPath->posPath[i - 1].distance2D(pPath->posPath[i]);
++			}
++			const float direct = pPath->posPath.front().distance2D(pPath->posPath.back());
++			if (direct > 1.f) {
++				circuit->LOG("apex: raid path walked=%.0f direct=%.0f detour=%.2f",
++						walked, direct, walked / direct);
++			}
++		}
+ 		position = pPath->posPath.back();
+ 		ActivePath();
+ 	} else {
+diff --git a/src/circuit/task/fighter/RaidTask.h b/src/circuit/task/fighter/RaidTask.h
+index ec833e6..2413351 100644
+--- a/src/circuit/task/fighter/RaidTask.h
++++ b/src/circuit/task/fighter/RaidTask.h
+@@ -34,6 +34,11 @@ private:
+ 	void ApplyRaidPath(const CQueryPathSingle* query);
+ 
+ 	float maxPower;
++	int lastDetourLog = -1000000;
++	int lastFlankLog = -1000000;
++	springai::AIFloat3 flankPos;
++	bool flankSet = false;
++	bool flankDone = false;
+ };
+ 
+ } // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
 index 0d59b65..27b6ab8 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
@@ -999,6 +1283,153 @@ index 0d59b65..27b6ab8 100644
  		validUnits.clear();
  		state = State::ROAM;
  		return false;
+diff --git a/src/circuit/terrain/path/PathFinder.cpp b/src/circuit/terrain/path/PathFinder.cpp
+index aef6e1e..a38e883 100644
+--- a/src/circuit/terrain/path/PathFinder.cpp
++++ b/src/circuit/terrain/path/PathFinder.cpp
+@@ -264,12 +264,13 @@ AIFloat3 CPathFinder::PathIndex2Pos(int index) const
+ std::shared_ptr<IPathQuery> CPathFinder::CreatePathSingleQuery(
+ 		CCircuitUnit* unit, CThreatMap* threatMap,  // SetMapData
+ 		const AIFloat3& startPos, const AIFloat3& endPos, float maxRange,
+-		NSMicroPather::HitFunc&& hitTest, float maxThreat, bool endPosOnly)
++		NSMicroPather::HitFunc&& hitTest, float maxThreat, bool endPosOnly,
++		float threatMod)
+ {
+ 	std::shared_ptr<IPathQuery> pQuery = std::make_shared<CQueryPathSingle>(*this, MakeQueryId());
+ 	CQueryPathSingle* query = static_cast<CQueryPathSingle*>(pQuery.get());
+ 
+-	FillMapData(query, unit, threatMap, startPos.y);
++	FillMapData(query, unit, threatMap, startPos.y, threatMod);
+ 	query->InitQuery(startPos, endPos, maxRange, std::move(hitTest), maxThreat, endPosOnly);
+ 
+ 	return pQuery;
+@@ -278,12 +279,13 @@ std::shared_ptr<IPathQuery> CPathFinder::CreatePathSingleQuery(
+ std::shared_ptr<IPathQuery> CPathFinder::CreatePathMultiQuery(
+ 		CCircuitUnit* unit, CThreatMap* threatMap,  // SetMapData
+ 		const AIFloat3& startPos, float maxRange, const F3Vec& possibleTargets,
+-		NSMicroPather::HitFunc&& hitTest, bool withGoal, float maxThreat, bool endPosOnly)
++		NSMicroPather::HitFunc&& hitTest, bool withGoal, float maxThreat, bool endPosOnly,
++		float threatMod)
+ {
+ 	std::shared_ptr<IPathQuery> pQuery = std::make_shared<CQueryPathMulti>(*this, MakeQueryId());
+ 	CQueryPathMulti* query = static_cast<CQueryPathMulti*>(pQuery.get());
+ 
+-	FillMapData(query, unit, threatMap, startPos.y);
++	FillMapData(query, unit, threatMap, startPos.y, threatMod);
+ 	query->InitQuery(startPos, maxRange, possibleTargets, std::move(hitTest), withGoal, maxThreat, endPosOnly);
+ 
+ 	return pQuery;
+@@ -468,7 +470,7 @@ CostFunc CPathFinder::GetMoveFun(MoveType mt, const CCircuitDef* cdef, float*& o
+ 	return moveFun;
+ }
+ 
+-CostFunc CPathFinder::GetThreatFun(MoveType mt, const CCircuitDef* cdef, CThreatMap* threatMap, float*& outThreatArray) const
++CostFunc CPathFinder::GetThreatFun(MoveType mt, const CCircuitDef* cdef, CThreatMap* threatMap, float*& outThreatArray, float threatMod) const
+ {
+ 	float* threatArray;
+ 	CostFunc threatFun;
+@@ -477,39 +479,39 @@ CostFunc CPathFinder::GetThreatFun(MoveType mt, const CCircuitDef* cdef, CThreat
+ 			threatArray = cdef->IsAbleToSwim()  // cloak doesn't work under water
+ 					? threatMap->GetSwimThreatArray(cdef->GetMainRole())
+ 					: threatMap->GetAmphThreatArray(cdef->GetMainRole());
+-			threatFun = [threatArray](int index) {
+-				return 2.f * threatArray[index];
++			threatFun = [threatArray, threatMod](int index) {
++				return threatMod * 2.f * threatArray[index];
+ 			};
+ 		} break;
+ 		case MoveType::CLOAK: {
+ 			threatArray = threatMap->GetCloakThreatArray();
+-			threatFun = [threatArray](int index) {
+-				return threatArray[index];
++			threatFun = [threatArray, threatMod](int index) {
++				return threatMod * threatArray[index];
+ 			};
+ 		} break;
+ 		case MoveType::AIR: {
+ 			threatArray = threatMap->GetAirThreatArray(cdef->GetMainRole());
+-			threatFun = [threatArray](int index) {
+-				return 2.f * threatArray[index];
++			threatFun = [threatArray, threatMod](int index) {
++				return threatMod * 2.f * threatArray[index];
+ 			};
+ 		} break;
+ 		case MoveType::SWIM: {
+ 			threatArray = threatMap->GetSwimThreatArray(cdef->GetMainRole());
+-			threatFun = [threatArray](int index) {
+-				return 2.f * threatArray[index];
++			threatFun = [threatArray, threatMod](int index) {
++				return threatMod * 2.f * threatArray[index];
+ 			};
+ 		} break;
+ 		case MoveType::DIVE: {
+ 			threatArray = threatMap->GetAmphThreatArray(cdef->GetMainRole());
+-			threatFun = [threatArray](int index) {
+-				return 2.f * threatArray[index];
++			threatFun = [threatArray, threatMod](int index) {
++				return threatMod * 2.f * threatArray[index];
+ 			};
+ 		} break;
+ 		default:
+ 		case MoveType::SURF: {
+ 			threatArray = threatMap->GetSurfThreatArray(cdef->GetMainRole());
+-			threatFun = [threatArray](int index) {
+-				return 2.f * threatArray[index];
++			threatFun = [threatArray, threatMod](int index) {
++				return threatMod * 2.f * threatArray[index];
+ 			};
+ 		} break;
+ 	}
+@@ -525,13 +527,13 @@ void CPathFinder::FillMapData(IPathQuery* query, CCircuitUnit* unit, const CCirc
+ 	query->Init(moveArray, nullptr, std::move(moveFun), nullptr, unit);
+ }
+ 
+-void CPathFinder::FillMapData(IPathQuery* query, CCircuitUnit* unit, CThreatMap* threatMap, float elevation)
++void CPathFinder::FillMapData(IPathQuery* query, CCircuitUnit* unit, CThreatMap* threatMap, float elevation, float threatMod)
+ {
+ 	MoveType mt = GetMoveType(unit, elevation);
+ 	float* moveArray;
+ 	float* threatArray;
+ 	CostFunc moveFun = GetMoveFun(mt, unit->GetCircuitDef(), moveArray);
+-	CostFunc threatFun = GetThreatFun(mt, unit->GetCircuitDef(), threatMap, threatArray);
++	CostFunc threatFun = GetThreatFun(mt, unit->GetCircuitDef(), threatMap, threatArray, threatMod);
+ 
+ 	query->Init(moveArray, threatArray, std::move(moveFun), std::move(threatFun), unit);
+ }
+diff --git a/src/circuit/terrain/path/PathFinder.h b/src/circuit/terrain/path/PathFinder.h
+index 023f029..23b9921 100644
+--- a/src/circuit/terrain/path/PathFinder.h
++++ b/src/circuit/terrain/path/PathFinder.h
+@@ -62,10 +62,12 @@ public:
+ 
+ 	std::shared_ptr<IPathQuery> CreatePathSingleQuery(CCircuitUnit* unit, CThreatMap* threatMap,
+ 			const springai::AIFloat3& startPos, const springai::AIFloat3& endPos, float maxRange,
+-			NSMicroPather::HitFunc&& hitTest = nullptr, float maxThreat = std::numeric_limits<float>::max(), bool endPosOnly = false);
++			NSMicroPather::HitFunc&& hitTest = nullptr, float maxThreat = std::numeric_limits<float>::max(), bool endPosOnly = false,
++			float threatMod = 1.f);
+ 	std::shared_ptr<IPathQuery> CreatePathMultiQuery(CCircuitUnit* unit, CThreatMap* threatMap,
+ 			const springai::AIFloat3& startPos, float maxRange, const F3Vec& possibleTargets,
+-			NSMicroPather::HitFunc&& hitTest = nullptr, bool withGoal = false, float maxThreat = std::numeric_limits<float>::max(), bool endPosOnly = false);
++			NSMicroPather::HitFunc&& hitTest = nullptr, bool withGoal = false, float maxThreat = std::numeric_limits<float>::max(), bool endPosOnly = false,
++			float threatMod = 1.f);
+ 	std::shared_ptr<IPathQuery> CreatePathWideQuery(CCircuitUnit* unit, const CCircuitDef* cdef,
+ 			const springai::AIFloat3& startPos, const springai::AIFloat3& endPos, const IndexVec& targets);
+ 	std::shared_ptr<IPathQuery> CreateCostMapQuery(CCircuitUnit* unit, CThreatMap* threatMap,
+@@ -97,9 +99,12 @@ private:
+ 	MoveType GetMoveType(CCircuitUnit* unit, float elevation) const;
+ 	MoveType GetMoveType(const CCircuitDef* cdef, float elevation) const;
+ 	NSMicroPather::CostFunc GetMoveFun(MoveType mt, const CCircuitDef* cdef, float*& outMoveArray) const;
+-	NSMicroPather::CostFunc GetThreatFun(MoveType mt, const CCircuitDef* cdef, CThreatMap* threatMap, float*& outThreatArray) const;
++	// threatMod scales the per-move-type threat cost. 1.0 leaves it as it was.
++	// Raising it buys a longer route with quieter ground, which is what makes an
++	// attack go round rather than straight up the middle.
++	NSMicroPather::CostFunc GetThreatFun(MoveType mt, const CCircuitDef* cdef, CThreatMap* threatMap, float*& outThreatArray, float threatMod = 1.f) const;
+ 	void FillMapData(IPathQuery* query, CCircuitUnit* unit, const CCircuitDef* cdef, float elevation);
+-	void FillMapData(IPathQuery* query, CCircuitUnit* unit, CThreatMap* threatMap, float elevation);
++	void FillMapData(IPathQuery* query, CCircuitUnit* unit, CThreatMap* threatMap, float elevation, float threatMod = 1.f);
+ 
+ 	void RunPathSingle(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete = nullptr);
+ 	void RunPathMulti(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete = nullptr);
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
 index a1ac882..15324db 100644
 --- a/src/circuit/unit/CircuitDef.cpp
@@ -1036,3 +1467,33 @@ index cd0b54a..08de77a 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
+diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
+index 2f597be..0e28e56 100644
+--- a/src/circuit/unit/CircuitUnit.cpp
++++ b/src/circuit/unit/CircuitUnit.cpp
+@@ -290,6 +290,13 @@ void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout)
+ //	unit->ExecuteCustomCommand(CMD_RAW_MOVE, {pos.x, pos.y, pos.z}, options, timeout);
+ }
+ 
++// A factory set to repeat re-queues what it finishes, so it keeps producing
++// without waiting to be handed the next task.
++void CCircuitUnit::CmdRepeat(bool repeat, short options, int timeout)
++{
++	unit->SetRepeat(repeat, options, timeout);
++}
++
+ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
+ {
+ //	assert(utils::is_in_map(pos));
+diff --git a/src/circuit/unit/CircuitUnit.h b/src/circuit/unit/CircuitUnit.h
+index cfe59bc..37d2080 100644
+--- a/src/circuit/unit/CircuitUnit.h
++++ b/src/circuit/unit/CircuitUnit.h
+@@ -131,6 +131,7 @@ public:
+ 
+ 	void CmdRemove(std::vector<float>&& params, short options = 0);
+ 	void CmdMoveTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
++	void CmdRepeat(bool repeat, short options = 0, int timeout = INT_MAX);
+ 	void CmdJumpTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
+ 	void CmdFightTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
+ 	void CmdPatrolTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);

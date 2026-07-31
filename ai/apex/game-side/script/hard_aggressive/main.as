@@ -40,6 +40,21 @@ void AiMain()
 		if (cdef !is null)
 			Factory::userData[cdef.id].attr |= Factory::Attr::T3;
 	}
+
+	// A map with a puddle of water does not justify amphibious units, which cost
+	// more than the land unit they displace and fight worse once ashore.
+	// apexearth: "if theres only a tiny bit of water in the map we shouldn't make
+	// any T1 or T2 amphibious tanks."
+	//
+	// GetLandPercent is 0-100 -- TerrainData scales the sector counts by
+	// 100/(convertStoHM^2). SetMaxThisUnit(0) makes IsAvailable() false at every
+	// site that asks -- factory weights, build chains, role lookups -- rather than
+	// each of them needing to learn a water rule.
+	// No dry-map unit disabling, deliberately. A name list missed every hovercraft;
+	// sweeping the surface class instead caught 128 defs, including ships that need
+	// a shipyard no dry map can host and hover/amphibious units that fight fine on
+	// land. Dropped as not worth the blast radius. The bindings exist if it is ever
+	// wanted: SetMaxThisUnit plus IsSurfer/IsFloater/IsAmphibious/IsSubmarine.
 }
 
 void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishAIId

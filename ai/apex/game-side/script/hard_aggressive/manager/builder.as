@@ -385,25 +385,72 @@ string leglht("leglht");
 string armpb("armpb");
 string corvipe("corvipe");
 string legapopupdef("legapopupdef");
+string armhlt("armhlt");
+string corhlt("corhlt");
+string armanni("armanni");
+string cordoom("cordoom");
+string legbastion("legbastion");
+
+CCircuitDef@ SideDef(const string& in side, const string& in arm,
+		const string& in cor, const string& in leg)
+{
+	if (side == "cortex")
+		return ai.GetCircuitDef(cor);
+	if (side == "legion")
+		return ai.GetCircuitDef(leg);
+	return ai.GetCircuitDef(arm);
+}
+
+bool Usable(CCircuitDef@ def)
+{
+	return (def !is null) && def.IsAvailable(ai.frame);
+}
+
+// Ranges, read from the unit defs 2026-07-31: llt 430, hlt 620, popup 730,
+// anni 1400 / bastion 1125 / doom 950. apexearth: "the popup turrets aren't
+// having enough range ... late game you kinda only want the T3 defenses."
+//
+// The 4,800-range batteries (armbrtha/corint/leglrpc) and the 68,000-metal
+// superweapons are deliberately NOT here. apexearth: "long range and super are
+// more like artillery cannons for hitting an enemy's base, good but not for any
+// close up defense" -- they cannot answer something already inside the base.
+//
+// Gated on income, not the clock, because the cost is what actually bites: a
+// 3,500-metal Annihilator is 350 seconds of a benchmark player's income and 9
+// seconds of a hosted game's. Rationed by time as well -- the dig-in path alone
+// placed 113 towers in one 36-minute game, and at popup prices that is fine
+// while at Annihilator prices it is not.
+const float DEF_HEAVY_INCOME = 50.f;
+const float DEF_HLT_INCOME   = 25.f;
+const int   HEAVY_DEF_PERIOD = 45 * SECOND;
+int gNextHeavyDef = 0;
 
 CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 {
 	const string side = ai.GetSideName();
+	const float inc = aiEconomyMgr.metal.income;
+
 	if (unit.circuitDef.costM >= ADV_CON_COST) {
-		if (side == "cortex")
-			return ai.GetCircuitDef(corvipe);
-		if (side == "legion")
-			return ai.GetCircuitDef(legapopupdef);
-		return ai.GetCircuitDef(armpb);
+		if ((inc >= DEF_HEAVY_INCOME) && (ai.frame >= gNextHeavyDef)) {
+			CCircuitDef@ heavy = SideDef(side, armanni, cordoom, legbastion);
+			if (Usable(heavy)) {
+				gNextHeavyDef = ai.frame + HEAVY_DEF_PERIOD;
+				return heavy;
+			}
+		}
+		return SideDef(side, armpb, corvipe, legapopupdef);
 	}
-	if (side == "cortex")
-		return ai.GetCircuitDef(corllt);
-	if (side == "legion")
-		return ai.GetCircuitDef(leglht);
-	return ai.GetCircuitDef(armllt);
+
+	// Legion has no T1 step up -- legck/legcv carry only leglht.
+	if (inc >= DEF_HLT_INCOME) {
+		CCircuitDef@ hard = SideDef(side, armhlt, corhlt, leglht);
+		if (Usable(hard))
+			return hard;
+	}
+	return SideDef(side, armllt, corllt, leglht);
 }
 
-bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)
+bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot, int minStep)
 {
 	if (!gHomeSet)
 		return false;
@@ -411,7 +458,7 @@ bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)
 	if (dir.SqLength2D() < NEAR_ZERO)
 		return false;
 	dir.SafeNormalize2D();
-	for (int i = 1; i <= DEF_STEPS; ++i) {
+	for (int i = minStep; i <= DEF_STEPS; ++i) {
 		const AIFloat3 back = hot + dir * (DEF_STEP * float(i));
 		if (!OnMap(back))
 			continue;
@@ -421,6 +468,241 @@ bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)
 		}
 	}
 	return false;
+}
+
+// A constructor that keeps getting shot will not expand, whatever the threat map
+// says at the instant we ask. apexearth, watching: "if a con has to retreat too
+// much in its recent history it should just go into safety and make defenses.
+// Because at that point it's unable to expand due to threats."
+//
+// History rather than prediction, because prediction demonstrably misses: in a
+// watched 20-minute game constructors died with con-veto firing ZERO times -- the
+// same shape as commanders dying where the threat map reads zero, because the
+// shooter is outside the tile being tested. Losing health is not a forecast.
+const int   TROUBLE_HITS    = 3;
+const int   TROUBLE_WINDOW  = 90 * SECOND;   // quiet for this long and the count clears
+const int   FORTIFY_TIME    = 120 * SECOND;  // how long a struck con stays dug in
+const int   FORTIFY_PERIOD  = 20 * SECOND;   // one tower per con per this
+const float TROUBLE_HP_DROP = 0.02f;
+const int   FORTIFY_STEP    = 3;             // pull back at least this many DEF_STEPs
+const uint  CON_TRACK_MAX   = 48;
+const int   CON_TRACK_STALE = 3 * MINUTE;
+
+array<int>   gConId;
+array<int>   gConHits;
+array<int>   gConHurtAt;
+array<float> gConHp;
+array<int>   gConDigUntil;
+array<int>   gConNextDig;
+array<int>   gConTouch;
+int gConFortified = 0;
+int gNextFortifyLog = 0;
+
+// Builder has no unit-removed hook, so dead constructors are dropped by staleness
+// rather than on death.
+int ConSlot(CCircuitUnit@ unit)
+{
+	const int id = unit.id;
+	for (uint i = 0; i < gConId.length(); ++i) {
+		if (gConId[i] == id) {
+			gConTouch[i] = ai.frame;
+			return int(i);
+		}
+	}
+	if (gConId.length() >= CON_TRACK_MAX) {
+		for (int i = int(gConId.length()) - 1; i >= 0; --i) {
+			if (ai.frame - gConTouch[i] > CON_TRACK_STALE) {
+				gConId.removeAt(i);
+				gConHits.removeAt(i);
+				gConHurtAt.removeAt(i);
+				gConHp.removeAt(i);
+				gConDigUntil.removeAt(i);
+				gConNextDig.removeAt(i);
+				gConTouch.removeAt(i);
+			}
+		}
+	}
+	gConId.insertLast(id);
+	gConHits.insertLast(0);
+	gConHurtAt.insertLast(0);
+	gConHp.insertLast(unit.GetHealthPercent());
+	gConDigUntil.insertLast(0);
+	gConNextDig.insertLast(0);
+	gConTouch.insertLast(ai.frame);
+	return int(gConId.length()) - 1;
+}
+
+void ConStrikeAt(int i)
+{
+	++gConHits[i];
+	gConHurtAt[i] = ai.frame;
+	if ((gConHits[i] >= TROUBLE_HITS) && (ai.frame >= gConDigUntil[i]))
+		gConDigUntil[i] = ai.frame + FORTIFY_TIME;
+}
+
+// Being refused a site counts the same as being shot at it: both say this
+// constructor is not getting to expand here.
+void ConStrike(CCircuitUnit@ unit)
+{
+	ConStrikeAt(ConSlot(unit));
+}
+
+bool ConDugIn(CCircuitUnit@ unit)
+{
+	const int i = ConSlot(unit);
+	if ((gConHits[i] > 0) && (ai.frame - gConHurtAt[i] > TROUBLE_WINDOW))
+		gConHits[i] = 0;
+	const float hp = unit.GetHealthPercent();
+	if (hp < gConHp[i] - TROUBLE_HP_DROP)
+		ConStrikeAt(i);
+	gConHp[i] = hp;
+	return ai.frame < gConDigUntil[i];
+}
+
+IUnitTask@ Fortify(CCircuitUnit@ unit)
+{
+	if (aiEconomyMgr.isEnergyStalling)
+		return null;
+	const int i = ConSlot(unit);
+	if (ai.frame < gConNextDig[i])
+		return null;
+	CCircuitDef@ tower = ContestTower(unit);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+	AIFloat3 spot;
+	if (!StandoffPos(unit, unit.GetPos(ai.frame), spot, FORTIFY_STEP))
+		return null;
+	IUnitTask@ dig = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, tower, spot, SQUARE_SIZE * 2));
+	if (dig is null)
+		return null;
+	gConNextDig[i] = ai.frame + FORTIFY_PERIOD;
+	++gConFortified;
+	if (ai.frame >= gNextFortifyLog) {
+		gNextFortifyLog = ai.frame + 5 * SECOND;
+		AiLog(Factory::T() + "apex: con-dig " + unit.circuitDef.GetName()
+			+ " hits=" + gConHits[i] + " -> " + tower.GetName()
+			+ " fortified=" + gConFortified);
+	}
+	return dig;
+}
+
+// Actually build the anti-air the air model asks for.
+//
+// Military::UpdateAirThreat only raises maxThisUnit, which PERMITS a turret and
+// requests nothing. Measured live: heavy=0/4 against 8,131 metal of enemy air --
+// four wanted, none standing. Flak sits at index 8 of porcupine.land and
+// porcupine.prevent is 1, so an ordinary cluster never walks past
+// landDefenders[0]; only a porc cluster would ever reach it.
+//
+// Placed where the constructor already is, so cover follows the ground we
+// actually occupy.
+//
+// Allowed to CLUSTER. apexearth: "you'd need more than that to deal with 10
+// legion heavy air attacking in a mass." Flak reaches 775 (legflak 850), so the
+// old 700-elmo spacing put each turret at the very edge of the next one's
+// envelope -- a mass meets them one at a time and kills them one at a time.
+// Inside 300 several cover the same airspace at once, which is what a mass has to
+// fly into.
+const float AA_POST_SPACING = 300.f;
+// And built at a rate that can actually close a large gap: one per 45s needs a
+// quarter of an hour to reach twenty.
+const int   AA_POST_PERIOD  = 45 * SECOND;
+const int   AA_POST_RUSH    = 12 * SECOND;
+const int   AA_RUSH_DEFICIT = 4;
+int  gNextAAPost = 0;
+int  gAAPosts = 0;
+AIFloat3 gLastAAPos;
+bool gAAPosSet = false;
+
+IUnitTask@ AirDefence(CCircuitUnit@ unit)
+{
+	if ((ai.frame < gNextAAPost) || aiEconomyMgr.isEnergyStalling)
+		return null;
+	const int deficit = Military::HeavyAADeficit();
+	if (deficit <= 0)
+		return null;
+	// Flak is a T2 build: armack/armacv carry it, armck/armcv do not. Asking a T1
+	// constructor is a silent no-op.
+	if (unit.circuitDef.costM < ADV_CON_COST)
+		return null;
+	CCircuitDef@ aa = Military::HeavyAADef();
+	if ((aa is null) || !aa.IsAvailable(ai.frame))
+		return null;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (!OnMap(here))
+		return null;
+	if (gAAPosSet && (gLastAAPos.distance2D(here) < AA_POST_SPACING))
+		return null;
+
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, aa, here, SQUARE_SIZE * 4));
+	if (post is null)
+		return null;
+	gNextAAPost = ai.frame + ((deficit >= AA_RUSH_DEFICIT) ? AA_POST_RUSH : AA_POST_PERIOD);
+	gLastAAPos = here;
+	gAAPosSet = true;
+	++gAAPosts;
+	AiLog(Factory::T() + "apex: aa-post " + aa.GetName()
+		+ " deficit=" + deficit
+		+ " built=" + gAAPosts);
+	return post;
+}
+
+// There should always be one going up. apexearth: "in general I'd like to see an
+// afus or fusion always being built in the late game. There should never be a
+// time when that isn't being built."
+//
+// Stock decides energy from whether it is stalling right now, which answers a
+// different question: a base that is not stalling still needs the NEXT fusion
+// started, because it takes minutes to finish and the demand arrives before it
+// does. A standing trickle is what keeps the curve ahead of the need.
+//
+// afus first where the economy can carry it -- 9,700-10,500 against a fusion's
+// 4,300-4,900, so it is only sane once income is genuinely large.
+string armfus("armfus");   string armafus("armafus");
+string corfus("corfus");   string corafus("corafus");
+string legfus("legfus");   string legafus("legafus");
+
+const float FUSION_MIN_INCOME = 35.f;
+const float AFUS_MIN_INCOME   = 120.f;
+const int   FUSION_PERIOD     = 75 * SECOND;
+int gNextFusion = 0;
+int gFusionPosts = 0;
+
+IUnitTask@ StandingEnergy(CCircuitUnit@ unit)
+{
+	if (ai.frame < gNextFusion)
+		return null;
+	const float inc = aiEconomyMgr.metal.income;
+	if (inc < FUSION_MIN_INCOME)
+		return null;
+	// Both tiers are T2 builds; a T1 constructor cannot place either, and asking
+	// is a silent no-op.
+	if (unit.circuitDef.costM < ADV_CON_COST)
+		return null;
+
+	const string side = ai.GetSideName();
+	CCircuitDef@ want = null;
+	if (inc >= AFUS_MIN_INCOME)
+		@want = SideDef(side, armafus, corafus, legafus);
+	if (!Usable(want))
+		@want = SideDef(side, armfus, corfus, legfus);
+	if (!Usable(want))
+		return null;
+
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (!OnMap(here))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
+			Task::Priority::NORMAL, want, here, SQUARE_SIZE * 8));
+	if (post is null)
+		return null;
+	gNextFusion = ai.frame + FUSION_PERIOD;
+	++gFusionPosts;
+	AiLog(Factory::T() + "apex: standing energy " + want.GetName()
+		+ " mInc=" + formatFloat(inc, "", 0, 0) + " built=" + gFusionPosts);
+	return post;
 }
 
 // Ground worth holding. A radar, pylon or nano can be rebuilt behind the line;
@@ -444,7 +726,7 @@ IUnitTask@ ContestDefence(CCircuitUnit@ unit, const string& in kind,
 	if ((tower is null) || !tower.IsAvailable(ai.frame))
 		return null;
 	AIFloat3 spot;
-	if (!StandoffPos(unit, hot, spot))
+	if (!StandoffPos(unit, hot, spot, 1))
 		return null;
 	if (gConDefPlaced && (gConDefPos.distance2D(spot) < DEF_SPACING))
 		return null;
@@ -552,6 +834,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			const float heat = ThreatFor(unit, held.GetBuildPos());
 			if (heat > CON_THREAT_VETO) {
 				++gConAbandoned;
+				ConStrike(unit);
 				LogConVeto(unit, "abandon", kind, heat);
 				// A defence post and a retreat both differ in build type; another
 				// mex would not, so the reroute belongs on the refuse path only.
@@ -565,6 +848,25 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		}
 	}
 
+	// Ahead of the dig-in and the veto: enemy air does not care which ground we
+	// hold, and nothing else in the AI ever asks for a flak.
+	if (!isComm) {
+		IUnitTask@ aa = AirDefence(unit);
+		if (aa !is null)
+			return aa;
+		IUnitTask@ pwr = StandingEnergy(unit);
+		if (pwr !is null)
+			return pwr;
+	}
+
+	// Its own recent history says it cannot expand, so stop sending it out. The
+	// tower it puts up instead is what makes the ground usable later.
+	if (!isComm && ConDugIn(unit)) {
+		IUnitTask@ dig = Fortify(unit);
+		if (dig !is null)
+			return dig;
+	}
+
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 	// Refusing to accept the job in the first place. Reached from CIdleTask, where
 	// returning null simply leaves the unit idle until the next idle sweep.
@@ -574,6 +876,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			const float heat = ThreatFor(unit, task.GetBuildPos());
 			if (heat > CON_THREAT_VETO) {
 				++gConRefused;
+				ConStrike(unit);
 				LogConVeto(unit, "refuse", kind, heat);
 				// CIdleTask assigns whatever comes back, so unlike the abandon
 				// path above this one can hand over a task the engine already
