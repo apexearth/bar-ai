@@ -177,6 +177,51 @@ Kept because it only relaxes a veto in a case observed live and costs nothing
 otherwise. The case it targets -- big economy AND losing -- is barely sampled by
 random games, so testing it needs a scenario, not more matches. **unmeasured**
 
+## Surprise air eco-assassination — implemented, NEVER RUN
+
+`script/hard_aggressive/manager/air.as`, namespace `Air`. One player per ally
+team builds a hidden T2 air force and throws all of it at the enemy economy.
+**Not one game has been played with this. Every number in it is reasoned from
+unit costs and from the C++ it drives.**
+
+What it does:
+
+| piece | mechanism | status |
+|---|---|---|
+| One air player per ally team | same one-writer blackboard as the tech election: everyone publishes `airinc`, `Factory::ElectorTeamId()` publishes `airlead` once, latched | unmeasured |
+| Two-step plant chain | the T2 air plant is buildable by **air constructors only** (`armca`/`armaca` and pairs) — no ground con of any tier has it. So: T1 air plant → its 5-con opener → T2 air plant | unmeasured |
+| 20 bombers + 20 fighters | forced from the T2 plant in `Factory::AiMakeTask`, alternating in proportion, 2 s apart | unmeasured |
+| Held at home | `Military::AiMakeTask` returns null, which leaves the unit in the idle task with no orders | unmeasured |
+| Abort on enemy AA | `GetEnemyCost(anti_air) > 2500` metal before committing; after committing it strikes early if half-massed, else stands down | unmeasured |
+| Strike hits economy, not army | `ANTI_STAT` added to the bomber def at release: `CBombTask::FindTarget` then skips every mobile enemy. Per-instance — `CCircuitDef` is owned by each `CCircuitAI` | unmeasured |
+| No retreat | `retreat: 0.0` on the six strike aircraft in `behaviour.json`/`behaviour_leg.json`; `IFighterTask::OnUnitDamaged` returns early while `healthPerc > GetRetreat()` | unmeasured |
+
+What it does **not** do, and why:
+
+- **They are not landed, only orderless.** `CmdFindPad` and `CmdWait` exist in
+  `CCircuitUnit` but are not registered to AngelScript — only `CmdMoveTo` is. An
+  idle aircraft hovers where it was built. Anything that scouts our base sees it,
+  so "hidden" here means "off the map", not "invisible".
+- **Bombers and fighters strike as two squads, not one.** `ISquadTask` merges
+  only within one `fightType`, so bombers form a BOMB squad and fighters an AA
+  squad and they travel separately. Combining them needs C++.
+- **No edge-of-map routing and no anti-flak spreading.** The path comes from
+  `CPathFinder` against the threat map; neither the route nor the formation is
+  reachable from script.
+- **`retreat: 0.0` is profile-wide, not scoped to the strategy.** There is no
+  `SetRetreat` binding, so `armpnix`, `armhawk`, `corhurc`, `corvamp`,
+  `legphoenix` and `legvenator` now fight to the death for every player on this
+  profile, not just the air assassin.
+- The income bar (60 m/s for the air player) is set above what the 4v4 benchmark
+  reaches, so **the expected benchmark result is that this never fires**. The
+  elector logs "no air assassin, best ally income X/60" once a minute past 15 min
+  so that silence can be told apart from a script that failed to compile.
+
+Also found while reading the C++: `Military::AiIsAirValid()` in `military.as` is
+dead — no C++ path calls it. The real gate is `CEnemyManager::IsAirValid()`
+against `quota.aa_threat`, which this profile sets to `[[8, 99999], [96, 500000]]`,
+i.e. effectively disabled.
+
 ## Packaging — what makes it load in a hosted game
 
 - **Ships under its own shortName, `BARbApex`**, rather than as version `apex` of

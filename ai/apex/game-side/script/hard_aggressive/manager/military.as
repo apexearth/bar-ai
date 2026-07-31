@@ -416,6 +416,12 @@ bool WantsMassing(const CCircuitDef@ cdef)
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 	const CCircuitDef@ cdef = unit.circuitDef;
+	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask
+	// does nothing when MakeTask gives it nothing, and CIdleTask::Start is a
+	// no-op. The unit keeps no orders and stays where it was built. That is how
+	// the air force is held at home until Air::Release().
+	if (Air::HoldsUnit(unit))
+		return null;
 	if (IsFodder(cdef)) {
 		// Scouts already get an ungrouped SCOUT task from stock. Raiders are
 		// first parked in Defend(RAID, quota.raid[0]); skip straight past that.
