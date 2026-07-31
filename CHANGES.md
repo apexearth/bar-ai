@@ -123,10 +123,60 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
 | Spam kept at high tiers (all factions) | cheap units for vision and distraction vs long-range T2 | unmeasured |
 | Radar + mobile jammer paired | `coreter` beside `corvrad` (Cortex only so far) | unmeasured |
 | Gantry `income_tier` 100/200 → 45/90 | unreachable, so a built gantry sat in its last tier | unmeasured |
+| Converters moved to their own hub chain | they sat 6th-10th in the fusion/afus chain, so the first one started only after five nano turrets finished — and `~IBuilderTask` deletes `nextTask`, so a nano that failed placement took every converter behind it | unmeasured |
+| Converters sized to the generator: fus 2, afus 5 (`legafus` 6) | one adv converter eats 600 e/s; armfus makes 1000, corfus 1100, legfus 1200, arm/corafus 3000, legafus 3300. `legfus` had none at all while armfus/corfus had two | unmeasured |
+| `limit: 1` on `armuwadvms`, `armuwms`, `leguwmstore` | the last uncapped metal storages, and `limit` is the only cap there is | unmeasured |
 
 Upstream bugs found and worked around: `legbombard` has no builder, `armfmd` is
 not a unit def, three `nanotct2` variants are buildable by nobody, several
 porcupine entries ship `on: false` and are built inert.
+
+## Energy waste, metal storage, late-game mexes — what was measured
+
+Three late-game complaints from a hosted game, checked against the 8 paired
++40% 40-minute 4v4s in `ab_t*` / `ab_c*` / `run-t3*` (apex ally 0, stock BARb
+ally 1) before anything was changed.
+
+**Energy waste is real.** Whole-game `energyExcess/energyProduced` is worthless
+here — it tracks who is losing, not which AI — so it was sliced per team per
+2-minute sample and bucketed on that slice's own energy income. apex wastes more
+than stock in **every** band:
+
+| e/s band | apex waste | stock waste |
+|---|---|---|
+| 200-500 | 12.4% | 1.9% |
+| 500-1000 | 3.3% | 0.8% |
+| 1000-2000 | 8.0% | 1.1% |
+| 2000-4000 | 3.8% | 2.7% |
+| 4000-8000 | 5.3% | 3.4% |
+| 8000+ | 2.5% | 1.0% |
+
+BAR's `game_energy_conversion` gadget converts `eCur - eStor * 0.75` per tick,
+capped by total converter capacity, so overflow at full storage *is* the measure
+of missing converter capacity. Hence the two build-chain changes above.
+
+**Metal storage runaway was not reproduced at benchmark scale** (`armmstor`
+never reaches the telemetry's top-4 spend list in any of the 8 games), but the
+mechanism is in the source. `CEconomyManager::UpdateStorageTasks` ships with its
+`GetMetalStore() > 60 * GetAvgMetalIncome()` cap commented out, leaving
+`IsMetalFull()` as the only gate — satisfied almost continuously on a bonused
+economy. It also consults exactly one def, `storeMDefs.GetFirstDef()` (best
+storage-per-metal, **no** availability filter, no fallback), which is
+`armuwadvms` 10000/750 rather than `armmstor` 3000/330 wherever an advanced
+constructor exists. `armuwadvms`, `armuwms` and `leguwmstore` carried no
+`limit`; their Cortex twins did. Faction parity, again.
+
+**Late-game mex obsession did NOT reproduce, and points the other way.** After
+minute 20, apex builds 0.66 extractors/min against stock's 1.13, and sinks 3.9%
+of metal produced into extractors against stock's 5.4% (n=32 team-games each).
+So no config was changed for it. What is true in the source, at any scale:
+`UpdateMetalTasks` enqueues MEX and MEXUP at `Priority::HIGH` and **returns**
+before it ever reaches the converter branch, task weight is `1/(priority+1)²` so
+a HIGH task beats a NORMAL one at 2.25x the distance, and the mex brake is
+`(GetAvgMetalIncome() < 100) || !IsMetalFull()` — an OR, so high income alone
+never stops it. `mex_max: [2.0, false]` leaves `mexMax` at `UINT_MAX`, so
+concurrent MEX tasks are unbounded; dropping it below 1.0 also switches on the
+`ms_pull` expansion rule, which is why it was left alone.
 
 ## T3 urgency gate — implemented, NOT shown to work
 

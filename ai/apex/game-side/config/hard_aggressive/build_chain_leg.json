@@ -75,6 +75,15 @@
 					// legajam (T2 con, 19000e) goes on the advanced fusion and radar hubs below.
 					[
 						{"unit": "legjam", "category": "defence", "offset": [-130, 0], "priority": "low"}
+					],
+					// legfus makes 1200 e/s and legadveconv converts 600, so two cover it.
+					// Legion had none at all here while armfus/corfus had two. Own chain for the
+					// same reason as those: chain entries activate one at a time, and
+					// ~IBuilderTask deletes nextTask, so anything ahead of a converter both
+					// delays it and can take it down.
+					[
+						{"unit": "legadveconv", "category": "convert", "offset": [110, 110]},
+						{"unit": "legadveconv", "category": "convert", "offset": [110, -110]}
 					]
 				]
 			},
@@ -86,11 +95,6 @@
 						{"unit": "legnanotc", "category": "nano", "offset": {"front": 15}, "priority": "now"},
 						{"unit": "legnanotc", "category": "nano", "offset": {"front": 20}, "priority": "now"},
 						{"unit": "legnanotc", "category": "nano", "offset": {"front": 25}, "priority": "now"},
-						{"unit": "legadveconv", "category": "convert", "offset": {"back": 10}, "priority": "now"},
-						{"unit": "legadveconv", "category": "convert", "offset": {"back": 20}, "priority": "now"},
-						{"unit": "legadveconv", "category": "convert", "offset": {"back": 30}, "priority": "now"},
-						{"unit": "legadveconv", "category": "convert", "offset": {"back": 40}, "priority": "now"},
-						{"unit": "legadveconv", "category": "convert", "offset": {"back": 50}, "priority": "now"},
 						{"unit": "legflak", "category": "defence", "offset": {"front": 30}, "priority": "now"},
 						{"unit": "legflak", "category": "defence", "offset": {"front": 40}, "priority": "now"},
 						{"unit": "leglupara", "category": "defence", "offset": {"front": 50}, "priority": "now"},
@@ -98,6 +102,16 @@
 					],
 					[
 						{"unit": "legajam", "category": "defence", "offset": [-160, 0], "priority": "low"}
+					],
+					// legafus makes 3300 e/s and legadveconv converts 600, so six cover it -- one
+					// more than the five that were queued behind five nano turrets in chain1.
+					[
+						{"unit": "legadveconv", "category": "convert", "offset": {"back": 10}, "priority": "now"},
+						{"unit": "legadveconv", "category": "convert", "offset": {"back": 20}, "priority": "now"},
+						{"unit": "legadveconv", "category": "convert", "offset": {"back": 30}, "priority": "now"},
+						{"unit": "legadveconv", "category": "convert", "offset": {"back": 40}, "priority": "now"},
+						{"unit": "legadveconv", "category": "convert", "offset": {"back": 50}, "priority": "now"},
+						{"unit": "legadveconv", "category": "convert", "offset": {"back": 60}, "priority": "now"}
 					]
 				]
 			}

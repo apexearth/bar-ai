@@ -975,9 +975,23 @@
 			"armshockwave" : {
 				"role": ["static"]
 			},
+			// `limit` is the ONLY cap on metal storage: CEconomyManager::UpdateStorageTasks
+			// ships with its `GetMetalStore() > 60 * GetAvgMetalIncome()` test commented
+			// out, so the sole remaining gate is IsMetalFull(), which a big economy
+			// satisfies almost continuously. It also only ever considers ONE def --
+			// storeMDefs.GetFirstDef(), the best storage-per-metal we can build, with no
+			// fallback -- and that def is armuwadvms (10000/750) wherever an advanced
+			// constructor exists, not armmstor (3000/330). armuwadvms and armuwms were the
+			// only uncapped metal storages left; coruwadvms/coruwms/legamstor already had 1.
 			"armuwadvms" : {
 				"role": ["static"],
-				"since": 1200
+				"since": 1200,
+				"limit": 1
+			},
+			"armuwms" : {
+				"role": ["static"],
+				"since": 1200,
+				"limit": 1
 			},
 			"armgmm" : {
 				"role": ["static"]
