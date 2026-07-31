@@ -207,19 +207,40 @@ bool PreferReclaim()
 // no enemy structure has claimed yet fails the third, so the task stays
 // selectable and a constructor walks to it. This is the middle term alone.
 //
-// ai.GetBuilderThreatAt reads CThreatMap's BUILDER-role SURFACE layer: enemy
-// damage-vs-builder times sqrt(health), painted over each enemy's weapon range
-// and still half its peak at the rim -- so a covered tile reads in the hundreds
-// and an uncovered one reads zero, while an unidentified radar blip contributes
-// 0.1. 4.0 is THREAT_MIN * 4, the engine's own "an enemy holds this ground" bar
-// in MilitaryManager::DefaultMakeDefence. Surface means a pure AA turret adds
-// nothing here (AddEnemyUnit routes HasSurfToAir into the air layer), so this
-// does not answer "is it safe to fly a con here".
+// The threat map paints enemy damage-vs-builder times sqrt(health) over each
+// enemy's weapon range and is still half its peak at the rim -- so a covered
+// tile reads in the hundreds and an uncovered one reads zero, while an
+// unidentified radar blip contributes 0.1. 4.0 is THREAT_MIN * 4, the engine's
+// own "an enemy holds this ground" bar in MilitaryManager::DefaultMakeDefence.
 const float CON_THREAT_VETO = 4.0f;
 
 int gConRefused = 0;
 int gConAbandoned = 0;
+int gConRerouted = 0;
+int gConDefended = 0;
 int gNextConVetoLog = 0;
+int gNextRerouteLog = 0;
+int gNextDefenceLog = 0;
+
+// CThreatMap indexes its arrays straight from the position and range-checks only
+// under assert; the bound is a strict less-than against the terrain extent.
+// -RgtVector, the engine's "no position", fails the first test.
+bool OnMap(const AIFloat3& in p)
+{
+	return (p.x >= 0.f) && (p.z >= 0.f)
+		&& (p.x < float(AiTerrainWidth())) && (p.z < float(AiTerrainHeight()));
+}
+
+// ai.GetBuilderThreatAt is the BUILDER-role SURFACE layer, and AddEnemyUnit
+// routes HasSurfToAir enemies into the air layer, so a pure AA turret adds
+// nothing to it -- an air constructor cannot see what kills it. GetUnitThreatAt
+// picks the layer from the unit; for a ground constructor it is the same array.
+float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
+{
+	if (!OnMap(where))
+		return 0.f;
+	return ai.GetUnitThreatAt(unit, where);
+}
 
 // Empty means "not a build this rule covers". Defence, bunkers and big guns
 // belong at the front by definition, and this variant reclaims battlefields on
@@ -244,16 +265,6 @@ string SiteBuildName(IUnitTask@ task)
 	return "";
 }
 
-float SiteThreat(IUnitTask@ task)
-{
-	const AIFloat3 where = task.GetBuildPos();
-	// -RgtVector is the engine's "no position", and GetBuilderThreatAt indexes
-	// the threat map with no range check in a release build.
-	if ((where.x < 0.f) || (where.z < 0.f))
-		return 0.f;
-	return ai.GetBuilderThreatAt(where);
-}
-
 void LogConVeto(CCircuitUnit@ unit, const string& in what,
 		const string& in kind, float threat)
 {
@@ -262,7 +273,164 @@ void LogConVeto(CCircuitUnit@ unit, const string& in what,
 	gNextConVetoLog = ai.frame + 5 * SECOND;
 	AiLog(Factory::T() + "apex: con-veto " + what + " " + unit.circuitDef.GetName()
 		+ " -> " + kind + " threat=" + formatFloat(threat, "", 0, 0)
-		+ " refused=" + gConRefused + " abandoned=" + gConAbandoned);
+		+ " refused=" + gConRefused + " abandoned=" + gConAbandoned
+		+ " rerouted=" + gConRerouted + " defended=" + gConDefended);
+}
+
+// Live MEX build tasks, so a refused one can be traded for a colder one.
+//
+// The script cannot enumerate metal spots -- no CMetalManager type is registered
+// -- and a MEX task built here would carry spotId -1, which CBMexTask hands
+// straight to mexSpots[spotId]. AiTaskAdded is the only place a MEX task is ever
+// visible. IUnitTask is refcounted, so a held handle keeps the object alive, and
+// every removal funnels through DequeueTask, which calls AiTaskRemoved.
+array<IUnitTask@> gMexTasks;
+
+// The script cannot ask whether a position is reachable, and the far side of the
+// map usually is not.
+const float REROUTE_RANGE = 3000.f;
+
+// Same buildDef as the task the engine just offered this unit is the only proof
+// available that the unit can build it: CCircuitDef exposes no CanBuild binding,
+// and mex defs are per-constructor -- armck builds armmex, armack only armmoho.
+IUnitTask@ SaferMex(CCircuitUnit@ unit, IUnitTask@ refused)
+{
+	const CCircuitDef@ want = refused.buildDef;
+	if (want is null)
+		return null;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	IUnitTask@ best = null;
+	float bestDist = REROUTE_RANGE;
+	float bestThreat = 0.f;
+	for (uint i = 0; i < gMexTasks.length(); ++i) {
+		IUnitTask@ cand = gMexTasks[i];
+		if ((cand is null) || (cand is refused))
+			continue;
+		const CCircuitDef@ has = cand.buildDef;
+		if ((has is null) || (has.id != want.id))
+			continue;
+		const AIFloat3 where = cand.GetBuildPos();
+		if (!OnMap(where))
+			continue;
+		const float dist = here.distance2D(where);
+		if (dist >= bestDist)
+			continue;
+		const float heat = ThreatFor(unit, where);
+		if (heat > CON_THREAT_VETO)
+			continue;
+		// Spreading over spots beats stacking constructors on one.
+		array<CCircuitUnit@>@ busy = cand.GetUnits();
+		if ((busy !is null) && (busy.length() > 0))
+			continue;
+		@best = cand;
+		bestDist = dist;
+		bestThreat = heat;
+	}
+	if (best is null)
+		return null;
+	++gConRerouted;
+	if (ai.frame >= gNextRerouteLog) {
+		gNextRerouteLog = ai.frame + 5 * SECOND;
+		AiLog(Factory::T() + "apex: con-reroute " + unit.circuitDef.GetName()
+			+ " -> mex threat=" + formatFloat(bestThreat, "", 0, 0)
+			+ " dist=" + formatFloat(bestDist, "", 0, 0)
+			+ " rerouted=" + gConRerouted);
+	}
+	return best;
+}
+
+// Contest the mex rather than sit on it. apexearth: "build defenses a safe
+// distance from the mex we desire to control. That is usually what I would do."
+// The standoff walks back toward our own start until the threat map reads clear,
+// so it is set by the enemy's reach rather than by a constant.
+const float DEF_STEP    = 160.f;
+const int   DEF_STEPS   = 6;
+const float DEF_SPACING = 500.f;
+const int   DEF_PERIOD  = 30 * SECOND;
+
+AIFloat3 gConDefPos;
+bool gConDefPlaced = false;
+int  gNextConDef = 0;
+
+// Split by tier because the tiers share nothing: armck/corck/legck build
+// armllt/corllt/leglht and no advanced tower, armack/armacv build armpb but
+// neither armllt nor armmex. Read from each constructor's buildoptions.
+string armllt("armllt");
+string corllt("corllt");
+string leglht("leglht");
+string armpb("armpb");
+string corvipe("corvipe");
+string legapopupdef("legapopupdef");
+
+CCircuitDef@ ContestTower(CCircuitUnit@ unit)
+{
+	const string side = ai.GetSideName();
+	if (unit.circuitDef.costM >= ADV_CON_COST) {
+		if (side == "cortex")
+			return ai.GetCircuitDef(corvipe);
+		if (side == "legion")
+			return ai.GetCircuitDef(legapopupdef);
+		return ai.GetCircuitDef(armpb);
+	}
+	if (side == "cortex")
+		return ai.GetCircuitDef(corllt);
+	if (side == "legion")
+		return ai.GetCircuitDef(leglht);
+	return ai.GetCircuitDef(armllt);
+}
+
+bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)
+{
+	if (!gHomeSet)
+		return false;
+	AIFloat3 dir = gHomePos - hot;
+	if (dir.SqLength2D() < NEAR_ZERO)
+		return false;
+	dir.SafeNormalize2D();
+	for (int i = 1; i <= DEF_STEPS; ++i) {
+		const AIFloat3 back = hot + dir * (DEF_STEP * float(i));
+		if (!OnMap(back))
+			continue;
+		if (ThreatFor(unit, back) <= CON_THREAT_VETO) {
+			spot = back;
+			return true;
+		}
+	}
+	return false;
+}
+
+IUnitTask@ ContestDefence(CCircuitUnit@ unit, const string& in kind,
+		float heat, const AIFloat3& in hot)
+{
+	// A tower is 680-15,000 energy, and handing a task over directly bypasses
+	// CanAssignTo, which is where the engine's own energy test lives.
+	if ((ai.frame < gNextConDef) || aiEconomyMgr.isEnergyStalling)
+		return null;
+	CCircuitDef@ tower = ContestTower(unit);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+	AIFloat3 spot;
+	if (!StandoffPos(unit, hot, spot))
+		return null;
+	if (gConDefPlaced && (gConDefPos.distance2D(spot) < DEF_SPACING))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, tower, spot, SQUARE_SIZE * 2));
+	if (post is null)
+		return null;
+	gNextConDef = ai.frame + DEF_PERIOD;
+	gConDefPos = spot;
+	gConDefPlaced = true;
+	++gConDefended;
+	if (ai.frame >= gNextDefenceLog) {
+		gNextDefenceLog = ai.frame + 5 * SECOND;
+		AiLog(Factory::T() + "apex: con-defend " + unit.circuitDef.GetName()
+			+ " " + kind + " threat=" + formatFloat(heat, "", 0, 0)
+			+ " -> " + tower.GetName()
+			+ " back=" + formatFloat(hot.distance2D(spot), "", 0, 0)
+			+ " defended=" + gConDefended);
+	}
+	return post;
 }
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
@@ -347,10 +515,15 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		IUnitTask@ held = unit.task;
 		const string kind = SiteBuildName(held);
 		if (kind != "") {
-			const float heat = SiteThreat(held);
+			const float heat = ThreatFor(unit, held.GetBuildPos());
 			if (heat > CON_THREAT_VETO) {
 				++gConAbandoned;
 				LogConVeto(unit, "abandon", kind, heat);
+				// A defence post and a retreat both differ in build type; another
+				// mex would not, so the reroute belongs on the refuse path only.
+				IUnitTask@ post = ContestDefence(unit, kind, heat, held.GetBuildPos());
+				if (post !is null)
+					return post;
 				IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
 				if (flee !is null)
 					return flee;
@@ -364,10 +537,21 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (!isComm) {
 		const string kind = SiteBuildName(task);
 		if (kind != "") {
-			const float heat = SiteThreat(task);
+			const float heat = ThreatFor(unit, task.GetBuildPos());
 			if (heat > CON_THREAT_VETO) {
 				++gConRefused;
 				LogConVeto(unit, "refuse", kind, heat);
+				// CIdleTask assigns whatever comes back, so unlike the abandon
+				// path above this one can hand over a task the engine already
+				// holds -- a mex the same constructor reads as cold.
+				if (kind == "mex") {
+					IUnitTask@ other = SaferMex(unit, task);
+					if (other !is null)
+						return other;
+				}
+				IUnitTask@ post = ContestDefence(unit, kind, heat, task.GetBuildPos());
+				if (post !is null)
+					return post;
 				@task = null;
 			}
 		}
@@ -412,11 +596,14 @@ int  gCommAssistNext = 0;
 
 void AiTaskAdded(IUnitTask@ task)
 {
-	if ((task.GetType() == Task::Type::BUILDER)
-		&& (task.GetBuildType() == Task::BuildType::MEXUP))
-	{
+	if (task.GetType() != Task::Type::BUILDER)
+		return;
+	const int bt = task.GetBuildType();
+	if (bt == Task::BuildType::MEXUP) {
 		gMexUpPos = task.GetBuildPos();
 		gMexUpActive = true;
+	} else if (bt == Task::BuildType::MEX) {
+		gMexTasks.insertLast(task);
 	}
 // 	if (task.GetType() != Task::Type::BUILDER)
 // 		return;
@@ -466,10 +653,18 @@ void AiTaskAdded(IUnitTask@ task)
 
 void AiTaskRemoved(IUnitTask@ task, bool done)
 {
-	if ((task.GetType() == Task::Type::BUILDER)
-		&& (task.GetBuildType() == Task::BuildType::MEXUP))
-	{
+	if (task.GetType() != Task::Type::BUILDER)
+		return;
+	const int bt = task.GetBuildType();
+	if (bt == Task::BuildType::MEXUP) {
 		gMexUpActive = false;
+	} else if (bt == Task::BuildType::MEX) {
+		for (uint i = 0; i < gMexTasks.length(); ++i) {
+			if (gMexTasks[i] is task) {
+				gMexTasks.removeAt(i);
+				break;
+			}
+		}
 	}
 // 	if (task.GetType() != Task::Type::BUILDER)
 // 		return;
