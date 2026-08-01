@@ -311,6 +311,10 @@ So:
   it cost.** The dig-in fortresses looked excellent on screen and were among the
   most expensive things here.
 
+See `docs/12-build-phases.md` for the BUILD_PHASE design that addresses this
+directly: a single sense of what the AI is buying right now, that individual
+rules defer to instead of each firing whenever its own condition happens to hold.
+
 ## Harness discipline
 
 - **Never edit a file a running tournament uses.** Editing `run_match.py`
