@@ -77,6 +77,41 @@ That is also the measurement: after wiring it up, `composition.py` should show
 spend concentrating differently by phase, and `mex upgrades` recovering toward
 stock's 8-11 rather than the 2 the flat rule set produced.
 
+## Why prioritisation is structurally hard here, and what a phase does not fix
+
+There is no scheduler. `AiMakeTask` is an ordered list of `if` statements, and
+each one either **takes** the constructor or passes it on. Priority is therefore
+encoded implicitly in the order the branches happen to sit in a function — which
+is invisible, untunable, and identical whether the AI holds one constructor or
+twenty.
+
+That last part is the trap, and it has already been observed live: an AI with
+**one** advanced constructor used it to build fusions and nothing else, forever.
+Two reasonable rules produced it —
+
+- own one advanced constructor and never build another (the `!gHaveAdvCon` cap)
+- keep a fusion going up
+
+— and neither is wrong on its own. With eight constructors, a rule that claims
+one takes an eighth of build power. With one constructor, the same rule takes
+**all of it**. Nothing in a winner-take-all list can express that difference,
+because no branch knows how much capacity exists or how much it is consuming.
+
+A phase does not fix this by itself. It narrows *which* rules compete, but the
+winner still takes the whole constructor. Two things are needed alongside it:
+
+- **Never let a rule take the last constructor.** A build-power floor reserved
+  for ordinary expansion — mexes and upgrades — that discretionary rules cannot
+  touch. One constructor means one job, and that job should be the economy.
+- **Gate on share, not on truth.** "Is my condition true" scales badly; "would
+  this be more than my share of current build power" does not. Build power is
+  readable (`aiBuilderMgr.GetWorkerCount()`), so a rule can ask whether it has
+  already taken enough.
+
+The general shape: the reason a dozen sensible rules cut metal production 4.3x
+is that each of them was written as *"if X then take a constructor"* and none as
+*"if X, and we can spare one"*.
+
 ## Hardest part
 
 Not the phases — the transition conditions. "Ensure we have enough energy and
