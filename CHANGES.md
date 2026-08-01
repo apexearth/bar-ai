@@ -128,8 +128,12 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
   the helper have since been deleted — nothing in the script computes bearing
   today. `CEnemyManager::GetEnemyPos()` still exists in C++, unbound, if the idea
   is ever retried. **suspect — do not rebuild without a fresh A/B**
-- **Mass before attacking**: attack quota grows 30 at 8 min → +3.5/min → cap 80.
-  Stock attacks with whatever is to hand.
+- **Mass before attacking**: attack quota grows 36 at 14 min → +3.5/min → cap 48.
+  Stock attacks with whatever is to hand. Start/cap were raised from 30/36 on a
+  request for a more cautious army; 140 and 80 both stalled the army entirely
+  once the quota became enforceable (below), so the useful range is narrow and
+  is being walked up rather than jumped. **unmeasured — not isolated from the
+  AA change it shipped alongside.**
 - **The attack quota did nothing until the promote shortcut was closed.**
   `CDefendTask::Update` promotes on
   `(attackPower >= maxPower) || !GetTasks(check).empty()`, and `DefaultMakeTask`
@@ -195,6 +199,57 @@ conditions are evaluated once, when the parent finishes.
   reads `CEnemyManager::IsAirValid()` directly in `FactoryManager`/`FactoryData`),
   and `behaviour.json`'s `aa_threat` puts `maxAAThreat` above 100,000, so that
   gate is off in this profile regardless. **unmeasured**
+
+### AA at mex clusters — `porcupine.prevent` 1 -> 2
+`DefaultMakeDefence` walks `num = isPorc ? defenders.size() : preventCount`, so
+at `prevent: 1` an ordinary metal cluster could only ever reach `land[0]`, a
+ground-only LLT. The AA tower sits at position 1, which made it **unreachable at
+every non-porc cluster for the whole game**, however much air the enemy fielded.
+The `CheapAA` rule in `builder.as` was firing but places at the constructor's own
+position and caps at 4, so AA existed but never at the mexes being bombed.
+
+Costs nothing while the enemy has no air: the walk `continue`s past any
+`IsRoleAA()` def while `GetEnemyCost(AIR) < 1`, and the loop is bounded by
+`i < num`, so the slot simply goes unused. `land[1]` is `armrl`/`corrl`/`legrl`
+at 80 metal.
+
+`water[1]` was a duplicate of `water[0]`, so `prevent: 2` would have bought a
+*second torpedo launcher* rather than AA. Appended `armfrt`/`corfrt` (SeaDefence,
+VTOL-only, 90 metal, buildable by commander/`armcs`/`armch`/`armbeaver`) at index
+17 and pointed `water[1]` at it. Legion has no floating AA and borrows `corfrt`,
+as its array already borrows `coratl`.
+
+**measured**, 8 games 3v3 Cortex on Comet Catcher: T1 AA **37.0 per game vs
+stock's 3.1**, with metal produced level (150,714 vs 150,651). Above the 12 that
+`CheapAA` alone could produce, so the cluster path is doing the work.
+
+### T3 defence gated on energy, not metal
+`Pulsar()` gated only on `PULSAR_MIN_INCOME = 60` *metal* income, which T1 mexes
+reach on their own — observed firing at `mInc=65..78`. These are energy monsters,
+not metal ones: `cordoom` 37,000E, `legbastion` 58,000E, `armanni` 74,000E,
+against 3,000-4,200 metal. So a Doomsday went up at 24.0 min while the fusion did
+not arrive until 26.0.
+
+Added `PULSAR_MIN_ENERGY = 1000` (apexearth: "we need at least 1000 energy per
+second before we should start thinking about making those" — one fusion is
+`armfus` 1000 / `corfus` 1100 / `legfus` 1200 E/s).
+
+`porcupine.base`'s `[12, 1500]` entry is removed. That path has **no income test
+of any kind** — `UpdateDefence` enqueues each entry at its frame — so it planted a
+T3 gun at 25 min on a pre-fusion economy regardless of any gate on `Pulsar()`.
+`Builder::Pulsar` is now the only route to those guns.
+
+**measured**, 8 games against the arm above, same map/seeds/settings:
+
+| | before | after |
+|---|---|---|
+| `cordoom` spend | 90,000 (18.8%) | **48,000 (10.7%)** |
+| `corfus` spend | 13,500 (2.8%) | **31,500 (7.0%)** |
+| fusion reaches top sinks | 3 of 8 games, median 30.0 min | **6 of 8 games, median 27.0 min** |
+
+Remaining `cordoom` spend is post-1000 E/s and therefore intended. Army fell
+17,586 -> 15,618 per game while stock held flat; that is inside the known
+tournament noise floor and is **not** established as an effect.
 
 ### Economy
 - **Reclaim over resurrect**: rez bots are handed a wreck reclaim before

@@ -257,7 +257,7 @@ void UpdateSling()
 // units back during the transition, when the army is already shrinking, compounds
 // it. Push it past the transition so the force is rebuilt first and massed after.
 const int   MASS_FROM   = 14 * MINUTE;
-const float MASS_START  = 30.f;
+const float MASS_START  = 36.f;
 const float MASS_PER_MIN = 3.5f;        // ~100 by 28 min
 // Was 140. Measured: apex finished on 92k metal against stock's 125k while
 // holding a smaller army, which is what happens when the army never leaves home
@@ -266,7 +266,10 @@ const float MASS_PER_MIN = 3.5f;        // ~100 by 28 min
 // piecemeal trickle attacks while letting a real force move and take ground.
 // 80 was set while CDefendTask's promote shortcut made this unenforceable. Now
 // that it binds, 80 is not reachable under pressure and the army never attacks.
-const float MASS_CAP    = 36.f;
+// 36 -> 48 is a deliberately small step toward "mass more before engaging":
+// 140 and 80 both stalled the army entirely once the quota became enforceable,
+// so the useful range is known to be narrow and is worth walking up, not jumping.
+const float MASS_CAP    = 48.f;
 // Now a metal-vs-metal ratio, so 1.0 is a real parity point. It used to compare
 // aiEnemyMgr.mobileThreat against armyCost; across eight 4v4 infologs that ratio
 // logged 0.02-0.14 and never once approached 0.95, so the clause below could not

@@ -448,6 +448,106 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	return post;
 }
 
+// Pulsars, and cheap AA. Both are things stock does that we do not.
+//
+// apexearth: "I don't see all that many pulsars in our defense lineup either.
+// Pulsars would be a pretty good counter to hold back the onslaught." Pulsar is
+// armanni -- and it is stock BARb's single largest metal sink, 14.0% of
+// everything it builds, while ours is ~0%. Their defence outspends their army.
+// It sits at porcupine.land index 12, which an ordinary cluster never reaches
+// because porcupine.prevent is 2.
+//
+// And on AA: "lots of the time people just make AA because its so cheap, and if
+// you have like 3 or 4 of them then the enemy air actively avoids you." That is
+// DETERRENCE, not attrition -- armrl is 80 metal against flak's 820, so four of
+// them is 320 metal to change the enemy's target selection. An earlier design
+// sized flak at 45% of enemy air VALUE, up to 30 turrets and 24,600 metal, to
+// kill an air force it could have simply discouraged.
+string armanni("armanni");   string cordoom("cordoom");   string legbastion("legbastion");
+string armrl("armrl");       string corrl("corrl");       string legrl("legrl");
+
+const float PULSAR_MIN_INCOME = 60.f;
+// apexearth: "we need at least 1000 energy per second before we should start
+// thinking about making those". One fusion is armfus 1000 / corfus 1100 / legfus 1200.
+const float PULSAR_MIN_ENERGY = 1000.f;
+// 4 reached 22.0% of ALL metal -- more than stock's 14% -- while we held one T2
+// constructor. Two is a pair covering one approach, which is what the economy can
+// carry; raise it when metal production is no longer half of stock's.
+const int   PULSAR_MAX        = 2;
+const int   PULSAR_PERIOD     = 60 * SECOND;
+const int   AA_WANT           = 4;      // enough that air picks someone else
+const int   AA_PERIOD         = 20 * SECOND;
+const uint  DEF_CON_FLOOR     = 3;      // never take the last builders
+int gNextPulsar = 0;
+int gNextAA = 0;
+
+CCircuitDef@ SideDef3(const string& in a, const string& in c, const string& in l)
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(c);
+	if (side == "legion")
+		return ai.GetCircuitDef(l);
+	return ai.GetCircuitDef(a);
+}
+
+// Cheap AA, kept at a small standing count. Any constructor can build it.
+IUnitTask@ CheapAA(CCircuitUnit@ unit)
+{
+	if ((ai.frame < gNextAA) || aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
+		return null;
+	CCircuitDef@ aa = SideDef3(armrl, corrl, legrl);
+	if ((aa is null) || !aa.IsAvailable(ai.frame) || (aa.count >= AA_WANT))
+		return null;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (!OnMap(here))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, aa, here, SQUARE_SIZE * 4));
+	if (post is null)
+		return null;
+	gNextAA = ai.frame + AA_PERIOD;
+	AiLog(Factory::T() + "apex: cheap-aa " + aa.GetName() + " standing=" + aa.count
+		+ "/" + AA_WANT);
+	return post;
+}
+
+// The heavy gun that holds ground. T2 constructors only -- armck/armcv cannot
+// build it, and asking would be dropped in silence.
+IUnitTask@ Pulsar(CCircuitUnit@ unit)
+{
+	if ((ai.frame < gNextPulsar) || aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (unit.circuitDef.costM < ADV_CON_COST)
+		return null;
+	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
+		return null;
+	if (aiEconomyMgr.metal.income < PULSAR_MIN_INCOME)
+		return null;
+	// These are energy monsters, not metal ones: cordoom 37,000E, legbastion 58,000E,
+	// armanni 74,000E, against 3000-4200 metal. The metal gate above is reachable on
+	// T1 mexes alone, which is how a gun went up at 24.0 min ahead of the fusion at
+	// 26.0. One fusion is 1000-1200 E/s, so this is "not before a fusion is paying".
+	if (aiEconomyMgr.energy.income < PULSAR_MIN_ENERGY)
+		return null;
+	CCircuitDef@ gun = SideDef3(armanni, cordoom, legbastion);
+	if ((gun is null) || !gun.IsAvailable(ai.frame) || (gun.count >= PULSAR_MAX))
+		return null;
+	AIFloat3 spot;
+	if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, gun, spot, SQUARE_SIZE * 2));
+	if (post is null)
+		return null;
+	gNextPulsar = ai.frame + PULSAR_PERIOD;
+	AiLog(Factory::T() + "apex: pulsar " + gun.GetName() + " standing=" + gun.count
+		+ "/" + PULSAR_MAX + " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
+	return post;
+}
+
 CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 {
 	const string side = ai.GetSideName();
@@ -623,6 +723,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// builders. Twelve rules pre-empting here with neither bound is what cut metal
 	// production 4.3x.
 	if (!isComm) {
+		IUnitTask@ aa = CheapAA(unit);
+		if (aa !is null)
+			return aa;
+		IUnitTask@ gun = Pulsar(unit);
+		if (gun !is null)
+			return gun;
 		IUnitTask@ conv = EnergyConverter(unit);
 		if (conv !is null)
 			return conv;

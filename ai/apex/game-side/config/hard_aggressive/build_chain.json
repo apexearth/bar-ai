@@ -4,10 +4,10 @@
 		"unit": {
 		//             	   0          1         2          3            4         5          6          7            8        9
 			"armada": ["armllt",  "armtl",  "armrl",   "armbeamer", "armhlt", "armclaw", "armcir",  "armferret", "armpb", "armatl",
-					   "armflak", "armamb", "armanni", "armguard",  "armamd", "armtarg", "armgate"],
+					   "armflak", "armamb", "armanni", "armguard",  "armamd", "armtarg", "armgate", "armfrt"],
 		//            	   0          1           2          3          4         5          6            7          8          9
 			"cortex": ["corllt",  "cortl",    "corrl",   "corhllt", "corhlt", "cormaw",  "cormadsam", "corerad", "corvipe", "coratl",
-					   "corflak", "cortoast", "cordoom", "corpun",  "corfmd", "cortarg", "corgate"]
+					   "corflak", "cortoast", "cordoom", "corpun",  "corfmd", "cortarg", "corgate", "corfrt"]
 		},
 		// Actual number of defences per cluster bounded by income - the order of defenses that should be build with numbers as above.
 		// One list, shared by every side: CMilitaryManager::ReadConfig indexes each side's
@@ -16,8 +16,15 @@
 		// amountFactor * min(metal, energy income), so on a hosted game's income that is
 		// 5,740 metal of flak per hot cluster and the heavy guns at 11/12 are never reached.
 		"land":  [0, 2, 3, 5, 6, 4, 7, 8, 10, 10, 12, 11],
-		"water": [1, 1, 1, 1, 4, 9, 10, 9, 10],
-		"prevent": 1,  // number of preventive defences
+		"water": [1, 17, 1, 1, 4, 9, 10, 9, 10],
+		// 2, not 1: DefaultMakeDefence walks only `prevent` entries away from a porc
+		// cluster, so at 1 an ordinary mex cluster could only ever reach index 0 -- a
+		// ground-only LLT -- and the AA at position 1 was unreachable all game however
+		// much air the enemy fielded. Position 1 is armrl/corrl/legrl on land and
+		// armfrt/corfrt at 17 on water, all 80-90 metal. This costs nothing while the
+		// enemy has no air: the walk skips any IsRoleAA() def while GetEnemyCost(AIR)
+		// is below 1, and the loop is bounded by i < num, so the slot simply goes unused.
+		"prevent": 2,  // number of preventive defences
 		"amount": {  // income bound factor
 			"offset": [-2.0, 2.0],
 			// Amount factor: 10x10 ~ 48.0, 20x20 ~ 32.0
@@ -35,8 +42,12 @@
 		// Indices 11 and 13 are deliberately skipped - armamb/cortoast/legacluster and
 		// armguard/corpun/legcluster all carry "on": false in behaviour.json, so the AI switches
 		// them off the moment they finish and they never fire.
+		// Index 12 (armanni/cordoom/legbastion) is deliberately absent: it is 37,000-74,000
+		// ENERGY, and this path has no income test of any kind, so at [12, 1500] it landed a
+		// T3 gun at 25 min on a pre-fusion economy. Builder::Pulsar is now the only path to
+		// those, gated on PULSAR_MIN_ENERGY.
 		"base": [
-			[3, 420], [4, 600], [10, 1200], [15,1220], [14, 1300], [15, 1320], [8, 1360], [12, 1500]
+			[3, 420], [4, 600], [10, 1200], [15,1220], [14, 1300], [15, 1320], [8, 1360]
 		],
 	
 		"superweapon": {
@@ -481,7 +492,7 @@
 		// defence point it has just laid out - for every cluster it defends, so a hub hung off the
 		// radar lands exactly on the defensive clusters. It is also the only lever that upgrades a
 		// FORWARD cluster: away from a "porc" cluster MakeDefence only ever considers
-		// landDefenders[0] (an LLT), because porcupine.prevent is 1.
+		// landDefenders[0..1] (an LLT and an AA tower), because porcupine.prevent is 2.
 		"radar": {
 			"armrad": {
 				"hub": [
