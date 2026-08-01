@@ -200,6 +200,80 @@ conditions are evaluated once, when the parent finishes.
   and `behaviour.json`'s `aa_threat` puts `maxAAThreat` above 100,000, so that
   gate is off in this profile regardless. **unmeasured**
 
+### The factory overrides were land-blind, so water maps got no navy
+Every override in `AiGetFactoryToBuild` named a hardcoded land def and runs
+*ahead* of the engine's pick, so on a water map each replaced a naval choice with
+something that had nowhere to go. The bot-lab branch was the worst: it returns
+before every other pick in the function, so once it fired it held the side on
+land for the rest of the game. Measured on Silent Sea:
+
+    apex: opening corap -> corvp
+    apex: no T1 bot lab -- building corlab   (x2)
+
+and the side finished on `corlab`/`corvp`/`coralab`/`coravp` with no naval
+anything, while stock BARb went amphibious.
+
+None of this was the engine. `waterIsAVoid` is only set on harmful-water maps;
+`CanBeBuiltAt` is sector-based so a shore-touching start qualifies; and
+`T1_FAC`/`T2_FAC` already paired `armsy`->`armasy` and `corsy`->`corasy`.
+
+`Factory::IsWaterMap()` is `!aiTerrainMgr.IsWaterAVoid() &&
+aiTerrainMgr.GetLandPercent() < 40`. 40 is `factory.json`'s own
+`select.min_land`, the same bar `CFactoryManager::GetRepresenter` uses to choose
+a factory's water variant, so this agrees with the engine instead of inventing a
+cutoff. Three sites now branch on it: the opening substitutes a shipyard rather
+than a vehicle plant, the bot-lab branch is skipped, and `T3Gantry()` returns
+`corgantuw`/`armshltxuw`.
+
+**measured**, two 8-game arms, 3v3 Cortex on Silent Sea, same seeds and settings:
+
+| | baseline | with fix |
+|---|---|---|
+| apex naval spend | **0 (0.0%)** | **63,640 (26.5% of top sinks)** |
+| apex metal/game | 66,587 | 62,677 |
+
+Zero naval metal in eight baseline games is the whole bug in one number. With the
+fix it opens `corsy`, techs to `corasy`, and fields `corsub`/`corpt`/`corcrus`
+with a `coracsub` constructor.
+
+Metal per game is **not** improved: a single match showed 43,410 -> 51,646 and
+that did not replicate over 8 games. Stock's own figure swung 62,339 -> 73,385
+between the two arms, so the -5.9% here is inside run-to-run variation and no
+economic claim should be made either way.
+
+Land maps are unchanged — verified on Comet Catcher, same seed: still
+`corap -> corvp`, bot lab x3, zero naval, `IsWaterMap()` false.
+
+**Legion naval, corrected 2026-08-01.** An earlier note here claimed Legion had
+no advanced shipyard, from a single failed filename search for `legasy`. That was
+wrong. Legion's advanced shipyard is **Cortex's `corasy`** — listed in the
+`buildoptions` of `legnavyconship`, `legcs` and `legch`, and named "Advanced
+Shipyard" in `language/en/units.json` alongside `legadvshipyard`. Legion borrows
+across factions elsewhere too: porcupine index 9 is `coratl` for all three sides.
+`legsy` -> `corasy` is now paired in `T1_FAC`/`T2_FAC`, so a Legion shipyard
+opening techs. `corasy` appears twice in `T2_FAC`, which is safe —
+`AdvCounterpart` returns on the first `T1_FAC` match and `OwnAdvProgress` takes a
+max.
+
+`corgantuw` is genuinely Cortex-only (`coracsub`/`corhacs`/`corsacvsub` are its
+only builders), so `T3Gantry()` leaves Legion on `leggant`.
+
+**Legion crashes the AI at frame 0, and it is not new.** Reproduced on both a
+water and a land map with this branch, and again with `ai/apex` checked out at
+`d4ade1b` — the pre-session commit — so it predates every change here. The stack
+is inside `SkirmishAI.dll`, not AngelScript, and no `.as` compile errors appear.
+**Untriaged**; Legion is unusable until it is found.
+
+Separately, `porcupine.water[1]` referenced index 17 while
+`build_chain_leg.json`'s Legion array still ended at 16 — a real out-of-bounds
+introduced by the AA fix above, now closed by appending `corfrt` there. It was
+not the cause of the crash.
+
+**Still open**: `coralab` remains 8.5% of apex spend on a water map. That is the
+engine's own pick, not an override, and may be right where there are islands.
+And `corcom` at 25.9% of all metal says the water *economy* is still weak — a
+different problem from "we never build shipyards".
+
 ### AA at mex clusters — `porcupine.prevent` 1 -> 2
 `DefaultMakeDefence` walks `num = isPorc ? defenders.size() : preventCount`, so
 at `prevent: 1` an ordinary metal cluster could only ever reach `land[0]`, a

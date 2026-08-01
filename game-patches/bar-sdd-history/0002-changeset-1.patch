@@ -1,0 +1,251 @@
+From 1ad2d73e275543ae8390143995d8793d2e40fa6e Mon Sep 17 00:00:00 2001
+From: apexearth <apexearth@gmail.com>
+Date: Fri, 28 Nov 2025 19:17:05 -0800
+Subject: [PATCH 2/2] changeset 1
+
+---
+ .../config/hard_aggressive/behaviour.json     | 14 ++---
+ .../config/hard_aggressive/build_chain.json   | 17 +++---
+ .../apex/config/hard_aggressive/factory.json  | 60 ++++++++++++-------
+ luarules/gadgets/ai_namer.lua                 | 32 +++++++++-
+ 4 files changed, 85 insertions(+), 38 deletions(-)
+
+diff --git a/luarules/configs/BARb/apex/config/hard_aggressive/behaviour.json b/luarules/configs/BARb/apex/config/hard_aggressive/behaviour.json
+index cf31075710..1549842de6 100644
+--- a/luarules/configs/BARb/apex/config/hard_aggressive/behaviour.json
++++ b/luarules/configs/BARb/apex/config/hard_aggressive/behaviour.json
+@@ -6,14 +6,14 @@
+ 		//But there's possibility that AI will just run from enemy till it has big enough group, but it may loose its base. So if with attack=0.8..1.0 AI is not loosing base then everything is ok and i think this range is optimal.
+ 	
+ 		"quota": {
+-			"scout": 2,  // max scout units out of raiders
+-			"raid": [10.0, 65.0],  // [<min>, <avg>] power of raider squad
+-			"attack": 15.0,  // min power of attack group
++			"scout": 3,  // max scout units out of raiders - increased for jammer detection
++			"raid": [8.0, 50.0],  // [<min>, <avg>] power of raider squad - lowered for more frequent raids
++			"attack": 12.0,  // min power of attack group - lowered to attack sooner
+ 			"thr_mod": {				//AI attacks everything with final threat (after all calculations) <= 1
+-				"attack": [1.0, 1.0],//"attack": [0.6, 0.8],  // [<min>, <max>] enemy threat multiplier for target selection of attack task |  values <1 makes enemy group seem less of an thread for ai => ai attacks stronger groups than it own | org=0.25, 0.3
+-				"defence": [1.0, 1.0],//"defence": [0.3, 0.5],  // [<min>, <max>] enemy threat modifier for group size calculation of defence task; org=0.95, 0.95 | high values = low risk; low values = high risk 
+-				"mobile": 1.05,  // initial modifier for power of attack group based on mobile enemy threat; org=1.05
+-				"static": 1.2,  // initial modifier for power of attack group based on static enemy threat; org= 1.2
++				"attack": [0.85, 0.95],  // lowered to make AI more aggressive against jammed armies
++				"defence": [1.0, 1.0],//"defence": [0.3, 0.5],  // [<min>, <max>] enemy threat modifier for group size calculation of defence task; org=0.95, 0.95 | high values = low risk; low values = high risk
++				"mobile": 1.0,  // initial modifier for power of attack group based on mobile enemy threat; lowered from 1.05
++				"static": 1.1,  // initial modifier for power of attack group based on static enemy threat; lowered from 1.2
+ 				"comm": 0.05   // because of power of dgun
+ 			},
+ 			// anti-air threat threshold, air factories will stop production when AA threat exceeds
+diff --git a/luarules/configs/BARb/apex/config/hard_aggressive/build_chain.json b/luarules/configs/BARb/apex/config/hard_aggressive/build_chain.json
+index b05d76409c..2d9d428059 100644
+--- a/luarules/configs/BARb/apex/config/hard_aggressive/build_chain.json
++++ b/luarules/configs/BARb/apex/config/hard_aggressive/build_chain.json
+@@ -31,9 +31,10 @@
+ 				"armada": ["armmercury",  	"armemp",  		"armbrtha", "armvulc", 		"armamd", "armsilo"],
+ 				"cortex": ["corscreamer", 	"cortron", 		"corint",   "corbuzz", 		"corfmd", "corsilo"]
+ 			},
+-			"weight":     	  [ 0.45,          	0.05,      		0.15,       0.15,      		0.10,     0.10],
+-	
+-			"condition": [80, 600]  // [<Minimum income>, <maximum seconds to build>]
++			// Boosted anti-nuke (index 4) from 0.10 to 0.25 to counter nuke spam
++			"weight":     	  [ 0.30,          	0.05,      		0.15,       0.15,      		0.25,     0.10],
++
++			"condition": [50, 800]  // Lowered from [80, 600] to build anti-nukes earlier
+ 		},
+ 	
+ 		"wall": {
+@@ -113,7 +114,7 @@
+ 			},
+ 			"armafus": {
+ 				"hub": [
+-					[ 
++					[
+ 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 5}, "priority": "now"},
+ 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 10}, "priority": "now"},
+ 						{"unit": "armnanotc", "category": "nano", "offset": {"front": 15}, "priority": "now"},
+@@ -127,7 +128,8 @@
+ 						{"unit": "armflak", "category": "defence", "offset": {"front": 120}, "priority": "now"},
+ 						{"unit": "armflak", "category": "defence", "offset": {"front": 130}, "priority": "now"},
+ 						{"unit": "armflak", "category": "defence", "offset": {"front": 140}, "priority": "now"},
+-						{"unit": "armflak", "category": "defence", "offset": {"front": 150}, "priority": "now"}
++						{"unit": "armflak", "category": "defence", "offset": {"front": 150}, "priority": "now"},
++						{"unit": "armamd", "category": "defence", "offset": {"back": 200}, "condition": {"chance": 0.7}}
+ 					]
+ 				]
+ 			},
+@@ -162,7 +164,7 @@
+ 			},
+ 			"corafus": {
+ 				"hub": [
+-					[  
++					[
+ 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 5}, "priority": "now"},
+ 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 10}, "priority": "now"},
+ 						{"unit": "cornanotc", "category": "nano", "offset": {"front": 15}, "priority": "now"},
+@@ -176,7 +178,8 @@
+ 						{"unit": "corflak", "category": "defence", "offset": {"front": 120}, "priority": "now"},
+ 						{"unit": "corflak", "category": "defence", "offset": {"front": 130}, "priority": "now"},
+ 						{"unit": "corflak", "category": "defence", "offset": {"front": 140}, "priority": "now"},
+-						{"unit": "corflak", "category": "defence", "offset": {"front": 150}, "priority": "now"}
++						{"unit": "corflak", "category": "defence", "offset": {"front": 150}, "priority": "now"},
++						{"unit": "corfmd", "category": "defence", "offset": {"back": 200}, "condition": {"chance": 0.7}}
+ 					]
+ 				]
+ 			}
+diff --git a/luarules/configs/BARb/apex/config/hard_aggressive/factory.json b/luarules/configs/BARb/apex/config/hard_aggressive/factory.json
+index 6d0740882c..3576797093 100644
+--- a/luarules/configs/BARb/apex/config/hard_aggressive/factory.json
++++ b/luarules/configs/BARb/apex/config/hard_aggressive/factory.json
+@@ -142,32 +142,40 @@
+ 		"require_energy": false,
+ 		"income_tier": [10, 25, 35],
+ 		"unit":      ["armca", "armfig", "armpeep", "armthund", "armkam"],
++		// Increased armpeep (scout) production for jammer detection
+ 		"land": {
+-			"tier0": [ 0.05,    0.90,     0.05,      0.00,       0.00],
+-			"tier1": [ 0.03,    0.57,     0.00,      0.20,       0.20],
+-			"tier2": [ 0.03,    0.57,     0.00,      0.20,       0.20],
+-			"tier3": [ 0.03,    0.57,     0.00,      0.20,       0.20]
++			"tier0": [ 0.05,    0.85,     0.10,      0.00,       0.00],
++			"tier1": [ 0.03,    0.52,     0.05,      0.20,       0.20],
++			"tier2": [ 0.03,    0.52,     0.05,      0.20,       0.20],
++			"tier3": [ 0.03,    0.52,     0.05,      0.20,       0.20]
+ 		},
+ 		"air": {
+-			"tier0": [ 0.05,    0.90,     0.05,      0.00,       0.00],
+-			"tier1": [ 0.03,    0.57,     0.00,      0.20,       0.20],
+-			"tier2": [ 0.03,    0.57,     0.00,      0.20,       0.20],
+-			"tier3": [ 0.03,    0.57,     0.00,      0.20,       0.20]
++			"tier0": [ 0.05,    0.85,     0.10,      0.00,       0.00],
++			"tier1": [ 0.03,    0.52,     0.05,      0.20,       0.20],
++			"tier2": [ 0.03,    0.52,     0.05,      0.20,       0.20],
++			"tier3": [ 0.03,    0.52,     0.05,      0.20,       0.20]
+ 		},
+ 		"caretaker": 3
+ 	},
+ 	"armaap": {
+ 		"importance": [0.0, 1.0],
+ 		"require_energy": true,
+-		"income_tier": [50],
++		// Late-game tiers added to maintain high fighter production against Big Air
++		"income_tier": [50, 80, 120, 180],
+ 		"unit":      ["armaca", "armhawk", "armawac", "armpnix", "armbrawl", "armblade", "armstil", "armliche"],
+ 		"land": {
+ 			"tier0": [ 0.05,     0.90,      0.05,      0.00,      0.00,       0.00,       0.00,      0.00],
+-			"tier1": [ 0.03,     0.37,      0.00,      0.15,      0.15,       0.10,       0.10,      0.10]
++			"tier1": [ 0.03,     0.37,      0.00,      0.15,      0.15,       0.10,       0.10,      0.10],
++			"tier2": [ 0.02,     0.85,      0.03,      0.05,      0.05,       0.00,       0.00,      0.00],
++			"tier3": [ 0.02,     0.90,      0.03,      0.03,      0.02,       0.00,       0.00,      0.00],
++			"tier4": [ 0.01,     0.95,      0.02,      0.01,      0.01,       0.00,       0.00,      0.00]
+ 		},
+ 		"air": {
+ 			"tier0": [ 0.05,     0.90,      0.05,      0.00,      0.00,       0.00,       0.00,      0.00],
+-			"tier1": [ 0.03,     0.37,      0.00,      0.15,      0.15,       0.10,       0.10,      0.10]
++			"tier1": [ 0.03,     0.37,      0.00,      0.15,      0.15,       0.10,       0.10,      0.10],
++			"tier2": [ 0.02,     0.85,      0.03,      0.05,      0.05,       0.00,       0.00,      0.00],
++			"tier3": [ 0.02,     0.90,      0.03,      0.03,      0.02,       0.00,       0.00,      0.00],
++			"tier4": [ 0.01,     0.95,      0.02,      0.01,      0.01,       0.00,       0.00,      0.00]
+ 		},
+ 		"caretaker": 6
+ 	},
+@@ -379,32 +387,40 @@
+ 		"require_energy": false,
+ 		"income_tier": [10, 25, 35],
+ 		"unit":      ["corca", "corveng", "corfink", "corshad", "corbw"],
++		// Increased corfink (scout) production for jammer detection
+ 		"land": {
+-			"tier0": [ 0.05,    0.90,      0.00,      0.00,      0.05],
+-			"tier1": [ 0.05,    0.55,      0.00,      0.20,      0.20],
+-			"tier2": [ 0.05,    0.55,      0.00,      0.20,      0.20],
+-			"tier3": [ 0.05,    0.55,      0.00,      0.20,      0.20]
++			"tier0": [ 0.05,    0.85,      0.10,      0.00,      0.00],
++			"tier1": [ 0.05,    0.50,      0.05,      0.20,      0.20],
++			"tier2": [ 0.05,    0.50,      0.05,      0.20,      0.20],
++			"tier3": [ 0.05,    0.50,      0.05,      0.20,      0.20]
+ 		},
+ 		"air": {
+-			"tier0": [ 0.05,    0.90,      0.00,      0.00,      0.05],
+-			"tier1": [ 0.05,    0.55,      0.00,      0.20,      0.20],
+-			"tier2": [ 0.05,    0.55,      0.00,      0.20,      0.20],
+-			"tier3": [ 0.05,    0.55,      0.00,      0.20,      0.20]
++			"tier0": [ 0.05,    0.85,      0.10,      0.00,      0.00],
++			"tier1": [ 0.05,    0.50,      0.05,      0.20,      0.20],
++			"tier2": [ 0.05,    0.50,      0.05,      0.20,      0.20],
++			"tier3": [ 0.05,    0.50,      0.05,      0.20,      0.20]
+ 		},
+ 		"caretaker": 3
+ 	},
+ 	"coraap": {
+ 		"importance": [0.0, 1.0],
+ 		"require_energy": false,
+-		"income_tier": [50],
++		// Late-game tiers added to maintain high fighter production against Big Air
++		"income_tier": [50, 80, 120, 180],
+ 		"unit":      ["coraca", "corvamp", "corawac", "corhurc", "corape", "corcrwh"],
+ 		"land": {
+ 			"tier0": [ 0.05,     0.90,      0.00,      0.05,      0.00,     0.00],
+-			"tier1": [ 0.03,     0.32,      0.05,      0.20,      0.20,     0.20]
++			"tier1": [ 0.03,     0.32,      0.05,      0.20,      0.20,     0.20],
++			"tier2": [ 0.02,     0.85,      0.03,      0.05,      0.05,     0.00],
++			"tier3": [ 0.02,     0.90,      0.03,      0.03,      0.02,     0.00],
++			"tier4": [ 0.01,     0.95,      0.02,      0.01,      0.01,     0.00]
+ 		},
+ 		"air": {
+ 			"tier0": [ 0.05,     0.95,      0.00,      0.00,      0.00,     0.00],
+-			"tier1": [ 0.05,     0.95,      0.00,      0.00,      0.00,     0.00]
++			"tier1": [ 0.05,     0.95,      0.00,      0.00,      0.00,     0.00],
++			"tier2": [ 0.02,     0.90,      0.03,      0.03,      0.02,     0.00],
++			"tier3": [ 0.02,     0.93,      0.02,      0.02,      0.01,     0.00],
++			"tier4": [ 0.01,     0.96,      0.01,      0.01,      0.01,     0.00]
+ 		},
+ 		"caretaker": 6
+ 	},
+diff --git a/luarules/gadgets/ai_namer.lua b/luarules/gadgets/ai_namer.lua
+index 3952b8b0a0..18024153d8 100644
+--- a/luarules/gadgets/ai_namer.lua
++++ b/luarules/gadgets/ai_namer.lua
+@@ -143,11 +143,39 @@ if gadgetHandler:IsSyncedCode() then
+ 			return confirmedAIName
+ 		end
+ 
+-		--function gadget:Initialize()
++			-- Get AI prefix based on AI type/version
++		local function getAIPrefix(teamID)
++			-- Spring.GetAIInfo returns multiple values: hostingPlayerID, shortName, version, options
++			local _, shortName, version, options = Spring.GetAIInfo(teamID)
++			shortName = tostring(shortName or "")
++
++			-- shortName format is like "BARbapex(3)" or "BARbstable(3)"
++			-- Parse out the version from the shortName
++			if string.find(shortName, "BARbapex") then
++				return "[APEX] "
++			elseif string.find(shortName, "BARbstable") then
++				return "[BARb] "
++			elseif string.find(shortName, "BARb") then
++				return "[BARb] "
++			end
++
++			-- Check for Lua AIs
++			local luaAI = Spring.GetTeamLuaAI(teamID) or ''
++			if string.find(luaAI, "Raptors") then
++				return "[Raptor] "
++			elseif string.find(luaAI, "Scavenger") then
++				return "[Scav] "
++			end
++			return ""
++		end
++
++	--function gadget:Initialize()
+ 			local t = Spring.GetTeamList()
+ 			for _,teamID in ipairs(t) do
+ 				if select(4,Spring.GetTeamInfo(teamID,false)) then	-- is AI?
+-					Spring.SetGameRulesParam('ainame_'..teamID, getName(teamID, string.find(Spring.GetTeamLuaAI(teamID) or '', "Raptors"), string.find(Spring.GetTeamLuaAI(teamID) or '', "Scavenger")))
++					local prefix = getAIPrefix(teamID)
++					local baseName = getName(teamID, string.find(Spring.GetTeamLuaAI(teamID) or '', "Raptors"), string.find(Spring.GetTeamLuaAI(teamID) or '', "Scavenger"))
++					Spring.SetGameRulesParam('ainame_'..teamID, prefix .. baseName)
+ 				end
+ 			end
+ 			gadgetHandler:RemoveGadget(self)
+-- 
+2.34.1.windows.1
+

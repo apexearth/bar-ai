@@ -427,6 +427,9 @@ string legap   ("legap");
 string legaap  ("legaap");
 string leggant ("leggant");
 
+string armshltxuw("armshltxuw");
+string corgantuw ("corgantuw");
+
 int switchInterval = MakeSwitchInterval();
 
 // The cheapest body THIS factory can actually make. Scout first, then raider:
@@ -1008,12 +1011,16 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 // "prefer Gollums over Sumos" bias that introduced coravp here was measured on
 // games where a vehicle plant happened to be the opening, so it never showed up
 // as a failure -- it just quietly disabled the whole rush on bot openings.
+// Index-paired: T2_FAC[i] is the advanced counterpart of T1_FAC[i]. corasy
+// appears twice because it serves both Cortex and Legion; that is safe because
+// AdvCounterpart returns on the first T1_FAC name match and OwnAdvProgress takes
+// a max over the whole array.
 array<string> T1_FAC = {armlab, armvp, armsy, armap,
                         corlab, corvp, corsy, corap,
-                        leglab, legvp};
+                        leglab, legvp, legsy};
 array<string> T2_FAC = {armalab, armavp, armasy, armaap,
                         coralab, coravp, corasy, coraap,
-                        legalab, legavp};
+                        legalab, legavp, corasy};
 
 // Our best progress toward an advanced plant, 0..1, or -1 if we hold none.
 // Nanoframes count -- commitment is the question the election asks, and the
@@ -1118,6 +1125,29 @@ CCircuitDef@ GroundOpening()
 	if (side == "legion")
 		return ai.GetCircuitDef(legvp);
 	return ai.GetCircuitDef(armvp);
+}
+
+// The overrides below run ahead of the engine's own pick and all name land defs,
+// so each needs a water branch or it silently replaces a naval choice.
+//
+// 40 is factory.json's own select.min_land, the value
+// CFactoryManager::GetRepresenter reads to choose a factory's water variant.
+const float MIN_LAND_PCT = 40.f;
+
+bool IsWaterMap()
+{
+	return !aiTerrainMgr.IsWaterAVoid()
+		&& (aiTerrainMgr.GetLandPercent() < MIN_LAND_PCT);
+}
+
+CCircuitDef@ NavalOpening()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(corsy);
+	if (side == "legion")
+		return ai.GetCircuitDef(legsy);
+	return ai.GetCircuitDef(armsy);
 }
 
 // The opening factory, remembered so we can tech into its own advanced version.
@@ -1267,6 +1297,13 @@ bool gHaveT3 = false;
 CCircuitDef@ T3Gantry()
 {
 	const string side = ai.GetSideName();
+	// Legion deliberately falls through to the land branch below.
+	if (IsWaterMap()) {
+		if (side == "cortex")
+			return ai.GetCircuitDef(corgantuw);
+		if (side != "legion")
+			return ai.GetCircuitDef(armshltxuw);
+	}
 	if (side == "cortex")
 		return ai.GetCircuitDef(corgant);
 	if (side == "legion")
@@ -1279,7 +1316,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	CCircuitDef@ pick = aiFactoryMgr.DefaultGetFactoryToBuild(pos, isStart, isReset);
 	if (isStart || (pick is null)) {
 		if (isStart && IsAirFactory(pick) && !MayOpenAir()) {
-			CCircuitDef@ ground = GroundOpening();
+			CCircuitDef@ ground = IsWaterMap() ? NavalOpening() : GroundOpening();
 			if (ground !is null) {
 				AiLog(T() + "apex: opening " + pick.GetName() + " -> "
 					+ ground.GetName()
@@ -1308,7 +1345,11 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// Not gated on gHaveT2 alone, or a player that never techs never gets one.
 	// Past FOLLOWER_TECH_FRAME the rush window is over and a second factory is
 	// affordable regardless.
-	if (!HaveT1BotLab() && (gHaveT2 || (ai.frame > FOLLOWER_TECH_FRAME))) {
+	// Skipped on water: this branch returns before every other pick in the
+	// function, so it would pre-empt any naval choice for the rest of the game.
+	if (!IsWaterMap() && !HaveT1BotLab()
+		&& (gHaveT2 || (ai.frame > FOLLOWER_TECH_FRAME)))
+	{
 		CCircuitDef@ lab = T1BotLab();
 		if (lab !is null) {
 			AiLog(T() + "apex: no T1 bot lab -- building " + lab.GetName()

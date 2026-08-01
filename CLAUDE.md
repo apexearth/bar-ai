@@ -14,7 +14,8 @@ otherwise. Re-verify paths before relying on them — engine versions change.
 | Launcher install | `C:\Users\apexe\AppData\Local\Programs\Beyond-All-Reason` |
 | Spring data / write dir | `…\Beyond-All-Reason\data` |
 | Active engine | `…\data\engine\recoil_2026.06.12` (from `launcher_cfg.json` → `config.json`) |
-| Game (dev checkout) | `…\data\games\BAR.sdd` — git clone of `beyond-all-reason/Beyond-All-Reason`, on branch `apex` |
+| Game (harness) | `…\data\games\BAR.sdd` — git clone of `beyond-all-reason/Beyond-All-Reason`, branch `apex`, pinned 2025-11-28 |
+| Game (reference) | `vendor/bar` — the same repo at upstream `master`, for looking things up |
 | Engine-side AIs | `…\data\engine\<ver>\AI\Skirmish\{BARb,BARbApex,CircuitAI,NullAI}\<version>\` |
 | Game-side AI config | `BAR.sdd\luarules\configs\<shortName>\<version>\{config,script}` |
 
@@ -22,8 +23,20 @@ otherwise. Re-verify paths before relying on them — engine versions change.
 new code — import `bar_env` instead. Override with `BAR_ROOT` / `BAR_DATA` /
 `BAR_ENGINE` / `BAR_GAME_SDD` env vars.
 
-**The BAR.sdd checkout is stale** — its `origin/master` ref is from 2025-11-28.
-`git fetch` in it before comparing against upstream.
+**There are two game trees and they are different versions.** `BAR.sdd` is
+pinned at 2025-11-28 and is what every match runs against — it is also the only
+one the dev gadgets can live in, and those gadgets produce *all* telemetry
+(`aaT1`, `metalProduced`, `top`, and the game-over winner). `vendor/bar` tracks
+upstream `master`. Never answer a unit question by picking one: run
+`tools/unitdef.py`, which reads both and shouts when they disagree —
+`legadvshipyard` exists upstream and not in the game we test, and `corasy` costs
+3100 here against 2800 upstream.
+
+**The game itself does not use `BAR.sdd`.** Chobby plays the rapid-downloaded
+`.sdp` packages in `data/packages`/`data/pool`; `BAR.sdd` is an extra entry the
+engine picks up by scanning `data/games/`, used only by this harness. That is
+why it sat eight months stale without anyone noticing, and why deleting it would
+cost the telemetry rather than break the game.
 
 **Read `docs/10-bar-game-concepts.md` before diagnosing anything.** Reasoning
 about this AI from telemetry without the game model has repeatedly produced
@@ -98,7 +111,7 @@ game-patches/               patches + dev gadgets applied to BAR.sdd
 tools/                      python harness (see below)
 docs/                       the reference material
 matches/                    harness output, gitignored
-vendor/                     upstream clones, gitignored
+vendor/                     upstream clones (circuitai, engine, bar), gitignored
 ```
 
 Deploy derives the engine-side folder from the engine's own `BARb/stable` on
@@ -122,6 +135,11 @@ python tools/deploy_ai.py patches            # apply game-patches/*.patch to BAR
 
 python tools/unitsync.py maps comet          # resolve map display names
 python tools/unitsync.py ais                 # what the engine sees
+
+python tools/unitdef.py corasy --builders    # cost, display name, who can build it
+python tools/unitdef.py legsy --builds       # what it builds
+python tools/unitdef.py "advanced ship"      # search display names
+python tools/unitdef.py --trees              # both game trees and their dates
 
 python tools/run_match.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1
@@ -191,6 +209,20 @@ share a shape: the thing didn't work, and nothing said so.
   raw return once and confirm it is real data. Route around via a synced gadget
   publishing a game rules param (`Game_getRulesParamFloat` is not gated); see
   `game-patches/gadgets/dev_team_income.lua`.
+- **Never answer a unit question from a filename search.** Use
+  `tools/unitdef.py`. A `glob legasy.lua` returning nothing was read as "Legion
+  has no advanced shipyard" and written into a code comment as fact; Legion's
+  advanced shipyard is `corasy`, which `legnavyconship`/`legcs`/`legch` list in
+  `buildoptions`. Unit defs sit in arbitrary faction subdirectories, display
+  names live in `language/en/units.json`, and what a faction can *build* is
+  neither — it is the buildoptions of its constructors. One search answers none
+  of those three questions.
+- **"This unit does not exist" is always a claim about ONE tree.** `BAR.sdd` is
+  pinned at 2025-11-28 and `vendor/bar` tracks master, so absence in one proves
+  nothing about the other — `legadvshipyard` is upstream-only. `tools/unitdef.py`
+  reads both and labels every answer with its source; a unit found only upstream
+  gets a loud "do not use it in AI code", because the AI runs against the pinned
+  tree.
 - **`str.replace` anchors that don't match do nothing, quietly.** This has eaten
   edits at least five times. Always `assert old in s` before replacing, and note
   that these Lua/AngelScript files are **tab-indented** — a space-indented anchor
@@ -373,6 +405,26 @@ to add more of them. Three rules, each from a real mistake:
 - **Change the code, change the comment.** A declaration still read "cleared on
   a handover" after the clearing was removed. Re-read every comment attached to
   a line you touch.
+- **Never write a finding into a comment. Findings go in `CHANGES.md`.** A
+  comment saying "Legion has legsy but no advanced shipyard" was written from a
+  single failed `glob legasy.lua`. It was false — Legion builds `corasy`, listed
+  in `legnavyconship`/`legcs`/`legch` buildoptions — and it sat in the code
+  asserting the opposite as fact. This is the recurring failure: a conclusion
+  drawn once, frozen in a comment, and then believed by the next reader
+  (including the next session) long after it stopped being true. Measurements,
+  unit costs, timings, "X never happens", "Y does not exist" are all findings.
+  They belong in `CHANGES.md`, where they are dated and sit next to the run that
+  produced them, or in nothing at all.
+
+  What may stay in a comment is a **mechanism you can see in the code being
+  read** — an engine gate that returns early, an index that is shared between
+  two files, a parser quirk. Not evidence for a decision; the reason a line
+  cannot be deleted.
+
+  Corollary: **absence is the least reliable finding of all.** Not finding a
+  file, a unit or a call proves the search failed, not that the thing is
+  missing. Never record "does not exist" anywhere on one search — check who
+  builds it, who references it, and the game's own name tables first.
 
 Default to none. Three lines is a lot; ten needs a reason.
 

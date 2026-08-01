@@ -7,8 +7,13 @@
 		// is the matching rung: 750m, legack/legacv, and it activates when built.
 		"unit": {
 		//             0          1           		2          		3          		4         5          6                7		   		8          	 	9
+			// Index 17 is corfrt, Legion's floating AA -- porcupine.water in
+			// build_chain.json indexes THIS array by the same shared list, so it must
+			// be as long as armada's and cortex's or water[1] reads out of bounds and
+			// the AI dies at frame 0. Legion has no floating AA of its own, and
+			// borrows across factions at index 9 (coratl) already.
 			"legion": ["leglht",  "legtl",    		"legrl",   		"leghive", 		"legmg",  "legdtr",  "legrhapsis",    "leglupara", 	"legapopupdef", "coratl",
-					   "legflak", "legacluster", 	"legbastion", 	"legcluster",  	"legabm", "legtarg", "legdeflector"]
+					   "legflak", "legacluster", 	"legbastion", 	"legcluster",  	"legabm", "legtarg", "legdeflector", "corfrt"]
 		},
 	
 		"superweapon": {
