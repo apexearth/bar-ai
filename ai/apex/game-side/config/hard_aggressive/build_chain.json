@@ -15,13 +15,7 @@
 		// running. DefaultMakeDefence walks the list until totalCost passes
 		// amountFactor * min(metal, energy income), so on a hosted game's income that is
 		// 5,740 metal of flak per hot cluster and the heavy guns at 11/12 are never reached.
-		//
-		// Index 13 is dropped: armguard/corpun/legcluster all carry "on": false in
-		// behaviour, and with no "slow_target" they never gain ATTR ONOFF, so nothing
-		// switches them back on -- built, paid for, and left inert. Index 12 now precedes
-		// 11 because armamb/cortoast are inert the same way while legacluster is not, so
-		// the working gun is reached first without costing Legion its tower.
-		"land":  [0, 2, 3, 5, 6, 4, 7, 8, 10, 10, 12, 11],
+		"land":  [0, 2, 3, 5, 6, 4, 7, 13, 8, 10, 10, 11, 12],
 		"water": [1, 1, 1, 1, 4, 9, 10, 9, 10],
 		"prevent": 1,  // number of preventive defences
 		"amount": {  // income bound factor
@@ -267,31 +261,35 @@
 			}
 		},
 		"defence": {
-			// ONE jammer hook, on the radar hub below. There were four, and they overlapped by
-			// construction: the radar hub places a jammer AND an armhlt, and armhlt was itself a
-			// hub placing a second jammer 90 elmos away. Observed live: "tons of HLT + jammer +
-			// con all around each other forming a mega defense blob".
-			// The armanni/cordoom hook was written when neither had ever completed in 30 measured
-			// games, so it was believed dead. Builder::ContestTower now builds Annihilators as the
-			// heavy defence rung -- 24 in one game -- which woke it up. Removed rather than gated:
-			// a jammer's radius is large, so a few well spread beat several stacked.
+			// The only jammers in this profile used to hang off armanni/cordoom, which are
+			// porcupine index 12 - last in "land" and, until this edit, 30 min into "base".
+			// Neither ever completed in 30 measured games, so the 0.8 chance below was never
+			// rolled even once. armhlt/corhlt are the first heavy tower every side actually
+			// finishes (base index 4, the T2 factory hubs and the radar hubs below), which makes
+			// them the reliable marker for "this is a defended position, hide it".
+			// Gated later than the radar-hub jammers below so the two hooks mostly cover different
+			// parts of the game instead of stacking two jammers on one position.
 			"armhlt": {
 				"hub": [[
-					{"unit": "armnanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"}
+					{"unit": "armnanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"},
+					{"unit": "armjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 20}, "priority": "low"}
 				]]
 			},
 			"corhlt": {
 				"hub": [[
-					{"unit": "cornanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"}
+					{"unit": "cornanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"},
+					{"unit": "corjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 20}, "priority": "low"}
 				]]
 			},
 			"armanni": {
 				"hub": [[
+					{"unit": "armjamt", "category": "defence", "offset": {"back": 80}, "condition": {"sensor": 900}},
 					{"unit": "armgate", "category": "defence", "offset": {"back": 160}, "condition": {"chance": 0.8}}
 				]]
 			},
 			"cordoom" : {
 				"hub": [[
+					{"unit": "corjamt", "category": "defence", "offset": {"back": 80}, "condition": {"sensor": 900}},
 					{"unit": "corgate", "category": "defence", "offset": {"back": 160}, "condition": {"chance": 0.8}}
 				]]
 			}
@@ -491,25 +489,25 @@
 		"radar": {
 			"armrad": {
 				"hub": [
-					[{"unit": "armjamt", "category": "defence", "offset": [-260, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
+					[{"unit": "armjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "armhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			},
 			"armarad": {
 				"hub": [
-					[{"unit": "armjamt", "category": "defence", "offset": [-260, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
+					[{"unit": "armjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "armhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			},
 			"corrad": {
 				"hub": [
-					[{"unit": "corjamt", "category": "defence", "offset": [-260, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
+					[{"unit": "corjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "corhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			},
 			"corarad": {
 				"hub": [
-					[{"unit": "corjamt", "category": "defence", "offset": [-260, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
+					[{"unit": "corjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "corhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			}

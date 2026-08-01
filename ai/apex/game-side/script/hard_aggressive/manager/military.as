@@ -704,32 +704,22 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 // Enemy air value below which we build no AA at all beyond the cheap tiers.
 // One Armada air constructor is 340 metal, one Cortex 360.
 const float AA_IGNORE    = 500.f;
+// Air share at which we answer their air at full stock strength. Below it, scale
+// down; scale is never above 1, so this only ever builds less AA than stock.
+const float AA_SHARE_REF = 0.25f;
+const float AA_SCALE_MIN = 0.10f;
 // Ceiling on AA as a share of our own army. response.json's own max_percent.
 const float AA_MAX_PCT   = 0.50f;
-// AA is sized as a FRACTION OF THEIR AIR IN METAL, not as a fixed count.
-//
-// apexearth: "if an enemy makes 10 legion heavy air they'll have like almost 40k
-// of metal ... you'd need more than [10 heavy AA] to deal with 10 legion heavy
-// air attacking in a mass." legfort is 5,600 metal each, so ten is 56,000 -- and
-// a flat cap of 6 turrets answered that with 4,920 metal of flak. A count that
-// does not scale with their spend cannot be right at both ends of a game.
-//
-// The divisor is the turret's own cost, read from the def, so this reads as "keep
-// AA worth about this fraction of their air".
-const float AA_METAL_RATIO = 0.45f;
-// Enough to matter the moment air is worth answering at all, since the averaged
-// figure lags the raw one.
-const int   AA_HEAVY_MIN = 2;
-// A runaway guard, not a working limit. It was 6, and 6 was binding constantly.
-const int   AA_HEAVY_MAX = 30;
+// Enemy air metal, scaled, that buys one heavy AA turret (armflak/armcir
+// 820/750, corflak/corerad 850/800, legflak 820).
+const float AA_HEAVY_PER = 1500.f;
+const int   AA_HEAVY_MAX = 6;
 
 // Air is over-counted and ground under-counted by simple visibility: aircraft
 // fly over us constantly, ground sits in fog. Weight ground up, and average both
 // so a single overflight does not swing the answer.
 const float GROUND_UNSEEN  = 3.0f;
 const float AIR_AVG_SECONDS = 240.f;
-// Rising air is believed far sooner than it is forgotten.
-const float AIR_RISE_SECONDS = 30.f;
 // Enemy air builders and scouts are counted as AIR. They cannot be separated
 // from ground ones by role, so discount by the most that could plausibly be air.
 const float SOFT_AIR_WEIGHT = 0.10f;
@@ -738,12 +728,6 @@ const float SOFT_AIR_WEIGHT = 0.10f;
 const float SOFT_AIR_CAP = 2500.f;
 float gAirAvg    = -1.f;
 float gGroundAvg = -1.f;
-
-// Raising maxThisUnit only PERMITS a turret; nothing was asking for one. Measured
-// live: heavy=0/4 -- four wanted, none standing -- because flak sits at index 8 of
-// porcupine.land and porcupine.prevent is 1, so an ordinary cluster never walks
-// past landDefenders[0]. Builder::AirDefence reads these and actually enqueues.
-int gHeavyWant = 0;
 
 int  gNextAirLog   = 0;
 bool gAAResolved   = false;
@@ -768,16 +752,6 @@ void ResolveHeavyAA()
 	}
 }
 
-CCircuitDef@ HeavyAADef()
-{
-	return (gFlak !is null) ? gFlak : gHeavy;
-}
-
-int HeavyAADeficit()
-{
-	return gHeavyWant - (LiveCount(gFlak) + LiveCount(gHeavy));
-}
-
 // Deliberately wider than EnemyArmyCost(), which omits HEAVY: leaving enemy T3
 // out of the denominator inflates the air share exactly in the late game.
 float EnemyGroundCost()
@@ -796,17 +770,16 @@ void CapHeavyAA(CCircuitDef@ def, int spare)
 		def.maxThisUnit = def.count + spare;
 }
 
-// AirScale REMOVED. It turned the air figure into a fraction of the enemy army
-// and multiplied the AA count by it, which cannot be right: 4,700 metal of
-// aircraft needs answering whether or not the same enemy also owns 13,000 metal
-// of tanks. What threatens us is how much air there is, not what proportion of
-// their army it represents. AA_IGNORE already stops us reacting to a lone scout.
-//
-// It was also unreachable in practice. GROUND_UNSEEN inflates ground x3 to cover
-// what we cannot see while air is DISCOUNTED, so the ratio came out about an
-// order of magnitude low -- measured live at share=0.034 where the real air to
-// ground ratio was 0.26, against an AA_SHARE_REF of 0.25 that therefore could
-// never be met. heavy=0/0 with 4,720 metal of enemy air on the field.
+// How seriously to take their air, 0..1. One number, used by both levers.
+float AirScale(float share)
+{
+	float s = share / AA_SHARE_REF;
+	if (s > 1.f)
+		s = 1.f;
+	if (s < AA_SCALE_MIN)
+		s = AA_SCALE_MIN;
+	return s;
+}
 
 void UpdateAirThreat()
 {
@@ -827,20 +800,15 @@ void UpdateAirThreat()
 		gAirAvg = air;
 		gGroundAvg = ground;
 	} else {
-		// Rise fast, decay slow. Symmetric smoothing over four minutes meant a real
-		// air force took minutes to register, by which time it had already hit us.
-		// Losing AA slowly is cheap; noticing air slowly is not.
-		const float kUp = 1.f / AIR_RISE_SECONDS;
-		const float kDn = 1.f / AIR_AVG_SECONDS;
-		gAirAvg += (air - gAirAvg) * ((air > gAirAvg) ? kUp : kDn);
-		gGroundAvg += (ground - gGroundAvg) * kDn;
+		const float k = 1.f / AIR_AVG_SECONDS;
+		gAirAvg += (air - gAirAvg) * k;
+		gGroundAvg += (ground - gGroundAvg) * k;
 	}
 
-	// Compare like with like: gGroundAvg carries the GROUND_UNSEEN inflation, so
-	// undo it here or the ratio is nonsense. Reported only -- nothing sizes off it.
-	const float total = gAirAvg + gGroundAvg / GROUND_UNSEEN;
+	const float total = gAirAvg + gGroundAvg;
 	const float share = (total > 0.f) ? gAirAvg / total : 0.f;
 	const bool worth = (gAirAvg >= AA_IGNORE);
+	const float scale = worth ? AirScale(share) : 0.f;
 
 	// factor is the divisor in RoleProbability's first gate: AA is built while
 	// enemyAir * ratio >= aaCost * factor, so aaCost tops out at
@@ -853,16 +821,7 @@ void UpdateAirThreat()
 	// before it can be scaled. Static AA below is real.
 
 	// count includes nanoframes, so a turret still building holds its own slot.
-	const float aaCost = ((gFlak !is null) && (gFlak.costM > 1.f)) ? gFlak.costM : 820.f;
-	int heavyWant = 0;
-	if (worth) {
-		heavyWant = int(gAirAvg * AA_METAL_RATIO / aaCost);
-		if (heavyWant < AA_HEAVY_MIN)
-			heavyWant = AA_HEAVY_MIN;
-		if (heavyWant > AA_HEAVY_MAX)
-			heavyWant = AA_HEAVY_MAX;
-	}
-	gHeavyWant = heavyWant;
+	int heavyWant = int(gAirAvg * scale / AA_HEAVY_PER);
 	if (heavyWant > AA_HEAVY_MAX)
 		heavyWant = AA_HEAVY_MAX;
 	const int heavyHave = LiveCount(gFlak) + LiveCount(gHeavy);
@@ -876,6 +835,7 @@ void UpdateAirThreat()
 			+ " air=" + formatFloat(gAirAvg, "", 0, 0)
 			+ " ground=" + formatFloat(gGroundAvg, "", 0, 0)
 			+ " share=" + formatFloat(share, "", 0, 3)
+			+ " scale=" + formatFloat(scale, "", 0, 2)
 			+ " heavy=" + heavyHave + "/" + heavyWant);
 	}
 }

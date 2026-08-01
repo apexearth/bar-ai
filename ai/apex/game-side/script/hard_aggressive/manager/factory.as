@@ -53,15 +53,8 @@ const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
 // building an advanced plant, and if two are building, whichever plant is
 // closest to finished. Nanoframes count -- ai.GetDefBuildProgress returns
 // fractional progress, which is exactly the tie-break.
-const string TV_ADV   = "adv";    // this team's best advanced-plant progress
-const string TV_LEAD  = "lead";   // the elector's answer, read by everyone
-// Metal income while this team could commit to a plant, 0 when it could not.
-// Electing on commitment alone cannot stop a stampede: nobody is designated until
-// somebody has already started, so the gate stands open and every team that comes
-// good in the same window starts its own plant. Publishing readiness lets the
-// elector pick BEFORE anyone spends, which is the whole point of having an
-// elector. Observed live: three commanders building T2 labs at ~6 min.
-const string TV_READY = "ready";
+const string TV_ADV  = "adv";    // this team's best advanced-plant progress
+const string TV_LEAD = "lead";   // the elector's answer, read by everyone
 
 // Total builders the tech lead may hold while rushing. Enough to finish an
 // advanced plant fast; beyond that each constructor is metal that buys nothing
@@ -97,22 +90,6 @@ int gNextArmyLog = 0;
 // Hammer 130. The stream of bodies is what is wanted, not the spend.
 const int   FODDER_EVERY = 3;
 int gArmyPushCount = 0;
-
-// Wealth buys build power all by itself: CFactoryManager::UpdateBuildPower stops
-// making constructors only once GetBuildPower() >= metalIncome * bpRatio, which
-// scales with income and knows nothing about whether we are being killed. So the
-// richer we get the more constructors we buy, whatever is happening to us.
-// apexearth: "we prefer to make more and more cons due to our wealth, but we're
-// dying because we aren't making army and defenses, so we're 'rich' but can't
-// spend because we never prioritize on fighting enough."
-//
-// Taking the factory's task slot is the only veto script has over that choice --
-// returning a recruit here means the engine never runs its builder branch for
-// this factory. So when we already hold plenty of build power AND are behind,
-// take the slot every time it is offered instead of every few seconds.
-const uint  SIEGE_WORKERS     = 12;
-const float SIEGE_RICH_INCOME = 60.f;
-const int   SIEGE_PUSH_SPACING = 1 * SECOND;
 
 int gRushLead = -1;   // last lead this instance saw published
 bool gT1Reclaimed = false;   // one-shot: we fed our T1 lab into the plant
@@ -165,11 +142,6 @@ void RunElection()
 	// between two teams whose progress is neck and neck.
 	if ((held >= 0) && (ai.ReadTeamValue(held, TV_ADV, -1.f) > 0.f))
 		return;
-	// Keep a provisional pick that has not spent anything yet but is still able
-	// to. Without this the title flaps between ready teams every tick, and each
-	// one starts a plant during its turn -- the stampede in a slower form.
-	if ((held >= 0) && (ai.ReadTeamValue(held, TV_READY, 0.f) > 0.f))
-		return;
 
 	int best = -1;
 	float bestProgress = 0.f;
@@ -183,21 +155,6 @@ void RunElection()
 			best = t;
 		}
 	}
-	// Nobody has committed. Designate the richest team that COULD, so exactly one
-	// goes ahead instead of everyone who happens to come good together.
-	if (best < 0) {
-		float bestReady = 0.f;
-		for (uint i = 0; i < mates.length(); ++i) {
-			const int t = int(mates[i]);
-			const float r = ai.ReadTeamValue(t, TV_READY, 0.f);
-			if (r <= 0.f)
-				continue;
-			if ((r > bestReady) || ((r == bestReady) && (best >= 0) && (t < best))) {
-				bestReady = r;
-				best = t;
-			}
-		}
-	}
 	ai.PublishTeamValue(TV_LEAD, float(best));
 }
 
@@ -208,7 +165,6 @@ void RunElection()
 void UpdateTeamCoord()
 {
 	ai.PublishTeamValue(TV_ADV, OwnAdvProgress());
-	ai.PublishTeamValue(TV_READY, RushReady() ? aiEconomyMgr.metal.income : 0.f);
 	if (ElectorTeamId() == ai.teamId)
 		RunElection();
 }
@@ -261,21 +217,6 @@ bool HaveT2Mex()
 	return gHaveT2Mex;
 }
 
-// How many advanced extractors we hold, nanoframes included.
-//
-// HaveT2Mex() is latched at ONE and cannot answer "enough". Measured over a game
-// where stock's single largest metal sink was armmoho at 25.8% of everything it
-// built: stock upgraded 7 mexes, we upgraded 1, and produced half its metal.
-// A T2 mex is roughly a 300% increase on that spot and pays for itself; it is
-// the purchase that makes every later purchase affordable.
-int T2MexCount()
-{
-	const string side = ai.GetSideName();
-	CCircuitDef@ moho = ai.GetCircuitDef((side == "cortex") ? cormoho
-	                                   : ((side == "legion") ? legmoho : armmoho));
-	return (moho is null) ? 0 : moho.count;
-}
-
 bool IsTechLead()
 {
 	return ai.teamId == RushLeadTeamId();
@@ -297,20 +238,13 @@ bool LeadIsDesignated()
 
 // May THIS instance pursue the advanced plant?
 //
-// Only the designated lead, because the elector now designates on readiness and
-// not just on commitment -- so there is no window where nobody holds the title
-// and everyone is therefore free to spend. "Whoever is ready" was open to ALL of
-// them at once: three commanders were seen starting T2 labs at ~6 min, which is
-// the four-players-all-teching failure the pooling design exists to prevent.
-//
-// This cannot deadlock the way gating on commitment did. That deadlocked because
-// the title required a plant nobody was allowed to start; readiness is earned by
-// the economy growing, which happens whether or not anyone may build. The frame
-// clause is a backstop only: past it the rush window is over and followers are
-// released anyway, so a broken election can never permanently block teching.
+// Before anyone is designated the answer is "whoever is ready" -- that is the
+// whole point of selecting on commitment rather than prediction, and RushReady
+// already demands a real economy behind it. Once someone is designated, only
+// they continue, so the team pools behind one player instead of four.
 bool MayPursueT2()
 {
-	return IsDesignatedLead() || (ai.frame >= FOLLOWER_TECH_FRAME);
+	return !LeadIsDesignated() || IsTechLead();
 }
 
 // Am I the ACTUAL designated lead? Distinct from IsTechLead(), which is true for
@@ -392,7 +326,6 @@ const int   FOLLOWER_TECH_FRAME  = 10 * MINUTE;
 // factor being too low, not this number being wrong -- check eInc in the T2GATE
 // log before lowering it.
 const float FOLLOWER_TECH_ENERGY = 800.f;
-int gNextTechBlockLog = 0;
 
 
 enum Attr {
@@ -446,20 +379,6 @@ int switchInterval = MakeSwitchInterval();
 // leglab answers leggob. Military::IsFodder is the gate, so a factory whose
 // cheapest option is not actually cheap returns null and the caller buys the
 // assault mainstay as before.
-// Advanced constructors this instance should hold. Two is the floor: one cannot
-// upgrade mexes and hold an energy queue at the same time.
-const int ADV_CON_BASE = 2;
-const int ADV_CON_MAX  = 7;
-const float ADV_CON_PER_INCOME = 25.f;
-
-int AdvConTarget()
-{
-	int want = ADV_CON_BASE + int(aiEconomyMgr.metal.income / ADV_CON_PER_INCOME);
-	if (want > ADV_CON_MAX)
-		want = ADV_CON_MAX;
-	return want;
-}
-
 CCircuitDef@ Fodder(const CCircuitDef@ facDef)
 {
 	CCircuitDef@ d = aiFactoryMgr.GetRoleDef(facDef, Unit::Role::SCOUT.type);
@@ -469,134 +388,6 @@ CCircuitDef@ Fodder(const CCircuitDef@ facDef)
 	if (Military::IsFodder(d))
 		return d;
 	return null;
-}
-
-// Spam labs. apexearth: "fodder factories should just have a repeat order on
-// like ticks or whatever and factory move order straight at the enemies... right
-// now I can see it isn't doing that", and separately "he should have 2 or 3
-// factories sending out spam".
-//
-// Two halves, and the AI had neither. REPEAT means the factory re-queues what it
-// finishes, so it keeps producing without being handed each unit as its own task.
-// The MOVE order on a factory is its rally point -- without one the bodies pile
-// up at home, which is the part that was visible on screen.
-const int SPAM_RALLY_PERIOD = 15 * SECOND;
-const int SPAM_LOG_PERIOD   = 30 * SECOND;
-// Short, so the rally point keeps following the enemy rather than being set once.
-const int SPAM_WAIT_TIME    = 10 * SECOND;
-array<int> gSpamRepeated;
-int gNextSpamRally = 0;
-int gNextSpamLog = 0;
-
-bool OnMapPos(const AIFloat3& in p)
-{
-	return (p.x >= 0.f) && (p.z >= 0.f)
-		&& (p.x < float(AiTerrainWidth())) && (p.z < float(AiTerrainHeight()));
-}
-
-IUnitTask@ SpamLab(CCircuitUnit@ unit)
-{
-	// Only once the T1 lab is surplus: before T2 it is still the source of the
-	// constructors and the opening army.
-	if (!gHaveT2)
-		return null;
-	if ((userData[unit.circuitDef.id].attr & (Attr::T2 | Attr::T3)) != 0)
-		return null;
-
-	// A lab on repeat is DEDICATED -- it loops fodder and the wait below stops
-	// anything else being queued on it, so it never builds another constructor.
-	// Converting too many starves the player of build power entirely. Observed
-	// live: a team's constructor count froze at 6 from minute 20 while its base
-	// stopped growing, and apexearth watching it: "still has T1 labs but there are
-	// no cons makin stuff, the commander is just dancing".
-	//
-	// So always leave two factories doing ordinary work.
-	const int facs = int(aiFactoryMgr.GetFactoryCount());
-	if ((facs < 3) || (int(gSpamRepeated.length()) >= facs - 2))
-		return null;
-	CCircuitDef@ want = Fodder(unit.circuitDef);
-	if (want is null)
-		return null;
-
-	if (ai.frame >= gNextSpamRally) {
-		const AIFloat3 at = aiEnemyMgr.GetEnemyPos();
-		if (OnMapPos(at)) {
-			gNextSpamRally = ai.frame + SPAM_RALLY_PERIOD;
-			unit.CmdMoveTo(at);
-		}
-	}
-
-	bool seeded = false;
-	for (uint i = 0; i < gSpamRepeated.length(); ++i) {
-		if (gSpamRepeated[i] == unit.id) {
-			seeded = true;
-			break;
-		}
-	}
-	if (!seeded) {
-		unit.CmdRepeat(true);
-		gSpamRepeated.insertLast(unit.id);
-		IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
-				Task::RecruitType::FIREPOWER, Task::Priority::NORMAL,
-				want, unit.GetPos(ai.frame), 0.f));
-		if (rec !is null) {
-			if (ai.frame >= gNextSpamLog) {
-				gNextSpamLog = ai.frame + SPAM_LOG_PERIOD;
-				AiLog(T() + "apex: spam lab " + unit.circuitDef.GetName()
-					+ " -> " + want.GetName() + " on repeat, rallying at enemy");
-			}
-			return rec;
-		}
-		return null;
-	}
-
-	// Seeded once, and never again. Under repeat the factory re-queues whatever it
-	// finishes, so ANY unit added is added for the rest of the game: enqueueing per
-	// ask made the queue grow without bound -- observed at 24 minutes as ~25 Maces
-	// and 13 Ticks stacked up. One entry is all a looping queue needs.
-	//
-	// A no-op wait holds the task slot so DefaultMakeTask below does not add one
-	// either. IWaitTask::Start returns immediately when isStop is false, so this
-	// issues no command and cannot disturb the queue that is already cycling.
-	return aiFactoryMgr.Enqueue(TaskS::Wait(false, SPAM_WAIT_TIME));
-}
-
-// Something behind the bodies that outranges what they run into. apexearth: "we
-// make lots of fodder but they aren't really getting backed up by anything with
-// range and direct fire damage ... we need to be making more starlights, snipers".
-//
-// Those are armmanni (Starlight, 1200 metal, range 950) and armsnipe
-// (Sharpshooter, 680, range 900), and BOTH carry role anti_heavy -- so asking the
-// factory for its anti_heavy unit gets each side its own without naming any of
-// them. Their configured weights are what starved them: armsnipe is 0.00 in the
-// first two income tiers against armfido's 0.40-0.50, and armmanni 0.00 then 0.15.
-const int BACKING_PERIOD = 20 * SECOND;
-int gNextBacking = 0;
-int gNextBackingLog = 0;
-
-IUnitTask@ RangedBacking(CCircuitUnit@ unit)
-{
-	if (!gHaveT2 || (ai.frame < gNextBacking))
-		return null;
-	// The anti_heavy unit is a T2 unit; a T1 lab returns null for the role anyway.
-	if ((userData[unit.circuitDef.id].attr & Attr::T2) == 0)
-		return null;
-	CCircuitDef@ want = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::AH.type);
-	if ((want is null) || !want.IsAvailable(ai.frame))
-		return null;
-
-	IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
-			Task::RecruitType::FIREPOWER, Task::Priority::NORMAL,
-			want, unit.GetPos(ai.frame), 0.f));
-	if (rec is null)
-		return null;
-	gNextBacking = ai.frame + BACKING_PERIOD;
-	if (ai.frame >= gNextBackingLog) {
-		gNextBackingLog = ai.frame + 30 * SECOND;
-		AiLog(T() + "apex: ranged backing " + unit.circuitDef.GetName()
-			+ " -> " + want.GetName());
-	}
-	return rec;
 }
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
@@ -712,20 +503,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// avoid buying while behind.
 	const bool isT1Fac =
 		((Factory::userData[unit.circuitDef.id].attr & (Factory::Attr::T2 | Factory::Attr::T3)) == 0);
-	// Under siege the advanced plant joins in. Its assault unit is expensive,
-	// which is the standing objection to asking for it, but the whole condition
-	// here is that we are rich and losing: expensive is affordable, and cheap is
-	// evidently not working.
-	const bool losing = Military::LosingGround();
-	const bool siege  = losing
-		&& (aiBuilderMgr.GetWorkerCount() >= SIEGE_WORKERS)
-		&& (aiEconomyMgr.metal.income >= SIEGE_RICH_INCOME);
-	// Under siege this pushed on EVERY ask, which left the factory doing nothing
-	// but army: observed live as a player that had lost its commander building
-	// only Brutes and spam and starting nothing else until it was safe again.
-	// Push harder, not exclusively -- the gap between asks is what leaves room for
-	// constructors and economy.
-	if (losing && gHaveT2 && HaveT2Mex() && (isT1Fac || siege)
+	if (isT1Fac && gHaveT2 && HaveT2Mex() && Military::LosingGround()
 		&& (ai.frame >= gNextArmyPush))
 	{
 		CCircuitDef@ want = null;
@@ -738,7 +516,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 					Task::RecruitType::FIREPOWER, Task::Priority::HIGH,
 					want, unit.GetPos(ai.frame), 0.f));
 			if (rec !is null) {
-				gNextArmyPush = ai.frame + (siege ? SIEGE_PUSH_SPACING : ARMY_PUSH_SPACING);
+				gNextArmyPush = ai.frame + ARMY_PUSH_SPACING;
 				if (ai.frame >= gNextArmyLog) {
 					gNextArmyLog = ai.frame + 30 * SECOND;
 					AiLog(T() + "apex: behind on the field, massing " + want.GetName()
@@ -750,18 +528,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		}
 	}
 
-	// Build advanced constructors up to a TARGET, not up to one.
-	//
-	// The old test was `!gHaveAdvCon` -- own a single advanced constructor and a
-	// non-lead never built another for the rest of the game. apexearth, watching:
-	// "now that we're always making a fusion we don't have enough t2 cons to make
-	// t2 mexes and other things ... I think a lot of this is solved by making more
-	// t2 cons." One constructor cannot upgrade mexes, hold the fusion queue and
-	// answer air at the same time; it just picks one and the rest never happen.
-	//
-	// Scaled on income, because build power is what an economy is FOR: more income
-	// means more places to spend it at once.
-	if (gHaveT2) {
+	if (gHaveT2 && ((IsDesignatedLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
 		// BUILDER, not BUILDER2. builderT2 is registered as a SUBROLE of builder
 		// (AiAddRole("builderT2", BUILDER.type)) and the factory role map is
 		// indexed by BASE roles only -- FactoryManager.cpp:1057 looks up
@@ -771,8 +538,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// no mexes at all. For an advanced plant the base builder IS the advanced
 		// constructor -- coravp's only builder is coracv.
 		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
-		const bool owed = IsDesignatedLead() && Builder::OwesAdvCons();
-		if ((con !is null) && (owed || (con.count < AdvConTarget()))) {
+		if (con !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
 					Task::RecruitType::BUILDPOWER,
 					IsSmallTeam() ? Task::Priority::NORMAL : Task::Priority::NOW,
@@ -781,19 +547,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				return rec;
 		}
 	}
-
-	// The T2 plant's share of the spam doctrine: bodies from the T1 labs, reach
-	// from here.
-	IUnitTask@ back = RangedBacking(unit);
-	if (back !is null)
-		return back;
-
-	// Last, so anything that matters more has already been taken: a T1 lab we no
-	// longer need for tech pours bodies at the enemy instead of idling.
-	IUnitTask@ spam = SpamLab(unit);
-	if (spam !is null)
-		return spam;
-
 	return aiFactoryMgr.DefaultMakeTask(unit);
 }
 
@@ -1065,24 +818,10 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// every non-lead on energy before anyone has been elected and nobody can
 	// start a plant, so nobody becomes lead, so nobody can start a plant. The
 	// energy bar applies once the team has a lead to pool behind.
-	// Bounded to the pooling window, like every other follower gate. It had no
-	// time bound, so it pre-empted the follower release below FOREVER: that branch
-	// asks only for metal income past FOLLOWER_TECH_FRAME, and could never be
-	// reached by anyone under 800 energy/s. Observed live at 33 minutes -- a
-	// wealthy player, metal storage full, no advanced plant and no way to ever
-	// start one. Nothing logged, because the T2GATE line lives in the rush branch
-	// this returns before.
 	if (LeadIsDesignated() && !IsDesignatedLead()
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
-		&& (ai.frame < FOLLOWER_TECH_FRAME)
 		&& (aiEconomyMgr.energy.income < FOLLOWER_TECH_ENERGY))
 	{
-		if (ai.frame >= gNextTechBlockLog) {
-			gNextTechBlockLog = ai.frame + 60 * SECOND;
-			AiLog(T() + "apex: follower held off T2, eInc="
-				+ formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
-				+ " needs " + formatFloat(FOLLOWER_TECH_ENERGY, "", 0, 0));
-		}
 		return false;
 	}
 	// The designated player is rushing: buy T2 as soon as the metal is on hand,

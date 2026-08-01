@@ -126,11 +126,17 @@
 			// heavy tower Legion actually finishes (base index 4, the T2 factory hubs, the radar
 			// hubs), so it is the reliable marker for "this position is worth hiding". Gated later
 			// than the radar-hub jammers so the two hooks do not stack on one spot.
+			"legmg": {
+				"hub": [[
+					{"unit": "legjam", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 14}, "priority": "low"}
+				]]
+			},
 			"legbastion" : {
 				"hub": [[
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
+					{"unit": "legajam", "category": "defence", "offset": {"back": 80}, "condition": {"sensor": 900}},
 					{"unit": "legdeflector", "category": "defence", "offset": {"back": 160}}
 				]]
 			}
@@ -239,13 +245,13 @@
 		"radar": {
 			"legrad": {
 				"hub": [
-					[{"unit": "legjam", "category": "defence", "offset": [-260, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
+					[{"unit": "legjam", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
 					[{"unit": "legmg", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			},
 			"legarad": {
 				"hub": [
-					[{"unit": "legajam", "category": "defence", "offset": [-260, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
+					[{"unit": "legajam", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 8}, "priority": "low"}],
 					[{"unit": "legmg", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			}
