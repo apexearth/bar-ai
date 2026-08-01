@@ -15,7 +15,7 @@
 		// running. DefaultMakeDefence walks the list until totalCost passes
 		// amountFactor * min(metal, energy income), so on a hosted game's income that is
 		// 5,740 metal of flak per hot cluster and the heavy guns at 11/12 are never reached.
-		"land":  [0, 2, 3, 5, 6, 4, 7, 13, 8, 10, 10, 11, 12],
+		"land":  [0, 2, 3, 5, 6, 4, 7, 8, 10, 10, 12, 11],
 		"water": [1, 1, 1, 1, 4, 9, 10, 9, 10],
 		"prevent": 1,  // number of preventive defences
 		"amount": {  // income bound factor
@@ -271,25 +271,21 @@
 			// parts of the game instead of stacking two jammers on one position.
 			"armhlt": {
 				"hub": [[
-					{"unit": "armnanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"},
-					{"unit": "armjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 20}, "priority": "low"}
+					{"unit": "armnanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"}
 				]]
 			},
 			"corhlt": {
 				"hub": [[
-					{"unit": "cornanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"},
-					{"unit": "corjamt", "category": "defence", "offset": {"back": 90}, "condition": {"m_inc>": 20}, "priority": "low"}
+					{"unit": "cornanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"}
 				]]
 			},
 			"armanni": {
 				"hub": [[
-					{"unit": "armjamt", "category": "defence", "offset": {"back": 80}, "condition": {"sensor": 900}},
 					{"unit": "armgate", "category": "defence", "offset": {"back": 160}, "condition": {"chance": 0.8}}
 				]]
 			},
 			"cordoom" : {
 				"hub": [[
-					{"unit": "corjamt", "category": "defence", "offset": {"back": 80}, "condition": {"sensor": 900}},
 					{"unit": "corgate", "category": "defence", "offset": {"back": 160}, "condition": {"chance": 0.8}}
 				]]
 			}
@@ -489,25 +485,25 @@
 		"radar": {
 			"armrad": {
 				"hub": [
-					[{"unit": "armjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
+					[{"unit": "armjamt", "category": "defence", "offset": [-260, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "armhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			},
 			"armarad": {
 				"hub": [
-					[{"unit": "armjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
+					[{"unit": "armjamt", "category": "defence", "offset": [-260, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "armhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			},
 			"corrad": {
 				"hub": [
-					[{"unit": "corjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
+					[{"unit": "corjamt", "category": "defence", "offset": [-260, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "corhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			},
 			"corarad": {
 				"hub": [
-					[{"unit": "corjamt", "category": "defence", "offset": [-90, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
+					[{"unit": "corjamt", "category": "defence", "offset": [-260, 0], "condition": {"m_inc>": 25}, "priority": "low"}],
 					[{"unit": "corhlt", "category": "defence", "offset": {"front": 110}, "condition": {"m_inc>": 28}, "priority": "low"}]
 				]
 			}

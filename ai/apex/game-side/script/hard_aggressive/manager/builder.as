@@ -362,6 +362,92 @@ string armpb("armpb");
 string corvipe("corvipe");
 string legapopupdef("legapopupdef");
 
+// T1 energy converters, at the back wall. apexearth: "t1 energy converters are
+// super duper cheap, to make t1 cons, send them to the back wall, and make
+// converters should be a super easy and safe task to do."
+//
+// The costs, read from the defs: 1 metal, 1,150 energy, 2,600 buildtime (a mex is
+// 50 / 500 / 1,800). So this is free in the scarce resource, paid for in the one
+// being thrown away -- 131,422 energy wasted per player in the last 8 games, or
+// about 114 converters' worth -- and the only real price is builder TIME.
+//
+// Which is why the floor below matters more than anything else here. Every rule
+// added this session was of the form "if X then take a constructor", and with one
+// constructor that is all of the build power rather than a share of it. This one
+// asks whether we can spare a builder first, and never takes the last two.
+string armmakr("armmakr");
+string cormakr("cormakr");
+string legeconv("legeconv");
+
+const uint  CONVERT_CON_FLOOR = 3;    // never dip below this many workers
+const float CONVERT_MIN_SPARE = 70.f; // one converter's draw of unused energy
+const int   CONVERT_PERIOD    = 25 * SECOND;
+const float REAR_DISTANCE     = 450.f;
+int gNextConvert = 0;
+int gConverts = 0;
+
+// Behind our own base, measured away from the enemy. Converters detonate, so the
+// back wall is both safer for them and safer for everything near them.
+bool RearPos(CCircuitUnit@ unit, AIFloat3& out spot)
+{
+	if (!gHomeSet)
+		return false;
+	AIFloat3 away = gHomePos - aiEnemyMgr.GetEnemyPos();
+	if (away.SqLength2D() < NEAR_ZERO)
+		return false;
+	away.SafeNormalize2D();
+	for (int i = 1; i <= 3; ++i) {
+		const AIFloat3 back = gHomePos + away * (REAR_DISTANCE * float(i));
+		if (!OnMap(back))
+			continue;
+		if (ThreatFor(unit, back) <= CON_THREAT_VETO) {
+			spot = back;
+			return true;
+		}
+	}
+	return false;
+}
+
+IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
+{
+	if (ai.frame < gNextConvert)
+		return null;
+	// Share, not truth: leave enough builders doing ordinary work.
+	if (aiBuilderMgr.GetWorkerCount() <= CONVERT_CON_FLOOR)
+		return null;
+	// Only what the grid can actually feed. Self-limiting -- every converter
+	// raises pull, so spare falls and this stops on its own.
+	const float spare = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	if (spare < CONVERT_MIN_SPARE)
+		return null;
+
+	// The T1 converter is what a T1 constructor can build: armck/armcv carry
+	// armmakr, corck/corcv cormakr, legck/legcv legeconv. armfmkr is a real def
+	// that NO ground constructor can build -- asking for it produced 95 requests
+	// and zero converters.
+	const string side = ai.GetSideName();
+	CCircuitDef@ want = (side == "cortex") ? ai.GetCircuitDef(cormakr)
+	                  : ((side == "legion") ? ai.GetCircuitDef(legeconv)
+	                                        : ai.GetCircuitDef(armmakr));
+	if ((want is null) || !want.IsAvailable(ai.frame))
+		return null;
+
+	AIFloat3 spot;
+	if (!RearPos(unit, spot))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::CONVERT,
+			Task::Priority::NORMAL, want, spot, SQUARE_SIZE * 8));
+	if (post is null)
+		return null;
+	gNextConvert = ai.frame + CONVERT_PERIOD;
+	++gConverts;
+	AiLog(Factory::T() + "apex: converter " + want.GetName()
+		+ " spare=" + formatFloat(spare, "", 0, 0)
+		+ " workers=" + aiBuilderMgr.GetWorkerCount()
+		+ " asked=" + gConverts + " standing=" + want.count);
+	return post;
+}
+
 CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 {
 	const string side = ai.GetSideName();
@@ -529,6 +615,17 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 					return flee;
 			}
 		}
+	}
+
+	// After the reactive branches above, before ordinary work. It pre-empts
+	// DefaultMakeTask, which is where mex upgrades live, so it is bounded twice
+	// over: one every 25 seconds, and never when it would leave us short of
+	// builders. Twelve rules pre-empting here with neither bound is what cut metal
+	// production 4.3x.
+	if (!isComm) {
+		IUnitTask@ conv = EnergyConverter(unit);
+		if (conv !is null)
+			return conv;
 	}
 
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);

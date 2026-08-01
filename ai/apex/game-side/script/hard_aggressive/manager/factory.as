@@ -55,6 +55,12 @@ const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
 // fractional progress, which is exactly the tie-break.
 const string TV_ADV  = "adv";    // this team's best advanced-plant progress
 const string TV_LEAD = "lead";   // the elector's answer, read by everyone
+// Metal income while this team could commit to a plant, 0 when it could not.
+// Electing on commitment ALONE cannot stop a stampede: nobody is designated until
+// somebody has already started, so the gate stands open and every team that comes
+// good in the same window starts its own plant. Observed live, twice: three
+// commanders teching within 40 seconds of each other at the 5 minute mark.
+const string TV_READY = "ready";
 
 // Total builders the tech lead may hold while rushing. Enough to finish an
 // advanced plant fast; beyond that each constructor is metal that buys nothing
@@ -142,6 +148,11 @@ void RunElection()
 	// between two teams whose progress is neck and neck.
 	if ((held >= 0) && (ai.ReadTeamValue(held, TV_ADV, -1.f) > 0.f))
 		return;
+	// Keep a provisional pick that has not spent anything yet but is still able
+	// to. Without this the title flaps between ready teams every tick and each
+	// starts a plant on its turn -- the same stampede, slower.
+	if ((held >= 0) && (ai.ReadTeamValue(held, TV_READY, 0.f) > 0.f))
+		return;
 
 	int best = -1;
 	float bestProgress = 0.f;
@@ -155,6 +166,22 @@ void RunElection()
 			best = t;
 		}
 	}
+	// ISOLATION TEST: readiness fallback disabled. Restricting who may tech cost
+	// 30% of metal production in an 8-game measurement, so this establishes
+	// whether the stampede gate is what did it.
+	if (false) {
+		float bestReady = 0.f;
+		for (uint i = 0; i < mates.length(); ++i) {
+			const int t = int(mates[i]);
+			const float r = ai.ReadTeamValue(t, TV_READY, 0.f);
+			if (r <= 0.f)
+				continue;
+			if ((r > bestReady) || ((r == bestReady) && (best >= 0) && (t < best))) {
+				bestReady = r;
+				best = t;
+			}
+		}
+	}
 	ai.PublishTeamValue(TV_LEAD, float(best));
 }
 
@@ -165,6 +192,7 @@ void RunElection()
 void UpdateTeamCoord()
 {
 	ai.PublishTeamValue(TV_ADV, OwnAdvProgress());
+	ai.PublishTeamValue(TV_READY, RushReady() ? aiEconomyMgr.metal.income : 0.f);
 	if (ElectorTeamId() == ai.teamId)
 		RunElection();
 }
@@ -244,6 +272,13 @@ bool LeadIsDesignated()
 // they continue, so the team pools behind one player instead of four.
 bool MayPursueT2()
 {
+	// Only the designated lead. The elector now designates on READINESS as well as
+	// commitment, so there is no window where nobody holds the title and everyone
+	// is therefore free to spend. "Whoever is ready" was open to all of them at
+	// once. This cannot deadlock the way gating on commitment did: that needed a
+	// plant nobody was allowed to start, whereas readiness is earned by the economy
+	// growing. The frame clause is a backstop only -- past it the rush window is
+	// over and followers are released anyway.
 	return !LeadIsDesignated() || IsTechLead();
 }
 
@@ -818,8 +853,16 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// every non-lead on energy before anyone has been elected and nobody can
 	// start a plant, so nobody becomes lead, so nobody can start a plant. The
 	// energy bar applies once the team has a lead to pool behind.
+	// Bounded to the pooling window, like every other follower gate. Without the
+	// frame clause it pre-empted the follower release below FOREVER: that branch
+	// asks only for metal income past FOLLOWER_TECH_FRAME and could never be
+	// reached by anyone under 800 energy/s. Observed live at 33 minutes -- a
+	// wealthy player, metal storage full, no advanced plant and no way to start
+	// one. Nothing logged, because the T2GATE line lives in the branch this
+	// returns before.
 	if (LeadIsDesignated() && !IsDesignatedLead()
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
+		&& (ai.frame < FOLLOWER_TECH_FRAME)
 		&& (aiEconomyMgr.energy.income < FOLLOWER_TECH_ENERGY))
 	{
 		return false;

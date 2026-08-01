@@ -158,6 +158,49 @@ whose units we will not fund, a gantry with no economy behind it, a radar hub
 whose jammers never come. Ask what the purchase is FOR, and whether that thing is
 reachable, before spending on the step that enables it.
 
+## Teching is a team act, and only half of it was ever built
+
+apexearth: *"When a player is teching up, they can hardly afford to do anything
+else, like defend themselves. Usually when I see us do this and not lose it is a
+lucky event. The techer is mostly defenceless, and the teammates need to be
+picking up that person's slack."*
+
+The tech-lead election implements the **economic** half — one player techs, the
+rest do not, so the metal pools instead of being spent three times over. The
+**defensive** half was never written: nothing tells a follower to cover the
+player who has just made itself helpless.
+
+That gap is visible in the measurement. Gating who may tech, with no instruction
+to the followers about what to do instead, cost 30% of metal production over 8
+games — every composition metric fell. The gate removed the economic benefit of
+parallel teching and delivered none of the protection it exists to enable,
+because the followers simply teched later rather than covering anyone.
+
+So the rule is not *"only one may tech"*. It is:
+
+> One player techs; **the others convert that time into army and into defending
+> the techer**. Neither half works alone.
+
+And gate on **safety, not identity** — the risk apexearth describes is being
+contested while helpless, not the act of teching itself. A player nobody is
+attacking can tech cheaply; three players teching while under pressure is the
+disaster. "Only one may ever tech" is a proxy for that, and a poor one.
+
+### A limit of the benchmark, worth stating
+
+Stock BARb may not punish an undefended techer the way a human opponent does. If
+so, a strategy of "everyone techs at once and hopes" will score BETTER against
+stock than it deserves, and the composition numbers will quietly recommend it.
+
+apexearth, who plays the game: *"usually when I see us do this and not lose it is
+a lucky event."* That is a variance description -- it wins when unpunished and
+loses badly when punished. A tournament mean cannot see the difference between a
+robust strategy and a lucky one; it reports the average of both.
+
+Where measurement and multiplayer experience disagree about a RISK, prefer the
+experience. Where they disagree about a RATE -- how much metal, how many
+upgrades -- prefer the measurement.
+
 ## Hardest part
 
 Not the phases — the transition conditions. "Ensure we have enough energy and
