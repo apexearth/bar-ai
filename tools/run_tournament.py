@@ -210,13 +210,24 @@ def summarise(rows: list[dict]) -> str:
             out.append(f"  {x} {wx} - {wy} {y}")
 
     if decided and wins:
-        # Normal approximation over decided games. Printed because a 36-game
+        # Wilson score interval over decided games. Printed because a 36-game
         # sample routinely spans a 30-point interval -- without it a 58% result
         # reads as a finding when it is noise.
+        #
+        # NOT the normal approximation, which was here and is degenerate at the
+        # ends: se = sqrt(p(1-p)/n) is ZERO when p is 0 or 1, so a 3-0 printed as
+        # "95% CI 100-100%, a real difference" on three games. Every clean sweep
+        # this tool has ever reported claimed certainty it had not earned. Wilson
+        # keeps a sane width at the extremes -- 3/3 spans about 44-100%, which
+        # correctly still includes 50%.
         best = max(wins, key=lambda s: wins[s])
         p = wins[best] / decided
-        se = (p * (1 - p) / decided) ** 0.5
-        lo, hi = max(0.0, p - 1.96 * se), min(1.0, p + 1.96 * se)
+        z = 1.96
+        denom = 1.0 + z * z / decided
+        centre = (p + z * z / (2 * decided)) / denom
+        half = (z / denom) * ((p * (1 - p) / decided
+                               + z * z / (4 * decided * decided)) ** 0.5)
+        lo, hi = max(0.0, centre - half), min(1.0, centre + half)
         out.append("")
         out.append(f"{best}: {wins[best]}/{decided} decided = {100*p:.1f}% "
                    f"(95% CI {100*lo:.0f}-{100*hi:.0f}%)")
