@@ -112,6 +112,52 @@ The general shape: the reason a dozen sensible rules cut metal production 4.3x
 is that each of them was written as *"if X then take a constructor"* and none as
 *"if X, and we can spare one"*.
 
+## Priority is a function of the follow-through, not a constant
+
+apexearth: *"why build another fusion if we are max energy? I'll tell you why,
+because you're gonna make tons of advanced energy converters!! ah shit but you
+never did... and then that dude never made t3... oops... and we get rekt."*
+
+That is the whole problem in one sentence. A fusion at max energy is **correct**
+if converters follow it and **wrong** if they do not — the same purchase, the
+opposite verdict, decided entirely by something that has not happened yet. No
+static priority can express that, because the number would have to change based
+on a plan.
+
+Measured over 8 games with the flat rule set:
+
+| | apex | stock |
+|---|---|---|
+| spend on fusion + afus | 32% | 24% |
+| energy wasted | 235,160 | 38,113 |
+| T3 spend | **0** | 9,469 |
+
+Both halves of the sentence, in numbers. The energy got built, the conversion
+did not, and the metal that should have become a gantry is sitting in generators
+feeding nothing. "We get rekt" is the T3 column.
+
+The rule that falls out:
+
+**Never buy a prerequisite unless the thing it is for is actually reachable.**
+
+Reachable is answerable, not a guess:
+
+- is there build power to do the follow-up, given the floor reserved for economy
+- does the phase we are in (or the next one) include that follow-up at all
+- can our constructors even build it — `armmakr` for the ground line, `armmmkr`
+  for the advanced one; a converter no constructor of ours can build makes the
+  fusion permanently wasted (see `docs/11-dead-unit-references.md`)
+
+Which suggests generation and conversion should be treated as **one purchase**
+rather than two rules that happen to run in sequence. A fusion whose converters
+are not affordable is not a cheaper fusion — it is a dead 4,300 metal, and the
+opportunity cost lands on whatever the next tier was going to be.
+
+The same test generalises to every prerequisite in the game: an advanced plant
+whose units we will not fund, a gantry with no economy behind it, a radar hub
+whose jammers never come. Ask what the purchase is FOR, and whether that thing is
+reachable, before spending on the step that enables it.
+
 ## Hardest part
 
 Not the phases — the transition conditions. "Ensure we have enough energy and
