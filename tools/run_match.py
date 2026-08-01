@@ -409,6 +409,8 @@ def run(args) -> int:
     if cfg.exists():
         run_cfg = write_dir / "run.cfg"
         shutil.copy2(cfg, run_cfg)
+        if watching:
+            print(f"window   {_fit_window_to_desktop(run_cfg)}")
         cmd += ["--config", str(run_cfg)]
     cmd.append(str(script_path))
 
@@ -518,6 +520,65 @@ def run(args) -> int:
     return 0
 
 
+def _desktop_work_area() -> tuple[int, int, int, int] | None:
+    """(x, y, w, h) of the primary monitor's work area, or None if unknown.
+
+    Work area, not full bounds, so a borderless window fills the screen without
+    hiding behind the taskbar.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        try:
+            user32.SetProcessDPIAware()  # else a scaled display reports scaled pixels
+        except Exception:
+            pass
+        rect = wintypes.RECT()
+        SPI_GETWORKAREA = 0x0030
+        if not user32.SystemParametersInfoW(SPI_GETWORKAREA, 0, ctypes.byref(rect), 0):
+            return None
+        return (rect.left, rect.top,
+                rect.right - rect.left, rect.bottom - rect.top)
+    except Exception:
+        return None
+
+
+def _fit_window_to_desktop(cfg_path: Path) -> str:
+    """Rewrite the watch config so the window opens filling the screen.
+
+    Recoil has no "maximized" config tag -- maximizing is an SDL call made at
+    runtime (GlobalRendering::SetWindowMinMaximized), not a setting. Sizing the
+    window to the work area and dropping the border is the equivalent that can be
+    expressed in a config, and unlike real fullscreen it still alt-tabs.
+    """
+    area = _desktop_work_area()
+    if area is None:
+        return "left at the configured size (desktop size unknown)"
+    x, y, w, h = area
+    over = {
+        "XResolution": str(w),
+        "YResolution": str(h),
+        "WindowPosX": str(x),
+        "WindowPosY": str(y),
+        "WindowBorderless": "1",
+    }
+    lines, seen = [], set()
+    for line in cfg_path.read_text(encoding="utf-8").splitlines():
+        key = line.split("=", 1)[0].strip()
+        if key in over:
+            lines.append(f"{key} = {over[key]}")
+            seen.add(key)
+        else:
+            lines.append(line)
+    lines += [f"{k} = {v}" for k, v in over.items() if k not in seen]
+    cfg_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return f"{w}x{h} borderless at {x},{y}"
+
+
 def _os_environ() -> dict:
     import os
 
@@ -563,7 +624,7 @@ def main() -> int:
     ap.add_argument("--windowed", action="store_true",
                     help="use spring.exe instead of spring-headless.exe")
     ap.add_argument("--watch", action="store_true",
-                    help="watch it play: windowed at 1600x900, replay recorded. "
+                    help="watch it play: fills the screen borderless, replay recorded. "
                          "Implies --windowed --speed 3; +/- adjust live up to 20x")
     ap.add_argument("--out", help="output directory (default: matches/<stamp>-<slug>)")
     ap.add_argument("--write-dir", dest="write_dir",

@@ -664,9 +664,21 @@ string armfus("armfus");   string armafus("armafus");
 string corfus("corfus");   string corafus("corafus");
 string legfus("legfus");   string legafus("legafus");
 
-const float FUSION_MIN_INCOME = 35.f;
-const float AFUS_MIN_INCOME   = 120.f;
+// Mex upgrades come FIRST. apexearth: "upgrading our T1 mexes to T2 mexes is more
+// important than making that fusion ... first fus went up at like 7m which was
+// too early because we hadn't upgraded enough of our t1 mexes yet." A T2 mex is
+// roughly a 300% increase on that spot and pays for itself; a fusion at 7 minutes
+// is 4,300 metal that buys energy we are not yet converting.
+// Reachable: measured metal income runs ~15/s while energy is wasted, so 55 meant
+// no fusion was ever built. It becomes affordable once the converters above turn
+// that waste into metal.
+const float FUSION_MIN_INCOME = 40.f;
+// afus was never reached -- 120 income is past where these games are decided, so
+// no advanced fusion existed at 24 minutes.
+const float AFUS_MIN_INCOME   = 80.f;
 const int   FUSION_PERIOD     = 75 * SECOND;
+// Unconsumed energy above which more generation is the wrong purchase.
+const float FUSION_SPARE_BLOCK = 300.f;
 int gNextFusion = 0;
 int gFusionPosts = 0;
 
@@ -676,6 +688,16 @@ IUnitTask@ StandingEnergy(CCircuitUnit@ unit)
 		return null;
 	const float inc = aiEconomyMgr.metal.income;
 	if (inc < FUSION_MIN_INCOME)
+		return null;
+	// Not before the mex upgrades have started paying.
+	if (!Factory::HaveT2Mex())
+		return null;
+	// Not while the grid is already throwing energy away. Converting the surplus
+	// costs one metal and returns metal; another fusion costs 4,300 and returns
+	// more of what is already being wasted. Measured with both rules running and
+	// no ordering between them: a player wasted 504,000 energy while its fusions
+	// kept going up. Convert first, generate second.
+	if ((aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull) > FUSION_SPARE_BLOCK)
 		return null;
 	// Both tiers are T2 builds; a T1 constructor cannot place either, and asking
 	// is a silent no-op.
@@ -702,6 +724,99 @@ IUnitTask@ StandingEnergy(CCircuitUnit@ unit)
 	++gFusionPosts;
 	AiLog(Factory::T() + "apex: standing energy " + want.GetName()
 		+ " mInc=" + formatFloat(inc, "", 0, 0) + " built=" + gFusionPosts);
+	return post;
+}
+
+// Energy we are not spending is metal we are not making. apexearth: "purple here
+// with 2400 excess energy and only 1 energy converter. Could be making a lot more
+// metal if they made e converters ... we'd do much better if we find an open
+// space in the back and make energy converters there (they're explosive so they
+// go in a nice safe place)".
+//
+// Stock's own converter branch needs IsEnergyFull() AND fewer than two CONVERT
+// tasks standing, so it tops out at two whatever the surplus is.
+// Every constructor can build a converter -- the tier that matches it. Read from
+// buildoptions: armck/armcv carry armmakr, corck/corcv cormakr, legck/legcv
+// legeconv; the advanced constructors carry armmmkr/cormmkr/legadveconv instead.
+//
+// The T1 ones cost ONE metal. That is why spamming them is the answer to a full
+// energy bank: they are free in the resource that is scarce and eat the one being
+// wasted. A first pass had them as armfmkr, which nothing can build, so 95
+// enqueues produced nothing at all while a player wasted 1.34 million energy.
+string armmakr("armmakr");  string armmmkr("armmmkr");
+string cormakr("cormakr");  string cormmkr("cormmkr");
+string legeconv("legeconv"); string legadveconv("legadveconv");
+
+// Sized on the surplus, which also self-limits: every converter raises pull, so
+// spare falls and this stops on its own once the waste is soaked up.
+//
+// It first read "energy full OR spare", and full storage is common early, so it
+// built regardless of surplus -- 121 converters in one game, one of them at
+// spare=-36. Storage being full says nothing about whether there is energy
+// spare to convert.
+const float CONVERT_MIN_SPARE = 70.f;   // one T1 converter's worth of surplus
+const float CONVERT_ADV_SPARE = 600.f;  // an advanced one eats this by itself
+// Short, because a T1 converter costs one metal: the surplus test below is the
+// real limiter, not the clock.
+const int   CONVERT_PERIOD   = 10 * SECOND;
+const float REAR_DISTANCE    = 900.f;
+int gNextConvert = 0;
+int gConverts = 0;
+
+// Behind our own base, measured away from the enemy. Converters detonate, so they
+// belong where a chain reaction cannot take the base with it.
+bool RearPos(CCircuitUnit@ unit, AIFloat3& out spot)
+{
+	if (!gHomeSet)
+		return false;
+	AIFloat3 away = gHomePos - aiEnemyMgr.GetEnemyPos();
+	if (away.SqLength2D() < NEAR_ZERO)
+		return false;
+	away.SafeNormalize2D();
+	for (int i = 1; i <= 3; ++i) {
+		const AIFloat3 back = gHomePos + away * (REAR_DISTANCE * float(i) * 0.5f);
+		if (!OnMap(back))
+			continue;
+		if (ThreatFor(unit, back) <= CON_THREAT_VETO) {
+			spot = back;
+			return true;
+		}
+	}
+	return false;
+}
+
+IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
+{
+	if (ai.frame < gNextConvert)
+		return null;
+	// Only what the grid can actually feed.
+	const float spare = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	if (spare < CONVERT_MIN_SPARE)
+		return null;
+
+	// Ask this constructor for the tier IT can build, so T1 constructors keep
+	// converting instead of dropping the request in silence.
+	const string side = ai.GetSideName();
+	CCircuitDef@ want = null;
+	if ((unit.circuitDef.costM >= ADV_CON_COST) && (spare >= CONVERT_ADV_SPARE))
+		@want = SideDef(side, armmmkr, cormmkr, legadveconv);
+	if (!Usable(want))
+		@want = SideDef(side, armmakr, cormakr, legeconv);
+	if (!Usable(want))
+		return null;
+
+	AIFloat3 spot;
+	if (!RearPos(unit, spot))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::CONVERT,
+			Task::Priority::NORMAL, want, spot, SQUARE_SIZE * 8));
+	if (post is null)
+		return null;
+	gNextConvert = ai.frame + CONVERT_PERIOD;
+	++gConverts;
+	AiLog(Factory::T() + "apex: converter " + want.GetName()
+		+ " spare=" + formatFloat(spare, "", 0, 0)
+		+ " built=" + gConverts);
 	return post;
 }
 
@@ -854,6 +969,11 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		IUnitTask@ aa = AirDefence(unit);
 		if (aa !is null)
 			return aa;
+		// Converters before more generation: unconverted excess is the waste, and
+		// a converter is 370-380 metal against a fusion's 4,300.
+		IUnitTask@ conv = EnergyConverter(unit);
+		if (conv !is null)
+			return conv;
 		IUnitTask@ pwr = StandingEnergy(unit);
 		if (pwr !is null)
 			return pwr;

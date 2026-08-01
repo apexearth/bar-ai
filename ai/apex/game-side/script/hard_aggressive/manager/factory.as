@@ -431,6 +431,20 @@ int switchInterval = MakeSwitchInterval();
 // leglab answers leggob. Military::IsFodder is the gate, so a factory whose
 // cheapest option is not actually cheap returns null and the caller buys the
 // assault mainstay as before.
+// Advanced constructors this instance should hold. Two is the floor: one cannot
+// upgrade mexes and hold an energy queue at the same time.
+const int ADV_CON_BASE = 2;
+const int ADV_CON_MAX  = 7;
+const float ADV_CON_PER_INCOME = 25.f;
+
+int AdvConTarget()
+{
+	int want = ADV_CON_BASE + int(aiEconomyMgr.metal.income / ADV_CON_PER_INCOME);
+	if (want > ADV_CON_MAX)
+		want = ADV_CON_MAX;
+	return want;
+}
+
 CCircuitDef@ Fodder(const CCircuitDef@ facDef)
 {
 	CCircuitDef@ d = aiFactoryMgr.GetRoleDef(facDef, Unit::Role::SCOUT.type);
@@ -721,7 +735,18 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		}
 	}
 
-	if (gHaveT2 && ((IsDesignatedLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
+	// Build advanced constructors up to a TARGET, not up to one.
+	//
+	// The old test was `!gHaveAdvCon` -- own a single advanced constructor and a
+	// non-lead never built another for the rest of the game. apexearth, watching:
+	// "now that we're always making a fusion we don't have enough t2 cons to make
+	// t2 mexes and other things ... I think a lot of this is solved by making more
+	// t2 cons." One constructor cannot upgrade mexes, hold the fusion queue and
+	// answer air at the same time; it just picks one and the rest never happen.
+	//
+	// Scaled on income, because build power is what an economy is FOR: more income
+	// means more places to spend it at once.
+	if (gHaveT2) {
 		// BUILDER, not BUILDER2. builderT2 is registered as a SUBROLE of builder
 		// (AiAddRole("builderT2", BUILDER.type)) and the factory role map is
 		// indexed by BASE roles only -- FactoryManager.cpp:1057 looks up
@@ -731,7 +756,8 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// no mexes at all. For an advanced plant the base builder IS the advanced
 		// constructor -- coravp's only builder is coracv.
 		CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
-		if (con !is null) {
+		const bool owed = IsDesignatedLead() && Builder::OwesAdvCons();
+		if ((con !is null) && (owed || (con.count < AdvConTarget()))) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
 					Task::RecruitType::BUILDPOWER,
 					IsSmallTeam() ? Task::Priority::NORMAL : Task::Priority::NOW,
