@@ -270,6 +270,47 @@ about BAR. Before treating "no T3" as affordable-but-broken *or* as unaffordable
 read the actual income. Above ~250 m/s the affordability argument inverts
 completely, which is why `T3Worthwhile()` drops its vetoes there.
 
+## "The path fires" is not evidence that the change is good
+
+Firing proves a change is *wired up*. It says nothing about what it **displaced**,
+and in this AI almost everything worth adding displaces something.
+
+Measured 2026-08-01, four 8-game tournaments, same map, seeds, settings and DLL:
+
+| | session start | after twelve changes |
+|---|---|---|
+| head to head | 2-2 | **0-8** |
+| metal produced | 140,940 | **32,648** |
+| mex upgrades | 11 | **2** |
+| army share | 18.3% | 4.1% |
+
+Twelve changes went in over one session. **Every one was confirmed firing** — that
+was the acceptance test — and each looked reasonable alone: dig-in towers when a
+constructor keeps getting shot, flak when the enemy flies, a converter when
+energy is wasted, the next fusion before it is needed. Together they cut metal
+production by 4.3x, because every one of them spends **constructor time**, and
+constructor time is the economy. They all run ahead of `DefaultMakeTask`, which
+is where mex upgrades live, so the AI answered every threat and never grew.
+
+Tuning the constants afterwards moved metal 39,233 -> 32,648, i.e. the wrong way.
+The problem was never the constants.
+
+So:
+
+- **Judge a behaviour change on composition, not on its log line.**
+  `python tools/composition.py <tournament>` reports where the metal actually
+  went. `mex upgrades 2 vs 8` is the same answer in every game; who won 8 games
+  is a coin flip.
+- **One behaviour change at a time**, with composition after each. A batch tells
+  you the batch is bad and nothing about which member.
+- **Separate rules that SPEND from fixes that STOP something.** Removing a
+  deadlock, a stampede or a tower built permanently switched off costs no build
+  power and is near-free to re-apply. A new rule that enqueues work is never
+  free, however cheap the unit.
+- **Watching a replay tells you a behaviour looks smart. It cannot tell you what
+  it cost.** The dig-in fortresses looked excellent on screen and were among the
+  most expensive things here.
+
 ## Harness discipline
 
 - **Never edit a file a running tournament uses.** Editing `run_match.py`
