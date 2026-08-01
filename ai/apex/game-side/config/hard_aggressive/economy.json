@@ -89,8 +89,19 @@
 	// ecoFactor = teamSize*eps_step+(1-eps_step)
 	"eps_step": 0.2,
 
-	// Mobile buildpower to metal income ratio
-	"buildpower": 1.2,  // 1.25,
+	// Mobile buildpower to metal income ratio.
+	//
+	// apexearth: "we need cons to make the eco and defenses, always have enough of
+	// these so we can make everything we need". This is that rule expressed as a
+	// SHARE rather than another rule that claims a constructor -- CFactoryManager
+	// ::UpdateBuildPower stops making builders once GetBuildPower() reaches
+	// metalIncome * this, so it is already proportional and already self-limiting.
+	//
+	// 1.2 is what stock BARb's hard and hard_aggressive both use, and measured over
+	// 8 games we ended on 10 constructors to stock's 37 and 3.0% of metal against
+	// its 8.9% -- so matching stock's ratio was not producing stock's build power.
+	// 1.5 is the value BARb's own root economy.json carries.
+	"buildpower": 1.5,  // was 1.2, stock's; root default is 1.5
 
 	// Metal excess to income ratio, -1 to disable
 	"excess": -1.0,
