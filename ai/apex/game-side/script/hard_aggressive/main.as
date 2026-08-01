@@ -59,6 +59,7 @@ void AiMain()
 
 void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishAIId
 {
+	Builder::UpdateIncomeAvg();
 	Factory::UpdateTeamCoord();
 	Military::UpdatePosture();
 	Factory::UpdateRushReclaim();

@@ -261,6 +261,21 @@ bool HaveT2Mex()
 	return gHaveT2Mex;
 }
 
+// How many advanced extractors we hold, nanoframes included.
+//
+// HaveT2Mex() is latched at ONE and cannot answer "enough". Measured over a game
+// where stock's single largest metal sink was armmoho at 25.8% of everything it
+// built: stock upgraded 7 mexes, we upgraded 1, and produced half its metal.
+// A T2 mex is roughly a 300% increase on that spot and pays for itself; it is
+// the purchase that makes every later purchase affordable.
+int T2MexCount()
+{
+	const string side = ai.GetSideName();
+	CCircuitDef@ moho = ai.GetCircuitDef((side == "cortex") ? cormoho
+	                                   : ((side == "legion") ? legmoho : armmoho));
+	return (moho is null) ? 0 : moho.count;
+}
+
 bool IsTechLead()
 {
 	return ai.teamId == RushLeadTeamId();

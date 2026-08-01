@@ -672,7 +672,23 @@ string legfus("legfus");   string legafus("legafus");
 // Reachable: measured metal income runs ~15/s while energy is wasted, so 55 meant
 // no fusion was ever built. It becomes affordable once the converters above turn
 // that waste into metal.
-const float FUSION_MIN_INCOME = 40.f;
+const float FUSION_MIN_INCOME = 35.f;
+
+// Metal income averaged over a minute. apexearth: "like 30+ or 35+ metal average
+// over a minute maybe". The instantaneous figure swings hard as tasks start and
+// finish, and a 4,300-metal purchase should not be triggered by a spike.
+const float INCOME_AVG_SECONDS = 60.f;
+float gMetalAvg = -1.f;
+
+// Driven from Main::AiUpdate, which runs once a second.
+void UpdateIncomeAvg()
+{
+	const float inc = aiEconomyMgr.metal.income;
+	if (gMetalAvg < 0.f)
+		gMetalAvg = inc;
+	else
+		gMetalAvg += (inc - gMetalAvg) / INCOME_AVG_SECONDS;
+}
 // afus was never reached -- 120 income is past where these games are decided, so
 // no advanced fusion existed at 24 minutes.
 const float AFUS_MIN_INCOME   = 80.f;
@@ -686,12 +702,18 @@ IUnitTask@ StandingEnergy(CCircuitUnit@ unit)
 {
 	if (ai.frame < gNextFusion)
 		return null;
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = (gMetalAvg < 0.f) ? aiEconomyMgr.metal.income : gMetalAvg;
 	if (inc < FUSION_MIN_INCOME)
 		return null;
-	// Not before the mex upgrades have started paying.
-	if (!Factory::HaveT2Mex())
-		return null;
+	// The bar is INCOME, not a count of extractors. apexearth: "sometimes 4 adv
+	// extractors may not be available so you can't just hard restrict. to go based
+	// on metal income is probably better."
+	//
+	// Counting extractors was tried and is brittle in both directions: a map may
+	// not offer four, and "no more generators than advanced extractors" reads
+	// 0 >= 0 before the first upgrade, which blocks generation forever. Income is
+	// the thing actually being asked about -- can we afford this -- and it rises
+	// whether the metal came from upgrades, more spots or reclaim.
 	// Not while the grid is already throwing energy away. Converting the surplus
 	// costs one metal and returns metal; another fusion costs 4,300 and returns
 	// more of what is already being wasted. Measured with both rules running and
@@ -723,7 +745,8 @@ IUnitTask@ StandingEnergy(CCircuitUnit@ unit)
 	gNextFusion = ai.frame + FUSION_PERIOD;
 	++gFusionPosts;
 	AiLog(Factory::T() + "apex: standing energy " + want.GetName()
-		+ " mInc=" + formatFloat(inc, "", 0, 0) + " built=" + gFusionPosts);
+		+ " mInc=" + formatFloat(inc, "", 0, 0)
+		+ " asked=" + gFusionPosts + " standing=" + want.count);
 	return post;
 }
 
@@ -756,9 +779,12 @@ string legeconv("legeconv"); string legadveconv("legadveconv");
 // spare to convert.
 const float CONVERT_MIN_SPARE = 70.f;   // one T1 converter's worth of surplus
 const float CONVERT_ADV_SPARE = 600.f;  // an advanced one eats this by itself
-// Short, because a T1 converter costs one metal: the surplus test below is the
-// real limiter, not the clock.
-const int   CONVERT_PERIOD   = 10 * SECOND;
+// A converter is cheap in metal but not in ATTENTION: this branch runs ahead of
+// DefaultMakeTask, which is where mex upgrades come from, so every enqueue is a
+// constructor not upgrading a mex. At 10s it fired 204 times in one game while
+// only one mex got upgraded. The surplus test still limits how many exist; this
+// limits how much of the build queue they displace.
+const int   CONVERT_PERIOD   = 25 * SECOND;
 const float REAR_DISTANCE    = 900.f;
 int gNextConvert = 0;
 int gConverts = 0;
@@ -814,9 +840,13 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 		return null;
 	gNextConvert = ai.frame + CONVERT_PERIOD;
 	++gConverts;
+	// standing= is the count that actually exists (nanoframes included). asked=
+	// is how many we have requested. The two diverging means the requests are not
+	// turning into buildings -- no room, no build power, or no reachable site --
+	// and that is invisible from the enqueue alone.
 	AiLog(Factory::T() + "apex: converter " + want.GetName()
 		+ " spare=" + formatFloat(spare, "", 0, 0)
-		+ " built=" + gConverts);
+		+ " asked=" + gConverts + " standing=" + want.count);
 	return post;
 }
 
