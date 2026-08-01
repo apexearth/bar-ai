@@ -61,6 +61,11 @@ const string TV_LEAD = "lead";   // the elector's answer, read by everyone
 // good in the same window starts its own plant. Observed live, twice: three
 // commanders teching within 40 seconds of each other at the 5 minute mark.
 const string TV_READY = "ready";
+// Distance from our own base to the enemy centroid. apexearth: "if you can find a
+// way to make it less likely that the AI at the front line is teching, then
+// that's a good idea." A player that techs stops defending itself, so the one
+// who can least afford that is the one closest to the enemy.
+const string TV_DIST = "dist";
 
 // Total builders the tech lead may hold while rushing. Enough to finish an
 // advanced plant fast; beyond that each constructor is metal that buys nothing
@@ -79,7 +84,19 @@ int gNextConOrder = 0;
 
 // Army catch-up production when behind. Short: this is the thing we want a
 // lot of, and the units are cheap.
-const int   ARMY_PUSH_SPACING = 3 * SECOND;
+// The catch-up push has no budget, and that is what makes it dangerous. It fires
+// while LosingGround(), which is nearly always true once behind, so it converts
+// the whole economy into army and then loses harder for want of an economy.
+//
+// Measured after it was pointed at the advanced plant: armbull 33.8% and armanni
+// 22.0% of ALL metal -- 56% on army and defence -- against ONE T2 constructor and
+// 5 mex upgrades to stock's 15 and 12. The unit choice was right and the spend was
+// ruinous. At 3 seconds it was buying 180-metal Stumpies; at the same cadence it
+// buys 800-metal Bulldogs.
+const int   ARMY_PUSH_SPACING = 12 * SECOND;
+// And it stops entirely when the economy behind it is too thin to carry it: an
+// army bought by starving the mexes cannot be replaced when it dies.
+const float ARMY_PUSH_MIN_INCOME = 30.f;
 int gNextArmyPush = 0;
 int gNextArmyLog = 0;
 
@@ -166,18 +183,19 @@ void RunElection()
 			best = t;
 		}
 	}
-	// ISOLATION TEST: readiness fallback disabled. Restricting who may tech cost
-	// 30% of metal production in an 8-game measurement, so this establishes
-	// whether the stampede gate is what did it.
-	if (false) {
-		float bestReady = 0.f;
+	// Nobody has committed. Designate the FURTHEST-BACK team that could, so the
+	// player who goes helpless is the one least likely to be attacked while it is.
+	// Richest-that-is-ready was the previous rule and it ignored position
+	// entirely, which is how the front-line player ended up teching.
+	if (best < 0) {
+		float bestDist = -1.f;
 		for (uint i = 0; i < mates.length(); ++i) {
 			const int t = int(mates[i]);
-			const float r = ai.ReadTeamValue(t, TV_READY, 0.f);
-			if (r <= 0.f)
-				continue;
-			if ((r > bestReady) || ((r == bestReady) && (best >= 0) && (t < best))) {
-				bestReady = r;
+			if (ai.ReadTeamValue(t, TV_READY, 0.f) <= 0.f)
+				continue;   // cannot afford it anyway
+			const float d = ai.ReadTeamValue(t, TV_DIST, 0.f);
+			if ((d > bestDist) || ((d == bestDist) && (best >= 0) && (t < best))) {
+				bestDist = d;
 				best = t;
 			}
 		}
@@ -193,6 +211,8 @@ void UpdateTeamCoord()
 {
 	ai.PublishTeamValue(TV_ADV, OwnAdvProgress());
 	ai.PublishTeamValue(TV_READY, RushReady() ? aiEconomyMgr.metal.income : 0.f);
+	ai.PublishTeamValue(TV_DIST, Builder::gHomeSet
+			? Builder::gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) : 0.f);
 	if (ElectorTeamId() == ai.teamId)
 		RunElection();
 }
@@ -279,7 +299,7 @@ bool MayPursueT2()
 	// plant nobody was allowed to start, whereas readiness is earned by the economy
 	// growing. The frame clause is a backstop only -- past it the rush window is
 	// over and followers are released anyway.
-	return !LeadIsDesignated() || IsTechLead();
+	return IsDesignatedLead() || (ai.frame >= FOLLOWER_TECH_FRAME);
 }
 
 // Am I the ACTUAL designated lead? Distinct from IsTechLead(), which is true for
@@ -533,18 +553,47 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	//
 	// Spaced, for the same reason RUSH_CON_SPACING exists: Enqueue does not dedup
 	// and the cap it would otherwise respect only counts finished units.
-	// T1 factories only. Asking the ADVANCED plant for its assault unit returned
-	// Reaper and Bulldog -- exactly the expensive T2 units this is meant to
-	// avoid buying while behind.
+	// Was T1 factories ONLY, on the reasoning that the advanced plant returns
+	// Reaper and Bulldog -- "exactly the expensive T2 units this is meant to avoid
+	// buying while behind". That reasoning is inverted once the enemy has teched.
+	//
+	// apexearth, watching: "we're throwing t one units at t two and t three armies
+	// ... they just get absolutely demolished by pretty much everything the enemy
+	// is fielding, so they're almost like a complete waste of space and effort."
+	//
+	// It was also self-reinforcing. This branch bypasses the factory tier weights
+	// entirely -- it asks GetRoleDef(ASSAULT) directly -- so losing produced Stumpy
+	// spam, which lost harder, which produced more: measured at 18.1% of all metal
+	// in one 8-game run, against stock's 2.0%. Cutting the tier weights could not
+	// touch it, because this path never reads them.
+	//
+	// Once we hold T2, the advanced plant answers instead. Expensive units are the
+	// point when the cheap ones cannot trade.
 	const bool isT1Fac =
 		((Factory::userData[unit.circuitDef.id].attr & (Factory::Attr::T2 | Factory::Attr::T3)) == 0);
-	if (isT1Fac && gHaveT2 && HaveT2Mex() && Military::LosingGround()
+	const bool isT2Fac =
+		((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) != 0);
+	if ((isT1Fac ? !gHaveT2 : isT2Fac) && HaveT2Mex() && Military::LosingGround()
+		&& (aiEconomyMgr.metal.income >= ARMY_PUSH_MIN_INCOME)
 		&& (ai.frame >= gNextArmyPush))
 	{
+		// Spam means SPAM. apexearth: "i said long ago to make spam units when
+		// we're dying. a stumpy is not a spam unit." TODO.md is specific -- ticks,
+		// grunts, pawns, rascals, wheelies, "the cheap but fast units", whose
+		// purpose is vision and distraction.
+		//
+		// This asked for the ASSAULT role two pushes in three, which is the
+		// mainstay tank: armstump for a vehicle plant. So "spam when dying" bought
+		// 180-metal tanks that trade badly against a teched enemy, and displaced
+		// the real army while doing it -- 18.1% of all metal in one 8-game run.
+		//
+		// Now split by what the factory IS: a T1 lab makes fodder, the advanced
+		// plant makes the army that can actually trade.
+		++gArmyPushCount;
 		CCircuitDef@ want = null;
-		if ((++gArmyPushCount % FODDER_EVERY) == 0)
+		if (isT1Fac)
 			@want = Fodder(unit.circuitDef);
-		if (want is null)
+		else
 			@want = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::ASSAULT.type);
 		if (want !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
