@@ -117,6 +117,235 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
   factory line to do it; small teams do not (measured: pre-empting cost 3-13).
 - **The tech lead never opens air**, and on teams under 6 **nobody** does.
 
+### Killing blow — dominance that actually ends the game
+Measured baseline: across 30 games on 8 maps, **20 (67%) hit the time limit
+undecided**, and on Quicksilver we finished 16 games holding 4.5x stock's metal,
+35x its T3 and 8.5x its army with ELEVEN unresolved. apexearth: "we are often
+winning but we're very slow to kill enemies ... we need some sort of switch which
+says ok now go for the killing blow."
+
+Past 15 minutes, once OUR TEAM's army is worth 1.8x the enemy's, the attack
+minimum drops to 10, any turtle hold is released, and both massing and turtling
+are stopped from re-engaging. Hysteresis at 1.5x so one lost fight does not flip
+it mid-push. The eco lead is exempt -- it holds no army by design.
+
+`quota.attack` is a MINIMUM before the engine forms an attack, and UpdateMassing
+walks it to MASS_CAP and pins it there whenever the enemy out-values us. Once far
+ahead that gate is pure delay: we sit on an army several times their size waiting
+for a bigger one.
+
+**measured**: undecided games **67% -> 17%**, records of 4-2, 5-0 and 3-2 across
+three 6-game 4v4 sets; one watched game on Supreme Isthmus won at 28.9 min where
+both baseline games there ran out the 50-minute clock undecided.
+
+Two bugs on the way, both worth remembering:
+- The first version compared `aiMilitaryMgr.armyCost` (ONE player) against
+  `EnemyArmyCost()` (the WHOLE enemy side) -- "is one of us worth more than all
+  eight of them", which read 3.6 AGAINST us in a game we were dominating. Team
+  army is now pooled over the blackboard. Same shape as `LosingGround()` being
+  permanently true for a player with no army.
+- At 2.5x it first became true at 36.8 minutes of a 50-minute game. A switch that
+  only flips once the win is overwhelming does not address winning slowly.
+
+### Air eco-assassination — it never once fired before this
+The strategy was written, armed, committed, and built **0 bombers and launched 0
+strikes** across every measured game. apexearth: "I only saw something akin to it
+once in dozens of games." Four separate breaks, each invisible in the numbers:
+
+- **Its factory request sat LAST in `AiGetFactoryToBuild`**, below the bot lab,
+  gantry, tech rush and navy branches, all of which return first. 133 of 134
+  status samples read `plants=0,0 cons=0 want=corap` -- it asked every time and
+  was never reached. Moved above them.
+- **Nothing built the air constructor.** `MakeFactoryTask` answered only for the
+  ADVANCED plant, but `FactoryToBuild` will not ask for that plant until an air
+  constructor exists -- and the only plant we owned was never told to build one.
+- **The income bar was self-defeating.** Elected at 63 and 81 metal/s, by which
+  point enemy anti-air was over the ceiling, so it never armed. The premise is
+  surprise; waiting for a bigger income waits for the enemy to build the counter.
+  60 -> 40.
+- **Both defs were advanced-tier**, so the force could not start until a plant
+  that rarely finished. The basic tier is a third of the price -- armthund 145
+  and armfig 73 against armpnix 230 -- and `Bombers()`/`Fighters()` now count
+  both tiers.
+
+**measured**: chain completes 6/6 and the strike **releases in 6/6 games**, at
+enemy anti-air of 0-2,351, with one stand-down. Aircraft are genuinely held:
+`HoldsUnit` makes `Military::AiMakeTask` return null for them, leaving them idle
+where built until Release, which then grants ANTI_STAT (target economy, skip
+army) and SetRetreat(0).
+
+**Still open**: strikes release on the DEADLINE path at exactly the half-mass
+floor -- 6 bombers and 4 fighters -- because the deadline passes before
+production reaches it, so the floor becomes the ceiling. `Priority::NOW`, a
+second plant, assist while massing and batch-6 orders did NOT move it (still 6/4
+in 6/6 games), because the advanced plant rarely completes and the second-plant
+branch was gated on it.
+
+### Resurrection — stock was rebuilding its army and we were scrapping ours
+apexearth spotted it and named the confound himself: winners hold rez bots
+BECAUSE they won. The timeline settles direction, and it was not survivorship.
+
+**measured**: over 6 games stock spent 21,460 metal a game resurrecting to our
+10,396; in one watched 8v8 it was **32,890 to our 436**, one stock player's
+single largest sink of any kind was `cornecro` at 17,940, and `armrectr` appears
+**zero times** in our entire log. Meanwhile we out-RECLAIM them 2:1 -- we win the
+metal accounting and they win the units back.
+
+Rez bots come only from a bot lab (`armrectr`/`cornecro`/`legrezbot`, 130 metal);
+the vehicle plant and advanced plant cannot build them, and our side ran about
+four vehicle plants per bot lab. Bot labs now come at 8 minutes rather than
+waiting for T2 or 13 minutes, and a floor of 4 rez bots is built ahead of
+anything else that lab would make. Requested BY NAME: these route through
+`UseAs::REZZER` but their config roles disagree across factions ("support" for
+Armada and Legion, "rezzer" for Cortex), so `GetRoleDef` is not reliable.
+
+**measured**: rez spend **10,396 -> 18,053**, against stock's 12,104 -- reversed.
+
+### Reading a game: `tools/report.py`
+One command, fixed order: script errors, did-it-fire counts, a 2-minute timeline
+per side with divergence points, then the outcome. It exists because three
+verdicts in one session came from the wrong slice -- a team effect called at 6 of
+8 games that reversed at 8; a cause read off the FINAL snapshot of a collapsing
+side when the timeline showed the sides level on mexes until minute 12; and a
+feature reported "never fired" from a regex that did not match the log line, in
+the tool built to prevent exactly that. When a feature reads 0/N, grep the source
+for the log string before believing it.
+
+### Eco lead — one player builds economy and nothing else
+apexearth: "one player who focuses mostly on building up a strong eco so that
+they can reach the late game as soon as possible. They don't make army unless
+endangered or our allies are dying." It **is** one of the tech leads: the primary
+slot holder, so there is no second election and it is already the sling target.
+Teams of 6+ only — on a 4v4 one player fielding no army is a quarter of the army
+missing, which is the same arithmetic that already restricts the constructor
+monopoly and the air opening.
+
+While the role is active that player builds constructors from its factory up to
+10 and then **nothing at all** — the idle line is the point, so income goes to
+mexes, energy and the T2/T3 economy — keeps `quota.attack` at 400 for the whole
+game rather than to `RUSH_GIVEUP`, and skips the Pulsar and the dig-in fortify.
+Cheap AA and the energy converter are kept: an economy with no army is what air
+goes looking for.
+
+Released when it is losing its **own** extractors (under 70% of its own peak),
+or when any ally is under 50% of theirs. Each player publishes its share of peak
+extractors as `mexhold`.
+
+**status: the role does what it says; whether the ROLE caused it is unproven.**
+20 games, 8v8 Quicksilver at +40%, 30-min cap. The eco player against its own
+seven teammates, mean per game: metal produced **60,800 vs 35,548 (+71%)**, mex
+upgrades **5 vs 3**, T2 spend **29,530 vs 12,616 (+134%)**, energy produced
+**+66%**, standing army **5,768 vs 6,127 (-6%)**. That is the intended shape --
+far more economy, no more army. Role active a median of ~15 of 30 minutes.
+
+**The confound is not small and is not resolved.** The eco lead IS the primary
+tech lead, elected on `RushReady()` -- i.e. a player that already had the economy
+to afford teching -- and it is the sling target every teammate donates to. A
+selection effect plus seven donors would produce a similar table with no role at
+all. Separating them needs the same variant with the role off, which has not been
+run.
+
+Two more things the same 20 games say:
+- **T3 never happens** (eco lead 0, teammates 60), so "reach the late game
+  sooner", the stated point of the role, is unevidenced at this scale.
+- **The eco player holds FEWER T1 constructors than its teammates (8 vs 11)**,
+  though `ECO_CON_CAP` is 10 and the idle-line log shows it sitting at 4-6. Build
+  power is what compounds, so the one thing the role does buy is the thing it is
+  short of. The cap is not what is binding.
+
+**The 6+ team gate was re-tested and holds.** Six 4v4 games each way, three maps,
+same seeds, only `ECO_ON_SMALL_TEAMS` differing: off went **2-1** on 904,267
+metal and 166,643 army; on went **0-4** on 516,702 metal and 80,671 army, with
+games ending *sooner* (41 min against 48). Everything below -- 28 constructors,
+the turret band, the converter block, air constructors -- does not buy back the
+quarter of a four-player team that stops fighting.
+
+**One map is not a benchmark.** Every eco-lead number in this section came from
+Quicksilver, where apex beats stock 4-1 on 4.5x the metal and 35x the T3. Across
+eight maps, 30 games, the same build goes **4-6 with 20 games (67%) undecided**,
+metal 1,374,971 vs 951,248 and **T3 136,557 vs 141,280 -- stock matches us**. On
+five of the seven other maps stock out-T3s us heavily (Throne 497,825 to 2,850).
+The "stock fields no T3" note elsewhere in this file is a benchmark artefact and
+this is what it looks like when the bonused economy runs long.
+
+**Build power, not willpower, was the whole problem.** Three arms of 8 games,
+8v8 Quicksilver at +40%, 60-minute cap, identical settings. A = the role as first
+written (ground constructor cap 10). B = cap 28, faster refill. C = B plus air
+constructors, the nano rectangle, fusions in the band, and aid.
+
+Eco player against its own teammates, mean per game:
+
+| | A | B | C |
+|---|---|---|---|
+| metal produced | +24% | +59% | **+114%** |
+| energy produced | -2% | +56% | **+82%** |
+| T2 mex upgrades | +34% | +91% | +91% |
+| advanced constructors | -45% | +75% | **+129%** |
+| metal built | -41% | -18% | **-22%** |
+| T3 spend | -94% | -84% | **-67%** |
+
+Whole apex side, per game:
+
+| | A | B | C |
+|---|---|---|---|
+| team metal produced | 1,367,701 | 1,301,770 | **1,773,612** |
+| team metal built | 1,235,176 | 1,154,838 | **1,413,394** |
+| team T3, MEDIAN | 66,300 | 82,950 | **221,325** |
+
+Median, not mean, for T3: per-game values run 0 to over 1,000,000, so the mean
+tracks whichever arm caught the runaway game and reverses sign between samples.
+An interim read of B at n=6 was reported as "team T3 -69%" and did not survive
+the last two games -- at n=8 the mean says -26% and the median says +25%. At
+n=8 per arm the team-level differences between A and B are noise; C is the first
+arm that moves the median several-fold.
+
+Not controlled: the arms ran sequentially, not paired on seed, and win rate
+separates none of them (A 7/8 decided, B and C 4/5).
+
+Four bugs found by smoke-testing C before measuring it, every one of which would
+have been invisible in the numbers:
+- `IsAirFactory(CCircuitDef@)` refused `unit.circuitDef`, which is a CONST
+  handle. An AngelScript compile error disables the whole variant and the match
+  still runs and reports a normal result.
+- **`aiBuilderMgr.GetWorkerCount()` counts nano turrets as workers.** The eco
+  lead logged `cons=25` against a mobile-constructor cap of 16 while standing on
+  eleven turrets, so the rectangle was eating the engineer budget.
+- Turret orders reached `asked=40` against `standing=11`: the cap tests FINISHED
+  units and Enqueue does not dedup. Bounded to 4 outstanding, with a resync so a
+  destroyed turret cannot wedge the rule shut forever.
+- **The air plant was unreachable.** The "no T1 bot lab" branch returns above it;
+  the eco lead asked for `armlab` three times in one 40-minute game and never
+  reached the air plant. Moved above it -- a bot lab builds the spam units this
+  player does not build.
+
+A single 8v8 on **Comet Catcher** went the other way: the eco player was overrun
+(extractor share 0.43), stood down at 12.6 min, and the pre-existing catch-up
+push then converted it into **29,450 metal of `armbull`** -- over half its
+production -- because a player that deliberately built no army is maximally
+`LosingGround()`. Standing the role down hands that player straight to the rule
+this AI already records as its worst spender.
+
+Three findings from getting it to run, each of which silently disabled it:
+- **"Being dismantled" cannot be read off metal or energy income.** apexearth:
+  reclaim gives a temporary income boost that later falls, and wind energy rises
+  and falls on its own. A peak set by a reclaim burst reads the return to normal
+  as death. Standing extractor count against that player's own peak moves in one
+  direction for one reason.
+- **`Military::gTurtle` is unusable as a gate for an armyless role**, exactly as
+  `LosingGround()` is. The hold fires when our own army *shrinks*; a player that
+  builds none can neither avoid it nor recover from it. Measured: HOLD at 8.7 min
+  on army 1897 → 1266, RESUME only at 15.0 min on army 110 — the six-minute
+  maximum hold expiring rather than recovering. It removed the role from the game.
+- **"Any ally below 70% of peak mexes" is true essentially all the time** with
+  seven allies. First 8v8: elected at 7.6 min, activated zero times. Self and ally
+  now use different bars (70% / 50%).
+- **The primary tech-lead slot flaps second to second**, because the election
+  keeps an incumbent only while `RushReady()` holds and that reads energy income,
+  which swings with the wind. Measured: slot moved 5 → lost → 5 → 3 → 5 inside
+  two minutes, so the role never ran longer than six seconds. The eco role now
+  keeps the title for 45s after losing the slot; **the underlying flapping is not
+  fixed and affects the tech rush too.**
+
 ### Combat posture
 - **Acting on enemy bearing did NOT work, and the machinery is gone.** The
   gadget used to publish the opposing start-position centroid as

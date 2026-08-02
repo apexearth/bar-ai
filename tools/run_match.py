@@ -264,6 +264,12 @@ def build_script(
         "dev_stats": 1,
         "dev_maxgameminutes": minutes,
     }
+    # Legion is behind a modoption that defaults to false (modoptions.lua
+    # "experimentallegionfaction"). With it off no leg* unit def exists, so a
+    # Side=Legion AI logs "Ignoring Legion" and then takes an access violation
+    # during init, killing the whole engine process at frame 0.
+    if any(s.lower() == "legion" for s in side_for):
+        modoptions["experimentallegionfaction"] = 1
     modoptions.update(extra_modoptions or {})
     body.append(_script_section("MODOPTIONS", modoptions))
 
@@ -374,7 +380,8 @@ def run(args) -> int:
     script = build_script(
         ais, map_name, game_name, args.minutes, args.seed,
         record_demo=args.replay, speed=args.speed,
-        max_speed=20 if args.watch else args.speed, per_side=args.per_side,
+        max_speed=args.max_speed or (20 if args.watch else args.speed),
+        per_side=args.per_side,
         sides=[x.strip() for x in args.sides.split(',')] if args.sides else None,
         boxes=args.boxes, box_size=args.box_size, handicap=args.handicap,
         drop_ai_version=args.drop_ai_version,
@@ -621,6 +628,10 @@ def main() -> int:
                          "(default 9999, or 1 with --watch)")
     ap.add_argument("--replay", action="store_true",
                     help="record a .sdfz replay (off by default: large and slows batches)")
+    ap.add_argument("--max-speed", dest="max_speed", type=int, default=0,
+                    help="upper bound for the in-game +/- keys. Defaults to --speed, "
+                         "which pins the sim; raise it to watch at --speed but keep "
+                         "the ability to fast-forward")
     ap.add_argument("--windowed", action="store_true",
                     help="use spring.exe instead of spring-headless.exe")
     ap.add_argument("--watch", action="store_true",

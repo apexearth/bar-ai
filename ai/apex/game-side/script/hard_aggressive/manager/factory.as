@@ -66,6 +66,30 @@ const string TV_READY = "ready";
 // that's a good idea." A player that techs stops defending itself, so the one
 // who can least afford that is the one closest to the enemy.
 const string TV_DIST = "dist";
+// What share of this team's PEAK extractor count it still holds, 1.0 while it
+// has never lost one. Published by everyone; the eco lead reads it as "is
+// somebody being taken apart". A share rather than a flag, because the bar for
+// standing our own ground and the bar for an ally being killed are not the same
+// number and only the reader knows which it is asking.
+const string TV_MEX = "mexhold";
+
+// The elector publishes one team id per lead slot. Slot 0 keeps the bare "lead"
+// key so every existing reader -- slinging, the air lead, the army suppression --
+// still finds the primary lead where it always was.
+string LeadKey(uint slot)
+{
+	return (slot == 0) ? TV_LEAD : (TV_LEAD + slot);
+}
+
+// How many players may rush T2 at once. apexearth, watching an 8v8: "on an 8v8
+// you might expect 2 players to go T2 early, not 5 or 6 ... 1 per ~6 guys seems
+// ok. so at 8 we get 2". Ceiling, so a small team still gets one.
+uint TechLeadQuota()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	const uint n = ((mates is null) || (mates.length() == 0)) ? 1 : mates.length();
+	return (n + 5) / 6;
+}
 
 // Total builders the tech lead may hold while rushing. Enough to finish an
 // advanced plant fast; beyond that each constructor is metal that buys nothing
@@ -114,8 +138,184 @@ int gNextArmyLog = 0;
 const int   FODDER_EVERY = 3;
 int gArmyPushCount = 0;
 
-int gRushLead = -1;   // last lead this instance saw published
+int gRushLead = -1;   // last PRIMARY lead this instance saw published
+bool gAmLead = false;   // this team holds one of the lead slots
 bool gT1Reclaimed = false;   // one-shot: we fed our T1 lab into the plant
+
+// ECO LEAD. One player -- the primary tech lead slot -- stops playing the map
+// and does nothing but grow an economy, so the team arrives at the late game
+// with something to spend there instead of four mid-sized economies that all
+// stop at T2. apexearth: "they don't make army unless endangered or our allies
+// are dying. they just focus on building up a huge economy."
+//
+// Big teams only, and for the reason already measured on the tech lead itself:
+// on a four-player team one player fielding no army is a quarter of the army
+// missing, and the note on the constructor monopoly below records what that
+// cost (standing army 17.8k against 25.4k, real K/D 0.70 against 1.24). At
+// eight players it is an eighth.
+//
+// Held for the whole game, not to Military::RUSH_GIVEUP: the point is the LATE
+// game, so a role that expires at fifteen minutes is the one part of it that
+// cannot pay off.
+bool gEcoActive = false;   // this instance is running as the eco lead right now
+int  gEcoLoggedFor = -1;   // team we last announced the role for
+
+// "Being taken apart" is measured as EXTRACTORS LOST off this team's own peak.
+//
+// Metal income was the obvious measure and is the wrong one: apexearth, "they
+// can reclaim and get a temporary boost to metal income and then later on it
+// falls", which sets a peak nothing can live up to and then reads the return to
+// normal as death. Energy income is worse still -- it rises and falls with the
+// wind. A standing extractor count moves in one direction for one reason.
+//
+// Deliberately not Military::LosingGround() either: that compares the enemy's
+// army value to OURS, and a player that builds no army reads "losing"
+// permanently, so the release would be stuck on from the moment the role began.
+// Two bars, because they answer two different questions.
+//
+// OURS is "we are being pushed off our own ground" -- the eco lead is the player
+// least able to fight back, so it reacts early.
+//
+// An ALLY's is "that player is being killed", and it has to be a much harder bar
+// on a big team. Seven allies each with an independent chance of standing a
+// couple of mexes below their peak means "any ally at 70%" is true essentially
+// all the time, which is what a first 8v8 run showed: the role was elected at
+// 7.6 minutes and never once activated.
+//
+// Both bars are also SUSTAINED rather than instantaneous, and this is the part
+// that was wrong. Upgrading a mex destroys the T1 extractor and leaves a
+// nanoframe, so the standing count dips for the whole build -- and the eco lead
+// upgrades more mexes than anyone (measured, 20 games: 5 against a teammate
+// average of 3). The role was therefore tripping its own release on the exact
+// behaviour it exists to produce: "losing our own mexes" was the single largest
+// cause of standing down, 45 times across those games.
+const float HURT_SELF_FRAC = 0.55f;
+const float HURT_ALLY_FRAC = 0.40f;
+const uint  HURT_MIN_MEX   = 6;   // under this a single lost mex is not a trend
+// A mex takes well under this to rebuild or upgrade; a base being eaten does not
+// recover inside it.
+const int   HURT_SUSTAIN   = 40 * SECOND;
+int gHurtSince = -1;   // frame our own share first went under the bar, -1 if not
+// Both tiers, all three sides; we only ever hold our own side's units, so the
+// others contribute zero. T1 first, advanced second -- MexCount indexes on that
+// split. Summing the two tiers is NOT by itself enough to make an upgrade
+// neutral, because the old unit is destroyed before the new one exists.
+array<string> MEX_DEFS = {"armmex", "cormex", "legmex",
+                          "armmoho", "cormoho", "legmoho"};
+bool  gHurt = false;
+float gMexHold = 1.f;   // our own share of peak, published for our allies
+uint  gPeakMex = 0;
+
+// How long the role survives losing its slot.
+//
+// Measured, 8v8 Comet Catcher at +40%: the primary slot moved team 5 -> lost ->
+// 5 -> 3 -> 5 inside two minutes, so the role was taken and dropped four times
+// and never ran for longer than six seconds. The election keeps an incumbent
+// only while RushReady() holds, and that reads ENERGY income, which rises and
+// falls with the wind -- apexearth, "wind energy goes up and down due to wind
+// speed". Taking the role is immediate; giving it up waits, so a slot that
+// flickers does not turn the whole strategy on and off with it.
+//
+// Two players can briefly believe they are the eco lead when the slot genuinely
+// moves. That costs one idle factory line for this long, against the strategy
+// not existing at all, which is what the flapping produced.
+// 45s was not enough: across 20 games "role lost" was still the second largest
+// cause of standing down, 31 times, behind only the mex dip. The election's
+// incumbency test is what flickers, not the player's fitness for the job.
+const int ECO_ROLE_GRACE = 150 * SECOND;
+int gEcoSlotSeen = -1000000;
+
+// Build power is the one thing the eco lead does buy from its factory. Past
+// this it buys nothing at all and the income goes to the builders instead --
+// mexes, energy, converters, the T2 and T3 economy.
+//
+// Spaced for the same reason RUSH_CON_SPACING is: Enqueue does not dedup and
+// GetWorkerCount() counts only FINISHED builders, so the cap alone cannot hold.
+// BUILD POWER IS THE ECONOMY, and 10 was starving the one player whose whole job
+// is to grow.
+//
+// Measured over 7 sixty-minute games: the eco lead PRODUCED 23% more metal than
+// its teammates and BUILT 36% less of it, holding 12 T1 constructors against
+// their 28. It banks income it has no capacity to spend, which is why it is also
+// the one player that never reaches T3 (1,557 against 22,179). At 30 minutes
+// this was invisible -- the margin still looked like +71% metal -- because there
+// had not yet been enough income for the ceiling to bind.
+//
+// A cap this size only binds late, and the spacing is what stops it being
+// bought all at once. apexearth's own note: "if above ~50% metal then we can
+// keep making construction turrets ... sometimes making ~4 more at a time is
+// more efficient."
+// Split between ground and AIR, and the ground half deliberately falls back.
+// apexearth: "the eco player should try to get more air constructors and more
+// nanos, less ground engineers." A ground engineer walks; at the scale this
+// player is working at -- 240,000 metal produced in an hour, spread over mexes,
+// fusions and a second base -- walking is most of what it does. Air constructors
+// cross the same distance in seconds, and a nano turret does not travel at all.
+// TODO.md carries the same rule and its caveat: air cons "allow you to scale
+// everything much faster ... HOWEVER - air cons are easily shot down near the
+// front line", which is survivable for THIS player because it works behind its
+// own team.
+const uint  ECO_CON_CAP     = 16;   // ground engineers, down from 28
+const int   ECO_CON_SPACING = 10 * SECOND;
+const int   ECO_AIR_CON_CAP = 12;
+const int   ECO_AIR_SPACING = 8 * SECOND;
+// The eco lead earns its own aircraft plant once it is clearly the team's bank.
+// Not before: a second factory this player cannot yet feed is the "rules that
+// spend" trap, and the air plant is only worth it for what it builds.
+const float ECO_AIR_PLANT_INCOME = 45.f;
+int gNextEcoAirCon = 0;
+int gNextEcoCon = 0;
+int gNextEcoLog = 0;
+int gNextEcoGateLog = 0;
+
+// LATE GAME, and a standing fighter screen once it arrives.
+//
+// apexearth: "make sure we always make air in the late game, even if it's just
+// fighters." The Air namespace next door is a different thing entirely -- one
+// player, a surprise bomber strike, gated behind income 60 and the enemy's
+// anti-air. That is a strategy that may never fire; this is a floor that always
+// does, so the team is never simply handed the sky.
+//
+// TODO.md's own definition of late game: "usually 25 minutes + into the game,
+// but you can gauge late game based on if we have things like fusions or afus".
+// Both, so a fast economy counts as late early and a slow one still qualifies.
+const int LATE_GAME_FRAME = 25 * MINUTE;
+// Fighters, not an air force. Enough to contest scouting and punish bombers.
+const int LATE_FIGHTERS   = 8;
+const int LATE_FIG_SPACING = 10 * SECOND;
+// Income before a player without any air plant builds one purely for this.
+const float LATE_AIR_INCOME = 55.f;
+int gNextFighter = 0;
+
+// A bot lab is worth having early for one reason above all others: it is the
+// ONLY source of a resurrection bot. armrectr/cornecro/legrezbot are 130 metal
+// and no other factory in the game can make them.
+const int BOTLAB_FROM = 8 * MINUTE;
+
+// Rez bots to keep once we own a lab.
+//
+// Measured, one 8v8: stock's rez spend was 32,890 against our 436, and we never
+// built a single rez bot in 27 minutes. Resurrection returns the UNIT, not scrap
+// -- an army that gets rebuilt off the field beats one that gets reclaimed for
+// metal, which is exactly the kill-exchange gap we keep losing.
+//
+// By name, not by role: BuilderManager routes these through UseAs::REZZER, but
+// the config ROLES disagree across factions ("support" for Armada and Legion,
+// "rezzer" for Cortex), so GetRoleDef is not a reliable way to ask for one.
+const int REZ_FLOOR    = 4;
+const int REZ_SPACING  = 20 * SECOND;
+int gNextRez = 0;
+string armrectr("armrectr"); string cornecro("cornecro"); string legrezbot("legrezbot");
+
+CCircuitDef@ RezBotDef()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(cornecro);
+	if (side == "legion")
+		return ai.GetCircuitDef(legrezbot);
+	return ai.GetCircuitDef(armrectr);
+}
 
 // False once the pooling strategy has been given up on (Military::RUSH_GIVEUP).
 // The rush branch below returns null rather than producing army, so a lead that
@@ -155,52 +355,77 @@ void RunElection()
 	if (mates is null)
 		return;
 
-	const int held = int(ai.ReadTeamValue(ai.teamId, TV_LEAD, -1.f));
-	// Past the give-up frame the title stops moving. Sharing has stopped by then
-	// anyway; the team keeps its tech lead rather than handing the role around.
-	if ((held >= 0) && (ai.frame > Military::RUSH_GIVEUP))
-		return;
-	// Keep the incumbent while it still holds a plant or a nanoframe. Reopening
-	// only when it has genuinely lost one is what stops the role flapping
-	// between two teams whose progress is neck and neck.
-	if ((held >= 0) && (ai.ReadTeamValue(held, TV_ADV, -1.f) > 0.f))
-		return;
-	// Keep a provisional pick that has not spent anything yet but is still able
-	// to. Without this the title flaps between ready teams every tick and each
-	// starts a plant on its turn -- the same stampede, slower.
-	if ((held >= 0) && (ai.ReadTeamValue(held, TV_READY, 0.f) > 0.f))
-		return;
+	const uint quota = TechLeadQuota();
 
-	int best = -1;
-	float bestProgress = 0.f;
-	for (uint i = 0; i < mates.length(); ++i) {
-		const int t = int(mates[i]);
-		const float p = ai.ReadTeamValue(t, TV_ADV, -1.f);
-		if (p <= 0.f)
-			continue;   // has not committed to an advanced plant
-		if ((p > bestProgress) || ((p == bestProgress) && (t < best))) {
-			bestProgress = p;
-			best = t;
+	// Incumbents first. A slot is kept while its holder still has a plant or a
+	// nanoframe, or is still able to pay for one -- reopening only on a genuine
+	// loss is what stops the role flapping between two teams whose progress is
+	// neck and neck. Past the give-up frame nothing moves at all: sharing has
+	// stopped by then, so the team keeps the leads it has.
+	array<int> leads;
+	for (uint s = 0; s < quota; ++s) {
+		const int held = int(ai.ReadTeamValue(ai.teamId, LeadKey(s), -1.f));
+		if (held < 0)
+			continue;
+		if ((ai.frame > Military::RUSH_GIVEUP)
+			|| (ai.ReadTeamValue(held, TV_ADV, -1.f) > 0.f)
+			|| (ai.ReadTeamValue(held, TV_READY, 0.f) > 0.f))
+		{
+			leads.insertLast(held);
 		}
 	}
-	// Nobody has committed. Designate the FURTHEST-BACK team that could, so the
-	// player who goes helpless is the one least likely to be attacked while it is.
-	// Richest-that-is-ready was the previous rule and it ignored position
+
+	// Fill whatever is left. Committed teams rank first, by how far along their
+	// plant is; then, for slots still empty, the FURTHEST-BACK team that could
+	// afford one -- the player who goes helpless should be the one least likely
+	// to be attacked while it is. Richest-that-is-ready ignored position
 	// entirely, which is how the front-line player ended up teching.
-	if (best < 0) {
-		float bestDist = -1.f;
+	while (leads.length() < quota) {
+		int best = -1;
+		float bestProgress = 0.f;
 		for (uint i = 0; i < mates.length(); ++i) {
 			const int t = int(mates[i]);
-			if (ai.ReadTeamValue(t, TV_READY, 0.f) <= 0.f)
-				continue;   // cannot afford it anyway
-			const float d = ai.ReadTeamValue(t, TV_DIST, 0.f);
-			if ((d > bestDist) || ((d == bestDist) && (best >= 0) && (t < best))) {
-				bestDist = d;
+			if (IsInLeadList(leads, t))
+				continue;
+			const float p = ai.ReadTeamValue(t, TV_ADV, -1.f);
+			if (p <= 0.f)
+				continue;   // has not committed to an advanced plant
+			if ((p > bestProgress) || ((p == bestProgress) && (t < best))) {
+				bestProgress = p;
 				best = t;
 			}
 		}
+		if (best < 0) {
+			float bestDist = -1.f;
+			for (uint i = 0; i < mates.length(); ++i) {
+				const int t = int(mates[i]);
+				if (IsInLeadList(leads, t))
+					continue;
+				if (ai.ReadTeamValue(t, TV_READY, 0.f) <= 0.f)
+					continue;   // cannot afford it anyway
+				const float d = ai.ReadTeamValue(t, TV_DIST, 0.f);
+				if ((d > bestDist) || ((d == bestDist) && (best >= 0) && (t < best))) {
+					bestDist = d;
+					best = t;
+				}
+			}
+		}
+		if (best < 0)
+			break;   // no further candidate; leave the slot empty
+		leads.insertLast(best);
 	}
-	ai.PublishTeamValue(TV_LEAD, float(best));
+
+	for (uint s = 0; s < quota; ++s)
+		ai.PublishTeamValue(LeadKey(s), (s < leads.length()) ? float(leads[s]) : -1.f);
+}
+
+bool IsInLeadList(const array<int>@ leads, int team)
+{
+	for (uint i = 0; i < leads.length(); ++i) {
+		if (leads[i] == team)
+			return true;
+	}
+	return false;
 }
 
 // Driven from AiUpdate, so every instance publishes on a fixed cadence.
@@ -213,26 +438,279 @@ void UpdateTeamCoord()
 	ai.PublishTeamValue(TV_READY, RushReady() ? aiEconomyMgr.metal.income : 0.f);
 	ai.PublishTeamValue(TV_DIST, Builder::gHomeSet
 			? Builder::gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) : 0.f);
+	ai.PublishTeamValue(TV_MEX, UpdateMexHold());
 	if (ElectorTeamId() == ai.teamId)
 		RunElection();
+	UpdateEcoLead();
 }
 
-int RushLeadTeamId()
+// Extractors we hold, counting one under construction as still held.
+//
+// An upgrade REPLACES the unit: the T1 extractor is destroyed and an advanced
+// one is laid down in its place, so a plain unit count reads every upgrade as a
+// lost mex for the whole build -- 14,100 build time for legmoho. The eco lead
+// upgrades more mexes than anyone on its team, so the release condition fired
+// hardest on the player doing the most of what the role exists to do.
+//
+// GetDefBuildProgress reports the best progress toward a def and -1 when none is
+// being built, so a nanoframe of any advanced extractor credits one back. It
+// cannot distinguish two simultaneous upgrades; the sustain window below covers
+// what this does not.
+uint MexCount()
+{
+	uint n = 0;
+	for (uint i = 0; i < MEX_DEFS.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(MEX_DEFS[i]);
+		if (d is null)
+			continue;
+		n += uint(d.count);
+		if (IsAdvancedMex(i) && (ai.GetDefBuildProgress(d) > 0.f))
+			++n;
+	}
+	return n;
+}
+
+// MEX_DEFS holds the three T1 extractors first, then the three advanced ones.
+// Only the advanced half is credited: a T1 mex under construction is expansion,
+// not an upgrade, and counting it would inflate the peak we measure against.
+bool IsAdvancedMex(uint i)
+{
+	return i >= 3;
+}
+
+// What share of our peak extractor count we still hold. Peak-tracked here rather
+// than recomputed at each reader, so the peak advances exactly once per update.
+// Until the peak is meaningful this reports full health rather than a ratio off
+// two or three opening mexes.
+float UpdateMexHold()
+{
+	const uint mex = MexCount();
+	if (mex > gPeakMex)
+		gPeakMex = mex;
+	gMexHold = (gPeakMex < HURT_MIN_MEX) ? 1.f : (float(mex) / float(gPeakMex));
+	if (gMexHold >= HURT_SELF_FRAC)
+		gHurtSince = -1;
+	else if (gHurtSince < 0)
+		gHurtSince = ai.frame;
+	gHurt = (gHurtSince >= 0) && ((ai.frame - gHurtSince) >= HURT_SUSTAIN);
+	return gMexHold;
+}
+
+// Is any ALLY being killed? Read straight off their own published share -- each
+// team is the only one that can count its own extractors.
+bool AlliesHurting()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return false;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		if (t == ai.teamId)
+			continue;
+		if (ai.ReadTeamValue(t, TV_MEX, 1.f) < HURT_ALLY_FRAC)
+			return true;
+	}
+	return false;
+}
+
+// The eco lead is the PRIMARY tech lead, not a separate election. It is already
+// chosen for exactly the properties the eco player wants -- furthest from the
+// enemy, able to pay -- and it is already the sling target, so the team's spare
+// metal is already going there.
+// Whether the role is allowed on a team under BIG_TEAM.
+//
+// Off by default, and the reason is measured: on a four-player team a player
+// fielding no army is a quarter of the army missing, which is the same
+// arithmetic that bars the air opening and the constructor monopoly there
+// (standing army 17.8k against 25.4k, real K/D 0.70 against 1.24).
+//
+// RE-TESTED 2026-08-02 against the current, much stronger role and the verdict
+// held. Six 4v4 games each way, same three maps and seeds, only this flag
+// differing: OFF went 2-1 on 904,267 metal and 166,643 army; ON went 0-4 on
+// 516,702 metal and 80,671 army, and its games ended SOONER (41 min against 48)
+// -- it is not slower, it is dead earlier. Build power, converters and air
+// constructors do not buy back the quarter of the team that stops fighting.
+const bool ECO_ON_SMALL_TEAMS = false;
+
+bool IsEcoLead()
+{
+	if (IsSmallTeam() && !ECO_ON_SMALL_TEAMS)
+		return false;
+	return IsDesignatedLead() && (ai.teamId == RushLeadTeamId());
+}
+
+// Resolved once per update and cached: EcoLeadActive() is read from three files,
+// one of them CBuilderManager's task hook, and this walks the ally roster.
+void UpdateEcoLead()
+{
+	const bool was = gEcoActive;
+	if (IsEcoLead())
+		gEcoSlotSeen = ai.frame;
+	const bool mine = (ai.frame - gEcoSlotSeen) <= ECO_ROLE_GRACE;
+	const bool allies = mine && AlliesHurting();
+
+	// Military::gTurtle is deliberately NOT a condition here, for the same reason
+	// LosingGround() is not: the hold fires when our own army SHRINKS, and this
+	// player builds no army, so it can neither avoid the hold nor recover from
+	// it. Measured in the same run: HOLD at 8.7 min on army 1897 -> 1266, RESUME
+	// only at 15.0 on army 110 -- the maximum hold, six minutes, expiring rather
+	// than recovering. As a gate it removed the role from the game.
+	gEcoActive = mine && !gHurt && !allies;
+
+	// Which gate is holding it off, sampled while we hold the slot. The first
+	// version of this role was elected and then never activated for a whole
+	// game, and there was no way to tell from the log which of four conditions
+	// was responsible -- so state them rather than guessing at them later.
+	if (mine && !gEcoActive && (ai.frame >= gNextEcoGateLog)) {
+		gNextEcoGateLog = ai.frame + 60 * SECOND;
+		AiLog(T() + "apex: eco lead held off"
+			+ " ourMex=" + formatFloat(gMexHold, "", 0, 2)
+			+ " allyDying=" + (allies ? "1" : "0"));
+	}
+
+	if (gEcoActive == was)
+		return;
+	if (gEcoActive) {
+		gEcoLoggedFor = ai.teamId;
+		AiLog(T() + "apex: ECO LEAD -- no army, economy only");
+	} else if (gEcoLoggedFor == ai.teamId) {
+		AiLog(T() + "apex: eco lead standing down"
+			+ (gHurt ? " (losing our own mexes)"
+			 : allies ? " (an ally is dying)" : " (role lost)"));
+	}
+}
+
+bool EcoLeadActive()
+{
+	return gEcoActive;
+}
+
+// Has the late game arrived? Either the clock, or a fusion standing -- a reactor
+// IS the late game economically, whenever it turns up.
+bool LateGame()
+{
+	return (ai.frame >= LATE_GAME_FRAME) || (Builder::gFusions.length() > 0);
+}
+
+string armca("armca");   string corca("corca");   string legca("legca");
+
+CCircuitDef@ AirConDef()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(corca);
+	if (side == "legion")
+		return ai.GetCircuitDef(legca);
+	return ai.GetCircuitDef(armca);
+}
+
+int AirConCount()
+{
+	CCircuitDef@ d = AirConDef();
+	return (d is null) ? 0 : d.count;
+}
+
+// Any aircraft plant of ours, basic or advanced. AIR_FAC already names all six.
+bool HaveAirFactory()
+{
+	for (uint i = 0; i < AIR_FAC.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(AIR_FAC[i]);
+		if ((d !is null) && (d.count > 0))
+			return true;
+	}
+	return false;
+}
+
+// The eco lead's aircraft plant exists to make CONSTRUCTORS, not an air force,
+// which is why it is not gated on MayOpenAir(): that rule is about who fights in
+// the air, and bars the tech lead outright. This asks for a plant only once the
+// economy is large enough that ground engineers are the thing holding it back.
+bool EcoWantsAirPlant()
+{
+	return gEcoActive && gHaveT2 && !HaveAirFactory()
+		&& (aiEconomyMgr.metal.income >= ECO_AIR_PLANT_INCOME);
+}
+
+// The ally holding least of its own peak, whatever the bar. Used when the team
+// is under pressure but nobody is dying yet: somebody still has it worst, and
+// they are the one to push metal at.
+int LowestHoldAlly()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return -1;
+	int worst = -1;
+	float worstHold = 2.f;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		if (t == ai.teamId)
+			continue;
+		const float hold = ai.ReadTeamValue(t, TV_MEX, 1.f);
+		if (hold < worstHold) {
+			worstHold = hold;
+			worst = t;
+		}
+	}
+	return worst;
+}
+
+// The ally in the worst trouble, by its own published share of peak extractors,
+// or -1 when nobody is under the bar. Used for aid, so it deliberately reads the
+// same number the release condition does.
+int NeediestAlly()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return -1;
+	int worst = -1;
+	float worstHold = HURT_ALLY_FRAC;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		if (t == ai.teamId)
+			continue;
+		const float hold = ai.ReadTeamValue(t, TV_MEX, 1.f);
+		if (hold < worstHold) {
+			worstHold = hold;
+			worst = t;
+		}
+	}
+	return worst;
+}
+
+// Refresh the primary lead and whether THIS team holds any lead slot. Both come
+// off one cadence because they read the same blackboard: un-cached this ran a
+// string concatenation and an engine callback on every IsTechLead().
+void RefreshLead()
 {
 	if (ai.frame < gLeadCheckedAt + 1 * SECOND)
-		return (gRushLead >= 0) ? gRushLead : ai.GetLeadTeamId();
+		return;
 	gLeadCheckedAt = ai.frame;
 
-	// Read the ELECTOR's slot, not our own, and never anything keyed on
+	// Read the ELECTOR's slots, not our own, and never anything keyed on
 	// ai.allyTeamId: that read 0 for every instance in the shipped DLL, which
 	// had ally 1 pooling behind ally 0's lead.
-	const int lead = int(ai.ReadTeamValue(ElectorTeamId(), TV_LEAD, -1.f));
-	// Nobody has committed yet. Defer to the engine's own pick, and to the last
-	// known lead if we ever had one, rather than reporting "nobody".
-	if (lead < 0)
-		return (gRushLead >= 0) ? gRushLead : ai.GetLeadTeamId();
+	const int elector = ElectorTeamId();
+	const uint quota = TechLeadQuota();
+	bool mine = false;
+	for (uint s = 0; s < quota; ++s) {
+		if (int(ai.ReadTeamValue(elector, LeadKey(s), -1.f)) == ai.teamId) {
+			mine = true;
+			break;
+		}
+	}
+	if (mine != gAmLead) {
+		AiLog(T() + "apex: tech lead role " + (mine ? "TAKEN" : "released")
+			+ " (quota " + quota + ")");
+		gAmLead = mine;
+	}
 
-	// Not latched here: the elector can hand the role over if the lead loses its
+	const int lead = int(ai.ReadTeamValue(elector, TV_LEAD, -1.f));
+	// Nobody has committed yet. Keep the last known lead if we ever had one,
+	// rather than reporting "nobody".
+	if (lead < 0)
+		return;
+
+	// Not latched here: the elector can hand a slot over if its holder loses its
 	// plant before the give-up frame.
 	if (lead != gRushLead) {
 		AiLog(T() + "apex: tech lead "
@@ -242,7 +720,14 @@ int RushLeadTeamId()
 		// gT1Reclaimed is deliberately NOT cleared: the reclaim stays one-shot
 		// per instance.
 	}
-	return gRushLead;
+}
+
+// The PRIMARY lead (slot 0). Slinging and the air lead want a single target, not
+// the whole set -- donations split across two leads fund neither.
+int RushLeadTeamId()
+{
+	RefreshLead();
+	return (gRushLead >= 0) ? gRushLead : ai.GetLeadTeamId();
 }
 
 string armmoho ("armmoho");
@@ -267,7 +752,12 @@ bool HaveT2Mex()
 
 bool IsTechLead()
 {
-	return ai.teamId == RushLeadTeamId();
+	RefreshLead();
+	if (gAmLead)
+		return true;
+	// Nobody has been elected yet: defer to the engine's own pick, exactly as
+	// this did when there was only ever one slot.
+	return !LeadIsDesignated() && (ai.teamId == RushLeadTeamId());
 }
 
 // Has anyone actually been designated yet?
@@ -299,7 +789,11 @@ bool MayPursueT2()
 	// plant nobody was allowed to start, whereas readiness is earned by the economy
 	// growing. The frame clause is a backstop only -- past it the rush window is
 	// over and followers are released anyway.
-	return IsDesignatedLead() || (ai.frame >= FOLLOWER_TECH_FRAME);
+	// The release used to be a clock, and the clock is what let everyone in: past
+	// FOLLOWER_TECH_FRAME this returned true for every player at once, and the
+	// rush branch then asked only for RUSH_MIN_METAL. A non-lead now earns T2
+	// with its economy instead of by waiting.
+	return IsDesignatedLead() || FollowerEconomyReady();
 }
 
 // Am I the ACTUAL designated lead? Distinct from IsTechLead(), which is true for
@@ -329,7 +823,14 @@ bool RushReady()
 		|| ((ai.frame > RUSH_LATEST) && (aiEconomyMgr.energy.income > RUSH_ENERGY_FLOOR));
 }
 
-const float FOLLOWER_TECH_INCOME = 28.f;   // followers wait for a running economy
+// Metal a NON-LEAD must be making before it may take T2. This constant existed
+// and was never read by anything -- the follower routes all gated on metal 18 or
+// on nothing at all.
+//
+// apexearth, watching an 8v8: "if someone is not rushing T2 then they really
+// need more metal and energy income before they try for it ... ~25+ metal per
+// second along with ~600+ energy".
+const float FOLLOWER_TECH_INCOME = 25.f;
 // Was 13 min, tuned when the lead itself only reached T2 around 20. The lead now
 // has its plant at a median of 6.3 min and starts handing out advanced
 // constructors well before 13, so holding followers that long leaves them
@@ -380,7 +881,23 @@ const int   FOLLOWER_TECH_FRAME  = 10 * MINUTE;
 // clear, not what it clears today. If followers stop teching at all, that is the
 // factor being too low, not this number being wrong -- check eInc in the T2GATE
 // log before lowering it.
-const float FOLLOWER_TECH_ENERGY = 800.f;
+const float FOLLOWER_TECH_ENERGY = 600.f;
+
+// May a non-lead take an advanced plant yet? Both halves, because teching on
+// metal alone stalls the base rather than growing it.
+//
+// This replaces a pure clock. The clock is what produced the stampede: every
+// follower gate was bounded by FOLLOWER_TECH_FRAME, so at ten minutes they all
+// expired at once and the rush branch below granted T2 to anyone holding
+// RUSH_MIN_METAL. Measured, 8v8 Supreme Isthmus: seven of eight players
+// committed to an advanced plant, five of them inside fifteen minutes, and
+// every single one did it at 14-16 metal/s. Army share came out 19.3% against
+// stock's 31.7% and T1 spend 11,671 against 26,879.
+bool FollowerEconomyReady()
+{
+	return (aiEconomyMgr.metal.income >= FOLLOWER_TECH_INCOME)
+		&& (aiEconomyMgr.energy.income >= FOLLOWER_TECH_ENERGY);
+}
 
 
 enum Attr {
@@ -455,6 +972,50 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	IUnitTask@ air = Air::MakeFactoryTask(unit);
 	if (air !is null)
 		return air;
+
+	// Rez bots from the bot lab, before anything else that lab would make.
+	//
+	// Placed high for the same reason the fighter floor is: it is a floor, not a
+	// strategy, and the branches below it -- the catch-up push, the constructor
+	// line -- would otherwise take every slot the lab has.
+	if (HaveT1BotLab() && (ai.frame >= gNextRez)) {
+		CCircuitDef@ lab = T1BotLab();
+		CCircuitDef@ rez = RezBotDef();
+		if ((lab !is null) && (rez !is null) && (unit.circuitDef.id == lab.id)
+			&& rez.IsAvailable(ai.frame) && (rez.count < REZ_FLOOR))
+		{
+			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+					Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
+					rez, unit.GetPos(ai.frame), 0.f));
+			if (rec !is null) {
+				gNextRez = ai.frame + REZ_SPACING;
+				return rec;
+			}
+		}
+	}
+
+	// A standing fighter screen in the late game, from ANY air plant we own.
+	//
+	// Above every other branch, including the eco lead's constructor line: this
+	// is a floor of eight aircraft, not a strategy, and the whole point is that
+	// it is never the thing that gets skipped. Air::MakeFactoryTask keeps
+	// priority over it because the assassin strike is timed and this is not.
+	//
+	// GetRoleDef(AA) returns whatever THIS plant can build -- the T1 plant's
+	// fighter, or Hawk/Vamp/Venator from the advanced one -- so it never asks for
+	// an aircraft the factory cannot make.
+	if (IsAirFactory(unit.circuitDef) && LateGame() && (ai.frame >= gNextFighter)) {
+		CCircuitDef@ fig = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::AA.type);
+		if ((fig !is null) && (fig.count < LATE_FIGHTERS)) {
+			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+					Task::RecruitType::FIREPOWER, Task::Priority::HIGH,
+					fig, unit.GetPos(ai.frame), 0.f));
+			if (rec !is null) {
+				gNextFighter = ai.frame + LATE_FIG_SPACING;
+				return rec;
+			}
+		}
+	}
 
 	// aiMilitaryMgr.quota.attack only caps how many units get SENT to attack; it
 	// does not stop the factory building them. Measured: the rusher's standing
@@ -576,7 +1137,11 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		((Factory::userData[unit.circuitDef.id].attr & (Factory::Attr::T2 | Factory::Attr::T3)) == 0);
 	const bool isT2Fac =
 		((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) != 0);
-	if ((isT1Fac ? !gHaveT2 : isT2Fac) && HaveT2Mex() && Military::LosingGround()
+	// !gEcoActive: the eco lead is BY CONSTRUCTION behind on the field -- it
+	// fields no army, so LosingGround() is true for it permanently, and this
+	// branch would otherwise be the one thing that turns its whole income into
+	// units. Its own release conditions are what decide when it fights.
+	if (!gEcoActive && (isT1Fac ? !gHaveT2 : isT2Fac) && HaveT2Mex() && Military::LosingGround()
 		&& (aiEconomyMgr.metal.income >= ARMY_PUSH_MIN_INCOME)
 		&& (ai.frame >= gNextArmyPush))
 	{
@@ -633,6 +1198,62 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			if (rec !is null)
 				return rec;
 		}
+	}
+
+	// The eco lead's factory. Build power while it is short of it, then nothing
+	// at all -- an idle line is the point, not a failure. Every unit this factory
+	// does not make is income the builders spend on mexes, energy and the T2/T3
+	// economy instead, which is the entire reason the role exists.
+	//
+	// This sits AFTER the advanced-constructor branch above deliberately: handing
+	// advanced cons to the rest of the team is the tech lead's job and the eco
+	// lead is still the tech lead. It only replaces what would otherwise be army.
+	if (gEcoActive) {
+		// The aircraft plant makes constructors and nothing else. Every other
+		// branch above has already had its say, so reaching here with an air
+		// factory means this player has one purely as build power.
+		if (IsAirFactory(unit.circuitDef)) {
+			if ((AirConCount() < ECO_AIR_CON_CAP) && (ai.frame >= gNextEcoAirCon)) {
+				CCircuitDef@ acon = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
+				if (acon !is null) {
+					IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+							Task::RecruitType::BUILDPOWER, Task::Priority::NORMAL,
+							acon, unit.GetPos(ai.frame), 0.f));
+					if (rec !is null) {
+						gNextEcoAirCon = ai.frame + ECO_AIR_SPACING;
+						return rec;
+					}
+				}
+			}
+			return null;
+		}
+		// GetWorkerCount() counts every worker we own, and a nano turret IS one --
+		// observed live, the eco lead logged cons=25 against a cap of 16 while
+		// standing on eleven turrets. Left alone, the rectangle eats the mobile
+		// constructor budget and the player ends up with turrets and nobody to
+		// walk to the next mex. Count the turrets back out.
+		if ((int(aiBuilderMgr.GetWorkerCount()) - Builder::NanoCount() < int(ECO_CON_CAP))
+			&& (ai.frame >= gNextEcoCon))
+		{
+			CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
+			if (con !is null) {
+				IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+						Task::RecruitType::BUILDPOWER, Task::Priority::NORMAL,
+						con, unit.GetPos(ai.frame), 0.f));
+				if (rec !is null) {
+					gNextEcoCon = ai.frame + ECO_CON_SPACING;
+					return rec;
+				}
+			}
+		}
+		if (ai.frame >= gNextEcoLog) {
+			gNextEcoLog = ai.frame + 60 * SECOND;
+			AiLog(T() + "apex: eco lead idle line, cons="
+				+ aiBuilderMgr.GetWorkerCount()
+				+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+				+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
+		}
+		return null;
 	}
 	return aiFactoryMgr.DefaultMakeTask(unit);
 }
@@ -856,66 +1477,40 @@ bool AiIsSwitchTime(int lastSwitchFrame)
 
 bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 {
-	// First, ahead of the follower gates below. The advanced air plant carries the
-	// T2 attribute, so the FOLLOWER_TECH_ENERGY gate would refuse it on any grid
-	// under 800 energy/sec -- and the air assassin is by construction not the
-	// designated tech lead, so that gate applies to it. Place it and pour income
+	// First, ahead of the non-lead guard below. The advanced air plant carries the
+	// T2 attribute, so FollowerEconomyReady would refuse it on any grid under
+	// FOLLOWER_TECH_ENERGY -- and the air assassin is by construction not a
+	// designated tech lead, so that guard applies to it. Place it and pour income
 	// in, same as the rush plant.
 	if (Air::WantsFactory(facDef)) {
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
 		return true;
 	}
-	// "Defend, hold, tech up to turn the tide" -- the holding half was
-	// implemented and the teching half was not, so the AI sat on banked metal
-	// instead of spending it. Holding is exactly when tech should be bought:
-	// the army is not being reinforced, so the stock requirement of
-	// armyCost > 1.2 * facCost * facCount can never be met while turtling.
-	// Followers hold on T1 until the economy can carry a second tech base;
-	// the lead keeps stock behaviour and techs first.
-	// Measured 4v4: this gate at income 45 left our side with 1 of 4 teched at
-	// 25.4m while stock got 3 of 4 by 21m -- it was suppressing tech outright
-	// rather than sequencing it. Followers now only wait until the rush window
-	// has passed OR the economy is genuinely running, whichever comes first.
-	// Followers were deadlocked: the gate keyed off their own metal income, but
-	// slinging is what suppresses that income -- so donating blocked the tech it
-	// was paying for. Release on elapsed time instead, and only hold them during
-	// the pooling window.
-	// LeadIsDesignated() is load-bearing, not belt-and-braces. The lead is now
-	// "whoever is building an advanced plant", so holding every non-lead back
-	// until FOLLOWER_TECH_FRAME deadlocks: nobody may start a plant, so nobody
-	// becomes lead, so nobody may start a plant. Measured -- the first election
-	// landed at 10.5 min in two runs, the frame the gate opens, against a 5.7 min
-	// baseline. Before anyone has committed the slot is open and whoever is ready
-	// races for it; once someone holds it, the rest are followers again.
-	if (LeadIsDesignated() && !IsDesignatedLead()
-		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
-		&& (ai.frame < FOLLOWER_TECH_FRAME))
-	{
-		return false;
-	}
-	// A follower needs real energy behind the plant, not just metal.
+	// One guard for every non-lead route to an advanced plant.
 	//
-	// This is a single early guard rather than another clause on the no-bank
-	// branch below, because a follower has FOUR routes to T2 in this function --
+	// It has to be a single early guard rather than a clause on the no-bank
+	// branch below, because a non-lead has FOUR routes to T2 in this function --
 	// the no-bank branch, the turtle branch, and both halves of the stock
-	// fallback -- and every one of them grants it on metal alone. Gating one
+	// fallback -- and every one of them grants it on metal alone, or in the
+	// turtle case on banked metal with no income test whatsoever. Gating one
 	// leaves the others open.
 	//
-	// LeadIsDesignated() is required here for the same reason it is above: gate
-	// every non-lead on energy before anyone has been elected and nobody can
-	// start a plant, so nobody becomes lead, so nobody can start a plant. The
-	// energy bar applies once the team has a lead to pool behind.
-	// Bounded to the pooling window, like every other follower gate. Without the
-	// frame clause it pre-empted the follower release below FOREVER: that branch
-	// asks only for metal income past FOLLOWER_TECH_FRAME and could never be
-	// reached by anyone under 800 energy/s. Observed live at 33 minutes -- a
-	// wealthy player, metal storage full, no advanced plant and no way to start
-	// one. Nothing logged, because the T2GATE line lives in the branch this
-	// returns before.
+	// This used to be two guards, both bounded by ai.frame < FOLLOWER_TECH_FRAME,
+	// which is what produced the stampede: at ten minutes both expired for
+	// everyone simultaneously and the whole team teched on RUSH_MIN_METAL. The
+	// bound is now the economy, so a player is held until it can actually carry
+	// a second tech base and released the moment it can.
+	//
+	// LeadIsDesignated() is load-bearing, not belt-and-braces. Gate every
+	// non-lead and nobody can start a plant, so nobody becomes lead, so nobody
+	// can start a plant. That deadlock was measured: the first election landed at
+	// 10.5 min in two runs -- the frame the old gate opened -- against a 5.7 min
+	// baseline. It cannot recur here, because the elector designates on TV_READY
+	// (published from RushReady, no plant required) as well as on commitment, so
+	// slots fill without anyone having to spend first.
 	if (LeadIsDesignated() && !IsDesignatedLead()
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
-		&& (ai.frame < FOLLOWER_TECH_FRAME)
-		&& (aiEconomyMgr.energy.income < FOLLOWER_TECH_ENERGY))
+		&& !FollowerEconomyReady())
 	{
 		return false;
 	}
@@ -942,6 +1537,7 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 		// the sticky isEnergyRequired, neither of which isSwitchTime bypasses.
 		// This line marks the frame we were actually reached on.
 		AiLog(T() + "T2GATE reached IsSwitchAllowed"
+			+ " lead=" + (IsDesignatedLead() ? "1" : "0")
 			+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
 			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1));
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
@@ -990,9 +1586,11 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// and all four teched simultaneously late in the game. One advanced plant per
 	// follower is the whole point -- the second is metal that should have been
 	// army or mex upgrades, spent at the worst possible moment.
-	if (!IsDesignatedLead() && !gHaveT2 && (ai.frame >= FOLLOWER_TECH_FRAME)
+	// The clock and the metal-18 bar are both gone: reaching here at all now means
+	// the guard at the top of this function passed, i.e. FollowerEconomyReady().
+	if (!IsDesignatedLead() && !gHaveT2
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
-		&& (aiEconomyMgr.metal.income > 18.f))
+		&& FollowerEconomyReady())
 	{
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
 		return true;
@@ -1069,7 +1667,10 @@ bool IsSmallTeam()
 	return (mates is null) || (mates.length() < BIG_TEAM);
 }
 
-bool IsAirFactory(CCircuitDef@ def)
+// const handle: CCircuitUnit::circuitDef is a const CCircuitDef@, and a
+// non-const parameter refuses it outright. The other two callers pass mutable
+// handles, which a const parameter still accepts.
+bool IsAirFactory(const CCircuitDef@ def)
 {
 	if (def is null)
 		return false;
@@ -1138,6 +1739,66 @@ bool IsWaterMap()
 {
 	return !aiTerrainMgr.IsWaterAVoid()
 		&& (aiTerrainMgr.GetLandPercent() < MIN_LAND_PCT);
+}
+
+// A map can carry a great deal of water and still not be a "water map".
+//
+// IsWaterMap gates on land < 40%, i.e. water > 60%. That is the right test for
+// the OPENING factory -- you do not open naval on a land majority -- but every
+// other naval branch hangs off it too, so on anything in between the AI builds
+// no naval unit of any kind. Observed on Supreme Isthmus: the boat move-types
+// (boat4/boat5/boat9) cover 39-40% of the map and the side finished the game
+// with zero shipyards, zero ships, and the sea uncontested.
+const float NAVY_MIN_WATER_PCT = 20.f;
+// A T1 shipyard is ~700 metal before a single hull comes out of it, so it waits
+// for an economy rather than competing with the opening.
+const float NAVY_MIN_INCOME = 15.f;
+
+bool IsMixedWaterMap()
+{
+	return !aiTerrainMgr.IsWaterAVoid()
+		&& !IsWaterMap()
+		&& (aiTerrainMgr.GetLandPercent() <= (100.f - NAVY_MIN_WATER_PCT));
+}
+
+// Are we standing in the sea?
+//
+// Map-wide land percentage is the wrong question for the OPENING. A map can be
+// mostly land and still put this player's start in the water -- an island start,
+// a lagoon, the far side of a channel -- and no land factory can be placed there
+// at all, whatever GetLandPercent says. The position handed to
+// AiGetFactoryToBuild is where the factory would actually go, and Spring puts sea
+// level at y = 0, so its height is the direct test.
+//
+// The margin is a judgement call, not a measurement: a commander a metre into the
+// shallows can still build on land, and only a real depth means a land factory is
+// impossible. Shallower than this and we keep the land opening.
+const float WATER_START_DEPTH = -8.f;
+
+// The position argument is not always resolved when isStart runs: observed
+// y=-0.0 for several instances in one run and correct heights for all eight in
+// another, on the same map and seed -- the DLL is multithreaded and this is a
+// race. The commander is a registered unit with a real position, so prefer it and
+// keep the argument as the fallback.
+//
+// Both readings failing means an unresolved height, which is NOT water: an
+// unknown reads as 0, and 0 is above WATER_START_DEPTH, so the land opening
+// stands. Missing a water start costs an opening; forcing a shipyard onto dry
+// land costs the game.
+bool IsWaterAt(const AIFloat3& in p)
+{
+	if (aiTerrainMgr.IsWaterAVoid())
+		return false;
+	const float y = Builder::gHomeSet ? Builder::gHomePos.y : p.y;
+	return y < WATER_START_DEPTH;
+}
+
+bool HaveShipyard()
+{
+	CCircuitDef@ sy = NavalOpening();
+	// count covers the nanoframe (RegisterTeamUnit runs for it), so one already
+	// under construction cannot be re-requested.
+	return (sy !is null) && (sy.count > 0);
 }
 
 CCircuitDef@ NavalOpening()
@@ -1315,6 +1976,32 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 {
 	CCircuitDef@ pick = aiFactoryMgr.DefaultGetFactoryToBuild(pos, isStart, isReset);
 	if (isStart || (pick is null)) {
+		// Logged unconditionally: IsWaterAt is built on pos.y, and a binding that
+		// quietly returns 0 for everything would look exactly like "no water start
+		// here" on every map. This line is what says the height is real.
+		if (isStart) {
+			AiLog(T() + "apex: start pos y=" + formatFloat(pos.y, "", 0, 1)
+				+ " commSet=" + (Builder::gHomeSet ? "1" : "0")
+				+ " commY=" + (Builder::gHomeSet
+					? formatFloat(Builder::gHomePos.y, "", 0, 1) : "n/a")
+				+ " land=" + formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 0) + "%");
+		}
+		// A water start outranks every other opening rule, including the air
+		// override below: if the spot is sea then a land lab cannot go there, so
+		// there is nothing to weigh up. DefaultGetFactoryToBuild picks its water
+		// variant off factory.json's select.min_land, which is the same map-wide
+		// 40% test as IsWaterMap and so misses this case entirely.
+		if (isStart && IsWaterAt(pos)) {
+			CCircuitDef@ sea = NavalOpening();
+			AiLog(T() + "apex: water start (y="
+				+ formatFloat(pos.y, "", 0, 0) + ") -- opening "
+				+ ((sea is null) ? "FAILED, no shipyard def" : sea.GetName())
+				+ ((pick is null) ? "" : " instead of " + pick.GetName()));
+			if (sea !is null) {
+				@gT1Fac = sea;
+				return sea;
+			}
+		}
 		if (isStart && IsAirFactory(pick) && !MayOpenAir()) {
 			CCircuitDef@ ground = IsWaterMap() ? NavalOpening() : GroundOpening();
 			if (ground !is null) {
@@ -1345,10 +2032,83 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// Not gated on gHaveT2 alone, or a player that never techs never gets one.
 	// Past FOLLOWER_TECH_FRAME the rush window is over and a second factory is
 	// affordable regardless.
+	// ABOVE the bot lab, because the bot lab branch returns and would otherwise
+	// make this unreachable. Measured: the eco lead asked for armlab three times
+	// in one 40-minute game and never once reached the air plant below.
+	//
+	// The bot lab is there for spam units and rez bots. This player builds no
+	// spam by construction, so for it the aircraft plant -- which is pure build
+	// power -- is worth more than the lab it is displacing.
+	if (EcoWantsAirPlant()) {
+		const string side = ai.GetSideName();
+		CCircuitDef@ ap = (side == "cortex") ? ai.GetCircuitDef(corap)
+		                : ((side == "legion") ? ai.GetCircuitDef(legap)
+		                                      : ai.GetCircuitDef(armap));
+		if (ap !is null) {
+			AiLog(T() + "apex: eco lead building " + ap.GetName()
+				+ " for air constructors at "
+				+ formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s");
+			return ap;
+		}
+	}
+
+	// The air assassin's plant, ABOVE the bot lab and the navy.
+	//
+	// It used to sit last in this function, "so it never pre-empts the tech rush,
+	// the bot lab or the gantry" -- and the consequence was that it pre-empted
+	// nothing and got nothing. Measured across 8 games: 133 of 134 status samples
+	// read `plants=0,0 cons=0 want=corap`, i.e. the strategy armed, committed, and
+	// asked for its first plant every single time while some branch above it
+	// returned first. It built 0 bombers and launched 0 strikes. apexearth: "I
+	// haven't been seeing our air eco assassination strategy, I only saw something
+	// akin to it once in dozens of games."
+	//
+	// Armed() is already narrow -- the air lead only, past 15 minutes, at 60+
+	// metal/s, with enemy anti-air under the ceiling -- so this cannot run away.
+	//
+	// It sits above the gantry as well, which IS a real trade for that one
+	// player: the bot lab branch is itself above the gantry, so anything placed
+	// below the bot lab is starved by it, and there is no slot that clears the
+	// bot lab without also clearing the gantry. One air lead per team delays its
+	// own gantry; the other seven players are untouched.
+	if (Air::Armed()) {
+		CCircuitDef@ airFac = Air::FactoryToBuild();
+		if (airFac !is null) {
+			AiLog(T() + "apex: air assassin building " + airFac.GetName());
+			return airFac;
+		}
+	}
+
+	// Somebody has to OWN an air plant for the fighter floor to mean anything.
+	// The eco lead builds one for constructors on a big team; this covers every
+	// other case -- small teams, and games where the eco role never activated.
+	// Bounded to the air slot holder, the same one-per-team cap the air opening
+	// uses, so eight players do not each build a plant.
+	if (LateGame() && !HaveAirFactory() && (ai.teamId == AirSlotTeamId())
+		&& (aiEconomyMgr.metal.income >= LATE_AIR_INCOME))
+	{
+		const string aside = ai.GetSideName();
+		CCircuitDef@ lap = (aside == "cortex") ? ai.GetCircuitDef(corap)
+		                 : ((aside == "legion") ? ai.GetCircuitDef(legap)
+		                                        : ai.GetCircuitDef(armap));
+		if (lap !is null) {
+			AiLog(T() + "apex: late game with no air -- building " + lap.GetName()
+				+ " for a fighter screen");
+			return lap;
+		}
+	}
+
 	// Skipped on water: this branch returns before every other pick in the
 	// function, so it would pre-empt any naval choice for the rest of the game.
+	// BOTLAB_FROM, not the follower tech clock. Waiting for T2 or thirteen minutes
+	// costs us the whole early game of resurrection, and resurrection is the
+	// single biggest measured gap against stock: over 6 games stock spent 21,460
+	// metal a game raising its dead to our 10,396, and in one watched 8v8 it was
+	// 32,890 to our 436 -- one stock player's largest sink of any kind was
+	// cornecro at 17,940. We built ZERO rez bots in that game. A lab is ~600
+	// metal and the bot is 130.
 	if (!IsWaterMap() && !HaveT1BotLab()
-		&& (gHaveT2 || (ai.frame > FOLLOWER_TECH_FRAME)))
+		&& (gHaveT2 || (ai.frame > BOTLAB_FROM)))
 	{
 		CCircuitDef@ lab = T1BotLab();
 		if (lab !is null) {
@@ -1380,12 +2140,25 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 			+ ((gT1Fac is null) ? "<unknown T1 factory>" : gT1Fac.GetName()));
 	}
 
-	// Last, so it never pre-empts the tech rush, the bot lab or the gantry.
-	if (Air::Armed()) {
-		CCircuitDef@ airFac = Air::FactoryToBuild();
-		if (airFac !is null) {
-			AiLog(T() + "apex: air assassin building " + airFac.GetName());
-			return airFac;
+	// Contest the water on a map that has plenty of it but is not a water map.
+	// Nothing else in this function will ever ask for a shipyard there, so the sea
+	// is a flank we can neither use nor defend.
+	//
+	// Placed here, below the tech rush, the bot lab and the gantry, because this
+	// is a rule that SPENDS -- a factory plus the ships it makes is real metal,
+	// and the last batch of individually-reasonable spending rules cut metal
+	// production 4.3x between them. It takes the slot only when nothing more
+	// important wants it, and only once the economy can carry it.
+	if (IsMixedWaterMap() && !HaveShipyard()
+		&& (aiEconomyMgr.metal.income >= NAVY_MIN_INCOME))
+	{
+		CCircuitDef@ sy = NavalOpening();
+		if (sy !is null) {
+			AiLog(T() + "apex: mixed map ("
+				+ formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 0)
+				+ "% land) -- building " + sy.GetName() + " to contest the water"
+				+ " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s");
+			return sy;
 		}
 	}
 

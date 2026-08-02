@@ -178,6 +178,89 @@ void UpdateRushRole()
 	aiMilitaryMgr.quota.attack = RushAttackQuota();
 }
 
+// The eco lead as the team's bank.
+//
+// apexearth: "if allies are hurting or we see our army losing it could share
+// metal to teammates. It can also share a fus or afus to help them." This is the
+// other half of the role -- it is measurably the richest player on the team
+// (+59% metal produced over its teammates) and the one least able to use metal
+// in a hurry, so when someone else is in trouble the metal is worth more in
+// their hands than banked in ours.
+//
+// Deliberately keyed on IsEcoLead(), NOT EcoLeadActive(): an ally dying is one
+// of the conditions that STANDS THE ROLE DOWN, so gating aid on the role being
+// active would mean it could never pay out at exactly the moment it should.
+const int   ECO_AID_PERIOD  = 5 * SECOND;
+const float ECO_AID_KEEP    = 0.25f;    // share of storage kept as working float
+const float ECO_AID_LUMP    = 1000.f;   // cap per transfer
+const int   ECO_FUSION_GAP  = 2 * MINUTE;
+int gNextEcoAid = 0;
+int gNextEcoFusion = 0;
+float gEcoAidTotal = 0.f;
+
+void UpdateEcoAid()
+{
+	if (!Factory::IsEcoLead() || (ai.frame < gNextEcoAid))
+		return;
+
+	const int dying = Factory::NeediestAlly();
+	const bool pressed = (dying >= 0) || gTurtle || LosingGround();
+	if (!pressed)
+		return;
+	gNextEcoAid = ai.frame + ECO_AID_PERIOD;
+
+	const int to = (dying >= 0) ? dying : Factory::LowestHoldAlly();
+	if (to < 0)
+		return;
+
+	// A reactor outlives any amount of metal, so it goes first -- but only to
+	// someone actually being killed, and never down to our own last two.
+	if ((dying >= 0) && (ai.frame >= gNextEcoFusion)) {
+		if (Builder::GiveFusion(dying))
+			gNextEcoFusion = ai.frame + ECO_FUSION_GAP;
+	}
+
+	const float spare = aiEconomyMgr.metal.current
+		- (aiEconomyMgr.metal.storage * ECO_AID_KEEP);
+	if (spare <= 0.f)
+		return;
+	const float amount = (spare < ECO_AID_LUMP) ? spare : ECO_AID_LUMP;
+	ai.SendResources(amount, 0.f, to);
+	gEcoAidTotal += amount;
+	if (gEcoAidTotal < amount + 1.f)   // first payment only
+		AiLog(Factory::T() + "apex: eco lead aiding team " + to
+			+ (dying >= 0 ? " (dying)" : " (team under pressure)"));
+}
+
+// Set while we hold the ECO lead's attack quota, so it can be handed back.
+bool gEcoQuotaHeld = false;
+
+// The eco lead keeps whatever army it has at home for the whole game.
+//
+// UpdateRushRole hands its quota back at RUSH_GIVEUP, which is right for a tech
+// rush -- the bet has either landed or lost by then. The eco role is a bet on
+// the LATE game, so expiring at fifteen minutes would remove it exactly where it
+// was meant to pay. Runs after UpdateRushRole so it wins on the frames both
+// apply, and after UpdateMassing, which only ever raises the quota.
+void UpdateEcoRole()
+{
+	if (!Factory::EcoLeadActive()) {
+		if (gEcoQuotaHeld) {
+			gEcoQuotaHeld = false;
+			// Not while turtling: the hold set 400 for its own reasons and
+			// restoring the baseline here would quietly cancel it.
+			if (!gTurtle) {
+				aiMilitaryMgr.quota.attack = (gAttackBase >= 0.f) ? gAttackBase : RUSH_TEAM_DEFEND;
+				AiLog(Factory::T() + "apex: eco lead released, attack quota -> "
+					+ aiMilitaryMgr.quota.attack);
+			}
+		}
+		return;
+	}
+	gEcoQuotaHeld = true;
+	aiMilitaryMgr.quota.attack = RUSH_SKIP_T1_BIG;
+}
+
 void UpdateSling()
 {
 	// Nothing to pool in the first half-minute, and the engine has not settled
@@ -280,6 +363,10 @@ int gNextMassLog = 0;
 
 void UpdateMassing()
 {
+	// The killing blow owns the quota once it is on: massing is what was holding
+	// the win up, so re-raising the minimum here would undo it every tick.
+	if (gKilling)
+		return;
 	if (gTurtle || (ai.frame < MASS_FROM))
 		return;   // an active hold is stricter; do not loosen it
 	if (ai.teamId == Factory::RushLeadTeamId() && !Factory::gHaveT2)
@@ -313,6 +400,90 @@ void UpdateMassing()
 		aiMilitaryMgr.quota.attack = want;
 }
 
+//------------------------------------------------------------------------------
+// KILLING BLOW.
+//
+// apexearth: "we are often winning but we're very slow to kill enemies ... we
+// need some sort of switch which says ok now go for the killing blow."
+//
+// Measured, 30 games across 8 maps: 20 of them (67%) hit the time limit
+// undecided, and on Quicksilver we finished 16 games holding 4.5x stock's metal,
+// 35x its T3 and 8.5x its army while ELEVEN went unresolved. Dominance that does
+// not convert is worth nothing -- a timed-out game is not a win.
+//
+// The cause is the massing rule doing its job too well. quota.attack is a
+// MINIMUM number of attackers before the engine will form an attack, and
+// UpdateMassing walks it up to MASS_CAP and pins it at MASS_CAP outright
+// whenever the enemy out-values us. Once we are far ahead that gate is pure
+// delay: we hold an army several times their size and keep waiting for a bigger
+// one.
+//
+// So: when we are clearly winning, stop waiting. Drop the minimum so attacks
+// form continuously and release the turtle if it is holding.
+//
+// Lowering minAttackers globally is known to be catastrophic -- 15 -> 6 scored
+// 0-10 and the note on MASS_FROM records it. This is not that. It is
+// conditional on holding KILL_EDGE times the enemy's army value, where even a
+// partial commitment outnumbers everything they can field.
+// 2.5x was too strict to be useful. Measured: it first became true at 36.8
+// minutes of a 50-minute game -- teamArmy 44,497 against 17,783 -- which is long
+// past the point where a push has time to finish anything. The whole complaint
+// is that we win slowly, so a switch that only flips once the win is already
+// overwhelming does not address it. 1.8x is still a commanding lead.
+const int   KILL_FROM  = 15 * MINUTE;   // not before the T2 transition settles
+const float KILL_EDGE  = 1.8f;          // OUR TEAM's army value against theirs
+const float KILL_FLOOR = 20000.f;       // ignore ratios off a tiny enemy sample
+const float KILL_QUOTA = 10.f;          // attack with what we have, repeatedly
+bool gKilling = false;
+
+// Our whole side's army value, pooled over the same blackboard the tech lead
+// election uses.
+//
+// This has to be TEAM against TEAM. aiMilitaryMgr.armyCost is one player's army
+// while EnemyArmyCost() sums the entire enemy side, so comparing them directly
+// asks "is one of us worth more than all eight of them" -- measured in the first
+// smoke run at army 11,525 against enemyArmy 41,903, a ratio of 3.6 AGAINST us
+// in a game we were dominating. The gate was unreachable by construction, the
+// same way LosingGround() is permanently TRUE for a player with no army.
+const string TV_ARMY = "army";
+
+float TeamArmyCost()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return aiMilitaryMgr.armyCost;
+	float total = 0.f;
+	for (uint i = 0; i < mates.length(); ++i)
+		total += ai.ReadTeamValue(int(mates[i]), TV_ARMY, 0.f);
+	return total;
+}
+
+bool KillingBlow()
+{
+	if (ai.frame < KILL_FROM)
+		return false;
+	const float ours = TeamArmyCost();
+	const float theirs = EnemyArmyCost();
+	if (ours < KILL_FLOOR)
+		return false;
+	// Hysteresis, so a single lost engagement does not flip us back to massing
+	// half way through the push that is winning the game.
+	return gKilling ? (ours > theirs * (KILL_EDGE * 0.6f))
+	                : (ours > theirs * KILL_EDGE);
+}
+
+void UpdateKillingBlow()
+{
+	ai.PublishTeamValue(TV_ARMY, aiMilitaryMgr.armyCost);
+	const bool now = KillingBlow();
+	if (now == gKilling)
+		return;
+	gKilling = now;
+	AiLog(Factory::T() + "apex: KILLING BLOW " + (now ? "ON" : "off")
+		+ " teamArmy=" + formatFloat(TeamArmyCost(), "", 0, 0)
+		+ " enemyArmy=" + formatFloat(EnemyArmyCost(), "", 0, 0));
+}
+
 void UpdatePosture()
 {
 	// Before UpdateRushRole, which overwrites quota.attack on the lead. Captured
@@ -321,10 +492,24 @@ void UpdatePosture()
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
+	UpdateKillingBlow();
 	UpdateSling();
 	UpdateRushDefence();
 	UpdateMassing();
 	UpdateRushRole();
+	UpdateEcoRole();
+	UpdateEcoAid();
+	// After massing and both role rules, so it is the last word on the quota.
+	// Not for the eco lead: it holds almost no army by design, and sending that
+	// at a base is throwing it away rather than ending anything.
+	if (gKilling && !Factory::EcoLeadActive()) {
+		aiMilitaryMgr.quota.attack = KILL_QUOTA;
+		if (gTurtle) {
+			gTurtle = false;
+			gPostureUntil = ai.frame;
+			AiLog(Factory::T() + "apex: killing blow releases the hold");
+		}
+	}
 	UpdateFrontGun();
 	UpdateAirThreat();
 	Commander::UpdateCaution();
@@ -345,6 +530,9 @@ void UpdatePosture()
 
 	if ((prev <= 0.f) || (ai.frame < gPostureUntil) || (ai.frame < TURTLE_EARLIEST))
 		return;
+
+	if (gKilling)
+		return;   // committed: a dip mid-push is not a reason to stop pushing
 
 	if (!gTurtle) {
 		// Shrinking army while the enemy still has a mobile force means we are
@@ -450,12 +638,51 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 {
 }
 
+// Where our own defences stand.
+//
+// Nothing in the ~405 bindings enumerates friendly units or asks "what is
+// defended here", so the only way to answer that is to accumulate it from the
+// events. MilitaryManager's fenceFinished/fenceDestroyed handlers call
+// UnitAdded/UnitRemoved with UseAs::FENCE for every defence structure we own,
+// whatever placed it -- build_chain porcupine clusters, DefaultMakeDefence, or
+// Builder::Fortify -- so this register sees all of them, not just ours.
+//
+// FENCE fires on FINISHED, not on placement. A tower under construction is
+// therefore invisible here; Builder::Fortify counts its own outstanding orders
+// separately for that reason.
+array<int>      gFenceId;
+array<AIFloat3> gFencePos;
+
+uint FenceCountNear(const AIFloat3& in pos, float radius)
+{
+	uint n = 0;
+	for (uint i = 0; i < gFencePos.length(); ++i) {
+		if (gFencePos[i].distance2D(pos) <= radius)
+			++n;
+	}
+	return n;
+}
+
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	if (usage != Unit::UseAs::FENCE)
+		return;
+	gFenceId.insertLast(unit.id);
+	gFencePos.insertLast(unit.GetPos(ai.frame));
 }
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	if (usage != Unit::UseAs::FENCE)
+		return;
+	const int id = unit.id;
+	for (uint i = 0; i < gFenceId.length(); ++i) {
+		if (gFenceId[i] == id) {
+			gFenceId.removeAt(i);
+			gFencePos.removeAt(i);
+			return;
+		}
+	}
 }
 
 void AiLoad(IStream& istream)
