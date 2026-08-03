@@ -146,6 +146,7 @@ python tools/run_match.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard
 python tools/run_match.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
     --map "Comet Catcher" --per-side 8 --watch   # windowed, real time, watchable
 
+python tools/review.py <run> --control <run>  # THE way to judge a run; see below
 python tools/check.py                        # pre-deploy: bad JSON, dead unit names
 python tools/trace_flow.py <match-or-run-dir> # did the pooling strategy actually work
 python tools/run_tournament.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
@@ -346,6 +347,49 @@ So:
 See `docs/12-build-phases.md` for the BUILD_PHASE design that addresses this
 directly: a single sense of what the AI is buying right now, that individual
 rules defer to instead of each firing whenever its own condition happens to hold.
+
+## Judging a run — do these, in this order
+
+`python tools/review.py <run> --control <run>` runs all of this and withholds a
+verdict when a gate fails. Prefer it to doing the steps by hand; the steps are
+listed because each one is here for a reason.
+
+Every item is here because skipping it produced a confident wrong answer.
+
+1. **Did it actually run?** `grep -ciE "\.as \([0-9]+, [0-9]+\) : ERR"` over the
+   infolog, and confirm the variant loaded. A compile error disables the variant
+   and the match still reports a normal result.
+2. **Run a control.** Deploy unmodified HEAD, run the *same* games, compare. On
+   2026-08-02 a change was blamed for a 0-7 tournament; the control lost too, and
+   the collapse turned out to predate it by weeks. Never attribute an effect
+   without the baseline in hand.
+3. **Compare equal samples.** 8 games against a 5-game control is not a
+   comparison. Wait for both to finish.
+4. **Standing counters are not end-state.** Constructors, army and `mCon` go to
+   ZERO when a team dies, so the last sample of a lost game is a corpse.
+   `composition.py` now reports these as PEAK and prints how many player-games
+   ended wiped out — read that line. Cumulative counters (metal, kills, losses)
+   are fine at the end. Reading end-state as the story once produced "apex builds
+   1 constructor to stock's 10" when apex actually held MORE constructors all
+   game; the diagnosis was backwards for an hour.
+5. **Cross-check the timeline before believing a total.**
+   `analyze_stats.py <run>` samples every 2 game-minutes. Totals hide when
+   something happened, and "when" is usually the finding — the same run showed
+   both AIs level to minute 4 and separating at minute 6.
+6. **A grep that returns nothing means the pattern is stale until proven
+   otherwise.** Log formats drift. `"sent .* metal to lead"` returned zero and
+   was reported as "slinging never fired" when 269,000 metal had moved; the
+   message had lost the word "metal" and was rate-limited 1-in-40. Confirm the
+   pattern matches something before concluding it is absent.
+7. **Check the configuration is legitimate.** Comet Catcher is a 4v4 map
+   (16x12); dozens of runs were done on it at 8v8, which starves every player and
+   invalidates the economy. Match player count to map size, and note that
+   `IsSmallTeam()` (< 6 per side) takes different code paths entirely.
+8. **Benchmark economics are not hosted economics.** Per-team metal income at
+   7 min: hosted games 12-41/s, this benchmark 4-9/s. Behaviours gated on income
+   (the air assassin needs 40/s) never fire here at all. If a change targets
+   something seen in a hosted game, confirm the benchmark can even reproduce the
+   condition before trusting a null result.
 
 ## Harness discipline
 

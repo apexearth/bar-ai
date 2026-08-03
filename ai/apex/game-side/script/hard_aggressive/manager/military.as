@@ -282,6 +282,18 @@ void UpdateSling()
 	if (lead < 0)
 		return;
 
+	// Stop once the plant we were funding exists. The window used to run to a
+	// flat RUSH_GIVEUP clock, so donations continued long after the thing they
+	// paid for was standing.
+	if (Factory::LeadHasPlant(lead))
+		return;
+
+	// Stop while the lead is at cap. Measured 2026-08-02: ~269,000 metal went
+	// into a lead whose bank sat above storage from minute 8 -- every point of
+	// it wasted, while the givers ran empty and stopped expanding.
+	if (Factory::LeadIsSaturated(lead))
+		return;
+
 	// Do not feed someone who is already banking metal -- that is just moving
 	// waste around. Only sling while the lead is actually spending everything.
 	// ai.GetTeamMetalFill() reports 1.0 unconditionally: the engine does not
@@ -339,19 +351,25 @@ void UpdateSling()
 // Massing started at 8 minutes, precisely where the divergence begins: holding
 // units back during the transition, when the army is already shrinking, compounds
 // it. Push it past the transition so the force is rebuilt first and massed after.
-const int   MASS_FROM   = 14 * MINUTE;
-const float MASS_START  = 36.f;
-const float MASS_PER_MIN = 3.5f;        // ~100 by 28 min
-// Was 140. Measured: apex finished on 92k metal against stock's 125k while
-// holding a smaller army, which is what happens when the army never leaves home
-// -- the enemy takes the map and we hold a wall around too few mexes. The plan
-// is capture territory THEN wall it, not wall an empty base. 80 still refuses
-// piecemeal trickle attacks while letting a real force move and take ground.
-// 80 was set while CDefendTask's promote shortcut made this unenforceable. Now
-// that it binds, 80 is not reachable under pressure and the army never attacks.
-// 36 -> 48 is a deliberately small step toward "mass more before engaging":
-// 140 and 80 both stalled the army entirely once the quota became enforceable,
-// so the useful range is known to be narrow and is worth walking up, not jumping.
+// How much army we insist on before committing, driven by the armies on the
+// field rather than by a clock.
+//
+// apexearth: "can you make massing based on how large the armies are? doesn't
+// seem like it should be a time based thing. In fact, usually doing things by
+// time is wrong." The clock version started at 14 minutes; measured 2026-08-02,
+// apex and stock are indistinguishable through minute 4 and apex collapses at
+// minute 6, so the gate arrived eight minutes after the bleeding started. Its
+// first sample read "army=820 enemyArmy=11973 ratio=14.60".
+//
+// UNITS. quota.attack is CAttackTask's minPower, in the engine's power units.
+// armyCost and EnemyArmyCost() are metal. Observed together in one line:
+// want=48, army=820, enemyArmy=11973 -- three different scales. They must never
+// be assigned or compared across. Only the RATIO theirs/ours is dimensionless,
+// so that is the sole bridge used here; the output stays in quota units and
+// inside the range below that is already known to work.
+const float MASS_FLOOR  = 30.f;   // even when ahead, never trickle 2-3 units
+// Ratio at or above which we stop attacking and let them come to the defences.
+const float MASS_HOLD_RATIO = 1.5f;
 const float MASS_CAP    = 48.f;
 // Now a metal-vs-metal ratio, so 1.0 is a real parity point. It used to compare
 // aiEnemyMgr.mobileThreat against armyCost; across eight 4v4 infologs that ratio
@@ -367,28 +385,35 @@ void UpdateMassing()
 	// the win up, so re-raising the minimum here would undo it every tick.
 	if (gKilling)
 		return;
-	if (gTurtle || (ai.frame < MASS_FROM))
+	if (gTurtle)
 		return;   // an active hold is stricter; do not loosen it
 	if (ai.teamId == Factory::RushLeadTeamId() && !Factory::gHaveT2)
 		return;   // the rusher has its own quota while teching
 
-	const float mins = float(ai.frame - MASS_FROM) / float(MINUTE);
-	float want = MASS_START + mins * MASS_PER_MIN;
-	if (want > MASS_CAP)
-		want = MASS_CAP;
-
-	// Do not trade into a stronger army. Nothing in the AI compares our force to
-	// the enemy's before committing, so it will walk into a losing fight as
-	// readily as a winning one -- observed: "we are trying to have our armies go
-	// toe to toe with the enemy who is dedicating everything just on aggression".
-	// When they out-mass us, demand a bigger mass before moving, which in
-	// practice means holding behind the defences and continuing to build while
-	// they break themselves on static defence.
-	const float ours = aiMilitaryMgr.armyCost;
+	// No army of our own is the 2v6 case: demand a full mass rather than let
+	// the first two units that exist wander out and die.
+	//
+	// TEAM against team. aiMilitaryMgr.armyCost is THIS player's army while
+	// EnemyArmyCost() sums every enemy, so comparing them on a 4v4 is one
+	// player against four and reads ~4x too pessimistic -- measured, the ratio
+	// never fell below 1.5 all game and the quota sat pinned at MASS_CAP, i.e.
+	// permanently holding. TeamArmyCost() sums the ally side over TV_ARMY, the
+	// same figure the killing blow already compares on.
+	const float ours = TeamArmyCost();
 	const float theirs = EnemyArmyCost();
-	if ((ours > 0.f) && (theirs > ours * ATTACK_EDGE)) {
-		want = MASS_CAP;   // hold: let them come to the defences instead
+	float want = MASS_CAP;
+	if (ours > 1.f) {
+		const float ratio = theirs / ours;
+		if (ratio <= ATTACK_EDGE) {
+			want = MASS_FLOOR;                    // ahead: move, but as a group
+		} else if (ratio >= MASS_HOLD_RATIO) {
+			want = MASS_CAP;                      // outmatched: hold
+		} else {
+			const float t = (ratio - ATTACK_EDGE) / (MASS_HOLD_RATIO - ATTACK_EDGE);
+			want = MASS_FLOOR + t * (MASS_CAP - MASS_FLOOR);
+		}
 	}
+
 	if (ai.frame >= gNextMassLog) {
 		gNextMassLog = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: mass want=" + formatFloat(want, "", 0, 0)
@@ -422,7 +447,7 @@ void UpdateMassing()
 // form continuously and release the turtle if it is holding.
 //
 // Lowering minAttackers globally is known to be catastrophic -- 15 -> 6 scored
-// 0-10 and the note on MASS_FROM records it. This is not that. It is
+// 0-10. This is not that. It is
 // conditional on holding KILL_EDGE times the enemy's army value, where even a
 // partial commitment outnumbers everything they can field.
 // 2.5x was too strict to be useful. Measured: it first became true at 36.8

@@ -30,6 +30,27 @@ REPO = Path(__file__).resolve().parent.parent
 
 # Metal buckets that together account for what was built. mBuiltReal is the
 # total; these are the parts worth separating when asking "did priorities slip".
+# Counters that only ever go UP. The last sample is the whole game, so reading
+# it at game end is correct.
+CUMULATIVE = {
+    "metalProduced", "metalUsed", "metalExcess", "energyProduced", "energyUsed",
+    "energyExcess", "damageDealt", "damageReceived", "mBuiltReal", "mFactories",
+    "mLostReal", "mLostCheap", "mKillReal", "mKillCheap", "mReclaim",
+    "mRezSpend", "mT1", "mT2", "mT3", "t2Mex",
+}
+
+# Counters that describe what a player is HOLDING right now. These go to zero
+# when a team dies, so the last sample of a lost game is a corpse, not a story.
+#
+# This cost a wrong conclusion on 2026-08-02: end-state read "cons T1 1 vs 10,
+# army 4.4% vs 26.1%" and was reported as "apex builds almost nothing". The
+# 2-minute timeline showed the opposite -- apex held MORE constructors than
+# stock all game (11.1 vs 7.1 at minute 20) and a comparable army. It lost on
+# trading, not production, and the diagnosis was backwards for an hour.
+#
+# So these are reported at their PEAK across the game, never at the end.
+STANDING = {"conT1", "conT2", "mCon", "armyReal", "armyCheap"}
+
 BUCKETS = [
     ("factories", "mFactories"),
     ("constructors", "mCon"),
@@ -81,12 +102,27 @@ def load(root: Path):
         # attribute correctly -- the tournament plays each pairing both ways.
         spec_of_ally = {i: t.get("spec", f"ally{i}") for i, t in enumerate(teams)}
         last: dict[tuple, dict] = {}
+        peak: dict[tuple, dict] = {}
         for row in stats:
-            last[(row["ally"], row["team"])] = row
-        for (ally, _team), row in last.items():
-            spec = spec_of_ally.get(int(ally))
-            if spec:
-                per_spec[spec].append(row)
+            key = (row["ally"], row["team"])
+            last[key] = row
+            acc = peak.setdefault(key, {})
+            for k in STANDING:
+                v = row.get(k)
+                if v is not None:
+                    acc[k] = max(acc.get(k, 0), v)
+        for key, row in last.items():
+            spec = spec_of_ally.get(int(key[0]))
+            if not spec:
+                continue
+            merged = dict(row)
+            merged.update(peak.get(key, {}))   # STANDING -> peak, not final
+            # A player holding no army and no constructors at the end was wiped;
+            # its final row is a corpse. Recorded so the report can say so.
+            merged["_died"] = (row.get("armyReal", 0) == 0
+                               and row.get("conT1", 0) == 0
+                               and row.get("mBuiltReal", 0) > 0)
+            per_spec[spec].append(merged)
     return per_spec, games
 
 
@@ -119,10 +155,21 @@ def main() -> int:
 
     specs = sorted(per_spec)
     print(f"{root}  --  {games} valid game(s), "
-          f"{sum(len(v) for v in per_spec.values())} player-games\n")
+          f"{sum(len(v) for v in per_spec.values())} player-games")
+
+    # How many players ended the game dead. Their FINAL standing counters are
+    # zero, which is why the tables below use peaks for those.
+    for _sp in specs:
+        _rows = per_spec[_sp]
+        _dead = sum(1 for r in _rows if r.get("_died"))
+        if _dead:
+            print(f"  note: {_dead}/{len(_rows)} {_sp[:30]} player-games ended wiped out")
+    print("  standing counters (constructors, army) are PEAK held;"
+          " cumulative (metal, kills) are end-state.")
+    print()
 
     w = 22
-    print("WHERE THE METAL WENT (share of metal built, mean per player)")
+    print("WHERE THE METAL WENT (PEAK army/cons over cumulative built)")
     print("  " + "category".ljust(w) + "".join(s[:26].rjust(28) for s in specs))
     for label, key in BUCKETS:
         cells = []
@@ -133,7 +180,7 @@ def main() -> int:
             cells.append(f"{share*100:26.1f}%")
         print("  " + label.ljust(w) + "".join(cells))
 
-    print("\nECONOMY REACH (mean per player)")
+    print("\nECONOMY REACH (mean per player; cons/army = PEAK held)")
     print("  " + "metric".ljust(w) + "".join(s[:26].rjust(28) for s in specs))
     for label, key in REACH:
         cells = []

@@ -278,11 +278,17 @@ bool HaveAirCon()
 CCircuitDef@ FactoryToBuild()
 {
 	ResolveDefs();
-	// A SECOND basic plant once the advanced one is up and we are still short of
-	// a force. Two plants is twice the aircraft per minute, and the strike is
-	// bounded by minutes, not by metal -- 12 basic bombers is only ~1,800.
-	if ((Have(gPlant2) > 0) && Committed() && !Massed()
-		&& (gPlant1 !is null) && gPlant1.IsAvailable(ai.frame) && (Have(gPlant1) < 2))
+	// A SECOND basic plant as soon as we are committed and short of a force.
+	// Two plants is twice the aircraft per minute, and the strike is bounded by
+	// minutes, not by metal -- 12 basic bombers is only ~1,800.
+	//
+	// This used to require the ADVANCED plant first. Measured in a hosted 11v13:
+	// every sample read plants=1,0 -- the advanced plant never finished, so the
+	// second basic one was never reachable, and four minutes of a single plant
+	// is about six aircraft. The strike released on the deadline at 6 bombers
+	// and 4 fighters against 12 and 8. Throughput has to come before tier.
+	if (Committed() && !Massed()
+		&& (gPlant1 !is null) && gPlant1.IsAvailable(ai.frame) && (Have(gPlant1) == 1))
 	{
 		return gPlant1;
 	}

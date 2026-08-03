@@ -72,6 +72,26 @@ const string TV_DIST = "dist";
 // standing our own ground and the bar for an ally being killed are not the same
 // number and only the reader knows which it is asking.
 const string TV_MEX = "mexhold";
+// How full this team's metal storage is, 0..1. Slinging reads it off the lead so
+// it can stop feeding a player who is already at cap. The check it restores was
+// dropped because ai.GetTeamMetalFill() returns 1.0 unconditionally -- the check
+// was right, its data source was not. Measured 2026-08-02: without it, eleven
+// followers pushed ~269,000 metal into one lead that sat over storage from
+// minute 8 and fielded no army for fourteen minutes.
+const string TV_FILL = "fill";
+
+// Stop feeding at this share of the lead's storage.
+//
+// This has to mean "overflowing", not "comfortable". 0.60 was tried and cut
+// pooling from ~269,000 metal to 312: a commander starts on 1000 metal against
+// 1400 storage, so the lead reads 71% full before it has spent anything, and
+// the check blocked donations through the whole window where they matter. The
+// plant went from ~5-8 min to 18.7 min and never finished.
+//
+// The waste being targeted is far past this line -- measured at 1305/1300 and
+// 1735/1300, i.e. at and over cap -- so the bar belongs just under 1.0 where it
+// catches real overflow and nothing else.
+const float SLING_STOP_FILL = 0.92f;
 
 // The elector publishes one team id per lead slot. Slot 0 keeps the bare "lead"
 // key so every existing reader -- slinging, the air lead, the army suppression --
@@ -287,6 +307,24 @@ const int LATE_FIG_SPACING = 10 * SECOND;
 const float LATE_AIR_INCOME = 55.f;
 int gNextFighter = 0;
 
+// Two radar planes is enough to sweep for a hiding commander; they are ~175
+// metal each and are vision, not army, so this is a floor rather than a build.
+const int LATE_SCOUTS       = 2;
+const int LATE_SCOUT_SPACING = 30 * SECOND;
+int gNextScout = 0;
+
+string armawac("armawac");  string corawac("corawac");  string legwhisper("legwhisper");
+
+CCircuitDef@ RadarPlaneDef()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(corawac);
+	if (side == "legion")
+		return ai.GetCircuitDef(legwhisper);
+	return ai.GetCircuitDef(armawac);
+}
+
 // A bot lab is worth having early for one reason above all others: it is the
 // ONLY source of a resurrection bot. armrectr/cornecro/legrezbot are 130 metal
 // and no other factory in the game can make them.
@@ -439,6 +477,8 @@ void UpdateTeamCoord()
 	ai.PublishTeamValue(TV_DIST, Builder::gHomeSet
 			? Builder::gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) : 0.f);
 	ai.PublishTeamValue(TV_MEX, UpdateMexHold());
+	ai.PublishTeamValue(TV_FILL, (aiEconomyMgr.metal.storage > 0.f)
+			? aiEconomyMgr.metal.current / aiEconomyMgr.metal.storage : 0.f);
 	if (ElectorTeamId() == ai.teamId)
 		RunElection();
 	UpdateEcoLead();
@@ -722,6 +762,18 @@ void RefreshLead()
 	}
 }
 
+// Is the lead saturated -- i.e. is a donation now just overflow?
+bool LeadIsSaturated(int lead)
+{
+	return ai.ReadTeamValue(lead, TV_FILL, 0.f) >= SLING_STOP_FILL;
+}
+
+// Has the lead got the plant the pooling was paying for?
+bool LeadHasPlant(int lead)
+{
+	return ai.ReadTeamValue(lead, TV_ADV, -1.f) >= 1.f;
+}
+
 // The PRIMARY lead (slot 0). Slinging and the air lead want a single target, not
 // the whole set -- donations split across two leads fund neither.
 int RushLeadTeamId()
@@ -989,6 +1041,32 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 					rez, unit.GetPos(ai.frame), 0.f));
 			if (rec !is null) {
 				gNextRez = ai.frame + REZ_SPACING;
+				return rec;
+			}
+		}
+	}
+
+	// Radar planes in the late game, to find what is left.
+	//
+	// apexearth: "when we're clearly winning we should make T2 radar planes and
+	// find the last com so we know where to send our armies." A surviving
+	// commander rebuilds, and a won game that runs another fifteen minutes is
+	// how that happens.
+	//
+	// Recruited directly rather than left to the factory ratios: armawac and
+	// corawac appear ONLY in the advanced air plant's list (0.05/0.0), and that
+	// plant is exactly the one that does not get built -- every sample of a
+	// hosted 11v13 read plants=1,0. Legion's legwhisper is not in behaviour.json
+	// at all, so it has no role and no ratio anywhere. Naming the def sidesteps
+	// all three problems and covers every faction.
+	if (IsAirFactory(unit.circuitDef) && LateGame() && (ai.frame >= gNextScout)) {
+		CCircuitDef@ eye = RadarPlaneDef();
+		if ((eye !is null) && eye.IsAvailable(ai.frame) && (eye.count < LATE_SCOUTS)) {
+			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+					Task::RecruitType::FIREPOWER, Task::Priority::NORMAL,
+					eye, unit.GetPos(ai.frame), 0.f));
+			if (rec !is null) {
+				gNextScout = ai.frame + LATE_SCOUT_SPACING;
 				return rec;
 			}
 		}

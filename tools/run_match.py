@@ -385,6 +385,7 @@ def run(args) -> int:
         sides=[x.strip() for x in args.sides.split(',')] if args.sides else None,
         boxes=args.boxes, box_size=args.box_size, handicap=args.handicap,
         drop_ai_version=args.drop_ai_version,
+        extra_modoptions=dict(kv.split('=', 1) for kv in args.modoption),
     )
     script_path = outdir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
@@ -649,6 +650,11 @@ def main() -> int:
                     help="omit Version from every [AI] block, as a lobby-hosted "
                          "multiplayer game does; use with --game to test the AI "
                          "exactly as a hosted match will load it")
+    ap.add_argument("--modoption", action="append", default=[], metavar="K=V",
+                    help="extra start-script modoption, repeatable. The one that "
+                         "matters for reproducing a hosted game is "
+                         "ai_incomemultiplier=1.5 -- benchmarks run at 1.0, and "
+                         "several behaviours only misfire on a bonused economy")
     ap.add_argument("--dry-run", action="store_true", help="print the script and stop")
     args = ap.parse_args()
     if args.speed == 0:
