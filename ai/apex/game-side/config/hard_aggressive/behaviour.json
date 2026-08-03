@@ -106,14 +106,14 @@
 		"behaviour": {
 			"armcom": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 5.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
 			},
 			"corcom": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 5.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
@@ -121,14 +121,14 @@
 //########################################################################################################################
 			"armcomlvl2": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 10.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
 			},
 			"corcomlvl2": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 10.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
@@ -136,14 +136,14 @@
 //########################################################################################################################
 			"armcomlvl3": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 15.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
 			},
 			"corcomlvl3": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 15.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
@@ -151,14 +151,14 @@
 //########################################################################################################################
 			"armcomlvl4": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 20.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
 			},
 			"corcomlvl4": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 20.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
@@ -166,14 +166,14 @@
 //########################################################################################################################
 			"armcomlvl5": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 25.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
 			},
 			"corcomlvl5": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 25.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
@@ -181,14 +181,14 @@
 //########################################################################################################################
 			"armcomlvl6": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 30.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
 			},
 			"corcomlvl6": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 30.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
@@ -196,14 +196,14 @@
 //########################################################################################################################
 			"armcomlvl7": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 35.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
 			},
 			"corcomlvl7": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 35.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
@@ -211,14 +211,14 @@
 //########################################################################################################################
 			"armcomlvl8": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 40.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
 			},
 			"corcomlvl8": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 40.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
@@ -226,14 +226,14 @@
 //########################################################################################################################
 			"armcomlvl9": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 45.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
 			},
 			"corcomlvl9": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 45.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
@@ -241,14 +241,14 @@
 //########################################################################################################################
 			"armcomlvl10": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 50.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
 			},
 			"corcomlvl10": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 50.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0}
