@@ -17,24 +17,20 @@
 		// 5,740 metal of flak per hot cluster and the heavy guns at 11/12 are never reached.
 		"land":  [0, 2, 3, 5, 6, 4, 7, 8, 10, 10, 12, 11],
 		"water": [1, 17, 1, 1, 4, 9, 10, 9, 10],
-		// 2, not 1: DefaultMakeDefence walks only `prevent` entries away from a porc
-		// cluster, so at 1 an ordinary mex cluster could only ever reach index 0 -- a
-		// ground-only LLT -- and the AA at position 1 was unreachable all game however
-		// much air the enemy fielded. Position 1 is armrl/corrl/legrl on land and
-		// armfrt/corfrt at 17 on water, all 80-90 metal. This costs nothing while the
-		// enemy has no air: the walk skips any IsRoleAA() def while GetEnemyCost(AIR)
-		// is below 1, and the loop is bounded by i < num, so the slot simply goes unused.
-		// Raised 1 -> 2 -> 5. DefaultMakeDefence walks
-		// num = isPorc ? defenders.size() : prevent, and isPorc is only true for a
-		// rich cluster far from base, or when 2 nearby UNFINISHED clusters read
-		// threat -- clusters we already hold are skipped. So our own base under
-		// attack is never "porc", and 2 bought a light laser tower and a rocket
-		// launcher. Observed live: an ally surrounded for four or five minutes with
-		// no real defence built. 5 reaches corhllt, cormaw and cormadsam, i.e. an
-		// actual defensive position.
-		// COST: this is 2.5x the towers wherever AiMakeDefence fires, and towers are
-		// constructor time. Check composition before believing it helped.
-		"prevent": 5,  // number of preventive defences
+		// 1, matching stock BARb.
+		//
+		// This was 2 to reach the AA at index 1 (armrl/corrl/legrl), which at 1 is
+		// unreachable at an ordinary cluster. That reason is now superseded:
+		// Builder::CheapAA builds those same three defs from ANY constructor on its
+		// own standing count, so cluster AA no longer depends on this walk.
+		//
+		// Kept minimal on purpose. prevent applies at EVERY cluster equally and
+		// cannot express "the front" -- raising it to 5 walled quiet rear mexes.
+		// apexearth: "I think that prevent is the wrong mechanism to tweak here. We
+		// need a new mechanism, that area defense, front line defense sort of
+		// thing." Military::UpdateFrontDefence is that mechanism; this path stays
+		// as light as stock.
+		"prevent": 1,  // number of preventive defences
 		"amount": {  // income bound factor
 			"offset": [-2.0, 2.0],
 			// Amount factor: 10x10 ~ 48.0, 20x20 ~ 32.0

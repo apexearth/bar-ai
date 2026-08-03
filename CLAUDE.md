@@ -214,9 +214,9 @@ share a shape: the thing didn't work, and nothing said so.
   zero almost everywhere anyway.** `CThreatMap::GetBuilderThreatAt` bounds-checks
   with an `assert` — compiled out in release — then indexes `surfThreat`
   unchecked. Sampling a ring of radius 1500 around a base near the map edge read
-  off-map memory and killed the engine at frame 3 (0xc0000005). No map-size
-  binding is exposed to clamp against, so only positions already known valid
-  (unit positions, or interpolations between two of them) are safe. Even then
+  off-map memory and killed the engine at frame 3 (0xc0000005). **Guard every
+  position with `Builder::OnMap()`** — `AiTerrainWidth()`/`AiTerrainHeight()`
+  are bound, and `OnMap` already exists for exactly this. Even so,
   the value is 3% nonzero across ten games, which is why the old commander
   retreat never fired — do not build a trigger on it.
 - **Never answer a unit question from a filename search.** Use

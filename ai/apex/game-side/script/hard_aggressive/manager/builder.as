@@ -246,11 +246,46 @@ bool OnMap(const AIFloat3& in p)
 // routes HasSurfToAir enemies into the air layer, so a pure AA turret adds
 // nothing to it -- an air constructor cannot see what kills it. GetUnitThreatAt
 // picks the layer from the unit; for a ground constructor it is the same array.
+// How far toward the enemy a site may sit before it counts as their ground.
+// FrontPos is published at 0.78 of the way, so this is just inside the line the
+// team already agrees on.
+const float CON_FAR_FRAC = 0.72f;
+
+// Is this site past the front, i.e. in enemy territory?
+//
+// Pure geometry against two positions that are always real -- our own base and
+// the enemy centroid -- because the threat map is not.
+bool PastFront(const AIFloat3& in where)
+{
+	if (!gHomeSet)
+		return false;
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	const float ex = foe.x - gHomePos.x;
+	const float ez = foe.z - gHomePos.z;
+	const float span = ex * ex + ez * ez;
+	if (span < 1.f)
+		return false;
+	// Project the site onto the home->enemy axis and compare the fraction.
+	const float t = ((where.x - gHomePos.x) * ex + (where.z - gHomePos.z) * ez) / span;
+	return t > CON_FAR_FRAC;
+}
+
 float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 {
 	if (!OnMap(where))
 		return 0.f;
-	return ai.GetUnitThreatAt(unit, where);
+	const float t = ai.GetUnitThreatAt(unit, where);
+	if (t > 0.f)
+		return t;
+	// THE THREAT MAP READS ZERO. Measured over a 20-minute 4v4: 121 samples, 0
+	// nonzero, max 0.00 -- so every CON_THREAT_VETO test passed unconditionally
+	// and constructors walked wherever they liked. apexearth, watching: "still
+	// see us sending construction units directly into clearly very dangerous
+	// area". Same dead signal that stopped the commander retreat ever firing.
+	//
+	// Geometry is the fallback: a site past the front is treated as hostile.
+	// Crude next to a real threat map, but it is answering with data that exists.
+	return PastFront(where) ? (CON_THREAT_VETO + 1.f) : 0.f;
 }
 
 // Empty means "not a build this rule covers". Defence, bunkers and big guns
@@ -398,9 +433,35 @@ uint DefenceAround(const AIFloat3& in pos)
 	return n;
 }
 
-bool AreaNeedsDefence(const AIFloat3& in pos)
+const int   TROUBLE_HITS    = 3;
+// Never stack more than this in one 700-elmo area, however hot it gets.
+const uint DIG_FENCE_CAP = 5;
+
+// How much defence an area needs, given how dangerous it has proven to be.
+//
+// apexearth: "This area is dangerous, and therefore, I should defend it better
+// than it already is defended." DIG_MAX_FENCE was a flat 2 -- the same bar for a
+// quiet back mex and a spot the enemy army is walking through.
+//
+// hits is the count of times the constructor working here has been struck. It is
+// already tracked per constructor for the dig-in trigger, and unlike
+// GetBuilderThreatAt -- which reads zero 97% of the time and crashes off-map --
+// it is a real, positional measure of danger: something shot us, here.
+uint FenceWanted(int hits)
 {
-	return DefenceAround(pos) < DIG_MAX_FENCE;
+	uint want = DIG_MAX_FENCE;
+	if (hits >= TROUBLE_HITS * 3)
+		want += 3;
+	else if (hits >= TROUBLE_HITS * 2)
+		want += 2;
+	else if (hits >= TROUBLE_HITS)
+		want += 1;
+	return (want > DIG_FENCE_CAP) ? DIG_FENCE_CAP : want;
+}
+
+bool AreaNeedsDefence(const AIFloat3& in pos, uint wanted = DIG_MAX_FENCE)
+{
+	return DefenceAround(pos) < wanted;
 }
 
 void NoteDigOrder(const AIFloat3& in pos)
@@ -446,6 +507,19 @@ const uint  CONVERT_CON_FLOOR = 3;    // never dip below this many workers
 const float CONVERT_MIN_SPARE = 70.f; // one converter's draw of unused energy
 const int   CONVERT_PERIOD    = 25 * SECOND;
 const float REAR_DISTANCE     = 450.f;
+
+// Enemy centroid this close to home means they are in the base.
+const float COMM_BASE_DANGER = 1100.f;
+const int   COMM_HIDE_PERIOD = 30 * SECOND;
+int gNextCommHide = 0;
+string armsolar("armsolar");  string corsolar("corsolar");  string legsolar("legsolar");
+
+bool BaseUnderAttack()
+{
+	if (!gHomeSet)
+		return false;
+	return gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) < COMM_BASE_DANGER;
+}
 int gNextConvert = 0;
 int gConverts = 0;
 
@@ -941,6 +1015,16 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 		return null;
 	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
 		return null;
+	// Only if the enemy actually flies. This had no such test, while
+	// DefaultMakeDefence has always skipped AA defs when GetEnemyCost(AIR) < 1 --
+	// so in a ground-only game this was the single largest defence spend: 30
+	// turrets in one 20-minute 4v4, more than the front line and the dig-ins
+	// together. Measured with the new mDefence counter: static defence was 12.6%
+	// of our metal against stock's 5.4%, with army 29.4% against 38.1%.
+	// apexearth: "the side effect is wasteful defense and then we have less army
+	// and are losing the overall fight."
+	if (aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type) < 1.f)
+		return null;
 	CCircuitDef@ aa = SideDef3(armrl, corrl, legrl);
 	if ((aa is null) || !aa.IsAvailable(ai.frame) || (aa.count >= AA_WANT))
 		return null;
@@ -1074,7 +1158,7 @@ IUnitTask@ ContestDefence(CCircuitUnit@ unit, const string& in kind,
 // ContestDefence above fires off ThreatFor at the build site, and in a watched
 // 20-minute game constructors died with con-veto firing ZERO times -- the shooter
 // is outside the tile being tested. Losing health is not a forecast.
-const int   TROUBLE_HITS    = 3;
+// (declared above FenceWanted, which needs it)
 const int   TROUBLE_WINDOW  = 90 * SECOND;   // quiet for this long and the count clears
 const int   FORTIFY_TIME    = 120 * SECOND;  // how long a struck con stays dug in
 const int   FORTIFY_PERIOD  = 20 * SECOND;   // one tower per con per this
@@ -1166,8 +1250,9 @@ IUnitTask@ Fortify(CCircuitUnit@ unit)
 	AIFloat3 spot;
 	if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
 		return null;
-	// The bound. Without it this is the version that was reverted.
-	if (!AreaNeedsDefence(spot))
+	// The bound. Without it this is the version that was reverted -- but the bar
+	// now rises with how hard this spot is being contested.
+	if (!AreaNeedsDefence(spot, FenceWanted(gConHits[i])))
 		return null;
 	IUnitTask@ dig = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, tower, spot, SQUARE_SIZE * 2));
@@ -1250,6 +1335,65 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
 			if (flee !is null)
 				return flee;
+		}
+		// The enemy centroid has come to US. PastFront cannot see this: the base
+		// centre sits at fraction ~0 on the home->enemy axis, so it always reads
+		// safe, however many enemies are standing in it. apexearth: "sometimes
+		// they have a tendency of just running into the center of their base only
+		// to get blown up... convince commanders to hide and defend themselves
+		// behind their base."
+		//
+		// So put the commander to work at the BACK WALL instead, using the RearPos
+		// the converter rule already uses -- measured away from the enemy, OnMap
+		// checked. It relocates by having a job there, which needs no movement
+		// command: CmdMoveTo is what UpdateCommanderSafety used and it correlated
+		// with 14-17 engine aborts per 20-game run.
+		//
+		// LIMITATION: GetEnemyPos is the centroid of ALL enemies, so on a big map
+		// with spread enemies it can read far away while one of them is in our
+		// base. This catches the massed case, not the single raider.
+		if (BaseUnderAttack() && (ai.frame >= gNextCommHide)) {
+			AIFloat3 back;
+			if (RearPos(unit, back)) {
+				CCircuitDef@ safe = SideDef3(armsolar, corsolar, legsolar);
+				if ((safe !is null) && safe.IsAvailable(ai.frame)) {
+					IUnitTask@ hide = aiBuilderMgr.Enqueue(TaskB::Common(
+							Task::BuildType::ENERGY, Task::Priority::NORMAL,
+							safe, back, SQUARE_SIZE * 8));
+					if (hide !is null) {
+						gNextCommHide = ai.frame + COMM_HIDE_PERIOD;
+						AiLog(Factory::T() + "apex: commander to the back wall, enemy "
+							+ formatFloat(gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()), "", 0, 0)
+							+ " from home");
+						return hide;
+					}
+				}
+			}
+		}
+		// Pull the commander off a site that is in enemy ground. Every other
+		// builder already gets this a few lines below, behind `if (!isComm)`, so
+		// the commander was the ONE unit that would keep walking into fire.
+		// apexearth: "sometimes they have a tendency of just running into the
+		// center of their base only to get blown up."
+		//
+		// Retreat only -- no ContestDefence. A constructor answers danger by
+		// building a tower into it; a commander must not stand there doing that.
+		// EnqueueRetreat is the same call the health path above already makes for
+		// commanders, so this adds no new mechanism. In particular it is NOT
+		// CmdMoveTo: that is what UpdateCommanderSafety used, and it correlated
+		// with 14-17 engine aborts per 20-game run before being removed.
+		{
+			IUnitTask@ held = unit.task;
+			const string kind = SiteBuildName(held);
+			if (kind != "") {
+				const float heat = ThreatFor(unit, held.GetBuildPos());
+				if (heat > CON_THREAT_VETO) {
+					LogConVeto(unit, "comm-abandon", kind, heat);
+					IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+					if (flee !is null)
+						return flee;
+				}
+			}
 		}
 		// Commander-assists-the-first-T2-mex REMOVED, and it must not be rebuilt
 		// this way. TaskB::Common leaves SBuildTask.ref.target null, and

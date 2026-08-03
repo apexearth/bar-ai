@@ -391,9 +391,11 @@ Two things block using it:
    The script cannot read territory at all.
 2. **Unchecked indexing.** `GetInfluenceAt` does `influence[z * width + x]` with
    no bounds test -- the same shape as `CThreatMap::GetBuilderThreatAt`, which
-   killed the engine at frame 3 today when sampled off-map (0xc0000005). Any
-   grid walk samples many positions, so this must be clamped before it is
-   reachable from script.
+   killed the engine at frame 3 today when sampled off-map (0xc0000005).
+   **This is NOT a blocker**, contrary to an earlier version of this note:
+   `AiTerrainWidth()`/`AiTerrainHeight()` are bound and `Builder::OnMap()`
+   already guards positions for precisely this reason. A grid walk just has to
+   use it on every cell. The only real blocker is (1), the missing bindings.
 
 ### Routes
 

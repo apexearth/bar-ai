@@ -35,7 +35,7 @@ REPO = Path(__file__).resolve().parent.parent
 CUMULATIVE = {
     "metalProduced", "metalUsed", "metalExcess", "energyProduced", "energyUsed",
     "energyExcess", "damageDealt", "damageReceived", "mBuiltReal", "mFactories",
-    "mLostReal", "mLostCheap", "mKillReal", "mKillCheap", "mReclaim",
+    "mDefence", "mLostReal", "mLostCheap", "mKillReal", "mKillCheap", "mReclaim",
     "mRezSpend", "mT1", "mT2", "mT3", "t2Mex",
 }
 
@@ -53,6 +53,7 @@ STANDING = {"conT1", "conT2", "mCon", "armyReal", "armyCheap"}
 
 BUCKETS = [
     ("factories", "mFactories"),
+    ("static defence", "mDefence"),
     ("constructors", "mCon"),
     ("army (real)", "armyReal"),
     ("army (cheap)", "armyCheap"),

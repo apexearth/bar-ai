@@ -535,6 +535,21 @@ void UpdateKillingBlow()
 // closer over four or five minutes" signal: an army massing at our doorstep
 // registers on the ring long before it is inside.
 //------------------------------------------------------------------------------
+// FRONT-LINE AREA DEFENCE.
+//
+// A mechanism of its own, deliberately -- not a tweak to porcupine.prevent.
+// apexearth: "I think that prevent is the wrong mechanism to tweak here. We
+// need a new mechanism, that area defense, front line defense sort of thing."
+// prevent applies at every cluster equally and cannot express "the front", so
+// raising it walled quiet rear mexes. It is back at 2 and this owns the heavy
+// defence instead.
+//
+// Towers are laid ACROSS the approach, not stacked on one point: offsets step
+// out alternately either side of the front position, perpendicular to the
+// home->enemy axis, so they form a line facing the enemy rather than a pile.
+// That is the buildable approximation of apexearth's territory-grid idea while
+// CInfluenceMap remains unreachable from script (see notes #12).
+//
 // Enemy army value against our standing towers.
 //
 // apexearth: "scan outside the range of that base for the total threat. And if
@@ -556,9 +571,17 @@ void UpdateKillingBlow()
 // So the comparison keeps apexearth's shape -- their strength against ours,
 // scaled -- using the enemy army value, which is a real number in these logs
 // (120 to 6,648 over one game) rather than a mostly-empty map lookup.
-const float PORC_TRIGGER    = 1.5f;
+// 2.0, not 1.5. First measurement with mDefence: static defence was 14.1% of
+// our metal against stock's 5.7%, while army was 26.2% against 30.7%.
+// apexearth: "the side effect is wasteful defense and then we have less army
+// and are losing the overall fight." Fire only when clearly outmatched.
+const float PORC_TRIGGER    = 2.0f;
 const int   PORC_ADD_SPACING = 20 * SECOND;
-const uint  PORC_ADD_CAP    = 10;
+const uint  PORC_ADD_CAP    = 4;    // was 10; see PORC_TRIGGER
+// The front is the contested area; allow a real position there, not a pair.
+const uint  PORC_FRONT_FENCE = 4;
+// Spacing between towers along the line.
+const float PORC_LINE_STEP  = 320.f;
 uint gPorcAdded = 0;
 int  gNextPorcAdd = 0;
 
@@ -638,7 +661,8 @@ void UpdateBaseDefence()
 	// back to two thirds of the way along our own home->enemy line, which is
 	// forward of the base without needing the gadget.
 	AIFloat3 spot;
-	if (!FrontPos(spot)) {
+	bool haveFront = FrontPos(spot);
+	if (!haveFront) {
 		AIFloat3 toEnemy = aiEnemyMgr.GetEnemyPos() - Builder::gHomePos;
 		const float len = sqrt(toEnemy.x * toEnemy.x + toEnemy.z * toEnemy.z);
 		spot = Builder::gHomePos;
@@ -647,8 +671,21 @@ void UpdateBaseDefence()
 			spot.z += toEnemy.z / len * (len * 0.66f);
 		}
 	}
-	// Do not stack them: skip if this area already has enough.
-	if (!Builder::AreaNeedsDefence(spot))
+	// Step across the front rather than piling up: alternate sides, widening.
+	// Perpendicular to the axis we face the enemy along.
+	AIFloat3 axis = aiEnemyMgr.GetEnemyPos() - Builder::gHomePos;
+	const float alen = sqrt(axis.x * axis.x + axis.z * axis.z);
+	if (alen > 1.f) {
+		const int step = int(gPorcAdded) + 1;
+		const float side = ((step % 2) == 0) ? 1.f : -1.f;
+		const float outw = float((step + 1) / 2) * PORC_LINE_STEP;
+		spot.x += (-axis.z / alen) * outw * side;
+		spot.z += ( axis.x / alen) * outw * side;
+	}
+
+	// Do not stack them, but the front is by definition the contested area, so
+	// it earns a higher bar than a quiet mex would.
+	if (!Builder::AreaNeedsDefence(spot, PORC_FRONT_FENCE))
 		return;
 
 	IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
@@ -1087,7 +1124,15 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	const bool onLine = NearFront(pos);
 
 	const bool early = (ai.frame <= 5 * MINUTE) && (threat > 0.f);
-	if (!gPorcArmed && !early && !onLine && !IsFrontierSite(pos))
+	// A BACK-LINE cluster needs more than "the enemy owns an army somewhere".
+	// gPorcArmed is global and trips as early as 2.3 min, so on its own it let
+	// every quiet rear mex through and they got walled while the front had
+	// nothing. apexearth: "too much defenses being spent in the back line when
+	// they could have been made up front to support the front line."
+	//
+	// Front and frontier sites are unchanged -- that is where the fighting is.
+	// Everywhere else now waits until we are actually behind on the field.
+	if (!onLine && !IsFrontierSite(pos) && !early && !LosingGround())
 		return;
 
 	// Something to pay with. Unchanged from the old gate, including the way that

@@ -96,6 +96,12 @@ local mexAt = {}          -- team -> {n -> frame the nth finished}
 -- ending at 12-13 minutes are commander-death timing, not attrition timing.
 local commLost = {}       -- team -> frame its commander died (-1 if alive)
 local builtTop = {}       -- team -> {unitName -> metal built}
+-- Metal sunk into STATIC defence. It was invisible: armyValue() counts only
+-- units with speed > 0, and the composition buckets are factories, constructors
+-- and army, so towers landed in mBuiltReal and nowhere else. apexearth: "the
+-- side effect is wasteful defense and then we have less army and are losing the
+-- overall fight" -- that trade cannot be judged without measuring both halves.
+local defSpend = {}       -- team -> cumulative metal on finished static defence
 
 local function techOf(ud)
     local t = techLvl[ud.id]
@@ -207,6 +213,10 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 			t2Mex[unitTeam] = (t2Mex[unitTeam] or 0) + 1
 		end
 	end
+	-- Immobile and armed = static defence. Excludes mexes, solars and nanos.
+	if (ud.speed or 0) == 0 and #ud.weapons > 0 and not ud.isFactory then
+		bump(defSpend, unitTeam, ud.metalCost or 0)
+	end
 	if ud.isFactory then
 		bump(facSpend, unitTeam, ud.metalCost or 0)
 		if techOf(ud) >= 2 and techFrame[unitTeam] == nil then
@@ -272,6 +282,7 @@ local function dump(reason)
 				string.format("mKillCheap=%.0f", killCheap[teamID] or 0),
 				string.format("mBuiltReal=%.0f", builtReal[teamID] or 0),
 				string.format("mFactories=%.0f", facSpend[teamID] or 0),
+				string.format("mDefence=%.0f", defSpend[teamID] or 0),
 				string.format("mReclaim=%.0f", mReclaim[teamID] or 0),
 				string.format("mRezSpend=%.0f", mRezSpend[teamID] or 0),
 				string.format("techFrame=%d", techFrame[teamID] or -1),
