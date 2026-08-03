@@ -31,9 +31,32 @@ array<int> gGifted;   // teams that already received their advanced con
 bool gGotAdvCon = false;
 
 // True once we hold an advanced constructor of our own, however we came by it --
-// built or gifted. A player with T2 and no advanced con should build one; a
-// player that already has one should not build a second.
+// built or gifted.
 bool gHaveAdvCon = false;
+
+// How many we hold. One was the old target, and the factory ratios cannot make
+// up the difference: Cortex's coravp weights constructors at ~1% against
+// correap's 61%, so whatever this rule does not force does not get built.
+// Measured over 16 games: 3 advanced constructors per player against stock's 8,
+// with T2 spend 28,451 against 44,060 and T3 2,378 against 8,186.
+int gAdvConCount = 0;
+
+// Income is the thing an extra advanced constructor is there to spend. Below the
+// first step one is plenty; a player running a real economy should be building
+// out, and that is where the T2/T3 gap comes from.
+const float ADV_CON_INCOME_STEP = 25.f;
+const int   ADV_CON_MAX         = 4;
+
+int AdvConsWanted()
+{
+	int want = 1 + int(aiEconomyMgr.metal.income / ADV_CON_INCOME_STEP);
+	return (want > ADV_CON_MAX) ? ADV_CON_MAX : want;
+}
+
+bool NeedsAdvCon()
+{
+	return gAdvConCount < AdvConsWanted();
+}
 
 bool OwesAdvCons()
 {
@@ -1005,7 +1028,7 @@ const float PULSAR_MIN_ENERGY = 1000.f;
 // 4 reached 22.0% of ALL metal -- more than stock's 14% -- while we held one T2
 // constructor. Two is a pair covering one approach, which is what the economy can
 // carry; raise it when metal production is no longer half of stock's.
-const int   PULSAR_MAX        = 2;
+const int   PULSAR_MAX        = 1;
 const int   PULSAR_PERIOD     = 60 * SECOND;
 // A flat standing count answered two aircraft and forty identically. These are
 // 80 metal each and only built once the enemy actually flies, so the ceiling can
@@ -1779,7 +1802,13 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 		gHaveAdvCon = true;
 	}
 	if (ShareAdvCon(unit, usage))
-		return;
+		return;   // handed to an ally; it is not ours to count
+	if ((usage == Unit::UseAs::BUILDER)
+		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+		&& (unit.circuitDef.costM >= ADV_CON_COST))
+	{
+		++gAdvConCount;
+	}
 
 	if (usage == Unit::UseAs::REZZER) {
 		const int rid = unit.circuitDef.id;
@@ -1835,6 +1864,15 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	// Losing one has to re-open the slot, or a player that loses its advanced
+	// constructors never replaces them.
+	if ((usage == Unit::UseAs::BUILDER)
+		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+		&& (unit.circuitDef.costM >= ADV_CON_COST)
+		&& (gAdvConCount > 0))
+	{
+		--gAdvConCount;
+	}
 	if (energizer1 is unit)
 		@energizer1 = null;
 	else if (energizer2 is unit)

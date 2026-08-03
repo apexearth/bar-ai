@@ -577,7 +577,7 @@ void UpdateKillingBlow()
 // and are losing the overall fight." Fire only when clearly outmatched.
 const float PORC_TRIGGER    = 2.0f;
 const int   PORC_ADD_SPACING = 20 * SECOND;
-const uint  PORC_ADD_CAP    = 4;    // was 10; see PORC_TRIGGER
+const uint  PORC_ADD_CAP    = 2;    // was 10, then 4; see PORC_TRIGGER
 // The front is the contested area; allow a real position there, not a pair.
 const uint  PORC_FRONT_FENCE = 4;
 // Spacing between towers along the line.
@@ -1186,6 +1186,16 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	// same opening clause bypassed the income requirement outright.
 	if ((ai.frame <= 5 * MINUTE) && (aiEconomyMgr.metal.income <= 10.f)
 		&& !early && !onLine)
+		return;
+
+	// A front-line cluster still needs an enemy army to be worth walling. On a
+	// small map almost every cluster reads as on-line, so `onLine` alone approved
+	// the whole map and DefaultMakeDefence put a tower on every defence point.
+	// Measured over five tournaments: static defence 15.5-21% of our metal
+	// against stock's 7-8.4%, and halving our own front-tower rule
+	// (PORC_ADD_CAP 4 -> 2) moved it 16.4% -> 16.8%, i.e. not at all -- the spend
+	// is this call, not ours.
+	if (!gPorcArmed && !gTurtle && !LosingGround() && !early)
 		return;
 
 	aiMilitaryMgr.DefaultMakeDefence(cluster, pos);
