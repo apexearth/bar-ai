@@ -961,7 +961,7 @@ index fac55c7..81a7f68 100644
  	}
  	return true;
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..02f2452 100644
+index cd063e4..c829b56 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -25,12 +25,23 @@
@@ -998,7 +998,36 @@ index cd063e4..02f2452 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -340,6 +352,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -256,7 +268,13 @@ void CAttackTask::FindTarget()
+ 	const int noChaseCat = cdef->GetNoChaseCategory();
+ 
+ 	CEnemyInfo* bestTarget = nullptr;
+-	const float sqOBDist = pos.SqDistance2D(basePos);  // Own to Base distance
++	// LINEAR, not squared. `scale` below divides a linear distance by this, and
++	// with a squared denominator the ratio collapses the moment the squad leaves
++	// home: at 100 elmos out scale is ~0.30, at 1000 it is ~0.003, at 2000 it is
++	// ~0.00075. Since scale multiplies the enemy influence we require ourselves
++	// to exceed, that zeroed the strength test entirely and the squad attacked
++	// anything at any odds once it was off the doorstep.
++	const float obDist = std::max(pos.distance2D(basePos), 1.f);  // Own to Base distance
+ 	float minSqDist = std::numeric_limits<float>::max();
+ 	bool hasGoodTarget = false;
+ 
+@@ -269,7 +287,12 @@ void CAttackTask::FindTarget()
+ 			continue;
+ 		}
+ 		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
+-		const float scale = std::min(distBE / sqOBDist, 1.f);
++		// Both linear, so this is a real ratio: how far the enemy group sits from
++		// our base against how far WE are from it. Near 1 when we are pushing as
++		// deep as they are -- demand the full strength check there. Below 1 only
++		// when the group is closer to our base than we are, i.e. defending home,
++		// where taking a worse fight is correct.
++		const float scale = std::min(distBE / obDist, 1.f);
+ 		if (((maxPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE))
+ 			|| !terrainMgr->CanMobileReachAt(area, group.pos, highestRange))
+ 		{
+@@ -340,6 +363,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
