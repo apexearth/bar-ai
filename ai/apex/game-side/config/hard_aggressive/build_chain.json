@@ -24,7 +24,17 @@
 		// armfrt/corfrt at 17 on water, all 80-90 metal. This costs nothing while the
 		// enemy has no air: the walk skips any IsRoleAA() def while GetEnemyCost(AIR)
 		// is below 1, and the loop is bounded by i < num, so the slot simply goes unused.
-		"prevent": 2,  // number of preventive defences
+		// Raised 1 -> 2 -> 5. DefaultMakeDefence walks
+		// num = isPorc ? defenders.size() : prevent, and isPorc is only true for a
+		// rich cluster far from base, or when 2 nearby UNFINISHED clusters read
+		// threat -- clusters we already hold are skipped. So our own base under
+		// attack is never "porc", and 2 bought a light laser tower and a rocket
+		// launcher. Observed live: an ally surrounded for four or five minutes with
+		// no real defence built. 5 reaches corhllt, cormaw and cormadsam, i.e. an
+		// actual defensive position.
+		// COST: this is 2.5x the towers wherever AiMakeDefence fires, and towers are
+		// constructor time. Check composition before believing it helped.
+		"prevent": 5,  // number of preventive defences
 		"amount": {  // income bound factor
 			"offset": [-2.0, 2.0],
 			// Amount factor: 10x10 ~ 48.0, 20x20 ~ 32.0

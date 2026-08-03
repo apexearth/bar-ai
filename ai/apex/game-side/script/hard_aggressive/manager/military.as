@@ -379,6 +379,26 @@ const float MASS_CAP    = 48.f;
 const float ATTACK_EDGE = 0.95f;
 int gNextMassLog = 0;
 
+// The size a group commits at, from the armies on the field.
+//
+// CDefendTask is created with maxPower = minAttackers and stops accepting units
+// once it reaches it, then promotes to an attack and leaves. So this number IS
+// the size each group leaves at -- not a threshold it grows past.
+float MassWant()
+{
+	const float ours = TeamArmyCost();
+	const float theirs = EnemyArmyCost();
+	if (ours <= 1.f)
+		return MASS_CAP;
+	const float ratio = theirs / ours;
+	if (ratio <= ATTACK_EDGE)
+		return MASS_FLOOR;                    // ahead: move, but as a group
+	if (ratio >= MASS_HOLD_RATIO)
+		return MASS_CAP;                      // outmatched: hold
+	const float t = (ratio - ATTACK_EDGE) / (MASS_HOLD_RATIO - ATTACK_EDGE);
+	return MASS_FLOOR + t * (MASS_CAP - MASS_FLOOR);
+}
+
 void UpdateMassing()
 {
 	// The killing blow owns the quota once it is on: massing is what was holding
@@ -401,18 +421,7 @@ void UpdateMassing()
 	// same figure the killing blow already compares on.
 	const float ours = TeamArmyCost();
 	const float theirs = EnemyArmyCost();
-	float want = MASS_CAP;
-	if (ours > 1.f) {
-		const float ratio = theirs / ours;
-		if (ratio <= ATTACK_EDGE) {
-			want = MASS_FLOOR;                    // ahead: move, but as a group
-		} else if (ratio >= MASS_HOLD_RATIO) {
-			want = MASS_CAP;                      // outmatched: hold
-		} else {
-			const float t = (ratio - ATTACK_EDGE) / (MASS_HOLD_RATIO - ATTACK_EDGE);
-			want = MASS_FLOOR + t * (MASS_CAP - MASS_FLOOR);
-		}
-	}
+	const float want = MassWant();
 
 	if (ai.frame >= gNextMassLog) {
 		gNextMassLog = ai.frame + 60 * SECOND;
@@ -576,7 +585,12 @@ void UpdatePosture()
 			|| (ai.frame - gTurtleStarted > TURTLE_MAX_HOLD)) {
 		gTurtle = false;
 		gPostureUntil = ai.frame + TURTLE_MIN_HOLD;
-		aiMilitaryMgr.quota.attack = gAttackBase;
+		// NOT gAttackBase. That is the stock 15, captured before anything
+		// touched it, and the turtle block runs AFTER UpdateMassing in
+		// UpdatePosture -- so every resume slammed the commit size back to
+		// stock and the next group left at stock size. Measured 15 hold/resume
+		// cycles in one game, i.e. fifteen small groups walking out.
+		aiMilitaryMgr.quota.attack = MassWant();
 		AiLog(Factory::T() + "apexturtle: RESUME frame=" + ai.frame + " army=" + army
 			+ " (held from " + gArmyAtHold + ")");
 	}

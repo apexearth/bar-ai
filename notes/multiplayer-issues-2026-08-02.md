@@ -314,6 +314,62 @@ player count are probably the bigger levers.
 
 ---
 
+## 10. A surrounded player should relocate, not die in place — FEATURE REQUEST
+
+apexearth, watching a 4v4: "green stay in his base while crazy amounts of army
+was surrounding him. If he was a real player, he would have left the base. He
+would have ran away to an allies' base and reconstructed over there."
+
+Nothing in the AI does this. `Builder::UpdateCommanderSafety()` was written once
+and **removed**, not disabled -- it correlated with the engine aborting 14-17
+games per 20-game run, and the two bindings it used (`CmdMoveTo` outside a task
+context, `GetEnemyCostAt`) are still registered but deliberately uncalled. So a
+retreat has to be built on something else, or those have to be isolated and
+tested one at a time in a throwaway variant first. See CLAUDE.md "Do not call".
+
+What a relocation actually needs, none of which exists yet:
+- a "this base is lost" signal distinct from the existing health-triggered
+  commander retreat, which fires on damage rather than on being surrounded;
+- somewhere to go -- an ally's base position. `TV_DIST` already publishes each
+  team's distance to the enemy centroid, so the machinery for asking allies
+  where they are is present;
+- a way to move the commander that is not `CmdMoveTo`.
+
+Deferred deliberately. Lower value than #11 and carries known crash history.
+
+---
+
+## 11. Defences are not built when the enemy is visibly closing in — PARTLY FIXED
+
+apexearth: "his T1 con needs to make pretty good defenses in the base when we
+see the enemies are encroaching... they're getting closer and closer over four
+or five minutes, so you have plenty of time, and no good defenses were being
+made."
+
+Cause found. `CMilitaryManager::DefaultMakeDefence` walks
+`num = isPorc ? defenders.size() : prevent`, and `isPorc` is true only for a
+rich cluster more than 1000 elmos from base, **or** when two nearby clusters
+read threat -- and that loop `continue`s over any cluster we have already
+finished. Our own base under attack is therefore never "porc", so it took the
+`prevent` path, which was **2**: a light laser tower and a rocket launcher.
+
+Raised to 5, reaching corhllt / cormaw / cormadsam -- a real position.
+
+Still open on this:
+- **Bounded by income as well.** The walk also stops once total cost exceeds
+  `amount.factor * min(metal, energy income)`. At the benchmark's 4-9 metal/s
+  that bound may cut the ladder short before 5, so this change will show up in
+  hosted games long before it shows in a benchmark.
+- **The jammer is a separate path and still missing.** apexearth asked for "a
+  jammer, and a shitload of towers". Jammers are not in the porcupine ladder at
+  all; they hang off build_chain hubs on armanni/cordoom, which CLAUDE.md
+  records as never having been built once in a 30-game sample.
+- `prevent` is global, so this is 2.5x the towers wherever `AiMakeDefence` fires,
+  not only at a threatened base. Towers are constructor time. Check
+  `composition.py` before believing it helped.
+
+---
+
 ## Suggested order
 
 0. **#9 get a representative benchmark first.** Nothing below can be measured
@@ -328,5 +384,7 @@ player count are probably the bigger levers.
 4. **#4 lab reclaim timing** — cheap.
 5. **#3 air disengagement** — verify the cause first; `thr_mod.static` affects
    every unit type, not just air. Look at it together with #7, same subsystem.
-6. **#8 late-game commander sweep** — a feature, not a defect, so it goes after
+6. **#11 jammer path** — towers are raised; the jammer half is untouched.
+7. **#8 late-game commander sweep** — a feature, not a defect, so it goes after
    the measured waste. Do part (a), the radar planes, on its own first.
+8. **#10 relocate a surrounded player** — deferred; carries crash history.
