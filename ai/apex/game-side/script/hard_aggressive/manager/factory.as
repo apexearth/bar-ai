@@ -278,6 +278,9 @@ int gEcoSlotSeen = -1000000;
 const uint  ECO_CON_CAP     = 16;   // ground engineers, down from 28
 const int   ECO_CON_SPACING = 10 * SECOND;
 const int   ECO_AIR_CON_CAP = 12;
+// Enough to unlock the advanced air plant, which is the only durable source of
+// fighters. Anything above this is left to the factory ratios.
+const int   AIR_CON_MIN     = 1;
 const int   ECO_AIR_SPACING = 8 * SECOND;
 // The eco lead earns its own aircraft plant once it is clearly the team's bank.
 // Not before: a second factory this player cannot yet feed is the "rules that
@@ -1286,7 +1289,39 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// This sits AFTER the advanced-constructor branch above deliberately: handing
 	// advanced cons to the rest of the team is the tech lead's job and the eco
 	// lead is still the tech lead. It only replaces what would otherwise be army.
-	if (gEcoActive) {
+	// The advanced air plant can only be built by an AIR constructor, and the T1
+	// air plant's own ratios give constructors about 5% -- so a player can hold
+	// the air slot all game and never produce one. Without the advanced plant
+	// there are no fighters at all, because FactoryManager's isAvailableDef
+	// requires (isActive || IsAttrRare()) and isActive goes false for a T1
+	// factory the moment its owner has any T2 factory. Fighters are not rare.
+	// One constructor unlocks the plant; after that the ratios decide.
+	if (IsAirFactory(unit.circuitDef) && (AirConCount() < AIR_CON_MIN)
+		&& (ai.frame >= gNextEcoAirCon))
+	{
+		CCircuitDef@ acon = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
+		if (acon !is null) {
+			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+					Task::RecruitType::BUILDPOWER, Task::Priority::NORMAL,
+					acon, unit.GetPos(ai.frame), 0.f));
+			if (rec !is null) {
+				gNextEcoAirCon = ai.frame + ECO_AIR_SPACING;
+				return rec;
+			}
+		}
+	}
+
+	// A gantry is the declared win condition, and the eco lead builds no army by
+	// design -- so a gantry it came by, built or resurrected, produced nothing at
+	// all. It has no BUILDER-role unit either, so the constructor branch below
+	// cannot absorb it and it falls through to `return null` every call.
+	// apexearth: "our eco guy ressurrected a gantry and then never made any unit
+	// from it". Owning one overrides the rule.
+	CCircuitDef@ gantDef = T3Gantry();
+	const bool isOwnGantry = (gantDef !is null)
+			&& (unit.circuitDef.id == gantDef.id);
+
+	if (gEcoActive && !isOwnGantry) {
 		// The aircraft plant makes constructors and nothing else. Every other
 		// branch above has already had its say, so reaching here with an air
 		// factory means this player has one purely as build power.
