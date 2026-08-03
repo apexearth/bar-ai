@@ -210,6 +210,15 @@ share a shape: the thing didn't work, and nothing said so.
   raw return once and confirm it is real data. Route around via a synced gadget
   publishing a game rules param (`Game_getRulesParamFloat` is not gated); see
   `game-patches/gadgets/dev_team_income.lua`.
+- **`ai.GetBuilderThreatAt(pos)` will crash on an off-map position, and reads
+  zero almost everywhere anyway.** `CThreatMap::GetBuilderThreatAt` bounds-checks
+  with an `assert` — compiled out in release — then indexes `surfThreat`
+  unchecked. Sampling a ring of radius 1500 around a base near the map edge read
+  off-map memory and killed the engine at frame 3 (0xc0000005). No map-size
+  binding is exposed to clamp against, so only positions already known valid
+  (unit positions, or interpolations between two of them) are safe. Even then
+  the value is 3% nonzero across ten games, which is why the old commander
+  retreat never fired — do not build a trigger on it.
 - **Never answer a unit question from a filename search.** Use
   `tools/unitdef.py`. A `glob legasy.lua` returning nothing was read as "Legion
   has no advanced shipyard" and written into a code comment as fact; Legion's

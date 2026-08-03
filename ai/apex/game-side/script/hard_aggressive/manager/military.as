@@ -518,6 +518,137 @@ void UpdateKillingBlow()
 		+ " enemyArmy=" + formatFloat(EnemyArmyCost(), "", 0, 0));
 }
 
+
+//------------------------------------------------------------------------------
+// Base defence scaled to the threat closing in.
+//
+// apexearth: "scan outside the range of that base for the total threat. And if
+// that value exceeds your base by some percentage, then you multiply the amount
+// of porc you're willing to make."
+//
+// This cannot be done by asking DefaultMakeDefence for more. `prevent` is a hard
+// cap -- num = min(isPorc ? defenders.size() : prevent, defenders.size()) -- and
+// its per-point cost accumulator makes a repeat call walk PAST what is already
+// paid for rather than add to it. So the extra towers are enqueued here.
+//
+// Threat is sampled on a ring OUTSIDE the base, which is the "getting closer and
+// closer over four or five minutes" signal: an army massing at our doorstep
+// registers on the ring long before it is inside.
+//------------------------------------------------------------------------------
+// Enemy army value against our standing towers.
+//
+// apexearth: "scan outside the range of that base for the total threat. And if
+// that value exceeds your base by some percentage, then you multiply the amount
+// of porc you're willing to make."
+//
+// The positional form of that was tried first and does not work. Two reasons,
+// both measured:
+//   - CThreatMap::GetBuilderThreatAt bounds-checks with an assert only, compiled
+//     out in release, then indexes surfThreat unchecked. Sampling a ring of
+//     radius 1500 around a base near the map edge read off-map memory and
+//     crashed the AI at frame 3 (0xc0000005). No map-size binding exists to
+//     clamp against.
+//   - Sampling only positions provably inside the map (interpolations along
+//     home->enemy) does not crash, but returns ZERO almost always. The same
+//     query was already measured at 3% nonzero across ten games and is the
+//     reason the old commander-threat retreat never fired.
+//
+// So the comparison keeps apexearth's shape -- their strength against ours,
+// scaled -- using the enemy army value, which is a real number in these logs
+// (120 to 6,648 over one game) rather than a mostly-empty map lookup.
+const float PORC_TRIGGER    = 1.5f;
+const int   PORC_ADD_SPACING = 20 * SECOND;
+const uint  PORC_ADD_CAP    = 10;
+uint gPorcAdded = 0;
+int  gNextPorcAdd = 0;
+
+float ApproachThreat()
+{
+	return EnemyArmyCost();
+}
+
+array<string> PORC_NAMES_ARM = {"armllt", "armbeamer", "armhlt", "armclaw"};
+array<string> PORC_NAMES_COR = {"corllt", "corhllt", "corhlt", "cormaw"};
+array<string> PORC_NAMES_LEG = {"leglht", "legmg", "legdtr"};
+
+array<string>@ PorcNames()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return @PORC_NAMES_COR;
+	if (side == "legion")
+		return @PORC_NAMES_LEG;
+	return @PORC_NAMES_ARM;
+}
+
+float OurTowerValue()
+{
+	array<string>@ names = PorcNames();
+	float total = 0.f;
+	for (uint i = 0; i < names.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(names[i]);
+		if (d !is null)
+			total += d.costM * float(d.count);
+	}
+	return total;
+}
+
+// The heaviest tower we can currently afford to place.
+CCircuitDef@ PorcToBuild()
+{
+	array<string>@ names = PorcNames();
+	CCircuitDef@ best = null;
+	for (uint i = 0; i < names.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(names[i]);
+		if ((d is null) || !d.IsAvailable(ai.frame))
+			continue;
+		if (d.costM > aiEconomyMgr.metal.income * 30.f)
+			continue;              // ~30s of income; do not stall on one tower
+		if ((best is null) || (d.costM > best.costM))
+			@best = d;
+	}
+	return best;
+}
+
+void UpdateBaseDefence()
+{
+	if (!Builder::gHomeSet || (gPorcAdded >= PORC_ADD_CAP))
+		return;
+	if (ai.frame < gNextPorcAdd)
+		return;
+
+	const float threat = ApproachThreat();
+	if (threat <= 0.f)
+		return;
+	const float ours = OurTowerValue();
+	if (threat < (ours + 1.f) * PORC_TRIGGER)
+		return;
+
+	CCircuitDef@ def = PorcToBuild();
+	if (def is null)
+		return;
+
+	// Between home and the enemy, at the ring: meet them before they arrive.
+	AIFloat3 toEnemy = aiEnemyMgr.GetEnemyPos() - Builder::gHomePos;
+	const float len = sqrt(toEnemy.x * toEnemy.x + toEnemy.z * toEnemy.z);
+	AIFloat3 spot = Builder::gHomePos;
+	if (len > 1.f) {
+		const float reach = (len < 1600.f) ? len * 0.35f : 560.f;
+		spot.x += toEnemy.x / len * reach;
+		spot.z += toEnemy.z / len * reach;
+	}
+
+	IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::HIGH, def, spot, SQUARE_SIZE * 24));
+	if (t !is null) {
+		++gPorcAdded;
+		gNextPorcAdd = ai.frame + PORC_ADD_SPACING;
+		AiLog(Factory::T() + "apex: porc+ " + def.GetName() + " #" + gPorcAdded
+			+ " enemyArmy=" + formatFloat(threat, "", 0, 0)
+			+ " ourTowers=" + formatFloat(ours, "", 0, 0));
+	}
+}
+
 void UpdatePosture()
 {
 	// Before UpdateRushRole, which overwrites quota.attack on the lead. Captured
@@ -527,6 +658,7 @@ void UpdatePosture()
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
 	UpdateKillingBlow();
+	UpdateBaseDefence();
 	UpdateSling();
 	UpdateRushDefence();
 	UpdateMassing();
