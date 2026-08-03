@@ -628,15 +628,28 @@ void UpdateBaseDefence()
 	if (def is null)
 		return;
 
-	// Between home and the enemy, at the ring: meet them before they arrive.
-	AIFloat3 toEnemy = aiEnemyMgr.GetEnemyPos() - Builder::gHomePos;
-	const float len = sqrt(toEnemy.x * toEnemy.x + toEnemy.z * toEnemy.z);
-	AIFloat3 spot = Builder::gHomePos;
-	if (len > 1.f) {
-		const float reach = (len < 1600.f) ? len * 0.35f : 560.f;
-		spot.x += toEnemy.x / len * reach;
-		spot.z += toEnemy.z / len * reach;
+	// AT THE FRONT, not at home. apexearth: "I often see our AI making defenses
+	// in the back of the map... what we really need are defenses closer to the
+	// front line, which are gonna kill the enemy and turn our fights around."
+	// Same reasoning UpdateFrontGun already applies to the big gun.
+	//
+	// FrontPos is the team front, published at 78% of the way to the enemy. It
+	// comes from dev_team_income.lua, so it is absent in a hosted game -- fall
+	// back to two thirds of the way along our own home->enemy line, which is
+	// forward of the base without needing the gadget.
+	AIFloat3 spot;
+	if (!FrontPos(spot)) {
+		AIFloat3 toEnemy = aiEnemyMgr.GetEnemyPos() - Builder::gHomePos;
+		const float len = sqrt(toEnemy.x * toEnemy.x + toEnemy.z * toEnemy.z);
+		spot = Builder::gHomePos;
+		if (len > 1.f) {
+			spot.x += toEnemy.x / len * (len * 0.66f);
+			spot.z += toEnemy.z / len * (len * 0.66f);
+		}
 	}
+	// Do not stack them: skip if this area already has enough.
+	if (!Builder::AreaNeedsDefence(spot))
+		return;
 
 	IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::HIGH, def, spot, SQUARE_SIZE * 24));
@@ -644,7 +657,7 @@ void UpdateBaseDefence()
 		++gPorcAdded;
 		gNextPorcAdd = ai.frame + PORC_ADD_SPACING;
 		AiLog(Factory::T() + "apex: porc+ " + def.GetName() + " #" + gPorcAdded
-			+ " enemyArmy=" + formatFloat(threat, "", 0, 0)
+			+ " at-front enemyArmy=" + formatFloat(threat, "", 0, 0)
 			+ " ourTowers=" + formatFloat(ours, "", 0, 0));
 	}
 }

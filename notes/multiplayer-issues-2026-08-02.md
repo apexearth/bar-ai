@@ -370,6 +370,50 @@ Still open on this:
 
 ---
 
+## 12. Territory grid to place a defensive LINE — DESIGN, blocked on bindings
+
+apexearth: "split the map up into a grid and build controlled territories on
+that grid, then form a line on the edge of our controlled territory to block all
+enemy movement from crossing into our territory. Typically you're just gonna
+have defenses on the mexes and in your bases. But if you had a grid, or some way
+of drawing on the map where enemies are gonna get through, that tells you where
+to put your defenses."
+
+**The engine already has this map.** `CInfluenceMap` exposes `GetInfluenceAt`,
+`GetAllyInflAt` and `GetEnemyInflAt` -- ally influence minus enemy influence per
+cell is precisely "controlled territory", and the zero crossing is the border he
+wants to fortify. `DefaultMakeDefence` already consults it:
+`isPorc |= GetInfluenceAt(pos) < INFL_EPS`.
+
+Two things block using it:
+
+1. **No script bindings.** Nothing on `CCircuitAI` exposes the influence map.
+   The script cannot read territory at all.
+2. **Unchecked indexing.** `GetInfluenceAt` does `influence[z * width + x]` with
+   no bounds test -- the same shape as `CThreatMap::GetBuilderThreatAt`, which
+   killed the engine at frame 3 today when sampled off-map (0xc0000005). Any
+   grid walk samples many positions, so this must be clamped before it is
+   reachable from script.
+
+### Routes
+
+- **C++ bindings** (`docs/06-building-the-dll.md`): expose ally/enemy influence
+  and the map dimensions, clamping inside the accessor. This is the only route
+  that works in a HOSTED game, and hosted games are the target.
+- **Synced Lua gadget**, the way the tech-lead election and `FrontPos` went:
+  compute the grid and publish border points as rules params. Cheap and safe,
+  but `dev_team_income.lua` is not in the rapid package, so it does nothing
+  online -- see #5.
+
+### Note on what exists already
+
+`FrontPos()` is a single point at 78% toward the enemy, published by the gadget,
+and `UpdateFrontGun` already places the big gun there rather than at base. The
+grid is the generalisation of that: a line instead of a point, and derived from
+held territory rather than from a fixed fraction.
+
+---
+
 ## Suggested order
 
 0. **#9 get a representative benchmark first.** Nothing below can be measured
