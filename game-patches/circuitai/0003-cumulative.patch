@@ -306,7 +306,7 @@ index b4f4f40..8638af3 100644
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e90..7b8b903 100644
+index 2b84e90..fbc418a 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
 @@ -9,6 +9,7 @@
@@ -439,6 +439,39 @@ index 2b84e90..7b8b903 100644
 +	// snowball.
  	if (IsEnergyStalling()) {
  		return UpdateEnergyTasks(position, unit);
+ 	}
+@@ -1571,6 +1669,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+ 		}
+ 	}
+ 
++	// GetBuildPosition above snaps to a sector centre chosen for reprDef, the
++	// factory's MOBILE representative; the test below is against facDef's
++	// IMMOBILE type. The two accept different sectors, so the snapped site can
++	// fail it. Without this the task is discarded and nothing is ever placed.
++	if (!factoryTask->IsPlop() && (factoryTask->GetFacing() == UNIT_NO_FACING)
++		&& !terrainMgr->CanBeBuiltAtSafe(facDef, buildPos))
++	{
++		const AIFloat3& homePos = circuit->GetSetupManager()->GetBasePos();
++		if (terrainMgr->CanBeBuiltAtSafe(facDef, homePos)) {
++			buildPos = homePos;
++		}
++	}
++
+ 	factoryTask->SetPosition(buildPos);
+ 
+ 	if (factoryTask->IsPlop()
+@@ -1589,6 +1700,12 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+ 		factoryTask = nullptr;
+ 		return task;
+ 	} else {
++		// CBFactoryTask's ctor calls CFactoryData::AddFactory; only Cancel() undoes
++		// it, and a bare delete does not call Cancel. allFactories[].count is the
++		// primary sort key in CFactoryData::GetFactoryToBuild, so each discard here
++		// permanently demotes that factory in every later choice. Cancel() is
++		// protected, so undo the count directly.
++		factoryMgr->DelFactory(facDef);
+ 		delete factoryTask;
+ 		factoryTask = nullptr;
  	}
 diff --git a/src/circuit/module/EconomyManager.h b/src/circuit/module/EconomyManager.h
 index 2925da7..f1b8ee8 100644
@@ -851,7 +884,7 @@ index 4863ac9..e509c6d 100644
  	void ReadConfig();
  	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
 diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
-index 7c69263..114afea 100644
+index 7c69263..f49f48b 100644
 --- a/src/circuit/task/RetreatTask.cpp
 +++ b/src/circuit/task/RetreatTask.cpp
 @@ -13,6 +13,7 @@
@@ -862,21 +895,60 @@ index 7c69263..114afea 100644
  #include "terrain/path/PathFinder.h"
  #include "terrain/path/QueryPathSingle.h"
  #include "terrain/path/QueryCostMap.h"
-@@ -148,6 +149,7 @@ void CRetreatTask::Start(CCircuitUnit* unit)
+@@ -148,6 +149,8 @@ void CRetreatTask::Start(CCircuitUnit* unit)
  				endPos = circuit->GetSetupManager()->GetBasePos();
  			}
  		}
-+		endPos = GetRearHaven(unit, endPos);
++		const AIFloat3 rally = GetRallyPos(unit);
++		endPos = utils::is_valid(rally) ? rally : GetRearHaven(unit, endPos);
  		range = factoryMgr->GetAssistRange() * 0.6f + pathfinder->GetSquareSize();
  	}
  
-@@ -162,6 +164,42 @@ void CRetreatTask::Start(CCircuitUnit* unit)
+@@ -162,6 +165,80 @@ void CRetreatTask::Start(CCircuitUnit* unit)
  	});
  }
  
 +// How far behind the haven the commander is parked. Roughly a base radius, so
 +// it clears the buildings the enemy is coming for without leaving the base.
 +#define COMM_REAR_DIST	900.f
++
++// Where along base->lane a falling-back fighter re-forms. Our script publishes
++// the front at 0.78 of that span, so this sits behind the fighting but well
++// forward of home.
++#define RALLY_FRAC	0.55f
++
++// A fighter falls back to ONE shared point, not to whichever haven happens to
++// be nearest it. GetClosestHaven is per-unit and havens are factory positions,
++// so a retreating squad fanned out to several places at the back of the map and
++// then walked all the way forward again. apexearth, watching: "each of our
++// units, as they pull back, it looks to me like they're pulling back to
++// different locations... a perfectly healthy set of units took the long walk
++// away from the front line, and now they're walking all the way back."
++//
++// Builders and the commander are excluded: they retreat to be repaired or to
++// hide, and a rally point in front of the base serves neither.
++AIFloat3 CRetreatTask::GetRallyPos(CCircuitUnit* unit) const
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	CCircuitDef* cdef = unit->GetCircuitDef();
++	if (cdef->IsRoleComm() || (circuit->GetBindedRole(cdef->GetMainRole()) == ROLE_TYPE(BUILDER))) {
++		return -RgtVector;
++	}
++
++	CSetupManager* setupMgr = circuit->GetSetupManager();
++	const AIFloat3& basePos = setupMgr->GetBasePos();
++	const AIFloat3& lanePos = setupMgr->GetLanePos();
++	if (!utils::is_valid(lanePos)) {
++		return -RgtVector;
++	}
++
++	AIFloat3 rally = basePos + (lanePos - basePos) * RALLY_FRAC;
++	CTerrainManager::CorrectPosition(rally);
++	if (!circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), rally)) {
++		return -RgtVector;
++	}
++	return rally;
++}
 +
 +// A retreat ends at the closest haven, or at the base CENTRE when there is no
 +// haven -- which is the middle of the thing the enemy is attacking. The
@@ -913,11 +985,14 @@ index 7c69263..114afea 100644
  void CRetreatTask::Update()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
-@@ -230,9 +268,28 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -230,9 +307,31 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  	if (!utils::is_valid(haven)) {
  		haven = circuit->GetSetupManager()->GetBasePos();
  	}
-+	haven = GetRearHaven(unit, haven);
++	if (repairer == nullptr) {  // nobody is waiting to repair it -- re-form instead
++		const AIFloat3 rally = GetRallyPos(unit);
++		haven = utils::is_valid(rally) ? rally : GetRearHaven(unit, haven);
++	}
  
  	const float maxDist = factoryMgr->GetAssistRange();
  	const AIFloat3& unitPos = unit->GetPos(frame);
@@ -943,14 +1018,15 @@ index 7c69263..114afea 100644
  		// TODO: push MoveAction into unit? to avoid enemy fire
  		TRY_UNIT(circuit, unit,
 diff --git a/src/circuit/task/RetreatTask.h b/src/circuit/task/RetreatTask.h
-index d29f582..98056a0 100644
+index d29f582..94ddc2a 100644
 --- a/src/circuit/task/RetreatTask.h
 +++ b/src/circuit/task/RetreatTask.h
-@@ -43,6 +43,7 @@ public:
+@@ -43,6 +43,8 @@ public:
  	virtual void Dead();
  
  private:
 +	springai::AIFloat3 GetRearHaven(CCircuitUnit* unit, const springai::AIFloat3& haven) const;
++	springai::AIFloat3 GetRallyPos(CCircuitUnit* unit) const;
  	void Recovered(CCircuitUnit* unit);
  
  	void ApplyPath(const CQueryPathSingle* query);
@@ -1065,10 +1141,10 @@ index fac55c7..81a7f68 100644
  	}
  	return true;
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..f3ffcfc 100644
+index cd063e4..00c939d 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
-@@ -25,12 +25,28 @@
+@@ -25,12 +25,35 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -1094,10 +1170,17 @@ index cd063e4..f3ffcfc 100644
 +// from the same 1000 for the same reason.
 +#define ASSIGN_RADIUS	3000.f
 +
++// Target-preference multipliers. The selection metric is a squared distance, so
++// 4.0 means an artillery piece is preferred over a closer ordinary unit until it
++// is about twice as far away.
++#define ARTY_PRIORITY		4.0f
++#define LONG_RANGE_PRIORITY	2.0f
++#define LONG_RANGE_MULT		1.3f   // "outranges us" -- 30% past our own reach
++
  CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
  		: ISquadTask(mgr, FightType::ATTACK, powerMod)
  		, minPower(minPower)
-@@ -59,7 +75,12 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
+@@ -59,7 +82,12 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
  	}
  
  	const int frame = manager->GetCircuit()->GetLastFrame();
@@ -1111,7 +1194,7 @@ index cd063e4..f3ffcfc 100644
  		return false;
  	}
  	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
-@@ -208,7 +229,8 @@ void CAttackTask::Update()
+@@ -208,7 +236,8 @@ void CAttackTask::Update()
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
  			leader, circuit->GetThreatMap(),
  			startPos, endPos, pathRange, GetHitTest(),
@@ -1121,7 +1204,7 @@ index cd063e4..f3ffcfc 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -238,6 +260,25 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,6 +267,25 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -1147,7 +1230,7 @@ index cd063e4..f3ffcfc 100644
  void CAttackTask::FindTarget()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
-@@ -245,18 +286,38 @@ void CAttackTask::FindTarget()
+@@ -245,18 +293,38 @@ void CAttackTask::FindTarget()
  	CInfluenceMap* inflMap = circuit->GetInflMap();
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
@@ -1189,7 +1272,7 @@ index cd063e4..f3ffcfc 100644
  	float minSqDist = std::numeric_limits<float>::max();
  	bool hasGoodTarget = false;
  
-@@ -269,10 +330,17 @@ void CAttackTask::FindTarget()
+@@ -269,10 +337,17 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -1211,7 +1294,29 @@ index cd063e4..f3ffcfc 100644
  			continue;
  		}
  
-@@ -323,6 +391,8 @@ void CAttackTask::FindTarget()
+@@ -319,10 +394,29 @@ void CAttackTask::FindTarget()
+ 				}
+ 			}
+ 
+-			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * scale;  // Own to Enemy distance
++			// Artillery is the thing that beats a massed army without ever being
++			// engaged, so it is worth crossing extra ground to reach. The metric
++			// below is a distance, so dividing pulls a long-ranged target closer
++			// in preference order without ignoring distance entirely -- a Shiva
++			// at the far end of the map still loses to one in front of us.
++			// apexearth: "they have artillery, and we get slammed by this
++			// artillery, and we never seem to really disperse the artillery blob"
++			// and "prioritize killing enemy long ranged units... we let them pile
++			// up rather than assassinating them".
++			float prio = 1.f;
++			if (edef != nullptr) {
++				if (edef->IsRoleArty()) {
++					prio = ARTY_PRIORITY;
++				} else if (edef->GetMaxRange() > weaponRange * LONG_RANGE_MULT) {
++					prio = LONG_RANGE_PRIORITY;  // outranges us even if not ARTY
++				}
++			}
++			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * scale / prio;  // Own to Enemy distance
  			if (minSqDist > sqOEDist) {
  				minSqDist = sqOEDist;
  				bestTarget = enemy;
@@ -1220,7 +1325,7 @@ index cd063e4..f3ffcfc 100644
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -332,6 +402,21 @@ void CAttackTask::FindTarget()
+@@ -332,6 +426,21 @@ void CAttackTask::FindTarget()
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
  	}
@@ -1242,7 +1347,7 @@ index cd063e4..f3ffcfc 100644
  	// Return: target, startPos=leader->pos, endPos=position
  }
  
-@@ -340,6 +425,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +449,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {

@@ -11,11 +11,16 @@
 		},
 		// Actual number of defences per cluster bounded by income - the order of defenses that should be build with numbers as above.
 		// One list, shared by every side: CMilitaryManager::ReadConfig indexes each side's
-		// own "unit" array with it. Index 10 (armflak/corflak/legflak) appeared seven times
-		// running. DefaultMakeDefence walks the list until totalCost passes
-		// amountFactor * min(metal, energy income), so on a hosted game's income that is
-		// 5,740 metal of flak per hot cluster and the heavy guns at 11/12 are never reached.
-		"land":  [3, 0, 2, 5, 6, 4, 7, 8, 10, 10, 12, 11],
+		// own "unit" array with it. DefaultMakeDefence walks the list until totalCost passes
+		// amountFactor * min(metal, energy income), so the LAST entry is the per-cluster
+		// spend cap, and the walk cannot tell a front cluster from a rear one - every mex
+		// cluster is a porc cluster (build_chain.mex."porc": true), which takes the whole
+		// list rather than porcupine.prevent entries.
+		// It therefore ends at flak. The old tail 12, 11 was armanni/cordoom (T3 gun) and
+		// armamb/cortoast, which carries "on": false in behaviour.json. The T3 gun still
+		// gets built, by Military::UpdateFrontGun at the published team front and by
+		// Builder::Pulsar, both of which choose their own position.
+		"land":  [3, 0, 2, 5, 6, 4, 7, 8, 10, 10],
 		"water": [1, 17, 1, 1, 4, 9, 10, 9, 10],
 		// 1, matching stock BARb.
 		//
@@ -278,14 +283,13 @@
 			}
 		},
 		"defence": {
-			// The only jammers in this profile used to hang off armanni/cordoom, which are
-			// porcupine index 12 - last in "land" and, until this edit, 30 min into "base".
-			// Neither ever completed in 30 measured games, so the 0.8 chance below was never
-			// rolled even once. armhlt/corhlt are the first heavy tower every side actually
-			// finishes (base index 4, the T2 factory hubs and the radar hubs below), which makes
-			// them the reliable marker for "this is a defended position, hide it".
-			// Gated later than the radar-hub jammers below so the two hooks mostly cover different
-			// parts of the game instead of stacking two jammers on one position.
+			// armhlt/corhlt are the first heavy tower every side actually finishes (base index 4,
+			// the T2 factory hubs and the radar hubs below), which makes them the marker for
+			// "this is a defended position, assist it".
+			//
+			// armanni/cordoom used to hang armgate/corgate off "back": 160 here. The shield is
+			// 3,000-3,200 metal and 54,000-55,000 energy, and "back" put it behind the gun,
+			// away from the enemy, wherever the gun happened to stand.
 			"armhlt": {
 				"hub": [[
 					{"unit": "armnanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"}
@@ -294,16 +298,6 @@
 			"corhlt": {
 				"hub": [[
 					{"unit": "cornanotc", "category": "nano", "offset": {"back": 40}, "condition": {"m_inc>": 14}, "priority": "normal"}
-				]]
-			},
-			"armanni": {
-				"hub": [[
-					{"unit": "armgate", "category": "defence", "offset": {"back": 160}, "condition": {"chance": 0.8}}
-				]]
-			},
-			"cordoom" : {
-				"hub": [[
-					{"unit": "corgate", "category": "defence", "offset": {"back": 160}, "condition": {"chance": 0.8}}
 				]]
 			}
 		},

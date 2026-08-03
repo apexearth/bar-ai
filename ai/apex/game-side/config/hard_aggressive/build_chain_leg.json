@@ -19,8 +19,12 @@
 		// build_chain.json's shared "land" now leads with index 3 so Armada and
 		// Cortex place the mid tower (armbeamer / corhllt) instead of the basic
 		// laser. Index 3 here is "leghive", not a tower, so Legion must not
-		// inherit that order -- this pins the previous one unchanged.
-		"land": [0, 2, 3, 5, 6, 4, 7, 8, 10, 10, 12, 11],
+		// inherit that order -- this pins Legion's own order.
+		// Ends at flak for the same reason as the shared list: the last entry is the
+		// per-cluster spend cap and the walk cannot tell front from rear. The dropped
+		// tail was 12 = legbastion (4,200m T3 gun, still placed by the leggant hub) and
+		// 11 = legacluster (2,300m).
+		"land": [0, 2, 3, 5, 6, 4, 7, 8, 10, 10],
 	
 		"superweapon": {
 			"unit": {
@@ -138,12 +142,15 @@
 			// hubs), so it is the reliable marker for "this position is worth hiding". Gated later
 			// than the radar-hub jammers so the two hooks do not stack on one spot.
 
+			// legdeflector used to sit at the end of this chain at "back": 160. The shield is
+			// 3,200 metal and 55,000 energy, and "back" put it behind the gun, away from the
+			// enemy, wherever the gun happened to stand. Same removal as
+			// defence.armanni/cordoom in build_chain.json.
 			"legbastion" : {
 				"hub": [[
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
 					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"},
-					{"unit": "legdeflector", "category": "defence", "offset": {"back": 160}}
+					{"unit": "legnanotc", "category": "nano", "offset": {"left": 5}, "priority": "now"}
 				]]
 			}
 		},

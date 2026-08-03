@@ -1775,12 +1775,18 @@ int AirSlotTeamId()
 	array<Id>@ mates = ai.GetTeamIds();
 	if ((mates is null) || (mates.length() == 0))
 		return -1;
+	// The eco lead builds no combat units at all, so handing it the team's one
+	// air slot means the air plant produces constructors and nothing else.
+	// RushLeadTeamId is the eco lead: IsEcoLead() is
+	// IsDesignatedLead() && (teamId == RushLeadTeamId()).
+	const int lead = RushLeadTeamId();
 	int slot = -1;
 	for (uint i = 0; i < mates.length(); ++i) {
-		if (int(mates[i]) > slot)
-			slot = int(mates[i]);
+		const int cand = int(mates[i]);
+		if ((cand != lead) && (cand > slot))
+			slot = cand;
 	}
-	return slot;
+	return slot;   // -1 when the lead is the only candidate: no air rather than dead air
 }
 
 // May this instance open with an air factory at all?
@@ -2185,7 +2191,14 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// 32,890 to our 436 -- one stock player's largest sink of any kind was
 	// cornecro at 17,940. We built ZERO rez bots in that game. A lab is ~600
 	// metal and the bot is 130.
-	if (!IsWaterMap() && !HaveT1BotLab()
+	// IsWaterMap() is a MAP test (land < 40%) and the failure is PER PLAYER: on a
+	// mostly-land map a water starter's constructors are naval and cannot place a
+	// land lab, so !HaveT1BotLab() never clears and this branch returns on every
+	// call, pre-empting the naval, T2 and gantry picks below it for the rest of
+	// the game. Measured: "no T1 bot lab" logged 206 times for one water player
+	// and 59 for another, against 1-3 for land players, both ending techStart=-1.
+	if (!IsWaterMap() && !(Builder::gHomeSet && IsWaterAt(Builder::gHomePos))
+		&& !HaveT1BotLab()
 		&& (gHaveT2 || (ai.frame > BOTLAB_FROM)))
 	{
 		CCircuitDef@ lab = T1BotLab();

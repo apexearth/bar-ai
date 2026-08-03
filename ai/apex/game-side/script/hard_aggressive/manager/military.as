@@ -1078,12 +1078,15 @@ bool FrontPos(AIFloat3& out p)
 
 string armanni("armanni");
 string cordoom("cordoom");
+string legbastion("legbastion");
 
 CCircuitDef@ BigGun()
 {
 	const string side = ai.GetSideName();
 	if (side == "cortex")
 		return ai.GetCircuitDef(cordoom);
+	if (side == "legion")
+		return ai.GetCircuitDef(legbastion);
 	return ai.GetCircuitDef(armanni);
 }
 
