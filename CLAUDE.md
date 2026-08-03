@@ -348,6 +348,27 @@ See `docs/12-build-phases.md` for the BUILD_PHASE design that addresses this
 directly: a single sense of what the AI is buying right now, that individual
 rules defer to instead of each firing whenever its own condition happens to hold.
 
+## apexearth is faster than the benchmark — ask him first
+
+A watched game returns useful feedback in about **five minutes**. A tournament
+with a matched control takes **twenty to thirty**, and on the standard benchmark
+it frequently cannot answer the question at all: per-team income there is
+4-9 metal/s against 12-41 in a hosted game, so anything gated on income never
+fires, and win rate has swung 60% -> 10% on an unchanged AI.
+
+So the default order is:
+
+1. **Deploy and hand him a windowed run** (`--watch --speed 5`). Do this FIRST,
+   before any measuring, so he is watching while other work continues.
+2. Act on what he reports. Every diagnosis that has actually landed this project
+   came from him watching: "two v six battles", "Commando as the first unit out
+   of the T2 lab", "cons at the front making mexes", "that's a 4v4 map".
+3. Use a tournament to **confirm** a mechanism he has already identified, or to
+   catch a regression. Not to go looking for one.
+
+Corollary: never leave him idle while a control runs. Launch the watch run, then
+do the slow measuring alongside it.
+
 ## Judging a run — do these, in this order
 
 `python tools/review.py <run> --control <run>` runs all of this and withholds a
