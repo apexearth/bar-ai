@@ -580,8 +580,6 @@ const int   PORC_ADD_SPACING = 20 * SECOND;
 const uint  PORC_ADD_CAP    = 2;    // was 10, then 4; see PORC_TRIGGER
 // The front is the contested area; allow a real position there, not a pair.
 const uint  PORC_FRONT_FENCE = 4;
-// Spacing between towers along the line.
-const float PORC_LINE_STEP  = 320.f;
 uint gPorcAdded = 0;
 int  gNextPorcAdd = 0;
 
@@ -590,9 +588,22 @@ float ApproachThreat()
 	return EnemyArmyCost();
 }
 
-array<string> PORC_NAMES_ARM = {"armllt", "armbeamer", "armhlt", "armclaw"};
-array<string> PORC_NAMES_COR = {"corllt", "corhllt", "corhlt", "cormaw"};
-array<string> PORC_NAMES_LEG = {"leglht", "legmg", "legdtr"};
+// ORDERED BY WEAPON RANGE, ascending -- PorcToBuild takes the last affordable
+// entry, so the order IS the preference. It used to pick the most expensive
+// affordable def, which is not the same ordering and got it backwards: cormaw
+// (290 metal) outbid corhllt (195) at every income, and reaches 410 elmos to
+// corhllt's 480. A tower that cannot reach the thing shooting it is dead metal
+// wherever it is placed, which is the other half of the placement complaint.
+//
+// The last entry of each list is the counter-battery tier. It is only ever
+// reachable when the budget in PorcToBuild is opened up, which needs the enemy
+// to have actually bought artillery.
+// The pop-up turrets stay in the list because OurTowerValue counts it and
+// build_chain still places them; ordered by range they can never be selected,
+// since every entry after them is both longer-ranged and cheaper.
+array<string> PORC_NAMES_ARM = {"armclaw", "armllt", "armbeamer", "armhlt", "armpb", "armguard"};
+array<string> PORC_NAMES_COR = {"cormaw", "corllt", "corhllt", "corhlt", "corvipe", "corpun"};
+array<string> PORC_NAMES_LEG = {"legdtr", "leglht", "legmg", "legcluster"};
 
 array<string>@ PorcNames()
 {
@@ -621,11 +632,24 @@ float OurTowerValue()
 // exists because the seconds-of-income budget alone lands between the two.
 const float PORC_MIN_BUDGET = 200.f;
 
-// The heaviest tower we can currently afford to place.
+// Seconds of income one front tower may cost. The second figure applies once the
+// enemy has bought artillery, which is the case the cheap tiers cannot answer at
+// all: every T2 artillery piece in the game outranges every tower below the
+// counter-battery tier, so against artillery a 30-second tower is not a cheaper
+// answer, it is no answer. Still bounded by PORC_ADD_CAP placements for the whole
+// game, so the worst case is two towers, not a habit.
+const float PORC_BUDGET_SECS = 30.f;
+const float PORC_SIEGE_SECS  = 60.f;
+// Enemy metal in the ARTY role before the wider budget opens. Two Pillagers.
+const float PORC_SIEGE_COST  = 800.f;
+
+// The longest-reaching tower we can currently afford to place.
 CCircuitDef@ PorcToBuild()
 {
 	array<string>@ names = PorcNames();
-	const float paced = aiEconomyMgr.metal.income * 30.f;
+	const float secs = (aiEnemyMgr.GetEnemyCost(Unit::Role::ARTY.type) >= PORC_SIEGE_COST)
+			? PORC_SIEGE_SECS : PORC_BUDGET_SECS;
+	const float paced = aiEconomyMgr.metal.income * secs;
 	const float budget = (paced > PORC_MIN_BUDGET) ? paced : PORC_MIN_BUDGET;
 	CCircuitDef@ best = null;
 	for (uint i = 0; i < names.length(); ++i) {
@@ -634,8 +658,7 @@ CCircuitDef@ PorcToBuild()
 			continue;
 		if (d.costM > budget)
 			continue;              // do not stall the economy on one tower
-		if ((best is null) || (d.costM > best.costM))
-			@best = d;
+		@best = d;                 // the list is ordered by range; later is better
 	}
 	return best;
 }
@@ -658,37 +681,17 @@ void UpdateBaseDefence()
 	if (def is null)
 		return;
 
-	// AT THE FRONT, not at home. apexearth: "I often see our AI making defenses
-	// in the back of the map... what we really need are defenses closer to the
-	// front line, which are gonna kill the enemy and turn our fights around."
-	// Same reasoning UpdateFrontGun already applies to the big gun.
+	// ON THE EDGE OF OUR TERRITORY, not at home and not on a lane. apexearth:
+	// "what we really need are defenses closer to the front line, which are gonna
+	// kill the enemy and turn our fights around", and "ideally what you try to
+	// form is a line on the edge of our controlled territory".
 	//
-	// FrontPos is the team front, published at 78% of the way to the enemy. It
-	// comes from dev_team_income.lua, so it is absent in a hosted game -- fall
-	// back to two thirds of the way along our own home->enemy line, which is
-	// forward of the base without needing the gadget.
+	// Each successive tower goes one holding further back from the tip, so the
+	// two of them stand on separate clusters along that edge rather than on one
+	// interpolated point. The gadget-published front is the fallback only.
 	AIFloat3 spot;
-	bool haveFront = FrontPos(spot);
-	if (!haveFront) {
-		AIFloat3 toEnemy = aiEnemyMgr.GetEnemyPos() - Builder::gHomePos;
-		const float len = sqrt(toEnemy.x * toEnemy.x + toEnemy.z * toEnemy.z);
-		spot = Builder::gHomePos;
-		if (len > 1.f) {
-			spot.x += toEnemy.x / len * (len * 0.66f);
-			spot.z += toEnemy.z / len * (len * 0.66f);
-		}
-	}
-	// Step across the front rather than piling up: alternate sides, widening.
-	// Perpendicular to the axis we face the enemy along.
-	AIFloat3 axis = aiEnemyMgr.GetEnemyPos() - Builder::gHomePos;
-	const float alen = sqrt(axis.x * axis.x + axis.z * axis.z);
-	if (alen > 1.f) {
-		const int step = int(gPorcAdded) + 1;
-		const float side = ((step % 2) == 0) ? 1.f : -1.f;
-		const float outw = float((step + 1) / 2) * PORC_LINE_STEP;
-		spot.x += (-axis.z / alen) * outw * side;
-		spot.z += ( axis.x / alen) * outw * side;
-	}
+	if (!BorderPos(spot, gPorcAdded) && !FrontPos(spot))
+		return;
 
 	// Do not stack them, but the front is by definition the contested area, so
 	// it earns a higher bar than a quiet mex would.
@@ -701,7 +704,8 @@ void UpdateBaseDefence()
 		++gPorcAdded;
 		gNextPorcAdd = ai.frame + PORC_ADD_SPACING;
 		AiLog(Factory::T() + "apex: porc+ " + def.GetName() + " #" + gPorcAdded
-			+ " at-front enemyArmy=" + formatFloat(threat, "", 0, 0)
+			+ " at-border enemyArmy=" + formatFloat(threat, "", 0, 0)
+			+ " enemyArty=" + formatFloat(aiEnemyMgr.GetEnemyCost(Unit::Role::ARTY.type), "", 0, 0)
 			+ " ourTowers=" + formatFloat(ours, "", 0, 0));
 	}
 }
@@ -994,40 +998,89 @@ const float PORC_THREAT_PER_ENEMY = 15.f;
 // dies and porc tasks get enqueued and aborted in alternation.
 const float PORC_RELEASE = 0.8f;
 
-// DefaultMakeDefence calls a cluster front-line when it sits further than 1000
-// elmos from GetBasePos(). That accessor is not bound, so approximate the base
-// with the mean of the sites this hook is handed in the opening: those are metal
-// clusters we own or have queued, so early on their mean is our own ground.
+// CONTROLLED TERRITORY, and its forward edge.
 //
-// Be clear about what this measures -- distance from OUR mass, not distance to
-// the enemy. It is a proxy and it can be wrong on a map where we expand away from
-// the fight. It is therefore only ever allowed to let defence through, never to
-// suppress it, so a bad reading costs metal and not a base.
-const int   PORC_ANCHOR_UNTIL = 4 * MINUTE;
-const float PORC_FRONTIER     = 1000.f;
+// apexearth: "if you could almost split the map up into a grid and build
+// controlled territories on that grid, then ideally what you try to form is a
+// line on the edge of our controlled territory in order to block all enemy
+// movement from crossing over into our territory."
+//
+// The grid already exists and is not ours to invent: CMilitaryManager walks the
+// metal clusters and calls this hook for every one our side has taken
+// (UpdateDefenceTasks only calls MakeDefence for IsClusterQueued/IsClusterFinished,
+// and finishedCount counts ALLY mexes, not just ours). So the set of positions
+// this hook is offered IS our side's territory, and the members of it nearest the
+// enemy are its forward edge.
+//
+// This deliberately replaces the old anchor-centroid "frontier" test, which
+// measured distance from our own early mass and so read a rear expansion as a
+// frontier, and the gadget-published front, which is a point on the line from our
+// centroid to theirs -- a lane, absent entirely outside this harness because
+// dev_team_income.lua does not exist in a hosted game.
+const float BORDER_BAND = 1200.f;
 
-float gAnchorX   = 0.f;
-float gAnchorZ   = 0.f;
-int   gAnchorN   = 0;
 bool  gPorcArmed = false;
 
-void NoteDefenceSite(const AIFloat3& in pos)
+array<int>      gSiteId;
+array<AIFloat3> gSitePos;
+
+void NoteSite(int cluster, const AIFloat3& in pos)
 {
-	if ((gAnchorN > 0) && (ai.frame > PORC_ANCHOR_UNTIL))
-		return;
-	gAnchorX += pos.x;
-	gAnchorZ += pos.z;
-	++gAnchorN;
+	for (uint i = 0; i < gSiteId.length(); ++i) {
+		if (gSiteId[i] == cluster) {
+			gSitePos[i] = pos;
+			return;
+		}
+	}
+	gSiteId.insertLast(cluster);
+	gSitePos.insertLast(pos);
 }
 
-bool IsFrontierSite(const AIFloat3& in pos)
+// The rank-th of our holdings, counted from the enemy inwards. rank 0 is the tip
+// of our territory.
+//
+// A site further from home than the enemy centroid is is not ours to hold -- that
+// is an ally's ground on the far side of the map, and a tower we send a builder
+// across the map to place is a tower that arrives after the fight.
+bool BorderPos(AIFloat3& out p, uint rank)
 {
-	if (gAnchorN == 0)
+	if (gSitePos.length() == 0)
 		return false;
-	const float n = float(gAnchorN);
-	const float dx = pos.x - gAnchorX / n;
-	const float dz = pos.z - gAnchorZ / n;
-	return (dx * dx + dz * dz) > (PORC_FRONTIER * PORC_FRONTIER);
+	AIFloat3 e = aiEnemyMgr.GetEnemyPos();
+	const float reach = Builder::gHomeSet ? Builder::gHomePos.distance2D(e) : -1.f;
+	float prev = -1.f;
+	AIFloat3 pick;
+	for (uint r = 0; r <= rank; ++r) {
+		float best = -1.f;
+		bool found = false;
+		for (uint i = 0; i < gSitePos.length(); ++i) {
+			const float d = gSitePos[i].distance2D(e);
+			if (d <= prev)
+				continue;          // claimed by an earlier rank
+			if ((reach > 0.f) && (gSitePos[i].distance2D(Builder::gHomePos) > reach))
+				continue;
+			if (!found || (d < best)) {
+				best = d;
+				pick = gSitePos[i];
+				found = true;
+			}
+		}
+		if (!found)
+			return false;
+		prev = best;
+	}
+	p = pick;
+	return true;
+}
+
+// Within one band of the forward edge, i.e. on the border rather than behind it.
+bool OnBorder(const AIFloat3& in pos)
+{
+	AIFloat3 edge;
+	if (!BorderPos(edge, 0))
+		return false;
+	AIFloat3 e = aiEnemyMgr.GetEnemyPos();
+	return pos.distance2D(e) <= edge.distance2D(e) + BORDER_BAND;
 }
 
 // What the enemy's mobile army is WORTH, in metal.
@@ -1107,10 +1160,10 @@ void UpdateFrontGun()
 	if (gun is null)
 		return;
 	AIFloat3 front;
-	if (!FrontPos(front))
+	if (!BorderPos(front, 0) && !FrontPos(front))
 		return;
 	gBigGunPlaced = true;
-	AiLog(Factory::T() + "apex: big gun " + gun.GetName() + " at the team front");
+	AiLog(Factory::T() + "apex: big gun " + gun.GetName() + " at the territory edge");
 	// BUNKER takes only a def and a position -- no target, no spot id.
 	aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::BUNKER,
 			Task::Priority::NORMAL, gun, front, 0.f));
@@ -1133,7 +1186,7 @@ bool NearFront(const AIFloat3& in pos)
 
 void AiMakeDefence(int cluster, const AIFloat3& in pos)
 {
-	NoteDefenceSite(pos);
+	NoteSite(cluster, pos);
 
 	if (gTurtle) {
 		aiMilitaryMgr.DefaultMakeDefence(cluster, pos);  // porc hard while holding
@@ -1167,7 +1220,9 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	if (Factory::IsDesignatedLead() && !gPorcArmed && !gTurtle && !LosingGround())
 		return;
 
-	const bool onLine = NearFront(pos);
+	// The edge of what we hold, with the gadget front kept as a second opinion
+	// where it exists.
+	const bool onLine = OnBorder(pos) || NearFront(pos);
 
 	const bool early = (ai.frame <= 5 * MINUTE) && (threat > 0.f);
 	// A BACK-LINE cluster needs more than "the enemy owns an army somewhere".
@@ -1176,13 +1231,13 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	// nothing. apexearth: "too much defenses being spent in the back line when
 	// they could have been made up front to support the front line."
 	//
-	// Front and frontier sites are unchanged -- that is where the fighting is.
+	// Border sites are unchanged -- that is where the fighting is.
 	//
 	// LosingGround() used to open this gate too, which made every rear cluster on
 	// the map eligible the moment we fell behind. Being behind is precisely when
 	// build power must go to army instead, and the border is already covered by
-	// the two clauses above, so it no longer bypasses the rear guard.
-	if (!onLine && !IsFrontierSite(pos) && !early)
+	// the clause above, so it no longer bypasses the rear guard.
+	if (!onLine && !early)
 		return;
 
 	// Something to pay with. Unchanged from the old gate, including the way that

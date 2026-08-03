@@ -535,6 +535,40 @@ string armmmkr("armmmkr");
 string cormmkr("cormmkr");
 string legadveconv("legadveconv");
 
+// The NAVAL forms of both tiers. A ship constructor's buildoptions contain only
+// these -- corcs carries corfmkr and no cormakr -- so handing a naval builder the
+// land def is the same silent no-op, in reverse, that the note above records for
+// armfmkr. Legion has no naval advanced converter in this game tree; its T2 naval
+// constructor is coracsub (reached through corasy, which legcs builds), and that
+// carries coruwmmm.
+string armfmkr("armfmkr");
+string corfmkr("corfmkr");
+string legfeconv("legfeconv");
+string armuwmmm("armuwmmm");
+string coruwmmm("coruwmmm");
+
+// CCircuitDef::isFloater is set only when the unit can exist on water and NOT on
+// land (minElev < -1 && maxElev < 1), so it separates ship constructors from the
+// commander and from hovers, which carry the land defs anyway.
+bool IsNavalBuilder(CCircuitUnit@ unit)
+{
+	return unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine();
+}
+
+CCircuitDef@ SmallConvDef(CCircuitUnit@ unit)
+{
+	if (IsNavalBuilder(unit))
+		return SideDef3(armfmkr, corfmkr, legfeconv);
+	return SideDef3(armmakr, cormakr, legeconv);
+}
+
+CCircuitDef@ BigConvDef(CCircuitUnit@ unit)
+{
+	if (IsNavalBuilder(unit))
+		return SideDef3(armuwmmm, coruwmmm, coruwmmm);
+	return SideDef3(armmmkr, cormmkr, legadveconv);
+}
+
 const uint  CONVERT_CON_FLOOR = 3;    // never dip below this many workers
 const float CONVERT_MIN_SPARE = 70.f; // one converter's draw of unused energy
 const int   CONVERT_PERIOD    = 25 * SECOND;
@@ -627,12 +661,9 @@ const int   ADV_CONV_AFTER = 8;   // small converters standing before switching 
 int gNextEcoConv = 0;
 int gEcoConvAsked = 0;
 
-int SmallConvCount()
+int SmallConvCount(CCircuitUnit@ unit)
 {
-	const string side = ai.GetSideName();
-	CCircuitDef@ d = (side == "cortex") ? ai.GetCircuitDef(cormakr)
-	               : ((side == "legion") ? ai.GetCircuitDef(legeconv)
-	                                     : ai.GetCircuitDef(armmakr));
+	CCircuitDef@ d = SmallConvDef(unit);
 	return (d is null) ? 0 : d.count;
 }
 
@@ -692,14 +723,9 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 	// was armmakr, because the branch is nearly always reached by a T1 builder.
 	const bool advBuilder = ((unit.circuitDef.costM >= ADV_CON_COST)
 			&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-		|| (gHaveAdvCon && (SmallConvCount() >= ADV_CONV_AFTER));
-	const string side = ai.GetSideName();
-	CCircuitDef@ small = (side == "cortex") ? ai.GetCircuitDef(cormakr)
-	                   : ((side == "legion") ? ai.GetCircuitDef(legeconv)
-	                                         : ai.GetCircuitDef(armmakr));
-	CCircuitDef@ big = (side == "cortex") ? ai.GetCircuitDef(cormmkr)
-	                 : ((side == "legion") ? ai.GetCircuitDef(legadveconv)
-	                                       : ai.GetCircuitDef(armmmkr));
+		|| (gHaveAdvCon && (SmallConvCount(unit) >= ADV_CONV_AFTER));
+	CCircuitDef@ small = SmallConvDef(unit);
+	CCircuitDef@ big = BigConvDef(unit);
 	CCircuitDef@ want = (advBuilder && (big !is null) && big.IsAvailable(ai.frame))
 		? big : small;
 	if ((want is null) || !want.IsAvailable(ai.frame))
@@ -750,14 +776,12 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	if (spare < CONVERT_MIN_SPARE)
 		return null;
 
-	// The T1 converter is what a T1 constructor can build: armck/armcv carry
-	// armmakr, corck/corcv cormakr, legck/legcv legeconv. armfmkr is a real def
-	// that NO ground constructor can build -- asking for it produced 95 requests
-	// and zero converters.
-	const string side = ai.GetSideName();
-	CCircuitDef@ want = (side == "cortex") ? ai.GetCircuitDef(cormakr)
-	                  : ((side == "legion") ? ai.GetCircuitDef(legeconv)
-	                                        : ai.GetCircuitDef(armmakr));
+	// The T1 converter is what THIS constructor can build: armck/armcv carry
+	// armmakr, corck/corcv cormakr, legck/legcv legeconv, and the ship
+	// constructors carry only the naval def. Asking a ground constructor for
+	// armfmkr produced 95 requests and zero converters; the mirror of that is what
+	// SmallConvDef avoids for naval builders.
+	CCircuitDef@ want = SmallConvDef(unit);
 	if ((want is null) || !want.IsAvailable(ai.frame))
 		return null;
 
@@ -942,6 +966,19 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 // us under the gate until the economy refills it.
 string armfus("armfus"); string corfus("corfus"); string legfus("legfus");
 string armafus("armafus"); string corafus("corafus"); string legafus("legafus");
+// The naval reactors. armacsub/coracsub carry armuwfus/coruwfus and no land
+// reactor, so a ship or sub constructor handed corfus holds a task it can never
+// start. Legion reaches T2 sea through coracsub, hence the Cortex def for it.
+// Declared here rather than beside the converter defs above because a global has
+// to precede its first use; a function does not.
+string armuwfus("armuwfus"); string coruwfus("coruwfus");
+
+CCircuitDef@ FusionDef(CCircuitUnit@ unit)
+{
+	if (IsNavalBuilder(unit))
+		return SideDef3(armuwfus, coruwfus, coruwfus);
+	return SideDef3(armfus, corfus, legfus);
+}
 
 const float FUSION_MIN_BANK = 0.55f;
 const int   FUSION_PERIOD   = 45 * SECOND;
@@ -967,10 +1004,7 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	if (EnergyWasting())
 		return null;
 
-	const string side = ai.GetSideName();
-	CCircuitDef@ want = (side == "cortex") ? ai.GetCircuitDef(corfus)
-	                  : ((side == "legion") ? ai.GetCircuitDef(legfus)
-	                                        : ai.GetCircuitDef(armfus));
+	CCircuitDef@ want = FusionDef(unit);
 
 	// Instrumented because the first run of this rule fired ZERO times in 24
 	// minutes while every gate above it read clear -- bank 1237/1250 against a

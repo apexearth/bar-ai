@@ -1108,3 +1108,87 @@ The open question is real though: massing means fewer, larger attacks, therefore
 less continuous harassment, therefore an enemy free to expand. Testing that needs
 repeated games, and the answer may be that attacks should mass while raids stay
 frequent — which is what the single shared `attackMod` prevents expressing.
+
+---
+
+## Naval players built no energy at all — 2026-08-03
+
+`CEconomyManager::ReadConfig` line 431 picks the energy block once for the whole
+team: `type = IsWaterMap() ? "water" : "land"`. Being naval is a property of the
+START POSITION, not the map, so on a mostly-land map a water starter read the
+`land` block, which carried no naval entries.
+
+Absence is not neutral. A def with no entry gets `SEnergyCond::limit = 0`, and
+`UpdateEnergyTasks` treats that as a hard stop:
+
+```cpp
+if (engy.cdef->GetCount() < engy.data.cond.limit) { ... }
+else if (!isEnergyStalling) { bestDef = nullptr; break; }   // aborts the scan
+```
+
+Solar and wind sit above the tidal and `continue` out on `CanBeBuiltAtSafe`
+(they cannot be placed in the sea), so the walk reached the tidal, evaluated
+`0 < 0`, and **broke out of the whole loop**. A naval player therefore enqueued
+no energy at all unless it was already stalling.
+
+Same shape as the land-bot-lab bug found the same day: a map-level test standing
+in for a per-player condition.
+
+Fixed by adding the naval defs to the `land` block as well. Land players are
+unaffected — `CanBeBuiltAtSafe` rejects a tidal at a land position before the
+limit is read, and `min_income` drops tidals from the def list entirely on a
+tideless map.
+
+### The naval build helpers were handing ships land buildings
+
+`EnergyConverter`, `EcoConverters` and `EcoFusion` in `builder.as` passed
+`cormakr`/`corfus` to every builder including ship constructors, which cannot
+build them. `EcoFusion` was worse than a silent no-op: the task enqueued
+successfully, so a naval eco lead held an unbuildable task every 45 seconds.
+Naval builders (`IsFloater() || IsSubmarine()`) now get the naval defs.
+
+### Naval unit facts, verified 2026-08-03 in the pinned tree
+
+| unit | cost | built by |
+|---|---|---|
+| `armtide`/`cortide`/`legtide` | 90 / 85 / 85 m | T1 con ships, commanders |
+| `armfmkr`/`corfmkr`/`legfeconv` | 1 m, 70 e/s | T1 con ships, commanders |
+| `armuwmmm`/`coruwmmm` | 380 / 370 m, 600 e/s | `armacsub`/`coracsub` |
+| `armuwfus`/`coruwfus` | 5200 / 5400 m, 1200 e/s | `armacsub`/`coracsub` only |
+
+**Legion has no naval fusion and no naval advanced converter in the pinned
+tree** — `leganavalfusion`/`leganavaleconv` are upstream-only. Legion's naval
+path runs through Cortex: `legcs` builds `corasy`, which yields `coracsub`,
+which carries `coruwfus`/`coruwmmm`. Legion does have its own `legtide` and
+`legfeconv`. `legcs` is game-tree-only, absent upstream.
+
+## Range: no tower we build can answer enemy artillery
+
+Verified 2026-08-03 from the pinned tree.
+
+| ours | metal | range | | enemy | metal | range |
+|---|---|---|---|---|---|---|
+| `corhllt` | 195 | 480 | | `cormart` | 400 | **800** |
+| `corhlt` | 480 | 620 | | `corban` | 1000 | 800 |
+| `corvipe` | 730 | 730 | | `corvroc` | 880 | **1310** |
+| `corpun` | 1300 | 1245 | | `cortrem` | 1850 | **1470** |
+
+A 400-metal Pillager outranges our 480-metal heavy tower by 180 elmos and kills
+it without being fired at. Repositioning cannot fix a range deficit.
+
+`corpun` (range 1245) is the only static counter we own, and it carries
+`"on": false` in `behaviour.json:790` — `CircuitAI.cpp` calls
+`SetOn(cdef->IsOn())` when a unit finishes, so it is built switched off.
+`armguard` and `cortoast` are the same.
+
+Our own long-range units are correctly handled but barely produced: `cormart`
+0.13/0.09, `corvroc` 0.06/0.05, and **`cortrem`, the only thing we own that
+outranges enemy siege, 0.01/0.04**. The artillery role routes them to
+`CArtilleryTask`, which positions at FULL `GetMaxRange()` — it does not apply the
+0.8 `RANGE_MOD` ordinary squads use — and only fires from a position under
+`THREAT_MIN`. `corban` is classed `skirmish`, not `artillery`, so it walks to
+80% of its 800 range with the main squad.
+
+Ruled out, do not chase: the per-unit `"threat": {all 0.0}` and `"power": 1.0`
+on those entries are uniform across every unit including `correap`/`corthud` and
+byte-identical to stock.

@@ -272,6 +272,45 @@
 						{"unit": "cormmkr", "category": "convert", "offset": [150, 150]}
 					]
 				]
+			},
+			// SEA ECONOMY. apexearth, watching an 8v8: "ideally they build a lot of
+			// tidals and energy converters way in the back against the wall in a safe
+			// place. Just keep doing that until we have T2 and can make the underwater
+			// fusions".
+			//
+			// The tidals themselves come from economy.json; these hubs are the
+			// converters that ride along, so the ratio is set by the thing that pays
+			// for them rather than by a separate rule with its own timer.
+			//
+			// A tidal makes tidalgenerator(1) * map tidal strength, i.e. tens of e/s;
+			// the naval converter draws energyconv_capacity 70 and costs ONE metal, so
+			// one per four tidals is the chance below. The child is placed relative to
+			// a FINISHED tidal, which already sits in the rear water field the sea
+			// player builds its energy in, and "back" is measured away from the enemy.
+			"armtide": {
+				"hub": [[{"unit": "armfmkr", "category": "convert", "offset": {"back": 90}, "condition": {"chance": 0.25}}]]
+			},
+			"cortide": {
+				"hub": [[{"unit": "corfmkr", "category": "convert", "offset": {"back": 90}, "condition": {"chance": 0.25}}]]
+			},
+			"legtide": {
+				"hub": [[{"unit": "legfeconv", "category": "convert", "offset": {"back": 90}, "condition": {"chance": 0.25}}]]
+			},
+			// The naval fusions, mirroring armfus/corfus above: 1200-1220 e/s against
+			// the naval advanced converter's 600, so two cover one reactor. armacsub
+			// and coracsub carry armuwmmm/coruwmmm; Legion reaches T2 sea through
+			// coracsub and so uses the Cortex pair.
+			"armuwfus": {
+				"hub": [[
+					{"unit": "armuwmmm", "category": "convert", "offset": [110, 110]},
+					{"unit": "armuwmmm", "category": "convert", "offset": [110, -110]}
+				]]
+			},
+			"coruwfus": {
+				"hub": [[
+					{"unit": "coruwmmm", "category": "convert", "offset": [110, 110]},
+					{"unit": "coruwmmm", "category": "convert", "offset": [110, -110]}
+				]]
 			}
 		},
 		"geo": {
