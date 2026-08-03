@@ -288,6 +288,15 @@ float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 	return PastFront(where) ? (CON_THREAT_VETO + 1.f) : 0.f;
 }
 
+// A resurrect pays out only on completion, so a bot driven off one has nothing
+// to show for the time; reclaim credits metal continuously and can be abandoned
+// part-done. On ground we may not get to keep, take the one that banks as it
+// goes.
+bool RezSpotHot(CCircuitUnit@ unit)
+{
+	return ThreatFor(unit, unit.GetPos(ai.frame)) > CON_THREAT_VETO;
+}
+
 // Empty means "not a build this rule covers". Defence, bunkers and big guns
 // belong at the front by definition, and this variant reclaims battlefields on
 // purpose, so none of them appear here.
@@ -998,7 +1007,12 @@ const float PULSAR_MIN_ENERGY = 1000.f;
 // carry; raise it when metal production is no longer half of stock's.
 const int   PULSAR_MAX        = 2;
 const int   PULSAR_PERIOD     = 60 * SECOND;
-const int   AA_WANT           = 4;      // enough that air picks someone else
+// A flat standing count answered two aircraft and forty identically. These are
+// 80 metal each and only built once the enemy actually flies, so the ceiling can
+// be generous; the floor is what makes air pick someone else.
+const int   AA_MIN            = 2;
+const int   AA_MAX            = 12;
+const float AA_PER_AIR        = 1000.f;  // one more turret per this much enemy air
 const int   AA_PERIOD         = 20 * SECOND;
 const uint  DEF_CON_FLOOR     = 3;      // never take the last builders
 int gNextPulsar = 0;
@@ -1029,10 +1043,14 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 	// of our metal against stock's 5.4%, with army 29.4% against 38.1%.
 	// apexearth: "the side effect is wasteful defense and then we have less army
 	// and are losing the overall fight."
-	if (aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type) < 1.f)
+	const float enemyAir = aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type);
+	if (enemyAir < 1.f)
 		return null;
+	int want = AA_MIN + int(enemyAir / AA_PER_AIR);
+	if (want > AA_MAX)
+		want = AA_MAX;
 	CCircuitDef@ aa = SideDef3(armrl, corrl, legrl);
-	if ((aa is null) || !aa.IsAvailable(ai.frame) || (aa.count >= AA_WANT))
+	if ((aa is null) || !aa.IsAvailable(ai.frame) || (aa.count >= want))
 		return null;
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	if (!OnMap(here))
@@ -1043,7 +1061,7 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 		return null;
 	gNextAA = ai.frame + AA_PERIOD;
 	AiLog(Factory::T() + "apex: cheap-aa " + aa.GetName() + " standing=" + aa.count
-		+ "/" + AA_WANT);
+		+ "/" + want + " enemyAir=" + formatFloat(enemyAir, "", 0, 0));
 	return post;
 }
 
@@ -1321,7 +1339,8 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 
 	// Eat the corpse rather than rebuild it, before the engine gets the chance
 	// to queue a resurrect for this bot.
-	if (IsRezzer(unit) && (ai.frame >= gNextRezWreck) && PreferReclaim()) {
+	if (IsRezzer(unit) && (ai.frame >= gNextRezWreck)
+			&& (PreferReclaim() || RezSpotHot(unit))) {
 		gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
 		IUnitTask@ eat = EnqueueWreckReclaim(unit, Task::Priority::HIGH);
 		if (eat !is null)

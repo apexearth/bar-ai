@@ -61,8 +61,12 @@ class UnitSync:
         L.GetSkirmishAICount.argtypes, L.GetSkirmishAICount.restype = [], ci
         L.GetSkirmishAIInfoCount.argtypes, L.GetSkirmishAIInfoCount.restype = [ci], ci
 
+        L.GetMapInfoCount.argtypes, L.GetMapInfoCount.restype = [ci], ci
+
         L.GetInfoKey.argtypes, L.GetInfoKey.restype = [ci], cs
+        L.GetInfoType.argtypes, L.GetInfoType.restype = [ci], cs
         L.GetInfoValueString.argtypes, L.GetInfoValueString.restype = [ci], cs
+        L.GetInfoValueInteger.argtypes, L.GetInfoValueInteger.restype = [ci], ci
 
     # --- helpers --------------------------------------------------------
     @staticmethod
@@ -91,6 +95,21 @@ class UnitSync:
             (self._s(self.lib.GetMapName(i)), self._s(self.lib.GetMapFileName(i)))
             for i in range(self.lib.GetMapCount())
         ]
+
+    def map_size(self, index: int) -> tuple[int, int]:
+        """(width, height) in the 512-elmo units BAR quotes, e.g. (16, 12).
+
+        `width`/`height` come back as INTEGER info entries, so GetInfoValueString
+        returns "" for them -- the reason a plain info block shows them blank.
+        Returns (0, 0) when the map does not publish them.
+        """
+        count = self.lib.GetMapInfoCount(index)
+        dims = {}
+        for i in range(count):
+            key = self._s(self.lib.GetInfoKey(i))
+            if key in ("width", "height") and self._s(self.lib.GetInfoType(i)) == "integer":
+                dims[key] = self.lib.GetInfoValueInteger(i)
+        return (dims.get("width", 0) // 512, dims.get("height", 0) // 512)
 
     def games(self) -> list[dict[str, str]]:
         out = []
@@ -144,10 +163,22 @@ def main() -> int:
 
     with UnitSync() as us:
         if what == "maps":
-            rows = [(n, f) for n, f in us.maps() if needle in n.lower() or needle in f.lower()]
+            all_maps = us.maps()
+            rows = [
+                (n, f, us.map_size(i))
+                for i, (n, f) in enumerate(all_maps)
+                if needle in n.lower() or needle in f.lower()
+            ]
             print(f"{len(rows)} map(s)")
-            for name, fname in sorted(rows):
-                print(f"  {name}\n      {fname}")
+            # Comet Catcher is 16x12 = 192 and is a 4v4, so ~48 area per player
+            # per side. Player count has to match map size: 8v8 on a 4v4 map
+            # starves everyone and invalidates the economy.
+            for name, fname, (w, h) in sorted(rows):
+                if w and h:
+                    fits = max(1, min(8, (w * h) // 48))
+                    print(f"  {name}\n      {fname}   {w}x{h}  area={w*h}  suits ~{fits}v{fits}")
+                else:
+                    print(f"  {name}\n      {fname}   (size unavailable)")
         elif what == "games":
             for g in us.games():
                 print(f"  {g.get('name', '?')}   [archive: {g.get('archive', '?')}]")

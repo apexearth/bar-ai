@@ -616,17 +616,24 @@ float OurTowerValue()
 	return total;
 }
 
+// A basic laser tower is outranged by the raiders it is meant to stop, so it
+// dies without ever firing; the next tower up reaches past them. The floor
+// exists because the seconds-of-income budget alone lands between the two.
+const float PORC_MIN_BUDGET = 200.f;
+
 // The heaviest tower we can currently afford to place.
 CCircuitDef@ PorcToBuild()
 {
 	array<string>@ names = PorcNames();
+	const float paced = aiEconomyMgr.metal.income * 30.f;
+	const float budget = (paced > PORC_MIN_BUDGET) ? paced : PORC_MIN_BUDGET;
 	CCircuitDef@ best = null;
 	for (uint i = 0; i < names.length(); ++i) {
 		CCircuitDef@ d = ai.GetCircuitDef(names[i]);
 		if ((d is null) || !d.IsAvailable(ai.frame))
 			continue;
-		if (d.costM > aiEconomyMgr.metal.income * 30.f)
-			continue;              // ~30s of income; do not stall on one tower
+		if (d.costM > budget)
+			continue;              // do not stall the economy on one tower
 		if ((best is null) || (d.costM > best.costM))
 			@best = d;
 	}
@@ -1167,8 +1174,12 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	// they could have been made up front to support the front line."
 	//
 	// Front and frontier sites are unchanged -- that is where the fighting is.
-	// Everywhere else now waits until we are actually behind on the field.
-	if (!onLine && !IsFrontierSite(pos) && !early && !LosingGround())
+	//
+	// LosingGround() used to open this gate too, which made every rear cluster on
+	// the map eligible the moment we fell behind. Being behind is precisely when
+	// build power must go to army instead, and the border is already covered by
+	// the two clauses above, so it no longer bypasses the rear guard.
+	if (!onLine && !IsFrontierSite(pos) && !early)
 		return;
 
 	// Something to pay with. Unchanged from the old gate, including the way that

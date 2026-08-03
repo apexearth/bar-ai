@@ -881,3 +881,230 @@ Check `exit_code` and `reason` in `result.json`, not just the winner. A run wher
 games end without a winner may be aborting rather than drawing — that mistake
 invalidated several days of conclusions here. Clean games are `exit 0` with
 `reason=gameover` or `reason=timelimit`.
+
+---
+
+## How the AI judges a fight — four defects found 2026-08-02
+
+All four sit behind one symptom apexearth has reported repeatedly: *"we won a
+fight, took that army to the enemy base and lost it all... we keep fighting with
+2/3rd or 1/2 their size army... never gaining enough to really fight because we
+throw our army away."* They are separate mechanisms and are being fixed one at a
+time, with a watched game between each.
+
+### 1. Squad strength is blind to damage — FIXED, unmeasured
+
+`FighterTask.cpp:52` accumulates `attackPower += cdef->GetPower()`. `cdef` is the
+`CCircuitDef` — the unit **type** — and `GetPower()` returns a constant field on
+it. The value therefore changes only when a unit is added or removed from the
+task; `RemoveAssignee` subtracts the same constant on death.
+
+Nothing anywhere reduces it for damage. A squad at 10% health across the board
+rates itself exactly as high as a fresh one, so after winning a bloody fight it
+still passes the engagement test and pushes on into the enemy base.
+
+The enemy side of that same comparison is **not** paper: `ThreatMap.cpp:290`
+weights an enemy by `GetHealth() + shield * SHIELD_MOD`. So the AI rated the
+enemy on current health and itself on paper strength — the asymmetry always
+favoured attacking.
+
+Fix: `CAttackTask::GetHealthScale()` returns power-weighted mean health across
+the squad, and `FindTarget` multiplies `maxPower` by it. Clamped to [0,1] because
+`GetHealthPercent()` subtracts `GetCaptureProgress() * 16` and can go negative.
+Deliberately local to `CAttackTask` — see defect 3.
+
+### 2. The engagement test has NO margin — not yet fixed
+
+`AttackTask.cpp` `FindTarget`:
+
+```cpp
+if ((maxPower <= group.influence * scale) && ...) continue;  // skip target
+```
+
+The squad engages the moment its power exceeds enemy influence **by any amount**.
+A 1% edge commits the whole army. Any enemy reserve not yet seen flips the
+outcome after the commitment is already made, and a slow-turning vehicle squad
+pays for the reversal on the way out.
+
+apexearth, watching: *"we consider fighting. But then we discovered that they
+actually have more units just behind the ones we see in the fog. And so then we
+turn around... it takes a moment to turn around, and so that's enough time for us
+to lose one or two."*
+
+### 3. `attackMod` cannot separate raiding from frontal combat
+
+One config value is read by SCOUT, RAID, ATTACK, BOMB, ARTY and AA. Raising
+`thr_mod.attack` from [1.0,1.0] to [1.4,1.8] to buy caution **tripled losses**
+and was reverted: it made raids cautious too, and a raid unwilling to trade is
+just passivity.
+
+This is why defects 1 and 2 are being fixed in `CAttackTask` rather than in
+config — that reaches frontal engagements only, leaving raids free to make the
+economic trades that are worth losing units for.
+
+### 4. Fog memory is NOT the problem — measured from source
+
+Checked because it was a natural suspect. `EnemyManager.cpp:129` sets
+`maxFrame = now - 20 minutes`; an enemy unseen for less than that stays in the
+list at its last known position, and line 551 adds `enemy.influence`
+**unconditionally**. Threat memory persists for a full twenty minutes.
+
+Only `cost` forgets: line 548 gates `eg.cost += enemy.cost` on
+`!IsMobile() || IsInRadarOrLOS()`, so a fogged mobile enemy drops out of `cost`
+while still counting in `influence`. The engagement test above uses
+`influence`, so it is the remembering one.
+
+Conclusion: units that surprise a committed squad were never seen at all — new
+production, or reserves on unscouted ground. Better scouting or longer memory
+would not have helped; margin (defect 2) is the answer.
+
+---
+
+## Defence towers were always the cheapest one — FIXED, unmeasured
+
+`PorcToBuild` already picked the heaviest tower it could afford, capped at
+`metal.income * 30`. Early income of ~6/s makes that a 180-metal budget, and the
+mid-tier tower costs **195** — it missed by 15 metal in every early placement, so
+the AI fell back to the basic laser tower indefinitely.
+
+That tower cannot fight the units it is meant to stop. Measured from the unit
+defs in the pinned tree:
+
+| unit | metal | range |
+|---|---|---|
+| `corllt` | 90 | **435** |
+| `corstorm` (rocket bot) | 110 | **475** |
+| `corhllt` "Twin Guard" | 195 | **480** |
+| `corhlt` "Warden" | 480 | 620 |
+
+A rocket bot outranges the basic tower by 40 elmos and kills it without being
+fired at. Armada is the same shape (`armllt` 85/430, `armbeamer` 190/480,
+`armhlt` 440/620). `corrl` is not an alternative — `onlytargetcategory VTOL`,
+it is anti-air only.
+
+Fix: a `PORC_MIN_BUDGET` floor of 200 metal, so the mid tower is always
+reachable. apexearth: *"HLTs are even better if we can afford it, but usually you
+wanna get those mediums up first, then an HLT once you can afford"* — that
+ordering falls out of the existing income term, which only clears 480 at 16
+metal/s, by which time the mediums are already placed.
+
+---
+
+## Rez bots died to all-or-nothing resurrects — FIXED, unmeasured
+
+A resurrect pays out only on completion; a bot driven off one has nothing to show
+for the time spent. A reclaim credits metal continuously and can be abandoned
+part-done. `RezSpotHot()` now forces reclaim when the bot stands on hot ground,
+which is what makes "snatch and go" possible.
+
+apexearth: *"we lose too many rezbots due to dangerous rezzing... dangerous
+rezzing should turn into reclaiming, which allows for more 'snatch and go' type
+behavior."*
+
+---
+
+## Metal converters may be eating the expansion gap — NOT ACTED ON
+
+Measured in one clean 20-minute 4v4: apex held constructor counts **level with or
+above** stock through minute 14, yet finished on 11.0 mexes to stock's 15.8.
+Same builders, spent differently.
+
+91 converters were built in that game. Build times from the pinned tree:
+
+| unit | metal | buildtime |
+|---|---|---|
+| `cormakr` (converter) | 1 | **2680** |
+| `cormex` | 50 | 1870 |
+
+A converter costs 43% **more constructor time** than a mex while costing
+essentially no metal — so it is invisible in a metal-spend audit and expensive in
+the resource that actually binds. This is a candidate for the remaining
+expansion gap, not a confirmed cause; nothing has been changed.
+
+---
+
+## Gating CDefendTask promotion — TRIED, REVERTED 2026-08-03
+
+**Do not retry this without a different mechanism.** It made every measured axis
+worse and it made squads *smaller*, which is the opposite of its purpose.
+
+`CDefendTask::Update` promotes on:
+
+```cpp
+if ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty()) {
+```
+
+The second clause is unconditional once one ATTACK task exists — which is always,
+after the opening. Engagement logging showed the consequence: over a 40-minute
+8v8, the median attack decision was made by **2 units**, p75 of 4, against a max
+of 30. So a floor was added: while an attack is already running, a defend task
+had to reach `maxPower * 0.5` before promoting.
+
+Measured on **identical settings** (Comet Catcher, 4v4, +25% handicap), one
+variable changed:
+
+| | before | after |
+|---|---|---|
+| apex eliminated | 23.3 min | **20.0 min** |
+| K/D | 0.55 | **0.32** |
+| metal produced | 169,601 | **109,901** |
+| mexes | 71 | **51** |
+| squad size, median | 4 | **3** |
+| decisions by <=2 units | 27% | **50%** |
+
+The run was verified valid first: variant loaded 8x, zero AngelScript errors,
+zero crashes. Apex simply died sooner.
+
+**Why the model was wrong** (inference, not measured): the promote path
+`Enqueue`s a new task, and `GetMergeTask()` on the following update folds it into
+an existing squad. So the observed trickle of 1-2 unit promotions was largely the
+*reinforcement pipeline*, not units walking off to fight alone — they promote,
+then merge into the squad already in the field. Gating promotion blocked
+reinforcement, so squads in contact shrank as they took losses with nothing
+arriving, and fewer attack tasks existed at all (78 engagement decisions -> 36).
+
+Consequence for future work: **squad size measured at the engagement decision is
+not a measure of how many units are in the fight.** A small `units=` count may be
+a wave about to merge. Any future attempt at massing has to measure the merged
+squad, or work on the merge/assignment path rather than on the promote gate.
+
+---
+
+## Squad join radius 1000 -> 3000 — squad size FIXED, win effect UNPROVEN
+
+`CAttackTask::CanAssignTo` rejected any unit further than 1000 elmos from the
+squad leader. That gate governs **merging as well as joining**, because
+`CheckMergeTask` calls `candidate->CanAssignTo(leader)` — so it, not the
+`MAX_TRAVEL_SEC * speed` budget in the same function (~2700 elmos for a T1 bot),
+was the binding limit. `CDefendTask::CanAssignTo` has no distance limit at all,
+so units pooled near home, promoted as a group there, and then could never
+combine with the squad already fighting 3000-5000 elmos away. The army was
+structurally split into "the squad in contact" and "everything built since".
+
+`CAntiAirTask` and `CBombTask` were already raised from the same 1000 to 4000
+here; ground attack had been left behind. `CRaidTask` is deliberately still 1000
+— raids are meant to be small and independent.
+
+Measured on identical settings (Pinch Point 8v8, left/right, 0.35 boxes):
+
+| | radius 1000 | radius 3000 |
+|---|---|---|
+| median squad at engagement | 2 | **5** |
+| decisions by <=2 units | 52% | **30%** |
+| decisions by >=8 units | 15% | **23%** |
+| sample | n=1037 | n=806 |
+
+The squad statistic has ~1000 samples inside a single game, so it does not depend
+on between-game variance the way win/loss does.
+
+**The same pair got worse on outcome** — apex K/D 1.71 -> 0.62, army peak
+117,425 -> 66,011 — and that is NOT attributable. Apex's own metal was flat
+(417,548 vs 414,945) while *stable's* doubled (258,443 -> 604,907), which no
+change of ours can cause. Between-game variance on this benchmark was measured
+the same day at ~50% on metal with the build held constant (89,814 vs 132,833,
+and 0 vs 55 attack tasks).
+
+The open question is real though: massing means fewer, larger attacks, therefore
+less continuous harassment, therefore an enemy free to expand. Testing that needs
+repeated games, and the answer may be that attacks should mass while raids stay
+frequent — which is what the single shared `attackMod` prevents expressing.

@@ -850,6 +850,110 @@ index 4863ac9..e509c6d 100644
  
  	void ReadConfig();
  	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
+diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
+index 7c69263..114afea 100644
+--- a/src/circuit/task/RetreatTask.cpp
++++ b/src/circuit/task/RetreatTask.cpp
+@@ -13,6 +13,7 @@
+ #include "module/FactoryManager.h"
+ #include "resource/MetalManager.h"
+ #include "setup/SetupManager.h"
++#include "unit/enemy/EnemyManager.h"
+ #include "terrain/path/PathFinder.h"
+ #include "terrain/path/QueryPathSingle.h"
+ #include "terrain/path/QueryCostMap.h"
+@@ -148,6 +149,7 @@ void CRetreatTask::Start(CCircuitUnit* unit)
+ 				endPos = circuit->GetSetupManager()->GetBasePos();
+ 			}
+ 		}
++		endPos = GetRearHaven(unit, endPos);
+ 		range = factoryMgr->GetAssistRange() * 0.6f + pathfinder->GetSquareSize();
+ 	}
+ 
+@@ -162,6 +164,42 @@ void CRetreatTask::Start(CCircuitUnit* unit)
+ 	});
+ }
+ 
++// How far behind the haven the commander is parked. Roughly a base radius, so
++// it clears the buildings the enemy is coming for without leaving the base.
++#define COMM_REAR_DIST	900.f
++
++// A retreat ends at the closest haven, or at the base CENTRE when there is no
++// haven -- which is the middle of the thing the enemy is attacking. The
++// commander then sits there, cloaked, in the path of the fight, and its death
++// takes the surrounding base with it.
++//
++// Push the destination directly away from the enemy centroid instead. Only for
++// the commander: everything else retreats to be repaired, and a repair pad
++// behind the base is no use to it.
++AIFloat3 CRetreatTask::GetRearHaven(CCircuitUnit* unit, const AIFloat3& haven) const
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	if (!unit->GetCircuitDef()->IsRoleComm()) {
++		return haven;
++	}
++
++	const AIFloat3& foe = circuit->GetEnemyManager()->GetEnemyPos();
++	const float len = haven.distance2D(foe);
++	if (len < 1.f) {  // no enemy known yet; no direction to run in
++		return haven;
++	}
++
++	AIFloat3 rear = haven;
++	rear.x += (haven.x - foe.x) / len * COMM_REAR_DIST;
++	rear.z += (haven.z - foe.z) / len * COMM_REAR_DIST;
++	CTerrainManager::CorrectPosition(rear);
++
++	if (!circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), rear)) {
++		return haven;  // water, cliff or off the map -- the centre beats stuck
++	}
++	return rear;
++}
++
+ void CRetreatTask::Update()
+ {
+ 	CCircuitAI* circuit = manager->GetCircuit();
+@@ -230,9 +268,28 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+ 	if (!utils::is_valid(haven)) {
+ 		haven = circuit->GetSetupManager()->GetBasePos();
+ 	}
++	haven = GetRearHaven(unit, haven);
+ 
+ 	const float maxDist = factoryMgr->GetAssistRange();
+ 	const AIFloat3& unitPos = unit->GetPos(frame);
++
++	// Cloak is switched on once, when the unit finishes (CircuitAI.cpp), and
++	// nothing ever switches it off -- so a commander that reaches safety keeps
++	// paying the upkeep, which early on is a large share of income. Re-decide it
++	// here: hidden while exposed, visible and cheap once on friendly ground.
++	// Only issued on a change; IsCloaked() is the current state.
++	if (cdef->IsRoleComm() && cdef->IsAbleToCloak()) {
++		const bool isSafe = circuit->GetInflMap()->GetInfluenceAt(unitPos) >= INFL_SAFE;
++		const bool canAfford = cdef->GetCloakCost()
++				< circuit->GetEconomyManager()->GetAvgEnergyIncome() * 0.1f;
++		const bool wantCloak = !isSafe && canAfford;
++		if (wantCloak != unit->GetUnit()->IsCloaked()) {
++			TRY_UNIT(circuit, unit,
++				unit->CmdCloak(wantCloak);
++			)
++		}
++	}
++
+ 	if (unitPos.SqDistance2D(haven) > SQUARE(maxDist)) {
+ 		// TODO: push MoveAction into unit? to avoid enemy fire
+ 		TRY_UNIT(circuit, unit,
+diff --git a/src/circuit/task/RetreatTask.h b/src/circuit/task/RetreatTask.h
+index d29f582..98056a0 100644
+--- a/src/circuit/task/RetreatTask.h
++++ b/src/circuit/task/RetreatTask.h
+@@ -43,6 +43,7 @@ public:
+ 	virtual void Dead();
+ 
+ private:
++	springai::AIFloat3 GetRearHaven(CCircuitUnit* unit, const springai::AIFloat3& haven) const;
+ 	void Recovered(CCircuitUnit* unit);
+ 
+ 	void ApplyPath(const CQueryPathSingle* query);
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
 index bc8ff11..1c559d0 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
@@ -961,10 +1065,10 @@ index fac55c7..81a7f68 100644
  	}
  	return true;
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..c829b56 100644
+index cd063e4..f3ffcfc 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
-@@ -25,12 +25,23 @@
+@@ -25,12 +25,28 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -985,10 +1089,29 @@ index cd063e4..c829b56 100644
 +// round the edge is: the middle is where the defences are.
 +static constexpr float ATTACK_THREAT_MOD = 4.f;
 +
++// Chosen so CheckMergeTask's own MAX_TRAVEL_SEC * speed budget (~2700 elmos for
++// a T1 bot) becomes the binding limit instead of this. The air tasks were raised
++// from the same 1000 for the same reason.
++#define ASSIGN_RADIUS	3000.f
++
  CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
  		: ISquadTask(mgr, FightType::ATTACK, powerMod)
  		, minPower(minPower)
-@@ -208,7 +219,8 @@ void CAttackTask::Update()
+@@ -59,7 +75,12 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
+ 	}
+ 
+ 	const int frame = manager->GetCircuit()->GetLastFrame();
+-	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(1000.f)) {
++	// This bounds both joining and MERGING -- CheckMergeTask calls
++	// candidate->CanAssignTo(leader), so it, not the MAX_TRAVEL_SEC budget there,
++	// is what decides whether two squads may combine. At 1000 a unit leaving a
++	// factory could not join a squad already at the front on any large map, and
++	// two squads a short walk apart could not merge; both had to fight alone.
++	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(ASSIGN_RADIUS)) {
+ 		return false;
+ 	}
+ 	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
+@@ -208,7 +229,8 @@ void CAttackTask::Update()
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
  			leader, circuit->GetThreatMap(),
  			startPos, endPos, pathRange, GetHitTest(),
@@ -998,11 +1121,64 @@ index cd063e4..c829b56 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -256,7 +268,13 @@ void CAttackTask::FindTarget()
+@@ -238,6 +260,25 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+ 	}
+ }
+ 
++// attackPower is a sum of CCircuitDef::GetPower(), a per-TYPE constant, so it
++// falls only when a unit dies -- a squad at a tenth of its health rates itself
++// exactly as high as a fresh one. The enemy side of the same comparison is not
++// paper: CThreatMap weights by current health. Weighting our own power by health
++// makes the two sides symmetric.
++float CAttackTask::GetHealthScale()
++{
++	float total = .0f;
++	float alive = .0f;
++	for (CCircuitUnit* unit : units) {
++		const float power = unit->GetCircuitDef()->GetPower();
++		float hp = unit->GetHealthPercent();
++		hp = std::max(.0f, std::min(1.f, hp));  // capture progress drives it negative
++		total += power;
++		alive += power * hp;
++	}
++	return (total > .0f) ? (alive / total) : 1.f;
++}
++
+ void CAttackTask::FindTarget()
+ {
+ 	CCircuitAI* circuit = manager->GetCircuit();
+@@ -245,18 +286,38 @@ void CAttackTask::FindTarget()
+ 	CInfluenceMap* inflMap = circuit->GetInflMap();
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+ 	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
+-	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
++	const int frame = circuit->GetLastFrame();
++	const AIFloat3& pos = leader->GetPos(frame);
+ 	SArea* area = leader->GetArea();
+ 	CCircuitDef* cdef = leader->GetCircuitDef();
+ 	const bool isAntiStatic = cdef->IsAttrAntiStat();
+ 	const float maxSpeed = SQUARE(highestSpeed * 1.01f / FRAMES_PER_SEC);
+-	const float maxPower = attackPower * powerMod;
++	// Computed once: each of these walks the whole squad, and FindTarget runs per
++	// task per update.
++	const float healthScale = GetHealthScale();
++	const float spread = GetSpreadRadius();
++	const float cohesion = (spread <= COHESION_MAX_SPREAD)
++			? 1.f
++			: std::max(COHESION_MIN_SCALE, COHESION_MAX_SPREAD / spread);
++	const float maxPower = attackPower * powerMod * healthScale * cohesion;
+ 	const float weaponRange = cdef->GetMaxRange() * 0.9f;
+ 	const int canTargetCat = cdef->GetTargetCategory();
  	const int noChaseCat = cdef->GetNoChaseCategory();
  
  	CEnemyInfo* bestTarget = nullptr;
 -	const float sqOBDist = pos.SqDistance2D(basePos);  // Own to Base distance
++	// Tuning inputs. Every metric in the stats export is an OUTCOME; to choose a
++	// number for the cohesion cap or a strength margin we need what the decision
++	// actually saw, at the moment it was made.
++	float bestInfl = .0f;
++	float bestScale = .0f;
++	int skippedWeak = 0;
 +	// LINEAR, not squared. `scale` below divides a linear distance by this, and
 +	// with a squared denominator the ratio collapses the moment the squad leaves
 +	// home: at 100 elmos out scale is ~0.30, at 1000 it is ~0.003, at 2000 it is
@@ -1013,21 +1189,60 @@ index cd063e4..c829b56 100644
  	float minSqDist = std::numeric_limits<float>::max();
  	bool hasGoodTarget = false;
  
-@@ -269,7 +287,12 @@ void CAttackTask::FindTarget()
+@@ -269,10 +330,17 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
 -		const float scale = std::min(distBE / sqOBDist, 1.f);
+-		if (((maxPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE))
+-			|| !terrainMgr->CanMobileReachAt(area, group.pos, highestRange))
+-		{
 +		// Both linear, so this is a real ratio: how far the enemy group sits from
 +		// our base against how far WE are from it. Near 1 when we are pushing as
 +		// deep as they are -- demand the full strength check there. Below 1 only
 +		// when the group is closer to our base than we are, i.e. defending home,
 +		// where taking a worse fight is correct.
 +		const float scale = std::min(distBE / obDist, 1.f);
- 		if (((maxPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE))
- 			|| !terrainMgr->CanMobileReachAt(area, group.pos, highestRange))
- 		{
-@@ -340,6 +363,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
++		if ((maxPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
++			++skippedWeak;
++			continue;
++		}
++		if (!terrainMgr->CanMobileReachAt(area, group.pos, highestRange)) {
+ 			continue;
+ 		}
+ 
+@@ -323,6 +391,8 @@ void CAttackTask::FindTarget()
+ 			if (minSqDist > sqOEDist) {
+ 				minSqDist = sqOEDist;
+ 				bestTarget = enemy;
++				bestInfl = group.influence;
++				bestScale = scale;
+ 				hasGoodTarget |= !isOverpowered;
+ 			}
+ 		}
+@@ -332,6 +402,21 @@ void CAttackTask::FindTarget()
+ 		SetTarget(bestTarget);
+ 		position = GetTarget()->GetPos();
+ 	}
++
++	// One line per squad per 10s, TAKE=committing to a target, SKIP=every group
++	// failed the strength test. `edge` is our rated power over what we had to
++	// beat: at 1.0 we engaged on a coin flip, which is what the test permits
++	// today. RATE LIMITED -- a count from a grep is not a count of decisions.
++	if (frame >= lastEngageLog + FRAMES_PER_SEC * 10) {
++		lastEngageLog = frame;
++		const float need = bestInfl * bestScale;
++		circuit->LOG("apex: engage %s units=%d spread=%.0f hp=%.2f coh=%.2f "
++				"power=%.0f need=%.0f edge=%.2f skipped=%d",
++				(bestTarget != nullptr) ? "TAKE" : "SKIP",
++				int(units.size()), spread, healthScale,
++				cohesion, maxPower, need,
++				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak);
++	}
+ 	// Return: target, startPos=leader->pos, endPos=position
+ }
+ 
+@@ -340,6 +425,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -1053,14 +1268,23 @@ index cd063e4..c829b56 100644
  	} else {
  		FallbackFrontPos();
 diff --git a/src/circuit/task/fighter/AttackTask.h b/src/circuit/task/fighter/AttackTask.h
-index 8585fc2..1f1b1a2 100644
+index 8585fc2..57927e6 100644
 --- a/src/circuit/task/fighter/AttackTask.h
 +++ b/src/circuit/task/fighter/AttackTask.h
-@@ -36,6 +36,7 @@ private:
+@@ -27,6 +27,7 @@ public:
+ 	virtual void OnUnitIdle(CCircuitUnit* unit) override;
+ 
+ private:
++	float GetHealthScale();
+ 	void FindTarget();
+ 	void ApplyTargetPath(const CQueryPathSingle* query);
+ 	void FallbackFrontPos();
+@@ -36,6 +37,8 @@ private:
  	void Fallback();
  
  	float minPower;
 +	int lastDetourLog = -1000000;
++	int lastEngageLog = -1000000;
  };
  
  } // namespace circuit
@@ -1283,10 +1507,50 @@ index ec833e6..2413351 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..27b6ab8 100644
+index 0d59b65..61cef20 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
-@@ -231,7 +231,9 @@ bool ISquadTask::IsMustRegroup()
+@@ -225,13 +225,49 @@ ISquadTask* ISquadTask::GetMergeTask()
+ 	return nullptr;
+ }
+ 
++// Mean distance from the squad's centroid. apexearth: "take all their locations
++// and calculate the overall positional radius averaged.... if they're all spread
++// out then you do NOT have a strong fighting force."
++float ISquadTask::GetSpreadRadius() const
++{
++	if (units.empty()) {
++		return .0f;
++	}
++	const float count = float(units.size());
++	AIFloat3 centroid = ZeroVector;
++	for (CCircuitUnit* unit : units) {
++		centroid += unit->GetLastPos();
++	}
++	centroid /= count;
++
++	float sum = .0f;
++	for (CCircuitUnit* unit : units) {
++		sum += centroid.distance2D(unit->GetLastPos());
++	}
++	return sum / count;
++}
++
++// Derate the squad's rated power by how strung out it is. Twenty units spanning
++// the map are not twenty units in a fight -- they arrive a few at a time and are
++// beaten in detail.
++float ISquadTask::GetCohesionScale() const
++{
++	const float spread = GetSpreadRadius();
++	if (spread <= COHESION_MAX_SPREAD) {
++		return 1.f;
++	}
++	return std::max(COHESION_MIN_SCALE, COHESION_MAX_SPREAD / spread);
++}
++
+ bool ISquadTask::IsMustRegroup()
+ {
+ 	if ((State::ENGAGE == state) || (updCount % 16 != 15)) {
  		return false;
  	}
  
@@ -1297,7 +1561,7 @@ index 0d59b65..27b6ab8 100644
  		state = State::ROAM;
  		return false;
  	}
-@@ -296,7 +298,13 @@ bool ISquadTask::IsMustRegroup()
+@@ -296,7 +332,13 @@ bool ISquadTask::IsMustRegroup()
  		return false;
  	}
  
@@ -1312,6 +1576,52 @@ index 0d59b65..27b6ab8 100644
  		validUnits.clear();
  		state = State::ROAM;
  		return false;
+@@ -305,7 +347,16 @@ bool ISquadTask::IsMustRegroup()
+ 	bool wasRegroup = (State::REGROUP == state);
+ 	state = State::ROAM;
+ 
+-	const float sqMaxDist = SQUARE(std::max<float>(SQUARE_SIZE * 8 * validUnits.size(), highestRange));
++	// apex: the permitted spread was SQUARE_SIZE * 8 * count, so it GREW with the
++	// squad -- 8 units could span 512 elmos and 20 units 1280, well past any
++	// weapon range, and a big squad therefore never counted as needing regroup.
++	// Capped so cohesion is an absolute distance. The floor is still highestRange,
++	// so small squads and long-ranged ones are unaffected; only the large strung
++	// out case changes. NOT applied to the stuck-unit sweep above, which uses the
++	// same expression to decide what to garbage-collect.
++	const float spread = std::min<float>(SQUARE_SIZE * 8 * validUnits.size(),
++			COHESION_MAX_SPREAD);
++	const float sqMaxDist = SQUARE(std::max<float>(spread, highestRange));
+ 	for (CCircuitUnit* unit : validUnits) {
+ 		const float sqDist = groupPos.SqDistance2D(unit->GetLastPos());
+ 		if (sqDist > sqMaxDist) {
+diff --git a/src/circuit/task/fighter/SquadTask.h b/src/circuit/task/fighter/SquadTask.h
+index a058d59..ea0ff47 100644
+--- a/src/circuit/task/fighter/SquadTask.h
++++ b/src/circuit/task/fighter/SquadTask.h
+@@ -15,6 +15,14 @@
+ 
+ namespace circuit {
+ 
++// Elmos of mean distance-from-centroid a squad may have and still count as a
++// single fighting force. Roughly 1.5x a T1 weapon range, so a squad inside it
++// can bring most of its guns to bear on the same target.
++#define COHESION_MAX_SPREAD	700.f
++// A strung-out squad is not worth nothing -- it still trickles damage in -- so
++// the derating bottoms out rather than reaching zero.
++#define COHESION_MIN_SCALE	0.35f
++
+ class ISquadTask: public IFighterTask {
+ protected:
+ 	ISquadTask(ITaskModule* mgr, FightType type, float powerMod);
+@@ -39,6 +47,8 @@ private:
+ 
+ protected:
+ 	ISquadTask* GetMergeTask();
++	float GetSpreadRadius() const;
++	float GetCohesionScale() const;
+ 	bool IsMustRegroup();
+ 	void ActivePath(float speed = NO_SPEED_LIMIT);
+ 	NSMicroPather::HitFunc GetHitTest() const;
 diff --git a/src/circuit/terrain/path/PathFinder.cpp b/src/circuit/terrain/path/PathFinder.cpp
 index aef6e1e..a38e883 100644
 --- a/src/circuit/terrain/path/PathFinder.cpp

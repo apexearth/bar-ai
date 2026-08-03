@@ -15,7 +15,7 @@
 		// running. DefaultMakeDefence walks the list until totalCost passes
 		// amountFactor * min(metal, energy income), so on a hosted game's income that is
 		// 5,740 metal of flak per hot cluster and the heavy guns at 11/12 are never reached.
-		"land":  [0, 2, 3, 5, 6, 4, 7, 8, 10, 10, 12, 11],
+		"land":  [3, 0, 2, 5, 6, 4, 7, 8, 10, 10, 12, 11],
 		"water": [1, 17, 1, 1, 4, 9, 10, 9, 10],
 		// 1, matching stock BARb.
 		//
