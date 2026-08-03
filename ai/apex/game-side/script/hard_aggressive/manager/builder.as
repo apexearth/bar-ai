@@ -509,7 +509,13 @@ const int   CONVERT_PERIOD    = 25 * SECOND;
 const float REAR_DISTANCE     = 450.f;
 
 // Enemy centroid this close to home means they are in the base.
-const float COMM_BASE_DANGER = 1100.f;
+// 2200, was 1100. GetEnemyPos is the centroid of ALL enemies, so on a 4v4 with
+// them spread out it sits mid-map and reads far from every base even while one
+// of them is standing in ours. Measured: fired once in a 20-minute game while
+// three commanders died. Widening trades precision for actually firing; the
+// commander only takes a back-wall job, so a false positive costs one solar
+// built somewhere safe.
+const float COMM_BASE_DANGER = 2200.f;
 const int   COMM_HIDE_PERIOD = 30 * SECOND;
 int gNextCommHide = 0;
 string armsolar("armsolar");  string corsolar("corsolar");  string legsolar("legsolar");
@@ -1696,7 +1702,13 @@ int gNextComMove = 0;
 // were within 800, returned a Patrol task from AiMakeTask, and destroyed the
 // economy (0-20, metal 6,631) -- this fires only when the commander has actually
 // been hurt, which is rare. A commander that is being shot SHOULD stop building.
-const float COM_RETREAT_HEALTH = 0.60f;
+// 0.85, was 0.60. At 0.60 the commander stood there until it had lost FORTY
+// PERCENT of its health, by which point it is inside an army. Measured in a
+// watched 4v4: three commanders died and this fired once. 0.85 means it leaves
+// on the first real damage, which is the whole point -- apexearth: "our guys are
+// still just standing in the middle of the base about to be killed, like a bunch
+// of idiots."
+const float COM_RETREAT_HEALTH = 0.85f;
 int gNextRetreatLog = 0;
 
 int gNextThreatLog = 0;

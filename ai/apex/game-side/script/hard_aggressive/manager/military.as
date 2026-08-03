@@ -699,6 +699,41 @@ void UpdateBaseDefence()
 	}
 }
 
+
+// No suicide runs while the army IS the defence.
+//
+// apexearth: "really early in the game, you don't wanna be doing suicide runs.
+// Imagine you do a suicide run that fails, and then your army is half size, and
+// you fed all that metal or resurrection ability to the enemy. Bam. Now you're
+// fucked." A deep strike that trades units for their economy is a good deal
+// LATER, when losses are replaceable -- and this AI's whole plan is to make the
+// enemy pay by dying on our defences and leaving wrecks, so handing them ours is
+// the same mistake in reverse.
+//
+// raid.min is the maxPower of the Defend task raiders sit in before it promotes
+// (MilitaryManager.cpp:1696), i.e. the size a raid group leaves at. Raising it
+// keeps them home massing instead of trickling out.
+//
+// Reached via quota.raid.min, NOT the quotaRaidMin shorthand: that shorthand is
+// registered in the current C++ source but is absent from the deployed
+// SkirmishAI.dll, which predates it. Source is not the binary.
+//
+// Keyed on OWNING T2, not on a clock -- apexearth: "usually doing things by time
+// is wrong". Before the advanced plant the army is the entire defence and every
+// loss is a large share of it; after, there is economy behind it to replace
+// what a strike costs.
+const float RAID_MIN_EARLY = 45.f;   // hold them home
+float gRaidMinStock = -1.f;
+
+void UpdateRaidCaution()
+{
+	if (gRaidMinStock < 0.f)
+		gRaidMinStock = aiMilitaryMgr.quota.raid.min;   // capture before overwriting
+	const float want = Factory::gHaveT2 ? gRaidMinStock : RAID_MIN_EARLY;
+	if (aiMilitaryMgr.quota.raid.min != want)
+		aiMilitaryMgr.quota.raid.min = want;
+}
+
 void UpdatePosture()
 {
 	// Before UpdateRushRole, which overwrites quota.attack on the lead. Captured
@@ -708,6 +743,7 @@ void UpdatePosture()
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
 	UpdateKillingBlow();
+	UpdateRaidCaution();
 	UpdateBaseDefence();
 	UpdateSling();
 	UpdateRushDefence();
