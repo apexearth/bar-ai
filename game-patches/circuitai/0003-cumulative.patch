@@ -1312,10 +1312,10 @@ index fac55c7..49eaa7b 100644
  	float minSqDist = std::numeric_limits<float>::max();
  
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..00c939d 100644
+index cd063e4..32c27f4 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
-@@ -25,12 +25,35 @@
+@@ -25,12 +25,50 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -1344,6 +1344,21 @@ index cd063e4..00c939d 100644
 +// Target-preference multipliers. The selection metric is a squared distance, so
 +// 4.0 means an artillery piece is preferred over a closer ordinary unit until it
 +// is about twice as far away.
++// How far ahead we must be before committing. The test was `maxPower <=
++// influence * scale`, i.e. a 1% edge sent the whole squad -- so anything not yet
++// seen flipped the outcome AFTER the commitment, and a slow-turning squad paid
++// for the reversal on the way out. apexearth: "We realize we're in danger too
++// late on our units... we head in ... panic... turn around... die", and earlier,
++// "if you take any fight you're gonna lose, then you probably did the wrong
++// thing". Applies to CAttackTask only: raids are meant to trade units for
++// economy and keep their own thresholds.
++#define ENGAGE_MARGIN		1.35f
++
++// Radius around a target within which OTHER enemy groups count as defending it.
++// Well past T2 weapon ranges (800-1470), because an army that close will reach
++// the fight long before it is over.
++#define NEARBY_ENEMY_DIST	1800.f
++
 +#define ARTY_PRIORITY		4.0f
 +#define LONG_RANGE_PRIORITY	2.0f
 +#define LONG_RANGE_MULT		1.3f   // "outranges us" -- 30% past our own reach
@@ -1351,7 +1366,7 @@ index cd063e4..00c939d 100644
  CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
  		: ISquadTask(mgr, FightType::ATTACK, powerMod)
  		, minPower(minPower)
-@@ -59,7 +82,12 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
+@@ -59,7 +97,12 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
  	}
  
  	const int frame = manager->GetCircuit()->GetLastFrame();
@@ -1365,7 +1380,7 @@ index cd063e4..00c939d 100644
  		return false;
  	}
  	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
-@@ -208,7 +236,8 @@ void CAttackTask::Update()
+@@ -208,7 +251,8 @@ void CAttackTask::Update()
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
  			leader, circuit->GetThreatMap(),
  			startPos, endPos, pathRange, GetHitTest(),
@@ -1375,7 +1390,7 @@ index cd063e4..00c939d 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -238,6 +267,25 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,25 +282,67 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -1401,8 +1416,10 @@ index cd063e4..00c939d 100644
  void CAttackTask::FindTarget()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
-@@ -245,18 +293,38 @@ void CAttackTask::FindTarget()
+ 	CMap* map = circuit->GetMap();
  	CInfluenceMap* inflMap = circuit->GetInflMap();
++	CThreatMap* threatMap = circuit->GetThreatMap();
++	threatMap->SetThreatType(leader);
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
 -	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
@@ -1431,6 +1448,7 @@ index cd063e4..00c939d 100644
 +	// number for the cohesion cap or a strength margin we need what the decision
 +	// actually saw, at the moment it was made.
 +	float bestInfl = .0f;
++	float bestNear = .0f;
 +	float bestScale = .0f;
 +	int skippedWeak = 0;
 +	// LINEAR, not squared. `scale` below divides a linear distance by this, and
@@ -1443,7 +1461,7 @@ index cd063e4..00c939d 100644
  	float minSqDist = std::numeric_limits<float>::max();
  	bool hasGoodTarget = false;
  
-@@ -269,10 +337,17 @@ void CAttackTask::FindTarget()
+@@ -269,10 +355,20 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -1457,7 +1475,10 @@ index cd063e4..00c939d 100644
 +		// when the group is closer to our base than we are, i.e. defending home,
 +		// where taking a worse fight is correct.
 +		const float scale = std::min(distBE / obDist, 1.f);
-+		if ((maxPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
++		// No margin is demanded on our own ground: a defender that waits for
++		// favourable odds has already lost the thing it was defending.
++		const bool isHome = inflMap->GetInfluenceAt(group.pos) >= INFL_SAFE;
++		if ((maxPower <= group.influence * scale * ENGAGE_MARGIN) && !isHome) {
 +			++skippedWeak;
 +			continue;
 +		}
@@ -1465,7 +1486,7 @@ index cd063e4..00c939d 100644
  			continue;
  		}
  
-@@ -319,10 +394,29 @@ void CAttackTask::FindTarget()
+@@ -319,10 +415,56 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -1487,16 +1508,43 @@ index cd063e4..00c939d 100644
 +					prio = LONG_RANGE_PRIORITY;  // outranges us even if not ARTY
 +				}
 +			}
++			// A group's own influence says nothing about what is standing NEXT to it.
++			// Measured over two 8v8 games: 90% of engagement decisions targeted a
++			// group with zero influence -- undefended economy -- so the strength
++			// test never ran, and the squad walked into whatever army happened to
++			// be nearby. apexearth: "We realize we're in danger too late on our
++			// units... we head in ... panic... turn around... die."
++			// The threat map covers each armed enemy's weapon range, so it sees the
++			// army beside the target that group.influence cannot.
++			// Guarded on > 0: if this layer ever reads dead, behaviour is unchanged
++			// rather than broken.
++			// NOT the threat map: CThreatMap::GetThreatAt read 0 at 14 of 15 target
++			// positions when logged, the same dead layer as GetBuilderThreatAt.
++			// Enemy GROUP influence is real data -- it is what the strength test
++			// above uses -- so sum every armed group standing near this target
++			// instead. That is the army beside the undefended mex.
++			float localInfl = .0f;
++			for (const CEnemyManager::SEnemyGroup& g : groups) {
++				if (g.pos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST)) {
++					localInfl += g.influence;
++				}
++			}
++			if ((localInfl > .0f) && (maxPower < localInfl * ENGAGE_MARGIN) && !isHome) {
++				++skippedWeak;
++				continue;
++			}
++
 +			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * scale / prio;  // Own to Enemy distance
  			if (minSqDist > sqOEDist) {
  				minSqDist = sqOEDist;
  				bestTarget = enemy;
 +				bestInfl = group.influence;
++				bestNear = localInfl;
 +				bestScale = scale;
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -332,6 +426,21 @@ void CAttackTask::FindTarget()
+@@ -332,6 +474,22 @@ void CAttackTask::FindTarget()
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
  	}
@@ -1509,16 +1557,17 @@ index cd063e4..00c939d 100644
 +		lastEngageLog = frame;
 +		const float need = bestInfl * bestScale;
 +		circuit->LOG("apex: engage %s units=%d spread=%.0f hp=%.2f coh=%.2f "
-+				"power=%.0f need=%.0f edge=%.2f skipped=%d",
++				"power=%.0f need=%.0f edge=%.2f skipped=%d near=%.0f",
 +				(bestTarget != nullptr) ? "TAKE" : "SKIP",
 +				int(units.size()), spread, healthScale,
 +				cohesion, maxPower, need,
-+				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak);
++				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak,
++				bestNear);
 +	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
  
-@@ -340,6 +449,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +498,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
