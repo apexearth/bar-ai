@@ -1359,6 +1359,18 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// with spread enemies it can read far away while one of them is in our
 		// base. This catches the massed case, not the single raider.
 		if (BaseUnderAttack() && (ai.frame >= gNextCommHide)) {
+			// Energy full: just leave. The solar is only a way to make the
+			// commander WALK somewhere -- it is not wanted for its own sake, and
+			// building one on a full bank is pure waste. This fired 21 times in a
+			// single game before the check existed. apexearth: "these guys are
+			// just making solars while they're on full energy... idk why".
+			if (aiEconomyMgr.isEnergyFull) {
+				IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+				if (flee !is null) {
+					gNextCommHide = ai.frame + COMM_HIDE_PERIOD;
+					return flee;
+				}
+			}
 			AIFloat3 back;
 			if (RearPos(unit, back)) {
 				CCircuitDef@ safe = SideDef3(armsolar, corsolar, legsolar);
