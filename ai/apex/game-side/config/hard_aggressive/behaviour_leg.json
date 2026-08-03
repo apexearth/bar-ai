@@ -279,7 +279,7 @@
 			},
 			"legcluster": {
 				"role": ["static"],
-				"on": false,
+				"on": true,
 				"limit": 3,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0

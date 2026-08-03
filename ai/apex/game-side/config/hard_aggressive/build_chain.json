@@ -58,7 +58,7 @@
 		// T3 gun at 25 min on a pre-fusion economy. Builder::Pulsar is now the only path to
 		// those, gated on PULSAR_MIN_ENERGY.
 		"base": [
-			[3, 420], [4, 600], [10, 1200], [15,1220], [14, 1300], [15, 1320], [8, 1360]
+			[3, 420], [4, 600], [10, 1200], [15,1220], [14, 1300], [8, 1360]
 		],
 	
 		"superweapon": {

@@ -306,7 +306,7 @@ index b4f4f40..8638af3 100644
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e90..fbc418a 100644
+index 2b84e90..8b0a3f8 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
 @@ -9,6 +9,7 @@
@@ -317,7 +317,19 @@ index 2b84e90..fbc418a 100644
  #include "scheduler/Scheduler.h"
  #include "script/EconomyScript.h"
  #include "setup/SetupManager.h"
-@@ -922,11 +923,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
+@@ -40,6 +41,11 @@ using namespace springai;
+ 
+ #define PYLON_RANGE		500.0f
+ 
++// Energy-condition relaxation over game time; see UpdateEnergyTasks.
++#define ENERGY_GATE_FULL_SEC	600		// unchanged for the first ten minutes
++#define ENERGY_GATE_LOW_SEC		1500	// fully relaxed by twenty-five
++#define ENERGY_GATE_FLOOR		0.2f
++
+ const char* RES_NAME_METAL = "Metal";
+ const char* RES_NAME_ENERGY = "Energy";
+ 
+@@ -922,11 +928,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
  
  bool CEconomyManager::IsOpenMexSpot(int spotId) const
  {
@@ -335,7 +347,7 @@ index 2b84e90..fbc418a 100644
  	if (mexSpots[spotId].isOpen == value) {
  		return;
  	}
-@@ -934,6 +941,90 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
+@@ -934,6 +946,90 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
  	value ? --mexCount : ++mexCount;
  }
  
@@ -426,7 +438,7 @@ index 2b84e90..fbc418a 100644
  bool CEconomyManager::IsIgnorePull(const IBuilderTask* task) const
  {
  	if (mexMax != std::numeric_limits<decltype(mexMax)>::max()) {
-@@ -1026,6 +1117,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1026,6 +1122,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  		return nullptr;
  	}
  
@@ -440,7 +452,52 @@ index 2b84e90..fbc418a 100644
  	if (IsEnergyStalling()) {
  		return UpdateEnergyTasks(position, unit);
  	}
-@@ -1571,6 +1669,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1278,6 +1381,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+ 	const int frame = circuit->GetLastFrame();
+ 	float bestResDist = std::numeric_limits<float>::max();
+ 
++	// The default energy condition is GetCostE() * costRatio, which for a fusion
++	// demands more energy income than the fusion itself produces (corfus: 1300
++	// required against ~1000 made) -- so the reason to build one disqualifies it.
++	// The metal is the real commitment: corfus is 4500 metal against 26,000
++	// energy spread over a 75,400 buildtime, i.e. tens of e/s of actual drain.
++	//
++	// It cannot simply be lowered. Only a few energy tasks are allowed at once
++	// (taskSize below), so an early fusion blocks all other energy for the
++	// minutes it takes to finish; dropping this bar to a flat 300 halved metal
++	// production and killed the AI at 28 minutes. So relax it with game time
++	// instead: unchanged early, when the economy cannot carry the bet, and low
++	// later, when build power finishes it quickly and the energy is genuinely
++	// needed. apexearth: "diminishing requirements over time perhaps may help".
++	const int gateSec = frame / FRAMES_PER_SEC;
++	float engyGate = 1.f;
++	if (gateSec >= ENERGY_GATE_LOW_SEC) {
++		engyGate = ENERGY_GATE_FLOOR;
++	} else if (gateSec > ENERGY_GATE_FULL_SEC) {
++		const float t = float(gateSec - ENERGY_GATE_FULL_SEC)
++				/ float(ENERGY_GATE_LOW_SEC - ENERGY_GATE_FULL_SEC);
++		engyGate = 1.f - t * (1.f - ENERGY_GATE_FLOOR);
++	}
++
+ 	const auto& infos = energyDefs.GetInfos();
+ 	const float curWind = circuit->GetMap()->GetCurWind();
+ 	auto checkWind = [curWind, terrainMgr, position, metalIncome, energyIncome, &infos](unsigned i) {
+@@ -1308,12 +1434,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+ 				if (engy.cdef->IsWind() && !checkWind(i)) {
+ 					continue;
+ 				}
+-				if ((engy.data.cond.metalIncome < metalIncome) && (engy.data.cond.energyIncome < energyIncome)) {
++				if ((engy.data.cond.metalIncome < metalIncome) && (engy.data.cond.energyIncome * engyGate < energyIncome)) {
+ 					bestDef = engy.cdef;
+ 					break;
+ 				} else {
+ 					const float resDist = ((engy.data.cond.metalIncome < metalIncome) ? 0.f : (engy.data.cond.metalIncome - metalIncome))
+-							+ ((engy.data.cond.energyIncome < energyIncome) ? 0.f : GetEcoEM() * (engy.data.cond.energyIncome - energyIncome));
++							+ ((engy.data.cond.energyIncome * engyGate < energyIncome) ? 0.f : GetEcoEM() * (engy.data.cond.energyIncome * engyGate - energyIncome));
+ 					if (bestResDist > resDist) {
+ 						bestResDist = resDist;
+ 						bestDef = engy.cdef;
+@@ -1571,6 +1697,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		}
  	}
  
@@ -460,7 +517,7 @@ index 2b84e90..fbc418a 100644
  	factoryTask->SetPosition(buildPos);
  
  	if (factoryTask->IsPlop()
-@@ -1589,6 +1700,12 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1589,6 +1728,12 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		factoryTask = nullptr;
  		return task;
  	} else {
@@ -511,7 +568,7 @@ index 2925da7..f1b8ee8 100644
  	bool IsIgnoreStallingPull(const IBuilderTask* task) const;
  	void CorrectResourcePull(float metal, float energy);
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b..c0ffaf4 100644
+index a44c20b..21aeb3b 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -301,6 +301,9 @@ void CMilitaryManager::InitHandlers()
@@ -556,6 +613,71 @@ index a44c20b..c0ffaf4 100644
  			}
  		} break;
  		default: break;
+@@ -1429,8 +1446,13 @@ void CMilitaryManager::UpdateDefence()
+ 		if (frame >= defElem.second) {
+ 			CCircuitDef* buildDef = defElem.first;
+ 			if (buildDef->IsAvailable(frame)) {
++				// A gun placed at the base is a gun that never shoots. Anything that
++				// shoots ground goes to the forward edge of held territory instead;
++				// AA, anti-nuke and the sensor towers stay where the value is.
++				const AIFloat3 pos = (buildDef->IsAttacker() && !buildDef->IsRoleAA() && !buildDef->IsRoleSuper())
++						? GetFrontierPos(ibd->first) : ibd->first;
+ 				circuit->GetBuilderManager()->Enqueue(TaskB::Common(IBuilderTask::BuildType::DEFENCE,
+-						IBuilderTask::Priority::NORMAL, buildDef, ibd->first, 0.f, true, 0));
++						IBuilderTask::Priority::NORMAL, buildDef, pos, 0.f, true, 0));
+ 			}
+ 			ibd->second.pop_back();
+ 		}
+@@ -1446,6 +1468,37 @@ void CMilitaryManager::UpdateDefence()
+ 	}
+ }
+ 
++// The forward edge of the territory this side holds: of the metal clusters our
++// side has taken, the one nearest the enemy that is not inside an ally's zone.
++// Never further from the enemy than the position handed in, so it can only ever
++// move a structure forward.
++AIFloat3 CMilitaryManager::GetFrontierPos(const AIFloat3& basePos)
++{
++	CMetalManager* mm = circuit->GetMetalManager();
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	const CMetalData::Clusters& clusters = mm->GetClusters();
++	const AIFloat3 enemyPos = circuit->GetEnemyManager()->GetEnemyPos();
++
++	const AIFloat3* best = nullptr;
++	float bestDist = basePos.SqDistance2D(enemyPos);
++	for (unsigned i = 0; i < clusters.size(); ++i) {
++		const int index = (int)i;
++		if (!mm->IsClusterFinished(index) && !mm->IsClusterQueued(index)) {
++			continue;
++		}
++		const AIFloat3& pos = clusters[i].position;
++		if (terrainMgr->IsZoneAlly(pos)) {
++			continue;  // an ally's ground; DefaultMakeDefence declines these too
++		}
++		const float dist = pos.SqDistance2D(enemyPos);
++		if (dist < bestDist) {
++			bestDist = dist;
++			best = &pos;
++		}
++	}
++	return (best == nullptr) ? basePos : *best;
++}
++
+ void CMilitaryManager::MakeBaseDefence(const AIFloat3& pos)
+ {
+ 	if (circuit->IsLoadSave()) {
+diff --git a/src/circuit/module/MilitaryManager.h b/src/circuit/module/MilitaryManager.h
+index c167603..535340e 100644
+--- a/src/circuit/module/MilitaryManager.h
++++ b/src/circuit/module/MilitaryManager.h
+@@ -189,6 +189,7 @@ private:
+ 	void AddArmyCost(CCircuitUnit* unit);
+ 	void DelArmyCost(CCircuitUnit* unit);
+ 	void PointOfInterest(CEnemyInfo* enemy, int start, int step);
++	springai::AIFloat3 GetFrontierPos(const springai::AIFloat3& basePos);
+ 	CDefenceData::SDefPoint* FindClosestDefPoint(const springai::AIFloat3& pos);
+ 	CDefenceData::SDefPoint* FindClosestDefPoint(int cluster, const springai::AIFloat3& pos,
+ 			std::function<bool (const CDefenceData::SDefPoint&)> predicate = nullptr);
 diff --git a/src/circuit/resource/MetalManager.cpp b/src/circuit/resource/MetalManager.cpp
 index d5e10a6..0f8898d 100644
 --- a/src/circuit/resource/MetalManager.cpp

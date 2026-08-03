@@ -1169,9 +1169,9 @@ void UpdateFrontGun()
 			Task::Priority::NORMAL, gun, front, 0.f));
 }
 
-// Is this cluster on the team's defence line? IsFrontierSite only measures
-// distance from OUR OWN mass, which says nothing about where the fighting is.
-// The published front does.
+// Is this cluster near the gadget-published front? A second opinion alongside
+// OnBorder, and only available in this harness -- dev_team_income.lua publishes
+// it and does not exist in a hosted game.
 const float FRONT_RADIUS = 1600.f;
 
 bool NearFront(const AIFloat3& in pos)
