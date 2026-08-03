@@ -10,7 +10,38 @@
 			"raid": [10.0, 65.0],  // [<min>, <avg>] power of raider squad
 			"attack": 15.0,  // min power of attack group
 			"thr_mod": {				//AI attacks everything with final threat (after all calculations) <= 1
-				"attack": [1.0, 1.0],//"attack": [0.6, 0.8],  // [<min>, <max>] enemy threat multiplier for target selection of attack task |  values <1 makes enemy group seem less of an thread for ai => ai attacks stronger groups than it own | org=0.25, 0.3
+				// TRIED [1.4, 1.8] AND REVERTED, 2026-08-02.
+			//
+			// CAttackTask skips a group when maxPower <= group.influence * scale,
+			// maxPower = attackPower * powerMod, powerMod = 0.8 / mod with mod
+			// drawn from this pair. Raising it to [1.4, 1.8] drops powerMod to
+			// 0.44-0.57, so the AI passes over anything it does not clearly
+			// out-power -- which is what apexearth asked for: "once we have
+			// clearly superior odds, that's when we should fight."
+			//
+			// It made things much worse. Same seed, army identical at minute 8,
+			// then losses 1,091 -> 5,759 -> 11,105 against 656 -> 1,678 -> 3,594,
+			// finishing on 765 army against 4,538.
+			//
+			// Two reasons it failed, and both must be answered before trying again.
+			//
+			// 1. ONE KNOB, SIX TASK TYPES. attackMod is read by SCOUT, RAID,
+			//    ATTACK, BOMB, ARTY and AA alike (MilitaryManager.cpp:632-655).
+			//    So this does not mean "be careful in frontal fights" -- it makes
+			//    RAIDS careful too. apexearth: "imagine you're doing a deep strike
+			//    into enemy territory to kill some of their economy. You're gonna
+			//    lose that fight. It's a suicide run, but it's deemed worth it
+			//    based on the economic damage you dish out." The rule is not
+			//    "only fight what you beat", it is "only take exchanges that pay"
+			//    -- and for a raid the payment is their economy, not their units.
+			//    Separating the two needs C++; there is no config lever.
+			//
+			// 2. Caution with nowhere to stand is just passivity. Declining a
+			//    fight leaves the squad milling in the open while the enemy takes
+			//    the map, and it is picked apart having never traded. The missing
+			//    half is somewhere to decline TOWARD -- bait, then punish from
+			//    prepared ground.
+			"attack": [1.0, 1.0],//"attack": [0.6, 0.8],  // [<min>, <max>] enemy threat multiplier for target selection of attack task |  values <1 makes enemy group seem less of an thread for ai => ai attacks stronger groups than it own | org=0.25, 0.3
 				"defence": [1.0, 1.0],//"defence": [0.3, 0.5],  // [<min>, <max>] enemy threat modifier for group size calculation of defence task; org=0.95, 0.95 | high values = low risk; low values = high risk 
 				"mobile": 1.05,  // initial modifier for power of attack group based on mobile enemy threat; org=1.05
 				"static": 1.2,  // initial modifier for power of attack group based on static enemy threat; org= 1.2
