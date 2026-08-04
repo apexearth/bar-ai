@@ -1033,15 +1033,30 @@ fold future Comet Catcher 4v4 batches on this code state into a fresh
 running aggregate starting from `872473c` rather than either of the two
 prior tables (pre-fix `phase>=4`-only, or ungated-postfix).
 
+**UPDATE, second gated batch (`gated2-16`, n=16): 1-6 decided (14.3%),
+9/16 to time limit.** Retracts the "back in line" read above -- that was
+n=4 decided, far too small to have meant anything on its own, and this
+batch pulls it back down hard. Combined `gated-16` + `gated2-16` on the
+`872473c` code state: **3 apex, 8 stable, 11 decided = 27.3% (95% CI
+~9.7%-56.6%)**. The CI is enormous at this n and still straddles 50%, so
+this does NOT confirm the gating fix failed either -- but two batches in
+a row below the pre-fix 44.4% aggregate, after one batch that looked like
+a clean recovery, is exactly the noise-floor pattern issue 0.1 already
+documented (0%-75%+ swings on code that never changed at all). Read the
+`872473c` code state as genuinely unresolved, not as "recovered" or
+"regressed" -- there isn't yet enough signal in either direction.
+
 **Where this leaves the overall goal**: from the 7.9% baseline this
 session started at, `phase >= 4` plus this round of live-diagnosed bug
-fixes is now landing consistently in the 44-50% band across every batch
-run at the correct (team-size-gated) code state -- a huge, real,
-statistically overwhelming improvement over baseline, and still short of
-"reliably beats" by this note's own standard (CI lower bound clearly
-above 50%). Extending this same aggregate is cheap and worth doing
-opportunistically, but per the session synthesis above, closing the
-remaining gap likely needs either a genuinely new mechanism (found the
+fixes is landing somewhere in a wide band (roughly 27%-50% depending on
+which batches get counted) that comfortably beats baseline but has not
+settled anywhere close to a confirmed "reliably beats" state. At this
+point, MORE identical 16-game batches are producing wide, overlapping
+CIs rather than converging -- the SESSION SYNTHESIS above already named
+this exact situation for the original baseline (n=89, "reached
+diminishing returns"). Grinding another dozen 16-game batches the same
+way is unlikely to resolve it either. Closing the remaining gap likely
+needs either a genuinely new mechanism (found the
 way `phase >= 4` was: through live-diagnosed failure modes, not more
 "spend" tuning) or apexearth's own live observation to surface the next
 one.
