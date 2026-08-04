@@ -469,12 +469,74 @@ bool IsInLeadList(const array<int>@ leads, int team)
 	return false;
 }
 
+// BUILD_PHASE, per docs/12-build-phases.md (apexearth's design). Diagnostic
+// only: computes and logs a phase number so a future session can check it
+// against real telemetry before gating any existing rule behind it. Gating
+// rules is the actual fix for the crowding-out pattern this session
+// independently reconfirmed five times (see notes/open-issues.md, "SESSION
+// SYNTHESIS") -- this is deliberately NOT that yet. Doing that blind, this
+// late in an unsupervised session, risks becoming "one more && on rules that
+// still all want to fire", which the design doc itself names as the way this
+// fails to help.
+//
+// Driven from STATE per the doc's own first rule (never a clock), so it can
+// fall back down on its own the moment a signal drops -- no ratchet, no
+// separate distress flag needed, because nothing is being latched here.
+// Thresholds are a first approximation from constants already used elsewhere
+// in this file (RUSH_MIN_METAL-scale for pre-T2, FUSION_KEEP for pre-T3) --
+// calibrate against composition.py's own per-phase breakdown once telemetry
+// exists, per the doc's measurement plan.
+int gLastPhase = -1;
+int gNextPhaseLog = 0;
+
+bool HaveGantry()
+{
+	CCircuitDef@ d = Builder::SideDef3(armshltx, corgant, leggant);
+	return (d !is null) && (d.count > 0);
+}
+
+int ComputePhase()
+{
+	const float mInc = aiEconomyMgr.metal.income;
+	const uint mex = MexCount();
+	const uint fusions = Builder::gFusions.length();
+	const bool hasT3 = HaveGantry();
+
+	if (hasT3 || (fusions >= 3))
+		return (hasT3 && (fusions >= 3)) ? 7 : 6;          // T3 / late
+	if (gHaveT2 && (fusions >= 1 || mInc >= 40.f))
+		return 5;                                          // pre-T3
+	if (gHaveT2)
+		return 4;                                          // T2
+	if (MayPursueT2() && RushReady())
+		return 3;                                          // pre-T2
+	if (mex >= 4)
+		return 2;                                          // build up
+	if (mex >= 1)
+		return 1;                                          // expand
+	return 0;                                              // opening
+}
+
+void UpdatePhase()
+{
+	const int phase = ComputePhase();
+	if ((phase != gLastPhase) || (ai.frame >= gNextPhaseLog)) {
+		gNextPhaseLog = ai.frame + 60 * SECOND;
+		AiLog(T() + "apexphase: " + gLastPhase + " -> " + phase
+			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+			+ " mex=" + MexCount() + " haveT2=" + (gHaveT2 ? "1" : "0")
+			+ " fusions=" + Builder::gFusions.length());
+		gLastPhase = phase;
+	}
+}
+
 // Driven from AiUpdate, so every instance publishes on a fixed cadence.
 // Publishing as a side effect of RushLeadTeamId() instead would make a team's
 // visibility depend on which code paths happened to ask for the lead that tick,
 // and a team that went quiet would look like it had lost its plant.
 void UpdateTeamCoord()
 {
+	UpdatePhase();
 	ai.PublishTeamValue(TV_ADV, OwnAdvProgress());
 	ai.PublishTeamValue(TV_READY, RushReady() ? aiEconomyMgr.metal.income : 0.f);
 	ai.PublishTeamValue(TV_DIST, Builder::gHomeSet
