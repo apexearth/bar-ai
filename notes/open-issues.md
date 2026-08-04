@@ -123,6 +123,47 @@ reason found by reading an infolog -- not a numeric tune. Future effort
 here is better spent finding more bugs of that shape than tuning more
 standing-count numbers into the noise.
 
+**Two C++ leads traced and closed, not fresh (`large-confirm16` session,
+2026-08-04):**
+- CHANGES.md's "How the AI judges a fight" defect 2 ("the engagement test has
+  NO margin") reads as unresolved in that doc, but `ENGAGE_MARGIN 1.80` is
+  already present and active in `vendor/engine/.../AttackTask.cpp` -- the SAME
+  fix `nobackwall`-era issue 1 already credited with fixing mid-game. Verified
+  the deployed DLL build postdates all current source (`find ... -newer` on the
+  build artifact returned nothing), so this is not a stale-build gap either.
+  The "edge=0.00" reading spotted live in `goal-watch2` was a red herring: it
+  is the log format's ternary default when `need<1`, not evidence of the old
+  bug. CHANGES.md is simply undermaintained on this point.
+- `commander.json`'s `hide.threat`/`hide.time` C++ lever
+  (`BuilderManager.cpp:967-984`) was already tried per CHANGES.md ("moved
+  losses not at all and cost 10-20k metal") -- confirmed the mechanism reads a
+  real, live signal (`GetEnemyInflAt`, not the known-dead `GetBuilderThreatAt`)
+  but not retried given the prior negative result. One structural note for a
+  future C++ session: the hide/danger branch is skipped entirely whenever
+  `GetWorkerCount() <= 2`, which is exactly when a team is already in trouble
+  -- untested, and would need a DLL rebuild (toolchain confirmed working,
+  `docker info` succeeds) to change.
+
+**Best current measurement of the goal, `large-confirm16`, n=16 (not
+just-tried, this session's LARGEST sample), current committed HEAD:**
+
+| | value |
+|---|---|
+| decided head to head | 2-6 apex (25% of decided) |
+| games reaching time limit (competitive draw) | 8/16 (50%) |
+| 95% CI on stable's decided win rate | 41-93% (still includes 50%) |
+| apex metal produced | 36,074 vs stable's 56,680 |
+| apex wiped-out player-games | 24/64 (37.5%) vs stable's 9/64 (14%) |
+
+**Reading this honestly**: half of all games are close enough to run the full
+25 minutes undecided. Of the games that DO get decided, apex wins about 1 in
+4 -- not reliable, and the CI is wide enough that even this is not yet a
+statistically airtight verdict, but it is the largest, most trustworthy read
+of the current baseline this session produced, and it does not show apex
+"reliably" winning by any definition. The wipe-out rate gap (2.6x) is the
+starkest number here and matches the [[commanders-decide-bar-games]] finding
+better than any economy metric does.
+
 ## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
 
 Not previously documented at this precision. 8-game controls at commit
