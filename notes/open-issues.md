@@ -105,6 +105,26 @@ retreating commander still dies (position at death vs. nearest ally, whether
 allied fire support existed) rather than tuning the health bar again blind --
 tuning that bar with a NUMBER has been tried and burned time before.
 
+**Update, does NOT clearly replicate** -- added `comm threat=... hp=...`
+logging (`56a4c66`) and re-ran 8 fresh games (`comm-death-investigate`) to test
+the theory above with real HP data instead of inferring death from silence.
+Result: in this batch's 3 decisive losses, ALL FOUR players' last log line
+clusters tightly around the match's own end time (within ~1 minute of the
+reported game length) and most read 77-100% HP at that last line -- not the
+staggered "one player's log goes quiet 7-10 minutes before the others, at
+declining health" pattern the `nobackwall-confirm` game showed. That pattern
+looks more like a synchronized team-wide loss once already behind (consistent
+with issue 0.1's economy gap) than an individual early commander death
+triggering a cascade. **The log-silence method itself is the problem**: this
+script has no `AiUnitDestroyed` hook (engine warns it is missing at every
+match start; confirmed no working example anywhere in `reference/barb-stable/`
+or `vendor/` either, so implementing one blind is a real crash risk given this
+file's own history of unsafe-binding aborts -- see CHANGES.md). Absence of a
+log line proves the unit stopped needing `AiMakeTask` calls, which is also
+true of a commander settled into a long build with nothing to reevaluate.
+**Do not treat this as a confirmed lead** -- it needs an actual death event to
+investigate further, not more inference from a 30s heartbeat.
+
 ## 1. The late game collapses, and it is a SEPARATE failure
 
 Measured, 8-game pairs on Comet Catcher 4v4 +25%:
