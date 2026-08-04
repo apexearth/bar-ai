@@ -740,3 +740,15 @@ batch rather than draw any conclusion from it. If this test is retried, use
 `run_tournament.py`'s worker-limited pool (or run individual `run_match.py`
 calls sequentially, not backgrounded together) -- this needed no new
 tooling, just the discipline this project already documents.
+
+**Retried properly (sequential, no contention), n=4: all 4 went the full
+time limit, 0 decided.** Too small a sample to compare win rates against,
+but a 4/4 (100%) undecided rate is notably higher than this session's
+typical undecided fraction (roughly 30-50% across the baseline batches),
+mildly consistent with team 1 being the stronger side -- games are more
+often held to a draw rather than lost outright. Sequential execution is
+slow (4 games took comparable wall-clock to an 8-game parallel batch), so
+this was not pushed further this session. A proper confirmation needs
+`run_tournament.py`-scale parallelism with one side forced, which the tool
+does not currently support (it always auto-swaps) -- worth a small
+`--force-side` flag if this is worth settling properly.
