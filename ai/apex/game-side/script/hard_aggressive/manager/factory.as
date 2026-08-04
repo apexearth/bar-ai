@@ -308,6 +308,18 @@ const int LATE_FIGHTERS   = 8;
 const int LATE_FIG_SPACING = 10 * SECOND;
 // Income before a player without any air plant builds one purely for this.
 const float LATE_AIR_INCOME = 55.f;
+
+// Reactive fallback, separate from the income-gated one above: apexearth,
+// watching an 8v8 live, "enemy air is really becoming brutal this game. They
+// have two air players... if we see the enemy has air and we do not have any
+// air, by ten minutes, we should probably be making an air lab and making
+// fighters. At the very least, we need some fighter defense." The income gate
+// exists to stop a plant we do not need; it says nothing about a threat we can
+// already see, so this triggers off Military::gAirAvg instead of our own
+// economy. Above AA_IGNORE (500): a floor meant to ignore a single air
+// constructor, not a real commitment worth answering with a plant.
+const int   EARLY_AIR_REACT_FRAME = 10 * MINUTE;
+const float EARLY_AIR_ENEMY_MIN   = 800.f;
 int gNextFighter = 0;
 
 // Two radar planes is enough to sweep for a hiding commander; they are ~175
@@ -587,11 +599,15 @@ bool IsAdvancedMex(uint i)
 // than recomputed at each reader, so the peak advances exactly once per update.
 // Until the peak is meaningful this reports full health rather than a ratio off
 // two or three opening mexes.
+int gLastMexGrowth = 0;   // frame gPeakMex was last raised
+
 float UpdateMexHold()
 {
 	const uint mex = MexCount();
-	if (mex > gPeakMex)
+	if (mex > gPeakMex) {
 		gPeakMex = mex;
+		gLastMexGrowth = ai.frame;
+	}
 	gMexHold = (gPeakMex < HURT_MIN_MEX) ? 1.f : (float(mex) / float(gPeakMex));
 	if (gMexHold >= HURT_SELF_FRAC)
 		gHurtSince = -1;
@@ -599,6 +615,40 @@ float UpdateMexHold()
 		gHurtSince = ai.frame;
 	gHurt = (gHurtSince >= 0) && ((ai.frame - gHurtSince) >= HURT_SUSTAIN);
 	return gMexHold;
+}
+
+// Detects a player boxed in -- out of reachable expansion for its CURRENT
+// move type, not merely "the map has some water". apexearth, watching an
+// 8v8 live: a player started on a small strip of land, chose bots, and
+// stood doing nothing once local mexes ran out, with an ocean it could not
+// build ships on (no shipyard, bots-only) and mexes on a nearby hill it
+// could not reach (no air con) -- IsMixedWaterMap() gates the shipyard
+// trigger on the MAP's average land%, which reads "mostly land" and never
+// fires for a player boxed onto a small peninsula regardless of THEIR own
+// situation. No terrain-height query is registered to script (checked
+// vendor/engine/.../InitScript.cpp), so a true geometric "am I landlocked"
+// test would need a new C++ binding -- too large a change to add blind this
+// late in an unsupervised session, especially after this session's own
+// experience with an under-tested C++ addition crashing the engine.
+//
+// This is the binding-free alternative: detect the SYMPTOM instead of the
+// geometric cause. A player with spare build capacity whose mex count has
+// not grown in a long time, well past the opening, is out of reachable
+// expansion for SOME reason -- water, cliffs, an enemy wall, a hill --
+// and trying an alternative move type (naval here; air is the harder case,
+// left for a future session per the note below) is a reasonable response
+// regardless of which reason it is.
+const int   STALL_MIN_FRAME  = 6 * MINUTE;   // let the opening actually happen first
+const int   STALL_DURATION   = 3 * MINUTE;   // no mex growth for this long
+const uint  STALL_MIN_MEX    = 2;            // had at least a normal opening
+
+bool ExpansionStalled()
+{
+	if (ai.frame < STALL_MIN_FRAME)
+		return false;
+	if (gPeakMex < STALL_MIN_MEX)
+		return false;
+	return (ai.frame - gLastMexGrowth) >= STALL_DURATION;
 }
 
 // Is any ALLY being killed? Read straight off their own published share -- each
@@ -1080,6 +1130,28 @@ CCircuitDef@ Fodder(const CCircuitDef@ facDef)
 	if (Military::IsFodder(d))
 		return d;
 	return null;
+}
+
+// A screen only defends if it stays home. Without this, a newly built screen
+// fighter got a normal military task and was sent to attack alone like any
+// other AA-role unit. apexearth, watching an 8v8 live: "I see us making air
+// and immediately sending them into the enemy to die. Can't be using air like
+// this... you build fighters, you leave them in your base to defend your
+// base." Same mechanism as Air::HoldsUnit -- returning null from
+// Military::AiMakeTask leaves the unit idle, and an idle unit still
+// auto-fires on anything that comes into weapon range, so parking at home IS
+// the defence.
+//
+// Skipped for the air lead: Air:: already owns the lifecycle of its own
+// aircraft (held pre-strike, released at Air::Release()), and the advanced
+// AA-role def can be the exact same def the assassin escort flies -- an
+// unconditional hold here would trap the escort right after release.
+bool HoldsLateFighter(CCircuitUnit@ unit)
+{
+	if (!LateGame() || Air::IsAirLead())
+		return false;
+	const CCircuitDef@ cdef = unit.circuitDef;
+	return (cdef !is null) && cdef.IsAbleToFly() && cdef.IsRoleAny(Unit::Role::AA.mask);
 }
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
@@ -1946,6 +2018,13 @@ const float NAVY_MIN_WATER_PCT = 20.f;
 // A T1 shipyard is ~700 metal before a single hull comes out of it, so it waits
 // for an economy rather than competing with the opening.
 const float NAVY_MIN_INCOME = 15.f;
+// Separate, lower floor for the ExpansionStalled() rescue case below. A player
+// genuinely boxed onto a small peninsula plateaus BELOW NAVY_MIN_INCOME
+// precisely because it has no more land to expand onto -- gating the escape
+// valve on the same income bar the AI needs the escape valve to reach is a
+// deadlock, not a safeguard. This is a rescue, not a luxury expansion, so it
+// asks only for enough to not immediately go bankrupt building the yard.
+const float NAVY_MIN_INCOME_STALLED = 6.f;
 
 bool IsMixedWaterMap()
 {
@@ -2277,15 +2356,19 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// other case -- small teams, and games where the eco role never activated.
 	// Bounded to the air slot holder, the same one-per-team cap the air opening
 	// uses, so eight players do not each build a plant.
-	if (LateGame() && !HaveAirFactory() && (ai.teamId == AirSlotTeamId())
-		&& (aiEconomyMgr.metal.income >= LATE_AIR_INCOME))
+	const bool lateFallback  = LateGame() && (aiEconomyMgr.metal.income >= LATE_AIR_INCOME);
+	const bool earlyReaction = (ai.frame >= EARLY_AIR_REACT_FRAME)
+		&& (Military::gAirAvg >= EARLY_AIR_ENEMY_MIN);
+	if (!HaveAirFactory() && (ai.teamId == AirSlotTeamId()) && (lateFallback || earlyReaction))
 	{
 		const string aside = ai.GetSideName();
 		CCircuitDef@ lap = (aside == "cortex") ? ai.GetCircuitDef(corap)
 		                 : ((aside == "legion") ? ai.GetCircuitDef(legap)
 		                                        : ai.GetCircuitDef(armap));
 		if (lap !is null) {
-			AiLog(T() + "apex: late game with no air -- building " + lap.GetName()
+			AiLog(T() + "apex: " + (earlyReaction ? "enemy air seen (" +
+				formatFloat(Military::gAirAvg, "", 0, 0) + "), no air of our own"
+				: "late game with no air") + " -- building " + lap.GetName()
 				+ " for a fighter screen");
 			return lap;
 		}
@@ -2340,23 +2423,27 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 			+ ((gT1Fac is null) ? "<unknown T1 factory>" : gT1Fac.GetName()));
 	}
 
-	// Contest the water on a map that has plenty of it but is not a water map.
-	// Nothing else in this function will ever ask for a shipyard there, so the sea
-	// is a flank we can neither use nor defend.
+	// Contest the water on a map that has plenty of it but is not a water map,
+	// OR try it as a fallback once our own expansion has stalled -- see
+	// ExpansionStalled() above for why the map-average test alone misses a
+	// player boxed onto a small peninsula on an otherwise land-majority map.
+	// Nothing else in this function will ever ask for a shipyard there, so the
+	// sea is a flank we can neither use nor defend.
 	//
 	// Placed here, below the tech rush, the bot lab and the gantry, because this
 	// is a rule that SPENDS -- a factory plus the ships it makes is real metal,
 	// and the last batch of individually-reasonable spending rules cut metal
 	// production 4.3x between them. It takes the slot only when nothing more
 	// important wants it, and only once the economy can carry it.
-	if (IsMixedWaterMap() && !HaveShipyard()
-		&& (aiEconomyMgr.metal.income >= NAVY_MIN_INCOME))
+	const bool stalled = !aiTerrainMgr.IsWaterAVoid() && ExpansionStalled();
+	if ((IsMixedWaterMap() || stalled) && !HaveShipyard()
+		&& (aiEconomyMgr.metal.income >= (stalled ? NAVY_MIN_INCOME_STALLED : NAVY_MIN_INCOME)))
 	{
 		CCircuitDef@ sy = NavalOpening();
 		if (sy !is null) {
-			AiLog(T() + "apex: mixed map ("
-				+ formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 0)
-				+ "% land) -- building " + sy.GetName() + " to contest the water"
+			AiLog(T() + "apex: " + (stalled ? "expansion stalled" : "mixed map (" +
+				formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 0) + "% land)")
+				+ " -- building " + sy.GetName() + " to contest the water"
 				+ " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s");
 			return sy;
 		}

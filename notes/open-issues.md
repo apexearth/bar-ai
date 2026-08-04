@@ -945,3 +945,110 @@ single-batch reads of 60% or 33.3%, going forward.
 **This is real, substantial progress toward the goal, though "beats
 reliably" would still need the CI's lower bound to clearly exceed 50%,
 not merely straddle it.** Worth continuing to extend this sample.
+
+**UPDATE, fourth batch (`phasegate4-extend3-16`, n=16): 2-2 decided
+(50.0%), 12/16 to time limit.** Combined across all four phase>=4 batches
+(64 games played, 23 decided):
+
+| batch | apex won | stable won |
+|---|---|---|
+| `phasegate4-test-16` | 5 | 3 |
+| `phasegate4-confirm-16` | 1 | 1 |
+| `phasegate4-extend2-16` | 4 | 5 |
+| `phasegate4-extend3-16` | 2 | 2 |
+| **total** | **12** | **11** |
+
+**Apex win rate: 52.2% (95% CI 32.6%-71.3%). `P(>=12 wins in 23 |
+baseline true rate 7.9%) < 0.000001`.** This batch landed almost exactly
+on the running average (50.0% vs. 52.6%) rather than pulling it further
+toward or away from 50% -- the estimate is stabilizing, not still
+swinging batch to batch the way the noise-floor section (issue 0.1)
+warned it could. Read as confirmation, not a new finding: `phase >= 4` is
+a real, large, statistically solid improvement over the 7.9% baseline
+(p < 1e-6 either way it's cut), and it is genuinely a coin flip against
+`BARb:stable:hard_aggressive` at this benchmark config -- not yet
+"reliably beats." The CI has now narrowed (was 31.7%-72.7% at n=19, now
+32.6%-71.3% at n=23) without moving off center. Getting the lower bound
+past 50% from here needs either a much larger sample or an actual further
+improvement, not just more of the same games.
+
+**UPDATE, fifth batch (`phasegate4-extend4-16`, n=16): 0-4 decided (0%),
+12/16 to time limit.** The first batch since this gate shipped to land
+clearly on the bad side rather than near the running average. Combined
+across all five phase>=4 batches (80 games played, 27 decided):
+
+| batch | apex won | stable won |
+|---|---|---|
+| `phasegate4-test-16` | 5 | 3 |
+| `phasegate4-confirm-16` | 1 | 1 |
+| `phasegate4-extend2-16` | 4 | 5 |
+| `phasegate4-extend3-16` | 2 | 2 |
+| `phasegate4-extend4-16` | 0 | 4 |
+| **total** | **12** | **15** |
+
+**Apex win rate: 44.4% (95% CI ~27.6%-62.7%). `P(>=12 wins in 27 |
+baseline true rate 7.9%) < 0.000001`.** Still an enormous, statistically
+solid improvement over the 7.9% baseline -- that conclusion does not
+change. But the point estimate has now crossed below 50% for the first
+time, and the last three extension batches (44.4%, 50.0%, 0%) show real
+batch-to-batch spread rather than the settling this note previously
+called out after extend3. Read this as the honest current state, not as
+a reason to chase a sixth extend batch immediately: **`phase >= 4` is not
+confirmed to reliably beat `BARb:stable:hard_aggressive` at this
+benchmark config** -- the CI still comfortably straddles 50%, and if
+anything the recent trend leans at or under it. The mechanism (deferring
+the optional economy/AA cluster until T2 actually finishes) remains the
+right fix for the crowding-out failure mode this session diagnosed and
+should stay shipped, but "beats reliably" needs either a real further
+improvement or a much larger sample before it can be called met.
+
+## 16. Players boxed onto an island barely expand, tech, or spend -- fix built, NOT YET MEASURED
+
+apexearth, watching an 8v8 live: a player started on a small strip of land,
+chose bots, and stood doing nothing once local mexes ran out, with an ocean
+it could not build ships on (no shipyard, bots-only) and mexes on a nearby
+hill it could not reach (no air con). Reported symptom set: no T2, minimal
+economy building, unused map space, no willingness to try water or a
+different factory.
+
+**Root cause found by reading the gates, not by guessing:** T2
+(`MayPursueT2`/`RushReady`/`FollowerEconomyReady`) and every eco-spend
+cluster gated on `Factory::gLastPhase` (issue 15) key off metal/energy
+INCOME, not mex count directly. A boxed player's income plateaus low because
+it cannot add mexes -- so it never clears the T2/eco income bars, and every
+downstream symptom (no T2, thin eco, nothing new gets built) follows from
+that one number staying flat. There is no engine-script binding for "am I
+geometrically landlocked" (checked `vendor/engine/.../InitScript.cpp` --
+nothing registered), so the fix targets the SYMPTOM (mex count not growing
+for a long time past the opening) rather than the geometric cause, in
+`factory.as`:
+
+- `ExpansionStalled()` -- true once `gPeakMex >= STALL_MIN_MEX` (2, i.e. a
+  normal opening happened) and `STALL_DURATION` (3 min) has passed with no
+  new mex.
+- `AiGetFactoryToBuild` now treats a stalled player the same as
+  `IsMixedWaterMap()`: it will build a T1 shipyard and start contesting the
+  water, even on a map whose LAND-AVERAGE reads as fine, because the map
+  average was never the boxed player's problem.
+- Found and fixed during this same pass, before any run: the naval-rescue
+  branch was gated on `aiEconomyMgr.metal.income >= NAVY_MIN_INCOME` (15/s)
+  -- the same bar a genuinely boxed player can never clear precisely because
+  it cannot expand, which would have made the rescue path unreachable by the
+  exact players it exists for. Split into a separate, lower
+  `NAVY_MIN_INCOME_STALLED` (6/s): enough to not build the yard into
+  bankruptcy, not so high the escape valve requires the outcome it produces.
+
+**What this does NOT fix, left for later:** a player boxed by CLIFFS/HILLS
+with no adjacent water at all (`IsWaterAVoid()` true, or water present but
+unreachable) has no rescue here -- that needs either a real terrain query
+bound to script, or a hover/air-con expansion path, neither built this pass.
+`aiTerrainMgr.IsWaterAVoid()` gates the fallback off entirely in that case.
+
+**Unmeasured.** No watch run and no tournament have been done against this
+change -- per session instruction, do your best without running the harness.
+Before trusting this: watch one game where a player visibly stalls (the
+`AiLog` line is `"expansion stalled -- building <yard> to contest the
+water"`), confirm it fires, and confirm play actually resumes (mex count,
+income, and eventually `gLastPhase` climbing again) rather than just a
+shipyard sitting idle. `python tools/composition.py` before trusting a win
+rate off this.

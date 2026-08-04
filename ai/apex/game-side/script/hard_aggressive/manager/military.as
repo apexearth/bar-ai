@@ -940,6 +940,8 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// the air force is held at home until Air::Release().
 	if (Air::HoldsUnit(unit))
 		return null;
+	if (Factory::HoldsLateFighter(unit))
+		return null;
 	if (IsFodder(cdef)) {
 		// Scouts already get an ungrouped SCOUT task from stock. Raiders are
 		// first parked in Defend(RAID, quota.raid[0]); skip straight past that.

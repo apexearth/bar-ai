@@ -212,6 +212,7 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
 // until it expires, which costs far more than the feature scan does.
 const int REZ_WRECK_PERIOD = 1 * SECOND;
 int gNextRezWreck = 0;
+int gNextRezFleeLog = 0;
 
 // Which defs resurrect, learned from the engine rather than named: BuilderManager
 // routes exactly the canresurrect units through UseAs::REZZER. A name list would
@@ -1577,6 +1578,44 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // 		}
 // 	}
 // 	return task;
+	// Rez bots have no buildoptions and cannot dig in like an ordinary
+	// constructor -- Fortify/ContestTower never apply to them -- so a hit here
+	// means flee, not fortify. And nothing else in this function ever calls
+	// ConDugIn for them, since every rez branch below returns early: a bot
+	// that commits to a resurrect has nothing re-checking it while the task
+	// runs. apexearth, watching an enemy army arrive live: "eight rez bots
+	// resurrecting... they have no time... they keep rezzing... and die...
+	// lots of metal around, all could have been taken... our bad logic
+	// prevented us from taking that metal and running."
+	//
+	// RezSpotHot/PreferReclaim below only gate which task gets ASSIGNED, and
+	// RezSpotHot's ThreatFor falls back to PastFront() geometry once the
+	// position threat map reads zero -- which ThreatFor's own comment says is
+	// ~97% of the time -- so an enemy push that has not crossed the front's
+	// 72% line still reads "safe" while standing on the bot. ConDugIn's
+	// HP-drop tracking is a real positional signal instead: something shot us,
+	// HERE. One hit is enough -- unlike an armed constructor, a rez bot cannot
+	// answer fire by digging in, only by leaving.
+	if (IsRezzer(unit)) {
+		ConDugIn(unit);   // side effect: refreshes gConHits/gConHp for this bot
+		if (gConHits[ConSlot(unit)] > 0) {
+			IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+			if (flee !is null) {
+				// TROUBLE_WINDOW holds this true for up to 90s per hit, so without a
+				// log throttle this call re-logs on every AiMakeTask re-entry while
+				// fleeing -- 399 lines in one 15-minute smoke test. EnqueueRetreat
+				// itself is called every time regardless (same as the commander
+				// retreat above), on the same assumption that re-enqueuing an
+				// existing retreat is a cheap no-op, not a restart.
+				if (ai.frame >= gNextRezFleeLog) {
+					gNextRezFleeLog = ai.frame + 20 * SECOND;
+					AiLog(Factory::T() + "apex: rez bot taking fire, retreating with whatever it banked");
+				}
+				return flee;
+			}
+		}
+	}
+
 	// Rez bots work the DEFENCE LINE, not wherever they happen to stand.
 	//
 	// apexearth: "if we are losing then reclaim becomes even more important, as
