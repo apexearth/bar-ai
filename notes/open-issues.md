@@ -125,6 +125,27 @@ true of a commander settled into a long build with nothing to reevaluate.
 **Do not treat this as a confirmed lead** -- it needs an actual death event to
 investigate further, not more inference from a 30s heartbeat.
 
+**Tried and reverted (discarded, never committed): eco-for-everyone, isolated
+retry.** T2GATE data from `comm-death-investigate` showed followers crossing
+`FOLLOWER_TECH_ENERGY` (600) only around minute 13 of 25 -- late, matching the
+low cons-T2/mex-upgrade counts. Un-gated `EcoConverters`/`EcoNano`/`EcoFusion`
+from `Factory::EcoLeadActive()` (every player builds some energy
+infrastructure, eco lead at double cadence via `EcoPeriod()`) as an ISOLATED
+retry of one piece of the `a7f3399` bundle, on top of the confirmed-good
+back-wall fix. 4-game triage against the current baseline: energy wasted
+24,829 vs baseline ~10,142 (2.4x), cons T2 1 vs ~3, mex upgrades 2 vs ~4, metal
+produced 30,821 vs ~40,743 -- moved the WRONG way on every metric, not just
+noisy. Matches a failure mode already on record in this file:
+`FollowerEconomyReady`'s own comment cites an 8v8 where every follower teching
+on a clock (not a mechanism this change resembles, but the same "spread
+economy investment across more players" shape) cut army share to 19.3% against
+stock's 31.7%. The bottleneck is real (followers ARE gated on energy pace) but
+"more players build energy" is the wrong lever -- reverted without an 8-game
+confirmation, since the 4-game signal was directionally consistent and
+mechanistic, not just a coin-flip win/loss. Next angle, if pursued: raise the
+energy the LEAD alone produces/converts (already fast at `EcoPeriod` full
+speed) rather than recruiting followers into the same job.
+
 ## 1. The late game collapses, and it is a SEPARATE failure
 
 Measured, 8-game pairs on Comet Catcher 4v4 +25%:
