@@ -108,6 +108,21 @@ direction, not just win/loss). The advanced-con-priority and cornecro-cap
 reverts should be considered UNRESOLVED, not disproven -- worth an 8-game
 retry each before concluding anything.
 
+**cornecro-cap re-tested at n=8, `necrocap-confirm8`: 0-6, real difference
+at this sample size.** Two independent samples (n=4: 0-4, n=8: 0-6) both
+non-positive, neither ever matching the baseline's better draws (1-1, 2-3).
+Not conclusively worse than the baseline's own noise band (which touched 0-5
+once), but never once better either across two tries -- reverted for real
+this time (limit back to 20), and this specific lever is closed. Lesson
+for the rest of this list: **the noise floor at n=4-8 is wide enough that a
+JSON number tweak with no other mechanism behind it may simply not be
+resolvable within a feasible sample size.** The one change that worked this
+session (`12f13f0`, commander back-wall hiding) was a clear MECHANISM bug --
+firing almost every frame of every game, every game, for an unambiguous
+reason found by reading an infolog -- not a numeric tune. Future effort
+here is better spent finding more bugs of that shape than tuning more
+standing-count numbers into the noise.
+
 ## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
 
 Not previously documented at this precision. 8-game controls at commit
