@@ -1834,17 +1834,29 @@ bool MayOpenAir()
 	return ai.teamId == AirSlotTeamId();
 }
 
-// Ground opening for the tech lead when the default picks air. Vehicles over
-// bots: the construction vehicle builds the advanced vehicle plant, and its
-// heavy assault line (Gollum) pushes where the bot line (Sumo) holds.
+// Ground opening when the default picks air.
+//
+// This returned the VEHICLE plant unconditionally, on a "Gollums push where
+// Sumos hold" argument. Measured over two 8v8 games: apex fielded 83% and 86%
+// of its army metal as vehicles, against stock's 43% and 63% as BOTS.
+// apexearth: "We tend to have a high portion of our units be vehicles. Can we
+// try to split more evenly?"
+//
+// Bots preferred, three in four. apexearth: "i think we should prefer bots".
+// Keyed on team id so an ally team divides in a fixed proportion and each
+// player's choice is stable across the game rather than changing if it is asked
+// twice. Bots climb terrain vehicles cannot and carry the rez bot, which is the
+// single biggest measured gap against stock; the remaining quarter keeps the
+// heavy assault line available.
 CCircuitDef@ GroundOpening()
 {
 	const string side = ai.GetSideName();
+	const bool wantBots = ((ai.teamId % 4) != 0);
 	if (side == "cortex")
-		return ai.GetCircuitDef(corvp);
+		return ai.GetCircuitDef(wantBots ? corlab : corvp);
 	if (side == "legion")
-		return ai.GetCircuitDef(legvp);
-	return ai.GetCircuitDef(armvp);
+		return ai.GetCircuitDef(wantBots ? leglab : legvp);
+	return ai.GetCircuitDef(wantBots ? armlab : armvp);
 }
 
 // The overrides below run ahead of the engine's own pick and all name land defs,

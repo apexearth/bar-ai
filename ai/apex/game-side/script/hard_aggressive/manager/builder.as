@@ -296,6 +296,29 @@ const float CON_FAR_FRAC = 0.72f;
 //
 // Pure geometry against two positions that are always real -- our own base and
 // the enemy centroid -- because the threat map is not.
+// A MEX is worth contesting in a way an ordinary building is not: it pays for
+// itself, it denies the spot to them, and refusing one costs the whole game's
+// income from it. The general bar also uses the enemy CENTROID, which on an 8v8
+// is the average of sixteen scattered players and therefore sits mid-map -- so
+// 0.72 of the way to it lands in neutral ground we should simply be taking.
+// apexearth, ten minutes into a game: "we've left a lot of open mexes that we
+// should have easily just gone ahead and taken."
+const float MEX_FAR_FRAC = 0.92f;
+
+bool PastFrontFrac(const AIFloat3& in where, float frac)
+{
+	if (!gHomeSet)
+		return false;
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	const float ex = foe.x - gHomePos.x;
+	const float ez = foe.z - gHomePos.z;
+	const float span = ex * ex + ez * ez;
+	if (span < 1.f)
+		return false;
+	const float t = ((where.x - gHomePos.x) * ex + (where.z - gHomePos.z) * ez) / span;
+	return t > frac;
+}
+
 bool PastFront(const AIFloat3& in where)
 {
 	if (!gHomeSet)
@@ -1591,7 +1614,16 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (!isComm) {
 		const string kind = SiteBuildName(task);
 		if (kind != "") {
-			const float heat = ThreatFor(unit, task.GetBuildPos());
+			const AIFloat3 site = task.GetBuildPos();
+			float heat = ThreatFor(unit, site);
+			// Mexes get the laxer bar. ThreatFor's real reading still applies when
+			// the threat map has data; this only relaxes the GEOMETRIC fallback,
+			// which is what actually fires today.
+			if ((kind == "mex") && (heat > CON_THREAT_VETO)
+				&& !PastFrontFrac(site, MEX_FAR_FRAC))
+			{
+				heat = 0.f;
+			}
 			if (heat > CON_THREAT_VETO) {
 				++gConRefused;
 				ConStrike(unit);
