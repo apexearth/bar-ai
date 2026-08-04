@@ -1474,3 +1474,62 @@ clearly worse or a wash, revert `economy.json`'s e-income override back to
 way, since on its own (before any JSON change) it can only ever cause the
 search to consider MORE options on a given tick, never fewer, so it has no
 plausible downside independent of the gate value.
+
+## 22. Round-2 attempt at issue 21's batch -- STILL incomplete, orphaned-process trap identified (2026-08-04)
+
+Picked up issue 21 exactly as written: no code change needed, the C++ fix and
+`economy.json` override were already implemented and deployed. Before doing
+anything else, checked for stuck processes per harness discipline and found
+issue 21's own batch (`tournaments/20260804-154253-round1-fusion-concurrency`)
+still had **3 live `spring-headless.exe` processes**, but its `ledger.jsonl`
+had only 3 entries and every one had `winner: null` -- i.e. these were 3
+in-flight matches with no controlling `run_tournament.py` process left alive
+to launch the remaining 13 jobs or ever record a result for the 3 running.
+**The orchestrator died with the prior agent turn; the workers it spawned did
+not.** A batch launched this way cannot self-complete no matter how long it is
+left -- there is nothing left to dispatch job 4 through 16 once the parent
+process is gone. This is a new, previously-undocumented failure mode distinct
+from the ones already in CLAUDE.md's harness-discipline section: it is not
+"someone edited a file the run needed" or "a waiter kept polling for a
+finished run" -- it is the run's own driver process disappearing at a subagent
+turn boundary while its workers keep going, silently producing a batch that
+can never reach its target count.
+
+Killed the 3 orphaned `spring-headless.exe` (`Get-Process spring-headless |
+Stop-Process -Force`, confirmed 0 remaining after a retry -- the first
+`Stop-Process` call reported no matching processes yet `Get-Process`
+immediately after still showed the same 3 PIDs with rising CPU time; a second
+`Stop-Process -Id <pid>` targeting the exact PIDs was needed before they
+actually died). Verified `deploy_ai.py status` still reported `apex in sync`
+(the round-1 deploy of the locally-built `SkirmishAI.dll` plus the
+uncommitted `economy.json` override was untouched by the process kill), so no
+rebuild or redeploy was needed. Launched a fresh, independent 16-game batch,
+`tournaments/20260804-154943-round2-fusion-concurrency`, with `run_tournament.py`
+backgrounded so its driver process is decoupled from this turn, and armed a
+polling monitor for `ledger.jsonl` reaching 16 lines.
+
+**This round again ran out of turn budget before the batch finished** -- at
+the time this had to be written up, `ledger.jsonl` for round2 did not yet
+exist (no game had completed even one 25-minute headless match, consistent
+with the ~15-25 min wall time this repo's own docs quote for a 16-game
+batch at 3 workers). **Zero win/loss or composition data was collected in
+this round either.** No commit was made to `economy.json` or any patch file;
+`git status --short` at the end of this round shows exactly the same single
+uncommitted line as issue 21 left it (`M
+ai/apex/game-side/config/hard_aggressive/economy.json`) -- no new drift.
+
+**For whoever picks this up next**: the deployed DLL and `economy.json` are
+still in the state to test (`deploy_ai.py status` said `apex in sync` as of
+this round; re-check it first in case another round has touched things since).
+Before relying on any background batch across a turn boundary, **confirm the
+driver process is actually alive**, not just that `spring-headless.exe`
+processes exist -- 3 running workers with 0 ledger entries and no growth over
+several minutes is the signature of an orphaned batch, not a slow one. If
+`tournaments/20260804-154943-round2-fusion-concurrency` is still running and
+its ledger is growing, let it finish and run `composition.py` on it. If it is
+also orphaned (workers alive, ledger stalled), kill and relaunch again with
+the same name-suffix pattern. Once a batch actually reaches 16/16, follow
+issue 21's decide step unchanged: corfus vs coradvsol share, T2 spend ratio
+vs stable (was 0.63 -> 0.21 when the gate was lowered alone), and wipeout
+rate (apex died at 28 min last time this gate was touched alone) are still
+the specific things to check before commit-vs-revert.
