@@ -858,6 +858,19 @@ i.e. effectively disabled.
   *lower* than baseline (3% nonzero vs 8%). Commander survival is still the
   strongest outcome correlate measured here, so it is worth pursuing, but not
   through a sampled position-threat signal.
+- **A fourth approach — "commander to the back wall" on enemy TEAM CENTROID
+  proximity (`BaseUnderAttack`, `COMM_BASE_DANGER`) — measured actively harmful
+  and is now disabled (`COMM_BACK_WALL_ON = false`).** On Comet Catcher 4v4 the
+  centroid of four spread-out enemies sits under the 2200-elmo bar from ~1
+  minute in for the entire game, regardless of whether anyone is attacking, so
+  the branch fired roughly every 30s all game and spent the commander's build
+  time — normally the fastest builder available early — on repeat back-wall
+  solars instead of the opening build. 8-game control vs
+  `BARb:stable:hard_aggressive`, same map/handicap/faction: paired K/D
+  log-ratio t-stat went from -13..-17 (apex shut out 0-5/0-7 decided) to -0.87
+  (not distinguishable from even, 1-1 head to head, one outright apex win). The
+  health-based retreat (`COM_RETREAT_HEALTH`) is untouched by this flag and
+  still the thing pulling a commander out of real danger.
 - **Choosing a metal spot from script.** Nothing in the binding surface can
   enumerate metal spots or clusters — `CMetalManager` and `CMetalData` are not
   registered at all — and `TaskB::Common` leaves `spotId` at -1, which

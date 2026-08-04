@@ -654,6 +654,26 @@ const float REAR_DISTANCE     = 450.f;
 const float COMM_BASE_DANGER = 2200.f;
 const int   COMM_HIDE_PERIOD = 30 * SECOND;
 int gNextCommHide = 0;
+// OFF. On Comet Catcher 4v4 the enemy TEAM CENTROID sits under COMM_BASE_DANGER
+// from ~1 minute in and stays there for the whole game (logged distances
+// 1300-2200 throughout), because the map is small enough that four spread-out
+// enemies average close to home regardless of whether anyone is actually
+// attacking. BaseUnderAttack() was not reading a threat on this map; it was
+// reading map scale. That fired this branch roughly every COMM_HIDE_PERIOD for
+// the entire game, spending the commander's build time -- normally the single
+// fastest builder early -- on repeat back-wall solars instead of the opening
+// build.
+//
+// Measured, 8-game control vs BARb:stable:hard_aggressive, Comet Catcher 4v4
+// +25% Cortex/Cortex, 25 min: paired K/D log-ratio went from t=-13..-17
+// (apex crushed every game, decided 0-5/0-7) to t=-0.87, not distinguishable
+// from even (1-1 head to head, apex won one outright, 6/8 games ran the full
+// 25 minutes instead of collapsing by minute 6-10). This was the single
+// largest lever found in the session -- see notes/open-issues.md.
+//
+// COM_RETREAT_HEALTH (health-based retreat) is unaffected by this flag and is
+// still the thing that pulls a commander out of real danger.
+const bool COMM_BACK_WALL_ON = false;
 string armsolar("armsolar");  string corsolar("corsolar");  string legsolar("legsolar");
 
 bool BaseUnderAttack()
@@ -1556,7 +1576,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// LIMITATION: GetEnemyPos is the centroid of ALL enemies, so on a big map
 		// with spread enemies it can read far away while one of them is in our
 		// base. This catches the massed case, not the single raider.
-		if (BaseUnderAttack() && (ai.frame >= gNextCommHide)) {
+		if (COMM_BACK_WALL_ON && BaseUnderAttack() && (ai.frame >= gNextCommHide)) {
 			// Energy full: just leave. The solar is only a way to make the
 			// commander WALK somewhere -- it is not wanted for its own sake, and
 			// building one on a full bank is pure waste. This fired 21 times in a
