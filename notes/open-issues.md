@@ -68,7 +68,21 @@ log-ratio t from -13..-17 to -0.87 (not significant). **Still not "reliable"**
 -- the goal is not met, this is progress on issue 0.1's shutout, not a win.
 Next candidate to chase: apex still produces ~40k metal to stable's ~64k
 in the same 8-game run, so the economy gap (not just the commander's early
-diversion) is still open. Watch another game now that the shutout is gone --
+diversion) is still open.
+
+**Tried and reverted (disabled, not deleted): heavy-AA escalation, `d3bb0e2`.**
+apexearth watched a game and reported light AA (corrl, 80m, deterrence-only,
+capped at 12) doing nothing against ~10 T2 gunships. Added a second tier
+(cormadsam/armferret/legflak) gated on real enemy air investment and income.
+Measured WORSE against the back-wall-fix baseline: head to head 1-1 -> 0-5,
+apex metal 40,743 -> 27,382, static defence share 10.6% -> 11.5%, wiped-out
+9/32 -> 13/32 -- a smaller version of the flak-tower mistake already on
+record in this file. One trial-run game won outright on economy and K/D
+(265,925 metal, K/D 1.13), so this is not obviously dead; a narrower version
+(higher income floor, lower cap, or gated on SUSTAINED rather than one-shot
+enemy air) may be worth a later isolated retry. `AA_HEAVY_ON = false`.
+
+Watch another game now that the shutout is gone --
 the next-largest visible defect may only be visible once the commander isn't
 masking it.
 
