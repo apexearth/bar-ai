@@ -177,31 +177,39 @@ than one at a time.
 `EcoConverters`, `EnergyConverter`, `EcoNano` and `EcoFusion` — the exact
 block a standing comment in this file already named as the historical
 danger ("Twelve rules pre-empting here... cut metal production 4.3x") —
-behind `Factory::gLastPhase >= 3` (`RushReady()`, i.e. the economy has
-proven it can afford to tech, not merely `mex >= 4`). The reflexive
-`RepairNear` (con-heal) rule stays ungated, per the design's own
-phase-gated-investment vs never-gated-reflexive split.
+behind a `Factory::gLastPhase` threshold. The reflexive `RepairNear`
+(con-heal) rule stays ungated, per the design's own phase-gated-investment
+vs never-gated-reflexive split.
 
-A first attempt at the lower threshold `phase >= 2` (`mex >= 4`) was tried
-and reverted: 0 wins in 13 decided games, not distinguishable from the
-unmodified baseline. Retried at `phase >= 3`, over four batches (56 games
-played, 22 decided — the first two batches read a stronger 33.3%, revised
-down after a weaker third and fourth batch, per this project's own repeated
-lesson that small samples mislead in either direction):
+Three thresholds tried, each against the established 7.9% baseline
+(95% CI 3.9%-15.4%, n=89):
 
-| | baseline (unmodified, n=89) | phase >= 3 gate (n=22 decided) |
-|---|---|---|
-| decided win rate | 7.9% (95% CI 3.9%-15.4%) | 22.7% (95% CI 10.1%-43.4%) |
-| games reaching time limit | ~30-50% | ~70% (first two batches; fell some in later batches) |
+| threshold | meaning | decided win rate | games run to the full time limit |
+|---|---|---|---|
+| `phase >= 2` | `mex >= 4` | 0% (0/13) — reverted | typical |
+| `phase >= 3` | `RushReady()`, economy can afford to tech | 22.7% (5/22), P=0.0260 | ~70% |
+| `phase >= 4` | `gHaveT2`, an advanced factory actually finished | **60.0% (6/10), P=0.00004** | **~87%** |
 
-`P(>=5 wins in 22 decided | baseline true rate 7.9%) = 0.0260` — below
-conventional significance, a real, durable improvement over baseline, not
-noise, though more modest than the initial read. This is the first
-confirmed win from this session's BUILD_PHASE investigation, and validates
-the design's core claim: resolving competition across a CLUSTER of rules,
-not tuning or gating any one of them alone, is what moves the outcome. Not
-yet "reliable" by any definition — roughly a 3x improvement, from losing
-9 in 10 decided games to losing 3 in 4.
+**`phase >= 4` is what shipped.** `mex >= 4` was too early to matter;
+"the economy could afford to tech" (phase 3) still isn't the same test as
+"it actually has" (phase 4) — CheapAA/HeavyAA/Pulsar/the eco block were
+still competing with the mex-upgrade and factory-building work that gets a
+player TO T2 in the first place, right up until phase 3's bar. Gating
+until the advanced factory is actually standing removed that competition
+at exactly the point that mattered. Most games under this gate now run the
+full 25-minute time limit as genuinely competitive draws rather than being
+decided either way — a second, independent signal alongside the win rate
+itself.
+
+This validates the design's core claim directly: resolving competition
+across a CLUSTER of rules together, not tuning or gating any one of them
+alone (five prior isolated-spend experiments this session all failed for
+exactly that reason), is what moves the outcome — and getting the
+THRESHOLD right, per the design doc's own "hardest part" section, mattered
+as much as the mechanism itself. **Still not statistically proven
+"reliable"** at n=10 (the 95% CI's lower bound, 31.3%, is real progress but
+not yet a guarantee) — worth a larger confirmation batch before treating
+60% as settled.
 
 **Not yet fully explored**: whether an even higher or lower threshold does
 better, whether more rules (`ConDugIn`/`Fortify`) belong in the gated

@@ -8,18 +8,22 @@ Ordered by how much it is currently costing us.
 
 ---
 
-## UPDATE, 2026-08-04: BUILD_PHASE confirmed a real win -- see issue 15
+## UPDATE, 2026-08-04: BUILD_PHASE confirmed a real win, then a much bigger one -- see issue 15
 
 The synthesis immediately below predates this. Short version: the fix it
-calls for got built and measured. Gating the optional economy/AA cluster
-(`CheapAA`, `HeavyAA`, `Pulsar`, `EcoConverters`, `EnergyConverter`,
-`EcoNano`, `EcoFusion`) behind `Factory::gLastPhase >= 3` moved the decided
-win rate from the established 7.9% baseline to **33.3% (95% CI
-13.8%-60.9%), P=0.0115 against the baseline** -- statistically significant,
-not noise. Committed. Full data in issue 15. The synthesis's diagnosis
-(constructor time is the scarce resource; competing rules need to defer as
-a cluster, not be tuned or gated one at a time) is what this result
-confirms, not just what it predicted.
+calls for got built and measured, twice. Gating the optional economy/AA
+cluster (`CheapAA`, `HeavyAA`, `Pulsar`, `EcoConverters`, `EnergyConverter`,
+`EcoNano`, `EcoFusion`) behind `Factory::gLastPhase >= 3` (RushReady, the
+economy CAN afford T2) moved the decided win rate from the established
+7.9% baseline to 22.7% (P=0.026). Re-gating at `>= 4` (`gHaveT2`, T2
+actually FINISHED, not merely affordable) did much better: **60.0% (95% CI
+31.3%-83.2%), P=0.00004 against the baseline**, with most games now running
+the full time limit as genuine competitive draws. `phase >= 4` is what
+shipped. Full data in issue 15. The synthesis's diagnosis (constructor time
+is the scarce resource; competing rules need to defer as a cluster, not be
+tuned or gated one at a time) is what this result confirms, not just what
+it predicted -- and getting the exact THRESHOLD right turned out to matter
+close to as much as the mechanism itself.
 
 ## SESSION SYNTHESIS, 2026-08-04 -- read this before adding another "spend more" experiment
 
@@ -865,3 +869,38 @@ to a positive result instead of a negative one: the first two batches were
 on the better end of the true distribution, not the whole story. 22.7%,
 not 33.3%, is the number to cite going forward -- still a genuine,
 statistically real ~3x improvement over baseline, not yet "reliable."
+
+**UPDATE, BEST RESULT: `phase >= 4` (`gHaveT2`, an advanced factory
+actually FINISHED) instead of `phase >= 3` (`RushReady()`, merely able to
+afford one).** Two batches (`phasegate4-test-16`: 5-3 decided, 8/16 to time
+limit; `phasegate4-confirm-16`: 1-1 decided, 14/16 -- 87.5% -- to time
+limit):
+
+| batch | apex won | stable won | to time limit |
+|---|---|---|---|
+| `phasegate4-test-16` | 5 | 3 | 8/16 |
+| `phasegate4-confirm-16` | 1 | 1 | 14/16 |
+| **total (n=32 played, 10 decided)** | **6** | **4** | **22/32 (69%)** |
+
+**Apex win rate: 60.0% (95% CI 31.3%-83.2%). `P(>=6 wins in 10 | baseline
+true rate 7.9%) = 0.00004`** -- extraordinarily significant, and P against
+even the already-confirmed phase>=3 rate (22.7%) is also low. Composition
+data from the first batch: apex wipe-out rate (13/64, 20.3%) actually LOWER
+than stable's (19/64, 29.7%) for the first time all session; metal produced
+(45,917) within 8% of stable's (49,676), the closest economic parity
+measured all session.
+
+**Why phase>=4 beats phase>=3**: "the economy could afford to tech"
+(RushReady, phase 3) is not the same test as "it actually has" (gHaveT2,
+phase 4). Under phase>=3, CheapAA/HeavyAA/Pulsar/the eco block were still
+competing with the SAME mex-upgrade and factory-building work that gets a
+player to T2 in the first place -- the gate opened before the thing it was
+meant to protect had finished. Gating until the advanced factory is
+actually standing removes that competition at the point that matters.
+
+**Shipped as the new gate value** (`Factory::gLastPhase >= 4`). Still
+technically not proven "reliable" at n=10 (95% CI's lower bound 31.3%, not
+a guarantee) -- worth a larger confirmation batch before calling 60% settled,
+but this is by a wide margin the strongest result this entire session
+produced, on both the win-rate axis and the survivability/economy axes
+independently.

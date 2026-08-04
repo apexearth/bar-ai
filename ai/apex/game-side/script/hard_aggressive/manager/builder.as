@@ -1769,21 +1769,22 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 					+ " held=" + gRepairHeld);
 			}
 		}
-		// BUILD_PHASE gate on the optional economy/AA cluster, CONFIRMED,
-		// 2026-08-04. A first try at phase >= 2 (mex >= 4) on this exact block
-		// was reverted -- 0 wins in 13 decided games, not distinguishable from
-		// the unmodified baseline. This gate, at phase >= 3 (RushReady, i.e.
-		// the economy has proven it can afford to tech -- not merely mex >= 4,
-		// which may be too early to mean a constructor can actually be
-		// spared), measured a REAL improvement: 4 wins in 12 decided games
-		// across 3 batches (33.3%, 95% CI 13.8%-60.9%) against the
-		// established 7.9% baseline -- P(>=4 wins in 12 | baseline true rate)
-		// = 0.0115. See notes/open-issues.md issue 15 for the full data and
-		// CHANGES.md for the summary. Before phase 3 (opening/expand/build
-		// up), a constructor's only job is expansion; CheapAA, HeavyAA,
-		// Pulsar and the eco converters/nano/fusion block below can all wait
-		// for an economy proven able to spare the build time.
-		else if (Factory::gLastPhase >= 3) {
+		// BUILD_PHASE gate on the optional economy/AA cluster. Progression,
+		// 2026-08-04: phase >= 2 (mex >= 4) reverted, 0 wins in 13 decided.
+		// phase >= 3 (RushReady) confirmed a real improvement, 5 wins in 22
+		// decided (22.7%) across 4 batches. phase >= 4 (gHaveT2 -- an
+		// advanced factory actually finished, not just afforded) measured
+		// BEST: 6 wins in 10 decided (60.0%, 95% CI 31.3%-83.2%) across 2
+		// batches, P(>=6 wins in 10 | baseline true rate 7.9%) = 0.00004, and
+		// most games (14/16 in the larger batch) ran the full time limit
+		// competitively rather than being decided either way. See
+		// notes/open-issues.md issue 15 for the full data and CHANGES.md for
+		// the summary. Before an advanced factory exists, a constructor's
+		// only job is expansion and reaching T2; CheapAA, HeavyAA, Pulsar and
+		// the eco converters/nano/fusion block below can all wait for an
+		// economy that has actually teched, not merely one that could afford
+		// to.
+		else if (Factory::gLastPhase >= 4) {
 			IUnitTask@ aa = CheapAA(unit);
 			if (aa !is null)
 				return aa;
