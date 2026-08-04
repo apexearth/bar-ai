@@ -1587,3 +1587,82 @@ open question for whoever picks this up next: test the C++ fix ALONE, with
 `economy.json` left at stock `[30, 40, 30]`, before concluding anything
 about fusion concurrency as a mechanism -- this round only tested "gate +
 concurrency fix together" and that combination lost.
+
+## 24. `round4-concurrency-alone` -- the C++ fix ALONE also regressed. Fusion-concurrency line fully closed (2026-08-04)
+
+Tested issue 23's exact residual question: the concurrency-capped-candidate
+fallthrough fix (`bestDef = nullptr; break;` -> `continue` in
+`EconomyManager.cpp::UpdateEnergyTasks`) with `economy.json` left at stock
+`[30, 40, 30]` -- no JSON gate change at all. Confirmed before testing: repo
+`git status` clean, `deploy_ai.py status` in sync at `9a13920fc2e7`, and the
+`continue` was present and reading exactly as issue 21/23 describe in
+`vendor/engine/AI/Skirmish/BARb/src/circuit/module/EconomyManager.cpp` around
+line 1450 -- so no rebuild was needed going in, only a fresh isolated batch.
+Smoke-tested first (5-min headless match, 0 AngelScript compile errors, both
+variants confirmed loaded).
+
+`tournaments/20260804-161220-round4-concurrency-alone`, 16/16 valid games, no
+crashes, no desyncs:
+
+```
+outcome  BARb-stable-hard_aggressive     7/16   43.8%
+         BARbApex-apex-hard_aggressive   2/16   12.5%
+```
+
+9 games ended undecided at the time limit. Composition confirms this is not
+a coin-flip on win rate alone -- it reproduces the same shape of collapse
+issue 23 found for the *combined* gate+fix change, on the fix alone:
+
+- metal produced: apex 33,155 vs stable 46,275 (~28% lower) -- issue 23's
+  combined change was ~25% lower
+- T2 spend: apex 10,393 vs stable 23,013 -- ratio **0.45**, actually a
+  *worse* collapse than the combined change's 0.52
+- wipeout rate: apex 20/64 player-games ended wiped out vs stable's 11/64 --
+  apex died more often, consistent with issue 23's 18/64 vs 10/64
+- apex's top metal sink this round was `cornecro` (16.3%) then `corsolar`
+  (14.4%), with `corfus` down to 4.0% -- a different composition than issue
+  23's combined-change batch (where corfus held 17.2%, matching stable).
+  The specific unit picked differs batch to batch, but the aggregate
+  T2-collapse signature does not.
+
+**This falsifies issue 21/23's own argument that the fallthrough fix "can
+only let the search consider MORE candidates, never fewer, so it should have
+no plausible downside."** That reasoning is true narrowly -- the search does
+see more defs -- but it ignores that the def it then picks can be a *worse*
+one for the moment (e.g. a T1 solar/necro pick that never rolls forward to
+fusion, versus the old behaviour of giving up on energy entirely for a tick
+and retrying). Falling through to a cheaper option changed WHICH cheaper
+option got queued repeatedly rather than fixing the starvation; three
+independent metrics (T2 ratio, metal produced, wipeout rate) moved the same
+wrong direction as the combined change, not a subset -- that is stronger
+than a single win-rate swing this session's own noise floor could produce.
+
+**Reverted.** Restored `bestDef = nullptr; break;` in
+`vendor/engine/AI/Skirmish/BARb/src/circuit/module/EconomyManager.cpp`,
+rebuilt via the documented one-step ninja build
+(`docs/06-building-the-dll.md`), redeployed (`deploy_ai.py deploy apex`
+printed `SkirmishAI.dll (local build)`, confirming the rebuilt binary went
+out), and smoke-tested again (0 compile errors). Checked
+`game-patches/circuitai/0003-cumulative.patch`: it never actually contained
+the `continue` fallthrough hunk in the first place -- that edit was a
+local-only change layered on top of the committed patch and was never
+regenerated into it. So the revert requires no patch update; the tracked
+patch already matches the reverted, currently-deployed state, and
+`git status --short` on the main repo shows zero diff.
+
+Note for whoever touches `vendor/engine` next: the working tree carries
+several OTHER uncommitted diffs beyond this one (`AA_MASS_RATIO`,
+`SQUAD_SPEED_RATIO`, `REPAIR_WORTH_COST`, the squad regroup threat cap, the
+squad cohesion spread cap -- several with "back to upstream" comments,
+suggesting they were already reverted locally this session but never
+regenerated into the patch either). None of those were touched, tested, or
+judged by this round; do not assume `git diff` in `vendor/engine/AI/Skirmish/BARb`
+being non-empty means untested work is pending review -- check each hunk
+against the committed patch before acting on it.
+
+**Conclusion: the fusion/energy-concurrency line (issues 18, 21, 23, 24) is
+now fully closed as tried and ruled out**, in every combination tested this
+session -- gate alone, gate+fix, and fix alone. All three regressed T2 spend
+and metal production versus stable. Do not re-open without a materially
+different mechanism (e.g. a per-def concurrency budget instead of a global
+one), not a re-run of the same lever.
