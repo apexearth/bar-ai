@@ -38,6 +38,20 @@ rest of the bundle intact) did not fix the shutout against `BARb:stable:hard`
 is not the dominant cause of the loss -- it may still be worth keeping reverted
 on its own merits, just not as an explanation for this result.
 
+Two more sub-changes tried in isolation, both reverted (see below in this
+file): eco-for-everyone (negative). The remaining untested piece --
+armfark/corfast `support` -> `builder` -- was deliberately NOT retried: the
+CURRENT committed comment on those units (`behaviour.json`) gives the OPPOSITE
+justification the bundle's commit message did. Bundle's reasoning: `support`
+starves the T2 lab of cheap build power. Current file's reasoning: `builder`
+made the T2 lab hand the unit back AS the shared advanced constructor instead
+of a real one. Both are stated as fact by a past session with no measurement
+cited in either comment. This needs resolving with a real test (does
+`GetFacRoleDef(ROLE_TYPE(BUILDER))` actually pick armfark/corfast over a real
+advanced constructor when both exist?) before touching the role again --
+guessing which story is true and shipping it blind, especially unsupervised,
+risks reintroducing a bug this project already paid to find once.
+
 ## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
 
 Not previously documented at this precision. 8-game controls at commit
