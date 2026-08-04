@@ -8,6 +8,60 @@ Ordered by how much it is currently costing us.
 
 ---
 
+## SESSION SYNTHESIS, 2026-08-04 -- read this before adding another "spend more" experiment
+
+Five independent, isolated, properly-measured tests this session all failed
+or measured negative, each adding or increasing ONE spend category on top of
+an already-confirmed-good baseline:
+
+| change | result |
+|---|---|
+| heavy-AA (new duplicate mechanism) | measured worse, n=8+4 |
+| eco-for-everyone (converters/nano/fusion for all, not just eco-lead) | measured worse, n=4 (every metric moved the wrong way) |
+| advanced-con recruit priority NORMAL->NOW | measured worse, n=4 |
+| cornecro standing cap 20->6 | confirmed worse at n=8 (two samples, neither positive) |
+| `AA_HEAVY_PER` 1500->900 (the EXISTING, correctly-designed heavy-AA system, not a duplicate) | confirmed worse at n=16 (28 games total across 3 batches) |
+
+**This is not five unrelated failures. It is the same failure mode CLAUDE.md
+already names from this project's history**: "every one of them spends
+CONSTRUCTOR TIME, and constructor time is the economy." Constructor time
+(and the metal/energy it can turn into finished buildings before the next
+crisis) is the scarce resource this AI is actually bottlenecked on at this
+benchmark, not any single missing capability. Every rule that claims a slice
+of it looks reasonable in isolation and measures negative in practice,
+because something else -- usually army -- pays for it.
+
+**The already-designed fix is `docs/12-build-phases.md` (BUILD_PHASE),
+apexearth's own design, written to solve exactly this. It is NOT
+implemented anywhere in `ai/apex/game-side/script/`** (checked
+2026-08-04, `grep -rl BUILD_PHASE` returns nothing). It replaces winner-
+take-all competing `if` branches with an explicit phase state (opening ->
+expand -> build up -> pre-T2 -> T2 -> pre-T3 -> T3 -> late) that most
+investment rules defer to, while reflexive rules (retreat, defend under
+fire, AA when bombers are overhead) stay ungated. Its own doc names the
+two failure modes to avoid: driving phase from a clock instead of state
+(wrong in exactly the games that matter), and letting phase only go up
+(a player that loses its commander and crashes back to a thin economy
+must fall phases, not keep buying T3 gantries it can no longer afford).
+
+**This is a substantial engineering project — new state, threading a gate
+through a dozen-plus existing rules, re-measuring each one's behavior under
+it — not a same-session quick fix, and not something to implement blind
+this late in an already long, unsupervised session.** It is the honest
+answer to "what would actually move the win rate," and the next session
+that has the time and (ideally) apexearth's live-watching should build it,
+using the failed experiments above as the evidence for WHY it's needed and
+`tools/composition.py`'s per-phase spend breakdown as the way to verify it
+worked (per the doc's own measurement plan: mex upgrades should recover
+toward stock's 8-11, not stay at the ~2 the current flat rule set produces).
+
+Aggregate current win rate against this benchmark, for reference: **20.8%**
+of decided games (95% CI 9.2%-40.5%, n=24 across 5 independent 8+ game
+batches at the unmodified current baseline) -- see issue 0.1 below for the
+full breakdown.
+
+---
+
 ## 0. `a7f3399` reverted -- measured worse than the commit before it
 
 Commit `a7f3399` (armfark/corfast back to builder, eco spend un-gated from
