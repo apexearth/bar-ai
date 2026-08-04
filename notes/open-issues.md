@@ -1533,3 +1533,57 @@ issue 21's decide step unchanged: corfus vs coradvsol share, T2 spend ratio
 vs stable (was 0.63 -> 0.21 when the gate was lowered alone), and wipeout
 rate (apex died at 28 min last time this gate was touched alone) are still
 the specific things to check before commit-vs-revert.
+
+## 23. Round-2's `round2-fusion-concurrency` batch finally completed 16/16 -- REGRESSION, reverted (2026-08-04)
+
+Picked up where issue 22 left off. Confirmed the batch's orchestrator (PID
+6840, `run_tournament.py --name round2-fusion-concurrency`) was alive and
+actively dispatching new match jobs (t003-t005 running at the time of
+inspection), not orphaned like round1 -- so this round let it run to
+completion instead of relaunching. `tournaments/20260804-154943-round2-fusion-concurrency`
+reached 16/16 valid games with no compile errors, no crashes, no desyncs.
+
+**Result: a clear regression, not the hoped-for fix.**
+
+```
+python tools/review.py tournaments/20260804-154943-round2-fusion-concurrency
+outcome  BARb-stable-hard_aggressive     5/16   31.2%
+         BARbApex-apex-hard_aggressive   0/16    0.0%
+```
+
+apex won **zero** of 16 games (5 decided for stable, 11 hit the time limit
+with no winner). Composition confirms this was not noise:
+
+- metal produced: apex 39,371 vs stable 52,211 (apex ~25% lower)
+- T2 spend: apex 13,653 vs stable 26,451 -- ratio 0.52, i.e. the same
+  collapse pattern issue 18/21 warned about when the fusion gate is lowered
+  without enough concurrency headroom, just not quite as severe as the
+  bare-gate-lowering's 0.21
+- wipeout rate: apex 18/64 player-games ended wiped out vs stable's 10/64 --
+  apex died more often, not less
+- corfus was still apex's #1 metal sink (17.2% share, close to stable's
+  17.6%) so the `armfus`/`corfus` e-income override to `[30, 40, 30, 300]`
+  did not starve fusion construction itself -- the collapse shows up
+  downstream, in T2 spend and overall metal produced, consistent with the
+  extra concurrency slot letting fusion compete with (and lose to, or crowd
+  out) other T2 economy work rather than fixing the original starvation.
+
+**Decision, per this session's stated rule (issue 21's own contingency
+plan): reverted.** `ai/apex/game-side/config/hard_aggressive/economy.json`
+restored to `[30, 40, 30]` via `git checkout --`; `git status --short` shows
+zero diff. Redeployed the clean HEAD (digest `9a13920fc2e7`), smoke-tested
+(3-minute headless match, 0 AngelScript compile errors in the infolog) --
+confirms the reverted state is what is actually live before anyone builds on
+it next.
+
+The vendor-side C++ concurrency fix (`continue` instead of `break` in the
+energy-task search, referenced in issue 21) was **not touched or re-verified
+this round** -- only the `economy.json` JSON override was tested and
+reverted. Issue 21's original argument that the C++ fix alone has no
+plausible downside (it can only let a search consider MORE options per
+tick, never fewer) still stands on its own logic, but it has never been
+benchmarked independently of the JSON gate change. That is the concrete
+open question for whoever picks this up next: test the C++ fix ALONE, with
+`economy.json` left at stock `[30, 40, 30]`, before concluding anything
+about fusion concurrency as a mechanism -- this round only tested "gate +
+concurrency fix together" and that combination lost.
