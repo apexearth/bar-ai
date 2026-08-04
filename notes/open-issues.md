@@ -82,9 +82,28 @@ record in this file. One trial-run game won outright on economy and K/D
 (higher income floor, lower cap, or gated on SUSTAINED rather than one-shot
 enemy air) may be worth a later isolated retry. `AA_HEAVY_ON = false`.
 
-Watch another game now that the shutout is gone --
-the next-largest visible defect may only be visible once the commander isn't
-masking it.
+**Next candidate, found from the `nobackwall-confirm` infologs (not a watch --
+apexearth went to bed, so this is stats-plus-mechanism per** [[mechanism-over-aggregates]]
+**style, cross-checking a log line rather than trusting an aggregate alone):**
+one player's `conbranch` instrumentation (a 30s heartbeat tied to that unit's
+constructor decisions) stops dead at 13-19 minutes in most of the 8 games,
+while the other three players' logs run to the full 25-minute cap. The
+stopped player's own log shows why in `t000`: "commander retreating at 61%,
+70%, 75%, 81% health" between 12.2 and 13.2 minutes, then nothing further from
+that instance. In the two games where NO player's log stops early, both went
+the full 25 minutes as competitive, undecided matches; in every game where one
+(sometimes two) did stop early, apex lost decisively. This lines up with the
+standing project finding [[commanders-decide-bar-games]]: commander survival
+predicts the winner, and three prior attempts at commander retreat logic
+(`commander.json` levers, `GetEnemyCostAt`, `GetBuilderThreatAt`) all failed to
+fix it (see CHANGES.md "Known not done"). `COM_RETREAT_HEALTH` (0.85, health-
+based) is the one thing in this file that reliably fires, and it still isn't
+enough to keep a commander alive under sustained pressure once retreat itself
+does not equal safety (no ally cover, no safe retreat lane, or simply
+outranged while fleeing). Worth a dedicated session: instrument WHY a
+retreating commander still dies (position at death vs. nearest ally, whether
+allied fire support existed) rather than tuning the health bar again blind --
+tuning that bar with a NUMBER has been tried and burned time before.
 
 ## 1. The late game collapses, and it is a SEPARATE failure
 
