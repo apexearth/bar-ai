@@ -2217,8 +2217,17 @@ void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 	else if (energizer2 is unit)
 		@energizer2 = null;
 	// Same NOCOUNT hazard as gT1FacUnit: a dangling handle reads as non-null.
-	if (gComm is unit)
+	if (gComm is unit) {
+		// A commander is never a gift candidate (ShareAdvCon excludes
+		// Role::COMM), so this removal IS a death signal -- the real one this
+		// file has lacked. "comm threat=... hp=..." (LogCommanderThreat) only
+		// samples every 30s and cannot tell "died suddenly" from "log just
+		// went quiet because nothing needed reevaluating"; this fires exactly
+		// once, at the actual removal.
+		AiLog(Factory::T() + "apex: COMMANDER LOST frame=" + ai.frame
+			+ " hp=" + formatFloat(unit.GetHealthPercent() * 100.f, "", 0, 0));
 		@gComm = null;
+	}
 	for (uint i = 0; i < gFusions.length(); ++i) {
 		if (gFusions[i] is unit) {
 			gFusions.removeAt(i);
