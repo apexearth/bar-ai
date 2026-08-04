@@ -74,6 +74,40 @@ against other builder-role candidates, so the fix for one bottleneck starved
 a different one. Reverted; the priority split may be intentional load-shedding
 that just isn't documented, not a bug.
 
+**Tried and reverted (discarded, never committed): cornecro (rez bot) standing
+limit 20 -> 6.** `composition.py` on the 8-game `nobackwall-confirm` run showed
+`cornecro` at 14.8% of ALL apex metal (76,700, ~590 built across 32
+player-games) with no reasoning cited for the limit of 20 on a 130-metal
+support unit with zero combat power. 4-game triage: cumulative cornecro spend
+DID drop proportionally (~1,926/player-game vs ~2,397 before, roughly a 20%
+cut, so the cap change worked as intended), but head to head was still 0-4 and
+metal produced fell further (18,719). Reverted as inconclusive rather than
+confirmed-bad -- see the noise-floor recheck immediately below, which throws
+real doubt on trusting ANY n=4 result from this stretch of the session.
+
+**IMPORTANT — noise-floor recheck, `noise-recheck` tournament, no code change
+from the committed baseline:** after three single-variable n=4 triages in a
+row all landed at 0-4 (advanced-con priority, cornecro cap, and the earlier
+comm-death-investigate's related batch), ran a fresh 8-game batch at the
+EXACT committed HEAD with nothing changed, to check whether "0-4" had become
+the new normal for this baseline or was itself noise. Result: **2-3 decided,
+not distinguishable from a coin flip** -- apex won 2 games outright, army
+share nearly even (20.1% vs 19.7%), metal produced closest of any run this
+session (45,066 vs 37,916). The SAME commit has now scored 0-5, 1-1, 0-3, and
+2-3 across four independent 8-game runs. **This means the 0-4 triage results
+for advanced-con-priority and cornecro-cap cannot be trusted as evidence of
+real regressions** -- they are within the demonstrated noise band of the
+unchanged baseline itself. [[bar-ai-benchmark-noise]] already documented a
+60%->10% swing on an unchanged AI; this is the same phenomenon measured fresh,
+at exactly the config this session has been using all along. **Anything
+decided from a single n=4 batch in this session should be treated as a coin
+flip, not a finding**, unless the metric moved in the SAME direction across
+multiple independent samples (as heavy-AA and eco-for-everyone both did, each
+confirmed or triaged across two batches with consistent economy-metric
+direction, not just win/loss). The advanced-con-priority and cornecro-cap
+reverts should be considered UNRESOLVED, not disproven -- worth an 8-game
+retry each before concluding anything.
+
 ## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
 
 Not previously documented at this precision. 8-game controls at commit
