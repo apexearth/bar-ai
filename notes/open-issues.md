@@ -555,7 +555,7 @@ distinction is a genuine, well-scoped project (the front-position helpers
 `BorderPos`/`FrontPos` already exist and are used elsewhere in this file),
 just not a quick JSON tune.
 
-## 13. Heavy AA threshold (`AA_HEAVY_PER`) -- tried lower, inconclusive, reverted
+## 13. Heavy AA threshold (`AA_HEAVY_PER`) -- tried lower, CONFIRMED WORSE, reverted for good
 
 Found the REAL heavy-AA system: `Military::UpdateAirThreat()` already
 properly discounts scout/constructor contamination (`softAir`) and smooths
@@ -579,3 +579,18 @@ never achieved, so this is a more promising direction than that one was.
 Worth a larger (16+ game) retry before ruling it out, given how close the
 triage result looked; not worth it immediately given the session's already
 extensive investment and the mixed 8-game signal.
+
+**Update: re-tested at n=16, `heavyaaper-large16` -- 1-7 decided, a real
+difference at this sample size (95% CI 53-98% for stable, excludes 50%).**
+Combined across all three batches at this value (n=4+8+16=28 games, 14
+decided): apex 2, stable 12 -- 14.3%, worse than the 20.8% aggregate
+baseline. **Settled, not just reverted**: `AA_HEAVY_PER=900` is confirmed
+worse, not merely inconclusive. The mechanistic reasoning (existing,
+correctly-designed system, previously never firing) was sound, but firing
+more readily still cost more than it gained -- likely the same crowding-out
+effect visible in the mixed batch's static-defence/army-share numbers,
+just confirmed at scale. `AA_HEAVY_PER` stays at 1500. If this system is
+revisited, the next lever to try is probably NOT more heavy AA sooner, but
+whether the crowding-out itself (static defence competing with army for the
+same constructor time) can be addressed directly -- which is the same
+open question issue 12 already raises for the front-line tower cap.
