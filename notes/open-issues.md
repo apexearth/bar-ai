@@ -681,3 +681,29 @@ competition across MANY rules at once, not validating or invalidating the
 approach through a single gated rule. Treat this as "heavy AA specifically
 is not the rule to prove the concept with," not as evidence against
 BUILD_PHASE as a whole.
+
+## 14. Team-0 vs team-1 win rate asymmetry -- suggestive, NOT statistically confirmed
+
+Pooled every decided game across this session's baseline batches
+(nobackwall-confirm, comm-death-investigate, noise-recheck, large-confirm16,
+commlost-investigate, baseline-extend-8 through -7): apex won 2/30 (6.7%) as
+team 0 against 5/25 (20.0%) as team 1 -- a 3x difference in raw win rate.
+
+**z = 1.48 (p ~ 0.14) -- not significant at conventional 95% confidence.**
+Flagging, not concluding: the effect size is large enough to be worth a
+larger, purpose-built sample (pool team-0-only and team-1-only tournaments
+separately, at n=30+ decided each, rather than reading it off pooled data
+collected for other purposes) before trusting it.
+
+No obvious mechanism found on a first look: the AI's positional logic
+(`CON_FAR_FRAC`, `BorderPos`, `gHomePos - aiEnemyMgr.GetEnemyPos()`) is built
+from relative vectors, not absolute map coordinates, so there is no a priori
+reason team identity should matter to OUR code. If real, the more likely
+explanation is a genuine map-side asymmetry on Comet Catcher itself (terrain,
+mex layout, start-position distance) that both AIs experience but only one
+learns to exploit -- which `tools/run_tournament.py`'s own side-swap design is
+meant to average out across a matched pair, but would NOT cancel if it
+affects team 0 and team 1 differently regardless of which AI occupies them.
+Worth checking: does STABLE also show a team-0/1 split in the same data (its
+own win rate by side, not just apex's)? That would distinguish "map asymmetry
+affecting both AIs" from "something apex-specific about occupying team 0."
