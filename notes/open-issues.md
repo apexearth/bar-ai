@@ -164,7 +164,35 @@ of the current baseline this session produced, and it does not show apex
 starkest number here and matches the [[commanders-decide-bar-games]] finding
 better than any economy metric does.
 
-## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
+**Real commander-death data, for the first time (`ba92167`, `commlost-investigate`,
+n=8).** This session's earlier "commander death" investigation
+(`e7b75a2`, retracted in `e22fc6d`) had no real death signal and inferred it
+from a log going quiet, which turned out unreliable. Added a proper one:
+`AiUnitRemoved` already fires for the commander (never a gift candidate) with
+no new declaration risk. Fresh 8-game read:
+
+| game | outcome | apex commanders lost (of 4) |
+|---|---|---|
+| t000 | decided loss, 20.4m | 3 |
+| t001 | UNDECIDED, time limit | **2** |
+| t002 | decided loss, 23.8m | 3 |
+| t003 | UNDECIDED, time limit | 4 |
+| t004 | decided loss, 22.3m | 3 |
+| t005 | decided loss, 22.3m | 4 |
+| t006 | decided loss, 17.8m | 4 |
+| t007 | decided loss, 18.6m | 4 |
+
+**Every decided loss lost 3 or 4 of 4 commanders (75-100% mortality).** The
+one game with the BEST commander survival (t001, only 2 lost) was also the
+closest to a genuinely even outcome. Not a perfect signal -- t003 lost all 4
+and still stayed undecided, so commander loss alone does not end a game -- but
+the pattern across 6 decided losses is consistent and now backed by a real
+death event, not inference. This is the clearest, most concrete confirmation
+yet of [[commanders-decide-bar-games]] for this exact benchmark, and the
+natural next investigation: what is actually killing them (weapon type,
+distance from home, whether retreat was in progress) is now answerable by
+grepping `COMMANDER LOST` against nearby log lines in future infologs, without
+needing to watch live.
 
 Not previously documented at this precision. 8-game controls at commit
 `9a63122`, Comet Catcher 4v4, +25%, Cortex/Cortex, 25 min:
