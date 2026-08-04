@@ -182,17 +182,51 @@ CI for free.
 
 ## Priority order for next session
 
-1. **Watch a live Comet Catcher 4v4** (section 0) — cheapest, highest
-   expected value, and this session never did it.
-2. **H1c**: one batch with the rez-bot fix reverted on the current gated
-   code state, to check whether it's actually the wipeout-rate driver.
-3. Depending on (2)'s result: either H1a (retune the rez-bot trigger) or
-   move to section 2 (advanced solar / fusion gate investigation).
-4. Section 3 (commander survival) and section 4 (team asymmetry) are
-   cheap, data-already-collected checks — worth doing alongside the above
-   rather than as separate test cycles, since they don't need new games.
+0. **STILL TOP PRIORITY, STILL NOT DONE: watch a live Comet Catcher
+   4v4** (section 0). This requires a human at the keyboard and none of
+   this round's agents could do it. Every mechanism that has actually
+   moved the win rate this session traces back to a live watch, never to
+   statistics alone — do this before writing more code from composition
+   tables.
+1. ~~**H1c**~~ — **DONE, 2026-08-04, commit `5610ad3`. Not confirmed**:
+   reverting the rez-bot fix moved cornecro share and wipeout rate
+   further from baseline, not back toward it. Do not pursue H1a/H1b
+   (retuning the rez-bot trigger) on this basis. See
+   `notes/open-issues.md` issue 17.
+2. ~~Advanced solar / fusion gate investigation~~ — **DONE, 2026-08-04,
+   commit `7ebfede`. Hypothesis as written was wrong**: the eco-lead
+   script path (`EcoFusion`/`EcoNano`) is entirely unreachable on this
+   4v4 benchmark (`IsSmallTeam()` gate), so its own thresholds cannot be
+   the cause of anything measured here. Real, still-live cause is the
+   already-known, already-reverted `economy.json` fusion e-income gate
+   (`5613d7d`). **New, untried angle from this diagnosis**: investigate
+   raising `CEconomyManager`'s energy-task concurrency (currently caps at
+   one energy task in flight at a time) so a lower fusion gate doesn't
+   re-create the starvation that caused `5613d7d`'s revert. This is now
+   the most concrete untested lever on the table — needs its own
+   isolated test with a control batch. See `notes/open-issues.md` issue
+   18 for the full mechanism trail.
+3. ~~Section 3 (commander survival)~~ — **DONE, 2026-08-04 (read-only,
+   no commit). Not reproduced**: at n=128 player-games / 26 decided
+   matches, losing the commander was not associated with a higher loss
+   rate for either side. The bottleneck is that most matches hit the
+   time limit before either commander dies (only 26/64 matches reached
+   `gameover`) — a real re-check needs a benchmark that resolves more
+   often, not more games at the current settings. See
+   `notes/open-issues.md` issue 19.
+4. ~~Section 4 (team asymmetry)~~ — **DONE, 2026-08-04 (read-only, no
+   commit). Refuted at n=259**: z dropped from 1.48 (n=55) to -1.30
+   (n=259) with 5x the data — the original "~3x split" does not
+   replicate at scale. Closed; see `notes/open-issues.md` issue 14's
+   update.
 
-Do not launch another blind 16-game batch on unchanged code hoping for a
-different answer — six of those in a row this session produced nothing
-but wide, overlapping confidence intervals. Every batch from here should
-be attached to a specific hypothesis above.
+**Everything in sections 1-4 has now been checked and none of it
+produced a code change that survived.** The single concrete next step
+with anything left to test is the energy-task-concurrency angle named
+under item 2 above. Do not launch another blind 16-game batch on
+unchanged code hoping for a different answer — six of those in a row
+earlier this session produced nothing but wide, overlapping confidence
+intervals, and this round's four checks (also mostly negative results)
+extend that pattern. Every batch from here should be attached to a
+specific hypothesis, and item 0 (watch a live game) should happen before
+starting the energy-task-concurrency work, not after.

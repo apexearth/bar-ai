@@ -779,6 +779,27 @@ this was not pushed further this session. A proper confirmation needs
 does not currently support (it always auto-swaps) -- worth a small
 `--force-side` flag if this is worth settling properly.
 
+**UPDATE, 2026-08-04: re-checked at n=259 decided games (all 55 tournaments
+dated 2026-08-04, every code state pooled together) -- REFUTED at this
+scale, closing this issue.** Pooling every decided Comet Catcher game from
+the whole day's tournaments (not just the earlier baseline batches this
+issue was originally built from) gives team-0 119 wins / team-1 140 wins
+out of 259 -- 45.9% vs 54.1%, an 8.1-point gap in the same direction as
+before, but **z = -1.30, two-sided p ~ 0.19**, weaker than the original
+n=55 sample's z=1.48 despite ~5x the data. A true effect this size should
+have gotten MORE significant with more data, not less; the original
+"~3x split" (6.7% vs 20.0%) does not replicate at scale and reads in
+hindsight as a small-sample fluctuation that regressed toward 50/50.
+Pooling across every code state is deliberate here, not sloppy: the
+hypothesis under test is a property of the map/team-slot, not of any
+particular AI build, and the original write-up above already confirmed
+the same direction held for both apex and stable independently. **Verdict:
+no actionable Comet Catcher team-0/1 asymmetry detectable at n=259.**
+This does not rule out a true small effect (e.g. 52/48) hiding under the
+noise, but there is nothing here to build a `--force-side` flag or any
+other fix around. Read-only analysis, no files or code changed for this
+check.
+
 ## 15. Multi-rule BUILD_PHASE gate -- phase>=2 failed, phase>=3 CONFIRMED a real win
 
 The genuine test the earlier single-rule heavy-AA gate could not be:
@@ -1311,3 +1332,69 @@ path on a bigger-team map has a working instrument already in place. Batch
 result for the record (informational only, not a behavior change): apex 4,
 stable 2, 10/16 undecided (hit the 25-min cap); apex wipeout rate 10/64
 (15.6%) vs stable 19/64 (29.7%) in these same games.
+
+## 19. "Commander survival predicts the winner" -- NOT reproduced against this session's data (2026-08-04)
+
+Re-checked the prior-session memory claim ("commander survival predicts
+the winner") against 64 matches / 128 player-games pooled from four
+2026-08-04 tournaments (`phasegate4-extend2-16`, `phasegate4-extend3-16`,
+`gated-16`, `isolate-latefighter-16`), fixing the dedup bug that sank the
+earlier ad-hoc attempt (team-id lookups are now reset per match, since
+team ids repeat across matches in one ledger). `commLost` semantics were
+confirmed reliable via `game-patches/gadgets/dev_stats_export.lua`: set
+once on the frame the `customParams.iscommander` unit dies, `-1`
+otherwise.
+
+**Commander-loss rate itself is nearly identical between sides**: apex
+53.1% (n=64) vs stable 56.2% (n=64) -- not a meaningful gap.
+
+**The win-correlation subsample is thin.** Only 26 of the 64 matches
+actually reached `result.reason=='gameover'`; the other 38 hit the time
+limit with no recorded winner and had to be excluded from this part
+(still counted in the loss-rate numbers above). Within those 26 decided
+games: apex commander-lost (n=15) lost 46.7% of the time, apex
+commander-survived (n=11) lost 54.5%; stable showed the same pattern
+(47.1% vs 55.6%). **Losing the commander was not associated with a
+higher loss rate for either side** -- if anything the small-sample
+numbers point slightly the opposite direction, most likely noise at
+n=9-17 per bucket.
+
+**Verdict: does not reproduce the prior finding in this data.** Treat as
+inconclusive/not-reproduced rather than a refutation -- the real
+constraint is that most matches in these tournaments end by time limit
+before either commander dies, so the subsample that could actually test
+the correlation is small. Recommend not treating "commander survival
+predicts the winner" as an established fact for tuning
+(`COM_RETREAT_HEALTH`, `COMM_BACK_WALL_ON`) without a larger sample of
+games that reach `gameover` rather than the time cap -- which likely
+means shorter time limits or a faster-resolving benchmark, not more
+games at the current 25-minute cap. Read-only analysis; no files or code
+changed for this check.
+
+## 20. Round synthesis, 2026-08-04 -- four checks against `notes/next-session-hypotheses.md` sections 1-4
+
+All four items from the prior write-up's priority list (excluding item 0,
+which needs a human and was NOT done -- see below) were tested this
+round, by separate agents, each already committed individually:
+
+| # | hypothesis | commit | result |
+|---|---|---|---|
+| 1 (H1c) | rez-bot flee-on-hit fix drives the cornecro/wipeout shift | `5610ad3` | **Not confirmed** -- reverting the fix moved cornecro share and wipeout rate FURTHER from baseline (17.3%, 37.5%), not back toward it. See issue 17. |
+| 2 | `EcoFusion()`'s own gate is too conservative vs advanced solar | `7ebfede` | **Wrong hypothesis, right area** -- the entire eco-lead script path is unreachable on 4v4 (`IsSmallTeam()` always true), so the real cause is the already-known, already-reverted `economy.json` fusion e-income gate. See issue 18. |
+| 3 | commander survival predicts the winner | (read-only, no commit -- synthesized here as issue 19) | **Not reproduced** at n=128 player-games / 26 decided matches. |
+| 4 | team-0/1 positional asymmetry | (read-only, no commit -- synthesized into issue 14 above) | **Refuted at n=259** -- z dropped from 1.48 to -1.30 with 5x the data. |
+
+Net effect on the code: **zero behavior changes survived this round.**
+Issue 17's revert-then-restore left `builder.as` unchanged from HEAD; the
+followup diagnosis in issue 18 kept only a throttled diagnostic log, no
+behavior change; issues 19 and 20 (this entry) are read-only analysis.
+The round's value is entirely in ruling things out and re-pointing the
+next concrete step: issue 18's "raise energy task concurrency" angle is
+now the most concrete untried lever on the table, everything upstream of
+it (eco-lead gates, rez-bot sensitivity, commander tuning, side-forcing)
+has now been checked and found not to be the active driver of what's
+being measured.
+
+**Item 0 -- watch a live Comet Catcher 4v4 -- was NOT addressed this
+round** and remains the single highest-priority action for next session;
+see `notes/next-session-hypotheses.md`'s updated priority list.
