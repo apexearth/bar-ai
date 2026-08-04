@@ -8,6 +8,56 @@ Ordered by how much it is currently costing us.
 
 ---
 
+## 0. `a7f3399` reverted -- measured worse than the commit before it
+
+Commit `a7f3399` (armfark/corfast back to builder, eco spend un-gated from
+eco-lead, ContestDefence disabled, base tower chain trimmed, T1 fodder push
+un-gated from `!gHaveT2`, `CON_FAR_FRAC` 0.72->0.95) went in without an
+isolated measurement -- it was already staged when this session started.
+
+8-game controls, Comet Catcher 4v4, +25% handicap, Cortex/Cortex, 25 min, vs
+`BARb:stable:hard_aggressive` (both directions swapped):
+
+| | before (`9a63122`) | after (`a7f3399`) |
+|---|---|---|
+| head to head (decided) | 0-5 | 0-7 |
+| apex metal produced | 28,860 | 19,261 |
+| apex wiped-out player-games | 17/32 | 21/32 |
+| apex T2 spend | 9,445 | 3,674 |
+| apex mex upgrades | 2 | 1 |
+
+Both lose to `hard_aggressive` outright at this sample size -- see issue 1 below,
+this is not new. But the bundle made it measurably worse on every axis, so it
+was reverted whole (`d75d998`) rather than bisected further; no time was spent
+finding which of the six changes was responsible, so any of them individually
+may still be worth re-trying in isolation with its own measurement.
+
+One candidate ruled out already: `CON_FAR_FRAC` reverted alone (0.95 -> 0.72,
+rest of the bundle intact) did not fix the shutout against `BARb:stable:hard`
+(still 0-7, same collapse starting minute 6), so the far-frac change specifically
+is not the dominant cause of the loss -- it may still be worth keeping reverted
+on its own merits, just not as an explanation for this result.
+
+## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
+
+Not previously documented at this precision. 8-game controls at commit
+`9a63122`, Comet Catcher 4v4, +25%, Cortex/Cortex, 25 min:
+
+| opponent profile | decided h2h | apex win% (undecided=loss) |
+|---|---|---|
+| `BARb:stable:hard` | 0-6 (2 timelimit) | 0% |
+| `BARb:stable:hard_aggressive` | 0-5 (3 timelimit) | 0% |
+
+This contradicts the K/D 0.97-at-25min figure logged earlier in issue 1 below --
+that number came from a different opponent/config combination that was not
+re-verified here. `hard` and `hard_aggressive` are both real stock BARb
+profiles (confirmed: `reference/barb-stable/game-side/config/{hard,hard_aggressive}`
+both exist), not a config-fallback artifact.
+
+**Next step, per the project's own doctrine**: stop reading telemetry blind and
+get a `--watch` run in front of apexearth. Every diagnosis that has actually
+landed on this AI came from him watching, not from aggregate stats.
+
 ## 1. The late game collapses, and it is a SEPARATE failure
 
 Measured, 8-game pairs on Comet Catcher 4v4 +25%:
