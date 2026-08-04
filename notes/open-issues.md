@@ -194,6 +194,30 @@ distance from home, whether retreat was in progress) is now answerable by
 grepping `COMMANDER LOST` against nearby log lines in future infologs, without
 needing to watch live.
 
+**First look at the mechanism, `t006` in the same batch.** Cross-referenced
+`COMMANDER LOST` against the existing `commander retreating at N% health` log
+for the same team index. Two different death shapes in the same game:
+- `t0`: retreating at 18% health, dead 25 seconds later -- a losing fight that
+  finished as expected.
+- `t1`: HEALING while retreating for 5+ minutes (63% -> 84% health, 11.8m to
+  16.7m, apparently safe), then the next 20s-interval sample reads 12% and it
+  dies within 2.4 seconds (frame 31778 -> 31921). A burst kill from apparent
+  safety, not a slow losing trade.
+
+The `t1` shape matches this file's own historical note on why
+`COM_RETREAT_HEALTH` was raised to 0.85 in the first place: "sometimes a com
+dies to that 1 or 2 last plasma shots from a distance while it is running
+away." It is STILL happening at the already-cautious 0.85 bar, which means the
+lever that needs adjusting is not WHEN the commander decides to flee (already
+about as early as it can be) but WHERE it flees to or WHAT catches it there --
+a big gun landing on the retreat path, or mobile pursuers. Diagnosing which
+needs either a replay watch or C++-side logging of the attacker/weapon (this
+session's `AiUnitRemoved` addition only sees OUR side; the killing blow's
+source is not exposed to script). **Handoff point for a future session,
+ideally with apexearth watching a game where this specific pattern fires.**
+
+## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
+
 Not previously documented at this precision. 8-game controls at commit
 `9a63122`, Comet Catcher 4v4, +25%, Cortex/Cortex, 25 min:
 
