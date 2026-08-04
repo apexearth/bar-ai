@@ -1046,20 +1046,42 @@ documented (0%-75%+ swings on code that never changed at all). Read the
 `872473c` code state as genuinely unresolved, not as "recovered" or
 "regressed" -- there isn't yet enough signal in either direction.
 
+**UPDATE, `gated-big-32` (n=32, real statistical power instead of another
+small batch): 2-8 decided (20.0%).** Combined across all three
+`872473c`-state batches (`gated-16` + `gated2-16` + `gated-big-32`, 64
+games played, 21 decided): **5 apex, 16 stable = 23.8% (95% CI
+~10.6%-45.1%)**. This CI does NOT include 50% -- the first time in this
+whole session a CI on a shipped code state has cleanly excluded parity on
+the wrong side. Not noise; a real regression from the pre-fix
+44.4%/n=27 aggregate.
+
+**Root-caused and fixed, `9a1b249`**: `HoldsLateFighter()` was scoped
+wider than its own justification. `LateGame()` goes true off EITHER the
+25-minute clock OR any fusion existing, and the AA-role match covers
+EVERY unit of that role, not just the freshly-recruited screen floor --
+so once any player had a fusion (plausible before the 25-min cap, given
+the phase-gated economy now techs faster), every AA-role aircraft on the
+team got benched to idle, including ones already usefully mid-fight.
+Gated to `!IsSmallTeam()`, matching how `earlyReaction`/`stalled` were
+already restricted for the identical reason.
+
+**Confirmation, `isolate-latefighter-16` (n=16, testing `9a1b249` alone,
+without also touching the rez-bot fix): 5-4 decided (55.6%, 95% CI
+27-81%).** First batch on any shipped code state to land above 50% since
+before the `872473c` regression. One batch is not proof -- the CI still
+straddles 50% and this project's noise floor is real -- but it's
+consistent with the diagnosis and is the strongest single post-fix
+result so far. A second confirmation batch is queued before trusting it.
+
 **Where this leaves the overall goal**: from the 7.9% baseline this
-session started at, `phase >= 4` plus this round of live-diagnosed bug
-fixes is landing somewhere in a wide band (roughly 27%-50% depending on
-which batches get counted) that comfortably beats baseline but has not
-settled anywhere close to a confirmed "reliably beats" state. At this
-point, MORE identical 16-game batches are producing wide, overlapping
-CIs rather than converging -- the SESSION SYNTHESIS above already named
-this exact situation for the original baseline (n=89, "reached
-diminishing returns"). Grinding another dozen 16-game batches the same
-way is unlikely to resolve it either. Closing the remaining gap likely
-needs either a genuinely new mechanism (found the
-way `phase >= 4` was: through live-diagnosed failure modes, not more
-"spend" tuning) or apexearth's own live observation to surface the next
-one.
+session started at, through `phase >= 4`, four live-diagnosed bug fixes,
+and now a fix to one of those fixes' own scope, the current best estimate
+is a genuine, large improvement over baseline that has NOT yet settled
+into a confirmed "reliably beats" state -- but `isolate-latefighter-16`
+is the first result actually pointing that direction rather than just
+toward "large but uncertain." Worth one more confirmation batch before
+either declaring this resolved or going back to look for what else in
+the 872473c/9a1b249 line might still be costing the benchmark.
 
 ## 16. Players boxed onto an island barely expand, tech, or spend -- fix built, NOT YET MEASURED
 
