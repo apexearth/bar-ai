@@ -125,3 +125,46 @@ re-test it properly or delete the dead code.
   (0 in 121 samples), `CThreatMap::GetThreatAt` at target positions (0 in 14/15),
   `Game_getTeamResource*` (-1 always), the published front outside BAR.sdd.
   Log a binding's raw value once before building logic on it.
+
+---
+
+## 10. Task displacement — investigated, guard added, NO measured gain
+
+apexearth: "buildings getting started and then canceled... maybe you have some
+logic that isn't checking if there's already a task and you are replacing tasks."
+
+The mechanism is real: `AiMakeTask` is called by `IBuilderTask::Reevaluate` on
+every task update while a builder is away from its build position, and the engine
+swaps the unit's task whenever the returned task differs in BUILD TYPE. Every
+optional rule (AA, Pulsar, converters, nanos, fusions, dig-ins) returned early
+without checking whether the unit was already mid-build.
+
+A guard now returns the held task when it survives the veto. Measured over 8
+games at 25 min against the previous build:
+
+| | no guard | guard |
+|---|---|---|
+| ARMY K/D | 1.06 | 1.04 |
+| metal ratio | 1.16 | 1.09 |
+| mex ratio | 1.08 | 1.03 |
+
+**No gain; slightly down, within noise.** Kept because it stops a behaviour that
+was directly observed, not because it measures better.
+
+**Caveat that matters**: the "60 live MEX tasks, 60 unworked" measurement which
+motivated this was taken WITH a rear-mex rule I had added, which fired every 2
+seconds on a GLOBAL timer and enqueued a fresh mex task each time — displacing
+whatever the constructor held. That rule probably manufactured the orphan pile.
+It has been removed, along with its logging, so whether orphaned mex tasks still
+occur is now UNKNOWN. Re-add the `live=/unworked=` counter before concluding
+anything about task orphaning.
+
+## 11. `FindOpenMexSpot` excludes ally zones — and that is CORRECT
+
+Checked because it looked like the cause of "no open spot". `IsZoneAlly` is
+`(allyCount > 0) && (ownCount == 0)` — a TEAMMATE's zone and not our own. It
+prevents stealing a teammate's spots and does not exclude our own base. Not a
+bug. Do not "fix" it.
+
+The remaining candidate for `mex-none` is `IsAllyOpenMexSpot` — the spot is
+already claimed by a live task. See issue 10.

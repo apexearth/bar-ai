@@ -173,6 +173,11 @@ const float WRECK_RICH_R  = 1400.f;
 const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
 const int   WRECK_TIMEOUT = 1 * MINUTE;
 int gNextWreck = 0;
+// Spacing on the safe-mex grab. Short: an unclaimed spot is income we are not
+// earning, and the check itself is one lookup.
+const int REAR_MEX_PERIOD = 2 * SECOND;
+int gNextRearMex = 0;
+int gNextMexLog = 0;
 int gNextRichLog = 0;
 
 IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
@@ -304,6 +309,22 @@ const float CON_FAR_FRAC = 0.72f;
 // apexearth, ten minutes into a game: "we've left a lot of open mexes that we
 // should have easily just gone ahead and taken."
 const float MEX_FAR_FRAC = 0.92f;
+
+// The raw projection of a position onto the home->enemy axis: 0 at our base,
+// 1 at the enemy centroid. Logging this is what makes a rejection explicable --
+// "rejected" alone cannot distinguish a bad threshold from a bad centroid.
+float FrontT(const AIFloat3& in where)
+{
+	if (!gHomeSet)
+		return 0.f;
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	const float ex = foe.x - gHomePos.x;
+	const float ez = foe.z - gHomePos.z;
+	const float span = ex * ex + ez * ez;
+	if (span < 1.f)
+		return 0.f;
+	return ((where.x - gHomePos.x) * ex + (where.z - gHomePos.z) * ez) / span;
+}
 
 bool PastFrontFrac(const AIFloat3& in where, float frac)
 {
@@ -1570,6 +1591,26 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// over: one every 25 seconds, and never when it would leave us short of
 	// builders. Twelve rules pre-empting here with neither bound is what cut metal
 	// production 4.3x.
+	// DO NOT DISPLACE WORK ALREADY IN PROGRESS.
+	//
+	// This hook is not only called for an idle builder: IBuilderTask::Reevaluate
+	// calls it on every task update for as long as the builder is away from its
+	// build position, and the engine swaps the unit's task whenever what we hand
+	// back differs in BUILD TYPE. So every optional rule below -- AA, the gun,
+	// converters, nanos, fusions, dig-ins -- could yank a constructor off a site
+	// it was walking to, leaving a claimed task nobody works.
+	// apexearth: "I noticed more recently buildings getting started and then
+	// canceled... maybe you have some logic that isn't checking if there's
+	// already a task and you are replacing tasks."
+	// Measured: 60 live MEX tasks with 60 of them unworked, repeatedly.
+	// The veto/abandon check above has already run, so anything still held here
+	// is work the AI still considers safe and wants finished.
+	if (!isComm) {
+		IUnitTask@ busy = unit.task;
+		if ((busy !is null) && (SiteBuildName(busy) != ""))
+			return busy;
+	}
+
 	if (!isComm) {
 		IUnitTask@ aa = CheapAA(unit);
 		if (aa !is null)
