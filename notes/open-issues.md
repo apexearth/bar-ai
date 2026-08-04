@@ -1213,3 +1213,101 @@ bottom of `notes/next-session-hypotheses.md`, and/or section 0 (watch a live
 Comet Catcher 4v4), which nobody has done all session and every actually-
 confirmed mechanism this session traces back to a live watch rather than a
 statistics-only diagnosis.
+
+---
+
+## 18. `coradvsol` vs `corfus` — the eco-lead gate hypothesis was WRONG; the real cause is the already-known, already-reverted `economy.json` fusion threshold (2026-08-04)
+
+Tested `notes/next-session-hypotheses.md` section 2. Added one throttled
+diagnostic `AiLog` at the top of `EcoFusion()` in `builder.as` (before any of
+its own early returns), logging `lead` (`Factory::EcoLeadActive()`), `haveT2`,
+metal income, bank vs the `FUSION_MIN_BANK` bar, `EnergyWasting()`, and the
+standing count of advsol vs fusion defs. Deployed clean (0 compile errors),
+smoke-tested, then ran one 16-game Comet Catcher 4v4 batch
+(`tournaments/20260804-150421-solar-fusion-diagnostic-16`) and grepped all 8
+apex instances' infologs for the new line: **470 samples, 16 games.**
+
+**Result: `lead=0` in all 470 samples, zero exceptions.** Cross-checked
+against the role's own announcement lines
+(`"ECO LEAD -- no army, economy only"` / `"eco lead standing down"` / `"eco
+lead held off"`) — **zero of any of them appear anywhere in the batch.** The
+eco-lead role never activates even once across 16 full 25-minute 4v4 games.
+
+**Root cause, read from the code, not guessed:**
+
+```
+const bool ECO_ON_SMALL_TEAMS = false;   // factory.as:688
+
+bool IsEcoLead()
+{
+	if (IsSmallTeam() && !ECO_ON_SMALL_TEAMS)
+		return false;
+	...
+}
+```
+
+`IsSmallTeam()` is `mates.length() < BIG_TEAM` (`BIG_TEAM = 6`). Comet Catcher
+4v4 has 4 mates per side, so `IsSmallTeam()` is unconditionally true on this
+benchmark, `IsEcoLead()` always returns `false`, `gEcoActive` never becomes
+`true`, and every rule gated on `Factory::EcoLeadActive()` — `EcoFusion()`,
+`EcoNano()`, and the eco lead's carve-out in `Pulsar()` — is **entirely
+unreachable on the map this whole session has been testing on.** This is not
+a bug: the comment above `ECO_ON_SMALL_TEAMS` records it as a deliberate,
+already-measured decision from 2026-08-02 (re-tested: OFF went 2-1 on
+904k/166k metal/army, ON went 0-4 on 517k/81k and died sooner) — a 4-player
+team can't afford to field zero army from one of its four players. **Section
+2's hypothesis, as written, does not apply to this benchmark: there is no
+live eco-lead fusion gate to be too conservative, because the eco lead itself
+never exists here.**
+
+**So where does apex's 15-17% `coradvsol` actually come from?** Composition
+this batch: apex `coradvsol` 15.2% (#2 sink), `corfus` 8.1% (#6); stable
+`corfus` 17.1% (#1 sink), `coradvsol` 3.2%. Since the eco-lead script path is
+dead on this map, 100% of that spend — for every ordinary constructor on both
+sides — comes from the plain engine-side task selection reading
+`config/hard_aggressive/economy.json`'s `"land"` block, walked in list order
+(`armsolar → armadvsol → armfus`, score-sorted, per `CEconomyManager::Update
+EnergyTasks`). **This exact mechanism was already found and partially fixed
+in commit `fcbcfc2` the same week** ("FUSION AT 30+ MINUTES": fusion's
+energy condition defaults to `costE * cost_ratio` = ~1300 e/s, which is
+2600 e/s effective while stalling, so the walk "fell through to coradvsol
+(bar 200) and stopped" before ever reaching fusion) — **and that fix was
+deliberately reverted the same day in `5613d7d`**, because lowering the gate
+alone made things worse: only one energy task is allowed in flight at a time,
+so committing early to one 26,000-energy fusion blocked every other energy
+build until it finished, and that batch's own numbers (T3 metal 16,800,
+static defence 2.20x stable's) got worse, not better. The revert's own
+commit message says it plainly: *"The 1300 gate is still the real reason for
+30-minute fusions, but lowering it in isolation is not the fix -- the task
+allowance is."* The current `economy.json` (`corfus`/`armfus`:
+`[30, 40, 30]`) carries that revert unchanged — the explicit m-income (30) was
+kept, the e-income override was not restored, so the ~1300 e/s default gate
+is still live today.
+
+**Conclusion: this is not a new finding, it is confirmation that a known,
+already-diagnosed, already-reverted-for-a-good-reason problem is still the
+live cause of apex's solar/fusion imbalance on the 4v4 benchmark.** The
+straightforward fix (lower the gate) is already known not to work in
+isolation. What was never tried is the thing `5613d7d`'s own message names as
+the actual lever: raising the energy task concurrency allowance (or otherwise
+letting a fusion commit without freezing every other energy build behind it)
+so a lower gate does not starve the rest of the grid. That is a genuinely new
+angle, not yet attempted, and it is a behavior change (not diagnosis) — needs
+its own isolated test with a control batch, per this project's one-change-at-
+a-time discipline.
+
+**What was NOT true and should stop being repeated:** the eco lead is not
+"choosing solar over fusion too readily" on Comet Catcher 4v4 — it has no
+opinion, because it isn't running. Any future work on `EcoFusion()`'s own
+gates (`FUSION_MIN_BANK`, `EnergyWasting()`) will have zero effect on this
+benchmark's win rate until either `ECO_ON_SMALL_TEAMS` changes (already
+tested worse) or the benchmark moves to `IsSmallTeam() == false` (>=6 per
+side), which is a different map/format than every other batch this session
+compared against.
+
+**Kept**: the diagnostic `AiLog` line in `EcoFusion()` — cheap, throttled
+45s, and it is what caught this; a future session investigating the eco-lead
+path on a bigger-team map has a working instrument already in place. Batch
+result for the record (informational only, not a behavior change): apex 4,
+stable 2, 10/16 undecided (hit the 25-min cap); apex wipeout rate 10/64
+(15.6%) vs stable 19/64 (29.7%) in these same games.

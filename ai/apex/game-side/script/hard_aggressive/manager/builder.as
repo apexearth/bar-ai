@@ -1063,6 +1063,7 @@ string armafus("armafus"); string corafus("corafus"); string legafus("legafus");
 // Declared here rather than beside the converter defs above because a global has
 // to precede its first use; a function does not.
 string armuwfus("armuwfus"); string coruwfus("coruwfus");
+string armadvsol("armadvsol"); string coradvsol("coradvsol"); string legadvsol("legadvsol");
 
 CCircuitDef@ FusionDef(CCircuitUnit@ unit)
 {
@@ -1073,12 +1074,32 @@ CCircuitDef@ FusionDef(CCircuitUnit@ unit)
 
 const float FUSION_MIN_BANK = 0.55f;
 const int   FUSION_PERIOD   = 45 * SECOND;
+const int   FUSION_DIAG_PERIOD = 45 * SECOND;
 int gNextFusion = 0;
 int gNextFusionLog = 0;
+int gNextFusionDiagLog = 0;
 int gFusionsAsked = 0;
 
 IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 {
+	// Diagnostic for notes/next-session-hypotheses.md #2: unconditional (ahead of
+	// every early return below) so it also shows how often this function's OWN
+	// gates are what block it, versus DefaultMakeTask falling through to the
+	// engine's score-sorted energy list (economy.json) further down, where solar
+	// and advsol sort ahead of fusion's default e-income bar.
+	if (ai.frame >= gNextFusionDiagLog) {
+		gNextFusionDiagLog = ai.frame + FUSION_DIAG_PERIOD;
+		CCircuitDef@ solarDef = SideDef3(armadvsol, coradvsol, legadvsol);
+		AiLog(Factory::T() + "apex: fusion-gate diag lead=" + (Factory::EcoLeadActive() ? "1" : "0")
+			+ " haveT2=" + (Factory::gHaveT2 ? "1" : "0")
+			+ " income=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+			+ " bank=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
+			+ "/" + formatFloat(aiEconomyMgr.metal.storage * FUSION_MIN_BANK, "", 0, 0)
+			+ " wasting=" + (EnergyWasting() ? "1" : "0")
+			+ " advsolCount=" + ((solarDef is null) ? -1 : solarDef.count)
+			+ " fusCount=" + FusionDef(unit).count);
+	}
+
 	if (!Factory::EcoLeadActive() || (ai.frame < gNextFusion))
 		return null;
 	// A T1 constructor cannot build one; asking anyway is the silent no-op this
