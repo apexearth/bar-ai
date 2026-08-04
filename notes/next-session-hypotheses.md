@@ -199,13 +199,23 @@ CI for free.
    4v4 benchmark (`IsSmallTeam()` gate), so its own thresholds cannot be
    the cause of anything measured here. Real, still-live cause is the
    already-known, already-reverted `economy.json` fusion e-income gate
-   (`5613d7d`). **New, untried angle from this diagnosis**: investigate
-   raising `CEconomyManager`'s energy-task concurrency (currently caps at
-   one energy task in flight at a time) so a lower fusion gate doesn't
-   re-create the starvation that caused `5613d7d`'s revert. This is now
-   the most concrete untested lever on the table — needs its own
-   isolated test with a control batch. See `notes/open-issues.md` issue
-   18 for the full mechanism trail.
+   (`5613d7d`). **Follow-on angle (raising `CEconomyManager`'s energy-task
+   concurrency) — ALSO DONE, 2026-08-04, commits `9a9cf47`..`30827c6`,
+   four rounds against a cap.** Every combination tested regressed apex
+   vs stable on three independent metrics (T2 spend ratio, metal
+   produced, wipeout rate): the JSON gate alone (previously known,
+   `5613d7d`), the gate plus a C++ concurrency fallthrough fix together
+   (0/16 apex wins, T2 ratio 0.52), and the C++ fix alone with the gate
+   left at stock (2/16 apex wins, T2 ratio 0.45 — actually worse than the
+   combined change). **The fusion/energy-concurrency line is now fully
+   closed as tried and ruled out** — do not re-open without a materially
+   different mechanism (e.g. a per-def concurrency budget instead of a
+   global one). See `notes/open-issues.md` issues 18, 21-25 for the full
+   trail, including a process note: two of the four rounds burned their
+   entire turn budget on tournament-orchestration mechanics (an orphaned
+   background driver, a batch that didn't finish in time) rather than
+   producing a measurement — a 16-game batch takes 15-25 min wall time,
+   longer than some round-based turn budgets allow.
 3. ~~Section 3 (commander survival)~~ — **DONE, 2026-08-04 (read-only,
    no commit). Not reproduced**: at n=128 player-games / 26 decided
    matches, losing the commander was not associated with a higher loss
@@ -220,13 +230,25 @@ CI for free.
    replicate at scale. Closed; see `notes/open-issues.md` issue 14's
    update.
 
-**Everything in sections 1-4 has now been checked and none of it
-produced a code change that survived.** The single concrete next step
-with anything left to test is the energy-task-concurrency angle named
-under item 2 above. Do not launch another blind 16-game batch on
-unchanged code hoping for a different answer — six of those in a row
-earlier this session produced nothing but wide, overlapping confidence
-intervals, and this round's four checks (also mostly negative results)
-extend that pattern. Every batch from here should be attached to a
-specific hypothesis, and item 0 (watch a live game) should happen before
-starting the energy-task-concurrency work, not after.
+**Everything in sections 1-4, including the energy-task-concurrency
+follow-on from item 2, has now been checked and none of it produced a
+code change that survived.** That follow-on took a full 4-round run
+(`notes/open-issues.md` issues 21-25) and closed with three clean,
+well-powered negative results, not an inconclusive one — the mechanism is
+genuinely ruled out, not merely untried. There is currently **no
+concrete, already-scoped code lever left on this list**. Do not launch
+another blind 16-game batch on unchanged code hoping for a different
+answer — six of those in a row earlier this session, plus this run's
+negative results, all point the same way: guessing from composition
+tables alone has run out of road for now.
+
+**Item 0 (watch a live Comet Catcher 4v4) is therefore not just still the
+top priority — it is now the ONLY item left on this list with real
+information behind it that hasn't been tried.** Every mechanism that
+has actually moved the win rate all session traces back to a live watch
+(the commander back-wall fix, BUILD_PHASE itself), and every
+statistics-only hypothesis attempted since (rez-bot sensitivity, fusion
+gate, fusion concurrency x2, commander survival re-check, team
+asymmetry) has come back negative or unconfirmed. The next session should
+not write another line of code from composition.py alone until someone
+has actually watched the benchmark configuration play.

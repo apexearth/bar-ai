@@ -1666,3 +1666,84 @@ session -- gate alone, gate+fix, and fix alone. All three regressed T2 spend
 and metal production versus stable. Do not re-open without a materially
 different mechanism (e.g. a per-def concurrency budget instead of a global
 one), not a re-run of the same lever.
+
+## 25. Consolidated summary: 4-round fusion-concurrency hypothesis run, no winner found (2026-08-04)
+
+This run set out to test item 2 of `next-session-hypotheses.md`'s priority
+list -- the "most concrete untested lever on the table" that survived the
+prior round's diagnosis: pairing a restored, lower `corfus`/`armfus`
+e-income gate (`5613d7d`'s revert target) with a loosened energy-task
+concurrency constraint in `CEconomyManager::UpdateEnergyTasks`, on the
+theory that the gate alone failed in `fcbcfc2`/`5613d7d` only because it
+starved all other energy building behind one in-flight fusion, not because
+a lower gate is inherently wrong. Four rounds ran against a 4-round cap.
+No winning change survived; the whole line is now closed (issues 18,
+21-24). Round by round:
+
+- **Round 1** (commit `9a9cf47`): implemented both halves of the fix (a
+  `break`->`continue` fallthrough in the concurrency-capped-candidate
+  branch, plus `economy.json`'s e-income override restored to
+  `[30, 40, 30, 300]`), deployed and smoke-tested clean, but the 16-game
+  confirmation batch only reached 3/16 games before the round ended.
+  **No data.**
+- **Round 2** (commits `31c45fb`, then `352b843`): found round 1's
+  tournament driver had died mid-run, orphaning 3 live spring-headless
+  workers with a ledger stuck at 3/16 -- a new, previously undocumented
+  background-run failure mode (now issue 22). Killed the orphans, relaunched
+  a fresh batch, but it also didn't finish inside the round's turn budget.
+  A separate, oddly-populated round (task fields literally `"test"`) picked
+  up the same in-flight state, let that relaunched batch finish, and got a
+  clear result: **apex 0/16 wins, stable 5/16 (11 undecided)**, T2 spend
+  ratio 0.52 (vs stable), metal produced ~25% lower, wipeout rate elevated
+  (18/64 vs 10/64). Reverted `economy.json`'s override; the C++ fix was left
+  untouched and unverified in isolation, which round 4 called out as the
+  concrete open question (issue 23).
+- **Round 4** (commit `30827c6`): tested the C++ fallthrough fix ALONE,
+  gate left at stock `[30, 40, 30]`, on the theory it "can only let the
+  search see more candidates, never fewer, so it should have no plausible
+  downside." Falsified: **apex 2/16 wins, stable 7/16 (9 undecided)**, T2
+  spend ratio 0.45 (worse than the combined change's 0.52), metal produced
+  ~28% lower, wipeout rate 20/64 vs 11/64 -- the same collapse shape
+  reproduced on the fix alone, across three independent metrics, not just a
+  win-rate swing this session's own noise floor could produce. Reverted;
+  confirmed the tracked `game-patches/circuitai/0003-cumulative.patch`
+  never contained the fallthrough hunk in the first place, so no patch
+  regeneration was needed.
+
+**Net result: no shipped change.** Two of four rounds burned their entire
+budget on run/orchestration mechanics (an orphaned tournament driver, a
+batch that didn't finish in time) rather than producing a measurement --
+that is itself the most concrete finding of this run, see issue 22 and the
+harness-discipline note below. Of the two rounds that did produce data,
+both were clean, well-powered negative results (three independent metrics
+moving the same wrong direction each time, not a coin-flip on win rate
+alone), which is a legitimate and useful outcome: the fusion/energy-task-
+concurrency mechanism is now genuinely ruled out, in all three combinations
+anyone could think to try, rather than left as an untested "most promising
+lever." `vendor/engine`'s working tree is confirmed back at a clean,
+patch-matching state (`git status --short` zero diff on the main repo;
+`0003-cumulative.patch` unchanged because it never carried the tested hunk).
+
+**Process note for whoever dispatches the next round-based run**: a 16-game
+tournament batch takes 15-25 minutes wall time, which is longer than at
+least two of this run's per-round turn budgets. `run_tournament.py &`
+detachment did not reliably survive a turn boundary (issue 22's orphaned
+driver). If this workflow shape (propose/test rounds with a turn budget)
+is used again for something that needs a full tournament, either give the
+round enough turn budget to poll to completion, or make round N+1's first
+job explicitly "resume/verify round N's batch," not a fresh idea -- which
+is what actually happened here by accident, not by design.
+
+**Research findings from a parallel read-only pass** (public GitHub issue
+trackers and community discussion, not this repo's own telemetry) turned up
+nothing directly actionable for this benchmark: two `rlcevg/CircuitAI`
+issues (#125 mex-spot misbuild, #127 failure to retreat) are filed against
+an unconfirmed "Testing AI" identity, not confirmed to be the shipped
+`hard_aggressive` profile; #118 (reclaim/resurrect ignoring Thor/Titan
+wrecks) describes stock BARb's own weakness at a unit scale this 25-minute
+4v4 benchmark never reaches; `beyond-all-reason/Beyond-All-Reason#2620` is
+about the allied co-op bot, out of scope for an enemy skirmish opponent; a
+low-confidence secondary source's air/water claims are either moot
+(this project is land-only) or already tracked (issue 5, mobile AA/fighter
+massing). None of this changes any conclusion above or opens a new lever --
+recorded here only so the search is not repeated.
