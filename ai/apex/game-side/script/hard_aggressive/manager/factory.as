@@ -2357,7 +2357,15 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// Bounded to the air slot holder, the same one-per-team cap the air opening
 	// uses, so eight players do not each build a plant.
 	const bool lateFallback  = LateGame() && (aiEconomyMgr.metal.income >= LATE_AIR_INCOME);
-	const bool earlyReaction = (ai.frame >= EARLY_AIR_REACT_FRAME)
+	// Restricted to big teams, unlike lateFallback above (which is deliberately
+	// small-team-inclusive per its own comment, but at a 25-minute gate that a
+	// 25-minute-capped 4v4 benchmark match almost never reaches). Diagnosed
+	// entirely from 8v8 observation, and this session's dominant finding is
+	// that any new spend competing with the phase-gated cluster costs a 4v4 --
+	// this trigger has no BUILD_PHASE gate of its own, so keep it off the
+	// benchmark the goal is actually measured against until it can be
+	// threaded through that gate properly.
+	const bool earlyReaction = !IsSmallTeam() && (ai.frame >= EARLY_AIR_REACT_FRAME)
 		&& (Military::gAirAvg >= EARLY_AIR_ENEMY_MIN);
 	if (!HaveAirFactory() && (ai.teamId == AirSlotTeamId()) && (lateFallback || earlyReaction))
 	{
@@ -2435,7 +2443,13 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// and the last batch of individually-reasonable spending rules cut metal
 	// production 4.3x between them. It takes the slot only when nothing more
 	// important wants it, and only once the economy can carry it.
-	const bool stalled = !aiTerrainMgr.IsWaterAVoid() && ExpansionStalled();
+	// stalled is restricted to big teams for the same reason earlyReaction is
+	// above: diagnosed entirely from an 8v8 live observation (a player boxed
+	// onto a small land strip), it has no BUILD_PHASE gate of its own, and
+	// this session's dominant finding is that any new unconditional spend
+	// costs a 4v4. IsMixedWaterMap() below is unaffected -- that branch
+	// predates this fix and already applied to every team size.
+	const bool stalled = !IsSmallTeam() && !aiTerrainMgr.IsWaterAVoid() && ExpansionStalled();
 	if ((IsMixedWaterMap() || stalled) && !HaveShipyard()
 		&& (aiEconomyMgr.metal.income >= (stalled ? NAVY_MIN_INCOME_STALLED : NAVY_MIN_INCOME)))
 	{
