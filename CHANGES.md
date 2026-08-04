@@ -1192,3 +1192,65 @@ outranges enemy siege, 0.01/0.04**. The artillery role routes them to
 Ruled out, do not chase: the per-unit `"threat": {all 0.0}` and `"power": 1.0`
 on those entries are uniform across every unit including `correap`/`corthud` and
 byte-identical to stock.
+
+---
+
+## The army loses; the towers do not carry us — measured 2026-08-03
+
+`dev_stats_export.lua` now splits kills by KILLER type (`mKillStatic`,
+`mKillMobile`) and reports mobile losses (`mLostMobile`) and standing jammer
+towers (`jamT`). A combined K/D cannot tell "our defences are working" apart
+from "our army is winning", and reads healthy while the army loses.
+
+apexearth, watching: "we make them suffer a lot with our defenses, but our
+units are still losing the battles."
+
+8 games, Comet Catcher 4v4, +25%, 40 minutes:
+
+| | apex | stable |
+|---|---|---|
+| combined K/D | 0.56 | 1.15 |
+| **ARMY K/D** | **0.66** | **1.40** |
+| kills by mobile | 1,141,429 | 1,682,405 |
+| kills by static | 182,390 | 174,681 |
+| mobile lost | 1,725,762 | 1,197,952 |
+| jammer towers | 24 | 48 |
+
+He was right about the army and wrong about the towers: static kills are within
+5% of each other, so defences carry NEITHER side. The army is the whole gap.
+
+## ENGAGE_MARGIN works at 25 minutes and not at 40
+
+Matched 8-game pairs, same map and settings, only the constant changed:
+
+| | 1.35 | 1.80 |
+|---|---|---|
+| apex K/D @25min | 0.82 | **0.97** |
+| stable K/D @25min | 0.82 | **0.64** |
+| metal ratio @25min | 0.94 | **1.26** |
+| apex K/D @40min | — | **0.56** |
+
+So requiring an 80% advantage genuinely improves fighting through mid-game and
+then stops holding. The late game is a separate failure, not a weaker version of
+the same one. At 10 minutes the two sides are IDENTICAL (0.76 vs 0.76 over 10
+games), so nothing is wrong with the opening either.
+
+## Reclaim cannot see the bodies
+
+apexearth: "even once they die all on our doorstep, we're not rushin to reclaim
+any of it... theres 1000+ metal in front of us and we don't even care".
+
+Reclaim previously required an empty bank or an idle builder, so a constructor
+holding any task walked past a corpse field. A rule was added that interrupts a
+build for a rich field, gated on TOTAL nearby value rather than the biggest
+single body — a dozen dead T1s is several hundred metal and none of them is
+individually large. This needed a new binding, `ai.GetWreckValueAt(pos, radius)`,
+since `GetBestWreckPos` only answers "is there one fat corpse here".
+
+**It does not fire, and the cause is upstream of the rule.** Probed over a
+16-minute game, 97 samples: `GetWreckValueAt` read 0 at both 1400 and 4000
+radius, AND the established `GetBestWreckPos` returned no position at 4000 with
+a 55-metal floor. Two independent bindings agree there is nothing reclaimable
+within 4000 elmos of our constructors. Either features are not visible to that
+callback without LOS, or constructors are never near the wrecks. **Do not tune
+the threshold — find out which of those it is first.**

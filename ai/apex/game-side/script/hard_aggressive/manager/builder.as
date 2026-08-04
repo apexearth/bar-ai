@@ -153,9 +153,27 @@ CCircuitUnit@ energizer2 = null;
 // the enemy bought for us.
 const float WRECK_SEARCH  = 2200.f;  // reach the whole approach, not just home
 const float WRECK_MIN     = 55.f;    // a repelled push leaves many small bodies
+// A body worth INTERRUPTING a build for, and how far we will go to reach one.
+// Reclaim previously required either an empty bank or an idle builder, so a
+// constructor holding any task walked straight past a field of wrecks.
+// apexearth, after a repelled push: "theres 1000+ metal in front of us and we
+// don't even care". This variant's plan is to make the enemy pay for our
+// economy and then eat the bodies -- that third step is the one that funds
+// everything, and it was not happening.
+// Deliberately a HIGH bar and a SHORT reach: this displaces real work, so it
+// must only fire for a body big enough to be worth more than what it interrupts,
+// and close enough that the walk is not the cost.
+// TOTAL metal in the field, not the biggest single body: a repelled push leaves
+// a dozen dead T1s, none of them individually large, and that is exactly the
+// pile worth eating. apexearth: "often its a dozen t1 that just died... still
+// its a lot of metal we should be eating... the building will still get made
+// faster if we grab the metal - then we can make the building without waiting!"
+const float WRECK_RICH    = 400.f;   // total reclaimable within WRECK_RICH_R
+const float WRECK_RICH_R  = 1400.f;
 const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
 const int   WRECK_TIMEOUT = 1 * MINUTE;
 int gNextWreck = 0;
+int gNextRichLog = 0;
 
 IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
 {
@@ -1609,6 +1627,35 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				return rec;
 		}
 	}
+	// The one case that DOES displace real work. Everything above this point is
+	// strictly additive by design; a rich corpse pile next to us is the exception,
+	// because the metal it returns exceeds anything the interrupted task was
+	// producing in the same seconds.
+	if (ai.frame >= gNextWreck) {
+		const AIFloat3 self = unit.GetPos(ai.frame);
+		if (OnMap(self)) {
+			// Gate on the field's TOTAL value, then aim at its richest body so the
+			// reclaim circle lands on the corpses rather than on a tree.
+			const float pile = ai.GetWreckValueAt(self, WRECK_RICH_R);
+			const AIFloat3 rich = (pile >= WRECK_RICH)
+					? ai.GetBestWreckPos(self, WRECK_RICH_R, 15.f)
+					: AIFloat3(-1.f, 0.f, -1.f);
+			if (rich.x >= 0.f) {
+				gNextWreck = ai.frame + 3 * SECOND;
+				IUnitTask@ fat = aiBuilderMgr.Enqueue(TaskB::Reclaim(
+						Task::Priority::HIGH, rich, 1000.f, WRECK_TIMEOUT,
+						WRECK_RADIUS, true));
+				if (fat !is null) {
+					if (ai.frame >= gNextRichLog) {
+						gNextRichLog = ai.frame + 30 * SECOND;
+						AiLog(Factory::T() + "apex: rich-wreck reclaim pile=" + formatFloat(pile, "", 0, 0));
+					}
+					return fat;
+				}
+			}
+		}
+	}
+
 	if (task !is null)
 		return task;   // strictly additive: never displace real work
 

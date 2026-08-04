@@ -577,7 +577,8 @@ void UpdateKillingBlow()
 // and are losing the overall fight." Fire only when clearly outmatched.
 const float PORC_TRIGGER    = 2.0f;
 const int   PORC_ADD_SPACING = 20 * SECOND;
-const uint  PORC_ADD_CAP    = 2;    // was 10, then 4; see PORC_TRIGGER
+const uint  PORC_ADD_CAP    = 2;
+const float JAMMER_BACK     = 180.f;  // just behind the tower it covers    // was 10, then 4; see PORC_TRIGGER
 // The front is the contested area; allow a real position there, not a pair.
 const uint  PORC_FRONT_FENCE = 4;
 uint gPorcAdded = 0;
@@ -663,6 +664,60 @@ CCircuitDef@ PorcToBuild()
 	return best;
 }
 
+// A jammer denies the radar that siege artillery needs to shoot at range, so it
+// belongs ON the defensive line rather than back beside a fusion, where the two
+// existing hubs put it. apexearth: "Jammers need to be part of that defensive
+// line. So all this logic that we've built to really shore up our defenses need
+// to include a jammer with them. This is what allows us to less easily go under
+// siege."
+// There is no T2 jammer tower in this game -- corjamt (115m, jam 360),
+// armjamt (240m, 500) and legjam (140m, 390) are the only immobile jammers, so
+// the T1 tower IS the answer. Cheap enough that one per placed tower is a
+// rounding error against a 195-480 metal tower.
+string armjamt("armjamt");
+string corjamt("corjamt");
+string legjam("legjam");
+
+CCircuitDef@ JammerDef()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(corjamt);
+	if (side == "legion")
+		return ai.GetCircuitDef(legjam);
+	return ai.GetCircuitDef(armjamt);
+}
+
+// One jammer per tower placed on the line, so the cover grows with the line
+// instead of being a single point the enemy can shoot out.
+void PlaceLineJammer(const AIFloat3& in spot)
+{
+	CCircuitDef@ jam = JammerDef();
+	if ((jam is null) || !jam.IsAvailable(ai.frame))
+		return;
+	if (int(jam.count) >= int(gPorcAdded) + 1)
+		return;   // already covered by an earlier placement
+	// Behind the tower it covers: the jammer is the thing being protected.
+	AIFloat3 back = spot;
+	if (Builder::gHomeSet) {
+		const float dx = Builder::gHomePos.x - spot.x;
+		const float dz = Builder::gHomePos.z - spot.z;
+		const float len = sqrt(dx * dx + dz * dz);
+		if (len > 1.f) {
+			back.x += dx / len * JAMMER_BACK;
+			back.z += dz / len * JAMMER_BACK;
+		}
+	}
+	if (!Builder::OnMap(back))
+		return;
+	IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, jam, back, SQUARE_SIZE * 16));
+	if (t !is null) {
+		AiLog(Factory::T() + "apex: line-jammer " + jam.GetName()
+			+ " standing=" + jam.count);
+	}
+}
+
 void UpdateBaseDefence()
 {
 	if (!Builder::gHomeSet || (gPorcAdded >= PORC_ADD_CAP))
@@ -703,6 +758,7 @@ void UpdateBaseDefence()
 	if (t !is null) {
 		++gPorcAdded;
 		gNextPorcAdd = ai.frame + PORC_ADD_SPACING;
+		PlaceLineJammer(spot);
 		AiLog(Factory::T() + "apex: porc+ " + def.GetName() + " #" + gPorcAdded
 			+ " at-border enemyArmy=" + formatFloat(threat, "", 0, 0)
 			+ " enemyArty=" + formatFloat(aiEnemyMgr.GetEnemyCost(Unit::Role::ARTY.type), "", 0, 0)

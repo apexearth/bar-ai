@@ -59,6 +59,14 @@ local nextDump = DUMP_INTERVAL
 -- team -> accumulated metal value
 local lostReal, lostCheap = {}, {}
 local killReal, killCheap = {}, {}
+-- Who did the killing, and what died. apexearth, watching: "we make them suffer
+-- a lot with our defenses, but our units are still losing the battles" -- a
+-- combined K/D cannot tell those apart, and reads healthy while the army loses.
+local killByStatic, killByMobile = {}, {}
+-- Standing jammer towers. They cost 115-240 metal, far too little to ever show
+-- in the `top` sinks field, so "we build none" was previously unanswerable.
+local jamTowers = {}
+local lostMobile = {}
 local builtReal = {}
 -- Testing whether the ~10 min collapse is a tech-transition problem: teching too
 -- early leaves you too poor to hold the line, too late leaves you outclassed.
@@ -137,7 +145,14 @@ function gadget:AllowFeatureBuildStep(builderID, builderTeam, featureID, feature
 	return true
 end
 
+local function isJammerTower(ud)
+	return ud ~= nil and ud.isBuilding and (ud.radarDistanceJam or 0) > 0
+end
+
 function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam)
+	if isJammerTower(UnitDefs[unitDefID]) then
+		jamTowers[unitTeam] = (jamTowers[unitTeam] or 0) - 1
+	end
 	do
 		local cd = UnitDefs[unitDefID]
 		if cd ~= nil and (cd.customParams or {}).iscommander and commLost[unitTeam] == nil then
@@ -162,11 +177,26 @@ function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerD
 
 	-- attackerTeam is nil for self-destructs, reclaim and terrain deaths; those
 	-- are losses but nobody's kill.
+	if not ud.isBuilding then
+		bump(lostMobile, unitTeam, cost)
+	end
+
 	if attackerTeam ~= nil and attackerTeam ~= unitTeam then
 		if cheap then
 			bump(killCheap, attackerTeam, cost)
 		else
 			bump(killReal, attackerTeam, cost)
+		end
+		-- Immobile killer = a tower did this; mobile = our army did.
+		-- attackerDefID is nil when the killer is out of LOS, so those land in
+		-- neither bucket rather than being guessed at.
+		local ad = attackerDefID and UnitDefs[attackerDefID]
+		if ad ~= nil then
+			if ad.isBuilding then
+				bump(killByStatic, attackerTeam, cost)
+			else
+				bump(killByMobile, attackerTeam, cost)
+			end
 		end
 	end
 end
@@ -190,6 +220,9 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	local ud = UnitDefs[unitDefID]
 	if ud == nil then
 		return
+	end
+	if isJammerTower(ud) then
+		jamTowers[unitTeam] = (jamTowers[unitTeam] or 0) + 1
 	end
 	if (ud.metalCost or 0) >= SPAM_COST then
 		bump(builtReal, unitTeam, ud.metalCost)
@@ -279,6 +312,10 @@ local function dump(reason)
 				string.format("mLostReal=%.0f", lostReal[teamID] or 0),
 				string.format("mLostCheap=%.0f", lostCheap[teamID] or 0),
 				string.format("mKillReal=%.0f", killReal[teamID] or 0),
+				string.format("jamT=%d", jamTowers[teamID] or 0),
+				string.format("mKillStatic=%.0f", killByStatic[teamID] or 0),
+				string.format("mKillMobile=%.0f", killByMobile[teamID] or 0),
+				string.format("mLostMobile=%.0f", lostMobile[teamID] or 0),
 				string.format("mKillCheap=%.0f", killCheap[teamID] or 0),
 				string.format("mBuiltReal=%.0f", builtReal[teamID] or 0),
 				string.format("mFactories=%.0f", facSpend[teamID] or 0),

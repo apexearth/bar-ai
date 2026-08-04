@@ -568,7 +568,7 @@ index 2925da7..f1b8ee8 100644
  	bool IsIgnoreStallingPull(const IBuilderTask* task) const;
  	void CorrectResourcePull(float metal, float energy);
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b..21aeb3b 100644
+index a44c20b..97a5047 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -301,6 +301,9 @@ void CMilitaryManager::InitHandlers()
@@ -666,11 +666,58 @@ index a44c20b..21aeb3b 100644
  void CMilitaryManager::MakeBaseDefence(const AIFloat3& pos)
  {
  	if (circuit->IsLoadSave()) {
+@@ -1717,10 +1770,40 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+ 	return task;
+ }
+ 
++// Share of energy income the commander's cloak may consume.
++#define COMM_CLOAK_SHARE	0.1f
++
++// Cloak is switched on once when a unit finishes and nothing outside a retreat
++// task ever reconsiders it, so a commander could sit -- or walk -- cloaked with
++// an empty bank for the rest of the game. The moving cost is what bites:
++// corcom is 100 e/s standing and 1000 e/s moving, and CCircuitDef takes the max
++// of the two, so cloak is affordable only above 10,000 e/s of income.
++// apexearth: "one of our commanders is just walking back and forth while trying
++// to stay cloaked. 1000 energy to move while cloaked... He has no energy now and
++// still cloaked."
++void CMilitaryManager::UpdateCommCloak()
++{
++	CCircuitUnit* comm = circuit->GetSetupManager()->GetCommander();
++	if ((comm == nullptr) || comm->IsDead() || !comm->GetCircuitDef()->IsAbleToCloak()) {
++		return;
++	}
++	CEconomyManager* economyMgr = circuit->GetEconomyManager();
++	const bool canAfford = !economyMgr->IsEnergyStalling()
++			&& (comm->GetCircuitDef()->GetCloakCost()
++				< economyMgr->GetAvgEnergyIncome() * COMM_CLOAK_SHARE);
++	if (!canAfford && comm->GetUnit()->IsCloaked()) {
++		TRY_UNIT(circuit, comm,
++			comm->CmdCloak(false);
++		)
++	}
++}
++
+ void CMilitaryManager::Watchdog()
+ {
+ 	ZoneScopedN(__PRETTY_FUNCTION__);
+ 
++	UpdateCommCloak();
++
+ 	for (CCircuitUnit* unit : army) {
+ 		if (unit->GetTask()->GetType() == IUnitTask::Type::PLAYER) {
+ 			continue;
 diff --git a/src/circuit/module/MilitaryManager.h b/src/circuit/module/MilitaryManager.h
-index c167603..535340e 100644
+index c167603..953a525 100644
 --- a/src/circuit/module/MilitaryManager.h
 +++ b/src/circuit/module/MilitaryManager.h
-@@ -189,6 +189,7 @@ private:
+@@ -184,11 +184,13 @@ public:
+ private:
+ 	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
+ 
++	void UpdateCommCloak();
+ 	void Watchdog();
+ 
  	void AddArmyCost(CCircuitUnit* unit);
  	void DelArmyCost(CCircuitUnit* unit);
  	void PointOfInterest(CEnemyInfo* enemy, int start, int step);
@@ -1312,7 +1359,7 @@ index fac55c7..49eaa7b 100644
  	float minSqDist = std::numeric_limits<float>::max();
  
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..32c27f4 100644
+index cd063e4..6003499 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -25,12 +25,50 @@
@@ -1352,7 +1399,7 @@ index cd063e4..32c27f4 100644
 +// "if you take any fight you're gonna lose, then you probably did the wrong
 +// thing". Applies to CAttackTask only: raids are meant to trade units for
 +// economy and keep their own thresholds.
-+#define ENGAGE_MARGIN		1.35f
++#define ENGAGE_MARGIN		1.80f
 +
 +// Radius around a target within which OTHER enemy groups count as defending it.
 +// Well past T2 weapon ranges (800-1470), because an army that close will reach
