@@ -1161,3 +1161,55 @@ water"`), confirm it fires, and confirm play actually resumes (mex count,
 income, and eventually `gLastPhase` climbing again) rather than just a
 shipyard sitting idle. `python tools/composition.py` before trusting a win
 rate off this.
+
+---
+
+## 17. H1c: rez-bot fix isolation test -- NOT confirmed, code reverted-then-restored (2026-08-04)
+
+Tested `notes/next-session-hypotheses.md` section 1's H1c: temporarily
+disabled the rez-bot flee-on-hit block (`builder.as`, the `IsRezzer(unit))
+{ ConDugIn(unit); if (gConHits[...] > 0) { ... EnqueueRetreat ... } }` block
+added in `6efc955`), redeployed, ran one 16-game Comet Catcher 4v4 batch
+(`tournaments/20260804-143915-h1c-revert-16`), and compared composition
+against the pre-fix and post-fix baselines from section 1's table.
+
+| batch | cornecro share | apex wipeout rate |
+|---|---|---|
+| pre-fix baseline (`phasegate4-extend3-16`) | 8.8% | 7.3% (9/124) |
+| post-fix average (3 batches) | ~15% | ~31% |
+| **h1c-revert-16 (fix OFF)** | **17.3%** | **37.5% (24/64)** |
+
+Both numbers went the WRONG way for H1c: with the rez-bot flee logic fully
+disabled, cornecro's metal share and apex's wipeout rate were *higher* than
+the post-fix average, not lower, and further from the pre-fix baseline than
+every post-fix batch already measured. This is a single 16-game batch (9
+decided games: apex 3, stable 6, 7 hit the 25-min time limit undecided) so
+it cannot rule out noise on its own, but it is a clean directional result
+in the opposite direction from what H1a/H1b predicted, on top of composition
+swings this session already knows can be large batch-to-batch. **H1c is not
+confirmed** -- the rez-bot fix is not shown to be driving the cornecro-share
+or wipeout-rate growth.
+
+Also notable this batch: apex's own economy was down across the board
+relative to stable in the same games (metal produced 32.5k vs 52.8k, T2
+spend 10.1k vs 28.2k, T3 spend 0 vs 302) -- consistent with the standing
+finding that a collapsing economy buys cheap passive stuff (cornecro,
+coradvsol, cornanotc are apex's top 3 sinks here) and dies before any
+payoff, i.e. the composition shift may be a symptom of losing rather than
+a cause of it, same as flagged as a possibility in section 1's original
+writeup.
+
+**Action taken**: the revert was temporary. `builder.as` has been restored
+to exactly the pre-test state (`git status` clean, `git diff` empty against
+HEAD after restoring) -- the rez-bot flee-on-hit fix is back in, unchanged.
+Redeployed and smoke-tested clean (0 compile errors) both with the fix
+removed and after restoring it.
+
+**Recommendation for next session**: do not keep chasing H1a/H1b (retuning
+the rez-bot trigger) off this result -- the one batch available argues
+against the rez-bot fix being the driver, if anything. Move to section 2
+(`coradvsol` vs `corfus` gate investigation) per the priority order at the
+bottom of `notes/next-session-hypotheses.md`, and/or section 0 (watch a live
+Comet Catcher 4v4), which nobody has done all session and every actually-
+confirmed mechanism this session traces back to a live watch rather than a
+statistics-only diagnosis.
