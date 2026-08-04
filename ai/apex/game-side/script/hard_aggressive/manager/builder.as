@@ -1212,6 +1212,68 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 	return post;
 }
 
+// armrl/corrl/legrl is DETERRENCE, not an answer: 80 metal, and CheapAA caps at
+// AA_MAX=12 regardless of how much air the enemy actually has. apexearth,
+// watching a game lost from this exact hole: "the enemies attacked us with
+// like ten gunships on one of our bases, and we had like eight of the light
+// AA. They did nothing. Light AA is so bad versus T2 gunships."
+//
+// So a second, heavier tier: cormadsam/armferret/legflak. All VTOL-only
+// structures, one tier up in cost (315-820 metal against corrl's 80) and
+// correspondingly harder-hitting. Gated on enemyAir being a real strike force
+// rather than CheapAA's "the enemy owns one aircraft" bar, and on income.
+//
+// OFF. Measured worse, not better -- the same failure this comment set out to
+// avoid. 8-game control vs BARb:stable:hard_aggressive, Comet Catcher 4v4 +25%
+// Cortex/Cortex, 25 min, against the back-wall-fix baseline (see CHANGES.md,
+// commander back-wall hiding): head to head 1-1 -> 0-5, metal produced
+// 40,743 -> 27,382, static defence share 10.6% -> 11.5%, wiped-out player-games
+// 9/32 -> 13/32. One game in a smaller trial run did win the economy and K/D
+// outright (265,925 metal, K/D 1.13), so the mechanism is not obviously always
+// bad -- it may need a higher income floor, a lower AA_HEAVY_MAX, or gating on
+// SUSTAINED enemy air rather than a one-shot cost reading. Left in place,
+// disabled, rather than deleted, since re-testing a narrower version is
+// plausible future work.
+const bool  AA_HEAVY_ON          = false;
+const float AA_HEAVY_ENEMY_AIR   = 2500.f;  // roughly two-plus real attack aircraft, not scouts
+const int   AA_HEAVY_MIN         = 1;
+const int   AA_HEAVY_MAX         = 4;
+const float AA_HEAVY_PER_AIR     = 1800.f;
+const float AA_HEAVY_MIN_INCOME  = 20.f;
+const int   AA_HEAVY_PERIOD      = 25 * SECOND;
+int gNextHeavyAA = 0;
+string armferret("armferret"); string cormadsam("cormadsam"); string legflak("legflak");
+
+IUnitTask@ HeavyAA(CCircuitUnit@ unit)
+{
+	if (!AA_HEAVY_ON || (ai.frame < gNextHeavyAA) || aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
+		return null;
+	if (aiEconomyMgr.metal.income < AA_HEAVY_MIN_INCOME)
+		return null;
+	const float enemyAir = aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type);
+	if (enemyAir < AA_HEAVY_ENEMY_AIR)
+		return null;
+	int want = AA_HEAVY_MIN + int((enemyAir - AA_HEAVY_ENEMY_AIR) / AA_HEAVY_PER_AIR);
+	if (want > AA_HEAVY_MAX)
+		want = AA_HEAVY_MAX;
+	CCircuitDef@ aa = SideDef3(armferret, cormadsam, legflak);
+	if ((aa is null) || !aa.IsAvailable(ai.frame) || (aa.count >= want))
+		return null;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (!OnMap(here))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, aa, here, SQUARE_SIZE * 4));
+	if (post is null)
+		return null;
+	gNextHeavyAA = ai.frame + AA_HEAVY_PERIOD;
+	AiLog(Factory::T() + "apex: heavy-aa " + aa.GetName() + " standing=" + aa.count
+		+ "/" + want + " enemyAir=" + formatFloat(enemyAir, "", 0, 0));
+	return post;
+}
+
 // The heavy gun that holds ground. T2 constructors only -- armck/armcv cannot
 // build it, and asking would be dropped in silence.
 IUnitTask@ Pulsar(CCircuitUnit@ unit)
@@ -1695,6 +1757,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		IUnitTask@ aa = CheapAA(unit);
 		if (aa !is null)
 			return aa;
+		IUnitTask@ heavyAa = HeavyAA(unit);
+		if (heavyAa !is null)
+			return heavyAa;
 		// The eco lead skips the Pulsar. It is a 60-income, 1000-energy piece of
 		// standing defence, i.e. precisely the spend the role exists to not make.
 		// CheapAA above is NOT skipped: an economy with no army is what air goes
