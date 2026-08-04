@@ -52,6 +52,28 @@ advanced constructor when both exist?) before touching the role again --
 guessing which story is true and shipping it blind, especially unsupervised,
 risks reintroducing a bug this project already paid to find once.
 
+**Resolved, `dfa3b0d`**: traced `GetFacRoleDef` in `vendor/engine`. `support`
+is correct -- with it, `armack`/`corack` is the SOLE builder-role candidate in
+an advanced lab's build list, so the sharing branch selects it with zero
+competition every time. `builder` would put it in a weighted draw against
+armfark/corfast (0.25 vs 0.15, ~37.5% diversion) for no benefit, since their
+210m cost is below `ADV_CON_COST` (300) anyway. Kept `support`, documented why,
+not re-tested behaviourally since the mechanism read is unambiguous.
+
+**Tried and reverted (discarded, never committed): advanced-con recruit
+priority NORMAL -> NOW on small teams.** Same investigation surfaced an
+undocumented, unmeasured priority split (`IsSmallTeam() ? NORMAL : NOW`) on
+the recruit that produces the team's one shared advanced constructor --
+seemed backwards, since one slow lead stalls a quarter of a 4-player team's
+mex upgrades against an eighth of an 8-player team. Raised to `NOW`
+unconditionally. 4-game triage: 0-4 (all decided, none reached time limit,
+worse than baseline's 0-2/2), apex metal produced 21,414 vs baseline's
+~40,743. `NOW` likely lets this recruit request repeatedly cut ahead of
+regular army/build production at the same factory instead of just winning
+against other builder-role candidates, so the fix for one bottleneck starved
+a different one. Reverted; the priority split may be intentional load-shedding
+that just isn't documented, not a bug.
+
 ## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
 
 Not previously documented at this precision. 8-game controls at commit
