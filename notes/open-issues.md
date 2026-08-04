@@ -554,3 +554,28 @@ printed regardless of the cluster's real position. Building the real
 distinction is a genuine, well-scoped project (the front-position helpers
 `BorderPos`/`FrontPos` already exist and are used elsewhere in this file),
 just not a quick JSON tune.
+
+## 13. Heavy AA threshold (`AA_HEAVY_PER`) -- tried lower, inconclusive, reverted
+
+Found the REAL heavy-AA system: `Military::UpdateAirThreat()` already
+properly discounts scout/constructor contamination (`softAir`) and smooths
+over 240s (`gAirAvg`) -- a much better-designed mechanism than the crude
+duplicate attempted earlier this session (`AA_HEAVY_ON` in builder.as,
+already reverted). Confirmed via `apexaa:` logs that this existing system
+sat at `heavy=0/0` for an ENTIRE 24-minute sample game even once the
+corrected air metric reached a meaningful level -- `AA_HEAVY_PER=1500` was
+simply too high a bar to ever cross in a normal game.
+
+Lowered to 900 and tested: 4-game triage (1-2 decided, apex won one, low
+12.5% wipe-out both sides) looked promising; 8-game confirm came back 0-3
+decided (5/8 to time limit) with wipe-out back up to 31.25% and static
+defence share creeping to 11.1% while army share stayed low at 15.3% -- the
+same crowding-out shape as the original heavy-AA failure, just milder.
+Combined across both batches: 1-5 decided (16.7%), not clearly better than
+the aggregate 20.8% baseline (issue 0.1). Reverted as INCONCLUSIVE, not
+confirmed-bad -- the mechanism now genuinely fires (confirmed via `heavy=`
+readings changing from always-0 to 1-6), which the crude duplicate attempt
+never achieved, so this is a more promising direction than that one was.
+Worth a larger (16+ game) retry before ruling it out, given how close the
+triage result looked; not worth it immediately given the session's already
+extensive investment and the mixed 8-game signal.
