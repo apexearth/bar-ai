@@ -1224,8 +1224,20 @@
 			},
 
 			"armfark": {
-				// support, not builder: this is an assist bot, and while it carried the
-				// builder role the T2 lab handed it back as the advanced constructor.
+				// support, not builder. Resolved 2026-08-04, both prior claims about
+				// this were true descriptions of the same mechanism's two effects:
+				// C++ UpdateBuildPower AND the AngelScript conbranch advanced-con-
+				// sharing branch both call the SAME GetFacRoleDef(BUILDER, facDef)
+				// weighted draw over armalab's build options. armfark only costs
+				// 210m (below ADV_CON_COST=300), so it cannot falsely satisfy
+				// gHaveAdvCon -- but at builder-role weight 0.15 against armack's
+				// 0.25 it would win ~37.5% of that draw, delaying/wasting recruits
+				// meant to get the team its ONE real shared advanced constructor.
+				// Support avoids that at the cost of UpdateBuildPower's generic
+				// cheap-buildpower topup. Kept support: the delay risk is on the
+				// team's single most load-bearing unit (see [[commanders-decide-bar-games]]
+				// -adjacent finding that advanced-con timing gates T2 mex upgrades),
+				// the topup loss is not.
 				"role": ["support"],
 				"build_speed": 10.0,  //bp 140
 				"limit": 20
