@@ -208,3 +208,34 @@ metal to build T2 and afford those expensive units" is the right intent and need
 real numbers behind it. Those numbers are measurable now (`composition.py` gives
 per-phase spend, income and upgrade counts), so they should be read off games
 rather than guessed, and written here when they are.
+
+## Candidate gates from a session of failed "spend more" experiments (2026-08-04)
+
+Five isolated, properly-controlled tests this session each added or increased
+ONE spend category on top of an already-confirmed-good baseline (commander
+back-wall hiding fixed, `12f13f0`). All five failed or measured negative,
+each against a fair control — see `notes/open-issues.md`, "SESSION SYNTHESIS",
+for the full data. This is the concrete evidence this design has been waiting
+for: not a hypothesis that competition exists, but five specific rules caught
+in the act, with the phase-worthy state already identified for each.
+
+Diagnostic-only phase computation now exists (`Factory::ComputePhase()`,
+`factory.as`), gating nothing yet. These are candidates for what to gate once
+that step is taken deliberately, not a instruction to wire them up blind:
+
+| rule | file | session finding | candidate gate |
+|---|---|---|---|
+| `Builder::EcoConverters`/`EcoNano`/`EcoFusion` for every player (not just eco-lead) | builder.as | every metric moved the wrong way (energy wasted 2.4x, cons T2 and mex upgrades DOWN not up) | already correctly eco-lead-gated; a phase gate would need to answer WHOSE economy is ready, which is per-player state this design doesn't carry alone |
+| Advanced-con recruit priority NORMAL->NOW on small teams | factory.as | metal produced fell further (21,414 vs ~40,743); likely displaced ordinary army/build production at the same factory | phase >= 2 (build up) before treating this recruit as urgent -- a phase 0/1 team has nothing to displace FROM yet, so urgency there is free; later it competes |
+| `cornecro` (rez bot) standing cap | behaviour.json | confirmed worse at n=8 twice; 14.8% of ALL metal on a support unit with no combat power | the doc's "gate on share, not on truth" fits exactly: cap relative to CURRENT constructor count, not a flat number that means something different at 3 constructors vs 20 |
+| Heavy AA (three tested variants: new duplicate, existing-system threshold lowered, existing-system phase-gated at >=4) | builder.as, military.as | all three negative or not-encouraging; the phase-gated version (this session's own first real gating attempt) did NOT rescue it | this is the session's cautionary result: gating ONE already-marginal rule is not equivalent to resolving competition across the ruleset the doc's own measurement plan expects. Re-attempt only alongside other rules deferring in the SAME phase, not alone |
+| Front-line tower cap (`PORC_ADD_CAP`) / `porcupine.prevent` | military.as, build_chain.json | both already-measured dead ends from a PRIOR session; raising either did not move aggregate defence spend, because a separate C++ call dominates it | not a phase candidate at all -- the real fix here is front/rear cluster awareness (`BorderPos`/`FrontPos` already exist), a different problem than crowding-out |
+
+The heavy-AA row is the important negative result: it is direct evidence that
+phase-gating a single rule in isolation is not sufficient to prove or disprove the
+whole design. The doc's own "risk to watch for" section already said this --
+"if it becomes one more && on twelve rules that otherwise still all want to
+fire, nothing changes." This session's attempt was exactly that shape (one
+rule, one &&), and it changed nothing for the better. The real test needs
+several of the table above deferring together, so a phase's rules stop
+competing with EACH OTHER, not just with an arbitrary threshold on one.
