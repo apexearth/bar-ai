@@ -254,6 +254,14 @@ bool PreferReclaim()
 {
 	if (!Factory::gHaveT2)
 		return true;
+	// Behind on the field, the completion risk is the whole argument: a resurrect
+	// credits nothing until it finishes, so a bot pushed off one has spent the
+	// time for no metal, while reclaim banks continuously and survives being
+	// interrupted. Same reasoning as RezSpotHot, on the team's position instead of
+	// this bot's tile. apexearth: "our resurrection box should be more likely to
+	// reclaim when we're losing."
+	if (Military::LosingGround())
+		return true;
 	return aiEconomyMgr.metal.current
 	     < aiEconomyMgr.metal.storage * REZ_METAL_FLOOR;
 }
@@ -1415,6 +1423,58 @@ IUnitTask@ Fortify(CCircuitUnit@ unit)
 	return dig;
 }
 
+// Wounded units already have repair tasks waiting; the constructors were busy
+// buying economy.
+//
+// Two engine paths raise them, both for units we own: CRetreatTask::AssignTo
+// enqueues TaskB::Repair(HIGH) for every non-air unit that starts retreating,
+// and IFighterTask::OnUnitDamaged enqueues one at NOW for a `heavy` under 90%.
+// Both land in CBuilderManager's REPAIR queue, and the ONLY way a constructor is
+// ever elected onto one is aiBuilderMgr.DefaultMakeTask -- which sits below the
+// optional economy rules in AiMakeTask, so an idle constructor reaches the
+// converter first and the queue is never read.
+//
+// AiTaskAdded is the only place a repair task is visible from here: nothing
+// enumerates the task queue and nothing enumerates friendly units. IUnitTask is
+// refcounted so a held handle keeps the object alive, and every removal funnels
+// through DequeueTask, which calls AiTaskRemoved -- the same contract gMexTasks
+// relies on. CBuilderManager::Enqueue returns the existing task for a target
+// that already has one, before TaskAdded, so a target cannot be listed twice.
+//
+// MOBILE targets only. Damaged buildings raise a repair task constantly, and
+// including them would hold the gate open for the whole game.
+array<IUnitTask@> gArmyRepairs;
+
+// Only constructors near the casualty stand down; the rest of the base keeps
+// building. Far enough to cover a fight the constructor is working behind,
+// short enough that the walk is not the cost.
+const float REPAIR_REACH = 1200.f;
+int gRepairHeld = 0;
+int gNextRepairLog = 0;
+
+bool RepairNear(CCircuitUnit@ unit)
+{
+	if (gArmyRepairs.length() == 0)
+		return false;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (!OnMap(here))
+		return false;
+	for (uint i = 0; i < gArmyRepairs.length(); ++i) {
+		IUnitTask@ cand = gArmyRepairs[i];
+		if (cand is null)
+			continue;
+		const AIFloat3 where = cand.GetBuildPos();
+		if (!OnMap(where) || (here.distance2D(where) > REPAIR_REACH))
+			continue;
+		// Somebody is already on it. Self-limiting: the first constructor to take
+		// the task closes the gate for everyone else.
+		array<CCircuitUnit@>@ busy = cand.GetUnits();
+		if ((busy is null) || (busy.length() == 0))
+			return true;
+	}
+	return false;
+}
+
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 // 	AiDelPoint(lastPos);
@@ -1624,20 +1684,39 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			if (gun !is null)
 				return gun;
 		}
-		// The eco lead's block first: it is the same purchase as the generic rule
-		// below but sized to a spill that rule was never built for.
-		IUnitTask@ block = EcoConverters(unit);
-		if (block !is null)
-			return block;
-		IUnitTask@ conv = EnergyConverter(unit);
-		if (conv !is null)
-			return conv;
-		IUnitTask@ nano = EcoNano(unit);
-		if (nano !is null)
-			return nano;
-		IUnitTask@ fus = EcoFusion(unit);
-		if (fus !is null)
-			return fus;
+		// Stand the economy down while a wounded unit is waiting nearby with
+		// nobody on it. DefaultMakeTask below is the only path that elects a
+		// constructor onto a repair task, and every rule in this block runs ahead
+		// of it. apexearth: "if constructors are also helping to heal us while we
+		// fight, all these things can really help us to turn things around."
+		//
+		// This buys nothing new -- it defers purchases that would still be offered
+		// on the next task update, and hands the seconds to work the engine had
+		// already queued.
+		if (!RepairNear(unit)) {
+			// The eco lead's block first: it is the same purchase as the generic
+			// rule below but sized to a spill that rule was never built for.
+			IUnitTask@ block = EcoConverters(unit);
+			if (block !is null)
+				return block;
+			IUnitTask@ conv = EnergyConverter(unit);
+			if (conv !is null)
+				return conv;
+			IUnitTask@ nano = EcoNano(unit);
+			if (nano !is null)
+				return nano;
+			IUnitTask@ fus = EcoFusion(unit);
+			if (fus !is null)
+				return fus;
+		} else {
+			++gRepairHeld;
+			if (ai.frame >= gNextRepairLog) {
+				gNextRepairLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: con-heal " + unit.circuitDef.GetName()
+					+ " stands down, repairs=" + gArmyRepairs.length()
+					+ " held=" + gRepairHeld);
+			}
+		}
 	}
 
 	// Its own recent history says it cannot expand, so stop sending it out. The
@@ -1761,6 +1840,10 @@ void AiTaskAdded(IUnitTask@ task)
 		gMexUpActive = true;
 	} else if (bt == Task::BuildType::MEX) {
 		gMexTasks.insertLast(task);
+	} else if (bt == Task::BuildType::REPAIR) {
+		CCircuitUnit@ hurt = task.target;
+		if ((hurt !is null) && hurt.circuitDef.IsMobile())
+			gArmyRepairs.insertLast(task);
 	}
 // 	if (task.GetType() != Task::Type::BUILDER)
 // 		return;
@@ -1819,6 +1902,14 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 		for (uint i = 0; i < gMexTasks.length(); ++i) {
 			if (gMexTasks[i] is task) {
 				gMexTasks.removeAt(i);
+				break;
+			}
+		}
+	} else if (bt == Task::BuildType::REPAIR) {
+		// By identity, not by target: the target may already be dead here.
+		for (uint i = 0; i < gArmyRepairs.length(); ++i) {
+			if (gArmyRepairs[i] is task) {
+				gArmyRepairs.removeAt(i);
 				break;
 			}
 		}
