@@ -707,3 +707,19 @@ affects team 0 and team 1 differently regardless of which AI occupies them.
 Worth checking: does STABLE also show a team-0/1 split in the same data (its
 own win rate by side, not just apex's)? That would distinguish "map asymmetry
 affecting both AIs" from "something apex-specific about occupying team 0."
+
+**Checked: yes, stable shows the SAME direction.** As team 0, stable wins
+20/25 (80.0%); as team 1, stable wins 28/30 (93.3%) -- team 1 is the stronger
+side for BOTH AIs, whichever one occupies it (the two counts are
+complementary by construction, so the z-statistic is numerically identical,
+1.48, but the DIRECTION matching across two independent AIs is real
+evidence). **This points to a genuine Comet Catcher team-1 positional
+advantage** (start position, terrain, mex layout, or the `boxes: lr` box
+assignment itself) rather than anything apex-specific -- not something to
+"fix" in the AI at all if confirmed, though it does mean an apex-only
+tournament with an unlucky side distribution (more team-0 assignments than
+team-1) would read as artificially worse than the AI's true skill gap,
+which may be part of why this session's per-batch win rate bounced around
+before the aggregate settled. Still not statistically confirmed at n=55 --
+a dedicated stock-vs-stock (mirror-match) tournament, side-locked, would
+settle it cleanly without any AI-skill confound at all.
