@@ -58,6 +58,20 @@ both exist), not a config-fallback artifact.
 get a `--watch` run in front of apexearth. Every diagnosis that has actually
 landed on this AI came from him watching, not from aggregate stats.
 
+**Resolved, partially** -- see `12f13f0` (commander back-wall hiding disabled).
+A `--watch` run plus the infolog it produced found the mechanism: the
+commander was spending its early build time on a false "under attack" signal
+that reads true almost permanently on this map (see CHANGES.md, "Known not
+done" -> commander retreat). After the fix: 8-game control vs
+`hard_aggressive`, same config, went from 0-5 decided to 1-1, paired K/D
+log-ratio t from -13..-17 to -0.87 (not significant). **Still not "reliable"**
+-- the goal is not met, this is progress on issue 0.1's shutout, not a win.
+Next candidate to chase: apex still produces ~40k metal to stable's ~64k
+in the same 8-game run, so the economy gap (not just the commander's early
+diversion) is still open. Watch another game now that the shutout is gone --
+the next-largest visible defect may only be visible once the commander isn't
+masking it.
+
 ## 1. The late game collapses, and it is a SEPARATE failure
 
 Measured, 8-game pairs on Comet Catcher 4v4 +25%:
