@@ -1146,9 +1146,19 @@ CCircuitDef@ Fodder(const CCircuitDef@ facDef)
 // aircraft (held pre-strike, released at Air::Release()), and the advanced
 // AA-role def can be the exact same def the assassin escort flies -- an
 // unconditional hold here would trap the escort right after release.
+//
+// Restricted to big teams. LateGame() goes true off EITHER the 25-minute
+// clock OR any fusion existing -- and this AA-role check is not scoped to
+// only the freshly-recruited screen floor, it holds EVERY unit of that
+// role, including ones already mid-fight. On a 25-minute-capped 4v4 with
+// the phase-gated economy now pushing tech faster, a fusion before the
+// cap is plausible, and this session's dominant finding is that any new
+// unconditional behavior change costs the benchmark. Diagnosed entirely
+// from 8v8 observation; gating it there matches earlyReaction/stalled in
+// factory.as, both restricted for the same reason.
 bool HoldsLateFighter(CCircuitUnit@ unit)
 {
-	if (!LateGame() || Air::IsAirLead())
+	if (IsSmallTeam() || !LateGame() || Air::IsAirLead())
 		return false;
 	const CCircuitDef@ cdef = unit.circuitDef;
 	return (cdef !is null) && cdef.IsAbleToFly() && cdef.IsRoleAny(Unit::Role::AA.mask);
