@@ -164,6 +164,30 @@ of the current baseline this session produced, and it does not show apex
 starkest number here and matches the [[commanders-decide-bar-games]] finding
 better than any economy metric does.
 
+**AGGREGATE across every same-baseline (post-back-wall-fix, unmodified
+code) sample of 8+ games run this session -- the single most statistically
+robust number available, since it pools 5 independent batches instead of
+trusting any one:**
+
+| batch | apex won | stable won |
+|---|---|---|
+| `nobackwall-confirm` | 1 | 1 |
+| `comm-death-investigate` | 0 | 3 |
+| `noise-recheck` | 2 | 3 |
+| `large-confirm16` | 2 | 6 |
+| `commlost-investigate` | 0 | 6 |
+| **total (n=24 decided, 40 games played)** | **5** | **19** |
+
+**Apex win rate: 20.8%, 95% CI 9.2%-40.5%.** This is the first time this
+session a confidence interval genuinely excludes 50% -- no single 8-16 game
+batch got there alone (the noise floor is real and each one individually
+included 50%), but pooling across independently-run batches at the identical
+code state does. **This settles the question the individual batches could
+not: the current baseline's underperformance against `hard_aggressive` is
+real, not noise, at roughly a 1-in-5 win rate in decided games.** Recompute
+this table if more same-baseline batches are run later, rather than trusting
+any single new batch on its own.
+
 **Real commander-death data, for the first time (`ba92167`, `commlost-investigate`,
 n=8).** This session's earlier "commander death" investigation
 (`e7b75a2`, retracted in `e22fc6d`) had no real death signal and inferred it
@@ -502,3 +526,31 @@ bug. Do not "fix" it.
 
 The remaining candidate for `mex-none` is `IsAllyOpenMexSpot` — the spot is
 already claimed by a live task. See issue 10.
+
+## 12. Static defence stops scaling early — already tuned, not a fresh lever
+
+Live infologs show `UpdateBaseDefence` (military.as) placing exactly 2
+`corhllt` towers per player around minute 4-6 and then never firing again for
+the rest of a 20-25 minute game, regardless of how the enemy's army grows.
+Looked like a live bug -- `PORC_ADD_CAP = 2` is a hard, permanent cap on
+front-line tower placement for the WHOLE game.
+
+**Already measured, not fresh**: the comment at `military.as` (the
+`DefaultMakeDefence` gate above it) records that halving this exact constant
+(`PORC_ADD_CAP 4 -> 2`) moved aggregate static-defence spend 16.4% -> 16.8%,
+i.e. not at all, because the dominant spender is
+`aiMilitaryMgr.DefaultMakeDefence(cluster, pos)` -- the C++ engine's own
+per-cluster defence call, gated separately (`gPorcArmed`, `gTurtle`,
+`LosingGround()`, `early`) -- not this AngelScript addition. Raising
+`PORC_ADD_CAP` back up is very unlikely to change the aggregate outcome for
+the same reason it didn't the first time it was tried. The `porcupine.prevent`
+JSON knob (build_chain.json) was also already tried raised (to 5) and
+reverted for walling quiet rear mexes wastefully -- its own comment names the
+correct fix ("cannot express the front") as still unbuilt: a per-cluster
+prevent count that is higher at the front and lower at the rear, which
+requires knowing which cluster IS the front. The `"at-border"` text in the
+`porc+` log line is NOT a computed flag -- it is a hardcoded label, always
+printed regardless of the cluster's real position. Building the real
+distinction is a genuine, well-scoped project (the front-position helpers
+`BorderPos`/`FrontPos` already exist and are used elsewhere in this file),
+just not a quick JSON tune.
