@@ -2097,6 +2097,14 @@ int gNextRetreatLog = 0;
 
 int gNextThreatLog = 0;
 
+// Health added alongside threat (both were logged separately before, neither
+// with the other). There is no AiUnitDestroyed hook in this script -- the
+// engine warns "Script: 'void AiUnitDestroyed(CCircuitUnit@)' not found!" at
+// every match start -- so the only way to see a commander's last moments from
+// the infolog is the gap between this heartbeat's last line and the point it
+// stops. A health trace turns "the log stopped at 13.3m" into "health was
+// still N% at 13.3m" or "already retreating and dropping fast", which is the
+// difference between "died suddenly" and "the existing retreat failed slowly".
 void LogCommanderThreat(CCircuitUnit@ unit)
 {
 	if (ai.frame < gNextThreatLog)
@@ -2104,6 +2112,7 @@ void LogCommanderThreat(CCircuitUnit@ unit)
 	gNextThreatLog = ai.frame + 30 * SECOND;
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	AiLog(Factory::T() + "apex: comm threat=" + formatFloat(ai.GetBuilderThreatAt(here), "", 0, 2)
+		+ " hp=" + formatFloat(unit.GetHealthPercent() * 100.f, "", 0, 0)
 		+ " frame=" + ai.frame);
 }
 
