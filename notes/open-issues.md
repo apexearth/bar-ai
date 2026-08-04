@@ -1022,6 +1022,30 @@ is a large, real win over the original 7.9% baseline and not yet
 confirmed to reliably beat `BARb:stable:hard_aggressive` at this
 benchmark config.
 
+**UPDATE, `872473c` gates `earlyReaction`/`stalled` to `!IsSmallTeam()`,
+confirmation batch `gated-16` (n=16): 2-2 decided (50.0%), 12/16 to time
+limit.** Back in line with the pre-fix 44.4%/n=27 aggregate and clear of
+the two ungated-postfix batches' 31.2%/n=16. Consistent with the
+mechanism (two new unconditional, un-phase-gated spend triggers were
+costing the 4v4 benchmark) but n=4 decided alone is far too small to call
+this confirmed on its own -- treat as supporting evidence, not proof, and
+fold future Comet Catcher 4v4 batches on this code state into a fresh
+running aggregate starting from `872473c` rather than either of the two
+prior tables (pre-fix `phase>=4`-only, or ungated-postfix).
+
+**Where this leaves the overall goal**: from the 7.9% baseline this
+session started at, `phase >= 4` plus this round of live-diagnosed bug
+fixes is now landing consistently in the 44-50% band across every batch
+run at the correct (team-size-gated) code state -- a huge, real,
+statistically overwhelming improvement over baseline, and still short of
+"reliably beats" by this note's own standard (CI lower bound clearly
+above 50%). Extending this same aggregate is cheap and worth doing
+opportunistically, but per the session synthesis above, closing the
+remaining gap likely needs either a genuinely new mechanism (found the
+way `phase >= 4` was: through live-diagnosed failure modes, not more
+"spend" tuning) or apexearth's own live observation to surface the next
+one.
+
 ## 16. Players boxed onto an island barely expand, tech, or spend -- fix built, NOT YET MEASURED
 
 apexearth, watching an 8v8 live: a player started on a small strip of land,
