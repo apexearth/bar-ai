@@ -55,8 +55,8 @@ using the failed experiments above as the evidence for WHY it's needed and
 worked (per the doc's own measurement plan: mex upgrades should recover
 toward stock's 8-11, not stay at the ~2 the current flat rule set produces).
 
-Aggregate current win rate against this benchmark, for reference: **12.2%**
-of decided games (95% CI 5.3%-25.5%, n=41 across 8 independent 8+ game
+Aggregate current win rate against this benchmark, for reference: **10.4%**
+of decided games (95% CI 4.5%-22.2%, n=48 across 9 independent 8+ game
 batches at the unmodified current baseline) -- see issue 0.1 below for the
 full breakdown.
 
@@ -233,10 +233,11 @@ trusting any one:**
 | `phase-validate-8` (pure diagnostic add, zero behaviour change -- see `e0f44eb`) | 0 | 6 |
 | `baseline-extend-8` | 0 | 6 |
 | `baseline-extend2-8` | 0 | 5 |
-| **total (n=41 decided, 64 games played)** | **5** | **36** |
+| `baseline-extend3-8` | 0 | 7 |
+| **total (n=48 decided, 72 games played)** | **5** | **43** |
 
-**Apex win rate: 12.2%, 95% CI 5.3%-25.5%** (updated from 20.8% across
-three more same-baseline batches). This is the first time this
+**Apex win rate: 10.4%, 95% CI 4.5%-22.2%** (updated from 20.8% across
+four more same-baseline batches, all 0-5, 0-6, 0-6, 0-7). This is the first time this
 session a confidence interval genuinely excludes 50% -- no single 8-16 game
 batch got there alone (the noise floor is real and each one individually
 included 50%), but pooling across independently-run batches at the identical
