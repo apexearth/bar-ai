@@ -184,18 +184,24 @@ phase-gated-investment vs never-gated-reflexive split.
 
 A first attempt at the lower threshold `phase >= 2` (`mex >= 4`) was tried
 and reverted: 0 wins in 13 decided games, not distinguishable from the
-unmodified baseline. Retried at `phase >= 3`:
+unmodified baseline. Retried at `phase >= 3`, over four batches (56 games
+played, 22 decided — the first two batches read a stronger 33.3%, revised
+down after a weaker third and fourth batch, per this project's own repeated
+lesson that small samples mislead in either direction):
 
-| | baseline (unmodified, n=89) | phase >= 3 gate (n=12 decided) |
+| | baseline (unmodified, n=89) | phase >= 3 gate (n=22 decided) |
 |---|---|---|
-| decided win rate | 7.9% (95% CI 3.9%-15.4%) | 33.3% (95% CI 13.8%-60.9%) |
-| games reaching time limit | ~30-50% | ~70% |
+| decided win rate | 7.9% (95% CI 3.9%-15.4%) | 22.7% (95% CI 10.1%-43.4%) |
+| games reaching time limit | ~30-50% | ~70% (first two batches; fell some in later batches) |
 
-`P(>=4 wins in 12 decided | baseline true rate 7.9%) = 0.0115` — a real,
-statistically significant improvement, not noise. This is the first
+`P(>=5 wins in 22 decided | baseline true rate 7.9%) = 0.0260` — below
+conventional significance, a real, durable improvement over baseline, not
+noise, though more modest than the initial read. This is the first
 confirmed win from this session's BUILD_PHASE investigation, and validates
 the design's core claim: resolving competition across a CLUSTER of rules,
-not tuning or gating any one of them alone, is what moves the outcome.
+not tuning or gating any one of them alone, is what moves the outcome. Not
+yet "reliable" by any definition — roughly a 3x improvement, from losing
+9 in 10 decided games to losing 3 in 4.
 
 **Not yet fully explored**: whether an even higher or lower threshold does
 better, whether more rules (`ConDugIn`/`Fortify`) belong in the gated

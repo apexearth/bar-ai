@@ -851,3 +851,17 @@ kept alongside the other confirmed fixes.
 whether `ConDugIn`/`Fortify` belong in the gated cluster too, and whether
 this holds on other maps/handicaps/factions -- this session tested Comet
 Catcher 4v4 +25% Cortex only, per the goal's own scope.
+
+**UPDATE, extended with a 4th batch (`phasegate3-extend-16`, n=16): 1-9
+decided** -- notably weaker than the first two batches, pulling the
+running aggregate down. **Combined across all 4 batches (56 games played,
+22 decided): apex 5, stable 17 -- 22.7% (95% CI 10.1%-43.4%).**
+`P(>=5 wins in 22 | baseline true rate 7.9%) = 0.0260` -- still below
+conventional significance, so this remains a real, durable improvement
+over the 7.9% baseline, just more modest than the initial 33.3% read
+suggested. This is exactly the lesson this session already learned about
+trusting small samples (see the noise-floor recheck in issue 0.1) applied
+to a positive result instead of a negative one: the first two batches were
+on the better end of the true distribution, not the whole story. 22.7%,
+not 33.3%, is the number to cite going forward -- still a genuine,
+statistically real ~3x improvement over baseline, not yet "reliable."
