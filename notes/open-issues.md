@@ -215,18 +215,24 @@ needs either a replay watch or C++-side logging of the attacker/weapon (this
 session's `AiUnitRemoved` addition only sees OUR side; the killing blow's
 source is not exposed to script).
 
-**Update, done: the C++-side logging above got built** (`6903b49`,
-`CCircuitAI::UnitDestroyed` now logs the attacker). See CHANGES.md,
-"Commander killer logging", for the full table -- corrected there after an
-initial name-only misread (`corthud` is "Thug", a Light Plasma Bot, not
-artillery; verified with `tools/unitdef.py` before the corrected version).
-Short version: no single killer type dominates (13 of 29 kills across 12
-games are direct-fire ground units), but `corban` "Banisher" kills from
-roughly double the mean distance of the direct-fire units, consistent with
-the burst-death pattern above. **Still a handoff, not a fix** -- a future
-session, ideally with apexearth watching a game where `corban` lands the
-kill, can confirm whether it is genuinely landing hits from outside where
-the commander perceives itself as safe.
+**Update, then REVERTED: the C++-side logging above got built** (`6903b49`,
+`CCircuitAI::UnitDestroyed` logged the attacker), passed a 4-game and an
+8-game smoke test clean, then crashed the engine 1 game in 16 in a follow-up
+data-gathering batch (access violation inside our own DLL, at the exact
+frame of a commander death). Reverted and rebuilt clean. See CHANGES.md,
+"Commander killer logging" for the crash detail and the two lessons drawn
+from it -- most importantly, that a handful of clean smoke-test games is not
+proof of safety for logic that only runs on a comparatively rare event.
+
+The killer-type data gathered before the crash was found is preserved as
+data, not disproven by the crash: no single killer type dominates (13 of 29
+kills across 12 games are direct-fire ground units, after correcting an
+initial name-only misread of `corthud` -- see CHANGES.md), but `corban`
+"Banisher" kills from roughly double the mean distance of the direct-fire
+units, consistent with the burst-death pattern above. **Still a handoff, not
+a fix** -- confirming it needs either a safer reattempt at the C++ logging
+(with the attacker's def null-checked before every dereference) or
+apexearth watching a game where `corban` lands the kill.
 
 ## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
 

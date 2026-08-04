@@ -34,7 +34,7 @@ from source and stripped; see `docs/06-building-the-dll.md`.
 **measured**: 46 `con-reroute spot` events in one 40-minute 4v4, each moving a
 constructor off a vetoed site onto a spot the threat map read at 0.
 
-### Commander killer logging — `CCircuitAI::UnitDestroyed`, diagnostic only
+### Commander killer logging — `CCircuitAI::UnitDestroyed` — REVERTED, crashed
 
 2026-08-04. This session had no way to see WHAT kills a commander -- the
 AngelScript-side `AiUnitRemoved` hook (added the same session, see
@@ -42,9 +42,42 @@ AngelScript-side `AiUnitRemoved` hook (added the same session, see
 available in C++ and is not exposed to script. Added four lines in
 `CircuitAI::UnitDestroyed`: if the destroyed unit `IsRoleComm()`, log the
 attacker's unit name and 2D distance (or "UNKNOWN (no attacker)" if none --
-env damage, self-destruct, capture). Pure logging, no behaviour change.
-Verified: `exit_code=0`, `crashed=false` on every game of a 4-game smoke
-test, so it did not destabilise the engine.
+env damage, self-destruct, capture).
+
+**REVERTED.** A 4-game and an 8-game smoke test both came back clean
+(`exit_code=0`, `crashed=false` on every game), which is why this was
+believed safe and committed. A follow-up 16-game batch, collected purely for
+more diagnostic data with no further code change, hit a real crash: access
+violation (0xc0000005) inside `SkirmishAI.dll`, at the exact frame of a
+`[BARAI_COMMLOST]` event -- 1 game in 16 (6.25%). Stack trace frames 0-2 are
+inside our own DLL. Most likely cause: `attacker->GetCircuitDef()->GetDef()`
+returning null in some circumstance this session did not characterise (a
+simultaneous-death edge case, or a `CEnemyInfo` whose def was never fully
+resolved), then `->GetName()` on that null pointer. Not root-caused with
+confidence, and every further test costs a rebuild + multi-game batch to
+even have a chance of reproducing the specific edge case, so the change was
+fully reverted rather than patched blind. Source reverted in
+`vendor/engine/` (gitignored, not visible as a diff here), DLL rebuilt from
+the reverted source and redeployed, confirmed crash-free again over 4 games.
+
+**Two lessons for a future attempt at this exact idea:**
+1. **A handful of clean smoke-test games is not proof of safety for an event
+   that only fires on death of a specific unit type.** A commander death is
+   comparatively rare per game (this session's own data: roughly 2-4 per
+   game), so a 4-8 game sample may simply not hit whatever specific
+   circumstance triggers the crash. This is the same lesson `docs/`/CLAUDE.md
+   already states for the AngelScript layer ("An AngelScript compile error
+   disables the whole variant, and the match still runs") applied to C++:
+   absence of an observed failure in a small sample is not absence of a bug.
+2. **Null-check every pointer in the chain before dereferencing**, even ones
+   that look like they should always be valid from the call site's contract
+   (`attacker != nullptr` was checked; `attacker->GetCircuitDef()` and
+   `->GetDef()` were not).
+
+The killer-type data collected before the crash was found is preserved below
+since it remains real data from real games (just from a build later proven
+unstable in a way unrelated to the LOG call's own correctness under normal
+conditions) -- read it as suggestive, not as settled.
 
 **CORRECTED below -- the first read named `corthud` as artillery from the
 name alone, the exact mistake `docs/`/CLAUDE.md warns about. Verified with
