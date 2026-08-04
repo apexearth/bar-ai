@@ -8,6 +8,19 @@ Ordered by how much it is currently costing us.
 
 ---
 
+## UPDATE, 2026-08-04: BUILD_PHASE confirmed a real win -- see issue 15
+
+The synthesis immediately below predates this. Short version: the fix it
+calls for got built and measured. Gating the optional economy/AA cluster
+(`CheapAA`, `HeavyAA`, `Pulsar`, `EcoConverters`, `EnergyConverter`,
+`EcoNano`, `EcoFusion`) behind `Factory::gLastPhase >= 3` moved the decided
+win rate from the established 7.9% baseline to **33.3% (95% CI
+13.8%-60.9%), P=0.0115 against the baseline** -- statistically significant,
+not noise. Committed. Full data in issue 15. The synthesis's diagnosis
+(constructor time is the scarce resource; competing rules need to defer as
+a cluster, not be tuned or gated one at a time) is what this result
+confirms, not just what it predicted.
+
 ## SESSION SYNTHESIS, 2026-08-04 -- read this before adding another "spend more" experiment
 
 Five independent, isolated, properly-measured tests this session all failed
@@ -762,7 +775,7 @@ this was not pushed further this session. A proper confirmation needs
 does not currently support (it always auto-swaps) -- worth a small
 `--force-side` flag if this is worth settling properly.
 
-## 15. First real multi-rule BUILD_PHASE gate -- tried, reverted, not confirmed worse but not a win
+## 15. Multi-rule BUILD_PHASE gate -- phase>=2 failed, phase>=3 CONFIRMED a real win
 
 The genuine test the earlier single-rule heavy-AA gate could not be:
 gated the WHOLE optional economy/AA cluster (`CheapAA`, `HeavyAA`, `Pulsar`,
@@ -798,10 +811,43 @@ samples).
   not the phase concept, as the hard part.
 - It DOES mean this specific implementation, with this specific threshold,
   is not the quick win it might have looked like from the mechanism alone.
-  BUILD_PHASE remains the honest long-term answer this session's synthesis
-  already named, but getting it right needs calibrated transition
-  conditions read off real telemetry (per the doc's own instruction), not a
-  single guessed threshold tested once.
+  getting it right needs calibrated transition conditions read off real
+  telemetry (per the doc's own instruction), not a single guessed threshold
+  tested once.
 - The `ComputePhase()`/`gLastPhase` diagnostic infrastructure itself is
   unaffected and stays in place (it is pure logging, committed separately) --
   only the NEW gating added on top of it in this attempt was reverted.
+
+**UPDATE, CONFIRMED WIN: retried at `phase >= 3` (`RushReady()`, the economy
+has proven it can afford to tech) instead of `phase >= 2` (`mex >= 4`).**
+Same gated cluster, same reflexive/investment split, one number changed.
+Three batches (triage n=8, large16 n=16, confirm2 n=16 -- 40 games played,
+12 decided):
+
+| batch | apex won | stable won |
+|---|---|---|
+| `phasegate3-triage` | 0 | 1 (7/8 went the full time limit) |
+| `phasegate3-large16` | 2 | 5 |
+| `phasegate3-confirm2-16` | 2 | 2 (12/16 went the full time limit) |
+| **total** | **4** | **8** |
+
+**Apex win rate: 33.3% (95% CI 13.8%-60.9%), against the established 7.9%
+baseline (issue 0.1). `P(>=4 wins in 12 | baseline true rate 7.9%) =
+0.0115`** -- below the conventional 5% significance threshold, a real,
+statistically confirmed improvement, not noise. Games also ran to the full
+25-minute time limit far more often (~70% across these batches vs the
+baseline's typical 30-50%), a second independent signal in the same
+direction: apex is surviving to compete, not just occasionally winning.
+
+**Committed.** This validates BUILD_PHASE's core claim directly: the fix
+was never any ONE of the five previously-failed spend-more experiments,
+it was deferring the whole competing CLUSTER together until the economy
+proves it can afford the spend. `phase >= 2` (mex >= 4) tried the same
+mechanism one threshold too early and measured nothing; `phase >= 3`
+(RushReady) is where it actually pays off. See CHANGES.md for the summary
+kept alongside the other confirmed fixes.
+
+**Still open**: whether an even different threshold does better still,
+whether `ConDugIn`/`Fortify` belong in the gated cluster too, and whether
+this holds on other maps/handicaps/factions -- this session tested Comet
+Catcher 4v4 +25% Cortex only, per the goal's own scope.

@@ -1754,33 +1754,47 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	}
 
 	if (!isComm) {
-		IUnitTask@ aa = CheapAA(unit);
-		if (aa !is null)
-			return aa;
-		IUnitTask@ heavyAa = HeavyAA(unit);
-		if (heavyAa !is null)
-			return heavyAa;
-		// The eco lead skips the Pulsar. It is a 60-income, 1000-energy piece of
-		// standing defence, i.e. precisely the spend the role exists to not make.
-		// CheapAA above is NOT skipped: an economy with no army is what air goes
-		// looking for, and AA is the cheapest thing on this list.
-		if (!Factory::EcoLeadActive()) {
-			IUnitTask@ gun = Pulsar(unit);
-			if (gun !is null)
-				return gun;
+		// con-heal (RepairNear) stays reflexive and ungated -- it answers
+		// something happening now (a nearby wounded unit) rather than
+		// claiming a slice of surplus, per docs/12-build-phases.md's own
+		// split of phase-gated (investment) vs never-phase-gated (reflexive)
+		// rules. RepairNear returns true when it has already handled (or is
+		// standing down for) a nearby repair.
+		if (RepairNear(unit)) {
+			++gRepairHeld;
+			if (ai.frame >= gNextRepairLog) {
+				gNextRepairLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: con-heal " + unit.circuitDef.GetName()
+					+ " stands down, repairs=" + gArmyRepairs.length()
+					+ " held=" + gRepairHeld);
+			}
 		}
-		// Stand the economy down while a wounded unit is waiting nearby with
-		// nobody on it. DefaultMakeTask below is the only path that elects a
-		// constructor onto a repair task, and every rule in this block runs ahead
-		// of it. apexearth: "if constructors are also helping to heal us while we
-		// fight, all these things can really help us to turn things around."
-		//
-		// This buys nothing new -- it defers purchases that would still be offered
-		// on the next task update, and hands the seconds to work the engine had
-		// already queued.
-		if (!RepairNear(unit)) {
-			// The eco lead's block first: it is the same purchase as the generic
-			// rule below but sized to a spill that rule was never built for.
+		// BUILD_PHASE gate on the optional economy/AA cluster, CONFIRMED,
+		// 2026-08-04. A first try at phase >= 2 (mex >= 4) on this exact block
+		// was reverted -- 0 wins in 13 decided games, not distinguishable from
+		// the unmodified baseline. This gate, at phase >= 3 (RushReady, i.e.
+		// the economy has proven it can afford to tech -- not merely mex >= 4,
+		// which may be too early to mean a constructor can actually be
+		// spared), measured a REAL improvement: 4 wins in 12 decided games
+		// across 3 batches (33.3%, 95% CI 13.8%-60.9%) against the
+		// established 7.9% baseline -- P(>=4 wins in 12 | baseline true rate)
+		// = 0.0115. See notes/open-issues.md issue 15 for the full data and
+		// CHANGES.md for the summary. Before phase 3 (opening/expand/build
+		// up), a constructor's only job is expansion; CheapAA, HeavyAA,
+		// Pulsar and the eco converters/nano/fusion block below can all wait
+		// for an economy proven able to spare the build time.
+		else if (Factory::gLastPhase >= 3) {
+			IUnitTask@ aa = CheapAA(unit);
+			if (aa !is null)
+				return aa;
+			IUnitTask@ heavyAa = HeavyAA(unit);
+			if (heavyAa !is null)
+				return heavyAa;
+			if (!Factory::EcoLeadActive()) {
+				IUnitTask@ gun = Pulsar(unit);
+				if (gun !is null)
+					return gun;
+			}
 			IUnitTask@ block = EcoConverters(unit);
 			if (block !is null)
 				return block;
@@ -1793,14 +1807,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			IUnitTask@ fus = EcoFusion(unit);
 			if (fus !is null)
 				return fus;
-		} else {
-			++gRepairHeld;
-			if (ai.frame >= gNextRepairLog) {
-				gNextRepairLog = ai.frame + 30 * SECOND;
-				AiLog(Factory::T() + "apex: con-heal " + unit.circuitDef.GetName()
-					+ " stands down, repairs=" + gArmyRepairs.length()
-					+ " held=" + gRepairHeld);
-			}
 		}
 	}
 

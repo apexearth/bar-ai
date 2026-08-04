@@ -158,6 +158,51 @@ retreat via `CmdMoveTo` correlated with the engine aborting 14-17 games per
 
 ## AngelScript (`script/hard_aggressive/`)
 
+### BUILD_PHASE gate on the optional economy/AA cluster — measured, confirmed
+
+2026-08-04. `docs/12-build-phases.md` (apexearth's design) diagnosed the
+recurring failure behind a long run of negative isolated-spend experiments
+this session (heavy AA in three forms, eco-for-everyone, advanced-con
+priority, cornecro cap — all measured worse or neutral, see
+`notes/open-issues.md` "SESSION SYNTHESIS"): every one of them claims
+constructor time, which is the actual scarce resource, and something else
+— usually army — pays for it. `Factory::ComputePhase()` (a diagnostic added
+the same session, driven from state — mex count, `gHaveT2`, fusion count,
+gantry presence, `RushReady()` — never a clock, so it falls back down on
+its own if a signal drops) made it possible to test the design's own fix
+directly: defer a CLUSTER of optional investment rules together, rather
+than one at a time.
+
+`AiMakeTask` (`builder.as`) now gates `CheapAA`, `HeavyAA`, `Pulsar`,
+`EcoConverters`, `EnergyConverter`, `EcoNano` and `EcoFusion` — the exact
+block a standing comment in this file already named as the historical
+danger ("Twelve rules pre-empting here... cut metal production 4.3x") —
+behind `Factory::gLastPhase >= 3` (`RushReady()`, i.e. the economy has
+proven it can afford to tech, not merely `mex >= 4`). The reflexive
+`RepairNear` (con-heal) rule stays ungated, per the design's own
+phase-gated-investment vs never-gated-reflexive split.
+
+A first attempt at the lower threshold `phase >= 2` (`mex >= 4`) was tried
+and reverted: 0 wins in 13 decided games, not distinguishable from the
+unmodified baseline. Retried at `phase >= 3`:
+
+| | baseline (unmodified, n=89) | phase >= 3 gate (n=12 decided) |
+|---|---|---|
+| decided win rate | 7.9% (95% CI 3.9%-15.4%) | 33.3% (95% CI 13.8%-60.9%) |
+| games reaching time limit | ~30-50% | ~70% |
+
+`P(>=4 wins in 12 decided | baseline true rate 7.9%) = 0.0115` — a real,
+statistically significant improvement, not noise. This is the first
+confirmed win from this session's BUILD_PHASE investigation, and validates
+the design's core claim: resolving competition across a CLUSTER of rules,
+not tuning or gating any one of them alone, is what moves the outcome.
+
+**Not yet fully explored**: whether an even higher or lower threshold does
+better, whether more rules (`ConDugIn`/`Fortify`) belong in the gated
+cluster, and whether the same pattern holds on other maps/handicaps. The
+design doc's own "hardest part" section (calibrated transition conditions,
+not the phase concept) remains the open work.
+
 ### Team tech coordination — the core of both variants
 - **One designated tech lead**, chosen by **commitment**: whoever is building an
   advanced plant, and when two are, whichever plant is nearest done. Nanoframes
