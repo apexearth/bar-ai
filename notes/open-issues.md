@@ -761,3 +761,47 @@ this was not pushed further this session. A proper confirmation needs
 `run_tournament.py`-scale parallelism with one side forced, which the tool
 does not currently support (it always auto-swaps) -- worth a small
 `--force-side` flag if this is worth settling properly.
+
+## 15. First real multi-rule BUILD_PHASE gate -- tried, reverted, not confirmed worse but not a win
+
+The genuine test the earlier single-rule heavy-AA gate could not be:
+gated the WHOLE optional economy/AA cluster (`CheapAA`, `HeavyAA`, `Pulsar`,
+`EcoConverters`, `EnergyConverter`, `EcoNano`, `EcoFusion`) behind
+`Factory::gLastPhase >= 2` (build up, reached once mex >= 4) in `builder.as`'s
+`AiMakeTask`, using the new `ComputePhase()` diagnostic. This is the SAME
+block `docs/12-build-phases.md`'s own comment already names as the historical
+danger ("Twelve rules pre-empting here... cut metal production 4.3x").
+Reflexive `RepairNear` (con-heal) stayed ungated, per the doc's own
+phase-gated-vs-reflexive split. Caught and fixed a real bug while
+implementing it: an early draft inverted the `RepairNear` condition polarity
+(would have swapped which branch handled repair vs economy) -- fixed before
+any test ran, via careful re-reading against the original code rather than
+trusting the refactor.
+
+**Result across three batches (smoke n=4, confirm n=8, large16 n=16 -- total
+28 games, 13 decided): 0 apex wins.** `P(0 wins | true rate is the 7.9%
+baseline) = 0.34` -- NOT statistically distinguishable from the unchanged
+baseline at this sample size, so this is not confirmed worse. But it is also
+clearly not a win, and economy metrics did not show the improvement the
+design doc's own measurement plan predicts (mex upgrades did not recover
+toward stock's 8-11; metal produced and army share were unremarkable, in the
+same range as the baseline). Reverted rather than push a 4th batch, matching
+this session's established discipline (revert after multiple non-positive
+samples).
+
+**What this does and does not mean for BUILD_PHASE:**
+- It does NOT disprove the design. The gate threshold (`phase >= 2`, i.e.
+  mex >= 4) may simply be wrong -- too late to matter (constructors are
+  already past the critical early-expansion window by the time mex hits 4)
+  or too early (the economy still can't spare the constructor even at mex 4).
+  The doc's own "hardest part" section already flags transition conditions,
+  not the phase concept, as the hard part.
+- It DOES mean this specific implementation, with this specific threshold,
+  is not the quick win it might have looked like from the mechanism alone.
+  BUILD_PHASE remains the honest long-term answer this session's synthesis
+  already named, but getting it right needs calibrated transition
+  conditions read off real telemetry (per the doc's own instruction), not a
+  single guessed threshold tested once.
+- The `ComputePhase()`/`gLastPhase` diagnostic infrastructure itself is
+  unaffected and stays in place (it is pure logging, committed separately) --
+  only the NEW gating added on top of it in this attempt was reverted.
