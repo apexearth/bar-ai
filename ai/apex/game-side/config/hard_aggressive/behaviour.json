@@ -973,7 +973,7 @@
 			},
 			"armmstor" : {
 				"role": ["static"],
-				"since": 300,
+				"since": 1200,
 				"limit": 1
 			},
 			"armwin": {
@@ -1057,7 +1057,7 @@
 			},
 			"cormstor" : {
 				"role": ["static"],
-				"since": 300,
+				"since": 1200,
 				"limit": 1
 			},
 			"cormakr": {
@@ -1224,21 +1224,18 @@
 			},
 
 			"armfark": {
-				// Back to builder. UpdateBuildPower recruits through
-				// GetFacRoleDef(ROLE_TYPE(BUILDER)), which support does not satisfy, so
-				// demoting this left armack (430m/180bp, limit 10) as the T2 lab's only
-				// builder and removed the cheapest build power in the game
-				// (210m/140bp, limit 20) at the moment T2 arrives.
-				"role": ["builder"],
+				// support, not builder: this is an assist bot, and while it carried the
+				// builder role the T2 lab handed it back as the advanced constructor.
+				"role": ["support"],
 				"build_speed": 10.0,  //bp 140
 				"limit": 20
 			},
 			"corfast": {
-				// See armfark. The "since" was holding Cortex's cheap assist bot back
-				// to minute 25 on top of the role demotion.
-				"role": ["builder"],
+				// support, not builder -- see armfark.
+				"role": ["support"],
 				"limit": 10,
-				"build_speed": 7.0
+				"build_speed": 7.0,
+				"since": 1500
 			},
 
 			"armcv": {
@@ -1372,13 +1369,11 @@
 	
 			"armpw": {
 				"role": ["raider"],
-				"attribute": ["rare"],
 				"ignore": true
 			},
 			"armrectr": {
 				"role": ["support"],
 				"attribute": ["rare"],
-				"retreat": 0.9,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
@@ -1405,7 +1400,6 @@
 			},
 			"armflea": {
 				"role": ["scout"],
-				"attribute": ["rare"],
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "commander": 10.0, "vs": {"air": 0.0, "surf": 0.0, "water": 0.0, "commander": 10.0}},
 				"ignore": true
 			},
@@ -1538,7 +1532,6 @@
 			},
 			"armfav": {
 				"role": ["scout"],
-				"attribute": ["rare"],
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
@@ -1818,7 +1811,7 @@
 	
 			"corak": {
 				"role": ["raider"],
-				"attribute": ["scout", "rare"],
+				"attribute": ["scout"],
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
@@ -1826,7 +1819,6 @@
 				"role": ["rezzer"],
 				"attribute": ["rare"],
 				"limit": 20,
-				"retreat": 0.9,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
@@ -1975,7 +1967,6 @@
 	
 			"corfav": {
 				"role": ["scout"],
-				"attribute": ["rare"],
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},

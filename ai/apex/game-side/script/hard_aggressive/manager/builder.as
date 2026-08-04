@@ -171,8 +171,6 @@ const float WRECK_MIN     = 55.f;    // a repelled push leaves many small bodies
 const float WRECK_RICH    = 400.f;   // total reclaimable within WRECK_RICH_R
 const float WRECK_RICH_R  = 1400.f;
 const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
-const float COMM_WRECK_NEAR = 450.f; // commander: only what it already stands on
-const float REZ_MAX_FRAC  = 0.5f;    // rezzers work our half of the lane, not theirs
 const int   WRECK_TIMEOUT = 1 * MINUTE;
 int gNextWreck = 0;
 // Spacing on the safe-mex grab. Short: an unclaimed spot is income we are not
@@ -305,7 +303,7 @@ bool OnMap(const AIFloat3& in p)
 // How far toward the enemy a site may sit before it counts as their ground.
 // FrontPos is published at 0.78 of the way, so this is just inside the line the
 // team already agrees on.
-const float CON_FAR_FRAC = 0.95f;
+const float CON_FAR_FRAC = 0.72f;
 
 // Is this site past the front, i.e. in enemy territory?
 //
@@ -731,14 +729,6 @@ const int   CONV_STALE     = 16;
 const int   CONV_MAX       = 90;
 const int   ADV_CONV_AFTER = 8;   // small converters standing before switching up
 int gNextEcoConv = 0;
-
-// Every player blankets the back with energy and converters; the eco lead just
-// does it oftener. apexearth: "This is the sort of thing all players should do.
-// Economy just does it *even more*".
-int EcoPeriod(int period)
-{
-	return Factory::EcoLeadActive() ? (period / 2) : period;
-}
 int gEcoConvAsked = 0;
 
 int SmallConvCount(CCircuitUnit@ unit)
@@ -772,12 +762,7 @@ bool ConvSpot(CCircuitUnit@ unit, int index, AIFloat3& out spot)
 
 IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 {
-	// Was eco-lead only, so on a 4v4 it never ran at all and on a 6v6 exactly one
-	// player did. apexearth: "we should just be blanketing the back of the map
-	// with lots of energy and converters... I tried to get you to do this, but
-	// it's never really happening." The rule's own conditions and its period
-	// still bound how often any one player buys.
-	if (ai.frame < gNextEcoConv)
+	if (!Factory::EcoLeadActive() || (ai.frame < gNextEcoConv))
 		return null;
 	// Only while energy is actually being binned, and self-limiting: every
 	// converter raises pull by 70, so the store drains and this stops on its own.
@@ -839,7 +824,7 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 			Task::Priority::NORMAL, want, spot, SQUARE_SIZE * 4));
 	if (post is null)
 		return null;
-	gNextEcoConv = ai.frame + EcoPeriod(CONV_PERIOD);
+	gNextEcoConv = ai.frame + CONV_PERIOD;
 	++gEcoConvAsked;
 	if ((gEcoConvAsked % 10) == 1)
 		AiLog(Factory::T() + "apex: eco converter block " + want.GetName()
@@ -989,7 +974,7 @@ int NanoCount()
 
 IUnitTask@ EcoNano(CCircuitUnit@ unit)
 {
-	if (ai.frame < gNextNano)
+	if (!Factory::EcoLeadActive() || (ai.frame < gNextNano))
 		return null;
 	if (aiEconomyMgr.metal.current < aiEconomyMgr.metal.storage * NANO_MIN_BANK)
 		return null;
@@ -1030,7 +1015,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 			Task::Priority::NORMAL, want, here, SQUARE_SIZE * 8));
 	if (post is null)
 		return null;
-	gNextNano = ai.frame + EcoPeriod(NANO_PERIOD);
+	gNextNano = ai.frame + NANO_PERIOD;
 	++gNanosAsked;
 	AiLog(Factory::T() + "apex: eco nano " + want.GetName()
 		+ " standing=" + want.count + " asked=" + gNanosAsked
@@ -1073,7 +1058,7 @@ int gFusionsAsked = 0;
 
 IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 {
-	if (ai.frame < gNextFusion)
+	if (!Factory::EcoLeadActive() || (ai.frame < gNextFusion))
 		return null;
 	// A T1 constructor cannot build one; asking anyway is the silent no-op this
 	// repo has been bitten by before.
@@ -1114,7 +1099,7 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 		}
 		return null;
 	}
-	gNextFusion = ai.frame + EcoPeriod(FUSION_PERIOD);
+	gNextFusion = ai.frame + FUSION_PERIOD;
 	++gFusionsAsked;
 	AiLog(Factory::T() + "apex: eco fusion " + want.GetName()
 		+ " standing=" + want.count + " asked=" + gFusionsAsked
@@ -1278,21 +1263,9 @@ bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)
 	return false;
 }
 
-const bool CONTEST_DEFENCE_ON = false;
-
 IUnitTask@ ContestDefence(CCircuitUnit@ unit, const string& in kind,
 		float heat, const AIFloat3& in hot)
 {
-	// OFF. This turned every refused mex into a tower -- observed live as advanced
-	// constructors building 730-metal Scorpions behind the line instead of
-	// expanding. StandoffPos puts it BEHIND the refused site by design, so the
-	// spend does not even reach the front it was meant to hold, and the veto that
-	// triggers it is pure geometry because the threat map reads zero.
-	// apexearth: "all this money we put in these defenses, we could be building
-	// units and economy."
-	if (!CONTEST_DEFENCE_ON)
-		return null;
-
 	// A tower is 680-15,000 energy, and handing a task over directly bypasses
 	// CanAssignTo, which is where the engine's own energy test lives.
 	if ((ai.frame < gNextConDef) || aiEconomyMgr.isEnergyStalling)
@@ -1534,10 +1507,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		if (Military::FrontPos(front)) {
 			gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
 			const AIFloat3 spoil = ai.GetBestWreckPos(front, WRECK_SEARCH, WRECK_MIN);
-			// Searching FROM the front also finds corpses on the far side of it,
-			// and a rez bot sent there arrives among whatever killed them. Take
-			// only what lies on our own half of the home->enemy axis.
-			if ((spoil.x >= 0.f) && !PastFrontFrac(spoil, REZ_MAX_FRAC)) {
+			if (spoil.x >= 0.f) {
 				IUnitTask@ harvest = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 						Task::Priority::HIGH, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
 				if (harvest !is null)
@@ -1801,13 +1771,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (aiEconomyMgr.isMetalEmpty && (ai.frame >= gNextWreck)) {
 		gNextWreck = ai.frame + 3 * SECOND;
 		const AIFloat3 here = unit.GetPos(ai.frame);
-		// "Stands next to" is the whole justification, and for the commander it has
-		// to be enforced: WRECK_SEARCH is a walk, this block sits above the
-		// `return task` that protects real work, and an empty bank is the normal
-		// state early. A commander is the only builder whose alternative job is
-		// expansion, so anything it does not already stand on costs a mex.
-		const float reach = isComm ? COMM_WRECK_NEAR : WRECK_SEARCH;
-		const AIFloat3 near = ai.GetBestWreckPos(here, reach, 15.f);
+		const AIFloat3 near = ai.GetBestWreckPos(here, WRECK_SEARCH, 15.f);
 		if (near.x >= 0.f) {
 			IUnitTask@ rec = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 					Task::Priority::HIGH, near, 400.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
