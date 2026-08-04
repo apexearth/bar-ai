@@ -651,3 +651,20 @@ revisited, the next lever to try is probably NOT more heavy AA sooner, but
 whether the crowding-out itself (static defence competing with army for the
 same constructor time) can be addressed directly -- which is the same
 open question issue 12 already raises for the front-line tower cap.
+
+**Third and final attempt on this specific lever: the SAME `AA_HEAVY_PER=900`,
+this time gated on `Factory::gLastPhase >= 4` (T2 established) using the new
+BUILD_PHASE diagnostic -- a direct test of whether phase-awareness itself was
+the missing piece.** 4-game triage: 0-3 decided, one unusually fast collapse
+(13.97 min). Not encouraging, and given two prior confirmed-negative results
+for closely related versions of this same mechanism, this is the third data
+point pointing the same direction -- reverted without spending an 8-game
+batch on a fourth variation of the same idea. **This specific lever
+(heavy AA, in any of its three tested forms) is now closed for this
+session.** It does not mean BUILD_PHASE itself is disproven -- gating ONE
+already-marginal rule behind phase is a much weaker test of the thesis than
+the doc's own design, which expects the payoff to come from resolving
+competition across MANY rules at once, not validating or invalidating the
+approach through a single gated rule. Treat this as "heavy AA specifically
+is not the rule to prove the concept with," not as evidence against
+BUILD_PHASE as a whole.
