@@ -213,8 +213,20 @@ about as early as it can be) but WHERE it flees to or WHAT catches it there --
 a big gun landing on the retreat path, or mobile pursuers. Diagnosing which
 needs either a replay watch or C++-side logging of the attacker/weapon (this
 session's `AiUnitRemoved` addition only sees OUR side; the killing blow's
-source is not exposed to script). **Handoff point for a future session,
-ideally with apexearth watching a game where this specific pattern fires.**
+source is not exposed to script).
+
+**Update, done: the C++-side logging above got built** (`6903b49`,
+`CCircuitAI::UnitDestroyed` now logs the attacker). See CHANGES.md,
+"Commander killer logging", for the full table -- corrected there after an
+initial name-only misread (`corthud` is "Thug", a Light Plasma Bot, not
+artillery; verified with `tools/unitdef.py` before the corrected version).
+Short version: no single killer type dominates (13 of 29 kills across 12
+games are direct-fire ground units), but `corban` "Banisher" kills from
+roughly double the mean distance of the direct-fire units, consistent with
+the burst-death pattern above. **Still a handoff, not a fix** -- a future
+session, ideally with apexearth watching a game where `corban` lands the
+kill, can confirm whether it is genuinely landing hits from outside where
+the commander perceives itself as safe.
 
 ## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
 

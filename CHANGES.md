@@ -46,17 +46,34 @@ env damage, self-destruct, capture). Pure logging, no behaviour change.
 Verified: `exit_code=0`, `crashed=false` on every game of a 4-game smoke
 test, so it did not destabilise the engine.
 
-**First read, same 4-game smoke test — grep `apex: commander killed by`:**
-artillery pieces (`corthud` "Thud", `corban` "Banisher") accounted for 5 of
-10 kills, at distances from 218 to 791 elmos, alongside `corsumo`, `corraid`,
-`corllt` (a T1 base defence tower) and `corlevlr`. This matches the burst-
-death pattern already found in `notes/open-issues.md` issue 0.1 (a commander
-healing steadily at 84% health dying within 2.4 seconds of the next sample)
-better than a slow losing fight would: artillery delivers one high-alpha hit
-with no sustained engagement to read as declining health beforehand. Small
-sample -- worth confirming over a larger batch before treating as settled,
-but it is the first concrete evidence of WHAT is doing this, not just THAT
-it happens.
+**CORRECTED below -- the first read named `corthud` as artillery from the
+name alone, the exact mistake `docs/`/CLAUDE.md warns about. Verified with
+`tools/unitdef.py` before writing this version.**
+
+**Read across two batches (4-game smoke + 8-game confirm, n=29 kills, 12
+games total) — grep `apex: commander killed by`:**
+
+| killer | count | mean distance | what it is |
+|---|---|---|---|
+| `corthud` "Thug" | 8 | 307 | Light Plasma Bot -- direct fire, medium range |
+| `corban` "Banisher" | 7 | 575 | Heavy Missile Tank -- real ranged skirmisher |
+| `corraid` "Brute" | 4 | 236 | Medium Assault Tank -- direct fire, close range |
+| `corsumo` "Mammoth" | 3 | 498 | Heavily Armored Assault Bot |
+| `corape` "Wasp" | 2 | -- | Gunship (air) |
+| `corstorm`/`cormist`/`corllt`/`corlevlr`/`corcan` | 1 each | -- | mixed |
+
+No single cause. Regular direct-combat units (`corthud`, `corraid`, `corcan`)
+account for 13 of 29 kills (45%), a mixed group of ranged/heavier units
+another chunk, and 2 kills came from the air -- not something the commander's
+ground-based retreat logic can out-walk regardless of health threshold. The
+one real pattern: `corban`'s mean kill distance (575) is roughly double
+`corthud`'s (307) and `corraid`'s (236), consistent with it landing the
+finishing hit from beyond where the commander perceived itself as clear of
+the fight, which fits the burst-death pattern already found in
+`notes/open-issues.md` issue 0.1 (a commander healing steadily at 84% health
+dying within 2.4 seconds of the next sample). But this is one plausible
+contributor among several causes, not a single dominant one -- do not act on
+"cap corban's range" or similar as if it were the whole answer.
 
 **This C++ source change lives in `vendor/engine/` only, which is
 gitignored** (`.gitignore:2`). It is not visible as a diff in this repo's
