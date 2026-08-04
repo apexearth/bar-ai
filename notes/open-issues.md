@@ -725,3 +725,18 @@ which may be part of why this session's per-batch win rate bounced around
 before the aggregate settled. Still not statistically confirmed at n=55 --
 a dedicated stock-vs-stock (mirror-match) tournament, side-locked, would
 settle it cleanly without any AI-skill confound at all.
+
+**Attempted the side-locked test, invalidated by a methodology error.**
+Launched 8 `run_match.py` instances directly with unrestricted background
+parallelism (`&` with no worker cap), instead of going through
+`run_tournament.py`'s `--workers`-limited queue. Result: one match (`g4`)
+never produced a `result.json` at all (resource exhaustion, likely RAM --
+each headless instance needs ~4.4 GB), and 5 of the remaining 7 showed an
+IDENTICAL game length (21.55 min) across different seeds, which
+`FixedRNGSeed does not make runs reproducible` (this project's own verified
+finding) says should not happen -- a strong sign of contention corrupting
+the runs' independence, not real seed-driven variation. Discarded the whole
+batch rather than draw any conclusion from it. If this test is retried, use
+`run_tournament.py`'s worker-limited pool (or run individual `run_match.py`
+calls sequentially, not backgrounded together) -- this needed no new
+tooling, just the discipline this project already documents.
