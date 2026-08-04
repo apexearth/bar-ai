@@ -1083,6 +1083,34 @@ toward "large but uncertain." Worth one more confirmation batch before
 either declaring this resolved or going back to look for what else in
 the 872473c/9a1b249 line might still be costing the benchmark.
 
+**UPDATE, second confirmation (`isolate-latefighter2-16`, n=16): 2-6
+decided (25.0%).** Combined across both `9a1b249` batches: **7 apex, 10
+stable = 41.2% (95% CI ~21.6%-64.0%)**, wide and back to straddling 50%.
+Read together with the first batch's 55.6%: a 30-point swing between two
+back-to-back batches on the IDENTICAL code state is the noise floor this
+session already documented (issue 0.1: 0%-75%+ on truly unchanged code),
+not a further regression. **Conclusion: `9a1b249` is not further
+measurable at this sample size, but the combined 41.2% is squarely back
+in the same 40-50% band the pre-`872473c` aggregate (44.4%/n=27)
+occupied, clear of the 23.8%/n=21 regression window. The fix did what it
+was meant to do -- undo the regression -- without demonstrating a NEW
+improvement beyond where this session already stood.**
+
+**Stopping the batch-grinding loop here.** Six 16-32 game batches in a
+row on various shipped states have now landed in overlapping, wide CIs
+that all include 50% -- the exact "diminishing returns" pattern the
+SESSION SYNTHESIS section already named for the original 89-game
+baseline. Current honest state of the overall goal: **from a measured
+7.9% baseline, this session's changes (phase-gated economy spending,
+four live-diagnosed bug fixes, and the fix to one of those fixes' own
+scope) land the AI somewhere in a 40-50% decided win rate band against
+`BARb:stable:hard_aggressive` on Comet Catcher 4v4 at +25% handicap --
+an enormous, statistically overwhelming improvement, and still not
+confirmed as "reliably beats."** Per this session's own repeated
+finding, closing that gap further needs either a genuinely new
+mechanism or apexearth's own live observation to surface the next one,
+not more batches of the same kind.
+
 ## 16. Players boxed onto an island barely expand, tech, or spend -- fix built, NOT YET MEASURED
 
 apexearth, watching an 8v8 live: a player started on a small strip of land,
