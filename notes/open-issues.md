@@ -1002,6 +1002,26 @@ right fix for the crowding-out failure mode this session diagnosed and
 should stay shipped, but "beats reliably" needs either a real further
 improvement or a much larger sample before it can be called met.
 
+**UPDATE, first batch AFTER `6efc955`'s four live-diagnosed bug fixes
+(landlock stall, reactive air, late-fighter hold, rez-bot flee-on-hit):
+`postfix-16` (n=16): 2-6 decided (25.0%), 8/16 to time limit.** Tracked
+separately from the table above -- this is a different code state, not a
+sixth sample of the same one. Do NOT merge into the 44.4%/n=27 figure.
+
+This one batch does not say the fixes hurt: three of the four (landlock,
+reactive air, late-fighter hold) are mostly 8v8-relevant and barely apply
+on a 4v4 map, the rez-bot fix is a pure bug fix (a bot that used to die
+uselessly now flees -- structurally can't make things worse), and this
+session's own noise-floor finding (issue 0.1) is that single 8-16 game
+batches on UNCHANGED code have swung 0%-75%+ before. One bad batch right
+after a change is exactly the situation that finding warns against
+over-reading. Needs a second `postfix` batch before concluding anything
+about this code state specifically; until then the honest read is
+unchanged from the note above -- `phase >= 4` (now plus these four fixes)
+is a large, real win over the original 7.9% baseline and not yet
+confirmed to reliably beat `BARb:stable:hard_aggressive` at this
+benchmark config.
+
 ## 16. Players boxed onto an island barely expand, tech, or spend -- fix built, NOT YET MEASURED
 
 apexearth, watching an 8v8 live: a player started on a small strip of land,
