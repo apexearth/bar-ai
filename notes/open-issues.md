@@ -904,3 +904,44 @@ a guarantee) -- worth a larger confirmation batch before calling 60% settled,
 but this is by a wide margin the strongest result this entire session
 produced, on both the win-rate axis and the survivability/economy axes
 independently.
+
+**Methodology correction from apexearth, watching a game live**: "I don't
+think in these games, like, at the twenty minute mark or the thirty minute
+mark, if one side has a third of the resources as the other or half the
+resources as the other, it's not going to turn around. The game has
+already decided." This means treating "games reaching the time limit" as
+evidence of competitiveness on its own is wrong -- a lopsided game that
+never triggers a formal `gameover` still reads as "undecided" in this
+harness's output. Checked directly against `analyze_stats.py`'s metal
+totals for `phasegate4-test-16`'s 8 undecided games: two (rows 7, 8) were
+genuinely lopsided (1.8x-2.4x metal) and should count as effectively
+decided; one (row 12) was actually apex ahead 1.7x; the other five were
+within ~1.2-1.4x, genuinely close. Reclassifying by this rule doesn't
+meaningfully change that batch's picture, but the CHECK matters more than
+this one clean result -- read the resource ratio directly for future
+batches rather than trusting the decided/undecided split as a
+competitiveness signal.
+
+**UPDATE, third batch (`phasegate4-extend2-16`, n=16): 4-5 decided
+(44.4%), 7/16 to time limit.** Combined across all three phase>=4 batches
+(48 games played, 19 decided):
+
+| batch | apex won | stable won |
+|---|---|---|
+| `phasegate4-test-16` | 5 | 3 |
+| `phasegate4-confirm-16` | 1 | 1 |
+| `phasegate4-extend2-16` | 4 | 5 |
+| **total** | **10** | **9** |
+
+**Apex win rate: 52.6% (95% CI 31.7%-72.7%). `P(>=10 wins in 19 |
+baseline true rate 7.9%) < 0.000001`.** The confidence interval now
+straddles 50% -- apex is genuinely, statistically indistinguishable from
+an even matchup against `BARb:stable:hard_aggressive` at this benchmark
+config, a complete reversal from the 7.9% (CI 3.9%-15.4%) baseline this
+session started measuring. This is the largest, most trustworthy read of
+the `phase >= 4` gate's true strength -- cite 52.6%, not the earlier
+single-batch reads of 60% or 33.3%, going forward.
+
+**This is real, substantial progress toward the goal, though "beats
+reliably" would still need the CI's lower bound to clearly exceed 50%,
+not merely straddle it.** Worth continuing to extend this sample.
