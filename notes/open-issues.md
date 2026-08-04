@@ -320,6 +320,13 @@ a fix** -- confirming it needs either a safer reattempt at the C++ logging
 (with the attacker's def null-checked before every dereference) or
 apexearth watching a game where `corban` lands the kill.
 
+**Positive confirmation, `baseline-extend6-8` t001, 2026-08-04.** This
+session's fastest, cleanest apex win (14.55 min, `gameover`) has ZERO
+`COMMANDER LOST` entries in apex's own log for the whole game -- all four
+commanders survived start to finish. The thesis this section has been
+building (commander survival predicts the winner) holds in the positive
+direction too, not just as an explanation for losses.
+
 ## 0.1 apex currently loses to STOCK BARb outright at this benchmark config
 
 Not previously documented at this precision. 8-game controls at commit
