@@ -1398,3 +1398,79 @@ being measured.
 **Item 0 -- watch a live Comet Catcher 4v4 -- was NOT addressed this
 round** and remains the single highest-priority action for next session;
 see `notes/next-session-hypotheses.md`'s updated priority list.
+
+## 21. Energy-task-concurrency fallthrough fix + restored fusion e-income gate -- IMPLEMENTED and DEPLOYED, batch INCOMPLETE (2026-08-04)
+
+Followed up on issue 18/20's "raise energy task concurrency" lever -- the one
+thing that commit `5613d7d`'s revert message named as the actual fix and that
+was never tried.
+
+**Found before writing anything**: `vendor/engine/AI/Skirmish/BARb/src/circuit
+/module/EconomyManager.cpp` already carries an *undocumented, uncommitted-to-
+notes* prior attempt at exactly this, captured in
+`game-patches/circuitai/0003-cumulative.patch` but never written up here or in
+CHANGES.md. It added a time-relaxed energy-income gate
+(`ENERGY_GATE_FULL_SEC`/`ENERGY_GATE_LOW_SEC`/`ENERGY_GATE_FLOOR`) and then
+neutralised it (`ENERGY_GATE_FLOOR = 1.0f`, i.e. no-op) with an in-code comment
+describing the identical starvation mechanism issue 18 re-derived: "while one
+4500-metal nanoframe stands the task-size formula allows no other energy task
+at all... energy flatlines." That comment is exactly the kind of finding
+CLAUDE.md says belongs here, not frozen in a comment -- recorded now.
+
+**The actual mechanism, read from `UpdateEnergyTasks`**: the per-def
+concurrency check (`taskSize < buildPower/costM*4+1`) rounds to ~1 for an
+expensive def like corfus. When that check fails for the walk's current
+best (highest-tech affordable) candidate, the old code did
+`bestDef = nullptr; break;` -- aborting the ENTIRE search for that tick, so a
+single in-flight fusion blocked not just another fusion but every cheaper
+energy def below it in the walk order too. That is the literal "one energy
+task blocks everything" bug named in `5613d7d`.
+
+**Change made** (one isolated behavior change, matching the hypothesis):
+1. `EconomyManager.cpp::UpdateEnergyTasks` -- changed that `break` to
+   `continue`, so a concurrency-capped high-tech candidate no longer aborts
+   the walk; cheaper defs with concurrency budget left get considered instead
+   of nothing being built at all.
+2. `economy.json` -- restored `corfus`/`armfus` e-income override to 300
+   (`[30, 40, 30, 300]`, up from the current `[30, 40, 30]` which defaults to
+   ~1300 e/s via `costE * cost_ratio`), same value `fcbcfc2` used before its
+   same-day revert.
+
+Rebuilt via `docs/06`'s ninja loop (clean build, only `EconomyManager.cpp.obj`
+recompiled), deployed (`SkirmishAI.dll (local build)`), smoke-tested: 5-minute
+headless match, 0 AngelScript compile errors, both AIs confirmed loaded via
+`Load script:` lines in the infolog.
+
+**Batch: `tournaments/20260804-154253-round1-fusion-concurrency` -- launched,
+NOT completed.** The session ran out of turn budget before any of the 16
+games finished (games were still in their opening minutes, 3 running
+concurrently, when this had to be written up). **No win/loss, composition, or
+starvation data was collected. This is not a result -- it is a checkpoint.**
+
+**State left in the repo**: the `economy.json` edit is UNCOMMITTED (working
+tree has one modified file, `git status --short` confirms nothing else
+changed). The C++ edit lives only in `vendor/engine/...EconomyManager.cpp`
+(gitignored) and the locally-built, already-deployed `SkirmishAI.dll` -- it is
+NOT yet captured into `game-patches/circuitai/0003-cumulative.patch`, so a
+fresh clone or a `vendor/` wipe loses it. Per this project's own doctrine
+(commit only on a measured, clear result), neither the JSON change nor the
+patch regeneration should be committed until the batch actually finishes and
+is compared with `composition.py`.
+
+**For whoever picks this up next**: the deployed DLL and `economy.json` are
+already in the state to test -- no rebuild needed unless `vendor/` gets
+touched. Either let `tournaments/20260804-154253-round1-fusion-concurrency`
+finish (it may still be running as a detached process) or relaunch a fresh
+16-game batch with the same name pattern, then run `composition.py` on it and
+follow this repo's decide step (issue 18/20's specific watch list: corfus vs
+coradvsol share, T2 spend ratio vs stable -- was 0.63 -> 0.21 when the gate was
+lowered alone, should NOT collapse again if the fallthrough fix worked -- and
+wipeout rate, since apex died at 28 min last time this gate was touched). If
+the batch is clearly better, commit the JSON change AND regenerate
+`0003-cumulative.patch` from the vendor working tree (`git diff` in
+`vendor/engine/AI/Skirmish/BARb`) so the C++ fix survives a re-clone. If it is
+clearly worse or a wash, revert `economy.json`'s e-income override back to
+`[30, 40, 30]` -- the `continue`-instead-of-`break` C++ fix can stay either
+way, since on its own (before any JSON change) it can only ever cause the
+search to consider MORE options on a given tick, never fewer, so it has no
+plausible downside independent of the gate value.
