@@ -34,6 +34,40 @@ from source and stripped; see `docs/06-building-the-dll.md`.
 **measured**: 46 `con-reroute spot` events in one 40-minute 4v4, each moving a
 constructor off a vetoed site onto a spot the threat map read at 0.
 
+### Commander killer logging — `CCircuitAI::UnitDestroyed`, diagnostic only
+
+2026-08-04. This session had no way to see WHAT kills a commander -- the
+AngelScript-side `AiUnitRemoved` hook (added the same session, see
+`ba92167`) can log THAT and WHEN, but the attacker (`CEnemyInfo*`) is only
+available in C++ and is not exposed to script. Added four lines in
+`CircuitAI::UnitDestroyed`: if the destroyed unit `IsRoleComm()`, log the
+attacker's unit name and 2D distance (or "UNKNOWN (no attacker)" if none --
+env damage, self-destruct, capture). Pure logging, no behaviour change.
+Verified: `exit_code=0`, `crashed=false` on every game of a 4-game smoke
+test, so it did not destabilise the engine.
+
+**First read, same 4-game smoke test — grep `apex: commander killed by`:**
+artillery pieces (`corthud` "Thud", `corban` "Banisher") accounted for 5 of
+10 kills, at distances from 218 to 791 elmos, alongside `corsumo`, `corraid`,
+`corllt` (a T1 base defence tower) and `corlevlr`. This matches the burst-
+death pattern already found in `notes/open-issues.md` issue 0.1 (a commander
+healing steadily at 84% health dying within 2.4 seconds of the next sample)
+better than a slow losing fight would: artillery delivers one high-alpha hit
+with no sustained engagement to read as declining health beforehand. Small
+sample -- worth confirming over a larger batch before treating as settled,
+but it is the first concrete evidence of WHAT is doing this, not just THAT
+it happens.
+
+**This C++ source change lives in `vendor/engine/` only, which is
+gitignored** (`.gitignore:2`). It is not visible as a diff in this repo's
+history -- only the resulting `ai/apex/engine-side/SkirmishAI.dll` binary is
+committed. A future session reading git log for this DLL's C++ provenance
+will not find it there; this note is the record. The local
+`vendor/engine/` clone is itself persistent on this machine (per
+`docs/06-building-the-dll.md`, "the tree is already cloned, patched and
+configured"), so the actual source edit does survive across sessions here,
+just not in git.
+
 ### Mex-spot indexing was an out-of-bounds write
 
 `CBMexTask`'s constructor calls `SetOpenMexSpot(spotId, false)`, which indexed
