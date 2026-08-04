@@ -28,6 +28,15 @@ defence are within 5% of each other. The army is the whole gap.
 squads outgrowing the merge radius, enemy siege artillery, our own T2 mix.
 Use `tools/kd_curve.py` on a 40-minute tournament and find the minute it turns.
 
+**There is currently NO clean 40-minute dataset on the present build.** Checked
+2026-08-03: `e10-bots3to1-40m` contains four `script.txt` files and zero
+infologs — it was killed before a single game logged anything, so the 40-minute
+confirmation of the 3:1 bot ratio does not exist. `e04-margin180-40m` stops at
+minute 6. The only 40-minute curve that ran to 30 min is `e06-jam-reclaim-40m`
+(3 games, a build since superseded), and it is grim: apex T2 spend 33,675
+against stable's 184,610 at minute 18, army 24,640 against 96,245. Do not cite
+40-minute numbers for the current build until a run actually finishes.
+
 ## 2. Reclaim cannot see the bodies
 
 apexearth: "theres 1000+ metal in front of us and we don't even care".

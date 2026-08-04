@@ -57,8 +57,12 @@
 		// ENERGY, and this path has no income test of any kind, so at [12, 1500] it landed a
 		// T3 gun at 25 min on a pre-fusion economy. Builder::Pulsar is now the only path to
 		// those, gated on PULSAR_MIN_ENERGY.
+		// Back to stock. The added [4, 600] and [8, 1360] were a 440m tower at
+		// minute 10 and a 680m tower at minute 23, and MakeBaseDefence places this
+		// list AT THE BASE with no income or cost test -- so they were bought at
+		// home, out of the same constructor time the front line needed.
 		"base": [
-			[3, 420], [4, 600], [10, 1200], [15,1220], [14, 1300], [8, 1360]
+			[3, 420], [10, 1200], [15,1220], [14, 1300], [15, 1320], [12, 1800]
 		],
 	
 		"superweapon": {

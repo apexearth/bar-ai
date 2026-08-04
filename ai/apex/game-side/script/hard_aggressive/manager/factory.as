@@ -868,7 +868,12 @@ bool IsDesignatedLead()
 // that cannot feed itself turns the pooling into one starving player plus three
 // donors. apexearth: "don't do T2 unless you got like fourteen metal per second
 // ... instead we just have one useless team member".
-const float RUSH_MIN_METAL = 14.f;
+// Raised from 14. Teching is also what switches this player's T1 factory off
+// (FactoryManager: noT1FacCount > 0 makes every T1 lab inactive), so an early
+// rush buys the plant by ending cheap-unit production while the enemy's is still
+// running. apexearth: "we make our T2 earlier than the enemy ... and they are
+// always kinda crushing us with their T1 army."
+const float RUSH_MIN_METAL = 20.f;
 
 bool RushReady()
 {
@@ -1222,7 +1227,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// fields no army, so LosingGround() is true for it permanently, and this
 	// branch would otherwise be the one thing that turns its whole income into
 	// units. Its own release conditions are what decide when it fights.
-	if (!gEcoActive && (isT1Fac ? !gHaveT2 : isT2Fac) && HaveT2Mex() && Military::LosingGround()
+	// A T1 lab used to be gated on `!gHaveT2`, so it stopped making fodder the
+	// moment we owned an advanced factory -- which is most of the game, and the
+	// part where distraction spam is worth most. Everything after that came from
+	// the T2 branch, i.e. GetRoleDef(ASSAULT), i.e. Reapers.
+	const bool tierOk = isT1Fac ? true : (isT2Fac && HaveT2Mex());
+	if (!gEcoActive && tierOk && Military::LosingGround()
 		&& (aiEconomyMgr.metal.income >= ARMY_PUSH_MIN_INCOME)
 		&& (ai.frame >= gNextArmyPush))
 	{
