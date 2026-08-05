@@ -2710,3 +2710,35 @@ correct by every visible signal and then measuring worse -- this needs
 either reading CircuitAI's C++ source for how `build_speed` is consumed,
 or a live-watched test, before touching it. Do not fix on this evidence
 alone despite it being stronger than the Legion cases.
+
+**Follow-up: read the C++ source directly (`vendor/circuitai`) rather than
+guessing.** `FactoryManager.cpp:516-518` confirms `build_speed` overrides
+`CircuitDef::SetBuildSpeed()`, consumed by `BuilderTask.cpp:604-625` for
+per-unit build-power accounting when assisting a task -- real and
+consumed, not dead code, but its effect specifically on a FACTORY (as
+opposed to a mobile constructor) is still not traced. `GetGoalBuildMod()`
+(the `build_mod` field), by contrast, IS effectively dead in this engine
+build -- `grep` found it only ever set (from JSON or a global default),
+never read anywhere. Do not bother adding `build_mod` to `armlab`/`armvp`
+even if revisiting `build_speed`; it would have no effect.
+
+**Found and fixed the real, separate gap in the same investigation**: the
+`"attribute": ["support"]` tag. `corlab`/`corvp` carry it; `armlab`/`armvp`
+did not (Armada's own T2 labs, `armalab`, already match Cortex's `coralab`
+on this). Traced in `EconomyManager.cpp:1555`: `facDef->IsRoleSupport()`
+branches factory PLACEMENT -- support-tagged ground factories place via
+`terrainMgr->GetBusPos()` (a staging/rally position), non-support
+factories use different placement logic. This is a real, understood
+mechanism, not a numeric guess. Added `"attribute": ["support"]` to
+`armlab`/`armvp` (commit `09ba614`).
+
+**Result: `armada-support-attr-16` (solo, clean) came back 10-6, 62.5% --
+IDENTICAL to the pre-fix clean baseline (`armada-armaca-clean-16`, also
+10-6/62.5%).** No measurable win-rate effect either direction at this
+sample size. Kept the fix (it's evidence-based, makes Armada's T1/T2 lab
+treatment internally consistent with itself and with Cortex, and isn't
+harmful), but report it honestly as unconfirmed/neutral, not a win --
+resist the temptation to claim progress from a flat result just because
+the mechanism tracing was thorough this time. `build_speed` itself
+remains untouched and is the more promising remaining lead if revisited,
+now that its consumption path is understood.
