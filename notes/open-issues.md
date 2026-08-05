@@ -3406,3 +3406,61 @@ the damage-ratio/game-length leads from issues 48-49 -- and confirm any
 candidate fix with a large (64-96 game) batch from the start, not a
 16-game one, given what this session learned about the cost of not doing
 that.
+
+## 53. `SQUAD_SPEED_RATIO` C++ fix (2.5 -> 3.5) + two hovercraft-config fixes, all from apexearth live-watching two more games
+
+Following the goal explicitly asked for -- "not just config... maybe that
+logic does not work for Armada or Legion" -- audited both AngelScript
+constants AND the vendored C++ (`vendor/engine/AI/Skirmish/BARb/src`) for
+values tuned by watching/measuring ONE faction. Found `AttackTask.cpp`'s
+`SQUAD_SPEED_RATIO` (gates squad merging) was 2.5, chosen to just admit
+one specific Cortex pair (`corban`/`corsumo` = 2.4). Verified directly:
+Legion's comparably-common T2 pair (`legstr`/`leginc`, `leginc` weighted
+up to 0.38 of `legalab`'s build share) needs 3.5 and failed outright,
+forcing `leginc` to always fight alone. Raised to 3.5 (checked it doesn't
+also swallow genuine outliers -- Cortex T3 superheavies need 3.3+,
+scouts need ~6.7+). Rebuilt via the documented Docker/ninja toolchain,
+stripped, deployed, smoke-tested clean on all three factions. Full
+mechanism and cross-faction speed data in `CHANGES.md`.
+
+**Two more bugs found from apexearth watching two windowed Legion,Legion
+games live** (a much higher hit rate than any further config-diffing this
+session):
+- **`legehovertank`** (Charybdis, T3 hovertank) had a proper `water`
+  table where it correctly dominates, but ALSO a stray 0.15 weight in the
+  `land` table -- caught live: "one of our guys is making hovers in a map
+  which has no water, not a great idea." Zeroed the land-table weight,
+  redistributed to the tier's existing dominant unit.
+- **`leghp`** (Legion's Hovercraft Platform factory) had real selection
+  weight (`importance: [0.1, 0.0]`) even on land maps, while `armhp`/
+  `corhp` (the Armada/Cortex equivalents) are both fully disabled
+  (`importance: [0.0, 0.0]`, marked `//Unused`). Confirmed via telemetry
+  from the watched game: a player spent 750 metal on `leghp` within the
+  first 2 minutes on a map with no water. Matched to `armhp`/`corhp`'s
+  treatment.
+
+**A third live finding, investigated but NOT fixed -- flagged for a
+future session**: apexearth also noticed no rez bots being built.
+Traced via `mRezSpend` telemetry across two full watched games: apex
+players frequently show ZERO rez-bot spend for the entire game even with
+tens of thousands of metal in real losses (one player: 74,720 metal lost,
+0 rez spend), while stock BARb (also CircuitAI, no AngelScript layer)
+reaches meaningfully more (13,571 on one player in the same game).
+Root cause traced precisely: rez bots can only be requested while
+`HaveT1BotLab()` is true, and the affected player's T1 bot lab was
+destroyed twice in the same 25-minute game (9.0min, 22.4min) --
+consistent with being the most heavily-pressured player on the team.
+This is a structural gap, not a simple config number: rez-bot production
+has exactly one factory path, and that factory is also the one most
+likely to die first for a losing player, compounding the problem. Needs
+either a fallback rez-production path or higher lab-rebuild priority when
+it's the sole rez source -- not attempted this session, flagged for
+follow-up.
+
+**Interim result on the `SQUAD_SPEED_RATIO` fix**: `legion-squadspeed-
+fix-large96` (96 games, solo, current fix deployed) tracking at 83/96
+games: 22-60 (26.5%), close to the established 25.8% baseline. Similar
+shape to Armada's build_speed disappointment -- a sound, well-traced
+mechanism that may not move THIS specific win-rate metric much. Full
+result pending completion; will log the final number and proper z-test
+separately once done.
