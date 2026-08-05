@@ -2526,8 +2526,45 @@ variation on constructor weights or the T1_FAC mechanism.
 tournament, not the corrupted one issue 35 originally cited): apex-Legion
 metal produced 177.7k vs stock's 126.6k, cons T1 28 vs 19, mex upgrades 15
 vs 14, T2 spend roughly even (73.6k vs 70.4k) -- apex is ahead or even on
-every economy metric, yet still only wins 43.8% of decided games. **Next
-session should start directly from army composition / combat effectiveness
-investigation** (military.json response tables, unit-role classification
-for Legion's specific unit names, retreat/engagement thresholds) rather
-than economy or the two mechanisms already ruled out here.
+every economy metric, yet still only wins 43.8% of decided games.
+
+## 39. Three-for-three: every code-reasoned Legion combat fix this session regressed
+
+Followed the economy-ahead lead into army-role classification. An audit
+found `legvflak` (Legion's T2 mobile AA vehicle, built steadily all game)
+had no CircuitAI role tag at all, while `armflak`/`corflak` are both
+explicitly `"anti_air"`. Tagged it to match, exactly mirroring the stock
+pattern. `legion-vflak-role-16` (solo, clean): **4-12 decided, 25%, 95% CI
+excludes 50%** -- a real, statistically significant regression. Reverted.
+
+**This is the third Legion fix this session to look solid on paper and
+regress when tested clean and isolated:**
+
+| # | fix | mechanism | clean solo result | vs 43.8% baseline |
+|---|---|---|---|---|
+| 37 | constructor weight parity (armack/legcv/legfus/T1_FAC bundle) | match Cortex's proven weights | 31.2% | worse |
+| 38 | T1_FAC/T2_FAC alone (legap/legaap) | enable a dormant rush mechanism | 12.5% (CI excludes 50%) | much worse |
+| 39 | legvflak role tag alone | match Cortex/Armada's AA classification | 25.0% (CI excludes 50%) | worse |
+
+Two of the three are statistically significant regressions, not noise, at
+n=16 each. **The pattern itself is the finding**: reasoning from "Cortex
+value X, Legion missing/different value X, therefore make Legion match
+Cortex" has now failed three independent times for Legion specifically,
+despite the identical reasoning approach working repeatedly for Armada
+(armack, armaca -- both confirmed positive or mechanism-validated) and for
+Cortex's own earlier fixes this session. Something about Legion is
+different in a way none of these audits have surfaced.
+
+**Recommendation for next session: stop generating more "audit the config,
+find the gap, fix it" hypotheses for Legion.** Three attempts at that
+approach, each with solid-looking evidence, have now cost a regression
+each time. Switch modality entirely, per this project's own established
+doctrine (`CLAUDE.md`: "apexearth is faster than the benchmark" and
+"watching a replay tells you a behaviour looks smart, it cannot tell you
+what it cost" -- the inverse also applies, an audit finding cannot tell you
+what it costs either): **get a human to watch a live windowed Legion,Legion
+or Legion-vs-stock game** and report what Legion's army actually does
+differently in a fight, rather than continuing to infer it from static
+config comparison. `tools/combat_events.py`/`tools/trace_flow.py` on an
+existing Legion tournament's replays may also surface something a config
+diff cannot.
