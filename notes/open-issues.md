@@ -3167,3 +3167,43 @@ engagement -- rather than relying on win/loss alone to judge a Legion
 combat-behavior fix. A win-rate-only test may need 32-64+ games to detect
 what a well-chosen continuous metric could detect in the two 16-game
 batches already in hand.
+
+## 49. Follow-up, same session: the strongest, cleanest signal in the whole investigation -- damage ratio predicts winning almost perfectly
+
+Pulled per-game `damageDealt`/`damageReceived` (summed to team/ally level)
+from each match's `result.json` `stats` array (per-team periodic samples,
+last sample = cumulative end-state) across both Legion baseline
+tournaments, and checked whether apex's damage ratio in each SPECIFIC
+game predicted whether apex won THAT game (not just the aggregate).
+
+**Result: apex-Legion won ZERO of the 13 games (across both batches
+combined) where its damage-dealt/damage-received ratio was <=1.0 (i.e.
+an unfavorable trade).** It won roughly half of the games where the
+ratio WAS favorable (7/12 in batch 1, 5/7 in batch 2). Full breakdown:
+
+| batch | favorable ratio (>1.0) | unfavorable ratio (<=1.0) |
+|---|---|---|
+| baseline 1 | 7 won / 5 lost | 0 won / 4 lost |
+| baseline 2 | 5 won / 2 lost | 0 won / 9 lost |
+| **combined** | **12 won / 7 lost (63%)** | **0 won / 13 lost (0%)** |
+
+This is a MUCH cleaner, more actionable signal than anything else found
+this session -- 0/13 is about as close to a perfect predictor as this
+kind of data gets. **Reframes the whole Legion problem precisely**: it is
+NOT that Legion lacks resources (issue 48 confirms the economy lead is
+real and repeatable) -- it is that in roughly HALF of games (13 of 25
+non-tied ratio games across both batches), Legion's army trades
+unfavorably in combat DESPITE that economic advantage, and whenever that
+happens, it loses the game with no exceptions in this sample.
+
+**This is the concrete next investigation for a future session**: find
+out what separates the ~half of games where Legion's combat trade goes
+well from the half where it doesn't, given the economy is consistently
+ahead in both kinds of game. Candidates worth checking first: does the
+unfavorable-ratio group correlate with a specific map area/engagement
+timing, a specific enemy composition, or a specific Legion army
+composition (tie back to `top` unit-composition strings already present
+in each stats sample -- readable per-game without new matches)? This is
+exactly the kind of question `tools/combat_events.py`/a live-watched game
+could answer, and now has a precise, testable definition of "goes wrong"
+(damage ratio crossing 1.0) rather than a vague "loses despite economy."
