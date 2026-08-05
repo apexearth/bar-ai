@@ -1172,23 +1172,40 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (air !is null)
 		return air;
 
-	// Rez bots from the bot lab, before anything else that lab would make.
+	// Rez bots from the bot lab, before anything else that lab would make --
+	// but only once there is something to reclaim or resurrect. apexearth,
+	// watching a Comet Catcher 4v4 live: "we build rez bots before we build
+	// anything else. Resurrection bots are certainly useful, but at t zero,
+	// it's not important. It isn't really important until you have stuff to
+	// reclaim or to resurrect." At game start nothing has died on either
+	// side, so this floor was competing HIGH-priority for the bot lab's very
+	// first slots against the opening mex/army push for a benefit that does
+	// not exist yet. Gated on the same wreck search EnqueueWreckReclaim
+	// already uses (WRECK_SEARCH/WRECK_MIN in builder.as) rather than a
+	// clock: it self-corrects the moment the first skirmish or scout death
+	// actually produces something worth reclaiming, instead of guessing a
+	// fixed early-game delay.
 	//
-	// Placed high for the same reason the fighter floor is: it is a floor, not a
-	// strategy, and the branches below it -- the catch-up push, the constructor
-	// line -- would otherwise take every slot the lab has.
+	// Placed high (once armed) for the same reason the fighter floor is: it
+	// is a floor, not a strategy, and the branches below it -- the catch-up
+	// push, the constructor line -- would otherwise take every slot the lab
+	// has.
 	if (HaveT1BotLab() && (ai.frame >= gNextRez)) {
 		CCircuitDef@ lab = T1BotLab();
 		CCircuitDef@ rez = RezBotDef();
 		if ((lab !is null) && (rez !is null) && (unit.circuitDef.id == lab.id)
 			&& rez.IsAvailable(ai.frame) && (rez.count < REZ_FLOOR))
 		{
-			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
-					Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
-					rez, unit.GetPos(ai.frame), 0.f));
-			if (rec !is null) {
-				gNextRez = ai.frame + REZ_SPACING;
-				return rec;
+			const AIFloat3 wreck = ai.GetBestWreckPos(unit.GetPos(ai.frame),
+					Builder::WRECK_SEARCH, Builder::WRECK_MIN);
+			if (wreck.x >= 0.f) {
+				IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+						Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
+						rez, unit.GetPos(ai.frame), 0.f));
+				if (rec !is null) {
+					gNextRez = ai.frame + REZ_SPACING;
+					return rec;
+				}
 			}
 		}
 	}
@@ -1512,6 +1529,26 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		}
 		return null;
 	}
+
+	// Never let an air factory fall through to the engine's own default ratio
+	// pick. apexearth, watching live, right after the air assassin's strike
+	// released successfully: "we're building more bombers and sending them
+	// in one at a time, and they're just dying to enemy ground AA. Completely
+	// wasted... there's no point making a bomber at all if you don't mass
+	// them." Confirmed in that game's infolog: team 2 (the assassin) kept
+	// spending on corshad for the rest of the game with zero further
+	// Air::-logged activity -- Air::MakeFactoryTask returns null
+	// unconditionally once gStrike is set (the assassin never re-arms), so
+	// this plant was falling all the way through to
+	// aiFactoryMgr.DefaultMakeTask and getting whatever the stock ratio
+	// table picks next, one at a time, with nothing to coordinate a mass.
+	// The only sanctioned uses of an air plant in this variant already claim
+	// it earlier in this function: Air:: while armed, the LATE_FIGHTERS
+	// floor (which holds what it builds via HoldsLateFighter), and the eco
+	// lead's own constructor line above. Nothing past this point should ever
+	// come from an air factory.
+	if (IsAirFactory(unit.circuitDef))
+		return null;
 	return aiFactoryMgr.DefaultMakeTask(unit);
 }
 
