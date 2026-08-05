@@ -1,0 +1,103 @@
+# Benchmark results — apex vs stock BARb
+
+A running ledger of tournament results tied to the exact commit tested, so
+"how good is the current code" is answerable without re-deriving it from
+`tournaments/`. Every row here is `BARbApex:apex:hard_aggressive` vs
+`BARb:stable:hard_aggressive`, Comet Catcher 4v4, +25% handicap both sides,
+unless the row says otherwise. **Games** is decided games only (ties/timeouts
+excluded from the win% denominator, per the tool's own convention).
+
+**Clean** = run alone, no concurrent `run_tournament.py` process (see
+`notes/open-issues.md` #37 — concurrent runs corrupt each other's results via
+a shared write-dir; fixed in commit `e05fabe`, but every run before that fix
+needs the "solo?" column checked before trusting it).
+
+**Read this table with `notes/open-issues.md` #45–47 in hand**: this
+benchmark's noise floor is wide — repeat runs of *identical* code have swung
+12–19 points on both Armada and Legion. A single row is not a confirmed
+result. Only trust a claim once multiple independent rows on the same commit
+agree, and check whether anyone actually did that pooling (search
+`open-issues.md` for the tournament name).
+
+## Current HEAD state (as of `a9148b8`, 2026-08-05)
+
+| faction | rows available | picture |
+|---|---|---|
+| **Cortex** | 4 clean batches, 75–88% each | reference faction; only one this session with a large, repeated, trustworthy margin over 50% |
+| **Armada** | 5 clean batches on the fully-fixed code, 62.5–81.2% | `build_speed` fixes (armlab/armvp/armnanotct2) are real, traced mechanisms; whether they move win rate is **unconfirmed** — pooled pre-fix (65.6%, n=32) vs pooled post-fix (75%, n=64) is not statistically significant (z=-0.96) |
+| **Legion** | 6 clean batches on the (reverted-to-baseline) code, 25–43.8% | all 4 things tried this session (constructor weights, `T1_FAC`, `legvflak` role tag, `leggant` build_speed) failed to show a confirmed effect once each was re-tested; current code == original pre-session baseline |
+
+## Cortex, Cortex — reference faction
+
+| date | tournament | commit | games | result | win% | solo? | notes |
+|---|---|---|---|---|---|---|---|
+| 2026-08-04 | `factorycap-16` | (pre-session, see summary) | 16 | 11-0 | 100% | ? | cited in prior-session summary, not independently re-verified this session |
+| 2026-08-04 | `factorycap-confirm-16` | (pre-session) | 16 | 9-0 | 100% | ? | ″ |
+| 2026-08-04 | `racefix-t2con-16` | (pre-session, ~d20592b) | 16 | 6-1 | 85.7% | ? | ″ |
+| 2026-08-04 | `corck-revert-confirm-8` | `1984ecc` | 8 | 5-2 | 71.4% | **NO** | half of a corrupted concurrent pair (with `armada-mirror-armck-8`) — do not trust the exact number, direction is consistent with other Cortex rows |
+| 2026-08-05 | `cortex-clean-reconfirm-16` | ~`420864f` state | 16 | 12-4 | **75.0%** | **yes** | CI 51–90%, excludes 50% |
+
+## Armada, Armada
+
+| date | tournament | commit | games | result | win% | solo? | notes |
+|---|---|---|---|---|---|---|---|
+| 2026-08-04 | `armada-mirror-armck-8` | `1984ecc` | 8 | 4-4 | 50% | **NO** | corrupted pair |
+| 2026-08-05 | `armada-t2con-16` | `d2f147a` | 16 | 9-6 | 60% | **NO** | corrupted pair (with `legion-t2con-16`) |
+| 2026-08-05 | `armada-armaca-fix-16` | `970f62d` | 16 | 7-7 | 50% | **NO** | corrupted pair |
+| 2026-08-05 | `armada-armaca-clean-16` | `970f62d` | 16 | 10-6 | **62.5%** | **yes** | this session's clean Armada baseline reference |
+| 2026-08-05 | `armada-support-attr-16` | `09ba614` | 16 | 10-6 | 62.5% | **yes** | identical to baseline — `support` attribute fix is neutral |
+| 2026-08-05 | `armada-buildspeed-16` | `5fe2254` | 16 | 13-3 | 81.2% | **yes** | +`armlab` build_speed fix only |
+| 2026-08-05 | `armada-buildspeed-vp-16` | `d80220c` | 16 | 12-4 | 75.0% | **yes** | +`armvp` build_speed fix (cumulative w/ armlab) |
+| 2026-08-05 | `armada-buildspeed-nano-16` | `de1cc99` | 16 | 13-3 | 81.2% | **yes** | +`armnanotct2` build_speed fix (all 3 fixes, "final" state) |
+| 2026-08-05 | `armada-buildspeed-stability-check-16` | `de1cc99` (re-run, no changes) | 16 | 10-6 | 62.5% | **yes** | same code as the row above — 18.7pp swing with zero changes |
+| 2026-08-05 | `armada-prefix-baseline2-16` | `09ba614` (build_speed reverted back to pre-fix for this test) | 16 | 11-5 | 68.8% | **yes** | second independent pre-fix read |
+
+**Pooled**: pre-fix (10+11)/32 = 65.6%. Post-fix (13+12+13+10)/64 = 75%.
+Two-proportion z = -0.96, **not significant**. See `open-issues.md` #46.
+
+## Legion, Legion
+
+| date | tournament | commit | games | result | win% | solo? | notes |
+|---|---|---|---|---|---|---|---|
+| 2026-08-05 | `legion-t2con-16` | `d2f147a` | 16 | 7-8 | 43.8% | **NO** | corrupted pair |
+| 2026-08-05 | `legion-bomber-fix-16` | `57cbadd` | 16 | 5-11 | 31.2% | **yes** | `legkam`→`legmos` swap — reverted (stockpile weapon issue) |
+| 2026-08-05 | `legion-bomber-revert-confirm-16` | `56aff15` | 16 | 4-10 | 25.0% | **NO** | corrupted pair (with `armada-armaca-fix-16`) |
+| 2026-08-05 | `legion-bomber-revert-clean-16` | `56aff15` | 16 | 5-10 | 31.2% | **yes** | clean re-run of the revert |
+| 2026-08-05 | `legion-pre-issue35-baseline-16` | `1984ecc` state | 16 | 7-9 | 43.8% | **yes** | true pre-issue-35 baseline (temp checkout) |
+| 2026-08-05 | `legion-t1fac-only-16` | `b02916f` | 16 | 2-14 | 12.5% | **yes** | `T1_FAC`/`T2_FAC` alone — CI excludes 50% |
+| 2026-08-05 | `legion-vflak-role-16` | `6e41b6e` | 16 | 4-12 | 25.0% | **yes** | `legvflak` anti_air tag — CI excludes 50% |
+| 2026-08-05 | `legion-gant-buildspeed-16` | `d373de1` | 16 | 3-13 | 18.8% | **yes** | `leggant` build_speed — CI excludes 50%, worst single read |
+| 2026-08-05 | `legion-baseline-stability-check-16` | `0fabb8f` state (baseline, unchanged) | 16 | 5-11 | 31.2% | **yes** | re-run of the SAME baseline code as `legion-pre-issue35-baseline-16` — 12.6pp swing, zero changes |
+| 2026-08-05 | `legion-t1fac-retest-16` | `04aaeb4` (T1_FAC re-added) | 16 | 6-10 | 37.5% | **yes** | second independent T1_FAC read |
+
+**Pooled baseline** (two identical-code runs): (7+5)/32 = 37.5%.
+**Pooled T1_FAC** (two identical-fix runs): (2+6)/32 = 25%. z = -1.08,
+**not significant** — closes the investigation with no confirmed effect
+either direction. `legvflak` and `leggant` were each only read once; not
+pooled. See `open-issues.md` #45, #47.
+
+## Cross-faction (not directly comparable to the tables above)
+
+| date | tournament | commit | matchup | games | result | win% | solo? | notes |
+|---|---|---|---|---|---|---|---|
+| 2026-08-04 | `armada-vs-cortex-8` | `d2f147a` | apex=Armada vs stock=Cortex | 8 | 2-6 | 25% | **NO** | conflates untested cross-faction asymmetry with the fix under test; not a clean read on anything |
+
+## What's NOT in this table
+
+`tournaments/` holds 100+ runs from 2026-08-01 through 2026-08-03 (investigating
+phase gates, fusion concurrency, air strikes, eco-lead tuning, and more) that
+predate this table and are not catalogued here. If a future session needs
+one of those, `python tools/run_tournament.py --report <run-dir>` re-prints
+its summary from `ledger.jsonl`; the corresponding commit can usually be
+found by matching the run's timestamp against `git log --since=... --until=...`.
+Consider backfilling the highest-value ones (anything CHANGES.md cites) if a
+complete history is ever needed — this table's scope is deliberately just
+"clean, commit-tied results from the 2026-08-05 session" for now.
+
+## Maps
+
+Every row above is **Comet Catcher (4v4, +25% handicap)** — this project's
+standard benchmark map (see `bar-ai-map-selection` memory: reclaim/water/
+asymmetric maps are not valid data here; Comet Catcher is deliberately the
+only one used for faction-comparison work). No other map has been tested
+against any of the commits in this table.
