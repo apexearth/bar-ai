@@ -22,11 +22,23 @@
 		// Cortex-as-reference logic applies (see armlab above): brought down to match,
 		// freed share going to leglob, the table's dominant absorber at every tier.
 		// Untested for Legion -- confirm with a Legion,Legion batch.
+		//
+		// legkark (Karkinos, "Medium Dual-Weapon Infantry Bot") previously had
+		// weight ONLY at tier3 (income>=35/s), same as legcen's frontline-bot
+		// sibling but with no tier1/tier2 presence at all. apexearth, watching a
+		// game: "some of legion's strongest front line units - i see we aren't
+		// making them... like legkark - nice tanky frontline unit for fragile
+		// units to hide behind." A correctly-Legion-tagged 8-game batch confirmed
+		// it: apex built it 0/8 games despite income crossing 35 in several of
+		// them -- tier3-only meant it was rare even when technically reachable,
+		// outcompeted by leglob's 0.60-0.71 share. Given legkark a tier1/tier2
+		// presence too, matching legcen's existing progression, taken from
+		// leglob's share. Untested -- confirm with a Legion,Legion batch.
 		"land": {			// 10
 			"tier0": [ 0.05,    0.60,    	0.05,       0.00,		0.00,     	0.00,      	0.00,     	0.30],
-			"tier1": [ 0.05,  0.67,  0.05,  0.00,  0.08,  0.00,  0.00,  0.15],
-			"tier2": [0.05, 0.70, 0.10, 0.06, 0.08, 0.00, 0.00, 0.00],
-			"tier3": [0.05, 0.71, 0.10, 0.06, 0.06, 0.08, 0.00, 0.00]
+			"tier1": [ 0.05,  0.62,  0.05,  0.00,  0.08,  0.05,  0.00,  0.15],
+			"tier2": [0.05, 0.62, 0.10, 0.06, 0.08, 0.08, 0.00, 0.00],
+			"tier3": [0.05, 0.67, 0.10, 0.06, 0.06, 0.12, 0.00, 0.00]
 		},
 		"air": {
 			"tier0": [ 0.10,    0.55,    	0.05,       0.00,		0.00,     	0.00,      	0.00,     	0.30],
