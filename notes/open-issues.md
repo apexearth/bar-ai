@@ -3130,3 +3130,40 @@ Cortex" was not achieved and not disproven this session -- what was
 achieved is a much clearer picture of how much data this benchmark
 actually needs before a claim should be trusted, which is the most
 durable outcome of the whole investigation.
+
+## 48. Robust, repeatable signal found via continuous metrics: Legion's economy lead is real and stable even though win rate is not
+
+Given win/loss proved too noisy to trust in single 16-game batches
+(issues 45-47), re-analyzed the two independent, identical-code Legion
+baseline tournaments (`legion-pre-issue35-baseline-16` and
+`legion-baseline-stability-check-16`) with `composition.py` instead --
+continuous economy metrics average over many samples per game and should
+carry more statistical power per batch than a single win/loss bit.
+
+**Result: apex-Legion's economic lead over stock BARb is consistent
+across both batches**, despite win rate swinging from 43.8% to 31.2%
+between them:
+- Batch 1: metal produced 177.7k (apex) vs 126.6k (stock) -- ratio 1.40x
+- Batch 2: metal produced 132.1k (apex) vs 103.2k (stock) -- ratio 1.28x
+
+Both batches independently show apex ahead by roughly 30-40% on raw
+economic output, a MUCH tighter, more repeatable range than the win-rate
+swing (12.6 points on a ~35% base, i.e. a ~35% relative swing) covering
+the same two samples. **This is the first genuinely robust (not
+noise-explainable) quantitative finding about Legion this session**: the
+economy-lead hypothesis from issue 35 holds up under a repeat measurement
+in a way none of the win-rate-based fix attempts did.
+
+**What this means**: Legion loses despite a real, repeatable ~30-40%
+economic advantage. The bottleneck is downstream of economy -- army
+composition, unit micro/targeting, or engagement outcomes -- exactly
+where this session's structural audits (issue 39's army-role-tag check)
+already looked without finding anything that held up. **Recommended
+future-session approach, given continuous metrics show more power than
+win/loss on this benchmark**: extend `composition.py` (or a new tool) to
+report combat-specific continuous metrics across many games -- e.g. kills
+per metal spent, army-value-lost-per-engagement, time-to-first-major-
+engagement -- rather than relying on win/loss alone to judge a Legion
+combat-behavior fix. A win-rate-only test may need 32-64+ games to detect
+what a well-chosen continuous metric could detect in the two 16-game
+batches already in hand.
