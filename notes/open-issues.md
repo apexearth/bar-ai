@@ -1942,3 +1942,73 @@ a redundant building), so per `CLAUDE.md`'s "separate rules that SPEND from
 fixes that STOP something," a regression here would be a surprise, but it
 still needs the same batch-and-composition confirmation as everything else
 in this file before being called done.
+
+## 29. Session round-up: two live reports (towers, bot-lab spam) diagnosed and fixed, plus a new auto-flagging tool -- none of the three deployed or tournament-tested yet
+
+apexearth watched a Comet Catcher 4v4 live and reported two things in one
+sitting: the army walking into enemy towers and losing ~10 army with no
+apparent focus fire, and team 2 ("teal") sitting on 4+ bot labs by ~18
+minutes. Three agents worked these in parallel this session; this entry
+just cross-references what each landed so issues 27/28 above (which already
+carry the full diagnosis) don't get restated.
+
+**Towers -- issue 27, commit `afc2157`.** Split into two independent
+mechanisms rather than one bug: (1) `MassWant()`/`UpdateMassing()` decided
+whether to commit to an attack using `EnemyArmyCost()`, which sums only
+mobile roles and is blind to static defence by its own docstring -- fixed by
+routing those two call sites through a new `EnemyMassingThreat()` that adds
+half-weight `RT::STATIC` cost, deliberately *not* folded into
+`EnemyArmyCost()` itself because that function also feeds
+`KillingBlow()`/`T3Worthwhile()`, where a static-heavy enemy could otherwise
+permanently pin those gates (see issue 27 for why that reproduces the
+already-documented "dominant but never converts" failure). (2) "we don't
+focus the tower" is moment-to-moment attack-target selection, which
+`docs/05-angelscript-api.md` says plainly lives in C++ and is unreachable
+from this AI's script layer -- confirmed, not attempted, logged as a
+separate C++-or-gadget follow-up.
+
+**Bot-lab spam -- issue 28, commit `2473373`.** Confirmed as six genuinely
+distinct `corlab` placements (not a log artifact) against a healthy,
+never-collapsing economy, then traced to a race: `HaveT1BotLab()` only
+becomes true when a builder's nanolathe *starts* the structure, not when the
+order is issued, so every constructor still walking to a build site reads
+the gate as still open and grabs the same job. Fixed with a 45-second
+`gNextBotLabRequest` cooldown, the same spacing-gate shape this file already
+used for the rez-bot floor.
+
+**Tooling -- `tools/combat_events.py`, commit `025558f`.** Both diagnoses
+above were done by hand-grepping `infolog.txt` and eyeballing
+`spending_timeline.py` rows for a collapse or a repeated build. This tool
+automates that noticing: it walks a match or tournament's `result.json`
+tree and reports (a) COLLAPSE events -- `armyReal`/`mCon` dropping >=60%
+(configurable) between consecutive samples, with the `top` metal-sink string
+at the after-sample for context, and (b) DUPLICATE-BUILD events -- the same
+factory unit placed more than once within a short window, read from
+`infolog.txt`'s `"<label> on field: <unit>"` lines when present, falling
+back to clustering same-sized `mFactories` jumps when there's no infolog
+(most tournament games). It was built and verified against
+`matches/watch-comet-catcher-4v4-8` (the match both reports above came
+from). Re-run this session against a tournament it had never seen,
+`tournaments/20260804-192304-livefixes2-16` (16 games, has infologs): it
+found 86 collapse events and 7 duplicate-build events across the batch
+without error, and the duplicate-build events used the precise `[infolog]`
+path (e.g. team 1 placing `corap` twice at 16.5m/17.9m), not the coarser
+`mFactories`-approx fallback -- confirming the tool generalizes past the one
+match it was written against, on both code paths it implements.
+
+**State at end of session: all three changes are committed but NONE are
+deployed or tournament-tested.** All three agents independently hit the same
+blocker -- `Get-Process` showed a live `spring` process and five
+`Beyond-All-Reason` windows already running for the whole session, so per
+`CLAUDE.md`'s deploy-while-BAR-is-open warning (`WinError 5`, half-written AI
+folder), nobody deployed. **Next session, in order: confirm BAR/spring are
+closed, deploy apex once (both behavior changes are already in the same
+tree, so one deploy covers both), smoke-test and grep the infolog for
+AngelScript compile errors, then run one 16-game Comet Catcher 4v4 tournament
+against pre-session HEAD.** Read it with `composition.py` for the tower fix
+(attack frequency / passivity, not just win rate) and with
+`spending_timeline.py`/`composition.py` for the bot-lab fix (duplicate
+`mFactories` spend should drop for players who previously over-built), and
+run `tools/combat_events.py` on the result as a fast first pass before
+either manual read -- it is now confirmed to work on tournament output, not
+just the one hand-inspected match.
