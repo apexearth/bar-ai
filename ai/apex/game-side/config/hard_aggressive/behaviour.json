@@ -268,6 +268,18 @@
 
 			"armlab": {
 				"role": ["builder"],
+				// corlab (T1 kbot lab, same role) carries "attribute": ["support"];
+				// armalab/coralab (T2 kbot lab, both factions) already match on this.
+				// EconomyManager.cpp:1555 branches factory placement on
+				// facDef->IsRoleSupport() -- ground support factories place via
+				// terrainMgr->GetBusPos() (a staging/rally position), non-support
+				// factories use different placement logic entirely. armlab was
+				// missing this tag, so Armada's T1 kbot lab placement differs from
+				// Cortex's by a real, traced mechanism, not just a build_speed number
+				// (build_speed/build_mod deliberately left alone -- see
+				// notes/open-issues.md #41, GetGoalBuildMod() has no reader in this
+				// engine build and its own effect is unconfirmed).
+				"attribute": ["support"],
 				"build_speed": 4.0
 			},
 			"armalab": {
@@ -278,6 +290,8 @@
 			},
 			"armvp": {
 				"role": ["builder"],
+				// Same gap as armlab above, for the T1 vehicle plant.
+				"attribute": ["support"],
 				"build_speed": 5.0
 			},
 			"armavp": {
