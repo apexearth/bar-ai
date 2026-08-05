@@ -2090,3 +2090,81 @@ Worth a second confirmation batch before calling the session's original
 goal definitively met, per this session's own standing discipline about
 single-batch overclaiming -- but this is, by a wide margin, the best
 evidence produced all session.
+
+## 33. T2-constructor count stuck flat at 3 -- diagnosed as a Cortex-only faction-parity ratio bug, NOT a build_chain.json one-shot gate. Fixed but NOT DEPLOYED (spring-headless running)
+
+Deep-dive hypothesis this session: apex's T2-constructor count measured flat at
+3 across three unrelated batches (gated-big-32 regression, the pre-session
+baseline, and the 11-0 factorycap-16 win) while every other economy metric
+scaled substantially with the session's fixes. Proposed mechanism was a
+`build_chain.json` condition (an `m_inc>` gate or hub) sampled once too early,
+the same shape as this file's documented nano-gate bug.
+
+**That specific file was not the cause.** `build_chain.json` has no T2-con
+entries at all -- it only governs defence/nano/energy hubs hung off factories
+and mexes. T2 constructors are chosen by the ordinary factory production-ratio
+tables in `factory.json`, which are re-evaluated continuously (not one-shot),
+so the "sampled once, too early" mechanism does not apply here.
+
+**Real mechanism, found by reading `builder.as` and `factory.json` together:**
+
+1. `Builder::AdvConsWanted()`/`NeedsAdvCon()` (`builder.as:50-59`) computes
+   `1 + income/25`, capped at 4 -- an income-scaling target that looks exactly
+   like what the hypothesis predicted should exist. **It is dead code.**
+   Grepped the entire `script/` tree: `NeedsAdvCon()` is defined and never
+   called anywhere. It cannot be the mechanism holding the count at 3, because
+   nothing reads it.
+2. The thing that actually *is* wired to production is `factory.json`'s
+   per-tier unit-weight tables. Cortex's T2 vehicle plant, `coravp`, weights
+   its T2 constructor `coracv` at **0.01 (tier0) / 0.02 (tier1)** -- effectively
+   never selected regardless of how much income there is, because these are
+   independent per-slot selection weights, not counts tied to income.
+   Armada's equivalent plant, `armavp`, weights its own T2 constructor,
+   `armacv`, at **0.55 (tier0) / 0.28 (tier1)** -- and `armavp`'s own comment
+   says so explicitly: *"armgremlin is the only cheap combat vehicle here,
+   hence the raise off 1%."* Someone deliberately raised Armada's T2-con
+   weight off stock's 1% at some point. Cortex's `coravp` was never given the
+   equivalent treatment and is still sitting at that original ~1-2%.
+3. **This exactly explains the flat 3 across all three measured batches**:
+   every tournament command in this repo's `CLAUDE.md`/task template runs
+   `--sides Cortex,Cortex`. Every single benchmark measurement all session hit
+   the never-fixed `coravp` ratio; none exercised the already-fixed `armavp`
+   one. A ~1-2% selection weight barely produces the same handful of
+   constructors whether income is 4 m/s or 40 m/s, because the weight itself
+   never moves -- which is why the count looked invariant across every
+   economic regime tested, without needing any one-shot-gate mechanism at all.
+
+This is the same *class* of bug CLAUDE.md already names -- "Faction parity:
+work done for Cortex has repeatedly been forgotten for Armada and Legion" --
+just inverted (a fix landed on Armada, never carried to Cortex), and it is a
+better-evidenced explanation than the one-shot-gate guess: it is not
+reasoning from a documented precedent's *shape*, it is the literal comment on
+`armavp` describing the exact fix that `coravp` is missing.
+
+**Fix, `ai/apex/game-side/config/hard_aggressive/factory.json`, `coravp.land`
+only** (left `coravp.air` at stock -- Comet Catcher is a land map, this
+session's benchmark never exercises the air table, and per CLAUDE.md's "one
+behaviour change at a time" the air-table gap is logged here as a known
+follow-up, not bundled in): raised `coracv` tier0/tier1 from 0.01/0.02 to
+0.45/0.25, mirroring `armacv`'s magnitude on `armavp`. Reduced `correap`
+(the unit that had been absorbing coracv's foregone share, at 0.40/0.28) to
+0.06/0.05 to compensate -- everything else in the table left untouched.
+`python tools/check.py` passed clean.
+
+**NOT deployed, NOT tournament-tested.** `Get-Process` showed three live
+`spring-headless` processes for the entire session (consistent with issue 32's
+own second confirmation batch, or another run apexearth has in flight) --
+deploying now risks `WinError 5` / a half-written AI folder per CLAUDE.md's
+harness-discipline section, and would step on whatever is running. **Next
+session: confirm spring-headless/BAR are closed, deploy apex, smoke-test (grep
+infolog for `.as ([0-9]+, [0-9]+) : ERR`), then run one 16-game Comet Catcher
+4v4 batch named `deepdive-t2con-parity` against the current
+factorycap-16-confirmed build. Read with `composition.py` for T2-constructor
+count specifically (expect a rise off the flat 3, closer to what stock's own
+side, or Armada, has shown) and overall metal produced/T2 spend; compare
+against factorycap-16's own numbers (apex 11/11 decided, wipeout 3/64, metal
+produced 41,075) as the baseline to beat or at least not regress from. Watch
+in particular for `correap`'s reduced weight costing something -- it was the
+dominant unit in that table at 40/28%, now cut to 6/5%, so a drop in Cortex's
+mobile combat-vehicle output on `coravp` specifically is the most plausible
+side effect to check for, not assume away.**

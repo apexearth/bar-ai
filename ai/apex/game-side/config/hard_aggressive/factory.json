@@ -362,10 +362,21 @@
 		"importance": [0.0, 1.0],
 		"require_energy": false,
 		"income_tier": [40],
+		// coracv (T2 constructor) was left at stock's ~1-2% here while armavp's
+		// armacv -- the same role on Armada's equivalent T2 plant -- was already
+		// raised to 0.55/0.28 (see armavp's own comment: "hence the raise off
+		// 1%"). Never applied to Cortex. Matches session diagnostic: T2-con
+		// count measured flat at 3 across every batch this session regardless
+		// of economy scale (gated-big-32, pre-session baseline, factorycap-16),
+		// while every benchmark tournament in this repo runs --sides
+		// Cortex,Cortex, so every one of those measurements hit this exact
+		// under-weighted entry. Mirrored armavp's magnitude here; correap
+		// (the unit that absorbed coracv's share) reduced by the same amount
+		// it once again dominates by, everything else left as-is.
 		"unit":      ["coracv", "correap", "corgol", "cormart", "corsent", "corvroc", "corban", "cortrem", "corvrad", "coreter"],
 		"land": {
-			"tier0": [ 0.01,     0.40,      0.07,     0.10,      0.02,      0.06,      0.22,     0.04,      0.02,      0.02],
-			"tier1": [ 0.02,     0.28,      0.31,     0.05,      0.02,      0.05,      0.18,     0.08,      0.01,      0.01]
+			"tier0": [ 0.45,     0.06,      0.07,     0.10,      0.02,      0.06,      0.22,     0.04,      0.02,      0.02],
+			"tier1": [ 0.25,     0.05,      0.31,     0.05,      0.02,      0.05,      0.18,     0.08,      0.01,      0.01]
 		},
 		"air": {
 			"tier0": [ 0.01,     0.51,      0.04,     0.08,      0.14,      0.04,      0.14,     0.01,      0.015,     0.015],
