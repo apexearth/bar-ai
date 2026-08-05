@@ -952,18 +952,14 @@
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
-			// legvflak (Charon, T2 mobile AA) had no role tag at all -- armflak/corflak
-			// are both explicitly "anti_air" (see behaviour.json). Without the tag this
-			// unit falls through to whatever CircuitAI's default role assumes, so Legion
-			// likely under-responds to enemy air and/or misuses this unit in ground
-			// fights despite building it steadily all game (factory_leg.json legavp,
-			// 0.05 weight every tier). Untested -- confirm with a solo Legion,Legion
-			// batch.
-			"legvflak": {
-				"role": ["anti_air"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
-				"power": 1.0
-			},
+			// legvflak (Charon, T2 mobile AA) is deliberately left WITHOUT a role tag.
+			// Tagging it "anti_air" (matching armflak/corflak exactly) was tried and
+			// confirmed, clean and solo, as a real regression: legion-vflak-role-16
+			// went 4-12 (25%, 95% CI excludes 50%) against the established clean 43.8%
+			// baseline -- the third independent, well-reasoned, code-level-justified
+			// Legion fix this session to regress when tested (see notes/open-issues.md
+			// #37/#38/#39). The mechanism is not understood. Do not re-add without a
+			// new, positive, isolated confirmation.
 			"legmed": {
 				"role":	["assault"],
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
