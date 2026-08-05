@@ -280,7 +280,15 @@
 				// notes/open-issues.md #41, GetGoalBuildMod() has no reader in this
 				// engine build and its own effect is unconfirmed).
 				"attribute": ["support"],
-				"build_speed": 4.0
+				// build_speed override was 4.0 vs corlab's 15.0 despite identical real
+				// engine workertime (150 for both, verified from the .lua unit defs).
+				// FactoryManager.cpp:516-518 confirms this overrides
+				// CircuitDef::SetBuildSpeed(), consumed by BuilderTask.cpp:604-625 for
+				// per-unit build-power accounting when assisting a task. Raised to
+				// match corlab's proven value. Untested -- confirm with a solo
+				// Armada,Armada batch; revert if it regresses (see
+				// notes/open-issues.md #41 for the full trace).
+				"build_speed": 15.0
 			},
 			"armalab": {
 				"role": ["static"],
@@ -292,7 +300,12 @@
 				"role": ["builder"],
 				// Same gap as armlab above, for the T1 vehicle plant.
 				"attribute": ["support"],
-				"build_speed": 5.0
+				// Same signature as armlab's build_speed fix (issue 42, 62.5% -> 81.2%
+				// confirmed): armvp/corvp real workertime is identical (150, verified
+				// from the .lua defs), so 5.0 vs corvp's 15.0 isn't a legitimate stat
+				// difference. Raised to match. Untested -- confirm with a solo
+				// Armada,Armada batch.
+				"build_speed": 15.0
 			},
 			"armavp": {
 				"role": ["static"],
@@ -501,7 +514,14 @@
 			"armnanotct2": {
 				"role": ["support"],
 				"build_mod": 500,
-				"build_speed": 16.0
+				// Reverse-direction case of the armlab/armvp build_speed fix (issue 42):
+				// here ARMADA's value was higher (16.0 vs cornanotct2's 8.0), despite
+				// identical real workertime (600 for both, verified from the .lua
+				// defs). Lowered to match cornanotct2's proven value. Untested -- this
+				// is the first "lower Armada to match Cortex" build_speed test this
+				// session; confirm with a solo Armada,Armada batch and revert if it
+				// regresses.
+				"build_speed": 8.0
 			},
 			"armnanotcplat": {
 				"role": ["support"],
