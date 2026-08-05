@@ -1258,6 +1258,7 @@ const int   AA_PERIOD         = 20 * SECOND;
 const uint  DEF_CON_FLOOR     = 3;      // never take the last builders
 int gNextPulsar = 0;
 int gNextAA = 0;
+int gNextAADiag = 0;  // temporary diagnostic, see CheapAA
 
 CCircuitDef@ SideDef3(const string& in a, const string& in c, const string& in l)
 {
@@ -1285,6 +1286,21 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 	// apexearth: "the side effect is wasteful defense and then we have less army
 	// and are losing the overall fight."
 	const float enemyAir = aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type);
+	// DIAGNOSTIC, apexearth: "I didn't see us making AA... check it." GetEnemyCost
+	// only accumulates on EnemyEnterLOS (not radar contact) and is otherwise never
+	// reduced except on enemy death -- a fast hit-and-run flyer that stays at radar
+	// range without crossing into true LOS could plausibly never get counted at
+	// all. mobileThreat/GetEnemyThreat(AIR) are separate accumulators (threat, not
+	// cost) that may behave differently; logging both to compare against the gate
+	// this function actually uses. Remove once the hypothesis is confirmed or
+	// ruled out.
+	if (ai.frame >= gNextAADiag) {
+		gNextAADiag = ai.frame + 20 * SECOND;
+		AiLog(Factory::T() + "apex: AA-gate enemyAir(cost)=" + formatFloat(enemyAir, "", 0, 1)
+			+ " enemyAirThreat=" + formatFloat(aiEnemyMgr.GetEnemyThreat(Unit::Role::AIR.type), "", 0, 1)
+			+ " mobileThreat=" + formatFloat(aiEnemyMgr.mobileThreat, "", 0, 1)
+			+ " rlCount=" + (SideDef3(armrl, corrl, legrl) is null ? -1 : int(SideDef3(armrl, corrl, legrl).count)));
+	}
 	if (enemyAir < 1.f)
 		return null;
 	int want = AA_MIN + int(enemyAir / AA_PER_AIR);
