@@ -300,7 +300,12 @@
 				"role": ["builder"],
 				// Same gap as armlab above, for the T1 vehicle plant.
 				"attribute": ["support"],
-				"build_speed": 5.0
+				// Same signature as armlab's build_speed fix (issue 42, 62.5% -> 81.2%
+				// confirmed): armvp/corvp real workertime is identical (150, verified
+				// from the .lua defs), so 5.0 vs corvp's 15.0 isn't a legitimate stat
+				// difference. Raised to match. Untested -- confirm with a solo
+				// Armada,Armada batch.
+				"build_speed": 15.0
 			},
 			"armavp": {
 				"role": ["static"],
