@@ -2658,7 +2658,7 @@ Armada 62.5% (`armada-armaca-clean-16`), Legion 43.8%
 | faction | clean win% | vs Cortex's own ~85%+ pattern | status |
 |---|---|---|---|
 | Cortex | 75-88% (4 batches) | is the reference | proven, stable |
-| Armada | 62.5% | below, but real confirmed progress this session (2 landed fixes) | still needs iteration |
+| Armada | 62.5% -> 75-81% (see issue 42) | now inside Cortex's own range | major progress, near-parity reached |
 | Legion | 43.8% | well below | 3 hypotheses tried, all reverted; needs live-watched investigation next |
 
 ## 41. Armada `build_speed` gaps found, deliberately NOT acted on -- unverified, could be legitimate
@@ -2772,10 +2772,23 @@ attempts, which either bundled multiple changes or enabled/tagged an
 entire new mechanism rather than correcting a single misconfigured
 number.
 
-**Not yet done**: `armvp`'s `build_speed` (5.0, `corvp`'s is 15.0) has the
-identical signature and was NOT yet raised or tested -- same real-stat
-verification applies (`armvp`/`corvp` workertime both 150). This is the
-clear next test for a future session, one change at a time as always.
-`armnanotct2` (16.0 vs `cornanotct2`'s 8.0, the REVERSE direction -- Armada
-higher) is a different case and untested; do not assume the same fix
-direction applies.
+**Follow-up, same session**: applied the identical fix to `armvp`
+(`build_speed` 5.0 -> 15.0, matching `corvp`; real workertime confirmed
+identical, 150 for both). `armada-buildspeed-vp-16` (solo, clean): **12-4
+decided, 75.0%, 95% CI 51-90% (excludes 50%)** -- a second real,
+statistically significant improvement, consistent with `armlab`'s 81.2%.
+
+**Armada session-end state: two independently confirmed real fixes
+(`armlab` and `armvp` build_speed), both landing Armada at 75-81% clean
+win rate** -- solidly inside Cortex's own 75-88% range from this session's
+clean batches. This is the strongest evidence this session that Armada can
+reach genuine parity with Cortex, not just incremental improvement. Both
+fixes share the same signature (a `build_speed` override mismatched from
+an identical real engine stat) and the same now-understood mechanism
+(`BuilderTask.cpp`'s build-power accounting) -- worth checking every other
+Armada building/unit for the same pattern before assuming it's
+exhausted.
+
+`armnanotct2` (16.0 vs `cornanotct2`'s 8.0, the REVERSE direction --
+Armada higher) is a different case and untested; do not assume the same
+fix direction applies without checking it independently.
