@@ -289,6 +289,18 @@ const float CON_THREAT_VETO = 4.0f;
 // a healthy player choosing a second or third.
 const int FACTORY_TYPE_CAP = 3;
 
+// The count cap alone does not close the race that causes the overshoot:
+// CCircuitDef.count only increments once a builder's nanolathe actually
+// STARTS the structure (same delay HaveT1BotLab() had), so several idle
+// constructors evaluated inside that walk-to-site window can all read the
+// same under-cap count and all get granted a build in turn -- apexearth,
+// watching live minutes after the count-cap fix shipped: "teal has 7 or 8
+// t1 botlabs... keeps making more over time... this is a bug." Same
+// per-def spacing-gate pattern gRezzerDefs/REZ_SPACING already use
+// elsewhere in this file for the identical class of race.
+const int FACTORY_REQUEST_SPACING = 30 * SECOND;
+array<int> gNextFactoryRequest(ai.GetDefCount() + 1);
+
 int gConRefused = 0;
 int gConAbandoned = 0;
 int gConRerouted = 0;
@@ -1983,10 +1995,17 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// the team's.
 		if ((kind == "factory") && (task !is null)) {
 			const CCircuitDef@ wantFac = task.buildDef;
-			if ((wantFac !is null) && (wantFac.count >= FACTORY_TYPE_CAP)) {
-				++gConRefused;
-				LogConVeto(unit, "refuse", "factory-cap", float(wantFac.count));
-				@task = null;
+			if (wantFac !is null) {
+				const int id = wantFac.id;
+				const bool tracked = (id >= 0) && (uint(id) < gNextFactoryRequest.length());
+				const bool tooSoon = tracked && (ai.frame < gNextFactoryRequest[id]);
+				if ((wantFac.count >= FACTORY_TYPE_CAP) || tooSoon) {
+					++gConRefused;
+					LogConVeto(unit, "refuse", "factory-cap", float(wantFac.count));
+					@task = null;
+				} else if (tracked) {
+					gNextFactoryRequest[id] = ai.frame + FACTORY_REQUEST_SPACING;
+				}
 			}
 		}
 		if ((task !is null) && (kind != "")) {
