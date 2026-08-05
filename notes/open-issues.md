@@ -2568,3 +2568,26 @@ differently in a fight, rather than continuing to infer it from static
 config comparison. `tools/combat_events.py`/`tools/trace_flow.py` on an
 existing Legion tournament's replays may also surface something a config
 diff cannot.
+
+**First data point from that recommendation**: ran a windowed
+Legion-vs-stock watch match (`matches/watch-legion-investigate`, apex lost,
+14.4 min) with no live human commentary this session, so analyzed it with
+`tools/combat_events.py` instead. Result is striking and qualitatively
+different from anything found via config audit: **all four apex-Legion
+players' armies collapsed between 8 and 14 minutes** -- armyReal dropped
+95%, 100%, 100%, and 89% in four separate collapse events across the team,
+two of them full wipes (`mCon`/`armyReal` to 0). This reads as one
+catastrophic team-wide engagement, not a slow economic grind loss, which
+fits "loses despite a better economy" far better than any of the three
+reverted hypotheses did. Also caught team 3 building `leglab` three times
+within 1.3 minutes (9.7/10.6/11.0min) -- within this session's
+`FACTORY_TYPE_CAP=3` (so not exceeding the cap fixed earlier this session
+for the *duplication* bug), but still three separate T1 bot labs by minute
+11 for one player, which divides build power across redundant factories
+instead of consolidating it -- plausibly a contributing factor to that
+player's weak showing in the collapse, though this is n=1 and qualitative,
+not confirmed. **Next session: watch several more Legion games (live, with
+apexearth, per this project's established fastest-signal method) focused
+specifically on what happens in the 5-10 minute window before these
+collapses** -- is it a lost initial engagement, a bad defensive position,
+a specific unit type folding, or something else entirely.
