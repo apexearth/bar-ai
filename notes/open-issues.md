@@ -3095,3 +3095,38 @@ comparisons already made, not generating new hypotheses. This is worth
 keeping in mind for future sessions: once a benchmark's noise floor is in
 question, re-running for statistical power beats chasing new leads until
 the existing claims are actually resolved one way or the other.
+
+## 47. T1_FAC investigation fully resolved: no confirmed effect, pooled data
+
+Followed through on issue 45's flag that `T1_FAC`/`T2_FAC` (adding
+`legap`/`legaap`) was the one Legion result closest to significance
+(z≈-1.8, p≈0.07) and worth resolving with more data rather than leaving
+ambiguous. Re-applied in isolation, ran a second independent solo batch:
+`legion-t1fac-retest-16` came back **37.5% (6-10)**, very different from
+the first read's 12.5%. Pooled: 8/32 = 25% for the fix, vs Legion's own
+pooled baseline of 12/32 = 37.5% (from issue 45). **z=-1.08, not
+significant.**
+
+**This closes the last open question from this session's Legion work.**
+Of the four things tested (constructor-weight bundle, `T1_FAC`/`T2_FAC`,
+`legvflak` role tag, `leggant` build_speed), none show a statistically
+confirmed effect on win rate once properly powered with a second
+independent batch. `legap`/`legaap` were left OUT of `T1_FAC`/`T2_FAC`
+(reverted, commit `8c4f076`) since there's no positive evidence to keep
+the change either -- absent a real effect either direction, the simpler,
+longer-tested configuration is the reasonable default.
+
+**Final honest state of this session's Legion work**: the code-level
+"bug" (a rush mechanism silently disabled for Legion air openers) is real
+and still true as a structural fact, but this session could not establish
+whether fixing it helps, hurts, or does nothing to win rate at the sample
+sizes tested (32 games total). Legion's baseline win rate against stock
+BARb on this benchmark remains genuinely unclear -- reads have ranged
+25-44% across the session's various clean batches, all statistically
+consistent with a single underlying rate somewhere in the low-to-mid
+30s%, well below Cortex's ~75-88% and Armada's now-also-uncertain
+62.5-81.2% band. Getting Legion or Armada to a number "similar to
+Cortex" was not achieved and not disproven this session -- what was
+achieved is a much clearer picture of how much data this benchmark
+actually needs before a claim should be trusted, which is the most
+durable outcome of the whole investigation.
