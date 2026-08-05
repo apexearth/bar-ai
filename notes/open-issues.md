@@ -2586,8 +2586,25 @@ for the *duplication* bug), but still three separate T1 bot labs by minute
 11 for one player, which divides build power across redundant factories
 instead of consolidating it -- plausibly a contributing factor to that
 player's weak showing in the collapse, though this is n=1 and qualitative,
-not confirmed. **Next session: watch several more Legion games (live, with
-apexearth, per this project's established fastest-signal method) focused
-specifically on what happens in the 5-10 minute window before these
-collapses** -- is it a lost initial engagement, a bad defensive position,
-a specific unit type folding, or something else entirely.
+not confirmed.
+
+**Correction after checking the broader dataset**: ran `combat_events.py`
+across the full 16-game `legion-pre-issue35-baseline-16` tournament to see
+if the windowed match's "team-wide 8-14min wipe" pattern holds generally.
+It does not, cleanly -- collapse events in that tournament happen to BOTH
+apex and stock, at varied game times (12, 24, 40, 42, 50 minutes), not
+consistently early and not consistently to one side. The windowed match's
+dramatic all-four-players-wiped-by-14-minutes result looks like an
+unusually severe single game, not the general pattern -- **do not
+over-index on the one windowed observation**. What the broader data does
+still support: single-player collapse events happen at a similar rate to
+apex and to stock, consistent with the earlier finding that this isn't a
+constant economic bleed but episodic combat losses -- just not
+concentrated in an early time window the way one match suggested.
+
+**Next session: watch several more Legion games (live, with apexearth, per
+this project's established fastest-signal method)** rather than trusting
+either the single dramatic collapse or the broader "collapses happen
+sometimes to both sides" read alone -- neither is a strong enough signal
+yet to act on without more direct observation of what a losing engagement
+actually looks like for Legion specifically.
