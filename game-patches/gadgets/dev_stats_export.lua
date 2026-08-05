@@ -347,6 +347,19 @@ local function dump(reason)
 			if #top > 0 then
 				parts[#parts + 1] = "top=" .. table.concat(top, ",")
 			end
+			-- Full unit-type list, not just the top 4. apexearth: "make sure that the
+			-- units we expect to be created are actually created" -- top= alone cannot
+			-- answer that, since a cheap or rare unit (an unused factory, a T3 unit
+			-- built once) never displaces the big spenders. Every unit type with any
+			-- metal invested this game, so a config weight can be checked against
+			-- what actually got built rather than inferred from the top spenders.
+			local all = {}
+			for i = 1, #names do
+				all[#all + 1] = string.format("%s:%.0f", names[i][1], names[i][2])
+			end
+			if #all > 0 then
+				parts[#parts + 1] = "allBuilt=" .. table.concat(all, ",")
+			end
 
 			local av, ac = armyValue(teamID)
 			parts[#parts + 1] = string.format("armyReal=%.0f", av)
