@@ -2237,62 +2237,42 @@ Armada-specific bug could plausibly have survived undetected the whole
 time -- CLAUDE.md's own "Faction parity" section already names this
 exact failure mode as recurring in this codebase.
 
-## 34. `corck` (Cortex T1 constructor) weight fix -- deployed, smoke-tested clean, tournament confirmation started but not finished this session
+## 34. `corck` T1-constructor "fix" was backwards -- reverted; Cortex is the reference, not Armada
 
-Originated from apexearth watching a live 8v8 (`matches/_engine`, ally=0 apex/
-Armada vs ally=1 stable/Cortex) and catching mex counts roughly halved on the
-Armada side by eye (frame 46800: apex mean ~7.4 mex/player vs stable ~14.6),
-several individual Armada players stuck at 2-4 mex while others were fine at
-11-20 -- a per-player, not universal, pattern.
+Originated the same way as before: a live 8v8 showed Armada mex counts roughly
+halved vs Cortex, and `corlab`'s `corck` (flat 0.05) vs `armlab`'s `armck`
+(0.25-0.35) looked like the same shape as issue 33's `coravp`/`coracv` fix (a
+value raised on Armada, never carried to Cortex). Raised `corck` to 0.25 flat
+on that assumption and launched `parity-corck-16` (Cortex,Cortex) to confirm.
 
-Three-angle audit did not find an Armada-specific script bug explaining that
-freeze directly. Per the task's own fallback instruction, implemented instead
-the best-evidenced parity gap found along the way, in `factory.json`'s
-`corlab` (Cortex T1 bot lab) table: `corck` (confirmed via `tools/unitdef.py`
-as "Tech 1 Constructor", not a spam unit) was weighted flat at **0.05** across
-all six income tiers, while `armlab`'s equivalent `armck` runs **0.25-0.35**.
-Same shape, same file, same mechanism as issue 33's `coravp`/`coracv` fix
-(a value raised on Armada, never carried to Cortex) -- and T1 constructor
-throughput sits directly upstream of mex placement/upgrade, which is the
-literal mechanism (not just a symptom-shape match) behind low mex counts.
+**That assumption was never checked and was wrong.** Every benchmark this
+entire session -- all three batches behind the 26-1 combined record
+(`factorycap-16` 11-0, `factorycap-confirm-16` 9-0, `racefix-t2con-16` 6-1)
+-- ran `--sides Cortex,Cortex`. Cortex's values, whatever they are, are the
+ones with real validated data; Armada's and Legion's have never been
+benchmarked at all. Treating Armada's number as "correct" and Cortex's as
+"the bug" had it backwards -- apexearth caught this directly: *"I guess one
+concern I have about your finding here is that all of our testing was with
+cortex. So we should assume the cortex values are the good ones."*
 
-**Fix**: raised `corck` to 0.25 flat across all six tiers. tier0's increase
-taken from `corak` (0.90->0.70); tier1-5's taken from `corthud` (the
-dominant unit there once `corak` is already near zero: 0.63->0.43,
-0.66->0.46, 0.68->0.48, 0.70->0.50, 0.72->0.52). `cornecro`, `corstorm`,
-`corcrash` untouched, matching issue 33's "touch only the receiving/donating
-pair" discipline.
+`parity-corck-16`'s own partial data agreed: 0-2 decided at 3/16, 0-3 decided
+at 6/16 -- apex losing every decided game, the opposite of every other batch
+this session. Stopped the batch early and reverted rather than waiting out
+the full 16 for a confirmation of a result already visible.
 
-**Verified before deploy**: `python tools/check.py` passed clean.
-`tools/unitdef.py corck` confirms Tech 1 Constructor, cost 120m/1750e.
+**Revert**: `corck` back to flat 0.05 across all six tiers (`corak`
+0.90/0.17/0/0/0/0, `corthud` 0.63/0.66/0.68/0.70/0.72 -- the exact values
+behind the 26-1 record).
 
-**Deploy + smoke test**: confirmed no spring/spring-headless/BAR process
-running (the live-watched 8v8 had ended by the time this fix was ready),
-deployed apex (digest `19dd2712288a`), ran a 15-minute Cortex,Cortex 4v4
-headless smoke match -- 0 AngelScript compile errors
-(`grep -c "\.as ([0-9]*, [0-9]*) : ERR"` on the infolog returned 0), and
-confirmed `BARbApex:apex:hard_aggressive` actually loaded via the infolog's
-`Load script: ...\BARbApex\apex\script\hard_aggressive\{init,main}.as` lines
-across all 4 apex players.
-
-**Tournament confirmation launched but not finished within this session's
-window**: `parity-corck-16` (Comet Catcher 4v4, Cortex,Cortex, 16 games,
-25 min, +25% handicap, 3 workers) was started and was still running matches
-when this entry was written -- do not treat this fix as fully confirmed by
-tournament data yet. **Next session: check
-`tournaments/20260804-232934-parity-corck-16` for a finished result, read
-with `tools/composition.py` for corck/T1-constructor counts and mex-upgrade
-counts specifically (the downstream signal this fix targets), and compare
-against this session's `factorycap-16` baseline (apex ~41k metal produced,
-wipeout 3/64) as the healthy-Cortex reference point. If it regresses metal
-production or T1-constructor-adjacent combat unit output (corthud dropped
-from ~63-72% down to ~43-52%, so a drop in Cortex's mobile assault output is
-the most plausible side effect to check for, not assume away), revert
-cleanly; otherwise this is confirmed alongside issue 33's still-undeployed
-`coravp`/`coracv` fix as a second, independent Cortex T1/T2-constructor
-parity gap in the same file.**
-
-Kept deployed/committed pending that tournament result: the mechanism is
-directly analogous to an already-proven-correct precedent (issue 33), the
-smoke test is clean, and reverting a config-only JSON change is trivial if
-the confirmation batch disagrees.
+**Redirected fix, same evidence, opposite direction**: brought `armlab`'s
+`armck` (0.25/0.25/0.35/0.35) and `factory_leg.json`'s `leglab` `legck`
+(flat 0.10) down to Cortex's proven flat 0.05 instead, freeing their share to
+each table's existing dominant absorber (`armpw`/`armham` for Armada,
+`leglob` for Legion -- the same "corak early, corthud late" shape issue 33
+and the original corck fix both used, just applied to the two untested
+factions rather than to Cortex). **Neither change is tournament-confirmed --
+next session, run an Armada,Armada and a Legion,Legion batch before trusting
+either.** Issue 33's `coravp`/`coracv` fix is the same open question: it too
+was written as "Cortex raised to match Armada" and has never been confirmed
+against a Cortex-only baseline the way corck's regression now has been --
+re-examine it under the same Cortex-is-reference logic.
