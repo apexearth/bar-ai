@@ -2168,3 +2168,37 @@ in particular for `correap`'s reduced weight costing something -- it was the
 dominant unit in that table at 40/28%, now cut to 6/5%, so a drop in Cortex's
 mobile combat-vehicle output on `coravp` specifically is the most plausible
 side effect to check for, not assume away.**
+
+## 33. `factorycap-confirm-16`: second confirmation, 9-0 decided, 100%, 95% CI 70-100%
+
+**Second consecutive 16-game batch with a CI that excludes 50% in apex's
+favor.** 9/9 decided games won, 7/16 to time limit. Combined across both
+`factorycap-16` and `factorycap-confirm-16`: **20 apex wins, 0 stable wins,
+20/20 decided across two independent batches.**
+
+Also from this session's deep-analysis workflow (read alongside this
+result, not yet deployed): the T2-constructor count that's been flat at 3
+across every batch measured this session, win or lose, traced to a real,
+long-standing bug -- `factory.json`'s `coravp` (Cortex T2 vehicle plant)
+weights its T2 constructor `coracv` at 0.01/0.02, while `armavp`
+(Armada's equivalent) weights `armacv` at 0.55/0.28, with `armavp`'s own
+comment confirming that ratio was a deliberate fix never carried over to
+Cortex. Every benchmark this entire session runs Cortex vs Cortex, so
+this has likely been silently capping apex's T2 constructor output the
+whole time, independent of anything else fixed today. Committed
+(`d20592b`) but not yet deployed or tested.
+
+Also flagged by the same workflow, worth tracking separately: even inside
+the 11-0 batch, 2 of 5 undecided games were apex clearly LOSING (not
+"almost winning"), with both apex allies collapsing together in each --
+and those 2 losses are exact seed-pairs with 2 convincing wins on the
+OPPOSITE side, suggesting Comet Catcher itself has seed-dependent spawn
+asymmetry strong enough to flip a game outright. This is a map property,
+not an AI bug, but worth confirming before trusting any single seed's
+result too far.
+
+Next: deploy the queued factory-request-spacing fix (closes the async-count
+race the count-only FACTORY_TYPE_CAP still had -- apexearth watched it live,
+teal reaching 7-8 bot labs and a 5th queuing at count=4) and the T2-con
+parity fix, tested separately per standing discipline, once the current
+windowed watch match clears.
