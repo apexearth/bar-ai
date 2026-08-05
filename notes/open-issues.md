@@ -2688,3 +2688,25 @@ way `legmos`'s stockpile weapon had to be read directly to catch issue
 values are correct and this issue should be closed with no action; only
 fix if the real stats are equal or close and the config ratio doesn't
 match.
+
+**Verified, same session**: read the real `workertime` stat from each
+pair's `.lua` unit def directly. All three are IDENTICAL between factions:
+`armlab`/`corlab` both 150, `armvp`/`corvp` both 150, `armnanotct2`/
+`cornanotct2` both 600. So the config's `build_speed` asymmetry does NOT
+reflect a real stat difference -- on that evidence alone this looks like a
+genuine bug, stronger evidence than any of the three Legion attempts had.
+
+**Still deliberately NOT fixed.** `build_speed` is not referenced anywhere
+in this AI's AngelScript (`grep` across `script/**/*.as` found nothing) --
+it's consumed only by CircuitAI's compiled C++ internals, and
+`behaviour.json` itself carries a `// FIXME: Temporary tag to override
+buildSpeed` comment nearby, meaning this field is a deliberate AI-side
+override mechanism, not a mirror of the engine stat. What effect changing
+it actually has (build-time estimation? nano/caretaker assignment
+priority? something else?) is not understood from the config or script
+alone. Given `T1_FAC`'s and `legvflak`'s regressions were both exactly this
+class of mistake -- flipping an opaque C++-consumed mechanism that looked
+correct by every visible signal and then measuring worse -- this needs
+either reading CircuitAI's C++ source for how `build_speed` is consumed,
+or a live-watched test, before touching it. Do not fix on this evidence
+alone despite it being stronger than the Legion cases.
