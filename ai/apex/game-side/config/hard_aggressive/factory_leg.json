@@ -99,9 +99,15 @@
 //Metal Cost		   	1200		3950					11000			2600		8000			7000				23500				1350
 		"unit":      [ 	"legjav", 	"legeallterrainmech", 	"legelrpcmech", "legkeres", "legerailtank", "legeshotgunmech", 	"legeheatraymech", 	"legehovertank"],
 		"land": {
-			"tier0": [ 	0.65, 		0.10,      				0.00,      		0.10,     	0.00,      		0.00,				0.00,				0.15],
-			"tier1": [ 	0.35,		0.20,      				0.00,      		0.30,     	0.00,      		0.00,				0.00,				0.15],
-			"tier2": [ 	0.05,		0.10,      				0.00,      		0.50,     	0.00,      		0.20,				0.00,				0.15],
+			// legehovertank (Charybdis, a hovertank) was weighted 0.15 in this LAND
+			// table at tier0-2 despite having its own "water" table below where it
+			// correctly dominates (0.35-0.50) -- apexearth watched it live: "one of
+			// our guys is making hovers in a map which has no water, not a great
+			// idea." Zeroed here; freed share went to whichever unit is already
+			// dominant at that tier (legjav tier0-1, legkeres tier2).
+			"tier0": [ 	0.80, 		0.10,      				0.00,      		0.10,     	0.00,      		0.00,				0.00,				0.00],
+			"tier1": [ 	0.50,		0.20,      				0.00,      		0.30,     	0.00,      		0.00,				0.00,				0.00],
+			"tier2": [ 	0.05,		0.10,      				0.00,      		0.65,     	0.00,      		0.20,				0.00,				0.00],
 			"tier3": [ 	0.00,		0.00,      				0.20,      		0.30,     	0.30,      		0.20,				0.00,				0.00],
 			"tier4": [ 	0.00,		0.00,      				0.40,      		0.10,     	0.20,      		0.20,				0.10,				0.00],
 			"tier5": [ 	0.00,		0.00,      				0.40,      		0.00,     	0.10,      		0.20,				0.30,				0.00]
