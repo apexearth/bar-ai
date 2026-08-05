@@ -2304,3 +2304,31 @@ logic.
 there), then re-run the Armada,Armada mirror to see if it moves off 50%.
 Legion's `legck` change remains completely unconfirmed -- no Legion,Legion
 batch has been run yet.
+
+## 35. Armada/Legion T2-constructor parity batch -- Armada trending up, Legion flat for a different reason
+
+Same session, same `d2f147a` commit (armack/legack lowered to Cortex's proven
+0.01-0.02, legcv raised to match corcv/armcv's already-agreed 0.11-0.16,
+legfus income gate completed, `legap`/`legaap` added to `T1_FAC`/`T2_FAC`).
+Two 16-game confirmation batches (Comet Catcher 4v4, +25% handicap):
+
+- `armada-t2con-16` (Armada,Armada): apex 9-6 decided (60.0%, 95% CI 36-80%)
+  -- up from the pre-fix 4-4 (50%) baseline. Still not distinguishable from a
+  coin flip at n=15 and nowhere near Cortex's ~85%+ pattern, but the right
+  direction. `composition.py` still shows a real gap even after this fix:
+  cons T1 14 vs stable's 23, cons T2 3 vs 7, T2 spend 22.0k vs 31.7k --
+  Armada's constructor throughput is still below Cortex's, despite armack/
+  armcv both now matching Cortex's proven weights. The remaining gap is not
+  explained by anything touched this session; likely needs the same kind of
+  multi-round iteration Cortex got (three 16-game batches plus a dozen script
+  changes), not a second config tweak.
+- `legion-t2con-16` (Legion,Legion): apex 7-8 decided (43.8%, 95% CI
+  ~25-64%) -- flat, no improvement. **This is a different problem than
+  Armada's.** `composition.py` shows Legion's ECONOMY IS ALREADY BETTER than
+  stock's: metal produced 80.9k vs 43.3k, cons T1 21 vs 15, cons T2 6 vs 4,
+  mex upgrades 8 vs 4 -- roughly double stock's economic output in every
+  metric. Losing roughly half of games with a stronger economy means the
+  bottleneck is army composition or combat effectiveness, not constructor
+  throughput. **Next step for Legion: audit `military.json`/`behaviour.json`
+  army-unit response tables and weights for the same kind of Cortex-vs-Legion
+  gap found in the factory tables, not another economy angle.**
