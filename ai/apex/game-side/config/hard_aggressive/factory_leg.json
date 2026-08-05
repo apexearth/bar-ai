@@ -202,9 +202,15 @@
 		},
 		"caretaker": 6
 	},
-	"leghp": {
-		"importance": [0.1, 0.0],	
-		"require_energy": false,	
+	"leghp": { //Unused
+		// armhp/corhp (the Armada/Cortex equivalent Hovercraft Platforms) are both
+		// disabled with importance [0.0, 0.0]; leghp was left at [0.1, 0.0], a real,
+		// nonzero selection chance even on pure-land maps. apexearth, watching a
+		// live Legion,Legion game: confirmed via telemetry -- team 2 spent 750 metal
+		// on leghp within the first 2 minutes, on a map with no water for hovercraft
+		// to leverage. Matches armhp/corhp's treatment now.
+		"importance": [0.0, 0.0],
+		"require_energy": false,
 		"income_tier": [20, 30, 40],	
 		"unit":      ["legch",  "legsh", "legner", "legmh", "legah", "legcar"],	
 		"land": {
