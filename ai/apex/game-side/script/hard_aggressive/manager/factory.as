@@ -1958,18 +1958,22 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 // appears twice because it serves both Cortex and Legion; that is safe because
 // AdvCounterpart returns on the first T1_FAC name match and OwnAdvProgress takes
 // a max over the whole array.
-// legap/legaap were missing here entirely -- AdvCounterpart() returns null
-// for any Legion player opening legap, silently disabling the T1-lab-reclaim
-// rush for that opening (see the T1 lab reclaim logic above). Re-added in
-// isolation from the rest of issue 35's Legion batch, which regressed when
-// bundled with unrelated weight changes (see notes/open-issues.md #35/#37)
-// and is being re-tested one change at a time.
+// legap/legaap are deliberately NOT in these arrays. Adding them (so
+// AdvCounterpart() resolves a T2 counterpart and enables the T1-lab-reclaim
+// rush for Legion air openers) was tried in isolation and confirmed, clean
+// and solo, as a severe regression: legion-t1fac-only-16 went 2-14 (12.5%,
+// 95% CI excludes 50%) against a established clean 43.8% baseline -- worse
+// than leaving the "bug" alone. Whatever the mechanism (legap/legaap's
+// cost/build-time/role may make the reclaim trade bad specifically for
+// Legion), this is NOT free to fix the way it looked from the code alone.
+// See notes/open-issues.md #35/#37/#38. Do not re-add without a new,
+// isolated, positive confirmation.
 array<string> T1_FAC = {armlab, armvp, armsy, armap,
                         corlab, corvp, corsy, corap,
-                        leglab, legvp, legsy, legap};
+                        leglab, legvp, legsy};
 array<string> T2_FAC = {armalab, armavp, armasy, armaap,
                         coralab, coravp, corasy, coraap,
-                        legalab, legavp, corasy, legaap};
+                        legalab, legavp, corasy};
 
 // Our best progress toward an advanced plant, 0..1, or -1 if we hold none.
 // Nanoframes count -- commitment is the question the election asks, and the
