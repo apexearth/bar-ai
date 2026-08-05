@@ -2906,3 +2906,29 @@ benchmark's testable surface** (land-only, Comet Catcher). The three
 confirmed fixes (`armlab`, `armvp`, `armnanotct2`) were the real, testable
 opportunities; the rest were either untestable (naval), inert (unused
 factory), or already entangled with other fixes.
+
+## 44. Full special-strategy faction-coverage audit: no new gaps found
+
+Per this session's goal ("ensure our special strategies work on all of the
+factions too"), ran a comprehensive audit of every AngelScript branch on
+`ai.GetSideName()` or hardcoded-unit-name special strategy across
+`commander.as`, `builder.as`, `military.as`, `factory.as`, `air.as` --
+beyond the ones already found/fixed this session (`T1_FAC`/`T2_FAC`,
+`gBomber1`, `legvflak`, `PORC_NAMES_*`, all already covered). **Result:
+no new gaps.** Every remaining faction branch (openers, rez-bot/nano/
+energy-grid/tower-contest/converter/fusion/heavy-AA defs, jammer,
+big-gun, T3 gantry, ground/naval opening picks) has genuine three-way
+coverage. Cases that looked like gaps on the surface turned out to be
+deliberate, documented design: `legasy` doesn't exist as a real unit
+(Legion has no T2 shipyard in this game tree, confirmed via
+`tools/unitdef.py`); Legion's naval T2 constructor/reactor path
+intentionally routes through Cortex's `coracsub`/`corasy` defs (commented
+in `builder.as`); `T3Gantry`'s Legion water fallthrough correctly lands on
+the land `leggant` branch, not a silent Armada default.
+
+**This closes out the "special strategies work on all factions" half of
+this session's goal as thoroughly checked** -- the remaining gap is
+entirely the win-rate side (Legion at ~43.8% vs Cortex's ~85%+), not
+missing/broken strategy coverage. The `commander.as` `Hide` namespace
+finding (an `armcom`/`corcom`-only, no-`legcom` dictionary) is dead code
+inside a block comment, never compiled -- noted but not a live bug.
