@@ -2739,6 +2739,43 @@ sample size. Kept the fix (it's evidence-based, makes Armada's T1/T2 lab
 treatment internally consistent with itself and with Cortex, and isn't
 harmful), but report it honestly as unconfirmed/neutral, not a win --
 resist the temptation to claim progress from a flat result just because
-the mechanism tracing was thorough this time. `build_speed` itself
-remains untouched and is the more promising remaining lead if revisited,
-now that its consumption path is understood.
+the mechanism tracing was thorough this time.
+
+## 42. `armlab` build_speed fix: 62.5% -> 81.2%, the strongest Armada result this session
+
+Follow-up to issue 41/the support-attribute fix: raised `armlab`'s
+`build_speed` override from 4.0 to 15.0, matching `corlab`'s proven value
+(real engine `workertime` is identical between them, 150 -- verified from
+the `.lua` unit defs, so this was never a legitimate stat difference).
+Mechanism traced in `vendor/circuitai` before touching it:
+`FactoryManager.cpp:516-518` overrides `CircuitDef::SetBuildSpeed()`,
+consumed by `BuilderTask.cpp:604-625` for per-unit build-power accounting
+when a unit assists a build task.
+
+`armada-buildspeed-16` (solo, clean, all 16 games completed normally):
+**13-3 decided, 81.2%, 95% CI 57-93% (excludes 50%) -- a real,
+statistically significant effect.** Up from the 62.5% baseline by nearly
+19 points, and now landing inside Cortex's own clean-batch range this
+session (75-88%). This is the strongest, best-evidenced Armada result of
+the whole session -- unlike the `support` attribute (neutral) and unlike
+all three Legion attempts (regressions), this one both traced correctly
+AND measured correctly.
+
+**Why this one probably worked when others didn't**: `build_speed` feeds
+directly into `BuilderTask.cpp`'s build-power accounting, a concrete,
+quantifiable resource-allocation number, not a placement/behavioral
+switch (`support` attribute) or an entire dormant strategy
+(`T1_FAC`/`legvflak`). The magnitude of the fix (4.0 -> 15.0, matching a
+number already proven at Cortex's win rate) is also a much closer analogy
+to `armack`/`armaca` (also both confirmed positive) than to the Legion
+attempts, which either bundled multiple changes or enabled/tagged an
+entire new mechanism rather than correcting a single misconfigured
+number.
+
+**Not yet done**: `armvp`'s `build_speed` (5.0, `corvp`'s is 15.0) has the
+identical signature and was NOT yet raised or tested -- same real-stat
+verification applies (`armvp`/`corvp` workertime both 150). This is the
+clear next test for a future session, one change at a time as always.
+`armnanotct2` (16.0 vs `cornanotct2`'s 8.0, the REVERSE direction -- Armada
+higher) is a different case and untested; do not assume the same fix
+direction applies.
