@@ -2235,7 +2235,7 @@ index ec833e6..2413351 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..21219ba 100644
+index 0d59b65..8050861 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -10,6 +10,7 @@
@@ -2375,7 +2375,24 @@ index 0d59b65..21219ba 100644
  	for (CCircuitUnit* unit : validUnits) {
  		const float sqDist = groupPos.SqDistance2D(unit->GetLastPos());
  		if (sqDist > sqMaxDist) {
-@@ -421,14 +520,25 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -390,7 +489,15 @@ void ISquadTask::Attack(const int frame)
+ void ISquadTask::Attack(const int frame, const bool isGround)
+ {
+ 	const AIFloat3& tPos = GetTarget()->GetPos();
+-	const bool isRepeatAttack = (frame >= attackFrame + FRAMES_PER_SEC * 3);
++	// apexearth: "keeping our units close to their maximum range against
++	// enemies, and to almost always stay moving. standing still leads to
++	// death much quicker." Previously 3s: a squad reaches its computed
++	// standoff position (below) and then holds it -- moving only when the
++	// target's tile/range bucket changes -- for up to 3 full seconds even
++	// though the target is very likely drifting the whole time. Shortened
++	// to 1s so position re-evaluates roughly 3x more often, without going
++	// so low it fights the engine's own per-frame unit AI or spams orders.
++	const bool isRepeatAttack = (frame >= attackFrame + FRAMES_PER_SEC * 1);
+ 	attackFrame = isRepeatAttack ? frame : attackFrame;
+ 
+ 	auto it = rangeUnits.begin()->second.begin();
+@@ -421,14 +528,25 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	int row = 0;
  	for (const auto& kv : rangeUnits) {
  		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();

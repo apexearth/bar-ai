@@ -97,7 +97,7 @@ earlier noisy 16-game read (43.8%, 31.2%) was a real draw from this same
 |---|---|---|---|---|---|---|---|
 | 2026-08-05 | `legion-squadspeed-fix-large96` | `455d1b4` (C++ `SQUAD_SPEED_RATIO` 2.5->3.5) | **96** | 25-70 | 26.0% | **yes** | z=0.09 vs pooled baseline — no effect |
 | 2026-08-05 | `legion-hovercraft-fix-large96` | `bfe5f91` (+`legehovertank`/`leghp` config fixes, no `CheapAA` yet) | 79 decided | 14-65 | **17.7%** | **yes** | CI 72-89% for stable, excludes 50%. NOT isolated from `SQUAD_SPEED_RATIO` — z vs squadspeed-only run = -1.35, not significant alone. Ran in the background past the point apexearth said to stop watching it; real data, flagged not overclaimed. See `open-issues.md` #55. |
-| 2026-08-05 | `legion-cheapaa-carveout-8` | `a8fbfe3` (+`CheapAA` phase-gate carve-out, issue 54) | 8 | 5-3 | 62.5% | **yes** | **Not a valid read on the fix**: `enemyAir(cost)=0.0` for all 8 games, both sides — stock BARb never built air in this matchup, so `CheapAA` had nothing to respond to regardless of the fix. Confirms the documented benchmark gotcha directly. See `open-issues.md` #55. |
+| 2026-08-05 | `legion-cheapaa-carveout-8` | `a8fbfe3` (+`CheapAA` phase-gate carve-out, issue 54) | 8 | 5-3 | 62.5% | **yes** | **MISLABELED — actually Cortex vs Cortex** (forgot `--sides Legion,Legion`; `run_tournament.py` defaults to alternating Armada/Cortex). Not a valid read on anything Legion. `enemyAir(cost)=0.0` for all 8 games confirms the benchmark-opponent-never-builds-air gotcha, but on Cortex, not Legion. See `open-issues.md` #55–56. |
 
 **Nothing tried this session moved this number, with the AA fix's status
 still open.** Five real, mostly well-evidenced win-rate attempts, all
