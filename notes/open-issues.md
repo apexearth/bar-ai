@@ -3546,6 +3546,23 @@ convention already used elsewhere.
 
 ## 55. CheapAA fix confirmed correctly implemented, but THIS benchmark cannot test it -- opponent never builds air; also a concerning large-sample hovercraft-fix regression surfaced
 
+**CORRECTION (see issue 56): the batch first analyzed here was mislabeled.**
+`run_tournament.py --sides` defaults to `Cortex,Cortex` (a deliberate
+choice, per its own `--help` text: "same faction on both sides so the
+faction matchup is not confounded with the variant under test") --
+`legion-cheapaa-carveout-8` was launched without `--sides Legion,Legion`,
+so despite the name every one of its 8 games was actually **Cortex vs
+Cortex**, confirmed via `script.txt`'s `Side=` field after the fact. Not a
+tool bug -- just forgetting to pass the flag for a Legion-targeted test.
+The `enemyAir(cost)=0.0`-in-all-8-games benchmark-limitation finding below
+is still real (re-confirmed on a correctly-faction-tagged Legion rerun,
+`legion-only-cheapaa-8`, issue 56) but every mention of "Legion" in the
+paragraph immediately below should be read as "this specific Cortex
+batch." Left as-was rather than rewritten, so the mistake and its catch
+are both on the record -- see issue 56 for the corrected data and the
+"always grep `Side=` before trusting a faction label, and always pass
+`--sides` explicitly" lesson.
+
 Ran `legion-cheapaa-carveout-8` (8 games, current HEAD incl. the issue-54
 `CheapAA` carve-out) to get a rough read. Result: 5/8 = 62.5% (95% CI
 31-86%, includes 50%). Before reading anything into that number: checked
@@ -3594,3 +3611,70 @@ yet resolved -- would need either a live-watch or a new C++ binding (none
 of `HasDGun()`'s call sites are exposed to AngelScript; adding a
 diagnostic there means a full Docker/ninja rebuild cycle, not a quick
 config/script change).
+
+## 56. Corrected the mislabeled batch, then a real unit-composition audit: legkark fixed and verified, legflak/leginc explained
+
+Per apexearth's request, compared apex's actual built-unit list (`allBuilt=`
+telemetry) against stock BARb's, using the FIRST correctly-faction-tagged
+Legion batch this session (`legion-only-cheapaa-8`, `--sides Legion,Legion`
+explicit -- the batch analyzed in issue 55 turned out to be Cortex vs
+Cortex, a labeling mistake caught mid-analysis: forgot to pass `--sides`,
+and `run_tournament.py`'s default is `Cortex,Cortex`, not an alternating
+default as first assumed. Corrected in place, see issue 55's correction
+note and [[bar-ai-faction-parity-transfer]] for the "always grep `Side=`"
+lesson).
+
+**Result of the real Legion-vs-stock comparison**: apex built 7 units
+stock never did (mostly cheap deterrence/jammer picks), stock built 20
+units apex never did. Investigated the notable ones:
+
+- **`legflak` (Pluto, static AA minigun)**: apex 0/8, stock 2/8. NOT a new
+  bug -- this is `HeavyAA`'s target, already measured net-negative and
+  disabled (`AA_HEAVY_ON = false`, see builder.as ~line 1336) after an
+  earlier Cortex-side test showed it crowding out the economy the same way
+  the twelve-changes session synthesis warned about. Also sits at index 10
+  of Legion's porcupine list, unreachable outside a full porc cluster per
+  the documented `prevent:1` gotcha. Confirmed-inert by design, not by
+  accident.
+- **`legkark` (Karkinos, "Medium Dual-Weapon Infantry Bot")**: apex 0/8,
+  stock 4/8. apexearth, watching a game: "some of legion's strongest front
+  line units - i see we aren't making them... like legkark - nice tanky
+  frontline unit for fragile units to hide behind." Traced it: `legkark`
+  had real weight in `factory_leg.json`'s `leglab.land`/`.air` tables, but
+  ONLY at tier3 (income >= 35/s for land), unlike `legcen` (its frontline
+  sibling) which is weighted from tier1. Confirmed income crossed 35 in
+  several of the 8 games yet `legkark` still never got picked -- tier3-only
+  made it rare even when reachable, since it only ever competed against
+  `leglob`'s dominant 0.60-0.71 share in that one tier. **Fixed**: added
+  tier1 (0.05) and tier2 (0.08) weight, taken from `leglob`'s share,
+  matching `legcen`'s progression. Committed `6c2d0e4`, deployed, verified
+  with a fresh 8-game batch: `legkark` built in 3/8 apex games (up from
+  0/8). Win rate unchanged (25.0% vs the 25.8% pooled baseline) -- same
+  "mechanism confirmed, no win-rate movement" pattern as every other fix
+  this session, but this one is a real, apexearth-confirmed correctness
+  gap closed regardless.
+- **`leginc` (Incinerator, heavy T2 bot)**: apex avg spend 2300 (~1 unit
+  total across 8 games) vs stock 17250 (~7.5 units). Checked with the same
+  rigor as `legkark` and NOT touched: gated behind `legalab`'s tier3
+  (income >= 100/s), and gets strong weight (0.28-0.38) once eligible --
+  a benchmark-income-ceiling issue (same class as the `CheapAA` finding;
+  this benchmark's income rarely sustains 100/s) rather than an authoring
+  gap. Changing it would be tuning for the benchmark's weak economy, not
+  fixing anything real.
+- **`legmstor` (Metal Storage)**: apex 0/8, stock 7/8. `since: 1200`
+  (20 minutes) gates it identically across ALL THREE factions
+  (`armmstor`/`cormstor`/`legmstor` all `since: 1200`) -- not
+  Legion-specific. This batch's median game length was only 16.7-17.1
+  minutes, so most games simply don't run long enough to unlock it for
+  ANY faction. Not investigated further; flagged as another benchmark-
+  length ceiling, not a bug.
+
+**Process lesson, same session**: `tools/expected_units.py` (built earlier
+this session) checks configured-vs-observed at the tool level but wasn't
+used for this pass -- the ad hoc per-game `allBuilt=` diff (comparing
+apex's built-set directly against stock's, not just apex's own config)
+answered "which of THEIR units are we missing" more directly than
+"which of OUR configured units never get built," which is a different
+question. Worth folding a `--compare-to <spec>` mode into
+`expected_units.py` for a future session instead of re-deriving this
+comparison ad hoc each time.
