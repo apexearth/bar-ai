@@ -2482,14 +2482,45 @@ batch**, rather than re-bundling them. The T1_FAC/T2_FAC fix in particular
 is a genuine structural bug (not a weight guess) and is the best candidate
 to re-try first in isolation.
 
+## 38. T1_FAC/T2_FAC legap/legaap fix, re-tested in isolation: also a real regression
+
+Following issue 37's plan (re-test each of issue 35's Legion changes one at
+a time, starting with the T1_FAC/T2_FAC structural bugfix since it looked
+like the most defensible of the four), re-added just `legap`/`legaap` to
+`T1_FAC`/`T2_FAC` (nothing else) and ran `legion-t1fac-only-16` solo,
+clean, all 16 games completed normally: **2-14 decided, 12.5%, 95% CI
+excludes 50%** -- a real, statistically significant effect at this sample
+size, and WORSE than the original four-change bundle's 31.2%.
+
+This is a genuinely surprising result: the code-level case for this fix was
+strong (a missing array entry silently disabling a rush mechanism -- the
+same shape as several confirmed-good fixes this session), but the actual
+in-game effect of turning that mechanism ON for Legion is sharply negative.
+The mechanism is not understood; plausible candidates not yet investigated:
+`legap`/`legaap`'s cost or build-time ratio may make the T1-lab-reclaim
+trade (eating a working T1 plant to rush a T2 one) a bad one specifically
+for Legion, or `AdvCounterpart()`/`OwnAdvProgress()` may interact badly with
+some other Legion-specific air-opening behavior. Reverted (`3d53479`) --
+**do not re-add without a new positive, isolated confirmation**, and if
+revisited, investigate the mechanism (e.g. watch a windowed Legion air-open
+game with this fix active) before assuming the code-level bug was actually
+worth fixing. This is a strong instance of this project's own standing
+lesson: "the path fires" (a rush mechanism now actually activates for
+Legion) is not evidence the change is good.
+
 **Summary for next session**: Cortex remains the reference (~26-1 pattern
 across three independent clean tournaments earlier in the session --
 `corck-revert-confirm-8`, run concurrently with `armada-mirror-armck-8`, is
 the one Cortex batch NOT independently clean; re-confirm it if precision
 matters, though the other three back the same pattern). Armada: real
 progress, ~62.5% clean (`armada-armaca-clean-16`), keep iterating the same
-way Cortex was -- many rounds, one change at a time. Legion: reverted back
-to a clean, confirmed 43.8% baseline; the constructor-parity/T1_FAC fixes
-that seemed well-evidenced by audit were empirically wrong when bundled and
-tested together -- re-test individually before concluding any one of them
-is bad.
+way Cortex was -- many rounds, one change at a time. Legion: back to its
+clean, confirmed ~43.8% baseline after reverting BOTH the weight-tuning
+batch (issue 37) AND the T1_FAC structural fix tested alone (issue 38) --
+two independent, evidence-based attempts this session, both regressions.
+Legion needs a genuinely different hypothesis next session, not another
+variation on constructor weights or the T1_FAC mechanism; the
+still-unconfirmed lead from issue 35 (Legion's economy reads ahead of
+stock's while still losing ~half its games, pointing at army composition
+or combat effectiveness rather than economy) was itself from a corrupted
+batch and should be re-checked cleanly before treating it as a real signal.
