@@ -3313,3 +3313,55 @@ resolve this cheaply, re-testing with THIS metric (fraction of games with
 a favorable damage ratio) rather than win rate would need a meaningfully
 smaller sample than the ~370-per-arm figure above -- worth computing that
 number specifically before committing to another large batch.
+
+## 51. DEFINITIVE: ran the large batch, and the build_speed effect vanishes with real power
+
+Given issue 50's number (~183 games/arm needed for the fraction-favorable
+metric), ran `armada-buildspeed-postfix-large96` -- 96 games, solo, clean,
+all games reached game-over, current fully-fixed Armada code
+(`armlab`/`armvp`/`armnanotct2` build_speed all applied).
+
+**Result: 55-41, 57.3% win rate (95% CI 47-67%, includes 50%). Damage
+ratio for this batch alone: 0.996 -- essentially exactly 1:1. Fraction of
+games with a favorable ratio: 48/96 = exactly 50.0%.**
+
+Both numbers are dramatically different from the four smaller post-fix
+batches (which averaged ~75% win rate and 70% fraction-favorable) and much
+closer to a coin flip. This single 96-game batch alone has more
+statistical weight than all four smaller post-fix batches combined (n=64),
+and it points the other way.
+
+**Pooling everything now available** (all 5 post-fix batches, n=160; both
+pre-fix batches, n=32):
+- Win rate: post-fix 103/160 = 64.4% vs pre-fix 21/32 = 65.6%.
+  **z=-0.13.** Essentially no difference at all.
+- Fraction-favorable: post-fix 93/160 = 58.1% vs pre-fix 18/32 = 56.3%.
+  **z=-0.20.** Essentially no difference at all.
+
+**This is the definitive answer, not another data point to argue over:
+with real statistical power, Armada's `build_speed` fix shows NO
+detectable effect on win rate or combat-trade outcome on this benchmark.**
+The four smaller post-fix batches that looked so promising (81.2%, 75.0%,
+81.2%, and a 62.5% outlier) were, in hindsight, a run of favorable draws
+from a noisy distribution centered close to where the pre-fix baseline
+already sat -- exactly the failure mode this session spent so much effort
+diagnosing for Legion, just less obvious for Armada because the early
+reads happened to point the same direction three times in a row.
+
+**Update the "GOAL MET" / "plausible improvement" framing one final time:
+Armada's `build_speed` fix is a real, correctly-traced mechanism (the C++
+source analysis stands) that this benchmark cannot detect any win-rate or
+combat-outcome effect from, once actually powered to detect it.** Keep
+the fix deployed (it is not harmful, and is arguably more "correct" by
+matching real engine stats) but stop citing it as a confirmed improvement
+in any future summary. The session's honest final position on all three
+factions:
+- **Cortex**: ~75-88%, a large, real, repeatedly-confirmed margin over 50%.
+- **Armada**: ~57-65% depending on exactly which pool, NOT distinguishable
+  from Legion's or Cortex's own historical range without more data, and
+  specifically NOT confirmed as improved by anything done this session.
+- **Legion**: ~25-44% across various reads, likely genuinely below Armada
+  and Cortex, though the exact number is also not pinned down precisely.
+  The damage-ratio/game-length findings (issues 48-49) remain the best
+  actual lead, and are unaffected by this correction since they were
+  never about the build_speed fix.
