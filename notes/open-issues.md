@@ -1747,3 +1747,26 @@ low-confidence secondary source's air/water claims are either moot
 (this project is land-only) or already tracked (issue 5, mobile AA/fighter
 massing). None of this changes any conclusion above or opens a new lever --
 recorded here only so the search is not repeated.
+
+## 26. `livefixes2-16` (n=16, post-8092d3a/493fd27): first batch this session with a CI excluding 50% on the WINNING side
+
+**4-0 decided (100%, 95% CI 51.0%-100.0%). 12/16 hit the time limit.** This
+tests the current shipped state: `phase >= 4` + the three earlier
+team-size-gated fixes (`872473c`/`9a1b249`) + today's three new
+live-diagnosed changes -- rez bots gated on an actual wreck being present
+instead of building unconditionally at t=0 (`8092d3a`), air factories no
+longer falling through to the engine's own uncoordinated bomber ratio pick
+after the assassin's strike releases (`8092d3a`), and the assassin's mass
+threshold scaling with income instead of a fixed 12/8 floor (`493fd27`).
+
+Small n (4 decided) means this is not yet the same statistical weight as
+the larger `gated`/`isolate-latefighter` batches, but it is the FIRST
+result all session where the 95% CI excludes 50% in apex's favor rather
+than straddling it or excluding it against apex. Worth a second batch to
+confirm before calling this "reliably beats," per the same discipline
+applied to every other result this session -- but this is the strongest
+single data point so far.
+
+(A first attempt at this exact batch, `livefixes-16`, was interrupted at
+14/16 games by an unrelated machine reboot mid-session and discarded
+rather than trusted at a partial count.)
