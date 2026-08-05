@@ -3256,3 +3256,29 @@ games) -- the opening is not where to look; the 15-25 minute window is.
 A live-watched game should focus attention there specifically, and
 `combat_events.py`/a similar tool filtered to that window (not the first
 20 minutes broadly) is the more precise next step.
+
+**One more cut, then a caveat about the cuts themselves**: checked
+`techStart` (near-identical, 16.6 vs 16.4 min average -- teching timing
+is NOT the differentiator) and `mT2` metal-in-T2-stuff at minute 18
+(favorable ahead by ~19%, 1524 vs 1282) between the two groups. The T2
+investment gap is suggestive but the timing evidence rules out "teching
+late" as the mechanism -- both groups start T2 at the same time, they
+just end up with different amounts of it invested by minute 18, which is
+as consistent with "the ongoing damage-ratio decline is starving T2
+investment" as "starved T2 investment is causing the decline." Cannot
+distinguish cause from effect with this data.
+
+**Honest caveat on this whole issue-48/49 line of investigation**: all of
+these cuts (economy lead, damage ratio, game length, top-unit
+composition, tech timing, T2 investment) were computed against the SAME
+32 games (two 16-game baseline batches). Slicing one fixed, fairly small
+dataset this many different ways risks finding patterns that are partly
+post-hoc/multiple-comparisons artifacts, not independently confirmed
+effects -- unlike the win-rate corrections in issues 45-47, none of these
+specific numeric splits (game-length gap, T2-investment gap, the
+minute-14 divergence point) have been checked against a THIRD independent
+batch. The overall shape (economy ahead, damage ratio predicts wins,
+divergence happens mid-game) is a much more useful and specific starting
+hypothesis for a future session than anything available before this
+analysis -- but treat the exact numbers (minute 14, 19% T2 gap, etc.) as
+approximate, not precise, until re-confirmed on new data.
