@@ -3490,3 +3490,107 @@ signal that whatever is actually holding Legion at ~25.8% is not any
 single mechanism this kind of targeted fix can reach -- worth treating as
 essentially confirmed for a future session, rather than assuming the 6th
 attempt will be different.
+
+## 54. CheapAA structurally unreachable pre-T2 -- carved out of the `gLastPhase>=4` gate; D-gun investigated, found symmetric
+
+apexearth live-watched two more games (2026-08-05) and reported, in order:
+hovercraft still building on a no-water map (already fixed, issue 53, not
+yet confirmed at scale), Legion commanders never D-gunning while Cortex's
+reliably do, and no AA getting built against active mosquito-gunship
+pressure ("I didn't see us making AA to fight against that... check it...
+fix it").
+
+**AA: root cause found and fixed.** Added a diagnostic log to `CheapAA()`
+(`builder.as`) and ran a 10-minute smoke test -- it never fired. Traced why:
+`CheapAA`/`HeavyAA`/`Pulsar`/the eco-converter cluster are only called from
+inside `if (Factory::gLastPhase >= 4)`, a gate whose justification (issue
+15, "P(>=6 wins in 10 | baseline 7.9%) = 0.00004") is real but was measured
+for the cluster as a whole. Phase telemetry (`apexphase:` log lines) from
+the same watched game confirms `gHaveT2` (and so phase>=4) stayed at 0 for
+the ENTIRE pre-T2 window, every team, every sample -- so the whole cluster,
+including AA, was unreachable for exactly the early-game window mosquito
+gunships punish.
+
+`CheapAA` is a poor fit for that gate on its own merits, independent of
+this bug: it's a tightly self-limited reactive deterrent (`enemyAir >= 1`
+required -- a real observed threat, not economic forecasting -- capped at
+`AA_MIN..AA_MAX`, throttled by `AA_PERIOD`), unlike `HeavyAA`/`Pulsar`/eco
+converters, which are open-ended investment decisions the phase gate was
+actually designed to defer. Carved `CheapAA` out into an unconditional
+check (still behind all its own internal gates) that runs before the
+`gLastPhase>=4` block, leaving `HeavyAA`/`Pulsar`/eco converters gated as
+before. Smoke-tested clean: `cheap-aa armrl standing=1/2` fired at 6.8
+minutes with `haveT2=0`, no AngelScript compile errors, variant loaded on
+all 16 seats. Committed `a8fbfe3`. 8-game batch (`legion-cheapaa-carveout-8`)
+launched to get a rough read; needs a larger batch before trusting any
+win-rate delta given this session's noise floor (see
+[[bar-ai-faction-parity-transfer]]).
+
+**D-gun: investigated, found no code-level asymmetry.** Compared
+`armcom.lua`/`legcom.lua`'s `disintegrator` weapondef block byte-for-byte
+-- identical (`weapontype = "DGun"`, `commandfire = true`, same damage/
+reload/energy cost). `builder.as`'s retreat trigger (`COM_RETREAT_HEALTH =
+0.85f`, `EnqueueRetreat()`) has no faction-specific branch. CircuitAI's
+`CCircuitDef::Init` computes `hasDGun` from `wd->IsManualFire()` on the
+weapon def, not from unit-def ordering, so the fact Legion's commander has
+a 4th weapon slot (AA missile) after the D-gun doesn't affect detection.
+**Did not find the bug** -- this is not a "confirmed non-issue," just a
+"the obvious places are symmetric." Needs either a targeted D-gun-fire
+diagnostic log (same pattern as the AA one) or another live-watched game
+to catch it in the act, rather than more code reading without new data.
+
+**commander.json Legion entry**: re-confirmed not a bug. `commander_leg.json`
+has a correct `legcom` entry; apexearth's concern was resolved by finding
+the per-faction override file, matching the `factory.json`/`factory_leg.json`
+convention already used elsewhere.
+
+## 55. CheapAA fix confirmed correctly implemented, but THIS benchmark cannot test it -- opponent never builds air; also a concerning large-sample hovercraft-fix regression surfaced
+
+Ran `legion-cheapaa-carveout-8` (8 games, current HEAD incl. the issue-54
+`CheapAA` carve-out) to get a rough read. Result: 5/8 = 62.5% (95% CI
+31-86%, includes 50%). Before reading anything into that number: checked
+every game's `AA-gate` diagnostic line and found `enemyAir(cost)` was
+**0.0 for the entire game, in all 8 matches, both sides.** Stock BARb
+simply never builds air on this specific benchmark matchup (Legion apex vs
+BARb stable, Comet Catcher). `CheapAA` cannot fire if there is nothing to
+build it against, fix or no fix -- so this 8-game batch cannot be read as
+evidence for or against the fix at all; it's pure noise, same distribution
+as every other unrelated Legion batch this session. Matches the standing
+documented gotcha (`docs/10-bar-game-concepts.md`/CLAUDE.md, item 8):
+"Behaviours gated on income/enemy air never fire here at all" -- confirmed
+directly, not just cited. **No further tournament batches against this
+specific matchup will validate the AA fix.** Either watch a hosted-style
+game live (per the "apexearth is faster than the benchmark" section) or
+find/construct a benchmark opponent that actually builds air.
+
+**Separately, found while pulling comparison data**: `legion-hovercraft-
+fix-large96` (tournaments/20260805-123947-..., 79 games decided, commit
+`bfe5f91` -- `SQUAD_SPEED_RATIO` + `legehovertank`/`leghp` fixes, no
+`CheapAA` yet) finished at **17.7% (14-65)**, below the 25.8% pooled
+baseline. z vs pooled baseline (33/128) = -1.35 -- not significant alone,
+but z vs the `SQUAD_SPEED_RATIO`-only large batch (25/95=26.3%, issue 53)
+= -1.35 also not significant, but both point the same (worse) direction
+and neither pairing is small. This run was in flight when apexearth said
+not to bother waiting on it (context: mid-conversation), so it was never
+intended to be a reported result -- but it completed to 79/96 anyway and
+is real data. Flagging rather than either hiding it or overclaiming it:
+NOT proven as a regression, but notably the worst of the fixes-combined
+reads. Given this session's pattern (issue 53's "five real fixes, zero
+confirmed effect"), a sixth negative-looking read is easier to explain as
+more of the same noise than as a real harm from the hovercraft fixes
+specifically -- but it has NOT been isolated (hovercraft fixes were never
+tested alone, only bundled with SQUAD_SPEED_RATIO). If a future session
+wants to close this out, test `legehovertank`/`leghp` alone, isolated from
+`SQUAD_SPEED_RATIO`, at large-batch scale.
+
+**Status of this session's Legion work**: `CheapAA` fix is a confirmed-
+correct mechanism fix (verified by direct log inspection, not inference)
+that this benchmark cannot score. `legehovertank`/`leghp` are confirmed-
+correct config fixes (matches Armada/Cortex's existing treatment) with an
+unresolved, not-yet-isolated large-sample result trending negative.
+`SQUAD_SPEED_RATIO` remains a confirmed-correct, win-rate-neutral C++ fix.
+D-gun: investigated (issue 54), found symmetric in the obvious places, not
+yet resolved -- would need either a live-watch or a new C++ binding (none
+of `HasDGun()`'s call sites are exposed to AngelScript; adding a
+diagnostic there means a full Docker/ninja rebuild cycle, not a quick
+config/script change).

@@ -96,17 +96,25 @@ earlier noisy 16-game read (43.8%, 31.2%) was a real draw from this same
 | date | tournament | commit | games | result | win% | solo? | notes |
 |---|---|---|---|---|---|---|---|
 | 2026-08-05 | `legion-squadspeed-fix-large96` | `455d1b4` (C++ `SQUAD_SPEED_RATIO` 2.5->3.5) | **96** | 25-70 | 26.0% | **yes** | z=0.09 vs pooled baseline — no effect |
+| 2026-08-05 | `legion-hovercraft-fix-large96` | `bfe5f91` (+`legehovertank`/`leghp` config fixes, no `CheapAA` yet) | 79 decided | 14-65 | **17.7%** | **yes** | CI 72-89% for stable, excludes 50%. NOT isolated from `SQUAD_SPEED_RATIO` — z vs squadspeed-only run = -1.35, not significant alone. Ran in the background past the point apexearth said to stop watching it; real data, flagged not overclaimed. See `open-issues.md` #55. |
+| 2026-08-05 | `legion-cheapaa-carveout-8` | `a8fbfe3` (+`CheapAA` phase-gate carve-out, issue 54) | 8 | 5-3 | 62.5% | **yes** | **Not a valid read on the fix**: `enemyAir(cost)=0.0` for all 8 games, both sides — stock BARb never built air in this matchup, so `CheapAA` had nothing to respond to regardless of the fix. Confirms the documented benchmark gotcha directly. See `open-issues.md` #55. |
 
-**Nothing tried this session moved this number.** Five real, mostly
-well-evidenced attempts, all resolved to "no confirmed win-rate effect"
-once properly powered: constructor weight bundle, `T1_FAC`/`T2_FAC`,
-`legvflak` role tag, `leggant` build_speed, and `SQUAD_SPEED_RATIO` (a
-C++ fix verified against real cross-faction unit-speed data). Two
-additional config fixes (`legehovertank`, `leghp` — both hovercraft
-units getting built on land maps with no water) were deployed based on
-apexearth live-watching two games and catching them directly; these are
-correctness fixes independent of the win-rate question, not yet
-tournament-confirmed at scale.
+**Nothing tried this session moved this number, with the AA fix's status
+still open.** Five real, mostly well-evidenced win-rate attempts, all
+resolved to "no confirmed win-rate effect" once properly powered:
+constructor weight bundle, `T1_FAC`/`T2_FAC`, `legvflak` role tag,
+`leggant` build_speed, and `SQUAD_SPEED_RATIO` (a C++ fix verified against
+real cross-faction unit-speed data). `legehovertank`/`leghp` (hovercraft
+units getting built on land maps with no water) are correctness fixes
+independent of the win-rate question, deployed from apexearth live-
+watching two games — but the one large-sample read available for that
+code state (17.7%, bundled with `SQUAD_SPEED_RATIO`) trends the worst of
+any Legion result this session and is not yet isolated or explained.
+`CheapAA`'s phase-gate fix (issue 54) is a confirmed-correct mechanism —
+verified by direct log inspection that it now fires pre-T2 — but this
+benchmark's opponent doesn't build air in this matchup, so it cannot be
+win-rate tested here at all; needs a live-watched game or a different
+benchmark opponent to confirm.
 
 ## Cross-faction (not directly comparable to the tables above)
 
