@@ -2202,3 +2202,37 @@ race the count-only FACTORY_TYPE_CAP still had -- apexearth watched it live,
 teal reaching 7-8 bot labs and a 5th queuing at count=4) and the T2-con
 parity fix, tested separately per standing discipline, once the current
 windowed watch match clears.
+
+## 34. `racefix-t2con-16`: third strong batch, 6-1 decided (85.7%), combined 26-1 across three batches
+
+Tests both the race-closing spacing gate (`38c9eb1`, closes the async-count
+race apexearth caught live -- "teal has 7 or 8 t1 botlabs") and the
+Armada/Cortex T2-constructor parity fix (`d20592b`, from the deep-analysis
+workflow) deployed together. **6-1 decided (85.7%, 95% CI 49-97%)**, 9/16
+to time limit. The CI's lower bound (49%) just barely still touches 50%,
+so this batch alone is not independently conclusive -- but it is the
+THIRD consecutive strong batch, and combined with `factorycap-16` (11-0)
+and `factorycap-confirm-16` (9-0): **26 apex wins, 1 stable win, 27
+decided across three independent 16-game tournaments (96.3%)**.
+
+Cannot cleanly separate the race-fix's own contribution from the T2-con
+fix's in this batch (both deployed together, per standing note about
+deploy bundling working-tree state) -- but neither shows any sign of
+having hurt, and the T2-con fix in particular targets a real, confirmed,
+session-long bug (Cortex's coravp shipped with essentially zero T2
+constructor weight, 0.01/0.02 vs Armada's correct 0.55/0.28), so a
+positive result here is expected rather than surprising.
+
+Separately: apexearth, watching a live 8v8 (matches/_engine, Supreme
+Isthmus), caught that apex was playing all-Armada against stable's
+all-Cortex, and apex's average mex count trailed stable's roughly 2:1
+(7.4 vs 14.6, several Armada players stuck at 2-4 mex while others were
+fine at 11-20) -- including the air-slot player's already-documented
+14-minute total economic freeze. A dedicated faction-parity audit
+workflow (Armada/Cortex/Legion, three angles: economy config weights,
+cross-faction unitdef verification, script-logic/opener branching) is
+running as of this entry to find what's actually different for Armada.
+This session's entire benchmark has run Cortex vs Cortex, so an
+Armada-specific bug could plausibly have survived undetected the whole
+time -- CLAUDE.md's own "Faction parity" section already names this
+exact failure mode as recurring in this codebase.
