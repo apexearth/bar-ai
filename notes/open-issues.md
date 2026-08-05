@@ -2876,18 +2876,33 @@ specifically -- this session exhausted the "audit config, find gap, fix
 it" approach across four independent, well-evidenced attempts with a
 100% failure rate.
 
-**Remaining Armada `build_speed` leads, verified but not yet tested**: a
+**Remaining Armada `build_speed` leads -- checked, mostly closed out.** A
 full (unfiltered) scan found several more `armXXX`/`corXXX` `build_speed`
-gaps beyond the three already confirmed, but all much smaller in magnitude
-(1.1-1.6x, vs the 2-4.5x gaps behind the three confirmed fixes) --
-`armack`=10/`corack`=9, `armacv`=10/`coracv`=12.5, `armamsub`=8/
-`coramsub`=7.5, `armasy`=10/`corasy`=15, `armck`=5/`corck`=4, `armcv`=7/
-`corcv`=4.5, `armfhp`=6/`corfhp`=10, `armhp`=6/`corhp`=10, `armplat`=8/
-`corplat`=10, `armsy`=5/`corsy`=8. Verified real workertime is identical
-for the two largest (`armasy`/`corasy` both 300, `armsy`/`corsy` both
-150), so these are real mismatches by the same evidence standard as the
-confirmed fixes, just smaller. Not tested this session (diminishing
-signal-to-noise at this magnitude, and this session already ran a very
-large number of tournaments) -- worth testing in a future session,
-`armasy`/`armsy` first since those two are verified, one at a time as
-always. The others' real stats were not checked.
+gaps beyond the three confirmed fixes, all smaller magnitude (1.1-1.6x vs
+2-4.5x). Followed up on each:
+- `armasy`/`corasy`, `armsy`/`corsy`, `armplat`/`corplat`,
+  `armfhp`/`corfhp` -- all `units\*Buildings\SeaFactories\` (naval
+  shipyards/seaplane platforms/hovercraft-from-water). This benchmark runs
+  on Comet Catcher, a land map, and this project's own established
+  guidance is that water-map testing isn't valid data here (see
+  `bar-ai-map-selection` memory) -- **not testable on this benchmark, not
+  a useful lead for the current test setup.**
+- `armhp`/`corhp` (Hovercraft Platform, the one `LandFactories` entry in
+  this group, real workertime confirmed identical at 150) -- both marked
+  `//Unused` in `factory.json`'s weight tables. **This AI never builds
+  this factory type at all**, so its `build_speed` value has zero effect
+  regardless of the config mismatch. Closed, no action needed.
+- `armack`/`corack`, `armacv`/`coracv`, `armamsub`/`coramsub`, `armck`/
+  `corck`, `armcv`/`corcv` -- these overlap with units already extensively
+  re-tuned this session via factory-weight fixes (T1/T2 constructors); a
+  separate `build_speed` pass on the same units risks conflating
+  attribution with already-confirmed weight fixes. Not pursued further
+  this session -- if revisited, treat as a fresh, fully isolated test on
+  top of the current (already-fixed) weight baseline, not a leftover from
+  this list.
+
+**Net: the `build_speed` mechanism appears to be exhausted for this
+benchmark's testable surface** (land-only, Comet Catcher). The three
+confirmed fixes (`armlab`, `armvp`, `armnanotct2`) were the real, testable
+opportunities; the rest were either untestable (naval), inert (unused
+factory), or already entangled with other fixes.
