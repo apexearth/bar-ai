@@ -3282,3 +3282,34 @@ divergence happens mid-game) is a much more useful and specific starting
 hypothesis for a future session than anything available before this
 analysis -- but treat the exact numbers (minute 14, 19% T2 gap, etc.) as
 approximate, not precise, until re-confirmed on new data.
+
+## 50. Required sample size for the Armada effect, and the same continuous-metric trick applied to Armada
+
+**Required sample size**: computed the games-per-arm needed for 80% power
+to detect the suspected Armada effect (pooled pre-fix 65.6% vs pooled
+post-fix 75%, alpha=0.05): **~370 games per arm.** At this benchmark's
+measured throughput (16 games in ~600-1000s with 3 workers), that is
+many hours per arm -- not practical to resolve via more win-rate batches
+in a normal session. This is the concrete number behind "stop running
+16-game batches to settle this" from issue 46's meta-lesson.
+
+**Applied Legion's damage-ratio trick to Armada's existing data instead**
+(all 6 clean Armada batches, no new tournaments): per-game favorable/
+unfavorable damage ratio predicts winning for Armada too, and about as
+strongly as it did for Legion -- pre-fix: 16W/2L when favorable, 5W/9L
+when unfavorable; post-fix: 42W/3L when favorable, 6W/13L when
+unfavorable. Checked the more specific hypothesis this suggests: does
+the `build_speed` fix change the FRACTION of games that end up
+favorable, rather than the overall win rate? Pre-fix 18/32 (56%) vs
+post-fix 45/64 (70%) games favorable: **z=-1.37 (p~0.17)** -- closer to
+significant than the raw win-rate comparison (z=-0.96) but still not
+conventionally significant.
+
+**Conclusion**: this fraction-favorable metric is a more sensitive lens
+than win rate on the data already in hand, and mildly supports the
+build_speed fix doing something real (more games end up with Armada
+trading favorably), but is not itself proof. If a future session wants to
+resolve this cheaply, re-testing with THIS metric (fraction of games with
+a favorable damage ratio) rather than win rate would need a meaningfully
+smaller sample than the ~370-per-arm figure above -- worth computing that
+number specifically before committing to another large batch.
