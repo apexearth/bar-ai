@@ -2426,3 +2426,21 @@ Armada-armaca/Legion-bomber-revert without re-confirmation -- the underlying
 code changes and their smoke-tests are still valid (compile-clean, correct
 faction loaded), only the win-rate/composition NUMBERS from concurrent
 batches are in question.
+
+**First clean re-run, `legion-bomber-revert-clean-16` (solo, no concurrent
+tournament)**: 5-10 decided (31.2%, played alone this time so trustworthy).
+This is the current Legion state -- all of issue 35's fixes (armack/legcv/
+legfus/T1_FAC) plus the reverted bomber mapping (back to `legkam`) -- and it
+is WORSE than the 43.8% `legion-t2con-16` reported for the identical
+armack/legcv/legfus/T1_FAC-only state. But `legion-t2con-16` was one half of
+a corrupted concurrent pair (with `armada-t2con-16`), so **that 43.8% number
+cannot be trusted either** -- there is no clean pre-fix Legion baseline to
+compare against; the very first Legion,Legion tournament this session
+(`legion-t2con-16`) was itself contaminated. Honest state as of this
+session's end: Legion sits around 31% in the one clean read available,
+issue 35's fixes are unconfirmed (never validated against a clean
+baseline), and getting a real answer needs a fresh, entirely solo batch
+run against a pre-issue-35 build, which was not done this session. Do not
+report Legion's fixes as working or not-working from this session's data
+-- report the tournament-contamination finding (issue 37) as the reason
+why, and re-baseline next session.
