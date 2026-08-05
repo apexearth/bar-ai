@@ -2932,3 +2932,75 @@ entirely the win-rate side (Legion at ~43.8% vs Cortex's ~85%+), not
 missing/broken strategy coverage. The `commander.as` `Hide` namespace
 finding (an `armcom`/`corcom`-only, no-`legcom` dictionary) is dead code
 inside a block comment, never compiled -- noted but not a live bug.
+
+## 45. CRITICAL CORRECTION: Legion's baseline itself swings ~13 points with zero code changes -- re-read issues 37-43 accordingly
+
+Ran `legion-baseline-stability-check-16` -- the exact same, unchanged
+code as `legion-pre-issue35-baseline-16` (the "clean 43.8% baseline"
+every Legion fix this session was compared against), re-run solo and
+clean with no other changes at all. Result: **5-11 decided, 31.2%** --
+NOT 43.8%. A 12.6-point swing with zero code changes between two clean,
+solo, 16-game batches of the identical build.
+
+**This means the whole "four-for-four Legion regressions" narrative
+(issues 37-39, 43) needs to be re-read with real statistical caution,
+not treated as settled.** Every one of those results was compared against
+a SINGLE 43.8% baseline reading and judged "regressed" or "confirmed
+worse" using a 95% CI against a fixed 50% (the coin-flip line vs stock
+BARb) -- the right test for "does apex beat stock," but NOT the right
+test for "did apex's OWN performance get worse from this fix," which
+needs comparison against the baseline's own sampling distribution, not a
+single point estimate. Redid that comparison properly (two-proportion
+z-test, pooling both baseline reads into n=32 as the reference):
+
+| result | win% | z vs pooled baseline (37.5%, n=32) | verdict |
+|---|---|---|---|
+| constructor-weight bundle (issue 37) | 31.2% | z=-0.43 | **NOT distinguishable from baseline noise** |
+| T1_FAC/T2_FAC alone (issue 38) | 12.5% | z=-1.80 (p~0.07) | borderline, closest to a real effect, still short of conventional significance |
+| legvflak role tag (issue 39) | 25.0% | z=-0.87 | **NOT distinguishable from baseline noise** |
+| leggant build_speed (issue 43) | 18.8% | z=-1.32 | **NOT distinguishable from baseline noise** |
+
+**Only the T1_FAC/T2_FAC rush-enabling fix (issue 38) still looks like it
+might be a real regression** -- and even that is short of the
+conventional p<0.05 bar with this sample size. The other three
+"confirmed regressions" this session -- including the entire basis for
+the "even a mechanism proven robust for Armada regresses Legion" claim
+(issue 43's `leggant` result) -- **cannot be distinguished from ordinary
+sampling noise around Legion's own baseline with the data actually
+collected.**
+
+**Why this happened**: this project's own documented noise floor
+(`bar-ai-benchmark-noise` memory: "10-game tournaments swung 60%->10% on
+an unchanged AI") was known and cited throughout this session, but was
+applied inconsistently -- every comparison used "CI excludes 50%" as the
+bar for "real," which answers "does this beat stock" but was silently
+treated as also answering "is this different from our own prior batch,"
+without re-deriving the correct test or re-checking against a second
+baseline sample. Cortex's own results (three-plus independent clean
+batches, all landing in a tight 75-88% band) never showed this problem,
+which is presumably why the pattern wasn't caught until directly testing
+baseline stability for Legion specifically.
+
+**What this does NOT undo**: Armada's three `build_speed` fixes (issue
+42) were each compared against Armada's OWN prior clean batch
+(`armada-armaca-clean-16`, 62.5%) as the reference, not a single distant
+number, and the effect sizes there (62.5%->75-81%, repeated three times
+independently) are much larger than anything in Legion's noise band --
+those results are much more likely to be real, though even they were not
+checked against a second, independent Armada baseline re-run the way
+Legion's was here. **A second Armada baseline stability check is the
+correct next step to fully validate issue 42 by the same standard now
+being applied to Legion.**
+
+**What this means going forward**: Legion's true baseline win rate against
+stock BARb on this benchmark is not well pinned down -- somewhere in the
+25-45% range based on two reads, wide enough that single 16-game batches
+cannot reliably detect anything but a large effect. Future Legion testing
+needs either larger sample sizes (32+ games) or multiple independent
+baseline reads before any single-batch result should be called a
+"confirmed regression." The `legkam`/legvflak/leggant reverts should
+probably STAY reverted (reverting to a known, if noisy, baseline is the
+conservative choice), but the confidence level attached to "this
+specific change caused this specific regression" should be downgraded
+across the board except for T1_FAC, which is still the best-supported (if
+not fully conventional) of the four.
