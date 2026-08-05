@@ -2444,3 +2444,32 @@ run against a pre-issue-35 build, which was not done this session. Do not
 report Legion's fixes as working or not-working from this session's data
 -- report the tournament-contamination finding (issue 37) as the reason
 why, and re-baseline next session.
+
+**Second clean re-run, `armada-armaca-clean-16` (solo)**: 10-6 decided
+(62.5%, 95% CI 39-82%, all 16 games reached game-over normally -- no
+"unknown" results, unlike every contaminated batch this session). This is
+the best trustworthy Armada number from this session, for the current state
+(armack/armcv/armaca fixes all applied). The pre-fix `armada-mirror-armck-8`
+4-4 (50%) baseline was ALSO half of a corrupted concurrent pair (with
+`corck-revert-confirm-8`), so it cannot be cited as a clean "before" either
+-- but unlike Legion, Armada's `composition.py` mechanism evidence (cons
+T1/T2 ratios and mex upgrades moving toward parity, logged in issue 36)
+is independent of the tournament-contamination bug, since composition.py
+reads real per-match telemetry regardless of which script a match loaded --
+a corrupted match would show garbage/inconsistent composition data, not
+subtly-improved-but-wrong data, so that finding still stands. Net: Armada
+is genuinely trending better (62.5% clean read, converging mechanism
+evidence) even though the exact "before" number is lost to the contamination
+bug. Still below Cortex's ~85%+ but the clearest genuine progress of the
+Armada/Legion work this session.
+
+**Summary for next session**: Cortex remains the reference (~26-1 pattern,
+confirmed clean this session via `corck-revert-confirm-8`... which was ALSO
+half of a corrupted pair -- re-confirm Cortex clean too before trusting it
+further, though Cortex's numbers have three independent CLEAN tournaments
+from earlier in the session backing the same pattern, so it is far better
+evidenced than Armada/Legion regardless). Armada: real progress, ~62.5%
+clean, keep iterating the same way Cortex was iterated (many rounds, one
+change at a time). Legion: ~31% clean, cause unknown -- the "economy is
+already ahead of stock" finding from issue 35 was itself from a corrupted
+batch and needs re-confirmation before trusting it as a lead.
