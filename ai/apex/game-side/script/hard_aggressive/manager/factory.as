@@ -355,7 +355,7 @@ const int BOTLAB_FROM = 8 * MINUTE;
 // By name, not by role: BuilderManager routes these through UseAs::REZZER, but
 // the config ROLES disagree across factions ("support" for Armada and Legion,
 // "rezzer" for Cortex), so GetRoleDef is not a reliable way to ask for one.
-const int REZ_FLOOR    = 4;
+const int REZ_FLOOR    = 8;
 const int REZ_SPACING  = 20 * SECOND;
 int gNextRez = 0;
 string armrectr("armrectr"); string cornecro("cornecro"); string legrezbot("legrezbot");
@@ -1196,9 +1196,18 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		if ((lab !is null) && (rez !is null) && (unit.circuitDef.id == lab.id)
 			&& rez.IsAvailable(ai.frame) && (rez.count < REZ_FLOOR))
 		{
-			const AIFloat3 wreck = ai.GetBestWreckPos(unit.GetPos(ai.frame),
-					Builder::WRECK_SEARCH, Builder::WRECK_MIN);
-			if (wreck.x >= 0.f) {
+			// The wreck-search only gates the FIRST one. apexearth: "earlier
+			// you changed the resurrection box to be less, but I think that
+			// we have too few now." Once at least one is already standing,
+			// real reclaim opportunity has already been proven for this
+			// game -- requiring a wreck to be in range at this EXACT tick
+			// before topping the rest of the floor back up just leaves it
+			// under-filled between fights, which is not what the original
+			// fix was for (that was about not building any at t=0, before
+			// anything had died at all).
+			const bool armed = (rez.count > 0) || (ai.GetBestWreckPos(
+					unit.GetPos(ai.frame), Builder::WRECK_SEARCH, Builder::WRECK_MIN).x >= 0.f);
+			if (armed) {
 				IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
 						Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
 						rez, unit.GetPos(ai.frame), 0.f));
