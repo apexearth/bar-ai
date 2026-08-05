@@ -199,7 +199,17 @@
 				"attribute": ["support", "solo"],
 				"limit": 1,
 				"build_mod": 1000.0,
-				"build_speed": 45.0 //bp 300
+				// Same build_speed-mismatch pattern as this session's three confirmed
+				// Armada wins (armlab/armvp/armnanotct2, see notes/open-issues.md #42):
+				// leggant/corgant real workertime is identical (600 for both, verified
+				// from the .lua defs), but Legion's override was 4.5x higher (45.0 vs
+				// corgant's 10.0). Lowered to match. Structurally different from this
+				// session's three Legion regressions (which enabled new mechanisms or
+				// redistributed weights across many units) -- this corrects a single
+				// mismatched number, the same category that worked 3/3 for Armada.
+				// Still cautious: test in isolation, revert immediately if it
+				// regresses.
+				"build_speed": 10.0 //bp 300
 			},
 			//"leggantuw": {
 			//	"role": ["static"],
