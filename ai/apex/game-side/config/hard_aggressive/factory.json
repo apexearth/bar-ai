@@ -73,14 +73,21 @@
 		"income_tier": [1, 30, 60, 80],
 
 		"unit":      ["armack", "armfark", "armfast", "armzeus", "armfboy",	"armmav", "armfido", "armaak", "armscab",	"armmark", "armaser", "armspid", "armsptk", "armsnipe", "armvader", "armamph"],
-								
-		"land": {               
-			"tier0": [0.25, 0.15, 0.14, 0.00, 0.00, 0.10, 0.40, 0.02, 0.00, 0.01, 0.01, 0.05, 0.05, 0.10, 0.00, 0.00],
-			"tier1": [0.25, 0.15, 0.10, 0.15, 0.05, 0.30, 0.36, 0.02, 0.00, 0.01, 0.01, 0.05, 0.05, 0.14, 0.20, 0.00],
-			"tier2": [0.25, 0.15, 0.20, 0.20, 0.15, 0.15, 0.30, 0.03, 0.01, 0.01, 0.01, 0.05, 0.05, 0.20, 0.10, 0.00],			
-			"tier3": [ 0.35,     0.15,		 0.20,      0.20,     0.30,		0.00,	   0.15,      0.03,     0.01,		0.01,     	0.01,		0.05,      0.05,      0.20,		0.00,       0.00],
-			"tier4": [ 0.35,     0.15,		 0.20,      0.20,     0.30,		0.00,	   0.15,      0.03,     0.01,		0.01,     	0.01,       0.05,      0.05,      0.20,		0.00,       0.00]			
-		},                      
+		// armack (T2 constructor) ran flat/tiered at 0.25-0.35 while corack -- same
+		// role, one lab over -- has sat at a proven 0.01-0.02 across this whole
+		// session's 26-1 Cortex record (coralab, above). Same shape as the
+		// armck/legck redirect: Cortex is the only faction with validated data, so
+		// armack comes down to match rather than corack going up. Freed share funnels
+		// to armfido (dominant tier0-2 unit) and armfboy (dominant tier3-4), mirroring
+		// how corthud absorbs corck's freed share in corlab. Untested for Armada --
+		// confirm with an Armada,Armada batch.
+		"land": {
+			"tier0": [0.02, 0.15, 0.14, 0.00, 0.00, 0.10, 0.63, 0.02, 0.00, 0.01, 0.01, 0.05, 0.05, 0.10, 0.00, 0.00],
+			"tier1": [0.02, 0.15, 0.10, 0.15, 0.05, 0.30, 0.59, 0.02, 0.00, 0.01, 0.01, 0.05, 0.05, 0.14, 0.20, 0.00],
+			"tier2": [0.02, 0.15, 0.20, 0.20, 0.15, 0.15, 0.53, 0.03, 0.01, 0.01, 0.01, 0.05, 0.05, 0.20, 0.10, 0.00],
+			"tier3": [ 0.02,     0.15,		 0.20,      0.20,     0.63,		0.00,	   0.15,      0.03,     0.01,		0.01,     	0.01,		0.05,      0.05,      0.20,		0.00,       0.00],
+			"tier4": [ 0.02,     0.15,		 0.20,      0.20,     0.63,		0.00,	   0.15,      0.03,     0.01,		0.01,     	0.01,       0.05,      0.05,      0.20,		0.00,       0.00]
+		},
 
 		"water": {                
 			"tier0": [ 0.25,     0.15,		 0.30,      0.00,     0.03,		0.07,	   0.50,      0.00,     0.00,		0.01,     	0.01,       0.05,      0.05,      0.00, 	0.00,		0.00],

@@ -1960,10 +1960,10 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 // a max over the whole array.
 array<string> T1_FAC = {armlab, armvp, armsy, armap,
                         corlab, corvp, corsy, corap,
-                        leglab, legvp, legsy};
+                        leglab, legvp, legsy, legap};
 array<string> T2_FAC = {armalab, armavp, armasy, armaap,
                         coralab, coravp, corasy, coraap,
-                        legalab, legavp, corasy};
+                        legalab, legavp, corasy, legaap};
 
 // Our best progress toward an advanced plant, 0..1, or -1 if we hold none.
 // Nanoframes count -- commitment is the question the election asks, and the

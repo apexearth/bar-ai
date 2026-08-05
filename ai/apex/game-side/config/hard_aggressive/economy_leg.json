@@ -9,7 +9,7 @@
 			"legwin": [200, 300],
 			"legsolar": [80, 120],
 			"legadvsol": [80, 120],
-			"legfus": [30, 40],
+			"legfus": [30, 40, 30],
 			"legafus": [200, 300]
 		},
 		"water": {
