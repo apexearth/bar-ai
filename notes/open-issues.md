@@ -2332,3 +2332,47 @@ Two 16-game confirmation batches (Comet Catcher 4v4, +25% handicap):
   throughput. **Next step for Legion: audit `military.json`/`behaviour.json`
   army-unit response tables and weights for the same kind of Cortex-vs-Legion
   gap found in the factory tables, not another economy angle.**
+
+## 36. Legion bomber-role fix regressed and was reverted; Armada armaca cap fix confirmed working by mechanism, not yet by win rate
+
+Prompted by issue 35: audited `air.as`/`factory.as`/`builder.as`/`military.as`/
+`commander.as`/`behaviour.json` for Cortex-vs-Legion/Armada STRUCTURAL bugs
+(wrong unit mappings), not more weight tuning.
+
+**Legion finding, implemented then reverted**: `air.as`'s `gBomber1` (the
+"basic tier" air role -- built off the T1 plant, stockpiled and released in
+waves) was mapped to `legkam` ("Martyr"), a one-shot kamikaze drone, while
+Cortex/Armada's equivalents (`corshad`/`armthund`) are real reusable
+bombers. Swapped to `legmos` ("Mosquito", a reusable stockpiling-rocket
+gunship, comparable cost). **This regressed**: `legion-bomber-fix-16` came
+back 5-11 (31.2%), down from the pre-fix 7-8 (43.8%) baseline -- the wrong
+direction, and by more than single-batch noise alone would suggest. Root
+cause found by reading `legmos.lua` directly (should have been checked
+before implementing, not after): its weapon has `stockpile=true` (1.8s
+build-up, 4-shot cap -- the same mechanism as a nuke silo), and `Release()`
+has no stockpile-order step, so these units almost certainly arrived at the
+target with zero rockets loaded. Reverted to `legkam`
+(`legion-bomber-revert-confirm-16` launched to confirm the revert restores
+the ~43.8% baseline). **Lesson**: verify a substitute unit's actual weapon
+mechanics before swapping it in, not just its role description and cost --
+`tools/unitdef.py`'s summary view doesn't surface `stockpile`, so this
+needed reading the `.lua` directly. legap's full roster has no conventional
+always-loaded reusable bomber; the next hypothesis for Legion's air role
+(if any) is leaving `gBomber1` null and skipping the basic tier entirely,
+untested.
+
+**Armada finding, implemented, mechanism-confirmed**: `behaviour.json`'s
+`armaca` (Advanced Construction Aircraft) was capped at `limit: 2`, matching
+`armconsul` immediately above it in the file -- a plausible copy-paste,
+since `coraca`/`legaca` (the identical unit) are both capped at 15. Raised
+to 15. `armada-armaca-fix-16`: win rate 7-7 (50%), down slightly from the
+prior batch's 9-6 (60%) but well within this project's documented
+single-batch noise floor. `composition.py` on the same batch shows the
+underlying mechanism moved in the right direction: cons T2 went from 3/7
+(43% of stock's count) to 9/13 (69%), cons T1 from 61% to 74%, mex upgrades
+from 5/7 to a near-parity 10/11. Kept the fix -- it's a validated bug (a
+cap that contradicts the AI's own documented eco-lead design intent) with a
+confirmed-correct mechanism; a single noisy win-rate sample is not grounds
+to revert a fix whose effect is independently visible in the composition
+data. Armada still nowhere near Cortex's ~85%+ pattern; next session should
+keep iterating rather than expect one fix to close that gap.
