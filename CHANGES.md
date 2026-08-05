@@ -34,6 +34,36 @@ from source and stripped; see `docs/06-building-the-dll.md`.
 **measured**: 46 `con-reroute spot` events in one 40-minute 4v4, each moving a
 constructor off a vetoed site onto a spot the threat map read at 0.
 
+### `SQUAD_SPEED_RATIO` 2.5 -> 3.5 — `AttackTask.cpp` — tuned on one Cortex pair, verified to fail for Legion
+
+2026-08-05. `CAttackTask::CanAssignTo` gates squad merging on
+`speedSlower * SQUAD_SPEED_RATIO >= speedFaster`; below that, the slower unit
+is refused and fights alone. The constant was 2.5, chosen to just admit one
+specific Cortex pair (Banisher 54 / Mammoth 22.5 = 2.4) -- faction-specific by
+construction, since it was never checked against the other two factions.
+
+Checked directly: Legion's comparably-common T2 pair, `legstr` (84 speed) and
+`leginc` (24 speed, weighted up to 0.38 of `legalab`'s build share at some
+income tiers -- not a rare unit), has a natural ratio of 3.5 and failed the
+old 2.5 gate outright. `leginc` could never merge into a squad with its own
+faction's fast T2 escort and fought alone every game, in exactly the T2-tier
+window (~minute 14+) where a separate data-driven finding this session showed
+Legion's combat trade starts eroding.
+
+**Fix**: raised to 3.5, the minimum that admits the Legion pair, chosen after
+checking it doesn't also swallow the genuine outliers this constant is meant
+to exclude (Cortex's T3 superheavies at ~16.5 speed need 3.3+ and sit right at
+the new boundary; scouts like `legscout` at 160 speed need ~6.7 and stay
+excluded regardless).
+
+Rebuilt (`ninja -C build-amd64-windows BARb`), smoke-tested clean on all three
+factions (0 compile errors, correct script loaded, no crash). **Not yet
+confirmed by tournament** -- this needs a large (64-96 game) solo batch per
+faction before trusting a win-rate effect, per this session's own
+hard-learned lesson about this benchmark's noise floor (see
+`notes/open-issues.md` #45-52). Patch captured in
+`game-patches/circuitai/0003-cumulative.patch`.
+
 ### Commander killer logging — `CCircuitAI::UnitDestroyed` — REVERTED, crashed
 
 2026-08-04. This session had no way to see WHAT kills a commander -- the
