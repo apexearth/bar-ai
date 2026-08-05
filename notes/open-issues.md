@@ -1875,3 +1875,70 @@ separate, bigger follow-up: either a C++ change to `CAttackTask`'s target
 scoring (needs the cross-compile toolchain, `docs/06-building-the-dll.md`) or
 a synced LuaRules gadget that overrides target selection for engaged squads.
 Not attempted here.**
+
+## 28. "Four bot labs by 18 minutes" (apexearth, watched Comet Catcher 4v4) -- confirmed as an in-flight-request race, cooldown gate added, NOT YET DEPLOYED (BAR open)
+
+Confirmed the report against `matches/watch-comet-catcher-4v4-8/infolog.txt`:
+team 2 (the eco/tech lead, `lead=1 haveT2=1` in the surrounding `conbranch`
+lines) logged `T1 lab on field: corlab` six times -- frames 1896 (1.1min),
+16600 (9.2min), 17586 (9.8min), 18465 and 18557 (10.3min, 92 frames /
+~3 seconds apart), and 19922 (11.1min). Each is a distinct new FACTORY unit
+being registered (`AiUnitAdded()` in `factory.as`, fires once per unit with
+`usage==FACTORY` and no T2 attribute), not six log lines about one lab.
+
+**Ruled out "lost in combat, rebuilt"**: pulled `tools/spending_timeline.py`
+for this match. Team 2's `mCon` rose 1220 -> 2420 -> 2650 across minutes
+6/10/14, `armyReal` stayed flat-to-rising (3665 -> 3245 -> 3260, never
+crashing toward zero), and `metalProduced` climbed steadily the whole window
+(4566 at min6 to 18757 at min12). None of the three signals that would mark
+a wipe-and-rebuild (mCon collapsing, armyReal collapsing, a `top` list going
+quiet) appear anywhere near 9-11 minutes. The `top`-list `corlab` spend
+itself tracks the count exactly: 470 (1 lab) at min8, 1410 (3 labs, matches
+frames through 19922) at min10-and-just-after, 2820 (6 labs) by min12. This
+is uncoordinated duplication of a healthy economy's build orders, not a
+rational response to losses.
+
+**Mechanism, confirmed by reading the code, not guessed**: the T1-bot-lab
+branch in `AiGetFactoryToBuild` (`factory.as`, previously ~line 2482) is
+gated on `!HaveT1BotLab()`, and `HaveT1BotLab()` checks `lab.count > 0`.
+`CCircuitDef::count` increments in `RegisterTeamUnit`, which the codebase's
+own existing comments (on this same function, and on `WantMoreGantries`)
+already establish runs at the **nanoframe** -- when a builder's nanolathe
+actually starts touching the structure, not when the build order is issued.
+A constructor ordered to place a lab still has to walk to the site first.
+Every other idle constructor that gets offered `AiGetFactoryToBuild` during
+that walk reads the exact same `!HaveT1BotLab()` (still true, nothing has
+started yet) and picks the identical lab. This is the same failure shape
+`AiIsSwitchTime`'s doc comment already names for a related but distinct bug
+("Observed live: one AI with THREE T1 bot labs" -- that case was a
+permanently-open switch gate, already fixed; this one is the *offer* gate
+having no in-flight memory at all) -- so this codebase has now independently
+hit "duplicate factory requests" from two different mechanisms.
+
+**Fix**: followed the existing `REZ_SPACING`/`gNextRez` spacing-gate pattern
+used for rez-bot floor requests in the same file. Added
+`BOTLAB_REQUEST_COOLDOWN = 45 * SECOND` and `gNextBotLabRequest`; the T1 lab
+branch now also requires `ai.frame >= gNextBotLabRequest` and sets it on
+every successful request, regardless of whether `HaveT1BotLab()` has cleared
+yet. 45s is a guess at "long enough to cover a nearby constructor's walk to
+the site," not a measured number -- flagged as such in the code comment. It
+is deliberately short relative to how long a genuinely lost lab needs to be
+absent before rebuilding is worth it (the six observed placements span 1.1
+to 11.1 minutes, so a real rebuild case is not remotely at risk of being
+blocked by a 45-second cooldown).
+
+**Not yet deployed or tournament-tested.** `python tools/check.py` passed
+clean (`apex\n  ok`). Deploy was blocked this session for the same reason as
+issue 27's part 1: `Get-Process` showed five live `Beyond-All-Reason`
+windows plus one `spring` process already running when this task started --
+deploying now risks `WinError 5` / a half-written AI folder. **Next session:
+confirm BAR is closed, deploy, smoke-test (grep infolog for
+`.as ([0-9]+, [0-9]+) : ERR`), then a 16-game Comet Catcher 4v4 batch,
+checking `spending_timeline.py`/`composition.py` specifically for reduced
+duplicate `mFactories` spend on players who previously over-built one type,
+without regressing overall win rate or economy** -- this is a pure
+low-risk waste-removal (constructor time and metal that were being spent on
+a redundant building), so per `CLAUDE.md`'s "separate rules that SPEND from
+fixes that STOP something," a regression here would be a surprise, but it
+still needs the same batch-and-composition confirmation as everything else
+in this file before being called done.

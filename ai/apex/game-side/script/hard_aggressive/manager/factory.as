@@ -358,6 +358,22 @@ const int BOTLAB_FROM = 8 * MINUTE;
 const int REZ_FLOOR    = 8;
 const int REZ_SPACING  = 20 * SECOND;
 int gNextRez = 0;
+
+// HaveT1BotLab() only clears once CCircuitDef::count increments, which happens
+// at the nanoframe -- construction actually starting, not the build order
+// being issued. A constructor sent to place a lab still has to walk there
+// first, and every OTHER idle constructor offered AiGetFactoryToBuild during
+// that walk also reads !HaveT1BotLab() and picks the same lab. Observed live,
+// team 2 in matches/watch-comet-catcher-4v4-8: six separate corlab placements,
+// two of them 92 frames (~3s) apart, while mCon/armyReal/metalProduced were
+// all rising the whole time -- not combat replacement, just uncoordinated
+// duplicate requests. This cooldown closes the gap the same way REZ_SPACING
+// closes the rez-bot one: once a lab request is handed out, no second one
+// within BOTLAB_REQUEST_COOLDOWN, whether or not HaveT1BotLab() has cleared
+// yet. Short enough to not delay a genuine rebuild after a real loss -- a lab
+// destroyed mid-game is gone for many minutes, not 45 seconds.
+const int BOTLAB_REQUEST_COOLDOWN = 45 * SECOND;
+int gNextBotLabRequest = 0;
 string armrectr("armrectr"); string cornecro("cornecro"); string legrezbot("legrezbot");
 
 CCircuitDef@ RezBotDef()
@@ -2481,10 +2497,12 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// and 59 for another, against 1-3 for land players, both ending techStart=-1.
 	if (!IsWaterMap() && !(Builder::gHomeSet && IsWaterAt(Builder::gHomePos))
 		&& !HaveT1BotLab()
+		&& (ai.frame >= gNextBotLabRequest)
 		&& (gHaveT2 || (ai.frame > BOTLAB_FROM)))
 	{
 		CCircuitDef@ lab = T1BotLab();
 		if (lab !is null) {
+			gNextBotLabRequest = ai.frame + BOTLAB_REQUEST_COOLDOWN;
 			AiLog(T() + "apex: no T1 bot lab -- building " + lab.GetName()
 				+ " for spam and rez bots");
 			return lab;
