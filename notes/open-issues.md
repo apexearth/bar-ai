@@ -3207,3 +3207,28 @@ in each stats sample -- readable per-game without new matches)? This is
 exactly the kind of question `tools/combat_events.py`/a live-watched game
 could answer, and now has a precise, testable definition of "goes wrong"
 (damage ratio crossing 1.0) rather than a vague "loses despite economy."
+
+**Two follow-up checks, same session, both from existing match data (no
+new tournaments needed):**
+
+1. **Top-unit composition**: unfavorable-ratio games' `top` (highest-spend
+   unit) lists skew toward `legalab`/`legadvsol`/`legcom` staying dominant;
+   favorable-ratio games skew toward `legmoho`/`legnanotc`/`legfus`/
+   `legafus` (economy-scaling buildings) appearing. Consistent with
+   favorable games being ones where the economy actually got to mature
+   past early-game spend.
+2. **Game length, the cleaner and more consistent of the two**:
+   unfavorable-ratio games are noticeably SHORTER than favorable ones, in
+   both batches independently -- baseline 1: 25.9 min (unfavorable) vs
+   34.0 min (favorable); baseline 2: 24.4 min vs 36.2 min. A ~10-minute
+   gap, both times.
+
+**Combined picture**: Legion's losses are not randomly distributed across
+game length -- they cluster in games that end early. This points the
+next session's investigation specifically at the EARLY game (the first
+~15-20 minutes) as the likely place the unfavorable combat trades happen,
+rather than treating "Legion's combat" as a single undifferentiated
+question. A live-watched early game, or `combat_events.py` filtered to
+the first 20 minutes across a batch of games, is the natural next step --
+this is a much sharper starting point than "watch a Legion game and see
+what happens" was at the start of this investigation.
