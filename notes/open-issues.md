@@ -2875,3 +2875,19 @@ should now be treated as closer to mandatory than optional for Legion
 specifically -- this session exhausted the "audit config, find gap, fix
 it" approach across four independent, well-evidenced attempts with a
 100% failure rate.
+
+**Remaining Armada `build_speed` leads, verified but not yet tested**: a
+full (unfiltered) scan found several more `armXXX`/`corXXX` `build_speed`
+gaps beyond the three already confirmed, but all much smaller in magnitude
+(1.1-1.6x, vs the 2-4.5x gaps behind the three confirmed fixes) --
+`armack`=10/`corack`=9, `armacv`=10/`coracv`=12.5, `armamsub`=8/
+`coramsub`=7.5, `armasy`=10/`corasy`=15, `armck`=5/`corck`=4, `armcv`=7/
+`corcv`=4.5, `armfhp`=6/`corfhp`=10, `armhp`=6/`corhp`=10, `armplat`=8/
+`corplat`=10, `armsy`=5/`corsy`=8. Verified real workertime is identical
+for the two largest (`armasy`/`corasy` both 300, `armsy`/`corsy` both
+150), so these are real mismatches by the same evidence standard as the
+confirmed fixes, just smaller. Not tested this session (diminishing
+signal-to-noise at this magnitude, and this session already ran a very
+large number of tournaments) -- worth testing in a future session,
+`armasy`/`armsy` first since those two are verified, one at a time as
+always. The others' real stats were not checked.
