@@ -514,7 +514,14 @@
 			"armnanotct2": {
 				"role": ["support"],
 				"build_mod": 500,
-				"build_speed": 16.0
+				// Reverse-direction case of the armlab/armvp build_speed fix (issue 42):
+				// here ARMADA's value was higher (16.0 vs cornanotct2's 8.0), despite
+				// identical real workertime (600 for both, verified from the .lua
+				// defs). Lowered to match cornanotct2's proven value. Untested -- this
+				// is the first "lower Armada to match Cortex" build_speed test this
+				// session; confirm with a solo Armada,Armada batch and revert if it
+				// regresses.
+				"build_speed": 8.0
 			},
 			"armnanotcplat": {
 				"role": ["support"],
