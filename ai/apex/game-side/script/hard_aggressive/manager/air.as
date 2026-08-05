@@ -169,14 +169,19 @@ void ResolveDefs()
 		@gCon1   = ai.GetCircuitDef("legca");   @gCon2   = ai.GetCircuitDef("legaca");
 		@gBomber = ai.GetCircuitDef("legphoenix"); @gFighter = ai.GetCircuitDef("legvenator");
 		// gBomber1 is the BASIC tier: a reusable strike unit built off the T1 plant,
-		// held and released in waves (see Release()/ScaledBombers() below) the same
-		// way corshad/armthund are. legkam ("Martyr") is a one-shot kamikaze drone --
-		// it self-destructs on its first strike, so every wave this AI stockpiles and
-		// releases is consumed and gone, unlike Cortex/Armada's reusable squadrons.
-		// legmos ("Mosquito") is Legion's actual analog: a stockpiling-rocket gunship
-		// that survives its strike, at a comparable cost (110m vs corshad/armthund's
-		// 145-150m).
-		@gBomber1 = ai.GetCircuitDef("legmos"); @gFighter1 = ai.GetCircuitDef("legfig");
+		// held and released in waves (see Release()/ScaledBombers() below), the same
+		// way corshad/armthund are. legkam ("Martyr") is a one-shot kamikaze drone,
+		// unlike those two -- looked like a bug and was swapped for legmos
+		// ("Mosquito") on 2026-08-05, but that regressed a confirmed Legion,Legion
+		// batch 43.8% -> 31.2%. legmos's weapon has stockpile=true (a 1.8s build-up,
+		// 4-shot cap, like a nuke silo) -- Release()'s hold-then-send logic has no
+		// stockpile-order step, so these almost certainly flew in with zero shots
+		// loaded and did nothing, worse than a kamikaze that at least explodes.
+		// Reverted. legap's roster (legca, legfig, legkam, legcib, legmos, leglts,
+		// legatrans) has no conventional always-loaded reusable bomber -- legkam is
+		// the least-bad fit until a real alternative is found (or gBomber1 is left
+		// null for Legion and this basic tier is skipped entirely).
+		@gBomber1 = ai.GetCircuitDef("legkam"); @gFighter1 = ai.GetCircuitDef("legfig");
 	} else {
 		@gPlant1 = ai.GetCircuitDef("armap");   @gPlant2 = ai.GetCircuitDef("armaap");
 		@gCon1   = ai.GetCircuitDef("armca");   @gCon2   = ai.GetCircuitDef("armaca");
