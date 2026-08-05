@@ -280,6 +280,15 @@ bool PreferReclaim()
 // own "an enemy holds this ground" bar in MilitaryManager::DefaultMakeDefence.
 const float CON_THREAT_VETO = 4.0f;
 
+// How many of ONE factory def (standing + under construction, this player's
+// own count -- CCircuitDef is per-instance) is enough. Past this, refuse the
+// engine's own DefaultMakeTask offer of another one. Not zero-risk to set
+// low: a strong economy legitimately wants more than one bot lab to
+// parallelize production, so this is deliberately generous rather than
+// tuned tight -- the bug this guards against was 8-10 in a few minutes, not
+// a healthy player choosing a second or third.
+const int FACTORY_TYPE_CAP = 3;
+
 int gConRefused = 0;
 int gConAbandoned = 0;
 int gConRerouted = 0;
@@ -1958,7 +1967,29 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// returning null simply leaves the unit idle until the next idle sweep.
 	if (!isComm) {
 		const string kind = SiteBuildName(task);
-		if (kind != "") {
+		// Cap redundant same-type factories. tools/combat_events.py (built this
+		// session) caught what the earlier bot-lab-request-cooldown fix
+		// (BOTLAB_REQUEST_COOLDOWN) missed: that fix only gates the ONE script
+		// branch that asks for a bot lab when we have none, but corlab kept
+		// getting placed again and again well after the first one existed --
+		// 8, even 10 placements inside a few minutes for a single
+		// healthy-economy player, gaps as short as 6 seconds apart. Nothing
+		// that fast is a rebuild-after-loss; this can only be the stock
+		// engine's own DefaultMakeTask independently offering the same
+		// factory type to every idle constructor, with nothing on the script
+		// side capping how many of one type we actually want. CCircuitDef is
+		// owned per CCircuitAI instance (see Air.as's own note on this), so
+		// .count here is THIS player's own standing+in-progress count, not
+		// the team's.
+		if ((kind == "factory") && (task !is null)) {
+			const CCircuitDef@ wantFac = task.buildDef;
+			if ((wantFac !is null) && (wantFac.count >= FACTORY_TYPE_CAP)) {
+				++gConRefused;
+				LogConVeto(unit, "refuse", "factory-cap", float(wantFac.count));
+				@task = null;
+			}
+		}
+		if ((task !is null) && (kind != "")) {
 			const AIFloat3 site = task.GetBuildPos();
 			float heat = ThreatFor(unit, site);
 			if (kind == "mex")
