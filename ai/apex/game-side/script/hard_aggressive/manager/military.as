@@ -379,6 +379,39 @@ const float MASS_CAP    = 48.f;
 const float ATTACK_EDGE = 0.95f;
 int gNextMassLog = 0;
 
+// EnemyArmyCost() sums only the mobile fighting roles (its own comment says
+// "the enemy's MOBILE army"), so a defended chokepoint -- several turrets --
+// reads identically to open ground as long as mobile counts match. apexearth,
+// watching: "we do something in the early game which is running into enemy
+// towers ... I've seen us lose ~10 army to a single tower." Confirmed in
+// matches/watch-comet-catcher-4v4-8/infolog.txt: "mass want=30 army=4250
+// enemyArmy=4072 ratio=0.96" at 10.0min, then armyReal 4250 -> 0 by 11.5min --
+// the ratio said "even fight, go," and the enemy's static defence was invisible
+// to it the whole time.
+//
+// Weighted at half, not 1:1 with EnemyArmyCost(): a turret is a sunk cost with
+// no upkeep, cannot retreat or redeploy, and only threatens the ground it
+// covers, unlike a mobile unit of the same value which threatens everywhere
+// and is continuously replaced. Folding it in at full weight would let a
+// static-heavy base pin quota.attack at MASS_CAP for the rest of the game
+// (EnemyArmyCost() only ever grows once a wall is up); this is scoped to
+// MassWant()/UpdateMassing() only, not EnemyArmyCost() itself, so
+// KillingBlow() and T3Worthwhile() -- which read EnemyArmyCost() directly --
+// are unaffected, and the killing-blow override (gKilling, above) still bypasses
+// this entirely once we are dominant. Unweighted, unmeasured constant; retune
+// from a watched game rather than a benchmark tournament, per the T3-worthwhile
+// income lesson above -- turret density is a map/base-layout property a
+// standard-scale benchmark may not reproduce at all.
+const float STATIC_DEFENSE_WEIGHT = 0.5f;
+
+// EnemyArmyCost() plus a discounted share of enemy static defence, for sizing
+// the group that commits to an attack. See MassWant() below for why this is
+// not folded into EnemyArmyCost() itself.
+float EnemyMassingThreat()
+{
+	return EnemyArmyCost() + STATIC_DEFENSE_WEIGHT * aiEnemyMgr.GetEnemyCost(RT::STATIC);
+}
+
 // The size a group commits at, from the armies on the field.
 //
 // CDefendTask is created with maxPower = minAttackers and stops accepting units
@@ -387,7 +420,7 @@ int gNextMassLog = 0;
 float MassWant()
 {
 	const float ours = TeamArmyCost();
-	const float theirs = EnemyArmyCost();
+	const float theirs = EnemyMassingThreat();
 	if (ours <= 1.f)
 		return MASS_CAP;
 	const float ratio = theirs / ours;
@@ -420,7 +453,7 @@ void UpdateMassing()
 	// permanently holding. TeamArmyCost() sums the ally side over TV_ARMY, the
 	// same figure the killing blow already compares on.
 	const float ours = TeamArmyCost();
-	const float theirs = EnemyArmyCost();
+	const float theirs = EnemyMassingThreat();
 	const float want = MassWant();
 
 	if (ai.frame >= gNextMassLog) {

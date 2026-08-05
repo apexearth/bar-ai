@@ -1770,3 +1770,108 @@ single data point so far.
 (A first attempt at this exact batch, `livefixes-16`, was interrupted at
 14/16 games by an unrelated machine reboot mid-session and discarded
 rather than trusted at a partial count.)
+
+## 27. "Running into enemy towers" (apexearth, watched Comet Catcher 4v4) -- one part fixed in AngelScript, one part is out of this AI's reach without new C++
+
+apexearth's report: "we do something in the early game which is running into
+enemy towers ... and we don't even seem to focus on killing the tower. I've
+seen us lose ~10 army to a single tower." Two separate mechanisms, confirmed
+independently.
+
+**Part 1 -- mass-commitment blindness to static defence. FIXED, code shipped,
+NOT YET DEPLOYED OR TESTED (BAR was open live during this session, see below).**
+
+`military.as` `EnemyArmyCost()` (docstring: "What the enemy's MOBILE army is
+WORTH") sums only `ASSAULT/RAIDER/RIOT/SKIRM/ARTY/AH` via
+`aiEnemyMgr.GetEnemyCost(role.type)`. It never included `RT::STATIC`, the same
+role the rest of the codebase already treats as a distinct enemy-composition
+category -- it appears in every `response.json` `"vs"` list
+(`ai/apex/game-side/config/hard_aggressive/response.json`) and in
+`docs/04-json-config-reference.md`'s worked example, always alongside the
+mobile roles, never folded into them. So `MassWant()`/`UpdateMassing()`
+(`military.as` ~380-435), which decide `aiMilitaryMgr.quota.attack` -- the
+team's attack-commitment threshold -- from `EnemyArmyCost()` vs
+`TeamArmyCost()`, read a heavily-turreted chokepoint identically to open
+ground whenever mobile army counts were similar. That matches the observed
+infolog exactly: `matches/watch-comet-catcher-4v4-8/infolog.txt` logged
+`mass want=30 army=4250 enemyArmy=4072 ratio=0.96` at 10.0min (just under
+`ATTACK_EDGE=0.95`, i.e. "committed"), then the entire army (4250 -> 0) and
+the commander died within 90 seconds.
+
+`RT::STATIC` / `Unit::Role::STATIC` (`ai/apex/game-side/script/unit.as:20,87`)
+is bound through the identical `aiEnemyMgr.GetEnemyCost(Type)` call
+`EnemyArmyCost()` already uses for every other role -- confirmed live data,
+not a guess (see `CLAUDE.md`'s engine-callback-bug note for why that
+distinction matters here). It was declared but never read anywhere in
+`ai/apex/game-side/script/` before this change.
+
+Added `EnemyMassingThreat() = EnemyArmyCost() + 0.5 * GetEnemyCost(RT::STATIC)`
+and pointed `MassWant()`/`UpdateMassing()` at it instead of `EnemyArmyCost()`
+directly. Deliberately NOT folded into `EnemyArmyCost()` itself, and
+deliberately weighted at half rather than 1:1:
+
+- `EnemyArmyCost()` also feeds `KillingBlow()`, `T3Worthwhile()`
+  (`factory.as:2308`), and `AssessedThreat()` (`military.as:1391`, which
+  already separately adds `RT::HEAVY` at full weight -- the established
+  precedent for broadening this function, used here as the template for
+  *how* to add a role, not *what weight*). Static defence is a sunk cost that
+  is built once and never degrades, unlike mobile army which is continuously
+  produced and lost. Folding it into `EnemyArmyCost()` itself would let a
+  static-heavy enemy base permanently inflate every one of those gates for the
+  rest of the game -- for `KillingBlow`/`T3Worthwhile` specifically, that
+  reproduces the exact "dominant but never converts" failure this file
+  already documents at line ~443 (30 games, 67% timed out) in a new form: a
+  war of attrition where the wall itself, not the enemy's fielded army, is
+  what keeps our own gates from ever releasing. Scoping the fix to a new
+  `EnemyMassingThreat()` used only by `MassWant()`/`UpdateMassing()` avoids
+  that; `KillingBlow()`'s own `gKilling` override already short-circuits
+  `UpdateMassing()` unconditionally once we're dominant, so this cannot
+  create a second attrition-lock even there.
+- Half weight, not full: a turret has no upkeep and cannot retreat, redeploy,
+  or be lost to a bad trade the way a mobile unit of equal cost can, but it
+  also only threatens the one approach it covers rather than the whole map.
+  This is reasoning, not a measurement -- explicitly flagged as such in the
+  code comment, per `CLAUDE.md`'s "never state a cause you did not measure."
+  0.5 is an untested starting constant; retune from a watched game (per
+  `CLAUDE.md`'s "apexearth is faster than the benchmark" section) rather than
+  a benchmark tournament -- turret density at a defended chokepoint is a
+  map/base-layout property the standard benchmark scale may not reproduce.
+
+**Not yet deployed or tournament-tested.** `python tools/check.py` passed
+clean. Deploy was blocked this session: `Get-Process` showed a live `spring`
+process plus five `Beyond-All-Reason` windows already running when this task
+started, i.e. apexearth (or someone) had a game open -- deploying now risks
+`WinError 5` / a half-written AI folder exactly as `CLAUDE.md`'s harness
+section warns, and would step on whatever match is in progress. **Next
+session: confirm BAR is closed, deploy, run the standard short-match smoke
+test (grep infolog for `.as ([0-9]+, [0-9]+) : ERR`), then a 16-game Comet
+Catcher 4v4 batch against the pre-this-change build, watching composition.py
+specifically for reduced attack frequency / passivity, not just win rate --
+that is the failure mode this kind of defensive change most plausibly
+introduces.**
+
+**Part 2 -- "we don't even seem to focus on killing the tower." Confirmed OUT
+OF REACH of this AI's AngelScript layer; would need new C++ engine work, not
+attempted here per the task's own scoping instruction.**
+
+`docs/05-angelscript-api.md`'s AngelScript API doc states this plainly and
+independently of this task: "There is no enemy unit enumeration. `CEnemyManager`
+exposes only `GetEnemyThreat(Type)`, `GetEnemyCost(Type)`, `mobileThreat` and
+`maxAAThreat`. No positions, no unit list, no commander handle... target
+selection lives in C++." Moment-to-moment attack-target selection during a
+fight -- which unit an engaged squad member shoots at, including whether it
+prioritizes a static emplacement over a moving target -- is entirely inside
+`CAttackTask`/engine combat logic. This AI's script layer (`military.as` and
+everything else in `ai/apex/game-side/script/`) only ever composes tasks and
+sets thresholds like `quota.attack`; per `docs/05-angelscript-api.md` item 1,
+even *enqueuing* an attack task by hand crashes the AI, let alone reaching
+into it to steer individual unit targeting. The doc's own escape hatch --
+`ai.CallRules`/`ai.GetGameRulesParam` talking to a game-side LuaRules gadget
+that computes a target -- exists only for a game archive under this project's
+control (`game-patches/gadgets/`), is a nontrivial new mechanism (synced Lua +
+a new binding path), and was explicitly out of scope for this task. **If
+"focus the tower, not whatever's in range" is worth doing, it is a new,
+separate, bigger follow-up: either a C++ change to `CAttackTask`'s target
+scoring (needs the cross-compile toolchain, `docs/06-building-the-dll.md`) or
+a synced LuaRules gadget that overrides target selection for engaged squads.
+Not attempted here.**
