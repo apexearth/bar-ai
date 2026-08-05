@@ -2463,13 +2463,33 @@ evidence) even though the exact "before" number is lost to the contamination
 bug. Still below Cortex's ~85%+ but the clearest genuine progress of the
 Armada/Legion work this session.
 
-**Summary for next session**: Cortex remains the reference (~26-1 pattern,
-confirmed clean this session via `corck-revert-confirm-8`... which was ALSO
-half of a corrupted pair -- re-confirm Cortex clean too before trusting it
-further, though Cortex's numbers have three independent CLEAN tournaments
-from earlier in the session backing the same pattern, so it is far better
-evidenced than Armada/Legion regardless). Armada: real progress, ~62.5%
-clean, keep iterating the same way Cortex was iterated (many rounds, one
-change at a time). Legion: ~31% clean, cause unknown -- the "economy is
-already ahead of stock" finding from issue 35 was itself from a corrupted
-batch and needs re-confirmation before trusting it as a lead.
+**Resolved same session**: got a genuine pre-issue-35 Legion baseline by
+temporarily checking out `factory_leg.json`/`economy_leg.json`/`factory.as`
+to commit `1984ecc` (before `d2f147a`), deploying, and running
+`legion-pre-issue35-baseline-16` solo (clean, all 16 games completed
+normally): **7-9 decided, 43.8%**. Against the clean post-fix read
+(`legion-bomber-revert-clean-16`, 31.2%), this is a real regression, not
+noise -- both batches are clean. **Reverted issue 35's Legion batch
+entirely** (commit `46a5e79`): legack/legcv back to flat 0.05, legfus back
+to 2 elements, `legap`/`legaap` removed from `T1_FAC`/`T2_FAC`. Armada's
+armack/armaca fixes are untouched and unaffected (separate files, separately
+confirmed positive). This is the textbook case CLAUDE.md already documents
+from an earlier session -- four changes bundled into one commit and tested
+together, one or more of them bad, and no way to tell which from the
+combined result. **Next session: re-apply legack, legcv, legfus, and the
+T1_FAC/T2_FAC bugfix ONE AT A TIME, each with its own solo confirmation
+batch**, rather than re-bundling them. The T1_FAC/T2_FAC fix in particular
+is a genuine structural bug (not a weight guess) and is the best candidate
+to re-try first in isolation.
+
+**Summary for next session**: Cortex remains the reference (~26-1 pattern
+across three independent clean tournaments earlier in the session --
+`corck-revert-confirm-8`, run concurrently with `armada-mirror-armck-8`, is
+the one Cortex batch NOT independently clean; re-confirm it if precision
+matters, though the other three back the same pattern). Armada: real
+progress, ~62.5% clean (`armada-armaca-clean-16`), keep iterating the same
+way Cortex was -- many rounds, one change at a time. Legion: reverted back
+to a clean, confirmed 43.8% baseline; the constructor-parity/T1_FAC fixes
+that seemed well-evidenced by audit were empirically wrong when bundled and
+tested together -- re-test individually before concluding any one of them
+is bad.
