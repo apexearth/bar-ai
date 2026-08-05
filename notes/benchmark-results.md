@@ -54,6 +54,16 @@ agree, and check whether anyone actually did that pooling (search
 
 **Pooled**: pre-fix (10+11)/32 = 65.6%. Post-fix (13+12+13+10)/64 = 75%.
 Two-proportion z = -0.96, **not significant**. See `open-issues.md` #46.
+Required sample for 80% power at this effect size: **~370 games/arm** --
+not practical via more win-rate batches (see #50).
+
+**Continuous-metric cross-check** (per-game `damageDealt`/`damageReceived`
+ratio, issue 50): fraction of games with a favorable ratio went from
+18/32 (56%) pre-fix to 45/64 (70%) post-fix, z=-1.37 (p~0.17) -- closer to
+significant than raw win rate, still not conclusive. Given a favorable
+ratio predicts winning at ~85-93% and unfavorable at ~32-36% (both
+pre- and post-fix), this fraction is the more sensitive metric to re-test
+with if this question is revisited.
 
 ## Legion, Legion
 
