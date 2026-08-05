@@ -2012,3 +2012,17 @@ against pre-session HEAD.** Read it with `composition.py` for the tower fix
 run `tools/combat_events.py` on the result as a fast first pass before
 either manual read -- it is now confirmed to work on tournament output, not
 just the one hand-inspected match.
+
+## 30. Deploy+smoke-test confirmation: tower/mass-blindness (afc2157) + bot-lab cooldown (2473373)
+
+BAR/spring confirmed closed. Deployed apex (digest 24e48b134e2d), smoke-tested
+(15-min Comet Catcher 4v4 headless): 0 AngelScript compile errors. Sanity
+checks on the smoke test: 5 "T1 lab on field: corlab" events across 4 apex
+players (normal range -- not the 6-in-2-minutes-for-one-player pattern the
+bot-lab fix targets), and "mass want=" (the new `EnemyMassingThreat()` path)
+logging 43 times with no apparent issue. Both changes are live and behaving
+sanely; launching `tower-botlab-16` (Comet Catcher 4v4) for the real
+comparison batch next -- read with `tools/combat_events.py` as a first pass,
+then `composition.py`/`spending_timeline.py` per issue 29's own recommendation
+(tower fix: watch for excess passivity, not just win rate; bot-lab fix:
+duplicate `mFactories` spend should drop).
