@@ -1761,6 +1761,26 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// TaskB::Repair(priority, target) is safe, and the script cannot obtain
 		// the mex nanoframe -- IUnitTask exposes GetBuildPos() and the assigned
 		// builders, never the thing being built.
+
+		// A player with no factory left has no way back -- see
+		// Factory::HaveAnyFactory()'s own comment for how this was found.
+		// Below every safety check above: a commander actively fleeing or
+		// hiding from a real threat must keep doing that, not detour to a
+		// build site. Gated past the opening (3 min) so this never competes
+		// with the normal game-start sequence, which already places the
+		// first factory through its own, separately-verified path.
+		if (!Factory::HaveAnyFactory() && (ai.frame >= 3 * MINUTE)) {
+			CCircuitDef@ lab = Factory::T1BotLab();
+			if ((lab !is null) && lab.IsAvailable(ai.frame)) {
+				IUnitTask@ rebuild = aiBuilderMgr.Enqueue(TaskB::Common(
+						Task::BuildType::FACTORY, Task::Priority::HIGH,
+						lab, unit.GetPos(ai.frame), 0.f));
+				if (rebuild !is null) {
+					AiLog(Factory::T() + "apex: commander rebuilding a factory -- we have none");
+					return rebuild;
+				}
+			}
+		}
 	}
 	// Already walking to a site that is now inside enemy fire. IBuilderTask::
 	// Reevaluate calls this hook on every task update for as long as the builder

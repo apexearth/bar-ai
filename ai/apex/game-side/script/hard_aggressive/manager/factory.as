@@ -1566,8 +1566,17 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 // declaration order.
 CCircuitUnit@ gT1FacUnit = null;
 
+// How many factories THIS instance currently has standing, of any kind or
+// tier. Nothing in this codebase asked "do we have any factory at all" --
+// grepped, zero hits for BuildType::FACTORY logic anywhere in builder.as --
+// so a player that lost its last one had no way back. See HaveAnyFactory()
+// and its use in the commander branch below.
+int gFactoryCount = 0;
+
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	if (usage == Unit::UseAs::FACTORY)
+		++gFactoryCount;
 	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) != 0)
 		gHaveT2 = true;
 	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T3) != 0)
@@ -1624,11 +1633,28 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	if (usage == Unit::UseAs::FACTORY)
+		--gFactoryCount;
 	// CCircuitUnit is registered NOCOUNT, so a handle is not nulled when the
 	// engine destroys the unit and `is null` stays false on freed memory.
 	// Leaving this unset crashed UpdateRushReclaim's Enqueue (0xc0000005).
 	if (gT1FacUnit is unit)
 		@gT1FacUnit = null;
+}
+
+// Any factory at all, of any kind or tier -- not just the T1 opener.
+// apexearth, watching a Comet Catcher 4v4 live: "something still seems to
+// make our AI go super dumb and just stop making any progress... it feels
+// more like we disappeared." Traced with tools/spending_timeline.py: a
+// player's last factory died at exactly the minute its spending (T1/T2/
+// factories/defence, all of it) flatlined to zero, and its commander then
+// did nothing for the next three minutes -- banking metal it never spent --
+// before dying to an ambush. See the commander branch in builder.as, which
+// is the only place this matters: any other builder that could have used
+// this is, by definition of the state being checked, already dead.
+bool HaveAnyFactory()
+{
+	return gFactoryCount > 0;
 }
 
 void AiLoad(IStream& istream)
