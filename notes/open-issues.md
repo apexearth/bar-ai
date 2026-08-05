@@ -2658,7 +2658,7 @@ Armada 62.5% (`armada-armaca-clean-16`), Legion 43.8%
 | faction | clean win% | vs Cortex's own ~85%+ pattern | status |
 |---|---|---|---|
 | Cortex | 75-88% (4 batches) | is the reference | proven, stable |
-| Armada | 62.5% -> 75-81%, 3 independent confirmations (issue 42) | inside Cortex's own range | GOAL MET this session |
+| Armada | 62.5%-81.2% across 5 reads, mechanism real but not statistically confirmed (issue 46 corrects issue 42) | plausible, unconfirmed | promising, needs more samples |
 | Legion | 43.8% | well below | 4 hypotheses tried (issue 43), all reverted, 100% failure rate across mechanism categories; live-watched investigation now closer to mandatory |
 
 ## 41. Armada `build_speed` gaps found, deliberately NOT acted on -- unverified, could be legitimate
@@ -3004,3 +3004,63 @@ conservative choice), but the confidence level attached to "this
 specific change caused this specific regression" should be downgraded
 across the board except for T1_FAC, which is still the best-supported (if
 not fully conventional) of the four.
+
+## 46. FURTHER CORRECTION: the Armada "goal met" declaration was premature too
+
+Ran `armada-buildspeed-stability-check-16` -- the exact same code as
+`armada-buildspeed-nano-16` (all three `build_speed` fixes applied:
+`armlab`, `armvp`, `armnanotct2`), re-run solo and clean with nothing
+changed, to apply the same rigor to Armada that issue 45 applied to
+Legion. **Result: 10-6 decided, 62.5%** -- not 75-81% like the three
+prior post-fix reads, and an EXACT match to the single pre-fix baseline
+(`armada-armaca-clean-16`, also 10-6/62.5%).
+
+Proper two-proportion z-tests:
+- The `armlab`-only read (81.2%) vs this stability check (62.5%, same
+  fully-fixed code): **z=1.18, not significant.**
+- All four post-fix reads pooled (81.2/75.0/81.2/62.5%, n=64, 48 wins)
+  vs the single pre-fix baseline (62.5%, n=16, 10 wins): **z=1.00, not
+  significant.**
+
+**Section 42's "GOAL MET" declaration for Armada was premature.** The
+underlying signal (3 of 4 post-fix reads landed higher than the one
+pre-fix read) is suggestive and the mechanism (a `build_speed` override
+mismatched from an identical real engine stat, traced through
+`vendor/circuitai`'s source) remains real and well-understood -- this is
+NOT the same as saying the fix is wrong. But with only ONE pre-fix
+baseline sample and four post-fix samples that themselves range from
+62.5% to 81.2%, the data collected this session cannot statistically
+distinguish "these fixes genuinely improved Armada" from "Armada's own
+baseline is nearly as noisy as Legion's, and the pre-fix read happened to
+land on the low end." **Downgrade Armada from "goal met, three
+confirmations" to "plausible real improvement, needs more independent
+samples of BOTH the pre-fix and post-fix states to actually confirm."**
+
+**What this changes about the session's takeaways**:
+- The `build_speed` mechanism itself (traced C++ source, verified real
+  engine stats) is still legitimate and worth keeping deployed -- reverting
+  it would not obviously help given the pre-fix state shows the same
+  noise.
+- The summary table's "Armada: GOAL MET" (issue 42) should read
+  "Armada: plausible improvement, unconfirmed at the rigor this session
+  ultimately discovered it needed."
+- **The real lesson of this session, cutting across both factions**: this
+  benchmark (Comet Catcher 4v4, +25% handicap, 16-game solo batches) has a
+  noise floor wide enough that NEITHER faction's single-batch comparisons
+  should have been treated as confirmed without either (a) comparing
+  against a properly pooled/repeated baseline, or (b) running enough
+  games (32+, or several independent 16-game batches) to narrow the
+  confidence interval below the effect size being claimed. This applies
+  retroactively to results reported earlier in the session with more
+  confidence than the underlying statistics actually supported -- not
+  just the four Legion "regressions" and now Armada's "wins," but
+  potentially to some of Cortex's own reported numbers too, though
+  Cortex's much larger effect sizes (75-88% vs a 50% reference, repeated
+  across four independent batches this session and a documented ~26-1
+  historical record) make it far less likely to be a pure noise artifact.
+- **Recommended fix for future sessions**: adopt a standard of "N
+  independent 16-game batches, not 1" before calling any result
+  confirmed, unless the effect size is large enough that a single batch's
+  CI already excludes both the null AND a plausible noisy-baseline range
+  -- and always run at least one baseline-stability re-check before/after
+  a claimed fix, not just a single before/after pair.
