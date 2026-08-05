@@ -3064,3 +3064,34 @@ samples of BOTH the pre-fix and post-fix states to actually confirm."**
   CI already excludes both the null AND a plausible noisy-baseline range
   -- and always run at least one baseline-stability re-check before/after
   a claimed fix, not just a single before/after pair.
+
+**Follow-up: doubled the sample on both sides.** Ran a second independent
+pre-fix baseline (`armada-prefix-baseline2-16`, temporarily checking
+`behaviour.json` back to before the `build_speed` fixes, tested, then
+restored -- see the commit history around `166060a`/`e526fbb` for an
+honest account of a staging mistake made and fixed while doing this):
+**11-5 decided, 68.8%** -- even higher than the first pre-fix read
+(62.5%). Pooled pre-fix is now 21/32 = 65.6%; pooled post-fix (four reads:
+81.2%, 75.0%, 81.2%, 62.5%) is 48/64 = 75%. Two-proportion z-test on the
+doubled samples: **z=-0.96, still not significant.**
+
+**This is now a reasonably solid negative result, not just an
+underpowered single comparison.** With n=32 on the pre-fix side and n=64
+on the post-fix side, a true effect in the 15-20 point range (what the
+first few reads suggested) would very likely have reached significance by
+now. It didn't. The honest conclusion: **if `build_speed`'s correction has
+a real effect on this benchmark, it's probably smaller than ~10 points,
+not the ~15-19 points the early reads suggested** -- consistent with
+early reads simply landing on the favorable side of a noisy distribution
+by chance, the same failure mode discovered for Legion. The fixes are
+being left in place (real mechanism, not harmful, several `.lua`-verified
+correct assumptions), but should be described going forward as
+"plausible, small-if-any confirmed effect," not "goal met."
+
+**Meta-lesson for how this session used its remaining time**: after
+finding the noise-floor problem, the highest-value use of further
+tournament budget was going back and properly powering the SAME
+comparisons already made, not generating new hypotheses. This is worth
+keeping in mind for future sessions: once a benchmark's noise floor is in
+question, re-running for statistical power beats chasing new leads until
+the existing claims are actually resolved one way or the other.
