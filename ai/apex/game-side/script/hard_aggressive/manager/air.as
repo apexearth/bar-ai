@@ -52,6 +52,28 @@ const float AIR_AA_CEILING = 2500.f;
 const int   AIR_BOMBERS    = 12;
 const int   AIR_FIGHTERS   = 8;
 
+// Scale the strike size with our own economy. apexearth: "I think it should
+// be standard air logic to save up 10+ bombers before using them. Scaled
+// based on how good our economy is." AIR_BOMBERS/AIR_FIGHTERS above are the
+// floor (already above the "10+" bar); a stronger economy can afford, and
+// profits more from, a bigger and more decisive strike than the minimum.
+const float AIR_SCALE_INCOME = 80.f;   // extra metal/s per extra bomber above the floor
+const int   AIR_BOMBERS_MAX  = 30;
+
+int ScaledBombers()
+{
+	const int extra = int(aiEconomyMgr.metal.income / AIR_SCALE_INCOME);
+	const int want = AIR_BOMBERS + extra;
+	return (want > AIR_BOMBERS_MAX) ? AIR_BOMBERS_MAX : want;
+}
+
+int ScaledFighters()
+{
+	// Same escort ratio as the floor (8 fighters per 12 bombers), scaled
+	// with the bomber count rather than income directly.
+	return int(float(ScaledBombers()) * float(AIR_FIGHTERS) / float(AIR_BOMBERS));
+}
+
 // Enqueue does not dedup and CCircuitDef::count only moves when a unit is
 // registered, so back-to-back orders overshoot the target. Same reason
 // Factory::RUSH_CON_SPACING exists.
@@ -69,7 +91,7 @@ const int   AIR_ORDER_SPACING = 2 * SECOND;
 // the repeat order, spelled at this layer.
 //
 // Overshoot is bounded by the same counters that bound a single order: the batch
-// is only issued while the force is still short of AIR_BOMBERS/AIR_FIGHTERS.
+// is only issued while the force is still short of ScaledBombers()/ScaledFighters().
 const int   AIR_BATCH = 6;
 
 // Priority::NOW while the strike is being built, and constructors pulled onto
@@ -255,12 +277,12 @@ int Fighters() { return Have(gFighter) + Have(gFighter1); }
 
 bool Massed()
 {
-	return (Bombers() >= AIR_BOMBERS) && (Fighters() >= AIR_FIGHTERS);
+	return (Bombers() >= ScaledBombers()) && (Fighters() >= ScaledFighters());
 }
 
 bool HalfMassed()
 {
-	return (Bombers() * 2 >= AIR_BOMBERS) && (Fighters() * 2 >= AIR_FIGHTERS);
+	return (Bombers() * 2 >= ScaledBombers()) && (Fighters() * 2 >= ScaledFighters());
 }
 
 bool HaveAirCon()
@@ -347,14 +369,17 @@ CCircuitDef@ NextAirDef(bool advanced)
 	const int nb = Bombers();
 	const int nf = Fighters();
 	// Grow the escort in step with the strike force rather than after it.
+	// Ratio-based, not scaled-count-based, so it holds regardless of how big
+	// ScaledBombers()/ScaledFighters() have grown -- AIR_BOMBERS/AIR_FIGHTERS
+	// is the same proportion ScaledFighters()/ScaledBombers() scales from.
 	if ((fighter !is null) && fighter.IsAvailable(ai.frame)
 		&& (nf * AIR_BOMBERS < nb * AIR_FIGHTERS))
 	{
 		return fighter;
 	}
-	if ((bomber !is null) && bomber.IsAvailable(ai.frame) && (nb < AIR_BOMBERS))
+	if ((bomber !is null) && bomber.IsAvailable(ai.frame) && (nb < ScaledBombers()))
 		return bomber;
-	if ((fighter !is null) && fighter.IsAvailable(ai.frame) && (nf < AIR_FIGHTERS))
+	if ((fighter !is null) && fighter.IsAvailable(ai.frame) && (nf < ScaledFighters()))
 		return fighter;
 	return null;
 }
@@ -541,8 +566,8 @@ void Update()
 	if (Armed() && (ai.frame >= gNextLog)) {
 		gNextLog = ai.frame + 60 * SECOND;
 		CCircuitDef@ want = FactoryToBuild();
-		AiLog(Factory::T() + "apex: air " + Bombers() + "/" + AIR_BOMBERS
-			+ " bombers, " + Fighters() + "/" + AIR_FIGHTERS + " fighters"
+		AiLog(Factory::T() + "apex: air " + Bombers() + "/" + ScaledBombers()
+			+ " bombers, " + Fighters() + "/" + ScaledFighters() + " fighters"
 			+ " plants=" + Have(gPlant1) + "," + Have(gPlant2)
 			+ " cons=" + (HaveAirCon() ? "1" : "0")
 			+ " want=" + ((want is null) ? "-" : want.GetName())
