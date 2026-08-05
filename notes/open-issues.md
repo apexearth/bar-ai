@@ -3232,3 +3232,27 @@ question. A live-watched early game, or `combat_events.py` filtered to
 the first 20 minutes across a batch of games, is the natural next step --
 this is a much sharper starting point than "watch a Legion game and see
 what happens" was at the start of this investigation.
+
+**Refinement, same session, using the periodic samples already in each
+match's `result.json`** (every ~2 game-minutes, not just the final
+cumulative one): built a pooled damage-ratio timeline (sum dealt/sum
+received across the group at each timestamp, not an average of
+per-game ratios, which is unstable early when `damageReceived` is near
+zero) for the favorable-outcome group vs the unfavorable-outcome group,
+across both baseline batches combined.
+
+**The divergence is NOT in the opening minutes -- both groups track each
+other noisily through minute ~12-14.** The real split starts around
+**minute 14-20**: the favorable group's pooled ratio settles and holds
+around 1.15-1.2 from there through minute 30, while the unfavorable
+group's ratio drifts downward through the same window, crossing below
+1.0 around minute 20 and settling around 0.86-0.95 until the game ends
+(consistent with the ~24-26 minute average length of unfavorable games
+found above). **Corrected framing: this is a mid-game SUSTAINED decline
+(roughly minutes 15-25), not an opening-minutes problem.** Something
+about Legion's army composition or economy trajectory from minute ~14
+onward either holds steady (favorable games) or erodes (unfavorable
+games) -- the opening is not where to look; the 15-25 minute window is.
+A live-watched game should focus attention there specifically, and
+`combat_events.py`/a similar tool filtered to that window (not the first
+20 minutes broadly) is the more precise next step.
