@@ -3457,10 +3457,36 @@ either a fallback rez-production path or higher lab-rebuild priority when
 it's the sole rez source -- not attempted this session, flagged for
 follow-up.
 
-**Interim result on the `SQUAD_SPEED_RATIO` fix**: `legion-squadspeed-
-fix-large96` (96 games, solo, current fix deployed) tracking at 83/96
-games: 22-60 (26.5%), close to the established 25.8% baseline. Similar
-shape to Armada's build_speed disappointment -- a sound, well-traced
-mechanism that may not move THIS specific win-rate metric much. Full
-result pending completion; will log the final number and proper z-test
-separately once done.
+**FINAL result on the `SQUAD_SPEED_RATIO` fix**: `legion-squadspeed-
+fix-large96` completed at 96/96: **25-70 decided (26.0%)**. Pooled
+against the established Legion baseline (33/128 = 25.8%): **z=0.09,
+essentially zero difference.** Same shape as Armada's `build_speed`
+result (issue 51) -- a real, cross-faction-verified, correctly-traced
+mechanism (confirmed via real speed data that Legion's `leginc`/`legstr`
+pair was genuinely blocked from merging under the old constant) that
+shows no measurable effect on THIS win-rate metric once properly powered.
+
+**Kept deployed anyway, same reasoning as the Armada fixes**: the
+underlying correctness case doesn't depend on the win-rate test --
+`leginc` genuinely couldn't merge into a squad with its own faction's
+escort before, and now it can. Whether that specific behavioral
+correction moves a whole game's outcome is a separate, apparently much
+harder question than the mechanism-level fix answers.
+
+**Two hovercraft-config fixes (`legehovertank`, `leghp`) deployed
+alongside it, smoke-tested clean.** Spot-checked a smoke match: no
+hovercraft spend appeared. Not yet tournament-confirmed at scale, but
+these are unambiguous fixes (matching Legion's treatment to Armada/
+Cortex's already-established pattern for the same unit class), not
+speculative like the win-rate-sensitive mechanism fixes -- lower bar for
+confidence needed.
+
+**Running total of this session's Legion attempts, all fully resolved as
+"no confirmed win-rate effect" once properly powered**: constructor
+weight bundle, `T1_FAC`/`T2_FAC`, `legvflak` role tag, `leggant`
+build_speed, and now `SQUAD_SPEED_RATIO`. Five real, mostly well-evidenced
+fixes/hypotheses, zero confirmed win-rate movement. This is a very strong
+signal that whatever is actually holding Legion at ~25.8% is not any
+single mechanism this kind of targeted fix can reach -- worth treating as
+essentially confirmed for a future session, rather than assuming the 6th
+attempt will be different.
