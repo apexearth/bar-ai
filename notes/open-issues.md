@@ -2638,3 +2638,25 @@ so `legvflak` (a 7th, from the T2 vehicle plant) wasn't filling an
 uncovered production line, which is the more precise version of the
 redundancy theory. Whether that redundancy is actually what caused the
 regression is still unconfirmed.
+
+## 40. Cortex clean-reconfirm closes the data-integrity loose end from issue 37
+
+`cortex-clean-reconfirm-16` (solo, clean, all 16 games completed normally):
+**12-4 decided, 75.0%, 95% CI 51-90% (excludes 50%)**. This directly
+replaces `corck-revert-confirm-8`, the one Cortex batch from earlier in the
+session that was half of a corrupted concurrent pair (issue 37) and
+therefore not independently trustworthy. Result is solidly consistent with
+this session's broader ~26-1/85%+ Cortex pattern from the three genuinely
+clean tournaments earlier in the session. **No remaining doubt about
+Cortex's data integrity this session** -- every faction now has at least
+one fully clean, solo-run confirmation batch: Cortex 75% (this entry),
+Armada 62.5% (`armada-armaca-clean-16`), Legion 43.8%
+(`legion-pre-issue35-baseline-16`).
+
+**Session-end state across all three factions**, all clean data:
+
+| faction | clean win% | vs Cortex's own ~85%+ pattern | status |
+|---|---|---|---|
+| Cortex | 75-88% (4 batches) | is the reference | proven, stable |
+| Armada | 62.5% | below, but real confirmed progress this session (2 landed fixes) | still needs iteration |
+| Legion | 43.8% | well below | 3 hypotheses tried, all reverted; needs live-watched investigation next |
