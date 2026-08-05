@@ -2236,3 +2236,63 @@ This session's entire benchmark has run Cortex vs Cortex, so an
 Armada-specific bug could plausibly have survived undetected the whole
 time -- CLAUDE.md's own "Faction parity" section already names this
 exact failure mode as recurring in this codebase.
+
+## 34. `corck` (Cortex T1 constructor) weight fix -- deployed, smoke-tested clean, tournament confirmation started but not finished this session
+
+Originated from apexearth watching a live 8v8 (`matches/_engine`, ally=0 apex/
+Armada vs ally=1 stable/Cortex) and catching mex counts roughly halved on the
+Armada side by eye (frame 46800: apex mean ~7.4 mex/player vs stable ~14.6),
+several individual Armada players stuck at 2-4 mex while others were fine at
+11-20 -- a per-player, not universal, pattern.
+
+Three-angle audit did not find an Armada-specific script bug explaining that
+freeze directly. Per the task's own fallback instruction, implemented instead
+the best-evidenced parity gap found along the way, in `factory.json`'s
+`corlab` (Cortex T1 bot lab) table: `corck` (confirmed via `tools/unitdef.py`
+as "Tech 1 Constructor", not a spam unit) was weighted flat at **0.05** across
+all six income tiers, while `armlab`'s equivalent `armck` runs **0.25-0.35**.
+Same shape, same file, same mechanism as issue 33's `coravp`/`coracv` fix
+(a value raised on Armada, never carried to Cortex) -- and T1 constructor
+throughput sits directly upstream of mex placement/upgrade, which is the
+literal mechanism (not just a symptom-shape match) behind low mex counts.
+
+**Fix**: raised `corck` to 0.25 flat across all six tiers. tier0's increase
+taken from `corak` (0.90->0.70); tier1-5's taken from `corthud` (the
+dominant unit there once `corak` is already near zero: 0.63->0.43,
+0.66->0.46, 0.68->0.48, 0.70->0.50, 0.72->0.52). `cornecro`, `corstorm`,
+`corcrash` untouched, matching issue 33's "touch only the receiving/donating
+pair" discipline.
+
+**Verified before deploy**: `python tools/check.py` passed clean.
+`tools/unitdef.py corck` confirms Tech 1 Constructor, cost 120m/1750e.
+
+**Deploy + smoke test**: confirmed no spring/spring-headless/BAR process
+running (the live-watched 8v8 had ended by the time this fix was ready),
+deployed apex (digest `19dd2712288a`), ran a 15-minute Cortex,Cortex 4v4
+headless smoke match -- 0 AngelScript compile errors
+(`grep -c "\.as ([0-9]*, [0-9]*) : ERR"` on the infolog returned 0), and
+confirmed `BARbApex:apex:hard_aggressive` actually loaded via the infolog's
+`Load script: ...\BARbApex\apex\script\hard_aggressive\{init,main}.as` lines
+across all 4 apex players.
+
+**Tournament confirmation launched but not finished within this session's
+window**: `parity-corck-16` (Comet Catcher 4v4, Cortex,Cortex, 16 games,
+25 min, +25% handicap, 3 workers) was started and was still running matches
+when this entry was written -- do not treat this fix as fully confirmed by
+tournament data yet. **Next session: check
+`tournaments/20260804-232934-parity-corck-16` for a finished result, read
+with `tools/composition.py` for corck/T1-constructor counts and mex-upgrade
+counts specifically (the downstream signal this fix targets), and compare
+against this session's `factorycap-16` baseline (apex ~41k metal produced,
+wipeout 3/64) as the healthy-Cortex reference point. If it regresses metal
+production or T1-constructor-adjacent combat unit output (corthud dropped
+from ~63-72% down to ~43-52%, so a drop in Cortex's mobile assault output is
+the most plausible side effect to check for, not assume away), revert
+cleanly; otherwise this is confirmed alongside issue 33's still-undeployed
+`coravp`/`coracv` fix as a second, independent Cortex T1/T2-constructor
+parity gap in the same file.**
+
+Kept deployed/committed pending that tournament result: the mechanism is
+directly analogous to an already-proven-correct precedent (issue 33), the
+smoke test is clean, and reverting a config-only JSON change is trivial if
+the confirmation batch disagrees.

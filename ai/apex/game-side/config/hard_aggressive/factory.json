@@ -301,13 +301,20 @@
 		"require_energy": false,
 		"income_tier": [10, 20, 30, 40, 50],
 		"unit":      ["corck", "corak", "cornecro", "corstorm", "corthud", "corcrash"],
+			// corck (T1 constructor) sat flat at 0.05 across every tier while armlab's
+			// armck -- same role on Armada's equivalent T1 lab -- runs 0.25-0.35 (see
+			// armlab above). Same shape as coravp/coracv (issue 33): raised off stock
+			// on Armada, never carried to Cortex. Raised corck to 0.25 flat, mirroring
+			// armck's magnitude; tier0's increase comes off corak (the unit absorbing
+			// corck's foregone share there), tier1-5's off corthud (dominant once
+			// corak drops near zero at those tiers). Nothing else in this table touched.
 		"land": {
-			"tier0": [ 0.05,    0.90,    0.05,       0.00,       0.00,      0.00],
-			"tier1": [ 0.05,  0.17,  0.05,  0.10,  0.63,  0.02],
-			"tier2": [0.05, 0.00, 0.05, 0.12, 0.66, 0.02],
-			"tier3": [0.05, 0.00, 0.05, 0.12, 0.68, 0.02],
-			"tier4": [0.05, 0.00, 0.05, 0.10, 0.70, 0.02],
-			"tier5": [0.05, 0.00, 0.05, 0.08, 0.72, 0.02]
+			"tier0": [ 0.25,    0.70,    0.05,       0.00,       0.00,      0.00],
+			"tier1": [ 0.25,  0.17,  0.05,  0.10,  0.43,  0.02],
+			"tier2": [0.25, 0.00, 0.05, 0.12, 0.46, 0.02],
+			"tier3": [0.25, 0.00, 0.05, 0.12, 0.48, 0.02],
+			"tier4": [0.25, 0.00, 0.05, 0.10, 0.50, 0.02],
+			"tier5": [0.25, 0.00, 0.05, 0.08, 0.52, 0.02]
 		},
 		"caretaker": 8
 	},
