@@ -2608,3 +2608,33 @@ either the single dramatic collapse or the broader "collapses happen
 sometimes to both sides" read alone -- neither is a strong enough signal
 yet to act on without more direct observation of what a losing engagement
 actually looks like for Legion specifically.
+
+**Mechanism update on issue 39's `legvflak` regression**: checked every
+other `"anti_air"`-tagged unit in `behaviour_leg.json` to test a "mobile
+units can't be tagged anti_air the way static ones can" hypothesis --
+**disproven**. Legion already has SIX working anti_air-tagged units across
+multiple production lines: `legrl`/`legflak`/`legfrl` (towers, kbot-lab
+and naval), `legaabot`/`legadvaabot` (mobile amphibious AA bots, bot lab),
+and `legah` (AA hovercraft). So Legion's air defense is not thin --
+`legvflak` would have been a SEVENTH AA option, from yet another
+production line (the T2 vehicle plant). `response.json`'s `anti_air` entry
+has `importance: 950` (by far the highest in the whole table -- next
+highest is `100`) and `max_percent: 0.5`, meaning any air threat trigger
+can pull up to half of build spend toward AA. With six AA options already
+covering every factory type, adding a seventh from `legavp` plausibly
+caused REDUNDANT AA spend when the response system triggered -- multiple
+factories responding to the same air threat simultaneously -- rather than
+filling a real gap. This is a plausible mechanism, not confirmed by
+further testing (the fix stays reverted either way), but it reframes the
+lesson: **the question for a "missing role tag" fix on this AI isn't just
+"does Cortex have this tag on the equivalent unit" but "does this faction
+already have adequate coverage for this role from its OTHER units."**
+Correcting an initial overclaim here: raw anti_air-tagged unit counts are
+actually Armada 13, Cortex 13, Legion 6 -- Legion has FEWER total AA
+options by count, so "Legion is over-provisioned" is not simply supported
+by the numbers. What Legion's 6 do cover is every major production line
+(kbot-lab tower + mobile, T2 bot-lab mobile, naval tower, hovercraft) --
+so `legvflak` (a 7th, from the T2 vehicle plant) wasn't filling an
+uncovered production line, which is the more precise version of the
+redundancy theory. Whether that redundancy is actually what caused the
+regression is still unconfirmed.
