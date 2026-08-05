@@ -2519,8 +2519,15 @@ clean, confirmed ~43.8% baseline after reverting BOTH the weight-tuning
 batch (issue 37) AND the T1_FAC structural fix tested alone (issue 38) --
 two independent, evidence-based attempts this session, both regressions.
 Legion needs a genuinely different hypothesis next session, not another
-variation on constructor weights or the T1_FAC mechanism; the
-still-unconfirmed lead from issue 35 (Legion's economy reads ahead of
-stock's while still losing ~half its games, pointing at army composition
-or combat effectiveness rather than economy) was itself from a corrupted
-batch and should be re-checked cleanly before treating it as a real signal.
+variation on constructor weights or the T1_FAC mechanism.
+
+**The economy-ahead lead is now CLEANLY confirmed**, re-checked against
+`composition.py` on `legion-pre-issue35-baseline-16` (the clean baseline
+tournament, not the corrupted one issue 35 originally cited): apex-Legion
+metal produced 177.7k vs stock's 126.6k, cons T1 28 vs 19, mex upgrades 15
+vs 14, T2 spend roughly even (73.6k vs 70.4k) -- apex is ahead or even on
+every economy metric, yet still only wins 43.8% of decided games. **Next
+session should start directly from army composition / combat effectiveness
+investigation** (military.json response tables, unit-role classification
+for Legion's specific unit names, retreat/engagement thresholds) rather
+than economy or the two mechanisms already ruled out here.
