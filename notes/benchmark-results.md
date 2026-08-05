@@ -25,7 +25,7 @@ agree, and check whether anyone actually did that pooling (search
 |---|---|---|
 | **Cortex** | 4 clean batches, 75–88% each | reference faction; only one this session with a large, repeated, trustworthy margin over 50% |
 | **Armada** | 6 clean batches on the fully-fixed code (n=160 pooled), 57.3–81.2% | `build_speed` fixes (armlab/armvp/armnanotct2) are real, traced mechanisms, kept deployed — but **definitively show no win-rate or combat-outcome effect** once a 96-game batch gave this real power (pooled post-fix 64.4% vs pre-fix 65.6%, z=-0.13; see `open-issues.md` #51). Do not cite the early 75–81% reads as representative. |
-| **Legion** | 6 clean batches on the (reverted-to-baseline) code, 25–43.8% | all 4 things tried this session (constructor weights, `T1_FAC`, `legvflak` role tag, `leggant` build_speed) failed to show a confirmed effect once each was re-tested; current code == original pre-session baseline. Best lead: damage-ratio/game-length analysis (`open-issues.md` #48–49), unaffected by the Armada correction. |
+| **Legion** | 7 clean batches (n=128 pooled baseline) | **DEFINITIVE: ~25.8% win rate (z=-3.99, p<0.0001), significantly below 50% and below both other factions.** All 4 fixes tried this session (constructor weights, `T1_FAC`, `legvflak` role tag, `leggant` build_speed) failed to move this number; current code == original pre-session baseline. Best lead for next session: damage-ratio/game-length analysis (`open-issues.md` #48–49). |
 
 ## Cortex, Cortex — reference faction
 
@@ -78,12 +78,21 @@ as representative without this context.
 | 2026-08-05 | `legion-gant-buildspeed-16` | `d373de1` | 16 | 3-13 | 18.8% | **yes** | `leggant` build_speed — CI excludes 50%, worst single read |
 | 2026-08-05 | `legion-baseline-stability-check-16` | `0fabb8f` state (baseline, unchanged) | 16 | 5-11 | 31.2% | **yes** | re-run of the SAME baseline code as `legion-pre-issue35-baseline-16` — 12.6pp swing, zero changes |
 | 2026-08-05 | `legion-t1fac-retest-16` | `04aaeb4` (T1_FAC re-added) | 16 | 6-10 | 37.5% | **yes** | second independent T1_FAC read |
+| 2026-08-05 | `legion-baseline-large96` | current HEAD (baseline, unchanged) | **96** | 21-75 | **21.9%** | **yes** | large batch — CI 15-31% (i.e. stable 69-85%), **excludes 50%: a real, significant result on its own** |
 
-**Pooled baseline** (two identical-code runs): (7+5)/32 = 37.5%.
-**Pooled T1_FAC** (two identical-fix runs): (2+6)/32 = 25%. z = -1.08,
-**not significant** — closes the investigation with no confirmed effect
-either direction. `legvflak` and `leggant` were each only read once; not
-pooled. See `open-issues.md` #45, #47.
+**Pooled T1_FAC** (two identical-fix runs): (2+6)/32 = 25%. z = -1.08 vs
+the small-batch baseline, **not significant** — closes that investigation
+with no confirmed effect either direction. `legvflak` and `leggant` were
+each only read once; not pooled. See `open-issues.md` #45, #47.
+
+**DEFINITIVE baseline, see `open-issues.md` #52**: pooling all THREE
+baseline reads (both 16-game batches + the 96-game one): 33/128 = **25.8%**,
+z=-3.99 vs 50% (p<0.0001). **This is Legion's real win rate against stock
+BARb on this benchmark** — genuinely, significantly below 50%, not an
+artifact of small-sample noise the way it looked mid-session. Every
+earlier noisy 16-game read (43.8%, 31.2%) was a real draw from this same
+~26% distribution, not evidence of instability. Nothing tried this
+session moved this number.
 
 ## Cross-faction (not directly comparable to the tables above)
 
