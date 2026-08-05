@@ -2660,3 +2660,31 @@ Armada 62.5% (`armada-armaca-clean-16`), Legion 43.8%
 | Cortex | 75-88% (4 batches) | is the reference | proven, stable |
 | Armada | 62.5% | below, but real confirmed progress this session (2 landed fixes) | still needs iteration |
 | Legion | 43.8% | well below | 3 hypotheses tried, all reverted; needs live-watched investigation next |
+
+## 41. Armada `build_speed` gaps found, deliberately NOT acted on -- unverified, could be legitimate
+
+A systematic scan for `armXXX`/`corXXX` behaviour.json pairs differing 2x+
+on `power` or `build_speed` (the same method that found `armaca`'s `limit`
+bug) turned up four `build_speed` gaps: `armaca`=10.0 vs `coraca`=5.0 (the
+same unit already fixed for `limit` this session), `armlab`=4.0 vs
+`corlab`=15.0, `armnanotct2`=16.0 vs `cornanotct2`=8.0, `armvp`=5.0 vs
+`corvp`=15.0. No `power`-field gaps found (the earlier `limit` scan also
+came back empty after the `armaca` fix -- no more 2x+ `limit` gaps remain).
+
+**Deliberately not touched.** Unlike `armaca`'s `limit`, which had a clear
+copy-paste signature (matching `armconsul` immediately above it in the
+file), these `build_speed` values have no such tell, and BAR's factions
+genuinely do have different real buildpower/speed stats by design --
+`armlab` vs `corlab` (T1 factories) having a 4x `build_speed` difference
+in this AI's config could be a correct reflection of a real in-game stat
+difference, not a bug. This session had three Legion regressions this same
+turn from exactly this failure mode: "different from Cortex" treated as
+"broken" without verifying against the actual unit/building stats first.
+**Before touching any of these: verify the real engine `buildpower`/
+`workertime` value for each pair** (not currently surfaced by
+`tools/unitdef.py`'s summary view -- may need the raw `.lua` unit def, the
+way `legmos`'s stockpile weapon had to be read directly to catch issue
+36's cause). If the real stats already differ by a similar ratio, these
+values are correct and this issue should be closed with no action; only
+fix if the real stats are equal or close and the config ratio doesn't
+match.
