@@ -2270,9 +2270,37 @@ behind the 26-1 record).
 each table's existing dominant absorber (`armpw`/`armham` for Armada,
 `leglob` for Legion -- the same "corak early, corthud late" shape issue 33
 and the original corck fix both used, just applied to the two untested
-factions rather than to Cortex). **Neither change is tournament-confirmed --
-next session, run an Armada,Armada and a Legion,Legion batch before trusting
-either.** Issue 33's `coravp`/`coracv` fix is the same open question: it too
-was written as "Cortex raised to match Armada" and has never been confirmed
-against a Cortex-only baseline the way corck's regression now has been --
-re-examine it under the same Cortex-is-reference logic.
+factions rather than to Cortex). Issue 33's `coravp`/`coracv` fix is the same
+open question: it too was written as "Cortex raised to match Armada" and has
+never been confirmed against a Cortex-only baseline the way corck's
+regression now has been -- re-examine it under the same Cortex-is-reference
+logic.
+
+**Confirmed same session, two isolating 8-game batches (Comet Catcher 4v4,
++25% handicap):**
+
+- `corck-revert-confirm-8` (Cortex,Cortex): apex 5-2 decided (71%, 95% CI
+  36-92%) -- consistent with this session's proven ~26-1-type pattern.
+  Confirms the revert restored Cortex cleanly; the earlier `parity-corck-16`
+  regression (0-3 at 6/16) is fully explained by the bad `corck` raise, not
+  by anything else touched this session.
+- `armada-mirror-armck-8` (Armada,Armada): apex 4-4 (50%, 95% CI 22-78%) --
+  an exact coin flip. Read this as a legitimate first baseline for a faction
+  that had never been benchmarked before this fix, not as a regression: it
+  is dramatically better than `corck`'s 0-3 regression shape, and Armada has
+  had zero of the iteration Cortex received across this session's three
+  16-game batches. **Not yet "beats reliably"** -- Armada needs its own
+  tuning pass the way Cortex got one, not a single parity fix, before it can
+  be judged against the same bar.
+- A separate `armada-vs-cortex-8` cross-faction batch (apex-Armada vs
+  stable-Cortex) went 2-6 for apex, but is NOT a clean read on this fix --
+  `composition.py` on that batch shows cons T2 1 vs 5, the same shape as the
+  still-unconfirmed issue 33 T2-constructor gap, not something introduced by
+  today's change. Cross-faction batches conflate multiple untested variables
+  and should not be used to judge a single-faction config change.
+
+**Still open for a future session**: get Armada its own tuning pass (the
+`coravp`/`coracv` T2-con angle first, since the cross-faction batch points
+there), then re-run the Armada,Armada mirror to see if it moves off 50%.
+Legion's `legck` change remains completely unconfirmed -- no Legion,Legion
+batch has been run yet.
