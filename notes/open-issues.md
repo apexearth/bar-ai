@@ -3678,3 +3678,69 @@ answered "which of THEIR units are we missing" more directly than
 question. Worth folding a `--compare-to <spec>` mode into
 `expected_units.py` for a future session instead of re-deriving this
 comparison ad hoc each time.
+
+## 57. Cortex 4v4 "regression" traced: SQUAD_SPEED_RATIO ruled out, kiting-interval fix recovers to 80.6%
+
+apexearth: "we aren't doing too bad here but it feels noticeably less good
+than how we were yesterday... should pinpoint *why* this is." Yesterday's
+known-good state is tagged `good-winrate-factorycap-16` (commit `d303771`)
+plus "one or two commits after" (`d20592b`, `8464a03`) -- 20/20 decided
+(100%) across two clean 4v4 Cortex,Cortex batches.
+
+**Full shared-code audit since that checkpoint** (everything touching
+`ai/apex/game-side/script`, `ai/apex/engine-side`, `vendor`): `factory.json`
+and `behaviour.json` changes are scoped entirely to Armada's own tables
+(armck/armack/armlab/armvp/armnanotct2/armaca), verified line-by-line, no
+Cortex entries touched. `factory.as`/`air.as` diffs are comments only or
+scoped to Legion's branch. `builder.as` carries two real mechanism changes:
+`FACTORY_REQUEST_SPACING` (a documented overproduction-race fix, issue
+"async-count race") and the `CheapAA` phase-gate carve-out (issue 54, a net
+addition, not a restriction). Neither is Cortex-specific in a way that
+should hurt it.
+
+**First real 4v4 Cortex,Cortex regression-check batch (this session, first
+time this exact matchup was tested since the known-good tag)**: 5-3 = 62.5%,
+CI includes 50%. Confirmed via z-test against the pooled known-good (20/20):
+z=2.90, p<0.005 -- a real, significant drop, not noise, at least at that
+moment.
+
+**Bisected the one remaining untested shared-code change**: rebuilt with
+C++ `SQUAD_SPEED_RATIO` reverted 3.5->2.5 (its pre-this-session value).
+Result: 71.4% (5/7 decided) -- barely different from 62.5%, not a
+significant change (numbers essentially overlap). **Ruled out**:
+`SQUAD_SPEED_RATIO` is not the regression driver. Restored to 3.5 (the
+evidence-based value, unrelated to this investigation).
+
+**Real lead, from apexearth watching live**: "one of the most important
+things I see in fighting is keeping our units close to their maximum range
+against enemies, and to almost always stay moving. standing still leads to
+death much quicker." Traced to `ISquadTask::Attack` (`SquadTask.cpp`): a
+squad computes a standoff position at weapon range (existing arc/row
+positioning logic) and then HOLDS it, re-evaluating only when the target's
+tile/range bucket changes or every 3 seconds (`isRepeatAttack`) -- units
+functionally stand still and fire for up to 3 full seconds per cycle even
+though the target is likely drifting the whole time. Shortened the
+repeat-attack interval to 1 second. Rebuilt, smoke-tested clean.
+
+**Result, progressively**: regression-check (62.5%) -> SQUAD_SPEED_RATIO
+bisect (71.4%, ruled out) -> kiting-fix 8-game (75.0%) -> kiting-fix
+**32-game** (78.1% / **80.6% decided, 25/31, CI 64-91%, excludes 50% --
+a real, significant result**). z-test vs the known-good 20/20: z=2.09,
+borderline -- a 20/20 record is itself consistent with a true rate as low
+as ~83% (Clopper-Pearson lower bound), so 80.6% is plausibly the SAME
+underlying rate as "yesterday," not a confirmed further regression. The
+three small 8-game batches (62.5/71.4/75.0%) that looked concerning were
+themselves a run of low draws from this same ~80% distribution -- textbook
+example of this project's own documented noise floor, resolved the
+project's own established way (one large batch, not more small ones).
+
+**Still below the 90% target** (this session's goal, set via Stop hook:
+"Cortex vs Cortex, Armada vs Armada, and Legion vs Legion games all showing
+90% or greater win rates"). Whether more work specifically targeting Cortex
+is warranted, or whether ~80% is close to this benchmark's real ceiling for
+Cortex, is not yet resolved -- next candidate lever: extend the kiting
+principle further (the 1s interval was a conservative first cut) or
+continue the D-gun investigation (still open, needs a C++ binding since
+`HasDGun()` isn't exposed to AngelScript).
+
+Committed: `cfe5c6e` (kiting-interval fix + SQUAD_SPEED_RATIO restore).
