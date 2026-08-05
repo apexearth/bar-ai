@@ -2026,3 +2026,67 @@ comparison batch next -- read with `tools/combat_events.py` as a first pass,
 then `composition.py`/`spending_timeline.py` per issue 29's own recommendation
 (tower fix: watch for excess passivity, not just win rate; bot-lab fix:
 duplicate `mFactories` spend should drop).
+
+## 31. `tower-botlab-16` result, and `combat_events.py` catching a fix that didn't work
+
+**`tower-botlab-16` (n=16): 7-3 decided (70.0%, 95% CI 40-89%), 6/16 to time
+limit.** Positive, centered well above 50%, but CI still includes it --
+not conclusive alone. But `tools/combat_events.py` (run as the plan
+specified) immediately surfaced something the win rate alone would have
+hidden: the bot-lab request-cooldown fix (`2473373`) was NOT actually
+working. Individual players still showed `corlab` placed **8, even 10
+times within a single 3-minute window**, gaps as short as 6 seconds --
+far too fast to be a genuine post-loss rebuild. Root cause: that fix only
+gated the ONE script branch that requests a bot lab when a player has
+*zero*; once any exists that branch stops firing on its own, so the
+cooldown was never even being exercised by the actual bug. The real
+duplication is the stock engine's own `DefaultMakeTask` independently
+offering the same factory type to every idle constructor, with nothing
+on the script side capping total count per type -- a different code path
+entirely from the one `2473373` fixed.
+
+**Fixed in `5b9b6fd`**: refuse any offered factory build once a player's
+own count of that exact def reaches `FACTORY_TYPE_CAP=3` (generous on
+purpose -- a strong economy legitimately wants 2-3 bot labs to
+parallelize production; the bug was 8-10, not a second or third).
+
+## 32. `factorycap-16` (n=16): 11-0 decided, 100%, 95% CI 74-100% -- the strongest result of the entire session
+
+**11/11 decided games won, 5/16 to time limit. CI excludes 50%, a real
+difference at this sample size.** This is the first time all session a
+win-rate result has been unambiguously statistically significant on the
+winning side at a real n (previous best was 4-0/n=4, CI 51-100%, too
+small to trust alone -- see issue 26).
+
+`combat_events.py` confirms the factory-cap fix actually worked: only 2
+duplicate-build events remain in the whole 16-game batch, both `x2`/`x3`
+(within `FACTORY_TYPE_CAP`'s intended allowance -- normal parallel
+production, not the runaway 8-10x pattern). `composition.py` shows the
+wipeout-rate reversal that likely explains most of the win-rate jump:
+**apex 3/64 player-games wiped (4.7%) vs stable's 27/64 (42.2%)** --
+a dramatic flip from the 31-39% apex wipeout rates measured earlier this
+session (issues 15/20/25 territory). Metal produced: apex 41,075 vs
+stable's 30,506. Energy wasted: apex 22,700 vs stable's 72,751. `cornecro`
+(rez bot) share of apex spend: 8.0%, down from the 14-17% seen in the
+earlier problem batches, consistent with today's rez-bot timing/exposure
+fixes.
+
+**This batch tests the FULL stack of today's fixes together**: rez-bot
+wreck-gate + floor 4->8 (`bac027e`), mex-threat abandon-path fix
+(`de4bf55`), rez-bot proactive exposure (`8d83827`), tower/mass-blindness
+via `EnemyMassingThreat()` (`afc2157`), bot-lab cooldown (`2473373`,
+superseded/completed by the factory-cap fix below), and the factory-type
+cap (`5b9b6fd`). Not isolated per-change -- if a second confirmation batch
+holds up, worth considering which of these contributed most, but the
+combined result is exactly what "reliably beats" was defined as at the
+start of this session.
+
+**One live-watched match during this same window (`watch-comet-catcher-4v4-9`)
+corroborates it independently**: apex won 21.86min, with `combat_events.py`
+showing zero apex collapses and both of stable's own players fully wiped
+(14-16min and 16-18min), zero duplicate-build events either side.
+
+Worth a second confirmation batch before calling the session's original
+goal definitively met, per this session's own standing discipline about
+single-batch overclaiming -- but this is, by a wide margin, the best
+evidence produced all session.
