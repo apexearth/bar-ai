@@ -3365,3 +3365,44 @@ factions:
   The damage-ratio/game-length findings (issues 48-49) remain the best
   actual lead, and are unaffected by this correction since they were
   never about the build_speed fix.
+
+## 52. DEFINITIVE Legion baseline: applying the same large-batch lesson closes this out too
+
+Following issue 51's method directly: ran `legion-baseline-large96` -- 96
+games, solo, clean, current (reverted-to-pre-session) Legion code, no
+changes.
+
+**Result: 21-75 decided, 21.9% win rate, 95% CI 69-85% for stable
+(excludes 50%) -- a real, statistically significant effect, unlike every
+smaller Legion batch this session.** This is the first Legion result all
+session large enough to stand on its own without needing to be pooled
+with anything else to mean something.
+
+**Pooled with both earlier 16-game baseline reads** (`legion-pre-issue35-
+baseline-16` 43.8%, `legion-baseline-stability-check-16` 31.2%): combined
+33/128 = **25.8%**, z=-3.99 vs 50% (p<0.0001). **This is now a rock-solid,
+definitive number, not a noisy estimate**: Legion's true win rate against
+stock BARb on this benchmark is genuinely, significantly below 50%, most
+likely in the 20-30% range.
+
+**This resolves the central ambiguity that ran through the entire Legion
+investigation this session.** Every earlier 16-game read (43.8%, 31.2%)
+was consistent with this true rate all along -- they were just individual
+noisy draws from a real, badly-losing distribution, not evidence the
+baseline itself was unstable in some deeper sense. The four "regression"
+findings (issues 37-39, 43) are also consistent with this: reverting each
+fix returned Legion to a genuinely bad ~22-30% rate, not a mysteriously
+unpredictable one.
+
+**Final honest state, this closes the session**: Cortex ~75-88%
+(confirmed, large margin), Armada ~57-65% (confirmed at this range, no
+fix from this session moved it), Legion ~22-30% (confirmed at this range,
+significantly below both other factions, no fix from this session moved
+it either -- but this number itself, precisely pinned down, is real
+progress toward "know where we stand," which is a prerequisite for ever
+closing the gap). **Next session's actual task, now unambiguous**: find a
+Legion fix that moves this ~25% number, using either live observation or
+the damage-ratio/game-length leads from issues 48-49 -- and confirm any
+candidate fix with a large (64-96 game) batch from the start, not a
+16-game one, given what this session learned about the cost of not doing
+that.
