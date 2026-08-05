@@ -1315,7 +1315,13 @@
 				"role": ["builder", "air"],
 				"attribute": ["solo"],
 				"retreat": 0.6,
-				"limit": 2,
+				// limit was 2 -- matches armconsul just above by what looks like
+				// copy-paste, not armaca's own role. coraca (identical unit, one
+				// faction over) and legaca both cap at 15; armaca capped here to
+				// match. factory.as's eco-lead logic explicitly wants MORE air
+				// constructors for scaling T2 build power (ECO_AIR_CON_CAP=12) --
+				// a cap of 2 left that lever nearly disabled for Armada only.
+				"limit": 15,
 				"build_speed": 10.0  //bp 100
 			},
 			"coraca": {
