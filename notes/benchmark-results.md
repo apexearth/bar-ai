@@ -91,8 +91,22 @@ z=-3.99 vs 50% (p<0.0001). **This is Legion's real win rate against stock
 BARb on this benchmark** — genuinely, significantly below 50%, not an
 artifact of small-sample noise the way it looked mid-session. Every
 earlier noisy 16-game read (43.8%, 31.2%) was a real draw from this same
-~26% distribution, not evidence of instability. Nothing tried this
-session moved this number.
+~26% distribution, not evidence of instability.
+
+| date | tournament | commit | games | result | win% | solo? | notes |
+|---|---|---|---|---|---|---|---|
+| 2026-08-05 | `legion-squadspeed-fix-large96` | `455d1b4` (C++ `SQUAD_SPEED_RATIO` 2.5->3.5) | **96** | 25-70 | 26.0% | **yes** | z=0.09 vs pooled baseline — no effect |
+
+**Nothing tried this session moved this number.** Five real, mostly
+well-evidenced attempts, all resolved to "no confirmed win-rate effect"
+once properly powered: constructor weight bundle, `T1_FAC`/`T2_FAC`,
+`legvflak` role tag, `leggant` build_speed, and `SQUAD_SPEED_RATIO` (a
+C++ fix verified against real cross-faction unit-speed data). Two
+additional config fixes (`legehovertank`, `leghp` — both hovercraft
+units getting built on land maps with no water) were deployed based on
+apexearth live-watching two games and catching them directly; these are
+correctness fixes independent of the win-rate question, not yet
+tournament-confirmed at scale.
 
 ## Cross-faction (not directly comparable to the tables above)
 
