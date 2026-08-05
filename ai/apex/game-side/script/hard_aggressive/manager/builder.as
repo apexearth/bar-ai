@@ -1939,45 +1939,58 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 					+ " held=" + gRepairHeld);
 			}
 		}
-		// BUILD_PHASE gate on the optional economy/AA cluster. Progression,
-		// 2026-08-04: phase >= 2 (mex >= 4) reverted, 0 wins in 13 decided.
-		// phase >= 3 (RushReady) confirmed a real improvement, 5 wins in 22
-		// decided (22.7%) across 4 batches. phase >= 4 (gHaveT2 -- an
-		// advanced factory actually finished, not just afforded) measured
-		// BEST: 6 wins in 10 decided (60.0%, 95% CI 31.3%-83.2%) across 2
-		// batches, P(>=6 wins in 10 | baseline true rate 7.9%) = 0.00004, and
-		// most games (14/16 in the larger batch) ran the full time limit
-		// competitively rather than being decided either way. See
-		// notes/open-issues.md issue 15 for the full data and CHANGES.md for
-		// the summary. Before an advanced factory exists, a constructor's
-		// only job is expansion and reaching T2; CheapAA, HeavyAA, Pulsar and
-		// the eco converters/nano/fusion block below can all wait for an
-		// economy that has actually teched, not merely one that could afford
-		// to.
-		else if (Factory::gLastPhase >= 4) {
+		else {
+			// CheapAA carved out of the phase gate below, 2026-08-05: apexearth
+			// live-watched a Legion game with aaT1=0 at 7+ minutes against active
+			// mosquito-gunship pressure, and the phase telemetry confirms why --
+			// gHaveT2 (and so gLastPhase>=4) stayed at 0 for the entire pre-T2
+			// window every game, so CheapAA was structurally unreachable exactly
+			// when hit-and-run air is cheapest to punish. Unlike HeavyAA/Pulsar/
+			// the eco cluster below (open-ended investment, correctly deferred
+			// until the economy has actually teched), CheapAA is already a
+			// tightly self-gated reactive deterrent: it requires enemyAir >= 1
+			// (a real observed threat, not a forecast), caps at AA_MIN..AA_MAX,
+			// and is throttled by AA_PERIOD -- it cannot crowd out expansion the
+			// way the rest of this cluster measurably did.
 			IUnitTask@ aa = CheapAA(unit);
 			if (aa !is null)
 				return aa;
-			IUnitTask@ heavyAa = HeavyAA(unit);
-			if (heavyAa !is null)
-				return heavyAa;
-			if (!Factory::EcoLeadActive()) {
-				IUnitTask@ gun = Pulsar(unit);
-				if (gun !is null)
-					return gun;
+			// BUILD_PHASE gate on the optional economy cluster. Progression,
+			// 2026-08-04: phase >= 2 (mex >= 4) reverted, 0 wins in 13 decided.
+			// phase >= 3 (RushReady) confirmed a real improvement, 5 wins in 22
+			// decided (22.7%) across 4 batches. phase >= 4 (gHaveT2 -- an
+			// advanced factory actually finished, not just afforded) measured
+			// BEST: 6 wins in 10 decided (60.0%, 95% CI 31.3%-83.2%) across 2
+			// batches, P(>=6 wins in 10 | baseline true rate 7.9%) = 0.00004, and
+			// most games (14/16 in the larger batch) ran the full time limit
+			// competitively rather than being decided either way. See
+			// notes/open-issues.md issue 15 for the full data and CHANGES.md for
+			// the summary. Before an advanced factory exists, a constructor's
+			// only job is expansion and reaching T2; HeavyAA, Pulsar and the eco
+			// converters/nano/fusion block below can all wait for an economy
+			// that has actually teched, not merely one that could afford to.
+			if (Factory::gLastPhase >= 4) {
+				IUnitTask@ heavyAa = HeavyAA(unit);
+				if (heavyAa !is null)
+					return heavyAa;
+				if (!Factory::EcoLeadActive()) {
+					IUnitTask@ gun = Pulsar(unit);
+					if (gun !is null)
+						return gun;
+				}
+				IUnitTask@ block = EcoConverters(unit);
+				if (block !is null)
+					return block;
+				IUnitTask@ conv = EnergyConverter(unit);
+				if (conv !is null)
+					return conv;
+				IUnitTask@ nano = EcoNano(unit);
+				if (nano !is null)
+					return nano;
+				IUnitTask@ fus = EcoFusion(unit);
+				if (fus !is null)
+					return fus;
 			}
-			IUnitTask@ block = EcoConverters(unit);
-			if (block !is null)
-				return block;
-			IUnitTask@ conv = EnergyConverter(unit);
-			if (conv !is null)
-				return conv;
-			IUnitTask@ nano = EcoNano(unit);
-			if (nano !is null)
-				return nano;
-			IUnitTask@ fus = EcoFusion(unit);
-			if (fus !is null)
-				return fus;
 		}
 	}
 
