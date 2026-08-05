@@ -2376,3 +2376,53 @@ confirmed-correct mechanism; a single noisy win-rate sample is not grounds
 to revert a fix whose effect is independently visible in the composition
 data. Armada still nowhere near Cortex's ~85%+ pattern; next session should
 keep iterating rather than expect one fix to close that gap.
+
+## 37. CRITICAL: running two `run_tournament.py` invocations concurrently corrupts both -- they share `runtime/engine-w0`
+
+Found while confirming issue 36's Legion revert: `legion-bomber-revert-confirm-16`
+came back 4-10 (25%), WORSE than the broken `legmos` batch it was supposed to
+fix (31.2%), on what should have been an exact revert to previously-working
+code. That result made no sense on its own, so I read a losing game's infolog
+directly (`t006`'s) and it was loading `StartScript from:
+...\armada-armaca-fix-16\matches\t011\script.txt` -- **a match inside the
+Legion tournament's own output folder was running the Armada tournament's
+script.** The two tournaments were launched concurrently in the same turn.
+
+Root cause, confirmed by reading `run_tournament.py`: `RUNTIME = REPO /
+"runtime"` is a single fixed path, and `worker_dirs(n)` allocates
+`runtime/engine-w{i}` for `i` in `range(n)`, starting at 0 every time the
+script is invoked -- there is no cross-process lock or PID/run-id in the
+path. `--workers` defaults to 1. **Two separate `run_tournament.py`
+processes both default to exactly one worker at `runtime/engine-w0` and will
+write into the same directory at the same time**, each overwriting the
+other's `script.txt`/write-dir state mid-run. This is silent: no error, no
+warning, just occasional matches that load the wrong script (and the result
+still gets recorded, so a corrupted match reads as a normal loss/win rather
+than a crash).
+
+**Every concurrently-launched tournament PAIR this session is suspect, not
+just this one** -- three pairs were run this way: `corck-revert-confirm-8` +
+`armada-mirror-armck-8`, `armada-t2con-16` + `legion-t2con-16`, and
+`legion-bomber-revert-confirm-16` + `armada-armaca-fix-16`. Any tournament
+launched ALONE (nothing else running via `run_tournament.py` at the same
+time) is NOT affected by this -- e.g. `legion-bomber-fix-16`'s 31.2%
+regression finding was launched solo and its own diagnosis (legmos's
+stockpile weapon) is independent of this bug and stands.
+
+**Fix going forward: never launch two `run_tournament.py` (or `run_match.py`
+against the default write-dir) processes at the same time.** If concurrent
+runs are ever needed, pass distinct `--write-dir` (run_match.py) or ensure
+each `run_tournament.py` invocation's implicit `runtime/engine-w*` range
+cannot overlap -- neither is currently done automatically; this is a real
+gap in the harness, not just a usage mistake, since two clean invocations of
+the documented CLI collide by default. Consider filing this as a
+`run_tournament.py` fix (derive the runtime subdir from a PID or run-id)
+rather than only a discipline note.
+
+**Action taken**: re-running the affected pairs sequentially to get
+trustworthy numbers; do not trust the win-rates recorded under commits
+touching Cortex-corck-revert, Armada-mirror-armck, Armada/Legion-T2-con, or
+Armada-armaca/Legion-bomber-revert without re-confirmation -- the underlying
+code changes and their smoke-tests are still valid (compile-clean, correct
+faction loaded), only the win-rate/composition NUMBERS from concurrent
+batches are in question.

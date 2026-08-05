@@ -104,6 +104,13 @@ def worker_dirs(n: int) -> queue.Queue:
 
     A cold write dir rescans 250+ maps on first use (~35 s). Copying an existing
     cache avoids paying that per worker.
+
+    The dir name includes this process's PID: two run_tournament.py invocations
+    both default to --workers 1, and without the PID both would land on the same
+    "engine-w0" and silently overwrite each other's script.txt mid-run -- a real
+    incident (see notes/open-issues.md #37) where one tournament's match loaded
+    the OTHER tournament's script and recorded a corrupted result as a normal
+    win/loss, with no error anywhere. Never share a write dir across processes.
     """
     q: queue.Queue = queue.Queue()
     RUNTIME.mkdir(parents=True, exist_ok=True)
@@ -114,8 +121,9 @@ def worker_dirs(n: int) -> queue.Queue:
             seed_cache = cand
             break
 
+    pid = os.getpid()
     for i in range(n):
-        d = RUNTIME / f"engine-w{i}"
+        d = RUNTIME / f"engine-w{i}-{pid}"
         d.mkdir(parents=True, exist_ok=True)
         if seed_cache and not (d / "cache").is_dir():
             shutil.copytree(seed_cache, d / "cache")
