@@ -1968,20 +1968,22 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 // Legion), this is NOT free to fix the way it looked from the code alone.
 // See notes/open-issues.md #35/#37/#38. Do not re-add without a new,
 // isolated, positive confirmation.
-// legap/legaap re-added here for a SECOND independent confirmation batch.
-// First isolated test (legion-t1fac-only-16, issue 38) read 12.5% (2-14,
-// CI excludes 50%) against a clean 43.8% baseline -- but issue 45 found
-// Legion's own baseline swings ~13pp with zero code changes, and a proper
-// z-test of that single result against the pooled baseline only reached
-// z=-1.8 (p~0.07), short of conventional significance. This re-test pools
-// with that first read for more statistical power before concluding
-// anything. See notes/open-issues.md #38/#45/#47.
+// legap/legaap are deliberately NOT in these arrays. Two independent solo
+// batches (legion-t1fac-only-16: 12.5%, legion-t1fac-retest-16: 37.5%)
+// pool to 25% (8/32) against Legion's own pooled baseline of 37.5%
+// (12/32) -- z=-1.08, not statistically significant. This is the fully
+// resolved conclusion after two rounds of testing: adding legap/legaap
+// has NO confirmed effect on Legion's win rate, positive or negative,
+// once properly powered. Left out (no positive evidence to keep the
+// change) rather than re-added. See notes/open-issues.md #38/#45/#47 for
+// the full arc of this investigation, including the initial single-batch
+// result that looked like a real regression before more data resolved it.
 array<string> T1_FAC = {armlab, armvp, armsy, armap,
                         corlab, corvp, corsy, corap,
-                        leglab, legvp, legsy, legap};
+                        leglab, legvp, legsy};
 array<string> T2_FAC = {armalab, armavp, armasy, armaap,
                         coralab, coravp, corasy, coraap,
-                        legalab, legavp, corasy, legaap};
+                        legalab, legavp, corasy};
 
 // Our best progress toward an advanced plant, 0..1, or -1 if we hold none.
 // Nanoframes count -- commitment is the question the election asks, and the
