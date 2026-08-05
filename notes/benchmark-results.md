@@ -19,13 +19,13 @@ result. Only trust a claim once multiple independent rows on the same commit
 agree, and check whether anyone actually did that pooling (search
 `open-issues.md` for the tournament name).
 
-## Current HEAD state (as of `a9148b8`, 2026-08-05)
+## Current HEAD state (as of `b9fad08`, 2026-08-05)
 
 | faction | rows available | picture |
 |---|---|---|
 | **Cortex** | 4 clean batches, 75–88% each | reference faction; only one this session with a large, repeated, trustworthy margin over 50% |
-| **Armada** | 5 clean batches on the fully-fixed code, 62.5–81.2% | `build_speed` fixes (armlab/armvp/armnanotct2) are real, traced mechanisms; whether they move win rate is **unconfirmed** — pooled pre-fix (65.6%, n=32) vs pooled post-fix (75%, n=64) is not statistically significant (z=-0.96) |
-| **Legion** | 6 clean batches on the (reverted-to-baseline) code, 25–43.8% | all 4 things tried this session (constructor weights, `T1_FAC`, `legvflak` role tag, `leggant` build_speed) failed to show a confirmed effect once each was re-tested; current code == original pre-session baseline |
+| **Armada** | 6 clean batches on the fully-fixed code (n=160 pooled), 57.3–81.2% | `build_speed` fixes (armlab/armvp/armnanotct2) are real, traced mechanisms, kept deployed — but **definitively show no win-rate or combat-outcome effect** once a 96-game batch gave this real power (pooled post-fix 64.4% vs pre-fix 65.6%, z=-0.13; see `open-issues.md` #51). Do not cite the early 75–81% reads as representative. |
+| **Legion** | 6 clean batches on the (reverted-to-baseline) code, 25–43.8% | all 4 things tried this session (constructor weights, `T1_FAC`, `legvflak` role tag, `leggant` build_speed) failed to show a confirmed effect once each was re-tested; current code == original pre-session baseline. Best lead: damage-ratio/game-length analysis (`open-issues.md` #48–49), unaffected by the Armada correction. |
 
 ## Cortex, Cortex — reference faction
 
@@ -51,19 +51,18 @@ agree, and check whether anyone actually did that pooling (search
 | 2026-08-05 | `armada-buildspeed-nano-16` | `de1cc99` | 16 | 13-3 | 81.2% | **yes** | +`armnanotct2` build_speed fix (all 3 fixes, "final" state) |
 | 2026-08-05 | `armada-buildspeed-stability-check-16` | `de1cc99` (re-run, no changes) | 16 | 10-6 | 62.5% | **yes** | same code as the row above — 18.7pp swing with zero changes |
 | 2026-08-05 | `armada-prefix-baseline2-16` | `09ba614` (build_speed reverted back to pre-fix for this test) | 16 | 11-5 | 68.8% | **yes** | second independent pre-fix read |
+| 2026-08-05 | `armada-buildspeed-postfix-large96` | `de1cc99` (full 3-fix state) | **96** | 55-41 | **57.3%** | **yes** | large batch — CI 47-67%, includes 50%; damage ratio 0.996, fraction-favorable exactly 50% |
 
-**Pooled**: pre-fix (10+11)/32 = 65.6%. Post-fix (13+12+13+10)/64 = 75%.
-Two-proportion z = -0.96, **not significant**. See `open-issues.md` #46.
-Required sample for 80% power at this effect size: **~370 games/arm** --
-not practical via more win-rate batches (see #50).
-
-**Continuous-metric cross-check** (per-game `damageDealt`/`damageReceived`
-ratio, issue 50): fraction of games with a favorable ratio went from
-18/32 (56%) pre-fix to 45/64 (70%) post-fix, z=-1.37 (p~0.17) -- closer to
-significant than raw win rate, still not conclusive. Given a favorable
-ratio predicts winning at ~85-93% and unfavorable at ~32-36% (both
-pre- and post-fix), this fraction is the more sensitive metric to re-test
-with if this question is revisited.
+**DEFINITIVE, see `open-issues.md` #51**: pooling ALL post-fix batches
+(5 batches, n=160) vs both pre-fix batches (n=32): win rate 64.4% vs
+65.6% (z=-0.13); fraction-favorable 58.1% vs 56.3% (z=-0.20). **Both
+essentially zero difference.** The four smaller post-fix batches that
+looked promising (81.2/75.0/81.2/62.5%) were a run of favorable draws,
+not a real effect — the single 96-game batch alone outweighs all four of
+them combined and reads close to a coin flip. **The `build_speed` fix is
+kept deployed (real, correctly-traced mechanism, not harmful) but is NOT
+a confirmed win-rate improvement.** Do not cite the earlier 75-81% numbers
+as representative without this context.
 
 ## Legion, Legion
 
