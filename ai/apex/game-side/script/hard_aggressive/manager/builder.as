@@ -349,6 +349,31 @@ bool PastFrontFrac(const AIFloat3& in where, float frac)
 	return t > frac;
 }
 
+// Mexes get a laxer bar than any other build type: ThreatFor's real reading
+// still applies when the threat map has data, this only relaxes the
+// GEOMETRIC fallback (PastFront/ThreatFor's own comment: the position threat
+// map reads zero ~97% of the time), which is what actually fires today. A
+// site that is not far forward is treated as safe rather than vetoed on that
+// dead signal alone.
+//
+// Shared by both places a threat check can end a mex task -- refuse (before
+// ever accepting one) and abandon (Reevaluate re-checks a task already in
+// progress on every step of the walk to it). apexearth, watching live: "the
+// commander only goes forward to build mexes -- we lose fights and end up
+// with almost none. Need more constructor aggression in building mexes
+// behind us." Traced to the refuse path having this exemption and the
+// abandon path NOT having it: a constructor could accept a rear mex fine,
+// then get knocked off it on a later re-evaluation by the exact same
+// unprotected geometric-fallback reading -- five abandon events on the same
+// mex in under 30 seconds, all at threat=5, barely over CON_THREAT_VETO's
+// 4.0. One rule, one place, used by both callers now.
+float MexHeat(const AIFloat3& in site, float heat)
+{
+	if ((heat > CON_THREAT_VETO) && !PastFrontFrac(site, MEX_FAR_FRAC))
+		return 0.f;
+	return heat;
+}
+
 bool PastFront(const AIFloat3& in where)
 {
 	if (!gHomeSet)
@@ -1791,7 +1816,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		IUnitTask@ held = unit.task;
 		const string kind = SiteBuildName(held);
 		if (kind != "") {
-			const float heat = ThreatFor(unit, held.GetBuildPos());
+			float heat = ThreatFor(unit, held.GetBuildPos());
+			if (kind == "mex")
+				heat = MexHeat(held.GetBuildPos(), heat);
 			if (heat > CON_THREAT_VETO) {
 				++gConAbandoned;
 				ConStrike(unit);
@@ -1908,14 +1935,8 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		if (kind != "") {
 			const AIFloat3 site = task.GetBuildPos();
 			float heat = ThreatFor(unit, site);
-			// Mexes get the laxer bar. ThreatFor's real reading still applies when
-			// the threat map has data; this only relaxes the GEOMETRIC fallback,
-			// which is what actually fires today.
-			if ((kind == "mex") && (heat > CON_THREAT_VETO)
-				&& !PastFrontFrac(site, MEX_FAR_FRAC))
-			{
-				heat = 0.f;
-			}
+			if (kind == "mex")
+				heat = MexHeat(site, heat);
 			if (heat > CON_THREAT_VETO) {
 				++gConRefused;
 				ConStrike(unit);
