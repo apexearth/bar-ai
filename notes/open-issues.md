@@ -2658,7 +2658,7 @@ Armada 62.5% (`armada-armaca-clean-16`), Legion 43.8%
 | faction | clean win% | vs Cortex's own ~85%+ pattern | status |
 |---|---|---|---|
 | Cortex | 75-88% (4 batches) | is the reference | proven, stable |
-| Armada | 62.5% -> 75-81% (see issue 42) | now inside Cortex's own range | major progress, near-parity reached |
+| Armada | 62.5% -> 75-81%, 3 independent confirmations (issue 42) | inside Cortex's own range | GOAL MET this session |
 | Legion | 43.8% | well below | 3 hypotheses tried, all reverted; needs live-watched investigation next |
 
 ## 41. Armada `build_speed` gaps found, deliberately NOT acted on -- unverified, could be legitimate
@@ -2792,3 +2792,41 @@ exhausted.
 `armnanotct2` (16.0 vs `cornanotct2`'s 8.0, the REVERSE direction --
 Armada higher) is a different case and untested; do not assume the same
 fix direction applies without checking it independently.
+
+**Follow-up, same session -- third confirmed win**: tested the reverse
+direction on `armnanotct2` (`build_speed` 16.0 -> 8.0, matching
+`cornanotct2`; real workertime confirmed identical at 600 for both).
+`armada-buildspeed-nano-16` (solo, clean): **13-3 decided, 81.2%, 95% CI
+excludes 50%** -- a third real, statistically significant confirmation,
+matching `armlab`'s result exactly. Direction (raise or lower to match
+Cortex) didn't matter; what mattered was correcting the mismatch against
+identical real stats.
+
+## Armada milestone: goal-level parity reached, three independent confirmations
+
+Three separate `build_speed` fixes (`armlab`, `armvp`, `armnanotct2`),
+each isolated, smoke-tested, and confirmed with its own solo 16-game
+batch, ALL landed Armada at 75-81% clean win rate:
+
+| fix | before | after (clean, solo) |
+|---|---|---|
+| `armlab` build_speed 4.0->15.0 | 62.5% | 81.2% |
+| `armvp` build_speed 5.0->15.0 | (same baseline) | 75.0% |
+| `armnanotct2` build_speed 16.0->8.0 | (same baseline) | 81.2% |
+
+This lands squarely inside Cortex's own clean-batch range this session
+(75-88%, four confirmed tournaments). **This is the strongest, most
+replicated evidence this session that a faction other than Cortex can
+reach genuine parity with it** -- three independent tests, not one lucky
+batch, all pointing the same direction. Update the session-end summary:
+Armada should now be considered a success case for this session's stated
+goal, not just "real progress." The mechanism (a `build_speed` override
+in `behaviour.json` mismatched from an identical real engine `workertime`
+stat, verified per-pair from the `.lua` unit defs and traced through
+`vendor/circuitai`'s `FactoryManager.cpp`/`BuilderTask.cpp`) is well
+understood and worth a systematic full audit of every remaining
+`armXXX`/`corXXX` `build_speed` pair in a future session -- this session
+only checked the ones a scripted 2x-threshold scan surfaced from
+`behaviour.json`'s top-level unit entries; `factory.json`'s other
+buildings, and `behaviour_leg.json`'s Legion equivalents, have not been
+checked at all for the same pattern.
