@@ -1968,12 +1968,20 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 // Legion), this is NOT free to fix the way it looked from the code alone.
 // See notes/open-issues.md #35/#37/#38. Do not re-add without a new,
 // isolated, positive confirmation.
+// legap/legaap re-added here for a SECOND independent confirmation batch.
+// First isolated test (legion-t1fac-only-16, issue 38) read 12.5% (2-14,
+// CI excludes 50%) against a clean 43.8% baseline -- but issue 45 found
+// Legion's own baseline swings ~13pp with zero code changes, and a proper
+// z-test of that single result against the pooled baseline only reached
+// z=-1.8 (p~0.07), short of conventional significance. This re-test pools
+// with that first read for more statistical power before concluding
+// anything. See notes/open-issues.md #38/#45/#47.
 array<string> T1_FAC = {armlab, armvp, armsy, armap,
                         corlab, corvp, corsy, corap,
-                        leglab, legvp, legsy};
+                        leglab, legvp, legsy, legap};
 array<string> T2_FAC = {armalab, armavp, armasy, armaap,
                         coralab, coravp, corasy, coraap,
-                        legalab, legavp, corasy};
+                        legalab, legavp, corasy, legaap};
 
 // Our best progress toward an advanced plant, 0..1, or -1 if we hold none.
 // Nanoframes count -- commitment is the question the election asks, and the
