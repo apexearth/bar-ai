@@ -2659,7 +2659,7 @@ Armada 62.5% (`armada-armaca-clean-16`), Legion 43.8%
 |---|---|---|---|
 | Cortex | 75-88% (4 batches) | is the reference | proven, stable |
 | Armada | 62.5% -> 75-81%, 3 independent confirmations (issue 42) | inside Cortex's own range | GOAL MET this session |
-| Legion | 43.8% | well below | 3 hypotheses tried, all reverted; needs live-watched investigation next |
+| Legion | 43.8% | well below | 4 hypotheses tried (issue 43), all reverted, 100% failure rate across mechanism categories; live-watched investigation now closer to mandatory |
 
 ## 41. Armada `build_speed` gaps found, deliberately NOT acted on -- unverified, could be legitimate
 
@@ -2830,3 +2830,48 @@ only checked the ones a scripted 2x-threshold scan surfaced from
 `behaviour.json`'s top-level unit entries; `factory.json`'s other
 buildings, and `behaviour_leg.json`'s Legion equivalents, have not been
 checked at all for the same pattern.
+
+## 43. Four-for-four: even Armada's proven build_speed mechanism regresses Legion
+
+Extended the same `build_speed`-mismatch mechanism that went 3/3 positive
+for Armada to Legion's `leggant` (T3 gantry, `build_speed` 45.0 -> 10.0,
+matching `corgant`; real workertime confirmed identical at 600 for both --
+the exact same evidence standard as the Armada fixes). Reverted after
+`legion-gant-buildspeed-16` (solo, clean) came back **3-13 decided, 18.8%,
+95% CI excludes 50% -- the worst of Legion's four regressions this
+session, and worse than the ~43.8% baseline by nearly 25 points.**
+
+This is now a four-for-four pattern across GENUINELY DIFFERENT mechanism
+categories -- not four variations on the same mistake:
+
+| # | fix | category | clean solo result |
+|---|---|---|---|
+| 37 | armack/legcv/legfus/T1_FAC bundle | weight redistribution across many units | 31.2% |
+| 38 | T1_FAC/T2_FAC alone | enable a dormant rush mechanism | 12.5% |
+| 39 | legvflak role tag | add a missing combat-role classification | 25.0% |
+| 43 | leggant build_speed | correct a build-power accounting number, proven 3/3 for Armada | 18.8% |
+
+**The strongest possible version of this session's finding**: it is not
+that Legion's config audits were poorly reasoned, or that one specific
+mechanism doesn't suit Legion -- it's that ANY intervention tried this
+session, regardless of category, evidence quality, or track record on
+another faction, made Legion worse. Four different mechanisms, four
+regressions, two of the four statistically significant at n=16. This
+goes beyond "config auditing doesn't work for Legion" (issue 39's
+conclusion) to something closer to: **Legion's current baseline
+(`legion-pre-issue35-baseline-16`, 43.8%) may already sit at a local
+optimum for this AI's overall strategy shape against stock BARb on this
+specific map/handicap, where perturbing almost anything makes it worse
+rather than better.** That is a testable hypothesis for a future
+session (try a handful of small, clearly-inert changes -- e.g. a comment
+addition, a value changed and changed back -- as a placebo-style check
+that 43.8% is stable and not itself just where this session's
+measurement noise happened to land), but is not confirmed.
+
+**Recommendation stands and strengthens**: do not attempt more Legion
+config fixes purely from static evidence, however strong the evidence
+looks. Live observation (per issue 39) remains the right next step, and
+should now be treated as closer to mandatory than optional for Legion
+specifically -- this session exhausted the "audit config, find gap, fix
+it" approach across four independent, well-evidenced attempts with a
+100% failure rate.
