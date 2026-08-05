@@ -416,6 +416,32 @@ bool RezSpotHot(CCircuitUnit@ unit)
 	return ThreatFor(unit, unit.GetPos(ai.frame)) > CON_THREAT_VETO;
 }
 
+// Earlier than RezSpotHot's own front-crossing line (PastFront's 72%), and
+// gated on a team-state signal rather than distance alone. apexearth: "make
+// our rezbots reclaim instead of resurrecting when they are in danger. If
+// the enemy influence is creeping towards them... By the time they even
+// take damage it is almost always too late."
+//
+// A raw distance-to-enemy-centroid proxy was tried for exactly this kind of
+// early warning already (BaseUnderAttack(), for commander safety) and
+// measured actively harmful on this map: Comet Catcher is small enough that
+// the enemy centroid sits close to home from ~1 minute in for the ENTIRE
+// game regardless of whether anyone is actually attacking -- it read map
+// scale, not danger, and crushed the win rate before being disabled
+// (COMM_BACK_WALL_ON, see its own comment). Do not repeat that mistake here.
+//
+// PastFrontFrac is relative instead of absolute -- how far along the
+// home->enemy axis THIS position specifically sits -- and combining it with
+// Military::LosingGround() (already used by PreferReclaim() for the same
+// "we are under pressure" reasoning) keeps this from firing on ordinary
+// forward positioning during a game we are winning.
+const float REZ_EXPOSED_FRAC = 0.55f;
+
+bool RezBotExposed(CCircuitUnit@ unit)
+{
+	return Military::LosingGround() && PastFrontFrac(unit.GetPos(ai.frame), REZ_EXPOSED_FRAC);
+}
+
 // Empty means "not a build this rule covers". Defence, bunkers and big guns
 // belong at the front by definition, and this variant reclaims battlefields on
 // purpose, so none of them appear here.
@@ -1686,7 +1712,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// Eat the corpse rather than rebuild it, before the engine gets the chance
 	// to queue a resurrect for this bot.
 	if (IsRezzer(unit) && (ai.frame >= gNextRezWreck)
-			&& (PreferReclaim() || RezSpotHot(unit))) {
+			&& (PreferReclaim() || RezSpotHot(unit) || RezBotExposed(unit))) {
 		gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
 		IUnitTask@ eat = EnqueueWreckReclaim(unit, Task::Priority::HIGH);
 		if (eat !is null)
