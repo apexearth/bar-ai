@@ -3744,3 +3744,53 @@ continue the D-gun investigation (still open, needs a C++ binding since
 `HasDGun()` isn't exposed to AngelScript).
 
 Committed: `cfe5c6e` (kiting-interval fix + SQUAD_SPEED_RATIO restore).
+
+## 58. Armada 4v4 investigated three ways, none moved the win rate -- economy/constructor hypothesis likely wrong or insufficient
+
+Per the session goal (90%+ for all three factions), tested Armada,Armada
+4v4 for the first time this session (16 games, current fix set incl. the
+kiting fix): **25.0% (4/16), CI excludes 50%.**
+
+Timeline (`analyze_stats.py`) showed metal production diverging from
+minute 6-10 onward, well before either side has T2 constructors, with K/D
+staying roughly competitive early -- pointed at a T1-era expansion
+problem, not a combat-micro one. Three fixes attempted, each tested with
+a fresh 8-game batch before considering anything larger (per apexearth's
+explicit guidance: start small, escalate only if promising):
+
+1. **Revert `armack` (T2 constructor) cut** (0.02 -> 0.25-0.35, matching
+   pre-session value): 25.0% (2/8), no change. `cons T2` composition data
+   was actually STILL crashed (3 vs 12) even after reverting the weight
+   that supposedly controlled it.
+2. **Revert `armck` (T1 constructor) cut** (0.05 -> 0.25-0.35, same
+   commit, same "untested for Armada" flag): 12.5% (1/8), WORSE. Timeline
+   showed the identical divergence shape (min 6-10 gap opening) as before
+   either revert -- conclusive that neither constructor weight was the
+   actual driver.
+3. **Redirect factory-cap-refused constructors to mex instead of idle**
+   (`FallbackMex`, commit `bf2b49d`): traced via infolog con-veto counts
+   that "factory-cap" was the dominant refusal reason (26/45) and the
+   veto's own code comment confirmed refused units go fully idle. Fix
+   confirmed firing mechanically (2/2 refusals rerouted in a smoke test).
+   Result: 12.5% (1/8), still no improvement. This batch's paired K/D
+   log-ratio was the first to reach significance (t=-2.03, "B trades
+   better") -- suggesting combat effectiveness, not just economy, may
+   also be a real factor, not previously visible in the noisier smaller
+   batches.
+
+**None of the three reverted/fixed the win rate.** All three are being
+kept deployed anyway: each is independently well-evidenced as a real
+mechanism-level improvement (matches the same "untested for Armada"
+gaps flagged in their origin commits, or a genuine idle-constructor
+leak), not harmful in any read so far, same reasoning this session
+applied to Legion's SQUAD_SPEED_RATIO and CheapAA fixes.
+
+**This matches the exact pattern already established for Legion this
+session** (five real fixes, zero confirmed win-rate movement, see
+[[bar-ai-faction-parity-transfer]]) -- Armada's problem is very likely
+NOT a single quick constructor/economy fix, the same way Legion's wasn't.
+Per this project's own established practice ("apexearth is faster than
+the benchmark -- ask him first"), three failed blind hypotheses in a row
+is exactly the point to stop guessing from telemetry alone and get a
+live-watched read instead, rather than continuing to burn batches on
+narrower and narrower economy theories.
