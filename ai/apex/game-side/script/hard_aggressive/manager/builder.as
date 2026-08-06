@@ -206,12 +206,37 @@ float WreckSeenValue()
 	return (ai.frame - gWreckSeenAt <= WRECK_SEEN_TTL) ? gWreckSeenValue : 0.f;
 }
 
+// The engine's own build-site safety check is an AND of three terms
+// (BuilderManager::MakeBuilderTask): near-zero power in the thing being built,
+// hot threat map, AND influence already reading enemy-owned. Contested ground
+// no enemy structure has claimed yet fails the third, so the task stays
+// selectable and a constructor walks to it. This is the middle term alone.
+//
+// The threat map paints enemy damage-vs-builder times sqrt(health) over each
+// enemy's weapon range and is still half its peak at the rim -- so a covered
+// tile reads in the hundreds and an uncovered one reads zero, while an
+// unidentified radar blip contributes 0.1. 4.0 is THREAT_MIN * 4, the engine's
+// own "an enemy holds this ground" bar in MilitaryManager::DefaultMakeDefence.
+//
+// Declared here, ahead of its first use in EnqueueWreckReclaim just below:
+// AngelScript has no forward declarations for globals (functions are visible
+// module-wide regardless of order, but a global const must be declared before
+// the line that reads it), and this constant used to live much further down,
+// declared only once ThreatFor() -- which needs it -- was already in scope.
+const float CON_THREAT_VETO = 4.0f;
+
 IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
 {
 	const AIFloat3 pos = unit.GetPos(ai.frame);
 	const AIFloat3 wreck = ai.GetBestWreckPos(pos, WRECK_SEARCH, WRECK_MIN);
 	if (wreck.x < 0.f)
 		return null;   // nothing worth the trip
+	// apexearth, watching live: "even our advanced cons are chasing wrecks
+	// which are dangerous." Shared by the idle-builder fallback and the
+	// rezzer-eats-wreck path; neither checked whether the wreck itself sits
+	// somewhere safe before sending a constructor to it.
+	if (ThreatFor(unit, wreck) > CON_THREAT_VETO)
+		return null;
 	return aiBuilderMgr.Enqueue(TaskB::Reclaim(priority, wreck,
 			1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
 }
@@ -293,18 +318,6 @@ bool PreferReclaim()
 	     < aiEconomyMgr.metal.storage * REZ_METAL_FLOOR;
 }
 
-// The engine's own build-site safety check is an AND of three terms
-// (BuilderManager::MakeBuilderTask): near-zero power in the thing being built,
-// hot threat map, AND influence already reading enemy-owned. Contested ground
-// no enemy structure has claimed yet fails the third, so the task stays
-// selectable and a constructor walks to it. This is the middle term alone.
-//
-// The threat map paints enemy damage-vs-builder times sqrt(health) over each
-// enemy's weapon range and is still half its peak at the rim -- so a covered
-// tile reads in the hundreds and an uncovered one reads zero, while an
-// unidentified radar blip contributes 0.1. 4.0 is THREAT_MIN * 4, the engine's
-// own "an enemy holds this ground" bar in MilitaryManager::DefaultMakeDefence.
-const float CON_THREAT_VETO = 4.0f;
 
 // How many of ONE factory def (standing + under construction, this player's
 // own count -- CCircuitDef is per-instance) is enough. Past this, refuse the
@@ -2271,24 +2284,41 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// construction turrets helping to build something, but we don't even have
 	// the metal to build it. One of those conturrets could have been
 	// reclaiming... basically - if you have <2% metal and reclaim is in your
-	// vicinity - reclaim!" This check exists and is not isComm-gated, but
-	// IBuilderTask::Reevaluate's own doc comment says it fires "for as long as
-	// the builder is away from its build position" -- unclear whether an
-	// ALREADY-ARRIVED, actively-assisting nano turret ever reaches AiMakeTask
-	// again at all, as opposed to a mobile constructor walking to a site.
-	// Logging whether this branch is even entered for a static/turret unit
-	// while metal-empty, before building a new redirect mechanism blind.
-	if (aiEconomyMgr.isMetalEmpty && (ai.frame >= gNextMetalEmptyDiag)) {
+	// vicinity - reclaim!" IBuilderTask::Reevaluate's own doc comment says it
+	// fires "for as long as the builder is away from its build position" --
+	// unclear whether an ALREADY-ARRIVED, actively-assisting nano turret ever
+	// reaches AiMakeTask again at all, as opposed to a mobile constructor
+	// walking to a site. Logging whether this branch is even entered for a
+	// static/turret unit while metal-empty, before building a new redirect
+	// mechanism blind.
+	//
+	// Both this and the rich-pile block below are now isComm-gated. They were
+	// not until 2026-08 -- but GetWreckValueAt/GetBestWreckPos were dead all
+	// last session (CircuitAI::metalRes only ever assigned on resign, so both
+	// always returned zero/invalid), so nothing chased a pile from here for
+	// ANYONE, commander included, and that masked this being reachable at all.
+	// Fixing the underlying binding unmasked it immediately: apexearth,
+	// watching live, "something makes our commanders all run out to the front
+	// line - maybe they're going for the reclaim - they should prioritize
+	// making those early game mexes." The rich-pile block below is explicitly
+	// the one case in this function that DISPLACES an already-assigned task --
+	// exactly the commander's early mex task from DefaultMakeTask.
+	if (!isComm && aiEconomyMgr.isMetalEmpty && (ai.frame >= gNextMetalEmptyDiag)) {
 		gNextMetalEmptyDiag = ai.frame + 10 * SECOND;
 		AiLog(Factory::T() + "apex: metal-empty-diag " + unit.circuitDef.GetName()
 			+ " static=" + (!unit.circuitDef.IsMobile() ? "1" : "0")
 			+ " hasTask=" + ((unit.task !is null) ? "1" : "0"));
 	}
-	if (aiEconomyMgr.isMetalEmpty && (ai.frame >= gNextWreck)) {
+	if (!isComm && aiEconomyMgr.isMetalEmpty && (ai.frame >= gNextWreck)) {
 		gNextWreck = ai.frame + 3 * SECOND;
 		const AIFloat3 here = unit.GetPos(ai.frame);
 		const AIFloat3 near = ai.GetBestWreckPos(here, WRECK_SEARCH, 15.f);
-		if (near.x >= 0.f) {
+		// apexearth, watching live: "even our advanced cons are chasing wrecks
+		// which are dangerous." Same fix as the commander exclusion above,
+		// generalized: unmasked by the same metalRes fix, this now finds real
+		// piles and had no idea whether the pile sits somewhere safe. Reuse
+		// the same ThreatFor/CON_THREAT_VETO check mex dispatch already uses.
+		if ((near.x >= 0.f) && (ThreatFor(unit, near) <= CON_THREAT_VETO)) {
 			NoteWreckSeen(ai.GetWreckValueAt(near, WRECK_RADIUS));
 			IUnitTask@ rec = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 					Task::Priority::HIGH, near, 400.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
@@ -2299,8 +2329,10 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// The one case that DOES displace real work. Everything above this point is
 	// strictly additive by design; a rich corpse pile next to us is the exception,
 	// because the metal it returns exceeds anything the interrupted task was
-	// producing in the same seconds.
-	if (ai.frame >= gNextWreck) {
+	// producing in the same seconds -- true for an ordinary constructor, not for
+	// a commander whose displaced task is the early mex expansion the team's
+	// whole economy depends on. See the isComm note above the metal-empty block.
+	if (!isComm && (ai.frame >= gNextWreck)) {
 		const AIFloat3 self = unit.GetPos(ai.frame);
 		if (OnMap(self)) {
 			// Gate on the field's TOTAL value, then aim at its richest body so the
@@ -2310,7 +2342,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			const AIFloat3 rich = (pile >= WRECK_RICH)
 					? ai.GetBestWreckPos(self, WRECK_RICH_R, 15.f)
 					: AIFloat3(-1.f, 0.f, -1.f);
-			if (rich.x >= 0.f) {
+			// Same threat check as above -- a rich pile is worth an interrupted
+			// task, it is not worth walking an advanced constructor into fire
+			// for. Checked at the PILE's position, not the constructor's
+			// current one: a con already standing somewhere safe should not
+			// walk toward a hot pile just because it can see it.
+			if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO)) {
 				gNextWreck = ai.frame + 3 * SECOND;
 				IUnitTask@ fat = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 						Task::Priority::HIGH, rich, 1000.f, WRECK_TIMEOUT,
