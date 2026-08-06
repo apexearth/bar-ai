@@ -2248,6 +2248,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// be starting fresh, not assisting, and is left alone. Mex/mex-upgrade
 	// tasks are exempt: assisting one of those is exactly the behavior a
 	// resource crunch should produce more of, not less.
+	// A fresh-context agent flagged this (added in 6214df3, smoke-tested
+	// only at the time) as a possible contributor to Cortex's drop from a
+	// documented 96.3% peak (2a9613e) to 68.8%. Tested directly: disabling
+	// this AND the factory-cap exemption above for a 16-game Cortex mirror
+	// (same seeds as the 68.8% baseline) gave 62.5% -- no recovery.
+	// Hypothesis rejected by data; restored.
 	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)
 		&& (task.GetBuildType() != Task::BuildType::MEX)
 		&& (task.GetBuildType() != Task::BuildType::MEXUP)
@@ -2311,6 +2317,13 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// by definition -- exempt it from both the count cap and the spacing
 		// cooldown, which exist only to stop DefaultMakeTask independently
 		// offering a brand new factory to every idle constructor.
+		//
+		// A different fresh-context agent later flagged this exemption as a
+		// possible contributor to Cortex's drop from a documented 96.3% peak
+		// (2a9613e) to 68.8%. Tested directly: reverting this AND the
+		// resource-crisis block below to a 16-game Cortex mirror (same
+		// seeds as the 68.8% baseline) gave 62.5% -- no recovery, slightly
+		// worse if anything. Hypothesis rejected by data; restored.
 		if ((kind == "factory") && (task !is null) && (task.GetUnits().length() == 0)) {
 			const CCircuitDef@ wantFac = task.buildDef;
 			if (wantFac !is null) {
