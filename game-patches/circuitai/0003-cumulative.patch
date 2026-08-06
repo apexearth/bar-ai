@@ -1394,7 +1394,7 @@ index d29f582..94ddc2a 100644
  
  	void ApplyPath(const CQueryPathSingle* query);
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..1c559d0 100644
+index bc8ff11..ac8d87a 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -20,6 +20,7 @@
@@ -1405,7 +1405,55 @@ index bc8ff11..1c559d0 100644
  #include "unit/action/DGunAction.h"
  #include "unit/action/CaptureAction.h"
  #include "unit/action/FightAction.h"
-@@ -645,15 +646,26 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -458,6 +459,47 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+ 		return false;
+ 	}
+ 
++	// apexearth: "We're totally out of metal and we have three construction
++	// turrets helping to build something, but we don't even have the metal to
++	// build it. One of those conturrets could have been reclaiming and
++	// allowing the others to build it even faster... Ideally would be to
++	// insert the reclaim request ahead of their current command so that as
++	// soon as it finishes, they all immediately return to what they were
++	// doing... basically - if you have <2% metal and reclaim is in your
++	// vicinity - reclaim!"
++	//
++	// Scoped to STATIC assist units (IsAttrBase, e.g. nano turrets): mobile
++	// constructors already have an equivalent AngelScript-side check
++	// (builder.as's isMetalEmpty block), but that runs through AiMakeTask,
++	// which per IBuilderTask::Reevaluate below is only reached again once a
++	// static assist unit is no longer the sole/primary worker on its task
++	// (executors.size() >= 2) -- so a turret already lathing on arrival can
++	// sit there indefinitely once metal runs dry, never re-evaluated.
++	//
++	// Issued as a raw ALT_KEY (insert-ahead) command directly from C++,
++	// deliberately NOT as a CircuitAI task swap and NOT exposed to
++	// AngelScript: CmdMoveTo from AngelScript (in the now-removed
++	// UpdateCommanderSafety) correlated with 14-17 engine aborts per 20-game
++	// run (see CHANGES.md), while the exact same raw-command APIs are called
++	// safely from C++ throughout this codebase (RetreatTask, CombatTask,
++	// GuardTask, MexTask all issue CmdMoveTo/CmdBuild directly). ALT_KEY
++	// alone inserts ahead of the unit's current command instead of replacing
++	// it, so once the reclaim finishes the unit's own queue resumes the
++	// build it was already assisting -- no CircuitAI-side task state changes
++	// at all, so nothing here needs to interact with buildFails, target, or
++	// the executors list.
++	if (unit->IsAttrBase() && ecoMgr->IsMetalEmpty() && (circuit->GetLastFrame() >= nextMetalEmptyReclaim)) {
++		const int frame = circuit->GetLastFrame();
++		const AIFloat3 herePos = unit->GetPos(frame);
++		const AIFloat3 wreckPos = circuit->GetBestWreckPos(herePos, 2200.f, 15.f);
++		if (utils::is_valid(wreckPos)) {
++			nextMetalEmptyReclaim = frame + FRAMES_PER_SEC * 10;
++			TRY_UNIT(circuit, unit,
++				unit->CmdReclaimInArea(wreckPos, 2200.f, UNIT_COMMAND_OPTION_ALT_KEY, frame + FRAMES_PER_SEC * 30);
++			)
++		}
++	}
++
+ 	/*
+ 	 * Reassign task if required
+ 	 */
+@@ -645,15 +687,26 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  
  void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  {
@@ -1440,7 +1488,7 @@ index bc8ff11..1c559d0 100644
  	}
  }
  
-@@ -799,6 +811,8 @@ void IBuilderTask::ExecuteChain(SBuildChain* chain)
+@@ -799,6 +852,8 @@ void IBuilderTask::ExecuteChain(SBuildChain* chain)
  							isSensor = [](CCircuitDef* cdef) { return cdef->IsRadar(); };
  						} else if (bi.cdef->IsSonar()) {
  							isSensor = [](CCircuitDef* cdef) { return cdef->IsSonar(); };
@@ -1449,6 +1497,27 @@ index bc8ff11..1c559d0 100644
  						} else {
  							isValid = false;
  							break;
+diff --git a/src/circuit/task/builder/BuilderTask.h b/src/circuit/task/builder/BuilderTask.h
+index 13ced8d..3a733d6 100644
+--- a/src/circuit/task/builder/BuilderTask.h
++++ b/src/circuit/task/builder/BuilderTask.h
+@@ -156,6 +156,16 @@ protected:
+ 	SResource savedIncome;
+ 	int buildFails;
+ 
++	// apexearth: "We're totally out of metal and we have three construction
++	// turrets helping to build something, but we don't even have the metal to
++	// build it. One of those conturrets could have been reclaiming... Ideally
++	// would be to insert the reclaim request ahead of their current command so
++	// that as soon as it finishes, they all immediately return to what they
++	// were doing... if you have <2% metal and reclaim is in your vicinity -
++	// reclaim!" Per-task, not per-unit: cheap, and the units on one task are
++	// already spatially close, so one check covers all of them well enough.
++	int nextMetalEmptyReclaim = 0;
++
+ 	decltype(units)::const_iterator unitIt;  // update iterator
+ 
+ 	std::set<CCircuitUnit*> traveled;
 diff --git a/src/circuit/task/builder/MexTask.cpp b/src/circuit/task/builder/MexTask.cpp
 index e49a5b3..d788199 100644
 --- a/src/circuit/task/builder/MexTask.cpp
