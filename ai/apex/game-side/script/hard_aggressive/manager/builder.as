@@ -2078,20 +2078,37 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			IUnitTask@ aa = CheapAA(unit);
 			if (aa !is null)
 				return aa;
-			// BUILD_PHASE gate on the optional economy cluster. Progression,
-			// 2026-08-04: phase >= 2 (mex >= 4) reverted, 0 wins in 13 decided.
-			// phase >= 3 (RushReady) confirmed a real improvement, 5 wins in 22
-			// decided (22.7%) across 4 batches. phase >= 4 (gHaveT2 -- an
-			// advanced factory actually finished, not just afforded) measured
+			// EnergyConverter carved out of the phase gate below, same shape and
+			// same evidence class as CheapAA above. apexearth, watching live at
+			// 9 minutes: "not a single rezbot on either team... Other AI also all
+			// has more metal than we do... and they make energy converters - we
+			// have NO energy converters. Yes we have extra energy. Why no energy
+			// converters?" EnergyConverter() is already tightly self-gated: it
+			// only fires when spare = income - pull actually exceeds
+			// CONVERT_MIN_SPARE (a real observed surplus, not a forecast), respects
+			// CONVERT_CON_FLOOR, and throttles on CONVERT_PERIOD -- the same
+			// "reactive, self-limiting, cannot crowd out expansion" profile that
+			// justified CheapAA's carve-out, and the energy it converts would
+			// otherwise be wasted outright (100k+ wasted energy per game measured
+			// repeatedly this session), so it is closer to free than the rest of
+			// this cluster.
+			IUnitTask@ conv = EnergyConverter(unit);
+			if (conv !is null)
+				return conv;
+			// BUILD_PHASE gate on the remaining optional economy cluster.
+			// Progression, 2026-08-04: phase >= 2 (mex >= 4) reverted, 0 wins in
+			// 13 decided. phase >= 3 (RushReady) confirmed a real improvement, 5
+			// wins in 22 decided (22.7%) across 4 batches. phase >= 4 (gHaveT2 --
+			// an advanced factory actually finished, not just afforded) measured
 			// BEST: 6 wins in 10 decided (60.0%, 95% CI 31.3%-83.2%) across 2
 			// batches, P(>=6 wins in 10 | baseline true rate 7.9%) = 0.00004, and
 			// most games (14/16 in the larger batch) ran the full time limit
 			// competitively rather than being decided either way. See
 			// notes/open-issues.md issue 15 for the full data and CHANGES.md for
 			// the summary. Before an advanced factory exists, a constructor's
-			// only job is expansion and reaching T2; HeavyAA, Pulsar and the eco
-			// converters/nano/fusion block below can all wait for an economy
-			// that has actually teched, not merely one that could afford to.
+			// only job is expansion and reaching T2; HeavyAA, Pulsar and the
+			// nano/fusion block below can all wait for an economy that has
+			// actually teched, not merely one that could afford to.
 			if (Factory::gLastPhase >= 4) {
 				IUnitTask@ heavyAa = HeavyAA(unit);
 				if (heavyAa !is null)
@@ -2104,9 +2121,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				IUnitTask@ block = EcoConverters(unit);
 				if (block !is null)
 					return block;
-				IUnitTask@ conv = EnergyConverter(unit);
-				if (conv !is null)
-					return conv;
 				IUnitTask@ nano = EcoNano(unit);
 				if (nano !is null)
 					return nano;

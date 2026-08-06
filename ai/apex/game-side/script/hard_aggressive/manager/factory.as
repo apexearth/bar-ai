@@ -1221,8 +1221,19 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			// under-filled between fights, which is not what the original
 			// fix was for (that was about not building any at t=0, before
 			// anything had died at all).
+			//
+			// Searched from unit.GetPos() -- the T1 BOT LAB's own position,
+			// since unit.circuitDef.id == lab.id is required above -- so a
+			// reclaim pile anywhere else in the base (apexearth, watching
+			// live: "there was a lot of reclaim metal available... they were
+			// right in front of a factory, but it was a vehicle factory")
+			// was invisible to this check even though it proved the exact
+			// thing the check exists to prove. Searched from the team's home
+			// position instead, which covers the whole base rather than one
+			// building's immediate radius.
+			const AIFloat3 armedFrom = Builder::gHomeSet ? Builder::gHomePos : unit.GetPos(ai.frame);
 			const bool armed = (rez.count > 0) || (ai.GetBestWreckPos(
-					unit.GetPos(ai.frame), Builder::WRECK_SEARCH, Builder::WRECK_MIN).x >= 0.f);
+					armedFrom, Builder::WRECK_SEARCH, Builder::WRECK_MIN).x >= 0.f);
 			if (armed) {
 				IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
 						Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
