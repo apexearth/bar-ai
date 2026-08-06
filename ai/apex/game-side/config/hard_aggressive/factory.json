@@ -42,6 +42,16 @@
 			// If income*ecoFactor < income_tier[N] then 'tierN' probability will be used
 		"income_tier": [2, 25,  35],
 			"unit":      ["armck", "armpw", "armrectr", "armrock", "armham", "armjeth", "armwar", "armflea"],
+			// armck reverted to the pre-session value (see below), then pushed
+			// FURTHER at tier2/3 (0.35 -> 0.45). Issue 59: stock BARb's own
+			// Armada expands ~17-35% faster than its own Cortex (mex count at
+			// minute 12/20, comparing stock-vs-Cortex to stock-vs-Armada) --
+			// apex-Armada's own performance is only mildly behind apex-Cortex's
+			// (~11% at minute 12), so matching Cortex-derived "proven" values
+			// (armck was already ABOVE corck's flat 0.05 even before this push)
+			// was never enough: the target was never parity with Cortex, it was
+			// beating a genuinely tougher stock opponent. Untested -- confirm
+			// with an Armada,Armada batch.
 			// armck cut to flat 0.05 (matching corck) regressed hard: an
 			// Armada,Armada 4v4 timeline (analyze_stats.py) showed mex count
 			// dead even with stock through minute 6 (3.8 vs 3.8), then apex
@@ -57,8 +67,8 @@
 			"land": {
 			"tier0": [ 0.25,    0.70,    0.05,       0.00,      0.00,     0.00,      0.00,     0.30],
 			"tier1": [0.25, 0.15, 0.05, 0.00, 0.65, 0.02, 0.00, 0.10],
-			"tier2": [0.35, 0.00, 0.05, 0.00, 0.68, 0.02, 0.04, 0.08],
-			"tier3": [0.35, 0.00, 0.05, 0.02, 0.70, 0.04, 0.04, 0.08]
+			"tier2": [0.45, 0.00, 0.05, 0.00, 0.58, 0.02, 0.04, 0.08],
+			"tier3": [0.45, 0.00, 0.05, 0.02, 0.60, 0.04, 0.04, 0.08]
 		},
 		"air": {
 			"tier0": [ 0.25,    0.64,    0.09,       0.00,      0.00,     0.10,      0.00,     0.30],
