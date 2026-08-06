@@ -2381,10 +2381,10 @@ index ec833e6..2413351 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..2ce485e 100644
+index 0d59b65..bf09dff 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
-@@ -10,6 +10,7 @@
+@@ -10,12 +10,14 @@
  #include "map/ThreatMap.h"
  #include "module/BuilderManager.h"
  #include "module/MilitaryManager.h"
@@ -2392,7 +2392,14 @@ index 0d59b65..2ce485e 100644
  #include "terrain/TerrainManager.h"
  #include "terrain/path/PathFinder.h"
  #include "terrain/path/QueryLineMap.h"
-@@ -225,13 +226,102 @@ ISquadTask* ISquadTask::GetMergeTask()
+ #include "unit/action/TravelAction.h"
+ #include "CircuitAI.h"
+ #include "util/Utils.h"
++#include "Log.h"
+ 
+ #include <cmath>
+ 
+@@ -225,13 +227,102 @@ ISquadTask* ISquadTask::GetMergeTask()
  	return nullptr;
  }
  
@@ -2496,7 +2503,7 @@ index 0d59b65..2ce485e 100644
  		state = State::ROAM;
  		return false;
  	}
-@@ -296,6 +386,10 @@ bool ISquadTask::IsMustRegroup()
+@@ -296,6 +387,10 @@ bool ISquadTask::IsMustRegroup()
  		return false;
  	}
  
@@ -2507,7 +2514,7 @@ index 0d59b65..2ce485e 100644
  	if (threatMap->GetThreatAt(groupPos) >= THREAT_MIN) {
  		validUnits.clear();
  		state = State::ROAM;
-@@ -305,7 +399,12 @@ bool ISquadTask::IsMustRegroup()
+@@ -305,7 +400,12 @@ bool ISquadTask::IsMustRegroup()
  	bool wasRegroup = (State::REGROUP == state);
  	state = State::ROAM;
  
@@ -2521,7 +2528,7 @@ index 0d59b65..2ce485e 100644
  	for (CCircuitUnit* unit : validUnits) {
  		const float sqDist = groupPos.SqDistance2D(unit->GetLastPos());
  		if (sqDist > sqMaxDist) {
-@@ -390,7 +489,15 @@ void ISquadTask::Attack(const int frame)
+@@ -390,7 +490,15 @@ void ISquadTask::Attack(const int frame)
  void ISquadTask::Attack(const int frame, const bool isGround)
  {
  	const AIFloat3& tPos = GetTarget()->GetPos();
@@ -2538,7 +2545,7 @@ index 0d59b65..2ce485e 100644
  	attackFrame = isRepeatAttack ? frame : attackFrame;
  
  	auto it = rangeUnits.begin()->second.begin();
-@@ -421,14 +528,54 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -421,14 +529,97 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	int row = 0;
  	for (const auto& kv : rangeUnits) {
  		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
@@ -2574,7 +2581,50 @@ index 0d59b65..2ce485e 100644
 +		// completion with no crash -- a real loss, but indistinguishable from
 +		// this session's established small-batch noise until re-tested clean.
 +		const bool isArty = (edef != nullptr) && edef->IsRoleArty();
-+		const bool outranged = !isArty && (edef != nullptr) && (edef->GetMaxRange() > kv.first);
++		// apexearth, watching live: "our thug style units are afraid of
++		// rocket bots because they have more range. thugs/maces are more
++		// powerful than rocket bots so that's unfortunate." A rocket bot
++		// (armrock/corrock) is direct-fire, not IsRoleArty(), so it was
++		// getting the same kite-away treatment as a real long-range threat
++		// even though a heavy assault bot standing at its own range shrugs
++		// off rocket fire and wins the trade -- kiting away just throws that
++		// advantage out for no reason.
++		//
++		// First attempt used cost as the "who wins" proxy and was wrong:
++		// checked against tools/unitdef.py, corthud (Thug) is 140 metal,
++		// armham (Mace) 130, armrock (Rocketeer) 120 -- all similar T1 bot
++		// costs, nowhere near a dominance ratio. GetPower() is the right
++		// signal instead: CCircuitDef precomputes damage*sqrt(health) per
++		// def (CircuitDef.cpp), the same formula CThreatMap::GetUnitPower
++		// uses for live units, and it is what the threat map itself is
++		// already built from -- Thug/Mace's low range but high alpha and
++		// health should score well above Rocketeer's glass-cannon poke
++		// (its own description: "good vs. static defenses") on this metric
++		// even though cost alone could not tell them apart.
++		const bool powerDominant = (edef != nullptr) && (rowDef != nullptr)
++				&& (rowDef->GetPower() > edef->GetPower() * POWER_DOMINANCE_RATIO);
++		// TEMPORARY diagnostic, apexearth: "remember good diagnostics and
++		// instrumentation are important!" GetPower() at the def level is
++		// unverified for this exact matchup -- log both sides' power whenever
++		// a row actually outranges its target, so a smoke test can confirm
++		// powerDominant fires true for Thug/Mace vs Rocketeer specifically
++		// before trusting the mechanism. Time-rate-limited rather than
++		// call-count-capped: a 60-call cap exhausted in the first 30 seconds
++		// of a 15-minute smoke test and never got another sample, so it
++		// never actually saw a Thug/Mace-vs-Rocketeer pairing at all.
++		static int sLastPowerDiagFrame = -1000000;
++		const int diagFrame = manager->GetCircuit()->GetLastFrame();
++		if ((edef != nullptr) && (rowDef != nullptr) && (edef->GetMaxRange() > kv.first)
++			&& (diagFrame >= sLastPowerDiagFrame + FRAMES_PER_SEC * 5))
++		{
++			sLastPowerDiagFrame = diagFrame;
++			manager->GetCircuit()->GetLog()->DoLog(utils::string_format(
++				std::string("apex: outrange-power-diag row=%s (pwr=%.1f) target=%s (pwr=%.1f) dominant=%d"),
++				rowDef->GetDef()->GetName(), rowDef->GetPower(),
++				edef->GetDef()->GetName(), edef->GetPower(), powerDominant).c_str());
++		}
++		const bool outranged = !isArty && !powerDominant
++				&& (edef != nullptr) && (edef->GetMaxRange() > kv.first);
 +		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
 +		const float range = standoff * ATTACK_RANGE_MOD;
  		// NOTE: 1st unit in 1st row will scout, ignoring GetTarget()->IsInRadarOrLOS()
@@ -2596,7 +2646,7 @@ index 0d59b65..2ce485e 100644
  		// NOTE: float delta = asinf(cdef->GetRadius() / range);
  		//       but sin of a small angle is similar to that angle, omit asinf() call
  		float delta = (3.0f * (rowDef->GetRadius() + aoe)) / (range + DIV0_SLACK);
-@@ -462,6 +609,27 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -462,6 +653,27 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				const float r = (iterNum == 0) ? range0 : range;
  				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
  				CTerrainManager::CorrectPosition(newPos);
@@ -2625,10 +2675,10 @@ index 0d59b65..2ce485e 100644
  			}
  
 diff --git a/src/circuit/task/fighter/SquadTask.h b/src/circuit/task/fighter/SquadTask.h
-index a058d59..5c85647 100644
+index a058d59..efe428b 100644
 --- a/src/circuit/task/fighter/SquadTask.h
 +++ b/src/circuit/task/fighter/SquadTask.h
-@@ -15,6 +15,34 @@
+@@ -15,6 +15,59 @@
  
  namespace circuit {
  
@@ -2657,13 +2707,38 @@ index a058d59..5c85647 100644
 +// TARGET's range plus this margin, not our own (shorter) range, so a
 +// mismatched engagement never puts us inside a reach we cannot answer.
 +#define OUTRANGED_SAFETY_MARGIN	1.1f
++// apexearth: "our thug style units are afraid of rocket bots because they
++// have more range. thugs/maces are more powerful than rocket bots so that's
++// unfortunate." A row whose own CCircuitDef::GetPower() (damage*sqrt(health),
++// precomputed per def -- see CircuitDef.cpp) beats the target's by this
++// ratio trusts its own range instead of kiting off the target's longer one.
++// NOT cost: checked corthud/armham/armrock (Thug/Mace/Rocketeer) via
++// tools/unitdef.py and they are 140/130/120 metal -- similar T1 bot costs
++// that cannot tell a brawler from a skirmisher apart.
++//
++// 1.15, not the first-guess 1.5: the outrange-power-diag log this ships with
++// caught the first value red-handed -- Mace vs Rocketeer, the exact reported
++// matchup, is only a 1.27x power ratio, and Thug vs Storm sits at 1.33x. Both
++// need to read as dominant. Every confirmed non-dominant sample in the same
++// data topped out at 0.86x (Thug vs a defense turret), so 1.15 clears both
++// real cases with margin while keeping a large gap above genuinely-even or
++// losing matchups.
++//
++// Known limitation, not yet worth the restructuring: GetPower() is a
++// TYPE-level constant off max health, not live health. A row standing at
++// 10% HP still reads as dominant over a full-health target it can no longer
++// actually out-trade. CThreatMap::GetUnitPower does the live-health version
++// of this same formula for our own units; the target only has CEnemyInfo's
++// last-seen health, which is enough to notice but adds complexity this
++// specific report does not need yet.
++#define POWER_DOMINANCE_RATIO	1.15f
 +// Spacing between neighbours on a regroup line, in elmos.
 +#define LINE_SPACING		110.f
 +
  class ISquadTask: public IFighterTask {
  protected:
  	ISquadTask(ITaskModule* mgr, FightType type, float powerMod);
-@@ -39,6 +67,9 @@ private:
+@@ -39,6 +92,9 @@ private:
  
  protected:
  	ISquadTask* GetMergeTask();

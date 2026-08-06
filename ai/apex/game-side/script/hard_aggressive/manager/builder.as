@@ -225,6 +225,11 @@ float WreckSeenValue()
 // declared only once ThreatFor() -- which needs it -- was already in scope.
 const float CON_THREAT_VETO = 4.0f;
 
+// apexearth: "have our units never assist another unit build something if
+// we are out of a resource (<5%)." Declared here, ahead of AiMakeTask's use
+// of it, for the same forward-declaration reason as CON_THREAT_VETO above.
+const float RESOURCE_CRISIS_FRAC = 0.05f;
+
 IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
 {
 	const AIFloat3 pos = unit.GetPos(ai.frame);
@@ -2020,6 +2025,39 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// with the normal game-start sequence, which already places the
 		// first factory through its own, separately-verified path.
 		if (!Factory::HaveAnyFactory() && (ai.frame >= 3 * MINUTE)) {
+			// apexearth, watching live: "when we have 0 buildings, we
+			// shouldn't start by making a lab... green ran out of
+			// everything, his first building to make after that was a
+			// botlab, then he started a vehicle lab.... he should get to
+			// high safety area and make economy first." This block used to
+			// build unconditionally at unit.GetPos() with no safety or
+			// economy check at all -- exactly that.
+			//
+			// Safety: reuse the same ThreatFor check the retreat branches
+			// above already use. A wiped-out commander standing in the open
+			// must keep fleeing, not stop to build.
+			const float hereThreat = ThreatFor(unit, unit.GetPos(ai.frame));
+			if (hereThreat > CON_THREAT_VETO) {
+				IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+				if (flee !is null)
+					return flee;
+			} else {
+				// Economy before factory, once actually safe: a rebuilt
+				// factory with no income behind it just gets lost the same
+				// way again. Only while a safe, reachable mex spot still
+				// exists nearby -- once none is left, fall through to the
+				// factory rebuild below rather than stalling forever
+				// waiting for a spot that isn't there.
+				const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
+				if (spot >= 0) {
+					IUnitTask@ mex = aiEconomyMgr.EnqueueMexAt(unit, spot);
+					if (mex !is null) {
+						AiLog(Factory::T() + "apex: commander economy-first, no factory yet -- mex before rebuild");
+						return mex;
+					}
+				}
+			}
+
 			CCircuitDef@ lab = Factory::T1BotLab();
 			if ((lab !is null) && lab.IsAvailable(ai.frame)) {
 				IUnitTask@ rebuild = aiBuilderMgr.Enqueue(TaskB::Common(
@@ -2203,6 +2241,27 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		@task = null;
 	}
 
+	// apexearth: "have our units never assist another unit build something if
+	// we are out of a resource (<5%). This should help encourage getting
+	// mexes." Only about JOINING someone else's build -- task.GetUnits() is
+	// the set of units already on it, so an empty list means this unit would
+	// be starting fresh, not assisting, and is left alone. Mex/mex-upgrade
+	// tasks are exempt: assisting one of those is exactly the behavior a
+	// resource crunch should produce more of, not less.
+	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)
+		&& (task.GetBuildType() != Task::BuildType::MEX)
+		&& (task.GetBuildType() != Task::BuildType::MEXUP)
+		&& (task.GetUnits().length() > 0))
+	{
+		const bool metalCrit = (aiEconomyMgr.metal.storage > 0.f)
+				&& (aiEconomyMgr.metal.current < aiEconomyMgr.metal.storage * RESOURCE_CRISIS_FRAC);
+		const bool energyCrit = (aiEconomyMgr.energy.storage > 0.f)
+				&& (aiEconomyMgr.energy.current < aiEconomyMgr.energy.storage * RESOURCE_CRISIS_FRAC);
+		if (metalCrit || energyCrit) {
+			@task = null;
+		}
+	}
+
 	// Refusing to accept the job in the first place. Reached from CIdleTask, where
 	// returning null simply leaves the unit idle until the next idle sweep.
 	if (!isComm) {
@@ -2239,7 +2298,20 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// owned per CCircuitAI instance (see Air.as's own note on this), so
 		// .count here is THIS player's own standing+in-progress count, not
 		// the team's.
-		if ((kind == "factory") && (task !is null)) {
+		// apexearth's T2 rush stalling at 18m traced (fresh-context agent
+		// review, 2026-08-06) to exactly this cap: a constructor legitimately
+		// pulled off the advanced-lab build by real threat (con-veto abandon,
+		// threat=12) tried to resume the SAME single in-progress build once
+		// safe, and this cap refused it every time as if it were requesting
+		// a brand new redundant factory -- rerouting to factory-cap-fallback-
+		// mex instead of finishing the T2 lab, repeatedly, well past the
+		// factory-cap threat window's own frame. task.GetUnits() is the set
+		// of units ALREADY on this task; a nonzero count means this is a
+		// build already underway, not a new request, and can't be redundant
+		// by definition -- exempt it from both the count cap and the spacing
+		// cooldown, which exist only to stop DefaultMakeTask independently
+		// offering a brand new factory to every idle constructor.
+		if ((kind == "factory") && (task !is null) && (task.GetUnits().length() == 0)) {
 			const CCircuitDef@ wantFac = task.buildDef;
 			if (wantFac !is null) {
 				const int id = wantFac.id;
