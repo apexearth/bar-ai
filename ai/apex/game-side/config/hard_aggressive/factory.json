@@ -97,12 +97,25 @@
 		// session specifically because corack was cut without a compensating
 		// path; Armada had no such gap to justify cutting armack in the first
 		// place. Reverted to the pre-session value.
+		//
+		// armfboy at tier3/4=0.30 (the pre-session, "correct" value -- not a
+		// regression) still absorbed 25-29% of ALL Armada metal spent across
+		// every 4v4 batch tested (issue 58/59/60), a concentration Cortex's
+		// own army composition never shows (its own top spender never exceeds
+		// ~6% of total). Four fixes targeting constructor weights/idle-time
+		// all failed to move the win rate; a direct stock-vs-stock test
+		// (issue 60) then ruled out "tougher opponent" as the explanation,
+		// leaving Armada's own combat composition as the most likely
+		// remaining lever. Reduced armfboy tier3/4 0.30 -> 0.15, redistributed
+		// to armaak (anti-air, was badly underweighted at 0.03) and armsptk
+		// (all-terrain rocket spider, was 0.05) for more diversity. Untested
+		// -- confirm with an Armada,Armada batch.
 		"land": {
 			"tier0": [0.25, 0.15, 0.14, 0.00, 0.00, 0.10, 0.40, 0.02, 0.00, 0.01, 0.01, 0.05, 0.05, 0.10, 0.00, 0.00],
 			"tier1": [0.25, 0.15, 0.10, 0.15, 0.05, 0.30, 0.36, 0.02, 0.00, 0.01, 0.01, 0.05, 0.05, 0.14, 0.20, 0.00],
 			"tier2": [0.25, 0.15, 0.20, 0.20, 0.15, 0.15, 0.30, 0.03, 0.01, 0.01, 0.01, 0.05, 0.05, 0.20, 0.10, 0.00],
-			"tier3": [ 0.35,     0.15,		 0.20,      0.20,     0.30,		0.00,	   0.15,      0.03,     0.01,		0.01,     	0.01,		0.05,      0.05,      0.20,		0.00,       0.00],
-			"tier4": [ 0.35,     0.15,		 0.20,      0.20,     0.30,		0.00,	   0.15,      0.03,     0.01,		0.01,     	0.01,       0.05,      0.05,      0.20,		0.00,       0.00]
+			"tier3": [ 0.35,     0.15,		 0.20,      0.20,     0.15,		0.00,	   0.15,      0.10,     0.01,		0.01,     	0.01,		0.05,      0.13,      0.20,		0.00,       0.00],
+			"tier4": [ 0.35,     0.15,		 0.20,      0.20,     0.15,		0.00,	   0.15,      0.10,     0.01,		0.01,     	0.01,       0.05,      0.13,      0.20,		0.00,       0.00]
 		},
 
 		"water": {                
