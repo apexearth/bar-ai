@@ -677,6 +677,17 @@ AIFloat3 gConDefPos;
 bool gConDefPlaced = false;
 int  gNextConDef = 0;
 
+// apexearth: "its terrible if they just get full of metal and stop doing
+// anything." AA/HeavyAA/Pulsar/ContestDefence/EcoFusion all gate off while
+// aiEconomyMgr.isEnergyStalling, so a team can end up with every one of
+// those rules simultaneously refusing to fire while metal keeps piling up
+// with nowhere to go -- a fully idle unit sitting on a capped bank. Metal
+// overflowing and doing nothing is strictly worse than spending some of a
+// stalling energy reserve on cheap ground defense, so the last-resort
+// fallback at the end of AiMakeTask bypasses that gate deliberately.
+const int METAL_FULL_DEF_PERIOD = 30 * SECOND;
+int gNextMetalFullDef = 0;
+
 // How much defence has to already stand here before we stop adding to it.
 //
 // apexearth, asking for the dig-in behaviour back: "Last time it seemed
@@ -2496,6 +2507,33 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 
 	if (task !is null)
 		return task;   // strictly additive: never displace real work
+
+	// Genuinely idle with nothing else offered: every rule above this point
+	// in the whole function -- mex, army, defense, converters, reclaim
+	// fallback -- already had its chance and found nothing. apexearth: "if
+	// you're waiting for their metal to become full, I mean, at that point,
+	// it could just already be too late" -- correct: gating on isMetalFull
+	// (80% of storage) meant real production time was already lost before
+	// this fired. !isMetalEmpty just means "not literally out of metal",
+	// which this fallback point already implies is being wasted regardless
+	// of exactly how close to full the bank is -- reaching here at all with
+	// any usable metal is itself the signal, not a specific fill level.
+	// See METAL_FULL_DEF_PERIOD's own comment for why this deliberately
+	// bypasses the isEnergyStalling gate the rest of this file's defense
+	// rules use.
+	if (!isComm && !aiEconomyMgr.isMetalEmpty && gHomeSet && (ai.frame >= gNextMetalFullDef)) {
+		CCircuitDef@ tower = ContestTower(unit);
+		if ((tower !is null) && tower.IsAvailable(ai.frame)) {
+			IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+					Task::Priority::NORMAL, tower, gHomePos, SQUARE_SIZE * 8));
+			if (post !is null) {
+				gNextMetalFullDef = ai.frame + METAL_FULL_DEF_PERIOD;
+				AiLog(Factory::T() + "apex: metal-full-fallback " + unit.circuitDef.GetName()
+					+ " -> " + tower.GetName());
+				return post;
+			}
+		}
+	}
 
 	// Reached by an idle builder, and by one whose only offer was refused above.
 	// Rate-limited so a field of them does not each run their own scan every tick.
