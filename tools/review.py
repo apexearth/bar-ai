@@ -175,11 +175,20 @@ def undecided_lean(rows: list[dict]) -> dict:
         if res.get("reason") == "gameover":
             continue
         total += 1
-        # `teams` only lists ONE representative team per side (e.g. a 4v4 has
-        # 8 real teams but just team 0 and team 1 here) -- every stats row
-        # carries its own `ally`, so map ally -> spec via those two anchors,
-        # then every other team on the same ally belongs to the same spec.
-        team_spec = {t["team"]: t["spec"] for t in r.get("teams", [])}
+        # `teams` only lists ONE representative entry per side (e.g. a 4v4
+        # has 8 real teams but just 2 entries here) -- and for per_side>1
+        # matches that entry's own "team" field can be wrong (run_match.py's
+        # own bug, not this function's: confirmed on a real 4v4 where
+        # teams[1]["team"] read 1, but script.txt showed Spring team 1 was
+        # actually on AllyTeam 0 alongside team 0, both apex -- the real
+        # stock team 4 was left with no representative at all). teams[]'s
+        # SPEC strings are trustworthy; its "team" id numbers are not for
+        # index 1+. Use array position instead: teams[0] is always side A's
+        # own team 0 (reliable), teams[1] is side B by construction of how
+        # this harness pairs AIs, matched to whichever ally ISN'T team 0's.
+        teams_list = r.get("teams", [])
+        if len(teams_list) != 2:
+            continue
         last_by_team: dict[float, dict] = {}
         team_ally: dict[float, float] = {}
         for row in r.get("stats", []):
@@ -191,7 +200,13 @@ def undecided_lean(rows: list[dict]) -> dict:
                 last_by_team[t] = row
             if t not in team_ally:
                 team_ally[t] = row.get("ally")
-        ally_spec = {team_ally[t]: spec for t, spec in team_spec.items() if t in team_ally}
+        ally0 = team_ally.get(teams_list[0]["team"])
+        if ally0 is None:
+            continue
+        other_allies = sorted({a for a in team_ally.values() if a != ally0})
+        if len(other_allies) != 1:
+            continue
+        ally_spec = {ally0: teams_list[0]["spec"], other_allies[0]: teams_list[1]["spec"]}
         per_spec: dict[str, dict] = collections.defaultdict(lambda: {"metal": 0.0, "kills": 0.0})
         for t, row in last_by_team.items():
             spec = ally_spec.get(team_ally.get(t))
