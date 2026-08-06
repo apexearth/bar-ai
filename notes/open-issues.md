@@ -3925,3 +3925,40 @@ from earlier this session almost exactly. See
 confirms a second time: individual mechanism-level fixes, however
 well-evidenced, are not closing either non-Cortex faction's gap on this
 benchmark.
+
+## 63. ConStrike fix + outranged-safety-margin: consistent with the established pattern, no clear win-rate movement
+
+Two more Armada 4v4 8-game reads:
+- `armada-constrike-fix-8` (ConStrike moved to true-failure-only path,
+  commit `a6730fd`): 37.5% (3/8).
+- `armada-outrange-margin-8` (adds the outranged-safety-margin evasion +
+  artillery exemption, commit `1ae3836`, combined with the ConStrike fix
+  above): 25.0% (2/8).
+
+Both within the same 12.5-37.5% band every other Armada attempt this
+session has landed in, regardless of which specific mechanism was
+changed. No dedicated diagnostic log exists for the outranged-margin C++
+change (unlike CheapAA/factory-cap, which log every fire) -- confirmed
+via code review and a clean smoke test (no crash, no compile error) that
+it is live, but its actual firing rate in real games is not directly
+observable from telemetry. Worth adding a rate-limited AiLog if this
+mechanism needs auditing later.
+
+**Running total, Armada 4v4 this session: seven real, well-evidenced
+attempts** (armack revert, armck revert, factory-cap fallback-mex,
+push-past-parity, armfboy diversify, ConStrike true-failure-only,
+outranged-safety-margin), **zero confirmed win-rate movement**, one
+important corrected hypothesis (issues 59/60). All seven are kept
+deployed -- each is independently well-evidenced as a real mechanism-
+level improvement or correctness fix, none measured as harmful in any
+read so far. This is now a very strong, repeated pattern matching
+Legion's own five-fixes/zero-movement result from earlier this session.
+Per apexearth's own "start small, escalate if promising" guidance and
+this project's established "resolve ambiguity with one big batch"
+practice: individual small-batch reads on this benchmark are too noisy
+to distinguish any of these fixes from each other or from doing nothing,
+and repeated small-batch cycling has reached clearly diminishing returns
+as a strategy for THIS specific goal (90%+ win rate). A single large
+(64-96 game) batch on the full current fix set would settle where Armada
+actually stands, the same way it did for Legion's baseline (issue 52) and
+Cortex's kiting-fix state (issue 57).
