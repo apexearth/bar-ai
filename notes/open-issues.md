@@ -3962,3 +3962,43 @@ as a strategy for THIS specific goal (90%+ win rate). A single large
 (64-96 game) batch on the full current fix set would settle where Armada
 actually stands, the same way it did for Legion's baseline (issue 52) and
 Cortex's kiting-fix state (issue 57).
+
+## 64. Jammers cluster: build_chain hubs attach per-parent-INSTANCE with no cross-hub area check
+
+apexearth, watching live: "Areas should have a general limit to how much
+they'll build there, especially on things like jammers... I often see
+many jammers all close together."
+
+Traced the mechanism in `build_chain.json`/`build_chain_leg.json`:
+jammers (`armjamt`, `corjamt`, `legjam`, `legajam`) are each attached to
+MULTIPLE separate parent hubs independently (e.g. `armjamt` appears on 3
+distinct hook triggers: two fusion-tier hooks plus another). Each hub
+fires once per matching PARENT INSTANCE finishing (per the documented
+build_chain mechanic, issue/CHANGES.md: "a hub fires only when its exact
+parent unit FINISHES"), at a fixed relative offset from that specific
+parent -- with no check anywhere for "is a jammer already standing
+nearby, placed by a different hub." If a player builds several
+qualifying buildings close together (normal -- players cluster fusions
+in their base), each independently spawns its own jammer nearby. The
+only existing mitigation is a single ad-hoc case for Legion (comment at
+build_chain_leg.json ~143: "...so the two hooks do not stack on one
+spot" -- two SPECIFIC known hooks given different offsets from each
+other), not a general mechanism, and it does not cover the N-fusions
+case at all (each fusion's jammer still uses the SAME offset from ITS
+OWN fusion, so 3 clustered fusions still produce 3 clustered jammers).
+
+`armjam`/`armjamt` telemetry check: 0 builds observed in the current
+32-game Armada batch (so not currently visible in that specific
+benchmark run), but `legjam` fired in 6/8 games in an earlier Legion
+telemetry sample this session -- the mechanism is real and faction-wide,
+just not necessarily exercised by every benchmark matchup.
+
+**Not implemented yet** -- this needs either (a) a new build_chain
+condition type checking for a same-type unit within some radius (C++
+change, since `SBuildInfo::condition` is a fixed enum per the documented
+build_chain gotcha "conditions cannot be combined"), or (b) an
+AngelScript-side pre-check before honoring a hub's jammer offer. Given
+this session already has seven undeployed-confirmation Armada changes
+stacked and a 32-game validation batch in flight, deliberately NOT
+bundling this in -- it should be its own separately-tested change once
+the current batch resolves, per one-change-at-a-time discipline.
