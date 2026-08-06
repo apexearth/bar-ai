@@ -2112,7 +2112,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				heat = MexHeat(site, heat);
 			if (heat > CON_THREAT_VETO) {
 				++gConRefused;
-				ConStrike(unit);
 				LogConVeto(unit, "refuse", kind, heat);
 				// CIdleTask assigns whatever comes back, so unlike the abandon
 				// path above this one can hand over a task the engine already
@@ -2125,6 +2124,17 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				IUnitTask@ post = ContestDefence(unit, kind, heat, task.GetBuildPos());
 				if (post !is null)
 					return post;
+				// ConStrike (which can trigger Fortify/dig-in once TROUBLE_HITS is
+				// reached) previously fired unconditionally on every refusal, even
+				// when SaferMex/ContestDefence immediately found a working
+				// alternative one line later -- three routine successful reroutes
+				// (business as usual, not persistent blocking) could trip the same
+				// threshold as three genuine repeated failures. apexearth, watching
+				// a game: "i see us making too many t1.5 defenses and advanced
+				// energy converters before we've even captured all our backline
+				// mexes." Moved to only the true-failure path, where no alternative
+				// was found at all.
+				ConStrike(unit);
 				@task = null;
 			}
 		}
