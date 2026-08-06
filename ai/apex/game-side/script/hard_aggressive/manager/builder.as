@@ -2182,6 +2182,27 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	}
 
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+
+	// apexearth, watching live: "commanders are often walking unreasonably
+	// long distances to get the reclaim when their time would be better
+	// spent getting mexes... once they have mexes reclaim is fine." The
+	// isComm gates on the wreck blocks below only stop the commander from
+	// CREATING a new reclaim task; they cannot stop CBuilderManager::
+	// MakeCommPeaceTask (native C++, runs inside DefaultMakeTask above) from
+	// picking up a Reclaim task some OTHER unit already enqueued into the
+	// shared buildTasks pool. Those reclaim tasks carry Task::Priority::HIGH,
+	// which dominates that picker's distance-cost weighting regardless of how
+	// far away the pile actually is -- so the commander can get pulled onto
+	// someone else's reclaim job from clear across the map. Reject it while
+	// there is still an unclaimed safe mex spot nearby; once the mex phase is
+	// done, let it through same as everyone else.
+	if (isComm && (task !is null) && (task.GetType() == Task::Type::BUILDER)
+		&& (task.GetBuildType() == Task::BuildType::RECLAIM)
+		&& (aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame)) >= 0))
+	{
+		@task = null;
+	}
+
 	// Refusing to accept the job in the first place. Reached from CIdleTask, where
 	// returning null simply leaves the unit idle until the next idle sweep.
 	if (!isComm) {
@@ -2368,7 +2389,10 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 
 	// Reached by an idle builder, and by one whose only offer was refused above.
 	// Rate-limited so a field of them does not each run their own scan every tick.
-	if (ai.frame < gNextWreck)
+	// isComm-gated same as the rest of this function's wreck-chasing -- this
+	// was the one remaining ungated path that could hand a self-initiated
+	// reclaim task back to a commander whose real task was rejected above.
+	if (isComm || (ai.frame < gNextWreck))
 		return task;
 	gNextWreck = ai.frame + 3 * SECOND;   // corpses decay; do not dawdle
 

@@ -1255,7 +1255,7 @@ index 4863ac9..e509c6d 100644
  	void ReadConfig();
  	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
 diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
-index 7c69263..7474fa4 100644
+index 7c69263..83c325b 100644
 --- a/src/circuit/task/RetreatTask.cpp
 +++ b/src/circuit/task/RetreatTask.cpp
 @@ -11,8 +11,10 @@
@@ -1269,7 +1269,7 @@ index 7c69263..7474fa4 100644
  #include "terrain/path/PathFinder.h"
  #include "terrain/path/QueryPathSingle.h"
  #include "terrain/path/QueryCostMap.h"
-@@ -148,7 +150,30 @@ void CRetreatTask::Start(CCircuitUnit* unit)
+@@ -148,7 +150,64 @@ void CRetreatTask::Start(CCircuitUnit* unit)
  				endPos = circuit->GetSetupManager()->GetBasePos();
  			}
  		}
@@ -1297,10 +1297,44 @@ index 7c69263..7474fa4 100644
 +			}
 +			endPos = fallback;
 +		}
++
++		// apexearth: "when we're retreating to safe havens, it seems we
++		// clump up into a tight ball, which makes us even more likely to
++		// die... we should spread out more evenly, forming a line against
++		// the threat." Every unit on this task computes the same endPos
++		// independently and paths to that exact point -- a squad that
++		// pulled back healthy converges onto one AOE-sized spot, which is
++		// no safer than standing still once it arrives. Offset along the
++		// line perpendicular to the enemy direction, same idea as
++		// ISquadTask::Attack's row spacing, keyed by this unit's rank among
++		// the task's OTHER assignees so the line forms without any unit
++		// needing to know where the others are headed.
++		if (units.size() > 1) {
++			const AIFloat3& foe = circuit->GetEnemyManager()->GetEnemyPos();
++			AIFloat3 dir = endPos - foe;
++			const float len = dir.Length2D();
++			if (len > 1.f) {
++				const AIFloat3 perp(-dir.z / len, 0.f, dir.x / len);
++				int index = 0;
++				for (CCircuitUnit* u : units) {
++					if (u == unit) {
++						break;
++					}
++					++index;
++				}
++				const float spacing = SQUARE_SIZE * 24;
++				const float lineOffset = (index - (units.size() - 1) * 0.5f) * spacing;
++				AIFloat3 spread = endPos + perp * lineOffset;
++				CTerrainManager::CorrectPosition(spread);
++				if (circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spread)) {
++					endPos = spread;
++				}
++			}
++		}
  	}
  
  //	const float minThreat = circuit->GetThreatMap()->GetUnitThreat(unit) * 0.125f;
-@@ -162,6 +187,90 @@ void CRetreatTask::Start(CCircuitUnit* unit)
+@@ -162,6 +221,90 @@ void CRetreatTask::Start(CCircuitUnit* unit)
  	});
  }
  
@@ -1391,7 +1425,7 @@ index 7c69263..7474fa4 100644
  void CRetreatTask::Update()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
-@@ -230,9 +339,31 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -230,9 +373,31 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  	if (!utils::is_valid(haven)) {
  		haven = circuit->GetSetupManager()->GetBasePos();
  	}
