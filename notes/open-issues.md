@@ -3794,3 +3794,42 @@ the benchmark -- ask him first"), three failed blind hypotheses in a row
 is exactly the point to stop guessing from telemetry alone and get a
 live-watched read instead, rather than continuing to burn batches on
 narrower and narrower economy theories.
+
+## 59. BREAKTHROUGH: stock BARb's own Armada is a tougher opponent than its own Cortex -- parity-with-Cortex was never the right target
+
+After three Armada fixes failed to move the win rate (issue 58), compared
+mex-count timelines apex-vs-apex across factions AND stock-vs-stock across
+matchups (`allBuilt=`/`mex` telemetry, same method as issue 55-57's
+timeline work):
+
+- **apex's own performance is comparable across factions**: at minute 12,
+  apex-Cortex reaches 10.5 mex, apex-Armada reaches 9.3 -- only ~11%
+  behind its own Cortex self, not a dramatic faction-specific collapse.
+- **stock's own performance is NOT comparable across matchups**: at
+  minute 12, stock-vs-Cortex reaches 10.1 mex, stock-vs-Armada reaches
+  11.8 -- 17% HIGHER. By minute 20 the gap widens to 35% (20.5 vs 15.2).
+
+Ratio comparison makes the reframe explicit: apex-Cortex actually
+slightly OUTPACES its stock opponent at minute 12 (10.5 vs 10.1). Apex-
+Armada falls meaningfully behind ITS stock opponent (9.3 vs 11.8) despite
+performing almost as well, in absolute terms, as apex-Cortex does.
+
+**Conclusion: stock BARb simply plays a stronger, faster-expanding game
+as Armada than as Cortex.** This was invisible to every fix attempted in
+issue 58 because all three targeted apex's OWN numbers (constructor
+weights, idle-time leaks) rather than the size of the gap apex actually
+needs to close. Matching apex-Armada to Cortex-derived "proven" values
+(the entire session's dominant strategy, per
+[[bar-ai-faction-parity-transfer]]) only gets Armada to Cortex-level
+performance -- which is not sufficient against a tougher opponent. This
+also explains why the SAME strategy failed for Legion five times earlier
+this session: if stock's Legion or Armada play is simply stronger than
+stock's Cortex play, no amount of copying Cortex's numbers closes a gap
+whose target was never "match Cortex," it was "beat a tougher stock
+opponent than Cortex faces."
+
+**Next step**: push Armada's economy (mex-focused constructor weights,
+income_tier thresholds) more aggressively than Cortex-parity, since
+parity was never the right target -- Armada apex needs to outpace its
+OWN Cortex-self's expansion rate to have a chance against its
+particular stock opponent, not just match it.
