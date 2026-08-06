@@ -672,6 +672,54 @@ const int   TROUBLE_HITS    = 3;
 // Never stack more than this in one 700-elmo area, however hot it gets.
 const uint DIG_FENCE_CAP = 5;
 
+// apexearth: "Areas should have a general limit to how much they'll build
+// there, especially on things like jammers... I often see many jammers all
+// close together." Traced: build_chain.json attaches a jammer to MULTIPLE
+// separate parent hubs independently (e.g. armjamt on three different hook
+// triggers), each firing once per matching parent instance finishing, at a
+// fixed offset from THAT parent -- with nothing checking whether a jammer
+// already stands nearby from a DIFFERENT parent's hub. Three fusions built
+// near each other (normal) produce three jammers near each other too.
+//
+// SiteBuildName() has no "jammer" kind at all (jammers fall through its
+// whitelist as ""), so the existing con-veto/threat-check block never sees
+// them. Same pattern as DefenceAround/gDigOrderPos above (no completion
+// hook to clear an order against, so track by TTL instead), scoped to the
+// four jammer defs actually seen in build_chain.json this session.
+string armjamt("armjamt");
+string corjamt("corjamt");
+string legjam2("legjam");
+string legajam("legajam");
+const float JAMMER_AREA     = 900.f;   // jammer coverage is wider than a defence fence
+const int   JAMMER_ORDER_TTL = 180 * SECOND;   // jammers are slow to build; outlive DIG_ORDER_TTL
+array<AIFloat3> gJammerPos;
+array<int>      gJammerAt;
+
+bool IsJammerDef(const CCircuitDef@ def)
+{
+	if (def is null)
+		return false;
+	const string name = def.GetName();
+	return (name == armjamt) || (name == corjamt) || (name == legjam2) || (name == legajam);
+}
+
+// Returns true if a jammer already stands (or was recently ordered) within
+// JAMMER_AREA of pos -- i.e. a new one here would cluster, not cover new
+// ground. Ages out its own tracked orders past JAMMER_ORDER_TTL the same
+// way gDigOrderPos does.
+bool AreaHasJammer(const AIFloat3& in pos)
+{
+	for (int i = int(gJammerAt.length()) - 1; i >= 0; --i) {
+		if (ai.frame - gJammerAt[i] > JAMMER_ORDER_TTL) {
+			gJammerAt.removeAt(i);
+			gJammerPos.removeAt(i);
+		} else if (gJammerPos[i].distance2D(pos) <= JAMMER_AREA) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // How much defence an area needs, given how dangerous it has proven to be.
 //
 // apexearth: "This area is dangerous, and therefore, I should defend it better
@@ -2067,6 +2115,24 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// Refusing to accept the job in the first place. Reached from CIdleTask, where
 	// returning null simply leaves the unit idle until the next idle sweep.
 	if (!isComm) {
+		// Jammer area-clustering veto (see AreaHasJammer's own comment). Checked
+		// before SiteBuildName's whitelist, since jammers fall outside it (kind
+		// would be "" and none of the checks below would ever see this task).
+		// GetBuildPos() is only valid for BUILDER-type tasks -- SiteBuildName
+		// guards this same way; missing it here crashed the native DLL at
+		// ~1.2 minutes in every game of an 8-game batch (armada-bisect-
+		// outrange-revert-8) the first time this path was actually exercised.
+		if ((task !is null) && (task.GetType() == Task::Type::BUILDER) && IsJammerDef(task.buildDef)) {
+			const AIFloat3 jsite = task.GetBuildPos();
+			if (AreaHasJammer(jsite)) {
+				++gConRefused;
+				LogConVeto(unit, "refuse", "jammer-cluster", 0.f);
+				@task = null;
+			} else {
+				gJammerPos.insertLast(jsite);
+				gJammerAt.insertLast(ai.frame);
+			}
+		}
 		string kind = SiteBuildName(task);
 		// Cap redundant same-type factories. tools/combat_events.py (built this
 		// session) caught what the earlier bot-lab-request-cooldown fix

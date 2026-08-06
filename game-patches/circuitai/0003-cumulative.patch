@@ -2235,7 +2235,7 @@ index ec833e6..2413351 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..3f1f9c4 100644
+index 0d59b65..4ea1736 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -10,6 +10,7 @@
@@ -2392,7 +2392,7 @@ index 0d59b65..3f1f9c4 100644
  	attackFrame = isRepeatAttack ? frame : attackFrame;
  
  	auto it = rangeUnits.begin()->second.begin();
-@@ -421,14 +528,46 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -421,14 +528,54 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	int row = 0;
  	for (const auto& kv : rangeUnits) {
  		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
@@ -2419,6 +2419,14 @@ index 0d59b65..3f1f9c4 100644
 +		// close-range-weak target is backwards for the same reason standing
 +		// still inside a direct-fire weapon's range is -- so arty targets keep
 +		// the normal own-range standoff instead of backing off to theirs.
++		// Restored: bisection (armada-bisect-outrange-revert-8) crashed the
++		// native DLL in all 8 games at ~1.2 minutes, but that batch also
++		// carried a real bug in the jammer-veto AngelScript path (called
++		// GetBuildPos() on a non-BUILDER task, same crash signature) that was
++		// new in that same deploy and this change was not. The prior 0-8 read
++		// (armada-unitdistance-check-8) that prompted the bisection ran to
++		// completion with no crash -- a real loss, but indistinguishable from
++		// this session's established small-batch noise until re-tested clean.
 +		const bool isArty = (edef != nullptr) && edef->IsRoleArty();
 +		const bool outranged = !isArty && (edef != nullptr) && (edef->GetMaxRange() > kv.first);
 +		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
