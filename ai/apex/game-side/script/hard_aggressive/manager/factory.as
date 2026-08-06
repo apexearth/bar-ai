@@ -364,6 +364,7 @@ const float REZ_METAL_PER_BOT = 500.f;
 const int REZ_SPACING  = 20 * SECOND;
 int gNextRez = 0;
 int gNextRezDiag = 0;  // temporary diagnostic, see the rez-bot armed check below
+int gNextFactoryDiag = 0;  // temporary diagnostic, see the AiMakeTask entry log below
 
 // HaveT1BotLab() only clears once CCircuitDef::count increments, which happens
 // at the nanoframe -- construction actually starting, not the build order
@@ -1188,6 +1189,25 @@ bool HoldsLateFighter(CCircuitUnit@ unit)
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
+	// Temporary diagnostic: apexearth, watching live, repeated report of a
+	// player with a live commander and intact base going unproductive for
+	// many minutes while metal piles up ("purple stopped making army...
+	// team died full on metal"). Cheap enough to run unconditionally --
+	// rate-limited per team, not per call -- and tells us the one thing the
+	// end-state totals in result.json cannot: whether this function keeps
+	// being called at all during a stall (a decision problem, something
+	// below keeps returning null) or stops being called entirely (the
+	// factory's task got stuck/held and the engine never re-asks).
+	if (ai.frame >= gNextFactoryDiag) {
+		gNextFactoryDiag = ai.frame + 30 * SECOND;
+		AiLog(T() + "apex: factory-diag " + unit.circuitDef.GetName()
+			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+			+ " mCur=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
+			+ " mStor=" + formatFloat(aiEconomyMgr.metal.storage, "", 0, 0)
+			+ " isMetalFull=" + (aiEconomyMgr.isMetalFull ? "1" : "0")
+			+ " hasTask=" + ((unit.task !is null) ? "1" : "0"));
+	}
+
 	// Safe to sit first: this answers only for the advanced air plant, so the
 	// ground line's branches below are untouched.
 	IUnitTask@ air = Air::MakeFactoryTask(unit);

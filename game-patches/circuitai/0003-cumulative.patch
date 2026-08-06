@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..3de93c5 100644
+index aeea933..9bd26c2 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -44,6 +44,10 @@
@@ -31,7 +31,7 @@ index aeea933..3de93c5 100644
  	allyTeam = setupManager->GetAllyTeam();
  	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
  	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
-@@ -1488,6 +1503,278 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1488,6 +1503,319 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -160,7 +160,35 @@ index aeea933..3de93c5 100644
 +// initialized metalRes (EconomyManager.cpp, set from Init()) which is why
 +// income/storage/sling all work fine off the same underlying resource. Resolve
 +// it fresh here instead of trusting the member.
-+springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal) const
++// apexearth: "any way we can enhance our reclaim logic to be careful not to
++// fully reclaim our own dead commander?" Broadened to ANY commander corpse,
++// not just our own: BAR lets any team's rez bot resurrect any wreck under
++// its OWN control regardless of who died there, so a dead enemy commander
++// sitting on the field is a steal-rez opportunity worth just as much
++// protection as our own -- and the Feature API this file already uses (see
++// GetBestWreckPos/GetWreckValueAt's own comments on GetFeaturesIn) exposes
++// no per-feature team-ownership accessor to tell "ours" from "theirs"
++// anyway, only Feature::GetResurrectDef() (which unit this corpse would
++// become). Resolved through GetCircuitDefSafe() to reuse this AI's own
++// IsRoleComm() classification -- the same one behaviour.json/behaviour_leg.json
++// already drive -- rather than re-deriving "is this a commander" from raw
++// UnitDef name/customparams.
++bool CCircuitAI::IsCommanderWreck(springai::Feature* f)
++{
++	if (f == nullptr) {
++		return false;
++	}
++	springai::UnitDef* rezDef = f->GetResurrectDef();
++	if (rezDef == nullptr) {
++		return false;
++	}
++	const int id = rezDef->GetUnitDefId();
++	delete rezDef;
++	CCircuitDef* cdef = GetCircuitDefSafe(id);
++	return (cdef != nullptr) && cdef->IsRoleComm();
++}
++
++springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal)
 +{
 +	springai::AIFloat3 best(-RgtVector);
 +	if ((callback == nullptr) || (radius <= 0.f)) {
@@ -175,6 +203,10 @@ index aeea933..3de93c5 100644
 +	const std::vector<springai::Feature*> feats = callback->GetFeaturesIn(pos, radius, false);
 +	for (springai::Feature* f : feats) {
 +		if (f == nullptr) {
++			continue;
++		}
++		if (IsCommanderWreck(f)) {
++			delete f;
 +			continue;
 +		}
 +		springai::FeatureDef* fd = f->GetDef();
@@ -202,8 +234,13 @@ index aeea933..3de93c5 100644
 +// just died... still its a lot of metal we should be eating".
 +// Same Feature::GetDef ownership rule as above -- that def IS ours to delete,
 +// unlike Unit::GetDef. See GetBestWreckPos's comment for why this resolves the
-+// metal resource locally instead of using the CCircuitAI::metalRes member.
-+float CCircuitAI::GetWreckValueAt(const springai::AIFloat3& pos, float radius) const
++// metal resource locally instead of using the CCircuitAI::metalRes member,
++// and its comment on IsCommanderWreck for why a commander corpse is excluded
++// here too -- this feeds the "how rich is this field" total that gates
++// whether a constructor gets sent at all, so a commander corpse skewing that
++// total high would still walk a con onto it even if GetBestWreckPos itself
++// never targets it directly.
++float CCircuitAI::GetWreckValueAt(const springai::AIFloat3& pos, float radius)
 +{
 +	if ((callback == nullptr) || (radius <= 0.f)) {
 +		return .0f;
@@ -216,6 +253,10 @@ index aeea933..3de93c5 100644
 +	const std::vector<springai::Feature*> feats = callback->GetFeaturesIn(pos, radius, false);
 +	for (springai::Feature* f : feats) {
 +		if (f == nullptr) {
++			continue;
++		}
++		if (IsCommanderWreck(f)) {
++			delete f;
 +			continue;
 +		}
 +		springai::FeatureDef* fd = f->GetDef();
@@ -311,10 +352,10 @@ index aeea933..3de93c5 100644
  {
  	// NOTE: See notes in MobileSlave or other economy->SendUnits places
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..ec7cf3d 100644
+index b4f4f40..bed1181 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -149,6 +149,41 @@ private:
+@@ -149,6 +149,42 @@ private:
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
  	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
@@ -348,8 +389,9 @@ index b4f4f40..ec7cf3d 100644
 +	// Plain floats, and they never leave this process.
 +	void PublishTeamValue(const std::string& key, float value);
 +	float ReadTeamValue(int otherTeamId, const std::string& key, float defVal) const;
-+	springai::AIFloat3 GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal) const;
-+	float GetWreckValueAt(const springai::AIFloat3& pos, float radius) const;
++	springai::AIFloat3 GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal);
++	float GetWreckValueAt(const springai::AIFloat3& pos, float radius);
++	bool IsCommanderWreck(springai::Feature* f);
 +	float GetEnemyCostAt(const springai::AIFloat3& pos, float radius) const;
 +	float GetBuilderThreatAt(const springai::AIFloat3& pos) const;
 +	float GetUnitThreatAt(CCircuitUnit* unit, const springai::AIFloat3& pos) const;

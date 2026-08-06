@@ -1440,3 +1440,67 @@ a 55-metal floor. Two independent bindings agree there is nothing reclaimable
 within 4000 elmos of our constructors. Either features are not visible to that
 callback without LOS, or constructors are never near the wrecks. **Do not tune
 the threshold — find out which of those it is first.**
+
+## Three fixes from one live session — 2026-08-06
+
+### Commander wrecks are excluded from reclaim/resurrect targeting — unmeasured
+
+apexearth: "any way we can enhance our reclaim logic to be careful not to fully
+reclaim our own dead commander?" `GetBestWreckPos`/`GetWreckValueAt` (see
+"Reclaim cannot see the bodies" above) now both skip any wreck whose
+`GetResurrectDef()` resolves to a commander-role unit, via a new
+`CCircuitAI::IsCommanderWreck(Feature*)`. Deliberately broadened from "our own"
+to "any" commander corpse: the `Feature` API exposes no team-ownership
+accessor, and BAR lets any allied rez bot resurrect any corpse under its own
+control anyway. `GetWreckValueAt` is excluded too, not just `GetBestWreckPos` —
+otherwise a commander corpse could still skew the "how rich is this field"
+total that gates whether a constructor gets sent there at all.
+
+### The metal-full-fallback was spamming Pharos instead of the T1.5 tower
+
+The fallback added earlier this session (constructors spend idle metal on
+defense once every other rule in `AiMakeTask` has had its chance) reused
+`ContestTower()`, written for a different, reactive case: an under-fire con
+grabbing whatever it can build fastest. `ContestTower`'s T1-vs-T1.5 split keys
+on the CALLING CONSTRUCTOR's own cost, so a cheap T1 con (the common case)
+always got the cheap turret — confirmed in an infolog, dozens of
+`metal-full-fallback legcv -> leglht` lines. apexearth, watching live:
+"Legion makes too many Pharos (llt light laser turret), not enough of the T1.5
+defenses." New `MetalFullTower()` always prefers the T1.5 popup tower
+(`legapopupdef`/`corvipe`/`armpb`) once it is unlocked, since reaching this
+fallback at all means the team can afford it; only falls back to the T1 turret
+before that tech exists. Smoke-tested all three factions: fallback now builds
+`corvipe`/`legapopupdef`/`armpb` instead of `corllt`/`leglht`/`armllt`.
+
+### No living commander now overrides `PreferReclaim()`
+
+apexearth: "if we have no comm anymore then we should prefer to rez."
+`PreferReclaim()` gates rez-bot behaviour and previously defaulted to
+reclaim-first before T2 and whenever `Military::LosingGround()`. It now checks
+`gComm is null` first, ahead of both: `gComm` is set null exactly once, at the
+real death event in `AiUnitRemoved` (see the `COMMANDER LOST` log there), and
+re-set the moment any commander-role unit is added — resurrected or freshly
+built — so this only holds during the actual gap. Unmeasured: no commander died
+in the three 8-minute faction smoke tests, so this path compiled and deployed
+clean but has not fired live yet.
+
+### Open: army production stalling with a live commander and idle metal
+
+Recurring live report, this session's newest instance: "purple stopped making
+army. he has a commander, home base still intact... he just stopped being
+productive. our team died full on metal." Pulled that player's own timeline
+from `result.json` (not the end-state total — see "Standing counters are not
+end-state" in `CLAUDE.md`): `armyReal` frozen at exactly 2700 for 10 straight
+minutes (20-30 min mark) while `metalProduced` climbed steadily and
+`metalExcess` grew from 345 to 2079, and `mCon` (constructor value) fell to 0
+by the same point. Ruled out the eco-lead role as the cause — this was a 4v4,
+`IsSmallTeam()` is true, and `ECO_ON_SMALL_TEAMS` is false, so `IsEcoLead()`
+cannot fire; no "eco lead" log line appears anywhere in that match's infolog.
+**Not yet root-caused.** Added a rate-limited entry log to `AiMakeTask` in
+`factory.as` (`apex: factory-diag`, once per 30s) recording income/current/
+storage/`isMetalFull`/whether the factory already holds a task — the next time
+this is caught live, that log will show whether the function keeps being
+called and returning nothing (a decision problem, something below always
+declines) or stops being called at all (the factory's task got stuck and the
+engine stops re-asking) — the same two-hypothesis split the RECLAIM-abandon fix
+resolved earlier this session for constructors, not yet applied to factories.

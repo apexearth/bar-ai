@@ -309,6 +309,15 @@ const float REZ_METAL_FLOOR = 0.10f;   // reclaim below this share of storage
 
 bool PreferReclaim()
 {
+	// apexearth, watching live: "if we have no comm anymore then we should
+	// prefer to rez." gComm is set null exactly once, in AiUnitRemoved, at
+	// the real death event (see the COMMANDER LOST log there) -- and re-set
+	// the moment any commander-role unit is added, resurrected or built, so
+	// this stays true only for the actual gap. Checked before every other
+	// case here, including the pre-T2 default: getting the commander back
+	// is worth more than whatever T1 reclaim would have banked instead.
+	if (gComm is null)
+		return false;
 	if (!Factory::gHaveT2)
 		return true;
 	// Behind on the field, the completion risk is the whole argument: a resurrect
@@ -1598,6 +1607,33 @@ CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 	return ai.GetCircuitDef(armllt);
 }
 
+// ContestTower's T1.5-vs-T1 split is keyed on the CALLING CONSTRUCTOR's own
+// cost, which is right for its original reactive use (ContestDefence: an
+// under-fire con grabs whatever it can build fastest) and wrong for the
+// metal-full fallback below: a cheap T1 con is the common case there too, but
+// the fallback only fires when the team has metal to spare, so it can always
+// afford the T1.5 popup tier. Reusing ContestTower as-is meant nearly every
+// metal-full-fallback build picked the cheap T1 turret (leglht/corllt/armllt)
+// regardless of what was actually needed -- confirmed in an infolog: dozens of
+// "metal-full-fallback legcv -> leglht" lines. apexearth, watching live:
+// "Legion makes too many Pharos (llt light laser turret), not enough of the
+// T1.5 defenses." Prefer the T1.5 tier whenever it's unlocked; only fall back
+// to the T1 turret before that tech exists.
+CCircuitDef@ MetalFullTower()
+{
+	const string side = ai.GetSideName();
+	CCircuitDef@ adv = (side == "cortex") ? ai.GetCircuitDef(corvipe)
+			: (side == "legion") ? ai.GetCircuitDef(legapopupdef)
+			: ai.GetCircuitDef(armpb);
+	if ((adv !is null) && adv.IsAvailable(ai.frame))
+		return adv;
+	if (side == "cortex")
+		return ai.GetCircuitDef(corllt);
+	if (side == "legion")
+		return ai.GetCircuitDef(leglht);
+	return ai.GetCircuitDef(armllt);
+}
+
 bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)
 {
 	if (!gHomeSet)
@@ -2522,7 +2558,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// bypasses the isEnergyStalling gate the rest of this file's defense
 	// rules use.
 	if (!isComm && !aiEconomyMgr.isMetalEmpty && gHomeSet && (ai.frame >= gNextMetalFullDef)) {
-		CCircuitDef@ tower = ContestTower(unit);
+		CCircuitDef@ tower = MetalFullTower();
 		if ((tower !is null) && tower.IsAvailable(ai.frame)) {
 			IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 					Task::Priority::NORMAL, tower, gHomePos, SQUARE_SIZE * 8));
