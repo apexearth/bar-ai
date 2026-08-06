@@ -3893,3 +3893,35 @@ build-site logs) for cases where a 2nd+ T1 lab of the SAME type gets
 built pre-T2, and whether it correlates with a specific unit-mix need
 (air-plant-alongside-bot-lab, which is fine) vs a true redundant
 duplicate (which isn't).
+
+## 62. armfboy diversification (fifth Armada attempt): promising 8-game read did not hold at 16 games
+
+Issue 58's fourth attempt failed; the armfboy diversification fix (armfboy
+tier3/4 0.30->0.15, redistributed to armaak/armsptk) looked promising at
+n=8 (37.5%, best Armada read yet) but regressed to 25.0% (4/16, CI
+excludes 50% -- the wrong direction) when escalated to n=16 per
+apexearth's own "start small, escalate if promising" guidance. Pooled:
+7/24 = 29.2%, z=0.64 vs the two batches independently -- not a
+significant difference, i.e. both reads are consistent with the SAME
+underlying rate, and that rate is not meaningfully different from the
+other four failed Armada attempts (12.5-25%).
+
+**This is the textbook pattern this project has hit repeatedly**
+(Legion's five fixes this session, now Armada's five): a small batch
+looks good, a larger one reveals it was a favorable draw from the same
+struggling distribution. Kept deployed (armfboy's own weight is still
+better-reasoned than the pre-fix 30% concentration, matches Cortex's own
+more-diversified composition pattern, not harmful in any read) but NOT
+claiming a win-rate fix.
+
+**Running total, Armada 4v4 this session**: five real, well-evidenced
+attempts (armack revert, armck revert, factory-cap fallback-mex,
+push-past-parity, armfboy diversification), zero confirmed win-rate
+movement, one important corrected hypothesis (issue 59/60: NOT a
+"tougher opponent," stock-Cortex actually beats stock-Armada 8-0
+head-to-head). Matches Legion's own five-fixes/zero-movement pattern
+from earlier this session almost exactly. See
+[[bar-ai-faction-parity-transfer]] for the standing lesson this now
+confirms a second time: individual mechanism-level fixes, however
+well-evidenced, are not closing either non-Cortex faction's gap on this
+benchmark.
