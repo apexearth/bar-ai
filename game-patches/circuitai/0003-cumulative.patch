@@ -2235,7 +2235,7 @@ index ec833e6..2413351 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..8050861 100644
+index 0d59b65..3f1f9c4 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -10,6 +10,7 @@
@@ -2392,7 +2392,7 @@ index 0d59b65..8050861 100644
  	attackFrame = isRepeatAttack ? frame : attackFrame;
  
  	auto it = rangeUnits.begin()->second.begin();
-@@ -421,14 +528,25 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -421,14 +528,46 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	int row = 0;
  	for (const auto& kv : rangeUnits) {
  		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
@@ -2401,7 +2401,28 @@ index 0d59b65..8050861 100644
 +		// 20% inside its reach, which throws away the whole point of keeping the
 +		// long-ranged units in an outer row -- a Banisher at 800 was standing at
 +		// 640, inside the tanks it was supposed to shoot over.
-+		const float range = kv.first * ATTACK_RANGE_MOD;
++		//
++		// apexearth: "some units easily die on the first hit... if enemies are
++		// within 900 [of my 1000 range] i absolutely have to move away from
++		// them... if i am just 10% out of range of that enemy unit, i absolutely
++		// must move away from them." When the CURRENT TARGET outranges this row's
++		// own weapon (edef->GetMaxRange() > kv.first), standing at our own range
++		// puts us inside theirs -- exactly backwards, we would be standing still
++		// getting hit while unable to answer. Stand at their range plus a safety
++		// margin instead, so we are never inside a reach we cannot match.
++		//
++		// EXCEPT indirect fire. apexearth: "some enemies are indirect fire --
++		// like rocket launcher units. We can be within range of those as long as
++		// we keep moving and avoid wherever their missile is going... Arbiters
++		// [corhrk, role="artillery" -> IsRoleArty()] have very long range but are
++		// super vulnerable if you get up close." Retreating from a dodgeable,
++		// close-range-weak target is backwards for the same reason standing
++		// still inside a direct-fire weapon's range is -- so arty targets keep
++		// the normal own-range standoff instead of backing off to theirs.
++		const bool isArty = (edef != nullptr) && edef->IsRoleArty();
++		const bool outranged = !isArty && (edef != nullptr) && (edef->GetMaxRange() > kv.first);
++		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
++		const float range = standoff * ATTACK_RANGE_MOD;
  		// NOTE: 1st unit in 1st row will scout, ignoring GetTarget()->IsInRadarOrLOS()
  		//       as unit may wobble back and forth without firing if turret turn is slow.
  		float range0 = range;
@@ -2422,10 +2443,10 @@ index 0d59b65..8050861 100644
  		//       but sin of a small angle is similar to that angle, omit asinf() call
  		float delta = (3.0f * (rowDef->GetRadius() + aoe)) / (range + DIV0_SLACK);
 diff --git a/src/circuit/task/fighter/SquadTask.h b/src/circuit/task/fighter/SquadTask.h
-index a058d59..d6ee9c0 100644
+index a058d59..5c85647 100644
 --- a/src/circuit/task/fighter/SquadTask.h
 +++ b/src/circuit/task/fighter/SquadTask.h
-@@ -15,6 +15,28 @@
+@@ -15,6 +15,34 @@
  
  namespace circuit {
  
@@ -2448,13 +2469,19 @@ index a058d59..d6ee9c0 100644
 +// regressed; the line-formation gather in that batch was the likely cause and
 +// this was never tested alone.
 +#define ATTACK_RANGE_MOD	0.95f
++// apexearth: "some units easily die on the first hit... if i am just 10% out
++// of range of that enemy unit, i absolutely must move away from them." Used
++// when the current target outranges a row's own weapon: stand at the
++// TARGET's range plus this margin, not our own (shorter) range, so a
++// mismatched engagement never puts us inside a reach we cannot answer.
++#define OUTRANGED_SAFETY_MARGIN	1.1f
 +// Spacing between neighbours on a regroup line, in elmos.
 +#define LINE_SPACING		110.f
 +
  class ISquadTask: public IFighterTask {
  protected:
  	ISquadTask(ITaskModule* mgr, FightType type, float powerMod);
-@@ -39,6 +61,9 @@ private:
+@@ -39,6 +67,9 @@ private:
  
  protected:
  	ISquadTask* GetMergeTask();
