@@ -173,6 +173,7 @@ const float WRECK_RICH_R  = 1400.f;
 const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
 const int   WRECK_TIMEOUT = 1 * MINUTE;
 int gNextWreck = 0;
+int gNextMetalEmptyDiag = 0;  // temporary diagnostic, see the isMetalEmpty block below
 // Spacing on the safe-mex grab. Short: an unclaimed spot is income we are not
 // earning, and the check itself is one lookup.
 const int REAR_MEX_PERIOD = 2 * SECOND;
@@ -2078,23 +2079,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			IUnitTask@ aa = CheapAA(unit);
 			if (aa !is null)
 				return aa;
-			// EnergyConverter carved out of the phase gate below, same shape and
-			// same evidence class as CheapAA above. apexearth, watching live at
-			// 9 minutes: "not a single rezbot on either team... Other AI also all
-			// has more metal than we do... and they make energy converters - we
-			// have NO energy converters. Yes we have extra energy. Why no energy
-			// converters?" EnergyConverter() is already tightly self-gated: it
-			// only fires when spare = income - pull actually exceeds
-			// CONVERT_MIN_SPARE (a real observed surplus, not a forecast), respects
-			// CONVERT_CON_FLOOR, and throttles on CONVERT_PERIOD -- the same
-			// "reactive, self-limiting, cannot crowd out expansion" profile that
-			// justified CheapAA's carve-out, and the energy it converts would
-			// otherwise be wasted outright (100k+ wasted energy per game measured
-			// repeatedly this session), so it is closer to free than the rest of
-			// this cluster.
-			IUnitTask@ conv = EnergyConverter(unit);
-			if (conv !is null)
-				return conv;
 			// BUILD_PHASE gate on the remaining optional economy cluster.
 			// Progression, 2026-08-04: phase >= 2 (mex >= 4) reverted, 0 wins in
 			// 13 decided. phase >= 3 (RushReady) confirmed a real improvement, 5
@@ -2106,9 +2090,25 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			// competitively rather than being decided either way. See
 			// notes/open-issues.md issue 15 for the full data and CHANGES.md for
 			// the summary. Before an advanced factory exists, a constructor's
-			// only job is expansion and reaching T2; HeavyAA, Pulsar and the
-			// nano/fusion block below can all wait for an economy that has
+			// only job is expansion and reaching T2; HeavyAA, Pulsar, EnergyConverter
+			// and the nano/fusion block below can all wait for an economy that has
 			// actually teched, not merely one that could afford to.
+			//
+			// EnergyConverter was carved out of this gate earlier tonight (same
+			// evidence shape as CheapAA -- self-gated on real spare energy, not a
+			// forecast) after apexearth asked "why no energy converters?" at 9
+			// minutes. REVERTED, same session, same night: apexearth immediately
+			// afterward, watching mex expansion specifically: "I'd say we do build
+			// too many cons... but huge issue is they just aren't placing enough
+			// priority on building mexes." EnergyConverter was checked and could
+			// claim a constructor's assignment BEFORE DefaultMakeTask (which is
+			// what actually creates new mex-expansion tasks, Priority::HIGH in
+			// EconomyManager.cpp) ever ran -- so unblocking it pre-T2 meant it
+			// could now win the same idle-constructor pool mex expansion needs,
+			// in exactly the 0-9 minute window this complaint is about. Mex
+			// expansion matters more than energy conversion; reverted to
+			// gLastPhase>=4 until a fix that does not compete with mex for
+			// constructor time exists.
 			if (Factory::gLastPhase >= 4) {
 				IUnitTask@ heavyAa = HeavyAA(unit);
 				if (heavyAa !is null)
@@ -2121,6 +2121,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				IUnitTask@ block = EcoConverters(unit);
 				if (block !is null)
 					return block;
+				IUnitTask@ conv = EnergyConverter(unit);
+				if (conv !is null)
+					return conv;
 				IUnitTask@ nano = EcoNano(unit);
 				if (nano !is null)
 					return nano;
@@ -2239,6 +2242,23 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// task it cannot afford -- so the idle-only path below never fired. When
 	// metal is actually empty, reclaiming beats standing still: it is the only
 	// thing that unblocks the task it is already holding.
+	// DIAGNOSTIC, apexearth: "We're totally out of metal and we have three
+	// construction turrets helping to build something, but we don't even have
+	// the metal to build it. One of those conturrets could have been
+	// reclaiming... basically - if you have <2% metal and reclaim is in your
+	// vicinity - reclaim!" This check exists and is not isComm-gated, but
+	// IBuilderTask::Reevaluate's own doc comment says it fires "for as long as
+	// the builder is away from its build position" -- unclear whether an
+	// ALREADY-ARRIVED, actively-assisting nano turret ever reaches AiMakeTask
+	// again at all, as opposed to a mobile constructor walking to a site.
+	// Logging whether this branch is even entered for a static/turret unit
+	// while metal-empty, before building a new redirect mechanism blind.
+	if (aiEconomyMgr.isMetalEmpty && (ai.frame >= gNextMetalEmptyDiag)) {
+		gNextMetalEmptyDiag = ai.frame + 10 * SECOND;
+		AiLog(Factory::T() + "apex: metal-empty-diag " + unit.circuitDef.GetName()
+			+ " static=" + (!unit.circuitDef.IsMobile() ? "1" : "0")
+			+ " hasTask=" + ((unit.task !is null) ? "1" : "0"));
+	}
 	if (aiEconomyMgr.isMetalEmpty && (ai.frame >= gNextWreck)) {
 		gNextWreck = ai.frame + 3 * SECOND;
 		const AIFloat3 here = unit.GetPos(ai.frame);
