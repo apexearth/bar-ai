@@ -2172,7 +2172,7 @@ index 9e6bfd8..c785896 100644
  			{
  				continue;
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
-index 0400f8d..ccee569 100644
+index 0400f8d..26ff756 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp
 +++ b/src/circuit/task/fighter/FighterTask.cpp
 @@ -100,6 +100,24 @@ void IFighterTask::OnUnitIdle(CCircuitUnit* unit)
@@ -2216,6 +2216,20 @@ index 0400f8d..ccee569 100644
  			circuit->GetBuilderManager()->Enqueue(TaskB::Repair(IBuilderTask::Priority::NOW, unit));
  		}
  		if (healthPerc < cdef->GetSelfDHP()) {
+@@ -203,7 +221,12 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
+ 	CCircuitDef* edef = GetTarget()->GetCircuitDef();
+ 	const bool isStatic = (edef != nullptr) && !edef->IsMobile();
+ 
+-	const float range = std::min(cdef->GetMinRange(), cdef->GetLosRadius()) * RANGE_MOD;
++	// Same fix as ISquadTask::AssignTo/RemoveAssignee (SquadTask.cpp): a
++	// multi-weapon unit's GetMinRange() is its SHORTEST weapon's range, not
++	// its real engagement distance. GetMaxRange() matches what the rest of
++	// this codebase's combat logic already treats as "how close this unit
++	// needs to get."
++	const float range = std::min(cdef->GetMaxRange(), cdef->GetLosRadius()) * RANGE_MOD;
+ 	AIFloat3 newPos(tPos.x + range * dir.x, tPos.y, tPos.z + range * dir.z);
+ 	CTerrainManager::CorrectPosition(newPos);
+ 	unit->Attack(newPos, GetTarget(), targetTile, GetTarget()->GetUnit()->IsCloaked(), isStatic, frame + FRAMES_PER_SEC * 60);
 diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
 index 9af0698..9f39c1f 100644
 --- a/src/circuit/task/fighter/RaidTask.cpp
@@ -2381,7 +2395,7 @@ index ec833e6..2413351 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..bf09dff 100644
+index 0d59b65..9f2234c 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -10,12 +10,14 @@
@@ -2399,7 +2413,49 @@ index 0d59b65..bf09dff 100644
  
  #include <cmath>
  
-@@ -225,13 +227,102 @@ ISquadTask* ISquadTask::GetMergeTask()
+@@ -48,7 +50,31 @@ void ISquadTask::AssignTo(CCircuitUnit* unit)
+ 	IFighterTask::AssignTo(unit);
+ 
+ 	CCircuitDef* cdef = unit->GetCircuitDef();
+-	const float range = cdef->GetMinRange();
++	// apexearth: "focus on getting to 50% with legion". Traced via a fresh-
++	// context agent's finding that Legion trades combat significantly worse
++	// than Cortex/Armada despite comparable economy (K/D log-ratio t=-2.16
++	// to -2.23 across two independent tournaments), and nine prior
++	// composition/unit-weight fix attempts across two sessions all failing
++	// to close it -- pointing at combat POSITIONING, not army composition.
++	//
++	// Squad rows are grouped by range so a row can stand at one shared
++	// distance from the target (see Attack() below). This used to group by
++	// GetMinRange() -- for a single-weapon unit that equals GetMaxRange(),
++	// no difference, which is why this was invisible for Cortex/Armada's
++	// mostly single-weapon rosters. But GetMinRange() is literally the
++	// SHORTEST range among ALL of a unit's weapon mounts (CircuitDef.cpp:
++	// minRange = std::min(minRange, range) across every mount). Legion's
++	// defining trait is multi-weapon units -- legkark (Karkinos, "Medium
++	// Dual-Weapon Infantry Bot") carries HEAT_RAY at range 360 and
++	// LEGION_SHOTGUN at range 251 (confirmed in units/Legion/Bots/
++	// legkark.lua's weapondefs). Grouped by min range, a legkark row was
++	// ordered to close to ~238 elmos (251 * ATTACK_RANGE_MOD) from every
++	// target -- needlessly inside its own better weapon's reach, and inside
++	// any enemy with range 251-360 that it never needed to engage that
++	// close. GetMaxRange() is what the outranged-safety-margin standoff
++	// logic already treats as "this row's real engagement range" elsewhere
++	// in this same file; grouping should agree with it.
++	const float range = cdef->GetMaxRange();
+ 	rangeUnits[range].insert(unit);
+ 
+ 	if (leader == nullptr) {
+@@ -79,7 +105,7 @@ void ISquadTask::RemoveAssignee(CCircuitUnit* unit)
+ 	IFighterTask::RemoveAssignee(unit);
+ 
+ 	CCircuitDef* cdef = unit->GetCircuitDef();
+-	const float range = cdef->GetMinRange();
++	const float range = cdef->GetMaxRange();  // must match AssignTo's key
+ 	std::set<CCircuitUnit*>& setUnits = rangeUnits[range];
+ 	setUnits.erase(unit);
+ 	if (setUnits.empty()) {
+@@ -225,13 +251,102 @@ ISquadTask* ISquadTask::GetMergeTask()
  	return nullptr;
  }
  
@@ -2503,7 +2559,7 @@ index 0d59b65..bf09dff 100644
  		state = State::ROAM;
  		return false;
  	}
-@@ -296,6 +387,10 @@ bool ISquadTask::IsMustRegroup()
+@@ -296,6 +411,10 @@ bool ISquadTask::IsMustRegroup()
  		return false;
  	}
  
@@ -2514,7 +2570,7 @@ index 0d59b65..bf09dff 100644
  	if (threatMap->GetThreatAt(groupPos) >= THREAT_MIN) {
  		validUnits.clear();
  		state = State::ROAM;
-@@ -305,7 +400,12 @@ bool ISquadTask::IsMustRegroup()
+@@ -305,7 +424,12 @@ bool ISquadTask::IsMustRegroup()
  	bool wasRegroup = (State::REGROUP == state);
  	state = State::ROAM;
  
@@ -2528,7 +2584,7 @@ index 0d59b65..bf09dff 100644
  	for (CCircuitUnit* unit : validUnits) {
  		const float sqDist = groupPos.SqDistance2D(unit->GetLastPos());
  		if (sqDist > sqMaxDist) {
-@@ -390,7 +490,15 @@ void ISquadTask::Attack(const int frame)
+@@ -390,7 +514,15 @@ void ISquadTask::Attack(const int frame)
  void ISquadTask::Attack(const int frame, const bool isGround)
  {
  	const AIFloat3& tPos = GetTarget()->GetPos();
@@ -2545,7 +2601,7 @@ index 0d59b65..bf09dff 100644
  	attackFrame = isRepeatAttack ? frame : attackFrame;
  
  	auto it = rangeUnits.begin()->second.begin();
-@@ -421,14 +529,97 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -421,14 +553,97 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	int row = 0;
  	for (const auto& kv : rangeUnits) {
  		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
@@ -2646,7 +2702,7 @@ index 0d59b65..bf09dff 100644
  		// NOTE: float delta = asinf(cdef->GetRadius() / range);
  		//       but sin of a small angle is similar to that angle, omit asinf() call
  		float delta = (3.0f * (rowDef->GetRadius() + aoe)) / (range + DIV0_SLACK);
-@@ -462,6 +653,27 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -462,6 +677,27 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				const float r = (iterNum == 0) ? range0 : range;
  				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
  				CTerrainManager::CorrectPosition(newPos);
