@@ -356,8 +356,14 @@ const int BOTLAB_FROM = 8 * MINUTE;
 // the config ROLES disagree across factions ("support" for Armada and Legion,
 // "rezzer" for Cortex), so GetRoleDef is not a reliable way to ask for one.
 const int REZ_FLOOR    = 8;
+// apexearth: "a rezbot costs like what, 130 metal?... so for every 500
+// wrecked metal seen make 1 rezbot???" armrectr is 130m; 500 leaves real
+// margin (a rez bot earns back multiples of its own cost per wreck it
+// actually processes) rather than breaking even on the first pile it finds.
+const float REZ_METAL_PER_BOT = 500.f;
 const int REZ_SPACING  = 20 * SECOND;
 int gNextRez = 0;
+int gNextRezDiag = 0;  // temporary diagnostic, see the rez-bot armed check below
 
 // HaveT1BotLab() only clears once CCircuitDef::count increments, which happens
 // at the nanoframe -- construction actually starting, not the build order
@@ -1210,31 +1216,42 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		CCircuitDef@ lab = T1BotLab();
 		CCircuitDef@ rez = RezBotDef();
 		if ((lab !is null) && (rez !is null) && (unit.circuitDef.id == lab.id)
-			&& rez.IsAvailable(ai.frame) && (rez.count < REZ_FLOOR))
+			&& rez.IsAvailable(ai.frame))
 		{
-			// The wreck-search only gates the FIRST one. apexearth: "earlier
-			// you changed the resurrection box to be less, but I think that
-			// we have too few now." Once at least one is already standing,
-			// real reclaim opportunity has already been proven for this
-			// game -- requiring a wreck to be in range at this EXACT tick
-			// before topping the rest of the floor back up just leaves it
-			// under-filled between fights, which is not what the original
-			// fix was for (that was about not building any at t=0, before
-			// anything had died at all).
+			// Replaced the binary "is there a wreck at all" armed-check, then
+			// a scaled-but-still-blind-query version. Root cause found: found
+			// via SSkirmishAICallbackImpl::getFeaturesIn -- the non-cheat path
+			// is `GetCallBack(id)->GetFeatures(...)`, which is LOS-gated, not
+			// a plain spatial query. There is no unit standing at home or at
+			// an enemy-centroid midpoint, so those queries return empty no
+			// matter the radius -- confirmed live: even a 50000-elmo sanity
+			// radius from home returned wreckValueHuge=0 in a game with
+			// mKillReal in the thousands. This matches the project's other
+			// LOS/vision-gated-callback surprises.
 			//
-			// Searched from unit.GetPos() -- the T1 BOT LAB's own position,
-			// since unit.circuitDef.id == lab.id is required above -- so a
-			// reclaim pile anywhere else in the base (apexearth, watching
-			// live: "there was a lot of reclaim metal available... they were
-			// right in front of a factory, but it was a vehicle factory")
-			// was invisible to this check even though it proved the exact
-			// thing the check exists to prove. Searched from the team's home
-			// position instead, which covers the whole base rather than one
-			// building's immediate radius.
-			const AIFloat3 armedFrom = Builder::gHomeSet ? Builder::gHomePos : unit.GetPos(ai.frame);
-			const bool armed = (rez.count > 0) || (ai.GetBestWreckPos(
-					armedFrom, Builder::WRECK_SEARCH, Builder::WRECK_MIN).x >= 0.f);
-			if (armed) {
+			// Fix: stop querying from a point with no vision. Every mobile
+			// builder already scans WRECK_RICH_R around itself for the
+			// "rich corpse pile" check every ~3s (builder.as); that scan DOES
+			// have vision, because a unit is standing right there. It now
+			// records what it sees via Builder::NoteWreckSeen, and this reads
+			// the sighting back instead of taking its own blind sample.
+			// apexearth: "if theres any reclaim we've seen on the map...
+			// start making some... a rezbot costs like what, 130 metal?...
+			// so for every 500 wrecked metal seen make 1 rezbot???" REZ_FLOOR
+			// still caps the ceiling so a battlefield's worth of corpses
+			// cannot balloon this past a sane standing count.
+			const float wreckValue = Builder::WreckSeenValue();
+			const int wantByReclaim = int(wreckValue / REZ_METAL_PER_BOT);
+			const int want = (wantByReclaim < REZ_FLOOR) ? wantByReclaim : REZ_FLOOR;
+			if (ai.frame >= gNextRezDiag) {
+				gNextRezDiag = ai.frame + 15 * SECOND;
+				AiLog(T() + "apex: rez-diag lab=" + (lab !is null ? lab.GetName() : "null")
+					+ " rez=" + (rez !is null ? rez.GetName() : "null")
+					+ " rezCount=" + (rez !is null ? rez.count : -1)
+					+ " wreckSeen=" + formatFloat(wreckValue, "", 0, 0)
+					+ " want=" + want);
+			}
+			if (rez.count < want) {
 				IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
 						Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
 						rez, unit.GetPos(ai.frame), 0.f));

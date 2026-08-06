@@ -181,6 +181,33 @@ int gNextRearMex = 0;
 int gNextMexLog = 0;
 int gNextRichLog = 0;
 
+// ai.GetWreckValueAt/GetBestWreckPos go through the engine's non-cheat feature
+// callback, which is LOS-gated (SSkirmishAICallbackImpl::getFeaturesIn calls
+// GetCallBack()->GetFeatures, not the quadfield). Querying from a position with
+// no unit standing near it -- a factory, home, or an enemy-centroid midpoint --
+// always returns empty, radius makes no difference. Confirmed live: even a
+// 50000-elmo sanity radius from home returned 0 in a game with mKillReal in the
+// thousands. Every mobile builder DOES have vision of its own surroundings
+// though, and one already scans WRECK_RICH_R around itself every ~3s below --
+// so record what it sees here and let anyone without a vantage point of their
+// own (factory.as's rez-bot floor) read the sighting instead of querying blind.
+float gWreckSeenValue = 0.f;
+int gWreckSeenAt = 0;
+const int WRECK_SEEN_TTL = 20 * SECOND;
+
+void NoteWreckSeen(float value)
+{
+	if (value <= 0.f)
+		return;
+	gWreckSeenValue = value;
+	gWreckSeenAt = ai.frame;
+}
+
+float WreckSeenValue()
+{
+	return (ai.frame - gWreckSeenAt <= WRECK_SEEN_TTL) ? gWreckSeenValue : 0.f;
+}
+
 IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
 {
 	const AIFloat3 pos = unit.GetPos(ai.frame);
@@ -2264,6 +2291,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		const AIFloat3 here = unit.GetPos(ai.frame);
 		const AIFloat3 near = ai.GetBestWreckPos(here, WRECK_SEARCH, 15.f);
 		if (near.x >= 0.f) {
+			NoteWreckSeen(ai.GetWreckValueAt(near, WRECK_RADIUS));
 			IUnitTask@ rec = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 					Task::Priority::HIGH, near, 400.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
 			if (rec !is null)
@@ -2280,6 +2308,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			// Gate on the field's TOTAL value, then aim at its richest body so the
 			// reclaim circle lands on the corpses rather than on a tree.
 			const float pile = ai.GetWreckValueAt(self, WRECK_RICH_R);
+			NoteWreckSeen(pile);
 			const AIFloat3 rich = (pile >= WRECK_RICH)
 					? ai.GetBestWreckPos(self, WRECK_RICH_R, 15.f)
 					: AIFloat3(-1.f, 0.f, -1.f);
