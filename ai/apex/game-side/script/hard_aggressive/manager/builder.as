@@ -1869,6 +1869,20 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		LogCommanderThreat(unit);
 		const float hp = unit.GetHealthPercent();
 		if (hp < COM_RETREAT_HEALTH) {
+			// apexearth, watching live: "once the commander retreats to the back
+			// of his base he stays there too long, even while at 50% health he's
+			// still cowering there... He should stand behind his t1 lab and help
+			// it build stuff!" Previously this fired EnqueueRetreat() every single
+			// cycle while hp stayed low, with no check on whether the commander
+			// had already reached safety -- so it could never fall through to
+			// DefaultMakeTask's own commander logic (CBuilderManager::
+			// DefaultMakeTask, MakeCommPeaceTask/MakeCommDangerTask), which
+			// already decides hide-vs-assist from LOCAL enemy influence at the
+			// commander's current position, not health. Only keep forcing a
+			// flee while genuinely still under local threat; once safe, let that
+			// existing C++ logic take over instead of looping a bare retreat.
+			const float hereThreat = ThreatFor(unit, unit.GetPos(ai.frame));
+			if (hereThreat > CON_THREAT_VETO) {
 			if (ai.frame >= gNextRetreatLog) {
 				gNextRetreatLog = ai.frame + 20 * SECOND;
 				AiLog(Factory::T() + "apex: commander retreating at "
@@ -1877,6 +1891,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
 			if (flee !is null)
 				return flee;
+			}
 		}
 		// The enemy centroid has come to US. PastFront cannot see this: the base
 		// centre sits at fraction ~0 on the home->enemy axis, so it always reads
