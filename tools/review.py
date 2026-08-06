@@ -154,6 +154,68 @@ def summarise(run: Path, rows: list[dict]) -> dict:
     return {"wins": dict(wins), "played": dict(played), "decided": decided}
 
 
+def undecided_lean(rows: list[dict]) -> dict:
+    """Games that hit the time limit instead of a clean gameover are dropped
+    entirely from the decided win rate -- treated as zero information. They
+    are not: apexearth, watching live, "apex tends to play a better 'long
+    game'", and a spot-check of 8 undecided games from an early-August batch
+    found apex ahead on BOTH metal produced and real kills at the time-limit
+    cutoff in 6 of 8 (one to stock, one a mutual-stalemate wipeout) -- a
+    result the decided-only percentage for that batch (2/8 = 25%) made look
+    like a loss. "Ahead" here means strictly ahead on both metalProduced and
+    mKillReal at the last stats sample; anything else is "mixed" rather than
+    guessed at with an invented composite score.
+    """
+    leads: dict[str, int] = collections.defaultdict(int)
+    mixed = 0
+    total = 0
+    details = []
+    for r in rows:
+        res = r.get("result", {})
+        if res.get("reason") == "gameover":
+            continue
+        total += 1
+        # `teams` only lists ONE representative team per side (e.g. a 4v4 has
+        # 8 real teams but just team 0 and team 1 here) -- every stats row
+        # carries its own `ally`, so map ally -> spec via those two anchors,
+        # then every other team on the same ally belongs to the same spec.
+        team_spec = {t["team"]: t["spec"] for t in r.get("teams", [])}
+        last_by_team: dict[float, dict] = {}
+        team_ally: dict[float, float] = {}
+        for row in r.get("stats", []):
+            t = row.get("team")
+            if t is None:
+                continue
+            f = row.get("frame", -1)
+            if t not in last_by_team or f > last_by_team[t].get("frame", -1):
+                last_by_team[t] = row
+            if t not in team_ally:
+                team_ally[t] = row.get("ally")
+        ally_spec = {team_ally[t]: spec for t, spec in team_spec.items() if t in team_ally}
+        per_spec: dict[str, dict] = collections.defaultdict(lambda: {"metal": 0.0, "kills": 0.0})
+        for t, row in last_by_team.items():
+            spec = ally_spec.get(team_ally.get(t))
+            if spec is None:
+                continue
+            per_spec[spec]["metal"] += row.get("metalProduced") or 0
+            per_spec[spec]["kills"] += row.get("mKillReal") or 0
+        if len(per_spec) != 2:
+            continue
+        (spec1, v1), (spec2, v2) = list(per_spec.items())
+        if v1["metal"] > v2["metal"] and v1["kills"] > v2["kills"]:
+            leads[spec1] += 1
+            leader = spec1
+        elif v2["metal"] > v1["metal"] and v2["kills"] > v1["kills"]:
+            leads[spec2] += 1
+            leader = spec2
+        else:
+            mixed += 1
+            leader = "mixed"
+        details.append({"spec1": spec1, "metal1": v1["metal"], "kills1": v1["kills"],
+                         "spec2": spec2, "metal2": v2["metal"], "kills2": v2["kills"], "leader": leader})
+    return {"total": total, "leads": dict(leads), "mixed": mixed, "details": details}
+
+
 def run_tool(script: str, *args: str) -> str:
     try:
         p = subprocess.run([sys.executable, str(REPO / "tools" / script), *args],
@@ -188,6 +250,17 @@ def report(run: Path, control: Path | None, show: bool) -> int:
     for spec, n in sorted(s["played"].items()):
         w = s["wins"].get(spec, 0)
         print(f"   {spec[:44]:<44} {w}/{n}  {100*w/max(n,1):5.1f}%")
+
+    lean = undecided_lean(rows)
+    if lean["total"] > 0:
+        print(f"\n   {lean['total']} game(s) hit the time limit instead of a gameover --")
+        print(f"   dropped from the win rate above as zero information. Who was")
+        print(f"   actually ahead on BOTH metal produced and real kills at the cutoff:")
+        for spec, n in sorted(lean["leads"].items()):
+            print(f"   {spec[:44]:<44} leading in {n}/{lean['total']}")
+        if lean["mixed"]:
+            print(f"   {'(no clear leader on both metrics)':<44} {lean['mixed']}/{lean['total']}")
+
     if control is not None:
         crows = rows_of(control)
         cs = summarise(control, crows)
