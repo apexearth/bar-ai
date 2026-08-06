@@ -1297,7 +1297,7 @@ index 4863ac9..e509c6d 100644
  	void ReadConfig();
  	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
 diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
-index 7c69263..83c325b 100644
+index 7c69263..6294013 100644
 --- a/src/circuit/task/RetreatTask.cpp
 +++ b/src/circuit/task/RetreatTask.cpp
 @@ -11,8 +11,10 @@
@@ -1499,6 +1499,28 @@ index 7c69263..83c325b 100644
  	if (unitPos.SqDistance2D(haven) > SQUARE(maxDist)) {
  		// TODO: push MoveAction into unit? to avoid enemy fire
  		TRY_UNIT(circuit, unit,
+@@ -248,7 +413,20 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+ 		}
+ 
+ 		// TODO: push WaitAction into unit
+-		if (/*cdef->GetDef()->IsAbleToAssist() || */cdef->IsAbleToRepair()) {
++		// apexearth, watching live: "when a commander has retreated he often
++		// ends up just patrolling back and forth for a very long time."
++		// CmdPatrolTo(pos) below is a ONE-point patrol order -- Recoil treats
++		// that as a there-and-back shuttle between wherever the unit was when
++		// the order was given and pos, looping forever until something else
++		// takes the unit. Every other decision in this file already carves
++		// the commander out of behaviour meant for ordinary builders/fighters
++		// (GetRallyPos, GetRearHaven, the cloak re-decide above); this branch
++		// had not been, and unlike a mobile constructor a commander idling
++		// here has no useful assist work at a shuffled-off build-site offset
++		// to justify the churn. Left standing at the haven instead -- AiMake-
++		// Task's isComm section (build/hide/back-wall) picks it up from
++		// there, same as any other commander idle event.
++		if (!cdef->IsRoleComm() && /*cdef->GetDef()->IsAbleToAssist() || */cdef->IsAbleToRepair()) {
+ 			AIFloat3 pos = unitPos;
+ 			if (unit->GetUnit()->IsCloaked()) {
+ 				pos += AIFloat3(SQUARE_SIZE * 2, 0, SQUARE_SIZE * 2);  // don't move, but assist if required
 diff --git a/src/circuit/task/RetreatTask.h b/src/circuit/task/RetreatTask.h
 index d29f582..94ddc2a 100644
 --- a/src/circuit/task/RetreatTask.h

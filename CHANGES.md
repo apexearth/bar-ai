@@ -1573,3 +1573,50 @@ FollowerEconomyReady`, logging the actual eInc/mInc against both thresholds
 whenever a non-lead is refused for exactly this reason. **Do not lower
 FOLLOWER_TECH_ENERGY from this report alone** -- get an actual blocked-side
 reading first.
+
+**Partly resolved same session, from source reasoning, not yet from a
+blocked-side eInc reading**: see "The tech-lead election was a one-way
+trip" below -- a follower stuck the whole game with `techStart=-1` may
+simply have had no lead left to follow, not (only) an unreached energy bar.
+
+## The tech-lead election was a one-way trip past 15 minutes
+
+apexearth, watching a different match live, same session: "If green did
+have T2 they must have lost it, and nobody else went and made T2." Found in
+`RunElection()`'s incumbent-retention check:
+
+```
+if ((ai.frame > Military::RUSH_GIVEUP)
+    || (ai.ReadTeamValue(held, TV_ADV, -1.f) > 0.f)
+    || (ai.ReadTeamValue(held, TV_READY, 0.f) > 0.f))
+```
+
+`Military::RUSH_GIVEUP` is 15 minutes. The `||` meant that past that frame
+the incumbent was kept UNCONDITIONALLY, regardless of `TV_ADV` -- which is
+`ai.GetDefBuildProgress`, confirmed live (returns -1 the instant we own none
+of the def) rather than a one-way ratchet. So a lead who loses their
+advanced plant after 15 minutes stays "the lead" for the rest of the game,
+the slot never reopens, and `MayPursueT2()`'s only remaining door for
+everyone else is `FollowerEconomyReady()` alone -- see the still-open item
+above for how high that bar sits. Likely the same root cause behind that
+report, not a separate coincidence: a team-wide "stuck at T1" after the
+30-minute mark is what "nobody left to designate" and "nobody clears the
+follower bar" look like from the outside, together. Removed the frame
+clause; retention is now governed purely by whether the incumbent still has
+a plant or can still afford one, at any point in the game.
+
+## Commander idling at a haven patrolled back and forth forever
+
+apexearth, watching live: "when a commander has retreated he often ends up
+just patrolling back and forth for a very long time." `CRetreatTask::
+OnUnitIdle` (C++), once a retreating unit is within range of its haven,
+issues `CmdPatrolTo(pos)` to any repair-capable unit -- which includes the
+commander. A patrol order to a single point is a there-and-back shuttle
+between wherever the unit was when the order was given and `pos`, by engine
+design, looping forever until something else takes the unit. Every other
+branch in this file already carves the commander out of behaviour meant for
+ordinary units (`GetRallyPos`, `GetRearHaven`, the cloak re-decide in the
+same function) -- this one hadn't been. Excluded the commander from the
+shuffle-to-a-nearby-build-site branch entirely; it now stays put at the
+haven and AiMakeTask's own isComm section (build/hide/back-wall) picks it up
+from there on the next cycle, same as any other commander idle event.

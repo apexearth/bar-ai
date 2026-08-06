@@ -437,15 +437,31 @@ void RunElection()
 	// Incumbents first. A slot is kept while its holder still has a plant or a
 	// nanoframe, or is still able to pay for one -- reopening only on a genuine
 	// loss is what stops the role flapping between two teams whose progress is
-	// neck and neck. Past the give-up frame nothing moves at all: sharing has
-	// stopped by then, so the team keeps the leads it has.
+	// neck and neck.
+	//
+	// The `(ai.frame > Military::RUSH_GIVEUP)` clause this used to OR in here
+	// is REMOVED. It made retention unconditional past 15 minutes regardless
+	// of TV_ADV/TV_READY -- ai.GetDefBuildProgress (what TV_ADV publishes,
+	// see OwnAdvProgress) correctly returns -1 the moment we own none of the
+	// def, so it already tracks a genuine loss live; the frame clause did not
+	// add stability, it just meant the lead slot could never reopen again
+	// once the game passed 15 minutes, however long the game still had left
+	// to run. apexearth, watching live, two matches running: "If green did
+	// have T2 they must have lost it, and nobody else went and made T2" --
+	// and in the previous match, a follower stuck at pure T1 army production
+	// for the entire back half of a 30-minute game while the team it was
+	// supposedly following had nothing to follow. Once the sole lead's plant
+	// dies past this frame, MayPursueT2()'s only other door
+	// (FollowerEconomyReady) requires clearing FOLLOWER_TECH_ENERGY alone --
+	// a bar its own comment already calls "deliberately above what the AI
+	// currently reaches" on some maps -- so a team can go the entire rest of
+	// a long game with nobody eligible to tech at all.
 	array<int> leads;
 	for (uint s = 0; s < quota; ++s) {
 		const int held = int(ai.ReadTeamValue(ai.teamId, LeadKey(s), -1.f));
 		if (held < 0)
 			continue;
-		if ((ai.frame > Military::RUSH_GIVEUP)
-			|| (ai.ReadTeamValue(held, TV_ADV, -1.f) > 0.f)
+		if ((ai.ReadTeamValue(held, TV_ADV, -1.f) > 0.f)
 			|| (ai.ReadTeamValue(held, TV_READY, 0.f) > 0.f))
 		{
 			leads.insertLast(held);
