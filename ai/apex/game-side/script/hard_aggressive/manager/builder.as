@@ -2095,6 +2095,31 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				if (flee !is null)
 					return flee;
 			}
+		} else if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
+			&& (held.GetBuildType() == Task::BuildType::RECLAIM))
+		{
+			// apexearth, watching live: "constructors seem to want to roam
+			// out towards the enemy army to reclaim ... they all died."
+			// SiteBuildName deliberately excludes RECLAIM (every wreck-
+			// chasing dispatch point already threat-checks the destination
+			// before sending a constructor there -- see EnqueueWreckReclaim/
+			// the rich-pile block), so this abandon-and-recheck loop above
+			// never covered reclaim: a destination checked safe ONCE at
+			// dispatch was never re-checked again during the walk or while
+			// reclaiming. An active battlefield's safety can flip in the
+			// time it takes to walk there -- there was no path back once it
+			// did. Same abandon pattern as mex/build above, no
+			// ContestDefence (building a tower at a corpse pile doesn't fit
+			// the same shape as holding a mex).
+			const float heat = ThreatFor(unit, held.GetBuildPos());
+			if (heat > CON_THREAT_VETO) {
+				++gConAbandoned;
+				ConStrike(unit);
+				LogConVeto(unit, "abandon", "reclaim", heat);
+				IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+				if (flee !is null)
+					return flee;
+			}
 		}
 	}
 
