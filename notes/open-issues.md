@@ -3871,3 +3871,25 @@ remains a legitimate constructor, worth more weight on its own economic
 merits) but was not justified by the "tougher opponent" theory, which is
 now known to be wrong. It did not fix the win rate either way (12.5%,
 1/8, issue 58's fourth failed Armada attempt).
+
+## 61. Minor, deferred: redundant T1 lab requests before ever reaching T2
+
+apexearth, watching live: "I do still see us trying to make more T1 labs
+when we haven't even gone to T2. this is ok only sometimes, usually for
+air or something... small problem though... worth remembering."
+
+Not investigated yet -- flagged by apexearth as minor/deferred, not
+urgent. Likely interacts with `FACTORY_TYPE_CAP=3` (builder.as) and the
+`FACTORY_REQUEST_SPACING` gate (issue 55-58's territory): a 2nd/3rd T1
+lab is sometimes legitimate (a second bot lab for a different unit
+mix, or a T1 air plant alongside a T1 bot lab -- different factory
+DEFS, so the per-def cap/spacing doesn't stop it), but apparently fires
+in cases that aren't that, before T2 is even reached. Possibly related
+to `leglab`/`armlab`/`corlab`'s `importance[0]` (startImp) staying high
+relative to other candidate factories for longer than ideal, or a
+DefaultMakeTask offer this AI doesn't have visibility into gating.
+Next session: check factory-type request logs (`con-veto`/factory
+build-site logs) for cases where a 2nd+ T1 lab of the SAME type gets
+built pre-T2, and whether it correlates with a specific unit-mix need
+(air-plant-alongside-bot-lab, which is fine) vs a true redundant
+duplicate (which isn't).
