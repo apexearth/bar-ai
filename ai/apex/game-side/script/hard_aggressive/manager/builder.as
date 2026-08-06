@@ -181,16 +181,14 @@ int gNextRearMex = 0;
 int gNextMexLog = 0;
 int gNextRichLog = 0;
 
-// ai.GetWreckValueAt/GetBestWreckPos go through the engine's non-cheat feature
-// callback, which is LOS-gated (SSkirmishAICallbackImpl::getFeaturesIn calls
-// GetCallBack()->GetFeatures, not the quadfield). Querying from a position with
-// no unit standing near it -- a factory, home, or an enemy-centroid midpoint --
-// always returns empty, radius makes no difference. Confirmed live: even a
-// 50000-elmo sanity radius from home returned 0 in a game with mKillReal in the
-// thousands. Every mobile builder DOES have vision of its own surroundings
-// though, and one already scans WRECK_RICH_R around itself every ~3s below --
-// so record what it sees here and let anyone without a vantage point of their
-// own (factory.as's rez-bot floor) read the sighting instead of querying blind.
+// ai.GetWreckValueAt/GetBestWreckPos were dead for every non-resigned team
+// until the C++ fix in CircuitAI.cpp (2026-08): both used the CCircuitAI::
+// metalRes member, which is only ever assigned inside NotifyResign() and so
+// stayed null all game, making both calls return zero/invalid unconditionally.
+// Fixed at the source, but every mobile builder already scans WRECK_RICH_R
+// around itself every ~3s below regardless -- record what it sees here and let
+// anyone without their own vantage point (factory.as's rez-bot floor) read the
+// sighting instead of taking a fresh sample from wherever they happen to be.
 float gWreckSeenValue = 0.f;
 int gWreckSeenAt = 0;
 const int WRECK_SEEN_TTL = 20 * SECOND;

@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..b4abc64 100644
+index aeea933..3de93c5 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -44,6 +44,10 @@
@@ -31,7 +31,7 @@ index aeea933..b4abc64 100644
  	allyTeam = setupManager->GetAllyTeam();
  	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
  	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
-@@ -1488,6 +1503,257 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1488,6 +1503,278 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -150,10 +150,24 @@ index aeea933..b4abc64 100644
 +// Unlike the Game_getTeamResource* family, the features API is not gated on the
 +// broken AI_TEAM_IDS array -- its non-cheating path goes through CAICallback,
 +// which holds a real team id. Verified in SSkirmishAICallbackImpl.cpp.
++//
++// Deliberately does NOT use the CCircuitAI::metalRes member: that one is only
++// ever assigned inside NotifyResign(), so for every team that has not resigned
++// it stays null and both this function and GetWreckValueAt returned zero
++// unconditionally, for the whole game, every time -- confirmed by a rate-limited
++// log at the top of GetWreckValueAt showing metalRes=0x0 from frame 18 through
++// frame 17769 of a 10-minute game. EconomyManager keeps its own separately-
++// initialized metalRes (EconomyManager.cpp, set from Init()) which is why
++// income/storage/sling all work fine off the same underlying resource. Resolve
++// it fresh here instead of trusting the member.
 +springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal) const
 +{
 +	springai::AIFloat3 best(-RgtVector);
-+	if ((callback == nullptr) || (metalRes == nullptr) || (radius <= 0.f)) {
++	if ((callback == nullptr) || (radius <= 0.f)) {
++		return best;
++	}
++	springai::Resource* metal = callback->GetResourceByName(RES_NAME_METAL);
++	if (metal == nullptr) {
 +		return best;
 +	}
 +
@@ -167,15 +181,16 @@ index aeea933..b4abc64 100644
 +		if (fd != nullptr) {
 +			// Reclaim left is a fraction of the def's contained metal; a wreck
 +			// someone else is already half way through is worth less to us.
-+			const float metal = fd->GetContainedResource(metalRes) * f->GetReclaimLeft();
-+			if (metal > bestMetal) {
-+				bestMetal = metal;
++			const float value = fd->GetContainedResource(metal) * f->GetReclaimLeft();
++			if (value > bestMetal) {
++				bestMetal = value;
 +				best = f->GetPosition();
 +			}
 +			delete fd;
 +		}
 +		delete f;
 +	}
++	delete metal;
 +	return best;
 +}
 +
@@ -186,10 +201,15 @@ index aeea933..b4abc64 100644
 +// not one of them is individually large. apexearth: "often its a dozen t1 that
 +// just died... still its a lot of metal we should be eating".
 +// Same Feature::GetDef ownership rule as above -- that def IS ours to delete,
-+// unlike Unit::GetDef.
++// unlike Unit::GetDef. See GetBestWreckPos's comment for why this resolves the
++// metal resource locally instead of using the CCircuitAI::metalRes member.
 +float CCircuitAI::GetWreckValueAt(const springai::AIFloat3& pos, float radius) const
 +{
-+	if ((callback == nullptr) || (metalRes == nullptr) || (radius <= 0.f)) {
++	if ((callback == nullptr) || (radius <= 0.f)) {
++		return .0f;
++	}
++	springai::Resource* metal = callback->GetResourceByName(RES_NAME_METAL);
++	if (metal == nullptr) {
 +		return .0f;
 +	}
 +	float total = .0f;
@@ -200,11 +220,12 @@ index aeea933..b4abc64 100644
 +		}
 +		springai::FeatureDef* fd = f->GetDef();
 +		if (fd != nullptr) {
-+			total += fd->GetContainedResource(metalRes) * f->GetReclaimLeft();
++			total += fd->GetContainedResource(metal) * f->GetReclaimLeft();
 +			delete fd;
 +		}
 +		delete f;
 +	}
++	delete metal;
 +	return total;
 +}
 +
