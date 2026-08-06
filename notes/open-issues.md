@@ -3833,3 +3833,41 @@ income_tier thresholds) more aggressively than Cortex-parity, since
 parity was never the right target -- Armada apex needs to outpace its
 OWN Cortex-self's expansion rate to have a chance against its
 particular stock opponent, not just match it.
+
+## 60. CORRECTION to issue 59: direct stock-vs-stock test overturns the "tougher opponent" hypothesis
+
+Tested directly: `BARb:stable:hard_aggressive` vs itself, `--sides
+Armada,Cortex` (team0=Armada confirmed fixed across all 8 games via
+script.txt). **Result: 8-0, 100% (CI 68-100%) for Cortex.** Stock's own
+Cortex beats stock's own Armada convincingly, head-to-head, with no apex
+AI involved anywhere in this test.
+
+This directly contradicts issue 59's conclusion. That issue inferred
+"stock-Armada is a tougher opponent" from comparing stock's mex-count
+timeline against TWO DIFFERENT opponents (apex-Cortex in one tournament,
+apex-Armada in another) -- not a controlled comparison. Raw mex count is
+also not proof of strength: stock-Armada apparently expands mex count
+just fine on paper yet still loses to stock-Cortex 8-0, so whatever
+actually decides these games isn't captured by that metric alone.
+
+**Corrected picture, now more concerning, not less**: stock-Cortex is the
+STRONGER of the two stock factions in this profile. apex-Cortex beats it
+anyway (80.6%). apex-Armada loses badly (12-25% across four fix attempts)
+to stock-Armada, the WEAKER faction. This is not explained by facing a
+tougher opponent -- apex's own Armada-specific play is genuinely worse
+than its Cortex play, full stop. The one signal from issue 58 that still
+holds and gains importance here: the first batch to reach statistical
+significance on K/D specifically (t=-2.03, "B trades better") -- combat
+effectiveness, not economy, is now the more likely place to look.
+
+**Practical lesson**: comparing a shared opponent's behavior across two
+different matchups is NOT a valid way to isolate one side's strength --
+a direct head-to-head (same AI, both factions, one tournament) is the
+only clean test, and should have been the first thing tried in issue 59
+rather than an indirect inference. Retracting the "push armck past
+Cortex-parity" change's STATED rationale (issue 59's reframing) -- the
+change itself is still a reasonable, harmless economic tweak (armck
+remains a legitimate constructor, worth more weight on its own economic
+merits) but was not justified by the "tougher opponent" theory, which is
+now known to be wrong. It did not fix the win rate either way (12.5%,
+1/8, issue 58's fourth failed Armada attempt).
