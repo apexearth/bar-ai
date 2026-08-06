@@ -42,7 +42,27 @@ ENGINE_WRITE_DIR = MATCHES / "_engine"
 
 # Faction names as they appear in BAR's sidedata.
 SIDES = ["Armada", "Cortex"]
-COLORS = ["0.15 0.45 0.90", "0.90 0.20 0.10", "0.20 0.80 0.30", "0.90 0.75 0.15"]
+# Indexed by a player's SLOT WITHIN ITS OWN ALLY TEAM (see _ai_and_team), not
+# by ally or by global team_id. Previously this was `COLORS[ally % len]`, so
+# every player on the same side got the IDENTICAL RGBColor -- in an 8v8 that
+# is 8 apex players all rendered as the same blue, with nothing in the game
+# client to tell them apart short of the player list panel. apexearth
+# repeatedly identified players live by inferred color ("blue", "purple",
+# "green") that the script was never actually producing; the distinctness he
+# was seeing came from some other engine-side default, not this field. Eight
+# entries so every player up to an 8v8 gets its own color; if per_side ever
+# exceeds this it cycles, same as before.
+COLOR_NAMES = ["blue", "red", "green", "yellow", "purple", "cyan", "orange", "pink"]
+COLORS = [
+    "0.15 0.45 0.90",  # blue
+    "0.90 0.20 0.10",  # red
+    "0.20 0.80 0.30",  # green
+    "0.90 0.75 0.15",  # yellow
+    "0.60 0.20 0.80",  # purple
+    "0.15 0.80 0.85",  # cyan
+    "0.95 0.55 0.10",  # orange
+    "0.95 0.35 0.65",  # pink
+]
 
 
 @dataclass
@@ -103,13 +123,18 @@ def _script_section(name: str, body: dict, indent: int = 1) -> str:
     return "\n".join(lines)
 
 
-def _ai_and_team(ai: AISpec, team_id: int, ally: int, side: str,
+def _ai_and_team(ai: AISpec, team_id: int, ally: int, slot: int, side: str,
                  handicap: int = 0, drop_version: bool = False) -> str:
-    """One [AI]/[TEAM] pair (or a LuaAI [TEAM]) for the given ally team."""
+    """One [AI]/[TEAM] pair (or a LuaAI [TEAM]) for the given ally team.
+
+    `slot` is this player's index WITHIN its own ally (0, 1, 2... per side),
+    which is what picks the color -- see COLORS' own comment for why that is
+    not `ally` or `team_id`.
+    """
     team = {
         "TeamLeader": 0,
         "AllyTeam": ally,
-        "RGBColor": COLORS[ally % len(COLORS)],
+        "RGBColor": COLORS[slot % len(COLORS)],
         "Side": side,
         "Handicap": handicap,
     }
@@ -204,8 +229,8 @@ def build_script(
 
     team_id = 0
     for ally, ai in enumerate(ais):
-        for _ in range(per_side):
-            body.append(_ai_and_team(ai, team_id, ally, side_for[ally], handicap,
+        for slot in range(per_side):
+            body.append(_ai_and_team(ai, team_id, ally, slot, side_for[ally], handicap,
                                      drop_ai_version))
             team_id += 1
         box = {"NumAllies": 0}
@@ -395,6 +420,18 @@ def run(args) -> int:
     print(f"engine   {env.engine_version}")
     for i, a in enumerate(ais):
         print(f"team {i}   {a.label()}")
+    if args.per_side > 1:
+        # Per-player color legend: RGBColor is now keyed by slot-within-ally
+        # (see COLORS' own comment), so with per_side > 1 each teammate gets
+        # its own distinct color instead of the whole side sharing one. Print
+        # the mapping so a color reported while watching ("purple did X") can
+        # be looked up directly instead of reverse-engineered from stats.
+        tid = 0
+        for i, a in enumerate(ais):
+            for slot in range(args.per_side):
+                name = COLOR_NAMES[slot % len(COLOR_NAMES)]
+                print(f"  team {tid} ({a.label()})   {name}")
+                tid += 1
     print(f"out      {outdir}")
 
     if args.dry_run:
