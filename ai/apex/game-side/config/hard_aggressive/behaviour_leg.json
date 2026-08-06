@@ -5,10 +5,21 @@
 //####|| Evolving Commanders ||###########################################################################################
 //########################################################################################################################
 
+// dg_cost added 2026-08-06: every commander tier here was missing it while
+// the shared behaviour.json gives every other faction's commander
+// ["commander", "dg_cost", "no_repair"]. Without it CDGunAction::Update
+// (DGunAction.cpp) filters D-gun targets by enemy->GetInfluence() < THREAT_MIN
+// instead of by cost -- confirmed via a split diagnostic (400+ sampled
+// events) that this influence check was rejecting ~98% of Legion's
+// commander's D-gun opportunities even with a visible enemy in range
+// (rejVis=0 every time), while Cortex/Armada commanders, which already had
+// dg_cost, passed the equivalent check 99% of the time. apexearth,
+// watching live: "legion just shoots lasers and dies easily to armies...
+// cortex and armada annihilate armies with dguns."
 		"behaviour": {
 			"legcom": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 5.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -16,7 +27,7 @@
 			},
 			"legcomlvl2": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 10.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -24,7 +35,7 @@
 			},
 			"legcomlvl3": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 15.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -32,7 +43,7 @@
 			},
 			"legcomlvl4": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 20.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -40,7 +51,7 @@
 			},
 			"legcomlvl5": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 25.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -48,7 +59,7 @@
 			},
 			"legcomlvl6": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 30.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -56,7 +67,7 @@
 			},
 			"legcomlvl7": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 35.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -64,7 +75,7 @@
 			},
 			"legcomlvl8": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 40.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -72,7 +83,7 @@
 			},
 			"legcomlvl9": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 45.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -80,7 +91,7 @@
 			},
 			"legcomlvl10": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 50.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
