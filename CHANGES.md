@@ -1504,3 +1504,72 @@ called and returning nothing (a decision problem, something below always
 declines) or stops being called at all (the factory's task got stuck and the
 engine stops re-asking) — the same two-hypothesis split the RECLAIM-abandon fix
 resolved earlier this session for constructors, not yet applied to factories.
+
+## Three more, same session, from watching two windowed games back to back
+
+### The commander was thrashing between mex, factory-assist and reclaim
+
+apexearth, watching live: "he'll start a job to build a mex, and then he'll
+turn around to try to assist a factory, but then he'll move away, and he'll
+follow some reclaim... we have a lot of different bits of logic that are all
+kind of competing for control of the same unit... we need some sort of
+control pass to compare what he's currently doing with what he's proposed to
+do." One instance of exactly this already had a fix: the commander could be
+pulled onto another unit's HIGH-priority Reclaim task from clear across the
+map (`CBuilderManager::MakeCommPeaceTask`, native, ignores distance against a
+HIGH-priority job), and that was vetoed while an open mex spot remained. That
+veto only ever compared the incoming task against "is a mex spot still
+open" -- it never looked at what the commander already held, so a
+factory-assist pick (also handed out by the same native picker) sailed
+through unguarded. Generalized: `unit.task` at this point in `AiMakeTask` is
+still the OLD task (`IBuilderTask::Reevaluate` only swaps it once this
+function returns something of a different build type), so comparing it
+against the freshly computed `DefaultMakeTask` proposal is exactly the
+"current vs proposed" check requested. Now refuses any proposed swap to a
+different recognized build type while the commander holds real, in-progress,
+non-dangerous work of its own. Confirmed firing in all three 8-minute faction
+smoke tests (4-16 times each) with zero AngelScript compile errors.
+
+### Air factories went permanently dead after the assassin stood down
+
+apexearth, watching live: "blue made 2 t1 air labs, a t2 air lab.. he's not
+making any army at 27m in... this is a brutal mistake." Root cause: the
+air-assassin election is latched forever ("the role is paid for in
+factories, so it never moves" -- `RunElection()`), and `Update()`'s
+"STANDING DOWN" branch (enemy AA rose past the ceiling before the strike
+ever committed) sets `gAbort = true`, which is never reset anywhere in the
+file. `Armed()` checks `gAbort`, so it goes permanently false, and
+`factory.as` has a deliberate blanket rule -- added for a different, earlier
+bug -- that no air factory may ever reach `DefaultMakeTask`. The two combine
+into a one-way trip: an elected lead whose strike aborts before committing
+gets every air factory it owns locked out of production for the rest of the
+match, with only a late-game 8-fighter floor (`LATE_FIGHTERS`) as a partial
+safety net, and no path back since nobody else can ever be elected either.
+Confirmed in that match's infolog: exactly one "STANDING DOWN" line, after
+which the player's armap/armaap factories kept showing up in the new
+factory-diag log with no further Air:: activity for the rest of the game.
+Fixed with `Air::RoleAbandoned()` (true only for the standing-down case, not
+the post-strike `gStrike` case, which is intentionally quiet) and an
+exemption in `factory.as`'s blanket block so an abandoned lead's plants fall
+back to ordinary production instead of building nothing.
+
+### Open: a follower stuck at T1 all game despite heavy army spend
+
+apexearth, same session: "purple at 29m in still pumping out TONS of
+army... but never went t2... we were almost winning but these issues turned
+it into a loss." Pulled from the same match: `mT1=47,500`, `mT2=0`,
+`techStart=-1` the whole 30-minute game. This is NOT a fresh bug the way the
+two above are -- `FOLLOWER_TECH_ENERGY`'s own comment already names this
+exact failure mode as possible and says what to check before touching the
+threshold: "Deliberately above what the AI currently reaches [on the
+benchmark]... If followers stop teching at all, that is the factor being too
+low, not this number being wrong -- check eInc in the T2GATE log before
+lowering it." The problem: that log (`T2GATE reached`) only ever fires on
+the PASSING path. A player that never once clears the bar leaves no record
+of how far short it stayed -- confirmed in this match's own infolog, only 2
+`T2GATE reached` lines total, for the two players who DID tech, and nothing
+at all for the two who didn't. Added the missing half: `T2GATE blocked
+FollowerEconomyReady`, logging the actual eInc/mInc against both thresholds
+whenever a non-lead is refused for exactly this reason. **Do not lower
+FOLLOWER_TECH_ENERGY from this report alone** -- get an actual blocked-side
+reading first.

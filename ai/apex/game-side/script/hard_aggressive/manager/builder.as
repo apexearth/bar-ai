@@ -2313,6 +2313,37 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		@task = null;
 	}
 
+	// General version of the veto above: apexearth, watching live, describing
+	// the commander cycling mex -> factory-assist -> reclaim and back: "we
+	// have a lot of different bits of logic that are all kind of competing
+	// for control of the same unit... we need some sort of control pass to
+	// compare what he's currently doing with what he's proposed to do so we
+	// can determine which is more important." The reclaim-specific check
+	// above only ever compared "is a mex spot still open" against the NEW
+	// task; it never looked at what the commander was already doing. `unit.
+	// task` here is still the OLD task -- IBuilderTask::Reevaluate only
+	// swaps it once this function returns something that differs in build
+	// type (see the comment above the `!isComm` block below) -- so this is
+	// exactly the current-vs-proposed comparison requested. Refuse a
+	// DefaultMakeTask/MakeCommPeaceTask pick of a DIFFERENT recognized build
+	// type while the commander already has real, in-progress work of its
+	// own and that work has not itself become dangerous (a real threat is
+	// handled by the comm-abandon retreat block above this function's
+	// isComm section, which runs first and returns before reaching here).
+	// SiteBuildName's whitelist already excludes RECLAIM, so this composes
+	// with the check above rather than fighting it: reclaim can still only
+	// be rejected by the specific mex-spot rule, never re-accepted here.
+	if (isComm && (task !is null) && (task.GetType() == Task::Type::BUILDER)) {
+		IUnitTask@ held = unit.task;
+		const string heldKind = SiteBuildName(held);
+		if ((heldKind != "") && (held.GetBuildType() != task.GetBuildType())
+			&& (ThreatFor(unit, held.GetBuildPos()) <= CON_THREAT_VETO))
+		{
+			LogConVeto(unit, "comm-hold", heldKind, 0.f);
+			@task = null;
+		}
+	}
+
 	// apexearth: "have our units never assist another unit build something if
 	// we are out of a resource (<5%). This should help encourage getting
 	// mexes." Only about JOINING someone else's build -- task.GetUnits() is

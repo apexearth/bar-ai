@@ -365,6 +365,7 @@ const int REZ_SPACING  = 20 * SECOND;
 int gNextRez = 0;
 int gNextRezDiag = 0;  // temporary diagnostic, see the rez-bot armed check below
 int gNextFactoryDiag = 0;  // temporary diagnostic, see the AiMakeTask entry log below
+int gNextT2GateBlockLog = 0;  // temporary diagnostic, see AiIsSwitchAllowed's FollowerEconomyReady check
 
 // HaveT1BotLab() only clears once CCircuitDef::count increments, which happens
 // at the nanoframe -- construction actually starting, not the build order
@@ -1619,8 +1620,15 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// it earlier in this function: Air:: while armed, the LATE_FIGHTERS
 	// floor (which holds what it builds via HoldsLateFighter), and the eco
 	// lead's own constructor line above. Nothing past this point should ever
-	// come from an air factory.
-	if (IsAirFactory(unit.circuitDef))
+	// come from an air factory -- UNLESS the air-lead role stood down before
+	// ever committing (Air::RoleAbandoned(), see that function's comment).
+	// The election is latched forever, so an aborted lead's own air plants
+	// have no path back to Air:: and no successful strike to have earned
+	// this quiet fallthrough the way a post-gStrike plant has -- left
+	// blocked, they build literally nothing for the rest of the game.
+	// apexearth, watching live: "blue made 2 t1 air labs, a t2 air lab..
+	// he's not making any army at 27m in."
+	if (IsAirFactory(unit.circuitDef) && !Air::RoleAbandoned())
 		return null;
 	return aiFactoryMgr.DefaultMakeTask(unit);
 }
@@ -1905,6 +1913,24 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
 		&& !FollowerEconomyReady())
 	{
+		// Temporary diagnostic: apexearth, watching live, a player 29 minutes
+		// in with heavy army spend (mT1 47,500 in one match) and mT2 still
+		// zero -- "purple... pumping out TONS of army... but never went t2."
+		// FOLLOWER_TECH_ENERGY's own comment already flags this as possible
+		// and deliberate ("Deliberately above what the AI currently reaches
+		// [on the benchmark]... If followers stop teching at all, that is the
+		// factor being too low, not this number being wrong -- check eInc in
+		// the T2GATE log before lowering it") -- but that log only fires on
+		// the PASSING path, so a player that never once clears the bar leaves
+		// no record of how far short it stayed. This is that missing record.
+		if (ai.frame >= gNextT2GateBlockLog) {
+			gNextT2GateBlockLog = ai.frame + 60 * SECOND;
+			AiLog(T() + "T2GATE blocked FollowerEconomyReady"
+				+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
+				+ "/" + formatFloat(FOLLOWER_TECH_ENERGY, "", 0, 0)
+				+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+				+ "/" + formatFloat(FOLLOWER_TECH_INCOME, "", 0, 1));
+		}
 		return false;
 	}
 	// The designated player is rushing: buy T2 as soon as the metal is on hand,

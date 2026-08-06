@@ -255,6 +255,28 @@ bool IsAirLead()
 	return (lead >= 0) && (lead == ai.teamId);
 }
 
+// True once this instance permanently stood down (Update()'s "STANDING DOWN"
+// branch, enemy AA rose past the ceiling before the strike committed). The
+// election in RunElection() is latched forever ("the role is paid for in
+// factories, so it never moves") and gAbort is likewise never reset anywhere
+// in this file, so on the elected air lead this is a ONE-WAY trip: Armed()
+// checks gAbort and returns false for the rest of the game, and nobody else
+// can ever be elected to take the role over. apexearth, watching live: "blue
+// made 2 t1 air labs, a t2 air lab.. he's not making any army at 27m in."
+// Confirmed in that match's infolog: exactly one "air assassin STANDING DOWN"
+// line, after which every armap/armaap factory-diag entry for that player
+// kept showing hasTask=1 with no further Air:: log activity for the rest of
+// the game -- factory.as's own blanket "no air factory reaches
+// DefaultMakeTask" rule (see the comment above that check) was written
+// assuming the only way MakeFactoryTask returns null is "mid-strike",
+// temporary. It is not, in this case. Exists so factory.as can let those
+// factories fall back to ordinary production instead of staying dead for the
+// rest of the match.
+bool RoleAbandoned()
+{
+	return gAbort;
+}
+
 float EnemyAACost()
 {
 	return aiEnemyMgr.GetEnemyCost(RT::AA);
