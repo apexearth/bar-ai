@@ -560,6 +560,66 @@ IUnitTask@ SaferMex(CCircuitUnit@ unit, IUnitTask@ refused)
 	return best;
 }
 
+string armmex("armmex");
+string cormex("cormex");
+string legmex("legmex");
+
+// apexearth: "we aren't doing too bad here but it feels noticeably less good
+// than yesterday" -> traced (2026-08-05) to the factory-cap veto below leaving
+// a refused constructor fully idle -- its own comment already says so: "CIdleTask
+// assigns whatever comes back... simply leaves the unit idle until the next idle
+// sweep." A timeline (analyze_stats.py) on Armada,Armada showed mex count
+// dead even with stock through minute 6, then falling behind by minute 8 --
+// entirely in the T1 window -- and infolog con-veto counts showed "factory-cap"
+// as the dominant refusal reason for armck specifically (26 of 45 in one game,
+// more than mex+mexup combined). SaferMex (above) cannot help here: it matches
+// candidates by the REFUSED task's own buildDef, and a factory-cap refusal's
+// buildDef is a factory, not a mex. But the basic T1 mex is buildable by every
+// side's T1 constructor by design (this is what those constructors are FOR),
+// so it does not need the "engine already proved buildability" trick SaferMex
+// relies on for tiers that vary per-constructor (armck builds armmex, armack
+// only armmoho -- see SaferMex's own comment).
+IUnitTask@ FallbackMex(CCircuitUnit@ unit)
+{
+	const CCircuitDef@ want = SideDef3(armmex, cormex, legmex);
+	if (want is null)
+		return null;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	IUnitTask@ best = null;
+	float bestDist = REROUTE_RANGE;
+	for (uint i = 0; i < gMexTasks.length(); ++i) {
+		IUnitTask@ cand = gMexTasks[i];
+		if (cand is null)
+			continue;
+		const CCircuitDef@ has = cand.buildDef;
+		if ((has is null) || (has.id != want.id))
+			continue;
+		const AIFloat3 where = cand.GetBuildPos();
+		if (!OnMap(where))
+			continue;
+		const float dist = here.distance2D(where);
+		if (dist >= bestDist)
+			continue;
+		if (ThreatFor(unit, where) > CON_THREAT_VETO)
+			continue;
+		array<CCircuitUnit@>@ busy = cand.GetUnits();
+		if ((busy !is null) && (busy.length() > 0))
+			continue;
+		@best = cand;
+		bestDist = dist;
+	}
+	if (best is null)
+		return null;
+	++gConRerouted;
+	if (ai.frame >= gNextRerouteLog) {
+		gNextRerouteLog = ai.frame + 5 * SECOND;
+		AiLog(Factory::T() + "apex: con-reroute " + unit.circuitDef.GetName()
+			+ " -> factory-cap-fallback-mex dist=" + formatFloat(bestDist, "", 0, 0)
+			+ " rerouted=" + gConRerouted);
+	}
+	return best;
+}
+
 // Contest the mex rather than sit on it. apexearth: "build defenses a safe
 // distance from the mex we desire to control. That is usually what I would do."
 // The standoff walks back toward our own start until the threat map reads clear,
@@ -2007,7 +2067,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// Refusing to accept the job in the first place. Reached from CIdleTask, where
 	// returning null simply leaves the unit idle until the next idle sweep.
 	if (!isComm) {
-		const string kind = SiteBuildName(task);
+		string kind = SiteBuildName(task);
 		// Cap redundant same-type factories. tools/combat_events.py (built this
 		// session) caught what the earlier bot-lab-request-cooldown fix
 		// (BOTLAB_REQUEST_COOLDOWN) missed: that fix only gates the ONE script
@@ -2031,7 +2091,15 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				if ((wantFac.count >= FACTORY_TYPE_CAP) || tooSoon) {
 					++gConRefused;
 					LogConVeto(unit, "refuse", "factory-cap", float(wantFac.count));
-					@task = null;
+					// Previously just @task = null here, which (per CIdleTask's own
+					// contract, see the function-level comment above) leaves the
+					// unit fully idle until the next idle sweep. Redirect to
+					// expansion first -- see FallbackMex's own comment for the
+					// traced mechanism and evidence.
+					IUnitTask@ fallback = FallbackMex(unit);
+					@task = fallback;
+					if (fallback !is null)
+						kind = "mex";
 				} else if (tracked) {
 					gNextFactoryRequest[id] = ai.frame + FACTORY_REQUEST_SPACING;
 				}
