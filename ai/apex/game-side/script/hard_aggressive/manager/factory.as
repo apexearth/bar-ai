@@ -2249,7 +2249,19 @@ const float NAVY_MIN_INCOME = 15.f;
 // valve on the same income bar the AI needs the escape valve to reach is a
 // deadlock, not a safeguard. This is a rescue, not a luxury expansion, so it
 // asks only for enough to not immediately go bankrupt building the yard.
+// Measured on Crater Islands (63% land, 4v4): the four players finished the
+// game on 2.4, 5.1, 5.2 and 13.3 metal/s, so even 6 was out of reach for three
+// of them and exactly one ever built a yard. On a map where a third of the
+// metal is across water, the yard is not a luxury bought out of surplus -- it
+// is the only route to any surplus at all, so the bar has to sit below what the
+// map actually produces before it is contested. The branch this gates still
+// sits below the tech rush, the bot lab and the gantry, so it only ever takes a
+// factory slot nothing else wanted.
 const float NAVY_MIN_INCOME_STALLED = 6.f;
+// Land share at or below which a MIXED map counts as water-heavy and uses the
+// stalled floor above. Crater Islands is 63%; a 75-80% land map is not really
+// a naval map and keeps the luxury bar.
+const float NAVY_HEAVY_LAND_PCT = 70.f;
 
 bool IsMixedWaterMap()
 {
@@ -2698,7 +2710,19 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// build on them without a yard. Measured on Silent Sea: all four players
 	// plateaued at 16-24 m/s, and the one that eventually cleared 15 asked for
 	// its first shipyard at 21.9 minutes of a 25 minute game.
-	const bool waterEscape = IsWaterMap() || stalled;
+	// A water-HEAVY mixed map is the same deadlock as a true water map, just
+	// less extreme, so it gets the same lower floor. Measured on Crater Islands
+	// (63% land): the four players finished on 5.1, 5.2, 2.4 and 13.3 metal/s,
+	// every one of them under NAVY_MIN_INCOME's 15, and exactly one ever built a
+	// shipyard -- the one whose opening happened to start in water. Income
+	// cannot climb past that bar precisely BECAUSE a third of the map's metal is
+	// across water we never contest.
+	//
+	// Bounded to genuinely water-heavy maps: a mixed map that is mostly land
+	// keeps the luxury floor, since there a yard really is optional.
+	const bool waterHeavy = IsMixedWaterMap()
+			&& (aiTerrainMgr.GetLandPercent() <= NAVY_HEAVY_LAND_PCT);
+	const bool waterEscape = IsWaterMap() || stalled || waterHeavy;
 	if ((IsWaterMap() || IsMixedWaterMap() || stalled) && !HaveShipyard()
 		&& (aiEconomyMgr.metal.income >= (waterEscape ? NAVY_MIN_INCOME_STALLED : NAVY_MIN_INCOME)))
 	{
