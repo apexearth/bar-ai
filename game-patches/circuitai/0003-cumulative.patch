@@ -1985,10 +1985,10 @@ index fac55c7..247f8a9 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..2b3048a 100644
+index cd063e4..f33ac93 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
-@@ -25,12 +25,122 @@
+@@ -25,12 +25,137 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -2003,11 +2003,26 @@ index cd063e4..2b3048a 100644
 +//
 +// maxThreat is only a CEILING -- it refuses tiles above it, and a strong squad
 +// gets a high one, so the cheapest route stays the short one straight up the
-+// middle. What decides the shape of the route is the per-tile cost, which was a
-+// flat 2x threat for every query in the AI. Attacks now pay far more for
-+// defended ground, so a longer quiet route wins on cost. That is what going
-+// round the edge is: the middle is where the defences are.
-+static constexpr float ATTACK_THREAT_MOD = 4.f;
++// middle. What decides the shape of the route is the per-tile cost, which is a
++// flat 2x threat for every other query in the AI.
++//
++// 4 -> 2 on 2026-08-07. At 4 an attack paid so much for defended ground that a
++// long quiet route round the map edge beat the short one through the middle --
++// the previous comment here predicted exactly that and treated it as the point.
++// Watched live, apexearth judged the result: "I see purple and teal sending
++// army around the back edge of the map rather than towards the front line...
++// wasteful movement."
++//
++// The detour is not free even when it avoids damage: the army is out of
++// position for the whole walk, arrives piecemeal, and on a large map may never
++// arrive at all. Back to the AI-wide 2, so defended ground still costs more
++// than open ground without the edge run being cheaper than the fight.
++static constexpr float ATTACK_THREAT_MOD = 2.f;
++
++// Multiplier on the path's threat CEILING (see the query in Update()). The
++// ceiling decides which tiles exist for the pathfinder at all, so it, not the
++// cost above, is what produces map-edge detours when it is tight.
++static constexpr float ATTACK_CEILING_MOD = 3.f;
 +
 +// Chosen so CheckMergeTask's own MAX_TRAVEL_SEC * speed budget (~2700 elmos for
 +// a T1 bot) becomes the binding limit instead of this. The air tasks were raised
@@ -2111,7 +2126,7 @@ index cd063e4..2b3048a 100644
  CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
  		: ISquadTask(mgr, FightType::ATTACK, powerMod)
  		, minPower(minPower)
-@@ -54,12 +164,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
+@@ -54,12 +179,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
  	if (speedLeader > speedUnit) {
  		std::swap(speedLeader, speedUnit);
  	}
@@ -2136,7 +2151,7 @@ index cd063e4..2b3048a 100644
  		return false;
  	}
  	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
-@@ -178,7 +298,20 @@ void CAttackTask::Update()
+@@ -178,7 +313,20 @@ void CAttackTask::Update()
  
  	state = State::ROAM;
  	if (GetTarget() != nullptr) {
@@ -2158,17 +2173,36 @@ index cd063e4..2b3048a 100644
  		if (position.SqDistance2D(startPos) < SQUARE(highestRange + slack)) {
  			int xs, ys, xe, ye;
  			circuit->GetPathfinder()->Pos2PathXY(startPos, &xs, &ys);
-@@ -208,7 +341,8 @@ void CAttackTask::Update()
+@@ -205,10 +353,27 @@ void CAttackTask::Update()
+ 	const float eps = pathfinder->GetSquareSize();
+ 	const float pathRange = std::max(highestRange - eps, eps);
+ 
++	// maxThreat is a CEILING: tiles above it are impassable, not merely
++	// expensive. Set from the squad's own power, a modest squad forbids most of
++	// the direct route and the pathfinder takes whatever is left -- which is the
++	// long way round the map edge. apexearth, watching live: "I see purple and
++	// teal sending army around the back edge of the map rather than towards the
++	// front line... they were going, like, twenty times the distance they needed
++	// to around enemy defenses."
++	//
++	// A detour that size is not caution, it is removal: the army is out of
++	// position for the whole walk, arrives piecemeal, and on a big map may never
++	// arrive. ATTACK_CEILING_MOD widens what a squad will path THROUGH. The
++	// engage test still decides whether to actually take the fight when it gets
++	// there -- that judgement belongs there, not in the pathfinder silently
++	// making the short route non-existent.
++	const float threatCeiling = ATTACK_CEILING_MOD * attackPower
++			/ circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale();
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
  			leader, circuit->GetThreatMap(),
  			startPos, endPos, pathRange, GetHitTest(),
 -			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
-+			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale(),
++			threatCeiling,
 +			false, ATTACK_THREAT_MOD);
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -238,25 +372,89 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,25 +403,89 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -2261,7 +2295,7 @@ index cd063e4..2b3048a 100644
  	float minSqDist = std::numeric_limits<float>::max();
  	bool hasGoodTarget = false;
  
-@@ -269,10 +467,20 @@ void CAttackTask::FindTarget()
+@@ -269,10 +498,20 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -2286,7 +2320,7 @@ index cd063e4..2b3048a 100644
  			continue;
  		}
  
-@@ -319,10 +527,56 @@ void CAttackTask::FindTarget()
+@@ -319,10 +558,56 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -2344,7 +2378,7 @@ index cd063e4..2b3048a 100644
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -332,6 +586,22 @@ void CAttackTask::FindTarget()
+@@ -332,6 +617,22 @@ void CAttackTask::FindTarget()
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
  	}
@@ -2367,7 +2401,7 @@ index cd063e4..2b3048a 100644
  	// Return: target, startPos=leader->pos, endPos=position
  }
  
-@@ -340,6 +610,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +641,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
