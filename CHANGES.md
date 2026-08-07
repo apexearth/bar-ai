@@ -5,8 +5,79 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 
 | variant | intent | best measured result |
 |---|---|---|
-| **apex** | stock BARb plus a team T2 rush | T2 at 5.7 min vs stock 13.9; ~45% wins |
+| **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
+
+## 2026-08-07: the aggression session
+
+Measured after the night's batch, all on engine `recoil_2026.07.04`:
+
+| test | result |
+|---|---|
+| 4v4 vs `BARb:stable:medium`, Cortex | **16-0** |
+| 4v4 vs `BARb:stable:medium`, Armada | **16-0** |
+| 4v4 vs `BARb:stable:medium`, Legion | **16-0** |
+| 8v8 vs `BARb:stable:hard`, Supreme Isthmus +40% | **8-0** |
+
+The 8v8 number is the one that matters: **the identical configuration went 0-8
+earlier the same day**, and games now end around 19 minutes instead of running
+to the 60-minute cap. Legion, historically the weak faction at ~40%, is level
+with the others.
+
+Two causes, both found by reading a real multiplayer game's infolog rather than
+the benchmark:
+
+- `ENGAGE_MARGIN` was 1.80, i.e. we demanded 80% more power than whatever
+  defended a target. In one live game: 492 engage decisions, **3,973 candidate
+  groups refused as too strong**, and `edge=0.00` on every sample -- meaning the
+  target finally accepted had no defenders at all. The AI was refusing every
+  real fight and attacking empty ground. Now 1.35.
+- `quota.attack` was restored to stock BARb's value after the rush window --
+  **15**. From mid-game on, only fifteen units per player could ever attack, and
+  slots filled first-come so a T3 unit finished later never got one. Now
+  `LATE_ATTACK_QUOTA = 200`, so the odds test decides who fights instead of an
+  arbitrary cap.
+
+**Do not read these as "the AI is solved".** Every one of these games is against
+another AI. The whole reason this batch exists is apexearth's observation that
+BARb is not the right measure, because humans punish timidity in ways BARb never
+does. A 16-0 against medium mostly says the build is not broken.
+
+### Self-play A/B, and what it does NOT show
+
+`ai/ctl` is a frozen copy of the build above, deployed as shortName `ApexCtl`,
+so later changes can be A/B'd by self-play instead of against a win rate already
+saturated at 100%. First use, 12 games Cortex 4v4, new build (juggernaut charge
++ `AIR_FROM` 11 min) against it: **9-3, 75%** -- but the 95% CI is 47-91%, which
+includes 50%. That is suggestive and **not** a demonstrated improvement. Twelve
+games cannot resolve an effect this size; it needs ~40 to separate from noise.
+
+### The juggernaut charge is UNVALIDATED, and the benchmark cannot validate it
+
+Built, compiles, and has a log line (`apex: juggernaut charge`) specifically so
+it can be observed. Across 8 games of 8v8 vs hard it fired **zero** times -- for
+a reason that is not a bug: **no juggernaut-class unit was ever built**. Two
+gantries total, and a 19.1 min median game length. A corjugg is 20,000 metal;
+the games end long before one exists, *because the AI now wins quickly*.
+
+So this feature is unreachable in the current benchmark, and no amount of
+running it will say anything. Validating it needs a scenario with a much longer
+game or a pre-seeded T3 force. **Do not tune it from benchmark results** -- there
+are none, and there will not be any.
+
+### Feature coverage, measured
+
+`tools/feature_audit.py` reports which strategies actually fired. Every feature
+that can fire under some condition has now been seen firing in at least one:
+eco lead (8/8 at 8v8 only -- it is off under 6 per side by design), air strike
+(8/8 at 8v8, 14/16 Legion, 7/16 Cortex -- it needs game length to mass), T3
+gantry (11/16 Legion), rich-wreck reclaim (8/8 at 8v8), tech-lead handover (3/8,
+72 fires -- a behaviour that did not exist before the latch fix).
+
+Two remain unvalidatable here and are annotated in the tool: `cheap AA` (BARb
+medium builds no air at all -- confirmed, every air unit in those 16 games was
+ours) and `commander retreat` (nothing ever threatened our commander; **zero**
+commanders lost across the 8 games vs hard).
 
 Status column below: **measured** = validated in a clean run; **unmeasured** =
 implemented and smoke-tested only; **suspect** = measured under conditions later

@@ -2039,7 +2039,7 @@ index fac55c7..247f8a9 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..41a3ad0 100644
+index cd063e4..f213a3e 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -25,12 +25,118 @@
@@ -2218,7 +2218,7 @@ index cd063e4..41a3ad0 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -238,25 +368,82 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,25 +368,89 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -2293,6 +2293,13 @@ index cd063e4..41a3ad0 100644
 +	// CCircuitUnit::Attack already walks a melee unit onto its target rather
 +	// than firing from range, so only the DECISION needed changing.
 +	const bool isJuggernaut = (cdef != nullptr) && cdef->IsRoleHeavy() && cdef->IsAttrMelee();
++	// Observable, or it cannot be validated. A behaviour with no log line is a
++	// behaviour nobody can prove ever ran -- which is how this repo has shipped
++	// dead code more than once. Rate limited per task, not per call.
++	if (isJuggernaut && (frame >= lastEngageLog + FRAMES_PER_SEC * 10)) {
++		circuit->LOG("apex: juggernaut charge %s -- ignoring engage margin",
++				cdef->GetDef()->GetName());
++	}
 +	int skippedWeak = 0;
 +	// LINEAR, not squared. `scale` below divides a linear distance by this, and
 +	// with a squared denominator the ratio collapses the moment the squad leaves
@@ -2304,7 +2311,7 @@ index cd063e4..41a3ad0 100644
  	float minSqDist = std::numeric_limits<float>::max();
  	bool hasGoodTarget = false;
  
-@@ -269,10 +456,20 @@ void CAttackTask::FindTarget()
+@@ -269,10 +463,20 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -2329,7 +2336,7 @@ index cd063e4..41a3ad0 100644
  			continue;
  		}
  
-@@ -319,10 +516,56 @@ void CAttackTask::FindTarget()
+@@ -319,10 +523,56 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -2387,7 +2394,7 @@ index cd063e4..41a3ad0 100644
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -332,6 +575,22 @@ void CAttackTask::FindTarget()
+@@ -332,6 +582,22 @@ void CAttackTask::FindTarget()
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
  	}
@@ -2410,7 +2417,7 @@ index cd063e4..41a3ad0 100644
  	// Return: target, startPos=leader->pos, endPos=position
  }
  
-@@ -340,6 +599,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +606,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
