@@ -2676,13 +2676,36 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// this session's dominant finding is that any new unconditional spend
 	// costs a 4v4. IsMixedWaterMap() below is unaffected -- that branch
 	// predates this fix and already applied to every team size.
+	// IsWaterMap() is in this test, not just IsMixedWaterMap(). The two are
+	// DISJOINT by construction -- IsMixedWaterMap() is defined as
+	// `!IsWaterMap() && land <= 80%` -- so on a genuine water map this branch
+	// used to be unreachable, and `stalled` could not rescue it either because
+	// that is restricted to big teams. Net effect: on a true water map at 4v4, a
+	// player whose opening happened to land on dry ground had NO path to a
+	// shipyard for the rest of the game.
+	//
+	// Measured on Silent Sea (4v4, 14x14): two players opened naval and spent
+	// 48% and 61% of their metal on it; the other two finished on 0% and 3.7%
+	// with no shipyard at all, and the game ran to the time limit with the sea
+	// half-contested. apexearth: "be sure that the AI works well on water/mix
+	// maps. Our AI should actively cross into water and build water units."
 	const bool stalled = !IsSmallTeam() && !aiTerrainMgr.IsWaterAVoid() && ExpansionStalled();
-	if ((IsMixedWaterMap() || stalled) && !HaveShipyard()
-		&& (aiEconomyMgr.metal.income >= (stalled ? NAVY_MIN_INCOME_STALLED : NAVY_MIN_INCOME)))
+	// A true water map uses the STALLED income floor, not the luxury one. The
+	// deadlock NAVY_MIN_INCOME_STALLED exists for -- "gating the escape valve on
+	// the same income bar the AI needs the escape valve to reach" -- is the
+	// normal condition there, not an edge case: half the metal spots are under
+	// water, so income cannot climb until we can build on them, and we cannot
+	// build on them without a yard. Measured on Silent Sea: all four players
+	// plateaued at 16-24 m/s, and the one that eventually cleared 15 asked for
+	// its first shipyard at 21.9 minutes of a 25 minute game.
+	const bool waterEscape = IsWaterMap() || stalled;
+	if ((IsWaterMap() || IsMixedWaterMap() || stalled) && !HaveShipyard()
+		&& (aiEconomyMgr.metal.income >= (waterEscape ? NAVY_MIN_INCOME_STALLED : NAVY_MIN_INCOME)))
 	{
 		CCircuitDef@ sy = NavalOpening();
 		if (sy !is null) {
-			AiLog(T() + "apex: " + (stalled ? "expansion stalled" : "mixed map (" +
+			AiLog(T() + "apex: " + (stalled ? "expansion stalled"
+				: (IsWaterMap() ? "water map (" : "mixed map (") +
 				formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 0) + "% land)")
 				+ " -- building " + sy.GetName() + " to contest the water"
 				+ " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s");
