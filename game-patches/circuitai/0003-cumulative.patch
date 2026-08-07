@@ -1985,10 +1985,10 @@ index fac55c7..247f8a9 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..f33ac93 100644
+index cd063e4..24caf7e 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
-@@ -25,12 +25,137 @@
+@@ -25,12 +25,143 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -2123,10 +2123,16 @@ index cd063e4..f33ac93 100644
 +#define LONG_RANGE_PRIORITY	2.0f
 +#define LONG_RANGE_MULT		1.3f   // "outranges us" -- 30% past our own reach
 +
++// A target faster than the squad by this much is treated as uncatchable, and
++// its preference is multiplied by the penalty below. Not a veto: it still gets
++// shot if it comes to us.
++#define CHASE_SPEED_RATIO	1.15f
++#define UNCATCHABLE_PENALTY	0.25f
++
  CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
  		: ISquadTask(mgr, FightType::ATTACK, powerMod)
  		, minPower(minPower)
-@@ -54,12 +179,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
+@@ -54,12 +185,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
  	if (speedLeader > speedUnit) {
  		std::swap(speedLeader, speedUnit);
  	}
@@ -2151,7 +2157,7 @@ index cd063e4..f33ac93 100644
  		return false;
  	}
  	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
-@@ -178,7 +313,20 @@ void CAttackTask::Update()
+@@ -178,7 +319,20 @@ void CAttackTask::Update()
  
  	state = State::ROAM;
  	if (GetTarget() != nullptr) {
@@ -2173,7 +2179,7 @@ index cd063e4..f33ac93 100644
  		if (position.SqDistance2D(startPos) < SQUARE(highestRange + slack)) {
  			int xs, ys, xe, ye;
  			circuit->GetPathfinder()->Pos2PathXY(startPos, &xs, &ys);
-@@ -205,10 +353,27 @@ void CAttackTask::Update()
+@@ -205,10 +359,27 @@ void CAttackTask::Update()
  	const float eps = pathfinder->GetSquareSize();
  	const float pathRange = std::max(highestRange - eps, eps);
  
@@ -2202,7 +2208,7 @@ index cd063e4..f33ac93 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -238,25 +403,89 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,25 +409,89 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -2295,7 +2301,7 @@ index cd063e4..f33ac93 100644
  	float minSqDist = std::numeric_limits<float>::max();
  	bool hasGoodTarget = false;
  
-@@ -269,10 +498,20 @@ void CAttackTask::FindTarget()
+@@ -269,10 +504,20 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -2320,7 +2326,7 @@ index cd063e4..f33ac93 100644
  			continue;
  		}
  
-@@ -319,10 +558,56 @@ void CAttackTask::FindTarget()
+@@ -319,10 +564,73 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -2340,6 +2346,23 @@ index cd063e4..f33ac93 100644
 +					prio = ARTY_PRIORITY;
 +				} else if (edef->GetMaxRange() > weaponRange * LONG_RANGE_MULT) {
 +					prio = LONG_RANGE_PRIORITY;  // outranges us even if not ARTY
++				}
++				// Do not chase what we cannot catch.
++				//
++				// apexearth, watching live: "sometimes i see entire armies
++				// chasing a few light units which takes them all off the
++				// frontline (pretty bad when this happens)." A target faster
++				// than the squad cannot be caught in open ground -- it simply
++				// leads the army away, which is what a raider is FOR. The
++				// metric below is a distance, so dividing by a prio under 1
++				// pushes the target down the order without forbidding it: a
++				// fast unit standing next to us is still worth shooting, a fast
++				// unit across the map is not worth walking to.
++				//
++				// Uses lowestSpeed, the pace the squad actually moves at, not
++				// the leader's -- a squad travels at its slowest member.
++				if ((lowestSpeed > .1f) && (edef->GetSpeed() > lowestSpeed * CHASE_SPEED_RATIO)) {
++					prio *= UNCATCHABLE_PENALTY;
 +				}
 +			}
 +			// A group's own influence says nothing about what is standing NEXT to it.
@@ -2378,7 +2401,7 @@ index cd063e4..f33ac93 100644
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -332,6 +617,22 @@ void CAttackTask::FindTarget()
+@@ -332,6 +640,22 @@ void CAttackTask::FindTarget()
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
  	}
@@ -2401,7 +2424,7 @@ index cd063e4..f33ac93 100644
  	// Return: target, startPos=leader->pos, endPos=position
  }
  
-@@ -340,6 +641,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +664,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {

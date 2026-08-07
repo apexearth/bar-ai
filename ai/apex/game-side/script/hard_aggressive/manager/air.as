@@ -53,6 +53,11 @@ const int   AIR_FROM       = 11 * MINUTE;
 // 40 metal/s that is about three and a half minutes of one player's income.
 const float AIR_MIN_INCOME = 40.f;
 
+// Income before a SECOND basic air plant is worth owning. Twice the bar for
+// arming at all: the first plant is the strategy, the second is throughput, and
+// throughput is only real if the metal exists to keep both busy.
+const float AIR_SECOND_PLANT_INCOME = 80.f;
+
 // Enemy anti-air already on the field, in metal, above which we do not start.
 // GetEnemyCost sums what we have SEEN, so it is a floor on their AA rather than a
 // measurement of it -- which biases this gate towards committing.
@@ -352,7 +357,16 @@ CCircuitDef@ FactoryToBuild()
 	// second basic one was never reachable, and four minutes of a single plant
 	// is about six aircraft. The strike released on the deadline at 6 bombers
 	// and 4 fighters against 12 and 8. Throughput has to come before tier.
+	//
+	// Gated on ECONOMY as well as commitment. apexearth, watching live:
+	// "shouldn't make 2 t1 air labs at a t1 phase, just 1 max... you can have
+	// more when economy is stronger." Committing is not the same as affording:
+	// a second 690-metal plant during the T1 phase competes with the expansion
+	// that pays for the aircraft, and two half-fed plants build no faster than
+	// one fed one. The throughput argument above is right once the income is
+	// there, which is what AIR_SECOND_PLANT_INCOME asks.
 	if (Committed() && !Massed()
+		&& (aiEconomyMgr.metal.income >= AIR_SECOND_PLANT_INCOME)
 		&& (gPlant1 !is null) && gPlant1.IsAvailable(ai.frame) && (Have(gPlant1) == 1))
 	{
 		return gPlant1;
