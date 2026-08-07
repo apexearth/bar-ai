@@ -849,6 +849,164 @@ void UpdateRaidCaution()
 		aiMilitaryMgr.quota.raid.min = want;
 }
 
+//------------------------------------------------------------------------------
+// Coordinated team push -- the "something extra" that punches through a line.
+//
+// apexearth: "usually you need something extra to punch through defenses and
+// win a game... to defeat human players Apex AI must be unpredictable and
+// dangerous", and the AIs should "cooperate with other Apex AIs to create
+// united strategies".
+//
+// The failure this addresses is structural, not a tuning error. Every instance
+// judges every fight ALONE: CAttackTask's engage test compares one squad's
+// power against the local defenders. Four allied squads that would each win
+// together therefore each refuse separately, and the team trickles. That is
+// exactly what a human punishes, and it is what the live 10-AI game showed --
+// 3,973 target groups refused across 492 decisions.
+//
+// So: the elector totals the ALLY TEAM's army, and when the team as a whole
+// clearly outweighs the enemy it declares a push window on the shared
+// blackboard. Every instance reads the same flag and, for that window, accepts
+// worse local odds (SetEngageBoost) and lifts its attack cap. They commit
+// together or not at all.
+//
+// Why this is dangerous to a human rather than merely aggressive: the army is
+// visibly idle right up until it is not, and then several bases empty at once
+// from different directions. The unpredictability is a side effect of the
+// trigger being a STATE (relative army value) rather than a clock -- there is
+// no timing to learn.
+// TV_ARMY and TeamArmyCost() already exist above (UpdateKillingBlow publishes
+// it every tick); reuse them rather than declaring a second copy.
+const string TV_PUSH = "push";     // elector's answer: frame the window ends
+
+// How far ahead the TEAM must be before committing everything. Deliberately
+// higher than the per-squad engage margin: this spends the whole army at once,
+// and being wrong costs the game rather than a squad.
+const float PUSH_TEAM_RATIO = 1.6f;
+// Long enough to cross the map and land, short enough that a push which has
+// clearly failed is not renewed forever.
+const int   PUSH_WINDOW  = 90 * SECOND;
+const int   PUSH_COOLDOWN = 3 * MINUTE;
+// Odds multiplier while pushing. 0.55 roughly halves the surplus the engage
+// test demands -- squads still refuse a genuinely hopeless fight, but stop
+// refusing the ones the rest of the team is about to join.
+const float PUSH_BOOST   = 0.55f;
+const float PUSH_QUOTA   = 200.f;
+// Nothing to push with. Below this the "ratio" is noise -- two scouts against
+// one is 2.0 and means nothing.
+const float PUSH_MIN_ARMY = 2500.f;
+
+//------------------------------------------------------------------------------
+// Personality.
+//
+// apexearth: "the AI should have different types of personalities... to defeat
+// human players Apex AI must be unpredictable and dangerous."
+//
+// A human learns an AI by watching one game and assuming the next is the same.
+// Ten identically-tuned Apex instances are one opponent repeated ten times, and
+// perfectly predictable once solved. A per-instance trait, rolled at runtime and
+// never announced, means the same lineup plays differently every match and the
+// player cannot know which base in front of them is the cautious one.
+//
+// Expressed as a multiplier on the SAME engage-margin lever the team push uses,
+// deliberately: it composes with everything already tuned instead of adding a
+// second decision system that can disagree with the first. A personality shifts
+// how readily this instance takes a fight; it does not invent new behaviour, so
+// the blast radius is bounded and it cannot deadlock a role election.
+//
+// The team push OVERRIDES personality (see UpdateTeamPush): when the team commits
+// everyone commits, including the cautious ones. Cooperation beats temperament,
+// which is the point of having both.
+const int PERSONA_ROLL_FRAME = 10 * SECOND;   // after Init, so teamId is settled
+int   gPersona     = -1;
+float gPersonaBias = 1.f;
+string gPersonaName = "standard";
+
+void RollPersona()
+{
+	if (gPersona >= 0)
+		return;
+	// AiRandom is seeded per process; teamId keeps instances from all landing on
+	// the same roll in the same tick.
+	gPersona = (AiRandom(0, 999) + ai.teamId * 7) % 4;
+	if (gPersona == 0) {
+		gPersonaBias = 0.82f;  // berserker: takes fights the others decline
+		gPersonaName = "berserker";
+	} else if (gPersona == 1) {
+		gPersonaBias = 1.18f;  // cautious: hoards, techs, joins pushes only
+		gPersonaName = "cautious";
+	} else {
+		gPersonaBias = 1.f;
+		gPersonaName = "standard";
+	}
+	AiLog(Factory::T() + "apex: personality = " + gPersonaName
+		+ " (engage x" + formatFloat(gPersonaBias, "", 0, 2) + ")");
+}
+
+int  gPushUntil   = 0;
+int  gPushNextOk  = 0;
+bool gPushLogged  = false;
+
+void UpdateTeamPush()
+{
+	if (ai.frame >= PERSONA_ROLL_FRAME)
+		RollPersona();
+
+	// One writer, same pattern as the tech-lead and air-lead elections.
+	if (Factory::ElectorTeamId() == ai.teamId) {
+		const float teamArmy = TeamArmyCost();
+		// EnemyArmyCost() only accumulates on EnemyEnterLOS, so an enemy we have
+		// not looked at reads as ZERO -- and `army > 0 * 1.6` is true for any
+		// army at all. Observed on the first run of this rule: every push logged
+		// "vs enemy 0", i.e. it was firing on ignorance rather than on advantage.
+		// EnemyArmyFloor() already exists for exactly this ("a refused query is
+		// unknown, never no enemies"), so treat it as the floor.
+		const float seen = EnemyArmyCost();
+		const float floorFoe = EnemyArmyFloor();
+		const float foe = (seen > floorFoe) ? seen : floorFoe;
+		const bool worth = (teamArmy >= PUSH_MIN_ARMY)
+				&& (teamArmy > foe * PUSH_TEAM_RATIO);
+		float until = ai.ReadTeamValue(ai.teamId, TV_PUSH, 0.f);
+		if (worth && (ai.frame >= gPushNextOk) && (ai.frame > until)) {
+			until = float(ai.frame + PUSH_WINDOW);
+			gPushNextOk = ai.frame + PUSH_WINDOW + PUSH_COOLDOWN;
+			AiLog(Factory::T() + "apex: TEAM PUSH -- army "
+				+ formatFloat(teamArmy, "", 0, 0) + " vs enemy "
+				+ formatFloat(foe, "", 0, 0));
+			// Land and air together. Only the air lead has a force to release,
+			// and it no-ops for everyone else.
+			if (Air::ReleaseForPush())
+				AiLog(Factory::T() + "apex: air joins the push");
+		}
+		ai.PublishTeamValue(TV_PUSH, until);
+	}
+
+	const int until = int(ai.ReadTeamValue(Factory::ElectorTeamId(), TV_PUSH, 0.f));
+	const bool pushing = (ai.frame < until) && !Factory::EcoLeadActive();
+	if (pushing) {
+		ai.SetEngageBoost(PUSH_BOOST);
+		// Commitment is the whole point. apexearth: "the real key there is
+		// 'commitment'... if we back off we certainly won't succeed." Units in a
+		// declared push stop retreating to heal; see CCircuitAI::IsCommitted.
+		ai.SetCommitted(true);
+		if (aiMilitaryMgr.quota.attack < PUSH_QUOTA)
+			aiMilitaryMgr.quota.attack = PUSH_QUOTA;
+		if (gTurtle) {
+			gTurtle = false;
+			gPostureUntil = ai.frame;
+		}
+		if (!gPushLogged) {
+			gPushLogged = true;
+			AiLog(Factory::T() + "apex: joining team push");
+		}
+	} else {
+		// Personality is the resting state; the push above overrides it.
+		ai.SetEngageBoost(gPersonaBias);
+		ai.SetCommitted(false);
+		gPushLogged = false;
+	}
+}
+
 void UpdatePosture()
 {
 	// Before UpdateRushRole, which overwrites quota.attack on the lead. Captured
@@ -866,6 +1024,8 @@ void UpdatePosture()
 	UpdateRushRole();
 	UpdateEcoRole();
 	UpdateEcoAid();
+	// Last, so it is the final word on the quota and the posture.
+	UpdateTeamPush();
 	// After massing and both role rules, so it is the last word on the quota.
 	// Not for the eco lead: it holds almost no army by design, and sending that
 	// at a base is throwing it away rather than ending anything.

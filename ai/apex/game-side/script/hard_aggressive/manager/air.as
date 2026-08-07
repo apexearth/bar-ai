@@ -132,6 +132,10 @@ const int   AIR_BATCH = 6;
 // of several games.
 const int   AIR_DEADLINE   = 4 * MINUTE;
 
+// How far behind on the ground cancels the whole strategy. Above parity by a
+// clear margin, so an even fight does not veto it; see the check in Update().
+const float GROUND_LOST_RATIO = 1.5f;
+
 // One writer per slot, as with the tech-lead election in factory.as: every
 // instance publishes its own income, and only the elector publishes the answer.
 const string TV_AIRINC  = "airinc";
@@ -539,6 +543,32 @@ void Release(const string& in why)
 		+ " enemyAA=" + formatFloat(EnemyAACost(), "", 0, 0));
 }
 
+// Release the strike because the LAND army is going in right now.
+//
+// apexearth: "sometimes a combination of an air bombing raid on that front-line
+// at the time our land army is engaging there (like they're actually there, not
+// 2000 elos away walking towards it) is a great combination of army and air. Our
+// AI needs to have this advanced ability to coordinate at the right times."
+//
+// The assassin's own triggers are Massed() and AIR_DEADLINE -- both about the
+// air force's internal state, neither aware of what the ground army is doing. A
+// team push is the moment the ground army commits, so it is exactly the moment
+// bombers are worth spending: the enemy's attention and its repair are already
+// on the land assault.
+//
+// HalfMassed() rather than Massed(): a coordinated half-strike lands with the
+// push, and a full one that lands two minutes later does not. Returns whether it
+// fired so the caller can log it.
+bool ReleaseForPush()
+{
+	if (gStrike || !Armed() || !Committed())
+		return false;
+	if (!HalfMassed())
+		return false;
+	Release("team push -- hitting the line with the army");
+	return true;
+}
+
 void Update()
 {
 	ResolveDefs();
@@ -562,6 +592,31 @@ void Update()
 	// Release() so the assist does not outlive the strike.
 	if (Committed() && !Massed())
 		Economy::isSwitchAssist = true;
+
+	// Do not start an air force while the ground war is being lost badly.
+	//
+	// apexearth: "we should not do these air assassin strategies if we're losing
+	// the ground war considerably." The assassin costs 7,000-9,000 metal of one
+	// player's production and deliberately fields no ground army while it builds
+	// -- which is affordable from a stable position and suicidal from a losing
+	// one. A raid also only pays if there is still a game to win when it lands.
+	//
+	// GROUND_LOST_RATIO, not Military::LosingGround(): that fires at parity
+	// (enemy > ours * 1.0), which is normal mid-game and would cancel the
+	// strategy almost always. "Considerably" is the ask, so this wants a real
+	// deficit. Checked only before COMMITTING -- a force already paid for is
+	// better spent than abandoned, and Update()'s own abort path handles the
+	// case where anti-air appears mid-build.
+	const float ourGround = Military::TeamArmyCost();
+	const float foeGround = Military::EnemyArmyCost();
+	if (!Committed() && (foeGround > ourGround * GROUND_LOST_RATIO)) {
+		if (ai.frame >= gNextLog) {
+			gNextLog = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: air assassin holding off -- losing the ground war "
+				+ formatFloat(ourGround, "", 0, 0) + " vs " + formatFloat(foeGround, "", 0, 0));
+		}
+		return;
+	}
 
 	if (!Committed() && Armed()) {
 		CCircuitDef@ first = FactoryToBuild();

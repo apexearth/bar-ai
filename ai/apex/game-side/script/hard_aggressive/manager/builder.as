@@ -458,6 +458,14 @@ bool PastFront(const AIFloat3& in where)
 	return t > CON_FAR_FRAC;
 }
 
+// How far around a build site we look for actual enemies, and how many make it
+// hostile. 600 is inside most T1 weapon ranges plus a little walking room: if
+// something armed is that close, a constructor standing still to build is being
+// shot, not "near the front".
+const float CON_FOE_RADIUS = 600.f;
+const float CON_FOE_COUNT  = 1.f;
+int gNextFoeDiag = 0;
+
 float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 {
 	if (!OnMap(where))
@@ -465,6 +473,31 @@ float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 	const float t = ai.GetUnitThreatAt(unit, where);
 	if (t > 0.f)
 		return t;
+
+	// Enemies ACTUALLY near the spot, before falling back to geometry.
+	//
+	// PastFront below projects onto the home->enemy-CENTROID axis, which is a
+	// 1-D test and wrong in two ways that matter here: with enemies spread out
+	// the centroid sits where nobody is, and the projection ignores
+	// perpendicular distance entirely -- so a site beside an enemy army, but
+	// not far along that axis, reads perfectly safe. That is the shape of
+	// apexearth's report: "I still see cons running into enemy fire too much."
+	//
+	// GetEnemyCostAt returns a COUNT of enemy units in the radius despite its
+	// name (CircuitAI.cpp). It is LOS-gated, which is acceptable precisely
+	// here: the danger this is meant to catch is close enough to see. OnMap is
+	// already checked above, which is the guard the threat-map crash needed.
+	const float foes = ai.GetEnemyCostAt(where, CON_FOE_RADIUS);
+	// Only the hot case is worth a line; "no enemies near this site" is the
+	// overwhelming majority and says nothing.
+	if ((foes > 0.f) && (ai.frame >= gNextFoeDiag)) {
+		gNextFoeDiag = ai.frame + 10 * SECOND;
+		AiLog(Factory::T() + "apex: con-foe-diag near=" + formatFloat(foes, "", 0, 0)
+			+ " unitThreat=" + formatFloat(t, "", 0, 2)
+			+ " pastFront=" + (PastFront(where) ? "1" : "0"));
+	}
+	if (foes >= CON_FOE_COUNT)
+		return CON_THREAT_VETO + 1.f;
 	// THE THREAT MAP READS ZERO. Measured over a 20-minute 4v4: 121 samples, 0
 	// nonzero, max 0.00 -- so every CON_THREAT_VETO test passed unconditionally
 	// and constructors walked wherever they liked. apexearth, watching: "still
