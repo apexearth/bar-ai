@@ -47,6 +47,9 @@ PATCH_DIR = REPO / "game-patches"
 # variant from BARb/stable so the bundled SkirmishAI.dll matches the installed
 # engine. A variant is never written under this name -- see short_name().
 BASE_SHORT_NAME = "BARb"
+# The baseline's own version. A variant may not use this name: see the guard in
+# deploy() for what deleting BARb/stable costs.
+BASE_VERSION = "stable"
 
 
 def variants() -> list[str]:
@@ -160,7 +163,13 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
     # working AI at all. An emptied folder is harmless: the engine's scan does
     # FindFiles(dir, "AIInfo.lua") and skips a directory that has none, so it
     # never reaches the lobby. Getting the new folder written is what matters.
-    if short != BASE_SHORT_NAME:
+    # `variant` is also the VERSION, so BARb/<variant> is BARb/stable when a
+    # variant is named "stable" -- and that is the pristine engine baseline this
+    # very function copies from, not a stale deploy of ours. Deleting it broke
+    # every future deploy AND the BARb:stable control we benchmark against; the
+    # stock SkirmishAI.dll is not in this repo, so it cost an engine repair to
+    # get back. Never touch the baseline version.
+    if short != BASE_SHORT_NAME and variant != BASE_VERSION:
         for stale in (env.skirmish_dir(BASE_SHORT_NAME, variant),
                       env.game_config_dir(BASE_SHORT_NAME, variant)):
             if not stale.exists():

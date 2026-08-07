@@ -23,7 +23,7 @@ local infos = {
 		-- highest by VersionCompare, and "apex" < "stable". Shipping as a version
 		-- therefore silently loads stock BARb in every hosted game.
 		key    = 'shortName',
-		value  = 'BARbApex', -- AI name - !This comment is used for parsing!
+		value  = 'Apex', -- AI name - !This comment is used for parsing!
 		desc   = 'machine conform name.',
 	},
 	{
@@ -32,7 +32,7 @@ local infos = {
 	},
 	{
 		key    = 'name',
-		value  = 'BARbarIAn Apex',
+		value  = 'Apex',
 		desc   = 'human readable name.',
 	},
 	{
