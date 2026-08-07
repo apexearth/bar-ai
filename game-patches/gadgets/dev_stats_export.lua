@@ -110,6 +110,18 @@ local builtTop = {}       -- team -> {unitName -> metal built}
 -- side effect is wasteful defense and then we have less army and are losing the
 -- overall fight" -- that trade cannot be judged without measuring both halves.
 local defSpend = {}       -- team -> cumulative metal on finished static defence
+-- Orders issued, i.e. APM. A player whose decision logic has wedged keeps its
+-- units and its income and simply stops ACTING, which every counter above
+-- reads as "fine, just slow". Counted here for BOTH AIs because a synced
+-- gadget sees UnitCommand for every team, so stock is measurable too.
+--
+-- cmdCount is cumulative; cmdWindow is orders since the last sample, which is
+-- the one that shows a stall as it happens rather than as a flattening slope.
+-- Read them against ownUnits/ownBuilders in the same row: zero orders while
+-- holding thirty units is a wedge, zero orders while holding two is just a
+-- player that has been killed, and those must not look alike.
+local cmdCount = {}       -- team -> commands issued, cumulative
+local cmdWindow = {}      -- team -> commands issued since the previous sample
 
 local function techOf(ud)
     local t = techLvl[ud.id]
@@ -262,6 +274,31 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	end
 end
 
+-- Every order any of our units receives, from an AI or from a widget. The AI
+-- interface issues real engine commands, so this is a faithful APM for both
+-- sides. Deliberately not filtered by cmdID: a stalled player issues nothing
+-- of any kind, and filtering to "interesting" commands would need a whitelist
+-- that silently rots as the game adds command types.
+function gadget:UnitCommand(unitID, unitDefID, unitTeam, cmdID, cmdParams, cmdOpts, cmdTag)
+	bump(cmdCount, unitTeam, 1)
+	bump(cmdWindow, unitTeam, 1)
+end
+
+-- Units held, and how many can build. The denominators that stop a dead player
+-- reading as a wedged one -- see cmdCount's comment.
+local function ownUnitCounts(teamID)
+	local units, builders = 0, 0
+	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+		units = units + 1
+		local udid = Spring.GetUnitDefID(uid)
+		local ud = udid and UnitDefs[udid]
+		if ud ~= nil and ud.isBuilder then
+			builders = builders + 1
+		end
+	end
+	return units, builders
+end
+
 -- Constructors held, split by tech. The tech lead deliberately converts the
 -- team's pooled metal into build power, so this is the number that separates
 -- "enough to finish the plant" from "metal that cannot be spent". Held rather
@@ -369,6 +406,16 @@ local function dump(reason)
 			parts[#parts + 1] = string.format("conT1=%d", c1)
 			parts[#parts + 1] = string.format("conT2=%d", c2)
 			parts[#parts + 1] = string.format("mCon=%.0f", cm)
+
+			-- APM, plus the denominators that tell a wedged player from a dead
+			-- one. cmdWindow is zeroed here so the next sample measures only
+			-- its own interval.
+			local ou, ob = ownUnitCounts(teamID)
+			parts[#parts + 1] = string.format("cmds=%d", cmdCount[teamID] or 0)
+			parts[#parts + 1] = string.format("cmdsWin=%d", cmdWindow[teamID] or 0)
+			parts[#parts + 1] = string.format("ownUnits=%d", ou)
+			parts[#parts + 1] = string.format("ownBuilders=%d", ob)
+			cmdWindow[teamID] = 0
 
 			local n = Spring.GetTeamStatsHistory(teamID)
 			if n and n > 0 then

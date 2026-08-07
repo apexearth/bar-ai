@@ -1213,6 +1213,21 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			+ " hasTask=" + ((unit.task !is null) ? "1" : "0"));
 	}
 
+	// Nano turrets register with the FACTORY manager (CFactoryManager keeps
+	// assistants alongside factories), so they arrive here -- but every branch
+	// below is written about a factory choosing what to RECRUIT, and none can
+	// produce a valid task for one. Several end in `return null`, and for an
+	// assistant that means no task at all: CFactoryManager::DefaultMakeTask is
+	// the only thing that routes it to CreateAssistTask. The eco lead's block
+	// is the worst case -- an unconditional `return null` for anything that is
+	// not an air plant or a constructor-capable factory -- which left every
+	// turret that player owned permanently idle. apexearth, watching an 8v8
+	// live: "blue's turrets are not doing anything at all"; blue was team 0,
+	// the eco lead. Hand assistants straight to DefaultMakeTask.
+	CCircuitDef@ nano = Builder::NanoDef();
+	if ((nano !is null) && (unit.circuitDef.id == nano.id))
+		return aiFactoryMgr.DefaultMakeTask(unit);
+
 	// Safe to sit first: this answers only for the advanced air plant, so the
 	// ground line's branches below are untouched.
 	IUnitTask@ air = Air::MakeFactoryTask(unit);
@@ -1461,8 +1476,19 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// fields no army, so LosingGround() is true for it permanently, and this
 	// branch would otherwise be the one thing that turns its whole income into
 	// units. Its own release conditions are what decide when it fights.
-	if (!gEcoActive && (isT1Fac ? !gHaveT2 : isT2Fac) && HaveT2Mex() && Military::LosingGround()
-		&& (aiEconomyMgr.metal.income >= ARMY_PUSH_MIN_INCOME)
+	// The economic gates (HaveT2Mex, ARMY_PUSH_MIN_INCOME) apply to the ADVANCED
+	// plant only. They are the right test for a T2 unit and exactly the wrong
+	// one for the case this rule exists to catch: a player being overrun loses
+	// its mexes and its income first, so both gates go false precisely when it
+	// is losing hardest, and the push is switched off for the only players that
+	// need it. Measured in a 4v4: t2Mex stayed 0 all game for three of four apex
+	// players and income peaked at 17 and 11 for the two that died, so "behind
+	// on the field" fired 6x and 4x for the two healthy players and NEVER for
+	// the two that were being killed. Fodder from a T1 lab is cheap enough that
+	// a collapsing player can still pay for it, which is the whole point.
+	const bool advPushOk = isT2Fac && HaveT2Mex()
+			&& (aiEconomyMgr.metal.income >= ARMY_PUSH_MIN_INCOME);
+	if (!gEcoActive && (isT1Fac ? !gHaveT2 : advPushOk) && Military::LosingGround()
 		&& (ai.frame >= gNextArmyPush))
 	{
 		// Spam means SPAM. apexearth: "i said long ago to make spam units when

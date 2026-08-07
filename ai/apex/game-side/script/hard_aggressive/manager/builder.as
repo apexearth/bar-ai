@@ -1924,6 +1924,15 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	}
 
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	// Only an advanced constructor can build a moho, so it is the one unit that
+	// can convert a mex into the biggest economy step available. The two wreck
+	// rules below sit ahead of the "never displace real work" line and so can
+	// take it off exactly that job -- and the reclaim they hand it is an AREA
+	// order (CmdReclaimInArea with CONTROL_KEY, which deliberately ignores the
+	// autoreclaimable filter), so it eats whatever is in the circle. apexearth,
+	// watching live: "our t2 con is wasting his time reclaiming trees instead
+	// of upgrading mexes."
+	const bool isAdvCon = !isComm && (unit.circuitDef.costM >= ADV_CON_COST);
 	if (isComm) {
 		LogCommanderThreat(unit);
 		const float hp = unit.GetHealthPercent();
@@ -2471,7 +2480,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			+ " static=" + (!unit.circuitDef.IsMobile() ? "1" : "0")
 			+ " hasTask=" + ((unit.task !is null) ? "1" : "0"));
 	}
-	if (!isComm && aiEconomyMgr.isMetalEmpty && (ai.frame >= gNextWreck)) {
+	if (!isComm && !isAdvCon && aiEconomyMgr.isMetalEmpty && (ai.frame >= gNextWreck)) {
 		gNextWreck = ai.frame + 3 * SECOND;
 		const AIFloat3 here = unit.GetPos(ai.frame);
 		const AIFloat3 near = ai.GetBestWreckPos(here, WRECK_SEARCH, 15.f);
@@ -2493,8 +2502,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// because the metal it returns exceeds anything the interrupted task was
 	// producing in the same seconds -- true for an ordinary constructor, not for
 	// a commander whose displaced task is the early mex expansion the team's
-	// whole economy depends on. See the isComm note above the metal-empty block.
-	if (!isComm && (ai.frame >= gNextWreck)) {
+	// whole economy depends on, nor for an advanced one whose displaced task is
+	// a moho. See the isComm note above the metal-empty block.
+	if (!isComm && !isAdvCon && (ai.frame >= gNextWreck)) {
 		const AIFloat3 self = unit.GetPos(ai.frame);
 		if (OnMap(self)) {
 			// Gate on the field's TOTAL value, then aim at its richest body so the

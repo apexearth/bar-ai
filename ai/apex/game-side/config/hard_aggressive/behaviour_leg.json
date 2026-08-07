@@ -5,6 +5,13 @@
 //####|| Evolving Commanders ||###########################################################################################
 //########################################################################################################################
 
+// no_repair added 2026-08-07, the second half of the same parity gap: without
+// it CRetreatTask::AssignTo (RetreatTask.cpp) enqueues a HIGH-priority Repair
+// task for the retreating commander, and the team's builders drop what they
+// are doing to heal a unit that regenerates on its own. apexearth, watching a
+// Legion game live: "our comm got hurt and all our build power is going into
+// healing him... better to let him naturally heal so we can keep expanding."
+//
 // dg_cost added 2026-08-06: every commander tier here was missing it while
 // the shared behaviour.json gives every other faction's commander
 // ["commander", "dg_cost", "no_repair"]. Without it CDGunAction::Update
@@ -19,7 +26,7 @@
 		"behaviour": {
 			"legcom": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 5.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -27,7 +34,7 @@
 			},
 			"legcomlvl2": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 10.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -35,7 +42,7 @@
 			},
 			"legcomlvl3": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 15.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -43,7 +50,7 @@
 			},
 			"legcomlvl4": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 20.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -51,7 +58,7 @@
 			},
 			"legcomlvl5": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 25.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -59,7 +66,7 @@
 			},
 			"legcomlvl6": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 30.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -67,7 +74,7 @@
 			},
 			"legcomlvl7": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 35.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -75,7 +82,7 @@
 			},
 			"legcomlvl8": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 40.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -83,7 +90,7 @@
 			},
 			"legcomlvl9": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 45.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
@@ -91,7 +98,7 @@
 			},
 			"legcomlvl10": {
 				"role": ["builder"],
-				"attribute": ["commander", "dg_cost"],
+				"attribute": ["commander", "dg_cost", "no_repair"],
 				"build_speed": 50.0,
 				"retreat": 0.6,
 				"threat": {"air": 1.0, "surf": 1.0, "water": 1.0, "default": 1.0},
