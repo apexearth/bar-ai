@@ -25,7 +25,13 @@ const float MAX_WIDTH = 2000.f;
 // seen the ally > foe * DOMINANCE test passes on almost nothing. So the bar for
 // each side is a fraction of that side's OWN strongest reading this scan, with
 // an absolute floor for the opening minutes when everything is small.
-const float PRESENCE_FLOOR = 5.0f;
+// The floor must stay tiny. The two fields are NOT on the same scale: ally
+// influence counts everything we own and peaks around 520, while enemy
+// influence counts only KNOWN enemy units and peaks under 33 in the same scan.
+// A floor of 5 erased the enemy field completely -- every AI read cFoe=0 for a
+// whole game -- which made the front vanish rather than move. The per-side
+// fraction is what does the work; the floor only guards the opening seconds.
+const float PRESENCE_FLOOR = 1.0f;
 const float PRESENCE_FRAC = 0.15f;
 const float DOMINANCE = 2.0f;   // one side this many times the other owns it
 // A seam cell within this of a chokepoint counts as being IN that corridor.
@@ -86,7 +92,8 @@ void Update()
 			+ " theirs=" + CountOf(THEIRS)
 			+ " empty=" + CountOf(EMPTY)
 			+ " seam=" + SeamSize() + " cAlly=" + gDbgAlly + " cFoe=" + gDbgFoe
-			+ " bar=" + int(gPresAlly) + "/" + int(gPresFoe));
+			+ " bar=" + int(gPresAlly) + "/" + int(gPresFoe)
+			+ " box=" + SeamBox());
 
 	Draw();
 }
@@ -113,6 +120,7 @@ void Update()
 // trust the local read -- see Factory's PublishTeamValue/ReadTeamValue.
 const int SEAM_N = 40;          // grid resolution per axis
 array<AIFloat3> gSeam;
+array<bool> gHot;   // parallel to gSeam: this perimeter cell faces known enemy
 int gDbgAlly = 0;
 int gDbgFoe = 0;
 float gPresAlly = PRESENCE_FLOOR;
@@ -129,6 +137,7 @@ AIFloat3 GridPos(int i, int j)
 void ScanSeam()
 {
 	gSeam.resize(0);
+	gHot.resize(0);
 	gDbgAlly = 0; gDbgFoe = 0;
 
 	// Pass one: how strong does each side get anywhere? The bars follow from it.
@@ -147,16 +156,61 @@ void ScanSeam()
 	gPresFoe = maxFoe * PRESENCE_FRAC;
 	if (gPresFoe < PRESENCE_FLOOR) gPresFoe = PRESENCE_FLOOR;
 
+	// Pass two: mark presence per cell.
+	array<bool> ally(SEAM_N * SEAM_N);
+	array<bool> foe(SEAM_N * SEAM_N);
 	for (int i = 0; i < SEAM_N; ++i) {
 		for (int j = 0; j < SEAM_N; ++j) {
 			const AIFloat3 p = GridPos(i, j);
-			const float a = ai.GetAllyInflAt(p);
-			const float f = ai.GetEnemyInflAt(p);
-			if (a >= gPresAlly) ++gDbgAlly;
-			if (f >= gPresFoe) ++gDbgFoe;
-			if ((a < gPresAlly) || (f < gPresFoe))
+			const bool a = (ai.GetAllyInflAt(p) >= gPresAlly);
+			const bool f = (ai.GetEnemyInflAt(p) >= gPresFoe);
+			ally[i * SEAM_N + j] = a;
+			foe[i * SEAM_N + j] = f;
+			if (a) ++gDbgAlly;
+			if (f) ++gDbgFoe;
+		}
+	}
+
+	// The front is the OUTER EDGE OF OUR OWN TERRITORY, and the enemy field only
+	// colours it in.
+	//
+	// Two earlier definitions failed against measurement. "Cells where both sides
+	// are present" found nothing: 339 ally cells and 56 enemy cells in one scan
+	// with ZERO holding both, because where one side is strong the other reads
+	// ~0. "Cells on the boundary between the two fields" found 2-3 cells, because
+	// enemy influence counts only KNOWN enemy units and is far too sparse to
+	// draw a line with.
+	//
+	// Our own perimeter needs no vision to compute, exists from minute one, and
+	// is what a player actually means by their front: the edge of what we hold.
+	// A perimeter cell facing known enemy influence is HOT -- that is where the
+	// fighting is -- and the rest is the quiet flank that still has to be held.
+	for (int i = 0; i < SEAM_N; ++i) {
+		for (int j = 0; j < SEAM_N; ++j) {
+			const int me = i * SEAM_N + j;
+			if (!ally[me])
 				continue;
-			gSeam.insertLast(p);
+			bool edge = false;
+			bool hot = false;
+			for (int di = -1; di <= 1; ++di) {
+				for (int dj = -1; dj <= 1; ++dj) {
+					if ((di == 0) && (dj == 0))
+						continue;
+					const int ni = i + di;
+					const int nj = j + dj;
+					if ((ni < 0) || (nj < 0) || (ni >= SEAM_N) || (nj >= SEAM_N))
+						continue;   // the map edge is not a front
+					const int nb = ni * SEAM_N + nj;
+					if (!ally[nb])
+						edge = true;
+					if (foe[nb])
+						hot = true;
+				}
+			}
+			if (!edge)
+				continue;
+			gSeam.insertLast(GridPos(i, j));
+			gHot.insertLast(hot);
 		}
 	}
 }
@@ -196,6 +250,22 @@ bool SeamChoke(const AIFloat3& in from, AIFloat3& out spot)
 }
 
 uint SeamSize() { return gSeam.length(); }
+
+// Bounding box of the seam this AI computed, to tell a bottom-biased READ from
+// a drawing layer that is dropping the top of the map.
+string SeamBox()
+{
+	if (gSeam.length() == 0)
+		return "none";
+	float x0 = gSeam[0].x, x1 = gSeam[0].x, z0 = gSeam[0].z, z1 = gSeam[0].z;
+	for (uint k = 1; k < gSeam.length(); ++k) {
+		if (gSeam[k].x < x0) x0 = gSeam[k].x;
+		if (gSeam[k].x > x1) x1 = gSeam[k].x;
+		if (gSeam[k].z < z0) z0 = gSeam[k].z;
+		if (gSeam[k].z > z1) z1 = gSeam[k].z;
+	}
+	return "x" + int(x0) + "-" + int(x1) + ",z" + int(z0) + "-" + int(z1);
+}
 
 // Positions of every seam corridor, nearest first from `from`. This is the list
 // the defence and army work in the next steps consume.
@@ -246,7 +316,7 @@ void Draw()
 	for (uint k = 0; k < gSeam.length(); ++k) {
 		if (gDrawnAt >= 0)
 			ai.DrawErase(gSeam[k]);
-		ai.DrawPoint(gSeam[k], "FRONT");
+		ai.DrawPoint(gSeam[k], gHot[k] ? "FRONT-HOT" : "front");
 	}
 	gDrawnAt = ai.frame;
 

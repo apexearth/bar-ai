@@ -8,6 +8,40 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-07: the front is our own perimeter, not a seam
+
+Three definitions of "front line", each killed by measurement, in order:
+
+1. **Cells where both sides are present.** Found nothing. One Jade 8v8 scan had
+   339 ally cells and 56 enemy cells and **zero** holding both -- where one side
+   is strong the other reads ~0, so the fields are effectively disjoint and an
+   overlap test only fires where both are so faint it means nothing.
+2. **Cells on the boundary between the two fields.** Found 2-3 cells. Enemy
+   influence counts only KNOWN enemy units, so it is far too sparse to draw a
+   line with.
+3. **The outer edge of our own influence region.** 102-112 cells spanning
+   x3072-12492, z1843-7987 -- a real perimeter across the map. Needs no vision,
+   exists from minute one, and is what a player means by their front: the edge
+   of what we hold. Perimeter cells adjacent to known enemy influence are marked
+   HOT; the rest is quiet flank that still has to be held.
+
+**The two fields are not on the same scale.** Ally influence counts everything
+we own and peaks around 520; enemy influence counts only what we have seen and
+peaks under 33 in the same scan. An absolute presence floor of 5 erased the
+enemy field completely -- every AI read cFoe=0 for an entire game -- so the
+front vanished instead of moving. The floor is now 1.0 and the per-side
+fraction does the work.
+
+**Deploys fail silently while a game is running.** Two deploys during a watch
+game did nothing; `cp` of the DLL reported "Device or resource busy" and the
+game-side script kept the old code. Two headless runs then "tested" stale files
+and produced results I nearly believed. Always confirm the deployed file
+contains the change, not just that deploy exited.
+
+Also: a `str.replace` without an `assert` silently did nothing, again, which is
+what put a call to the non-existent `ai.GetTeamPos()` into a file that then
+appeared to deploy fine.
+
 ## 2026-08-07: the front line is not at the chokepoints
 
 Step 2 of the front-line work: classify each chokepoint ours/contested/theirs
