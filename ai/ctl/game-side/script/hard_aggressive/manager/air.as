@@ -19,26 +19,8 @@ namespace Air {
 //------------------------------------------------------------------------------
 
 // Mid-game only. Before this the whole team is pooling metal behind the tech
-// lead, and an air plant competes with it.
-//
-// 15 -> 11 min on 2026-08-07. 15 was RUSH_GIVEUP's own frame, i.e. the clock at
-// which pooling formally stops -- but the thing pooling BUYS, the lead's
-// advanced plant, is measured in this repo at a 6.3 min median. So from about
-// 7 minutes the competition this guarded against is already over, and the
-// remaining 8 minutes were spent waiting for a clock rather than for a state.
-//
-// Cost of waiting, measured over 16 games vs BARb medium (median length 21.3
-// min): the assassin armed in all 16 and committed in all 16, but only 7
-// strikes ever released and 5 of those were AIR_DEADLINE forcing a half-massed
-// launch. It had ~6 minutes to build and mass ~40 aircraft. BAR's own pro guide
-// on early air raids puts the raid at the T1->T2 transition for exactly this
-// reason -- the value is in hitting before anti-air exists, and AIR_AA_CEILING
-// already encodes that same idea as a gate we lose by waiting.
-//
-// Not moved to the T1->T2 transition proper: that IS the pooling window, and
-// this AI's whole team strategy is built on it. 11 keeps the plant clear of the
-// pool and still nearly doubles the time available to mass.
-const int   AIR_FROM       = 11 * MINUTE;
+// lead (Military::RUSH_GIVEUP, same frame), and an air plant competes with it.
+const int   AIR_FROM       = 15 * MINUTE;
 
 // The candidate's OWN metal income. 20 bombers + 20 fighters is ~7,400 metal for
 // Armada and ~8,900 for Cortex, so this is roughly two minutes of one player's
