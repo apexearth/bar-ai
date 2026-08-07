@@ -8,6 +8,59 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-07: the front line is not at the chokepoints
+
+Step 2 of the front-line work: classify each chokepoint ours/contested/theirs
+against the influence map. It produced a result that invalidates the plan it was
+part of.
+
+Influence is now bound to script (`GetAllyInflAt`, `GetEnemyInflAt`,
+`GetNetInflAt`), bounds-guarded -- `CInfluenceMap::PosToXZ` does NO bounds check
+and indexes `enemyInfl[z * width + x]` straight from the raw position, the same
+unchecked pattern that made `GetBuilderThreatAt` kill the engine at frame 3.
+
+**Classify on ally and enemy separately, never on the difference.** Net influence
+reads 77 beside our base and exactly 0 on ground nobody has been near, so a
+difference-based test calls both "balanced" -- and most of the map is the second
+kind. A seam requires BOTH sides present.
+
+**Terrain chokepoints are not where the fighting is.** Jade Empress 8v8, 63
+usable chokepoints:
+
+| | |
+|---|---|
+| chokepoints ours | 23-36 |
+| chokepoints contested | **0** |
+| chokepoints theirs | **0** |
+| influence-grid cells with BOTH sides present | **55-77** |
+
+The contest is real and none of it lands on a chokepoint. BWEM chokepoints on
+these maps are base entrances and interior pockets; the fighting happens in open
+ground. Comet Catcher is the same story -- its 8 chokepoints sit at 6584,392 and
+1048,4632, i.e. the two start corners.
+
+So holding chokepoints would mean turtling at our own base entrance, which is
+the opposite of a forward line. The front line is now read off the influence
+field directly (`Front::SeamNear`), with chokepoints kept as a SECONDARY filter:
+`Front::SeamChoke` returns a seam cell that also sits in a corridor, which is
+the best metal-per-tower on the map when it exists, and returns false when the
+front is in open ground -- the common case.
+
+**Each AI has its own influence map.** Same game, same moment, on Jade: forward
+teams read 72-82 enemy cells and a 55-77 cell seam; rear teams read cFoe=0 and
+no seam at all. A rear player computing this alone concludes there is no front
+line. Anything consuming the seam must share it across the team via
+PublishTeamValue/ReadTeamValue rather than trust the local read. This cost an
+hour of chasing a "seam=0" that was really a sampling artifact -- an `awk`
+stride that happened to lock onto one rear team.
+
+Also bound: `DrawPoint`/`DrawLine`/`DrawErase`, which place ordinary in-game map
+markers via the already-present `springai::Drawer`. `Front::DRAW` is currently
+**on**, drawing every chokepoint with its ownership and every seam cell as
+FRONT. Allies and spectators see these -- turn it off before multiplayer.
+
+No behaviour change yet: nothing consumes the seam.
+
 ## 2026-08-07: BWEM chokepoints exist, and were unreachable
 
 CircuitAI vendors a full BWEM (Brood War Easy Map) implementation in

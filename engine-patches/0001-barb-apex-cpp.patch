@@ -1,15 +1,24 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..96df8d4 100644
+index aeea933..c733a8c 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
-@@ -18,6 +18,7 @@
+@@ -18,6 +18,8 @@
  #include "module/MilitaryManager.h"
  #include "resource/MetalManager.h"
  #include "terrain/TerrainManager.h"
 +#include "map/GridAnalyzer.h"
++#include "map/InfluenceMap.h"   // unconditionally: the DEBUG_VIS include below is gated
  #include "terrain/path/PathFinder.h"
  #include "task/PlayerTask.h"
  #include "unit/CircuitUnit.h"
+@@ -26,7 +28,6 @@
+ #include "util/Utils.h"
+ #include "util/Profiler.h"
+ #ifdef DEBUG_VIS
+-#include "map/InfluenceMap.h"
+ #include "map/ThreatMap.h"
+ #include "resource/EnergyGrid.h"
+ #endif  // DEBUG_VIS
 @@ -44,6 +45,10 @@
  #include "Drawer.h"
  #include "Economy.h"
@@ -60,7 +69,7 @@ index aeea933..96df8d4 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1488,6 +1511,519 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1488,6 +1511,565 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -365,6 +374,52 @@ index aeea933..96df8d4 100644
 +	return (area == nullptr) ? -1 : area->GetId();
 +}
 +
++void CCircuitAI::DrawPoint(const AIFloat3& pos, const std::string& label)
++{
++	if ((drawer != nullptr) && IsPosOnMap(pos)) {
++		drawer->AddPoint(pos, label.c_str());
++	}
++}
++
++void CCircuitAI::DrawLine(const AIFloat3& from, const AIFloat3& to)
++{
++	if ((drawer != nullptr) && IsPosOnMap(from) && IsPosOnMap(to)) {
++		drawer->AddLine(from, to);
++	}
++}
++
++void CCircuitAI::DrawErase(const AIFloat3& pos)
++{
++	if ((drawer != nullptr) && IsPosOnMap(pos)) {
++		drawer->DeletePointsAndLines(pos);
++	}
++}
++
++// Influence lookups, bounds-guarded. See the header comment: the underlying
++// CInfluenceMap accessors index an array from an unchecked position.
++bool CCircuitAI::IsPosOnMap(const AIFloat3& pos) const
++{
++	CTerrainManager* terrainMgr = GetTerrainManager();
++	return (pos.x >= .0f) && (pos.z >= .0f)
++			&& (pos.x < terrainMgr->GetTerrainWidth())
++			&& (pos.z < terrainMgr->GetTerrainHeight());
++}
++
++float CCircuitAI::GetAllyInflAt(const AIFloat3& pos) const
++{
++	return IsPosOnMap(pos) ? GetInflMap()->GetAllyInflAt(pos) : .0f;
++}
++
++float CCircuitAI::GetEnemyInflAt(const AIFloat3& pos) const
++{
++	return IsPosOnMap(pos) ? GetInflMap()->GetEnemyInflAt(pos) : .0f;
++}
++
++float CCircuitAI::GetNetInflAt(const AIFloat3& pos) const
++{
++	return IsPosOnMap(pos) ? GetInflMap()->GetInfluenceAt(pos) : .0f;
++}
++
 +// Where our losses are happening, cost-weighted and decaying.
 +//
 +// The AI could say HOW MUCH enemy army exists (ApproachThreat is just
@@ -581,10 +636,10 @@ index aeea933..96df8d4 100644
  {
  	// NOTE: See notes in MobileSlave or other economy->SendUnits places
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..14d1cc4 100644
+index b4f4f40..28921e0 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -149,6 +149,87 @@ private:
+@@ -149,6 +149,101 @@ private:
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
  	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
@@ -641,6 +696,20 @@ index b4f4f40..14d1cc4 100644
 +	bool GetChokePointEnds(int idx, springai::AIFloat3& outEnd1, springai::AIFloat3& outEnd2) const;
 +	// The two areas this chokepoint joins; -1 if absent.
 +	int GetChokePointArea(int idx, int which) const;
++	// Influence at a position. CInfluenceMap::PosToXZ does NO bounds checking --
++	// it indexes enemyInfl[z * width + x] straight from the raw position, the
++	// same unchecked pattern that made GetBuilderThreatAt kill the engine at
++	// frame 3 on an off-map read. These guard; the raw ones must never be bound.
++	bool IsPosOnMap(const springai::AIFloat3& pos) const;
++	// In-game map markers, for watching what the AI believes. These are ordinary
++	// map points/lines: allies and spectators see them, so anything using these
++	// must stay off by default outside a debug watch.
++	void DrawPoint(const springai::AIFloat3& pos, const std::string& label);
++	void DrawLine(const springai::AIFloat3& from, const springai::AIFloat3& to);
++	void DrawErase(const springai::AIFloat3& pos);
++	float GetAllyInflAt(const springai::AIFloat3& pos) const;
++	float GetEnemyInflAt(const springai::AIFloat3& pos) const;
++	float GetNetInflAt(const springai::AIFloat3& pos) const;
 +	float GetRecentTradeRatio();
 +	// Multiplier on the engage margin, set from AngelScript. 1.0 = unchanged.
 +	// Below 1 the AI accepts worse odds; this is how a coordinated team push
@@ -672,7 +741,7 @@ index b4f4f40..14d1cc4 100644
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
-@@ -205,6 +286,29 @@ private:
+@@ -205,6 +300,29 @@ private:
  	bool isAllyBaseAvoid;
  // <<< AIOptions.lua ---- END
  
@@ -1371,7 +1440,7 @@ index 193efa9..954669b 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..4aff8a1 100644
+index 2839b72..3fe95f7 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -195,6 +195,114 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
@@ -1489,7 +1558,7 @@ index 2839b72..4aff8a1 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -499,6 +607,32 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -499,6 +607,38 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	gIdArrayType = engine->GetTypeInfoByDecl("array<Id>");
  	r = engine->RegisterObjectMethod("CCircuitAI", "array<Id>@ GetTeamIds() const", asFUNCTION(CCircuitAI_GetTeamIds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1513,6 +1582,12 @@ index 2839b72..4aff8a1 100644
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetChokePointWidth(int) const", asMETHOD(CCircuitAI, GetChokePointWidth), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool GetChokePointEnds(int, AIFloat3& out, AIFloat3& out)", asFUNCTION(CCircuitAI_GetChokePointEnds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "int GetChokePointArea(int, int) const", asMETHOD(CCircuitAI, GetChokePointArea), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetAllyInflAt), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetEnemyInflAt), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetNetInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetNetInflAt), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void DrawPoint(const AIFloat3& in, const string& in)", asMETHOD(CCircuitAI, DrawPoint), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void DrawLine(const AIFloat3& in, const AIFloat3& in)", asMETHOD(CCircuitAI, DrawLine), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void DrawErase(const AIFloat3& in)", asMETHOD(CCircuitAI, DrawErase), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 FindBuildSiteNear(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_FindBuildSiteNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEngageBoost() const", asMETHOD(CCircuitAI, GetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1522,7 +1597,7 @@ index 2839b72..4aff8a1 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -564,6 +698,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +704,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1546,7 +1621,7 @@ index 2839b72..4aff8a1 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +724,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +730,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1567,7 +1642,7 @@ index 2839b72..4aff8a1 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -703,6 +868,9 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +874,9 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
