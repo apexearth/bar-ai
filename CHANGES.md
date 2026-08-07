@@ -1605,6 +1605,40 @@ follower bar" look like from the outside, together. Removed the frame
 clause; retention is now governed purely by whether the incumbent still has
 a plant or can still afford one, at any point in the game.
 
+## The metal-full fallback was buying Pit Bulls — 2026-08-07
+
+The idle-constructor fallback added the previous day built a defence tower.
+Watched 8v8, Supreme Isthmus, +40%: **191 fires, every one an `armpb`** at
+680 metal *and* 14,000 energy — ~130,000 metal and 2.7M energy team-wide.
+apexearth, watching: "some of our guys in the back line are just building
+tons of t2 small defenses... we have half the economy of our enemy."
+
+It now builds energy (solar 155 / advanced solar 350), skipped entirely while
+`EnergyWasting()`. In smoke tests it fires ~1x per 8 minutes instead of
+continuously, because that gate holds it shut most of the time.
+
+**A theory this refuted, recorded so it is not retried:** the first fix
+claimed energy would unlock followers' T2 via `FOLLOWER_TECH_ENERGY`. The log
+says otherwise — `T2GATE blocked` fired **zero** times, and five of eight
+players cleared the follower gate and still ended with 5 T2 constructors
+against stock's 20. The energy bar is not what holds tech back here.
+
+### Open: the mex-upgrade flat-line is where the 8v8 economy actually goes
+
+Same game, per-4-minute timeline (`analyze_stats.py` on the single match):
+apex is level or ahead through minute 12 (113,727 metal vs 113,891, and
+*ahead* on T2 at minute 8), then diverges. By minute 40: metal 1,015,506 vs
+2,512,456, T2 spend 412,765 vs 1,410,430, T3 4,725 vs 132,509.
+
+The mechanism is visible in one column: **apex mex upgrades go 32, 33, 33 over
+the last twelve minutes while stock goes 44, 49, 56.** Apex stops upgrading
+mexes around minute 30 and never restarts; stock never stops. Static-defence
+*share* is comparable (11.5% vs 10.4%), so this is not simply "we built more
+towers" — apex's whole economy is 4x smaller and the towers are part of what
+its constructors did instead of expanding. Not yet root-caused: the fallback
+fires only after everything above it declines, so something upstream is
+declining mex upgrades too. Start there, not at the fallback.
+
 ## Commander idling at a haven patrolled back and forth forever
 
 apexearth, watching live: "when a commander has retreated he often ends up

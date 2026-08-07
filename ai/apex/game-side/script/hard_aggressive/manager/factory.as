@@ -439,23 +439,9 @@ void RunElection()
 	// loss is what stops the role flapping between two teams whose progress is
 	// neck and neck.
 	//
-	// The `(ai.frame > Military::RUSH_GIVEUP)` clause this used to OR in here
-	// is REMOVED. It made retention unconditional past 15 minutes regardless
-	// of TV_ADV/TV_READY -- ai.GetDefBuildProgress (what TV_ADV publishes,
-	// see OwnAdvProgress) correctly returns -1 the moment we own none of the
-	// def, so it already tracks a genuine loss live; the frame clause did not
-	// add stability, it just meant the lead slot could never reopen again
-	// once the game passed 15 minutes, however long the game still had left
-	// to run. apexearth, watching live, two matches running: "If green did
-	// have T2 they must have lost it, and nobody else went and made T2" --
-	// and in the previous match, a follower stuck at pure T1 army production
-	// for the entire back half of a 30-minute game while the team it was
-	// supposedly following had nothing to follow. Once the sole lead's plant
-	// dies past this frame, MayPursueT2()'s only other door
-	// (FollowerEconomyReady) requires clearing FOLLOWER_TECH_ENERGY alone --
-	// a bar its own comment already calls "deliberately above what the AI
-	// currently reaches" on some maps -- so a team can go the entire rest of
-	// a long game with nobody eligible to tech at all.
+	// Deliberately NOT bounded by Military::RUSH_GIVEUP: that made retention
+	// unconditional past 15 min, so a lead that lost its plant kept the slot
+	// and it never reopened. TV_ADV already tracks the loss live.
 	array<int> leads;
 	for (uint s = 0; s < quota; ++s) {
 		const int held = int(ai.ReadTeamValue(ai.teamId, LeadKey(s), -1.f));
@@ -1206,15 +1192,9 @@ bool HoldsLateFighter(CCircuitUnit@ unit)
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
-	// Temporary diagnostic: apexearth, watching live, repeated report of a
-	// player with a live commander and intact base going unproductive for
-	// many minutes while metal piles up ("purple stopped making army...
-	// team died full on metal"). Cheap enough to run unconditionally --
-	// rate-limited per team, not per call -- and tells us the one thing the
-	// end-state totals in result.json cannot: whether this function keeps
-	// being called at all during a stall (a decision problem, something
-	// below keeps returning null) or stops being called entirely (the
-	// factory's task got stuck/held and the engine never re-asks).
+	// Diagnostic for the "factory goes idle with a full bank" reports:
+	// distinguishes this hook still being called and declining every branch
+	// from it not being called at all. See CHANGES.md 2026-08-06.
 	if (ai.frame >= gNextFactoryDiag) {
 		gNextFactoryDiag = ai.frame + 30 * SECOND;
 		AiLog(T() + "apex: factory-diag " + unit.circuitDef.GetName()
@@ -1636,14 +1616,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// it earlier in this function: Air:: while armed, the LATE_FIGHTERS
 	// floor (which holds what it builds via HoldsLateFighter), and the eco
 	// lead's own constructor line above. Nothing past this point should ever
-	// come from an air factory -- UNLESS the air-lead role stood down before
-	// ever committing (Air::RoleAbandoned(), see that function's comment).
-	// The election is latched forever, so an aborted lead's own air plants
-	// have no path back to Air:: and no successful strike to have earned
-	// this quiet fallthrough the way a post-gStrike plant has -- left
-	// blocked, they build literally nothing for the rest of the game.
-	// apexearth, watching live: "blue made 2 t1 air labs, a t2 air lab..
-	// he's not making any army at 27m in."
+	// come from an air factory -- UNLESS the air lead stood down before ever
+	// committing, which is permanent and leaves its plants no path back to
+	// Air::. Blocking those builds nothing for the rest of the game.
 	if (IsAirFactory(unit.circuitDef) && !Air::RoleAbandoned())
 		return null;
 	return aiFactoryMgr.DefaultMakeTask(unit);
@@ -1929,16 +1904,8 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
 		&& !FollowerEconomyReady())
 	{
-		// Temporary diagnostic: apexearth, watching live, a player 29 minutes
-		// in with heavy army spend (mT1 47,500 in one match) and mT2 still
-		// zero -- "purple... pumping out TONS of army... but never went t2."
-		// FOLLOWER_TECH_ENERGY's own comment already flags this as possible
-		// and deliberate ("Deliberately above what the AI currently reaches
-		// [on the benchmark]... If followers stop teching at all, that is the
-		// factor being too low, not this number being wrong -- check eInc in
-		// the T2GATE log before lowering it") -- but that log only fires on
-		// the PASSING path, so a player that never once clears the bar leaves
-		// no record of how far short it stayed. This is that missing record.
+		// The "T2GATE reached" log below only fires on the PASSING path, so a
+		// player permanently short of the bar left no record of how short.
 		if (ai.frame >= gNextT2GateBlockLog) {
 			gNextT2GateBlockLog = ai.frame + 60 * SECOND;
 			AiLog(T() + "T2GATE blocked FollowerEconomyReady"

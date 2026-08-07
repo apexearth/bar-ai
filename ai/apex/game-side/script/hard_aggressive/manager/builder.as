@@ -309,13 +309,8 @@ const float REZ_METAL_FLOOR = 0.10f;   // reclaim below this share of storage
 
 bool PreferReclaim()
 {
-	// apexearth, watching live: "if we have no comm anymore then we should
-	// prefer to rez." gComm is set null exactly once, in AiUnitRemoved, at
-	// the real death event (see the COMMANDER LOST log there) -- and re-set
-	// the moment any commander-role unit is added, resurrected or built, so
-	// this stays true only for the actual gap. Checked before every other
-	// case here, including the pre-T2 default: getting the commander back
-	// is worth more than whatever T1 reclaim would have banked instead.
+	// No commander: rez ahead of everything else, including the pre-T2
+	// default. gComm is null only for the real gap between death and rebuild.
 	if (gComm is null)
 		return false;
 	if (!Factory::gHaveT2)
@@ -1607,33 +1602,6 @@ CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 	return ai.GetCircuitDef(armllt);
 }
 
-// ContestTower's T1.5-vs-T1 split is keyed on the CALLING CONSTRUCTOR's own
-// cost, which is right for its original reactive use (ContestDefence: an
-// under-fire con grabs whatever it can build fastest) and wrong for the
-// metal-full fallback below: a cheap T1 con is the common case there too, but
-// the fallback only fires when the team has metal to spare, so it can always
-// afford the T1.5 popup tier. Reusing ContestTower as-is meant nearly every
-// metal-full-fallback build picked the cheap T1 turret (leglht/corllt/armllt)
-// regardless of what was actually needed -- confirmed in an infolog: dozens of
-// "metal-full-fallback legcv -> leglht" lines. apexearth, watching live:
-// "Legion makes too many Pharos (llt light laser turret), not enough of the
-// T1.5 defenses." Prefer the T1.5 tier whenever it's unlocked; only fall back
-// to the T1 turret before that tech exists.
-CCircuitDef@ MetalFullTower()
-{
-	const string side = ai.GetSideName();
-	CCircuitDef@ adv = (side == "cortex") ? ai.GetCircuitDef(corvipe)
-			: (side == "legion") ? ai.GetCircuitDef(legapopupdef)
-			: ai.GetCircuitDef(armpb);
-	if ((adv !is null) && adv.IsAvailable(ai.frame))
-		return adv;
-	if (side == "cortex")
-		return ai.GetCircuitDef(corllt);
-	if (side == "legion")
-		return ai.GetCircuitDef(leglht);
-	return ai.GetCircuitDef(armllt);
-}
-
 bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)
 {
 	if (!gHomeSet)
@@ -2313,26 +2281,11 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		@task = null;
 	}
 
-	// General version of the veto above: apexearth, watching live, describing
-	// the commander cycling mex -> factory-assist -> reclaim and back: "we
-	// have a lot of different bits of logic that are all kind of competing
-	// for control of the same unit... we need some sort of control pass to
-	// compare what he's currently doing with what he's proposed to do so we
-	// can determine which is more important." The reclaim-specific check
-	// above only ever compared "is a mex spot still open" against the NEW
-	// task; it never looked at what the commander was already doing. `unit.
-	// task` here is still the OLD task -- IBuilderTask::Reevaluate only
-	// swaps it once this function returns something that differs in build
-	// type (see the comment above the `!isComm` block below) -- so this is
-	// exactly the current-vs-proposed comparison requested. Refuse a
-	// DefaultMakeTask/MakeCommPeaceTask pick of a DIFFERENT recognized build
-	// type while the commander already has real, in-progress work of its
-	// own and that work has not itself become dangerous (a real threat is
-	// handled by the comm-abandon retreat block above this function's
-	// isComm section, which runs first and returns before reaching here).
-	// SiteBuildName's whitelist already excludes RECLAIM, so this composes
-	// with the check above rather than fighting it: reclaim can still only
-	// be rejected by the specific mex-spot rule, never re-accepted here.
+	// General form of the veto above: keep what the commander is already
+	// doing rather than swapping to a different build type. `unit.task` is
+	// still the OLD task here -- Reevaluate only swaps it once this function
+	// returns a differing build type -- so this compares current against
+	// proposed. Danger is handled earlier, by the comm-abandon retreat.
 	if (isComm && (task !is null) && (task.GetType() == Task::Type::BUILDER)) {
 		IUnitTask@ held = unit.task;
 		const string heldKind = SiteBuildName(held);
@@ -2575,28 +2528,25 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (task !is null)
 		return task;   // strictly additive: never displace real work
 
-	// Genuinely idle with nothing else offered: every rule above this point
-	// in the whole function -- mex, army, defense, converters, reclaim
-	// fallback -- already had its chance and found nothing. apexearth: "if
-	// you're waiting for their metal to become full, I mean, at that point,
-	// it could just already be too late" -- correct: gating on isMetalFull
-	// (80% of storage) meant real production time was already lost before
-	// this fired. !isMetalEmpty just means "not literally out of metal",
-	// which this fallback point already implies is being wasted regardless
-	// of exactly how close to full the bank is -- reaching here at all with
-	// any usable metal is itself the signal, not a specific fill level.
-	// See METAL_FULL_DEF_PERIOD's own comment for why this deliberately
-	// bypasses the isEnergyStalling gate the rest of this file's defense
-	// rules use.
-	if (!isComm && !aiEconomyMgr.isMetalEmpty && gHomeSet && (ai.frame >= gNextMetalFullDef)) {
-		CCircuitDef@ tower = MetalFullTower();
-		if ((tower !is null) && tower.IsAvailable(ai.frame)) {
-			IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-					Task::Priority::NORMAL, tower, gHomePos, SQUARE_SIZE * 8));
+	// Last resort: everything above declined and we still have metal. Buys
+	// energy, not defence -- what this spends is constructor time, and a con
+	// part-way through a 680-metal/14,000-energy turret cannot take the mex
+	// upgrade that frees up thirty seconds later. See CHANGES.md 2026-08-07.
+	if (!isComm && !aiEconomyMgr.isMetalEmpty && gHomeSet
+		&& !EnergyWasting() && (ai.frame >= gNextMetalFullDef))
+	{
+		CCircuitDef@ gen = Factory::gHaveT2
+				? SideDef3(armadvsol, coradvsol, legadvsol)
+				: SideDef3(armsolar, corsolar, legsolar);
+		if ((gen is null) || !gen.IsAvailable(ai.frame))
+			@gen = SideDef3(armsolar, corsolar, legsolar);
+		if ((gen !is null) && gen.IsAvailable(ai.frame)) {
+			IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
+					Task::Priority::NORMAL, gen, gHomePos, SQUARE_SIZE * 8));
 			if (post !is null) {
 				gNextMetalFullDef = ai.frame + METAL_FULL_DEF_PERIOD;
 				AiLog(Factory::T() + "apex: metal-full-fallback " + unit.circuitDef.GetName()
-					+ " -> " + tower.GetName());
+					+ " -> " + gen.GetName());
 				return post;
 			}
 		}

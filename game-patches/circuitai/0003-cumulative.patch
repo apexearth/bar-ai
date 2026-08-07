@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..9bd26c2 100644
+index aeea933..54497fb 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -44,6 +44,10 @@
@@ -31,7 +31,7 @@ index aeea933..9bd26c2 100644
  	allyTeam = setupManager->GetAllyTeam();
  	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
  	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
-@@ -1488,6 +1503,319 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1488,6 +1503,309 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -160,19 +160,9 @@ index aeea933..9bd26c2 100644
 +// initialized metalRes (EconomyManager.cpp, set from Init()) which is why
 +// income/storage/sling all work fine off the same underlying resource. Resolve
 +// it fresh here instead of trusting the member.
-+// apexearth: "any way we can enhance our reclaim logic to be careful not to
-+// fully reclaim our own dead commander?" Broadened to ANY commander corpse,
-+// not just our own: BAR lets any team's rez bot resurrect any wreck under
-+// its OWN control regardless of who died there, so a dead enemy commander
-+// sitting on the field is a steal-rez opportunity worth just as much
-+// protection as our own -- and the Feature API this file already uses (see
-+// GetBestWreckPos/GetWreckValueAt's own comments on GetFeaturesIn) exposes
-+// no per-feature team-ownership accessor to tell "ours" from "theirs"
-+// anyway, only Feature::GetResurrectDef() (which unit this corpse would
-+// become). Resolved through GetCircuitDefSafe() to reuse this AI's own
-+// IsRoleComm() classification -- the same one behaviour.json/behaviour_leg.json
-+// already drive -- rather than re-deriving "is this a commander" from raw
-+// UnitDef name/customparams.
++// Any commander corpse, not only ours: the Feature API exposes no per-feature
++// team-ownership accessor, only GetResurrectDef() (what this corpse would
++// become), and a rez bot can resurrect any of them under its own control.
 +bool CCircuitAI::IsCommanderWreck(springai::Feature* f)
 +{
 +	if (f == nullptr) {
@@ -1297,7 +1287,7 @@ index 4863ac9..e509c6d 100644
  	void ReadConfig();
  	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
 diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
-index 7c69263..6294013 100644
+index 7c69263..d86eb4b 100644
 --- a/src/circuit/task/RetreatTask.cpp
 +++ b/src/circuit/task/RetreatTask.cpp
 @@ -11,8 +11,10 @@
@@ -1499,24 +1489,15 @@ index 7c69263..6294013 100644
  	if (unitPos.SqDistance2D(haven) > SQUARE(maxDist)) {
  		// TODO: push MoveAction into unit? to avoid enemy fire
  		TRY_UNIT(circuit, unit,
-@@ -248,7 +413,20 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -248,7 +413,11 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  		}
  
  		// TODO: push WaitAction into unit
 -		if (/*cdef->GetDef()->IsAbleToAssist() || */cdef->IsAbleToRepair()) {
-+		// apexearth, watching live: "when a commander has retreated he often
-+		// ends up just patrolling back and forth for a very long time."
-+		// CmdPatrolTo(pos) below is a ONE-point patrol order -- Recoil treats
-+		// that as a there-and-back shuttle between wherever the unit was when
-+		// the order was given and pos, looping forever until something else
-+		// takes the unit. Every other decision in this file already carves
-+		// the commander out of behaviour meant for ordinary builders/fighters
-+		// (GetRallyPos, GetRearHaven, the cloak re-decide above); this branch
-+		// had not been, and unlike a mobile constructor a commander idling
-+		// here has no useful assist work at a shuffled-off build-site offset
-+		// to justify the churn. Left standing at the haven instead -- AiMake-
-+		// Task's isComm section (build/hide/back-wall) picks it up from
-+		// there, same as any other commander idle event.
++		// CmdPatrolTo below is a one-point patrol: a there-and-back shuttle
++		// that loops until something else claims the unit. Commanders are
++		// excluded -- AiMakeTask's isComm section picks them up when idle,
++		// same as GetRallyPos/GetRearHaven already carve them out here.
 +		if (!cdef->IsRoleComm() && /*cdef->GetDef()->IsAbleToAssist() || */cdef->IsAbleToRepair()) {
  			AIFloat3 pos = unitPos;
  			if (unit->GetUnit()->IsCloaked()) {
