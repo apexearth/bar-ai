@@ -4047,3 +4047,43 @@ place to look first.
 script is currently dead -- Fortify, ContestDefence, and the T1.5 tower the
 metal-full fallback used to build before it was switched to energy. Their log
 lines fire, which is why this went unnoticed.
+
+
+## LOCALISED (2026-08-07): script defence dies with no build position
+
+Follow-up to the section above. Two of the three causes are now fixed and
+committed; the third is identified and is the remaining blocker.
+
+1. **Task abandonment** -- FIXED (614945b). AiMakeTask re-decides every call and
+   Reevaluate swaps on a differing build type, so a tower was dropped the moment
+   its trigger stopped holding. Proven with a probe in
+   `IBuilderTask::CanAssignTo`: corllt ACCEPTED six times, built zero.
+2. **Site search too tight** -- FIXED (bbb7822). Every script DEFENCE task passed
+   a shake of 16-32 elmos against `TaskB::Common`'s own default of 256.
+3. **The positions are not buildable** -- REMAINING. A probe in
+   `IBuilderTask::Cancel` reporting how defence tasks END gave, over one game:
+
+   ```
+   9 of 10 cancellations: buildPosValid=0, assignees=0, executors=0
+   1 of 10:               buildPosValid=1
+   ```
+
+   So the task is created, briefly assigned, and dies **without ever resolving a
+   buildable position**, even searching 256 elmos. Script towers consequently
+   appear in only 2 of 6 games on the same build.
+
+**Why**: our defence positions come from raw geometry -- `StandoffPos` walks back
+from a hot spot, the fallbacks offset from `gHomePos` -- and neither checks
+whether anything can be built there. Stock CircuitAI's defence builds reliably
+because it takes sites from real defence clusters (`MilitaryManager` defence
+points), not from arithmetic.
+
+**This is the same root cause as apexearth's "we easily run out of room to make
+buildings that'll let us be awesome with T3"**: the base is dense, and a point
+picked by geometry usually lands on something.
+
+**Next step** (do NOT add another placement rule first): pick defence sites the
+way the engine can honour them -- either query the terrain manager for a build
+site near the desired point before enqueuing, or use the militaryManager defence
+points that stock already maintains. Until then, adding more defence rules just
+adds more tasks that cancel.
