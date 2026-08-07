@@ -9,7 +9,7 @@ namespace Front {
 
 // A gap narrower than this is an artefact between interior areas, not something
 // an army could hold; wider than this is open ground no line would cover.
-const float MIN_WIDTH = 200.f;
+const float MIN_WIDTH = 80.f;
 const float MAX_WIDTH = 2000.f;
 
 // Ownership is read from ally and enemy influence SEPARATELY, not from their
@@ -18,7 +18,15 @@ const float MAX_WIDTH = 2000.f;
 // made both of those "balanced", so empty no-man's-land was indistinguishable
 // from a genuine seam -- and empty ground is where most of the map sits.
 // A seam requires BOTH sides actually present.
-const float PRESENCE = 1.0f;    // below this, nobody is meaningfully there
+//
+// "Present" is RELATIVE, not a fixed number. Influence runs to ~290 where a
+// team is massed, and a flat threshold of 1.0 called any faint bleed presence --
+// which labelled ground OURS that we were nowhere near, because with no enemy
+// seen the ally > foe * DOMINANCE test passes on almost nothing. So the bar for
+// each side is a fraction of that side's OWN strongest reading this scan, with
+// an absolute floor for the opening minutes when everything is small.
+const float PRESENCE_FLOOR = 5.0f;
+const float PRESENCE_FRAC = 0.15f;
 const float DOMINANCE = 2.0f;   // one side this many times the other owns it
 // A seam cell within this of a chokepoint counts as being IN that corridor.
 const float CHOKE_NEAR = 600.f;
@@ -54,7 +62,7 @@ int Classify(const AIFloat3& in pos)
 {
 	const float ally = ai.GetAllyInflAt(pos);
 	const float foe = ai.GetEnemyInflAt(pos);
-	if ((ally < PRESENCE) && (foe < PRESENCE))
+	if ((ally < gPresAlly) && (foe < gPresFoe))
 		return EMPTY;
 	if (ally > foe * DOMINANCE)
 		return OURS;
@@ -70,15 +78,16 @@ void Update()
 		return;
 	gNextClassify = ai.frame + RECLASSIFY;
 
+	ScanSeam();   // sets the presence bars that Classify reads
 	for (uint k = 0; k < gIdx.length(); ++k)
 		gOwner[k] = Classify(ai.GetChokePointPos(gIdx[k]));
 	AiLog("apex: frontline ours=" + CountOf(OURS)
 			+ " contested=" + CountOf(CONTESTED)
 			+ " theirs=" + CountOf(THEIRS)
 			+ " empty=" + CountOf(EMPTY)
-			+ " seam=" + SeamSize() + " cAlly=" + gDbgAlly + " cFoe=" + gDbgFoe);
+			+ " seam=" + SeamSize() + " cAlly=" + gDbgAlly + " cFoe=" + gDbgFoe
+			+ " bar=" + int(gPresAlly) + "/" + int(gPresFoe));
 
-	ScanSeam();
 	Draw();
 }
 
@@ -106,23 +115,46 @@ const int SEAM_N = 40;          // grid resolution per axis
 array<AIFloat3> gSeam;
 int gDbgAlly = 0;
 int gDbgFoe = 0;
+float gPresAlly = PRESENCE_FLOOR;
+float gPresFoe = PRESENCE_FLOOR;
+
+AIFloat3 GridPos(int i, int j)
+{
+	AIFloat3 p;
+	p.x = float(AiTerrainWidth()) * (float(i) + .5f) / float(SEAM_N);
+	p.z = float(AiTerrainHeight()) * (float(j) + .5f) / float(SEAM_N);
+	return p;
+}
 
 void ScanSeam()
 {
 	gSeam.resize(0);
 	gDbgAlly = 0; gDbgFoe = 0;
-	const float w = AiTerrainWidth();
-	const float h = AiTerrainHeight();
+
+	// Pass one: how strong does each side get anywhere? The bars follow from it.
+	float maxAlly = 0.f, maxFoe = 0.f;
 	for (int i = 0; i < SEAM_N; ++i) {
 		for (int j = 0; j < SEAM_N; ++j) {
-			AIFloat3 p;
-			p.x = w * (float(i) + .5f) / float(SEAM_N);
-			p.z = h * (float(j) + .5f) / float(SEAM_N);
+			const AIFloat3 p = GridPos(i, j);
 			const float a = ai.GetAllyInflAt(p);
 			const float f = ai.GetEnemyInflAt(p);
-			if (a >= PRESENCE) ++gDbgAlly;
-			if (f >= PRESENCE) ++gDbgFoe;
-			if ((a < PRESENCE) || (f < PRESENCE))
+			if (a > maxAlly) maxAlly = a;
+			if (f > maxFoe) maxFoe = f;
+		}
+	}
+	gPresAlly = maxAlly * PRESENCE_FRAC;
+	if (gPresAlly < PRESENCE_FLOOR) gPresAlly = PRESENCE_FLOOR;
+	gPresFoe = maxFoe * PRESENCE_FRAC;
+	if (gPresFoe < PRESENCE_FLOOR) gPresFoe = PRESENCE_FLOOR;
+
+	for (int i = 0; i < SEAM_N; ++i) {
+		for (int j = 0; j < SEAM_N; ++j) {
+			const AIFloat3 p = GridPos(i, j);
+			const float a = ai.GetAllyInflAt(p);
+			const float f = ai.GetEnemyInflAt(p);
+			if (a >= gPresAlly) ++gDbgAlly;
+			if (f >= gPresFoe) ++gDbgFoe;
+			if ((a < gPresAlly) || (f < gPresFoe))
 				continue;
 			gSeam.insertLast(p);
 		}
@@ -204,8 +236,23 @@ int gDrawnAt = -1;
 
 void Draw()
 {
-	if (!DRAW || (ai.teamId != Factory::ElectorTeamId()))
-		return;   // one team draws, or every AI stacks markers on the same spot
+	if (!DRAW)
+		return;
+
+	// Every AI draws its OWN seam, so what you see is the union of what the team
+	// knows. Measured: in one Jade 8v8, 248 of 400 samples read cFoe=0 -- rear
+	// players see no enemy at all -- so drawing from a single team showed one
+	// player's slice of the front and left the rest of the map blank.
+	for (uint k = 0; k < gSeam.length(); ++k) {
+		if (gDrawnAt >= 0)
+			ai.DrawErase(gSeam[k]);
+		ai.DrawPoint(gSeam[k], "FRONT");
+	}
+	gDrawnAt = ai.frame;
+
+	// The chokepoint layer is identical for every AI, so only one draws it.
+	if (ai.teamId != Factory::ElectorTeamId())
+		return;
 
 	for (uint k = 0; k < gIdx.length(); ++k) {
 		const int i = gIdx[k];
@@ -225,12 +272,6 @@ void Draw()
 		if (ai.GetChokePointEnds(i, e1, e2))
 			ai.DrawLine(e1, e2);   // the gap an army or a wall would span
 	}
-	for (uint k = 0; k < gSeam.length(); ++k) {
-		if (gDrawnAt >= 0)
-			ai.DrawErase(gSeam[k]);
-		ai.DrawPoint(gSeam[k], "FRONT");
-	}
-	gDrawnAt = ai.frame;
 }
 
 }  // namespace Front
