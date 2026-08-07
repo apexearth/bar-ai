@@ -466,6 +466,18 @@ const float CON_FOE_RADIUS = 600.f;
 const float CON_FOE_COUNT  = 1.f;
 int gNextFoeDiag = 0;
 
+// Site-search radius for script-placed static defence.
+//
+// Every DEFENCE task in this file passed SQUARE_SIZE*2 or *4 -- 16 or 32 elmos
+// -- while TaskB::Common's own default is SQUARE_SIZE*32, i.e. 256. That
+// effectively demanded a buildable site on the exact point handed in, and the
+// points come from StandoffPos/geometry with no buildability check at all.
+// Measured consequence: script-placed towers were ACCEPTED by a builder (probe
+// inside IBuilderTask::CanAssignTo showed corllt accepted six times in one
+// game) and then never completed, while stock CircuitAI's own defence, which
+// picks sites from real defence clusters, built normally.
+const float DEF_SHAKE = SQUARE_SIZE * 32;
+
 float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 {
 	if (!OnMap(where))
@@ -1513,7 +1525,7 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 	if (!OnMap(here))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, aa, here, SQUARE_SIZE * 4));
+			Task::Priority::NORMAL, aa, here, DEF_SHAKE));
 	if (post is null)
 		return null;
 	gNextAA = ai.frame + AA_PERIOD;
@@ -1575,7 +1587,7 @@ IUnitTask@ HeavyAA(CCircuitUnit@ unit)
 	if (!OnMap(here))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, aa, here, SQUARE_SIZE * 4));
+			Task::Priority::NORMAL, aa, here, DEF_SHAKE));
 	if (post is null)
 		return null;
 	gNextHeavyAA = ai.frame + AA_HEAVY_PERIOD;
@@ -1609,7 +1621,7 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, gun, spot, SQUARE_SIZE * 2));
+			Task::Priority::NORMAL, gun, spot, DEF_SHAKE));
 	if (post is null)
 		return null;
 	gNextPulsar = ai.frame + PULSAR_PERIOD;
@@ -1788,7 +1800,7 @@ IUnitTask@ ContestDefence(CCircuitUnit@ unit, const string& in kind,
 	if (!AreaNeedsDefence(spot))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, tower, spot, SQUARE_SIZE * 2));
+			Task::Priority::NORMAL, tower, spot, DEF_SHAKE));
 	if (post is null)
 		return null;
 	NoteDigOrder(spot);
@@ -1913,7 +1925,7 @@ IUnitTask@ Fortify(CCircuitUnit@ unit)
 	if (!AreaNeedsDefence(spot, FenceWanted(gConHits[i])))
 		return null;
 	IUnitTask@ dig = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, tower, spot, SQUARE_SIZE * 2));
+			Task::Priority::NORMAL, tower, spot, DEF_SHAKE));
 	if (dig is null)
 		return null;
 	NoteDigOrder(spot);
