@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..54497fb 100644
+index aeea933..58a7ed2 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -44,6 +44,10 @@
@@ -31,7 +31,23 @@ index aeea933..54497fb 100644
  	allyTeam = setupManager->GetAllyTeam();
  	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
  	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
-@@ -1488,6 +1503,309 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1167,6 +1182,7 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+ int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+ {
+ 	destroyed.insert(unit->GetId());
++	NoteTrade(false, unit->GetCircuitDef());
+ 	for (auto& module : modules) {
+ 		module->UnitDestroyed(unit, attacker);
+ 	}
+@@ -1288,6 +1304,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+ 
+ int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
+ {
++	NoteTrade(true, enemy->GetCircuitDef());
+ 	allyTeam->EnemyDestroyed(enemy->GetData(), this);
+ 
+ 	militaryManager->DelPointOfInterest(enemy);
+@@ -1488,6 +1505,359 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -163,6 +179,56 @@ index aeea933..54497fb 100644
 +// Any commander corpse, not only ours: the Feature API exposes no per-feature
 +// team-ownership accessor, only GetResurrectDef() (what this corpse would
 +// become), and a rez bot can resurrect any of them under its own control.
++// Recent trade record, by metal value, over a decaying window.
++//
++// apexearth: "if our recent k/d is low we stop attacking so much, we start to
++// be more careful and require greater odds to attack." Value, not unit count --
++// trading ten Fleas for a Titan is a win and a raw count calls it a loss.
++//
++// Decayed rather than a ring buffer of timestamps: one multiply on a fixed
++// cadence, no allocation, and it answers "lately" without a hard window edge
++// where a single old fight drops out and flips the posture.
++//
++// Only mobile, armed units count on our side. A reclaimed wreck, a bombed mex
++// or a lost nano turret says nothing about whether our ARMY is trading well,
++// and folding them in made a player that was being eco-raided read as though
++// its army were losing fights it never had.
++void CCircuitAI::NoteTrade(bool isKill, CCircuitDef* cdef)
++{
++	if (cdef == nullptr) {
++		return;
++	}
++	if (!isKill && (!cdef->IsMobile() || cdef->IsRoleComm())) {
++		return;
++	}
++	const float v = cdef->GetCostM();
++	if (isKill) {
++		tradeKilled += v;
++	} else {
++		tradeLost += v;
++	}
++}
++
++// Kills over losses, lately. 1.0 means even. Returns 1.0 until enough has
++// happened to mean anything -- an unproven ratio must not tighten the engage
++// test, or the opening (no fights yet, or one dead scout) reads as a collapse.
++float CCircuitAI::GetRecentTradeRatio()
++{
++	const int frame = GetLastFrame();
++	if (frame >= tradeDecayFrame + TRADE_DECAY_PERIOD) {
++		tradeDecayFrame = frame;
++		tradeKilled *= TRADE_DECAY;
++		tradeLost *= TRADE_DECAY;
++	}
++	if ((tradeKilled + tradeLost) < TRADE_MIN_SAMPLE) {
++		return 1.f;
++	}
++	if (tradeLost < 1.f) {
++		return 2.f;  // killing without dying; the cap keeps this bounded
++	}
++	return tradeKilled / tradeLost;
++}
++
 +bool CCircuitAI::IsCommanderWreck(springai::Feature* f)
 +{
 +	if (f == nullptr) {
@@ -342,10 +408,10 @@ index aeea933..54497fb 100644
  {
  	// NOTE: See notes in MobileSlave or other economy->SendUnits places
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..bed1181 100644
+index b4f4f40..bf0d98c 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -149,6 +149,42 @@ private:
+@@ -149,6 +149,45 @@ private:
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
  	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
@@ -382,12 +448,32 @@ index b4f4f40..bed1181 100644
 +	springai::AIFloat3 GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal);
 +	float GetWreckValueAt(const springai::AIFloat3& pos, float radius);
 +	bool IsCommanderWreck(springai::Feature* f);
++	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
++	void NoteTrade(bool isKill, CCircuitDef* cdef);
++	float GetRecentTradeRatio();
 +	float GetEnemyCostAt(const springai::AIFloat3& pos, float radius) const;
 +	float GetBuilderThreatAt(const springai::AIFloat3& pos) const;
 +	float GetUnitThreatAt(CCircuitUnit* unit, const springai::AIFloat3& pos) const;
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
+@@ -205,6 +244,16 @@ private:
+ 	bool isAllyBaseAvoid;
+ // <<< AIOptions.lua ---- END
+ 
++// >>> Recent trade record ---- BEGIN
++private:
++	#define TRADE_DECAY_PERIOD	(FRAMES_PER_SEC * 30)
++	#define TRADE_DECAY			0.75f   // ~2 min half-life at the period above
++	#define TRADE_MIN_SAMPLE	600.f   // metal traded before the ratio means anything
++	float tradeKilled = .0f;
++	float tradeLost = .0f;
++	int tradeDecayFrame = 0;
++// <<< Recent trade record ---- END
++
+ // >>> UnitDefs ---- BEGIN
+ public:
+ 	using CircuitDefs = std::vector<CCircuitDef>;  // UnitDefId=0 is not valid, @see rts/Sim/Units/UnitDefHandler.h
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
 index 2b84e90..bf697f3 100644
 --- a/src/circuit/module/EconomyManager.cpp
@@ -1810,10 +1896,10 @@ index fac55c7..247f8a9 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..70c7036 100644
+index cd063e4..af3e902 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
-@@ -25,12 +25,68 @@
+@@ -25,12 +25,100 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -1866,6 +1952,38 @@ index cd063e4..70c7036 100644
 +
 +#define ENGAGE_MARGIN		1.80f
 +
++// How much harder the engage test gets when we are losing trades.
++//
++// apexearth: "if our recent k/d is low we stop attacking so much, we start to
++// be more careful and require greater odds to attack." The margin below is a
++// fixed 1.80 regardless of whether the last ten fights went well or badly --
++// this scales it by the recent kill/loss ratio (CCircuitAI::GetRecentTradeRatio,
++// by metal value, decayed). Ratio 1.0 leaves the margin exactly as it was, so
++// an even game behaves identically to before; the clamps stop a streak either
++// way from running away with it.
++//
++// Deliberately asymmetric. Winning trades relaxes the demand only slightly
++// (down to 0.9x) because "we are winning" is the state where overreach is
++// cheapest to punish; losing tightens it up to 1.6x, which is the behaviour
++// actually asked for. This is a MULTIPLIER on a margin, not a new rule that
++// spends anything -- it only ever changes which fights get refused.
++#define TRADE_MARGIN_MIN	0.90f
++#define TRADE_MARGIN_MAX	1.60f
++
++static inline float TradeScaledMargin(circuit::CCircuitAI* circuit)
++{
++	const float ratio = circuit->GetRecentTradeRatio();
++	if (ratio <= 0.f) {
++		return ENGAGE_MARGIN * TRADE_MARGIN_MAX;
++	}
++	// Demand scales with 1/ratio: trading at 0.5 asks for twice the odds
++	// before the clamp, trading at 2.0 asks for a little less than before.
++	float scale = 1.f / ratio;
++	if (scale < TRADE_MARGIN_MIN) scale = TRADE_MARGIN_MIN;
++	if (scale > TRADE_MARGIN_MAX) scale = TRADE_MARGIN_MAX;
++	return ENGAGE_MARGIN * scale;
++}
++
 +// Radius around a target within which OTHER enemy groups count as defending it.
 +// Measured at 1800: 1,738 target groups refused against 29 engagements taken in
 +// a single 4v4 game -- on a 16x12 map that radius sweeps most of the board, so
@@ -1882,7 +2000,7 @@ index cd063e4..70c7036 100644
  CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
  		: ISquadTask(mgr, FightType::ATTACK, powerMod)
  		, minPower(minPower)
-@@ -54,12 +110,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
+@@ -54,12 +142,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
  	if (speedLeader > speedUnit) {
  		std::swap(speedLeader, speedUnit);
  	}
@@ -1907,7 +2025,7 @@ index cd063e4..70c7036 100644
  		return false;
  	}
  	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
-@@ -178,7 +244,20 @@ void CAttackTask::Update()
+@@ -178,7 +276,20 @@ void CAttackTask::Update()
  
  	state = State::ROAM;
  	if (GetTarget() != nullptr) {
@@ -1929,7 +2047,7 @@ index cd063e4..70c7036 100644
  		if (position.SqDistance2D(startPos) < SQUARE(highestRange + slack)) {
  			int xs, ys, xe, ye;
  			circuit->GetPathfinder()->Pos2PathXY(startPos, &xs, &ys);
-@@ -208,7 +287,8 @@ void CAttackTask::Update()
+@@ -208,7 +319,8 @@ void CAttackTask::Update()
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
  			leader, circuit->GetThreatMap(),
  			startPos, endPos, pathRange, GetHitTest(),
@@ -1939,7 +2057,7 @@ index cd063e4..70c7036 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -238,25 +318,67 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,25 +350,67 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -2010,7 +2128,7 @@ index cd063e4..70c7036 100644
  	float minSqDist = std::numeric_limits<float>::max();
  	bool hasGoodTarget = false;
  
-@@ -269,10 +391,20 @@ void CAttackTask::FindTarget()
+@@ -269,10 +423,20 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -2027,7 +2145,7 @@ index cd063e4..70c7036 100644
 +		// No margin is demanded on our own ground: a defender that waits for
 +		// favourable odds has already lost the thing it was defending.
 +		const bool isHome = inflMap->GetInfluenceAt(group.pos) >= INFL_SAFE;
-+		if ((maxPower <= group.influence * scale * ENGAGE_MARGIN) && !isHome) {
++		if ((maxPower <= group.influence * scale * TradeScaledMargin(circuit)) && !isHome) {
 +			++skippedWeak;
 +			continue;
 +		}
@@ -2035,7 +2153,7 @@ index cd063e4..70c7036 100644
  			continue;
  		}
  
-@@ -319,10 +451,56 @@ void CAttackTask::FindTarget()
+@@ -319,10 +483,56 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -2078,7 +2196,7 @@ index cd063e4..70c7036 100644
 +					localInfl += g.influence;
 +				}
 +			}
-+			if ((localInfl > .0f) && (maxPower < localInfl * ENGAGE_MARGIN) && !isHome) {
++			if ((localInfl > .0f) && (maxPower < localInfl * TradeScaledMargin(circuit)) && !isHome) {
 +				++skippedWeak;
 +				continue;
 +			}
@@ -2093,7 +2211,7 @@ index cd063e4..70c7036 100644
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -332,6 +510,22 @@ void CAttackTask::FindTarget()
+@@ -332,6 +542,22 @@ void CAttackTask::FindTarget()
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
  	}
@@ -2116,7 +2234,7 @@ index cd063e4..70c7036 100644
  	// Return: target, startPos=leader->pos, endPos=position
  }
  
-@@ -340,6 +534,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +566,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
