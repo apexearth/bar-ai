@@ -2081,6 +2081,35 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// watching live: "our t2 con is wasting his time reclaiming trees instead
 	// of upgrading mexes."
 	const bool isAdvCon = !isComm && (unit.circuitDef.costM >= ADV_CON_COST);
+
+	// Let a constructor FINISH the defence it already started.
+	//
+	// AiMakeTask re-decides from scratch on every call, and IBuilderTask::
+	// Reevaluate swaps the unit's task whenever we hand back a different BUILD
+	// TYPE. Fortify only fires while ConDugIn() is true, i.e. while the con is
+	// being shot at -- so the moment the shooting stops this function offers a
+	// mex or an energy building instead, the swap happens, and the half-built
+	// tower is abandoned.
+	//
+	// That is why script-placed static defence has never appeared in a game.
+	// Measured with a probe inside IBuilderTask::CanAssignTo: corllt tasks were
+	// ACCEPTED by a builder six times in one game and corllt was built ZERO
+	// times, while stock CircuitAI's own corhlt/corhllt built normally. Energy
+	// survived the same churn only because the metal-full fallback keeps
+	// handing back ENERGY -- the same type, so no swap.
+	//
+	// Deliberately narrow: only a DEFENCE build already in progress, only while
+	// its site is not itself dangerous (the abandon checks below still own that
+	// case), and never for the commander, which has its own hold rule.
+	if (!isComm) {
+		IUnitTask@ busy = unit.task;
+		if ((busy !is null) && (busy.GetType() == Task::Type::BUILDER)
+			&& (busy.GetBuildType() == Task::BuildType::DEFENCE)
+			&& (ThreatFor(unit, busy.GetBuildPos()) <= CON_THREAT_VETO))
+		{
+			return busy;
+		}
+	}
 	if (isComm) {
 		LogCommanderThreat(unit);
 		const float hp = unit.GetHealthPercent();
