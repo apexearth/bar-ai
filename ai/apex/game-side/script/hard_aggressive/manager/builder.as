@@ -2765,7 +2765,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// isComm-gated same as the rest of this function's wreck-chasing -- this
 	// was the one remaining ungated path that could hand a self-initiated
 	// reclaim task back to a commander whose real task was rejected above.
-	if (isComm || (ai.frame < gNextWreck))
+	//
+	// Rez bots only. For every other constructor this path was pure pre-emption:
+	// DefaultMakeTask offers them a RECLAIM anyway (isResurrect is false for
+	// them -- see the REZ_WRECK_PERIOD comment), so returning one HERE does not
+	// add reclaim, it just jumps the queue ahead of the mex expansion that lives
+	// in DefaultMakeTask. Rez bots still need the pre-empt, because for them the
+	// engine's offer is a RESURRECT with a 300s timeout.
+	if (isComm || !IsRezzer(unit) || (ai.frame < gNextWreck))
 		return task;
 	gNextWreck = ai.frame + 3 * SECOND;   // corpses decay; do not dawdle
 

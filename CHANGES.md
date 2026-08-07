@@ -8,6 +8,83 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-07: BWEM chokepoints exist, and were unreachable
+
+CircuitAI vendors a full BWEM (Brood War Easy Map) implementation in
+`circuit/map/GridAnalyzer.cpp`: every game it decomposes the map into areas
+joined by chokepoints, with geometry, width and area adjacency. **Nothing could
+read it.**
+
+`CDefenceData::Init` pushes every chokepoint into `defPoints`:
+
+    for (bwem::CChokePoint* ch : terrainMgr->GetTAChokePoints())
+        defPoints.push_back({ch->GetCenter(), .0f});
+
+but every consumer selects through `GetDefIndices(clusterIndex)` ->
+`clusterInfos[k].idxPoints`, which is populated ONLY by the metal-cluster loop.
+No cluster ever references a chokepoint index. The one path that could have
+reached them -- a `knnSearch` over the whole `defPoints` tree -- is commented out
+in `CDefenceData::GetDefPoint` behind `FIXME: Re-work cluster-only points into
+search-tree`. `MilitaryManager.cpp:753` holds a second, also commented-out,
+chokepoint block. Upstream built the analysis and left it unwired.
+
+**Consequence: every defence position this AI has ever placed was anchored to a
+metal cluster.** That is why defence reads as "towers around bases and mexes"
+and never as a front line, and it is the likeliest reason ~9 attempts at
+geometric wall/front-line placement all failed -- they were interpolating lines
+with `BorderPos`/`FrontPos` while the real corridor topology sat unused.
+
+Exposed read-only to script (no behaviour change): `GetChokePointCount`,
+`GetChokePointPos`, `GetChokePointWidth`, `GetChokePointEnds`,
+`GetChokePointArea`. Width is recomputed as `|end1 - end2|` because
+`CChokePoint::size` is private and only `IsSmall()` (< 300) is public.
+
+Verified returning real data, not the `Game_getTeamResource*` failure mode:
+
+| map | chokepoints | usable (200-2000 wide) |
+|---|---|---|
+| Comet Catcher Remake (16x12) | 8 | 5 |
+| Jade Empress 1.41 (32x32) | 100 | -- |
+
+Jade's widths run 22 to 2806; most of the 100 are sub-200-elmo slivers between
+interior areas, so the raw count is not the usable count. Area ids form a real
+graph (1/2, 1/3, 5/6, 11/12, ...), which is what a "which corridor do enemy
+reinforcements flow through" query would run over.
+
+Not yet used by any behaviour. Next: classify each chokepoint ours/contested/
+theirs against the influence map, then anchor defence to contested ones, then a
+hold task that does not promote itself into an attack.
+
+## 2026-08-07: constructors no longer pre-empt themselves into reclaim
+
+`AiMakeTask`'s tail handed EVERY idle non-commander builder a wreck reclaim
+before returning. Per the code's own `REZ_WRECK_PERIOD` comment, ordinary
+constructors already get a RECLAIM offer from `DefaultMakeTask` (isResurrect is
+false for them), so this path never ADDED reclaim -- it jumped the queue ahead of
+the mex expansion that lives in `DefaultMakeTask`. Now rez-bot only; they still
+need the pre-empt because for them the engine's offer is a 300s RESURRECT.
+
+Motivating measurement, one 8v8 on Jade Empress 1.41 (32 min, no control):
+
+| | Apex | BARb hard |
+|---|---|---|
+| mexes | 233 | **394** |
+| T2 mexes | 25 | **44** |
+| metal produced | 293k | **485k** |
+| metal reclaimed | **13.8k** | 8.9k |
+| killed / lost | 60k / 122k | 106k / 86k |
+| PEAK constructor metal | 17,770 | **59,275** |
+
+We were already out-reclaiming BARb 1.5x while falling 161 mexes behind. Mex
+counts are level to minute 8 (83 vs 87) and diverge from 14 on (133/151, 186/248,
+217/319, 233/394) -- we do not lose the expansion race early, we stop expanding.
+A 0.49 trade ratio on 60% of the enemy's economy is about what the economy alone
+predicts, so this is a candidate root cause for the long-standing K/D deficit
+rather than a separate problem.
+
+One game, no control. Unverified as an improvement -- the change is a REMOVAL,
+which per the "path fires" section is the cheap kind to try and revert.
+
 ## 2026-08-07: RESULTS BELOW WERE VOID -- read this first
 
 **Every tournament result in the section below was measured against a BARb with

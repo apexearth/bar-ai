@@ -681,8 +681,13 @@ def main() -> int:
                          "(default: matches/_engine)")
     ap.add_argument("--box-size", dest="box_size", type=float, default=0.0,
                     help="start-box size as a fraction of the map, e.g. 0.35; 0 = auto (0.38 for <=4 per side, 0.20 above)")
-    ap.add_argument("--handicap", type=int, default=0,
-                    help="percent resource bonus for EVERY AI, e.g. 50; speeds games up so 8v8s reach game over instead of timing out undecided")
+    ap.add_argument("--handicap", type=int, default=None,
+                    help="percent resource bonus for EVERY AI, e.g. 50. Engine key "
+                         "Handicap -> SetAdvantage(pct/100) -> income multiplier, the "
+                         "same number BAR's player list shows as '+50%%'. Defaults to 50 "
+                         "under --watch, because a hosted multiplayer game is always "
+                         "bonused and several behaviours are income-gated; 0 otherwise, "
+                         "to keep benchmarks comparable with past runs.")
     ap.add_argument("--drop-ai-version", dest="drop_ai_version", action="store_true",
                     help="omit Version from every [AI] block, as a lobby-hosted "
                          "multiplayer game does; use with --game to test the AI "
@@ -696,6 +701,8 @@ def main() -> int:
     args = ap.parse_args()
     if args.speed == 0:
         args.speed = 3 if args.watch else 9999
+    if args.handicap is None:
+        args.handicap = 50 if args.watch else 0
     if args.watch:
         args.replay = True
     return run(args)

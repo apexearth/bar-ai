@@ -7,6 +7,11 @@
 
 namespace Main {
 
+// A gap narrower than this is an artefact between interior areas, not a corridor
+// an army could hold; wider than this is open ground that no line would cover.
+const float CHOKE_MIN_WIDTH = 200.f;
+const float CHOKE_MAX_WIDTH = 2000.f;
+
 void AiMain()
 {
 	// NOTE: Initialize config params
@@ -42,8 +47,29 @@ void AiMain()
 	}
 }
 
+// BWEM chokepoint inventory, logged once. Confirmed returning real data on
+// Comet Catcher (8) and Jade Empress (100); kept as a one-liner because the
+// usable count, not the raw count, is what the front-line work depends on --
+// most of Jade's 100 are sub-200-elmo slivers between interior areas.
+bool gChokeProbed = false;
+void ProbeChokePoints()
+{
+	if (gChokeProbed || (ai.frame < 2 * SECOND))
+		return;
+	gChokeProbed = true;
+	const int n = ai.GetChokePointCount();
+	int usable = 0;
+	for (int i = 0; i < n; ++i) {
+		const float w = ai.GetChokePointWidth(i);
+		if ((w >= CHOKE_MIN_WIDTH) && (w <= CHOKE_MAX_WIDTH))
+			++usable;
+	}
+	AiLog("apex: chokepoints count=" + n + " usable=" + usable);
+}
+
 void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishAIId
 {
+	ProbeChokePoints();
 	Factory::UpdateTeamCoord();
 	Military::UpdatePosture();
 	Factory::UpdateRushReclaim();
