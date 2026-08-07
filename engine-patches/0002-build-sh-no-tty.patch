@@ -1,0 +1,13 @@
+diff --git a/docker-build-v2/build.sh b/docker-build-v2/build.sh
+index d05e8ad..0495263 100755
+--- a/docker-build-v2/build.sh
++++ b/docker-build-v2/build.sh
+@@ -154,7 +154,7 @@ if [[ "$GIT_DIR" != "$GIT_COMMON_DIR" ]]; then
+   WORKTREE_MOUNTS="-v $GIT_COMMON_DIR:$GIT_COMMON_DIR:ro"
+ fi
+ 
+-$RUNTIME run --platform=linux/$ARCH -it --rm \
++$RUNTIME run --platform=linux/$ARCH -i --rm \
+     -v "$CWD${P}":/build/src:z,ro \
+     -v "$CWD${P}.cache${P}ccache-$PLATFORM":/build/cache:z,rw \
+     -v "$CWD${P}build-$PLATFORM":/build/out:z,rw \
