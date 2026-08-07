@@ -4002,3 +4002,48 @@ this session already has seven undeployed-confirmation Armada changes
 stacked and a 32-game validation batch in flight, deliberately NOT
 bundling this in -- it should be its own separately-tested change once
 the current batch resolves, per one-change-at-a-time discipline.
+
+## Script-placed DEFENCE structures never finish (2026-08-07)
+
+**Fortify's dig-in towers have never been built.** Measured over three games:
+17/31/24 `con-dig` events, and `corllt`/`corvipe`/`legapopupdef` appear **zero**
+times in `allBuilt`. The only static defence that gets built is `corhlt`/
+`corhllt`, which comes from stock CircuitAI's own porcupine/build_chain system,
+not from our script. This is pre-existing -- it reproduces in games from before
+2026-08-07's threat change, so it is not a regression from that.
+
+Six attempts to build a wall line (dragon's teeth) all produced the same
+result: tasks created, tasks returned, **zero units finished**. What was ruled
+out, each by measurement rather than reasoning:
+
+- **Not buildability.** `corck/armck/legck` and the commander all list
+  `cordrag/armdrag/legdrag` in buildoptions.
+- **Not the advanced-con trap.** Advanced cons (`corack` etc.) genuinely cannot
+  build teeth, and restricting the offer to T1 cons changed nothing.
+- **Not priority.** LOW and NORMAL behave identically.
+- **Not the shake radius.** `SQUARE_SIZE` through `SQUARE_SIZE*8` all fail.
+- **Not pooled-vs-returned.** Returning the task to the calling constructor
+  fails the same way as leaving it in the pool.
+- **Not task churn.** Rate-limiting to one piece per 12s, so each has time to
+  finish, changed nothing.
+- **Not a telemetry artifact.** `allBuilt` is not truncated (it lists every
+  unit type with metal invested), though note it counts on **UnitFinished**, so
+  a started-and-abandoned nanoframe would be invisible.
+- **Not position.** Anchored at `gHomePos + dir*420`, the same anchor style the
+  metal-full fallback uses successfully for energy.
+
+The discriminator that still holds: `TaskB::Common(BuildType::ENERGY, ...)` from
+the same file, same call shape, **does** complete -- 19 enqueues produced 7,800
+metal of solar in the same game where 17 defence enqueues produced nothing. So
+the failure is specific to `BuildType::DEFENCE` from script.
+
+Next step is instrumentation, not another attempt: log inside `CBDefenceTask`
+whether the task is assigned a builder, and whether it is aborted, and by what.
+`CBDefenceTask::CanAssignTo` requires `GetFactoryCount() != 0` (we have
+factories) and otherwise defers to `IBuilderTask::CanAssignTo` -- that is the
+place to look first.
+
+**Consequence worth flagging:** every feature that places static defence from
+script is currently dead -- Fortify, ContestDefence, and the T1.5 tower the
+metal-full fallback used to build before it was switched to energy. Their log
+lines fire, which is why this went unnoticed.
