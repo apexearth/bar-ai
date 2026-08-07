@@ -792,8 +792,17 @@ void UpdateBaseDefence()
 	// Each successive tower goes one holding further back from the tip, so the
 	// two of them stand on separate clusters along that edge rather than on one
 	// interpolated point. The gadget-published front is the fallback only.
+	// Prefer the measured front to the geometric guesses. BorderPos walks our own
+	// holdings outward and FrontPos reads a gadget-published lane; both estimate
+	// a line that Front:: now actually computes, as the enemy-facing edge of our
+	// territory. FrontChoke first -- a front cell that also sits in a BWEM
+	// corridor is worth far more per tower than one in open ground. The old pair
+	// stay as the fallback for the opening, when no enemy has been seen and the
+	// front is honestly unknown.
 	AIFloat3 spot;
-	if (!BorderPos(spot, gPorcAdded) && !FrontPos(spot))
+	if (!Front::FrontChoke(Builder::gHomePos, spot)
+			&& !Front::FrontNear(Builder::gHomePos, spot)
+			&& !BorderPos(spot, gPorcAdded) && !FrontPos(spot))
 		return;
 
 	// Do not stack them, but the front is by definition the contested area, so

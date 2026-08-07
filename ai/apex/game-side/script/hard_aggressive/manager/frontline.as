@@ -38,6 +38,9 @@ const float FOE_FLOOR = 1.0f;
 const float FOE_FRAC = 0.10f;
 
 const float CHOKE_NEAR = 600.f;
+// How much further than the closest front cell a cell may sit and still count
+// as front. Beyond this it is enemy-facing flank, not the line.
+const float FRONT_BAND = 3000.f;
 const int RECLASSIFY = 10 * SECOND;
 const int SEAM_N = 40;
 
@@ -187,11 +190,39 @@ void Scan()
 			gPerim.insertLast(p);
 			if (!gFoeKnown) {
 				gEdge.insertLast(NONE);
-			} else {
-				const float facing = (p.x - gOurMid.x) * dirx + (p.z - gOurMid.z) * dirz;
-				gEdge.insertLast((facing > 0.f) ? FRONT : BACK);
+				continue;
 			}
+			// Facing them is necessary but not sufficient. The far flank of a
+			// large territory faces the enemy too and is nowhere near them;
+			// apexearth: "should prefer frontlines near enemies". So the front
+			// is the enemy-facing arc that is also within a band of the closest
+			// approach to their territory.
+			const float facing = (p.x - gOurMid.x) * dirx + (p.z - gOurMid.z) * dirz;
+			if (facing <= 0.f) {
+				gEdge.insertLast(BACK);
+				continue;
+			}
+			gEdge.insertLast(FRONT);
 		}
+	}
+
+	// Trim the enemy-facing arc down to the part actually near them. On a large
+	// territory the far flank faces the enemy too and is nowhere near the
+	// fighting; keeping it made the line span our whole border.
+	if (!gFoeKnown)
+		return;
+	float closest = -1.f;
+	for (uint k = 0; k < gPerim.length(); ++k) {
+		if (gEdge[k] != FRONT)
+			continue;
+		const float d = gPerim[k].distance2D(gFoeMid);
+		if ((closest < 0.f) || (d < closest))
+			closest = d;
+	}
+	for (uint k = 0; k < gPerim.length(); ++k) {
+		if ((gEdge[k] == FRONT)
+				&& (gPerim[k].distance2D(gFoeMid) > closest + FRONT_BAND))
+			gEdge[k] = BACK;
 	}
 }
 
@@ -235,10 +266,32 @@ void Update()
 	Draw();
 }
 
-// Nearest point on the front to `from`. False while the front is still unknown,
-// which is the honest answer for the opening of a game.
+// Where the front should be before anyone has seen anything, from start-box
+// geometry alone. apexearth: "do we know the centerpoint of our startbox
+// compared to centerpoint of enemy start box? divide the map in half based on
+// the angles and midpoint there and bam you have around where the frontline
+// should be."
+//
+// The engine already derives exactly this: CSetupManager spreads the allies
+// along a line taken from the start-box geometry and hands each AI its own slot
+// as lanePos, so it is a per-player share of that midline rather than one point
+// the whole team crowds. Now bound to script.
+bool LaneFront(AIFloat3& out spot)
+{
+	const AIFloat3 lane = aiSetupMgr.GetLanePos();
+	if (!ai.IsPosOnMap(lane))
+		return false;
+	spot = lane;
+	return true;
+}
+
+// Nearest point on the front to `from`. Falls back to the start-box lane while
+// no enemy has been seen, so the opening has a sensible prior instead of
+// nothing.
 bool FrontNear(const AIFloat3& in from, AIFloat3& out spot)
 {
+	if (!gFoeKnown)
+		return LaneFront(spot);
 	float best = -1.f;
 	for (uint k = 0; k < gPerim.length(); ++k) {
 		if (gEdge[k] != FRONT)
@@ -287,32 +340,39 @@ void Draw()
 	if (!DRAW)
 		return;
 
+	// ONE AI draws. Ally influence is ally-WIDE, so all eight compute virtually
+	// the same perimeter -- and DeletePointsAndLines erases other players' marks
+	// at that position too, so they spent the game erasing each other's lines.
+	// That is why the overlay faded out mid-game.
+	if (ai.teamId != Factory::ElectorTeamId())
+		return;
+
 	if (gDrawn) {
 		for (uint k = 0; k < gPrevDraw.length(); ++k)
 			ai.DrawErase(gPrevDraw[k]);
 	}
 	gPrevDraw.resize(0);
 
-	// Join each front cell to its ring neighbours so it renders as a contour
-	// rather than a cloud. 1.6 cells catches the 8 neighbours and nothing more.
+	// Join each front cell to its TWO nearest front neighbours. Linking every
+	// pair within range drew a mesh of four-plus lines per cell; two gives a
+	// contour.
 	const float span = float(AiTerrainWidth()) / float(SEAM_N) * 1.6f;
 	for (uint k = 0; k < gPerim.length(); ++k) {
-		if (gEdge[k] == BACK)
+		if (gEdge[k] != FRONT)
 			continue;   // the back is a danger zone, but it is not the front
-		for (uint m = k + 1; m < gPerim.length(); ++m) {
-			if (gEdge[m] == BACK)
+		int drawn = 0;
+		for (uint m = 0; (m < gPerim.length()) && (drawn < 2); ++m) {
+			if ((m == k) || (gEdge[m] != FRONT))
 				continue;
 			if (gPerim[k].distance2D(gPerim[m]) > span)
 				continue;
 			ai.DrawLine(gPerim[k], gPerim[m]);
+			++drawn;
 		}
 		gPrevDraw.insertLast(gPerim[k]);
 	}
 	gDrawn = true;
 
-	// The chokepoint layer is identical for every AI, so only one draws it.
-	if (ai.teamId != Factory::ElectorTeamId())
-		return;
 	for (uint k = 0; k < gIdx.length(); ++k) {
 		AIFloat3 e1, e2;
 		if (ai.GetChokePointEnds(gIdx[k], e1, e2))
