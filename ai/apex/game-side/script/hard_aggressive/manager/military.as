@@ -116,6 +116,22 @@ float RushAttackQuota()
 // "defend and stall", not "do nothing".
 const float RUSH_TEAM_DEFEND = 60.f;
 
+// The attack quota to hold for the REST of the game, once the rush window and
+// any turtle hold are over. Not gAttackBase: that is stock BARb's value, read
+// off the config at startup, and in apexearth's live multiplayer game it was
+// 15 -- so from mid-game on, only fifteen units per player were ever allowed to
+// attack and everything above that stood in the base. apexearth, watching that
+// game: "our units don't attack enough... i see a lot of our T3 units just
+// hangin out and not fighting", and separately "we aren't aggressive enough vs
+// humans early on".
+//
+// A cap that low also wastes the expensive end of the army first: the fifteen
+// slots fill with whatever exists when the window opens, and a T3 unit finished
+// afterwards simply never gets one. Set well above any realistic standing army
+// so the quota stops being the thing that decides, and the engage test (which
+// actually looks at the odds) decides instead.
+const float LATE_ATTACK_QUOTA = 200.f;
+
 bool gRushDefenceHeld = false;
 
 void UpdateRushDefence()
@@ -127,9 +143,9 @@ void UpdateRushDefence()
 		// this and must not be clobbered.
 		if (gRushDefenceHeld) {
 			gRushDefenceHeld = false;
-			if ((aiMilitaryMgr.quota.attack == RUSH_TEAM_DEFEND) && (gAttackBase >= 0.f)) {
-				aiMilitaryMgr.quota.attack = gAttackBase;
-				AiLog(Factory::T() + "apex: rush over, attack quota -> " + gAttackBase);
+			if (aiMilitaryMgr.quota.attack == RUSH_TEAM_DEFEND) {
+				aiMilitaryMgr.quota.attack = LATE_ATTACK_QUOTA;
+				AiLog(Factory::T() + "apex: rush over, attack quota -> " + LATE_ATTACK_QUOTA);
 			}
 		}
 		return;
@@ -161,10 +177,9 @@ void UpdateRushRole()
 		// do-not-attack quota all game (measured: lowest army on its team by 4x).
 		if (gRushQuotaHeld) {
 			gRushQuotaHeld = false;
-			// Back to the stock value, not RUSH_TEAM_DEFEND: past the deadline
-			// there is no strategy left to defend, and before it UpdateRushDefence
-			// re-raises a follower to 60 on its own.
-			aiMilitaryMgr.quota.attack = (gAttackBase >= 0.f) ? gAttackBase : RUSH_TEAM_DEFEND;
+			// LATE_ATTACK_QUOTA, not the stock value: see its comment -- stock
+			// is 15 here and that cap, not the odds, was deciding who fought.
+			aiMilitaryMgr.quota.attack = LATE_ATTACK_QUOTA;
 			AiLog(Factory::T() + "apex: rusher role released, attack quota -> "
 				+ aiMilitaryMgr.quota.attack);
 		}
@@ -250,7 +265,7 @@ void UpdateEcoRole()
 			// Not while turtling: the hold set 400 for its own reasons and
 			// restoring the baseline here would quietly cancel it.
 			if (!gTurtle) {
-				aiMilitaryMgr.quota.attack = (gAttackBase >= 0.f) ? gAttackBase : RUSH_TEAM_DEFEND;
+				aiMilitaryMgr.quota.attack = LATE_ATTACK_QUOTA;
 				AiLog(Factory::T() + "apex: eco lead released, attack quota -> "
 					+ aiMilitaryMgr.quota.attack);
 			}

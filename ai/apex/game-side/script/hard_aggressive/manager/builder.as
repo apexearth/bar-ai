@@ -1602,6 +1602,121 @@ CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 	return ai.GetCircuitDef(armllt);
 }
 
+// Reclaiming OUR OWN buildings, for two reasons that share one mechanism.
+//
+// 1. apexearth: "when theres no room to build a gantry we need to reclaim
+//    older t1 buildings." C++ reports where a large footprint failed to place
+//    (CBFactoryTask::FindBuildSite -> NoteBuildBlocked); we clear T1 clutter
+//    near that spot.
+// 2. apexearth: "once game is clearly in t3/t2 stage we need to reclaim all
+//    our t1 and t1.5 defenses." Those towers stop earning against T2/T3 units
+//    and their metal is better in something current.
+//
+// Targets are named defs, NOT a computed tier. CCircuitDef carries no tech
+// level, so any tier test would be a heuristic -- and the failure mode here is
+// reclaiming our own base, which is not a thing to be approximate about. These
+// are exactly the towers ContestTower/MetalFullTower build, and the solar every
+// opening puts down, so the list cannot drift away from what we actually own.
+// Never mexes, never factories, never anything armed above T1.5.
+const int OBSOLETE_PERIOD = 20 * SECOND;
+const float OBSOLETE_NEAR = 900.f;     // around a blocked build site
+// Income a T2 player must clear before stripping its own T1 defences. A player
+// that has merely touched T2 may still be holding a line against T1 armies, and
+// those towers are the line.
+const float OBSOLETE_T2_INCOME = 60.f;
+int gNextObsolete = 0;
+
+// The T1/T1.5 towers this AI builds, cheapest first.
+array<string> ObsoleteDefenceNames()
+{
+	const string side = ai.GetSideName();
+	array<string> names;
+	if (side == "cortex") {
+		names.insertLast(corllt);
+		names.insertLast(corvipe);
+	} else if (side == "legion") {
+		names.insertLast(leglht);
+		names.insertLast(legapopupdef);
+	} else {
+		names.insertLast(armllt);
+		names.insertLast(armpb);
+	}
+	return names;
+}
+
+// The opening solar, by name. SideDef3 returns a def; here we need the name.
+string ObsoleteSolarName()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return corsolar;
+	if (side == "legion")
+		return legsolar;
+	return armsolar;
+}
+
+IUnitTask@ ReclaimOwnDef(CCircuitUnit@ unit, const string& in defName,
+		const AIFloat3& in near, float radius, const string& in why)
+{
+	CCircuitDef@ def = ai.GetCircuitDef(defName);
+	if ((def is null) || (def.count <= 0))
+		return null;
+	array<CCircuitUnit@>@ owned = ai.GetOwnUnitsOfDef(def, near, radius);
+	if ((owned is null) || (owned.length() == 0))
+		return null;
+	for (uint i = 0; i < owned.length(); ++i) {
+		CCircuitUnit@ victim = owned[i];
+		if ((victim is null) || (victim is unit))
+			continue;
+		IUnitTask@ eat = aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, victim));
+		if (eat !is null) {
+			gNextObsolete = ai.frame + OBSOLETE_PERIOD;
+			AiLog(Factory::T() + "apex: obsolete-reclaim " + defName + " (" + why + ")");
+			return eat;
+		}
+	}
+	return null;
+}
+
+IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit)
+{
+	if (ai.frame < gNextObsolete)
+		return null;
+
+	// Case 1: something large could not be placed. Clear the cheapest clutter
+	// first -- a solar is 155 metal and rebuildable anywhere, a T1 tower is
+	// dead weight by the time we are placing gantries.
+	AIFloat3 blocked;
+	if (ai.GetBlockedBuildPos(blocked)) {
+		array<string> clutter;
+		clutter.insertLast(ObsoleteSolarName());
+		array<string> towers = ObsoleteDefenceNames();
+		for (uint i = 0; i < towers.length(); ++i)
+			clutter.insertLast(towers[i]);
+		for (uint i = 0; i < clutter.length(); ++i) {
+			IUnitTask@ eat = ReclaimOwnDef(unit, clutter[i], blocked, OBSOLETE_NEAR, "blocked build");
+			if (eat !is null)
+				return eat;
+		}
+	}
+
+	// Case 2: we are clearly past the tier these towers defend against. gHaveT3
+	// is a gantry standing; the T2 half additionally wants a real economy, so a
+	// player that merely touched T2 does not strip its own defences while still
+	// fighting T1 armies.
+	const bool lateEnough = Factory::gHaveT3
+			|| (Factory::gHaveT2 && (aiEconomyMgr.metal.income >= OBSOLETE_T2_INCOME));
+	if (!lateEnough)
+		return null;
+	array<string> towers = ObsoleteDefenceNames();
+	for (uint i = 0; i < towers.length(); ++i) {
+		IUnitTask@ eat = ReclaimOwnDef(unit, towers[i], gHomePos, 0.f, "past its tier");
+		if (eat !is null)
+			return eat;
+	}
+	return null;
+}
+
 bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)
 {
 	if (!gHomeSet)
@@ -2560,6 +2675,15 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				return post;
 			}
 		}
+	}
+
+	// Clearing our own obsolete buildings. Both cases are the same act -- pick
+	// one of OUR structures and reclaim it -- so they share ObsoleteReclaim();
+	// what differs is only which defs and where. See its comment for the gates.
+	if (!isComm) {
+		IUnitTask@ tidy = ObsoleteReclaim(unit);
+		if (tidy !is null)
+			return tidy;
 	}
 
 	// Reached by an idle builder, and by one whose only offer was refused above.

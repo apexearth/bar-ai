@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..58a7ed2 100644
+index aeea933..8e5b963 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -44,6 +44,10 @@
@@ -47,7 +47,7 @@ index aeea933..58a7ed2 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1488,6 +1505,359 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1488,6 +1505,409 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -229,6 +229,56 @@ index aeea933..58a7ed2 100644
 +	return tradeKilled / tradeLost;
 +}
 +
++// A large building found no site. Recorded rather than acted on: deciding what
++// is expendable is policy, and policy lives in AngelScript. apexearth: "when
++// theres no room to build a gantry we need to reclaim older t1 buildings."
++void CCircuitAI::NoteBuildBlocked(const springai::AIFloat3& pos)
++{
++	blockedBuildPos = pos;
++	blockedBuildFrame = GetLastFrame();
++}
++
++bool CCircuitAI::GetBlockedBuildPos(springai::AIFloat3& outPos)
++{
++	if (GetLastFrame() > blockedBuildFrame + BLOCKED_BUILD_TTL) {
++		return false;
++	}
++	if (!utils::is_valid(blockedBuildPos)) {
++		return false;
++	}
++	outPos = blockedBuildPos;
++	return true;
++}
++
++// Our own live units of one def near a position. Deliberately NOT filtered by
++// what is "obsolete" -- that is the caller's judgement, and keeping it out of
++// here is what stops this becoming a second place where policy hides.
++// Skips anything still being built: reclaiming our own nanoframe is just
++// burning the metal we already committed.
++std::vector<CCircuitUnit*> CCircuitAI::GetOwnUnitsOfDef(CCircuitDef* def, const springai::AIFloat3& pos, float radius)
++{
++	std::vector<CCircuitUnit*> out;
++	if (def == nullptr) {
++		return out;
++	}
++	const float sqRadius = radius * radius;
++	const int frame = GetLastFrame();
++	for (auto& kv : teamUnits) {
++		CCircuitUnit* u = kv.second;
++		if ((u == nullptr) || (u->GetCircuitDef() != def)) {
++			continue;
++		}
++		if (u->GetUnit()->IsBeingBuilt()) {
++			continue;
++		}
++		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
++			continue;
++		}
++		out.push_back(u);
++	}
++	return out;
++}
++
 +bool CCircuitAI::IsCommanderWreck(springai::Feature* f)
 +{
 +	if (f == nullptr) {
@@ -408,10 +458,10 @@ index aeea933..58a7ed2 100644
  {
  	// NOTE: See notes in MobileSlave or other economy->SendUnits places
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..bf0d98c 100644
+index b4f4f40..963c937 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -149,6 +149,45 @@ private:
+@@ -149,6 +149,52 @@ private:
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
  	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
@@ -451,13 +501,20 @@ index b4f4f40..bf0d98c 100644
 +	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 +	void NoteTrade(bool isKill, CCircuitDef* cdef);
 +	float GetRecentTradeRatio();
++	// A large building could not be placed. Reported, not acted on: what to
++	// clear out of the way is a policy question and lives in AngelScript.
++	void NoteBuildBlocked(const springai::AIFloat3& pos);
++	bool GetBlockedBuildPos(springai::AIFloat3& outPos);
++	// Our own units of `def` within radius of pos. The script can see a def's
++	// count but has no way to reach the instances.
++	std::vector<CCircuitUnit*> GetOwnUnitsOfDef(CCircuitDef* def, const springai::AIFloat3& pos, float radius);
 +	float GetEnemyCostAt(const springai::AIFloat3& pos, float radius) const;
 +	float GetBuilderThreatAt(const springai::AIFloat3& pos) const;
 +	float GetUnitThreatAt(CCircuitUnit* unit, const springai::AIFloat3& pos) const;
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
-@@ -205,6 +244,16 @@ private:
+@@ -205,6 +251,21 @@ private:
  	bool isAllyBaseAvoid;
  // <<< AIOptions.lua ---- END
  
@@ -469,6 +526,11 @@ index b4f4f40..bf0d98c 100644
 +	float tradeKilled = .0f;
 +	float tradeLost = .0f;
 +	int tradeDecayFrame = 0;
++	// Where a large building last failed to find a site, and when. Expires so
++	// the script never acts on a stale report.
++	#define BLOCKED_BUILD_TTL	(FRAMES_PER_SEC * 30)
++	springai::AIFloat3 blockedBuildPos = -RgtVector;
++	int blockedBuildFrame = -1000000;
 +// <<< Recent trade record ---- END
 +
  // >>> UnitDefs ---- BEGIN
@@ -1143,10 +1205,10 @@ index 193efa9..954669b 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..c859c66 100644
+index 2839b72..36b454d 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
-@@ -195,6 +195,76 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +195,93 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
@@ -1190,6 +1252,23 @@ index 2839b72..c859c66 100644
 +	return circuit->GetBestWreckPos(pos, radius, minMetal);
 +}
 +
++static bool CCircuitAI_GetBlockedBuildPos(CCircuitAI* circuit, AIFloat3& outPos)
++{
++	return circuit->GetBlockedBuildPos(outPos);
++}
++
++static CScriptArray* CCircuitAI_GetOwnUnitsOfDef(CCircuitAI* circuit, CCircuitDef* def,
++		const AIFloat3& pos, float radius)
++{
++	const std::vector<CCircuitUnit*> found = circuit->GetOwnUnitsOfDef(def, pos, radius);
++	CScriptArray* arr = CScriptArray::Create(gUnitArrayType, found.size());
++	asUINT i = 0;
++	for (CCircuitUnit* unit : found) {
++		arr->SetValue(i++, &unit);
++	}
++	return arr;
++}
++
 +static float CCircuitAI_GetTeamMetalIncome(CCircuitAI* circuit, int otherTeamId)
 +{
 +	return circuit->GetTeamMetalIncome(otherTeamId);
@@ -1223,7 +1302,7 @@ index 2839b72..c859c66 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -499,6 +569,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -499,6 +586,22 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	gIdArrayType = engine->GetTypeInfoByDecl("array<Id>");
  	r = engine->RegisterObjectMethod("CCircuitAI", "array<Id>@ GetTeamIds() const", asFUNCTION(CCircuitAI_GetTeamIds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1238,13 +1317,15 @@ index 2839b72..c859c66 100644
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float ReadTeamValue(int, const string& in, float) const", asFUNCTION(CCircuitAI_ReadTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestWreckPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestWreckPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetWreckValueAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetWreckValueAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "bool GetBlockedBuildPos(AIFloat3& out)", asFUNCTION(CCircuitAI_GetBlockedBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetUnitThreatAt(CCircuitUnit@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetUnitThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -564,6 +648,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +667,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1268,7 +1349,7 @@ index 2839b72..c859c66 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +674,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +693,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1289,7 +1370,7 @@ index 2839b72..c859c66 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -703,6 +818,9 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +837,9 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1726,6 +1807,30 @@ index 13ced8d..3a733d6 100644
  	decltype(units)::const_iterator unitIt;  // update iterator
  
  	std::set<CCircuitUnit*> traveled;
+diff --git a/src/circuit/task/builder/FactoryTask.cpp b/src/circuit/task/builder/FactoryTask.cpp
+index 9c2a9cb..889a9db 100644
+--- a/src/circuit/task/builder/FactoryTask.cpp
++++ b/src/circuit/task/builder/FactoryTask.cpp
+@@ -147,7 +147,18 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
+ 		return;
+ 	}
+ 	facing = opposite[facing];
+-	checkFacing();
++	if (checkFacing()) {
++		return;
++	}
++
++	// All four facings failed: there is genuinely nowhere here to put this.
++	// Only reported for LARGE footprints -- an ordinary lab failing to place is
++	// usually a bad search origin, whereas a gantry-sized building failing is
++	// what a base packed with old T1 clutter looks like. The script decides
++	// whether anything nearby is worth clearing; see CCircuitAI::NoteBuildBlocked.
++	if (testSize >= SQUARE_SIZE * 8) {
++		circuit->NoteBuildBlocked(pos);
++	}
+ }
+ 
+ #define SERIALIZE(stream, func)	\
 diff --git a/src/circuit/task/builder/MexTask.cpp b/src/circuit/task/builder/MexTask.cpp
 index e49a5b3..d788199 100644
 --- a/src/circuit/task/builder/MexTask.cpp
@@ -1934,10 +2039,10 @@ index fac55c7..247f8a9 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..af3e902 100644
+index cd063e4..fbdd3db 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
-@@ -25,12 +25,100 @@
+@@ -25,12 +25,118 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -1988,7 +2093,25 @@ index cd063e4..af3e902 100644
 +// unfolds out of column before the enemy's guns bear. Roughly a T2 weapon range.
 +#define DEPLOY_SLACK		700.f
 +
-+#define ENGAGE_MARGIN		1.80f
++// 1.80 -> 1.35 on 2026-08-07, from apexearth's live multiplayer game.
++//
++// 1.80 demanded 80% more power than whatever was defending a target. Measured
++// in that game (map Project SD-129, 10 Apex AIs, 27 min): 492 engage decisions,
++// every one reporting TAKE -- but 3,973 candidate groups refused as too strong
++// first, a mean of 8 per decision and up to 26 in a single one. Every sample
++// logged edge=0.00, which means the target finally accepted had essentially no
++// defending influence at all.
++//
++// So the AI was not choosing bad fights, it was refusing all of them and
++// attacking empty ground. apexearth: "we aren't aggressive enough vs humans
++// early on, and we tend to run when we really shouldn't." Against a human who
++// masses and pushes, never contesting a defended position loses by default.
++//
++// Not dropped to 1.0: the history in this file records that the original test
++// was effectively margin 1.0 and engaged on a coin flip, which is its own
++// failure. 1.35 still asks for a real edge, roughly halving the surplus
++// demanded rather than removing it.
++#define ENGAGE_MARGIN		1.35f
 +
 +// How much harder the engage test gets when we are losing trades.
 +//
@@ -2038,7 +2161,7 @@ index cd063e4..af3e902 100644
  CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
  		: ISquadTask(mgr, FightType::ATTACK, powerMod)
  		, minPower(minPower)
-@@ -54,12 +142,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
+@@ -54,12 +160,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
  	if (speedLeader > speedUnit) {
  		std::swap(speedLeader, speedUnit);
  	}
@@ -2063,7 +2186,7 @@ index cd063e4..af3e902 100644
  		return false;
  	}
  	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
-@@ -178,7 +276,20 @@ void CAttackTask::Update()
+@@ -178,7 +294,20 @@ void CAttackTask::Update()
  
  	state = State::ROAM;
  	if (GetTarget() != nullptr) {
@@ -2085,7 +2208,7 @@ index cd063e4..af3e902 100644
  		if (position.SqDistance2D(startPos) < SQUARE(highestRange + slack)) {
  			int xs, ys, xe, ye;
  			circuit->GetPathfinder()->Pos2PathXY(startPos, &xs, &ys);
-@@ -208,7 +319,8 @@ void CAttackTask::Update()
+@@ -208,7 +337,8 @@ void CAttackTask::Update()
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
  			leader, circuit->GetThreatMap(),
  			startPos, endPos, pathRange, GetHitTest(),
@@ -2095,7 +2218,7 @@ index cd063e4..af3e902 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -238,25 +350,67 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,25 +368,67 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -2166,7 +2289,7 @@ index cd063e4..af3e902 100644
  	float minSqDist = std::numeric_limits<float>::max();
  	bool hasGoodTarget = false;
  
-@@ -269,10 +423,20 @@ void CAttackTask::FindTarget()
+@@ -269,10 +441,20 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -2191,7 +2314,7 @@ index cd063e4..af3e902 100644
  			continue;
  		}
  
-@@ -319,10 +483,56 @@ void CAttackTask::FindTarget()
+@@ -319,10 +501,56 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -2249,7 +2372,7 @@ index cd063e4..af3e902 100644
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -332,6 +542,22 @@ void CAttackTask::FindTarget()
+@@ -332,6 +560,22 @@ void CAttackTask::FindTarget()
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
  	}
@@ -2272,7 +2395,7 @@ index cd063e4..af3e902 100644
  	// Return: target, startPos=leader->pos, endPos=position
  }
  
-@@ -340,6 +566,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +584,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
