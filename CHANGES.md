@@ -8,7 +8,44 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
-## 2026-08-07: the aggression session
+## 2026-08-07: RESULTS BELOW WERE VOID -- read this first
+
+**Every tournament result in the section below was measured against a BARb with
+no AI script, and is meaningless.** Kept, struck through, because the failure
+mode is worth more than the numbers were.
+
+Cause: `deploy_ai.py`'s stale-cleanup deletes `BARb/<variant>` to remove old
+version-style deploys. `variant` is also the VERSION, so deploying a variant
+named `stable` resolved that to `BARb/stable` -- the baseline -- in BOTH halves:
+the engine-side folder AND `BAR.sdd/luarules/configs/BARb/stable`. The
+engine-side half was noticed and restored from `files.md5.gz`. The GAME-SIDE
+half was not, and that is where stock BARb's `hard`/`medium`/`easy` profile
+scripts live. Engine-side ships only the `dev` profile.
+
+So from that point on, `BARb:stable:hard` and `:medium` loaded, logged
+`Game-side script: 'LuaRules\Configs\BARb\stable\script\hard\init.as' is
+missing!`, and then did nothing. Commanders stood still all game.
+
+**This reads exactly like a triumph.** 16-0 on every faction, 8-0 at 8v8 on the
+configuration that had gone 0-8 hours earlier, games "won" in 19 minutes instead
+of 40. Every one of those numbers is an artifact. The 19-minute games were not
+fast wins, they were walkovers against a corpse.
+
+What survived:
+- The **0-8** 8v8 result from BEFORE the deletion is real.
+- Both self-play A/Bs (`Apex` vs `ApexCtl`) are unaffected, since both sides are
+  ours -- and both said the new strategic work does NOT help: 11-13 and 9-11.
+- With BARb restored and verified (0 missing-script errors, 363 AI log lines vs
+  12, army 18,470 vs 17,790 over a full 20 min), we are roughly EVEN with BARb
+  hard, not dominant.
+
+Detection: an AI that loads but never acts logs almost nothing. BARb produced 12
+lines across a whole game against apex's 851. `tools/feature_audit.py` reports
+per-game coverage and would have caught this instantly had it been pointed at
+the OPPONENT rather than only at us. Check the opponent is alive before believing
+a win rate -- a walkover and a triumph are the same number.
+
+## 2026-08-07: the aggression session (RESULTS VOID, SEE ABOVE)
 
 Measured after the night's batch, all on engine `recoil_2026.07.04`:
 
