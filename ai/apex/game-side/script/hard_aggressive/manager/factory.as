@@ -575,6 +575,14 @@ void UpdatePhase()
 void UpdateTeamCoord()
 {
 	UpdatePhase();
+	// gHaveT2 latches on in AiUnitAdded and had no way back down, but the
+	// branch that REBUILDS an advanced plant is gated on !gHaveT2 -- so a
+	// player whose lab died still read "we have T2" and could never start
+	// another. Recomputed here rather than in AiUnitRemoved because that hook
+	// gives no guarantee the dying unit has left the def yet; on this cadence
+	// it self-corrects either way.
+	if (gHaveT2 && !AnyAdvPlant())
+		gHaveT2 = false;
 	ai.PublishTeamValue(TV_ADV, OwnAdvProgress());
 	ai.PublishTeamValue(TV_READY, RushReady() ? aiEconomyMgr.metal.income : 0.f);
 	ai.PublishTeamValue(TV_DIST, Builder::gHomeSet
@@ -2041,6 +2049,22 @@ array<string> T1_FAC = {armlab, armvp, armsy, armap,
 array<string> T2_FAC = {armalab, armavp, armasy, armaap,
                         coralab, coravp, corasy, coraap,
                         legalab, legavp, corasy};
+
+// Do we own OR are we building any advanced plant? GetDefBuildProgress is -1
+// only when we hold none of that def at all, so a nanoframe counts -- which is
+// the point: gHaveT2 must not drop while a replacement is going up, or the
+// !gHaveT2 rebuild branch starts a second one. Unlike OwnAdvProgress this does
+// NOT skip air plants; the question here is "do we hold the tier", not "is this
+// player a credible ground-push tech lead".
+bool AnyAdvPlant()
+{
+	for (uint i = 0; i < T2_FAC.length(); ++i) {
+		CCircuitDef@ def = ai.GetCircuitDef(T2_FAC[i]);
+		if ((def !is null) && (ai.GetDefBuildProgress(def) >= 0.f))
+			return true;
+	}
+	return false;
+}
 
 // Our best progress toward an advanced plant, 0..1, or -1 if we hold none.
 // Nanoframes count -- commitment is the question the election asks, and the
