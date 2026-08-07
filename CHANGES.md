@@ -8,6 +8,51 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-07: front vs back, and the front starts UNKNOWN
+
+apexearth on the undirected perimeter: "the perceived frontline is behind us,
+not even facing the enemy, its also too small so we have obvious gaps... the
+front line is really where our territory ends and the enemy's territory is about
+to begin... you might say in the beginning of a game the frontline is completely
+unset / unknown."
+
+Two errors, both fixed:
+
+- **Too small, with gaps.** Territory was thresholded at 15% of peak ally
+  influence, which selects the dense CORE. Its edge therefore sat behind our own
+  army. Territory is now 3% (~15 against a ~520 peak) -- everything we
+  meaningfully hold. Perimeter went from ~30 patchy cells to ~100 wrapping the
+  whole territory.
+- **Behind us.** A ring has no direction; half of any ring faces our own rear.
+  The ring is now split against the bearing from our territory centroid to the
+  enemy centroid: FRONT faces them, BACK is the fog behind us. Measured on Jade
+  8v8: ~53 front / ~47 back of ~100.
+
+Enemy position is REMEMBERED, not sampled (`gFoeSeen`, +1 per sighting, 0.995
+decay per scan). Enemy influence only holds units currently known, so a raid
+that passes through vanishes seconds later -- but the fact their territory lies
+that way does not stop being true. Without the memory the bearing flickered.
+
+**The front is UNKNOWN until an enemy has been seen**, and says so rather than
+guessing: 240 of 673 samples in one game had foeKnown=0 (early game, and rear
+players who never see anyone). `Front::IsFrontKnown()` exposes it; `FrontNear`
+returns false rather than inventing a direction.
+
+Overlay draws map LINES, not points. Points are pings -- each one fires an alert
+and a minimap flash, unreadable at this density.
+
+### Deploys keep failing silently while a game runs
+
+Three deploys this session did nothing because a watch game held the files;
+`cp` said "Device or resource busy" and the game-side script kept old code. Two
+headless runs then reported on stale files. The deploy step now aborts if a
+spring/Beyond-All-Reason process exists, and the deployed FILE is grepped for
+the change rather than trusting deploy's exit.
+
+Also walked into two documented traps again: a `str.replace` without an assert
+silently did nothing, and `out` is a reserved AngelScript keyword (32 compile
+errors, which disable the whole variant while the match still reports normally).
+
 ## 2026-08-07: the front is our own perimeter, not a seam
 
 Three definitions of "front line", each killed by measurement, in order:

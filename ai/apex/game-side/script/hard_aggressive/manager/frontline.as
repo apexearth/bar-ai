@@ -1,58 +1,75 @@
 namespace Front {
 
-// Which map corridors are ours, which are the enemy's, and which are the seam
-// between them.
+// Where our territory ends and the enemy's is about to begin.
 //
-// The topology is BWEM's, computed by the engine every game (see CHANGES.md --
-// it was unreachable until the GetChokePoint* bindings). Classification lives
-// here rather than in C++ so the thresholds can be retuned without a rebuild.
+// Four definitions died against measurement, in this order:
+//   1. Cells where BOTH sides are present. One Jade 8v8 scan: 339 ally cells,
+//      56 enemy cells, ZERO holding both. Where one side is strong the other
+//      reads ~0, so the fields are disjoint and the test only fires where both
+//      are too faint to mean anything.
+//   2. The boundary between the two fields. Found 2-3 cells. Enemy influence
+//      counts only KNOWN enemy units and is far too sparse to draw a line with.
+//   3. The edge of our influence at a 15%-of-peak bar. That bar picks out the
+//      dense CORE of our territory, so its edge sat BEHIND our own army and was
+//      full of gaps.
+//   4. That same ring, undirected. Half of any ring faces our own rear, which
+//      is a danger zone but is not a front line.
+//
+// So: territory is a LOW bar (anything we meaningfully hold), its perimeter
+// wraps the whole territory, and the ring is then split by direction -- the part
+// facing the enemy is the FRONT, the part facing our own fog is the BACK.
+// Before we have seen any enemy there is no direction to split on, and the
+// front is honestly UNKNOWN rather than guessed.
 
-// A gap narrower than this is an artefact between interior areas, not something
-// an army could hold; wider than this is open ground no line would cover.
 const float MIN_WIDTH = 80.f;
 const float MAX_WIDTH = 2000.f;
 
-// Ownership is read from ally and enemy influence SEPARATELY, not from their
-// difference. Measured on Comet Catcher: a corridor beside our base reads net
-// 77, one nobody has been near reads exactly 0. Classifying on the difference
-// made both of those "balanced", so empty no-man's-land was indistinguishable
-// from a genuine seam -- and empty ground is where most of the map sits.
-// A seam requires BOTH sides actually present.
-//
-// "Present" is RELATIVE, not a fixed number. Influence runs to ~290 where a
-// team is massed, and a flat threshold of 1.0 called any faint bleed presence --
-// which labelled ground OURS that we were nowhere near, because with no enemy
-// seen the ally > foe * DOMINANCE test passes on almost nothing. So the bar for
-// each side is a fraction of that side's OWN strongest reading this scan, with
-// an absolute floor for the opening minutes when everything is small.
-// The floor must stay tiny. The two fields are NOT on the same scale: ally
-// influence counts everything we own and peaks around 520, while enemy
-// influence counts only KNOWN enemy units and peaks under 33 in the same scan.
-// A floor of 5 erased the enemy field completely -- every AI read cFoe=0 for a
-// whole game -- which made the front vanish rather than move. The per-side
-// fraction is what does the work; the floor only guards the opening seconds.
-const float PRESENCE_FLOOR = 1.0f;
-const float PRESENCE_FRAC = 0.15f;
-const float DOMINANCE = 2.0f;   // one side this many times the other owns it
-// A seam cell within this of a chokepoint counts as being IN that corridor.
-const float CHOKE_NEAR = 600.f;
+// Territory is everything we meaningfully hold, not only where we are massed.
+// At 15% of peak this picked out the core alone and the ring sat behind our own
+// army. Ally influence peaks ~520, so 3% is ~15 -- clear of numerical noise, but
+// it includes the thin edges we really do hold.
+const float TERRITORY_FLOOR = 1.0f;
+const float TERRITORY_FRAC = 0.03f;
+// Enemy influence is on another scale entirely -- it counts only what we have
+// SEEN, and peaks under 33 against ally's 520 -- so it gets its own bar. An
+// absolute floor of 5 once erased it completely and every AI read cFoe=0 for a
+// whole game, which made the front vanish instead of move.
+const float FOE_FLOOR = 1.0f;
+const float FOE_FRAC = 0.10f;
 
-// Chokepoints do not move, so the geometry is gathered once. Ownership does
-// move, so it is re-read on a timer.
+const float CHOKE_NEAR = 600.f;
 const int RECLASSIFY = 10 * SECOND;
+const int SEAM_N = 40;
 
 enum Owner { EMPTY = 0, OURS = 1, CONTESTED = 2, THEIRS = 3 };
+enum Edge { NONE = 0, FRONT = 1, BACK = 2 };
 
-array<int> gIdx;        // indices into the engine's chokepoint list
-array<int> gOwner;      // parallel to gIdx
+array<int> gIdx;
+array<int> gOwner;
 int gNextClassify = 0;
 bool gGathered = false;
+
+array<AIFloat3> gPerim;    // the whole ring around our territory
+array<int> gEdge;          // parallel to gPerim: FRONT, BACK or NONE
+array<AIFloat3> gPrevDraw; // what we drew last pass, so it can be erased
+array<float> gFoeSeen;     // persistent memory of where enemies have been
+bool gFoeKnown = false;
+AIFloat3 gOurMid;
+AIFloat3 gFoeMid;
+float gPresAlly = TERRITORY_FLOOR;
+float gPresFoe = FOE_FLOOR;
+int gDbgAlly = 0;
+int gDbgFoe = 0;
+bool gDrawn = false;
 
 void Gather()
 {
 	if (gGathered)
 		return;
 	gGathered = true;
+	gFoeSeen.resize(SEAM_N * SEAM_N);
+	for (uint k = 0; k < gFoeSeen.length(); ++k)
+		gFoeSeen[k] = 0.f;
 	const int n = ai.GetChokePointCount();
 	for (int i = 0; i < n; ++i) {
 		const float w = ai.GetChokePointWidth(i);
@@ -64,68 +81,6 @@ void Gather()
 	AiLog("apex: frontline gathered " + gIdx.length() + "/" + n + " usable chokepoints");
 }
 
-int Classify(const AIFloat3& in pos)
-{
-	const float ally = ai.GetAllyInflAt(pos);
-	const float foe = ai.GetEnemyInflAt(pos);
-	if ((ally < gPresAlly) && (foe < gPresFoe))
-		return EMPTY;
-	if (ally > foe * DOMINANCE)
-		return OURS;
-	if (foe > ally * DOMINANCE)
-		return THEIRS;
-	return CONTESTED;
-}
-
-void Update()
-{
-	Gather();
-	if (ai.frame < gNextClassify)
-		return;
-	gNextClassify = ai.frame + RECLASSIFY;
-
-	ScanSeam();   // sets the presence bars that Classify reads
-	for (uint k = 0; k < gIdx.length(); ++k)
-		gOwner[k] = Classify(ai.GetChokePointPos(gIdx[k]));
-	AiLog("apex: frontline ours=" + CountOf(OURS)
-			+ " contested=" + CountOf(CONTESTED)
-			+ " theirs=" + CountOf(THEIRS)
-			+ " empty=" + CountOf(EMPTY)
-			+ " seam=" + SeamSize() + " cAlly=" + gDbgAlly + " cFoe=" + gDbgFoe
-			+ " bar=" + int(gPresAlly) + "/" + int(gPresFoe)
-			+ " box=" + SeamBox());
-
-	Draw();
-}
-
-// The front line, read off the influence field.
-//
-// Measured before this existed: terrain chokepoints are NOT where the fighting
-// is. On Jade 8v8 at 10 min, 63 usable chokepoints classified as 23 ours / 40
-// empty / 0 contested / 0 theirs -- while a 40x40 sweep of the same map at the
-// same moment found 277 cells with enemy presence and 155 with BOTH sides
-// present. The contest is real and none of it lands on a chokepoint, because
-// BWEM chokepoints on these maps are base entrances and interior pockets and
-// the fighting happens in open ground.
-//
-// So the seam is sampled directly: grid cells where both sides are present.
-// Chokepoints stay useful as a filter -- a seam cell that also sits in a
-// corridor is worth far more per tower than one in the open -- but they cannot
-// define the line by themselves.
-// Each AI keeps its OWN influence map, built from what that AI personally knows.
-// Measured on Jade 8v8: forward teams read 72-82 enemy cells and a 55-64 cell
-// seam, while rear teams read cFoe=0 and no seam at all, in the same game at the
-// same moment. So a rear player computing this alone concludes there is no front
-// line. Whatever consumes the seam has to share it across the team rather than
-// trust the local read -- see Factory's PublishTeamValue/ReadTeamValue.
-const int SEAM_N = 40;          // grid resolution per axis
-array<AIFloat3> gSeam;
-array<bool> gHot;   // parallel to gSeam: this perimeter cell faces known enemy
-int gDbgAlly = 0;
-int gDbgFoe = 0;
-float gPresAlly = PRESENCE_FLOOR;
-float gPresFoe = PRESENCE_FLOOR;
-
 AIFloat3 GridPos(int i, int j)
 {
 	AIFloat3 p;
@@ -134,13 +89,26 @@ AIFloat3 GridPos(int i, int j)
 	return p;
 }
 
-void ScanSeam()
+int Classify(const AIFloat3& in pos)
 {
-	gSeam.resize(0);
-	gHot.resize(0);
-	gDbgAlly = 0; gDbgFoe = 0;
+	const float ally = ai.GetAllyInflAt(pos);
+	const float foe = ai.GetEnemyInflAt(pos);
+	if ((ally < gPresAlly) && (foe < gPresFoe))
+		return EMPTY;
+	if (ally > foe * 2.f)
+		return OURS;
+	if (foe > ally * 2.f)
+		return THEIRS;
+	return CONTESTED;
+}
 
-	// Pass one: how strong does each side get anywhere? The bars follow from it.
+void Scan()
+{
+	gPerim.resize(0);
+	gEdge.resize(0);
+	gDbgAlly = 0;
+	gDbgFoe = 0;
+
 	float maxAlly = 0.f, maxFoe = 0.f;
 	for (int i = 0; i < SEAM_N; ++i) {
 		for (int j = 0; j < SEAM_N; ++j) {
@@ -151,93 +119,149 @@ void ScanSeam()
 			if (f > maxFoe) maxFoe = f;
 		}
 	}
-	gPresAlly = maxAlly * PRESENCE_FRAC;
-	if (gPresAlly < PRESENCE_FLOOR) gPresAlly = PRESENCE_FLOOR;
-	gPresFoe = maxFoe * PRESENCE_FRAC;
-	if (gPresFoe < PRESENCE_FLOOR) gPresFoe = PRESENCE_FLOOR;
+	gPresAlly = maxAlly * TERRITORY_FRAC;
+	if (gPresAlly < TERRITORY_FLOOR) gPresAlly = TERRITORY_FLOOR;
+	gPresFoe = maxFoe * FOE_FRAC;
+	if (gPresFoe < FOE_FLOOR) gPresFoe = FOE_FLOOR;
 
-	// Pass two: mark presence per cell.
-	array<bool> ally(SEAM_N * SEAM_N);
-	array<bool> foe(SEAM_N * SEAM_N);
-	for (int i = 0; i < SEAM_N; ++i) {
-		for (int j = 0; j < SEAM_N; ++j) {
-			const AIFloat3 p = GridPos(i, j);
-			const bool a = (ai.GetAllyInflAt(p) >= gPresAlly);
-			const bool f = (ai.GetEnemyInflAt(p) >= gPresFoe);
-			ally[i * SEAM_N + j] = a;
-			foe[i * SEAM_N + j] = f;
-			if (a) ++gDbgAlly;
-			if (f) ++gDbgFoe;
-		}
-	}
-
-	// The front is the OUTER EDGE OF OUR OWN TERRITORY, and the enemy field only
-	// colours it in.
-	//
-	// Two earlier definitions failed against measurement. "Cells where both sides
-	// are present" found nothing: 339 ally cells and 56 enemy cells in one scan
-	// with ZERO holding both, because where one side is strong the other reads
-	// ~0. "Cells on the boundary between the two fields" found 2-3 cells, because
-	// enemy influence counts only KNOWN enemy units and is far too sparse to
-	// draw a line with.
-	//
-	// Our own perimeter needs no vision to compute, exists from minute one, and
-	// is what a player actually means by their front: the edge of what we hold.
-	// A perimeter cell facing known enemy influence is HOT -- that is where the
-	// fighting is -- and the rest is the quiet flank that still has to be held.
+	array<bool> ours(SEAM_N * SEAM_N);
+	float ox = 0.f, oz = 0.f, ow = 0.f;
+	float fx = 0.f, fz = 0.f, fw = 0.f;
 	for (int i = 0; i < SEAM_N; ++i) {
 		for (int j = 0; j < SEAM_N; ++j) {
 			const int me = i * SEAM_N + j;
-			if (!ally[me])
+			const AIFloat3 p = GridPos(i, j);
+			const bool a = (ai.GetAllyInflAt(p) >= gPresAlly);
+			ours[me] = a;
+			if (a) {
+				++gDbgAlly;
+				ox += p.x; oz += p.z; ow += 1.f;
+			}
+			// Enemy sightings are REMEMBERED, not sampled. A raid that passes
+			// through is gone from the influence map seconds later, but the fact
+			// that their territory lies that way does not stop being true.
+			if (ai.GetEnemyInflAt(p) >= gPresFoe) {
+				++gDbgFoe;
+				gFoeSeen[me] += 1.f;
+			} else {
+				gFoeSeen[me] *= 0.995f;
+			}
+			if (gFoeSeen[me] > 0.5f) {
+				fx += p.x * gFoeSeen[me];
+				fz += p.z * gFoeSeen[me];
+				fw += gFoeSeen[me];
+			}
+		}
+	}
+	if (ow > 0.f) {
+		gOurMid.x = ox / ow;
+		gOurMid.z = oz / ow;
+	}
+	gFoeKnown = (fw > 0.f);
+	if (gFoeKnown) {
+		gFoeMid.x = fx / fw;
+		gFoeMid.z = fz / fw;
+	}
+
+	const float dirx = gFoeMid.x - gOurMid.x;
+	const float dirz = gFoeMid.z - gOurMid.z;
+	for (int i = 0; i < SEAM_N; ++i) {
+		for (int j = 0; j < SEAM_N; ++j) {
+			const int me = i * SEAM_N + j;
+			if (!ours[me])
 				continue;
 			bool edge = false;
-			bool hot = false;
-			for (int di = -1; di <= 1; ++di) {
-				for (int dj = -1; dj <= 1; ++dj) {
-					if ((di == 0) && (dj == 0))
-						continue;
+			for (int di = -1; (di <= 1) && !edge; ++di) {
+				for (int dj = -1; (dj <= 1) && !edge; ++dj) {
 					const int ni = i + di;
 					const int nj = j + dj;
 					if ((ni < 0) || (nj < 0) || (ni >= SEAM_N) || (nj >= SEAM_N))
 						continue;   // the map edge is not a front
-					const int nb = ni * SEAM_N + nj;
-					if (!ally[nb])
+					if (!ours[ni * SEAM_N + nj])
 						edge = true;
-					if (foe[nb])
-						hot = true;
 				}
 			}
 			if (!edge)
 				continue;
-			gSeam.insertLast(GridPos(i, j));
-			gHot.insertLast(hot);
+			const AIFloat3 p = GridPos(i, j);
+			gPerim.insertLast(p);
+			if (!gFoeKnown) {
+				gEdge.insertLast(NONE);
+			} else {
+				const float facing = (p.x - gOurMid.x) * dirx + (p.z - gOurMid.z) * dirz;
+				gEdge.insertLast((facing > 0.f) ? FRONT : BACK);
+			}
 		}
 	}
 }
 
-// Nearest point on the front to `from`, if there is a front at all.
-bool SeamNear(const AIFloat3& in from, AIFloat3& out spot)
+uint CountEdge(int kind)
+{
+	uint n = 0;
+	for (uint k = 0; k < gEdge.length(); ++k) {
+		if (gEdge[k] == kind)
+			++n;
+	}
+	return n;
+}
+
+uint CountOf(int owner)
+{
+	uint n = 0;
+	for (uint k = 0; k < gOwner.length(); ++k) {
+		if (gOwner[k] == owner)
+			++n;
+	}
+	return n;
+}
+
+void Update()
+{
+	Gather();
+	if (ai.frame < gNextClassify)
+		return;
+	gNextClassify = ai.frame + RECLASSIFY;
+
+	Scan();
+	for (uint k = 0; k < gIdx.length(); ++k)
+		gOwner[k] = Classify(ai.GetChokePointPos(gIdx[k]));
+
+	AiLog("apex: frontline perim=" + gPerim.length()
+			+ " front=" + CountEdge(FRONT) + " back=" + CountEdge(BACK)
+			+ " foeKnown=" + (gFoeKnown ? 1 : 0)
+			+ " cAlly=" + gDbgAlly + " cFoe=" + gDbgFoe
+			+ " bar=" + int(gPresAlly) + "/" + int(gPresFoe));
+
+	Draw();
+}
+
+// Nearest point on the front to `from`. False while the front is still unknown,
+// which is the honest answer for the opening of a game.
+bool FrontNear(const AIFloat3& in from, AIFloat3& out spot)
 {
 	float best = -1.f;
-	for (uint k = 0; k < gSeam.length(); ++k) {
-		const float d = gSeam[k].distance2D(from);
+	for (uint k = 0; k < gPerim.length(); ++k) {
+		if (gEdge[k] != FRONT)
+			continue;
+		const float d = gPerim[k].distance2D(from);
 		if ((best < 0.f) || (d < best)) {
 			best = d;
-			spot = gSeam[k];
+			spot = gPerim[k];
 		}
 	}
 	return best >= 0.f;
 }
 
-// A seam cell that also sits in a corridor: the best metal-per-tower on the map.
-// Returns false when the front is in open ground, which is the common case.
-bool SeamChoke(const AIFloat3& in from, AIFloat3& out spot)
+// A front cell that also sits in a corridor: the best metal-per-tower there is.
+bool FrontChoke(const AIFloat3& in from, AIFloat3& out spot)
 {
 	float best = -1.f;
-	for (uint k = 0; k < gSeam.length(); ++k) {
+	for (uint k = 0; k < gPerim.length(); ++k) {
+		if (gEdge[k] != FRONT)
+			continue;
 		for (uint c = 0; c < gIdx.length(); ++c) {
 			const AIFloat3 cp = ai.GetChokePointPos(gIdx[c]);
-			if (cp.distance2D(gSeam[k]) > CHOKE_NEAR)
+			if (cp.distance2D(gPerim[k]) > CHOKE_NEAR)
 				continue;
 			const float d = cp.distance2D(from);
 			if ((best < 0.f) || (d < best)) {
@@ -249,98 +273,50 @@ bool SeamChoke(const AIFloat3& in from, AIFloat3& out spot)
 	return best >= 0.f;
 }
 
-uint SeamSize() { return gSeam.length(); }
-
-// Bounding box of the seam this AI computed, to tell a bottom-biased READ from
-// a drawing layer that is dropping the top of the map.
-string SeamBox()
-{
-	if (gSeam.length() == 0)
-		return "none";
-	float x0 = gSeam[0].x, x1 = gSeam[0].x, z0 = gSeam[0].z, z1 = gSeam[0].z;
-	for (uint k = 1; k < gSeam.length(); ++k) {
-		if (gSeam[k].x < x0) x0 = gSeam[k].x;
-		if (gSeam[k].x > x1) x1 = gSeam[k].x;
-		if (gSeam[k].z < z0) z0 = gSeam[k].z;
-		if (gSeam[k].z > z1) z1 = gSeam[k].z;
-	}
-	return "x" + int(x0) + "-" + int(x1) + ",z" + int(z0) + "-" + int(z1);
-}
-
-// Positions of every seam corridor, nearest first from `from`. This is the list
-// the defence and army work in the next steps consume.
-uint Contested(const AIFloat3& in from, array<AIFloat3>& names)
-{
-	names.resize(0);
-	array<float> dist;
-	for (uint k = 0; k < gIdx.length(); ++k) {
-		if (gOwner[k] != CONTESTED)
-			continue;
-		const AIFloat3 p = ai.GetChokePointPos(gIdx[k]);
-		const float d = p.distance2D(from);
-		uint at = 0;
-		while ((at < dist.length()) && (dist[at] < d))
-			++at;
-		dist.insertAt(at, d);
-		names.insertAt(at, p);
-	}
-	return names.length();
-}
-
-// Count by owner, for logging and for gates that only care how much seam exists.
-uint CountOf(int owner)
-{
-	uint n = 0;
-	for (uint k = 0; k < gOwner.length(); ++k) {
-		if (gOwner[k] == owner)
-			++n;
-	}
-	return n;
-}
+uint FrontSize() { return CountEdge(FRONT); }
+bool IsFrontKnown() { return gFoeKnown; }
 
 // ---------------------------------------------------------------------------
-// Debug overlay. These are ORDINARY MAP MARKERS -- allies and spectators see
-// them. Leave DRAW off for anything but a watched game.
+// Debug overlay. Map LINES, not points. A point is a PING -- it fires an alert
+// and a minimap flash -- which at this density is unreadable. Lines just draw.
+// Allies and spectators see these. Off for anything but a watched game.
 const bool DRAW = true;
-int gDrawnAt = -1;
 
 void Draw()
 {
 	if (!DRAW)
 		return;
 
-	// Every AI draws its OWN seam, so what you see is the union of what the team
-	// knows. Measured: in one Jade 8v8, 248 of 400 samples read cFoe=0 -- rear
-	// players see no enemy at all -- so drawing from a single team showed one
-	// player's slice of the front and left the rest of the map blank.
-	for (uint k = 0; k < gSeam.length(); ++k) {
-		if (gDrawnAt >= 0)
-			ai.DrawErase(gSeam[k]);
-		ai.DrawPoint(gSeam[k], gHot[k] ? "FRONT-HOT" : "front");
+	if (gDrawn) {
+		for (uint k = 0; k < gPrevDraw.length(); ++k)
+			ai.DrawErase(gPrevDraw[k]);
 	}
-	gDrawnAt = ai.frame;
+	gPrevDraw.resize(0);
+
+	// Join each front cell to its ring neighbours so it renders as a contour
+	// rather than a cloud. 1.6 cells catches the 8 neighbours and nothing more.
+	const float span = float(AiTerrainWidth()) / float(SEAM_N) * 1.6f;
+	for (uint k = 0; k < gPerim.length(); ++k) {
+		if (gEdge[k] == BACK)
+			continue;   // the back is a danger zone, but it is not the front
+		for (uint m = k + 1; m < gPerim.length(); ++m) {
+			if (gEdge[m] == BACK)
+				continue;
+			if (gPerim[k].distance2D(gPerim[m]) > span)
+				continue;
+			ai.DrawLine(gPerim[k], gPerim[m]);
+		}
+		gPrevDraw.insertLast(gPerim[k]);
+	}
+	gDrawn = true;
 
 	// The chokepoint layer is identical for every AI, so only one draws it.
 	if (ai.teamId != Factory::ElectorTeamId())
 		return;
-
 	for (uint k = 0; k < gIdx.length(); ++k) {
-		const int i = gIdx[k];
-		const AIFloat3 c = ai.GetChokePointPos(i);
-		if (gDrawnAt >= 0)
-			ai.DrawErase(c);
-
-		string tag;
-		if (gOwner[k] == OURS)			tag = "OURS";
-		else if (gOwner[k] == THEIRS)	tag = "THEIRS";
-		else if (gOwner[k] == CONTESTED)	tag = "CONTESTED";
-		else							tag = "empty";
-
-		ai.DrawPoint(c, tag + " w" + int(ai.GetChokePointWidth(i)));
-
 		AIFloat3 e1, e2;
-		if (ai.GetChokePointEnds(i, e1, e2))
-			ai.DrawLine(e1, e2);   // the gap an army or a wall would span
+		if (ai.GetChokePointEnds(gIdx[k], e1, e2))
+			ai.DrawLine(e1, e2);
 	}
 }
 
