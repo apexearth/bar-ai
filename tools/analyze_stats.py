@@ -2,6 +2,7 @@
 
     python tools/analyze_stats.py coh-deep            # summary + timeline
     python tools/analyze_stats.py coh-deep --chart    # also writes timeline.svg
+    python tools/analyze_stats.py 20260806-192247-...  # a single match under matches/
 
 A win rate is one bit per match. These counters are continuous, paired (both
 sides observed in the same game) and sampled every 2 game-minutes, so a handful
@@ -124,18 +125,36 @@ def main() -> int:
     ap.add_argument("--chart", action="store_true")
     args = ap.parse_args()
 
+    # A tournament's ledger.jsonl and a single match's result.json share the
+    # exact same row shape (engine/map/game/seed/teams/result/stats) -- a
+    # ledger is literally one result.json per line. So a single match under
+    # matches/ works here too, as a one-row "tournament": this is the tool
+    # that got hand-reimplemented ad hoc, in-conversation, more than once in
+    # one session because it only ever looked under tournaments/.
     runs = sorted(p for p in (REPO / "tournaments").glob(f"*{args.run}*")
                   if (p / "ledger.jsonl").exists())
+    single_match = None
     if not runs:
-        raise SystemExit("no matching run")
-    run = runs[-1]
-    rows = [json.loads(l) for l in (run / "ledger.jsonl").read_text("utf-8").splitlines() if l.strip()]
+        matches = sorted(p for p in (REPO / "matches").glob(f"*{args.run}*")
+                         if (p / "result.json").exists())
+        if matches:
+            single_match = matches[-1]
+    if not runs and single_match is None:
+        raise SystemExit("no matching run (checked tournaments/ and matches/)")
+
+    if single_match is not None:
+        run = single_match
+        rows = [json.loads((run / "result.json").read_text("utf-8"))]
+        cfg = {}
+    else:
+        run = runs[-1]
+        rows = [json.loads(l) for l in (run / "ledger.jsonl").read_text("utf-8").splitlines() if l.strip()]
+        cfg = json.loads((run / "config.json").read_text("utf-8")) if (run / "config.json").exists() else {}
     rows = [r for r in rows if r.get("stats")]
     if not rows:
         raise SystemExit(f"{run.name}: no telemetry -- is the dev_stats gadget installed?")
 
     specs = sorted({t["spec"] for r in rows for t in r["teams"]})
-    cfg = json.loads((run / "config.json").read_text("utf-8")) if (run / "config.json").exists() else {}
     ordered = [s.split(":")[1] for s in cfg.get("ais", [])] if cfg.get("ais") else []
     a_name = next((s for s in specs if ordered and ordered[0] in s), specs[0])
     b_name = next((s for s in specs if s != a_name), specs[-1])
