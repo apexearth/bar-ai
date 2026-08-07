@@ -2596,7 +2596,7 @@ index ec833e6..2413351 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..9f2234c 100644
+index 0d59b65..bd6b1da 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -10,12 +10,14 @@
@@ -2802,7 +2802,7 @@ index 0d59b65..9f2234c 100644
  	attackFrame = isRepeatAttack ? frame : attackFrame;
  
  	auto it = rangeUnits.begin()->second.begin();
-@@ -421,14 +553,97 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -421,14 +553,116 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	int row = 0;
  	for (const auto& kv : rangeUnits) {
  		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
@@ -2876,11 +2876,30 @@ index 0d59b65..9f2234c 100644
 +		{
 +			sLastPowerDiagFrame = diagFrame;
 +			manager->GetCircuit()->GetLog()->DoLog(utils::string_format(
-+				std::string("apex: outrange-power-diag row=%s (pwr=%.1f) target=%s (pwr=%.1f) dominant=%d"),
-+				rowDef->GetDef()->GetName(), rowDef->GetPower(),
-+				edef->GetDef()->GetName(), edef->GetPower(), powerDominant).c_str());
++				std::string("apex: outrange-power-diag row=%s (pwr=%.1f hp=%.0f) target=%s (pwr=%.1f hp=%.0f) dominant=%d glass=%d"),
++				rowDef->GetDef()->GetName(), rowDef->GetPower(), rowDef->GetHealth(),
++				edef->GetDef()->GetName(), edef->GetPower(), edef->GetHealth(),
++				powerDominant, (edef->GetHealth() < rowDef->GetHealth())).c_str());
 +		}
-+		const bool outranged = !isArty && !powerDominant
++		// A target that outranges us AND is more fragile than we are loses the
++		// race the moment we close, so backing off to its range hands it a free
++		// win -- it simply keeps shooting and we never arrive. apexearth: "we
++		// stop when we are afraid of sniper-like units... we need to dive in and
++		// ignore that 'stay at range' strat if we really want to commit to
++		// killing/engaging them."
++		//
++		// Keyed on HEALTH rather than the role or the "siege" attribute, both of
++		// which were checked against the configs and are wrong for this. Read
++		// from the pinned tree: Sharpshooter (armsnipe, the actual sniper) has
++		// 580 health against a Mace's 1000 -- fragile, dive it. But role
++		// anti_heavy also covers Starlight (2800) and Arquebus (2200), and the
++		// siege attribute covers Vanguard, kamikazes, ships and subs; exempting
++		// either group would send squads diving into things that comfortably win
++		// the close fight. Health separates them cleanly and needs no list to
++		// maintain.
++		const bool glassCannon = (edef != nullptr) && (rowDef != nullptr)
++				&& (edef->GetHealth() < rowDef->GetHealth());
++		const bool outranged = !isArty && !powerDominant && !glassCannon
 +				&& (edef != nullptr) && (edef->GetMaxRange() > kv.first);
 +		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
 +		const float range = standoff * ATTACK_RANGE_MOD;
@@ -2903,7 +2922,7 @@ index 0d59b65..9f2234c 100644
  		// NOTE: float delta = asinf(cdef->GetRadius() / range);
  		//       but sin of a small angle is similar to that angle, omit asinf() call
  		float delta = (3.0f * (rowDef->GetRadius() + aoe)) / (range + DIV0_SLACK);
-@@ -462,6 +677,27 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -462,6 +696,27 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				const float r = (iterNum == 0) ? range0 : range;
  				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
  				CTerrainManager::CorrectPosition(newPos);
