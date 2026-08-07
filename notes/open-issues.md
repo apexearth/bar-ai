@@ -4087,3 +4087,26 @@ way the engine can honour them -- either query the terrain manager for a build
 site near the desired point before enqueuing, or use the militaryManager defence
 points that stock already maintains. Until then, adding more defence rules just
 adds more tasks that cancel.
+
+
+### Tried and REVERTED: validating defence positions before enqueuing (2026-08-07)
+
+The obvious remedy for "9 of 10 defence tasks die with buildPosValid=0" is to
+ask the engine for a real site first. `CCircuitAI::FindBuildSiteNear` was added
+and bound to script for exactly that, and all five script defence enqueues were
+routed through it: find a buildable spot near the wanted position, or do not
+enqueue at all.
+
+**It cost 21% of the economy.** Team metal over 8 games afterwards averaged
+76,751 against 97,818 over 6 games before, and variance widened sharply
+(37k-120k against 83k-109k). Tower count did not clearly improve either -- 2 of
+4 seeds, the same rough rate as before.
+
+Likely mechanism, NOT confirmed: `FindBuildSite` returns a valid site that may
+be far from the wanted position, so constructors walk a long way to place a
+tower instead of doing economy work nearby. That is the same
+constructor-time-is-the-economy trap documented in CLAUDE.md.
+
+The binding is KEPT (it is inert unless called) because the approach is still
+the right shape -- it just needs a distance bound on the returned site, and a
+check that the walk is worth the tower. Do not simply re-enable it.
