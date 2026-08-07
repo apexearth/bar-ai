@@ -3172,7 +3172,7 @@ index 023f029..23b9921 100644
  	void RunPathSingle(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete = nullptr);
  	void RunPathMulti(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete = nullptr);
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882..15324db 100644
+index a1ac882..13b1e1a 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -164,6 +164,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
@@ -3183,6 +3183,30 @@ index a1ac882..15324db 100644
  		, isSonar(false)
  		, isDecoy(false)
  		, isOnSlow(false)
+@@ -252,8 +253,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 		jumpRange = (it != customParams.end()) ? utils::string_to_float(it->second) : 400.0f;
+ 	}
+ 
++	// BAR spells this "drone", not "is_drone". Upstream only looked for
++	// "is_drone", which appears NOWHERE in the BAR unit tree -- so this whole
++	// branch was dead here and drones were treated as ordinary units: worth
++	// chasing, worth shooting, and counted at full cost in the threat map.
++	// apexearth: "when fighting enemy legion hives, find the base unit, don't
++	// bother stopping to shoot at drones so much... need to kill the base."
++	// A legdrone is 15 metal and respawns from a 300-metal leghive, so trading
++	// shots with them is unwinnable by construction.
++	// Both names accepted: "is_drone" stays for whatever game does use it.
+ 	it = customParams.find("is_drone");
++	if (it == customParams.end()) {
++		it = customParams.find("drone");
++	}
+ 	if ((it != customParams.end()) && (utils::string_to_int(it->second) == 1)) {
++		// Bad category feeds noChaseCategory and targetCategory (~bad) below,
++		// i.e. "do not divert to chase or target this". Units still return fire
++		// at whatever is shooting them; they just stop walking off after chaff.
+ 		category |= circuit->GetBadCategory();
+ 		costM *= 0.1f;  // avoid threat metal
+ 	}
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
 index cd0b54a..08de77a 100644
 --- a/src/circuit/unit/CircuitDef.h
