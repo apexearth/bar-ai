@@ -533,6 +533,11 @@ bool HaveGantry()
 	return (d !is null) && (d.count > 0);
 }
 
+// Income that stands in for "four mexes" and "one mex" of economic power. A T1
+// mex yields roughly 2-3 metal/s, so four is about 10.
+const float PHASE_BUILDUP_INCOME = 10.f;
+const float PHASE_EXPAND_INCOME  = 3.f;
+
 int ComputePhase()
 {
 	const float mInc = aiEconomyMgr.metal.income;
@@ -548,9 +553,19 @@ int ComputePhase()
 		return 4;                                          // T2
 	if (MayPursueT2() && RushReady())
 		return 3;                                          // pre-T2
-	if (mex >= 4)
+	// ECONOMIC POWER, not mex count. apexearth: "we should never gate purely on
+	// mex count. you can gate by economic power."
+	//
+	// A count is the wrong measure twice over: it ignores where the metal is
+	// actually coming from (reclaim, converters, a richer spot), and it traps a
+	// player that cannot expand. Measured: t0 and t3 sat at 2 mexes and phase 1
+	// for thirty minutes, and phase 1 is below every economic rule in the AI --
+	// the whole cluster needs phase >= 4 -- so they could not build the economy
+	// that would have got them out. Mex count is kept only as an alternative way
+	// to reach the rung, never as the sole way.
+	if ((mInc >= PHASE_BUILDUP_INCOME) || (mex >= 4))
 		return 2;                                          // build up
-	if (mex >= 1)
+	if ((mInc >= PHASE_EXPAND_INCOME) || (mex >= 1))
 		return 1;                                          // expand
 	return 0;                                              // opening
 }
