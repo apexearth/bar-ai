@@ -638,6 +638,14 @@ const uint  PORC_LEAK_FENCE = 2;
 // across the map instead of building, and that is constructor time, which is the
 // economy.
 const float PORC_MAX_REACH  = 3600.f;
+// How far back from the front the tower actually goes. Far enough that the
+// builder is not standing in the fight, close enough that the tower still
+// covers the approach.
+const float PORC_SETBACK      = 700.f;
+// Enemy metal already within this radius of the site that makes it not worth
+// starting. A tower that dies half-built cost the constructor-seconds anyway.
+const float PORC_DANGER_RADIUS = 700.f;
+const float PORC_DANGER_COST   = 600.f;
 uint gPorcAdded = 0;
 int  gNextPorcAdd = 0;
 
@@ -866,6 +874,29 @@ void UpdateBaseDefence()
 	// this is somebody else's part of the line.
 	if (haveSpot && (spot.distance2D(Builder::gHomePos) > PORC_MAX_REACH))
 		haveSpot = false;
+
+	// BEHIND the line, not on it. apexearth: "what is the point in trying to make
+	// a tower that can never be built? You go to some really dangerous place and
+	// are like, oh, I'm just gonna take a minute and build this. It's dumb."
+	//
+	// The front is by definition the most contested ground on the map, and a
+	// tower is a constructor standing still for a long time. Pull the site back
+	// toward our own territory so the tower still covers the approach but the
+	// builder is not parked in the fight, then refuse outright if the enemy is
+	// already on top of it -- a request that dies to a raider costs the
+	// constructor-seconds either way.
+	if (haveSpot) {
+		const float dx = Builder::gHomePos.x - spot.x;
+		const float dz = Builder::gHomePos.z - spot.z;
+		const float len = sqrt(dx * dx + dz * dz);
+		if (len > 1.f) {
+			spot.x += dx / len * PORC_SETBACK;
+			spot.z += dz / len * PORC_SETBACK;
+		}
+		if (!ai.IsPosOnMap(spot)
+				|| (ai.GetEnemyCostAt(spot, PORC_DANGER_RADIUS) > PORC_DANGER_COST))
+			haveSpot = false;
+	}
 	if (!haveSpot) {
 		// Past the cap, ONLY a measured front position earns a tower. The
 		// geometric guesses stay capped at two, because uncapping a guess is how
