@@ -1127,7 +1127,6 @@ void UpdateTeamPush()
 		// unknown, never no enemies"), so treat it as the floor.
 		const float seen = EnemyArmyCost();
 		const float floorFoe = EnemyArmyFloor();
-		float foe = (seen > floorFoe) ? seen : floorFoe;
 		// Never push on IGNORANCE. EnemyArmyFloor is
 		// PORC_THREAT_PER_ENEMY * teams -- 90 metal on a 6v6, less than one
 		// scout -- so `teamArmy > foe * 1.6` was satisfied by any army at all
@@ -1142,8 +1141,12 @@ void UpdateTeamPush()
 		// on a bad estimate is not a worse trade, it is an army that cannot
 		// disengage. apexearth: "For us to be willing to push like that, we have
 		// to have superior army to the enemy's."
-		if (foe < teamArmy)
-			foe = teamArmy;
+		//
+		// The substitution applies ONLY to the unscouted case. Raising a SEEN
+		// estimate up to teamArmy as well makes foe >= teamArmy unconditionally,
+		// and the test below then reads `teamArmy > teamArmy * 1.6` -- false for
+		// every army, so no push can ever be declared.
+		const float foe = (seen > floorFoe) ? seen : teamArmy;
 		const bool worth = (teamArmy >= PUSH_MIN_ARMY)
 				&& (teamArmy > foe * PUSH_TEAM_RATIO);
 		float until = ai.ReadTeamValue(ai.teamId, TV_PUSH, 0.f);
