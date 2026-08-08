@@ -184,3 +184,37 @@ which dominates.
 
 Do not guess between these. The previous reading of the combined counter as "we
 are out of room" was an assumption presented as a measurement.
+
+## ANSWERED: the cramped-map hypothesis is confirmed, and half-fixed
+
+Split counter, Callisto 4v4, per player:
+
+    t0  placed=0   band=0  hot=0  terrain=11328
+    t1  placed=0   band=0  hot=0  terrain=4896
+    t2  placed=13  band=0  hot=0  terrain=6022
+    t3  placed=56  band=0  hot=0  terrain=1044
+
+**band=0 and hot=0 on every player.** The base is never full and threat never
+blocks it. EVERY failure is the terrain manager refusing the cell. The fixed
+rectangle does not fit the ground.
+
+Fixed: SNAP was 48, so a cell was discarded unless a buildable site existed
+within 48 elmos of its exact centre. Spot() now retries the whole scan at
+SNAP_LOOSE (CELL*2 = 144) before giving up. Measured: t1 0 -> 11 placed,
+t2 13 -> 32, no behaviour regressions.
+
+### STILL BROKEN: t0 places NOTHING even at 144 elmos of slack
+
+terrain=16,704 rejections, placed=0 -- but `techroom=440` proves buildable ground
+exists near its anchor. So this is NOT rough terrain, it is a bad FRAME: the
+bands project backward from the anchor along gFwd, and for that start position
+everything behind it is off-map or cliff.
+
+The axis is latched once and never validated. Next step, in order:
+1. Log gAnchor and gFwd per player and confirm where t0's bands actually land.
+2. If they land off-map/unbuildable, validate the axis at latch time -- try the
+   reverse and the two perpendiculars, keep whichever yields buildable cells.
+3. Only then consider making the whole layout adaptive.
+
+Do NOT just widen SNAP further; at 144 it is already two cells and the grid stops
+being a grid.

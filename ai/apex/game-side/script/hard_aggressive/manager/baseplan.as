@@ -68,6 +68,15 @@ array<int>   BAND_ROWS;
 // having honoured the grid. Beyond this the cell is taken and we move on rather
 // than let the site drift into a lane.
 const float SNAP = 48.f;
+// Second pass. Measured on Callisto: every placement failure was the terrain
+// manager refusing the cell -- band=0, hot=0, terrain=11,328 on a player that
+// placed NOTHING all game -- because a site had to exist within 48 elmos of the
+// cell's exact centre, which rough ground rarely offers. A tidy grid that cannot
+// be built on is worse than a slightly loose one that can, so a failed strict
+// pass retries at two cells of slack before giving up. apexearth: "ive
+// repeatedly seen us perform extra bad on maps where we don't have a lot of
+// room."
+const float SNAP_LOOSE = CELL * 2.f;
 
 // Cells examined per placement. The scan restarts at zero every time so holes
 // left by losses get refilled, which is the whole point of having a grid.
@@ -349,10 +358,13 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 		return false;
 	SweepReserves();
 
+	for (int pass = 0; pass < 2; ++pass) {
+	const float snap = (pass == 0) ? SNAP : SNAP_LOOSE;
 	for (int index = 0; index < SCAN_MAX; ++index) {
 		AIFloat3 cell;
 		if (!CellPos(kind, index, cell)) {
-			++gFailBand;
+			if (pass == 0)
+				++gFailBand;
 			break;
 		}
 		if (Reserved(kind, index)) {
@@ -367,12 +379,12 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 			++gFailHot;
 			continue;
 		}
-		const AIFloat3 site = ai.FindBuildSiteNear(def, cell, SNAP);
+		const AIFloat3 site = ai.FindBuildSiteNear(def, cell, snap);
 		if (!Builder::OnMap(site)) {
 			++gFailTerrain;   // nothing can stand in this cell
 			continue;
 		}
-		if (site.distance2D(cell) > SNAP) {
+		if (site.distance2D(cell) > snap) {
 			++gFailTerrain;   // slid off the grid; treat the cell as taken
 			continue;
 		}
@@ -381,6 +393,7 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 		++gPlaced;
 		spot = site;
 		return true;
+	}
 	}
 	++gNoRoom;
 	return false;
