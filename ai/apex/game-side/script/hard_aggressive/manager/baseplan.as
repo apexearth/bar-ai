@@ -91,7 +91,14 @@ float gMinLat = 0.f, gMaxLat = 0.f, gMaxDepth = 0.f;
 bool gGrown = false;
 
 int gPlaced = 0;
-int gNoRoom = 0;      // placements that found no free cell at all
+// Why a placement failed, split by cause. One combined counter conflated four
+// unrelated things and was read as "the base is full" when it may have been
+// none of them -- apexearth: "noroom is wrong".
+int gNoRoom = 0;      // scan exhausted: every reason below, summed
+int gFailBand = 0;    // ran off the end of the band's rows
+int gFailHot = 0;     // cells rejected by the threat veto
+int gFailTerrain = 0; // terrain manager would not take the cell
+int gFailBusy = 0;    // cell already reserved by an in-flight request
 int gNextLog = 0;
 
 float Abs(float v) { return (v < 0.f) ? -v : v; }
@@ -344,19 +351,31 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 
 	for (int index = 0; index < SCAN_MAX; ++index) {
 		AIFloat3 cell;
-		if (!CellPos(kind, index, cell))
-			break;   // band is full
-		if (Reserved(kind, index))
+		if (!CellPos(kind, index, cell)) {
+			++gFailBand;
+			break;
+		}
+		if (Reserved(kind, index)) {
+			++gFailBusy;
 			continue;
-		if (!Builder::OnMap(cell))
+		}
+		if (!Builder::OnMap(cell)) {
+			++gFailTerrain;
 			continue;
-		if (Builder::ThreatFor(unit, cell) > Builder::CON_THREAT_VETO)
+		}
+		if (Builder::ThreatFor(unit, cell) > Builder::CON_THREAT_VETO) {
+			++gFailHot;
 			continue;
+		}
 		const AIFloat3 site = ai.FindBuildSiteNear(def, cell, SNAP);
-		if (!Builder::OnMap(site))
-			continue;   // nothing can stand in this cell
-		if (site.distance2D(cell) > SNAP)
-			continue;   // slid off the grid; treat the cell as taken
+		if (!Builder::OnMap(site)) {
+			++gFailTerrain;   // nothing can stand in this cell
+			continue;
+		}
+		if (site.distance2D(cell) > SNAP) {
+			++gFailTerrain;   // slid off the grid; treat the cell as taken
+			continue;
+		}
 		Reserve(kind, index);
 		Grow(kind, index);
 		++gPlaced;
@@ -407,6 +426,8 @@ void Update()
 	AiLog(Factory::T() + "apex: base area=" + int(Area())
 		+ " width=" + int(gMaxLat - gMinLat) + " depth=" + int(gMaxDepth)
 		+ " placed=" + gPlaced + " noroom=" + gNoRoom
+		+ " (band=" + gFailBand + " hot=" + gFailHot
+		+ " terrain=" + gFailTerrain + " busy=" + gFailBusy + ")"
 		+ " blocked=" + (ai.GetBlockedBuildPos(blocked) ? 1 : 0)
 		+ " techroom=" + techDist);
 }

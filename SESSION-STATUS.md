@@ -152,3 +152,35 @@ separated them:
 Worth separating before changing either. Also unexplained: we build ~66 armack to
 stock's ~10 while holding fewer T2 constructors at peak -- we buy them and lose
 them.
+
+## Strongest open hypothesis: the base grid fails on cramped maps
+
+apexearth: "ive repeatedly seen us perform extra bad on maps where we don't have
+a lot of room."
+
+Mechanism, and it is testable. `Base::Spot` lays out straight rows at fixed
+depths from a latched anchor, with 1,512 elmos of lateral span and SCAN_MAX=96
+cells examined. On tight ground those cells may simply not exist. When Spot
+fails, everything downstream fails at once:
+
+- the home crew's economy rule returned null entirely (fixed today with a
+  FindBuildSiteNear fallback, but that SCATTERS instead of packing)
+- constructors then walk between spread-out sites and look idle
+- the base sprawls -- which is what the grid was built to prevent
+
+Measured on Callisto, per player: `placed=0 noroom=119`, `placed=28 noroom=112`,
+`placed=217 noroom=6`. The same code, wildly different outcomes by start
+position. On a roomy map the grid succeeds and none of this fires, so the AI
+looks fine -- which matches the reported pattern exactly.
+
+`noroom` was one combined counter and is now split by cause:
+`noroom=N (band=N hot=N terrain=N busy=N)`. THE TEST: run a cramped map and read
+which dominates.
+- `terrain` dominating => the band geometry does not fit tight ground; the fix
+  is a layout that adapts to available space, not a fixed rectangle.
+- `band` dominating => genuinely full; note SCAN_MAX=96 cannot even reach the
+  back of the ECO band (12 rows x ~18 cols ~= 216 cells), so raise it first.
+- `hot` dominating => not a layout problem at all; the base is under threat.
+
+Do not guess between these. The previous reading of the combined counter as "we
+are out of room" was an assumption presented as a measurement.
