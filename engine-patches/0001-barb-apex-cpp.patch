@@ -636,10 +636,10 @@ index aeea933..c733a8c 100644
  {
  	// NOTE: See notes in MobileSlave or other economy->SendUnits places
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..28921e0 100644
+index b4f4f40..472e883 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -149,6 +149,101 @@ private:
+@@ -149,6 +149,107 @@ private:
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
  	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
@@ -701,6 +701,12 @@ index b4f4f40..28921e0 100644
 +	// same unchecked pattern that made GetBuilderThreatAt kill the engine at
 +	// frame 3 on an off-map read. These guard; the raw ones must never be bound.
 +	bool IsPosOnMap(const springai::AIFloat3& pos) const;
++	// The front line, handed down from script. Army positions were selected
++	// exclusively from metal-cluster defPoints, so squads had no position that
++	// meant "the line" and orbited bases instead of holding ground.
++	void SetFrontPos(const springai::AIFloat3& pos) { frontPos = pos; }
++	const springai::AIFloat3& GetFrontPos() const { return frontPos; }
++	bool HasFrontPos() const { return frontPos.x >= 0.f; }
 +	// In-game map markers, for watching what the AI believes. These are ordinary
 +	// map points/lines: allies and spectators see them, so anything using these
 +	// must stay off by default outside a debug watch.
@@ -741,7 +747,7 @@ index b4f4f40..28921e0 100644
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
-@@ -205,6 +300,29 @@ private:
+@@ -205,6 +306,30 @@ private:
  	bool isAllyBaseAvoid;
  // <<< AIOptions.lua ---- END
  
@@ -759,6 +765,7 @@ index b4f4f40..28921e0 100644
 +	springai::AIFloat3 blockedBuildPos = -RgtVector;
 +	int blockedBuildFrame = -1000000;
 +	float engageBoost = 1.f;
++	springai::AIFloat3 frontPos = -RgtVector;
 +	#define HOT_DECAY_PERIOD	(FRAMES_PER_SEC * 20)
 +	#define HOT_DECAY			0.80f   // ~1 min half-life
 +	#define HOT_MIN_WEIGHT		250.f   // metal lost before the spot means anything
@@ -1067,7 +1074,7 @@ index 2925da7..f1b8ee8 100644
  	bool IsIgnoreStallingPull(const IBuilderTask* task) const;
  	void CorrectResourcePull(float metal, float energy);
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b..0728958 100644
+index a44c20b..a0e16d4 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -56,6 +56,8 @@ using namespace terrain;
@@ -1227,7 +1234,41 @@ index a44c20b..0728958 100644
  	outPositions.clear();
  
  	CInfluenceMap* inflMap = circuit->GetInflMap();
-@@ -1429,8 +1526,13 @@ void CMilitaryManager::UpdateDefence()
+@@ -1095,6 +1192,16 @@ void CMilitaryManager::FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions
+ {
+ 	outPositions.clear();
+ 
++	// The FRONT first. Every position below comes from GetDefIndices(cluster),
++	// i.e. metal-cluster points only, which is why squads orbited bases and mexes
++	// and never held a line -- there was no position in the system that meant
++	// "the edge of our territory". Script computes one now; it goes in ahead of
++	// the clusters so a squad rallies on the line and falls back to clusters only
++	// when the front is still unknown.
++	if (circuit->HasFrontPos()) {
++		outPositions.push_back(circuit->GetFrontPos());
++	}
++
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+ 	const int frame = circuit->GetLastFrame();
+ 
+@@ -1149,6 +1256,16 @@ void CMilitaryManager::FillSafePos(CCircuitUnit* unit, F3Vec& outPositions)
+ {
+ 	outPositions.clear();
+ 
++	// The FRONT first. Every position below comes from GetDefIndices(cluster),
++	// i.e. metal-cluster points only, which is why squads orbited bases and mexes
++	// and never held a line -- there was no position in the system that meant
++	// "the edge of our territory". Script computes one now; it goes in ahead of
++	// the clusters so a squad rallies on the line and falls back to clusters only
++	// when the front is still unknown.
++	if (circuit->HasFrontPos()) {
++		outPositions.push_back(circuit->GetFrontPos());
++	}
++
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+ 	const int frame = circuit->GetLastFrame();
+ 
+@@ -1429,8 +1546,13 @@ void CMilitaryManager::UpdateDefence()
  		if (frame >= defElem.second) {
  			CCircuitDef* buildDef = defElem.first;
  			if (buildDef->IsAvailable(frame)) {
@@ -1242,7 +1283,7 @@ index a44c20b..0728958 100644
  			}
  			ibd->second.pop_back();
  		}
-@@ -1446,6 +1548,37 @@ void CMilitaryManager::UpdateDefence()
+@@ -1446,6 +1568,37 @@ void CMilitaryManager::UpdateDefence()
  	}
  }
  
@@ -1280,7 +1321,7 @@ index a44c20b..0728958 100644
  void CMilitaryManager::MakeBaseDefence(const AIFloat3& pos)
  {
  	if (circuit->IsLoadSave()) {
-@@ -1717,10 +1850,40 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1717,10 +1870,40 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  	return task;
  }
  
@@ -1468,7 +1509,7 @@ index 193efa9..954669b 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..2db7fb5 100644
+index 2839b72..1a4c09a 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -195,6 +195,124 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
@@ -1596,7 +1637,7 @@ index 2839b72..2db7fb5 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -499,6 +617,39 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -499,6 +617,40 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	gIdArrayType = engine->GetTypeInfoByDecl("array<Id>");
  	r = engine->RegisterObjectMethod("CCircuitAI", "array<Id>@ GetTeamIds() const", asFUNCTION(CCircuitAI_GetTeamIds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1620,6 +1661,7 @@ index 2839b72..2db7fb5 100644
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetChokePointWidth(int) const", asMETHOD(CCircuitAI, GetChokePointWidth), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool GetChokePointEnds(int, AIFloat3& out, AIFloat3& out)", asFUNCTION(CCircuitAI_GetChokePointEnds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "int GetChokePointArea(int, int) const", asMETHOD(CCircuitAI, GetChokePointArea), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void SetFrontPos(const AIFloat3& in)", asMETHOD(CCircuitAI, SetFrontPos), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsPosOnMap(const AIFloat3& in) const", asMETHOD(CCircuitAI, IsPosOnMap), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetAllyInflAt), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetEnemyInflAt), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1636,7 +1678,7 @@ index 2839b72..2db7fb5 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -564,6 +715,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +716,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1660,7 +1702,7 @@ index 2839b72..2db7fb5 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +741,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +742,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1681,7 +1723,7 @@ index 2839b72..2db7fb5 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +767,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +768,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -1690,7 +1732,7 @@ index 2839b72..2db7fb5 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +887,9 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +888,9 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -2794,6 +2836,46 @@ index 9e6bfd8..c785896 100644
  				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore())
  			{
  				continue;
+diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
+index bfc3caf..3a7ffc9 100644
+--- a/src/circuit/task/fighter/DefendTask.cpp
++++ b/src/circuit/task/fighter/DefendTask.cpp
+@@ -29,6 +29,13 @@
+ 
+ namespace circuit {
+ 
++// How close a DEFEND task must be to the front to count as holding it, and how
++// far past its own maxPower it must get before it may leave anyway. Above that
++// the squad is surplus and is better spent attacking than standing still.
++#define FRONT_HOLD_RANGE	1800.0f
++#define FRONT_HOLD_POWER	2.0f
++
++
+ using namespace springai;
+ using namespace terrain;
+ 
+@@ -106,6 +113,21 @@ void CDefendTask::Update()
+ 	 */
+ 	if (updCount % 32 == 1) {
+ 		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
++		// Hold a share of the defenders ON the line. A DEFEND task promotes its
++		// whole squad into an ATTACK the moment it is strong enough, which is
++		// exactly what turns a garrison back into a roaming blob -- apexearth:
++		// "the way that AI seems to work is it has these squads, and the squads
++		// move around like blobs on the map, they don't necessarily have any
++		// responsibility to cover any specific area".
++		//
++		// Only defenders sitting on the front are held; a DEFEND task somewhere
++		// in the rear has nothing to cover and should still promote.
++		CCircuitAI* circuitAI = manager->GetCircuit();
++		const bool onFront = circuitAI->HasFrontPos()
++				&& (position.SqDistance2D(circuitAI->GetFrontPos()) < SQUARE(FRONT_HOLD_RANGE));
++		if (onFront && (attackPower < maxPower * FRONT_HOLD_POWER)) {
++			return;   // not strong enough to leave the line uncovered
++		}
+ 		if ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty()) {
+ 			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
+ 			decltype(units) tmpUnits = units;
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
 index 0400f8d..60369d1 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp

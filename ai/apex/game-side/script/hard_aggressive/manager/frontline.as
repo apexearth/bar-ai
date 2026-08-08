@@ -323,6 +323,13 @@ void Update()
 			+ " lane=" + int(aiSetupMgr.GetLanePos().x) + "," + int(aiSetupMgr.GetLanePos().z)
 			+ " frontD=" + int(MeanDist(FRONT)) + " backD=" + int(MeanDist(BACK)));
 
+	// Hand the line down to C++. Army positions (FillSafePos, FillAttackSafePos,
+	// CDefendTask) are chosen there and had only metal-cluster points to pick
+	// from, so nothing the AI moved could ever be placed on the front.
+	AIFloat3 anchor;
+	if (FrontNear(Builder::gHomePos, anchor))
+		ai.SetFrontPos(anchor);
+
 	Draw();
 }
 
