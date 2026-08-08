@@ -123,6 +123,14 @@ hand-copied approach broke on each one (the `apex` variant existed only in
 See **`CHANGES.md`** for everything this AI does differently from stock BARb,
 which layer each change lives in, and how well each is actually measured.
 
+**Read `USER-FEEDBACK.md` before starting work.** It is the standing brief of
+what apexearth actually wants, in one place, with the still-unresolved items
+marked. Several entries there have been raised three or four times without being
+fixed — base sprawl and never reclaiming old buildings, army not being positioned
+on the front line, naval players going idle. Re-reading it costs a minute; being
+told the same thing again costs his session. `CHANGES.md` says what was done,
+`USER-FEEDBACK.md` says what was asked for.
+
 ## Commands
 
 ```bash
@@ -358,6 +366,9 @@ directly: a single sense of what the AI is buying right now, that individual
 rules defer to instead of each firing whenever its own condition happens to hold.
 
 ## apexearth is faster than the benchmark — ask him first
+
+His standing requests live in `USER-FEEDBACK.md`; this section is only about
+the workflow.
 
 A watched game returns useful feedback in about **five minutes**. A tournament
 with a matched control takes **twenty to thirty**, and on the standard benchmark
