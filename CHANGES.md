@@ -8,6 +8,69 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-08: the bank is empty, not full — the fraction-of-storage gates are dead
+
+Measured on `matches/20260808-230041-…` (Supreme Isthmus 8v8, 40.7 min, apex =
+ally 0). 583 `factory-diag` samples, 233 `fusion-gate diag` samples, 336
+`BARAI_STATS` samples, read per player and per 5-minute bucket.
+
+**Storage is built, by the C++ economy manager, not by any script rule.** No
+script enqueues `Task::BuildType::STORE`; the only script-side requests are the
+`store` entries in `build_chain.json` (`armuwadves`/`coruwadves`, +30,000 E) off
+the T2 lab. Everything else comes from `CEconomyManager::UpdateStorageTasks`
+under `IsMetalFull()`. Per player in that game: energy storage 36,000 on every
+one of our eight; metal storage 10,000 on three of eight and **zero on the other
+five**. Stock's split was comparable (13,000 / 10,000 / 3,000 / 0). Across four
+maps the same pattern holds — metal storage is present on roughly half of both
+sides' players. "We never build storage" is false.
+
+**Metal fill by 5-minute bucket, our eight players pooled** (median of
+`mCur/mStor`, and the share of samples with `isMetalFull=1`):
+
+| min | median stor | median bank | median fill | isMetalFull |
+|---|---|---|---|---|
+| 0-5 | 1,300 | 1,139 | **0.91** | 56% |
+| 5-10 | 1,350 | 856 | 0.63 | 37% |
+| 10-15 | 1,450 | 18 | **0.01** | 15% |
+| 15-30 | 2,700-3,800 | 11-32 | **0.01** | 0-8% |
+| 35-40 | 3,700-3,925 | 127-133 | 0.01-0.03 | 5-17% |
+
+Late-game (25 min+) per player, average income vs average bank: 92.5/s and 104
+metal, 123.8/s and 68, 88.1/s and 124, 105.4/s and 412 — a bank worth **0.6 to
+4 seconds of income**. We are metal-starved from minute 10 to the end, not full.
+`metalExcess` for the whole game is 37-399 metal per player.
+
+**The `isMetalFull` samples are dying bases.** Joining each `factory-diag` to the
+nearest `BARAI_STATS`: `ownBuilders` > 5 → 12.4% full, mean fill 0.21;
+`ownBuilders` 1-5 → 28.6%; `ownBuilders` = 0 → 75%, mean fill 0.79. Team 2 sat
+10,400/11,850 for its last minutes with `armyReal=0` and `conT1=0`; team 3's
+`mStor` fell 4,300 → 1,100 → 500 as its storage buildings died, and read
+`isMetalFull=1` at 430/500. Storage shrinks when the base does, so a corpse
+reads full.
+
+**Energy is the opposite of the complaint.** Our `energyExcess` rate is 0 from
+minute 14 to the end; stock wastes 4-8% of production over the same window
+(2.15M on one player). Both sides spill 13-25% at minutes 8-10 only.
+
+**So the fraction-of-storage gates almost never pass.** Share of samples clearing
+each bar, our players, after minute 10:
+
+| bar | rule | 10-25 min | 25 min+ |
+|---|---|---|---|
+| `>= 0.80` | `isMetalFull` (economy.as:30) | 4.8% | 5.2% |
+| `>= 0.55` | `FUSION_MIN_BANK` (builder.as:1553) | 6.6% | 8.7% |
+| `>= 0.50` | `NANO_MIN_BANK` (builder.as:1410), `SLING_FLOOD_FRAC` (military.as:103) | 8.3% | 8.7% |
+| `>= 0.25` | `ECO_AID_KEEP` (military.as:227) | 11.4% | 18.7% |
+| `< 0.20` | `isMetalEmpty` (economy.as:29) | 87.3% | 77.8% |
+
+The only player that cleared them often (team 2, 25-35%) was the one that died.
+`fusion-gate diag` passed its bank bar 14 times in 233 samples.
+
+Corollary, because it inverts the obvious fix: **raising storage makes these
+rules fire LESS.** The bar is a fraction of storage, so more storage raises the
+absolute metal required while the bank stays at a few seconds of income. Any
+storage increase has to be paired with a change of gate, not made on its own.
+
 ## 2026-08-08: the gantry cap WAS the T3 constraint
 
 Single-variable change from the arm below -- `GANTRY_PER_INCOME` 150 -> 100 and

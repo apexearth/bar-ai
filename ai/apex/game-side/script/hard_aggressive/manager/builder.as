@@ -1512,6 +1512,18 @@ CCircuitDef@ FusionDef(CCircuitUnit@ unit)
 	return SideDef3(armfus, corfus, legfus);
 }
 
+// Converters get the same cooldown a reactor gets, and for the same reason: a
+// script-side aiBuilderMgr.Enqueue is bound straight to CBuilderManager::Enqueue
+// with no CanEnqueueTask check (BuilderScript.cpp:67), while the C++ economy
+// generator that creates mex and mex-upgrade tasks is budgeted --
+// CEconomyManager::MakeEconomyTasks returns null on
+// !CanEnqueueTask() == !(buildTasksCount < workers.size() * 8). An unassigned
+// build task holds its slot for ASSIGN_TIMEOUT (300s) before ITaskModule::Update
+// aborts it, so an uncooled rung spends that shared budget faster than it can be
+// reclaimed.
+const int   HOME_CONV_PERIOD = 90 * SECOND;
+int gNextConv = 0;
+
 const float FUSION_MIN_BANK = 0.55f;
 const int   FUSION_PERIOD   = 45 * SECOND;
 const int   FUSION_DIAG_PERIOD = 45 * SECOND;
@@ -1800,15 +1812,32 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	CCircuitDef@ gun = SideDef3(armanni, cordoom, legbastion);
 	if ((gun is null) || !gun.IsAvailable(ai.frame) || (gun.count >= PulsarCap()))
 		return null;
+	// On the line, not in the base. StandoffPos walks from the point it is handed
+	// TOWARD home and stops at the first safe step -- right for ContestDefence,
+	// which hands it a real enemy hotspot, but this call handed it the
+	// constructor's own position, and the constructors that pass the T2 cost gate
+	// are standing in the base. Every gun therefore landed one step further into
+	// the base, which is the same border-ranked placement the porc path already
+	// uses correctly.
+	// apexearth: "they're still good for a frontline, but i just see a lot made
+	// way back behind in the base... taking up valuable room."
 	AIFloat3 spot;
-	if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
-		return null;
+	string where = "border";
+	if (!Military::BorderPos(spot, uint(gun.count))) {
+		where = "front";
+		if (!Military::FrontPos(spot)) {
+			where = "standoff";
+			if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
+				return null;
+		}
+	}
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, gun, spot, DEF_SHAKE));
 	if (post is null)
 		return null;
 	AiLog(Factory::T() + "apex: pulsar " + gun.GetName() + " standing=" + gun.count
-		+ "/" + PulsarCap() + " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
+		+ "/" + PulsarCap() + " at-" + where
+		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
 	return post;
 }
 
@@ -2049,6 +2078,8 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	CCircuitDef@ gen = null;
 	bool pickedReactor = false;
 	if (EnergyWasting()) {
+		if (ai.frame < gNextConv)
+			return null;
 		// Spilling energy: turn it into metal.
 		@gen = BigConvDef(unit);
 		if ((gen is null) || !gen.IsAvailable(ai.frame))
@@ -2158,6 +2189,8 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		return null;
 	if (pickedReactor)
 		gNextFusion = ai.frame + FUSION_PERIOD;
+	if (isConv)
+		gNextConv = ai.frame + HOME_CONV_PERIOD;
 	AiLog(Factory::T() + "apex: home energy " + gen.GetName()
 		+ " standing=" + gen.count
 		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
@@ -3296,7 +3329,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				return guard;
 
 			// The home crew's own job, NOT phase-gated: the pre-fusion energy
-			// curve is exactly the stage this is for.
+			// curve is exactly the stage this is for. HomeEnergy returns null for
+			// anyone who is not Crew::HOME, so this call cannot reach the rest of
+			// the constructor pool.
 			IUnitTask@ juice = HomeEnergy(unit);
 			if (juice !is null)
 				return juice;
