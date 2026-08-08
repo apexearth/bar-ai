@@ -1586,11 +1586,24 @@ const float PULSAR_MIN_INCOME = 60.f;
 // apexearth: "we need at least 1000 energy per second before we should start
 // thinking about making those". One fusion is armfus 1000 / corfus 1100 / legfus 1200.
 const float PULSAR_MIN_ENERGY = 1000.f;
-// 4 reached 22.0% of ALL metal -- more than stock's 14% -- while we held one T2
-// constructor. Two is a pair covering one approach, which is what the economy can
-// carry; raise it when metal production is no longer half of stock's.
-const int   PULSAR_MAX        = 1;
-const int   PULSAR_PERIOD     = 60 * SECOND;
+// Derived, not fixed. A flat 1 meant a player on 400 metal/second held exactly
+// as many T3 defence towers as one on 60 -- and it was the reason "make more T3
+// defence" produced nothing even after the LRPC stopped stealing the pick.
+//
+// The comment this replaces recorded that 4 towers reached 22% of all metal
+// "while we held one T2 constructor"; that ratio was a symptom of an economy
+// that could not spend, and the constructor caps that caused it are gone.
+// apexearth: "we need to be making way more t3 defense when we're metal full".
+const float PULSAR_PER_INCOME = 120.f;
+const int   PULSAR_FULL_BONUS = 3;
+
+int PulsarCap()
+{
+	int cap = 1 + int(aiEconomyMgr.metal.income / PULSAR_PER_INCOME);
+	if (aiEconomyMgr.isMetalFull)
+		cap += PULSAR_FULL_BONUS;
+	return cap;
+}
 // A flat standing count answered two aircraft and forty identically. These are
 // 80 metal each and only built once the enemy actually flies, so the ceiling can
 // be generous; the floor is what makes air pick someone else.
@@ -1742,7 +1755,10 @@ IUnitTask@ HeavyAA(CCircuitUnit@ unit)
 // build it, and asking would be dropped in silence.
 IUnitTask@ Pulsar(CCircuitUnit@ unit)
 {
-	if ((ai.frame < gNextPulsar) || aiEconomyMgr.isEnergyStalling)
+	// No period. What should stop this is the economy and the standing count,
+	// both checked below -- a clock refuses to reinforce a line being broken
+	// through for reasons that have nothing to do with the line.
+	if (aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (unit.circuitDef.costM < ADV_CON_COST)
 		return null;
@@ -1757,7 +1773,7 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	if (aiEconomyMgr.energy.income < PULSAR_MIN_ENERGY)
 		return null;
 	CCircuitDef@ gun = SideDef3(armanni, cordoom, legbastion);
-	if ((gun is null) || !gun.IsAvailable(ai.frame) || (gun.count >= PULSAR_MAX))
+	if ((gun is null) || !gun.IsAvailable(ai.frame) || (gun.count >= PulsarCap()))
 		return null;
 	AIFloat3 spot;
 	if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
@@ -1766,9 +1782,181 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 			Task::Priority::NORMAL, gun, spot, DEF_SHAKE));
 	if (post is null)
 		return null;
-	gNextPulsar = ai.frame + PULSAR_PERIOD;
 	AiLog(Factory::T() + "apex: pulsar " + gun.GetName() + " standing=" + gun.count
-		+ "/" + PULSAR_MAX + " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
+		+ "/" + PulsarCap() + " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
+	return post;
+}
+
+// One nuclear launcher per player, as early as the economy can carry it.
+//
+// apexearth: "Let's make sure all our guys make at least 1 nuke launcher per
+// game - seems like they'd be effective. Usually the earlier the better."
+//
+// Costs from the pinned tree: armsilo 8100 metal / 90,000 energy, corsilo and
+// legsilo 7700 / 82,000. The energy is what actually gates it -- that is roughly
+// a fusion-minute -- so the bar is set on energy income rather than on metal or a
+// clock. Advanced constructors only: armsilo's buildoptions list armack/armacv/
+// armaca and their heavy variants, so asking a T1 constructor is a silent no-op.
+string armsilo("armsilo"); string corsilo("corsilo"); string legsilo("legsilo");
+
+// Measured on a 6v6 medium map at Handicap 50: peak energy income 1230 with zero
+// fusions standing, so a bar of 1800 was unreachable and "one per game" never
+// happened there. Set below what a mid-sized game actually reaches -- apexearth:
+// "make sure all our guys make at least 1 nuke launcher per game... usually the
+// earlier the better."
+const float NUKE_MIN_ENERGY = 1000.f;
+const float NUKE_MIN_INCOME = 50.f;
+int gNukesAsked = 0;
+
+CCircuitDef@ NukeDef()
+{
+	return SideDef3(armsilo, corsilo, legsilo);
+}
+
+int NukeCap()
+{
+	// One is the point of the rule; a bank at the cap can carry more.
+	return aiEconomyMgr.isMetalFull ? 3 : 1;
+}
+
+IUnitTask@ NukeSilo(CCircuitUnit@ unit)
+{
+	if (aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (unit.circuitDef.costM < ADV_CON_COST)
+		return null;
+	if (aiEconomyMgr.energy.income < NUKE_MIN_ENERGY)
+		return null;
+	if (aiEconomyMgr.metal.income < NUKE_MIN_INCOME)
+		return null;
+	CCircuitDef@ silo = NukeDef();
+	if ((silo is null) || !silo.IsAvailable(ai.frame))
+		return null;
+	// Outstanding as well as standing: a silo takes a long time to build and
+	// Enqueue does not dedup, so counting only what stands orders a second one
+	// while the first is still a nanoframe.
+	if ((silo.count >= NukeCap()) || (gNukesAsked - silo.count >= 1))
+		return null;
+
+	// Behind the base, in the nano field where it will actually get finished.
+	AIFloat3 near;
+	if (!NanoCluster(near))
+		near = gHomePos;
+	const AIFloat3 site = ai.FindBuildSiteNear(silo, near, GANTRY_NEAR_NANO);
+	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
+		return null;
+
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::BIG_GUN,
+			Task::Priority::NORMAL, silo, site, 0.f));
+	if (post is null)
+		return null;
+	++gNukesAsked;
+	AiLog(Factory::T() + "apex: nuke silo " + silo.GetName()
+		+ " standing=" + silo.count + " asked=" + gNukesAsked
+		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
+	return post;
+}
+
+// A light turret on an undefended mex.
+//
+// apexearth: "We're losing too many mexes to tiny units from the enemies because
+// we aren't making an llt to defend them... it just takes that little bit of
+// metal to save mexes from dying.. its very worth doing in the early game... our
+// armies waste so much time chasing leaks around."
+//
+// The turret is 130-150 metal against a mex at 620 plus whatever the raid then
+// costs in army attention, so this pays for itself on the first leak it stops.
+// Distinct from ContestTower, which deliberately refuses a T1 turret once we are
+// past that tier: at a mex the cheap turret is the right answer precisely because
+// it only has to beat a scout.
+const float MEX_GUARD_RADIUS = 260.f;   // turret sits on top of the mex
+// Two turrets while the economy is still small, one after that. apexearth:
+// "more towers around our mexes, at least in that early phase of the game".
+// A lone turret trades with a raider; a pair holds against the several that
+// stock actually sends. Once LandIsPrecious the ground is worth more than the
+// extra turret, and the army should be the answer.
+uint MexGuardWanted()
+{
+	return LandIsPrecious() ? 1 : 2;
+}
+// How far a constructor will travel to guard one. Measured on the first run:
+// a turret was ordered on a mex 3,029 elmos away, which is the walk that gets
+// constructors killed and is why this rule has to be about the mex you are
+// standing next to.
+const float MEX_GUARD_REACH  = 1200.f;
+
+CCircuitDef@ MexDef()
+{
+	return SideDef3(armmex, cormex, legmex);
+}
+
+CCircuitDef@ MexGuardTower(CCircuitUnit@ unit)
+{
+	const string side = ai.GetSideName();
+	if (unit.circuitDef.costM >= ADV_CON_COST) {
+		if (side == "cortex")
+			return ai.GetCircuitDef(corvipe);
+		if (side == "legion")
+			return ai.GetCircuitDef(legapopupdef);
+		return ai.GetCircuitDef(armpb);
+	}
+	if (side == "cortex")
+		return ai.GetCircuitDef(corllt);
+	if (side == "legion")
+		return ai.GetCircuitDef(leglht);
+	return ai.GetCircuitDef(armllt);
+}
+
+IUnitTask@ MexGuard(CCircuitUnit@ unit)
+{
+	if (aiEconomyMgr.isEnergyStalling)
+		return null;
+	CCircuitDef@ mex = MexDef();
+	if ((mex is null) || (mex.count <= 0))
+		return null;
+	CCircuitDef@ tower = MexGuardTower(unit);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+
+	array<CCircuitUnit@>@ mine = ai.GetOwnUnitsOfDef(mex, gHomePos, 0.f);
+	if ((mine is null) || (mine.length() == 0))
+		return null;
+
+	// Nearest undefended mex to this constructor, so it guards what it is
+	// standing next to rather than walking the map.
+	CCircuitUnit@ pick = null;
+	float best = -1.f;
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	for (uint i = 0; i < mine.length(); ++i) {
+		if (mine[i] is null)
+			continue;
+		const AIFloat3 at = mine[i].GetPos(ai.frame);
+		if (!OnMap(at) || !AreaNeedsDefence(at, MexGuardWanted()))
+			continue;
+		if (ThreatFor(unit, at) > CON_THREAT_VETO)
+			continue;
+		const float d = at.distance2D(me);
+		if (d > MEX_GUARD_REACH)
+			continue;
+		if ((best < 0.f) || (d < best)) {
+			best = d;
+			@pick = mine[i];
+		}
+	}
+	if (pick is null)
+		return null;
+
+	const AIFloat3 at = pick.GetPos(ai.frame);
+	const AIFloat3 site = ai.FindBuildSiteNear(tower, at, MEX_GUARD_RADIUS);
+	if (!OnMap(site))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, tower, site, 0.f));
+	if (post is null)
+		return null;
+	NoteDigOrder(site);
+	AiLog(Factory::T() + "apex: mex guard " + tower.GetName()
+		+ " on a mex " + int(best) + " away, mexes=" + mex.count);
 	return post;
 }
 
@@ -2870,6 +3058,13 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				if (hold !is null)
 					return hold;
 			}
+			// Guarding a mex is NOT in the phase-gated cluster below: it is an
+			// early-game job, it is the cheapest thing on this list, and the
+			// alternative is the army walking back to chase a scout.
+			IUnitTask@ guard = MexGuard(unit);
+			if (guard !is null)
+				return guard;
+
 			if (Factory::gLastPhase >= 4 && (crewRole == Crew::ECO)) {
 				// Clearing an obsolete base outranks ADDING to it. ObsoleteReclaim
 				// also sits at the end of this function, which is why it fired
@@ -2885,6 +3080,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				IUnitTask@ big = SurplusGantry(unit);
 				if (big !is null)
 					return big;
+				IUnitTask@ nuke = NukeSilo(unit);
+				if (nuke !is null)
+					return nuke;
 				// Assist bots and front constructors get their standing job here,
 				// where everything protective has already had its say.
 				IUnitTask@ help = Assist::Work(unit);

@@ -239,39 +239,102 @@ IUnitTask@ MexWork(CCircuitUnit@ unit)
 // Bounded by demand, not by a clock -- see FRONT_SPACING. The three things that
 // legitimately stop it are that we cannot pay for the tower, that this stretch
 // already has cover, and that we would be stacking towers on one spot.
+// How many of ours stand within `r` of `p`.
+int CountNear(CCircuitDef@ d, const AIFloat3& in p, float r)
+{
+	if ((d is null) || (d.count <= 0))
+		return 0;
+	array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(d, p, r);
+	return (have is null) ? 0 : int(have.length());
+}
+
+string armjamt("armjamt"); string corjamt("corjamt"); string legjam("legjam");
+
+CCircuitDef@ JammerDef()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(corjamt);
+	if (side == "legion")
+		return ai.GetCircuitDef(legjam);
+	return ai.GetCircuitDef(armjamt);
+}
+
+// What this stretch of the line is missing, in the order it is worth having.
+//
+// apexearth: "front line defenses are better but still have gaps that are
+// continuously a problem. front line lacked jammers for a long time, and there
+// were no nano turrets to support/heal the front line."
+//
+// A turret is the thing that fights, so it comes first. A construction turret
+// behind it repairs everything in its radius, which is the cheapest way to keep
+// a line standing. A jammer (armjamt 240, corjamt 115, legjam 140) hides the lot
+// from radar. Jammers are also in build_chain.json, hung off armanni -- a hub
+// only fires when its exact parent FINISHES, which is why they arrived late or
+// not at all.
+const float FRONT_SUPPORT_R = 420.f;
+
+CCircuitDef@ FrontWant(CCircuitUnit@ unit, const AIFloat3& in where)
+{
+	CCircuitDef@ tower = Builder::ContestTower(unit);
+	if ((tower !is null) && tower.IsAvailable(ai.frame)
+			&& (CountNear(tower, where, FRONT_SUPPORT_R) < 1))
+		return tower;
+
+	CCircuitDef@ nano = Builder::NanoDef();
+	if ((nano !is null) && nano.IsAvailable(ai.frame)
+			&& (CountNear(nano, where, FRONT_SUPPORT_R) < 1))
+		return nano;
+
+	CCircuitDef@ jam = JammerDef();
+	if ((jam !is null) && jam.IsAvailable(ai.frame)
+			&& (CountNear(jam, where, FRONT_SUPPORT_R) < 1))
+		return jam;
+
+	return tower;   // thicken the line where it already has support
+}
+
 IUnitTask@ FrontWork(CCircuitUnit@ unit)
 {
 	if (RoleOf(unit) != FRONT)
 		return null;
 	if (aiEconomyMgr.isEnergyStalling)
 		return null;
-	// ContestTower returns null for a T1 constructor once we are past T1 tier --
-	// apexearth does not want light lasers built late. Such a member falls
-	// through to the ordinary ladder rather than building something worthless.
-	CCircuitDef@ tower = Builder::ContestTower(unit);
-	if ((tower is null) || !tower.IsAvailable(ai.frame))
-		return null;
-
 	AIFloat3 line;
 	if (!Front::FrontNear(unit.GetPos(ai.frame), line))
 		return null;
-	// Stand off from the line toward home, so the tower covers the approach
+	// Stand off from the line toward home, so what we build covers the approach
 	// rather than being placed in the middle of the enemy's half.
 	AIFloat3 spot;
 	if (!Builder::StandoffPos(unit, line, spot))
 		return null;
-	for (uint i = 0; i < gFrontPlaced.length(); ++i) {
-		if (gFrontPlaced[i].distance2D(spot) < FRONT_SPACING)
+
+	// What this stretch is missing -- turret, then a construction turret to keep
+	// it repaired, then a jammer. Only the turret is subject to the "already
+	// covered" test; support is exactly what we want where cover exists.
+	CCircuitDef@ tower = FrontWant(unit, spot);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+	const bool isTurret = (tower is Builder::ContestTower(unit));
+	if (isTurret) {
+		for (uint i = 0; i < gFrontPlaced.length(); ++i) {
+			if (gFrontPlaced[i].distance2D(spot) < FRONT_SPACING)
+				return null;
+		}
+		if (!Builder::AreaNeedsDefence(spot))
 			return null;
 	}
-	if (!Builder::AreaNeedsDefence(spot))
-		return null;
 
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, tower, spot, Builder::DEF_SHAKE));
+	const AIFloat3 site = ai.FindBuildSiteNear(tower, spot, FRONT_SUPPORT_R);
+	if (!Builder::OnMap(site))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(
+			isTurret ? Task::BuildType::DEFENCE : Task::BuildType::NANO,
+			Task::Priority::NORMAL, tower, site, 0.f));
 	if (post is null)
 		return null;
-	gFrontPlaced.insertLast(spot);
+	if (isTurret)
+		gFrontPlaced.insertLast(spot);
 	AiLog(Factory::T() + "apex: crew front " + unit.circuitDef.GetName()
 		+ " -> " + tower.GetName() + " posts=" + gFrontPlaced.length());
 	return post;

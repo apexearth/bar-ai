@@ -124,6 +124,16 @@ The thing he asked for first and has pushed hardest on.
 
 ## Economy and expansion
 
+- **RESOLVED 2026-08-08 (unmeasured): we never harass their economy while they
+  constantly harass ours.** apexearth: "We have an enemy that is constantly
+  harassing our economy, and we never harass their economy." Cause found in
+  `factory.json`: apex had zeroed the RAIDER out of the T1 bot lab. `armpw`
+  (Pawn) share against stock's -- tier1 0.15 vs **0.70**, tier2 **0.00** vs 0.70,
+  tier3 **0.00** vs 0.30 -- replaced by `armham` (assault) at 0.58-0.65. Stock's
+  bot lab is a raiding factory; ours was an assault factory. Restored to 0.40 /
+  0.30 / 0.25 with `armham` reduced to match. Cortex and Legion NOT yet checked
+  for the same gap -- the recurring faction-parity trap.
+
 - **The enemy takes map-wide mexes far faster than we do.** Untaken mexes matter
   more than reclaim.
 - **Constructors should not be reclaiming.** Rez bots exist for that.
@@ -156,6 +166,29 @@ The thing he asked for first and has pushed hardest on.
   `CanMoveToPos`); it is not exposed to script.
 
 ## Air
+
+- **AIR DOCTRINE, stated plainly 2026-08-08. Three rules:**
+  1. **Assume the enemy army is escorted by AA, and only engage it with air when
+     AA is observed ABSENT.** Not a prohibition -- a presumption. "you can attack
+     army with air. But, usually, there's a lot of AA there. you almost have to
+     assume that there's going to be aa there. And then if for some reason there
+     isn't, then you can harass them." Also: "The enemy ground army would
+     annihilate our air really fast."
+     Note the shape: unknown must read as "AA present", never as "no AA" -- the
+     same failure that made the team push fire on ignorance, where an unscouted
+     enemy army read as 90 metal. `Air::EnemyAACost()` already exists, and like
+     `GetEnemyCost` it only accumulates on EnemyEnterLOS, so a zero from it means
+     "not looked", not "not there".
+  2. **Air IS for defending against raiders.** Interception at home is a real
+     job for it.
+  3. **Air is for harassing economy.** "i never see us doing useful things with
+     Air, like attacking enemy mexes and stuff."
+  Measured in the game that prompted this: air units WERE built (armhawk 2660,
+  armthund 2465, armkam 2295) and the only air log line all game was
+  `air assassin holding off -- losing the ground war`, 31 times. So this is a
+  targeting problem, not a production one -- and the hold-off is circular: we are
+  behind on the ground, so air stands down, so we stay behind. Raiding economy is
+  what a losing side should do with air.
 
 - **UNRESOLVED: we never have more than ~10 fighters.** He wants ~30 over the
   base for defence, always avoiding enemy AA. A standing garrison, not a reaction

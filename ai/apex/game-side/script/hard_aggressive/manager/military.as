@@ -29,7 +29,25 @@ const int   TURTLE_MAX_HOLD = 6 * MINUTE;
 // minAttackers while turtling. Deliberately NOT retuned alongside the AiMakeTask
 // change that finally puts it in force -- see the note there. Until then this is
 // a number picked when it could not bite, and it is the first thing to measure.
-const float TURTLE_ATTACK   = 400.f;
+// 400 parked the whole army in DEFEND tasks, which CANNOT target anything
+// outside our own influence -- CDefendTask::FindTarget skips every enemy where
+// GetAllyDefendInflAt < INFL_EPS. Units only become able to see enemy-territory
+// targets after promoting past quota.attack, and FRONT_HOLD_POWER doubles this
+// to 800 near the front. Measured across one 8v8: the turtle held for a mean 55%
+// of the game, so for over half of it "attack their economy" was not in the
+// candidate set at all. apexearth: "we don't attack their economy because we're
+// too busy chasing after the little guys attacking our economy."
+//
+// 96 is 2x MASS_CAP -- hold harder than the strictest massing gate, rather than
+// never leave. Survives the 2x front doubling at 192, which a mid-game army can
+// actually reach.
+// 96 was tried and measured WORSE, 2026-08-08: engagements went 13 -> 113 (the
+// army really does leave home now) but army K/D fell 0.49 -> 0.32 and mobile
+// losses doubled to 136,986. Un-parking an army that trades badly just feeds it
+// faster. Fighting quality has to come first; this leash comes off after.
+// 240 is the midpoint -- enough to leave for a real target, not enough to send
+// the whole pool out on a bad trade.
+const float TURTLE_ATTACK   = 240.f;
 const int   TURTLE_MIN_HOLD = 45 * SECOND;   // avoid flapping between postures
 // Six-match read: the only game that held at 6 min also teched latest (22.4m)
 // and lost, while all three clean wins never held and teched at 15.6-19.6m. An
@@ -687,8 +705,19 @@ float ApproachThreat()
 // The T3 supers (armvulc 70000, corbuzz 68000, legstarfall 63000) are
 // deliberately NOT here: at 30-60 seconds of income they would need 1000+
 // metal/second to pass the budget, so listing them would be dead weight.
-array<string> PORC_NAMES_ARM = {"armclaw", "armllt", "armbeamer", "armhlt", "armpb", "armguard", "armanni", "armbrtha"};
-array<string> PORC_NAMES_COR = {"cormaw", "corllt", "corhllt", "corhlt", "corvipe", "corpun", "cordoom", "corint"};
+// The long-range plasma cannons -- armbrtha (Basilica) and corint -- are NOT
+// here. This list is ordered by range ascending and PorcToBuild takes the LAST
+// affordable entry, so putting an LRPC at the end made it win every defence
+// request the moment the economy could reach it, and the actual T3 defence tower
+// below it could never be picked. apexearth: "i see us mostly building
+// Basilica's - the long range plasma cannon. Those aren't good for defense...
+// We should make more units like the Pulsar."
+//
+// An LRPC is siege artillery, not something that holds ground. It still has its
+// own route via the big_gun chain in build_chain.json; it just no longer
+// masquerades as defence. Legion never had one in this list.
+array<string> PORC_NAMES_ARM = {"armclaw", "armllt", "armbeamer", "armhlt", "armpb", "armguard", "armanni"};
+array<string> PORC_NAMES_COR = {"cormaw", "corllt", "corhllt", "corhlt", "corvipe", "corpun", "cordoom"};
 array<string> PORC_NAMES_LEG = {"legdtr", "leglht", "legmg", "legcluster", "legbastion"};
 
 array<string>@ PorcNames()
@@ -1080,7 +1109,23 @@ void UpdateTeamPush()
 		// unknown, never no enemies"), so treat it as the floor.
 		const float seen = EnemyArmyCost();
 		const float floorFoe = EnemyArmyFloor();
-		const float foe = (seen > floorFoe) ? seen : floorFoe;
+		float foe = (seen > floorFoe) ? seen : floorFoe;
+		// Never push on IGNORANCE. EnemyArmyFloor is
+		// PORC_THREAT_PER_ENEMY * teams -- 90 metal on a 6v6, less than one
+		// scout -- so `teamArmy > foe * 1.6` was satisfied by any army at all
+		// and the only real gate was PUSH_MIN_ARMY. An unscouted enemy is
+		// assumed to MATCH us rather than to be absent, which makes the
+		// superiority test unpassable until we have actually seen that we are
+		// ahead.
+		//
+		// This matters more than an ordinary threshold because a declared push
+		// both halves the engagement bar (PUSH_BOOST) and sets IsCommitted,
+		// which stops every non-commander retreating at all -- so a push taken
+		// on a bad estimate is not a worse trade, it is an army that cannot
+		// disengage. apexearth: "For us to be willing to push like that, we have
+		// to have superior army to the enemy's."
+		if (foe < teamArmy)
+			foe = teamArmy;
 		const bool worth = (teamArmy >= PUSH_MIN_ARMY)
 				&& (teamArmy > foe * PUSH_TEAM_RATIO);
 		float until = ai.ReadTeamValue(ai.teamId, TV_PUSH, 0.f);
@@ -1119,6 +1164,29 @@ void UpdateTeamPush()
 	} else {
 		// Personality is the resting state; the push above overrides it.
 		ai.SetEngageBoost(gPersonaBias);
+		// Commitment is NOT only for declared pushes.
+		//
+		// IsCommitted is the one thing that stops a unit leaving a fight at its
+		// own 60% health threshold, and it was wired exclusively to the team
+		// push -- which is rare. So in ordinary fighting a squad dissolves one
+		// unit at a time, each leaving as it drops below the bar, and the damage
+		// already spent buys nothing. apexearth: "we will lose half of our army
+		// to a turret that was almost killed, but then we ran away. And then the
+		// turret never died... our fighting just looks really, really, really
+		// bad."
+		//
+		// TRIED AND REVERTED, 2026-08-08: `SetCommitted(TeamArmyCost() >=
+		// PUSH_MIN_ARMY)` -- commit outside a declared push too, so squads stop
+		// dissolving one unit at a time at the 0.6 health bar. Measured on one
+		// 18-minute 5v5 Cortex mirror: army K/D 0.38 against stock's 1.73, and
+		// mobile losses 69,824 against 35,796. Blanket commitment means every
+		// bad fight is fought to the death, which is worse than leaving them.
+		//
+		// The underlying complaint is still real and still unfixed -- "we will
+		// lose half of our army to a turret that was almost killed, but then we
+		// ran away." The answer is not "never retreat"; it is retreating as a
+		// SQUAD rather than per unit, and finishing a target that is nearly
+		// dead. Both live in the C++ fighter tasks.
 		ai.SetCommitted(false);
 		gPushLogged = false;
 	}
