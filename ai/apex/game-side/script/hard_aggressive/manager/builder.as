@@ -960,6 +960,16 @@ int gNextCommHide = 0;
 // still the thing that pulls a commander out of real danger.
 const bool COMM_BACK_WALL_ON = false;
 string armsolar("armsolar");  string corsolar("corsolar");  string legsolar("legsolar");
+// Obsolete T1 economy and AA, by faction. apexearth at 35 min: "we are *not*
+// reclaiming our t1 buildings like wind turbines, t1 energy converters, t1 air
+// defense". ObsoleteReclaim only ever looked at defence towers and the opening
+// solar, so all of this stood untouched for the whole game.
+// Names verified against the pinned tree with tools/unitdef.py: Legion's
+// converter is legeconv, NOT legmakr, which does not exist in either tree.
+// Only the wind turbines are new here: armmakr/cormakr/legeconv and
+// armrl/corrl/legrl are already declared elsewhere in this namespace, and
+// redeclaring them is a Name conflict that disables the whole variant.
+string armwin("armwin");    string corwin("corwin");    string legwin("legwin");
 
 bool BaseUnderAttack()
 {
@@ -1753,13 +1763,53 @@ IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit)
 			|| (Factory::gHaveT2 && (aiEconomyMgr.metal.income >= OBSOLETE_T2_INCOME));
 	if (!lateEnough)
 		return null;
+	// ECONOMY FIRST. This whole function is rate-limited to one reclaim per
+	// OBSOLETE_PERIOD and each loop returns on its first hit, so whichever list
+	// runs first gets nearly all the reclaims. With towers first the eco list
+	// fired ZERO times in a 30-minute game while towers fired 9. apexearth was
+	// looking at wind turbines still standing at 35 minutes, not at towers.
+	array<string> junk = ObsoleteEcoNames();
+	for (uint i = 0; i < junk.length(); ++i) {
+		IUnitTask@ eat = ReclaimOwnDef(unit, junk[i], gHomePos, 0.f, "obsolete tier-1 eco");
+		if (eat !is null)
+			return eat;
+	}
 	array<string> towers = ObsoleteDefenceNames();
 	for (uint i = 0; i < towers.length(); ++i) {
 		IUnitTask@ eat = ReclaimOwnDef(unit, towers[i], gHomePos, 0.f, "past its tier");
 		if (eat !is null)
 			return eat;
 	}
+	// The T1 ECONOMY is obsolete on the same terms and was never considered:
+	// wind turbines, the opening solar, T1 converters and T1 AA. A wind turbine
+	// still occupying prime base ground at 35 minutes is metal we already paid
+	// for, sitting where a fusion could go.
 	return null;
+}
+
+// T1 economy and AA that a T2/T3 base has outgrown. Per-faction, because a
+// name list that only covers Cortex is the recurring faction-parity trap.
+array<string> ObsoleteEcoNames()
+{
+	array<string> names;
+	const string side = ai.GetSideName();
+	if (side == "cortex") {
+		names.insertLast(corwin);
+		names.insertLast(corsolar);
+		names.insertLast(cormakr);
+		names.insertLast(corrl);
+	} else if (side == "legion") {
+		names.insertLast(legwin);
+		names.insertLast(legsolar);
+		names.insertLast(legeconv);
+		names.insertLast(legrl);
+	} else {
+		names.insertLast(armwin);
+		names.insertLast(armsolar);
+		names.insertLast(armmakr);
+		names.insertLast(armrl);
+	}
+	return names;
 }
 
 bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)

@@ -631,6 +631,13 @@ const bool  FRONT_UNCAPPED   = true;
 const float JAMMER_BACK     = 180.f;  // just behind the tower it covers    // was 10, then 4; see PORC_TRIGGER
 // The front is the contested area; allow a real position there, not a pair.
 const uint  PORC_FRONT_FENCE = 4;
+// A leak is answered on a looser bar than the front: the point is to be present
+// at all in the interior, not to build a wall there.
+const uint  PORC_LEAK_FENCE = 2;
+// How far a constructor may be sent to place one. Beyond this it is commuting
+// across the map instead of building, and that is constructor time, which is the
+// economy.
+const float PORC_MAX_REACH  = 3600.f;
 uint gPorcAdded = 0;
 int  gNextPorcAdd = 0;
 
@@ -652,9 +659,24 @@ float ApproachThreat()
 // The pop-up turrets stay in the list because OurTowerValue counts it and
 // build_chain still places them; ordered by range they can never be selected,
 // since every entry after them is both longer-ranged and cheaper.
-array<string> PORC_NAMES_ARM = {"armclaw", "armllt", "armbeamer", "armhlt", "armpb", "armguard"};
-array<string> PORC_NAMES_COR = {"cormaw", "corllt", "corhllt", "corhlt", "corvipe", "corpun"};
-array<string> PORC_NAMES_LEG = {"legdtr", "leglht", "legmg", "legcluster"};
+// The heavy tiers on the end are new. apexearth: "once t3 is on the field the
+// older defenses start disappearing and we don't have enough jammers and T3 big
+// boy defenses that can credibly defend against this stuff." The ladder stopped
+// at the T2 counter-battery tier, so a base facing T3 had nothing left to build
+// that could hurt it, and PorcToBuild simply kept re-picking a tower that dies
+// to a Titan without firing.
+//
+// Costs from the pinned tree: armanni 3500, armbrtha 4500; cordoom 3000,
+// corint 4600; legbastion 4200. PorcToBuild's budget is income x 30s (60s once
+// the enemy owns artillery), so these cannot be reached on a small economy --
+// they open up exactly when the income that makes T3 possible arrives.
+//
+// The T3 supers (armvulc 70000, corbuzz 68000, legstarfall 63000) are
+// deliberately NOT here: at 30-60 seconds of income they would need 1000+
+// metal/second to pass the budget, so listing them would be dead weight.
+array<string> PORC_NAMES_ARM = {"armclaw", "armllt", "armbeamer", "armhlt", "armpb", "armguard", "armanni", "armbrtha"};
+array<string> PORC_NAMES_COR = {"cormaw", "corllt", "corhllt", "corhlt", "corvipe", "corpun", "cordoom", "corint"};
+array<string> PORC_NAMES_LEG = {"legdtr", "leglht", "legmg", "legcluster", "legbastion"};
 
 array<string>@ PorcNames()
 {
@@ -813,9 +835,37 @@ void UpdateBaseDefence()
 	// corridor is worth far more per tower than one in open ground. The old pair
 	// stay as the fallback for the opening, when no enemy has been seen and the
 	// front is honestly unknown.
+	// WHERE WE ARE ACTUALLY BLEEDING comes first.
+	//
+	// apexearth: "we lose stuff to 'leaks' because we don't even have any
+	// defenses on our deep inside mexes... especially not in the important areas
+	// where most of the 'leaks' are actually happening". Both the front line and
+	// the old geometric guesses answer "where is the edge", and neither answers
+	// "where are we losing things" -- ApproachThreat is EnemyArmyCost, a global
+	// scalar with no position at all. A raider inside our base and an army massing
+	// on the border look identical to it.
+	//
+	// ai.GetAttackHotspot is the cost-weighted, decaying centroid of our own
+	// losses, so a leak in the interior registers as itself rather than as
+	// pressure on the front. It takes priority: a hole behind the line is worth
+	// more than one more tower on it.
 	AIFloat3 spot;
-	bool haveSpot = Front::FrontChoke(Builder::gHomePos, spot)
-			|| Front::FrontNear(Builder::gHomePos, spot);
+	bool haveSpot = false;
+	AIFloat3 hot;
+	float hotWeight = 0.f;
+	if (ai.GetAttackHotspot(hot, hotWeight) && ai.IsPosOnMap(hot)
+			&& Builder::AreaNeedsDefence(hot, PORC_LEAK_FENCE)) {
+		spot = hot;
+		haveSpot = true;
+	}
+	if (!haveSpot)
+		haveSpot = Front::FrontChoke(Builder::gHomePos, spot)
+				|| Front::FrontNear(Builder::gHomePos, spot);
+	// A tower is built by a constructor that has to walk there. apexearth on the
+	// uncapped front: "cons commuting into stupid places frankly". Anything past
+	// this is somebody else's part of the line.
+	if (haveSpot && (spot.distance2D(Builder::gHomePos) > PORC_MAX_REACH))
+		haveSpot = false;
 	if (!haveSpot) {
 		// Past the cap, ONLY a measured front position earns a tower. The
 		// geometric guesses stay capped at two, because uncapping a guess is how
