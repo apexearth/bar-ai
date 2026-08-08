@@ -64,6 +64,7 @@ float gPresFoe = FOE_FLOOR;
 int gDbgAlly = 0;
 int gDbgFoe = 0;
 bool gDrawn = false;
+bool gChokeDrawn = false;
 
 void Gather()
 {
@@ -402,6 +403,15 @@ void Draw()
 	}
 	gDrawn = true;
 
+	// Chokepoints never move, so draw them ONCE. Redrawing every pass leaked:
+	// only perimeter positions are erased above, so nothing ever removed a
+	// chokepoint line and ~78 accumulated every 10 seconds. Neither the engine
+	// nor this file caps map drawings -- InMapDrawModel's numLines is a counter
+	// that is never compared against a limit -- so a 45-minute game piled up
+	// roughly 21,000 stale, redundant lines.
+	if (gChokeDrawn)
+		return;
+	gChokeDrawn = true;
 	for (uint k = 0; k < gIdx.length(); ++k) {
 		AIFloat3 e1, e2;
 		if (ai.GetChokePointEnds(gIdx[k], e1, e2))
