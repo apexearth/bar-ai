@@ -583,9 +583,40 @@ bool ReleaseForPush()
 	return true;
 }
 
+// How many aircraft still flying counts as "the strike force still exists".
+const int STRIKE_SPENT_BELOW = 3;
+
+// Re-arm once the wave is spent.
+//
+// gStrike is set on Release and was NEVER reset. HoldsUnit returns false while
+// it is set, so before the first strike new aircraft are held at base and massed
+// -- and after it, every plane we build is released the moment it rolls out,
+// alone, into the same defended airspace. apexearth: "we keep our air assassin
+// role on 'attack' even once we've lost all our attack force.... so we just keep
+// sending them in as we build."
+//
+// Massing is the entire point of the role, so once the force is gone the right
+// state is the one we started in: hold and rebuild.
+void ReArm()
+{
+	if (!gStrike)
+		return;
+	int have = 0;
+	if (gBomber !is null) have += gBomber.count;
+	if (gFighter !is null) have += gFighter.count;
+	if (gBomber1 !is null) have += gBomber1.count;
+	if (gFighter1 !is null) have += gFighter1.count;
+	if (have >= STRIKE_SPENT_BELOW)
+		return;
+	gStrike = false;
+	AiLog(Factory::T() + "apex: air strike spent (" + have
+		+ " left) -- holding and rebuilding instead of trickling");
+}
+
 void Update()
 {
 	ResolveDefs();
+	ReArm();
 	ai.PublishTeamValue(TV_AIRINC, aiEconomyMgr.metal.income);
 	if (Factory::ElectorTeamId() == ai.teamId)
 		RunElection();

@@ -1479,6 +1479,12 @@ string armafus("armafus"); string corafus("corafus"); string legafus("legafus");
 // to precede its first use; a function does not.
 string armuwfus("armuwfus"); string coruwfus("coruwfus");
 string armadvsol("armadvsol"); string coradvsol("coradvsol"); string legadvsol("legadvsol");
+// Energy income before the advanced collector is worth its 5,000-energy build.
+const float ADVSOL_MIN_ENERGY = 200.f;
+// How far from home to look when the grid has no cell left.
+const float ECO_FALLBACK_RANGE = 1400.f;
+// Energy income wanted per point of metal income before the grid is 'enough'.
+const float ENERGY_LEAD_RATIO = 12.f;
 
 CCircuitDef@ FusionDef(CCircuitUnit@ unit)
 {
@@ -1792,6 +1798,11 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 // apexearth: "Let's make sure all our guys make at least 1 nuke launcher per
 // game - seems like they'd be effective. Usually the earlier the better."
 //
+// CONFIRMED FIRING 2026-08-08 -- apexearth watching: "i did see nuke silos going
+// up". What is still unknown is whether they are USED well: the one that landed
+// was not on an enemy base. Nuke target selection lives in the C++ SuperTask and
+// has not been audited.
+//
 // Costs from the pinned tree: armsilo 8100 metal / 90,000 energy, corsilo and
 // legsilo 7700 / 82,000. The energy is what actually gates it -- that is roughly
 // a fusion-minute -- so the bar is set on energy income rather than on metal or a
@@ -1804,8 +1815,13 @@ string armsilo("armsilo"); string corsilo("corsilo"); string legsilo("legsilo");
 // happened there. Set below what a mid-sized game actually reaches -- apexearth:
 // "make sure all our guys make at least 1 nuke launcher per game... usually the
 // earlier the better."
-const float NUKE_MIN_ENERGY = 1000.f;
-const float NUKE_MIN_INCOME = 50.f;
+// 1000/50 was set for a medium map before this had ever been watched, and it
+// measured badly -- apexearth: "making nukes hurt us because we weren't healthy
+// enough." A silo is 8,100 metal and 90,000 energy BEFORE a single missile, and
+// we already build only 40-60% of stock's metal, so it has to come out of real
+// surplus rather than out of the army budget.
+const float NUKE_MIN_ENERGY = 2500.f;
+const float NUKE_MIN_INCOME = 150.f;
 int gNukesAsked = 0;
 
 CCircuitDef@ NukeDef()
@@ -1815,8 +1831,15 @@ CCircuitDef@ NukeDef()
 
 int NukeCap()
 {
-	// One is the point of the rule; a bank at the cap can carry more.
-	return aiEconomyMgr.isMetalFull ? 3 : 1;
+	// One is the point of the rule. A bank at the cap removes the cap entirely --
+	// apexearth: "if we are full on metal we should make the limit unlimited to
+	// allow us to keep making more." Metal sitting at storage is already wasted,
+	// so there is nothing left for another silo to displace.
+	//
+	// Note this is a cap on how many may STAND, not on how many at once: the
+	// outstanding test below still allows only one in flight, which serialises
+	// them and matches "build expensive structures ONE AT A TIME, assisted".
+	return aiEconomyMgr.isMetalFull ? 999 : 1;
 }
 
 IUnitTask@ NukeSilo(CCircuitUnit@ unit)
@@ -1828,6 +1851,11 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 	if (aiEconomyMgr.energy.income < NUKE_MIN_ENERGY)
 		return null;
 	if (aiEconomyMgr.metal.income < NUKE_MIN_INCOME)
+		return null;
+	// Only out of surplus. A silo started on a tight bank starves everything
+	// else for the several minutes it takes to finish.
+	if (aiEconomyMgr.isMetalEmpty || (aiEconomyMgr.metal.current
+			< aiEconomyMgr.metal.storage * 0.5f))
 		return null;
 	CCircuitDef@ silo = NukeDef();
 	if ((silo is null) || !silo.IsAvailable(ai.frame))
@@ -1884,6 +1912,8 @@ uint MexGuardWanted()
 // constructors killed and is why this rule has to be about the mex you are
 // standing next to.
 const float MEX_GUARD_REACH  = 1200.f;
+// Close enough that we are standing on it; the walk-into-fire veto is moot.
+const float MEX_GUARD_HERE   = 400.f;
 
 CCircuitDef@ MexDef()
 {
@@ -1933,9 +1963,14 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 		const AIFloat3 at = mine[i].GetPos(ai.frame);
 		if (!OnMap(at) || !AreaNeedsDefence(at, MexGuardWanted()))
 			continue;
-		if (ThreatFor(unit, at) > CON_THREAT_VETO)
-			continue;
 		const float d = at.distance2D(me);
+		// The threat veto exists to stop a constructor WALKING into fire. If we
+		// are already standing at the mex it does not apply -- and a mex that
+		// reads hot is a mex near the enemy, which is exactly the one that needs
+		// the turret. apexearth: "commander still just walked away from the 2
+		// mexes, 1 radar, and 3 wind turbines he made near the enemy base."
+		if ((d > MEX_GUARD_HERE) && (ThreatFor(unit, at) > CON_THREAT_VETO))
+			continue;
 		if (d > MEX_GUARD_REACH)
 			continue;
 		if ((best < 0.f) || (d < best)) {
@@ -1957,6 +1992,82 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 	NoteDigOrder(site);
 	AiLog(Factory::T() + "apex: mex guard " + tower.GetName()
 		+ " on a mex " + int(best) + " away, mexes=" + mex.count);
+	return post;
+}
+
+// The home crew's actual job: build the energy the base runs on.
+//
+// apexearth: "I do not think the 'home' cons are actually focusing on economy...
+// the stage before fusion when we should be making advanced solars - we just
+// aren't making many of those at all... so our overall economy is much further
+// behind the enemies."
+//
+// He is right, and the reason is placement in the ladder. Advanced solar existed
+// only as a LAST-RESORT fallback at the very end of AiMakeTask, behind a
+// cooldown and behind every other offer. Nothing owned it. armadvsol is 350
+// metal for 75 energy against armsolar's 155 for 20 -- more than twice the
+// energy per metal, and it is the whole pre-fusion energy curve.
+//
+// Bounded by demand, not a clock: we stop when energy is already being wasted.
+IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
+{
+	if (Crew::RoleOf(unit) != Crew::HOME)
+		return null;
+	// NO metal-empty gate. "Don't spend when broke" is exactly backwards for the
+	// one thing that ends being broke: a solar is 155 metal and pays back
+	// forever, which at 13 metal/second is twelve seconds of income. Measured:
+	// t0 sat pinned near zero bank for 30 minutes with home=2 constructors whose
+	// only job this is, and fired it ZERO times. The engine already refuses what
+	// it truly cannot afford, so the guard bought nothing and cost everything.
+	//
+	// apexearth's rule, verbatim: "maxEnergy ? buildConverters : buildEnergy".
+	//
+	// The point is that the home crew is NEVER out of work -- one branch or the
+	// other always applies. My previous version declined whenever energy looked
+	// momentarily plentiful, which in the early game is nearly always, so the
+	// home crew sat idle and the economy fell behind: "only sinbearer seems to
+	// be doing much eco".
+	CCircuitDef@ gen = null;
+	if (EnergyWasting()) {
+		// Spilling energy: turn it into metal.
+		@gen = BigConvDef(unit);
+		if ((gen is null) || !gen.IsAvailable(ai.frame))
+			@gen = SmallConvDef(unit);
+	} else {
+		// Plain solar until the grid can carry the advanced one. apexearth: "We
+		// shouldn't make advanced solar until we have ~200 energy per second."
+		// armadvsol costs 5,000 energy to BUILD against armsolar's zero, so
+		// below that bar it is paid for out of energy we do not have.
+		if (aiEconomyMgr.energy.income >= ADVSOL_MIN_ENERGY)
+			@gen = SideDef3(armadvsol, coradvsol, legadvsol);
+		if ((gen is null) || !gen.IsAvailable(ai.frame))
+			@gen = SideDef3(armsolar, corsolar, legsolar);
+	}
+	if ((gen is null) || !gen.IsAvailable(ai.frame))
+		return null;
+	const bool isConv = EnergyWasting();
+	// The grid is a PREFERENCE, never a veto. Base::Spot failing means the
+	// lattice has no free cell -- measured on Callisto, t0 hit noroom=67 and
+	// placed=0 and therefore built no economy at all for the whole game, while
+	// players whose grid was working (placed=13, 29) built normally. A layout
+	// rule that cannot find a tidy spot must still put the building down.
+	// apexearth: "we run out of room due to our terribly inefficient placement
+	// of buildings."
+	AIFloat3 spot;
+	if (!Base::Spot(unit, gen, Base::ECO, spot)) {
+		// Anywhere the terrain manager will take it, working outward from home.
+		spot = ai.FindBuildSiteNear(gen, gHomePos, ECO_FALLBACK_RANGE);
+		if (!OnMap(spot))
+			return null;
+	}
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(
+			isConv ? Task::BuildType::CONVERT : Task::BuildType::ENERGY,
+			Task::Priority::NORMAL, gen, spot, 0.f));
+	if (post is null)
+		return null;
+	AiLog(Factory::T() + "apex: home energy " + gen.GetName()
+		+ " standing=" + gen.count
+		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
 	return post;
 }
 
@@ -2737,6 +2848,16 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	}
 	if (isComm) {
 		LogCommanderThreat(unit);
+		// The commander guards the mexes it just made. apexearth: "even the
+		// commander does this... he's right there making the mex and then he
+		// just walks away like they arent important to protect." MexGuard picks
+		// the NEAREST undefended mex within MEX_GUARD_REACH, so for a commander
+		// that has just finished one this is the mex under its feet.
+		if (unit.GetHealthPercent() >= COM_RETREAT_HEALTH) {
+			IUnitTask@ cguard = MexGuard(unit);
+			if (cguard !is null)
+				return cguard;
+		}
 		const float hp = unit.GetHealthPercent();
 		if (hp < COM_RETREAT_HEALTH) {
 			// apexearth, watching live: "once the commander retreats to the back
@@ -3061,11 +3182,33 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			// Guarding a mex is NOT in the phase-gated cluster below: it is an
 			// early-game job, it is the cheapest thing on this list, and the
 			// alternative is the army walking back to chase a scout.
+			// The home crew never leaves. apexearth: "some should ALWAYS be
+			// doing economy at home." They are kept home by being offered ONLY
+			// the economy cluster below, which is all base work by construction,
+			// and by being skipped for the jobs that travel.
+			// EVERY role guards mexes, home crew included: MEX_GUARD_REACH is
+			// 1200 and HOME_RADIUS is 1600, so a nearby mex is base work by any
+			// reading. Excluding them dropped guards from 32 to 9 in a game --
+			// with 2 home and 3 mex out of about 5 constructors there was nobody
+			// left to place one. apexearth: "we NEED to have at least one llt
+			// early game within range of our mexes... it'll make them last so
+			// much longer."
+			// Guarding a mex comes FIRST -- ahead of the home crew's energy job.
+			// HomeEnergy always returns work now, so putting it first meant the
+			// home crew never reached this and guards fell 18 -> 6 in a game.
+			// A 130-metal turret that saves a 620-metal mex outranks a solar.
 			IUnitTask@ guard = MexGuard(unit);
 			if (guard !is null)
 				return guard;
 
-			if (Factory::gLastPhase >= 4 && (crewRole == Crew::ECO)) {
+			// The home crew's own job, NOT phase-gated: the pre-fusion energy
+			// curve is exactly the stage this is for.
+			IUnitTask@ juice = HomeEnergy(unit);
+			if (juice !is null)
+				return juice;
+
+			if ((Factory::gLastPhase >= 4)
+				&& ((crewRole == Crew::ECO) || (crewRole == Crew::HOME))) {
 				// Clearing an obsolete base outranks ADDING to it. ObsoleteReclaim
 				// also sits at the end of this function, which is why it fired
 				// twice in thirty minutes: a constructor was always offered

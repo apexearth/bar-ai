@@ -1,0 +1,18 @@
+{
+  "air_rearm": 0.0,
+  "assist": 4.0625,
+  "base_grid": 4.0625,
+  "crew_front": 0.0,
+  "crew_mex_done": 0.0,
+  "eco_converter": 0.0,
+  "eco_fusion": 0.0,
+  "eco_nano": 0.0,
+  "engage": 0.0,
+  "gantry": 0.0,
+  "home_energy": 3.3125,
+  "mex_guard": 2.375,
+  "nuke_silo": 0.0,
+  "obsolete_reclaim": 0.0,
+  "pulsar": 0.0,
+  "surplus_gantry": 0.0
+}

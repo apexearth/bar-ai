@@ -18,7 +18,20 @@ namespace Crew {
 // The commander is already a crew of one -- it takes mex spots until none is
 // left, then falls through to everything else. This generalises that.
 
-enum Role { ECO = 0, MEX = 1, FRONT = 2 };
+enum Role { ECO = 0, MEX = 1, FRONT = 2, HOME = 3 };
+
+// Constructors that NEVER leave the base.
+//
+// apexearth, watching: "the enemy usually has some cons in their base making
+// economy, sometimes we don't have any, like all our cons go out to do other
+// things... some should ALWAYS be doing economy at home."
+//
+// ECO was a catch-all default, not a job -- an ECO constructor still walked the
+// whole ladder and could be sent anywhere. HOME is the role his original
+// description actually asked for: "I will build some, and those constructors
+// will only work on the economy."
+const int   HOME_CREW   = 2;
+const float HOME_RADIUS = 1600.f;
 
 // How many consecutive dry checks before a mex constructor gives up the job.
 //
@@ -44,6 +57,18 @@ array<AIFloat3> gFrontPlaced;
 // Measured 2026-08-08, 6-game 8v8: we make 5 mex upgrades to stock's 9 while
 // holding 22 peak constructors to its 62. Three is a starting point, not a
 // derived number -- it is the first thing to sweep once this is measurable.
+// Raised 3 -> 5 on the survey, 2026-08-08. Across 16 games at four sizes we
+// produce 53-73% of stock's metal and make 1-4 mex upgrades against its 4-7,
+// and every other deficit is proportional to that: metal BUILT 40-72%,
+// constructors held a quarter to a half. The constructor ratios are NOT the
+// cause -- apex already asks for more constructors than stock (armck 0.45 vs
+// 0.35, coracv 0.45 vs 0.01) -- so the pie is small rather than badly sliced,
+// and expansion is the upstream end of that loop.
+// TRIED 5, MEASURED WORSE, reverted 2026-08-08. Same map/size/factions/seeds as
+// the survey arm: metal produced 30,491 -> 25,822, metal built 20,136 -> 16,230
+// (40% -> 28% of stock's), mex upgrades 1 -> 0, T3 spend 615 -> 0. Five of about
+// ten constructors on mex duty starves everything else and does not even buy
+// expansion. The metal deficit is real but the crew size is not the lever.
 const int MEX_CREW = 3;
 
 // Roles are held per UNIT, keyed on CCircuitUnit::id. Linear scan: a crew is
@@ -138,7 +163,12 @@ void Enlist(CCircuitUnit@ unit)
 	// crew short.
 	if (Assist::IsAssistBot(unit))
 		return;
-	const int role = (CountOf(MEX) < MEX_CREW) ? MEX : ECO;
+	// Home first -- the economy is the thing that must never stop.
+	int role = ECO;
+	if (CountOf(HOME) < HOME_CREW)
+		role = HOME;
+	else if (!gMexPhaseOver && (CountOf(MEX) < MEX_CREW))
+		role = MEX;
 	gId.insertLast(int(unit.id));
 	gRole.insertLast(role);
 	gDry.insertLast(0);
@@ -294,9 +324,33 @@ CCircuitDef@ FrontWant(CCircuitUnit@ unit, const AIFloat3& in where)
 	return tower;   // thicken the line where it already has support
 }
 
+// A front line is a LATE-GAME structure.
+//
+// apexearth: "frontline defense for LATE GAME, not for early game... lower
+// defense for defending the mexes early game, killing the raiding parties", and
+// on why: "I KNOW they're good once we hit T3... that wall of pulsars is great...
+// but in the lesser defenses the enemy is often able to concentrate their fire
+// and overwhelm any one area."
+//
+// That is a statement about mass, not about tier. Scattered cheap turrets are
+// defeated in detail because each fights alone; a T3 wall works because the
+// pieces cover each other and outrange the approach. So spreading lesser
+// defence along a line is strictly worse than either massing it or not buying
+// it -- and we were doing exactly that, at 22.9% of our metal against stock's
+// 13.1% while spending ZERO on T3.
+//
+// Early defence is MexGuard's job instead: cheap turrets on the mexes that are
+// actually being raided.
+bool FrontLineWorthIt()
+{
+	return Factory::gHaveT3 || (aiEconomyMgr.energy.income >= 3000.f);
+}
+
 IUnitTask@ FrontWork(CCircuitUnit@ unit)
 {
 	if (RoleOf(unit) != FRONT)
+		return null;
+	if (!FrontLineWorthIt())
 		return null;
 	if (aiEconomyMgr.isEnergyStalling)
 		return null;
@@ -357,6 +411,12 @@ void FillVacancies()
 	// to mex, it finds nothing for DRY_LIMIT checks, retires, gets promoted
 	// again. Spots that reopen later are still taken -- by the ordinary ladder,
 	// which is where mex expansion lives anyway.
+	// Home vacancies are filled first and are never given up.
+	for (uint i = 0; (i < gRole.length()) && (CountOf(HOME) < HOME_CREW); ++i) {
+		if (gRole[i] != ECO)
+			continue;
+		gRole[i] = HOME;
+	}
 	if (gMexPhaseOver)
 		return;
 	for (uint i = 0; (i < gRole.length()) && (CountOf(MEX) < MEX_CREW); ++i) {
@@ -391,13 +451,22 @@ void Update()
 	if (ai.frame < gNextLog)
 		return;
 	gNextLog = ai.frame + 60 * SECOND;
-	AiLog(Factory::T() + "apex: crew mex=" + CountOf(MEX)
+	AiLog(Factory::T() + "apex: crew home=" + CountOf(HOME)
+		+ " mex=" + CountOf(MEX)
 		+ " front=" + CountOf(FRONT) + " eco=" + CountOf(ECO)
 		+ " tracked=" + gId.length() + " posts=" + gFrontPlaced.length()
 		+ " mexesBuilt=" + gMexBuilt
 		+ " died mex/front/eco=" + gDiedMex + "/" + gDiedFront + "/" + gDiedEco);
 	if (gDeathKind.length() > 0)
 		AiLog(Factory::T() + "apex: con deaths by job" + DeathReport());
+}
+
+// Is this constructor barred from working at `where`? Only the home crew is.
+bool TooFarForHome(CCircuitUnit@ unit, const AIFloat3& in where)
+{
+	if ((unit is null) || (RoleOf(unit) != HOME) || !Builder::gHomeSet)
+		return false;
+	return where.distance2D(Builder::gHomePos) > HOME_RADIUS;
 }
 
 }  // namespace Crew
