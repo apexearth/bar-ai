@@ -1326,8 +1326,13 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	if (!BandSpot(unit, gNanosAsked, true, here))
 		return null;
 
+	// Spread them. At SQUARE_SIZE * 8 the engine placed up to NANO_MAX of these
+	// almost touching, which on a narrow shore walls the builder in behind its
+	// own turrets -- apexearth watched a naval player do exactly that twice.
+	// The shake is the radius the engine may slide the site within, so a wider
+	// one costs nothing but keeps a gap to walk through.
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::NANO,
-			Task::Priority::NORMAL, want, here, SQUARE_SIZE * 8));
+			Task::Priority::NORMAL, want, here, SQUARE_SIZE * 20));
 	if (post is null)
 		return null;
 	gNextNano = ai.frame + NANO_PERIOD;
