@@ -626,6 +626,8 @@ void UpdateKillingBlow()
 const float PORC_TRIGGER    = 2.0f;
 const int   PORC_ADD_SPACING = 20 * SECOND;
 const uint  PORC_ADD_CAP    = 2;
+// Toggle for A/B: false restores the old two-per-AI behaviour exactly.
+const bool  FRONT_UNCAPPED   = true;
 const float JAMMER_BACK     = 180.f;  // just behind the tower it covers    // was 10, then 4; see PORC_TRIGGER
 // The front is the contested area; allow a real position there, not a pair.
 const uint  PORC_FRONT_FENCE = 4;
@@ -768,7 +770,19 @@ void PlaceLineJammer(const AIFloat3& in spot)
 
 void UpdateBaseDefence()
 {
-	if (!Builder::gHomeSet || (gPorcAdded >= PORC_ADD_CAP))
+	if (!Builder::gHomeSet)
+		return;
+	// The count cap only governs the GUESSED positions. apexearth: "if theres a
+	// frontline we should build defenses there regardless of any cap" -- two
+	// towers per AI for a whole game is a token, not a line, and that cap is why
+	// the front never looked defended.
+	//
+	// Uncapping is the spending class of change, so note what still governs it:
+	// the threat trigger below only fires while enemy army exceeds PORC_TRIGGER
+	// times our standing tower value, so this is self-limiting and stops once the
+	// line is strong enough; PORC_ADD_SPACING still paces one placement per 20s
+	// per AI; and AreaNeedsDefence still refuses to stack them.
+	if ((gPorcAdded >= PORC_ADD_CAP) && (!FRONT_UNCAPPED || !Front::IsFrontKnown()))
 		return;
 	if (ai.frame < gNextPorcAdd)
 		return;
@@ -800,9 +814,17 @@ void UpdateBaseDefence()
 	// stay as the fallback for the opening, when no enemy has been seen and the
 	// front is honestly unknown.
 	AIFloat3 spot;
-	if (!Front::FrontChoke(Builder::gHomePos, spot)
-			&& !Front::FrontNear(Builder::gHomePos, spot)
-			&& !BorderPos(spot, gPorcAdded) && !FrontPos(spot))
+	bool haveSpot = Front::FrontChoke(Builder::gHomePos, spot)
+			|| Front::FrontNear(Builder::gHomePos, spot);
+	if (!haveSpot) {
+		// Past the cap, ONLY a measured front position earns a tower. The
+		// geometric guesses stay capped at two, because uncapping a guess is how
+		// you get a field of towers somewhere nothing is happening.
+		if (gPorcAdded >= PORC_ADD_CAP)
+			return;
+		haveSpot = BorderPos(spot, gPorcAdded) || FrontPos(spot);
+	}
+	if (!haveSpot)
 		return;
 
 	// Do not stack them, but the front is by definition the contested area, so

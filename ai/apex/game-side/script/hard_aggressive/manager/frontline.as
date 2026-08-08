@@ -304,6 +304,7 @@ uint CountOf(int owner)
 void Update()
 {
 	Gather();
+	PumpDraw();   // every tick, not every rescan -- see DRAW_PER_TICK
 	if (ai.frame < gNextClassify)
 		return;
 	gNextClassify = ai.frame + RECLASSIFY;
@@ -394,6 +395,44 @@ bool IsFrontKnown() { return gFoeKnown; }
 // Allies and spectators see these. Off for anything but a watched game.
 const bool DRAW = true;
 
+// The server DROPS map-draw commands once 25 arrive with under 50ms between
+// each -- GameServer.cpp, NETMSG_MAPDRAW:
+//
+//     mapDrawTimings[a].second > 25  ->  break
+//
+// It is anti-DOS, it is silent, and it comments that the rate "is impossible to
+// reach manually, but (very) easily through Lua". An AI hits it just as easily:
+// ~80 front segments plus ~78 chokepoint segments went out in one burst every
+// 10 seconds, so the first 25 drew and the rest vanished with no error anywhere.
+// That is the whole mystery of the missing overlay, and of the chokepoint layer
+// being "missing a bunch of where these should be".
+//
+// So drawing is queued and metered: a small batch per tick, with the tick gap
+// resetting the server's consecutive-command counter.
+const uint DRAW_PER_TICK = 15;
+array<AIFloat3> gQueueA;
+array<AIFloat3> gQueueB;   // == A means erase-at-A rather than line A->B
+
+void Enqueue(const AIFloat3& in a, const AIFloat3& in b)
+{
+	gQueueA.insertLast(a);
+	gQueueB.insertLast(b);
+}
+
+void PumpDraw()
+{
+	uint sent = 0;
+	while ((gQueueA.length() > 0) && (sent < DRAW_PER_TICK)) {
+		if (gQueueA[0] == gQueueB[0])
+			ai.DrawErase(gQueueA[0]);
+		else
+			ai.DrawLine(gQueueA[0], gQueueB[0]);
+		gQueueA.removeAt(0);
+		gQueueB.removeAt(0);
+		++sent;
+	}
+}
+
 void Draw()
 {
 	if (!DRAW)
@@ -406,9 +445,13 @@ void Draw()
 	if (ai.teamId != Factory::ElectorTeamId())
 		return;
 
+	// A rescan replaces the queue outright; a backlog of stale segments is worse
+	// than a gap, and the 60s auto-eraser cleans up anything left behind.
+	gQueueA.resize(0);
+	gQueueB.resize(0);
 	if (gDrawn) {
 		for (uint k = 0; k < gPrevDraw.length(); ++k)
-			ai.DrawErase(gPrevDraw[k]);
+			Enqueue(gPrevDraw[k], gPrevDraw[k]);
 	}
 	gPrevDraw.resize(0);
 
@@ -425,7 +468,7 @@ void Draw()
 				continue;
 			if (gPerim[k].distance2D(gPerim[m]) > span)
 				continue;
-			ai.DrawLine(gPerim[k], gPerim[m]);
+			Enqueue(gPerim[k], gPerim[m]);
 			++drawn;
 		}
 		gPrevDraw.insertLast(gPerim[k]);
@@ -440,7 +483,7 @@ void Draw()
 	for (uint k = 0; k < gIdx.length(); ++k) {
 		AIFloat3 e1, e2;
 		if (ai.GetChokePointEnds(gIdx[k], e1, e2))
-			ai.DrawLine(e1, e2);
+			Enqueue(e1, e2);
 	}
 }
 
