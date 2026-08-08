@@ -140,7 +140,18 @@ void Scan()
 		for (int j = 0; j < SEAM_N; ++j) {
 			const int me = i * SEAM_N + j;
 			const AIFloat3 p = GridPos(i, j);
-			const bool a = (ai.GetAllyInflAt(p) >= gPresAlly);
+			// Territory is where we are ON TOP, not merely where we are present.
+			// Ally influence counts MOBILE units, so an army pushing into enemy
+			// ground painted that ground as ours, the perimeter followed the army
+			// instead of our holdings, and the front got drawn deep inside enemy
+			// territory -- apexearth: "i see the front lines are often drawn where
+			// it's full of enemies. How are we supposed to hold or make defense on
+			// any sort of front line when it's in any territory?" Every tower
+			// request there then died to the danger veto: 202 requests, 8,360
+			// metal of defence actually built.
+			const float av = ai.GetAllyInflAt(p);
+			const float fv = ai.GetEnemyInflAt(p);
+			const bool a = (av >= gPresAlly) && (av > fv);
 			ours[me] = a;
 			if (a) {
 				++gDbgAlly;
@@ -149,7 +160,7 @@ void Scan()
 			// Enemy sightings are REMEMBERED, not sampled. A raid that passes
 			// through is gone from the influence map seconds later, but the fact
 			// that their territory lies that way does not stop being true.
-			if (ai.GetEnemyInflAt(p) >= gPresFoe) {
+			if (fv >= gPresFoe) {
 				++gDbgFoe;
 				gFoeSeen[me] += 1.f;
 			} else {
@@ -400,7 +411,7 @@ bool IsFrontKnown() { return gFoeKnown; }
 // Debug overlay. Map LINES, not points. A point is a PING -- it fires an alert
 // and a minimap flash -- which at this density is unreadable. Lines just draw.
 // Allies and spectators see these. Off for anything but a watched game.
-const bool DRAW = true;
+const bool DRAW = false;   // ON draws real map markers -- allies see them
 
 // The server DROPS map-draw commands once 25 arrive with under 50ms between
 // each -- GameServer.cpp, NETMSG_MAPDRAW:
