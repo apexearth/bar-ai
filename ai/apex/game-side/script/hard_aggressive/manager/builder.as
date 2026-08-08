@@ -1483,6 +1483,10 @@ string armadvsol("armadvsol"); string coradvsol("coradvsol"); string legadvsol("
 const float ADVSOL_MIN_ENERGY = 200.f;
 // How far from home to look when the grid has no cell left.
 const float ECO_FALLBACK_RANGE = 1400.f;
+// Tight enough that the next building lands touching the last one.
+const float ECO_PACK_RANGE = 180.f;
+AIFloat3 gEcoLast;
+bool gEcoPacked = false;
 // Energy income wanted per point of metal income before the grid is 'enough'.
 const float ENERGY_LEAD_RATIO = 12.f;
 
@@ -2034,14 +2038,39 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		if ((gen is null) || !gen.IsAvailable(ai.frame))
 			@gen = SmallConvDef(unit);
 	} else {
-		// Plain solar until the grid can carry the advanced one. apexearth: "We
-		// shouldn't make advanced solar until we have ~200 energy per second."
+		// Pick the generator by ENERGY PER METAL, measured rather than assumed.
+		//
+		// aiEconomyMgr.GetEnergyMake() reports what a def actually produces on
+		// THIS map, so for a wind turbine it already reflects the map's wind --
+		// no wind API needed. A turbine is 40 metal, so where wind is strong it
+		// beats solar (155m for 20e) and advanced solar (350m for 75e) several
+		// times over; where it is weak the same test rejects it. apexearth,
+		// watching the enemy lead us by 1,500 energy/s at six minutes: "the
+		// differentiator? They make wind... should we make more wind instead of
+		// only advanced solars? if wind speed is good yeah probably."
+		CCircuitDef@ wind = SideDef3(armwin, corwin, legwin);
+		CCircuitDef@ sol = SideDef3(armsolar, corsolar, legsolar);
+		CCircuitDef@ adv = null;
 		// armadvsol costs 5,000 energy to BUILD against armsolar's zero, so
 		// below that bar it is paid for out of energy we do not have.
+		// apexearth: "We shouldn't make advanced solar until we have ~200
+		// energy per second."
 		if (aiEconomyMgr.energy.income >= ADVSOL_MIN_ENERGY)
-			@gen = SideDef3(armadvsol, coradvsol, legadvsol);
-		if ((gen is null) || !gen.IsAvailable(ai.frame))
-			@gen = SideDef3(armsolar, corsolar, legsolar);
+			@adv = SideDef3(armadvsol, coradvsol, legadvsol);
+
+		float best = -1.f;
+		if ((wind !is null) && wind.IsAvailable(ai.frame) && (wind.costM > 0.f)) {
+			const float r = aiEconomyMgr.GetEnergyMake(wind) / wind.costM;
+			if (r > best) { best = r; @gen = wind; }
+		}
+		if ((sol !is null) && sol.IsAvailable(ai.frame) && (sol.costM > 0.f)) {
+			const float r = aiEconomyMgr.GetEnergyMake(sol) / sol.costM;
+			if (r > best) { best = r; @gen = sol; }
+		}
+		if ((adv !is null) && adv.IsAvailable(ai.frame) && (adv.costM > 0.f)) {
+			const float r = aiEconomyMgr.GetEnergyMake(adv) / adv.costM;
+			if (r > best) { best = r; @gen = adv; }
+		}
 	}
 	if ((gen is null) || !gen.IsAvailable(ai.frame))
 		return null;
@@ -2055,10 +2084,30 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// of buildings."
 	AIFloat3 spot;
 	if (!Base::Spot(unit, gen, Base::ECO, spot)) {
-		// Anywhere the terrain manager will take it, working outward from home.
-		spot = ai.FindBuildSiteNear(gen, gHomePos, ECO_FALLBACK_RANGE);
+		// PACK against the last thing we built, not around home.
+		//
+		// The old fallback searched outward from the base centre across
+		// ECO_FALLBACK_RANGE, so every building landed in whatever hole it found
+		// first -- far from the previous one. That is the scatter apexearth is
+		// looking at: "we build like idiots... enemy builds much more
+		// efficiently with space than we do", with stock BARb laying solid
+		// rectangles of forty buildings while we spread confetti.
+		//
+		// FindBuildSiteNear spirals OUTWARD from the point given, so seeding it
+		// on the last placement with a tight radius chains buildings edge to
+		// edge into rows and blocks. Falling back to home only when that fails
+		// starts a fresh block instead of abandoning the build.
+		if (gEcoPacked)
+			spot = ai.FindBuildSiteNear(gen, gEcoLast, ECO_PACK_RANGE);
+		if (!gEcoPacked || !OnMap(spot))
+			spot = ai.FindBuildSiteNear(gen, gHomePos, ECO_FALLBACK_RANGE);
 		if (!OnMap(spot))
 			return null;
+		gEcoLast = spot;
+		gEcoPacked = true;
+	} else {
+		gEcoLast = spot;
+		gEcoPacked = true;
 	}
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(
 			isConv ? Task::BuildType::CONVERT : Task::BuildType::ENERGY,

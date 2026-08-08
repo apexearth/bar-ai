@@ -40,11 +40,19 @@ const int ANCHOR_DEADLINE = 3 * MINUTE;
 // with different pitches still leave their gaps in the same places and the gaps
 // line up into an actual corridor. The lane at lateral 0 is the axis itself:
 // the road out of the factory toward the front.
-// CELL is the pitch C++ snaps to, and every band pitch and band depth below is a
-// whole multiple of it. That is load-bearing: IBuilderTask::Execute snaps EVERY
-// non-fixed placement onto this grid, including the ones this file positions
-// itself, so a band on some other pitch would have its own cells moved off it.
+// CELL is this file's own band pitch. GRID_CELL is the separate, much finer
+// pitch handed to C++.
+//
+// They are separate because of what the C++ snap does downstream:
+// IBuilderTask::Execute quantises the position onto the published pitch and then
+// CTerrainManager::FindBuildSite takes the nearest site the blocking map allows.
+// Structures whose footprint is not a multiple of that pitch therefore cannot
+// land next to each other -- the quantised neighbour overlaps, the blocking map
+// refuses it, and the spiral settles a whole pitch further out. A pitch of one
+// heightmap square divides every footprint, so the snap aligns without ever
+// forcing a gap, and the walkway push it also performs still applies.
 const float CELL       = 72.f;
+const float GRID_CELL  = 8.f;     // SQUARE_SIZE; the pitch published to C++
 const float LANE_PITCH = 720.f;   // spacing between walkways: one column in ten
 const float LANE_HALF  = 72.f;    // half-width of a walkway
 const float HALF_SPAN  = 1512.f;  // lateral cap; a bound, not a target
@@ -64,27 +72,30 @@ array<float> BAND_COL;
 array<float> BAND_HALF;
 array<int>   BAND_ROWS;
 
-// How far off its grid cell the engine may settle a site and still count as
-// having honoured the grid. Beyond this the cell is taken and we move on rather
-// than let the site drift into a lane.
-const float SNAP = 48.f;
-// Second pass. Measured on Callisto: every placement failure was the terrain
-// manager refusing the cell -- band=0, hot=0, terrain=11,328 on a player that
-// placed NOTHING all game -- because a site had to exist within 48 elmos of the
-// cell's exact centre, which rough ground rarely offers. A tidy grid that cannot
-// be built on is worse than a slightly loose one that can, so a failed strict
-// pass retries at two cells of slack before giving up. apexearth: "ive
-// repeatedly seen us perform extra bad on maps where we don't have a lot of
-// room."
-const float SNAP_LOOSE = CELL * 2.f;
+// How far from a cell centre the site search may reach, and how far outside the
+// band's own rectangle the site it comes back with may sit.
+//
+// The site is accepted on being clear of a walkway and inside the band, not on
+// landing near the cell centre. block_map.json already fixes the spacing between
+// any two structures -- structures of a class ignore each other and pack edge to
+// edge, everything else gets a yard -- so a second spacing rule layered on top of
+// it can only be looser than that one or fight it.
+const float SEEK       = CELL * 2.f;
+const float SEEK_LOOSE = CELL * 4.f;
+const float BAND_SLACK = CELL * 2.f;
 
-// Cells examined per placement. The scan restarts at zero every time so holes
-// left by losses get refilled, which is the whole point of having a grid.
-const int SCAN_MAX = 96;
+// Cells examined per placement, and how far back of the last success the scan
+// resumes so holes left by losses still get refilled. A scan that always started
+// at zero could never reach past cell SCAN_MAX however deep the band is.
+const int SCAN_MAX    = 96;
+const int SCAN_REWIND = 24;
 
 // A handed-out cell is not blocked until its nanoframe exists, so two requests
 // in the same few seconds would both pass FindBuildSiteNear on the same cell.
+// The resolved site is reserved as well as the cell: neighbouring cells resolve
+// to the same packed site once the ground between them is taken.
 const int RESERVE_TTL = 90 * SECOND;
+const float RESERVE_R = 96.f;
 
 array<float> gColN;   // allowed lateral offsets, per kind, ordered outward
 array<float> gColE;
@@ -93,6 +104,11 @@ bool gColsBuilt = false;
 
 array<int> gResIdx;    // reserved cells: kind * 100000 + index
 array<int> gResFrame;
+array<float> gResX;    // reserved sites
+array<float> gResZ;
+array<int> gResSiteFrame;
+
+array<int> gCursor;    // per kind, where the last successful scan got to
 
 // Footprint, in band coordinates: how far back and how wide we have actually
 // committed to. Grown only by slots we USED.
@@ -155,6 +171,7 @@ void EnsureCols()
 	BAND_COL  = { 72.f,  72.f,  144.f};
 	BAND_HALF = { 32.f,  40.f,   64.f};
 	BAND_ROWS = {    4,    12,       5};
+	gCursor   = {    0,     0,       0};
 	BuildCols(NANO, @gColN);
 	BuildCols(ECO, @gColE);
 	BuildCols(HEAVY, @gColH);
@@ -174,6 +191,49 @@ float ColAt(int kind, uint i)
 	if (kind == NANO) return gColN[i];
 	if (kind == ECO) return gColE[i];
 	return gColH[i];
+}
+
+// --- axis validation --------------------------------------------------------
+//
+// The axis is latched once and every band projects backward from it, so an axis
+// pointing into water or a cliff face makes the whole rectangle unbuildable and
+// nothing ever recovers. Before latching, the four right-angle orientations are
+// probed with a real structure and the front-derived one is kept unless it is
+// far worse than an alternative -- the base is meant to grow away from the
+// fighting, and that is worth giving up only when it cannot be built on at all.
+const int AXIS_PROBE_ROWS = 4;
+const uint AXIS_PROBE_STEP = 3;
+
+CCircuitDef@ AxisProbeDef()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(Builder::corsolar);
+	if (side == "legion")
+		return ai.GetCircuitDef(Builder::legsolar);
+	return ai.GetCircuitDef(Builder::armsolar);
+}
+
+int AxisScore(const AIFloat3& in fwd, const AIFloat3& in across, CCircuitDef@ probe)
+{
+	if (probe is null)
+		return 0;
+	const uint cols = ColCount(ECO);
+	if (cols == 0)
+		return 0;
+	int ok = 0;
+	for (int row = 0; row < AXIS_PROBE_ROWS; ++row) {
+		const float depth = BAND_BACK[ECO] + float(row) * BAND_ROW[ECO] * 3.f;
+		for (uint c = 0; c < cols; c += AXIS_PROBE_STEP) {
+			const AIFloat3 cell = gAnchor - fwd * depth + across * ColAt(ECO, c);
+			if (!Builder::OnMap(cell))
+				continue;
+			const AIFloat3 site = ai.FindBuildSiteNear(probe, cell, SEEK);
+			if (Builder::OnMap(site) && (site.distance2D(cell) <= SEEK))
+				++ok;
+		}
+	}
+	return ok;
 }
 
 // Establish anchor and axis, latching each once it is real.
@@ -215,11 +275,38 @@ bool Frame()
 		if (f.SqLength2D() < NEAR_ZERO)
 			return false;
 		f.SafeNormalize2D();
-		gFwd = f;
-		gAcross = AIFloat3(-f.z, 0.f, f.x);
+		AIFloat3 a(-f.z, 0.f, f.x);
+
+		CCircuitDef@ probe = AxisProbeDef();
+		const int front = AxisScore(f, a, probe);
+		int best = front;
+		AIFloat3 bf = f;
+		AIFloat3 ba = a;
+		for (int t = 1; t < 4; ++t) {
+			AIFloat3 cf;
+			if (t == 1)
+				cf = AIFloat3(-f.x, 0.f, -f.z);
+			else if (t == 2)
+				cf = AIFloat3(-f.z, 0.f, f.x);
+			else
+				cf = AIFloat3(f.z, 0.f, -f.x);
+			const AIFloat3 ca(-cf.z, 0.f, cf.x);
+			const int s = AxisScore(cf, ca, probe);
+			// Only a candidate that more than doubles the front-derived score can
+			// take the axis; below that the front-facing one stands.
+			if ((s > best) && (s > front * 2)) {
+				best = s;
+				bf = cf;
+				ba = ca;
+			}
+		}
+
+		gFwd = bf;
+		gAcross = ba;
 		gAxisSet = true;
 		AiLog("apex: base frame anchor=" + int(gAnchor.x) + "," + int(gAnchor.z)
-			+ " fwd=" + formatFloat(gFwd.x, "", 0, 2) + "," + formatFloat(gFwd.z, "", 0, 2));
+			+ " fwd=" + formatFloat(gFwd.x, "", 0, 2) + "," + formatFloat(gFwd.z, "", 0, 2)
+			+ " axis front=" + front + " kept=" + best);
 	}
 
 	// Hand the frame down to C++, which snaps every non-fixed placement onto it
@@ -229,8 +316,8 @@ bool Frame()
 	// everything already standing is then off it.
 	if (!gPublished && gAnchorFinal) {
 		gPublished = true;
-		ai.SetBaseGrid(gAnchor, gFwd, CELL, LANE_PITCH, LANE_HALF, GRID_RANGE);
-		AiLog("apex: base grid published cell=" + int(CELL)
+		ai.SetBaseGrid(gAnchor, gFwd, GRID_CELL, LANE_PITCH, LANE_HALF, GRID_RANGE);
+		AiLog("apex: base grid published cell=" + int(GRID_CELL)
 			+ " lane=" + int(LANE_PITCH) + "/" + int(LANE_HALF)
 			+ " range=" + int(GRID_RANGE));
 	}
@@ -286,12 +373,41 @@ bool Reserved(int kind, int index)
 	return false;
 }
 
+void ReserveSite(const AIFloat3& in site)
+{
+	gResX.insertLast(site.x);
+	gResZ.insertLast(site.z);
+	gResSiteFrame.insertLast(ai.frame);
+}
+
+bool SiteTaken(const AIFloat3& in site)
+{
+	for (uint i = 0; i < gResX.length(); ++i) {
+		if (ai.frame >= gResSiteFrame[i] + RESERVE_TTL)
+			continue;
+		const float dx = site.x - gResX[i];
+		const float dz = site.z - gResZ[i];
+		if ((dx * dx + dz * dz) < (RESERVE_R * RESERVE_R))
+			return true;
+	}
+	return false;
+}
+
 void SweepReserves()
 {
 	for (uint i = 0; i < gResIdx.length();) {
 		if (ai.frame >= gResFrame[i] + RESERVE_TTL) {
 			gResIdx.removeAt(i);
 			gResFrame.removeAt(i);
+		} else {
+			++i;
+		}
+	}
+	for (uint i = 0; i < gResX.length();) {
+		if (ai.frame >= gResSiteFrame[i] + RESERVE_TTL) {
+			gResX.removeAt(i);
+			gResZ.removeAt(i);
+			gResSiteFrame.removeAt(i);
 		} else {
 			++i;
 		}
@@ -358,12 +474,26 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 		return false;
 	SweepReserves();
 
+	// The band's own rectangle, with slack. This is what replaced the old check
+	// that a site had to land within a fixed distance of the cell centre: the
+	// packing pitch belongs to block_map, and the only thing the layout still has
+	// to enforce is that a structure stays in its band and out of a walkway.
+	const float depthLo = BAND_BACK[kind] - BAND_SLACK;
+	const float depthHi = BAND_BACK[kind] + float(BAND_ROWS[kind]) * BAND_ROW[kind] + BAND_SLACK;
+	const float latHi = HALF_SPAN + BAND_SLACK;
+
 	for (int pass = 0; pass < 2; ++pass) {
-	const float snap = (pass == 0) ? SNAP : SNAP_LOOSE;
-	for (int index = 0; index < SCAN_MAX; ++index) {
+	const float seek = (pass == 0) ? SEEK : SEEK_LOOSE;
+	// The strict pass resumes just behind the frontier so the rows fill forward;
+	// the loose pass restarts at zero, which is also what refills holes.
+	int start = (pass == 0) ? (gCursor[kind] - SCAN_REWIND) : 0;
+	if (start < 0)
+		start = 0;
+	for (int n = 0; n < SCAN_MAX; ++n) {
+		const int index = start + n;
 		AIFloat3 cell;
 		if (!CellPos(kind, index, cell)) {
-			if (pass == 0)
+			if (pass == 1)
 				++gFailBand;
 			break;
 		}
@@ -379,17 +509,29 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 			++gFailHot;
 			continue;
 		}
-		const AIFloat3 site = ai.FindBuildSiteNear(def, cell, snap);
+		const AIFloat3 site = ai.FindBuildSiteNear(def, cell, seek);
 		if (!Builder::OnMap(site)) {
-			++gFailTerrain;   // nothing can stand in this cell
+			++gFailTerrain;   // nothing can stand near this cell
 			continue;
 		}
-		if (site.distance2D(cell) > snap) {
-			++gFailTerrain;   // slid off the grid; treat the cell as taken
+		float sDepth, sLat;
+		Coords(site, sDepth, sLat);
+		if ((sDepth < depthLo) || (sDepth > depthHi) || (Abs(sLat) > latHi)) {
+			++gFailTerrain;   // left the band; treat the cell as taken
+			continue;
+		}
+		if (LaneGap(sLat) < LANE_HALF) {
+			++gFailTerrain;   // would stand in a walkway
+			continue;
+		}
+		if (SiteTaken(site)) {
+			++gFailBusy;
 			continue;
 		}
 		Reserve(kind, index);
+		ReserveSite(site);
 		Grow(kind, index);
+		gCursor[kind] = index;
 		++gPlaced;
 		spot = site;
 		return true;
@@ -439,6 +581,7 @@ void Update()
 	AiLog(Factory::T() + "apex: base area=" + int(Area())
 		+ " width=" + int(gMaxLat - gMinLat) + " depth=" + int(gMaxDepth)
 		+ " placed=" + gPlaced + " noroom=" + gNoRoom
+		+ " cur=" + gCursor[NANO] + "/" + gCursor[ECO] + "/" + gCursor[HEAVY]
 		+ " (band=" + gFailBand + " hot=" + gFailHot
 		+ " terrain=" + gFailTerrain + " busy=" + gFailBusy + ")"
 		+ " blocked=" + (ai.GetBlockedBuildPos(blocked) ? 1 : 0)
