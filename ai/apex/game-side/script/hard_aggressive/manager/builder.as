@@ -1326,13 +1326,13 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	if (!BandSpot(unit, gNanosAsked, true, here))
 		return null;
 
-	// Spread them. At SQUARE_SIZE * 8 the engine placed up to NANO_MAX of these
-	// almost touching, which on a narrow shore walls the builder in behind its
-	// own turrets -- apexearth watched a naval player do exactly that twice.
-	// The shake is the radius the engine may slide the site within, so a wider
-	// one costs nothing but keeps a gap to walk through.
+	// Nanos go TIGHT, right next to each other. apexearth: "nano's should be
+	// placed right next to each other usually." Spreading them was my fix for a
+	// naval builder walling itself in, and it was the wrong trade -- it bought
+	// walkability with base sprawl, and sprawl is why there is eventually no room
+	// to tech up. The self-walling case is a layout problem, not a spacing one.
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::NANO,
-			Task::Priority::NORMAL, want, here, SQUARE_SIZE * 20));
+			Task::Priority::NORMAL, want, here, SQUARE_SIZE * 6));
 	if (post is null)
 		return null;
 	gNextNano = ai.frame + NANO_PERIOD;
