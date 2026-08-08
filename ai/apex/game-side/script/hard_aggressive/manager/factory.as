@@ -563,9 +563,12 @@ int ComputePhase()
 	// the whole cluster needs phase >= 4 -- so they could not build the economy
 	// that would have got them out. Mex count is kept only as an alternative way
 	// to reach the rung, never as the sole way.
-	if ((mInc >= PHASE_BUILDUP_INCOME) || (mex >= 4))
+	// NO mex-count clause, not even as an alternative route to the rung.
+	// apexearth, twice: "we should never gate purely on mex count", then
+	// "remember, NO gates based on mex count. DO NOT DO THAT."
+	if (mInc >= PHASE_BUILDUP_INCOME)
 		return 2;                                          // build up
-	if ((mInc >= PHASE_EXPAND_INCOME) || (mex >= 1))
+	if (mInc >= PHASE_EXPAND_INCOME)
 		return 1;                                          // expand
 	return 0;                                              // opening
 }
