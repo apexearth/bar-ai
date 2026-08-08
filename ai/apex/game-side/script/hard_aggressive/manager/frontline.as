@@ -409,7 +409,11 @@ const bool DRAW = true;
 //
 // So drawing is queued and metered: a small batch per tick, with the tick gap
 // resetting the server's consecutive-command counter.
-const uint DRAW_PER_TICK = 15;
+// Sized against the server's 25-in-a-row/50ms drop rule. AiUpdate runs every 30
+// frames, which is 1 game second -- but the server's window is REAL time, so at
+// speed 20 that tick gap is only ~50ms and consecutive ticks can start sharing
+// one window. A smaller batch keeps the running count clear of 25 even then.
+const uint DRAW_PER_TICK = 8;
 array<AIFloat3> gQueueA;
 array<AIFloat3> gQueueB;   // == A means erase-at-A rather than line A->B
 
