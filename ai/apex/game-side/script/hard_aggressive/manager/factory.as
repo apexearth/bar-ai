@@ -2425,6 +2425,11 @@ const float GANTRY_PER_INCOME = 100.f;
 const int   GANTRY_MAX        = 6;
 // Extra plants allowed while the bank is at the cap.
 const int   GANTRY_SURPLUS_BONUS = 4;
+// A gantry that is actually building draws far more energy per second than it
+// does metal, so two of them cannot run concurrently on a grid that can only
+// pay for one. Every rung above is gated on METAL income alone, which says
+// nothing about that. See CHANGES.md for the per-unit energy rates.
+const float GANTRY_PER_ENERGY = 600.f;
 
 // A T1 bot lab is wanted for the whole game, not just the opening: it is the
 // cheap assault spam and the only source of rez bots. apexearth: "one T2
@@ -2466,6 +2471,11 @@ bool WantMoreGantries()
 	// apexearth: "If we are metal full we need to just keep making more gantries."
 	if (aiEconomyMgr.isMetalFull)
 		want += GANTRY_SURPLUS_BONUS;
+	int engyWant = int(aiEconomyMgr.energy.income / GANTRY_PER_ENERGY);
+	if (engyWant < 1)
+		engyWant = 1;
+	if (want > engyWant)
+		want = engyWant;
 	return int(gant.count) < want;
 }
 
