@@ -226,6 +226,31 @@ void Scan()
 	}
 }
 
+// Mean projection of an edge kind onto the direction from our territory centroid
+// toward the enemy, in elmos. FRONT must come out positive and BACK negative.
+//
+// Measured against each AI's own BASE first, which was confounded: the perimeter
+// is ally-WIDE, so a player sitting on the enemy-facing corner has the team's
+// far back edge further from it than the front is, and the comparison came out
+// a coin flip (228 vs 237) while the geometry was actually fine.
+float MeanDist(int kind)
+{
+	const float dx = gFoeMid.x - gOurMid.x;
+	const float dz = gFoeMid.z - gOurMid.z;
+	const float len = sqrt(dx * dx + dz * dz);
+	if (len < 1.f)
+		return 0.f;
+	float sum = 0.f;
+	uint n = 0;
+	for (uint k = 0; k < gEdge.length(); ++k) {
+		if (gEdge[k] != kind)
+			continue;
+		sum += ((gPerim[k].x - gOurMid.x) * dx + (gPerim[k].z - gOurMid.z) * dz) / len;
+		++n;
+	}
+	return (n == 0) ? 0.f : (sum / float(n));
+}
+
 uint CountEdge(int kind)
 {
 	uint n = 0;
@@ -261,7 +286,11 @@ void Update()
 			+ " front=" + CountEdge(FRONT) + " back=" + CountEdge(BACK)
 			+ " foeKnown=" + (gFoeKnown ? 1 : 0)
 			+ " cAlly=" + gDbgAlly + " cFoe=" + gDbgFoe
-			+ " bar=" + int(gPresAlly) + "/" + int(gPresFoe));
+			+ " bar=" + int(gPresAlly) + "/" + int(gPresFoe)
+			+ " ourMid=" + int(gOurMid.x) + "," + int(gOurMid.z)
+			+ " foeMid=" + int(gFoeMid.x) + "," + int(gFoeMid.z)
+			+ " lane=" + int(aiSetupMgr.GetLanePos().x) + "," + int(aiSetupMgr.GetLanePos().z)
+			+ " frontD=" + int(MeanDist(FRONT)) + " backD=" + int(MeanDist(BACK)));
 
 	Draw();
 }
