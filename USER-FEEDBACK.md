@@ -10,6 +10,30 @@ work is cheaper than being told the same thing a fourth time.
 
 ---
 
+## Current priority (2026-08-08)
+
+He set this explicitly after a session that added many features at once:
+
+> "it hurt, but i don't care... I want to get these features in and many of them
+> are done poorly so none of the 'has it helped or hurt' matters until things are
+> working correctly."
+
+So: **do not spend time on control tournaments or win-rate comparisons yet.** The
+features are half-built; measuring whether a broken feature helps is noise. The
+bar right now is "does this actually do the thing it claims to do", validated by
+watching and by counting real outcomes (structures built, mexes held) rather than
+by score.
+
+Ordered work he named:
+
+1. **Base layout and reclaim.** Sprawl, wasted space, never reclaiming old
+   buildings, no room to tech up. One problem, not several -- there is no layout
+   model at all, only a position plus a shake radius, which can trade sprawl
+   against self-walling but cannot solve either.
+2. **Front line, consistently.** Army AND defences positioned on the front, every
+   game, not occasionally. He cares about both halves: the line existing, and
+   units actually being on it.
+
 ## How he wants me to work
 
 - **Watching beats measuring.** He returns useful feedback in ~5 minutes; a
