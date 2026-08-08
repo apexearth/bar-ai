@@ -1481,6 +1481,21 @@ string armuwfus("armuwfus"); string coruwfus("coruwfus");
 string armadvsol("armadvsol"); string coradvsol("coradvsol"); string legadvsol("legadvsol");
 // Energy income before the advanced collector is worth its 5,000-energy build.
 const float ADVSOL_MIN_ENERGY = 200.f;
+// A generator is affordable when income covers its BUILD cost -- both resources --
+// inside this many seconds. This is the whole tiering rule: nothing else decides
+// when the ladder steps up.
+const float AFFORD_SECONDS = 90.f;
+
+bool AffordableGen(CCircuitDef@ d)
+{
+	if ((d is null) || !d.IsAvailable(ai.frame))
+		return false;
+	if (d.costM > aiEconomyMgr.metal.income * AFFORD_SECONDS)
+		return false;
+	if (d.costE > aiEconomyMgr.energy.income * AFFORD_SECONDS)
+		return false;
+	return true;
+}
 // How far from home to look when the grid has no cell left.
 const float ECO_FALLBACK_RANGE = 1400.f;
 // Tight enough that the next building lands touching the last one.
@@ -2032,22 +2047,27 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// home crew sat idle and the economy fell behind: "only sinbearer seems to
 	// be doing much eco".
 	CCircuitDef@ gen = null;
+	bool pickedReactor = false;
 	if (EnergyWasting()) {
 		// Spilling energy: turn it into metal.
 		@gen = BigConvDef(unit);
 		if ((gen is null) || !gen.IsAvailable(ai.frame))
 			@gen = SmallConvDef(unit);
 	} else {
-		// Pick the generator by ENERGY PER METAL, measured rather than assumed.
+		// Pick the BIGGEST generator the economy can pay for.
 		//
-		// aiEconomyMgr.GetEnergyMake() reports what a def actually produces on
-		// THIS map, so for a wind turbine it already reflects the map's wind --
-		// no wind API needed. A turbine is 40 metal, so where wind is strong it
-		// beats solar (155m for 20e) and advanced solar (350m for 75e) several
-		// times over; where it is weak the same test rejects it. apexearth,
-		// watching the enemy lead us by 1,500 energy/s at six minutes: "the
-		// differentiator? They make wind... should we make more wind instead of
-		// only advanced solars? if wind speed is good yeah probably."
+		// Ranking by energy-per-metal can never tier up. A wind turbine is 40
+		// metal and a fusion 4,300 for 1,000 energy, so the turbine wins that
+		// ratio at every income there will ever be -- the ladder has no top step,
+		// it has no steps at all. GetEnergyMake() still decides wind against
+		// solar, where the ratio question is real and map-dependent: it reports
+		// what a def actually produces on THIS map, so a turbine is compared at
+		// the map's own wind with no wind API needed.
+		//
+		// AffordableGen is the tiering rule, and it is economic power rather than
+		// a tier check or a clock: a reactor becomes eligible exactly when income
+		// can pay for it. That walks wind -> advanced solar -> fusion -> advanced
+		// fusion on its own, at whatever pace the economy actually supports.
 		CCircuitDef@ wind = SideDef3(armwin, corwin, legwin);
 		CCircuitDef@ sol = SideDef3(armsolar, corsolar, legsolar);
 		CCircuitDef@ adv = null;
@@ -2057,19 +2077,41 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		// energy per second."
 		if (aiEconomyMgr.energy.income >= ADVSOL_MIN_ENERGY)
 			@adv = SideDef3(armadvsol, coradvsol, legadvsol);
+		// A reactor is 4,300-9,700 metal against a turbine's 40, and this function
+		// is offered a constructor about thirty times a game-minute. Without a
+		// cooldown every idle builder queues its own reactor off the same reading
+		// of the same income. The cheap rungs stay uncapped -- overbuilding wind
+		// is self-correcting, overbuilding fusions is the economy.
+		CCircuitDef@ fus = null;
+		CCircuitDef@ afus = null;
+		if (ai.frame >= gNextFusion) {
+			@fus = FusionDef(unit);
+			// armacsub/coracsub carry the underwater reactor and no land one, and
+			// there is no naval advanced reactor to reach for.
+			if (!IsNavalBuilder(unit))
+				@afus = SideDef3(armafus, corafus, legafus);
+		}
 
 		float best = -1.f;
-		if ((wind !is null) && wind.IsAvailable(ai.frame) && (wind.costM > 0.f)) {
-			const float r = aiEconomyMgr.GetEnergyMake(wind) / wind.costM;
-			if (r > best) { best = r; @gen = wind; }
+		if (AffordableGen(wind)) {
+			const float e = aiEconomyMgr.GetEnergyMake(wind);
+			if (e > best) { best = e; @gen = wind; }
 		}
-		if ((sol !is null) && sol.IsAvailable(ai.frame) && (sol.costM > 0.f)) {
-			const float r = aiEconomyMgr.GetEnergyMake(sol) / sol.costM;
-			if (r > best) { best = r; @gen = sol; }
+		if (AffordableGen(sol)) {
+			const float e = aiEconomyMgr.GetEnergyMake(sol);
+			if (e > best) { best = e; @gen = sol; }
 		}
-		if ((adv !is null) && adv.IsAvailable(ai.frame) && (adv.costM > 0.f)) {
-			const float r = aiEconomyMgr.GetEnergyMake(adv) / adv.costM;
-			if (r > best) { best = r; @gen = adv; }
+		if (AffordableGen(adv)) {
+			const float e = aiEconomyMgr.GetEnergyMake(adv);
+			if (e > best) { best = e; @gen = adv; }
+		}
+		if (AffordableGen(fus)) {
+			const float e = aiEconomyMgr.GetEnergyMake(fus);
+			if (e > best) { best = e; @gen = fus; pickedReactor = true; }
+		}
+		if (AffordableGen(afus)) {
+			const float e = aiEconomyMgr.GetEnergyMake(afus);
+			if (e > best) { best = e; @gen = afus; pickedReactor = true; }
 		}
 	}
 	if ((gen is null) || !gen.IsAvailable(ai.frame))
@@ -2114,8 +2156,11 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 			Task::Priority::NORMAL, gen, spot, 0.f));
 	if (post is null)
 		return null;
+	if (pickedReactor)
+		gNextFusion = ai.frame + FUSION_PERIOD;
 	AiLog(Factory::T() + "apex: home energy " + gen.GetName()
 		+ " standing=" + gen.count
+		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
 	return post;
 }
