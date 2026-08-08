@@ -102,6 +102,19 @@ array<float> gColE;
 array<float> gColH;
 bool gColsBuilt = false;
 
+// Slot visit order, per kind: row * 1000 + column index, nearest the band's own
+// origin first. The index a caller sees is a position in THIS list, not a
+// row-major cell number.
+//
+// Row-major order walks one row across every column before stepping back a row,
+// so a band fills as a line the full width of the column list before it ever
+// gains depth. Ordering by distance instead makes it accrete outward from a
+// point, which is the shape CTerrainManager::FindBuildSite's distance-sorted
+// offset table produces for a caller that keeps passing the same position.
+array<int> gOrdN;
+array<int> gOrdE;
+array<int> gOrdH;
+
 array<int> gResIdx;    // reserved cells: kind * 100000 + index
 array<int> gResFrame;
 array<float> gResX;    // reserved sites
@@ -161,6 +174,33 @@ void BuildCols(int kind, array<float>@ cols)
 	}
 }
 
+void BuildOrder(int kind, array<int>@ ord, array<float>@ cols)
+{
+	ord.resize(0);
+	array<float> key;
+	const int rows = BAND_ROWS[kind];
+	const float rowPitch = BAND_ROW[kind];
+	for (int r = 0; r < rows; ++r) {
+		const float depth = float(r) * rowPitch;
+		for (uint c = 0; c < cols.length(); ++c) {
+			const float lat = cols[c];
+			ord.insertLast(r * 1000 + int(c));
+			key.insertLast(lat * lat + depth * depth);
+		}
+	}
+	for (uint i = 0; i < ord.length(); ++i) {
+		uint best = i;
+		for (uint j = i + 1; j < ord.length(); ++j) {
+			if (key[j] < key[best])
+				best = j;
+		}
+		if (best != i) {
+			const float tk = key[i]; key[i] = key[best]; key[best] = tk;
+			const int to = ord[i]; ord[i] = ord[best]; ord[best] = to;
+		}
+	}
+}
+
 void EnsureCols()
 {
 	if (gColsBuilt)
@@ -175,8 +215,12 @@ void EnsureCols()
 	BuildCols(NANO, @gColN);
 	BuildCols(ECO, @gColE);
 	BuildCols(HEAVY, @gColH);
+	BuildOrder(NANO, @gOrdN, @gColN);
+	BuildOrder(ECO, @gOrdE, @gColE);
+	BuildOrder(HEAVY, @gOrdH, @gColH);
 	AiLog("apex: base grid cols nano=" + gColN.length()
-		+ " eco=" + gColE.length() + " heavy=" + gColH.length());
+		+ " eco=" + gColE.length() + " heavy=" + gColH.length()
+		+ " slots=" + gOrdN.length() + "/" + gOrdE.length() + "/" + gOrdH.length());
 }
 
 uint ColCount(int kind)
@@ -191,6 +235,27 @@ float ColAt(int kind, uint i)
 	if (kind == NANO) return gColN[i];
 	if (kind == ECO) return gColE[i];
 	return gColH[i];
+}
+
+// Band coordinates of the index-th slot, in visit order.
+bool SlotAt(int kind, int index, float& out lat, float& out depth)
+{
+	if (index < 0)
+		return false;
+	int code;
+	if (kind == NANO) {
+		if (uint(index) >= gOrdN.length()) return false;
+		code = gOrdN[index];
+	} else if (kind == ECO) {
+		if (uint(index) >= gOrdE.length()) return false;
+		code = gOrdE[index];
+	} else {
+		if (uint(index) >= gOrdH.length()) return false;
+		code = gOrdH[index];
+	}
+	lat = ColAt(kind, uint(code % 1000));
+	depth = BAND_BACK[kind] + float(code / 1000) * BAND_ROW[kind];
+	return true;
 }
 
 // --- axis validation --------------------------------------------------------
@@ -338,14 +403,9 @@ void Coords(const AIFloat3& in p, float& out depth, float& out lat)
 
 bool CellPos(int kind, int index, AIFloat3& out cell)
 {
-	const uint cols = ColCount(kind);
-	if (cols == 0)
+	float lat, depth;
+	if (!SlotAt(kind, index, lat, depth))
 		return false;
-	const int row = index / int(cols);
-	if (row >= BAND_ROWS[kind])
-		return false;
-	const float lat = ColAt(kind, uint(index) % cols);
-	const float depth = BAND_BACK[kind] + float(row) * BAND_ROW[kind];
 	cell = gAnchor - gFwd * depth + gAcross * lat;
 	return true;
 }
@@ -416,11 +476,9 @@ void SweepReserves()
 
 void Grow(int kind, int index)
 {
-	const uint cols = ColCount(kind);
-	if (cols == 0)
+	float lat, depth;
+	if (!SlotAt(kind, index, lat, depth))
 		return;
-	const float lat = ColAt(kind, uint(index) % cols);
-	const float depth = BAND_BACK[kind] + float(index / int(cols)) * BAND_ROW[kind];
 	if (!gGrown) {
 		gGrown = true;
 		gMinLat = lat;
