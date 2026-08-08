@@ -134,7 +134,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("run", type=Path, help="tournament or match directory")
     ap.add_argument("--faction", required=True, choices=list(FACTION_FILES))
-    ap.add_argument("--spec", default="BARbApex", help="only count players whose spec contains this (default: BARbApex)")
+    ap.add_argument("--spec", default="Apex", help="only count players whose spec contains this (default: Apex)")
     args = ap.parse_args()
 
     if not args.run.is_dir():

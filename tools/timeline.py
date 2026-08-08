@@ -41,7 +41,7 @@ def series(d: Path):
     """[(minute, ours{}, theirs{})] for one game."""
     r = json.loads((d / "result.json").read_text())
     specs = {t["team"]: t["spec"] for t in r["teams"]}
-    ally = 0.0 if str(specs.get(0, "")).startswith("BARbApex") else 1.0
+    ally = 0.0 if "Apex" in str(specs.get(0, "")) else 1.0
 
     by_frame = {}
     for row in r.get("stats", []):

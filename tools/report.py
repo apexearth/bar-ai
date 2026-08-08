@@ -82,7 +82,7 @@ def games(root: Path):
 
 def apex_ally(r):
     specs = {t["team"]: t["spec"] for t in r["teams"]}
-    return 0.0 if str(specs.get(0, "")).startswith("BARbApex") else 1.0
+    return 0.0 if "Apex" in str(specs.get(0, "")) else 1.0
 
 
 def series(d: Path):
@@ -182,7 +182,7 @@ def main():
         ws = res.get("winner_specs") or []
         if not ws:
             U += 1
-        elif any("BARbApex" in s for s in ws):
+        elif any("Apex" in s for s in ws):
             W += 1
         else:
             L += 1
