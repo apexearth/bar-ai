@@ -772,7 +772,7 @@ index b4f4f40..28921e0 100644
  public:
  	using CircuitDefs = std::vector<CCircuitDef>;  // UnitDefId=0 is not valid, @see rts/Sim/Units/UnitDefHandler.h
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e90..bf697f3 100644
+index 2b84e90..179d0d0 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
 @@ -9,6 +9,7 @@
@@ -783,7 +783,17 @@ index 2b84e90..bf697f3 100644
  #include "scheduler/Scheduler.h"
  #include "script/EconomyScript.h"
  #include "setup/SetupManager.h"
-@@ -40,6 +41,16 @@ using namespace springai;
+@@ -36,10 +37,26 @@
+ 
+ namespace circuit {
+ 
++// Energy bank above which an energy-bearing feature (a tree) is not worth a
++// constructor-second. apexearth: "do not reclaim for energy if we are >20%
++// energy".
++#define RECLAIM_ENERGY_MAX	0.20f
++
++
+ using namespace springai;
  
  #define PYLON_RANGE		500.0f
  
@@ -800,7 +810,7 @@ index 2b84e90..bf697f3 100644
  const char* RES_NAME_METAL = "Metal";
  const char* RES_NAME_ENERGY = "Energy";
  
-@@ -922,11 +933,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
+@@ -922,11 +939,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
  
  bool CEconomyManager::IsOpenMexSpot(int spotId) const
  {
@@ -818,7 +828,7 @@ index 2b84e90..bf697f3 100644
  	if (mexSpots[spotId].isOpen == value) {
  		return;
  	}
-@@ -934,6 +951,90 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
+@@ -934,6 +957,90 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
  	value ? --mexCount : ++mexCount;
  }
  
@@ -909,7 +919,7 @@ index 2b84e90..bf697f3 100644
  bool CEconomyManager::IsIgnorePull(const IBuilderTask* task) const
  {
  	if (mexMax != std::numeric_limits<decltype(mexMax)>::max()) {
-@@ -1026,6 +1127,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1026,6 +1133,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  		return nullptr;
  	}
  
@@ -923,7 +933,25 @@ index 2b84e90..bf697f3 100644
  	if (IsEnergyStalling()) {
  		return UpdateEnergyTasks(position, unit);
  	}
-@@ -1278,6 +1386,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1214,7 +1328,17 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
+ 			}
+ 		}
+ 		float reclaimValue = featDef->GetContainedResource(metalRes)/* * feature->GetReclaimLeft()*/;
++		// apexearth: "do not reclaim for energy if we are >20% energy" -- watching
++		// constructors chew trees while the enemy took the map. A tree is an
++		// ENERGY feature; above this bank it is not worth a constructor-second,
++		// and constructor time is what buys mexes.
++		const float energyFeat = featDef->GetContainedResource(energyRes);
+ 		delete featDef;
++		const float eStore = GetEnergyStore();
++		const float eFrac = (eStore > 0.f) ? (GetEnergyCur() / eStore) : 0.f;
++		if ((energyFeat > reclaimValue) && (eFrac > RECLAIM_ENERGY_MAX)) {
++			continue;
++		}
+ 		if (reclaimValue < 1.0f) {
+ 			continue;
+ 		}
+@@ -1278,6 +1402,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  	const int frame = circuit->GetLastFrame();
  	float bestResDist = std::numeric_limits<float>::max();
  
@@ -953,7 +981,7 @@ index 2b84e90..bf697f3 100644
  	const auto& infos = energyDefs.GetInfos();
  	const float curWind = circuit->GetMap()->GetCurWind();
  	auto checkWind = [curWind, terrainMgr, position, metalIncome, energyIncome, &infos](unsigned i) {
-@@ -1308,12 +1439,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1308,12 +1455,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  				if (engy.cdef->IsWind() && !checkWind(i)) {
  					continue;
  				}
@@ -968,7 +996,7 @@ index 2b84e90..bf697f3 100644
  					if (bestResDist > resDist) {
  						bestResDist = resDist;
  						bestDef = engy.cdef;
-@@ -1571,6 +1702,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1571,6 +1718,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		}
  	}
  
@@ -988,7 +1016,7 @@ index 2b84e90..bf697f3 100644
  	factoryTask->SetPosition(buildPos);
  
  	if (factoryTask->IsPlop()
-@@ -1589,6 +1733,12 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1589,6 +1749,12 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		factoryTask = nullptr;
  		return task;
  	} else {
