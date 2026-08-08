@@ -458,6 +458,26 @@ bool PastFront(const AIFloat3& in where)
 	return t > CON_FAR_FRAC;
 }
 
+// How far around a build site we look for actual enemies, and how many make it
+// hostile. 600 is inside most T1 weapon ranges plus a little walking room: if
+// something armed is that close, a constructor standing still to build is being
+// shot, not "near the front".
+const float CON_FOE_RADIUS = 600.f;
+const float CON_FOE_COUNT  = 1.f;
+int gNextFoeDiag = 0;
+
+// Site-search radius for script-placed static defence.
+//
+// Every DEFENCE task in this file passed SQUARE_SIZE*2 or *4 -- 16 or 32 elmos
+// -- while TaskB::Common's own default is SQUARE_SIZE*32, i.e. 256. That
+// effectively demanded a buildable site on the exact point handed in, and the
+// points come from StandoffPos/geometry with no buildability check at all.
+// Measured consequence: script-placed towers were ACCEPTED by a builder (probe
+// inside IBuilderTask::CanAssignTo showed corllt accepted six times in one
+// game) and then never completed, while stock CircuitAI's own defence, which
+// picks sites from real defence clusters, built normally.
+const float DEF_SHAKE = SQUARE_SIZE * 32;
+
 float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 {
 	if (!OnMap(where))
@@ -465,6 +485,31 @@ float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 	const float t = ai.GetUnitThreatAt(unit, where);
 	if (t > 0.f)
 		return t;
+
+	// Enemies ACTUALLY near the spot, before falling back to geometry.
+	//
+	// PastFront below projects onto the home->enemy-CENTROID axis, which is a
+	// 1-D test and wrong in two ways that matter here: with enemies spread out
+	// the centroid sits where nobody is, and the projection ignores
+	// perpendicular distance entirely -- so a site beside an enemy army, but
+	// not far along that axis, reads perfectly safe. That is the shape of
+	// apexearth's report: "I still see cons running into enemy fire too much."
+	//
+	// GetEnemyCostAt returns a COUNT of enemy units in the radius despite its
+	// name (CircuitAI.cpp). It is LOS-gated, which is acceptable precisely
+	// here: the danger this is meant to catch is close enough to see. OnMap is
+	// already checked above, which is the guard the threat-map crash needed.
+	const float foes = ai.GetEnemyCostAt(where, CON_FOE_RADIUS);
+	// Only the hot case is worth a line; "no enemies near this site" is the
+	// overwhelming majority and says nothing.
+	if ((foes > 0.f) && (ai.frame >= gNextFoeDiag)) {
+		gNextFoeDiag = ai.frame + 10 * SECOND;
+		AiLog(Factory::T() + "apex: con-foe-diag near=" + formatFloat(foes, "", 0, 0)
+			+ " unitThreat=" + formatFloat(t, "", 0, 2)
+			+ " pastFront=" + (PastFront(where) ? "1" : "0"));
+	}
+	if (foes >= CON_FOE_COUNT)
+		return CON_THREAT_VETO + 1.f;
 	// THE THREAT MAP READS ZERO. Measured over a 20-minute 4v4: 121 samples, 0
 	// nonzero, max 0.00 -- so every CON_THREAT_VETO test passed unconditionally
 	// and constructors walked wherever they liked. apexearth, watching: "still
@@ -915,6 +960,16 @@ int gNextCommHide = 0;
 // still the thing that pulls a commander out of real danger.
 const bool COMM_BACK_WALL_ON = false;
 string armsolar("armsolar");  string corsolar("corsolar");  string legsolar("legsolar");
+// Obsolete T1 economy and AA, by faction. apexearth at 35 min: "we are *not*
+// reclaiming our t1 buildings like wind turbines, t1 energy converters, t1 air
+// defense". ObsoleteReclaim only ever looked at defence towers and the opening
+// solar, so all of this stood untouched for the whole game.
+// Names verified against the pinned tree with tools/unitdef.py: Legion's
+// converter is legeconv, NOT legmakr, which does not exist in either tree.
+// Only the wind turbines are new here: armmakr/cormakr/legeconv and
+// armrl/corrl/legrl are already declared elsewhere in this namespace, and
+// redeclaring them is a Name conflict that disables the whole variant.
+string armwin("armwin");    string corwin("corwin");    string legwin("legwin");
 
 bool BaseUnderAttack()
 {
@@ -1271,8 +1326,13 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	if (!BandSpot(unit, gNanosAsked, true, here))
 		return null;
 
+	// Nanos go TIGHT, right next to each other. apexearth: "nano's should be
+	// placed right next to each other usually." Spreading them was my fix for a
+	// naval builder walling itself in, and it was the wrong trade -- it bought
+	// walkability with base sprawl, and sprawl is why there is eventually no room
+	// to tech up. The self-walling case is a layout problem, not a spacing one.
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::NANO,
-			Task::Priority::NORMAL, want, here, SQUARE_SIZE * 8));
+			Task::Priority::NORMAL, want, here, SQUARE_SIZE * 6));
 	if (post is null)
 		return null;
 	gNextNano = ai.frame + NANO_PERIOD;
@@ -1480,7 +1540,7 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 	if (!OnMap(here))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, aa, here, SQUARE_SIZE * 4));
+			Task::Priority::NORMAL, aa, here, DEF_SHAKE));
 	if (post is null)
 		return null;
 	gNextAA = ai.frame + AA_PERIOD;
@@ -1542,7 +1602,7 @@ IUnitTask@ HeavyAA(CCircuitUnit@ unit)
 	if (!OnMap(here))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, aa, here, SQUARE_SIZE * 4));
+			Task::Priority::NORMAL, aa, here, DEF_SHAKE));
 	if (post is null)
 		return null;
 	gNextHeavyAA = ai.frame + AA_HEAVY_PERIOD;
@@ -1576,7 +1636,7 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, gun, spot, SQUARE_SIZE * 2));
+			Task::Priority::NORMAL, gun, spot, DEF_SHAKE));
 	if (post is null)
 		return null;
 	gNextPulsar = ai.frame + PULSAR_PERIOD;
@@ -1708,13 +1768,53 @@ IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit)
 			|| (Factory::gHaveT2 && (aiEconomyMgr.metal.income >= OBSOLETE_T2_INCOME));
 	if (!lateEnough)
 		return null;
+	// ECONOMY FIRST. This whole function is rate-limited to one reclaim per
+	// OBSOLETE_PERIOD and each loop returns on its first hit, so whichever list
+	// runs first gets nearly all the reclaims. With towers first the eco list
+	// fired ZERO times in a 30-minute game while towers fired 9. apexearth was
+	// looking at wind turbines still standing at 35 minutes, not at towers.
+	array<string> junk = ObsoleteEcoNames();
+	for (uint i = 0; i < junk.length(); ++i) {
+		IUnitTask@ eat = ReclaimOwnDef(unit, junk[i], gHomePos, 0.f, "obsolete tier-1 eco");
+		if (eat !is null)
+			return eat;
+	}
 	array<string> towers = ObsoleteDefenceNames();
 	for (uint i = 0; i < towers.length(); ++i) {
 		IUnitTask@ eat = ReclaimOwnDef(unit, towers[i], gHomePos, 0.f, "past its tier");
 		if (eat !is null)
 			return eat;
 	}
+	// The T1 ECONOMY is obsolete on the same terms and was never considered:
+	// wind turbines, the opening solar, T1 converters and T1 AA. A wind turbine
+	// still occupying prime base ground at 35 minutes is metal we already paid
+	// for, sitting where a fusion could go.
 	return null;
+}
+
+// T1 economy and AA that a T2/T3 base has outgrown. Per-faction, because a
+// name list that only covers Cortex is the recurring faction-parity trap.
+array<string> ObsoleteEcoNames()
+{
+	array<string> names;
+	const string side = ai.GetSideName();
+	if (side == "cortex") {
+		names.insertLast(corwin);
+		names.insertLast(corsolar);
+		names.insertLast(cormakr);
+		names.insertLast(corrl);
+	} else if (side == "legion") {
+		names.insertLast(legwin);
+		names.insertLast(legsolar);
+		names.insertLast(legeconv);
+		names.insertLast(legrl);
+	} else {
+		names.insertLast(armwin);
+		names.insertLast(armsolar);
+		names.insertLast(armmakr);
+		names.insertLast(armrl);
+	}
+	return names;
 }
 
 bool StandoffPos(CCircuitUnit@ unit, const AIFloat3& in hot, AIFloat3& out spot)
@@ -1755,7 +1855,7 @@ IUnitTask@ ContestDefence(CCircuitUnit@ unit, const string& in kind,
 	if (!AreaNeedsDefence(spot))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, tower, spot, SQUARE_SIZE * 2));
+			Task::Priority::NORMAL, tower, spot, DEF_SHAKE));
 	if (post is null)
 		return null;
 	NoteDigOrder(spot);
@@ -1880,7 +1980,7 @@ IUnitTask@ Fortify(CCircuitUnit@ unit)
 	if (!AreaNeedsDefence(spot, FenceWanted(gConHits[i])))
 		return null;
 	IUnitTask@ dig = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, tower, spot, SQUARE_SIZE * 2));
+			Task::Priority::NORMAL, tower, spot, DEF_SHAKE));
 	if (dig is null)
 		return null;
 	NoteDigOrder(spot);
@@ -2048,6 +2148,35 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// watching live: "our t2 con is wasting his time reclaiming trees instead
 	// of upgrading mexes."
 	const bool isAdvCon = !isComm && (unit.circuitDef.costM >= ADV_CON_COST);
+
+	// Let a constructor FINISH the defence it already started.
+	//
+	// AiMakeTask re-decides from scratch on every call, and IBuilderTask::
+	// Reevaluate swaps the unit's task whenever we hand back a different BUILD
+	// TYPE. Fortify only fires while ConDugIn() is true, i.e. while the con is
+	// being shot at -- so the moment the shooting stops this function offers a
+	// mex or an energy building instead, the swap happens, and the half-built
+	// tower is abandoned.
+	//
+	// That is why script-placed static defence has never appeared in a game.
+	// Measured with a probe inside IBuilderTask::CanAssignTo: corllt tasks were
+	// ACCEPTED by a builder six times in one game and corllt was built ZERO
+	// times, while stock CircuitAI's own corhlt/corhllt built normally. Energy
+	// survived the same churn only because the metal-full fallback keeps
+	// handing back ENERGY -- the same type, so no swap.
+	//
+	// Deliberately narrow: only a DEFENCE build already in progress, only while
+	// its site is not itself dangerous (the abandon checks below still own that
+	// case), and never for the commander, which has its own hold rule.
+	if (!isComm) {
+		IUnitTask@ busy = unit.task;
+		if ((busy !is null) && (busy.GetType() == Task::Type::BUILDER)
+			&& (busy.GetBuildType() == Task::BuildType::DEFENCE)
+			&& (ThreatFor(unit, busy.GetBuildPos()) <= CON_THREAT_VETO))
+		{
+			return busy;
+		}
+	}
 	if (isComm) {
 		LogCommanderThreat(unit);
 		const float hp = unit.GetHealthPercent();
@@ -2691,7 +2820,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// isComm-gated same as the rest of this function's wreck-chasing -- this
 	// was the one remaining ungated path that could hand a self-initiated
 	// reclaim task back to a commander whose real task was rejected above.
-	if (isComm || (ai.frame < gNextWreck))
+	//
+	// Rez bots only. For every other constructor this path was pure pre-emption:
+	// DefaultMakeTask offers them a RECLAIM anyway (isResurrect is false for
+	// them -- see the REZ_WRECK_PERIOD comment), so returning one HERE does not
+	// add reclaim, it just jumps the queue ahead of the mex expansion that lives
+	// in DefaultMakeTask. Rez bots still need the pre-empt, because for them the
+	// engine's offer is a RESURRECT with a 300s timeout.
+	if (isComm || !IsRezzer(unit) || (ai.frame < gNextWreck))
 		return task;
 	gNextWreck = ai.frame + 3 * SECOND;   // corpses decay; do not dawdle
 

@@ -1,8 +1,25 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..9c9612f 100644
+index aeea933..b2c21b8 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
-@@ -44,6 +44,10 @@
+@@ -18,6 +18,8 @@
+ #include "module/MilitaryManager.h"
+ #include "resource/MetalManager.h"
+ #include "terrain/TerrainManager.h"
++#include "map/GridAnalyzer.h"
++#include "map/InfluenceMap.h"   // unconditionally: the DEBUG_VIS include below is gated
+ #include "terrain/path/PathFinder.h"
+ #include "task/PlayerTask.h"
+ #include "unit/CircuitUnit.h"
+@@ -26,7 +28,6 @@
+ #include "util/Utils.h"
+ #include "util/Profiler.h"
+ #ifdef DEBUG_VIS
+-#include "map/InfluenceMap.h"
+ #include "map/ThreatMap.h"
+ #include "resource/EnergyGrid.h"
+ #endif  // DEBUG_VIS
+@@ -44,6 +45,10 @@
  #include "Drawer.h"
  #include "Economy.h"
  #include "Resource.h"
@@ -13,7 +30,7 @@ index aeea933..9c9612f 100644
  #include "SkirmishAI.h"
  #include "WrappUnit.h"
  #include "WrappTeam.h"
-@@ -602,6 +606,17 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
+@@ -602,6 +607,17 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
  //		return ERROR_INIT;
  //	}
  
@@ -31,15 +48,20 @@ index aeea933..9c9612f 100644
  	allyTeam = setupManager->GetAllyTeam();
  	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
  	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
-@@ -1167,6 +1182,7 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+@@ -1167,6 +1183,12 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
  int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
  	destroyed.insert(unit->GetId());
 +	NoteTrade(false, unit->GetCircuitDef());
++	// Feeds the attack hotspot: where we are losing things is the best evidence
++	// available of where the enemy actually is.
++	if (unit->GetCircuitDef() != nullptr) {
++		NoteLossAt(unit->GetPos(GetLastFrame()), unit->GetCircuitDef()->GetCostM());
++	}
  	for (auto& module : modules) {
  		module->UnitDestroyed(unit, attacker);
  	}
-@@ -1288,6 +1304,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+@@ -1288,6 +1310,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
  
  int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
  {
@@ -47,7 +69,7 @@ index aeea933..9c9612f 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1488,6 +1505,430 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1488,6 +1511,619 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -229,6 +251,60 @@ index aeea933..9c9612f 100644
 +	return tradeKilled / tradeLost;
 +}
 +
++void CCircuitAI::SetBaseGrid(const AIFloat3& anchor, const AIFloat3& fwd,
++		float cell, float lanePitch, float laneHalf, float range)
++{
++	gridAnchor = anchor;
++	gridFwd = fwd;
++	gridCell = cell;
++	gridLanePitch = lanePitch;
++	gridLaneHalf = laneHalf;
++	gridRange = range;
++}
++
++// Snap a build position onto the base grid, leaving the walkways empty.
++//
++// Returns false whenever the grid should not apply -- no frame published yet, or
++// the position is outside the base entirely. Everything that must sit on a
++// specific piece of ground (a metal spot, a geo vent, a tower on the front) is
++// excluded by the CALLER on build type; this only knows about geometry.
++bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos) const
++{
++	if ((gridCell <= .0f) || !utils::is_valid(gridAnchor) || !utils::is_valid(pos)) {
++		return false;
++	}
++	const float dx = pos.x - gridAnchor.x;
++	const float dz = pos.z - gridAnchor.z;
++	if ((dx * dx + dz * dz) > (gridRange * gridRange)) {
++		return false;  // not in the base; leave it where the rule wanted it
++	}
++
++	// Into the base frame: `depth` runs backward from the anchor, `lat` across.
++	const float depth = -(dx * gridFwd.x + dz * gridFwd.z);
++	const float lat = dx * -gridFwd.z + dz * gridFwd.x;
++
++	float sLat = std::round(lat / gridCell) * gridCell;
++	const float sDepth = std::round(depth / gridCell) * gridCell;
++
++	// Walkways are defined on the lateral axis, so a snapped column that lands in
++	// one is pushed sideways to the first cell clear of it. Without this the grid
++	// packs the corridors shut, which is the self-walling it exists to prevent.
++	if (gridLanePitch > .0f) {
++		const float laneCentre = std::round(sLat / gridLanePitch) * gridLanePitch;
++		const float gap = std::fabs(sLat - laneCentre);
++		if (gap < gridLaneHalf) {
++			const float push = std::ceil((gridLaneHalf - gap) / gridCell) * gridCell;
++			sLat += (sLat >= laneCentre) ? push : -push;
++		}
++	}
++
++	outPos = AIFloat3(gridAnchor.x - gridFwd.x * sDepth + -gridFwd.z * sLat,
++					  pos.y,
++					  gridAnchor.z - gridFwd.z * sDepth + gridFwd.x * sLat);
++	CTerrainManager::CorrectPosition(outPos);
++	return true;
++}
++
 +// A large building found no site. Recorded rather than acted on: deciding what
 +// is expendable is policy, and policy lives in AngelScript. apexearth: "when
 +// theres no room to build a gantry we need to reclaim older t1 buildings."
@@ -298,6 +374,141 @@ index aeea933..9c9612f 100644
 +		return -RgtVector;
 +	}
 +	return tm->FindBuildSite(def, pos, radius, UNIT_NO_FACING);
++}
++
++// --- BWEM chokepoints, exposed to script -------------------------------------
++//
++// Read-only plumbing. The analysis already runs; nothing here changes it.
++
++static const bwem::CChokePoint* GetChoke(CCircuitAI* circuit, int idx)
++{
++	const std::vector<bwem::CChokePoint*>& chokes =
++			circuit->GetTerrainManager()->GetTAChokePoints();
++	if ((idx < 0) || (idx >= (int)chokes.size())) {
++		return nullptr;
++	}
++	return chokes[idx];
++}
++
++int CCircuitAI::GetChokePointCount() const
++{
++	return (int)GetTerrainManager()->GetTAChokePoints().size();
++}
++
++springai::AIFloat3 CCircuitAI::GetChokePointPos(int idx) const
++{
++	const bwem::CChokePoint* cp = GetChoke(const_cast<CCircuitAI*>(this), idx);
++	return (cp == nullptr) ? AIFloat3(-RgtVector) : cp->GetCenter();
++}
++
++float CCircuitAI::GetChokePointWidth(int idx) const
++{
++	const bwem::CChokePoint* cp = GetChoke(const_cast<CCircuitAI*>(this), idx);
++	return (cp == nullptr) ? .0f : cp->GetEnd1().distance2D(cp->GetEnd2());
++}
++
++bool CCircuitAI::GetChokePointEnds(int idx, AIFloat3& outEnd1, AIFloat3& outEnd2) const
++{
++	const bwem::CChokePoint* cp = GetChoke(const_cast<CCircuitAI*>(this), idx);
++	if (cp == nullptr) {
++		return false;
++	}
++	outEnd1 = cp->GetEnd1();
++	outEnd2 = cp->GetEnd2();
++	return true;
++}
++
++int CCircuitAI::GetChokePointArea(int idx, int which) const
++{
++	const bwem::CChokePoint* cp = GetChoke(const_cast<CCircuitAI*>(this), idx);
++	if (cp == nullptr) {
++		return -1;
++	}
++	const bwem::CArea* area = (which == 0) ? cp->GetAreas().first : cp->GetAreas().second;
++	return (area == nullptr) ? -1 : area->GetId();
++}
++
++void CCircuitAI::DrawPoint(const AIFloat3& pos, const std::string& label)
++{
++	if ((drawer != nullptr) && IsPosOnMap(pos)) {
++		drawer->AddPoint(pos, label.c_str());
++	}
++}
++
++void CCircuitAI::DrawLine(const AIFloat3& from, const AIFloat3& to)
++{
++	if ((drawer != nullptr) && IsPosOnMap(from) && IsPosOnMap(to)) {
++		drawer->AddLine(from, to);
++	}
++}
++
++void CCircuitAI::DrawErase(const AIFloat3& pos)
++{
++	if ((drawer != nullptr) && IsPosOnMap(pos)) {
++		drawer->DeletePointsAndLines(pos);
++	}
++}
++
++// Influence lookups, bounds-guarded. See the header comment: the underlying
++// CInfluenceMap accessors index an array from an unchecked position.
++bool CCircuitAI::IsPosOnMap(const AIFloat3& pos) const
++{
++	CTerrainManager* terrainMgr = GetTerrainManager();
++	return (pos.x >= .0f) && (pos.z >= .0f)
++			&& (pos.x < terrainMgr->GetTerrainWidth())
++			&& (pos.z < terrainMgr->GetTerrainHeight());
++}
++
++float CCircuitAI::GetAllyInflAt(const AIFloat3& pos) const
++{
++	return IsPosOnMap(pos) ? GetInflMap()->GetAllyInflAt(pos) : .0f;
++}
++
++float CCircuitAI::GetEnemyInflAt(const AIFloat3& pos) const
++{
++	return IsPosOnMap(pos) ? GetInflMap()->GetEnemyInflAt(pos) : .0f;
++}
++
++float CCircuitAI::GetNetInflAt(const AIFloat3& pos) const
++{
++	return IsPosOnMap(pos) ? GetInflMap()->GetInfluenceAt(pos) : .0f;
++}
++
++// Where our losses are happening, cost-weighted and decaying.
++//
++// The AI could say HOW MUCH enemy army exists (ApproachThreat is just
++// EnemyArmyCost) but never WHERE it was hitting us, so defence went to a
++// geometric border point and the army had nothing to converge on. apexearth:
++// "do we have a way of detecting where enemies are attacking us from? and
++// placing towers and defenses there... or at least moving our army there to act
++// as a wall?"
++//
++// Cost-weighted so a dead constructor or a dead tank moves it and a dead scout
++// barely does. Decayed so it tracks the CURRENT attack rather than accumulating
++// every fight of the game into a meaningless average.
++void CCircuitAI::NoteLossAt(const springai::AIFloat3& pos, float costM)
++{
++	if ((costM <= .0f) || !utils::is_valid(pos)) {
++		return;
++	}
++	hotSum += pos * costM;
++	hotWeight += costM;
++}
++
++bool CCircuitAI::GetAttackHotspot(springai::AIFloat3& outPos, float& outWeight)
++{
++	const int frame = GetLastFrame();
++	if (frame >= hotDecayFrame + HOT_DECAY_PERIOD) {
++		hotDecayFrame = frame;
++		hotSum *= HOT_DECAY;
++		hotWeight *= HOT_DECAY;
++	}
++	if (hotWeight < HOT_MIN_WEIGHT) {
++		return false;
++	}
++	outPos = hotSum / hotWeight;
++	outWeight = hotWeight;
++	return true;
 +}
 +
 +bool CCircuitAI::IsCommanderWreck(springai::Feature* f)
@@ -479,10 +690,10 @@ index aeea933..9c9612f 100644
  {
  	// NOTE: See notes in MobileSlave or other economy->SendUnits places
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..d833909 100644
+index b4f4f40..e1380bc 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -149,6 +149,69 @@ private:
+@@ -149,6 +149,116 @@ private:
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
  	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
@@ -521,6 +732,53 @@ index b4f4f40..d833909 100644
 +	bool IsCommanderWreck(springai::Feature* f);
 +	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 +	void NoteTrade(bool isKill, CCircuitDef* cdef);
++	// WHERE we are losing units, as a cost-weighted decaying centroid. The AI
++	// had no location for incoming attacks at all -- ApproachThreat() is a
++	// global scalar -- so defence was placed by geometry alone.
++	void NoteLossAt(const springai::AIFloat3& pos, float costM);
++	bool GetAttackHotspot(springai::AIFloat3& outPos, float& outWeight);
++	// BWEM chokepoints. Computed every game by CGridAnalyzer and, until now,
++	// reachable from nowhere: DefenceData pushes them into defPoints but every
++	// consumer selects via GetDefIndices(cluster), which only ever indexes the
++	// metal-cluster points, and the search-tree path that could reach them is
++	// commented out behind a FIXME.
++	int GetChokePointCount() const;
++	springai::AIFloat3 GetChokePointPos(int idx) const;
++	// Width of the gap, i.e. |end1 - end2|. CChokePoint keeps this as a private
++	// `size`; only IsSmall() (< 300) is public, so recompute from the ends.
++	float GetChokePointWidth(int idx) const;
++	bool GetChokePointEnds(int idx, springai::AIFloat3& outEnd1, springai::AIFloat3& outEnd2) const;
++	// The two areas this chokepoint joins; -1 if absent.
++	int GetChokePointArea(int idx, int which) const;
++	// Influence at a position. CInfluenceMap::PosToXZ does NO bounds checking --
++	// it indexes enemyInfl[z * width + x] straight from the raw position, the
++	// same unchecked pattern that made GetBuilderThreatAt kill the engine at
++	// frame 3 on an off-map read. These guard; the raw ones must never be bound.
++	bool IsPosOnMap(const springai::AIFloat3& pos) const;
++	// The front line, handed down from script. Army positions were selected
++	// exclusively from metal-cluster defPoints, so squads had no position that
++	// meant "the line" and orbited bases instead of holding ground.
++	void SetFrontPos(const springai::AIFloat3& pos) { frontPos = pos; }
++	const springai::AIFloat3& GetFrontPos() const { return frontPos; }
++	bool HasFrontPos() const { return frontPos.x >= 0.f; }
++	// The base layout, handed down from script the same way the front line is.
++	//
++	// Every structure placement was a position plus a shake radius, and Execute
++	// jittered the position anywhere inside that radius before searching. There
++	// was no footprint, no rows and no lanes, so the radius could only trade
++	// sprawl against self-walling. Script owns the frame; this snaps to it.
++	void SetBaseGrid(const springai::AIFloat3& anchor, const springai::AIFloat3& fwd,
++			float cell, float lanePitch, float laneHalf, float range);
++	bool SnapToBaseGrid(const springai::AIFloat3& pos, springai::AIFloat3& outPos) const;
++	// In-game map markers, for watching what the AI believes. These are ordinary
++	// map points/lines: allies and spectators see them, so anything using these
++	// must stay off by default outside a debug watch.
++	void DrawPoint(const springai::AIFloat3& pos, const std::string& label);
++	void DrawLine(const springai::AIFloat3& from, const springai::AIFloat3& to);
++	void DrawErase(const springai::AIFloat3& pos);
++	float GetAllyInflAt(const springai::AIFloat3& pos) const;
++	float GetEnemyInflAt(const springai::AIFloat3& pos) const;
++	float GetNetInflAt(const springai::AIFloat3& pos) const;
 +	float GetRecentTradeRatio();
 +	// Multiplier on the engage margin, set from AngelScript. 1.0 = unchanged.
 +	// Below 1 the AI accepts worse odds; this is how a coordinated team push
@@ -552,7 +810,7 @@ index b4f4f40..d833909 100644
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
-@@ -205,6 +268,23 @@ private:
+@@ -205,6 +315,37 @@ private:
  	bool isAllyBaseAvoid;
  // <<< AIOptions.lua ---- END
  
@@ -570,6 +828,20 @@ index b4f4f40..d833909 100644
 +	springai::AIFloat3 blockedBuildPos = -RgtVector;
 +	int blockedBuildFrame = -1000000;
 +	float engageBoost = 1.f;
++	springai::AIFloat3 frontPos = -RgtVector;
++	// Base grid, published by script. cell <= 0 means "no grid yet".
++	springai::AIFloat3 gridAnchor = -RgtVector;
++	springai::AIFloat3 gridFwd = ZeroVector;
++	float gridCell = .0f;
++	float gridLanePitch = .0f;
++	float gridLaneHalf = .0f;
++	float gridRange = .0f;
++	#define HOT_DECAY_PERIOD	(FRAMES_PER_SEC * 20)
++	#define HOT_DECAY			0.80f   // ~1 min half-life
++	#define HOT_MIN_WEIGHT		250.f   // metal lost before the spot means anything
++	springai::AIFloat3 hotSum = ZeroVector;   // cost-weighted position sum
++	float hotWeight = .0f;
++	int hotDecayFrame = 0;
 +	bool isCommitted = false;
 +// <<< Recent trade record ---- END
 +
@@ -577,7 +849,7 @@ index b4f4f40..d833909 100644
  public:
  	using CircuitDefs = std::vector<CCircuitDef>;  // UnitDefId=0 is not valid, @see rts/Sim/Units/UnitDefHandler.h
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e90..bf697f3 100644
+index 2b84e90..179d0d0 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
 @@ -9,6 +9,7 @@
@@ -588,7 +860,17 @@ index 2b84e90..bf697f3 100644
  #include "scheduler/Scheduler.h"
  #include "script/EconomyScript.h"
  #include "setup/SetupManager.h"
-@@ -40,6 +41,16 @@ using namespace springai;
+@@ -36,10 +37,26 @@
+ 
+ namespace circuit {
+ 
++// Energy bank above which an energy-bearing feature (a tree) is not worth a
++// constructor-second. apexearth: "do not reclaim for energy if we are >20%
++// energy".
++#define RECLAIM_ENERGY_MAX	0.20f
++
++
+ using namespace springai;
  
  #define PYLON_RANGE		500.0f
  
@@ -605,7 +887,7 @@ index 2b84e90..bf697f3 100644
  const char* RES_NAME_METAL = "Metal";
  const char* RES_NAME_ENERGY = "Energy";
  
-@@ -922,11 +933,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
+@@ -922,11 +939,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
  
  bool CEconomyManager::IsOpenMexSpot(int spotId) const
  {
@@ -623,7 +905,7 @@ index 2b84e90..bf697f3 100644
  	if (mexSpots[spotId].isOpen == value) {
  		return;
  	}
-@@ -934,6 +951,90 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
+@@ -934,6 +957,90 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
  	value ? --mexCount : ++mexCount;
  }
  
@@ -714,7 +996,7 @@ index 2b84e90..bf697f3 100644
  bool CEconomyManager::IsIgnorePull(const IBuilderTask* task) const
  {
  	if (mexMax != std::numeric_limits<decltype(mexMax)>::max()) {
-@@ -1026,6 +1127,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1026,6 +1133,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  		return nullptr;
  	}
  
@@ -728,7 +1010,25 @@ index 2b84e90..bf697f3 100644
  	if (IsEnergyStalling()) {
  		return UpdateEnergyTasks(position, unit);
  	}
-@@ -1278,6 +1386,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1214,7 +1328,17 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
+ 			}
+ 		}
+ 		float reclaimValue = featDef->GetContainedResource(metalRes)/* * feature->GetReclaimLeft()*/;
++		// apexearth: "do not reclaim for energy if we are >20% energy" -- watching
++		// constructors chew trees while the enemy took the map. A tree is an
++		// ENERGY feature; above this bank it is not worth a constructor-second,
++		// and constructor time is what buys mexes.
++		const float energyFeat = featDef->GetContainedResource(energyRes);
+ 		delete featDef;
++		const float eStore = GetEnergyStore();
++		const float eFrac = (eStore > 0.f) ? (GetEnergyCur() / eStore) : 0.f;
++		if ((energyFeat > reclaimValue) && (eFrac > RECLAIM_ENERGY_MAX)) {
++			continue;
++		}
+ 		if (reclaimValue < 1.0f) {
+ 			continue;
+ 		}
+@@ -1278,6 +1402,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  	const int frame = circuit->GetLastFrame();
  	float bestResDist = std::numeric_limits<float>::max();
  
@@ -758,7 +1058,7 @@ index 2b84e90..bf697f3 100644
  	const auto& infos = energyDefs.GetInfos();
  	const float curWind = circuit->GetMap()->GetCurWind();
  	auto checkWind = [curWind, terrainMgr, position, metalIncome, energyIncome, &infos](unsigned i) {
-@@ -1308,12 +1439,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1308,12 +1455,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  				if (engy.cdef->IsWind() && !checkWind(i)) {
  					continue;
  				}
@@ -773,7 +1073,7 @@ index 2b84e90..bf697f3 100644
  					if (bestResDist > resDist) {
  						bestResDist = resDist;
  						bestDef = engy.cdef;
-@@ -1571,6 +1702,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1571,6 +1718,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		}
  	}
  
@@ -793,7 +1093,7 @@ index 2b84e90..bf697f3 100644
  	factoryTask->SetPosition(buildPos);
  
  	if (factoryTask->IsPlop()
-@@ -1589,6 +1733,12 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1589,6 +1749,12 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		factoryTask = nullptr;
  		return task;
  	} else {
@@ -844,7 +1144,7 @@ index 2925da7..f1b8ee8 100644
  	bool IsIgnoreStallingPull(const IBuilderTask* task) const;
  	void CorrectResourcePull(float metal, float energy);
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b..0728958 100644
+index a44c20b..a0e16d4 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -56,6 +56,8 @@ using namespace terrain;
@@ -1004,7 +1304,41 @@ index a44c20b..0728958 100644
  	outPositions.clear();
  
  	CInfluenceMap* inflMap = circuit->GetInflMap();
-@@ -1429,8 +1526,13 @@ void CMilitaryManager::UpdateDefence()
+@@ -1095,6 +1192,16 @@ void CMilitaryManager::FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions
+ {
+ 	outPositions.clear();
+ 
++	// The FRONT first. Every position below comes from GetDefIndices(cluster),
++	// i.e. metal-cluster points only, which is why squads orbited bases and mexes
++	// and never held a line -- there was no position in the system that meant
++	// "the edge of our territory". Script computes one now; it goes in ahead of
++	// the clusters so a squad rallies on the line and falls back to clusters only
++	// when the front is still unknown.
++	if (circuit->HasFrontPos()) {
++		outPositions.push_back(circuit->GetFrontPos());
++	}
++
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+ 	const int frame = circuit->GetLastFrame();
+ 
+@@ -1149,6 +1256,16 @@ void CMilitaryManager::FillSafePos(CCircuitUnit* unit, F3Vec& outPositions)
+ {
+ 	outPositions.clear();
+ 
++	// The FRONT first. Every position below comes from GetDefIndices(cluster),
++	// i.e. metal-cluster points only, which is why squads orbited bases and mexes
++	// and never held a line -- there was no position in the system that meant
++	// "the edge of our territory". Script computes one now; it goes in ahead of
++	// the clusters so a squad rallies on the line and falls back to clusters only
++	// when the front is still unknown.
++	if (circuit->HasFrontPos()) {
++		outPositions.push_back(circuit->GetFrontPos());
++	}
++
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+ 	const int frame = circuit->GetLastFrame();
+ 
+@@ -1429,8 +1546,13 @@ void CMilitaryManager::UpdateDefence()
  		if (frame >= defElem.second) {
  			CCircuitDef* buildDef = defElem.first;
  			if (buildDef->IsAvailable(frame)) {
@@ -1019,7 +1353,7 @@ index a44c20b..0728958 100644
  			}
  			ibd->second.pop_back();
  		}
-@@ -1446,6 +1548,37 @@ void CMilitaryManager::UpdateDefence()
+@@ -1446,6 +1568,37 @@ void CMilitaryManager::UpdateDefence()
  	}
  }
  
@@ -1057,7 +1391,7 @@ index a44c20b..0728958 100644
  void CMilitaryManager::MakeBaseDefence(const AIFloat3& pos)
  {
  	if (circuit->IsLoadSave()) {
-@@ -1717,10 +1850,40 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1717,10 +1870,40 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  	return task;
  }
  
@@ -1245,10 +1579,10 @@ index 193efa9..954669b 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..8587ca5 100644
+index 2839b72..457e3d6 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
-@@ -195,6 +195,99 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +195,130 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
@@ -1296,6 +1630,37 @@ index 2839b72..8587ca5 100644
 +		const AIFloat3& pos, float radius)
 +{
 +	return circuit->FindBuildSiteNear(def, pos, radius);
++}
++
++static void CCircuitAI_SetBaseGrid(CCircuitAI* circuit, const AIFloat3& anchor,
++		const AIFloat3& fwd, float cell, float lanePitch, float laneHalf, float range)
++{
++	circuit->SetBaseGrid(anchor, fwd, cell, lanePitch, laneHalf, range);
++}
++
++static AIFloat3 CSetupManager_GetBasePos(CSetupManager* mgr)
++{
++	return mgr->GetBasePos();
++}
++
++static AIFloat3 CSetupManager_GetLanePos(CSetupManager* mgr)
++{
++	return mgr->GetLanePos();
++}
++
++static AIFloat3 CCircuitAI_GetChokePointPos(CCircuitAI* circuit, int idx)
++{
++	return circuit->GetChokePointPos(idx);
++}
++
++static bool CCircuitAI_GetChokePointEnds(CCircuitAI* circuit, int idx, AIFloat3& outEnd1, AIFloat3& outEnd2)
++{
++	return circuit->GetChokePointEnds(idx, outEnd1, outEnd2);
++}
++
++static bool CCircuitAI_GetAttackHotspot(CCircuitAI* circuit, AIFloat3& outPos, float& outWeight)
++{
++	return circuit->GetAttackHotspot(outPos, outWeight);
 +}
 +
 +static bool CCircuitAI_GetBlockedBuildPos(CCircuitAI* circuit, AIFloat3& outPos)
@@ -1348,7 +1713,7 @@ index 2839b72..8587ca5 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -499,6 +592,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -499,6 +623,41 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	gIdArrayType = engine->GetTypeInfoByDecl("array<Id>");
  	r = engine->RegisterObjectMethod("CCircuitAI", "array<Id>@ GetTeamIds() const", asFUNCTION(CCircuitAI_GetTeamIds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1366,6 +1731,21 @@ index 2839b72..8587ca5 100644
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool GetBlockedBuildPos(AIFloat3& out)", asFUNCTION(CCircuitAI_GetBlockedBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "void SetEngageBoost(float)", asMETHOD(CCircuitAI, SetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "void SetCommitted(bool)", asMETHOD(CCircuitAI, SetCommitted), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "bool GetAttackHotspot(AIFloat3& out, float& out)", asFUNCTION(CCircuitAI_GetAttackHotspot), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "int GetChokePointCount() const", asMETHOD(CCircuitAI, GetChokePointCount), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetChokePointPos(int) const", asFUNCTION(CCircuitAI_GetChokePointPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetChokePointWidth(int) const", asMETHOD(CCircuitAI, GetChokePointWidth), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "bool GetChokePointEnds(int, AIFloat3& out, AIFloat3& out)", asFUNCTION(CCircuitAI_GetChokePointEnds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "int GetChokePointArea(int, int) const", asMETHOD(CCircuitAI, GetChokePointArea), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void SetFrontPos(const AIFloat3& in)", asMETHOD(CCircuitAI, SetFrontPos), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void SetBaseGrid(const AIFloat3& in, const AIFloat3& in, float, float, float, float)", asFUNCTION(CCircuitAI_SetBaseGrid), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsPosOnMap(const AIFloat3& in) const",asMETHOD(CCircuitAI, IsPosOnMap), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetAllyInflAt), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetEnemyInflAt), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetNetInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetNetInflAt), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void DrawPoint(const AIFloat3& in, const string& in)", asMETHOD(CCircuitAI, DrawPoint), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void DrawLine(const AIFloat3& in, const AIFloat3& in)", asMETHOD(CCircuitAI, DrawLine), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "void DrawErase(const AIFloat3& in)", asMETHOD(CCircuitAI, DrawErase), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 FindBuildSiteNear(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_FindBuildSiteNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEngageBoost() const", asMETHOD(CCircuitAI, GetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1375,7 +1755,7 @@ index 2839b72..8587ca5 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -564,6 +677,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +723,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1399,7 +1779,7 @@ index 2839b72..8587ca5 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +703,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +749,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1420,7 +1800,16 @@ index 2839b72..8587ca5 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -703,6 +847,9 @@ void CInitScript::RegisterMgr()
+@@ -585,6 +775,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+ 	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
+ 	// AS docs / "Registering object methods" / "Composite members"
+ 	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CSetupManager", "AIFloat3 GetBasePos() const", asFUNCTION(CSetupManager_GetBasePos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CSetupManager", "AIFloat3 GetLanePos() const", asFUNCTION(CSetupManager_GetLanePos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ }
+ 
+ CInitScript::~CInitScript()
+@@ -703,6 +895,9 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1732,6 +2121,36 @@ index d29f582..94ddc2a 100644
  	void Recovered(CCircuitUnit* unit);
  
  	void ApplyPath(const CQueryPathSingle* query);
+diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
+index bc8ff11..e279244 100644
+--- a/src/circuit/task/builder/BuilderTask.cpp
++++ b/src/circuit/task/builder/BuilderTask.cpp
+@@ -285,8 +285,23 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+ 		}
+ 	}
+ 
+-	// Alter/randomize position
+-	AIFloat3 pos = (shake > .0f) ? utils::get_near_pos(position, shake) : position;
++	// Onto the base grid where there is one, otherwise the old jitter.
++	//
++	// Excluded types have to stand on a particular piece of ground and would be
++	// ruined by being moved: MEX/MEXUP on the metal spot, GEO/GEOUP on the vent,
++	// DEFENCE/BUNKER/BIG_GUN on the line they were sited to cover, PYLON on the
++	// grid link it was placed to make. FACTORY is excluded too, but for the
++	// opposite reason -- packing labs into the lattice is what leaves no room to
++	// tech up, and the point of the lattice is to keep that room free for them.
++	AIFloat3 pos;
++	const bool isFixed = (buildType == BuildType::MEX) || (buildType == BuildType::MEXUP)
++			|| (buildType == BuildType::GEO) || (buildType == BuildType::GEOUP)
++			|| (buildType == BuildType::DEFENCE) || (buildType == BuildType::BUNKER)
++			|| (buildType == BuildType::BIG_GUN) || (buildType == BuildType::PYLON)
++			|| (buildType == BuildType::FACTORY) || (buildType == BuildType::TERRAFORM);
++	if (isFixed || !circuit->SnapToBaseGrid(position, pos)) {
++		pos = (shake > .0f) ? utils::get_near_pos(position, shake) : position;
++	}
+ 	CTerrainManager::CorrectPosition(pos);
+ 
+ 	const float searchRadius = 200 * SQUARE_SIZE;
 diff --git a/src/circuit/task/builder/BuilderTask.h b/src/circuit/task/builder/BuilderTask.h
 index 13ced8d..3a733d6 100644
 --- a/src/circuit/task/builder/BuilderTask.h
@@ -2524,6 +2943,46 @@ index 9e6bfd8..c785896 100644
  				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore())
  			{
  				continue;
+diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
+index bfc3caf..3a7ffc9 100644
+--- a/src/circuit/task/fighter/DefendTask.cpp
++++ b/src/circuit/task/fighter/DefendTask.cpp
+@@ -29,6 +29,13 @@
+ 
+ namespace circuit {
+ 
++// How close a DEFEND task must be to the front to count as holding it, and how
++// far past its own maxPower it must get before it may leave anyway. Above that
++// the squad is surplus and is better spent attacking than standing still.
++#define FRONT_HOLD_RANGE	1800.0f
++#define FRONT_HOLD_POWER	2.0f
++
++
+ using namespace springai;
+ using namespace terrain;
+ 
+@@ -106,6 +113,21 @@ void CDefendTask::Update()
+ 	 */
+ 	if (updCount % 32 == 1) {
+ 		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
++		// Hold a share of the defenders ON the line. A DEFEND task promotes its
++		// whole squad into an ATTACK the moment it is strong enough, which is
++		// exactly what turns a garrison back into a roaming blob -- apexearth:
++		// "the way that AI seems to work is it has these squads, and the squads
++		// move around like blobs on the map, they don't necessarily have any
++		// responsibility to cover any specific area".
++		//
++		// Only defenders sitting on the front are held; a DEFEND task somewhere
++		// in the rear has nothing to cover and should still promote.
++		CCircuitAI* circuitAI = manager->GetCircuit();
++		const bool onFront = circuitAI->HasFrontPos()
++				&& (position.SqDistance2D(circuitAI->GetFrontPos()) < SQUARE(FRONT_HOLD_RANGE));
++		if (onFront && (attackPower < maxPower * FRONT_HOLD_POWER)) {
++			return;   // not strong enough to leave the line uncovered
++		}
+ 		if ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty()) {
+ 			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
+ 			decltype(units) tmpUnits = units;
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
 index 0400f8d..60369d1 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp

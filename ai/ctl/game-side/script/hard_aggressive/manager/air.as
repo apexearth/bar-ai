@@ -19,8 +19,26 @@ namespace Air {
 //------------------------------------------------------------------------------
 
 // Mid-game only. Before this the whole team is pooling metal behind the tech
-// lead (Military::RUSH_GIVEUP, same frame), and an air plant competes with it.
-const int   AIR_FROM       = 15 * MINUTE;
+// lead, and an air plant competes with it.
+//
+// 15 -> 11 min on 2026-08-07. 15 was RUSH_GIVEUP's own frame, i.e. the clock at
+// which pooling formally stops -- but the thing pooling BUYS, the lead's
+// advanced plant, is measured in this repo at a 6.3 min median. So from about
+// 7 minutes the competition this guarded against is already over, and the
+// remaining 8 minutes were spent waiting for a clock rather than for a state.
+//
+// Cost of waiting, measured over 16 games vs BARb medium (median length 21.3
+// min): the assassin armed in all 16 and committed in all 16, but only 7
+// strikes ever released and 5 of those were AIR_DEADLINE forcing a half-massed
+// launch. It had ~6 minutes to build and mass ~40 aircraft. BAR's own pro guide
+// on early air raids puts the raid at the T1->T2 transition for exactly this
+// reason -- the value is in hitting before anti-air exists, and AIR_AA_CEILING
+// already encodes that same idea as a gate we lose by waiting.
+//
+// Not moved to the T1->T2 transition proper: that IS the pooling window, and
+// this AI's whole team strategy is built on it. 11 keeps the plant clear of the
+// pool and still nearly doubles the time available to mass.
+const int   AIR_FROM       = 11 * MINUTE;
 
 // The candidate's OWN metal income. 20 bombers + 20 fighters is ~7,400 metal for
 // Armada and ~8,900 for Cortex, so this is roughly two minutes of one player's
@@ -34,6 +52,11 @@ const int   AIR_FROM       = 15 * MINUTE;
 // thing that cancels it. 20 bombers + 20 fighters is ~7,400-8,900 metal, so at
 // 40 metal/s that is about three and a half minutes of one player's income.
 const float AIR_MIN_INCOME = 40.f;
+
+// Income before a SECOND basic air plant is worth owning. Twice the bar for
+// arming at all: the first plant is the strategy, the second is throughput, and
+// throughput is only real if the metal exists to keep both busy.
+const float AIR_SECOND_PLANT_INCOME = 80.f;
 
 // Enemy anti-air already on the field, in metal, above which we do not start.
 // GetEnemyCost sums what we have SEEN, so it is a floor on their AA rather than a
@@ -113,6 +136,10 @@ const int   AIR_BATCH = 6;
 // Also cut, for the same reason: eight minutes after commitment was past the end
 // of several games.
 const int   AIR_DEADLINE   = 4 * MINUTE;
+
+// How far behind on the ground cancels the whole strategy. Above parity by a
+// clear margin, so an even fight does not veto it; see the check in Update().
+const float GROUND_LOST_RATIO = 1.5f;
 
 // One writer per slot, as with the tech-lead election in factory.as: every
 // instance publishes its own income, and only the elector publishes the answer.
@@ -330,7 +357,16 @@ CCircuitDef@ FactoryToBuild()
 	// second basic one was never reachable, and four minutes of a single plant
 	// is about six aircraft. The strike released on the deadline at 6 bombers
 	// and 4 fighters against 12 and 8. Throughput has to come before tier.
+	//
+	// Gated on ECONOMY as well as commitment. apexearth, watching live:
+	// "shouldn't make 2 t1 air labs at a t1 phase, just 1 max... you can have
+	// more when economy is stronger." Committing is not the same as affording:
+	// a second 690-metal plant during the T1 phase competes with the expansion
+	// that pays for the aircraft, and two half-fed plants build no faster than
+	// one fed one. The throughput argument above is right once the income is
+	// there, which is what AIR_SECOND_PLANT_INCOME asks.
 	if (Committed() && !Massed()
+		&& (aiEconomyMgr.metal.income >= AIR_SECOND_PLANT_INCOME)
 		&& (gPlant1 !is null) && gPlant1.IsAvailable(ai.frame) && (Have(gPlant1) == 1))
 	{
 		return gPlant1;
@@ -521,6 +557,32 @@ void Release(const string& in why)
 		+ " enemyAA=" + formatFloat(EnemyAACost(), "", 0, 0));
 }
 
+// Release the strike because the LAND army is going in right now.
+//
+// apexearth: "sometimes a combination of an air bombing raid on that front-line
+// at the time our land army is engaging there (like they're actually there, not
+// 2000 elos away walking towards it) is a great combination of army and air. Our
+// AI needs to have this advanced ability to coordinate at the right times."
+//
+// The assassin's own triggers are Massed() and AIR_DEADLINE -- both about the
+// air force's internal state, neither aware of what the ground army is doing. A
+// team push is the moment the ground army commits, so it is exactly the moment
+// bombers are worth spending: the enemy's attention and its repair are already
+// on the land assault.
+//
+// HalfMassed() rather than Massed(): a coordinated half-strike lands with the
+// push, and a full one that lands two minutes later does not. Returns whether it
+// fired so the caller can log it.
+bool ReleaseForPush()
+{
+	if (gStrike || !Armed() || !Committed())
+		return false;
+	if (!HalfMassed())
+		return false;
+	Release("team push -- hitting the line with the army");
+	return true;
+}
+
 void Update()
 {
 	ResolveDefs();
@@ -544,6 +606,31 @@ void Update()
 	// Release() so the assist does not outlive the strike.
 	if (Committed() && !Massed())
 		Economy::isSwitchAssist = true;
+
+	// Do not start an air force while the ground war is being lost badly.
+	//
+	// apexearth: "we should not do these air assassin strategies if we're losing
+	// the ground war considerably." The assassin costs 7,000-9,000 metal of one
+	// player's production and deliberately fields no ground army while it builds
+	// -- which is affordable from a stable position and suicidal from a losing
+	// one. A raid also only pays if there is still a game to win when it lands.
+	//
+	// GROUND_LOST_RATIO, not Military::LosingGround(): that fires at parity
+	// (enemy > ours * 1.0), which is normal mid-game and would cancel the
+	// strategy almost always. "Considerably" is the ask, so this wants a real
+	// deficit. Checked only before COMMITTING -- a force already paid for is
+	// better spent than abandoned, and Update()'s own abort path handles the
+	// case where anti-air appears mid-build.
+	const float ourGround = Military::TeamArmyCost();
+	const float foeGround = Military::EnemyArmyCost();
+	if (!Committed() && (foeGround > ourGround * GROUND_LOST_RATIO)) {
+		if (ai.frame >= gNextLog) {
+			gNextLog = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: air assassin holding off -- losing the ground war "
+				+ formatFloat(ourGround, "", 0, 0) + " vs " + formatFloat(foeGround, "", 0, 0));
+		}
+		return;
+	}
 
 	if (!Committed() && Armed()) {
 		CCircuitDef@ first = FactoryToBuild();

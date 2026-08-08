@@ -626,9 +626,31 @@ void UpdateKillingBlow()
 const float PORC_TRIGGER    = 2.0f;
 const int   PORC_ADD_SPACING = 20 * SECOND;
 const uint  PORC_ADD_CAP    = 2;
+// Toggle for A/B: false restores the old two-per-AI behaviour exactly.
+const bool  FRONT_UNCAPPED   = true;
 const float JAMMER_BACK     = 180.f;  // just behind the tower it covers    // was 10, then 4; see PORC_TRIGGER
 // The front is the contested area; allow a real position there, not a pair.
 const uint  PORC_FRONT_FENCE = 4;
+// A leak is answered on a looser bar than the front: the point is to be present
+// at all in the interior, not to build a wall there.
+const uint  PORC_LEAK_FENCE = 2;
+// How far a constructor may be sent to place one. Beyond this it is commuting
+// across the map instead of building, and that is constructor time, which is the
+// economy.
+const float PORC_MAX_REACH  = 3600.f;
+// How far back from the front the tower actually goes. Far enough that the
+// builder is not standing in the fight, close enough that the tower still
+// covers the approach.
+const float PORC_SETBACK      = 700.f;
+// Enemy metal already within this radius of the site that makes it not worth
+// starting. A tower that dies half-built cost the constructor-seconds anyway.
+const float PORC_DANGER_RADIUS = 700.f;
+// Relaxed once territory required DOMINANCE: the front already sits in ground we
+// hold, so a strict veto here refused sites that were never dangerous. Stacked
+// with the setback it strangled construction -- defence built fell 21,285 ->
+// 8,360 -> 2,950 metal across three runs as each veto went in. Only a genuinely
+// hot site is refused now.
+const float PORC_DANGER_COST   = 2500.f;
 uint gPorcAdded = 0;
 int  gNextPorcAdd = 0;
 
@@ -650,9 +672,24 @@ float ApproachThreat()
 // The pop-up turrets stay in the list because OurTowerValue counts it and
 // build_chain still places them; ordered by range they can never be selected,
 // since every entry after them is both longer-ranged and cheaper.
-array<string> PORC_NAMES_ARM = {"armclaw", "armllt", "armbeamer", "armhlt", "armpb", "armguard"};
-array<string> PORC_NAMES_COR = {"cormaw", "corllt", "corhllt", "corhlt", "corvipe", "corpun"};
-array<string> PORC_NAMES_LEG = {"legdtr", "leglht", "legmg", "legcluster"};
+// The heavy tiers on the end are new. apexearth: "once t3 is on the field the
+// older defenses start disappearing and we don't have enough jammers and T3 big
+// boy defenses that can credibly defend against this stuff." The ladder stopped
+// at the T2 counter-battery tier, so a base facing T3 had nothing left to build
+// that could hurt it, and PorcToBuild simply kept re-picking a tower that dies
+// to a Titan without firing.
+//
+// Costs from the pinned tree: armanni 3500, armbrtha 4500; cordoom 3000,
+// corint 4600; legbastion 4200. PorcToBuild's budget is income x 30s (60s once
+// the enemy owns artillery), so these cannot be reached on a small economy --
+// they open up exactly when the income that makes T3 possible arrives.
+//
+// The T3 supers (armvulc 70000, corbuzz 68000, legstarfall 63000) are
+// deliberately NOT here: at 30-60 seconds of income they would need 1000+
+// metal/second to pass the budget, so listing them would be dead weight.
+array<string> PORC_NAMES_ARM = {"armclaw", "armllt", "armbeamer", "armhlt", "armpb", "armguard", "armanni", "armbrtha"};
+array<string> PORC_NAMES_COR = {"cormaw", "corllt", "corhllt", "corhlt", "corvipe", "corpun", "cordoom", "corint"};
+array<string> PORC_NAMES_LEG = {"legdtr", "leglht", "legmg", "legcluster", "legbastion"};
 
 array<string>@ PorcNames()
 {
@@ -768,7 +805,19 @@ void PlaceLineJammer(const AIFloat3& in spot)
 
 void UpdateBaseDefence()
 {
-	if (!Builder::gHomeSet || (gPorcAdded >= PORC_ADD_CAP))
+	if (!Builder::gHomeSet)
+		return;
+	// The count cap only governs the GUESSED positions. apexearth: "if theres a
+	// frontline we should build defenses there regardless of any cap" -- two
+	// towers per AI for a whole game is a token, not a line, and that cap is why
+	// the front never looked defended.
+	//
+	// Uncapping is the spending class of change, so note what still governs it:
+	// the threat trigger below only fires while enemy army exceeds PORC_TRIGGER
+	// times our standing tower value, so this is self-limiting and stops once the
+	// line is strong enough; PORC_ADD_SPACING still paces one placement per 20s
+	// per AI; and AreaNeedsDefence still refuses to stack them.
+	if ((gPorcAdded >= PORC_ADD_CAP) && (!FRONT_UNCAPPED || !Front::IsFrontKnown()))
 		return;
 	if (ai.frame < gNextPorcAdd)
 		return;
@@ -792,8 +841,76 @@ void UpdateBaseDefence()
 	// Each successive tower goes one holding further back from the tip, so the
 	// two of them stand on separate clusters along that edge rather than on one
 	// interpolated point. The gadget-published front is the fallback only.
+	// Prefer the measured front to the geometric guesses. BorderPos walks our own
+	// holdings outward and FrontPos reads a gadget-published lane; both estimate
+	// a line that Front:: now actually computes, as the enemy-facing edge of our
+	// territory. FrontChoke first -- a front cell that also sits in a BWEM
+	// corridor is worth far more per tower than one in open ground. The old pair
+	// stay as the fallback for the opening, when no enemy has been seen and the
+	// front is honestly unknown.
+	// WHERE WE ARE ACTUALLY BLEEDING comes first.
+	//
+	// apexearth: "we lose stuff to 'leaks' because we don't even have any
+	// defenses on our deep inside mexes... especially not in the important areas
+	// where most of the 'leaks' are actually happening". Both the front line and
+	// the old geometric guesses answer "where is the edge", and neither answers
+	// "where are we losing things" -- ApproachThreat is EnemyArmyCost, a global
+	// scalar with no position at all. A raider inside our base and an army massing
+	// on the border look identical to it.
+	//
+	// ai.GetAttackHotspot is the cost-weighted, decaying centroid of our own
+	// losses, so a leak in the interior registers as itself rather than as
+	// pressure on the front. It takes priority: a hole behind the line is worth
+	// more than one more tower on it.
 	AIFloat3 spot;
-	if (!BorderPos(spot, gPorcAdded) && !FrontPos(spot))
+	bool haveSpot = false;
+	AIFloat3 hot;
+	float hotWeight = 0.f;
+	if (ai.GetAttackHotspot(hot, hotWeight) && ai.IsPosOnMap(hot)
+			&& Builder::AreaNeedsDefence(hot, PORC_LEAK_FENCE)) {
+		spot = hot;
+		haveSpot = true;
+	}
+	if (!haveSpot)
+		haveSpot = Front::FrontChoke(Builder::gHomePos, spot)
+				|| Front::FrontNear(Builder::gHomePos, spot);
+	// A tower is built by a constructor that has to walk there. apexearth on the
+	// uncapped front: "cons commuting into stupid places frankly". Anything past
+	// this is somebody else's part of the line.
+	if (haveSpot && (spot.distance2D(Builder::gHomePos) > PORC_MAX_REACH))
+		haveSpot = false;
+
+	// BEHIND the line, not on it. apexearth: "what is the point in trying to make
+	// a tower that can never be built? You go to some really dangerous place and
+	// are like, oh, I'm just gonna take a minute and build this. It's dumb."
+	//
+	// The front is by definition the most contested ground on the map, and a
+	// tower is a constructor standing still for a long time. Pull the site back
+	// toward our own territory so the tower still covers the approach but the
+	// builder is not parked in the fight, then refuse outright if the enemy is
+	// already on top of it -- a request that dies to a raider costs the
+	// constructor-seconds either way.
+	if (haveSpot) {
+		const float dx = Builder::gHomePos.x - spot.x;
+		const float dz = Builder::gHomePos.z - spot.z;
+		const float len = sqrt(dx * dx + dz * dz);
+		if (len > 1.f) {
+			spot.x += dx / len * PORC_SETBACK;
+			spot.z += dz / len * PORC_SETBACK;
+		}
+		if (!ai.IsPosOnMap(spot)
+				|| (ai.GetEnemyCostAt(spot, PORC_DANGER_RADIUS) > PORC_DANGER_COST))
+			haveSpot = false;
+	}
+	if (!haveSpot) {
+		// Past the cap, ONLY a measured front position earns a tower. The
+		// geometric guesses stay capped at two, because uncapping a guess is how
+		// you get a field of towers somewhere nothing is happening.
+		if (gPorcAdded >= PORC_ADD_CAP)
+			return;
+		haveSpot = BorderPos(spot, gPorcAdded) || FrontPos(spot);
+	}
+	if (!haveSpot)
 		return;
 
 	// Do not stack them, but the front is by definition the contested area, so
@@ -849,6 +966,164 @@ void UpdateRaidCaution()
 		aiMilitaryMgr.quota.raid.min = want;
 }
 
+//------------------------------------------------------------------------------
+// Coordinated team push -- the "something extra" that punches through a line.
+//
+// apexearth: "usually you need something extra to punch through defenses and
+// win a game... to defeat human players Apex AI must be unpredictable and
+// dangerous", and the AIs should "cooperate with other Apex AIs to create
+// united strategies".
+//
+// The failure this addresses is structural, not a tuning error. Every instance
+// judges every fight ALONE: CAttackTask's engage test compares one squad's
+// power against the local defenders. Four allied squads that would each win
+// together therefore each refuse separately, and the team trickles. That is
+// exactly what a human punishes, and it is what the live 10-AI game showed --
+// 3,973 target groups refused across 492 decisions.
+//
+// So: the elector totals the ALLY TEAM's army, and when the team as a whole
+// clearly outweighs the enemy it declares a push window on the shared
+// blackboard. Every instance reads the same flag and, for that window, accepts
+// worse local odds (SetEngageBoost) and lifts its attack cap. They commit
+// together or not at all.
+//
+// Why this is dangerous to a human rather than merely aggressive: the army is
+// visibly idle right up until it is not, and then several bases empty at once
+// from different directions. The unpredictability is a side effect of the
+// trigger being a STATE (relative army value) rather than a clock -- there is
+// no timing to learn.
+// TV_ARMY and TeamArmyCost() already exist above (UpdateKillingBlow publishes
+// it every tick); reuse them rather than declaring a second copy.
+const string TV_PUSH = "push";     // elector's answer: frame the window ends
+
+// How far ahead the TEAM must be before committing everything. Deliberately
+// higher than the per-squad engage margin: this spends the whole army at once,
+// and being wrong costs the game rather than a squad.
+const float PUSH_TEAM_RATIO = 1.6f;
+// Long enough to cross the map and land, short enough that a push which has
+// clearly failed is not renewed forever.
+const int   PUSH_WINDOW  = 90 * SECOND;
+const int   PUSH_COOLDOWN = 3 * MINUTE;
+// Odds multiplier while pushing. 0.55 roughly halves the surplus the engage
+// test demands -- squads still refuse a genuinely hopeless fight, but stop
+// refusing the ones the rest of the team is about to join.
+const float PUSH_BOOST   = 0.55f;
+const float PUSH_QUOTA   = 200.f;
+// Nothing to push with. Below this the "ratio" is noise -- two scouts against
+// one is 2.0 and means nothing.
+const float PUSH_MIN_ARMY = 2500.f;
+
+//------------------------------------------------------------------------------
+// Personality.
+//
+// apexearth: "the AI should have different types of personalities... to defeat
+// human players Apex AI must be unpredictable and dangerous."
+//
+// A human learns an AI by watching one game and assuming the next is the same.
+// Ten identically-tuned Apex instances are one opponent repeated ten times, and
+// perfectly predictable once solved. A per-instance trait, rolled at runtime and
+// never announced, means the same lineup plays differently every match and the
+// player cannot know which base in front of them is the cautious one.
+//
+// Expressed as a multiplier on the SAME engage-margin lever the team push uses,
+// deliberately: it composes with everything already tuned instead of adding a
+// second decision system that can disagree with the first. A personality shifts
+// how readily this instance takes a fight; it does not invent new behaviour, so
+// the blast radius is bounded and it cannot deadlock a role election.
+//
+// The team push OVERRIDES personality (see UpdateTeamPush): when the team commits
+// everyone commits, including the cautious ones. Cooperation beats temperament,
+// which is the point of having both.
+const int PERSONA_ROLL_FRAME = 10 * SECOND;   // after Init, so teamId is settled
+int   gPersona     = -1;
+float gPersonaBias = 1.f;
+string gPersonaName = "standard";
+
+void RollPersona()
+{
+	if (gPersona >= 0)
+		return;
+	// AiRandom is seeded per process; teamId keeps instances from all landing on
+	// the same roll in the same tick.
+	gPersona = (AiRandom(0, 999) + ai.teamId * 7) % 4;
+	if (gPersona == 0) {
+		gPersonaBias = 0.82f;  // berserker: takes fights the others decline
+		gPersonaName = "berserker";
+	} else if (gPersona == 1) {
+		gPersonaBias = 1.18f;  // cautious: hoards, techs, joins pushes only
+		gPersonaName = "cautious";
+	} else {
+		gPersonaBias = 1.f;
+		gPersonaName = "standard";
+	}
+	AiLog(Factory::T() + "apex: personality = " + gPersonaName
+		+ " (engage x" + formatFloat(gPersonaBias, "", 0, 2) + ")");
+}
+
+int  gPushUntil   = 0;
+int  gPushNextOk  = 0;
+bool gPushLogged  = false;
+
+void UpdateTeamPush()
+{
+	if (ai.frame >= PERSONA_ROLL_FRAME)
+		RollPersona();
+
+	// One writer, same pattern as the tech-lead and air-lead elections.
+	if (Factory::ElectorTeamId() == ai.teamId) {
+		const float teamArmy = TeamArmyCost();
+		// EnemyArmyCost() only accumulates on EnemyEnterLOS, so an enemy we have
+		// not looked at reads as ZERO -- and `army > 0 * 1.6` is true for any
+		// army at all. Observed on the first run of this rule: every push logged
+		// "vs enemy 0", i.e. it was firing on ignorance rather than on advantage.
+		// EnemyArmyFloor() already exists for exactly this ("a refused query is
+		// unknown, never no enemies"), so treat it as the floor.
+		const float seen = EnemyArmyCost();
+		const float floorFoe = EnemyArmyFloor();
+		const float foe = (seen > floorFoe) ? seen : floorFoe;
+		const bool worth = (teamArmy >= PUSH_MIN_ARMY)
+				&& (teamArmy > foe * PUSH_TEAM_RATIO);
+		float until = ai.ReadTeamValue(ai.teamId, TV_PUSH, 0.f);
+		if (worth && (ai.frame >= gPushNextOk) && (ai.frame > until)) {
+			until = float(ai.frame + PUSH_WINDOW);
+			gPushNextOk = ai.frame + PUSH_WINDOW + PUSH_COOLDOWN;
+			AiLog(Factory::T() + "apex: TEAM PUSH -- army "
+				+ formatFloat(teamArmy, "", 0, 0) + " vs enemy "
+				+ formatFloat(foe, "", 0, 0));
+			// Land and air together. Only the air lead has a force to release,
+			// and it no-ops for everyone else.
+			if (Air::ReleaseForPush())
+				AiLog(Factory::T() + "apex: air joins the push");
+		}
+		ai.PublishTeamValue(TV_PUSH, until);
+	}
+
+	const int until = int(ai.ReadTeamValue(Factory::ElectorTeamId(), TV_PUSH, 0.f));
+	const bool pushing = (ai.frame < until) && !Factory::EcoLeadActive();
+	if (pushing) {
+		ai.SetEngageBoost(PUSH_BOOST);
+		// Commitment is the whole point. apexearth: "the real key there is
+		// 'commitment'... if we back off we certainly won't succeed." Units in a
+		// declared push stop retreating to heal; see CCircuitAI::IsCommitted.
+		ai.SetCommitted(true);
+		if (aiMilitaryMgr.quota.attack < PUSH_QUOTA)
+			aiMilitaryMgr.quota.attack = PUSH_QUOTA;
+		if (gTurtle) {
+			gTurtle = false;
+			gPostureUntil = ai.frame;
+		}
+		if (!gPushLogged) {
+			gPushLogged = true;
+			AiLog(Factory::T() + "apex: joining team push");
+		}
+	} else {
+		// Personality is the resting state; the push above overrides it.
+		ai.SetEngageBoost(gPersonaBias);
+		ai.SetCommitted(false);
+		gPushLogged = false;
+	}
+}
+
 void UpdatePosture()
 {
 	// Before UpdateRushRole, which overwrites quota.attack on the lead. Captured
@@ -866,6 +1141,8 @@ void UpdatePosture()
 	UpdateRushRole();
 	UpdateEcoRole();
 	UpdateEcoAid();
+	// Last, so it is the final word on the quota and the posture.
+	UpdateTeamPush();
 	// After massing and both role rules, so it is the last word on the quota.
 	// Not for the eco lead: it holds almost no army by design, and sending that
 	// at a base is throwing it away rather than ending anything.

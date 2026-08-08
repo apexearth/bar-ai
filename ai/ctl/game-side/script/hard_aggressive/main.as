@@ -3,6 +3,7 @@
 #include "manager/factory.as"
 #include "manager/economy.as"
 #include "manager/air.as"
+#include "manager/frontline.as"
 
 
 namespace Main {
@@ -49,6 +50,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Factory::UpdateRushReclaim();
 	Factory::LogRushState();
 	Air::Update();
+	Front::Update();
 }
 
 }  // namespace Main
