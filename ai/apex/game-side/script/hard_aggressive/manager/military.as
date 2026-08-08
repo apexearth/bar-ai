@@ -645,7 +645,12 @@ const float PORC_SETBACK      = 700.f;
 // Enemy metal already within this radius of the site that makes it not worth
 // starting. A tower that dies half-built cost the constructor-seconds anyway.
 const float PORC_DANGER_RADIUS = 700.f;
-const float PORC_DANGER_COST   = 600.f;
+// Relaxed once territory required DOMINANCE: the front already sits in ground we
+// hold, so a strict veto here refused sites that were never dangerous. Stacked
+// with the setback it strangled construction -- defence built fell 21,285 ->
+// 8,360 -> 2,950 metal across three runs as each veto went in. Only a genuinely
+// hot site is refused now.
+const float PORC_DANGER_COST   = 2500.f;
 uint gPorcAdded = 0;
 int  gNextPorcAdd = 0;
 
