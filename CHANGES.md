@@ -8,6 +8,52 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-07: naval response was switched off entirely
+
+apexearth: "we suffer lots from enemy subs, we don't make enough torp launchers
+or destroyers at t1... the destroyer is one of the best units to build along
+with the submarine... if you spam a whole ton of subs, you can win an entire
+water battle unless the enemy has T3 hovers."
+
+`response.json` explains it. `anti_sub` was zeroed on every field:
+
+    "anti_sub": { "vs": ["sub"], "ratio": [0.0], "importance": [0.0],
+                  "max_percent": 0.00, "eps_step": 0.00 }
+
+against stock BARb's `ratio 0.8, importance 5.0, max_percent 0.30`. And the
+`"sub"` entry stock ships was **absent from our config altogether**. So the AI
+had no response to enemy subs and no reason to build subs of its own. This dates
+to the original apex import (`9d04b5a`), not a recent regression -- it has been
+off the whole time.
+
+The roles exist and are wired: `armroy` (Corsair, T1 destroyer, 880 metal) is
+`anti_sub`, `armsubk` is `anti_sub`+`sub`, with Legion equivalents in
+`behaviour_leg.json`. `response.json` is shared across all three factions, so
+one fix covers faction parity.
+
+Now `anti_sub` ratio 0.9 / importance 500 / max_percent 0.45, and `sub` restored
+at ratio 0.6 / importance 300 / max_percent 0.6 -- above stock's 5.0 importance
+because both units stay relevant well past T1.
+
+Both are demand-driven (`vs` gates on enemy roles present), so neither can fire
+on a land map. Unmeasured beyond "no config errors, no script errors".
+
+### The overlay vanished because BAR erases map marks after 60 seconds
+
+`luaui/Widgets/map_auto_mapmark_eraser.lua` ships with `eraseTime = 60` and
+deletes every mark 60 seconds after it appears. So the previous commit's
+"draw chokepoints once" was exactly backwards -- the layer disappeared a minute
+in, which is precisely what was reported. Chokepoints are redrawn every pass
+again. That widget also means marks CANNOT accumulate, so the 21,000-stale-lines
+worry in that commit was wrong; the erase bookkeeping is now belt and braces.
+
+The front lines were missing for a different reason: `Draw` only draws FRONT
+cells, and FRONT requires `gFoeKnown`. Each AI's influence map holds only what
+that AI knows, so if the single drawing AI is a rear player that never sees
+anyone, the overlay is empty all game. The enemy bearing is now pooled across
+the team over the blackboard (`apexFoeX/Z/W`), weighted by sighting count, so a
+forward teammate's contact gives everyone behind them a real front.
+
 ## 2026-08-07: front vs back, and the front starts UNKNOWN
 
 apexearth on the undirected perimeter: "the perceived frontline is behind us,

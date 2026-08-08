@@ -44,6 +44,11 @@ const float FRONT_BAND = 3000.f;
 const int RECLASSIFY = 10 * SECOND;
 const int SEAM_N = 40;
 
+// Blackboard keys for pooling the enemy bearing across the team.
+const string TV_FOE_X = "apexFoeX";
+const string TV_FOE_Z = "apexFoeZ";
+const string TV_FOE_W = "apexFoeW";
+
 enum Owner { EMPTY = 0, OURS = 1, CONTESTED = 2, THEIRS = 3 };
 enum Edge { NONE = 0, FRONT = 1, BACK = 2 };
 
@@ -161,10 +166,34 @@ void Scan()
 		gOurMid.x = ox / ow;
 		gOurMid.z = oz / ow;
 	}
-	gFoeKnown = (fw > 0.f);
+	// Share the enemy bearing across the team.
+	//
+	// Each AI's influence map holds only what THAT AI knows, and rear players
+	// never see anyone -- measured at 248 of 400 samples reading cFoe=0 in one
+	// Jade 8v8. Alone, those players conclude there is no front and place
+	// nothing, and if the drawing AI happens to be one of them the overlay is
+	// empty all game. The sighting a forward teammate has is just as true for
+	// everyone behind them, so it is pooled.
+	if (fw > 0.f) {
+		ai.PublishTeamValue(TV_FOE_X, fx / fw);
+		ai.PublishTeamValue(TV_FOE_Z, fz / fw);
+		ai.PublishTeamValue(TV_FOE_W, fw);
+	}
+	float tx = 0.f, tz = 0.f, tw = 0.f;
+	array<Id>@ mates = ai.GetTeamIds();
+	for (uint i = 0; (mates !is null) && (i < mates.length()); ++i) {
+		const int id = int(mates[i]);
+		const float w = ai.ReadTeamValue(id, TV_FOE_W, 0.f);
+		if (w <= 0.f)
+			continue;
+		tx += ai.ReadTeamValue(id, TV_FOE_X, 0.f) * w;
+		tz += ai.ReadTeamValue(id, TV_FOE_Z, 0.f) * w;
+		tw += w;
+	}
+	gFoeKnown = (tw > 0.f);
 	if (gFoeKnown) {
-		gFoeMid.x = fx / fw;
-		gFoeMid.z = fz / fw;
+		gFoeMid.x = tx / tw;
+		gFoeMid.z = tz / tw;
 	}
 
 	const float dirx = gFoeMid.x - gOurMid.x;
@@ -403,15 +432,11 @@ void Draw()
 	}
 	gDrawn = true;
 
-	// Chokepoints never move, so draw them ONCE. Redrawing every pass leaked:
-	// only perimeter positions are erased above, so nothing ever removed a
-	// chokepoint line and ~78 accumulated every 10 seconds. Neither the engine
-	// nor this file caps map drawings -- InMapDrawModel's numLines is a counter
-	// that is never compared against a limit -- so a 45-minute game piled up
-	// roughly 21,000 stale, redundant lines.
-	if (gChokeDrawn)
-		return;
-	gChokeDrawn = true;
+	// Chokepoints must be REDRAWN, not drawn once. BAR ships the "Auto mapmark
+	// eraser" widget (luaui/Widgets/map_auto_mapmark_eraser.lua) with
+	// eraseTime = 60, which deletes every mark 60 seconds after it appears. A
+	// draw-once layer therefore vanishes a minute in. That same widget is why
+	// marks cannot accumulate, so the erase bookkeeping here is belt and braces.
 	for (uint k = 0; k < gIdx.length(); ++k) {
 		AIFloat3 e1, e2;
 		if (ai.GetChokePointEnds(gIdx[k], e1, e2))
