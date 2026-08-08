@@ -716,8 +716,26 @@ float ApproachThreat()
 // An LRPC is siege artillery, not something that holds ground. It still has its
 // own route via the big_gun chain in build_chain.json; it just no longer
 // masquerades as defence. Legion never had one in this list.
-array<string> PORC_NAMES_ARM = {"armclaw", "armllt", "armbeamer", "armhlt", "armpb", "armguard", "armanni"};
-array<string> PORC_NAMES_COR = {"cormaw", "corllt", "corhllt", "corhlt", "corvipe", "corpun", "cordoom"};
+// armguard (Gauntlet, 1250) and corpun (Agitator, 1300) are NOT here. They are
+// "Area Control Plasma Artillery" -- the T1.5 tier -- and this list is ordered by
+// range ascending with PorcToBuild taking the LAST affordable entry, so from
+// about 1,250 income-worth of budget upward they outranked armpb (680) and were
+// the automatic pick until armanni (3500) came into reach. That is a wide band
+// where every defence request bought one. apexearth: "we make too much t1.5
+// artillery, they cost 1200 and are not worth it... t2 artillery is more
+// worthwhile."
+//
+// Same mechanism as the Basilica removal above, one rung lower: a long-ranged
+// entry at the end of a range-ordered list wins everything below it. The ladder
+// is now pop-up gauss -> T3 tower.
+// armamb (Rattlesnake, 2500) and cortoast (Persecutor, 2500) fill the rung
+// between the pop-up gauss and the T3 tower. apexearth: "there is t2 defense
+// better than a pitbull, we should prefer it" -- and, on the tier below it,
+// "t2 artillery is more worthwhile" than the 1250-metal T1.5 plasma. Being last
+// affordable before armanni/cordoom is what makes them the preferred pick across
+// that whole income band.
+array<string> PORC_NAMES_ARM = {"armclaw", "armllt", "armbeamer", "armhlt", "armpb", "armamb", "armanni"};
+array<string> PORC_NAMES_COR = {"cormaw", "corllt", "corhllt", "corhlt", "corvipe", "cortoast", "cordoom"};
 array<string> PORC_NAMES_LEG = {"legdtr", "leglht", "legmg", "legcluster", "legbastion"};
 
 array<string>@ PorcNames()
