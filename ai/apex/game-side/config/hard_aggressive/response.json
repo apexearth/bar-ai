@@ -60,9 +60,9 @@
 	},
 	"anti_air": {
 		"vs":         ["air"],
-		"ratio":      [ 0.75],
+		"ratio":      [ 1.60],
 		"importance": [ 950.0],
-		"max_percent": 0.5,
+		"max_percent": 0.65,
 		"eps_step": 0.6
 	},
 	"anti_sub": {
