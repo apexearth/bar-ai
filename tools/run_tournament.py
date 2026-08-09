@@ -135,7 +135,8 @@ def worker_dirs(n: int) -> queue.Queue:
 def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
          match_root: Path, per_side: int = 1,
          sides: str | None = None, boxes: str = "lr",
-         box_size: float = 0.0, handicap: int = 0) -> dict | None:
+         box_size: float = 0.0, handicap: int = 0,
+         modoptions: list[str] | None = None) -> dict | None:
     """Run one match in its own process and read back its result.json.
 
     Output and write dirs are passed explicitly rather than letting run_match
@@ -158,6 +159,8 @@ def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
         cmd += ["--handicap", str(handicap)]
     if sides:
         cmd += ["--sides", sides]
+    for mo in (modoptions or []):
+        cmd += ["--modoption", mo]
     if engine:
         cmd += ["--engine", engine]
 
@@ -277,6 +280,10 @@ def main() -> int:
                          "variant under test")
     ap.add_argument("--per-side", dest="per_side", type=int, default=1,
                     help="AIs per side; 4 makes every match a 4v4")
+    ap.add_argument("--modoption", action="append", default=[], metavar="K=V",
+                    help="extra start-script modoption, repeatable; passed to "
+                         "every match. Used to select an arm of an A/B without "
+                         "rebuilding or redeploying (see dev_tunables.lua)")
     ap.add_argument("--engine", help="engine version dir")
     ap.add_argument("--name", help="label for this run's output directory")
     ap.add_argument("--report", nargs="?", const="", metavar="RUN_DIR",
@@ -329,6 +336,7 @@ def main() -> int:
     (run_dir / "config.json").write_text(json.dumps({
         "ais": args.ais, "maps": maps, "games_per_pairing": per_pair,
         "minutes": args.minutes, "workers": args.workers, "engine": args.engine,
+        "modoption": args.modoption,
         "per_side": args.per_side, "sides": args.sides,
         "jobs": [asdict(j) for j in jobs],
     }, indent=2), encoding="utf-8")
@@ -347,7 +355,7 @@ def main() -> int:
         wd = pool.get()
         try:
             row = play(job, args.minutes, args.engine, wd, match_root, args.per_side,
-                       args.sides, args.boxes, args.box_size, args.handicap)
+                       args.sides, args.boxes, args.box_size, args.handicap, args.modoption)
         finally:
             pool.put(wd)
         with _lock:
