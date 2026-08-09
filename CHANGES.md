@@ -5,8 +5,28 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 
 | variant | intent | best measured result |
 |---|---|---|
-| **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
+| **apex** | team T2 rush in team games; stock behaviour with no allies | **1v1 vs `BARb:stable:hard`: 56-57 over 113 decided games (49.6%)**, 2026-08-10 |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
+
+The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
+on the `hard_aggressive` config base, which is no longer what apex ships. They
+are not withdrawn, they are simply no longer about this build.
+
+## 2026-08-10: where the 1v1 ended up
+
+40 games per faction, Altair Crossing 1v1 mirror, side-swapped, 60-minute cap,
+`Apex:apex:hard_aggressive` against `BARb:stable:hard`:
+
+| faction | decided | apex wins | win% | 95% CI |
+|---|---|---|---|---|
+| Cortex | 37 | 17 | 46% | 31-62% |
+| Armada | 39 | 23 | **59%** | 43-73% |
+| Legion | 37 | 16 | 43% | 28-59% |
+| **pooled** | **113** | **56** | **49.6%** | 40-59% |
+
+Against a starting point of 1 win in 66 decided games. Every faction's interval
+includes 50% and none reaches the 75% target; this is parity with stock, not
+superiority over it.
 
 ## 2026-08-10: the 1v1 win rate is 1/66, and the 20-minute cap was hiding it
 
@@ -93,6 +113,39 @@ taken on a config tree the upstream author stopped maintaining.
 
 The C++ delta, by contrast, is roughly neutral here: apex's DLL running stock
 `hard` game-side scored 6-11, a CI that includes 50%.
+
+## 2026-08-10: the fighter-task C++ delta costs 12 points, and is reverted
+
+Two arms, 40 games each, run CONCURRENTLY in one session against
+`BARb:stable:hard` (Altair Crossing 1v1 Cortex, 60-minute cap):
+
+| arm | decided | apex wins | win% |
+|---|---|---|---|
+| apex fighter tasks | 38 | 14 | 37% |
+| reverted to upstream `0ef3626` | 39 | **19** | **49%** |
+
+Reverted: `src/circuit/task/fighter/` in full, plus `MoveAction.cpp` and
+`TravelAction.h`. That is line-formation travel, the orbiting standoff, the
+engage and continue margins, trade-scaled caution, the raid-economy target
+scoring and the sticky-target rules.
+
+The tunable A/B pointed at the same place before the rebuild, on the same
+40-game footing:
+
+| arm | decided | apex wins |
+|---|---|---|
+| control | 38 | 10 |
+| `apex_engage_margin=0.5` | 38 | 10 |
+| `apex_orbit_rate=0 apex_range_mod=1.0` | 38 | **14** |
+
+So the caution margins are NOT the cost — turning them almost off changes
+nothing — and the standoff/orbit carries a real part of it. That is the pair to
+re-land first, with a measurement.
+
+Nothing is lost: every reverted behaviour is in the branch history and can come
+back one at a time. What did not happen the first time is the measurement.
+
+**8v8 is not re-measured. Every number in this section is 1v1.**
 
 ## 2026-08-10: apex stands aside when it has no allies, and moves onto the `hard` base
 

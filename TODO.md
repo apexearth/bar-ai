@@ -67,3 +67,37 @@ confusion each one causes:
 
 Bugs found in the same pass are in CHANGES.md under "found while refactoring,
 NOT fixed" — they are deliberately still there.
+
+# Getting the 1v1 past parity (2026-08-10)
+
+The 1v1 is at 50% against `BARb:stable:hard` over 113 decided games, up from
+1/66. Everything that got it there was REMOVING apex's own work; nothing added
+today made it better than stock. What is left is the harder half.
+
+Measurement first, because it is what made the rest possible:
+
+- **45-60 minute caps, not 20.** At 20 minutes most games were undecided and the
+  win rate did not exist. Median decided length is 31-37 min.
+- **40 games per arm, and run the arms CONCURRENTLY.** The same build measured
+  8/20 and 3/17 an hour apart. At n=38 the 95% CI is still about +/-16 points,
+  so separating 50% from 75% needs roughly that sample and a matched control in
+  the same session.
+- `python tools/tl.py <run> [shortname]` prints the paired timeline -- it drops
+  any sample where one side has stopped reporting, which is what makes late-game
+  rows honest.
+
+Candidates, in the order the evidence supports:
+
+1. **Re-land the fighter-task behaviours one at a time.** They are on
+   `barbarian-apex` history before the revert. The standoff-and-orbit pair is
+   the one with a measured signature: turning it off by modoption scored 14-24
+   against a 10-28 control. Everything else in that revert is unmeasured in
+   either direction.
+2. **Re-derive apex's config deltas on the `hard` base.** The old ones were
+   tuned against `hard_aggressive` and are gone. The raider-share fix in
+   `factory.json` is the one with a stated cause behind it.
+3. **Re-measure 8v8.** Nothing about team play was measured today, and both the
+   config base and the fighter tasks moved under it.
+4. **`ApexActive()` is all-or-nothing.** It should become per-behaviour, so a
+   rule that is good in a 1v1 can run there while the pooling machinery does
+   not. Today it buys the floor and forbids the ceiling.

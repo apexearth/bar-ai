@@ -63,6 +63,19 @@ Three edits, all of them required:
 The compiled default must stay the shipped behaviour. A tunable is a way to
 measure a change, not a way to make one.
 
+## 2026-08-10: nine of these no longer have a reader
+
+The fighter-task C++ delta was reverted to upstream (see CHANGES.md), and with
+it went every call site of `apex_engage_margin`, `apex_trade_margin_max`,
+`apex_continue_margin`, `apex_air_threat_mod`, `apex_static_no_continue`,
+`apex_encircle_penalty`, `apex_squad_spacing`, `apex_range_mod` and
+`apex_orbit_rate`. Setting them now does nothing. They are left in
+`dev_tunables.lua` and in the table above because the behaviours they measure
+are expected to be re-landed one at a time, and each will want its tunable back.
+
+`apex_attack_minpower_threat`, `apex_scout_threat` and `apex_reclaim_energy_dist`
+live in MilitaryManager/EconomyManager and are unaffected.
+
 ## Added 2026-08-10
 
 | name | default | read by | what it does |
