@@ -299,6 +299,11 @@ static float CCircuitAI_GetTeamMetalFill(CCircuitAI* circuit, int otherTeamId)
 	return circuit->GetTeamMetalFill(otherTeamId);
 }
 
+static float CCircuitAI_GetTunable(CCircuitAI* circuit, const std::string& name, float defVal)
+{
+	return circuit->GetTunable(name.c_str(), defVal);
+}
+
 static float CCircuitAI_GetDefBuildProgress(CCircuitAI* circuit, CCircuitDef* def)
 {
 	return circuit->GetDefBuildProgress(def);
@@ -630,6 +635,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// A hosted multiplayer game cannot carry synced Lua, but every AI the host
 	// adds shares this process, so they can simply read each other.
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetDefBuildProgress(CCircuitDef@) const", asFUNCTION(CCircuitAI_GetDefBuildProgress), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTunable(const string &in, float) const", asFUNCTION(CCircuitAI_GetTunable), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void PublishTeamValue(const string& in, float)", asFUNCTION(CCircuitAI_PublishTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float ReadTeamValue(int, const string& in, float) const", asFUNCTION(CCircuitAI_ReadTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestWreckPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestWreckPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

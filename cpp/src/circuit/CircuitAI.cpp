@@ -1567,6 +1567,17 @@ float CCircuitAI::GetTeamMetalIncome(int otherTeamId) const
 	return game->GetRulesParamFloat(key.c_str(), -1.f);
 }
 
+float CCircuitAI::GetTunable(const char* name, float defVal) const
+{
+	auto it = tunables.find(name);
+	if (it != tunables.end()) {
+		return it->second;
+	}
+	const float value = (game != nullptr) ? game->GetRulesParamFloat(name, defVal) : defVal;
+	tunables[name] = value;
+	return value;
+}
+
 // Highest build progress among our own units of `def`, or -1 if we hold none.
 //
 // teamUnits carries nanoframes as well as finished units -- other call sites

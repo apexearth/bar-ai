@@ -162,6 +162,18 @@ public:
 	float GetTeamMetalFill(int otherTeamId) const;
 	float GetTeamMetalIncome(int otherTeamId) const;
 
+	// --- experiment tunables ---------------------------------------------
+	// A combat constant read from a game rules param instead of a #define, so
+	// one DLL can serve every arm of an A/B run and the arm is chosen by a
+	// modoption on the match command line. Rebuilding to change a constant made
+	// each measurement a Docker build; the arena resolves a 2v2 matchup in about
+	// a minute, so the build dominated the experiment.
+	//
+	// The default is returned whenever the publishing gadget is absent, which is
+	// every non-harness game, so behaviour off the bench is unchanged. Values
+	// are cached on first read: this sits inside the per-unit attack loop.
+	float GetTunable(const char* name, float defVal) const;
+
 	// --- in-process team coordination -----------------------------------
 	// Every AI the host adds lives in ONE process (AIExport.cpp keeps them in
 	// `myAIs`, and CGameAttribute::GetCircuits() hands out the live set), so
@@ -271,6 +283,8 @@ public:
 
 	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
 private:
+	mutable std::map<std::string, float> tunables;  // see GetTunable
+
 	std::pair<CEnemyInfo*, bool> RegisterEnemyInfo(ICoreUnit::Id unitId, bool isInLOS = false);
 	CEnemyInfo* RegisterEnemyInfo(springai::Unit* e);
 	void UnregisterEnemyInfo(CEnemyInfo* enemy);
