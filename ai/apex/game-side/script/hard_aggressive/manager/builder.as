@@ -19,5 +19,11 @@
 #include "builder/mexguard.as"    // mex turrets, home energy ladder, contest towers
 #include "builder/obsolete.as"    // reclaiming our own outdated buildings
 #include "builder/fortify.as"     // per-constructor strike history and dig-in
+#include "builder/rules_rezzer.as"     // rez bots flee, salvage and pre-empt
+#include "builder/rules_hold.as"       // keep, or abandon, work already started
+#include "builder/rules_commander.as"  // the commander's own safety and vetoes
+#include "builder/rules_optional.as"   // the optional cluster ahead of expansion
+#include "builder/rules_offer.as"      // screening DefaultMakeTask's offer
+#include "builder/rules_scavenge.as"   // wrecks, and the last-resort jobs
 #include "builder/maketask.as"    // AiMakeTask: the rule pipeline
 #include "builder/events.as"      // task/unit hooks, save/load, diagnostics
