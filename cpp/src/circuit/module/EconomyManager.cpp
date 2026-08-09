@@ -41,6 +41,9 @@ namespace circuit {
 // constructor-second. apexearth: "do not reclaim for energy if we are >20%
 // energy".
 #define RECLAIM_ENERGY_MAX	0.20f
+// How far a constructor may WALK for an energy feature (a tree). Roughly one
+// screen: near enough that it is picked up in passing rather than travelled to.
+#define RECLAIM_ENERGY_DIST	900.f
 
 
 using namespace springai;
@@ -104,7 +107,12 @@ CEconomyManager::~CEconomyManager()
 	delete energyRes;
 	delete economy;
 
-	delete factoryTask;
+	// Refcounted: CBuilderManager::Enqueue already fired TaskAdded, so a script
+	// may still hold a handle. Release, never delete.
+	if (factoryTask != nullptr) {
+		factoryTask->ClearRelease();
+		factoryTask = nullptr;
+	}
 }
 
 void CEconomyManager::InitHandlers()
@@ -1175,7 +1183,19 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
 					const auto& unitIds = circuit->GetCallback()->GetFriendlyUnitIdsIn(pos, maxRange, false);
 					float curExtract = -1.f;
 					for (ICoreUnit::Id unitId : unitIds) {
-						CAllyUnit* curMex = circuit->GetFriendlyUnit(unitId);  // CCircuitUnit* curMex = circuit->GetTeamUnit(unitId);
+						// apex: OWN-team, not ally-wide. An ally's extractor
+						// satisfied "a mex here yields less than what I can
+						// build" -- Legion's legmex extracts 0.0008 against
+						// 0.001 for arm/cormex, and any moho outyields every
+						// ally T1 -- so a MEXUP task was enqueued on ground we
+						// do not own. It can never complete: Execute() cannot
+						// place over their extractor, and its reclaim fallback
+						// resolves the occupant through GetTeamUnit(), which is
+						// null for another team. The task then pins one of the
+						// mex_up slots and marks the spot upgrading, so real
+						// upgrades starve. Measured: MEXUP pinned at the cap of
+						// 4 for 237 of 291 samples with nothing upgraded.
+						CCircuitUnit* curMex = circuit->GetTeamUnit(unitId);
 						if (curMex == nullptr) {
 							continue;
 						}
@@ -1336,8 +1356,25 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
 		delete featDef;
 		const float eStore = GetEnergyStore();
 		const float eFrac = (eStore > 0.f) ? (GetEnergyCur() / eStore) : 0.f;
-		if ((energyFeat > reclaimValue) && (eFrac > RECLAIM_ENERGY_MAX)) {
+		const bool isEnergyFeat = (energyFeat > reclaimValue);
+		if (isEnergyFeat && (eFrac > RECLAIM_ENERGY_MAX)) {
 			continue;
+		}
+		// ...and even when the bank IS low, do not WALK for it. The !isNear
+		// branch above queries GetFeatures() -- every feature on the map -- so
+		// the nearest qualifying tree could be on the far side of the board, and
+		// the constructor-seconds spent reaching it dwarf the energy in it.
+		// apexearth, watching a 1v1: "I saw 5 cons going far from the base and
+		// reclaiming trees (energy)... waste of time... we shouldn't be doing
+		// that".
+		// Scoped to ENERGY-dominant features on purpose: a field of metal wrecks
+		// after a repelled push is worth crossing ground for, and that is this
+		// variant's whole plan. A tree is not.
+		if (isEnergyFeat) {
+			const float maxDist = circuit->GetTunable("apex_reclaim_energy_dist", RECLAIM_ENERGY_DIST);
+			if ((maxDist > 0.f) && (position.SqDistance2D(featPos) > SQUARE(maxDist))) {
+				continue;
+			}
 		}
 		if (reclaimValue < 1.0f) {
 			continue;
@@ -1749,13 +1786,16 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
 		factoryTask = nullptr;
 		return task;
 	} else {
-		// CBFactoryTask's ctor calls CFactoryData::AddFactory; only Cancel() undoes
-		// it, and a bare delete does not call Cancel. allFactories[].count is the
-		// primary sort key in CFactoryData::GetFactoryToBuild, so each discard here
-		// permanently demotes that factory in every later choice. Cancel() is
-		// protected, so undo the count directly.
-		factoryMgr->DelFactory(facDef);
-		delete factoryTask;
+		// PickNextFactory enqueues this task INACTIVE, so it is not in
+		// updateTasks and the module will never free it -- but Enqueue has
+		// already fired TaskAdded, so AngelScript may hold a refcounted handle
+		// to it. AbortTask runs the normal teardown: TaskRemoved lets the script
+		// drop its handle, and CBFactoryTask::Cancel undoes the AddFactory its
+		// ctor did (allFactories[].count is the primary sort key in
+		// CFactoryData::GetFactoryToBuild). ClearRelease then drops the module's
+		// own reference instead of deleting under the script's.
+		builderMgr->AbortTask(factoryTask);
+		factoryTask->ClearRelease();
 		factoryTask = nullptr;
 	}
 

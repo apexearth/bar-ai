@@ -18,6 +18,280 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-09: the AI crashed the engine because C++ deleted tasks the script held
+
+Layer 3 (C++), `module/EconomyManager.cpp` and `task/builder/BuilderTask.cpp`.
+
+Two watched 8v8s died mid-game with `Access violation (0xc0000005)` at
+`Exception Address: 0x0`, and the engine's own note — *"This stacktrace indicates
+a problem with a skirmish AI"* — with every frame inside our `SkirmishAI.dll`.
+Symbolized against the unstripped build (see `docs/06-building-the-dll.md`):
+
+    circuit::IRefCounter::Release()          RefCounter.cpp:29   <- delete this
+    asCContext::ExecuteNext()                as_context.cpp:3234
+    circuit::CScriptManager::Exec()          ScriptManager.cpp:230
+    circuit::ITaskModuleScript::MakeTask()   TaskModuleScript.cpp:40
+    circuit::CBuilderManager::AssignTask()   BuilderManager.cpp:786
+    circuit::CIdleTask::Update()             IdleTask.cpp:71
+
+`RefCounter.cpp:29` is `delete this`, and the null PC is that call dispatching
+through a freed vtable: a use-after-free that surfaces when AngelScript drops a
+handle, not when the object dies.
+
+`IUnitTask` derives `IRefCounter` and is registered `asOBJ_REF` with
+`asBEHAVE_ADDREF`/`asBEHAVE_RELEASE` (`InitScript.cpp:599-601`), so a script
+handle owns a counted reference. Three sites freed such an object with a bare
+`delete`, bypassing that count:
+
+- `CEconomyManager::UpdateFactoryTasks`, the discard branch. `PickNextFactory`
+  enqueues the factory task INACTIVE, so it never enters `updateTasks` and the
+  module never frees it — but `CBuilderManager::Enqueue` fires `TaskAdded`
+  either way, which is where `joinbuild.as` registers the handle
+  (`JoinEligibleType` includes FACTORY; `JOIN_MIN_COST` is 200 against a
+  factory's thousands).
+- `~CEconomyManager`, the same `delete factoryTask`.
+- `~IBuilderTask`, `delete nextTask` — `nextTask` chains also come from
+  `Enqueue`, so build_chain children and defence rows are script-visible too.
+
+The discard branch now calls `builderMgr->AbortTask()` then `ClearRelease()`.
+`AbortTask` runs the normal teardown, so `TaskRemoved` lets the script drop its
+handle and `CBFactoryTask::Cancel` undoes the `AddFactory` its ctor did — which
+**removes the apex workaround that was there**: the manual
+`factoryMgr->DelFactory(facDef)` existed only because a bare delete skips
+`Cancel`. The other two sites `ClearRelease()`, so the object outlives its owner
+until the last handle goes.
+
+Verified by replay: the crashing configuration — Flats and Forests v2.2, 8v8,
+`--handicap 100`, seed 5703, which died at frame 32265 (17.9 min) — ran the full
+45 minutes, zero AngelScript errors, with `con-join` firing 585 times. Note the
+same build carried other in-flight C++, so only the not-crashing is attributable
+here.
+
+This is a latent upstream bug that only bites an AI whose script holds task
+handles. Ours has to, for `joinbuild` and `mexguard` to work at all.
+
+## 2026-08-09: the front line gets per-player sectors, and defenders stop garrisoning minute 5
+
+Layers 2 and 3, `manager/frontline.as` and `module/MilitaryManager.{cpp,h}`.
+
+apexearth: "I routinely see our units patrolling behind our own allies bases.
+meanwhile, the enemy is attacking one of our frontline bases and our huge army
+isn't there to protect it."
+
+Read from source, not yet measured. Three defects compounding, all of them the
+same shape — a team-wide answer used where a per-player one was needed, and an
+answer computed once and never revised:
+
+1. **The front collapsed onto one ally.** `Front::Scan` builds territory from
+   `GetAllyInflAt`, which is ally-WIDE, so every AI on the team computes the same
+   perimeter. It then kept only the arc within `FRONT_BAND` (3000) of the team's
+   single closest approach to a single pooled enemy centroid. That arc belongs to
+   whichever ally happens to sit furthest forward, so every other player's
+   frontage was demoted to back line and every AI's `FrontNear(ourHome)` anchored
+   on the same few cells — behind that ally's base.
+2. **A flank base had no front at all.** FRONT vs BACK was
+   `(cell - teamCentroid) · (enemyCentroid - teamCentroid)`. The team centroid is
+   identical for every AI, so a player on a flank had its whole border projecting
+   backwards along the team bearing and classified BACK.
+3. **A DEFEND task's stand position was frozen at construction.** `Enqueue` sets
+   it from `GetDefenceStand()` — the tower cluster nearest our lane at that
+   instant — and the repositioning code in `UpdateDefenceTasks` had been
+   commented out, so a garrison formed in minute 5 still held minute 5's ground
+   at minute 40, and `CDefendTask::Start` walked every newly built unit there.
+   Separately, a squad that found no target called `FillFrontPos`, which offered
+   the pathfinder our own tower positions and never the front or the fighting.
+
+Fixes:
+
+- Each AI publishes its home on the blackboard (`apexHomeX`/`Z`) the same way the
+  enemy bearing is already pooled, and a front cell belongs to the ally nearest
+  it — a Voronoi split of the line over the team. Enemy-facing is measured from
+  our OWN home for our own cells, and the `FRONT_BAND` trim is applied per sector
+  rather than once for the team. `FrontNear` and `FrontChoke` take our sector
+  first, falling back to the team line only for a player that owns no front cell.
+  With no ally home published (a 1v1) the whole line is ours, which is the
+  pre-change behaviour.
+- `CMilitaryManager::GetGuardAnchor` — where we are actually bleeding
+  (`GetAttackHotspot`, gated on the position not being enemy-dominated), else the
+  front. `FillFrontPos` returns it as a STRICT single candidate rather than one
+  of a set, because a multi-candidate path query always picks our own tower
+  cluster over the front. `UpdateDefenceTasks` re-anchors every DEFEND task that
+  has no target of its own to the same position each pass.
+
+**Known side effect, deliberate but untested:** `CDefendTask::Update`'s
+`FRONT_HOLD_RANGE` rule refuses to promote a DEFEND task to ATTACK while it sits
+within 1800 of the front and holds under 2x `maxPower`. Defend tasks were rarely
+on the front before, so that rule rarely fired; now they are anchored on it, so
+it fires as designed and the mass needed before walking out roughly doubles. That
+is the direction of "we attack too much and hold too little", but it is a second
+behaviour change riding along and should be watched for a stalled offence.
+
+Costs no constructor time — this is the "stop something wrong" class, not a new
+rule that enqueues work.
+
+## 2026-08-09: a raid that runs out of targets presses on instead of walking home
+
+Layer 3 (C++), `task/fighter/RaidTask.{cpp,h}`.
+
+apexearth: "after we do an attack raid on enemy mexes we often just turn around
+and walk home to do nothing... in reality we could usually go further to take out
+many more mexes."
+
+Read from source, not measured: `CRaidTask::FindTarget` can only see enemies
+already in `CCircuitAI::GetEnemyInfos`, i.e. things we have had radar or LOS on.
+The mex field one screen beyond the one we just cleared has never been seen and
+so does not exist to the raid. With no target, `Update` falls through to
+`FallbackRaid`, whose destination is one of exactly two things:
+
+- `CMilitaryManager::GetScoutPosition`, which only returns clusters that are
+  unqueued, unfinished by us AND below `THREAT_MIN` — the quiet ground, which
+  after a successful raid is behind the party; or
+- a uniformly random map position (`rand() % width`), set in the constructor and
+  again in `OnUnitIdle`.
+
+Both are, on average, backwards. That is the walk home.
+
+Added `CRaidTask::FindOnwardSpot`: the nearest metal spot that is at least
+`PRESS_STEP` (400) closer to the enemy CENTROID than the party currently stands,
+reachable by the leader's area, within `PRESS_MAX_LEG` (4000) and carrying less
+threat than the party's own power. `FallbackRaid` uses it in place of the
+scout/random destination — but only on the branch where the party is NOT already
+outmatched where it stands; the existing "threat here exceeds us, go elsewhere"
+escape is untouched, so this cannot push a losing party further in.
+
+Measured against the enemy centroid rather than our own base deliberately: that
+keeps arriving at their economy whichever flank the party came in on, with no
+per-map special case. The per-spot threat test is what stops it walking a raid
+into the enemy army — an undefended spot is worth approaching blind, a defended
+one is not.
+
+Spends no constructor time, so by the 2026-08-01 composition rule this is in the
+cheap-to-try category rather than the displacing one.
+
+Logged, rate-limited to 20s: `apex: raid presses on to (x,z), N further in`.
+
+**Not yet measured.** Built and patched; deploy was blocked by a running BAR.
+
+## 2026-08-09: T3 heavies hold the defence line instead of walking out alone
+
+Layer 2 (AngelScript), `manager/military/superguard.as` (new),
+`manager/military/hooks.as`, `manager/military.as`.
+
+apexearth: "we make T3 units but then fail to really defend ourselves using that
+T3... they're often the toughest things in the game so they should be standing
+in front of our T3 defense helping to defend the base."
+
+`CMilitaryManager::DefaultMakeTask` has exactly one branch for the SUPER role,
+and for a **mobile** super it is `Enqueue(TaskF::Common(ATTACK))` -- a brand new
+`CAttackTask` holding that one unit, the frame it finishes. So a 29,000-metal
+Korgoth crosses the map by itself, and the next one gets its own task and
+crosses by itself too. Nothing routed them home and nothing grouped them.
+`Military::WantsMassing` excluded `SUPER` explicitly, so they fell through to
+exactly that branch.
+
+They now go into a DEFEND task that never promotes. Four mechanisms make that
+hold, all read out of CircuitAI:
+
+- `UpdateDefenceTasks` rewrites `maxPower` every 5 s to
+  `max(minAttackers, PreMaxGroupThreat)` -- but only for a DEFEND task whose
+  `promote` is ATTACK. Ours is RALLY, so it is skipped and the holding power
+  survives.
+- `CDefendTask::Update` promotes on
+  `(attackPower >= maxPower) || !GetTasks(check).empty()`. Nothing in CircuitAI
+  ever enqueues a MELEE task, so the second clause is dead; `SUPER_HOLD_POWER`
+  puts the first out of reach.
+- With no target inside our own influence, `CDefendTask` falls back to
+  `CMilitaryManager::FillFrontPos`, which returns the **defence points of the
+  metal cluster nearest our lane toward the enemy**. That is where the squad
+  parks: on our own defence line, facing them.
+- `CDefendTask::CanAssignTo` requires an equal `promote`, so this squad merges
+  only with itself and never with the ATTACK-promoting massing pool.
+
+`promote` is RALLY rather than a type that can never fire, so if the holding
+power is ever reached the failure mode is "they attack together"
+(`CRallyTask` carries `maxPower` 1 and converts the group into one ATTACK task)
+rather than "they stand still forever".
+
+Which units: role SUPER, or cost >= `SUPER_COST` 7000. The role alone is not
+enough for faction parity -- Armada and Cortex tag `armbanth`/`armthor`/
+`corkorg`/`corjugg` "super", and Legion tags **none** of its gantry units that
+way (`legeheatraymech`, 23,500 metal, is only "heavy"). The cost key has to
+clear the T2 heavies: `corsumo` 2,200, `armvang` 3,300, `legpede` 5,500 are all
+T2, against `legeheatraymech` 23,500 and `legeshotgunmech` 7,000.
+
+The hold is released for a declared team push and for the killing blow, read
+when the unit is **tasked**. A super already holding stays holding: nothing in
+the ~405 bindings can move a unit out of a task it has been assigned to, so
+either the release is read at assignment time or it lives in C++. That is the
+known cost of doing this in layer 2, and it is the first thing to revisit.
+
+Tunables: `apex_super_guard` (default 1; 0 restores stock routing, one solo
+attack task per super) and `apex_super_cost` (default 7000).
+
+**Mechanism verified, effect NOT measured.** Zero AngelScript errors, variant
+loaded, and the branch was exercised end to end -- 29 holds, no crash, no errors
+-- but only by forcing `apex_super_cost=100` so ordinary units took it. It could
+not be measured on its own terms because **this benchmark never builds a super
+at all**: see the finding below.
+
+### Finding: we build gantries and produce nothing from them
+
+Measured 2026-08-09, Comet Catcher, 2v2 Cortex mirror, +300% handicap, 32
+minutes -- an economy far past the point where T3 is affordable
+(`metalProduced` 438,979 on the winning side).
+
+Our side built **four gantries, 33,600 metal, and zero units out of them**:
+`corgant:33600` appears in `allBuilt` and `corshiva`/`corkorg`/`corjugg` never
+do. Stock BARb on the other side fielded `corkorg:87000` by minute 24 and
+`mT3=259000` by the end, against our `mT3=30800` -- which is the gantries
+themselves and nothing else. The same shape appeared in the Armada game:
+`armshltx:31600`, five gantries, no `armbanth` or `armthor`.
+
+The log also calls the gantry a T1 lab (`apex: T1 lab on field: corgant`) and
+reports `conbranch fac=corgant ... roleDef=NULL`, so whatever picks what a
+factory builds is not recognising it. Not yet diagnosed; it is a separate
+change from this one.
+
+## 2026-08-09: nuke the army massed on our own border
+
+Layer 3: `cpp/src/circuit/task/static/SuperTask.cpp`.
+
+apexearth: "if there is a huge mass of enemy army right on our border we should
+prioritize nuking that army."
+
+That target was previously unreachable, twice over. `isTargetValid` rejected any
+group with `GetAllyInflAt(pos) > INFL_EPS` -- ally influence is nonzero within
+range of our own armed units and defences, so "on our border" is exactly the
+region that test excluded. Anything that survived it then had to clear a second
+veto: no ATTACK/AH/AA squad leader within `1.25 * AOE` of the group, and with
+`corsilo` at AOE 1920 that is a 2400-elmo exclusion around our own army -- which
+is by definition sitting on the line the enemy is massing against. A silo could
+shoot an enemy base or an army crossing neutral ground, and nothing else.
+
+Both vetoes are now replaced, for that one case, by a value trade. A group
+counts as a border mass when its MOBILE cost (`cost - roleCosts[STATIC]`) is at
+least `ARMY_MASS_MIN` 4000 metal and our influence reaches its position. For such
+a group the ally-influence and squad-proximity tests are skipped, and instead
+`FriendlyCostIn` sums the metal of every friendly unit within one AOE of the
+impact point; the strike is allowed only if the enemy mobile mass exceeds that by
+`BLAST_TRADE` 3x. The influence map cannot price this itself -- it carries
+range-weighted danger, not cost.
+
+Priority is a scoring term, not an override: `GroupScore` adds
+`ARMY_MASS_WEIGHT * mobileCost` (2.0) for a border mass, which makes a massed
+army on our ground outrank a base of equal metal, while a base still beats a
+loose group of the same size anywhere else.
+
+The same relaxation applies to every unit CSuperTask drives, so long guns
+(Bertha, Buzzsaw, Ragnarok) get it as well; their smaller AOE shrinks the
+friendly-cost radius with them.
+
+Verified: compiles and links clean, 0 AngelScript errors, variant loads.
+`apex: super fire` now logs `mobile=` and `border=` so the border case can be
+counted rather than inferred. **The behaviour itself is not yet measured** -- a
+silo needs `eInc >= 2500` and `mInc >= 150`, which the standard benchmark never
+reaches, so confirmation needs a long bonused game or a hosted one.
+
 ## 2026-08-09: help the identical building already started, instead of starting a second
 
 Layer 2: `script/hard_aggressive/manager/builder/joinbuild.as` (new),
@@ -206,6 +480,158 @@ Config-layer alternative, rejected: `behaviour.<unit>.range` is a real JSON key
 formula, but only the scalar form raises `minRange`, it overwrites `maxRange`
 for every consumer that reads it (threat, height filters, path reachability),
 and it cannot reach the `losRadius` clamp that is the actual cause.
+
+## 2026-08-09: The ally-mex upgrade also CLOGGED the mex_up slots — fixed in C++
+
+Layer 3 (C++), one line in `CEconomyManager::UpdateMetalTasks`'s upgrade
+predicate, plus the tracked copy in `cpp/` and
+`game-patches/circuitai/0003-cumulative.patch`.
+
+The veto below stopped the constructor walking, but not the real damage.
+`CBMexUpTask`'s constructor calls `SetUpgradingMexSpot(spotId, true)` and the
+task counts against `mex_up` (4 in our `economy.json`, same as stock `hard`). An
+ally-spot task therefore **holds one of the four upgrade slots and marks that
+spot as already-being-upgraded**. Before the veto it self-cleared, badly: a
+constructor took it, `Execute` failed, `AbortTask` freed the slot — and the walk
+was the visible symptom. With the veto, nothing executed it, so nothing aborted
+it, and the slots filled permanently.
+
+Measured, `expand-diag` pool depth for build type 14 (MEXUP):
+
+| | samples pinned at the cap of 4 |
+|---|---|
+| before the veto (12:26 game) | 95 / 166 |
+| with the veto only (12:54 game) | **237 / 291** |
+| after this C++ fix | **49 / 148**, spread across 1-4 |
+
+So the clog pre-dated the veto and the veto made it worse. Both are fixed by
+correcting the predicate at source: `GetFriendlyUnit(unitId)` ->
+`GetTeamUnit(unitId)`, which is the own-team lookup the original author had
+already written and commented out on that exact line. Ally spots now never
+become upgrade tasks, so there is nothing to walk to, nothing to clog, and the
+script veto below is left as a guard that no longer fires (60 firings in the
+live game, **1** after the fix).
+
+Verified: 30-min 8v8, Flats and Forests v2.2, `--sides random`, seed 5701 —
+0 AngelScript errors, 0 crashes, MEXUP flowing rather than stuck.
+
+**The user's actual goal is NOT yet met.** apex holds a median of 17 mexes and
+4 T2 mexes, so most home-base mexes are still un-upgraded. This change removed
+the defect that was blocking upgrades; it did not raise the priority of making
+them. apexearth: "Mex upgrades within our base are paramount importance for T2
+cons." The named next step is a rule that puts an advanced constructor on a
+home-base mex upgrade ahead of the optional cluster, and/or raising `mex_up`
+now that the slots are no longer wasted — one at a time, with `composition.py`
+against a matched control.
+
+Do not compare the t2Mex totals of the 12:54 game against the verification run:
+stock's own median fell from 12.5 to 3.0 between them, i.e. the two games are
+not the same economy and neither is a control for the other.
+
+## 2026-08-09: A crash in AiTaskRemoved — a dangling task handle, not the mex work
+
+Not fixed. Recorded so the next session does not re-diagnose it.
+
+A live 8v8 died at frame 54108 with `Access violation (0xc0000005)` at
+**Exception Address 0x0** — a jump to a null function pointer — and
+`This stacktrace indicates a problem with a skirmish AI`.
+
+Resolved with the recipe in `docs/06`, against the DLL that actually crashed
+(ImageBase `0x1e33b0000` + the infolog offsets):
+
+```
+(0) 0x0                        <- jumped to null
+(1) circuit::IRefCounter::Release()          script/RefCounter.cpp:29
+(2) asCContext::ExecuteNext()                as_context.cpp:3234
+(4) circuit::CScriptManager::Exec(...)       ScriptManager.cpp:231
+(5) ITaskModuleScript::TaskRemoved(IUnitTask*, bool)  <- AiTaskRemoved
+(6) circuit::ITaskModule::DequeueTask(IUnitTask*, bool)
+(7) std::_Rb_tree<int, CBRepairTask*>::find(...)
+(8) circuit::CCircuitAI::UnitFinished(...)   CircuitAI.cpp:1111
+```
+
+So: a unit finished, a **repair** task was dequeued, `AiTaskRemoved` ran, and
+releasing a handle called through freed memory. `manager/builder/events.as`
+holds `array<IUnitTask@> gArmyRepairs` and `gMexTasks` — ref-counted task
+handles kept across frames — and `AiTaskRemoved` is where `removeAt` releases
+one. A task destroyed by a path that does not run `DequeueTask` leaves a stale
+handle whose `Release()` runs on freed memory. `fortify.as:140` already asserts
+that DequeueTask/AiTaskRemoved is a reliable contract; this stack is the
+counter-example.
+
+**It is not the mex work**: that code stores unit ids and positions, never task
+handles, and appears nowhere on this stack. The clog fix above may make it
+rarer by cutting task churn, but the use-after-free is untouched.
+
+## 2026-08-09: Constructors walked into an ally's base to upgrade a mex that was not ours
+
+Layer 2 (AngelScript), new `manager/builder/mexowner.as`, one line each in
+`builder.as`, `builder/maketask.as`, plus `Economy::AiUnitAdded`/`AiUnitRemoved`
+in `manager/economy.as` and the missing economy half of the `Unit::UseAs` enum
+in `script/unit.as`.
+
+apexearth, watching an 8v8 live: "'Supernova' (teal) is just running back and
+forth in his allies base at <6m timeframe... it was bad", then "corcom cannot
+mexup".
+
+**`CEconomyManager::UpdateEconomyTasks` picks the mex spot to upgrade using
+ALLY-wide unit lookups.** The predicate reads the extraction rate of everything
+`GetFriendlyUnitIdsIn()` returns and resolves each id through
+`GetFriendlyUnit()`, with the own-team `GetTeamUnit()` call commented out
+beside it. So an ally's extractor satisfies "there is a mex here yielding less
+than what I can build", and a MEXUP task is enqueued at `Priority::HIGH` on
+ground we do not own.
+
+**The task can never complete.** `CBMexUpTask::Execute` cannot place the
+building — the ally's extractor occupies the spot — and its fallback (reclaim
+the old mex, build on the second pass) resolves the occupant through
+`GetTeamUnit()`, which returns null for another team's unit. `oldMex` stays
+null, `AbortTask` fires, `SetUpgradingMexSpot(spotId, false)` releases the
+spot, and the next `AiMakeTask` picks the same spot again. The constructor
+walks to the ally's base, turns round, walks back, indefinitely.
+
+**Why it bites in the opening, and why it looked Cortex-specific.** Before an
+advanced constructor exists, `metalDefs.GetBuildDefs(conDef)` offers a
+constructor only its own side's T1 mex, so the spot must hold something
+yielding *less* than a T1 mex. Read from the pinned tree: **`armmex` and
+`cormex` extract 0.001, `legmex` extracts 0.0008** ("Extracts Slightly Reduced
+Metal"). So an Armada or Cortex player with a Legion ally starts doing this the
+moment `GetAvgMetalIncome()` passes the rule's threshold of 10 — and a Legion
+player never does, because nothing yields less than `legmex`. In the live
+8v8 the vetoes appear for teams 0, 2, 3 and 5 (Armada and Cortex) and for the
+Legion player not once. Once advanced constructors exist **every** faction
+reaches it, because a moho outyields every ally's T1 mex.
+
+It compounded on the commander: the held task is a MEXUP, and
+`VetoCommanderHold` then refuses every replacement build type offered, so the
+commander was pinned to a job it could not do. `corcom` builds `cormex` but not
+`cormoho` — only `corcomlvl5`+ and the advanced constructors can.
+
+The fix is a veto, `VetoAllyMexUp`, screening `DefaultMakeTask`'s offer ahead of
+`ExpansionAlwaysWins` — an upgrade on an ally's spot reads as expansion and
+would otherwise be taken outright. It refuses any MEXUP whose build position is
+not within 96 elmos of a mex of ours.
+
+**Which mexes are ours needs no def list.** `CEconomyManager`'s own
+`mexFinishedHandler` fires `UnitAdded(UseAs::MEX)` for every extractor we
+finish and `mexDestroyedHandler` the reverse, so the tracked set covers Armada,
+Cortex and Legion, the moho tier, the exploding variants and the underwater
+`armuwmme`/`coruwmme` pair by construction. That hook lands in the **Economy**
+namespace, not Builder's — `Builder::AiUnitAdded` only ever receives `BUILDER`
+and `REZZER` — and `script/unit.as` was missing the economy half of the
+`UseAs` enum entirely (it stopped at `ASSIST`, where `Module.h` continues
+`ENERGY, GEO, MEX, CONVERT, STORE, AIRPAD`). Both added.
+
+Deliberately **not** made to work rather than refused: reclaiming an ally's
+extractor to build our own on top is not something the engine-side task can
+express, and in a team game the ally is the one who should be upgrading it.
+
+**Deployed and confirmed firing; not yet measured.** 12-minute 8v8 on Supreme
+Isthmus v1.8, `--sides random`, seed 5601: zero AngelScript errors, variant
+loaded, the rule fires for `corcom`, `corca`, `corck`, `corcv` and `armck`, and
+the old signature (`con-veto ... -> mexup`, 16 occurrences in the live game's
+log) is **gone — zero**. What it displaced is unmeasured; judge it on
+`composition.py` against a matched control.
 
 ## 2026-08-09: A mobile radar travels with the army
 

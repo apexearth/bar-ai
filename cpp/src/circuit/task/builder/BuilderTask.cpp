@@ -97,7 +97,13 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
 
 IBuilderTask::~IBuilderTask()
 {
-	delete nextTask;
+	// nextTask came from CBuilderManager::Enqueue, which fires TaskAdded, so a
+	// script may hold a refcounted handle to it. Release rather than delete: the
+	// object then outlives this one until the last handle goes.
+	if (nextTask != nullptr) {
+		nextTask->ClearRelease();
+		nextTask = nullptr;
+	}
 }
 
 bool IBuilderTask::CanAssignTo(CCircuitUnit* unit) const
