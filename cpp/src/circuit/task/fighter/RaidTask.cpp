@@ -9,7 +9,9 @@
 #include "map/InfluenceMap.h"
 #include "map/ThreatMap.h"
 #include "module/MilitaryManager.h"
+#include "resource/MetalManager.h"
 #include "setup/SetupManager.h"
+#include "unit/enemy/EnemyManager.h"
 #include "terrain/TerrainManager.h"
 #include "terrain/path/PathFinder.h"
 #include "terrain/path/QueryPathSingle.h"
@@ -63,6 +65,27 @@ static constexpr float FLANK_MIN_DIST = 2000.f;  // shorter raids go straight
 static constexpr float FLANK_OFFSET   = 1800.f;  // how far off the line to swing
 static constexpr float FLANK_MARGIN   = 400.f;   // stay off the very edge
 static constexpr float FLANK_REACHED  = 700.f;
+
+// PRESS ON, rather than going back for orders.
+//
+// A raid party that has eaten the mexes it could see has no target left, and
+// FindTarget only knows about enemies already in CCircuitAI::GetEnemyInfos --
+// the next mex field, one screen further on, has never been in LOS and does not
+// exist as far as the raid is concerned. The only fallback was
+// CMilitaryManager::GetScoutPosition, which scores clusters that are unclaimed
+// AND below THREAT_MIN, i.e. the quiet ground; failing that, a uniformly random
+// map position. Both of those are, on average, behind the party.
+// apexearth: "after we do an attack raid on enemy mexes we often just turn
+// around and walk home to do nothing... in reality we could usually go further
+// to take out many more mexes."
+//
+// "Onward" is measured against the enemy CENTROID, not our own base: that is the
+// direction that keeps arriving at their economy whichever flank the party came
+// in on, and it needs no map-side special case. The threat test per spot is what
+// stops this walking a raid into the enemy army -- an undefended spot is worth
+// approaching blind, a defended one is not.
+static constexpr float PRESS_STEP    = 400.f;   // ground that must be gained to count as onward
+static constexpr float PRESS_MAX_LEG = 4000.f;  // one hop, not a march across the map
 
 static AIFloat3 ChooseFlankPos(CCircuitAI* circuit, const AIFloat3& from, const AIFloat3& to)
 {
@@ -541,6 +564,20 @@ void CRaidTask::FallbackRaid()
 		} else {
 			position = nextPos;
 		}
+	} else {
+		// Nothing in front of us is beating us, so there is no reason to be
+		// heading anywhere but further in.
+		const AIFloat3 onward = FindOnwardSpot();
+		if (utils::is_valid(onward)) {
+			if (!utils::is_equal_pos(onward, position)
+				&& (circuit->GetLastFrame() >= lastPressLog + FRAMES_PER_SEC * 20))
+			{
+				lastPressLog = circuit->GetLastFrame();
+				circuit->LOG("apex: raid presses on to (%.0f,%.0f), %.0f further in",
+						onward.x, onward.z, pos.distance2D(onward));
+			}
+			position = onward;
+		}
 	}
 
 	if (!utils::is_valid(position)) {
@@ -571,6 +608,47 @@ void CRaidTask::FallbackRaid()
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
 		this->ApplyRaidPath(static_cast<const CQueryPathSingle*>(query));
 	});
+}
+
+springai::AIFloat3 CRaidTask::FindOnwardSpot() const
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	const AIFloat3& foe = circuit->GetEnemyManager()->GetEnemyPos();
+	if (!utils::is_valid(foe)) {
+		return -RgtVector;  // nothing seen yet; no direction to press in
+	}
+	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
+	const float ourDist = pos.distance2D(foe);
+	if (ourDist <= PRESS_STEP) {
+		return -RgtVector;  // already on top of them
+	}
+
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	CThreatMap* threatMap = circuit->GetThreatMap();
+	threatMap->SetThreatType(leader);
+	const float power = attackPower * powerMod;
+	SArea* area = leader->GetArea();
+
+	const CMetalData::Metals& spots = circuit->GetMetalManager()->GetSpots();
+	AIFloat3 best = -RgtVector;
+	float bestSqDist = SQUARE(PRESS_MAX_LEG);
+	for (const CMetalData::SMetal& spot : spots) {
+		if (foe.distance2D(spot.position) > ourDist - PRESS_STEP) {
+			continue;  // no deeper than we already stand
+		}
+		const float sqDist = pos.SqDistance2D(spot.position);
+		if (sqDist >= bestSqDist) {
+			continue;
+		}
+		if (!terrainMgr->CanMoveToPos(area, spot.position)
+			|| (threatMap->GetThreatAt(spot.position) >= power))
+		{
+			continue;
+		}
+		bestSqDist = sqDist;
+		best = spot.position;
+	}
+	return best;
 }
 
 void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
