@@ -1,5 +1,20 @@
 # CircuitAI (SkirmishAI.dll) patches
 
+> **The source of truth is now `cpp/`, not this patch.** `vendor/` is gitignored
+> and both `vendor/engine` and its `BARb` submodule are their own git repos, so
+> the parent repo can only ever store them as pointers -- a re-clone or
+> `git clean` destroys every C++ change. A whole session of work came within one
+> command of exactly that. `cpp/` mirrors the modified files themselves, so they
+> are diffable, reviewable and mergeable like any other source.
+>
+>     python tools/sync_cpp.py pull    # vendor -> cpp/, run after ANY C++ edit
+>     python tools/sync_cpp.py apply   # cpp/ -> vendor, run after a fresh clone
+>     python tools/sync_cpp.py status
+>
+> The cumulative patch below is still regenerated as a convenience for applying
+> the delta to a clean upstream checkout, but it is no longer the only copy.
+
+
 Changes to the vendored AI **C++**, which lives in `vendor/` and is therefore
 gitignored. Without these patches the fixes exist only in a working tree and in
 one binary in the live engine directory, and vanish the next time anyone
