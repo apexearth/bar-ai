@@ -1,0 +1,264 @@
+--------------------------------------------------------------------------------
+-- dev_arena.lua -- hand both AIs an identical army and see which one fights
+-- better with it.
+--
+-- A normal match measures fighting logic through the economy that paid for the
+-- army, the build order that chose its composition and the map position it
+-- arrived at. Those dominate: a side that out-produces its opponent wins the
+-- fight regardless of how it micros. This gadget removes all of that. Both
+-- sides get the SAME units, the SAME count, at MIRRORED positions, and the only
+-- variable left is what each AI does with them.
+--
+-- Rounds repeat inside one match, so a five-minute run yields ~15 independent
+-- samples instead of one. Sides swap positions on alternate rounds, so terrain
+-- advantage at either spawn cancels out across a pair.
+--
+-- Installed by tools/deploy_ai.py into BAR.sdd/luarules/gadgets/. Inert unless
+-- the start script sets dev_arena, so it cannot affect a normal game.
+--
+--   dev_arena         "1" to enable
+--   dev_arena_def     unit def to spawn on both sides   (default armpw)
+--   dev_arena_def_b   override for ally 1 only; blank = same as dev_arena_def
+--   dev_arena_count   units per side per round          (default 8)
+--   dev_arena_start   first spawn frame                 (default 900)
+--   dev_arena_round   max frames per round              (default 1800)
+--   dev_arena_gap     frames between rounds             (default 150)
+--   dev_arena_sep     elmos between the two lines       (default 700)
+--
+-- Output, one line per round, parsed by tools/arena.py:
+--   [BARAI_ARENA] round=N ally=A team=T def=D n=K x=.. z=..
+--   [BARAI_ARENA_END] round=N frames=F winner=A alive0=.. alive1=..
+--                     metal0=.. metal1=.. spawn0=.. spawn1=.. flip=0|1
+--------------------------------------------------------------------------------
+
+local modOptions = Spring.GetModOptions() or {}
+local enabled = tostring(modOptions.dev_arena or "") == "1"
+
+function gadget:GetInfo()
+	return {
+		name    = "Dev Arena",
+		desc    = "Mirrored equal-army fights for AI combat benchmarking.",
+		author  = "bar-ai",
+		date    = "2026",
+		license = "GNU GPL, v2 or later",
+		layer   = 1001,
+		enabled = enabled,
+	}
+end
+
+if not gadgetHandler:IsSyncedCode() then
+	return
+end
+
+local function opt(name, default)
+	local v = modOptions[name]
+	if v == nil or v == "" then
+		return default
+	end
+	return v
+end
+
+local function optNum(name, default)
+	return tonumber(opt(name, default)) or default
+end
+
+local DEF_A      = tostring(opt("dev_arena_def", "armpw"))
+local DEF_B      = tostring(opt("dev_arena_def_b", ""))
+if DEF_B == "" then DEF_B = DEF_A end
+local COUNT      = math.floor(optNum("dev_arena_count", 8))
+local START      = math.floor(optNum("dev_arena_start", 900))
+local ROUND      = math.floor(optNum("dev_arena_round", 1800))
+local GAP        = math.floor(optNum("dev_arena_gap", 150))
+local SEP        = optNum("dev_arena_sep", 700)
+
+-- Spacing between neighbours in a spawn line. Wide enough that the engine does
+-- not have to shove overlapping units apart on the first frame, which would
+-- scatter the formation before either AI issues an order.
+local PITCH = 64
+
+local mapX = Game.mapSizeX
+local mapZ = Game.mapSizeZ
+
+local defIDs = {}   -- ally -> unitDefID
+local metalOf = {}  -- ally -> metal cost per unit
+
+local spawned = { [0] = {}, [1] = {} }  -- ally -> { unitID = true }
+local roundNo = 0
+local roundStart = 0
+local waitUntil = START
+local active = false
+local flip = false
+local anchorA, anchorB  -- {x, z} spawn centres, before flip
+
+--------------------------------------------------------------------------------
+
+local function resolveDef(name)
+	local ud = UnitDefNames[name]
+	if not ud then
+		Spring.Echo("[BARAI_ARENA] ERROR unknown unit def '" .. tostring(name) .. "'")
+		return nil
+	end
+	return ud.id, ud.metalCost
+end
+
+-- The two spawn centres, offset from the map middle along the line joining the
+-- start positions. Falls back to the map's long axis when start positions are
+-- unavailable, which happens with some box configurations.
+local function computeAnchors()
+	local cx, cz = mapX / 2, mapZ / 2
+	local dx, dz = 1, 0
+	local p = {}
+	for ally = 0, 1 do
+		local teams = Spring.GetTeamList(ally)
+		if teams and teams[1] then
+			local x, _, z = Spring.GetTeamStartPosition(teams[1])
+			if x and x > 0 then
+				p[ally] = { x, z }
+			end
+		end
+	end
+	if p[0] and p[1] then
+		dx, dz = p[1][1] - p[0][1], p[1][2] - p[0][2]
+		local len = math.sqrt(dx * dx + dz * dz)
+		if len > 1 then
+			dx, dz = dx / len, dz / len
+		else
+			dx, dz = 1, 0
+		end
+	elseif mapZ > mapX then
+		dx, dz = 0, 1
+	end
+	local h = SEP / 2
+	anchorA = { cx - dx * h, cz - dz * h, -dz, dx }  -- x, z, and the perpendicular
+	anchorB = { cx + dx * h, cz + dz * h, -dz, dx }
+end
+
+-- Nudge a spawn point off water or off the map edge. Units created underwater
+-- would be a different fight entirely, and CreateUnit off-map silently fails.
+local function landNear(x, z)
+	local step = 128
+	for r = 0, 8 do
+		for _, d in ipairs({ { 0, 0 }, { r, 0 }, { -r, 0 }, { 0, r }, { 0, -r } }) do
+			local px = math.max(256, math.min(mapX - 256, x + d[1] * step))
+			local pz = math.max(256, math.min(mapZ - 256, z + d[2] * step))
+			if Spring.GetGroundHeight(px, pz) > 8 then
+				return px, pz
+			end
+		end
+	end
+	return math.max(256, math.min(mapX - 256, x)),
+	       math.max(256, math.min(mapZ - 256, z))
+end
+
+local function spawnSide(ally, anchor, facingAway)
+	local teams = Spring.GetTeamList(ally)
+	local team = teams and teams[1]
+	if not team then
+		return 0
+	end
+	local px, pz, perpX, perpZ = anchor[1], anchor[2], anchor[3], anchor[4]
+	px, pz = landNear(px, pz)
+
+	local n = 0
+	for i = 0, COUNT - 1 do
+		-- Centre the line on the anchor.
+		local off = (i - (COUNT - 1) / 2) * PITCH
+		local ux = px + perpX * off
+		local uz = pz + perpZ * off
+		ux = math.max(64, math.min(mapX - 64, ux))
+		uz = math.max(64, math.min(mapZ - 64, uz))
+		local y = Spring.GetGroundHeight(ux, uz)
+		local id = Spring.CreateUnit(defIDs[ally], ux, y, uz, facingAway and 2 or 0, team)
+		if id then
+			spawned[ally][id] = true
+			n = n + 1
+		end
+	end
+	Spring.Echo(string.format(
+		"[BARAI_ARENA] round=%d ally=%d team=%d def=%s n=%d x=%d z=%d",
+		roundNo, ally, team, ally == 0 and DEF_A or DEF_B, n, px, pz))
+	return n
+end
+
+local function aliveCount(ally)
+	local n = 0
+	for id in pairs(spawned[ally]) do
+		if Spring.ValidUnitID(id) and not Spring.GetUnitIsDead(id) then
+			n = n + 1
+		else
+			spawned[ally][id] = nil
+		end
+	end
+	return n
+end
+
+local function clearRound()
+	for ally = 0, 1 do
+		for id in pairs(spawned[ally]) do
+			if Spring.ValidUnitID(id) and not Spring.GetUnitIsDead(id) then
+				Spring.DestroyUnit(id, false, true)
+			end
+		end
+		spawned[ally] = {}
+	end
+end
+
+local function beginRound(frame)
+	roundNo = roundNo + 1
+	roundStart = frame
+	flip = (roundNo % 2 == 0)
+	local a = flip and anchorB or anchorA
+	local b = flip and anchorA or anchorB
+	local n0 = spawnSide(0, a, flip)
+	local n1 = spawnSide(1, b, not flip)
+	active = (n0 > 0 and n1 > 0)
+	if not active then
+		Spring.Echo("[BARAI_ARENA] ERROR spawn failed, arena disabled")
+		waitUntil = math.huge
+	end
+end
+
+local function endRound(frame)
+	local a0, a1 = aliveCount(0), aliveCount(1)
+	local winner = -1
+	if a0 > 0 and a1 == 0 then
+		winner = 0
+	elseif a1 > 0 and a0 == 0 then
+		winner = 1
+	end
+	Spring.Echo(string.format(
+		"[BARAI_ARENA_END] round=%d frames=%d winner=%d alive0=%d alive1=%d "
+		.. "metal0=%.0f metal1=%.0f spawn0=%d spawn1=%d flip=%d",
+		roundNo, frame - roundStart, winner, a0, a1,
+		a0 * metalOf[0], a1 * metalOf[1], COUNT, COUNT, flip and 1 or 0))
+	clearRound()
+	active = false
+	waitUntil = frame + GAP
+end
+
+--------------------------------------------------------------------------------
+
+function gadget:Initialize()
+	local idA, mA = resolveDef(DEF_A)
+	local idB, mB = resolveDef(DEF_B)
+	if not idA or not idB then
+		gadgetHandler:RemoveGadget(self)
+		return
+	end
+	defIDs[0], metalOf[0] = idA, mA
+	defIDs[1], metalOf[1] = idB, mB
+	computeAnchors()
+	Spring.Echo(string.format(
+		"[BARAI_ARENA] init defA=%s defB=%s count=%d sep=%d round=%d",
+		DEF_A, DEF_B, COUNT, SEP, ROUND))
+end
+
+function gadget:GameFrame(frame)
+	if active then
+		if aliveCount(0) == 0 or aliveCount(1) == 0 or (frame - roundStart) >= ROUND then
+			endRound(frame)
+		end
+	elseif frame >= waitUntil then
+		beginRound(frame)
+	end
+end

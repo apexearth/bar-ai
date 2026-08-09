@@ -8,6 +8,54 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-09: we lose close-range fights by 25%, and are exactly even at range
+
+The first controlled measurement of fighting logic in this repo. `dev_arena.lua`
+hands both AIs the SAME units, the same count, at mirrored positions, and
+repeats the fight many times inside one match, so army size, economy, build
+order and map position are all held constant and the only thing left varying is
+what each AI does with the units. `tools/arena.py` scores it.
+
+**Slot bias is real and must be cancelled.** Two self-play controls (apex vs
+apex, stable vs stable) both gave ally 1 a ~1.0 unit advantage per round
+(-0.93 and -1.08), and it did NOT cancel when the spawn positions were swapped,
+so it is tied to the team slot, not terrain. Every result below is the mean of
+both orientations (`tools/arena_ab.sh`); a single orientation is worthless. The
+first probe, run one way only, said apex was +0.48 AHEAD -- the reverse
+orientation showed the opposite, and the truth was -2.23.
+
+Apex vs BARb stable, Armada both sides, edge = mean survivors we keep minus
+survivors they keep, per round:
+
+| units | unit (range) | map | rounds | W-L | edge | edge / force |
+|---|---|---|---|---|---|---|
+| 2 | armpw (180) | Altair Crossing | 126 | 41-67 | **-0.46** | -23% |
+| 2 | armpw (180) | Avalanche | 109 | 28-56 | **-0.48** | -24% |
+| 8 | armpw (180) | Altair Crossing | 81 | 18-32 | -2.23 | -28% |
+| 16 | armpw (180) | Altair Crossing | 60 | 7-15 | -3.87 | -24% |
+| 2 | **armrock (475)** | Altair Crossing | 83 | 30-29 | **+0.08** | +4% |
+
+Two things fall out. The deficit is a near-constant **fraction** of the force at
+every group size, including 2v2 -- so it is not a formation or coordination
+failure that only appears in big groups, it is per-unit. And it is **absent for
+a long-ranged unit**: dead even over 83 rounds, in both orientations
+independently (+0.14 and -0.03).
+
+This also relocates the 1v1 problem. Over six 20-minute 1v1 games on Altair
+Crossing our metal production was at parity (ratio 0.80-1.36, median 1.09) while
+army K/D was 0.47 against stock's 1.42. At 1v1 the economy is not the
+bottleneck; the fight is.
+
+**Not yet established: which change caused it.** Our four C++ commits add ~400
+lines to `SquadTask` plus `MoveAction`/`TravelAction`/`CircuitUnit`, and none of
+them was ever measured against a combat control -- the arena did not exist. The
+standoff ring places a unit at `weaponRange * ATTACK_RANGE_MOD` (0.95), which is
+a FRACTIONAL margin: 9 elmos of slack for a Pawn against 24 for a Rocketeer.
+That asymmetry has the right shape to explain the table, but it is stock code
+and stock wins, so on its own it is not the cause -- our orbit precession moves
+the unit continuously along exactly that edge. Both are hypotheses. The bisect
+is one arena run per commit and has not been done.
+
 ## 2026-08-08: the bank is empty, not full — the fraction-of-storage gates are dead
 
 Measured on `matches/20260808-230041-…` (Supreme Isthmus 8v8, 40.7 min, apex =

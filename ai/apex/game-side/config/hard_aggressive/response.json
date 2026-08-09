@@ -69,7 +69,18 @@
 	},
 	"anti_air": {
 		"vs":         ["air"],
-		"ratio":      [ 1.60],
+		// ratio is the VETO term -- how much enemy air must exist before the
+		// response is refused -- and 1.60 let us hold more than twice the AA
+		// stock does (0.75). Combined with prob = enemyAirMetal / (ourAACost + 1)
+		// * importance (MilitaryManager.cpp:1409), the early game is the WORST
+		// case: our AA holding is 0, so the denominator is 1 and one enemy scout
+		// worth 60 metal scores in the tens of thousands. The response is
+		// unbounded exactly when we own nothing, which is minute two.
+		// apexearth: "i think we make too many ground AA units early game."
+		// 0.90 stays above stock -- air has genuinely hurt us before -- while
+		// removing the doubled allowance. max_percent 0.35 already caps the
+		// late-game share below stock's 0.5, so this is the early-game half.
+		"ratio":      [ 0.90],
 		"importance": [ 950.0],
 		"max_percent": 0.35,
 		"eps_step": 0.15
