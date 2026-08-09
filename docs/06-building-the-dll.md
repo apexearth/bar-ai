@@ -94,8 +94,14 @@ any change:
 
 ```bash
 cd vendor/engine/AI/Skirmish/BARb
-git diff > /path/to/bar-ai/game-patches/circuitai/0003-cumulative.patch
+python /path/to/bar-ai/tools/sync_cpp.py pull   # vendor -> cpp/, the source of truth
+git diff --ignore-cr-at-eol $(git merge-base apex/barbarian HEAD) \
+    > /path/to/bar-ai/game-patches/circuitai/0003-cumulative.patch
 ```
+
+A bare `git diff` is **not** enough: the tree sits on a local `barbarian-apex`
+branch with its own commits, so it shows only the uncommitted delta and drops
+everything already committed there.
 
 See `game-patches/circuitai/README.md` — apply only the cumulative patch; the
 numbered ones are kept for their reasoning and conflict if replayed in sequence.

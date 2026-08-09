@@ -29,6 +29,19 @@ did:
     cd vendor/engine/AI/Skirmish/BARb
     git apply /path/to/bar-ai/game-patches/circuitai/0003-cumulative.patch
 
+## Regenerating
+
+Not `git diff > patch`, which docs/06 still says: the vendored BARb tree sits on
+a local branch `barbarian-apex` with its own commits, so a bare `git diff` shows
+only what is uncommitted there and silently drops every committed change. The
+base is the fork point, and the working tree is CRLF against LF blobs, so the
+CR difference has to be ignored or every touched file comes out rewritten
+whole (22,000 lines instead of 3,500):
+
+    cd vendor/engine/AI/Skirmish/BARb
+    git diff --ignore-cr-at-eol $(git merge-base apex/barbarian HEAD) \
+        > /path/to/bar-ai/game-patches/circuitai/0003-cumulative.patch
+
 `0001-guardtasks-use-after-free.patch` and `0002-real-ally-team-id.patch` are
 kept for the reasoning in their headers, not to be applied. They are subsumed:
 0002 and the later in-process coordination work both edit `CircuitAI.{h,cpp}`,

@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..b2c21b8 100644
+index aeea933..7b0d180 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,6 +18,8 @@
@@ -69,7 +69,7 @@ index aeea933..b2c21b8 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1488,6 +1511,619 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1488,6 +1511,630 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -127,6 +127,17 @@ index aeea933..b2c21b8 100644
 +	}
 +	const std::string key = "ai_minc_" + utils::int_to_string(otherTeamId);
 +	return game->GetRulesParamFloat(key.c_str(), -1.f);
++}
++
++float CCircuitAI::GetTunable(const char* name, float defVal) const
++{
++	auto it = tunables.find(name);
++	if (it != tunables.end()) {
++		return it->second;
++	}
++	const float value = (game != nullptr) ? game->GetRulesParamFloat(name, defVal) : defVal;
++	tunables[name] = value;
++	return value;
 +}
 +
 +// Highest build progress among our own units of `def`, or -1 if we hold none.
@@ -690,10 +701,10 @@ index aeea933..b2c21b8 100644
  {
  	// NOTE: See notes in MobileSlave or other economy->SendUnits places
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..e1380bc 100644
+index b4f4f40..4a9f663 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -149,6 +149,116 @@ private:
+@@ -149,6 +149,128 @@ private:
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
  	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
@@ -709,6 +720,18 @@ index b4f4f40..e1380bc 100644
 +	// sending to someone already near cap just wastes it.
 +	float GetTeamMetalFill(int otherTeamId) const;
 +	float GetTeamMetalIncome(int otherTeamId) const;
++
++	// --- experiment tunables ---------------------------------------------
++	// A combat constant read from a game rules param instead of a #define, so
++	// one DLL can serve every arm of an A/B run and the arm is chosen by a
++	// modoption on the match command line. Rebuilding to change a constant made
++	// each measurement a Docker build; the arena resolves a 2v2 matchup in about
++	// a minute, so the build dominated the experiment.
++	//
++	// The default is returned whenever the publishing gadget is absent, which is
++	// every non-harness game, so behaviour off the bench is unchanged. Values
++	// are cached on first read: this sits inside the per-unit attack loop.
++	float GetTunable(const char* name, float defVal) const;
 +
 +	// --- in-process team coordination -----------------------------------
 +	// Every AI the host adds lives in ONE process (AIExport.cpp keeps them in
@@ -810,7 +833,16 @@ index b4f4f40..e1380bc 100644
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
-@@ -205,6 +315,37 @@ private:
+@@ -161,6 +283,8 @@ public:
+ 
+ 	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
+ private:
++	mutable std::map<std::string, float> tunables;  // see GetTunable
++
+ 	std::pair<CEnemyInfo*, bool> RegisterEnemyInfo(ICoreUnit::Id unitId, bool isInLOS = false);
+ 	CEnemyInfo* RegisterEnemyInfo(springai::Unit* e);
+ 	void UnregisterEnemyInfo(CEnemyInfo* enemy);
+@@ -205,6 +329,37 @@ private:
  	bool isAllyBaseAvoid;
  // <<< AIOptions.lua ---- END
  
@@ -872,7 +904,7 @@ index 4222197..0c44d3f 100644
  	void ActivateTask(IBuilderTask* task);
  
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e90..179d0d0 100644
+index 2b84e90..4c70013 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
 @@ -9,6 +9,7 @@
@@ -883,7 +915,7 @@ index 2b84e90..179d0d0 100644
  #include "scheduler/Scheduler.h"
  #include "script/EconomyScript.h"
  #include "setup/SetupManager.h"
-@@ -36,10 +37,26 @@
+@@ -36,10 +37,29 @@
  
  namespace circuit {
  
@@ -891,6 +923,9 @@ index 2b84e90..179d0d0 100644
 +// constructor-second. apexearth: "do not reclaim for energy if we are >20%
 +// energy".
 +#define RECLAIM_ENERGY_MAX	0.20f
++// How far a constructor may WALK for an energy feature (a tree). Roughly one
++// screen: near enough that it is picked up in passing rather than travelled to.
++#define RECLAIM_ENERGY_DIST	900.f
 +
 +
  using namespace springai;
@@ -910,7 +945,21 @@ index 2b84e90..179d0d0 100644
  const char* RES_NAME_METAL = "Metal";
  const char* RES_NAME_ENERGY = "Energy";
  
-@@ -922,11 +939,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
+@@ -87,7 +107,12 @@ CEconomyManager::~CEconomyManager()
+ 	delete energyRes;
+ 	delete economy;
+ 
+-	delete factoryTask;
++	// Refcounted: CBuilderManager::Enqueue already fired TaskAdded, so a script
++	// may still hold a handle. Release, never delete.
++	if (factoryTask != nullptr) {
++		factoryTask->ClearRelease();
++		factoryTask = nullptr;
++	}
+ }
+ 
+ void CEconomyManager::InitHandlers()
+@@ -922,11 +947,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
  
  bool CEconomyManager::IsOpenMexSpot(int spotId) const
  {
@@ -928,7 +977,7 @@ index 2b84e90..179d0d0 100644
  	if (mexSpots[spotId].isOpen == value) {
  		return;
  	}
-@@ -934,6 +957,90 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
+@@ -934,6 +965,90 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
  	value ? --mexCount : ++mexCount;
  }
  
@@ -1019,7 +1068,7 @@ index 2b84e90..179d0d0 100644
  bool CEconomyManager::IsIgnorePull(const IBuilderTask* task) const
  {
  	if (mexMax != std::numeric_limits<decltype(mexMax)>::max()) {
-@@ -1026,6 +1133,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1026,6 +1141,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  		return nullptr;
  	}
  
@@ -1033,7 +1082,28 @@ index 2b84e90..179d0d0 100644
  	if (IsEnergyStalling()) {
  		return UpdateEnergyTasks(position, unit);
  	}
-@@ -1214,7 +1328,17 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
+@@ -1061,7 +1183,19 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+ 					const auto& unitIds = circuit->GetCallback()->GetFriendlyUnitIdsIn(pos, maxRange, false);
+ 					float curExtract = -1.f;
+ 					for (ICoreUnit::Id unitId : unitIds) {
+-						CAllyUnit* curMex = circuit->GetFriendlyUnit(unitId);  // CCircuitUnit* curMex = circuit->GetTeamUnit(unitId);
++						// apex: OWN-team, not ally-wide. An ally's extractor
++						// satisfied "a mex here yields less than what I can
++						// build" -- Legion's legmex extracts 0.0008 against
++						// 0.001 for arm/cormex, and any moho outyields every
++						// ally T1 -- so a MEXUP task was enqueued on ground we
++						// do not own. It can never complete: Execute() cannot
++						// place over their extractor, and its reclaim fallback
++						// resolves the occupant through GetTeamUnit(), which is
++						// null for another team. The task then pins one of the
++						// mex_up slots and marks the spot upgrading, so real
++						// upgrades starve. Measured: MEXUP pinned at the cap of
++						// 4 for 237 of 291 samples with nothing upgraded.
++						CCircuitUnit* curMex = circuit->GetTeamUnit(unitId);
+ 						if (curMex == nullptr) {
+ 							continue;
+ 						}
+@@ -1214,7 +1348,34 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
  			}
  		}
  		float reclaimValue = featDef->GetContainedResource(metalRes)/* * feature->GetReclaimLeft()*/;
@@ -1045,13 +1115,30 @@ index 2b84e90..179d0d0 100644
  		delete featDef;
 +		const float eStore = GetEnergyStore();
 +		const float eFrac = (eStore > 0.f) ? (GetEnergyCur() / eStore) : 0.f;
-+		if ((energyFeat > reclaimValue) && (eFrac > RECLAIM_ENERGY_MAX)) {
++		const bool isEnergyFeat = (energyFeat > reclaimValue);
++		if (isEnergyFeat && (eFrac > RECLAIM_ENERGY_MAX)) {
 +			continue;
++		}
++		// ...and even when the bank IS low, do not WALK for it. The !isNear
++		// branch above queries GetFeatures() -- every feature on the map -- so
++		// the nearest qualifying tree could be on the far side of the board, and
++		// the constructor-seconds spent reaching it dwarf the energy in it.
++		// apexearth, watching a 1v1: "I saw 5 cons going far from the base and
++		// reclaiming trees (energy)... waste of time... we shouldn't be doing
++		// that".
++		// Scoped to ENERGY-dominant features on purpose: a field of metal wrecks
++		// after a repelled push is worth crossing ground for, and that is this
++		// variant's whole plan. A tree is not.
++		if (isEnergyFeat) {
++			const float maxDist = circuit->GetTunable("apex_reclaim_energy_dist", RECLAIM_ENERGY_DIST);
++			if ((maxDist > 0.f) && (position.SqDistance2D(featPos) > SQUARE(maxDist))) {
++				continue;
++			}
 +		}
  		if (reclaimValue < 1.0f) {
  			continue;
  		}
-@@ -1278,6 +1402,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1278,6 +1439,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  	const int frame = circuit->GetLastFrame();
  	float bestResDist = std::numeric_limits<float>::max();
  
@@ -1081,7 +1168,7 @@ index 2b84e90..179d0d0 100644
  	const auto& infos = energyDefs.GetInfos();
  	const float curWind = circuit->GetMap()->GetCurWind();
  	auto checkWind = [curWind, terrainMgr, position, metalIncome, energyIncome, &infos](unsigned i) {
-@@ -1308,12 +1455,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1308,12 +1492,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  				if (engy.cdef->IsWind() && !checkWind(i)) {
  					continue;
  				}
@@ -1096,7 +1183,7 @@ index 2b84e90..179d0d0 100644
  					if (bestResDist > resDist) {
  						bestResDist = resDist;
  						bestDef = engy.cdef;
-@@ -1571,6 +1718,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1571,6 +1755,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		}
  	}
  
@@ -1116,21 +1203,26 @@ index 2b84e90..179d0d0 100644
  	factoryTask->SetPosition(buildPos);
  
  	if (factoryTask->IsPlop()
-@@ -1589,6 +1749,12 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1589,7 +1786,16 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		factoryTask = nullptr;
  		return task;
  	} else {
-+		// CBFactoryTask's ctor calls CFactoryData::AddFactory; only Cancel() undoes
-+		// it, and a bare delete does not call Cancel. allFactories[].count is the
-+		// primary sort key in CFactoryData::GetFactoryToBuild, so each discard here
-+		// permanently demotes that factory in every later choice. Cancel() is
-+		// protected, so undo the count directly.
-+		factoryMgr->DelFactory(facDef);
- 		delete factoryTask;
+-		delete factoryTask;
++		// PickNextFactory enqueues this task INACTIVE, so it is not in
++		// updateTasks and the module will never free it -- but Enqueue has
++		// already fired TaskAdded, so AngelScript may hold a refcounted handle
++		// to it. AbortTask runs the normal teardown: TaskRemoved lets the script
++		// drop its handle, and CBFactoryTask::Cancel undoes the AddFactory its
++		// ctor did (allFactories[].count is the primary sort key in
++		// CFactoryData::GetFactoryToBuild). ClearRelease then drops the module's
++		// own reference instead of deleting under the script's.
++		builderMgr->AbortTask(factoryTask);
++		factoryTask->ClearRelease();
  		factoryTask = nullptr;
  	}
+ 
 diff --git a/src/circuit/module/EconomyManager.h b/src/circuit/module/EconomyManager.h
-index 2925da7..f1b8ee8 100644
+index 2925da7..83cdeb1 100644
 --- a/src/circuit/module/EconomyManager.h
 +++ b/src/circuit/module/EconomyManager.h
 @@ -107,15 +107,26 @@ public:
@@ -1167,7 +1259,7 @@ index 2925da7..f1b8ee8 100644
  	bool IsIgnoreStallingPull(const IBuilderTask* task) const;
  	void CorrectResourcePull(float metal, float energy);
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b..6b0ae57 100644
+index a44c20b..cd35f37 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -56,6 +56,8 @@ using namespace terrain;
@@ -1286,7 +1378,7 @@ index a44c20b..6b0ae57 100644
  			}
  		} break;
  		default: break;
-@@ -1063,8 +1121,75 @@ void CMilitaryManager::ClearScoutPosition(IUnitTask* task)
+@@ -1063,14 +1121,119 @@ void CMilitaryManager::ClearScoutPosition(IUnitTask* task)
  	scoutTasks.erase(it);
  }
  
@@ -1349,9 +1441,51 @@ index a44c20b..6b0ae57 100644
 +	return defStand;
 +}
 +
++// Where a squad with nothing to shoot should be standing: where we are actually
++// being hit, else the line, else nothing.
++//
++// Both are single positions and the priority is STRICT. Handing the pathfinder a
++// set of candidates makes it pick the cheapest one to walk to, and our own tower
++// cluster is always cheaper to walk to than the front -- which is how a squad
++// ends up garrisoning the base while a border base burns.
++bool CMilitaryManager::GetGuardAnchor(AIFloat3& outPos) const
++{
++	// A leak behind the line outranks the line. GetAttackHotspot is the
++	// cost-weighted decaying centroid of OUR OWN losses, so it points at the
++	// fighting rather than at geometry. It is a centroid of every loss though,
++	// including an army dying on the far side of the map, so it is only followed
++	// where we are not the weaker side -- otherwise the garrison marches into the
++	// enemy base to defend it.
++	AIFloat3 hot;
++	float weight;
++	if (circuit->GetAttackHotspot(hot, weight) && circuit->IsPosOnMap(hot)
++		&& (circuit->GetInflMap()->GetInfluenceAt(hot) > -INFL_EPS))
++	{
++		outPos = hot;
++		return true;
++	}
++	if (circuit->HasFrontPos()) {
++		outPos = circuit->GetFrontPos();
++		return true;
++	}
++	return false;
++}
++
  void CMilitaryManager::FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions)
  {
-+	// Our own towers first. Both callers reach here because the squad found no
+ 	outPositions.clear();
+ 
+-	CInfluenceMap* inflMap = circuit->GetInflMap();
+-	CMetalManager* metalMgr = circuit->GetMetalManager();
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+ 	SArea* area = unit->GetArea();
++	AIFloat3 anchor;
++	if (GetGuardAnchor(anchor) && terrainMgr->CanMoveToPos(area, anchor)) {
++		outPositions.push_back(anchor);
++		return;
++	}
++
++	// Then our own towers. Both callers reach here because the squad found no
 +	// target it could beat, which is exactly the moment it should fall back onto
 +	// static defence instead of onto whichever metal cluster is nearest the lane.
 +	FillDefencePos(unit, outPositions);
@@ -1359,10 +1493,14 @@ index a44c20b..6b0ae57 100644
 +		return;
 +	}
 +
- 	outPositions.clear();
++	outPositions.clear();
++
++	CInfluenceMap* inflMap = circuit->GetInflMap();
++	CMetalManager* metalMgr = circuit->GetMetalManager();
+ 	const CMetalData::Clusters& clusters = metalMgr->GetClusters();
  
- 	CInfluenceMap* inflMap = circuit->GetInflMap();
-@@ -1095,6 +1220,16 @@ void CMilitaryManager::FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions
+ 	CMetalData::PointPredicate predicate = [inflMap, metalMgr, terrainMgr, area, clusters](const int index) {
+@@ -1095,6 +1258,16 @@ void CMilitaryManager::FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions
  {
  	outPositions.clear();
  
@@ -1379,7 +1517,7 @@ index a44c20b..6b0ae57 100644
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const int frame = circuit->GetLastFrame();
  
-@@ -1149,6 +1284,16 @@ void CMilitaryManager::FillSafePos(CCircuitUnit* unit, F3Vec& outPositions)
+@@ -1149,6 +1322,16 @@ void CMilitaryManager::FillSafePos(CCircuitUnit* unit, F3Vec& outPositions)
  {
  	outPositions.clear();
  
@@ -1396,7 +1534,36 @@ index a44c20b..6b0ae57 100644
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const int frame = circuit->GetLastFrame();
  
-@@ -1429,8 +1574,13 @@ void CMilitaryManager::UpdateDefence()
+@@ -1356,11 +1539,25 @@ void CMilitaryManager::UpdateDefenceTasks()
+ //	const CMetalData::Metals& spots = mm->GetSpots();
+ 	const CMetalData::Clusters& clusters = mm->GetClusters();
+ //	const std::vector<CEnemyManager::SEnemyGroup>& enemyGroups = circuit->GetEnemyManager()->GetEnemyGroups();
++	// A DEFEND task takes its stand position ONCE, in Enqueue, from
++	// GetDefenceStand() -- the tower cluster nearest our lane at the moment the
++	// task happened to be created. It was never revised afterwards, so a garrison
++	// formed in minute 5 was still holding minute 5's ground at minute 40, and
++	// every unit built into it was sent there by CDefendTask::Start. apexearth:
++	// "the enemy is attacking one of our frontline bases and our huge army isn't
++	// there to protect it."
++	//
++	// Re-anchored to the same thing a squad with no target walks to, so the two
++	// agree: where we are being hit, else the front. Only while the task has no
++	// target of its own -- an engaged task writes its target into position and
++	// must not be pulled off it.
++	AIFloat3 anchor;
++	const bool hasAnchor = GetGuardAnchor(anchor);
+ 	for (IFighterTask* task : tasks) {
+ 		CDefendTask* dt = static_cast<CDefendTask*>(task);
+-//		if (dt->GetTarget() != nullptr) {
+-//			continue;
+-//		}
++		if (hasAnchor && (dt->GetTarget() == nullptr)) {
++			dt->SetPosition(anchor);
++		}
+ //		STerrainMapArea* area = dt->GetLeader()->GetArea();
+ //		CMetalData::PointPredicate predicate = [em, tm, area, &spots, &clusters](const int index) {
+ //			const CMetalData::MetalIndices& idcs = clusters[index].idxSpots;
+@@ -1429,8 +1626,13 @@ void CMilitaryManager::UpdateDefence()
  		if (frame >= defElem.second) {
  			CCircuitDef* buildDef = defElem.first;
  			if (buildDef->IsAvailable(frame)) {
@@ -1411,7 +1578,7 @@ index a44c20b..6b0ae57 100644
  			}
  			ibd->second.pop_back();
  		}
-@@ -1446,6 +1596,37 @@ void CMilitaryManager::UpdateDefence()
+@@ -1446,6 +1648,37 @@ void CMilitaryManager::UpdateDefence()
  	}
  }
  
@@ -1449,7 +1616,7 @@ index a44c20b..6b0ae57 100644
  void CMilitaryManager::MakeBaseDefence(const AIFloat3& pos)
  {
  	if (circuit->IsLoadSave()) {
-@@ -1717,10 +1898,40 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1717,10 +1950,40 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  	return task;
  }
  
@@ -1491,19 +1658,21 @@ index a44c20b..6b0ae57 100644
  		if (unit->GetTask()->GetType() == IUnitTask::Type::PLAYER) {
  			continue;
 diff --git a/src/circuit/module/MilitaryManager.h b/src/circuit/module/MilitaryManager.h
-index c167603..9fb5d98 100644
+index c167603..f974e48 100644
 --- a/src/circuit/module/MilitaryManager.h
 +++ b/src/circuit/module/MilitaryManager.h
-@@ -130,6 +130,8 @@ public:
+@@ -129,7 +129,10 @@ public:
+ 	void ProcessHubDefence(CBDefenceTask* task);
  	springai::AIFloat3 GetScoutPosition(CCircuitUnit* unit);
  	void ClearScoutPosition(IUnitTask* task);
++	bool GetGuardAnchor(springai::AIFloat3& outPos) const;
  	void FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions);
 +	void FillDefencePos(CCircuitUnit* unit, F3Vec& outPositions);
 +	springai::AIFloat3 GetDefenceStand();
  	void FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions);
  	void FillStaticSafePos(CCircuitUnit* unit, F3Vec& outPositions);
  	void FillSafePos(CCircuitUnit* unit, F3Vec& outPositions);
-@@ -181,14 +183,33 @@ public:
+@@ -181,14 +184,33 @@ public:
  
  	float GetRangeUnitCountCompensatorScale();
  
@@ -1537,7 +1706,7 @@ index c167603..9fb5d98 100644
  	CDefenceData::SDefPoint* FindClosestDefPoint(const springai::AIFloat3& pos);
  	CDefenceData::SDefPoint* FindClosestDefPoint(int cluster, const springai::AIFloat3& pos,
  			std::function<bool (const CDefenceData::SDefPoint&)> predicate = nullptr);
-@@ -205,6 +226,14 @@ private:
+@@ -205,6 +227,14 @@ private:
  	unsigned int defenceIdx;
  	std::map<CCircuitUnit*, int> porcToPoint;  // unit: defPointId
  
@@ -1553,7 +1722,7 @@ index c167603..9fb5d98 100644
  		int spotNum;  // last used spot number in cluster
  		int scouted;  // times this point was scouted
 diff --git a/src/circuit/resource/MetalManager.cpp b/src/circuit/resource/MetalManager.cpp
-index d5e10a6..0f8898d 100644
+index d5e10a6..af45b33 100644
 --- a/src/circuit/resource/MetalManager.cpp
 +++ b/src/circuit/resource/MetalManager.cpp
 @@ -262,9 +262,16 @@ void CMetalManager::FindWithinRangeSpots(const AIFloat3& posFrom, const AIFloat3
@@ -1575,7 +1744,7 @@ index d5e10a6..0f8898d 100644
  }
  
 diff --git a/src/circuit/resource/MetalManager.h b/src/circuit/resource/MetalManager.h
-index ff81f9f..3c1961a 100644
+index ff81f9f..ffb4d92 100644
 --- a/src/circuit/resource/MetalManager.h
 +++ b/src/circuit/resource/MetalManager.h
 @@ -34,6 +34,9 @@ public:
@@ -1624,7 +1793,7 @@ index 3838196..bab42c1 100644
  
  CBuilderScript::~CBuilderScript()
 diff --git a/src/circuit/script/EconomyScript.cpp b/src/circuit/script/EconomyScript.cpp
-index 193efa9..954669b 100644
+index 193efa9..343ae19 100644
 --- a/src/circuit/script/EconomyScript.cpp
 +++ b/src/circuit/script/EconomyScript.cpp
 @@ -8,6 +8,8 @@
@@ -1672,10 +1841,10 @@ index 193efa9..954669b 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..457e3d6 100644
+index 2839b72..39a849e 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
-@@ -195,6 +195,130 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +195,135 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
@@ -1783,6 +1952,11 @@ index 2839b72..457e3d6 100644
 +	return circuit->GetTeamMetalFill(otherTeamId);
 +}
 +
++static float CCircuitAI_GetTunable(CCircuitAI* circuit, const std::string& name, float defVal)
++{
++	return circuit->GetTunable(name.c_str(), defVal);
++}
++
 +static float CCircuitAI_GetDefBuildProgress(CCircuitAI* circuit, CCircuitDef* def)
 +{
 +	return circuit->GetDefBuildProgress(def);
@@ -1806,7 +1980,7 @@ index 2839b72..457e3d6 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -499,6 +623,41 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -499,6 +628,42 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	gIdArrayType = engine->GetTypeInfoByDecl("array<Id>");
  	r = engine->RegisterObjectMethod("CCircuitAI", "array<Id>@ GetTeamIds() const", asFUNCTION(CCircuitAI_GetTeamIds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1817,6 +1991,7 @@ index 2839b72..457e3d6 100644
 +	// A hosted multiplayer game cannot carry synced Lua, but every AI the host
 +	// adds shares this process, so they can simply read each other.
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetDefBuildProgress(CCircuitDef@) const", asFUNCTION(CCircuitAI_GetDefBuildProgress), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTunable(const string &in, float) const", asFUNCTION(CCircuitAI_GetTunable), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "void PublishTeamValue(const string& in, float)", asFUNCTION(CCircuitAI_PublishTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float ReadTeamValue(int, const string& in, float) const", asFUNCTION(CCircuitAI_ReadTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestWreckPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestWreckPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1848,7 +2023,7 @@ index 2839b72..457e3d6 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -564,6 +723,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +729,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1872,7 +2047,7 @@ index 2839b72..457e3d6 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +749,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +755,20 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1893,7 +2068,7 @@ index 2839b72..457e3d6 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +775,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +781,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -1902,7 +2077,7 @@ index 2839b72..457e3d6 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +895,9 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +901,9 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1913,7 +2088,7 @@ index 2839b72..457e3d6 100644
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
 diff --git a/src/circuit/setup/SetupData.cpp b/src/circuit/setup/SetupData.cpp
-index b0cbe19..5bab20e 100644
+index b0cbe19..804196a 100644
 --- a/src/circuit/setup/SetupData.cpp
 +++ b/src/circuit/setup/SetupData.cpp
 @@ -7,6 +7,7 @@
@@ -1940,7 +2115,7 @@ index b0cbe19..5bab20e 100644
 +
  } // namespace circuit
 diff --git a/src/circuit/setup/SetupData.h b/src/circuit/setup/SetupData.h
-index 66b8c22..ed1ec49 100644
+index 66b8c22..2a4dbd6 100644
 --- a/src/circuit/setup/SetupData.h
 +++ b/src/circuit/setup/SetupData.h
 @@ -39,6 +39,13 @@ public:
@@ -1958,7 +2133,7 @@ index 66b8c22..ed1ec49 100644
  
  	const ModOptions& GetModOptions() const { return modoptions; }
 diff --git a/src/circuit/setup/SetupManager.cpp b/src/circuit/setup/SetupManager.cpp
-index 3df26d7..e7b07e8 100644
+index 3df26d7..2951660 100644
 --- a/src/circuit/setup/SetupManager.cpp
 +++ b/src/circuit/setup/SetupManager.cpp
 @@ -328,6 +328,11 @@ CAllyTeam* CSetupManager::GetAllyTeam() const
@@ -1974,7 +2149,7 @@ index 3df26d7..e7b07e8 100644
  {
  	const Json::Value& root = GetConfig();
 diff --git a/src/circuit/setup/SetupManager.h b/src/circuit/setup/SetupManager.h
-index 4863ac9..e509c6d 100644
+index 4863ac9..0e42800 100644
 --- a/src/circuit/setup/SetupManager.h
 +++ b/src/circuit/setup/SetupManager.h
 @@ -78,6 +78,7 @@ public:
@@ -1986,7 +2161,7 @@ index 4863ac9..e509c6d 100644
  	void ReadConfig();
  	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
 diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
-index 7c69263..d86eb4b 100644
+index 7c69263..2dc3d68 100644
 --- a/src/circuit/task/RetreatTask.cpp
 +++ b/src/circuit/task/RetreatTask.cpp
 @@ -11,8 +11,10 @@
@@ -2202,7 +2377,7 @@ index 7c69263..d86eb4b 100644
  			if (unit->GetUnit()->IsCloaked()) {
  				pos += AIFloat3(SQUARE_SIZE * 2, 0, SQUARE_SIZE * 2);  // don't move, but assist if required
 diff --git a/src/circuit/task/RetreatTask.h b/src/circuit/task/RetreatTask.h
-index d29f582..94ddc2a 100644
+index d29f582..a8ea52e 100644
 --- a/src/circuit/task/RetreatTask.h
 +++ b/src/circuit/task/RetreatTask.h
 @@ -43,6 +43,8 @@ public:
@@ -2215,10 +2390,25 @@ index d29f582..94ddc2a 100644
  
  	void ApplyPath(const CQueryPathSingle* query);
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..e279244 100644
+index bc8ff11..b294c2b 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
-@@ -285,8 +285,23 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -97,7 +97,13 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
+ 
+ IBuilderTask::~IBuilderTask()
+ {
+-	delete nextTask;
++	// nextTask came from CBuilderManager::Enqueue, which fires TaskAdded, so a
++	// script may hold a refcounted handle to it. Release rather than delete: the
++	// object then outlives this one until the last handle goes.
++	if (nextTask != nullptr) {
++		nextTask->ClearRelease();
++		nextTask = nullptr;
++	}
+ }
+ 
+ bool IBuilderTask::CanAssignTo(CCircuitUnit* unit) const
+@@ -285,8 +291,23 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -2245,7 +2435,7 @@ index bc8ff11..e279244 100644
  
  	const float searchRadius = 200 * SQUARE_SIZE;
 diff --git a/src/circuit/task/builder/BuilderTask.h b/src/circuit/task/builder/BuilderTask.h
-index 13ced8d..3a733d6 100644
+index 13ced8d..d295f66 100644
 --- a/src/circuit/task/builder/BuilderTask.h
 +++ b/src/circuit/task/builder/BuilderTask.h
 @@ -156,6 +156,16 @@ protected:
@@ -2266,7 +2456,7 @@ index 13ced8d..3a733d6 100644
  
  	std::set<CCircuitUnit*> traveled;
 diff --git a/src/circuit/task/builder/FactoryTask.cpp b/src/circuit/task/builder/FactoryTask.cpp
-index 9c2a9cb..889a9db 100644
+index 9c2a9cb..b12ef57 100644
 --- a/src/circuit/task/builder/FactoryTask.cpp
 +++ b/src/circuit/task/builder/FactoryTask.cpp
 @@ -147,7 +147,18 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
@@ -2290,7 +2480,7 @@ index 9c2a9cb..889a9db 100644
  
  #define SERIALIZE(stream, func)	\
 diff --git a/src/circuit/task/builder/MexTask.cpp b/src/circuit/task/builder/MexTask.cpp
-index e49a5b3..d788199 100644
+index e49a5b3..4c414a3 100644
 --- a/src/circuit/task/builder/MexTask.cpp
 +++ b/src/circuit/task/builder/MexTask.cpp
 @@ -128,7 +128,7 @@ bool CBMexTask::Reevaluate(CCircuitUnit* unit)
@@ -2303,7 +2493,7 @@ index e49a5b3..d788199 100644
  			return false;
  		};
 diff --git a/src/circuit/task/builder/ReclaimTask.cpp b/src/circuit/task/builder/ReclaimTask.cpp
-index aa96738..afcd9e1 100644
+index aa96738..8b9731e 100644
 --- a/src/circuit/task/builder/ReclaimTask.cpp
 +++ b/src/circuit/task/builder/ReclaimTask.cpp
 @@ -110,7 +110,33 @@ bool CBReclaimTask::Reevaluate(CCircuitUnit* unit)
@@ -2340,1009 +2530,212 @@ index aa96738..afcd9e1 100644
  			CEnemyInfo* enemy = circuit->GetEnemyInfo(enemyId);
  			if (enemy == nullptr) {
  				continue;
-diff --git a/src/circuit/task/fighter/AntiAirTask.cpp b/src/circuit/task/fighter/AntiAirTask.cpp
-index fac55c7..247f8a9 100644
---- a/src/circuit/task/fighter/AntiAirTask.cpp
-+++ b/src/circuit/task/fighter/AntiAirTask.cpp
-@@ -5,6 +5,7 @@
-  *      Author: rlcevg
-  */
- 
-+#include <algorithm>
- #include "task/fighter/AntiAirTask.h"
- #include "map/ThreatMap.h"
- #include "module/MilitaryManager.h"
-@@ -15,6 +16,7 @@
- #include "terrain/path/QueryPathMulti.h"
- #include "unit/action/FightAction.h"
- #include "unit/action/MoveAction.h"
-+#include "unit/enemy/EnemyManager.h"
- #include "unit/enemy/EnemyUnit.h"
- #include "unit/CircuitUnit.h"
- #include "CircuitAI.h"
-@@ -24,6 +26,26 @@
- 
- #include "AISCommands.h"
- 
-+// Fighters were sent the moment they rolled off the pad, so a squad of one flew
-+// at an enemy flight of four or five. apexearth: "we just go in with one. We
-+// should be saving up an equal or greater number of fighters as the enemy has
-+// and then attacking."
-+//
-+// Held at home until the squad's own cost matches this share of the enemy's
-+// known air, then released. Below the floor there is nothing worth massing
-+// against and the squad flies as before, so early interception is unaffected.
-+// GetEnemyCost(AIR) is every enemy air unit ever registered, across every enemy
-+// player, dead ones included -- not the flight in front of us. One squad's metal
-+// never reaches parity with it, so at 1.0 the hold never released.
-+#define AA_MASS_RATIO   0.25f
-+#define AA_MASS_FLOOR   400.f   // metal of enemy air below which we do not wait
-+// Enemy air this close to the ground we defend is not a flight to be out-massed,
-+// it is a raid in progress. The hold above is measured against the enemy's TOTAL
-+// air cost, which a single heavy gunship exceeds on its own, so without this the
-+// squad waits for a parity it cannot reach while the raider shoots the line.
-+#define AA_RAID_RADIUS  2600.f
-+
-+
- namespace circuit {
- 
- using namespace springai;
-@@ -44,13 +66,24 @@ CAntiAirTask::~CAntiAirTask()
- 
- bool CAntiAirTask::CanAssignTo(CCircuitUnit* unit) const
- {
--	if (!unit->GetCircuitDef()->IsRoleAA() ||
--		(unit->GetCircuitDef() != leader->GetCircuitDef()))
--	{
-+	if (!unit->GetCircuitDef()->IsRoleAA()) {
-+		return false;
-+	}
-+	// apex: was `unit->GetCircuitDef() != leader->GetCircuitDef()`, i.e. only the
-+	// identical unit type could join. Use the same speed-compatibility rule
-+	// CAttackTask applies to ground instead, so mixed AA/fighter types can mass.
-+	float speedLeader = leader->GetCircuitDef()->GetSpeed();
-+	float speedUnit = unit->GetCircuitDef()->GetSpeed();
-+	if (speedLeader > speedUnit) {
-+		std::swap(speedLeader, speedUnit);
-+	}
-+	if (speedLeader * 1.5f < speedUnit) {
- 		return false;
- 	}
- 	const int frame = manager->GetCircuit()->GetLastFrame();
--	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(1000.f)) {
-+	// apex: was SQUARE(1000.f). Aircraft cover that in seconds, so newly built
-+	// bombers were always out of range and formed solo tasks instead.
-+	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(4000.f)) {
- 		return false;
- 	}
- 	return true;
-@@ -285,8 +318,45 @@ void CAntiAirTask::FindTarget()
- 	const float maxPower = attackPower * powerMod;
- //	const CCircuitDef::RoleT role = cdef->GetMainRole();
- 
-+	// Do not go hunting one at a time. Our own cost, not attackPower, because
-+	// attackPower is a sum of per-type constants and the comparison is against
-+	// an enemy COST from the enemy manager.
-+	// The ground we are defending: the held line if we have one, else the base.
-+	AIFloat3 homeRef = circuit->GetMilitaryManager()->GetDefenceStand();
-+	if (!utils::is_valid(homeRef)) {
-+		homeRef = circuit->GetSetupManager()->GetBasePos();
-+	}
-+	bool isRaid = false;
-+	for (auto& kv : circuit->GetEnemyInfos()) {
-+		CEnemyInfo* e = kv.second;
-+		if (e->IsHidden()) {
-+			continue;
-+		}
-+		CCircuitDef* ed = e->GetCircuitDef();
-+		if ((ed != nullptr) && ed->IsAbleToFly()
-+			&& (homeRef.SqDistance2D(e->GetPos()) < SQUARE(AA_RAID_RADIUS)))
-+		{
-+			isRaid = true;
-+			break;
-+		}
-+	}
-+
-+	const float enemyAir = circuit->GetEnemyManager()->GetEnemyCost(ROLE_TYPE(AIR));
-+	if (!isRaid && (enemyAir > AA_MASS_FLOOR)) {
-+		float ourAir = .0f;
-+		for (CCircuitUnit* u : units) {
-+			ourAir += u->GetCircuitDef()->GetCostM();
-+		}
-+		if (ourAir < enemyAir * AA_MASS_RATIO) {
-+			SetTarget(nullptr);
-+			return;   // keep gathering; ISquadTask merging runs while we hold
-+		}
-+	}
-+
- 	CEnemyInfo* bestTarget = nullptr;
- 	float minSqDist = std::numeric_limits<float>::max();
-+	CEnemyInfo* bestRaid = nullptr;
-+	float minSqRaid = std::numeric_limits<float>::max();
- 
- 	threatMap->SetThreatType(leader);
- 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
-@@ -297,7 +367,8 @@ void CAntiAirTask::FindTarget()
- 		}
- 
- 		const AIFloat3& ePos = enemy->GetPos();
--		if ((maxPower <= threatMap->GetThreatAt(ePos)/* - enemy->GetThreat(role)*/)
-+		const bool isHomeTgt = (homeRef.SqDistance2D(ePos) < SQUARE(AA_RAID_RADIUS));
-+		if ((!isHomeTgt && (maxPower <= threatMap->GetThreatAt(ePos)/* - enemy->GetThreat(role)*/))
- 			|| !terrainMgr->CanMoveToPos(area, ePos))
- 		{
- 			continue;
-@@ -328,14 +399,20 @@ void CAntiAirTask::FindTarget()
- 		}
- 
- 		const float sqDist = pos.SqDistance2D(ePos);
--		if (minSqDist > sqDist) {
-+		if (isHomeTgt) {
-+			if (minSqRaid > sqDist) {
-+				minSqRaid = sqDist;
-+				bestRaid = enemy;
-+			}
-+		} else if (minSqDist > sqDist) {
- 			minSqDist = sqDist;
- 			bestTarget = enemy;
- 		}
- 	}
- 
--	SetTarget(bestTarget);
--	if (bestTarget != nullptr) {
-+	// Whatever is over our own ground outranks whatever is merely closest.
-+	SetTarget((bestRaid != nullptr) ? bestRaid : bestTarget);
-+	if (GetTarget() != nullptr) {
- 		position = GetTarget()->GetPos();
- 	}
- 	// Return: target, startPos=leader->pos, endPos=position
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..2a495f9 100644
+index cd063e4..e503667 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
-@@ -25,12 +25,211 @@
+@@ -24,10 +24,49 @@
+ 
  #include "spring/SpringMap.h"
  
++#include "Drawer.h"
++
  #include "AISCommands.h"
-+#include "Log.h"
  
  namespace circuit {
  
++// ECONOMY IS THE TARGET, NOT THE ARMY.
++//
++// Upstream scores a target purely by distance, so the enemy army standing in
++// the middle is always nearer than the mex behind it and always wins. That is
++// why squads chase armies around and their extractors are never touched.
++// apexearth: "Our armies tend to chase around enemy armies instead of trying to
++// attack enemy metal extractor positions", and "the goal there shouldn't be to
++// engage enemy army, but to attack their economy."
++//
++// The metric is a DISTANCE, so preference is applied by DIVIDING it: a target
++// worth 5x is treated as if it were five times nearer.
++#define FREE_ECO_PRIORITY	5.0f
++// Prefer the economy that actually dies in the time a raid has. A converter is
++// 380 metal behind 445 hitpoints; an advanced solar 350 behind 1130. Equal-ish
++// metal, and only one is coming down before the owner reacts.
++#define SOFT_ECO_DENSITY	0.50f
++#define SOFT_ECO_BONUS		2.0f
++// ...and push their defensive LINE to the back of the order. A static gun cannot
++// be caught out of position and gives nothing back when it dies, so walking a
++// squad into it is the worst trade on the board -- and it competed on distance
++// like everything else, because their wall sits between us and their base.
++#define ENEMY_WALL_PENALTY	0.2f
++// Radius within which other enemy GROUPS count as defending a target. Enemy
++// group influence is real data (the strength test uses it); the threat map read
++// zero at 14 of 15 target positions when logged, so it is not used here.
++#define NEARBY_ENEMY_DIST	800.f
++// Economy on the map EDGE is the raid target of choice. apexearth: "the best mex
++// attacks can be done around the edges of the map. Probably good to prioritize
++// those areas." An edge extractor is approachable from outside the lane both
++// armies fight over, so a raid reaches it without crossing their army -- which is
++// the whole point of raiding the economy instead of engaging.
++// The band is a FRACTION of the map's shorter side, so it means the same thing
++// on an 8x8 and a 24x24.
++#define EDGE_ECO_BAND		0.20f
++#define EDGE_ECO_BONUS		2.0f
++
++
  using namespace springai;
  using namespace terrain;
  
-+// How much more an attack path pays for threatened ground than any other path.
-+//
-+// maxThreat is only a CEILING -- it refuses tiles above it, and a strong squad
-+// gets a high one, so the cheapest route stays the short one straight up the
-+// middle. What decides the shape of the route is the per-tile cost, which is a
-+// flat 2x threat for every other query in the AI.
-+//
-+// 4 -> 2 on 2026-08-07. At 4 an attack paid so much for defended ground that a
-+// long quiet route round the map edge beat the short one through the middle --
-+// the previous comment here predicted exactly that and treated it as the point.
-+// Watched live, apexearth judged the result: "I see purple and teal sending
-+// army around the back edge of the map rather than towards the front line...
-+// wasteful movement."
-+//
-+// The detour is not free even when it avoids damage: the army is out of
-+// position for the whole walk, arrives piecemeal, and on a large map may never
-+// arrive at all. Back to the AI-wide 2, so defended ground still costs more
-+// than open ground without the edge run being cheaper than the fight.
-+static constexpr float ATTACK_THREAT_MOD = 2.f;
-+
-+// Multiplier on the path's threat CEILING (see the query in Update()). The
-+// ceiling decides which tiles exist for the pathfinder at all, so it, not the
-+// cost above, is what produces map-edge detours when it is tight.
-+static constexpr float ATTACK_CEILING_MOD = 3.f;
-+
-+// Chosen so CheckMergeTask's own MAX_TRAVEL_SEC * speed budget (~2700 elmos for
-+// a T1 bot) becomes the binding limit instead of this. The air tasks were raised
-+// from the same 1000 for the same reason.
-+#define ASSIGN_RADIUS	3000.f
-+// Was 2.5, tuned from a single Cortex pair (Banisher 54 / Mammoth 22.5 = 2.4).
-+// That is faction-specific by construction: Legion's comparably-common T2 pair
-+// (legstr 84 / leginc 24 = 3.5) fails the 2.5 gate outright, so leginc -- a
-+// unit factory.json weights up to 0.38 at some income tiers -- can never merge
-+// into a squad with its faction's own fast T2 escort and is forced to fight
-+// alone every game. Raised to 3.5 to admit that pair while still excluding the
-+// genuine outliers (Cortex's corjugg/T3 superheavies at ~16.5 need ratio 3.3+
-+// against corban and are borderline either way; scouts like legscout at 160
-+// need ~6.7 and stay excluded regardless).
-+#define SQUAD_SPEED_RATIO	3.5f
-+
-+// Target-preference multipliers. The selection metric is a squared distance, so
-+// 4.0 means an artillery piece is preferred over a closer ordinary unit until it
-+// is about twice as far away.
-+// How far ahead we must be before committing. The test was `maxPower <=
-+// influence * scale`, i.e. a 1% edge sent the whole squad -- so anything not yet
-+// seen flipped the outcome AFTER the commitment, and a slow-turning squad paid
-+// for the reversal on the way out. apexearth: "We realize we're in danger too
-+// late on our units... we head in ... panic... turn around... die", and earlier,
-+// "if you take any fight you're gonna lose, then you probably did the wrong
-+// thing". Applies to CAttackTask only: raids are meant to trade units for
-+// economy and keep their own thresholds.
-+// Extra distance at which a squad switches from travelling to formation, so it
-+// unfolds out of column before the enemy's guns bear. Roughly a T2 weapon range.
-+#define DEPLOY_SLACK		700.f
-+
-+// 1.80 -> 1.35 on 2026-08-07, from apexearth's live multiplayer game.
-+//
-+// 1.80 demanded 80% more power than whatever was defending a target. Measured
-+// in that game (map Project SD-129, 10 Apex AIs, 27 min): 492 engage decisions,
-+// every one reporting TAKE -- but 3,973 candidate groups refused as too strong
-+// first, a mean of 8 per decision and up to 26 in a single one. Every sample
-+// logged edge=0.00, which means the target finally accepted had essentially no
-+// defending influence at all.
-+//
-+// So the AI was not choosing bad fights, it was refusing all of them and
-+// attacking empty ground. apexearth: "we aren't aggressive enough vs humans
-+// early on, and we tend to run when we really shouldn't." Against a human who
-+// masses and pushes, never contesting a defended position loses by default.
-+//
-+// Not dropped to 1.0: the history in this file records that the original test
-+// was effectively margin 1.0 and engaged on a coin flip, which is its own
-+// failure. 1.35 still asks for a real edge, roughly halving the surplus
-+// demanded rather than removing it.
-+#define ENGAGE_MARGIN		1.35f
-+// The bar to CONTINUE a fight, against ENGAGE_MARGIN's bar to start one.
-+// Deliberately below 1.0: once contact is made the damage already dealt is sunk,
-+// and TradeScaledMargin's inputs are generated BY this fight -- our losses land
-+// before our kills, so the trade term tightens at exactly the moment finishing
-+// is the right call. Measured: 13 of 13 engagements in one game were authorised
-+// against need=0 enemy influence, then re-tested at 1 Hz against a real army.
-+#define CONTINUE_MARGIN		0.85f
-+// How far a joining unit may be from the squad leader before it is told to close
-+// on the squad rather than take the squad's route to the enemy. Roughly one
-+// screen: nearer than this and it is already part of the group.
-+#define JOIN_RALLY_DIST		600.f
-+// A target this far gone is worth finishing rather than trading away.
-+#define FINISH_HP_FRAC		0.35f
-+#define FINISH_PRIORITY		3.0f
-+
-+// How much harder the engage test gets when we are losing trades.
-+//
-+// apexearth: "if our recent k/d is low we stop attacking so much, we start to
-+// be more careful and require greater odds to attack." The margin below is a
-+// fixed 1.80 regardless of whether the last ten fights went well or badly --
-+// this scales it by the recent kill/loss ratio (CCircuitAI::GetRecentTradeRatio,
-+// by metal value, decayed). Ratio 1.0 leaves the margin exactly as it was, so
-+// an even game behaves identically to before; the clamps stop a streak either
-+// way from running away with it.
-+//
-+// Deliberately asymmetric. Winning trades relaxes the demand only slightly
-+// (down to 0.9x) because "we are winning" is the state where overreach is
-+// cheapest to punish; losing tightens it up to 1.6x, which is the behaviour
-+// actually asked for. This is a MULTIPLIER on a margin, not a new rule that
-+// spends anything -- it only ever changes which fights get refused.
-+#define TRADE_MARGIN_MIN	0.90f
-+// THE PASSIVE HALF IS GONE. At 1.60 this was not feedback, it was a constant:
-+// the windowed trade ratio sat below 0.63 from minute 16 to 38 of a measured
-+// game, so 1/ratio pinned at the ceiling and the bar to start any fight sat at
-+// ENGAGE_MARGIN * 1.60 = 2.16. We demanded better than 2:1 odds, all game.
-+//
-+// Worse, it is a spiral in the wrong direction: losing trades raises the bar,
-+// the higher bar refuses fights, refusing fights cedes ground and loses more.
-+// And the no-data branch above returns ENGAGE_MARGIN * TRADE_MARGIN_MAX -- so
-+// before a single trade had happened, at game start, we were already at maximum
-+// caution.
-+//
-+// At 1.0 the ratio can only ever make us MORE aggressive (TRADE_MARGIN_MIN 0.90
-+// still applies when we are trading well) and never more passive. The useful
-+// direction is kept, the spiral is deleted, and "no information" now means
-+// neutral instead of maximally afraid.
-+// apexearth: "we are too cowardly against attacking some enemy bases.... we
-+// totally could win and we backoff" and "maybe we need to ditch that thing that
-+// makes us more passive?"
-+#define TRADE_MARGIN_MAX	1.00f
-+
-+static inline float TradeScaledMargin(circuit::CCircuitAI* circuit)
-+{
-+	const float ratio = circuit->GetRecentTradeRatio();
-+	if (ratio <= 0.f) {
-+		return ENGAGE_MARGIN * TRADE_MARGIN_MAX;
-+	}
-+	// Demand scales with 1/ratio: trading at 0.5 asks for twice the odds
-+	// before the clamp, trading at 2.0 asks for a little less than before.
-+	float scale = 1.f / ratio;
-+	if (scale < TRADE_MARGIN_MIN) scale = TRADE_MARGIN_MIN;
-+	if (scale > TRADE_MARGIN_MAX) scale = TRADE_MARGIN_MAX;
-+	// Team push multiplier, set from script (Military::UpdateTeamPush). A
-+	// coordinated all-in is the one time accepting worse odds is correct: the
-+	// whole ally team commits at once, so the local odds understate what is
-+	// actually arriving.
-+	return ENGAGE_MARGIN * scale * circuit->GetEngageBoost();
-+}
-+
-+// Radius around a target within which OTHER enemy groups count as defending it.
-+// Measured at 1800: 1,738 target groups refused against 29 engagements taken in
-+// a single 4v4 game -- on a 16x12 map that radius sweeps most of the board, so
-+// every target looked defended by the entire enemy army and squads fell back
-+// home having found nothing acceptable. apexearth: "purple retreated its
-+// entire army back into its base". 800 is one T2 weapon range: close enough
-+// that the army really is covering the target.
-+#define NEARBY_ENEMY_DIST	800.f
-+
-+#define ARTY_PRIORITY		4.0f
-+#define LONG_RANGE_PRIORITY	2.0f
-+#define LONG_RANGE_MULT		1.3f   // "outranges us" -- 30% past our own reach
-+
-+// A target faster than the squad by this much is treated as uncatchable, and
-+// its preference is multiplied by the penalty below. Not a veto: it still gets
-+// shot if it comes to us.
-+#define CHASE_SPEED_RATIO	1.15f
-+#define UNCATCHABLE_PENALTY	0.25f
-+// apex: an undefended enemy structure that cannot shoot back is the best trade a
-+// raid can make -- it removes income permanently and costs nothing to take. The
-+// metric below is a DISTANCE, so a target with no priority competes on nearness
-+// alone, and the enemy army in the middle is always nearer than the mex behind
-+// it. apexearth: "we have an opportunity to freely kill an enemy mex and we walk
-+// away in favor of fighting enemy army in the middle... thats how bad we are at
-+// raiding."
-+#define FREE_ECO_PRIORITY	5.0f
-+// apex: the other half of the same doctrine. A static gun cannot be caught out of
-+// position, never stops shooting, and gives nothing back when it dies -- so
-+// walking a squad into the enemy's defensive line is the worst trade on the
-+// board, and it competed on distance like everything else because their wall
-+// sits between us and their base. apexearth: "we send them at the enemy wall to
-+// fight.... why do we do that? this makes no sense. We should be attacking their
-+// mexes, their economy... and DEFENDING against their army."
-+// A penalty, not a veto -- a gun shelling our own ground still dies, via isHome.
-+#define ENEMY_WALL_PENALTY	0.2f
-+// apex: metal denied per hitpoint, above which an undefended structure counts as
-+// a SOFT target and is worth going out of the way for. Read from the defs rather
-+// than guessed: converter 380m/445hp = 0.85, fusion 4300/4450 = 0.97, solar
-+// 155/340 = 0.46, advanced solar 350/1130 = 0.31. So this cleanly separates the
-+// things that die in a raid pass from the things that soak one.
-+#define SOFT_ECO_DENSITY	0.50f
-+#define SOFT_ECO_BONUS		2.0f
-+// apex: how much better a new candidate must look before a squad abandons the
-+// target it already chose. FindTarget re-runs every pass and scores purely on
-+// the CURRENT geometry, so as the squad moved the ordering churned and it
-+// changed its mind repeatedly -- walking a few steps toward one target, then
-+// another, then back -- which reads exactly as indecision and covers no ground.
-+// apexearth: "it wants to go run around the enemy, but then its like nahhh ill
-+// go back to my base... nah ill attack this guy.... nah ill go behind them all!
-+// ... totally screws up its effectiveness as it can't make up its mind and just
-+// runs in circles on the spot."
-+// The metric is a distance and lower wins, so a bonus to the incumbent is a
-+// DIVISOR on it. Commitment, not blindness: something 40% better still wins.
-+#define TARGET_STICKY		1.4f
-+
- CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
- 		: ISquadTask(mgr, FightType::ATTACK, powerMod)
- 		, minPower(minPower)
-@@ -54,12 +253,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
- 	if (speedLeader > speedUnit) {
- 		std::swap(speedLeader, speedUnit);
- 	}
--	if (speedLeader * 1.5f < speedUnit) {
-+	// Cortex ground speeds run 37.5 (Sumo) to 54 (Banisher) against the Mammoth's
-+	// 22.5, so at 1.5 the Mammoth fails against every one of them and can only
-+	// ever hold a task of its own. Same for the other slow heavies. The squad
-+	// still moves at the pace of its slowest member either way; the choice this
-+	// makes is whether the heavy walks in with company or by itself.
-+	if (speedLeader * SQUAD_SPEED_RATIO < speedUnit) {
- 		return false;
- 	}
- 
- 	const int frame = manager->GetCircuit()->GetLastFrame();
--	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(1000.f)) {
-+	// This bounds both joining and MERGING -- CheckMergeTask calls
-+	// candidate->CanAssignTo(leader), so it, not the MAX_TRAVEL_SEC budget there,
-+	// is what decides whether two squads may combine. At 1000 a unit leaving a
-+	// factory could not join a squad already at the front on any large map, and
-+	// two squads a short walk apart could not merge; both had to fight alone.
-+	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(ASSIGN_RADIUS)) {
- 		return false;
- 	}
- 	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
-@@ -108,6 +317,49 @@ void CAttackTask::RemoveAssignee(CCircuitUnit* unit)
- 
- void CAttackTask::Start(CCircuitUnit* unit)
- {
-+	// A UNIT JOINS THE SQUAD, NOT THE TARGET.
-+	//
-+	// This did one of two things and neither was joining. While the squad was
-+	// REGROUP or ENGAGE it returned immediately, leaving the new unit standing
-+	// wherever it was built -- inside enemy fire if the fight had moved there.
-+	// Otherwise it handed the unit the squad's OWN path to the enemy, which the
-+	// unit then walked alone, arriving at the objective by itself and dying
-+	// there. apexearth: "after I see some other units get to the place where we
-+	// were attacking (lingering join order?) and they get picked off one by one
-+	// a bit... we stand within enemy fire and are super indecisive."
-+	//
-+	// Send it to the leader instead. One move order, no path query -- the squad
-+	// logic takes over on the next Update once it is close enough to count as
-+	// part of the group, and this is exactly the case IsMustRegroup is measuring.
-+	CCircuitAI* circuit = manager->GetCircuit();
-+	const int frame = circuit->GetLastFrame();
-+	if ((leader != nullptr) && (unit != leader)) {
-+		const AIFloat3& leaderPos = leader->GetPos(frame);
-+		// ...unless it is standing on OUR ground with an enemy on it. Rallying is
-+		// "go join the squad", and if home is being attacked, marching away from
-+		// the attack to reach a squad somewhere else is the worst answer
-+		// available. apexearth: "imagine an enemy is attacking our base... is this
-+		// logic making our army actively abandon our base?" -- a fair question
-+		// about a change I had just made, and the answer was yes.
-+		// GetAllyDefendInflAt is fed by our own buildings, so it means "we live
-+		// here"; enemy influence on the same tile means they are here too. Leave
-+		// the unit unordered: the defend machinery re-evaluates it next pass,
-+		// which is what should own a unit standing in a fight at home.
-+		CInfluenceMap* inflMap = circuit->GetInflMap();
-+		const AIFloat3& here = unit->GetPos(frame);
-+		const bool homeUnderAttack = (inflMap->GetAllyDefendInflAt(here) > INFL_EPS)
-+				&& (inflMap->GetEnemyInflAt(here) > INFL_EPS);
-+		if (homeUnderAttack) {
-+			return;
-+		}
-+		if (here.SqDistance2D(leaderPos) > SQUARE(JOIN_RALLY_DIST)) {
-+			TRY_UNIT(circuit, unit,
-+				unit->CmdMoveTo(leaderPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY,
-+						frame + FRAMES_PER_SEC * 60);
-+			)
-+			return;
-+		}
-+	}
- 	if ((State::REGROUP == state) || (State::ENGAGE == state)) {
- 		return;
- 	}
-@@ -170,6 +422,9 @@ void CAttackTask::Update()
- 	}
- 
- 	const AIFloat3& startPos = leader->GetPos(frame);
-+	// Captured BEFORE FindTarget, which clears the target, and before `state` is
-+	// reset to ROAM below -- ENGAGE is not latched, it is re-derived every pass.
-+	const bool wasEngagedThisPass = (State::ENGAGE == state);
- //	if (circuit->GetInflMap()->GetInfluenceAt(startPos) < -INFL_EPS) {
- //		SetTarget(nullptr);  // FIXME: back-forths group
- //	} else {
-@@ -178,7 +433,20 @@ void CAttackTask::Update()
- 
- 	state = State::ROAM;
- 	if (GetTarget() != nullptr) {
--		const float slack = (circuit->GetInflMap()->GetAllyDefendInflAt(position) > INFL_EPS) ? 300.f : 100.f;
-+		// DEPLOY BEFORE CONTACT. ENGAGE is what calls Attack(), which is the only
-+		// thing that spreads the squad into range-keyed arcs. Triggering it at
-+		// weapon range + 100 means the squad is still in line-ahead on its path
-+		// when it enters the enemy's range: they are already in line-abreast with
-+		// every gun bearing, we arrive as a column with only the leaders able to
-+		// fire. apexearth: "if your spot is shaped like a line, and then they're
-+		// shaped like the t on our line, like, in naval battles, you know, the
-+		// whole crossing the t concept, that's the kind of stuff I see."
-+		//
-+		// DEPLOY_SLACK buys the distance to unfold from column into line first.
-+		// It only changes WHEN the existing formation code runs, not its shape --
-+		// the arc widths and per-row ranges are untouched.
-+		const float base = (circuit->GetInflMap()->GetAllyDefendInflAt(position) > INFL_EPS) ? 300.f : 100.f;
-+		const float slack = base + DEPLOY_SLACK;
- 		if (position.SqDistance2D(startPos) < SQUARE(highestRange + slack)) {
- 			int xs, ys, xe, ye;
- 			circuit->GetPathfinder()->Pos2PathXY(startPos, &xs, &ys);
-@@ -196,6 +464,11 @@ void CAttackTask::Update()
- 	}
- 
- 	if (GetTarget() == nullptr) {
-+		// Do NOT issue a walk-to-the-front order out of a fight we were in one
-+		// tick ago -- that is the visible "turn around and run away".
-+		if (wasEngagedThisPass) {
-+			return;
-+		}
- 		FallbackFrontPos();
- 		return;
- 	}
-@@ -205,10 +478,27 @@ void CAttackTask::Update()
- 	const float eps = pathfinder->GetSquareSize();
- 	const float pathRange = std::max(highestRange - eps, eps);
- 
-+	// maxThreat is a CEILING: tiles above it are impassable, not merely
-+	// expensive. Set from the squad's own power, a modest squad forbids most of
-+	// the direct route and the pathfinder takes whatever is left -- which is the
-+	// long way round the map edge. apexearth, watching live: "I see purple and
-+	// teal sending army around the back edge of the map rather than towards the
-+	// front line... they were going, like, twenty times the distance they needed
-+	// to around enemy defenses."
-+	//
-+	// A detour that size is not caution, it is removal: the army is out of
-+	// position for the whole walk, arrives piecemeal, and on a big map may never
-+	// arrive. ATTACK_CEILING_MOD widens what a squad will path THROUGH. The
-+	// engage test still decides whether to actually take the fight when it gets
-+	// there -- that judgement belongs there, not in the pathfinder silently
-+	// making the short route non-existent.
-+	const float threatCeiling = ATTACK_CEILING_MOD * attackPower
-+			/ circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale();
+@@ -208,7 +247,22 @@ void CAttackTask::Update()
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
  			leader, circuit->GetThreatMap(),
  			startPos, endPos, pathRange, GetHitTest(),
 -			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
-+			threatCeiling,
-+			false, ATTACK_THREAT_MOD);
++			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale(),
++			// AVOID THEIR ARMY ON THE WAY TO THEIR ECONOMY.
++			//
++			// Upstream passes no threat modifier here, so it defaults to 1.0 and
++			// contested ground costs the same as empty ground -- the short line
++			// runs through their army, which is fine for a doom-stack that means
++			// to fight it and wrong for a raid that means not to.
++			// apexearth: "if we have 1000+ metal worth of units we could use them
++			// as an attack force to AVOID enemy army and ATTACK enemy metal. We
++			// should try to stay away from all enemy army in this type of attack."
++			// The precedent is RaidTask's RAID_ROAM_THREAT_MOD = 8: pricing
++			// contested ground high is what made raid parties work round the
++			// outside on their own, with no waypoints -- just a cost function
++			// that makes the flank the shortest path.
++			// Default 1.0 keeps upstream behaviour until measured.
++			false, circuit->GetTunable("apex_attack_threat_mod", 1.f));
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -238,28 +528,94 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
- 	}
- }
- 
-+// attackPower is a sum of CCircuitDef::GetPower(), a per-TYPE constant, so it
-+// falls only when a unit dies -- a squad at a tenth of its health rates itself
-+// exactly as high as a fresh one. The enemy side of the same comparison is not
-+// paper: CThreatMap weights by current health. Weighting our own power by health
-+// makes the two sides symmetric.
-+float CAttackTask::GetHealthScale()
-+{
-+	float total = .0f;
-+	float alive = .0f;
-+	for (CCircuitUnit* unit : units) {
-+		const float power = unit->GetCircuitDef()->GetPower();
-+		float hp = unit->GetHealthPercent();
-+		hp = std::max(.0f, std::min(1.f, hp));  // capture progress drives it negative
-+		total += power;
-+		alive += power * hp;
-+	}
-+	return (total > .0f) ? (alive / total) : 1.f;
-+}
-+
- void CAttackTask::FindTarget()
- {
- 	CCircuitAI* circuit = manager->GetCircuit();
- 	CMap* map = circuit->GetMap();
- 	CInfluenceMap* inflMap = circuit->GetInflMap();
-+	CThreatMap* threatMap = circuit->GetThreatMap();
-+	threatMap->SetThreatType(leader);
- 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
- 	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
--	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
-+	const int frame = circuit->GetLastFrame();
-+	const AIFloat3& pos = leader->GetPos(frame);
- 	SArea* area = leader->GetArea();
- 	CCircuitDef* cdef = leader->GetCircuitDef();
- 	const bool isAntiStatic = cdef->IsAttrAntiStat();
- 	const float maxSpeed = SQUARE(highestSpeed * 1.01f / FRAMES_PER_SEC);
--	const float maxPower = attackPower * powerMod;
-+	// Computed once: each of these walks the whole squad, and FindTarget runs per
-+	// task per update.
-+	const float healthScale = GetHealthScale();
-+	const float spread = GetSpreadRadius();
-+	const float cohesion = (spread <= COHESION_MAX_SPREAD)
-+			? 1.f
-+			: std::max(COHESION_MIN_SCALE, COHESION_MAX_SPREAD / spread);
-+	const float maxPower = attackPower * powerMod * healthScale * cohesion;
- 	const float weaponRange = cdef->GetMaxRange() * 0.9f;
- 	const int canTargetCat = cdef->GetTargetCategory();
- 	const int noChaseCat = cdef->GetNoChaseCategory();
- 
- 	CEnemyInfo* bestTarget = nullptr;
--	const float sqOBDist = pos.SqDistance2D(basePos);  // Own to Base distance
-+	// Tuning inputs. Every metric in the stats export is an OUTCOME; to choose a
-+	// number for the cohesion cap or a strength margin we need what the decision
-+	// actually saw, at the moment it was made.
-+	float bestInfl = .0f;
-+	float bestNear = .0f;
-+	float bestScale = .0f;
-+	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), armbanth
-+	// (Titan), corkorg (Korgoth) and armraz all carry role heavy + attribute
-+	// melee, and all of them detonate on death -- so the value is delivered by
-+	// ARRIVING, and a walking bomb that refuses a defended target has thrown
-+	// its whole cost away. apexearth: "if we make juggernauts the biggest goal
-+	// with them is to just walk straight into an enemy base (because they
-+	// explode when they die)", and separately "i see a lot of our T3 units just
-+	// hangin out and not fighting".
-+	//
-+	// heavy+melee is exactly those four in the shipped configs -- checked, not
-+	// assumed. It deliberately excludes corroach/corsktl, which are also melee
-+	// bombs but assault-role T1/T2 chaff whose behaviour is not in question here.
-+	// CCircuitUnit::Attack already walks a melee unit onto its target rather
-+	// than firing from range, so only the DECISION needed changing.
-+	const bool isJuggernaut = (cdef != nullptr) && cdef->IsRoleHeavy() && cdef->IsAttrMelee();
-+	// Observable, or it cannot be validated. A behaviour with no log line is a
-+	// behaviour nobody can prove ever ran -- which is how this repo has shipped
-+	// dead code more than once. Rate limited per task, not per call.
-+	if (isJuggernaut && (frame >= lastEngageLog + FRAMES_PER_SEC * 10)) {
-+		circuit->LOG("apex: juggernaut charge %s -- ignoring engage margin",
-+				cdef->GetDef()->GetName());
-+	}
-+	int skippedWeak = 0;
-+	// LINEAR, not squared. `scale` below divides a linear distance by this, and
-+	// with a squared denominator the ratio collapses the moment the squad leaves
-+	// home: at 100 elmos out scale is ~0.30, at 1000 it is ~0.003, at 2000 it is
-+	// ~0.00075. Since scale multiplies the enemy influence we require ourselves
-+	// to exceed, that zeroed the strength test entirely and the squad attacked
-+	// anything at any odds once it was off the doorstep.
-+	const float obDist = std::max(pos.distance2D(basePos), 1.f);  // Own to Base distance
- 	float minSqDist = std::numeric_limits<float>::max();
- 	bool hasGoodTarget = false;
- 
-+	CEnemyInfo* prevTarget = GetTarget();  // compared only, never dereferenced
-+	const bool wasEngaged = (State::ENGAGE == state);
- 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
- 	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
- 	for (unsigned i = 0; i < groups.size(); ++i) {
-@@ -269,10 +625,23 @@ void CAttackTask::FindTarget()
- 			continue;
- 		}
- 		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
--		const float scale = std::min(distBE / sqOBDist, 1.f);
--		if (((maxPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE))
--			|| !terrainMgr->CanMobileReachAt(area, group.pos, highestRange))
--		{
-+		// Both linear, so this is a real ratio: how far the enemy group sits from
-+		// our base against how far WE are from it. Near 1 when we are pushing as
-+		// deep as they are -- demand the full strength check there. Below 1 only
-+		// when the group is closer to our base than we are, i.e. defending home,
-+		// where taking a worse fight is correct.
-+		const float scale = std::min(distBE / obDist, 1.f);
-+		// No margin is demanded on our own ground: a defender that waits for
-+		// favourable odds has already lost the thing it was defending.
-+		const bool isHome = inflMap->GetInfluenceAt(group.pos) >= INFL_SAFE;
-+		const bool holdsPrev = wasEngaged && (prevTarget != nullptr)
-+				&& (std::find(group.units.begin(), group.units.end(), prevTarget->GetId()) != group.units.end());
-+		const float groupMargin = holdsPrev ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
-+		if (!isJuggernaut && (maxPower <= group.influence * scale * groupMargin) && !isHome) {
-+			++skippedWeak;
-+			continue;
-+		}
-+		if (!terrainMgr->CanMobileReachAt(area, group.pos, highestRange)) {
- 			continue;
- 		}
- 
-@@ -319,10 +688,112 @@ void CAttackTask::FindTarget()
+@@ -319,7 +373,43 @@ void CAttackTask::FindTarget()
  				}
  			}
  
 -			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * scale;  // Own to Enemy distance
-+			// Artillery is the thing that beats a massed army without ever being
-+			// engaged, so it is worth crossing extra ground to reach. The metric
-+			// below is a distance, so dividing pulls a long-ranged target closer
-+			// in preference order without ignoring distance entirely -- a Shiva
-+			// at the far end of the map still loses to one in front of us.
-+			// apexearth: "they have artillery, and we get slammed by this
-+			// artillery, and we never seem to really disperse the artillery blob"
-+			// and "prioritize killing enemy long ranged units... we let them pile
-+			// up rather than assassinating them".
++			// Preference, applied to the distance metric below by division.
 +			float prio = 1.f;
-+			if (edef != nullptr) {
-+				// Finish what is nearly dead. apexearth: "we will lose half of our
-+				// army to a turret that was almost killed, but then we ran away.
-+				// And then the turret never died."
-+				const float maxHP = edef->GetHealth();
-+				if ((maxHP > 1.f) && ((enemy->GetHealth() / maxHP) < FINISH_HP_FRAC)) {
-+					prio *= FINISH_PRIORITY;
++			if (circuit->GetTunable("apex_eco_target", 1.f) > 0.f) {
++				// The army standing beside this target, which is what makes an
++				// extractor defended or free. Summed from enemy groups rather
++				// than the threat map, for the reason given above.
++				float localInfl = .0f;
++				for (const CEnemyManager::SEnemyGroup& g : groups) {
++					if (g.pos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST)) {
++						localInfl += g.influence;
++					}
 +				}
-+				if (edef->IsRoleArty()) {
-+					prio = ARTY_PRIORITY;
-+				} else if (edef->GetMaxRange() > weaponRange * LONG_RANGE_MULT) {
-+					prio = LONG_RANGE_PRIORITY;  // outranges us even if not ARTY
++				const bool isHome = (pos.SqDistance2D(ePos) > sqOBDist);
++				const bool isEco = (edef != nullptr) && !edef->IsMobile() && !edef->IsAttacker();
++				if (isEco && (localInfl <= .0f)) {
++					prio *= FREE_ECO_PRIORITY;
++					const float hp = std::max(edef->GetHealth(), 1.f);
++					if ((edef->GetCostM() / hp) > SOFT_ECO_DENSITY) {
++						prio *= SOFT_ECO_BONUS;
++					}
 +				}
-+				// Do not chase what we cannot catch.
-+				//
-+				// apexearth, watching live: "sometimes i see entire armies
-+				// chasing a few light units which takes them all off the
-+				// frontline (pretty bad when this happens)." A target faster
-+				// than the squad cannot be caught in open ground -- it simply
-+				// leads the army away, which is what a raider is FOR. The
-+				// metric below is a distance, so dividing by a prio under 1
-+				// pushes the target down the order without forbidding it: a
-+				// fast unit standing next to us is still worth shooting, a fast
-+				// unit across the map is not worth walking to.
-+				//
-+				// Uses lowestSpeed, the pace the squad actually moves at, not
-+				// the leader's -- a squad travels at its slowest member.
-+				if ((lowestSpeed > .1f) && (edef->GetSpeed() > lowestSpeed * CHASE_SPEED_RATIO)) {
-+					prio *= UNCATCHABLE_PENALTY;
++				if (isEco) {
++					const float mapW = circuit->GetTerrainManager()->GetTerrainWidth();
++					const float mapH = circuit->GetTerrainManager()->GetTerrainHeight();
++					const float band = std::min(mapW, mapH)
++							* circuit->GetTunable("apex_edge_band", EDGE_ECO_BAND);
++					const float edgeDist = std::min(std::min(ePos.x, mapW - ePos.x),
++													std::min(ePos.z, mapH - ePos.z));
++					if (edgeDist < band) {
++						prio *= circuit->GetTunable("apex_edge_bonus", EDGE_ECO_BONUS);
++					}
 +				}
-+			}
-+			// A group's own influence says nothing about what is standing NEXT to it.
-+			// Measured over two 8v8 games: 90% of engagement decisions targeted a
-+			// group with zero influence -- undefended economy -- so the strength
-+			// test never ran, and the squad walked into whatever army happened to
-+			// be nearby. apexearth: "We realize we're in danger too late on our
-+			// units... we head in ... panic... turn around... die."
-+			// The threat map covers each armed enemy's weapon range, so it sees the
-+			// army beside the target that group.influence cannot.
-+			// Guarded on > 0: if this layer ever reads dead, behaviour is unchanged
-+			// rather than broken.
-+			// NOT the threat map: CThreatMap::GetThreatAt read 0 at 14 of 15 target
-+			// positions when logged, the same dead layer as GetBuilderThreatAt.
-+			// Enemy GROUP influence is real data -- it is what the strength test
-+			// above uses -- so sum every armed group standing near this target
-+			// instead. That is the army beside the undefended mex.
-+			float localInfl = .0f;
-+			for (const CEnemyManager::SEnemyGroup& g : groups) {
-+				if (g.pos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST)) {
-+					localInfl += g.influence;
++				if ((edef != nullptr) && !edef->IsMobile() && edef->IsAttacker() && !isHome) {
++					prio *= ENEMY_WALL_PENALTY;
 +				}
 +			}
-+			// localInfl is already the army standing beside this target. It was
-+			// only ever used to REFUSE a target; nothing used it to prefer a safe
-+			// one. A static, unarmed, undefended building is exactly that.
-+			if ((edef != nullptr) && !edef->IsMobile() && !edef->IsAttacker()
-+				&& (localInfl <= .0f))
-+			{
-+				prio *= FREE_ECO_PRIORITY;
-+				// ...and prefer the ones that actually die in the time a raid
-+				// has. A converter is 380 metal behind 445 hitpoints; an
-+				// advanced solar is 350 behind 1130. Equal-ish metal, and only
-+				// one of them is coming down before the owner reacts.
-+				// apexearth: "I want to see us doing cheeky moves like running
-+				// the edge of the map and popping enemy energy converters in 1
-+				// or 2 hits... (they're very explosive and fragile) This kind of
-+				// stuff would be able to win a game."
-+				const float hp = std::max(edef->GetHealth(), 1.f);
-+				if ((edef->GetCostM() / hp) > SOFT_ECO_DENSITY) {
-+					prio *= SOFT_ECO_BONUS;
-+				}
-+			}
-+			// ...and push their defensive line to the BACK of the order. isHome
-+			// means it is shooting at us where we live, which still has to die.
-+			if ((edef != nullptr) && !edef->IsMobile() && edef->IsAttacker() && !isHome) {
-+				prio *= ENEMY_WALL_PENALTY;
-+			}
-+			// Stay on the target we already committed to unless something is
-+			// clearly better. prevTarget is what this task chose last pass.
-+			if (enemy == prevTarget) {
-+				prio *= TARGET_STICKY;
-+			}
-+
-+			const float nearMargin = (enemy == prevTarget) ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
-+			if (!isJuggernaut && (localInfl > .0f) && (maxPower < localInfl * nearMargin) && !isHome) {
-+				++skippedWeak;
-+				continue;
-+			}
-+
 +			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * scale / prio;  // Own to Enemy distance
  			if (minSqDist > sqOEDist) {
  				minSqDist = sqOEDist;
  				bestTarget = enemy;
-+				bestInfl = group.influence;
-+				bestNear = localInfl;
-+				bestScale = scale;
- 				hasGoodTarget |= !isOverpowered;
- 			}
- 		}
-@@ -332,6 +803,22 @@ void CAttackTask::FindTarget()
+@@ -331,6 +421,18 @@ void CAttackTask::FindTarget()
+ 	if (bestTarget != nullptr) {
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
- 	}
-+
-+	// One line per squad per 10s, TAKE=committing to a target, SKIP=every group
-+	// failed the strength test. `edge` is our rated power over what we had to
-+	// beat: at 1.0 we engaged on a coin flip, which is what the test permits
-+	// today. RATE LIMITED -- a count from a grep is not a count of decisions.
-+	if (frame >= lastEngageLog + FRAMES_PER_SEC * 10) {
-+		lastEngageLog = frame;
-+		const float need = bestInfl * bestScale;
-+		circuit->LOG("apex: engage %s units=%d spread=%.0f hp=%.2f coh=%.2f "
-+				"power=%.0f need=%.0f edge=%.2f skipped=%d near=%.0f",
-+				(bestTarget != nullptr) ? "TAKE" : "SKIP",
-+				int(units.size()), spread, healthScale,
-+				cohesion, maxPower, need,
-+				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak,
-+				bestNear);
-+	}
- 	// Return: target, startPos=leader->pos, endPos=position
- }
- 
-@@ -340,6 +827,24 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
- 	pPath = query->GetPathInfo();
- 
- 	if (!pPath->posPath.empty()) {
-+		// Whether the squad went round or straight through is otherwise invisible:
-+		// walked/direct near 1.0 is a charge up the middle, well above 1.0 is a
-+		// flank. Rate limited because attack paths are re-queried constantly.
-+		CCircuitAI* circuit = manager->GetCircuit();
-+		if (circuit->GetLastFrame() >= lastDetourLog + FRAMES_PER_SEC * 20) {
-+			lastDetourLog = circuit->GetLastFrame();
-+			const AIFloat3& from = pPath->posPath.front();
-+			const AIFloat3& to = pPath->posPath.back();
-+			float walked = 0.f;
-+			for (size_t i = 1; i < pPath->posPath.size(); ++i) {
-+				walked += pPath->posPath[i - 1].distance2D(pPath->posPath[i]);
-+			}
-+			const float direct = from.distance2D(to);
-+			if (direct > 1.f) {
-+				circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f",
-+						walked, direct, walked / direct);
++		// Put a marker on the map the first time this attack picks a target, so a
++		// spectator can find the group and watch what it does.
++		// apexearth: "when an attack force is created can you have us ping on the
++		// map where it is so i can then watch it closely?"
++		// Dev aid, off by default -- markers are chat-visible clutter in a real
++		// game. AddPoint is the same call the debug 'knn' command uses.
++		if (!isPinged && (circuit->GetTunable("apex_ping_attacks", 0.f) > 0.f)) {
++			isPinged = true;
++			if (circuit->GetDrawer() != nullptr) {
++				circuit->GetDrawer()->AddPoint(position, "ATTACK");
 +			}
 +		}
- 		ActivePath(lowestSpeed);
- 	} else {
- 		FallbackFrontPos();
+ 	}
+ 	// Return: target, startPos=leader->pos, endPos=position
+ }
 diff --git a/src/circuit/task/fighter/AttackTask.h b/src/circuit/task/fighter/AttackTask.h
-index 8585fc2..57927e6 100644
+index 8585fc2..d25da96 100644
 --- a/src/circuit/task/fighter/AttackTask.h
 +++ b/src/circuit/task/fighter/AttackTask.h
-@@ -27,6 +27,7 @@ public:
- 	virtual void OnUnitIdle(CCircuitUnit* unit) override;
- 
- private:
-+	float GetHealthScale();
- 	void FindTarget();
- 	void ApplyTargetPath(const CQueryPathSingle* query);
- 	void FallbackFrontPos();
-@@ -36,6 +37,8 @@ private:
+@@ -36,6 +36,7 @@ private:
  	void Fallback();
  
  	float minPower;
-+	int lastDetourLog = -1000000;
-+	int lastEngageLog = -1000000;
++	bool isPinged = false;  // map ping for this attack, see apex_ping_attacks
  };
  
  } // namespace circuit
-diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
-index 9e6bfd8..c785896 100644
---- a/src/circuit/task/fighter/BombTask.cpp
-+++ b/src/circuit/task/fighter/BombTask.cpp
-@@ -5,6 +5,7 @@
-  *      Author: rlcevg
-  */
- 
-+#include <algorithm>
- #include "task/fighter/BombTask.h"
- #include "map/ThreatMap.h"
- #include "module/MilitaryManager.h"
-@@ -39,13 +40,22 @@ CBombTask::~CBombTask()
- 
- bool CBombTask::CanAssignTo(CCircuitUnit* unit) const
- {
--	if (!unit->GetCircuitDef()->IsRoleBomber() ||
--		(unit->GetCircuitDef() != leader->GetCircuitDef()))
--	{
-+	if (!unit->GetCircuitDef()->IsRoleBomber()) {
-+		return false;
-+	}
-+	// apex: was an exact CircuitDef match, so only the identical unit type could
-+	// join. Use the speed rule CAttackTask applies to ground instead.
-+	float speedLeader = leader->GetCircuitDef()->GetSpeed();
-+	float speedUnit = unit->GetCircuitDef()->GetSpeed();
-+	if (speedLeader > speedUnit) {
-+		std::swap(speedLeader, speedUnit);
-+	}
-+	if (speedLeader * 1.5f < speedUnit) {
- 		return false;
- 	}
- 	const int frame = manager->GetCircuit()->GetLastFrame();
--	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(1000.f)) {
-+	// apex: was SQUARE(1000.f); aircraft cross that in seconds.
-+	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(4000.f)) {
- 		return false;
- 	}
- 	return true;
-@@ -281,8 +291,13 @@ void CBombTask::FindTarget()
- //		float altitude;
- 		CCircuitDef* edef = enemy->GetCircuitDef();
- 		if (edef != nullptr) {
-+			// apex: ANTI_STAT skipped every mobile enemy, which excluded
-+			// constructors -- the highest-value target for an eco raid. Builders
-+			// and commanders stay eligible; other mobiles are still skipped.
-+			const bool skipMobile = isAntiStatic && edef->IsMobile()
-+					&& !edef->IsRoleBuilder() && !edef->IsRoleComm();
- 			if ((edef->GetSpeed() > speed)
--				|| (isAntiStatic && edef->IsMobile())
-+				|| skipMobile
- 				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore())
- 			{
- 				continue;
-diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
-index bfc3caf..3a7ffc9 100644
---- a/src/circuit/task/fighter/DefendTask.cpp
-+++ b/src/circuit/task/fighter/DefendTask.cpp
-@@ -29,6 +29,13 @@
- 
- namespace circuit {
- 
-+// How close a DEFEND task must be to the front to count as holding it, and how
-+// far past its own maxPower it must get before it may leave anyway. Above that
-+// the squad is surplus and is better spent attacking than standing still.
-+#define FRONT_HOLD_RANGE	1800.0f
-+#define FRONT_HOLD_POWER	2.0f
-+
-+
- using namespace springai;
- using namespace terrain;
- 
-@@ -106,6 +113,21 @@ void CDefendTask::Update()
- 	 */
- 	if (updCount % 32 == 1) {
- 		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
-+		// Hold a share of the defenders ON the line. A DEFEND task promotes its
-+		// whole squad into an ATTACK the moment it is strong enough, which is
-+		// exactly what turns a garrison back into a roaming blob -- apexearth:
-+		// "the way that AI seems to work is it has these squads, and the squads
-+		// move around like blobs on the map, they don't necessarily have any
-+		// responsibility to cover any specific area".
-+		//
-+		// Only defenders sitting on the front are held; a DEFEND task somewhere
-+		// in the rear has nothing to cover and should still promote.
-+		CCircuitAI* circuitAI = manager->GetCircuit();
-+		const bool onFront = circuitAI->HasFrontPos()
-+				&& (position.SqDistance2D(circuitAI->GetFrontPos()) < SQUARE(FRONT_HOLD_RANGE));
-+		if (onFront && (attackPower < maxPower * FRONT_HOLD_POWER)) {
-+			return;   // not strong enough to leave the line uncovered
-+		}
- 		if ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty()) {
- 			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
- 			decltype(units) tmpUnits = units;
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
-index 0400f8d..60369d1 100644
+index 0400f8d..e16f91b 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp
 +++ b/src/circuit/task/fighter/FighterTask.cpp
-@@ -100,6 +100,24 @@ void IFighterTask::OnUnitIdle(CCircuitUnit* unit)
- 	}
- }
- 
-+// Repairing a damaged unit MID-FIGHT was gated on IsRoleHeavy(), which in this
-+// config is essentially T3 plus armfboy -- so for a normal army the repair path
-+// was nearly dead, and a unit only ever got repaired after it had already given
-+// up and retreated. apexearth: "if constructors are also helping to heal us
-+// while we fight, all these things can really help us to turn things around."
-+//
-+// Cost is the filter instead of role: repairing a 42-metal Grunt is not worth a
-+// constructor's walk, repairing a 665-metal Tiger plainly is.
-+// 150 made this "every damaged unit in the army", each enqueued at Priority::NOW,
-+// which preempts construction: constructors left the base to chase damaged units
-+// into the fight. Build power is the economy, so this was paid for out of it.
-+#define REPAIR_WORTH_COST	900.f
-+
-+static inline bool IsWorthRepair(CCircuitDef* cdef)
-+{
-+	return (cdef->GetCostM() >= REPAIR_WORTH_COST) && !cdef->IsRoleComm();
-+}
-+
- void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
- {
- 	CCircuitAI* circuit = manager->GetCircuit();
-@@ -112,18 +130,29 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
- 		return;
- 	}
- 
-+	// Committed push: do not peel off. apexearth: "Need to ensure the units
-+	// don't suddenly say 'oh lets regroup somewhere safe!' because their purpose
-+	// is to kill bases, and they probably can't get away on larger maps."
-+	// Retreating mid-breakthrough is worse than dying in it -- a unit that turns
-+	// around is killed anyway on the walk home AND gives up the gap it opened.
-+	// Commanders still retreat: losing one loses the game, which is a different
-+	// trade entirely.
-+	if (circuit->IsCommitted() && !cdef->IsRoleComm()) {
-+		return;
-+	}
-+
- 	const float healthPerc = unit->GetHealthPercent();
- 
- 	if (unit->HasShield()) {
- 		const float minShield = circuit->GetSetupManager()->GetEmptyShield();
- 		if ((healthPerc > cdef->GetRetreat()) && unit->IsShieldCharged(minShield)) {
--			if (cdef->IsRoleHeavy() && (healthPerc < 0.9f) && !unit->IsAttrNoRepair()) {
-+			if (IsWorthRepair(cdef) && (healthPerc < 0.9f) && !unit->IsAttrNoRepair()) {
- 				circuit->GetBuilderManager()->Enqueue(TaskB::Repair(IBuilderTask::Priority::NOW, unit));
- 			}
- 			return;
- 		}
- 	} else if ((healthPerc > cdef->GetRetreat()) && !unit->IsDisarmed(frame)) {
--		if (cdef->IsRoleHeavy() && (healthPerc < 0.9f) && !unit->IsAttrNoRepair()) {
-+		if (IsWorthRepair(cdef) && (healthPerc < 0.9f) && !unit->IsAttrNoRepair()) {
- 			circuit->GetBuilderManager()->Enqueue(TaskB::Repair(IBuilderTask::Priority::NOW, unit));
- 		}
- 		if (healthPerc < cdef->GetSelfDHP()) {
-@@ -203,7 +232,12 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
+@@ -203,7 +203,18 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
  	CCircuitDef* edef = GetTarget()->GetCircuitDef();
  	const bool isStatic = (edef != nullptr) && !edef->IsMobile();
  
 -	const float range = std::min(cdef->GetMinRange(), cdef->GetLosRadius()) * RANGE_MOD;
-+	// Same fix as ISquadTask::AssignTo/RemoveAssignee (SquadTask.cpp): a
-+	// multi-weapon unit's GetMinRange() is its SHORTEST weapon's range, not
-+	// its real engagement distance. GetMaxRange() matches what the rest of
-+	// this codebase's combat logic already treats as "how close this unit
-+	// needs to get."
-+	const float range = std::min(cdef->GetMaxRange(), cdef->GetLosRadius()) * RANGE_MOD;
++	// The LOS clamp is what pulls a long gun with short eyes into knife range:
++	// a Sharpshooter carries range 900 against sightdistance 455, so the old
++	// unconditional min() stood it at 40% of its own reach. ISquadTask::Attack
++	// already only clamps when the target is unseen -- this mirrors that, so a
++	// unit that can already see (or radar) its target keeps its full standoff.
++	const float rangeMod = circuit->GetTunable("apex_range_mod", RANGE_MOD);
++	const bool seesTarget = (circuit->GetTunable("apex_los_standoff", 1.f) > 0.f)
++			&& !isStatic && GetTarget()->IsInRadarOrLOS();
++	float range = cdef->GetMinRange() * rangeMod;
++	if (!seesTarget) {
++		range = std::min(range, cdef->GetLosRadius() * rangeMod);
++	}
  	AIFloat3 newPos(tPos.x + range * dir.x, tPos.y, tPos.z + range * dir.z);
  	CTerrainManager::CorrectPosition(newPos);
  	unit->Attack(newPos, GetTarget(), targetTile, GetTarget()->GetUnit()->IsCloaked(), isStatic, frame + FRAMES_PER_SEC * 60);
+diff --git a/src/circuit/task/fighter/FighterTask.h b/src/circuit/task/fighter/FighterTask.h
+index e1d90c4..82f4aa0 100644
+--- a/src/circuit/task/fighter/FighterTask.h
++++ b/src/circuit/task/fighter/FighterTask.h
+@@ -13,7 +13,7 @@
+ 
+ namespace circuit {
+ 
+-#define RANGE_MOD	0.8f
++#define RANGE_MOD	0.9f  // compiled default; override with apex_range_mod
+ 
+ class CEnemyInfo;
+ 
 diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
-index 9af0698..247a3a7 100644
+index 9af0698..1d2e16c 100644
 --- a/src/circuit/task/fighter/RaidTask.cpp
 +++ b/src/circuit/task/fighter/RaidTask.cpp
-@@ -24,12 +24,81 @@
+@@ -9,7 +9,9 @@
+ #include "map/InfluenceMap.h"
+ #include "map/ThreatMap.h"
+ #include "module/MilitaryManager.h"
++#include "resource/MetalManager.h"
+ #include "setup/SetupManager.h"
++#include "unit/enemy/EnemyManager.h"
+ #include "terrain/TerrainManager.h"
+ #include "terrain/path/PathFinder.h"
+ #include "terrain/path/QueryPathSingle.h"
+@@ -24,12 +26,102 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -3386,6 +2779,27 @@ index 9af0698..247a3a7 100644
 +static constexpr float FLANK_MARGIN   = 400.f;   // stay off the very edge
 +static constexpr float FLANK_REACHED  = 700.f;
 +
++// PRESS ON, rather than going back for orders.
++//
++// A raid party that has eaten the mexes it could see has no target left, and
++// FindTarget only knows about enemies already in CCircuitAI::GetEnemyInfos --
++// the next mex field, one screen further on, has never been in LOS and does not
++// exist as far as the raid is concerned. The only fallback was
++// CMilitaryManager::GetScoutPosition, which scores clusters that are unclaimed
++// AND below THREAT_MIN, i.e. the quiet ground; failing that, a uniformly random
++// map position. Both of those are, on average, behind the party.
++// apexearth: "after we do an attack raid on enemy mexes we often just turn
++// around and walk home to do nothing... in reality we could usually go further
++// to take out many more mexes."
++//
++// "Onward" is measured against the enemy CENTROID, not our own base: that is the
++// direction that keeps arriving at their economy whichever flank the party came
++// in on, and it needs no map-side special case. The threat test per spot is what
++// stops this walking a raid into the enemy army -- an undefended spot is worth
++// approaching blind, a defended one is not.
++static constexpr float PRESS_STEP    = 400.f;   // ground that must be gained to count as onward
++static constexpr float PRESS_MAX_LEG = 4000.f;  // one hop, not a march across the map
++
 +static AIFloat3 ChooseFlankPos(CCircuitAI* circuit, const AIFloat3& from, const AIFloat3& to)
 +{
 +	if (from.distance2D(to) < FLANK_MIN_DIST) {
@@ -3424,7 +2838,7 @@ index 9af0698..247a3a7 100644
  CRaidTask::CRaidTask(ITaskModule* mgr, float maxPower, float powerMod)
  		: ISquadTask(mgr, FightType::RAID, powerMod)
  		, maxPower(maxPower)
-@@ -206,11 +275,42 @@ void CRaidTask::Update()
+@@ -206,11 +298,42 @@ void CRaidTask::Update()
  	const AIFloat3& startPos = leader->GetPos(frame);
  	const float pathRange = std::max(std::min(cdef->GetMaxRange(), cdef->GetLosRadius()), (float)threatMap->GetSquareSize());
  
@@ -3469,7 +2883,7 @@ index 9af0698..247a3a7 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -349,6 +449,15 @@ bool CRaidTask::FindTarget()
+@@ -349,6 +472,15 @@ bool CRaidTask::FindTarget()
  		}
  
  		float sqDist = pos.SqDistance2D(ePos);
@@ -3485,7 +2899,7 @@ index 9af0698..247a3a7 100644
  		if ((minPower > power) && (minSqDist > sqDist)) {
  			if (enemy->IsInRadarOrLOS()) {
  				if (((targetCat & noChaseCat) == 0) && !enemy->IsBeingBuilt()) {
-@@ -392,7 +501,25 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
+@@ -392,7 +524,25 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
  {
  	pPath = query->GetPathInfo();
  
@@ -3511,7 +2925,28 @@ index 9af0698..247a3a7 100644
  		position = pPath->posPath.back();
  		ActivePath();
  	} else {
-@@ -424,9 +551,21 @@ void CRaidTask::FallbackRaid()
+@@ -414,6 +564,20 @@ void CRaidTask::FallbackRaid()
+ 		} else {
+ 			position = nextPos;
+ 		}
++	} else {
++		// Nothing in front of us is beating us, so there is no reason to be
++		// heading anywhere but further in.
++		const AIFloat3 onward = FindOnwardSpot();
++		if (utils::is_valid(onward)) {
++			if (!utils::is_equal_pos(onward, position)
++				&& (circuit->GetLastFrame() >= lastPressLog + FRAMES_PER_SEC * 20))
++			{
++				lastPressLog = circuit->GetLastFrame();
++				circuit->LOG("apex: raid presses on to (%.0f,%.0f), %.0f further in",
++						onward.x, onward.z, pos.distance2D(onward));
++			}
++			position = onward;
++		}
+ 	}
+ 
+ 	if (!utils::is_valid(position)) {
+@@ -424,9 +588,21 @@ void CRaidTask::FallbackRaid()
  	}
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
@@ -3534,16 +2969,69 @@ index 9af0698..247a3a7 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
+@@ -434,6 +610,47 @@ void CRaidTask::FallbackRaid()
+ 	});
+ }
+ 
++springai::AIFloat3 CRaidTask::FindOnwardSpot() const
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	const AIFloat3& foe = circuit->GetEnemyManager()->GetEnemyPos();
++	if (!utils::is_valid(foe)) {
++		return -RgtVector;  // nothing seen yet; no direction to press in
++	}
++	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
++	const float ourDist = pos.distance2D(foe);
++	if (ourDist <= PRESS_STEP) {
++		return -RgtVector;  // already on top of them
++	}
++
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	CThreatMap* threatMap = circuit->GetThreatMap();
++	threatMap->SetThreatType(leader);
++	const float power = attackPower * powerMod;
++	SArea* area = leader->GetArea();
++
++	const CMetalData::Metals& spots = circuit->GetMetalManager()->GetSpots();
++	AIFloat3 best = -RgtVector;
++	float bestSqDist = SQUARE(PRESS_MAX_LEG);
++	for (const CMetalData::SMetal& spot : spots) {
++		if (foe.distance2D(spot.position) > ourDist - PRESS_STEP) {
++			continue;  // no deeper than we already stand
++		}
++		const float sqDist = pos.SqDistance2D(spot.position);
++		if (sqDist >= bestSqDist) {
++			continue;
++		}
++		if (!terrainMgr->CanMoveToPos(area, spot.position)
++			|| (threatMap->GetThreatAt(spot.position) >= power))
++		{
++			continue;
++		}
++		bestSqDist = sqDist;
++		best = spot.position;
++	}
++	return best;
++}
++
+ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
+ {
+ 	pPath = query->GetPathInfo();
 diff --git a/src/circuit/task/fighter/RaidTask.h b/src/circuit/task/fighter/RaidTask.h
-index ec833e6..2413351 100644
+index ec833e6..2959783 100644
 --- a/src/circuit/task/fighter/RaidTask.h
 +++ b/src/circuit/task/fighter/RaidTask.h
-@@ -34,6 +34,11 @@ private:
+@@ -31,9 +31,16 @@ private:
+ 	bool FindTarget();
+ 	void ApplyTargetPath(const CQueryPathMulti* query);
+ 	void FallbackRaid();
++	springai::AIFloat3 FindOnwardSpot() const;
  	void ApplyRaidPath(const CQueryPathSingle* query);
  
  	float maxPower;
 +	int lastDetourLog = -1000000;
 +	int lastFlankLog = -1000000;
++	int lastPressLog = -1000000;
 +	springai::AIFloat3 flankPos;
 +	bool flankSet = false;
 +	bool flankDone = false;
@@ -3551,527 +3039,44 @@ index ec833e6..2413351 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..0817702 100644
+index 0d59b65..1c25940 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
-@@ -10,12 +10,14 @@
- #include "map/ThreatMap.h"
- #include "module/BuilderManager.h"
- #include "module/MilitaryManager.h"
-+#include "unit/enemy/EnemyManager.h"
- #include "terrain/TerrainManager.h"
- #include "terrain/path/PathFinder.h"
- #include "terrain/path/QueryLineMap.h"
- #include "unit/action/TravelAction.h"
- #include "CircuitAI.h"
- #include "util/Utils.h"
-+#include "Log.h"
+@@ -418,15 +418,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+ 	// incorrect, it should check aoe in vicinity
+ 	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
- #include <cmath>
- 
-@@ -48,7 +50,31 @@ void ISquadTask::AssignTo(CCircuitUnit* unit)
- 	IFighterTask::AssignTo(unit);
- 
- 	CCircuitDef* cdef = unit->GetCircuitDef();
--	const float range = cdef->GetMinRange();
-+	// apexearth: "focus on getting to 50% with legion". Traced via a fresh-
-+	// context agent's finding that Legion trades combat significantly worse
-+	// than Cortex/Armada despite comparable economy (K/D log-ratio t=-2.16
-+	// to -2.23 across two independent tournaments), and nine prior
-+	// composition/unit-weight fix attempts across two sessions all failing
-+	// to close it -- pointing at combat POSITIONING, not army composition.
-+	//
-+	// Squad rows are grouped by range so a row can stand at one shared
-+	// distance from the target (see Attack() below). This used to group by
-+	// GetMinRange() -- for a single-weapon unit that equals GetMaxRange(),
-+	// no difference, which is why this was invisible for Cortex/Armada's
-+	// mostly single-weapon rosters. But GetMinRange() is literally the
-+	// SHORTEST range among ALL of a unit's weapon mounts (CircuitDef.cpp:
-+	// minRange = std::min(minRange, range) across every mount). Legion's
-+	// defining trait is multi-weapon units -- legkark (Karkinos, "Medium
-+	// Dual-Weapon Infantry Bot") carries HEAT_RAY at range 360 and
-+	// LEGION_SHOTGUN at range 251 (confirmed in units/Legion/Bots/
-+	// legkark.lua's weapondefs). Grouped by min range, a legkark row was
-+	// ordered to close to ~238 elmos (251 * ATTACK_RANGE_MOD) from every
-+	// target -- needlessly inside its own better weapon's reach, and inside
-+	// any enemy with range 251-360 that it never needed to engage that
-+	// close. GetMaxRange() is what the outranged-safety-margin standoff
-+	// logic already treats as "this row's real engagement range" elsewhere
-+	// in this same file; grouping should agree with it.
-+	const float range = cdef->GetMaxRange();
- 	rangeUnits[range].insert(unit);
- 
- 	if (leader == nullptr) {
-@@ -79,7 +105,7 @@ void ISquadTask::RemoveAssignee(CCircuitUnit* unit)
- 	IFighterTask::RemoveAssignee(unit);
- 
- 	CCircuitDef* cdef = unit->GetCircuitDef();
--	const float range = cdef->GetMinRange();
-+	const float range = cdef->GetMaxRange();  // must match AssignTo's key
- 	std::set<CCircuitUnit*>& setUnits = rangeUnits[range];
- 	setUnits.erase(unit);
- 	if (setUnits.empty()) {
-@@ -225,13 +251,102 @@ ISquadTask* ISquadTask::GetMergeTask()
- 	return nullptr;
- }
- 
-+// A slot on a curved line facing the enemy, rather than the centre point itself.
-+//
-+// Regrouping sent every unit to ONE position, which is how a squad becomes a
-+// ball -- and a ball is a single AOE footprint. apexearth: "units should be
-+// organized into curved lines against the general area of influence of the
-+// enemy. we don't organize into balls, we organize into curves/lines."
-+//
-+// The line runs perpendicular to enemy-influence direction, so it presents a
-+// front rather than a column. It bows slightly forward at the centre, which is
-+// what makes it a curve: the flanks trail, so the shape wraps toward the enemy
-+// instead of being a flat wall.
-+AIFloat3 ISquadTask::LinePos(CCircuitUnit* unit, const AIFloat3& centre) const
-+{
-+	if (units.size() < 2) {
-+		return centre;
-+	}
-+	CCircuitAI* circuit = manager->GetCircuit();
-+	const AIFloat3& foe = circuit->GetEnemyManager()->GetEnemyPos();
-+	float fx = foe.x - centre.x;
-+	float fz = foe.z - centre.z;
-+	const float flen = sqrtf(fx * fx + fz * fz);
-+	if (flen < 1.f) {
-+		return centre;
-+	}
-+	fx /= flen;
-+	fz /= flen;
++	const float rangeMod = manager->GetCircuit()->GetTunable("apex_range_mod", RANGE_MOD);
 +
-+	// Stable slot per unit: iteration order of `units` is by pointer and does not
-+	// churn between updates, so a unit keeps its place instead of swapping.
-+	int idx = 0;
-+	for (CCircuitUnit* u : units) {
-+		if (u == unit) {
-+			break;
-+		}
-+		++idx;
-+	}
-+	const int n = int(units.size());
-+	const float off = (float(idx) - float(n - 1) * 0.5f) * LINE_SPACING;
-+
-+	// Perpendicular to the enemy direction.
-+	AIFloat3 pos = centre;
-+	pos.x += -fz * off;
-+	pos.z +=  fx * off;
-+	// Bow: the centre stands forward of the flanks by up to a third of the span.
-+	const float half = float(n - 1) * 0.5f * LINE_SPACING;
-+	const float bow = (half > 1.f) ? (1.f - (off * off) / (half * half)) : 0.f;
-+	pos.x += fx * bow * LINE_SPACING;
-+	pos.z += fz * bow * LINE_SPACING;
-+
-+	CTerrainManager::CorrectPosition(pos);
-+	return pos;
-+}
-+
-+// Mean distance from the squad's centroid. apexearth: "take all their locations
-+// and calculate the overall positional radius averaged.... if they're all spread
-+// out then you do NOT have a strong fighting force."
-+float ISquadTask::GetSpreadRadius() const
-+{
-+	if (units.empty()) {
-+		return .0f;
-+	}
-+	const float count = float(units.size());
-+	AIFloat3 centroid = ZeroVector;
-+	for (CCircuitUnit* unit : units) {
-+		centroid += unit->GetLastPos();
-+	}
-+	centroid /= count;
-+
-+	float sum = .0f;
-+	for (CCircuitUnit* unit : units) {
-+		sum += centroid.distance2D(unit->GetLastPos());
-+	}
-+	return sum / count;
-+}
-+
-+// Derate the squad's rated power by how strung out it is. Twenty units spanning
-+// the map are not twenty units in a fight -- they arrive a few at a time and are
-+// beaten in detail.
-+float ISquadTask::GetCohesionScale() const
-+{
-+	const float spread = GetSpreadRadius();
-+	if (spread <= COHESION_MAX_SPREAD) {
-+		return 1.f;
-+	}
-+	return std::max(COHESION_MIN_SCALE, COHESION_MAX_SPREAD / spread);
-+}
-+
- bool ISquadTask::IsMustRegroup()
- {
- 	if ((State::ENGAGE == state) || (updCount % 16 != 15)) {
- 		return false;
- 	}
- 
--	if (!IsMergeSafe()) {  // (circuit->GetInflMap()->GetEnemyInflAt(leader->GetPos(frame)) > INFL_EPS) ?
-+	// apex: ground squads may now regroup outside friendly influence. Refusing
-+	// to re-cohere in contested ground is what makes them arrive piecemeal.
-+	if (!leader->GetCircuitDef()->IsAbleToFly() ? false : !IsMergeSafe()) {
- 		state = State::ROAM;
- 		return false;
- 	}
-@@ -296,6 +411,10 @@ bool ISquadTask::IsMustRegroup()
- 		return false;
- 	}
- 
-+	// Back to upstream THREAT_MIN. Widening this to 8x for ground let the block
-+	// below run while the squad was in contact, and that block ends in
-+	// Garbage(leader), which routes to UnitDestroyed + UnregisterTeamUnit: the AI
-+	// drops a LIVE unit from its own records and never orders it again.
- 	if (threatMap->GetThreatAt(groupPos) >= THREAT_MIN) {
- 		validUnits.clear();
- 		state = State::ROAM;
-@@ -305,7 +424,12 @@ bool ISquadTask::IsMustRegroup()
- 	bool wasRegroup = (State::REGROUP == state);
- 	state = State::ROAM;
- 
--	const float sqMaxDist = SQUARE(std::max<float>(SQUARE_SIZE * 8 * validUnits.size(), highestRange));
-+	// Back to upstream's count-scaled spread. Capping it at an absolute 700 while
-+	// CanAssignTo admits units up to ASSIGN_RADIUS 3000 apart made REGROUP the
-+	// squad's normal state: it could not satisfy cohesion it was assembled to
-+	// violate, so it gathered instead of fighting, and fed the block below.
-+	const float spread = SQUARE_SIZE * 8 * validUnits.size();
-+	const float sqMaxDist = SQUARE(std::max<float>(spread, highestRange));
- 	for (CCircuitUnit* unit : validUnits) {
- 		const float sqDist = groupPos.SqDistance2D(unit->GetLastPos());
- 		if (sqDist > sqMaxDist) {
-@@ -332,8 +456,26 @@ bool ISquadTask::IsMustRegroup()
- 
- void ISquadTask::ActivePath(float speed)
- {
-+	// TRAVEL LINE-ABREAST, not single file. Every unit gets the same path, so
-+	// without a per-unit offset the squad walks onto one point and meets contact
-+	// as a column with only the leaders able to fire. Spread them perpendicular
-+	// to the path instead: the squad arrives as a wall, every gun bearing, and a
-+	// wall is also what stops raiders leaking between units.
-+	// apexearth: "they should really be forming a wall against the enemy so when
-+	// the enemy comes in to attack we have that 'wall of fire' coming out of all
-+	// our nicely positioned units... also it helps to block enemy 'leaks'."
-+	//
-+	// Centred on the path, so the squad's centre of mass still follows the route
-+	// the pathfinder chose and nothing about target or route selection changes.
-+	// Width is bounded: a line wider than this stops being one fight.
-+	const int n = int(units.size());
-+	const float width = std::min(float(n - 1) * SQUAD_FILE_SPACING, SQUAD_FILE_MAX_WIDTH);
-+	const float step = (n > 1) ? (width / float(n - 1)) : 0.f;
-+	int i = 0;
- 	for (CCircuitUnit* unit : units) {
- 		unit->GetTravelAct()->SetPath(pPath, speed);
-+		unit->GetTravelAct()->SetLateral((n > 1) ? (float(i) * step - width * 0.5f) : 0.f);
-+		++i;
- 	}
- }
- 
-@@ -390,9 +532,22 @@ void ISquadTask::Attack(const int frame)
- void ISquadTask::Attack(const int frame, const bool isGround)
- {
- 	const AIFloat3& tPos = GetTarget()->GetPos();
--	const bool isRepeatAttack = (frame >= attackFrame + FRAMES_PER_SEC * 3);
-+	// apexearth: "keeping our units close to their maximum range against
-+	// enemies, and to almost always stay moving. standing still leads to
-+	// death much quicker." Previously 3s: a squad reaches its computed
-+	// standoff position (below) and then holds it -- moving only when the
-+	// target's tile/range bucket changes -- for up to 3 full seconds even
-+	// though the target is very likely drifting the whole time. Shortened
-+	// to 1s so position re-evaluates roughly 3x more often, without going
-+	// so low it fights the engine's own per-frame unit AI or spams orders.
-+	const bool isRepeatAttack = (frame >= attackFrame + FRAMES_PER_SEC * 1);
- 	attackFrame = isRepeatAttack ? frame : attackFrame;
- 
-+	// One direction per task, derived from its identity rather than randomly, so
-+	// it is stable across passes and two neighbouring squads do not orbit the
-+	// same way into each other.
-+	const float orbitDir = ((reinterpret_cast<uintptr_t>(this) >> 4) & 1u) ? 1.f : -1.f;
-+
- 	auto it = rangeUnits.begin()->second.begin();
- 	std::advance(it, rangeUnits.begin()->second.size() / 2);  // TODO: Optimize
- 	AIFloat3 dir = (*it)->GetPos(frame) - tPos;
-@@ -421,14 +576,116 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	int row = 0;
  	for (const auto& kv : rangeUnits) {
  		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
 -		const float range = kv.first * RANGE_MOD;
-+		// Each row stands at ITS OWN weapon range. RANGE_MOD 0.8 walked every row
-+		// 20% inside its reach, which throws away the whole point of keeping the
-+		// long-ranged units in an outer row -- a Banisher at 800 was standing at
-+		// 640, inside the tanks it was supposed to shoot over.
-+		//
-+		// apexearth: "some units easily die on the first hit... if enemies are
-+		// within 900 [of my 1000 range] i absolutely have to move away from
-+		// them... if i am just 10% out of range of that enemy unit, i absolutely
-+		// must move away from them." When the CURRENT TARGET outranges this row's
-+		// own weapon (edef->GetMaxRange() > kv.first), standing at our own range
-+		// puts us inside theirs -- exactly backwards, we would be standing still
-+		// getting hit while unable to answer. Stand at their range plus a safety
-+		// margin instead, so we are never inside a reach we cannot match.
-+		//
-+		// EXCEPT indirect fire. apexearth: "some enemies are indirect fire --
-+		// like rocket launcher units. We can be within range of those as long as
-+		// we keep moving and avoid wherever their missile is going... Arbiters
-+		// [corhrk, role="artillery" -> IsRoleArty()] have very long range but are
-+		// super vulnerable if you get up close." Retreating from a dodgeable,
-+		// close-range-weak target is backwards for the same reason standing
-+		// still inside a direct-fire weapon's range is -- so arty targets keep
-+		// the normal own-range standoff instead of backing off to theirs.
-+		// Restored: bisection (armada-bisect-outrange-revert-8) crashed the
-+		// native DLL in all 8 games at ~1.2 minutes, but that batch also
-+		// carried a real bug in the jammer-veto AngelScript path (called
-+		// GetBuildPos() on a non-BUILDER task, same crash signature) that was
-+		// new in that same deploy and this change was not. The prior 0-8 read
-+		// (armada-unitdistance-check-8) that prompted the bisection ran to
-+		// completion with no crash -- a real loss, but indistinguishable from
-+		// this session's established small-batch noise until re-tested clean.
-+		const bool isArty = (edef != nullptr) && edef->IsRoleArty();
-+		// apexearth, watching live: "our thug style units are afraid of
-+		// rocket bots because they have more range. thugs/maces are more
-+		// powerful than rocket bots so that's unfortunate." A rocket bot
-+		// (armrock/corrock) is direct-fire, not IsRoleArty(), so it was
-+		// getting the same kite-away treatment as a real long-range threat
-+		// even though a heavy assault bot standing at its own range shrugs
-+		// off rocket fire and wins the trade -- kiting away just throws that
-+		// advantage out for no reason.
-+		//
-+		// First attempt used cost as the "who wins" proxy and was wrong:
-+		// checked against tools/unitdef.py, corthud (Thug) is 140 metal,
-+		// armham (Mace) 130, armrock (Rocketeer) 120 -- all similar T1 bot
-+		// costs, nowhere near a dominance ratio. GetPower() is the right
-+		// signal instead: CCircuitDef precomputes damage*sqrt(health) per
-+		// def (CircuitDef.cpp), the same formula CThreatMap::GetUnitPower
-+		// uses for live units, and it is what the threat map itself is
-+		// already built from -- Thug/Mace's low range but high alpha and
-+		// health should score well above Rocketeer's glass-cannon poke
-+		// (its own description: "good vs. static defenses") on this metric
-+		// even though cost alone could not tell them apart.
-+		const bool powerDominant = (edef != nullptr) && (rowDef != nullptr)
-+				&& (rowDef->GetPower() > edef->GetPower() * POWER_DOMINANCE_RATIO);
-+		// TEMPORARY diagnostic, apexearth: "remember good diagnostics and
-+		// instrumentation are important!" GetPower() at the def level is
-+		// unverified for this exact matchup -- log both sides' power whenever
-+		// a row actually outranges its target, so a smoke test can confirm
-+		// powerDominant fires true for Thug/Mace vs Rocketeer specifically
-+		// before trusting the mechanism. Time-rate-limited rather than
-+		// call-count-capped: a 60-call cap exhausted in the first 30 seconds
-+		// of a 15-minute smoke test and never got another sample, so it
-+		// never actually saw a Thug/Mace-vs-Rocketeer pairing at all.
-+		static int sLastPowerDiagFrame = -1000000;
-+		const int diagFrame = manager->GetCircuit()->GetLastFrame();
-+		if ((edef != nullptr) && (rowDef != nullptr) && (edef->GetMaxRange() > kv.first)
-+			&& (diagFrame >= sLastPowerDiagFrame + FRAMES_PER_SEC * 5))
-+		{
-+			sLastPowerDiagFrame = diagFrame;
-+			manager->GetCircuit()->GetLog()->DoLog(utils::string_format(
-+				std::string("apex: outrange-power-diag row=%s (pwr=%.1f hp=%.0f) target=%s (pwr=%.1f hp=%.0f) dominant=%d glass=%d"),
-+				rowDef->GetDef()->GetName(), rowDef->GetPower(), rowDef->GetHealth(),
-+				edef->GetDef()->GetName(), edef->GetPower(), edef->GetHealth(),
-+				powerDominant, (edef->GetHealth() < rowDef->GetHealth())).c_str());
-+		}
-+		// A target that outranges us AND is more fragile than we are loses the
-+		// race the moment we close, so backing off to its range hands it a free
-+		// win -- it simply keeps shooting and we never arrive. apexearth: "we
-+		// stop when we are afraid of sniper-like units... we need to dive in and
-+		// ignore that 'stay at range' strat if we really want to commit to
-+		// killing/engaging them."
-+		//
-+		// Keyed on HEALTH rather than the role or the "siege" attribute, both of
-+		// which were checked against the configs and are wrong for this. Read
-+		// from the pinned tree: Sharpshooter (armsnipe, the actual sniper) has
-+		// 580 health against a Mace's 1000 -- fragile, dive it. But role
-+		// anti_heavy also covers Starlight (2800) and Arquebus (2200), and the
-+		// siege attribute covers Vanguard, kamikazes, ships and subs; exempting
-+		// either group would send squads diving into things that comfortably win
-+		// the close fight. Health separates them cleanly and needs no list to
-+		// maintain.
-+		const bool glassCannon = (edef != nullptr) && (rowDef != nullptr)
-+				&& (edef->GetHealth() < rowDef->GetHealth());
-+		const bool outranged = !isArty && !powerDominant && !glassCannon
-+				&& (edef != nullptr) && (edef->GetMaxRange() > kv.first);
-+		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
-+		const float range = standoff * ATTACK_RANGE_MOD;
++		const float range = kv.first * rangeMod;
  		// NOTE: 1st unit in 1st row will scout, ignoring GetTarget()->IsInRadarOrLOS()
  		//       as unit may wobble back and forth without firing if turret turn is slow.
  		float range0 = range;
  		if ((row++ == 0) && (isStatic || !GetTarget()->IsInRadarOrLOS())) {
 -			range0 = std::min(kv.first, rowDef->GetLosRadius()) * RANGE_MOD;
-+			range0 = std::min(kv.first, rowDef->GetLosRadius()) * ATTACK_RANGE_MOD;
++			range0 = std::min(kv.first, rowDef->GetLosRadius()) * rangeMod;
  		}
--		const float maxDelta = (M_PI * 0.9f) / kv.second.size();
-+		// The arc a row may occupy. At 0.9*PI a squad packs into a half circle on
-+		// one side of the target, which is a single AOE footprint -- and the wider
-+		// the squad, the tighter the packing, because this is divided by the unit
-+		// count. apexearth: "if we had a whole bunch of tiger tanks, we would
-+		// surround the enemy units, form a circle... ideally... our banishers
-+		// would stay at a distance." Rows are already keyed by weapon range, so
-+		// the second half of that is done; this is the first half.
-+		const float maxDelta = (M_PI * ARC_SPAN) / kv.second.size();
+ 		const float maxDelta = (M_PI * 0.9f) / kv.second.size();
  		// NOTE: float delta = asinf(cdef->GetRadius() / range);
- 		//       but sin of a small angle is similar to that angle, omit asinf() call
- 		float delta = (3.0f * (rowDef->GetRadius() + aoe)) / (range + DIV0_SLACK);
-@@ -458,10 +715,58 @@ void ISquadTask::Attack(const int frame, const bool isGround)
- 				|| (unit->GetTarget() != GetTarget())
- 				|| (unit->GetTargetTile() != targetTile))
- 			{
--				const float angle = alpha + beta;
-+				// KEEP MOVING. The slot is already a point on a circle of this
-+				// row's weapon range around the target -- but the angle came
-+				// only from the CURRENT bearing, so a unit walked to its slot
-+				// and then stood there until the target moved. Standing at the
-+				// right distance is still standing still.
-+				//
-+				// Precess the whole ring instead. Every unit keeps its own arc
-+				// slot relative to its neighbours, so the formation holds, while
-+				// the ring rotates slowly around the target: units strafe
-+				// laterally at constant range, changing heading continuously.
-+				// Projectiles lead their target, so a unit that never holds a
-+				// heading eats fewer of them -- and the standoff distance, which
-+				// is the point of the arc, is unchanged because rotation is
-+				// perpendicular to it.
-+				//
-+				// This is only useful because CmdSetTarget is now live: before
-+				// that a move order meant not shooting, so orbiting would have
-+				// traded damage for evasion. Now it is free.
-+				// apexearth: "our units could kinda circle around the enemies
-+				// they want to shoot at... staying on the move, boosting their
-+				// evasion when they keep changing their movement direction."
-+				//
-+				// Rate is per-task and constant, so the squad turns as one body
-+				// rather than scattering. The existing threat check below still
-+				// vetoes any step into worse ground, so this cannot orbit a unit
-+				// into a second enemy.
-+				const float orbit = ORBIT_RATE * (frame / (float)FRAMES_PER_SEC) * orbitDir;
-+				const float angle = alpha + beta + orbit;
- 				const float r = (iterNum == 0) ? range0 : range;
- 				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
- 				CTerrainManager::CorrectPosition(newPos);
-+
-+				// apexearth: "sometimes our retreat logic takes us into new
-+				// threats... it specifically appears to be the logic where we
-+				// keep our distance from enemies we're actively fighting."
-+				// newPos is computed purely from THIS target's range and this
-+				// row's arc slot -- it never checks whether stepping there
-+				// walks the unit into a second enemy's range it wasn't
-+				// already in. Compare threat at the candidate standoff spot
-+				// against threat where the unit already stands; if backing
-+				// off would make things worse rather than better, hold
-+				// position (still attack-move there, at 0 distance, so the
-+				// engine's own turret tracking keeps firing) instead of
-+				// stepping into the hotter spot. Small multiplicative
-+				// tolerance so a unit doesn't flip-flop between two tiles of
-+				// near-identical threat every isRepeatAttack tick.
-+				CThreatMap* threatMap = manager->GetCircuit()->GetThreatMap();
-+				const AIFloat3& curPos = unit->GetPos(frame);
-+				if (threatMap->GetThreatAt(unit, newPos) > threatMap->GetThreatAt(unit, curPos) * 1.5f) {
-+					newPos = curPos;
-+				}
-+
- 				unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60);
- 			}
- 
-diff --git a/src/circuit/task/fighter/SquadTask.h b/src/circuit/task/fighter/SquadTask.h
-index a058d59..e65e6ac 100644
---- a/src/circuit/task/fighter/SquadTask.h
-+++ b/src/circuit/task/fighter/SquadTask.h
-@@ -15,6 +15,73 @@
- 
- namespace circuit {
- 
-+// Elmos of mean distance-from-centroid a squad may have and still count as a
-+// single fighting force. Roughly 1.5x a T1 weapon range, so a squad inside it
-+// can bring most of its guns to bear on the same target.
-+#define COHESION_MAX_SPREAD	700.f
-+// A strung-out squad is not worth nothing -- it still trickles damage in -- so
-+// the derating bottoms out rather than reaching zero.
-+#define COHESION_MIN_SCALE	0.35f
-+
-+// Fraction of a full circle a single range-row may wrap around its target.
-+// 0.9 packs a squad into a half circle; 1.2 is a broad crescent. NOT a ring --
-+// apexearth: "we don't organize into balls, we organize into curves/lines".
-+#define ARC_SPAN		0.9f
-+// Rows fight at their OWN range, not 20% inside it. apexearth: "don't attack
-+// at 80% range, attack at 95% range". At 0.8 a Banisher with 800 range stood
-+// at 640 -- inside the tanks it is supposed to shoot over, and inside the
-+// enemy's reach. Reverted once as part of a three-change formation batch that
-+// regressed; the line-formation gather in that batch was the likely cause and
-+// this was never tested alone.
-+#define ATTACK_RANGE_MOD	0.95f
-+// apexearth: "some units easily die on the first hit... if i am just 10% out
-+// of range of that enemy unit, i absolutely must move away from them." Used
-+// when the current target outranges a row's own weapon: stand at the
-+// TARGET's range plus this margin, not our own (shorter) range, so a
-+// mismatched engagement never puts us inside a reach we cannot answer.
-+#define OUTRANGED_SAFETY_MARGIN	1.1f
-+// apexearth: "our thug style units are afraid of rocket bots because they
-+// have more range. thugs/maces are more powerful than rocket bots so that's
-+// unfortunate." A row whose own CCircuitDef::GetPower() (damage*sqrt(health),
-+// precomputed per def -- see CircuitDef.cpp) beats the target's by this
-+// ratio trusts its own range instead of kiting off the target's longer one.
-+// NOT cost: checked corthud/armham/armrock (Thug/Mace/Rocketeer) via
-+// tools/unitdef.py and they are 140/130/120 metal -- similar T1 bot costs
-+// that cannot tell a brawler from a skirmisher apart.
-+//
-+// 1.15, not the first-guess 1.5: the outrange-power-diag log this ships with
-+// caught the first value red-handed -- Mace vs Rocketeer, the exact reported
-+// matchup, is only a 1.27x power ratio, and Thug vs Storm sits at 1.33x. Both
-+// need to read as dominant. Every confirmed non-dominant sample in the same
-+// data topped out at 0.86x (Thug vs a defense turret), so 1.15 clears both
-+// real cases with margin while keeping a large gap above genuinely-even or
-+// losing matchups.
-+//
-+// Known limitation, not yet worth the restructuring: GetPower() is a
-+// TYPE-level constant off max health, not live health. A row standing at
-+// 10% HP still reads as dominant over a full-health target it can no longer
-+// actually out-trade. CThreatMap::GetUnitPower does the live-health version
-+// of this same formula for our own units; the target only has CEnemyInfo's
-+// last-seen health, which is enough to notice but adds complexity this
-+// specific report does not need yet.
-+#define POWER_DOMINANCE_RATIO	1.15f
-+// apex: radians per second the standoff ring precesses around its target. At a
-+// 500-elmo standoff that is ~90 elmos/second of lateral travel -- under the
-+// speed of the mobile units that use this formation, so orbiting never costs a
-+// unit its slot in the arc, and slow enough to read as circling rather than
-+// spinning. Halved from a first guess of 0.35 after doing that arithmetic: 0.35
-+// would have demanded ~175 elmos/s, above several T1 bots.
-+#define ORBIT_RATE				0.18f
-+// apex: lateral spacing between neighbouring units when a squad travels, and the
-+// widest the line may get. 96 elmos is roughly two build squares -- enough that
-+// units are not shouldering each other into the terrain, tight enough that the
-+// line is a wall rather than a picket. The cap keeps a 20-unit squad from
-+// spreading across 1900 elmos and arriving as two separate fights.
-+#define SQUAD_FILE_SPACING		96.f
-+#define SQUAD_FILE_MAX_WIDTH	768.f
-+// Spacing between neighbours on a regroup line, in elmos.
-+#define LINE_SPACING		110.f
-+
- class ISquadTask: public IFighterTask {
- protected:
- 	ISquadTask(ITaskModule* mgr, FightType type, float powerMod);
-@@ -39,6 +106,9 @@ private:
- 
- protected:
- 	ISquadTask* GetMergeTask();
-+	springai::AIFloat3 LinePos(CCircuitUnit* unit, const springai::AIFloat3& centre) const;
-+	float GetSpreadRadius() const;
-+	float GetCohesionScale() const;
- 	bool IsMustRegroup();
- 	void ActivePath(float speed = NO_SPEED_LIMIT);
- 	NSMicroPather::HitFunc GetHitTest() const;
 diff --git a/src/circuit/task/static/SuperTask.cpp b/src/circuit/task/static/SuperTask.cpp
-index e19de07..6f3a862 100644
+index e19de07..477ed0e 100644
 --- a/src/circuit/task/static/SuperTask.cpp
 +++ b/src/circuit/task/static/SuperTask.cpp
-@@ -10,6 +10,7 @@
+@@ -10,13 +10,17 @@
  #include "map/InfluenceMap.h"
  #include "module/MilitaryManager.h"
  #include "unit/enemy/EnemyUnit.h"
++#include "unit/ally/AllyUnit.h"
 +#include "unit/CircuitDef.h"
  #include "unit/CircuitUnit.h"
  #include "CircuitAI.h"
  #include "util/Utils.h"
-@@ -17,6 +18,7 @@
+ 
++#include "spring/SpringCallback.h"
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -4079,7 +3084,7 @@ index e19de07..6f3a862 100644
  #include "Lua.h"
  
  namespace circuit {
-@@ -24,6 +26,21 @@ namespace circuit {
+@@ -24,6 +28,67 @@ namespace circuit {
  using namespace springai;
  
  #define TARGET_DELAY	(FRAMES_PER_SEC * 10)
@@ -4091,17 +3096,63 @@ index e19de07..6f3a862 100644
 +// and does not rebuild in the ten seconds it takes the missile to land, so it is
 +// worth strictly more than an equal pile of units.
 +#define STATIC_WEIGHT	1.0f
++// apex: metal of MOBILE enemy in one group that counts as "a huge mass of army".
++#define ARMY_MASS_MIN	4000.f
++// apex: how much a massed army standing on ground we hold is worth beyond its raw
++// cost. Above 1.0 it outranks a base of equal metal, which is the point: the base
++// will still be there next reload, the push will be inside us.
++#define ARMY_MASS_WEIGHT	2.0f
++// apex: multiple of our own metal inside the blast that the enemy mass must beat
++// before we fire onto our own ground.
++#define BLAST_TRADE	3.0f
++
++static inline float MobileCost(const CEnemyManager::SEnemyGroup& group)
++{
++	return std::max(0.f, group.cost - group.roleCosts[ROLE_TYPE(STATIC)]);
++}
++
++// apex: a massed enemy army standing where our own influence reaches -- the push
++// on our border. GetAllyInflAt is nonzero only within range of our own armed
++// units and defences, so this is literally "they are on top of our line".
++static inline bool IsBorderMass(const CEnemyManager::SEnemyGroup& group, CInfluenceMap* inflMap)
++{
++	return (MobileCost(group) >= ARMY_MASS_MIN)
++		&& (inflMap->GetAllyInflAt(group.pos) > INFL_EPS);
++}
 +
 +// apex: score a candidate. Raw cost picks the biggest blob on the map; this tips
-+// the choice toward the densest STATIC target of comparable value.
-+static inline float GroupScore(const CEnemyManager::SEnemyGroup& group)
++// the choice toward the densest STATIC target of comparable value, and above that
++// toward an army massed on our own ground.
++static inline float GroupScore(const CEnemyManager::SEnemyGroup& group, CInfluenceMap* inflMap)
 +{
-+	return group.cost + STATIC_WEIGHT * group.roleCosts[ROLE_TYPE(STATIC)];
++	float score = group.cost + STATIC_WEIGHT * group.roleCosts[ROLE_TYPE(STATIC)];
++	if (IsBorderMass(group, inflMap)) {
++		score += ARMY_MASS_WEIGHT * MobileCost(group);
++	}
++	return score;
++}
++
++// apex: our own metal standing inside the blast. Firing onto our own ground is
++// only worth it as a trade, and the influence map cannot price one -- it carries
++// range-weighted danger, not cost.
++static float FriendlyCostIn(CCircuitAI* circuit, const AIFloat3& pos, float radius)
++{
++	circuit->UpdateFriendlyUnits();
++	auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(pos, radius);
++	float cost = 0.f;
++	for (Unit* u : units) {
++		CAllyUnit* au = circuit->GetFriendlyUnit(u);
++		if ((au != nullptr) && (au->GetCircuitDef() != nullptr)) {
++			cost += au->GetCircuitDef()->GetCostM();
++		}
++	}
++	utils::free(units);
++	return cost;
 +}
  
  CSuperTask::CSuperTask(ITaskModule* mgr)
  		: IFighterTask(mgr, IFighterTask::FightType::SUPER, 1.f)
-@@ -92,11 +109,27 @@ void CSuperTask::Update()
+@@ -92,16 +157,46 @@ void CSuperTask::Update()
  		&militaryMgr->GetTasks(IFighterTask::FightType::AH),
  		&militaryMgr->GetTasks(IFighterTask::FightType::AA),
  	};
@@ -4119,25 +3170,49 @@ index e19de07..6f3a862 100644
 +	// Keep the real intent of the old test -- never fire onto ground WE hold -- and
 +	// otherwise accept a group that is worth hitting.
 +	const float staticShare = STATIC_SHARE;
-+	auto isTargetValid = [&avoidTasks, frame, sqAoe, staticShare, inflMap, circuit](const CEnemyManager::SEnemyGroup& group) {
-+		if (inflMap->GetAllyInflAt(group.pos) > INFL_EPS) {
++	const float aoe = cdef->GetAoe();
++	// apex: a huge enemy army standing on our own line used to be the one thing a
++	// silo could never shoot -- any ally influence at all vetoed the group, and our
++	// own squads defending that line sat inside the blast radius, vetoing it again.
++	// Both vetoes are replaced for that case by a value trade: our metal in the
++	// blast against theirs. Everything else keeps the old, stricter rules.
++	auto isTargetValid = [&avoidTasks, frame, sqAoe, aoe, staticShare, inflMap, circuit](const CEnemyManager::SEnemyGroup& group) {
++		const bool isMass = IsBorderMass(group, inflMap);
++		if (!isMass && (inflMap->GetAllyInflAt(group.pos) > INFL_EPS)) {
  			return false;
  		}
+-		for (const std::set<IFighterTask*>* tasks : avoidTasks) {
+-			for (const IFighterTask* task : *tasks) {
+-				const AIFloat3& leaderPos = static_cast<const ISquadTask*>(task)->GetLeaderPos(frame);
+-				if (leaderPos.SqDistance2D(group.pos) < sqAoe) {
+-					return false;
 +		const float statCost = group.roleCosts[ROLE_TYPE(STATIC)];
-+		if ((inflMap->GetInfluenceAt(group.pos) > -INFL_EPS)
++		if (!isMass && (inflMap->GetInfluenceAt(group.pos) > -INFL_EPS)
 +			&& (statCost < group.cost * staticShare))
 +		{
 +			return false;  // not enemy ground, and not a base either
 +		}
- 		for (const std::set<IFighterTask*>* tasks : avoidTasks) {
- 			for (const IFighterTask* task : *tasks) {
- 				const AIFloat3& leaderPos = static_cast<const ISquadTask*>(task)->GetLeaderPos(frame);
-@@ -123,11 +156,12 @@ void CSuperTask::Update()
++		if (isMass) {
++			const float ours = FriendlyCostIn(circuit, group.pos, aoe);
++			if (MobileCost(group) < ours * BLAST_TRADE) {
++				return false;  // too much of us standing in it
++			}
++		} else {
++			for (const std::set<IFighterTask*>* tasks : avoidTasks) {
++				for (const IFighterTask* task : *tasks) {
++					const AIFloat3& leaderPos = static_cast<const ISquadTask*>(task)->GetLeaderPos(frame);
++					if (leaderPos.SqDistance2D(group.pos) < sqAoe) {
++						return false;
++					}
+ 				}
+ 			}
+ 		}
+@@ -123,11 +218,12 @@ void CSuperTask::Update()
  	if (cdef->IsHoldFire() || (State::ROAM == state)) {
  		for (unsigned i = 0; i < groups.size(); ++i) {
  			const CEnemyManager::SEnemyGroup& group = groups[i];
 -			if ((cost >= group.cost) || (position.SqDistance2D(group.pos) >= maxSqRange)) {
-+			const float score = GroupScore(group);
++			const float score = GroupScore(group, inflMap);
 +			if ((cost >= score) || (position.SqDistance2D(group.pos) >= maxSqRange)) {
  				continue;
  			}
@@ -4148,12 +3223,12 @@ index e19de07..6f3a862 100644
  				groupIdx = i;
  			}
  		}
-@@ -141,11 +175,12 @@ void CSuperTask::Update()
+@@ -141,11 +237,12 @@ void CSuperTask::Update()
  			}
  			const AIFloat3& newVec = (group.pos - position).Normalize2D();
  			const float angleMod = M_PI / (2.f * (std::acos(targetVec.dot2D(newVec)) + 1e-2f));
 -			if (cost >= group.cost * angleMod) {
-+			const float score = GroupScore(group) * angleMod;
++			const float score = GroupScore(group, inflMap) * angleMod;
 +			if (cost >= score) {
  				continue;
  			}
@@ -4164,7 +3239,7 @@ index e19de07..6f3a862 100644
  				groupIdx = i;
  			}
  		}
-@@ -153,6 +188,11 @@ void CSuperTask::Update()
+@@ -153,6 +250,11 @@ void CSuperTask::Update()
  	const float maxCost = cdef->IsAttrStock() ? cdef->GetWeaponDef()->GetCostM() : cdef->GetCostM() * 0.01f;
  
  	if ((groupIdx < 0) || (cost < maxCost)) {
@@ -4176,7 +3251,7 @@ index e19de07..6f3a862 100644
  		TRY_UNIT(circuit, unit,
  			unit->CmdStop();
  		)
-@@ -204,6 +244,16 @@ void CSuperTask::Update()
+@@ -204,6 +306,17 @@ void CSuperTask::Update()
  		targetPos = GetTarget()->GetPos();
  		targetPos.y = circuit->GetMap()->GetElevationAt(targetPos.x, targetPos.z);
  
@@ -4186,9 +3261,10 @@ index e19de07..6f3a862 100644
 +		// indistinguishable from one with no target -- the reason this needed
 +		// reading the engine rather than grepping a log.
 +		const CEnemyManager::SEnemyGroup& chosen = groups[groupIdx];
-+		circuit->LOG("apex: super fire %s stock=%i score=%.0f cost=%.0f static=%.0f at (%.0f,%.0f)",
++		circuit->LOG("apex: super fire %s stock=%i score=%.0f cost=%.0f static=%.0f mobile=%.0f border=%i at (%.0f,%.0f)",
 +				cdef->GetDef()->GetName(), unit->GetUnit()->GetStockpile(), cost, chosen.cost,
-+				chosen.roleCosts[ROLE_TYPE(STATIC)], targetPos.x, targetPos.z);
++				chosen.roleCosts[ROLE_TYPE(STATIC)], MobileCost(chosen),
++				IsBorderMass(chosen, inflMap) ? 1 : 0, targetPos.x, targetPos.z);
 +
  		std::string cmd = (!cdef->IsAttrStock() || (unit->GetUnit()->GetStockpile() > 0)) ? "ai_super_fire:" : "ai_super_intention:";
  		cmd += utils::int_to_string(unit->GetId()) + "/" + utils::int_to_string(targetPos.x) + "/" + utils::int_to_string(targetPos.z);
@@ -4307,7 +3383,7 @@ index aef6e1e..a38e883 100644
  	query->Init(moveArray, threatArray, std::move(moveFun), std::move(threatFun), unit);
  }
 diff --git a/src/circuit/terrain/path/PathFinder.h b/src/circuit/terrain/path/PathFinder.h
-index 023f029..23b9921 100644
+index 023f029..5f725bc 100644
 --- a/src/circuit/terrain/path/PathFinder.h
 +++ b/src/circuit/terrain/path/PathFinder.h
 @@ -62,10 +62,12 @@ public:
@@ -4341,7 +3417,7 @@ index 023f029..23b9921 100644
  	void RunPathSingle(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete = nullptr);
  	void RunPathMulti(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete = nullptr);
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882..13b1e1a 100644
+index a1ac882..40c9fcc 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -164,6 +164,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
@@ -4377,7 +3453,7 @@ index a1ac882..13b1e1a 100644
  		costM *= 0.1f;  // avoid threat metal
  	}
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a..08de77a 100644
+index cd0b54a..be8a95f 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
 @@ -326,6 +326,12 @@ public:
@@ -4454,98 +3530,3 @@ index cfe59bc..37d2080 100644
  	void CmdJumpTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
  	void CmdFightTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
  	void CmdPatrolTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
-diff --git a/src/circuit/unit/action/MoveAction.cpp b/src/circuit/unit/action/MoveAction.cpp
-index a01329c..9b0a3d1 100644
---- a/src/circuit/unit/action/MoveAction.cpp
-+++ b/src/circuit/unit/action/MoveAction.cpp
-@@ -8,6 +8,7 @@
- #include "unit/action/MoveAction.h"
- #include "unit/CircuitUnit.h"
- #include "CircuitAI.h"
-+#include "terrain/TerrainManager.h"
- #include "util/Utils.h"
- 
- #include "AISCommands.h"
-@@ -55,6 +56,29 @@ void CMoveAction::Update(CCircuitAI* circuit)
- 	}
- 	int step = pathIterator;
- 
-+	// apex: walk this unit's own line parallel to the shared path. The offset is
-+	// perpendicular to the local direction of travel, recomputed per waypoint, so
-+	// the formation stays square to the path around corners instead of shearing.
-+	// Zero for every caller that does not opt in (builders, scouts, singles), and
-+	// the lambda is then an identity function.
-+	auto offsetPos = [this, circuit](const AIFloat3& p, int idx) -> AIFloat3 {
-+		if (lateral == 0.f) {
-+			return p;
-+		}
-+		const int last = int(pPath->posPath.size()) - 1;
-+		const int a = std::max(0, std::min(idx, last));
-+		const int b = std::max(0, std::min(idx + 1, last));
-+		AIFloat3 dir = (a == b) ? AIFloat3(1.f, 0.f, 0.f) : (pPath->posPath[b] - pPath->posPath[a]);
-+		dir.y = 0.f;
-+		if (dir.SqLength2D() < 1.f) {
-+			return p;
-+		}
-+		dir.Normalize2D();
-+		AIFloat3 out(p.x - dir.z * lateral, p.y, p.z + dir.x * lateral);
-+		CTerrainManager::CorrectPosition(out);
-+		return out;
-+	};
-+
- 	TRY_UNIT(circuit, unit,
- 		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;
- 		if (unit->IsAllowedToJump() && unit->IsJumpReady()) {
-@@ -73,18 +97,18 @@ void CMoveAction::Update(CCircuitAI* circuit)
- 				unit->CmdJumpTo(jumpPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
- 			}
- 			if (isBadJump) {
--				const AIFloat3& pos = pPath->posPath[step];
-+				const AIFloat3 pos = offsetPos(pPath->posPath[step], step);
- 				unit->CmdMoveTo(pos, options, lastFrame + FRAMES_PER_SEC * 60);
- 			}
- 		} else {
--			const AIFloat3& pos = pPath->posPath[step];
-+			const AIFloat3 pos = offsetPos(pPath->posPath[step], step);
- 			unit->CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
- 		}
- 		unit->CmdWantedSpeed(stepSpeed);
- 
- 		for (int i = 2; (step < pathMaxIndex) && (i < 3); ++i) {
- 			step = std::min(step + increment, pathMaxIndex);
--			const AIFloat3& pos = pPath->posPath[step];
-+			const AIFloat3 pos = offsetPos(pPath->posPath[step], step);
- 			unit->CmdMoveTo(pos, options, lastFrame + FRAMES_PER_SEC * 60 * i);
- 		}
- 	)
-diff --git a/src/circuit/unit/action/TravelAction.h b/src/circuit/unit/action/TravelAction.h
-index 63cd924..f6230d1 100644
---- a/src/circuit/unit/action/TravelAction.h
-+++ b/src/circuit/unit/action/TravelAction.h
-@@ -27,10 +27,26 @@ public:
- 	void SetPath(const std::shared_ptr<CPathInfo>& pPath, float speed = NO_SPEED_LIMIT);
- 	const std::shared_ptr<CPathInfo>& GetPath() const { return pPath; }
- 
-+	// apex: lateral offset from the shared path, in elmos, signed. A squad walks
-+	// ONE path -- ISquadTask::ActivePath hands every unit the same CPathInfo --
-+	// so without this the whole squad files onto a single point and arrives as a
-+	// blob. With it each unit walks its own line parallel to the path and the
-+	// squad travels line-abreast, already facing the enemy when contact happens.
-+	// apexearth: "lots of our basic moves are still an entire squad to a single
-+	// point on the map... they should really be forming a wall against the enemy
-+	// so when the enemy comes in to attack we have that 'wall of fire' coming out
-+	// of all our nicely positioned units... also it helps to block enemy 'leaks'
-+	// (raiding parties)."
-+	// DEFAULTS TO ZERO and only squad tasks set it, so builders and every other
-+	// ITravelAction user are byte-for-byte unchanged.
-+	void SetLateral(float offset) { lateral = offset; }
-+	float GetLateral() const { return lateral; }
-+
- protected:
- 	int CalcSpeedStep(CCircuitAI* circuit, float& stepSpeed);
- 
- 	std::shared_ptr<CPathInfo> pPath;
-+	float lateral = 0.f;
- 	float speed;
- 	int pathIterator;
- 	int increment;
