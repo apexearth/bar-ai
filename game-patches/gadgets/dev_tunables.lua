@@ -34,6 +34,8 @@ local NAMES = {
 	"apex_attack_minpower_threat",
 	"apex_encircle_penalty",
 	"apex_comm_flee_influence",
+	"apex_static_no_continue",
+	"apex_rush_min_metal",
 }
 
 local pending = {}

@@ -16,6 +16,7 @@ the global last frame would contain only the survivor.
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -53,8 +54,34 @@ def read(log: Path):
     return out
 
 
+def subject_ally(match_dir: Path, subject: str) -> int | None:
+    """Which ally index the subject AI played, from result.json.
+
+    A tournament SWAPS sides between pairings, so the subject is ally 0 in half
+    the matches and ally 1 in the other half. Assuming ally 0 is always us mixed
+    the two together and produced a trade ratio near 1.0 for every arm -- it was
+    averaging us against ourselves.
+    """
+    rj = match_dir / "result.json"
+    if not rj.exists():
+        return None
+    try:
+        teams = json.loads(rj.read_text("utf-8")).get("teams", [])
+    except (ValueError, OSError):
+        return None
+    for t in teams:
+        if subject.lower() in str(t.get("spec", "")).lower():
+            # 1v1: team index is the ally index.
+            return int(t.get("team", -1))
+    return None
+
+
 def main() -> int:
-    args = sys.argv[1:]
+    args = [a for a in sys.argv[1:] if not a.startswith("--subject")]
+    subject = "Apex"
+    for a in sys.argv[1:]:
+        if a.startswith("--subject="):
+            subject = a.split("=", 1)[1]
     if not args:
         print(__doc__)
         return 2
@@ -74,17 +101,23 @@ def main() -> int:
 
     tot = {0: dict.fromkeys(CUM, 0.0), 1: dict.fromkeys(CUM, 0.0)}
     rows = []
+    skipped = 0
     for log in logs:
         d = read(log)
         if 0 not in d or 1 not in d:
             continue
-        for ally in (0, 1):
-            for k in CUM:
-                tot[ally][k] += d[ally][k]
-        kd = d[0]["mKillReal"] / (d[0]["mLostReal"] or 1)
-        kdo = d[1]["mKillReal"] / (d[1]["mLostReal"] or 1)
+        mine = subject_ally(log.parent, subject)
+        if mine is None:
+            mine = 0  # plain match dirs: run_match always puts --a first
+        theirs = 1 - mine
+        us, them = d[mine], d[theirs]
+        for k in CUM:
+            tot[0][k] += us[k]
+            tot[1][k] += them[k]
+        kd = us["mKillReal"] / (us["mLostReal"] or 1)
+        kdo = them["mKillReal"] / (them["mLostReal"] or 1)
         rows.append((log.parent.name[:34], kd, kdo,
-                     d[0]["metalProduced"] / (d[1]["metalProduced"] or 1)))
+                     us["metalProduced"] / (them["metalProduced"] or 1)))
 
     print(f"  {'game':36} {'ourKD':>6} {'theirKD':>8} {'metal':>6}")
     for name, kd, kdo, mr in rows:

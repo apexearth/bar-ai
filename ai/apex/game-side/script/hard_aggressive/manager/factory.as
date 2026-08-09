@@ -1041,7 +1041,12 @@ const float RUSH_MIN_METAL = 14.f;
 
 bool RushReady()
 {
-	if (aiEconomyMgr.metal.income < RUSH_MIN_METAL)
+	// Tunable so the threshold can be A/B'd rather than argued about.
+	// apexearth, watching a 1v1: "in this game im watching we really failed to
+	// take mexes before making the T2 it seemed". 14 metal/s is about five or
+	// six mexes; in a 1v1 the player IS the lead, so this rush branch is the one
+	// that fires and nothing else holds it back.
+	if (aiEconomyMgr.metal.income < ai.GetTunable("apex_rush_min_metal", RUSH_MIN_METAL))
 		return false;
 	return (aiEconomyMgr.energy.income > RUSH_ENERGY_TARGET)
 		|| ((ai.frame > RUSH_LATEST) && (aiEconomyMgr.energy.income > RUSH_ENERGY_FLOOR));
