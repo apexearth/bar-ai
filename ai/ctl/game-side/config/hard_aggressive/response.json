@@ -62,8 +62,8 @@
 		"vs":         ["air"],
 		"ratio":      [ 1.60],
 		"importance": [ 950.0],
-		"max_percent": 0.65,
-		"eps_step": 0.6
+		"max_percent": 0.35,
+		"eps_step": 0.15
 	},
 	"anti_sub": {
 		"vs":         ["sub"],

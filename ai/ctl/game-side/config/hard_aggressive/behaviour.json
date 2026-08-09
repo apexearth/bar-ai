@@ -1274,12 +1274,16 @@
 				// the topup loss is not.
 				"role": ["support"],
 				"build_speed": 10.0,  //bp 140
-				"limit": 20
+				// A full bank is the constraint this cap was fighting, not the
+				// other way round. apexearth: "imagine 100 butlers helping to make
+				// tons of titans". 210 metal for 140 build power is the cheapest
+				// conversion of a stalled bank into units that exists.
+				"limit": 200
 			},
 			"corfast": {
 				// support, not builder -- see armfark.
 				"role": ["support"],
-				"limit": 10,
+				"limit": 200,
 				"build_speed": 7.0,
 				"since": 1500
 			},
@@ -1436,6 +1440,12 @@
 			},
 			"armham": {
 				"role": ["assault"],
+				// "rare" keeps a T1 lab buildable after we tech. CFactoryManager
+				// sets isActive false for every T1 factory once any T2 factory is
+				// registered, and RequiredFireDef then drops every def that is not
+				// rare -- so a T1 lab's entire buildable set becomes whatever
+				// carries this attribute. Ours carried only rez bots.
+				"attribute": ["rare"],
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
@@ -1881,6 +1891,7 @@
 			},
 			"corthud": {
 				"role": ["assault"],
+				"attribute": ["rare"],
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},

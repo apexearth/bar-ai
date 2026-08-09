@@ -45,12 +45,21 @@ int gAdvConCount = 0;
 // first step one is plenty; a player running a real economy should be building
 // out, and that is where the T2/T3 gap comes from.
 const float ADV_CON_INCOME_STEP = 25.f;
-const int   ADV_CON_MAX         = 4;
+// What a full bank is worth in extra constructors. apexearth: "if we are full on
+// metal then obviously we need more factories/builders spending it."
+const int   ADV_CON_FULL_BONUS  = 6;
 
+// No ceiling. apexearth: "we shouldn't have any hard caps, everything needs to be
+// balanced based on the economy/game progression." The old ADV_CON_MAX of 4 bound
+// from about 75 metal/second upward, so every economy from a modest one to 400+
+// got the same four constructors -- which is most of why a large bank never
+// turned back into units.
 int AdvConsWanted()
 {
 	int want = 1 + int(aiEconomyMgr.metal.income / ADV_CON_INCOME_STEP);
-	return (want > ADV_CON_MAX) ? ADV_CON_MAX : want;
+	if (aiEconomyMgr.isMetalFull)
+		want += ADV_CON_FULL_BONUS;
+	return want;
 }
 
 bool NeedsAdvCon()
@@ -335,7 +344,20 @@ bool PreferReclaim()
 // parallelize production, so this is deliberately generous rather than
 // tuned tight -- the bug this guards against was 8-10 in a few minutes, not
 // a healthy player choosing a second or third.
-const int FACTORY_TYPE_CAP = 3;
+// Derived from income rather than fixed. A player on 400 metal/second and a
+// player on 40 do not want the same number of plants, and a full bank means the
+// plants we have are not keeping up -- apexearth: "if we are full on metal then
+// obviously we need more factories/builders spending it."
+const float FACTORY_PER_INCOME  = 60.f;
+const int   FACTORY_FULL_BONUS  = 2;
+
+int FactoryTypeCap()
+{
+	int cap = 1 + int(aiEconomyMgr.metal.income / FACTORY_PER_INCOME);
+	if (aiEconomyMgr.isMetalFull)
+		cap += FACTORY_FULL_BONUS;
+	return cap;
+}
 
 // The count cap alone does not close the race that causes the overshoot:
 // CCircuitDef.count only increments once a builder's nanolathe actually
@@ -982,6 +1004,11 @@ int gConverts = 0;
 
 // Behind our own base, measured away from the enemy. Converters detonate, so the
 // back wall is both safer for them and safer for everything near them.
+//
+// Kept for the callers that want a rear position without a building to put
+// there -- the commander's back-wall work in particular. Anything that IS
+// placing a structure goes through Base::Spot instead, which returns a grid cell
+// the terrain manager has already agreed to.
 bool RearPos(CCircuitUnit@ unit, AIFloat3& out spot)
 {
 	if (!gHomeSet)
@@ -1033,11 +1060,9 @@ bool EnergyWasting()
 // sixty metal a second, for essentially no metal outlay.
 //
 // apexearth sent the blueprint tutorial for this: humans lay energy and
-// conversion out as dense packed rectangles rather than scattering them. A
-// converter is 3x3, so a tight lattice is what it is meant to sit in.
-const int   CONV_COLS      = 8;      // width of the block, in converters
-const float CONV_STEP      = 64.f;   // 3x3 footprint plus a lane
-const float CONV_BACK      = 1250.f; // behind the turret rows and the eco lanes
+// conversion out as dense packed rectangles rather than scattering them. The
+// rectangle now comes from Base::, which owns one grid for the whole base;
+// what is left here is only how fast and how many.
 const int   CONV_PERIOD    = 6 * SECOND;
 const int   CONV_INFLIGHT  = 6;
 const int   CONV_STALE     = 16;
@@ -1052,27 +1077,12 @@ int SmallConvCount(CCircuitUnit@ unit)
 	return (d is null) ? 0 : d.count;
 }
 
-// A rectangle CONV_COLS wide, growing backwards row by row, centred on the base
-// axis so it lands behind the turret band rather than across it.
-bool ConvSpot(CCircuitUnit@ unit, int index, AIFloat3& out spot)
+// Converters take the eco band of the shared grid. The rectangle they used to
+// get was its own lattice on its own origin, which is how a "packed block" could
+// still land on top of the turret rows.
+bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 {
-	if (!gHomeSet)
-		return false;
-	AIFloat3 away = gHomePos - aiEnemyMgr.GetEnemyPos();
-	if (away.SqLength2D() < NEAR_ZERO)
-		return false;
-	away.SafeNormalize2D();
-	const AIFloat3 across(-away.z, 0.f, away.x);
-	const int col = index % CONV_COLS;
-	const int row = index / CONV_COLS;
-	const float lateral = (float(col) - float(CONV_COLS - 1) * 0.5f) * CONV_STEP;
-	const AIFloat3 p = gHomePos
-		+ away * (CONV_BACK + float(row) * CONV_STEP)
-		+ across * lateral;
-	if (!OnMap(p) || (ThreatFor(unit, p) > CON_THREAT_VETO))
-		return false;
-	spot = p;
-	return true;
+	return Base::Spot(unit, def, Base::ECO, spot);
 }
 
 IUnitTask@ EcoConverters(CCircuitUnit@ unit)
@@ -1133,10 +1143,13 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 		return null;
 
 	AIFloat3 spot;
-	if (!ConvSpot(unit, gEcoConvAsked, spot))
+	if (!ConvSpot(unit, want, spot))
 		return null;
+	// Shake ZERO. The site came back from the terrain manager, so it is already
+	// the buildable spot -- letting the engine slide it again is exactly the
+	// sprawl this grid exists to stop.
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::CONVERT,
-			Task::Priority::NORMAL, want, spot, SQUARE_SIZE * 4));
+			Task::Priority::NORMAL, want, spot, 0.f));
 	if (post is null)
 		return null;
 	gNextEcoConv = ai.frame + CONV_PERIOD;
@@ -1166,15 +1179,25 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	// constructors carry only the naval def. Asking a ground constructor for
 	// armfmkr produced 95 requests and zero converters; the mirror of that is what
 	// SmallConvDef avoids for naval builders.
-	CCircuitDef@ want = SmallConvDef(unit);
+	// Upgrade rather than keep laying T1. Once the advanced converter is
+	// buildable the small one is what ObsoleteReclaim is trying to clear, and
+	// this rule was replacing them as fast as they were eaten -- 176 armmakr
+	// enqueued against 63 reclaimed in one 37-minute game.
+	CCircuitDef@ want = BigConvDef(unit);
 	if ((want is null) || !want.IsAvailable(ai.frame))
+		@want = SmallConvDef(unit);
+	if ((want is null) || !want.IsAvailable(ai.frame))
+		return null;
+	// No new T1 converters once the ground is worth more than they return:
+	// reclaiming one and immediately rebuilding it is worse than leaving it.
+	if (LandIsPrecious() && (want is SmallConvDef(unit)))
 		return null;
 
 	AIFloat3 spot;
-	if (!RearPos(unit, spot))
+	if (!ConvSpot(unit, want, spot))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::CONVERT,
-			Task::Priority::NORMAL, want, spot, SQUARE_SIZE * 8));
+			Task::Priority::NORMAL, want, spot, 0.f));
 	if (post is null)
 		return null;
 	gNextConvert = ai.frame + CONVERT_PERIOD;
@@ -1186,67 +1209,25 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	return post;
 }
 
-// Construction turrets for the eco lead, laid out as a LONG RECTANGLE behind the
-// base rather than piled where a constructor happens to stand.
+// Construction turrets for the eco lead, laid out as rows behind the base rather
+// than piled where a constructor happens to stand.
 //
 // apexearth: "ideally it creates a long rectangle of nanos and builds the eco
 // all around those", and separately "boost its build power or start building
 // more in parallel if it's used all the nanos in one area already". A turret
 // only assists what is inside its radius, so stacking them on one yard
-// saturates: the tenth turret queues behind the same work as the first. Two
-// parallel rows, laid along the axis ACROSS the enemy direction and growing
-// outward from the centre, give a band of overlapping radii instead -- every
-// point along it is covered by several turrets, and the band is what the economy
-// then gets built inside.
-//
-// The rows sit behind home on the same axis RearPos uses for converters, so the
-// buildings that rule places already land within the band.
-string armnanotc("armnanotc"); string cornanotc("cornanotc"); string legnanotc("legnanotc");
-
-const float NANO_BACK = 400.f;   // how far behind home the first row sits
-const float NANO_ROW  = 220.f;   // gap between the two rows
-const float NANO_STEP = 300.f;   // spacing along a row; under a turret's radius
-                                 // so neighbouring fields overlap
-
-// How far outside the turret rows the economy sits. Under a turret's radius, so
-// an eco slot is inside the assist field of the row it hugs.
-const float ECO_INSET = 180.f;
-
-// Where the index-th building of the band goes -- turret rows when nano is true,
-// the economy rows that flank them when it is false. Deterministic in the index,
-// so the shape is the same whichever constructor is asked to build it, and the
-// two lattices share one anchor and one axis so they interlock rather than
-// fighting each other for ground.
+// saturates: the tenth turret queues behind the same work as the first.
 //
 // apexearth: "the organization of the eco and the nanoturrets is very important
 // to an efficient strategy."
-bool BandSpot(CCircuitUnit@ unit, int index, bool nano, AIFloat3& out spot)
-{
-	if (!gHomeSet)
-		return false;
-	AIFloat3 away = gHomePos - aiEnemyMgr.GetEnemyPos();
-	if (away.SqLength2D() < NEAR_ZERO)
-		return false;
-	away.SafeNormalize2D();
-	// Perpendicular in the XZ plane: the long side of the rectangle.
-	const AIFloat3 across(-away.z, 0.f, away.x);
+string armnanotc("armnanotc"); string cornanotc("cornanotc"); string legnanotc("legnanotc");
 
-	const int row = index % 2;          // which of the two rows
-	const int col = index / 2;          // how far along it
-	// Turret rows sit at NANO_BACK and one row deeper; the economy flanks them,
-	// one lane in front of the first and one behind the last.
-	const float back = nano
-		? (NANO_BACK + float(row) * NANO_ROW)
-		: ((row == 0) ? (NANO_BACK - ECO_INSET)
-		              : (NANO_BACK + 2.f * NANO_ROW + ECO_INSET));
-	// Alternate right and left of centre so the rectangle grows outward from the
-	// base instead of marching off in one direction.
-	const int step = ((col % 2) == 0) ? (col / 2) : -((col + 2) / 2);
-	const AIFloat3 p = gHomePos + away * back + across * (float(step) * NANO_STEP);
-	if (!OnMap(p) || (ThreatFor(unit, p) > CON_THREAT_VETO))
-		return false;
-	spot = p;
-	return true;
+// Nanos take the band nearest the anchor so their assist radius reaches both the
+// factory and the first economy rows; reactors take the deepest band, where one
+// going up does not take the rest of the base with it.
+bool BandSpot(CCircuitUnit@ unit, CCircuitDef@ def, bool nano, AIFloat3& out spot)
+{
+	return Base::Spot(unit, def, nano ? Base::NANO : Base::HEAVY, spot);
 }
 
 // Only while metal is genuinely piling up. The eco lead's measured failure is
@@ -1262,10 +1243,64 @@ const float NANO_MIN_BANK = 0.5f;   // share of metal storage standing unspent
 // Raised with the shift away from ground engineers: a turret is 210 metal and
 // never walks anywhere, which is why it is the build power this player should
 // hold most of. Two rows of twenty is the rectangle it fills out.
-const int   NANO_MAX      = 40;
+// The engine's own per-player unit limit, from the `maxunits` modoption
+// (modoptions.lua: default 2000, min 500, max 32000).
+//
+// This is the only real ceiling there is, and it is the one worth respecting --
+// apexearth: "you can detect the in-game hard unit cap (usually 2000 units per
+// player) and do a proportion cap but still it should be a high cap, need lots
+// of builders to make the big units... 20 titans goes a long way in a game
+// and... thats just 20 units :)". Slots spent on build power buy the few slots
+// that matter.
+int gUnitCap = 0;
+
+int UnitCap()
+{
+	if (gUnitCap > 0)
+		return gUnitCap;
+	gUnitCap = 2000;
+	const string v = string(aiSetupMgr.GetModOptions()["maxunits"]);
+	if (v != "") {
+		const int n = parseInt(v);
+		if (n > 0)
+			gUnitCap = n;
+	}
+	AiLog("apex: unit cap " + gUnitCap);
+	return gUnitCap;
+}
+
+int CapShare(float share)
+{
+	const int n = int(float(UnitCap()) * share);
+	return (n < 1) ? 1 : n;
+}
+
+// Turrets wanted, from income, ceilinged by a share of the unit cap rather than
+// by a number someone picked. A turret is 210 metal and 140 build power that
+// never walks anywhere, so on a large economy it is the best thing a full bank
+// can become.
+const float NANO_PER_INCOME = 5.f;
+const int   NANO_FULL_BONUS = 20;
+const float NANO_CAP_SHARE  = 0.12f;
+
+int NanoCap()
+{
+	int cap = 2 + int(aiEconomyMgr.metal.income / NANO_PER_INCOME);
+	if (aiEconomyMgr.isMetalFull)
+		cap += NANO_FULL_BONUS;
+	const int ceiling = CapShare(NANO_CAP_SHARE);
+	return (cap > ceiling) ? ceiling : cap;
+}
 const int   NANO_INFLIGHT = 4;    // turrets ordered but not yet standing
 const int   NANO_STALE    = 12;   // beyond this the counter has drifted, resync
 const int   NANO_PERIOD   = 15 * SECOND;
+// While the bank is at the cap, order them as fast as the placement allows and
+// let far more of them be in flight at once. apexearth: "in a game like that we'd
+// need like a ton of nano turrets, 100s of butlers, all working to make the
+// expensive stuff." A period is the wrong bound for that -- the thing that should
+// stop us is running out of bank or of ground, both of which are checked anyway.
+const int   NANO_FULL_PERIOD   = 1 * SECOND;
+const int   NANO_FULL_INFLIGHT = 24;
 int gNextNano = 0;
 int gNanosAsked = 0;
 
@@ -1287,9 +1322,90 @@ int NanoCount()
 	return (d is null) ? 0 : d.count;
 }
 
+// Where our construction turrets actually stand, as a centroid.
+//
+// apexearth: "we should try to place gantries near existing nano turrets so they
+// build faster". A gantry is 8,400 metal and a Titan far more, so the difference
+// between building one inside an assist field and outside it is minutes.
+bool NanoCluster(AIFloat3& out spot)
+{
+	CCircuitDef@ d = NanoDef();
+	if ((d is null) || (d.count <= 0) || !gHomeSet)
+		return false;
+	array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(d, gHomePos, 0.f);
+	if ((have is null) || (have.length() == 0))
+		return false;
+	float x = 0.f, z = 0.f, n = 0.f;
+	for (uint i = 0; i < have.length(); ++i) {
+		if (have[i] is null)
+			continue;
+		const AIFloat3 at = have[i].GetPos(ai.frame);
+		x += at.x; z += at.z; n += 1.f;
+	}
+	if (n < 1.f)
+		return false;
+	AIFloat3 p;
+	p.x = x / n;
+	p.z = z / n;
+	if (!OnMap(p))
+		return false;
+	spot = p;
+	return true;
+}
+
+// Metal is at the cap and we are not converting it into anything.
+//
+// apexearth: "we're totally metal full and just aren't able to spend it... If we
+// are metal full we need to just keep making more gantries and more butler
+// assist guys and more nano turrets."
+bool MetalFull()
+{
+	return aiEconomyMgr.isMetalFull;
+}
+
+// A gantry, placed in the assist field of our turret rows, paid for out of a
+// bank we are otherwise wasting. Advanced constructors only -- asking a T1
+// constructor for a gantry is the silent no-op this repo has been bitten by.
+const float GANTRY_NEAR_NANO = 700.f;
+int gSurplusGantries = 0;
+
+IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
+{
+	if (!MetalFull() || !Factory::WantMoreGantries())
+		return null;
+	if (unit.circuitDef.costM < ADV_CON_COST)
+		return null;
+	CCircuitDef@ gant = Factory::T3Gantry();
+	if ((gant is null) || !gant.IsAvailable(ai.frame))
+		return null;
+
+	AIFloat3 near;
+	if (!NanoCluster(near))
+		near = gHomePos;
+	const AIFloat3 site = ai.FindBuildSiteNear(gant, near, GANTRY_NEAR_NANO);
+	if (!OnMap(site))
+		return null;
+	if (ThreatFor(unit, site) > CON_THREAT_VETO)
+		return null;
+
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Factory(Task::Priority::HIGH,
+			gant, site, null, 0.f));
+	if (post is null)
+		return null;
+	++gSurplusGantries;
+	AiLog(Factory::T() + "apex: surplus gantry " + gant.GetName()
+		+ " by the nanos, bank=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
+		+ "/" + formatFloat(aiEconomyMgr.metal.storage, "", 0, 0)
+		+ " placed=" + gSurplusGantries);
+	return post;
+}
+
 IUnitTask@ EcoNano(CCircuitUnit@ unit)
 {
-	if (!Factory::EcoLeadActive() || (ai.frame < gNextNano))
+	// Turrets are for the eco lead OR for anyone whose bank is full: a player at
+	// the metal cap is wasting income, and build power is the thing that turns it
+	// back into units.
+	if ((!Factory::EcoLeadActive() && !MetalFull()) || (ai.frame < gNextNano))
 		return null;
 	if (aiEconomyMgr.metal.current < aiEconomyMgr.metal.storage * NANO_MIN_BANK)
 		return null;
@@ -1302,7 +1418,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	CCircuitDef@ want = (side == "cortex") ? ai.GetCircuitDef(cornanotc)
 	                  : ((side == "legion") ? ai.GetCircuitDef(legnanotc)
 	                                        : ai.GetCircuitDef(armnanotc));
-	if ((want is null) || !want.IsAvailable(ai.frame) || (want.count >= NANO_MAX))
+	if ((want is null) || !want.IsAvailable(ai.frame) || (want.count >= NanoCap()))
 		return null;
 
 	// Bound what is OUTSTANDING, not just what stands. want.count sees finished
@@ -1323,16 +1439,16 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		return null;
 
 	AIFloat3 here;
-	if (!BandSpot(unit, gNanosAsked, true, here))
+	if (!BandSpot(unit, want, true, here))
 		return null;
 
-	// Nanos go TIGHT, right next to each other. apexearth: "nano's should be
-	// placed right next to each other usually." Spreading them was my fix for a
-	// naval builder walling itself in, and it was the wrong trade -- it bought
-	// walkability with base sprawl, and sprawl is why there is eventually no room
-	// to tech up. The self-walling case is a layout problem, not a spacing one.
+	// Nanos go TIGHT, right next to each other, on a grid pitch that leaves the
+	// walkways clear. apexearth: "nano's should be placed right next to each
+	// other usually." Spreading them was the earlier fix for a naval builder
+	// walling itself in, and it was the wrong trade -- it bought walkability with
+	// sprawl. Tight rows plus lanes is what buys both.
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::NANO,
-			Task::Priority::NORMAL, want, here, SQUARE_SIZE * 6));
+			Task::Priority::NORMAL, want, here, 0.f));
 	if (post is null)
 		return null;
 	gNextNano = ai.frame + NANO_PERIOD;
@@ -1363,6 +1479,12 @@ string armafus("armafus"); string corafus("corafus"); string legafus("legafus");
 // to precede its first use; a function does not.
 string armuwfus("armuwfus"); string coruwfus("coruwfus");
 string armadvsol("armadvsol"); string coradvsol("coradvsol"); string legadvsol("legadvsol");
+// Energy income before the advanced collector is worth its 5,000-energy build.
+const float ADVSOL_MIN_ENERGY = 200.f;
+// How far from home to look when the grid has no cell left.
+const float ECO_FALLBACK_RANGE = 1400.f;
+// Energy income wanted per point of metal income before the grid is 'enough'.
+const float ENERGY_LEAD_RATIO = 12.f;
 
 CCircuitDef@ FusionDef(CCircuitUnit@ unit)
 {
@@ -1424,10 +1546,10 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// whole runs before.
 	AIFloat3 spot;
 	const bool okDef = (want !is null) && want.IsAvailable(ai.frame);
-	const bool okSpot = okDef && BandSpot(unit, gFusionsAsked, false, spot);
+	const bool okSpot = okDef && BandSpot(unit, want, false, spot);
 	IUnitTask@ post = okSpot
 		? aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
-				Task::Priority::NORMAL, want, spot, SQUARE_SIZE * 8))
+				Task::Priority::NORMAL, want, spot, 0.f))
 		: null;
 	if (post is null) {
 		if (ai.frame >= gNextFusionLog) {
@@ -1470,11 +1592,24 @@ const float PULSAR_MIN_INCOME = 60.f;
 // apexearth: "we need at least 1000 energy per second before we should start
 // thinking about making those". One fusion is armfus 1000 / corfus 1100 / legfus 1200.
 const float PULSAR_MIN_ENERGY = 1000.f;
-// 4 reached 22.0% of ALL metal -- more than stock's 14% -- while we held one T2
-// constructor. Two is a pair covering one approach, which is what the economy can
-// carry; raise it when metal production is no longer half of stock's.
-const int   PULSAR_MAX        = 1;
-const int   PULSAR_PERIOD     = 60 * SECOND;
+// Derived, not fixed. A flat 1 meant a player on 400 metal/second held exactly
+// as many T3 defence towers as one on 60 -- and it was the reason "make more T3
+// defence" produced nothing even after the LRPC stopped stealing the pick.
+//
+// The comment this replaces recorded that 4 towers reached 22% of all metal
+// "while we held one T2 constructor"; that ratio was a symptom of an economy
+// that could not spend, and the constructor caps that caused it are gone.
+// apexearth: "we need to be making way more t3 defense when we're metal full".
+const float PULSAR_PER_INCOME = 120.f;
+const int   PULSAR_FULL_BONUS = 3;
+
+int PulsarCap()
+{
+	int cap = 1 + int(aiEconomyMgr.metal.income / PULSAR_PER_INCOME);
+	if (aiEconomyMgr.isMetalFull)
+		cap += PULSAR_FULL_BONUS;
+	return cap;
+}
 // A flat standing count answered two aircraft and forty identically. These are
 // 80 metal each and only built once the enemy actually flies, so the ceiling can
 // be generous; the floor is what makes air pick someone else.
@@ -1503,6 +1638,17 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 	if ((ai.frame < gNextAA) || aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
+		return null;
+	// Hand over to HeavyAA once the grid can obviously pay for the better turret.
+	// apexearth: "if you have, like, ten thousand energy then you can certainly
+	// afford better anti air." A Ferret costs 5,700 energy to a Nettle's 900, so
+	// the question is affordability, not tier. Availability is checked too, so
+	// there is no window where this has stood down and nothing has taken over.
+	//
+	// Without the handover this rule kept replacing the T1 turrets ObsoleteReclaim
+	// had just eaten, which is what made them unreclaimable in practice.
+	CCircuitDef@ heavy = SideDef3(armferret, cormadsam, legflak);
+	if (LandIsPrecious() && (heavy !is null) && heavy.IsAvailable(ai.frame))
 		return null;
 	// Only if the enemy actually flies. This had no such test, while
 	// DefaultMakeDefence has always skipped AA defs when GetEnemyCost(AIR) < 1 --
@@ -1615,7 +1761,10 @@ IUnitTask@ HeavyAA(CCircuitUnit@ unit)
 // build it, and asking would be dropped in silence.
 IUnitTask@ Pulsar(CCircuitUnit@ unit)
 {
-	if ((ai.frame < gNextPulsar) || aiEconomyMgr.isEnergyStalling)
+	// No period. What should stop this is the economy and the standing count,
+	// both checked below -- a clock refuses to reinforce a line being broken
+	// through for reasons that have nothing to do with the line.
+	if (aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (unit.circuitDef.costM < ADV_CON_COST)
 		return null;
@@ -1630,7 +1779,7 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	if (aiEconomyMgr.energy.income < PULSAR_MIN_ENERGY)
 		return null;
 	CCircuitDef@ gun = SideDef3(armanni, cordoom, legbastion);
-	if ((gun is null) || !gun.IsAvailable(ai.frame) || (gun.count >= PULSAR_MAX))
+	if ((gun is null) || !gun.IsAvailable(ai.frame) || (gun.count >= PulsarCap()))
 		return null;
 	AIFloat3 spot;
 	if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
@@ -1639,9 +1788,286 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 			Task::Priority::NORMAL, gun, spot, DEF_SHAKE));
 	if (post is null)
 		return null;
-	gNextPulsar = ai.frame + PULSAR_PERIOD;
 	AiLog(Factory::T() + "apex: pulsar " + gun.GetName() + " standing=" + gun.count
-		+ "/" + PULSAR_MAX + " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
+		+ "/" + PulsarCap() + " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
+	return post;
+}
+
+// One nuclear launcher per player, as early as the economy can carry it.
+//
+// apexearth: "Let's make sure all our guys make at least 1 nuke launcher per
+// game - seems like they'd be effective. Usually the earlier the better."
+//
+// CONFIRMED FIRING 2026-08-08 -- apexearth watching: "i did see nuke silos going
+// up". What is still unknown is whether they are USED well: the one that landed
+// was not on an enemy base. Nuke target selection lives in the C++ SuperTask and
+// has not been audited.
+//
+// Costs from the pinned tree: armsilo 8100 metal / 90,000 energy, corsilo and
+// legsilo 7700 / 82,000. The energy is what actually gates it -- that is roughly
+// a fusion-minute -- so the bar is set on energy income rather than on metal or a
+// clock. Advanced constructors only: armsilo's buildoptions list armack/armacv/
+// armaca and their heavy variants, so asking a T1 constructor is a silent no-op.
+string armsilo("armsilo"); string corsilo("corsilo"); string legsilo("legsilo");
+
+// Measured on a 6v6 medium map at Handicap 50: peak energy income 1230 with zero
+// fusions standing, so a bar of 1800 was unreachable and "one per game" never
+// happened there. Set below what a mid-sized game actually reaches -- apexearth:
+// "make sure all our guys make at least 1 nuke launcher per game... usually the
+// earlier the better."
+// 1000/50 was set for a medium map before this had ever been watched, and it
+// measured badly -- apexearth: "making nukes hurt us because we weren't healthy
+// enough." A silo is 8,100 metal and 90,000 energy BEFORE a single missile, and
+// we already build only 40-60% of stock's metal, so it has to come out of real
+// surplus rather than out of the army budget.
+const float NUKE_MIN_ENERGY = 2500.f;
+const float NUKE_MIN_INCOME = 150.f;
+int gNukesAsked = 0;
+
+CCircuitDef@ NukeDef()
+{
+	return SideDef3(armsilo, corsilo, legsilo);
+}
+
+int NukeCap()
+{
+	// One is the point of the rule. A bank at the cap removes the cap entirely --
+	// apexearth: "if we are full on metal we should make the limit unlimited to
+	// allow us to keep making more." Metal sitting at storage is already wasted,
+	// so there is nothing left for another silo to displace.
+	//
+	// Note this is a cap on how many may STAND, not on how many at once: the
+	// outstanding test below still allows only one in flight, which serialises
+	// them and matches "build expensive structures ONE AT A TIME, assisted".
+	return aiEconomyMgr.isMetalFull ? 999 : 1;
+}
+
+IUnitTask@ NukeSilo(CCircuitUnit@ unit)
+{
+	if (aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (unit.circuitDef.costM < ADV_CON_COST)
+		return null;
+	if (aiEconomyMgr.energy.income < NUKE_MIN_ENERGY)
+		return null;
+	if (aiEconomyMgr.metal.income < NUKE_MIN_INCOME)
+		return null;
+	// Only out of surplus. A silo started on a tight bank starves everything
+	// else for the several minutes it takes to finish.
+	if (aiEconomyMgr.isMetalEmpty || (aiEconomyMgr.metal.current
+			< aiEconomyMgr.metal.storage * 0.5f))
+		return null;
+	CCircuitDef@ silo = NukeDef();
+	if ((silo is null) || !silo.IsAvailable(ai.frame))
+		return null;
+	// Outstanding as well as standing: a silo takes a long time to build and
+	// Enqueue does not dedup, so counting only what stands orders a second one
+	// while the first is still a nanoframe.
+	if ((silo.count >= NukeCap()) || (gNukesAsked - silo.count >= 1))
+		return null;
+
+	// Behind the base, in the nano field where it will actually get finished.
+	AIFloat3 near;
+	if (!NanoCluster(near))
+		near = gHomePos;
+	const AIFloat3 site = ai.FindBuildSiteNear(silo, near, GANTRY_NEAR_NANO);
+	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
+		return null;
+
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::BIG_GUN,
+			Task::Priority::NORMAL, silo, site, 0.f));
+	if (post is null)
+		return null;
+	++gNukesAsked;
+	AiLog(Factory::T() + "apex: nuke silo " + silo.GetName()
+		+ " standing=" + silo.count + " asked=" + gNukesAsked
+		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
+	return post;
+}
+
+// A light turret on an undefended mex.
+//
+// apexearth: "We're losing too many mexes to tiny units from the enemies because
+// we aren't making an llt to defend them... it just takes that little bit of
+// metal to save mexes from dying.. its very worth doing in the early game... our
+// armies waste so much time chasing leaks around."
+//
+// The turret is 130-150 metal against a mex at 620 plus whatever the raid then
+// costs in army attention, so this pays for itself on the first leak it stops.
+// Distinct from ContestTower, which deliberately refuses a T1 turret once we are
+// past that tier: at a mex the cheap turret is the right answer precisely because
+// it only has to beat a scout.
+const float MEX_GUARD_RADIUS = 260.f;   // turret sits on top of the mex
+// Two turrets while the economy is still small, one after that. apexearth:
+// "more towers around our mexes, at least in that early phase of the game".
+// A lone turret trades with a raider; a pair holds against the several that
+// stock actually sends. Once LandIsPrecious the ground is worth more than the
+// extra turret, and the army should be the answer.
+uint MexGuardWanted()
+{
+	return LandIsPrecious() ? 1 : 2;
+}
+// How far a constructor will travel to guard one. Measured on the first run:
+// a turret was ordered on a mex 3,029 elmos away, which is the walk that gets
+// constructors killed and is why this rule has to be about the mex you are
+// standing next to.
+const float MEX_GUARD_REACH  = 1200.f;
+// Close enough that we are standing on it; the walk-into-fire veto is moot.
+const float MEX_GUARD_HERE   = 400.f;
+
+CCircuitDef@ MexDef()
+{
+	return SideDef3(armmex, cormex, legmex);
+}
+
+CCircuitDef@ MexGuardTower(CCircuitUnit@ unit)
+{
+	const string side = ai.GetSideName();
+	if (unit.circuitDef.costM >= ADV_CON_COST) {
+		if (side == "cortex")
+			return ai.GetCircuitDef(corvipe);
+		if (side == "legion")
+			return ai.GetCircuitDef(legapopupdef);
+		return ai.GetCircuitDef(armpb);
+	}
+	if (side == "cortex")
+		return ai.GetCircuitDef(corllt);
+	if (side == "legion")
+		return ai.GetCircuitDef(leglht);
+	return ai.GetCircuitDef(armllt);
+}
+
+IUnitTask@ MexGuard(CCircuitUnit@ unit)
+{
+	if (aiEconomyMgr.isEnergyStalling)
+		return null;
+	CCircuitDef@ mex = MexDef();
+	if ((mex is null) || (mex.count <= 0))
+		return null;
+	CCircuitDef@ tower = MexGuardTower(unit);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+
+	array<CCircuitUnit@>@ mine = ai.GetOwnUnitsOfDef(mex, gHomePos, 0.f);
+	if ((mine is null) || (mine.length() == 0))
+		return null;
+
+	// Nearest undefended mex to this constructor, so it guards what it is
+	// standing next to rather than walking the map.
+	CCircuitUnit@ pick = null;
+	float best = -1.f;
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	for (uint i = 0; i < mine.length(); ++i) {
+		if (mine[i] is null)
+			continue;
+		const AIFloat3 at = mine[i].GetPos(ai.frame);
+		if (!OnMap(at) || !AreaNeedsDefence(at, MexGuardWanted()))
+			continue;
+		const float d = at.distance2D(me);
+		// The threat veto exists to stop a constructor WALKING into fire. If we
+		// are already standing at the mex it does not apply -- and a mex that
+		// reads hot is a mex near the enemy, which is exactly the one that needs
+		// the turret. apexearth: "commander still just walked away from the 2
+		// mexes, 1 radar, and 3 wind turbines he made near the enemy base."
+		if ((d > MEX_GUARD_HERE) && (ThreatFor(unit, at) > CON_THREAT_VETO))
+			continue;
+		if (d > MEX_GUARD_REACH)
+			continue;
+		if ((best < 0.f) || (d < best)) {
+			best = d;
+			@pick = mine[i];
+		}
+	}
+	if (pick is null)
+		return null;
+
+	const AIFloat3 at = pick.GetPos(ai.frame);
+	const AIFloat3 site = ai.FindBuildSiteNear(tower, at, MEX_GUARD_RADIUS);
+	if (!OnMap(site))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, tower, site, 0.f));
+	if (post is null)
+		return null;
+	NoteDigOrder(site);
+	AiLog(Factory::T() + "apex: mex guard " + tower.GetName()
+		+ " on a mex " + int(best) + " away, mexes=" + mex.count);
+	return post;
+}
+
+// The home crew's actual job: build the energy the base runs on.
+//
+// apexearth: "I do not think the 'home' cons are actually focusing on economy...
+// the stage before fusion when we should be making advanced solars - we just
+// aren't making many of those at all... so our overall economy is much further
+// behind the enemies."
+//
+// He is right, and the reason is placement in the ladder. Advanced solar existed
+// only as a LAST-RESORT fallback at the very end of AiMakeTask, behind a
+// cooldown and behind every other offer. Nothing owned it. armadvsol is 350
+// metal for 75 energy against armsolar's 155 for 20 -- more than twice the
+// energy per metal, and it is the whole pre-fusion energy curve.
+//
+// Bounded by demand, not a clock: we stop when energy is already being wasted.
+IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
+{
+	if (Crew::RoleOf(unit) != Crew::HOME)
+		return null;
+	// NO metal-empty gate. "Don't spend when broke" is exactly backwards for the
+	// one thing that ends being broke: a solar is 155 metal and pays back
+	// forever, which at 13 metal/second is twelve seconds of income. Measured:
+	// t0 sat pinned near zero bank for 30 minutes with home=2 constructors whose
+	// only job this is, and fired it ZERO times. The engine already refuses what
+	// it truly cannot afford, so the guard bought nothing and cost everything.
+	//
+	// apexearth's rule, verbatim: "maxEnergy ? buildConverters : buildEnergy".
+	//
+	// The point is that the home crew is NEVER out of work -- one branch or the
+	// other always applies. My previous version declined whenever energy looked
+	// momentarily plentiful, which in the early game is nearly always, so the
+	// home crew sat idle and the economy fell behind: "only sinbearer seems to
+	// be doing much eco".
+	CCircuitDef@ gen = null;
+	if (EnergyWasting()) {
+		// Spilling energy: turn it into metal.
+		@gen = BigConvDef(unit);
+		if ((gen is null) || !gen.IsAvailable(ai.frame))
+			@gen = SmallConvDef(unit);
+	} else {
+		// Plain solar until the grid can carry the advanced one. apexearth: "We
+		// shouldn't make advanced solar until we have ~200 energy per second."
+		// armadvsol costs 5,000 energy to BUILD against armsolar's zero, so
+		// below that bar it is paid for out of energy we do not have.
+		if (aiEconomyMgr.energy.income >= ADVSOL_MIN_ENERGY)
+			@gen = SideDef3(armadvsol, coradvsol, legadvsol);
+		if ((gen is null) || !gen.IsAvailable(ai.frame))
+			@gen = SideDef3(armsolar, corsolar, legsolar);
+	}
+	if ((gen is null) || !gen.IsAvailable(ai.frame))
+		return null;
+	const bool isConv = EnergyWasting();
+	// The grid is a PREFERENCE, never a veto. Base::Spot failing means the
+	// lattice has no free cell -- measured on Callisto, t0 hit noroom=67 and
+	// placed=0 and therefore built no economy at all for the whole game, while
+	// players whose grid was working (placed=13, 29) built normally. A layout
+	// rule that cannot find a tidy spot must still put the building down.
+	// apexearth: "we run out of room due to our terribly inefficient placement
+	// of buildings."
+	AIFloat3 spot;
+	if (!Base::Spot(unit, gen, Base::ECO, spot)) {
+		// Anywhere the terrain manager will take it, working outward from home.
+		spot = ai.FindBuildSiteNear(gen, gHomePos, ECO_FALLBACK_RANGE);
+		if (!OnMap(spot))
+			return null;
+	}
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(
+			isConv ? Task::BuildType::CONVERT : Task::BuildType::ENERGY,
+			Task::Priority::NORMAL, gen, spot, 0.f));
+	if (post is null)
+		return null;
+	AiLog(Factory::T() + "apex: home energy " + gen.GetName()
+		+ " standing=" + gen.count
+		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
 	return post;
 }
 
@@ -1655,6 +2081,18 @@ CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 			return ai.GetCircuitDef(legapopupdef);
 		return ai.GetCircuitDef(armpb);
 	}
+	// Nothing rather than a light laser once we are past its tier. The tower was
+	// chosen from the CONSTRUCTOR's cost alone, so a T1 constructor kept being
+	// offered one however late the game was -- apexearth, watching at 25 minutes
+	// on 130 metal/second: "i still see some of our cons retreating from front
+	// line to build a light laser turret, the t1 super crappy turret... at this
+	// point we shouldn't be making those anymore."
+	//
+	// Returning null STOPS work rather than redirecting it, which is why it is
+	// safe to add on its own: the constructor falls through to whatever it would
+	// have done next instead of walking home for a 150-metal turret.
+	if (PastT1Tier())
+		return null;
 	if (side == "cortex")
 		return ai.GetCircuitDef(corllt);
 	if (side == "legion")
@@ -1684,7 +2122,160 @@ const float OBSOLETE_NEAR = 900.f;     // around a blocked build site
 // that has merely touched T2 may still be holding a line against T1 armies, and
 // those towers are the line.
 const float OBSOLETE_T2_INCOME = 60.f;
+const int   OBSOLETE_MIN_PERIOD = 3 * SECOND;
+// One fusion reactor's output. The unit of "how far past T1 the grid is".
+const float OBSOLETE_ENERGY_SCALE = 1000.f;
 int gNextObsolete = 0;
+uint gObsoleteTurn = 0;
+
+// What a piece of ground is WORTH, expressed as the energy income standing on
+// the base.
+//
+// apexearth: "late into a game, land becomes very valuable... To have very cheap
+// ineffective buildings taking up your space is very bad, and it only becomes
+// more and more bad", and then the arithmetic: "you can fit, like, four wind
+// turbines on the same amount of land that you can fit an advanced fusion...
+// do you want sixty energy from that land? or do you want three thousand energy
+// from that land?"
+//
+// Read from the defs: armafus produces 3000 energy, armfus 1000, armsolar 20,
+// a wind turbine varies around 60. So the cost of leaving T1 eco standing is not
+// its metal, it is the reactor that cannot go there -- and that cost rises with
+// every reactor we could otherwise afford. Energy income is the direct measure
+// of how far past T1 the grid is, so it is what sets the clearing rate.
+//
+// A clock cannot express that, and neither can a clutter count: at one reclaim
+// per 20 seconds the live game had junk RISE from 43 to 67 while 27 reclaims
+// fired.
+int ObsoletePeriod()
+{
+	const float e = aiEconomyMgr.energy.income;
+	int p = int(float(OBSOLETE_PERIOD) / (1.f + e / OBSOLETE_ENERGY_SCALE));
+	if (p < OBSOLETE_MIN_PERIOD)
+		p = OBSOLETE_MIN_PERIOD;
+	return p;
+}
+
+// The grid is past the tier that T1 buildings were worth their ground for.
+// One fusion's worth of income; an advanced fusion is three of these.
+const float LAND_PRECIOUS_ENERGY = 1000.f;
+
+bool LandIsPrecious()
+{
+	return aiEconomyMgr.energy.income >= LAND_PRECIOUS_ENERGY;
+}
+
+// Targets we have already asked for. CBuilderManager::Enqueue returns the
+// EXISTING task when a reclaim is already marked on a target, and the victim
+// pick below is deterministic -- so without this the same still-standing
+// building is re-picked every period and the rate limit is spent on a task that
+// already exists.
+array<int> gReclaimAsked;
+
+bool AskedFor(int id)
+{
+	for (uint i = 0; i < gReclaimAsked.length(); ++i) {
+		if (gReclaimAsked[i] == id)
+			return true;
+	}
+	return false;
+}
+
+// Cheap mobile build power, unlocked at the moment it can no longer cost us the
+// advanced constructor.
+//
+// armfark (Butler, 210m, 140 build power) and corfast (Twitcher, 210m) are
+// parked as role "support" in behaviour.json rather than "builder".
+// CFactoryManager::GetFacRoleDef filters the recruit draw on GetMainRole, so at
+// builder weight they win a share of it against armack -- delaying the team's
+// single shared advanced constructor, which is what gates T2 mex upgrades.
+//
+// That objection is entirely about the RACE for the first one. Once we hold an
+// advanced constructor there is nothing left to delay, and 210 metal for 140
+// build power is the cheapest build power there is. Legion needs no equivalent:
+// legaceb is already role builder in behaviour_leg.json.
+//
+// apexearth: "don't forget about those t2 assist bots with build power. those
+// little guys are like mobile nano turrets and might be useful for AI even
+// moreso than humans."
+string armfark("armfark"); string corfast("corfast"); string legaceb("legaceb");
+bool gAssistPromoted = false;
+
+// Assist bots and advanced constructors get their limit from the economy every
+// tick, not from a number in behaviour.json.
+//
+// apexearth: "same with adv cons, make tons of them... we shouldn't have any hard
+// caps, everything needs to be balanced based on the economy/game progression",
+// and "in a game like that we'd need like a ton of nano turrets, 100s of butlers,
+// all working to make the expensive stuff."
+const float ASSIST_PER_INCOME = 3.f;
+const float ASSIST_CAP_SHARE  = 0.20f;
+
+void SetDefCap(CCircuitDef@ d, int want)
+{
+	if ((d is null) || (want < 1))
+		return;
+	if (d.GetMaxThisUnit() != want)
+		d.SetMaxThisUnit(want);
+}
+
+CCircuitDef@ AssistBotDef()
+{
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(corfast);
+	if (side == "legion")
+		return ai.GetCircuitDef(legaceb);
+	return ai.GetCircuitDef(armfark);
+}
+
+void UpdateEconomicCaps()
+{
+	int want = 2 + int(aiEconomyMgr.metal.income / ASSIST_PER_INCOME);
+	if (aiEconomyMgr.isMetalFull)
+		want *= 2;
+	const int ceiling = CapShare(ASSIST_CAP_SHARE);
+	if (want > ceiling)
+		want = ceiling;
+	SetDefCap(AssistBotDef(), want);
+	SetDefCap(NanoDef(), NanoCap());
+}
+
+void PromoteAssistBots()
+{
+	if (gAssistPromoted || !gHaveAdvCon)
+		return;
+	const string side = ai.GetSideName();
+	if (side == "legion") {
+		gAssistPromoted = true;
+		return;
+	}
+	CCircuitDef@ bot = (side == "cortex") ? ai.GetCircuitDef(corfast)
+	                                      : ai.GetCircuitDef(armfark);
+	if (bot is null)
+		return;
+	gAssistPromoted = true;
+	bot.SetMainRole(RT::BUILDER);
+	AiLog(Factory::T() + "apex: assist bot " + bot.GetName()
+		+ " promoted to builder (advanced constructor held)");
+}
+
+// Past the tier T1 defences and T1 economy were built for. gHaveT3 is a gantry
+// standing; the T2 half additionally wants a real economy, so a player that has
+// merely touched T2 does not strip its own defences while still fighting T1
+// armies. One definition, read by both the reclaim below and ContestTower --
+// they were separate judgements about the same moment, and only one of them
+// existed.
+bool PastT1Tier()
+{
+	return Factory::gHaveT3
+		|| (Factory::gHaveT2 && (aiEconomyMgr.metal.income >= OBSOLETE_T2_INCOME));
+}
+
+// How much T1 junk has to be standing before clearing it outranks the ordinary
+// build queue. Below this the end-of-queue path is fine; above it the base is
+// visibly cluttered and the clutter is what is stopping us teching up.
+const int OBSOLETE_URGENT_COUNT = 6;
 
 // The T1/T1.5 towers this AI builds, cheapest first.
 array<string> ObsoleteDefenceNames()
@@ -1724,18 +2315,90 @@ IUnitTask@ ReclaimOwnDef(CCircuitUnit@ unit, const string& in defName,
 	array<CCircuitUnit@>@ owned = ai.GetOwnUnitsOfDef(def, near, radius);
 	if ((owned is null) || (owned.length() == 0))
 		return null;
+
+	// WHICH of our copies to eat is a space question, not an arbitrary one.
+	// apexearth: "reclaim what's stranded outside the footprint or sitting in a
+	// lane". A structure standing in a walkway is what makes the base
+	// uncrossable; one stranded outside the footprint is what makes it sprawl.
+	// Both were previously indistinguishable from a tidy row -- the loop took
+	// whichever copy the engine happened to list first.
+	CCircuitUnit@ pick = null;
+	int bestScore = -1;
+	string bestWhy = why;
 	for (uint i = 0; i < owned.length(); ++i) {
 		CCircuitUnit@ victim = owned[i];
-		if ((victim is null) || (victim is unit))
+		if ((victim is null) || (victim is unit) || AskedFor(victim.id))
 			continue;
-		IUnitTask@ eat = aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, victim));
-		if (eat !is null) {
-			gNextObsolete = ai.frame + OBSOLETE_PERIOD;
-			AiLog(Factory::T() + "apex: obsolete-reclaim " + defName + " (" + why + ")");
-			return eat;
+		const AIFloat3 at = victim.GetPos(ai.frame);
+		int score = 0;
+		string tag = why;
+		if (Base::InLaneAt(at)) {
+			score = 2;
+			tag = "in a lane";
+		} else if (Base::Ready() && !Base::Inside(at)) {
+			score = 1;
+			tag = "stranded outside the base";
+		}
+		if (score > bestScore) {
+			bestScore = score;
+			@pick = victim;
+			bestWhy = tag;
 		}
 	}
-	return null;
+	if (pick is null)
+		return null;
+
+	IUnitTask@ eat = aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, pick));
+	if (eat is null)
+		return null;
+	gReclaimAsked.insertLast(pick.id);
+	if (gReclaimAsked.length() > 64)
+		gReclaimAsked.removeAt(0);
+	gNextObsolete = ai.frame + ObsoletePeriod();
+	AiLog(Factory::T() + "apex: obsolete-reclaim " + defName + " #" + pick.id
+		+ " (" + bestWhy + ")");
+	return eat;
+}
+
+// How many T1 structures we are still standing on. Counted from the same name
+// lists the reclaim uses, so the trigger and the target cannot drift apart.
+int ObsoleteJunkCount()
+{
+	int n = 0;
+	array<string> junk = ObsoleteEcoNames();
+	for (uint i = 0; i < junk.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(junk[i]);
+		if (d !is null)
+			n += d.count;
+	}
+	array<string> towers = ObsoleteDefenceNames();
+	for (uint i = 0; i < towers.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(towers[i]);
+		if (d !is null)
+			n += d.count;
+	}
+	return n;
+}
+
+int gNextJunkLog = 0;
+
+// The promoted path: same act, but ahead of the economy offers instead of behind
+// everything. Gated hard so it cannot become a constructor sink.
+IUnitTask@ ObsoleteUrgent(CCircuitUnit@ unit)
+{
+	if (!PastT1Tier())
+		return null;
+	const int junk = ObsoleteJunkCount();
+	if (ai.frame >= gNextJunkLog) {
+		gNextJunkLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: obsolete junk standing=" + junk
+			+ " income=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+			+ " t2=" + (Factory::gHaveT2 ? "1" : "0")
+			+ " t3=" + (Factory::gHaveT3 ? "1" : "0"));
+	}
+	if (junk < OBSOLETE_URGENT_COUNT)
+		return null;
+	return ObsoleteReclaim(unit);
 }
 
 IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit)
@@ -1760,40 +2423,46 @@ IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit)
 		}
 	}
 
-	// Case 2: we are clearly past the tier these towers defend against. gHaveT3
-	// is a gantry standing; the T2 half additionally wants a real economy, so a
-	// player that merely touched T2 does not strip its own defences while still
-	// fighting T1 armies.
-	const bool lateEnough = Factory::gHaveT3
-			|| (Factory::gHaveT2 && (aiEconomyMgr.metal.income >= OBSOLETE_T2_INCOME));
-	if (!lateEnough)
+	// Case 2: we are clearly past the tier these towers defend against.
+	if (!PastT1Tier())
 		return null;
-	// ECONOMY FIRST. This whole function is rate-limited to one reclaim per
-	// OBSOLETE_PERIOD and each loop returns on its first hit, so whichever list
-	// runs first gets nearly all the reclaims. With towers first the eco list
-	// fired ZERO times in a 30-minute game while towers fired 9. apexearth was
-	// looking at wind turbines still standing at 35 minutes, not at towers.
-	array<string> junk = ObsoleteEcoNames();
-	for (uint i = 0; i < junk.length(); ++i) {
-		IUnitTask@ eat = ReclaimOwnDef(unit, junk[i], gHomePos, 0.f, "obsolete tier-1 eco");
-		if (eat !is null)
-			return eat;
-	}
+
+	// ONE list, entered at a ROTATING offset.
+	//
+	// Two fixed lists each returning on their first hit meant whichever ran first
+	// took nearly everything: measured in a live 37-minute game, 272 armwin and
+	// 63 armmakr against 3 armllt. Wind is rebuilt continuously by the stock
+	// economy manager, so index 0 always had a candidate and the tower list was
+	// unreachable -- which is precisely the thing apexearth keeps seeing standing.
+	// Rotating the entry point costs nothing and gives every def its turn.
+	array<string> all = ObsoleteEcoNames();
 	array<string> towers = ObsoleteDefenceNames();
-	for (uint i = 0; i < towers.length(); ++i) {
-		IUnitTask@ eat = ReclaimOwnDef(unit, towers[i], gHomePos, 0.f, "past its tier");
-		if (eat !is null)
+	for (uint i = 0; i < towers.length(); ++i)
+		all.insertLast(towers[i]);
+	if (all.length() == 0)
+		return null;
+
+	const uint n = all.length();
+	for (uint k = 0; k < n; ++k) {
+		const uint i = (gObsoleteTurn + k) % n;
+		const bool isTower = (i >= n - towers.length());
+		IUnitTask@ eat = ReclaimOwnDef(unit, all[i], gHomePos, 0.f,
+				isTower ? "past its tier" : "obsolete tier-1 eco");
+		if (eat !is null) {
+			gObsoleteTurn = (i + 1) % n;
 			return eat;
+		}
 	}
-	// The T1 ECONOMY is obsolete on the same terms and was never considered:
-	// wind turbines, the opening solar, T1 converters and T1 AA. A wind turbine
-	// still occupying prime base ground at 35 minutes is metal we already paid
-	// for, sitting where a fusion could go.
 	return null;
 }
 
 // T1 economy and AA that a T2/T3 base has outgrown. Per-faction, because a
 // name list that only covers Cortex is the recurring faction-parity trap.
+//
+// The T1 converter and the T1 AA turret belong here -- apexearth: "those become
+// trash long into a game". What had to change is the two rules that were
+// REBUILDING them behind us: CheapAA and the generic EnergyConverter both now
+// stand down past T1 tier, so reclaiming one no longer queues its replacement.
 array<string> ObsoleteEcoNames()
 {
 	array<string> names;
@@ -2179,6 +2848,16 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	}
 	if (isComm) {
 		LogCommanderThreat(unit);
+		// The commander guards the mexes it just made. apexearth: "even the
+		// commander does this... he's right there making the mex and then he
+		// just walks away like they arent important to protect." MexGuard picks
+		// the NEAREST undefended mex within MEX_GUARD_REACH, so for a commander
+		// that has just finished one this is the mex under its feet.
+		if (unit.GetHealthPercent() >= COM_RETREAT_HEALTH) {
+			IUnitTask@ cguard = MexGuard(unit);
+			if (cguard !is null)
+				return cguard;
+		}
 		const float hp = unit.GetHealthPercent();
 		if (hp < COM_RETREAT_HEALTH) {
 			// apexearth, watching live: "once the commander retreats to the back
@@ -2416,6 +3095,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			return busy;
 	}
 
+
 	if (!isComm) {
 		// con-heal (RepairNear) stays reflexive and ungated -- it answers
 		// something happening now (a nearby wounded unit) rather than
@@ -2478,7 +3158,79 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			// expansion matters more than energy conversion; reverted to
 			// gLastPhase>=4 until a fix that does not compete with mex for
 			// constructor time exists.
-			if (Factory::gLastPhase >= 4) {
+			// The crew SUPPRESSES the optional economy cluster for its members;
+			// it does not replace their task selection.
+			//
+			// First attempt dispatched the crew above this whole function, which
+			// skipped every threat veto, abandon and repair rule an ordinary
+			// constructor gets -- apexearth: "cons seem really dumb, dark green
+			// just walking its cons off to die", and the economy was worse. The
+			// intent was only ever to stop converters/nanos/fusions outbidding
+			// mex expansion for these units, and that is all this does now:
+			// they fall through to DefaultMakeTask, where mex work lives at
+			// Priority::HIGH, with every safety rule above still applied.
+			const int crewRole = Crew::RoleOf(unit);
+			if (crewRole == Crew::MEX) {
+				IUnitTask@ dig = Crew::MexWork(unit);
+				if (dig !is null)
+					return dig;
+			} else if (crewRole == Crew::FRONT) {
+				IUnitTask@ hold = Crew::FrontWork(unit);
+				if (hold !is null)
+					return hold;
+			}
+			// Guarding a mex is NOT in the phase-gated cluster below: it is an
+			// early-game job, it is the cheapest thing on this list, and the
+			// alternative is the army walking back to chase a scout.
+			// The home crew never leaves. apexearth: "some should ALWAYS be
+			// doing economy at home." They are kept home by being offered ONLY
+			// the economy cluster below, which is all base work by construction,
+			// and by being skipped for the jobs that travel.
+			// EVERY role guards mexes, home crew included: MEX_GUARD_REACH is
+			// 1200 and HOME_RADIUS is 1600, so a nearby mex is base work by any
+			// reading. Excluding them dropped guards from 32 to 9 in a game --
+			// with 2 home and 3 mex out of about 5 constructors there was nobody
+			// left to place one. apexearth: "we NEED to have at least one llt
+			// early game within range of our mexes... it'll make them last so
+			// much longer."
+			// Guarding a mex comes FIRST -- ahead of the home crew's energy job.
+			// HomeEnergy always returns work now, so putting it first meant the
+			// home crew never reached this and guards fell 18 -> 6 in a game.
+			// A 130-metal turret that saves a 620-metal mex outranks a solar.
+			IUnitTask@ guard = MexGuard(unit);
+			if (guard !is null)
+				return guard;
+
+			// The home crew's own job, NOT phase-gated: the pre-fusion energy
+			// curve is exactly the stage this is for.
+			IUnitTask@ juice = HomeEnergy(unit);
+			if (juice !is null)
+				return juice;
+
+			if ((Factory::gLastPhase >= 4)
+				&& ((crewRole == Crew::ECO) || (crewRole == Crew::HOME))) {
+				// Clearing an obsolete base outranks ADDING to it. ObsoleteReclaim
+				// also sits at the end of this function, which is why it fired
+				// twice in thirty minutes: a constructor was always offered
+				// something else first. Promoted only above the ECO offers -- the
+				// cheapest constructor time here -- and only once the junk is
+				// thick enough to be the thing in the way.
+				IUnitTask@ clear = ObsoleteUrgent(unit);
+				if (clear !is null)
+					return clear;
+				// A full bank outranks everything else here. The most expensive
+				// thing we can start is the one that drains it fastest.
+				IUnitTask@ big = SurplusGantry(unit);
+				if (big !is null)
+					return big;
+				IUnitTask@ nuke = NukeSilo(unit);
+				if (nuke !is null)
+					return nuke;
+				// Assist bots and front constructors get their standing job here,
+				// where everything protective has already had its say.
+				IUnitTask@ help = Assist::Work(unit);
+				if (help !is null)
+					return help;
 				IUnitTask@ heavyAa = HeavyAA(unit);
 				if (heavyAa !is null)
 					return heavyAa;
@@ -2639,7 +3391,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				const int id = wantFac.id;
 				const bool tracked = (id >= 0) && (uint(id) < gNextFactoryRequest.length());
 				const bool tooSoon = tracked && (ai.frame < gNextFactoryRequest[id]);
-				if ((wantFac.count >= FACTORY_TYPE_CAP) || tooSoon) {
+				if ((wantFac.count >= FactoryTypeCap()) || tooSoon) {
 					++gConRefused;
 					LogConVeto(unit, "refuse", "factory-cap", float(wantFac.count));
 					// Previously just @task = null here, which (per CIdleTask's own
@@ -3089,6 +3841,9 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 	if (usage != Unit::UseAs::BUILDER || cdef.IsRoleAny(Unit::Role::COMM.mask))
 		return;
 
+	// Give it a standing job before anything else claims it.
+	Crew::Enlist(unit);
+
 	// A gifted advanced constructor materialises where it stood, in the lead's
 	// base, and the receiving AI then picks its own work -- observed live, an
 	// ally used one to start a mex on the front line. Nothing on the giving side
@@ -3132,6 +3887,7 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	Crew::Discharge(unit);
 	// Losing one has to re-open the slot, or a player that loses its advanced
 	// constructors never replaces them.
 	if ((usage == Unit::UseAs::BUILDER)

@@ -708,7 +708,7 @@
 			},
 			"legaceb": {
 				"role": ["builder"],
-				"limit": 16,
+				"limit": 200,
 				"build_speed": 7.0,
 				"since": 1300
 			},

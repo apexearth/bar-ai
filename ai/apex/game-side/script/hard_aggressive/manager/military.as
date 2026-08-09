@@ -1582,33 +1582,80 @@ void NoteSite(int cluster, const AIFloat3& in pos)
 // A site further from home than the enemy centroid is is not ours to hold -- that
 // is an ally's ground on the far side of the map, and a tower we send a builder
 // across the map to place is a tower that arrives after the fight.
+// Cover the border, do not crowd one bearing.
+//
+// This ranked our sites purely by distance to aiEnemyMgr.GetEnemyPos() -- a
+// SINGLE point, the enemy centroid -- so rank 0 was the site nearest that
+// bearing, rank 1 the next nearest, and every tower we ever built marched
+// toward the same compass direction. Whichever flank the centroid did not
+// point at got nothing, however much of our territory sat on it.
+// apexearth, watching: "the AI controls so much on the right because we never
+// build any defenses on the right... AI has free right to just walk around our
+// defenses", and earlier, with a screenshot: "we do stuff like this and the
+// enemy can just go around most of our towers very easily."
+//
+// Coverage instead: among the sites on our forward edge, take the one that is
+// least defended already. gFencePos is the register of every defence we own,
+// so "least defended" is a real count and not a guess. Distance to the enemy
+// still decides WHICH sites are eligible -- the forward edge is still the
+// front -- but among those, the emptiest ground wins.
+const float COVER_RADIUS = 900.f;
+
 bool BorderPos(AIFloat3& out p, uint rank)
 {
 	if (gSitePos.length() == 0)
 		return false;
 	AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 	const float reach = Builder::gHomeSet ? Builder::gHomePos.distance2D(e) : -1.f;
-	float prev = -1.f;
+
+	// The forward edge: the nearest eligible site to the enemy sets the band.
+	float edge = -1.f;
+	for (uint i = 0; i < gSitePos.length(); ++i) {
+		if ((reach > 0.f) && (gSitePos[i].distance2D(Builder::gHomePos) > reach))
+			continue;
+		const float d = gSitePos[i].distance2D(e);
+		if ((edge < 0.f) || (d < edge))
+			edge = d;
+	}
+	if (edge < 0.f)
+		return false;
+
+	// Among everything within one band of that edge, the least-covered site.
+	// `rank` still spreads successive requests: it skips the rank best-covered
+	// answers, so two towers asked for in the same breath do not stack.
+	float prevCover = -1.f;
 	AIFloat3 pick;
+	bool have = false;
 	for (uint r = 0; r <= rank; ++r) {
-		float best = -1.f;
+		float bestCover = -1.f;
+		float bestDist = -1.f;
 		bool found = false;
 		for (uint i = 0; i < gSitePos.length(); ++i) {
-			const float d = gSitePos[i].distance2D(e);
-			if (d <= prev)
-				continue;          // claimed by an earlier rank
 			if ((reach > 0.f) && (gSitePos[i].distance2D(Builder::gHomePos) > reach))
 				continue;
-			if (!found || (d < best)) {
-				best = d;
+			const float d = gSitePos[i].distance2D(e);
+			if (d > edge + BORDER_BAND)
+				continue;                       // behind the line, not on it
+			const float cover = float(FenceCountNear(gSitePos[i], COVER_RADIUS));
+			if (cover <= prevCover)
+				continue;                       // claimed by an earlier rank
+			// Fewest defences first; ties broken toward the enemy.
+			if (!found || (cover < bestCover)
+				|| ((cover == bestCover) && (d < bestDist)))
+			{
+				bestCover = cover;
+				bestDist = d;
 				pick = gSitePos[i];
 				found = true;
 			}
 		}
 		if (!found)
-			return false;
-		prev = best;
+			break;
+		prevCover = bestCover;
+		have = true;
 	}
+	if (!have)
+		return false;
 	p = pick;
 	return true;
 }

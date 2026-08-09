@@ -111,7 +111,16 @@
 		"def_low": {
 			"type": ["circle", "def_low"],
 			"radius": 5,  // 80 / (SQUARE_SIZE * 2)
-			"ignore": ["engy_mid", "engy_high", "engy_low", "nano"]
+			// def_low added: every other class in this file self-ignores so its
+			// own kind packs edge to edge -- solar ignores engy_low, converter
+			// ignores convert, fusion ignores engy_mid -- and defence was the one
+			// that did not, so its radius-5 circle held every turret a full
+			// 80 elmos off the next one. apexearth: "we can pack air defenses
+			// right side by side - using that 'ignore' trick... its a smart tick
+			// and you should be using it for same-type buildings."
+			// A block of AA is the point: four cheap turrets together change what
+			// enemy air is willing to fly over, where four spread out do not.
+			"ignore": ["def_low", "engy_mid", "engy_high", "engy_low", "nano"]
 		},
 		"caretaker": {
 			"type": ["rectangle", "nano"],

@@ -1634,27 +1634,27 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		return null;
 	}
 
-	// Never let an air factory fall through to the engine's own default ratio
-	// pick. apexearth, watching live, right after the air assassin's strike
-	// released successfully: "we're building more bombers and sending them
-	// in one at a time, and they're just dying to enemy ground AA. Completely
-	// wasted... there's no point making a bomber at all if you don't mass
-	// them." Confirmed in that game's infolog: team 2 (the assassin) kept
-	// spending on corshad for the rest of the game with zero further
-	// Air::-logged activity -- Air::MakeFactoryTask returns null
-	// unconditionally once gStrike is set (the assassin never re-arms), so
-	// this plant was falling all the way through to
-	// aiFactoryMgr.DefaultMakeTask and getting whatever the stock ratio
-	// table picks next, one at a time, with nothing to coordinate a mass.
-	// The only sanctioned uses of an air plant in this variant already claim
-	// it earlier in this function: Air:: while armed, the LATE_FIGHTERS
-	// floor (which holds what it builds via HoldsLateFighter), and the eco
-	// lead's own constructor line above. Nothing past this point should ever
-	// come from an air factory -- UNLESS the air lead stood down before ever
-	// committing, which is permanent and leaves its plants no path back to
-	// Air::. Blocking those builds nothing for the rest of the game.
-	if (IsAirFactory(unit.circuitDef) && !Air::RoleAbandoned())
-		return null;
+	// An air plant that Air:: did not claim above falls through to
+	// DefaultMakeTask like every other factory.
+	//
+	// This used to return null for ANY air factory unless the air role had been
+	// permanently abandoned, on the reasoning that every sanctioned use of an air
+	// plant claims it earlier in this function. That reasoning holds only for the
+	// air lead's plants while it is armed. It is false for the air-slot opener,
+	// which is never the lead (the lead is elected on highest income and the
+	// opener has the worst economy on the team), and it is false for the lead
+	// itself whenever Air:: declines -- quota met, enemy AA too high, not yet
+	// committed. In all of those cases the plant produced NOTHING, permanently.
+	//
+	// apexearth: "our air player made just 1 con and thats it... air lab just
+	// sitting there doing nothing else", then "i bet we have some special flag or
+	// branching path of logic that is breaking our air opening player", then
+	// "Can we not have this whole Air::RoleAbandoned logic in here? I bet that is
+	// the cause of a lot of air labs i see sitting there doing nothing."
+	//
+	// The concern this originally answered -- trickling bombers one at a time
+	// into enemy AA -- is about how bombers are USED, not about starving every
+	// air plant on the team.
 	return aiFactoryMgr.DefaultMakeTask(unit);
 }
 
@@ -2396,8 +2396,17 @@ const float T3_INCOME_URGENT = 150.f;
 //
 // gHaveT3 itself stays -- military.as reads it for big-gun placement -- it just
 // no longer decides whether to build another.
-const float GANTRY_PER_INCOME = 150.f;
-const int   GANTRY_MAX        = 4;
+// Measured 2026-08-08, 6-game 8v8 at Handicap 50: we field 2 T3 plants where
+// stock fields 7, and 16 "building T3 gantry" decisions produced 2 gantries. At
+// 150 a player on 400 metal/second wants only 2 -- so the cap, not the economy,
+// is the throughput ceiling. Space is not the constraint either: techroom=-1
+// occurred zero times in 1,907 samples, so there was always somewhere to put one.
+//
+// 100/6 gives 4 gantries at 400 m/s and 6 at 600, still short of stock's 7.
+const float GANTRY_PER_INCOME = 100.f;
+const int   GANTRY_MAX        = 6;
+// Extra plants allowed while the bank is at the cap.
+const int   GANTRY_SURPLUS_BONUS = 4;
 
 // A T1 bot lab is wanted for the whole game, not just the opening: it is the
 // cheap assault spam and the only source of rez bots. apexearth: "one T2
@@ -2434,6 +2443,11 @@ bool WantMoreGantries()
 		want = 1;
 	else if (want > GANTRY_MAX)
 		want = GANTRY_MAX;
+	// A full bank means the cap is the wrong number: income says what we can
+	// sustain, a full bank says we are already failing to spend what we have.
+	// apexearth: "If we are metal full we need to just keep making more gantries."
+	if (aiEconomyMgr.isMetalFull)
+		want += GANTRY_SURPLUS_BONUS;
 	return int(gant.count) < want;
 }
 
@@ -2659,10 +2673,24 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 		}
 	}
 
-	if (MayPursueT2() && !gHaveT2 && RushReady() && RushWindowOpen()) {
+	// No rush-window clause. RushWindowOpen() is `frame <= 15 minutes`, and it was
+	// gating the only route to an advanced plant -- so a player that had not
+	// teched by minute 15, for any reason, could never tech again however rich it
+	// became. Measured live at 33 minutes: t6 on 257 metal/s with two fusions and
+	// a bank of 13,478 overflowing 9,185 of storage, still haveT2=0.
+	//
+	// The rush window is about who gets there FIRST; it should never have decided
+	// who may get there at all. What remains is economic: MayPursueT2() is the
+	// designated lead or a follower whose income has earned it, and RushReady()
+	// checks we can actually power the plant.
+	//
+	// apexearth: "some of our guys havent made a t2 lab... they only have 1
+	// advanced con (the one shared to them)", and separately the general rule --
+	// "game progression is almost always based on the size of the economy."
+	if (MayPursueT2() && !gHaveT2 && RushReady()) {
 		CCircuitDef@ adv = AdvCounterpart();
 		if (adv !is null) {
-			AiLog(T() + "apex: rusher building advanced plant " + adv.GetName()
+			AiLog(T() + "apex: building advanced plant " + adv.GetName()
 				+ " (from " + gT1Fac.GetName() + ")");
 			return adv;
 		}

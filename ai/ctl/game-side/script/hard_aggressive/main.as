@@ -4,6 +4,9 @@
 #include "manager/economy.as"
 #include "manager/air.as"
 #include "manager/frontline.as"
+#include "manager/baseplan.as"
+#include "manager/crew.as"
+#include "manager/assist.as"
 
 
 namespace Main {
@@ -51,6 +54,11 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Factory::LogRushState();
 	Air::Update();
 	Front::Update();
+	Base::Update();
+	Crew::Update();
+	Assist::Update();
+	Builder::PromoteAssistBots();
+	Builder::UpdateEconomicCaps();
 }
 
 }  // namespace Main
