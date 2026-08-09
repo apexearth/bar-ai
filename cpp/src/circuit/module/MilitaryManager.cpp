@@ -1953,27 +1953,40 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
 // Share of energy income the commander's cloak may consume.
 #define COMM_CLOAK_SHARE	0.1f
 
-// Cloak is switched on once when a unit finishes and nothing outside a retreat
-// task ever reconsiders it, so a commander could sit -- or walk -- cloaked with
-// an empty bank for the rest of the game. The moving cost is what bites:
-// corcom is 100 e/s standing and 1000 e/s moving, and CCircuitDef takes the max
-// of the two, so cloak is affordable only above 10,000 e/s of income.
+// The moving cost is what bites: corcom is 100 e/s standing and 1000 e/s moving,
+// and CCircuitDef takes the max of the two, so cloak is affordable only above
+// 10,000 e/s of income. Below that the commander must show itself; above it,
+// the energy is not worth thinking about and it stays hidden all the time --
+// a visible commander is the first thing an enemy aims at.
 // apexearth: "one of our commanders is just walking back and forth while trying
 // to stay cloaked. 1000 energy to move while cloaked... He has no energy now and
-// still cloaked."
+// still cloaked." / "when it is late game and we are very rich our commanders
+// should always stay cloaked."
+bool CMilitaryManager::IsCommCloakWanted(CCircuitUnit* unit) const
+{
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	if (!cdef->IsAbleToCloak()) {
+		return false;
+	}
+	CEconomyManager* economyMgr = circuit->GetEconomyManager();
+	return !economyMgr->IsEnergyStalling()
+			&& (cdef->GetCloakCost() < economyMgr->GetAvgEnergyIncome() * COMM_CLOAK_SHARE);
+}
+
+// Cloak is switched on once when a unit finishes and nothing outside a retreat
+// task ever reconsiders it, so without this the state drifts in both directions:
+// a poor commander walks around cloaked with an empty bank, and a rich one that
+// was uncloaked once stays visible for the rest of the game.
 void CMilitaryManager::UpdateCommCloak()
 {
 	CCircuitUnit* comm = circuit->GetSetupManager()->GetCommander();
 	if ((comm == nullptr) || comm->IsDead() || !comm->GetCircuitDef()->IsAbleToCloak()) {
 		return;
 	}
-	CEconomyManager* economyMgr = circuit->GetEconomyManager();
-	const bool canAfford = !economyMgr->IsEnergyStalling()
-			&& (comm->GetCircuitDef()->GetCloakCost()
-				< economyMgr->GetAvgEnergyIncome() * COMM_CLOAK_SHARE);
-	if (!canAfford && comm->GetUnit()->IsCloaked()) {
+	const bool wantCloak = IsCommCloakWanted(comm);
+	if (wantCloak != comm->GetUnit()->IsCloaked()) {
 		TRY_UNIT(circuit, comm,
-			comm->CmdCloak(false);
+			comm->CmdCloak(wantCloak);
 		)
 	}
 }

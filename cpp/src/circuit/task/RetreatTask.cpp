@@ -382,15 +382,12 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
 	const AIFloat3& unitPos = unit->GetPos(frame);
 
 	// Cloak is switched on once, when the unit finishes (CircuitAI.cpp), and
-	// nothing ever switches it off -- so a commander that reaches safety keeps
-	// paying the upkeep, which early on is a large share of income. Re-decide it
-	// here: hidden while exposed, visible and cheap once on friendly ground.
+	// nothing there ever switches it off -- so re-decide it here too rather than
+	// waiting up to a minute for the military manager's watchdog. Same predicate
+	// as the watchdog, so the two cannot fight over the state.
 	// Only issued on a change; IsCloaked() is the current state.
 	if (cdef->IsRoleComm() && cdef->IsAbleToCloak()) {
-		const bool isSafe = circuit->GetInflMap()->GetInfluenceAt(unitPos) >= INFL_SAFE;
-		const bool canAfford = cdef->GetCloakCost()
-				< circuit->GetEconomyManager()->GetAvgEnergyIncome() * 0.1f;
-		const bool wantCloak = !isSafe && canAfford;
+		const bool wantCloak = circuit->GetMilitaryManager()->IsCommCloakWanted(unit);
 		if (wantCloak != unit->GetUnit()->IsCloaked()) {
 			TRY_UNIT(circuit, unit,
 				unit->CmdCloak(wantCloak);

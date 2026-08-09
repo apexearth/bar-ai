@@ -194,6 +194,9 @@ public:
 	void NoteSuperTarget(const springai::AIFloat3& pos, int frame);
 	bool IsRecentSuperTarget(const springai::AIFloat3& pos, float sqRadius, int frame) const;
 
+	// The one place that decides whether a commander should be cloaked.
+	bool IsCommCloakWanted(CCircuitUnit* unit) const;
+
 private:
 	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
 
