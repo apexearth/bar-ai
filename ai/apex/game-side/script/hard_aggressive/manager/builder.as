@@ -2890,10 +2890,17 @@ void ExpandDiag()
 			++idle;
 			continue;
 		}
+		// A task with no build SITE is not the same as no task -- reclaim, guard
+		// and patrol all have none. Counting them together hid which of the two
+		// was happening.
 		const string k = SiteBuildName(t);
 		if (k == "") {
-			++idle;
-		} else if (t.GetBuildType() == Task::BuildType::MEX) {
+			++onOther;
+			if (kinds.length() < 60)
+				kinds += "bt" + t.GetBuildType() + " ";
+			continue;
+		}
+		if (t.GetBuildType() == Task::BuildType::MEX) {
 			++onMex;
 		} else {
 			++onOther;
@@ -2901,7 +2908,17 @@ void ExpandDiag()
 				kinds += k + " ";
 		}
 	}
-	AiLog(Factory::T() + "apex: expand-diag idle=" + idle
+	// FACTORY0 NANO1 STORE2 PYLON3 ENERGY4 GEO5 GEOUP6 DEFENCE7 -- census of the
+	// pool, so an unworked backlog can be told apart by what it is made of.
+	string census = "";
+	const array<string> tn = {"fac","nano","store","pylon","energy","geo","geoup","def",
+			"t8","t9","t10","t11","t12","t13","t14","t15"};
+	for (int t = 0; t < 16; ++t) {
+		const uint c = aiBuilderMgr.GetTaskCountOf(t);
+		if (c > 0)
+			census += tn[t] + "=" + c + " ";
+	}
+	AiLog(Factory::T() + "apex: expand-diag pool[" + census + "] idle=" + idle
 		+ " onMex=" + onMex + " onOther=" + onOther + " [" + kinds + "]"
 		+ " spot=" + spot
 		+ " tasks=" + aiBuilderMgr.GetBuildTaskCount()
