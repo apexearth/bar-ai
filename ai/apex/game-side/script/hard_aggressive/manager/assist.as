@@ -142,7 +142,7 @@ IUnitTask@ BestSite(CCircuitUnit@ unit)
 		if (!IsBuildWork(bt) || (t.target is null))
 			continue;
 		const AIFloat3 where = t.GetBuildPos();
-		if (!Builder::OnMap(where))
+		if (!OnMap(where))
 			continue;
 		const float dist = here.distance2D(where);
 		if (dist > ASSIST_RANGE)
@@ -186,7 +186,7 @@ CCircuitUnit@ BestVip(CCircuitUnit@ unit)
 		if (GuardsOn(int(c.id)) >= GUARD_STACK)
 			continue;
 		const AIFloat3 where = c.GetPos(ai.frame);
-		if (!Builder::OnMap(where))
+		if (!OnMap(where))
 			continue;
 		const float dist = here.distance2D(where);
 		if (dist > ASSIST_RANGE)

@@ -257,7 +257,7 @@ IUnitTask@ VetoCommanderHold(CCircuitUnit@ unit, bool isComm, IUnitTask@ task)
 {
 	// General form of the veto above: keep what the commander is already
 	// doing rather than swapping to a different build type. `unit.task` is
-	// still the OLD task here -- Reevaluate only swaps it once this function
+	// still the OLD task here -- Reevaluate only swaps it once AiMakeTask
 	// returns a differing build type -- so this compares current against
 	// proposed. Danger is handled earlier, by the comm-abandon retreat.
 	// The FIRST factory is never worth holding a mex over. The commander is the

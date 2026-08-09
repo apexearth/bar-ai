@@ -163,7 +163,7 @@ void PlaceLineJammer(const AIFloat3& in spot)
 			back.z += dz / len * JAMMER_BACK;
 		}
 	}
-	if (!Builder::OnMap(back))
+	if (!OnMap(back))
 		return;
 	IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, jam, back, SQUARE_SIZE * 16));

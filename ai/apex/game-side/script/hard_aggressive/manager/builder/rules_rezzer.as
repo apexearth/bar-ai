@@ -7,8 +7,8 @@ IUnitTask@ RezzerFlee(CCircuitUnit@ unit)
 {
 	// Rez bots have no buildoptions and cannot dig in like an ordinary
 	// constructor -- Fortify/ContestTower never apply to them -- so a hit here
-	// means flee, not fortify. And nothing else in this function ever calls
-	// ConDugIn for them, since every rez branch below returns early: a bot
+	// means flee, not fortify. And nothing else in the task pipeline ever calls
+	// ConDugIn for them, since every rez rule returns early: a bot
 	// that commits to a resurrect has nothing re-checking it while the task
 	// runs. apexearth, watching an enemy army arrive live: "eight rez bots
 	// resurrecting... they have no time... they keep rezzing... and die...
@@ -88,7 +88,7 @@ IUnitTask@ RezzerPreemptReclaim(CCircuitUnit@ unit, bool isComm, IUnitTask@ task
 {
 	// Reached by an idle builder, and by one whose only offer was refused above.
 	// Rate-limited so a field of them does not each run their own scan every tick.
-	// isComm-gated same as the rest of this function's wreck-chasing -- this
+	// isComm-gated same as the rest of the pipeline's wreck-chasing -- this
 	// was the one remaining ungated path that could hand a self-initiated
 	// reclaim task back to a commander whose real task was rejected above.
 	//

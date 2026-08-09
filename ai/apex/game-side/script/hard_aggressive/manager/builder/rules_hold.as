@@ -9,7 +9,7 @@ IUnitTask@ HoldDefenceInProgress(CCircuitUnit@ unit, bool isComm)
 	// AiMakeTask re-decides from scratch on every call, and IBuilderTask::
 	// Reevaluate swaps the unit's task whenever we hand back a different BUILD
 	// TYPE. Fortify only fires while ConDugIn() is true, i.e. while the con is
-	// being shot at -- so the moment the shooting stops this function offers a
+	// being shot at -- so the moment the shooting stops the pipeline offers a
 	// mex or an energy building instead, the swap happens, and the half-built
 	// tower is abandoned.
 	//

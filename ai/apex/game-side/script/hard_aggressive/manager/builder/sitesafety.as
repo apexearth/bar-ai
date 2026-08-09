@@ -42,15 +42,6 @@ int gNextConVetoLog = 0;
 int gNextRerouteLog = 0;
 int gNextDefenceLog = 0;
 
-// CThreatMap indexes its arrays straight from the position and range-checks only
-// under assert; the bound is a strict less-than against the terrain extent.
-// -RgtVector, the engine's "no position", fails the first test.
-bool OnMap(const AIFloat3& in p)
-{
-	return (p.x >= 0.f) && (p.z >= 0.f)
-		&& (p.x < float(AiTerrainWidth())) && (p.z < float(AiTerrainHeight()));
-}
-
 // ai.GetBuilderThreatAt is the BUILDER-role SURFACE layer, and AddEnemyUnit
 // routes HasSurfToAir enemies into the air layer, so a pure AA turret adds
 // nothing to it -- an air constructor cannot see what kills it. GetUnitThreatAt

@@ -120,6 +120,34 @@ This is what makes the variant survive BAR engine updates — the previous
 hand-copied approach broke on each one (the `apex` variant existed only in
 `recoil_2025.06.11` and had been dead ever since).
 
+### How the AngelScript is laid out
+
+Every `manager/<name>.as` is a SHIM: a table of contents that `#include`s the
+real code from `manager/<name>/`. Edit the parts, not the shim — except to add a
+part, which means adding a line to the shim.
+
+**The include order in a shim is load-bearing.** `CScriptBuilder` adds a section
+before walking that section's own includes, depth-first in listed order, so the
+shim's list is literally the order the compiler sees the declarations in.
+Functions are visible module-wide regardless of file; globals, consts and types
+are not, and must be declared before the line that reads them. Moving a function
+between parts is free. Moving a global earlier than its declaration is a
+`No matching symbol` that disables the whole variant.
+
+Both `AiMakeTask`s are pipelines: `builder/maketask.as` and
+`factory/maketask.as` are short ordered lists of named rules that live in the
+sibling `rules_*.as`. A rule returns null to pass. **Where a new rule goes in
+that list is the design decision** — see the 2026-08-01 composition finding
+below.
+
+`script/side.as` holds `SideDef3`/`SideName3`, outside every namespace, which is
+how an Armada/Cortex/Legion triple gets resolved. Use it rather than writing
+another `if (side == "cortex")` chain.
+
+Files are kept under ~600 lines deliberately: above that, work degenerates into
+grep-an-anchor-and-blind-replace, and a `str.replace` anchor that does not match
+fails silently. That has eaten edits here at least five times.
+
 See **`CHANGES.md`** for everything this AI does differently from stock BARb,
 which layer each change lives in, and how well each is actually measured.
 
@@ -223,7 +251,7 @@ share a shape: the thing didn't work, and nothing said so.
   with an `assert` — compiled out in release — then indexes `surfThreat`
   unchecked. Sampling a ring of radius 1500 around a base near the map edge read
   off-map memory and killed the engine at frame 3 (0xc0000005). **Guard every
-  position with `Builder::OnMap()`** — `AiTerrainWidth()`/`AiTerrainHeight()`
+  position with `OnMap()`** (`script/world.as`) — `AiTerrainWidth()`/`AiTerrainHeight()`
   are bound, and `OnMap` already exists for exactly this. Even so,
   the value is 3% nonzero across ten games, which is why the old commander
   retreat never fired — do not build a trigger on it.

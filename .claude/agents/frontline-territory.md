@@ -109,7 +109,7 @@ error here shows up as four unrelated-looking bugs.
 
 1. Does the change read enemy influence or enemy cost? Zero means "not looked", not
    "not there" — show unknown is handled as unknown. `IsFrontKnown()` exists for this.
-2. Is the read bounds-guarded? `PosToXZ` does not check, and `Builder::OnMap` is the
+2. Is the read bounds-guarded? `PosToXZ` does not check, and `OnMap` (script/world.as) is the
    guard used elsewhere.
 3. Is the derived value shared across the team, or computed locally? A rear player's
    local answer is `cFoe=0`. Use the `apexFoeX/Z/W` blackboard pooling.

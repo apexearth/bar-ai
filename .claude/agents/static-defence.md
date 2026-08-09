@@ -122,5 +122,5 @@ if theres a frontline we should build defenses there regardless of any cap."**
 7. Does it place the tower where a constructor can survive the walk? Check
    `Builder::ThreatFor`, `PastFront`, `StandoffPos` are consulted — and note
    `ai.GetBuilderThreatAt` reads zero ~97% of the time and **crashes on an off-map
-   position**; guard every position with `Builder::OnMap`.
+   position**; guard every position with `OnMap` (script/world.as).
 8. Count the structure, not the request. A `porc+` line is a REQUEST.

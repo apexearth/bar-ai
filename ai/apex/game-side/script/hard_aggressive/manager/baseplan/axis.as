@@ -17,10 +17,10 @@ int AxisScore(const AIFloat3& in fwd, const AIFloat3& in across, CCircuitDef@ pr
 		const float depth = BAND_BACK[ECO] + float(row) * BAND_ROW[ECO] * 3.f;
 		for (uint c = 0; c < cols; c += AXIS_PROBE_STEP) {
 			const AIFloat3 cell = gAnchor - fwd * depth + across * ColAt(ECO, c);
-			if (!Builder::OnMap(cell))
+			if (!OnMap(cell))
 				continue;
 			const AIFloat3 site = ai.FindBuildSiteNear(probe, cell, SEEK);
-			if (Builder::OnMap(site) && (site.distance2D(cell) <= SEEK))
+			if (OnMap(site) && (site.distance2D(cell) <= SEEK))
 				++ok;
 		}
 	}
@@ -58,7 +58,7 @@ bool Frame()
 		bool have = Front::FrontNear(gAnchor, toward);
 		if (!have) {
 			toward = aiEnemyMgr.GetEnemyPos();
-			have = Builder::OnMap(toward);
+			have = OnMap(toward);
 		}
 		if (!have)
 			return false;

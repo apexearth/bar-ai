@@ -83,7 +83,7 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			// The crew SUPPRESSES the optional economy cluster for its members;
 			// it does not replace their task selection.
 			//
-			// First attempt dispatched the crew above this whole function, which
+			// First attempt dispatched the crew above the whole pipeline, which
 			// skipped every threat veto, abandon and repair rule an ordinary
 			// constructor gets -- apexearth: "cons seem really dumb, dark green
 			// just walking its cons off to die", and the economy was worse. The
@@ -134,7 +134,7 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			if ((Factory::gLastPhase >= 4)
 				&& ((crewRole == Crew::ECO) || (crewRole == Crew::HOME))) {
 				// Clearing an obsolete base outranks ADDING to it. ObsoleteReclaim
-				// also sits at the end of this function, which is why it fired
+				// also sits at the end of the pipeline, which is why it fired
 				// twice in thirty minutes: a constructor was always offered
 				// something else first. Promoted only above the ECO offers -- the
 				// cheapest constructor time here -- and only once the junk is

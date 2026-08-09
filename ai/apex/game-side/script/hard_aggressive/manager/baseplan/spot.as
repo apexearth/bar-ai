@@ -39,7 +39,7 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 			++gFailBusy;
 			continue;
 		}
-		if (!Builder::OnMap(cell)) {
+		if (!OnMap(cell)) {
 			++gFailTerrain;
 			continue;
 		}
@@ -48,7 +48,7 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 			continue;
 		}
 		const AIFloat3 site = ai.FindBuildSiteNear(def, cell, seek);
-		if (!Builder::OnMap(site)) {
+		if (!OnMap(site)) {
 			++gFailTerrain;   // nothing can stand near this cell
 			continue;
 		}
@@ -106,7 +106,7 @@ void Update()
 	CCircuitDef@ probe = TechProbeDef();
 	if (probe !is null) {
 		const AIFloat3 site = ai.FindBuildSiteNear(probe, gAnchor, TECH_PROBE_R);
-		if (Builder::OnMap(site))
+		if (OnMap(site))
 			techDist = int(site.distance2D(gAnchor));
 	}
 

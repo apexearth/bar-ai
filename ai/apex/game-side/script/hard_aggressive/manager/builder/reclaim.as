@@ -34,7 +34,7 @@ const float WRECK_RICH_R  = 1400.f;
 const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
 const int   WRECK_TIMEOUT = 1 * MINUTE;
 int gNextWreck = 0;
-int gNextMetalEmptyDiag = 0;  // temporary diagnostic, see the isMetalEmpty block below
+int gNextMetalEmptyDiag = 0;  // temporary diagnostic, see ScavengeWrecks
 // Spacing on the safe-mex grab. Short: an unclaimed spot is income we are not
 // earning, and the check itself is one lookup.
 const int REAR_MEX_PERIOD = 2 * SECOND;
@@ -101,8 +101,8 @@ float WreckSeenValue()
 // declared only once ThreatFor() -- which needs it -- was already in scope.
 const float CON_THREAT_VETO = 4.0f;
 
-// Declared here rather than beside its use: AngelScript needs globals declared
-// before use, and the commander flee that rate-limits on it sits far above.
+// Declared here rather than beside its use in rules_commander.as: AngelScript
+// needs globals declared before use, and the shims fix the order of the files.
 int gNextCommFleeLog = 0;
 
 // apexearth: "have our units never assist another unit build something if

@@ -251,7 +251,7 @@ IUnitTask@ MexWork(CCircuitUnit@ unit)
 	// dumb, dark green just walking its cons off to die instead of making
 	// economy." A crew is a standing job, not a licence to ignore the map.
 	const AIFloat3 where = aiEconomyMgr.GetMexSpotPos(spot);
-	if (Builder::OnMap(where)) {
+	if (OnMap(where)) {
 		float heat = Builder::ThreatFor(unit, where);
 		heat = Builder::MexHeat(where, heat);
 		if (heat > Builder::CON_THREAT_VETO)
@@ -375,7 +375,7 @@ IUnitTask@ FrontWork(CCircuitUnit@ unit)
 	}
 
 	const AIFloat3 site = ai.FindBuildSiteNear(tower, spot, FRONT_SUPPORT_R);
-	if (!Builder::OnMap(site))
+	if (!OnMap(site))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(
 			isTurret ? Task::BuildType::DEFENCE : Task::BuildType::NANO,

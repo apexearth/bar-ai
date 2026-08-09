@@ -13,10 +13,9 @@
 --
 --   python tools/run_match.py ... --modoption apex_orbit_rate=0
 --
--- Currently read by the DLL:
---   apex_orbit_rate     rate the standoff ring precesses      (default 0.18)
---   apex_squad_spacing  lateral spacing of a travelling line  (default 96)
---   apex_range_mod      standoff as a fraction of weapon range (default 0.95)
+-- Every name in NAMES below, with its default and where it is read, is listed
+-- in docs/15-tunables.md. Twelve are read by the DLL and three by AngelScript;
+-- a name missing from NAMES is silently ignored, so add both together.
 --------------------------------------------------------------------------------
 
 local modOptions = Spring.GetModOptions() or {}
