@@ -16,6 +16,9 @@
 #include "factory/ecolead.as"      // the eco-lead role and its air plant
 #include "factory/techlead.as"     // T2 mex, rush readiness, follower gating
 #include "factory/defs.as"         // factory def names, userData, fodder
+#include "factory/rules_recruit.as" // production floors: rez bots, fighters, scouts
+#include "factory/rules_rush.as"    // build power during the tech rush, army catch-up
+#include "factory/rules_ecolead.as" // the eco lead's deliberately idle line
 #include "factory/maketask.as"     // AiMakeTask: what a factory builds next
 #include "factory/hooks.as"        // task/unit hooks, save/load, T(), rush logging
 #include "factory/switch.as"       // AiIsSwitchTime / AiIsSwitchAllowed
