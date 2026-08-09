@@ -1425,10 +1425,19 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (Factory::HoldsLateFighter(unit))
 		return null;
 	if (IsFodder(cdef)) {
-		// Scouts already get an ungrouped SCOUT task from stock. Raiders are
-		// first parked in Defend(RAID, quota.raid[0]); skip straight past that.
-		if (cdef.IsRoleAny(Unit::Role::RAIDER.mask))
-			return aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::RAID));
+		// RAIDERS GROUP BEFORE THEY GO. This used to send every raider straight
+		// to its own RAID task the moment it was built, skipping the pool stock
+		// parks them in -- Defend(RAID, quota.raid[0]) -- which holds them until
+		// they add up to quota.raid[0] power and then promotes them TOGETHER.
+		// The shortcut got each raider moving sooner and guaranteed it moved
+		// alone, so we trickled ones and twos into a map being raided by packs.
+		// Our quota.raid is [10, 65], identical to stock's, so the pack behaviour
+		// was always configured -- we were routing around it.
+		// apexearth: "they raid us and we never raid them.... they'll attack with
+		// like 15 grunts all together... wiping out a lot of our stuff.... we
+		// never really do that to the enemy... It really sets the stage/posture
+		// for the T2 phase of the game. we *start* the t2 phase behind because of
+		// all that raiding."
 		return aiMilitaryMgr.DefaultMakeTask(unit);
 	}
 	if (WantsMassing(cdef)) {
