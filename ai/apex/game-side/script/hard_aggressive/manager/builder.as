@@ -3420,7 +3420,18 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// still the OLD task here -- Reevaluate only swaps it once this function
 	// returns a differing build type -- so this compares current against
 	// proposed. Danger is handled earlier, by the comm-abandon retreat.
-	if (isComm && (task !is null) && (task.GetType() == Task::Type::BUILDER)) {
+	// The FIRST factory is never worth holding a mex over. The commander is the
+	// only builder in the opening, so while it is pinned to a mex chain nothing
+	// else can start the lab -- and there is always another mex spot, so the pin
+	// does not release on its own. apexearth, watching a 6v6: "'calm phil' didn't
+	// make a lab until 4m in... he was walking around unsure what to do with
+	// himself." That player took 4.1 minutes to a first factory against 1.0-2.8
+	// for the other five.
+	const bool firstFactory = (task !is null)
+			&& (task.GetType() == Task::Type::BUILDER)
+			&& (task.GetBuildType() == Task::BuildType::FACTORY)
+			&& !Factory::HaveAnyFactory();
+	if (isComm && !firstFactory && (task !is null) && (task.GetType() == Task::Type::BUILDER)) {
 		IUnitTask@ held = unit.task;
 		const string heldKind = SiteBuildName(held);
 		if ((heldKind != "") && (held.GetBuildType() != task.GetBuildType())

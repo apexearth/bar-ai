@@ -1213,6 +1213,73 @@ void UpdateTeamPush()
 	}
 }
 
+//------------------------------------------------------------------------------
+// Lateral corridor probe. Read-only: it issues no order, enqueues no task and
+// spends no build power.
+//
+// GetAllyInflAt counts MOBILE units (see Front::Scan), so sampling it forward of
+// our own ground measures where our army walks, and GetEnemyInflAt sampled
+// forward of theirs measures where their army walks. Both are reported across
+// the home->enemy axis, in units of the base separation: 0 is dead on the axis,
+// 0.5 is half the base separation off it.
+//------------------------------------------------------------------------------
+const int PROBE_SAMPLE = 15 * SECOND;
+const int PROBE_N      = 16;
+
+int gNextLatProbe = 0;
+
+void UpdateCorridorProbe()
+{
+	if (ai.frame < gNextLatProbe)
+		return;
+	gNextLatProbe = ai.frame + PROBE_SAMPLE;
+	if (!Builder::gHomeSet)
+		return;
+	const AIFloat3 home = Builder::gHomePos;
+	const AIFloat3 foe  = aiEnemyMgr.GetEnemyPos();
+	const float ex = foe.x - home.x;
+	const float ez = foe.z - home.z;
+	const float sep = sqrt(ex * ex + ez * ez);
+	if (sep < 1.f)
+		return;
+	const float ux = ex / sep;
+	const float uz = ez / sep;
+
+	float aw = 0.f, aAbs = 0.f, aSig = 0.f;
+	float fw = 0.f, fAbs = 0.f, fSig = 0.f;
+	for (int i = 0; i < PROBE_N; ++i) {
+		for (int j = 0; j < PROBE_N; ++j) {
+			AIFloat3 p;
+			p.x = float(AiTerrainWidth())  * (float(i) + .5f) / float(PROBE_N);
+			p.z = float(AiTerrainHeight()) * (float(j) + .5f) / float(PROBE_N);
+			if (!ai.IsPosOnMap(p))
+				continue;
+			const float dx = p.x - home.x;
+			const float dz = p.z - home.z;
+			const float along = (dx * ux + dz * uz) / sep;
+			const float lat = (dx * uz - dz * ux) / sep;
+			const float mag = (lat < 0.f) ? -lat : lat;
+			if ((along > 0.40f) && (along < 1.10f)) {
+				const float a = ai.GetAllyInflAt(p);
+				aw += a; aAbs += a * mag; aSig += a * lat;
+			}
+			if ((along > -0.10f) && (along < 0.60f)) {
+				const float f = ai.GetEnemyInflAt(p);
+				fw += f; fAbs += f * mag; fSig += f * lat;
+			}
+		}
+	}
+	if ((aw <= 0.f) && (fw <= 0.f))
+		return;
+	AiLog(Factory::T() + "apexlat: ours |lat|="
+		+ formatFloat((aw > 0.f) ? aAbs / aw : -1.f, "", 0, 2)
+		+ " lat=" + formatFloat((aw > 0.f) ? aSig / aw : 0.f, "", 0, 2)
+		+ " w=" + formatFloat(aw, "", 0, 0)
+		+ " | theirs |lat|=" + formatFloat((fw > 0.f) ? fAbs / fw : -1.f, "", 0, 2)
+		+ " lat=" + formatFloat((fw > 0.f) ? fSig / fw : 0.f, "", 0, 2)
+		+ " w=" + formatFloat(fw, "", 0, 0));
+}
+
 void UpdatePosture()
 {
 	// Before UpdateRushRole, which overwrites quota.attack on the lead. Captured
@@ -1245,6 +1312,7 @@ void UpdatePosture()
 	}
 	UpdateFrontGun();
 	UpdateAirThreat();
+	UpdateCorridorProbe();
 	Commander::UpdateCaution();
 	// DISABLED. Exit-code audit: aborts (exit -1003) jumped from 0-2 per 20-game
 	// run to 14-17 the moment this landed, and stayed there. The engine is dying,
