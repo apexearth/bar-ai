@@ -1,6 +1,6 @@
 # Runtime tunables — the registry
 
-Fifteen constants can be overridden per match without a rebuild and without
+Twenty-one constants can be overridden per match without a rebuild and without
 touching the AI's shipped defaults. They exist so a threshold can be A/B'd
 instead of argued about.
 
@@ -81,3 +81,24 @@ live in MilitaryManager/EconomyManager and are unaffected.
 | name | default | read by | what it does |
 |---|---|---|---|
 | `apex_solo_stock` | 1 (on) | AngelScript `script/world.as` `ApexActive()` | 0 makes apex run its own game-side rules even with no allies, i.e. the pre-2026-08-10 behaviour |
+
+## The raid-the-economy set
+
+Added alongside the raiding work; verified 2026-08-09 by reading every call
+site. These were in `dev_tunables.lua` but had no row here.
+
+| name | default | read by | what it does |
+|---|---|---|---|
+| `apex_attack_threat_mod` | 1.0 (upstream behaviour) | C++ `AttackTask.cpp` `Update` | what an attack party pays for contested ground in the path query. Raising it makes the flank the shortest path, the way `RaidTask`'s `RAID_ROAM_THREAT_MOD = 8` already does for raid parties |
+| `apex_eco_target` | 1.0 (on) | C++ `AttackTask.cpp` `FindTarget` | 0 drops the preference for economic targets with little army standing beside them |
+| `apex_mass_vs_army` | 0 (off) | AngelScript `military/massing.as` `MassWant` | 0 pins the massing quota at the floor. Above 0, the quota scales between `MASS_FLOOR` and `MASS_CAP` on the enemy-to-our army ratio |
+| `apex_mass_floor` | 30 (`MASS_FLOOR`) | AngelScript `military/massing.as` `MassWant` | smallest attack party, as a **power** sum — not a unit count and not metal |
+| `apex_mass_hold_secs` | 120 | AngelScript `military/massing.as` `UpdateMassing` | how long the army may wait for a full mass before committing anyway |
+
+`MASS_CAP` is 48 and `MASS_FLOOR` 30, both in `military/roles.as`.
+
+| name | default | read by | what it does |
+|---|---|---|---|
+| `apex_edge_band` | 0.20 (`EDGE_ECO_BAND`) | C++ `AttackTask.cpp` `FindTarget` | how wide the map-edge strip is, as a fraction of the map's shorter side |
+| `apex_edge_bonus` | 2.0 (`EDGE_ECO_BONUS`) | C++ `AttackTask.cpp` `FindTarget` | preference multiplier for economic targets inside that strip. apexearth: "the best mex attacks can be done around the edges of the map" |
+| `apex_ping_attacks` | 0 (off) | C++ `AttackTask.cpp` `FindTarget` | 1 drops one "ATTACK" map marker per attack party, the first time it picks a target. Dev aid for watching a game; markers are visible clutter otherwise |

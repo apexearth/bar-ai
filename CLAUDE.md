@@ -4,7 +4,7 @@ AI development for **Beyond All Reason** (BAR), the RTS on the **Recoil** engine
 (a fork of Spring RTS). This repo is the source of truth for a custom AI; the
 live game install is a deploy target.
 
-Everything below was verified on this machine on 2026-07-27 unless marked
+Everything below was verified on this machine on 2026-08-09 unless marked
 otherwise. Re-verify paths before relying on them — engine versions change.
 
 ## Local layout
@@ -13,10 +13,10 @@ otherwise. Re-verify paths before relying on them — engine versions change.
 |---|---|
 | Launcher install | `C:\Users\apexe\AppData\Local\Programs\Beyond-All-Reason` |
 | Spring data / write dir | `…\Beyond-All-Reason\data` |
-| Active engine | `…\data\engine\recoil_2026.06.12` (from `launcher_cfg.json` → `config.json`) |
+| Active engine | `…\data\engine\recoil_2026.07.04` (from `launcher_cfg.json` → `config.json`) |
 | Game (harness) | `…\data\games\BAR.sdd` — git clone of `beyond-all-reason/Beyond-All-Reason`, branch `apex`, pinned 2025-11-28 |
 | Game (reference) | `vendor/bar` — the same repo at upstream `master`, for looking things up |
-| Engine-side AIs | `…\data\engine\<ver>\AI\Skirmish\{BARb,BARbApex,CircuitAI,NullAI}\<version>\` |
+| Engine-side AIs | `…\data\engine\<ver>\AI\Skirmish\{BARb,Apex,ApexCtl,ApexStk,CircuitAI,NullAI}\<version>\` |
 | Game-side AI config | `BAR.sdd\luarules\configs\<shortName>\<version>\{config,script}` |
 
 `tools/bar_env.py` resolves all of this at runtime. Never hardcode these paths in
@@ -67,8 +67,10 @@ them. Reach for C++ only when you need a mechanism that doesn't exist yet.
 ## Three axes — do not confuse them
 
 - **shortName** → the AI's identity. **This is the only one multiplayer keeps.**
-  `AI/Skirmish/<shortName>/<version>/`. Ours is `BARbApex`, so the harness spec
-  is `BARbApex:apex`, not `BARb:apex`.
+  `AI/Skirmish/<shortName>/<version>/`. Ours is `Apex`, so the harness spec
+  is `Apex:apex`, not `BARb:apex`. (It was `BARbApex` until 2026-08; nothing
+  validates a shortName, so an old command silently produces
+  `unknown skirmish AI` and a variant that scores zero on everything.)
 - **AI version** → a variant within one shortName.
   `AIInfo.lua`'s `version` value must equal the folder name.
 - **profile** → a difficulty/playstyle within one version, chosen by the
@@ -95,7 +97,7 @@ from every `[AI]` block exactly as a hosted game does.
 
 Config lookup falls back: `config/<profile>/x.json` → `config/x.json`.
 Confirmed at runtime in an infolog:
-`Load script: LuaRules\Configs\BARbApex\apex\script\hard_aggressive\init.as`
+`Load script: LuaRules\Configs\Apex\apex\script\hard_aggressive\init.as`
 
 Corresponding C++ (CircuitAI `util/FileSystem.h`):
 `"LuaRules/Configs/" + shortName + "/" + version + "/" + subdir + "/"`,
@@ -177,18 +179,24 @@ python tools/unitdef.py legsy --builds       # what it builds
 python tools/unitdef.py "advanced ship"      # search display names
 python tools/unitdef.py --trees              # both game trees and their dates
 
-python tools/run_match.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_match.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1
-python tools/run_match.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_match.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
     --map "Comet Catcher" --per-side 8 --watch   # windowed, real time, watchable
 
 python tools/review.py <run> --control <run>  # THE way to judge a run; see below
 python tools/check.py                        # pre-deploy: bad JSON, dead unit names
 python tools/trace_flow.py <match-or-run-dir> # did the pooling strategy actually work
-python tools/run_tournament.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_tournament.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
     --maps "Comet Catcher" --games 10
 python tools/run_tournament.py --report
+
+python tools/composition.py <tournament>     # where the metal actually went
+python tools/tl.py tournaments/<run>         # paired timeline by game minute
+python tools/fight1v1.py <run-dir>           # army trade efficiency, in metal
 ```
+
+Batch output lands in `tournaments/<stamp>-<slug>/`, not `matches/`.
 
 Measured on this machine: a 27 game-minute match completes in ~44 s wall
 (~37× realtime) with a warm archive cache; a cold cache adds ~35 s.
@@ -327,7 +335,8 @@ constraint either.
 the games this AI is actually hosted in — re-check the income before applying
 it.**
 
-At benchmark scale: apexdef produces ~110,000 metal across a 45-minute 4v4 —
+At benchmark scale: apexdef (the pre-merge variant, since folded into apex)
+produces ~110,000 metal across a 45-minute 4v4 —
 about 40 metal/second for the whole team. Against that, T3 is two or three units
 a game, and that is what gets fielded. Stock BARb fields none.
 

@@ -231,14 +231,54 @@ landmine.
 ## Batch runs
 
 ```bash
-python tools/run_tournament.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_tournament.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
     --maps "Comet Catcher,Supreme Isthmus" --games 10
 python tools/run_tournament.py --report
 ```
 
 Sides are swapped every other game because team 0 and team 1 don't get equivalent
-start positions on most maps — without the swap you measure the map. Results
-append to `matches/tournament.jsonl`.
+start positions on most maps — without the swap you measure the map.
+
+Output is one self-contained directory per run — **`tournaments/`, not
+`matches/`**:
+
+```
+tournaments/<stamp>-<slug>/
+    ledger.jsonl      one JSON row per completed match
+    summary.txt       the printed report
+    config.json       what was run, so a result is reproducible
+    matches/tNNN-.../ script.txt, infolog.txt, result.json per match
+```
+
+Engine scratch (write dirs, archive caches, demos) lives in `runtime/`. Both
+`tournaments/` and `runtime/` are gitignored.
+
+Parallelism only scales with `ThreadPinPolicy = 0` in `tools/headless.cfg` —
+with the engine's default pinning every instance pins to the *same* cores and
+they serialise while the rest of the machine idles.
+
+### Reading a batch
+
+```bash
+python tools/review.py <run> --control <run>   # the verdict, with gates
+python tools/tl.py tournaments/<run>           # paired timeline by game minute
+python tools/composition.py <run>              # where the metal actually went
+python tools/fight1v1.py <run-dir> [more...]   # army trade efficiency in metal
+```
+
+`tl.py` reads which side is which from each match's `script.txt`, so a
+side-swapping tournament never averages us against ourselves. `fight1v1.py`
+takes each side's own last sample, because a dead team stops reporting and the
+global last frame contains only the survivor.
+
+### The game-length cap is part of the measurement
+
+Every 1v1 tournament in this repo before 2026-08-10 capped at 20 minutes, and
+most games were still running at the cap — so the win rate was not merely noisy,
+it was unmeasurable, and the army-trade proxy stood in for it. At 45 minutes
+essentially every 1v1 reaches game over. Median 1v1 game length is 24-34 min:
+a 20-minute cap cuts games off at roughly the point they are being decided.
+Check that your cap is longer than the games before reading a win rate.
 
 At ~45 s per match, 10 games is ~8 minutes. Parallelising is possible with
 separate write dirs plus `--only-local`, at the cost of contended CPU; the sim is

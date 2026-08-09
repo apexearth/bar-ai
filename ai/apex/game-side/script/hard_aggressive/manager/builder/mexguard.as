@@ -13,13 +13,36 @@ namespace Builder {
 // past that tier: at a mex the cheap turret is the right answer precisely because
 // it only has to beat a scout.
 const float MEX_GUARD_RADIUS = 260.f;   // turret sits on top of the mex
-// Two turrets while the economy is still small, one after that. apexearth:
-// "more towers around our mexes, at least in that early phase of the game".
-// A lone turret trades with a raider; a pair holds against the several that
-// stock actually sends. Once LandIsPrecious the ground is worth more than the
-// extra turret, and the army should be the answer.
-uint MexGuardWanted()
+// HOW MANY TURRETS A MEX WANTS IS A FUNCTION OF WHERE IT SITS.
+//
+// apexearth: "The closer our metal extractors are to the enemy, the more
+// defenses we should be building on them. All of our mexes need to have at
+// least 1 turret in range to defend it."
+//
+// FrontT projects a position onto the home->enemy-centroid axis: 0 at our base,
+// 1 at the enemy. That is the same measure the constructor safety rules already
+// use, so a forward mex here is forward by the AI's own existing definition.
+//
+// The floor is 1 and never 0, at any income and any distance. LandIsPrecious
+// only decides whether a REAR mex also gets a second one -- it may not take the
+// last turret off a mex, and it does not apply forward at all, where the ground
+// being contested is the whole reason the turrets are there.
+// The thresholds are set against the range WE ACTUALLY HOLD, not against the
+// 0..1 the axis defines. Measured over a 20-minute 4v4, 76 guard placements: our
+// own mexes span frontT -0.01 to 0.44 and stop there, because a mex past midfield
+// is the enemy's. Thresholds of 0.35/0.60 put 69 of 76 in the rear tier and fired
+// the forward tier zero times -- a gradient that does not engage is not a
+// gradient. 0.20/0.40 splits the range we occupy into three populated tiers.
+const float MEX_GUARD_MID_FRAC = 0.20f;
+const float MEX_GUARD_FWD_FRAC = 0.40f;
+
+uint MexGuardWanted(const AIFloat3& in at)
 {
+	const float t = FrontT(at);
+	if (t >= MEX_GUARD_FWD_FRAC)
+		return 4;
+	if (t >= MEX_GUARD_MID_FRAC)
+		return 3;
 	return LandIsPrecious() ? 1 : 2;
 }
 // How far a constructor will travel to guard one. Measured on the first run:
@@ -27,9 +50,19 @@ uint MexGuardWanted()
 // constructors killed and is why this rule has to be about the mex you are
 // standing next to.
 const float MEX_GUARD_REACH  = 1200.f;
-// Close enough that we are standing on it; the walk-into-fire veto is moot.
-// Radius counted when asking how covered a mex already is.
+// A mex with NOTHING covering it is the exception to that, because the
+// alternative to a long walk is the mex staying bare forever: no constructor
+// may ever pass within 1200 of it. Ordinary constructors only -- the commander
+// keeps the short reach, since walking it across the map is how games are lost.
+const float MEX_BARE_REACH   = 2400.f;
+// Radius counted when asking how thick defence around a mex already is.
 const float MEX_COVER_RADIUS = 700.f;
+// A turret only defends what it can SHOOT, and armllt/corllt/leglht reach 430.
+// MEX_COVER_RADIUS answers "how thick is defence around here", which is the
+// right question for ranking and the wrong one for "is this mex defended" -- a
+// tower 700 elmos away covers nothing. Anything this rule places lands within
+// MEX_GUARD_RADIUS of the mex, so a guard it builds always counts.
+const float MEX_IN_RANGE     = 420.f;
 // How much the walk from the builder counts against exposure. Small: it breaks
 // ties between comparable mexes without letting a safe mex underfoot outrank a
 // bare one on the front.
@@ -50,8 +83,6 @@ CCircuitDef@ MexGuardTower(CCircuitUnit@ unit)
 
 IUnitTask@ MexGuard(CCircuitUnit@ unit)
 {
-	if (aiEconomyMgr.isEnergyStalling)
-		return null;
 	CCircuitDef@ mex = MexDef();
 	if ((mex is null) || (mex.count <= 0))
 		return null;
@@ -65,14 +96,33 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 
 	// Nearest undefended mex to this constructor, so it guards what it is
 	// standing next to rather than walking the map.
+	//
+	// A BARE mex -- one with no turret within firing range of it -- always
+	// outranks one that merely wants another turret, whatever either scores
+	// below. Without that split the score alone decides, and a mex at 2 cover
+	// near the enemy beats a bare one further back, so the "at least one" floor
+	// is never reached on the rear half of the map. bestBare latches: once a
+	// bare mex is in hand, no covered one may displace it.
+	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	const float reach = isComm ? MEX_GUARD_REACH : MEX_BARE_REACH;
+	// Stalling energy stops us THICKENING defence, not putting the first turret
+	// on a mex that has none. apexearth: "all of our mexes need to have at least
+	// 1 turret in range... make sure we always do this."
+	const bool stalling = aiEconomyMgr.isEnergyStalling;
 	CCircuitUnit@ pick = null;
 	float best = -1.f;
+	bool bestBare = false;
 	const AIFloat3 me = unit.GetPos(ai.frame);
 	for (uint i = 0; i < mine.length(); ++i) {
 		if (mine[i] is null)
 			continue;
 		const AIFloat3 at = mine[i].GetPos(ai.frame);
-		if (!OnMap(at) || !AreaNeedsDefence(at, MexGuardWanted()))
+		if (!OnMap(at))
+			continue;
+		const bool bare = (DefenceWithin(at, MEX_IN_RANGE) == 0);
+		if (bestBare && !bare)
+			continue;
+		if (!bare && (stalling || !AreaNeedsDefence(at, MexGuardWanted(at))))
 			continue;
 		const float d = at.distance2D(me);
 		// The threat veto exists to stop a constructor WALKING into fire. If we
@@ -82,7 +132,7 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 		// mexes, 1 radar, and 3 wind turbines he made near the enemy base."
 		if ((d > MEX_GUARD_HERE) && (ThreatFor(unit, at) > CON_THREAT_VETO))
 			continue;
-		if (d > MEX_GUARD_REACH)
+		if (d > (bare ? reach : MEX_GUARD_REACH))
 			continue;
 		// Among the mexes this constructor can reach, guard the one most likely
 		// to be attacked first, not merely the closest one to the builder. Same
@@ -96,6 +146,11 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 		const float cover = float(Military::FenceCountNear(at, MEX_COVER_RADIUS));
 		const float score = (cover + 1.f) * at.distance2D(aiEnemyMgr.GetEnemyPos())
 				+ d * MEX_WALK_WEIGHT;
+		if (bare && !bestBare) {
+			// First bare mex seen: it wins outright over anything held so far.
+			bestBare = true;
+			best = -1.f;
+		}
 		if ((best < 0.f) || (score < best)) {
 			best = score;
 			@pick = mine[i];
@@ -114,7 +169,11 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 		return null;
 	NoteDigOrder(site);
 	AiLog(Factory::T() + "apex: mex guard " + tower.GetName()
-		+ " on a mex " + int(best) + " away, mexes=" + mex.count);
+		+ (bestBare ? " on a BARE mex" : " thickening a mex")
+		+ " score=" + int(best)
+		+ " frontT=" + formatFloat(FrontT(at), "", 0, 2)
+		+ " wanted=" + int(MexGuardWanted(at))
+		+ " mexes=" + mex.count);
 	return post;
 }
 

@@ -18,16 +18,43 @@ Per profile, in `game-side/script/<profile>/`:
 ```
 init.as                 AiInit    — declares which JSON files to load
 main.as                 AiMain    — one-time setup;  AiUpdate — every 30 frames
+manager/air.as          air factory, air lead election, wings
+manager/assist.as       assist bots
+manager/baseplan.as     where buildings go — grid, walkways, reserved spots
 manager/builder.as      construction task selection
+manager/crew.as         constructor crews
 manager/economy.as      economy tick
 manager/factory.as      factory choice and unit recruitment
+manager/frontline.as    influence map, territory, front/back line
 manager/military.as     combat task selection, defence
 misc/commander.as       commander behaviour
 ```
 
+Stock ships only `builder`/`economy`/`factory`/`military`; the rest are ours.
+
+**Every `manager/<name>.as` above is a shim** — a table of contents that
+`#include`s the real code from a sibling `manager/<name>/` directory. `apex`
+has 69 `.as` files under `hard_aggressive/`. Edit the parts, not the shim,
+except to add a part (which means adding a line to the shim).
+
+**The include order in a shim is load-bearing.** `CScriptBuilder` adds a section
+before walking that section's own includes, depth-first in listed order, so the
+shim's list is literally the order the compiler sees declarations in. Functions
+are visible module-wide regardless of file; globals, consts and types are not,
+and must be declared before the line that reads them. Moving a function between
+parts is free; moving a global earlier than its declaration is a
+`No matching symbol` that disables the whole variant.
+
+Both `AiMakeTask`s are **rule pipelines**: `builder/maketask.as` and
+`factory/maketask.as` are short ordered lists of named rules that live in the
+sibling `rules_*.as` files. A rule returns null to pass. Where a new rule goes
+in that list is the design decision — see CLAUDE.md's composition finding.
+
 Shared, one level up (`script/`): `common.as`, `define.as` (constants: `SECOND`
 = 30, `MINUTE`, `SQUARE_SIZE` = 8, `NEAR_ZERO`), `unit.as` (role and attribute
-masks), `task.as` (task constructors).
+masks), `task.as` (task constructors), `side.as` (`SideDef3`/`SideName3`, the
+Armada/Cortex/Legion faction dispatch), `world.as` (`OnMap` and other position
+guards).
 
 `#include` is relative to the including file.
 

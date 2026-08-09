@@ -32,6 +32,36 @@ int gNextArmyLog = 0;
 const int   FODDER_EVERY = 3;
 int gArmyPushCount = 0;
 
+// WHAT A DEFENSIVE POSTURE BUYS.
+//
+// apexearth: "when we are losing and playing defensively we should stop building
+// units like the 'Bull'; in a defensive posture we need to buy long range units
+// which can hit enemies from the safety of within our base. Also we need to
+// create spam units, cheap T1 units and use them as fodder against the enemy."
+//
+// Military::gTurtle is the AI's own statement that it is losing the trade and has
+// stopped attacking (see military/state.as). While it holds, the army is parked in
+// DEFEND tasks inside our own influence -- which is exactly the position an
+// assault tank is worst in and artillery is best in. A Bull is 950 metal of
+// short-ranged brawler bought to stand still; the ARTY role is 110-920 depending
+// on tier and shoots from behind whatever is holding the line.
+//
+// This is a SUBSTITUTION, not an addition: the factory was going to spend the slot
+// on something regardless, so unlike the builder-side rules CLAUDE.md warns about
+// it costs no constructor time and displaces no expansion. What it displaces is
+// the assault mainstay, which is the point.
+//
+// Alternating rather than all-artillery: artillery alone dies to anything that
+// reaches it. Every other pick is fodder -- the cheap bodies that soak the charge
+// while the artillery fires. Fodder() answers per factory and returns null when
+// this line's cheapest unit is not actually cheap, so this never buys an
+// expensive unit believing it is spam.
+const int   TURTLE_MIX_SPACING = 10 * SECOND;
+const int   TURTLE_ARTY_EVERY  = 2;   // every other pick is the long-range one
+int gNextTurtleMix    = 0;
+int gTurtleMixCount   = 0;
+int gNextTurtleMixLog = 0;
+
 int gRushLead = -1;   // last PRIMARY lead this instance saw published
 bool gAmLead = false;   // this team holds one of the lead slots
 bool gT1Reclaimed = false;   // one-shot: we fed our T1 lab into the plant

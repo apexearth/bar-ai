@@ -9,7 +9,7 @@ Three sources, resolved at AI init:
 ```
 SkirmishAI.dll                          the C++ engine of the AI (CircuitAI)
   ├─ engine/<ver>/AI/Skirmish/BARb/<version>/{config,script}/    fallback defaults
-  └─ BAR.sdd/luarules/configs/BARb/<version>/{config,script}/    what actually loads
+  └─ BAR.sdd/luarules/configs/<shortName>/<version>/{config,script}/  what actually loads
 ```
 
 The game-side path is built in CircuitAI's `util/FileSystem.h`:
@@ -26,9 +26,9 @@ option, which defaults to **true**.
 Confirmed in a real infolog from this machine:
 
 ```
-Skirmish AI <BARbarIAn Apex-apex>: 1.6.24
-Skirmish AI <BARbarIAn Apex-apex>: Load script: LuaRules\Configs\BARb\apex\script\hard_aggressive\init.as
-Skirmish AI <BARbarIAn Apex-apex>: hard_aggressive AngelScript Rules!
+Skirmish AI <Apex-apex>: 1.6.24
+Skirmish AI <Apex-apex>: Load script: LuaRules\Configs\Apex\apex\script\hard_aggressive\init.as
+Skirmish AI <Apex-apex>: hard_aggressive AngelScript Rules!
 ```
 
 So with `game_config` on, effectively 100% of the JSON and AngelScript come from
@@ -43,13 +43,25 @@ Three separate dimensions, easy to conflate:
 start script's `Version` is empty and the engine resolves the shortName to its
 highest version by `VersionCompare` — `stable` beats `apex`. A variant shipped as
 a *version* of `BARb` therefore plays as stock BARb in multiplayer, silently.
-Ours is `BARbApex`.
+Ours is `Apex`. (It was `BARbApex` until 2026-08. Nothing validates a shortName
+— the harness writes it straight into the start script — so an out-of-date
+command yields `FetchSkirmishAILibrary: unknown skirmish AI` and a side that
+scores zero on every metric, which reads exactly like a catastrophic
+regression.)
+
+The variants in this repo, each a distinct shortName for that reason:
+
+| repo dir | shortName | version | what it is |
+|---|---|---|---|
+| `ai/apex` | `Apex` | `apex` | the AI under development |
+| `ai/ctl` | `ApexCtl` | `ctl` | frozen control, for self-play A/B |
+| `ai/stk` | `ApexStk` | `stk` | stock config + stock script on the apex DLL, to isolate DLL effects |
 
 **AI version** — a variant within one shortName. Needs both halves:
 
 ```
-engine/<ver>/AI/Skirmish/BARbApex/apex/     AIInfo.lua (version='apex') + SkirmishAI.dll + config/ + script/
-BAR.sdd/luarules/configs/BARbApex/apex/     config/ + script/   (local iteration only)
+engine/<ver>/AI/Skirmish/Apex/apex/     AIInfo.lua (version='apex') + SkirmishAI.dll + config/ + script/
+BAR.sdd/luarules/configs/Apex/apex/     config/ + script/   (local iteration only)
 ```
 
 The engine-side `config/`+`script/` are what a hosted game actually loads: other
@@ -62,15 +74,25 @@ CircuitAI logs "Game-side config: missing!" and falls back to the AI data dir.
 ```
 config/hard_aggressive/*.json
 script/hard_aggressive/{init,main}.as
-script/hard_aggressive/manager/{builder,economy,factory,military}.as
+script/hard_aggressive/manager/{air,assist,baseplan,builder,crew,economy,
+                                factory,frontline,military}.as
 script/hard_aggressive/misc/commander.as
 ```
 
 Stock ships `easy`, `medium`, `hard`, `hard_aggressive` game-side, plus `dev`
-engine-side. Chobby overrides the visible list via `aiCustomData.lua` — which
-only knows about `BARb stable`. **A custom version is not in Chobby's config, so
-you must declare your own profiles in your own `AIOptions.lua`** or the dropdown
-will show only whatever the engine-side file lists.
+engine-side. **`apex` ships exactly one, `hard_aggressive`** — the other trees
+were deleted because they carried none of this AI's work. Chobby overrides the
+visible list via `aiCustomData.lua` — which only knows about `BARb stable`. **A
+custom version is not in Chobby's config, so you must declare your own profiles
+in your own `AIOptions.lua`** or the dropdown will show only whatever the
+engine-side file lists.
+
+Each `manager/<name>.as` is now a **shim** — an ordered `#include` list of the
+real code in the sibling `manager/<name>/` directory (69 `.as` files in all).
+The order is load-bearing; see the CLAUDE.md section "How the AngelScript is
+laid out" before moving anything. Both `AiMakeTask`s are rule pipelines:
+`builder/maketask.as` and `factory/maketask.as` are short ordered lists of
+named rules living in the sibling `rules_*.as`.
 
 ## Config layering
 
@@ -81,7 +103,12 @@ then the version root:
 config/<profile>/factory.json   →   config/factory.json
 ```
 
-So a profile only needs to contain the files it actually changes. Faction
+So a profile *can* contain only the files it changes. **`apex` does not use this
+fallback**: the seven top-level `config/*.json` files were deleted as
+unreachable, and every config it loads sits in `config/hard_aggressive/`. The
+fallback is described here because stock relies on it, not because we do.
+
+Faction
 variants are separate files rather than another directory level: `*_leg.json`
 for Legion, plus `behaviour_extra_units.json` and `behaviour_scav_units.json`.
 Which of these load is logged at init (`Ignoring Legion`, `Ignoring Scav Units`,
@@ -108,13 +135,14 @@ present in the file if you want them.
 
 What `tools/deploy_ai.py deploy` automates:
 
-1. Copy the engine's `AI/Skirmish/BARb/stable/` → `AI/Skirmish/BARb/<name>/`.
+1. Copy the engine's `AI/Skirmish/BARb/stable/` → `AI/Skirmish/<shortName>/<name>/`,
+   the shortName coming from the variant's own `AIInfo.lua` (`Apex`, not `BARb`).
    This is what supplies the correct `SkirmishAI.dll` for the installed engine.
 2. Overwrite `AIInfo.lua` with `version = '<name>'` (must match the folder) and a
    distinct `name` for the lobby.
 3. Overwrite `AIOptions.lua` with your profile list.
 4. Copy your `config/` and `script/` to
-   `BAR.sdd/luarules/configs/BARb/<name>/`.
+   `BAR.sdd/luarules/configs/<shortName>/<name>/`.
 5. Restart the client — the AI list is built at startup.
 
 Verify without launching the game:

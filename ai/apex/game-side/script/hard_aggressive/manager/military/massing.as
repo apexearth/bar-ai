@@ -200,7 +200,8 @@ void LogUnitPower()
 	if (gPowerLogged || (ai.frame < 30 * SECOND))
 		return;
 	gPowerLogged = true;
-	array<string> names = {"armpw", "armrock", "armwar", "corak", "corthud", "armzeus", "armjeth"};
+	array<string> names = {"armpw", "armrock", "armwar", "corak", "corthud", "armzeus", "armjeth",
+	                       "armbanth", "corkorg", "corshiva", "armmanni"};
 	string msg = "apex: unit power --";
 	for (uint i = 0; i < names.length(); ++i) {
 		CCircuitDef@ d = ai.GetCircuitDef(names[i]);

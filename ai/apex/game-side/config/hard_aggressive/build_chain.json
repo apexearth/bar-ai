@@ -26,8 +26,11 @@
 	"point_range": 600.0,  // maximum distance between 2 points in hierarchical cluster within economy cluster
 
 	// Base defence and time to build it, in seconds
+	// Index 22 (armtarg/cortarg/legtarg) is deliberately absent: this list is
+	// per-player, so it produced one Pinpointer for every AI on the side. The
+	// count that matters is the team's, so Builder::Pinpointer owns them now.
 	"base": [
-		[3, 420], [2, 520], [4, 760], [10, 1200], [14, 1250], [12, 1600], [22, 1800]
+		[3, 420], [2, 520], [4, 760], [10, 1200], [14, 1250], [12, 1600]
 	],
 
 	//superweapons get only build when there is nothing else to do

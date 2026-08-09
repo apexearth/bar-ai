@@ -1,6 +1,7 @@
 # 01 — Local environment
 
-Surveyed 2026-07-27. Re-check before trusting: engine versions rotate, and the
+Surveyed 2026-07-27; engine version re-checked 2026-08-09. Re-check before
+trusting: engine versions rotate, and the
 launcher replaces the engine directory on update.
 
 ## Install
@@ -35,7 +36,7 @@ There is no `Documents\My Games\Spring`; the install folder is the data dir.
 The third field is a patch counter, **not** a day — `recoil_2026.06.12` was
 released 2026-07-14.
 
-Active engine is **`recoil_2026.06.12`**, resolved as
+Active engine is **`recoil_2026.07.04`** (verified 2026-08-09), resolved as
 `launcher_cfg.json` (`manual-win`) → `config.json` → `setups[].launch.engine`.
 `tools/bar_env.py` does that lookup for you.
 

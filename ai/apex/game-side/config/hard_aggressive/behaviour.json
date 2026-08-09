@@ -521,13 +521,15 @@
 
 
 // BUILDINGS
+		// One EACH, not three each -- three is the whole side's allowance, and
+		// Builder::Pinpointer is what enforces that across the team.
 		"armtarg": {
 			"role": ["static"],
-			"limit": 3
+			"limit": 1
 		},
 		"cortarg": {
 			"role": ["static"],
-			"limit": 3
+			"limit": 1
 		},
 		"armemp":{
 			"role":	["super", "static"] //without "super" it does not shoot

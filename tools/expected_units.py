@@ -26,9 +26,9 @@ never chosen, not just that the unit lost out to its factory-mates.
 
 Usage:
     python tools/expected_units.py <tournament-or-match-dir> --faction legion
-    python tools/expected_units.py <run> --faction armada --spec BARbApex
+    python tools/expected_units.py <run> --faction armada --spec Apex
 
---spec filters to specs containing that substring (default: BARbApex, i.e.
+--spec filters to specs containing that substring (default: Apex, i.e.
 our own AI, not stock) so a mixed-faction batch only checks the side that
 was actually configured to be that faction.
 """

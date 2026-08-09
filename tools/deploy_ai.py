@@ -1,7 +1,7 @@
 """Deploy a BARb AI variant from this repo into the live BAR installation.
 
 A variant has two halves. Both are keyed on the shortName declared in the
-variant's own AIInfo.lua -- 'BARbApex', not 'BARb' -- because a variant must be a
+variant's own AIInfo.lua -- 'Apex', not 'BARb' -- because a variant must be a
 distinct AI, not a distinct version of BARb. The lobby's ADDBOT carries no
 version field, so in multiplayer a version-only variant resolves to stock BARb.
 

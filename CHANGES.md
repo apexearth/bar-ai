@@ -1,16 +1,208 @@
 # What this AI does that stock BARb does not
 
-Two variants, both built on BARb (CircuitAI). Everything here is a deliberate
-difference from `BARb/stable`; anything not listed behaves as stock.
+One AI, built on BARb (CircuitAI). Everything here is a deliberate difference
+from `BARb/stable`; anything not listed behaves as stock.
 
-| variant | intent | best measured result |
-|---|---|---|
-| **apex** | team T2 rush in team games; stock behaviour with no allies | **1v1 vs `BARb:stable:hard`: 56-57 over 113 decided games (49.6%)**, 2026-08-10 |
-| **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
+| variant | shortName | intent | best measured result |
+|---|---|---|---|
+| **apex** | `Apex` | team T2 rush in team games; stock behaviour with no allies | **1v1 vs `BARb:stable:hard`: 56-57 over 113 decided games (49.6%)**, 2026-08-10 |
+
+`apexdef` ("hold ground, out-eco, finish with T3", 4-3 over 10 clean games) was
+merged into apex and no longer exists as a separate variant.
+
+`ai/ctl` (`ApexCtl`) and `ai/stk` (`ApexStk`) are measurement fixtures, not AIs
+being developed: a frozen control for self-play A/B, and stock config + stock
+script on the apex DLL to isolate what the DLL itself changes.
 
 The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
+
+## 2026-08-09: A defensive posture buys artillery and fodder, not Bulls
+
+Layer 2 (AngelScript), `manager/factory/armypush.as`, `factory/rules_rush.as`,
+`factory/maketask.as`.
+
+apexearth: "When we are losing and playing defensively we should stop building
+units like the 'Bull'. In a defensive posture we need to buy long range units
+which can hit enemies from the safety of within our base. Also we need to create
+spam units, cheap T1 units and use them as fodder against the enemy."
+
+`Military::gTurtle` is already the AI's own statement that it is losing the trade
+and has stopped attacking, and while it holds the army is parked in DEFEND tasks
+inside our own influence. Nothing changed what we *bought* in that state:
+`LosingArmyPush` asked `GetRoleDef(ASSAULT)` from the advanced plant, which is
+`armbull` — 950 metal of short-ranged brawler bought to stand still.
+
+New `DefensiveComposition` rule, above `LosingArmyPush` in the factory pipeline.
+While turtling and not the eco lead, it alternates:
+
+- **artillery** (`Unit::Role::ARTY`) — the long-range half. Per faction and tier
+  that is `armart` 135 / `corstorm` 110 at T1, `armmart` 320 / `cormart` 400 /
+  `corhrk` 600 / `armmerl` 920 / `corvroc` 880 at T2.
+- **fodder** (the existing `Fodder()`, scout-or-raider under 100 metal) — the
+  cheap bodies that soak the charge while the artillery fires.
+
+with fallback both ways, so a bot lab with no artillery unit still contributes
+fodder and a plant whose cheapest unit is not cheap still contributes artillery.
+`LosingArmyPush`'s advanced branch takes the same ARTY-over-ASSAULT substitution
+while turtling, because it is unspaced and would otherwise fill the gaps between
+`DefensiveComposition`'s picks with exactly the Bulls this removes.
+
+This is a **substitution, not an addition**: the factory was going to spend the
+slot regardless, so unlike the builder-side rules the 2026-08-01 finding is about,
+it costs no constructor time and displaces no expansion. What it displaces is the
+assault mainstay.
+
+**Not yet measured.** Deployed and smoke-tested only; judge it on
+`composition.py` (assault share down, artillery share up, mex upgrades unchanged)
+against a matched control.
+
+## 2026-08-09: Jammers are placed deliberately instead of by chain accident
+
+Layer 2 (AngelScript), `manager/builder/statics.as` + `rules_optional.as`.
+
+apexearth: "We need to ensure our base is covered by jammers."
+
+Nothing placed them on purpose. The only jammer entries in the game are
+`build_chain.json` hubs hanging off `armrad`/`corrad`/`armfrad`/`corfrad`, and a
+hub fires only when its exact parent unit finishes — so base jamming was a side
+effect of whether a radar tower happened to get built, at `"low"` priority,
+behind a Pulsar and a Big Bertha in the same list.
+
+New `BaseJammer` rule asks for `armjamt` 240 / `corjamt` 115 / `legjam` 140
+directly. Capped at 3, one outstanding at a time, 45-second period. The first
+covers the base itself; later ones anchor on `Military::BorderPos` so they move
+out to the approaches. Gated on **energy**, not metal — 5,200-8,500 to build and
+40/s upkeep forever, against ~150 metal — and on `energy.income >= 150`.
+
+Orders are recorded in `digin.as`'s existing `gJammerPos`/`gJammerAt` ledger, the
+one built for the chain path after apexearth reported "I often see many jammers
+all close together", so the two paths cannot cluster against each other.
+
+Placed in the phase-gated (`gLastPhase >= 4`) ECO/HOME cluster with the other
+one-off structures. Deliberate: before an advanced factory exists a constructor's
+only job is expansion, per the 2026-08-01 finding. The cost of that choice is
+that a base is not jammed until it has teched.
+
+**Not yet measured.**
+
+## 2026-08-09: Pinpointers are capped at three for the whole TEAM
+
+Layer 2 (AngelScript) `manager/builder/statics.as` + `rules_optional.as` +
+`manager/factory/phase.as`, and layer 1 (JSON) `build_chain.json`,
+`behaviour.json`, `behaviour_leg.json`.
+
+apexearth: "Ensure that we make pinpointer style units (for Armada, Cortex, and
+Legion) - the entire team only needs 3 max."
+
+We already built them, and the cap was on the wrong axis. Two sources, both
+per-player:
+
+- `build_chain.json`'s `base` list carried `[22, 1800]` — porcupine index 22 is
+  `armtarg`/`cortarg`/`legtarg` — so **every AI on the side** scheduled one at
+  30 minutes, on a clock, with no economy gate at all.
+- `behaviour.json` set `"limit": 3` on `armtarg`/`cortarg` and `behaviour_leg.json`
+  the same on `legtarg`. That is the engine's per-instance def limit, so an 8v8
+  side was permitted **24**, for an effect that stops stacking at 3.
+
+The `[22, 1800]` entry is removed and the limits are now `1` each, so
+`Builder::Pinpointer` is the single source and the per-player ceiling is
+engine-enforced underneath it. The team cap itself rides the same in-process
+blackboard the tech-lead election uses: each instance publishes `TV_TARG`
+("targ") from `UpdateTeamCoord` as its standing-plus-outstanding count, and sums
+the ally roster before ordering.
+
+Two things the cap needs that a plain sum does not give:
+
+- **Its own contribution comes from `OwnPinpoints()`, not from its own
+  blackboard slot.** Publishing happens once a second; a rule reading its own
+  stale slot would order a second one inside that window.
+- **One asker at a time, by rank in the ally roster** (`PinpointTurn`). Without
+  it the cap is only as tight as the publish cadence — every instance passing the
+  economy gates in the same second reads the same total and all of them order,
+  which is how a cap of 3 becomes a 5.
+
+An order that never becomes a building would otherwise hold a team slot for the
+rest of the game, since the slot is released by the standing count; the ask
+expires after `PINPOINT_ASK_TTL` (5 min).
+
+Gated on the grid rather than a clock, because that is what this costs: 7,200-7,500
+energy to build against 810 metal, and then `energyupkeep = 100` for the rest of
+the game. Bar is 500 energy income and 30 metal income, T2 constructors only
+(`armtarg` lists `armaca`/`armack`/`armacv` and their heavy variants, so asking a
+T1 constructor is a silent no-op), placed with the nanos behind the base.
+
+Sits in the phase-≥4 ECO/HOME cluster just after `Shield`. It is a SPEND rule of
+the class CLAUDE.md records as having cut metal production 4.3x when twelve went
+in at once — but capped at three for the entire side it can displace at most
+~2,400 metal of expansion across all players, against the up-to-24 the shipped
+config allowed.
+
+**NOT YET MEASURED, AND NOT YET COMPILE-CHECKED.** A live game and two headless
+matches were running when this was written, so `deploy_ai.py` correctly refused
+and no infolog has confirmed the AngelScript compiles or that the rule fires.
+An AngelScript compile error disables the whole variant silently; grep the
+infolog before trusting any run on this.
+
+## 2026-08-09: mex defence scales with how close the mex is to the enemy
+
+Layer 2 (AngelScript), `manager/builder/mexguard.as` + `digin.as`.
+
+apexearth: "The closer our metal extractors are to the enemy, the more defenses
+we should be building on them. All of our mexes need to have at least 1 turret
+in range to defend it. Make sure we always do this."
+
+Both halves were broken, in different ways:
+
+- **The wanted count was global, not positional.** `MexGuardWanted()` returned
+  `LandIsPrecious() ? 1 : 2` — the same bar for a mex under the enemy's nose and
+  one behind the factory. It now reads `FrontT(at)` (the existing home→enemy-axis
+  projection, 0 at our base, 1 at the enemy centroid): **4 turrets past 0.40,
+  3 past 0.20, and 1-2 at the rear**. `LandIsPrecious` now only decides whether a
+  REAR mex gets a second turret; it can no longer take the last one away, and it
+  does not apply forward at all.
+
+  Those two thresholds were first set at 0.35/0.60 by eye and that was wrong.
+  Measured over a 20-minute 4v4 (76 placements): **our own mexes span frontT
+  -0.01 to 0.44 and stop there** -- a mex past midfield is the enemy's -- so
+  0.35/0.60 put 69 of 76 in the rear tier and fired the forward tier zero times.
+  The thresholds have to be set against the range we actually hold, not against
+  the 0..1 the axis defines.
+- **"Defended" was measured at the wrong radius.** The cover count used
+  `MEX_COVER_RADIUS` = 700, but `armllt`/`corllt`/`leglht` have **430 range**, so
+  a mex could be counted as defended by a tower that cannot shoot anything
+  attacking it. The bare test now uses `MEX_IN_RANGE` = 420. 700 is still the
+  right radius for the *ranking* question ("how thick is defence here"), so both
+  now exist and answer their own question.
+
+Three gates were stopping the "at least 1" floor from ever being a floor:
+
+1. `if (aiEconomyMgr.isEnergyStalling) return null;` at the top declined to place
+   even a first turret. Stalling now only blocks **thickening**; a bare mex is
+   still guarded.
+2. Ranking was `(cover + 1) * distanceToEnemy`, so a mex at cover 2 near the
+   enemy outscored a bare mex further back — the rear half of the map never
+   reached its floor. Bare-ness is now a hard first key that latches: once a bare
+   mex is in hand, no covered one can displace it.
+3. `MEX_GUARD_REACH` = 1200 meant a mex no constructor ever passed within 1200 of
+   stayed bare forever. Bare mexes get `MEX_BARE_REACH` = 2400 — **for ordinary
+   constructors only**; the commander keeps 1200, since walking it across the map
+   is how games are lost. The walk-into-fire threat veto still applies to every
+   candidate beyond `MEX_GUARD_HERE`, so this buys reach and not recklessness.
+
+`DefenceAround()` was generalised to `DefenceWithin(pos, radius)` (fences plus
+outstanding orders, same TTL bookkeeping) so the two radii share one
+implementation; `DefenceAround` is now a one-line call at `DIG_AREA`.
+
+Verified running, not verified good: 20-minute 4v4, `Comet Catcher`, seed 1 —
+**0 AngelScript errors**, variant loaded, and the rule fired **76 times, 50 of
+them on a mex with nothing in range** and 26 thickening.
+
+**Effect not measured.** This is a rule that SPENDS constructor time, which is
+the 2026-08-01 failure mode — the forward tiers (3 and 4 turrets) are the part
+most likely to displace mex upgrades. Needs `composition.py` against a matched
+control before it is trusted.
 
 ## 2026-08-10: where the 1v1 ended up
 

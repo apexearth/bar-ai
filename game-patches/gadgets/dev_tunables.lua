@@ -48,6 +48,10 @@ local NAMES = {
 	"apex_mass_hold_secs",
 	"apex_mass_floor",
 	"apex_attack_threat_mod",
+	"apex_edge_band",
+	"apex_edge_bonus",
+	-- Dev aid: one map marker per attack group when it first picks a target.
+	"apex_ping_attacks",
 }
 
 local pending = {}

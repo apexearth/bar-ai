@@ -127,6 +127,46 @@ IUnitTask@ ShareAdvancedCon(CCircuitUnit@ unit)
 	return null;
 }
 
+// Long range and fodder while we are holding. See the TURTLE_MIX_SPACING note in
+// armypush.as for why this is a substitution rather than a new spend.
+IUnitTask@ DefensiveComposition(CCircuitUnit@ unit)
+{
+	if (gEcoActive || !Military::gTurtle || (ai.frame < gNextTurtleMix))
+		return null;
+	// Air plants are Air::'s to schedule, and an aircraft is not what "hit them
+	// from inside our base" means.
+	if (IsAirFactory(unit.circuitDef))
+		return null;
+
+	CCircuitDef@ want = null;
+	if ((gTurtleMixCount % TURTLE_ARTY_EVERY) == 0)
+		@want = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::ARTY.type);
+	// Fall back BOTH ways: a bot lab that has no artillery unit still contributes
+	// fodder, and a plant whose cheapest unit is not cheap enough to be fodder
+	// still contributes artillery. Only a line that can do neither passes.
+	if (want is null)
+		@want = Fodder(unit.circuitDef);
+	if (want is null)
+		@want = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::ARTY.type);
+	if ((want is null) || !want.IsAvailable(ai.frame))
+		return null;
+
+	IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+			Task::RecruitType::FIREPOWER, Task::Priority::HIGH,
+			want, unit.GetPos(ai.frame), 0.f));
+	if (rec is null)
+		return null;
+	++gTurtleMixCount;
+	gNextTurtleMix = ai.frame + TURTLE_MIX_SPACING;
+	if (ai.frame >= gNextTurtleMixLog) {
+		gNextTurtleMixLog = ai.frame + 30 * SECOND;
+		AiLog(T() + "apex: holding, buying " + want.GetName()
+			+ " cost=" + formatFloat(want.costM, "", 0, 0)
+			+ " picks=" + gTurtleMixCount);
+	}
+	return rec;
+}
+
 IUnitTask@ LosingArmyPush(CCircuitUnit@ unit)
 {
 	// Behind on the field, with T2 and a mex upgraded: pour income into the cheap
@@ -192,10 +232,18 @@ IUnitTask@ LosingArmyPush(CCircuitUnit@ unit)
 		// plant makes the army that can actually trade.
 		++gArmyPushCount;
 		CCircuitDef@ want = null;
-		if (isT1Fac)
+		if (isT1Fac) {
 			@want = Fodder(unit.circuitDef);
-		else
+		} else if (Military::gTurtle) {
+			// DefensiveComposition above already claims most slots while holding,
+			// but it is spaced and this is not -- without the same substitution
+			// here the gap between its picks is where the Bulls came from.
+			@want = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::ARTY.type);
+			if (want is null)
+				@want = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::ASSAULT.type);
+		} else {
 			@want = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::ASSAULT.type);
+		}
 		if (want !is null) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
 					Task::RecruitType::FIREPOWER, Task::Priority::HIGH,

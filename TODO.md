@@ -153,3 +153,67 @@ join an attack squad. Needs to interact correctly with the killing-blow override
 which deliberately commits everything when far ahead.
 
 Not built. Unmeasured.
+
+## Scout the mex area first, then size the group to what is actually there
+
+apexearth, 2026-08-09: "you can scout with 1 cheap unit first to see what the
+enemy has in these areas... then you can build your attack size based on how
+strong the mex area is."
+
+This replaces a global quota with a per-target decision, which is the right
+shape: `quota.attack` today is ONE number for every attack, so the group forms
+to a fixed size and only afterwards looks for something it can beat. Sizing the
+group to the target inverts that, and it is what a human does.
+
+Both halves already exist and are not wired together:
+
+- **Seeing the area.** `CMilitaryManager::GetScoutPosition` already sends scouts
+  to metal CLUSTERS -- but it only counts a cluster scoutable when some spot
+  reads `threat < THREAT_MIN`, so any cluster the enemy holds is excluded and we
+  only ever look where they are not. `apex_scout_threat` (built, default off)
+  raises that ceiling. It is a prerequisite for everything else here: enemy
+  groups are built from `hostileDatas + peaceDatas`, i.e. only enemies we have
+  SEEN, so an unscouted extractor is not a low-priority target, it is not a
+  candidate at all.
+- **Measuring the area.** `CAttackTask::FindTarget` already computes `localInfl`
+  -- the summed influence of enemy groups within `NEARBY_ENEMY_DIST` of a
+  candidate -- and uses it both to refuse defended targets and (now) to grant
+  `FREE_ECO_PRIORITY` only when it is zero. That IS "how strong is this mex
+  area", already calculated.
+
+What is missing is using `localInfl` to SET the group size rather than only to
+accept or refuse a target: pick the target first, then require a group scaled to
+its local defence, instead of forming a fixed-size group and shopping for
+something it can beat. Needs care with `CAttackTask`'s `minPower`, which is
+fixed at construction and only re-tested in `RemoveAssignee`.
+
+Not built. The scouting half is built but unmeasured at 8v8.
+
+## A single T3 assault unit should raid on its own, around the rim
+
+apexearth, 2026-08-09: "Once we have units like the 'Titan' they can do these
+attack orders all on their own. Through the edge of the map they'll be very
+good."
+
+Titan is `armbanth`, 13,500 metal; the Cortex equivalent is `corkorg` at 29,000.
+Either is worth more than the whole floor-sized group the massing quota asks for,
+so waiting to bundle one with a screen of Pawns is spending the wrong resource.
+
+It may already work. `quota.attack` is a POWER sum and `CDefendTask` promotes as
+soon as its assignees reach `minPower`, so if one Titan's `GetPower()` already
+exceeds `MASS_FLOOR` (30) it fills the quota alone and leaves. That is a fact
+about the unit, not a design question, and it has never been read --
+`LogUnitPower()` now includes `armbanth`, `corkorg`, `corshiva` and `armmanni`
+so the next run prints it. Measure before building anything here.
+
+If the power does clear the floor and a Titan still does not go alone, the gate
+is elsewhere (role masks, `IsIgnore`, the factory never building one at all --
+T3 output is two or three units a game at benchmark income; see CLAUDE.md).
+
+The "through the edge" half is not target selection, which is now handled
+(`EDGE_ECO_BONUS`), but ROUTING: the path a party takes to a rim target still
+crosses whatever the threat map lets it. `apex_attack_threat_mod` raises the
+price of contested ground and is the existing lever; whether it produces a rim
+route or just a slower one has not been looked at.
+
+Not built. Unmeasured.

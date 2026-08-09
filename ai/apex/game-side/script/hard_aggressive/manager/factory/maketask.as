@@ -42,6 +42,11 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		return t;
 
 	ConBranchLog(unit);
+	// Above LosingArmyPush deliberately: both answer "we are behind", and this one
+	// is the answer for the case where we have also stopped attacking.
+	@t = DefensiveComposition(unit);
+	if (t !is null)
+		return t;
 	@t = LosingArmyPush(unit);
 	if (t !is null)
 		return t;

@@ -101,6 +101,7 @@ void UpdateTeamCoord()
 	ai.PublishTeamValue(TV_MEX, UpdateMexHold());
 	ai.PublishTeamValue(TV_FILL, (aiEconomyMgr.metal.storage > 0.f)
 			? aiEconomyMgr.metal.current / aiEconomyMgr.metal.storage : 0.f);
+	ai.PublishTeamValue(Builder::TV_TARG, float(Builder::OwnPinpoints()));
 	if (ElectorTeamId() == ai.teamId)
 		RunElection();
 	UpdateEcoLead();

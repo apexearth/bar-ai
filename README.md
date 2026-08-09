@@ -24,20 +24,20 @@ python tools/deploy_ai.py deploy apex
 ```
 
 Then launch BAR normally — the variant shows up in the lobby AI list as
-**BARbarIAn Apex**.
+**Apex**.
 
 To benchmark it against stock BARb without opening the game:
 
 ```bash
 python tools/deploy_ai.py gadgets   # one-time: installs the autoquit/result gadget
-python tools/run_match.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_match.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1
 ```
 
 A full match takes well under a minute of wall time. For statistics:
 
 ```bash
-python tools/run_tournament.py --a BARbApex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_tournament.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
     --maps "Comet Catcher,Supreme Isthmus" --games 10
 python tools/run_tournament.py --report
 ```
@@ -46,13 +46,20 @@ python tools/run_tournament.py --report
 
 ```
 ai/apex/            the AI variant — source of truth, deployed into the live install
+ai/ctl/             frozen control, for self-play A/B against apex
+ai/stk/             stock config + stock script on the apex DLL, to isolate DLL effects
 reference/          pristine BARb stable, for diffing (read-only)
 game-patches/       changes to shared BAR files + dev gadgets
 tools/              deploy + headless match harness (Python 3.13, stdlib only)
 docs/               reference material
-matches/            harness output (gitignored)
+matches/            single-match output (gitignored)
+tournaments/        batch output (gitignored)
 vendor/             upstream clones (gitignored)
 ```
+
+Each variant is a distinct **shortName** (`Apex`, `ApexCtl`, `ApexStk`), not a
+version of `BARb` — see docs/03 for why a version-only variant silently plays as
+stock in multiplayer.
 
 ## Docs
 
@@ -67,6 +74,17 @@ vendor/             upstream clones (gitignored)
 | [07 — Headless testing](docs/07-headless-testing.md) | start scripts, speed, debugging, replays |
 | [08 — ML and RL notes](docs/08-ml-and-rl.md) | what exists, what doesn't, what it would take |
 | [09 — Resources](docs/09-resources.md) | every URL worth keeping |
+| [10 — BAR game concepts](docs/10-bar-game-concepts.md) | the economy and tech model — read before diagnosing anything |
+| [11 — Dead unit references](docs/11-dead-unit-references.md) | unit names in stock config that no longer exist |
+| [12 — Build phases](docs/12-build-phases.md) | the BUILD_PHASE design, and the displacement problem it solves |
+| [13 — Other AIs](docs/13-other-ais.md) | the other custom BARb forks, and what they do |
+| [14 — BAR AI landscape](docs/14-bar-ai-landscape.md) | the wider ecosystem and where this work sits in it |
+| [15 — Tunables](docs/15-tunables.md) | the `apex_*` modoptions and how to A/B with them |
+
+Beyond `docs/`: **`CHANGES.md`** is what this AI does differently from stock and
+how well each change is measured; **`USER-FEEDBACK.md`** is the standing brief of
+what's actually wanted; **`CLAUDE.md`** is the working guide, including the
+silent failure modes worth knowing before trusting a result.
 
 ## Conventions
 

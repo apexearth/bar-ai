@@ -240,6 +240,77 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	return post;
 }
 
+// JAMMERS OVER THE BASE. apexearth: "we need to ensure our base is covered by
+// jammers."
+//
+// Nothing was placing them deliberately. The only jammer entries in the game are
+// build_chain.json hubs hanging off armrad/corrad/armfrad/corfrad, and a hub fires
+// only when its exact parent unit FINISHES -- so base jamming was a side effect of
+// whether a radar tower happened to get built, at "low" priority, behind a Pulsar
+// and a Big Bertha in the same list. armjamt/corjamt/legjam are 115-240 metal;
+// this asks for them directly instead.
+//
+// The def names, IsJammerDef and the AreaHasJammer anti-clustering ledger already
+// exist in digin.as -- built for the chain path, which stacked three jammers on
+// top of each other. Orders made here are recorded in the same ledger so the two
+// paths cannot cluster against each other either.
+//
+// Energy, not metal, is what this costs: 5,200-8,500 to build and 40/s upkeep
+// forever, against ~150 metal. Gated accordingly.
+const int   JAMMER_MAX        = 3;
+const float JAMMER_MIN_ENERGY = 150.f;
+const int   JAMMER_PERIOD     = 45 * SECOND;
+const float JAMMER_REACH      = 700.f;   // search radius around the chosen anchor
+int gNextJammer   = 0;
+int gJammersAsked = 0;
+
+IUnitTask@ BaseJammer(CCircuitUnit@ unit)
+{
+	if ((ai.frame < gNextJammer) || aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (!gHomeSet)
+		return null;
+	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
+		return null;
+	if (aiEconomyMgr.energy.income < JAMMER_MIN_ENERGY)
+		return null;
+	CCircuitDef@ jam = SideDef3(armjamt, corjamt, legjam2);
+	if ((jam is null) || !jam.IsAvailable(ai.frame) || (int(jam.count) >= JAMMER_MAX))
+		return null;
+	// Asked-minus-standing, the same idiom NukeSilo and Shield use: Enqueue does
+	// not dedup and a jammer takes a while, so counting only what stands orders
+	// the whole set at once.
+	if (gJammersAsked - int(jam.count) >= 1)
+		return null;
+
+	// The first one covers the base itself; later ones move out to the approaches,
+	// which is where something worth hiding from radar is actually walking.
+	AIFloat3 anchor = gHomePos;
+	if (jam.count > 0) {
+		AIFloat3 border;
+		if (Military::BorderPos(border, uint(jam.count) - 1))
+			anchor = border;
+	}
+	const AIFloat3 site = ai.FindBuildSiteNear(jam, anchor, JAMMER_REACH);
+	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
+		return null;
+	if (AreaHasJammer(site))
+		return null;   // would stack on one we already have; try again next period
+
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::RADAR,
+			Task::Priority::NORMAL, jam, site, 0.f));
+	if (post is null)
+		return null;
+	gJammerPos.insertLast(site);
+	gJammerAt.insertLast(ai.frame);
+	++gJammersAsked;
+	gNextJammer = ai.frame + JAMMER_PERIOD;
+	AiLog(Factory::T() + "apex: base-jammer " + jam.GetName()
+		+ " standing=" + jam.count + "/" + JAMMER_MAX
+		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
+	return post;
+}
+
 IUnitTask@ HomeDeter(CCircuitUnit@ unit)
 {
 	if ((ai.frame < gNextDeter) || aiEconomyMgr.isEnergyStalling)
@@ -450,6 +521,147 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 	++gNukesAsked;
 	AiLog(Factory::T() + "apex: nuke silo " + silo.GetName()
 		+ " standing=" + silo.count + " asked=" + gNukesAsked
+		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
+	return post;
+}
+
+// Pinpointers, three for the WHOLE TEAM.
+//
+// apexearth: "Ensure that we make pinpointer style units (for Armada, Cortex,
+// and Legion) - the entire team only needs 3 max."
+//
+// armtarg/cortarg/legtarg, "Enhanced Radar Targeting, more facilities enhance
+// accuracy". 800-810 metal and 7,200-7,500 energy each, so three is ~2,400 metal
+// spread across the whole side -- but the cap has to be a TEAM cap, not a per
+// player one, or eight instances each build "just one" and the side pays eight
+// times for an effect that stopped stacking at three.
+//
+// Advanced constructors only: armtarg lists armaca/armack/armacv and their heavy
+// variants, and asking a T1 constructor is a silent no-op.
+string armtarg("armtarg"); string cortarg("cortarg"); string legtarg("legtarg");
+
+// Published as this player's standing-plus-outstanding count; every instance
+// sums the roster before ordering one.
+const string TV_TARG = "targ";
+
+const int   PINPOINT_TEAM_MAX   = 3;
+const int   PINPOINT_PER_PLAYER = 1;   // spread them, so one death is not all three
+const float PINPOINT_MIN_ENERGY = 500.f;
+const float PINPOINT_MIN_INCOME = 30.f;
+const int   PINPOINT_PERIOD     = 30 * SECOND;
+// An order that never becomes a building would otherwise hold a team slot for
+// the rest of the game, since the slot is released by the standing count.
+const int   PINPOINT_ASK_TTL    = 5 * MINUTE;
+int gNextPinpoint    = 0;
+int gPinpointAskedAt = -1;
+
+CCircuitDef@ PinpointDef()
+{
+	return SideDef3(armtarg, cortarg, legtarg);
+}
+
+bool PinpointPending()
+{
+	if (gPinpointAskedAt < 0)
+		return false;
+	if (ai.frame >= gPinpointAskedAt + PINPOINT_ASK_TTL)
+		return false;
+	CCircuitDef@ targ = PinpointDef();
+	return (targ is null) || (int(targ.count) == 0);
+}
+
+int OwnPinpoints()
+{
+	CCircuitDef@ targ = PinpointDef();
+	const int standing = (targ is null) ? 0 : int(targ.count);
+	return standing + (PinpointPending() ? 1 : 0);
+}
+
+// Our own contribution comes from OwnPinpoints() rather than the blackboard:
+// UpdateTeamCoord publishes once a second, and a rule that read its own stale
+// slot would order a second one inside that window.
+int TeamPinpoints()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() == 0))
+		return OwnPinpoints();
+	int n = 0;
+	bool sawSelf = false;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		if (t == ai.teamId) {
+			sawSelf = true;
+			n += OwnPinpoints();
+		} else {
+			n += int(ai.ReadTeamValue(t, TV_TARG, 0.f));
+		}
+	}
+	return sawSelf ? n : (n + OwnPinpoints());
+}
+
+// One asker at a time, by rank in the ally roster. Without this the team cap is
+// only as tight as the publish cadence: every instance that passed the economy
+// gates inside the same second would read the same total and all of them would
+// order, which is exactly how a cap of 3 becomes a 5.
+bool PinpointTurn()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() <= 1))
+		return true;
+	uint rank = 0;
+	for (uint i = 0; i < mates.length(); ++i) {
+		if (int(mates[i]) < ai.teamId)
+			++rank;
+	}
+	// If the roster does not list us, every id is below ours and rank lands one
+	// past the end -- a slot that never comes round, i.e. we would never build.
+	if (rank >= mates.length())
+		rank = mates.length() - 1;
+	return (uint(ai.frame / (2 * SECOND)) % mates.length()) == rank;
+}
+
+IUnitTask@ Pinpointer(CCircuitUnit@ unit)
+{
+	if ((ai.frame < gNextPinpoint) || aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (unit.circuitDef.costM < ADV_CON_COST)
+		return null;
+	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
+		return null;
+	// Energy is what this costs -- 7,200-7,500 to build against 810 metal, and
+	// then energyupkeep 100 for the rest of the game -- so it is gated on the
+	// grid the way the silo is, rather than on a clock the way the base-defence
+	// list it replaces was.
+	if ((aiEconomyMgr.energy.income < PINPOINT_MIN_ENERGY)
+		|| (aiEconomyMgr.metal.income < PINPOINT_MIN_INCOME))
+		return null;
+	CCircuitDef@ targ = PinpointDef();
+	if ((targ is null) || !targ.IsAvailable(ai.frame))
+		return null;
+	if (OwnPinpoints() >= PINPOINT_PER_PLAYER)
+		return null;
+	if (!PinpointTurn())
+		return null;
+	if (TeamPinpoints() >= PINPOINT_TEAM_MAX)
+		return null;
+
+	// Behind the base with the nanos. It has no weapon and its whole value is
+	// standing up for the rest of the game.
+	AIFloat3 near;
+	if (!NanoCluster(near))
+		near = gHomePos;
+	const AIFloat3 site = ai.FindBuildSiteNear(targ, near, GANTRY_NEAR_NANO);
+	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
+		return null;
+
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::RADAR,
+			Task::Priority::NORMAL, targ, site, 0.f));
+	if (post is null)
+		return null;
+	gPinpointAskedAt = ai.frame;
+	gNextPinpoint = ai.frame + PINPOINT_PERIOD;
+	AiLog(Factory::T() + "apex: pinpointer " + targ.GetName()
+		+ " team=" + TeamPinpoints() + "/" + PINPOINT_TEAM_MAX
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
 	return post;
 }

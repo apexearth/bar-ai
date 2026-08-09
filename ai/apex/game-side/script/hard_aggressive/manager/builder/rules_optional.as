@@ -163,6 +163,20 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 				IUnitTask@ dome = Shield(unit);
 				if (dome !is null)
 					return dome;
+				// Capped at three for the entire side, so the most this rule
+				// can ever displace is ~2,400 metal of expansion across all of
+				// us -- which is why it sits with the one-off structures rather
+				// than behind the compounding economy block below.
+				IUnitTask@ targ = Pinpointer(unit);
+				if (targ !is null)
+					return targ;
+				// Bounded at three, ~500 metal for the whole game, and it sits
+				// with the other one-off structures rather than earlier for the
+				// reason this whole cluster is phase-gated: before an advanced
+				// factory exists a constructor's only job is expansion.
+				IUnitTask@ jam = BaseJammer(unit);
+				if (jam !is null)
+					return jam;
 				IUnitTask@ block = EcoConverters(unit);
 				if (block !is null)
 					return block;

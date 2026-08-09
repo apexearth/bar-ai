@@ -45,18 +45,26 @@ const int   DIG_ORDER_TTL = 90 * SECOND;
 array<AIFloat3> gDigOrderPos;
 array<int>      gDigOrderAt;
 
-uint DefenceAround(const AIFloat3& in pos)
+// Finished defences plus still-outstanding orders within radius. FENCE only
+// fires on FINISHED, so the order list is what stops a burst of requests each
+// seeing the same empty ground.
+uint DefenceWithin(const AIFloat3& in pos, float radius)
 {
-	uint n = Military::FenceCountNear(pos, DIG_AREA);
+	uint n = Military::FenceCountNear(pos, radius);
 	for (int i = int(gDigOrderAt.length()) - 1; i >= 0; --i) {
 		if (ai.frame - gDigOrderAt[i] > DIG_ORDER_TTL) {
 			gDigOrderAt.removeAt(i);
 			gDigOrderPos.removeAt(i);
-		} else if (gDigOrderPos[i].distance2D(pos) <= DIG_AREA) {
+		} else if (gDigOrderPos[i].distance2D(pos) <= radius) {
 			++n;
 		}
 	}
 	return n;
+}
+
+uint DefenceAround(const AIFloat3& in pos)
+{
+	return DefenceWithin(pos, DIG_AREA);
 }
 
 const int   TROUBLE_HITS    = 3;
