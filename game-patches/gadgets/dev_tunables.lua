@@ -32,6 +32,8 @@ local NAMES = {
 	"apex_trade_margin_max",
 	"apex_continue_margin",
 	"apex_attack_minpower_threat",
+	"apex_encircle_penalty",
+	"apex_comm_flee_influence",
 }
 
 local pending = {}

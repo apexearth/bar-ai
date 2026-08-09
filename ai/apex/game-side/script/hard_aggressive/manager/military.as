@@ -1055,6 +1055,19 @@ const int   PUSH_COOLDOWN = 3 * MINUTE;
 // test demands -- squads still refuse a genuinely hopeless fight, but stop
 // refusing the ones the rest of the team is about to join.
 const float PUSH_BOOST   = 0.55f;
+// Engage bias while an advanced plant is going up. apexearth, watching a 1v1:
+// "when we are making a t2 lab we should ***not*** attack... im seeing we end up
+// with no army left when t2 lab comes up." A T2 lab is the most expensive thing
+// bought so far, and it is bought with metal that is NOT going into army -- so
+// the moment we commit to it is exactly the moment we can least afford to trade
+// the army we already have.
+//
+// Above 1 is cautious (PUSH_BOOST 0.55 is the aggressive direction). This raises
+// only the bar to START an attack: CONTINUE_MARGIN governs fights already
+// joined, and defence runs through CDefendTask, which does not consult this at
+// all. So we still hold ground and still finish what we are in -- we just stop
+// walking out to start new fights while the lab is unfinished.
+const float T2_HOLD_BOOST = 1.60f;
 const float PUSH_QUOTA   = 200.f;
 // Nothing to push with. Below this the "ratio" is noise -- two scouts against
 // one is 2.0 and means nothing.
@@ -1184,7 +1197,15 @@ void UpdateTeamPush()
 		}
 	} else {
 		// Personality is the resting state; the push above overrides it.
-		ai.SetEngageBoost(gPersonaBias);
+		// Teching overrides personality in the cautious direction only -- a
+		// berserker at 0.82 still holds while its lab is unfinished, and a
+		// cautious 1.18 is not made less careful by this.
+		const float adv = Factory::OwnAdvProgress();
+		const bool teching = (adv >= 0.f) && (adv < 1.f);
+		float boost = gPersonaBias;
+		if (teching && (T2_HOLD_BOOST > boost))
+			boost = T2_HOLD_BOOST;
+		ai.SetEngageBoost(boost);
 		// Commitment is NOT only for declared pushes.
 		//
 		// IsCommitted is the one thing that stops a unit leaving a fight at its

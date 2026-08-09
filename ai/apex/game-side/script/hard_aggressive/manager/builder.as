@@ -249,6 +249,10 @@ float WreckSeenValue()
 // declared only once ThreatFor() -- which needs it -- was already in scope.
 const float CON_THREAT_VETO = 4.0f;
 
+// Declared here rather than beside its use: AngelScript needs globals declared
+// before use, and the commander flee that rate-limits on it sits far above.
+int gNextCommFleeLog = 0;
+
 // apexearth: "have our units never assist another unit build something if
 // we are out of a resource (<5%)." Declared here, ahead of AiMakeTask's use
 // of it, for the same forward-declaration reason as CON_THREAT_VETO above.
@@ -3264,6 +3268,39 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	}
 	if (isComm) {
 		LogCommanderThreat(unit);
+		// LEAVE BECAUSE OF WHAT IS THERE, NOT BECAUSE YOU ARE ALREADY HURT.
+		//
+		// COM_RETREAT_HEALTH already pulls the commander out on first real
+		// damage, and it is still dying: apexearth, watching a 1v1, "we keep
+		// losing to our commander going banzai into enemy armies... almost every
+		// time", then the correction that matters -- "he's defending the base,
+		// but the enemy army is too big for him to take on so he should not do
+		// it". An army that arrives in force kills a commander from full health,
+		// so a health trigger fires once and too late.
+		//
+		// Uses the INFLUENCE map, not ai.GetBuilderThreatAt: the threat map read
+		// LOWER than baseline in the 30s before a commander died across ten
+		// games (3% nonzero vs 8%), because the killer is at range and the
+		// victim's own tile reads clean. Influence is a different signal.
+		//
+		// DEFAULT OFF. The last position-based commander retreat fired whenever
+		// 3+ enemies were within 800, returned a Patrol task, and went 0-20 with
+		// metal at 6,631. The threshold here is not measured either, so it ships
+		// inert and is switched on per-match for the A/B that sets it.
+		const float fleeInfl = ai.GetTunable("apex_comm_flee_influence", 0.f);
+		if (fleeInfl > 0.f) {
+			const float hereInfl = ai.GetEnemyInflAt(unit.GetPos(ai.frame));
+			if (hereInfl > fleeInfl) {
+				if (ai.frame >= gNextCommFleeLog) {
+					gNextCommFleeLog = ai.frame + 15 * SECOND;
+					AiLog(Factory::T() + "apex: commander leaving, enemy influence "
+						+ formatFloat(hereInfl, "", 0, 2) + " > " + formatFloat(fleeInfl, "", 0, 2));
+				}
+				IUnitTask@ bail = aiBuilderMgr.EnqueueRetreat();
+				if (bail !is null)
+					return bail;
+			}
+		}
 		// The commander guards the mexes it just made. apexearth: "even the
 		// commander does this... he's right there making the mex and then he
 		// just walks away like they arent important to protect." MexGuard picks

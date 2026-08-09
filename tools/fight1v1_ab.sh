@@ -12,13 +12,18 @@ cd "$(dirname "$0")/.."
 
 TAG="$1"; shift
 SEEDS="${FIGHT_SEEDS:-1 2 3 4 5 6 7 8}"
+# run_match assigns factions by POSITION (SIDES[i % len]), not by seed, so
+# without this every game in every batch was apex-Armada vs stock-Cortex and no
+# amount of reseeding varied it. apexearth: "do you keep playing the same seed?
+# we are always being ARM bots vs cortex vehicles". Mirror by default; set
+# FIGHT_SIDES to check a result carries to another faction.
 MAP="${FIGHT_MAP:-Altair_Crossing_V4.1}"
 MINUTES="${FIGHT_MINUTES:-20}"
 
 for s in $SEEDS; do
     python -u tools/run_match.py \
         --a Apex:apex:hard_aggressive --b BARb:stable:hard \
-        --map "$MAP" --per-side 1 --minutes "$MINUTES" --seed "$s" "$@" \
+        --map "$MAP" --per-side 1 --minutes "$MINUTES" --seed "$s"         --sides "${FIGHT_SIDES:-Armada,Armada}" "$@" \
         --out "matches/f1v1-$TAG-$s" >/dev/null 2>&1
 done
 
