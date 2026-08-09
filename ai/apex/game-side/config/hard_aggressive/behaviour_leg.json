@@ -844,7 +844,21 @@
 				"retreat": 0.6,
 				"limit": 3
 			},
-	
+			// Legion's vehicle-plant radar and jammer were the only two of the
+			// six mobile radar/jammer units with no entry here at all, so they
+			// got neither the "support" role that routes a unit into
+			// CSupportTask nor a limit. Matched to legaradk/legajamk, the bot
+			// lab pair, which do have entries.
+			"legavrad": {
+				"role": ["support"],
+				"retreat": 0.6,
+				"limit": 3
+			},
+			"legavjam": {
+				"role": ["support"],
+				"limit": 3
+			},
+
 			// aircraft - legap
 	
 			"legcib": {

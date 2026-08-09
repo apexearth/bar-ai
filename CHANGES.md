@@ -207,6 +207,71 @@ formula, but only the scalar form raises `minRange`, it overwrites `maxRange`
 for every consumer that reads it (threat, height filters, path reachability),
 and it cannot reach the `losRadius` clamp that is the actual cause.
 
+## 2026-08-09: A mobile radar travels with the army
+
+Layer 2 (AngelScript), new `manager/factory/eyes.as`, one line in
+`factory/maketask.as` and one in `manager/factory.as`.
+
+apexearth: "Some units have long range but poor LOS - when we have units like
+this we should have them bring a radar unit with them (jammer too if possible)
+so that they can see what they should fire at... one example is the Hound unit."
+
+Read from the pinned game tree: **armfido (Hound) has 650 weapon range against
+400 sight.** It is not the worst — `corvroc` is 1310 against 221, `armmerl` 1300
+against 247, `cortrem` 1470 against 351, `cormart` 800 against 299.
+
+**The escort mechanism was already there and already correct.** Every mobile
+radar and jammer carries `"role": ["support"]` in `behaviour.json`;
+`CMilitaryManager::DefaultMakeTask` routes a support unit to `CSupportTask`,
+which paths to the nearest ATTACK/DEFEND squad leader and calls `AssignTask` to
+join that squad. `Military::WantsMassing` already returns false for SUPPORT, so
+apex does not divert them. What was missing is the unit: in `factory.json` the
+radars sit at 0.00-0.05 in the ratio tables against 0.40 for the guns they would
+be spotting for.
+
+New `EyesForTheGuns` rule, placed with the other production floors, above
+`RushBuildPower`. It recruits the mobile radar directly, the same way
+`LateRadarPlane` recruits the radar plane:
+
+- **The blind-gun set is derived, not listed.** `GetMaxRange()` and `losRadius`
+  are both bound, so the rule walks every def once and marks anything mobile,
+  non-flying, non-AA, non-commander, non-builder with range in [650, 3000] and
+  `range > los * 1.6`. That covers all three factions and every terrain block by
+  construction. The 3000 cap is because anti-ship missiles carry range 72000.
+- **One radar per 5 blind guns standing, capped at 2**; a jammer per 10, capped
+  at 1, and only once the radar cap is met. 30 s spacing.
+- **Named per factory, not asked for by role.** The radar, the jammer and the
+  assist bot all carry role `support`, so `GetRoleDef(SUPPORT)` cannot tell them
+  apart — the same reason `RezBotDef` names its defs. Dispatch is on the
+  factory's own def (`armalab`/`coralab`/`legalab`/`armavp`/`coravp`/`legavp`),
+  which is what keeps the request from being a silent no-op.
+- **Naval is deliberately out of scope.** A T2 ship already carries 1000-2950
+  radar of its own.
+
+Layer 1 alongside it: **`legavrad` and `legavjam` had no `behaviour_leg.json`
+entry at all** — the only two of the six mobile radar/jammer units without one.
+No entry means no `support` role, so Legion's vehicle-plant radar would not have
+gone to `CSupportTask` and would not have followed anything. Added, matched to
+the `legaradk`/`legajamk` bot-lab pair that do have entries.
+
+Cheap by the standards of what it displaces: the radars are 92-125 metal and the
+jammers 75-105, against 285 for a Hound and 320-920 for the artillery. It spends
+factory time, not constructor time, so the 2026-08-01 composition finding does
+not bite here — but it does displace a unit from the same lab, and the gate
+(five T2 blind guns already fielded) is what keeps it out of the opening and the
+tech rush.
+
+**Deployed and confirmed firing; not yet measured.** One 30-minute 4v4 on Comet
+Catcher, seed 1: zero AngelScript errors, `Load script: …Apex\apex\…` confirmed,
+and the rule fired twice — `blindDefs=22` (the derived set), first at
+`blindGuns=5 standing=0`, again at `blindGuns=10 standing=1`. So both the gate
+and the one-per-five escalation behave as written. It did **not** fire in a
+20-minute cut of the same game, which is the benchmark's starved economy, not a
+bug: five T2 blind guns is simply not reached that early here.
+
+What is still unknown is what it displaced. Judge it on `composition.py`
+against a matched control.
+
 ## 2026-08-09: A defensive posture buys artillery and fodder, not Bulls
 
 Layer 2 (AngelScript), `manager/factory/armypush.as`, `factory/rules_rush.as`,

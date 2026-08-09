@@ -35,6 +35,11 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	@t = LateFighterScreen(unit);
 	if (t !is null)
 		return t;
+	// A floor like the two above it, and gated on five T2 blind guns already
+	// standing, so it cannot reach back into the opening or the rush.
+	@t = EyesForTheGuns(unit);
+	if (t !is null)
+		return t;
 
 	bool idle = false;
 	@t = RushBuildPower(unit, idle);
