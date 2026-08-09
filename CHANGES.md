@@ -8,6 +8,52 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-09 (CORRECTION): the army-trade metric has a 30% noise floor at n=8
+
+The +47% "adaptive caution" result recorded below is WITHDRAWN. It came from
+batches corrupted by a harness bug, and the effect is inside the noise anyway.
+
+**Two instrument bugs, both silent, both producing confident numbers.**
+
+1. Every match shared one engine write dir, and `run_match` copies `infolog.txt`
+   out of it at the end -- so two matches running at once land each other's logs
+   in each other's output folders. Watched games launched alongside measurement
+   batches corrupted them. `run_tournament` already got this right and says so:
+   "Never share a write dir across processes." Caught because a CONTROL logged a
+   rule only the treatment enabled.
+2. `fight1v1.py` assumed ally 0 was always the subject. True for `run_match`
+   batches, FALSE for tournaments, which swap sides between pairings -- so every
+   tournament arm read a ratio near 1.0 because it was averaging us against
+   ourselves.
+
+**The noise floor.** Four unmodified baseline measurements, 8 games each, all
+Altair Crossing 1v1:
+
+| run | trade ratio |
+|---|---|
+| base, seeds 1-8 | 0.252 |
+| baserep, seeds 11-18 | 0.307 |
+| c-base, clean sequential | 0.227 |
+| t-base, tournament | 0.297 |
+
+mean 0.271, sd 0.038, range 0.227-0.307 -- a spread of **30% of the mean on an
+unchanged AI**. An 8-game arm must clear roughly **0.346** before it is
+distinguishable from baseline at 2 sd. Nearly every "improvement" claimed today
+sat below that: trade caution measured 0.310 in one clean run and 0.148 in
+another. Both are noise.
+
+**What clears the bar.** The commander flee (`apex_comm_flee_influence=0.3`, on
+top of trade caution) measured **0.594** in a clean sequential run -- the only
+arm above 0.346. That is one 8-game sample and is not yet a result; it is the
+one worth spending a large tournament on. apexearth: "we keep losing to our
+commander going banzai into enemy armies... almost every time."
+
+**Method, for next time.** Use `run_tournament` (per-worker write dirs, swapped
+sides, ledger, reproducible `config.json`, now `--modoption` for A/B arms), never
+hand-rolled loops. Never run a watched game beside a measuring batch unless the
+batch sets its own write dir. And size the batch against the 0.038 sd, not
+against how large the difference looks.
+
 ## 2026-08-09: adaptive caution improves the army trade 47%; a blanket bar makes it worse
 
 Measured in real 1v1 games, not the arena -- the arena found us at parity in an
