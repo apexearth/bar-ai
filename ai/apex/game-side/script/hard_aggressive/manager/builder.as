@@ -1401,6 +1401,11 @@ bool MetalFull()
 const float GANTRY_NEAR_NANO = 700.f;
 int gSurplusGantries = 0;
 
+// How far from home to look once the tidy spots are exhausted. A gantry across
+// the base beats no gantry.
+const float GANTRY_SEARCH_WIDE = 2600.f;
+int gNextGantryFailLog = 0;
+
 IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 {
 	if (!MetalFull() || !Factory::WantMoreGantries())
@@ -1411,12 +1416,35 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 	if ((gant is null) || !gant.IsAvailable(ai.frame))
 		return null;
 
+	// A gantry is a 16x16 footprint -- the largest thing we ever place -- and on
+	// a hilly map there may be no flat square that big anywhere near the nanos.
+	// This used to be ONE FindBuildSiteNear call at a fixed radius: when it
+	// failed it returned null and said nothing, every call, for the whole game.
+	// apexearth, on Carrot Mountains: "it has lots of hills... i think gantry
+	// locations are hard to find. can you help make sure we find spots for them?"
+	//
+	// Widen instead of giving up. Assisting nanos are a preference, not a
+	// requirement -- a gantry built across the base still builds; a gantry that
+	// never gets placed does not.
 	AIFloat3 near;
-	if (!NanoCluster(near))
+	const bool haveNano = NanoCluster(near);
+	if (!haveNano)
 		near = gHomePos;
-	const AIFloat3 site = ai.FindBuildSiteNear(gant, near, GANTRY_NEAR_NANO);
-	if (!OnMap(site))
+	AIFloat3 site = ai.FindBuildSiteNear(gant, near, GANTRY_NEAR_NANO);
+	if (!OnMap(site) && haveNano)                    // anywhere in the base
+		site = ai.FindBuildSiteNear(gant, gHomePos, GANTRY_NEAR_NANO);
+	if (!OnMap(site))                                // anywhere we can reach
+		site = ai.FindBuildSiteNear(gant, gHomePos, GANTRY_SEARCH_WIDE);
+	if (!OnMap(site)) {
+		if (ai.frame >= gNextGantryFailLog) {
+			gNextGantryFailLog = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: gantry NO SITE for " + gant.GetName()
+				+ " nano=" + (haveNano ? "1" : "0")
+				+ " tried=" + formatFloat(GANTRY_NEAR_NANO, "", 0, 0)
+				+ "/" + formatFloat(GANTRY_SEARCH_WIDE, "", 0, 0));
+		}
 		return null;
+	}
 	if (ThreatFor(unit, site) > CON_THREAT_VETO)
 		return null;
 
@@ -1798,6 +1826,57 @@ const float AA_HEAVY_MIN_INCOME  = 20.f;
 const int   AA_HEAVY_PERIOD      = 25 * SECOND;
 int gNextHeavyAA = 0;
 string armferret("armferret"); string cormadsam("cormadsam"); string legflak("legflak");
+
+// A FEW TOWERS AT HOME, EARLY, TO NOT BE WORTH RAIDING.
+//
+// apexearth: "need more t1.5 defenses around our home base in the early game...
+// enemy raids are able to get all the way in, the t1.5 defense would deter them
+// from even trying - we don't need a ton, just enough to convince them not to do
+// it." Same argument the cheap-AA floor already rests on: deterrence changes the
+// enemy's target selection, which is worth far more than the turret's own dps.
+//
+// This is a SPEND rule, the class CLAUDE.md records as having cut metal
+// production 4.3x when twelve of them were added at once, so it is bounded hard:
+// a standing count of DETER_HOME_MAX, only near home, only before an advanced
+// factory exists, and only once there is income to pay for it. Beamer 190 /
+// Twin Guard 195 against a Sentry's 85 -- the point is a tower a raider cannot
+// simply run past, not a cheaper one we build more of.
+string armbeamer("armbeamer"); string corhllt("corhllt"); string legmg("legmg");
+const int   DETER_HOME_MAX    = 3;
+const float DETER_MIN_INCOME  = 8.f;
+const float DETER_RADIUS      = 900.f;
+const int   DETER_PERIOD      = 30 * SECOND;
+int gNextDeter = 0;
+
+IUnitTask@ HomeDeter(CCircuitUnit@ unit)
+{
+	if ((ai.frame < gNextDeter) || aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (!gHomeSet || Factory::gHaveT2)
+		return null;                       // early game only; porc takes over later
+	if (aiEconomyMgr.metal.income < DETER_MIN_INCOME)
+		return null;
+	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
+		return null;
+	if (int(Military::FenceCountNear(gHomePos, DETER_RADIUS)) >= DETER_HOME_MAX)
+		return null;
+	CCircuitDef@ tower = SideDef3(armbeamer, corhllt, legmg);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+	const AIFloat3 site = ai.FindBuildSiteNear(tower, gHomePos, DETER_RADIUS);
+	if (!OnMap(site))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, tower, site, 0.f));
+	if (post is null)
+		return null;
+	gNextDeter = ai.frame + DETER_PERIOD;
+	AiLog(Factory::T() + "apex: home-deter " + tower.GetName()
+		+ " standing=" + Military::FenceCountNear(gHomePos, DETER_RADIUS)
+		+ "/" + DETER_HOME_MAX
+		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
+	return post;
+}
 
 IUnitTask@ HeavyAA(CCircuitUnit@ unit)
 {
@@ -3415,6 +3494,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			IUnitTask@ heavyAa = HeavyAA(unit);
 			if (heavyAa !is null)
 				return heavyAa;
+			IUnitTask@ deter = HomeDeter(unit);
+			if (deter !is null)
+				return deter;
 			// BUILD_PHASE gate on the remaining optional economy cluster.
 			// Progression, 2026-08-04: phase >= 2 (mex >= 4) reverted, 0 wins in
 			// 13 decided. phase >= 3 (RushReady) confirmed a real improvement, 5
