@@ -39,7 +39,7 @@ ERR_RE = re.compile(r"\[BARAI_ARENA\] ERROR (.*)")
 
 def parse(path: Path):
     text = path.read_text("utf-8", errors="replace")
-    rounds = []
+    rounds, dirty = [], []
     for m in END_RE.finditer(text):
         d = {}
         for tok in m.group(1).split():
@@ -48,11 +48,18 @@ def parse(path: Path):
                 d[k] = float(v)
             except ValueError:
                 d[k] = v
-        rounds.append(d)
+        # clean=0 marks a round decided partly by units outside the two spawned
+        # sets -- the surrounding match walking in. Older logs have no clean
+        # field; treat those as clean so they still parse, but they are not
+        # comparable with rounds recorded after the check existed.
+        if d.get("clean", 1.0) != 0.0:
+            rounds.append(d)
+        else:
+            dirty.append(d)
     init = INIT_RE.search(text)
     errs = [m.group(1) for m in ERR_RE.finditer(text)]
     as_err = len(re.findall(r"\.as \(\d+, \d+\) : ERR", text))
-    return rounds, (init.group(1) if init else None), errs, as_err
+    return rounds, (init.group(1) if init else None), errs, as_err, dirty
 
 
 def infologs(root: Path):
@@ -97,11 +104,13 @@ def pair_mode(fwd_dir: str, rev_dir: str) -> int:
         root = Path(d)
         if not root.is_absolute():
             root = REPO / root
-        rounds = []
+        rounds, dropped = [], 0
         for log in infologs(root):
-            rounds.extend(parse(log)[0])
-        out.append(rounds)
-    fwd, rev = out
+            r = parse(log)
+            rounds.extend(r[0])
+            dropped += len(r[4])
+        out.append((rounds, dropped))
+    (fwd, dfwd), (rev, drev) = out
     if not fwd or not rev:
         print("pair mode needs rounds in both directories")
         return 2
@@ -118,7 +127,8 @@ def pair_mode(fwd_dir: str, rev_dir: str) -> int:
           f"subject {rw}-{rl}")
     print(f"\n  SUBJECT EDGE (slot bias cancelled): {e:+.2f} units/round")
     print(f"  subject rounds won {fw + rw} / opponent {fl + rl} / draw {draws}"
-          f"   over {n} rounds")
+          f"   over {n} rounds"
+          + (f"   ({dfwd + drev} dropped as contaminated)" if (dfwd + drev) else ""))
     if draws > 0.4 * n:
         print(f"\n  WARNING: {100.0 * draws / n:.0f}% draws -- sides may be "
               f"disengaging; the edge is diluted.")
@@ -145,7 +155,7 @@ def main() -> int:
             print(f"missing: {root}")
             continue
         for log in infologs(root):
-            rounds, init, errs, as_err = parse(log)
+            rounds, init, errs, as_err, dropped = parse(log)
             name = log.parent.name
             print(f"\n=== {name} ===")
             if init:

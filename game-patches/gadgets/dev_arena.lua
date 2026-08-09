@@ -70,6 +70,12 @@ local START      = math.floor(optNum("dev_arena_start", 900))
 local ROUND      = math.floor(optNum("dev_arena_round", 1800))
 local GAP        = math.floor(optNum("dev_arena_gap", 150))
 local SEP        = optNum("dev_arena_sep", 700)
+-- 0 none, 1 ally 0, 2 ally 1, 3 both. CircuitAI drops a unit carrying
+-- disableAiControl from its own control, so the engine's default auto-fight is
+-- all that remains. Setting 3 asks whether the two AIs' ORDERS explain the
+-- measured gap at all: with neither side commanding, any residual edge must
+-- come from the arena itself rather than from tactics.
+local NOCTRL     = math.floor(optNum("dev_arena_nocontrol", 0))
 
 -- Spacing between neighbours in a spawn line. Wide enough that the engine does
 -- not have to shove overlapping units apart on the first frame, which would
@@ -84,6 +90,7 @@ local metalOf = {}  -- ally -> metal cost per unit
 
 local spawned = { [0] = {}, [1] = {} }  -- ally -> { unitID = true }
 local roundNo = 0
+local dirty = false  -- an outsider joined this round; see UnitDestroyed
 local roundStart = 0
 local waitUntil = START
 local active = false
@@ -170,6 +177,9 @@ local function spawnSide(ally, anchor, facingAway)
 		local y = Spring.GetGroundHeight(ux, uz)
 		local id = Spring.CreateUnit(defIDs[ally], ux, y, uz, facingAway and 2 or 0, team)
 		if id then
+			if (NOCTRL == 3) or (NOCTRL == ally + 1) then
+				Spring.SetUnitRulesParam(id, "disableAiControl", 1)
+			end
 			spawned[ally][id] = true
 			n = n + 1
 		end
@@ -206,6 +216,7 @@ end
 local function beginRound(frame)
 	roundNo = roundNo + 1
 	roundStart = frame
+	dirty = false
 	flip = (roundNo % 2 == 0)
 	local a = flip and anchorB or anchorA
 	local b = flip and anchorA or anchorB
@@ -228,9 +239,10 @@ local function endRound(frame)
 	end
 	Spring.Echo(string.format(
 		"[BARAI_ARENA_END] round=%d frames=%d winner=%d alive0=%d alive1=%d "
-		.. "metal0=%.0f metal1=%.0f spawn0=%d spawn1=%d flip=%d",
+		.. "metal0=%.0f metal1=%.0f spawn0=%d spawn1=%d flip=%d clean=%d",
 		roundNo, frame - roundStart, winner, a0, a1,
-		a0 * metalOf[0], a1 * metalOf[1], COUNT, COUNT, flip and 1 or 0))
+		a0 * metalOf[0], a1 * metalOf[1], COUNT, COUNT, flip and 1 or 0,
+		dirty and 0 or 1))
 	clearRound()
 	active = false
 	waitUntil = frame + GAP
@@ -251,6 +263,27 @@ function gadget:Initialize()
 	Spring.Echo(string.format(
 		"[BARAI_ARENA] init defA=%s defB=%s count=%d sep=%d round=%d",
 		DEF_A, DEF_B, COUNT, SEP, ROUND))
+end
+
+-- The arena sits at the map centre of a live match, so each AI's real army can
+-- wander in and decide a round. A round where anything outside the two spawned
+-- sets dealt a killing blow measures the surrounding game, not the fight, and is
+-- dropped by tools/arena.py. Without this the instrument reported a 0.72
+-- unit/round gap even with BOTH sides' units removed from AI control, which is a
+-- fight neither AI was steering.
+function gadget:UnitDestroyed(unitID, unitDefID, teamID, attackerID)
+	if not active then
+		return
+	end
+	if not (spawned[0][unitID] or spawned[1][unitID]) then
+		return
+	end
+	if attackerID == nil then
+		return  -- terrain, self-destruct, or our own end-of-round cleanup
+	end
+	if not (spawned[0][attackerID] or spawned[1][attackerID]) then
+		dirty = true
+	end
 end
 
 function gadget:GameFrame(frame)

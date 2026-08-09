@@ -21,14 +21,24 @@
 
 local modOptions = Spring.GetModOptions() or {}
 
+-- Named explicitly rather than discovered by iterating the modoptions table:
+-- pairs() over it yields nothing here even though direct key access works, so a
+-- prefix scan silently found no options and the gadget disabled itself.
+local NAMES = {
+	"apex_orbit_rate",
+	"apex_squad_spacing",
+	"apex_range_mod",
+}
+
 local pending = {}
-for k, v in pairs(modOptions) do
-	if type(k) == "string" and k:sub(1, 5) == "apex_" then
-		local n = tonumber(v)
+for _, k in ipairs(NAMES) do
+	local raw = modOptions[k]
+	if raw ~= nil and raw ~= "" then
+		local n = tonumber(raw)
 		if n then
 			pending[k] = n
 		else
-			Spring.Echo("[BARAI_TUNABLE] ignoring non-numeric " .. k .. "=" .. tostring(v))
+			Spring.Echo("[BARAI_TUNABLE] ignoring non-numeric " .. k .. "=" .. tostring(raw))
 		end
 	end
 end

@@ -8,7 +8,58 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
-## 2026-08-09: we lose close-range fights by 25%, and are exactly even at range
+## 2026-08-09 (CORRECTED): the 25% close-range deficit was contamination
+
+**The finding recorded earlier the same day is withdrawn. Read this instead.**
+
+The arena sits at the map centre of a live 1v1, and each AI's real army walks
+into it. `dev_arena.lua` now flags any round in which something outside the two
+spawned sets landed a killing blow, and `arena.py` drops those rounds. **43-70%
+of all rounds were contaminated.** They were not measuring the fight.
+
+What exposed it: setting `dev_arena_nocontrol=3` removes BOTH sides' spawned
+units from AI control, so neither AI is steering and the edge must be zero. It
+read **-0.72**. An instrument that reports a three-quarter-unit tactical gap in a
+fight neither AI is directing is measuring something else.
+
+On clean rounds only, 2v2 Pawn, both orientations, 40-minute runs:
+
+| arm | clean rounds | edge |
+|---|---|---|
+| baseline, both AIs steering | 96 | -0.20 |
+| **neither AI steering** | 85 | **-0.12** |
+
+Indistinguishable, and both near zero. **In an isolated equal-army fight we are
+at parity with stock**, and AI orders move the result by about 0.08 units/round,
+which is nothing. The earlier -0.46 was the surrounding match, and the tidy
+range-dependence in the withdrawn table (even with a 475-range unit, -25% with a
+180-range one) went with it -- a longer-ranged unit is simply harder for a
+passing stranger to finish off.
+
+Three combat constants were made runtime-tunable (`apex_orbit_rate`,
+`apex_squad_spacing`, `apex_range_mod`; see CircuitAI `65ea323`) and A/B'd
+before the contamination was known. Every arm was WORSE than leaving them alone
+-- orbit off -0.95, lateral spacing off -0.77, standoff at 0.70/0.50/1.10 of
+weapon range -0.89/-0.56/-0.64, against a -0.33 baseline. Those numbers are
+contaminated too, but they are consistent and they point the same way, so the
+current values are not obviously wrong and our own orbit and line-spacing
+changes are not the problem. Nothing here justifies changing them.
+
+**What survives, and it was measured outside the arena.** Six 20-minute 1v1
+games on Altair Crossing: our metal production at parity (ratio 0.80-1.36,
+median 1.09) against army K/D of **0.47 to stock's 1.42**, and we won 0 of 6.
+We do lose the fighting in real games, with an equal economy to pay for it.
+
+Putting the two together relocates the problem: it is not unit-level micro,
+because that is at parity when the fight is symmetric and isolated. It is
+**which fights we take** -- being caught at bad odds, piecemeal, or split. That
+is engagement selection, and the arena as built cannot see it, because it hands
+both sides the same army at the same moment by construction. Measuring it needs
+either the real 1v1 games (army K/D, ~30s per game) or an arena that spawns
+DELIBERATELY unequal forces and asks whether each AI correctly refuses the bad
+ones.
+
+## 2026-08-09 (WITHDRAWN, see above): we lose close-range fights by 25%
 
 The first controlled measurement of fighting logic in this repo. `dev_arena.lua`
 hands both AIs the SAME units, the same count, at mirrored positions, and
