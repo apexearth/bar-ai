@@ -50,6 +50,11 @@ void AiMain()
 
 void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishAIId
 {
+	// Ahead of the ApexActive gate: a unit walled in by our own buildings is
+	// broken in a solo game exactly as it is in a team one, and freeing it is a
+	// fix rather than a piece of the team machinery that gate exists for.
+	Military::UpdateUnblock();
+
 	if (!ApexActive())
 		return;
 

@@ -55,6 +55,9 @@ local NAMES = {
 	-- one solo CAttackTask per super, the frame it finishes.
 	"apex_super_guard",
 	"apex_super_cost",
+	-- Reclaim our own cheap buildings to free units walled in by them
+	-- (2026-08-09). 0 leaves a penned unit penned.
+	"apex_unblock",
 	-- Dev aid: one map marker per attack group when it first picks a target.
 	"apex_ping_attacks",
 }

@@ -42,6 +42,7 @@
 #include "Game.h"
 #include "Lua.h"
 #include "Pathing.h"
+#include "MoveData.h"
 #include "Drawer.h"
 #include "Economy.h"
 #include "Resource.h"
@@ -1802,6 +1803,58 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnUnitsOfDef(CCircuitDef* def, const 
 		out.push_back(u);
 	}
 	return out;
+}
+
+std::vector<CCircuitUnit*> CCircuitAI::GetOwnStructsNear(const springai::AIFloat3& pos, float radius)
+{
+	std::vector<CCircuitUnit*> out;
+	const float sqRadius = radius * radius;
+	const int frame = GetLastFrame();
+	for (auto& kv : teamUnits) {
+		CCircuitUnit* u = kv.second;
+		if ((u == nullptr) || (u->GetCircuitDef() == nullptr)) {
+			continue;
+		}
+		if (u->GetCircuitDef()->IsMobile()) {
+			continue;
+		}
+		if (u->GetUnit()->IsBeingBuilt()) {
+			continue;
+		}
+		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
+			continue;
+		}
+		out.push_back(u);
+	}
+	return out;
+}
+
+float CCircuitAI::GetPathLength(CCircuitUnit* unit, const springai::AIFloat3& to)
+{
+	if ((unit == nullptr) || (unit->GetCircuitDef() == nullptr)) {
+		return -1.f;
+	}
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	if (!cdef->IsMobile() || cdef->IsAbleToFly()) {
+		return -1.f;
+	}
+	const int defId = cdef->GetId();
+	auto it = pathTypes.find(defId);
+	if (it == pathTypes.end()) {
+		springai::MoveData* md = cdef->GetDef()->GetMoveData();
+		if (md == nullptr) {
+			it = pathTypes.emplace(defId, -1).first;
+		} else {
+			it = pathTypes.emplace(defId, md->GetPathType()).first;
+			delete md;
+		}
+	}
+	if (it->second < 0) {
+		return -1.f;
+	}
+	// goalRadius 0 asks for the exact square and fails on anything standing on
+	// it; SQUARE_SIZE * 8 is the granularity the estimator works at anyway.
+	return GetPathing()->GetApproximateLength(unit->GetPos(GetLastFrame()), to, it->second, 64.f);
 }
 
 // Ask the terrain manager for a site `def` can be placed on near `pos`.

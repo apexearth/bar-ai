@@ -268,6 +268,16 @@ public:
 	// Our own units of `def` within radius of pos. The script can see a def's
 	// count but has no way to reach the instances.
 	std::vector<CCircuitUnit*> GetOwnUnitsOfDef(CCircuitDef* def, const springai::AIFloat3& pos, float radius);
+	// Every finished structure of ours near pos, whatever its def. A name list
+	// cannot answer "what of ours is standing in the way" -- it only answers it
+	// for the factions someone remembered to list.
+	std::vector<CCircuitUnit*> GetOwnStructsNear(const springai::AIFloat3& pos, float radius);
+	// Engine path length for this unit's move type, or -1 when there is no path.
+	// CircuitAI's own areas come from CTerrainData and are terrain-only, so a
+	// pocket walled in by BUILDINGS is invisible to CanMoveToPos. The engine's
+	// path manager reads the synced blocking map, structures included, which is
+	// the only oracle here that can see one.
+	float GetPathLength(CCircuitUnit* unit, const springai::AIFloat3& to);
 	float GetEnemyCostAt(const springai::AIFloat3& pos, float radius) const;
 	float GetBuilderThreatAt(const springai::AIFloat3& pos) const;
 	float GetUnitThreatAt(CCircuitUnit* unit, const springai::AIFloat3& pos) const;
@@ -342,6 +352,9 @@ private:
 	#define BLOCKED_BUILD_TTL	(FRAMES_PER_SEC * 30)
 	springai::AIFloat3 blockedBuildPos = -RgtVector;
 	int blockedBuildFrame = -1000000;
+	// def id -> engine pathType. UnitDef::GetMoveData() allocates a wrapper the
+	// caller must delete, so the lookup is done once per def.
+	std::map<int, int> pathTypes;
 	float engageBoost = 1.f;
 	springai::AIFloat3 frontPos = -RgtVector;
 	// Base grid, published by script. cell <= 0 means "no grid yet".

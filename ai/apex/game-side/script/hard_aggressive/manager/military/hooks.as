@@ -116,6 +116,8 @@ uint FenceCountNear(const AIFloat3& in pos, float radius)
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	if (usage == Unit::UseAs::COMBAT)
+		NotePenned(unit);
 	if (usage != Unit::UseAs::FENCE)
 		return;
 	gFenceId.insertLast(unit.id);
@@ -124,6 +126,8 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	if (usage == Unit::UseAs::COMBAT)
+		ForgetPenned(unit.id);
 	if (usage != Unit::UseAs::FENCE)
 		return;
 	const int id = unit.id;

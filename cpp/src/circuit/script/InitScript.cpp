@@ -289,6 +289,22 @@ static CScriptArray* CCircuitAI_GetOwnUnitsOfDef(CCircuitAI* circuit, CCircuitDe
 	return arr;
 }
 
+static CScriptArray* CCircuitAI_GetOwnStructsNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
+{
+	const std::vector<CCircuitUnit*> found = circuit->GetOwnStructsNear(pos, radius);
+	CScriptArray* arr = CScriptArray::Create(gUnitArrayType, found.size());
+	asUINT i = 0;
+	for (CCircuitUnit* unit : found) {
+		arr->SetValue(i++, &unit);
+	}
+	return arr;
+}
+
+static float CCircuitAI_GetPathLength(CCircuitAI* circuit, CCircuitUnit* unit, const AIFloat3& to)
+{
+	return circuit->GetPathLength(unit, to);
+}
+
 static float CCircuitAI_GetTeamMetalIncome(CCircuitAI* circuit, int otherTeamId)
 {
 	return circuit->GetTeamMetalIncome(otherTeamId);
@@ -661,6 +677,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 FindBuildSiteNear(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_FindBuildSiteNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEngageBoost() const", asMETHOD(CCircuitAI, GetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetPathLength(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GetPathLength), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetUnitThreatAt(CCircuitUnit@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetUnitThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -721,6 +739,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMex() const", asMETHOD(CCircuitDef, IsMex), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsBuilder() const", asMETHOD(CCircuitDef, IsBuilder), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);

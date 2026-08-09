@@ -48,6 +48,7 @@ Verified 2026-08-09 by reading every call site.
 | `apex_wind_per_metal` | 1.0 | AngelScript `builder/mexguard.as` | 0 restores picking wind-vs-solar on raw output |
 | `apex_comm_flee_influence` | 0 (off) | AngelScript `builder/rules_commander.as` | enemy influence at which the commander leaves |
 | `apex_rush_min_metal` | 14 (`RUSH_MIN_METAL`) | AngelScript `factory/techlead.as` | income the tech rush waits for |
+| `apex_unblock` | 1 (on) | AngelScript `military/unblock.as` | 0 stops reclaiming our own cheap buildings to free a unit walled in by them |
 
 Anything shipped at 0 is **off by default** and exists only for the A/B that
 would justify turning it on.

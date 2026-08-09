@@ -84,6 +84,60 @@ by a closed pipe (`docker ... | grep | head`) left a truncated `ThreatMap.cpp.ob
 that still linked. Never pipe a build through `head`; deleting the object and
 rebuilding clean fixed it.
 
+## 2026-08-09: units walled in by our own buildings get a way out
+
+Layer 3 (C++ bindings) + layer 2 (`military/unblock.as`). **Not yet measured, not
+yet run** — landed as code only.
+
+apexearth: "we need to detect units that are blocked and reclaim cheapest
+buildings we can to unblock their movement. This often happens in late game
+where units are completely locked into an area and cannot move outside. Usually
+theres just 1 or 2 buildings in the way."
+
+Why nothing caught it: CircuitAI's only reachability test is
+`CTerrainManager::CanMoveToPos`, over the areas `CTerrainData` computes from
+**slope and depth**. Structures are not in that model at all, so a pocket sealed
+by four solars is open ground to every routing decision in the AI — the unit is
+handed a destination it cannot reach and keeps trying. Nothing enumerates
+friendly units either, so "who has not moved" could not be asked.
+
+Three new bindings, all thin:
+
+- `ai.GetPathLength(unit, to)` → `CAICallback::GetPathLength` →
+  `pathManager->RequestPath`. The engine's path manager reads the synced
+  blocking map, buildings included; it is the only oracle here that can see a
+  pen. Returns -1 when there is no path. `pathType` is cached per def because
+  `UnitDef::GetMoveData()` allocates a wrapper the caller must delete.
+- `ai.GetOwnStructsNear(pos, radius)` → our finished structures, any def. The
+  existing `GetOwnUnitsOfDef` needs a def, and a per-faction name list is the
+  parity trap that has eaten this repo repeatedly.
+- `CCircuitDef::IsMex()` / `IsBuilder()`, so the script can refuse to eat a mex
+  or a factory without naming them.
+
+Detection is three gates, each cheap enough to pay for the next: motionless for
+45 s (a position read); ≥ 4 structures of ours within 700 elmos (one array walk);
+and every one of 8 rays out to 700 elmos failing a path query (the expensive
+part — one unit at a time, at most every 3 s). Standing still alone is not
+enough: a defend squad on the line is motionless for minutes and is exactly
+where it should be. Failing *every* exit is what separates the two.
+
+A path that reaches the ring is at least the straight line long, and a search
+stopped by a wall comes back **short**, not long — so both bounds are failures
+and the short one is what a pen actually produces. The ray that got furthest is
+the thinnest part of the wall; the cheapest structure of ours in that lane
+(within a 96-elmo corridor, never a mex, never a builder, never above 800 metal)
+is what gets reclaimed, at most one per 10 s, then the unit is re-checked 15 s
+later.
+
+The ≥ 4 structures gate is what keeps this off terrain-locked units: an island
+or a bay fails all 8 rays too, and reclaiming cannot fix either. `apex_unblock=0`
+turns the whole thing off.
+
+**What it costs, since that is the question this repo keeps getting wrong:** it
+spends constructor time, on a reclaim that returns metal. The rate limit is the
+control — one order per 10 s per player, and only for a unit that has failed
+every test above.
+
 ## 2026-08-09: the AI crashed the engine because C++ deleted tasks the script held
 
 Layer 3 (C++), `module/EconomyManager.cpp` and `task/builder/BuilderTask.cpp`.

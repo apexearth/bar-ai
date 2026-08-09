@@ -246,6 +246,11 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 		++gAdvConCount;
 	}
 
+	// A constructor sealed into a pocket is the same failure as a walled-in
+	// squad, and the one that strands work half-built. See military/unblock.as.
+	if ((usage == Unit::UseAs::BUILDER) || (usage == Unit::UseAs::REZZER))
+		Military::NotePenned(unit);
+
 	if (usage == Unit::UseAs::REZZER) {
 		const int rid = unit.circuitDef.id;
 		if ((rid >= 0) && (uint(rid) < gRezzerDefs.length()) && !gRezzerDefs[rid]) {
@@ -317,6 +322,8 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	Crew::Discharge(unit);
+	if ((usage == Unit::UseAs::BUILDER) || (usage == Unit::UseAs::REZZER))
+		Military::ForgetPenned(unit.id);
 	// Losing one has to re-open the slot, or a player that loses its advanced
 	// constructors never replaces them.
 	if ((usage == Unit::UseAs::BUILDER)
