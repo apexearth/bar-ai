@@ -27,6 +27,7 @@ local NAMES = {
 	"apex_orbit_rate",
 	"apex_squad_spacing",
 	"apex_range_mod",
+	"apex_los_standoff",
 	"apex_engage_margin",
 	"apex_trade_margin_max",
 	"apex_continue_margin",

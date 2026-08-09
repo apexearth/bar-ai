@@ -96,6 +96,63 @@ zero AngelScript errors, variant loaded, AA still built and still ramping on the
 player facing air (1-2 by minute 16, 10 by minute 24 on the pressured player).
 The claim to test in a hosted 8v8 is that the drought between ramps is gone.
 
+## 2026-08-09: long guns stand at 90% of their range instead of 40%
+
+Layer 3 (C++), `task/fighter/FighterTask.{h,cpp}` and `task/fighter/SquadTask.cpp`.
+
+apexearth: "I see units like the sniper standing far too close to enemy armies.
+Let's make sure units like that stand at around 90%+ of their max range."
+
+The standoff position is computed in exactly two places, and both discount by
+`RANGE_MOD`:
+
+| path | standoff | Sharpshooter |
+|---|---|---|
+| `IFighterTask::Attack` (solo), `FighterTask.cpp:206` | `min(minRange, losRadius) * RANGE_MOD` | **364** |
+| `ISquadTask::Attack` (per range-tier row), `SquadTask.cpp:424` | `minRange * RANGE_MOD` | 720 |
+| `ISquadTask::Attack` row 0 when the target is unseen, `:429` | `min(minRange, losRadius) * RANGE_MOD` | 364 |
+
+`armsnipe` carries weapon range **900** against `sightdistance` **455**, so the
+solo path stood it at 364 -- **40% of its own reach**, inside almost everything
+that shoots back. The `losRadius` term, not `RANGE_MOD`, is the dominant cause:
+it is the binding minimum for every gun that outranges its own eyes.
+
+Two changes:
+
+- The solo path now clamps to `losRadius` only when the target is **not** in
+  radar or LOS, which is what `ISquadTask::Attack` already did for its scouting
+  first row. A unit that can already see what it is shooting keeps its full
+  standoff. Gated on `apex_los_standoff` (default 1; 0 restores the old
+  unconditional clamp).
+- `RANGE_MOD` 0.8 -> 0.9, reachable at runtime as `apex_range_mod`, which was
+  already a registered name in `dev_tunables.lua` whose reader was removed by
+  the 2026-08-10 fighter-task revert.
+
+Sharpshooter standoff becomes 810 on both paths, 90% of 900, as asked.
+
+The `* 0.9f` constants in `AttackTask.cpp:251`, `DefendTask.cpp:229`,
+`RaidTask.cpp:260` and `ScoutTask.cpp:167` look like this and are **not**: they
+are vertical reachability filters (`ePos.y - elevation > weaponRange`), never
+positions. `AntiHeavyTask.cpp:294` -- the sniper's own task -- uses `GetMaxRange()`
+for the same height test and computes no standoff of its own; it inherits the
+solo path above.
+
+Base range stays `GetMinRange()`, deliberately: a multi-weapon unit still closes
+to its shortest gun. Switching that to `GetMaxRange()` is a separate axis and
+would confound this measurement.
+
+**NOT MEASURED YET.** This is the same territory as the 2026-08-10 revert
+("the standoff/orbit carries a real part of it. That is the pair to re-land
+first, with a measurement"), which is why both halves are tunable-gated: the
+full control arm is `--modoption apex_range_mod=0.8 --modoption apex_los_standoff=0`,
+so the A/B needs no rebuild and no redeploy.
+
+Config-layer alternative, rejected: `behaviour.<unit>.range` is a real JSON key
+(`FactoryManager.cpp:491-503` -> `CCircuitDef::SetRange`) and does feed this
+formula, but only the scalar form raises `minRange`, it overwrites `maxRange`
+for every consumer that reads it (threat, height filters, path reachability),
+and it cannot reach the `losRadius` clamp that is the actual cause.
+
 ## 2026-08-09: A defensive posture buys artillery and fodder, not Bulls
 
 Layer 2 (AngelScript), `manager/factory/armypush.as`, `factory/rules_rush.as`,
