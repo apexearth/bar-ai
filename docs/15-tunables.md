@@ -62,3 +62,9 @@ Three edits, all of them required:
 
 The compiled default must stay the shipped behaviour. A tunable is a way to
 measure a change, not a way to make one.
+
+## Added 2026-08-10
+
+| name | default | read by | what it does |
+|---|---|---|---|
+| `apex_solo_stock` | 1 (on) | AngelScript `script/world.as` `ApexActive()` | 0 makes apex run its own game-side rules even with no allies, i.e. the pre-2026-08-10 behaviour |

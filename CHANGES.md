@@ -8,6 +8,140 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-10: the 1v1 win rate is 1/66, and the 20-minute cap was hiding it
+
+Every 1v1 tournament in this repo before today capped at 20 minutes, and most
+games were still running at the cap -- so the headline metric was the army-trade
+proxy and the win rate was simply unmeasurable. apexearth confirmed the cap need
+not stand. **At 45 minutes essentially every game reaches game over**, and the
+answer it gives is not ambiguous:
+
+| faction | decided | apex wins | win% | 95% CI (for stock) |
+|---|---|---|---|---|
+| Cortex | 24/24 | 0 | **0.0%** | 86-100% stock |
+| Armada | 22/24 | 1 | **4.5%** | 78-99% stock |
+| Legion | 20/24 | 0 | **0.0%** | 84-100% stock |
+
+Altair Crossing, 1v1 mirror, side-swapped, `Apex:apex:hard_aggressive` against
+`BARb:stable:hard`, 24 games each. Median game length 24-34 min, i.e. the old
+cap cut the games off at roughly the point where they were being decided.
+
+Cortex army trade over those 24 games: **0.206** (we kill 110,605 metal and lose
+271,725; they kill 316,610 and lose 159,985). Metal produced ratio 0.862.
+
+**Where it goes wrong, from the paired timeline** (`tools/tl.py`, which pairs
+samples by frame so a dead team's silence cannot flatter the survivor):
+
+| game min | metalProduced | armyReal | mFactories | mKillReal | mLostReal |
+|---|---|---|---|---|---|
+| 8 | 4,936 / 4,635 | 2,938 / 3,290 | 531 / 520 | 83 / 86 | 269 / 316 |
+| 12 | 9,265 / 8,322 | 3,390 / 4,077 | **1,052 / 519** | 498 / 752 | 1,092 / 1,116 |
+| 16 | 15,189 / 14,038 | 3,678 / 4,816 | **2,147 / 695** | 1,607 / 2,554 | 3,160 / 2,394 |
+| 20 | 23,640 / 21,151 | 4,041 / 4,906 | 2,921 / 2,146 | 3,530 / 4,975 | 5,947 / 4,550 |
+| 32 | 54,753 / 54,440 | 2,964 / **7,756** | 5,066 / 3,370 | 9,332 / **18,933** | 23,020 / 11,802 |
+
+(apex / stock. mex is 17/15 in our favour at minute 20 and 20/32 against us at
+32.)
+
+We are AHEAD on economy and mexes to minute 20. What we do with it is buy
+factories: 2,147 metal of them at minute 16 against stock's 695, while stock
+buys Thugs. Composition over the same 24 games, as a share of all metal built:
+
+| | apex | stock |
+|---|---|---|
+| factories | **14.1%** | 7.1% |
+| static defence | 16.2% | 22.0% |
+| army (real) | 20.5% | 23.6% |
+| `corthud` (the T1 mainstay) | **3.6%** | 10.9% |
+| `coralab` (advanced bot lab) | **15.9%** | 4.5% |
+| `corfus` | 0% | 11.7% |
+| `corpun` (T2 area artillery) | 0% | 14.2% |
+
+So stock's 1v1 plan is Thugs, mohos, a fusion and Agitators; ours is advanced
+labs, T1 constructors and advanced solars. We tech at a median of 13.8 min
+against their 17.5 and have nothing on the field when we get there.
+
+## 2026-08-10: `hard_aggressive` is a STALE stock profile, and apex was forked from it
+
+The 0-24 above was decomposed by layer, 24 games per arm, same map, same
+opponent (`BARb:stable:hard`), side-swapped:
+
+| arm | what it is | decided | wins | win% |
+|---|---|---|---|---|
+| `Apex:apex:hard_aggressive` | apex config + apex script + apex DLL | 24 | 0 | **0%** |
+| `ApexStk:stk:hard_aggressive` | **stock** config + **stock** script + apex DLL | 24 | 2 | **8%** |
+| `ApexStk:stk:hard` | stock config + stock script + apex DLL, `hard` profile | 17 | 6 | **35%** |
+| `BARb:stable:hard_aggressive` | stock everything, `hard_aggressive` profile | 23 | 6 | **26%** |
+
+Read down the list. Strip every line of apex's own game-side work and the AI
+still loses 22-24; that is not apex's doing. Change nothing except the PROFILE
+and it goes from 26% to ~50% — stock BARb playing `hard_aggressive` loses 6-17
+to stock BARb playing `hard`, same binary, same everything, config only.
+
+`hard_aggressive` is not "hard, but aggressive". It is an **unmaintained older
+copy** of the hard tree. `economy.json` is the clearest tell: `hard` carries a
+per-def efficiency term (`"corfus": [4, 6, 50, 600, 2.06]  // efficiency=2.057844`)
+with geothermals, underwater fusion and `armckfus`; `hard_aggressive` carries a
+two-element stub (`"corfus": [30, 40]`) with none of them. The energy `factor`
+ladder is `[[6,1],[20,300],[30,420],[60,3600]]` in `hard` and `[[1,300],[30,7200]]`
+in `hard_aggressive`. Stock's own `AIOptions.lua` has `def = 'hard'` and does not
+list `hard_aggressive` in its items at all.
+
+So the "one profile on purpose" decision — keep `hard_aggressive`, delete the
+rest — picked the wrong survivor, and every measurement in this repo has been
+taken on a config tree the upstream author stopped maintaining.
+
+The C++ delta, by contrast, is roughly neutral here: apex's DLL running stock
+`hard` game-side scored 6-11, a CI that includes 50%.
+
+## 2026-08-10: apex stands aside when it has no allies, and moves onto the `hard` base
+
+Two changes, measured separately, 24 games each against `BARb:stable:hard`,
+Altair Crossing 1v1 Cortex mirror, side-swapped:
+
+| build | decided | apex wins | win% |
+|---|---|---|---|
+| before | 24 | 0 | 0% |
+| `ApexActive()` gate only (still on `hard_aggressive` configs) | 23 | 6 | **26%** |
+| + config base moved to stock `hard` | 20 | 8 | **40%** (CI includes 50) |
+
+**`ApexActive()`** (`script/world.as`) is false when `ai.GetTeamIds()` holds one
+entry, i.e. no allies. Every apex game-side hook returns the stock answer when it
+is false: both `AiMakeTask` pipelines, `Military::AiMakeTask`, `AiMakeDefence`,
+`AiIsSwitchTime`, `AiIsSwitchAllowed`, `AiGetFactoryToBuild` and the whole of
+`AiUpdate`. Verified in an infolog: `apex:` log lines go from 144 to 3 in a 1v1.
+
+The 26% is the confirmation that the gate is COMPLETE, not just that it helped:
+stock BARb running `hard_aggressive` measured 6-17 in its own 24-game arm, and
+apex-with-the-gate measured 6-17. Identical, which is what "we are now playing
+stock" should look like.
+
+**The config base.** `config/hard_aggressive/` is now a copy of stock's `hard`
+tree rather than of its `hard_aggressive` tree. The directory keeps its name
+because the profile option names both the config dir and the script dir.
+
+Two things this costs, recorded so they are not discovered later:
+
+- apex's own config deltas (raider shares in `factory.json`, the build-chain
+  edits, `economy.json` tuning) are GONE and need re-deriving on the new base.
+  They were measured on a tree that loses to `hard` by construction.
+- **8v8 is not re-measured.** The 16-0/8-0 results at the top of this file were
+  taken on the `hard_aggressive` configs. Team play still runs every apex rule;
+  only its config base moved. Re-measure before trusting the old numbers.
+
+## 2026-08-10 (NEGATIVE): switching the T2 rush off in small teams changes nothing
+
+The structural hypothesis was that the rush is a team strategy misapplied in a
+1v1 — pool behind one player while others hold ground, with nobody to pool from
+and nobody holding ground. Implemented as `!IsSmallTeam()` on both of the rush's
+bypasses in `AiIsSwitchTime` (the 10-second probe, which also disables
+EconomyManager's metal gate) and `AiIsSwitchAllowed` (the no-bank T2 grant), so a
+small team falls through to stock's "have an army before you tech" gate.
+
+**0-23, against a 0-24 baseline.** No effect in either direction. The factory
+overspend it was aimed at is real (2,147 metal of factories at minute 16 against
+stock's 695) but is evidently not what decides these games.
+
 ## 2026-08-09: the AngelScript was split up (pure refactor, no behaviour change)
 
 `builder.as` was 4,651 lines and `factory.as` 2,859. That is a CORRECTNESS
