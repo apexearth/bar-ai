@@ -790,9 +790,14 @@
 				"attribute":["siege"],
 				"threat": {"surf": 0.2, "vs":{"static":5.0, "artillery":5.0}}
 			},
+			// Lance and Charon carry onlytargetcategory VTOL -- neither can fire
+			// at a ground target at all. Lance was roled "skirmish", so it was
+			// counted as ground power and sent to fight ground; Charon had no
+			// entry here at all, so it inherited the default role and never
+			// counted toward the anti_air response budget either.
 			"legrail": {
-				"role": ["skirmish"],
-				"threat":{"vs":{"artillery": 2.0}}
+				"role": ["anti_air"],
+				"threat": {"air": 2.0, "water": 0.0, "surf": 0.0}
 			},
 	
 			// 	LEGION ADV VELICLE PLANT
@@ -802,6 +807,11 @@
 			},
 			"legaskirmtank": {
 				"role": ["skirmish"]
+			},
+			"legvflak": {
+				"role": ["anti_air"],
+				"limit": 10,
+				"threat": {"air": 2.0, "water": 0.0, "surf": 0.0}
 			},
 			"legmrv": {
 				"role": ["raider"]

@@ -10,6 +10,21 @@ bool IsFodder(const CCircuitDef@ cdef)
 // That is its default branch -- every role absent from its role->fight-type map,
 // which is assault, skirmish and the custom roles bound to assault -- plus riot
 // when no guard task can take the unit. Everything else keeps stock routing.
+//
+// GROUND AA TRAVELS WITH THE ARMY. Stock routes the AA role to FightType::AA,
+// and CAntiAirTask's constructor seeds its position with
+// `rand() % terrainWidth/Height` -- an AA squad's destination is a random point
+// on the map, unrelated to where our army is or where their air is flying. It
+// also merges only same-def units (CanAssignTo compares against the leader's
+// circuitDef), so it accumulates one big single-type blob rather than spreading
+// a couple of escorts over the front.
+//
+// Aircraft are excluded: fighters keep FightType::AA because Air:: owns them,
+// and a fighter parked in a ground squad cannot intercept anything.
+//
+// apexearth: "our armies often need at least 1 or 2 AA units attached to them
+// but theres a lot of times I don't see that... previously I'm seeing squads of
+// 8 aa units very early in the game."
 bool WantsMassing(const CCircuitDef@ cdef)
 {
 	if (cdef.IsRoleAny(Unit::Role::SCOUT.mask | Unit::Role::SUPPORT.mask))
@@ -17,7 +32,9 @@ bool WantsMassing(const CCircuitDef@ cdef)
 	const Type role = ai.GetBindedRole(cdef.GetMainRole());
 	if (role == RT::RIOT)
 		return aiMilitaryMgr.GetGuardTaskNum() == 0;
-	return (role != RT::RAIDER) && (role != RT::ARTY) && (role != RT::AA)
+	if (role == RT::AA)
+		return !cdef.IsAbleToFly();
+	return (role != RT::RAIDER) && (role != RT::ARTY)
 		&& (role != RT::AH) && (role != RT::BOMBER) && (role != RT::MINE)
 		&& (role != RT::SUPER) && (role != RT::SCOUT) && (role != RT::SUPPORT);
 }

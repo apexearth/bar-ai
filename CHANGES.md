@@ -18,6 +18,84 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-09: mobile AA is all-or-nothing, and it never travels with the army
+
+Layers 1 and 2: `config/hard_aggressive/factory.json`, `factory_leg.json`,
+`behaviour_leg.json`, `script/hard_aggressive/manager/military/hooks.as`.
+
+apexearth: "at some point recently i said we made too many AA units, in recent
+games im feeling like we don't make enough... our armies often need at least 1
+or 2 AA units attached to them but theres a lot of times I don't see that.
+previously I'm seeing squads of 8 aa units very early in the game."
+
+Both halves of that are the same mechanism. Read from
+`FactoryManager.cpp:1706` (`GetFacTierProbs`) and `:1658`:
+
+```
+allyAACost = militaryMgr->GetRoleCost(AA) * allyTeam->GetAliveSize();
+isAir      = enemyTotalAirCost > allyAACost;
+tiers      = isAir ? airTiers : isWaterMap ? waterTiers : landTiers;
+...
+if (probs[i] > 0.f) { prob = RoleProbability(bd) * (probs[i] + reWeight); }
+```
+
+Three consequences, none of them visible from the config:
+
+- **A unit with weight 0.00 in the selected terrain block is not a candidate at
+  all.** `probs[i] > 0.f` gates entry to the candidate list, before the response
+  system is consulted. Conversely `prob = isResp ? prob : probs[i]` means the
+  raw weight is the floor when the response gate is shut -- so the terrain
+  block, not `response.json`, is what decides whether any AA exists.
+- **`isAir` is a bang-bang switch, and the ally-size multiplier makes it
+  hair-trigger.** In an 8v8 our own AA metal is multiplied by 8 before the
+  comparison, so one or two AA units per player flip the whole team back to the
+  land block. Then, in the land block as shipped, **every T1 ground factory
+  carried 0.00 AA at tier0 and tier1** -- `armjeth`, `armsam`, `corcrash`,
+  `cormist` -- and 0.01-0.05 above that. Production stops dead until the enemy's
+  air outgrows ours again, at which point the air block (0.2-0.3) turns it back
+  on hard. That is the squad of eight and the drought, alternating.
+- **Legion could not build mobile AA at all.** `legaabot` and `legadvaabot` were
+  0.00 in *every* tier of *every* terrain block of `leglab`, `legalab` and
+  `legamphlab` -- air block included, so the response path could not rescue it
+  either.
+
+Two unit defs were mis-roled in `behaviour_leg.json`. Both carry
+`onlytargetcategory VTOL` and cannot fire on a ground target:
+`legrail` (Lance, 240m) was roled `skirmish`, so it counted as ground power and
+was sent to fight ground; `legvflak` (Charon, 470m) had **no entry at all**, so
+it took the default role and never counted toward the AA response budget --
+while sitting at weight 0.05 in `legavp`.
+
+Changes:
+
+- A floor in the **land and water** blocks of every ground, hover and amphib
+  factory: 0.06 for a T1 plant, 0.05 for a T2 one, applied as
+  `max(existing, floor)` so nothing was lowered. 102 weights raised across the
+  two files. At a land-block total of ~1.3-1.9 that is a 3-5% share -- one or
+  two escorts on an army of forty, which is what was asked for, not a squad.
+  The air blocks are untouched: "enemy has a ton of air" already answers itself
+  there.
+- Legion's zeros filled in on the same rule, plus 0.15 in its air blocks to
+  match what Armada and Cortex already had.
+- `legrail` and `legvflak` roled `anti_air`.
+- **Ground AA now masses with the army** (`Military::WantsMassing`). Stock routes
+  the AA role to `FightType::AA`, and `CAntiAirTask`'s constructor seeds its
+  destination with `rand() % terrainWidth/Height` -- a random point on the map.
+  It also merges only same-def units (`CanAssignTo` compares against the
+  leader's `circuitDef`), so it accumulates one single-type blob instead of
+  spreading escorts along the front. Aircraft keep the stock routing: `Air::`
+  owns them, and a fighter parked in a ground squad intercepts nothing.
+
+**Not measured.** A 4v4 benchmark cannot reproduce the condition: it stays in
+tier0 on 4-9 metal/s per team, and with the enemy flying it sat in the *air*
+block for most of the game, where the land-block floor never binds. Changed vs
+control on the same seed read 24 vs 28 mobile AA built -- and the opponent's own
+AA moved 14 vs 1 between the two runs, which is the run-to-run divergence
+CLAUDE.md records for `FixedRNGSeed`, not an effect. What the run does confirm:
+zero AngelScript errors, variant loaded, AA still built and still ramping on the
+player facing air (1-2 by minute 16, 10 by minute 24 on the pressured player).
+The claim to test in a hosted 8v8 is that the drought between ramps is gone.
+
 ## 2026-08-09: A defensive posture buys artillery and fodder, not Bulls
 
 Layer 2 (AngelScript), `manager/factory/armypush.as`, `factory/rules_rush.as`,
