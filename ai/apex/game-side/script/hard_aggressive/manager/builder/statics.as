@@ -433,7 +433,9 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	return post;
 }
 
-// One nuclear launcher per player, as early as the economy can carry it.
+// One nuclear launcher per player, as early as the economy can carry it -- and
+// as many as we like once both banks are over 80% and the income is going to
+// waste anyway.
 //
 // apexearth: "Let's make sure all our guys make at least 1 nuke launcher per
 // game - seems like they'd be effective. Usually the earlier the better."
@@ -462,24 +464,44 @@ string armsilo("armsilo"); string corsilo("corsilo"); string legsilo("legsilo");
 // surplus rather than out of the army budget.
 const float NUKE_MIN_ENERGY = 2500.f;
 const float NUKE_MIN_INCOME = 150.f;
+
+// Both banks over this share of storage is the "we are wasting income" state.
+// aiEconomyMgr's own flags do not agree on a threshold -- isMetalFull is 0.8 but
+// isEnergyFull is 0.88 -- so both sides are read directly against one number.
+const float NUKE_FULL_FRAC = 0.8f;
 int gNukesAsked = 0;
+// High-water standing count. Asked-minus-standing would read a DESTROYED silo as
+// one still in flight and block every rebuild for the rest of the game; against
+// the peak, a loss lowers standing and the cap lets the replacement through.
+int gNukesPeak = 0;
 
 CCircuitDef@ NukeDef()
 {
 	return SideDef3(armsilo, corsilo, legsilo);
 }
 
+// apexearth: "when we are full on metal and energy (>80%) we should keep making
+// more nuke launchers." A silo is 8,100 metal and 90,000 energy, and the energy
+// is the half that actually hurts -- so a metal bank at the cap on its own is
+// not enough to say the next one is free.
+bool NukeSurplus()
+{
+	return (aiEconomyMgr.metal.storage > 0.f) && (aiEconomyMgr.energy.storage > 0.f)
+		&& (aiEconomyMgr.metal.current > aiEconomyMgr.metal.storage * NUKE_FULL_FRAC)
+		&& (aiEconomyMgr.energy.current > aiEconomyMgr.energy.storage * NUKE_FULL_FRAC);
+}
+
 int NukeCap()
 {
-	// One is the point of the rule. A bank at the cap removes the cap entirely --
-	// apexearth: "if we are full on metal we should make the limit unlimited to
-	// allow us to keep making more." Metal sitting at storage is already wasted,
-	// so there is nothing left for another silo to displace.
+	// One is the point of the rule. Both banks at the cap removes the cap
+	// entirely -- apexearth: "if we are full on metal we should make the limit
+	// unlimited to allow us to keep making more." Resources sitting at storage
+	// are already wasted, so there is nothing left for another silo to displace.
 	//
 	// Note this is a cap on how many may STAND, not on how many at once: the
 	// outstanding test below still allows only one in flight, which serialises
 	// them and matches "build expensive structures ONE AT A TIME, assisted".
-	return aiEconomyMgr.isMetalFull ? 999 : 1;
+	return NukeSurplus() ? 999 : 1;
 }
 
 IUnitTask@ NukeSilo(CCircuitUnit@ unit)
@@ -488,22 +510,31 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 		return null;
 	if (unit.circuitDef.costM < ADV_CON_COST)
 		return null;
-	if (aiEconomyMgr.energy.income < NUKE_MIN_ENERGY)
-		return null;
-	if (aiEconomyMgr.metal.income < NUKE_MIN_INCOME)
-		return null;
-	// Only out of surplus. A silo started on a tight bank starves everything
-	// else for the several minutes it takes to finish.
-	if (aiEconomyMgr.isMetalEmpty || (aiEconomyMgr.metal.current
-			< aiEconomyMgr.metal.storage * 0.5f))
-		return null;
+	// The income and half-bank bars are a proxy for "can we afford one without
+	// starving the rest". Both banks sitting over 80% answers that question
+	// directly, so the proxy is skipped rather than allowed to veto it.
+	const bool surplus = NukeSurplus();
+	if (!surplus) {
+		if (aiEconomyMgr.energy.income < NUKE_MIN_ENERGY)
+			return null;
+		if (aiEconomyMgr.metal.income < NUKE_MIN_INCOME)
+			return null;
+		// Only out of surplus. A silo started on a tight bank starves everything
+		// else for the several minutes it takes to finish.
+		if (aiEconomyMgr.isMetalEmpty || (aiEconomyMgr.metal.current
+				< aiEconomyMgr.metal.storage * 0.5f))
+			return null;
+	}
 	CCircuitDef@ silo = NukeDef();
 	if ((silo is null) || !silo.IsAvailable(ai.frame))
 		return null;
+	const int standing = int(silo.count);
+	if (standing > gNukesPeak)
+		gNukesPeak = standing;
 	// Outstanding as well as standing: a silo takes a long time to build and
 	// Enqueue does not dedup, so counting only what stands orders a second one
 	// while the first is still a nanoframe.
-	if ((silo.count >= NukeCap()) || (gNukesAsked - silo.count >= 1))
+	if ((standing >= NukeCap()) || (gNukesAsked - gNukesPeak >= 1))
 		return null;
 
 	// Behind the base, in the nano field where it will actually get finished.
@@ -521,6 +552,7 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 	++gNukesAsked;
 	AiLog(Factory::T() + "apex: nuke silo " + silo.GetName()
 		+ " standing=" + silo.count + " asked=" + gNukesAsked
+		+ (surplus ? " surplus" : "")
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
 	return post;
 }

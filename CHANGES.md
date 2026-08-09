@@ -252,6 +252,40 @@ reports `conbranch fac=corgant ... roleDef=NULL`, so whatever picks what a
 factory builds is not recognising it. Not yet diagnosed; it is a separate
 change from this one.
 
+## 2026-08-09: keep building silos while both banks are over 80%
+
+Layer 2: `script/hard_aggressive/manager/builder/statics.as`.
+
+apexearth: "when we are full on metal and energy (>80%) we should keep making
+more nuke launchers."
+
+The unlimited cap already existed but keyed on `isMetalFull` alone, and it was
+the only thing that got lifted -- `NukeSilo`'s income bars (`eInc >= 2500`,
+`mInc >= 150`) and its 50%-of-storage bank test still applied underneath it, so
+a full bank on a modest income still built exactly one. Those bars are a proxy
+for "can we afford one without starving the rest"; both banks sitting over 80%
+answers that directly, so in that state the proxy is skipped rather than allowed
+to veto. `NukeCap` now keys on the same both-banks state.
+
+Energy is read at the same 0.8 as metal rather than through
+`aiEconomyMgr.isEnergyFull`, which is 0.88. A silo is 8,100 metal and 90,000
+energy, so energy is the half that decides whether the next one is really free,
+and metal-full alone is not enough to say it is.
+
+Also fixed while here: outstanding was `asked - standing`, which reads a
+DESTROYED silo as one still in flight and blocks every rebuild for the rest of
+the game. It is now `asked - peak-standing`, so a loss lowers standing and the
+cap lets the replacement through.
+
+One at a time is unchanged -- the cap is on how many may STAND, not how many are
+in flight, so silos are still serialised and assisted.
+
+Verified: deployed, 0 AngelScript errors, variant loads. **The behaviour is not
+measured** -- the standard benchmark never reaches `eInc 2500`, let alone both
+banks at 80%, so confirming it needs a long bonused or hosted game. Note it sits
+after `SurplusGantry` in the pipeline, which fires on the same full bank, so
+gantries are still bought first while `WantMoreGantries` holds.
+
 ## 2026-08-09: nuke the army massed on our own border
 
 Layer 3: `cpp/src/circuit/task/static/SuperTask.cpp`.
