@@ -96,6 +96,10 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// get their turn on the same offer.
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 
+	// Before the offer is read as expansion: a mex upgrade on an ally's spot
+	// can never complete, and re-offers forever.
+	@task = VetoAllyMexUp(unit, task);
+
 	@t = ExpansionAlwaysWins(task);
 	if (t !is null)
 		return t;

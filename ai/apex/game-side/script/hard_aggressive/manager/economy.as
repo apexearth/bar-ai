@@ -6,6 +6,21 @@ namespace Economy {
 // To not reset army requirement on factory switch, @see Factory::AiIsSwitchAllowed
 bool isSwitchAssist = false;
 
+// The economy half of the UseAs enum arrives here, not in Builder's hook --
+// CEconomyManager owns the extractor handlers. Only MEX is wanted: it is the
+// authoritative "this extractor is OURS" signal behind Builder::VetoAllyMexUp.
+void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
+{
+	if (usage == Unit::UseAs::MEX)
+		Builder::NoteOwnMex(unit);
+}
+
+void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
+{
+	if (usage == Unit::UseAs::MEX)
+		Builder::DropOwnMex(unit);
+}
+
 void AiLoad(IStream& istream)
 {
 }

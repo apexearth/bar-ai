@@ -59,10 +59,13 @@ TypeMask NO_DGUN   = aiAttrMasker.GetTypeMask("no_dgun");
 TypeMask ANTI_STAT = aiAttrMasker.GetTypeMask("anti_stat");
 }  // namespace Attr
 
+// Mirrors IModule::UseAs in Module.h. The economy half was missing here, so
+// Economy::AiUnitAdded had no name for the usage it is handed.
 enum UseAs {
 	COMBAT = 0, FENCE, SUPER, STOCK,  // military
 	BUILDER, REZZER,  // builder
-	FACTORY, ASSIST  // factory
+	FACTORY, ASSIST,  // factory
+	ENERGY, GEO, MEX, CONVERT, STORE, AIRPAD  // economy
 }
 
 }  // namespace Unit

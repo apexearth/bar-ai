@@ -11,6 +11,7 @@
 #include "builder/reclaim.as"     // wreck valuation, rez bots, reclaim-vs-resurrect
 #include "builder/sitesafety.as"  // OnMap, front fractions, ThreatFor, veto logging
 #include "builder/mexwork.as"     // reroute a refused mex to a colder spot
+#include "builder/mexowner.as"    // which mexes are ours, and the ally-mexup veto
 #include "builder/joinbuild.as"   // help the identical building already started
 #include "builder/digin.as"       // fence/jammer area bookkeeping
 #include "builder/converter.as"   // energy converters, rear positions
