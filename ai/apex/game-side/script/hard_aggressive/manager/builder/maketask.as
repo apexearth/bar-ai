@@ -100,6 +100,13 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// Before any optional spending: if the engine just offered a SECOND task for
+	// a building one of ours already started (or is walking to), take that one
+	// instead. A redirect of an offer already made -- it enqueues nothing.
+	@t = JoinDuplicateBuild(unit, isComm, task);
+	if (t !is null)
+		return t;
+
 	@t = OptionalWork(unit, isComm);
 	if (t !is null)
 		return t;

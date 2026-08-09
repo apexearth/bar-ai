@@ -18,6 +18,60 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-09: help the identical building already started, instead of starting a second
+
+Layer 2: `script/hard_aggressive/manager/builder/joinbuild.as` (new),
+`builder/maketask.as`, `builder/events.as`, `builder.as`.
+
+apexearth: "we tend to have multiple construction bots all decide to make
+identical buildings at the same time... if they're about to make a building of a
+certain type but one is already being made we'll instead choose to help the one
+which is already being made" -- and, on the same behaviour: "this has to include
+buildings where placement is pending (constructor still walking over to start
+it)."
+
+Nothing in the engine prevents it. `IBuilderTask::CanAssignTo` refuses a second
+builder on ONE task once that task has enough build power
+(`cost.metal < buildPower.metal * GetGoalBuildTime(income)`), but it has no
+opinion about a second TASK for the same def -- and the queue legitimately holds
+several, since `MakeEconomyTasks` and the build chains enqueue independently.
+`MakeBuilderTask` then hands two idle constructors two different tasks for the
+same building and each walks off to its own site.
+
+`JoinDuplicateBuild` runs on the offer `DefaultMakeTask` just made, immediately
+after `ExpansionAlwaysWins` and ahead of all optional spending. If the offer is a
+fresh task (no assignees) for a def that another live task is already working, it
+returns that other task instead. The pending-placement case is covered by
+construction: `IBuilderTask::AssignTo` runs the moment the builder is given the
+job and the entire walk happens before a nanoframe exists, so `GetUnits()` is
+non-empty for the whole window -- a check on standing structures or on
+`buildDef.count` would see nothing there.
+
+This is a redirect, not a spend: the duplicate task stays queued and is built
+later by whoever is idle then, so the rule serializes work rather than creating
+any. That is why it sits ahead of `OptionalWork` despite the 2026-08-01 finding.
+
+How many builders one task may hold is derived from economy, not fixed --
+apexearth: "if something is 3000 metal to create and we make ~100 metal per
+second then probably we'd be happy to put 5 or more builders on it to get it
+built fast". `cost/income` is the seconds of whole income the building costs; a
+rich player is build-power-limited and extra lathes are free speed, a poor player
+is metal-limited and they just share the same trickle. `builders =
+JOIN_AFFORD_SECONDS / (cost/income)`, `JOIN_AFFORD_SECONDS = 150`, clamped
+[2, 8]: 3000 at 100/s is 30 income-seconds and gives 5; at the benchmark's 10/s
+the same building gets the floor of 2.
+
+Scope is deliberately narrow. Not MEX/MEXUP/GEO/GEOUP -- two of those are two
+different spots, and stacking constructors on one is what `SaferMex` already
+refuses. Not DEFENCE -- two towers in two places are both wanted. Not below 200
+metal, where solar (155) and wind (43) are meant to be built several at once and
+serializing costs more walk time than it saves.
+
+Measured only as wired-up so far: 25-minute 4v4 on Comet Catcher, zero
+AngelScript errors, variant loaded, `con-join` fired 3 times (`armck ->
+armadvsol`, cap 7 at that income). Not yet judged on composition against a
+control, which per the 2026-08-01 finding is the test that matters.
+
 ## 2026-08-09: mobile AA is all-or-nothing, and it never travels with the army
 
 Layers 1 and 2: `config/hard_aggressive/factory.json`, `factory_leg.json`,
