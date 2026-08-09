@@ -2854,6 +2854,68 @@ const float REPAIR_REACH = 1200.f;
 int gRepairHeld = 0;
 int gNextRepairLog = 0;
 
+// EXPANSION DIAGNOSTIC. Every claim about why we stop expanding has so far been
+// inferred. This reports, for one representative constructor, the three facts
+// that decide it: whether the engine can still offer us a mex spot at all, what
+// the bank is doing, and how many workers exist to take it.
+int gNextExpandLog = 0;
+void ExpandDiag()
+{
+	if (ai.frame < gNextExpandLog)
+		return;
+	gNextExpandLog = ai.frame + 30 * SECOND;
+	CCircuitDef@ mex = SideDef3(armmex, cormex, legmex);
+	int spot = -2;
+	AIFloat3 probe = gHomeSet ? gHomePos : AIFloat3(0, 0, 0);
+	for (uint i = 0; i < Crew::gId.length(); ++i) {
+		CCircuitUnit@ u = ai.GetTeamUnit(Id(Crew::gId[i]));
+		if (u is null)
+			continue;
+		spot = aiEconomyMgr.FindOpenMexSpot(u, u.GetPos(ai.frame));
+		probe = u.GetPos(ai.frame);
+		break;
+	}
+	// What every tracked builder is actually holding. "Full bank, spots open,
+	// nothing built" has three different causes -- no task, a task it cannot
+	// progress, or a task that is not economic -- and they are indistinguishable
+	// from the outside.
+	int idle = 0, onMex = 0, onOther = 0;
+	string kinds = "";
+	for (uint i = 0; i < Crew::gId.length(); ++i) {
+		CCircuitUnit@ c = ai.GetTeamUnit(Id(Crew::gId[i]));
+		if (c is null)
+			continue;
+		IUnitTask@ t = c.task;
+		if (t is null) {
+			++idle;
+			continue;
+		}
+		const string k = SiteBuildName(t);
+		if (k == "") {
+			++idle;
+		} else if (t.GetBuildType() == Task::BuildType::MEX) {
+			++onMex;
+		} else {
+			++onOther;
+			if (kinds.length() < 60)
+				kinds += k + " ";
+		}
+	}
+	AiLog(Factory::T() + "apex: expand-diag idle=" + idle
+		+ " onMex=" + onMex + " onOther=" + onOther + " [" + kinds + "]"
+		+ " spot=" + spot
+		+ " tasks=" + aiBuilderMgr.GetBuildTaskCount()
+		+ " canEnq=" + (aiBuilderMgr.CanEnqueueTask(8) ? "1" : "0")
+		+ " mex=" + ((mex is null) ? -1 : mex.count)
+		+ " workers=" + aiBuilderMgr.GetWorkerCount()
+		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+		+ " mCur=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
+		+ "/" + formatFloat(aiEconomyMgr.metal.storage, "", 0, 0)
+		+ " full=" + (aiEconomyMgr.isMetalFull ? "1" : "0")
+		+ " phase=" + Factory::gLastPhase
+		+ " haveT2=" + (Factory::gHaveT2 ? "1" : "0"));
+}
+
 bool RepairNear(CCircuitUnit@ unit)
 {
 	if (gArmyRepairs.length() == 0)

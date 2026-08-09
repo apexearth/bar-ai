@@ -432,10 +432,42 @@ local function dump(reason)
 	end
 end
 
+-- Building POSITIONS, as a separate line so nothing parsing BARAI_STATS breaks.
+-- There was no positional telemetry in this project at all, so every claim about
+-- base layout was inferred from reading placement code rather than measured.
+-- Static buildings only, and only their footprint-relevant facts: id, x, z and
+-- the def's footprint in build squares. That is enough to compute packing
+-- density, nearest-neighbour spacing and row/column alignment offline.
+local function dumpPositions()
+	for _, teamID in ipairs(Spring.GetTeamList()) do
+		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
+		if isAI then
+			local out = {}
+			for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+				local udid = Spring.GetUnitDefID(uid)
+				local ud = udid and UnitDefs[udid]
+				if ud and ud.isBuilding and not ud.canMove then
+					local x, _, z = Spring.GetUnitPosition(uid)
+					if x then
+						out[#out + 1] = string.format("%s:%d:%d:%d:%d",
+								ud.name, x, z, ud.xsize or 0, ud.zsize or 0)
+					end
+				end
+			end
+			if #out > 0 then
+				Spring.Echo(string.format("[BARAI_POS] team=%d ally=%d frame=%d n=%d %s",
+						teamID, select(6, Spring.GetTeamInfo(teamID, false)) or 0,
+						Spring.GetGameFrame(), #out, table.concat(out, ",")))
+			end
+		end
+	end
+end
+
 function gadget:GameFrame(frame)
 	if frame >= nextDump then
 		nextDump = frame + DUMP_INTERVAL
 		dump("periodic")
+		dumpPositions()
 	end
 end
 
