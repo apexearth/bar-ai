@@ -48,6 +48,10 @@ const int SEAM_N = 40;
 const string TV_FOE_X = "apexFoeX";
 const string TV_FOE_Z = "apexFoeZ";
 const string TV_FOE_W = "apexFoeW";
+// And for splitting the line into per-player sectors: each AI publishes where it
+// lives, and a front cell belongs to whichever ally is nearest it.
+const string TV_HOME_X = "apexHomeX";
+const string TV_HOME_Z = "apexHomeZ";
 
 enum Owner { EMPTY = 0, OURS = 1, CONTESTED = 2, THEIRS = 3 };
 enum Edge { NONE = 0, FRONT = 1, BACK = 2 };
@@ -59,6 +63,10 @@ bool gGathered = false;
 
 array<AIFloat3> gPerim;    // the whole ring around our territory
 array<int> gEdge;          // parallel to gPerim: FRONT, BACK or NONE
+array<bool> gMine;         // parallel to gPerim: this cell is THIS AI's to hold
+array<float> gMateX;       // ally home positions, refreshed each Scan
+array<float> gMateZ;
+bool gSectored = false;    // false until at least one ally home is published
 array<AIFloat3> gPrevDraw; // what we drew last pass, so it can be erased
 array<float> gFoeSeen;     // persistent memory of where enemies have been
 bool gFoeKnown = false;
@@ -111,12 +119,72 @@ int Classify(const AIFloat3& in pos)
 	return CONTESTED;
 }
 
+// SECTORS: which part of the team's line is THIS AI's to hold.
+//
+// Territory is measured from ally-wide influence, so every AI on the team
+// computes the same perimeter and the same enemy bearing -- and then all of them
+// anchored on the same few cells, because the trim below keeps only the arc
+// nearest the enemy and that arc belongs to whichever ally happens to sit
+// furthest forward. apexearth: "I routinely see our units patrolling behind our
+// own allies bases. meanwhile, the enemy is attacking one of our frontline bases
+// and our huge army isn't there to protect it."
+//
+// Same failure the defence placement had (territory.as: ranking every site by
+// distance to ONE enemy point sent every tower down one bearing), one level up:
+// a single closest-approach test cannot describe a line held by eight players.
+//
+// A cell belongs to the ally whose home is nearest it -- a Voronoi split of the
+// line over the team, which is how a human team divides a front. It needs the
+// allies' home positions, and nothing enumerates them, so they are pooled the
+// same way the enemy bearing already is.
+void ReadMates()
+{
+	gMateX.resize(0);
+	gMateZ.resize(0);
+	if (Builder::gHomeSet) {
+		ai.PublishTeamValue(TV_HOME_X, Builder::gHomePos.x);
+		ai.PublishTeamValue(TV_HOME_Z, Builder::gHomePos.z);
+	}
+	array<Id>@ mates = ai.GetTeamIds();
+	for (uint i = 0; (mates !is null) && (i < mates.length()); ++i) {
+		const int id = int(mates[i]);
+		if (id == ai.teamId)
+			continue;   // ours is gHomePos; a mate entry for it would be a tie
+		const float x = ai.ReadTeamValue(id, TV_HOME_X, -1.f);
+		const float z = ai.ReadTeamValue(id, TV_HOME_Z, -1.f);
+		if ((x < 0.f) || (z < 0.f))
+			continue;
+		gMateX.insertLast(x);
+		gMateZ.insertLast(z);
+	}
+	// No mate has published yet, or we have no home of our own to compare
+	// against: the whole line is ours, which is the pre-sector behaviour and the
+	// right answer in a 1v1.
+	gSectored = Builder::gHomeSet && (gMateX.length() > 0);
+}
+
+bool Mine(const AIFloat3& in p)
+{
+	if (!gSectored)
+		return true;
+	const float own = p.distance2D(Builder::gHomePos);
+	for (uint i = 0; i < gMateX.length(); ++i) {
+		const float dx = p.x - gMateX[i];
+		const float dz = p.z - gMateZ[i];
+		if (sqrt(dx * dx + dz * dz) < own)
+			return false;
+	}
+	return true;
+}
+
 void Scan()
 {
 	gPerim.resize(0);
 	gEdge.resize(0);
+	gMine.resize(0);
 	gDbgAlly = 0;
 	gDbgFoe = 0;
+	ReadMates();
 
 	float maxAlly = 0.f, maxFoe = 0.f;
 	for (int i = 0; i < SEAM_N; ++i) {
@@ -207,8 +275,6 @@ void Scan()
 		gFoeMid.z = tz / tw;
 	}
 
-	const float dirx = gFoeMid.x - gOurMid.x;
-	const float dirz = gFoeMid.z - gOurMid.z;
 	for (int i = 0; i < SEAM_N; ++i) {
 		for (int j = 0; j < SEAM_N; ++j) {
 			const int me = i * SEAM_N + j;
@@ -229,6 +295,8 @@ void Scan()
 				continue;
 			const AIFloat3 p = GridPos(i, j);
 			gPerim.insertLast(p);
+			const bool mine = Mine(p);
+			gMine.insertLast(mine);
 			if (!gFoeKnown) {
 				gEdge.insertLast(NONE);
 				continue;
@@ -238,7 +306,16 @@ void Scan()
 			// apexearth: "should prefer frontlines near enemies". So the front
 			// is the enemy-facing arc that is also within a band of the closest
 			// approach to their territory.
-			const float facing = (p.x - gOurMid.x) * dirx + (p.z - gOurMid.z) * dirz;
+			//
+			// Measured from OUR OWN home for the cells that are ours, not from the
+			// team centroid. That centroid is the same point for every AI on the
+			// team, so a player sitting on a flank had its entire border projecting
+			// backwards along the team bearing and classified as back line -- it
+			// had no front of its own, and its army anchored on somebody else's.
+			const float rx = (mine && Builder::gHomeSet) ? Builder::gHomePos.x : gOurMid.x;
+			const float rz = (mine && Builder::gHomeSet) ? Builder::gHomePos.z : gOurMid.z;
+			const float facing = (p.x - rx) * (gFoeMid.x - rx)
+					+ (p.z - rz) * (gFoeMid.z - rz);
 			if (facing <= 0.f) {
 				gEdge.insertLast(BACK);
 				continue;
@@ -250,19 +327,28 @@ void Scan()
 	// Trim the enemy-facing arc down to the part actually near them. On a large
 	// territory the far flank faces the enemy too and is nowhere near the
 	// fighting; keeping it made the line span our whole border.
+	// Trimmed PER SECTOR. One closest-approach figure for the whole team keeps
+	// only the arc in front of whichever ally stands furthest forward, and demotes
+	// every other player's frontage to back line -- which is how eight AIs came to
+	// share one anchor behind one ally's base.
 	if (!gFoeKnown)
 		return;
-	float closest = -1.f;
+	float closeMine = -1.f;
+	float closeTeam = -1.f;
 	for (uint k = 0; k < gPerim.length(); ++k) {
 		if (gEdge[k] != FRONT)
 			continue;
 		const float d = gPerim[k].distance2D(gFoeMid);
-		if ((closest < 0.f) || (d < closest))
-			closest = d;
+		if ((closeTeam < 0.f) || (d < closeTeam))
+			closeTeam = d;
+		if (gMine[k] && ((closeMine < 0.f) || (d < closeMine)))
+			closeMine = d;
 	}
 	for (uint k = 0; k < gPerim.length(); ++k) {
-		if ((gEdge[k] == FRONT)
-				&& (gPerim[k].distance2D(gFoeMid) > closest + FRONT_BAND))
+		if (gEdge[k] != FRONT)
+			continue;
+		const float ref = (gMine[k] && (closeMine >= 0.f)) ? closeMine : closeTeam;
+		if (gPerim[k].distance2D(gFoeMid) > ref + FRONT_BAND)
 			gEdge[k] = BACK;
 	}
 }
@@ -326,6 +412,7 @@ void Update()
 
 	AiLog("apex: frontline perim=" + gPerim.length()
 			+ " front=" + CountEdge(FRONT) + " back=" + CountEdge(BACK)
+			+ " mine=" + MineEdge(FRONT) + " sectors=" + (gSectored ? int(gMateX.length()) + 1 : 1)
 			+ " foeKnown=" + (gFoeKnown ? 1 : 0)
 			+ " cAlly=" + gDbgAlly + " cFoe=" + gDbgFoe
 			+ " bar=" + int(gPresAlly) + "/" + int(gPresFoe)
@@ -366,21 +453,31 @@ bool LaneFront(AIFloat3& out spot)
 // Nearest point on the front to `from`. Falls back to the start-box lane while
 // no enemy has been seen, so the opening has a sensible prior instead of
 // nothing.
+// OUR SECTOR FIRST. Nearest-front-cell over the whole team line is what put the
+// anchor behind an ally: their frontage is genuinely nearer to us than our own
+// once the trim has demoted ours. Only if we own no front cell at all -- a rear
+// player with nothing of its own on the line -- does the team line answer.
 bool FrontNear(const AIFloat3& in from, AIFloat3& out spot)
 {
 	if (!gFoeKnown)
 		return LaneFront(spot);
-	float best = -1.f;
-	for (uint k = 0; k < gPerim.length(); ++k) {
-		if (gEdge[k] != FRONT)
-			continue;
-		const float d = gPerim[k].distance2D(from);
-		if ((best < 0.f) || (d < best)) {
-			best = d;
-			spot = gPerim[k];
+	for (int pass = 0; pass < 2; ++pass) {
+		float best = -1.f;
+		for (uint k = 0; k < gPerim.length(); ++k) {
+			if (gEdge[k] != FRONT)
+				continue;
+			if ((pass == 0) && !gMine[k])
+				continue;
+			const float d = gPerim[k].distance2D(from);
+			if ((best < 0.f) || (d < best)) {
+				best = d;
+				spot = gPerim[k];
+			}
 		}
+		if (best >= 0.f)
+			return true;
 	}
-	return best >= 0.f;
+	return false;
 }
 
 // A front cell that also sits in a corridor: the best metal-per-tower there is.
@@ -388,8 +485,8 @@ bool FrontChoke(const AIFloat3& in from, AIFloat3& out spot)
 {
 	float best = -1.f;
 	for (uint k = 0; k < gPerim.length(); ++k) {
-		if (gEdge[k] != FRONT)
-			continue;
+		if ((gEdge[k] != FRONT) || !gMine[k])
+			continue;   // an ally's corridor is an ally's to hold
 		for (uint c = 0; c < gIdx.length(); ++c) {
 			const AIFloat3 cp = ai.GetChokePointPos(gIdx[c]);
 			if (cp.distance2D(gPerim[k]) > CHOKE_NEAR)
@@ -402,6 +499,16 @@ bool FrontChoke(const AIFloat3& in from, AIFloat3& out spot)
 		}
 	}
 	return best >= 0.f;
+}
+
+uint MineEdge(int kind)
+{
+	uint n = 0;
+	for (uint k = 0; k < gEdge.length(); ++k) {
+		if ((gEdge[k] == kind) && gMine[k])
+			++n;
+	}
+	return n;
 }
 
 uint FrontSize() { return CountEdge(FRONT); }

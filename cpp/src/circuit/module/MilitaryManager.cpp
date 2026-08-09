@@ -1180,9 +1180,49 @@ AIFloat3 CMilitaryManager::GetDefenceStand()
 	return defStand;
 }
 
+// Where a squad with nothing to shoot should be standing: where we are actually
+// being hit, else the line, else nothing.
+//
+// Both are single positions and the priority is STRICT. Handing the pathfinder a
+// set of candidates makes it pick the cheapest one to walk to, and our own tower
+// cluster is always cheaper to walk to than the front -- which is how a squad
+// ends up garrisoning the base while a border base burns.
+bool CMilitaryManager::GetGuardAnchor(AIFloat3& outPos) const
+{
+	// A leak behind the line outranks the line. GetAttackHotspot is the
+	// cost-weighted decaying centroid of OUR OWN losses, so it points at the
+	// fighting rather than at geometry. It is a centroid of every loss though,
+	// including an army dying on the far side of the map, so it is only followed
+	// where we are not the weaker side -- otherwise the garrison marches into the
+	// enemy base to defend it.
+	AIFloat3 hot;
+	float weight;
+	if (circuit->GetAttackHotspot(hot, weight) && circuit->IsPosOnMap(hot)
+		&& (circuit->GetInflMap()->GetInfluenceAt(hot) > -INFL_EPS))
+	{
+		outPos = hot;
+		return true;
+	}
+	if (circuit->HasFrontPos()) {
+		outPos = circuit->GetFrontPos();
+		return true;
+	}
+	return false;
+}
+
 void CMilitaryManager::FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions)
 {
-	// Our own towers first. Both callers reach here because the squad found no
+	outPositions.clear();
+
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	SArea* area = unit->GetArea();
+	AIFloat3 anchor;
+	if (GetGuardAnchor(anchor) && terrainMgr->CanMoveToPos(area, anchor)) {
+		outPositions.push_back(anchor);
+		return;
+	}
+
+	// Then our own towers. Both callers reach here because the squad found no
 	// target it could beat, which is exactly the moment it should fall back onto
 	// static defence instead of onto whichever metal cluster is nearest the lane.
 	FillDefencePos(unit, outPositions);
@@ -1194,8 +1234,6 @@ void CMilitaryManager::FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions)
 
 	CInfluenceMap* inflMap = circuit->GetInflMap();
 	CMetalManager* metalMgr = circuit->GetMetalManager();
-	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-	SArea* area = unit->GetArea();
 	const CMetalData::Clusters& clusters = metalMgr->GetClusters();
 
 	CMetalData::PointPredicate predicate = [inflMap, metalMgr, terrainMgr, area, clusters](const int index) {
@@ -1501,11 +1539,25 @@ void CMilitaryManager::UpdateDefenceTasks()
 //	const CMetalData::Metals& spots = mm->GetSpots();
 	const CMetalData::Clusters& clusters = mm->GetClusters();
 //	const std::vector<CEnemyManager::SEnemyGroup>& enemyGroups = circuit->GetEnemyManager()->GetEnemyGroups();
+	// A DEFEND task takes its stand position ONCE, in Enqueue, from
+	// GetDefenceStand() -- the tower cluster nearest our lane at the moment the
+	// task happened to be created. It was never revised afterwards, so a garrison
+	// formed in minute 5 was still holding minute 5's ground at minute 40, and
+	// every unit built into it was sent there by CDefendTask::Start. apexearth:
+	// "the enemy is attacking one of our frontline bases and our huge army isn't
+	// there to protect it."
+	//
+	// Re-anchored to the same thing a squad with no target walks to, so the two
+	// agree: where we are being hit, else the front. Only while the task has no
+	// target of its own -- an engaged task writes its target into position and
+	// must not be pulled off it.
+	AIFloat3 anchor;
+	const bool hasAnchor = GetGuardAnchor(anchor);
 	for (IFighterTask* task : tasks) {
 		CDefendTask* dt = static_cast<CDefendTask*>(task);
-//		if (dt->GetTarget() != nullptr) {
-//			continue;
-//		}
+		if (hasAnchor && (dt->GetTarget() == nullptr)) {
+			dt->SetPosition(anchor);
+		}
 //		STerrainMapArea* area = dt->GetLeader()->GetArea();
 //		CMetalData::PointPredicate predicate = [em, tm, area, &spots, &clusters](const int index) {
 //			const CMetalData::MetalIndices& idcs = clusters[index].idxSpots;
