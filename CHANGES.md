@@ -8,6 +8,55 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-09: adaptive caution improves the army trade 47%; a blanket bar makes it worse
+
+Measured in real 1v1 games, not the arena -- the arena found us at parity in an
+isolated equal-army fight, so it cannot see the thing that costs us games, which
+is WHICH fights we take. `tools/fight1v1.py` scores army K/D in metal across a
+batch; `tools/fight1v1_ab.sh` runs one arm over eight seeds.
+
+Altair Crossing, 1v1, 20 minutes, Apex vs BARb stable. Two independent batches
+(seeds 1-8 and 11-18), pooled to 16 games per arm:
+
+| arm | our K/D | their K/D | trade ratio |
+|---|---|---|---|
+| baseline | 0.347 | 1.271 | **0.273** |
+| `TRADE_MARGIN_MAX` 1.0 -> 1.6 | 0.394 | 0.983 | **0.401** |
+
++47% relative, and it reproduced in both batches independently (0.252 -> 0.430,
+then 0.307 -> 0.383). Metal production stayed at parity throughout (ratio
+1.04-1.08), so this is the fight changing, not the economy.
+
+**The direction matters more than the number.** A blanket higher bar made things
+WORSE: `ENGAGE_MARGIN` 1.35 -> 2.0 dropped the ratio to 0.191 over 8 games. What
+helps is caution that TRACKS the situation -- `TRADE_MARGIN_MAX` is the ceiling
+on the 1/recentTradeRatio term, so raising it restores the "get more careful when
+we are losing trades" half that was removed on 2026-08-08. That removal was
+justified against a real problem (the term pinned at its ceiling all game, a bar
+of 2.16, a spiral) but it deleted the feedback entirely by capping at 1.0. 1.6
+restores it; the earlier failure was the ceiling being reached constantly, which
+is a different complaint from the feedback existing at all.
+
+**No win-rate improvement: every arm is 0-8, and so is the baseline.** The trade
+moved a long way and the games did not, which is the honest state of it.
+
+**The mechanism, seen live.** apexearth, watching a 1v1: "saw us make 1 welder
+and engage an army of ~15 thugs with it" -- armzeus is 350 metal against roughly
+1,800 of Thugs. `minAttackers` (the `attack` quota, default 8) is a flat POWER
+threshold, so one high-power T2 unit clears it alone, and `minPower` is only ever
+re-tested in `CAttackTask::RemoveAssignee`, when a unit LEAVES. Nothing stops an
+attack advancing with one unit. `CDefendTask` already scales its requirement by
+the largest known enemy group (`MilitaryManager.cpp` SetMaxPower); attack never
+did. Added as `apex_attack_minpower_threat`, default 0 = unchanged.
+
+**Rezbots were starved by the terrain block, not by the ratio.** apexearth: "we
+need rezbots". The rezzer sat at 0.05 on `land` for all three factions while the
+`air` block already used 0.09-0.12 -- so on every map actually tested they were
+the rarest thing in the lab. Raised to 0.12 on land for `armrectr`, `cornecro`
+and `legrezbot` together (faction parity for one change, not three experiments).
+The 0.12 is anchored on the air block, not measured; factory ratios are
+zero-sum, so it displaces something and needs its own A/B.
+
 ## 2026-08-09 (CORRECTED): the 25% close-range deficit was contamination
 
 **The finding recorded earlier the same day is withdrawn. Read this instead.**
