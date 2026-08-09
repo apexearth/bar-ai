@@ -73,33 +73,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	@t = CommanderMexGuard(unit, isComm);
 	if (t !is null)
 		return t;
-	// EXPANSION OUTRANKS OPTIONAL SPENDING.
-	//
-	// The header above says order is the design and that anything placed before
-	// DefaultMakeTask claims a constructor before expansion is even considered.
-	// OptionalWork and Fortify were both placed there, and between them they can
-	// claim a builder for AA, a deterrence tower, an energy converter, a gantry,
-	// a nuke silo, a Pulsar, a shield or a dig-in -- so a constructor that could
-	// have been upgrading a mex spends itself on any of those first.
-	//
-	// apexearth, watching an 8v8: "in our build order we should prefer to make
-	// T2 mex upgrades on OUR mexes instead of making something like an advanced
-	// metal converter, or a rattlesnake. I see purple making those two things at
-	// the same time instead of properly focusing on increasing their metal
-	// income."
-	//
-	// This is the 2026-08-01 failure mode exactly: twelve rules were added ahead
-	// of DefaultMakeTask, every one of them fired, and metal production fell
-	// 4.3x because mex upgrades live behind them. Asking the engine FIRST and
-	// taking the offer only when it is expansion costs nothing -- ExpansionAlwaysWins
-	// returns null for every other build type, so the optional rules below still
-	// get their turn on the same offer.
-	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
-
-	@t = ExpansionAlwaysWins(task);
-	if (t !is null)
-		return t;
-
 	@t = OptionalWork(unit, isComm);
 	if (t !is null)
 		return t;
@@ -112,6 +85,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		if (dig !is null)
 			return dig;
 	}
+
+	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+
+	@t = ExpansionAlwaysWins(task);
+	if (t !is null)
+		return t;
 
 	@task = VetoCommanderReclaim(unit, isComm, task);
 	@task = VetoCommanderHold(unit, isComm, task);

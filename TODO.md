@@ -101,3 +101,55 @@ Candidates, in the order the evidence supports:
 4. **`ApexActive()` is all-or-nothing.** It should become per-behaviour, so a
    rule that is good in a 1v1 can run there while the pooling machinery does
    not. Today it buys the floor and forbids the ceiling.
+
+## Rezbots follow the attack group and eat what it kills
+
+apexearth, 2026-08-09, watching an 8v8: "we should have this group followed by
+rezbots which will reclaim everything they kill... this is a nice to have, but
+would be great, and prevent enemy from just resurrecting all their stuff."
+
+Two payoffs in one behaviour: the metal from a won fight comes back to us, and
+the enemy loses the option to resurrect its own losses -- which is otherwise a
+free rebuild for them on ground they still hold.
+
+Not built yet. Notes for whoever does:
+- The rezzer role already exists (`response.json` "rezzer", and `builder/rules_rezzer.as`
+  has RezzerFlee / RezzerFrontSalvage / RezzerEatCorpse), so the unit and its
+  task types are in place; what is missing is following a SQUAD rather than
+  working from the base outward.
+- `reclaim vs resurrect` is already decided by PreferReclaim() -- for this job it
+  must be RECLAIM, not resurrect: reclaiming is much faster and denial is the
+  point. apexearth previously: "rezzing takes MUCH LONGER than reclaiming... so
+  if in a dangerous area you should generally reclaim."
+- Needs a leash to the squad, and must not pull rezbots off base reclaim while
+  the squad is idle at home.
+
+## Long-range siege units should hold the base line, not walk into the open
+
+apexearth, 2026-08-09: "Starlights, Ambassadors, these really long range units
+are great for defense. But I typically see us move them out into open ground and
+get destroyed. They should act like defensive turrets and stay home... waiting
+around where I have my nano turrets and my own defensive turrets to help add DPS
+and heal my units if they get hit. This same thing helps vs players too."
+
+The units, read from the pinned tree:
+- `armmanni` Starlight: range 950, 1,200 metal, role `anti_heavy_ass`, attribute `siege`
+- `armmerl` Ambassador: range 1,300, 920 metal, role `artillery`, attribute `siege`
+
+Both already carry the `siege` attribute, which today only changes their travel
+action (CFightAction instead of CMoveAction in CAttackTask::AddAssignee) -- it
+does NOT keep them home. `armmerl` being role `artillery` routes it to
+CArtilleryTask, which still moves toward targets rather than holding a line.
+
+What is wanted is a LEASH, not a new behaviour: a long-ranged, fragile, expensive
+unit should stay within our own defended area, where static defence adds DPS and
+nano turrets repair it, and shoot outward from there. Its range is the whole
+point -- it can cover ground it does not stand on.
+
+Candidate implementation: keep units with (long range AND siege AND low speed)
+assigned to defence near the front-line position the military layer already
+computes (`military/defenceline.as`, `frontline.as`), instead of letting them
+join an attack squad. Needs to interact correctly with the killing-blow override,
+which deliberately commits everything when far ahead.
+
+Not built. Unmeasured.

@@ -40,6 +40,14 @@ local NAMES = {
 	"apex_scout_threat",
 	"apex_wind_per_metal",
 	"apex_solo_stock",
+	-- Economy-first targeting and group sizing (2026-08-09). The first three of
+	-- the fighter tunables above no longer have a reader; the fighter delta was
+	-- reverted to upstream. These do.
+	"apex_eco_target",
+	"apex_mass_vs_army",
+	"apex_mass_hold_secs",
+	"apex_mass_floor",
+	"apex_attack_threat_mod",
 }
 
 local pending = {}

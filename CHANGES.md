@@ -333,6 +333,61 @@ indistinguishable from a regression here, so these are recorded and left.
   a comment claims that makes it stable; it is heap-layout dependent, so the
   same seed gives different orbits run to run.
 
+## 2026-08-09: we never attacked, and the group size was the reason
+
+apexearth, watching an 8v8: "we just don't really attack ever... so the enemy
+only ever takes territory from us slowly over time and we never get any of it
+back", and "Our armies tend to chase around enemy armies instead of trying to
+attack enemy metal extractor positions... the goal there shouldn't be to engage
+enemy army, but to attack their economy."
+
+Three separate mechanisms, each of which alone blocks the others.
+
+**1. The group we demanded was sized against their whole army.** `MassWant()`
+scales `quota.attack` -- the MINIMUM attack power before the engine will form an
+attack at all -- with the ratio of their army to ours. Measured live in an 8v8:
+ratio 1.28-1.35, so it returned 41-43 and never touched `MASS_CAP`, meaning a
+deadline keyed on the cap would never have fired. Behind on economy means behind
+on army means a larger demand means nobody leaves, which loses more ground.
+
+**The quota is a POWER SUM, not a unit count** (`CFighterTask`: `attackPower +=
+cdef->GetPower()`). Measured in-game: Pawn 2.5, Grunt 2.5, Rocketeer 4.8, Thug
+6.4, Warrior 11.5. So `MASS_FLOOR` 30 is about **twelve Grunts**, and the 41-43
+actually demanded was about **seventeen**. apexearth asked for "~10 grunts", so
+the FLOOR was right all along -- the army-ratio scaling on top of it was not.
+`MassWant` now returns the floor; `apex_mass_vs_army=1` restores the old scaling.
+
+**2. Target selection scored purely by distance**, so the enemy army in the
+middle is always nearer than the mex behind it. Re-landed from the reverted
+fighter delta, and ONLY this part of it: undefended static economy gets
+`FREE_ECO_PRIORITY` 5x (x2 again when soft -- a converter is 380 metal behind 445
+hitpoints against an advanced solar's 350 behind 1130), and their defensive line
+gets `ENEMY_WALL_PENALTY` 0.2x unless it is shooting us at home. The metric is a
+DISTANCE, so preference divides it.
+
+**3. Attack paths priced contested ground at 1.0**, i.e. not at all, so the short
+route ran through their army. Now `apex_attack_threat_mod`, following
+`RaidTask`'s `RAID_ROAM_THREAT_MOD = 8` -- the same trick that made raid parties
+work round the outside with no waypoints.
+
+**On the recorded warning.** This file already said "lowering minAttackers
+globally is known to be catastrophic -- 15 -> 6 scored 0-10". apexearth's read:
+"It probably was kinda 'catastrophic' because you were engaging the enemy army -
+right???" That is the likely explanation -- when it was measured, targeting was
+pure distance, so a small group walked at whatever was nearest, which is their
+army. Six units meeting an army is a feed. The three changes above are meant to
+be taken together for exactly that reason, and the bundle is being measured
+interleaved against an unmodified control.
+
+Also fixed here: `ExpansionAlwaysWins` ran AFTER `OptionalWork` and `Fortify`, so
+a constructor could be claimed for AA, a deterrence tower, an energy converter, a
+gantry, a nuke silo, a Pulsar or a shield before the engine was even asked what
+to build -- and mex upgrades exist only in that engine offer. apexearth: "I see
+purple making those two things at the same time instead of properly focusing on
+increasing their metal income." This is the 2026-08-01 failure mode exactly.
+Measured at 8v8 the mex ratio did not move (54% of stock either way), so the
+ordering was not the binding constraint, but the offer now comes first regardless.
+
 ## 2026-08-09: solar was chosen over wind on essentially every map
 
 `HomeEnergy` ranks energy candidates by RAW OUTPUT, which is deliberate -- the
