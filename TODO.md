@@ -35,3 +35,35 @@ Before the enemy is ready, have the entire team go straight for nukes. Build up 
 - Prefer to create organized bases using geometric shapes like rectangles, squares, fitting efficiently into grid patterns.
 - in late game take advantage of air constructors - they allow you to scale everything much faster, because ground cons move slowly. HOWEVER - air cons are easily shot down near the front line - this requires intelligence so that air cons aren't used when enemy AA is nearby. You have to hook this into their behavior, choice of where to build, AND whether they even get constructed. Complex.
 - AI should hover under a jammer and stay cloaked, when enemy T3 comes and attacks it should try to do surprise D-guns to kill all the T3 without dying itself.
+
+# Refactor candidates left undone (2026-08-09)
+
+The AngelScript was split into modules and both `AiMakeTask`s became rule
+pipelines; the C++ delta was deliberately left alone, because every change there
+needs a Docker rebuild and a fresh measurement and this pass was required not to
+change behaviour. What a C++ pass should take first, in order of how much
+confusion each one causes:
+
+- `CAttackTask::FindTarget` is ~230 lines with TWO margin tests (`groupMargin`,
+  `nearMargin`) computed from overlapping but not identical rules, both calling
+  `TradeScaledMargin` and both checking `isHome`/`prevTarget`. It is the hardest
+  place in the delta to reason about.
+- The squad-join relaxation is copy-pasted three times with three different
+  magic pairs: `AttackTask.cpp` (3.5, 3000), `AntiAirTask.cpp` (1.5, 4000),
+  `BombTask.cpp` (1.5, 4000). Changing one will not find the others.
+- The perpendicular line-offset maths is written four times (`SquadTask::LinePos`,
+  `SquadTask::ActivePath`, `RetreatTask`'s retreat line, `MoveAction::offsetPos`),
+  three of them with the same O(n) "find my index in `units`" loop. One
+  `LineSlot(index, count, spacing, dir)` covers all four.
+- Two independent "sticky target" implementations, both using 1.4, one as a
+  multiplier on `prio` and one as a divisor on `sqDist` — same constant, same
+  intent, different algebra and different units.
+- Three constants now mean "fraction of weapon range to stand at":
+  `RANGE_MOD` 0.8, `ATTACK_RANGE_MOD` 0.95, and the `apex_range_mod` tunable
+  that overrides only some uses of the second.
+- Path-detour logging is duplicated verbatim between `AttackTask` and `RaidTask`,
+  down to the rate limit and the message shape.
+- Constants are `#define` in headers rather than `constexpr` in the class.
+
+Bugs found in the same pass are in CHANGES.md under "found while refactoring,
+NOT fixed" — they are deliberately still there.

@@ -8,6 +8,144 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-09: the AngelScript was split up (pure refactor, no behaviour change)
+
+`builder.as` was 4,651 lines and `factory.as` 2,859. That is a CORRECTNESS
+problem, not a tidiness one: neither fits comfortably in an agent's context, so
+edits were made by grepping for a landmark, reading twenty lines around it and
+doing an anchored `str.replace` — and an anchor that does not match fails
+silently, which has eaten edits here at least five times.
+
+Nothing about how the AI plays was meant to change, and the diff was constructed
+so that it could not:
+
+| | before | after |
+|---|---|---|
+| largest script file | 4,651 | 512 |
+| files over 800 lines | 3 | 0 |
+| `Builder::AiMakeTask` | 989 lines | 118-line pipeline + 15 named rules |
+| `Factory::AiMakeTask` | 502 lines | 60-line pipeline + 12 named rules |
+| faction `if (side == …)` chains | 19 | 1 (`SideDef3` in `script/side.as`) |
+
+**How "no behaviour change" was established.** Three independent checks, because
+this benchmark's noise floor cannot carry the claim on its own:
+
+1. *Reconstruction.* Every split is a line slice, and a script re-concatenates
+   the parts and diffs the non-blank lines against the pre-split file. For the
+   two `AiMakeTask`s the same check reports every line that is not present
+   verbatim in the new files — the entire list is the pipeline glue, plus two
+   `if (x !is null) return x;` that gained braces because they now also set an
+   out-parameter, plus one three-line call that became the pipeline's own.
+2. *Compile and load, on every faction.* 8-minute 1v1s on Armada, Cortex and
+   Legion after each step: zero `.as (line, col) : ERR`, and `Load script:
+   LuaRules\Configs\Apex\apex\...` present. This gate earned its keep — one
+   qualified `Builder::SideDef3` survived a rename, the match still ran to
+   completion and reported a normal result, and the grep is the only thing that
+   caught it.
+3. *A paired tournament.* The pre-refactor build was deployed as the `ctl`
+   variant and both played `BARb:stable:hard` in the SAME tournament,
+   interleaved, 24 games each, Altair Crossing 1v1 Armada mirror, 20 minutes.
+
+| arm | trade ratio | metal produced ratio |
+|---|---|---|
+| pre-refactor (`ApexCtl:ctl`) | 0.621 | 0.957 |
+| refactored (`Apex:apex`) | 0.564 | 0.982 |
+
+and in the 24 games the two builds played each OTHER, the refactored build read
+**1.689** against the old one's 0.592 — i.e. the two comparisons disagree about
+the sign, which is what noise looks like and what a real change does not.
+
+For scale, the same two builds measured in an EARLIER session, one after the
+other rather than interleaved, read 0.301 (pre) and 0.243 (post). The same build
+moved 0.301 -> 0.621 between sessions; the two builds differ by 0.057 within
+one. Run the arms interleaved or the session is the biggest term in the result.
+
+**Log-line counts are not a check.** Re-running the UNCHANGED baseline on the
+same seed moved one log category from 75 lines to 0, because the DLL is
+multithreaded and the games diverge. Anything read from a single run is noise.
+
+The one thing deleted rather than moved: `config/*.json`, the seven top-level
+files. `CSetupManager::ReadConfig` reads `config/<profile>/<name>.json` and only
+falls back to `config/<name>.json` when that is empty or missing, so with all
+seven present under `hard_aggressive/` the top-level copies were never read —
+confirmed in an infolog, which lists seven `Load config:` lines and all seven are
+the profile's. They were 2,360 lines byte-identical to `barb-stable`, and their
+real cost was as a trap: editing one has no effect and says nothing.
+
+## 2026-08-09: found while refactoring, NOT fixed
+
+Everything here was found by reading, during a refactor that was required not to
+change behaviour. None of it is fixed. An unmeasured behaviour change is
+indistinguishable from a regression here, so these are recorded and left.
+
+**AngelScript / config**
+
+- `build_chain.json:/porcupine/land` is a SINGLE array read once per side, and
+  `UpdateJson` replaces arrays rather than merging them. `build_chain_leg.json`
+  sets its own `land`, and the `_leg` files load after the base ones — so with
+  `experimentallegionfaction=1`, **Armada and Cortex silently use Legion's
+  defence order too** (`armllt` first instead of `armbeamer`). The comment in
+  `build_chain_leg.json` describes a per-side mechanism that does not exist.
+  Does not bite the benchmark, which only sets the modoption for a Legion side;
+  does bite hosted games, where it is normally on.
+- `build_chain.json` `/factory/armshltx/hub[1]` and `/factory/corgant/hub[1]`
+  are literally `[]`, under a comment claiming they are "the only place armanni
+  gets built other than base index 12" — and index 12 is in neither
+  `porcupine.base` nor `porcupine.land`. Legion's equivalent carries the real
+  entry. A faction-parity gap; `Builder::Pulsar` is what actually fields them.
+- The advanced-radar hubs (`armarad`/`corarad`/`legarad`) are unreachable.
+  `AvailList::GetBestDef` scores `pi*r^2/costM`, the basic radar wins on every
+  faction (230,907 vs 96,211 for Armada), and `checkSensor` ends the scan on the
+  first available def even when it enqueues nothing.
+- `porcupine.wall`, `porcupine.choke` and `porcupine.default` are parsed into
+  `wallDefs`/`chokeDefs`/`defaultPorc` and never read: the choke block in
+  `DefaultMakeDefence` is commented out and `GetDefaultPorc()` has no call site.
+  (`choke.armada` is also `["coreyes"]`, a Cortex unit.)
+- `armamb` and `cortoast` carry `"on": false`, so `CircuitAI::UnitFinished`
+  switches them off the instant they finish — and `military/basedefence.as`
+  deliberately picks them as the preferred T2 rung for Armada and Cortex.
+  Legion's `legcluster` is `"on": true`.
+- A comment in `build_chain.json` justifies skipping porcupine indices 11 and 13
+  on the grounds that six defs carry `"on": false`. Only two of them do;
+  `armguard`, `corpun` and `legcluster` are explicitly on and `legacluster` has
+  no key. Index 13's exclusion rests on a false premise.
+- `build_chain_leg.json` claims a short array makes the AI "die at frame 0" out
+  of bounds. `ReadConfig` bounds-checks and skips. The padding is still needed
+  for correct indexing; the crash claim is false.
+- `economy.json` carries three `legion` keys (`geo`, `mex`, `default`) that
+  point at Armada units and can never apply — overridden by `economy_leg.json`
+  when Legion is on, and irrelevant when it is off.
+- `block_map.json` names four units that do not exist (`armuwmex`, `coruwmex`,
+  `legamsub`, `legplat`). Inherited from stock; `tools/check.py` reports them.
+
+**C++ (`vendor/engine/.../BARb`, branch `barbarian-apex`)**
+
+- `task/fighter/AttackTask.cpp:795,797` — the finish-off bonus is discarded. The
+  block does `prio *= FINISH_PRIORITY;` and then `prio = ARTY_PRIORITY;` /
+  `prio = LONG_RANGE_PRIORITY;` by plain assignment, so a nearly-dead artillery
+  piece scores 4.0 instead of 12.0. Every other modifier in the block uses `*=`.
+  This is exactly the "we walked away from a nearly-dead thing" case the
+  `FINISH_PRIORITY` comment cites.
+- `task/fighter/SquadTask.cpp:642` — `static int sLastPowerDiagFrame` is a
+  FUNCTION-LOCAL static, so it is shared by every squad task of every AI
+  instance in the process (all 8-10 bots the host adds live in one DLL). It both
+  starves every AI but one of the diagnostic and is an unsynchronised
+  read-modify-write. Labelled "TEMPORARY" and still shipping.
+- `CircuitAI.cpp` — the team blackboard is a file-scope
+  `static std::map<std::pair<int,std::string>, float> teamValues` mutated from
+  every AI instance with no lock, and process-global rather than per-game.
+- `task/fighter/SquadTask.cpp:681` — `range0` hardcodes `ATTACK_RANGE_MOD` while
+  the row four lines above reads the `apex_range_mod` tunable, so an A/B of that
+  modoption silently does not move the scouting row.
+- `task/builder/BuilderTask.h:167` — `nextMetalEmptyReclaim` is declared with a
+  large comment describing behaviour, and is never read or written.
+- `ISquadTask::LinePos` and `ISquadTask::GetCohesionScale` are dead, and
+  `AttackTask.cpp:653` re-implements the latter inline against the same
+  constants.
+- `SquadTask.cpp:531` derives the orbit direction from the object's address and
+  a comment claims that makes it stable; it is heap-layout dependent, so the
+  same seed gives different orbits run to run.
+
 ## 2026-08-09: solar was chosen over wind on essentially every map
 
 `HomeEnergy` ranks energy candidates by RAW OUTPUT, which is deliberate -- the
