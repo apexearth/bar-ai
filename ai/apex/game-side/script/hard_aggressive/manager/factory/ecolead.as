@@ -4,12 +4,7 @@ string armca("armca");   string corca("corca");   string legca("legca");
 
 CCircuitDef@ AirConDef()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(corca);
-	if (side == "legion")
-		return ai.GetCircuitDef(legca);
-	return ai.GetCircuitDef(armca);
+	return SideDef3(armca, corca, legca);
 }
 
 int AirConCount()

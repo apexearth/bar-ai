@@ -13,9 +13,7 @@ bool HaveT2Mex()
 {
 	if (gHaveT2Mex)
 		return true;
-	const string side = ai.GetSideName();
-	CCircuitDef@ moho = ai.GetCircuitDef((side == "cortex") ? cormoho
-	                                   : ((side == "legion") ? legmoho : armmoho));
+	CCircuitDef@ moho = SideDef3(armmoho, cormoho, legmoho);
 	gHaveT2Mex = (moho !is null) && (moho.count > 0);
 	return gHaveT2Mex;
 }

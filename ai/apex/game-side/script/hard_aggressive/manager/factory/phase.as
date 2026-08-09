@@ -22,7 +22,7 @@ int gNextPhaseLog = 0;
 
 bool HaveGantry()
 {
-	CCircuitDef@ d = Builder::SideDef3(armshltx, corgant, leggant);
+	CCircuitDef@ d = SideDef3(armshltx, corgant, leggant);
 	return (d !is null) && (d.count > 0);
 }
 

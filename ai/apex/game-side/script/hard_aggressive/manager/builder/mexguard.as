@@ -43,19 +43,9 @@ CCircuitDef@ MexDef()
 
 CCircuitDef@ MexGuardTower(CCircuitUnit@ unit)
 {
-	const string side = ai.GetSideName();
-	if (unit.circuitDef.costM >= ADV_CON_COST) {
-		if (side == "cortex")
-			return ai.GetCircuitDef(corvipe);
-		if (side == "legion")
-			return ai.GetCircuitDef(legapopupdef);
-		return ai.GetCircuitDef(armpb);
-	}
-	if (side == "cortex")
-		return ai.GetCircuitDef(corllt);
-	if (side == "legion")
-		return ai.GetCircuitDef(leglht);
-	return ai.GetCircuitDef(armllt);
+	if (unit.circuitDef.costM >= ADV_CON_COST)
+		return SideDef3(armpb, corvipe, legapopupdef);
+	return SideDef3(armllt, corllt, leglht);
 }
 
 IUnitTask@ MexGuard(CCircuitUnit@ unit)
@@ -322,14 +312,8 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 
 CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 {
-	const string side = ai.GetSideName();
-	if (unit.circuitDef.costM >= ADV_CON_COST) {
-		if (side == "cortex")
-			return ai.GetCircuitDef(corvipe);
-		if (side == "legion")
-			return ai.GetCircuitDef(legapopupdef);
-		return ai.GetCircuitDef(armpb);
-	}
+	if (unit.circuitDef.costM >= ADV_CON_COST)
+		return SideDef3(armpb, corvipe, legapopupdef);
 	// Nothing rather than a light laser once we are past its tier. The tower was
 	// chosen from the CONSTRUCTOR's cost alone, so a T1 constructor kept being
 	// offered one however late the game was -- apexearth, watching at 25 minutes
@@ -342,11 +326,7 @@ CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 	// have done next instead of walking home for a 150-metal turret.
 	if (PastT1Tier())
 		return null;
-	if (side == "cortex")
-		return ai.GetCircuitDef(corllt);
-	if (side == "legion")
-		return ai.GetCircuitDef(leglht);
-	return ai.GetCircuitDef(armllt);
+	return SideDef3(armllt, corllt, leglht);
 }
 
 }  // namespace Builder

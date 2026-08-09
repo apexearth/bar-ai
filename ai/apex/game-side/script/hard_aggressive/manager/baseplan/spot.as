@@ -90,12 +90,7 @@ const float TECH_PROBE_R = 1800.f;
 
 CCircuitDef@ TechProbeDef()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(Factory::coralab);
-	if (side == "legion")
-		return ai.GetCircuitDef(Factory::legalab);
-	return ai.GetCircuitDef(Factory::armalab);
+	return SideDef3(Factory::armalab, Factory::coralab, Factory::legalab);
 }
 
 void Update()

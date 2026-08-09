@@ -121,12 +121,7 @@ void SetDefCap(CCircuitDef@ d, int want)
 
 CCircuitDef@ AssistBotDef()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(corfast);
-	if (side == "legion")
-		return ai.GetCircuitDef(legaceb);
-	return ai.GetCircuitDef(armfark);
+	return SideDef3(armfark, corfast, legaceb);
 }
 
 void UpdateEconomicCaps()
@@ -195,15 +190,9 @@ array<string> ObsoleteDefenceNames()
 	return names;
 }
 
-// The opening solar, by name. SideDef3 returns a def; here we need the name.
 string ObsoleteSolarName()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return corsolar;
-	if (side == "legion")
-		return legsolar;
-	return armsolar;
+	return SideName3(armsolar, corsolar, legsolar);
 }
 
 IUnitTask@ ReclaimOwnDef(CCircuitUnit@ unit, const string& in defName,

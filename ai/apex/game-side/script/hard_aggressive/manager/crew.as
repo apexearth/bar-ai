@@ -282,12 +282,7 @@ string armjamt("armjamt"); string corjamt("corjamt"); string legjam("legjam");
 
 CCircuitDef@ JammerDef()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(corjamt);
-	if (side == "legion")
-		return ai.GetCircuitDef(legjam);
-	return ai.GetCircuitDef(armjamt);
+	return SideDef3(armjamt, corjamt, legjam);
 }
 
 // What this stretch of the line is missing, in the order it is worth having.

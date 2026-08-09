@@ -4,12 +4,7 @@ string armawac("armawac");  string corawac("corawac");  string legwhisper("legwh
 
 CCircuitDef@ RadarPlaneDef()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(corawac);
-	if (side == "legion")
-		return ai.GetCircuitDef(legwhisper);
-	return ai.GetCircuitDef(armawac);
+	return SideDef3(armawac, corawac, legwhisper);
 }
 
 // A bot lab is worth having early for one reason above all others: it is the
@@ -63,12 +58,7 @@ string armrectr("armrectr"); string cornecro("cornecro"); string legrezbot("legr
 
 CCircuitDef@ RezBotDef()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(cornecro);
-	if (side == "legion")
-		return ai.GetCircuitDef(legrezbot);
-	return ai.GetCircuitDef(armrectr);
+	return SideDef3(armrectr, cornecro, legrezbot);
 }
 
 // False once the pooling strategy has been given up on (Military::RUSH_GIVEUP).

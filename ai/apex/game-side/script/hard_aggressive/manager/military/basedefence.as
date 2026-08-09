@@ -140,12 +140,7 @@ string legjam("legjam");
 
 CCircuitDef@ JammerDef()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(corjamt);
-	if (side == "legion")
-		return ai.GetCircuitDef(legjam);
-	return ai.GetCircuitDef(armjamt);
+	return SideDef3(armjamt, corjamt, legjam);
 }
 
 // One jammer per tower placed on the line, so the cover grows with the line

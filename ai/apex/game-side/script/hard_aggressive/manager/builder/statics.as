@@ -62,16 +62,6 @@ int gNextPulsar = 0;
 int gNextAA = 0;
 int gNextAADiag = 0;  // temporary diagnostic, see CheapAA
 
-CCircuitDef@ SideDef3(const string& in a, const string& in c, const string& in l)
-{
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(c);
-	if (side == "legion")
-		return ai.GetCircuitDef(l);
-	return ai.GetCircuitDef(a);
-}
-
 // Cheap AA, kept at a small standing count. Any constructor can build it.
 IUnitTask@ CheapAA(CCircuitUnit@ unit)
 {

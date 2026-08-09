@@ -68,10 +68,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// spam by construction, so for it the aircraft plant -- which is pure build
 	// power -- is worth more than the lab it is displacing.
 	if (EcoWantsAirPlant()) {
-		const string side = ai.GetSideName();
-		CCircuitDef@ ap = (side == "cortex") ? ai.GetCircuitDef(corap)
-		                : ((side == "legion") ? ai.GetCircuitDef(legap)
-		                                      : ai.GetCircuitDef(armap));
+		CCircuitDef@ ap = SideDef3(armap, corap, legap);
 		if (ap !is null) {
 			AiLog(T() + "apex: eco lead building " + ap.GetName()
 				+ " for air constructors at "

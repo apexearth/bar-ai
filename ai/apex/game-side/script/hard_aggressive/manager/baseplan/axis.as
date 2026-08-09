@@ -2,12 +2,7 @@ namespace Base {
 
 CCircuitDef@ AxisProbeDef()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(Builder::corsolar);
-	if (side == "legion")
-		return ai.GetCircuitDef(Builder::legsolar);
-	return ai.GetCircuitDef(Builder::armsolar);
+	return SideDef3(Builder::armsolar, Builder::corsolar, Builder::legsolar);
 }
 
 int AxisScore(const AIFloat3& in fwd, const AIFloat3& in across, CCircuitDef@ probe)

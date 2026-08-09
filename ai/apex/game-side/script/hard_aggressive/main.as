@@ -1,3 +1,4 @@
+#include "../side.as"
 #include "manager/military.as"
 #include "manager/builder.as"
 #include "manager/factory.as"

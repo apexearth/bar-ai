@@ -37,12 +37,7 @@ CCircuitDef@ OurBotDef()
 {
 	if (!gBotDefsResolved)
 		ResolveBotDefs();
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(corfast);
-	if (side == "legion")
-		return ai.GetCircuitDef(legaceb);
-	return ai.GetCircuitDef(armfark);
+	return SideDef3(armfark, corfast, legaceb);
 }
 
 bool IsAssistBot(CCircuitUnit@ unit)

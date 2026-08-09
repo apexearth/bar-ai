@@ -275,12 +275,7 @@ bool HaveShipyard()
 
 CCircuitDef@ NavalOpening()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(corsy);
-	if (side == "legion")
-		return ai.GetCircuitDef(legsy);
-	return ai.GetCircuitDef(armsy);
+	return SideDef3(armsy, corsy, legsy);
 }
 
 // The opening factory, remembered so we can tech into its own advanced version.
@@ -382,12 +377,7 @@ const float GANTRY_PER_ENERGY = 5000.f;
 // the T2 if the T2 doesn't have a good mass".
 CCircuitDef@ T1BotLab()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(corlab);
-	if (side == "legion")
-		return ai.GetCircuitDef(leglab);
-	return ai.GetCircuitDef(armlab);
+	return SideDef3(armlab, corlab, leglab);
 }
 
 bool HaveT1BotLab()

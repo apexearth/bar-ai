@@ -6,12 +6,7 @@ string legbastion("legbastion");
 
 CCircuitDef@ BigGun()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(cordoom);
-	if (side == "legion")
-		return ai.GetCircuitDef(legbastion);
-	return ai.GetCircuitDef(armanni);
+	return SideDef3(armanni, cordoom, legbastion);
 }
 
 // The big gun used to hang off the T3 gantry's build chain, so it was placed

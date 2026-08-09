@@ -97,12 +97,7 @@ int gNanosAsked = 0;
 
 CCircuitDef@ NanoDef()
 {
-	const string side = ai.GetSideName();
-	if (side == "cortex")
-		return ai.GetCircuitDef(cornanotc);
-	if (side == "legion")
-		return ai.GetCircuitDef(legnanotc);
-	return ai.GetCircuitDef(armnanotc);
+	return SideDef3(armnanotc, cornanotc, legnanotc);
 }
 
 // Turrets we hold. aiBuilderMgr.GetWorkerCount() counts these as workers, so any
@@ -233,10 +228,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	if (aiEconomyMgr.isEnergyStalling)
 		return null;
 
-	const string side = ai.GetSideName();
-	CCircuitDef@ want = (side == "cortex") ? ai.GetCircuitDef(cornanotc)
-	                  : ((side == "legion") ? ai.GetCircuitDef(legnanotc)
-	                                        : ai.GetCircuitDef(armnanotc));
+	CCircuitDef@ want = SideDef3(armnanotc, cornanotc, legnanotc);
 	if ((want is null) || !want.IsAvailable(ai.frame) || (want.count >= NanoCap()))
 		return null;
 
