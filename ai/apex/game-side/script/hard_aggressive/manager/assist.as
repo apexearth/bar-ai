@@ -30,6 +30,21 @@ void ResolveBotDefs()
 	}
 }
 
+// The assist bot for OUR side, whichever that is. gBotDefs already holds all
+// three factions' -- armfark, corfast, legaceb -- so this stays faction-neutral
+// by construction rather than by three call sites remembering to match.
+CCircuitDef@ OurBotDef()
+{
+	if (!gBotDefsResolved)
+		ResolveBotDefs();
+	const string side = ai.GetSideName();
+	if (side == "cortex")
+		return ai.GetCircuitDef(corfast);
+	if (side == "legion")
+		return ai.GetCircuitDef(legaceb);
+	return ai.GetCircuitDef(armfark);
+}
+
 bool IsAssistBot(CCircuitUnit@ unit)
 {
 	if (unit is null)

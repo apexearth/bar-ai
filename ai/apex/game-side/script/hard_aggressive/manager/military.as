@@ -1620,38 +1620,46 @@ bool BorderPos(AIFloat3& out p, uint rank)
 	if (edge < 0.f)
 		return false;
 
-	// Among everything within one band of that edge, the least-covered site.
-	// `rank` still spreads successive requests: it skips the rank best-covered
-	// answers, so two towers asked for in the same breath do not stack.
-	float prevCover = -1.f;
+	// COVERAGE, not a wall on one bearing.
+	//
+	// The first version of this restricted candidates to sites within one band of
+	// the forward edge, which fixed WHICH forward site got the tower and left the
+	// flanks ineligible -- so the towers still stacked in one place and the enemy
+	// still walked around them into the economy. apexearth, with a screenshot:
+	// "any idea how to fix our defense placement so AI can stop just walking
+	// around them to attack our eco from the back? Happens all the time. You can
+	// see we have a ton of defense being built - all concentrated in one spot."
+	//
+	// Every site we hold is eligible. Score = (defences already near it + 1) x
+	// distance to the enemy, lowest wins. Two properties fall out of that product:
+	// an UNDEFENDED site always outranks a defended one at the same distance, so
+	// cover spreads before it thickens; and among equally undefended sites the
+	// most exposed one wins, so it spreads toward the threat rather than into the
+	// rear. A site that already has three towers must be three times closer to the
+	// enemy to beat a bare one.
+	float prevScore = -1.f;
 	AIFloat3 pick;
 	bool have = false;
 	for (uint r = 0; r <= rank; ++r) {
-		float bestCover = -1.f;
-		float bestDist = -1.f;
+		float bestScore = -1.f;
 		bool found = false;
 		for (uint i = 0; i < gSitePos.length(); ++i) {
 			if ((reach > 0.f) && (gSitePos[i].distance2D(Builder::gHomePos) > reach))
 				continue;
 			const float d = gSitePos[i].distance2D(e);
-			if (d > edge + BORDER_BAND)
-				continue;                       // behind the line, not on it
 			const float cover = float(FenceCountNear(gSitePos[i], COVER_RADIUS));
-			if (cover <= prevCover)
+			const float score = (cover + 1.f) * d;
+			if (score <= prevScore)
 				continue;                       // claimed by an earlier rank
-			// Fewest defences first; ties broken toward the enemy.
-			if (!found || (cover < bestCover)
-				|| ((cover == bestCover) && (d < bestDist)))
-			{
-				bestCover = cover;
-				bestDist = d;
+			if (!found || (score < bestScore)) {
+				bestScore = score;
 				pick = gSitePos[i];
 				found = true;
 			}
 		}
 		if (!found)
 			break;
-		prevCover = bestCover;
+		prevScore = bestScore;
 		have = true;
 	}
 	if (!have)

@@ -1780,8 +1780,17 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 // SUSTAINED enemy air rather than a one-shot cost reading. Left in place,
 // disabled, rather than deleted, since re-testing a narrower version is
 // plausible future work.
-const bool  AA_HEAVY_ON          = false;
-const float AA_HEAVY_ENEMY_AIR   = 2500.f;  // roughly two-plus real attack aircraft, not scouts
+// Back ON. It was switched off after a version that sized flak at 45% of enemy
+// air VALUE -- up to 30 turrets and 24,600 metal to kill an air force it could
+// have discouraged. The constants below are that design's replacement and are
+// bounded at 1..4, so the reason for the kill switch no longer applies, and the
+// switch meant we have been building NO good AA at all.
+// apexearth: "we arent making the better AA early enough in our bases."
+const bool  AA_HEAVY_ON          = true;
+// Earlier than "two-plus real attack aircraft": by the time that much air is
+// overhead the mexes it came for are already dying, and a Ferret takes time to
+// build. One committed gunship is enough to want the better turret.
+const float AA_HEAVY_ENEMY_AIR   = 1200.f;
 const int   AA_HEAVY_MIN         = 1;
 const int   AA_HEAVY_MAX         = 4;
 const float AA_HEAVY_PER_AIR     = 1800.f;
@@ -1993,6 +2002,12 @@ uint MexGuardWanted()
 // standing next to.
 const float MEX_GUARD_REACH  = 1200.f;
 // Close enough that we are standing on it; the walk-into-fire veto is moot.
+// Radius counted when asking how covered a mex already is.
+const float MEX_COVER_RADIUS = 700.f;
+// How much the walk from the builder counts against exposure. Small: it breaks
+// ties between comparable mexes without letting a safe mex underfoot outrank a
+// bare one on the front.
+const float MEX_WALK_WEIGHT = 0.25f;
 const float MEX_GUARD_HERE   = 400.f;
 
 CCircuitDef@ MexDef()
@@ -2053,8 +2068,20 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 			continue;
 		if (d > MEX_GUARD_REACH)
 			continue;
-		if ((best < 0.f) || (d < best)) {
-			best = d;
+		// Among the mexes this constructor can reach, guard the one most likely
+		// to be attacked first, not merely the closest one to the builder. Same
+		// score the border towers now use: (defences already near it + 1) x
+		// distance to the enemy, lowest wins -- so cover spreads before it
+		// thickens, and among equally bare mexes the exposed one wins.
+		// apexearth: "if you fix that defense placement all our AI will do a lot
+		// better. we can use that to understand where to place our lesser
+		// defenses too."
+		// Distance to the builder still breaks ties, so it does not walk the map.
+		const float cover = float(Military::FenceCountNear(at, MEX_COVER_RADIUS));
+		const float score = (cover + 1.f) * at.distance2D(aiEnemyMgr.GetEnemyPos())
+				+ d * MEX_WALK_WEIGHT;
+		if ((best < 0.f) || (score < best)) {
+			best = score;
 			@pick = mine[i];
 		}
 	}
@@ -3334,6 +3361,19 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	}
 
 
+	// The commander plants most of the early mexes, and was the ONE builder
+	// forbidden from protecting them: MexGuard lives inside the !isComm block
+	// below, so every mex the commander made stood bare unless some other
+	// constructor happened past. apexearth, watching: "the commander here makes
+	// 5 mexes and doesnt build a sentry tower next to any of them."
+	// Self-limiting without a cooldown: AreaNeedsDefence only returns a mex that
+	// is not already covered, so this stops asking once they are.
+	if (isComm) {
+		IUnitTask@ commGuard = MexGuard(unit);
+		if (commGuard !is null)
+			return commGuard;
+	}
+
 	if (!isComm) {
 		// con-heal (RepairNear) stays reflexive and ungated -- it answers
 		// something happening now (a nearby wounded unit) rather than
@@ -3366,6 +3406,15 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			IUnitTask@ aa = CheapAA(unit);
 			if (aa !is null)
 				return aa;
+			// The better turret sits beside the cheap one, outside the phase
+			// gate, for the same reason CheapAA was carved out of it: it answers
+			// OBSERVED enemy air rather than forecasting, it is bounded at 1..4,
+			// and the def is T2 so it cannot fire before the tech exists anyway.
+			// Inside the gate it needed gHaveT2 AND an ECO/HOME crew role, which
+			// is why the good AA never appeared in time.
+			IUnitTask@ heavyAa = HeavyAA(unit);
+			if (heavyAa !is null)
+				return heavyAa;
 			// BUILD_PHASE gate on the remaining optional economy cluster.
 			// Progression, 2026-08-04: phase >= 2 (mex >= 4) reverted, 0 wins in
 			// 13 decided. phase >= 3 (RushReady) confirmed a real improvement, 5
@@ -3471,9 +3520,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				IUnitTask@ help = Assist::Work(unit);
 				if (help !is null)
 					return help;
-				IUnitTask@ heavyAa = HeavyAA(unit);
-				if (heavyAa !is null)
-					return heavyAa;
 				if (!Factory::EcoLeadActive()) {
 					IUnitTask@ gun = Pulsar(unit);
 					if (gun !is null)
@@ -3505,6 +3551,34 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	}
 
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+
+	// EXPANSION IS NEVER OVERRIDDEN.
+	//
+	// Everything below this line can null `task` -- threat vetoes, the comm-hold
+	// rule, the assist gate -- and every one of them was written about some other
+	// build type. When the engine hands back a MEX, MEXUP, GEO or GEOUP it has
+	// already decided we should expand, at Priority::HIGH, from the one function
+	// that creates that work at all (CEconomyManager::MakeEconomyTasks). Refusing
+	// it does not defer expansion, it discards the only offer of it.
+	//
+	// This repo has the collapse on record: mex upgrades 11 -> 2 across a session
+	// where twelve rules were added in front of DefaultMakeTask, each individually
+	// reasonable. Today's 1v1 measurements found the same shape from the other
+	// end -- MEX tasks standing unworked at 2, 4, 8, 13, 23 while no builder was
+	// on one for fourteen minutes.
+	//
+	// Taken from Felnious/Skirmish, which reaches the same conclusion structurally
+	// rather than by tuning: the same six lines appear in five of its role files.
+	// See docs/13-other-ais.md. It is a STOP, not a spend -- it enqueues nothing
+	// and cannot cost constructor time, it only declines to throw work away.
+	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)) {
+		const int bt = task.GetBuildType();
+		if ((bt == int(Task::BuildType::MEX)) || (bt == int(Task::BuildType::MEXUP))
+			|| (bt == int(Task::BuildType::GEO)) || (bt == int(Task::BuildType::GEOUP)))
+		{
+			return task;
+		}
+	}
 
 	// apexearth, watching live: "commanders are often walking unreasonably
 	// long distances to get the reclaim when their time would be better

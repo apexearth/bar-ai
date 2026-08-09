@@ -362,6 +362,11 @@ const int REZ_FLOOR    = 8;
 // actually processes) rather than breaking even on the first pile it finds.
 const float REZ_METAL_PER_BOT = 500.f;
 const int REZ_SPACING  = 20 * SECOND;
+// One assist bot per this long while the bank is full. Short, because the
+// condition is self-limiting -- when the build power catches up with income the
+// bank stops being full and this stops firing.
+const int ASSIST_BOT_SPACING = 15 * SECOND;
+int gNextAssistBot = 0;
 int gNextRez = 0;
 int gNextRezDiag = 0;  // temporary diagnostic, see the rez-bot armed check below
 int gNextFactoryDiag = 0;  // temporary diagnostic, see the AiMakeTask entry log below
@@ -1317,6 +1322,46 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 					gNextRez = ai.frame + REZ_SPACING;
 					return rec;
 				}
+			}
+		}
+	}
+
+	// A FULL BANK BUYS BUILD POWER, whatever faction we are.
+	//
+	// apexearth: "it could be the sort of thing where you see that you're full of
+	// metal, and so you have greater odds to make a butler because of the excess
+	// build power. would be same for any faction in that logic."
+	//
+	// This replaces a hand-tuned ratio bump for armfark alone, which would have
+	// been an Armada-only fix to a problem all three factions have -- exactly the
+	// faction-parity trap CLAUDE.md records. Being metal-full is the condition
+	// that makes the trade obviously right: 210 metal for 140 build power turns a
+	// bank we are visibly failing to spend into the thing that spends it, and the
+	// standing limit is already 200, so the cap was never what stopped us.
+	//
+	// Gated on the bank rather than a count, so it self-corrects: the moment the
+	// extra build power drains the bank, this stops asking and the ordinary
+	// ratios take the slot back.
+	if (aiEconomyMgr.isMetalFull && (ai.frame >= gNextAssistBot)) {
+		// Ask THIS factory for its support-role unit and only take it if that is
+		// the assist bot. Enqueueing a def the factory cannot build is a silent
+		// no-op -- 33 dropped requests and zero errors, per CLAUDE.md -- so the
+		// factory's own build options have to be the authority, not a name list.
+		CCircuitDef@ bot = Assist::OurBotDef();
+		CCircuitDef@ sup = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::SUPPORT.type);
+		if ((bot !is null) && (sup !is null) && (sup.id == bot.id)
+			&& bot.IsAvailable(ai.frame))
+		{
+			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+					Task::RecruitType::BUILDPOWER, Task::Priority::NORMAL,
+					bot, unit.GetPos(ai.frame), 0.f));
+			if (rec !is null) {
+				gNextAssistBot = ai.frame + ASSIST_BOT_SPACING;
+				AiLog(T() + "apex: bank-buys-buildpower " + bot.GetName()
+					+ " standing=" + bot.count
+					+ " mCur=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
+					+ "/" + formatFloat(aiEconomyMgr.metal.storage, "", 0, 0));
+				return rec;
 			}
 		}
 	}
