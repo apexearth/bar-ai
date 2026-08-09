@@ -1402,7 +1402,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	{
 		// Cap AND spacing: the cap alone cannot hold, because GetWorkerCount()
 		// only sees finished builders (see RUSH_CON_SPACING above).
-		if ((aiBuilderMgr.GetWorkerCount() < RUSH_CON_CAP)
+		if ((int(aiBuilderMgr.GetWorkerCount()) - Builder::RezCount() < int(RUSH_CON_CAP))
 			&& (ai.frame >= gNextConOrder))
 		{
 			CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);
@@ -1627,8 +1627,10 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// observed live, the eco lead logged cons=25 against a cap of 16 while
 		// standing on eleven turrets. Left alone, the rectangle eats the mobile
 		// constructor budget and the player ends up with turrets and nobody to
-		// walk to the next mex. Count the turrets back out.
-		if ((int(aiBuilderMgr.GetWorkerCount()) - Builder::NanoCount() < int(ECO_CON_CAP))
+		// walk to the next mex. Count the turrets back out -- and rez bots too,
+		// which CBuilderManager puts in `workers` without any build power.
+		if ((int(aiBuilderMgr.GetWorkerCount()) - Builder::NanoCount() - Builder::RezCount()
+				< int(ECO_CON_CAP))
 			&& (ai.frame >= gNextEcoCon))
 		{
 			CCircuitDef@ con = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::BUILDER.type);

@@ -59,6 +59,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Assist::Update();
 	Builder::PromoteAssistBots();
 	Builder::UpdateEconomicCaps();
+	Builder::AdvConDiag();
 }
 
 }  // namespace Main

@@ -198,13 +198,25 @@ int gNextRichLog = 0;
 // around itself every ~3s below regardless -- record what it sees here and let
 // anyone without their own vantage point (factory.as's rez-bot floor) read the
 // sighting instead of taking a fresh sample from wherever they happen to be.
+//
+// A DECAYING PEAK, not the last reading. The only samplers are ordinary mobile
+// constructors reporting GetWreckValueAt within WRECK_RICH_R of wherever they
+// happen to stand, so consecutive readings are unrelated points, not a series:
+// one con parked in a corpse field and the next one home at the mex line both
+// write here. A last-reading-wins value therefore spends most of its life at
+// whatever the most recent con happened to be standing on, and its consumer
+// (factory.as's rez-bot floor) is sizing a STANDING count of units that take
+// 2800 buildtime to arrive -- a quantity that cannot track a signal which
+// changes every three seconds. Holding the peak and bleeding it out over
+// WRECK_SEEN_TTL makes the value mean "this much was on the field recently",
+// which is the question the floor is actually asking.
 float gWreckSeenValue = 0.f;
 int gWreckSeenAt = 0;
-const int WRECK_SEEN_TTL = 20 * SECOND;
+const int WRECK_SEEN_TTL = 3 * MINUTE;
 
 void NoteWreckSeen(float value)
 {
-	if (value <= 0.f)
+	if ((value <= 0.f) || (value < WreckSeenValue()))
 		return;
 	gWreckSeenValue = value;
 	gWreckSeenAt = ai.frame;
@@ -212,7 +224,10 @@ void NoteWreckSeen(float value)
 
 float WreckSeenValue()
 {
-	return (ai.frame - gWreckSeenAt <= WRECK_SEEN_TTL) ? gWreckSeenValue : 0.f;
+	const int age = ai.frame - gWreckSeenAt;
+	if ((age < 0) || (age >= WRECK_SEEN_TTL))
+		return 0.f;
+	return gWreckSeenValue * (1.f - float(age) / float(WRECK_SEEN_TTL));
 }
 
 // The engine's own build-site safety check is an AND of three terms
@@ -288,11 +303,28 @@ int gNextRezFleeLog = 0;
 // an id past it raises a script exception that kills the enclosing callback
 // without saying so.
 array<bool> gRezzerDefs(ai.GetDefCount() + 1);
+array<int> gRezzerIds;
 
 bool IsRezzer(CCircuitUnit@ unit)
 {
 	const int id = unit.circuitDef.id;
 	return (id >= 0) && (uint(id) < gRezzerDefs.length()) && gRezzerDefs[id];
+}
+
+// Rez bots we hold. CBuilderManager routes them through rezzFinishedHandler,
+// which inserts into `workers` but never calls AddBuildPower -- so a rez bot
+// raises GetWorkerCount() while contributing nothing to GetBuildPower(). Any
+// cap written against GetWorkerCount() has to take them back out, the same way
+// the nano turrets are taken out.
+int RezCount()
+{
+	int n = 0;
+	for (uint i = 0; i < gRezzerIds.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(gRezzerIds[i]);
+		if (d !is null)
+			n += int(d.count);
+	}
+	return n;
 }
 
 // Reclaim turns a corpse into raw metal; resurrect returns the WHOLE unit for a
@@ -3721,6 +3753,28 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// engine's offer is a RESURRECT with a 300s timeout.
 	if (isComm || !IsRezzer(unit) || (ai.frame < gNextWreck))
 		return task;
+	// Stop pre-empting once the reactor the metal was for is already standing.
+	// apexearth: "resurrecting a titan is only useful sometimes. oftentimes that
+	// sudden boost in resources will pay for an AFUS and that can be a big deal
+	// if you don't have an AFUS yet!" So the choice is not reclaim-versus-
+	// resurrect in the abstract -- it is what the metal is FOR. Before the
+	// advanced reactor exists a field of corpses is the fastest way to it, and
+	// after it exists the corpse is worth more standing back up than melted.
+	// Falling through hands the bot to DefaultMakeTask, which gives a rezzer a
+	// RESURRECT unconditionally (UpdateReclaimTasks takes isResurrect straight
+	// from IsAbleToResurrect).
+	// ...and only where the bot can afford the time. apexearth: "rezzing takes
+	// MUCH LONGER than reclaiming... so if in a dangerous area you should
+	// generally reclaim." A resurrect that is interrupted returns nothing at all,
+	// where a reclaim banks metal continuously as it goes, so under threat the
+	// slow option is not merely worse, it is a total loss.
+	if (!IsNavalBuilder(unit)
+		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
+	{
+		CCircuitDef@ afus = SideDef3(armafus, corafus, legafus);
+		if ((afus !is null) && (afus.count > 0))
+			return task;
+	}
 	gNextWreck = ai.frame + 3 * SECOND;   // corpses decay; do not dawdle
 
 	return EnqueueWreckReclaim(unit, Task::Priority::NORMAL);
@@ -3972,8 +4026,10 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 
 	if (usage == Unit::UseAs::REZZER) {
 		const int rid = unit.circuitDef.id;
-		if ((rid >= 0) && (uint(rid) < gRezzerDefs.length()))
+		if ((rid >= 0) && (uint(rid) < gRezzerDefs.length()) && !gRezzerDefs[rid]) {
 			gRezzerDefs[rid] = true;
+			gRezzerIds.insertLast(rid);
+		}
 		return;
 	}
 
@@ -4017,7 +4073,18 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 			@energizer1 = unit;
 			unit.AddAttribute(Unit::Attr::BASE.type);
 		}
-	} else {
+	} else if (cdef.costM < ADV_CON_COST) {
+		// Never an ADVANCED constructor. Attr::BASE routes a unit to
+		// CBuilderManager::MakeEnergizerTask for the rest of its life, and that
+		// function has no CreateBuilderTask -- it can only pick up work that
+		// already exists, within 2000 elmos, in a fixed type order that puts
+		// ENERGY/STORE/FACTORY/NANO ahead of MEXUP, and it returns nullptr
+		// outright once the unit is on a GUARD task. Nothing ever calls
+		// DelAttribute. T1 constructors cost 110-135 and T2 cost 340-550, so this
+		// branch caught the first advanced constructor of the game, every game,
+		// and pinned the one unit that can upgrade a mex to a rule that cannot
+		// create the task. apexearth, watching: "they also have a t2 con which
+		// they aren't doing anything with."
 		if (energizer2 is null) {
 			@energizer2 = unit;
 			unit.AddAttribute(Unit::Attr::BASE.type);
@@ -4110,6 +4177,91 @@ void AiSave(OStream& ostream)
 {
 	ostream << Id(energizer1 !is null ? energizer1.id : -1)
 			<< Id(energizer2 !is null ? energizer2.id : -1);
+}
+
+// LOG ONLY. Enqueues nothing, returns nothing, changes no decision.
+//
+// Sampled from AiUpdate rather than from AiMakeTask, because the question is
+// whether a parked advanced constructor reaches AiMakeTask at all: a builder
+// that has arrived at its site is put into engine WAIT by IBuilderTask::
+// Reevaluate, and one holding a task of the same build type is never re-offered
+// work. Neither state is visible from inside the hook that would have to fix it.
+array<int>   gAdvId;
+array<float> gAdvX;
+array<float> gAdvZ;
+array<int>   gAdvStill;
+int gNextAdvDiag = 0;
+
+const float ADV_STILL_DIST    = 48.f;          // a con at work jitters more than this
+const int   ADV_DIAG_PERIOD   = 15 * SECOND;
+const int   ADV_STILL_SAMPLES = 4;             // ~1 minute parked before it is news
+const uint  ADV_TRACK_MAX     = 128;
+
+int AdvSlot(int id)
+{
+	for (uint i = 0; i < gAdvId.length(); ++i) {
+		if (gAdvId[i] == id)
+			return int(i);
+	}
+	// Dead constructors are never removed one by one; the arrays are pure
+	// scratch, so dropping the lot is cheaper than tracking removals.
+	if (gAdvId.length() >= ADV_TRACK_MAX) {
+		gAdvId.resize(0);
+		gAdvX.resize(0);
+		gAdvZ.resize(0);
+		gAdvStill.resize(0);
+	}
+	gAdvId.insertLast(id);
+	gAdvX.insertLast(0.f);
+	gAdvZ.insertLast(0.f);
+	gAdvStill.insertLast(-1);
+	return int(gAdvId.length()) - 1;
+}
+
+void AdvConDiag()
+{
+	if (ai.frame < gNextAdvDiag)
+		return;
+	gNextAdvDiag = ai.frame + ADV_DIAG_PERIOD;
+	for (uint i = 0; i < Crew::gId.length(); ++i) {
+		CCircuitUnit@ c = ai.GetTeamUnit(Id(Crew::gId[i]));
+		if ((c is null) || (c.circuitDef.costM < ADV_CON_COST))
+			continue;
+		const AIFloat3 here = c.GetPos(ai.frame);
+		if (!OnMap(here))
+			continue;
+		const int s = AdvSlot(int(c.id));
+		const float dx = here.x - gAdvX[s];
+		const float dz = here.z - gAdvZ[s];
+		const bool moved = (gAdvStill[s] < 0)
+				|| ((dx * dx + dz * dz) > (ADV_STILL_DIST * ADV_STILL_DIST));
+		gAdvStill[s] = moved ? 0 : (gAdvStill[s] + 1);
+		gAdvX[s] = here.x;
+		gAdvZ[s] = here.z;
+		if (gAdvStill[s] < ADV_STILL_SAMPLES)
+			continue;
+		IUnitTask@ t = c.task;
+		int tt = -1;
+		int bt = -1;
+		uint on = 0;
+		if (t !is null) {
+			tt = t.GetType();
+			if (tt == Task::Type::BUILDER) {
+				bt = t.GetBuildType();
+				array<CCircuitUnit@>@ crew = t.GetUnits();
+				if (crew !is null)
+					on = crew.length();
+			}
+		}
+		AiLog(Factory::T() + "apex: advcon-idle " + c.circuitDef.GetName()
+			+ " still=" + gAdvStill[s]
+			+ " base=" + (c.IsAttrAny(Unit::Attr::BASE.mask) ? "1" : "0")
+			+ " type=" + tt + " build=" + bt + " on=" + on
+			+ " role=" + Crew::RoleOf(c)
+			+ " mEmpty=" + (aiEconomyMgr.isMetalEmpty ? "1" : "0")
+			+ " eEmpty=" + (aiEconomyMgr.isEnergyEmpty ? "1" : "0")
+			+ " eStall=" + (aiEconomyMgr.isEnergyStalling ? "1" : "0"));
+	}
 }
 
 }  // namespace Builder
