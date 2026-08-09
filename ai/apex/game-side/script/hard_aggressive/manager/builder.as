@@ -2337,14 +2337,51 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 				@afus = SideDef3(armafus, corafus, legafus);
 		}
 
-		float best = -1.f;
-		if (AffordableGen(wind)) {
-			const float e = aiEconomyMgr.GetEnergyMake(wind);
-			if (e > best) { best = e; @gen = wind; }
+		// WIND vs SOLAR IS A PER-METAL QUESTION, AND RAW OUTPUT ANSWERS IT WRONG.
+		//
+		// The ladder below ranks by raw output so that it can TIER UP -- ranking
+		// by energy-per-metal would pin it on wind turbines forever, since a
+		// 40-metal turbine beats a 4,300-metal fusion on that ratio at every
+		// income there will ever be. But applying raw output to the wind/solar
+		// pair specifically decides it backwards: armsolar makes 20 against a
+		// turbine's output of the MAP'S WIND, and almost no map has wind above
+		// 20, so solar wins essentially everywhere -- while costing 155 metal
+		// against the turbine's 40.
+		//
+		// Per metal on a 12-wind map: wind 12/40 = 0.300, solar 20/155 = 0.129.
+		// Break-even is around 5.2 wind. apexearth: "this map has tons of wind,
+		// we should never make any solars on a map like this one... generally if
+		// average wind is greater than ~7.5 then wind is better. and this map has
+		// 12 wind MINIMUM."
+		//
+		// So decide the pair on cost-effectiveness, then hand the winner to the
+		// raw-output ladder, which keeps its ability to tier up to reactors.
+		CCircuitDef@ t1 = null;
+		float t1Make = -1.f;
+		if (ai.GetTunable("apex_wind_per_metal", 1.f) > 0.f) {
+			float bestPerM = -1.f;
+			if (AffordableGen(wind) && (wind.costM > 0.f)) {
+				const float e = aiEconomyMgr.GetEnergyMake(wind);
+				bestPerM = e / wind.costM; @t1 = wind; t1Make = e;
+			}
+			if (AffordableGen(sol) && (sol.costM > 0.f)) {
+				const float e = aiEconomyMgr.GetEnergyMake(sol);
+				if ((e / sol.costM) > bestPerM) { bestPerM = e / sol.costM; @t1 = sol; t1Make = e; }
+			}
+		} else {
+			if (AffordableGen(wind)) {
+				const float e = aiEconomyMgr.GetEnergyMake(wind);
+				if (e > t1Make) { t1Make = e; @t1 = wind; }
+			}
+			if (AffordableGen(sol)) {
+				const float e = aiEconomyMgr.GetEnergyMake(sol);
+				if (e > t1Make) { t1Make = e; @t1 = sol; }
+			}
 		}
-		if (AffordableGen(sol)) {
-			const float e = aiEconomyMgr.GetEnergyMake(sol);
-			if (e > best) { best = e; @gen = sol; }
+
+		float best = -1.f;
+		if (t1 !is null) {
+			best = t1Make; @gen = t1;
 		}
 		if (AffordableGen(adv)) {
 			const float e = aiEconomyMgr.GetEnergyMake(adv);

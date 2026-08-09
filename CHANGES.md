@@ -8,6 +8,46 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-09: solar was chosen over wind on essentially every map
+
+`HomeEnergy` ranks energy candidates by RAW OUTPUT, which is deliberate -- the
+ladder has to be able to tier up, and ranking by energy-per-metal would pin it on
+wind turbines forever, since a 40-metal turbine beats a 4,300-metal fusion on
+that ratio at every income there will ever be.
+
+But raw output decides the WIND/SOLAR pair backwards. `armsolar` makes a flat 20;
+a turbine makes the map's wind. Almost no map has wind above 20, so solar won
+essentially everywhere -- at 155 metal against the turbine's 40. The comment
+above the block claimed "GetEnergyMake() still decides wind against solar, where
+the ratio question is real and map-dependent". It did not.
+
+Per metal on a 12-wind map: wind 12/40 = **0.300**, solar 20/155 = **0.129**.
+Break-even is around 5.2 wind. apexearth: "this map has tons of wind, we should
+never make any solars on a map like this one... generally if average wind is
+greater than ~7.5 then wind is better. and this map has 12 wind MINIMUM."
+
+The pair is now decided on cost-effectiveness and the winner handed to the
+raw-output ladder, so tiering up still works. Verified live: a smoke game that
+previously built solars now builds 29 turbines and zero solars.
+`apex_wind_per_metal=0` restores the old behaviour for A/B.
+
+## 2026-08-09: the T2 rush is a TEAM strategy running in 1v1
+
+apexearth: "on a 1v1 map we shouldn't dive straight into t2 either, we should
+build a big army and strong economy."
+
+Measured first, and the naive fix FAILS: raising `RUSH_MIN_METAL` 14 -> 22
+scored 0.323 against 0.380, and made the economy worse too (metal ratio 0.939
+against ~0.97). The constructors do not spend the extra window on mexes.
+
+The structural reason is that the whole rush path is a TEAM design: pool the
+team's metal behind one elected lead so ONE player reaches T2 fast, with
+`FOLLOWER_TECH_INCOME` (25 metal/s) holding the others back to hold ground
+meanwhile. In a 1v1 there are no followers to pool from and nobody holding
+ground while the single player techs, so the machinery is misapplied rather than
+mistuned -- which is why moving its threshold only made things worse. Gating the
+rush path on TEAM SIZE rather than income is the untested candidate.
+
 ## 2026-08-09: every 24-game arm, and what actually survived
 
 Altair Crossing 1v1, Armada mirror, side-swapped tournaments, 24 games per arm,

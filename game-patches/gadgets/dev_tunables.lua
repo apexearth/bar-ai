@@ -39,6 +39,7 @@ local NAMES = {
 	"apex_reclaim_energy_dist",
 	"apex_air_threat_mod",
 	"apex_scout_threat",
+	"apex_wind_per_metal",
 }
 
 local pending = {}
