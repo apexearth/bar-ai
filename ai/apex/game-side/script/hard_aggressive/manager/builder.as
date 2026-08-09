@@ -1691,8 +1691,18 @@ const float PULSAR_MIN_ENERGY = 1000.f;
 // "while we held one T2 constructor"; that ratio was a symptom of an economy
 // that could not spend, and the constructor caps that caused it are gone.
 // apexearth: "we need to be making way more t3 defense when we're metal full".
-const float PULSAR_PER_INCOME = 120.f;
-const int   PULSAR_FULL_BONUS = 3;
+// One per this much metal income. Halved from 120: at 120 a player on 240 metal/s
+// -- a normal hosted mid-game -- was allowed THREE, and apexearth rates these as
+// the best defensive metal in the game: "they're so good for defense we should
+// try not to [cap them]". Still derived rather than flat, so a poor player does
+// not bankrupt itself on 3,000-4,200 metal towers.
+const float PULSAR_PER_INCOME = 60.f;
+// And more headroom while the bank is full, which is the state where a tower is
+// paid for out of metal we are otherwise wasting.
+const int   PULSAR_FULL_BONUS = 5;
+// How many may be under construction simultaneously.
+const int   PULSAR_CONCURRENT = 2;
+int gPulsarsAsked = 0;
 
 int PulsarCap()
 {
@@ -1848,6 +1858,59 @@ const float DETER_RADIUS      = 900.f;
 const int   DETER_PERIOD      = 30 * SECOND;
 int gNextDeter = 0;
 
+// SHIELDS OVER THE BASE. apexearth: "If we can have these really surrounding our
+// base it is greatttt defense. + add shields."
+//
+// armgate Keeper 3,000m/54,000e, corgate Overseer 3,200m/55,000e, legdeflector
+// Soteria 3,200m/55,000e -- near-identical, so one rule covers all three.
+//
+// I first recorded "Legion has no equivalent, verified" after `leggate` returned
+// nothing. That was one guessed name and it was wrong; apexearth: "legion does
+// have shields!" Found properly by reading how armgate declares its own -- the
+// field is `weapontype = "Shield"`, not the `shieldpower` I grepped for -- which
+// lists legdeflector and leggatet3. Exactly the absence-from-one-search trap
+// CLAUDE.md is written against.
+//
+// Gated on ENERGY rather than metal: a shield's real cost is its upkeep, and one
+// running dry is 3,000 metal doing nothing. Placed by the coverage score, so
+// shields spread across the approaches instead of stacking on one.
+string armgate("armgate"); string corgate("corgate"); string legdeflector("legdeflector");
+const float SHIELD_MIN_ENERGY = 1500.f;
+const int   SHIELD_MAX        = 3;
+const int   SHIELD_PERIOD     = 60 * SECOND;
+int gNextShield = 0;
+int gShieldsAsked = 0;
+
+IUnitTask@ Shield(CCircuitUnit@ unit)
+{
+	if ((ai.frame < gNextShield) || aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (unit.circuitDef.costM < ADV_CON_COST)
+		return null;                       // T2 constructors only
+	if (aiEconomyMgr.energy.income < SHIELD_MIN_ENERGY)
+		return null;
+	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
+		return null;
+	CCircuitDef@ dome = SideDef3(armgate, corgate, legdeflector);
+	if ((dome is null) || !dome.IsAvailable(ai.frame) || (dome.count >= SHIELD_MAX))
+		return null;
+	if (gShieldsAsked - dome.count >= 1)
+		return null;                       // one at a time; they are not cheap
+	AIFloat3 spot;
+	if (!Military::BorderPos(spot, uint(dome.count)) && !Military::FrontPos(spot))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, dome, spot, 0.f));
+	if (post is null)
+		return null;
+	++gShieldsAsked;
+	gNextShield = ai.frame + SHIELD_PERIOD;
+	AiLog(Factory::T() + "apex: shield " + dome.GetName() + " standing=" + dome.count
+		+ "/" + SHIELD_MAX
+		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
+	return post;
+}
+
 IUnitTask@ HomeDeter(CCircuitUnit@ unit)
 {
 	if ((ai.frame < gNextDeter) || aiEconomyMgr.isEnergyStalling)
@@ -1932,6 +1995,14 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	CCircuitDef@ gun = SideDef3(armanni, cordoom, legbastion);
 	if ((gun is null) || !gun.IsAvailable(ai.frame) || (gun.count >= PulsarCap()))
 		return null;
+	// Cap how many are going up AT ONCE, which is a different question from how
+	// many we end up with. Each is 3,000-4,200 metal, so six simultaneous
+	// nanoframes is most of a mid-game bank frozen in half-built towers that
+	// defend nothing until they finish. apexearth: "probably you want to limit
+	// how many we make at once to like 2 or 3. (sometimes I see 6 going up all at
+	// once)". Same asked-minus-standing idiom NukeSilo uses.
+	if (gPulsarsAsked - gun.count >= PULSAR_CONCURRENT)
+		return null;
 	// On the line, not in the base. StandoffPos walks from the point it is handed
 	// TOWARD home and stops at the first safe step -- right for ContestDefence,
 	// which hands it a real enemy hotspot, but this call handed it the
@@ -1955,6 +2026,7 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 			Task::Priority::NORMAL, gun, spot, DEF_SHAKE));
 	if (post is null)
 		return null;
+	++gPulsarsAsked;
 	AiLog(Factory::T() + "apex: pulsar " + gun.GetName() + " standing=" + gun.count
 		+ "/" + PulsarCap() + " at-" + where
 		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
@@ -3607,6 +3679,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 					if (gun !is null)
 						return gun;
 				}
+				IUnitTask@ dome = Shield(unit);
+				if (dome !is null)
+					return dome;
 				IUnitTask@ block = EcoConverters(unit);
 				if (block !is null)
 					return block;
