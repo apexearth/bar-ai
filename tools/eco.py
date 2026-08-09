@@ -124,8 +124,30 @@ def convex_hull_area(pts):
     return abs(area) / 2.0
 
 
+# Remote structures are not sprawl. Mex guards stand at distant mexes and border
+# towers at the front BY DESIGN -- apexearth asked for both -- but they blow up a
+# convex hull and drag "packing" toward zero, which measures the wrong thing.
+# Organisation is about the BASE: take the densest cluster and score that.
+BASE_R = 1400.0
+
+
+def base_cluster(rows):
+    if len(rows) < 4:
+        return rows
+    best, best_n = None, -1
+    for _n, cx, cz, _xs, _zs in rows:
+        n = sum(1 for _m, x, z, _a, _b in rows
+                if (x - cx) ** 2 + (z - cz) ** 2 <= BASE_R * BASE_R)
+        if n > best_n:
+            best_n, best = n, (cx, cz)
+    cx, cz = best
+    return [r for r in rows
+            if (r[1] - cx) ** 2 + (r[2] - cz) ** 2 <= BASE_R * BASE_R]
+
+
 def organisation(rows):
     """Layout quality for one player at one sample."""
+    rows = base_cluster(rows)
     if len(rows) < 4:
         return None
     pts = [(x, z) for _n, x, z, _xs, _zs in rows]

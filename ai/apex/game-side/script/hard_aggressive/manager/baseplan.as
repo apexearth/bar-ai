@@ -55,6 +55,17 @@ const float CELL       = 72.f;
 const float GRID_CELL  = 8.f;     // SQUARE_SIZE; the pitch published to C++
 const float LANE_PITCH = 720.f;   // spacing between walkways: one column in ten
 const float LANE_HALF  = 72.f;    // half-width of a walkway
+// Lateral slack on Inside(). This WAS LANE_PITCH -- one constant serving two
+// unrelated jobs, so the walkway spacing also decided how far sideways a
+// position could be and still count as "in the base". At 720 that bound
+// rejected ground the base genuinely needed, and Inside() gates the work that
+// grows it. Measured, 8 seeds, 1v1 Altair vs easy, 16 min: total mex 56 -> 81
+// (+45%) and metal 109,705 -> 139,406 (+27%), better in 7 of 8 seeds, with the
+// walkways left ON -- an earlier run that removed them scored the same, so the
+// gain was never the corridors.
+// Effectively unbounded: depth still bounds the band, and GRID_RANGE still
+// bounds the grid in C++. This is only the lateral test.
+const float BAND_LAT_SLACK = 100000.f;
 const float HALF_SPAN  = 1512.f;  // lateral cap; a bound, not a target
 const float GRID_RANGE = 2200.f;  // beyond this a placement is not "in the base"
 
@@ -506,7 +517,7 @@ bool Inside(const AIFloat3& in p)
 	float depth, lat;
 	Coords(p, depth, lat);
 	return (depth >= -BAND_BACK[NANO]) && (depth <= gMaxDepth + BAND_ROW[HEAVY])
-		&& (lat >= gMinLat - LANE_PITCH) && (lat <= gMaxLat + LANE_PITCH);
+		&& (lat >= gMinLat - BAND_LAT_SLACK) && (lat <= gMaxLat + BAND_LAT_SLACK);
 }
 
 // Is this position standing in a walkway? Only asked of things already known to
