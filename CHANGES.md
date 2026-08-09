@@ -8,6 +8,53 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-09: every 24-game arm, and what actually survived
+
+Altair Crossing 1v1, Armada mirror, side-swapped tournaments, 24 games per arm,
+all on one build so the arms are comparable. Trade ratio = our army K/D in metal
+over theirs.
+
+| arm | trade ratio | enemy static metal killed |
+|---|---|---|
+| scouts may look at enemy-held clusters (`apex_scout_threat=1000`) | **0.415** | 8,257 |
+| tree-reclaim walk capped at 900 (default) | 0.380 | 10,135 |
+| tree-reclaim walk uncapped (previous behaviour) | 0.341 | 11,003 |
+| air pays 8x for threat (`apex_air_threat_mod=8`) | 0.323 | 9,733 |
+| T2 rush at 22 metal/s instead of 14 | 0.323 | -- |
+| no sunk-cost discount under static guns | 0.238 | 8,963 |
+
+**The tree cap is the one change that beat its own direct control** (0.380 vs
+0.341, same build, same seeds). It is also the only one that purely REMOVES
+work, which is the near-free category from the 2026-08-01 composition finding.
+
+**A prediction that failed, recorded because it failed.** The scouting change
+was justified by a chain: `GetScoutPosition` only counts a metal cluster
+scoutable if some spot reads `threat < THREAT_MIN`, so enemy-held clusters are
+excluded; enemy groups are built from `hostileDatas + peaceDatas`, i.e. only
+enemies we have SEEN; target selection iterates those groups. So a defended
+enemy mex cluster is not a low-priority target, it is not a candidate, and
+`FREE_ECO_PRIORITY` can never fire on it. apexearth: "why didn't we attack the
+enemy eco in that mex cluster area?"
+
+That predicts enemy static kills should RISE when scouts may look. They FELL,
+8,257 against 10,135. The arm scored best on trade, but not through the
+mechanism claimed, so the mechanism is unsupported and the 0.415 is a number
+without an explanation -- and at n=24 it is about 1.6 sd from the tree cap,
+which is not separation. Re-run before believing it.
+
+**Delaying T2 does not fix teching-before-mexes.** apexearth: "we really failed
+to take mexes before making the T2". Raising the rush threshold 14 -> 22 metal/s
+made both the trade (0.323) AND the economy (metal ratio 0.939 vs ~0.97) worse.
+The constructors do not spend the extra window on mexes. The observation is real;
+this is not its fix.
+
+**Scoreboard by source.** Changes derived from watching the AI play located real
+mechanisms every time. Changes I derived by reading code and reasoning about
+mechanism went 0 for 10 against measurement -- including my own implementations
+of behaviours apexearth had correctly identified (the tower sunk-cost fix scored
+worst of every arm tried). Locating a problem and fixing it are separate skills,
+and only the first one transferred.
+
 ## 2026-08-09 (SETTLED): trade caution is HARMFUL at proper sample size
 
 24 games per arm, side-swapped tournament, Altair Crossing 1v1 Armada mirror:

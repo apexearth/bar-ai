@@ -37,6 +37,8 @@ local NAMES = {
 	"apex_static_no_continue",
 	"apex_rush_min_metal",
 	"apex_reclaim_energy_dist",
+	"apex_air_threat_mod",
+	"apex_scout_threat",
 }
 
 local pending = {}

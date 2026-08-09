@@ -23,7 +23,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-CUM = ("mKillReal", "mLostReal", "mKillMobile", "mLostMobile", "metalProduced")
+CUM = ("mKillReal", "mLostReal", "mKillMobile", "mLostMobile", "metalProduced",
+       "mKillStatic")
 
 
 def read(log: Path):
@@ -132,6 +133,11 @@ def main() -> int:
     print(f"  metal produced     ratio {metal:.3f}")
     print(f"  metal killed/lost  us {tot[0]['mKillReal']:.0f}/{tot[0]['mLostReal']:.0f}"
           f"   them {tot[1]['mKillReal']:.0f}/{tot[1]['mLostReal']:.0f}")
+    # Enemy STATIC metal killed: mexes, energy, defences. The direct measure of
+    # whether we are actually hurting their economy rather than only trading
+    # armies with it.
+    print(f"  enemy static killed us {tot[0]['mKillStatic']:.0f}"
+          f"   them {tot[1]['mKillStatic']:.0f}")
     return 0
 
 
