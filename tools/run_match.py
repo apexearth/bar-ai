@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import re
 import shutil
 import subprocess
@@ -42,6 +43,8 @@ ENGINE_WRITE_DIR = MATCHES / "_engine"
 
 # Faction names as they appear in BAR's sidedata.
 SIDES = ["Armada", "Cortex"]
+# --sides random draws from all three, per player.
+FACTIONS = ["Armada", "Cortex", "Legion"]
 # Indexed by a player's SLOT WITHIN ITS OWN ALLY TEAM (see _ai_and_team), not
 # by ally or by global team_id. Previously this was `COLORS[ally % len]`, so
 # every player on the same side got the IDENTICAL RGBColor -- in an 8v8 that
@@ -223,14 +226,24 @@ def build_script(
     # faction matchup is confounded with the variant under test, and any
     # faction-specific unit (Cortex Dragons, Armada Liche) only appears in
     # half the games.
-    side_for = list(sides) if sides else [SIDES[i % len(SIDES)] for i in range(len(ais))]
-    while len(side_for) < len(ais):
-        side_for.append(side_for[-1])
+    # 'random' is per PLAYER, not per side: the point of an all-random game is a
+    # mixed team, which is what a hosted game looks like. Drawn from the run's
+    # seed so the same command replays the same factions.
+    is_random = bool(sides) and (len(sides) == 1) and (sides[0].lower() == "random")
+    if is_random:
+        rng = random.Random(seed if seed is not None else 0)
+        side_of = [[rng.choice(FACTIONS) for _ in range(per_side)] for _ in ais]
+    else:
+        side_for = list(sides) if sides else [SIDES[i % len(SIDES)] for i in range(len(ais))]
+        while len(side_for) < len(ais):
+            side_for.append(side_for[-1])
+        side_of = [[side_for[a]] * per_side for a in range(len(ais))]
+    side_for = [s for team in side_of for s in team]   # flat, for the Legion gate below
 
     team_id = 0
     for ally, ai in enumerate(ais):
         for slot in range(per_side):
-            body.append(_ai_and_team(ai, team_id, ally, slot, side_for[ally], handicap,
+            body.append(_ai_and_team(ai, team_id, ally, slot, side_of[ally][slot], handicap,
                                      drop_ai_version))
             team_id += 1
         box = {"NumAllies": 0}
