@@ -36,6 +36,7 @@ local NAMES = {
 	"apex_comm_flee_influence",
 	"apex_static_no_continue",
 	"apex_rush_min_metal",
+	"apex_reclaim_energy_dist",
 }
 
 local pending = {}

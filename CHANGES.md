@@ -8,6 +8,47 @@ difference from `BARb/stable`; anything not listed behaves as stock.
 | **apex** | stock BARb plus a team T2 rush | **16-0 vs medium on all three factions; 8-0 vs hard at 8v8** (2026-08-07) |
 | **apexdef** | hold ground, out-eco, finish with T3 | 4-3 over 10 clean games |
 
+## 2026-08-09 (SETTLED): trade caution is HARMFUL at proper sample size
+
+24 games per arm, side-swapped tournament, Altair Crossing 1v1 Armada mirror:
+
+| arm | games | trade ratio |
+|---|---|---|
+| baseline | 24 | **0.400** |
+| `TRADE_MARGIN_MAX` 1.0 -> 1.6 | 24 | **0.288** |
+
+So the +47% claimed earlier is not merely inside the noise, it has the wrong
+sign. Nothing shipped: the compiled default remains 1.0 and 1.6 only ever
+existed as a modoption. Note the baseline itself read 0.400 here against
+0.227-0.307 across four 8-game samples -- the small batches understated the
+baseline as well as overstating the arm, which is what a 30% noise floor does in
+both directions.
+
+The general lesson, third time today: an 8-game arm cannot resolve anything this
+metric measures. Use `run_tournament` with >=24 games per arm.
+
+## 2026-08-09: constructors walk the whole map for trees
+
+`CEconomyManager::UpdateReclaimTasks` takes its `!isNear` branch from
+`GetFeatures()` -- EVERY feature on the map -- then picks the nearest qualifying
+one with **no distance limit at all**. An earlier session added a bank check
+("do not reclaim for energy if we are >20% energy", `RECLAIM_ENERGY_MAX`), so
+the behaviour is gated on the energy bank but never on the walk: whenever the
+bank dips, a constructor may be dispatched to the far side of the board for a
+tree. apexearth, watching a 1v1: "I saw 5 cons going far from the base and
+reclaiming trees (energy)... waste of time... we shouldn't be doing that", and
+"those cons should focus on eco more".
+
+`RECLAIM_ENERGY_DIST` (900, ~one screen, tunable via
+`apex_reclaim_energy_dist`) caps how far a constructor will travel for an
+ENERGY-dominant feature. Scoped to energy features deliberately: a field of
+metal wrecks after a repelled push is worth crossing ground for and is this
+variant's whole funding plan; a tree is not.
+
+Unlike most changes this one only TAKES WORK AWAY, which is the near-free kind
+per the 2026-08-01 composition finding -- constructor time is the economy.
+Unmeasured as yet.
+
 ## 2026-08-09 (CORRECTION): the army-trade metric has a 30% noise floor at n=8
 
 The +47% "adaptive caution" result recorded below is WITHDRAWN. It came from
