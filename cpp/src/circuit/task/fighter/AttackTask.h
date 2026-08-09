@@ -39,6 +39,9 @@ private:
 	float minPower;
 	int lastDetourLog = -1000000;
 	int lastEngageLog = -1000000;
+	// -1 until rolled, then 0 = threat-aware route, 1 = straight in. Rolled once
+	// per task so a squad does not change its mind about the route mid-walk.
+	int chargeRoll = -1;
 };
 
 } // namespace circuit

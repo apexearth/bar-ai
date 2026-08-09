@@ -15,6 +15,8 @@
 
 namespace circuit {
 
+class CCircuitDef;
+
 // Elmos of mean distance-from-centroid a squad may have and still count as a
 // single fighting force. Roughly 1.5x a T1 weapon range, so a squad inside it
 // can bring most of its guns to bear on the same target.
@@ -79,6 +81,23 @@ namespace circuit {
 // spreading across 1900 elmos and arriving as two separate fights.
 #define SQUAD_FILE_SPACING		96.f
 #define SQUAD_FILE_MAX_WIDTH	768.f
+// apex: how far apart a CHARGER stands from its neighbour, travelling and in
+// formation. The commander D-gun carries `noexplode = true` and range 262 (read
+// from CORCOM.lua), so the projectile does not stop at the first thing it hits
+// -- it keeps flying, and everything on that line dies to one shot. Two
+// Behemoths inside 262 elmos of each other are therefore one target, not two.
+// 360 clears that with margin without breaking the squad into separate fights.
+// apexearth: "they should spread out and not be too close which would allow
+// multiple of them to be d-gunned together in a single shot."
+#define CHARGE_SPACING			360.f
+// Share of charger squads that take the straight route. The rest keep the
+// ordinary threat-aware path, which is the flank -- "can still do a small
+// allotment to that side attack sometimes".
+#define CHARGE_DIRECT_PCT		80
+// A threat ceiling no real tile reaches, so the charger's route is decided by
+// distance alone. CMicroPather compares `threatArray[i] > maxThreat`, so any
+// large finite value works and avoids infinities in the cost arithmetic.
+#define CHARGE_THREAT_CEILING	1e9f
 // Spacing between neighbours on a regroup line, in elmos.
 #define LINE_SPACING		110.f
 
@@ -97,6 +116,12 @@ public:
 
 	CCircuitUnit* GetLeader() const { return leader; }
 	const springai::AIFloat3& GetLeaderPos(int frame) const;
+
+	// role heavy + attribute melee: corjugg (Behemoth), corkorg (Juggernaut) and
+	// armbanth (Titan). They detonate on death, so the value is delivered by
+	// arriving. CAttackTask::FindTarget already keys the
+	// ignore-the-engage-margin charge off the same pair.
+	static bool IsChargeDef(const CCircuitDef* cdef);
 
 private:
 	void FindLeader(decltype(units)::iterator itBegin, decltype(units)::iterator itEnd);

@@ -51,6 +51,10 @@ local NAMES = {
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",
+	-- T3 heavies hold the defence line (2026-08-09). 0 restores stock routing:
+	-- one solo CAttackTask per super, the frame it finishes.
+	"apex_super_guard",
+	"apex_super_cost",
 	-- Dev aid: one map marker per attack group when it first picks a target.
 	"apex_ping_attacks",
 }

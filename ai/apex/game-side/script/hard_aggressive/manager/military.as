@@ -9,6 +9,7 @@
 #include "military/killingblow.as"  // committing everything to finish a player
 #include "military/basedefence.as"  // approach threat, porcupines, line jammers
 #include "military/posture.as"      // raid caution, persona, team push, corridors
+#include "military/superguard.as"   // T3 heavies hold the defence line
 #include "military/hooks.as"        // AiMakeTask, task/unit hooks, save/load
 #include "military/territory.as"    // what we hold, where the border and front are
 #include "military/defenceline.as"  // the front gun and AiMakeDefence

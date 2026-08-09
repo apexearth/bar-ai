@@ -18,6 +18,72 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-09: Behemoths charge the front instead of walking round the map
+
+Layer 3 (`AttackTask`, `SquadTask`) + layer 2 (`military/superguard.as`).
+**Landed and smoke-tested only** — see the caveat at the end.
+
+apexearth: "these are extremely powerful units which should be braver than usual
+and attack enemy bases. They should spread out and not be too close which would
+allow multiple of them to be d-gunned together in a single shot. Currently they
+seem to be using our 'attack around the edge of the map' strategy — normally
+this is good but behemoths are terribly slow so its less good for them, and also
+less good for juggernauts. Straight front assault usually is preferred — can
+still do a small allotment to that side attack sometimes."
+
+The unit is `corjugg` (Behemoth, 20,000 metal); `corkorg` is the Juggernaut. A
+scan of the shipped `behaviour.json` for `role: heavy` + `attribute: melee`
+returns exactly three: `corjugg`, `corkorg` and `armbanth` (Titan) — Armada's
+only one. **`armraz` is NOT one of them**, correcting a comment in
+`AttackTask.cpp` that had asserted it since the engage-margin bypass landed;
+`armraz` is `skirmish, heavy` with no `melee` attribute. That pair of tags
+already keyed `CAttackTask::FindTarget`'s bypass, so it is now the single
+definition of a CHARGER, shared by three call sites: `ISquadTask::IsChargeDef`.
+
+**Watch runs must be Cortex.** apexearth, on the first watch run: "you're
+starting us as arm and them as cortex soooo impossible for you to validate your
+changes." `run_match.py` alternates factions by default; Behemoth and Juggernaut
+are Cortex, and Armada's only charger is the Titan. Use `--sides Cortex,Cortex`.
+
+Three changes, all keyed off it:
+
+1. **The route.** `CAttackTask::Update` gave every squad the same threat-aware
+   path query — `ATTACK_THREAT_MOD` 2 on the cost, `ATTACK_CEILING_MOD` 3 on the
+   ceiling. That is the machinery that produces map-edge detours, and it is
+   deliberate for ordinary squads. A charger now queries with `threatMod 0` (see
+   `CPathFinder::GetThreatFun` — the cost becomes pure distance) and a ceiling of
+   1e9, so the route is the short one through the front. `CHARGE_DIRECT_PCT` 80
+   leaves one squad in five on the old route, which is the "small allotment to
+   that side attack"; the roll is per task and taken once, so a squad does not
+   change its mind mid-walk. `apex: attack path` now logs `charge=`.
+2. **The spacing.** The commander's disintegrator carries `noexplode = true` and
+   range 262 (read from `CORCOM.lua`), so the projectile does not stop at what it
+   hits — everything on that line dies to one shot. `CHARGE_SPACING` 360 is now a
+   FLOOR on a charger's separation, both travelling (`ActivePath`, where gaps are
+   now per neighbour-pair so a charger's neighbours widen without blowing the
+   whole squad apart) and in formation (`Attack`, applied AFTER the `maxDelta`
+   cap — that cap shrinks with unit count, so the more Behemoths arrived the
+   tighter they packed, exactly backwards).
+3. **The hold is lifted for them.** `WantsSuperGuard` parks role-SUPER units on
+   our own defence line; that was the answer to "we make T3 and then fail to
+   defend with it", and it stays for `armepoch`, `corblackhy` and friends. A
+   charger is exempt: its value is delivered by arriving somewhere of theirs, so
+   the defence line is the one place it can never pay for itself.
+
+**What is actually verified:** compiles, links, and a 12-minute 4v4 runs with
+zero AngelScript errors and no crash, against a matched control DLL built from
+HEAD. The behaviour itself is NOT measured, and this benchmark cannot measure it
+— the same reason recorded under "the juggernaut charge is UNVALIDATED" below:
+at 4-9 metal/s per team no 20,000-metal unit is ever built. It needs a hosted
+game or a heavily bonused one.
+
+**One trap this cost an hour on.** The first build of these changes crashed at
+frame 0 with an access violation and no AngelScript error. The code was fine:
+`tools/sync_cpp.py apply` rewrites all 42 mirrored files, and a build interrupted
+by a closed pipe (`docker ... | grep | head`) left a truncated `ThreatMap.cpp.obj`
+that still linked. Never pipe a build through `head`; deleting the object and
+rebuilding clean fixed it.
+
 ## 2026-08-09: the AI crashed the engine because C++ deleted tasks the script held
 
 Layer 3 (C++), `module/EconomyManager.cpp` and `task/builder/BuilderTask.cpp`.

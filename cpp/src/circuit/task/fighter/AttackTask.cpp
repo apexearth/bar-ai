@@ -492,13 +492,35 @@ void CAttackTask::Update()
 	// engage test still decides whether to actually take the fight when it gets
 	// there -- that judgement belongs there, not in the pathfinder silently
 	// making the short route non-existent.
-	const float threatCeiling = ATTACK_CEILING_MOD * attackPower
-			/ circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale();
+	//
+	// A CHARGER ignores both. See IsChargeDef: a Behemoth is 20,000 metal of
+	// walking bomb that delivers its value by ARRIVING, and it walks at ~16
+	// elmos/s -- the slowest thing we field. A route that trades distance for
+	// safety is the one trade it can never afford, and the threat it is dodging
+	// is threat it is built to eat. apexearth: "these are extremely powerful
+	// units which should be braver than usual and attack enemy bases... the
+	// attack around the edge of the map strategy is normally good but behemoths
+	// are terribly slow so its less good for them."
+	//
+	// threatMod 0 makes the cost pure distance (see CPathFinder::GetThreatFun)
+	// and the ceiling is out of reach of any real tile, so the route is the
+	// short one through the front. CHARGE_DIRECT_PCT leaves a minority still
+	// going round, which is the "small allotment to that side attack" -- rolled
+	// once per task, so the squad commits to one route rather than oscillating.
+	if (chargeRoll < 0) {
+		chargeRoll = (rand() % 100 < CHARGE_DIRECT_PCT) ? 1 : 0;
+	}
+	const bool isCharge = (chargeRoll == 1)
+			&& ISquadTask::IsChargeDef(leader->GetCircuitDef());
+	const float threatCeiling = isCharge
+			? CHARGE_THREAT_CEILING
+			: (ATTACK_CEILING_MOD * attackPower
+					/ circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			leader, circuit->GetThreatMap(),
 			startPos, endPos, pathRange, GetHitTest(),
 			threatCeiling,
-			false, ATTACK_THREAT_MOD);
+			false, isCharge ? 0.f : ATTACK_THREAT_MOD);
 	pathQueries[leader] = query;
 
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
@@ -581,17 +603,18 @@ void CAttackTask::FindTarget()
 	float bestInfl = .0f;
 	float bestNear = .0f;
 	float bestScale = .0f;
-	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), armbanth
-	// (Titan), corkorg (Korgoth) and armraz all carry role heavy + attribute
-	// melee, and all of them detonate on death -- so the value is delivered by
+	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), corkorg
+	// (Juggernaut) and armbanth (Titan) carry role heavy + attribute melee, and
+	// they detonate on death -- so the value is delivered by
 	// ARRIVING, and a walking bomb that refuses a defended target has thrown
 	// its whole cost away. apexearth: "if we make juggernauts the biggest goal
 	// with them is to just walk straight into an enemy base (because they
 	// explode when they die)", and separately "i see a lot of our T3 units just
 	// hangin out and not fighting".
 	//
-	// heavy+melee is exactly those four in the shipped configs -- checked, not
-	// assumed. It deliberately excludes corroach/corsktl, which are also melee
+	// heavy+melee is exactly those three in the shipped configs -- re-derived by
+	// scanning behaviour.json, not assumed. It deliberately excludes
+	// corroach/corsktl, which are also melee
 	// bombs but assault-role T1/T2 chaff whose behaviour is not in question here.
 	// CCircuitUnit::Attack already walks a melee unit onto its target rather
 	// than firing from range, so only the DECISION needed changing.
@@ -841,8 +864,10 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
 			}
 			const float direct = from.distance2D(to);
 			if (direct > 1.f) {
-				circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f",
-						walked, direct, walked / direct);
+				circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f charge=%d",
+						walked, direct, walked / direct,
+						int((chargeRoll == 1) && (leader != nullptr)
+								&& ISquadTask::IsChargeDef(leader->GetCircuitDef())));
 			}
 		}
 		ActivePath(lowestSpeed);

@@ -20,6 +20,7 @@
 #include "Log.h"
 
 #include <cmath>
+#include <vector>
 
 namespace circuit {
 
@@ -43,6 +44,11 @@ ISquadTask::ISquadTask(ITaskModule* mgr, FightType type, float powerMod)
 
 ISquadTask::~ISquadTask()
 {
+}
+
+bool ISquadTask::IsChargeDef(const CCircuitDef* cdef)
+{
+	return (cdef != nullptr) && cdef->IsRoleHeavy() && cdef->IsAttrMelee();
 }
 
 void ISquadTask::AssignTo(CCircuitUnit* unit)
@@ -468,13 +474,38 @@ void ISquadTask::ActivePath(float speed)
 	// Centred on the path, so the squad's centre of mass still follows the route
 	// the pathfinder chose and nothing about target or route selection changes.
 	// Width is bounded: a line wider than this stops being one fight.
+	//
+	// The gap is per-NEIGHBOUR-PAIR, not one width shared out, because a charger
+	// needs CHARGE_SPACING from whatever stands next to it while the ordinary
+	// units either side of it stay at SQUAD_FILE_SPACING. Sharing one uniform
+	// step would either pack the chargers into one D-gun line or blow the whole
+	// squad apart to keep them separated.
 	const int n = int(units.size());
-	const float width = std::min(float(n - 1) * SQUAD_FILE_SPACING, SQUAD_FILE_MAX_WIDTH);
-	const float step = (n > 1) ? (width / float(n - 1)) : 0.f;
+	std::vector<float> offset;
+	offset.reserve(n);
+	float span = 0.f;
+	float cap = SQUAD_FILE_MAX_WIDTH;
+	const CCircuitDef* prevDef = nullptr;
+	for (CCircuitUnit* unit : units) {
+		const CCircuitDef* cdef = unit->GetCircuitDef();
+		const bool isCharge = IsChargeDef(cdef);
+		if (prevDef != nullptr) {
+			span += (isCharge || IsChargeDef(prevDef)) ? CHARGE_SPACING : SQUAD_FILE_SPACING;
+		}
+		if (isCharge) {
+			// A charger squad is allowed to be wider than one fight: its units
+			// each survive alone, which is the whole reason to separate them.
+			cap = std::max(cap, CHARGE_SPACING * float(n));
+		}
+		offset.push_back(span);
+		prevDef = cdef;
+	}
+	const float scale = (span > cap) ? (cap / span) : 1.f;
+	const float half = span * scale * 0.5f;
 	int i = 0;
 	for (CCircuitUnit* unit : units) {
 		unit->GetTravelAct()->SetPath(pPath, speed);
-		unit->GetTravelAct()->SetLateral((n > 1) ? (float(i) * step - width * 0.5f) : 0.f);
+		unit->GetTravelAct()->SetLateral((n > 1) ? (offset[i] * scale - half) : 0.f);
 		++i;
 	}
 }
@@ -691,6 +722,18 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		float delta = (3.0f * (rowDef->GetRadius() + aoe)) / (range + DIV0_SLACK);
 		if (delta > maxDelta) {
 			delta = maxDelta;
+		}
+		// A charger row gets a FLOOR on its spacing, applied after the cap so
+		// the cap cannot take it back: maxDelta shrinks with the unit count, so
+		// the more Behemoths arrive the tighter they were packing -- exactly
+		// backwards for the one thing a commander can kill them with. Bounded so
+		// the arc can close into a full ring but never wrap over itself.
+		if (IsChargeDef(rowDef)) {
+			const float minDelta = std::min(CHARGE_SPACING / (range + DIV0_SLACK),
+					float(2.0 * M_PI) / float(kv.second.size()));
+			if (delta < minDelta) {
+				delta = minDelta;
+			}
 		}
 
 		float beta = -delta * (kv.second.size() / 2);

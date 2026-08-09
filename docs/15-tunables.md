@@ -104,4 +104,6 @@ site. These were in `dev_tunables.lua` but had no row here.
 |---|---|---|---|
 | `apex_edge_band` | 0.20 (`EDGE_ECO_BAND`) | C++ `AttackTask.cpp` `FindTarget` | how wide the map-edge strip is, as a fraction of the map's shorter side |
 | `apex_edge_bonus` | 2.0 (`EDGE_ECO_BONUS`) | C++ `AttackTask.cpp` `FindTarget` | preference multiplier for economic targets inside that strip. apexearth: "the best mex attacks can be done around the edges of the map" |
+| `apex_super_guard` | 1 (on) | AngelScript `military/superguard.as` | 0 restores stock routing for mobile supers: one solo `CAttackTask` each, the frame they finish |
+| `apex_super_cost` | 7000 (`SUPER_COST`) | AngelScript `military/superguard.as` | cost at which a non-SUPER-role unit is treated as a T3 heavy and held on the defence line. Legion tags no gantry unit "super", which is why cost is a second key |
 | `apex_ping_attacks` | 0 (off) | C++ `AttackTask.cpp` `FindTarget` | 1 drops one "ATTACK" map marker per attack party, the first time it picks a target. Dev aid for watching a game; markers are visible clutter otherwise |

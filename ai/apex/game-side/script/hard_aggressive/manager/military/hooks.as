@@ -69,6 +69,11 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// all that raiding."
 		return aiMilitaryMgr.DefaultMakeTask(unit);
 	}
+	// Before the massing pool: a super that reaches WantsMassing is excluded
+	// there by role and falls through to DefaultMakeTask, which sends it out
+	// alone. See superguard.as.
+	if (WantsSuperGuard(cdef) && !SuperReleased())
+		return SuperGuardTask(unit);
 	if (WantsMassing(cdef)) {
 		return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
 				Task::FightType::ATTACK, aiMilitaryMgr.quota.attack));
