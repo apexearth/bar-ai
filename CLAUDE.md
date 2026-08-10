@@ -402,7 +402,7 @@ So:
   it cost.** The dig-in fortresses looked excellent on screen and were among the
   most expensive things here.
 
-See `docs/18-task-arbiter.md` for the design that addresses this directly --
+See `docs/18-brain.md` for the design that addresses this directly --
 rules propose Wants and one arbiter ranks them, instead of the first rule in an
 ordered list winning. `docs/17-behaviour-config.md` traces every behaviour.json
 knob to the line that consumes it. `docs/12-build-phases.md` is the BUILD_PHASE

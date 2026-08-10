@@ -15,7 +15,7 @@ namespace Brain {
 //
 // Here a rule states a WANT -- what it would do, what that is worth, what it
 // costs -- with no side effects. Decide() ranks the list and only then acts. See
-// docs/18-task-arbiter.md for the staging; this is stage one, so the ranking is
+// docs/18-brain.md for the staging; this is stage one, so the ranking is
 // logged and only the mex-upgrade want is executed.
 //
 // VALUE IS METAL PER SECOND GAINED, PER METAL SPENT. That is the one unit every

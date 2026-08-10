@@ -1,4 +1,11 @@
-# Wants and an arbiter — replacing the first-match ladder
+# The Brain — a macro view that decides, instead of a first-match ladder
+
+apexearth: *"I want it to generally be a macro-view brain/logic center."*
+
+Three faculties: **Knowledge** (what do I believe, and how stale is it),
+**Wants** (what should this metal buy), **Directives** (what should these units
+do). The ranking described first is the Wants faculty; the other two are further
+down, and Knowledge is what makes the other two scorable at all.
 
 apexearth: *"what if we created a stack/list of all the things we wanted to do and
 then properly prioritized them after in some process which has a better macro

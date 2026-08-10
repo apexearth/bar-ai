@@ -1,6 +1,6 @@
 # BUILD_PHASE — a single sense of "what are we buying right now"
 
-> **Its consumer is [18 — Wants and an arbiter](18-task-arbiter.md).** BUILD_PHASE
+> **Its consumer is [18 — The Brain](18-brain.md).** BUILD_PHASE
 > answers *what are we buying*; the arbiter is where that answer actually decides
 > between competing proposals. Phases without an arbiter are advice each rule may
 > ignore.

@@ -125,7 +125,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	//
 	// Rules below propose one thing each and the first one wins; Brain::Decide
 	// ranks what it knows about and acts on the best. Today it knows about mex
-	// upgrades only -- see docs/18-task-arbiter.md for the staging -- so this is
+	// upgrades only -- see docs/18-brain.md for the staging -- so this is
 	// "an advanced constructor upgrades a mex rather than starting a gantry",
 	// which is the order apexearth has asked for five times.
 	@t = Brain::Decide(unit, isAdvCon);
