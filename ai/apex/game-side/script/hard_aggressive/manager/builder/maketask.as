@@ -92,10 +92,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// returns null for every other build type, so the optional rules below still
 	// get their turn on the same offer.
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
-
-	// Before the offer is read as expansion: a mex upgrade on an ally's spot
-	// can never complete, and re-offers forever.
-	@task = VetoAllyMexUp(unit, task);
+	NoteOffer(unit, task, isAdvCon);
 
 	@t = ExpansionAlwaysWins(task);
 	if (t !is null)

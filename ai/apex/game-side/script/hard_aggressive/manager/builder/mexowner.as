@@ -1,92 +1,16 @@
 namespace Builder {
 
-// A mex upgrade is only ours to make if the mex underneath it is OURS.
+// What the AI knows about which extractors are ours.
 //
-// CEconomyManager::UpdateEconomyTasks picks the spot to upgrade with a
-// predicate that reads the extraction rate of every unit returned by
-// GetFriendlyUnitIdsIn(), resolving each id through GetFriendlyUnit() -- the
-// ALLY-wide lookup, with the own-team GetTeamUnit() call commented out beside
-// it. So an ally's extractor counts as "a mex on this spot yielding less than
-// what I can build", and a MEXUP task is enqueued at HIGH priority on ground
-// we do not own.
+// The ally-mexup VETO that used to live here is gone. apexearth: "that whole bit
+// of code where we refuse to build mex upgrades for allies is a terrible idea."
+// It was written for a real failure -- CEconomyManager picks the upgrade spot
+// through the ALLY-wide GetFriendlyUnit lookup, so an ally's extractor can be
+// offered and the task cannot complete -- but the cure was worse: it needed to
+// know which mexes were ours, got that wrong (ourMexes=4 on a side holding 150+),
+// and silently refused OUR OWN upgrades. An aborted task costs one constructor
+// trip; refusing upgrades costs the whole metal economy.
 //
-// It can never complete. CBMexUpTask::Execute cannot place the building -- the
-// ally's extractor occupies the spot -- and its fallback, reclaim the old mex
-// and build on the second pass, resolves the occupant through GetTeamUnit(),
-// which returns null for another team's unit. So oldMex stays null, the task
-// aborts, the spot is released, and the next AiMakeTask picks it again. The
-// constructor walks to the ally's base, turns round, and walks back, for as
-// long as the condition holds.
-//
-// Which mexes are ours needs no def list: CEconomyManager's own
-// mexFinishedHandler fires UnitAdded(UseAs::MEX) for every extractor we
-// finish, and mexDestroyedHandler the reverse, so the set below covers all
-// three factions, the moho tier and the underwater pair by construction.
-// Economy::AiUnitAdded feeds it.
-
-const float OWN_MEX_R = 96.f;   // the task builds on the spot the mex stands on
-
-array<int>      gOwnMexId;
-array<AIFloat3> gOwnMexPos;
-int gNextAllyMexLog = 0;
-
-void NoteOwnMex(CCircuitUnit@ unit)
-{
-	if (unit is null)
-		return;
-	const int id = int(unit.id);
-	for (uint i = 0; i < gOwnMexId.length(); ++i) {
-		if (gOwnMexId[i] == id)
-			return;
-	}
-	gOwnMexId.insertLast(id);
-	gOwnMexPos.insertLast(unit.GetPos(ai.frame));
-}
-
-void DropOwnMex(CCircuitUnit@ unit)
-{
-	if (unit is null)
-		return;
-	const int id = int(unit.id);
-	for (uint i = 0; i < gOwnMexId.length(); ++i) {
-		if (gOwnMexId[i] == id) {
-			gOwnMexId.removeAt(i);
-			gOwnMexPos.removeAt(i);
-			return;
-		}
-	}
-}
-
-bool OnOurMex(const AIFloat3& in p)
-{
-	const float r2 = OWN_MEX_R * OWN_MEX_R;
-	for (uint i = 0; i < gOwnMexPos.length(); ++i) {
-		const float dx = p.x - gOwnMexPos[i].x;
-		const float dz = p.z - gOwnMexPos[i].z;
-		if (dx * dx + dz * dz <= r2)
-			return true;
-	}
-	return false;
-}
-
-// Screens DefaultMakeTask's offer, ahead of ExpansionAlwaysWins -- an upgrade
-// on an ally's spot reads as expansion and would otherwise be taken outright.
-IUnitTask@ VetoAllyMexUp(CCircuitUnit@ unit, IUnitTask@ task)
-{
-	if ((task is null) || (task.GetType() != Task::Type::BUILDER)
-			|| (task.GetBuildType() != Task::BuildType::MEXUP))
-		return task;
-	if (OnOurMex(task.GetBuildPos()))
-		return task;
-	if (ai.frame >= gNextAllyMexLog) {
-		gNextAllyMexLog = ai.frame + 30 * SECOND;
-		AiLog(Factory::T() + "apex: mexup refused, not our mex -- "
-			+ unit.circuitDef.GetName() + " ourMexes=" + gOwnMexId.length());
-	}
-	return null;
-}
-
-
 // UPGRADES FIRST. apexearth, repeatedly: "we make pinpoints or nuke launchers
 // before upgrading any mex... you still aren't doing tier 2 mex building first."
 //
@@ -95,11 +19,75 @@ IUnitTask@ VetoAllyMexUp(CCircuitUnit@ unit, IUnitTask@ task)
 // moho pays for them, they do not pay for it.
 bool MexUpgradesOutstanding()
 {
-	CCircuitDef@ moho = SideDef3(armmoho, cormoho, legmoho);
+	// Literals, not the armmoho/cormoho/legmoho globals: those are declared in
+	// factory/techlead.as, which the shim includes AFTER builder/*, and a global
+	// read before its declaration is "No matching symbol" -- which disables the
+	// whole variant and still reports a normal match.
+	CCircuitDef@ moho = SideDef3("armmoho", "cormoho", "legmoho");
 	if ((moho is null) || !moho.IsAvailable(ai.frame))
 		return false;   // cannot upgrade yet; nothing to defer for
-	CCircuitDef@ mex = SideDef3(armmex, cormex, legmex);
+	CCircuitDef@ mex = SideDef3("armmex", "cormex", "legmex");
 	return (mex !is null) && (mex.count > 0);
+}
+
+
+// WHAT THE ENGINE ACTUALLY OFFERS.
+//
+// Three sessions have now argued about why mex upgrades are rare without ever
+// measuring whether the engine OFFERS one. Everything downstream -- the guard
+// that used to be here, the ladder order, the optional rules -- can only lose
+// offers that were made. One line a minute, counting offers by build type, so
+// "we never upgrade" can be attributed to supply or to demand rather than
+// guessed at.
+int gOfferMexUp = 0;
+int gOfferMex = 0;
+int gOfferOther = 0;
+int gOfferNull = 0;
+int gNextOfferLog = 0;
+
+// SPLIT BY BUILDER TIER, or the number means nothing.
+//
+// metalDefs.GetBuildDefs(unit->GetCircuitDef()) limits the upgrade search to
+// defs THIS unit can build, and only an advanced constructor can build a moho.
+// So every T1 constructor's call is structurally incapable of being offered a
+// MEXUP, and counting them together buried the real rate: 0.4% across all
+// builders says nothing about whether the advanced ones are being offered work.
+int gAdvOfferMexUp = 0;
+int gAdvOfferOther = 0;
+int gAdvOfferNull = 0;
+
+void NoteOffer(CCircuitUnit@ unit, IUnitTask@ task, bool isAdvCon)
+{
+	if (isAdvCon) {
+		if (task is null)
+			++gAdvOfferNull;
+		else if ((task.GetType() == Task::Type::BUILDER)
+				&& (task.GetBuildType() == Task::BuildType::MEXUP))
+			++gAdvOfferMexUp;
+		else
+			++gAdvOfferOther;
+	}
+	if (task is null)
+		++gOfferNull;
+	else if (task.GetType() != Task::Type::BUILDER)
+		++gOfferOther;
+	else if (task.GetBuildType() == Task::BuildType::MEXUP)
+		++gOfferMexUp;
+	else if (task.GetBuildType() == Task::BuildType::MEX)
+		++gOfferMex;
+	else
+		++gOfferOther;
+
+	if (ai.frame < gNextOfferLog)
+		return;
+	gNextOfferLog = ai.frame + 60 * SECOND;
+	AiLog(Factory::T() + "apex: offers mexup=" + gOfferMexUp
+		+ " mex=" + gOfferMex
+		+ " other=" + gOfferOther
+		+ " none=" + gOfferNull
+		+ " | adv mexup=" + gAdvOfferMexUp
+		+ " other=" + gAdvOfferOther
+		+ " none=" + gAdvOfferNull);
 }
 
 }  // namespace Builder

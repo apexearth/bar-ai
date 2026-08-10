@@ -56,6 +56,20 @@ class Game:
     def count(self, pattern: str) -> int:
         return len(re.findall(pattern, self.log))
 
+    def per_team(self, pattern: str, before_min: float = 1e9) -> dict:
+        """Count matches per PLAYER, from the `[<min>m t<team>]` tag apex logs.
+
+        An 8v8 infolog holds eight players' lines, so counting the whole file
+        reported "6 T1 air labs" for a team of eight -- fewer than one each,
+        flagged as a failure. Every per-player limit is evaluated per player.
+        """
+        out: dict = defaultdict(int)
+        rx = re.compile(r"\[f=(\d+)\][^\n]*?\[[\d.]+m t(\d+)\][^\n]*?" + pattern)
+        for m in rx.finditer(self.log):
+            if int(m.group(1)) / 1800.0 <= before_min:
+                out[int(m.group(2))] += 1
+        return out
+
     def before(self, pattern: str, minutes: float) -> int:
         n = 0
         for m in re.finditer(r"\[f=(\d+)\][^\n]*?" + pattern, self.log):
@@ -142,8 +156,10 @@ def check_commander_not_idle(g: Game):
     """apexearth: 'the commander stands around after making the first mex'."""
     if not g.log:
         return None, "no infolog"
-    n = g.before(r"con-veto comm-hold", 10.0)
-    return n <= COMM_VETO_LIMIT, f"{n} comm-hold vetoes in the first 10 min (limit {COMM_VETO_LIMIT})"
+    worst = max(g.per_team(r"con-veto comm-hold", 10.0).values(), default=0)
+    return worst <= COMM_VETO_LIMIT, (
+        f"worst player had {worst} comm-hold vetoes in the first 10 min "
+        f"(limit {COMM_VETO_LIMIT})")
 
 
 def check_no_solo_team_roles(g: Game):
@@ -195,9 +211,20 @@ def check_no_duplicate_expensive_plants(g):
     """USER-FEEDBACK: 'never build two of the same expensive plant' (two T2 shipyards)."""
     if not g.log:
         return None, "no infolog"
-    starts = re.findall(r"apex: (?:building advanced plant|T1 lab on field:) (\w+)", g.log)
-    dupes = {u for u in starts if starts.count(u) > 1}
-    return not dupes, "repeat plant starts: " + (", ".join(sorted(dupes)) or "none")
+    # Per player: a team of eight legitimately starts eight labs between them.
+    seen: dict = defaultdict(lambda: defaultdict(int))
+    rx = re.compile(r"\[[\d.]+m t(\d+)\][^\n]*?"
+                    r"apex: (?:building advanced plant|T1 lab on field:) (\w+)")
+    for m in rx.finditer(g.log):
+        seen[int(m.group(1))][m.group(2)] += 1
+    worst, who = 0, "none"
+    for defs in seen.values():
+        for d, n in defs.items():
+            if n > worst:
+                worst, who = n, d
+    if not seen:
+        return None, "no plant starts logged"
+    return worst <= 1, f"worst player started {worst}x {who}"
 
 
 def check_expensive_built_serially(g):
@@ -264,8 +291,8 @@ def check_one_t1_air_lab(g):
     """USER-FEEDBACK: 'one T1 air lab in the T1 phase, not two.'"""
     if not g.log:
         return None, "no infolog"
-    air = [u for u in re.findall(r"apex: T1 lab on field: (\w+)", g.log) if u.endswith("ap")]
-    return len(air) <= 1, f"{len(air)} T1 air labs started"
+    worst = max(g.per_team(r"apex: T1 lab on field: \w*ap\b").values(), default=0)
+    return worst <= 1, f"worst player started {worst} T1 air labs"
 
 
 def check_front_is_known(g):

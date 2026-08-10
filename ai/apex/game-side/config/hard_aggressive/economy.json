@@ -91,7 +91,12 @@
 
 //mspull - // Mobile constructor to static constructor metal pull ratio; [[<value>, <start_mex_percent>], [<value>, <end_mex_percent>]]
 
-	"mex_up": 4,  // maximum number of simultaneous mex upgrades 2/3
+	"mex_up": 12,  // maximum number of simultaneous mex upgrades 2/3
+	// 4 was stock's cap on SIMULTANEOUS upgrades, and it is the supply limit:
+	// only an advanced constructor can build a moho, we now field dozens of them
+	// (92 in a 1v1) with a full metal bank, and the engine will still only ever
+	// have four upgrades in flight. Measured: T2 mexes sat at 11-13% of mexes
+	// held across three arms that each changed something downstream of the offer.
 	"calc_mex": false,  // always calculate mex spots (global)
 	"goal_exec": 50.0,  // assign builders till targeted time (in s) to build reached => low value: builders focus on few projects; high value: builder do more task; old values: 45, 50
 	"build_mod": 1000.0,  // default build_mod for UnitDef, if it's not specified
