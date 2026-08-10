@@ -168,3 +168,56 @@ you the batch is bad and nothing about which member. Measured payoff first:
 3. **Slinging**, which needs the team layer and is the first genuinely team-wide
    Want.
 4. **Roles**, last, because they need the Brain's team state to exist first.
+
+## Three faculties, not one
+
+apexearth's second list -- where is their main base, where are my defensive gaps,
+is my commander in danger, is T3 walking at him, have they gone quiet, do they
+have twenty silos, should I make spam to distract them, which target should the
+air squad take -- is not more Wants. It is a different faculty, and the Brain
+needs three:
+
+| faculty | question | output | example |
+|---|---|---|---|
+| **Knowledge** | what do I believe, and how stale is it? | beliefs with confidence | "their main base is here, seen 4 min ago" |
+| **Wants** | what should this metal buy? | ranked proposals | a moho beats a gantry |
+| **Directives** | what should these units do? | standing orders | "air squad: this target, this approach" |
+
+Knowledge feeds the other two. A nuke Want cannot be scored without a belief
+about where their base is; an air Directive cannot pick a target without one
+about where their AA is not.
+
+**Beliefs must carry staleness, and unknown must never read as zero.** This is
+the failure mode already on record here twice: `GetEnemyCost` only accumulates on
+EnemyEnterLOS, so a zero means "not looked", not "not there" -- which is how an
+unscouted enemy army read as 90 metal and a team push fired on ignorance. Every
+belief needs a `lastSeen` frame and a confidence, and every consumer needs to
+treat low confidence as danger rather than safety.
+
+### What each item needs, and what exists today
+
+| apexearth's item | needs | available now |
+|---|---|---|
+| where is their main base (nuke targeting) | belief with staleness | `aiEnemyMgr.GetEnemyPos()`, `ai.GetEnemyCostAt(pos, r)` -- a centroid exists, confidence does not |
+| gaps in my defences | coverage map over our territory | `DefenceWithin(pos, r)` and the front line exist; nothing sweeps for holes |
+| danger approaching the commander | threat at a moving point | `ai.GetUnitThreatAt(unit, pos)`; `apex_comm_flee_influence` exists and is OFF |
+| T3 walking at the commander: d-gun or evade | enemy def identity nearby | **missing** -- no binding enumerates enemy units near a point by def |
+| they have gone quiet, scout them | time since last LOS on anything of theirs | **missing** -- needs a lastSeen ledger; scouting itself exists |
+| they have 20 silos, build anti-nuke | enemy count BY DEF | **missing** -- `GetEnemyCost(Type)` is by role, not by def |
+| spam to distract, auto-move into their half | factory ratio + standing move order | ratios exist; a standing "send these there" directive does not |
+| tell air squads about high-value targets | target list + safe approach | `GetAttackHotspot` exists; `apex_attack_threat_mod` is the routing lever and is unmeasured |
+
+Three of the eight need new bindings. That is the honest cost, and it is worth
+paying: "enemy units near a point, by def" unlocks the commander d-gun/evade
+decision, the anti-nuke response and most target selection at once.
+
+### Where this goes wrong if rushed
+
+- **A belief store that nothing consumes is dead weight.** Add each belief WITH
+  its first consumer.
+- **Directives fight the task system.** CircuitAI already assigns units to tasks;
+  a Directive that issues raw orders will be overwritten next frame. They must be
+  expressed as task preferences, not as commands.
+- **Confidence gets ignored under pressure.** The temptation is always to treat a
+  stale belief as fact because it is the only one available. The consumer, not
+  the store, has to decide -- and "unknown" must cost something.
