@@ -105,3 +105,66 @@ nothing about which member. So:
 
 Stage 1 is worth doing regardless of whether 2-4 ever happen: it is the missing
 instrument, and it costs no behaviour change to find out.
+
+## Which strategies belong in the Brain, and which do not
+
+apexearth listed five: air assassin, nuke strategies, eco lead, tech lead,
+slinging. They are not one kind of thing, and forcing them into one mechanism
+would be the mistake this design is meant to avoid.
+
+**Two faculties, one macro state.**
+
+| faculty | question it answers | mechanism |
+|---|---|---|
+| **Wants** | what should this metal / build power / squad buy? | ranked by value per cost |
+| **Roles** | which PLAYER on this team plays which part? | assignment over the team blackboard |
+
+Ranking answers "is a moho worth more than a gantry". It cannot answer "which of
+eight players should be the tech lead" -- that is an assignment problem with one
+winner and seven losers, and squeezing it into value/cost would lose the
+constraint that makes it work.
+
+### Wants (route these in)
+
+- **Air assassin.** Today it is a veto: `air assassin holding off -- losing the
+  ground war`, 31 times in one game, which is circular -- we are behind, so air
+  stands down, so we stay behind. As a Want it is `enemy_metal_removed / cost`
+  and "losing the ground war" becomes a multiplier on value, not a gate. A raid
+  that removes 3,000 metal of undefended economy should outrank a gantry whether
+  or not the ground war is going badly.
+- **Nuke strategies.** Two separable pieces. Building a silo is a Want
+  (`docs/16-big-plays.md` stage 0, 8,100 metal and 90,000 energy each, currently
+  nothing proposes them). The salvo TRIGGER is not -- it is a policy over a count
+  the Brain already holds, and it fires when enough silos are loaded.
+- **Slinging.** Metal sent to an ally competes directly with metal spent here, so
+  it is a Want whose value is "what the receiver converts it into, minus what we
+  would have". Needs the team layer below.
+
+### Roles (route in, different mechanism)
+
+- **Eco lead** and **tech lead** are elections: exactly one player takes the part
+  and the rest defer. They already run over `PublishTeamValue`/`ReadTeamValue`,
+  which is the right substrate; what they lack is a shared view of what the team
+  is short of. The Brain should own that state and the election should read it,
+  rather than each player deciding alone from its own economy.
+
+### Neither (leave alone)
+
+Reflexive rules -- repair nearby, retreat, abandon an unsafe site, commander
+safety. They answer something happening NOW. Ranking a wounded constructor
+against a reactor is a category error, and `docs/12-build-phases.md` already
+draws the same line.
+
+### Order to do it in
+
+One per validation cycle, because the 2026-08-01 finding is that a batch tells
+you the batch is bad and nothing about which member. Measured payoff first:
+
+1. **The optional class** -- gantry, silo, Pulsar, Pinpointer, reactor, converter,
+   nano. Already gated behind `MexUpgradesOutstanding()`, so the ranking replaces
+   a crude boolean with a comparison, and the mex Want has something to rank
+   against. (Stage 2 of the plan above.)
+2. **Air assassin**, which converts a circular veto into a value.
+3. **Slinging**, which needs the team layer and is the first genuinely team-wide
+   Want.
+4. **Roles**, last, because they need the Brain's team state to exist first.
