@@ -153,6 +153,10 @@ fails silently. That has eaten edits here at least five times.
 See **`CHANGES.md`** for everything this AI does differently from stock BARb,
 which layer each change lives in, and how well each is actually measured.
 
+**`ISSUES.md` is the live list of what is wrong** — each entry with the
+evidence for it and, where known, the mechanism in our own code. Add to it
+rather than re-deriving the same complaint next session.
+
 **Read `USER-FEEDBACK.md` before starting work.** It is the standing brief of
 what apexearth actually wants, in one place, with the still-unresolved items
 marked. Several entries there have been raised three or four times without being

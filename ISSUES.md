@@ -1,0 +1,118 @@
+# Open issues — what is wrong with this AI right now
+
+What is broken or missing, with the evidence for it. `CHANGES.md` says what was
+done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
+
+---
+
+## 1. We do not press an advantage. We chip.
+
+**apexearth, 2026-08-09, watching 8v8 vs `BARb:stable:medium` on Ancient Vault:**
+
+> "We are not nearly aggressive enough in our games. We don't get enough
+> pressure, we need smart pushes where the pusher doesn't even take damage. This
+> is medium AI, this map is not fair with the starting positions you chose, and
+> we still aren't killing them. We have 4x the resources but we just chill and
+> don't really care to kill them."
+
+**Measured in that same game, from the live infolog:**
+
+| | |
+|---|---|
+| killing blow flipped ON | **15.0 min** (the earliest it can) |
+| team army when it flipped | 46,959 against 22,259 — a 2.1x lead |
+| engagements logged | **654** |
+| decisions TAKE / SKIP | 653 / 1 |
+| median group size | **5 units** |
+| groups of 3 units or fewer | **255 (39%)** |
+| median power vs need | 129 vs 57 |
+| mass quota, all game | 30 (the floor), 110 samples |
+
+So the AI is not passive and it is not refusing fights — it engages constantly,
+always at favourable local odds, in packets of five. It holds a 46,000-metal army
+and commits it a hundred metal at a time.
+
+**The mechanism is in our own code, and it is backwards.**
+`military/posture.as:323` — once the killing blow is on, the attack quota is set
+to `KILL_QUOTA = 10` ("attack with what we have, repeatedly",
+`military/massing.as:175`). Winning therefore makes the AI attack in SMALLER
+groups than the ordinary `MASS_FLOOR` of 30. The one moment it should be forming
+a hammer is the moment it disperses.
+
+The floor of 30 was itself deliberate and correct for its purpose — raiding
+undefended mexes with ~10 grunts. Killing a player is a different job and wants a
+different number.
+
+**Fix to try first:** make the killing-blow quota a concentration, not a
+dispersal — one push that outnumbers everything they can field, tunable so it can
+be A/B'd (`apex_kill_quota`). Watch for the known trap in the other direction:
+raising `minAttackers` globally scored 0-10 historically, so this must stay
+gated on `gKilling` (past 15 min, 1.8x army lead) and never touch the raid floor.
+
+**Test map: Ancient Vault v1.4**, 8v8, us top-right, them bottom-left, box size
+0.45. apexearth: "perhaps this is a good map for testing/improving our AI's
+overall aggression". It is 20x30, area 600, and the biggest map installed with
+**no water at all** (min height +300 — `GetMapMinHeight` via unitsync ranks
+these; every 28x28-and-larger map here dips below sea level).
+
+    python tools/run_match.py --a Apex:apex:hard_aggressive --b BARb:stable:medium \
+        --map "Ancient Vault v1.4" --per-side 8 --sides random --seed 6102 \
+        --boxes trbl --box-size 0.45 --minutes 75 --watch --speed 5
+
+---
+
+## 2. Pushes should not take damage on the way in
+
+**apexearth:** "we need smart pushes where the pusher doesn't even take damage."
+
+Related but distinct from issue 1: not just *bigger* pushes, but pushes that
+arrive intact. The pieces that exist and are not being used together:
+
+- `apex_attack_threat_mod` — what an attack party pays for contested ground in
+  the path query. Raising it makes the flank the shortest path, the way
+  `RaidTask`'s `RAID_ROAM_THREAT_MOD = 8` already does for raid parties. Shipped
+  at 1.0, i.e. upstream behaviour, and **never measured**.
+- The map-edge preference in `AttackTask.cpp` (`apex_edge_band` / `apex_edge_bonus`)
+  already prefers economy on the rim. The routing half of "go around the edge"
+  was never built.
+
+---
+
+## 3. Stealth and sight are not used to set up attacks
+
+**apexearth:** "Maybe some better use of the stealth units to provide sight would
+help AI be even more cheeky/evil to players."
+
+Nothing today pairs a scout, radar or cloaked unit with an attack party to see
+what it is walking into. `apex_scout_threat` exists (how hot a metal cluster may
+be and still be scoutable) and has never been enabled or measured at 8v8. The
+mobile radar escort (`factory/eyes.as`, 2026-08-09) follows the army for
+targeting, not for reconnaissance ahead of a push.
+
+Untouched: cloaked units as spotters, and using vision to pick a target that is
+undefended *right now* rather than one that scored well when the task was made.
+
+---
+
+## 4. The late game produces no moments
+
+See `docs/16-big-plays.md` for the full plan. Summary: nukes fire one at a time
+the instant they are ready (`super fire armsilo stock`, 427 launches in one
+hosted game), which one anti-nuke absorbs forever. Fifteen simultaneous launches
+need fifteen silos, because a silo reloads in 30 s and an interceptor re-fires
+every 2 s.
+
+Stage 0 of that plan — actually building the silos — has not started.
+
+---
+
+## 5. Unblock's escape direction can pick a lane that stays blocked
+
+From the 2026-08-09 hosted game: `armbeaver #9079` needed **six** clearing
+orders, eating a nano turret each time and staying stuck. Detection is right
+(9 firings, no false positives, one unit had 86 of our buildings ringed around
+it); the direction heuristic picks the thinnest wall by structure count, which is
+not the same as the way out.
+
+Also, 86 of our own buildings around one unit is the base-sprawl complaint in
+`USER-FEEDBACK.md` showing up as a number.
