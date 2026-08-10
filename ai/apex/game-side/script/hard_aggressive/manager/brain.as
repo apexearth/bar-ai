@@ -39,6 +39,19 @@ const float GANTRY_VALUE   = 2.0f;   // opens T3 production
 const float SILO_VALUE     = 4.0f;   // enemy metal removed, amortised
 const float PULSAR_VALUE   = 1.5f;   // area denial near the base
 const float PINPOINT_VALUE = 0.5f;   // targeting support, cheap and bounded
+// The standing eco rules, as values rather than as "always".
+//
+// A converter eats 70 energy/s and returns 1 metal/s for ~1 metal to build
+// (energyconv_capacity 70, efficiency 1/70, read from armmakr.lua), so while
+// energy is spilling it is the best metal-per-metal in the game by a wide
+// margin -- and that is exactly the state measured at 41.5% metal waste with
+// idle factories. Energy itself is scored on what it unlocks, and is URGENT
+// rather than merely valuable when the grid is stalling: UpdateEconomyTasks
+// returns early on IsEnergyStalling, so a stall stops every other economy task
+// including mex upgrades.
+const float CONVERT_VALUE     = 1.0f;    // metal/s per converter, while spilling
+const float ENERGY_VALUE      = 1.2f;    // metal/s equivalent of a generator step
+const float ENERGY_STALL_MULT = 6.0f;    // a stall blocks the whole economy
 
 class Want
 {
@@ -159,6 +172,10 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 		return Builder::Pulsar(unit);
 	if (kind == "pinpoint")
 		return Builder::Pinpointer(unit);
+	if (kind == "energy")
+		return Builder::HomeEnergy(unit);
+	if (kind == "convert")
+		return Builder::EnergyConverter(unit);
 	return null;
 }
 
@@ -172,6 +189,20 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	Propose(MexUpgradeWant(unit));
 	// The optional class. Costs are read from the defs so a score means
 	// something; where a def is missing the want is simply not proposed.
+	// ALWAYS MAKE ENERGY, AND CONVERT WHEN IT SPILLS -- as scores, so they can
+	// be compared rather than merely obeyed. apexearth: "we had built custom eco
+	// logic... always make energy, and if max energy make energy converters."
+	if (aiEconomyMgr.isEnergyStalling) {
+		Want@ e = Simple("energy", ENERGY_VALUE * ENERGY_STALL_MULT,
+				SideDef3("armsolar", "corsolar", "legsolar"));
+		if (e !is null) {
+			e.have = 0;   // a stall is not "we have enough of these"
+			Propose(e);
+		}
+	}
+	if (Builder::EnergyWasting())
+		Propose(Simple("convert", CONVERT_VALUE, SideDef3("armmakr", "cormakr", "legeconv")));
+
 	Propose(Simple("gantry", GANTRY_VALUE, SideDef3("armshltx", "corgant", "leggant")));
 	Propose(Simple("silo", SILO_VALUE, SideDef3("armsilo", "corsilo", "legsilo")));
 	Propose(Simple("pulsar", PULSAR_VALUE, SideDef3("armanni", "cordoom", "legstarfall")));
