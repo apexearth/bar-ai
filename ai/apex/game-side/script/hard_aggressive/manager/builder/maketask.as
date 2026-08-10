@@ -121,6 +121,17 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// THE MACRO VIEW GETS ITS SAY BEFORE ANY OPTIONAL SPENDING.
+	//
+	// Rules below propose one thing each and the first one wins; Brain::Decide
+	// ranks what it knows about and acts on the best. Today it knows about mex
+	// upgrades only -- see docs/18-task-arbiter.md for the staging -- so this is
+	// "an advanced constructor upgrades a mex rather than starting a gantry",
+	// which is the order apexearth has asked for five times.
+	@t = Brain::Decide(unit, isAdvCon);
+	if (t !is null)
+		return t;
+
 	@t = OptionalWork(unit, isComm);
 	if (t !is null)
 		return t;

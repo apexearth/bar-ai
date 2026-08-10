@@ -8,6 +8,9 @@
 #include "script/BuilderScript.h"
 #include "script/ScriptManager.h"
 #include "module/BuilderManager.h"
+#include "resource/MetalManager.h"
+#include "terrain/TerrainManager.h"
+#include "CircuitAI.h"
 #include "util/Utils.h"
 #include "angelscript/include/angelscript.h"
 
@@ -20,7 +23,40 @@ static void ConstructSResourceVal(SResource* mem, float m, float e)
 	new(mem) SResource{m, e};
 }
 
+// apex: order a mex upgrade from script.
+//
+// apexearth: "it seems weird that we cannot control telling one of our advanced
+// construction bots to upgrade a mex. I as a player can do that, so the AI must
+// have that same capability." It always could -- CEconomyManager does exactly
+// this internally -- there was simply no binding, so no rule of ours could ask.
+// A MEXUP task carries a metal-spot INDEX as well as a position, which is why
+// the generic SBuildTask path cannot express it.
+//
+// Returns null when there is no spot near `pos`, when an upgrade is already in
+// flight there, or when `def` cannot be built on it.
+static IUnitTask* CBuilderManager_EnqueueMexUp(CBuilderManager* mgr, const AIFloat3& pos, CCircuitDef* def)
+{
+	if (def == nullptr) {
+		return nullptr;
+	}
+	CCircuitAI* circuit = mgr->GetCircuit();
+	CMetalManager* metalMgr = circuit->GetMetalManager();
+	const int index = metalMgr->FindNearestSpot(pos);
+	if (index < 0) {
+		return nullptr;
+	}
+	const CMetalData::Metals& spots = metalMgr->GetSpots();
+	const AIFloat3& spotPos = spots[index].position;
+	if (!circuit->GetTerrainManager()->CanBeBuiltAt(def, spotPos)) {
+		return nullptr;
+	}
+	return mgr->Enqueue(TaskB::Spot(IBuilderTask::BuildType::MEXUP,
+			IBuilderTask::Priority::HIGH, def, spotPos, index));
+}
+
 CBuilderScript::CBuilderScript(CScriptManager* scr, CBuilderManager* mgr)
+
+
 		: ITaskModuleScript(scr, mgr)
 {
 	asIScriptEngine* engine = script->GetEngine();
@@ -67,6 +103,7 @@ CBuilderScript::CBuilderScript(CScriptManager* scr, CBuilderManager* mgr)
 	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ Enqueue(const SBuildTask& in)", asMETHODPR(CBuilderManager, Enqueue, (const TaskB::SBuildTask&), IBuilderTask*), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ Enqueue(const SServBTask& in)", asMETHODPR(CBuilderManager, Enqueue, (const TaskB::SServBTask&), IUnitTask*), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ EnqueueRetreat()", asMETHOD(CBuilderManager, EnqueueRetreat), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ EnqueueMexUp(const AIFloat3& in, CCircuitDef@)", asFUNCTION(CBuilderManager_EnqueueMexUp), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "uint GetWorkerCount() const", asMETHOD(CBuilderManager, GetWorkerCount), asCALL_THISCALL); ASSERT(r >= 0);
 	// apex: see BuilderManager.h -- lets script report the task budget that gates
 	// mex creation, instead of inferring it.
