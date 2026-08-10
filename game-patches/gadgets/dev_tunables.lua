@@ -51,6 +51,9 @@ local NAMES = {
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",
+	"apex_unblock",
+	"apex_unblock_still",
+	"apex_unblock_period",
 	-- T3 heavies hold the defence line (2026-08-09). 0 restores stock routing:
 	-- one solo CAttackTask per super, the frame it finishes.
 	"apex_super_guard",

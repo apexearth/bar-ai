@@ -138,6 +138,79 @@ spends constructor time, on a reclaim that returns metal. The rate limit is the
 control — one order per 10 s per player, and only for a unit that has failed
 every test above.
 
+## 2026-08-09: the AI desynced multiplayer by asking the engine for a path
+
+Layer 2 (AngelScript), `manager/military/unblock.as`. New tool,
+`tools/run_netmatch.py`. New widget, `game-patches/widgets/dbg_desync_alarm.lua`.
+
+apexearth desynced twice in hosted games. Both times only HIS client was named
+(`Sync error for apexearth in frame 9139`), permanently from ~5 minutes, with no
+error logged anywhere and every player's map and mod checksum identical -- so
+`BAR.sdd`, the dev gadgets and `game-patches` were all irrelevant, and the games
+were played on the rapid packages like everyone else's.
+
+The asymmetry: he was the only one running the AI. Every `[AI]` block carries
+`Host=<player>`, so AI code executes on ONE machine and the other clients only
+replay its netted orders. Anything the AI does that touches engine state
+*directly* therefore happens on one machine.
+
+**`ai.GetPathLength` is such a thing.** `unblock.as` used it to tell a penned
+unit from a parked one -- eight rays, every 3 seconds. It reaches
+`CAICallback::InitPath` -> `QTPFS::PathManager::RequestPath(..., synced=false,
+immediateResult=true)` -> `QueueSearch`, which runs a real A* inline and creates
+entities in the SAME global `entt` registry (`QTPFS/Registry.h`) as the synced
+paths. QTPFS's own `ExecuteQueuedSearches` warns "Remember: Do NOT impact this
+group while the background tasks are running!" about exactly that registry
+group. It is not the synced RNG: `grep gsRNG rts/Sim/Path/` is empty.
+
+Reproduced with `tools/run_netmatch.py`, which runs a host process and a peer
+process against each other on one machine -- a single-process match cannot
+desync, which is why the benchmark never saw this in months of running.
+
+| configuration | sync errors |
+|---|---|
+| stock BARb vs stock BARb | none |
+| `ApexOrd:ord` (older DLL + older scripts) | none |
+| current DLL + `ord`'s scripts | none |
+| apex, unblock ON | 44 @ f13018, 14 @ f19019, 37 @ f14167 stressed |
+| apex, `apex_unblock=0` (seeds 11 and 12) | none |
+| apex, rewritten rule | none, twice |
+
+The current-DLL-with-old-scripts run is what proved it was the game-side layer:
+today's whole C++ delta is exonerated. Binding usage then named the file --
+`GetPathLength`, `GetOwnStructsNear` and `IsMex` are the only bindings apex's
+scripts use that `ord`'s do not, all three from `unblock.as`, and only the first
+mutates anything.
+
+Two things did NOT hold up and are recorded so they are not re-argued:
+
+- **No dose-response.** Six times the probe rate and a ninth of the stillness
+  threshold gave 37 errors at f14167 -- no earlier, no heavier. The on/off
+  switch is repeatable; the probe *count* driving it is not shown.
+- **The first `apex_unblock=0` test was void**, because the name was missing
+  from `NAMES` in `dev_tunables.lua` and the modoption was silently dropped --
+  the trap that file's own comment warns about. And "the rule never fired" was
+  wrong: the log line is on the reclaim ORDER, while the path probes run
+  silently. Absence of that line proves nothing about the engine calls.
+
+**The rewrite** (apexearth's design): order the unit to walk out of the ring and
+see whether it does. A parked defender obeys; a walled-in one cannot. Issuing a
+move is a netted command and reading a position is a read, so nothing executes
+on the host alone. Direction comes from bucketing our own structures into
+eighths, which is the same "thinnest part of the wall" reasoning the rays gave,
+by arithmetic. It is also a better test: eight rays can miss the gap the engine
+would route through, and a successful query does not prove the unit will
+traverse it.
+
+**Its accuracy is NOT established.** Of the three firings measured, all three
+were commanders and all three were wrong: the commander stands in the middle of
+the base by design and is re-tasked every few seconds, so the probe order is
+overridden before it steps and "did not move" reads as "cannot move". Guards
+added -- never test a unit on a BUILDER task, never test the commander, and
+require two failed orders. After those, twelve minutes produced zero firings,
+which is zero false positives and zero true ones. A run that catches a real pen
+is still owed; a 12-minute 4v4 rarely walls anything in.
+
 ## 2026-08-09: the AI crashed the engine because C++ deleted tasks the script held
 
 Layer 3 (C++), `module/EconomyManager.cpp` and `task/builder/BuilderTask.cpp`.

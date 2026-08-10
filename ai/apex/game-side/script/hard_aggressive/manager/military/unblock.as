@@ -18,32 +18,22 @@ namespace Military {
 //  - Nothing enumerates friendly units either, so "who has not moved" cannot be
 //    asked without keeping the register below.
 //
-// The oracle is the ENGINE's path manager, reached through
-// ai.GetPathLength(unit, to) (CAICallback::GetPathLength -> pathManager->
-// RequestPath). That one reads the synced blocking map, buildings included.
-//
-// Detection is deliberately in three stages, each one cheap enough to gate the
-// next:
-//   1. the unit has not moved for UNBLOCK_STILL         -- free, a position read
-//   2. our own structures are packed around it          -- one array walk
-//   3. every direction out of it fails a path query     -- 8 engine searches
-// Stage 3 is the only expensive one and it runs for at most one unit at a time,
-// no more often than UNBLOCK_PROBE_PERIOD.
-//
+// Detection is in stages, each cheap enough to gate the next:
+//   1. the unit has not moved for UNBLOCK_STILL      -- free, a position read
+//   2. it is ordered to walk out of the ring         -- one netted command
+//   3. UNBLOCK_TEST_WAIT later it still has not moved
 // Standing still is NOT enough on its own: a defend squad parked on the line is
-// motionless for minutes at a time and is exactly where it should be. Failing
-// every exit is what separates them.
+// motionless for minutes at a time and is exactly where it should be. Refusing
+// an order to move is what separates them.
+//
+// Stage 2 replaced eight ai.GetPathLength queries; see the block above
+// StartMoveTest for why the engine call had to go.
 const int   UNBLOCK_STILL     = 45 * SECOND;  // motionless this long -> candidate
 const int   UNBLOCK_RECHECK   = 15 * SECOND;  // ...then again, after a clearing
 const float UNBLOCK_EPS       = 48.f;   // movement under this is standing still
 const int   UNBLOCK_SAMPLE    = 24;     // units whose position is read per tick
 const float UNBLOCK_RING      = 700.f;  // how far out an exit has to reach
 const int   UNBLOCK_RAYS      = 8;      // directions probed around the unit
-// A path that reaches the ring is at least the straight line long; a search that
-// stops against a wall comes back SHORT, not long. Both bounds are therefore
-// failures, and the short one is the one a pen actually produces.
-const float UNBLOCK_MIN_RATIO = 0.90f;
-const float UNBLOCK_MAX_RATIO = 3.00f;
 // A wall has to be made of something. Below this many structures of ours in the
 // ring there is nothing to blame and the unit is held by terrain, which
 // reclaiming cannot fix.
@@ -51,6 +41,9 @@ const int   UNBLOCK_MIN_WALL  = 4;
 const float UNBLOCK_CORRIDOR  = 96.f;   // half-width of the lane a unit needs
 const int   UNBLOCK_PROBE_PERIOD = 3 * SECOND;
 const int   UNBLOCK_ORDER_PERIOD = 10 * SECOND;
+// How long a unit gets to obey the move order before it counts as penned.
+const int   UNBLOCK_TEST_WAIT = 8 * SECOND;
+const int   UNBLOCK_STRIKES   = 1;   // failed orders tolerated before acting
 // Never eat something expensive to answer this. A solar is 155, a wind ~40, a
 // T1 tower 100-350, a converter ~700. Anything dearer is a reactor, a lab or a
 // T2/T3 gun, and a walled-in squad is not worth one.
@@ -78,9 +71,7 @@ bool UnblockOn()
 	return ai.GetTunable("apex_unblock", 1.f) > 0.f;
 }
 
-// Ground units only. A flyer is never walled in, and ai.GetPathLength has no
-// move type to answer with for one -- it returns -1, which reads here as
-// "no way out" and would fire on every aircraft we own.
+// Ground units only: a flyer is never walled in by buildings.
 void NotePenned(CCircuitUnit@ unit)
 {
 	if (unit is null)
@@ -114,33 +105,107 @@ bool UnblockAsked(Id id)
 	return false;
 }
 
-// Can this unit reach anywhere UNBLOCK_RING away? One ray is enough: a unit that
-// can get out in one direction is not penned, whatever it is doing standing
-// still. `outDir` returns the ray that came closest to working, which is where
-// the wall we want to eat stands.
-bool HasWayOut(CCircuitUnit@ unit, const AIFloat3& in at, AIFloat3& out outDir)
+// ASKING THE UNIT TO WALK REPLACES ASKING THE ENGINE FOR A PATH.
+//
+// ai.GetPathLength reaches CAICallback::InitPath -> QTPFS RequestPath, which
+// runs a real search and creates entities in the path manager's registry. The
+// AI runs on ONE machine, so that work happens on the host and nowhere else --
+// and QTPFS's own ExecuteQueuedSearches carries the warning "Do NOT impact this
+// group while the background tasks are running". Measured over paired network
+// games: with this rule on, the peer diverged in every run; off, none.
+//
+// The engine call was only ever a way to tell a PENNED unit from a PARKED one,
+// since a defender holding the line is also motionless for minutes. An order to
+// move separates them just as well: the parked one obeys, the walled-in one
+// cannot. Issuing a move is a netted command like any other, and reading a
+// position is a read, so nothing here executes on the host alone.
+//
+// It is also the better test. Eight rays can miss the gap the engine would
+// route through, and a path query that succeeds does not prove the unit will
+// actually traverse it.
+array<Id>       gTestId;      // unit under a move test
+array<AIFloat3> gTestFrom;    // where it stood when the order went out
+array<int>      gTestFrame;   // when it went out
+array<AIFloat3> gTestDir;     // direction it was sent, i.e. where the wall is
+array<int>      gTestStrikes; // failed move orders so far
+
+// Where to send it: the eighth of the ring holding the fewest of our own
+// buildings. Pure arithmetic over a list we already have -- the thinnest part of
+// the wall, by the same reasoning the ray probe used, without the engine call.
+AIFloat3 ThinnestDir(const AIFloat3& in at)
 {
-	float bestReach = -1.f;
-	AIFloat3 bestDir(0.f, 0.f, 0.f);
-	for (int k = 0; k < UNBLOCK_RAYS; ++k) {
-		const float a = 6.2831853f * float(k) / float(UNBLOCK_RAYS);
-		AIFloat3 dir(cos(a), 0.f, sin(a));
-		const AIFloat3 probe = at + dir * UNBLOCK_RING;
-		if (!OnMap(probe))
-			continue;
-		const float len = ai.GetPathLength(unit, probe);
-		if ((len >= UNBLOCK_RING * UNBLOCK_MIN_RATIO)
-			&& (len <= UNBLOCK_RING * UNBLOCK_MAX_RATIO))
-			return true;
-		// A partial path stops against whatever stopped it. The ray that got
-		// furthest is the thinnest part of the wall.
-		if (len > bestReach) {
-			bestReach = len;
-			bestDir = dir;
+	array<int> count(UNBLOCK_RAYS, 0);
+	array<CCircuitUnit@>@ structs = ai.GetOwnStructsNear(at, UNBLOCK_RING);
+	if (structs !is null) {
+		for (uint i = 0; i < structs.length(); ++i) {
+			CCircuitUnit@ s = structs[i];
+			if (s is null)
+				continue;
+			const AIFloat3 rel = s.GetPos(ai.frame) - at;
+			if (rel.SqLength2D() < NEAR_ZERO)
+				continue;
+			float a = atan2(rel.z, rel.x);
+			if (a < 0.f)
+				a += 6.2831853f;
+			int k = int(a / 6.2831853f * float(UNBLOCK_RAYS)) % UNBLOCK_RAYS;
+			++count[k];
 		}
 	}
-	outDir = bestDir;
+	int best = 0;
+	for (int k = 1; k < UNBLOCK_RAYS; ++k) {
+		if (count[k] < count[best])
+			best = k;
+	}
+	const float a = 6.2831853f * float(best) / float(UNBLOCK_RAYS);
+	return AIFloat3(cos(a), 0.f, sin(a));
+}
+
+bool UnderTest(Id id)
+{
+	for (uint i = 0; i < gTestId.length(); ++i) {
+		if (gTestId[i] == id)
+			return true;
+	}
 	return false;
+}
+
+void DropTest(uint i)
+{
+	gTestId.removeAt(i);
+	gTestFrom.removeAt(i);
+	gTestFrame.removeAt(i);
+	gTestDir.removeAt(i);
+	gTestStrikes.removeAt(i);
+}
+
+// Send it somewhere. Short of the ring, so a unit that CAN move registers the
+// move well inside the verdict window.
+void StartMoveTest(CCircuitUnit@ unit, const AIFloat3& in at)
+{
+	// NOT a unit whose task wants it standing still. A constructor building, or
+	// anything else mid-task, has its orders re-asserted by that task, so our
+	// move is overridden, the unit never moves, and it reads as penned when it
+	// is working. Measured: without this the commander was tested at 1.0 min and
+	// a wind generator was reclaimed underneath it.
+	IUnitTask@ t = unit.task;
+	if ((t !is null) && (t.GetType() == Task::Type::BUILDER))
+		return;
+	// NOR the commander. It stands in the middle of the base by design, with our
+	// buildings packed around it, and CircuitAI re-tasks it every few seconds --
+	// so the move order is overridden and it reads as penned. Measured: two of
+	// two clearing orders in a 12-minute game were commanders, both wrong.
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return;
+	const AIFloat3 dir = ThinnestDir(at);
+	const AIFloat3 to = at + dir * (UNBLOCK_RING * 0.5f);
+	if (!OnMap(to))
+		return;
+	unit.CmdMoveTo(to);
+	gTestId.insertLast(unit.id);
+	gTestFrom.insertLast(at);
+	gTestFrame.insertLast(ai.frame);
+	gTestDir.insertLast(dir);
+	gTestStrikes.insertLast(0);
 }
 
 // The cheapest thing of OURS standing in the lane the unit would leave by.
@@ -188,14 +253,8 @@ CCircuitUnit@ WallToEat(const AIFloat3& in at, const AIFloat3& in dir, int& out 
 
 // Returns true when a clearing order went out, so the caller can hold this unit
 // off for UNBLOCK_RECHECK rather than immediately asking for a second building.
-bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at)
+bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in dir)
 {
-	AIFloat3 dir;
-	if (HasWayOut(unit, at, dir))
-		return false;
-	if (dir.SqLength2D() < NEAR_ZERO)
-		return false;   // every ray was off-map; nothing to reason about
-
 	++gPennedSeen;
 	int wall = 0;
 	CCircuitUnit@ eat = WallToEat(at, dir, wall);
@@ -254,18 +313,53 @@ void UpdateUnblock()
 			gPenMoved[i] = frame;
 			continue;
 		}
-		if (frame - gPenMoved[i] < UNBLOCK_STILL)
+		if (frame - gPenMoved[i] < int(ai.GetTunable("apex_unblock_still", float(UNBLOCK_STILL))))
 			continue;
 		if ((frame < gNextProbe) || (frame < gNextUnblockOrder))
 			continue;
 
-		gNextProbe = frame + UNBLOCK_PROBE_PERIOD;
-		if (TryUnblock(u, at)) {
-			// Give the reclaim time to happen before asking for another one on
-			// this unit's behalf; if it walks away the timer is reset anyway.
-			gPenMoved[i] = frame - (UNBLOCK_STILL - UNBLOCK_RECHECK);
+		gNextProbe = frame + int(ai.GetTunable("apex_unblock_period", float(UNBLOCK_PROBE_PERIOD)));
+		if (!UnderTest(u.id))
+			StartMoveTest(u, at);
+		return;   // one candidate per tick
+	}
+}
+
+// The verdict half. A unit that was ordered to move and did is not penned; one
+// that did not, after UNBLOCK_TEST_WAIT, is -- and the direction it failed to
+// walk is where the wall stands.
+void UpdateMoveTests()
+{
+	const int frame = ai.frame;
+	const int wait = int(ai.GetTunable("apex_unblock_test_wait", float(UNBLOCK_TEST_WAIT)));
+	for (uint i = 0; i < gTestId.length(); ) {
+		CCircuitUnit@ u = ai.GetTeamUnit(gTestId[i]);
+		if (u is null) {
+			DropTest(i);
+			continue;
 		}
-		return;   // one probe set per tick, whatever it found
+		const AIFloat3 at = u.GetPos(frame);
+		if (at.distance2D(gTestFrom[i]) > UNBLOCK_EPS) {
+			ForgetPenned(gTestId[i]);   // it walked; it was parked, not penned
+			DropTest(i);
+			continue;
+		}
+		if (frame - gTestFrame[i] < wait) {
+			++i;
+			continue;
+		}
+		if (gTestStrikes[i] < UNBLOCK_STRIKES) {
+			// One failed order can be a task re-asserting itself in the same
+			// second. Ask again before eating a building over it.
+			++gTestStrikes[i];
+			gTestFrame[i] = frame;
+			u.CmdMoveTo(at + gTestDir[i] * (UNBLOCK_RING * 0.5f));
+			++i;
+			continue;
+		}
+		if (frame >= gNextUnblockOrder)
+			TryUnblock(u, at, gTestDir[i]);
+		DropTest(i);
 	}
 }
 

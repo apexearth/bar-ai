@@ -54,6 +54,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	// broken in a solo game exactly as it is in a team one, and freeing it is a
 	// fix rather than a piece of the team machinery that gate exists for.
 	Military::UpdateUnblock();
+	Military::UpdateMoveTests();
 
 	if (!ApexActive())
 		return;
