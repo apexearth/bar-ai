@@ -52,6 +52,30 @@ const float PINPOINT_VALUE = 0.5f;   // targeting support, cheap and bounded
 const float CONVERT_VALUE     = 1.0f;    // metal/s per converter, while spilling
 const float ENERGY_VALUE      = 1.2f;    // metal/s equivalent of a generator step
 const float ENERGY_STALL_MULT = 6.0f;    // a stall blocks the whole economy
+// BOTH BANKS FULL MEANS INCOME IS NOT THE PROBLEM. apexearth: "if we are full on
+// energy AND metal, then we can probably decrease all of our eco priority by
+// some multiplier." More income buys nothing when neither resource can be
+// stored or spent -- the constraint has moved to build power and to what we do
+// with the surplus, so everything economic drops behind the things that spend.
+const float ECO_SATED_MULT    = 0.25f;
+// BUILD POWER IS WHAT A FULL BANK ACTUALLY NEEDS. apexearth: "in matches where
+// we are +100 handicap it's easy to max out the economy and have a hard time
+// using all the resources." A nano turret converts banked metal back into units
+// at ~7 metal/s of build power for ~300 metal, which beats every income want
+// once income is no longer the constraint. Scored high only while sated, so it
+// cannot crowd out expansion in a normal game.
+const float NANO_VALUE        = 7.0f;
+
+bool EcoSated()
+{
+	return aiEconomyMgr.isMetalFull && aiEconomyMgr.isEnergyFull;
+}
+
+// The kinds whose whole purpose is more income.
+bool IsEcoKind(const string& in kind)
+{
+	return (kind == "mexup") || (kind == "energy") || (kind == "convert");
+}
 
 class Want
 {
@@ -74,7 +98,9 @@ class Want
 	// Pinpointer is worth much less than the first.
 	float Score() const
 	{
-		const float scaled = value / (1.f + float(have));
+		float scaled = value / (1.f + float(have));
+		if (IsEcoKind(kind) && EcoSated())
+			scaled *= ECO_SATED_MULT;
 		return (cost > 1.f) ? (scaled / cost) : scaled;
 	}
 }
@@ -176,6 +202,8 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 		return Builder::HomeEnergy(unit);
 	if (kind == "convert")
 		return Builder::EnergyConverter(unit);
+	if (kind == "nano")
+		return Builder::EcoNano(unit);
 	return null;
 }
 
@@ -202,6 +230,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	}
 	if (Builder::EnergyWasting())
 		Propose(Simple("convert", CONVERT_VALUE, SideDef3("armmakr", "cormakr", "legeconv")));
+
+	// Spend the surplus rather than growing it further.
+	if (EcoSated() || aiEconomyMgr.isMetalFull)
+		Propose(Simple("nano", NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc")));
 
 	Propose(Simple("gantry", GANTRY_VALUE, SideDef3("armshltx", "corgant", "leggant")));
 	Propose(Simple("silo", SILO_VALUE, SideDef3("armsilo", "corsilo", "legsilo")));
@@ -247,6 +279,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			break;
 		}
 	}
+	// With both banks full the upgrade is no longer the thing standing between
+	// us and spending, so it stops blocking everything else.
+	if (EcoSated())
+		haveMexUp = false;
 
 	for (uint i = 0; i < order.length(); ++i) {
 		Want@ w = order[i];
