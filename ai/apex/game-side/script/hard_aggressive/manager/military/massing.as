@@ -172,7 +172,12 @@ void UpdateMassing()
 const int   KILL_FROM  = 15 * MINUTE;   // not before the T2 transition settles
 const float KILL_EDGE  = 1.8f;          // OUR TEAM's army value against theirs
 const float KILL_FLOOR = 20000.f;       // ignore ratios off a tiny enemy sample
-const float KILL_QUOTA = 10.f;          // attack with what we have, repeatedly
+// CONCENTRATE to finish, do not disperse.
+//
+// quota.attack is the power a group must reach before CDefendTask promotes it
+// and leaves, so it IS the size each push commits at. Set below MASS_FLOOR it
+// means the winning side attacks in smaller packets than the losing one.
+const float KILL_QUOTA = 300.f;
 bool gKilling = false;
 
 // Our whole side's army value, pooled over the same blackboard the tech lead

@@ -61,6 +61,37 @@ these; every 28x28-and-larger map here dips below sea level).
 
 ---
 
+### 1b. The deeper cause: we buy a fifth of the army they do
+
+Measured 2026-08-09, 6 games, 8v8 Ancient Vault vs `BARb:stable:medium`,
+`composition.py`:
+
+| share of metal | apex | BARb medium |
+|---|---|---|
+| **army (real)** | **22.8%** | **51.9%** |
+| static defence | 19.4% | 10.3% |
+| constructors | 10.4% | 5.1% |
+| factories | 8.1% | 8.4% |
+
+Apex out-produced them — 45,287 metal per player against 35,368 — and still
+fielded less than half the army share. It also held 23 T1 constructors per
+player to their 7. Top sinks were `coradvsol` 18.5%, `corthud` 14.7%,
+`cornecro` 12.8% (rez bots), `corfus` 8.3%; theirs were `corsolar` 12.4%,
+`corthud` 12.2%, then four more combat units.
+
+**6 of 48 apex player-games ended wiped out, against 1 of 48 for medium.**
+
+This reframes issue 1. Concentrating the army into bigger pushes worked as a
+mechanism (44% of engagements were 15+ units, against 6% before) and changed the
+result very little, because the army being concentrated is a fifth of the metal.
+Pressure cannot come from spending the enemy's army budget on solars, rez bots
+and turrets. The quota was the right lever for the symptom and the wrong one for
+the cause.
+
+Do not "fix" this by cutting economy blindly — the 2026-08-01 finding is that
+every rule here displaces something. But 19.4% on static defence while losing
+players to wipeout says the defence is not buying safety either.
+
 ## 2. Pushes should not take damage on the way in
 
 **apexearth:** "we need smart pushes where the pusher doesn't even take damage."

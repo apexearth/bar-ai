@@ -320,7 +320,7 @@ void UpdatePosture()
 	// Not for the eco lead: it holds almost no army by design, and sending that
 	// at a base is throwing it away rather than ending anything.
 	if (gKilling && !Factory::EcoLeadActive()) {
-		aiMilitaryMgr.quota.attack = KILL_QUOTA;
+		aiMilitaryMgr.quota.attack = ai.GetTunable("apex_kill_quota", KILL_QUOTA);
 		if (gTurtle) {
 			gTurtle = false;
 			gPostureUntil = ai.frame;
