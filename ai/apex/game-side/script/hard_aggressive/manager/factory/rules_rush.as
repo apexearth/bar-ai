@@ -105,7 +105,17 @@ void ConBranchLog(CCircuitUnit@ unit)
 
 IUnitTask@ ShareAdvancedCon(CCircuitUnit@ unit)
 {
-	if (gHaveT2 && ((IsDesignatedLead() && Builder::OwesAdvCons()) || !Builder::gHaveAdvCon)) {
+	// ONE advanced constructor was the whole condition. `OwesAdvCons()` is
+	// false with no allies to gift, so solo the only remaining term was
+	// `!gHaveAdvCon` -- the plant built exactly one T2 constructor, ever, and
+	// then went back to units. apexearth, watching a 1v1 at +100: "we are full
+	// on metal and still only have 1 t2 con... only at 20m in we finally make
+	// the second one."
+	//
+	// Builder::NeedsAdvCon() already scales the count with income and adds for a
+	// full bank -- it existed and NOTHING called it, so the gate stayed at one.
+	if (gHaveT2 && ((IsDesignatedLead() && Builder::OwesAdvCons())
+			|| Builder::NeedsAdvCon())) {
 		// BUILDER, not BUILDER2. builderT2 is registered as a SUBROLE of builder
 		// (AiAddRole("builderT2", BUILDER.type)) and the factory role map is
 		// indexed by BASE roles only -- FactoryManager.cpp:1057 looks up

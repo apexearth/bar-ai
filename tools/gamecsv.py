@@ -105,8 +105,16 @@ def read_game(d: Path) -> list[dict]:
             sn = re.search(r"ShortName=(\w+);", body)
             ver = re.search(r"Version=(\w+);", body)
             team = re.search(r"Team=(\d+);", body)
+            # The profile lives in the AI's OPTIONS block and is NOT part of
+            # ShortName:Version -- without it, BARb:stable:hard and
+            # BARb:stable:medium collapse into one row and a reference run reads
+            # as a single mixed arm.
+            prof = re.search(r"profile=(\w+);", body)
             if sn and team:
-                names[int(team.group(1))] = f"{sn.group(1)}:{ver.group(1) if ver else ''}"
+                label = f"{sn.group(1)}:{ver.group(1) if ver else ''}"
+                if prof:
+                    label += f":{prof.group(1)}"
+                names[int(team.group(1))] = label
     team_ally = {int(s["team"]): s["ally"] for s in stats}
     ally_name = {}
     for t, nm in sorted(names.items()):
@@ -125,7 +133,7 @@ def read_game(d: Path) -> list[dict]:
             "ally": int(ally),
             "ai": ally_name.get(ally, ""),
             "won": int(bool(res.get("winners")) and ally_name.get(ally, "").split(":")[0]
-                       in " ".join(res.get("winners", []))),
+                       in " ".join(str(w) for w in res.get("winners", []))),
             # Which start box. On some maps this is worth a 2x swing in army and
             # K/D, so an arm that is not paired by orientation mostly measures
             # which box it drew.
@@ -152,12 +160,54 @@ def read_game(d: Path) -> list[dict]:
         killed = fin.get("mKillReal", 0) + fin.get("mKillCheap", 0)
         row["kill_per_metal"] = round(killed / max(fin.get("metalProduced", 0), 1), 4)
         row["kill_rate_per_min"] = round(killed / max(res.get("game_minutes", 0), 1), 1)
+        # apexearth: "do you have the ability to see how many units we're
+        # producing per minute?" -- and the waste beside it, because a full bank
+        # with idle factories is the failure these numbers are meant to catch.
+        mins = max(res.get("game_minutes", 0), 1)
+        row["units_per_min"] = round(fin.get("ownUnits", 0) / mins, 2)
+        row["built_per_min"] = round(fin.get("mBuiltReal", 0) / mins, 1)
+        row["metal_per_min"] = round(fin.get("metalProduced", 0) / mins, 1)
+        row["waste_pct"] = round(100 * fin.get("metalExcess", 0)
+                                 / max(fin.get("metalProduced", 0), 1), 1)
         row["dmg_ratio"] = round(fin.get("damageDealt", 0) / max(fin.get("damageReceived", 0), 1), 3)
         # A team whose standing counters end at zero was wiped out.
         row["wiped"] = int(fin.get("ownUnits", 0) == 0)
         row.update(eng if ally == 0 else {})
         out.append(row)
     return out
+
+
+def timeline(paths: list[str]) -> None:
+    """Per-sample walk of one game: what we HELD, minute by minute.
+
+    apexearth: "can that analysis also count how many cons we have and labs we
+    have by minute?" conT1/conT2 are counts from the stats gadget; factories are
+    reported as METAL (mFactories), the gadget has no count, so it is shown as
+    spend and as an implied lab count at ~600 metal a lab.
+    """
+    for pth in paths:
+        for d in match_dirs(Path(pth)):
+            r = json.load(open(d / "result.json"))
+            stats = r.get("stats") or []
+            if not stats:
+                continue
+            by = defaultdict(lambda: defaultdict(float))
+            for s in stats:
+                for k, v in s.items():
+                    if isinstance(v, (int, float)) and k not in ("team", "ally", "frame"):
+                        by[(s["ally"], s["frame"])][k] += v
+            print()
+            print(f"{d.name}   {r.get('map','')}")
+            print(f"{'min':>5s} | {'conT1':>5s} {'conT2':>5s} {'facM':>7s} {'~labs':>5s} "
+                  f"{'units':>5s} {'army':>8s} {'metal':>9s} {'waste%':>6s} | "
+                  f"{'eT1':>4s} {'eT2':>4s} {'eArmy':>8s} {'eMetal':>9s}")
+            for fr in sorted({f for _, f in by}):
+                a, b = by[(0.0, fr)], by[(1.0, fr)]
+                w = 100 * a["metalExcess"] / max(a["metalProduced"], 1)
+                print(f"{fr/1800:5.1f} | {a['conT1']:5.0f} {a['conT2']:5.0f} {a['mFactories']:7,.0f} "
+                      f"{a['mFactories']/600:5.1f} {a['ownUnits']:5.0f} {a['armyReal']:8,.0f} "
+                      f"{a['metalProduced']:9,.0f} {w:6.1f} | {b['conT1']:4.0f} {b['conT2']:4.0f} "
+                      f"{b['armyReal']:8,.0f} {b['metalProduced']:9,.0f}")
 
 
 def ratios(rows: list[dict]) -> list[dict]:
@@ -198,7 +248,13 @@ def main() -> int:
     ap.add_argument("paths", nargs="+", help="match or tournament directories")
     ap.add_argument("--out", help="write CSV here instead of stdout")
     ap.add_argument("--summary", action="store_true", help="totals per run instead of CSV")
+    ap.add_argument("--timeline", action="store_true",
+                    help="per-sample walk of each game: cons, labs, army, waste")
     args = ap.parse_args()
+
+    if args.timeline:
+        timeline(args.paths)
+        return 0
 
     rows: list[dict] = []
     for p in args.paths:

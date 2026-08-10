@@ -72,7 +72,13 @@ void UpdateRushRole()
 	// Past the deadline this must still run, to hand the quota back. Returning
 	// early instead left the lead pinned at RushAttackQuota() -- 400, i.e. never
 	// attack -- for the entire rest of the game.
-	if ((ai.frame > RUSH_GIVEUP) || !Factory::IsDesignatedLead()) {
+	// SOLO HAS NO ONE TO RUSH FOR. The rusher trades its own army for the
+	// team's tech, and its quota of 400 means "never attack". With no allies
+	// that is a player that neither fights nor is covered by anyone -- observed
+	// live in a 1v1: "designated T2 rusher -- skipping T1 army until 15m".
+	array<Id>@ roster = ai.GetTeamIds();
+	const bool haveTeam = (roster !is null) && (roster.length() > 1);
+	if (!haveTeam || (ai.frame > RUSH_GIVEUP) || !Factory::IsDesignatedLead()) {
 		// The role can move -- before the election lands this falls back to the
 		// engine's pick, usually a different team. quota.attack was assigned and
 		// never undone, so a team that was briefly the rusher kept the

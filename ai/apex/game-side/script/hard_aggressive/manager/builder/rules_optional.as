@@ -144,21 +144,29 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 					return clear;
 				// A full bank outranks everything else here. The most expensive
 				// thing we can start is the one that drains it fastest.
-				IUnitTask@ big = SurplusGantry(unit);
-				if (big !is null)
-					return big;
-				IUnitTask@ nuke = NukeSilo(unit);
-				if (nuke !is null)
-					return nuke;
+				// A MOHO BEFORE A GANTRY, A SILO OR A PULSAR. apexearth: "we make
+				// pinpoints or nuke launchers before upgrading any mex."
+				if (!MexUpgradesOutstanding()) {
+					IUnitTask@ big = SurplusGantry(unit);
+					if (big !is null)
+						return big;
+				}
+				if (!MexUpgradesOutstanding()) {
+					IUnitTask@ nuke = NukeSilo(unit);
+					if (nuke !is null)
+						return nuke;
+				}
 				// Assist bots and front constructors get their standing job here,
 				// where everything protective has already had its say.
 				IUnitTask@ help = Assist::Work(unit);
 				if (help !is null)
 					return help;
 				if (!Factory::EcoLeadActive()) {
-					IUnitTask@ gun = Pulsar(unit);
-					if (gun !is null)
-						return gun;
+					if (!MexUpgradesOutstanding()) {
+						IUnitTask@ gun = Pulsar(unit);
+						if (gun !is null)
+							return gun;
+					}
 				}
 				IUnitTask@ dome = Shield(unit);
 				if (dome !is null)
@@ -167,9 +175,11 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 				// can ever displace is ~2,400 metal of expansion across all of
 				// us -- which is why it sits with the one-off structures rather
 				// than behind the compounding economy block below.
-				IUnitTask@ targ = Pinpointer(unit);
-				if (targ !is null)
-					return targ;
+				if (!MexUpgradesOutstanding()) {
+					IUnitTask@ targ = Pinpointer(unit);
+					if (targ !is null)
+						return targ;
+				}
 				// Bounded at three, ~500 metal for the whole game, and it sits
 				// with the other one-off structures rather than earlier for the
 				// reason this whole cluster is phase-gated: before an advanced

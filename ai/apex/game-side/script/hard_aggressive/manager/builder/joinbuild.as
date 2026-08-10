@@ -108,6 +108,48 @@ void JoinForget(IUnitTask@ task)
 	}
 }
 
+// The same search, for rules that ENQUEUE rather than screen an offer. Returns
+// the in-progress task for `want` nearest this unit, or null if none is under
+// way within JOIN_RANGE and under its builder cap.
+IUnitTask@ JoinTaskFor(const CCircuitDef@ want, CCircuitUnit@ unit)
+{
+	if ((want is null) || (want.costM < JOIN_MIN_COST) || (unit is null))
+		return null;
+	const uint cap = JoinBuilderCap(want.costM);
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	IUnitTask@ best = null;
+	float bestDist = JOIN_RANGE;
+	for (uint i = 0; i < gJoinTasks.length(); ++i) {
+		IUnitTask@ cand = gJoinTasks[i];
+		if (cand is null)
+			continue;
+		const CCircuitDef@ has = cand.buildDef;
+		if ((has is null) || (has.id != want.id))
+			continue;
+		array<CCircuitUnit@>@ busy = cand.GetUnits();
+		if ((busy is null) || (busy.length() == 0) || (busy.length() >= cap))
+			continue;
+		const AIFloat3 where = cand.GetBuildPos();
+		if (!OnMap(where))
+			continue;
+		const float dist = here.distance2D(where);
+		if (dist >= bestDist)
+			continue;
+		@best = cand;
+		bestDist = dist;
+	}
+	if (best !is null) {
+		++gConJoined;
+		if (ai.frame >= gNextJoinLog) {
+			gNextJoinLog = ai.frame + 5 * SECOND;
+			AiLog(Factory::T() + "apex: con-join(direct) " + unit.circuitDef.GetName()
+				+ " -> " + want.GetName() + " dist=" + formatFloat(bestDist, "", 0, 0)
+				+ " cap=" + cap + " joined=" + gConJoined);
+		}
+	}
+	return best;
+}
+
 IUnitTask@ JoinDuplicateBuild(CCircuitUnit@ unit, bool isComm, IUnitTask@ offer)
 {
 	if (isComm || (offer is null) || (offer.GetType() != Task::Type::BUILDER))

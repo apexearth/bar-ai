@@ -115,7 +115,12 @@ void UpdateEcoLead()
 	// it. Measured in the same run: HOLD at 8.7 min on army 1897 -> 1266, RESUME
 	// only at 15.0 on army 110 -- the maximum hold, six minutes, expiring rather
 	// than recovering. As a gate it removed the role from the game.
-	gEcoActive = mine && !gHurt && !allies;
+	// A TEAM ROLE NEEDS A TEAM. apexearth, watching a 1v1: "it certainly
+	// shouldn't be solo running the eco lead role." The role trades this
+	// player's army for the team's economy; with no team it just means no army.
+	array<Id>@ roster = ai.GetTeamIds();
+	const bool haveTeam = (roster !is null) && (roster.length() > 1);
+	gEcoActive = haveTeam && mine && !gHurt && !allies;
 
 	// Which gate is holding it off, sampled while we hold the slot. The first
 	// version of this role was elected and then never activated for a whole

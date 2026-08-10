@@ -37,8 +37,21 @@ bool IsTechLead()
 // was always elected. Observed live: blue built the first advanced plant every
 // single game, even when green was richer and ready sooner. "Whoever commits
 // first" had quietly collapsed into "team 0".
+// THE RUSH IS TEAM MACHINERY. apexearth: "in a 1v1 we shouldn't be using the
+// rush rule at all." Every behaviour keyed on the designated lead -- suppressing
+// our own army, being the sling target, skipping defence, holding followers back
+// -- only makes sense when there are followers to hold back and allies to feed
+// us. With no allies it is one player deliberately playing worse.
+bool HaveAllies()
+{
+	array<Id>@ roster = ai.GetTeamIds();
+	return (roster !is null) && (roster.length() > 1);
+}
+
 bool LeadIsDesignated()
 {
+	if (!HaveAllies())
+		return false;
 	return ai.ReadTeamValue(ElectorTeamId(), TV_LEAD, -1.f) >= 0.f;
 }
 

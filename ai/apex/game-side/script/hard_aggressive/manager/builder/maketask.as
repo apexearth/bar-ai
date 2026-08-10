@@ -70,9 +70,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	@t = HoldWorkInProgress(unit, isComm);
 	if (t !is null)
 		return t;
-	@t = CommanderMexGuard(unit, isComm);
-	if (t !is null)
-		return t;
 	// EXPANSION OUTRANKS OPTIONAL SPENDING.
 	//
 	// The header above says order is the design and that anything placed before
@@ -101,6 +98,22 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	@task = VetoAllyMexUp(unit, task);
 
 	@t = ExpansionAlwaysWins(task);
+	if (t !is null)
+		return t;
+
+	// A TURRET ON A MEX MUST NOT OUTRANK UPGRADING ONE.
+	//
+	// This rule used to sit ABOVE DefaultMakeTask, so a constructor that the
+	// engine would have sent to a MEXUP built a guard tower instead -- measured
+	// in a 1v1: 162 mex-guard picks against 4 upgrades all game, t2Mex still 1
+	// at eighteen minutes. apexearth, for the fifth time: "still are not
+	// prioritising mex upgrades... there's probably special logic in here, and
+	// it is overriding our mex stuff."
+	//
+	// Below the expansion check it keeps doing its job -- bare mexes still get
+	// their first turret from whatever the engine did not want for expansion --
+	// and it can no longer displace the upgrade that pays for everything.
+	@t = CommanderMexGuard(unit, isComm);
 	if (t !is null)
 		return t;
 

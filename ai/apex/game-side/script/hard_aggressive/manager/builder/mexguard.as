@@ -353,6 +353,19 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		gEcoLast = spot;
 		gEcoPacked = true;
 	}
+	// ONE AT A TIME. apexearth, watching live: "I am actively seeing us build 5
+	// AFUS at the same time. Our builders should see one is already being built
+	// and choose to assist in building that instead."
+	//
+	// Builder::JoinDuplicateBuild only redirects an OFFER that DefaultMakeTask
+	// made; this rule ENQUEUES directly, so it bypassed that check entirely and
+	// every constructor that reached it started another reactor. Ask the same
+	// question here, before enqueueing: if one of these is already under way
+	// within reach, join it.
+	IUnitTask@ already = Builder::JoinTaskFor(gen, unit);
+	if (already !is null)
+		return already;
+
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(
 			isConv ? Task::BuildType::CONVERT : Task::BuildType::ENERGY,
 			Task::Priority::NORMAL, gen, spot, 0.f));

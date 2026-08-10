@@ -138,11 +138,21 @@ string T()
 // The T1 lab is ~600-900 metal standing idle -- the rush already stops it
 // producing, so it is pure banked metal doing nothing. Feed it into the plant it
 // is being replaced by; a T1 lab can be rebuilt later once T2 economy is up.
+// Above this banked metal the T1 lab is worth more as a factory than as scrap.
+const float RECLAIM_LAB_BANK = 1500.f;
+
 void UpdateRushReclaim()
 {
 	if (gT1Reclaimed || gHaveT2 || !IsTechLead() || !RushWindowOpen())
 		return;
 	if (gT1FacUnit is null)
+		return;
+	// Only when the metal is actually wanted. apexearth, watching a 1v1: "we
+	// reclaimed the t1 lab but we still had plenty of resource so that wasn't
+	// necessary." The rule exists to unstick a rush that cannot afford the
+	// plant; with a full bank it is destroying a working factory to bank metal
+	// that is already spilling.
+	if (aiEconomyMgr.isMetalFull || (aiEconomyMgr.metal.current > RECLAIM_LAB_BANK))
 		return;
 	// The advanced plant must EXIST, not merely have been chosen.
 	// AiGetFactoryToBuild returning it is a preference; placement came minutes

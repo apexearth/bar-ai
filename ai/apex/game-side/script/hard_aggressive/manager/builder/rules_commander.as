@@ -274,7 +274,17 @@ IUnitTask@ VetoCommanderHold(CCircuitUnit@ unit, bool isComm, IUnitTask@ task)
 	if (isComm && !firstFactory && (task !is null) && (task.GetType() == Task::Type::BUILDER)) {
 		IUnitTask@ held = unit.task;
 		const string heldKind = SiteBuildName(held);
-		if ((heldKind != "") && (held.GetBuildType() != task.GetBuildType())
+		// HOLD ONLY REAL WORK. `held` names a build type from the moment the task
+		// exists, but `target` is the nanoframe -- null until something is
+		// actually standing there. Vetoing on the name alone meant the commander
+		// refused every new job while "holding" a task it had not started, and
+		// AiMakeTask returning null leaves it with nothing to do at all.
+		// apexearth, twice, watching the opening: "the commander stands around
+		// for some time after making the first mex, takes him a while to figure
+		// out what to do next." Measured: 14 comm-hold vetoes before minute 7,
+		// in bursts of seven, five game-seconds apart.
+		const bool reallyWorking = (held !is null) && (held.target !is null);
+		if (reallyWorking && (heldKind != "") && (held.GetBuildType() != task.GetBuildType())
 			&& (ThreatFor(unit, held.GetBuildPos()) <= CON_THREAT_VETO))
 		{
 			LogConVeto(unit, "comm-hold", heldKind, 0.f);

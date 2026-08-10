@@ -513,10 +513,17 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 	// The income and half-bank bars are a proxy for "can we afford one without
 	// starving the rest". Both banks sitting over 80% answers that question
 	// directly, so the proxy is skipped rather than allowed to veto it.
+	// THE ENERGY FLOOR IS NOT A PROXY, IT IS THE RUNNING COST. A missile is
+	// 90,000 energy to stockpile, so a silo on a thin grid does not merely cost
+	// its build price, it holds the whole economy down for as long as it stands.
+	// A full bank does not answer that: storage is small next to a reactor's
+	// output, and it was full precisely because nothing else was spending.
+	// apexearth, watching live: "now we have no energy because we have a nuke
+	// launcher with only 1500 energy income."
+	if (aiEconomyMgr.energy.income < NUKE_MIN_ENERGY)
+		return null;
 	const bool surplus = NukeSurplus();
 	if (!surplus) {
-		if (aiEconomyMgr.energy.income < NUKE_MIN_ENERGY)
-			return null;
 		if (aiEconomyMgr.metal.income < NUKE_MIN_INCOME)
 			return null;
 		// Only out of surplus. A silo started on a tight bank starves everything

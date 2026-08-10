@@ -86,4 +86,20 @@ IUnitTask@ VetoAllyMexUp(CCircuitUnit@ unit, IUnitTask@ task)
 	return null;
 }
 
+
+// UPGRADES FIRST. apexearth, repeatedly: "we make pinpoints or nuke launchers
+// before upgrading any mex... you still aren't doing tier 2 mex building first."
+//
+// True while we own a plain mex and can build the advanced one. The big optional
+// investments below (gantry, nuke silo, Pulsar) test this before spending: a
+// moho pays for them, they do not pay for it.
+bool MexUpgradesOutstanding()
+{
+	CCircuitDef@ moho = SideDef3(armmoho, cormoho, legmoho);
+	if ((moho is null) || !moho.IsAvailable(ai.frame))
+		return false;   // cannot upgrade yet; nothing to defer for
+	CCircuitDef@ mex = SideDef3(armmex, cormex, legmex);
+	return (mex !is null) && (mex.count > 0);
+}
+
 }  // namespace Builder
