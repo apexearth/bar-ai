@@ -213,6 +213,7 @@ private:
 		float speed;
 	};
 	CAvailList<SMetalExt> metalDefs;
+	int mexUpDiagFrame = 0;  // apex: rate-limit for the mexup-spots diagnostic
 
 	struct SConvertExt {
 		float energyUse;

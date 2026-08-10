@@ -603,18 +603,17 @@ void CAttackTask::FindTarget()
 	float bestInfl = .0f;
 	float bestNear = .0f;
 	float bestScale = .0f;
-	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), corkorg
-	// (Juggernaut) and armbanth (Titan) carry role heavy + attribute melee, and
-	// they detonate on death -- so the value is delivered by
+	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), armbanth
+	// (Titan), corkorg (Korgoth) and armraz all carry role heavy + attribute
+	// melee, and all of them detonate on death -- so the value is delivered by
 	// ARRIVING, and a walking bomb that refuses a defended target has thrown
 	// its whole cost away. apexearth: "if we make juggernauts the biggest goal
 	// with them is to just walk straight into an enemy base (because they
 	// explode when they die)", and separately "i see a lot of our T3 units just
 	// hangin out and not fighting".
 	//
-	// heavy+melee is exactly those three in the shipped configs -- re-derived by
-	// scanning behaviour.json, not assumed. It deliberately excludes
-	// corroach/corsktl, which are also melee
+	// heavy+melee is exactly those four in the shipped configs -- checked, not
+	// assumed. It deliberately excludes corroach/corsktl, which are also melee
 	// bombs but assault-role T1/T2 chaff whose behaviour is not in question here.
 	// CCircuitUnit::Attack already walks a melee unit onto its target rather
 	// than firing from range, so only the DECISION needed changing.

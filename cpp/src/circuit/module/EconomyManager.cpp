@@ -1156,7 +1156,51 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
 	const int frame = circuit->GetLastFrame();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 
-	if ((builderMgr->GetTasks(IBuilderTask::BuildType::MEXUP).size() < numMexUp) && (GetAvgMetalIncome() > 10.f)) {
+	// HOW MANY UPGRADES MAY BE IN FLIGHT IS AN ECONOMY QUESTION, NOT A CONSTANT.
+	//
+	// apexearth: "limit on upgrades can be based on how many advanced cons we
+	// have and how wealthy we are... if we don't have any upgraded mexes and
+	// we're poor then wow upgrading a mex is priority #1."
+	//
+	// The config cap is 4, and it is the supply limit on the whole thing: only
+	// an advanced constructor can build a moho, we field dozens of them with a
+	// full bank, and the engine would still only ever create four upgrades.
+	// Measured: T2 mexes flat at 11-13% of mexes held across three arms that
+	// each changed something DOWNSTREAM of the offer.
+	unsigned mexUpCap = numMexUp;
+	const float mInc = GetAvgMetalIncome();
+	const float perInc = circuit->GetTunable("apex_mexup_per_income", 25.f);
+	if (perInc > .0f) {
+		mexUpCap = std::max(mexUpCap, unsigned(mInc / perInc));
+	}
+	if (IsMetalFull()) {
+		mexUpCap += unsigned(circuit->GetTunable("apex_mexup_full_bonus", 4.f));
+	}
+	// Nothing upgraded yet is the case he called priority #1: allow a burst even
+	// on a poor economy, since the upgrade is what ENDS being poor.
+	// "Upgraded" = we hold an extractor that is not the cheapest one available.
+	// metalDefs holds every extractor def; the base tier is the least
+	// extraction among them.
+	float minExtract = std::numeric_limits<float>::max();
+	float baseExtract = std::numeric_limits<float>::max();
+	for (CCircuitDef* md : metalDefs.GetAll()) {
+		if (md != nullptr) {
+			baseExtract = std::min(baseExtract, md->GetExtractsM());
+			minExtract = baseExtract;
+		}
+	}
+	bool anyUpgraded = false;
+	for (CCircuitDef* md : metalDefs.GetAll()) {
+		if ((md != nullptr) && (md->GetCount() > 0) && (md->GetExtractsM() > baseExtract)) {
+			anyUpgraded = true;
+			break;
+		}
+	}
+	if (!anyUpgraded) {
+		mexUpCap = std::max(mexUpCap, unsigned(circuit->GetTunable("apex_mexup_first", 3.f)));
+	}
+
+	if ((builderMgr->GetTasks(IBuilderTask::BuildType::MEXUP).size() < mexUpCap) && (mInc > 10.f)) {
 		const std::vector<CCircuitDef*>& mexDefOptions = metalDefs.GetBuildDefs(unit->GetCircuitDef());
 		std::vector<std::pair<CCircuitDef*, float>> mexDefs;
 		float maxRange = 0.f;
@@ -1174,11 +1218,21 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
 			CMetalManager* metalMgr = circuit->GetMetalManager();
 			const CMetalData::Metals& spots = metalMgr->GetSpots();
 			CCircuitDef* mexDef = nullptr;
-			CMetalData::PointPredicate predicate = [this, &spots, &mexDefs, maxRange, terrainMgr, unit, &mexDef](int index) {
+			// WHY a spot is rejected, counted. Three arms changed things downstream
+			// of this predicate and moved T2 mex share by ~1 point each; nothing has
+			// ever measured which clause here says no.
+			int rejUpgrading = 0, rejReach = 0, rejNotOurs = 0, rejNoBetter = 0, accepted = 0;
+			CMetalData::PointPredicate predicate = [this, &spots, &mexDefs, maxRange, terrainMgr, unit, &mexDef,
+					&rejUpgrading, &rejReach, &rejNotOurs, &rejNoBetter, &accepted](int index) {
 				const AIFloat3& pos = spots[index].position;
-				if (true/*!IsOpenMexSpot(index)*/
-					&& !IsUpgradingMexSpot(index)
-					&& terrainMgr->CanReachAtSafe(unit, pos, unit->GetCircuitDef()->GetBuildDistance()))  // hostile environment
+				if (IsUpgradingMexSpot(index)) {
+					++rejUpgrading;
+					return false;
+				}
+				if (!terrainMgr->CanReachAtSafe(unit, pos, unit->GetCircuitDef()->GetBuildDistance())) {
+					++rejReach;
+					return false;
+				}
 				{
 					const auto& unitIds = circuit->GetCallback()->GetFriendlyUnitIdsIn(pos, maxRange, false);
 					float curExtract = -1.f;
@@ -1205,19 +1259,91 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
 						}
 					}
 					if (curExtract <= 0.f) {
+						++rejNotOurs;
 						return false;
 					}
 					for (const auto& pair : mexDefs) {
 						if ((curExtract < pair.second) && terrainMgr->CanBeBuiltAt(pair.first, pos)) {
 							mexDef = pair.first;
+							++accepted;
 							return true;
 						}
 					}
+					++rejNoBetter;
 				}
 				return false;
 			};
 //			const AIFloat3& searchPos = circuit->GetSetupManager()->GetBasePos();
-			int index = metalMgr->GetSpotToUpgrade(/*searchPos*/position, predicate);
+			// SEARCH OUR OWN EXTRACTORS, NOT THE WHOLE MAP.
+			//
+			// GetSpotToUpgrade walks metal spots from `position` and asks the
+			// predicate about each. Measured with the counters below, over four
+			// 8v8 games and only for builders that CAN upgrade: 89.6% of spots
+			// examined were rejected as notOurs, acceptance was 0.1%, and mean
+			// upgrades in flight were 1.3 against a cap of 13.9. The cap was
+			// never the limit -- the search almost never lands on one of ours.
+			//
+			// We know exactly which extractors are ours: they are in teamUnits.
+			// Walk those first and take the nearest that a better def out-yields.
+			int index = -1;
+			{
+				float bestDist = std::numeric_limits<float>::max();
+				for (const auto& kv : circuit->GetTeamUnits()) {
+					CCircuitUnit* u = kv.second;
+					if ((u == nullptr) || (u->GetCircuitDef() == nullptr) || !u->GetCircuitDef()->IsMex()) {
+						continue;
+					}
+					const float have = u->GetCircuitDef()->GetExtractsM();
+					bool better = false;
+					for (const auto& pair : mexDefs) {
+						if (have < pair.second) {
+							better = true;
+							break;
+						}
+					}
+					if (!better) {
+						continue;
+					}
+					const AIFloat3& upos = u->GetPos(frame);
+					const int idx = metalMgr->FindNearestSpot(upos);
+					if ((idx < 0) || IsUpgradingMexSpot(idx)) {
+						continue;
+					}
+					if (!terrainMgr->CanReachAtSafe(unit, spots[idx].position,
+							unit->GetCircuitDef()->GetBuildDistance())) {
+						continue;
+					}
+					const float d = position.SqDistance2D(spots[idx].position);
+					if (d < bestDist) {
+						bestDist = d;
+						index = idx;
+						for (const auto& pair : mexDefs) {
+							if ((have < pair.second) && terrainMgr->CanBeBuiltAt(pair.first, spots[idx].position)) {
+								mexDef = pair.first;
+								break;
+							}
+						}
+					}
+				}
+			}
+			// Fall back to the map-wide search only when we own nothing worth
+			// upgrading, so nothing that used to work stops working.
+			if ((index == -1) || (mexDef == nullptr)) {
+				index = metalMgr->GetSpotToUpgrade(/*searchPos*/position, predicate);
+			}
+			// ONLY COUNT BUILDERS THAT COULD UPGRADE ANYTHING. mexDefs holds the
+			// extractor defs THIS unit can build; a T1 constructor's list is the
+			// base tier alone, so every spot it looks at is "no better def" or
+			// "not ours" and it can never succeed. Counting those buried the
+			// advanced constructors' own numbers under 43,000 impossible calls.
+			const bool canUpgrade = (mexDefs.size() > 1)
+					|| ((mexDefs.size() == 1) && (mexDefs.front().second > minExtract));
+			if (canUpgrade && (circuit->GetLastFrame() > mexUpDiagFrame)) {
+				mexUpDiagFrame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
+				circuit->LOG("apex: mexup-spots cap=%u inflight=%u | upgrading=%d unreach=%d notOurs=%d noBetter=%d ok=%d",
+						mexUpCap, (unsigned)builderMgr->GetTasks(IBuilderTask::BuildType::MEXUP).size(),
+						rejUpgrading, rejReach, rejNotOurs, rejNoBetter, accepted);
+			}
 			builderMgr->SetCanUpMex(unit->GetCircuitDef(), index != -1);
 			if (index != -1) {
 				const AIFloat3& pos = spots[index].position;

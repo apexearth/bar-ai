@@ -117,9 +117,9 @@ public:
 	CCircuitUnit* GetLeader() const { return leader; }
 	const springai::AIFloat3& GetLeaderPos(int frame) const;
 
-	// role heavy + attribute melee: corjugg (Behemoth), corkorg (Juggernaut) and
-	// armbanth (Titan). They detonate on death, so the value is delivered by
-	// arriving. CAttackTask::FindTarget already keys the
+	// role heavy + attribute melee: corjugg (Behemoth), corkorg (Juggernaut),
+	// armbanth (Titan), armraz. All of them detonate on death, so the value is
+	// delivered by arriving. CAttackTask::FindTarget already keys the
 	// ignore-the-engage-margin charge off the same pair.
 	static bool IsChargeDef(const CCircuitDef* cdef);
 
