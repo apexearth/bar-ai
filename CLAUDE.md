@@ -402,7 +402,11 @@ So:
   it cost.** The dig-in fortresses looked excellent on screen and were among the
   most expensive things here.
 
-See `docs/12-build-phases.md` for the BUILD_PHASE design that addresses this
+See `docs/18-task-arbiter.md` for the design that addresses this directly --
+rules propose Wants and one arbiter ranks them, instead of the first rule in an
+ordered list winning. `docs/17-behaviour-config.md` traces every behaviour.json
+knob to the line that consumes it. `docs/12-build-phases.md` is the BUILD_PHASE
+design that addresses this
 directly: a single sense of what the AI is buying right now, that individual
 rules defer to instead of each firing whenever its own condition happens to hold.
 

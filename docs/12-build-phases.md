@@ -1,5 +1,10 @@
 # BUILD_PHASE — a single sense of "what are we buying right now"
 
+> **Its consumer is [18 — Wants and an arbiter](18-task-arbiter.md).** BUILD_PHASE
+> answers *what are we buying*; the arbiter is where that answer actually decides
+> between competing proposals. Phases without an arbiter are advice each rule may
+> ignore.
+
 apexearth's design. Written down because it is the missing dimension behind the
 regression recorded in `CLAUDE.md`: twelve rules that each fired on their own
 local condition, competed for the same constructor-seconds, and cut metal
@@ -89,7 +94,8 @@ That last part is the trap, and it has already been observed live: an AI with
 **one** advanced constructor used it to build fusions and nothing else, forever.
 Two reasonable rules produced it —
 
-- own one advanced constructor and never build another (the `!gHaveAdvCon` cap)
+- own one advanced constructor and never build another (the `!gHaveAdvCon` cap;
+  FIXED 2026-08-10 -- the gate now calls `NeedsAdvCon()`, which scales with income)
 - keep a fusion going up
 
 — and neither is wrong on its own. With eight constructors, a rule that claims

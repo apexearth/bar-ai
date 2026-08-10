@@ -1,5 +1,9 @@
 # 13 — Other people's BAR AIs: Felnious/Skirmish
 
+> Narrow survey of two AIs. The wider community picture is
+> [14 — The wider BAR AI landscape](14-bar-ai-landscape.md); read that first if
+> you want "who is building what".
+
 Read 2026-08-08 against commit `d765a46` of
 <https://github.com/Felnious/Skirmish> (a full clone was taken; every quote
 below is from a file in that tree, cited by path and line where it matters).

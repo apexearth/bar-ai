@@ -108,3 +108,22 @@ site. These were in `dev_tunables.lua` but had no row here.
 | `apex_super_guard` | 1 (on) | AngelScript `military/superguard.as` | 0 restores stock routing for mobile supers: one solo `CAttackTask` each, the frame they finish |
 | `apex_super_cost` | 7000 (`SUPER_COST`) | AngelScript `military/superguard.as` | cost at which a non-SUPER-role unit is treated as a T3 heavy and held on the defence line. Legion tags no gantry unit "super", which is why cost is a second key |
 | `apex_ping_attacks` | 0 (off) | C++ `AttackTask.cpp` `FindTarget` | 1 drops one "ATTACK" map marker per attack party, the first time it picks a target. Dev aid for watching a game; markers are visible clutter otherwise |
+
+## Added 2026-08-10
+
+| name | default | read by | what it does |
+|---|---|---|---|
+| `apex_kill_quota` | 300 (`KILL_QUOTA`) | AngelScript `military/posture.as` | attack power the killing blow commits at. Was 10, i.e. SMALLER than the ordinary floor of 30 -- winning made the AI disperse. Measured: 44% of engagements became 15+ unit pushes against 6%, and the result did not move |
+| `apex_unblock` | 1 (on) | AngelScript `military/unblock.as` | 0 disables the walled-in-unit rule entirely |
+| `apex_unblock_still` | 1350 frames (45 s) | AngelScript `military/unblock.as` | how long a unit must be motionless to become a candidate |
+| `apex_unblock_period` | 90 frames (3 s) | AngelScript `military/unblock.as` | minimum spacing between probes |
+| `apex_unblock_test_wait` | 240 frames (8 s) | AngelScript `military/unblock.as` | how long a unit gets to obey the move order before it counts as penned |
+| `apex_mexup_per_income` | 25 | C++ `EconomyManager.cpp` | metal/s per simultaneous mex-upgrade slot |
+| `apex_mexup_full_bonus` | 4 | C++ `EconomyManager.cpp` | extra upgrade slots while the metal bank is full |
+| `apex_mexup_first` | 3 | C++ `EconomyManager.cpp` | minimum slots while NOTHING is upgraded yet -- "if we don't have any upgraded mexes and we're poor then upgrading a mex is priority #1" |
+
+Measured note on the mexup set: the cap was never the binding constraint. Over
+four 8v8 games, counting only builders that can upgrade, mean upgrades in flight
+were 1.3 against a cap of 13.9 and 89.6% of spots examined were rejected as "not
+ours". The fix that helped was searching our OWN extractors first
+(`EconomyManager.cpp`), not raising the ceiling.

@@ -11,7 +11,10 @@ starting from a baseline.
 ## What you actually have
 
 - **Fast headless self-play.** Measured here: ~37× realtime, a full match in
-  ~45 s, deterministic with `FixedRNGSeed`. That's a workable sample rate for
+  ~45 s. NOT deterministic: `FixedRNGSeed` fixes the map and start positions but
+  the AI DLL is multithreaded, so the same seed produced first-T2 at 5.2, 6.9,
+  9.1 and 9.8 minutes. Any learning method here has to treat a single run as a
+  sample, not as an evaluation. That's a workable sample rate for
   evolutionary/bandit methods; it is thin for step-wise deep RL.
 - **A rich hand-written baseline.** CircuitAI is a strong opponent and a strong
   starting policy. Hybrid approaches — learn a small part, keep the rest — are far
