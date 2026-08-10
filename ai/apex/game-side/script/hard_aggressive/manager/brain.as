@@ -29,6 +29,16 @@ const float MEXUP_REACH = 2400.f;
 // What a moho adds over a plain mex, in metal/second, at standard extraction.
 // Read from the defs rather than assumed: armmex 1.8/s, armmoho 5.4/s here.
 const float MEXUP_INCOME_GAIN = 3.6f;
+// A converter turns energy into metal at roughly this rate, which is how an
+// energy build is put on the same scale as a metal one.
+const float ENERGY_TO_METAL = 0.014f;
+// What the one-off investments are worth, in metal/second equivalent. These are
+// ESTIMATES and the log prints the score they produce, so they are meant to be
+// argued with from a game rather than defended from a desk.
+const float GANTRY_VALUE   = 2.0f;   // opens T3 production
+const float SILO_VALUE     = 4.0f;   // enemy metal removed, amortised
+const float PULSAR_VALUE   = 1.5f;   // area denial near the base
+const float PINPOINT_VALUE = 0.5f;   // targeting support, cheap and bounded
 
 class Want
 {
@@ -39,15 +49,27 @@ class Want
 	CCircuitDef@ def;
 	bool needsAdvCon = false;
 
+	int have = 0;         // how many of this we already hold
+
+	// VALUE PER METAL, WITH DIMINISHING RETURNS.
+	//
+	// Ranking on value/cost alone hands the game to whatever is cheapest: a
+	// Pinpointer at 0.5 metal/s and ~800 metal scores higher than a silo at 4.0
+	// and 8,100, so the first ranked run picked pinpoint whenever no upgrade was
+	// in reach. Halving the value per copy already standing is what stops one
+	// cheap thing winning forever, and it is the real shape -- the second
+	// Pinpointer is worth much less than the first.
 	float Score() const
 	{
-		return (cost > 1.f) ? (value / cost) : value;
+		const float scaled = value / (1.f + float(have));
+		return (cost > 1.f) ? (scaled / cost) : scaled;
 	}
 }
 
 array<Want@> gWants;
 int gNextBrainLog = 0;
 int gMexUpOrders = 0;
+int gNextPickLog = 0;
 
 void Clear()
 {
@@ -108,42 +130,118 @@ Want@ MexUpgradeWant(CCircuitUnit@ unit)
 	return w;
 }
 
-// Rank, log, and act on what we can act on.
+// A want the Brain does not execute itself: it names the rule that does, and
+// Decide() calls that rule only if this want wins. The rule keeps its own
+// preconditions -- this decides ORDER, not eligibility.
+Want@ Simple(string kind, float value, CCircuitDef@ def)
+{
+	if ((def is null) || !def.IsAvailable(ai.frame))
+		return null;
+	Want@ w = Want();
+	w.kind = kind;
+	w.value = value;
+	w.cost = def.costM;
+	w.have = def.count;
+	@w.def = def;
+	w.needsAdvCon = true;
+	return w;
+}
+
+// Run the rule behind a want. Returns null when its own preconditions refuse,
+// in which case Decide falls through to the next-ranked want.
+IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
+{
+	if (kind == "gantry")
+		return Builder::SurplusGantry(unit);
+	if (kind == "silo")
+		return Builder::NukeSilo(unit);
+	if (kind == "pulsar")
+		return Builder::Pulsar(unit);
+	if (kind == "pinpoint")
+		return Builder::Pinpointer(unit);
+	return null;
+}
+
+// Rank, log, and act on the best want whose rule accepts.
 IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 {
 	Clear();
-	if (isAdvCon)
-		Propose(MexUpgradeWant(unit));
+	if (!isAdvCon)
+		return null;
+
+	Propose(MexUpgradeWant(unit));
+	// The optional class. Costs are read from the defs so a score means
+	// something; where a def is missing the want is simply not proposed.
+	Propose(Simple("gantry", GANTRY_VALUE, SideDef3("armshltx", "corgant", "leggant")));
+	Propose(Simple("silo", SILO_VALUE, SideDef3("armsilo", "corsilo", "legsilo")));
+	Propose(Simple("pulsar", PULSAR_VALUE, SideDef3("armanni", "cordoom", "legstarfall")));
+	Propose(Simple("pinpoint", PINPOINT_VALUE, SideDef3("armtarg", "cortarg", "legtarg")));
 
 	if (gWants.length() == 0)
 		return null;
 
-	Want@ top = gWants[0];
-	for (uint i = 1; i < gWants.length(); ++i) {
-		if (gWants[i].Score() > top.Score())
-			@top = gWants[i];
+	// Descending by score, first rule that accepts wins.
+	array<Want@> order = gWants;
+	for (uint i = 0; i < order.length(); ++i) {
+		for (uint j = i + 1; j < order.length(); ++j) {
+			if (order[j].Score() > order[i].Score()) {
+				Want@ tmp = order[i];
+				@order[i] = order[j];
+				@order[j] = tmp;
+			}
+		}
 	}
 
 	if (ai.frame >= gNextBrainLog) {
 		gNextBrainLog = ai.frame + 30 * SECOND;
-		string line = "apex: brain wants=" + gWants.length() + " top=" + top.kind
-			+ " score=" + formatFloat(top.Score(), "", 0, 4);
-		for (uint i = 0; i < gWants.length(); ++i) {
-			line += " | " + gWants[i].kind + "=" + formatFloat(gWants[i].Score(), "", 0, 4);
-		}
+		string line = "apex: brain wants=" + order.length();
+		for (uint i = 0; i < order.length(); ++i)
+			line += " | " + order[i].kind + "=" + formatFloat(order[i].Score(), "", 0, 4);
 		AiLog(Factory::T() + line);
 	}
 
-	if (top.kind == "mexup") {
-		// The binding added 2026-08-10. A MEXUP task carries a metal-spot index
-		// as well as a position, so the generic Enqueue could not express it --
-		// which is why no rule of ours could order an upgrade at all.
-		IUnitTask@ t = aiBuilderMgr.EnqueueMexUp(top.pos, top.def);
+	// UPGRADES ARE NOT OPTIONAL SPENDING. If an upgrade is in reach, this
+	// constructor's job is the upgrade -- and if the enqueue happens to fail
+	// (spot taken, already upgrading), it goes back to the engine's own work
+	// rather than starting a Pulsar instead.
+	//
+	// Measured: with the optional class executing whenever it outranked nothing,
+	// picks rose from 13 to 20 per batch and T2 mex share fell 17.6% -> 15.1%.
+	// Ranking decides order among optional things; it does not get to displace
+	// the economy that pays for them.
+	bool haveMexUp = false;
+	for (uint i = 0; i < order.length(); ++i) {
+		if (order[i].kind == "mexup") {
+			haveMexUp = true;
+			break;
+		}
+	}
+
+	for (uint i = 0; i < order.length(); ++i) {
+		Want@ w = order[i];
+		if (w.kind != "mexup" && haveMexUp)
+			continue;
+		if (w.kind == "mexup") {
+			// The binding added 2026-08-10. A MEXUP task carries a metal-spot
+			// index as well as a position, so the generic Enqueue could not
+			// express it -- which is why no rule of ours could order an upgrade.
+			IUnitTask@ t = aiBuilderMgr.EnqueueMexUp(w.pos, w.def);
+			if (t !is null) {
+				++gMexUpOrders;
+				if (gMexUpOrders <= 3 || (gMexUpOrders % 25 == 0)) {
+					AiLog(Factory::T() + "apex: brain orders mexup #" + gMexUpOrders
+						+ " by " + unit.circuitDef.GetName());
+				}
+				return t;
+			}
+			continue;
+		}
+		IUnitTask@ t = Execute(w.kind, unit);
 		if (t !is null) {
-			++gMexUpOrders;
-			if (gMexUpOrders <= 3 || (gMexUpOrders % 10 == 0)) {
-				AiLog(Factory::T() + "apex: brain orders mexup #" + gMexUpOrders
-					+ " by " + unit.circuitDef.GetName());
+			if (ai.frame >= gNextPickLog) {
+				gNextPickLog = ai.frame + 60 * SECOND;
+				AiLog(Factory::T() + "apex: brain picks " + w.kind
+					+ " score=" + formatFloat(w.Score(), "", 0, 4));
 			}
 			return t;
 		}
