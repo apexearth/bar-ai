@@ -37,7 +37,8 @@ from pathlib import Path
 # PEAK because a dead team's standing counters read zero; CUM is end-state.
 PEAK = ["armyReal", "armyCheap", "mDefence", "mCon", "mFactories", "ownUnits"]
 CUM = ["metalProduced", "metalUsed", "metalExcess", "energyProduced", "energyExcess",
-       "mKillReal", "mLostReal", "mKillStatic", "mBuiltReal", "mReclaim", "mRezSpend",
+       "mKillReal", "mKillCheap", "mLostReal", "mLostCheap", "mKillStatic",
+       "mBuiltReal", "mReclaim", "mRezSpend",
        "mT1", "mT2", "mT3", "damageDealt", "damageReceived", "mex", "t2Mex", "commLost"]
 
 ENGAGE_RE = re.compile(
@@ -142,6 +143,15 @@ def read_game(d: Path) -> list[dict]:
         for k in CUM:
             row[k] = round(fin.get(k, 0.0))
         row["kd"] = round(fin.get("mKillReal", 0) / max(fin.get("mLostReal", 0), 1), 3)
+        # THE LESS NOISY METRIC. K/D has a per-game sd of 0.41 on a mean of 0.67
+        # (62% relative); enemy metal destroyed per metal produced has 23%, so it
+        # sees a real change in ~13-30 games where K/D needs 117+. It is also the
+        # question actually being asked: how much of the enemy did this economy
+        # destroy? `kill_rate` is the same thing per game minute -- "kill them
+        # faster" is a rate, not a ratio.
+        killed = fin.get("mKillReal", 0) + fin.get("mKillCheap", 0)
+        row["kill_per_metal"] = round(killed / max(fin.get("metalProduced", 0), 1), 4)
+        row["kill_rate_per_min"] = round(killed / max(res.get("game_minutes", 0), 1), 1)
         row["dmg_ratio"] = round(fin.get("damageDealt", 0) / max(fin.get("damageReceived", 0), 1), 3)
         # A team whose standing counters end at zero was wiped out.
         row["wiped"] = int(fin.get("ownUnits", 0) == 0)
@@ -171,14 +181,15 @@ def summarise(rows: list[dict]) -> None:
     for r in rows:
         by_run_ally[(r["run"], r["ai"] or f"ally{r['ally']}")].append(r)
     keys = ["peak_armyReal", "peak_mDefence", "peak_mCon", "metalProduced",
-            "mKillReal", "mLostReal", "mT3"]
-    print(f"{'run':34s} {'ai':22s} {'n':>3s} " + " ".join(f"{k.replace('peak_',''):>13s}" for k in keys) + f" {'K/D':>6s} {'wiped':>6s}")
+            "mKillReal", "mKillCheap", "mLostReal"]
+    print(f"{'run':34s} {'ai':22s} {'n':>3s} " + " ".join(f"{k.replace('peak_',''):>13s}" for k in keys) + f" {'K/D':>6s} {'kill/m':>7s} {'wiped':>6s}")
     for (run, ai), rs in sorted(by_run_ally.items()):
         tot = {k: sum(r[k] for r in rs) for k in keys}
         kd = tot["mKillReal"] / max(tot["mLostReal"], 1)
+        kpm = (tot["mKillReal"] + tot["mKillCheap"]) / max(tot["metalProduced"], 1)
         print(f"{run[:34]:34s} {ai[:22]:22s} {len(rs):3d} "
               + " ".join(f"{tot[k]:13,.0f}" for k in keys)
-              + f" {kd:6.2f} {sum(r['wiped'] for r in rs):6d}")
+              + f" {kd:6.2f} {kpm:7.3f} {sum(r['wiped'] for r in rs):6d}")
 
 
 def main() -> int:
