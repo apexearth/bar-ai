@@ -92,6 +92,31 @@ Do not "fix" this by cutting economy blindly — the 2026-08-01 finding is that
 every rule here displaces something. But 19.4% on static defence while losing
 players to wipeout says the defence is not buying safety either.
 
+### 1c. Army share does not move. Three arms, three ways, same 23%
+
+6 games each, 8v8 Ancient Vault vs `BARb:stable:medium`, 40 min, +50:
+
+| arm | army share | wiped out | K/D |
+|---|---|---|---|
+| `kill_quota=300` (concentrate) | 22.8% | 6/48 | 1.14 |
+| `kill_quota=10` (chip, control) | 23.9% | 8/48 | 1.09 |
+| rez bots cut to stable's 0.05 | 23.6% | 9/48 | — |
+| BARb medium, all three arms | ~51% | 1-2/48 | — |
+
+Cutting the rez bot from 0.50/0.30 to 0.05 -- a unit that was 12.8% of all metal
+-- moved army share by 0.8 points, i.e. not at all. So the metal did not follow
+the ratio into army; it went somewhere else in the same non-army categories.
+
+**That invariance is itself the finding.** Army share sits at 23% however the
+factory ratios are set, which says the constraint is not what the factory is told
+to build. Candidates, in order of size: the factory is starved of metal because
+builder work is spent first (static defence 18.4%, constructors 10.0%, and in a
+hosted game 63% of `advcon-idle` samples carried `mEmpty=1`); or factory uptime
+itself is the cap.
+
+Next test should measure FACTORY METAL PULL against builder pull, not another
+ratio.
+
 ## 2. Pushes should not take damage on the way in
 
 **apexearth:** "we need smart pushes where the pusher doesn't even take damage."
