@@ -198,6 +198,24 @@ float EnemyArmyCost()
 // Behind on the field: they field more army value than we do.
 const float BEHIND_RATIO = 1.0f;
 
+// ENEMIES HOLDING GROUND IN OUR OWN BASE, WITHOUT AN INVENTED THRESHOLD.
+//
+// Builder::BaseUnderAttack asks whether the enemy CENTROID is within 2200 of
+// home, and in a 4v4 the centroid of eight enemies sits in the middle of the map
+// forever: measured 0 firings across three 16-minute games. It catches a massed
+// push on a 1v1 and nothing else.
+//
+// Net influence is ally minus enemy at a point (CInfluenceMap::GetInfluenceAt
+// returns influence - INFL_BASE), so its ZERO CROSSING is the question already
+// asked in the right units: who owns this ground. No constant to guess at, and
+// it is local to our base rather than an average over the whole map.
+bool BaseContested()
+{
+	if (!Builder::gHomeSet)
+		return false;
+	return ai.GetNetInflAt(Builder::gHomePos) < 0.f;
+}
+
 bool LosingGround()
 {
 	return EnemyArmyCost() > aiMilitaryMgr.armyCost * BEHIND_RATIO;

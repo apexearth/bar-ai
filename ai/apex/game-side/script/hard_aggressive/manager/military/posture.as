@@ -327,6 +327,27 @@ void UpdatePosture()
 			AiLog(Factory::T() + "apex: killing blow releases the hold");
 		}
 	}
+	// A HOLD MUST NEVER STOP US DEFENDING OUR OWN GROUND.
+	//
+	// The hold is entered when our army shrinks -- which is precisely what being
+	// attacked looks like. So an enemy army walking into a base drove the army
+	// that should answer it into a 45-second-to-6-minute posture whose whole
+	// effect is quota.attack = 240, i.e. no group is ever large enough to engage.
+	// apexearth, watching: "When our base is under attack, we have armies from our
+	// allies running away instead of helping. Like, we totally had an opportunity
+	// to wipe out the enemy army, but instead we just ran away."
+	//
+	// The hold is for the case it was built for: stop feeding the army into THEIR
+	// base while losing the trade. Enemies in ours is the opposite situation --
+	// short supply lines, our defences shooting, their army out of position -- and
+	// it is the one moment the trade is in our favour. Released the same way the
+	// killing blow releases it.
+	if (gTurtle && (BaseContested() || Builder::BaseUnderAttack())) {
+		gTurtle = false;
+		gPostureUntil = ai.frame;
+		aiMilitaryMgr.quota.attack = gAttackBase;
+		AiLog(Factory::T() + "apex: base under attack -- releasing the hold to defend");
+	}
 	UpdateFrontGun();
 	UpdateAirThreat();
 	UpdateCorridorProbe();
@@ -355,7 +376,12 @@ void UpdatePosture()
 	if (!gTurtle) {
 		// Shrinking army while the enemy still has a mobile force means we are
 		// losing the trade, not merely between waves.
-		if ((army < prev * LOSING_RATIO) && (aiEnemyMgr.mobileThreat > 0.f)) {
+		// ... and it is not entered while they are in our base, for the same
+		// reason: losses taken defending are not evidence that defending is a
+		// losing trade.
+		if ((army < prev * LOSING_RATIO) && (aiEnemyMgr.mobileThreat > 0.f)
+			&& !BaseContested() && !Builder::BaseUnderAttack())
+		{
 			gTurtle = true;
 			++gTurtleCount;
 			gArmyAtHold = prev;          // strength to rebuild back to
