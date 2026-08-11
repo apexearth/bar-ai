@@ -23,6 +23,7 @@ int gFactoryCount = 0;
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	Brain::NoteSpend(unit, usage);
 	if (usage == Unit::UseAs::FACTORY)
 		++gFactoryCount;
 	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) != 0)

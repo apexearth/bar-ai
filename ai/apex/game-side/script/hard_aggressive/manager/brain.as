@@ -115,6 +115,16 @@ float ArmyDeficitMult()
 	return (ratio < floorV) ? floorV : ratio;
 }
 
+// Which budget category a want spends from.
+Cat BudgetCatOf(const string& in kind)
+{
+	if ((kind == "nano") || (kind == "frontnano") || (kind == "gantry"))
+		return BUILDPOWER;
+	if ((kind == "pulsar") || (kind == "silo") || (kind == "pinpoint"))
+		return DEFENCE;
+	return ECONOMY;
+}
+
 // The kinds whose whole purpose is more income.
 bool IsEcoKind(const string& in kind)
 {
@@ -144,6 +154,11 @@ class Want
 	float Score() const
 	{
 		float scaled = value / (1.f + float(have));
+		// The category budget: what this purchase is worth against the share of
+		// metal its whole category is meant to have. See brain/budget.as -- this
+		// is the one place the army/defence/economy/build-power split is stated,
+		// and every want now answers to it.
+		scaled *= BudgetMult(BudgetCatOf(kind));
 		if (IsEcoKind(kind)) {
 			if (EcoSated())
 				scaled *= ECO_SATED_MULT;

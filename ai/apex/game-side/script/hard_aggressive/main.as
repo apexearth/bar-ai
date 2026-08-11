@@ -1,5 +1,7 @@
 #include "../side.as"
 #include "../world.as"
+#include "targets.as"          // EVERY build ratio, in one file
+#include "manager/brain/budget.as"  // the one place the build split is stated
 #include "manager/brain.as"       // macro view: rules propose Wants, this ranks them
 #include "manager/brain/mix.as"   // ...and the target army composition
 #include "manager/military.as"

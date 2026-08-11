@@ -116,6 +116,7 @@ uint FenceCountNear(const AIFloat3& in pos, float radius)
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	Brain::NoteSpend(unit, usage);
 	// SUPERS GET STUCK MOST, AND WERE NEVER REGISTERED. A Karganeth arrives as
 	// SUPER, not COMBAT, so the walled-in detector never saw the units most
 	// likely to be walled in. apexearth, watching a 1v1: "I'm actively in a good

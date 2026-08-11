@@ -305,6 +305,7 @@ void UpdatePosture()
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
+	Brain::BudgetLog();
 	UpdateKillingBlow();
 	UpdateRaidCaution();
 	UpdateBaseDefence();

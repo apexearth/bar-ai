@@ -215,6 +215,7 @@ void LogCommanderThreat(CCircuitUnit@ unit)
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	Brain::NoteSpend(unit, usage);
 	// Before every early return below, or a fusion finishing while some other
 	// branch claims the unit is never recorded.
 	if (IsFusion(unit.circuitDef))

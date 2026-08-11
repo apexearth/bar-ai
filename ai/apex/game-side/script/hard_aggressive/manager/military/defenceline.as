@@ -145,7 +145,11 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	// own, whoever placed it, so this bounds our own rules too, not just this
 	// call. A turtle or a real push through our ground overrides it: being
 	// attacked is when towers are worth more than the curve says.
-	const float per = ai.GetTunable("apex_fence_per_income", 0.8f);
+	// Scaled by the category budget as well as by income, so defence answers
+	// to the same table as everything else: over its share it buys fewer
+	// towers, under its share it buys more. brain/budget.as.
+	const float per = ai.GetTunable("apex_fence_per_income", 0.8f)
+			* Brain::BudgetMult(Brain::DEFENCE);
 	const int budget = 1 + int(aiEconomyMgr.metal.income * per);
 	if (!gTurtle && !BaseContested() && (int(gFenceId.length()) >= budget)) {
 		if (ai.frame >= gNextFenceCapLog) {

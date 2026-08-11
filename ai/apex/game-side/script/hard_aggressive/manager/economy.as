@@ -10,6 +10,7 @@ bool isSwitchAssist = false;
 // CEconomyManager owns the extractor handlers.
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	Brain::NoteSpend(unit, usage);
 }
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)

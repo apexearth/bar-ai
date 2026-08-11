@@ -77,6 +77,11 @@ local NAMES = {
 	"apex_fence_per_income",
 	"apex_army_deficit_floor",
 	"apex_hold_release",
+	"apex_budget",
+	"apex_share_army",
+	"apex_share_defence",
+	"apex_share_economy",
+	"apex_share_buildpower",
 	"apex_unblock_test_wait",
 	"apex_nano_income_gate",
 	-- The Brain's mex upgrades (2026-08-10): how many the engine holds open.

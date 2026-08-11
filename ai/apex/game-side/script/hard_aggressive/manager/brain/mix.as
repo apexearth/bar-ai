@@ -39,9 +39,12 @@ namespace Brain {
 class MixTarget
 {
 	Type role;
-	float share;
+	// The curve from targets.as, read against income every time the mix decides.
+	// apexearth: "Raiders at .3 to start is OK but later on I want it lower."
+	array<float>@ curve;
 	array<Type> counters;
-	MixTarget(Type r, float s) { role = r; share = s; }
+	MixTarget(Type r, array<float>@ c) { role = r; @curve = c; }
+	float Share() const { return Targets::At(curve); }
 	void Counter(Type enemyRole) { counters.insertLast(enemyRole); }
 }
 
@@ -54,7 +57,7 @@ int gScoutPicks = 0;
 // table. Not 1.0: the roles we hold for reasons the enemy does not dictate --
 // something to raid with, something to hold ground -- must survive a reading of
 // their army, or one sighting empties the rest of the composition.
-const float MIX_COUNTER_MAX = 0.6f;
+const float MIX_COUNTER_MAX = Targets::COUNTER_MAX;
 
 // WHICH FACTORIES THE BRAIN OWNS.
 //
@@ -111,17 +114,17 @@ void InitMix()
 {
 	if (gMix.length() > 0)
 		return;
-	MixTarget@ raid = MixTarget(RT::RAIDER,  0.30f);
+	MixTarget@ raid = MixTarget(RT::RAIDER, @Targets::ROLE_RAIDER);
 	raid.Counter(RT::ARTY);        // artillery cannot defend itself up close
 	raid.Counter(RT::SKIRM);
 	gMix.insertLast(raid);
 
-	MixTarget@ assault = MixTarget(RT::ASSAULT, 0.30f);
+	MixTarget@ assault = MixTarget(RT::ASSAULT, @Targets::ROLE_ASSAULT);
 	assault.Counter(RT::STATIC);   // what walks into defences
 	assault.Counter(RT::RIOT);
 	gMix.insertLast(assault);
 
-	MixTarget@ skirm = MixTarget(RT::SKIRM, 0.15f);
+	MixTarget@ skirm = MixTarget(RT::SKIRM, @Targets::ROLE_SKIRM);
 	skirm.Counter(RT::RIOT);
 	skirm.Counter(RT::ASSAULT);
 	gMix.insertLast(skirm);
@@ -129,16 +132,16 @@ void InitMix()
 	// THE ANSWER TO BEING RAIDED. apexearth, watching a 4v4: "enemy super light
 	// units would harass our early game mexes very effectively and we didn't have
 	// any super lights of our own to catch them."
-	MixTarget@ riot = MixTarget(RT::RIOT, 0.10f);
+	MixTarget@ riot = MixTarget(RT::RIOT, @Targets::ROLE_RIOT);
 	riot.Counter(RT::RAIDER);
 	riot.Counter(RT::SCOUT);
 	gMix.insertLast(riot);
 
-	MixTarget@ arty = MixTarget(RT::ARTY, 0.06f);
+	MixTarget@ arty = MixTarget(RT::ARTY, @Targets::ROLE_ARTY);
 	arty.Counter(RT::STATIC);
 	gMix.insertLast(arty);
 
-	MixTarget@ aa = MixTarget(RT::AA, 0.06f);
+	MixTarget@ aa = MixTarget(RT::AA, @Targets::ROLE_AA);
 	aa.Counter(RT::AIR);
 	aa.Counter(RT::BOMBER);
 	gMix.insertLast(aa);
@@ -154,32 +157,23 @@ void InitMix()
 	//
 	// Both defs are T2, so IsAvailable keeps these out of the T1 phase without a
 	// clock: before the advanced plant stands they are simply skipped.
-	MixTarget@ heavy = MixTarget(RT::HEAVY, 0.12f);
+	MixTarget@ heavy = MixTarget(RT::HEAVY, @Targets::ROLE_HEAVY);
 	heavy.Counter(RT::STATIC);
 	heavy.Counter(RT::ASSAULT);
 	gMix.insertLast(heavy);
 
-	MixTarget@ ah = MixTarget(RT::AH, 0.05f);
+	MixTarget@ ah = MixTarget(RT::AH, @Targets::ROLE_AH);
 	ah.Counter(RT::HEAVY);
 	ah.Counter(RT::SUPER);
 	gMix.insertLast(ah);
 
-	MixTarget@ aha = MixTarget(RT::AHA, 0.05f);
+	MixTarget@ aha = MixTarget(RT::AHA, @Targets::ROLE_AHA);
 	aha.Counter(RT::HEAVY);
 	aha.Counter(RT::SUPER);
 	gMix.insertLast(aha);
 
-	// Normalised here rather than by hand, so a row can be added or a weight
-	// changed above without the whole column having to be re-balanced. `have` is
-	// a share of the total held, so the targets have to be shares of one for a
-	// gap to mean anything.
-	float sum = 0.f;
-	for (uint i = 0; i < gMix.length(); ++i)
-		sum += gMix[i].share;
-	if (sum > 0.f) {
-		for (uint i = 0; i < gMix.length(); ++i)
-			gMix[i].share /= sum;
-	}
+	// No normalising here any more: a share is read from its curve at the income
+	// of the moment, so BaseShares() normalises what it reads.
 }
 
 // WHAT THE ENEMY IS ACTUALLY FIELDING, AS A TARGET COMPOSITION.
@@ -240,56 +234,22 @@ array<float> CounterShares(CCircuitUnit@ fac, float &out weight)
 }
 
 // The base table read through what we know of the enemy.
-// CHAFF STOPS EARNING ITS SLOT ONCE THE ECONOMY IS REAL.
-//
-// apexearth: "enemies are often killing the pawns in 1 hit... i guess after like
-// 20m/s we hardly need any pawns anymore", "scouts too", and then the curve
-// itself: "at 15 metal start to taper, 20 metal .66, 30 metal .25, 100 metal
-// .05".
-//
-// A Pawn is 54 metal and dies to one shot from anything the enemy fields past
-// their own opening. What a raider is worth is the economic damage it does
-// before dying, and that falls as the enemy's units and defences grow -- which
-// tracks income, theirs and ours together.
-//
-// His four points, interpolated rather than fitted: a curve through them misses
-// every one by a little, and there is no mechanism here that a smooth function
-// would be more honest about. Below the first point it is 1.0, above the last it
-// holds -- never zero, because they keep distraction and scouting value, and the
-// counter weighting can still raise the answer to enemy raiders independently.
-array<float> gChaffIncome = {15.f, 20.f, 30.f, 100.f};
-array<float> gChaffScale  = {1.0f, 0.66f, 0.25f, 0.05f};
-
-float ChaffScale()
-{
-	const float inc = aiEconomyMgr.metal.income * ai.GetTunable("apex_chaff_mult", 1.f);
-	if (inc <= gChaffIncome[0])
-		return gChaffScale[0];
-	for (uint i = 1; i < gChaffIncome.length(); ++i) {
-		if (inc < gChaffIncome[i]) {
-			const float span = gChaffIncome[i] - gChaffIncome[i - 1];
-			const float t = (inc - gChaffIncome[i - 1]) / span;
-			return gChaffScale[i - 1] + (gChaffScale[i] - gChaffScale[i - 1]) * t;
-		}
-	}
-	return gChaffScale[gChaffScale.length() - 1];
-}
-
-bool IsChaffRole(Type role)
-{
-	return (role == RT::RAIDER) || (role == RT::SCOUT);
-}
-
+// The chaff fade lives in targets.as now, as the ROLE_RAIDER curve itself --
+// "at 15 metal start to taper, 20 metal .66, 30 metal .25, 100 metal .05" is a
+// shape, and a shape belongs in the table of shapes rather than as a multiplier
+// bolted onto one. Scouts fade the same way through SCOUT_PER_MEX.
 // The base table read through the economy, renormalised so the weight a fading
 // role gives up is taken by the roles that still earn it rather than simply
 // vanishing from the total.
 array<float> BaseShares()
 {
 	array<float> b(gMix.length(), 0.f);
-	const float chaff = ChaffScale();
 	float sum = 0.f;
 	for (uint i = 0; i < gMix.length(); ++i) {
-		b[i] = gMix[i].share * (IsChaffRole(gMix[i].role) ? chaff : 1.f);
+		// Straight from the curve. The old chaff multiplier is gone: ROLE_RAIDER
+		// in targets.as fades on its own, and applying both taped one fade on top
+		// of another.
+		b[i] = gMix[i].Share();
 		sum += b[i];
 	}
 	if (sum > 0.f) {
@@ -422,12 +382,13 @@ IUnitTask@ ScoutFloor(CCircuitUnit@ fac)
 	CCircuitDef@ scout = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::SCOUT);
 	if ((scout is null) || !scout.IsAvailable(ai.frame))
 		return null;
-	const float per = ai.GetTunable("apex_mix_scout_per_mex", 4.f);
+	const float per = ai.GetTunable("apex_mix_scout_per_mex",
+			Targets::At(Targets::SCOUT_PER_MEX));
 	int want = 1;
 	if (per >= 1.f) {
 		CCircuitDef@ mex = SideDef3("armmex", "cormex", "legmex");
 		if (mex !is null)
-			want = 1 + int(float(mex.count) * ChaffScale() / per);
+			want = 1 + int(float(mex.count) / per);
 	}
 	if (scout.count >= want)
 		return null;
