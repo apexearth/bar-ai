@@ -242,34 +242,37 @@ array<float> CounterShares(CCircuitUnit@ fac, float &out weight)
 // The base table read through what we know of the enemy.
 // CHAFF STOPS EARNING ITS SLOT ONCE THE ECONOMY IS REAL.
 //
-// apexearth, watching: "enemies are often killing the pawns in 1 hit... i guess
-// after like 20m/s we hardly need any pawns anymore", and "scouts too".
+// apexearth: "enemies are often killing the pawns in 1 hit... i guess after like
+// 20m/s we hardly need any pawns anymore", "scouts too", and then the curve
+// itself: "at 15 metal start to taper, 20 metal .66, 30 metal .25, 100 metal
+// .05".
 //
-// A Pawn is 54 metal and dies to one shot from anything the enemy fields once
-// they are past their own opening. The value of a raider is the ECONOMIC damage
-// it does before it dies, so it falls as the enemy's units and defences get
-// bigger -- and enemy scale tracks income, ours and theirs together. This is
-// the same shape the game's own tier tables use (armlab drops armpw to 0.00 at
-// 100 metal/s); it just starts fading at the income he named rather than
-// falling off a cliff three tiers later.
+// A Pawn is 54 metal and dies to one shot from anything the enemy fields past
+// their own opening. What a raider is worth is the economic damage it does
+// before dying, and that falls as the enemy's units and defences grow -- which
+// tracks income, theirs and ours together.
 //
-//   income    10    20    40    60   100   200
-//   scale    1.00  1.00  0.50  0.33  0.20  0.15
-//
-// A floor rather than zero: they keep distraction and scouting value, and the
-// counter weighting can still raise RIOT-vs-raider answers independently.
-const float CHAFF_FULL_INCOME = 20.f;
-const float CHAFF_FLOOR       = 0.15f;
+// His four points, interpolated rather than fitted: a curve through them misses
+// every one by a little, and there is no mechanism here that a smooth function
+// would be more honest about. Below the first point it is 1.0, above the last it
+// holds -- never zero, because they keep distraction and scouting value, and the
+// counter weighting can still raise the answer to enemy raiders independently.
+array<float> gChaffIncome = {15.f, 20.f, 30.f, 100.f};
+array<float> gChaffScale  = {1.0f, 0.66f, 0.25f, 0.05f};
 
 float ChaffScale()
 {
-	const float full = ai.GetTunable("apex_chaff_income", CHAFF_FULL_INCOME);
-	const float inc = aiEconomyMgr.metal.income;
-	if (inc <= full)
-		return 1.f;
-	const float floorV = ai.GetTunable("apex_chaff_floor", CHAFF_FLOOR);
-	const float scale = full / inc;
-	return (scale < floorV) ? floorV : scale;
+	const float inc = aiEconomyMgr.metal.income * ai.GetTunable("apex_chaff_mult", 1.f);
+	if (inc <= gChaffIncome[0])
+		return gChaffScale[0];
+	for (uint i = 1; i < gChaffIncome.length(); ++i) {
+		if (inc < gChaffIncome[i]) {
+			const float span = gChaffIncome[i] - gChaffIncome[i - 1];
+			const float t = (inc - gChaffIncome[i - 1]) / span;
+			return gChaffScale[i - 1] + (gChaffScale[i] - gChaffScale[i - 1]) * t;
+		}
+	}
+	return gChaffScale[gChaffScale.length() - 1];
 }
 
 bool IsChaffRole(Type role)
