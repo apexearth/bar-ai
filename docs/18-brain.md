@@ -27,9 +27,11 @@ Two files, both in the `Brain` namespace, both included from
 | `manager/brain.as` | **Wants** — what should this metal buy | `Brain::Decide(unit, isAdvCon)` | `builder/maketask.as`, above `OptionalWork` and below the engine's expansion offer |
 | `manager/brain/mix.as` | **Composition** — what should this factory build | `Brain::MixTask(fac)` | `factory/maketask.as`, above the generic production branches and below the specific floors (assist, air, rez) |
 
-**Knowledge and Directives do not exist yet.** Nothing in the code carries a
-belief with a `lastSeen` or a confidence; the tables further down are still a
-plan.
+**Directives do not exist yet, and Knowledge exists only inside the mix.**
+Nothing carries a belief with a `lastSeen`; what `mix.as` has is the one property
+the design insists on — *unknown must not read as zero* — expressed as a
+confidence weight rather than as a stored belief. See "Knowledge, as far as it
+goes" below. The belief tables further down are still a plan.
 
 ### Wants — `manager/brain.as`
 
@@ -105,8 +107,59 @@ Two things about it are load-bearing:
   releases the id when the factory dies. apexearth: *"make sure the old system
   doesn't interact with that factory and add its own things."*
 
-Off with `apex_mix=0`. Logs `apex: mix claims <fac>` and `apex: mix -> <def>
-picks=N`.
+- **Eyes are a floor too, and for the same reason.** `ScoutFloor` runs after the
+  build-power floor and before the ratio. A scout share cannot work: scouts are
+  the cheapest units in the game, so a metal share big enough to yield a useful
+  COUNT is a large share of the army and one small enough not to distort it
+  yields none. The wanted number follows the ground there is to watch —
+  `1 + mexes / apex_mix_scout_per_mex` (4) — and the def's own `IsAvailable`
+  enforces behaviour.json's `limit`. Off with `apex_mix_scout=0`.
+
+  Until this existed an owned line could not build a SCOUT at all: the mix table
+  is combat roles only and a claimed factory skips every rule below it. That is
+  the mechanism behind *"enemy super light units would harass our early game
+  mexes very effectively and we didn't have any super lights of our own."*
+
+  Know what it does NOT buy: `CMilitaryManager::DefaultMakeTask` gives a
+  scout-role unit a SCOUT fight task whether or not `quota.scout` (2) is already
+  met — the over-quota branch falls through to `Common(SCOUT)`. So extra Ticks
+  scout, they do not garrison. The production answer to being raided is the
+  counter weighting below, which turns enemy RAIDER cost into RIOT share, and
+  RIOT is the role CircuitAI gives a DEFEND task.
+
+Off with `apex_mix=0`. Logs `apex: mix claims <fac>`, `apex: mix scout #N`, and
+`apex: mix -> <def> picks=N counterW=W | <the six targets>`.
+
+### Knowledge, as far as it goes — `CounterShares()`
+
+The base table is what we want in a vacuum. Each role also names the enemy roles
+it answers — CircuitAI's own relations, stated where the roles are defined in
+behaviour.json: riot answers raiders, skirmish answers riots and assaults,
+assault answers statics. `response.json` encodes the same idea and **an owned
+line never reaches it**, which is how the enemy could field a role we had no
+production answer to with nothing in the path noticing.
+
+    demand_i = sum over the roles i counters of aiEnemyMgr.GetEnemyCost(role)
+    counter_i = demand_i / sum(demand)
+    target_i  = base_i * (1 - w) + counter_i * w
+
+The whole design of this is in `w`. `GetEnemyCost` only accumulates on
+EnemyEnterLOS, so a zero is *not looked*, never *not there*:
+
+    w = MIX_COUNTER_MAX (0.6) * seen / (seen + ours) * apex_mix_counter
+
+With nothing scouted `w` is 0 and the balanced base table is used unchanged —
+ignorance keeps the rounded composition instead of reading as "the enemy has
+nothing", which is the exact failure that made a team push fire on an unscouted
+army worth 90 metal. A glimpse of one squad while we hold an army barely moves
+the target; a well-scouted enemy army moves it most of the way. It is capped
+below 1.0 on purpose: the roles we hold for reasons the enemy does not dictate —
+something to raid with, something to hold ground — have to survive a reading of
+their army.
+
+This is a confidence, not a belief: there is still no `lastSeen`, and a role the
+enemy stopped fielding decays only as our own army grows. A real Knowledge
+faculty would store both.
 
 ## What is wrong with the ladder
 

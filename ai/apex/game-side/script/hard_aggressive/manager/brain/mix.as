@@ -33,16 +33,28 @@ namespace Brain {
 // raider out of the T1 bot lab and that "we never harass their economy while
 // they constantly harass ours" -- stock's bot lab is a raiding factory and ours
 // had become an assault factory.
+// A role, what we want of it in a vacuum, and which enemy roles make it worth
+// more than that. The counter list is what turns a fixed table into a reading of
+// the game -- see CounterShares().
 class MixTarget
 {
 	Type role;
 	float share;
+	array<Type> counters;
 	MixTarget(Type r, float s) { role = r; share = s; }
+	void Counter(Type enemyRole) { counters.insertLast(enemyRole); }
 }
 
 array<MixTarget@> gMix;
 int gNextMixLog = 0;
 int gMixPicks = 0;
+int gScoutPicks = 0;
+
+// How far a perfectly-scouted enemy may pull the composition away from the base
+// table. Not 1.0: the roles we hold for reasons the enemy does not dictate --
+// something to raid with, something to hold ground -- must survive a reading of
+// their army, or one sighting empties the rest of the composition.
+const float MIX_COUNTER_MAX = 0.6f;
 
 // WHICH FACTORIES THE BRAIN OWNS.
 //
@@ -89,16 +101,136 @@ void ReleaseFactory(Id id)
 	}
 }
 
+// The counter relations are CircuitAI's own, stated in behaviour.json where the
+// roles are defined: "riot ... is built when enemy has many raiders", "assault
+// ... when enemy has many statics", "skirmish ... when enemy has many riots or
+// assaults". response.json expresses the same idea, and an owned line never
+// reaches it -- which is how an enemy could field a role we had no answer to and
+// nothing in the production path noticed.
 void InitMix()
 {
 	if (gMix.length() > 0)
 		return;
-	gMix.insertLast(MixTarget(Unit::Role::RAIDER.type,  0.30f));
-	gMix.insertLast(MixTarget(Unit::Role::ASSAULT.type, 0.30f));
-	gMix.insertLast(MixTarget(Unit::Role::SKIRM.type,   0.15f));
-	gMix.insertLast(MixTarget(Unit::Role::RIOT.type,    0.10f));
-	gMix.insertLast(MixTarget(Unit::Role::ARTY.type,    0.08f));
-	gMix.insertLast(MixTarget(Unit::Role::AA.type,      0.07f));
+	MixTarget@ raid = MixTarget(RT::RAIDER,  0.30f);
+	raid.Counter(RT::ARTY);        // artillery cannot defend itself up close
+	raid.Counter(RT::SKIRM);
+	gMix.insertLast(raid);
+
+	MixTarget@ assault = MixTarget(RT::ASSAULT, 0.30f);
+	assault.Counter(RT::STATIC);   // what walks into defences
+	assault.Counter(RT::RIOT);
+	gMix.insertLast(assault);
+
+	MixTarget@ skirm = MixTarget(RT::SKIRM, 0.15f);
+	skirm.Counter(RT::RIOT);
+	skirm.Counter(RT::ASSAULT);
+	gMix.insertLast(skirm);
+
+	// THE ANSWER TO BEING RAIDED. apexearth, watching a 4v4: "enemy super light
+	// units would harass our early game mexes very effectively and we didn't have
+	// any super lights of our own to catch them."
+	MixTarget@ riot = MixTarget(RT::RIOT, 0.10f);
+	riot.Counter(RT::RAIDER);
+	riot.Counter(RT::SCOUT);
+	gMix.insertLast(riot);
+
+	MixTarget@ arty = MixTarget(RT::ARTY, 0.06f);
+	arty.Counter(RT::STATIC);
+	gMix.insertLast(arty);
+
+	MixTarget@ aa = MixTarget(RT::AA, 0.06f);
+	aa.Counter(RT::AIR);
+	aa.Counter(RT::BOMBER);
+	gMix.insertLast(aa);
+
+	// THE T2 ROLES THE TABLE COULD NOT NAME.
+	//
+	// apexearth, watching a T2 bot line: "could really use a few snipers in our
+	// base or fatboys when we are t2 bots... we seem to only make hounds right
+	// now and thats not working out." The mechanism is exact -- behaviour.json
+	// gives armfboy the HEAVY role and armsnipe anti_heavy_ass, and NEITHER was in
+	// this table, so an owned line could not build them at all. Hound (armfido) is
+	// Armada's only assault-role T2 bot, so the whole ASSAULT share became Hounds.
+	//
+	// Both defs are T2, so IsAvailable keeps these out of the T1 phase without a
+	// clock: before the advanced plant stands they are simply skipped.
+	MixTarget@ heavy = MixTarget(RT::HEAVY, 0.12f);
+	heavy.Counter(RT::STATIC);
+	heavy.Counter(RT::ASSAULT);
+	gMix.insertLast(heavy);
+
+	MixTarget@ ah = MixTarget(RT::AH, 0.05f);
+	ah.Counter(RT::HEAVY);
+	ah.Counter(RT::SUPER);
+	gMix.insertLast(ah);
+
+	MixTarget@ aha = MixTarget(RT::AHA, 0.05f);
+	aha.Counter(RT::HEAVY);
+	aha.Counter(RT::SUPER);
+	gMix.insertLast(aha);
+
+	// Normalised here rather than by hand, so a row can be added or a weight
+	// changed above without the whole column having to be re-balanced. `have` is
+	// a share of the total held, so the targets have to be shares of one for a
+	// gap to mean anything.
+	float sum = 0.f;
+	for (uint i = 0; i < gMix.length(); ++i)
+		sum += gMix[i].share;
+	if (sum > 0.f) {
+		for (uint i = 0; i < gMix.length(); ++i)
+			gMix[i].share /= sum;
+	}
+}
+
+// WHAT THE ENEMY IS ACTUALLY FIELDING, AS A TARGET COMPOSITION.
+//
+// Each role's demand is the enemy metal in the roles it counters; the demands
+// normalise into a second set of shares, which Target() blends with the base
+// table. GetEnemyCost only accumulates on EnemyEnterLOS, so a zero means "not
+// seen" rather than "not there" -- that is why this is a BLEND WEIGHTED BY HOW
+// MUCH WE HAVE SEEN and not a replacement. With nothing scouted the weight is
+// zero and the base table is used unchanged, so ignorance keeps the balanced
+// composition instead of reading as "the enemy has nothing".
+array<float> CounterShares(CCircuitUnit@ fac, float &out weight)
+{
+	array<float> out_(gMix.length(), 0.f);
+	weight = 0.f;
+	float seen = 0.f;
+	float total = 0.f;
+	for (uint i = 0; i < gMix.length(); ++i) {
+		float demand = 0.f;
+		for (uint c = 0; c < gMix[i].counters.length(); ++c)
+			demand += aiEnemyMgr.GetEnemyCost(gMix[i].counters[c]);
+		out_[i] = demand;
+		total += demand;
+	}
+	// Everything we have laid eyes on, counted once, as the scale against which
+	// our own army says whether that sighting is worth steering by.
+	seen = total;
+	if (total <= 1.f)
+		return out_;
+	for (uint i = 0; i < out_.length(); ++i)
+		out_[i] /= total;
+
+	float ours = 0.f;
+	for (uint i = 0; i < gMix.length(); ++i) {
+		const float held = HeldOfRole(fac, gMix[i].role);
+		if (held > 0.f)
+			ours += held;
+	}
+	// Seen against held: a glimpse of one squad while we hold an army barely
+	// moves the target; a well-scouted enemy army moves it most of the way.
+	const float frac = seen / (seen + ((ours > 1.f) ? ours : 1.f));
+	weight = MIX_COUNTER_MAX * frac * ai.GetTunable("apex_mix_counter", 1.f);
+	if (weight > MIX_COUNTER_MAX)
+		weight = MIX_COUNTER_MAX;
+	return out_;
+}
+
+// The base table read through what we know of the enemy.
+float Target(uint i, const array<float>& in counter, float weight)
+{
+	return gMix[i].share * (1.f - weight) + counter[i] * weight;
 }
 
 // What we currently HOLD of a role, in metal. CCircuitDef::count is our own
@@ -126,13 +258,29 @@ CCircuitDef@ NextForMix(CCircuitUnit@ fac)
 		total = 1.f;             // opening: every share reads as zero, so the
 		                         // first pick is simply the highest target
 
+	float weight = 0.f;
+	array<float> counter = CounterShares(fac, weight);
+
+	// A RATIO BEING MET IS NOT A REASON TO STOP BUILDING.
+	//
+	// worstGap started at 0, so once no role was below its target this returned
+	// null -- and an owned line does not fall through to our production rules, it
+	// falls to the engine, which has its own reasons to decline. A factory then
+	// stands idle on a full bank. apexearth, watching: "we often aren't even
+	// using all of our resources yet the factory will remain idle."
+	//
+	// The target is a composition, not a quantity. Starting below every possible
+	// gap means the line always has an answer: whichever role is furthest below
+	// target, or when all are at or above it, the one that is least over. The
+	// composition still converges -- building the least-over role is what keeps it
+	// there -- and the line never goes quiet while it can build something.
 	CCircuitDef@ best = null;
-	float worstGap = 0.f;
+	float worstGap = -1000.f;
 	for (uint i = 0; i < gMix.length(); ++i) {
 		if (held[i] < 0.f)
 			continue;            // not buildable here
 		const float have = held[i] / total;
-		const float gap = gMix[i].share - have;
+		const float gap = Target(i, counter, weight) - have;
 		if (gap <= worstGap)
 			continue;
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
@@ -173,6 +321,50 @@ IUnitTask@ BuildPowerFirst(CCircuitUnit@ fac)
 			con, fac.GetPos(ai.frame), 0.f));
 }
 
+// EYES ARE A FLOOR, NOT A SHARE -- AND AN OWNED LINE HAD NEITHER.
+//
+// The mix table is combat roles only, and a claimed factory skips every rule
+// below it, so from the moment the mix took the bot lab nothing on that line
+// could ever build a SCOUT. That is the whole mechanism behind apexearth,
+// watching a 4v4 at +25: "enemy super light units would harass our early game
+// mexes very effectively and we didn't have any super lights of our own to catch
+// them." Armada's is a 21-metal Tick; the enemy's were being built from the tier
+// table we had stopped consulting.
+//
+// A share cannot express it. Scouts are the cheapest units in the game, so a
+// metal share large enough to yield a useful COUNT is a large share of the army,
+// and one small enough not to distort the army yields none. What we want is a
+// standing number, and the honest thing for that number to follow is how much
+// ground there is to watch -- so it scales with the extractors we hold, the same
+// way everything else here scales with the economy. The def's own availability
+// still bounds it, which is where behaviour.json's limit is enforced.
+IUnitTask@ ScoutFloor(CCircuitUnit@ fac)
+{
+	CCircuitDef@ scout = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::SCOUT);
+	if ((scout is null) || !scout.IsAvailable(ai.frame))
+		return null;
+	const float per = ai.GetTunable("apex_mix_scout_per_mex", 4.f);
+	int want = 1;
+	if (per >= 1.f) {
+		CCircuitDef@ mex = SideDef3("armmex", "cormex", "legmex");
+		if (mex !is null)
+			want = 1 + int(float(mex.count) / per);
+	}
+	if (scout.count >= want)
+		return null;
+	IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
+			Task::RecruitType::FIREPOWER, Task::Priority::NORMAL,
+			scout, fac.GetPos(ai.frame), 0.f));
+	if (rec !is null) {
+		++gScoutPicks;
+		if (gScoutPicks <= 3 || (gScoutPicks % 20 == 0)) {
+			AiLog(Factory::T() + "apex: mix scout #" + gScoutPicks + " "
+				+ scout.GetName() + " have=" + scout.count + " want=" + want);
+		}
+	}
+	return rec;
+}
+
 IUnitTask@ MixTask(CCircuitUnit@ fac)
 {
 	if (ai.GetTunable("apex_mix", 1.f) <= 0.f)
@@ -181,6 +373,13 @@ IUnitTask@ MixTask(CCircuitUnit@ fac)
 	if (bp !is null) {
 		ClaimFactory(fac);
 		return bp;
+	}
+	if (ai.GetTunable("apex_mix_scout", 1.f) > 0.f) {
+		IUnitTask@ sc = ScoutFloor(fac);
+		if (sc !is null) {
+			ClaimFactory(fac);
+			return sc;
+		}
 	}
 	CCircuitDef@ want = NextForMix(fac);
 	if (want is null)
@@ -196,8 +395,14 @@ IUnitTask@ MixTask(CCircuitUnit@ fac)
 	++gMixPicks;
 	if (ai.frame >= gNextMixLog) {
 		gNextMixLog = ai.frame + 60 * SECOND;
-		AiLog(Factory::T() + "apex: mix -> " + want.GetName()
-			+ " picks=" + gMixPicks);
+		float weight = 0.f;
+		array<float> counter = CounterShares(fac, weight);
+		string line = Factory::T() + "apex: mix -> " + want.GetName()
+			+ " picks=" + gMixPicks
+			+ " counterW=" + formatFloat(weight, "", 0, 2);
+		for (uint i = 0; i < gMix.length(); ++i)
+			line += " | " + formatFloat(Target(i, counter, weight), "", 0, 2);
+		AiLog(line);
 	}
 	return rec;
 }

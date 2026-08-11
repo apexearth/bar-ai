@@ -93,6 +93,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// get their turn on the same offer.
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 	NoteOffer(unit, task, isAdvCon);
+	if (isComm) {
+		++gCommOffers;
+		if (task is null)
+			++gCommOfferNull;
+		CommDiag();
+	}
 
 	@t = ExpansionAlwaysWins(task);
 	if (t !is null)
@@ -168,7 +174,17 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
-	return RezzerPreemptReclaim(unit, isComm, task);
+	@t = RezzerPreemptReclaim(unit, isComm, task);
+	if (t !is null)
+		return t;
+
+	// Nothing above answered. For every other builder that is fine -- the engine
+	// asks again shortly. For the commander it is measured idle time on the
+	// biggest builder we own, so it gets a last resort of its own.
+	@t = CommanderIdleWork(unit, isComm);
+	if (isComm && (t is null))
+		++gCommEndNull;
+	return t;
 }
 
 }  // namespace Builder

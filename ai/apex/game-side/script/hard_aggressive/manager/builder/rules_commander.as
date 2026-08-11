@@ -3,6 +3,43 @@ namespace Builder {
 // Everything AiMakeTask does differently for the commander: its own safety
 // rules before work is chosen, and its own vetoes over what work is offered.
 
+// WHY THE COMMANDER IS STANDING STILL.
+//
+// dev_stats_export samples every commander twice a second and reports the share
+// of samples where the engine holds zero orders for it. Measured 2026-08-10 over
+// a 10-minute 4v4: ours idle 56.4% of the game against stock BARb's 26.6%.
+//
+// A returned null from AiMakeTask IS that idle time -- the engine has nothing to
+// give the unit and simply waits for the next Reevaluate. Three of this file's
+// rules can produce one by REFUSING an offer without supplying a replacement,
+// and none of them logged, so the counters below say which.
+int gCommOffers = 0;        // times DefaultMakeTask was asked for a commander
+int gCommOfferNull = 0;     //   ... and the engine itself had nothing
+int gCommVetoReclaim = 0;   // reclaim refused in favour of a mex spot
+int gCommVetoHold = 0;      // new job refused to keep the current one
+int gCommEndNull = 0;       // reached the end of the pipeline with nothing
+int gCommIdleJobs = 0;      // last-resort jobs CommanderIdleWork supplied
+int gCommRetreatHp = 0;     // returned a retreat because health was low
+int gCommGuard = 0;         // returned a mex guard
+int gCommIdleUnsafe = 0;    // CommanderIdleWork refused: standing in threat
+int gCommIdleNoJob = 0;     //   ... refused: mex, assist and energy all declined
+int gNextCommDiag = 0;
+
+void CommDiag()
+{
+	if (ai.frame < gNextCommDiag)
+		return;
+	gNextCommDiag = ai.frame + 60 * SECOND;
+	AiLog(Factory::T() + "apex: comm-diag offers=" + gCommOffers
+		+ " offerNull=" + gCommOfferNull
+		+ " vetoReclaim=" + gCommVetoReclaim
+		+ " vetoHold=" + gCommVetoHold
+		+ " endNull=" + gCommEndNull
+		+ " idleJobs=" + gCommIdleJobs
+		+ " retreatHp=" + gCommRetreatHp + " guard=" + gCommGuard
+		+ " idleUnsafe=" + gCommIdleUnsafe + " idleNoJob=" + gCommIdleNoJob);
+}
+
 IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 {
 	if (isComm) {
@@ -47,8 +84,10 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 		// that has just finished one this is the mex under its feet.
 		if (unit.GetHealthPercent() >= COM_RETREAT_HEALTH) {
 			IUnitTask@ cguard = MexGuard(unit);
-			if (cguard !is null)
+			if (cguard !is null) {
+				++gCommGuard;
 				return cguard;
+			}
 		}
 		const float hp = unit.GetHealthPercent();
 		if (hp < COM_RETREAT_HEALTH) {
@@ -72,8 +111,10 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 					+ formatFloat(hp * 100.f, "", 0, 0) + "% health, frame=" + ai.frame);
 			}
 			IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
-			if (flee !is null)
+			if (flee !is null) {
+				++gCommRetreatHp;
 				return flee;
+			}
 			}
 		}
 		// The enemy centroid has come to US. PastFront cannot see this: the base
@@ -212,6 +253,82 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 	return null;
 }
 
+int gNextCommAssist = 0;
+const int COMM_ASSIST_PERIOD = 2 * SECOND;
+
+// THE COMMANDER HAD NO FALLBACK, AND THAT IS WHERE THE IDLE TIME COMES FROM.
+//
+// Measured with the comm-diag counters above, 16-minute 4v4: across four
+// commanders the pipeline ended with nothing 105-407 times, and in every case
+// `offerNull` accounts for nearly all of it -- the ENGINE's own commander task
+// makers (CBuilderManager::MakeCommPeaceTask / MakeCommDangerTask) declined, and
+// our ladder had nothing to add. Our two vetoes are not the cause: three of the
+// four players logged 0-2 of them.
+//
+// Everything at the tail of AiMakeTask that could have answered is gated
+// `!isComm` -- MetalFullFallback, TidyObsolete, the dig-in. So the one unit that
+// is most of our build power for the whole opening was the only one with no
+// last resort at all, and it stood still for 48% of the game against stock's
+// 33%.
+//
+// Ordered by what the metal is worth, not by convenience: take ground, then put
+// build power on the line that is producing, then buy energy. apexearth, on the
+// same behaviour seen from the other side: "He should stand behind his t1 lab
+// and help it build stuff!"
+IUnitTask@ CommanderIdleWork(CCircuitUnit@ unit, bool isComm)
+{
+	if (!isComm)
+		return null;
+	// A commander that is standing still because it is in danger is handled by
+	// the retreat branches above; do not hand it a job that walks it back out.
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (ThreatFor(unit, here) > CON_THREAT_VETO) {
+		++gCommIdleUnsafe;
+		return null;
+	}
+
+	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, here);
+	if (spot >= 0) {
+		IUnitTask@ mex = aiEconomyMgr.EnqueueMexAt(unit, spot);
+		if (mex !is null) {
+			++gCommIdleJobs;
+			return mex;
+		}
+	}
+
+	// Assisting is a REPAIR task on the factory itself, which is the only shape
+	// the engine accepts: a positional REPAIR dereferences a null target inside
+	// CBuilderManager::Enqueue. Rate-limited because the task persists once
+	// taken, so asking every call would queue duplicates.
+	if ((Factory::gT1FacUnit !is null) && (ai.frame >= gNextCommAssist)) {
+		IUnitTask@ help = aiBuilderMgr.Enqueue(
+				TaskB::Repair(Task::Priority::NORMAL, Factory::gT1FacUnit));
+		if (help !is null) {
+			gNextCommAssist = ai.frame + COMM_ASSIST_PERIOD;
+			++gCommIdleJobs;
+			return help;
+		}
+	}
+
+	if (!aiEconomyMgr.isMetalEmpty && gHomeSet && !EnergyWasting()) {
+		CCircuitDef@ gen = Factory::gHaveT2
+				? SideDef3(armadvsol, coradvsol, legadvsol)
+				: SideDef3(armsolar, corsolar, legsolar);
+		if ((gen is null) || !gen.IsAvailable(ai.frame))
+			@gen = SideDef3(armsolar, corsolar, legsolar);
+		if ((gen !is null) && gen.IsAvailable(ai.frame)) {
+			IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
+					Task::Priority::NORMAL, gen, gHomePos, SQUARE_SIZE * 8));
+			if (post !is null) {
+				++gCommIdleJobs;
+				return post;
+			}
+		}
+	}
+	++gCommIdleNoJob;
+	return null;
+}
+
 IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)
 {
 	// The commander plants most of the early mexes, and was the ONE builder
@@ -248,6 +365,7 @@ IUnitTask@ VetoCommanderReclaim(CCircuitUnit@ unit, bool isComm, IUnitTask@ task
 		&& (task.GetBuildType() == Task::BuildType::RECLAIM)
 		&& (aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame)) >= 0))
 	{
+		++gCommVetoReclaim;
 		@task = null;
 	}
 	return task;
@@ -287,6 +405,7 @@ IUnitTask@ VetoCommanderHold(CCircuitUnit@ unit, bool isComm, IUnitTask@ task)
 		if (reallyWorking && (heldKind != "") && (held.GetBuildType() != task.GetBuildType())
 			&& (ThreatFor(unit, held.GetBuildPos()) <= CON_THREAT_VETO))
 		{
+			++gCommVetoHold;
 			LogConVeto(unit, "comm-hold", heldKind, 0.f);
 			@task = null;
 		}

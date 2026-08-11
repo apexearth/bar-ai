@@ -123,6 +123,24 @@ local defSpend = {}       -- team -> cumulative metal on finished static defence
 local cmdCount = {}       -- team -> commands issued, cumulative
 local cmdWindow = {}      -- team -> commands issued since the previous sample
 
+-- COMMANDER IDLE TIME. apexearth, watching a 4v4: "prioritize fixing this
+-- commander idle time. could be one big reason we underperform."
+--
+-- Nothing here could see it. cmds/cmdsWin are team-wide, so a commander standing
+-- still is hidden by fifty other units taking orders, and the AI's own logs
+-- record the decisions it MADE, never the ticks where it decided nothing. The
+-- commander is the biggest builder on the field for the whole opening, so its
+-- idle fraction is build power that was paid for and not spent.
+--
+-- Sampled rather than event-driven: a command queue emptying is not an event,
+-- and UnitIdle fires on transitions that a re-order immediately cancels. Idle
+-- here means the engine holds zero commands for it at the sample instant.
+-- Counted for both AIs, so stock is the control.
+local commIdle = {}       -- team -> samples where a live commander had no orders
+local commSamp = {}       -- team -> samples taken over a live commander
+local COMM_SAMPLE = 15    -- frames between samples (2/second)
+local nextCommSample = 0
+
 local function techOf(ud)
     local t = techLvl[ud.id]
     if t == nil then
@@ -336,6 +354,27 @@ end
 
 -- `io` is nil in the gadget sandbox, so emit through Spring.Echo and let the
 -- harness parse the infolog it already collects. Last line per team wins.
+local function sampleCommIdle()
+	for _, teamID in ipairs(Spring.GetTeamList()) do
+		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
+		if isAI then
+			for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+				local udid = Spring.GetUnitDefID(uid)
+				local ud = udid and UnitDefs[udid]
+				if ud ~= nil and (ud.customParams or {}).iscommander then
+					bump(commSamp, teamID, 1)
+					-- Ask for one command only; we care whether the queue is
+					-- empty, not what is in it.
+					local cmds = Spring.GetUnitCommands(uid, 1)
+					if cmds == nil or #cmds == 0 then
+						bump(commIdle, teamID, 1)
+					end
+				end
+			end
+		end
+	end
+end
+
 local function dump(reason)
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
@@ -415,6 +454,8 @@ local function dump(reason)
 			parts[#parts + 1] = string.format("cmdsWin=%d", cmdWindow[teamID] or 0)
 			parts[#parts + 1] = string.format("ownUnits=%d", ou)
 			parts[#parts + 1] = string.format("ownBuilders=%d", ob)
+			parts[#parts + 1] = string.format("commIdle=%d", commIdle[teamID] or 0)
+			parts[#parts + 1] = string.format("commSamp=%d", commSamp[teamID] or 0)
 			cmdWindow[teamID] = 0
 
 			local n = Spring.GetTeamStatsHistory(teamID)
@@ -464,6 +505,10 @@ local function dumpPositions()
 end
 
 function gadget:GameFrame(frame)
+	if frame >= nextCommSample then
+		nextCommSample = frame + COMM_SAMPLE
+		sampleCommIdle()
+	end
 	if frame >= nextDump then
 		nextDump = frame + DUMP_INTERVAL
 		dump("periodic")

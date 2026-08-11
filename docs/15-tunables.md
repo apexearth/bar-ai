@@ -56,6 +56,9 @@ Verified 2026-08-09 by reading every call site.
 | `apex_front_nano` | 1 (on) | AngelScript `brain.as` `Decide` | 0 stops the Brain proposing a nano turret behind the front line |
 | `apex_mix` | 1 (on) | AngelScript `brain/mix.as` `MixTask` | 0 turns the target-composition system off; factories fall back to the old production rules |
 | `apex_mix_con_income` | 30 | AngelScript `brain/mix.as` `BuildPowerFirst` | metal income per constructor the mix builds before it looks at the army ratio |
+| `apex_mix_counter` | 1 | AngelScript `brain/mix.as` `CounterShares` | multiplier on how far observed enemy composition pulls the target mix; 0 restores the fixed table. Capped by `MIX_COUNTER_MAX` (0.6) |
+| `apex_mix_scout` | 1 (on) | AngelScript `brain/mix.as` `MixTask` | 0 removes the scout floor, which is the only way an owned factory line builds a scout at all |
+| `apex_mix_scout_per_mex` | 4 | AngelScript `brain/mix.as` `ScoutFloor` | extractors held per standing scout wanted; 0 pins it at one |
 | `apex_mexup_per_income` | 25 | C++ `EconomyManager.cpp` `UpdateMexUp` | metal income per concurrent mex upgrade the engine will hold open |
 | `apex_mexup_full_bonus` | 4 | C++ `EconomyManager.cpp` `UpdateMexUp` | extra concurrent upgrades allowed while the metal bank is full |
 | `apex_mexup_first` | 3 | C++ `EconomyManager.cpp` `UpdateMexUp` | floor on that cap while nothing is upgraded yet — the "priority #1" burst |
