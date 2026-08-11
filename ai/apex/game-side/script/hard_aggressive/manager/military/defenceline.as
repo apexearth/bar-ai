@@ -188,6 +188,10 @@ bool DefenceAllowedAt(const AIFloat3& in pos)
 			++local;
 	}
 	if (forward) {
+		// WORK ORDERED COUNTS AGAINST THE BUDGET, NOT JUST WORK FINISHED. See
+		// Builder::OutstandingFrontTasks: a budget that counts only standing
+		// towers cannot bind on a line where nothing is finishing.
+		front += Builder::OutstandingFrontTasks();
 		// Team-wide: one line, one budget, however many of us are holding it.
 		const float teamFront = TeamSum(TV_FFENCE, float(front));
 		const float teamInc = TeamSum(TV_MINC, aiEconomyMgr.metal.income);

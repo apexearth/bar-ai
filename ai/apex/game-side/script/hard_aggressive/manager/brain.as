@@ -178,6 +178,78 @@ int gNextBrainLog = 0;
 int gMexUpOrders = 0;
 int gMexOrders = 0;
 int gFenceOrders = 0;
+// Where the orders were AIMED, against where the towers ended up standing. The
+// two have been measured only at the end, which cannot tell a request that was
+// never forward from a forward tower that never got built.
+int gFenceNear = 0;   // ordered inside 0.10 of the way to the enemy
+int gFenceMid = 0;    // 0.10 - 0.25
+int gFenceFar = 0;    // past 0.25
+
+// DID THE ORDER BECOME A TOWER? Aim and outcome have only ever been measured
+// separately -- orders from the log, standing towers from the position gadget --
+// and a request aimed at 0.4 that never gets built looks identical, at the end of
+// the game, to a request that was never aimed forward at all.
+array<AIFloat3> gAimPos;
+array<int> gAimAt;
+array<IUnitTask@> gAimTask;
+int gAimBuilt = 0;
+int gAimLost = 0;
+int gAimNoWorker = 0;   // still on the books at settle time with nobody on it
+int gAimGone = 0;       // task itself was dropped
+int gNextAimLog = 0;
+const int   AIM_SETTLE = 90 * SECOND;   // long enough to walk there and build
+const float AIM_RADIUS = 300.f;
+
+int gAimEarlyOn = 0;    // had a builder on it 10s after the order
+int gAimEarlyOff = 0;
+array<bool> gAimSeen;
+
+void FenceSweep()
+{
+	for (int i = int(gAimPos.length()) - 1; i >= 0; --i) {
+		// Was it ever picked up at all? Assigned-then-abandoned and never-assigned
+		// look identical at settle time, and they have opposite fixes.
+		if (!gAimSeen[i] && (ai.frame - gAimAt[i] >= 10 * SECOND)) {
+			gAimSeen[i] = true;
+			IUnitTask@ e = gAimTask[i];
+			array<CCircuitUnit@>@ onE = (e is null) ? null : e.GetUnits();
+			if ((onE !is null) && (onE.length() > 0))
+				++gAimEarlyOn;
+			else
+				++gAimEarlyOff;
+		}
+		if (ai.frame - gAimAt[i] < AIM_SETTLE)
+			continue;
+		if (Military::FenceCountNear(gAimPos[i], AIM_RADIUS) > 0) {
+			++gAimBuilt;
+		} else {
+			++gAimLost;
+			// Which half of the failure it is: an order nobody ever picked up, or
+			// one that was picked up and did not survive the attempt.
+			IUnitTask@ t = gAimTask[i];
+			if (t is null) {
+				++gAimGone;
+			} else {
+				array<CCircuitUnit@>@ on = t.GetUnits();
+				if ((on is null) || (on.length() == 0))
+					++gAimNoWorker;
+			}
+		}
+		gAimPos.removeAt(i);
+		gAimAt.removeAt(i);
+		gAimTask.removeAt(i);
+		gAimSeen.removeAt(i);
+	}
+	if ((gAimBuilt + gAimLost > 0) && (ai.frame >= gNextAimLog)) {
+		gNextAimLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: front-aim built=" + gAimBuilt
+			+ " never=" + gAimLost
+			+ " picked=" + gAimEarlyOn + "/" + (gAimEarlyOn + gAimEarlyOff)
+			+ " (idle=" + gAimNoWorker
+			+ " dropped=" + gAimGone + ")"
+			+ " pending=" + gAimPos.length());
+	}
+}
 int gNextPickLog = 0;
 
 void Clear()
@@ -266,18 +338,35 @@ Want@ MexWant(CCircuitUnit@ unit)
 // BudgetMult. This one competes there like everything else.
 const float FRONT_FENCE_VALUE = 1.2f;
 const float FRONT_FENCE_SPREAD = 700.f;   // how far apart cover counts as spread
+const float FRONT_SITE_SEARCH = 400.f;    // how far to look for ground it fits on
 
 Want@ FrontDefenceWant(CCircuitUnit@ unit)
 {
+	FenceSweep();
 	array<AIFloat3> line;
 	if (!Military::FrontCurve(line) || (line.length() == 0))
 		return null;
 
+	// A TASK NOBODY CAN REACH IS NEVER ASSIGNED TO ANYONE. Measured: of 235 front
+	// orders across two games, 7 became towers and every single failure was still
+	// on the books 90 seconds later with NO worker on it -- not dropped, not
+	// killed, just never picked up. The builder manager elects units onto tasks by
+	// its own cost-and-distance ranking, so a request 3,000 elmos away loses to
+	// every nearer piece of work, forever, however good the position is.
+	//
+	// So the Brain asks the builder in front of it to cover the stretch of line in
+	// front of IT, rather than the best point on the whole curve.
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	const float reach = ai.GetTunable("apex_front_reach", 2200.f);
 	AIFloat3 best;
 	bool have = false;
 	uint fewest = 0;
+	float bestDist = 0.f;
 	for (uint i = 0; i < line.length(); ++i) {
 		if (!OnMap(line[i]))
+			continue;
+		const float d = me.distance2D(line[i]);
+		if (d > reach)
 			continue;
 		// Never send a builder somewhere it cannot survive to finish. apexearth:
 		// "what is the point in trying to make a tower that can never be built?"
@@ -289,8 +378,12 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 		if (Builder::DefenceTaskNear(line[i], FRONT_FENCE_SPREAD))
 			continue;
 		const uint cover = Military::FenceCountNear(line[i], FRONT_FENCE_SPREAD);
-		if (!have || (cover < fewest)) {
+		// Least-covered stretch first -- cover spreads along the line before it
+		// thickens anywhere on it -- and the nearer of two equally bare stretches,
+		// so the walk is not the cost.
+		if (!have || (cover < fewest) || ((cover == fewest) && (d < bestDist))) {
 			fewest = cover;
+			bestDist = d;
 			best = line[i];
 			have = true;
 		}
@@ -300,8 +393,16 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	if (!Military::DefenceAllowedAt(best))
 		return null;
 
-	CCircuitDef@ tower = Builder::MexGuardTower(unit, best);
+	CCircuitDef@ tower = Builder::FrontTower(unit, best);
 	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+	// A POINT ON A CURVE IS NOT A BUILD SITE. Every other placement in this AI
+	// runs its position through FindBuildSiteNear first; this one handed the raw
+	// sample straight to Enqueue. The samples are geometry -- fourteen steps along
+	// a bearing -- so they land on slopes, in water and inside existing buildings
+	// as often as not.
+	best = ai.FindBuildSiteNear(tower, best, FRONT_SITE_SEARCH);
+	if (!OnMap(best))
 		return null;
 
 	Want@ w = Want();
@@ -618,9 +719,23 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 					Task::Priority::NORMAL, w.def, w.pos, SQUARE_SIZE * 4));
 			if (t !is null) {
 				++gFenceOrders;
-				if (gFenceOrders <= 3 || (gFenceOrders % 20 == 0)) {
+				const float fwd = Military::ForwardFraction(w.pos);
+				if (fwd < 0.10f)
+					++gFenceNear;
+				else if (fwd < 0.25f)
+					++gFenceMid;
+				else
+					++gFenceFar;
+				gAimPos.insertLast(w.pos);
+				gAimAt.insertLast(ai.frame);
+				gAimTask.insertLast(t);
+				gAimSeen.insertLast(false);
+				if (gFenceOrders <= 3 || (gFenceOrders % 10 == 0)) {
 					AiLog(Factory::T() + "apex: brain orders front defence #"
-						+ gFenceOrders + " " + w.def.GetName());
+						+ gFenceOrders + " " + w.def.GetName()
+						+ " fwd=" + formatFloat(fwd, "", 0, 2)
+						+ " aimed near/mid/far=" + gFenceNear + "/" + gFenceMid
+						+ "/" + gFenceFar);
 				}
 				return t;
 			}

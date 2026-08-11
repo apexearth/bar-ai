@@ -82,13 +82,19 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 	JoinForget(task);
 	if (bt == Task::BuildType::MEXUP) {
 		gMexUpActive = false;
-	} else if (bt == Task::BuildType::MEX) {
+	} else if (bt == Task::BuildType::DEFENCE) {
+		// THE REGISTER LEAKED. Defence tasks were added here and removed only
+		// under the MEX branch, comparing against tasks that can never be in this
+		// array -- so nothing ever left it. DefenceTaskNear then answered "already
+		// ordered" for every point the Brain had EVER asked for, which retires the
+		// whole front curve after one pass along it.
 		for (uint i = 0; i < gDefTasks.length(); ++i) {
 			if (gDefTasks[i] is task) {
 				gDefTasks.removeAt(i);
 				break;
 			}
 		}
+	} else if (bt == Task::BuildType::MEX) {
 		for (uint i = 0; i < gMexTasks.length(); ++i) {
 			if (gMexTasks[i] is task) {
 				gMexTasks.removeAt(i);

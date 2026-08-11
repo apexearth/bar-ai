@@ -18,6 +18,82 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-11: the front line is aimed correctly and almost never built
+
+Layer 2 (`manager/brain.as`, `manager/military/territory.as`,
+`manager/builder/{events,mexwork,mexguard}.as`) plus a new measurement tool,
+`tools/defence_pos.py`.
+
+Every previous claim about defence placement counted TOWERS. This projects each
+static defence onto the axis from its owner's base to the enemy's, from the
+`[BARAI_POS]` gadget, so 0.0 is "in our base" and 0.5 is midfield -- which is
+what "90% on the front line" actually asserts. Six games, 4v4 Comet Catcher,
++50, both Armada, 20 minutes:
+
+| | apex | stock |
+|---|---|---|
+| defences per player | 9.4 | 36.0 |
+| median position | 0.01 | 0.13 |
+| past the quarter mark | 2% | 36% |
+
+Instrumenting the request side separated aim from outcome, which the end-state
+telemetry cannot do:
+
+- the front line itself is computed correctly -- mean crossing 0.35-0.48 of the
+  way to the enemy, 13 lanes, edge to edge;
+- the Brain aims correctly -- 139 of 140 orders past 0.25 for one player,
+  typically 0.38-0.70;
+- **7 of 235 orders became towers.** Every failure was still on the books 90
+  seconds later with NO builder on it. Only ~1 in 3 had a builder even 10
+  seconds in.
+
+Ruled out by direct A/B: the def (Pit Bull 680m/14,000e -> Beamer changed
+nothing) and invalid ground (adding the `FindBuildSiteNear` snap every other
+placement already does changed nothing).
+
+Two real bugs found on the way, both fixed here:
+
+- **`gDefTasks` leaked.** Defence tasks were registered in `AiTaskAdded` and
+  removed only inside `AiTaskRemoved`'s `MEX` branch, comparing against tasks
+  that can never be in that array. `DefenceTaskNear` therefore answered "already
+  ordered" for every point the Brain had EVER asked for, retiring the whole front
+  curve after one pass along it.
+- **Empty ground counted as enemy ground.** `GetNetInflAt` is ally minus enemy,
+  so land neither side has walked into reads exactly 0, and the crossing test was
+  `<= 0`. Measured min lane fraction 0.08 -- the first sample -- on every 30
+  second tick of two games: every unwalked flank put the front one step from our
+  own base.
+
+Also: a request is only "spoken for" if a builder is on it, and outstanding
+orders now count against the front budget. The budget counted STANDING towers,
+which cannot bind on a line where nothing finishes -- one player ordered 140 in
+fourteen minutes once the leak stopped capping it by accident, and that
+constructor time is the economy: metal produced fell 29,148 -> 19,445 per player
+against an unchanged opponent. With the order-bound in, six clean games:
+
+| | before (6 games) | after (6 games) |
+|---|---|---|
+| metal produced | 29,148 | **32,548** |
+| mex upgrades | 2 | **3** |
+| constructors (T1, peak) | 21 | **27** |
+| static defence share | 16.2% | 15.5% |
+| defence past 0.25 | 2% | 0% |
+
+So the position is still not fixed. What is fixed is that it is now MEASURED,
+and the failure is located: the orders are right and nobody goes.
+
+**REVERTED, do not retry as-is:** having the Brain hand back an existing
+unworked defence task from `AiMakeTask` instead of enqueueing a new one. It
+looks correct -- our script hook is the only thing that elects a builder onto a
+task -- but it corrupted the heap: 5 of 6 games exited `0xC0000374` at 5-20
+minutes, against 0x0 for every game before and after. Whatever re-election needs,
+it is not returning a registered task by handle from this path.
+
+Unrelated, found while reading a crash log: `dev_team_income.lua` had been
+failing to load since the front-publication removal (a stray `end`, then a call
+to the deleted `publishFront`). Every run between those two commits had no team
+income gadget at all.
+
 ## 2026-08-10: the Brain — rules propose Wants, one ranking decides
 
 Layer 2 (`manager/brain.as`, `manager/brain/mix.as`) + layer 3 (one new binding).

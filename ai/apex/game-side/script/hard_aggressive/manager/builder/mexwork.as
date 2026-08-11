@@ -41,6 +41,13 @@ bool DefenceTaskNear(const AIFloat3& in pos, float radius)
 	for (uint i = 0; i < gDefTasks.length(); ++i) {
 		if (gDefTasks[i] is null)
 			continue;
+		// ONLY A TASK SOMEBODY IS ON COUNTS AS SPOKEN FOR. An order with no
+		// builder on it is not cover, it is an orphan -- measured, 90% of the
+		// Brain's front orders sat exactly like that at 90 seconds -- and
+		// treating it as cover is what stops anyone ever going back for it.
+		array<CCircuitUnit@>@ on = gDefTasks[i].GetUnits();
+		if ((on is null) || (on.length() == 0))
+			continue;
 		const AIFloat3 at = gDefTasks[i].GetBuildPos();
 		if (!OnMap(at))
 			continue;
@@ -50,6 +57,27 @@ bool DefenceTaskNear(const AIFloat3& in pos, float radius)
 			return true;
 	}
 	return false;
+}
+
+// Orders on the books for the FRONT specifically. The defence budget counted
+// standing towers only, which is a bound that cannot bind while the orders are
+// not finishing: front towers stood at zero all game, so the budget read "no
+// front defence yet" and approved every request. One player ordered 140 in
+// fourteen minutes and that constructor time is the economy -- metal produced
+// fell 29,148 -> 19,445 per player against an unchanged opponent.
+uint OutstandingFrontTasks()
+{
+	uint n = 0;
+	for (uint i = 0; i < gDefTasks.length(); ++i) {
+		if (gDefTasks[i] is null)
+			continue;
+		const AIFloat3 at = gDefTasks[i].GetBuildPos();
+		if (!OnMap(at))
+			continue;
+		if (Military::OnBorder(at) || Military::NearFront(at))
+			++n;
+	}
+	return n;
 }
 
 uint OutstandingMexTasks()

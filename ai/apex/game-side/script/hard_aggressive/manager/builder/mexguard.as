@@ -96,6 +96,25 @@ CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 	return SideDef3(armllt, corllt, leglht);
 }
 
+// WHAT TO BUILD ON THE LINE ITSELF, which is not the same question as what to
+// put on a mex. An advanced constructor at a mex gets a Pit Bull, and the Brain's
+// front request inherited that: 20+ Pit Bulls ordered per player per game at 0.38
+// to 0.70 of the way to the enemy, and ZERO ever finished. It is 680 metal,
+// 14,000 energy and 15,000 build time -- roughly a minute of undisturbed work by
+// one advanced constructor, standing on contested ground.
+//
+// The A/B arm below builds the same thing the T1 path already builds on the
+// border instead. apex_front_pb=1 restores the Pit Bull.
+CCircuitDef@ FrontTower(CCircuitUnit@ unit, const AIFloat3& in at)
+{
+	if (ai.GetTunable("apex_front_pb", 0.f) > 0.f)
+		return MexGuardTower(unit, at);
+	CCircuitDef@ mid = SideDef3(armbeamer, corhllt, legmg);
+	if ((mid !is null) && mid.IsAvailable(ai.frame))
+		return mid;
+	return SideDef3(armllt, corllt, leglht);
+}
+
 IUnitTask@ MexGuard(CCircuitUnit@ unit)
 {
 	CCircuitDef@ mex = MexDef();

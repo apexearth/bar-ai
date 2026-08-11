@@ -168,7 +168,6 @@ end
 -- territory.as walks lanes across the map and takes the zero crossing of ally
 -- minus enemy influence. That is engine-side, present in every game, and it
 -- follows the fighting.
-end
 
 function gadget:GameFrame(frame)
 	if frame < next_at then
@@ -195,5 +194,4 @@ function gadget:GameFrame(frame)
 
 	-- After the incomes above are current, never against a half-updated table.
 	updateLeads(frame)
-	publishFront()
 end

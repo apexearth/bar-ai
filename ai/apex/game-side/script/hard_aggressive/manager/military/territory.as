@@ -314,22 +314,69 @@ void RebuildFront()
 	for (int lane = -FRONT_LANES; lane <= FRONT_LANES; ++lane) {
 		const AIFloat3 origin = home + side * (float(lane) * FrontLaneGap());
 		float found = -1.f;
+		float ours = -1.f;
 		for (int i = 1; i <= FRONT_SAMPLES; ++i) {
 			const float t = FRONT_SCAN_END * float(i) / float(FRONT_SAMPLES);
 			const AIFloat3 p = origin + fwd * t;
 			if (!OnMap(p))
 				break;
-			// The crossing: ground where they out-hold us.
-			if (ai.GetNetInflAt(p) <= 0.f) {
-				found = t;
+			// EMPTY GROUND IS NOBODY'S, NOT THEIRS. GetNetInflAt is ally minus
+			// enemy, so ground neither side has been near reads exactly 0 -- and
+			// testing `<= 0` called the first such sample the crossing. Every lane
+			// on a flank we simply had not walked into therefore put the front one
+			// step from our own base: measured min=0.08 across every 30-second
+			// sample of two games, which is the first sample, every time.
+			const float inf = ai.GetNetInflAt(p);
+			if (inf > 0.f) {
+				ours = t;      // still ours out to here
+				continue;
+			}
+			if (inf < 0.f) {
+				found = t;     // theirs: this is the crossing
 				break;
 			}
+			// exactly 0: no man's land, keep walking
 		}
+		// Held all the way to the last positive sample and never met them: the line
+		// is out past there, not back at the base.
+		if ((found < 0.f) && (ours > 0.5f))
+			found = ours;
 		// A lane with no crossing is one we hold all the way, or one nobody has
 		// contested. Halfway is the start-box answer and is right for both.
 		gFrontLane.insertLast((found < 0.f) ? 0.5f : found);
 	}
 	gFrontValid = true;
+	FrontDiag();
+}
+
+// WHERE THE LINE ACTUALLY SITS. Every reading of the defence telemetry so far has
+// had to infer this: a tower measured at 0.03 of the way to the enemy is either a
+// placement rule ignoring the front or a front that really is at our doorstep, and
+// the two are indistinguishable from the outside.
+int gNextFrontLog = 0;
+void FrontDiag()
+{
+	if (ai.frame < gNextFrontLog)
+		return;
+	gNextFrontLog = ai.frame + 30 * SECOND;
+	float lo = 9.f;
+	float hi = -9.f;
+	float sum = 0.f;
+	int uncontested = 0;
+	for (uint i = 0; i < gFrontLane.length(); ++i) {
+		const float t = gFrontLane[i];
+		sum += t;
+		if (t < lo) lo = t;
+		if (t > hi) hi = t;
+		if (t == 0.5f) ++uncontested;
+	}
+	const float n = float(gFrontLane.length());
+	AiLog(Factory::T() + "apex: front-diag lanes=" + gFrontLane.length()
+		+ " mean=" + formatFloat((n > 0.f) ? sum / n : 0.f, "", 0, 2)
+		+ " min=" + formatFloat(lo, "", 0, 2)
+		+ " max=" + formatFloat(hi, "", 0, 2)
+		+ " uncontested=" + uncontested
+		+ " gap=" + formatFloat(FrontLaneGap(), "", 0, 0));
 }
 
 // Which lane a position falls in, and how far along the axis it sits.
