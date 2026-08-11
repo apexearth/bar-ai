@@ -110,6 +110,10 @@ IUnitTask@ Fortify(CCircuitUnit@ unit)
 	// tower, nor that this spot is the front. See Military::DefenceAllowedAt.
 	if (!Military::DefenceAllowedAt(spot))
 		return null;
+	// Dig-ins place where the constructor is standing, which is the other half of
+	// the heap the blob audit keeps flagging. See Builder::TooCrowded.
+	if (TooCrowded(spot))
+		return null;
 	IUnitTask@ dig = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, tower, spot, DEF_SHAKE));
 	if (dig is null)

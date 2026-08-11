@@ -344,7 +344,7 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 {
 	FenceSweep();
 	array<AIFloat3> line;
-	if (!Military::FrontCurve(line) || (line.length() == 0))
+	if (!Military::FrontBuildSpots(line) || (line.length() == 0))
 		return null;
 
 	// A TASK NOBODY CAN REACH IS NEVER ASSIGNED TO ANYONE. Measured: of 235 front

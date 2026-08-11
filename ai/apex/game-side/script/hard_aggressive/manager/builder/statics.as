@@ -68,6 +68,86 @@ int PulsarCap()
 const int   AA_MIN            = 2;
 const int   AA_MAX            = 12;
 const float AA_PER_AIR        = 1000.f;  // one more turret per this much enemy air
+// HOW MUCH AA A GIVEN AMOUNT OF ENEMY AIR ACTUALLY NEEDS. apexearth: "AA is also
+// generally more powerful than air by cost, so you can likely multiple the
+// number by .1."
+//
+// A turret sits still, needs no escort and shoots anything that comes over it,
+// so a metal of AA answers far more than a metal of aircraft. Both AA rules read
+// this same factor, so the trade is stated once instead of being buried in two
+// different divisors.
+const float AA_VS_AIR = 0.1f;
+
+float AAWanted(float enemyAir, float perAir, int floorCount)
+{
+	const float k = ai.GetTunable("apex_aa_vs_air", AA_VS_AIR);
+	return float(floorCount) + (enemyAir * k) / perAir;
+}
+
+// A TURRET MUST COVER SOMETHING. apexearth: "purple is still making lots of
+// towers in the back of their base."
+//
+// CheapAA and Fortify both place at the CONSTRUCTOR'S OWN POSITION -- wherever it
+// happened to be standing when the rule fired. Constructors idle in the back of
+// the base, so that is where the towers go, and the blob audit shows the result:
+// 27 turrets at forward fraction 0.03, eight of them AA and eight dig-ins,
+// covering nothing.
+//
+// Every gate added to this so far measured the POSITION and let them through:
+// "nothing behind us" refuses ForwardFraction < 0, and a base's back yard reads
+// +0.01 to +0.09 -- forward of the territory centroid, technically.
+//
+// The honest test is DENSITY, not position.
+// The anti-blob rule, and it is about DENSITY rather than position, because
+// position is what every previous attempt tested and none of them caught this.
+// The same radius the audit clusters on, so what the tool calls a blob is what
+// the AI refuses to start.
+//
+// NOT a cap on how much defence we may hold -- it says nothing about the total,
+// only that the eighth turret within 420 elmos of the same spot adds nothing the
+// seventh did not. On the line, where the fighting actually concentrates, the
+// allowance is higher: apexearth, "in late game if theres like 10 pulsars all
+// near each other, thats not a bad thing."
+const float BLOB_RADIUS = 420.f;
+
+bool TooCrowded(const AIFloat3& in at)
+{
+	const bool onLine = Military::OnBorder(at) || Military::NearFront(at);
+	const float most = ai.GetTunable(onLine ? "apex_blob_front" : "apex_blob_rear",
+			onLine ? 10.f : 4.f);
+	return float(Military::FenceCountNear(at, BLOB_RADIUS)) >= most;
+}
+
+// Placing one, once something has decided another is wanted. Shared by the
+// per-base floor and the team-wide answer so both obey the same defence policy
+// and log the same line.
+IUnitTask@ AAOrder(CCircuitUnit@ unit, CCircuitDef@ aa, int want, float enemyAir)
+{
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (!OnMap(here))
+		return null;
+	// Placed at the constructor's own feet, so this is the rule most able to
+	// build a heap in the back of the base. See TooCrowded.
+	if (TooCrowded(here))
+		return null;
+	// ANTI-AIR IS DEFENCE AND ANSWERS TO THE DEFENCE POLICY. Measured, armferret
+	// and armrl were 31 of the ~57 towers we held, and neither rule had ever been
+	// asked whether another one was affordable or wanted here -- they place at the
+	// CONSTRUCTOR'S OWN POSITION, which is wherever it happened to be standing.
+	// apexearth: "We're definitely out of control with building certain things
+	// like the light laser turrets and popup air defense turrets."
+	if (!Military::DefenceAllowedAt(here))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, aa, here, DEF_SHAKE));
+	if (post is null)
+		return null;
+	gNextAA = ai.frame + AA_PERIOD;
+	AiLog(Factory::T() + "apex: cheap-aa " + aa.GetName() + " mine=" + aa.count
+		+ " team=" + formatFloat(Military::TeamAA(), "", 0, 0)
+		+ "/" + want + " enemyAir=" + formatFloat(enemyAir, "", 0, 0));
+	return post;
+}
 const int   AA_PERIOD         = 20 * SECOND;
 const uint  DEF_CON_FLOOR     = 3;      // never take the last builders
 int gNextPulsar = 0;
@@ -118,31 +198,27 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 	}
 	if (enemyAir < 1.f)
 		return null;
-	int want = AA_MIN + int(enemyAir / AA_PER_AIR);
+	int want = int(AAWanted(enemyAir, AA_PER_AIR, AA_MIN));
 	if (want > AA_MAX)
 		want = AA_MAX;
 	CCircuitDef@ aa = SideDef3(armrl, corrl, legrl);
-	if ((aa is null) || !aa.IsAvailable(ai.frame) || (aa.count >= want))
+	if ((aa is null) || !aa.IsAvailable(ai.frame))
 		return null;
-	const AIFloat3 here = unit.GetPos(ai.frame);
-	if (!OnMap(here))
+	// THE FLOOR IS PER BASE, THE ANSWER IS PER TEAM. apexearth's own reason for
+	// the floor is deterrence -- "if you have like 3 or 4 of them then the enemy
+	// air actively avoids you" -- and that only works over the base it is standing
+	// on. An ally's turrets across the map do not make our extractors a bad
+	// target. The SCALED part answers the enemy's air force, which is one force
+	// facing one team, so that half is counted team-wide.
+	if (aa.count < AA_MIN)
+		return AAOrder(unit, aa, want, enemyAir);
+	// COUNT THE TEAM'S TURRETS AGAINST THE TEAM'S OPPONENT. enemyAir above is the
+	// whole enemy side's air value, so comparing it against our OWN turret count
+	// asks every player to answer all of their aircraft alone -- four times the
+	// AA, landing on whichever of us has spare build power. See Military::TeamAA.
+	if (Military::TeamAA() >= float(want))
 		return null;
-	// ANTI-AIR IS DEFENCE AND ANSWERS TO THE DEFENCE POLICY. Measured, armferret
-	// and armrl were 31 of the ~57 towers we held, and neither rule had ever been
-	// asked whether another one was affordable or wanted here -- they place at the
-	// CONSTRUCTOR'S OWN POSITION, which is wherever it happened to be standing.
-	// apexearth: "We're definitely out of control with building certain things
-	// like the light laser turrets and popup air defense turrets."
-	if (!Military::DefenceAllowedAt(here))
-		return null;
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, aa, here, DEF_SHAKE));
-	if (post is null)
-		return null;
-	gNextAA = ai.frame + AA_PERIOD;
-	AiLog(Factory::T() + "apex: cheap-aa " + aa.GetName() + " standing=" + aa.count
-		+ "/" + want + " enemyAir=" + formatFloat(enemyAir, "", 0, 0));
-	return post;
+	return AAOrder(unit, aa, want, enemyAir);
 }
 
 // armrl/corrl/legrl is DETERRENCE, not an answer: 80 metal, and CheapAA caps at
@@ -373,9 +449,13 @@ IUnitTask@ HeavyAA(CCircuitUnit@ unit)
 	const float enemyAir = aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type);
 	if (enemyAir < AA_HEAVY_ENEMY_AIR)
 		return null;
-	const int want = AA_HEAVY_MIN + int((enemyAir - AA_HEAVY_ENEMY_AIR) / AA_HEAVY_PER_AIR);
+	const int want = int(AAWanted(enemyAir - AA_HEAVY_ENEMY_AIR,
+			AA_HEAVY_PER_AIR, AA_HEAVY_MIN));
 	CCircuitDef@ aa = SideDef3(armferret, cormadsam, legflak);
-	if ((aa is null) || !aa.IsAvailable(ai.frame) || (aa.count >= want))
+	if ((aa is null) || !aa.IsAvailable(ai.frame))
+		return null;
+	// The team's turrets against the team's opponent -- see CheapAA.
+	if (Military::TeamAA() >= float(want))
 		return null;
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	if (!OnMap(here))

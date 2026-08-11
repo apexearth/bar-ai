@@ -112,7 +112,25 @@ int AdvConsWanted()
 	int want = ConsWantedTier(true, false);
 	if (aiEconomyMgr.isMetalFull)
 		want += ADV_CON_FULL_BONUS;
-	return want;
+
+	// WHAT THE ECONOMY CAN AFFORD IS A CEILING, NOT A TARGET. apexearth,
+	// watching: "we made ~10 T2 cons on purple this game instead of making army
+	// and defenses.... too much build power, not enough economy."
+	//
+	// The curve above answers "how many could we support", and we then built
+	// straight to it whether or not there was anything for them to do -- so the
+	// ceiling became the goal and the metal went into builders standing around
+	// instead of into army. A constructor is only worth its cost while there is
+	// work queued for it.
+	//
+	// The unit of "enough work" is the engine's own: CEconomyManager::
+	// MakeEconomyTasks refuses to create more once buildTasksCount reaches
+	// workers * 8, so eight tasks per worker is saturation by its reckoning.
+	// Wanting another one at half that is a builder who would have a queue.
+	const float per = ai.GetTunable("apex_con_tasks_each", 4.f);
+	const int demand = (per > 0.f)
+			? int(float(aiBuilderMgr.GetBuildTaskCount()) / per) + 1 : want;
+	return (demand < want) ? demand : want;
 }
 
 bool NeedsAdvCon()

@@ -658,8 +658,39 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
 	FindFacing(pos);
 
 	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
-	CTerrainManager::TerrainPredicate predicate = [terrainMgr, builder](const AIFloat3& p) {
-		return terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance());
+	// A DEFENCE TASK MAY STAND ON GROUND THAT IS NOT PERFECTLY QUIET.
+	//
+	// apexearth: "Maybe we need to be OK with building under some level of
+	// threat..." -- said after watching constructors idle in the early game while
+	// the front line went unbuilt, and after "their base basically IS on the
+	// frontline."
+	//
+	// The engine already contradicts itself here. UpdatePath, thirty lines up,
+	// decides whether the builder may TRAVEL to the site with
+	// CanReachAtSafe(unit, endPos, range, cdef->GetPower()) -- threat up to the
+	// builder's own power. This predicate omits the argument and so takes the
+	// default, THREAT_MIN (1.0, util/Defines.h). We are permitted to walk there
+	// and then refused anywhere to stand.
+	//
+	// Measured from the script side before this changed: front-defence orders were
+	// not aborted and not unreachable, they were alive and unstaffed -- 48-105 per
+	// player per game against 1-18 aborted -- because FindBuildSite returned
+	// nothing and Execute fell through to FallbackTask, releasing the builder.
+	//
+	// Only DEFENCE. An extractor or a reactor placed in a threatened cell is a
+	// building that dies; a turret placed there is the entire point of the turret.
+	// The bar is the TURRET'S power, not the builder's. A constructor's power is
+	// ~0, so keying on it made this stricter than the default it replaced and
+	// measured flat: 0% of defences forward against 5% before. What a defence
+	// task should tolerate is what the thing being built can answer -- a Beamer
+	// belongs exactly where a Beamer's worth of threat is.
+	float threatBar = THREAT_MIN;
+	if ((buildType == BuildType::DEFENCE) && (buildDef != nullptr)) {
+		threatBar = std::max(THREAT_MIN, buildDef->GetPower());
+	}
+	CTerrainManager::TerrainPredicate predicate = [terrainMgr, builder, threatBar](const AIFloat3& p) {
+		return terrainMgr->CanReachAtSafe(builder, p,
+				builder->GetCircuitDef()->GetBuildDistance(), threatBar);
 	};
 	SetBuildPos(terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, predicate));
 }

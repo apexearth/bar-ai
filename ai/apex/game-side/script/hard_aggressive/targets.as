@@ -80,15 +80,23 @@ array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
 // is what the metal buys instead.
 //                            8     20     50    100    300
 //------------------------------------------------------------------------------
-array<float> ROLE_RAIDER  = {0.35f, 0.10f, 0.15f, 0.08f, 0.05f};
-array<float> ROLE_ASSAULT = {0.35f, 0.2f, 0.28f, 0.24f, 0.10f};
-array<float> ROLE_SKIRM   = {0.12f, 0.25f, 0.17f, 0.18f, 0.18f};
+// RAIDERS ARE A T1 UNIT. apexearth: "We should make more snipers, fatboys,
+// jammers, *no* T2 raiders." A raider's job is reaching undefended ground early;
+// once both sides hold a line it is metal walking into a turret. The row goes to
+// zero above the T1 economy rather than tapering, because "some" T2 raiders is
+// what a taper buys and he asked for none.
+array<float> ROLE_RAIDER  = {0.35f, 0.10f, 0.00f, 0.00f, 0.00f};
+array<float> ROLE_ASSAULT = {0.35f, 0.2f, 0.24f, 0.18f, 0.08f};
+array<float> ROLE_SKIRM   = {0.12f, 0.25f, 0.17f, 0.15f, 0.14f};
 array<float> ROLE_RIOT    = {0.10f, 0.10f, 0.10f, 0.09f, 0.08f};
 array<float> ROLE_ARTY    = {0.03f, 0.05f, 0.08f, 0.10f, 0.12f};
 array<float> ROLE_AA      = {0.05f, 0.06f, 0.07f, 0.07f, 0.07f};
-array<float> ROLE_HEAVY   = {0.00f, 0.02f, 0.15f, 0.22f, 0.25f};
-array<float> ROLE_AH      = {0.00f, 0.00f, 0.05f, 0.08f, 0.10f};
-array<float> ROLE_AHA     = {0.00f, 0.00f, 0.05f, 0.08f, 0.10f};
+// Fatboys, and the anti-heavy pair that is Snipers and tank-killers. These are
+// what the raider share becomes: units that hold ground and outrange what walks
+// into them, which is the composition for being pushed back rather than pushing.
+array<float> ROLE_HEAVY   = {0.00f, 0.02f, 0.20f, 0.26f, 0.28f};
+array<float> ROLE_AH      = {0.00f, 0.00f, 0.07f, 0.10f, 0.12f};
+array<float> ROLE_AHA     = {0.00f, 0.00f, 0.07f, 0.10f, 0.11f};
 
 //------------------------------------------------------------------------------
 // 2b. HOW DEFENCE ITSELF IS SPLIT.

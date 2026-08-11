@@ -94,35 +94,23 @@ void UpdateKillingBlow()
 // our metal against stock's 5.7%, while army was 26.2% against 30.7%.
 // apexearth: "the side effect is wasteful defense and then we have less army
 // and are losing the overall fight." Fire only when clearly outmatched.
-const float PORC_TRIGGER    = 2.0f;
-const int   PORC_ADD_SPACING = 20 * SECOND;
-const uint  PORC_ADD_CAP    = 2;
 // Toggle for A/B: false restores the old two-per-AI behaviour exactly.
-const bool  FRONT_UNCAPPED   = true;
 const float JAMMER_BACK     = 180.f;  // just behind the tower it covers    // was 10, then 4; see PORC_TRIGGER
 // The front is the contested area; allow a real position there, not a pair.
-const uint  PORC_FRONT_FENCE = 4;
 // A leak is answered on a looser bar than the front: the point is to be present
 // at all in the interior, not to build a wall there.
-const uint  PORC_LEAK_FENCE = 2;
 // How far a constructor may be sent to place one. Beyond this it is commuting
 // across the map instead of building, and that is constructor time, which is the
 // economy.
-const float PORC_MAX_REACH  = 3600.f;
 // How far back from the front the tower actually goes. Far enough that the
 // builder is not standing in the fight, close enough that the tower still
 // covers the approach.
-const float PORC_SETBACK      = 700.f;
 // Enemy metal already within this radius of the site that makes it not worth
 // starting. A tower that dies half-built cost the constructor-seconds anyway.
-const float PORC_DANGER_RADIUS = 700.f;
 // Relaxed once territory required DOMINANCE: the front already sits in ground we
 // hold, so a strict veto here refused sites that were never dangerous. Stacked
 // with the setback it strangled construction -- defence built fell 21,285 ->
 // 8,360 -> 2,950 metal across three runs as each veto went in. Only a genuinely
 // hot site is refused now.
-const float PORC_DANGER_COST   = 2500.f;
-uint gPorcAdded = 0;
-int  gNextPorcAdd = 0;
 
 }  // namespace Military

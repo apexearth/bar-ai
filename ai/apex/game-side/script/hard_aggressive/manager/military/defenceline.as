@@ -77,6 +77,42 @@ bool NearFront(const AIFloat3& in pos)
 // for army value, and it needs no gadget.
 const string TV_FFENCE = "ffence";
 const string TV_MINC   = "minc";
+// ANTI-AIR IS ONE TEAM ANSWER TO ONE TEAM'S AIRCRAFT.
+//
+// apexearth, watching: "We used to have a problem with teal making tons of light
+// turrets. But now in this game, I see teal making lots of anti air."
+//
+// Same bug as the light turrets and the same shape as the front budget was.
+// GetEnemyCost(AIR) is the value of the WHOLE ENEMY TEAM'S air, while
+// CCircuitDef::count is only our OWN turrets -- so every player sizes its answer
+// against all of their aircraft and counts none of its allies' turrets. Four
+// players independently build the whole team's AA, and it piles onto whichever
+// slot has spare constructor time, which the election makes the same slot every
+// game.
+const string TV_AA = "aa";
+
+// Own names rather than Builder's: main.as includes military before builder, and
+// a global is only visible after the line that declares it (functions are not).
+string aaCheapArm("armrl");
+string aaCheapCor("corrl");
+string aaCheapLeg("legrl");
+string aaHeavyArm("armferret");
+string aaHeavyCor("cormadsam");
+string aaHeavyLeg("legflak");
+
+// Every static AA turret we hold, cheap and heavy: what the team is asked to
+// count against the enemy's air.
+uint OwnStaticAA()
+{
+	uint n = 0;
+	CCircuitDef@ cheap = SideDef3(aaCheapArm, aaCheapCor, aaCheapLeg);
+	if (cheap !is null)
+		n += cheap.count;
+	CCircuitDef@ heavy = SideDef3(aaHeavyArm, aaHeavyCor, aaHeavyLeg);
+	if (heavy !is null)
+		n += heavy.count;
+	return n;
+}
 
 void PublishDefence()
 {
@@ -87,7 +123,9 @@ void PublishDefence()
 	}
 	ai.PublishTeamValue(TV_FFENCE, float(front));
 	ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
+	ai.PublishTeamValue(TV_AA, float(OwnStaticAA()));
 }
+
 
 float TeamSum(const string& in key, float own)
 {
@@ -98,6 +136,14 @@ float TeamSum(const string& in key, float own)
 	for (uint i = 0; i < mates.length(); ++i)
 		total += ai.ReadTeamValue(int(mates[i]), key, 0.f);
 	return (total > own) ? total : own;
+}
+
+// Static AA the whole side holds, against an enemy air value that is also the
+// whole side's. Both halves of the comparison have to describe the same team or
+// the answer is multiplied by however many of us there are.
+float TeamAA()
+{
+	return TeamSum(TV_AA, float(OwnStaticAA()));
 }
 
 // THE ONE ANSWER TO "MAY A TOWER GO HERE".

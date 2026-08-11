@@ -71,6 +71,20 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// designated tech lead, so that guard applies to it. Place it and pour income
 	// in, same as the rush plant.
 	if (Air::WantsFactory(facDef)) {
+		// NOT WHILE THE T2 TRANSITION IS IN FLIGHT. apexearth, watching: "i often
+		// see us switching into air while we're still transitioning to T2, thats a
+		// bad use of resources."
+		//
+		// The branch above deliberately runs before every other guard so the T2
+		// gate cannot refuse an air plant -- which also means nothing else can.
+		// A player that has decided to tech is paying for a plant, advanced
+		// constructors and the mexes to feed them; an air plant on top of that
+		// buys a second unfinished thing instead of finishing the first.
+		//
+		// State, not a threshold: once the advanced plant is up this stops
+		// applying by itself, and a player not pursuing T2 at all is unaffected.
+		if (!gHaveT2 && MayPursueT2())
+			return false;
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
 		return true;
 	}

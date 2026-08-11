@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import collections
 import statistics
 import sys
 from collections import defaultdict
@@ -122,17 +123,98 @@ def analyse_match(mdir: Path, defs: set[str]):
         span = ax * ax + az * az
         if span <= 0:
             continue
-        fracs = []
+        fracs, pts, names = [], [], []
         for n, x, z in rows:
             if n not in defs:
                 continue
             fracs.append(((x - home[0]) * ax + (z - home[1]) * az) / span)
+            pts.append((x, z))
+            names.append(n)
         rows_out.append({
             "match": mdir.name, "frame": frame, "team": team, "ally": ally,
             "ai": labels.get(team, "?"), "n": len(fracs),
-            "fracs": fracs,
+            "fracs": fracs, "pts": pts, "names": names,
         })
     return rows_out
+
+
+def blobs(points, radius=420.0, min_size=5):
+    """Tight clusters of static defence, by single-link grouping.
+
+    apexearth: "you could quickly just parse the log to see where all the turrets
+    are getting built, and if theres any blobs like this. Seems like an audit
+    script check candidate."
+
+    He is right that this is the check, and it would have caught a heap of 13
+    light laser turrets sitting below a base without anyone having to notice it
+    on screen. A blob is not defined by count alone -- towers SHOULD cluster on a
+    chokepoint -- so the report carries how far forward the cluster sits, which is
+    what separates a held line from a pile in the back yard.
+    """
+    unused = list(range(len(points)))
+    out = []
+    while unused:
+        seed = unused.pop()
+        group = [seed]
+        frontier = [seed]
+        while frontier:
+            cur = frontier.pop()
+            for j in list(unused):
+                a, b = points[cur], points[j]
+                if (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 <= radius * radius:
+                    unused.remove(j)
+                    group.append(j)
+                    frontier.append(j)
+        if len(group) >= min_size:
+            out.append(group)
+    return out
+
+
+# WHAT a blob is made of decides whether it is a problem. apexearth: "its just
+# especially an issue when they're the light laser turrets and its BEHIND our
+# base. in late game if theres like 10 pulsars all near each other, thats not a
+# bad thing."
+#
+# So the flag is cheap-AND-rearward, not merely clustered. Cost is the honest
+# discriminator and, read from the unit defs, it cannot go stale like a name list.
+CHEAP_DEFENCE = 400.0   # metal each; llt 85, beamer 190, claw 170, rl 80
+BEHIND = 0.10           # forward fraction at or below which this is our back yard
+
+
+def def_costs(defs: set[str]) -> dict:
+    env = bar_env.load()
+    root = env.game_sdd / "units"
+    out = {}
+    for p in root.rglob("*.lua"):
+        if p.stem.lower() not in defs:
+            continue
+        m = re.search(r"metalcost\s*=\s*(\d+)",
+                      p.read_text("utf-8", errors="replace"), re.I)
+        if m:
+            out[p.stem.lower()] = float(m.group(1))
+    return out
+
+
+def report_blobs(rows, title, costs):
+    print(f"\n=== blobs: {title} ===")
+    print("Clusters of 5+ static defences within 420 elmos.")
+    print(f"  WASTE = mostly cheap turrets (under {CHEAP_DEFENCE:.0f} metal each)"
+          f" at or behind fwd {BEHIND:.2f}.")
+    print("  A pile of heavy defence, or a pile out on the line, is not flagged.")
+    print(f"{'':<6}{'AI':<16}{'match':<9}{'n':>4}{'fwd':>7}{'avg m':>7}  types")
+    waste = 0
+    for r in sorted(rows, key=lambda r: (r["ai"], r["match"])):
+        pts = r.get("pts") or []
+        for g in blobs(pts):
+            fwd = statistics.median([r["fracs"][i] for i in g])
+            names = collections.Counter(r["names"][i] for i in g)
+            avg = sum(costs.get(r["names"][i], 0.0) for i in g) / len(g)
+            bad = (avg < CHEAP_DEFENCE) and (fwd <= BEHIND)
+            waste += 1 if bad else 0
+            top = ", ".join(f"{n}x{c}" for n, c in names.most_common(3))
+            print(f"{'WASTE ' if bad else '      '}{r['ai']:<16}"
+                  f"{r['match'][5:13]:<9}{len(g):>4}{fwd:>7.2f}{avg:>7.0f}  {top}")
+    print(f"  -- {waste} wasteful blob(s)")
 
 
 def report(rows, title):
@@ -158,6 +240,8 @@ def main() -> int:
     ap.add_argument("run")
     ap.add_argument("--control")
     ap.add_argument("--per-match", action="store_true")
+    ap.add_argument("--blobs", action="store_true",
+                    help="report tight clusters of static defence")
     a = ap.parse_args()
 
     defs = defence_defs()
@@ -171,6 +255,8 @@ def main() -> int:
             print(f"{label}: no [BARAI_POS] telemetry under {root}")
             continue
         report(rows, f"{label}: {root.name}")
+        if a.blobs:
+            report_blobs(rows, root.name, def_costs(defs))
         if a.per_match:
             for r in sorted(rows, key=lambda r: (r["match"], r["team"])):
                 if not r["fracs"]:

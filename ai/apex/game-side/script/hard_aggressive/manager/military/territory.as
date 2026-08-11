@@ -278,6 +278,43 @@ const float FRONT_SCAN_END = 1.15f;   // a little past their centroid
 const float FRONT_BAND     = 0.18f;   // how wide "on the line" is, as a fraction
 const float FRONT_SETBACK  = 0.12f;   // build this far inside it, not on it
 
+// THE FRONT IS A RING AROUND WHAT WE HOLD, NOT A LINE ACROSS ONE BEARING.
+//
+// apexearth, from a screenshot of his team boxed into the top-left corner of an
+// 8v8: "at this point in the game our frontline should appear diagonal just on
+// this little edge of the map." The drawn line was four near-vertical strokes
+// down the left quarter instead.
+//
+// Both are correct descriptions of the same model failing. Lanes are laid
+// perpendicular to ONE bearing -- our centre to the enemy CENTROID -- so the
+// front they describe is always a straight line facing one direction. A team in
+// a corner is surrounded across ninety degrees or more, and the average of all
+// those enemies points somewhere down the middle, so the lanes end up
+// perpendicular to a direction no individual enemy is actually on.
+//
+// Sampling RADIALLY has no preferred direction: one ray per bearing, each
+// finding its own crossing, and the shape that falls out is whatever the
+// situation is -- a straight line when the enemy is on one side, an arc cutting
+// off a corner when we are boxed into one, a full ring when surrounded. It is
+// also less code than the lane version: no perpendicular, no lane gap, no map
+// diagonal.
+const int FRONT_RAYS = 24;            // every 15 degrees
+// Radius, in elmos, at which each bearing's ray meets the front. Index 0 points
+// along +x and they run counter-clockwise.
+array<float> gRayR;
+// The same per bearing, but as far out as a BUILDER may actually work.
+array<float> gRaySafe;
+// DID THIS BEARING ACTUALLY MEET ANYBODY. A ray that ran its whole length
+// without finding enemy influence, or that walked off the map, has no front on
+// it -- it is our own rear, or the edge of the world.
+//
+// apexearth, with a screenshot: "Look at this weird circle of turrets purple
+// made." Emitting every ray as a build point turns the ring into a literal
+// circle of towers around the base, most of them facing nothing. Sampling all
+// the way round is still right -- that is what lets a corner read as an arc --
+// but only the contested arc of it is the front.
+array<bool> gRayHot;
+
 // Per lane: the fraction along home->enemy at which that lane's influence
 // crosses. Index 0 is the leftmost lane.
 array<float> gFrontLane;
@@ -376,8 +413,92 @@ void RebuildFront()
 		gFrontLane.insertLast((found < 0.f) ? 0.5f : found);
 		gFrontSafe.insertLast(safe);
 	}
+	RebuildRing(home);
 	gFrontValid = true;
 	FrontDiag();
+}
+
+// One ray per bearing. Each walks outward until the influence turns enemy, and
+// records both where that happened and how far out a builder could still work.
+void RebuildRing(const AIFloat3& in home)
+{
+	gRayR.resize(0);
+	gRaySafe.resize(0);
+	gRayHot.resize(0);
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	const float reach = sqrt(w * w + h * h) * 0.5f;   // half the map diagonal
+	const float step = reach / float(FRONT_SAMPLES);
+	const float bar = ai.GetTunable("apex_build_threat_bar", 1.f);
+
+	// NOTHING BEHIND US IS FRONT. apexearth: "We know theres no AI with a start
+	// point behind us, and theres no room back there for there to be any threat."
+	//
+	// Firmer than asking the influence map, which answers about this tick: a
+	// bearing pointing away from every enemy cannot become the front line because
+	// there is nobody back there to make one. Excluding the rear half outright
+	// also stops the ring closing on itself, which is what wrapped the drawn line
+	// around our own half of the map.
+	//
+	// apex_front_rear_arc=1 restores the full ring for the case he allowed for --
+	// "on some weird maps this may be valid" -- e.g. genuinely surrounded.
+	const bool rearToo = ai.GetTunable("apex_front_rear_arc", 0.f) > 0.f;
+	AIFloat3 toEnemy = aiEnemyMgr.GetEnemyPos() - home;
+	const bool haveBearing = toEnemy.SqLength2D() > NEAR_ZERO;
+	if (haveBearing)
+		toEnemy.SafeNormalize2D();
+
+	for (int r = 0; r < FRONT_RAYS; ++r) {
+		const float ang = 6.2831853f * float(r) / float(FRONT_RAYS);
+		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
+		if (!rearToo && haveBearing
+			&& ((dir.x * toEnemy.x + dir.z * toEnemy.z) <= 0.f))
+		{
+			gRayR.insertLast(reach);
+			gRaySafe.insertLast(0.f);
+			gRayHot.insertLast(false);
+			continue;
+		}
+		float edge = reach;      // never met them: the whole ray is ours
+		float safe = 0.f;
+		bool hot = false;        // did this bearing find an enemy at all
+		for (int i = 1; i <= FRONT_SAMPLES; ++i) {
+			const float d = step * float(i);
+			const AIFloat3 p = home + dir * d;
+			if (!OnMap(p)) {
+				if (edge > d)
+					edge = d;    // the map edge is a front we never have to hold
+				break;
+			}
+			if (ai.GetBuilderThreatAt(p) <= bar)
+				safe = d;
+			const float inf = ai.GetNetInflAt(p);
+			if (inf < 0.f) {
+				edge = d;
+				hot = true;
+				break;
+			}
+		}
+		gRayR.insertLast(edge);
+		gRaySafe.insertLast(safe);
+		gRayHot.insertLast(hot);
+	}
+}
+
+// Which ray a position falls on.
+int RayOf(const AIFloat3& in pos)
+{
+	const float dx = pos.x - gFrontHome.x;
+	const float dz = pos.z - gFrontHome.z;
+	float ang = atan2(dz, dx);
+	if (ang < 0.f)
+		ang += 6.2831853f;
+	int r = int(ang / 6.2831853f * float(FRONT_RAYS) + 0.5f);
+	if (r >= FRONT_RAYS)
+		r = 0;
+	if (r < 0)
+		r = 0;
+	return r;
 }
 
 // WHERE THE LINE ACTUALLY SITS. Every reading of the defence telemetry so far has
@@ -455,41 +576,67 @@ float FrontFractionAt(const AIFloat3& in pos)
 }
 
 // The whole line, for callers that want the shape rather than one answer.
+// THE FRONT LINE ITSELF: where our territory ends, per contested bearing.
+//
+// This is a statement about the battlefield, and it is what gets DRAWN. It is
+// NOT a list of places to build -- conflating the two is why the drawn line came
+// out "super tiny and weird" (apexearth): it was showing the build spots, which
+// clamp to the safe edge and drop most bearings, so what appeared on screen was
+// a few stubs near the base rather than the front.
 bool FrontCurve(array<AIFloat3>& out pts)
 {
 	RebuildFront();
 	pts.resize(0);
 	if (!gFrontValid)
 		return false;
-	// PULLED BACK OFF THE LINE, ON PURPOSE. apexearth: "Never send a constructor
-	// to build a tower in a dangerous place... what is the point in trying to
-	// make a tower that can never be built? ... Build behind the line, not on
-	// it." The crossing IS contested ground by definition, so a builder sent
-	// exactly there is refused by its own safety veto and the order dies: 14
-	// orders produced no towers. These points sit just inside our side of it,
-	// which is where a tower can be finished and still cover the line.
-	const float back = ai.GetTunable("apex_front_setback", FRONT_SETBACK);
-	// AS FAR OUT AS A BUILDER CAN WORK, AND NO FURTHER. apexearth: "Usually we
-	// want to build in a safer area and work our way out with more defenses over
-	// time."
-	//
-	// That is also the only thing the engine will accept: the site search refuses
-	// any threatened cell outright, so an order past the safe edge is not a risky
-	// tower, it is no tower at all. Taking the nearer of the two makes the line
-	// creep forward on its own as the army clears ground, which is the mechanism
-	// that moves it -- threat is only forgotten when we see the ground is empty.
-	const bool useSafe = ai.GetTunable("apex_front_safe_edge", 1.f) > 0.f;
-	for (uint i = 0; i < gFrontLane.length(); ++i) {
-		const float laneOff = (float(i) - float(FRONT_LANES)) * FrontLaneGap();
-		float t = gFrontLane[i] - back;
-		if (useSafe && (i < gFrontSafe.length()) && (gFrontSafe[i] < t))
-			t = gFrontSafe[i];
-		if (t < 0.f)
-			t = 0.f;
-		pts.insertLast(gFrontHome + gFrontSide * laneOff + gFrontFwd * t);
+	for (uint i = 0; i < gRayR.length(); ++i) {
+		if ((i < gRayHot.length()) && !gRayHot[i])
+			continue;   // no enemy on this bearing; see gRayHot
+		const float ang = 6.2831853f * float(i) / float(FRONT_RAYS);
+		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
+		const AIFloat3 p = gFrontHome + dir * gRayR[i];
+		if (OnMap(p))
+			pts.insertLast(p);
 	}
-	return true;
+	return pts.length() > 0;
 }
+
+// WHERE A TOWER COVERING THAT LINE CAN ACTUALLY GO.
+//
+// Derived from the line, and different from it in three ways, each measured:
+// pulled back by the setback so the builder is not parked in the fight; clamped
+// to ground whose builder threat the engine's site search will accept, because
+// past that the order is never staffed at all; and dropped entirely on bearings
+// where that workable ground does not reach a decent share of the way out --
+// otherwise every bearing collapses to the same short radius and the ring
+// degenerates into a heap of turrets outside the base.
+bool FrontBuildSpots(array<AIFloat3>& out pts)
+{
+	RebuildFront();
+	pts.resize(0);
+	if (!gFrontValid)
+		return false;
+	const float back = ai.GetTunable("apex_front_setback", FRONT_SETBACK);
+	const bool useSafe = ai.GetTunable("apex_front_safe_edge", 1.f) > 0.f;
+	const float minReach = ai.GetTunable("apex_front_min_reach", 0.5f);
+	for (uint i = 0; i < gRayR.length(); ++i) {
+		if ((i < gRayHot.length()) && !gRayHot[i])
+			continue;
+		const float ang = 6.2831853f * float(i) / float(FRONT_RAYS);
+		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
+		const float line = gRayR[i] * (1.f - back);
+		float d = line;
+		if (useSafe && (i < gRaySafe.length()) && (gRaySafe[i] < d))
+			d = gRaySafe[i];
+		if ((d <= 0.f) || (d < line * minReach))
+			continue;
+		const AIFloat3 p = gFrontHome + dir * d;
+		if (OnMap(p))
+			pts.insertLast(p);
+	}
+	return pts.length() > 0;
+}
+
 
 // The crossing directly ahead, kept for callers that want a single point.
 bool FrontLinePos(AIFloat3& out p)
@@ -505,12 +652,18 @@ bool FrontLinePos(AIFloat3& out p)
 // nobody is contesting.
 bool OnBorder(const AIFloat3& in pos)
 {
+	RebuildFront();
+	if (!gFrontValid || (gRayR.length() == 0))
+		return false;
+	// Against the ring's radius on THIS position's bearing. The band is a share
+	// of that radius rather than a fixed distance, so it means the same thing on
+	// a small map and a large one.
 	const float band = ai.GetTunable("apex_front_band", FRONT_BAND);
-	// Against the crossing in THIS position's lane, not against one global
-	// number -- which is the point of computing a curve. A tower on a flank the
-	// enemy has pushed into is on the line even though the centre has not moved.
-	return ForwardFraction(pos) >= (FrontFractionAt(pos) - band);
+	const int r = RayOf(pos);
+	const float here = pos.distance2D(gFrontHome);
+	return here >= (gRayR[r] * (1.f - band));
 }
+
 
 // What the enemy's mobile army is WORTH, in metal.
 //

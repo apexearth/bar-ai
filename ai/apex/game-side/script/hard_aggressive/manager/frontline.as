@@ -593,9 +593,27 @@ void DrawFrontLine()
 	array<AIFloat3> line;
 	if (!Military::FrontCurve(line) || (line.length() < 2))
 		return;
+	// THE LINE ENDS WHERE IT RUNS OUT, IT DOES NOT WRAP ROUND THE BACK.
+	//
+	// apexearth: "You saw how the frontline now wraps around our half of the map?
+	// ... essentially if the frontline hits the edge of the map we should stop
+	// there."
+	//
+	// FrontCurve emits only the contested bearings, so the arc has gaps in it
+	// wherever a ray met nobody or walked off the map. Joining every consecutive
+	// pair then draws a chord straight across our own half between the two ends of
+	// the arc, which is the wrap he is describing -- a drawing artefact on top of
+	// a curve that is already correct.
+	//
+	// Neighbouring bearings sit one ring-step apart; anything much wider than that
+	// is not a neighbour, it is the gap. Break the polyline there.
+	const float step = 6.2831853f / float(Military::FRONT_RAYS);
 	for (uint i = 1; i < line.length(); ++i) {
 		if (!OnMap(line[i - 1]) || !OnMap(line[i]))
 			continue;
+		const float r = line[i].distance2D(Military::gFrontHome);
+		if (line[i - 1].distance2D(line[i]) > (r * step * 2.5f))
+			continue;   // the arc ended here
 		Enqueue(line[i - 1], line[i]);
 		gFrontDrawn.insertLast(line[i - 1]);
 	}

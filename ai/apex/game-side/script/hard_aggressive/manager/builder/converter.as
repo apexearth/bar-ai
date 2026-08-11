@@ -118,6 +118,23 @@ bool BaseUnderAttack()
 {
 	if (!gHomeSet)
 		return false;
+	// ASK ABOUT OUR BASE, NOT ABOUT THE AVERAGE OF EVERY ENEMY ON THE MAP.
+	//
+	// This tested the distance from home to GetEnemyPos(), which is the CENTROID
+	// of all known enemies. In a 4v4 that sits somewhere in midfield and comes
+	// within COMM_BASE_DANGER of our base essentially never -- so this returned
+	// false while a raiding party was inside the base, and every rule keyed on it
+	// stood down: the posture hold-release, the commander's back-wall work, and
+	// most recently the army's refusal to leave home. apexearth, three times over:
+	// "our armies actively run away from our base when our base is under attack."
+	//
+	// Enemy influence AT our own position is the local measurement, and it is the
+	// same signal the commander's flee rule already trusts.
+	if (ai.GetEnemyInflAt(gHomePos)
+		> ai.GetTunable("apex_base_attack_infl", 0.f))
+	{
+		return true;
+	}
 	return gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) < COMM_BASE_DANGER;
 }
 int gNextConvert = 0;

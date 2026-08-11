@@ -101,8 +101,48 @@ bool IsAdvConDef(CCircuitUnit@ unit)
 	return unit.circuitDef.costM >= ADV_CON_COST;
 }
 
+// THE TOWER TIER FOLLOWS THE ECONOMY. apexearth: "At 50 metal+ we should be
+// making defenses like rattlesnakes, at 100 metal+ we should be making [Pulsar]
+// T3 defenses..., the old defenses are worthless at these levels."
+//
+// Rattlesnake armamb 2500 / Persecutor cortoast 2500 / Rampart legrampart 2600,
+// then Pulsar armanni 3500 / Bulwark cordoom 3000 / Bastion legbastion 4200.
+//
+// EVERY ONE of these is buildable only by an advanced constructor -- armack,
+// armacv, armaca and the levelled commanders, per `unitdef.py <name> --builders`.
+// Handing one to a T1 constructor is not a downgrade, it is a silent no-op: the
+// request is dropped with no error, which is exactly how every commander tower
+// this session turned out to be an unbuildable Pit Bull. So the ladder applies
+// to the builders that can climb it, and everyone else keeps the cheap turret
+// they can actually finish.
+string armtoast("armamb");   string cortoastd("cortoast");  string legramp("legrampart");
+string armpulsar("armanni"); string corpulsar("cordoom");   string legpulsar("legbastion");
+const float DEF_TIER_T2_INCOME = 50.f;
+const float DEF_TIER_T3_INCOME = 100.f;
+
+CCircuitDef@ HeavyDefenceFor(CCircuitUnit@ unit)
+{
+	if (!IsAdvConDef(unit))
+		return null;
+	const float inc = aiEconomyMgr.metal.income;
+	if (inc >= ai.GetTunable("apex_def_t3_income", DEF_TIER_T3_INCOME)) {
+		CCircuitDef@ big = SideDef3(armpulsar, corpulsar, legpulsar);
+		if ((big !is null) && big.IsAvailable(ai.frame))
+			return big;
+	}
+	if (inc >= ai.GetTunable("apex_def_t2_income", DEF_TIER_T2_INCOME)) {
+		CCircuitDef@ mid = SideDef3(armtoast, cortoastd, legramp);
+		if ((mid !is null) && mid.IsAvailable(ai.frame))
+			return mid;
+	}
+	return null;
+}
+
 CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 {
+	CCircuitDef@ heavy = HeavyDefenceFor(unit);
+	if (heavy !is null)
+		return heavy;
 	if (IsAdvConDef(unit))
 		return SideDef3(armpb, corvipe, legapopupdef);
 	if (OnMap(at) && (Military::OnBorder(at) || Military::NearFront(at))) {
@@ -124,11 +164,24 @@ CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 // border instead. apex_front_pb=1 restores the Pit Bull.
 CCircuitDef@ FrontTower(CCircuitUnit@ unit, const AIFloat3& in at)
 {
+	// The line gets the same tiering as anything else: a Beamer is not what a
+	// 100 metal/second economy should be holding ground with.
+	CCircuitDef@ heavy = HeavyDefenceFor(unit);
+	if (heavy !is null)
+		return heavy;
 	if (ai.GetTunable("apex_front_pb", 0.f) > 0.f)
 		return MexGuardTower(unit, at);
 	CCircuitDef@ mid = SideDef3(armbeamer, corhllt, legmg);
 	if ((mid !is null) && mid.IsAvailable(ai.frame))
 		return mid;
+	// NOTHING, rather than a light laser, once the economy is past that tier.
+	// apexearth: "the old defenses are worthless at these levels." Returning null
+	// STOPS the work instead of redirecting it -- the same thing ContestTower
+	// already does for the same reason -- so a T1 constructor that cannot build
+	// anything worth having goes back to the economy instead of adding another 85
+	// metal turret to the pile the blob audit keeps flagging.
+	if (PastT1Tier())
+		return null;
 	return SideDef3(armllt, corllt, leglht);
 }
 

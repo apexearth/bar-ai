@@ -75,6 +75,36 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (WantsSuperGuard(cdef) && !SuperReleased())
 		return SuperGuardTask(unit);
 	if (WantsMassing(cdef)) {
+		// WHILE OUR BASE IS BEING HIT, THE POOL DOES NOT LEAVE.
+		//
+		// apexearth, for the third time: "when an enemy attacks us we should
+		// converge on them and kill them but instead we just stand around doing
+		// nothing to help our base... heck our armies actively run away from our
+		// base when our base is under attack", and "early on we could wipe out
+		// enemy armies but instead we let them beat us up."
+		//
+		// The third argument is a PROMOTION TRIGGER: at that much power the DEFEND
+		// task converts to ATTACK and marches on the enemy. So the moment we have
+		// enough army to defend ourselves is the exact moment it leaves -- which
+		// is what he is watching. Nothing in it ever asked whether home was under
+		// attack.
+		//
+		// Promoting to MELEE instead is what holds it: this file's own comment
+		// records that nothing in CircuitAI ever enqueues a MELEE task, and
+		// UpdateDefenceTasks only rewrites maxPower for tasks that promote to
+		// ATTACK -- so a MELEE-promoting task keeps the power we gave it and never
+		// converts. The pool stays a defence, and CDefendTask sends it at whatever
+		// is threatening us.
+		//
+		// It reverts by itself: this only decides the task a unit is joining now,
+		// so once the attack is over, new units pool into ordinary attack-promoting
+		// tasks again.
+		if ((ai.GetTunable("apex_defend_home", 1.f) > 0.f)
+			&& (Builder::BaseUnderAttack() || BaseContested()))
+		{
+			return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+					Task::FightType::MELEE, aiMilitaryMgr.quota.attack));
+		}
 		return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
 				Task::FightType::ATTACK, aiMilitaryMgr.quota.attack));
 	}

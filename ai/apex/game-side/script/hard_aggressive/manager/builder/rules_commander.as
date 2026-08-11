@@ -397,6 +397,15 @@ IUnitTask@ HomeTower(CCircuitUnit@ unit, bool isComm)
 	if (post is null)
 		return null;
 	gNextHomeTower = ai.frame + HOME_TOWER_RETRY;
+	// A BASE ON THE LINE NEEDS THE JAMMER TOO. apexearth: "green always dies
+	// first... they're so rarely making good frontline and usually never have a
+	// jammer. Their base basically IS on the frontline."
+	//
+	// PlaceLineJammer already exists and was only ever called when a porcupine
+	// tower went up on the line -- which for a player whose base IS the line
+	// happens rarely, so the one position that most needs the cover never got it.
+	// Reusing the same function rather than writing a second jammer rule.
+	Military::PlaceLineJammer(site);
 	++gHomeTowerOrders;
 	AiLog(Factory::T() + "apex: home tower " + tower.GetName()
 		+ " #" + gHomeTowerOrders + " -- base had none");

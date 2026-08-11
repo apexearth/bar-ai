@@ -70,6 +70,59 @@ Measured after the deletions, six games against the same control: metal produced
 per player (11.5), forward 2% (4%). Neutral to slightly ahead on economy, unmoved
 on position -- with three rules and a config row removed.
 
+## 2026-08-11: the tower blobs were ONE rule, and its throttle was never wired
+
+apexearth: "purple is still making lots of towers in the back of their base...
+why is this so hard for you?" -- after a day of fixing the wrong thing.
+
+**Attribute before fixing.** Every placement rule logs when it fires, so counting
+who actually places our defence takes one command. Six games:
+
+| source | orders |
+|---|---|
+| `porc+` (`Military::UpdateBaseDefence`) | **8246** |
+| Brain `FrontDefenceWant` | 227 |
+| MexGuard | 174 |
+| CheapAA | 166 |
+| HomeTower | 64 |
+| Fortify (dig-in) | 17 |
+
+The whole day had gone into the Brain's spatial model -- the radial ring, the safe
+edge, the setback, the min-reach rule -- which was placing 3% of our towers. The
+rule doing the other 97% was never looked at.
+
+**The bug.** `gNextPorcAdd` is assigned at the bottom of `UpdateBaseDefence` and
+READ NOWHERE. The 20-second pacing it represents has never existed. Worse, that
+pacing is the stated justification for `FRONT_UNCAPPED = true` (2026-08-07), which
+removed the `PORC_ADD_CAP = 2` that was the only thing actually holding the rule
+back:
+
+> "Uncapping is the spending class of change, so note what still governs it: ...
+> PORC_ADD_SPACING still paces one placement per 20s per AI"
+
+So from 08-02 to 08-07 a dead throttle sat behind a working cap and did no harm;
+on 08-07 the cap came off on the strength of it, and the rule went from 2 towers
+per game to a counter reading **#830 for one player**, at `Priority::HIGH`, from a
+position source that falls back to our own held sites near home. That is the blob
+behind the base, the ring of turrets, and every "we build defence in stupid
+places" report since.
+
+It is ours, not stock -- nothing in `barb-stable` has any of it -- and it predates
+the Brain by nine days, so the Brain has been carrying blame it did not earn.
+
+**Deleted**, at apexearth's call: `UpdateBaseDefence`, `ApproachThreat`,
+`OurTowerValue`, `PorcToBuild` and twelve now-dead constants; `basedefence.as`
+goes from 351 lines to 79. `PlaceLineJammer` survives (the commander's home tower
+uses it) and its bound moves off the deleted `gPorcAdded`, which would otherwise
+have pinned us to one jammer for the whole game.
+
+**And the front line stopped being the build list.** `FrontCurve` returned build
+POSITIONS -- crossing, minus setback, clamped to the safe edge, bearings dropped
+by min-reach -- and that is what was being drawn, which is why the overlay looked
+"super tiny and weird". It now returns the line itself, for drawing and for
+reasoning; `FrontBuildSpots` derives the buildable version for the Brain. Two
+different questions that had been one function.
+
 ## 2026-08-11 (corrected): the safe ground exists, and it is EARLY
 
 The entry below is too pessimistic and the correction matters. It read the safe

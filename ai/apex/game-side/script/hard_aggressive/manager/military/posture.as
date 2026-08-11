@@ -309,7 +309,6 @@ void UpdatePosture()
 	Brain::BudgetLog();
 	UpdateKillingBlow();
 	UpdateRaidCaution();
-	UpdateBaseDefence();
 	UpdateSling();
 	UpdateRushDefence();
 	UpdateMassing();

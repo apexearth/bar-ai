@@ -11,7 +11,12 @@
 		"attack": 20.0,  // min power of attack group ---- was 40
 		"thr_mod": {				//AI attacks everything with final threat (after all calculations) <= 1
 			"attack": [0.6, 0.8],  // [<min>, <max>] enemy threat multiplier for target selection of attack task |  values <1 makes enemy group seem less of an thread for ai => ai attacks stronger groups than it own | org=0.25, 0.3
-			"defence": [0.3, 0.5],  // [<min>, <max>] enemy threat modifier for group size calculation of defence task; org=0.95, 0.95 | high values = low risk; low values = high risk 
+			"defence": [1.0, 1.0],  // apexearth: "even our allies don't come to help".
+			// This sizes the DEFENCE group against the attacker, and at 0.3-0.5 it
+			// computed that group for an enemy a third to a half of its real
+			// strength -- so every response to a base being hit was deliberately
+			// too small to win it. Stock is 1.0/1.0; this is back to answering the
+			// army that is actually there. org=0.95, 0.95  // [<min>, <max>] enemy threat modifier for group size calculation of defence task; org=0.95, 0.95 | high values = low risk; low values = high risk 
 			"mobile": 1.0,  // initial modifier for power of attack group based on mobile enemy threat; org=1.05
 			"static": 1.2,  // initial modifier for power of attack group based on static enemy threat; org= 1.2
 			"comm": 0.003   // because of power of dgun
