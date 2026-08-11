@@ -111,6 +111,25 @@ void InitMix()
 {
 	if (gMix.length() > 0)
 		return;
+	// BUILD POWER IS PART OF THE RATIO. apexearth: "We should be targetting
+	// ratios... build ratios.... the air cons have no limit to how many we can
+	// make... and thats fine. but we should still build by a certain ratio."
+	//
+	// No limit and always-build are different things, and this file had conflated
+	// them: BuildPowerFirst ran BEFORE the ratio and returned a constructor
+	// whenever the count was under a curve, so a line whose curve could not be
+	// satisfied -- air, whose ceiling is deliberately absent -- built constructors
+	// and nothing else forever.
+	//
+	// It was a floor originally because as a share it never won: combat shares
+	// start at zero and are emptied by losses, so the largest gap was always a
+	// combat role. What changed is that the chaff roles now fade with income and
+	// the combat share is spread across nine entries, so a builder share can hold
+	// its ground. The ceiling stays where he put it -- Builder::ConsWantedFor, his
+	// logarithmic curve -- and applies to ground constructors only.
+	MixTarget@ build = MixTarget(RT::BUILDER, 0.20f);
+	gMix.insertLast(build);
+
 	MixTarget@ raid = MixTarget(RT::RAIDER,  0.30f);
 	raid.Counter(RT::ARTY);        // artillery cannot defend itself up close
 	raid.Counter(RT::SKIRM);
@@ -359,6 +378,14 @@ CCircuitDef@ NextForMix(CCircuitUnit@ fac)
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
 		if ((d is null) || !d.IsAvailable(ai.frame))
 			continue;
+		// The one role with a ceiling as well as a share. Air is exempt by his
+		// rule; ground constructors stop at the curve however far below share
+		// they read, because past it the bodies have nowhere to stand.
+		if ((gMix[i].role == RT::BUILDER) && (d.count >= Builder::ConsWantedFor(d))
+			&& !aiEconomyMgr.isMetalFull)
+		{
+			continue;
+		}
 		worstGap = gap;
 		@best = d;
 	}
@@ -377,8 +404,8 @@ CCircuitDef@ NextForMix(CCircuitUnit@ fac)
 // switched off for the claimed line. That is how a mix that looks reasonable
 // starves the thing that builds the economy.
 //
-// So it is a FLOOR, checked before the ratio: below what the income justifies,
-// the next unit off this line is a constructor.
+// What remains here is the zero case only -- see the BUILDER entry in InitMix
+// for where build power is actually decided now.
 IUnitTask@ BuildPowerFirst(CCircuitUnit@ fac)
 {
 	CCircuitDef@ con = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
@@ -390,10 +417,11 @@ IUnitTask@ BuildPowerFirst(CCircuitUnit@ fac)
 	// numbers and where they came from. The tier is read off the def's own cost,
 	// and an air constructor is unbounded because a ceiling here is about room in
 	// the base, which air does not use.
-	const int want = Builder::ConsWantedFor(con);
-	// A full bank overrides the curve outright: metal we cannot spend is the
-	// economy saying it needs more build power, whatever the shape says.
-	if ((con.count >= want) && !aiEconomyMgr.isMetalFull)
+	// ONLY the zero case now. Everything above zero is decided by the BUILDER
+	// share in the ratio walk, which is what "build by a certain ratio" means; a
+	// line with no constructor at all cannot recover on its own, so that one case
+	// still pre-empts.
+	if (con.count > 0)
 		return null;
 	return aiFactoryMgr.Enqueue(TaskS::Recruit(
 			Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,

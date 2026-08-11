@@ -391,6 +391,87 @@ end
 
 -- `io` is nil in the gadget sandbox, so emit through Spring.Echo and let the
 -- harness parse the infolog it already collects. Last line per team wins.
+-- DO OUR UNITS FIGHT TOGETHER? apexearth, repeatedly and with increasing
+-- precision: "our units do not seem to be as coordinated as they used to. They
+-- often walk around as individuals", "they don't seem to form good groups. They
+-- often just stand around doing nothing, getting shot at. We tend to attack and
+-- single units or a couple".
+--
+-- Nothing here measured that. armyReal says how much army exists, never whether
+-- it is in one place. This clusters each side's mobile armed units by proximity
+-- (single-link, GROUP_RADIUS) and reports the distribution, so "we attack in
+-- ones and twos" becomes a number that can be compared against stock in the same
+-- game -- which is the only control that matters.
+local GROUP_RADIUS = 500
+local GROUP_RADIUS_SQ = GROUP_RADIUS * GROUP_RADIUS
+local grpLone = {}    -- team -> sampled units alone (no armed friend within radius)
+local grpBig = {}     -- team -> sampled units in a group of >= 5
+local grpUnits = {}   -- team -> army units sampled
+local grpMax = {}     -- team -> largest group seen
+local grpIdle = {}    -- team -> army units sampled with NO orders
+local GROUP_SAMPLE = 150   -- frames; 5s, this is O(n^2) per sample
+local nextGroupSample = 0
+
+local function sampleGroups()
+	for _, teamID in ipairs(Spring.GetTeamList()) do
+		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
+		if isAI then
+			local xs, zs, n = {}, {}, 0
+			for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+				local udid = Spring.GetUnitDefID(uid)
+				local ud = udid and UnitDefs[udid]
+				if ud ~= nil and ud.speed and ud.speed > 0 and #ud.weapons > 0
+					and not (ud.customParams or {}).iscommander
+					and not ud.isBuilder
+				then
+					local x, _, z = Spring.GetUnitPosition(uid)
+					if x then
+						n = n + 1; xs[n] = x; zs[n] = z
+						local cmds = Spring.GetUnitCommands(uid, 1)
+						if cmds == nil or #cmds == 0 then
+							bump(grpIdle, teamID, 1)
+						end
+					end
+				end
+			end
+			if n > 0 then
+				-- single-link clustering, O(n^2); army counts here are small
+				local comp = {}
+				for i = 1, n do comp[i] = i end
+				local function root(i) while comp[i] ~= i do i = comp[i] end return i end
+				for i = 1, n - 1 do
+					for j = i + 1, n do
+						local dx, dz = xs[i] - xs[j], zs[i] - zs[j]
+						if dx * dx + dz * dz <= GROUP_RADIUS_SQ then
+							local a, b = root(i), root(j)
+							if a ~= b then comp[a] = b end
+						end
+					end
+				end
+				local size = {}
+				for i = 1, n do
+					local r = root(i)
+					size[r] = (size[r] or 0) + 1
+				end
+				local big, lone, largest = 0, 0, 0
+				for _, sz in pairs(size) do
+					if sz >= 5 then big = big + sz end
+					if sz == 1 then lone = lone + 1 end
+					if sz > largest then largest = sz end
+				end
+				-- "They often just stand around doing nothing, getting shot at."
+				-- Proximity says our units are as clustered as stock's; this asks
+				-- the other half -- are they DOING anything. Same definition as
+				-- the commander sampler: zero commands in the engine's queue.
+				bump(grpUnits, teamID, n)
+				bump(grpBig, teamID, big)
+				bump(grpLone, teamID, lone)
+				if largest > (grpMax[teamID] or 0) then grpMax[teamID] = largest end
+			end
+		end
+	end
+end
+
 local function sampleCommIdle()
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
@@ -530,6 +611,11 @@ local function dump(reason)
 			parts[#parts + 1] = string.format("commAssist=%d", commAssist[teamID] or 0)
 			parts[#parts + 1] = string.format("commStall=%d", commStall[teamID] or 0)
 			parts[#parts + 1] = string.format("commCloakFlips=%d", commCloakFlips[teamID] or 0)
+			parts[#parts + 1] = string.format("grpUnits=%d", grpUnits[teamID] or 0)
+			parts[#parts + 1] = string.format("grpBig=%d", grpBig[teamID] or 0)
+			parts[#parts + 1] = string.format("grpLone=%d", grpLone[teamID] or 0)
+			parts[#parts + 1] = string.format("grpMax=%d", grpMax[teamID] or 0)
+			parts[#parts + 1] = string.format("grpIdle=%d", grpIdle[teamID] or 0)
 
 			local cb = cheapBuilt[teamID]
 			if cb ~= nil then
@@ -591,6 +677,10 @@ local function dumpPositions()
 end
 
 function gadget:GameFrame(frame)
+	if frame >= nextGroupSample then
+		nextGroupSample = frame + GROUP_SAMPLE
+		sampleGroups()
+	end
 	if frame >= nextCommSample then
 		nextCommSample = frame + COMM_SAMPLE
 		sampleCommIdle()
