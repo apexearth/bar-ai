@@ -311,26 +311,15 @@ IUnitTask@ BuildPowerFirst(CCircuitUnit@ fac)
 	CCircuitDef@ con = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
 	if ((con is null) || !con.IsAvailable(ai.frame))
 		return null;
-	// ONE CONSTRUCTOR PER 30 METAL/S WAS A CAP OF TWO.
-	//
-	// Measured at minute 16 of a 4v4, per player: we held 2 T1 constructors
-	// against stock BARb's 10-12, with 5-7 extractors against their 10-14 and
-	// 11-17% of our metal going to waste because there was nobody to spend it.
-	// At a realistic 30-40 metal/s that formula returns 2, and it returned 2 all
-	// game -- a hard ceiling wearing an income gate's clothes.
-	//
-	// The right number comes off the unit def rather than a preference. A T1
-	// constructor has workertime 80, and BAR structures cost roughly 0.06 metal
-	// per point of buildtime (armsolar 155/2600, and the rest are close), so one
-	// absorbs about 5 metal/s of income. Below that the metal has nowhere to go,
-	// which is exactly the waste the telemetry shows.
-	const float per = ai.GetTunable("apex_mix_con_income", 6.f);
-	const int want = 1 + int(aiEconomyMgr.metal.income / per);
-	// AND NO CEILING WHILE THE METAL IS GOING TO WASTE. Whatever number the
-	// income implies, metal we cannot spend is the economy saying it directly:
-	// there is not enough build power, so build more. apexearth: "we shouldn't
-	// have any hard caps, everything needs to be balanced based on the
-	// economy/game progression."
+	// ONE CONSTRUCTOR PER 30 METAL/S WAS A CAP OF TWO, and one per 6 was a line
+	// with no top. Both are replaced by Builder::ConsWantedFor, which is the same
+	// logarithmic curve the advanced constructors use -- see its comment for the
+	// numbers and where they came from. The tier is read off the def's own cost,
+	// and an air constructor is unbounded because a ceiling here is about room in
+	// the base, which air does not use.
+	const int want = Builder::ConsWantedFor(con);
+	// A full bank overrides the curve outright: metal we cannot spend is the
+	// economy saying it needs more build power, whatever the shape says.
 	if ((con.count >= want) && !aiEconomyMgr.isMetalFull)
 		return null;
 	return aiFactoryMgr.Enqueue(TaskS::Recruit(

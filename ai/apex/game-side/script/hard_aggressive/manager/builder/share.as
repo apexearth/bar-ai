@@ -47,14 +47,66 @@ const float ADV_CON_INCOME_STEP = 25.f;
 // metal then obviously we need more factories/builders spending it."
 const int   ADV_CON_FULL_BONUS  = 6;
 
-// No ceiling. apexearth: "we shouldn't have any hard caps, everything needs to be
-// balanced based on the economy/game progression." The old ADV_CON_MAX of 4 bound
-// from about 75 metal/second upward, so every economy from a modest one to 400+
-// got the same four constructors -- which is most of why a large bank never
-// turned back into units.
+// HOW MANY CONSTRUCTORS AN ECONOMY IS WORTH, LOGARITHMICALLY.
+//
+// Linear in income was wrong in both directions: 1 + income/25 gives 5 at 100
+// metal/s where a player wants ten, and the T1 version (1 + income/6, and 1 +
+// income/30 before that) keeps climbing past any number of bodies a base has
+// room for. Constructors have a ground hitbox and a base has finite room, so the
+// return on the twentieth is not the return on the second.
+//
+// The curve is fitted to apexearth's own numbers, given as a shape rather than a
+// cap: "At 8 metal per second we could have ~3 T1 cons. At 100m/s maybe 15
+// limit? At 500 metal per second? Idk... 20, 25?" and for T2 "20m/s 2 T2 cons?
+// 100m/s 10 T2 cons? 500m/s ~25?"
+//
+//   income   8    20    40   100   250   500  1000        he said
+//   T1     3.0   7.2  10.4  14.6  18.8  22.0  25.2        3 / 15 / 20-25
+//   T2       1   2.0   6.1  11.6  17.1  21.3  25.4        2 / 10 / ~25
+//
+// T1 passes through all three of his points. T2 splits the difference between
+// them -- through 20 and 500 exactly it would want 13.5 at 100, through 20 and
+// 100 it would want 17 at 500. All four coefficients are tunable, because the
+// top of the curve is where he was least certain.
+//
+// "Air cons would never need a limit since they have no ground hitbox to worry
+// about" -- so an air constructor has none. The whole justification for a
+// ceiling is base room, and air does not consume it.
+const float CON_AIR_UNBOUNDED = 9999.f;
+
+// The def-taking form. mix.as is included BEFORE builder.as in main.as, so a
+// const declared here is not visible there -- functions are module-wide but
+// globals are not. Reading the tier off the def happens on this side of that
+// line for exactly that reason.
+int ConsWantedFor(CCircuitDef@ con)
+{
+	if (con is null)
+		return 1;
+	return ConsWantedTier(con.costM >= ADV_CON_COST,
+			con.IsRoleAny(Unit::Role::AIR.mask));
+}
+
+int ConsWantedTier(bool advanced, bool air)
+{
+	if (air)
+		return int(CON_AIR_UNBOUNDED);
+	const float inc = aiEconomyMgr.metal.income;
+	if (inc < 2.f)
+		return 1;
+	const float a = advanced ? ai.GetTunable("apex_con_log_t2_a", 6.0f)
+	                         : ai.GetTunable("apex_con_log_t1_a", 4.6f);
+	const float b = advanced ? ai.GetTunable("apex_con_log_t2_b", -16.0f)
+	                         : ai.GetTunable("apex_con_log_t1_b", -6.55f);
+	const int want = int(a * log(inc) + b);
+	return (want < 1) ? 1 : want;
+}
+
+// apexearth: "if we are full on metal then obviously we need more
+// factories/builders spending it." A full bank is the economy overriding the
+// curve, which is why this is added on top rather than folded into it.
 int AdvConsWanted()
 {
-	int want = 1 + int(aiEconomyMgr.metal.income / ADV_CON_INCOME_STEP);
+	int want = ConsWantedTier(true, false);
 	if (aiEconomyMgr.isMetalFull)
 		want += ADV_CON_FULL_BONUS;
 	return want;
