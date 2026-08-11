@@ -35,18 +35,12 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			// (a real observed threat, not a forecast), caps at AA_MIN..AA_MAX,
 			// and is throttled by AA_PERIOD -- it cannot crowd out expansion the
 			// way the rest of this cluster measurably did.
-			IUnitTask@ aa = CheapAA(unit);
-			if (aa !is null)
-				return aa;
 			// The better turret sits beside the cheap one, outside the phase
 			// gate, for the same reason CheapAA was carved out of it: it answers
 			// OBSERVED enemy air rather than forecasting, it is bounded at 1..4,
 			// and the def is T2 so it cannot fire before the tech exists anyway.
 			// Inside the gate it needed gHaveT2 AND an ECO/HOME crew role, which
 			// is why the good AA never appeared in time.
-			IUnitTask@ heavyAa = HeavyAA(unit);
-			if (heavyAa !is null)
-				return heavyAa;
 			IUnitTask@ deter = HomeDeter(unit);
 			if (deter !is null)
 				return deter;
@@ -119,9 +113,6 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			// HomeEnergy always returns work now, so putting it first meant the
 			// home crew never reached this and guards fell 18 -> 6 in a game.
 			// A 130-metal turret that saves a 620-metal mex outranks a solar.
-			IUnitTask@ guard = MexGuard(unit);
-			if (guard !is null)
-				return guard;
 
 			// The home crew's own job, NOT phase-gated: the pre-fusion energy
 			// curve is exactly the stage this is for. HomeEnergy returns null for

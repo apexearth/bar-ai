@@ -340,6 +340,144 @@ const float FRONT_FENCE_VALUE = 1.2f;
 const float FRONT_FENCE_SPREAD = 700.f;   // how far apart cover counts as spread
 const float FRONT_SITE_SEARCH = 400.f;    // how far to look for ground it fits on
 
+// COVERING AN EXTRACTOR, as a WANT rather than as a rule that places its own
+// tower. apexearth: "do the consolidation."
+//
+// MexGuard's REASON was always sound -- a bare extractor is free metal for one
+// raider -- and it was its PLACEMENT that produced blobs: it chose a mex, then a
+// site next to it, with no reference to anything else we were building. Here the
+// reason becomes a proposal that competes with the line on value, and one
+// placement path serves both.
+//
+// A mex with nothing in firing range of it outranks a mex that merely wants a
+// second turret, which is what makes cover spread before it thickens.
+const float MEX_COVER_VALUE = 0.9f;
+
+Want@ MexCoverWant(CCircuitUnit@ unit)
+{
+	CCircuitDef@ mex = Builder::MexDef();
+	if ((mex is null) || (mex.count <= 0))
+		return null;
+	array<CCircuitUnit@>@ mine = ai.GetOwnUnitsOfDef(mex, Builder::gHomePos, 0.f);
+	if ((mine is null) || (mine.length() == 0))
+		return null;
+
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	const float reach = ai.GetTunable("apex_front_reach", 2200.f);
+	AIFloat3 best;
+	bool have = false;
+	float bestD = 0.f;
+	for (uint i = 0; i < mine.length(); ++i) {
+		if (mine[i] is null)
+			continue;
+		const AIFloat3 at = mine[i].GetPos(ai.frame);
+		if (!OnMap(at))
+			continue;
+		if (Builder::DefenceWithin(at, Builder::MEX_IN_RANGE) > 0)
+			continue;                       // already covered
+		const float d = me.distance2D(at);
+		if (d > reach)
+			continue;
+		if (Builder::ThreatFor(unit, at) > Builder::CON_THREAT_VETO)
+			continue;
+		if (Builder::DefenceTaskNear(at, Builder::MEX_IN_RANGE))
+			continue;
+		if (!have || (d < bestD)) {
+			bestD = d;
+			best = at;
+			have = true;
+		}
+	}
+	if (!have)
+		return null;
+
+	CCircuitDef@ tower = Builder::MexGuardTower(unit, best);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+	if (!Military::DefenceAllowedAt(best))
+		return null;
+	AIFloat3 site = ai.FindBuildSiteNear(tower, best, Builder::MEX_GUARD_RADIUS);
+	if (!OnMap(site) || Builder::TooCrowded(site))
+		return null;
+
+	Want@ w = Want();
+	w.kind = "fence";
+	w.value = MEX_COVER_VALUE;
+	w.cost = tower.costM;
+	w.pos = site;
+	@w.def = tower;
+	w.needsAdvCon = false;
+	return w;
+}
+
+// ANSWERING THEIR AIR, over something worth answering it over.
+//
+// CheapAA and HeavyAA placed at the CONSTRUCTOR'S OWN POSITION, which is how a
+// third of the rearward blobs happened -- the turret went wherever a builder was
+// standing. The sizing they did is kept exactly: the enemy's air value against
+// what the TEAM already holds, discounted because AA out-trades aircraft per
+// metal, with a per-base deterrence floor. Only the position changes: over an
+// extractor, which is what their air is actually hunting.
+const float AIR_COVER_VALUE = 0.8f;
+
+Want@ AirCoverWant(CCircuitUnit@ unit)
+{
+	const float enemyAir = aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type);
+	if (enemyAir < 1.f)
+		return null;
+	CCircuitDef@ aa = Builder::AADefFor(unit);
+	if ((aa is null) || !aa.IsAvailable(ai.frame))
+		return null;
+	const int want = Builder::AAWantedNow(unit, enemyAir);
+	if (aa.count < Builder::AA_MIN) {
+		// per-base deterrence floor, counted on our own turrets
+	} else if (Military::TeamAA() >= float(want)) {
+		return null;
+	}
+
+	// Over an extractor rather than under the builder's feet.
+	CCircuitDef@ mex = Builder::MexDef();
+	if ((mex is null) || (mex.count <= 0))
+		return null;
+	array<CCircuitUnit@>@ mine = ai.GetOwnUnitsOfDef(mex, unit.GetPos(ai.frame),
+			ai.GetTunable("apex_front_reach", 2200.f));
+	if ((mine is null) || (mine.length() == 0))
+		return null;
+	AIFloat3 best;
+	bool have = false;
+	uint fewest = 0;
+	for (uint i = 0; i < mine.length(); ++i) {
+		if (mine[i] is null)
+			continue;
+		const AIFloat3 at = mine[i].GetPos(ai.frame);
+		if (!OnMap(at) || Builder::TooCrowded(at))
+			continue;
+		const uint near = Military::FenceCountNear(at, Builder::MEX_COVER_RADIUS);
+		if (!have || (near < fewest)) {
+			fewest = near;
+			best = at;
+			have = true;
+		}
+	}
+	if (!have)
+		return null;
+	if (!Military::DefenceAllowedAt(best))
+		return null;
+	AIFloat3 site = ai.FindBuildSiteNear(aa, best, Builder::MEX_GUARD_RADIUS);
+	if (!OnMap(site))
+		return null;
+
+	Want@ w = Want();
+	w.kind = "fence";
+	w.value = AIR_COVER_VALUE;
+	w.cost = aa.costM;
+	w.pos = site;
+	@w.def = aa;
+	w.needsAdvCon = false;
+	w.have = int(fewest);
+	return w;
+}
+
 Want@ FrontDefenceWant(CCircuitUnit@ unit)
 {
 	FenceSweep();
@@ -603,6 +741,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 
 	Propose(MexWant(unit));
 	Propose(FrontDefenceWant(unit));
+	Propose(MexCoverWant(unit));
+	Propose(AirCoverWant(unit));
 	Propose(MexUpgradeWant(unit));
 	// The optional class. Costs are read from the defs so a score means
 	// something; where a def is missing the want is simply not proposed.

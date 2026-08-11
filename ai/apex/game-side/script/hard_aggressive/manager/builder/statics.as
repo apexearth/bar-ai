@@ -154,73 +154,6 @@ int gNextPulsar = 0;
 int gNextAA = 0;
 int gNextAADiag = 0;  // temporary diagnostic, see CheapAA
 
-// Cheap AA, kept at a small standing count. Any constructor can build it.
-IUnitTask@ CheapAA(CCircuitUnit@ unit)
-{
-	if (aiEconomyMgr.isEnergyStalling)
-		return null;
-	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
-		return null;
-	// Hand over to HeavyAA once the grid can obviously pay for the better turret.
-	// apexearth: "if you have, like, ten thousand energy then you can certainly
-	// afford better anti air." A Ferret costs 5,700 energy to a Nettle's 900, so
-	// the question is affordability, not tier. Availability is checked too, so
-	// there is no window where this has stood down and nothing has taken over.
-	//
-	// Without the handover this rule kept replacing the T1 turrets ObsoleteReclaim
-	// had just eaten, which is what made them unreclaimable in practice.
-	CCircuitDef@ heavy = SideDef3(armferret, cormadsam, legflak);
-	if (LandIsPrecious() && (heavy !is null) && heavy.IsAvailable(ai.frame))
-		return null;
-	// Only if the enemy actually flies. This had no such test, while
-	// DefaultMakeDefence has always skipped AA defs when GetEnemyCost(AIR) < 1 --
-	// so in a ground-only game this was the single largest defence spend: 30
-	// turrets in one 20-minute 4v4, more than the front line and the dig-ins
-	// together. Measured with the new mDefence counter: static defence was 12.6%
-	// of our metal against stock's 5.4%, with army 29.4% against 38.1%.
-	// apexearth: "the side effect is wasteful defense and then we have less army
-	// and are losing the overall fight."
-	const float enemyAir = aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type);
-	// DIAGNOSTIC, apexearth: "I didn't see us making AA... check it." GetEnemyCost
-	// only accumulates on EnemyEnterLOS (not radar contact) and is otherwise never
-	// reduced except on enemy death -- a fast hit-and-run flyer that stays at radar
-	// range without crossing into true LOS could plausibly never get counted at
-	// all. mobileThreat/GetEnemyThreat(AIR) are separate accumulators (threat, not
-	// cost) that may behave differently; logging both to compare against the gate
-	// this function actually uses. Remove once the hypothesis is confirmed or
-	// ruled out.
-	if (ai.frame >= gNextAADiag) {
-		gNextAADiag = ai.frame + 20 * SECOND;
-		AiLog(Factory::T() + "apex: AA-gate enemyAir(cost)=" + formatFloat(enemyAir, "", 0, 1)
-			+ " enemyAirThreat=" + formatFloat(aiEnemyMgr.GetEnemyThreat(Unit::Role::AIR.type), "", 0, 1)
-			+ " mobileThreat=" + formatFloat(aiEnemyMgr.mobileThreat, "", 0, 1)
-			+ " rlCount=" + (SideDef3(armrl, corrl, legrl) is null ? -1 : int(SideDef3(armrl, corrl, legrl).count)));
-	}
-	if (enemyAir < 1.f)
-		return null;
-	int want = int(AAWanted(enemyAir, AA_PER_AIR, AA_MIN));
-	if (want > AA_MAX)
-		want = AA_MAX;
-	CCircuitDef@ aa = SideDef3(armrl, corrl, legrl);
-	if ((aa is null) || !aa.IsAvailable(ai.frame))
-		return null;
-	// THE FLOOR IS PER BASE, THE ANSWER IS PER TEAM. apexearth's own reason for
-	// the floor is deterrence -- "if you have like 3 or 4 of them then the enemy
-	// air actively avoids you" -- and that only works over the base it is standing
-	// on. An ally's turrets across the map do not make our extractors a bad
-	// target. The SCALED part answers the enemy's air force, which is one force
-	// facing one team, so that half is counted team-wide.
-	if (aa.count < AA_MIN)
-		return AAOrder(unit, aa, want, enemyAir);
-	// COUNT THE TEAM'S TURRETS AGAINST THE TEAM'S OPPONENT. enemyAir above is the
-	// whole enemy side's air value, so comparing it against our OWN turret count
-	// asks every player to answer all of their aircraft alone -- four times the
-	// AA, landing on whichever of us has spare build power. See Military::TeamAA.
-	if (Military::TeamAA() >= float(want))
-		return null;
-	return AAOrder(unit, aa, want, enemyAir);
-}
-
 // armrl/corrl/legrl is DETERRENCE, not an answer: 80 metal, and CheapAA caps at
 // AA_MAX=12 regardless of how much air the enemy actually has. apexearth,
 // watching a game lost from this exact hole: "the enemies attacked us with
@@ -435,46 +368,6 @@ IUnitTask@ HomeDeter(CCircuitUnit@ unit)
 		+ " standing=" + Military::FenceCountNear(gHomePos, DETER_RADIUS)
 		+ "/" + DETER_HOME_MAX
 		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
-	return post;
-}
-
-IUnitTask@ HeavyAA(CCircuitUnit@ unit)
-{
-	if (!AA_HEAVY_ON || aiEconomyMgr.isEnergyStalling)
-		return null;
-	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
-		return null;
-	if (aiEconomyMgr.metal.income < AA_HEAVY_MIN_INCOME)
-		return null;
-	const float enemyAir = aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type);
-	if (enemyAir < AA_HEAVY_ENEMY_AIR)
-		return null;
-	const int want = int(AAWanted(enemyAir - AA_HEAVY_ENEMY_AIR,
-			AA_HEAVY_PER_AIR, AA_HEAVY_MIN));
-	CCircuitDef@ aa = SideDef3(armferret, cormadsam, legflak);
-	if ((aa is null) || !aa.IsAvailable(ai.frame))
-		return null;
-	// The team's turrets against the team's opponent -- see CheapAA.
-	if (Military::TeamAA() >= float(want))
-		return null;
-	const AIFloat3 here = unit.GetPos(ai.frame);
-	if (!OnMap(here))
-		return null;
-	// ANTI-AIR IS DEFENCE AND ANSWERS TO THE DEFENCE POLICY. Measured, armferret
-	// and armrl were 31 of the ~57 towers we held, and neither rule had ever been
-	// asked whether another one was affordable or wanted here -- they place at the
-	// CONSTRUCTOR'S OWN POSITION, which is wherever it happened to be standing.
-	// apexearth: "We're definitely out of control with building certain things
-	// like the light laser turrets and popup air defense turrets."
-	if (!Military::DefenceAllowedAt(here))
-		return null;
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, aa, here, DEF_SHAKE));
-	if (post is null)
-		return null;
-	gNextHeavyAA = ai.frame + AA_HEAVY_PERIOD;
-	AiLog(Factory::T() + "apex: heavy-aa " + aa.GetName() + " standing=" + aa.count
-		+ "/" + want + " enemyAir=" + formatFloat(enemyAir, "", 0, 0));
 	return post;
 }
 
@@ -810,6 +703,30 @@ IUnitTask@ Pinpointer(CCircuitUnit@ unit)
 		+ " team=" + TeamPinpoints() + "/" + PINPOINT_TEAM_MAX
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
 	return post;
+}
+
+// THE SIZING, KEPT; THE PLACEMENT, GONE. CheapAA and HeavyAA chose a def and a
+// count correctly and then put the turret at the constructor's feet, which is a
+// third of the rearward blobs. Brain::AirCoverWant asks these two and places over
+// an extractor -- what their air is actually hunting.
+CCircuitDef@ AADefFor(CCircuitUnit@ unit)
+{
+	CCircuitDef@ heavy = SideDef3(armferret, cormadsam, legflak);
+	if (LandIsPrecious() && (heavy !is null) && heavy.IsAvailable(ai.frame))
+		return heavy;
+	return SideDef3(armrl, corrl, legrl);
+}
+
+int AAWantedNow(CCircuitUnit@ unit, float enemyAir)
+{
+	CCircuitDef@ aa = AADefFor(unit);
+	const bool isHeavy = (aa !is null) && (aa.costM > 400.f);
+	int want = isHeavy
+			? int(AAWanted(enemyAir - AA_HEAVY_ENEMY_AIR, AA_HEAVY_PER_AIR, AA_HEAVY_MIN))
+			: int(AAWanted(enemyAir, AA_PER_AIR, AA_MIN));
+	if (!isHeavy && (want > AA_MAX))
+		want = AA_MAX;
+	return (want < 1) ? 1 : want;
 }
 
 }  // namespace Builder

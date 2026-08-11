@@ -88,50 +88,6 @@ bool ConDugIn(CCircuitUnit@ unit)
 	return ai.frame < gConDigUntil[i];
 }
 
-IUnitTask@ Fortify(CCircuitUnit@ unit)
-{
-	if (aiEconomyMgr.isEnergyStalling)
-		return null;
-	const int i = ConSlot(unit);
-	if (ai.frame < gConNextDig[i])
-		return null;
-	CCircuitDef@ tower = ContestTower(unit);
-	if ((tower is null) || !tower.IsAvailable(ai.frame))
-		return null;
-	AIFloat3 spot;
-	if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
-		return null;
-	// The bound. Without it this is the version that was reverted -- but the bar
-	// now rises with how hard this spot is being contested.
-	if (!AreaNeedsDefence(spot, FenceWanted(gConHits[i])))
-		return null;
-	// ...and the same policy every other placement answers to. A constructor
-	// being shot at says WHERE trouble is; it does not say we can afford another
-	// tower, nor that this spot is the front. See Military::DefenceAllowedAt.
-	if (!Military::DefenceAllowedAt(spot))
-		return null;
-	// Dig-ins place where the constructor is standing, which is the other half of
-	// the heap the blob audit keeps flagging. See Builder::TooCrowded.
-	if (TooCrowded(spot))
-		return null;
-	IUnitTask@ dig = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, tower, spot, DEF_SHAKE));
-	if (dig is null)
-		return null;
-	NoteDigOrder(spot);
-	gConNextDig[i] = ai.frame + FORTIFY_PERIOD;
-	++gConFortified;
-	if (ai.frame >= gNextFortifyLog) {
-		gNextFortifyLog = ai.frame + 5 * SECOND;
-		AiLog(Factory::T() + "apex: con-dig " + unit.circuitDef.GetName()
-			+ " hits=" + gConHits[i] + " -> " + tower.GetName()
-			+ " fence=" + Military::FenceCountNear(spot, DIG_AREA)
-			+ " here=" + DefenceAround(spot)
-			+ " fortified=" + gConFortified);
-	}
-	return dig;
-}
-
 // Wounded units already have repair tasks waiting; the constructors were busy
 // buying economy.
 //

@@ -97,11 +97,6 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 			IUnitTask@ home = HomeTower(unit, isComm);
 			if (home !is null)
 				return home;
-			IUnitTask@ cguard = MexGuard(unit);
-			if (cguard !is null) {
-				++gCommGuard;
-				return cguard;
-			}
 		}
 		const float hp = unit.GetHealthPercent();
 		if (hp < COM_RETREAT_HEALTH) {
@@ -422,9 +417,6 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)
 	// Self-limiting without a cooldown: AreaNeedsDefence only returns a mex that
 	// is not already covered, so this stops asking once they are.
 	if (isComm && CommRules()) {
-		IUnitTask@ commGuard = MexGuard(unit);
-		if (commGuard !is null)
-			return commGuard;
 	}
 	return null;
 }

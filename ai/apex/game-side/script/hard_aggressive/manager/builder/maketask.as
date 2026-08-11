@@ -148,15 +148,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
-	// Its own recent history says it cannot expand, so stop sending it out. The
-	// tower it puts up instead is what makes the ground usable later -- but only
-	// where something is not already standing; see AreaNeedsDefence.
-	if (!isComm && !Factory::EcoLeadActive() && ConDugIn(unit)) {
-		IUnitTask@ dig = Fortify(unit);
-		if (dig !is null)
-			return dig;
-	}
-
 	@task = VetoCommanderReclaim(unit, isComm, task);
 	@task = VetoCommanderHold(unit, isComm, task);
 	@task = VetoCrisisAssist(task);
