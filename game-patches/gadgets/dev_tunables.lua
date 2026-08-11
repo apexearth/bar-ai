@@ -71,6 +71,8 @@ local NAMES = {
 	"apex_mix_counter",
 	"apex_mix_scout",
 	"apex_mix_scout_per_mex",
+	"apex_chaff_income",
+	"apex_chaff_floor",
 	"apex_nano_income_gate",
 	-- The Brain's mex upgrades (2026-08-10): how many the engine holds open.
 	"apex_mexup_per_income",

@@ -240,9 +240,66 @@ array<float> CounterShares(CCircuitUnit@ fac, float &out weight)
 }
 
 // The base table read through what we know of the enemy.
-float Target(uint i, const array<float>& in counter, float weight)
+// CHAFF STOPS EARNING ITS SLOT ONCE THE ECONOMY IS REAL.
+//
+// apexearth, watching: "enemies are often killing the pawns in 1 hit... i guess
+// after like 20m/s we hardly need any pawns anymore", and "scouts too".
+//
+// A Pawn is 54 metal and dies to one shot from anything the enemy fields once
+// they are past their own opening. The value of a raider is the ECONOMIC damage
+// it does before it dies, so it falls as the enemy's units and defences get
+// bigger -- and enemy scale tracks income, ours and theirs together. This is
+// the same shape the game's own tier tables use (armlab drops armpw to 0.00 at
+// 100 metal/s); it just starts fading at the income he named rather than
+// falling off a cliff three tiers later.
+//
+//   income    10    20    40    60   100   200
+//   scale    1.00  1.00  0.50  0.33  0.20  0.15
+//
+// A floor rather than zero: they keep distraction and scouting value, and the
+// counter weighting can still raise RIOT-vs-raider answers independently.
+const float CHAFF_FULL_INCOME = 20.f;
+const float CHAFF_FLOOR       = 0.15f;
+
+float ChaffScale()
 {
-	return gMix[i].share * (1.f - weight) + counter[i] * weight;
+	const float full = ai.GetTunable("apex_chaff_income", CHAFF_FULL_INCOME);
+	const float inc = aiEconomyMgr.metal.income;
+	if (inc <= full)
+		return 1.f;
+	const float floorV = ai.GetTunable("apex_chaff_floor", CHAFF_FLOOR);
+	const float scale = full / inc;
+	return (scale < floorV) ? floorV : scale;
+}
+
+bool IsChaffRole(Type role)
+{
+	return (role == RT::RAIDER) || (role == RT::SCOUT);
+}
+
+// The base table read through the economy, renormalised so the weight a fading
+// role gives up is taken by the roles that still earn it rather than simply
+// vanishing from the total.
+array<float> BaseShares()
+{
+	array<float> b(gMix.length(), 0.f);
+	const float chaff = ChaffScale();
+	float sum = 0.f;
+	for (uint i = 0; i < gMix.length(); ++i) {
+		b[i] = gMix[i].share * (IsChaffRole(gMix[i].role) ? chaff : 1.f);
+		sum += b[i];
+	}
+	if (sum > 0.f) {
+		for (uint i = 0; i < b.length(); ++i)
+			b[i] /= sum;
+	}
+	return b;
+}
+
+float Target(uint i, const array<float>& in base, const array<float>& in counter,
+		float weight)
+{
+	return base[i] * (1.f - weight) + counter[i] * weight;
 }
 
 // What we currently HOLD of a role, in metal. CCircuitDef::count is our own
@@ -272,6 +329,7 @@ CCircuitDef@ NextForMix(CCircuitUnit@ fac)
 
 	float weight = 0.f;
 	array<float> counter = CounterShares(fac, weight);
+	array<float> base = BaseShares();
 
 	// A RATIO BEING MET IS NOT A REASON TO STOP BUILDING.
 	//
@@ -292,7 +350,7 @@ CCircuitDef@ NextForMix(CCircuitUnit@ fac)
 		if (held[i] < 0.f)
 			continue;            // not buildable here
 		const float have = held[i] / total;
-		const float gap = Target(i, counter, weight) - have;
+		const float gap = Target(i, base, counter, weight) - have;
 		if (gap <= worstGap)
 			continue;
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
@@ -366,7 +424,7 @@ IUnitTask@ ScoutFloor(CCircuitUnit@ fac)
 	if (per >= 1.f) {
 		CCircuitDef@ mex = SideDef3("armmex", "cormex", "legmex");
 		if (mex !is null)
-			want = 1 + int(float(mex.count) / per);
+			want = 1 + int(float(mex.count) * ChaffScale() / per);
 	}
 	if (scout.count >= want)
 		return null;
@@ -415,11 +473,12 @@ IUnitTask@ MixTask(CCircuitUnit@ fac)
 		gNextMixLog = ai.frame + 60 * SECOND;
 		float weight = 0.f;
 		array<float> counter = CounterShares(fac, weight);
+		array<float> base = BaseShares();
 		string line = Factory::T() + "apex: mix -> " + want.GetName()
 			+ " picks=" + gMixPicks
 			+ " counterW=" + formatFloat(weight, "", 0, 2);
 		for (uint i = 0; i < gMix.length(); ++i)
-			line += " | " + formatFloat(Target(i, counter, weight), "", 0, 2);
+			line += " | " + formatFloat(Target(i, base, counter, weight), "", 0, 2);
 		AiLog(line);
 	}
 	return rec;
