@@ -281,6 +281,17 @@ const float FRONT_SETBACK  = 0.12f;   // build this far inside it, not on it
 // Per lane: the fraction along home->enemy at which that lane's influence
 // crosses. Index 0 is the leftmost lane.
 array<float> gFrontLane;
+// How far out a BUILDER can actually work in each lane, as a fraction of the
+// same axis. Not the same question as where the line is, and it is the one that
+// decides whether a tower can exist: IBuilderTask::FindBuildSite searches with a
+// CanReachAtSafe predicate, which rejects any cell whose builder threat is above
+// THREAT_MIN, so an order past this point is refused by the engine's own site
+// search and left queued with nobody on it.
+//
+// Threat does not time out. CMapManager::HostileInLOS keeps an enemy's threat
+// until we have line of sight on where it was and it is gone, or it dies -- so
+// this edge moves outward when the army takes ground, and not otherwise.
+array<float> gFrontSafe;
 int gFrontStamp = -1;
 AIFloat3 gFrontFwd;      // home -> enemy, unnormalised (the axis' own length)
 AIFloat3 gFrontSide;     // unit perpendicular
@@ -294,6 +305,7 @@ void RebuildFront()
 	gFrontStamp = ai.frame;
 	gFrontValid = false;
 	gFrontLane.resize(0);
+	gFrontSafe.resize(0);
 
 	if (!Builder::gHomeSet)
 		return;
@@ -315,11 +327,29 @@ void RebuildFront()
 		const AIFloat3 origin = home + side * (float(lane) * FrontLaneGap());
 		float found = -1.f;
 		float ours = -1.f;
+		float safe = 0.f;
+		bool stillSafe = true;
 		for (int i = 1; i <= FRONT_SAMPLES; ++i) {
 			const float t = FRONT_SCAN_END * float(i) / float(FRONT_SAMPLES);
 			const AIFloat3 p = origin + fwd * t;
 			if (!OnMap(p))
 				break;
+			// How far out this lane is still workable, tracked on the way past.
+			// Stops at the FIRST threatened sample rather than taking the last
+			// clear one: a pocket of quiet ground beyond a threatened band is not
+			// somewhere a constructor can walk to.
+			// THE SAME BAR THE ENGINE USES, not a stricter one. CanReachAtSafe
+			// tests `GetBuilderThreatAt(pos) > THREAT_MIN`, and THREAT_MIN is 1.0
+			// (util/Defines.h) while the accessor has already subtracted
+			// THREAT_BASE. Testing `> 0` instead put the safe edge at 0.00-0.08 of
+			// the way out in every lane of every game -- our own doorstep -- so
+			// every tower collapsed back onto the base.
+			if (stillSafe) {
+				if (ai.GetBuilderThreatAt(p) > ai.GetTunable("apex_build_threat_bar", 1.f))
+					stillSafe = false;
+				else
+					safe = t;
+			}
 			// EMPTY GROUND IS NOBODY'S, NOT THEIRS. GetNetInflAt is ally minus
 			// enemy, so ground neither side has been near reads exactly 0 -- and
 			// testing `<= 0` called the first such sample the crossing. Every lane
@@ -344,6 +374,7 @@ void RebuildFront()
 		// A lane with no crossing is one we hold all the way, or one nobody has
 		// contested. Halfway is the start-box answer and is right for both.
 		gFrontLane.insertLast((found < 0.f) ? 0.5f : found);
+		gFrontSafe.insertLast(safe);
 	}
 	gFrontValid = true;
 	FrontDiag();
@@ -370,8 +401,18 @@ void FrontDiag()
 		if (t > hi) hi = t;
 		if (t == 0.5f) ++uncontested;
 	}
+	float safeSum = 0.f;
+	float safeMax = 0.f;
+	for (uint i = 0; i < gFrontSafe.length(); ++i) {
+		safeSum += gFrontSafe[i];
+		if (gFrontSafe[i] > safeMax)
+			safeMax = gFrontSafe[i];
+	}
+	const float sn = float(gFrontSafe.length());
 	const float n = float(gFrontLane.length());
 	AiLog(Factory::T() + "apex: front-diag lanes=" + gFrontLane.length()
+		+ " safeMean=" + formatFloat((sn > 0.f) ? safeSum / sn : 0.f, "", 0, 2)
+		+ " safeMax=" + formatFloat(safeMax, "", 0, 2)
 		+ " mean=" + formatFloat((n > 0.f) ? sum / n : 0.f, "", 0, 2)
 		+ " min=" + formatFloat(lo, "", 0, 2)
 		+ " max=" + formatFloat(hi, "", 0, 2)
@@ -416,9 +457,21 @@ bool FrontCurve(array<AIFloat3>& out pts)
 	// orders produced no towers. These points sit just inside our side of it,
 	// which is where a tower can be finished and still cover the line.
 	const float back = ai.GetTunable("apex_front_setback", FRONT_SETBACK);
+	// AS FAR OUT AS A BUILDER CAN WORK, AND NO FURTHER. apexearth: "Usually we
+	// want to build in a safer area and work our way out with more defenses over
+	// time."
+	//
+	// That is also the only thing the engine will accept: the site search refuses
+	// any threatened cell outright, so an order past the safe edge is not a risky
+	// tower, it is no tower at all. Taking the nearer of the two makes the line
+	// creep forward on its own as the army clears ground, which is the mechanism
+	// that moves it -- threat is only forgotten when we see the ground is empty.
+	const bool useSafe = ai.GetTunable("apex_front_safe_edge", 1.f) > 0.f;
 	for (uint i = 0; i < gFrontLane.length(); ++i) {
 		const float laneOff = (float(i) - float(FRONT_LANES)) * FrontLaneGap();
 		float t = gFrontLane[i] - back;
+		if (useSafe && (i < gFrontSafe.length()) && (gFrontSafe[i] < t))
+			t = gFrontSafe[i];
 		if (t < 0.f)
 			t = 0.f;
 		pts.insertLast(gFrontHome + gFrontSide * laneOff + gFrontFwd * t);

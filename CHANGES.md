@@ -18,6 +18,51 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-11: there is no ground forward that a builder is allowed to work on
+
+apexearth, asked which way to resolve the site-search refusal: *"i don't fully
+understand how long 'threat' lasts at the front line. Usually we want to build in
+a safer area and work our way out with more defenses over time... Army to protect
+the defense builder is a smart choice if possible."*
+
+**Threat does not time out.** `CMapManager::HostileInLOS` keeps an enemy's threat
+contribution until we have line of sight on where it was and it is gone, or it
+dies. Waiting does not clear the front; taking or observing the ground does. So
+"work our way out over time" is the right model and the army is the thing that
+moves it.
+
+Implemented as such: `RebuildFront` now records, per lane, how far out a builder
+can actually work -- the first sample whose builder threat exceeds the engine's
+own bar -- and `FrontCurve` places at whichever comes first, that edge or the
+line. The line then creeps forward on its own as ground is cleared, with no
+timer anywhere.
+
+Then the bar itself had to be right, and getting it wrong is instructive:
+`GetBuilderThreatAt` has already subtracted `THREAT_BASE`, and `CanReachAtSafe`
+tests it against `THREAT_MIN`, which is **1.0** (`util/Defines.h`). Testing `> 0`
+instead put the safe edge at 0.00-0.08 in every lane of every game and collapsed
+every tower back onto the base.
+
+At the correct bar, measured over six games: **safe edge mean 0.01-0.08, max
+0.33-0.49.** That is the finding. Our own territory reads threatened from about
+eight percent of the way out, so there is essentially nowhere between our base
+and theirs that a constructor is permitted to build. Defence position moved 0.02
+-> 0.04 median and stayed at 1% past the quarter mark, which is what that
+measurement predicts.
+
+**So forward defence is downstream of the army, not of placement.** We cannot
+build forward because we hold no ground forward; stock's towers sit at 0.12-0.18
+because it holds ground there, from `DefaultMakeDefence` on clusters it already
+controls. Every placement lever has now been tried and measured against this and
+none of them can matter while the threat blanket starts at our doorstep. It is
+the same thing apexearth has said from watching: *"it's units not performing well
+in battle."*
+
+Economy is unharmed by the change (metal produced 31,802 against the 32,548
+control, mex upgrades 3, wiped 1/24), so the safe edge stays on: it is the honest
+placement rule, and it will start producing forward towers by itself the moment
+the army holds ground.
+
 ## 2026-08-11: WHY the front orders are never filled -- the site search refuses
 
 Located, with the probe corrected. The earlier "dropped" test asked whether the
