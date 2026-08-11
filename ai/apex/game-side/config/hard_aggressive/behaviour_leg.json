@@ -28,32 +28,27 @@
 
 			"leglab": {
 				"role": ["static"],
-				"limit": 1,
 				"build_speed": 5.0,  //bp 100
 				"midposoffset": [-3.239746, 0, -2]
 			},
 			"legalab": {
 				"role": ["static"],
 				"attribute": ["support"],
-				"limit": 1,
 				"build_speed": 15.0 // bp 300
 			},
 			"legvp": {
 				"role": ["static"],
-				"limit": 1,
 				"build_speed": 5.0 // bp 100
 	
 			},
 			"legavp": {
 				"role": ["static"],
 				"attribute": ["support"],
-				"limit": 1,
 				"build_speed": 15.0  //bp 300
 			},
 			"leghp": {
 				"role": ["static"],
-				"build_speed": 10.0, //bp 200
-				"limit": 1
+				"build_speed": 10.0 //bp 200
 			},
 	
 //########################################################################################################################
@@ -62,14 +57,12 @@
 
 			"legfhp": {
 				"role": ["static"],
-				"build_speed": 10.0, //bp 200
-				"limit": 1
+				"build_speed": 10.0 //bp 200
 			},
 			"legsy": {
 				"role": ["static"],
 				"build_speed": 8.0, //bp 165
-				"build_mod": 1000.0,
-				"limit": 1
+				"build_mod": 1000.0
 			},
 			//"legasy": {
 			//	"role": ["static"],
@@ -80,8 +73,7 @@
 			//},
 			"legamsub": {
 				"role": ["builder"],
-				"build_speed": 7.5, //bp 150
-				"limit": 1
+				"build_speed": 7.5 //bp 150
 			},
 	
 //########################################################################################################################
@@ -91,21 +83,18 @@
 			"legap": {
 				"role": ["static"],
 				"attribute": ["support"],
-				"limit": 1,
 				"build_speed": 5.0 //bp 100
 			},
 			"legaap": {
 				"role": ["static"],
 				"attribute": ["support"],
 				"since": 420,
-				"limit": 1,
 				"build_speed": 10.0 //bp 200
 			},
 			"legplat": {
 				"role": ["builder"],
 				"build_speed": 10.0,  //bp 200
-				"since": 420.0,
-				"limit": 1
+				"since": 420.0
 			},
 
 //########################################################################################################################
@@ -115,13 +104,11 @@
 			"leggant": {
 				"role": ["static"],
 				"attribute": ["support", "solo"],
-				"limit": 1,
 				"build_speed": 45.0 //bp 300
 			},
 			"leggantuw": {
 				"role": ["static"],
 				"attribute": ["support", "solo"],
-				"limit": 1,
 				"build_speed": 45.0 //bp 300
 			},
 	
@@ -384,12 +371,10 @@
 				"role": ["static"]
 			},
 			"legsolar" : {
-				"role": ["static"],
-				"limit": 4
+				"role": ["static"]
 			},
 			"legadvsol" : {
-				"role": ["static"],
-				"limit": 6
+				"role": ["static"]
 			},
 			"leggeo" : {
 				"role": ["static"]
@@ -541,7 +526,6 @@
 			"legck": {
 				"role": ["builder"],
 				//"attribute": ["solo"],
-				"limit": 12,
 				"build_speed": 4.0  
 			},
 			"legack": {
@@ -552,18 +536,15 @@
 			},
 			"legcv": {
 				"role": ["builder"],
-				"limit": 10,
 				"build_speed": 4.5  //bp 90
 			},
 			"legotter": {
 				"role": ["builder"],
 				"attribute": ["solo"],
-				"limit": 6,
 				"build_speed": 4.0
 			},
 			"legnavyconship": {
 				"role": ["builder"],
-				"limit": 6,
 				"build_speed": 4.0
 			},
 			"legmlv": {
@@ -578,32 +559,27 @@
 			},
 			"legaceb": {
 				"role": ["builder"],
-				"limit": 16,
 				"build_speed": 7.0,
 				"since": 1300
 			},
 			"legca": {
 				"role": ["builder", "air"],
 				"retreat": 0.6,
-				"limit": 15,
 				"build_speed": 3.0
 			},
 			"legaca": {
 				"role": ["builder", "air"],
 				"attribute": ["solo"],
 				"retreat": 0.6,
-				"limit": 15,
 				"build_speed": 5.0
 			},
 			"legcs": {
 				"role": ["builder"],
 				"retreat": 0.6,
-				"limit": 8,
 				"build_speed": 6.0
 			},
 			"legch": {
 				"role": ["builder"],
-				"limit": 10,
 				"build_speed": 6.0
 			},
 	
@@ -679,14 +655,12 @@
 			},
 			"legdecom": {
 				"role": ["builder"],
-				"buildspeed": 6.0,
-				"limit": 2
+				"buildspeed": 6.0
 			},
 			"legsnapper": {
 				"role": ["scout"],
 				"attribute": ["melee"],
-				"retreat": 0,
-				"limit": 2
+				"retreat": 0
 			},
 			"legsrail": {
 				"role": ["anti_heavy"]
@@ -709,8 +683,7 @@
 			},
 
 			"legaspy": {
-				"role": ["scout"],
-				"limit": 3
+				"role": ["scout"]
 			},
 
 			"legaradk": {
