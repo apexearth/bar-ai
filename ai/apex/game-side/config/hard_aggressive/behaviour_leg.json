@@ -28,32 +28,27 @@
 
 			"leglab": {
 				"role": ["static"],
-				"limit": 1,
 				"build_speed": 5.0,  //bp 100
 				"midposoffset": [-3.239746, 0, -2]
 			},
 			"legalab": {
 				"role": ["static"],
 				"attribute": ["support"],
-				"limit": 1,
 				"build_speed": 15.0 // bp 300
 			},
 			"legvp": {
 				"role": ["static"],
-				"limit": 1,
 				"build_speed": 5.0 // bp 100
 	
 			},
 			"legavp": {
 				"role": ["static"],
 				"attribute": ["support"],
-				"limit": 1,
 				"build_speed": 15.0  //bp 300
 			},
 			"leghp": {
 				"role": ["static"],
-				"build_speed": 10.0, //bp 200
-				"limit": 1
+				"build_speed": 10.0 //bp 200
 			},
 	
 //########################################################################################################################
@@ -62,14 +57,12 @@
 
 			"legfhp": {
 				"role": ["static"],
-				"build_speed": 10.0, //bp 200
-				"limit": 1
+				"build_speed": 10.0 //bp 200
 			},
 			"legsy": {
 				"role": ["static"],
 				"build_speed": 8.0, //bp 165
-				"build_mod": 1000.0,
-				"limit": 1
+				"build_mod": 1000.0
 			},
 			//"legasy": {
 			//	"role": ["static"],
@@ -80,8 +73,7 @@
 			//},
 			"legamsub": {
 				"role": ["builder"],
-				"build_speed": 7.5, //bp 150
-				"limit": 1
+				"build_speed": 7.5 //bp 150
 			},
 	
 //########################################################################################################################
@@ -91,21 +83,18 @@
 			"legap": {
 				"role": ["static"],
 				"attribute": ["support"],
-				"limit": 1,
 				"build_speed": 5.0 //bp 100
 			},
 			"legaap": {
 				"role": ["static"],
 				"attribute": ["support"],
 				"since": 420,
-				"limit": 1,
 				"build_speed": 10.0 //bp 200
 			},
 			"legplat": {
 				"role": ["builder"],
 				"build_speed": 10.0,  //bp 200
-				"since": 420.0,
-				"limit": 1
+				"since": 420.0
 			},
 
 //########################################################################################################################
@@ -115,13 +104,11 @@
 			"leggant": {
 				"role": ["static"],
 				"attribute": ["support", "solo"],
-				"limit": 1,
 				"build_speed": 45.0 //bp 300
 			},
 			"leggantuw": {
 				"role": ["static"],
 				"attribute": ["support", "solo"],
-				"limit": 1,
 				"build_speed": 45.0 //bp 300
 			},
 	
@@ -182,7 +169,6 @@
 			"legcluster": {
 				"role": ["static"],
 				"on": false,
-				"limit": 3,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
@@ -219,14 +205,12 @@
 			},
 			"legsd":{
 				"role":["static"],
-				"limit": 3,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			// One EACH; three is the whole side's allowance. See behaviour.json.
 			"legtarg": {
-				"role": ["static"],
-				"limit": 1
+				"role": ["static"]
 			},
 			"legdeflector": {
 				"role": ["static"],
@@ -281,20 +265,17 @@
 			},
 			"legperdition":{
 				"role":	["super", "static"],
-				"limit":1,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legabm":{
 				"role":	["super", "static"],
-				"limit": 5,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legsilo":{
 				"role":	["super", "static"],
-				"threat": {"air": 0.0, "surf": 0.1, "water": 0.0},
-				"limit": 1
+				"threat": {"air": 0.0, "surf": 0.1, "water": 0.0}
 			},
 	// T1 Sea Defenses -- Legion
 			"legfrad": {
@@ -311,8 +292,7 @@
 				"role": ["static"],
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 			 	"power": 1.0, 
-				"since": 360,
-				"limit": 3
+				"since": 360
 			},
 			"legfrl": {
 				"role": ["anti_air"],
@@ -377,27 +357,23 @@
 			},
 			"legmstor" : {
 				"role": ["static"],
-				"since": 300,
-				"limit": 1
+				"since": 300
 			},
 			"legwin": {
 				"role": ["static"]
 			},
 			"legsolar" : {
-				"role": ["static"],
-				"limit": 4
+				"role": ["static"]
 			},
 			"legadvsol" : {
-				"role": ["static"],
-				"limit": 6
+				"role": ["static"]
 			},
 			"leggeo" : {
 				"role": ["static"]
 			},
 			"legestor" : {
 				"role": ["static"],
-				"since": 300,
-				"limit": 1
+				"since": 300
 			},
 			//Sea T1 Economy
 			"legfeconv" : {
@@ -412,8 +388,7 @@
 			},
 			"leguwestore" : {
 				"role": ["static"],
-				"since": 9999,
-				"limit": 1
+				"since": 9999
 			},
 			//Land T2 Economy
 			"legmoho" : {
@@ -424,7 +399,6 @@
 			},
 			"legamstor" : {
 				"role": ["static"],
-				"limit": 1,
 				"since": 1200
 			},
 			"legageo" : {
@@ -454,17 +428,14 @@
 			},
 			"coruwms" : {
 				"role": ["static"],
-				"since": 500,
-				"limit": 1
+				"since": 500
 			},
 			"coruwadvms" : {
-				"role": ["static"],
-				"limit": 1
+				"role": ["static"]
 			},
 			"coruwes" : {
 				"role": ["static"],
-				"since": 240,
-				"limit": 1
+				"since": 240
 			},*/
 	
 	
@@ -541,29 +512,24 @@
 			"legck": {
 				"role": ["builder"],
 				//"attribute": ["solo"],
-				"limit": 12,
 				"build_speed": 4.0  
 			},
 			"legack": {
 				"role": ["builderT2"],
 				"attribute": ["solo"],
-				"limit": 10,
 				"build_speed": 9.0  
 			},
 			"legcv": {
 				"role": ["builder"],
-				"limit": 10,
 				"build_speed": 4.5  //bp 90
 			},
 			"legotter": {
 				"role": ["builder"],
 				"attribute": ["solo"],
-				"limit": 6,
 				"build_speed": 4.0
 			},
 			"legnavyconship": {
 				"role": ["builder"],
-				"limit": 6,
 				"build_speed": 4.0
 			},
 			"legmlv": {
@@ -573,37 +539,31 @@
 			"legacv": {
 				"role": ["builderT2"],
 				"attribute": ["solo"],
-				"limit": 15,
 				"build_speed": 12.5
 			},
 			"legaceb": {
 				"role": ["builder"],
-				"limit": 16,
 				"build_speed": 7.0,
 				"since": 1300
 			},
 			"legca": {
 				"role": ["builder", "air"],
 				"retreat": 0.6,
-				"limit": 15,
 				"build_speed": 3.0
 			},
 			"legaca": {
 				"role": ["builder", "air"],
 				"attribute": ["solo"],
 				"retreat": 0.6,
-				"limit": 15,
 				"build_speed": 5.0
 			},
 			"legcs": {
 				"role": ["builder"],
 				"retreat": 0.6,
-				"limit": 8,
 				"build_speed": 6.0
 			},
 			"legch": {
 				"role": ["builder"],
-				"limit": 10,
 				"build_speed": 6.0
 			},
 	
@@ -611,14 +571,12 @@
 
 			"legcen": {
 				"role": ["assault"],
-				"threat":{"vs":{"artillery": 4.0, "anti-heavy":3.0}},
-				"limit": 40
+				"threat":{"vs":{"artillery": 4.0, "anti-heavy":3.0}}
 			},
 			"legbal": {
 				"role": ["assault"],
 				"attribute": ["siege"],
 				"retreat": 0.6,
-				"limit": 10,
 				"threat": {"air": 0.0, "water": 0.0, "surf": 0.8,
 					"vs": {"artillery": 1.8, "anti_air": 1.8, "raiders":0.5}
 				}
@@ -645,13 +603,11 @@
 			},
 			"legaabot": {
 				"role": ["anti_air"],
-				"limit": 10,
 				"threat": {"air": 2.0, "water": 0.0, "surf":0.0}
 			},
 			"legrezbot": {
 				"role": ["support"],
-				"retreat": 0.6,
-				"limit":60
+				"retreat": 0.6
 			},
 	
 			// adv bot - legalab
@@ -674,19 +630,16 @@
 			"legbart": {
 				"role": ["artillery"],
 				"threat": {"surf":0.5, "vs":{"static":2.0, "artillery":2.0}},
-				"retreat": 0.8,
-				"limit": 10
+				"retreat": 0.8
 			},
 			"legdecom": {
 				"role": ["builder"],
-				"buildspeed": 6.0,
-				"limit": 2
+				"buildspeed": 6.0
 			},
 			"legsnapper": {
 				"role": ["scout"],
 				"attribute": ["melee"],
-				"retreat": 0,
-				"limit": 2
+				"retreat": 0
 			},
 			"legsrail": {
 				"role": ["anti_heavy"]
@@ -695,32 +648,26 @@
 				"role": ["artillery"],
 				"attribute":["siege"],
 				"threat": {"surf":0.5, "vs":{"static":2.0, "artillery":2.0}},
-				"retreat": 0.8,
-				"limit": 10
+				"retreat": 0.8
 			},
 			"legamph": {
-				"role": ["raider"],
-				"limit": 10
+				"role": ["raider"]
 			},
 			"legadvaabot": {
-				"role": ["anti_air"],
+				"role": ["anti_air"]
 				//"attribute": ["support"],
-				"limit": 10
 			},
 
 			"legaspy": {
-				"role": ["scout"],
-				"limit": 3
+				"role": ["scout"]
 			},
 
 			"legaradk": {
 				"role": ["support"],
-				"retreat": 0.6,
-				"limit": 3
+				"retreat": 0.6
 			},
 			"legajamk": {
-				"role": ["support"],
-				"limit": 3
+				"role": ["support"]
 			},
 
 			// T3 LEGION EXPERIMENTAL - leggant
@@ -770,8 +717,7 @@
 			"leghades": {
 				"role": ["raider"],
 				"attribute": ["scout"],
-				"threat":{"vs":{"artillery": 2.0}},
-				"limit": 30
+				"threat":{"vs":{"artillery": 2.0}}
 			},
 			"legamphtank": {
 				"role": ["assault"]
@@ -810,7 +756,6 @@
 			},
 			"legvflak": {
 				"role": ["anti_air"],
-				"limit": 10,
 				"threat": {"air": 2.0, "water": 0.0, "surf": 0.0}
 			},
 			"legmrv": {
@@ -835,14 +780,12 @@
 				"retreat": 0.5
 			},
 			"legvcarry": {
-				"role":	["riot"],
-				"limit": 3
+				"role":	["riot"]
 			},
 			"leginf": {
 				"role": ["artillery"],
 				"threat": {"surf": 0.2, "vs":{"static":5.0, "artillery":5.0}},
-				"retreat": 0.6,
-				"limit": 3
+				"retreat": 0.6
 			},
 			// Legion's vehicle-plant radar and jammer were the only two of the
 			// six mobile radar/jammer units with no entry here at all, so they
@@ -851,12 +794,10 @@
 			// lab pair, which do have entries.
 			"legavrad": {
 				"role": ["support"],
-				"retreat": 0.6,
-				"limit": 3
+				"retreat": 0.6
 			},
 			"legavjam": {
-				"role": ["support"],
-				"limit": 3
+				"role": ["support"]
 			},
 
 			// aircraft - legap
@@ -873,7 +814,6 @@
 			"legkam": {
 				"role": ["bomber", "air"],
 				"power": 0.5,
-				"limit": 30,
 				"retreat": 0.5
 			},
 			"legmos": {
@@ -981,8 +921,7 @@
 			},
 			"legmh": {
 				"role": ["artillery"],
-				"threat": {"surf": 0.2, "vs":{"static":5.0, "artillery":5.0}},
-				"limit": 6
+				"threat": {"surf": 0.2, "vs":{"static":5.0, "artillery":5.0}}
 			},
 			"legah": {
 				"role": ["anti_air"],

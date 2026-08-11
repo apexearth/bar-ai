@@ -93,8 +93,6 @@ void UpdateAirThreat()
 
 	// count includes nanoframes, so a turret still building holds its own slot.
 	int heavyWant = int(gAirAvg * scale / AA_HEAVY_PER);
-	if (heavyWant > AA_HEAVY_MAX)
-		heavyWant = AA_HEAVY_MAX;
 	const int heavyHave = LiveCount(gFlak) + LiveCount(gHeavy);
 	const int spare = (heavyWant > heavyHave) ? (heavyWant - heavyHave) : 0;
 	CapHeavyAA(gFlak, spare);

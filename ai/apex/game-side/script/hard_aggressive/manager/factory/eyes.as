@@ -24,9 +24,10 @@ const float EYES_MIN_RANGE = 650.f;   // below this the gap is not worth paying 
 const float EYES_MAX_RANGE = 3000.f;  // anti-ship missiles carry range 72000
 
 const int EYES_PER_RADAR = 5;   // blind guns fielded per mobile radar wanted
-const int EYES_RADAR_MAX = 2;
+// No ceiling: one mobile radar per EYES_PER_RADAR blind guns, all the way up.
+// apexearth: "we don't want radar max cap, we don't want jammer max".
 const int EYES_PER_JAM   = 10;  // the jammer is the second-order want
-const int EYES_JAM_MAX   = 1;
+// No ceiling on jammers either, same reason as the radar above.
 const int EYES_SPACING   = 30 * SECOND;
 
 int gNextEyes = 0;
@@ -104,8 +105,6 @@ IUnitTask@ EyesForTheGuns(CCircuitUnit@ unit)
 		return null;
 
 	int want = guns / EYES_PER_RADAR;
-	if (want > EYES_RADAR_MAX)
-		want = EYES_RADAR_MAX;
 	CCircuitDef@ eye = EyeDefFor(unit.circuitDef, false);
 	bool haveRadar = (eye !is null) && (eye.count >= want);
 
@@ -113,8 +112,6 @@ IUnitTask@ EyesForTheGuns(CCircuitUnit@ unit)
 		// The jammer only earns its slot once the radar is already out there:
 		// it denies the enemy's targeting, which matters after we can see.
 		want = guns / EYES_PER_JAM;
-		if (want > EYES_JAM_MAX)
-			want = EYES_JAM_MAX;
 		@eye = EyeDefFor(unit.circuitDef, true);
 		if ((eye is null) || (eye.count >= want) || !eye.IsAvailable(ai.frame))
 			return null;

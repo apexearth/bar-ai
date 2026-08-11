@@ -69,7 +69,10 @@ uint DefenceAround(const AIFloat3& in pos)
 
 const int   TROUBLE_HITS    = 3;
 // Never stack more than this in one 700-elmo area, however hot it gets.
-const uint DIG_FENCE_CAP = 5;
+// No ceiling. apexearth: "we don't want that cap" -- what bounds a fence is
+// how often this position has actually been shot at, which the hit count below
+// already expresses.
+const uint DIG_FENCE_PER_TROUBLE = 1;
 
 // apexearth: "Areas should have a general limit to how much they'll build
 // there, especially on things like jammers... I often see many jammers all
@@ -138,7 +141,7 @@ uint FenceWanted(int hits)
 		want += 2;
 	else if (hits >= TROUBLE_HITS)
 		want += 1;
-	return (want > DIG_FENCE_CAP) ? DIG_FENCE_CAP : want;
+	return want + uint(hits / (TROUBLE_HITS * 4)) * DIG_FENCE_PER_TROUBLE;
 }
 
 bool AreaNeedsDefence(const AIFloat3& in pos, uint wanted = DIG_MAX_FENCE)

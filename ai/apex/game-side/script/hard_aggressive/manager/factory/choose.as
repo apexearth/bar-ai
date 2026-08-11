@@ -1,6 +1,68 @@
 namespace Factory {
 
+// HOW MANY PLANTS OF ONE TYPE AN ECONOMY IS WORTH.
+//
+// behaviour.json capped armlab/armvp/armsy/armap at ONE each, forever, at every
+// income. apexearth: "We should not be limiting the factory counts at 1. I'd say
+// at 1000 metal per second you can have a limit of 10 t1 plants. At 20 metal the
+// limit would be 1 T1 plant per type. For advanced labs... 1000 metal, 5
+// advanced plants per type... 100 metal, 1 per type. For gantries, 1 per 150
+// metal per second."
+//
+//   income    20    50   100   250   500  1000
+//   T1       1.0   3.1   4.7   6.8   8.4  10.0
+//   T2         1     1   1.0   2.6   3.8   5.0
+//   T3         -     -     -   1.6   3.3   6.7
+//
+// Per TYPE, not in total: pick.count is this def's own count, so a second bot lab
+// and a first vehicle plant are counted separately, which is what he asked for.
+// This does not contradict "never build two of the same expensive plant" -- that
+// was about building them SIMULTANEOUSLY on one economy, and at 20 metal/s this
+// still says one.
+int gNextPlantCapLog = 0;
+
+int PlantsWanted(const CCircuitDef@ fac)
+{
+	if (fac is null)
+		return 1;
+	const float inc = aiEconomyMgr.metal.income;
+	if (inc < 2.f)
+		return 1;
+	int want;
+	if ((userData[fac.id].attr & Attr::T3) != 0)
+		want = int(inc / ai.GetTunable("apex_plants_t3_per", 150.f));
+	else if ((userData[fac.id].attr & Attr::T2) != 0)
+		want = int(ai.GetTunable("apex_plants_t2_a", -7.0f)
+				+ ai.GetTunable("apex_plants_t2_b", 1.737f) * log(inc));
+	else
+		want = int(ai.GetTunable("apex_plants_t1_a", -5.892f)
+				+ ai.GetTunable("apex_plants_t1_b", 2.301f) * log(inc));
+	return (want < 1) ? 1 : want;
+}
+
+// The plant curve is applied ONCE, here, rather than at each of the dozen
+// returns inside ChooseFactory. The opening is exempt: isStart is the first
+// factory of the game and there is nothing to count yet.
 CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isReset)
+{
+	CCircuitDef@ want = ChooseFactory(pos, isStart, isReset);
+	if (isStart || (want is null) || !ApexActive())
+		return want;
+	const int have = want.count;
+	const int allowed = PlantsWanted(want);
+	if (have >= allowed) {
+		if (ai.frame >= gNextPlantCapLog) {
+			gNextPlantCapLog = ai.frame + 60 * SECOND;
+			AiLog(T() + "apex: " + want.GetName() + " held " + have + " >= "
+				+ allowed + " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+				+ " m/s -- no more of this type yet");
+		}
+		return null;
+	}
+	return want;
+}
+
+CCircuitDef@ ChooseFactory(const AIFloat3& in pos, bool isStart, bool isReset)
 {
 	if (!ApexActive())
 		return aiFactoryMgr.DefaultGetFactoryToBuild(pos, isStart, isReset);

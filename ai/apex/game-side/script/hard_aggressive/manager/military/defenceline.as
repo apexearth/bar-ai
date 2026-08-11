@@ -158,7 +158,8 @@ const float AA_MAX_PCT   = 0.50f;
 // Enemy air metal, scaled, that buys one heavy AA turret (armflak/armcir
 // 820/750, corflak/corerad 850/800, legflak 820).
 const float AA_HEAVY_PER = 1500.f;
-const int   AA_HEAVY_MAX = 6;
+// No ceiling: heavy AA is already proportional to the enemy's observed air
+// value through AA_HEAVY_PER. apexearth: "no AA heavy max".
 
 // Air is over-counted and ground under-counted by simple visibility: aircraft
 // fly over us constantly, ground sits in fog. Weight ground up, and average both

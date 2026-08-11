@@ -171,7 +171,8 @@ const bool  AA_HEAVY_ON          = true;
 // build. One committed gunship is enough to want the better turret.
 const float AA_HEAVY_ENEMY_AIR   = 1200.f;
 const int   AA_HEAVY_MIN         = 1;
-const int   AA_HEAVY_MAX         = 4;
+// No ceiling. The enemy's own air value is the proportion this scales on, which
+// is what a cap here was overriding. apexearth: "no AA heavy max".
 const float AA_HEAVY_PER_AIR     = 1800.f;
 const float AA_HEAVY_MIN_INCOME  = 20.f;
 const int   AA_HEAVY_PERIOD      = 25 * SECOND;
@@ -364,9 +365,7 @@ IUnitTask@ HeavyAA(CCircuitUnit@ unit)
 	const float enemyAir = aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type);
 	if (enemyAir < AA_HEAVY_ENEMY_AIR)
 		return null;
-	int want = AA_HEAVY_MIN + int((enemyAir - AA_HEAVY_ENEMY_AIR) / AA_HEAVY_PER_AIR);
-	if (want > AA_HEAVY_MAX)
-		want = AA_HEAVY_MAX;
+	const int want = AA_HEAVY_MIN + int((enemyAir - AA_HEAVY_ENEMY_AIR) / AA_HEAVY_PER_AIR);
 	CCircuitDef@ aa = SideDef3(armferret, cormadsam, legflak);
 	if ((aa is null) || !aa.IsAvailable(ai.frame) || (aa.count >= want))
 		return null;

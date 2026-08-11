@@ -172,7 +172,7 @@ IUnitTask@ LateRadarPlane(CCircuitUnit@ unit)
 	// all three problems and covers every faction.
 	if (IsAirFactory(unit.circuitDef) && LateGame() && (ai.frame >= gNextScout)) {
 		CCircuitDef@ eye = RadarPlaneDef();
-		if ((eye !is null) && eye.IsAvailable(ai.frame) && (eye.count < LATE_SCOUTS)) {
+		if ((eye !is null) && eye.IsAvailable(ai.frame) && (eye.count < 1 + int(aiEconomyMgr.metal.income / LATE_SCOUT_INCOME))) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
 					Task::RecruitType::FIREPOWER, Task::Priority::NORMAL,
 					eye, unit.GetPos(ai.frame), 0.f));
@@ -199,7 +199,7 @@ IUnitTask@ LateFighterScreen(CCircuitUnit@ unit)
 	// an aircraft the factory cannot make.
 	if (IsAirFactory(unit.circuitDef) && LateGame() && (ai.frame >= gNextFighter)) {
 		CCircuitDef@ fig = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::AA.type);
-		if ((fig !is null) && (fig.count < LATE_FIGHTERS)) {
+		if ((fig !is null) && (fig.count < 1 + int(aiEconomyMgr.metal.income / LATE_FIGHTER_INCOME))) {
 			IUnitTask@ rec = aiFactoryMgr.Enqueue(TaskS::Recruit(
 					Task::RecruitType::FIREPOWER, Task::Priority::HIGH,
 					fig, unit.GetPos(ai.frame), 0.f));

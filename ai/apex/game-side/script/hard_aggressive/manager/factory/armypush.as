@@ -207,8 +207,11 @@ int gNextEcoGateLog = 0;
 // but you can gauge late game based on if we have things like fusions or afus".
 // Both, so a fast economy counts as late early and a slow one still qualifies.
 const int LATE_GAME_FRAME = 25 * MINUTE;
-// Fighters, not an air force. Enough to contest scouting and punish bombers.
-const int LATE_FIGHTERS   = 8;
+// A STANDING GARRISON, SIZED BY THE ECONOMY. Eight was flat, and apexearth has
+// asked twice for about thirty fighters over the base -- "no late fighters
+// max". One per this much income instead, so a big economy keeps a real
+// screen and a small one still gets a few.
+const float LATE_FIGHTER_INCOME = 4.f;
 const int LATE_FIG_SPACING = 10 * SECOND;
 // Income before a player without any air plant builds one purely for this.
 const float LATE_AIR_INCOME = 55.f;
@@ -226,9 +229,9 @@ const int   EARLY_AIR_REACT_FRAME = 10 * MINUTE;
 const float EARLY_AIR_ENEMY_MIN   = 800.f;
 int gNextFighter = 0;
 
-// Two radar planes is enough to sweep for a hiding commander; they are ~175
-// metal each and are vision, not army, so this is a floor rather than a build.
-const int LATE_SCOUTS       = 2;
+// Vision, not army, at ~175 metal each -- so this is a floor, and it scales
+// with the economy like everything else rather than stopping at two.
+const float LATE_SCOUT_INCOME = 30.f;
 const int LATE_SCOUT_SPACING = 30 * SECOND;
 int gNextScout = 0;
 
