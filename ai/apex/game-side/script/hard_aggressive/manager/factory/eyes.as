@@ -95,8 +95,6 @@ CCircuitDef@ EyeDefFor(const CCircuitDef@ facDef, bool jammer)
 
 IUnitTask@ EyesForTheGuns(CCircuitUnit@ unit)
 {
-	if (ai.frame < gNextEyes)
-		return null;
 
 	// Gated on guns already in the field, so this cannot displace the opening
 	// or the tech rush: the units it serves are T2 and it needs five of them.

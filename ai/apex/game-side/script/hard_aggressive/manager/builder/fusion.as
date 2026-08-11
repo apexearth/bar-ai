@@ -101,7 +101,14 @@ CCircuitDef@ FusionDef(CCircuitUnit@ unit)
 // build task holds its slot for ASSIGN_TIMEOUT (300s) before ITaskModule::Update
 // aborts it, so an uncooled rung spends that shared budget faster than it can be
 // reclaimed.
+// The cooldown is about the ADVANCED converter, which is 380 metal and 21,000
+// energy to build. A cheap one costs ONE metal, and the spill already says how
+// many the grid can feed -- so serialising those at 90 seconds apiece meant a
+// base overflowing energy crawled towards the fix a converter and a half per
+// game minute. apexearth: "Don't be afraid to make more than one tier1
+// converter at a time."
 const int   HOME_CONV_PERIOD = 90 * SECOND;
+const int   HOME_CONV_T1_PERIOD = 3 * SECOND;   // enough to not queue duplicates
 int gNextConv = 0;
 
 // Metal income above which a reactor is worth it regardless of role. A fusion
@@ -156,8 +163,6 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// the moment their own economy justifies one. The conditions below -- T2
 	// exists, the bank can pay, energy is not already spilling -- are the real
 	// answer, and they are the same for every player.
-	if (ai.frame < gNextFusion)
-		return null;
 	if (aiEconomyMgr.metal.income < FUSION_SOLO_INCOME)
 		return null;
 	// A T1 constructor cannot build one; asking anyway is the silent no-op this

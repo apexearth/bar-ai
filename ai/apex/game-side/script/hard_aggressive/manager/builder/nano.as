@@ -270,7 +270,7 @@ int gNextFrontNano = 0;
 
 IUnitTask@ FrontNano(CCircuitUnit@ unit)
 {
-	if (Factory::EcoLeadActive() || (ai.frame < gNextFrontNano))
+	if (Factory::EcoLeadActive())
 		return null;
 	if (aiEconomyMgr.metal.income < FRONT_NANO_INCOME)
 		return null;
@@ -326,7 +326,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	// Three independent reasons, not a role gate: the eco lead builds them as its
 	// job, anyone at the metal cap needs the sink, and any real income justifies
 	// the build power. Solo reaches this through the last two.
-	if ((!Factory::EcoLeadActive() && !MetalFull() && !richEnough) || (ai.frame < gNextNano))
+	if (!Factory::EcoLeadActive() && !MetalFull() && !richEnough)
 		return null;
 	// Half the bank while poor, a fifth once the income itself justifies it.
 	const float bankNeed = richEnough ? NANO_RICH_BANK : NANO_MIN_BANK;

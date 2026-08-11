@@ -49,8 +49,6 @@ IUnitTask@ MakeFactoryTask(CCircuitUnit@ fac)
 	if (!Armed() || gStrike)
 		return null;
 	ResolveDefs();
-	if (ai.frame < gNextAirOrder)
-		return null;
 
 	// The BASIC plant's one job: an air constructor, because FactoryToBuild will
 	// not ask for the advanced plant until HaveAirCon() is true. Nothing was

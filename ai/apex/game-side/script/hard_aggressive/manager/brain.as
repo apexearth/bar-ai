@@ -213,8 +213,42 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 		return Builder::Pulsar(unit);
 	if (kind == "pinpoint")
 		return Builder::Pinpointer(unit);
-	if (kind == "energy")
-		return Builder::HomeEnergy(unit);
+	if (kind == "energy") {
+		// ALWAYS BE BUILDING ENERGY. apexearth: "The rule is really simple. Always
+		// be building energy. Build converters if we are wasting energy. If we are
+		// full of both energy and metal then making more energy becomes less
+		// important."
+		//
+		// All three clauses are in Decide -- the want is proposed every tick, the
+		// converter want is gated on EnergyWasting, and ECO_SATED_MULT damps both
+		// when the banks are full. The first one has never actually fired: this
+		// called HomeEnergy, which returns null for any constructor that is not in
+		// the HOME crew (Crew::RoleOf), so the highest-value want in the ranking
+		// silently did nothing for every other builder. Measured against the
+		// pre-Brain build at minute 14: energy produced 206,124 -> 170,830.
+		//
+		// HomeEnergy no longer refuses on crew role, so it answers for any
+		// builder and keeps the ladder that tiers wind -> advanced solar ->
+		// fusion. The fallback below is for the cases it still declines -- a
+		// naval builder with no reachable site, a def not yet available -- and
+		// places on the same base grid so it lands in the eco band rather than
+		// wherever the unit happens to be standing.
+		IUnitTask@ home = Builder::HomeEnergy(unit);
+		if (home !is null)
+			return home;
+		if (Builder::EnergyWasting())
+			return null;   // the converter want owns this case
+		CCircuitDef@ gen = Builder::SolarDef();
+		if ((gen is null) || !gen.IsAvailable(ai.frame))
+			return null;
+		AIFloat3 spot;
+		if (!Base::Spot(unit, gen, Base::ECO, spot))
+			spot = Builder::gHomePos;
+		if (!OnMap(spot))
+			return null;
+		return aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
+				Task::Priority::NORMAL, gen, spot, SQUARE_SIZE * 8));
+	}
 	if (kind == "convert")
 		return Builder::EnergyConverter(unit);
 	if (kind == "nano")
@@ -272,7 +306,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// not enough advanced solars."
 	//
 	// A stall is urgency, so it stays a multiplier rather than the gate.
-	{
+	// ...BUT NOT WHILE IT IS SPILLING. The rule is "always be building energy;
+	// build converters if we are wasting energy" -- two clauses, and proposing
+	// both at once means the generator want keeps winning and the spill grows.
+	// Measured when this was unconditional: energy produced 315,333 per player
+	// against stock's 169,414, of which 180,306 was WASTED, while metal fell to
+	// 10,331 and the trade ratio collapsed to 0.11. More generators is the answer
+	// to a shortage, never to a surplus.
+	if (!Builder::EnergyWasting()) {
 		Want@ e = Simple("energy",
 				ENERGY_VALUE * (aiEconomyMgr.isEnergyStalling ? ENERGY_STALL_MULT : 1.f),
 				Builder::SolarDef(), false);

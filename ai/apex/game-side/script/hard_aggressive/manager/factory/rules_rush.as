@@ -141,7 +141,7 @@ IUnitTask@ ShareAdvancedCon(CCircuitUnit@ unit)
 // armypush.as for why this is a substitution rather than a new spend.
 IUnitTask@ DefensiveComposition(CCircuitUnit@ unit)
 {
-	if (gEcoActive || !Military::gTurtle || (ai.frame < gNextTurtleMix))
+	if (gEcoActive || !Military::gTurtle)
 		return null;
 	// Air plants are Air::'s to schedule, and an aircraft is not what "hit them
 	// from inside our base" means.

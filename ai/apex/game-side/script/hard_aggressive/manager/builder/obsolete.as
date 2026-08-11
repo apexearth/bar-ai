@@ -352,24 +352,54 @@ IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit)
 // trash long into a game". What had to change is the two rules that were
 // REBUILDING them behind us: CheapAA and the generic EnergyConverter both now
 // stand down past T1 tier, so reclaiming one no longer queues its replacement.
+// REPLACE, DO NOT JUST REMOVE. apexearth, watching: "I saw us reclaiming t1
+// converters before t2 converters were even made. Should replace t1s with t2s
+// otherwise we just lower our metal income."
+//
+// PastT1Tier() asks whether we have TECHED, never whether the replacement was
+// actually built -- so a base at T2 with the income for it tore out its cheap
+// converters and its solars while nothing had taken over the job. Both of those
+// are income: a converter IS metal income, and a solar is what runs it.
+//
+// So each of those two entries now waits for its own successor to be standing.
+// Wind and the T1 AA turret are unconditional: wind is superseded by any
+// generator at all, and the AA turret is not economy.
+bool HaveReplacementFor(const string& in name)
+{
+	CCircuitDef@ better = null;
+	if ((name == armmakr) || (name == cormakr) || (name == legeconv))
+		@better = SideDef3(armmmkr, cormmkr, legadveconv);
+	else if ((name == armsolar) || (name == corsolar) || (name == legsolar))
+		@better = SideDef3(armadvsol, coradvsol, legadvsol);
+	else
+		return true;   // no successor to wait for
+	return (better !is null) && (better.count > 0);
+}
+
 array<string> ObsoleteEcoNames()
 {
 	array<string> names;
 	const string side = ai.GetSideName();
 	if (side == "cortex") {
 		names.insertLast(corwin);
-		names.insertLast(corsolar);
-		names.insertLast(cormakr);
+		if (HaveReplacementFor(corsolar))
+			names.insertLast(corsolar);
+		if (HaveReplacementFor(cormakr))
+			names.insertLast(cormakr);
 		names.insertLast(corrl);
 	} else if (side == "legion") {
 		names.insertLast(legwin);
-		names.insertLast(legsolar);
-		names.insertLast(legeconv);
+		if (HaveReplacementFor(legsolar))
+			names.insertLast(legsolar);
+		if (HaveReplacementFor(legeconv))
+			names.insertLast(legeconv);
 		names.insertLast(legrl);
 	} else {
 		names.insertLast(armwin);
-		names.insertLast(armsolar);
-		names.insertLast(armmakr);
+		if (HaveReplacementFor(armsolar))
+			names.insertLast(armsolar);
+		if (HaveReplacementFor(armmakr))
+			names.insertLast(armmakr);
 		names.insertLast(armrl);
 	}
 	return names;

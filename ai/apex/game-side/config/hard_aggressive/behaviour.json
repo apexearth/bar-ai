@@ -107,53 +107,63 @@
 // FACTORIES - Ground (Surface)
 		"armlab": {
 			"role": ["static"],
-			"build_speed": 5.0 //bp 100
+			"build_speed": 5.0, //bp 100
+            "limit": 1
 		},
 		"armalab": {
 			"role": ["static"],
 			"attribute": ["support"], //facory with support is build only in base
+			"limit": 1,
 			"build_speed": 15.0 //bp 300
 		},
 		"armshltx": {
 			"role": ["static"],
 			"attribute": ["support"],
 			"midposoffset": [0, 0, -16],
+			"limit": 1,
 			"build_speed": 1.0 // bp 600
 		},
 		"armvp": {
 			"role": ["static"],
-			"build_speed": 5.0 // bp 100
+			"build_speed": 5.0, // bp 100
+            "limit": 1
 		},
 		"armavp": {
 			"role": ["static"],
 			"attribute": ["support"],
+			"limit": 1,
 			"build_speed": 15.0 //bp 300
 		},
 
 		"corlab": {
 			"role": ["static"],
 			"build_speed": 5.0,  //bp 100
+            "limit": 1,
 			"midposoffset": [-3.239746, 0, -2]
 		},
 		"coralab": {
 			"role": ["static"],
 			"midposoffset": [0, 0, -4],
 			//"attribute": ["support"],
+			"limit": 1,
 			"build_speed": 15.0 // bp 300
 		},
 		"corgant": {
 			"role": ["static"],
 			"attribute": ["support"],
+			"limit": 1,
 			"build_speed": 1.0 //bp 300
 		},
 		"corvp": {
 			"role": ["builder"],
-			"build_speed": 5.0 // bp 100
+			"build_speed": 5.0, // bp 100
+            "limit": 1
 
 		},
 		"coravp": {
 			"role": ["static"],
 			"attribute": ["support"],
+			"limit": 1,
 			"build_speed": 15.0  //bp 300
 		},
 
@@ -161,85 +171,102 @@
 		"armap": {
 			"role": ["static"],
 			"attribute": ["support"],
+			"limit": 1,
 			"build_speed": 5 //bp 100
 		},
 		"armaap": {
 			"role": ["static"],
 			"attribute": ["support"],
             "since": 420,
+			"limit": 1,
 			"build_speed": 10.0 //bp 200
 		},
 		"corap": {
 			"role": ["static"],
 			"attribute": ["support"],
+			"limit": 1,
 			"build_speed": 5.0 //bp 100
 		},
 		"coraap": {
 			"role": ["static"],
 			"attribute": ["support"],
             "since": 420,
+			"limit": 1,
 			"build_speed": 10.0 //bp 200
 		},
 
 // FACTORIES - water
 		"armsy": {
 			"role": ["static"],
-			"build_speed": 8.0 // bp 165
+			"build_speed": 8.0, // bp 165
+			"limit": 1
 		},
 		"armasy": {
 			"role": ["static"],
-			"build_speed": 15.0 //bp 300
+			"build_speed": 15.0, //bp 300
             //"since": 540,
+			"limit": 1
 		},
 		"armhp": {
 			"role": ["static"],
-			"build_speed": 10.0 //bp 200
+			"build_speed": 10.0, //bp 200
+			"limit": 1
 		},
 		"armfhp": {
 			"role": ["static"],
-			"build_speed": 10.0
+			"build_speed": 10.0,
+			"limit": 1
 		},
         "armamsub": {
 			"role": ["static"],
-			"build_speed": 7.5 //bp 150
+			"build_speed": 7.5, //bp 150
+			"limit": 1
         },
         "armplat": {
 			"role": ["static"],
 			"build_speed": 10.0, //200
-			"since": 420
+			"since": 420,
+			"limit": 1
         },
 		"armshltxuw": {
 			"role": ["static"],
 			"attribute": ["support"],
 			"midposoffset": [0, 0, -16],
-			"build_speed": 1.0 //bp 300
+			"build_speed": 1.0, //bp 300
+			"limit": 1
 		},
         "corsy": {
 			"role": ["static"],
-			"build_speed": 8.0 //bp 165
+			"build_speed": 8.0, //bp 165
+			"limit": 1
 		},
 		"corasy": {
 			"role": ["static"],
 			"build_speed": 15.0,  //bp 300
-            "since": 480
+            "since": 480,
+			"limit": 1
 		},
 		"corhp": {
 			"role": ["static"],
-			"build_speed": 10.0 //bp 200
+			"build_speed": 10.0, //bp 200
+			"limit": 1
 		},
 		"corfhp": {
 			"role": ["static"],
 			"build_speed": 10.0, //bp 200
-			"since": 300
+			"since": 300,
+			"limit": 1
 		},
         "coramsub": {
 			"role": ["builder"],
-			"build_speed": 7.5 //bp 150
+			"build_speed": 7.5, //bp 150
+			"limit": 1
 		},
         "corplat": {
 			"role": ["builder"],
 			"build_speed": 10.0,  //bp 200
-			"since": 420
+			"since": 420,
+			"limit": 1
 		},
 
 
@@ -297,7 +324,8 @@
 		},
         "armfhlt": {
 			"role": ["static"],
-            "since": 360
+            "since": 360,
+            "limit": 3	
 		},
 		"armguard": {
 			"role": ["static"],
@@ -305,7 +333,8 @@
 			"threat":{
 				"vs":{"raider": 0.5, "assault": 0.5, "skirmish": 0.5}
 			},
-            "since": 600
+            "since": 600,
+			"limit": 3
 		},
 		"armclaw": {
 			"role": ["static"],
@@ -341,7 +370,8 @@
 		},
         "armsilo":{
 			"role":	["super", "static"],
-            "threat":{"air": 0.0, "water": 0.0, "surf": 0.1}
+            "threat":{"air": 0.0, "water": 0.0, "surf": 0.1},
+			"limit": 1
         },
 
 		"armrl": {
@@ -412,7 +442,8 @@
 		},
 		"corfhlt": {
 			"role": ["static"],
-			"since": 360
+			"since": 360,
+			"limit": 3
 		},
 		
 		"cormaw": {
@@ -429,7 +460,8 @@
 			"role": ["static"],
 			"on": false,
 			"threat": {"air": 0.0, "water": 0.1,"surf": 0.5},
-            "since": 600
+            "since": 600,
+			"limit": 3
 		},
 		"corrl": {
 			"role": ["anti_air"],
@@ -481,7 +513,8 @@
 		},
         "corsilo":{
 			"role":	["super", "static"],
-            "threat":{"air": 0.0, "water": 0.0, "surf": 0.1}
+            "threat":{"air": 0.0, "water": 0.0, "surf": 0.1},
+			"limit": 1
         },
 
 
@@ -491,16 +524,19 @@
 		// One EACH, not three each -- three is the whole side's allowance, and
 		// Builder::Pinpointer is what enforces that across the team.
 		"armtarg": {
-			"role": ["static"]
+			"role": ["static"],
+			"limit": 1
 		},
 		"cortarg": {
-			"role": ["static"]
+			"role": ["static"],
+			"limit": 1
 		},
 		"armemp":{
 			"role":	["super", "static"] //without "super" it does not shoot
 		},
 		"cortron":{
-			"role":	["super", "static"]
+			"role":	["super", "static"],
+			"limit":1
 		},
 		"armveil":{
 			"role": ["static"]
@@ -579,18 +615,22 @@
         },
 		"armestor" : {
 			"role": ["static"],
-			"since": 240
+			"since": 240,
+			"limit": 1
 		},
 		"armuwes" : {
 			"role": ["static"],
-			"since": 240
+			"since": 240,
+			"limit": 1
 		},
 		"armmstor" : {
 			"role": ["static"],
-			"since": 500
+			"since": 500,
+			"limit": 1
 		},
 		"armuwadvms" : {
-			"role": ["static"]
+			"role": ["static"],
+			"limit": 1
 		},
 		"cormex" : {
 			"role": ["static"],
@@ -616,22 +656,27 @@
         },
 		"cormstor" : {
 			"role": ["static"],
-			"since": 500
+			"since": 500,
+			"limit": 1
 		},
 		"coruwms" : {
 			"role": ["static"],
-			"since": 500
+			"since": 500,
+			"limit": 1
 		},
 		"coruwadvms" : {
-			"role": ["static"]
+			"role": ["static"],
+			"limit": 1
 			},
 		"corestor" : {
 			"role": ["static"],
-			"since": 240
+			"since": 240,
+			"limit": 1
 		},
 		"coruwes" : {
 			"role": ["static"],
-			"since": 240
+			"since": 240,
+			"limit": 1
 		},
 
 
@@ -732,50 +777,60 @@
 		//Mobile Builders 	
 		"armck": {
 			"role": ["builder"],
+			"limit": 12,
 			"build_speed": 4.0  //bp 80
 		},
         "corck": {
 			"role": ["builder"],
 			//"attribute": ["solo"],
+			"limit": 12,
 			"build_speed": 4.0  
 		},
 		"armack": {
 			"role": ["builderT2"],
 			"attribute": ["solo"],
+			"limit": 10,
 			"build_speed": 9.0  //bp 180
 		},
         "corack": {
 			"role": ["builderT2"],
 			"attribute": ["solo"],
+			"limit": 10,
 			"build_speed": 9.0  
 		},
 		"armfark": {
 			"role": ["builder"], //support,mine
 			//"attribute": ["support"], //without attribute
 			"build_speed": 1.0,  //bp 140 											test!!!!!
+			"limit": 20,
             "since": 1500
 		},
         "corfast": {
 			"role": ["builder"],
+			"limit": 10,
 			"build_speed": 7.0,
             "since": 1500
 		},
 		"armcv": {
 			"role": ["builder"],
+			"limit": 10,
 			"build_speed": 4.5  //bp 90
 		},
         "corcv": {
 			"role": ["builder"],
+			"limit": 10,
 			"build_speed": 4.5  //bp 90
 		},
 		"armbeaver": {
 			"role": ["builder"],
 			"attribute": ["solo"],
+			"limit": 6,
 			"build_speed": 4.0  //bp 80
 		},
         "cormuskrat": {
 			"role": ["builder"],
 			"attribute": ["solo"],
+			"limit": 6,
 			"build_speed": 4.0
 		},
         "cormlv": {
@@ -785,79 +840,94 @@
 		"armacv": {
 			"role": ["builderT2"],
 			"attribute": ["solo"],
+			"limit": 15,
 			"build_speed": 12.5  //bp 250
 		},
         "coracv": {
 			"role": ["builderT2"],
 			"attribute": ["solo"],
+			"limit": 15,
 			"build_speed": 12.5  //bp 250
 		},
 		"armconsul": {
 			"role": ["builder"],
 			//"attribute": ["support"],
 			"build_speed": 1.0 ,  //bp 150 																test!!!
-            "since": 1500
+            "since": 1500,
+			"limit": 20
 		},
 		"armca": {
 			"role": ["builder", "air"],
 			"retreat": 0.7,
+			"limit": 15,
 			"build_speed": 3.0  //bp 60
 		},
         "corca": {
 			"role": ["builder", "air"],
 			"attribute": ["solo"],
 			"retreat": 0.6,
+			"limit": 15,
 			"build_speed": 3.0
 		},
 		"armaca": {
 			"role": ["builder", "air"],
 			"attribute": ["solo"],
 			"retreat": 0.6,
+			"limit": 15,
 			"build_speed": 5.0  //bp 100
 		},
 		"coraca": {
 			"role": ["builder", "air"],
 			"retreat": 0.6,
+			"limit": 15,
 			"build_speed": 5.0
 		},
 		"armcs": {
 			"role": ["builder"],
 			"retreat": 0.6,
+			"limit": 8,
 			"build_speed": 6  //bp 125
 		},
 		"corcs": {
 			"role": ["builder"],
 			"retreat": 0.6,
+			"limit": 6,
 			"build_speed": 6.0
 		},
 		"armacsub": {
 			"role": ["builderT2", "sub"],
 			"attribute": ["solo"],
 			"retreat": 0.5,
+			"limit": 8,
 			"build_speed": 15.0 //bp 300
 		},
 		"coracsub": {
 			"role": ["builderT2", "sub"],
             "attribute": ["solo"],
 			"retreat": 0.3,
+			"limit": 6,
 			"build_speed": 15.0
 		},
         "armmls": {
 			"role": ["builder"],
 			"retreat": 0.5,
+			"limit": 2,
 			"build_speed": 10.0  //bp 200
 		},
         "cormls": {
 			"role": ["builder"],
 			"build_speed": 10.0,  
-			"retreat": 0.75
+			"retreat": 0.75,
+            "limit":2
         },
 		"armch": {
 			"role": ["builder"],
+			"limit": 10,
 			"build_speed": 6.0  //bp 110
 		},
 		"corch": {
 			"role": ["builder"],
+			"limit": 10,
 			"build_speed": 6.0
 		},
 
@@ -876,13 +946,15 @@
 		"armrectr": {
 			"role": ["support"],		//["builder"],	["raider", "support"]	//["skirmish", "support"],
 			//"attribute": ["support"],
-			"retreat": 0.6
+			"retreat": 0.6,
 			//"buildspeed": 0.1,
+			"limit":60
 		},
 		"armrock": {
 			"role": ["assault"],
 			"attribute": ["siege"],
 			"retreat": 0.6,
+			"limit": 10,
 			"threat": {"air": 0.0, "water": 0.0, "surf": 0.8,
 				"vs": {"artillery": 1.8, "anti_air": 1.8, "raiders":0.5}
 			}
@@ -895,6 +967,7 @@
 		},
 		"armjeth": {
 			"role": ["anti_air"],
+			"limit": 10,
 			"threat": {"air": 2.0, "water": 0.0, "surf":0.0}
 		},
 		"armwar": {
@@ -908,7 +981,8 @@
 			"role": ["scout"],
 			"threat":{"air": 0.0, "water": 0.0,
 					"vs":{"artillery": 2.0, "anti_air": 2.0}
-			}
+			},
+			"limit": 5
 		},
 
 
@@ -924,7 +998,8 @@
 		},
 		"armamph": {
 				"role": ["raider", "anti_air"],
-				"threat": {"air": 1.0, "water": 0.0, "surf": 1.0}
+				"threat": {"air": 1.0, "water": 0.0, "surf": 1.0},
+                "limit": 10	
 		},
 		"armzeus": {
 			"role": ["skirmish"],  //is it more skirmish or riot?
@@ -964,15 +1039,18 @@
 		},
 		"armaak": {
 			"role": ["anti_air"],
-			"threat":{"air": 2.0, "water": 0.0, "surf":0.0}
+			"threat":{"air": 2.0, "water": 0.0, "surf":0.0},
+			"limit": 10
 
 		},
 		"armmark": {
 			"role": ["support"], //support
+			"limit": 2,
 			"threat":{"air": 0.0, "water": 0.0, "surf": 0.0}
 		},
 		"armaser": {
 			"role": ["support"],
+			"limit": 2,
 			"threat":{"air": 0.0, "water": 0.0, "surf": 0.0}
 		},
 		"armspid": {
@@ -993,10 +1071,12 @@
 		},
 		"armscab": {
 			"role": ["support"],
+			"limit": 1,
 			"threat":{"air": 0.0, "water": 0.0, "surf": 0.0} 
 		},
 		"armspy": {
 			"role": ["scout"],
+			"limit": 2,
 			"threat":{"air": 0.0, "water": 0.0, "surf": 0.0} 
 		},
 		
@@ -1049,22 +1129,26 @@
 			"limit": 0
 		},
 		"armfav": {
-			"role": ["scout"]
+			"role": ["scout"],
+			"limit": 5
 		},
 		"armflash": {
 			"role": ["raider"],
+			"limit": 20,
 			"threat":{"air": 0.0, "water": 0.0,
 				"vs":{"artillery": 2.0, "anti_air": 2.0, "scout":1.5}	
 			}
 		},
 		"armpincer": {
 			"role": ["raider"],
+			"limit": 20,
 			"threat":{"air": 0.0, "water": 0.0,
 				"vs":{"artillery": 2.0, "anti_air": 2.0, "scout":1.0}
 			}
 		},
 		"armstump": {
 			"role": ["skirmish"],
+			"limit":30,
 			"threat":{"air": 0.0, "water": 0.0,
 				"vs":{"artillery": 2.0, "anti_air": 2.0}
 			}
@@ -1072,6 +1156,7 @@
 		"armart": {
 			"role": ["artillery"],
 			"attribute": ["siege"],
+			"limit": 5,
 			"threat":{"air": 0.0, "water": 0.0, "surf": 0.5, "vs":{"anti_air": 2.0}},
 			"power": 0.5
 		},
@@ -1103,7 +1188,8 @@
 			}
 		},
 		"armgremlin": {
-				"role": ["scout"]
+				"role": ["scout"],
+				"limit": 5	
 		},
 		"armbull": {
 			"role": ["skirmish"],
@@ -1135,10 +1221,12 @@
 			"threat":{"air":1.0, "water":0.0, "surf":0.0}
 		},
 		"armseer": {
-			"role": ["support"] //support
+			"role": ["support"], //support
+			"limit": 2
 		},
 		"armjam": {
-			"role": ["support"] //support
+			"role": ["support"], //support
+			"limit": 2
 		},
 
 
@@ -1147,7 +1235,8 @@
 		// aircraft - armap
 
 		"armpeep": {
-			"role": ["scout", "air"]
+			"role": ["scout", "air"],
+			"limit": 3
 		},
 		"armfig": {
 			"role": ["anti_air", "air"],
@@ -1157,10 +1246,12 @@
 		"armthund": {
 			"role": ["bomber", "air"],
 			"power": 0.5,
+			"limit": 30,
 			"retreat": 0.5
 		},
 		"armkam": {
 			"role": ["raider", "air"],
+			"limit": 40,
 			"retreat": 0.8
 		},
 
@@ -1221,7 +1312,8 @@
 
         "armrecl": {
 			"role": ["support"],
-			"retreat": 0.6
+			"retreat": 0.6,
+			"limit": 6
 		},
 		"armpt": {
 			"role": ["scout", "anti_air"]
@@ -1261,7 +1353,8 @@
 			"attribute": ["siege"]
 		},	
 		"armaas": {
-			"role": ["anti_air"]
+			"role": ["anti_air"],
+			"limit": 5
 		},
 		"armcrus": {
 			"role": ["skirmish"],
@@ -1271,11 +1364,13 @@
 		},
         "armsjam": {
 			"role": ["support"],
-			"retreat": 0.75
+			"retreat": 0.75,
+            "limit": 3
 		},
 		"armcarry": {
 			"role": ["support"],
-			"retreat": 0.75
+			"retreat": 0.75,
+            "limit": 2
 		},
 		"armmship": {
 			"role": ["artillery"],
@@ -1304,7 +1399,8 @@
 			"role": ["assault"]
 		},
 		"armmh": {
-			"role": ["artillery"]
+			"role": ["artillery"],
+            "limit": 6
 		},
 		"armah": {
 			"role": ["anti_air"],
@@ -1320,23 +1416,27 @@
 			"role": ["raider"],
 			"attribute": ["scout"],
 			"threat":{"vs":{"artillery": 4.0, "anti-heavy":3.0}},
-            "power": 0.9
+            "power": 0.9,
+			"limit": 40
 		},
 		"cornecro": {
 			"role": ["scout"], // 1st role was "raider"; scout cause there is no other scout on core
+			"limit": 60,
 			"retreat": 0.6
 		},
 		"corstorm": {
 			"role": ["artillery"],  //assault
-			"attribute": ["siege"]
+			"attribute": ["siege"],
+            "limit": 10
 		},
 		"corthud": {
 			"role": ["skirmish"],
 			"threat":{"vs":{"artillery": 2.0}}
 		},
 		"corcrash": {
-			"role": ["anti_air"]
+			"role": ["anti_air"],
 			//"attribute": ["support"],
+			"limit": 10
 		},
 	
 
@@ -1370,42 +1470,52 @@
 			"role": ["artillery"],
 			"attribute":["siege"],
 			"threat": {"surf":0.5, "vs":{"static":2.0, "artillery":2.0}},
-			"retreat": 0.8
+			"retreat": 0.8,
+			"limit": 10
 		},
 		"coraak": {
-			"role": ["anti_air"]
+			"role": ["anti_air"],
 			//"attribute": ["support"],
+			"limit": 10
 		},
 		"cormando": {
 			"role": ["support"],
-			"buildpeed": 6.0
+			"buildpeed": 6.0,
+			"limit": 3
 		},
 		"cordecom": {
 			"role": ["builder"],
-			"buildspeed": 6.0
+			"buildspeed": 6.0, 
+			"limit": 2
 		},
 		"corroach": {
 			"role": ["scout"],
 			"attribute": ["melee"],
-			"retreat": 0
+			"retreat": 0,
+			"limit": 2
 		},
 		"corsktl": {
 			"role": ["raider"],
 			"attribute": ["melee"],
-			"retreat": 0
+			"retreat": 0,
+			"limit": 2
 		},
 		"corvoyr": {
 			"role": ["support"],
-			"retreat": 0.6
+			"retreat": 0.6,
+			"limit": 3
 		},
 		"corspec": {
-			"role": ["support"]
+			"role": ["support"],
+			"limit": 3
 		},
 		"coramph": {
-			"role": ["raider"]
+			"role": ["raider"],
+            "limit": 10
 		},
 		"corspy": {
-			"role": ["scout"]
+			"role": ["scout"],
+			"limit": 3
 		},
 	
 
@@ -1454,11 +1564,13 @@
 		"corgator": {
 			"role": ["raider"],
 			"attribute": ["scout"],
-			"threat":{"vs":{"artillery": 2.0}}
+			"threat":{"vs":{"artillery": 2.0}},
+			"limit": 30
 		},
 		"corgarp": {
 			"role": ["raider"],
-			"threat":{"vs":{"artillery": 2.0}}
+			"threat":{"vs":{"artillery": 2.0}},
+			"limit": 25
 		},
 		"corraid": {
 			"role": ["skirmish"],
@@ -1522,14 +1634,17 @@
 			"retreat": 0.5
 		},
 		"corvrad": {
-			"role": ["support"]
+			"role": ["support"],
+			"limit": 2
 		},
 		"coreter": {
-			"role": ["support"]
+			"role": ["support"],
+			"limit": 3
 		},
 		"cormabm": {
 			"role": ["support"],
-			"attribute": ["siege"]
+			"attribute": ["siege"],
+			"limit": 1
 		},
 
 
@@ -1539,11 +1654,13 @@
 
 		"correcl": {
 			"role": ["support"],
-			"retreat": 0.6
+			"retreat": 0.6,
+			"limit": 10
 		},
 		"corpt": {
 			"role": ["anti_air"],
-			"attribute": ["siege"]
+			"attribute": ["siege"],
+			"limit": 10
 		},
 		"coresupp": {
 			"role": ["scout"]
@@ -1558,7 +1675,8 @@
 				"air": 0.0, "surf": 1.0, "water": 0.5, 
 				"vs": {"scout":0.5, "raider":0.5}
 			},
-			"retreat": 0.5
+			"retreat": 0.5,
+			"limit": 10
 		},
 		"corsub": {
 			"role": ["raider", "sub"]		
@@ -1578,7 +1696,8 @@
 			"attribute": ["siege"]
 		},
 		"corarch": {
-			"role": ["anti_air"]
+			"role": ["anti_air"],
+			"limit": 5
 		},
 		"corcrus": {
 			"role": ["skirmish"],
@@ -1591,7 +1710,8 @@
 		},
 		"corcarry": {
 			"role": ["support"],
-			"retreat": 0.75
+			"retreat": 0.75,
+            "limit": 2
 		},
 		"cormship": {
 			"role": ["artillery"],
@@ -1615,7 +1735,8 @@
 
 		"corfink": {
 			"role": ["scout", "air"],
-			"retreat": 0.8
+			"retreat": 0.8,
+			"limit": 5
 		},
 		"corveng": {
 			"role": ["anti_air", "air"],
@@ -1681,7 +1802,8 @@
 		},
 		"cormh": {
 			"role": ["artillery"],
-			"threat": {"surf": 0.2, "vs":{"static":5.0, "artillery":5.0}}
+			"threat": {"surf": 0.2, "vs":{"static":5.0, "artillery":5.0}},
+            "limit": 6
 		},
 		"corah": {
 			"role": ["anti_air"],

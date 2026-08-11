@@ -217,8 +217,6 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 	// Same principle as the reactor above: a surplus is a surplus whoever owns
 	// it. The eco lead's contribution is the packed BLOCK and a faster cadence,
 	// not the exclusive right to convert. EnergyWasting() below is the gate.
-	if (ai.frame < gNextEcoConv)
-		return null;
 	// Only while energy is actually being binned, and self-limiting: every
 	// converter raises pull by 70, so the store drains and this stops on its own.
 	if (!EnergyWasting())
@@ -294,8 +292,6 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 
 IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 {
-	if (ai.frame < gNextConvert)
-		return null;
 	// Share, not truth: leave enough builders doing ordinary work.
 	if (aiBuilderMgr.GetWorkerCount() <= CONVERT_CON_FLOOR)
 		return null;

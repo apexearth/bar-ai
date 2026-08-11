@@ -208,8 +208,26 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 // Bounded by demand, not a clock: we stop when energy is already being wasted.
 IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 {
-	if (Crew::RoleOf(unit) != Crew::HOME)
+	// ANY BUILDER MAY MAKE ENERGY. apexearth: "Always be building energy", and
+	// then "Allow others outside of home crew too...".
+	//
+	// The crew role decided WHO, and that made "always" false: this returned null
+	// for every constructor outside the two-strong HOME crew, so the Brain's
+	// energy want -- the one it proposes every single tick -- did nothing for the
+	// rest of the base. Measured against the pre-Brain build at minute 14, energy
+	// produced 206,124 -> 170,830 per player while waste tripled.
+	//
+	// The crew still decides who does it BY DEFAULT, because a home constructor
+	// reaches this through its own rule before the Brain ever ranks anything.
+	// What is gone is the refusal: when the ranking says energy is the best use
+	// of this builder, the builder is allowed to build it.
+	//
+	// Off with apex_energy_any=0, which restores the crew-only behaviour.
+	if ((Crew::RoleOf(unit) != Crew::HOME)
+		&& (ai.GetTunable("apex_energy_any", 1.f) <= 0.f))
+	{
 		return null;
+	}
 	// NO metal-empty gate. "Don't spend when broke" is exactly backwards for the
 	// one thing that ends being broke: a solar is 155 metal and pays back
 	// forever, which at 13 metal/second is twelve seconds of income. Measured:
@@ -227,8 +245,16 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	CCircuitDef@ gen = null;
 	bool pickedReactor = false;
 	if (EnergyWasting()) {
-		if (ai.frame < gNextConv)
-			return null;
+		// NO PERIOD BETWEEN CONVERTERS. apexearth: "It doesn't make sense for us to
+		// have that at all. We don't need some period between creating these
+		// things. That's a very bad idea."
+		//
+		// What the timer was standing in for is real but is not a timer: the
+		// engine's economy budget is finite (CEconomyManager::MakeEconomyTasks
+		// returns null unless buildTasksCount < workers * 8) and an unassigned task
+		// holds its slot for 300s. The bound for that is a COUNT -- how many the
+		// spill can actually feed -- which the Brain's convert want already applies
+		// as income/draw. A clock only makes us slow to fix a surplus.
 		// Spilling energy: turn it into metal.
 		@gen = BigConvDef(unit);
 		if ((gen is null) || !gen.IsAvailable(ai.frame))
@@ -388,8 +414,8 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		return null;
 	if (pickedReactor)
 		gNextFusion = ai.frame + FUSION_PERIOD;
-	if (isConv)
-		gNextConv = ai.frame + HOME_CONV_PERIOD;
+	// Converters no longer wait on a clock at all; see the EnergyWasting branch
+	// above for why the bound is a count instead.
 	AiLog(Factory::T() + "apex: home energy " + gen.GetName()
 		+ " standing=" + gen.count
 		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)

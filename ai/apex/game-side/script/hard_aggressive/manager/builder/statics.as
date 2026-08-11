@@ -77,7 +77,7 @@ int gNextAADiag = 0;  // temporary diagnostic, see CheapAA
 // Cheap AA, kept at a small standing count. Any constructor can build it.
 IUnitTask@ CheapAA(CCircuitUnit@ unit)
 {
-	if ((ai.frame < gNextAA) || aiEconomyMgr.isEnergyStalling)
+	if (aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
 		return null;
@@ -225,7 +225,7 @@ int gShieldsAsked = 0;
 
 IUnitTask@ Shield(CCircuitUnit@ unit)
 {
-	if ((ai.frame < gNextShield) || aiEconomyMgr.isEnergyStalling)
+	if (aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (unit.circuitDef.costM < ADV_CON_COST)
 		return null;                       // T2 constructors only
@@ -279,7 +279,7 @@ int gJammersAsked = 0;
 
 IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 {
-	if ((ai.frame < gNextJammer) || aiEconomyMgr.isEnergyStalling)
+	if (aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (!gHomeSet)
 		return null;
@@ -326,7 +326,7 @@ IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 
 IUnitTask@ HomeDeter(CCircuitUnit@ unit)
 {
-	if ((ai.frame < gNextDeter) || aiEconomyMgr.isEnergyStalling)
+	if (aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (!gHomeSet || Factory::gHaveT2)
 		return null;                       // early game only; porc takes over later
@@ -356,7 +356,7 @@ IUnitTask@ HomeDeter(CCircuitUnit@ unit)
 
 IUnitTask@ HeavyAA(CCircuitUnit@ unit)
 {
-	if (!AA_HEAVY_ON || (ai.frame < gNextHeavyAA) || aiEconomyMgr.isEnergyStalling)
+	if (!AA_HEAVY_ON || aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
 		return null;
@@ -672,7 +672,7 @@ bool PinpointTurn()
 
 IUnitTask@ Pinpointer(CCircuitUnit@ unit)
 {
-	if ((ai.frame < gNextPinpoint) || aiEconomyMgr.isEnergyStalling)
+	if (aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (unit.circuitDef.costM < ADV_CON_COST)
 		return null;

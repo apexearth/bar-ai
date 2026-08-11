@@ -189,8 +189,6 @@ void UpdateBaseDefence()
 	// per AI; and AreaNeedsDefence still refuses to stack them.
 	if ((gPorcAdded >= PORC_ADD_CAP) && (!FRONT_UNCAPPED || !Front::IsFrontKnown()))
 		return;
-	if (ai.frame < gNextPorcAdd)
-		return;
 
 	const float threat = ApproachThreat();
 	if (threat <= 0.f)

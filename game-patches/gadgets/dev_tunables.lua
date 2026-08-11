@@ -73,6 +73,7 @@ local NAMES = {
 	"apex_mix_scout_per_mex",
 	"apex_chaff_mult",
 	"apex_advsol_energy",
+	"apex_energy_any",
 	"apex_unblock_test_wait",
 	"apex_nano_income_gate",
 	-- The Brain's mex upgrades (2026-08-10): how many the engine holds open.
