@@ -20,6 +20,12 @@ bool HaveT2Mex()
 
 bool IsTechLead()
 {
+	// Solo we are the only player, so we are trivially the one who techs. This
+	// is the OPPOSITE of the rusher tests: those coordinate between allies and
+	// must be false alone; this asks "is teching my job", and alone it always
+	// is. Getting this backwards would stop a 1v1 teching at all.
+	if (!TeamPlay())
+		return true;
 	RefreshLead();
 	if (gAmLead)
 		return true;

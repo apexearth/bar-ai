@@ -23,6 +23,21 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// TARGET COMPOSITION, ahead of the generic production branches but below the
+	// floors that answer a specific need (assist bots, air, rez). See
+	// manager/brain/mix.as: this converges the army toward a stated mix instead
+	// of letting whichever rule answers first decide what the army becomes.
+	@t = Brain::MixTask(unit);
+	if (t !is null)
+		return t;
+	// An owned line does not fall through to the old production rules. If the
+	// mix could not decide this tick, the ENGINE answers -- never our floors,
+	// which would quietly reintroduce the composition the mix is steering away
+	// from. apexearth: "make sure the old system doesn't interact with that
+	// factory and add its own things."
+	if (Brain::OwnsFactory(unit))
+		return aiFactoryMgr.DefaultMakeTask(unit);
+
 	@t = RezBotFloor(unit);
 	if (t !is null)
 		return t;

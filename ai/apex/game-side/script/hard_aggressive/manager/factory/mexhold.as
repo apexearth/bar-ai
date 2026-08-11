@@ -145,9 +145,34 @@ void UpdateEcoLead()
 	}
 }
 
+// TEAM ROLES DO NOT EXIST WITHOUT A TEAM, AND NEITHER DO THE PATHS THAT READ
+// THEM.
+//
+// apexearth: "this is that eco logic contaminating a 1v1 game still. Even though
+// I said 'no eco role in 1v1 games' we still have the logic buried in there,
+// causing all sorts of hidden hard to understand bugs. The entire eco pathway of
+// code needs to be disabled."
+//
+// He is right, and the fusion bug is the proof: the reactor rule asked
+// EcoLeadActive() as its ONLY gate, so with no eco lead nobody ever built a
+// reactor -- a solo player simply never teched its energy. Disabling the ROLE
+// silently disabled a behaviour that had nothing to do with teams.
+//
+// So the rule is now: every consumer of a team role must be one of
+//   (a) genuinely team-only -- it coordinates with allies, and is skipped solo;
+//   (b) general behaviour that was wrongly gated on a role -- ungated, with its
+//       own economic condition instead.
+// TeamPlay() below is the single answer to "do team roles exist at all", so the
+// question is asked in one place rather than rediscovered per rule.
+bool TeamPlay()
+{
+	array<Id>@ roster = ai.GetTeamIds();
+	return (roster !is null) && (roster.length() > 1);
+}
+
 bool EcoLeadActive()
 {
-	return gEcoActive;
+	return TeamPlay() && gEcoActive;
 }
 
 // Has the late game arrived? Either the clock, or a fusion standing -- a reactor

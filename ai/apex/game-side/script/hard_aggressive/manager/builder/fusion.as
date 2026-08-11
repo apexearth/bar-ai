@@ -64,6 +64,9 @@ CCircuitDef@ FusionDef(CCircuitUnit@ unit)
 const int   HOME_CONV_PERIOD = 90 * SECOND;
 int gNextConv = 0;
 
+// Metal income above which a reactor is worth it regardless of role. A fusion
+// is ~4,300 metal and pays for every advanced thing that follows.
+const float FUSION_SOLO_INCOME = 35.f;
 const float FUSION_MIN_BANK = 0.55f;
 const int   FUSION_PERIOD   = 45 * SECOND;
 const int   FUSION_DIAG_PERIOD = 45 * SECOND;
@@ -92,7 +95,18 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 			+ " fusCount=" + FusionDef(unit).count);
 	}
 
-	if (!Factory::EcoLeadActive() || (ai.frame < gNextFusion))
+	// A REACTOR IS NOT A TEAM ROLE. This required EcoLeadActive(), which is an
+	// election among ALLIES -- so a solo player never built a fusion at all, and
+	// in a team game only one player ever did. apexearth, watching a 1v1 against
+	// hard: "hard AI dominating us, making fusions way earlier even though we
+	// seemed to have good early game mexes... we are full metal but haven't even
+	// started a fusion."
+	//
+	// Anyone whose economy has outgrown solar belongs on reactors. The eco lead
+	// still gets its own faster cadence below; this is the floor for everyone
+	// else.
+	const bool richEnough = (aiEconomyMgr.metal.income >= FUSION_SOLO_INCOME);
+	if ((!Factory::EcoLeadActive() && !richEnough) || (ai.frame < gNextFusion))
 		return null;
 	// A T1 constructor cannot build one; asking anyway is the silent no-op this
 	// repo has been bitten by before.

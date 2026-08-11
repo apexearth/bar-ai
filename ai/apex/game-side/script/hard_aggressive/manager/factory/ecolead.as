@@ -141,6 +141,13 @@ bool LeadHasPlant(int lead)
 // the whole set -- donations split across two leads fund neither.
 int RushLeadTeamId()
 {
+	// SOLO HAS NO LEAD TO ELECT. The fallback is ai.GetLeadTeamId(), which with
+	// no allies is US -- so "am I the rusher", "am I the sling target" and "am I
+	// the air tech lead" all read TRUE, and the whole team pathway ran in a 1v1
+	// while the role itself was supposedly off. -1 matches no team id, so every
+	// such test is false and the general-purpose paths take over.
+	if (!TeamPlay())
+		return -1;
 	RefreshLead();
 	return (gRushLead >= 0) ? gRushLead : ai.GetLeadTeamId();
 }

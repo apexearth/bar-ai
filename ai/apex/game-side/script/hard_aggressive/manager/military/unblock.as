@@ -190,6 +190,12 @@ void StartMoveTest(CCircuitUnit@ unit, const AIFloat3& in at)
 	IUnitTask@ t = unit.task;
 	if ((t !is null) && (t.GetType() == Task::Type::BUILDER))
 		return;
+	// A super parked on the defence line is standing still because it was told
+	// to -- but IUnitTask exposes GetType/GetBuildType and NOT GetFightType, so
+	// "parked" cannot be read directly. The existing gates cover it instead: the
+	// move test only calls a unit penned after TWO refused orders, and TryUnblock
+	// additionally requires UNBLOCK_MIN_WALL of our own structures ringing it.
+	// A parked super obeys the first order and is cleared.
 	// NOR the commander. It stands in the middle of the base by design, with our
 	// buildings packed around it, and CircuitAI re-tasks it every few seconds --
 	// so the move order is overridden and it reads as penned. Measured: two of

@@ -88,6 +88,11 @@ void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 	// Leaving this unset crashed UpdateRushReclaim's Enqueue (0xc0000005).
 	if (gT1FacUnit is unit)
 		@gT1FacUnit = null;
+	// A dead factory must not keep its ownership claim: ids are reused, and the
+	// next unit to take this one would silently inherit "the Brain owns this
+	// line" without the Brain ever having decided that.
+	if (usage == Unit::UseAs::FACTORY)
+		Brain::ReleaseFactory(unit.id);
 }
 
 // Any factory at all, of any kind or tier -- not just the T1 opener.

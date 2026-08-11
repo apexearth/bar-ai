@@ -259,9 +259,13 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 // standing by repairing them where they fight. Same 210-metal unit, and it is
 // the cheapest repair in the game -- a damaged Pulsar or a mauled squad
 // otherwise walks home or dies.
-const int   FRONT_NANO_PERIOD = 20 * SECOND;
-const float FRONT_NANO_INCOME = 40.f;   // do not take this from a poor economy
-const float FRONT_NANO_SHARE  = 0.35f;  // of NanoCap(), so it scales with income
+// Later and fewer than the first attempt: 40 metal/s and one every 20 s put
+// them up while the economy was still compounding, and they cost 15% army
+// alongside the gate change. A repair station is worth having once there is
+// something worth repairing.
+const int   FRONT_NANO_PERIOD = 45 * SECOND;
+const float FRONT_NANO_INCOME = 90.f;   // a real economy, not an early one
+const float FRONT_NANO_SHARE  = 0.15f;  // of NanoCap(), so it stays a minority
 int gNextFrontNano = 0;
 
 IUnitTask@ FrontNano(CCircuitUnit@ unit)
@@ -319,6 +323,9 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	// NANO_INCOME_GATE metal/second the income alone pays for one every few
 	// seconds, so the bank check below is what should decide, not a cap event.
 	const bool richEnough = (aiEconomyMgr.metal.income >= NanoIncomeGate());
+	// Three independent reasons, not a role gate: the eco lead builds them as its
+	// job, anyone at the metal cap needs the sink, and any real income justifies
+	// the build power. Solo reaches this through the last two.
 	if ((!Factory::EcoLeadActive() && !MetalFull() && !richEnough) || (ai.frame < gNextNano))
 		return null;
 	// Half the bank while poor, a fifth once the income itself justifies it.

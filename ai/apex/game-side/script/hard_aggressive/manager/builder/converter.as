@@ -208,7 +208,11 @@ bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 
 IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 {
-	if (!Factory::EcoLeadActive() || (ai.frame < gNextEcoConv))
+	// The eco lead's converter BLOCK is a team behaviour; converting a surplus
+	// is not. Solo, or as a normal teammate, EnergyWasting() below is the real
+	// condition -- see the fusion bug for what happens when a role is the only
+	// gate on an economic behaviour.
+	if ((!Factory::EcoLeadActive() && Factory::TeamPlay()) || (ai.frame < gNextEcoConv))
 		return null;
 	// Only while energy is actually being binned, and self-limiting: every
 	// converter raises pull by 70, so the store drains and this stops on its own.

@@ -240,11 +240,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// Spend the surplus rather than growing it further.
 	if (EcoSated() || aiEconomyMgr.isMetalFull)
 		Propose(Simple("nano", NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc")));
-	// Front repair turrets are held back pending attribution: proposed alongside
-	// the income-gate change, the pair cost 15% army and doubled waste, and the
-	// two cannot be separated from one arm. Re-enable once the gate alone is
-	// measured. apex_front_nano=1 turns it on.
-	if (ai.GetTunable("apex_front_nano", 0.f) > 0.f)
+	// ON by default. Attribution showed the income gate, not these, caused the
+	// army drop -- and K/D was the one number that went UP with them (1.49 ->
+	// 1.54). apexearth: "notice how our KD went up with the nanodefense. Maybe
+	// we're just building them a little bit too early, or making too many at
+	// once. Probably a good thing to have on, just be reasonable about it."
+	// So: kept, later and fewer (see FRONT_NANO_* in builder/nano.as).
+	if (ai.GetTunable("apex_front_nano", 1.f) > 0.f)
 		Propose(Simple("frontnano", FRONT_NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc")));
 
 	Propose(Simple("gantry", GANTRY_VALUE, SideDef3("armshltx", "corgant", "leggant")));
