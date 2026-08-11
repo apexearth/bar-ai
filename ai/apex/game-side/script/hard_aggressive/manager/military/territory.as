@@ -601,6 +601,73 @@ bool FrontCurve(array<AIFloat3>& out pts)
 	return pts.length() > 0;
 }
 
+// A CONTINUOUS LINE, SPACED BY WHAT A TURRET CAN ACTUALLY SHOOT.
+//
+// apexearth: "we need no 'gaps' there. So a line of turrets are needed, all
+// within range of each other's firing radius, so no 'leaks' can get through."
+//
+// That is a definite objective, and it is the first one this AI has had for
+// defence: sample the arc at intervals of the turret's OWN weapon range, so a
+// raider cannot pass between two of them. The spacing is read from the def via
+// GetMaxRange rather than guessed -- the old FRONT_FENCE_SPREAD was a flat 700
+// for an armllt that reaches 430 and a Rattlesnake that reaches much further,
+// which leaves a hole in one case and wastes metal in the other.
+//
+// Sampling the ARC rather than the bearings is the point: 24 fixed bearings put
+// points 785 elmos apart at radius 3000 and 130 apart at radius 500, so the same
+// ring is full of holes far out and stacked up close. Arc length is the honest
+// unit for "no gaps".
+bool FrontLineSpots(array<AIFloat3>& out pts, float spacing)
+{
+	RebuildFront();
+	pts.resize(0);
+	if (!gFrontValid || (spacing < 1.f))
+		return false;
+	const float back = ai.GetTunable("apex_front_setback", FRONT_SETBACK);
+	const bool useSafe = ai.GetTunable("apex_front_safe_edge", 1.f) > 0.f;
+	const float minReach = ai.GetTunable("apex_front_min_reach", 0.5f);
+	const float step = 6.2831853f / float(FRONT_RAYS);
+
+	for (uint i = 0; i < gRayR.length(); ++i) {
+		if ((i < gRayHot.length()) && !gRayHot[i])
+			continue;
+		const uint j = (i + 1) % gRayR.length();
+		const bool pairHot = (j >= gRayHot.length()) || gRayHot[j];
+
+		// This bearing's buildable radius, and the next one's, so the segment
+		// between them can be filled at the requested spacing.
+		float d0 = gRayR[i] * (1.f - back);
+		if (useSafe && (i < gRaySafe.length()) && (gRaySafe[i] < d0))
+			d0 = gRaySafe[i];
+		if ((d0 <= 0.f) || (d0 < gRayR[i] * (1.f - back) * minReach))
+			continue;
+		float d1 = d0;
+		if (pairHot) {
+			d1 = gRayR[j] * (1.f - back);
+			if (useSafe && (j < gRaySafe.length()) && (gRaySafe[j] < d1))
+				d1 = gRaySafe[j];
+			if (d1 <= 0.f)
+				d1 = d0;
+		}
+
+		// How many turrets this segment of arc needs to be gap-free.
+		const float arc = step * ((d0 + d1) * 0.5f);
+		int n = int(arc / spacing);
+		if (n < 1)
+			n = 1;
+		for (int k = 0; k < n; ++k) {
+			const float t = float(k) / float(n);
+			const float ang = 6.2831853f * (float(i) + t) / float(FRONT_RAYS);
+			const float d = d0 + (d1 - d0) * t;
+			const AIFloat3 p = gFrontHome
+					+ AIFloat3(cos(ang), 0.f, sin(ang)) * d;
+			if (OnMap(p))
+				pts.insertLast(p);
+		}
+	}
+	return pts.length() > 0;
+}
+
 // WHERE A TOWER COVERING THAT LINE CAN ACTUALLY GO.
 //
 // Derived from the line, and different from it in three ways, each measured:

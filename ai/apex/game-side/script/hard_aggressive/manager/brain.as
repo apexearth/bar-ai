@@ -343,8 +343,27 @@ const float FRONT_SITE_SEARCH = 400.f;    // how far to look for ground it fits 
 Want@ FrontDefenceWant(CCircuitUnit@ unit)
 {
 	FenceSweep();
+	// THE LINE IS SPACED BY THE TURRET'S OWN RANGE. apexearth: "a line of turrets
+	// are needed, all within range of each other's firing radius, so no 'leaks'
+	// can get through." So the def is chosen FIRST -- it decides how far apart the
+	// line's positions are -- and a Rattlesnake line is correctly sparser than a
+	// Beamer line rather than both being a flat 700 elmos.
+	CCircuitDef@ tower = Builder::FrontTower(unit, unit.GetPos(ai.frame));
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+	float span = tower.GetMaxRange();
+	if (span < 200.f)
+		span = 200.f;   // a def with no usable range must not collapse the line
+	// OVERLAP, DON'T JUST TOUCH. apexearth: "you'll want to make sure they overlap
+	// by ~20% on that firing range circle." At spacing == range the neighbour sits
+	// exactly on the edge of the circle, so anything walking the seam is engaged
+	// by one turret at its worst range and by nothing else. Pulling the spacing in
+	// by a fifth means every point on the line is covered by two.
+	const float overlap = ai.GetTunable("apex_front_overlap", 0.2f);
+	const float spacing = span * (1.f - overlap);
+
 	array<AIFloat3> line;
-	if (!Military::FrontBuildSpots(line) || (line.length() == 0))
+	if (!Military::FrontLineSpots(line, spacing) || (line.length() == 0))
 		return null;
 
 	// A TASK NOBODY CAN REACH IS NEVER ASSIGNED TO ANYONE. Measured: of 235 front
@@ -375,9 +394,10 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 		// Already ordered here: a want that re-proposes every call enqueued 101
 		// towers for 15 that got built, and each unassigned task holds its slot
 		// for 300 seconds against the engine's budget.
-		if (Builder::DefenceTaskNear(line[i], FRONT_FENCE_SPREAD))
+		if (Builder::DefenceTaskNear(line[i], spacing))
 			continue;
-		const uint cover = Military::FenceCountNear(line[i], FRONT_FENCE_SPREAD);
+		// A gap is a stretch of line with nothing in range of it.
+		const uint cover = Military::FenceCountNear(line[i], span);
 		// Least-covered stretch first -- cover spreads along the line before it
 		// thickens anywhere on it -- and the nearer of two equally bare stretches,
 		// so the walk is not the cost.
@@ -393,9 +413,6 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	if (!Military::DefenceAllowedAt(best))
 		return null;
 
-	CCircuitDef@ tower = Builder::FrontTower(unit, best);
-	if ((tower is null) || !tower.IsAvailable(ai.frame))
-		return null;
 	// A POINT ON A CURVE IS NOT A BUILD SITE. Every other placement in this AI
 	// runs its position through FindBuildSiteNear first; this one handed the raw
 	// sample straight to Enqueue. The samples are geometry -- fourteen steps along
@@ -412,7 +429,7 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	// point of the want being ranked instead of sitting in the pipeline.
 	uint bare = 0;
 	for (uint i = 0; i < line.length(); ++i) {
-		if (OnMap(line[i]) && (Military::FenceCountNear(line[i], FRONT_FENCE_SPREAD) == 0))
+		if (OnMap(line[i]) && (Military::FenceCountNear(line[i], span) == 0))
 			++bare;
 	}
 	const float uncovered = (line.length() > 0)
