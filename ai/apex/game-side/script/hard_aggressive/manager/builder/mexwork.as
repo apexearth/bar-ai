@@ -9,6 +9,21 @@ namespace Builder {
 // every removal funnels through DequeueTask, which calls AiTaskRemoved.
 array<IUnitTask@> gMexTasks;
 
+// How many extractor jobs are already outstanding. A function rather than a
+// direct read of the array because main.as includes brain.as BEFORE builder.as,
+// so a global declared here is not visible to the Brain -- functions are
+// module-wide, globals are not.
+//
+// This is the bound on the Brain's expansion want. Without it that want, being
+// the highest-value thing on the board by a factor of five, re-proposed on every
+// call and enqueued 97 extractor tasks in a single game -- an unassigned task
+// holds its slot for 300s and the engine's economy generator refuses new work
+// above workers * 8, so the spam starves the very thing it is trying to buy.
+uint OutstandingMexTasks()
+{
+	return gMexTasks.length();
+}
+
 // The script cannot ask whether a position is reachable, and the far side of the
 // map usually is not.
 const float REROUTE_RANGE = 3000.f;

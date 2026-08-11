@@ -123,6 +123,7 @@ class Want
 array<Want@> gWants;
 int gNextBrainLog = 0;
 int gMexUpOrders = 0;
+int gMexOrders = 0;
 int gNextPickLog = 0;
 
 void Clear()
@@ -134,6 +135,57 @@ void Propose(Want@ w)
 {
 	if (w !is null)
 		gWants.insertLast(w);
+}
+
+// EXPANSION AS A WANT, NOT AS A POSITION IN A LIST.
+//
+// apexearth: "potentially, expansion always wins is now being replaced by logic
+// in the brain", and "a lot of the concepts and things that I had added in the
+// past are now the brain's responsibility."
+//
+// ExpansionAlwaysWins protects expansion by SITTING EARLY: it takes the engine's
+// offer when that offer happens to be a mex. It cannot help when the engine
+// offers something else, or nothing -- and the engine's economy generator is
+// budgeted (MakeEconomyTasks refuses above workers * 8), so "nothing" is common
+// exactly when the base is busiest. Measured 6 games at minute 14: we hold 10
+// extractors to stock's 13 and make 12,303 metal to their 17,185.
+//
+// It does not need protecting once it has a number. A plain extractor yields
+// ~1.8 metal/second for ~50 metal, which is 0.033 per metal against a moho
+// upgrade's 0.0058 and a reactor's 0.0034 -- expansion outranks an upgrade five
+// to one and a reactor ten to one on value alone, which is the right answer and
+// the one the ladder was hard-coding by hand.
+//
+// Any builder, not just an advanced one: taking ground is T1 work.
+const float MEX_INCOME_GAIN = 1.8f;   // armmex extraction, read from the defs
+
+Want@ MexWant(CCircuitUnit@ unit)
+{
+	CCircuitDef@ mex = SideDef3("armmex", "cormex", "legmex");
+	if ((mex is null) || !mex.IsAvailable(ai.frame))
+		return null;
+	// BOUNDED BY BUILD POWER, WHICH IS WHAT ACTUALLY LIMITS EXPANSION. Nothing
+	// else does: every open spot is worth the same, so this want re-proposes for
+	// every builder on every call and enqueued 97 extractor tasks in one game
+	// before this line existed. One outstanding job per worker is the honest
+	// ceiling -- a job nobody can walk to is a slot held for 300 seconds against
+	// the engine's economy budget.
+	if (Builder::OutstandingMexTasks() >= aiBuilderMgr.GetWorkerCount())
+		return null;
+	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
+	if (spot < 0)
+		return null;
+	Want@ w = Want();
+	w.kind = "mex";
+	w.value = MEX_INCOME_GAIN;
+	w.cost = mex.costM;
+	@w.def = mex;
+	w.needsAdvCon = false;
+	// NOT decayed by how many extractors already stand. Every spot yields the
+	// same, and the map runs out of them on its own -- FindOpenMexSpot returning
+	// -1 is the only bound this needs.
+	w.have = 0;
+	return w;
 }
 
 // The one want that is executed today. Everything else is proposed and logged so
@@ -291,6 +343,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// Brain rather than through the ladder.
 	const bool preT2 = !Factory::gHaveT2;
 
+	Propose(MexWant(unit));
 	Propose(MexUpgradeWant(unit));
 	// The optional class. Costs are read from the defs so a score means
 	// something; where a def is missing the want is simply not proposed.
@@ -427,8 +480,26 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		Want@ w = order[i];
 		if (w.needsAdvCon && !isAdvCon)
 			continue;   // this one really does need an advanced builder
-		if (w.kind != "mexup" && haveMexUp)
+		// Expansion is never blocked by a pending upgrade: a new extractor is
+		// worth five upgrades per metal, and they are not alternatives -- one
+		// takes ground, the other improves ground already held.
+		if ((w.kind != "mexup") && (w.kind != "mex") && haveMexUp)
 			continue;
+		if (w.kind == "mex") {
+			const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
+			if (spot < 0)
+				continue;
+			IUnitTask@ t = aiEconomyMgr.EnqueueMexAt(unit, spot);
+			if (t !is null) {
+				++gMexOrders;
+				if (gMexOrders <= 3 || (gMexOrders % 25 == 0)) {
+					AiLog(Factory::T() + "apex: brain orders mex #" + gMexOrders
+						+ " by " + unit.circuitDef.GetName());
+				}
+				return t;
+			}
+			continue;
+		}
 		if (w.kind == "mexup") {
 			// The binding added 2026-08-10. A MEXUP task carries a metal-spot
 			// index as well as a position, so the generic Enqueue could not
