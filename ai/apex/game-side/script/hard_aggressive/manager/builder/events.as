@@ -21,6 +21,8 @@ void AiTaskAdded(IUnitTask@ task)
 		gMexUpActive = true;
 	} else if (bt == Task::BuildType::MEX) {
 		gMexTasks.insertLast(task);
+	} else if (bt == Task::BuildType::DEFENCE) {
+		gDefTasks.insertLast(task);
 	} else if (bt == Task::BuildType::REPAIR) {
 		CCircuitUnit@ hurt = task.target;
 		if ((hurt !is null) && hurt.circuitDef.IsMobile())
@@ -81,6 +83,12 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 	if (bt == Task::BuildType::MEXUP) {
 		gMexUpActive = false;
 	} else if (bt == Task::BuildType::MEX) {
+		for (uint i = 0; i < gDefTasks.length(); ++i) {
+			if (gDefTasks[i] is task) {
+				gDefTasks.removeAt(i);
+				break;
+			}
+		}
 		for (uint i = 0; i < gMexTasks.length(); ++i) {
 			if (gMexTasks[i] is task) {
 				gMexTasks.removeAt(i);

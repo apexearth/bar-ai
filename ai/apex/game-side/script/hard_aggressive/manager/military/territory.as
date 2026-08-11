@@ -235,6 +235,7 @@ const float FRONT_LANE_GAP = 900.f;   // elmos between lanes
 const int   FRONT_SAMPLES  = 14;
 const float FRONT_SCAN_END = 1.15f;   // a little past their centroid
 const float FRONT_BAND     = 0.18f;   // how wide "on the line" is, as a fraction
+const float FRONT_SETBACK  = 0.12f;   // build this far inside it, not on it
 
 // Per lane: the fraction along home->enemy at which that lane's influence
 // crosses. Index 0 is the leftmost lane.
@@ -319,9 +320,20 @@ bool FrontCurve(array<AIFloat3>& out pts)
 	pts.resize(0);
 	if (!gFrontValid)
 		return false;
+	// PULLED BACK OFF THE LINE, ON PURPOSE. apexearth: "Never send a constructor
+	// to build a tower in a dangerous place... what is the point in trying to
+	// make a tower that can never be built? ... Build behind the line, not on
+	// it." The crossing IS contested ground by definition, so a builder sent
+	// exactly there is refused by its own safety veto and the order dies: 14
+	// orders produced no towers. These points sit just inside our side of it,
+	// which is where a tower can be finished and still cover the line.
+	const float back = ai.GetTunable("apex_front_setback", FRONT_SETBACK);
 	for (uint i = 0; i < gFrontLane.length(); ++i) {
 		const float laneOff = (float(i) - float(FRONT_LANES)) * FRONT_LANE_GAP;
-		pts.insertLast(gFrontHome + gFrontSide * laneOff + gFrontFwd * gFrontLane[i]);
+		float t = gFrontLane[i] - back;
+		if (t < 0.f)
+			t = 0.f;
+		pts.insertLast(gFrontHome + gFrontSide * laneOff + gFrontFwd * t);
 	}
 	return true;
 }

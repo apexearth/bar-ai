@@ -120,7 +120,8 @@ Cat BudgetCatOf(const string& in kind)
 {
 	if ((kind == "nano") || (kind == "frontnano") || (kind == "gantry"))
 		return BUILDPOWER;
-	if ((kind == "pulsar") || (kind == "silo") || (kind == "pinpoint"))
+	if ((kind == "fence") || (kind == "pulsar") || (kind == "silo")
+		|| (kind == "pinpoint"))
 		return DEFENCE;
 	return ECONOMY;
 }
@@ -176,6 +177,7 @@ array<Want@> gWants;
 int gNextBrainLog = 0;
 int gMexUpOrders = 0;
 int gMexOrders = 0;
+int gFenceOrders = 0;
 int gNextPickLog = 0;
 
 void Clear()
@@ -237,6 +239,79 @@ Want@ MexWant(CCircuitUnit@ unit)
 	// same, and the map runs out of them on its own -- FindOpenMexSpot returning
 	// -1 is the only bound this needs.
 	w.have = 0;
+	return w;
+}
+
+// DEFENCE THE BRAIN ASKS FOR, ON THE LINE IT CHOSE.
+//
+// apexearth: "Make it so we actively place defenses on the frontline. This is
+// something the brain should ask for."
+//
+// Every tower until now was placed by somebody else and merely approved or
+// refused here: MexGuard picked the mex, Fortify picked wherever a constructor
+// was standing when it got shot, and the gate could only say yes or no to a spot
+// it had no part in choosing. Measured across every arrangement of that, 12
+// minutes at +50: 0% of our defences sat past a quarter of the way to the enemy
+// while stock had a player at 86% forward.
+//
+// So the Brain proposes a POSITION now. Military::FrontCurve is the influence
+// crossing sampled lane by lane across the map, and the pick is the point on it
+// that has the least standing near it -- cover spreads along the line before it
+// thickens anywhere on it. The def follows the position, as it does at a mex:
+// the Beamer where a raid arrives in force, the Sentry behind.
+//
+// Value is deliberately modest. Defence's real currency is threat denied per
+// metal, which this file does not yet speak; what actually bounds it is the
+// DEFENCE category budget from targets.as, applied to every want through
+// BudgetMult. This one competes there like everything else.
+const float FRONT_FENCE_VALUE = 1.2f;
+const float FRONT_FENCE_SPREAD = 700.f;   // how far apart cover counts as spread
+
+Want@ FrontDefenceWant(CCircuitUnit@ unit)
+{
+	array<AIFloat3> line;
+	if (!Military::FrontCurve(line) || (line.length() == 0))
+		return null;
+
+	AIFloat3 best;
+	bool have = false;
+	uint fewest = 0;
+	for (uint i = 0; i < line.length(); ++i) {
+		if (!OnMap(line[i]))
+			continue;
+		// Never send a builder somewhere it cannot survive to finish. apexearth:
+		// "what is the point in trying to make a tower that can never be built?"
+		if (Builder::ThreatFor(unit, line[i]) > Builder::CON_THREAT_VETO)
+			continue;
+		// Already ordered here: a want that re-proposes every call enqueued 101
+		// towers for 15 that got built, and each unassigned task holds its slot
+		// for 300 seconds against the engine's budget.
+		if (Builder::DefenceTaskNear(line[i], FRONT_FENCE_SPREAD))
+			continue;
+		const uint cover = Military::FenceCountNear(line[i], FRONT_FENCE_SPREAD);
+		if (!have || (cover < fewest)) {
+			fewest = cover;
+			best = line[i];
+			have = true;
+		}
+	}
+	if (!have)
+		return null;
+	if (!Military::DefenceAllowedAt(best))
+		return null;
+
+	CCircuitDef@ tower = Builder::MexGuardTower(unit, best);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+
+	Want@ w = Want();
+	w.kind = "fence";
+	w.value = FRONT_FENCE_VALUE;
+	w.cost = tower.costM;
+	w.pos = best;
+	@w.def = tower;
+	w.needsAdvCon = false;
+	w.have = int(fewest);   // a stretch of line already covered is worth less
 	return w;
 }
 
@@ -396,6 +471,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	const bool preT2 = !Factory::gHaveT2;
 
 	Propose(MexWant(unit));
+	Propose(FrontDefenceWant(unit));
 	Propose(MexUpgradeWant(unit));
 	// The optional class. Costs are read from the defs so a score means
 	// something; where a def is missing the want is simply not proposed.
@@ -537,6 +613,19 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		// takes ground, the other improves ground already held.
 		if ((w.kind != "mexup") && (w.kind != "mex") && haveMexUp)
 			continue;
+		if (w.kind == "fence") {
+			IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+					Task::Priority::NORMAL, w.def, w.pos, SQUARE_SIZE * 4));
+			if (t !is null) {
+				++gFenceOrders;
+				if (gFenceOrders <= 3 || (gFenceOrders % 20 == 0)) {
+					AiLog(Factory::T() + "apex: brain orders front defence #"
+						+ gFenceOrders + " " + w.def.GetName());
+				}
+				return t;
+			}
+			continue;
+		}
 		if (w.kind == "mex") {
 			const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
 			if (spot < 0)

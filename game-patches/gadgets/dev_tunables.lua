@@ -78,6 +78,7 @@ local NAMES = {
 	"apex_fence_rear_share",
 	"apex_front_fraction",
 	"apex_front_band",
+	"apex_front_setback",
 	"apex_army_deficit_floor",
 	"apex_hold_release",
 	"apex_budget",

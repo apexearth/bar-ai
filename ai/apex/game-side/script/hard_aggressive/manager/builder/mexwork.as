@@ -19,6 +19,39 @@ array<IUnitTask@> gMexTasks;
 // call and enqueued 97 extractor tasks in a single game -- an unassigned task
 // holds its slot for 300s and the engine's economy generator refuses new work
 // above workers * 8, so the spam starves the very thing it is trying to buy.
+// Defence jobs already ordered and not yet finished. Same contract and same
+// reason as the mex one below: a want that re-proposes on every call enqueues
+// faster than builders can walk, and an unassigned task holds its slot for 300
+// seconds against the engine's economy budget. Measured on the front-defence
+// want's first run: 101 orders, 15 towers standing.
+array<IUnitTask@> gDefTasks;
+
+uint OutstandingDefenceTasks()
+{
+	return gDefTasks.length();
+}
+
+// Is a defence job already ordered near here? The right bound for a want that
+// picks a POSITION: a global count refuses the Brain because MexGuard and
+// Fortify filled the register, which is how one arm ordered three towers while
+// 54 went up around it. What matters is whether this spot is already spoken for.
+bool DefenceTaskNear(const AIFloat3& in pos, float radius)
+{
+	const float sq = radius * radius;
+	for (uint i = 0; i < gDefTasks.length(); ++i) {
+		if (gDefTasks[i] is null)
+			continue;
+		const AIFloat3 at = gDefTasks[i].GetBuildPos();
+		if (!OnMap(at))
+			continue;
+		const float dx = at.x - pos.x;
+		const float dz = at.z - pos.z;
+		if ((dx * dx + dz * dz) < sq)
+			return true;
+	}
+	return false;
+}
+
 uint OutstandingMexTasks()
 {
 	return gMexTasks.length();
