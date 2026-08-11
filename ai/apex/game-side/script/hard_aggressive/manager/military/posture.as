@@ -305,6 +305,7 @@ void UpdatePosture()
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
+	PublishDefence();   // our front-tower count and income, for the team budget
 	Brain::BudgetLog();
 	UpdateKillingBlow();
 	UpdateRaidCaution();

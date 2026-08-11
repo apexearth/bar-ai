@@ -58,6 +58,48 @@ bool NearFront(const AIFloat3& in pos)
 	return (dx * dx + dz * dz) < (FRONT_RADIUS * FRONT_RADIUS);
 }
 
+// THE FRONT LINE IS A TEAM OBJECT, SO ITS BUDGET IS A TEAM BUDGET.
+//
+// apexearth, from a hosted 8v8: "lol its always teal doing this, idk why."
+//
+// Two mechanisms, both deterministic, both mine. Factory::ElectorTeamId picks
+// the LOWEST team id and hands out the lead roles, so the same slots hold the
+// same roles in every game -- and AiMakeDefence returned outright for a lead,
+// meaning defence landed entirely on whoever the election never picks. Teal was
+// not behaving oddly; teal was never elected.
+//
+// And each player sized the front against its OWN income and counted only its
+// OWN towers, so four players each independently decided how much line to hold.
+// The line in front of our bases is one object, its length does not depend on
+// how many of us there are, and the budget for it should not either.
+//
+// Published per player and summed: same mechanism the killing blow already uses
+// for army value, and it needs no gadget.
+const string TV_FFENCE = "ffence";
+const string TV_MINC   = "minc";
+
+void PublishDefence()
+{
+	uint front = 0;
+	for (uint i = 0; i < gFencePos.length(); ++i) {
+		if (OnBorder(gFencePos[i]) || NearFront(gFencePos[i]))
+			++front;
+	}
+	ai.PublishTeamValue(TV_FFENCE, float(front));
+	ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
+}
+
+float TeamSum(const string& in key, float own)
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() == 0))
+		return own;
+	float total = 0.f;
+	for (uint i = 0; i < mates.length(); ++i)
+		total += ai.ReadTeamValue(int(mates[i]), key, 0.f);
+	return (total > own) ? total : own;
+}
+
 // THE ONE ANSWER TO "MAY A TOWER GO HERE".
 //
 // apexearth: "Clean up those other systems that are placing the unwanted
@@ -96,7 +138,14 @@ bool DefenceAllowedAt(const AIFloat3& in pos)
 	// says that once instead of squaring it.
 	const float pressure = (gTurtle || BaseContested()) ? 2.f : 1.f;
 	const float share = Brain::BudgetMult(Brain::DEFENCE);
-	const float boost = (pressure > share) ? pressure : share;
+	float boost = (pressure > share) ? pressure : share;
+	// ROLE CHANGES HOW MUCH, NEVER WHETHER. A lead used to return outright, which
+	// put the whole job on the players the election never picks. It buys less
+	// now -- its metal is wanted for the plant and the T2 mexes -- but it is not
+	// forbidden, which is his standing rule and the same fault as the eco-lead
+	// exclusivity he caught before.
+	if (Factory::IsDesignatedLead() && !gPorcArmed && !gTurtle && !LosingGround())
+		boost *= ai.GetTunable("apex_lead_defence", 0.35f);
 	const float per = ai.GetTunable("apex_fence_per_income", 0.8f) * boost;
 	const float budget = 1.f + aiEconomyMgr.metal.income * per;
 
@@ -138,8 +187,15 @@ bool DefenceAllowedAt(const AIFloat3& in pos)
 		else
 			++local;
 	}
-	if (forward)
-		return float(front) < budget * (fShare / total);
+	if (forward) {
+		// Team-wide: one line, one budget, however many of us are holding it.
+		const float teamFront = TeamSum(TV_FFENCE, float(front));
+		const float teamInc = TeamSum(TV_MINC, aiEconomyMgr.metal.income);
+		const float teamBudget = 1.f + teamInc
+				* ai.GetTunable("apex_fence_per_income", 0.8f) * boost;
+		return teamFront < teamBudget * (fShare / total);
+	}
+	// Local work stays local: a mex guard defends OUR extractor with OUR metal.
 	return float(local) < budget * (lShare / total);
 }
 
@@ -181,8 +237,8 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	// on eco and the T2". Every tower it builds is metal the team pooled for tech
 	// spent on something else. Threat still overrides: staying alive is the one
 	// early job it does have.
-	if (Factory::IsDesignatedLead() && !gPorcArmed && !gTurtle && !LosingGround())
-		return;
+	// The lead's reticence is a smaller budget now, not a refusal -- see
+	// DefenceAllowedAt.
 
 	// The edge of what we hold, with the gadget front kept as a second opinion
 	// where it exists.

@@ -258,8 +258,21 @@ float ForwardFraction(const AIFloat3& in pos)
 // "where is that raider", a fine one to "which way is the enemy", which is all
 // it is asked. Lanes run perpendicular to it. Before contact there is no
 // crossing and the opening answer is the one the start boxes give -- halfway.
-const int   FRONT_LANES    = 5;       // each side of centre, so 11 lanes
-const float FRONT_LANE_GAP = 900.f;   // elmos between lanes
+// LANES SPAN THE MAP, they are not a fixed width. 11 lanes at 900 elmos covers
+// 9,900 -- fine on Comet Catcher and nowhere near edge to edge on an 8v8 map,
+// where the drawn line visibly stopped a third of the way down. apexearth, from
+// a screenshot of a hosted game. The count is fixed and the SPACING follows the
+// map's diagonal, so the line always reaches both edges whatever it is playing
+// on.
+const int FRONT_LANES = 6;            // each side of centre, so 13 lanes
+
+float FrontLaneGap()
+{
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	const float diag = sqrt(w * w + h * h);
+	return diag / float(2 * FRONT_LANES);
+}
 const int   FRONT_SAMPLES  = 14;
 const float FRONT_SCAN_END = 1.15f;   // a little past their centroid
 const float FRONT_BAND     = 0.18f;   // how wide "on the line" is, as a fraction
@@ -299,7 +312,7 @@ void RebuildFront()
 	gFrontSide = side;
 
 	for (int lane = -FRONT_LANES; lane <= FRONT_LANES; ++lane) {
-		const AIFloat3 origin = home + side * (float(lane) * FRONT_LANE_GAP);
+		const AIFloat3 origin = home + side * (float(lane) * FrontLaneGap());
 		float found = -1.f;
 		for (int i = 1; i <= FRONT_SAMPLES; ++i) {
 			const float t = FRONT_SCAN_END * float(i) / float(FRONT_SAMPLES);
@@ -324,7 +337,7 @@ int LaneOf(const AIFloat3& in pos)
 {
 	const AIFloat3 d = pos - gFrontHome;
 	const float off = d.x * gFrontSide.x + d.z * gFrontSide.z;
-	int lane = int(off / FRONT_LANE_GAP + (off >= 0.f ? 0.5f : -0.5f));
+	int lane = int(off / FrontLaneGap() + (off >= 0.f ? 0.5f : -0.5f));
 	if (lane < -FRONT_LANES)
 		lane = -FRONT_LANES;
 	if (lane > FRONT_LANES)
@@ -357,7 +370,7 @@ bool FrontCurve(array<AIFloat3>& out pts)
 	// which is where a tower can be finished and still cover the line.
 	const float back = ai.GetTunable("apex_front_setback", FRONT_SETBACK);
 	for (uint i = 0; i < gFrontLane.length(); ++i) {
-		const float laneOff = (float(i) - float(FRONT_LANES)) * FRONT_LANE_GAP;
+		const float laneOff = (float(i) - float(FRONT_LANES)) * FrontLaneGap();
 		float t = gFrontLane[i] - back;
 		if (t < 0.f)
 			t = 0.f;

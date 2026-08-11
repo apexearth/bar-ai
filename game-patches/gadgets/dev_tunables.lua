@@ -80,6 +80,7 @@ local NAMES = {
 	"apex_front_band",
 	"apex_front_setback",
 	"apex_draw_front",
+	"apex_lead_defence",
 	"apex_army_deficit_floor",
 	"apex_hold_release",
 	"apex_budget",
