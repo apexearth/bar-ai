@@ -328,28 +328,28 @@ void RebuildFront()
 		float found = -1.f;
 		float ours = -1.f;
 		float safe = 0.f;
-		bool stillSafe = true;
 		for (int i = 1; i <= FRONT_SAMPLES; ++i) {
 			const float t = FRONT_SCAN_END * float(i) / float(FRONT_SAMPLES);
 			const AIFloat3 p = origin + fwd * t;
 			if (!OnMap(p))
 				break;
-			// How far out this lane is still workable, tracked on the way past.
-			// Stops at the FIRST threatened sample rather than taking the last
-			// clear one: a pocket of quiet ground beyond a threatened band is not
-			// somewhere a constructor can walk to.
+			// THE SAFE GROUND CLOSEST TO THE LINE. apexearth: "just pull the line
+			// back for where to make defenses."
+			//
+			// The FURTHEST workable sample, not the first threatened one. Stopping
+			// at the first threat was my own assumption -- that a quiet pocket
+			// beyond a hot band cannot be walked to -- and it is wrong: the engine
+			// tests CanReachAtSafe, which is threat at the DESTINATION plus whether
+			// a path exists at all, not a clear straight line. One raider sitting
+			// 0.08 out therefore collapsed the whole lane onto the base.
+			//
 			// THE SAME BAR THE ENGINE USES, not a stricter one. CanReachAtSafe
 			// tests `GetBuilderThreatAt(pos) > THREAT_MIN`, and THREAT_MIN is 1.0
 			// (util/Defines.h) while the accessor has already subtracted
-			// THREAT_BASE. Testing `> 0` instead put the safe edge at 0.00-0.08 of
-			// the way out in every lane of every game -- our own doorstep -- so
-			// every tower collapsed back onto the base.
-			if (stillSafe) {
-				if (ai.GetBuilderThreatAt(p) > ai.GetTunable("apex_build_threat_bar", 1.f))
-					stillSafe = false;
-				else
-					safe = t;
-			}
+			// THREAT_BASE. Testing `> 0` instead put the safe edge at 0.00-0.08 in
+			// every lane of every game.
+			if (ai.GetBuilderThreatAt(p) <= ai.GetTunable("apex_build_threat_bar", 1.f))
+				safe = t;
 			// EMPTY GROUND IS NOBODY'S, NOT THEIRS. GetNetInflAt is ally minus
 			// enemy, so ground neither side has been near reads exactly 0 -- and
 			// testing `<= 0` called the first such sample the crossing. Every lane
@@ -401,6 +401,17 @@ void FrontDiag()
 		if (t > hi) hi = t;
 		if (t == 0.5f) ++uncontested;
 	}
+	// IS THE BINDING TELLING THE TRUTH? "There is no safe ground forward" is a
+	// strong claim resting entirely on GetBuilderThreatAt, which this repo has
+	// already caught reading nonsense once. Raw values along the axis, including
+	// our own base, which must read ~0 early or the reading is not what we think.
+	string ray = "";
+	for (int k = 0; k <= 5; ++k) {
+		const float t = 0.1f * float(k);
+		const AIFloat3 p = gFrontHome + gFrontFwd * t;
+		ray += OnMap(p) ? formatFloat(ai.GetBuilderThreatAt(p), "", 0, 1) : "-";
+		ray += " ";
+	}
 	float safeSum = 0.f;
 	float safeMax = 0.f;
 	for (uint i = 0; i < gFrontSafe.length(); ++i) {
@@ -411,6 +422,7 @@ void FrontDiag()
 	const float sn = float(gFrontSafe.length());
 	const float n = float(gFrontLane.length());
 	AiLog(Factory::T() + "apex: front-diag lanes=" + gFrontLane.length()
+		+ " ray[0..0.5]=" + ray
 		+ " safeMean=" + formatFloat((sn > 0.f) ? safeSum / sn : 0.f, "", 0, 2)
 		+ " safeMax=" + formatFloat(safeMax, "", 0, 2)
 		+ " mean=" + formatFloat((n > 0.f) ? sum / n : 0.f, "", 0, 2)

@@ -18,6 +18,56 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-11 (corrected): the safe ground exists, and it is EARLY
+
+The entry below is too pessimistic and the correction matters. It read the safe
+edge as a property of the game; it is a property of the CLOCK.
+
+Two errors were in the measurement, both mine:
+
+1. The lane scan stopped at the FIRST threatened sample, on the assumption that a
+   quiet pocket beyond a hot band cannot be walked to. Wrong: the engine tests
+   `CanReachAtSafe`, which is threat at the DESTINATION plus whether a path exists
+   at all -- not a clear straight line. One raider 0.08 out collapsed a whole lane
+   onto the base. Taking the FURTHEST workable sample instead is what apexearth
+   asked for ("just pull the line back for where to make defenses"), and it moved
+   forward defence 1% -> 4% with economy unchanged (metal 29,996 against the
+   32,548 control, 2/24 wiped).
+
+2. The averages hid the time axis, which is the whole finding. Raw builder threat
+   sampled along the home->enemy axis, one 12-minute game, our own base at t=0:
+
+   | game minute | threat at 0.0 .. 0.5 | safe edge |
+   |---|---|---|
+   | 0.0 | 0.0 0.0 0.0 0.0 0.0 0.0 | 0.62 |
+   | 2.5 | 0.0 0.0 0.0 0.0 0.0 0.0 | 0.53 |
+   | 5.5 | 0.0 0.0 0.0 0.0 0.0 0.0 | 0.61 |
+   | 8.5 | 0.0 0.0 0.0 0.0 0.0 6.5 | 0.48 |
+   | 11.5 | 2.7 2.7 8.0 11.8 10.1 9.8 | 0.19 |
+
+**For the first eight minutes there is safe ground all the way to midfield.** By
+11.5 minutes the enemy's threat blanket covers our own start position. Forward
+defence is not impossible, it is LATE.
+
+Measured over the same game, defence position by minute: at 6 min we hold 1.8
+defences per player and **14%** of them are past the quarter mark; at 12 min we
+hold 9.2 and only 3% are. The forward line does start to form, and is then
+swamped by the volume of towers built at home once the ground outside is gone.
+
+The Brain is already asking in the right window -- first front order at 1.8 min
+at 0.37, orders continuing to 10.9 min. What it does not have at 1.8 minutes is a
+constructor to spare: pulling one of two builders across 0.4 of the map at two
+minutes is exactly the displacement this file's 2026-08-01 entry is about. So the
+window where forward ground is free is the window where constructor time is most
+expensive, and the window where we can afford towers is the window where the
+ground is gone.
+
+That is the real shape of it, and it is a question about WHEN, not about
+placement mechanics. Left unresolved deliberately -- it is apexearth's call
+whether early forward towers are worth the constructor time, and the alternative
+he already named (army escorting the builder later) buys the same thing at a
+different price.
+
 ## 2026-08-11: there is no ground forward that a builder is allowed to work on
 
 apexearth, asked which way to resolve the site-search refusal: *"i don't fully
