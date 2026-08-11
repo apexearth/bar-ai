@@ -43,12 +43,22 @@ const int   PULSAR_FULL_BONUS = 5;
 const int   PULSAR_CONCURRENT = 2;
 int gPulsarsAsked = 0;
 
+// TWENTY OF THEM IS NOT A DEFENCE, IT IS A HOBBY. apexearth, watching:
+// "in late game we suddenly have like 20 doomsday T3 towers being built."
+//
+// The cap was 1 + income/60 with no ceiling, so a 400 metal/s economy wanted
+// seven and a full bank added five more, and each one is thousands of metal
+// that never moves. A big gun covers ground; the eighth one covers ground the
+// seventh already did.
+const int PULSAR_CEILING = 4;
+
 int PulsarCap()
 {
 	int cap = 1 + int(aiEconomyMgr.metal.income / PULSAR_PER_INCOME);
 	if (aiEconomyMgr.isMetalFull)
 		cap += PULSAR_FULL_BONUS;
-	return cap;
+	const int ceiling = int(ai.GetTunable("apex_pulsar_ceiling", float(PULSAR_CEILING)));
+	return (cap > ceiling) ? ceiling : cap;
 }
 // A flat standing count answered two aircraft and forty identically. These are
 // 80 metal each and only built once the enemy actually flies, so the ceiling can

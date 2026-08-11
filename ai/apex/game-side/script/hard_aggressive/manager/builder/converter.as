@@ -189,6 +189,8 @@ const int   CONV_INFLIGHT  = 6;
 const int   CONV_STALE     = 16;
 const int   CONV_MAX       = 90;
 const int   ADV_CONV_AFTER = 8;   // small converters standing before switching up
+// A normal player converts too, just less often than the dedicated eco lead.
+const float CONV_OTHER_MULT = 1.5f;
 int gNextEcoConv = 0;
 int gEcoConvAsked = 0;
 
@@ -212,7 +214,10 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 	// is not. Solo, or as a normal teammate, EnergyWasting() below is the real
 	// condition -- see the fusion bug for what happens when a role is the only
 	// gate on an economic behaviour.
-	if ((!Factory::EcoLeadActive() && Factory::TeamPlay()) || (ai.frame < gNextEcoConv))
+	// Same principle as the reactor above: a surplus is a surplus whoever owns
+	// it. The eco lead's contribution is the packed BLOCK and a faster cadence,
+	// not the exclusive right to convert. EnergyWasting() below is the gate.
+	if (ai.frame < gNextEcoConv)
 		return null;
 	// Only while energy is actually being binned, and self-limiting: every
 	// converter raises pull by 70, so the store drains and this stops on its own.
@@ -277,7 +282,8 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 			Task::Priority::NORMAL, want, spot, 0.f));
 	if (post is null)
 		return null;
-	gNextEcoConv = ai.frame + CONV_PERIOD;
+	gNextEcoConv = ai.frame + (Factory::EcoLeadActive()
+			? CONV_PERIOD : int(float(CONV_PERIOD) * CONV_OTHER_MULT));
 	++gEcoConvAsked;
 	if ((gEcoConvAsked % 10) == 1)
 		AiLog(Factory::T() + "apex: eco converter block " + want.GetName()

@@ -145,6 +145,38 @@ Waste tracks nothing sensible -- 1.4% at 4v4 against 12.8% at 1v1 -- which is
 what pull-based production predicts: whether metal gets spent depends on whether
 some rule happened to fire when a line came free.
 
+
+## 6. Late game: we do not advance, and our own artillery is part of why
+
+apexearth, watching a 1v1 vs `BARb:stable:hard`, 2026-08-10:
+
+> "We aren't advancing well and these tremors kill our own advancing units just
+> as well as the enemies. We are too slow to make Juggernauts and Behemoths.
+> Might as well start off with a jugg and walk it straight into the enemy base
+> right for their commander."
+
+Three separate things, none fixed:
+
+- **Friendly fire from our own artillery.** A Tremor firing into a contested
+  line hits whatever is standing in it, and what is standing in it is usually
+  our push. Nothing today asks whether an artillery target has our own units
+  near it. `CArtilleryTask` picks by enemy value alone.
+- **T3 assault arrives far too late to matter.** The gantry and the heavies are
+  gated behind the same phase machinery as everything else, so by the time a
+  Juggernaut exists the game is decided. His suggestion is worth taking
+  literally: at a high enough economy, a single Juggernaut walked at the enemy
+  commander is a better use of 20,000 metal than the same metal in T2.
+- **Advancing at all.** Fixed in neither direction -- see issue 1, we chip.
+
+Fixed the same session, from the same game:
+
+- 9 fusions and no advanced fusion: `FusionDef()` only ever returned the plain
+  tier, so the ladder had no top rung. Now climbs at 120 metal/s once three
+  plain reactors stand.
+- ~20 Doomsday towers late: `PulsarCap()` was `1 + income/60` with no ceiling,
+  so a 400 metal/s economy wanted seven and a full bank added five more.
+  Ceilinged at 4 (`apex_pulsar_ceiling`).
+
 ## 2. Pushes should not take damage on the way in
 
 **apexearth:** "we need smart pushes where the pusher doesn't even take damage."

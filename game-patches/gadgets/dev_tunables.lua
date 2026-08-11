@@ -56,6 +56,8 @@ local NAMES = {
 	"apex_unblock_period",
 	"apex_kill_quota",
 	"apex_front_nano",
+	"apex_mix",
+	"apex_pulsar_ceiling",
 	"apex_nano_income_gate",
 	-- T3 heavies hold the defence line (2026-08-09). 0 restores stock routing:
 	-- one solo CAttackTask per super, the frame it finishes.

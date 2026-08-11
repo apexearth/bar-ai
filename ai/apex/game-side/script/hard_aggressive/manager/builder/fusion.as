@@ -45,11 +45,29 @@ bool gEcoPacked = false;
 // Energy income wanted per point of metal income before the grid is 'enough'.
 const float ENERGY_LEAD_RATIO = 12.f;
 
+// THE LADDER HAS A TOP RUNG AND WE NEVER CLIMBED IT. apexearth: "we have 9
+// fusions but don't seem to care to make any AFUS."
+//
+// An advanced fusion is roughly three reactors in one building and one
+// footprint, which matters once the base is full of them. Chosen once the
+// economy can pay for it and the constructor can actually build it -- asking a
+// T1 constructor for one is the silent no-op this repo has been bitten by.
+const float AFUS_INCOME = 120.f;   // metal/s at which the big reactor pays
+const int   AFUS_AFTER  = 3;       // ...and only once the plain ones are up
+
 CCircuitDef@ FusionDef(CCircuitUnit@ unit)
 {
 	if (IsNavalBuilder(unit))
 		return SideDef3(armuwfus, coruwfus, coruwfus);
-	return SideDef3(armfus, corfus, legfus);
+	CCircuitDef@ plain = SideDef3(armfus, corfus, legfus);
+	if ((aiEconomyMgr.metal.income >= AFUS_INCOME)
+		&& (plain !is null) && (plain.count >= AFUS_AFTER))
+	{
+		CCircuitDef@ adv = SideDef3("armafus", "corafus", "legafus");
+		if ((adv !is null) && adv.IsAvailable(ai.frame))
+			return adv;
+	}
+	return plain;
 }
 
 // Converters get the same cooldown a reactor gets, and for the same reason: a
@@ -67,6 +85,8 @@ int gNextConv = 0;
 // Metal income above which a reactor is worth it regardless of role. A fusion
 // is ~4,300 metal and pays for every advanced thing that follows.
 const float FUSION_SOLO_INCOME = 35.f;
+// How much longer a non-eco-lead waits between reactors.
+const float FUSION_OTHER_MULT = 2.0f;
 const float FUSION_MIN_BANK = 0.55f;
 const int   FUSION_PERIOD   = 45 * SECOND;
 const int   FUSION_DIAG_PERIOD = 45 * SECOND;
@@ -105,8 +125,18 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// Anyone whose economy has outgrown solar belongs on reactors. The eco lead
 	// still gets its own faster cadence below; this is the floor for everyone
 	// else.
-	const bool richEnough = (aiEconomyMgr.metal.income >= FUSION_SOLO_INCOME);
-	if ((!Factory::EcoLeadActive() && !richEnough) || (ai.frame < gNextFusion))
+	// NO "NEVER" ON ECONOMY. apexearth: "non-eco players should always build
+	// fusions and converters when they get to the proper economy. Shouldn't ever
+	// have that kind of logic that says 'never do this' when it comes to eco."
+	//
+	// The role decides the CADENCE, not the permission: the eco lead comes back
+	// to this sooner because that is its job, and everyone else builds a reactor
+	// the moment their own economy justifies one. The conditions below -- T2
+	// exists, the bank can pay, energy is not already spilling -- are the real
+	// answer, and they are the same for every player.
+	if (ai.frame < gNextFusion)
+		return null;
+	if (aiEconomyMgr.metal.income < FUSION_SOLO_INCOME)
 		return null;
 	// A T1 constructor cannot build one; asking anyway is the silent no-op this
 	// repo has been bitten by before.
@@ -147,7 +177,10 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 		}
 		return null;
 	}
-	gNextFusion = ai.frame + FUSION_PERIOD;
+	// Cadence is where the role lives now: the eco lead returns to reactors
+	// sooner because that is its job, everyone else waits longer between them.
+	gNextFusion = ai.frame + (Factory::EcoLeadActive()
+			? FUSION_PERIOD : int(float(FUSION_PERIOD) * FUSION_OTHER_MULT));
 	++gFusionsAsked;
 	AiLog(Factory::T() + "apex: eco fusion " + want.GetName()
 		+ " standing=" + want.count + " asked=" + gFusionsAsked
