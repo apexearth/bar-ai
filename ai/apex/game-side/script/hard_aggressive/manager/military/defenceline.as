@@ -1,5 +1,7 @@
 namespace Military {
 
+int gNextFenceCapLog = 0;
+
 string armanni("armanni");
 string cordoom("cordoom");
 string legbastion("legbastion");
@@ -126,6 +128,34 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	// is this call, not ours.
 	if (!gPorcArmed && !gTurtle && !LosingGround() && !early)
 		return;
+
+	// HOW MUCH DEFENCE THE ECONOMY IS WORTH.
+	//
+	// This call is where the defence metal actually goes -- the comment above
+	// says so from five tournaments -- and nothing bounded it but the clock that
+	// has now been removed. Measured over 6 games at minute 14, removing those
+	// cooldowns moved static defence from 17.5% of metal produced to 21.6% while
+	// our standing army fell 4,637 -> 3,816 and losses rose 2,850 -> 3,811. The
+	// towers were eating the army.
+	//
+	// The bound is the count our income supports, fitted to what the pre-Brain
+	// build actually did rather than picked: it held ~2,525 metal of defence at
+	// ~16 metal/second of income, and at ~190 metal a tower that is about 13 of
+	// them -- 0.8 per point of income. gFenceId is every defence structure we
+	// own, whoever placed it, so this bounds our own rules too, not just this
+	// call. A turtle or a real push through our ground overrides it: being
+	// attacked is when towers are worth more than the curve says.
+	const float per = ai.GetTunable("apex_fence_per_income", 0.8f);
+	const int budget = 1 + int(aiEconomyMgr.metal.income * per);
+	if (!gTurtle && !BaseContested() && (int(gFenceId.length()) >= budget)) {
+		if (ai.frame >= gNextFenceCapLog) {
+			gNextFenceCapLog = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: defence at budget " + gFenceId.length()
+				+ "/" + budget + " for " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+				+ " m/s -- army instead");
+		}
+		return;
+	}
 
 	aiMilitaryMgr.DefaultMakeDefence(cluster, pos);
 }
