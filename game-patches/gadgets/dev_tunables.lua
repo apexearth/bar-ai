@@ -57,7 +57,12 @@ local NAMES = {
 	"apex_kill_quota",
 	"apex_front_nano",
 	"apex_mix",
+	"apex_mix_con_income",
 	"apex_nano_income_gate",
+	-- The Brain's mex upgrades (2026-08-10): how many the engine holds open.
+	"apex_mexup_per_income",
+	"apex_mexup_full_bonus",
+	"apex_mexup_first",
 	-- T3 heavies hold the defence line (2026-08-09). 0 restores stock routing:
 	-- one solo CAttackTask per super, the frame it finishes.
 	"apex_super_guard",

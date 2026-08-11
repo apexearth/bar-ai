@@ -14,6 +14,100 @@ view?"*
 Yes. This is the right shape, and today's mex-upgrade investigation is the
 argument for it.
 
+**The rest of this document is the design. What is actually built is the next
+section — read that first if you are about to change the code.**
+
+## What exists today (2026-08-10)
+
+Two files, both in the `Brain` namespace, both included from
+`script/hard_aggressive/main.as`:
+
+| file | faculty | entry point | called from |
+|---|---|---|---|
+| `manager/brain.as` | **Wants** — what should this metal buy | `Brain::Decide(unit, isAdvCon)` | `builder/maketask.as`, above `OptionalWork` and below the engine's expansion offer |
+| `manager/brain/mix.as` | **Composition** — what should this factory build | `Brain::MixTask(fac)` | `factory/maketask.as`, above the generic production branches and below the specific floors (assist, air, rez) |
+
+**Knowledge and Directives do not exist yet.** Nothing in the code carries a
+belief with a `lastSeen` or a confidence; the tables further down are still a
+plan.
+
+### Wants — `manager/brain.as`
+
+A `Want` is `{kind, value (metal/s gained), cost (metal), pos, def, have}`.
+`Decide` proposes, ranks, then acts:
+
+    Score() = value / (1 + have) / cost        [× ECO_SATED_MULT for eco kinds when both banks are full]
+
+`/(1 + have)` is what stops one cheap thing winning forever — without it a
+Pinpointer (0.5 metal/s, ~800 metal) outscored a nuke silo (4.0, 8,100) and took
+every pick.
+
+Kinds proposed today, with their compiled values in metal/second-equivalent:
+
+| kind | value | executed by | gate |
+|---|---|---|---|
+| `mexup` | 3.6 (moho over mex) | `aiBuilderMgr.EnqueueMexUp` directly | an extractor of ours within 2400 |
+| `energy` | 1.2 × 6.0 while stalling | `Builder::HomeEnergy` | only proposed while `isEnergyStalling` |
+| `convert` | 1.0 | `Builder::EnergyConverter` | post-T2, `Builder::EnergyWasting()` |
+| `nano` | 7.0 | `Builder::EcoNano` | post-T2, metal full |
+| `frontnano` | 3.0 | `Builder::FrontNano` | post-T2, `apex_front_nano` |
+| `gantry` | 2.0 | `Builder::SurplusGantry` | post-T2 |
+| `silo` | 4.0 | `Builder::NukeSilo` | post-T2 |
+| `pulsar` | 1.5 | `Builder::Pulsar` | post-T2 |
+| `pinpoint` | 0.5 | `Builder::Pinpointer` | post-T2 |
+
+Four rules of precedence sit around the ranking, and each exists because
+measuring without it went backwards:
+
+- **Advanced constructors only.** `Decide` returns null for anyone else.
+- **Nothing optional before T2 exists.** With `Factory::gHaveT2` false, only the
+  mex upgrade and an energy stall may be proposed — converters, nanos and
+  reactors had starved the advanced plant that unlocks the rest.
+- **Upgrades are not optional spending.** If a `mexup` Want is in the list, no
+  other kind may execute this tick; a failed enqueue falls back to the engine's
+  own work rather than starting something else. Lifted once both banks are full.
+- **The Brain decides ORDER, not eligibility.** Every kind except `mexup` is
+  executed by calling the existing rule, which keeps its own preconditions; if
+  it refuses, `Decide` falls through to the next-ranked Want.
+
+`Brain::Execute` is the kind → rule table. **Adding a Want means adding a line
+there as well as a `Propose` call**, or the Want ranks and can never fire.
+
+The ranked list is logged in full every 30 s as `apex: brain wants=N | kind=score
+…`; the chosen one as `apex: brain picks <kind> score=…`; ordered upgrades as
+`apex: brain orders mexup #N`.
+
+`EnqueueMexUp` is ours — `cpp/src/circuit/script/BuilderScript.cpp`. A MEXUP task
+carries a metal-spot INDEX as well as a position, so the generic `Enqueue` could
+not express it, which is why no rule of ours could order an upgrade before this.
+How many upgrades the engine will hold open is still C++, in
+`CEconomyManager::UpdateMexUp`, tuned by `apex_mexup_per_income` /
+`apex_mexup_full_bonus` / `apex_mexup_first`.
+
+### Composition — `manager/brain/mix.as`
+
+The same inversion applied to production: instead of "what should this factory
+build NEXT", a target share of army METAL per role is stated and each decision is
+"which role is furthest below it". Targets: raider .30, assault .30, skirm .15,
+riot .10, arty .08, AA .07. One unit is chosen per call, so the army *converges*
+rather than being reset.
+
+Two things about it are load-bearing:
+
+- **Build power is a FLOOR, not a share.** As a share (0.15) it never won —
+  combat shares start at zero and are constantly emptied by losses, so the
+  largest gap is always a combat role. `BuildPowerFirst` runs before the ratio:
+  one constructor per `apex_mix_con_income` (30) of metal income.
+- **Ownership.** The first successful enqueue claims that factory
+  (`Brain::OwnsFactory`), and from then on the apex production rules are skipped
+  for that line entirely — an owned line that the mix cannot answer falls through
+  to `aiFactoryMgr.DefaultMakeTask`, never to our floors. `factory/hooks.as`
+  releases the id when the factory dies. apexearth: *"make sure the old system
+  doesn't interact with that factory and add its own things."*
+
+Off with `apex_mix=0`. Logs `apex: mix claims <fac>` and `apex: mix -> <def>
+picks=N`.
+
 ## What is wrong with the ladder
 
 `builder/maketask.as` is an ordered pipeline: `AiMakeTask` is called for ONE
@@ -99,16 +193,17 @@ it" rather than inferring starvation from outcomes three layers downstream.
 The 2026-08-01 finding says a batch of changes tells you the batch is bad and
 nothing about which member. So:
 
-1. **Instrument only.** Every rule that fires also records a Want (kind, value,
-   cost). Nothing changes behaviour; the log gains a ranked list per tick. This
-   alone answers "what displaced the upgrade" for free.
-2. **Arbitrate the optional class only** -- gantry, silo, Pulsar, Pinpointer,
-   shield, converter, reactor, nano. These are the open-ended investments, they
-   are already gated behind `MexUpgradesOutstanding()`, and they are where the
-   displacement measurably happens.
-3. **Add expansion** (mex, moho) as Wants competing on income-per-metal.
+1. ~~**Instrument only.**~~ **Done.** Every proposed Want is logged with its
+   score every 30 s, which is what answers "what displaced the upgrade".
+2. ~~**Arbitrate the optional class only**~~ -- gantry, silo, Pulsar,
+   Pinpointer, converter, reactor, nano. **Done**; shield is still not proposed.
+3. ~~**Add expansion**~~ -- the moho Want landed with stage 1 and is the one
+   thing the Brain enqueues itself. Plain mex claiming is still the engine's.
 4. **Add defence**, which needs `threat_denied` to mean something -- the hardest
-   scoring problem and the last to attempt.
+   scoring problem and the last to attempt. **Not started.**
+
+Composition (`brain/mix.as`) was not on this list and arrived alongside stage 3;
+it is the same inversion applied to the factory rather than to the constructor.
 
 Stage 1 is worth doing regardless of whether 2-4 ever happen: it is the missing
 instrument, and it costs no behaviour change to find out.
@@ -170,7 +265,7 @@ you the batch is bad and nothing about which member. Measured payoff first:
 1. **The optional class** -- gantry, silo, Pulsar, Pinpointer, reactor, converter,
    nano. Already gated behind `MexUpgradesOutstanding()`, so the ranking replaces
    a crude boolean with a comparison, and the mex Want has something to rank
-   against. (Stage 2 of the plan above.)
+   against. (Stage 2 of the plan above.) **Done.**
 2. **Air assassin**, which converts a circular veto into a value.
 3. **Slinging**, which needs the team layer and is the first genuinely team-wide
    Want.

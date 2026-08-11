@@ -14,9 +14,14 @@ namespace Brain {
 // upgrades in a single game.
 //
 // Here a rule states a WANT -- what it would do, what that is worth, what it
-// costs -- with no side effects. Decide() ranks the list and only then acts. See
-// docs/18-brain.md for the staging; this is stage one, so the ranking is
-// logged and only the mex-upgrade want is executed.
+// costs -- with no side effects. Decide() ranks the list and only then acts, and
+// the whole ranking is logged so a pick can be argued with. docs/18-brain.md
+// describes what is built here and what is still only designed.
+//
+// Only the mex-upgrade want is enqueued by this file. Every other kind names an
+// existing rule in Execute(), which keeps its own preconditions -- the ranking
+// decides ORDER, not eligibility. A new want therefore needs a Propose() call
+// AND a line in Execute(), or it ranks and can never fire.
 //
 // VALUE IS METAL PER SECOND GAINED, PER METAL SPENT. That is the one unit every
 // economic want can be expressed in, and it is why an upgrade can be compared to

@@ -411,7 +411,7 @@ bool IsFrontKnown() { return gFoeKnown; }
 // Debug overlay. Map LINES, not points. A point is a PING -- it fires an alert
 // and a minimap flash -- which at this density is unreadable. Lines just draw.
 // Allies and spectators see these. Off for anything but a watched game.
-const bool DRAW = true;   // ON draws real map markers -- allies see them
+const bool DRAW = false;  // ON draws real map markers -- allies see them
 
 // The server DROPS map-draw commands once 25 arrive with under 50ms between
 // each -- GameServer.cpp, NETMSG_MAPDRAW:

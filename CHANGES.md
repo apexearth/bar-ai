@@ -18,6 +18,88 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-10: the Brain — rules propose Wants, one ranking decides
+
+Layer 2 (`manager/brain.as`, `manager/brain/mix.as`) + layer 3 (one new binding).
+Design and current state: **`docs/18-brain.md`**.
+
+apexearth: *"what if we created a stack/list of all the things we wanted to do
+and then properly prioritized them after in some process which has a better macro
+view?"* and *"I want it to generally be a macro-view brain/logic center."*
+
+The ladder in `builder/maketask.as` makes POSITION the only priority — the first
+rule that returns a task wins, so importance is expressed by where a rule sits.
+Measured: `CommanderMexGuard`, one line above `DefaultMakeTask`, took 162
+constructor-picks against 4 mex upgrades in a single game.
+
+A rule now states a **Want** — kind, value in metal/second gained, cost in metal
+— with no side effects. `Brain::Decide` ranks the list and only then acts. Four
+arms, each measured over 6 games vs medium on the same map and settings:
+
+| arm | T2 mex share | metal | army |
+|---|---|---|---|
+| before | 13.5% | 4.61M | 1.28M |
+| Wants + the moho | 17.3% | 4.72M | 1.51M |
+| optional class ranked | 20.6% | 4.97M | 1.53M |
+
+Two flaws the measurement found, both now structural:
+
+- **value/cost alone hands the game to whatever is cheapest.** A Pinpointer at
+  0.5 metal/s and ~800 metal outscored a silo at 4.0 and 8,100, and won every
+  pick. Value decays per copy already standing (`value / (1 + have)`) — which is
+  also the true shape, since the second Pinpointer is worth much less than the
+  first. This is what bounds open-ended things instead of a hard cap.
+- **Ranking must not displace the economy that pays for it.** With the optional
+  class free to execute whenever it ranked first, picks rose 13 → 20 per batch
+  and T2 mex share fell 17.6% → 15.1%. If an upgrade is in reach the constructor
+  takes it; ranking decides order among optional things only.
+
+Then two follow-ons, both from apexearth watching:
+
+- **Both banks full means income is not the problem** (*"if we are full on energy
+  AND metal, then we can probably decrease all of our eco priority"*): eco kinds
+  score × 0.25 while sated, and a nano turret — banked metal back into units at
+  ~7 metal/s of build power for ~300 — outranks every income Want in that state.
+- **Nothing optional before T2 exists.** Watching a 4v4 at +25: *"something's
+  going wrong this game where our guys are not going to t2."* The lead logged
+  "building advanced plant coravp" fifty times with `haveT2` still 0 while
+  constructors went to converters, nanos and reactors. Pre-T2 the only Wants
+  proposed are the upgrade and an energy stall. This is the 2026-08-01
+  displacement finding arriving through the Brain instead of through the ladder.
+
+**The binding is new.** `CBuilderManager::EnqueueMexUp`
+(`cpp/src/circuit/script/BuilderScript.cpp`) — apexearth: *"it seems weird that
+we cannot control telling one of our advanced construction bots to upgrade a mex.
+I as a player can do that, so the AI must have that same capability."* It always
+could; a MEXUP task carries a metal-spot INDEX as well as a position, so the
+generic `Enqueue` could not express it and no rule of ours could ask.
+
+### The same inversion for production: `brain/mix.as`
+
+apexearth: *"imagine we know that we want a certain mix of plain composition…
+we set up our queues and over time our composition shifts towards the target."*
+
+The motivation, 60 games across five team sizes vs BARb medium: we out-produce
+1.10–1.76× and field 0.57–0.90× their army in every bracket. Production was the
+weak axis. A target share of army metal per role is now stated (raider .30,
+assault .30, skirm .15, riot .10, arty .08, AA .07) and each pick is "the role
+furthest below target", one unit at a time so the composition converges.
+
+- **Build power cannot be a share.** At 0.15 alongside the combat roles it never
+  won: combat shares start at zero and are emptied by losses, so the largest gap
+  is always a combat role. Measured in a 1v1 vs hard — our advanced constructors
+  stayed at 1 from minute 14 to the end while hard reached 15 by minute 16, with
+  the old constructor rules switched off for the claimed line. It is now a floor
+  checked before the ratio, one con per 30 metal/s of income.
+- **A claimed line belongs to the mix.** apexearth: *"make sure the old system
+  doesn't interact with that factory and add its own things."* Two systems taking
+  turns on one production line is worse than either alone. An owned line the mix
+  cannot answer falls through to the engine's `DefaultMakeTask`, never to our
+  floors.
+
+The mix has **no head-to-head measurement of its own on record** — it landed
+alongside the role-leak fixes. Tunables: `apex_mix`, `apex_mix_con_income`.
+
 ## 2026-08-09: Behemoths charge the front instead of walking round the map
 
 Layer 3 (`AttackTask`, `SquadTask`) + layer 2 (`military/superguard.as`).

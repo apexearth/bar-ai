@@ -1,8 +1,12 @@
 # Runtime tunables — the registry
 
-Twenty-one constants can be overridden per match without a rebuild and without
-touching the AI's shipped defaults. They exist so a threshold can be A/B'd
-instead of argued about.
+Constants can be overridden per match without a rebuild and without touching the
+AI's shipped defaults. They exist so a threshold can be A/B'd instead of argued
+about.
+
+The table below is not the whole set — `dev_tunables.lua`'s `NAMES` is what the
+harness can actually set, and a few readers (`apex_unblock_test_wait`) are in
+neither. `grep -rhoE 'GetTunable\("[a-z_]+"' ai cpp` is the authority.
 
     python tools/run_match.py ... --modoption apex_orbit_rate=0
     python tools/run_tournament.py ... --modoption apex_rush_min_metal=22
@@ -49,6 +53,16 @@ Verified 2026-08-09 by reading every call site.
 | `apex_comm_flee_influence` | 0 (off) | AngelScript `builder/rules_commander.as` | enemy influence at which the commander leaves |
 | `apex_rush_min_metal` | 14 (`RUSH_MIN_METAL`) | AngelScript `factory/techlead.as` | income the tech rush waits for |
 | `apex_unblock` | 1 (on) | AngelScript `military/unblock.as` | 0 stops reclaiming our own cheap buildings to free a unit walled in by them |
+| `apex_front_nano` | 1 (on) | AngelScript `brain.as` `Decide` | 0 stops the Brain proposing a nano turret behind the front line |
+| `apex_mix` | 1 (on) | AngelScript `brain/mix.as` `MixTask` | 0 turns the target-composition system off; factories fall back to the old production rules |
+| `apex_mix_con_income` | 30 | AngelScript `brain/mix.as` `BuildPowerFirst` | metal income per constructor the mix builds before it looks at the army ratio |
+| `apex_mexup_per_income` | 25 | C++ `EconomyManager.cpp` `UpdateMexUp` | metal income per concurrent mex upgrade the engine will hold open |
+| `apex_mexup_full_bonus` | 4 | C++ `EconomyManager.cpp` `UpdateMexUp` | extra concurrent upgrades allowed while the metal bank is full |
+| `apex_mexup_first` | 3 | C++ `EconomyManager.cpp` `UpdateMexUp` | floor on that cap while nothing is upgraded yet — the "priority #1" burst |
+
+The last five are what bound the Brain's mex-upgrade Want (`docs/18-brain.md`):
+the script proposes and enqueues, the engine decides how many upgrades may be
+open at once.
 
 Anything shipped at 0 is **off by default** and exists only for the A/B that
 would justify turning it on.
