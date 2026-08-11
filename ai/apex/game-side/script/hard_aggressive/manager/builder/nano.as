@@ -31,6 +31,8 @@ bool BandSpot(CCircuitUnit@ unit, CCircuitDef@ def, bool nano, AIFloat3& out spo
 // rules that quietly ate the economy: when metal is tight this cannot fire at
 // all, so it never displaces a mex upgrade.
 const float NANO_MIN_BANK = 0.5f;   // share of metal storage standing unspent
+const float NANO_RICH_BANK = 0.2f;  // ...once income alone justifies the turret
+const float NANO_INCOME_GATE = 60.f;  // metal/s above which build power is the constraint
 // Raised with the shift away from ground engineers: a turret is 210 metal and
 // never walks anywhere, which is why it is the build power this player should
 // hold most of. Two rows of twenty is the rectangle it fills out.
@@ -238,9 +240,24 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	// Turrets are for the eco lead OR for anyone whose bank is full: a player at
 	// the metal cap is wasting income, and build power is the thing that turns it
 	// back into units.
-	if ((!Factory::EcoLeadActive() && !MetalFull()) || (ai.frame < gNextNano))
+	// BUILD POWER SHOULD TRACK INCOME, NOT ONLY A FULL BANK.
+	//
+	// The old gate was "eco lead, or metal is FULL". Measured after raising the
+	// in-flight limit: 576 turrets across 48 player-games, 12 each, on economies
+	// running 100-400 metal/s -- because a full bank is a rare instant, not a
+	// state. apexearth: "I need to build a lot more nanoturrets to keep up with
+	// the amount of energy and resources that I have. When players play, they can
+	// have hundreds of these."
+	//
+	// A turret is 210 metal for 140 build power that never walks anywhere. At
+	// NANO_INCOME_GATE metal/second the income alone pays for one every few
+	// seconds, so the bank check below is what should decide, not a cap event.
+	const bool richEnough = (aiEconomyMgr.metal.income >= NANO_INCOME_GATE);
+	if ((!Factory::EcoLeadActive() && !MetalFull() && !richEnough) || (ai.frame < gNextNano))
 		return null;
-	if (aiEconomyMgr.metal.current < aiEconomyMgr.metal.storage * NANO_MIN_BANK)
+	// Half the bank while poor, a fifth once the income itself justifies it.
+	const float bankNeed = richEnough ? NANO_RICH_BANK : NANO_MIN_BANK;
+	if (aiEconomyMgr.metal.current < aiEconomyMgr.metal.storage * bankNeed)
 		return null;
 	// A turret costs 3200 energy to put up; buying build power on a grid that
 	// cannot pay for it stalls both.
