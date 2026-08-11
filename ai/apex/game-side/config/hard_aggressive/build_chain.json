@@ -185,20 +185,10 @@
 
 
 	"factory": {
-		"armlab": {
-			"hub": [[{"unit": "armllt", "category": "defence", "offset": {"back": 5}, "priority": "now"}]]
-		},
-		"armvp": {
-			"hub": [[{"unit": "armllt", "category": "defence", "offset": {"back": 5}, "priority": "now"}]]
-		},
 		"corlab": {
 			"hub": [
-				[{"unit": "corllt", "category": "defence", "offset": {"back": 5}, "priority": "now"}],
 				[{"unit": "corvipe", "category": "defence", "offset": {"front": 300}, "priority": "low"}]
 			]				 
-		},
-		"corvp": {
-			"hub": [[{"unit": "corllt", "category": "defence", "offset": {"back": 5}, "priority": "now"}]]
 		},
 
 
@@ -220,7 +210,6 @@
 			]
 		},
 		"coravp": {
-			"hub": [[{"unit": "corllt", "category": "defence", "offset": {"back": 5}, "priority": "now"}]]
 		},
 
 
@@ -308,7 +297,6 @@
 	"radar":{
 		"armrad": {
 			"hub": [
-				[{"unit": "armllt", "category": "defence", "offset": {"front": 100}, "priority": "now"}],
 				[{"unit": "armrl", "category": "defence", "offset": {"back": 10},"condition": {"air": true}, "priority": "high"}],
 				[{"unit": "armguard", "category": "defence", "offset": [120, 100], "priority": "normal"}],
 				[
@@ -328,7 +316,6 @@
 		},
 		"corrad": {
 			"hub": [
-				[{"unit": "corllt", "category": "defence", "offset": {"front": 100}, "priority": "now"}],
 				[{"unit": "corfrt", "category": "defence", "offset": {"back": 10}, "condition": {"air": true}, "priority": "high"}],
 				[{"unit": "corpun", "category": "defence", "offset": [100, -100], "priority": "normal"}],
 				[{"unit": "corvipe", "category": "defence", "offset": [100, -100], "priority": "normal"}],

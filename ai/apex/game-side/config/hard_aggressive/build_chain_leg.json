@@ -112,12 +112,6 @@
 
 
 	"factory": {
-		"leglab": {
-			"hub": [[{"unit": "leglht", "category": "defence", "offset": {"back": 5}, "priority": "now"}]]
-		},
-		"legvp": {
-			"hub": [[{"unit": "leglht", "category": "defence", "offset": {"back": 5}, "priority": "now"}]]
-		},
 
 		"legalab": {
 			"hub": [
@@ -158,7 +152,6 @@
 	"radar":{
 		"legrad": {
 			"hub": [
-				[{"unit": "leglht", "category": "defence", "offset": {"front": 100}, "priority": "now"}],
 				[{"unit": "legrl", "category": "defence", "offset": {"back": 10},"condition": {"air": true}, "priority": "high"}],
 				[{"unit": "legcluster", "category": "defence", "offset": [120, 100], "priority": "normal"}],
 				[

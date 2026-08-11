@@ -105,6 +105,11 @@ IUnitTask@ Fortify(CCircuitUnit@ unit)
 	// now rises with how hard this spot is being contested.
 	if (!AreaNeedsDefence(spot, FenceWanted(gConHits[i])))
 		return null;
+	// ...and the same policy every other placement answers to. A constructor
+	// being shot at says WHERE trouble is; it does not say we can afford another
+	// tower, nor that this spot is the front. See Military::DefenceAllowedAt.
+	if (!Military::DefenceAllowedAt(spot))
+		return null;
 	IUnitTask@ dig = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, tower, spot, DEF_SHAKE));
 	if (dig is null)

@@ -52,6 +52,45 @@ bool NearFront(const AIFloat3& in pos)
 	return (dx * dx + dz * dz) < (FRONT_RADIUS * FRONT_RADIUS);
 }
 
+// THE ONE ANSWER TO "MAY A TOWER GO HERE".
+//
+// apexearth: "Clean up those other systems that are placing the unwanted
+// towers." Three of them placed defence without ever consulting the defence
+// policy -- MexGuard put one on every extractor, Fortify put one wherever a
+// constructor happened to be shot, and build_chain.json bolted one onto every
+// factory -- so the income budget, the front-line rule and the rear share
+// applied to a minority of what we actually built. Measured: 50 defence
+// structures, 21 of them armllt, effectively none forward.
+//
+// Every placement now asks this first. It answers three questions in the order
+// they matter, and each of them is economic or positional -- never a count typed
+// in here:
+//   1. is defence already over the share targets.as gives it,
+//   2. is this the rear, and has the rear had its tenth,
+//   3. ...unless we are actually being attacked, when a tower beats the curve.
+bool DefenceAllowedAt(const AIFloat3& in pos)
+{
+	if (gTurtle || BaseContested())
+		return true;   // under attack: the curve does not get a vote
+
+	const float per = ai.GetTunable("apex_fence_per_income", 0.8f)
+			* Brain::BudgetMult(Brain::DEFENCE);
+	const int budget = 1 + int(aiEconomyMgr.metal.income * per);
+	if (int(gFenceId.length()) >= budget)
+		return false;
+
+	if (OnBorder(pos) || NearFront(pos))
+		return true;
+
+	const float rearShare = ai.GetTunable("apex_fence_rear_share", 0.10f);
+	uint rear = 0;
+	for (uint i = 0; i < gFencePos.length(); ++i) {
+		if (!OnBorder(gFencePos[i]) && !NearFront(gFencePos[i]))
+			++rear;
+	}
+	return float(rear) < float(budget) * rearShare;
+}
+
 void AiMakeDefence(int cluster, const AIFloat3& in pos)
 {
 	if (!ApexActive()) {
@@ -129,66 +168,13 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	if (!gPorcArmed && !gTurtle && !LosingGround() && !early)
 		return;
 
-	// HOW MUCH DEFENCE THE ECONOMY IS WORTH.
-	//
-	// This call is where the defence metal actually goes -- the comment above
-	// says so from five tournaments -- and nothing bounded it but the clock that
-	// has now been removed. Measured over 6 games at minute 14, removing those
-	// cooldowns moved static defence from 17.5% of metal produced to 21.6% while
-	// our standing army fell 4,637 -> 3,816 and losses rose 2,850 -> 3,811. The
-	// towers were eating the army.
-	//
-	// The bound is the count our income supports, fitted to what the pre-Brain
-	// build actually did rather than picked: it held ~2,525 metal of defence at
-	// ~16 metal/second of income, and at ~190 metal a tower that is about 13 of
-	// them -- 0.8 per point of income. gFenceId is every defence structure we
-	// own, whoever placed it, so this bounds our own rules too, not just this
-	// call. A turtle or a real push through our ground overrides it: being
-	// attacked is when towers are worth more than the curve says.
-	// Scaled by the category budget as well as by income, so defence answers
-	// to the same table as everything else: over its share it buys fewer
-	// towers, under its share it buys more. brain/budget.as.
-	const float per = ai.GetTunable("apex_fence_per_income", 0.8f)
-			* Brain::BudgetMult(Brain::DEFENCE);
-	const int budget = 1 + int(aiEconomyMgr.metal.income * per);
-
-	// NINETY PERCENT OF DEFENCE BELONGS ON THE FRONT LINE. apexearth: "We're
-	// making tons of defenses but few of them are on the front line. We need to be
-	// putting 90% of our defenses on the front line", and in USER-FEEDBACK.md
-	// before that: "90% of a human's defences sit on the front line."
-	//
-	// The share was never enforced, only hoped for: onLine gated WHETHER a rear
-	// cluster was eligible, and several clauses above bypass that gate entirely --
-	// the opening, a turtle, losing ground. So rear towers competed for the same
-	// budget as front ones and, there being far more rear clusters than border
-	// ones on a small map, they won on sheer number.
-	//
-	// gFencePos records where every defence structure we own actually stands, so
-	// the split can be counted rather than assumed. A rear site is refused once
-	// the rear already holds its tenth; the front is never refused on this basis.
-	if (!onLine) {
-		const float rearShare = ai.GetTunable("apex_fence_rear_share", 0.10f);
-		uint rear = 0;
-		for (uint i = 0; i < gFencePos.length(); ++i) {
-			if (!OnBorder(gFencePos[i]) && !NearFront(gFencePos[i]))
-				++rear;
-		}
-		if (float(rear) >= float(budget) * rearShare) {
-			if (ai.frame >= gNextFenceCapLog) {
-				gNextFenceCapLog = ai.frame + 60 * SECOND;
-				AiLog(Factory::T() + "apex: rear defence at its share " + rear
-					+ "/" + formatFloat(float(budget) * rearShare, "", 0, 1)
-					+ " of " + budget + " -- front line only");
-			}
-			return;
-		}
-	}
-	if (!gTurtle && !BaseContested() && (int(gFenceId.length()) >= budget)) {
+	// One policy, asked the same way every other placement asks it.
+	if (!DefenceAllowedAt(pos)) {
 		if (ai.frame >= gNextFenceCapLog) {
 			gNextFenceCapLog = ai.frame + 60 * SECOND;
-			AiLog(Factory::T() + "apex: defence at budget " + gFenceId.length()
-				+ "/" + budget + " for " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
-				+ " m/s -- army instead");
+			AiLog(Factory::T() + "apex: defence refused here -- "
+				+ gFenceId.length() + " standing, "
+				+ (OnBorder(pos) ? "front" : "rear"));
 		}
 		return;
 	}

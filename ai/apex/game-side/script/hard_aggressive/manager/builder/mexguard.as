@@ -178,6 +178,10 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 	const AIFloat3 site = ai.FindBuildSiteNear(tower, at, MEX_GUARD_RADIUS);
 	if (!OnMap(site))
 		return null;
+	// Extractors cluster near home, so this was the largest single source of rear
+	// towers. It answers to the defence policy now like everything else.
+	if (!Military::DefenceAllowedAt(site))
+		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, tower, site, 0.f));
 	if (post is null)
