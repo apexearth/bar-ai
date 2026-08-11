@@ -158,6 +158,11 @@ local commMove = {}       -- has an order and its position changed
 local commAssistIdle = {} -- guarding/repairing a factory with an empty queue
 local commAssist = {}     -- guarding/repairing something else
 local commStall = {}      -- has an order, not building, did not move
+-- Cloak TRANSITIONS, not cloak state. The commander flip-flopping is the
+-- complaint, and a state sample cannot show it -- only the number of times
+-- the bit changed between samples can.
+local commCloakFlips = {} -- team -> cloak state changes observed
+local commPrevCloak = {}  -- unitID -> last sampled cloak state
 local commPrevX = {}      -- unitID -> last sampled position
 local commPrevZ = {}
 local CMD_REPAIR = CMD.REPAIR
@@ -385,6 +390,11 @@ local function sampleCommIdle()
 				local ud = udid and UnitDefs[udid]
 				if ud ~= nil and (ud.customParams or {}).iscommander then
 					bump(commSamp, teamID, 1)
+					local cloaked = Spring.GetUnitIsCloaked(uid) and true or false
+					if commPrevCloak[uid] ~= nil and commPrevCloak[uid] ~= cloaked then
+						bump(commCloakFlips, teamID, 1)
+					end
+					commPrevCloak[uid] = cloaked
 					local cmds = Spring.GetUnitCommands(uid, 1)
 					local x, _, z = Spring.GetUnitPosition(uid)
 					local px, pz = commPrevX[uid], commPrevZ[uid]
@@ -509,6 +519,7 @@ local function dump(reason)
 			parts[#parts + 1] = string.format("commAssistIdle=%d", commAssistIdle[teamID] or 0)
 			parts[#parts + 1] = string.format("commAssist=%d", commAssist[teamID] or 0)
 			parts[#parts + 1] = string.format("commStall=%d", commStall[teamID] or 0)
+			parts[#parts + 1] = string.format("commCloakFlips=%d", commCloakFlips[teamID] or 0)
 			cmdWindow[teamID] = 0
 
 			local n = Spring.GetTeamStatsHistory(teamID)

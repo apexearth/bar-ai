@@ -82,9 +82,24 @@ void CRetreatTask::AssignTo(CCircuitUnit* unit)
 	unit->PushTravelAct(travelAction);
 	unit->SetAllowedToJump(cdef->IsAbleToJump() && !cdef->IsAttrNoJump());
 
+	// CLOAKING ON RETREAT IS NOT FREE, AND FOR A COMMANDER IT IS NOT AFFORDABLE.
+	//
+	// This cloaked unconditionally, and armcom's cloakcostmoving is 1000 energy
+	// per second -- so a retreating commander switched on a drain no early
+	// economy can pay. UpdateCommCloak (military watchdog) and Update() below
+	// then both re-decide with IsCommCloakWanted, see it is unaffordable and
+	// switch it straight back off, and the next retreat re-assignment turns it on
+	// again. apexearth, twice, watching: "commander still 'running to safety' and
+	// cloaking..." -- one event, not two.
+	//
+	// Ordinary cloakers keep the old behaviour: for them it is cheap and hiding
+	// while wounded is the point. Only the commander consults affordability, via
+	// the same predicate the watchdog uses, so the two cannot disagree.
 	if (unit->GetCircuitDef()->IsAbleToCloak()) {
+		const bool wantCloak = !cdef->IsRoleComm()
+				|| circuit->GetMilitaryManager()->IsCommCloakWanted(unit);
 		TRY_UNIT(manager->GetCircuit(), unit,
-			unit->CmdCloak(true);
+			unit->CmdCloak(wantCloak);
 			unit->CmdSetFireState(CCircuitDef::FireType::RETURN);
 		)
 	}

@@ -255,6 +255,7 @@ void CBombTask::FindTarget()
 //								 cdef->GetLosRadius()) * 2;
 	const float sqRange = (GetTarget() != nullptr) ? pos.SqDistance2D(GetTarget()->GetPos()) + 1.f : SQUARE(2000.0f);
 	float minHealth = std::numeric_limits<float>::max();
+	float bestScore = 0.f;
 
 	COOAICallback* callback = circuit->GetCallback();
 	const float trueAoe = cdef->GetAoe() + SQUARE_SIZE;
@@ -333,9 +334,29 @@ void CBombTask::FindTarget()
 //                }
 //				cost += ei->GetCost();
 //			}
-			if (minHealth > health) {
+			// VALUE, NOT SOFTNESS. Stock picks the lowest-HEALTH target, which is
+			// why bombers cross the map for a metal extractor and then die to AA
+			// on the way home. apexearth: "we are not focusing on attacking the
+			// enemy home base with the air. We don't wanna attack a lot of the
+			// small mex emplacements and because we're air we fly a huge arc
+			// after hitting a low-value target and usually die to AA."
+			//
+			// Score = metal per hitpoint, discounted by distance, so a lab or a
+			// reactor beats an extractor and a near target beats a far one of
+			// equal worth. The floor stops a bomber committing to anything under
+			// apex_bomb_min_value metal while something better exists.
+			const float value = (edef != nullptr) ? edef->GetCostM() : 0.f;
+			const float sqDist = pos.SqDistance2D(ePos);
+			const float minValue = circuit->GetTunable("apex_bomb_min_value", 200.f);
+			const float distScale = circuit->GetTunable("apex_bomb_dist_scale", 4000.f);
+			const float dist = math::sqrt(sqDist);
+			float score = (value / std::max(health, 1.f)) / (1.f + dist / distScale);
+			if (value < minValue) {
+				score *= 0.1f;   // still allowed, but only if nothing else offers
+			}
+			if (score > bestScore) {
+				bestScore = score;
 				minHealth = health;
-				const float sqDist = pos.SqDistance2D(ePos);
 				if (sqDist < sqRange) {
 					bestTarget = enemy;
 				} else {
