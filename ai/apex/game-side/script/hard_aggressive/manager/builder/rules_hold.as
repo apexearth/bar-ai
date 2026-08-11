@@ -23,13 +23,26 @@ IUnitTask@ HoldDefenceInProgress(CCircuitUnit@ unit, bool isComm)
 	// Deliberately narrow: only a DEFENCE build already in progress, only while
 	// its site is not itself dangerous (the abandon checks below still own that
 	// case), and never for the commander, which has its own hold rule.
+	// THE THREAT GATE EXCLUDES EXACTLY THE FRONT. A site on the line is contested
+	// by definition, so this hold fires for a mex guard at home and never for the
+	// Brain's front request -- which is why 7 of 235 front orders became towers
+	// while towers at home were built normally. Arm under test: hold a FORWARD
+	// defence task through the walk as well. The front curve already sits a
+	// setback inside our own side of the crossing, which is what is supposed to
+	// make the site survivable.
 	if (!isComm) {
 		IUnitTask@ busy = unit.task;
 		if ((busy !is null) && (busy.GetType() == Task::Type::BUILDER)
-			&& (busy.GetBuildType() == Task::BuildType::DEFENCE)
-			&& (ThreatFor(unit, busy.GetBuildPos()) <= CON_THREAT_VETO))
+			&& (busy.GetBuildType() == Task::BuildType::DEFENCE))
 		{
-			return busy;
+			const AIFloat3 at = busy.GetBuildPos();
+			if (ThreatFor(unit, at) <= CON_THREAT_VETO)
+				return busy;
+			if ((ai.GetTunable("apex_hold_front", 0.f) > 0.f) && OnMap(at)
+				&& (Military::OnBorder(at) || Military::NearFront(at)))
+			{
+				return busy;
+			}
 		}
 	}
 	return null;

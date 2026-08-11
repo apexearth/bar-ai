@@ -18,6 +18,48 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-11: WHY the front orders are never filled -- the site search refuses
+
+Located, with the probe corrected. The earlier "dropped" test asked whether the
+script's task handle was null, which it never is; asking `gDefTasks` whether the
+task is still registered separates the two failures properly. Six games, per
+player: **48-105 orders alive and unstaffed against 1-18 aborted.** The orders
+are not killed and are not unreachable -- nobody is ever sent.
+
+`IBuilderTask::FindBuildSite` (BuilderTask.cpp:664) hands the terrain search this
+predicate:
+
+    predicate = [](const AIFloat3& p) {
+        return terrainMgr->CanReachAtSafe(builder, p, buildDistance);
+    };
+
+and `CanReachAtSafe` rejects any cell with `GetBuilderThreatAt(pos) > THREAT_MIN`.
+So **every candidate cell near the front is refused by the site search itself**.
+`Execute` then falls to its `else` branch, calls `FallbackTask(unit)`, and the
+builder goes to guard/assist/patrol while the task stays on the books forever.
+
+Four fixes were tried against this and all four are upstream or downstream of
+that search, which is why none moved the position (all six games, 4v4 Comet
+Catcher, +50, 20 min, apex defences past 0.25 of the way to the enemy):
+
+| arm | forward | note |
+|---|---|---|
+| baseline | 0% | |
+| Beamer instead of Pit Bull | 3% | def is not the constraint |
+| `FindBuildSiteNear` snap before enqueue | 0% | the engine re-searches anyway |
+| hold the task through the walk (`apex_hold_front`) | 1% | it is not being stolen |
+| `Priority::NOW` (`apex_front_now`) | 1% | elector documents this as "disregard safety" |
+| take the engine's own offer (`apex_take_front_offer`) | 1% | our ladder was declining it, but that is not the binding refusal |
+| setback 0.12 -> 0.30 (`apex_front_setback`) | 0% | |
+
+Corollary worth recording: **stock BARb is not placing towers on the contested
+line either.** Its 0.13-0.18 median comes from `DefaultMakeDefence` at clusters it
+already holds, where threat is zero. The difference is how far forward it holds
+ground, not a placement rule we are missing.
+
+All six arms are left in as tunables, defaulted OFF, since none of them can be
+judged until the site search allows a threatened cell at all.
+
 ## 2026-08-11: the front line is aimed correctly and almost never built
 
 Layer 2 (`manager/brain.as`, `manager/military/territory.as`,

@@ -34,6 +34,43 @@ IUnitTask@ ExpansionAlwaysWins(IUnitTask@ task)
 	return null;
 }
 
+// THE ENGINE WAS ALREADY SENDING SOMEBODY AND WE KEPT SAYING NO.
+//
+// Same shape as ExpansionAlwaysWins, for the same reason. CBuilderManager's own
+// elector (MakeBuilderTask) walks the queued tasks and hands back the one it has
+// chosen a builder for. When that is the Brain's front tower, every rule below
+// ExpansionAlwaysWins gets to answer instead -- Brain::Decide most of all, which
+// cheerfully orders ANOTHER front tower -- and the offer is thrown away. It is
+// only honoured at the very bottom of AiMakeTask, by which point nothing is left.
+//
+// Measured: the front orders are not aborted and are not unreachable, they are
+// alive and unstaffed -- 48-105 queued with no worker against 1-18 aborted, per
+// player per game. Neither Priority::NOW (which the elector documents as
+// "disregard safety") nor holding the task through the walk changed that, because
+// the refusal is ours.
+//
+// A STOP, not a spend: it enqueues nothing and can only decline to discard work
+// already ordered and already staffed.
+IUnitTask@ FrontDefenceOffer(IUnitTask@ task)
+{
+	// Default OFF: measured neutral (defences 10.3 -> 9.1 per player, still 0-1%
+	// forward), because the refusal it addresses is not the binding one -- see
+	// IBuilderTask::FindBuildSite. Kept, and off, until the site search allows a
+	// threatened cell at all; on its own it only shuffles which offer is declined.
+	if (ai.GetTunable("apex_take_front_offer", 0.f) <= 0.f)
+		return null;
+	if ((task is null) || (task.GetType() != Task::Type::BUILDER))
+		return null;
+	if (task.GetBuildType() != int(Task::BuildType::DEFENCE))
+		return null;
+	const AIFloat3 at = task.GetBuildPos();
+	if (!OnMap(at))
+		return null;
+	if (!Military::OnBorder(at) && !Military::NearFront(at))
+		return null;
+	return task;
+}
+
 IUnitTask@ VetoCrisisAssist(IUnitTask@ task)
 {
 	// apexearth: "have our units never assist another unit build something if

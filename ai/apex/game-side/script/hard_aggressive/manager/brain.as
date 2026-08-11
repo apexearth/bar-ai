@@ -227,12 +227,12 @@ void FenceSweep()
 			// Which half of the failure it is: an order nobody ever picked up, or
 			// one that was picked up and did not survive the attempt.
 			IUnitTask@ t = gAimTask[i];
-			if (t is null) {
-				++gAimGone;
+			if (!Builder::IsDefenceTaskLive(t)) {
+				++gAimGone;      // aborted or dequeued by the engine
 			} else {
 				array<CCircuitUnit@>@ on = t.GetUnits();
 				if ((on is null) || (on.length() == 0))
-					++gAimNoWorker;
+					++gAimNoWorker;   // still queued, nobody elected onto it
 			}
 		}
 		gAimPos.removeAt(i);
@@ -715,8 +715,18 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		if ((w.kind != "mexup") && (w.kind != "mex") && haveMexUp)
 			continue;
 		if (w.kind == "fence") {
+			// PRIORITY IS WHAT DECIDES WHETHER ANYONE IS EVER SENT.
+			// CBuilderManager::MakeBuilderTask, the engine's own elector, skips a
+			// candidate whose site is threatened and enemy-influenced -- except
+			// when the task is NOW, where its own comment reads "Disregard
+			// safety". A front site is threatened and enemy-influenced by
+			// definition, so at NORMAL these orders are unelectable and sit on the
+			// books forever: measured 48-105 alive with no worker against 1-18
+			// aborted.
+			const Task::Priority prio = (ai.GetTunable("apex_front_now", 0.f) > 0.f)
+					? Task::Priority::NOW : Task::Priority::NORMAL;
 			IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-					Task::Priority::NORMAL, w.def, w.pos, SQUARE_SIZE * 4));
+					prio, w.def, w.pos, SQUARE_SIZE * 4));
 			if (t !is null) {
 				++gFenceOrders;
 				const float fwd = Military::ForwardFraction(w.pos);

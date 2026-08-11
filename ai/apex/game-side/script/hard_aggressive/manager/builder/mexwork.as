@@ -59,6 +59,21 @@ bool DefenceTaskNear(const AIFloat3& in pos, float radius)
 	return false;
 }
 
+// Is this task still on the books? Every removal funnels through DequeueTask ->
+// AiTaskRemoved, so a task that has left gDefTasks was aborted or finished, and
+// one still in it is queued. Those two failures have opposite fixes and are
+// indistinguishable from a count of standing towers.
+bool IsDefenceTaskLive(IUnitTask@ task)
+{
+	if (task is null)
+		return false;
+	for (uint i = 0; i < gDefTasks.length(); ++i) {
+		if (gDefTasks[i] is task)
+			return true;
+	}
+	return false;
+}
+
 // Orders on the books for the FRONT specifically. The defence budget counted
 // standing towers only, which is a bound that cannot bind while the orders are
 // not finishing: front towers stood at zero all game, so the budget read "no

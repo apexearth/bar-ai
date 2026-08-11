@@ -104,6 +104,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// Below expansion, above everything optional: a front tower the engine has
+	// already elected a builder for is work in progress, not a proposal.
+	@t = FrontDefenceOffer(task);
+	if (t !is null)
+		return t;
+
 	// A TURRET ON A MEX MUST NOT OUTRANK UPGRADING ONE.
 	//
 	// This rule used to sit ABOVE DefaultMakeTask, so a constructor that the
