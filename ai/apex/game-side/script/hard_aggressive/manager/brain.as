@@ -55,8 +55,12 @@ const float PINPOINT_VALUE = 0.5f;   // targeting support, cheap and bounded
 // returns early on IsEnergyStalling, so a stall stops every other economy task
 // including mex upgrades.
 const float CONVERT_VALUE     = 1.0f;    // metal/s per converter, while spilling
-// energyconv_capacity, read from armmakr.lua: what one converter draws.
-const float CONVERT_DRAW      = 70.f;
+// energyconv_capacity, read from the defs: what one converter draws.
+const float CONVERT_DRAW      = 70.f;    // armmakr, 1 metal, 1 metal/s back
+const float CONVERT_DRAW_BIG  = 600.f;   // armmmkr, 380 metal, 10.3 metal/s back
+// One advanced converter replaces about nine cheap ones for a tenth of the
+// footprint, so it is worth proportionally more than its raw rate suggests.
+const float BIG_CONV_VALUE    = 10.3f;
 const float ENERGY_VALUE      = 1.2f;    // metal/s equivalent of a generator step
 const float ENERGY_STALL_MULT = 6.0f;    // a stall blocks the whole economy
 // BOTH BANKS FULL MEANS INCOME IS NOT THE PROBLEM. apexearth: "if we are full on
@@ -294,11 +298,20 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// in the game -- but it has no natural stopping point, so the bound has to be
 	// the thing it feeds on: one converter draws 70 energy/second, so the grid
 	// supports income/70 of them and no more.
+	// THE ADVANCED CONVERTER, WHENEVER WE CAN BUILD ONE. apexearth: "spacing also
+	// matters... that cheap e converter takes up a lot of room and is very
+	// fragile, so the advanced version is almost always better." Nine armmakr to
+	// match one armmmkr's 600-energy draw is nine footprints in the eco band and
+	// nine things that die to one shell. This proposed the small one by name.
 	if (Builder::EnergyWasting()) {
-		CCircuitDef@ conv = SideDef3("armmakr", "cormakr", "legeconv");
-		const int convRoom = int(aiEconomyMgr.energy.income / CONVERT_DRAW);
+		CCircuitDef@ big = Builder::BigConvDef(unit);
+		const bool useBig = isAdvCon && (big !is null) && big.IsAvailable(ai.frame);
+		CCircuitDef@ conv = useBig ? big : Builder::SmallConvDef(unit);
+		const float draw = useBig ? CONVERT_DRAW_BIG : CONVERT_DRAW;
+		const int convRoom = int(aiEconomyMgr.energy.income / draw);
 		if ((conv !is null) && (conv.count < convRoom)) {
-			Want@ c = Simple("convert", CONVERT_VALUE, conv, false);
+			Want@ c = Simple("convert", CONVERT_VALUE * (useBig ? BIG_CONV_VALUE : 1.f),
+					conv, false);
 			if (c !is null) {
 				c.have = 0;   // demand is the spill, not how many already stand
 				Propose(c);
