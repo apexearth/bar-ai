@@ -508,6 +508,45 @@ Every item is here because skipping it produced a confident wrong answer.
   cannot tell you this — in a replay AIs are "remote", `AiLog` output does not
   appear at all, and `Spring.GetAIInfo` reports `SYNCED_NOSHORTNAME`.
 
+## Ask before inventing policy
+
+apexearth, after a hard cap of 4 was added to something he had twice said should
+scale with the economy: *"damn you have me worried about whatever other bad ideas
+you may randomly add. You should update claude.md so you ask more questions
+before just making decisions like that."*
+
+The failure is not being wrong once. It is deciding a POLICY question -- what the
+AI is allowed to do -- as if it were an implementation detail, and burying the
+answer in a constant. These are the ones that keep happening:
+
+- **Hard caps and ceilings.** "At most 4 of these." He has now said twice that
+  nothing should have a hard cap; everything scales with economy and progression.
+  If something is being built too often, the fix is its VALUE relative to
+  alternatives, not a number that forbids the eleventh one.
+- **Exclusivity.** "Only the eco lead may build reactors", "only the tech lead
+  may go T2". This one shipped for weeks and made a solo player never build a
+  reactor at all. A role may change how OFTEN or how MUCH; it must not decide
+  WHETHER.
+- **Turning a behaviour off** to fix a symptom, rather than finding what starves
+  it. Front-line nanos got defaulted off after one arm; he wanted them on and
+  tuned.
+- **Thresholds pulled out of the air.** A gate at "60 metal/s" is a claim about
+  the game. Derive it, measure it, or ask -- and say which of the three it was.
+
+What to do instead, in order of preference:
+
+1. **Derive it from the economy** -- income, bank, what the thing costs, what it
+   returns. That is the answer he gives every time he is asked.
+2. **Make it a tunable with the measured default**, and say in the commit what
+   was measured. Then it is an experiment, not a decree.
+3. **Ask.** One sentence: "should X be capped, or scale with income?" He answers
+   these in seconds and the answer is usually "scale".
+
+Not every choice needs a question -- fixing a null deref, wiring a rule that
+already exists, following a stated preference. The trigger is: *am I deciding
+what the AI is ALLOWED to do, rather than how to do what it was already meant to
+do?* If yes, ask.
+
 ## Conventions
 
 - Python 3.13, standard library only. No new dependencies without a reason.

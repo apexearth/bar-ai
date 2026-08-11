@@ -220,6 +220,21 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	if (!isAdvCon)
 		return null;
 
+	// NOTHING OPTIONAL BEFORE T2 EXISTS.
+	//
+	// apexearth, watching a 4v4 at +25: "something's going wrong this game where
+	// our guys are not going to t2." The lead logged "building advanced plant
+	// coravp" fifty times with haveT2 still 0 -- the plant was requested over and
+	// over while constructors went to converters, nanos and reactors, all of
+	// which this session had just ungated for every player. Each was individually
+	// reasonable and together they starved the one building that unlocks the
+	// rest.
+	//
+	// Before an advanced factory stands, the only thing worth a constructor is
+	// expansion. This is the 2026-08-01 displacement finding arriving through the
+	// Brain rather than through the ladder.
+	const bool preT2 = !Factory::gHaveT2;
+
 	Propose(MexUpgradeWant(unit));
 	// The optional class. Costs are read from the defs so a score means
 	// something; where a def is missing the want is simply not proposed.
@@ -234,11 +249,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			Propose(e);
 		}
 	}
-	if (Builder::EnergyWasting())
+	if (!preT2 && Builder::EnergyWasting())
 		Propose(Simple("convert", CONVERT_VALUE, SideDef3("armmakr", "cormakr", "legeconv")));
 
 	// Spend the surplus rather than growing it further.
-	if (EcoSated() || aiEconomyMgr.isMetalFull)
+	if (!preT2 && (EcoSated() || aiEconomyMgr.isMetalFull))
 		Propose(Simple("nano", NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc")));
 	// ON by default. Attribution showed the income gate, not these, caused the
 	// army drop -- and K/D was the one number that went UP with them (1.49 ->
@@ -246,13 +261,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// we're just building them a little bit too early, or making too many at
 	// once. Probably a good thing to have on, just be reasonable about it."
 	// So: kept, later and fewer (see FRONT_NANO_* in builder/nano.as).
-	if (ai.GetTunable("apex_front_nano", 1.f) > 0.f)
+	if (!preT2 && (ai.GetTunable("apex_front_nano", 1.f) > 0.f))
 		Propose(Simple("frontnano", FRONT_NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc")));
 
+	if (!preT2) {
 	Propose(Simple("gantry", GANTRY_VALUE, SideDef3("armshltx", "corgant", "leggant")));
 	Propose(Simple("silo", SILO_VALUE, SideDef3("armsilo", "corsilo", "legsilo")));
 	Propose(Simple("pulsar", PULSAR_VALUE, SideDef3("armanni", "cordoom", "legstarfall")));
 	Propose(Simple("pinpoint", PINPOINT_VALUE, SideDef3("armtarg", "cortarg", "legtarg")));
+	}
 
 	if (gWants.length() == 0)
 		return null;

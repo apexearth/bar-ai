@@ -43,22 +43,24 @@ const int   PULSAR_FULL_BONUS = 5;
 const int   PULSAR_CONCURRENT = 2;
 int gPulsarsAsked = 0;
 
-// TWENTY OF THEM IS NOT A DEFENCE, IT IS A HOBBY. apexearth, watching:
-// "in late game we suddenly have like 20 doomsday T3 towers being built."
+// NO HARD CAP. apexearth, twice now: "we shouldn't have any hard caps,
+// everything needs to be balanced based on the economy/game progression", and
+// on this specific number: "no no no don't you ever do such a thing like limit
+// to 4 max T3 towers."
 //
-// The cap was 1 + income/60 with no ceiling, so a 400 metal/s economy wanted
-// seven and a full bank added five more, and each one is thousands of metal
-// that never moves. A big gun covers ground; the eighth one covers ground the
-// seventh already did.
-const int PULSAR_CEILING = 4;
-
+// A ceiling of 4 was added here after he saw twenty go up and removed the same
+// day. It is the wrong tool: at 400 metal/s twenty big guns may well be
+// affordable, and the real complaint was that they were built INSTEAD of
+// advancing, not that they existed. What bounds them now is the Brain's
+// ranking -- a want's value decays per copy already standing (value / (1 +
+// have)), so the eighth gun scores an eighth of the first and loses to
+// everything else long before the metal runs out.
 int PulsarCap()
 {
 	int cap = 1 + int(aiEconomyMgr.metal.income / PULSAR_PER_INCOME);
 	if (aiEconomyMgr.isMetalFull)
 		cap += PULSAR_FULL_BONUS;
-	const int ceiling = int(ai.GetTunable("apex_pulsar_ceiling", float(PULSAR_CEILING)));
-	return (cap > ceiling) ? ceiling : cap;
+	return cap;
 }
 // A flat standing count answered two aircraft and forty identically. These are
 // 80 metal each and only built once the enemy actually flies, so the ceiling can

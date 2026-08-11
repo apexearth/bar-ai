@@ -173,9 +173,11 @@ Fixed the same session, from the same game:
 - 9 fusions and no advanced fusion: `FusionDef()` only ever returned the plain
   tier, so the ladder had no top rung. Now climbs at 120 metal/s once three
   plain reactors stand.
-- ~20 Doomsday towers late: `PulsarCap()` was `1 + income/60` with no ceiling,
-  so a 400 metal/s economy wanted seven and a full bank added five more.
-  Ceilinged at 4 (`apex_pulsar_ceiling`).
+- ~20 Doomsday towers late. A ceiling of 4 was added and REVERTED the same
+  day -- apexearth: "no no no don't you ever do such a thing like limit to 4
+  max T3 towers." The count is not the problem; building them instead of
+  advancing is. What bounds them is the Brain's per-copy value decay, not a
+  number.
 
 ## 2. Pushes should not take damage on the way in
 
