@@ -189,11 +189,39 @@ bool BorderPos(AIFloat3& out p, uint rank)
 // is forward" -- the only thing it is used for here.
 const float FRONT_FRACTION = 0.30f;
 
+// WHERE OUR TERRITORY ACTUALLY IS, not where we spawned.
+//
+// Everything positional measured from Builder::gHomePos, the START position. It
+// never moves, so as the base grows forward the origin stays behind it and a
+// tower behind the real base still reads as "forward". apexearth, watching:
+// "we're basically making tons of defense, but we're making it all, like, behind
+// our base" -- true on screen and false to the AI, at the same time, because the
+// two were measuring from different places.
+//
+// gSitePos is every metal cluster our side holds, which this file's own comment
+// already calls our territory: CMilitaryManager offers this hook one position
+// per cluster we have taken. Its centroid is where we are NOW. The start
+// position is the fallback for the opening, before we hold anything.
+AIFloat3 TerritoryCentre()
+{
+	if (gSitePos.length() == 0)
+		return Builder::gHomePos;
+	float x = 0.f;
+	float z = 0.f;
+	for (uint i = 0; i < gSitePos.length(); ++i) {
+		x += gSitePos[i].x;
+		z += gSitePos[i].z;
+	}
+	const float n = float(gSitePos.length());
+	AIFloat3 c = AIFloat3(x / n, 0.f, z / n);
+	return OnMap(c) ? c : Builder::gHomePos;
+}
+
 float ForwardFraction(const AIFloat3& in pos)
 {
 	if (!Builder::gHomeSet)
 		return 0.f;
-	const AIFloat3 home = Builder::gHomePos;
+	const AIFloat3 home = TerritoryCentre();
 	const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 	if (!OnMap(e))
 		return 0.f;
@@ -256,7 +284,7 @@ void RebuildFront()
 
 	if (!Builder::gHomeSet)
 		return;
-	const AIFloat3 home = Builder::gHomePos;
+	const AIFloat3 home = TerritoryCentre();
 	const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 	if (!OnMap(e))
 		return;

@@ -401,6 +401,7 @@ uint CountOf(int owner)
 void Update()
 {
 	Gather();
+	DrawFrontLine();
 	PumpDraw();   // every tick, not every rescan -- see DRAW_PER_TICK
 	if (ai.frame < gNextClassify)
 		return;
@@ -559,6 +560,44 @@ void PumpDraw()
 		gQueueA.removeAt(0);
 		gQueueB.removeAt(0);
 		++sent;
+	}
+}
+
+// THE COMPUTED FRONT, ON SCREEN. apexearth: "If you think it's helpful, you can
+// draw the perceived front line on the screen for me to see."
+//
+// It is helpful: every disagreement tonight between what he sees and what the
+// telemetry says has come from the AI and the human measuring from different
+// places. Drawing what the AI believes settles that by eye in seconds.
+//
+// Segments between consecutive points of Military::FrontCurve -- the influence
+// crossing, lane by lane. Redrawn on a slow cadence because the server drops
+// map-draw commands after 25 in a row inside 50ms and BAR's own widget erases
+// every mark after 60 seconds, so this repaints inside that window rather than
+// accumulating.
+int gNextFrontDraw = 0;
+array<AIFloat3> gFrontDrawn;
+
+void DrawFrontLine()
+{
+	if (ai.GetTunable("apex_draw_front", 1.f) <= 0.f)
+		return;
+	if (ai.frame < gNextFrontDraw)
+		return;
+	gNextFrontDraw = ai.frame + 20 * SECOND;
+
+	for (uint i = 0; i < gFrontDrawn.length(); ++i)
+		Enqueue(gFrontDrawn[i], gFrontDrawn[i]);   // erase the last one
+	gFrontDrawn.resize(0);
+
+	array<AIFloat3> line;
+	if (!Military::FrontCurve(line) || (line.length() < 2))
+		return;
+	for (uint i = 1; i < line.length(); ++i) {
+		if (!OnMap(line[i - 1]) || !OnMap(line[i]))
+			continue;
+		Enqueue(line[i - 1], line[i]);
+		gFrontDrawn.insertLast(line[i - 1]);
 	}
 }
 

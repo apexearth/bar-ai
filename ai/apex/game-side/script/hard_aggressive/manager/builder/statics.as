@@ -127,6 +127,14 @@ IUnitTask@ CheapAA(CCircuitUnit@ unit)
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	if (!OnMap(here))
 		return null;
+	// ANTI-AIR IS DEFENCE AND ANSWERS TO THE DEFENCE POLICY. Measured, armferret
+	// and armrl were 31 of the ~57 towers we held, and neither rule had ever been
+	// asked whether another one was affordable or wanted here -- they place at the
+	// CONSTRUCTOR'S OWN POSITION, which is wherever it happened to be standing.
+	// apexearth: "We're definitely out of control with building certain things
+	// like the light laser turrets and popup air defense turrets."
+	if (!Military::DefenceAllowedAt(here))
+		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, aa, here, DEF_SHAKE));
 	if (post is null)
@@ -371,6 +379,14 @@ IUnitTask@ HeavyAA(CCircuitUnit@ unit)
 		return null;
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	if (!OnMap(here))
+		return null;
+	// ANTI-AIR IS DEFENCE AND ANSWERS TO THE DEFENCE POLICY. Measured, armferret
+	// and armrl were 31 of the ~57 towers we held, and neither rule had ever been
+	// asked whether another one was affordable or wanted here -- they place at the
+	// CONSTRUCTOR'S OWN POSITION, which is wherever it happened to be standing.
+	// apexearth: "We're definitely out of control with building certain things
+	// like the light laser turrets and popup air defense turrets."
+	if (!Military::DefenceAllowedAt(here))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, aa, here, DEF_SHAKE));
