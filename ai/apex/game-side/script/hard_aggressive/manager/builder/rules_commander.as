@@ -268,6 +268,7 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 }
 
 int gNextCommAssist = 0;
+int gNextCommEnergy = 0;
 const int COMM_ASSIST_PERIOD = 2 * SECOND;
 
 // THE COMMANDER HAD NO FALLBACK, AND THAT IS WHERE THE IDLE TIME COMES FROM.
@@ -295,6 +296,14 @@ IUnitTask@ CommanderIdleWork(CCircuitUnit@ unit, bool isComm)
 		return null;
 	// A commander that is standing still because it is in danger is handled by
 	// the retreat branches above; do not hand it a job that walks it back out.
+	// VetoCommanderReclaim and VetoCommanderHold null the engine's offer in order
+	// to KEEP the commander on what it is already doing. Handing it fresh work
+	// here caused exactly the task switch those vetoes exist to prevent, so a
+	// commander genuinely mid-job is left alone. `target` is the nanoframe, which
+	// is what separates real work from a task it has not started.
+	IUnitTask@ held = unit.task;
+	if ((held !is null) && (SiteBuildName(held) != "") && (held.target !is null))
+		return null;
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	if (ThreatFor(unit, here) > CON_THREAT_VETO) {
 		++gCommIdleUnsafe;
@@ -324,12 +333,14 @@ IUnitTask@ CommanderIdleWork(CCircuitUnit@ unit, bool isComm)
 		}
 	}
 
-	if (!aiEconomyMgr.isMetalEmpty && gHomeSet && !EnergyWasting()) {
+	if (!aiEconomyMgr.isMetalEmpty && gHomeSet && !EnergyWasting()
+		&& (ai.frame >= gNextCommEnergy)) {
 		CCircuitDef@ gen = SolarDef();
 		if ((gen !is null) && gen.IsAvailable(ai.frame)) {
 			IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
 					Task::Priority::NORMAL, gen, gHomePos, SQUARE_SIZE * 8));
 			if (post !is null) {
+				gNextCommEnergy = ai.frame + COMM_ASSIST_PERIOD;
 				++gCommIdleJobs;
 				return post;
 			}

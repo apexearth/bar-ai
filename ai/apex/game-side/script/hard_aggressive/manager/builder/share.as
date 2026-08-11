@@ -70,9 +70,14 @@ const int   ADV_CON_FULL_BONUS  = 6;
 // top of the curve is where he was least certain.
 //
 // "Air cons would never need a limit since they have no ground hitbox to worry
-// about" -- so an air constructor has none. The whole justification for a
-// ceiling is base room, and air does not consume it.
-const float CON_AIR_UNBOUNDED = 9999.f;
+// about." The ceiling that room-in-the-base justifies is what air does not need,
+// and it no longer has one: behaviour.json's flat armca/corca limits are gone.
+//
+// It must NOT mean an unbounded FLOOR. This returned 9999, and BuildPowerFirst
+// uses the number as "build a constructor while below it" -- so an air plant the
+// mix claimed could never satisfy the floor, returned a constructor on every
+// call, and built nothing else for the rest of the game. The floor is what the
+// income justifies for everyone; only the ceiling was ever the air question.
 
 // The def-taking form. mix.as is included BEFORE builder.as in main.as, so a
 // const declared here is not visible there -- functions are module-wide but
@@ -88,8 +93,6 @@ int ConsWantedFor(CCircuitDef@ con)
 
 int ConsWantedTier(bool advanced, bool air)
 {
-	if (air)
-		return int(CON_AIR_UNBOUNDED);
 	const float inc = aiEconomyMgr.metal.income;
 	if (inc < 2.f)
 		return 1;

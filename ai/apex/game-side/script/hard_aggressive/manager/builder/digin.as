@@ -68,7 +68,6 @@ uint DefenceAround(const AIFloat3& in pos)
 }
 
 const int   TROUBLE_HITS    = 3;
-// Never stack more than this in one 700-elmo area, however hot it gets.
 // No ceiling. apexearth: "we don't want that cap" -- what bounds a fence is
 // how often this position has actually been shot at, which the hit count below
 // already expresses.
