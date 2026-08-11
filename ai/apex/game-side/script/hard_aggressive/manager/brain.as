@@ -405,9 +405,22 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	if (!OnMap(best))
 		return null;
 
+	// HOW MUCH THE LINE IS WORTH RIGHT NOW, rather than a constant. A line with
+	// nothing on it is the most valuable thing a builder can be doing; a line
+	// already covered end to end is worth almost nothing, and should lose to a mex
+	// upgrade without anyone having to write a rule saying so. That is the whole
+	// point of the want being ranked instead of sitting in the pipeline.
+	uint bare = 0;
+	for (uint i = 0; i < line.length(); ++i) {
+		if (OnMap(line[i]) && (Military::FenceCountNear(line[i], FRONT_FENCE_SPREAD) == 0))
+			++bare;
+	}
+	const float uncovered = (line.length() > 0)
+			? (float(bare) / float(line.length())) : 0.f;
+
 	Want@ w = Want();
 	w.kind = "fence";
-	w.value = FRONT_FENCE_VALUE;
+	w.value = FRONT_FENCE_VALUE * uncovered;
 	w.cost = tower.costM;
 	w.pos = best;
 	@w.def = tower;

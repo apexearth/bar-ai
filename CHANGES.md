@@ -18,6 +18,58 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-11: three rules deleted, one real bug fixed, and a pattern banned
+
+apexearth: *"fyi im getting huge red flags that this is so fragile for you to put
+together. Please make it smart and adaptable."*
+
+He is right, and the shape of the mistake is on record in this file already. I
+answered each symptom with another rung on the `AiMakeTask` ladder -- a commander
+march, a support crew, an offer-taker, a hold rule -- each with its own
+thresholds and its own idea of when to fire. That is the 2026-08-01 failure mode
+being rebuilt by hand: order is the design, so every added rung is a displacement
+bet, and none of them share a view of the world.
+
+**Deleted, not extended**: `CommanderAdvanceMex`, `CommanderFrontLine` and
+`FrontSupport` are gone, along with the `FRONT_CONS` curve they needed. Forward
+defence has ONE home again -- the Brain's `FrontDefenceWant` -- which is the
+component whose entire job is ranking proposals against each other.
+
+What the deleted rules knew was moved into it rather than lost: the want's value
+is now `FRONT_FENCE_VALUE * (uncovered fraction of the line)`. A bare line
+outranks a mex upgrade on its own arithmetic; a line already covered end to end
+loses to one, with nobody writing a rule that says so. That is the adaptable
+version of what the ladder was expressing by position.
+
+**A real bug, independent of all of it.** `ADV_CON_COST` is 300 and `armcom`
+costs 2700, so `MexGuardTower` and `ContestTower` classified the COMMANDER as an
+advanced constructor and handed it `armpb` -- a Pit Bull, which
+`unitdef.py armpb --builders` lists as buildable by `armcomlvl4` and up. A
+level-1 commander cannot build one, so every tower the commander was ever asked
+for was a silent no-op. This is why the commander still left its mexes bare after
+`CommanderMexGuard` was added to fix exactly that: the rule fired, and the def
+was unbuildable. `IsAdvConDef` now excludes the COMM role, and the commander
+builds the llt it can actually build.
+
+**A pattern banned.** Handing back a task out of our own registry as the result
+of `AiMakeTask` has now killed the engine twice: the defence-task version exited
+`0xC0000374` (heap corruption) in 5 of 6 games, the mex version `0xC0000005` in
+3 of 6. Both read as obviously correct. `SaferMex`/`FallbackMex` do the same
+thing and are stable, which suggests the difference is being called cold rather
+than on the engine's own refusal path -- but that is a guess, and a guess does
+not license retrying it.
+
+Also caught by the same experiment: `FindOpenMexSpot` does NOT return a spot near
+the position it is given, it returns the best open spot it knows. Probing "one
+step toward the front" with it claimed extractors at 4.75, 5.19 and **15.64** of
+the way to the enemy, and ten of twenty-four player-games ended wiped out. Never
+hand its result to a builder without checking where it actually is.
+
+Measured after the deletions, six games against the same control: metal produced
+31,133 (control 29,996), mex upgrades 3, wiped 2/24 (control 2/24), defences 11.0
+per player (11.5), forward 2% (4%). Neutral to slightly ahead on economy, unmoved
+on position -- with three rules and a config row removed.
+
 ## 2026-08-11 (corrected): the safe ground exists, and it is EARLY
 
 The entry below is too pessimistic and the correction matters. It read the safe

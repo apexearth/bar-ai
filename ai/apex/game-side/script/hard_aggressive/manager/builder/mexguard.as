@@ -84,9 +84,26 @@ CCircuitDef@ MexDef()
 // where a raid arrives in force and a Sentry is a speed bump. The Beamer is 190
 // metal for materially more gun -- the same def statics.as reaches for when it
 // wants something an attack cannot simply walk past.
+// A COMMANDER IS NOT AN ADVANCED CONSTRUCTOR, WHATEVER IT COSTS. The tier here
+// is decided by cost, ADV_CON_COST is 300, and armcom costs 2700 -- so every
+// tower the commander was ever asked to build was a Pit Bull, which
+// `unitdef.py armpb --builders` lists as buildable by armcomlvl4 and up. A
+// level-1 commander cannot build one, and asking for it is a silent no-op.
+//
+// This is why the commander still left its mexes bare after CommanderMexGuard
+// was added to fix exactly that: the rule fired and the def was unbuildable.
+// apexearth: humans "walk their commanders to the front, capturing mexes on the
+// way, making some llts" -- an llt is what it can actually build.
+bool IsAdvConDef(CCircuitUnit@ unit)
+{
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return false;
+	return unit.circuitDef.costM >= ADV_CON_COST;
+}
+
 CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 {
-	if (unit.circuitDef.costM >= ADV_CON_COST)
+	if (IsAdvConDef(unit))
 		return SideDef3(armpb, corvipe, legapopupdef);
 	if (OnMap(at) && (Military::OnBorder(at) || Military::NearFront(at))) {
 		CCircuitDef@ mid = SideDef3(armbeamer, corhllt, legmg);
@@ -448,7 +465,7 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 
 CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 {
-	if (unit.circuitDef.costM >= ADV_CON_COST)
+	if (IsAdvConDef(unit))
 		return SideDef3(armpb, corvipe, legapopupdef);
 	// Nothing rather than a light laser once we are past its tier. The tower was
 	// chosen from the CONSTRUCTOR's cost alone, so a T1 constructor kept being
