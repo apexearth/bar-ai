@@ -91,6 +91,22 @@ array<float> ROLE_AH      = {0.00f, 0.00f, 0.05f, 0.08f, 0.10f};
 array<float> ROLE_AHA     = {0.00f, 0.00f, 0.05f, 0.08f, 0.10f};
 
 //------------------------------------------------------------------------------
+// 2b. HOW DEFENCE ITSELF IS SPLIT.
+//
+// Two different jobs share the SPEND_DEFENCE share, and they must not compete
+// for it: holding the front line is the Brain's macro decision, while guarding
+// an extractor or answering a constructor that keeps being shot is local work
+// that belongs to the rule that noticed. On one shared allowance the local work
+// wins by sheer number -- there are far more mexes than lanes -- and the front
+// line ends up depending on how many extractors we happen to own.
+//
+// Relative weights, like everything else here.
+//                       8     20     50    100    300
+//------------------------------------------------------------------------------
+array<float> DEF_FRONT = {1.f,  2.f,  3.f,  3.f,  3.f};   // the Brain's line
+array<float> DEF_LOCAL = {2.f,  2.f,  1.f,  1.f,  1.f};   // mex guards, dig-ins
+
+//------------------------------------------------------------------------------
 // 3. HOW FAR THE OBSERVED ENEMY MOVES THE MIX.
 //
 // Each role answers particular enemy roles -- riot answers raiders, skirmish

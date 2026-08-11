@@ -84,23 +84,63 @@ bool DefenceAllowedAt(const AIFloat3& in pos)
 	// with none of them forward. Under attack we can afford more defence, not
 	// unlimited defence, and the rear share still has to hold or we wall the
 	// wrong end of the map.
+	// ONE MULTIPLIER, NOT TWO MULTIPLIED. apexearth: "We're definitely out of
+	// control with building certain things like the light laser turrets and popup
+	// air defense turrets."
+	//
+	// He is right and it was arithmetic, not the removed limits. This read
+	// income * 0.8 * BudgetMult * pressure, and BudgetMult reaches 2.0 while
+	// pressure is another 2.0 -- so a base under attack whose defence share was
+	// still low allowed 1 + 40 * 0.8 * 4 = 129 towers at 40 metal/s. Both factors
+	// say "more defence than usual is justified", and taking the larger of the two
+	// says that once instead of squaring it.
 	const float pressure = (gTurtle || BaseContested()) ? 2.f : 1.f;
-	const float per = ai.GetTunable("apex_fence_per_income", 0.8f)
-			* Brain::BudgetMult(Brain::DEFENCE) * pressure;
-	const int budget = 1 + int(aiEconomyMgr.metal.income * per);
-	if (int(gFenceId.length()) >= budget)
+	const float share = Brain::BudgetMult(Brain::DEFENCE);
+	const float boost = (pressure > share) ? pressure : share;
+	const float per = ai.GetTunable("apex_fence_per_income", 0.8f) * boost;
+	const float budget = 1.f + aiEconomyMgr.metal.income * per;
+
+	// TWO JOBS, TWO ALLOWANCES. apexearth: "I just want to make sure we are
+	// staying organized... I was wondering if we're depending on unrelated things
+	// to get our frontline defence created."
+	//
+	// We were. Holding the line and guarding an extractor shared one budget, and
+	// mex guards are numerous and near home -- so they spent the allowance and the
+	// Brain's front request was then refused for being over it. The front line
+	// depended on how many mexes we happened to own, which is exactly the coupling
+	// he is asking about. Each job now counts only its own standing towers against
+	// its own share, from targets.as DEF_FRONT / DEF_LOCAL.
+	// NOTHING BEHIND OUR OWN BASE. apexearth, watching: "we're basically making
+	// tons of defense, but we're making it all, like, behind our base."
+	//
+	// The gate only ever asked "is this forward?", and treated everything else as
+	// local work worth an allowance -- which lumps a tower covering a rear mex in
+	// with a tower on the far side of our own start position. Measured, our
+	// players' median defence sat at -0.17 to -0.12 along the home->enemy axis:
+	// past the base, away from the enemy. Ground the enemy can only reach by
+	// walking through everything else we own does not need a turret.
+	//
+	// Exception is the same one as everywhere else: if they are actually in our
+	// ground, they got there somehow and the geometry no longer argues.
+	if ((ForwardFraction(pos) < 0.f) && !gTurtle && !BaseContested())
 		return false;
 
-	if (OnBorder(pos) || NearFront(pos))
-		return true;
+	const float fShare = Targets::At(Targets::DEF_FRONT);
+	const float lShare = Targets::At(Targets::DEF_LOCAL);
+	const float total = (fShare + lShare > 0.f) ? (fShare + lShare) : 1.f;
+	const bool forward = OnBorder(pos) || NearFront(pos);
 
-	const float rearShare = ai.GetTunable("apex_fence_rear_share", 0.10f);
-	uint rear = 0;
+	uint front = 0;
+	uint local = 0;
 	for (uint i = 0; i < gFencePos.length(); ++i) {
-		if (!OnBorder(gFencePos[i]) && !NearFront(gFencePos[i]))
-			++rear;
+		if (OnBorder(gFencePos[i]) || NearFront(gFencePos[i]))
+			++front;
+		else
+			++local;
 	}
-	return float(rear) < float(budget) * rearShare;
+	if (forward)
+		return float(front) < budget * (fShare / total);
+	return float(local) < budget * (lShare / total);
 }
 
 void AiMakeDefence(int cluster, const AIFloat3& in pos)
