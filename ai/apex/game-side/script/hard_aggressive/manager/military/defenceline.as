@@ -151,6 +151,38 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	const float per = ai.GetTunable("apex_fence_per_income", 0.8f)
 			* Brain::BudgetMult(Brain::DEFENCE);
 	const int budget = 1 + int(aiEconomyMgr.metal.income * per);
+
+	// NINETY PERCENT OF DEFENCE BELONGS ON THE FRONT LINE. apexearth: "We're
+	// making tons of defenses but few of them are on the front line. We need to be
+	// putting 90% of our defenses on the front line", and in USER-FEEDBACK.md
+	// before that: "90% of a human's defences sit on the front line."
+	//
+	// The share was never enforced, only hoped for: onLine gated WHETHER a rear
+	// cluster was eligible, and several clauses above bypass that gate entirely --
+	// the opening, a turtle, losing ground. So rear towers competed for the same
+	// budget as front ones and, there being far more rear clusters than border
+	// ones on a small map, they won on sheer number.
+	//
+	// gFencePos records where every defence structure we own actually stands, so
+	// the split can be counted rather than assumed. A rear site is refused once
+	// the rear already holds its tenth; the front is never refused on this basis.
+	if (!onLine) {
+		const float rearShare = ai.GetTunable("apex_fence_rear_share", 0.10f);
+		uint rear = 0;
+		for (uint i = 0; i < gFencePos.length(); ++i) {
+			if (!OnBorder(gFencePos[i]) && !NearFront(gFencePos[i]))
+				++rear;
+		}
+		if (float(rear) >= float(budget) * rearShare) {
+			if (ai.frame >= gNextFenceCapLog) {
+				gNextFenceCapLog = ai.frame + 60 * SECOND;
+				AiLog(Factory::T() + "apex: rear defence at its share " + rear
+					+ "/" + formatFloat(float(budget) * rearShare, "", 0, 1)
+					+ " of " + budget + " -- front line only");
+			}
+			return;
+		}
+	}
 	if (!gTurtle && !BaseContested() && (int(gFenceId.length()) >= budget)) {
 		if (ai.frame >= gNextFenceCapLog) {
 			gNextFenceCapLog = ai.frame + 60 * SECOND;

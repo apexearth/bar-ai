@@ -16,8 +16,21 @@
 //
 // Two rules for anything added here:
 //   * a ratio against economic power, never a count and never a clock;
-//   * relative weights, not percentages -- rows are normalised, so raising one
-//     entry lowers the others and nothing has to add up by hand.
+//   * relative weights, not percentages -- EVERY row here is normalised against
+//     its neighbours, so {3, 1, 2, 2} says exactly what {0.375, 0.125, 0.25,
+//     0.25} says. Raise one entry and the others fall by themselves. This is
+//     true of the SPEND_ rows and the ROLE_ rows alike.
+//
+// WRITING THE NUMBERS: they are AngelScript float literals, so they need a
+// decimal point AND the f -- `2.f` or `2.0f`, never `2f` and never `.5f`. A bad
+// literal here does not fail loudly: the whole variant stops compiling and the
+// match still runs, with apex playing as near-stock and nothing on screen
+// saying so. Check any edit with:
+//
+//     python tools/deploy_ai.py deploy apex && python tools/run_match.py \
+//         --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+//         --map "Comet Catcher" --minutes 5 --out matches/_check
+//     grep -c " : ERR " matches/_check/infolog.txt      # must be 0
 //==============================================================================
 
 namespace Targets {
@@ -36,12 +49,17 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 //
 // Early the economy and build power matter most; once there is an economy to
 // spend, the army takes the largest share.
+//
+// RELATIVE WEIGHTS -- they do NOT have to add up to anything. {3, 1, 2, 2} says
+// the same as {0.375, 0.125, 0.25, 0.25}; raise one row and the others fall by
+// themselves. Written here as thirds and halves so the intent is readable rather
+// than as decimals that happen to sum to one.
 //                            8     20     50    100    300
 //------------------------------------------------------------------------------
-array<float> SPEND_ARMY       = {0.30f, 0.40f, 0.45f, 0.50f, 0.55f};
-array<float> SPEND_DEFENCE    = {0.10f, 0.15f, 0.15f, 0.15f, 0.15f};
-array<float> SPEND_ECONOMY    = {0.35f, 0.27f, 0.22f, 0.18f, 0.13f};
-array<float> SPEND_BUILDPOWER = {0.25f, 0.18f, 0.18f, 0.17f, 0.17f};
+array<float> SPEND_ARMY       = {  3.f,   4.f,   5.f,   6.f,   10.f};
+array<float> SPEND_DEFENCE    = {  1.f,  2.f,  1.5f,  1.5f,  0.5f};
+array<float> SPEND_ECONOMY    = {3.5f,  2.7f,   2.f,  1.5f,   1.f};
+array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
 
 //------------------------------------------------------------------------------
 // 2. WHAT THE ARMY IS MADE OF.
@@ -62,9 +80,9 @@ array<float> SPEND_BUILDPOWER = {0.25f, 0.18f, 0.18f, 0.17f, 0.17f};
 // is what the metal buys instead.
 //                            8     20     50    100    300
 //------------------------------------------------------------------------------
-array<float> ROLE_RAIDER  = {0.35f, 0.30f, 0.15f, 0.08f, 0.05f};
-array<float> ROLE_ASSAULT = {0.35f, 0.32f, 0.28f, 0.24f, 0.20f};
-array<float> ROLE_SKIRM   = {0.12f, 0.15f, 0.17f, 0.18f, 0.18f};
+array<float> ROLE_RAIDER  = {0.35f, 0.10f, 0.15f, 0.08f, 0.05f};
+array<float> ROLE_ASSAULT = {0.35f, 0.2f, 0.28f, 0.24f, 0.10f};
+array<float> ROLE_SKIRM   = {0.12f, 0.25f, 0.17f, 0.18f, 0.18f};
 array<float> ROLE_RIOT    = {0.10f, 0.10f, 0.10f, 0.09f, 0.08f};
 array<float> ROLE_ARTY    = {0.03f, 0.05f, 0.08f, 0.10f, 0.12f};
 array<float> ROLE_AA      = {0.05f, 0.06f, 0.07f, 0.07f, 0.07f};
@@ -90,7 +108,7 @@ const float COUNTER_MAX = 0.6f;
 // spend a slot on.
 //                       8     20     50    100    300
 //------------------------------------------------------------------------------
-array<float> SCOUT_PER_MEX = {3.f,  4.f,  8.f, 16.f, 32.f};
+array<float> SCOUT_PER_MEX = {1.f,  1.f,  2.f, 4.f, 8.f};
 
 //------------------------------------------------------------------------------
 // Piecewise-linear read of any row above, against metal income. Below the first

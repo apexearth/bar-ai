@@ -167,14 +167,47 @@ bool BorderPos(AIFloat3& out p, uint rank)
 	return true;
 }
 
-// Within one band of the forward edge, i.e. on the border rather than behind it.
+// THE FRONT IS BETWEEN US AND THEM, NOT WHEREVER WE HAPPEN TO HAVE BUILT.
+//
+// This measured against BorderPos(edge, 0), and that edge is the closest of OUR
+// OWN defence sites to the enemy -- so the definition was self-referential. With
+// everything we own sitting at home, home became the border and every rear tower
+// passed. Measured from positional telemetry, 12 minutes, +50: our four players
+// held 53 defences with 0-17% of them past a quarter of the way to the enemy and
+// median positions of -0.22 to 0.14 along the home->enemy axis, i.e. at or
+// BEHIND our own base centroid -- and the rear-share check refused none of them,
+// because every one read as "on the border".
+//
+// apexearth, repeatedly and again tonight: "We're making tons of defenses but
+// few of them are on the front line. We need to be putting 90% of our defenses
+// on the front line."
+//
+// So it is geometry now: how far along the line from our base to theirs a
+// position sits. 0 is our base, 1 is theirs, and anything past FRONT_FRACTION
+// counts as forward. GetEnemyPos is the centroid of all enemies, which is a poor
+// answer to "where is that one raider" and a perfectly good answer to "which way
+// is forward" -- the only thing it is used for here.
+const float FRONT_FRACTION = 0.30f;
+
+float ForwardFraction(const AIFloat3& in pos)
+{
+	if (!Builder::gHomeSet)
+		return 0.f;
+	const AIFloat3 home = Builder::gHomePos;
+	const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(e))
+		return 0.f;
+	const float dx = e.x - home.x;
+	const float dz = e.z - home.z;
+	const float span = dx * dx + dz * dz;
+	if (span < NEAR_ZERO)
+		return 0.f;
+	return ((pos.x - home.x) * dx + (pos.z - home.z) * dz) / span;
+}
+
 bool OnBorder(const AIFloat3& in pos)
 {
-	AIFloat3 edge;
-	if (!BorderPos(edge, 0))
-		return false;
-	AIFloat3 e = aiEnemyMgr.GetEnemyPos();
-	return pos.distance2D(e) <= edge.distance2D(e) + BORDER_BAND;
+	return ForwardFraction(pos) >= ai.GetTunable("apex_front_fraction", FRONT_FRACTION);
 }
 
 // What the enemy's mobile army is WORTH, in metal.

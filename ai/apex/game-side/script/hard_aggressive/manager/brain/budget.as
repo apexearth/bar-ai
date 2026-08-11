@@ -40,7 +40,15 @@ int gNextBudgetLog = 0;
 // pre-Brain build actually produced (army 35.6%, defence 22.2%, constructors
 // 10.5%, factories 11.1%) with army raised, because that build was itself losing
 // the trade and stock fields more army than either of us.
-float TargetShare(Cat c)
+// RELATIVE WEIGHTS, NOT PERCENTAGES. apexearth: "Easier for me if I don't have
+// to do math here and you interpret it proportionally."
+//
+// So the four rows in targets.as are read at the current income and then
+// normalised against each other. {3, 1, 2, 2} and {0.375, 0.125, 0.25, 0.25}
+// mean exactly the same thing, and raising one row lowers the others without
+// anything having to be re-balanced by hand -- the same contract the ROLE_ rows
+// already had.
+float RawTarget(Cat c)
 {
 	if (c == ARMY)
 		return ai.GetTunable("apex_share_army", Targets::At(Targets::SPEND_ARMY));
@@ -49,6 +57,16 @@ float TargetShare(Cat c)
 	if (c == ECONOMY)
 		return ai.GetTunable("apex_share_economy", Targets::At(Targets::SPEND_ECONOMY));
 	return ai.GetTunable("apex_share_buildpower", Targets::At(Targets::SPEND_BUILDPOWER));
+}
+
+float TargetShare(Cat c)
+{
+	float sum = 0.f;
+	for (int i = 0; i < int(CATS); ++i)
+		sum += RawTarget(Cat(i));
+	if (sum <= 0.f)
+		return 0.f;
+	return RawTarget(c) / sum;
 }
 
 Cat CatOf(Unit::UseAs usage)

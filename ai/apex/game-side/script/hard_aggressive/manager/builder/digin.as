@@ -131,6 +131,24 @@ bool AreaHasJammer(const AIFloat3& in pos)
 // already tracked per constructor for the dig-in trigger, and unlike
 // GetBuilderThreatAt -- which reads zero 97% of the time and crashes off-map --
 // it is a real, positional measure of danger: something shot us, here.
+// A SCOUT IS NOT A SIEGE. apexearth, watching: "one of our bases was attacked by
+// an annoying scout, and afterwards, they made fifteen or more light laser
+// turrets. None of the other bases do this."
+//
+// Because the escalation ran on HIT COUNT, and only on hit count. The last term
+// here was `hits / 12`, linear and with no top, while gConHits clears only after
+// 90 quiet seconds -- so one cheap unit plinking one constructor drove that
+// base's wanted fence up indefinitely, and every base nobody shot at stayed at
+// the floor. It could not tell a Flea from a Fatboy push.
+//
+// Hits stay as the TRIGGER, which is what they are good for: something is
+// shooting here, and unlike GetBuilderThreatAt that reading is real. What they
+// no longer do is set the AMOUNT. Escalation now saturates at three extra --
+// past that more towers stop answering the question -- and the whole thing is
+// scaled by the defence category's budget, so an area can only keep escalating
+// while defence as a whole is still under its share of our metal. See
+// brain/budget.as and targets.as SPEND_DEFENCE: that is the economic bound, and
+// it moves with income instead of being a number typed in here.
 uint FenceWanted(int hits)
 {
 	uint want = DIG_MAX_FENCE;
@@ -140,7 +158,9 @@ uint FenceWanted(int hits)
 		want += 2;
 	else if (hits >= TROUBLE_HITS)
 		want += 1;
-	return want + uint(hits / (TROUBLE_HITS * 4)) * DIG_FENCE_PER_TROUBLE;
+	const float budget = Brain::BudgetMult(Brain::DEFENCE);
+	const uint scaled = uint(float(want) * budget);
+	return (scaled < DIG_MAX_FENCE) ? DIG_MAX_FENCE : scaled;
 }
 
 bool AreaNeedsDefence(const AIFloat3& in pos, uint wanted = DIG_MAX_FENCE)

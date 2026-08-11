@@ -75,6 +75,8 @@ local NAMES = {
 	"apex_advsol_energy",
 	"apex_energy_any",
 	"apex_fence_per_income",
+	"apex_fence_rear_share",
+	"apex_front_fraction",
 	"apex_army_deficit_floor",
 	"apex_hold_release",
 	"apex_budget",
