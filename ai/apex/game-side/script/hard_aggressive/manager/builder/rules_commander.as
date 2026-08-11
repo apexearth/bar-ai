@@ -320,11 +320,7 @@ IUnitTask@ CommanderIdleWork(CCircuitUnit@ unit, bool isComm)
 	}
 
 	if (!aiEconomyMgr.isMetalEmpty && gHomeSet && !EnergyWasting()) {
-		CCircuitDef@ gen = Factory::gHaveT2
-				? SideDef3(armadvsol, coradvsol, legadvsol)
-				: SideDef3(armsolar, corsolar, legsolar);
-		if ((gen is null) || !gen.IsAvailable(ai.frame))
-			@gen = SideDef3(armsolar, corsolar, legsolar);
+		CCircuitDef@ gen = SolarDef();
 		if ((gen !is null) && gen.IsAvailable(ai.frame)) {
 			IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
 					Task::Priority::NORMAL, gen, gHomePos, SQUARE_SIZE * 8));

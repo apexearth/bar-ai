@@ -105,11 +105,7 @@ IUnitTask@ MetalFullFallback(CCircuitUnit@ unit, bool isComm)
 	if (!isComm && !aiEconomyMgr.isMetalEmpty && gHomeSet
 		&& !EnergyWasting() && (ai.frame >= gNextMetalFullDef))
 	{
-		CCircuitDef@ gen = Factory::gHaveT2
-				? SideDef3(armadvsol, coradvsol, legadvsol)
-				: SideDef3(armsolar, corsolar, legsolar);
-		if ((gen is null) || !gen.IsAvailable(ai.frame))
-			@gen = SideDef3(armsolar, corsolar, legsolar);
+		CCircuitDef@ gen = SolarDef();
 		if ((gen !is null) && gen.IsAvailable(ai.frame)) {
 			IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
 					Task::Priority::NORMAL, gen, gHomePos, SQUARE_SIZE * 8));

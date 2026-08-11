@@ -20,11 +20,33 @@ string armafus("armafus"); string corafus("corafus"); string legafus("legafus");
 string armuwfus("armuwfus"); string coruwfus("coruwfus");
 string armadvsol("armadvsol"); string coradvsol("coradvsol"); string legadvsol("legadvsol");
 // Energy income before the advanced collector is worth its 5,000-energy build.
-const float ADVSOL_MIN_ENERGY = 200.f;
+// apexearth: "we make too many basic solars and not enough advanced solars...
+// if we make over 250 energy per second then make advanced solars."
+const float ADVSOL_MIN_ENERGY = 250.f;
 // A generator is affordable when income covers its BUILD cost -- both resources --
 // inside this many seconds. This is the whole tiering rule: nothing else decides
 // when the ladder steps up.
 const float AFFORD_SECONDS = 90.f;
+
+// WHICH SOLAR, EVERYWHERE.
+//
+// HomeEnergy's ladder already tiered up correctly, but it was not the only thing
+// building collectors: the Brain's energy-stall want, the metal-full fallback and
+// the commander's last resort each picked armsolar directly -- two of them off
+// `Factory::gHaveT2`, which is a tech question, not an energy one. So a base
+// making 400 energy/second kept putting down 20-energy panels from three
+// different rules. This is the single answer they all use now.
+CCircuitDef@ SolarDef()
+{
+	if (aiEconomyMgr.energy.income
+			>= ai.GetTunable("apex_advsol_energy", ADVSOL_MIN_ENERGY)) {
+		CCircuitDef@ adv = SideDef3(armadvsol, coradvsol, legadvsol);
+		if ((adv !is null) && adv.IsAvailable(ai.frame))
+			return adv;
+	}
+	return SideDef3(armsolar, corsolar, legsolar);
+}
+
 
 bool AffordableGen(CCircuitDef@ d)
 {

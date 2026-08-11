@@ -55,6 +55,8 @@ const float PINPOINT_VALUE = 0.5f;   // targeting support, cheap and bounded
 // returns early on IsEnergyStalling, so a stall stops every other economy task
 // including mex upgrades.
 const float CONVERT_VALUE     = 1.0f;    // metal/s per converter, while spilling
+// energyconv_capacity, read from armmakr.lua: what one converter draws.
+const float CONVERT_DRAW      = 70.f;
 const float ENERGY_VALUE      = 1.2f;    // metal/s equivalent of a generator step
 const float ENERGY_STALL_MULT = 6.0f;    // a stall blocks the whole economy
 // BOTH BANKS FULL MEANS INCOME IS NOT THE PROBLEM. apexearth: "if we are full on
@@ -181,7 +183,7 @@ Want@ MexUpgradeWant(CCircuitUnit@ unit)
 // A want the Brain does not execute itself: it names the rule that does, and
 // Decide() calls that rule only if this want wins. The rule keeps its own
 // preconditions -- this decides ORDER, not eligibility.
-Want@ Simple(string kind, float value, CCircuitDef@ def)
+Want@ Simple(string kind, float value, CCircuitDef@ def, bool advOnly = true)
 {
 	if ((def is null) || !def.IsAvailable(ai.frame))
 		return null;
@@ -191,7 +193,7 @@ Want@ Simple(string kind, float value, CCircuitDef@ def)
 	w.cost = def.costM;
 	w.have = def.count;
 	@w.def = def;
-	w.needsAdvCon = true;
+	w.needsAdvCon = advOnly;
 	return w;
 }
 
@@ -222,8 +224,19 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 {
 	Clear();
-	if (!isAdvCon)
-		return null;
+	// THE BRAIN WAS INERT FOR THE WHOLE EARLY GAME.
+	//
+	// This read `if (!isAdvCon) return null;`, and isAdvCon is cost >= 300, i.e.
+	// a T2 constructor. Measured: conT2 is 0 at minute 12 in every game sampled,
+	// and `apex: brain wants=` appears ZERO times in a 12-minute infolog. So the
+	// Wants faculty -- the thing that is supposed to rank what our metal buys --
+	// did not run at all until an advanced constructor existed, which is after
+	// the window where our economy actually falls behind.
+	//
+	// Only some wants genuinely need an advanced builder: a moho, a gantry, a
+	// silo. Energy, converters and nano turrets are ordinary T1 work. So the test
+	// moves from the whole function to the individual want, which is what
+	// needsAdvCon was for.
 
 	// NOTHING OPTIONAL BEFORE T2 EXISTS.
 	//
@@ -246,20 +259,56 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// ALWAYS MAKE ENERGY, AND CONVERT WHEN IT SPILLS -- as scores, so they can
 	// be compared rather than merely obeyed. apexearth: "we had built custom eco
 	// logic... always make energy, and if max energy make energy converters."
-	if (aiEconomyMgr.isEnergyStalling) {
-		Want@ e = Simple("energy", ENERGY_VALUE * ENERGY_STALL_MULT,
-				SideDef3("armsolar", "corsolar", "legsolar"));
+	// ALWAYS, not only when already broke. The rule this implements is "always
+	// make energy, and if max energy make energy converters" -- but the code only
+	// proposed energy `if (isEnergyStalling)`, which is the state where the grid
+	// has ALREADY run out. So the Brain never grew energy ahead of demand; growth
+	// happened only through rules that bypass this ranking entirely, each of which
+	// put down a basic collector. apexearth: "we make too many basic solars and
+	// not enough advanced solars."
+	//
+	// A stall is urgency, so it stays a multiplier rather than the gate.
+	{
+		Want@ e = Simple("energy",
+				ENERGY_VALUE * (aiEconomyMgr.isEnergyStalling ? ENERGY_STALL_MULT : 1.f),
+				Builder::SolarDef(), false);
 		if (e !is null) {
-			e.have = 0;   // a stall is not "we have enough of these"
+			// NOT decayed by how many we hold. `/(1 + have)` is right for "one
+			// more Pinpointer" and wrong for energy: demand comes from what the
+			// base CONSUMES, and it does not fall because a collector already
+			// stands. The stall branch used to zero this by hand, which was the
+			// same admission in one special case.
+			e.have = 0;
 			Propose(e);
 		}
 	}
-	if (!preT2 && Builder::EnergyWasting())
-		Propose(Simple("convert", CONVERT_VALUE, SideDef3("armmakr", "cormakr", "legeconv")));
+	// NO preT2 GATE. Spilling energy is spilling energy, and a converter is 1
+	// metal to build -- the cheapest metal in the game while the grid overflows.
+	// Blocking this before an advanced plant existed threw the surplus away in
+	// exactly the window our economy is weakest: measured 22,000-28,000 energy
+	// wasted per side by minute 10.
+	// BOUNDED BY THE SPILL, NOT BY A SCORE. A converter costs 1 metal, and
+	// Score() deliberately skips the per-metal division below a cost of 1, so it
+	// ranks 1.0 against a reactor's 0.003 and wins every single tick. That is not
+	// wrong as economics -- while energy overflows it IS the best metal-per-metal
+	// in the game -- but it has no natural stopping point, so the bound has to be
+	// the thing it feeds on: one converter draws 70 energy/second, so the grid
+	// supports income/70 of them and no more.
+	if (Builder::EnergyWasting()) {
+		CCircuitDef@ conv = SideDef3("armmakr", "cormakr", "legeconv");
+		const int convRoom = int(aiEconomyMgr.energy.income / CONVERT_DRAW);
+		if ((conv !is null) && (conv.count < convRoom)) {
+			Want@ c = Simple("convert", CONVERT_VALUE, conv, false);
+			if (c !is null) {
+				c.have = 0;   // demand is the spill, not how many already stand
+				Propose(c);
+			}
+		}
+	}
 
 	// Spend the surplus rather than growing it further.
 	if (!preT2 && (EcoSated() || aiEconomyMgr.isMetalFull))
-		Propose(Simple("nano", NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc")));
+		Propose(Simple("nano", NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc"), false));
 	// ON by default. Attribution showed the income gate, not these, caused the
 	// army drop -- and K/D was the one number that went UP with them (1.49 ->
 	// 1.54). apexearth: "notice how our KD went up with the nanodefense. Maybe
@@ -267,7 +316,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// once. Probably a good thing to have on, just be reasonable about it."
 	// So: kept, later and fewer (see FRONT_NANO_* in builder/nano.as).
 	if (!preT2 && (ai.GetTunable("apex_front_nano", 1.f) > 0.f))
-		Propose(Simple("frontnano", FRONT_NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc")));
+		Propose(Simple("frontnano", FRONT_NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc"), false));
 
 	if (!preT2) {
 	Propose(Simple("gantry", GANTRY_VALUE, SideDef3("armshltx", "corgant", "leggant")));
@@ -322,6 +371,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 
 	for (uint i = 0; i < order.length(); ++i) {
 		Want@ w = order[i];
+		if (w.needsAdvCon && !isAdvCon)
+			continue;   // this one really does need an advanced builder
 		if (w.kind != "mexup" && haveMexUp)
 			continue;
 		if (w.kind == "mexup") {
