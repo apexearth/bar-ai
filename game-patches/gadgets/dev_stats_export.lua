@@ -104,6 +104,7 @@ local mexAt = {}          -- team -> {n -> frame the nth finished}
 -- ending at 12-13 minutes are commander-death timing, not attrition timing.
 local commLost = {}       -- team -> frame its commander died (-1 if alive)
 local builtTop = {}       -- team -> {unitName -> metal built}
+local cheapBuilt = {}     -- team -> {unitName -> metal built}, BELOW SPAM_COST
 -- Metal sunk into STATIC defence. It was invisible: armyValue() counts only
 -- units with speed > 0, and the composition buckets are factories, constructors
 -- and army, so towers landed in mBuiltReal and nowhere else. apexearth: "the
@@ -280,6 +281,15 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	end
 	if isJammerTower(ud) then
 		jamTowers[unitTeam] = (jamTowers[unitTeam] or 0) + 1
+	end
+	-- CHEAP UNITS WERE INVISIBLE IN EVERY COUNTER. A Pawn is 54 metal against
+	-- SPAM_COST 120, so armyReal, mBuiltReal, allBuilt and top= all excluded it --
+	-- cumulative chaff production was simply not in the telemetry, which is why a
+	-- claim about how many Pawns we build had to be estimated from a rate-limited
+	-- log line and was wrong. Counted here per def, outside the branch below.
+	if (ud.metalCost or 0) > 0 and (ud.metalCost or 0) < SPAM_COST then
+		cheapBuilt[unitTeam] = cheapBuilt[unitTeam] or {}
+		cheapBuilt[unitTeam][ud.name] = (cheapBuilt[unitTeam][ud.name] or 0) + ud.metalCost
 	end
 	if (ud.metalCost or 0) >= SPAM_COST then
 		bump(builtReal, unitTeam, ud.metalCost)
@@ -520,6 +530,18 @@ local function dump(reason)
 			parts[#parts + 1] = string.format("commAssist=%d", commAssist[teamID] or 0)
 			parts[#parts + 1] = string.format("commStall=%d", commStall[teamID] or 0)
 			parts[#parts + 1] = string.format("commCloakFlips=%d", commCloakFlips[teamID] or 0)
+
+			local cb = cheapBuilt[teamID]
+			if cb ~= nil then
+				local out = {}
+				for name, metal in pairs(cb) do
+					out[#out + 1] = string.format("%s:%d", name, metal)
+				end
+				table.sort(out)
+				if #out > 0 then
+					parts[#parts + 1] = "cheapBuilt=" .. table.concat(out, ",")
+				end
+			end
 			cmdWindow[teamID] = 0
 
 			local n = Spring.GetTeamStatsHistory(teamID)

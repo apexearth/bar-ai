@@ -518,7 +518,28 @@ def run(args) -> int:
     if result.reason == "unknown" and exit_code is None:
         result.reason = "walltimeout"
 
-    stats = parse_stats(infolog_text)
+    # TELEMETRY COMES FROM stdout, NOT THE SHARED INFOLOG.
+    #
+    # The engine write dir is shared across runs so the archive cache is built
+    # once, and `infolog.txt` in it is appended by every concurrent engine. Two
+    # matches running at the same time therefore interleave their [BARAI_STATS]
+    # rows into each other's parsed result, and each process's own file offset
+    # means rows are also silently LOST. Audited 2026-08-11: of 22 runs, six were
+    # corrupted this way -- one lost 88 of its 96 rows to its concurrent partner,
+    # and a foreign row is what produced a wrong "holds 5 -> 2" in a commit
+    # message.
+    #
+    # `stdout` is this process's own pipe and cannot be crossed. It is the
+    # reference; the infolog stays for the AI's own log lines and for the case
+    # where stdout was not captured.
+    stats = parse_stats(stdout) if stdout else None
+    if stats is None:
+        stats = parse_stats(infolog_text)
+    elif infolog_text:
+        other = parse_stats(infolog_text) or []
+        if len(other) != len(stats):
+            print(f"  telemetry: infolog has {len(other)} rows, stdout {len(stats)}"
+                  f" -- using stdout (shared write dir was contaminated)")
 
     demo = _latest_demo(write_dir / "demos", started)
     if demo:
