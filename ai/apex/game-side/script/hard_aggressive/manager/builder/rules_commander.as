@@ -92,6 +92,11 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 		// the NEAREST undefended mex within MEX_GUARD_REACH, so for a commander
 		// that has just finished one this is the mex under its feet.
 		if (unit.GetHealthPercent() >= COM_RETREAT_HEALTH) {
+			// Above MexGuard: the base is worth more than the extractor the
+			// commander happens to be standing next to, and this asks once.
+			IUnitTask@ home = HomeTower(unit, isComm);
+			if (home !is null)
+				return home;
 			IUnitTask@ cguard = MexGuard(unit);
 			if (cguard !is null) {
 				++gCommGuard;
@@ -332,6 +337,59 @@ IUnitTask@ CommanderIdleWork(CCircuitUnit@ unit, bool isComm)
 	}
 	++gCommIdleNoJob;
 	return null;
+}
+
+// ONE TOWER AT HOME, BEFORE THE COMMANDER WANDERS OFF.
+//
+// apexearth: "our frontline guys bases die early game because commander walks
+// away without building a tower in the base. (just takes 1 to save a whole lot
+// of time)"
+//
+// MexGuard covers extractors, and Fortify answers a constructor that keeps being
+// shot at -- neither covers the base itself, and the commander is the only
+// builder present in the opening. A Sentry is 85 metal against the whole start
+// position, and it only has to exist once: the count check below stops asking
+// the moment one stands, so this cannot turn into a porcupine habit.
+const float HOME_TOWER_RADIUS = 900.f;
+// GetOwnUnitsOfDef only returns FINISHED units, so while the tower was a
+// nanoframe this rule saw a bare base and ordered another -- 85 orders across
+// four players in one 14-minute game. The gate is what stops that: ask, then
+// leave it alone long enough to actually get built.
+const int   HOME_TOWER_RETRY  = 90 * SECOND;
+int gHomeTowerOrders = 0;
+int gNextHomeTower = 0;
+
+IUnitTask@ HomeTower(CCircuitUnit@ unit, bool isComm)
+{
+	if (!isComm || !CommRules() || !gHomeSet || (ai.frame < gNextHomeTower))
+		return null;
+	// A forward base is exactly the case he was describing, so it gets the
+	// heavier tower; a rear start keeps the cheap one.
+	CCircuitDef@ tower = null;
+	if (Military::OnBorder(gHomePos) || Military::NearFront(gHomePos))
+		@tower = SideDef3(armbeamer, corhllt, legmg);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		@tower = SideDef3(armllt, corllt, leglht);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+	// Anything of ours already standing here counts, so a base that got its
+	// defence some other way is left alone.
+	array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(tower, gHomePos, HOME_TOWER_RADIUS);
+	if ((have !is null) && (have.length() > 0))
+		return null;
+
+	const AIFloat3 site = ai.FindBuildSiteNear(tower, gHomePos, HOME_TOWER_RADIUS);
+	if (!OnMap(site))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::HIGH, tower, site, 0.f));
+	if (post is null)
+		return null;
+	gNextHomeTower = ai.frame + HOME_TOWER_RETRY;
+	++gHomeTowerOrders;
+	AiLog(Factory::T() + "apex: home tower " + tower.GetName()
+		+ " #" + gHomeTowerOrders + " -- base had none");
+	return post;
 }
 
 IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)

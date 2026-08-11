@@ -41,6 +41,24 @@ void CapHeavyAA(CCircuitDef@ def, int spare)
 		def.maxThisUnit = def.count + spare;
 }
 
+// The enemy air value that is safe to REACT to, for callers outside this file.
+//
+// Raw GetEnemyCost(AIR) is not "enemy aircraft": behaviour.json gives air
+// constructors ["builder","air"] and air scouts ["scout","air"], and
+// CFactoryManager hands the AIR enemy role to everything that IsAbleToFly, so two
+// enemy air cons read as ~680 metal of "air". gAirAvg is that number with the
+// builder/scout share discounted and time-averaged, and AA_IGNORE is the floor
+// below which it is not worth answering at all.
+//
+// Returns 0 rather than a small number below the floor, so a caller that
+// normalises demands cannot have a rounding error turn into an army of Jethros.
+float AirThreatSeen()
+{
+	if (gAirAvg < AA_IGNORE)
+		return 0.f;
+	return gAirAvg;
+}
+
 // How seriously to take their air, 0..1. One number, used by both levers.
 float AirScale(float share)
 {

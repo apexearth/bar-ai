@@ -199,8 +199,20 @@ array<float> CounterShares(CCircuitUnit@ fac, float &out weight)
 	float total = 0.f;
 	for (uint i = 0; i < gMix.length(); ++i) {
 		float demand = 0.f;
-		for (uint c = 0; c < gMix[i].counters.length(); ++c)
-			demand += aiEnemyMgr.GetEnemyCost(gMix[i].counters[c]);
+		for (uint c = 0; c < gMix[i].counters.length(); ++c) {
+			// AIR IS THE ONE ROLE WHOSE RAW COST LIES. apexearth, watching:
+			// "wow our team has 38 anti air units...." Air constructors and air
+			// scouts both carry the AIR role, so GetEnemyCost(AIR) reads a few
+			// hundred metal of enemy ECONOMY as aircraft -- and because these
+			// demands are normalised against each other, that was often the
+			// largest number seen and pulled the AA share toward the cap.
+			// Military::AirThreatSeen is the discounted, time-averaged value the
+			// static-AA code already trusts, and it reads 0 below AA_IGNORE.
+			if (gMix[i].counters[c] == RT::AIR)
+				demand += Military::AirThreatSeen();
+			else
+				demand += aiEnemyMgr.GetEnemyCost(gMix[i].counters[c]);
+		}
 		out_[i] = demand;
 		total += demand;
 	}

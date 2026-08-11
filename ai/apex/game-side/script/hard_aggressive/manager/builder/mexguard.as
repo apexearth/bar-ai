@@ -74,10 +74,25 @@ CCircuitDef@ MexDef()
 	return SideDef3(armmex, cormex, legmex);
 }
 
-CCircuitDef@ MexGuardTower(CCircuitUnit@ unit)
+// WHAT A SENTRY IS AND IS NOT FOR. apexearth: "we still make too many t1
+// turrets, need to make much more t1.5 turrets to protect those forward bases
+// early game", alongside "in early game we should put a light laser turret near
+// every mex spot".
+//
+// Both, and the position decides which: an 85-metal Sentry is the right answer
+// for a quiet extractor behind the line, and the wrong one for a forward base,
+// where a raid arrives in force and a Sentry is a speed bump. The Beamer is 190
+// metal for materially more gun -- the same def statics.as reaches for when it
+// wants something an attack cannot simply walk past.
+CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 {
 	if (unit.circuitDef.costM >= ADV_CON_COST)
 		return SideDef3(armpb, corvipe, legapopupdef);
+	if (OnMap(at) && (Military::OnBorder(at) || Military::NearFront(at))) {
+		CCircuitDef@ mid = SideDef3(armbeamer, corhllt, legmg);
+		if ((mid !is null) && mid.IsAvailable(ai.frame))
+			return mid;
+	}
 	return SideDef3(armllt, corllt, leglht);
 }
 
@@ -85,9 +100,6 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 {
 	CCircuitDef@ mex = MexDef();
 	if ((mex is null) || (mex.count <= 0))
-		return null;
-	CCircuitDef@ tower = MexGuardTower(unit);
-	if ((tower is null) || !tower.IsAvailable(ai.frame))
 		return null;
 
 	array<CCircuitUnit@>@ mine = ai.GetOwnUnitsOfDef(mex, gHomePos, 0.f);
@@ -160,6 +172,9 @@ IUnitTask@ MexGuard(CCircuitUnit@ unit)
 		return null;
 
 	const AIFloat3 at = pick.GetPos(ai.frame);
+	CCircuitDef@ tower = MexGuardTower(unit, at);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
 	const AIFloat3 site = ai.FindBuildSiteNear(tower, at, MEX_GUARD_RADIUS);
 	if (!OnMap(site))
 		return null;
