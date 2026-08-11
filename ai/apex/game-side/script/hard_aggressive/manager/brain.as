@@ -65,6 +65,10 @@ const float ECO_SATED_MULT    = 0.25f;
 // once income is no longer the constraint. Scored high only while sated, so it
 // cannot crowd out expansion in a normal game.
 const float NANO_VALUE        = 7.0f;
+// A front turret repairs instead of producing, so its value is what it keeps
+// alive rather than what it builds. Lower than a base nano's build power, and
+// it only proposes once there is a front to stand behind.
+const float FRONT_NANO_VALUE  = 3.0f;
 
 bool EcoSated()
 {
@@ -204,6 +208,8 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 		return Builder::EnergyConverter(unit);
 	if (kind == "nano")
 		return Builder::EcoNano(unit);
+	if (kind == "frontnano")
+		return Builder::FrontNano(unit);
 	return null;
 }
 
@@ -234,6 +240,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// Spend the surplus rather than growing it further.
 	if (EcoSated() || aiEconomyMgr.isMetalFull)
 		Propose(Simple("nano", NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc")));
+	// Front repair turrets are held back pending attribution: proposed alongside
+	// the income-gate change, the pair cost 15% army and doubled waste, and the
+	// two cannot be separated from one arm. Re-enable once the gate alone is
+	// measured. apex_front_nano=1 turns it on.
+	if (ai.GetTunable("apex_front_nano", 0.f) > 0.f)
+		Propose(Simple("frontnano", FRONT_NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc")));
 
 	Propose(Simple("gantry", GANTRY_VALUE, SideDef3("armshltx", "corgant", "leggant")));
 	Propose(Simple("silo", SILO_VALUE, SideDef3("armsilo", "corsilo", "legsilo")));

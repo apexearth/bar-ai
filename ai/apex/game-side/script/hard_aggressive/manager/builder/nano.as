@@ -32,7 +32,23 @@ bool BandSpot(CCircuitUnit@ unit, CCircuitDef@ def, bool nano, AIFloat3& out spo
 // all, so it never displaces a mex upgrade.
 const float NANO_MIN_BANK = 0.5f;   // share of metal storage standing unspent
 const float NANO_RICH_BANK = 0.2f;  // ...once income alone justifies the turret
-const float NANO_INCOME_GATE = 60.f;  // metal/s above which build power is the constraint
+// MEASURED AGAINST INTUITION, AND INTUITION LOST HERE.
+//
+// apexearth: "I make nano turrets even at less than 20m/sec." Tried at 15, on
+// its own, 6 games vs medium at +100: turrets FELL 15.0 -> 13.5 per player,
+// army 1,811,160 -> 1,506,964, waste 1.6% -> 5.8%. Building them early appears
+// to take metal from the expansion that would have paid for more of them later.
+//
+// That is a statement about THIS benchmark, not about his games -- a human
+// places them where they are needed and keeps them busy, and the 20-minute
+// +100 format rewards compounding economy over early build power. Left tunable
+// so the question can be reopened cheaply.
+const float NANO_INCOME_GATE_DEF = 60.f;
+
+float NanoIncomeGate()
+{
+	return ai.GetTunable("apex_nano_income_gate", NANO_INCOME_GATE_DEF);
+}
 // Raised with the shift away from ground engineers: a turret is 210 metal and
 // never walks anywhere, which is why it is the build power this player should
 // hold most of. Two rows of twenty is the rectangle it fills out.
@@ -235,6 +251,56 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 	return post;
 }
 
+// A TURRET ON THE FRONT IS A REPAIR STATION. apexearth: "on frontlines they're
+// also useful for repairing."
+//
+// Distinct from EcoNano below in purpose and in placement: that one buys build
+// power beside the factories, this one keeps the defence line and the army
+// standing by repairing them where they fight. Same 210-metal unit, and it is
+// the cheapest repair in the game -- a damaged Pulsar or a mauled squad
+// otherwise walks home or dies.
+const int   FRONT_NANO_PERIOD = 20 * SECOND;
+const float FRONT_NANO_INCOME = 40.f;   // do not take this from a poor economy
+const float FRONT_NANO_SHARE  = 0.35f;  // of NanoCap(), so it scales with income
+int gNextFrontNano = 0;
+
+IUnitTask@ FrontNano(CCircuitUnit@ unit)
+{
+	if (Factory::EcoLeadActive() || (ai.frame < gNextFrontNano))
+		return null;
+	if (aiEconomyMgr.metal.income < FRONT_NANO_INCOME)
+		return null;
+	if (aiEconomyMgr.isEnergyStalling)
+		return null;   // a turret is 3200 energy to raise
+
+	CCircuitDef@ want = SideDef3(armnanotc, cornanotc, legnanotc);
+	if ((want is null) || !want.IsAvailable(ai.frame))
+		return null;
+	// Its own share of the cap, so front repair cannot eat the whole allowance.
+	if (float(want.count) >= float(NanoCap()) * (1.f + FRONT_NANO_SHARE))
+		return null;
+
+	AIFloat3 spot;
+	if (!Front::FrontNear(unit.GetPos(ai.frame), spot))
+		return null;
+	if (!OnMap(spot))
+		return null;
+	// BEHIND the line, not on it. apexearth: "never send a constructor to build a
+	// tower in a dangerous place."
+	if (ThreatFor(unit, spot) > CON_THREAT_VETO)
+		return null;
+
+	AIFloat3 place = ai.FindBuildSiteNear(want, spot, 600.f);
+	if (!OnMap(place))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::NANO,
+			Task::Priority::NORMAL, want, place, 0.f));
+	if (post is null)
+		return null;
+	gNextFrontNano = ai.frame + FRONT_NANO_PERIOD;
+	return post;
+}
+
 IUnitTask@ EcoNano(CCircuitUnit@ unit)
 {
 	// Turrets are for the eco lead OR for anyone whose bank is full: a player at
@@ -252,7 +318,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	// A turret is 210 metal for 140 build power that never walks anywhere. At
 	// NANO_INCOME_GATE metal/second the income alone pays for one every few
 	// seconds, so the bank check below is what should decide, not a cap event.
-	const bool richEnough = (aiEconomyMgr.metal.income >= NANO_INCOME_GATE);
+	const bool richEnough = (aiEconomyMgr.metal.income >= NanoIncomeGate());
 	if ((!Factory::EcoLeadActive() && !MetalFull() && !richEnough) || (ai.frame < gNextNano))
 		return null;
 	// Half the bank while poor, a fifth once the income itself justifies it.
