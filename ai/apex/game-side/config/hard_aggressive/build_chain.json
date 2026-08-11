@@ -16,7 +16,17 @@
 	// Actual number of defences per cluster bounded by income - the order of defenses that should be build with numbers as above.
 	"land":  [0, 3, 5, 6, 4, 8, 10, 12],
 	"water": [1, 1, 4, 9, 10, 9, 10],
-	"prevent": 1,  // number of preventive defences
+	// DefaultMakeDefence walks `num = isPorc ? defenders.size() : preventCount`,
+	// so this is literally how many entries of the "land" order below an ORDINARY
+	// cluster ever receives. At 1 that was index 0 and nothing else -- a Sentry,
+	// 85 metal, forever, however rich we got. apexearth: "we made tons of light
+	// laser turrets this game. Those aren't good enough... need heavy laser
+	// turrets or the medium laser turrets for T1 phase."
+	// At 2 a defended cluster gets the Sentry AND index 3, the Beamer (190) --
+	// which also keeps the other half of the same request, "in early game we
+	// should put a light laser turret near every mex spot", since index 0 is
+	// still what every cluster gets first.
+	"prevent": 2,  // number of preventive defences
 	"amount": {  // income bound factor
 		"offset": [-2.0, 2.0],
 		// Amount factor: 10x10 ~ 48.0, 20x20 ~ 32.0

@@ -56,6 +56,7 @@ local NAMES = {
 	"apex_unblock_period",
 	"apex_kill_quota",
 	"apex_front_nano",
+	"apex_comm_rules",
 	"apex_mix",
 	"apex_mix_con_income",
 	"apex_mix_counter",

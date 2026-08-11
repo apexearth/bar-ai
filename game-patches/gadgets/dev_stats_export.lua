@@ -141,6 +141,28 @@ local commSamp = {}       -- team -> samples taken over a live commander
 local COMM_SAMPLE = 15    -- frames between samples (2/second)
 local nextCommSample = 0
 
+-- WHAT IT IS DOING, NOT WHETHER IT WAS TOLD TO DO SOMETHING.
+--
+-- commIdle above measures an empty command queue, and that turned out to answer
+-- the wrong question: feeding the commander a job on almost every tick (end-of-
+-- pipeline nulls 105-407 -> 7-23) moved it by under a point. So the orders are
+-- being issued and the time is going somewhere else.
+--
+-- These buckets split a sample by OUTCOME. The one that matters is commStall:
+-- it holds an order, it is not building, and it did not move -- work that was
+-- assigned and is achieving nothing. commAssistIdle is the specific suspicion
+-- that ties this to the factory complaint: a commander assisting a factory that
+-- has nothing queued looks busy and produces nothing.
+local commBuild = {}      -- constructing something right now
+local commMove = {}       -- has an order and its position changed
+local commAssistIdle = {} -- guarding/repairing a factory with an empty queue
+local commAssist = {}     -- guarding/repairing something else
+local commStall = {}      -- has an order, not building, did not move
+local commPrevX = {}      -- unitID -> last sampled position
+local commPrevZ = {}
+local CMD_REPAIR = CMD.REPAIR
+local CMD_GUARD = CMD.GUARD
+
 local function techOf(ud)
     local t = techLvl[ud.id]
     if t == nil then
@@ -363,11 +385,37 @@ local function sampleCommIdle()
 				local ud = udid and UnitDefs[udid]
 				if ud ~= nil and (ud.customParams or {}).iscommander then
 					bump(commSamp, teamID, 1)
-					-- Ask for one command only; we care whether the queue is
-					-- empty, not what is in it.
 					local cmds = Spring.GetUnitCommands(uid, 1)
+					local x, _, z = Spring.GetUnitPosition(uid)
+					local px, pz = commPrevX[uid], commPrevZ[uid]
+					local moved = (px == nil) or (x == nil)
+							or ((x - px) * (x - px) + (z - pz) * (z - pz) > 16)
+					commPrevX[uid], commPrevZ[uid] = x, z
+
 					if cmds == nil or #cmds == 0 then
 						bump(commIdle, teamID, 1)
+					elseif Spring.GetUnitIsBuilding(uid) then
+						bump(commBuild, teamID, 1)
+					else
+						local c = cmds[1]
+						local isAssist = (c.id == CMD_REPAIR or c.id == CMD_GUARD)
+						local tgt = isAssist and c.params and c.params[1]
+						if tgt then
+							-- An assisted factory with nothing queued is the
+							-- commander's time going nowhere.
+							local q = Spring.GetFactoryCommands(tgt, 1)
+							local tdid = Spring.GetUnitDefID(tgt)
+							local tud = tdid and UnitDefs[tdid]
+							if tud ~= nil and tud.isFactory and (q == nil or #q == 0) then
+								bump(commAssistIdle, teamID, 1)
+							else
+								bump(commAssist, teamID, 1)
+							end
+						elseif moved then
+							bump(commMove, teamID, 1)
+						else
+							bump(commStall, teamID, 1)
+						end
 					end
 				end
 			end
@@ -456,6 +504,11 @@ local function dump(reason)
 			parts[#parts + 1] = string.format("ownBuilders=%d", ob)
 			parts[#parts + 1] = string.format("commIdle=%d", commIdle[teamID] or 0)
 			parts[#parts + 1] = string.format("commSamp=%d", commSamp[teamID] or 0)
+			parts[#parts + 1] = string.format("commBuild=%d", commBuild[teamID] or 0)
+			parts[#parts + 1] = string.format("commMove=%d", commMove[teamID] or 0)
+			parts[#parts + 1] = string.format("commAssistIdle=%d", commAssistIdle[teamID] or 0)
+			parts[#parts + 1] = string.format("commAssist=%d", commAssist[teamID] or 0)
+			parts[#parts + 1] = string.format("commStall=%d", commStall[teamID] or 0)
 			cmdWindow[teamID] = 0
 
 			local n = Spring.GetTeamStatsHistory(teamID)

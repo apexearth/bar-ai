@@ -311,10 +311,27 @@ IUnitTask@ BuildPowerFirst(CCircuitUnit@ fac)
 	CCircuitDef@ con = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
 	if ((con is null) || !con.IsAvailable(ai.frame))
 		return null;
-	// The same shape as Builder::NeedsAdvCon: one per this much metal income.
-	const float per = ai.GetTunable("apex_mix_con_income", 30.f);
+	// ONE CONSTRUCTOR PER 30 METAL/S WAS A CAP OF TWO.
+	//
+	// Measured at minute 16 of a 4v4, per player: we held 2 T1 constructors
+	// against stock BARb's 10-12, with 5-7 extractors against their 10-14 and
+	// 11-17% of our metal going to waste because there was nobody to spend it.
+	// At a realistic 30-40 metal/s that formula returns 2, and it returned 2 all
+	// game -- a hard ceiling wearing an income gate's clothes.
+	//
+	// The right number comes off the unit def rather than a preference. A T1
+	// constructor has workertime 80, and BAR structures cost roughly 0.06 metal
+	// per point of buildtime (armsolar 155/2600, and the rest are close), so one
+	// absorbs about 5 metal/s of income. Below that the metal has nowhere to go,
+	// which is exactly the waste the telemetry shows.
+	const float per = ai.GetTunable("apex_mix_con_income", 6.f);
 	const int want = 1 + int(aiEconomyMgr.metal.income / per);
-	if (con.count >= want)
+	// AND NO CEILING WHILE THE METAL IS GOING TO WASTE. Whatever number the
+	// income implies, metal we cannot spend is the economy saying it directly:
+	// there is not enough build power, so build more. apexearth: "we shouldn't
+	// have any hard caps, everything needs to be balanced based on the
+	// economy/game progression."
+	if ((con.count >= want) && !aiEconomyMgr.isMetalFull)
 		return null;
 	return aiFactoryMgr.Enqueue(TaskS::Recruit(
 			Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,

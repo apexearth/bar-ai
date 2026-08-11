@@ -40,9 +40,18 @@ void CommDiag()
 		+ " idleUnsafe=" + gCommIdleUnsafe + " idleNoJob=" + gCommIdleNoJob);
 }
 
+// THE DECISIVE SWITCH. With apex_comm_rules=0 every commander-specific rule in
+// this file no-ops and the commander is whatever CBuilderManager makes of it, so
+// one A/B says whether our idle time is ours or the engine's. Nothing else in
+// AiMakeTask treats the commander specially.
+bool CommRules()
+{
+	return ai.GetTunable("apex_comm_rules", 1.f) > 0.f;
+}
+
 IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 {
-	if (isComm) {
+	if (isComm && CommRules()) {
 		LogCommanderThreat(unit);
 		// LEAVE BECAUSE OF WHAT IS THERE, NOT BECAUSE YOU ARE ALREADY HURT.
 		//
@@ -277,7 +286,7 @@ const int COMM_ASSIST_PERIOD = 2 * SECOND;
 // and help it build stuff!"
 IUnitTask@ CommanderIdleWork(CCircuitUnit@ unit, bool isComm)
 {
-	if (!isComm)
+	if (!isComm || !CommRules())
 		return null;
 	// A commander that is standing still because it is in danger is handled by
 	// the retreat branches above; do not hand it a job that walks it back out.
@@ -338,7 +347,7 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)
 	// 5 mexes and doesnt build a sentry tower next to any of them."
 	// Self-limiting without a cooldown: AreaNeedsDefence only returns a mex that
 	// is not already covered, so this stops asking once they are.
-	if (isComm) {
+	if (isComm && CommRules()) {
 		IUnitTask@ commGuard = MexGuard(unit);
 		if (commGuard !is null)
 			return commGuard;
@@ -361,7 +370,7 @@ IUnitTask@ VetoCommanderReclaim(CCircuitUnit@ unit, bool isComm, IUnitTask@ task
 	// someone else's reclaim job from clear across the map. Reject it while
 	// there is still an unclaimed safe mex spot nearby; once the mex phase is
 	// done, let it through same as everyone else.
-	if (isComm && (task !is null) && (task.GetType() == Task::Type::BUILDER)
+	if (isComm && CommRules() && (task !is null) && (task.GetType() == Task::Type::BUILDER)
 		&& (task.GetBuildType() == Task::BuildType::RECLAIM)
 		&& (aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame)) >= 0))
 	{
@@ -389,7 +398,7 @@ IUnitTask@ VetoCommanderHold(CCircuitUnit@ unit, bool isComm, IUnitTask@ task)
 			&& (task.GetType() == Task::Type::BUILDER)
 			&& (task.GetBuildType() == Task::BuildType::FACTORY)
 			&& !Factory::HaveAnyFactory();
-	if (isComm && !firstFactory && (task !is null) && (task.GetType() == Task::Type::BUILDER)) {
+	if (isComm && CommRules() && !firstFactory && (task !is null) && (task.GetType() == Task::Type::BUILDER)) {
 		IUnitTask@ held = unit.task;
 		const string heldKind = SiteBuildName(held);
 		// HOLD ONLY REAL WORK. `held` names a build type from the moment the task
