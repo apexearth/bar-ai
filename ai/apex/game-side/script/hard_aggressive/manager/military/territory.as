@@ -205,9 +205,146 @@ float ForwardFraction(const AIFloat3& in pos)
 	return ((pos.x - home.x) * dx + (pos.z - home.z) * dz) / span;
 }
 
+// THE FRONT LINE, AS A CURVE ACROSS THE MAP, COMPUTED FROM THE BATTLEFIELD.
+//
+// apexearth: "We need this to work in a hosted game. Figure out how to do front
+// lines properly in a hosted game. This should be easily possible and computable
+// based on the current battlefield", then: "You also need to be drawing a line
+// across the entire map. So maybe you find the influence zones, and you create a
+// curve on the map of a collection of points, and draw that across the edge of
+// the map, that is around where your frontline is."
+//
+// So: not one marker, a CURVE. The influence map is engine-side and always
+// present -- GetNetInflAt is ally minus enemy -- so the front is where that
+// crosses zero, which is his own definition of it: "where OUR territory ends and
+// the ENEMY'S begins". Sampled once per lane across the width of the map, the
+// crossings form a line that bulges where they have pushed into us and recedes
+// where we have pushed into them.
+//
+// Nothing here is a gadget. The old source read ai_frontx_<team>, published by
+// dev_team_income.lua, which exists only in BAR.sdd -- so in a hosted game it
+// returned nothing at all while on the bench it was permissive enough to call a
+// tower at -0.17 "near the front". Both wrong, in opposite directions.
+//
+// Forward is the bearing from our base to the enemy centroid: a poor answer to
+// "where is that raider", a fine one to "which way is the enemy", which is all
+// it is asked. Lanes run perpendicular to it. Before contact there is no
+// crossing and the opening answer is the one the start boxes give -- halfway.
+const int   FRONT_LANES    = 5;       // each side of centre, so 11 lanes
+const float FRONT_LANE_GAP = 900.f;   // elmos between lanes
+const int   FRONT_SAMPLES  = 14;
+const float FRONT_SCAN_END = 1.15f;   // a little past their centroid
+const float FRONT_BAND     = 0.18f;   // how wide "on the line" is, as a fraction
+
+// Per lane: the fraction along home->enemy at which that lane's influence
+// crosses. Index 0 is the leftmost lane.
+array<float> gFrontLane;
+int gFrontStamp = -1;
+AIFloat3 gFrontFwd;      // home -> enemy, unnormalised (the axis' own length)
+AIFloat3 gFrontSide;     // unit perpendicular
+AIFloat3 gFrontHome;
+bool gFrontValid = false;
+
+void RebuildFront()
+{
+	if ((gFrontStamp >= 0) && (ai.frame - gFrontStamp < 30))
+		return;
+	gFrontStamp = ai.frame;
+	gFrontValid = false;
+	gFrontLane.resize(0);
+
+	if (!Builder::gHomeSet)
+		return;
+	const AIFloat3 home = Builder::gHomePos;
+	const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(e))
+		return;
+	AIFloat3 fwd = e - home;
+	if (fwd.SqLength2D() < NEAR_ZERO)
+		return;
+	AIFloat3 side = AIFloat3(-fwd.z, 0.f, fwd.x);
+	side.SafeNormalize2D();
+
+	gFrontHome = home;
+	gFrontFwd = fwd;
+	gFrontSide = side;
+
+	for (int lane = -FRONT_LANES; lane <= FRONT_LANES; ++lane) {
+		const AIFloat3 origin = home + side * (float(lane) * FRONT_LANE_GAP);
+		float found = -1.f;
+		for (int i = 1; i <= FRONT_SAMPLES; ++i) {
+			const float t = FRONT_SCAN_END * float(i) / float(FRONT_SAMPLES);
+			const AIFloat3 p = origin + fwd * t;
+			if (!OnMap(p))
+				break;
+			// The crossing: ground where they out-hold us.
+			if (ai.GetNetInflAt(p) <= 0.f) {
+				found = t;
+				break;
+			}
+		}
+		// A lane with no crossing is one we hold all the way, or one nobody has
+		// contested. Halfway is the start-box answer and is right for both.
+		gFrontLane.insertLast((found < 0.f) ? 0.5f : found);
+	}
+	gFrontValid = true;
+}
+
+// Which lane a position falls in, and how far along the axis it sits.
+int LaneOf(const AIFloat3& in pos)
+{
+	const AIFloat3 d = pos - gFrontHome;
+	const float off = d.x * gFrontSide.x + d.z * gFrontSide.z;
+	int lane = int(off / FRONT_LANE_GAP + (off >= 0.f ? 0.5f : -0.5f));
+	if (lane < -FRONT_LANES)
+		lane = -FRONT_LANES;
+	if (lane > FRONT_LANES)
+		lane = FRONT_LANES;
+	return lane + FRONT_LANES;   // into array space
+}
+
+// Where the front sits in THIS position's lane, as a fraction along home->enemy.
+float FrontFractionAt(const AIFloat3& in pos)
+{
+	RebuildFront();
+	if (!gFrontValid || (gFrontLane.length() == 0))
+		return 0.5f;
+	return gFrontLane[LaneOf(pos)];
+}
+
+// The whole line, for callers that want the shape rather than one answer.
+bool FrontCurve(array<AIFloat3>& out pts)
+{
+	RebuildFront();
+	pts.resize(0);
+	if (!gFrontValid)
+		return false;
+	for (uint i = 0; i < gFrontLane.length(); ++i) {
+		const float laneOff = (float(i) - float(FRONT_LANES)) * FRONT_LANE_GAP;
+		pts.insertLast(gFrontHome + gFrontSide * laneOff + gFrontFwd * gFrontLane[i]);
+	}
+	return true;
+}
+
+// The crossing directly ahead, kept for callers that want a single point.
+bool FrontLinePos(AIFloat3& out p)
+{
+	RebuildFront();
+	if (!gFrontValid)
+		return false;
+	p = gFrontHome + gFrontFwd * FrontFractionAt(gFrontHome);
+	return OnMap(p);
+}
+
+// On the line, or past it. A tower behind the crossing is defending ground
+// nobody is contesting.
 bool OnBorder(const AIFloat3& in pos)
 {
-	return ForwardFraction(pos) >= ai.GetTunable("apex_front_fraction", FRONT_FRACTION);
+	const float band = ai.GetTunable("apex_front_band", FRONT_BAND);
+	// Against the crossing in THIS position's lane, not against one global
+	// number -- which is the point of computing a curve. A tower on a flank the
+	// enemy has pushed into is on the line even though the centre has not moved.
+	return ForwardFraction(pos) >= (FrontFractionAt(pos) - band);
 }
 
 // What the enemy's mobile army is WORTH, in metal.
@@ -264,14 +401,8 @@ float EnemyArmyFloor()
 
 // The team front, published by dev_team_income.lua at 78% of the way from our
 // own centroid to the enemy's.
-bool FrontPos(AIFloat3& out p)
-{
-	const float x = ai.GetGameRulesParam("ai_frontx_" + ai.teamId, -1.f);
-	const float z = ai.GetGameRulesParam("ai_frontz_" + ai.teamId, -1.f);
-	if ((x < 0.f) || (z < 0.f))
-		return false;
-	p = AIFloat3(x, 0.f, z);
-	return true;
-}
+// FrontPos is gone with the gadget that fed it: it read ai_frontx_<team>, which
+// only ever existed in BAR.sdd. FrontLinePos above answers the same question
+// from the influence map, in any game.
 
 }  // namespace Military

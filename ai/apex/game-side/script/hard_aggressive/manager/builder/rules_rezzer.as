@@ -56,7 +56,7 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 	// finds them. Search from the front instead while we are behind.
 	if (IsRezzer(unit) && Military::LosingGround() && (ai.frame >= gNextRezWreck)) {
 		AIFloat3 front;
-		if (Military::FrontPos(front)) {
+		if (Military::FrontLinePos(front)) {
 			gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
 			const AIFloat3 spoil = ai.GetBestWreckPos(front, WRECK_SEARCH, WRECK_MIN);
 			if (spoil.x >= 0.f) {

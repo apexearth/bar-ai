@@ -153,83 +153,21 @@ local function updateLeads(frame)
 end
 
 --------------------------------------------------------------------------------
--- Team front.
+-- TEAM FRONT: REMOVED 2026-08-11.
 --
--- Every AI reasons only about its own clusters, so a back-line player builds its
--- big guns in its own base where nothing is attacking -- apexearth, watching:
--- "he makes a T3 defence in his base, instead of going to the front player's
--- base and placing it there to protect them ... T3 is good kinda like at the
--- 75% or 80% edge of the TEAM border, not just their own border".
+-- This published ai_frontx_<team>/ai_frontz_<team>, a point 78% of the way from
+-- an ally's start position toward the enemy's, and Military::FrontPos read it.
+-- apexearth: "remove the old gadget, we don't want a distraction which will
+-- never work in multiplayer" -- and he is right twice over. A gadget lives in
+-- BAR.sdd, which a hosted game does not load, so the whole of the defence
+-- policy that keyed on it behaved one way on the bench and another in the games
+-- this AI is for. It was also computed from START POSITIONS, so it never moved
+-- as the battle did.
 --
--- Publish that point: from the ally's own centroid, FRONT_FRAC of the way toward
--- the enemy's. Start positions, because bases do not move and this must be
--- stable -- a front that wanders makes placement flap.
-local FRONT_FRAC = 0.78
-local frontDone = false
-
-local function publishFront()
-	if frontDone then
-		return
-	end
-	local byAlly = {}
-	for _, t in ipairs(Spring.GetTeamList()) do
-		local _, _, _, _, _, allyID = Spring.GetTeamInfo(t, false)
-		local x, _, z = Spring.GetTeamStartPosition(t)
-		if allyID ~= nil and x ~= nil then
-			local a = byAlly[allyID] or {x = 0, z = 0, n = 0, pts = {}}
-			a.x, a.z, a.n = a.x + x, a.z + z, a.n + 1
-			a.pts[#a.pts + 1] = {x = x, z = z}
-			byAlly[allyID] = a
-		end
-	end
-	if next(byAlly) == nil then
-		return
-	end
-	for _, t in ipairs(Spring.GetTeamList()) do
-		local _, _, _, isAI, _, allyID = Spring.GetTeamInfo(t, false)
-		local mine = allyID ~= nil and byAlly[allyID]
-		if isAI and mine and mine.n > 0 then
-			local ex, ez, en = 0, 0, 0
-			for a, v in pairs(byAlly) do
-				if a ~= allyID then ex, ez, en = ex + v.x, ez + v.z, en + v.n end
-			end
-			if en > 0 then
-				local mx, mz = mine.x / mine.n, mine.z / mine.n
-				local tx, tz = ex / en, ez / en
-				-- The front is a LINE, not a point. A single centroid sends every
-				-- player's defence to the same spot and leaves the flanks open.
-				-- Project each team's own start onto the axis perpendicular to
-				-- "toward the enemy", and give it a front point at the same
-				-- lateral offset -- so a left-flank player defends the left of the
-				-- line and a right-flank player the right, each covering its own
-				-- stretch rather than piling onto one spot.
-				local dx, dz = tx - mx, tz - mz
-				local len = math.sqrt(dx * dx + dz * dz)
-				if len > 1 then
-					local px, pz = -dz / len, dx / len   -- perpendicular, unit
-					-- team half-width along that perpendicular
-					local half = 0
-					for _, q in ipairs(mine.pts) do
-						local d = math.abs((q.x - mx) * px + (q.z - mz) * pz)
-						if d > half then half = d end
-					end
-					if half < 256 then half = 256 end
-					local bx = mx + dx * FRONT_FRAC
-					local bz = mz + dz * FRONT_FRAC
-					-- Which slot is this team's? Nearest by its own offset.
-					local mine_x, _, mine_z = Spring.GetTeamStartPosition(t)
-					local off = ((mine_x or mx) - mx) * px + ((mine_z or mz) - mz) * pz
-					local frac = math.max(-1, math.min(1, off / half))
-					Spring.SetGameRulesParam("ai_frontx_" .. t, bx + px * half * frac)
-					Spring.SetGameRulesParam("ai_frontz_" .. t, bz + pz * half * frac)
-					frontDone = true
-				end
-			end
-		end
-	end
-	if frontDone then
-		Spring.Echo("[BARAI_FRONT] published at " .. FRONT_FRAC .. " toward the enemy")
-	end
+-- The front is computed from the influence map now -- Military::RebuildFront in
+-- territory.as walks lanes across the map and takes the zero crossing of ally
+-- minus enemy influence. That is engine-side, present in every game, and it
+-- follows the fighting.
 end
 
 function gadget:GameFrame(frame)

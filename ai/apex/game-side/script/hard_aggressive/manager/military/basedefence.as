@@ -276,7 +276,7 @@ void UpdateBaseDefence()
 		// you get a field of towers somewhere nothing is happening.
 		if (gPorcAdded >= PORC_ADD_CAP)
 			return;
-		haveSpot = BorderPos(spot, gPorcAdded) || FrontPos(spot);
+		haveSpot = BorderPos(spot, gPorcAdded) || FrontLinePos(spot);
 	}
 	if (!haveSpot)
 		return;

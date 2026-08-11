@@ -239,7 +239,7 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	if (gShieldsAsked - dome.count >= 1)
 		return null;                       // one at a time; they are not cheap
 	AIFloat3 spot;
-	if (!Military::BorderPos(spot, uint(dome.count)) && !Military::FrontPos(spot))
+	if (!Military::BorderPos(spot, uint(dome.count)) && !Military::FrontLinePos(spot))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, dome, spot, 0.f));
@@ -427,7 +427,7 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	string where = "border";
 	if (!Military::BorderPos(spot, uint(gun.count))) {
 		where = "front";
-		if (!Military::FrontPos(spot)) {
+		if (!Military::FrontLinePos(spot)) {
 			where = "standoff";
 			if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
 				return null;

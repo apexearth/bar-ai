@@ -47,7 +47,7 @@ int gNextDefenceLog = 0;
 // nothing to it -- an air constructor cannot see what kills it. GetUnitThreatAt
 // picks the layer from the unit; for a ground constructor it is the same array.
 // How far toward the enemy a site may sit before it counts as their ground.
-// FrontPos is published at 0.78 of the way, so this is just inside the line the
+// The front line is the influence crossing now, so this sits just inside the line
 // team already agrees on.
 const float CON_FAR_FRAC = 0.72f;
 

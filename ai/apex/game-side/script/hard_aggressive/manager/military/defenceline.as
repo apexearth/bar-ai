@@ -28,7 +28,7 @@ void UpdateFrontGun()
 	if (gun is null)
 		return;
 	AIFloat3 front;
-	if (!BorderPos(front, 0) && !FrontPos(front))
+	if (!BorderPos(front, 0) && !FrontLinePos(front))
 		return;
 	gBigGunPlaced = true;
 	AiLog(Factory::T() + "apex: big gun " + gun.GetName() + " at the territory edge");
@@ -37,15 +37,21 @@ void UpdateFrontGun()
 			Task::Priority::NORMAL, gun, front, 0.f));
 }
 
-// Is this cluster near the gadget-published front? A second opinion alongside
-// OnBorder, and only available in this harness -- dev_team_income.lua publishes
-// it and does not exist in a hosted game.
+// Near the front line, in metres rather than as a fraction -- for callers that
+// think in map distance.
+//
+// This used to read the gadget-published position (ai_frontx_<team>, from
+// dev_team_income.lua) and so answered FALSE in every hosted game while being
+// permissive on the bench: measured, it passed towers sitting at -0.17 along the
+// home->enemy axis as "near the front". Both halves of that were wrong, and in
+// opposite directions. It is the influence crossing now, same as OnBorder, so
+// the bench and a real game agree.
 const float FRONT_RADIUS = 1600.f;
 
 bool NearFront(const AIFloat3& in pos)
 {
 	AIFloat3 f;
-	if (!FrontPos(f))
+	if (!FrontLinePos(f))
 		return false;
 	const float dx = pos.x - f.x;
 	const float dz = pos.z - f.z;
@@ -70,11 +76,17 @@ bool NearFront(const AIFloat3& in pos)
 //   3. ...unless we are actually being attacked, when a tower beats the curve.
 bool DefenceAllowedAt(const AIFloat3& in pos)
 {
-	if (gTurtle || BaseContested())
-		return true;   // under attack: the curve does not get a vote
-
+	// BEING ATTACKED RAISES THE BUDGET; IT DOES NOT REMOVE IT.
+	//
+	// This returned true outright while contested, and measured at +50 the base
+	// reads contested for most of the game -- so the gate switched itself off
+	// exactly while the towers were being built, and the count went back to 70
+	// with none of them forward. Under attack we can afford more defence, not
+	// unlimited defence, and the rear share still has to hold or we wall the
+	// wrong end of the map.
+	const float pressure = (gTurtle || BaseContested()) ? 2.f : 1.f;
 	const float per = ai.GetTunable("apex_fence_per_income", 0.8f)
-			* Brain::BudgetMult(Brain::DEFENCE);
+			* Brain::BudgetMult(Brain::DEFENCE) * pressure;
 	const int budget = 1 + int(aiEconomyMgr.metal.income * per);
 	if (int(gFenceId.length()) >= budget)
 		return false;
