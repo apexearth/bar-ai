@@ -86,10 +86,40 @@ bool EcoSated()
 	return aiEconomyMgr.isMetalFull && aiEconomyMgr.isEnergyFull;
 }
 
+// ARMY IS NOT THE RESIDUAL. Measured 2026-08-11 across four arms: every cap I
+// removed moved metal into constructors, factories and towers, and the standing
+// army fell every time -- 4,605 on the pre-Brain build down to 3,943 -- with the
+// trade ratio following it down. Nothing in this AI ever gave army a claim on
+// metal. Economy wants compete with economy wants, defence has an income budget,
+// and the army is whatever is left.
+//
+// So the economy defers when we are losing the army fight, exactly as it already
+// defers when both banks are full. Same shape as ECO_SATED_MULT, opposite cause:
+// there the constraint has moved to build power, here it has moved to the front.
+// Both are the economy noticing that more income is not the thing we lack.
+//
+// Scaled by HOW FAR behind, not switched: at parity nothing changes, and the
+// damping deepens as the gap does, so this cannot latch us out of expanding.
+// EnemyArmyCost only accumulates on sighting, so an unscouted enemy reads small
+// and the multiplier stays near 1 -- ignorance never damps the economy.
+const float ARMY_DEFICIT_FLOOR = 0.35f;   // most the economy is ever damped
+
+float ArmyDeficitMult()
+{
+	const float ours = Military::TeamArmyCost();
+	const float theirs = Military::EnemyArmyCost();
+	if ((theirs <= 1.f) || (ours >= theirs))
+		return 1.f;
+	const float ratio = ours / theirs;          // 0..1, smaller is worse
+	const float floorV = ai.GetTunable("apex_army_deficit_floor", ARMY_DEFICIT_FLOOR);
+	return (ratio < floorV) ? floorV : ratio;
+}
+
 // The kinds whose whole purpose is more income.
 bool IsEcoKind(const string& in kind)
 {
-	return (kind == "mexup") || (kind == "energy") || (kind == "convert");
+	return (kind == "mexup") || (kind == "energy") || (kind == "convert")
+		|| (kind == "mex");
 }
 
 class Want
@@ -114,8 +144,15 @@ class Want
 	float Score() const
 	{
 		float scaled = value / (1.f + float(have));
-		if (IsEcoKind(kind) && EcoSated())
-			scaled *= ECO_SATED_MULT;
+		if (IsEcoKind(kind)) {
+			if (EcoSated())
+				scaled *= ECO_SATED_MULT;
+			// Expansion is exempt: taking ground is how we out-produce them back
+			// into the fight, and a mex is 50 metal. What defers is the expensive
+			// economy -- reactors, converters, upgrades.
+			if (kind != "mex")
+				scaled *= ArmyDeficitMult();
+		}
 		return (cost > 1.f) ? (scaled / cost) : scaled;
 	}
 }

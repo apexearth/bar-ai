@@ -342,7 +342,8 @@ void UpdatePosture()
 	// short supply lines, our defences shooting, their army out of position -- and
 	// it is the one moment the trade is in our favour. Released the same way the
 	// killing blow releases it.
-	if (gTurtle && (BaseContested() || Builder::BaseUnderAttack())) {
+	if (gTurtle && (ai.GetTunable("apex_hold_release", 1.f) > 0.f)
+		&& (BaseContested() || Builder::BaseUnderAttack())) {
 		gTurtle = false;
 		gPostureUntil = ai.frame;
 		aiMilitaryMgr.quota.attack = gAttackBase;
@@ -380,7 +381,8 @@ void UpdatePosture()
 		// reason: losses taken defending are not evidence that defending is a
 		// losing trade.
 		if ((army < prev * LOSING_RATIO) && (aiEnemyMgr.mobileThreat > 0.f)
-			&& !BaseContested() && !Builder::BaseUnderAttack())
+			&& ((ai.GetTunable("apex_hold_release", 1.f) <= 0.f)
+				|| (!BaseContested() && !Builder::BaseUnderAttack())))
 		{
 			gTurtle = true;
 			++gTurtleCount;

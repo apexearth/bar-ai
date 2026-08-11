@@ -75,6 +75,8 @@ local NAMES = {
 	"apex_advsol_energy",
 	"apex_energy_any",
 	"apex_fence_per_income",
+	"apex_army_deficit_floor",
+	"apex_hold_release",
 	"apex_unblock_test_wait",
 	"apex_nano_income_gate",
 	-- The Brain's mex upgrades (2026-08-10): how many the engine holds open.
