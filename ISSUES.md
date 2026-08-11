@@ -117,6 +117,34 @@ itself is the cap.
 Next test should measure FACTORY METAL PULL against builder pull, not another
 ratio.
 
+
+### 1d. Benchmark across five team sizes, 2026-08-10
+
+12 games per bracket vs `BARb:stable:medium`, 20 min, +100, size-matched dry maps
+(Copper Hill 1v1, Boreal Falls 2v2, Painted Desert 4v4, Adamantium Factory 6v6,
+Ancient Vault 8v8). The 1v1 bracket ran with `apex_solo_stock=0` so it measures
+OUR rules rather than the stand-aside default.
+
+| bracket | wins | army vs theirs | metal vs theirs | waste | T2 mex | K/D | kill/metal |
+|---|---|---|---|---|---|---|---|
+| 1v1 | 0 | 0.87x | 1.10x | 12.8% | 12.1% | **0.30** | 0.060 |
+| 2v2 | 0 | 0.88x | 1.36x | 9.7% | 24.1% | 0.52 | 0.110 |
+| 4v4 | 0 | 0.78x | 1.23x | 1.4% | 11.2% | 0.68 | 0.164 |
+| 6v6 | 0 | **0.57x** | 1.27x | 8.2% | 14.7% | 0.52 | 0.112 |
+| 8v8 | 0 | 0.85x | **1.76x** | 3.2% | 23.3% | 0.55 | 0.112 |
+
+**Zero wins and zero losses in 60 games.** Every one hit the time limit, so this
+format measures economy and trade, not winning.
+
+The shape is identical in every bracket: we out-produce (1.10-1.76x), field less
+army (0.57-0.90x) and lose the trade (K/D 0.30-0.68). It is not a team-size
+problem. 1v1 is the weakest and has no team machinery in it at all, which makes
+it the cleanest test bed for production changes.
+
+Waste tracks nothing sensible -- 1.4% at 4v4 against 12.8% at 1v1 -- which is
+what pull-based production predicts: whether metal gets spent depends on whether
+some rule happened to fire when a line came free.
+
 ## 2. Pushes should not take damage on the way in
 
 **apexearth:** "we need smart pushes where the pusher doesn't even take damage."

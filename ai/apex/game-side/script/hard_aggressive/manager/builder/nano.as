@@ -82,7 +82,26 @@ int NanoCap()
 	const int ceiling = CapShare(NANO_CAP_SHARE);
 	return (cap > ceiling) ? ceiling : cap;
 }
-const int   NANO_INFLIGHT = 4;    // turrets ordered but not yet standing
+// HOW MANY MAY BE UNDER CONSTRUCTION AT ONCE. This, not NanoCap(), is what was
+// actually limiting us. apexearth: "there are a lot of times when I'm playing and
+// I need to build a lot more nanoturrets to keep up with the amount of energy and
+// resources that I have. When players play, they can have hundreds of these."
+//
+// Measured across 6 games at +100: 533 turrets over 48 player-games -- 11 each --
+// while NanoCap() allowed 42 at 100 metal/s and 102 at 400. The cap was never
+// reached because only FOUR could ever be in flight, at one order per period.
+// Four in flight is a trickle on an economy that can pay for twenty at once.
+const int   NANO_INFLIGHT_BASE = 4;
+const float NANO_INFLIGHT_PER_INCOME = 25.f;   // one more in flight per this much
+const int   NANO_INFLIGHT_FULL = 12;           // extra while the bank is at the cap
+
+int NanoInFlight()
+{
+	int n = NANO_INFLIGHT_BASE + int(aiEconomyMgr.metal.income / NANO_INFLIGHT_PER_INCOME);
+	if (aiEconomyMgr.isMetalFull)
+		n += NANO_INFLIGHT_FULL;
+	return n;
+}
 const int   NANO_STALE    = 12;   // beyond this the counter has drifted, resync
 const int   NANO_PERIOD   = 15 * SECOND;
 // While the bank is at the cap, order them as fast as the placement allows and
@@ -246,7 +265,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		gNanosAsked = want.count;
 		outstanding = 0;
 	}
-	if (outstanding >= NANO_INFLIGHT)
+	if (outstanding >= NanoInFlight())
 		return null;
 
 	AIFloat3 here;

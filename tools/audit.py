@@ -177,7 +177,12 @@ def check_nuke_affordable(g: Game):
     """apexearth: 'no energy because we have a nuke launcher at 1500 income'."""
     if not g.log:
         return None, "no infolog"
-    if not re.search(r"(?i)nuke|silo", g.log):
+    # WAS A SILO ACTUALLY BUILT? Matching the word "silo" anywhere made this
+    # fail 12/12 in a bracket where none was built at all -- the Brain logs
+    # "silo=0.0005" in every ranked-wants line, and the check read its own
+    # instrumentation as evidence. allBuilt carries metal per def and is the
+    # authoritative answer.
+    if not re.search(r"allBuilt=\S*(arm|cor|leg)silo:", g.log):
         return None, "no nuke silo built"
     incomes = [float(m.group(1)) for m in re.finditer(r"eInc=(\d+)", g.log)]
     peak = max(incomes) if incomes else 0.0
