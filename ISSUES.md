@@ -266,3 +266,30 @@ Before touching the army: add army-position telemetry to dev_stats_export.lua
 (each side's army centroid and its distance from its own base). [BARAI_POS]
 records BUILDINGS ONLY, so "our armies run away when the base is attacked" cannot
 currently be measured at all, only watched.
+
+## NEXT: idle constructors must assist the factory (2026-08-11)
+
+apexearth: "we really lacked any sort of T2 army... imagine if we had 20 cons
+helping the T2 lab make army... maybe the game would have gone better", and "all
+that time we spend making cons is time not spent making army, AND as i told you
+before we often have cons just sitting around with nothing to do".
+
+Capping constructors is the wrong lever and was tried today. The measurement says
+the build power EXISTS and does not convert: at minute 12 we hold 3,027 metal of
+constructors against stock's 2,428, and at minute 20 we field 6,399 army against
+their 12,649, on comparable income. More builders, less army.
+
+So the work is: a constructor with nothing to do assists the factory, turning
+build power directly into units. That is also the answer to "cons sitting around"
+-- there is no such thing as an idle constructor while a lab is building.
+
+Check first, per attribute-before-fixing: ExpandDiag already logs idle/onMex/
+onOther per constructor every 30s. Count what the idle ones are actually doing
+before writing a rule. `aiFactoryMgr.isAssistRequired` and the REPAIR task path
+(assisting a building under construction IS a repair task in Spring) are the
+existing mechanisms; CBuilderManager's own elector already raises repair tasks it
+never gets to because our ladder answers first.
+
+Do NOT re-cap constructors to fix this. The cap fix committed today is only about
+a full metal bank disabling the limit outright, which is why a losing player ended
+with 60 T1 cons.

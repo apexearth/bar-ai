@@ -351,9 +351,23 @@ IUnitTask@ BuildPowerFirst(CCircuitUnit@ fac)
 	// and an air constructor is unbounded because a ceiling here is about room in
 	// the base, which air does not use.
 	const int want = Builder::ConsWantedFor(con);
-	// A full bank overrides the curve outright: metal we cannot spend is the
-	// economy saying it needs more build power, whatever the shape says.
-	if ((con.count >= want) && !aiEconomyMgr.isMetalFull)
+	// A FULL BANK RAISES THE LIMIT, IT DOES NOT REMOVE IT. apexearth, watching:
+	// "lmao purple has 60 t1 cons just before dying", and on the curve's numbers:
+	// "those were like 'reasonable' limits".
+	//
+	// This read `&& !isMetalFull`, so a full bank bypassed the curve outright --
+	// and a player that is LOSING is permanently metal-full, because production
+	// has stalled and nothing can be spent. So the limit switched itself off
+	// exactly when the game was going worst, and the factory built constructors
+	// until it died. Same shape as the porc+ throttle: a bound with an override
+	// that swallows it.
+	//
+	// Full metal is still real evidence that more build power is wanted, so it
+	// buys headroom on the curve rather than a blank cheque.
+	int cap = want;
+	if (aiEconomyMgr.isMetalFull)
+		cap = int(float(want) * ai.GetTunable("apex_con_full_mult", 1.5f)) + 1;
+	if (con.count >= cap)
 		return null;
 	return aiFactoryMgr.Enqueue(TaskS::Recruit(
 			Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
