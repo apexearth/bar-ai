@@ -205,6 +205,33 @@ static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
 	unit->CmdRepeat(repeat);
 }
 
+// Queue `count` of `buildDef` on a factory directly, the way a player does:
+// one standing queue, appended with SHIFT, left alone to run. CRecruitTask is
+// the other way -- one task per unit, and its Finish() calls Cancel(), which
+// CmdRemoves every build order left on the factory. The two cannot coexist on
+// the same factory: whichever unit finishes first wipes the rest of the queue.
+// `replace` issues the first order with no options, which REPLACES the
+// factory's queue; the rest append. That is how a player lays down a fresh
+// queue, and it means no separate clear command is needed.
+//
+// UNVERIFIED, TEST BEFORE TRUSTING THE COUNT: apexearth reports that in BAR
+// shift adds or removes 5 units at a time and ctrl 20. If that multiplier is
+// applied engine-side rather than by the UI, `count` orders become 5x count
+// units. First run must queue a known number and count what actually comes out.
+static void CCircuitUnit_CmdBuildUnit(CCircuitUnit* unit, CCircuitDef* buildDef,
+		int count, bool replace)
+{
+	if ((buildDef == nullptr) || (count <= 0)) {
+		return;
+	}
+	const AIFloat3 pos = unit->GetPos(0);
+	for (int i = 0; i < count; ++i) {
+		const short opts = ((i == 0) && replace)
+				? 0 : UNIT_COMMAND_OPTION_SHIFT_KEY;
+		unit->CmdBuild(buildDef, pos, UNIT_NO_FACING, opts);
+	}
+}
+
 static AIFloat3 CEnemyManager_GetEnemyPos(CEnemyManager* mgr)
 {
 	return mgr->GetEnemyPos();
@@ -784,6 +811,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// A factory told to repeat re-queues what it finishes, so a spam lab keeps
 	// producing instead of waiting to be handed each unit as a separate task.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdRepeat(bool)", asFUNCTION(CCircuitUnit_CmdRepeat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	// Build orders straight to a factory, bypassing CRecruitTask entirely. The
+	// two schemes cannot share a factory: CRecruitTask::Finish() calls Cancel(),
+	// which CmdRemoves every build order still queued, so the first completion
+	// under the task scheme wipes a standing queue.
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdBuildUnit(CCircuitDef@, int, bool)", asFUNCTION(CCircuitUnit_CmdBuildUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// Health is the missing half of "is this risky". Threat alone said commanders
 	// die where the map reads ZERO, because the killer is often at range -- the
 	// last plasma shots landing on a commander already running. Health loss is
