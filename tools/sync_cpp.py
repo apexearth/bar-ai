@@ -31,13 +31,42 @@ BARB = REPO / "vendor" / "engine" / "AI" / "Skirmish" / "BARb"
 MIRROR = REPO / "cpp"
 
 
+# Upstream is a BRANCH, not this checkout's HEAD. The BARb clone sits on a local
+# branch carrying our commits, so a bare `git diff` -- working tree vs HEAD --
+# sees only what is uncommitted and calls every committed change of ours
+# upstream's. That made `pull` skip any file whose change had been committed, and
+# made `status` label 43 real files "no longer differs from upstream; rm by hand".
+UPSTREAM_REFS = ("apex/barbarian", "origin/barbarian", "origin/master")
+
+
+def _upstream_base() -> str | None:
+    for ref in UPSTREAM_REFS:
+        got = subprocess.run(["git", "merge-base", "HEAD", ref], cwd=BARB,
+                             capture_output=True, text=True)
+        if got.returncode == 0 and got.stdout.strip():
+            return got.stdout.strip()
+    return None
+
+
 def modified_files() -> list[str]:
     """Files we have changed against upstream, per the submodule's own git."""
     if not (BARB / ".git").exists():
         raise SystemExit(f"no BARb checkout at {BARB}")
+    base = _upstream_base()
+    if base is None:
+        raise SystemExit(
+            f"no upstream ref in {BARB} (tried {', '.join(UPSTREAM_REFS)}).\n"
+            "Refusing to guess: without a base every tracked file looks stale,\n"
+            "and `status` would tell you to delete work that is not upstream's.")
+    out = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=BARB,
+                         capture_output=True, text=True, check=True).stdout
+    files = {line.strip() for line in out.splitlines() if line.strip()}
+    # Uncommitted edits too -- an agent that has just written a file has not
+    # committed it, and it is still ours.
     out = subprocess.run(["git", "diff", "--name-only"], cwd=BARB,
                          capture_output=True, text=True, check=True).stdout
-    return [line.strip() for line in out.splitlines() if line.strip()]
+    files.update(line.strip() for line in out.splitlines() if line.strip())
+    return sorted(files)
 
 
 def tracked_files() -> list[str]:

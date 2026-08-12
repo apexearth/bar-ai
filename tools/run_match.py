@@ -468,7 +468,12 @@ def run(args) -> int:
     exe = env.spring if watching else env.headless
     # BAR's tools/headless_testing/start.sh removes this before every run:
     # stale widget config silently enables/disables widgets between runs.
-    shutil.rmtree(write_dir / "LuaUI" / "Config", ignore_errors=True)
+    # A WATCHED run keeps it. BAR's camera_remember_mode widget stores the camera
+    # here and restores it only when the handler hands SetConfigData saved data;
+    # with the directory gone that call never happens, savedCamState stays nil,
+    # and the camera falls back to watch.cfg's CamMode on every single game.
+    if not watching:
+        shutil.rmtree(write_dir / "LuaUI" / "Config", ignore_errors=True)
 
     cmd = [str(exe), "--write-dir", str(write_dir)]
     # headless.cfg forces an 8x8 window, which is right for a batch and useless

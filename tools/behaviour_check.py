@@ -29,7 +29,7 @@ BASELINE = ROOT / "tools" / "behaviour_baseline.json"
 # Marker -> substring searched in the infolog. Add a line here whenever a rule
 # gains a log message; a rule with no marker cannot be regression-checked.
 MARKERS = {
-    "mex_guard": "apex: mex guard",
+    "mex_guard": "apex: mex sentry",
     "home_energy": "apex: home energy",
     "eco_nano": "apex: eco nano",
     "eco_converter": "apex: eco converter block",
