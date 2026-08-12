@@ -419,19 +419,41 @@ IUnitTask@ ScoutFloor(CCircuitUnit@ fac)
 	return rec;
 }
 
+// WHERE THE FACTORY'S METAL GOES, in metal rather than in decisions -- a
+// constructor and a raider are one pick each and are not the same spend.
+// The census above this (Factory::FacWon) established that MixTask answers
+// every real factory decision, so these three numbers are the whole of what
+// our factories buy.
+int gMixBPn = 0;    float gMixBPm = 0.f;
+int gMixScn = 0;    float gMixScm = 0.f;
+int gMixFin = 0;    float gMixFim = 0.f;
+
 IUnitTask@ MixTask(CCircuitUnit@ fac)
 {
 	if (ai.GetTunable("apex_mix", 1.f) <= 0.f)
 		return null;
+	// DO NOT APPEND TO A QUEUE THAT ALREADY HAS WORK. Our Enqueue is blind --
+	// see Factory::gQTask -- so without this every call adds another order on
+	// top of the last. Declining hands the line to DefaultMakeTask, which scans
+	// the pending list and ASSIGNS an existing task instead of creating one;
+	// that reuse path is the only correct queue handling in the codebase and
+	// our pipeline runs entirely ahead of it.
+	if (!Factory::QueueHasRoom())
+		return null;
 	IUnitTask@ bp = BuildPowerFirst(fac);
 	if (bp !is null) {
 		ClaimFactory(fac);
+		++gMixBPn;
+		CCircuitDef@ bpd = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
+		if (bpd !is null)
+			gMixBPm += bpd.costM;
 		return bp;
 	}
 	if (ai.GetTunable("apex_mix_scout", 1.f) > 0.f) {
 		IUnitTask@ sc = ScoutFloor(fac);
 		if (sc !is null) {
 			ClaimFactory(fac);
+			++gMixScn;
 			return sc;
 		}
 	}
@@ -447,6 +469,8 @@ IUnitTask@ MixTask(CCircuitUnit@ fac)
 
 	ClaimFactory(fac);
 	++gMixPicks;
+	++gMixFin;
+	gMixFim += want.costM;
 	if (ai.frame >= gNextMixLog) {
 		gNextMixLog = ai.frame + 60 * SECOND;
 		float weight = 0.f;
@@ -454,6 +478,9 @@ IUnitTask@ MixTask(CCircuitUnit@ fac)
 		array<float> base = BaseShares();
 		string line = Factory::T() + "apex: mix -> " + want.GetName()
 			+ " picks=" + gMixPicks
+			+ " spend bp=" + gMixBPn + "/" + formatFloat(gMixBPm, "", 0, 0)
+			+ " sc=" + gMixScn
+			+ " fire=" + gMixFin + "/" + formatFloat(gMixFim, "", 0, 0)
 			+ " counterW=" + formatFloat(weight, "", 0, 2);
 		for (uint i = 0; i < gMix.length(); ++i)
 			line += " | " + formatFloat(Target(i, base, counter, weight), "", 0, 2);

@@ -3,19 +3,55 @@ namespace Factory {
 // Recruiting floors: things a factory must produce some of, regardless of
 // what the ratios in factory.json would otherwise pick.
 
+// WHICH RULE ANSWERS THE FACTORY, AND HOW OFTEN IT IS ASKED.
+//
+// AiMakeTask is demand-driven: CIdleTask::Update assigns, and the engine
+// re-asks whenever the line has nothing to do. So the CALL RATE is the
+// factory's idle rate, and the winner names the rule that answered.
+//
+// This is the only way to see any of it from script. CFactoryManager exposes
+// DefaultMakeTask, Enqueue, GetRoleDef and GetFactoryCount and nothing else --
+// neither GetTasks nor CanEnqueueTask is bound, so the pending recruit queue's
+// depth is invisible here. Every Enqueue we make is therefore blind: it cannot
+// see what is already queued.
+array<string> gFacWho;
+array<int>    gFacHits;
+int gFacCalls = 0;
+
+IUnitTask@ FacWon(const string &in who, IUnitTask@ t)
+{
+	for (uint i = 0; i < gFacWho.length(); ++i) {
+		if (gFacWho[i] == who) {
+			++gFacHits[i];
+			return t;
+		}
+	}
+	gFacWho.insertLast(who);
+	gFacHits.insertLast(1);
+	return t;
+}
+
 void FactoryDiag(CCircuitUnit@ unit)
 {
+	++gFacCalls;
 	// Diagnostic for the "factory goes idle with a full bank" reports:
 	// distinguishes this hook still being called and declining every branch
 	// from it not being called at all. See CHANGES.md 2026-08-06.
 	if (ai.frame >= gNextFactoryDiag) {
 		gNextFactoryDiag = ai.frame + 30 * SECOND;
+		string census = "";
+		for (uint i = 0; i < gFacWho.length(); ++i)
+			census += " " + gFacWho[i] + "=" + gFacHits[i];
 		AiLog(T() + "apex: factory-diag " + unit.circuitDef.GetName()
 			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
 			+ " mCur=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
 			+ " mStor=" + formatFloat(aiEconomyMgr.metal.storage, "", 0, 0)
 			+ " isMetalFull=" + (aiEconomyMgr.isMetalFull ? "1" : "0")
-			+ " hasTask=" + ((unit.task !is null) ? "1" : "0"));
+			+ " hasTask=" + ((unit.task !is null) ? "1" : "0")
+			+ " calls=" + gFacCalls
+			+ " queue=" + QueueDepth() + " unstarted=" + QueueUnstarted()
+			+ " facs=" + aiFactoryMgr.GetFactoryCount()
+			+ " won:" + census);
 	}
 }
 

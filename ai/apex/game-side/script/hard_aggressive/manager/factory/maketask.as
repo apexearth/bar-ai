@@ -15,13 +15,27 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 
 	IUnitTask@ t = AssistantWork(unit);
 	if (t !is null)
-		return t;
+		return FacWon("assist", t);
+
+	// NO RULE BELOW MAY APPEND TO A QUEUE THAT IS ALREADY FULL.
+	//
+	// Every Enqueue in this pipeline is blind: CanEnqueueTask and GetTasks are
+	// not bound to script, and CFactoryManager::Enqueue appends unconditionally.
+	// Stock throttles its own producers at two pending per factory; our rules
+	// were the only ones that never did, and the register above measured the
+	// result -- 9 of 10 pending recruits unstarted on two factories.
+	//
+	// Declining hands the line to DefaultMakeTask, which scans the pending list
+	// and ASSIGNS an existing task rather than creating another. That is the
+	// queue being consumed instead of grown.
+	if (!QueueHasRoom())
+		return FacWon("queue-full", aiFactoryMgr.DefaultMakeTask(unit));
 
 	// Safe to sit first: this answers only for the advanced air plant, so the
 	// ground line's branches below are untouched.
 	@t = Air::MakeFactoryTask(unit);
 	if (t !is null)
-		return t;
+		return FacWon("air", t);
 
 	// TARGET COMPOSITION, ahead of the generic production branches but below the
 	// floors that answer a specific need (assist bots, air, rez). See
@@ -29,57 +43,57 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// of letting whichever rule answers first decide what the army becomes.
 	@t = Brain::MixTask(unit);
 	if (t !is null)
-		return t;
+		return FacWon("mix", t);
 	// An owned line does not fall through to the old production rules. If the
 	// mix could not decide this tick, the ENGINE answers -- never our floors,
 	// which would quietly reintroduce the composition the mix is steering away
 	// from. apexearth: "make sure the old system doesn't interact with that
 	// factory and add its own things."
 	if (Brain::OwnsFactory(unit))
-		return aiFactoryMgr.DefaultMakeTask(unit);
+		return FacWon("mix-default", aiFactoryMgr.DefaultMakeTask(unit));
 
 	@t = RezBotFloor(unit);
 	if (t !is null)
-		return t;
+		return FacWon("rez", t);
 	@t = BankBuysBuildPower(unit);
 	if (t !is null)
-		return t;
+		return FacWon("bank-bp", t);
 	@t = LateRadarPlane(unit);
 	if (t !is null)
-		return t;
+		return FacWon("radar-plane", t);
 	@t = LateFighterScreen(unit);
 	if (t !is null)
-		return t;
+		return FacWon("fighter", t);
 	// A floor like the two above it, and gated on five T2 blind guns already
 	// standing, so it cannot reach back into the opening or the rush.
 	@t = EyesForTheGuns(unit);
 	if (t !is null)
-		return t;
+		return FacWon("eyes", t);
 
 	bool idle = false;
 	@t = RushBuildPower(unit, idle);
 	if (idle || (t !is null))
-		return t;
+		return FacWon(idle ? "rush-idle" : "rush-bp", t);
 
 	ConBranchLog(unit);
 	// Above LosingArmyPush deliberately: both answer "we are behind", and this one
 	// is the answer for the case where we have also stopped attacking.
 	@t = DefensiveComposition(unit);
 	if (t !is null)
-		return t;
+		return FacWon("defensive", t);
 	@t = LosingArmyPush(unit);
 	if (t !is null)
-		return t;
+		return FacWon("losing-push", t);
 	@t = ShareAdvancedCon(unit);
 	if (t !is null)
-		return t;
+		return FacWon("share-acon", t);
 	@t = AirConMinimum(unit);
 	if (t !is null)
-		return t;
+		return FacWon("air-con", t);
 
 	@t = EcoLeadLine(unit, idle);
 	if (idle || (t !is null))
-		return t;
+		return FacWon(idle ? "ecolead-idle" : "ecolead", t);
 
 	// An air plant that Air:: did not claim above falls through to
 	// DefaultMakeTask like every other factory.
@@ -102,7 +116,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// The concern this originally answered -- trickling bombers one at a time
 	// into enemy AA -- is about how bombers are USED, not about starving every
 	// air plant on the team.
-	return aiFactoryMgr.DefaultMakeTask(unit);
+	return FacWon("default", aiFactoryMgr.DefaultMakeTask(unit));
 }
 
 }  // namespace Factory

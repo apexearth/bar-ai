@@ -1,11 +1,70 @@
 namespace Factory {
 
+// THE PENDING RECRUIT QUEUE, MIRRORED IN SCRIPT.
+//
+// CFactoryManager owns the real one (factoryTasks) and throttles its OWN
+// producers against it: UpdateBuildPower and UpdateFirePower both open with
+// CanEnqueueTask(), which is `factoryTasks.size() < factories.size() * 2`.
+// Neither that nor GetTasks is registered in FactoryScript.cpp -- the bound
+// surface is DefaultMakeTask, Enqueue, GetRoleDef and GetFactoryCount -- so
+// every Enqueue our rules make is blind and appends unconditionally. Enqueue
+// itself is `new CRecruitTask` + push_back: no dedup, no cap, no look at what
+// is already queued. A task leaves only via DequeueTask, when its unit
+// finishes or it is aborted.
+//
+// These two hooks are the only view of that list available from here, so the
+// register is rebuilt from them. Recruit tasks arrive as manager type FACTORY
+// with build type RECRUIT.
+array<IUnitTask@> gQTask;
+
 void AiTaskAdded(IUnitTask@ task)
 {
+	if ((task is null) || (task.GetType() != Task::Type::FACTORY))
+		return;
+	if (task.GetBuildType() != Task::BuildType::RECRUIT)
+		return;
+	gQTask.insertLast(task);
 }
 
 void AiTaskRemoved(IUnitTask@ task, bool done)
 {
+	for (uint i = 0; i < gQTask.length(); ++i) {
+		if (gQTask[i] is task) {
+			gQTask.removeAt(i);
+			return;
+		}
+	}
+}
+
+uint QueueDepth()
+{
+	return gQTask.length();
+}
+
+// Stock's own throttle, reimplemented because it is not bound. Two pending per
+// factory is deep enough that a line never idles waiting for the next decision
+// and shallow enough that the queue cannot accumulate -- it is CircuitAI's
+// number, not one invented here; apex_fac_queue exposes it for an A/B.
+bool QueueHasRoom()
+{
+	const int fac = aiFactoryMgr.GetFactoryCount();
+	if (fac <= 0)
+		return true;
+	const float per = ai.GetTunable("apex_fac_queue", 2.f);
+	return float(gQTask.length()) < float(fac) * per;
+}
+
+// How many pending recruits nobody has started yet. A queue that is deep in
+// UNSTARTED orders is the accumulation this register exists to detect.
+uint QueueUnstarted()
+{
+	uint n = 0;
+	for (uint i = 0; i < gQTask.length(); ++i) {
+		array<CCircuitUnit@>@ on = gQTask[i].GetUnits();
+		if ((on is null) || (on.length() == 0))
+			++n;
+	}
+	return n;
 }
 
 // The lead's own T1 lab, kept so it can be fed back into the T2 plant.
