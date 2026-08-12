@@ -90,6 +90,22 @@ const string TV_MINC   = "minc";
 // slot has spare constructor time, which the election makes the same slot every
 // game.
 const string TV_AA = "aa";
+// WHERE EACH OF US IS BEING HURT. apexearth: "its 4 different AI right so this is
+// just ally defense forces coming to aid (so long as the distance is not too
+// great)."
+//
+// CCircuitAI::GetAttackHotspot is a cost-weighted centroid of where WE have lost
+// units, decayed so it follows the current fight. It is per-AI -- NoteLossAt only
+// ever accumulates our own losses -- so a player cannot see an ally being
+// overrun, which is why nobody ever turns up to help.
+//
+// Published as three floats and read back the same way the front budget and the
+// AA count already are. Nothing coordinates the response: each player picks the
+// heaviest fight it can reach and goes. Four players doing that independently is
+// what looks like a converging attack from the outside.
+const string TV_AIDX = "aidx";
+const string TV_AIDZ = "aidz";
+const string TV_AIDW = "aidw";
 
 // Own names rather than Builder's: main.as includes military before builder, and
 // a global is only visible after the line that declares it (functions are not).
@@ -124,6 +140,16 @@ void PublishDefence()
 	ai.PublishTeamValue(TV_FFENCE, float(front));
 	ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
 	ai.PublishTeamValue(TV_AA, float(OwnStaticAA()));
+
+	AIFloat3 hot;
+	float hotW = 0.f;
+	if (ai.GetAttackHotspot(hot, hotW) && OnMap(hot)) {
+		ai.PublishTeamValue(TV_AIDX, hot.x);
+		ai.PublishTeamValue(TV_AIDZ, hot.z);
+		ai.PublishTeamValue(TV_AIDW, hotW);
+	} else {
+		ai.PublishTeamValue(TV_AIDW, 0.f);
+	}
 }
 
 
@@ -141,6 +167,38 @@ float TeamSum(const string& in key, float own)
 // Static AA the whole side holds, against an enemy air value that is also the
 // whole side's. Both halves of the comparison have to describe the same team or
 // the answer is multiplied by however many of us there are.
+// The worst fight on our side that we could actually reach, our own included.
+// Weight is metal lost there, so "worst" means most expensive, and the reach
+// bound is apexearth's "so long as the distance is not too great" -- an ally on
+// the far side of the map is someone else's problem.
+bool AllyAidPos(const AIFloat3& in from, AIFloat3& out at, float& out weight)
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() == 0))
+		return false;
+	const float reach = ai.GetTunable("apex_aid_reach", 6000.f);
+	const float least = ai.GetTunable("apex_aid_min_loss", 300.f);
+	bool have = false;
+	float best = 0.f;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int id = int(mates[i]);
+		const float w = ai.ReadTeamValue(id, TV_AIDW, 0.f);
+		if (w < least)
+			continue;
+		AIFloat3 p = AIFloat3(ai.ReadTeamValue(id, TV_AIDX, 0.f), 0.f,
+				ai.ReadTeamValue(id, TV_AIDZ, 0.f));
+		if (!OnMap(p) || (from.distance2D(p) > reach))
+			continue;
+		if (!have || (w > best)) {
+			best = w;
+			at = p;
+			have = true;
+		}
+	}
+	weight = best;
+	return have;
+}
+
 float TeamAA()
 {
 	return TeamSum(TV_AA, float(OwnStaticAA()));

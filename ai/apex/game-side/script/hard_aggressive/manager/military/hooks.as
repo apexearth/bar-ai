@@ -99,6 +99,25 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// It reverts by itself: this only decides the task a unit is joining now,
 		// so once the attack is over, new units pool into ordinary attack-promoting
 		// tasks again.
+		// AN ALLY BEING OVERRUN COUNTS AS OUR BASE BEING HIT. apexearth: "it's not
+		// just about our own base. It's about seeing that an ally's base is in
+		// their attack and going to assist them."
+		//
+		// AllyAidPos is the heaviest fight on our side within reach, our own
+		// included, from the loss-weighted hotspot each player now publishes. It
+		// is also a far better "we are under attack" trigger than
+		// BaseUnderAttack(), which fired twice in six games because it asks about
+		// enemy influence at our own start position.
+		// MEASURED AND REVERTED, 2026-08-11. Gating this on AllyAidPos -- any ally
+		// losing 300 metal within 6,000 elmos -- is true almost continuously in a
+		// 4v4, so the pool never promoted to ATTACK at all and the army was ground
+		// down in place: at minute 20, army 4,676 against stock's 15,309 (from
+		// 9,467/13,244) and metal lost 42,166 against 16,332.
+		//
+		// The publishing side is kept and is sound; what is wrong is the RESPONSE.
+		// "An ally is being hurt somewhere" must change where the army goes, not
+		// forbid it from ever attacking -- a permanent defensive stance is how you
+		// lose slowly. Use AllyAidPos to pick a DESTINATION next, not as a veto.
 		if ((ai.GetTunable("apex_defend_home", 1.f) > 0.f)
 			&& (Builder::BaseUnderAttack() || BaseContested()))
 		{
