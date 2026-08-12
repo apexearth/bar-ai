@@ -301,6 +301,18 @@ def build_script(
         # metal/damage/unit counters. Continuous signal beats a win/loss bit.
         "dev_stats": 1,
         "dev_maxgameminutes": minutes,
+        # THE PER-PLAYER UNIT LIMIT, AND WE HAVE TO STATE IT.
+        #
+        # BAR's modoptions.lua declares "maxunits" with def=2000 ("Max Units Per
+        # Player"), but a modoption default only applies when the LOBBY writes
+        # it; a hand-built start script that omits the key falls through to the
+        # ENGINE default, which CGameSetup.cpp:632 reads as 32000
+        # (`file.GetDef(maxUnitsPerTeam, "32000", "GAME\\ModOptions\\MaxUnits")`).
+        # So every run here has been played at 16x the unit limit of a real game
+        # -- which is what made the facqueue quota size itself off 32000 and
+        # target twenty thousand raiders. Anything that divides up the unit limit
+        # is measuring a different game unless this is set.
+        "maxunits": 2000,
     }
     # Legion is behind a modoption that defaults to false (modoptions.lua
     # "experimentallegionfaction"). With it off no leg* unit def exists, so a

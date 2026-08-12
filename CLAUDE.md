@@ -252,11 +252,16 @@ share a shape: the thing didn't work, and nothing said so.
 - **`aiMilitaryMgr.quota.attack` caps units SENT to attack, not units BUILT.**
   Setting it to suppress army production does nothing; the factory keeps going.
 - **Engine callbacks can be silently dead.** Every `Game_getTeamResource*` call
-  returns -1 for all teams — including the AI's own — because
-  `AI_TEAM_IDS` in `rts/ExternalAI/SSkirmishAICallbackImpl.cpp` is declared
-  `= {{-1}}` and never assigned. Before building logic on a binding, log its
-  raw return once and confirm it is real data. Route around via a synced gadget
-  publishing a game rules param (`Game_getRulesParamFloat` is not gated); see
+  was measured returning -1 for all teams, including the AI's own. **The
+  mechanism previously recorded here is wrong**: it said `AI_TEAM_IDS` in
+  `rts/ExternalAI/SSkirmishAICallbackImpl.cpp` is "declared `= {{-1}}` and never
+  assigned", but in `recoil_2026.07.04` it *is* assigned, at line 5535
+  (`AI_TEAM_IDS[ai->GetSkirmishAIID()] = ai->GetTeamId()`), and the -1 comes out
+  of `aiGetTeamResource`'s `AlliedTeams` gate. The observation has not been
+  re-measured on this engine — treat both the reading and the explanation as
+  unverified. Before building logic on a binding, log its raw return once and
+  confirm it is real data. Route around via a synced gadget publishing a game
+  rules param (`Game_getRulesParamFloat` is not gated); see
   `game-patches/gadgets/dev_team_income.lua`.
 - **`ai.GetBuilderThreatAt(pos)` will crash on an off-map position, and reads
   zero almost everywhere anyway.** `CThreatMap::GetBuilderThreatAt` bounds-checks
@@ -285,6 +290,26 @@ share a shape: the thing didn't work, and nothing said so.
   edits at least five times. Always `assert old in s` before replacing, and note
   that these Lua/AngelScript files are **tab-indented** — a space-indented anchor
   will never match.
+- **An order we issue is NOT applied when we issue it, and reading the unit back
+  in the same tick returns the state before it.** `CAICallback::GiveOrder`
+  (`rts/ExternalAI/AICallback.cpp:369`) never touches the unit — it does
+  `clientNet->Send(SendAICommand(...))`, and the command lands when that message
+  is consumed. **The lag scales with sim speed**: measured 2026-08-12, a factory
+  read `CountQueued == 0` for 45 consecutive `AiUpdate`s at the benchmark's
+  default speed cap (~37x realtime) and then took all 56 queued orders in one
+  tick; at `--speed 3` the same code read 2-9 throughout. Any loop of the form
+  "read what the unit has, top it up" will issue one order per tick for the whole
+  lag window. Keep a count of what was SENT and use the read only to confirm it.
+  This is also a benchmark trap: a headless run at max speed can exercise a
+  completely different code path from the game apexearth watches.
+- **`AiMakeTask` is a RE-ELECTION, not a request for new work.**
+  `IBuilderTask::Reevaluate` (`task/builder/BuilderTask.cpp:447`) calls
+  `manager->MakeTask(unit)` on every task update for every builder not yet in
+  build range, and only reassigns if the answer has a *different* build type. So
+  any rule that `Enqueue`s before returning enqueues **once per update**, and
+  every enqueue after the first is an orphan nobody will ever work. Measured:
+  15 front-defence tasks in 3 minutes, `picked=0/15`. Return an existing task, or
+  remember the one already placed for that builder.
 
 - **Aggregate over the right unit.** The T2 rush was reported as "not firing"
   from a median first-T2 of 14.9 min. That was the median across ALL FOUR
@@ -476,6 +501,20 @@ Every item is here because skipping it produced a confident wrong answer.
    (the air assassin needs 40/s) never fire here at all. If a change targets
    something seen in a hosted game, confirm the benchmark can even reproduce the
    condition before trusting a null result.
+9. **The default speed cap degrades the AI, and it degrades OURS more than
+   stock's.** Measured 2026-08-12, one build, one seed, 4v4, 8 game minutes,
+   the only variable being `--speed`: commander idle **59-81% for apex and 21-39%
+   for stock at the default cap (~37x), against 3-4% for both at `--speed 3`** —
+   and at the default cap apex fielded zero combat units in twelve minutes while
+   at `--speed 3` it fielded a normal army. The mechanism is the async-order
+   entry in the silent-failures list: at 37x the engine applies our orders ~45
+   sim-seconds late, so any read-then-decide loop reads a stale world and
+   re-issues. **The more commands a change makes the AI issue, the worse the
+   benchmark makes it look.** Anything touching production, task assignment or
+   command volume must be measured at a speed where it behaves, and the run
+   checked against a control at the SAME speed. `facQueued` in
+   `dev_stats_export.lua` is the tell: if apex's factories hold tens of orders
+   where stock holds 0-3, the run is measuring the harness.
 
 ## Harness discipline
 

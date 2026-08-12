@@ -389,6 +389,23 @@ local function armyValue(teamID)
 	return total, cheap
 end
 
+-- TEMPORARY DIAGNOSTIC: the real factory build queue, read synced. The AI-side
+-- CCircuitUnit::CountQueued reads it through the skirmish callback and is under
+-- suspicion of always answering 0; this is the independent number.
+local function factoryQueueDepth(teamID)
+	local facs, orders = 0, 0
+	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+		local udid = Spring.GetUnitDefID(uid)
+		local ud = udid and UnitDefs[udid]
+		if ud ~= nil and ud.isFactory then
+			facs = facs + 1
+			local q = Spring.GetFactoryCommands(uid, -1)
+			if q then orders = orders + #q end
+		end
+	end
+	return facs, orders
+end
+
 -- `io` is nil in the gadget sandbox, so emit through Spring.Echo and let the
 -- harness parse the infolog it already collects. Last line per team wins.
 local function sampleCommIdle()
@@ -530,6 +547,10 @@ local function dump(reason)
 			parts[#parts + 1] = string.format("commAssist=%d", commAssist[teamID] or 0)
 			parts[#parts + 1] = string.format("commStall=%d", commStall[teamID] or 0)
 			parts[#parts + 1] = string.format("commCloakFlips=%d", commCloakFlips[teamID] or 0)
+
+			local nf, nq = factoryQueueDepth(teamID)
+			parts[#parts + 1] = string.format("facCount=%d", nf)
+			parts[#parts + 1] = string.format("facQueued=%d", nq)
 
 			local cb = cheapBuilt[teamID]
 			if cb ~= nil then

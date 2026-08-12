@@ -5,6 +5,44 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
+## 0. WE LOSE THREE TIMES THE METAL WE KILL. This is where the games go.
+
+Measured 2026-08-12 across four runs on Comet Catcher 4v4 vs `BARb:stable:hard`,
+as `(mKillReal + mKillCheap) / (mLostReal + mLostCheap)` summed over each side:
+
+| run | length | apex trade | stock trade |
+|---|---|---|---|
+| `20260812-011550` | 18m | **0.09** | 5.20 |
+| `20260812-033241` | 20m | **0.53** | 1.19 |
+| `20260812-045745` | 30m | **0.64** | 0.92 |
+| `20260812-083510` | 24m | **0.26** | 2.41 |
+
+In the last of those, at 20 minutes: apex killed 22,469 metal and lost 72,901;
+stock killed 63,526 and lost 32,803. Per player, apex traded 0.23-0.50 against
+stock's 0.88-3.32.
+
+**This is not new and it is not the factory work** — the same ratio appears in
+runs that predate any of it, including runs where facqueue was not installed.
+
+**It also explains the economy gap, which is downstream of it.** The two sides
+are level on metal built to minute 8-12 (apex 6.7-8.4k against stock 6.9-9.1k at
+8 min); the gap opens at 12-16 and reaches 2-3x by minute 24, and in the same
+window two apex players are killed outright and flatline. Losing the army loses
+the map, then the mexes, then the player. Chasing the economy numbers directly
+means chasing a symptom.
+
+Note damage tells a different story from metal: apex t0 dealt 78,578 and received
+95,460 — a ratio of 0.82 — while trading 0.50 in metal. We deal roughly
+comparable damage and still lose far more value, which points at *what* dies
+rather than at raw combat power.
+
+**Do not tune this from the aggregate.** The standing lesson in this repo is that
+every change inferred from stats lost and every change from watching a replay
+won. This entry is here to say where to look, not what to change: hand apexearth
+a watched game and ask specifically what the army is doing when it dies.
+
+---
+
 ## 1. We do not press an advantage. We chip.
 
 **apexearth, 2026-08-09, watching 8v8 vs `BARb:stable:medium` on Ancient Vault:**

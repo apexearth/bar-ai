@@ -18,6 +18,184 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-12 (evening): six things apexearth saw in one watched game
+
+Every item below came from him watching, and every one turned out to be a
+mechanism rather than a tuning number.
+
+**Nine T1 bot labs at 66 metal/s.** The plant curve allows three. It was being
+skipped entirely: `AiGetFactoryToBuild` exempted `isStart`, and `isStart` is *not*
+"the first factory of the game" — `CFactoryManager::UpdateIdle`
+(`module/FactoryManager.cpp:1360`) passes it from the recovery path that runs
+whenever no builder for our factory type is available, and enqueues at
+`Priority::NOW`. A T1 lab's builder goes unavailable the moment its owner has any
+T2 factory, so that path fires repeatedly. The cap logged exactly one refusal in a
+whole game. Now exempt only while we own no factory at all. Verified: apex runs
+0-3 factories at 22 min against stock's 2-3.
+
+**The cap counted reclaim.** apexearth: *"when we reclaim metal our income will
+suddenly go much higher than normal. Make sure our cap logic doesn't include
+reclaim."* Nothing in the bound surface separates reclaim from mining
+(`SResourceInfo` is current/storage/pull/income), so `Factory::SteadyIncome()`
+filters by shape instead: the **median** of the last minute, which a burst cannot
+move. This matters because a plant is permanent — a cap read from a momentary peak
+ratchets, and only the highest sample it ever saw ends up mattering.
+
+**T2 lab too late, and in the open.** New `Builder::AdvancedPlantAtRear`, placed
+above `DefaultMakeTask` so it genuinely outranks expansion, bounded to one plant
+with no factory task already on the books. It anchors on the rearmost
+construction turret and searches within that turret's **own** build range — read
+at runtime via a new `GetBuildDistance()` binding, because apexearth: *"players
+can tweak game settings which increase build range."* Verified firing four times
+at 30-32 m/s, all behind the base (`fwd` -0.10 to -0.36). Timing is still short of
+what he wants, but the gap is now between ordering and finishing, not before the
+order.
+
+**Search radii too small — a whole class of silent no-op.** He asked whether 700
+was "the same # as a unit's attack range"; it was (`corllt` 435, `cornanotc`
+builddistance 400). A subagent audit against real footprints found more:
+- `MEX_GUARD_RADIUS` **260 -> 400**. Commented "turret sits on top of the mex",
+  written for a 32-elmo LLT — but `MexGuardTower` returns `armanni`/`armamb`/
+  `legbastion` (64-80 elmos) past 50-100 m/s. 400 is the most that keeps the
+  existing invariant (a guard must land within `MEX_IN_RANGE` 420). This is the
+  answer to *"we still have a lot of mexes that don't get guarded."*
+- `FRONT_SITE_SEARCH` **400 -> scaled off the tower's own `GetMaxRange()`**. It was
+  below the range of the cheapest tower it places, and the line's spacing is
+  already computed from `GetMaxRange` (~1120 elmos for an armanni), so a 400-elmo
+  nudge could not reach neighbouring valid ground. `FrontLineSpots` is
+  deterministic, so a spot that failed once failed forever.
+- Nuke silo and pinpointer copied `GANTRY_NEAR_NANO = 700` from the gantry rule
+  but not its widen-on-failure fallback, while anchoring on the densest patch of
+  the base. For once-per-game structures one failed search was the whole
+  behaviour. They now widen exactly as the gantry does.
+
+**Fifteen decoy commanders, 12,000 metal.** `corack` is role `builderT2`, so
+`cordecom` is the only plain-`builder` unit in `coralab`'s list and therefore what
+`GetRoleDef(coralab, BUILDER)` returns — which `Brain::QuotaFor`'s constructor
+floor asks for and sizes with `ConsWantedFor`. The quota log caught it:
+`cordecom=15/14`. **Stock BARb ships `"limit": 2` here and this config had dropped
+it**; restored rather than re-invented, and `buildspeed` was a typo for
+`build_speed` that had been silently doing nothing. Verified: 0 decoys.
+
+**Six AA turrets in one spot at six minutes.** `AirCoverWant` chose the extractor
+with the fewest nearby *fences*, but `Military::FenceCountNear` reads `gFencePos`,
+which `Military::AiUnitAdded` fills only for units arriving as `UseAs::FENCE`. An
+AA turret just built does not raise that count, so the "least covered" mex stayed
+least covered and was chosen again. It now counts our own AA within the turret's
+own range — no registry involved — and skips a mex already covered. Note the
+severity was partly self-inflicted: splitting AA into its own budget row (below)
+un-damped AA spending straight into this placement bug.
+
+**Still open:** front-line defence at the map edge. apexearth's diagnosis is
+right and is the sharpest statement of it yet — *"the higher threat parts of the
+front are where we need more defenses, but we tend to not make defenses where
+theres threat."* Three gates compound: `CON_THREAT_VETO` refuses threatened
+sites, `DefenceAllowedAt` refuses the rear, and `IBuilderTask::UpdatePath`
+auto-aborts anything failing `CanReachAtSafe`, which a front position never
+passes. Static defence measured 3.2-8.9% of metal against stock's 15.0-33.7% even
+after the radius fixes, so the radius was never the binding constraint. Left
+undone deliberately: it trades constructor lives for towers and belongs behind a
+tunable with a measured default, not a blanket flip.
+
+## 2026-08-12 (later still): the budget counted solar collectors as defence
+
+**apexearth: *"dampening defense at 10% is what I said to do for Air defenses. I
+do not mean we should do that for land defenses."*** The 10% he gave for
+anti-air was sitting in `SPEND_DEFENCE` and throttling every tower on the map,
+and `AirCoverWant` and `FrontDefenceWant` both proposed under the same `"fence"`
+kind, so the two competed for one allowance.
+
+Worse, the allowance was measured wrong. Instrumented 2026-08-12: `corsolar`
+arrives at `Brain::NoteSpend` with `usage=1` (`UseAs::FENCE`) and was counted as
+DEFENCE — **28 solars, 4200 metal, against 720 metal of actual towers**. So the
+Brain believed defence was 13-20% of spend against its 10% target and damped
+every defence want for being over budget, while the game's own counter (immobile
++ armed + not a factory) put real defence at **2.4-4.6%** against stock's
+**20-30%**. The same 4200 metal was missing from ECONOMY, which was boosted for
+being under. Two categories wrong from one misread bit.
+
+Why a solar carries the fence attribute is *not* established — nothing in any
+config here sets it, and script attributes go through a name-based masker, so it
+is not an enum-order mismatch. It does not need to be: the category a unit
+belongs to is a property of the unit, so `CatOf` now decides from the unit
+(`IsEnergyBuilding`, `IsMobile`, the AA role) instead of trusting the attribute.
+
+Changes: `AIRDEF` is now its own budget category with apexearth's row unchanged
+(`SPEND_AIRDEF`, ~8%); `SPEND_DEFENCE` is land only, with a **measured** default
+(~21% early, tapering) taken from stock's 10.8-30.5% while trading 1.94 against
+our 2.4-13.3% while trading 0.31; `AirCoverWant` proposes kind `"aa"`, placed
+identically but scored against its own row. After the fix the same run reports
+`def=0.08/0.20 aa=0.00/0.08 eco=0.33/0.28` — defence under target and boosted,
+economy back where it belongs.
+
+**Not yet solved:** wanting more defence is not building more. Front-line
+defence tasks are aborted by `IBuilderTask::UpdatePath` when the site fails
+`CanReachAtSafe`, which a front position always does, and that is independent of
+priority — so `apex_front_now` cannot fix it. `canAutoAbort` is writable from
+script (`InitScript.cpp:861`); switching it off sends builders onto ground the
+engine calls unsafe. Left for apexearth: it trades towers for constructor lives.
+
+### Two of the eleven silenced rules folded into the quota
+
+Driving every factory meant `Factory::AiMakeTask` never reached the rules below
+`Brain::FactoryQueueTask`. `RezBotFloor` and `AirConMinimum` are now floor
+entries in `QuotaFor`, carrying the same gates they had as rules — rez bots at
+one per 500 metal of wreck actually seen, capped at `REZ_FLOOR`; one air
+constructor so the advanced air plant is reachable at all. Nine remain:
+`BankBuysBuildPower`, `LateRadarPlane`, `LateFighterScreen`, `EyesForTheGuns`,
+`RushBuildPower`, `DefensiveComposition`, `LosingArmyPush`, `ShareAdvancedCon`,
+`EcoLeadLine`.
+
+## 2026-08-12 (later): the quota was building nothing but constructors, and the benchmark was hiding it
+
+Review of the whole Brain/factory path, at apexearth's request. Four findings,
+all measured; `docs/19-factory-through-brain.md` has the evidence and the runs.
+
+**The benchmark measures a different AI at its default speed.** Same build, same
+seed, 4v4, 8 game minutes, only `--speed` varying: apex commanders idle 59-81% at
+the default cap against stock's 21-39%, and **3-4% for both at `--speed 3`**. At
+the default cap apex fielded zero combat units in twelve minutes; at `--speed 3`
+it fielded a normal army. AI orders are not applied when issued --
+`CAICallback::GiveOrder` only sends a net message, consumed under a wall-clock
+budget -- so at ~37x realtime the engine is ~45 sim-seconds behind, and anything
+that reads state back to decide the next order reads a stale world. **The more
+commands a change makes the AI issue, the worse the benchmark makes it look.**
+Every headless facqueue number taken before today is void.
+
+**The quota ordered ~50 constructors in a factory's first 45 seconds.**
+`FillQuota` topped up against that stale read with no memory of what it had sent.
+Fixed: orders sent are tracked per line and the queue read is treated as delayed
+confirmation, with a 90 s lost-order escape hatch.
+
+**The composition was decided by the order of a C++ array.** Every combat target
+was in the thousands (`corak=0/20296`) because `SlotsForArmy` used
+`ai.GetUnitMax()` -- `unitHandler.MaxUnits()`, the whole map's 32000 cap -- so
+every ratio printed `0.00`, `FillQuota` broke ties with a strict `<`, and the
+constructor was simply first in the list. Fixed three ways: a new
+`ai.GetUnitLimit()` binding reads the real per-player limit
+(`teamHandler.Team(ours)->GetMaxUnits()`, BAR's "Max Units Per Player" modoption,
+default 2000); constructors and scouts are checked as **floors** and the ratio
+only ever chooses between combat roles; ties break on the larger target, so an
+empty army builds what the mix wants most of.
+
+**`AiMakeTask` is a re-election, not a request for work.**
+`IBuilderTask::Reevaluate` calls it on every task update for every builder not yet
+in build range, and reassigns only on a different build type -- so every rule of
+ours that `Enqueue`s before returning leaked one orphan task per update
+(15 front-defence orders in 3 minutes, `picked=0/15`). Fixed: a builder already on
+a live task is handed the engine's own offer and none of our enqueueing rules run,
+which makes a re-elected builder behave exactly as stock does.
+
+Also fixed: `HomeTower` re-ordered a tower every 90 s while one was pending,
+because it tested for standing units and not for its own outstanding task.
+
+**Correction, on the record.** Commander idleness was first blamed on wall-clock
+path-query latency. apexearth doubted it and was right: attributed with a new
+`CmdQueueSize` binding, the commander holds a task *and* an engine order 78-96% of
+the time at `--speed 3`, and waits on a path only 2-3%. That latency explains the
+benchmark artefact and nothing else. Where apex actually loses is after minute
+ten, and that is not yet attributed.
+
 ## 2026-08-12: factories run our own standing queue, not one CRecruitTask per unit
 
 apexearth: *"Can we try \*not\* using the original CircuitAI method to make units
