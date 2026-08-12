@@ -290,6 +290,16 @@ share a shape: the thing didn't work, and nothing said so.
   edits at least five times. Always `assert old in s` before replacing, and note
   that these Lua/AngelScript files are **tab-indented** — a space-indented anchor
   will never match.
+- **A DUPLICATE `RegisterObjectMethod` kills the AI at init, and the match still
+  reports a normal-looking failure.** Registering a binding that already exists
+  returns `asALREADY_REGISTERED (-13)`, the `ASSERT` fires, and the AI never
+  initialises — the engine runs to completion, `result.json` says
+  `crashed: true` with an EMPTY stats array, and the only real evidence is one
+  line in the infolog: `Failed in call to function 'RegisterObjectMethod'`. Grep
+  `asALREADY_REGISTERED` before blaming logic. Measured 2026-08-12: `SetRetreat`
+  was bound 14 lines below where a second copy was added, and the "surface
+  listing" that said it was missing had been truncated with `head -30` — absence
+  again, from an incomplete search.
 - **An order we issue is NOT applied when we issue it, and reading the unit back
   in the same tick returns the state before it.** `CAICallback::GiveOrder`
   (`rts/ExternalAI/AICallback.cpp:369`) never touches the unit — it does
@@ -434,6 +444,48 @@ knob to the line that consumes it. `docs/12-build-phases.md` is the BUILD_PHASE
 design that addresses this
 directly: a single sense of what the AI is buying right now, that individual
 rules defer to instead of each firing whenever its own condition happens to hold.
+
+## Working as a fleet — delegate by default
+
+Set 2026-08-12 by apexearth: the top-level session is an **organizer**. The
+domain agents in `.claude/agents/` carry the detail; top-level context stays
+slim so the loop stays fast.
+
+**Investigation is parallel and read-only. Implementation is serial and
+measured.** This is not a style preference. Twelve changes went in over one
+session, every one confirmed firing, and together they cut metal production
+4.3x — see "The path fires" above. A fleet of agents editing at once is that
+failure mode industrialized. The serialization is what makes the parallelism
+safe.
+
+- **INVESTIGATE** — the default. Many agents at once, across different
+  domains. They read, grep, and run tools; they return a diagnosis and a
+  proposed patch. **They do not edit.**
+- **IMPLEMENT** — one agent, one approved diagnosis, then a measurement before
+  the next goes in.
+
+**What an agent must return.** Top-level context is the scarce resource, so
+the report is bounded and structured:
+
+1. **VERDICT** — one line. What is wrong, or "no bug found". A clean bill of
+   health is a real and useful answer; do not manufacture a finding.
+2. **EVIDENCE** — the specific line, log excerpt or measurement, cited
+   `file:line`. An absence needs the positive search that established it.
+3. **PATCH** — the exact change, or "none proposed".
+4. **COST** — what constructor time or build power this spends, and what it
+   displaces. "None" is valid but must be argued, not assumed.
+5. **CONFIDENCE** — and what observation would falsify it.
+
+No file dumps, no narration of the search. The point of delegating is that the
+organizer reads a conclusion, not a transcript.
+
+**Every agent runs on Opus**, declared in its own frontmatter so it does not
+silently follow the session model.
+
+**Never leave apexearth idle.** If he has said he is around, a windowed game
+runs the entire time the fleet and the smoke runs do — launch it *first*, then
+dispatch. Kill it and hand him a fresh one if a smoke run finishes early and
+shows an obvious problem; watching a known-broken build wastes his session.
 
 ## apexearth is faster than the benchmark — ask him first
 

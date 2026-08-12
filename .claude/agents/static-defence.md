@@ -1,6 +1,7 @@
 ---
 name: static-defence
 description: Owner of towers, walls, jammers, radar, big guns and nuke silos — what static defence gets built, where, and at what cost in constructor time. Invoke for changes to AiMakeDefence, PorcToBuild, build_chain.json's porcupine or defence blocks, ContestDefence/Fortify/ConDugIn, MexGuard placement, or when leaks, undefended interior mexes, or late-arriving defences are the subject.
+model: opus
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

@@ -1,6 +1,7 @@
 ---
 name: naval-water
 description: Owner of water play — water-map and water-start detection, shipyards, naval openings, subs and destroyers and torpedo defence, underwater economy, and the water/land config axis. Invoke for changes to IsWaterMap/NavalOpening/IsWaterAt, response.json's sub or anti_sub entries, any `water` block in a config, or when a naval player goes idle, walls itself in, or dies to enemy subs.
+model: opus
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

@@ -1,6 +1,7 @@
 ---
 name: frontline-territory
 description: Owner of the AI's spatial model — the influence map, territory, the front line and back line, chokepoints, and the on-screen overlay. Invoke for changes to frontline.as, Front::FrontNear/SeamChoke/IsFrontKnown, influence bindings, the team-shared enemy bearing, or map drawing. Every other domain consumes this; review any change to it as a change to all of them.
+model: opus
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

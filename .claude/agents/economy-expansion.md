@@ -1,6 +1,7 @@
 ---
 name: economy-expansion
 description: Owner of metal expansion — mex claiming, mex upgrades (Moho), the mex crew, mex guarding, and the DefaultMakeTask position that all of it depends on. Invoke when changing anything that claims a constructor before DefaultMakeTask, when mex/t2Mex counts fall, when reviewing any new rule that enqueues builder work, or when asked why the AI stopped expanding. This is the domain every other domain displaces — route reviews of ANY new spend rule here.
+model: opus
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

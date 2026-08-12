@@ -1,6 +1,7 @@
 ---
 name: build-power
 description: Referee of constructor time — the AiMakeTask ladder order, constructor roles and caps, nano turrets, assist bots, and who is allowed to claim a builder. Invoke whenever a rule is added to, removed from, or reordered within builder.as AiMakeTask, when constructor counts change, or when a change "fires correctly" but something else got worse. This is the agent that arbitrates displacement between all the other domains.
+model: opus
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

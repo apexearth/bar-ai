@@ -1,6 +1,7 @@
 ---
 name: military-engagement
 description: Owner of how the army fights — posture, massing, engagement odds, attack quotas, team pushes, the killing blow, raid caution, and army trading. Invoke for changes to military.as attack/posture logic, ENGAGE_MARGIN-style thresholds, quota.attack, squad merging, or when kills/losses ratios, army positioning, or "we attack too much and hold too little" is the subject.
+model: opus
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

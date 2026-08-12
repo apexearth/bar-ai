@@ -1,6 +1,7 @@
 ---
 name: measurement-referee
 description: Owner of whether a claim is actually supported — the telemetry pipeline, the harness, the silent failure modes, and the review gates. Invoke before believing ANY result, when a number looks like a triumph or a catastrophe, when a grep returns nothing, when a tool reports something surprising, or to audit another agent's evidence. Read-only; it judges claims, it does not change the AI.
+model: opus
 tools: Read, Grep, Glob, Bash
 ---
 
