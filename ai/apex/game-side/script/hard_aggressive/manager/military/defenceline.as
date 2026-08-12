@@ -106,6 +106,10 @@ const string TV_AA = "aa";
 const string TV_AIDX = "aidx";
 const string TV_AIDZ = "aidz";
 const string TV_AIDW = "aidw";
+// teamValues is never erased and GetTeamIds() is a static roster, so a player
+// that dies keeps its last published weight -- its largest ever -- forever.
+// A frame stamp is what tells a live publisher from a dead one.
+const string TV_AIDF = "aidf";
 
 // Own names rather than Builder's: main.as includes military before builder, and
 // a global is only visible after the line that declares it (functions are not).
@@ -140,6 +144,7 @@ void PublishDefence()
 	ai.PublishTeamValue(TV_FFENCE, float(front));
 	ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
 	ai.PublishTeamValue(TV_AA, float(OwnStaticAA()));
+	ai.PublishTeamValue(TV_AIDF, float(ai.frame));
 
 	AIFloat3 hot;
 	float hotW = 0.f;
@@ -167,21 +172,45 @@ float TeamSum(const string& in key, float own)
 // Static AA the whole side holds, against an enemy air value that is also the
 // whole side's. Both halves of the comparison have to describe the same team or
 // the answer is multiplied by however many of us there are.
-// The worst fight on our side that we could actually reach, our own included.
-// Weight is metal lost there, so "worst" means most expensive, and the reach
-// bound is apexearth's "so long as the distance is not too great" -- an ally on
-// the far side of the map is someone else's problem.
-bool AllyAidPos(const AIFloat3& in from, AIFloat3& out at, float& out weight)
+// Our home to theirs, so the aid reach is a measurement of this map rather than
+// a distance typed in here.
+float BaseSeparation()
 {
+	if (!Builder::gHomeSet)
+		return 0.f;
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(foe))
+		return 0.f;
+	return Builder::gHomePos.distance2D(foe);
+}
+
+// The worst fight an ALLY is losing that we could actually reach. Weight is
+// metal lost there, so "worst" means most expensive, and the reach bound is
+// apexearth's "so long as the distance is not too great".
+bool AllyAidPos(const AIFloat3& in from, AIFloat3& out at, float& out weight, int& out who)
+{
+	who = -1;
+	weight = 0.f;
 	array<Id>@ mates = ai.GetTeamIds();
 	if ((mates is null) || (mates.length() == 0))
 		return false;
-	const float reach = ai.GetTunable("apex_aid_reach", 6000.f);
+	// GetTunable caches on first call, so a computed default would freeze at
+	// whatever the separation was the first time this ran -- 0, before the home
+	// position is set. Sentinel instead: unset follows the measurement live.
+	const float sep = BaseSeparation();
+	const float tuned = ai.GetTunable("apex_aid_reach", -1.f);
+	const float reach = (tuned > 0.f) ? tuned : ((sep > 0.f) ? sep : 6000.f);
 	const float least = ai.GetTunable("apex_aid_min_loss", 300.f);
+	const float fresh = ai.GetTunable("apex_aid_fresh", 60.f) * float(SECOND);
 	bool have = false;
 	float best = 0.f;
 	for (uint i = 0; i < mates.length(); ++i) {
 		const int id = int(mates[i]);
+		if (id == ai.teamId)
+			continue;   // our own fight is not aid; see GetGuardAnchor
+		const float when = ai.ReadTeamValue(id, TV_AIDF, -1.f);
+		if ((when < 0.f) || (float(ai.frame) - when > fresh))
+			continue;   // dead or never published: its weight is frozen, not current
 		const float w = ai.ReadTeamValue(id, TV_AIDW, 0.f);
 		if (w < least)
 			continue;
@@ -192,11 +221,80 @@ bool AllyAidPos(const AIFloat3& in from, AIFloat3& out at, float& out weight)
 		if (!have || (w > best)) {
 			best = w;
 			at = p;
+			who = id;
 			have = true;
 		}
 	}
 	weight = best;
 	return have;
+}
+
+// AS FAR TOWARD THEM AS WE STILL CONTEST. apexearth, on helping a player who is
+// already losing: "Go, but only as far as contested ground." Bisect the segment
+// from our end to theirs and stop at the influence zero crossing, so we reach
+// survivors and sit on the attacker's flank instead of walking into ground we
+// have already lost.
+bool AidClampToContested(const AIFloat3& in from, const AIFloat3& in to, AIFloat3& out at)
+{
+	if (!OnMap(from) || !OnMap(to))
+		return false;
+	if (ai.GetNetInflAt(to) >= 0.f) {
+		at = to;
+		return true;
+	}
+	if (ai.GetNetInflAt(from) < 0.f)
+		return false;   // we do not hold our own end either
+	AIFloat3 good = from;
+	AIFloat3 bad = to;
+	for (int i = 0; i < 8; ++i) {   // 8 halvings resolve a base separation to ~1%
+		AIFloat3 mid = (good + bad) * 0.5f;
+		if (!OnMap(mid))
+			break;
+		if (ai.GetNetInflAt(mid) >= 0.f)
+			good = mid;
+		else
+			bad = mid;
+	}
+	at = good;
+	return true;
+}
+
+// READ-ONLY. Issues no order and enqueues nothing: it reports what an aid
+// response WOULD do, because the response itself cannot be built at this layer
+// (see CHANGES.md -- one anchor serves every DEFEND task).
+int gNextAidLog = 0;
+
+void LogAidState()
+{
+	if (ai.frame < gNextAidLog)
+		return;
+	AIFloat3 aid;
+	float aidW = 0.f;
+	int who = -1;
+	if (!Builder::gHomeSet || !AllyAidPos(Builder::gHomePos, aid, aidW, who))
+		return;
+	gNextAidLog = ai.frame + 20 * SECOND;
+
+	AIFloat3 own;
+	float ownW = 0.f;
+	if (!ai.GetAttackHotspot(own, ownW))
+		ownW = 0.f;
+	// Same measured quantity on both sides: one player's decaying loss weight.
+	const float frac = aidW / (aidW + ownW);
+
+	AIFloat3 go;
+	string dest = " go=none";
+	if (AidClampToContested(Builder::gHomePos, aid, go)) {
+		dest = " go=" + int(go.x) + "," + int(go.z)
+			+ " clamped=" + int(go.distance2D(aid));
+	}
+	AiLog(Factory::T() + "apexaid: team " + who
+		+ " hurt=" + formatFloat(aidW, "", 0, 0)
+		+ " ours=" + formatFloat(ownW, "", 0, 0)
+		+ " frac=" + formatFloat(frac, "", 0, 2)
+		+ " army=" + formatFloat(aiMilitaryMgr.armyCost, "", 0, 0)
+		+ " dist=" + int(Builder::gHomePos.distance2D(aid))
+		+ dest);
 }
 
 float TeamAA()

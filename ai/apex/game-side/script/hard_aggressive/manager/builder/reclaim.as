@@ -82,6 +82,58 @@ float WreckSeenValue()
 	return gWreckSeenValue * (1.f - float(age) / float(WRECK_SEEN_TTL));
 }
 
+// ScavengeWrecks also writes NoteWreckSeen, but it sits below AiMakeTask's
+// AskingForNewWork return: while constructors hold work nothing samples, the
+// value decays to zero, and the rez-bot floor that reads it leaves the quota
+// entirely. A low reading from here is harmless -- NoteWreckSeen keeps a peak.
+const int WRECK_SAMPLE_PERIOD = 5 * SECOND;
+int gNextWreckSample = 0;
+
+void SampleWreckField()
+{
+	if (ai.frame < gNextWreckSample)
+		return;
+	gNextWreckSample = ai.frame + WRECK_SAMPLE_PERIOD;
+	float best = 0.f;
+	// One unit per squad: members stand well inside WRECK_RICH_R of each other,
+	// so a second query over the same field costs a feature scan for nothing.
+	for (uint i = 0; i < Military::gSquads.length(); ++i) {
+		IUnitTask@ squad = Military::gSquads[i];
+		if (squad is null)
+			continue;
+		array<CCircuitUnit@>@ on = squad.GetUnits();
+		if ((on is null) || (on.length() == 0))
+			continue;
+		CCircuitUnit@ u = on[0];
+		if (u is null)
+			continue;
+		const AIFloat3 p = u.GetPos(ai.frame);
+		if (!OnMap(p))
+			continue;
+		const float v = ai.GetWreckValueAt(p, WRECK_RICH_R);
+		if (v > best)
+			best = v;
+	}
+	NoteWreckSeen(best);
+}
+
+// The same reading taken from a builder, wherever AiMakeTask found it. Rate
+// limited across ALL builders, not per builder: one query answers the question
+// for everyone standing in the same field.
+const int WRECK_SIGHT_PERIOD = 2 * SECOND;
+int gNextWreckSight = 0;
+
+void NoteWreckSighting(CCircuitUnit@ unit)
+{
+	if ((unit is null) || (ai.frame < gNextWreckSight))
+		return;
+	gNextWreckSight = ai.frame + WRECK_SIGHT_PERIOD;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (!OnMap(here))
+		return;
+	NoteWreckSeen(ai.GetWreckValueAt(here, WRECK_RICH_R));
+}
+
 // The engine's own build-site safety check is an AND of three terms
 // (BuilderManager::MakeBuilderTask): near-zero power in the thing being built,
 // hot threat map, AND influence already reading enemy-owned. Contested ground

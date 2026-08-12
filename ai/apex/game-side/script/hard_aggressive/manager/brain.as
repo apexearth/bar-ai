@@ -477,14 +477,15 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 	CCircuitDef@ aa = Builder::AADefFor(unit);
 	if ((aa is null) || !aa.IsAvailable(ai.frame))
 		return null;
+	// NO AIR SEEN, NO AA. Letting the deterrence floor stand before any sighting
+	// was tried and put three SAMs in the base against an enemy with no aircraft.
+	// The floor still applies, but only once air exists to deter.
+	if (enemyAir < 1.f)
+		return null;
 	const int want = Builder::AAWantedNow(unit, enemyAir);
-	// The deterrence floor stands whether or not air has been SEEN -- a base with
-	// no AA at all is free to the first bomber, and AirThreatSeen reads zero until
-	// a real sighting. Returning early on "no air right now" made AA_MIN
-	// unreachable and left us on one turret at sixteen minutes.
 	if (aa.count < Builder::AA_MIN) {
 		// per-base deterrence floor, counted on our own turrets
-	} else if ((enemyAir < 1.f) || (Military::TeamAA() >= float(want))) {
+	} else if (Military::TeamAA() >= float(want)) {
 		return null;
 	}
 

@@ -188,20 +188,19 @@ bool PastT1Tier()
 // visibly cluttered and the clutter is what is stopping us teching up.
 const int OBSOLETE_URGENT_COUNT = 6;
 
-// The T1/T1.5 towers this AI builds, cheapest first.
+// The T1 towers this AI builds. The T2 pop-ups are deliberately NOT here: they
+// are one of the three defs HaveHeavyDefence() reads, so listing them made that
+// guard authorise eating the very tier it gates on.
 array<string> ObsoleteDefenceNames()
 {
 	const string side = ai.GetSideName();
 	array<string> names;
 	if (side == "cortex") {
 		names.insertLast(corllt);
-		names.insertLast(corvipe);
 	} else if (side == "legion") {
 		names.insertLast(leglht);
-		names.insertLast(legapopupdef);
 	} else {
 		names.insertLast(armllt);
-		names.insertLast(armpb);
 	}
 	return names;
 }
@@ -308,6 +307,13 @@ IUnitTask@ ObsoleteUrgent(CCircuitUnit@ unit)
 
 IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit)
 {
+	// NOT THE ADVANCED CONSTRUCTORS. apexearth: "I see T2 con time is being used
+	// to reclaim obsolete buildings. Let's not have that be important for them at
+	// all. Rezbots, T1 cons, and con turrets can do that." An advanced con is the
+	// only unit that can build a moho, a reactor or a heavy turret, and there are
+	// never many; tidying is work anything else can do.
+	if (IsAdvConDef(unit))
+		return null;
 	if (ai.frame < gNextObsolete)
 		return null;
 
@@ -397,6 +403,10 @@ bool HaveReplacementFor(const string& in name)
 		@better = SideDef3(armmmkr, cormmkr, legadveconv);
 	else if ((name == armsolar) || (name == corsolar) || (name == legsolar))
 		@better = SideDef3(armadvsol, coradvsol, legadvsol);
+	// A reactor is the advanced collector's successor: once one stands the panels
+	// are footprint and metal the base wants back.
+	else if ((name == armadvsol) || (name == coradvsol) || (name == legadvsol))
+		@better = SideDef3(armfus, corfus, legfus);
 	else
 		return true;   // no successor to wait for
 	return (better !is null) && (better.count > 0);
@@ -412,6 +422,8 @@ array<string> ObsoleteEcoNames()
 			names.insertLast(corsolar);
 		if (HaveReplacementFor(cormakr))
 			names.insertLast(cormakr);
+		if (HaveReplacementFor(coradvsol))
+			names.insertLast(coradvsol);
 		names.insertLast(corrl);
 	} else if (side == "legion") {
 		names.insertLast(legwin);
@@ -419,6 +431,8 @@ array<string> ObsoleteEcoNames()
 			names.insertLast(legsolar);
 		if (HaveReplacementFor(legeconv))
 			names.insertLast(legeconv);
+		if (HaveReplacementFor(legadvsol))
+			names.insertLast(legadvsol);
 		names.insertLast(legrl);
 	} else {
 		names.insertLast(armwin);
@@ -426,6 +440,8 @@ array<string> ObsoleteEcoNames()
 			names.insertLast(armsolar);
 		if (HaveReplacementFor(armmakr))
 			names.insertLast(armmakr);
+		if (HaveReplacementFor(armadvsol))
+			names.insertLast(armadvsol);
 		names.insertLast(armrl);
 	}
 	return names;

@@ -354,6 +354,24 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		}
 	}
 
+	// EYES AND COVER FOR EACH SQUAD. apexearth: "can you make it so we always have
+	// a radar and a jammer built and attached to each squad?"
+	//
+	// corvoyr (Augur) and corspec (Deceiver) are role SUPPORT, and SUPPORT is not
+	// in gMix -- so a driven line could not build either of them at all, the same
+	// gap that once hid HEAVY and AH. One per squad on the field.
+	{
+		const uint squads = Military::SquadCount();
+		if (squads > 0) {
+			CCircuitDef@ sup = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::SUPPORT);
+			if ((sup !is null) && sup.IsAvailable(ai.frame)) {
+				defs.insertLast(sup);
+				want.insertLast(int(squads));
+				isFloor.insertLast(true);
+			}
+		}
+	}
+
 	// FLOORS THE OLD PRODUCTION RULES USED TO HOLD.
 	//
 	// A driven line is answered by Brain::FactoryQueueTask and never reaches the

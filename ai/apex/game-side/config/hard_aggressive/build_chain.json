@@ -14,7 +14,13 @@
 		},
 		
 	// Actual number of defences per cluster bounded by income - the order of defenses that should be build with numbers as above.
-	"land":  [0, 3, 5, 6, 4, 8, 10, 12],
+	// GROUND ONLY. 6 (cormadsam, SAM) and 10 (corflak, Birdshot) are ANTI-AIR and
+	// this ladder is walked with no air check whatsoever, so once prevent opened
+	// it every cluster started putting up SAMs. apexearth: "we make like 3 AA in
+	// our base early game before we have *ever* seen any enemy air." AA is
+	// demand-driven through Brain::AirCoverWant, which is gated on air actually
+	// being seen; this list is what answers ground.
+	"land":  [0, 3, 5, 4, 8, 12],
 	"water": [1, 1, 4, 9, 10, 9, 10],
 	// DefaultMakeDefence walks `num = isPorc ? defenders.size() : preventCount`,
 	// so this is literally how many entries of the "land" order below an ORDINARY
@@ -26,7 +32,13 @@
 	// which also keeps the other half of the same request, "in early game we
 	// should put a light laser turret near every mex spot", since index 0 is
 	// still what every cluster gets first.
-	"prevent": 2,  // number of preventive defences
+	// At 2 the Cortex ladder stopped at corhllt: cormaw, cormadsam, corhlt and
+	// then EVERY T2/T3 turret -- corvipe, corflak, cordoom -- were unreachable
+	// outside a porcupine cluster, at any income. apexearth at 300 metal/s: "I
+	// only see like 1 T2 defense... we get pushed back because of a lack of T2 and
+	// T3 defenses." 8 opens the whole ladder; how MANY get built is bound
+	// separately by "amount" against income, so a poor player still builds few.
+	"prevent": 6,  // number of preventive defences: the whole ground ladder above
 	"amount": {  // income bound factor
 		"offset": [-2.0, 2.0],
 		// Amount factor: 10x10 ~ 48.0, 20x20 ~ 32.0

@@ -290,7 +290,13 @@ void UpdateSling()
 // be assigned or compared across. Only the RATIO theirs/ours is dimensionless,
 // so that is the sole bridge used here; the output stays in quota units and
 // inside the range below that is already known to work.
-const float MASS_FLOOR  = 30.f;   // even when ahead, never trickle 2-3 units
+// POWER, not units: a Grunt is 0.9, so 30 demanded ~33 of them before any attack
+// would form at all -- and apexearth's own figure, quoted in MassWant above, is
+// "~10 grunts". 12 is roughly 13 Grunts or 8 Thugs: a real group, not a trickle,
+// and reachable. At 30 the army regrouped and never went. apexearth, watching:
+// "we will lose this game because we keep moving our army towards the back of
+// the base... our regrouping behavior makes it so we never are able to push."
+const float MASS_FLOOR  = 12.f;   // even when ahead, never trickle 2-3 units
 // Ratio at or above which we stop attacking and let them come to the defences.
 const float MASS_HOLD_RATIO = 1.5f;
 const float MASS_CAP    = 48.f;

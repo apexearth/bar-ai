@@ -284,8 +284,18 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				}
 			}
 
+			// ONE REBUILD, NOT ONE PER TICK. HaveAnyFactory counts FINISHED
+			// factories, so while the first lab is still a nanoframe this branch
+			// stays true and queues another, and another. Measured live: 127
+			// rebuild orders on one player, five bot labs standing at 20 metal/s
+			// where PlantsWanted allows one -- and this path enqueues directly, so
+			// the plant curve never saw any of them. lab.count includes the
+			// nanoframe; the task check covers the gap before construction starts.
 			CCircuitDef@ lab = Factory::T1BotLab();
-			if ((lab !is null) && lab.IsAvailable(ai.frame)) {
+			if ((lab !is null) && lab.IsAvailable(ai.frame)
+				&& (lab.count <= 0)
+				&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) <= 0))
+			{
 				IUnitTask@ rebuild = aiBuilderMgr.Enqueue(TaskB::Common(
 						Task::BuildType::FACTORY, Task::Priority::HIGH,
 						lab, unit.GetPos(ai.frame), 0.f));

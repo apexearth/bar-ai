@@ -37,6 +37,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (!ApexActive())
 		return aiBuilderMgr.DefaultMakeTask(unit);
 
+	// Above every early return below, including AskingForNewWork's: recording
+	// what a builder can SEE is not a decision to go and eat it, so it carries
+	// none of ScavengeWrecks' exclusions -- an advanced constructor still never
+	// chases a pile, and still reports one.
+	NoteWreckSighting(unit);
+
 	IUnitTask@ t = RezzerFlee(unit);
 	if (t !is null)
 		return t;

@@ -115,12 +115,19 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			// A 130-metal turret that saves a 620-metal mex outranks a solar.
 
 			// The home crew's own job, NOT phase-gated: the pre-fusion energy
-			// curve is exactly the stage this is for. HomeEnergy returns null for
-			// anyone who is not Crew::HOME, so this call cannot reach the rest of
-			// the constructor pool.
-			IUnitTask@ juice = HomeEnergy(unit);
-			if (juice !is null)
-				return juice;
+			// curve is exactly the stage this is for. The crew test lives HERE
+			// because HomeEnergy itself no longer refuses a non-HOME builder --
+			// apex_energy_any defaults on -- and this is the terminal rule of
+			// OptionalWork, the one that always finds work. Offered to every ECO
+			// constructor it became the default job of the whole pool and starved
+			// everything below it. Energy is still reachable for any builder
+			// through Brain::Execute("energy"), ranked against the mex upgrade
+			// instead of ahead of it.
+			if (crewRole == Crew::HOME) {
+				IUnitTask@ juice = HomeEnergy(unit);
+				if (juice !is null)
+					return juice;
+			}
 
 			if ((Factory::gLastPhase >= 4)
 				&& ((crewRole == Crew::ECO) || (crewRole == Crew::HOME))) {
@@ -305,6 +312,36 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 		+ formatFloat(Factory::SteadyIncome(), "", 0, 0) + " m/s steady, fwd="
 		+ formatFloat(Military::ForwardFraction(site), "", 0, 2));
 	return post;
+}
+
+// WHERE A REACTOR GOES. apexearth: "We make AFUS in unsafe places. They should
+// be made far in the back-line."
+//
+// 0 leaves the placement to the ordinary eco layout, 1 is the grid's heavy band,
+// 2 anchors on the rear point instead -- the heavy band is only the back of the
+// base while the latched axis is rearward.
+int ReactorSpot(CCircuitUnit@ unit, CCircuitDef@ gen, AIFloat3& out spot)
+{
+	if (!gHomeSet || (gen is null))
+		return 0;
+	if (ai.GetTunable("apex_reactor_rear", 1.f) <= 0.f)
+		return 0;
+	AIFloat3 site;
+	if (Base::AxisIsRearward() && Base::Spot(unit, gen, Base::HEAVY, site)
+			&& (FrontT(site) <= 0.f)) {
+		spot = site;
+		return 1;
+	}
+	const AIFloat3 rear = RearOfBase(ai.GetTunable("apex_reactor_rear_dist", T2_REAR_DIST));
+	if (!OnMap(rear))
+		return 0;
+	site = ai.FindBuildSiteNear(gen, rear, T2_REAR_SEARCH);
+	if (!OnMap(site) || (FrontT(site) > 0.f))
+		return 0;
+	if (ThreatFor(unit, site) > CON_THREAT_VETO)
+		return 0;
+	spot = site;
+	return 2;
 }
 
 }  // namespace Builder

@@ -115,6 +115,23 @@ bool Frame()
 	return true;
 }
 
+// Bands are laid out as gAnchor - gFwd * depth (reserve.as, CellPos), so a
+// deeper band is only further from the enemy while gFwd still points at them --
+// and AxisScore above may replace the front-derived axis with its 180-flip.
+bool AxisIsRearward()
+{
+	if (!gAxisSet)
+		return false;
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(foe))
+		return false;
+	const float ex = foe.x - gAnchor.x;
+	const float ez = foe.z - gAnchor.z;
+	if ((ex * ex + ez * ez) < NEAR_ZERO)
+		return false;
+	return ((gFwd.x * ex) + (gFwd.z * ez)) > 0.f;
+}
+
 bool Ready() { return gAnchorSet && gAxisSet; }
 
 }  // namespace Base

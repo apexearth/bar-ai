@@ -123,7 +123,8 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// The publishing side is kept and is sound; what is wrong is the RESPONSE.
 		// "An ally is being hurt somewhere" must change where the army goes, not
 		// forbid it from ever attacking -- a permanent defensive stance is how you
-		// lose slowly. Use AllyAidPos to pick a DESTINATION next, not as a veto.
+		// lose slowly. Sending a FRACTION of the army needs a per-task position,
+		// which this layer does not have; see CHANGES.md before trying again.
 		if ((ai.GetTunable("apex_defend_home", 1.f) > 0.f)
 			&& (Builder::BaseUnderAttack() || BaseContested()))
 		{
@@ -136,12 +137,39 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	return aiMilitaryMgr.DefaultMakeTask(unit);
 }
 
+// OUR SQUADS, mirrored from the task hooks. Nothing in the bound surface
+// enumerates fighter tasks, so this register is the only way to ask how many
+// groups we are fielding or how big they are.
+array<IUnitTask@> gSquads;
+
 void AiTaskAdded(IUnitTask@ task)
 {
+	if ((task is null) || (task.GetType() != Task::Type::FIGHTER))
+		return;
+	gSquads.insertLast(task);
 }
 
 void AiTaskRemoved(IUnitTask@ task, bool done)
 {
+	for (uint i = 0; i < gSquads.length(); ++i) {
+		if (gSquads[i] is task) {
+			gSquads.removeAt(i);
+			return;
+		}
+	}
+}
+
+// Groups with units actually in them. An empty fighter task is a request nobody
+// has been elected onto, not a squad on the field.
+uint SquadCount()
+{
+	uint n = 0;
+	for (uint i = 0; i < gSquads.length(); ++i) {
+		array<CCircuitUnit@>@ on = gSquads[i].GetUnits();
+		if ((on !is null) && (on.length() > 0))
+			++n;
+	}
+	return n;
 }
 
 // Where our own defences stand.

@@ -552,6 +552,25 @@ local function dump(reason)
 			parts[#parts + 1] = string.format("facCount=%d", nf)
 			parts[#parts + 1] = string.format("facQueued=%d", nq)
 
+			-- Does CmdSetTarget actually land for an AI-owned unit? The AI has
+			-- issued it for a long time and nothing has ever confirmed it took.
+			-- unit_target_on_the_move.lua (BAR's own) writes this rules param on
+			-- success, and rules params are not behind the AI_TEAM_IDS gate that
+			-- makes the resource callbacks read -1.
+			local armed, targeted = 0, 0
+			for _, uID in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+				local ud = UnitDefs[Spring.GetUnitDefID(uID) or -1]
+				if ud ~= nil and ud.canAttack and (ud.maxWeaponRange or 0) > 0 then
+					armed = armed + 1
+					local t = tonumber(Spring.GetUnitRulesParam(uID, "targetID"))
+					if t ~= nil and t >= 0 then
+						targeted = targeted + 1
+					end
+				end
+			end
+			parts[#parts + 1] = string.format("armed=%d", armed)
+			parts[#parts + 1] = string.format("setTarget=%d", targeted)
+
 			local cb = cheapBuilt[teamID]
 			if cb ~= nil then
 				local out = {}

@@ -106,7 +106,12 @@ array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
 // once both sides hold a line it is metal walking into a turret. The row goes to
 // zero above the T1 economy rather than tapering, because "some" T2 raiders is
 // what a taper buys and he asked for none.
-array<float> ROLE_RAIDER  = {0.35f, 0.10f, 0.00f, 0.00f, 0.00f};
+// Never zero past T1. It read {..., 0, 0, 0}, so from 50 metal/s upward we built
+// no cheap fast unit at all -- exactly when enemy jammers make seeing them the
+// problem. apexearth: "once we are in T2 phase the only T1 we should make is the
+// lightest T1 units, not a TON of them, and their behavior should be far more
+// suicidal." A small standing share of 42-metal Grunts is a lot of eyes.
+array<float> ROLE_RAIDER  = {0.35f, 0.10f, 0.05f, 0.04f, 0.03f};
 array<float> ROLE_ASSAULT = {0.35f, 0.2f, 0.24f, 0.18f, 0.08f};
 array<float> ROLE_SKIRM   = {0.12f, 0.25f, 0.17f, 0.15f, 0.14f};
 array<float> ROLE_RIOT    = {0.10f, 0.10f, 0.10f, 0.09f, 0.08f};

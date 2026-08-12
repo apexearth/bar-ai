@@ -18,6 +18,231 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-12: ally aid — the signal was already there, the response needs the DLL
+
+Layer 2, `manager/military/defenceline.as`, `manager/military/posture.as`.
+
+apexearth, watching live: "We still aren't sending military to aid our allies as
+their base is under attack. I see teal next to blue, he makes military, sends
+them to the center of his base, and does nothing with them... meanwhile blue is
+fighting for his life."
+
+**The distress signal has existed and been published every tick since the
+2026-08-11 attempt; it has never had a consumer.** `PublishDefence` publishes
+`aidx`/`aidz`/`aidw` (this player's loss-weighted hotspot and its weight) from
+`CCircuitAI::GetAttackHotspot`. The only reader is `AllyAidPos`, and a whole-tree
+grep for it returns the definition plus three lines of comment — **no call site**.
+The one attempt to use it wired it as a *veto* on attacking (any ally losing 300
+metal within 6,000 elmos, true almost continuously in a 4v4), the pool then never
+promoted to ATTACK, and it was reverted: `tournaments/20260811-180647-ally-aid`,
+0-4 decided over 6 games.
+
+Full blackboard census, for the next person who looks: `adv`/`lead`/`ready`/
+`dist`/`mexhold`/`fill` (tech election + slinging — the one that demonstrably
+works, 269,000 metal moved), `targ`, `airinc`/`airlead`, `apexHome*`/`apexFoe*`,
+`ffence`/`minc`/`aa` (team *budgets*), `army` (team push), `aidx`/`aidz`/`aidw`.
+Transport is `CCircuitAI::PublishTeamValue`/`ReadTeamValue`, a process-wide map.
+
+**apexearth asked for a FRACTION of the army, scaled by how badly the ally is
+hurt. That is not reachable from AngelScript, and this is the reason:**
+
+- `IUnitTask` binds `GetType`, `GetBuildType`, `GetBuildPos`, `GetUnits`,
+  `Abort`, `Done`. **There is no position setter.**
+- `TaskF::SFightTask` carries `type`/`check`/`promote`/`power`/`vip` and **no
+  position**; `CMilitaryManager::Enqueue` derives a DEFEND task's position from
+  `GetDefenceStand()` itself.
+- `CMilitaryManager::UpdateDefenceTasks` overwrites **every** untargeted DEFEND
+  task's position from the single `GetGuardAnchor()` on every pass — so even a
+  second task created from script is dragged onto the same point.
+- The only positional levers bound are `ai.SetFrontPos` (one global anchor),
+  `aiSetupMgr.SetLanePos` (no path to army movement) and
+  `CCircuitUnit::CmdMoveTo` (recorded as driving engine aborts 0-2 → 14-17 per
+  20-game run).
+
+So the army is all-or-nothing at this layer. Whole-pool aid was **explicitly
+declined**, so nothing was wired to `SetFrontPos`. Sending a fraction needs a DLL
+change: either a position setter on `IFighterTask` exposed to script, or
+`UpdateDefenceTasks` distributing more than one anchor.
+
+What did land, all of it sensing rather than acting:
+
+- **`aidf` heartbeat, and a freshness gate.** `teamValues` is never erased and
+  `GetTeamIds()` is a static roster, so **a player that dies keeps publishing its
+  last — and largest — loss weight forever**. Any consumer of `AllyAidPos` would
+  have locked permanently onto a dead ally's grave. **`army` (TEAM PUSH) has the
+  identical latent bug and is NOT fixed here** — a dead ally's army value still
+  counts toward `PUSH_TEAM_RATIO`. Separate change.
+- `AllyAidPos` now excludes our own team (our own fight is not aid; `GetGuardAnchor`
+  prefers our own hotspot anyway) and reports which ally.
+- `apex_aid_reach` defaults to the **measured base separation**, not 6,000. Note
+  `GetTunable` caches on first call, so the default is a `-1` sentinel and the
+  measurement is applied per call — a computed default would have frozen at 0.
+- `AidClampToContested`: apexearth's "go, but only as far as contested ground" —
+  bisects our end to theirs and stops at the influence zero crossing.
+- `LogAidState`, read-only, `apexaid:` — reports the ally, their loss weight,
+  ours, the implied fraction `aidW/(aidW+ownW)`, our army value and the clamped
+  destination. **This exists so the trigger can be measured before the DLL change
+  is made**, given the 2026-08-11 finding that the naive condition is true almost
+  continuously.
+
+Unresolved and needing the DLL work first: push-vs-aid arbitration by metal value
+(`ai.GetEnemyCostAt` is bound, but `TV_PUSH` carries only an end frame, so "what
+the push is attacking" has no location to price).
+
+## 2026-08-12: the standoff was silently reverted by a factory commit, and the ring leaked
+
+Layer 3 (C++), `task/fighter/FighterTask.{h,cpp}`, `task/fighter/SquadTask.{h,cpp}`,
+`unit/CircuitUnit.cpp`. **Needs a DLL rebuild to take effect.**
+
+apexearth, watching live: "I see our long range units are not trying to stay at
+the ~90% of their max range distance with enemies."
+
+He reported the same thing on 2026-08-09 and it was fixed then. **`648fffb`
+("Quota sized on unit slots") reverted it three days later**, in a commit whose
+subject is the factory queue. It deleted the `apex_range_mod` reader from
+`ISquadTask::Attack`, deleted the whole `apex_range_mod` + `apex_los_standoff`
+block from `IFighterTask::Attack`, and put back an unconditional
+`std::min(GetMaxRange(), GetLosRadius()) * RANGE_MOD`. The DLL deployed on
+2026-08-12 carries the reverted version, so the behaviour he is watching is the
+pre-fix behaviour. Both tunable names stayed in `dev_tunables.lua` with nothing
+reading them, which is why an A/B of the constant would have read as no effect.
+
+Why the `losRadius` term is an anti-long-range filter specifically, read from
+the pinned tree (`sightdistance` vs max weapon `range`):
+
+| | sight | range | sight/range |
+|---|---|---|---|
+| corvroc | 221 | 1310 | 0.17 |
+| armmerl | 247 | 1300 | 0.19 |
+| cortrem | 351 | 1470 | 0.24 |
+| corhrk | 370 | 1210 | 0.31 |
+| cormort (Sheldon) | 300 | 850 | 0.35 |
+| armmart | 286 | 820 | 0.35 |
+| armsnipe | 455 | 900 | 0.51 |
+| corban | 650 | 800 | 0.81 |
+| corthud / armham | 380 | 380 | 1.00 |
+| corgator / legstr | 330 / 400 | 230 / 280 | 1.43 |
+| corak | 500 | 215 | 2.33 |
+
+Every long gun in all three factions is below 1.0 and every brawler is at or
+above it, so a `min(range, sight)` clamp binds on exactly the class of unit he
+named and on nothing else.
+
+Three changes:
+
+- **One standoff fraction, `STANDOFF_RANGE_MOD` (0.95), read at runtime as
+  `apex_range_mod`, applied to the unit's OWN `GetMaxRange()`.** It replaces
+  `RANGE_MOD` (0.9, solo path) and `ATTACK_RANGE_MOD` (0.95, squad path), which
+  were separate constants for the same quantity and had already drifted apart
+  twice. Per unit and per row, never an absolute distance, so a game setting
+  that changes ranges carries through. 0.95 rather than the 0.90 in the report:
+  0.90 would move the squad path 5% CLOSER than it already stands, which is the
+  wrong direction for the complaint, and 0.95 is his own earlier number ("don't
+  attack at 80% range, attack at 95% range").
+- **The `losRadius` clamp only binds when the target is not in radar or LOS**,
+  in both paths, gated on `apex_los_standoff`. A gun that outranges its eyes has
+  to close to acquire; once it can see, there is nothing left to walk towards.
+- **The trailing fight order ends at the standoff ring instead of the enemy's
+  own position** (`CCircuitUnit::Attack(pos, ...)`, gated on
+  `apex_standoff_hold`). The standoff order is a queue --
+  `Move(ring), Attack(enemy), Fight(enemyPos)` -- and the third command marches
+  the unit the rest of the way in as soon as either of the first two finishes,
+  which is up to 2s for an ATTACK task and up to 8s for a DEFEND task
+  (`updCount % 4` / `% 16` at ~0.5s per task update). Melee keeps the old
+  destination, and so does any unit whose target it cannot see: that no-LOS walk
+  is what the order was written for.
+
+Control arm, no rebuild needed:
+`--modoption apex_range_mod=0.9 --modoption apex_los_standoff=0 --modoption apex_standoff_hold=0`.
+
+**NOT MEASURED.** No rebuild was run, so nothing here is in a DLL yet.
+
+Coverage, checked against the role census in `behaviour.json` rather than
+assumed: `assault`, `skirmish`, `riot`, `heavy` and ground `anti_air` reach
+`ISquadTask::Attack`; `anti_heavy_ass` (armsnipe, armmanni) is bound to SUPPORT
+in `script/unit.as`, and `CSupportTask` hands those units into the nearest
+ATTACK/DEFEND squad at 1000 elmos, so they reach it too. Two roles do not, and
+are deliberately untouched:
+
+- `artillery` (15 defs across the three factions) goes to `CArtilleryTask`,
+  which sets `HOLD_POS`, only ever targets STATIC enemies, and paths to an
+  acceptance radius of its full `GetMaxRange()` -- i.e. it already stops at 100%
+  of its range and does not walk in. Multiplying that radius by a fraction would
+  make it stop CLOSER, not further out.
+- `anti_heavy` maps to `CAntiHeavyTask`, which engages with the bare
+  `Attack(target)` overload and has no standoff at all -- but **no unit in our
+  config carries that role**, so the path is never constructed. Worth knowing
+  before anyone "fixes the sniper" there again.
+
+Also found and not acted on: `apex_bomb_min_value` and `apex_bomb_dist_scale`
+are read by `BombTask.cpp` but are absent from `dev_tunables.lua`'s `NAMES`, so
+setting them does nothing.
+
+## 2026-08-12 (night): five mechanisms, all found by agents from a watched game
+
+**We built T2 defence and then ate it.** `ObsoleteDefenceNames()` listed the T2
+pop-up turrets (`armpb`/`corvipe`/`legapopupdef`) as "T1/T1.5 junk", and those
+same three defs are what `HaveHeavyDefence()` reads to decide the reclaim
+rotation may run at all -- so owning a Scorpion authorised eating Scorpions.
+`corvipe` is 730 metal and buildable only by advanced constructors; it is not
+T1.5. Measured across 11 matches over two days: 21 built, 16 reclaim orders
+against them, several tagged `past its tier`. Removed from the list; the guard
+now means what it says. Verified: 0 AngelScript errors, 0 pop-up reclaims where
+the comparable pre-change run had 5. Layer: AngelScript. STOP, not spend.
+
+**HomeEnergy had become the default job of every constructor.** It is the
+terminal rule of `OptionalWork` and documents itself as "never out of work". A
+2026-08-11 commit removed its crew scope (`apex_energy_any` defaults on), so
+roughly 21 ECO constructors reached it instead of 2 HOME ones -- while the
+comment at the call site still asserted the opposite. Re-scoped at the call site.
+Measured, matched seed, one change: metal produced 44,444 -> 48,338 (+8.8%) and
+fusions 0 -> 1,125 per player. **The predicted effect did not appear**: advanced
+solars fell only 5% and mohos were exactly flat, which is the falsifier the
+diagnosis named. The remaining leak is elsewhere -- most likely the engine's own
+energy tasks arriving through `DefaultMakeTask` unscreened. Layer: AngelScript.
+
+**The regroup guards were on the anchor nothing reads.** `SetLanePos()` has an
+exhaustive reader list of three: `GetDefenceStand()`, a branch of `FillFrontPos`
+that is dead once a front position exists (about minute 1), and a retreat rally.
+No attack or defend task reads it. The army follows `SetFrontPos()`, which
+`frontline.as` was writing with no direction test, no on-map check and no
+hysteresis -- so the direction and stickiness guards added earlier that day had
+no effect, and apexearth saw REGROUP pings with no units at them. Now published
+from `Posture::UpdateLanePos` (guarded) and the unguarded write deleted.
+Layer: AngelScript. Not yet measured.
+
+**Reactors were placed in the ordinary economy band.** Every AFUS in 115 runs is
+sited by `HomeEnergy` with `Base::ECO` -- the same band a 155-metal solar gets.
+`Base::HEAVY`, the band reserved for reactors, is only used by `EcoFusion`, which
+fired 5 times in 115 runs and never once for an AFUS. Measured forward-percentile
+within each base: `corafus` median 48, `armafus` 55, plain `armfus` 34,
+converters 14. Our advanced fusions sat further forward than plain ones, worst
+cases 1,179-1,430 elmos on the enemy side of their own start. New
+`Builder::ReactorSpot` prefers the HEAVY band when the latched axis is actually
+rearward, else anchors on `RearOfBase`, with a `FrontT <= 0` gate. Every failure
+path returns to the previous placement, so the worst case is no change.
+`EcoFusion` is a second reactor path and is NOT yet routed through it.
+Layer: AngelScript. Not yet measured.
+
+**Rezbots stopped existing after 10 minutes.** The rezbot enters the factory
+quota only while `WreckSeenValue() >= 500`, and that value is fed by exactly one
+sampler: idle T1 constructors reaching the bottom of the builder pipeline. Once
+constructors are busy nothing samples, it decays to 0 over 3 minutes, and the def
+drops out of the quota list entirely -- it appeared in 0/10, 7/20 and 3/11 quota
+prints across three runs, never once before minute 10. Stock spends 3,538-3,993
+metal per game resurrecting; we spend 168-256. The gate is apexearth's own policy
+and is correct; its input was dead. Cortex is hit twice as hard because `corlab`
+has no support-role unit, so it lacks the ungated squad-count floor that feeds
+Armada and Legion -- that half is a role question and is NOT changed.
+Layer: AngelScript. Not yet measured.
+
+### Recorded, not acted on
+
+Two findings from the same pass went to `ISSUES.md` instead: the base layout axis
+is the exact 180-degree reversal in 223 of 442 latches (it moves every building,
+not just reactors), and the AI crashes inside `SkirmishAI.dll` in about 1% of runs
+(4 of 371), predating all of the above.
+
 ## 2026-08-12 (evening): six things apexearth saw in one watched game
 
 Every item below came from him watching, and every one turned out to be a
@@ -114,10 +339,14 @@ every defence want for being over budget, while the game's own counter (immobile
 **20-30%**. The same 4200 metal was missing from ECONOMY, which was boosted for
 being under. Two categories wrong from one misread bit.
 
-Why a solar carries the fence attribute is *not* established — nothing in any
-config here sets it, and script attributes go through a name-based masker, so it
-is not an enum-order mismatch. It does not need to be: the category a unit
-belongs to is a property of the unit, so `CatOf` now decides from the unit
+**Why a solar carries the fence attribute — SOLVED, later the same day.**
+`CMilitaryManager::ReadConfig` (`module/MilitaryManager.cpp:402`) does
+`cdef->AddAttribute(ATTR_TYPE(FENCE))` for **every def in `porcupine.unit`**, and
+that list is not just turrets — it carries `corsolar`, `coradvsol`, `cornanotc`,
+`corrad`, `corestor`, `cormstor` and more, because the same list is indexed by
+`land`/`water` for the defence ladder. Nothing in our config was wrong; the
+engine stamps the attribute on load. The fix stands either way: the category a
+unit belongs to is a property of the unit, so `CatOf` now decides from the unit
 (`IsEnergyBuilding`, `IsMobile`, the AA role) instead of trusting the attribute.
 
 Changes: `AIRDEF` is now its own budget category with apexearth's row unchanged

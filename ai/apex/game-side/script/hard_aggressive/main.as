@@ -64,10 +64,12 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (!ApexActive())
 		return;
 
+	Builder::SampleWreckField();   // before the queue that reads WreckSeenValue
 	Brain::UpdateFacQueues();
 	Brain::LogFacQueues();
 	Factory::UpdateTeamCoord();
 	Military::UpdateLanePos();
+	Military::UpdateSpamPosture();
 	Military::UpdatePosture();
 	Factory::SampleIncome();
 	Factory::UpdateRushReclaim();

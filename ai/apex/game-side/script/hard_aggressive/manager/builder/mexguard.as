@@ -376,6 +376,18 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// apexearth: "we run out of room due to our terribly inefficient placement
 	// of buildings."
 	AIFloat3 spot;
+	// A reactor is placed on exposure rather than on the layout, and never packed
+	// against the last eco building: ReactorSpot leaves gEcoLast alone so the eco
+	// block does not chain out to the back line behind it.
+	int rear = 0;
+	if (pickedReactor)
+		rear = ReactorSpot(unit, gen, spot);
+	string via = "eco";
+	if (rear == 1)
+		via = "heavy";
+	else if (rear == 2)
+		via = "rear";
+	if (rear == 0) {
 	if (!Base::Spot(unit, gen, Base::ECO, spot)) {
 		// PACK against the last thing we built, not around home.
 		//
@@ -392,8 +404,12 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		// starts a fresh block instead of abandoning the build.
 		if (gEcoPacked)
 			spot = ai.FindBuildSiteNear(gen, gEcoLast, ECO_PACK_RANGE);
-		if (!gEcoPacked || !OnMap(spot))
+		if (!gEcoPacked || !OnMap(spot)) {
 			spot = ai.FindBuildSiteNear(gen, gHomePos, ECO_FALLBACK_RANGE);
+			via = "home";
+		} else {
+			via = "pack";
+		}
 		if (!OnMap(spot))
 			return null;
 		gEcoLast = spot;
@@ -401,6 +417,7 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	} else {
 		gEcoLast = spot;
 		gEcoPacked = true;
+	}
 	}
 	// ONE AT A TIME. apexearth, watching live: "I am actively seeing us build 5
 	// AFUS at the same time. Our builders should see one is already being built
@@ -426,6 +443,9 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// above for why the bound is a count instead.
 	AiLog(Factory::T() + "apex: home energy " + gen.GetName()
 		+ " standing=" + gen.count
+		+ " at=" + int(spot.x) + "," + int(spot.z)
+		+ " fwd=" + formatFloat(FrontT(spot), "", 0, 2)
+		+ " via=" + via
 		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
 	return post;

@@ -7,39 +7,10 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ## 0. WE LOSE THREE TIMES THE METAL WE KILL. This is where the games go.
 
-Measured 2026-08-12 across four runs on Comet Catcher 4v4 vs `BARb:stable:hard`,
-as `(mKillReal + mKillCheap) / (mLostReal + mLostCheap)` summed over each side:
-
-| run | length | apex trade | stock trade |
-|---|---|---|---|
-| `20260812-011550` | 18m | **0.09** | 5.20 |
-| `20260812-033241` | 20m | **0.53** | 1.19 |
-| `20260812-045745` | 30m | **0.64** | 0.92 |
-| `20260812-083510` | 24m | **0.26** | 2.41 |
-
-In the last of those, at 20 minutes: apex killed 22,469 metal and lost 72,901;
-stock killed 63,526 and lost 32,803. Per player, apex traded 0.23-0.50 against
-stock's 0.88-3.32.
-
-**This is not new and it is not the factory work** — the same ratio appears in
-runs that predate any of it, including runs where facqueue was not installed.
-
-**It also explains the economy gap, which is downstream of it.** The two sides
-are level on metal built to minute 8-12 (apex 6.7-8.4k against stock 6.9-9.1k at
-8 min); the gap opens at 12-16 and reaches 2-3x by minute 24, and in the same
-window two apex players are killed outright and flatline. Losing the army loses
-the map, then the mexes, then the player. Chasing the economy numbers directly
-means chasing a symptom.
-
-Note damage tells a different story from metal: apex t0 dealt 78,578 and received
-95,460 — a ratio of 0.82 — while trading 0.50 in metal. We deal roughly
-comparable damage and still lose far more value, which points at *what* dies
-rather than at raw combat power.
-
-**Do not tune this from the aggregate.** The standing lesson in this repo is that
-every change inferred from stats lost and every change from watching a replay
-won. This entry is here to say where to look, not what to change: hand apexearth
-a watched game and ask specifically what the army is doing when it dies.
+User comments: 
+- This doesn't matter until we stabalize our new systems and balance everything. 
+- Losses should be expected and not over-analyzed.
+- Focus on our behavior, not win/loss us vs them metrics.
 
 ---
 
@@ -331,3 +302,50 @@ never gets to because our ladder answers first.
 Do NOT re-cap constructors to fix this. The cap fix committed today is only about
 a full metal bank disabling the limit outright, which is why a losing player ended
 with 60 T1 cons.
+
+## The base layout axis is the exact 180-degree reversal in half of all games
+
+Measured 2026-08-12 over 442 `apex: base frame` latches in `matches/2026081*`:
+
+```
+axis kept front-facing 221 | axis REPLACED 223
+fwd points AWAY from enemy (bands grow toward enemy) 221
+fwd sideways 2 | fwd toward enemy (bands grow rear) 221
+```
+
+Every one of the 223 replacements was the exact 180-degree flip, not some other
+orientation. `baseplan/axis.as:76-93` probes four right-angle orientations and
+takes any that "more than doubles the front-derived score"; candidate `t == 1` is
+`(-f.x, -f.z)`. Bands are then laid out as `gAnchor - gFwd * depth`, so when the
+axis flips the whole stack grows TOWARD the enemy and the DEEPEST band -- the one
+`baseplan/state.as:75-76` reserves for heavy energy, "where a fusion going up does
+not take the rest of the base with it" -- is the most exposed ground we own.
+
+Example: team 3, run `20260812-211651`, `anchor=809,706 fwd=-0.81,-0.58`, enemy
+centroid ~(6436, 2751), dot = -0.96.
+
+This is not a reactor bug. It moves every building the base plan places, which is
+why it is recorded here rather than fixed alongside the AFUS placement work --
+that change routes around it (`Base::AxisIsRearward`) for reactors only.
+
+## The AI crashes in SkirmishAI.dll at roughly 1 percent of runs
+
+4 of 371 runs on 2026-08-12 ended `Spring 2026.07.04 has crashed`. Stack is four
+frames deep inside our own DLL:
+
+```
+(0) SkirmishAI.dll [0x59edf]
+(1) SkirmishAI.dll [0x5aaf6]
+(2) SkirmishAI.dll [0x11850]
+(3) SkirmishAI.dll [0x23e2]
+(4) spring.exe ...
+```
+
+Predates the 2026-08-12 obsolete.as and rules_optional.as changes -- run
+`20260812-210421` crashed before either was deployed, so do NOT attribute it to
+them without a repro. Observed once at frame 54707 (30.4 game-minutes), well into
+a game, with nothing unusual in the preceding AI log lines.
+
+The deployed `SkirmishAI.dll` is a 208 MB unstripped build, so those offsets are
+resolvable with addr2line against the matching build if this gets worse. Nobody
+has done that yet. Not reproduced on demand.

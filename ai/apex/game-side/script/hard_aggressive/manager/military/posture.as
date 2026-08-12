@@ -313,22 +313,118 @@ void UpdateCorridorProbe()
 // moves the engine's own anchor and lets it do the moving.
 const float LANE_FORWARD = 0.35f;   // fraction of the way from base to enemy
 int gNextLane = 0;
+AIFloat3 gLanePinged;
+AIFloat3 gLaneAt;
+// How far the front must actually move before the army is asked to move with
+// it. Roughly two turret ranges: below this it is jitter, above it is a real
+// shift of the line.
+const float LANE_STICKY = 900.f;
+
+// THE LIGHT T1 STOPS BEING A RAIDER AND BECOMES EYES, BUT ONLY IN T2 PHASE.
+//
+// apexearth: "once we are in T2 phase the only T1 we should make is the lightest
+// T1 units... their behavior should be far more suicidal... they run in to spot
+// the enemy" -- and, on the early game, "this is only when they're being used as
+// spam, not early game behavior."
+//
+// behaviour.json states ONE retreat value for the whole game, so the config
+// cannot express that. CCircuitDef::SetRetreat was bound for it: the original is
+// kept and restored, so a pre-T2 Grunt is as cautious as it ever was.
+float gRaiderRetreat = -1.f;
+bool gRaiderSuicidal = false;
+
+void UpdateSpamPosture()
+{
+	CCircuitDef@ light = SideDef3("armpw", "corak", "leggob");
+	if (light is null)
+		return;
+	if (gRaiderRetreat < 0.f)
+		gRaiderRetreat = light.GetRetreat();
+	const bool spam = Factory::gHaveT2
+		&& (ai.GetTunable("apex_spam_suicidal", 1.f) > 0.f);
+	if (spam == gRaiderSuicidal)
+		return;
+	gRaiderSuicidal = spam;
+	light.SetRetreat(spam ? 0.f : gRaiderRetreat);
+	AiLog(Factory::T() + "apex: " + light.GetName() + " retreat -> "
+		+ formatFloat(spam ? 0.f : gRaiderRetreat, "", 0, 2)
+		+ (spam ? " (T2 phase: spotter)" : " (T1 phase: raider)"));
+}
 
 void UpdateLanePos()
 {
-    if (ai.frame < gNextLane)
-        return;
-    gNextLane = ai.frame + 10 * SECOND;
-    if (!Builder::gHomeSet)
-        return;
-    const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
-    if (!OnMap(foe))
-        return;
-    const float f = ai.GetTunable("apex_lane_forward", LANE_FORWARD);
-    AIFloat3 lane = Builder::gHomePos + (foe - Builder::gHomePos) * f;
-    if (!OnMap(lane))
-        return;
-    aiSetupMgr.SetLanePos(lane);
+	if (ai.frame < gNextLane)
+		return;
+	gNextLane = ai.frame + 10 * SECOND;
+	if (!Builder::gHomeSet)
+		return;
+	// THE FRONT ITSELF, not a fraction of the way to it. apexearth: "our superior
+	// offensive armies often regroup too close to the front of our base. They
+	// should regroup on the frontline somewhere in relative safety." FrontNear
+	// returns the nearest perimeter point that is a FRONT edge, preferring ground
+	// we hold; FillFrontPos then picks a cluster there whose influence is ours and
+	// which is reachable, so safety is the predicate's job rather than a setback we
+	// would have to guess at.
+	// TOWARD THE ENEMY, OR NOT AT ALL. FrontNear returns the NEAREST perimeter
+	// point classified FRONT, with no direction test -- and before the enemy is
+	// located, a bearing that simply runs off the map edge is classified the same
+	// way. So the nearest "front" could be behind us, and the anchor flip-flopped
+	// between mid-map and our own back edge every ten seconds. apexearth, reading
+	// the ping: "sometimes we're massing in mid and other times we are massing in
+	// the back edge of the map."
+	//
+	// ForwardFraction is positive toward the enemy, so requiring it rules out the
+	// rear perimeter, and IsFrontKnown keeps us on the deterministic fallback until
+	// there is a real front to stand on.
+	AIFloat3 lane;
+	bool onFront = Front::IsFrontKnown()
+		&& Front::FrontNear(Builder::gHomePos, lane)
+		&& OnMap(lane)
+		&& (ForwardFraction(lane) > 0.f);
+	if (!onFront) {
+		const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+		if (!OnMap(foe))
+			return;
+		const float f = ai.GetTunable("apex_lane_forward", LANE_FORWARD);
+		lane = Builder::gHomePos + (foe - Builder::gHomePos) * f;
+	}
+	if (!OnMap(lane))
+		return;
+
+	// COMMIT TO AN ANCHOR. apexearth: "imagine constantly trying to go to front and
+	// then to back, you only ever end up in the middle." A regroup point that moves
+	// every ten seconds is an army permanently in transit, and averaging two
+	// candidates is exactly the middle of the map. So a new anchor has to be a
+	// MEANINGFUL distance from the one we are already using before we adopt it --
+	// small drift is ignored, a genuine shift of the front is not.
+	if (OnMap(gLaneAt)
+		&& (lane.distance2D(gLaneAt) < ai.GetTunable("apex_lane_sticky", LANE_STICKY)))
+	{
+		aiSetupMgr.SetLanePos(gLaneAt);   // keep standing where we already stand
+		ai.SetFrontPos(gLaneAt);
+		return;
+	}
+	gLaneAt = lane;
+	aiSetupMgr.SetLanePos(lane);
+	// frontPos, NOT just lanePos, is what moves the army. GetLanePos reaches only
+	// GetDefenceStand, a dead branch of FillFrontPos, and a retreat rally -- no
+	// attack or defend task reads it. GetGuardAnchor reads frontPos, and every
+	// DEFEND task's position is rewritten from it each pass. The guards above were
+	// therefore being applied to the anchor nothing consumed.
+	ai.SetFrontPos(lane);
+
+	// WHY THE ARMY IS THERE, ON THE MAP. apexearth: "if you can ping on the map to
+	// identify *why* units are doing things I could be able to tell you better
+	// whats going on." This is the anchor FillFrontPos picks the regroup cluster
+	// from, so it is the single most useful thing to see.
+	if (ai.GetTunable("apex_ping", 1.f) > 0.f) {
+		if (OnMap(gLanePinged))
+			AiDelPoint(gLanePinged);
+		gLanePinged = gLaneAt;
+		AiAddPoint(gLaneAt, "REGROUP " + (onFront ? "front" : "fallback")
+			+ " mass=" + formatFloat(aiMilitaryMgr.quota.attack, "", 0, 0)
+			+ (gTurtle ? " TURTLE" : "") + (gKilling ? " KILL" : ""));
+	}
 }
 
 void UpdatePosture()
@@ -340,6 +436,7 @@ void UpdatePosture()
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
 	PublishDefence();   // our front-tower count and income, for the team budget
+	LogAidState();      // read-only: what an ally-aid response would do
 	Brain::BudgetLog();
 	UpdateKillingBlow();
 	UpdateRaidCaution();
