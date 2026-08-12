@@ -161,6 +161,22 @@ void PromoteAssistBots()
 // armies. One definition, read by both the reclaim below and ContestTower --
 // they were separate judgements about the same moment, and only one of them
 // existed.
+// Do we hold anything heavier than a T1 turret? Defs from mexguard.as, which the
+// shim includes first.
+bool HaveHeavyDefence()
+{
+	array<CCircuitDef@> heavy = {
+		SideDef3(armtoast, cortoastd, legramp),
+		SideDef3(armpulsar, corpulsar, legpulsar),
+		SideDef3(armpb, corvipe, legapopupdef)
+	};
+	for (uint i = 0; i < heavy.length(); ++i) {
+		if ((heavy[i] !is null) && (heavy[i].count > 0))
+			return true;
+	}
+	return false;
+}
+
 bool PastT1Tier()
 {
 	return Factory::gHaveT3
@@ -325,9 +341,19 @@ IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit)
 	// unreachable -- which is precisely the thing apexearth keeps seeing standing.
 	// Rotating the entry point costs nothing and gives every def its turn.
 	array<string> all = ObsoleteEcoNames();
-	array<string> towers = ObsoleteDefenceNames();
-	for (uint i = 0; i < towers.length(); ++i)
-		all.insertLast(towers[i]);
+	// A TOWER IS ONLY OBSOLETE ONCE ITS REPLACEMENT EXISTS. apexearth: "we
+	// reclaim our t1.5 defenses far before we even build our T2+ defenses, and we
+	// have a horrible lack of T2+ defenses." PastT1Tier is a TECH test -- T2 plant
+	// plus income -- and says nothing about whether a heavier turret was ever
+	// built. HeavyDefenceFor needs an advanced constructor to be the one asking,
+	// and conT2 is often zero, so the old tower came down and nothing replaced it.
+	// Economy junk still goes at the tech gate; only defence waits for its heir.
+	array<string> towers;
+	if (HaveHeavyDefence()) {
+		towers = ObsoleteDefenceNames();
+		for (uint i = 0; i < towers.length(); ++i)
+			all.insertLast(towers[i]);
+	}
 	if (all.length() == 0)
 		return null;
 

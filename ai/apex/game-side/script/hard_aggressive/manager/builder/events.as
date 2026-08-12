@@ -508,4 +508,43 @@ void AdvConDiag()
 	}
 }
 
+// WHY THE COMMANDER IS STANDING THERE. Buckets declared in rules_commander.as,
+// sampled here because gComm is declared in this file and the shim includes it
+// last. Called once per AiUpdate; see CommDiag for what the numbers mean.
+void CommIdleAttribute()
+{
+	// gComm is cleared in AiUnitRemoved -- CCircuitUnit is NOCOUNT, so a stored
+	// handle stays non-null on freed memory and must never be read after death.
+	CCircuitUnit@ u = gComm;
+	if (u is null)
+		return;
+	++gCDSamples;
+	IUnitTask@ t = u.task;
+	const int q = u.CmdQueueSize();
+	if ((t is null) || (t.GetType() == Task::Type::IDLE)
+		|| (t.GetType() == Task::Type::NIL))
+	{
+		++gCDNoTask;
+	} else if (t.GetType() != Task::Type::BUILDER) {
+		++gCDOther;
+	} else if (q > 0) {
+		++gCDOrdered;
+		gCommStuck = 0;
+	} else {
+		++gCDWaiting;
+		// Holding a build task with NO engine order. Briefly that is a pending
+		// path query; sustained, the task is one the commander will never start,
+		// and it will hold it forever because HoldWorkInProgress keeps returning
+		// it. Dropping it puts the commander back through the pipeline.
+		if (++gCommStuck >= int(ai.GetTunable("apex_comm_stuck", COMM_STUCK_TICKS))) {
+			gCommStuck = 0;
+			++gCommUnstuck;
+			AiLog(Factory::T() + "apex: commander stuck on bt"
+				+ t.GetBuildType() + " with no order -- dropping it (#"
+				+ gCommUnstuck + ")");
+			t.Abort();
+		}
+	}
+}
+
 }  // namespace Builder

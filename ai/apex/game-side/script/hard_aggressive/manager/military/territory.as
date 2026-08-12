@@ -617,7 +617,42 @@ bool FrontCurve(array<AIFloat3>& out pts)
 // points 785 elmos apart at radius 3000 and 130 apart at radius 500, so the same
 // ring is full of holes far out and stacked up close. Arc length is the honest
 // unit for "no gaps".
-bool FrontLineSpots(array<AIFloat3>& out pts, float spacing)
+// EXTRA DENSITY AT THE MAP EDGE, DERIVED RATHER THAN GUESSED.
+//
+// apexearth: "If you attack map center you'll be hit on all sides from the
+// defensive turrets. If you attack through map edge you're only hit by in front
+// and to one side (not two sides)... so we need EXTRA defense on the edges to
+// compensate for this."
+//
+// The geometry is exact. A point on the line is engaged by every turret within
+// range R OF IT ALONG THE LINE. In the interior that is a span of 2R -- R of
+// line on each side. Within d < R of the map edge only min(R, d) of line exists
+// on the outward side, because there is no map to put turrets on, so the
+// covering span falls to R + min(R, d) -- as little as HALF, hard against the
+// edge. Restoring equal cover means shrinking the spacing by that same ratio:
+//
+//     spacing(d) = spacing * (R + min(R, d)) / 2R
+//
+// 0.5x at the edge (double the turret density), 1.0x once a full turret range
+// inland, linear between. Nothing is invented here: R is the very range the
+// caller already spaced the line by, and the factor is the coverage deficit it
+// is correcting.
+float EdgeSpacing(const AIFloat3& in at, float spacing, float reach)
+{
+	if (reach < 1.f)
+		return spacing;
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	float d = at.x;
+	if (at.z < d)      d = at.z;
+	if (w - at.x < d)  d = w - at.x;
+	if (h - at.z < d)  d = h - at.z;
+	if (d < 0.f)       d = 0.f;
+	if (d > reach)     d = reach;
+	return spacing * (reach + d) / (2.f * reach);
+}
+
+bool FrontLineSpots(array<AIFloat3>& out pts, float spacing, float reach = 0.f)
 {
 	RebuildFront();
 	pts.resize(0);
@@ -650,9 +685,15 @@ bool FrontLineSpots(array<AIFloat3>& out pts, float spacing)
 				d1 = d0;
 		}
 
-		// How many turrets this segment of arc needs to be gap-free.
+		// How many turrets this segment of arc needs to be gap-free -- at the
+		// spacing this part of the line needs, which is tighter near the map edge.
+		// See EdgeSpacing.
 		const float arc = step * ((d0 + d1) * 0.5f);
-		int n = int(arc / spacing);
+		const float midAng = 6.2831853f * (float(i) + 0.5f) / float(FRONT_RAYS);
+		const AIFloat3 mid = gFrontHome
+				+ AIFloat3(cos(midAng), 0.f, sin(midAng)) * ((d0 + d1) * 0.5f);
+		const float useSpacing = EdgeSpacing(mid, spacing, reach);
+		int n = int(arc / ((useSpacing > 1.f) ? useSpacing : spacing));
 		if (n < 1)
 			n = 1;
 		for (int k = 0; k < n; ++k) {

@@ -23,13 +23,50 @@ int gCommRetreatHp = 0;     // returned a retreat because health was low
 int gCommGuard = 0;         // returned a mex guard
 int gCommIdleUnsafe = 0;    // CommanderIdleWork refused: standing in threat
 int gCommIdleNoJob = 0;     //   ... refused: mex, assist and energy all declined
+int gMexSentries = 0;       // guard turrets placed on bare extractors
+// Consecutive AiUpdates the commander has held a build task with no engine
+// order. Well above a path query's latency at normal speed, so this fires on a
+// task that is genuinely never going to start.
+const int COMM_STUCK_TICKS = 15;
+int gCommStuck = 0;
+int gCommUnstuck = 0;
 int gNextCommDiag = 0;
+
+// WHY THE COMMANDER IS STANDING THERE, attributed instead of guessed.
+//
+// The dev gadget's commIdle counts an EMPTY ENGINE COMMAND QUEUE. That is the
+// symptom; it cannot say which of the possible causes it is, and every account
+// of it so far has been inferred. These four buckets are mutually exclusive and
+// cover the space, sampled once per AiUpdate over our own commander:
+//
+//   noTask   -- no task at all. The pipeline declined; that is our bug.
+//   waiting  -- holds a BUILDER task but no engine order. Almost always an
+//               unfinished path query: IBuilderTask::UpdatePath returns without
+//               issuing anything while one is outstanding, and the answer comes
+//               back off a worker thread.
+//   ordered  -- holds a task AND an engine order. Working. Not idle.
+//   other    -- any other task type (retreat, wait, combat).
+//
+// Sample counts, so they are read against each other and against commSamp.
+int gCDNoTask = 0;
+int gCDWaiting = 0;
+int gCDOrdered = 0;
+int gCDOther = 0;
+int gCDSamples = 0;
+
+// The sampler itself lives in builder/events.as, which is where gComm is
+// declared -- this shim's include order puts events.as last, and a global read
+// before its declaration is a compile error that disables the whole variant.
 
 void CommDiag()
 {
 	if (ai.frame < gNextCommDiag)
 		return;
 	gNextCommDiag = ai.frame + 60 * SECOND;
+	AiLog(Factory::T() + "apex: comm-why samples=" + gCDSamples
+		+ " noTask=" + gCDNoTask + " waiting=" + gCDWaiting
+		+ " ordered=" + gCDOrdered + " other=" + gCDOther
+		+ " unstuck=" + gCommUnstuck);
 	AiLog(Factory::T() + "apex: comm-diag offers=" + gCommOffers
 		+ " offerNull=" + gCommOfferNull
 		+ " vetoReclaim=" + gCommVetoReclaim
@@ -364,10 +401,20 @@ const float HOME_TOWER_RADIUS = 900.f;
 const int   HOME_TOWER_RETRY  = 90 * SECOND;
 int gHomeTowerOrders = 0;
 int gNextHomeTower = 0;
+// THE ORDER WE ALREADY PLACED. The retry gate above bounds how OFTEN this asks,
+// not how many orders can be outstanding, and the standing-unit test cannot see
+// a tower that was ordered and never built -- so a base whose tower never gets
+// made re-orders one every 90s forever. Measured on team 1: four orders in five
+// minutes with none standing. Holding the task handle is the same pattern
+// gMexTasks and gAimTask use, and IsDefenceTaskLive is its existing test.
+IUnitTask@ gHomeTowerTask = null;
 
 IUnitTask@ HomeTower(CCircuitUnit@ unit, bool isComm)
 {
 	if (!isComm || !CommRules() || !gHomeSet || (ai.frame < gNextHomeTower))
+		return null;
+	// One outstanding order at a time. See gHomeTowerTask.
+	if (IsDefenceTaskLive(gHomeTowerTask))
 		return null;
 	// A forward base is exactly the case he was describing, so it gets the
 	// heavier tower; a rear start keeps the cheap one.
@@ -391,6 +438,7 @@ IUnitTask@ HomeTower(CCircuitUnit@ unit, bool isComm)
 			Task::Priority::HIGH, tower, site, 0.f));
 	if (post is null)
 		return null;
+	@gHomeTowerTask = post;
 	gNextHomeTower = ai.frame + HOME_TOWER_RETRY;
 	// A BASE ON THE LINE NEEDS THE JAMMER TOO. apexearth: "green always dies
 	// first... they're so rarely making good frontline and usually never have a
@@ -414,11 +462,72 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)
 	// below, so every mex the commander made stood bare unless some other
 	// constructor happened past. apexearth, watching: "the commander here makes
 	// 5 mexes and doesnt build a sentry tower next to any of them."
-	// Self-limiting without a cooldown: AreaNeedsDefence only returns a mex that
-	// is not already covered, so this stops asking once they are.
-	if (isComm && CommRules()) {
+	// ANY builder, ANY tier: an unguarded extractor is the thing being asked
+	// about, not who happens to be free. apexearth: "If we have an unguarded mex
+	// then guarding it should be a boosted priority."
+	//
+	// Self-limiting, which is what lets it sit high in the pipeline: it answers
+	// only for an extractor with no cover and no pending cover, so each mex draws
+	// one turret and then stops asking. apex_mex_sentry turns it down for games
+	// against humans, who raid far less than the AI does.
+	if (ai.GetTunable("apex_mex_sentry", 1.f) <= 0.f)
+		return null;
+	if (isComm && !CommRules())
+		return null;
+	CCircuitDef@ mex = MexDef();
+	if ((mex is null) || (mex.count <= 0))
+		return null;
+	array<CCircuitUnit@>@ mine = ai.GetOwnUnitsOfDef(mex, gHomePos, 0.f);
+	if ((mine is null) || (mine.length() == 0))
+		return null;
+
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	AIFloat3 bare;
+	bool have = false;
+	float bestD = 0.f;
+	for (uint i = 0; i < mine.length(); ++i) {
+		if (mine[i] is null)
+			continue;
+		const AIFloat3 at = mine[i].GetPos(ai.frame);
+		if (!OnMap(at))
+			continue;
+		if (DefenceWithin(at, MEX_IN_RANGE) > 0)
+			continue;                       // already shot over
+		if (DefenceTaskNear(at, MEX_IN_RANGE))
+			continue;                       // someone is already on it
+		const float d = me.distance2D(at);
+		if (!have || (d < bestD)) {
+			bestD = d;
+			bare = at;
+			have = true;
+		}
 	}
-	return null;
+	if (!have)
+		return null;
+
+	CCircuitDef@ tower = MexGuardTower(unit, bare);
+	if ((tower is null) || !tower.IsAvailable(ai.frame))
+		return null;
+	const AIFloat3 site = ai.FindBuildSiteNear(tower, bare, MEX_GUARD_RADIUS);
+	if (!OnMap(site))
+		return null;
+
+	// DefenceAllowedAt is not asked: it bounds the FRONT allowance and refuses the
+	// rear, where extractors are.
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
+			Task::Priority::HIGH, tower, site, 0.f));
+	if (post is null)
+		return null;
+	// Without this the mex reads bare again next tick: FENCE only fires on a
+	// FINISHED turret, so nothing suppresses the repeat until it is built.
+	// Measured without it: 170 sentries for a player holding one extractor.
+	NoteDigOrder(site);
+	++gMexSentries;
+	if (gMexSentries <= 3 || (gMexSentries % 10 == 0)) {
+		AiLog(Factory::T() + "apex: mex sentry #" + gMexSentries + " "
+			+ tower.GetName() + " on a bare extractor, mex=" + mex.count);
+	}
+	return post;
 }
 
 IUnitTask@ VetoCommanderReclaim(CCircuitUnit@ unit, bool isComm, IUnitTask@ task)

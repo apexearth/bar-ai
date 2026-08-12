@@ -12,7 +12,22 @@ namespace Builder {
 // Distinct from ContestTower, which deliberately refuses a T1 turret once we are
 // past that tier: at a mex the cheap turret is the right answer precisely because
 // it only has to beat a scout.
-const float MEX_GUARD_RADIUS = 260.f;   // turret sits on top of the mex
+// HOW FAR FROM THE MEX A GUARD MAY BE PLACED.
+//
+// apexearth, watching: "We still have a lot of mexes that don't get guarded."
+// This was 260, commented "turret sits on top of the mex", and that comment was
+// written for a 32-elmo LLT. MexGuardTower returns armanni/armamb/legbastion
+// (64-80 elmos) once income passes 50-100 m/s, and armpb/corvipe for any
+// advanced constructor -- so on a 64-elmo mex sitting on its own resource-spot
+// terrain, 260 is a thin annulus, FindBuildSiteNear returns nothing, and the
+// rule returns null WITHOUT SAYING SO. A guard that is never placed and a guard
+// that is refused look identical from the log.
+//
+// 400 is the largest value that keeps the invariant below: a guard must land
+// within MEX_IN_RANGE (420) of the mex or it does not cover what it was built
+// for, and MEX_IN_RANGE cannot be named here because AngelScript resolves
+// globals in declaration order and it is declared further down this file.
+const float MEX_GUARD_RADIUS = 400.f;
 // HOW MANY TURRETS A MEX WANTS IS A FUNCTION OF WHERE IT SITS.
 //
 // apexearth: "The closer our metal extractors are to the enemy, the more

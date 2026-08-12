@@ -365,7 +365,14 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	// the map eligible the moment we fell behind. Being behind is precisely when
 	// build power must go to army instead, and the border is already covered by
 	// the clause above, so it no longer bypasses the rear guard.
-	if (!onLine && !early)
+	// A PIERCED FRONT IS WHY THE BASE NEEDS COVER TOO. apexearth: "when frontlines
+	// do get pierced, it is these little raider units that do lots of damage to
+	// us. Easily avoidable with basic base defense coverage." This refused every
+	// non-border cluster outright -- 21 "refused here, rear" in one game -- so a
+	// raider that got through met nothing. The rear is allowed again, but only
+	// while the defence budget is genuinely unspent, which is what stops it going
+	// back to walling quiet mexes.
+	if (!onLine && !early && !Brain::UnderBudget("fence"))
 		return;
 
 	// Something to pay with. Unchanged from the old gate, including the way that

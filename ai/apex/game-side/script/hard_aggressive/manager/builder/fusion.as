@@ -74,8 +74,10 @@ const float ENERGY_LEAD_RATIO = 12.f;
 // footprint, which matters once the base is full of them. Chosen once the
 // economy can pay for it and the constructor can actually build it -- asking a
 // T1 constructor for one is the silent no-op this repo has been bitten by.
-const float AFUS_INCOME = 120.f;   // metal/s at which the big reactor pays
-const int   AFUS_AFTER  = 3;       // ...and only once the plain ones are up
+// Roughly where a human gets to it -- two fusions and a few advanced converters
+// in, well under 100 m/s. An expectation, not a rule; both are tunable.
+const float AFUS_INCOME = 70.f;    // metal/s at which the big reactor pays
+const int   AFUS_AFTER  = 2;       // ...and only once two plain ones are up
 
 CCircuitDef@ FusionDef(CCircuitUnit@ unit)
 {
@@ -113,10 +115,9 @@ int gNextConv = 0;
 
 // Metal income above which a reactor is worth it regardless of role. A fusion
 // is ~4,300 metal and pays for every advanced thing that follows.
-const float FUSION_SOLO_INCOME = 35.f;
+const float FUSION_SOLO_INCOME = 30.f;
 // How much longer a non-eco-lead waits between reactors.
 const float FUSION_OTHER_MULT = 2.0f;
-const float FUSION_MIN_BANK = 0.55f;
 const int   FUSION_PERIOD   = 45 * SECOND;
 const int   FUSION_DIAG_PERIOD = 45 * SECOND;
 int gNextFusion = 0;
@@ -138,7 +139,7 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 			+ " haveT2=" + (Factory::gHaveT2 ? "1" : "0")
 			+ " income=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
 			+ " bank=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
-			+ "/" + formatFloat(aiEconomyMgr.metal.storage * FUSION_MIN_BANK, "", 0, 0)
+			+ " steady=" + formatFloat(Factory::SteadyIncome(), "", 0, 0)
 			+ " wasting=" + (EnergyWasting() ? "1" : "0")
 			+ " advsolCount=" + ((solarDef is null) ? -1 : solarDef.count)
 			+ " fusCount=" + FusionDef(unit).count);
@@ -163,13 +164,17 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// the moment their own economy justifies one. The conditions below -- T2
 	// exists, the bank can pay, energy is not already spilling -- are the real
 	// answer, and they are the same for every player.
-	if (aiEconomyMgr.metal.income < FUSION_SOLO_INCOME)
+	// apexearth: "after I go T2, upgrade my mexes, I'm usually then making a
+	// fusion. and I usually have over 30 metal per second after having upgraded my
+	// mexes." Steady income, so a reclaim burst does not trigger one early.
+	if (Factory::SteadyIncome()
+		< ai.GetTunable("apex_fusion_income", FUSION_SOLO_INCOME))
+	{
 		return null;
+	}
 	// A T1 constructor cannot build one; asking anyway is the silent no-op this
 	// repo has been bitten by before.
 	if (!Factory::gHaveT2)
-		return null;
-	if (aiEconomyMgr.metal.current < aiEconomyMgr.metal.storage * FUSION_MIN_BANK)
 		return null;
 	// Not while we are already spilling energy. Measured over 8 games, the eco
 	// lead wasted 46.7% of every joule it made -- 12.8 million per game against a

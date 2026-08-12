@@ -297,6 +297,40 @@ void UpdateCorridorProbe()
 		+ " w=" + formatFloat(fw, "", 0, 0));
 }
 
+// THE ARMY HOLDS WHERE THE LANE IS. apexearth: "purple had like 10+ mammoths in
+// the center of their base, and instead of protecting the edge of their base they
+// just stayed in the center... standing in the center of your base is *not*
+// defending your base."
+//
+// CMilitaryManager::FillFrontPos takes the metal cluster nearest lanePos and
+// returns that cluster's defence points, so lanePos is the whole answer to where
+// the army stands. Left alone it sits at the start position, which is the middle
+// of the base. Pushed toward the enemy by a fraction of the way to the front, the
+// nearest cluster becomes a forward one and the army holds the edge instead.
+//
+// Not a CmdMoveTo: issuing those outside a task context is what drove engine
+// aborts from 0-2 to 14-17 per 20-game run (see the disabled block below). This
+// moves the engine's own anchor and lets it do the moving.
+const float LANE_FORWARD = 0.35f;   // fraction of the way from base to enemy
+int gNextLane = 0;
+
+void UpdateLanePos()
+{
+    if (ai.frame < gNextLane)
+        return;
+    gNextLane = ai.frame + 10 * SECOND;
+    if (!Builder::gHomeSet)
+        return;
+    const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+    if (!OnMap(foe))
+        return;
+    const float f = ai.GetTunable("apex_lane_forward", LANE_FORWARD);
+    AIFloat3 lane = Builder::gHomePos + (foe - Builder::gHomePos) * f;
+    if (!OnMap(lane))
+        return;
+    aiSetupMgr.SetLanePos(lane);
+}
+
 void UpdatePosture()
 {
 	// Before UpdateRushRole, which overwrites quota.attack on the lead. Captured

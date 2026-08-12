@@ -67,7 +67,9 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Brain::UpdateFacQueues();
 	Brain::LogFacQueues();
 	Factory::UpdateTeamCoord();
+	Military::UpdateLanePos();
 	Military::UpdatePosture();
+	Factory::SampleIncome();
 	Factory::UpdateRushReclaim();
 	Factory::LogRushState();
 	Air::Update();
@@ -75,6 +77,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Base::Update();
 	Crew::Update();
 	Assist::Update();
+	Builder::CommIdleAttribute();
 	Builder::PromoteAssistBots();
 	Builder::UpdateEconomicCaps();
 	Builder::AdvConDiag();

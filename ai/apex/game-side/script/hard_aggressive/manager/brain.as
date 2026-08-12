@@ -120,10 +120,22 @@ Cat BudgetCatOf(const string& in kind)
 {
 	if ((kind == "nano") || (kind == "frontnano") || (kind == "gantry"))
 		return BUILDPOWER;
+	// "aa" is anti-air cover and spends from the air-defence row; "fence" is the
+	// land line. They shared one kind and one budget until 2026-08-12, which put
+	// apexearth's anti-air number in charge of every ground tower. See targets.as.
+	if (kind == "aa")
+		return AIRDEF;
 	if ((kind == "fence") || (kind == "pulsar") || (kind == "silo")
 		|| (kind == "pinpoint"))
 		return DEFENCE;
 	return ECONOMY;
+}
+
+// Is this kind's category still short of the share targets.as gives it?
+bool UnderBudget(const string& in kind)
+{
+	const Cat c = BudgetCatOf(kind);
+	return ShareOf(c) < TargetShare(c);
 }
 
 // The kinds whose whole purpose is more income.
@@ -338,7 +350,28 @@ Want@ MexWant(CCircuitUnit@ unit)
 // BudgetMult. This one competes there like everything else.
 const float FRONT_FENCE_VALUE = 1.2f;
 const float FRONT_FENCE_SPREAD = 700.f;   // how far apart cover counts as spread
-const float FRONT_SITE_SEARCH = 400.f;    // how far to look for ground it fits on
+// HOW FAR TO LOOK FOR GROUND THE TOWER FITS ON.
+//
+// Was 400 -- less than the 435 range of the cheapest tower it places, and a
+// fraction of the 1400 that armanni/cortoast reach. The samples this searches
+// around are raw geometry (see the call site), so they land on slopes, in water
+// and inside buildings; a lake or a cliff face is routinely wider than 400
+// elmos, and FrontLineSpots is deterministic, so a spot that fails once fails on
+// every call for the rest of the game. Failure returns null and the want is
+// never proposed at all -- silent, and a candidate for why the front line is
+// ordered far more often than it is built.
+//
+// The line's own spacing is computed from the tower's GetMaxRange (about 1120
+// elmos apart for an armanni), so a nudge smaller than that cannot even reach
+// the neighbouring valid ground. Scaled off the same number for that reason.
+const float FRONT_SITE_FRAC = 0.9f;
+
+float FrontSiteSearch(const CCircuitDef@ tower)
+{
+	const float r = (tower is null) ? 0.f : tower.GetMaxRange();
+	const float s = r * ai.GetTunable("apex_front_site_frac", FRONT_SITE_FRAC);
+	return (s < 400.f) ? 400.f : s;
+}
 
 // COVERING AN EXTRACTOR, as a WANT rather than as a rule that places its own
 // tower. apexearth: "do the consolidation."
@@ -437,16 +470,21 @@ const float AIR_COVER_VALUE = 0.8f;
 
 Want@ AirCoverWant(CCircuitUnit@ unit)
 {
-	const float enemyAir = aiEnemyMgr.GetEnemyCost(Unit::Role::AIR.type);
-	if (enemyAir < 1.f)
-		return null;
+	// AirThreatSeen, not GetEnemyCost(AIR): air constructors and air scouts carry
+	// the AIR role, so the raw cost reads enemy ECONOMY as aircraft and sized the
+	// turret count off it. The army mix was corrected for this; this was not.
+	const float enemyAir = Military::AirThreatSeen();
 	CCircuitDef@ aa = Builder::AADefFor(unit);
 	if ((aa is null) || !aa.IsAvailable(ai.frame))
 		return null;
 	const int want = Builder::AAWantedNow(unit, enemyAir);
+	// The deterrence floor stands whether or not air has been SEEN -- a base with
+	// no AA at all is free to the first bomber, and AirThreatSeen reads zero until
+	// a real sighting. Returning early on "no air right now" made AA_MIN
+	// unreachable and left us on one turret at sixteen minutes.
 	if (aa.count < Builder::AA_MIN) {
 		// per-base deterrence floor, counted on our own turrets
-	} else if (Military::TeamAA() >= float(want)) {
+	} else if ((enemyAir < 1.f) || (Military::TeamAA() >= float(want))) {
 		return null;
 	}
 
@@ -467,7 +505,20 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 		const AIFloat3 at = mine[i].GetPos(ai.frame);
 		if (!OnMap(at) || Builder::TooCrowded(at))
 			continue;
-		const uint near = Military::FenceCountNear(at, Builder::MEX_COVER_RADIUS);
+		// COUNT THE AA, NOT THE FENCES. This asked FenceCountNear, which reads
+		// gFencePos, which Military::AiUnitAdded fills only for units arriving as
+		// UseAs::FENCE. An AA turret we have just built does not raise that count,
+		// so the mex we picked as "least covered" stayed the least covered and was
+		// picked again, and again. apexearth, watching: "I'm seeing cases where we
+		// build unusually large AA clusters (6 aa all together in one spot) at just
+		// 6m into the game."
+		//
+		// Asking how many of THIS TURRET we already own within its own reach needs
+		// no registry and cannot drift from what is actually standing.
+		array<CCircuitUnit@>@ cover = ai.GetOwnUnitsOfDef(aa, at, aa.GetMaxRange());
+		const uint near = (cover is null) ? 0 : cover.length();
+		if (near > 0)
+			continue;               // this extractor is already covered
 		if (!have || (near < fewest)) {
 			fewest = near;
 			best = at;
@@ -483,7 +534,7 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 		return null;
 
 	Want@ w = Want();
-	w.kind = "fence";
+	w.kind = "aa";          // its own budget row; Act() handles it as a fence
 	w.value = AIR_COVER_VALUE;
 	w.cost = aa.costM;
 	w.pos = site;
@@ -516,7 +567,10 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	const float spacing = span * (1.f - overlap);
 
 	array<AIFloat3> line;
-	if (!Military::FrontLineSpots(line, spacing) || (line.length() == 0))
+	// `span` is the turret's own range, which is what the edge-density correction
+	// in FrontLineSpots needs to know: the deficit it corrects is measured in
+	// turret ranges from the map edge, not in elmos.
+	if (!Military::FrontLineSpots(line, spacing, span) || (line.length() == 0))
 		return null;
 
 	// A TASK NOBODY CAN REACH IS NEVER ASSIGNED TO ANYONE. Measured: of 235 front
@@ -571,7 +625,7 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	// sample straight to Enqueue. The samples are geometry -- fourteen steps along
 	// a bearing -- so they land on slopes, in water and inside existing buildings
 	// as often as not.
-	best = ai.FindBuildSiteNear(tower, best, FRONT_SITE_SEARCH);
+	best = ai.FindBuildSiteNear(tower, best, FrontSiteSearch(tower));
 	if (!OnMap(best))
 		return null;
 
@@ -721,9 +775,30 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 	return null;
 }
 
+// AiMakeTask is a RE-ELECTION, not always a request for work:
+// IBuilderTask::Reevaluate calls it on every task update for a builder not yet
+// in build range, and reassigns only on a different build type. A rule that
+// Enqueues before returning therefore leaks one orphan task per update, and
+// reassignment also restarts the unit's pending path query.
+bool AskingForNewWork(CCircuitUnit@ unit)
+{
+	if (unit is null)
+		return false;
+	IUnitTask@ t = unit.task;
+	if (t is null)
+		return true;
+	// GetType() returns int, and Task::Type will not implicitly convert -- compare
+	// against the enum values rather than storing one.
+	return (t.GetType() == Task::Type::IDLE)
+		|| (t.GetType() == Task::Type::NIL)
+		|| (t.GetType() == Task::Type::WAIT);
+}
+
 // Rank, log, and act on the best want whose rule accepts.
 IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 {
+	if (!AskingForNewWork(unit))
+		return null;
 	Clear();
 	// THE BRAIN WAS INERT FOR THE WHOLE EARLY GAME.
 	//
@@ -850,6 +925,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		return null;
 
 	// Descending by score, first rule that accepts wins.
+	//
+	// Ranking every under-budget category ahead of every at-budget one was tried
+	// 2026-08-12 and measured WORSE: fence orders 19 -> 6, mexes 10-19 -> 5-11.
+	// Early on nothing has been built, so every category reads under target and
+	// the partition decides nothing while destabilising the order. Coverage
+	// scaling in the want's own value is the lever that works instead.
 	array<Want@> order = gWants;
 	for (uint i = 0; i < order.length(); ++i) {
 		for (uint j = i + 1; j < order.length(); ++j) {
@@ -899,7 +980,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		// takes ground, the other improves ground already held.
 		if ((w.kind != "mexup") && (w.kind != "mex") && haveMexUp)
 			continue;
-		if (w.kind == "fence") {
+		// "aa" is placed exactly like a fence -- a DEFENCE build task at a chosen
+		// site. Only the budget row it is scored against differs.
+		if ((w.kind == "fence") || (w.kind == "aa")) {
 			// PRIORITY IS WHAT DECIDES WHETHER ANYONE IS EVER SENT.
 			// CBuilderManager::MakeBuilderTask, the engine's own elector, skips a
 			// candidate whose site is threatened and enemy-influenced -- except

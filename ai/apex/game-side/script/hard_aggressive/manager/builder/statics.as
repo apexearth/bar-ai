@@ -68,15 +68,12 @@ int PulsarCap()
 const int   AA_MIN            = 2;
 const int   AA_MAX            = 12;
 const float AA_PER_AIR        = 1000.f;  // one more turret per this much enemy air
-// HOW MUCH AA A GIVEN AMOUNT OF ENEMY AIR ACTUALLY NEEDS. apexearth: "AA is also
-// generally more powerful than air by cost, so you can likely multiple the
-// number by .1."
-//
-// A turret sits still, needs no escort and shoots anything that comes over it,
-// so a metal of AA answers far more than a metal of aircraft. Both AA rules read
-// this same factor, so the trade is stated once instead of being buried in two
-// different divisors.
-const float AA_VS_AIR = 0.1f;
+// Metal of AA worth building per metal of enemy air. apexearth, 2026-08-12: "we
+// only need like 20% the cost of air defense for the amount of enemy air they
+// have" (revised up from the 0.1 he first estimated). A turret sits still, needs
+// no escort and shoots anything overhead, so it answers far more than its cost in
+// aircraft. Both AA rules read this, so the trade is stated once.
+const float AA_VS_AIR = 0.2f;
 
 float AAWanted(float enemyAir, float perAir, int floorCount)
 {
@@ -545,10 +542,21 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 		return null;
 
 	// Behind the base, in the nano field where it will actually get finished.
+	// WIDEN, DO NOT GIVE UP. This copied GANTRY_NEAR_NANO from the gantry rule
+	// but not the gantry's fallback: the nano cluster is the densest patch of the
+	// base, a silo is 112 elmos, and a 700 search there routinely finds nothing.
+	// A nuke silo is a once-per-game structure gated behind a long income ramp,
+	// so one failed search WAS the whole behaviour, and it returned null in
+	// silence. Same shape the gantry rule already fixed for itself.
 	AIFloat3 near;
-	if (!NanoCluster(near))
+	const bool haveNano = NanoCluster(near);
+	if (!haveNano)
 		near = gHomePos;
-	const AIFloat3 site = ai.FindBuildSiteNear(silo, near, GANTRY_NEAR_NANO);
+	AIFloat3 site = ai.FindBuildSiteNear(silo, near, GANTRY_NEAR_NANO);
+	if (!OnMap(site) && haveNano)
+		site = ai.FindBuildSiteNear(silo, gHomePos, GANTRY_NEAR_NANO);
+	if (!OnMap(site))
+		site = ai.FindBuildSiteNear(silo, gHomePos, GANTRY_SEARCH_WIDE);
 	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
 		return null;
 
@@ -686,10 +694,17 @@ IUnitTask@ Pinpointer(CCircuitUnit@ unit)
 
 	// Behind the base with the nanos. It has no weapon and its whole value is
 	// standing up for the rest of the game.
+	// Widen rather than give up -- see the silo above for why 700 in the nano
+	// field is not a search, it is a coin flip that loses silently.
 	AIFloat3 near;
-	if (!NanoCluster(near))
+	const bool haveNano = NanoCluster(near);
+	if (!haveNano)
 		near = gHomePos;
-	const AIFloat3 site = ai.FindBuildSiteNear(targ, near, GANTRY_NEAR_NANO);
+	AIFloat3 site = ai.FindBuildSiteNear(targ, near, GANTRY_NEAR_NANO);
+	if (!OnMap(site) && haveNano)
+		site = ai.FindBuildSiteNear(targ, gHomePos, GANTRY_NEAR_NANO);
+	if (!OnMap(site))
+		site = ai.FindBuildSiteNear(targ, gHomePos, GANTRY_SEARCH_WIDE);
 	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
 		return null;
 

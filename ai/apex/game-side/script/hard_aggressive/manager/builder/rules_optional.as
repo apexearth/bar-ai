@@ -196,4 +196,115 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 	return null;
 }
 
+// THE ADVANCED PLANT, EARLY, AND AT THE BACK OF THE BASE.
+//
+// apexearth: "we didn't prioritize making a T2 lab early enough. Once we make
+// ~30+ metal per second we definitely should be making a T2 lab with high
+// priority in a SAFE location behind our base."
+//
+// Both halves needed a rule. CEconomyManager::UpdateFactoryTasks enqueues the
+// plant as `TaskB::Factory(priority, facDef, -RgtVector, representer)` -- the
+// position is -RgtVector, meaning "engine, you choose" -- and it only gets there
+// after CheckAssistRequired and a chain of income tests, which is why the plant
+// arrives late and wherever FindBuildSite happens to land it. Enqueueing it
+// ourselves is the only lever on either timing or place.
+//
+// SteadyIncome, not metal.income: the trigger must not be tripped by a reclaim
+// burst. See Factory::SteadyIncome.
+//
+// This is a REDIRECT of a build the engine would make anyway, not a new class of
+// spend -- but it does make it EARLIER, so it is gated hard: one at a time, only
+// while no factory task is on the books at all (CircuitAI's own
+// UpdateFactoryTasks makes the same check before it will queue one), and only
+// before we have T2.
+const float T2_REAR_DIST = 600.f;
+// How far from the rear point a site may be found when no nano covers the back.
+// apexearth: "T2_REAR_SEARCH = 700, is this the same # as a unit's attack range?
+// If so then that search radius is too small." It was: corllt's weapon range is
+// 435 and cornanotc's builddistance is 400, so 700 was barely more than one
+// turret's reach and a crowded base would yield no site at all. A base is
+// thousands of elmos across; anchoring at RearOfBase and searching this far
+// still lands behind it.
+const float T2_REAR_SEARCH = 1600.f;
+// Fraction of the nano's OWN build range -- a host modoption can change it, so a
+// fixed elmo count would silently find no site.
+const float T2_NANO_FRAC = 0.95f;
+
+IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
+{
+	if (Factory::gHaveT2 || !gHomeSet)
+		return null;
+	if (ai.GetTunable("apex_t2_rear", 1.f) <= 0.f)
+		return null;
+	if (Factory::SteadyIncome() < ai.GetTunable("apex_t2_income", 30.f))
+		return null;
+	// Someone is already on it -- ours or the engine's. Either way, not twice.
+	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) > 0)
+		return null;
+	CCircuitDef@ adv = Factory::AdvCounterpart();
+	if ((adv is null) || !adv.IsAvailable(ai.frame) || (adv.count > 0))
+		return null;
+
+	const AIFloat3 rear = RearOfBase(ai.GetTunable("apex_t2_rear_dist", T2_REAR_DIST));
+	if (!OnMap(rear))
+		return null;
+
+	// UNDER A NANO IF THERE IS ONE. apexearth: "You want to have it towards the
+	// back and preferrably within range of existing nano turrets." A turret that
+	// already reaches the site assists the plant up -- which is most of the point
+	// of building it early -- and repairs it afterwards. So the rearmost nano is
+	// tried first, and RearOfBase is the fallback for a base that has none.
+	AIFloat3 site;
+	bool have = false;
+	CCircuitDef@ nano = NanoDef();
+	if (nano !is null) {
+		array<CCircuitUnit@>@ ours = ai.GetOwnUnitsOfDef(nano, gHomePos, 0.f);
+		if (ours !is null) {
+			AIFloat3 bestNano;
+			bool haveNano = false;
+			float rearmost = 0.f;
+			for (uint i = 0; i < ours.length(); ++i) {
+				if (ours[i] is null)
+					continue;
+				const AIFloat3 at = ours[i].GetPos(ai.frame);
+				if (!OnMap(at))
+					continue;
+				// Smaller forward fraction is further from the enemy.
+				const float fwd = Military::ForwardFraction(at);
+				if (!haveNano || (fwd < rearmost)) {
+					rearmost = fwd;
+					bestNano = at;
+					haveNano = true;
+				}
+			}
+			if (haveNano) {
+				const float reach = nano.GetBuildDistance() * T2_NANO_FRAC;
+				AIFloat3 near = ai.FindBuildSiteNear(adv, bestNano, reach);
+				if (OnMap(near)) {
+					site = near;
+					have = true;
+				}
+			}
+		}
+	}
+	if (!have) {
+		AIFloat3 back = ai.FindBuildSiteNear(adv, rear, T2_REAR_SEARCH);
+		if (!OnMap(back))
+			return null;
+		site = back;
+	}
+	// "Safe" is the point of putting it at the back, so refuse a site that is not.
+	if (ThreatFor(unit, site) > CON_THREAT_VETO)
+		return null;
+
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Factory(Task::Priority::HIGH,
+			adv, site, null, 0.f));
+	if (post is null)
+		return null;
+	AiLog(Factory::T() + "apex: T2 plant " + adv.GetName() + " at the rear, "
+		+ formatFloat(Factory::SteadyIncome(), "", 0, 0) + " m/s steady, fwd="
+		+ formatFloat(Military::ForwardFraction(site), "", 0, 2));
+	return post;
+}
+
 }  // namespace Builder

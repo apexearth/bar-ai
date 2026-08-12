@@ -70,6 +70,29 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	@t = HoldWorkInProgress(unit, isComm);
 	if (t !is null)
 		return t;
+
+	// THE ADVANCED PLANT OUTRANKS EXPANSION, ONCE AND ONLY ONCE.
+	//
+	// apexearth: "once we make ~30+ metal per second we definitely should be
+	// making a T2 lab with high priority in a SAFE location behind our base."
+	// High priority means above DefaultMakeTask, which is where mex expansion
+	// lives -- so this is the one rule deliberately placed in the zone the header
+	// warns about, and it is bounded to match: one plant, one builder, only while
+	// no factory task exists at all, only before we have T2, and only on a
+	// reclaim-proof income reading. It is also a redirect rather than a new class
+	// of spend -- the engine builds this plant regardless, later and wherever
+	// FindBuildSite lands it.
+	@t = AdvancedPlantAtRear(unit);
+	if (t !is null)
+		return t;
+
+	// A bare extractor outranks expansion, at any tier and for any builder: one
+	// cheap turret per mex, asked once each. It cannot run away -- an extractor
+	// with cover or a pending order is skipped -- and a raided mex costs more than
+	// the turret every time.
+	@t = CommanderMexGuard(unit, isComm);
+	if (t !is null)
+		return t;
 	// EXPANSION OUTRANKS OPTIONAL SPENDING.
 	//
 	// The header above says order is the design and that anything placed before
@@ -119,19 +142,32 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// prioritising mex upgrades... there's probably special logic in here, and
 	// it is overriding our mex stuff."
 	//
-	// Below the expansion check it keeps doing its job -- bare mexes still get
-	// their first turret from whatever the engine did not want for expansion --
-	// and it can no longer displace the upgrade that pays for everything.
-	@t = CommanderMexGuard(unit, isComm);
-	if (t !is null)
-		return t;
-
+	// Moved above DefaultMakeTask 2026-08-12 at apexearth's request -- "if we have
+	// an unguarded mex then guarding it should be a boosted priority" -- so this
+	// second call would only ever find what the first one already declined.
+	//
 	// Before any optional spending: if the engine just offered a SECOND task for
 	// a building one of ours already started (or is walking to), take that one
 	// instead. A redirect of an offer already made -- it enqueues nothing.
 	@t = JoinDuplicateBuild(unit, isComm, task);
 	if (t !is null)
 		return t;
+
+	// BELOW THIS LINE EVERY RULE ENQUEUES, AND THIS FUNCTION IS OFTEN A
+	// RE-ELECTION RATHER THAN A REQUEST FOR WORK.
+	//
+	// IBuilderTask::Reevaluate calls MakeTask on every task update for a builder
+	// that has not reached its site yet, purely to ask "is there something more
+	// important?", and reassigns only on a different build type. Each of our
+	// enqueueing rules answering that question creates a task -- and if the type
+	// matches, the builder stays where it was and the new task is an orphan with
+	// no worker. See Brain::AskingForNewWork for the measurement.
+	//
+	// Handing back the engine's own offer keeps CircuitAI's re-election working
+	// (that offer is an existing task, not a new one); what stops is US inventing
+	// work for a builder that already has some.
+	if (!Brain::AskingForNewWork(unit))
+		return task;
 
 	// THE MACRO VIEW GETS ITS SAY BEFORE ANY OPTIONAL SPENDING.
 	//
