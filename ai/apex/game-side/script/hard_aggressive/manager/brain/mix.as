@@ -96,6 +96,7 @@ void ClaimFactory(CCircuitUnit@ fac)
 
 void ReleaseFactory(Id id)
 {
+	FQForget(id);
 	for (uint i = 0; i < gMixOwned.length(); ++i) {
 		if (gMixOwned[i] == id) {
 			gMixOwned.removeAt(i);

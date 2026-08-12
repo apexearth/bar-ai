@@ -17,6 +17,18 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (t !is null)
 		return FacWon("assist", t);
 
+	// A LINE THE BRAIN DRIVES IS ANSWERED HERE AND NOWHERE ELSE.
+	//
+	// It holds a standing queue laid with CmdBuildUnit, and CRecruitTask::Finish()
+	// calls Cancel(), which CmdRemoves every build order still on the factory. So
+	// one recruit task assigned to a driven line -- by our rules or by
+	// DefaultMakeTask below -- wipes the queue at its first completion. Sitting
+	// above the queue-full branch is deliberate for the same reason: that branch
+	// hands the line to DefaultMakeTask, which is exactly what must not reach it.
+	// The Wait keeps the factory manager treating the line as busy.
+	if (Brain::DrivenFactory(unit))
+		return FacWon("facqueue", Brain::FactoryQueueTask(unit));
+
 	// NO RULE BELOW MAY APPEND TO A QUEUE THAT IS ALREADY FULL.
 	//
 	// Every Enqueue in this pipeline is blind: CanEnqueueTask and GetTasks are
@@ -36,6 +48,13 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	@t = Air::MakeFactoryTask(unit);
 	if (t !is null)
 		return FacWon("air", t);
+
+	// TAKING A LINE. Below Air:: so an air plant the air manager wants keeps its
+	// own pathway, and above the mix because this is the mix's composition laid
+	// down as a queue rather than handed out one CRecruitTask at a time.
+	@t = Brain::FactoryQueueTask(unit);
+	if (t !is null)
+		return FacWon("facqueue", t);
 
 	// TARGET COMPOSITION, ahead of the generic production branches but below the
 	// floors that answer a specific need (assist bots, air, rez). See

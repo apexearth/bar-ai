@@ -44,6 +44,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (!ApexActive())
 		return aiMilitaryMgr.DefaultMakeTask(unit);
 
+	// A unit built off a standing queue finishes with no owning task and lands in
+	// CIdleTask, so this hook is the only thing that can give it a role. An idle
+	// unit re-asks every idle update, so requests far above units registered is
+	// what "the army came out unassigned and stood still" looks like from a log.
+	Brain::NoteMilRequest();
+
 	const CCircuitDef@ cdef = unit.circuitDef;
 	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask
 	// does nothing when MakeTask gives it nothing, and CIdleTask::Start is a
@@ -171,8 +177,10 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 	// likely to be walled in. apexearth, watching a 1v1: "I'm actively in a good
 	// situation where Karganeths are blocked" -- and the rule fired zero times
 	// in that entire game.
-	if ((usage == Unit::UseAs::COMBAT) || (usage == Unit::UseAs::SUPER))
+	if ((usage == Unit::UseAs::COMBAT) || (usage == Unit::UseAs::SUPER)) {
 		NotePenned(unit);
+		Brain::NoteFacQueueUnit();
+	}
 	if (usage != Unit::UseAs::FENCE)
 		return;
 	gFenceId.insertLast(unit.id);

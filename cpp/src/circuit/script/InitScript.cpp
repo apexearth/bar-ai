@@ -34,6 +34,7 @@
 #include "Game.h"
 #include "Team.h"
 #include "Lua.h"
+#include "AISCommands.h"  // UNIT_COMMAND_OPTION_*, used by CmdBuildUnit below
 
 namespace circuit {
 

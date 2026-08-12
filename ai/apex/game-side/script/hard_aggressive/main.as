@@ -7,6 +7,7 @@
 #include "manager/military.as"
 #include "manager/builder.as"
 #include "manager/factory.as"
+#include "manager/brain/facqueue.as"  // ...and drives a factory itself, as a standing queue
 #include "manager/economy.as"
 #include "manager/air.as"
 #include "manager/frontline.as"
@@ -63,6 +64,8 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (!ApexActive())
 		return;
 
+	Brain::UpdateFacQueues();
+	Brain::LogFacQueues();
 	Factory::UpdateTeamCoord();
 	Military::UpdatePosture();
 	Factory::UpdateRushReclaim();

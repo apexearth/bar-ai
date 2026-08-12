@@ -194,6 +194,37 @@ a new authority; it is making explicit what is already true.
 
 ---
 
+## Built and measured, 2026-08-12
+
+All three steps are done: the DLL was rebuilt with `CmdBuildUnit` (it needed
+`#include "AISCommands.h"` for `UNIT_COMMAND_OPTION_SHIFT_KEY`), `manager/brain/
+facqueue.as` drives the line, and `Factory::AiMakeTask` keeps CircuitAI off it.
+Verified in a 15-minute 4v4 Cortex mirror on Comet Catcher: zero AngelScript
+errors, the variant loaded, four lines taken, `facqueue` the winning rule 97
+times, and `mix` no longer answering for those factories.
+
+What the run settled, against the questions below:
+
+- **`count` is not multiplied engine-side.** Orders issued 28/17/26/29 per player
+  against combat units registered 25/14/31/36. One order, one unit.
+- **`Wait(false, ...)` holds the line.** No recruit task was assigned to a driven
+  factory in the whole game, and the line kept producing.
+- **Units built with no owning task do get roles.** `Military::AiMakeTask`
+  requests ran 1.4x units registered -- an unassigned army re-asks on every idle
+  update and would read far higher.
+- **Assistants were unaffected**: `assist` still answers through
+  `DefaultMakeTask`, which is the branch above ours.
+
+The one thing that did NOT work first time: comparing the wanted plan to the laid
+one as an ORDERED LIST re-laid every line every `FQ_RELAY_MIN`, because a single
+slot moving between roles rewrites the list. 16 lay-downs per line, and a line
+that consumes ~1.5 units per 20s never reached its queue's tail -- one unit at a
+time again, wearing a queue. Comparing by composition, with a churn threshold
+(`apex_fac_queue_churn`, 0.34), took it to 3 lay-downs per line.
+
+Still not measured: what any of this does to the army. Composition against a
+control is the next step.
+
 ## Unverified, must be measured not assumed
 
 - **shift/ctrl multiplier.** apexearth: *"shift will add/remove 5 units, ctrl

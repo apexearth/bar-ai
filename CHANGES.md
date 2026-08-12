@@ -18,6 +18,44 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-12: factories run our own standing queue, not one CRecruitTask per unit
+
+apexearth: *"Can we try \*not\* using the original CircuitAI method to make units
+and instead use our method? (this is what i've been asking for the entire time
+btw)"* -- `docs/19-factory-through-brain.md` is the design and the source
+citations.
+
+A factory the Brain takes is now given a queue the way a player gives one:
+`CmdBuildUnit` lays the whole composition down in one go, `CmdRepeat(true)` makes
+the line loop it, and nothing hands it another order until the composition it
+should be building has materially changed. The line is held on a `Wait(false)`
+task so `CFactoryManager` treats it as busy and never assigns it a recruit --
+which it must not, because `CRecruitTask::Finish()` calls `Cancel()`, and that
+CmdRemoves every build order still queued. A factory is ours or CircuitAI's;
+there is no blending.
+
+Layers: C++ (`CmdBuildUnit` binding, DLL rebuilt), AngelScript
+(`manager/brain/facqueue.as`, two hooks in `factory/maketask.as`).
+
+Measured, 15-minute 4v4 Cortex mirror vs `BARb:stable:hard`, Comet Catcher:
+
+- **`count` is not multiplied.** The open question was whether BAR's shift-adds-5
+  applies engine-side, which would make every order five units. Across four
+  players, orders issued 28/17/26/29 against combat units registered 25/14/31/36
+  -- one order, one unit, with repeat accounting for the overshoot.
+- **Units built off a queue do get roles.** They finish with no owning task and
+  land in `CIdleTask`, so `Military::AiMakeTask` is the only thing that can
+  assign them. Task requests ran 1.4x units registered; an army standing
+  unassigned would re-ask on every idle update and read far higher.
+- **Comparing plans as ordered lists re-lays every line, every time.** First run:
+  16 lay-downs per line, one every `FQ_RELAY_MIN` without exception, because one
+  slot moving between roles rewrites the list. A line that consumes ~1.5 units
+  per 20s never reaches the tail of its queue -- the old one-at-a-time behaviour
+  wearing a queue. Comparing by COMPOSITION with a churn threshold took it to 3.
+
+Not yet measured: what this does to the army. Composition against a control is
+the next step, and no claim about strength is made here.
+
 ## 2026-08-11: three rules deleted, one real bug fixed, and a pattern banned
 
 apexearth: *"fyi im getting huge red flags that this is so fragile for you to put
