@@ -529,6 +529,17 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 
 void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
 {
+	// `pos` is a standoff point on a ring of this unit's own weapon range. The
+	// trailing fight order below is queued BEHIND the move and the attack, so
+	// once either finishes it walks the unit the rest of the way in and the
+	// standoff is spent -- which is what a long gun drifting into the enemy
+	// line looks like. It exists for the no-LOS case: a target we only
+	// remember has to be walked up to. When the target is in radar or LOS
+	// there is nothing to walk towards, so the fight order ends at the ring.
+	// Melee keeps the old destination; arriving is the whole weapon.
+	const bool hold = (manager->GetCircuit()->GetTunable("apex_standoff_hold", 1.f) > 0.f)
+			&& !circuitDef->IsAttrMelee() && enemy->IsInRadarOrLOS();
+	const AIFloat3 fightPos = hold ? pos : enemy->GetPos();
 	TRY_UNIT(manager->GetCircuit(), this,
 		if (circuitDef->IsAttrMelee()) {
 			if (IsJumpReady()) {
@@ -545,7 +556,7 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
 		} else {
 			unit->Attack(enemy->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 		}
-		CmdFightTo(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // los-cheat related
+		CmdFightTo(fightPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // los-cheat related
 		CmdWantedSpeed(NO_SPEED_LIMIT);
 		CmdSetTarget(target);
 		if (circuitDef->IsAttrOnOff()) {

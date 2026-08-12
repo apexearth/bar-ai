@@ -237,7 +237,17 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
 	// its real engagement distance. GetMaxRange() matches what the rest of
 	// this codebase's combat logic already treats as "how close this unit
 	// needs to get."
-	const float range = std::min(cdef->GetMaxRange(), cdef->GetLosRadius()) * RANGE_MOD;
+	//
+	// The losRadius clamp only applies while the target cannot be seen: a gun
+	// that outranges its own eyes must close to acquire, but once the target is
+	// in radar or LOS there is nothing left to walk towards.
+	const float rangeMod = circuit->GetTunable("apex_range_mod", STANDOFF_RANGE_MOD);
+	const bool seesTarget = (circuit->GetTunable("apex_los_standoff", 1.f) > 0.f)
+			&& !isStatic && GetTarget()->IsInRadarOrLOS();
+	float range = cdef->GetMaxRange() * rangeMod;
+	if (!seesTarget) {
+		range = std::min(range, cdef->GetLosRadius() * rangeMod);
+	}
 	AIFloat3 newPos(tPos.x + range * dir.x, tPos.y, tPos.z + range * dir.z);
 	CTerrainManager::CorrectPosition(newPos);
 	unit->Attack(newPos, GetTarget(), targetTile, GetTarget()->GetUnit()->IsCloaked(), isStatic, frame + FRAMES_PER_SEC * 60);

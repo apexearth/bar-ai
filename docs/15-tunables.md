@@ -45,8 +45,9 @@ Verified 2026-08-09 by reading every call site.
 | `apex_attack_minpower_threat` | 0 (off, flat `minAttackers`) | C++ `MilitaryManager.cpp` `Enqueue` | scale the attack party size with threat |
 | `apex_scout_threat` | 1.0 (`THREAT_MIN`) | C++ `MilitaryManager.cpp` `GetScoutPosition` | how hot a metal cluster may be and still be scoutable |
 | `apex_squad_spacing` | 96 | C++ `SquadTask.cpp` `ActivePath` | lateral spacing of a travelling line |
-| `apex_range_mod` | 0.9 (`RANGE_MOD`) | C++ `FighterTask.cpp` + `SquadTask.cpp` `Attack` | standoff as a fraction of weapon range |
-| `apex_los_standoff` | 1 (on) | C++ `FighterTask.cpp` `Attack` | 0 restores clamping a solo unit's standoff to its own `losRadius` even when it can see the target |
+| `apex_range_mod` | 0.95 (`STANDOFF_RANGE_MOD`) | C++ `FighterTask.cpp` + `SquadTask.cpp` `Attack` | standoff as a fraction of the unit's own `GetMaxRange()` |
+| `apex_los_standoff` | 1 (on) | C++ `FighterTask.cpp` + `SquadTask.cpp` `Attack` | 0 restores clamping the standoff to the unit's own `losRadius` even when it can see the target |
+| `apex_standoff_hold` | 1 (on) | C++ `CircuitUnit.cpp` `Attack(pos, ...)` | 0 restores the trailing fight order marching to the enemy's own position instead of ending at the standoff ring |
 | `apex_orbit_rate` | 0.18 | C++ `SquadTask.cpp` `Attack` | rate the standoff ring precesses |
 | `apex_reclaim_energy_dist` | 900 | C++ `EconomyManager.cpp` `UpdateReclaimTasks` | how far a constructor may walk for a tree |
 | `apex_wind_per_metal` | 1.0 | AngelScript `builder/mexguard.as` | 0 restores picking wind-vs-solar on raw output |
@@ -88,9 +89,10 @@ The fighter-task C++ delta was reverted to upstream (see CHANGES.md), and with
 it went every call site of `apex_engage_margin`, `apex_trade_margin_max`,
 `apex_continue_margin`, `apex_air_threat_mod`, `apex_static_no_continue`,
 `apex_encircle_penalty`, `apex_squad_spacing`, `apex_range_mod` and
-`apex_orbit_rate`. Setting them now does nothing -- **except `apex_range_mod`,
-which got its reader back on 2026-08-09 when the standoff was re-landed (see
-CHANGES.md); the row above is current.** They are left in
+`apex_orbit_rate`. Setting them now does nothing -- **except `apex_range_mod`
+and `apex_los_standoff`, whose readers were removed a second time by an
+unrelated commit and restored on 2026-08-12 (see CHANGES.md); the rows above
+are current.** They are left in
 `dev_tunables.lua` and in the table above because the behaviours they measure
 are expected to be re-landed one at a time, and each will want its tunable back.
 

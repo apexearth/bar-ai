@@ -29,13 +29,6 @@ class CCircuitDef;
 // 0.9 packs a squad into a half circle; 1.2 is a broad crescent. NOT a ring --
 // apexearth: "we don't organize into balls, we organize into curves/lines".
 #define ARC_SPAN		0.9f
-// Rows fight at their OWN range, not 20% inside it. apexearth: "don't attack
-// at 80% range, attack at 95% range". At 0.8 a Banisher with 800 range stood
-// at 640 -- inside the tanks it is supposed to shoot over, and inside the
-// enemy's reach. Reverted once as part of a three-change formation batch that
-// regressed; the line-formation gather in that batch was the likely cause and
-// this was never tested alone.
-#define ATTACK_RANGE_MOD	0.95f
 // apexearth: "some units easily die on the first hit... if i am just 10% out
 // of range of that enemy unit, i absolutely must move away from them." Used
 // when the current target outranges a row's own weapon: stand at the

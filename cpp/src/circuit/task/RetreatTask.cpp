@@ -245,21 +245,36 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 // forward of home.
 #define RALLY_FRAC	0.55f
 
-// A fighter falls back to ONE shared point, not to whichever haven happens to
-// be nearest it. GetClosestHaven is per-unit and havens are factory positions,
-// so a retreating squad fanned out to several places at the back of the map and
-// then walked all the way forward again. apexearth, watching: "each of our
-// units, as they pull back, it looks to me like they're pulling back to
-// different locations... a perfectly healthy set of units took the long walk
-// away from the front line, and now they're walking all the way back."
+// The health at which Update() below hands the unit back. Nothing else releases
+// it, so the rally-point gate reads the same constant.
+#define RETREAT_HEALED	0.98f
+
+// A fighter that is not hurt falls back to ONE shared point, not to whichever
+// haven happens to be nearest it. GetClosestHaven is per-unit and havens are
+// factory positions, so a retreating squad fanned out to several places at the
+// back of the map and then walked all the way forward again. apexearth,
+// watching: "each of our units, as they pull back, it looks to me like they're
+// pulling back to different locations... a perfectly healthy set of units took
+// the long walk away from the front line, and now they're walking all the way
+// back."
 //
-// Builders and the commander are excluded: they retreat to be repaired or to
-// hide, and a rally point in front of the base serves neither.
+// Builders, the commander and anything damaged are excluded: they retreat to be
+// repaired or to hide, and a rally point in front of the base serves neither.
 AIFloat3 CRetreatTask::GetRallyPos(CCircuitUnit* unit) const
 {
 	CCircuitAI* circuit = manager->GetCircuit();
 	CCircuitDef* cdef = unit->GetCircuitDef();
 	if (cdef->IsRoleComm() || (circuit->GetBindedRole(cdef->GetMainRole()) == ROLE_TYPE(BUILDER))) {
+		return -RgtVector;
+	}
+
+	// A haven is a nano turret's patrol position, so it repairs whatever stands
+	// on it; the defence stand is towers and the rally point is bare ground, and
+	// neither ends the retreat. Damage therefore defers to the haven, and the
+	// rally point is used only when no haven is reachable.
+	if ((unit->GetHealthPercent() <= RETREAT_HEALED)
+		&& utils::is_valid(circuit->GetFactoryManager()->GetClosestHaven(unit)))
+	{
 		return -RgtVector;
 	}
 
@@ -329,8 +344,8 @@ void CRetreatTask::Update()
 	for (CCircuitUnit* unit : assignees) {
 		const float healthPerc = unit->GetHealthPercent();
 		bool isRepaired = unit->HasShield()
-				? (healthPerc > 0.98f) && unit->IsShieldCharged(circuit->GetSetupManager()->GetFullShield())
-				: healthPerc > 0.98f;
+				? (healthPerc > RETREAT_HEALED) && unit->IsShieldCharged(circuit->GetSetupManager()->GetFullShield())
+				: healthPerc > RETREAT_HEALED;
 
 		CCircuitDef* cdef = unit->GetCircuitDef();
 		if (isRepaired && !unit->IsDisarmed(frame)) {

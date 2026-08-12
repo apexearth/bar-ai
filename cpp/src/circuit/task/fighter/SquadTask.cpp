@@ -74,7 +74,7 @@ void ISquadTask::AssignTo(CCircuitUnit* unit)
 	// Dual-Weapon Infantry Bot") carries HEAT_RAY at range 360 and
 	// LEGION_SHOTGUN at range 251 (confirmed in units/Legion/Bots/
 	// legkark.lua's weapondefs). Grouped by min range, a legkark row was
-	// ordered to close to ~238 elmos (251 * ATTACK_RANGE_MOD) from every
+	// ordered to close to ~238 elmos (251 * STANDOFF_RANGE_MOD) from every
 	// target -- needlessly inside its own better weapon's reach, and inside
 	// any enemy with range 251-360 that it never needed to engage that
 	// close. GetMaxRange() is what the outranged-safety-margin standoff
@@ -604,10 +604,13 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 	// incorrect, it should check aoe in vicinity
 	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
 
+	const float rangeMod = manager->GetCircuit()->GetTunable("apex_range_mod", STANDOFF_RANGE_MOD);
+	const bool losStandoff = manager->GetCircuit()->GetTunable("apex_los_standoff", 1.f) > 0.f;
+
 	int row = 0;
 	for (const auto& kv : rangeUnits) {
 		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
-		// Each row stands at ITS OWN weapon range. RANGE_MOD 0.8 walked every row
+		// Each row stands at ITS OWN weapon range. A fraction of 0.8 walked every row
 		// 20% inside its reach, which throws away the whole point of keeping the
 		// long-ranged units in an outer row -- a Banisher at 800 was standing at
 		// 640, inside the tanks it was supposed to shoot over.
@@ -702,12 +705,12 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		const bool outranged = !isArty && !powerDominant && !glassCannon
 				&& (edef != nullptr) && (edef->GetMaxRange() > kv.first);
 		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
-		const float range = standoff * ATTACK_RANGE_MOD;
+		const float range = standoff * rangeMod;
 		// NOTE: 1st unit in 1st row will scout, ignoring GetTarget()->IsInRadarOrLOS()
 		//       as unit may wobble back and forth without firing if turret turn is slow.
 		float range0 = range;
-		if ((row++ == 0) && (isStatic || !GetTarget()->IsInRadarOrLOS())) {
-			range0 = std::min(kv.first, rowDef->GetLosRadius()) * ATTACK_RANGE_MOD;
+		if ((row++ == 0) && losStandoff && (isStatic || !GetTarget()->IsInRadarOrLOS())) {
+			range0 = std::min(kv.first, rowDef->GetLosRadius()) * rangeMod;
 		}
 		// The arc a row may occupy. At 0.9*PI a squad packs into a half circle on
 		// one side of the target, which is a single AOE footprint -- and the wider
