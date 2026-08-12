@@ -234,3 +234,35 @@ not the same as the way out.
 
 Also, 86 of our own buildings around one unit is the base-sprawl complaint in
 `USER-FEEDBACK.md` showing up as a number.
+
+## NEXT: come to an ally's aid (2026-08-11)
+
+apexearth: "its 4 different AI right so this is just ally defense forces coming
+to aid (so long as the distance is not too great)", and on naming: "You don't
+need to label this as 'pincer' or anything like that. It's simply coming to an
+ally's aid so label it as something like that."
+
+The converging-from-three-sides effect is what it LOOKS like when four players
+each defend their own side. Nothing coordinates it, so it is not a manoeuvre and
+must not be named as one -- call it ally aid.
+
+The signal already exists and is ours: `CCircuitAI::GetAttackHotspot`
+(cpp/src/circuit/CircuitAI.cpp), a cost-weighted centroid of where we have been
+losing units, with a decay so it tracks the current fight rather than averaging
+the game. It is PER-AI: `NoteLossAt` accumulates only our own losses, so a player
+cannot see an ally being overrun.
+
+Make it ally-wide with the mechanism already carrying the front-tower budget and
+the AA count -- PublishTeamValue/ReadTeamValue, three keys (x, z, weight). Each
+player then picks the heaviest fight within reach and sends its massing pool.
+"Not too great a distance" is the existing reach bound.
+
+Also fixes: `BaseUnderAttack()` fired twice in six games because it asks about
+enemy influence at our own start position; a loss-weighted hotspot is a far
+better "we are being attacked" trigger. And it gives the Brain's defence wants a
+second position source -- the one porc+ had, deleted with it.
+
+Before touching the army: add army-position telemetry to dev_stats_export.lua
+(each side's army centroid and its distance from its own base). [BARAI_POS]
+records BUILDINGS ONLY, so "our armies run away when the base is attacked" cannot
+currently be measured at all, only watched.
