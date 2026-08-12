@@ -351,7 +351,21 @@ const float FRONT_SITE_SEARCH = 400.f;    // how far to look for ground it fits 
 //
 // A mex with nothing in firing range of it outranks a mex that merely wants a
 // second turret, which is what makes cover spread before it thickens.
-const float MEX_COVER_VALUE = 0.9f;
+// A BARE MEX IS HIGH PRIORITY, and the value says why rather than asserting it.
+// apexearth: "A mex with no turret in range to defend it is a high priority
+// target for building a turret to defend that area."
+//
+// Everything else in this file is valued in metal per second, so this is too: an
+// extractor makes 1.8/s (armmex, read from the defs -- the same figure
+// MEXUP_INCOME_GAIN is derived against), and an uncovered one is that income plus
+// its 620 metal standing in front of anything that wanders past. The turret is 85.
+//
+// Scaled by exposure, because a bare extractor on the front is raided and one
+// behind the base mostly is not -- FrontT is 0 at home and 1 at the enemy, the
+// same measure every other positional rule uses. At home this scores about four
+// times a mex upgrade per metal; on the front, twelve.
+const float MEX_INCOME_AT_RISK = 1.8f;
+const float MEX_EXPOSURE_MULT  = 3.0f;
 
 Want@ MexCoverWant(CCircuitUnit@ unit)
 {
@@ -402,7 +416,8 @@ Want@ MexCoverWant(CCircuitUnit@ unit)
 
 	Want@ w = Want();
 	w.kind = "fence";
-	w.value = MEX_COVER_VALUE;
+	w.value = MEX_INCOME_AT_RISK
+			* (1.f + MEX_EXPOSURE_MULT * Builder::FrontT(best));
 	w.cost = tower.costM;
 	w.pos = site;
 	@w.def = tower;
