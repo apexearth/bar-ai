@@ -91,17 +91,61 @@ void FQForget(Id id)
 	gFQFac.removeAt(i);
 }
 
-// HOW MUCH ARMY THIS LINE IS FOR.
+// HOW MANY UNITS THIS LINE IS FOR: the unit limit, less what we already hold.
 //
-// Not a number invented here: brain/budget.as already states what share of
-// everything we build should be army, and gSpentTotal is what we have actually
-// built. Their product is the army that share has paid for, and each driven line
-// owns an equal part of it. It grows with the economy because everything else
-// does, which is the answer apexearth gives every time a bound is asked about.
-float ArmyMetalPerLine()
+// apexearth: "Take a look at your unit limit and divvy up your quota based on
+// something reasonable. Let's say you have 100 buildings, 2000 unit limit,
+// you're in T1... then your split is on 1900 available units."
+//
+// The previous sizing was a share of metal we had ALREADY SPENT, and it was
+// wrong in the way that matters: it lagged, so a met quota stopped the line, and
+// a stopped line is how apex fielded army 0/2700/150/0 against stock's
+// 5455/6435/5595/6865 in a 22-minute 4v4.
+//
+// Slots do not lag. They also make the absolute number stop mattering -- split
+// 1900 ways by ratio and no combat target is ever reached -- which is the point:
+// the quota becomes a SHAPE, "whichever type is furthest below its share goes
+// next", and the line only falls quiet when the map is full or the tier moved.
+// The engine's own limit is the ceiling, so nothing here invents one.
+int SlotsForArmy()
+{
+	const int limit = ai.GetUnitMax();
+	if (limit <= 0)
+		return 0;
+	// Buildings are the part of the limit that is not army and never will be.
+	const int used = ai.GetTeamUnitCount(true);
+	const int free = limit - used;
+	return (free > 0) ? free : 0;
+}
+
+int SlotsPerLine()
 {
 	const uint lines = (gFQFac.length() > 0) ? gFQFac.length() : 1;
-	return (gSpentTotal * TargetShare(ARMY)) / float(lines);
+	return SlotsForArmy() / int(lines);
+}
+
+// WHAT A TIER IS STILL WORTH ONCE THE NEXT ONE IS ON THE FIELD.
+//
+// apexearth: "Later when you get to T2 you reduce your target T1, removing some
+// entirely, and now target to create T2 units... later on when T3 is on the
+// field, adjust your T2 army accordingly."
+//
+// Dropping a tier's share below what we already hold is what makes its line go
+// quiet, because a quota already met orders nothing. That is the one place in
+// this design where the absolute number does real work.
+float TierShare(CCircuitDef@ d)
+{
+	const bool isT2 = (Factory::userData[d.id].attr & Factory::Attr::T2) != 0;
+	const bool isT3 = (Factory::userData[d.id].attr & Factory::Attr::T3) != 0;
+	if (isT3)
+		return 1.f;
+	if (isT2)
+		return Factory::gHaveT3
+			? ai.GetTunable("apex_quota_t2_after_t3", 0.4f) : 1.f;
+	if (Factory::gHaveT3)
+		return ai.GetTunable("apex_quota_t1_after_t3", 0.f);
+	return Factory::gHaveT2
+		? ai.GetTunable("apex_quota_t1_after_t2", 0.25f) : 1.f;
 }
 
 int RoundUp(float v)
@@ -174,7 +218,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want)
 	if (sum <= 0.f)
 		return;
 
-	const float armyM = ArmyMetalPerLine();
+	const float slots = float(SlotsPerLine());
 	for (uint i = 0; i < gMix.length(); ++i) {
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
 		if ((d is null) || !d.IsAvailable(ai.frame) || (d.costM <= 0.f))
@@ -183,7 +227,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want)
 		if (s <= 0.f)
 			continue;
 		defs.insertLast(d);
-		want.insertLast(RoundUp((s / sum) * armyM / d.costM));
+		want.insertLast(RoundUp((s / sum) * slots * TierShare(d)));
 	}
 }
 
@@ -210,6 +254,79 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want)
 // Nothing here replaces the factory's queue. A replace would take the unit
 // under construction with it, and the widget goes out of its way not to do that
 // either -- it refuses to displace a build more than 7.5% done.
+// THE ADVANCED CONSTRUCTOR JUMPS THE QUEUE.
+//
+// apexearth: "(force your advanced cons to build first by giving them an
+// inserted queue mode order)".
+//
+// A new advanced plant is the one moment where order matters more than ratio:
+// everything the tier change is for -- upgraded extractors, the T2 economy, the
+// plants that follow -- waits on that constructor, and behind a queue of army it
+// arrives minutes late. CmdInsertBuild is CMD_INSERT, so it goes to the front
+// WITHOUT clearing the queue or touching the unit under construction.
+//
+// Once per line: gFQConDone records that this line has had its jump.
+array<Id> gFQConDone;
+
+bool ConAlreadyJumped(Id id)
+{
+	for (uint i = 0; i < gFQConDone.length(); ++i) {
+		if (gFQConDone[i] == id)
+			return true;
+	}
+	return false;
+}
+
+// THE OPENING IS NOT THROWN AWAY WHEN WE TAKE THE LINE.
+//
+// Taking a factory aborts the recruit tasks on it, which includes the OPENER --
+// the specific first units Opener::GetOpener lays down for that plant, in order.
+// Green's log, 0.9 min: "facqueue aborted 10 recruit task(s) still holding
+// corlab" -- the whole opening, gone, replaced a second later by whatever the
+// quota ratio happened to want. apexearth: "green is still not acting normal",
+// and it does the same thing every game because the opener is aborted every
+// game.
+//
+// So the opener is re-issued as our own orders. Inserted in REVERSE: CMD_INSERT
+// puts each order at the front, so laying them backwards is what makes the queue
+// read forwards.
+void OpenerFirst(int line)
+{
+	CCircuitUnit@ fac = gFQFac[line];
+	const array<Opener::SO>@ opener = Opener::GetOpener(fac.circuitDef);
+	if (opener is null)
+		return;
+	int laid = 0;
+	for (int i = int(opener.length()) - 1; i >= 0; --i) {
+		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, opener[i].role);
+		if ((d is null) || !d.IsAvailable(ai.frame))
+			continue;
+		for (uint j = 0; j < opener[i].count; ++j) {
+			fac.CmdInsertBuild(d, true);
+			++laid;
+		}
+	}
+	gFQOrders += laid;
+	AiLog(Factory::T() + "apex: facqueue " + fac.circuitDef.GetName() + " #"
+		+ fac.id + " opens with " + laid + " unit(s)");
+}
+
+void AdvConFirst(int line)
+{
+	CCircuitUnit@ fac = gFQFac[line];
+	if ((Factory::userData[fac.circuitDef.id].attr & Factory::Attr::T2) == 0)
+		return;      // only an advanced plant has an advanced constructor to make
+	if (ConAlreadyJumped(fac.id))
+		return;
+	CCircuitDef@ con = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
+	if ((con is null) || !con.IsAvailable(ai.frame))
+		return;
+	gFQConDone.insertLast(fac.id);
+	fac.CmdInsertBuild(con, true);
+	AiLog(Factory::T() + "apex: facqueue " + fac.circuitDef.GetName() + " #"
+		+ fac.id + " inserts " + con.GetName() + " at the front");
+}
+
 void FillQuota(int line)
 {
 	CCircuitUnit@ fac = gFQFac[line];
@@ -241,7 +358,14 @@ void FillQuota(int line)
 	if (best is null)
 		return;      // every quota met: the line stops, which is the point
 
-	fac.CmdBuildUnit(best, 1, false);
+	// INSERT, NEVER SHIFT-APPEND. FactoryCAI::GetCountMultiplierFromOptions is
+	// `if (opts & SHIFT_KEY) ret *= 5`, so every append we made was FIVE units,
+	// not one -- which is why the line kept filling up however low the look-ahead
+	// was set. apexearth: "you're sending their command with shift, which adds 5",
+	// and "queuing army 5 at a time is no good... just queue 2 or 3 of what you
+	// want". CMD_INSERT carries no multiplier, which is exactly why BAR's own
+	// quota widget uses it rather than a shift-append.
+	fac.CmdInsertBuild(best, false);
 	++gFQOrders;
 	if (gFQOrders <= 5 || (gFQOrders % 25 == 0)) {
 		AiLog(Factory::T() + "apex: facqueue " + fac.circuitDef.GetName() + " #"
@@ -320,6 +444,8 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		fac.CmdRepeat(false);
 		AiLog(Factory::T() + "apex: facqueue takes " + fac.circuitDef.GetName()
 			+ " #" + fac.id + " (CRecruitTask off for this line)");
+		OpenerFirst(line);
+		AdvConFirst(line);
 		FillQuota(line);
 	}
 	return aiFactoryMgr.Enqueue(TaskS::Wait(false, FQ_WAIT));
@@ -385,7 +511,7 @@ void LogFacQueues()
 	gNextFQLog = ai.frame + 30 * SECOND;
 	AiLog(Factory::T() + "apex: facqueue lines=" + gFQFac.length()
 		+ " orders=" + gFQOrders
-		+ " armyM/line=" + formatFloat(ArmyMetalPerLine(), "", 0, 0)
+		+ " slots/line=" + SlotsPerLine() + " limit=" + ai.GetUnitMax()
 		+ " milreq=" + gFQMilReq);
 }
 

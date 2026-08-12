@@ -36,6 +36,7 @@
 #include "Lua.h"
 #include "AISCommands.h"  // UNIT_COMMAND_OPTION_*, used by CmdBuildUnit below
 #include "Command.h"       // springai::Command, for reading a unit's own queue
+#include "Sim/Units/CommandAI/Command.h"  // CMD_INSERT
 
 namespace circuit {
 
@@ -169,6 +170,74 @@ static CCircuitDef* CCircuitAI_GetCircuitDef(CCircuitAI* circuit, const std::str
 static std::string CCircuitAI_GetMapName(CCircuitAI* circuit)
 {
 	return circuit->GetMap()->GetName();
+}
+
+// THE UNIT LIMIT, AND WHAT WE HAVE SPENT OF IT.
+//
+// apexearth, on how a quota should be sized: "Take a look at your unit limit and
+// divvy up your quota based on something reasonable. Let's say you have 100
+// buildings, 2000 unit limit, you're in T1... then your split is on 1900
+// available units."
+//
+// Unit_getLimit is the OTHER callback and must not be used: it indexes
+// AI_TEAM_IDS, the array declared `= {{-1}}` and never assigned, which is why
+// every Game_getTeamResource* call in this engine returns -1. Unit::GetMax()
+// reads unitHandler.MaxUnits() with no team lookup at all.
+static int CCircuitAI_GetUnitMax(CCircuitAI* circuit)
+{
+	// GetMax() is a STATIC callback -- skirmishAiCallback_Unit_getMax ignores the
+	// unit it is asked through -- so any unit of ours answers it, and borrowing
+	// one avoids constructing a wrapper for a unit id that may not exist.
+	for (const auto& kv : circuit->GetTeamUnits()) {
+		if ((kv.second != nullptr) && (kv.second->GetUnit() != nullptr)) {
+			return kv.second->GetUnit()->GetMax();
+		}
+	}
+	return 0;
+}
+
+// How many units we hold, and how many of those are buildings. The split is what
+// makes "slots left for army" a real number rather than a guess.
+static int CCircuitAI_GetTeamUnitCount(CCircuitAI* circuit, bool staticOnly)
+{
+	int n = 0;
+	for (const auto& kv : circuit->GetTeamUnits()) {
+		const CCircuitUnit* u = kv.second;
+		if ((u == nullptr) || (u->GetCircuitDef() == nullptr)) {
+			continue;
+		}
+		if (!staticOnly || !u->GetCircuitDef()->IsMobile()) {
+			++n;
+		}
+	}
+	return n;
+}
+
+// Put a build order at the FRONT of a factory's queue without disturbing what is
+// already on it -- the same CMD_INSERT the Quota Mode widget uses. CmdBuild can
+// only append (SHIFT) or replace (no options), and replacing takes the unit under
+// construction with it.
+//
+// Position 1 rather than 0 leaves whatever is being built alone; the widget does
+// the same, and only drops to 0 when nothing is in progress.
+static void CCircuitUnit_CmdInsertBuild(CCircuitUnit* unit, CCircuitDef* buildDef,
+		bool front)
+{
+	if (buildDef == nullptr) {
+		return;
+	}
+	std::vector<float> params = {
+		front ? 0.f : 1.f,
+		float(-buildDef->GetId()),
+		float(UNIT_COMMAND_OPTION_ALT_KEY | UNIT_COMMAND_OPTION_INTERNAL_ORDER)
+	};
+	// TRY_UNIT needs a CCircuitAI to report a dead unit to, and ITaskModule is an
+	// incomplete type in this translation unit, so the same guard is inline.
+	try {
+		unit->GetUnit()->ExecuteCustomCommand(CMD_INSERT, std::move(params),
+				UNIT_COMMAND_OPTION_ALT_KEY | UNIT_COMMAND_OPTION_CONTROL_KEY);
+	} catch (const std::exception& e) {
+	}
 }
 
 static int CCircuitAI_GetLeadTeamId(CCircuitAI* circuit)
@@ -693,6 +762,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetLeadTeamId() const", asFUNCTION(CCircuitAI_GetLeadTeamId), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	// Sizing a quota: the unit limit, and what we are already holding of it.
+	r = engine->RegisterObjectMethod("CCircuitAI", "int GetUnitMax() const", asFUNCTION(CCircuitAI_GetUnitMax), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int GetTeamUnitCount(bool) const", asFUNCTION(CCircuitAI_GetTeamUnitCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetSideId() const", asMETHOD(CCircuitAI, GetSideId), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "const string& GetSideName() const", asMETHOD(CCircuitAI, GetSideName), asCALL_THISCALL); ASSERT(r >= 0);
 	gIdArrayType = engine->GetTypeInfoByDecl("array<Id>");
@@ -845,6 +917,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdBuildUnit(CCircuitDef@, int, bool)", asFUNCTION(CCircuitUnit_CmdBuildUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// Reading the factory's own queue. Pass null to count every build order on it.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int CountQueued(CCircuitDef@)", asFUNCTION(CCircuitUnit_CountQueued), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	// Jump the queue without clearing it -- how an advanced constructor gets built
+	// first when the tier changes.
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdInsertBuild(CCircuitDef@, bool)", asFUNCTION(CCircuitUnit_CmdInsertBuild), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// Health is the missing half of "is this risky". Threat alone said commanders
 	// die where the map reads ZERO, because the killer is often at range -- the
 	// last plasma shots landing on a commander already running. Health loss is
