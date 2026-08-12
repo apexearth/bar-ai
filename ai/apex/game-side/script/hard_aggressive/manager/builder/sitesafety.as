@@ -80,6 +80,36 @@ float FrontT(const AIFloat3& in where)
 	return ((where.x - gHomePos.x) * ex + (where.z - gHomePos.z) * ez) / span;
 }
 
+// A point BEHIND our base, on the same axis: home, pushed directly away from
+// the enemy centroid. FrontT of the result is negative, which is what "the
+// back of our base" means in this codebase's one spatial model.
+//
+// Clamped onto the map, because home near a map edge pushes straight off it and
+// an off-map position crashes the threat map (CThreatMap bounds-checks under an
+// assert that is compiled out in release).
+AIFloat3 RearOfBase(float dist)
+{
+	AIFloat3 rear = gHomePos;
+	if (!gHomeSet)
+		return rear;
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	const float ex = foe.x - gHomePos.x;
+	const float ez = foe.z - gHomePos.z;
+	const float len = sqrt(ex * ex + ez * ez);
+	if (len < 1.f)
+		return rear;
+	rear.x = gHomePos.x - (ex / len) * dist;
+	rear.z = gHomePos.z - (ez / len) * dist;
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	const float pad = 64.f;
+	if (rear.x < pad) rear.x = pad;
+	if (rear.z < pad) rear.z = pad;
+	if (rear.x > w - pad) rear.x = w - pad;
+	if (rear.z > h - pad) rear.z = h - pad;
+	return rear;
+}
+
 bool PastFrontFrac(const AIFloat3& in where, float frac)
 {
 	if (!gHomeSet)
