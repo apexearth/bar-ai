@@ -29,6 +29,32 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (Brain::DrivenFactory(unit))
 		return FacWon("facqueue", Brain::FactoryQueueTask(unit));
 
+	// Safe to sit first: this answers only for the advanced air plant, so the
+	// ground line's branches below are untouched.
+	@t = Air::MakeFactoryTask(unit);
+	if (t !is null)
+		return FacWon("air", t);
+
+	// TAKING A LINE. Below Air:: so an air plant the air manager wants keeps its
+	// own pathway -- and ABOVE the queue-full branch, which is the order that
+	// matters.
+	//
+	// It sat below, and that made the whole scheme self-defeating. A driven line
+	// refuses recruit tasks, so the pending recruit list never drains; the
+	// queue-full branch then handed the NEXT factory that asked back to
+	// DefaultMakeTask, so it was never adopted, so it created more recruit tasks.
+	// Meanwhile a permanently-full recruit list plus income is one of the things
+	// CFactoryManager answers by building another factory. Measured live,
+	// 2026-08-12: `queue=10 unstarted=10 facs=7` on one player -- seven T1 labs,
+	// ten recruit orders nobody could ever start, three of the seven lines ours.
+	// apexearth, watching: "now at 40 m/s teal has 6 t1 botlabs."
+	//
+	// Nothing below this line can enqueue a recruit for a factory we drive, so
+	// the queue-full throttle has nothing to protect on a driven line.
+	@t = Brain::FactoryQueueTask(unit);
+	if (t !is null)
+		return FacWon("facqueue", t);
+
 	// NO RULE BELOW MAY APPEND TO A QUEUE THAT IS ALREADY FULL.
 	//
 	// Every Enqueue in this pipeline is blind: CanEnqueueTask and GetTasks are
@@ -42,19 +68,6 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// queue being consumed instead of grown.
 	if (!QueueHasRoom())
 		return FacWon("queue-full", aiFactoryMgr.DefaultMakeTask(unit));
-
-	// Safe to sit first: this answers only for the advanced air plant, so the
-	// ground line's branches below are untouched.
-	@t = Air::MakeFactoryTask(unit);
-	if (t !is null)
-		return FacWon("air", t);
-
-	// TAKING A LINE. Below Air:: so an air plant the air manager wants keeps its
-	// own pathway, and above the mix because this is the mix's composition laid
-	// down as a queue rather than handed out one CRecruitTask at a time.
-	@t = Brain::FactoryQueueTask(unit);
-	if (t !is null)
-		return FacWon("facqueue", t);
 
 	// TARGET COMPOSITION, ahead of the generic production branches but below the
 	// floors that answer a specific need (assist bots, air, rez). See

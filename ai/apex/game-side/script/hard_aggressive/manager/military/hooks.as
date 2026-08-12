@@ -177,10 +177,8 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 	// likely to be walled in. apexearth, watching a 1v1: "I'm actively in a good
 	// situation where Karganeths are blocked" -- and the rule fired zero times
 	// in that entire game.
-	if ((usage == Unit::UseAs::COMBAT) || (usage == Unit::UseAs::SUPER)) {
+	if ((usage == Unit::UseAs::COMBAT) || (usage == Unit::UseAs::SUPER))
 		NotePenned(unit);
-		Brain::NoteFacQueueUnit();
-	}
 	if (usage != Unit::UseAs::FENCE)
 		return;
 	gFenceId.insertLast(unit.id);

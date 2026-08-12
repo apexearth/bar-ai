@@ -35,6 +35,7 @@
 #include "Team.h"
 #include "Lua.h"
 #include "AISCommands.h"  // UNIT_COMMAND_OPTION_*, used by CmdBuildUnit below
+#include "Command.h"       // springai::Command, for reading a unit's own queue
 
 namespace circuit {
 
@@ -206,6 +207,33 @@ static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
 	unit->CmdRepeat(repeat);
 }
 
+// HOW MANY BUILD ORDERS THIS UNIT ALREADY HAS QUEUED, all defs or one.
+//
+// Without this every script-side view of a factory's queue is a guess. Nothing
+// in the bound surface reads it -- CFactoryManager::GetTasks is not registered
+// either -- so a quota that must not re-order what is already ordered had no
+// way to tell, and each way of inferring it failed differently.
+//
+// BAR's own Quota Mode widget is built on exactly this call
+// (`Spring.GetFactoryCommands`), which is why it can insert one unit at a time
+// and never accumulate. A build order carries the NEGATIVE unitDefId as its
+// command id, which is how a queued build is told from a move or a wait.
+static int CCircuitUnit_CountQueued(CCircuitUnit* unit, CCircuitDef* buildDef)
+{
+	const int wanted = (buildDef == nullptr)
+			? 0 : -buildDef->GetId();
+	int n = 0;
+	auto commands = unit->GetUnit()->GetCurrentCommands();
+	for (springai::Command* cmd : commands) {
+		const int id = cmd->GetId();
+		if ((id < 0) && ((wanted == 0) || (id == wanted))) {
+			++n;
+		}
+		delete cmd;
+	}
+	return n;
+}
+
 // Queue `count` of `buildDef` on a factory directly, the way a player does:
 // one standing queue, appended with SHIFT, left alone to run. CRecruitTask is
 // the other way -- one task per unit, and its Finish() calls Cancel(), which
@@ -215,10 +243,8 @@ static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
 // factory's queue; the rest append. That is how a player lays down a fresh
 // queue, and it means no separate clear command is needed.
 //
-// UNVERIFIED, TEST BEFORE TRUSTING THE COUNT: apexearth reports that in BAR
-// shift adds or removes 5 units at a time and ctrl 20. If that multiplier is
-// applied engine-side rather than by the UI, `count` orders become 5x count
-// units. First run must queue a known number and count what actually comes out.
+// Measured 2026-08-12: `count` is NOT multiplied engine-side. BAR's shift-adds-
+// five is the UI doing it, so one order is one unit.
 static void CCircuitUnit_CmdBuildUnit(CCircuitUnit* unit, CCircuitDef* buildDef,
 		int count, bool replace)
 {
@@ -817,6 +843,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// which CmdRemoves every build order still queued, so the first completion
 	// under the task scheme wipes a standing queue.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdBuildUnit(CCircuitDef@, int, bool)", asFUNCTION(CCircuitUnit_CmdBuildUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	// Reading the factory's own queue. Pass null to count every build order on it.
+	r = engine->RegisterObjectMethod("CCircuitUnit", "int CountQueued(CCircuitDef@)", asFUNCTION(CCircuitUnit_CountQueued), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// Health is the missing half of "is this risky". Threat alone said commanders
 	// die where the map reads ZERO, because the killer is often at range -- the
 	// last plasma shots landing on a commander already running. Health loss is

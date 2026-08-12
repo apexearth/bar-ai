@@ -1,61 +1,63 @@
 namespace Brain {
 
 //------------------------------------------------------------------------------
-// OUR OWN STANDING QUEUE, INSTEAD OF ONE CRecruitTask PER UNIT.
+// QUOTA MODE: A FACTORY IS TOLD HOW MANY, NOT WHAT NEXT.
 //
-// apexearth: "Can we try *not* using the original CircuitAI method to make units
-// and instead use our method?" and "I want to watch a game with it all working
-// through brain, and not the old pathway."
+// apexearth: "'Quota Mode' -- where you simply set a desired target quantity and
+// the factory will make sure we build up to that quantity", and on how the
+// target is reached: "Calculate how much total army you want, then fill up the
+// quota to the ratio of those units that you want. (round up). Remember each
+// factory has it's own unique quota."
 //
-// A factory driven from here is given a queue the way a player gives one: a list
-// of build orders laid down in one go, with repeat on, and then left alone. The
-// composition it expresses is the same mix NextForMix walks toward one unit at a
-// time -- what changes is that the line never waits to be handed its next order.
+// So each driven line holds a target COUNT per unit type, and every tick we
+// order only the shortfall -- quota minus what we hold minus what is already on
+// its way. A quota that is met orders nothing, which is what bounds production
+// without anything having a cap: the target itself is economic.
 //
-// THE TWO SCHEMES CANNOT SHARE A FACTORY. CRecruitTask::Finish() calls Cancel(),
-// which CmdRemoves every build order still queued on the factory, so under the
-// task scheme the first unit to finish wipes the rest of a standing queue. That
-// is a mechanism, not a tuning problem: a factory is either ours or CircuitAI's.
-// DrivenFactory() is what Factory::AiMakeTask checks to keep the old pathway off
-// a line we have taken, and a driven line is held on a Wait task so the factory
-// manager considers it busy and never assigns it a recruit.
+// REPEAT IS OFF, AND THAT IS THE WHOLE POINT. The first version of this file
+// laid a composition down and set CmdRepeat(true). apexearth: "With repeat being
+// on the amount you've queued will never go down. So you just have factory #s
+// that will perpetually keep going higher." Measured in that run: 129 orders
+// issued against 253 combat units registered on one line -- production had come
+// loose from the plan. Worse, a floor inside the loop can never leave it: the
+// constructor was one order in ten, and the re-lay test needed a third of the
+// composition to move, so Builder::ConsWantedFor -- the economy curve that is
+// supposed to bound constructors -- could not bind at all.
 //
-// See docs/19-factory-through-brain.md.
+// Orders are issued ONE AT A TIME AND INTERLEAVED, round-robin over the types
+// that are short, so the line builds the ratio rather than a run of one type.
+// apexearth: "If you add 5 then instead of spreading out our build we'll build 5
+// of one type and then 5 of the next, etc... that is not good." The count
+// argument of CmdBuildUnit is therefore always 1.
+//
+// THE TWO SCHEMES STILL CANNOT SHARE A FACTORY. CRecruitTask::Finish() calls
+// Cancel(), which CmdRemoves every build order still queued, so one recruit task
+// on a driven line wipes the shortfall we just ordered. A driven line is held on
+// a Wait task and answered by nothing else. See docs/19-factory-through-brain.md.
 //------------------------------------------------------------------------------
 
-// How many orders one lay-down puts on the line. This is RATIO GRANULARITY, not
-// a production cap -- repeat is on, so the line loops the queue for as long as
-// it stands. A queue of n can express a share no finer than 1/n.
-const float FQ_DEPTH_DEFAULT = 8.f;
-
 // The Wait task's timeout, in frames. When it expires the factory goes idle and
-// AiMakeTask is called for it again, which is our re-entry point; the queue on
-// the line is untouched by any of that.
+// AiMakeTask is called for it again, which is our re-entry point; the orders on
+// the line are untouched by any of that.
 const int FQ_WAIT = 30 * SECOND;
 
-// Never re-lay more often than this. A re-lay REPLACES the factory's queue, and
-// whatever it was part-way through building is inside that queue.
-const int FQ_RELAY_MIN = 20 * SECOND;
+// HOW MANY OF OUR ORDERS MAY BE ON A LINE AT ONCE. Not a bound on production --
+// the quota is that -- but on how much of the shortfall is committed to the
+// factory in advance, so the mix can still answer a change in the enemy's army
+// instead of it being queued behind seventy raiders. Two is what BAR's own quota
+// widget effectively holds: the unit being built, and the next one.
+const float FQ_AHEAD_DEFAULT = 2.f;
 
-// How much of the queue must want to be something else before it is worth
-// replacing. Measured 2026-08-12, first run of this path: comparing the plans
-// as ORDERED LISTS re-laid every line every 20s without exception -- one slot
-// moving between roles rewrites the list -- and a line that consumed ~1.5 units
-// per 20s never reached the tail of its queue. That is the old one-at-a-time
-// behaviour wearing a queue, so the comparison is by composition and needs a
-// real shift, not a reordering.
-const float FQ_CHURN_DEFAULT = 0.34f;
+// How close a finished unit must be to a driven factory to be counted as having
+// come off it. Units appear on the factory's build pad.
+const float FQ_CLAIM_RANGE = 400.f;
 
 array<Id> gFQId;                 // factories we drive, by id
 array<CCircuitUnit@> gFQFac;     // ...and their handles, parallel to gFQId
-array<string> gFQSig;            // the composition each was last laid with
-array<int> gFQFrame;             // when that lay-down happened
-// The bucket counts of each line's laid queue, gFQStride wide per line: slot 0
-// is the constructor floor, slot 1 the scout floor, then one per mix role.
-array<int> gFQBucket;
-uint gFQStride = 0;
-int gFQLays = 0;                 // lay-downs performed
-int gFQOrders = 0;               // build orders issued across all of them
+
+int gFQOrders = 0;               // build orders issued, all lines
+int gFQMilReq = 0;               // military task requests, see NoteMilRequest
+int gNextFQLog = 0;
 
 bool FacQueueOn()
 {
@@ -87,226 +89,286 @@ void FQForget(Id id)
 		return;
 	gFQId.removeAt(i);
 	gFQFac.removeAt(i);
-	gFQSig.removeAt(i);
-	gFQFrame.removeAt(i);
-	for (uint b = 0; b < gFQStride; ++b)
-		gFQBucket.removeAt(uint(i) * gFQStride);
 }
 
-// THE COMPOSITION, AS A LIST OF ORDERS.
+// HOW MUCH ARMY THIS LINE IS FOR.
 //
-// The same walk NextForMix does -- whichever role is furthest below its target
-// share -- except the pick is repeated against a running total that includes
-// what this queue has already asked for. That is what turns one decision into a
-// queue that states a ratio rather than n copies of the same unit.
-array<CCircuitDef@> PlanForQueue(CCircuitUnit@ fac, array<int>@ buckets)
+// Not a number invented here: brain/budget.as already states what share of
+// everything we build should be army, and gSpentTotal is what we have actually
+// built. Their product is the army that share has paid for, and each driven line
+// owns an equal part of it. It grows with the economy because everything else
+// does, which is the answer apexearth gives every time a bound is asked about.
+float ArmyMetalPerLine()
 {
-	array<CCircuitDef@> plan;
-	InitMix();
-	gFQStride = gMix.length() + 2;
-	buckets.resize(gFQStride);
-	for (uint b = 0; b < gFQStride; ++b)
-		buckets[b] = 0;
-	if ((fac is null) || (gMix.length() == 0))
-		return plan;
+	const uint lines = (gFQFac.length() > 0) ? gFQFac.length() : 1;
+	return (gSpentTotal * TargetShare(ARMY)) / float(lines);
+}
 
-	// Build power first, for the reason BuildPowerFirst states: combat shares are
-	// always the largest gap, so a constructor inside the ratio is never chosen.
-	// The curve, and what a full bank does to it, are Builder::ConsWantedFor's.
+int RoundUp(float v)
+{
+	if (v <= 0.f)
+		return 0;
+	int q = int(v);
+	if (float(q) < v)
+		++q;
+	return q;
+}
+
+// THE QUOTA FOR ONE LINE: a target count per unit type it can build.
+//
+// The combat roles come from the mix -- the same base/counter blend NextForMix
+// reads -- turned from a share of metal into a count of units by the cost of the
+// unit that fills the role, rounded up. Build power and eyes are quantities
+// already, and keep the curves that own them: Builder::ConsWantedFor is what an
+// economy is worth in constructors, and the scout floor scales with the ground
+// there is to watch.
+void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want)
+{
+	defs.resize(0);
+	want.resize(0);
+	InitMix();
+	if ((fac is null) || (gMix.length() == 0))
+		return;
+
 	CCircuitDef@ con = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
 	if ((con !is null) && con.IsAvailable(ai.frame)) {
 		int cap = Builder::ConsWantedFor(con);
 		if (aiEconomyMgr.isMetalFull)
 			cap = int(float(cap) * ai.GetTunable("apex_con_full_mult", 1.5f)) + 1;
-		if (con.count < cap) {
-			plan.insertLast(con);
-			buckets[0] = 1;
-		}
+		defs.insertLast(con);
+		want.insertLast(cap);
 	}
 
-	// Eyes are a floor, not a share -- see ScoutFloor for why a share cannot
-	// express a 21-metal unit.
 	if (ai.GetTunable("apex_mix_scout", 1.f) > 0.f) {
 		CCircuitDef@ scout = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::SCOUT);
 		if ((scout !is null) && scout.IsAvailable(ai.frame)) {
 			const float per = ai.GetTunable("apex_mix_scout_per_mex",
 					Targets::At(Targets::SCOUT_PER_MEX));
-			int want = 1;
+			int n = 1;
 			if (per >= 1.f) {
 				CCircuitDef@ mex = SideDef3("armmex", "cormex", "legmex");
 				if (mex !is null)
-					want = 1 + int(float(mex.count) / per);
+					n = 1 + int(float(mex.count) / per);
 			}
-			if (scout.count < want) {
-				plan.insertLast(scout);
-				buckets[1] = 1;
-			}
+			defs.insertLast(scout);
+			want.insertLast(n);
 		}
 	}
-
-	float total = 0.f;
-	array<float> held(gMix.length(), -1.f);
-	for (uint i = 0; i < gMix.length(); ++i) {
-		held[i] = HeldOfRole(fac, gMix[i].role);
-		if (held[i] > 0.f)
-			total += held[i];
-	}
-	if (total < 1.f)
-		total = 1.f;
 
 	float weight = 0.f;
 	array<float> counter = CounterShares(fac, weight);
 	array<float> base = BaseShares();
 
-	const int depth = int(ai.GetTunable("apex_fac_queue_depth", FQ_DEPTH_DEFAULT));
-	for (int n = 0; n < depth; ++n) {
-		CCircuitDef@ best = null;
-		int bestI = -1;
-		float worstGap = -1000.f;
-		for (uint i = 0; i < gMix.length(); ++i) {
-			if (held[i] < 0.f)
-				continue;
-			const float gap = Target(i, base, counter, weight) - (held[i] / total);
-			if (gap <= worstGap)
-				continue;
-			CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
-			if ((d is null) || !d.IsAvailable(ai.frame))
-				continue;
-			worstGap = gap;
-			bestI = int(i);
-			@best = d;
+	// The shares are stated over every role in the mix; a line that cannot build
+	// half of them would otherwise quietly aim for half an army. Normalising over
+	// what this line CAN build is what makes the quota that line's own.
+	float sum = 0.f;
+	for (uint i = 0; i < gMix.length(); ++i) {
+		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
+		if ((d is null) || !d.IsAvailable(ai.frame))
+			continue;
+		const float s = Target(i, base, counter, weight);
+		if (s > 0.f)
+			sum += s;
+	}
+	if (sum <= 0.f)
+		return;
+
+	const float armyM = ArmyMetalPerLine();
+	for (uint i = 0; i < gMix.length(); ++i) {
+		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
+		if ((d is null) || !d.IsAvailable(ai.frame) || (d.costM <= 0.f))
+			continue;
+		const float s = Target(i, base, counter, weight);
+		if (s <= 0.f)
+			continue;
+		defs.insertLast(d);
+		want.insertLast(RoundUp((s / sum) * armyM / d.costM));
+	}
+}
+
+// FILLING THE QUOTA, THE WAY BAR'S OWN QUOTA MODE DOES IT.
+//
+// apexearth: "You are not using Quota mode. You are just adding a lot of things
+// on the Queue mode."
+//
+// He was right, and the reason was mechanical: every earlier version had to
+// GUESS what was already on the factory, because nothing in the bound surface
+// reads a unit's command queue. Tracking orders by type left phantoms that
+// silenced the line; crediting any nearby unit over-credited and kept appending.
+// Both are the same mistake in different clothes.
+//
+// BAR's own widget (luaui/Widgets/unit_factory_quota.lua) does not guess. It
+// reads the queue with Spring.GetFactoryCommands, and every 15 frames it adds
+// ONE unit -- whichever type has the lowest count/quota ratio -- and only while
+// its own previous order is no longer at the head. The queue never grows.
+//
+// CCircuitUnit::CountQueued is that same read, bound for this. So this is the
+// widget's loop: one order at a time, neediest ratio first, and nothing added
+// while the line still has our orders on it.
+//
+// Nothing here replaces the factory's queue. A replace would take the unit
+// under construction with it, and the widget goes out of its way not to do that
+// either -- it refuses to displace a build more than 7.5% done.
+void FillQuota(int line)
+{
+	CCircuitUnit@ fac = gFQFac[line];
+	const int ahead = int(ai.GetTunable("apex_fac_ahead", FQ_AHEAD_DEFAULT));
+	if (fac.CountQueued(null) >= ahead)
+		return;
+
+	array<CCircuitDef@> defs;
+	array<int> want;
+	QuotaFor(fac, defs, want);
+
+	CCircuitDef@ best = null;
+	float worst = 1.0e18f;
+	for (uint i = 0; i < defs.length(); ++i) {
+		if (want[i] <= 0)
+			continue;
+		// Held plus already ordered: the widget counts the units a factory has
+		// alive, and reading the queue is what stops the same shortfall being
+		// ordered again on the next tick.
+		const int have = defs[i].count + fac.CountQueued(defs[i]);
+		if (have >= want[i])
+			continue;
+		const float ratio = float(have) / float(want[i]);
+		if (ratio < worst) {
+			worst = ratio;
+			@best = defs[i];
 		}
-		if (best is null)
-			break;
-		plan.insertLast(best);
-		++buckets[2 + bestI];
-		held[bestI] += best.costM;
-		total += best.costM;
 	}
-	return plan;
-}
+	if (best is null)
+		return;      // every quota met: the line stops, which is the point
 
-// How much of the composition has moved, as a fraction: 0 when the two queues
-// ask for the same things, 1 when they share nothing.
-float BucketChurn(array<int>@ have, array<int>@ want)
-{
-	int diff = 0;
-	int sum = 0;
-	for (uint b = 0; b < gFQStride; ++b) {
-		int d = have[b] - want[b];
-		diff += (d < 0) ? -d : d;
-		sum += have[b] + want[b];
+	fac.CmdBuildUnit(best, 1, false);
+	++gFQOrders;
+	if (gFQOrders <= 5 || (gFQOrders % 25 == 0)) {
+		AiLog(Factory::T() + "apex: facqueue " + fac.circuitDef.GetName() + " #"
+			+ fac.id + " +1 " + best.GetName() + " (have " + best.count
+			+ ", quota-ratio " + formatFloat(worst, "", 0, 2)
+			+ ", queued " + fac.CountQueued(null) + ")");
 	}
-	if (sum <= 0)
-		return 0.f;
-	return float(diff) / float(sum);
 }
 
-array<int> BucketsOfLine(uint line)
+// A RECRUIT TASK ALREADY ASSIGNED TO THIS FACTORY WILL WIPE OUR QUEUE.
+//
+// CRecruitTask::Finish() calls Cancel(), which CmdRemoves every build order left
+// on the factory -- it does not know, or care, which of them were its own. A line
+// we take mid-game has such tasks on it already, from the opener and from
+// whatever the mix enqueued before the takeover, and each one that completes
+// silences the line until the stuck detector notices 90 seconds later. Measured
+// 2026-08-12: a taken vehicle plant produced 5 units in 6 minutes, and the units
+// that DID appear were ones we had never ordered.
+//
+// Factory::gQTask is the pending recruit list, mirrored from the task hooks
+// because CFactoryManager::GetTasks is not bound. Aborting is safe here and only
+// here: it happens once, before our first order goes down.
+void AbortRecruitsOn(CCircuitUnit@ fac)
 {
-	array<int> b(gFQStride, 0);
-	for (uint i = 0; i < gFQStride; ++i)
-		b[i] = gFQBucket[line * gFQStride + i];
-	return b;
+	array<IUnitTask@> doomed;
+	for (uint i = 0; i < Factory::gQTask.length(); ++i) {
+		IUnitTask@ t = Factory::gQTask[i];
+		if (t is null)
+			continue;
+		array<CCircuitUnit@>@ on = t.GetUnits();
+		// An UNSTARTED recruit task -- no factory has taken it -- is the backlog
+		// that made CFactoryManager want more factories. Nothing can ever start
+		// it once we drive the lines, because a driven line refuses recruits, so
+		// it would sit in the pending list for the rest of the game. A factory we
+		// do NOT drive can create its own again on its next ask.
+		if ((on is null) || (on.length() == 0)) {
+			doomed.insertLast(t);
+			continue;
+		}
+		for (uint u = 0; u < on.length(); ++u) {
+			if (on[u].id == fac.id) {
+				doomed.insertLast(t);
+				break;
+			}
+		}
+	}
+	// Abort() runs AiTaskRemoved, which mutates gQTask -- collect first, then act.
+	for (uint i = 0; i < doomed.length(); ++i)
+		doomed[i].Abort();
+	if (doomed.length() > 0) {
+		AiLog(Factory::T() + "apex: facqueue aborted " + doomed.length()
+			+ " recruit task(s) still holding " + fac.circuitDef.GetName()
+			+ " #" + fac.id);
+	}
 }
 
-void StoreBuckets(uint line, array<int>@ buckets)
-{
-	while (gFQBucket.length() < (line + 1) * gFQStride)
-		gFQBucket.insertLast(0);
-	for (uint i = 0; i < gFQStride; ++i)
-		gFQBucket[line * gFQStride + i] = buckets[i];
-}
-
-string PlanSig(array<CCircuitDef@>& in plan)
-{
-	string s;
-	for (uint i = 0; i < plan.length(); ++i)
-		s += plan[i].GetName() + ",";
-	return s;
-}
-
-// Lay the whole queue down in one go. The first order carries no options, which
-// REPLACES whatever the factory had; the rest append with SHIFT. Repeat then
-// makes the line loop it instead of idling at the end.
-void LayQueue(CCircuitUnit@ fac, array<CCircuitDef@>& in plan)
-{
-	for (uint i = 0; i < plan.length(); ++i)
-		fac.CmdBuildUnit(plan[i], 1, i == 0);
-	fac.CmdRepeat(true);
-	++gFQLays;
-	gFQOrders += int(plan.length());
-	AiLog(Factory::T() + "apex: facqueue lay #" + gFQLays + " on "
-		+ fac.circuitDef.GetName() + " #" + fac.id
-		+ " orders=" + plan.length() + " [" + PlanSig(plan) + "]");
-}
-
-// Take a line, lay its first queue, and hold it with a Wait so the factory
-// manager never hands it a recruit task. Returns null when this unit is not
-// something we can drive -- a nano turret has no role defs, so it plans nothing.
+// Take a line and hold it. The first order replaces whatever is on the factory,
+// which clears anything a recruit task left there; repeat is turned off because
+// a looping queue is production with no target at all.
 IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 {
 	if (!FacQueueOn() || (fac is null))
 		return null;
 
-	int i = FQIndex(fac.id);
-	if (i < 0) {
-		array<int> buckets;
-		array<CCircuitDef@> plan = PlanForQueue(fac, buckets);
-		if (plan.length() == 0)
-			return null;
+	int line = FQIndex(fac.id);
+	if (line < 0) {
+		array<CCircuitDef@> defs;
+		array<int> want;
+		QuotaFor(fac, defs, want);
+		if (defs.length() == 0)
+			return null;      // not a line we can drive: a nano turret has no roles
 		gFQId.insertLast(fac.id);
 		gFQFac.insertLast(fac);
-		gFQSig.insertLast(PlanSig(plan));
-		gFQFrame.insertLast(ai.frame);
-		StoreBuckets(gFQId.length() - 1, buckets);
+		line = int(gFQId.length()) - 1;
+		AbortRecruitsOn(fac);
+		fac.CmdRepeat(false);
 		AiLog(Factory::T() + "apex: facqueue takes " + fac.circuitDef.GetName()
 			+ " #" + fac.id + " (CRecruitTask off for this line)");
-		LayQueue(fac, plan);
+		FillQuota(line);
 	}
 	return aiFactoryMgr.Enqueue(TaskS::Wait(false, FQ_WAIT));
 }
 
-// Re-lay a driven line when the composition it should be building has MATERIALLY
-// changed -- a different list of orders, not a different tick. Relaying every
-// tick is the blind-append bug in a new costume, and it also throws away
-// whatever the factory is part-way through building.
+// Recruit orders nobody can ever start, swept up as they appear.
+//
+// AbortRecruitsOn clears the backlog when a line is TAKEN, which is not enough:
+// Factory::AiUnitAdded enqueues an opener for every new factory, and once every
+// line is driven those orders can never be assigned to anything. They then sit
+// in the pending list forever, and a pending list that never drains is one of
+// the things CFactoryManager answers by building another factory -- the seven
+// bot labs above. Only while we drive every factory we own; below that, a line
+// we do not drive can still take them.
+int gNextSweep = 0;
+
+void SweepDeadRecruits()
+{
+	if (ai.frame < gNextSweep)
+		return;
+	gNextSweep = ai.frame + 5 * SECOND;
+	if ((gFQFac.length() == 0)
+		|| (int(gFQFac.length()) < aiFactoryMgr.GetFactoryCount()))
+		return;
+
+	array<IUnitTask@> doomed;
+	for (uint i = 0; i < Factory::gQTask.length(); ++i) {
+		IUnitTask@ t = Factory::gQTask[i];
+		if (t is null)
+			continue;
+		array<CCircuitUnit@>@ on = t.GetUnits();
+		if ((on is null) || (on.length() == 0))
+			doomed.insertLast(t);
+	}
+	for (uint i = 0; i < doomed.length(); ++i)
+		doomed[i].Abort();
+	if (doomed.length() > 0) {
+		AiLog(Factory::T() + "apex: facqueue swept " + doomed.length()
+			+ " recruit order(s) no line can start");
+	}
+}
+
 void UpdateFacQueues()
 {
 	if (!FacQueueOn())
 		return;
-	for (uint i = 0; i < gFQFac.length(); ++i) {
-		if (ai.frame - gFQFrame[i] < FQ_RELAY_MIN)
-			continue;
-		CCircuitUnit@ fac = gFQFac[i];
-		array<int> buckets;
-		array<CCircuitDef@> plan = PlanForQueue(fac, buckets);
-		if (plan.length() == 0)
-			continue;
-		array<int> have = BucketsOfLine(i);
-		if (BucketChurn(have, buckets)
-				< ai.GetTunable("apex_fac_queue_churn", FQ_CHURN_DEFAULT))
-			continue;
-		gFQSig[i] = PlanSig(plan);
-		gFQFrame[i] = ai.frame;
-		StoreBuckets(i, buckets);
-		LayQueue(fac, plan);
-	}
-}
-
-// WHAT CAME OUT OF THE ORDERS WE ISSUED.
-//
-// The count is the thing to read first: apexearth reports that in BAR shift adds
-// five units at a time and ctrl twenty, and if that multiplier is applied
-// engine-side rather than by the UI then every order we append is five units.
-// Orders issued against units finished is the measurement that settles it.
-int gFQBuilt = 0;
-int gFQMilReq = 0;
-int gNextFQLog = 0;
-
-void NoteFacQueueUnit()
-{
-	++gFQBuilt;
+	for (uint i = 0; i < gFQFac.length(); ++i)
+		FillQuota(int(i));
+	SweepDeadRecruits();
 }
 
 void NoteMilRequest()
@@ -322,8 +384,9 @@ void LogFacQueues()
 		return;
 	gNextFQLog = ai.frame + 30 * SECOND;
 	AiLog(Factory::T() + "apex: facqueue lines=" + gFQFac.length()
-		+ " lays=" + gFQLays + " orders=" + gFQOrders
-		+ " built=" + gFQBuilt + " milreq=" + gFQMilReq);
+		+ " orders=" + gFQOrders
+		+ " armyM/line=" + formatFloat(ArmyMetalPerLine(), "", 0, 0)
+		+ " milreq=" + gFQMilReq);
 }
 
 }  // namespace Brain
