@@ -1438,9 +1438,25 @@
 			"buildpeed": 6.0,
 			"limit": 3
 		},
+		// A DECOY IS NOT A CONSTRUCTOR, AND WITHOUT A LIMIT IT BECOMES ONE.
+		//
+		// apexearth, watching: "we make too many decoy commanders, we have a funny
+		// quantity of these guys and they're really not very useful." Measured in
+		// that game: 12,000 metal of cordecom on one player, peaking at 15 alive.
+		//
+		// Mechanism: corack is role "builderT2", so cordecom is the ONLY unit in
+		// coralab's list with the plain "builder" role -- which makes it what
+		// GetRoleDef(coralab, BUILDER) returns. Brain::QuotaFor's constructor floor
+		// asks for exactly that, sizes it with Builder::ConsWantedFor, and duly
+		// ordered thirteen decoys. The quota log caught it: "cordecom=15/14".
+		//
+		// stock BARb ships "limit": 2 here and this config had dropped it. Restored
+		// rather than re-invented. "buildspeed" was also a typo for "build_speed"
+		// and was silently doing nothing.
 		"cordecom": {
 			"role": ["builder"],
-			"buildspeed": 6.0
+			"limit": 2,
+			"build_speed": 6.0
 		},
 		"corroach": {
 			"role": ["scout"],

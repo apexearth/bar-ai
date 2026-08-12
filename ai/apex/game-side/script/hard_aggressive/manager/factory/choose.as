@@ -21,11 +21,50 @@ namespace Factory {
 // still says one.
 int gNextPlantCapLog = 0;
 
+// THE CAP MUST NOT COUNT RECLAIM. apexearth: "when we reclaim metal our income
+// will suddenly go much higher than normal. Make sure our cap logic doesn't
+// include reclaim."
+//
+// aiEconomyMgr.metal.income is the team's whole metal rate, reclaim included,
+// and nothing in the bound surface separates the two -- SResourceInfo carries
+// only current/storage/pull/income. So this filters by SHAPE instead: a reclaim
+// burst is a spike, a real economy is a level that is held. The MEDIAN of the
+// last minute cannot be moved by a burst shorter than half the window, while it
+// tracks a genuine change within about thirty seconds.
+//
+// It matters because a plant, once built, is permanent: a cap read from a
+// momentary peak ratchets, and only the highest sample the cap ever saw ends up
+// mattering. Measured live 2026-08-12: team 3 held NINE T1 bot labs at a steady
+// 66 metal/s where the curve allows three.
+const int STEADY_SAMPLES = 60;      // one per AiUpdate, so about a minute
+array<float> gIncomeRing;
+uint gIncomeAt = 0;
+
+void SampleIncome()
+{
+	if (gIncomeRing.length() < uint(STEADY_SAMPLES)) {
+		gIncomeRing.insertLast(aiEconomyMgr.metal.income);
+		return;
+	}
+	gIncomeRing[gIncomeAt] = aiEconomyMgr.metal.income;
+	gIncomeAt = (gIncomeAt + 1) % uint(STEADY_SAMPLES);
+}
+
+float SteadyIncome()
+{
+	const uint n = gIncomeRing.length();
+	if (n == 0)
+		return aiEconomyMgr.metal.income;
+	array<float> sorted = gIncomeRing;
+	sorted.sortAsc();
+	return sorted[n / 2];
+}
+
 int PlantsWanted(const CCircuitDef@ fac)
 {
 	if (fac is null)
 		return 1;
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = SteadyIncome();
 	if (inc < 2.f)
 		return 1;
 	int want;
@@ -41,12 +80,31 @@ int PlantsWanted(const CCircuitDef@ fac)
 }
 
 // The plant curve is applied ONCE, here, rather than at each of the dozen
-// returns inside ChooseFactory. The opening is exempt: isStart is the first
-// factory of the game and there is nothing to count yet.
+// returns inside ChooseFactory. Only the opening is exempt -- see below for why
+// that is not the same thing as isStart.
 CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isReset)
 {
 	CCircuitDef@ want = ChooseFactory(pos, isStart, isReset);
-	if (isStart || (want is null) || !ApexActive())
+	// isStart IS NOT "the first factory of the game", and exempting it was a hole
+	// the size of the whole cap. CFactoryManager::UpdateIdle
+	// (module/FactoryManager.cpp:1360) calls
+	// `GetFactoryToBuild(-RgtVector, true, true)` from the recovery path that runs
+	// when no builder for our factory type is available, and enqueues the result
+	// at Priority::NOW. That path fires again and again -- a T1 lab's builder goes
+	// unavailable the moment its owner has any T2 factory -- and every one of
+	// those calls arrived here with isStart true and skipped the curve.
+	//
+	// Measured 2026-08-12, watched 4v4: team 3 reached NINE T1 bot labs at a true
+	// 66 metal/s, where PlantsWanted allows three, while the cap logged exactly
+	// one refusal in the whole game and that was for a T2 lab. apexearth,
+	// watching: "Purple in this game has 9 T1 bot labs at 17m in... at 100 metal
+	// per second our limit on T1 labs would be something like 5."
+	//
+	// No exemption: PlantsWanted never returns less than 1, and CCircuitDef::count
+	// counts the NANOFRAME, so a rebuild from nothing passes on have=0 while the
+	// second request sees have=1 and is refused. Exempting on a factory COUNT
+	// instead is what let a lost base rebuild three labs in a row.
+	if ((want is null) || !ApexActive())
 		return want;
 	const int have = want.count;
 	const int allowed = PlantsWanted(want);
@@ -54,7 +112,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 		if (ai.frame >= gNextPlantCapLog) {
 			gNextPlantCapLog = ai.frame + 60 * SECOND;
 			AiLog(T() + "apex: " + want.GetName() + " held " + have + " >= "
-				+ allowed + " at " + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+				+ allowed + " at " + formatFloat(SteadyIncome(), "", 0, 0)
 				+ " m/s -- no more of this type yet");
 		}
 		return null;

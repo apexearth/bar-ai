@@ -56,8 +56,29 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 // than as decimals that happen to sum to one.
 //                            8     20     50    100    300
 //------------------------------------------------------------------------------
+// LAND DEFENCE AND AIR DEFENCE ARE SEPARATE ROWS, AND THEY MUST BE.
+//
+// apexearth, 2026-08-12: "dampening defense at 10% is what I said to do for Air
+// defenses. I do not mean we should do that for land defenses." The old single
+// SPEND_DEFENCE row carried the number he gave for ANTI-AIR and applied it to
+// every tower, and AirCoverWant and FrontDefenceWant both proposed under the
+// same "fence" kind, so they competed for one allowance.
+//
+// SPEND_AIRDEF keeps the row he specified, unchanged, and now means only what he
+// meant by it.
+//
+// SPEND_DEFENCE is a MEASURED default, not a chosen one. Static defence spend as
+// a share of metal built, 4v4 Comet Catcher vs BARb:stable:hard, 22-24 minutes,
+// two runs (matches/20260812-081605-*, -083510-*): stock 10.8-30.5% while
+// trading 1.94 in metal, us 2.4-13.3% while trading 0.31. The row below sits at
+// ~21% of the split early and tapers as the army share climbs, which puts us in
+// stock's measured band instead of a fifth of it. It is a starting point to be
+// A/B'd, and every entry is tunable (apex_share_defence, apex_share_airdef).
+//                            8     20     50    100    300
 array<float> SPEND_ARMY       = {  3.f,   4.f,   5.f,   6.f,   10.f};
-array<float> SPEND_DEFENCE    = {  1.f,  2.f,  1.5f,  1.5f,  0.5f};
+// ~26% of the split early: the upper half of stock's measured 15-33% band.
+array<float> SPEND_DEFENCE    = {3.5f,   4.f,   3.f,  2.5f,  1.2f};
+array<float> SPEND_AIRDEF     = {  1.f,   2.f,  1.5f,  1.5f,  0.5f};
 array<float> SPEND_ECONOMY    = {3.5f,  2.7f,   2.f,  1.5f,   1.f};
 array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
 

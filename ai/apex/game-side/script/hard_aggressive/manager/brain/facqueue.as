@@ -52,12 +52,77 @@ const float FQ_AHEAD_DEFAULT = 2.f;
 // come off it. Units appear on the factory's build pad.
 const float FQ_CLAIM_RANGE = 400.f;
 
+// AN ORDER WE SENT THAT NEVER APPEARS IS PRESUMED LOST AFTER THIS.
+//
+// The reconciliation below waits for the queue read to confirm what we sent, so
+// an order the engine REFUSED -- asking a line for a def it cannot build is a
+// silent no-op -- would otherwise wedge the line for the rest of the game. This
+// is the escape hatch, and it is deliberately much longer than the worst
+// observed application lag (~45 sim-seconds at the benchmark's speed cap).
+const int FQ_LOST = 90 * SECOND;
+
 array<Id> gFQId;                 // factories we drive, by id
 array<CCircuitUnit@> gFQFac;     // ...and their handles, parallel to gFQId
+array<int> gFQSeen;              // ...and the queue depth we last observed
+array<int> gFQAt;                // ...and the frame we last sent one an order
+
+// ORDERS SENT BUT NOT YET VISIBLE, as a flat FIFO of (line, def) pairs.
+//
+// Flat rather than an array-of-arrays because the def is needed too: `have` for
+// the ratio is `count + CountQueued(def)`, and BOTH of those lag, so a def we
+// have just asked for still reads as zero and wins the ratio again next tick.
+// That is how one bot lab committed fifty constructors in its first 45 seconds.
+array<int> gFQPendLine;
+array<CCircuitDef@> gFQPendDef;
 
 int gFQOrders = 0;               // build orders issued, all lines
 int gFQMilReq = 0;               // military task requests, see NoteMilRequest
+int gFQLost = 0;                 // orders presumed lost, see FQ_LOST
 int gNextFQLog = 0;
+
+void PendAdd(int line, CCircuitDef@ d)
+{
+	gFQPendLine.insertLast(line);
+	gFQPendDef.insertLast(d);
+}
+
+int PendCount(int line, CCircuitDef@ d)
+{
+	int n = 0;
+	for (uint i = 0; i < gFQPendLine.length(); ++i) {
+		if ((gFQPendLine[i] == line) && ((d is null) || (gFQPendDef[i] is d)))
+			++n;
+	}
+	return n;
+}
+
+// Drop the OLDEST n entries for this line: the queue is FIFO, so the orders that
+// have become visible are the ones we sent first.
+void PendDrop(int line, int n)
+{
+	for (uint i = 0; (i < gFQPendLine.length()) && (n > 0); ) {
+		if (gFQPendLine[i] == line) {
+			gFQPendLine.removeAt(i);
+			gFQPendDef.removeAt(i);
+			--n;
+			continue;
+		}
+		++i;
+	}
+}
+
+// Lines shift down when one is forgotten, so every stored index must shift too.
+void PendReindex(int gone)
+{
+	for (int i = int(gFQPendLine.length()) - 1; i >= 0; --i) {
+		if (gFQPendLine[i] == gone) {
+			gFQPendLine.removeAt(i);
+			gFQPendDef.removeAt(i);
+		} else if (gFQPendLine[i] > gone) {
+			gFQPendLine[i] -= 1;
+		}
+	}
+}
 
 bool FacQueueOn()
 {
@@ -89,6 +154,9 @@ void FQForget(Id id)
 		return;
 	gFQId.removeAt(i);
 	gFQFac.removeAt(i);
+	gFQSeen.removeAt(i);
+	gFQAt.removeAt(i);
+	PendReindex(i);
 }
 
 // HOW MANY UNITS THIS LINE IS FOR: the unit limit, less what we already hold.
@@ -102,26 +170,36 @@ void FQForget(Id id)
 // a stopped line is how apex fielded army 0/2700/150/0 against stock's
 // 5455/6435/5595/6865 in a 22-minute 4v4.
 //
-// Slots do not lag. They also make the absolute number stop mattering -- split
-// 1900 ways by ratio and no combat target is ever reached -- which is the point:
-// the quota becomes a SHAPE, "whichever type is furthest below its share goes
-// next", and the line only falls quiet when the map is full or the tier moved.
-// The engine's own limit is the ceiling, so nothing here invents one.
+// THE LIMIT IS PER PLAYER, AND IT IS NOT GetUnitMax.
+//
+// GetUnitMax is unitHandler.MaxUnits() -- the whole map's cap,
+// min(maxUnitsPerTeam * activeTeams, 32000). Sized on that, a bot lab's raider
+// target came out at 20,296 and every combat ratio printed 0.00, so the
+// composition was decided by the order of a C++ array rather than by the mix.
+//
+// GetUnitLimit is teamHandler.Team(ours)->GetMaxUnits(), which is BAR's
+// "Max Units Per Player" modoption: default 2000, min 500, max 32000, and the
+// host can change it. That is the budget this divides up.
+//
+// The quota is TEAM-WIDE, not per line, because the count it is compared against
+// is team-wide: CCircuitDef::count is every unit of that def we own, with no way
+// to ask which factory made it (the bound surface has no per-factory census, and
+// BAR's own quota widget only manages it by watching UnitCreated in unsynced Lua,
+// which an AI cannot do). Dividing the target by the number of lines while
+// comparing against an undivided count made the team stop at 1/lines of what was
+// intended. Each line still gets its own quota in SHAPE -- QuotaFor normalises
+// over the roles that line can actually build, so a bot lab and a vehicle plant
+// want different things -- and they fill toward one shared target instead of
+// double-counting it.
 int SlotsForArmy()
 {
-	const int limit = ai.GetUnitMax();
+	const int limit = ai.GetUnitLimit();
 	if (limit <= 0)
 		return 0;
 	// Buildings are the part of the limit that is not army and never will be.
 	const int used = ai.GetTeamUnitCount(true);
 	const int free = limit - used;
 	return (free > 0) ? free : 0;
-}
-
-int SlotsPerLine()
-{
-	const uint lines = (gFQFac.length() > 0) ? gFQFac.length() : 1;
-	return SlotsForArmy() / int(lines);
 }
 
 // WHAT A TIER IS STILL WORTH ONCE THE NEXT ONE IS ON THE FIELD.
@@ -148,6 +226,50 @@ float TierShare(CCircuitDef@ d)
 		? ai.GetTunable("apex_quota_t1_after_t2", 0.25f) : 1.f;
 }
 
+// How many core T2 fighters count as "protected". Scales with the economy that
+// has to be defended rather than being a fixed number.
+int T2CoreWanted()
+{
+	const float inc = Factory::SteadyIncome();
+	const float per = ai.GetTunable("apex_t2_core_per_income", 6.f);
+	int n = int(inc / per);
+	const int floorN = int(ai.GetTunable("apex_t2_core_min", 4.f));
+	return (n < floorN) ? floorN : n;
+}
+
+// A T2 plant that can already make advanced constructors, and an army that
+// cannot yet hold anything.
+bool T2ArmyShort(CCircuitUnit@ fac)
+{
+	if ((Factory::userData[fac.circuitDef.id].attr & Factory::Attr::T2) == 0)
+		return false;
+	CCircuitDef@ acon = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::BUILDER2);
+	if ((acon is null) || (acon.count <= 0))
+		return false;
+	array<Type> core = {RT::ASSAULT, RT::HEAVY, RT::AH, RT::AHA};
+	int have = 0;
+	for (uint i = 0; i < core.length(); ++i) {
+		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, core[i]);
+		if (d !is null)
+			have += d.count;
+	}
+	return have < T2CoreWanted();
+}
+
+// Cortex's "scout" IS the resurrection bot -- behaviour.json gives cornecro the
+// scout role because the bot lab has no other -- so asking for a scout early
+// buys a 130-metal rezzer. apexearth: "we don't need those super early on unless
+// there is energy or metal to reclaim that would be useful." Same reclaim test
+// the rez floor uses.
+bool ScoutWorthIt(CCircuitDef@ scout)
+{
+	if (scout is null)
+		return false;
+	if (scout !is Factory::RezBotDef())
+		return true;
+	return Builder::WreckSeenValue() >= Factory::REZ_METAL_PER_BOT;
+}
+
 int RoundUp(float v)
 {
 	if (v <= 0.f)
@@ -166,13 +288,44 @@ int RoundUp(float v)
 // already, and keep the curves that own them: Builder::ConsWantedFor is what an
 // economy is worth in constructors, and the scout floor scales with the ground
 // there is to watch.
-void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want)
+//
+// `isFloor` marks the two entries that are QUANTITIES rather than shares.
+// Everything here used to be one flat list ranked by have/want, and that quietly
+// handed the composition to array order: a constructor wanting 3 and a raider
+// wanting 1200 both read ratio 0.00 while we held none of either, FillQuota broke
+// the tie with a strict `<`, and the constructor was simply first in the list. So
+// a driven line built constructors and nothing else. Floors are now CHECKED as
+// floors -- below the number, build it -- and the ratio only ever chooses between
+// combat roles, which is the one thing it is meaningful for.
+void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
+		array<bool>@ isFloor)
 {
 	defs.resize(0);
 	want.resize(0);
+	isFloor.resize(0);
 	InitMix();
 	if ((fac is null) || (gMix.length() == 0))
 		return;
+
+	// T2 CONS BUT NO T2 ARMY: army is the only thing this line makes.
+	//
+	// apexearth: "if we have t2 cons but no t2 military then military is our #1
+	// priority. we shouldn't build anything like a decoy, a spybot, a raider, bad
+	// fighting unit, artillery, if we have too few assault, heavy, or bannisher
+	// type T2 military units to protect us."
+	if (T2ArmyShort(fac)) {
+		array<Type> core = {RT::ASSAULT, RT::HEAVY, RT::AH, RT::AHA};
+		for (uint c = 0; c < core.length(); ++c) {
+			CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, core[c]);
+			if ((d is null) || !d.IsAvailable(ai.frame))
+				continue;
+			defs.insertLast(d);
+			want.insertLast(T2CoreWanted());
+			isFloor.insertLast(true);
+		}
+		if (defs.length() > 0)
+			return;      // nothing else off this line until the army exists
+	}
 
 	CCircuitDef@ con = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
 	if ((con !is null) && con.IsAvailable(ai.frame)) {
@@ -181,11 +334,12 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want)
 			cap = int(float(cap) * ai.GetTunable("apex_con_full_mult", 1.5f)) + 1;
 		defs.insertLast(con);
 		want.insertLast(cap);
+		isFloor.insertLast(true);
 	}
 
 	if (ai.GetTunable("apex_mix_scout", 1.f) > 0.f) {
 		CCircuitDef@ scout = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::SCOUT);
-		if ((scout !is null) && scout.IsAvailable(ai.frame)) {
+		if ((scout !is null) && scout.IsAvailable(ai.frame) && ScoutWorthIt(scout)) {
 			const float per = ai.GetTunable("apex_mix_scout_per_mex",
 					Targets::At(Targets::SCOUT_PER_MEX));
 			int n = 1;
@@ -196,6 +350,50 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want)
 			}
 			defs.insertLast(scout);
 			want.insertLast(n);
+			isFloor.insertLast(true);
+		}
+	}
+
+	// FLOORS THE OLD PRODUCTION RULES USED TO HOLD.
+	//
+	// A driven line is answered by Brain::FactoryQueueTask and never reaches the
+	// rules below it in Factory::AiMakeTask, so RezBotFloor, AirConMinimum and
+	// nine others simply stopped running when the Brain took the line. Each of
+	// them is a quota in disguise -- "keep N of this thing" -- so each belongs
+	// here as a floor entry carrying its own gate, not as a rule that can never
+	// fire. Order matters: floors are checked top-down and the first one short
+	// wins, so build power stays ahead of eyes, and eyes ahead of these.
+	//
+	// Rez bots, gated exactly as the rule was: one per REZ_METAL_PER_BOT of wreck
+	// we have actually SEEN, capped at REZ_FLOOR. apexearth: "it isn't really
+	// important until you have stuff to reclaim or to resurrect."
+	if (Factory::HaveT1BotLab()) {
+		CCircuitDef@ lab = Factory::T1BotLab();
+		CCircuitDef@ rez = Factory::RezBotDef();
+		if ((lab !is null) && (rez !is null) && (fac.circuitDef.id == lab.id)
+			&& rez.IsAvailable(ai.frame))
+		{
+			const int byReclaim = int(Builder::WreckSeenValue() / Factory::REZ_METAL_PER_BOT);
+			const int n = (byReclaim < Factory::REZ_FLOOR) ? byReclaim : Factory::REZ_FLOOR;
+			if (n > 0) {
+				defs.insertLast(rez);
+				want.insertLast(n);
+				isFloor.insertLast(true);
+			}
+		}
+	}
+
+	// One air constructor, so the advanced air plant is reachable at all. The T1
+	// air plant's own ratios give constructors ~5%, so a player can hold the air
+	// slot all game and never produce one -- and with no advanced plant there are
+	// no fighters, because isAvailableDef needs (isActive || IsAttrRare()) and a
+	// T1 factory goes inactive the moment its owner has any T2 factory.
+	if (Factory::IsAirFactory(fac.circuitDef)) {
+		CCircuitDef@ acon = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
+		if ((acon !is null) && acon.IsAvailable(ai.frame)) {
+			defs.insertLast(acon);
+			want.insertLast(Factory::AIR_CON_MIN);
+			isFloor.insertLast(true);
 		}
 	}
 
@@ -218,7 +416,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want)
 	if (sum <= 0.f)
 		return;
 
-	const float slots = float(SlotsPerLine());
+	const float slots = float(SlotsForArmy());
 	for (uint i = 0; i < gMix.length(); ++i) {
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
 		if ((d is null) || !d.IsAvailable(ai.frame) || (d.costM <= 0.f))
@@ -228,6 +426,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want)
 			continue;
 		defs.insertLast(d);
 		want.insertLast(RoundUp((s / sum) * slots * TierShare(d)));
+		isFloor.insertLast(false);
 	}
 }
 
@@ -247,9 +446,15 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want)
 // ONE unit -- whichever type has the lowest count/quota ratio -- and only while
 // its own previous order is no longer at the head. The queue never grows.
 //
-// CCircuitUnit::CountQueued is that same read, bound for this. So this is the
-// widget's loop: one order at a time, neediest ratio first, and nothing added
-// while the line still has our orders on it.
+// CCircuitUnit::CountQueued reads the same queue but NOT with the same timing,
+// and the throttle below is unsound because of it. The widget's order is applied
+// before its next read; ours goes out over the network and is applied whenever
+// that message is consumed -- measured ~45 sim-seconds later at benchmark speed,
+// ~1 at --speed 3. For those 45 ticks this reads an empty line and adds another
+// order every tick: 56 orders committed to one bot lab in its first 45 seconds,
+// all constructors, which is ~20 minutes of production. A throttle here has to
+// count what it SENT and use the queue read only to confirm it.
+// See docs/19-factory-through-brain.md, "Bug 1".
 //
 // Nothing here replaces the factory's queue. A replace would take the unit
 // under construction with it, and the widget goes out of its way not to do that
@@ -301,11 +506,16 @@ void OpenerFirst(int line)
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, opener[i].role);
 		if ((d is null) || !d.IsAvailable(ai.frame))
 			continue;
+		// The opener's SCOUT slot is a rez bot on Cortex. See ScoutWorthIt.
+		if ((opener[i].role == RT::SCOUT) && !ScoutWorthIt(d))
+			continue;
 		for (uint j = 0; j < opener[i].count; ++j) {
 			fac.CmdInsertBuild(d, true);
+			PendAdd(line, d);
 			++laid;
 		}
 	}
+	gFQAt[line] = ai.frame;
 	gFQOrders += laid;
 	AiLog(Factory::T() + "apex: facqueue " + fac.circuitDef.GetName() + " #"
 		+ fac.id + " opens with " + laid + " unit(s)");
@@ -323,6 +533,9 @@ void AdvConFirst(int line)
 		return;
 	gFQConDone.insertLast(fac.id);
 	fac.CmdInsertBuild(con, true);
+	PendAdd(line, con);
+	gFQAt[line] = ai.frame;
+	++gFQOrders;
 	AiLog(Factory::T() + "apex: facqueue " + fac.circuitDef.GetName() + " #"
 		+ fac.id + " inserts " + con.GetName() + " at the front");
 }
@@ -331,28 +544,77 @@ void FillQuota(int line)
 {
 	CCircuitUnit@ fac = gFQFac[line];
 	const int ahead = int(ai.GetTunable("apex_fac_ahead", FQ_AHEAD_DEFAULT));
-	if (fac.CountQueued(null) >= ahead)
+	const int depth = fac.CountQueued(null);
+
+	// RECONCILE WHAT WE SENT WITH WHAT THE ENGINE HAS APPLIED.
+	//
+	// An AI order is not applied when it is issued: CAICallback::GiveOrder only
+	// does clientNet->Send(SendAICommand(...)), and the command lands when that
+	// message is consumed -- measured ~45 sim-seconds later at the benchmark's
+	// speed cap, ~1 at --speed 3. Topping up against the raw read therefore issues
+	// one order per tick for the whole lag window: 56 orders onto one bot lab in
+	// its first 45 seconds, all constructors, which is about twenty minutes of
+	// production. So the read is treated as DELAYED CONFIRMATION of what we sent,
+	// never as the whole truth. Growth in the queue since last tick is our own
+	// orders becoming visible.
+	const int grew = depth - gFQSeen[line];
+	if (grew > 0)
+		PendDrop(line, grew);
+	gFQSeen[line] = depth;
+	// An order the engine refused -- asking a line for a def it cannot build is a
+	// silent no-op -- would otherwise wedge this line for the rest of the game.
+	if ((PendCount(line, null) > 0) && (ai.frame - gFQAt[line] > FQ_LOST)) {
+		gFQLost += PendCount(line, null);
+		PendDrop(line, PendCount(line, null));
+	}
+	if (depth + PendCount(line, null) >= ahead)
 		return;
 
 	array<CCircuitDef@> defs;
 	array<int> want;
-	QuotaFor(fac, defs, want);
+	array<bool> isFloor;
+	QuotaFor(fac, defs, want, isFloor);
 
+	// A FLOOR IS CHECKED AS A FLOOR; THE RATIO ONLY CHOOSES BETWEEN COMBAT ROLES.
+	// See QuotaFor: one flat ranking by have/want made array order decide the army.
 	CCircuitDef@ best = null;
 	float worst = 1.0e18f;
+	int bestWant = 0;
 	for (uint i = 0; i < defs.length(); ++i) {
-		if (want[i] <= 0)
+		if ((want[i] <= 0) || !isFloor[i])
 			continue;
-		// Held plus already ordered: the widget counts the units a factory has
-		// alive, and reading the queue is what stops the same shortfall being
-		// ordered again on the next tick.
-		const int have = defs[i].count + fac.CountQueued(defs[i]);
-		if (have >= want[i])
-			continue;
-		const float ratio = float(have) / float(want[i]);
-		if (ratio < worst) {
-			worst = ratio;
+		// Held, plus on the line, plus sent-but-not-yet-visible. All three terms
+		// are needed: the first two both lag, which is how a floor of three
+		// constructors ordered fifty.
+		const int have = defs[i].count + fac.CountQueued(defs[i])
+				+ PendCount(line, defs[i]);
+		if (have < want[i]) {
 			@best = defs[i];
+			worst = float(have) / float(want[i]);
+			break;         // floors are in priority order: build power, then eyes
+		}
+	}
+	if (best is null) {
+		for (uint i = 0; i < defs.length(); ++i) {
+			if ((want[i] <= 0) || isFloor[i])
+				continue;
+			const int have = defs[i].count + fac.CountQueued(defs[i])
+					+ PendCount(line, defs[i]);
+			if (have >= want[i])
+				continue;
+			const float ratio = float(have) / float(want[i]);
+			// Holding none of anything, every ratio is 0 and the tie decided the
+			// composition by array order. Break it on the LARGER target: with an
+			// empty army, build the thing the mix wants most of. That reproduces
+			// the intended ratio from the very first unit instead of from the
+			// point where counts diverge.
+			if ((ratio < worst - 1.0e-6f)
+				|| ((ratio < worst + 1.0e-6f) && (want[i] > bestWant)))
+			{
+				worst = ratio;
+				bestWant = want[i];
+				@best = defs[i];
+			}
 		}
 	}
 	if (best is null)
@@ -366,12 +628,18 @@ void FillQuota(int line)
 	// want". CMD_INSERT carries no multiplier, which is exactly why BAR's own
 	// quota widget uses it rather than a shift-append.
 	fac.CmdInsertBuild(best, false);
+	PendAdd(line, best);
+	gFQAt[line] = ai.frame;
 	++gFQOrders;
 	if (gFQOrders <= 5 || (gFQOrders % 25 == 0)) {
+		string q = "";
+		for (uint i = 0; i < defs.length(); ++i)
+			q += " " + defs[i].GetName() + "=" + defs[i].count + "/" + want[i];
 		AiLog(Factory::T() + "apex: facqueue " + fac.circuitDef.GetName() + " #"
 			+ fac.id + " +1 " + best.GetName() + " (have " + best.count
 			+ ", quota-ratio " + formatFloat(worst, "", 0, 2)
-			+ ", queued " + fac.CountQueued(null) + ")");
+			+ ", depth " + depth + " pend " + PendCount(line, null)
+			+ ") quota:" + q);
 	}
 }
 
@@ -434,11 +702,14 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	if (line < 0) {
 		array<CCircuitDef@> defs;
 		array<int> want;
-		QuotaFor(fac, defs, want);
+		array<bool> isFloor;
+		QuotaFor(fac, defs, want, isFloor);
 		if (defs.length() == 0)
 			return null;      // not a line we can drive: a nano turret has no roles
 		gFQId.insertLast(fac.id);
 		gFQFac.insertLast(fac);
+		gFQSeen.insertLast(0);
+		gFQAt.insertLast(ai.frame);
 		line = int(gFQId.length()) - 1;
 		AbortRecruitsOn(fac);
 		fac.CmdRepeat(false);
@@ -509,10 +780,16 @@ void LogFacQueues()
 	if (ai.frame < gNextFQLog)
 		return;
 	gNextFQLog = ai.frame + 30 * SECOND;
+	string d = "";
+	for (uint i = 0; i < gFQFac.length(); ++i) {
+		d += " #" + gFQFac[i].id + ":" + gFQFac[i].CountQueued(null)
+			+ "+" + PendCount(int(i), null);
+	}
 	AiLog(Factory::T() + "apex: facqueue lines=" + gFQFac.length()
-		+ " orders=" + gFQOrders
-		+ " slots/line=" + SlotsPerLine() + " limit=" + ai.GetUnitMax()
-		+ " milreq=" + gFQMilReq);
+		+ " orders=" + gFQOrders + " lost=" + gFQLost
+		+ " slots=" + SlotsForArmy() + " limit=" + ai.GetUnitLimit()
+		+ " max=" + ai.GetUnitMax() + " held=" + ai.GetTeamUnitCount(false)
+		+ " milreq=" + gFQMilReq + " depth+pend:" + d);
 }
 
 }  // namespace Brain

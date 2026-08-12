@@ -26,7 +26,11 @@ namespace Brain {
 // was actually built.
 //------------------------------------------------------------------------------
 
-enum Cat { ARMY = 0, DEFENCE = 1, ECONOMY = 2, BUILDPOWER = 3, CATS = 4 };
+// AIRDEF IS ITS OWN ROW. apexearth: "dampening defense at 10% is what I said to
+// do for Air defenses. I do not mean we should do that for land defenses." The
+// two shared one category and one want kind, so the number he gave for anti-air
+// was throttling every tower on the map. See targets.as.
+enum Cat { ARMY = 0, DEFENCE = 1, AIRDEF = 2, ECONOMY = 3, BUILDPOWER = 4, CATS = 5 };
 
 array<float> gSpent(CATS, 0.f);
 float gSpentTotal = 0.f;
@@ -54,6 +58,8 @@ float RawTarget(Cat c)
 		return ai.GetTunable("apex_share_army", Targets::At(Targets::SPEND_ARMY));
 	if (c == DEFENCE)
 		return ai.GetTunable("apex_share_defence", Targets::At(Targets::SPEND_DEFENCE));
+	if (c == AIRDEF)
+		return ai.GetTunable("apex_share_airdef", Targets::At(Targets::SPEND_AIRDEF));
 	if (c == ECONOMY)
 		return ai.GetTunable("apex_share_economy", Targets::At(Targets::SPEND_ECONOMY));
 	return ai.GetTunable("apex_share_buildpower", Targets::At(Targets::SPEND_BUILDPOWER));
@@ -69,8 +75,22 @@ float TargetShare(Cat c)
 	return RawTarget(c) / sum;
 }
 
-Cat CatOf(Unit::UseAs usage)
+// An energy maker is ECONOMY whichever manager reports it: corsolar arrives here
+// as UseAs::FENCE and was counted as defence. Decide from the unit, not the
+// attribute. See CHANGES.md 2026-08-12.
+bool IsEnergyBuilding(const CCircuitDef@ d)
 {
+	return (d !is null) && !d.IsMobile() && (aiEconomyMgr.GetEnergyMake(d) > 1.f);
+}
+
+Cat CatOf(const CCircuitDef@ def, Unit::UseAs usage)
+{
+	if (IsEnergyBuilding(def))
+		return ECONOMY;
+	// A static anti-air turret is spent from the air-defence row, not the land
+	// one -- they are the same UseAs to the engine and must not be to us.
+	if ((def !is null) && !def.IsMobile() && def.IsRoleAny(Unit::Role::AA.mask))
+		return AIRDEF;
 	switch (usage) {
 	case Unit::UseAs::COMBAT:
 	case Unit::UseAs::SUPER:
@@ -95,7 +115,7 @@ void NoteSpend(CCircuitUnit@ unit, Unit::UseAs usage)
 	const float m = unit.circuitDef.costM;
 	if (m <= 0.f)
 		return;
-	gSpent[CatOf(usage)] += m;
+	gSpent[CatOf(unit.circuitDef, usage)] += m;
 	gSpentTotal += m;
 }
 
@@ -143,11 +163,18 @@ void BudgetLog()
 		+ "/" + formatFloat(TargetShare(ARMY), "", 0, 2)
 		+ " def=" + formatFloat(ShareOf(DEFENCE), "", 0, 2)
 		+ "/" + formatFloat(TargetShare(DEFENCE), "", 0, 2)
+		+ " aa=" + formatFloat(ShareOf(AIRDEF), "", 0, 2)
+		+ "/" + formatFloat(TargetShare(AIRDEF), "", 0, 2)
 		+ " eco=" + formatFloat(ShareOf(ECONOMY), "", 0, 2)
 		+ "/" + formatFloat(TargetShare(ECONOMY), "", 0, 2)
 		+ " bp=" + formatFloat(ShareOf(BUILDPOWER), "", 0, 2)
 		+ "/" + formatFloat(TargetShare(BUILDPOWER), "", 0, 2)
-		+ " total=" + formatFloat(gSpentTotal, "", 0, 0));
+		+ " total=" + formatFloat(gSpentTotal, "", 0, 0)
+		+ " raw=" + formatFloat(gSpent[ARMY], "", 0, 0)
+		+ "/" + formatFloat(gSpent[DEFENCE], "", 0, 0)
+		+ "/" + formatFloat(gSpent[AIRDEF], "", 0, 0)
+		+ "/" + formatFloat(gSpent[ECONOMY], "", 0, 0)
+		+ "/" + formatFloat(gSpent[BUILDPOWER], "", 0, 0));
 }
 
 }  // namespace Brain
