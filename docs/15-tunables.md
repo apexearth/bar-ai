@@ -115,9 +115,11 @@ site. These were in `dev_tunables.lua` but had no row here.
 |---|---|---|---|
 | `apex_attack_threat_mod` | 1.0 (upstream behaviour) | C++ `AttackTask.cpp` `Update` | what an attack party pays for contested ground in the path query. Raising it makes the flank the shortest path, the way `RaidTask`'s `RAID_ROAM_THREAT_MOD = 8` already does for raid parties |
 | `apex_eco_target` | 1.0 (on) | C++ `AttackTask.cpp` `FindTarget` | 0 drops the preference for economic targets with little army standing beside them |
+| `apex_eco_unseen` | 1.0 (no-op) | C++ `AttackTask.cpp` `FindTarget` | multiplier on the `FREE_ECO_PRIORITY` raid bonus when the target's ground is NOT in current LOS. `localInfl == 0` only means "no army remembered there"; below 1.0 the bonus is discounted for ground we have not actually looked at. `seen=` on the `apex: engage` line reports whether the chosen target was in LOS |
 | `apex_mass_vs_army` | 0 (off) | AngelScript `military/massing.as` `MassWant` | 0 pins the massing quota at the floor. Above 0, the quota scales between `MASS_FLOOR` and `MASS_CAP` on the enemy-to-our army ratio |
 | `apex_mass_floor` | 30 (`MASS_FLOOR`) | AngelScript `military/massing.as` `MassWant` | smallest attack party, as a **power** sum — not a unit count and not metal |
 | `apex_mass_hold_secs` | 120 | AngelScript `military/massing.as` `UpdateMassing` | how long the army may wait for a full mass before committing anyway |
+| `apex_ghost_weight` | 1.0 (no-op) | AngelScript `military/territory.as` `EnemyCostOf` | how much a mobile enemy unit still counts for once it has not been seen inside `CEnemyManager`'s freshness window (60 s). `GetEnemyCost` never forgets a unit once registered, so `EnemyArmyCost`/`EnemyFieldCost` accumulate every raider ever sighted; the fresh part comes from the new `GetEnemyCostFresh` binding and the remainder is weighted by this. At 1.0 the sum is arithmetically identical to the raw one. Statics are never discounted. The `apexfoe: raw= fresh= ghost%=` log line reports the fraction at stake |
 
 `MASS_CAP` is 48 and `MASS_FLOOR` 30, both in `military/roles.as`.
 

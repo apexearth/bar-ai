@@ -756,6 +756,29 @@ void FrontDiag()
 		+ " max=" + formatFloat(rMax / axis, "", 0, 2)
 		+ " safe/r=" + formatFloat(sSum / hn, "", 0, 2)
 		+ " bar=" + int(gRingAllyBar) + "/" + int(gRingFoeBar));
+
+	GhostDiag();
+}
+
+// HOW MUCH OF THE ENEMY ARMY WE ARE COUNTING IS A MEMORY. GetEnemyCost never
+// forgets a unit once registered, so the gap between it and the fresh sum is
+// everything we saw once and have not seen since. Nothing acts on this yet --
+// apex_ghost_weight defaults to 1.0, i.e. count ghosts in full, exactly as
+// before -- but the fraction has to be measurable before it can be tuned.
+void GhostDiag()
+{
+	const float raw = aiEnemyMgr.GetEnemyCost(Unit::Role::ASSAULT.type)
+	                + aiEnemyMgr.GetEnemyCost(Unit::Role::RAIDER.type)
+	                + aiEnemyMgr.GetEnemyCost(Unit::Role::RIOT.type)
+	                + aiEnemyMgr.GetEnemyCost(Unit::Role::SKIRM.type);
+	const float fresh = aiEnemyMgr.GetEnemyCostFresh(Unit::Role::ASSAULT.type)
+	                  + aiEnemyMgr.GetEnemyCostFresh(Unit::Role::RAIDER.type)
+	                  + aiEnemyMgr.GetEnemyCostFresh(Unit::Role::RIOT.type)
+	                  + aiEnemyMgr.GetEnemyCostFresh(Unit::Role::SKIRM.type);
+	AiLog(Factory::T() + "apexfoe: raw=" + int(raw)
+		+ " fresh=" + int(fresh)
+		+ " ghost%=" + int((raw > 1.f) ? (raw - fresh) * 100.f / raw : 0.f)
+		+ " w=" + formatFloat(ai.GetTunable("apex_ghost_weight", 1.f), "", 0, 2));
 }
 
 // Which lane a position falls in, and how far along the axis it sits.
@@ -998,14 +1021,27 @@ bool OnBorder(const AIFloat3& in pos)
 // always and any gate built on it never fires. GetEnemyCost returns
 // enemyInfos[type].cost, a metal sum, which is directly comparable to armyCost
 // (accumulated from GetCostM). Summed over the roles that actually fight.
+// Mobile roles only. A building we saw once is still there; a raider is not.
+// GetEnemyCostFresh counts only what was seen inside the manager's freshness
+// window; the remainder is a ghost, weighted by apex_ghost_weight. At the
+// default 1.0 this is arithmetically identical to the raw sum.
+float EnemyCostOf(int role)
+{
+	const float raw = aiEnemyMgr.GetEnemyCost(role);
+	float fresh = aiEnemyMgr.GetEnemyCostFresh(role);
+	if (fresh > raw)
+		fresh = raw;
+	return fresh + (raw - fresh) * ai.GetTunable("apex_ghost_weight", 1.f);
+}
+
 float EnemyArmyCost()
 {
-	return aiEnemyMgr.GetEnemyCost(Unit::Role::ASSAULT.type)
-	     + aiEnemyMgr.GetEnemyCost(Unit::Role::RAIDER.type)
-	     + aiEnemyMgr.GetEnemyCost(Unit::Role::RIOT.type)
-	     + aiEnemyMgr.GetEnemyCost(Unit::Role::SKIRM.type)
-	     + aiEnemyMgr.GetEnemyCost(Unit::Role::ARTY.type)
-	     + aiEnemyMgr.GetEnemyCost(Unit::Role::AH.type);
+	return EnemyCostOf(Unit::Role::ASSAULT.type)
+	     + EnemyCostOf(Unit::Role::RAIDER.type)
+	     + EnemyCostOf(Unit::Role::RIOT.type)
+	     + EnemyCostOf(Unit::Role::SKIRM.type)
+	     + EnemyCostOf(Unit::Role::ARTY.type)
+	     + EnemyCostOf(Unit::Role::AH.type);
 }
 
 // THE WHOLE ENEMY ARMY, INCLUDING THE PART THAT DECIDES GAMES.
@@ -1026,8 +1062,8 @@ float EnemyArmyCost()
 float EnemyFieldCost()
 {
 	return EnemyArmyCost()
-	     + aiEnemyMgr.GetEnemyCost(Unit::Role::HEAVY.type)
-	     + aiEnemyMgr.GetEnemyCost(Unit::Role::SUPER.type);
+	     + EnemyCostOf(Unit::Role::HEAVY.type)
+	     + EnemyCostOf(Unit::Role::SUPER.type);
 }
 
 // Behind on the field: they field more army value than we do.

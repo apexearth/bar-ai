@@ -7,6 +7,7 @@
 
 #include "task/fighter/AttackTask.h"
 #include "map/InfluenceMap.h"
+#include "map/MapManager.h"
 #include "map/ThreatMap.h"
 #include "module/MilitaryManager.h"
 #include "setup/SetupManager.h"
@@ -598,6 +599,11 @@ void CAttackTask::FindTarget()
 	CInfluenceMap* inflMap = circuit->GetInflMap();
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	threatMap->SetThreatType(leader);
+	CMapManager* mapMgr = circuit->GetMapManager();
+	// 1.0 == today's behaviour exactly. A tunable, not a hardcoded policy number --
+	// this ships as a no-op and is turned down only after measuring the LOS
+	// coverage this discount actually has to work with.
+	const float unseenEco = circuit->GetTunable("apex_eco_unseen", 1.0f);
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
 	const int frame = circuit->GetLastFrame();
@@ -625,6 +631,7 @@ void CAttackTask::FindTarget()
 	float bestInfl = .0f;
 	float bestNear = .0f;
 	float bestScale = .0f;
+	int bestSeen = 0;  // was the chosen target's ground in current LOS, or only remembered
 	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), armbanth
 	// (Titan), corkorg (Korgoth) and armraz all carry role heavy + attribute
 	// melee, and all of them detonate on death -- so the value is delivered by
@@ -800,7 +807,12 @@ void CAttackTask::FindTarget()
 			if ((edef != nullptr) && !edef->IsMobile() && !edef->IsAttacker()
 				&& (localInfl <= .0f))
 			{
-				prio *= FREE_ECO_PRIORITY;
+				// localInfl == 0 is "no army REMEMBERED here" (hostileDatas retains
+				// anything out of current radar/LOS via CMapManager::HostileInLOS),
+				// not "no army here". The structure itself is safe to remember -- it
+				// cannot move. The absence of a guard next to it is not, unless we
+				// have actually looked.
+				prio *= mapMgr->IsInLOS(ePos) ? FREE_ECO_PRIORITY : (FREE_ECO_PRIORITY * unseenEco);
 				// ...and prefer the ones that actually die in the time a raid
 				// has. A converter is 380 metal behind 445 hitpoints; an
 				// advanced solar is 350 behind 1130. Equal-ish metal, and only
@@ -838,6 +850,7 @@ void CAttackTask::FindTarget()
 				bestInfl = group.influence;
 				bestNear = localInfl;
 				bestScale = scale;
+				bestSeen = mapMgr->IsInLOS(ePos) ? 1 : 0;
 				hasGoodTarget |= !isOverpowered;
 			}
 		}
@@ -856,12 +869,12 @@ void CAttackTask::FindTarget()
 		lastEngageLog = frame;
 		const float need = bestInfl * bestScale;
 		circuit->LOG("apex: engage %s units=%d spread=%.0f hp=%.2f coh=%.2f "
-				"power=%.0f need=%.0f edge=%.2f skipped=%d near=%.0f",
+				"power=%.0f need=%.0f edge=%.2f skipped=%d near=%.0f seen=%d",
 				(bestTarget != nullptr) ? "TAKE" : "SKIP",
 				int(units.size()), spread, healthScale,
 				cohesion, maxPower, need,
 				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak,
-				bestNear);
+				bestNear, bestSeen);
 	}
 	// Return: target, startPos=leader->pos, endPos=position
 }

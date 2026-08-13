@@ -1136,6 +1136,11 @@ void CInitScript::RegisterMgr()
 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
+	// GetEnemyCost never forgets: a raider seen once still counts an hour later.
+	// The Fresh variants count only what was seen within SetFreshSeconds().
+	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCostFresh(Type) const", asMETHOD(CEnemyManager, GetEnemyCostFresh), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectProperty("CEnemyManager", "const float freshMobileThreat", asOFFSET(CEnemyManager, freshMobileThreat)); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "void SetFreshSeconds(float)", asMETHOD(CEnemyManager, SetFreshSeconds), asCALL_THISCALL); ASSERT(r >= 0);
 	// Centroid of the enemy groups we can see. Noisy by nature -- raiders in our
 	// own base pull it backwards -- so it suits a rally point, not a facing.
 	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyPos() const", asFUNCTION(CEnemyManager_GetEnemyPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

@@ -18,6 +18,54 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-13: the enemy model never forgot, and raids never checked
+
+Layer 3 (C++) + layer 2 (AngelScript). Two related fixes landed together in one
+DLL rebuild; both ship as provable no-ops pending measurement.
+
+**Enemy cost never expired inside 20 minutes, and everything downstream
+overestimated the enemy in the direction of timidity.** `CEnemyManager` retires
+a sighting only after 20 game-minutes unseen, and nothing anywhere read
+recency -- so at minute 20 our model was the union of everything ever seen,
+undecayed. apexearth, after losing a real 6v6 to humans: "just 20m in we're
+dying a lot and we already need spam to get vision on the humans, or air
+scouts." Against stock BARb (which does not retreat) this is nearly harmless;
+against humans who trade and reposition it is a systematic overestimate, worst
+exactly when we scout least.
+
+Added a second "fresh" cost bucket to `CEnemyManager` (`freshInfos`,
+`freshMobileCost`, `freshMobileThreat`), maintained by the existing staggered
+per-enemy walk: an enemy is fresh while seen within a window (default 60s,
+`SetFreshSeconds`, unwired for now) and drops out immediately if we look at its
+last known position and it is not there. Bound to script as
+`GetEnemyCostFresh`/`freshMobileThreat`. `territory.as`'s `EnemyArmyCost()` and
+`EnemyFieldCost()` -- the choke point for TEAM PUSH, KillingBlow, LosingGround,
+MassWant and T3Worthwhile -- now blend fresh and raw cost via
+`EnemyCostOf(role) = fresh + (raw - fresh) * apex_ghost_weight`. Default
+`apex_ghost_weight = 1.0` is bit-identical to before; a `GhostDiag()` telemetry
+line reports the ghost fraction so the weight can be set from a measurement,
+not a guess. Static/building cost is untouched -- turrets don't move or die
+unseen.
+
+**Raids paid a 5x priority bonus for a target we had never actually looked at.**
+`CAttackTask::FindTarget` scores an eco target as free (`FREE_ECO_PRIORITY`,
+5x) whenever no enemy army is *remembered* nearby (`localInfl <= 0`). But
+`hostileDatas` retains anything out of current LOS/radar, so `localInfl == 0`
+means "nothing remembered here", indistinguishable from "we never looked" --
+the same trap CLAUDE.md calls out for `GetBuilderThreatAt`. An unlooked-at mex
+scored identically to a confirmed-clear one. Now the bonus is discounted to
+`FREE_ECO_PRIORITY * apex_eco_unseen` unless `CMapManager::IsInLOS(ePos)` is
+true. Default `apex_eco_unseen = 1.0` is bit-identical to before. The `apex:
+engage` log gained `seen=0/1` for the chosen target so the discount's actual
+bind rate is measurable before it's tuned.
+
+Neither change spends constructor time or build power. Both are pure
+re-weightings of decisions already being made. `ai/apex/engine-side/
+SkirmishAI.dll` (the committed stripped copy, for machines without the docker
+build set up) was NOT refreshed this session -- `deploy_ai.py` prefers the
+local unstripped build when present, so nothing is blocked, but the repo copy
+is now stale until someone re-strips it.
+
 ## 2026-08-13: reactors started in parallel and never finished
 
 Layer 2 (AngelScript), `manager/builder/joinbuild.as` and

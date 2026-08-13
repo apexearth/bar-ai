@@ -47,6 +47,7 @@ local NAMES = {
 	-- the fighter tunables above no longer have a reader; the fighter delta was
 	-- reverted to upstream. These do.
 	"apex_eco_target",
+	"apex_eco_unseen",
 	"apex_mass_vs_army",
 	"apex_mass_hold_secs",
 	"apex_mass_floor",
@@ -108,6 +109,9 @@ local NAMES = {
 	-- Both default OFF in the script so nothing draws in a hosted game; these
 	-- are how a dev run turns the overlay back on.
 	"apex_ping",
+	-- How much a never-re-seen enemy unit still counts for. 1.0 = the old
+	-- behaviour, where our picture of the enemy never expires.
+	"apex_ghost_weight",
 }
 
 local pending = {}
