@@ -67,33 +67,18 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 // SPEND_AIRDEF keeps the row he specified, unchanged, and now means only what he
 // meant by it.
 //
-// SPEND_DEFENCE is a MEASURED default, not a chosen one. Static defence spend as
-// a share of metal built, 4v4 Comet Catcher vs BARb:stable:hard, 22-24 minutes,
-// two runs (matches/20260812-081605-*, -083510-*): stock 10.8-30.5% while
-// trading 1.94 in metal, us 2.4-13.3% while trading 0.31. The row below sits at
-// ~21% of the split early and tapers as the army share climbs, which puts us in
-// stock's measured band instead of a fifth of it. It is a starting point to be
-// A/B'd, and every entry is tunable (apex_share_defence, apex_share_airdef).
+// Every entry is tunable (apex_share_defence, apex_share_airdef).
 //                            8     20     50    100    300
 array<float> SPEND_ARMY       = {  3.f,   4.f,   5.f,   6.f,   10.f};
-// ~26% of the split early: the upper half of stock's measured 15-33% band.
+// TEN PERCENT OF EVERYTHING WE BUILD, AT EVERY INCOME. apexearth, 2026-08-13:
+// "Let's try defence at 10%."
 //
-// THE LATE-GAME DEFENCE SHARE MUST NOT BE THE SMALLEST. apexearth, three times
-// on 2026-08-12: "we need EXTRA defense on the edges", "whatever logic you have
-// for making defenses in general isn't good enough", "We should be making tons of
-// T3 defenses and shields late in the game."
-//
-// This row used to be the only one that FELL with income -- after normalising
-// against the other four it gave 25.9% at 8 metal/s, 27.6% at 20, 22.6% at 50,
-// 18.9% at 100 and 8.3% at 300 -- so the budget shrank exactly where he wants it
-// largest. The 8 and 20 entries are unchanged measured values; 50 and 100 are set
-// equal to the 20 entry, holding the measured mid-game weight flat rather than
-// decaying it; and 300 is chosen so that after normalisation against the RISING
-// army row the late share is not the smallest of the five. That gives
-// 25.9 / 27.6 / 28.0 / 27.2 / 27.5 percent, inside stock's measured band at every
-// step. Above ~4.5 at the 300 step every further point comes out of ARMY, not the
-// economy: at that income the economy row is 1.0 and its share barely moves.
-array<float> SPEND_DEFENCE    = {3.5f,   4.f,   4.f,   4.f,   5.f};
+// These are relative weights, so a row cannot state a percentage on its own --
+// each entry below is set to one ninth of the sum of the other four rows at that
+// income step, which is what makes SPEND_DEFENCE / (all five) come out at 0.100
+// in every column. Change any other row and these have to be recomputed; that is
+// the cost of stating an absolute share in a relative table.
+array<float> SPEND_DEFENCE    = {1.11f, 1.17f, 1.14f, 1.19f, 1.47f};
 array<float> SPEND_AIRDEF     = {  1.f,   2.f,  1.5f,  1.5f,  0.5f};
 array<float> SPEND_ECONOMY    = {3.5f,  2.7f,   2.f,  1.5f,   1.f};
 array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};

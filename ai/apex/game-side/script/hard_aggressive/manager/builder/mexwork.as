@@ -116,19 +116,25 @@ bool IsDefenceTaskLive(IUnitTask@ task)
 // front defence yet" and approved every request. One player ordered 140 in
 // fourteen minutes and that constructor time is the economy -- metal produced
 // fell 29,148 -> 19,445 per player against an unchanged opponent.
-uint OutstandingFrontTasks()
+//
+// In METAL, because the budget it feeds is a share of metal: a Sentry and a
+// Pulsar are not one unit of front line each.
+float OutstandingFrontCost()
 {
-	uint n = 0;
+	float m = 0.f;
 	for (uint i = 0; i < gDefTasks.length(); ++i) {
 		if (gDefTasks[i] is null)
+			continue;
+		CCircuitDef@ d = gDefTasks[i].buildDef;
+		if (d is null)
 			continue;
 		const AIFloat3 at = gDefTasks[i].GetBuildPos();
 		if (!OnMap(at))
 			continue;
 		if (Military::OnBorder(at) || Military::NearFront(at))
-			++n;
+			m += d.costM;
 	}
-	return n;
+	return m;
 }
 
 uint OutstandingMexTasks()

@@ -78,6 +78,13 @@ bool NearFront(const AIFloat3& in pos)
 // for army value, and it needs no gadget.
 const string TV_FFENCE = "ffence";
 const string TV_MINC   = "minc";
+// A BUDGET DENOMINATED IN TOWERS CANNOT BOUND A SHARE OF METAL. The front budget
+// counted towers against income, so the same allowance bought a Sentry and a
+// Pulsar, and nothing in it could see what the rest of the team was building
+// instead. These two carry the front line's METAL and the player's TOTAL metal
+// spend, so the bound becomes the same quantity targets.as states: a share.
+const string TV_FMETAL = "fmetal";
+const string TV_MSPEND = "mspend";
 // ANTI-AIR IS ONE TEAM ANSWER TO ONE TEAM'S AIRCRAFT.
 //
 // apexearth, watching: "We used to have a problem with teal making tons of light
@@ -135,6 +142,25 @@ uint OwnStaticAA()
 	return n;
 }
 
+// What this player has put into the front line, in metal: every standing tower
+// out there plus the ones already ordered. An order has claimed the constructor
+// time it will cost whether or not it ever finishes, which is the whole reason
+// the count-based budget could not bind (see Builder::OutstandingFrontTasks).
+float OwnFrontMetal()
+{
+	float m = 0.f;
+	for (uint i = 0; i < gFencePos.length(); ++i) {
+		if (!OnBorder(gFencePos[i]) && !NearFront(gFencePos[i]))
+			continue;
+		if (i >= gFenceDef.length())
+			continue;
+		const CCircuitDef@ d = gFenceDef[i];
+		if (d !is null)
+			m += d.costM;
+	}
+	return m + Builder::OutstandingFrontCost();
+}
+
 void PublishDefence()
 {
 	uint front = 0;
@@ -144,6 +170,8 @@ void PublishDefence()
 	}
 	ai.PublishTeamValue(TV_FFENCE, float(front));
 	ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
+	ai.PublishTeamValue(TV_FMETAL, OwnFrontMetal());
+	ai.PublishTeamValue(TV_MSPEND, Brain::gSpentTotal);
 	ai.PublishTeamValue(TV_AA, float(OwnStaticAA()));
 	ai.PublishTeamValue(TV_AIDF, float(ai.frame));
 
@@ -340,10 +368,10 @@ float TeamAA()
 // always go in, at any density, so density can never stop the defence climbing
 // with the economy. It only stops the same turret being repeated.
 //
-// `def` null means the caller does not know what will be placed -- AiMakeDefence,
-// where the def is chosen inside DefaultMakeDefence after this returns. Unknown
-// can never be "higher tier", and the light turret's range is the radius, which is
-// what an ordinary cluster gets from landDefenders[0] under prevent:1.
+// `def` null means the caller does not know what will be placed. Unknown can
+// never be "higher tier", so it is a refusal on crowded ground -- which is why
+// AiMakeDefence, the path that places most of our towers, asks with LadderDef()
+// rather than with null.
 bool CrowdAllows(const AIFloat3& in pos, CCircuitDef@ def)
 {
 	// apexearth's number, not a derived one.
@@ -381,6 +409,52 @@ bool CrowdAllows(const AIFloat3& in pos, CCircuitDef@ def)
 	return better;
 }
 
+// WHAT THE ENGINE'S OWN LADDER WOULD PUT HERE.
+//
+// AiMakeDefence has no def to offer the crowd cap -- DefaultMakeDefence chooses
+// inside C++, after we have already answered -- so it asked with null, and null
+// can never be "higher tier". The tier exemption, which is the one clause that
+// keeps the crowd cap from being a ceiling on the whole defence budget, therefore
+// could not fire on the single path that places most of our towers.
+//
+// This is the same list, in the same order: build_chain.json porcupine "land"
+// [0, 3, 5, 4, 8, 12] resolved against each faction's unit array. It is walked the
+// way CMilitaryManager::DefaultMakeDefence walks it -- cumulative cost against an
+// income-derived maxCost -- and the DEAREST rung that still fits is the answer,
+// because that is the tier this economy is buying. The 32 is the config's own
+// amount factor for a 20x20 map (48 for 10x10, so this under-claims on a small
+// one) and ecoFactor is omitted, which under-claims again under a resource bonus.
+// Both errors point the same way: toward asking with a cheaper def, i.e. toward
+// refusing rather than exempting.
+const float LADDER_AMOUNT = 32.f;
+
+CCircuitDef@ LadderDef()
+{
+	array<CCircuitDef@> rungs = {
+		SideDef3("armllt",    "corllt",  "leglht"),
+		SideDef3("armbeamer", "corhllt", "legmg"),
+		SideDef3("armclaw",   "cormaw",  "legdtr"),
+		SideDef3("armhlt",    "corhlt",  "leghive"),
+		SideDef3("armpb",     "corvipe", "legapopupdef"),
+		SideDef3("armanni",   "cordoom", "legbastion")
+	};
+	const float inc = (aiEconomyMgr.metal.income < aiEconomyMgr.energy.income)
+			? aiEconomyMgr.metal.income : aiEconomyMgr.energy.income;
+	const float maxCost = LADDER_AMOUNT * inc;
+	CCircuitDef@ best = null;
+	float total = 0.f;
+	for (uint i = 0; i < rungs.length(); ++i) {
+		CCircuitDef@ d = rungs[i];
+		if ((d is null) || !d.IsAvailable(ai.frame))
+			continue;
+		total += d.costM;
+		if (total >= maxCost)
+			break;
+		@best = d;
+	}
+	return best;
+}
+
 bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 {
 	if (!CrowdAllows(pos, def))
@@ -394,27 +468,26 @@ bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 	// with none of them forward. Under attack we can afford more defence, not
 	// unlimited defence, and the rear share still has to hold or we wall the
 	// wrong end of the map.
-	// ONE MULTIPLIER, NOT TWO MULTIPLIED. apexearth: "We're definitely out of
-	// control with building certain things like the light laser turrets and popup
-	// air defense turrets."
+	// BEING BELOW THE SHARE IS THE THING THE SHARE MEASURES. apexearth: "We're
+	// definitely out of control with building certain things like the light laser
+	// turrets and popup air defense turrets."
 	//
-	// He is right and it was arithmetic, not the removed limits. This read
-	// income * 0.8 * BudgetMult * pressure, and BudgetMult reaches 2.0 while
-	// pressure is another 2.0 -- so a base under attack whose defence share was
-	// still low allowed 1 + 40 * 0.8 * 4 = 129 towers at 40 metal/s. Both factors
-	// say "more defence than usual is justified", and taking the larger of the two
-	// says that once instead of squaring it.
-	const float pressure = (gTurtle || BaseContested()) ? 2.f : 1.f;
-	const float share = Brain::BudgetMult(Brain::DEFENCE);
-	float boost = (pressure > share) ? pressure : share;
+	// BudgetMult(DEFENCE) is target/have, so it reads 2.0 for exactly as long as
+	// defence is under its target -- and it was used here to RAISE the allowance,
+	// which is the bound arguing with itself: the further below target we are, the
+	// more we are allowed to build, until we are not below it any more. Against a
+	// share test that is circular and cancels the bound outright. Only pressure
+	// multiplies now, and only the target share; BudgetMult still ranks defence
+	// against the other categories where it belongs, in Brain.
+	float pressureAllow = (gTurtle || BaseContested()) ? 2.f : 1.f;
 	// ROLE CHANGES HOW MUCH, NEVER WHETHER. A lead used to return outright, which
 	// put the whole job on the players the election never picks. It buys less
 	// now -- its metal is wanted for the plant and the T2 mexes -- but it is not
 	// forbidden, which is his standing rule and the same fault as the eco-lead
 	// exclusivity he caught before.
 	if (Factory::IsDesignatedLead() && !gPorcArmed && !gTurtle && !LosingGround())
-		boost *= ai.GetTunable("apex_lead_defence", 0.35f);
-	const float per = ai.GetTunable("apex_fence_per_income", 0.8f) * boost;
+		pressureAllow *= ai.GetTunable("apex_lead_defence", 0.35f);
+	const float per = ai.GetTunable("apex_fence_per_income", 0.8f) * pressureAllow;
 	const float budget = 1.f + aiEconomyMgr.metal.income * per;
 
 	// TWO JOBS, TWO ALLOWANCES. apexearth: "I just want to make sure we are
@@ -447,25 +520,29 @@ bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 	const float total = (fShare + lShare > 0.f) ? (fShare + lShare) : 1.f;
 	const bool forward = OnBorder(pos) || NearFront(pos);
 
-	uint front = 0;
 	uint local = 0;
 	for (uint i = 0; i < gFencePos.length(); ++i) {
-		if (OnBorder(gFencePos[i]) || NearFront(gFencePos[i]))
-			++front;
-		else
+		if (!OnBorder(gFencePos[i]) && !NearFront(gFencePos[i]))
 			++local;
 	}
 	if (forward) {
-		// WORK ORDERED COUNTS AGAINST THE BUDGET, NOT JUST WORK FINISHED. See
-		// Builder::OutstandingFrontTasks: a budget that counts only standing
-		// towers cannot bind on a line where nothing is finishing.
-		front += Builder::OutstandingFrontTasks();
-		// Team-wide: one line, one budget, however many of us are holding it.
-		const float teamFront = TeamSum(TV_FFENCE, float(front));
-		const float teamInc = TeamSum(TV_MINC, aiEconomyMgr.metal.income);
-		const float teamBudget = 1.f + teamInc
-				* ai.GetTunable("apex_fence_per_income", 0.8f) * boost;
-		return teamFront < teamBudget * (fShare / total);
+		// THE FRONT LINE'S BUDGET IS A SHARE OF THE TEAM'S METAL, NOT A NUMBER OF
+		// TOWERS. Counting towers against income made every tower cost the same:
+		// an 85-metal Sentry and a 3,000-metal Pulsar each spent one unit of the
+		// allowance, so opening the ladder to T2/T3 turrets multiplied the actual
+		// spend without moving the count that was supposed to bound it. Both sides
+		// of this comparison are metal, and both are the TEAM's -- one line, one
+		// budget, however many of us are holding it.
+		//
+		// Ordered work is included through OwnFrontMetal: a bound that counts only
+		// finished towers cannot bind on a line where nothing finishes.
+		const float teamFrontM = TeamSum(TV_FMETAL, OwnFrontMetal());
+		const float teamSpend = TeamSum(TV_MSPEND, Brain::gSpentTotal);
+		if (teamSpend <= 1.f)
+			return true;   // nothing built yet: the share is undefined, not exceeded
+		const float want = Brain::TargetShare(Brain::DEFENCE)
+				* pressureAllow * (fShare / total);
+		return (teamFrontM / teamSpend) < want;
 	}
 	// Local work stays local: a mex guard defends OUR extractor with OUR metal.
 	return float(local) < budget * (lShare / total);
@@ -562,8 +639,9 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	if (!gPorcArmed && !gTurtle && !LosingGround() && !early)
 		return;
 
-	// One policy, asked the same way every other placement asks it.
-	if (!DefenceAllowedAt(pos)) {
+	// One policy, asked the same way every other placement asks it -- and asked
+	// WITH a def, so the crowd cap's tier exemption can see an upgrade coming.
+	if (!DefenceAllowedAt(pos, LadderDef())) {
 		if (ai.frame >= gNextFenceCapLog) {
 			gNextFenceCapLog = ai.frame + 60 * SECOND;
 			AiLog(Factory::T() + "apex: defence refused here -- "

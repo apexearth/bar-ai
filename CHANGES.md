@@ -18,6 +18,58 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-13: defence budget is a share of metal, not a count of towers
+
+Layer 2 (AngelScript), `military/defenceline.as`, `targets.as`,
+`builder/mexwork.as`. apexearth, watching a windowed 8v8: "We still make way
+too many defenses. I counted over 100 sentry turrets... So tone back defense
+more, add more military." Also connects to the same night's "towers spread out
+instead of on a good straighter line" report.
+
+The front-line allowance compared a COUNT of standing towers against income,
+so an 85-metal Sentry and a 3,000-metal Pulsar each spent one unit of it —
+climbing the tower ladder multiplied real spend without moving the number
+meant to bound it. Both sides of the comparison are metal now, and both are
+the TEAM's: `PublishDefence` publishes front-line metal (standing fences via
+`gFenceDef` plus `Builder::OutstandingFrontCost` for ordered-but-unfinished
+work) and `Brain::gSpentTotal`, and `DefenceAllowedAt` tests
+`teamFrontMetal / teamTotalSpend` against `TargetShare(DEFENCE) * pressure *
+DEF_FRONT-share`.
+
+Second, `boost = max(pressure, BudgetMult(DEFENCE))` was removed: `BudgetMult`
+is target/have, so it read 2.0 for exactly as long as defence was UNDER
+target and raised the allowance — against a share test that is circular and
+cancels the bound. Only the attack-pressure multiplier (unchanged at 2x while
+`gTurtle`/`BaseContested()`, kept as-is per apexearth: "keep 2x for now")
+applies to the target share now.
+
+Third, `AiMakeDefence` asked the crowd cap (landed earlier the same session)
+with `def = null`, and null can never be "higher tier" — so the tier-upgrade
+exemption could never fire on the path that places most of our towers, and a
+crowded spot was refused outright instead of allowed as an upgrade. That is
+also the "spread thin instead of massed" report: refused as a repeat, the
+request lands as a fresh cheap Sentry on new ground instead. Now asks with
+`Military::LadderDef()`, which walks `build_chain.json`'s porcupine `land`
+ladder the way `CMilitaryManager::DefaultMakeDefence` does (cumulative cost
+against an income-derived `maxCost`) and returns the dearest rung the economy
+currently reaches — a new function, since `Military::PorcToBuild` (the design's
+assumed name) does not exist in the current split-out `manager/military/*.as`
+layout; def selection there is C++-only (`landDefenders[i]`), unbound to
+script.
+
+Finally, `targets.as`'s `SPEND_DEFENCE` recalibrated to normalize to **10% of
+spend at every income step** — apexearth's explicit number, not a derived one:
+"Let's try defence at 10%." Effective front-line ceiling: 3.3% / 5.0% / 7.5% /
+7.5% / 7.5% of team metal across the five income steps (10% minus the
+rear/local share), doubled while contested.
+
+Smoke-tested clean (no compile errors, no crash, full run). **Not yet
+measured** — needs a tournament with `composition.py` and the `mDefence` /
+`mKillStatic` vs `mKillMobile` split against a matched control, and ideally a
+watched game to confirm apexearth stops seeing triple-digit turret counts.
+`build_chain.json`'s `prevent: 6` (lets one approval enqueue up to 6 towers
+around one point) was deliberately left alone this pass.
+
 ## 2026-08-13: duplicate energy builds were checked against the wrong position
 
 Layer 2 (AngelScript), `builder/joinbuild.as`, `fusion.as`, `mexguard.as`. The
