@@ -5,14 +5,75 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
+## NEW: anti-air coverage is lacking (2026-08-13, watching)
+
+**apexearth, watching the windowed 8v8:** "We lack anti air coverage."
+
+Not yet investigated. In `matches/20260813-222958-*`, `corflak` (Cortex AA)
+appears only 9 times across the whole log for an 8-player team, and no
+`armflak`/`armjuno`/`corjuno` at all — but this is a raw grep, not a proper
+count of built-vs-requested-vs-lost, and doesn't separate "AA was never
+requested" from "AA was requested and refused" from "AA died and was never
+replaced". Needs a proper pass — likely air-warfare's factory ratio /
+`CheapAA`/`HeavyAA` selection, or static-defence's `AAOrder`
+(`builder/statics.as`) gate, or both.
+
+## NEW: the defensive front line is spread thin instead of massed on a line (2026-08-13, watching)
+
+**apexearth, watching the same game:** "Our defensive frontline is too thick,
+towers spread out instead of on a good straighter line that allows many more
+of them to fire at the same time."
+
+Not yet investigated. Candidate mechanism: `Brain::TowerReach`/`FrontCurve`/
+`FrontLineSpots` (frontline.as, defenceline.as) place towers along a computed
+curve rather than a straight line, or space them by the per-tower crowd check
+landed today (`CrowdAllows`, `defenceline.as`) rather than by a firing-arc
+overlap rule. Also worth checking against today's tower-crowding cap
+(`apex_fence_crowd`) — that change caps how many towers cluster in ONE spot,
+which is a different axis from "are they arranged so they mass fire," and
+could in principle be making this specific complaint worse rather than better
+if towers are now being pushed to spread out to avoid the crowd penalty
+instead of lining up.
+
 ## 0b. REACTORS ARE STARTED IN PARALLEL AND NEVER FINISH
 
-**FIX LANDED 2026-08-13, NOT YET MEASURED.** All four mechanisms below were
-fixed in `joinbuild.as`/`fusion.as` (see CHANGES.md). Smoke-tested clean (no
-compile errors, full 30-minute run). The 701/40 numbers below are the
-*pre-fix* baseline — a fresh tournament against the same baseline conditions
-is needed to confirm the fix actually closes the gap before this entry can be
-removed.
+**FIX LANDED 2026-08-13, NOT YET MEASURED — AND A REAL GAP FOUND THE SAME
+NIGHT, WATCHING.** All four mechanisms below were fixed in
+`joinbuild.as`/`fusion.as` (see CHANGES.md). Smoke-tested clean (no compile
+errors, full 30-minute run). The 701/40 numbers below are the *pre-fix*
+baseline — a fresh tournament against the same baseline conditions is still
+needed.
+
+**apexearth, watching a windowed 8v8 the same night, at 26:55:** "At 26:55 into
+this game We are making 5 advanced solars and 2 fusions at the same time. You
+just made a fix which was supposed to fix exactly this kind of issue." Traced
+in `matches/20260813-222958-*`: team t3 alone enqueued **5 separate armadvsol
+tasks in an 8-game-second window** (frames 40956-41196), landing at
+`1680,2880` / `544,3504` / `1744,2880` / `1616,2880` / `1792,3024` — four of
+the five within ~200 elmos of each other. The join system is not dead: the
+same log window shows successful joins elsewhere (`con-join(direct)
+armrectr -> armadvsol joined=1`). It just doesn't see this case.
+
+**Mechanism**: `JoinTaskFor(want, unit)` (`joinbuild.as:128-134`) measures
+distance from `unit.GetPos(ai.frame)` — the CALLING BUILDER's current
+position — never from the spot `HomeEnergy`/`EcoFusion` is about to place the
+building at. That is deliberate for one purpose (`joinbuild.as:33-36`: "a
+constructor on the far side of the map building its own is better than one
+walking across the map to help"), but `HomeEnergy` computes `spot` via
+`ReactorSpot`/`BandSpot`/`CoveredSpot` *before* calling `JoinTaskFor`
+(`mexguard.as:538-595`) and never passes it in. So five idle constructors
+scattered around the base each ask "is there a joinable task near ME" from
+five different locations, each gets "no", and each then independently
+computes a `spot` from the SAME placement logic (pack/band against the same
+base layout) — which is exactly why the five spots end up clustered together
+even though the five builders that decided to place them were not.
+
+**Not yet fixed.** The right question is closer to "is there a joinable task
+near the SPOT I am about to build at", which needs `JoinTaskFor` (or a sibling
+check) to take the candidate `spot` as a parameter and compare against
+`cand.GetBuildPos()` directly, independent of where the calling unit currently
+stands — walk-time-to-assist and duplicate-detection are two different
+questions that the current single distance check conflates.
 
 **apexearth, 2026-08-13, after losing a real multiplayer 6v6 to HUMANS:** "we are
 super inefficient when we make multiple eco buildings at the same time, like 2
