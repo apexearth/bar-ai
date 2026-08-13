@@ -1,7 +1,7 @@
 ---
 name: air-warfare
 description: Owner of everything airborne — the air factory, air lead election, bombers and fighters, the air assassin, air constructors, and anti-air. Invoke for changes to air.as, CheapAA/HeavyAA, factory.json's air_map/no_air selection, air unit ratios, or when air is built but never does anything useful, when the AI never masses fighters, or when enemy air goes unanswered.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

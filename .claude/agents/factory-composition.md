@@ -1,7 +1,7 @@
 ---
 name: factory-composition
 description: Owner of what gets BUILT — factory choice and switching, unit ratios per income tier, unit roles, and the response table. Invoke for changes to factory.json/factory_leg.json, behaviour.json role assignments, response.json, AiGetFactoryToBuild, AiIsSwitchAllowed, or when the army mix is wrong (no raiders, too many assault bots, a unit type never appears).
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

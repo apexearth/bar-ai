@@ -1,7 +1,7 @@
 ---
 name: commander-opening
 description: Owner of the commander and the opening — the commander as main early builder, its work radius and hide behaviour, D-gun risk, the first factory choice, and everything before the first advanced plant. Invoke for changes to isComm branches in builder.as, commander.json, COMM_* constants, GroundOpening/NavalOpening/MayOpenAir, or when the opening is slow or commanders are dying.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

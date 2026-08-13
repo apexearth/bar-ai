@@ -1,7 +1,7 @@
 ---
 name: base-layout
 description: Owner of where buildings go — the base grid and walkways, placement sprawl, self-walling, keeping room to tech up, and reclaiming obsolete or in-the-way structures. Invoke for any change to baseplan.as, to a placement position or shake radius, to block_map.json, to the C++ grid snap, or when the base is sprawling, walling itself in, or has no room for an advanced lab.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

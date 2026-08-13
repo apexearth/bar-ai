@@ -1,7 +1,7 @@
 ---
 name: energy-power
 description: Owner of the energy economy — the generator ladder (wind/solar/advanced solar/fusion/AFUS), metal converters, geothermal, and energy waste. Invoke for changes to HomeEnergy, EcoFusion, EcoConverters, EnergyConverter, economy.json's energy block, or when energy is being wasted, when fusions are built that nothing converts, or when a naval player never builds energy.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

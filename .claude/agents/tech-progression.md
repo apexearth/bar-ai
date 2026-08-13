@@ -1,7 +1,7 @@
 ---
 name: tech-progression
 description: Owner of the tech ladder and build phases — the T2 rush, the tech-lead election, metal slinging, advanced constructor sharing, T3 gantries, and Factory::ComputePhase. Invoke for changes to the phase thresholds, RushReady/MayPursueT2/FollowerTechIncome, GANTRY_* constants, T3Worthwhile, the blackboard team-coordination keys, or when T2/T3 arrives too late or not at all.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 
