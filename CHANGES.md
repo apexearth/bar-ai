@@ -18,6 +18,50 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-13: duplicate energy buildings landed on the identical tile — VERIFIED
+
+Layer 2 (AngelScript), `builder/joinbuild.as`, `mexguard.as`, `fusion.as`. Third
+and final gap in the same-day reactor/solar-parallelism fix, found by
+apexearth watching, live, on the build that shipped the second fix: "You just
+spent 33 minutes working and the advanced solars still aren't fixed."
+
+**He was right, and it was two compounding bugs.** Live-inspected via the
+match harness's `_engine` write-dir infolog while his game was still running:
+
+1. **A join refused only for CAP still fell through to an identical spot.**
+   `JoinTaskFor` (fixed earlier the same day to check the build SITE, not the
+   builder) correctly finds the existing task, but if that task is already at
+   its builder cap (income-floored at 2), the refusal is `why=nocap` and the
+   caller enqueues anyway — landing at the SAME coordinate, because
+   `ai.FindBuildSiteNear` only sees real engine state, and a task whose
+   builders haven't physically started the nanoframe yet is invisible to it.
+   Measured live: 6 duplicate `armadvsol` enqueues on one tile in 3 real-time
+   seconds for one player. Fixed with a new `SpotCollides` check that ignores
+   cap entirely — a full cap must never excuse a second building on the SAME
+   ground; the rule now declines outright and lets the ladder retry next
+   update rather than duplicate.
+2. **`SpotCollides` itself was blind to cheap buildings.** `JoinRegister` only
+   added a task to the collision registry if its cost was above
+   `JOIN_MIN_COST` (200) — a deliberate design choice for "don't bother
+   walking across the map to ASSIST a 155-metal solar," but it also meant
+   solar (155 metal) was NEVER checked for a literal same-tile collision.
+   Re-testing the identical scenario (same map, seed, 8v8) after fix 1 still
+   showed up to 6 `armsolar` duplicates on one tile. Registration is now
+   unconditional for eligible task types; `JOIN_MIN_COST` still gates whether
+   `JoinTaskFor`/`JoinDuplicateBuild` bother walking to ASSIST a cheap
+   building — that design intent is preserved — but every task is now on the
+   board for collision purposes regardless of cost.
+
+**Verified, not just smoke-tested, per apexearth's explicit request.** Same
+map/seed/player-count (8v8 Comet Catcher, seed 7) run twice: before this pair
+of fixes, a scripted frame-window scan of every `home energy`/`eco fusion`
+enqueue line found **18 same-team/same-def/same-position bursts within 5 real
+seconds of each other**. After: **zero**, across 343 energy enqueue lines in
+the identical scenario. Sanity check that this did not over-restrict: solar
+building still proceeded normally (59 enqueues, teams reaching 10-12 standing
+solars each) — the fix stops literal same-tile duplicates, not nearby
+legitimate placement.
+
 ## 2026-08-13: defence budget is a share of metal, not a count of towers
 
 Layer 2 (AngelScript), `military/defenceline.as`, `targets.as`,

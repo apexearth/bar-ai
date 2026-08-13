@@ -598,6 +598,14 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	IUnitTask@ already = Builder::JoinTaskFor(gen, unit, spot);
 	if (already !is null)
 		return already;
+	// The join above is capped by what the economy can feed; a full cap must
+	// never excuse building a SECOND copy on the same ground. Measured live:
+	// once the cap was reached, ai.FindBuildSiteNear kept returning the exact
+	// same tile to every further builder, because a queued-but-not-yet-started
+	// task is invisible to the engine's own site search. Decline outright
+	// rather than duplicate -- the ladder will try this unit again next update.
+	if (Builder::SpotCollides(gen, spot))
+		return null;
 
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(
 			isConv ? Task::BuildType::CONVERT : Task::BuildType::ENERGY,

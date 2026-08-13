@@ -66,6 +66,46 @@ uint JoinBuilderCap(float cost)
 	return uint(want);
 }
 
+// How close counts as "the same ground" for SpotCollides, below. Comfortably
+// bigger than any T1/T2 economy building footprint (armadvsol/armsolar are a
+// few dozen elmos across) so a real second site a short walk away is untouched.
+const float JOIN_COLLIDE_RANGE = 150.f;
+
+// Is `spot` already where a queued same-class task sits, REGARDLESS of that
+// task's builder cap? JoinTaskFor answers "should I help", which is capped by
+// what the economy can feed; this answers "would I be building on top of
+// something already ordered", which a cap must never excuse.
+//
+// Measured live, 2026-08-13, apexearth watching: cap=2 (income-floor) was hit
+// by two builders walking to the same armadvsol before either had started the
+// physical nanoframe, so ai.FindBuildSiteNear -- which only sees REAL engine
+// state, not our own queued-but-not-yet-under-construction tasks -- kept
+// returning the identical empty-looking coordinate to every builder refused a
+// join for "nocap". Six duplicate enqueues landed on one tile in three
+// real-time seconds. The cap was doing its job; nothing was stopping the
+// EXCESS builders from re-discovering the same "empty" ground instead of
+// either waiting or finding different ground.
+bool SpotCollides(const CCircuitDef@ want, const AIFloat3& in spot)
+{
+	if (want is null)
+		return false;
+	const float sq = JOIN_COLLIDE_RANGE * JOIN_COLLIDE_RANGE;
+	for (uint i = 0; i < gJoinTasks.length(); ++i) {
+		IUnitTask@ cand = gJoinTasks[i];
+		if (cand is null)
+			continue;
+		const CCircuitDef@ has = cand.buildDef;
+		if ((has is null) || (has.id != want.id))
+			continue;
+		const AIFloat3 where = cand.GetBuildPos();
+		if (!OnMap(where))
+			continue;
+		if (spot.SqDistance2D(where) < sq)
+			return true;
+	}
+	return false;
+}
+
 array<IUnitTask@> gJoinTasks;
 int gConJoined = 0;
 int gNextJoinLog = 0;
@@ -101,12 +141,19 @@ bool JoinEligibleType(int bt)
 // Same pattern as gMexTasks: AiTaskAdded is the only place a live task handle is
 // visible, IUnitTask is refcounted so a held handle stays valid, and every
 // removal funnels through DequeueTask -> AiTaskRemoved.
+//
+// NO cost floor here. JOIN_MIN_COST says "not worth walking across the map to
+// ASSIST a cheap building" -- JoinTaskFor and JoinDuplicateBuild still apply it
+// themselves. Registration is a different question: is this task ON THE BOARD
+// AT ALL for SpotCollides to check literal position collisions against.
+// Measured live, 2026-08-13: armsolar (155 metal, under the old 200 floor here)
+// piled up to 6 duplicates on ONE TILE within 56 frames, because a task that
+// was never registered could never be found colliding with anything.
 void JoinRegister(IUnitTask@ task)
 {
 	if (!JoinEligibleType(task.GetBuildType()))
 		return;
-	const CCircuitDef@ def = task.buildDef;
-	if ((def is null) || (def.costM < JOIN_MIN_COST))
+	if (task.buildDef is null)
 		return;
 	gJoinTasks.insertLast(task);
 }

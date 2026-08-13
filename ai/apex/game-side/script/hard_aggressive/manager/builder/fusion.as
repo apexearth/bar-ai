@@ -278,12 +278,16 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// new was asked for. Checked against `spot`, not the unit -- a task nobody
 	// has been given yet still counts, and duplicate-ness is a property of the
 	// SITE, not of which builder happened to notice it.
+	bool blockedByCap = false;
 	if (okDef && okSpot) {
 		IUnitTask@ already = Builder::JoinTaskFor(want, unit, spot);
 		if (already !is null)
 			return already;
+		// A full cap must never excuse a second reactor on the SAME ground --
+		// see the identical guard and its measurement in HomeEnergy.
+		blockedByCap = Builder::SpotCollides(want, spot);
 	}
-	IUnitTask@ post = okSpot
+	IUnitTask@ post = (okSpot && !blockedByCap)
 		? aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, want, spot, 0.f))
 		: null;
