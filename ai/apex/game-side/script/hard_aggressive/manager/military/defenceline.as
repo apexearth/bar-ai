@@ -480,6 +480,13 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 
 	NoteSite(cluster, pos);
 
+	// Radar is not porc. Every early return below skips DefaultMakeDefence, and the
+	// sensor block sits at its end, so a cluster we decline to WALL also gets no
+	// EYES. Coverage is bounded in C++ by the same two things it always was: any
+	// friendly radar (ours or an ally's) already within range, and the income-derived
+	// maxCost.
+	aiMilitaryMgr.DefaultMakeSensors(cluster, pos);
+
 	if (gTurtle) {
 		aiMilitaryMgr.DefaultMakeDefence(cluster, pos);  // porc hard while holding
 		return;

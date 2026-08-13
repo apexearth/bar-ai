@@ -1002,7 +1002,15 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
 		}
 	}
 
-	// Build sensors
+	MakeSensors(backPos, maxCost, isPorc ? 1 / 4.f : 1 / SQRT_2, isWater);
+}
+
+void CMilitaryManager::MakeSensors(const AIFloat3& backPos, float maxCost, float radiusMod, bool isWater)
+{
+	const int frame = circuit->GetLastFrame();
+	CBuilderManager* builderMgr = circuit->GetBuilderManager();
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+
 	auto checkSensor = [this, frame, maxCost, &backPos, builderMgr, terrainMgr](IBuilderTask::BuildType type,
 			CCircuitDef* cdef, float range, std::function<bool (CCircuitDef*)> isSensor)
 	{
@@ -1028,7 +1036,6 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
 	};
 	// radar
 	if (radarDefs.HasAvail()) {
-		const float radiusMod = isPorc ? 1 / 4.f : 1 / SQRT_2;
 		radarDefs.GetBestDef([&checkSensor, radiusMod](CCircuitDef* cdef, const SSensorExt& data) {
 			return checkSensor(IBuilderTask::BuildType::RADAR, cdef, data.radius * radiusMod,
 					[](CCircuitDef* cdef) { return cdef->IsRadar(); });
@@ -1041,6 +1048,31 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
 					[](CCircuitDef* cdef) { return cdef->IsSonar(); });
 		});
 	}
+}
+
+void CMilitaryManager::DefaultMakeSensors(int cluster, const AIFloat3& pos)
+{
+	assert(cluster >= 0);
+	if (!radarDefs.HasAvail() && !sonarDefs.HasAvail()) {
+		return;
+	}
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	if (terrainMgr->IsZoneAlly(pos)) {
+		return;
+	}
+
+	CEconomyManager* em = circuit->GetEconomyManager();
+	const float metalIncome = std::min(em->GetAvgMetalIncome(), em->GetAvgEnergyIncome()) * em->GetEcoFactor();
+	const float maxCost = amountFactor * metalIncome;
+
+	const CDefenceData::SDefPoint* pnt = FindClosestDefPoint(cluster, pos);
+	const AIFloat3& anchor = (pnt == nullptr) ? pos : pnt->position;
+	AIFloat3 backPos = anchor - (circuit->GetEnemyManager()->GetEnemyPos() - pos).Normalize2D() * (SQUARE_SIZE * 10);
+	CTerrainManager::CorrectPosition(backPos);
+
+	const bool isWater = !terrainMgr->IsWaterAVoid()
+			&& (circuit->GetMap()->GetElevationAt(pos.x, pos.z) < -SQUARE_SIZE * 2);
+	MakeSensors(backPos, maxCost, 1 / SQRT_2, isWater);
 }
 
 void CMilitaryManager::MarkPorc(CCircuitUnit* unit, int defPointId)

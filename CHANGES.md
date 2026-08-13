@@ -18,6 +18,36 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-13: radar towers were placed only where a wall also went up
+
+Layer 3 (C++) + layer 2 (AngelScript), the other half of the 0a fix above.
+Measured over 10x 6v6 Aethermoor Creek at `--handicap 50`: radar towers landed
+at ~1/player against BARb's ~2.4/player. No script rule builds a radar tower at
+all -- the only two `Enqueue(BuildType::RADAR)` sites build a jammer and a
+targeting facility -- so every radar came from the sensor block at the tail of
+`CMilitaryManager::DefaultMakeDefence`, and every early return in our
+`AiMakeDefence` (rear cluster, pre-army, under-budget, refused-here) skipped
+that whole call. A cluster we decline to WALL also got no EYES, on exactly the
+quiet/rear ground where permanent radar is cheapest and a tower is unwanted --
+which is also why the previous entry's stale enemy model is worst where we
+scout least.
+
+Extracted the sensor placement into `CMilitaryManager::MakeSensors` plus a new
+public `DefaultMakeSensors(cluster, pos)` entry point (bound in
+`MilitaryScript.cpp`), and call it from `AiMakeDefence` immediately after
+`NoteSite`, ahead of every early return. No new tunable -- coverage stays
+bounded by the two limits it already had: the friendly-radar-in-range dedup
+(ours or an ally's) and the income-derived `maxCost`.
+
+**Landed after separately trimming the radar build-chain hub first** (own
+commit, above the reactor entry): each finished radar used to enqueue its whole
+hub -- ~7,700 expected metal of T2 defence per radar (armguard+armamb+armpb+
+armanni+armbrtha and the Cortex/Legion equivalents) -- and unblocking placement
+without trimming that first would have multiplied it silently at ~2.4/player.
+
+Not yet re-measured against the 1 vs 2.4 baseline; smoke-tested only (no
+compile errors, no crash, `armrad` builds observed in an 18.85-minute run).
+
 ## 2026-08-13: the enemy model never forgot, and raids never checked
 
 Layer 3 (C++) + layer 2 (AngelScript). Two related fixes landed together in one
