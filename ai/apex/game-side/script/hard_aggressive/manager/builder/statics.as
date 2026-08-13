@@ -145,7 +145,7 @@ IUnitTask@ AAOrder(CCircuitUnit@ unit, CCircuitDef@ aa, int want, float enemyAir
 	// CONSTRUCTOR'S OWN POSITION, which is wherever it happened to be standing.
 	// apexearth: "We're definitely out of control with building certain things
 	// like the light laser turrets and popup air defense turrets."
-	if (!Military::DefenceAllowedAt(here))
+	if (!Military::DefenceAllowedAt(here, aa))
 		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, aa, here, DEF_SHAKE));

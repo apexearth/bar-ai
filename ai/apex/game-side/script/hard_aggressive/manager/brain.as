@@ -674,7 +674,7 @@ Want@ MexCoverWant(CCircuitUnit@ unit)
 	CCircuitDef@ tower = Builder::MexGuardTower(unit, best);
 	if ((tower is null) || !tower.IsAvailable(ai.frame))
 		return null;
-	if (!Military::DefenceAllowedAt(best))
+	if (!Military::DefenceAllowedAt(best, tower))
 		return null;
 	AIFloat3 site = ai.FindBuildSiteNear(tower, best, Builder::MEX_GUARD_RADIUS);
 	if (!OnMap(site) || Builder::TooCrowded(site))
@@ -810,7 +810,7 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 	}
 	if (!have)
 		return null;
-	if (!Military::DefenceAllowedAt(best))
+	if (!Military::DefenceAllowedAt(best, aa))
 		return null;
 	AIFloat3 site = ai.FindBuildSiteNear(aa, best, Builder::MEX_GUARD_RADIUS);
 	if (!OnMap(site))
@@ -915,7 +915,7 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	}
 	if (!have)
 		return null;
-	if (!Military::DefenceAllowedAt(best))
+	if (!Military::DefenceAllowedAt(best, tower))
 		return null;
 
 	// A POINT ON A CURVE IS NOT A BUILD SITE. Every other placement in this AI

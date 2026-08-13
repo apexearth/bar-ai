@@ -287,7 +287,13 @@ bool CDefendTask::FindTarget()
 		}
 
 		const AIFloat3& ePos = enemy->GetPos();
-		if ((inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS)
+		// A DEFENCE SQUAD MUST FIGHT WHAT IS ON TOP OF IT. GetAllyDefendInflAt is
+		// written only by our BUILDINGS -- CInfluenceMap::AddStaticArmed and
+		// AddUnarmed; AddMobileArmed feeds drawAllyInfl and never this one -- so a
+		// squad held away from the base is blind to whatever is shooting it.
+		// `atUs` is the same reach Update() uses to decide ENGAGE.
+		const bool atUs = (pos.SqDistance2D(ePos) < SQUARE(highestRange + 500.f));
+		if ((!atUs && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
 			|| !terrainMgr->CanMoveToPos(area, ePos))
 		{
 			continue;
@@ -297,6 +303,8 @@ bool CDefendTask::FindTarget()
 		float checkPower = maxPower;
 		if (sqEBDist < sqBaseRange) {
 			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
+		} else if (atUs) {
+			checkPower *= 4.0f;   // already in contact: same allowance as at home
 		}
 		if (checkPower <= threatMap->GetThreatAt(ePos)) {
 			continue;

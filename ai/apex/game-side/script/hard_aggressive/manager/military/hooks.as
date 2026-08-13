@@ -240,6 +240,10 @@ uint EscortSquadCount()
 // separately for that reason.
 array<int>      gFenceId;
 array<AIFloat3> gFencePos;
+// Parallel to the two above and maintained with them: what each one IS. Nothing
+// else records it -- gFencePos is positions only -- so "is the thing we are about
+// to place better than what already stands here" had no way to be asked.
+array<CCircuitDef@> gFenceDef;
 
 // WHERE A TOWER OF OURS DIED. AiUnitRemoved dropped the position and kept
 // nothing, so ground that had just proved it needs defending read identical to
@@ -254,6 +258,30 @@ uint FenceCountNear(const AIFloat3& in pos, float radius)
 	for (uint i = 0; i < gFencePos.length(); ++i) {
 		if (gFencePos[i].distance2D(pos) <= radius)
 			++n;
+	}
+	return n;
+}
+
+// The guns already covering this ground, and the dearest of them.
+//
+// Only a fence with a SURFACE gun counts. An anti-air turret, a jammer or a line
+// of dragon teeth does not shoot at something walking in, so counting one as
+// cover would refuse a ground tower on ground that has none.
+uint FenceGunsNear(const AIFloat3& in pos, float radius, float& out topCost)
+{
+	topCost = 0.f;
+	uint n = 0;
+	for (uint i = 0; i < gFencePos.length(); ++i) {
+		if (gFencePos[i].distance2D(pos) > radius)
+			continue;
+		if (i >= gFenceDef.length())
+			continue;
+		CCircuitDef@ d = gFenceDef[i];
+		if ((d is null) || (d.GetSurfThreat() <= 0.f))
+			continue;
+		++n;
+		if (d.costM > topCost)
+			topCost = d.costM;
 	}
 	return n;
 }
@@ -295,6 +323,7 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 		return;
 	gFenceId.insertLast(unit.id);
 	gFencePos.insertLast(unit.GetPos(ai.frame));
+	gFenceDef.insertLast(unit.circuitDef);
 }
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
@@ -312,6 +341,8 @@ void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 			}
 			gFenceId.removeAt(i);
 			gFencePos.removeAt(i);
+			if (i < gFenceDef.length())
+				gFenceDef.removeAt(i);
 			return;
 		}
 	}

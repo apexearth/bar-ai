@@ -5,205 +5,99 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
-## 0. WE LOSE THREE TIMES THE METAL WE KILL. This is where the games go.
+## 0b. REACTORS ARE STARTED IN PARALLEL AND NEVER FINISH
 
-User comments: 
-- This doesn't matter until we stabalize our new systems and balance everything. 
-- Losses should be expected and not over-analyzed.
-- Focus on our behavior, not win/loss us vs them metrics.
+**apexearth, 2026-08-13, after losing a real multiplayer 6v6 to HUMANS:** "we are
+super inefficient when we make multiple eco buildings at the same time, like 2
+fusions, 2 or 3 afus... etc."
 
----
+Measured over the 16 `Handicap=50` runs in `matches/20260813-*`, 64 apex
+player-games: **701 reactor start requests, 40 reactors finished.** 267 requests
+(38%) started a reactor while at least one was already an unfinished nanoframe.
+**93 of 109 observed reactor nanoframes never completed in 50 minutes.** Median
+start→finish 4.6 game-minutes, p90 7.6.
 
-## 1. We do not press an advantage. We chip.
+**The engine already does this right; both our AngelScript paths bypass it.**
+`CEconomyManager::UpdateEnergyTasks` bounds concurrent energy tasks at
+`buildPower/costM*4+1` — which is 1 for a fusion at any realistic income — and it
+*does* count our script-enqueued tasks. We route around it.
 
-**apexearth, 2026-08-09, watching 8v8 vs `BARb:stable:medium` on Ancient Vault:**
+- **`JoinBuilderCap` (`builder/joinbuild.as:54`) is INVERTED.** `150*income/cost`
+  grants *fewer* assistants the more expensive the building. Reactors got cap=2 in
+  333 of 485 sampled misses; an armafus with 2 armacks is **14.5 game-minutes**.
+  A refused builder walks off and starts another reactor.
+- `JoinTaskFor` refuses a queued-but-unassigned task (`joinbuild.as:153`, 179
+  sampled misses), so the caller enqueues a duplicate. Correct in
+  `JoinDuplicateBuild`; a copy-paste defect here.
+- It matches on `def.id`, so **an armfus nanoframe never blocks an armafus start**.
+  `HomeEnergy` asked for armfus 210x and armafus 209x in the same sample — the
+  ladder oscillates between rungs and each rung is invisible to the other. That is
+  literally "2 fusions, 2 or 3 afus".
+- `EcoFusion` (`builder/fusion.as:272`) never calls `JoinTaskFor` at all — 37
+  enqueues at the *identical* position within 10 s, the `AiMakeTask` re-election
+  leak. Its own `gFusionsAsked - built` bound (`fusion.as:247`) goes NEGATIVE and
+  stops binding whenever `HomeEnergy` has out-built it, the steady state at 531 vs
+  170 requests.
 
-> "We are not nearly aggressive enough in our games. We don't get enough
-> pressure, we need smart pushes where the pusher doesn't even take damage. This
-> is medium AI, this map is not fair with the starting positions you chose, and
-> we still aren't killing them. We have 4x the resources but we just chill and
-> don't really care to kill them."
+**Serialising is free money, and this is not a cap argument.** With build power B
+fixed and K reactors of buildtime T: in parallel every one lands at `KT/B` and
+nothing pays until then; serialised the k-th lands at `kT/B` and the first pays K
+times earlier for identical metal. Integrated energy over the same window is
+`(K+1)/2` greater. K=3 doubles the energy for zero extra spend.
 
-**Measured in that same game, from the live infolog:**
+Derivation for the replacement cap: `metalCost/buildtime` is ~0.03-0.06 across BAR
+structures, so one builder drains `workertime * 0.04` metal/s — about 7 for a T2
+constructor — **independent of what is being built**. What a building can feed is
+`income / drain`. Cost cancels; the current formula makes it the denominator.
 
-| | |
-|---|---|
-| killing blow flipped ON | **15.0 min** (the earliest it can) |
-| team army when it flipped | 46,959 against 22,259 — a 2.1x lead |
-| engagements logged | **654** |
-| decisions TAKE / SKIP | 653 / 1 |
-| median group size | **5 units** |
-| groups of 3 units or fewer | **255 (39%)** |
-| median power vs need | 129 vs 57 |
-| mass quota, all game | 30 (the floor), 110 samples |
-
-So the AI is not passive and it is not refusing fights — it engages constantly,
-always at favourable local odds, in packets of five. It holds a 46,000-metal army
-and commits it a hundred metal at a time.
-
-**The mechanism is in our own code, and it is backwards.**
-`military/posture.as:323` — once the killing blow is on, the attack quota is set
-to `KILL_QUOTA = 10` ("attack with what we have, repeatedly",
-`military/massing.as:175`). Winning therefore makes the AI attack in SMALLER
-groups than the ordinary `MASS_FLOOR` of 30. The one moment it should be forming
-a hammer is the moment it disperses.
-
-The floor of 30 was itself deliberate and correct for its purpose — raiding
-undefended mexes with ~10 grunts. Killing a player is a different job and wants a
-different number.
-
-**Fix to try first:** make the killing-blow quota a concentration, not a
-dispersal — one push that outnumbers everything they can field, tunable so it can
-be A/B'd (`apex_kill_quota`). Watch for the known trap in the other direction:
-raising `minAttackers` globally scored 0-10 historically, so this must stay
-gated on `gKilling` (past 15 min, 1.8x army lead) and never touch the raid floor.
-
-**Test map: Ancient Vault v1.4**, 8v8, us top-right, them bottom-left, box size
-0.45. apexearth: "perhaps this is a good map for testing/improving our AI's
-overall aggression". It is 20x30, area 600, and the biggest map installed with
-**no water at all** (min height +300 — `GetMapMinHeight` via unitsync ranks
-these; every 28x28-and-larger map here dips below sea level).
-
-    python tools/run_match.py --a Apex:apex:hard_aggressive --b BARb:stable:medium \
-        --map "Ancient Vault v1.4" --per-side 8 --sides random --seed 6102 \
-        --boxes trbl --box-size 0.45 --minutes 75 --watch --speed 5
+Fix is a STOP (redirect a builder onto queued work, enqueue nothing). Order,
+measured between each: un-invert the cap; let `JoinTaskFor` take unassigned tasks
+and give `EcoFusion` the same join check; make "already under way" per
+reactor-CLASS using the existing `IsFusion` (`builder/events.as:403`); clamp the
+negative `outstanding`. `JOIN_BUILDERS_MAX = 8` is a hard cap of the kind
+apexearth has rejected twice and binds at 200 m/s.
 
 ---
 
-### 1b. The deeper cause: we buy a fifth of the army they do
+## 0a. OUR PICTURE OF THE ENEMY NEVER EXPIRES — and it is worst against humans
 
-Measured 2026-08-09, 6 games, 8v8 Ancient Vault vs `BARb:stable:medium`,
-`composition.py`:
+**apexearth, 2026-08-13, after losing a real multiplayer 6v6 to HUMANS:** "just
+20m in we're dying a lot and we already need spam to get vision on the humans, or
+air scouts."
 
-| share of metal | apex | BARb medium |
-|---|---|---|
-| **army (real)** | **22.8%** | **51.9%** |
-| static defence | 19.4% | 10.3% |
-| constructors | 10.4% | 5.1% |
-| factories | 8.1% | 8.4% |
+`CEnemyManager::Update` (`unit/enemy/EnemyManager.cpp:129`) retires a sighting
+only after `FRAMES_PER_SEC * 60 * 20` — **twenty game-minutes** unseen.
+`CAllyTeam::AddEnemyCost` increments on `EnemyEnterLOS` and decrements only on
+`EnemyDestroyed`. And **no script anywhere reads recency**: a whole-tree grep for
+`lastSeen`/`stale`/freshness returns only *level* reads of `GetEnemyCost`, never
+a recency test.
 
-Apex out-produced them — 45,287 metal per player against 35,368 — and still
-fielded less than half the army share. It also held 23 T1 constructors per
-player to their 7. Top sinks were `coradvsol` 18.5%, `corthud` 14.7%,
-`cornecro` 12.8% (rez bots), `corfus` 8.3%; theirs were `corsolar` 12.4%,
-`corthud` 12.2%, then four more combat units.
+So at minute 20 our model of the enemy is the **union of everything ever seen,
+undecayed** — and every consumer acts on it: `brain/mix.as`, `military/posture.as`,
+`builder/sitesafety.as`, `airthreat.as`, `military/defenceline.as`.
 
-**6 of 48 apex player-games ended wiped out, against 1 of 48 for medium.**
+**Why this is a humans-specific defect.** Against stock BARb it is nearly
+harmless: stock's army does not retreat, so what we saw is still there and mostly
+dies where we saw it. Humans move, retreat, re-position and hide — so the model is
+systematically wrong, it is wrong in the direction of *overestimating* what is in
+front of us, and it is worst exactly when we are scouting least. Any "do we have
+enough to attack" comparison against that number gets monotonically harder.
 
-This reframes issue 1. Concentrating the army into bigger pushes worked as a
-mechanism (44% of engagements were 15+ units, against 6% before) and changed the
-result very little, because the army being concentrated is a fifth of the metal.
-Pressure cannot come from spending the enemy's army budget on solars, rez bots
-and turrets. The quota was the right lever for the symptom and the wrong one for
-the cause.
+`EnemyManager`'s `lastSeen` is **not bound to AngelScript**. Adding the binding is
+a C++ change and the prerequisite for any fix here.
 
-Do not "fix" this by cutting economy blindly — the 2026-08-01 finding is that
-every rule here displaces something. But 19.4% on static defence while losing
-players to wipeout says the defence is not buying safety either.
+Measured alongside it, same runs (10x 6v6 Aethermoor Creek, `--handicap 50`):
+**radar towers ~1 per player per game for us against BARb's ~2.4** (`armrad` 5-11
+per side of six, `armarad` 0-1). No script rule builds a radar tower at all — the
+only two `Enqueue(BuildType::RADAR)` sites build a *jammer* and a *targeting
+facility*. Towers come solely from CircuitAI's `DefaultMakeDefence` sensor block
+(`MilitaryManager.cpp:885-916`), which our own `AiMakeDefence` gates out of most
+of the map: every early return in `military/defenceline.as:408-503` skips
+`DefaultMakeDefence`, and the sensor block sits inside it.
 
-### 1c. Army share does not move. Three arms, three ways, same 23%
-
-6 games each, 8v8 Ancient Vault vs `BARb:stable:medium`, 40 min, +50:
-
-| arm | army share | wiped out | K/D |
-|---|---|---|---|
-| `kill_quota=300` (concentrate) | 22.8% | 6/48 | 1.14 |
-| `kill_quota=10` (chip, control) | 23.9% | 8/48 | 1.09 |
-| rez bots cut to stable's 0.05 | 23.6% | 9/48 | — |
-| BARb medium, all three arms | ~51% | 1-2/48 | — |
-
-Cutting the rez bot from 0.50/0.30 to 0.05 -- a unit that was 12.8% of all metal
--- moved army share by 0.8 points, i.e. not at all. So the metal did not follow
-the ratio into army; it went somewhere else in the same non-army categories.
-
-**That invariance is itself the finding.** Army share sits at 23% however the
-factory ratios are set, which says the constraint is not what the factory is told
-to build. Candidates, in order of size: the factory is starved of metal because
-builder work is spent first (static defence 18.4%, constructors 10.0%, and in a
-hosted game 63% of `advcon-idle` samples carried `mEmpty=1`); or factory uptime
-itself is the cap.
-
-Next test should measure FACTORY METAL PULL against builder pull, not another
-ratio.
-
-
-### 1d. Benchmark across five team sizes, 2026-08-10
-
-12 games per bracket vs `BARb:stable:medium`, 20 min, +100, size-matched dry maps
-(Copper Hill 1v1, Boreal Falls 2v2, Painted Desert 4v4, Adamantium Factory 6v6,
-Ancient Vault 8v8). The 1v1 bracket ran with `apex_solo_stock=0` so it measures
-OUR rules rather than the stand-aside default.
-
-| bracket | wins | army vs theirs | metal vs theirs | waste | T2 mex | K/D | kill/metal |
-|---|---|---|---|---|---|---|---|
-| 1v1 | 0 | 0.87x | 1.10x | 12.8% | 12.1% | **0.30** | 0.060 |
-| 2v2 | 0 | 0.88x | 1.36x | 9.7% | 24.1% | 0.52 | 0.110 |
-| 4v4 | 0 | 0.78x | 1.23x | 1.4% | 11.2% | 0.68 | 0.164 |
-| 6v6 | 0 | **0.57x** | 1.27x | 8.2% | 14.7% | 0.52 | 0.112 |
-| 8v8 | 0 | 0.85x | **1.76x** | 3.2% | 23.3% | 0.55 | 0.112 |
-
-**Zero wins and zero losses in 60 games.** Every one hit the time limit, so this
-format measures economy and trade, not winning.
-
-The shape is identical in every bracket: we out-produce (1.10-1.76x), field less
-army (0.57-0.90x) and lose the trade (K/D 0.30-0.68). It is not a team-size
-problem. 1v1 is the weakest and has no team machinery in it at all, which makes
-it the cleanest test bed for production changes.
-
-Waste tracks nothing sensible -- 1.4% at 4v4 against 12.8% at 1v1 -- which is
-what pull-based production predicts: whether metal gets spent depends on whether
-some rule happened to fire when a line came free.
-
-
-## 6. Late game: we do not advance, and our own artillery is part of why
-
-apexearth, watching a 1v1 vs `BARb:stable:hard`, 2026-08-10:
-
-> "We aren't advancing well and these tremors kill our own advancing units just
-> as well as the enemies. We are too slow to make Juggernauts and Behemoths.
-> Might as well start off with a jugg and walk it straight into the enemy base
-> right for their commander."
-
-Three separate things, none fixed:
-
-- **Friendly fire from our own artillery.** A Tremor firing into a contested
-  line hits whatever is standing in it, and what is standing in it is usually
-  our push. Nothing today asks whether an artillery target has our own units
-  near it. `CArtilleryTask` picks by enemy value alone.
-- **T3 assault arrives far too late to matter.** The gantry and the heavies are
-  gated behind the same phase machinery as everything else, so by the time a
-  Juggernaut exists the game is decided. His suggestion is worth taking
-  literally: at a high enough economy, a single Juggernaut walked at the enemy
-  commander is a better use of 20,000 metal than the same metal in T2.
-- **Advancing at all.** Fixed in neither direction -- see issue 1, we chip.
-
-Fixed the same session, from the same game:
-
-- 9 fusions and no advanced fusion: `FusionDef()` only ever returned the plain
-  tier, so the ladder had no top rung. Now climbs at 120 metal/s once three
-  plain reactors stand.
-- ~20 Doomsday towers late. A ceiling of 4 was added and REVERTED the same
-  day -- apexearth: "no no no don't you ever do such a thing like limit to 4
-  max T3 towers." The count is not the problem; building them instead of
-  advancing is. What bounds them is the Brain's per-copy value decay, not a
-  number.
-
-## 2. Pushes should not take damage on the way in
-
-**apexearth:** "we need smart pushes where the pusher doesn't even take damage."
-
-Related but distinct from issue 1: not just *bigger* pushes, but pushes that
-arrive intact. The pieces that exist and are not being used together:
-
-- `apex_attack_threat_mod` — what an attack party pays for contested ground in
-  the path query. Raising it makes the flank the shortest path, the way
-  `RaidTask`'s `RAID_ROAM_THREAT_MOD = 8` already does for raid parties. Shipped
-  at 1.0, i.e. upstream behaviour, and **never measured**.
-- The map-edge preference in `AttackTask.cpp` (`apex_edge_band` / `apex_edge_bonus`)
-  already prefers economy on the rim. The routing half of "go around the edge"
-  was never built.
-
----
+Scouts themselves are NOT the gap — armflea 58-177, armfav 38-54, armpeep 7-40,
+armawac 5-13 per side. We look; we do not remember correctly, and we hold almost
+no permanent coverage.
 
 ## 3. Stealth and sight are not used to set up attacks
 

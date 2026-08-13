@@ -59,6 +59,42 @@ bool DefenceTaskNear(const AIFloat3& in pos, float radius)
 	return false;
 }
 
+// Defence ALREADY ORDERED here, and the dearest of it. The companion to
+// Military::FenceGunsNear, which sees only finished towers: the FENCE event fires
+// on completion and CCircuitAI::GetOwnUnitsOfDef skips IsBeingBuilt, so without
+// this half a crowd test reads bare ground for the whole build time and six more
+// can start at once.
+//
+// Unlike DefenceTaskNear this counts orders with NOBODY on them. A queued tower is
+// not cover, but it is metal already committed to this spot, and the burst being
+// refused is exactly the one where no builder has been elected yet. Entries leave
+// the register through DequeueTask -> AiTaskRemoved, so an aborted order stops
+// counting on its own.
+uint DefenceOrdersNear(const AIFloat3& in pos, float radius, float& out topCost)
+{
+	topCost = 0.f;
+	const float sq = radius * radius;
+	uint n = 0;
+	for (uint i = 0; i < gDefTasks.length(); ++i) {
+		if (gDefTasks[i] is null)
+			continue;
+		const AIFloat3 at = gDefTasks[i].GetBuildPos();
+		if (!OnMap(at))
+			continue;
+		const float dx = at.x - pos.x;
+		const float dz = at.z - pos.z;
+		if ((dx * dx + dz * dz) >= sq)
+			continue;
+		CCircuitDef@ d = gDefTasks[i].buildDef;
+		if ((d is null) || (d.GetSurfThreat() <= 0.f))
+			continue;
+		++n;
+		if (d.costM > topCost)
+			topCost = d.costM;
+	}
+	return n;
+}
+
 // Is this task still on the books? Every removal funnels through DequeueTask ->
 // AiTaskRemoved, so a task that has left gDefTasks was aborted or finished, and
 // one still in it is queued. Those two failures have opposite fixes and are

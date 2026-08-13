@@ -1,6 +1,7 @@
 namespace Military {
 
 int gNextFenceCapLog = 0;
+int gNextCrowdLog = 0;
 
 string armanni("armanni");
 string cordoom("cordoom");
@@ -318,8 +319,73 @@ float TeamAA()
 //   1. is defence already over the share targets.as gives it,
 //   2. is this the rear, and has the rear had its tenth,
 //   3. ...unless we are actually being attacked, when a tower beats the curve.
-bool DefenceAllowedAt(const AIFloat3& in pos)
+//   4. and, whatever the budget says, is this ground already covered -- unless
+//      what we are placing is better than what covers it.
+//
+// SIX TOWERS COVERING THE SAME GROUND IS ONE TOWER'S COVER, FIVE TIMES OVER.
+// apexearth, watching a 6v6 at +50: "we make too many towers at the front. we
+// need to learn that we have too many towers at the front in one spot and start
+// spreading them out or stop making them. If a tower already has 6 other towers
+// in it's range then maybe we should stop making more unless we're making a
+// higher tier of tower."
+//
+// Every other clause in this gate is economic or positional, and neither could
+// see this: a blob and a line cost the same metal and sit at the same forward
+// fraction. The radius is the placed turret's own weapon range through
+// Brain::TowerReach (CCircuitDef::GetMaxRange, clamped -- legrampart's ICBM
+// interceptor reports 72,000), so a Beamer line and a Pulsar line are each judged
+// at their own spacing rather than at a number typed in here.
+//
+// The tier exemption is what keeps this from being a ceiling: a better turret may
+// always go in, at any density, so density can never stop the defence climbing
+// with the economy. It only stops the same turret being repeated.
+//
+// `def` null means the caller does not know what will be placed -- AiMakeDefence,
+// where the def is chosen inside DefaultMakeDefence after this returns. Unknown
+// can never be "higher tier", and the light turret's range is the radius, which is
+// what an ordinary cluster gets from landDefenders[0] under prevent:1.
+bool CrowdAllows(const AIFloat3& in pos, CCircuitDef@ def)
 {
+	// apexearth's number, not a derived one.
+	const float most = ai.GetTunable("apex_fence_crowd", 6.f);
+	if (most <= 0.f)
+		return true;
+	// A def with no surface gun -- anti-air, a jammer -- is not what he is
+	// describing and is bounded by its own rule (Brain::AACoverNear).
+	if ((def !is null) && (def.GetSurfThreat() <= 0.f))
+		return true;
+	float span = (def is null) ? Brain::LightTowerRange() : Brain::TowerReach(def);
+	if (span < 200.f)
+		span = 200.f;
+
+	float standTop = 0.f;
+	float orderTop = 0.f;
+	const uint standing = FenceGunsNear(pos, span, standTop);
+	const uint ordered = Builder::DefenceOrdersNear(pos, span, orderTop);
+	if (float(standing + ordered) < most)
+		return true;
+
+	const float top = (standTop > orderTop) ? standTop : orderTop;
+	const bool better = (def !is null) && (def.costM > top);
+	if (!better && (ai.frame >= gNextCrowdLog)) {
+		gNextCrowdLog = ai.frame + 30 * SECOND;
+		string wanted = "?";
+		if (def !is null)
+			wanted = def.GetName();
+		AiLog(Factory::T() + "apex: crowded " + (standing + ordered)
+			+ " within " + int(span)
+			+ " (" + ordered + " on order), best=" + formatFloat(top, "", 0, 0)
+			+ ", want=" + wanted
+			+ ((OnBorder(pos) || NearFront(pos)) ? " front" : " rear"));
+	}
+	return better;
+}
+
+bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
+{
+	if (!CrowdAllows(pos, def))
+		return false;
+
 	// BEING ATTACKED RAISES THE BUDGET; IT DOES NOT REMOVE IT.
 	//
 	// This returned true outright while contested, and measured at +50 the base
