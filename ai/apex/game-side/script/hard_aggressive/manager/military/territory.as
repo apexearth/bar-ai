@@ -1008,6 +1008,28 @@ float EnemyArmyCost()
 	     + aiEnemyMgr.GetEnemyCost(Unit::Role::AH.type);
 }
 
+// THE WHOLE ENEMY ARMY, INCLUDING THE PART THAT DECIDES GAMES.
+//
+// EnemyArmyCost above sums six roles and counts NEITHER heavy NOR super, so 40
+// unit defs -- armbanth, armthor, corgol, corjugg, corkorg, corsumo,
+// legeheatraymech and the rest -- are worth exactly zero to us. Measured in a
+// 40-minute 8v8: BARb fielded 849,790 metal of T3, all of it invisible, and
+// every one of our seven team pushes was declared while we were 17-50% BEHIND
+// on real standing army. A declared push sets IsCommitted, so no unit may
+// retreat -- that is not a worse trade, it is an army that cannot disengage.
+//
+// Ten defs carry a counted role AND heavy and are double-counted here.
+// Over-counting an enemy is the safe error; reading their Korgoths as absent is
+// not. Only the two commit decisions read this -- LosingGround and the sizing
+// helpers keep the narrower sum, because widening those moves reclaim, rez and
+// the front-tower rule as well.
+float EnemyFieldCost()
+{
+	return EnemyArmyCost()
+	     + aiEnemyMgr.GetEnemyCost(Unit::Role::HEAVY.type)
+	     + aiEnemyMgr.GetEnemyCost(Unit::Role::SUPER.type);
+}
+
 // Behind on the field: they field more army value than we do.
 const float BEHIND_RATIO = 1.0f;
 

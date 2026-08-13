@@ -134,7 +134,7 @@ void UpdateTeamPush()
 		// "vs enemy 0", i.e. it was firing on ignorance rather than on advantage.
 		// EnemyArmyFloor() already exists for exactly this ("a refused query is
 		// unknown, never no enemies"), so treat it as the floor.
-		const float seen = EnemyArmyCost();
+		const float seen = EnemyFieldCost();
 		const float floorFoe = EnemyArmyFloor();
 		// Never push on IGNORANCE. EnemyArmyFloor is
 		// PORC_THREAT_PER_ENEMY * teams -- 90 metal on a 6v6, less than one

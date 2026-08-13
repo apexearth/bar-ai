@@ -16,7 +16,7 @@ bool KillingBlow()
 	if (ai.frame < KILL_FROM)
 		return false;
 	const float ours = TeamArmyCost();
-	const float theirs = EnemyArmyCost();
+	const float theirs = EnemyFieldCost();
 	if (ours < KILL_FLOOR)
 		return false;
 	// Hysteresis, so a single lost engagement does not flip us back to massing
@@ -34,7 +34,7 @@ void UpdateKillingBlow()
 	gKilling = now;
 	AiLog(Factory::T() + "apex: KILLING BLOW " + (now ? "ON" : "off")
 		+ " teamArmy=" + formatFloat(TeamArmyCost(), "", 0, 0)
-		+ " enemyArmy=" + formatFloat(EnemyArmyCost(), "", 0, 0));
+		+ " enemyArmy=" + formatFloat(EnemyFieldCost(), "", 0, 0));
 }
 
 
