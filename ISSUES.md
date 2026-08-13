@@ -30,33 +30,46 @@ ensure our military is ***responsive*** to needs for aid."
 This is an explicit rebalancing directive from apexearth, not a bug report —
 he is stating the policy himself (tone back defence, grow army, make the army
 respond to where the enemy actually is), which is different from this repo
-inventing a threshold on its own. Two distinct claims, likely two different
+inventing a threshold on its own. Two distinct claims, two different
 mechanisms:
 
-1. **Static defence is overbuilt in aggregate** — "100 sentry turrets" even
-   after today's per-spot crowding cap (`CrowdAllows`/`apex_fence_crowd`) landed
-   earlier the same session. That cap bounds how many towers cluster in ONE
-   spot; it does nothing about the total count across many spots along a long
-   front line, which is what "100 turrets" describes. Static-defence's own
-   territory.
-2. **Army does not redeploy to a breakout** — once the enemy penetrates
-   anywhere, our units at every OTHER point of the line stay put instead of
-   converging on the actual threat, per apexearth's own description ("that
-   army goes around our entire frontline to hit us in the back"). This is
-   military-engagement's territory: posture, `quota.attack`, and whatever (if
-   anything) currently reacts to a hotspot forming behind the front rather than
-   at it. `CCircuitAI::GetAttackHotspot` (a cost-weighted loss centroid) already
-   exists per the 2026-08-11 ally-aid note further down this file — worth
-   checking whether it is being read for THIS purpose (pulling defenders off an
-   unthreatened stretch of line) or only for the separate ally-convergence idea.
-
-Not yet investigated. Needs proper domain passes from both static-defence
-(is defence spend actually higher than it should be for the income, and is
-`apex_fence_crowd`'s per-spot cap the only knob or is there a team-wide/
-line-wide one missing) and military-engagement (what triggers a redeployment
-today, if anything, and what "responsive" should mean in code — likely reading
-the loss-hotspot or an equivalent penetration signal rather than a static
-per-sector quota).
+1. **Static defence is overbuilt in aggregate — FIX LANDED 2026-08-13, NOT YET
+   MEASURED.** Confirmed: the front-line budget was a tower COUNT scaling
+   linearly with income (~1.2 towers per team metal/s), so a Sentry and a
+   Pulsar each spent one unit of it — permitting 100+ towers before the count
+   ever bound at hosted-game income. Also confirmed connected to the "spread
+   thin" report below: `CrowdAllows` was being asked with `def = null` on the
+   path that places most towers, so its tier-upgrade exemption could never
+   fire, and a crowded spot was refused outright rather than allowed as an
+   upgrade — landing as a fresh cheap Sentry on new ground instead. Both fixed
+   in one pass: the budget is now a team metal-share test
+   (`teamFrontMetal/teamTotalSpend` vs `TargetShare(DEFENCE) * pressure *
+   front-share`), and the crowd check now receives a real candidate def via a
+   new `Military::LadderDef()`. `SPEND_DEFENCE` recalibrated to 10% of spend
+   at every income step, apexearth's explicit number ("Let's try defence at
+   10%"). See CHANGES.md. Smoke-tested clean; needs a tournament + a watched
+   game before this half can be closed out.
+2. **Army does not redeploy to a breakout — INVESTIGATED, DESIGNED, NOT YET
+   IMPLEMENTED.** Confirmed: every DEFEND pool is pulled toward the SAME single
+   anchor point (`GetGuardAnchor`) each pass — either one cost-weighted
+   centroid of all recent losses (`GetAttackHotspot`) or one sticky front
+   point, never a per-sector position. Two simultaneous breaches average to a
+   point between them that is neither. A previous responsiveness attempt
+   (freeze new units near-base while contested) was tried, measured, and
+   reverted (`hooks.as`) — its own comment names the missing capability: "a
+   per-task position, which this layer does not have."
+   Design (C++, layer 3): turn the hotspot from one centroid into a small
+   fixed-size set of loss spots; make `GetGuardAnchor` per-task, scored by
+   remaining unanswered threat at each spot divided by distance, subtracting
+   already-assigned power as pools are assigned so later pools naturally pick
+   the next-worst breach; stop `CheckMergeTask` from merging DEFEND pools
+   anchored to different spots back into one blob.
+   **Before implementing: run the cheap falsifier the investigating agent
+   flagged.** Log `GetTasks(DEFEND).size()` and each task's `attackPower`/
+   `position` every 20s in one game. If there is typically only ONE live
+   DEFEND pool, per-task anchoring changes nothing — the fix would need to
+   SPLIT pools, not steer them, which is a different and larger change. Check
+   this before spending the C++ implementation effort.
 
 ## NEW: the defensive front line is spread thin instead of massed on a line (2026-08-13, watching)
 
