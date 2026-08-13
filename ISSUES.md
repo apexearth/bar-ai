@@ -7,6 +7,13 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ## 0b. REACTORS ARE STARTED IN PARALLEL AND NEVER FINISH
 
+**FIX LANDED 2026-08-13, NOT YET MEASURED.** All four mechanisms below were
+fixed in `joinbuild.as`/`fusion.as` (see CHANGES.md). Smoke-tested clean (no
+compile errors, full 30-minute run). The 701/40 numbers below are the
+*pre-fix* baseline — a fresh tournament against the same baseline conditions
+is needed to confirm the fix actually closes the gap before this entry can be
+removed.
+
 **apexearth, 2026-08-13, after losing a real multiplayer 6v6 to HUMANS:** "we are
 super inefficient when we make multiple eco buildings at the same time, like 2
 fusions, 2 or 3 afus... etc."
@@ -61,6 +68,16 @@ apexearth has rejected twice and binds at 200 m/s.
 
 ## 0a. OUR PICTURE OF THE ENEMY NEVER EXPIRES — and it is worst against humans
 
+**FIX LANDED 2026-08-13, NOT YET MEASURED AND SHIPPED AS A NO-OP.** Both halves
+landed: a fresh-cost C++ binding (`GetEnemyCostFresh`/`freshMobileThreat`)
+blended into `EnemyArmyCost`/`EnemyFieldCost` via `apex_ghost_weight` (default
+1.0 — bit-identical to before, by design), and the radar-tower sensor unblock
+(`DefaultMakeSensors`). See CHANGES.md for both. Neither is measured yet:
+`apex_ghost_weight` needs the `GhostDiag()` ghost-fraction telemetry from a
+real run before it's worth turning down, and radar count needs a fresh 10x
+6v6 batch against the 1/player-vs-2.4/player baseline below. Both smoke-tested
+clean (no compile errors, no crash, DLL rebuilt).
+
 **apexearth, 2026-08-13, after losing a real multiplayer 6v6 to HUMANS:** "just
 20m in we're dying a lot and we already need spam to get vision on the humans, or
 air scouts."
@@ -100,6 +117,18 @@ armawac 5-13 per side. We look; we do not remember correctly, and we hold almost
 no permanent coverage.
 
 ## 3. Stealth and sight are not used to set up attacks
+
+**PARTIAL FIX LANDED 2026-08-13, NOT YET MEASURED AND SHIPPED AS A NO-OP.**
+`CAttackTask::FindTarget`'s 5x free-eco raid bonus is now discounted unless
+`CMapManager::IsInLOS` confirms the target ground, via `apex_eco_unseen`
+(default 1.0 — bit-identical to before). This addresses only the "target
+scoring trusts memory, not current vision" half — the corrected diagnosis is
+that targets ARE re-scored continuously, but the safety check reads
+`hostileDatas`, which retains anything out of current LOS/radar, so unseen
+reads as confirmed-clear. See CHANGES.md. Everything below about
+`apex_scout_threat` and escort-based scouting-ahead-of-a-push is still
+untouched — deliberately out of scope for this pass; land and measure the
+target-scoring fix first.
 
 **apexearth:** "Maybe some better use of the stealth units to provide sight would
 help AI be even more cheeky/evil to players."
