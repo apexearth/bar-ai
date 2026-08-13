@@ -18,6 +18,42 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-13: reactors started in parallel and never finished
+
+Layer 2 (AngelScript), `manager/builder/joinbuild.as` and
+`manager/builder/fusion.as`. Measured over 16 `Handicap=50` 6v6 runs: 701
+reactor start requests, 40 reactors finished; 93 of 109 observed nanoframes
+never completed in 50 minutes. apexearth, after losing a real multiplayer 6v6:
+"we are super inefficient when we make multiple eco buildings at the same time,
+like 2 fusions, 2 or 3 afus... etc."
+
+Four mechanisms each independently produced a second reactor start, and each
+fix is a STOP (redirect a builder onto queued work, enqueue nothing new):
+
+- `JoinBuilderCap` read `150 * income / cost`, so a *more expensive* reactor got
+  *fewer* assistants — an armafus was capped at the floor of 2 in economies that
+  could feed eight. A lathe's drain is roughly constant regardless of what it is
+  building, so the cap is now `income / JOIN_BUILDER_DRAIN` (7.0 m/s, tunable
+  `apex_join_drain`), floored at 2, no ceiling.
+- `JoinTaskFor` refused any task with no assignee yet, so during the whole
+  walk-to-site window its caller was told "nothing under way" and started a
+  duplicate. A queued-but-unassigned task now counts, with an already-worked one
+  preferred at similar distance via a small bias.
+- `EcoFusion` never called `JoinTaskFor` at all — it enqueued directly every
+  time. It now joins first, enqueuing only when nothing is found.
+- Both join functions matched on exact def id, so an armfus nanoframe never
+  blocked an armafus start although `HomeEnergy` re-ranks the two rungs every
+  call. Same-class reactors (`IsFusion`) now block each other, but only once the
+  candidate task has an assignee — a commander can build armfus but not armafus,
+  and an assignee is the only proof the joiner's builder handles that rung.
+- `fusion.as`'s own `outstanding = gFusionsAsked - built` bound went negative
+  once `HomeEnergy` built reactors it never tracked, and only the high side was
+  clamped — so the bound stopped binding at 531 vs 170 requests. Now clamped on
+  both sides.
+
+Not yet measured with a run — landed and awaiting a benchmark + a hosted-game
+watch before the numbers above are re-taken.
+
 ## 2026-08-13: the front-hold gate skipped the merge, so the army could never mass
 
 Layer 3 (C++), `task/fighter/DefendTask.cpp`. **This is our own bug, added with

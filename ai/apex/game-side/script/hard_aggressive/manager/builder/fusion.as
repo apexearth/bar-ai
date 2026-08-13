@@ -246,8 +246,10 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 		const int built = ReactorCount();
 		int outstanding = gFusionsAsked - built;
 		// HomeEnergy builds reactors without touching gFusionsAsked, so this can
-		// drift negative; resetting on the far side keeps a desync from wedging it.
-		if (outstanding > allowed * 2) {
+		// drift negative; resetting on EITHER side keeps a desync from wedging
+		// it. Negative was the live case and only the high side was caught, so
+		// the bound stopped binding entirely once HomeEnergy got ahead.
+		if ((outstanding < 0) || (outstanding > allowed * 2)) {
 			gFusionsAsked = built;
 			outstanding = 0;
 		}
@@ -269,6 +271,16 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	if (okDef)
 		rear = ReactorSpot(unit, want, spot);
 	const bool okSpot = okDef && ((rear != 0) || BandSpot(unit, want, false, spot));
+	// Join before enqueueing, same as HomeEnergy. This rule ENQUEUES directly,
+	// so JoinDuplicateBuild -- which only screens an offer DefaultMakeTask made
+	// -- never saw it, and every constructor reaching here started its own
+	// reactor. Neither the counter nor the cooldown moves for a join: nothing
+	// new was asked for.
+	if (okDef) {
+		IUnitTask@ already = Builder::JoinTaskFor(want, unit);
+		if (already !is null)
+			return already;
+	}
 	IUnitTask@ post = okSpot
 		? aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, want, spot, 0.f))

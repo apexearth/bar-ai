@@ -17,11 +17,13 @@ namespace Builder {
 // a STOP in the sense of CHANGES.md 2026-08-01 -- it only redirects an offer the
 // engine already made.
 //
-// "Already under way" means the task has an ASSIGNEE, not a nanoframe:
-// IBuilderTask::AssignTo runs the moment the builder is given the job, and the
-// whole walk to the site happens before a single nanoframe exists. A check for
-// standing structures or for buildDef.count would miss exactly the window this
-// rule is for.
+// For JoinDuplicateBuild, "already under way" means the task has an ASSIGNEE,
+// not a nanoframe: IBuilderTask::AssignTo runs the moment the builder is given
+// the job, and the whole walk to the site happens before a single nanoframe
+// exists. A check for standing structures or for buildDef.count would miss
+// exactly the window that rule is for. JoinTaskFor is a different question --
+// its caller is about to ENQUEUE a second task, so a queued-but-unassigned task
+// is already enough to make that enqueue a duplicate, and it takes one.
 
 // Below this, serializing costs more in walk time than it saves. Solar 155 and
 // wind 43 are meant to be built several at once; a construction turret is 210,
@@ -33,33 +35,34 @@ const float JOIN_MIN_COST = 200.f;
 // better than one walking across the map to help.
 const float JOIN_RANGE = 1500.f;
 
-// How many builders one task may hold, from how cheap the building is relative
-// to what we earn -- never a flat number and never a clock.
+// How much nearer an already-assigned task is treated as being, when choosing
+// between one somebody is working and one merely sitting in the queue.
+const float JOIN_ASSIGNED_BIAS = 400.f;
+
+// How many builders one task may hold, from what the ECONOMY can feed -- never a
+// flat number and never a clock.
 //
-// cost/income is the seconds of our WHOLE income the building costs. A rich
-// player pays that off quickly and is limited by build power, so more lathes on
-// it is free speed; a poor player is limited by metal, and extra builders just
-// stand there sharing the same trickle. So builders fall as that ratio rises:
+// A lathe pulls a roughly constant metal/s while it is building, set by its
+// buildSpeed and not by what it is building: the cost only decides how LONG the
+// drain lasts. So the number of lathes an economy can keep fed is income/drain,
+// and it does not depend on the building's cost at all. `cost` stays in the
+// signature because JOIN_MIN_COST callers already have it and a future
+// per-target rule would want it.
 //
-//   builders = JOIN_AFFORD_SECONDS / (cost / income)
-//
-// apexearth: "if something is 3000 metal to create and we make ~100 metal per
-// second then probably we'd be happy to put 5 or more builders on it" -- 3000
-// at 100/s is 30 income-seconds, and 150/30 is 5. At the benchmark's 10/s the
-// same building is 300 income-seconds and gets the floor of 2.
-const float JOIN_AFFORD_SECONDS = 150.f;
-const uint  JOIN_BUILDERS_MIN = 2;   // below 2 the rule could never fire
-const uint  JOIN_BUILDERS_MAX = 8;
+// Above this cap the extra builders are not slower, they are stalling: the
+// metal is spent either way, so the only thing more lathes on one site can buy
+// once income is exhausted is taking metal off everything else.
+const float JOIN_BUILDER_DRAIN = 7.0f;  // metal/s one constructor pulls
+const uint  JOIN_BUILDERS_MIN = 2;      // below 2 the rule could never fire
 
 uint JoinBuilderCap(float cost)
 {
-	if (cost < 1.f)
+	const float drain = ai.GetTunable("apex_join_drain", JOIN_BUILDER_DRAIN);
+	if (drain <= 0.f)
 		return JOIN_BUILDERS_MIN;
-	const float want = JOIN_AFFORD_SECONDS * aiEconomyMgr.metal.income / cost;
+	const float want = aiEconomyMgr.metal.income / drain;
 	if (want <= float(JOIN_BUILDERS_MIN))
 		return JOIN_BUILDERS_MIN;
-	if (want >= float(JOIN_BUILDERS_MAX))
-		return JOIN_BUILDERS_MAX;
 	return uint(want);
 }
 
@@ -73,7 +76,7 @@ int gNextJoinLog = 0;
 int gConJoinMiss = 0;
 int gMissNoCap = 0;       // the task already holds its builder cap
 int gMissFar = 0;         // nearest candidate sits beyond JOIN_RANGE
-int gMissUnassigned = 0;  // task exists but nobody has been given it yet
+int gMissUnassigned = 0;  // same-class OTHER def queued, and nobody is on it
 int gMissNone = 0;        // no task for this def at all -- the ordinary case
 int gNextJoinMissLog = 0;
 
@@ -119,8 +122,9 @@ void JoinForget(IUnitTask@ task)
 }
 
 // The same search, for rules that ENQUEUE rather than screen an offer. Returns
-// the in-progress task for `want` nearest this unit, or null if none is under
-// way within JOIN_RANGE and under its builder cap.
+// the best existing task for `want` within JOIN_RANGE and under its builder
+// cap, or null if there is none. A task nobody has been given yet still counts:
+// the caller's alternative is a SECOND task for the same thing.
 IUnitTask@ JoinTaskFor(const CCircuitDef@ want, CCircuitUnit@ unit)
 {
 	if ((want is null) || (want.costM < JOIN_MIN_COST) || (unit is null))
@@ -128,8 +132,9 @@ IUnitTask@ JoinTaskFor(const CCircuitDef@ want, CCircuitUnit@ unit)
 	const uint cap = JoinBuilderCap(want.costM);
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	IUnitTask@ best = null;
-	float bestDist = JOIN_RANGE;
-	// The refusal of the NEAREST candidate we could not take. bestDist only
+	float bestDist = 0.f;
+	float bestScore = JOIN_RANGE;
+	// The refusal of the NEAREST candidate we could not take. bestScore only
 	// shrinks once `best` is set, so while best is null every "far" rejection
 	// really is beyond JOIN_RANGE rather than merely second-nearest.
 	string why = "none";
@@ -141,20 +146,46 @@ IUnitTask@ JoinTaskFor(const CCircuitDef@ want, CCircuitUnit@ unit)
 		if (cand is null)
 			continue;
 		const CCircuitDef@ has = cand.buildDef;
-		if ((has is null) || (has.id != want.id))
+		if (has is null)
 			continue;
 		const AIFloat3 where = cand.GetBuildPos();
 		if (!OnMap(where))
 			continue;
 		array<CCircuitUnit@>@ busy = cand.GetUnits();
 		const uint nbusy = (busy is null) ? 0 : busy.length();
+		// Same reactor CLASS counts as the same job. HomeEnergy re-ranks fus
+		// against afus every call, so each rung was blind to the other rung's
+		// in-progress work and both got started. Only a task somebody is
+		// ALREADY on may match across defs: assisting a live nanoframe needs no
+		// build option, but starting one does, and a commander that can build
+		// armfus cannot build armafus.
+		if (has.id != want.id) {
+			if (!IsFusion(has) || !IsFusion(want))
+				continue;
+			if (nbusy == 0) {
+				const float d = here.distance2D(where);
+				if (!whySet || (d < whyDist)) {
+					whySet = true;
+					why = "unassigned";
+					whyDist = d;
+					whyBusy = 0;
+				}
+				continue;
+			}
+		}
 		const float dist = here.distance2D(where);
+		// An assigned task is worth joining over an unassigned one at a similar
+		// distance: somebody is already walking to it, so the metal starts
+		// flowing sooner. Treating it as JOIN_ASSIGNED_BIAS nearer keeps that a
+		// preference rather than an override -- a much closer queued site still
+		// wins.
+		const float score = (nbusy > 0) ? (dist - JOIN_ASSIGNED_BIAS) : dist;
 		string bad = "";
-		if (nbusy == 0)
-			bad = "unassigned";
-		else if (nbusy >= cap)
+		if (nbusy >= cap)
 			bad = "nocap";
-		else if (dist >= bestDist)
+		else if (dist >= JOIN_RANGE)
+			bad = "far";
+		else if (score >= bestScore)
 			bad = "far";
 		if (bad != "") {
 			if (!whySet || (dist < whyDist)) {
@@ -166,6 +197,7 @@ IUnitTask@ JoinTaskFor(const CCircuitDef@ want, CCircuitUnit@ unit)
 			continue;
 		}
 		@best = cand;
+		bestScore = score;
 		bestDist = dist;
 	}
 	if (best !is null) {
@@ -228,8 +260,14 @@ IUnitTask@ JoinDuplicateBuild(CCircuitUnit@ unit, bool isComm, IUnitTask@ offer)
 		if ((cand is null) || (cand is offer))
 			continue;
 		const CCircuitDef@ has = cand.buildDef;
-		if ((has is null) || (has.id != want.id))
+		// Same reactor class counts as the same job; the assignee this loop
+		// already demands below is what makes a cross-def join safe (assisting
+		// a nanoframe needs no build option, starting one does).
+		if ((has is null)
+			|| ((has.id != want.id) && !(IsFusion(has) && IsFusion(want))))
+		{
 			continue;
+		}
 		array<CCircuitUnit@>@ busy = cand.GetUnits();
 		if ((busy is null) || (busy.length() == 0) || (busy.length() >= cap))
 			continue;
