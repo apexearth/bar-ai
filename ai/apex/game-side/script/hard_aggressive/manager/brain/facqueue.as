@@ -467,22 +467,17 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	array<float> counter = CounterShares(fac, weight);
 	array<float> base = BaseShares();
 
-	// The shares are stated over every role in the mix; a line that cannot build
-	// half of them would otherwise quietly aim for half an army. Normalising over
-	// what this line CAN build is what makes the quota that line's own.
-	float sum = 0.f;
-	for (uint i = 0; i < gMix.length(); ++i) {
-		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
-		if ((d is null) || !d.IsAvailable(ai.frame))
-			continue;
-		const float s = Target(i, base, counter, weight);
-		if (s > 0.f)
-			sum += s;
-	}
-	if (sum <= 0.f)
-		return;
-
+	// THE SHARE IS OF THE ARMY, NOT OF THIS LINE. The shares used to be
+	// renormalised over the roles this line could build, so every line aimed to
+	// fill the whole slot budget out of whatever roles it had left -- and a role
+	// row is zeroed as income rises, so late a line is often down to one. Target()
+	// already sums to 1 across the mix, so taking it straight is what makes the
+	// budget divide instead of being claimed once per line.
+	//
+	// The scaling is uniform per line either way, so this moves only where a line
+	// goes quiet, never which unit it picks next.
 	const float slots = float(SlotsForArmy());
+	const float tier = TierShare(fac);
 	for (uint i = 0; i < gMix.length(); ++i) {
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
 		if ((d is null) || !d.IsAvailable(ai.frame) || (d.costM <= 0.f))
@@ -491,7 +486,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		if (s <= 0.f)
 			continue;
 		defs.insertLast(d);
-		want.insertLast(RoundUp((s / sum) * slots * TierShare(fac)));
+		want.insertLast(RoundUp(s * slots * tier));
 		isFloor.insertLast(false);
 	}
 }

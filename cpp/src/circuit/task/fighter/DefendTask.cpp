@@ -33,7 +33,17 @@ namespace circuit {
 // far past its own maxPower it must get before it may leave anyway. Above that
 // the squad is surplus and is better spent attacking than standing still.
 #define FRONT_HOLD_RANGE	1800.0f
-#define FRONT_HOLD_POWER	2.0f
+// A DEFENCE POOL MUST BE ABLE TO REACH THE BAR IT IS HELD TO.
+//
+// CanAssignTo above stops a pool accepting units at maxPower, and this held it
+// until attackPower >= maxPower * FRONT_HOLD_POWER -- so at 2.0 the release was
+// unreachable except by merging two full pools, and every pool passes the
+// `onFront` test by construction because UpdateDefenceTasks writes the anchor
+// into `position` and this compares `position` against that same anchor.
+// apexearth, watching a 400 metal/s player: "we have 257 of them and they all
+// just stay in our base... none of them leave."
+// At 1.0 the release matches the cap: a pool that is full is a pool that may go.
+#define FRONT_HOLD_POWER	1.0f
 
 
 using namespace springai;

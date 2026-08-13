@@ -60,14 +60,44 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (Factory::HoldsLateFighter(unit))
 		return null;
 	if (IsFodder(cdef)) {
-		// RAIDERS GROUP BEFORE THEY GO. This used to send every raider straight
-		// to its own RAID task the moment it was built, skipping the pool stock
-		// parks them in -- Defend(RAID, quota.raid[0]) -- which holds them until
-		// they add up to quota.raid[0] power and then promotes them TOGETHER.
-		// The shortcut got each raider moving sooner and guaranteed it moved
-		// alone, so we trickled ones and twos into a map being raided by packs.
-		// Our quota.raid is [10, 65], identical to stock's, so the pack behaviour
-		// was always configured -- we were routing around it.
+		// The set of defs the spam posture applies to, discovered rather than
+		// listed. See NoteFodderDef.
+		NoteFodderDef(cdef);
+		// IN SPAM PHASE THEY DO NOT FORM SQUADS. apexearth: "they shouldn't form
+		// squads, they spread out and waste enemy firepower... they run in to spot
+		// the enemy with little regard for their safety."
+		//
+		// CScoutTask is the only fighter task in CircuitAI that cannot become a
+		// group: it derives from IFighterTask and not ISquadTask, so it has no
+		// CheckMergeTask and no other task can absorb it, and its CanAssignTo is
+		// `units.empty() && IsRoleScout()` -- one unit, forever. The role half of
+		// that gate is bypassed here because ITaskModule::AssignTask calls
+		// AssignTo directly on whatever MakeTask returns; CanAssignTo only guards
+		// the merge and re-assignment paths, which is exactly the part we want
+		// closed. So a raider-role Grunt can hold a scout task, and nothing can
+		// join it.
+		//
+		// Where each one goes is CMilitaryManager::GetScoutPosition, which claims
+		// an unscouted metal cluster per task and skips any cluster another scout
+		// task already holds -- so N of them spread over N clusters instead of
+		// walking the same lane. Unlooked-at ground reads as zero threat, so the
+		// ground they are sent to is by construction the ground we know least
+		// about, which is where the enemy estimate is wrong.
+		//
+		// It also drops the quota.scout ceiling for them: that gate lives in
+		// DefaultMakeTask, and this does not go through it. Two eyes was a cap,
+		// and how many we field is a production question, not a routing one.
+		if (SpamPhase())
+			return aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::SCOUT));
+		// BEFORE SPAM PHASE, RAIDERS GROUP BEFORE THEY GO. This used to send every
+		// raider straight to its own RAID task the moment it was built, skipping
+		// the pool stock parks them in -- Defend(RAID, quota.raid.min) -- which
+		// holds them until they add up to that much power and then promotes them
+		// TOGETHER. The shortcut got each raider moving sooner and guaranteed it
+		// moved alone, so we trickled ones and twos into a map being raided by
+		// packs. quota.raid is configured for the pack -- we were routing around
+		// it. UpdateRaidCaution raises the promotion floor further while we are
+		// still on T1, which is the same instruction stated in power.
 		// apexearth: "they raid us and we never raid them.... they'll attack with
 		// like 15 grunts all together... wiping out a lot of our stuff.... we
 		// never really do that to the enemy... It really sets the stage/posture

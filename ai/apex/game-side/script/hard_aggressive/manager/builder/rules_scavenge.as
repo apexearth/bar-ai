@@ -130,8 +130,13 @@ IUnitTask@ TidyObsolete(CCircuitUnit@ unit, bool isComm)
 	// is null here, so the engine declined, and every rule above it declined too.
 	// A full bank is the second half of the condition apexearth named -- there is
 	// nothing this constructor could be buying with the metal instead.
+	//
+	// The rank floor is VALUE_NONE and only here: this constructor is provably
+	// idle, so the periphery is worth clearing when nothing better is standing.
+	// How OFTEN that happens is ObsoletePeriod's job -- a low-ranked target earns
+	// a long cooldown, so a corner turbine costs one walk and not a habit.
 	if (!isComm) {
-		IUnitTask@ tidy = ObsoleteReclaim(unit, aiEconomyMgr.isMetalFull);
+		IUnitTask@ tidy = ObsoleteReclaim(unit, aiEconomyMgr.isMetalFull, VALUE_NONE);
 		if (tidy !is null)
 			return tidy;
 	}

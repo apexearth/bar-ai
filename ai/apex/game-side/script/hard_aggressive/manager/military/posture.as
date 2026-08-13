@@ -327,28 +327,63 @@ const float LANE_STICKY = 900.f;
 // the enemy" -- and, on the early game, "this is only when they're being used as
 // spam, not early game behavior."
 //
-// behaviour.json states ONE retreat value for the whole game, so the config
-// cannot express that. CCircuitDef::SetRetreat was bound for it: the original is
-// kept and restored, so a pre-T2 Grunt is as cautious as it ever was.
-float gRaiderRetreat = -1.f;
+// Two halves. This one is willingness to die: behaviour.json states ONE retreat
+// value for the whole game, so the config cannot express a posture that changes,
+// and CCircuitDef::SetRetreat was bound for it. The original is kept and
+// restored, so a pre-T2 Grunt is as cautious as it ever was. The other half is
+// where they go and whether they go alone -- Military::AiMakeTask in hooks.as.
 bool gRaiderSuicidal = false;
+
+// Every fodder def we have actually built, discovered as it passes AiMakeTask.
+// Nothing in the bindings enumerates CCircuitDefs, and a hand-written per-faction
+// list would be a fourth place to keep parity; IsFodder is already the predicate
+// that decides which units are spam, so the register follows it exactly.
+// unit.circuitDef is a const handle and SetRetreat is not const, so the id is
+// round-tripped through ai.GetCircuitDef to get a writable one.
+array<CCircuitDef@> gFodderDef;
+array<float>        gFodderRetreat;   // parallel: the value config gave each def
+
+// The one predicate. Routing (hooks.as) and posture must never disagree about
+// whether these units are spam right now, so both ask this.
+bool SpamPhase()
+{
+	return Factory::gHaveT2 && (ai.GetTunable("apex_spam_suicidal", 1.f) > 0.f);
+}
+
+void NoteFodderDef(const CCircuitDef@ cdef)
+{
+	if (cdef is null)
+		return;
+	for (uint i = 0; i < gFodderDef.length(); ++i) {
+		if (gFodderDef[i].id == cdef.id)
+			return;
+	}
+	CCircuitDef@ d = ai.GetCircuitDef(cdef.id);
+	if (d is null)
+		return;
+	gFodderDef.insertLast(d);
+	gFodderRetreat.insertLast(d.GetRetreat());
+	// A def first seen mid-phase still has to take the posture already in force.
+	d.SetRetreat(gRaiderSuicidal ? 0.f : gFodderRetreat[gFodderRetreat.length() - 1]);
+}
 
 void UpdateSpamPosture()
 {
-	CCircuitDef@ light = SideDef3("armpw", "corak", "leggob");
-	if (light is null)
-		return;
-	if (gRaiderRetreat < 0.f)
-		gRaiderRetreat = light.GetRetreat();
-	const bool spam = Factory::gHaveT2
-		&& (ai.GetTunable("apex_spam_suicidal", 1.f) > 0.f);
+	const bool spam = SpamPhase();
 	if (spam == gRaiderSuicidal)
 		return;
 	gRaiderSuicidal = spam;
-	light.SetRetreat(spam ? 0.f : gRaiderRetreat);
-	AiLog(Factory::T() + "apex: " + light.GetName() + " retreat -> "
-		+ formatFloat(spam ? 0.f : gRaiderRetreat, "", 0, 2)
-		+ (spam ? " (T2 phase: spotter)" : " (T1 phase: raider)"));
+	string names = "";
+	for (uint i = 0; i < gFodderDef.length(); ++i) {
+		gFodderDef[i].SetRetreat(spam ? 0.f : gFodderRetreat[i]);
+		if (i > 0)
+			names += " ";
+		names += gFodderDef[i].GetName();
+	}
+	string how = "raider";
+	if (spam)
+		how = "spotter";
+	AiLog(Factory::T() + "apex: spam posture -> " + how + " [" + names + "]");
 }
 
 void UpdateLanePos()

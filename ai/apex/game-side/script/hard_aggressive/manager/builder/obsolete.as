@@ -1,14 +1,25 @@
 namespace Builder {
 
-// Reclaiming OUR OWN buildings, for two reasons that share one mechanism.
+// Reclaiming OUR OWN buildings. apexearth: "we are full of crappy buildings in
+// the later game... when we're wealthy all the old buildings like wind should be
+// reclaimed, all the T1.5 turrets should be reclaimed in favor of the bigger
+// turrets", and "the tight packing is great, its the damned t1 buildings we
+// never reclaim."
+//
+// THIS IS NOT AN ECONOMY ACTIVITY. What the act buys is the GROUND; what it
+// costs is constructor time, which is the scarce one. So every decision below is
+// about which cell somebody else wants -- the ranking is the whole design, see
+// VALUE_* and GroundValue -- and never about the metal that comes back.
+//
+// Two cases share the mechanism:
 //
 // 1. apexearth: "when theres no room to build a gantry we need to reclaim
 //    older t1 buildings." C++ reports where a large footprint failed to place
-//    (CBFactoryTask::FindBuildSite -> NoteBuildBlocked); we clear T1 clutter
-//    near that spot.
+//    (CBFactoryTask::FindBuildSite -> NoteBuildBlocked); that spot is the
+//    highest-ranked ground there is.
 // 2. apexearth: "once game is clearly in t3/t2 stage we need to reclaim all
 //    our t1 and t1.5 defenses." Those towers stop earning against T2/T3 units
-//    and their metal is better in something current.
+//    and hold a cell the base has better uses for.
 //
 // Targets are named defs, NOT a computed tier. CCircuitDef carries no tech
 // level, so any tier test would be a heuristic -- and the failure mode here is
@@ -25,8 +36,33 @@ const float OBSOLETE_T2_INCOME = 60.f;
 const int   OBSOLETE_MIN_PERIOD = 3 * SECOND;
 // One fusion reactor's output. The unit of "how far past T1 the grid is".
 const float OBSOLETE_ENERGY_SCALE = 1000.f;
-int gNextObsolete = 0;
-uint gObsoleteTurn = 0;
+int gNextObsolete = 0;   // earliest frame we may SCAN
+int gObsoleteTook = 0;   // frame of the last reclaim actually enqueued
+
+// WHAT THE GROUND UNDER A BUILDING IS WORTH, as a rank: a target is worth what
+// something else wants to do with the cell it stands on. The whole ordering
+// lives in these four numbers and in ValueRate below -- nothing downstream
+// compares anything but the rank, so re-weighting a term (raising the walkway
+// above the blocked site, say) is an edit to this block alone.
+const int VALUE_NONE    = 0;   // periphery: nothing is waiting for this cell
+const int VALUE_INSIDE  = 1;   // standing in the built-up footprint
+const int VALUE_LANE    = 2;   // standing in a walkway
+const int VALUE_BLOCKED = 3;   // a large footprint failed to place on this spot
+
+// Multiplier on the clearing rate for a target of each rank. A corner turbine is
+// not worth a constructor walking to it; a cell a gantry just failed to take is.
+const float OBSOLETE_RATE_NONE    = 0.25f;
+const float OBSOLETE_RATE_INSIDE  = 1.f;
+const float OBSOLETE_RATE_LANE    = 2.f;
+const float OBSOLETE_RATE_BLOCKED = 4.f;
+
+float ValueRate(int value)
+{
+	if (value == VALUE_BLOCKED) return OBSOLETE_RATE_BLOCKED;
+	if (value == VALUE_LANE)    return OBSOLETE_RATE_LANE;
+	if (value == VALUE_INSIDE)  return OBSOLETE_RATE_INSIDE;
+	return OBSOLETE_RATE_NONE;
+}
 
 // What a piece of ground is WORTH, expressed as the energy income standing on
 // the base.
@@ -47,10 +83,16 @@ uint gObsoleteTurn = 0;
 // A clock cannot express that, and neither can a clutter count: at one reclaim
 // per 20 seconds the live game had junk RISE from 43 to 67 while 27 reclaims
 // fired.
-int ObsoletePeriod()
+//
+// ENERGY INCOME AND NOT THE METAL BANK is the wealth term. A pinned bank prices
+// the metal a reclaim returns, which is the resource this act does not care
+// about; energy income prices the ground. The rate rises with it continuously --
+// there is no state in which clearing is switched on.
+int ObsoletePeriod(int value)
 {
 	const float e = aiEconomyMgr.energy.income;
-	int p = int(float(OBSOLETE_PERIOD) / (1.f + e / OBSOLETE_ENERGY_SCALE));
+	const float scale = (1.f + e / OBSOLETE_ENERGY_SCALE) * ValueRate(value);
+	int p = (scale > 0.f) ? int(float(OBSOLETE_PERIOD) / scale) : OBSOLETE_PERIOD;
 	if (p < OBSOLETE_MIN_PERIOD)
 		p = OBSOLETE_MIN_PERIOD;
 	return p;
@@ -155,21 +197,22 @@ void PromoteAssistBots()
 		+ " promoted to builder (advanced constructor held)");
 }
 
-// Past the tier T1 defences and T1 economy were built for. gHaveT3 is a gantry
-// standing; the T2 half additionally wants a real economy, so a player that has
-// merely touched T2 does not strip its own defences while still fighting T1
-// armies. One definition, read by both the reclaim below and ContestTower --
-// they were separate judgements about the same moment, and only one of them
-// existed.
-// Do we hold anything heavier than a T1 turret? Defs from mexguard.as, which the
-// shim includes first.
-bool HaveHeavyDefence()
+// The turret tiers above T1.5, as defs from mexguard.as, which the shim includes
+// first.
+array<CCircuitDef@> HeavyDefenceDefs()
 {
 	array<CCircuitDef@> heavy = {
 		SideDef3(armtoast, cortoastd, legramp),
 		SideDef3(armpulsar, corpulsar, legpulsar),
 		SideDef3(armpb, corvipe, legapopupdef)
 	};
+	return heavy;
+}
+
+// Do we hold anything heavier than a T1 turret?
+bool HaveHeavyDefence()
+{
+	array<CCircuitDef@> heavy = HeavyDefenceDefs();
 	for (uint i = 0; i < heavy.length(); ++i) {
 		if ((heavy[i] !is null) && (heavy[i].count > 0))
 			return true;
@@ -177,16 +220,65 @@ bool HaveHeavyDefence()
 	return false;
 }
 
+// IN FAVOR OF THE BIGGER TURRETS, which is a claim about a piece of ground and
+// not about the roster: HaveHeavyDefence answers "do we own one anywhere", and
+// that authorises eating a Beamer on the far side of the base from the only
+// Pulsar we have. The successor has to reach the cell the old tower holds.
+//
+// FOLLOWS the upgrade, never triggers it. Enqueueing the heavy turret from here
+// would put a 680-2,500 metal DEFENCE task in a rule that runs above the economy
+// offers, and would take the old tower down while its heir was still a nanoframe
+// -- which is the complaint this gate exists to answer.
+array<AIFloat3> gCoverAt;
+array<float>    gCoverR;
+
+void RefreshHeavyCover()
+{
+	gCoverAt.resize(0);
+	gCoverR.resize(0);
+	array<CCircuitDef@> heavy = HeavyDefenceDefs();
+	for (uint i = 0; i < heavy.length(); ++i) {
+		CCircuitDef@ d = heavy[i];
+		if ((d is null) || (d.count <= 0))
+			continue;
+		const float r = d.GetMaxRange() * COVER_FRAC;
+		if (r <= 0.f)
+			continue;
+		array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(d, gHomePos, 0.f);
+		if (have is null)
+			continue;
+		for (uint k = 0; k < have.length(); ++k) {
+			if (have[k] is null)
+				continue;
+			gCoverAt.insertLast(have[k].GetPos(ai.frame));
+			gCoverR.insertLast(r);
+		}
+	}
+}
+
+bool HeavyCoverAt(const AIFloat3& in at)
+{
+	for (uint i = 0; i < gCoverAt.length(); ++i) {
+		if (gCoverAt[i].distance2D(at) <= gCoverR[i])
+			return true;
+	}
+	return false;
+}
+
+// Past the tier T1 defences and T1 economy were built for. gHaveT3 is a gantry
+// standing; the T2 half additionally wants a real economy, so a player that has
+// merely touched T2 does not strip its own defences while still fighting T1
+// armies. One definition, read here and by FrontTower.
 bool PastT1Tier()
 {
 	return Factory::gHaveT3
 		|| (Factory::gHaveT2 && (aiEconomyMgr.metal.income >= OBSOLETE_T2_INCOME));
 }
 
-// How much T1 junk has to be standing before clearing it outranks the ordinary
-// build queue. Below this the end-of-queue path is fine; above it the base is
-// visibly cluttered and the clutter is what is stopping us teching up.
-const int OBSOLETE_URGENT_COUNT = 6;
+// What makes clearing outrank the ordinary build queue is the GROUND, not how
+// many. Six turbines in a corner are not urgent and one Beamer across a walkway
+// is: a count says nothing about whether anything is waiting for the cell.
+const int OBSOLETE_URGENT_VALUE = VALUE_LANE;
 
 // The T1 and T1.5 towers this AI builds -- tiers 0 and 1 of the same ladder
 // MexGuardTower/FrontTower/CoverDef climb.
@@ -212,80 +304,109 @@ array<string> ObsoleteDefenceNames()
 	return names;
 }
 
-string ObsoleteSolarName()
+// WHICH of our copies to eat is a space question. apexearth: "reclaim what's
+// stranded outside the footprint or sitting in a lane" -- a structure in a
+// walkway is what makes the base uncrossable, one mid-footprint is standing
+// where the next reactor goes. The periphery ranks LAST rather than first:
+// nobody is waiting for that cell, and a T1 constructor moves at 36 elmos/s, so
+// the walk out and back costs more time than the reclaim.
+//
+// A TURRET IS SCORED THE OTHER WAY ROUND. "Outside the footprint" describes
+// every tower on the line -- the ones still doing the job they were built for.
+// apexearth: "we reclaim our t1.5 defenses far before we even build our T2+
+// defenses, and we have a horrible lack of T2+ defenses." So a defence entry is
+// eligible only where it is base clutter, and -1 says it is not a target at all.
+//
+// InLaneAt is asked only of positions already known to be inside: it tests the
+// lateral offset alone, so a building a screen away on the same band would
+// otherwise read as "in a lane" without being near the base at all.
+int GroundValue(const AIFloat3& in at, bool isDefence, bool sited,
+		bool haveBlocked, const AIFloat3& in blocked)
 {
-	return SideName3(armsolar, corsolar, legsolar);
+	if (haveBlocked && (at.distance2D(blocked) <= OBSOLETE_NEAR))
+		return VALUE_BLOCKED;
+	if (sited && Base::Inside(at))
+		return Base::InLaneAt(at) ? VALUE_LANE : VALUE_INSIDE;
+	return (isDefence && sited) ? -1 : VALUE_NONE;
 }
 
-IUnitTask@ ReclaimOwnDef(CCircuitUnit@ unit, const string& in defName,
-		const AIFloat3& in near, float radius, const string& in why,
-		bool isDefence = false)
+string ValueWhy(int value)
 {
-	CCircuitDef@ def = ai.GetCircuitDef(defName);
-	if ((def is null) || (def.count <= 0))
-		return null;
-	array<CCircuitUnit@>@ owned = ai.GetOwnUnitsOfDef(def, near, radius);
-	if ((owned is null) || (owned.length() == 0))
-		return null;
+	if (value == VALUE_BLOCKED) return "blocking a build site";
+	if (value == VALUE_LANE)    return "standing in a walkway";
+	if (value == VALUE_INSIDE)  return "inside the footprint";
+	return "outside the footprint";
+}
 
-	// WHICH of our copies to eat is a space question, not an arbitrary one.
-	// apexearth: "reclaim what's stranded outside the footprint or sitting in a
-	// lane". A structure standing in a walkway is what makes the base
-	// uncrossable; one stranded outside the footprint is what makes it sprawl.
-	// Both were previously indistinguishable from a tidy row -- the loop took
-	// whichever copy the engine happened to list first.
-	//
-	// A TURRET IS SCORED THE OTHER WAY ROUND. The eco entries are ranked by where
-	// they waste ground, and "stranded outside the footprint" is a description of
-	// every tower on the line -- the ones still doing the job they were built for.
-	// apexearth: "we reclaim our t1.5 defenses far before we even build our T2+
-	// defenses, and we have a horrible lack of T2+ defenses." So a defence entry
-	// is eligible only where it is base clutter: inside the footprint, or standing
-	// in a walkway. Same boundary Base publishes for placement, so a tower the
-	// grid would refuse to place there is a tower the grid will take back.
-	CCircuitUnit@ pick = null;
-	int bestScore = -1;
-	string bestWhy = why;
+// ONE pass over every candidate def, ranked by ground and then by how far the
+// constructor has to walk. Per-def lists each returning on their first hit meant
+// whichever ran first took nearly everything: measured in a live 37-minute game,
+// 272 armwin and 63 armmakr against 3 armllt. Ranking across the whole set is
+// also the only form in which "prefer the target whose ground someone wants" can
+// be expressed at all.
+CCircuitUnit@ ObsoletePick(CCircuitUnit@ unit, int floorValue, bool haveBlocked,
+		const AIFloat3& in blocked, string& out defName, int& out value)
+{
+	defName = "";
+	value = floorValue - 1;
+	array<string> names = ObsoleteEcoNames();
+	const uint ecoEnd = names.length();
+	if (HaveHeavyDefence()) {
+		array<string> towers = ObsoleteDefenceNames();
+		for (uint i = 0; i < towers.length(); ++i)
+			names.insertLast(towers[i]);
+		RefreshHeavyCover();
+	}
+
 	const bool sited = Base::Ready();
-	for (uint i = 0; i < owned.length(); ++i) {
-		CCircuitUnit@ victim = owned[i];
-		if ((victim is null) || (victim is unit) || AskedFor(victim.id))
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	CCircuitUnit@ pick = null;
+	float bestDist = 0.f;
+	for (uint i = 0; i < names.length(); ++i) {
+		const bool isDefence = (i >= ecoEnd);
+		CCircuitDef@ def = ai.GetCircuitDef(names[i]);
+		if ((def is null) || (def.count <= 0))
 			continue;
-		const AIFloat3 at = victim.GetPos(ai.frame);
-		const bool inLane = Base::InLaneAt(at);
-		const bool inside = sited && Base::Inside(at);
-		if (isDefence && sited && !inLane && !inside)
+		array<CCircuitUnit@>@ owned = ai.GetOwnUnitsOfDef(def, gHomePos, 0.f);
+		if (owned is null)
 			continue;
-		int score = 0;
-		string tag = why;
-		if (inLane) {
-			score = 2;
-			tag = "in a lane";
-		} else if (isDefence && inside) {
-			score = 1;
-			tag = "clutter inside the base";
-		} else if (!isDefence && sited && !inside) {
-			score = 1;
-			tag = "stranded outside the base";
-		}
-		if (score > bestScore) {
-			bestScore = score;
-			@pick = victim;
-			bestWhy = tag;
+		for (uint k = 0; k < owned.length(); ++k) {
+			CCircuitUnit@ victim = owned[k];
+			if ((victim is null) || (victim is unit) || AskedFor(victim.id))
+				continue;
+			const AIFloat3 at = victim.GetPos(ai.frame);
+			const int v = GroundValue(at, isDefence, sited, haveBlocked, blocked);
+			if ((v < floorValue) || (v < 0))
+				continue;
+			// A tower goes only where its heir already reaches. The exception is
+			// ground a large building has just failed to take: there the tower is
+			// the reason we cannot tech up, and a heavier turret is standing
+			// somewhere or the def would not be in this list.
+			if (isDefence && (v != VALUE_BLOCKED) && !HeavyCoverAt(at))
+				continue;
+			const float d = me.distance2D(at);
+			if ((v > value) || ((v == value) && (d < bestDist))) {
+				value = v;
+				bestDist = d;
+				@pick = victim;
+				defName = names[i];
+			}
 		}
 	}
-	if (pick is null)
-		return null;
+	return pick;
+}
 
-	IUnitTask@ eat = aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, pick));
+IUnitTask@ ReclaimOwnDef(CCircuitUnit@ victim, const string& in defName, int value)
+{
+	IUnitTask@ eat = aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, victim));
 	if (eat is null)
 		return null;
-	gReclaimAsked.insertLast(pick.id);
+	gReclaimAsked.insertLast(victim.id);
 	if (gReclaimAsked.length() > 64)
 		gReclaimAsked.removeAt(0);
-	gNextObsolete = ai.frame + ObsoletePeriod();
-	AiLog(Factory::T() + "apex: obsolete-reclaim " + defName + " #" + pick.id
-		+ " (" + bestWhy + ")");
+	gObsoleteTook = ai.frame;
+	AiLog(Factory::T() + "apex: obsolete-reclaim " + defName + " #" + victim.id
+		+ " (" + ValueWhy(value) + ") v=" + value);
 	return eat;
 }
 
@@ -312,7 +433,8 @@ int ObsoleteJunkCount()
 int gNextJunkLog = 0;
 
 // The promoted path: same act, but ahead of the economy offers instead of behind
-// everything. Gated hard so it cannot become a constructor sink.
+// everything. What keeps it from becoming a constructor sink is the rank floor
+// -- it will only take ground somebody is waiting for.
 IUnitTask@ ObsoleteUrgent(CCircuitUnit@ unit)
 {
 	if (!PastT1Tier())
@@ -325,12 +447,11 @@ IUnitTask@ ObsoleteUrgent(CCircuitUnit@ unit)
 			+ " t2=" + (Factory::gHaveT2 ? "1" : "0")
 			+ " t3=" + (Factory::gHaveT3 ? "1" : "0"));
 	}
-	if (junk < OBSOLETE_URGENT_COUNT)
-		return null;
-	return ObsoleteReclaim(unit);
+	return ObsoleteReclaim(unit, false, OBSOLETE_URGENT_VALUE);
 }
 
-IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit, bool allowAdv = false)
+IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit, bool allowAdv = false,
+		int minValue = VALUE_NONE)
 {
 	// NOT THE ADVANCED CONSTRUCTORS. apexearth: "I see T2 con time is being used
 	// to reclaim obsolete buildings. Let's not have that be important for them at
@@ -346,67 +467,38 @@ IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit, bool allowAdv = false)
 	// old stuff." The promoted path above the economy offers never passes it.
 	if (IsAdvConDef(unit) && !allowAdv)
 		return null;
+	// Two rate limits, because the permit depends on what the scan finds. The
+	// scan itself is bounded here at the shortest period any target could earn --
+	// AiMakeTask is a re-election and runs per builder per update, and each scan
+	// walks teamUnits once per candidate def.
 	if (ai.frame < gNextObsolete)
 		return null;
 
-	// Case 1: something large could not be placed. Clear the cheapest clutter
-	// first -- a solar is 155 metal and rebuildable anywhere, a T1 tower is
-	// dead weight by the time we are placing gantries.
 	AIFloat3 blocked;
-	if (ai.GetBlockedBuildPos(blocked)) {
-		array<string> clutter;
-		clutter.insertLast(ObsoleteSolarName());
-		array<string> towers = ObsoleteDefenceNames();
-		for (uint i = 0; i < towers.length(); ++i)
-			clutter.insertLast(towers[i]);
-		for (uint i = 0; i < clutter.length(); ++i) {
-			IUnitTask@ eat = ReclaimOwnDef(unit, clutter[i], blocked, OBSOLETE_NEAR, "blocked build");
-			if (eat !is null)
-				return eat;
-		}
+	const bool haveBlocked = ai.GetBlockedBuildPos(blocked);
+	// A tower on ground a gantry has just failed to take is clutter whatever the
+	// tech state says; everything else waits until we are past the tier these
+	// buildings were worth their ground for.
+	int floorValue = minValue;
+	if (!PastT1Tier()) {
+		if (!haveBlocked)
+			return null;
+		if (floorValue < VALUE_BLOCKED)
+			floorValue = VALUE_BLOCKED;
 	}
 
-	// Case 2: we are clearly past the tier these towers defend against.
-	if (!PastT1Tier())
+	string defName;
+	int value = 0;
+	gNextObsolete = ai.frame + OBSOLETE_MIN_PERIOD;
+	CCircuitUnit@ pick = ObsoletePick(unit, floorValue, haveBlocked, blocked,
+			defName, value);
+	if (pick is null)
 		return null;
-
-	// ONE list, entered at a ROTATING offset.
-	//
-	// Two fixed lists each returning on their first hit meant whichever ran first
-	// took nearly everything: measured in a live 37-minute game, 272 armwin and
-	// 63 armmakr against 3 armllt. Wind is rebuilt continuously by the stock
-	// economy manager, so index 0 always had a candidate and the tower list was
-	// unreachable -- which is precisely the thing apexearth keeps seeing standing.
-	// Rotating the entry point costs nothing and gives every def its turn.
-	array<string> all = ObsoleteEcoNames();
-	// A TOWER IS ONLY OBSOLETE ONCE ITS REPLACEMENT EXISTS. apexearth: "we
-	// reclaim our t1.5 defenses far before we even build our T2+ defenses, and we
-	// have a horrible lack of T2+ defenses." PastT1Tier is a TECH test -- T2 plant
-	// plus income -- and says nothing about whether a heavier turret was ever
-	// built. HeavyDefenceFor needs an advanced constructor to be the one asking,
-	// and conT2 is often zero, so the old tower came down and nothing replaced it.
-	// Economy junk still goes at the tech gate; only defence waits for its heir.
-	array<string> towers;
-	if (HaveHeavyDefence()) {
-		towers = ObsoleteDefenceNames();
-		for (uint i = 0; i < towers.length(); ++i)
-			all.insertLast(towers[i]);
-	}
-	if (all.length() == 0)
+	// The permit is computed for the rank actually found, so a cell a gantry
+	// wants is not made to wait behind the cooldown a corner turbine earned.
+	if (ai.frame < gObsoleteTook + ObsoletePeriod(value))
 		return null;
-
-	const uint n = all.length();
-	for (uint k = 0; k < n; ++k) {
-		const uint i = (gObsoleteTurn + k) % n;
-		const bool isTower = (i >= n - towers.length());
-		IUnitTask@ eat = ReclaimOwnDef(unit, all[i], gHomePos, 0.f,
-				isTower ? "past its tier" : "obsolete tier-1 eco", isTower);
-		if (eat !is null) {
-			gObsoleteTurn = (i + 1) % n;
-			return eat;
-		}
-	}
-	return null;
+	return ReclaimOwnDef(pick, defName, value);
 }
 
 // T1 economy and AA that a T2/T3 base has outgrown. Per-faction, because a
