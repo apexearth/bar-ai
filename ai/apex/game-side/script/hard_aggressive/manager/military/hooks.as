@@ -243,7 +243,7 @@ array<AIFloat3> gFencePos;
 // Parallel to the two above and maintained with them: what each one IS. Nothing
 // else records it -- gFencePos is positions only -- so "is the thing we are about
 // to place better than what already stands here" had no way to be asked.
-array<CCircuitDef@> gFenceDef;
+array<const CCircuitDef@> gFenceDef;
 
 // WHERE A TOWER OF OURS DIED. AiUnitRemoved dropped the position and kept
 // nothing, so ground that had just proved it needs defending read identical to
@@ -276,7 +276,7 @@ uint FenceGunsNear(const AIFloat3& in pos, float radius, float& out topCost)
 			continue;
 		if (i >= gFenceDef.length())
 			continue;
-		CCircuitDef@ d = gFenceDef[i];
+		const CCircuitDef@ d = gFenceDef[i];
 		if ((d is null) || (d.GetSurfThreat() <= 0.f))
 			continue;
 		++n;
