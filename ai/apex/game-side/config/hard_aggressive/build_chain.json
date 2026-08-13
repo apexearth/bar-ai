@@ -318,22 +318,24 @@
 
 
 	"radar":{
+		// TRIMMED 2026-08-13: a finished radar used to enqueue every row below --
+		// BuilderTask.cpp walks the whole hub and enqueues every entry whose
+		// condition passes -- which was ~7,700 expected metal of T2 defence per
+		// radar (armguard+armamb+armpb+armanni+armbrtha). That was tolerable at
+		// ~1 radar/player; the 0a fix (Military::DefaultMakeSensors) raises radar
+		// count toward BARb's ~2.4/player, which would have multiplied it. Kept:
+		// the AA row, one basic turret as the radar's own defence, and the
+		// jammer/advanced-radar sensor upgrades. Removed: the heavy secondary
+		// turret pair and the single superheavy gun, which are what a porcupine
+		// cluster or the front line already builds on their own budget -- a radar
+		// hub is not the place to re-derive that spend.
 		"armrad": {
 			"hub": [
 				[{"unit": "armrl", "category": "defence", "offset": {"back": 10},"condition": {"air": true}, "priority": "high"}],
 				[{"unit": "armguard", "category": "defence", "offset": [120, 100], "priority": "normal"}],
 				[
-					{"unit": "armamb", "category": "defence", "offset": [120, -100], "priority": "high"},
-					{"unit": "armpb", "category": "defence", "offset": [140, 100], "priority": "normal"}
-				],
-				[
-					//{"unit": "armanni", "category": "defence", "offset": [70, -100], "priority": "normal"},
-					{"unit": "armanni", "category": "defence", "offset": [70, 100], "condition": {"chance":0.5}, "priority": "low"}
-				],
-				[
 					{"unit": "armjamt", "category": "defence", "offset": [-60, 0], "priority": "low"},
-					{"unit": "armarad", "category": "defence", "offset": [-100, 0], "condition": {"chance":0.4}, "priority": "low"}, 
-					{"unit": "armbrtha", "category": "defence", "offset": [-100, 0], "condition": {"chance":0.3}, "priority": "low"}
+					{"unit": "armarad", "category": "defence", "offset": [-100, 0], "condition": {"chance":0.4}, "priority": "low"}
 				]
 			]
 		},
@@ -341,17 +343,11 @@
 			"hub": [
 				[{"unit": "corfrt", "category": "defence", "offset": {"back": 10}, "condition": {"air": true}, "priority": "high"}],
 				[{"unit": "corpun", "category": "defence", "offset": [100, -100], "priority": "normal"}],
-				[{"unit": "corvipe", "category": "defence", "offset": [100, -100], "priority": "normal"}],
-				[{"unit": "cortoast", "category": "defence", "offset": [120, 100], "priority": "high"}],
-				[
-					//{"unit": "cordoom", "category": "defence", "offset": [80, -100], "priority": "normal"},
-					{"unit": "cordoom", "category": "defence", "offset": [70, 100], "condition": {"chance":0.5}, "priority": "low"}],
 				[
 					{"unit": "corjamt", "category": "defence", "offset": [-60, 0], "priority": "low"},
-					{"unit": "corarad", "category": "defence", "offset": [-100, 0], "condition": {"chance":0.4}, "priority": "low"}, 
-					{"unit": "corint", "category": "defence", "offset": [-100, 0], "condition": {"chance":0.4}, "priority": "low"} 
+					{"unit": "corarad", "category": "defence", "offset": [-100, 0], "condition": {"chance":0.4}, "priority": "low"}
 				]
-		]
+			]
 		},
 		"armfrad":{
 			"hub":[

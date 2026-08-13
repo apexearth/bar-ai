@@ -149,23 +149,18 @@
 
 
 
+	// TRIMMED 2026-08-13 -- same reason as build_chain.json's armrad/corrad:
+	// the heavy secondary turrets and the superheavy gun are removed so a radar
+	// hub no longer re-derives a porcupine cluster's worth of spend on its own
+	// budget, ahead of the 0a fix raising radar count toward BARb's ~2.4/player.
 	"radar":{
 		"legrad": {
 			"hub": [
 				[{"unit": "legrl", "category": "defence", "offset": {"back": 10},"condition": {"air": true}, "priority": "high"}],
 				[{"unit": "legcluster", "category": "defence", "offset": [120, 100], "priority": "normal"}],
 				[
-					{"unit": "legacluster", "category": "defence", "offset": [120, -100], "priority": "high"},
-					{"unit": "legapopupdef", "category": "defence", "offset": [140, 100], "priority": "normal"}
-				],
-				[
-					//{"unit": "legbastion", "category": "defence", "offset": [70, -100], "priority": "normal"},
-					{"unit": "legbastion", "category": "defence", "offset": [70, 100], "condition": {"chance":0.5}, "priority": "low"}
-				],
-				[
 					{"unit": "legjam", "category": "defence", "offset": [-60, 0], "priority": "low"},
-					{"unit": "legarad", "category": "defence", "offset": [-100, 0], "condition": {"chance":0.4}, "priority": "low"}, 
-					{"unit": "leglrpc", "category": "defence", "offset": [-100, 0], "condition": {"chance":0.3}, "priority": "low"}
+					{"unit": "legarad", "category": "defence", "offset": [-100, 0], "condition": {"chance":0.4}, "priority": "low"}
 				]
 			]
 		}
