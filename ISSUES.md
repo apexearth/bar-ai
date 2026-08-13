@@ -18,6 +18,46 @@ replaced". Needs a proper pass — likely air-warfare's factory ratio /
 `CheapAA`/`HeavyAA` selection, or static-defence's `AAOrder`
 (`builder/statics.as`) gate, or both.
 
+## NEW: too much metal in defence, not enough responsive army (2026-08-13, watching)
+
+**apexearth, watching a second windowed 8v8:** "We still make way too many
+defenses. I counted over 100 sentry turrets... once enemies break through one
+part of the frontline that army goes around our entire frontline to hit us in
+the back and we spend so much on the frontline that we lack army to defend
+where the enemy penetrated. So tone back defense more, add more military -
+ensure our military is ***responsive*** to needs for aid."
+
+This is an explicit rebalancing directive from apexearth, not a bug report —
+he is stating the policy himself (tone back defence, grow army, make the army
+respond to where the enemy actually is), which is different from this repo
+inventing a threshold on its own. Two distinct claims, likely two different
+mechanisms:
+
+1. **Static defence is overbuilt in aggregate** — "100 sentry turrets" even
+   after today's per-spot crowding cap (`CrowdAllows`/`apex_fence_crowd`) landed
+   earlier the same session. That cap bounds how many towers cluster in ONE
+   spot; it does nothing about the total count across many spots along a long
+   front line, which is what "100 turrets" describes. Static-defence's own
+   territory.
+2. **Army does not redeploy to a breakout** — once the enemy penetrates
+   anywhere, our units at every OTHER point of the line stay put instead of
+   converging on the actual threat, per apexearth's own description ("that
+   army goes around our entire frontline to hit us in the back"). This is
+   military-engagement's territory: posture, `quota.attack`, and whatever (if
+   anything) currently reacts to a hotspot forming behind the front rather than
+   at it. `CCircuitAI::GetAttackHotspot` (a cost-weighted loss centroid) already
+   exists per the 2026-08-11 ally-aid note further down this file — worth
+   checking whether it is being read for THIS purpose (pulling defenders off an
+   unthreatened stretch of line) or only for the separate ally-convergence idea.
+
+Not yet investigated. Needs proper domain passes from both static-defence
+(is defence spend actually higher than it should be for the income, and is
+`apex_fence_crowd`'s per-spot cap the only knob or is there a team-wide/
+line-wide one missing) and military-engagement (what triggers a redeployment
+today, if anything, and what "responsive" should mean in code — likely reading
+the loss-hotspot or an equivalent penetration signal rather than a static
+per-sector quota).
+
 ## NEW: the defensive front line is spread thin instead of massed on a line (2026-08-13, watching)
 
 **apexearth, watching the same game:** "Our defensive frontline is too thick,
@@ -37,43 +77,42 @@ instead of lining up.
 
 ## 0b. REACTORS ARE STARTED IN PARALLEL AND NEVER FINISH
 
-**FIX LANDED 2026-08-13, NOT YET MEASURED — AND A REAL GAP FOUND THE SAME
-NIGHT, WATCHING.** All four mechanisms below were fixed in
-`joinbuild.as`/`fusion.as` (see CHANGES.md). Smoke-tested clean (no compile
-errors, full 30-minute run). The 701/40 numbers below are the *pre-fix*
-baseline — a fresh tournament against the same baseline conditions is still
-needed.
+**BOTH FIXES LANDED 2026-08-13, NOT YET MEASURED BY A WATCHED GAME OR
+TOURNAMENT.** The original four mechanisms were fixed in
+`joinbuild.as`/`fusion.as`. A gap in that fix — found the same night, watching
+— was fixed a few hours later: `JoinTaskFor` now checks duplicate-ness against
+the SITE being built (`spot`), not the calling builder's own position (see
+CHANGES.md, both entries). Smoke-tested clean each time (no compile errors, no
+crash, full runs). The 701/40 numbers below are the *pre-either-fix* baseline
+— still needs a fresh tournament, and ideally a third watched game to confirm
+apexearth stops seeing the burst.
 
-**apexearth, watching a windowed 8v8 the same night, at 26:55:** "At 26:55 into
-this game We are making 5 advanced solars and 2 fusions at the same time. You
-just made a fix which was supposed to fix exactly this kind of issue." Traced
-in `matches/20260813-222958-*`: team t3 alone enqueued **5 separate armadvsol
-tasks in an 8-game-second window** (frames 40956-41196), landing at
+**Reported three times, in order:** "we are super inefficient when we make
+multiple eco buildings at the same time, like 2 fusions, 2 or 3 afus" (after a
+lost 6v6, before any fix) → "At 26:55... we are making 5 advanced solars and 2
+fusions at the same time. You just made a fix which was supposed to fix
+exactly this kind of issue" (watching, after the first fix, before the second)
+→ "I still see multiple advanced solars being built (~20m in)... a single team
+going off making ~4 of them all at the same time" (watching, same build as the
+second report — the second fix had not been deployed yet when this game ran).
+
+Traced in `matches/20260813-222958-*`: team t3 alone enqueued **5 separate
+armadvsol tasks in an 8-game-second window** (frames 40956-41196), landing at
 `1680,2880` / `544,3504` / `1744,2880` / `1616,2880` / `1792,3024` — four of
-the five within ~200 elmos of each other. The join system is not dead: the
+the five within ~200 elmos of each other. The join system was not dead: the
 same log window shows successful joins elsewhere (`con-join(direct)
-armrectr -> armadvsol joined=1`). It just doesn't see this case.
+armrectr -> armadvsol joined=1`). It just didn't see this case.
 
-**Mechanism**: `JoinTaskFor(want, unit)` (`joinbuild.as:128-134`) measures
-distance from `unit.GetPos(ai.frame)` — the CALLING BUILDER's current
-position — never from the spot `HomeEnergy`/`EcoFusion` is about to place the
-building at. That is deliberate for one purpose (`joinbuild.as:33-36`: "a
-constructor on the far side of the map building its own is better than one
-walking across the map to help"), but `HomeEnergy` computes `spot` via
-`ReactorSpot`/`BandSpot`/`CoveredSpot` *before* calling `JoinTaskFor`
-(`mexguard.as:538-595`) and never passes it in. So five idle constructors
-scattered around the base each ask "is there a joinable task near ME" from
-five different locations, each gets "no", and each then independently
-computes a `spot` from the SAME placement logic (pack/band against the same
-base layout) — which is exactly why the five spots end up clustered together
-even though the five builders that decided to place them were not.
-
-**Not yet fixed.** The right question is closer to "is there a joinable task
-near the SPOT I am about to build at", which needs `JoinTaskFor` (or a sibling
-check) to take the candidate `spot` as a parameter and compare against
-`cand.GetBuildPos()` directly, independent of where the calling unit currently
-stands — walk-time-to-assist and duplicate-detection are two different
-questions that the current single distance check conflates.
+**Mechanism, now fixed**: `JoinTaskFor(want, unit)` measured distance from
+`unit.GetPos(ai.frame)` — the CALLING BUILDER's current position — never from
+the spot `HomeEnergy`/`EcoFusion` was about to place the building at. Five idle
+constructors scattered around the base each asked "is there a joinable task
+near ME" from five different locations, each got "no", and each then
+independently computed a `spot` from the SAME placement logic (pack/band
+against the same base layout) — which is exactly why the five spots ended up
+clustered together even though the five builders that decided to place them
+were not. `JoinTaskFor` now takes the caller's `spot` as a required parameter
+and checks against that instead.
 
 **apexearth, 2026-08-13, after losing a real multiplayer 6v6 to HUMANS:** "we are
 super inefficient when we make multiple eco buildings at the same time, like 2
