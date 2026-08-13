@@ -70,6 +70,12 @@ mechanisms:
    DEFEND pool, per-task anchoring changes nothing — the fix would need to
    SPLIT pools, not steer them, which is a different and larger change. Check
    this before spending the C++ implementation effort.
+   **Further evidence, same watching session, after the defence-share fix
+   deployed:** "we're losing our main base and our own army is walking around
+   the back to a neighbor's base instead of protecting ourselves. I do see
+   that defenses are less strong." Consistent with the diagnosis above — with
+   defence now correctly weaker (working as intended), the missing
+   redeployment mechanism is more exposed, not less relevant.
 
 ## NEW: the defensive front line is spread thin instead of massed on a line (2026-08-13, watching)
 
@@ -90,24 +96,40 @@ instead of lining up.
 
 ## 0b. REACTORS ARE STARTED IN PARALLEL AND NEVER FINISH
 
-**BOTH FIXES LANDED 2026-08-13, NOT YET MEASURED BY A WATCHED GAME OR
-TOURNAMENT.** The original four mechanisms were fixed in
-`joinbuild.as`/`fusion.as`. A gap in that fix — found the same night, watching
-— was fixed a few hours later: `JoinTaskFor` now checks duplicate-ness against
-the SITE being built (`spot`), not the calling builder's own position (see
-CHANGES.md, both entries). Smoke-tested clean each time (no compile errors, no
-crash, full runs). The 701/40 numbers below are the *pre-either-fix* baseline
-— still needs a fresh tournament, and ideally a third watched game to confirm
-apexearth stops seeing the burst.
+**THREE FIXES LANDED 2026-08-13. THE THIRD IS VERIFIED (SAME SEED, BEFORE/
+AFTER), THE FIRST TWO ARE SMOKE-TESTED ONLY, NEITHER MEASURED BY A WATCHED
+GAME OR TOURNAMENT.** The original four mechanisms were fixed in
+`joinbuild.as`/`fusion.as`. Two further gaps were found the same night,
+watching, and fixed within hours of each report: (1) `JoinTaskFor` now checks
+duplicate-ness against the SITE being built (`spot`), not the calling
+builder's own position; (2) a join refused only for hitting the builder cap no
+longer falls through to an identical spot (`SpotCollides`), and the collision
+registry (`JoinRegister`) no longer exempts cheap buildings like solar from
+being checked at all. See CHANGES.md for all three. The 701/40 numbers below
+are the *pre-any-fix* baseline — still needs a fresh tournament, and ideally a
+fourth watched game to confirm apexearth stops seeing the burst live (the
+verification below is scripted-log, not a watched game).
 
-**Reported three times, in order:** "we are super inefficient when we make
+**Reported four times, in order:** "we are super inefficient when we make
 multiple eco buildings at the same time, like 2 fusions, 2 or 3 afus" (after a
 lost 6v6, before any fix) → "At 26:55... we are making 5 advanced solars and 2
 fusions at the same time. You just made a fix which was supposed to fix
-exactly this kind of issue" (watching, after the first fix, before the second)
-→ "I still see multiple advanced solars being built (~20m in)... a single team
-going off making ~4 of them all at the same time" (watching, same build as the
-second report — the second fix had not been deployed yet when this game ran).
+exactly this kind of issue" (watching, after fix 1's predecessor landed, before
+fix 1 itself) → "I still see multiple advanced solars being built (~20m in)...
+a single team going off making ~4 of them all at the same time" (watching, same
+build as the previous report — fix 1 not yet deployed) → "You just spent 33
+minutes working and the advanced solars still aren't fixed... what?" (watching,
+AFTER fix 1 was deployed — this report is what surfaced fixes 2 and the
+registry gap; fix 1 alone was real but insufficient).
+
+**Verification for fix 2+registry** (not yet done for fix 1 alone): same
+map/seed/player-count (8v8 Comet Catcher, seed 7) run twice via
+`tools/run_match.py`, before and after. A scripted scan of every energy-enqueue
+log line for same-team/same-def/same-position events within 5 real seconds of
+each other found **18 bursts before, 0 after**, across 343 energy-enqueue
+lines in the post-fix run. Solar building still proceeds normally post-fix (59
+enqueues, teams reaching 10-12 standing) — the fix stops literal duplicates
+without blocking legitimate nearby placement.
 
 Traced in `matches/20260813-222958-*`: team t3 alone enqueued **5 separate
 armadvsol tasks in an 8-game-second window** (frames 40956-41196), landing at
