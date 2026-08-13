@@ -619,7 +619,12 @@ array<AIFloat3> gFrontDrawn;
 
 void DrawFrontLine()
 {
-	if (ai.GetTunable("apex_draw_front", 1.f) <= 0.f)
+	// OFF BY DEFAULT because this ships. Tunables resolve through
+	// GetRulesParamFloat, which only dev_tunables.lua in BAR.sdd ever sets, and
+	// multiplayer plays the rapid packages -- so a default of 1 meant every
+	// hosted game drew on the map for human allies who never asked for it.
+	// The harness opts in: --modoption apex_draw_front=1.
+	if (ai.GetTunable("apex_draw_front", 0.f) <= 0.f)
 		return;
 	if (ai.frame < gNextFrontDraw)
 		return;

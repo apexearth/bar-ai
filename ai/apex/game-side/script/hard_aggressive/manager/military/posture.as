@@ -452,7 +452,9 @@ void UpdateLanePos()
 	// identify *why* units are doing things I could be able to tell you better
 	// whats going on." This is the anchor FillFrontPos picks the regroup cluster
 	// from, so it is the single most useful thing to see.
-	if (ai.GetTunable("apex_ping", 1.f) > 0.f) {
+	// OFF BY DEFAULT: this is a map marker human allies see. The harness turns it
+	// back on with --modoption apex_ping=1; see apex_draw_front in frontline.as.
+	if (ai.GetTunable("apex_ping", 0.f) > 0.f) {
 		if (OnMap(gLanePinged))
 			AiDelPoint(gLanePinged);
 		gLanePinged = gLaneAt;

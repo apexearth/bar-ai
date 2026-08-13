@@ -105,6 +105,9 @@ local NAMES = {
 	"apex_unblock",
 	-- Dev aid: one map marker per attack group when it first picks a target.
 	"apex_ping_attacks",
+	-- Both default OFF in the script so nothing draws in a hosted game; these
+	-- are how a dev run turns the overlay back on.
+	"apex_ping",
 }
 
 local pending = {}
