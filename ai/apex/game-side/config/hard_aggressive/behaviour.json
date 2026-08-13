@@ -349,8 +349,7 @@
 		},
         "armsilo":{
 			"role":	["super", "static"],
-            "threat":{"air": 0.0, "water": 0.0, "surf": 0.1},
-			"limit": 1
+            "threat":{"air": 0.0, "water": 0.0, "surf": 0.1}
         },
 
 		"armrl": {
@@ -492,8 +491,7 @@
 		},
         "corsilo":{
 			"role":	["super", "static"],
-            "threat":{"air": 0.0, "water": 0.0, "surf": 0.1},
-			"limit": 1
+            "threat":{"air": 0.0, "water": 0.0, "surf": 0.1}
         },
 
 

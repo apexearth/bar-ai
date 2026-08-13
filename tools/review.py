@@ -85,6 +85,81 @@ def check_sample(rows: list[dict]) -> list[str]:
     return notes
 
 
+# What a gantry exists to build, by faction, and everything else it can emit.
+SUPERS = ("corjugg", "corkorg", "armbanth", "armthor", "legeheatraymech")
+T3_UNITS = SUPERS + ("corkarg", "corshiva", "corcat", "armvang", "armmar",
+                     "armraz", "legpede", "legkeres")
+GANTRIES = ("corgant", "corgantuw", "armshltx", "armshltxuw", "leggant")
+
+
+def check_gantry(run: Path) -> list[str]:
+    """A standing gantry that builds nothing, and T3 output that is all one def.
+
+    Both failed silently before. TierShare read the tier bits off the UNIT def
+    while only FACTORY defs carry them, so once a gantry existed every unit it
+    could build had its target multiplied by apex_quota_t1_after_t3 (0.0): the
+    gantry drained its five-unit opener and never got another order, while the
+    metal bank sat pinned at full storage -- 124,272 metal wasted in one game
+    against stock's zero. And the default opener is five RAIDERs, which on a
+    gantry means five Karganeths, so what little it did build was one def.
+    apexearth, watching: "I see gantries not building anything" and "we just
+    make karganeths the most... wheres our variety???"
+    """
+    notes: list[str] = []
+    idle, mono, nosuper = [], [], []
+    for res in sorted(run.rglob("result.json")):
+        try:
+            d = json.loads(res.read_text(errors="ignore"))
+        except Exception:
+            continue
+        st = [x for x in (d.get("stats") or []) if x.get("reason") == "periodic"]
+        if not st:
+            continue
+        # OURS ONLY. `teams` is one entry per SIDE and carries the AI spec; the
+        # per-player rows carry `ally`, which indexes it. Without this the check
+        # reports the OPPONENT's gantries as our failure -- in an 8v8 that is half
+        # the rows, and it read as "gantry idle" on stock BARb players.
+        ours = {int(t.get("team", -1)) for t in (d.get("teams") or [])
+                if str(t.get("shortName", "")).lower().startswith("apex")}
+        last = max(int(x["frame"]) for x in st)
+        for r in (x for x in st if int(x["frame"]) == last):
+            if ours and (int(float(r.get("ally", -1))) not in ours):
+                continue
+            built = {}
+            for part in (r.get("allBuilt") or "").split(","):
+                if ":" in part:
+                    k, v = part.rsplit(":", 1)
+                    try:
+                        built[k] = int(v)
+                    except ValueError:
+                        pass
+            if sum(built.get(g, 0) for g in GANTRIES) <= 0:
+                continue
+            t3 = {k: v for k, v in built.items() if k in T3_UNITS and v > 0}
+            spent = sum(t3.values())
+            team = int(float(r.get("team", -1)))
+            if spent == 0:
+                idle.append(f"t{team}")
+                continue
+            if not any(k in SUPERS for k in t3):
+                nosuper.append(f"t{team}")
+            top, val = max(t3.items(), key=lambda kv: kv[1])
+            if val / spent >= 0.80:
+                mono.append(f"t{team} {val / spent:.0%} {top}")
+    if idle:
+        notes.append(f"   !! GANTRY IDLE: standing gantry, zero T3 units "
+                     f"-- {', '.join(sorted(set(idle))[:6])}")
+    if mono:
+        notes.append(f"   !! T3 MONOCULTURE: one def is 80%+ of T3 output "
+                     f"-- {', '.join(sorted(set(mono))[:4])}")
+    if nosuper:
+        notes.append(f"   !  no super-role T3 (Juggernaut/Behemoth/Titan) built "
+                     f"-- {', '.join(sorted(set(nosuper))[:6])}")
+    if not notes:
+        notes.append("   gantries building, T3 output mixed")
+    return notes
+
+
 def check_config(rows: list[dict]) -> list[str]:
     """The 4v4-map-at-8v8 trap."""
     notes = []
@@ -259,6 +334,10 @@ def report(run: Path, control: Path | None, show: bool) -> int:
     print("\n3. configuration")
     for n in check_config(rows):
         print(f"   {n}")
+
+    print("\n3b. T3 / gantry")
+    for n in check_gantry(run):
+        print(n)
 
     print("\n4. outcome  (one bit per match -- never the verdict on its own)")
     s = summarise(run, rows)

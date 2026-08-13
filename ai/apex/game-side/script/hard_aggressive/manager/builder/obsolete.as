@@ -188,19 +188,26 @@ bool PastT1Tier()
 // visibly cluttered and the clutter is what is stopping us teching up.
 const int OBSOLETE_URGENT_COUNT = 6;
 
-// The T1 towers this AI builds. The T2 pop-ups are deliberately NOT here: they
-// are one of the three defs HaveHeavyDefence() reads, so listing them made that
-// guard authorise eating the very tier it gates on.
+// The T1 and T1.5 towers this AI builds -- tiers 0 and 1 of the same ladder
+// MexGuardTower/FrontTower/CoverDef climb.
+//
+// The T2 pop-ups are deliberately NOT here: they are one of the three defs
+// HaveHeavyDefence() reads, so listing them made that guard authorise eating the
+// very tier it gates on. The mid tier is in no part of that set, so it can be
+// listed without touching the gate.
 array<string> ObsoleteDefenceNames()
 {
 	const string side = ai.GetSideName();
 	array<string> names;
 	if (side == "cortex") {
 		names.insertLast(corllt);
+		names.insertLast(corhllt);
 	} else if (side == "legion") {
 		names.insertLast(leglht);
+		names.insertLast(legmg);
 	} else {
 		names.insertLast(armllt);
+		names.insertLast(armbeamer);
 	}
 	return names;
 }
@@ -211,7 +218,8 @@ string ObsoleteSolarName()
 }
 
 IUnitTask@ ReclaimOwnDef(CCircuitUnit@ unit, const string& in defName,
-		const AIFloat3& in near, float radius, const string& in why)
+		const AIFloat3& in near, float radius, const string& in why,
+		bool isDefence = false)
 {
 	CCircuitDef@ def = ai.GetCircuitDef(defName);
 	if ((def is null) || (def.count <= 0))
@@ -226,20 +234,37 @@ IUnitTask@ ReclaimOwnDef(CCircuitUnit@ unit, const string& in defName,
 	// uncrossable; one stranded outside the footprint is what makes it sprawl.
 	// Both were previously indistinguishable from a tidy row -- the loop took
 	// whichever copy the engine happened to list first.
+	//
+	// A TURRET IS SCORED THE OTHER WAY ROUND. The eco entries are ranked by where
+	// they waste ground, and "stranded outside the footprint" is a description of
+	// every tower on the line -- the ones still doing the job they were built for.
+	// apexearth: "we reclaim our t1.5 defenses far before we even build our T2+
+	// defenses, and we have a horrible lack of T2+ defenses." So a defence entry
+	// is eligible only where it is base clutter: inside the footprint, or standing
+	// in a walkway. Same boundary Base publishes for placement, so a tower the
+	// grid would refuse to place there is a tower the grid will take back.
 	CCircuitUnit@ pick = null;
 	int bestScore = -1;
 	string bestWhy = why;
+	const bool sited = Base::Ready();
 	for (uint i = 0; i < owned.length(); ++i) {
 		CCircuitUnit@ victim = owned[i];
 		if ((victim is null) || (victim is unit) || AskedFor(victim.id))
 			continue;
 		const AIFloat3 at = victim.GetPos(ai.frame);
+		const bool inLane = Base::InLaneAt(at);
+		const bool inside = sited && Base::Inside(at);
+		if (isDefence && sited && !inLane && !inside)
+			continue;
 		int score = 0;
 		string tag = why;
-		if (Base::InLaneAt(at)) {
+		if (inLane) {
 			score = 2;
 			tag = "in a lane";
-		} else if (Base::Ready() && !Base::Inside(at)) {
+		} else if (isDefence && inside) {
+			score = 1;
+			tag = "clutter inside the base";
+		} else if (!isDefence && sited && !inside) {
 			score = 1;
 			tag = "stranded outside the base";
 		}
@@ -305,14 +330,21 @@ IUnitTask@ ObsoleteUrgent(CCircuitUnit@ unit)
 	return ObsoleteReclaim(unit);
 }
 
-IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit)
+IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit, bool allowAdv = false)
 {
 	// NOT THE ADVANCED CONSTRUCTORS. apexearth: "I see T2 con time is being used
 	// to reclaim obsolete buildings. Let's not have that be important for them at
 	// all. Rezbots, T1 cons, and con turrets can do that." An advanced con is the
 	// only unit that can build a moho, a reactor or a heavy turret, and there are
 	// never many; tidying is work anything else can do.
-	if (IsAdvConDef(unit))
+	//
+	// allowAdv is the one exception, and only the caller can establish it: the
+	// last-resort path runs after the engine's own offer came back null and after
+	// every rule above declined, so there is no moho for this constructor to be
+	// taken off. It is passed the bank state as well -- apexearth, watching an
+	// 8v8: "These guys have tons of metal so they could spend some time reclaiming
+	// old stuff." The promoted path above the economy offers never passes it.
+	if (IsAdvConDef(unit) && !allowAdv)
 		return null;
 	if (ai.frame < gNextObsolete)
 		return null;
@@ -368,7 +400,7 @@ IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit)
 		const uint i = (gObsoleteTurn + k) % n;
 		const bool isTower = (i >= n - towers.length());
 		IUnitTask@ eat = ReclaimOwnDef(unit, all[i], gHomePos, 0.f,
-				isTower ? "past its tier" : "obsolete tier-1 eco");
+				isTower ? "past its tier" : "obsolete tier-1 eco", isTower);
 		if (eat !is null) {
 			gObsoleteTurn = (i + 1) % n;
 			return eat;

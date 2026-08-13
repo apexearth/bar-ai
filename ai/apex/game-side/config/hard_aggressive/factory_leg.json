@@ -81,23 +81,37 @@
 		"importance": [0.0, 3.0],
 		"require_energy": true,
 		"income_tier": [100, 150, 200, 250, 300],
-//Metal Cost		   	1200		2500		11000			2600		8000			7000				23500				20000		950
+//Metal Cost		   	1200		3950		11000			2600		6500			7000				23500				1350
+//Role (behaviour_leg)	raider		skirmish   artillery		assault		assault			riot				heavy				raider
 		"unit":      [ 	"legjav", 	"legeallterrainmech", "legelrpcmech", 	"legkeres", "legerailtank", "legeshotgunmech", 	"legeheatraymech", 	"legehovertank"],
+
+		// A 0.00 removes the ROLE from the plant, not just the unit's share:
+		// GetFacRoleDef only collects candidates with probs[i] > 0, so a role with
+		// no positive entry resolves to null and every by-role consumer skips it.
+		// legelrpcmech was the plant's only artillery and legeshotgunmech its only
+		// riot, both zeroed below 150 metal/s; in water everything but the hover
+		// tank was zeroed at every tier, leaving one role.
+		//
+		// legeheatraymech stays 0.00 everywhere on purpose. It is
+		// Factory::SuperDefFor(leggant), which already keeps one in flight per plant,
+		// and it is the only gantry def in any faction whose mainRole is heavy -- a
+		// positive entry here would also resolve the quota's HEAVY share to it and
+		// buy a 23500-metal mech twice over.
 		"land": {
-			"tier0": [ 	0.80, 		0.10,      0.00,      		0.10,     	0.00,      		0.00,				0.00,				0.00],
-			"tier1": [ 	0.50,		0.20,      0.00,      		0.30,     	0.00,      		0.00,				0.00,				0.00],
-			"tier2": [ 	0.20,		0.10,      0.00,      		0.50,     	0.00,      		0.20,				0.00,				0.00],
-			"tier3": [ 	0.00,		0.00,      0.20,      		0.30,     	0.30,      		0.20,				0.00,				0.00],
-			"tier4": [ 	0.00,		0.00,      0.40,      		0.10,     	0.20,      		0.20,				0.10,				0.00],
-			"tier5": [ 	0.00,		0.00,      0.40,      		0.00,     	0.10,      		0.20,				0.30,				0.00]
+			"tier0": [ 	0.30, 		0.20,      0.05,      		0.25,     	0.05,      		0.15,				0.00,				0.00],
+			"tier1": [ 	0.20,		0.20,      0.10,      		0.25,     	0.05,      		0.15,				0.00,				0.05],
+			"tier2": [ 	0.15,		0.20,      0.12,      		0.23,     	0.08,      		0.17,				0.00,				0.05],
+			"tier3": [ 	0.10,		0.18,      0.17,      		0.20,     	0.12,      		0.18,				0.00,				0.05],
+			"tier4": [ 	0.07,		0.16,      0.20,      		0.16,     	0.16,      		0.20,				0.00,				0.05],
+			"tier5": [ 	0.05,		0.15,      0.22,      		0.13,     	0.20,      		0.20,				0.00,				0.05]
 		},
 		"water": {
-			"tier0": [ 	0.80, 		0.00,      0.00,      		0.00,     	0.00,      		0.00,				0.00,				0.20],
-			"tier1": [ 	0.50,		0.00,      0.00,      		0.00,     	0.00,      		0.00,				0.00,				0.50],
-			"tier2": [ 	0.20,		0.00,      0.00,      		0.00,     	0.00,      		0.00,				0.00,				0.80],
-			"tier3": [ 	0.00,		0.00,      0.00,      		0.00,     	0.00,      		0.00,				0.10,				0.90],
-			"tier4": [ 	0.00,		0.00,      0.00,      		0.00,     	0.00,      		0.00,				0.20,				0.80],
-			"tier5": [ 	0.00,		0.00,      0.00,      		0.00,     	0.00,      		0.00,				0.40,				0.60]
+			"tier0": [ 	0.10, 		0.15,      0.05,      		0.20,     	0.05,      		0.15,				0.00,				0.30],
+			"tier1": [ 	0.05,		0.15,      0.08,      		0.18,     	0.07,      		0.15,				0.00,				0.32],
+			"tier2": [ 	0.05,		0.13,      0.10,      		0.15,     	0.10,      		0.15,				0.00,				0.32],
+			"tier3": [ 	0.03,		0.12,      0.13,      		0.13,     	0.12,      		0.15,				0.00,				0.32],
+			"tier4": [ 	0.03,		0.10,      0.15,      		0.12,     	0.13,      		0.15,				0.00,				0.32],
+			"tier5": [ 	0.03,		0.10,      0.17,      		0.10,     	0.13,      		0.15,				0.00,				0.32]
 		},
 
 		"caretaker": 30

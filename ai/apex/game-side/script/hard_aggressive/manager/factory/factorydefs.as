@@ -459,4 +459,28 @@ CCircuitDef@ T3Gantry()
 	return ai.GetCircuitDef(armshltx);
 }
 
+// THE ONE BIG UNIT A GANTRY IS FOR, per faction and per land/water plant.
+//
+// Named rather than resolved by role: GetFacRoleDef draws at random among a
+// factory's role defs and skips any whose factory.json tier probability is zero,
+// and the super column is 0.00 at tier0 -- so a role lookup answers null exactly
+// when the plant is new. Each name is checked against that plant's own
+// buildoptions; corgantuw cannot build corjugg, and Legion's heaviest carries
+// role "heavy" rather than "super", so no role lookup could ever have found it.
+CCircuitDef@ SuperDefFor(const CCircuitDef@ facDef)
+{
+	if (facDef is null)
+		return null;
+	const string fac = facDef.GetName();
+	if (fac == corgant)
+		return ai.GetCircuitDef("corjugg");
+	if (fac == corgantuw)
+		return ai.GetCircuitDef("corkorg");
+	if ((fac == armshltx) || (fac == armshltxuw))
+		return ai.GetCircuitDef("armbanth");
+	if (fac == leggant)
+		return ai.GetCircuitDef("legeheatraymech");
+	return null;
+}
+
 }  // namespace Factory

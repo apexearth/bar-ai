@@ -224,13 +224,17 @@ int SlotsForArmy()
 // Dropping a tier's share below what we already hold is what makes its line go
 // quiet, because a quota already met orders nothing. That is the one place in
 // this design where the absolute number does real work.
-float TierShare(CCircuitDef@ d)
+// THE TIER OF THE LINE, NOT OF THE UNIT. Factory::userData carries T2/T3 for
+// FACTORY defs only -- main.as tags eleven plants and nothing else -- so asking
+// it about a unit def answered "T1" for every unit in the game, and once a
+// gantry stood, apex_quota_t1_after_t3 (0.0) zeroed the target for everything
+// that gantry could build.
+float TierShare(CCircuitUnit@ fac)
 {
-	const bool isT2 = (Factory::userData[d.id].attr & Factory::Attr::T2) != 0;
-	const bool isT3 = (Factory::userData[d.id].attr & Factory::Attr::T3) != 0;
-	if (isT3)
+	const int attr = Factory::userData[fac.circuitDef.id].attr;
+	if ((attr & Factory::Attr::T3) != 0)
 		return 1.f;
-	if (isT2)
+	if ((attr & Factory::Attr::T2) != 0)
 		return Factory::gHaveT3
 			? ai.GetTunable("apex_quota_t2_after_t3", 0.4f) : 1.f;
 	if (Factory::gHaveT3)
@@ -443,6 +447,22 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		}
 	}
 
+	// A GANTRY THAT IS STANDING IS NEVER IDLE. apexearth, watching: "make sure T3
+	// gantries are always building... if in doubt.. make a juggernaut or behemoth
+	// huge T3". Named rather than asked for by role: GetFacRoleDef skips any def
+	// whose factory.json tier probability is zero, and the super column is 0.00 at
+	// tier0, so the role resolves to null exactly when the plant is new.
+	// One in flight per plant -- a gantry builds one unit at a time, and how many
+	// plants exist is already what WantMoreGantries derives from the economy.
+	if ((Factory::userData[fac.circuitDef.id].attr & Factory::Attr::T3) != 0) {
+		CCircuitDef@ big = Factory::SuperDefFor(fac.circuitDef);
+		if ((big !is null) && big.IsAvailable(ai.frame)) {
+			defs.insertLast(big);
+			want.insertLast(int(fac.circuitDef.count));
+			isFloor.insertLast(true);
+		}
+	}
+
 	float weight = 0.f;
 	array<float> counter = CounterShares(fac, weight);
 	array<float> base = BaseShares();
@@ -471,7 +491,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		if (s <= 0.f)
 			continue;
 		defs.insertLast(d);
-		want.insertLast(RoundUp((s / sum) * slots * TierShare(d)));
+		want.insertLast(RoundUp((s / sum) * slots * TierShare(fac)));
 		isFloor.insertLast(false);
 	}
 }

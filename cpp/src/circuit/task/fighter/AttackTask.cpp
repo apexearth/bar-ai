@@ -289,7 +289,23 @@ void CAttackTask::AssignTo(CCircuitUnit* unit)
 	CCircuitDef* cdef = unit->GetCircuitDef();
 	highestRange = std::max(highestRange, cdef->GetLosRadius());
 
-	if (cdef->IsRoleSupport()) {
+	// A UNIT THAT CAN SHOOT WHAT THE SQUAD SHOOTS FIGHTS IN THE FORMATION; ONLY
+	// AN ESCORT THAT CANNOT FOLLOWS THE LEADER.
+	//
+	// CSupportAction is blocking, and ISquadTask::Attack and ActivePath both skip
+	// a unit whose Blocker() is set, so attaching it hands the unit's position to
+	// the action -- and the action has no position logic for anything armed:
+	// `reach` is only ever set inside its own `!IsAttacker()` branch, leaving
+	// `pos = leaderPos` and a 64-elmo stop radius.
+	//
+	// IsRoleSupport() is the role MASK, and CCircuitDef::AddRole ORs in the
+	// BINDED role, so it is true for the "support" ATTRIBUTE and for every custom
+	// role bound to SUPPORT -- not just for things that escort.
+	//
+	// HasSurfToLand() rather than IsAttacker(): pure AA still has DPS, and an AA
+	// escort put on the arc of a ground fight it cannot join would be standing on
+	// the front rank for nothing.
+	if (cdef->IsRoleSupport() && !cdef->HasSurfToLand()) {
 		unit->PushBack(new CSupportAction(unit));
 	}
 

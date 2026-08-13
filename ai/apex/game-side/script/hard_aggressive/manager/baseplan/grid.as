@@ -67,9 +67,19 @@ void EnsureCols()
 	if (gColsBuilt)
 		return;
 	gColsBuilt = true;
+	// Pitch is the FOOTPRINT of what stands in the band, in whole build cells,
+	// because that is the only pitch on which two of them touch.
+	//
+	// NANO 48: a construction turret is footprintX 3, and only turrets are given
+	// this band. ECO 64: advanced solar and the advanced converter are both
+	// footprintX 4, and they are what the eco block is made of once the economy
+	// is real; the 5-footprint solar spills one build cell past its cell and the
+	// site search closes that itself. HEAVY 144 is deliberately looser than the
+	// 6-footprint reactor that stands in it -- see BAND_BACK above for why heavy
+	// energy is not packed.
 	BAND_BACK = {216.f, 576.f, 1440.f};
-	BAND_ROW  = { 72.f,  72.f,  144.f};
-	BAND_COL  = { 72.f,  72.f,  144.f};
+	BAND_ROW  = { 48.f,  64.f,  144.f};
+	BAND_COL  = { 48.f,  64.f,  144.f};
 	BAND_HALF = { 32.f,  40.f,   64.f};
 	BAND_ROWS = {    4,    12,       5};
 	gCursor   = {    0,     0,       0};

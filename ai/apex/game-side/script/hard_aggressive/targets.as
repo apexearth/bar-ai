@@ -115,6 +115,18 @@ array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
 // I want it lower", and a 54-metal Pawn dies to one shot from anything a real
 // economy fields. The heavy and anti-heavy rows climb to meet it, because that
 // is what the metal buys instead.
+//
+// THESE ROWS ARE READ IN TWO DIFFERENT UNITS. Brain::NextForMix weighs them against
+// held METAL (mix.as: `held = count * costM`), while Brain::QuotaFor turns them into
+// a target COUNT (`want = share * slots`) that FillQuota compares against
+// `defs[i].count`. On a line whose units all cost 40-100 metal the two agree. On a
+// gantry, whose defs run 950 to 29000, they do not.
+//
+// A row also only reaches a factory holding a def whose MAIN role is that role and
+// whose factory.json probability is above zero -- CFactoryManager::GetFacRoleDef
+// filters on both -- and QuotaFor renormalises over what the line can build. No
+// gantry in any faction has an AA, anti-heavy or builder def, so at gantry income
+// much of this table is spent by the T2 lines rather than by the gantry.
 //                            8     20     50    100    300
 //------------------------------------------------------------------------------
 // RAIDERS ARE A T1 UNIT. apexearth: "We should make more snipers, fatboys,

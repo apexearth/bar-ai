@@ -43,6 +43,51 @@ bool Reserved(int kind, int index)
 	return false;
 }
 
+// How close two resolved sites may be before the second is treated as the first.
+// One build cell inside the band's pitch: a neighbour standing edge to edge is a
+// whole pitch away and stays legal, while two cells that resolved onto the same
+// ground are caught.
+float SiteR(int kind)
+{
+	return BAND_COL[kind] - BUILD_CELL;
+}
+
+// Score a placement against the ones before it and remember it. A site within
+// one pitch of an earlier site of the same kind is standing against it; further
+// than that and there is ground between them that nothing will ever use.
+void NoteTiling(int kind, const AIFloat3& in site)
+{
+	float best = -1.f;
+	for (uint i = 0; i < gTileX.length(); ++i) {
+		if (gTileKind[i] != kind)
+			continue;
+		const float dx = site.x - gTileX[i];
+		const float dz = site.z - gTileZ[i];
+		const float d = dx * dx + dz * dz;
+		if ((best < 0.f) || (d < best))
+			best = d;
+	}
+	if (best >= 0.f) {
+		const float pitch = BAND_COL[kind] + BUILD_CELL;
+		if (best <= (pitch * pitch))
+			++gTouch;
+		else
+			++gApart;
+	}
+	if (gTileX.length() < uint(TILE_MEMORY)) {
+		gTileX.insertLast(site.x);
+		gTileZ.insertLast(site.z);
+		gTileKind.insertLast(kind);
+		return;
+	}
+	if (gTileNext >= TILE_MEMORY)
+		gTileNext = 0;
+	gTileX[uint(gTileNext)] = site.x;
+	gTileZ[uint(gTileNext)] = site.z;
+	gTileKind[uint(gTileNext)] = kind;
+	++gTileNext;
+}
+
 void ReserveSite(const AIFloat3& in site)
 {
 	gResX.insertLast(site.x);
@@ -50,14 +95,15 @@ void ReserveSite(const AIFloat3& in site)
 	gResSiteFrame.insertLast(ai.frame);
 }
 
-bool SiteTaken(const AIFloat3& in site)
+bool SiteTaken(int kind, const AIFloat3& in site)
 {
+	const float r = SiteR(kind);
 	for (uint i = 0; i < gResX.length(); ++i) {
 		if (ai.frame >= gResSiteFrame[i] + RESERVE_TTL)
 			continue;
 		const float dx = site.x - gResX[i];
 		const float dz = site.z - gResZ[i];
-		if ((dx * dx + dz * dz) < (RESERVE_R * RESERVE_R))
+		if ((dx * dx + dz * dz) < (r * r))
 			return true;
 	}
 	return false;

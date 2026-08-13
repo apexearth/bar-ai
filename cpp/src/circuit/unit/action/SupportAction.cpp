@@ -40,11 +40,10 @@ CSupportAction::CSupportAction(CCircuitUnit* owner)
 	isBlocking = true;
 	CCircuitDef* cdef = owner->GetCircuitDef();
 	isLowUpdate = cdef->IsAttrMelee() || (cdef->GetReloadTime() >= FRAMES_PER_SEC * 5);
-	// ONLY AN UNARMED SENSOR ESCORT TRAILS. IsRoleSupport(), which is what
-	// decides whether this action exists at all, is the role MASK -- so it is
-	// also true for corsumo, cormort, armsam and cormist, which carry "support"
-	// as an ATTRIBUTE and are meant to be in the fight. Those keep reach 0 and
-	// the stock behaviour exactly.
+	// ONLY AN UNARMED SENSOR ESCORT TRAILS. The callers no longer attach this
+	// action to anything that can shoot ground, so what reaches here is sensors,
+	// rez/reclaim bots and pure AA; of those only a sensor gets a trailing slot,
+	// the rest keep reach 0 and hug the leader as before.
 	if (!cdef->IsAttacker()) {
 		if (cdef->GetJammerRadius() > 1.f) {
 			// A jammer only hides what stands inside its radius.

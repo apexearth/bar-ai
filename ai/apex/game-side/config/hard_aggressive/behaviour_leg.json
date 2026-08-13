@@ -274,14 +274,12 @@
 			},
 			"legabm":{
 				"role":	["super", "static"],
-				"limit": 5,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legsilo":{
 				"role":	["super", "static"],
-				"threat": {"air": 0.0, "surf": 0.1, "water": 0.0},
-				"limit": 1
+				"threat": {"air": 0.0, "surf": 0.1, "water": 0.0}
 			},
 	// T1 Sea Defenses -- Legion
 			"legfrad": {

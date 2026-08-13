@@ -62,12 +62,13 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 			++gFailTerrain;   // would stand in a walkway
 			continue;
 		}
-		if (SiteTaken(site)) {
+		if (SiteTaken(kind, site)) {
 			++gFailBusy;
 			continue;
 		}
 		Reserve(kind, index);
 		ReserveSite(site);
+		NoteTiling(kind, site);
 		Grow(kind, index);
 		gCursor[kind] = index;
 		++gPlaced;
@@ -114,6 +115,7 @@ void Update()
 	AiLog(Factory::T() + "apex: base area=" + int(Area())
 		+ " width=" + int(gMaxLat - gMinLat) + " depth=" + int(gMaxDepth)
 		+ " placed=" + gPlaced + " noroom=" + gNoRoom
+		+ " touch=" + gTouch + "/" + (gTouch + gApart)
 		+ " cur=" + gCursor[NANO] + "/" + gCursor[ECO] + "/" + gCursor[HEAVY]
 		+ " (band=" + gFailBand + " hot=" + gFailHot
 		+ " terrain=" + gFailTerrain + " busy=" + gFailBusy + ")"

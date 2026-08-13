@@ -41,20 +41,27 @@ const int ANCHOR_DEADLINE = 3 * MINUTE;
 // with different pitches still leave their gaps in the same places and the gaps
 // line up into an actual corridor. The lane at lateral 0 is the axis itself:
 // the road out of the factory toward the front.
-// CELL is this file's own band pitch. GRID_CELL is the separate, much finer
-// pitch handed to C++.
 //
-// They are separate because of what the C++ snap does downstream:
-// IBuilderTask::Execute quantises the position onto the published pitch and then
-// CTerrainManager::FindBuildSite takes the nearest site the blocking map allows.
-// Structures whose footprint is not a multiple of that pitch therefore cannot
-// land next to each other -- the quantised neighbour overlaps, the blocking map
-// refuses it, and the spiral settles a whole pitch further out. A pitch of one
-// heightmap square divides every footprint, so the snap aligns without ever
-// forcing a gap, and the walkway push it also performs still applies.
+// BUILD_CELL is the engine's own build square and the invariant every band pitch
+// has to satisfy. CTerrainManager::CorrectPosition truncates a build position to
+// a multiple of SQUARE_SIZE * 2, and FindBuildSiteByMask derives its search
+// corner as int(pos / (SQUARE_SIZE * 2)), so a candidate site can only ever land
+// on that lattice. A band pitch that is not a whole multiple of it cannot be
+// held: consecutive cells truncate alternately down and up, and two neighbours
+// meant to touch end up one build square apart.
+//
+// A structure's footprint is footprintX * BUILD_CELL elmos, so every footprint
+// is a whole number of build cells too. A band whose pitch equals the footprint
+// of what stands in it therefore tiles exactly; a pitch LARGER than the
+// footprint is a gap the site search cannot close, while a pitch smaller is
+// closed by the search itself, since it takes the nearest position the blocking
+// map allows and that is the edge-adjacent one.
+const float BUILD_CELL = 16.f;    // SQUARE_SIZE * 2; the engine's build square
+// The site-search reach and band slack below, and nothing else. Band pitches are
+// per band and live in EnsureCols.
 const float CELL       = 72.f;
 const float GRID_CELL  = 8.f;     // SQUARE_SIZE; the pitch published to C++
-const float LANE_PITCH = 720.f;   // spacing between walkways: one column in ten
+const float LANE_PITCH = 720.f;   // spacing between walkways, in world offset
 const float LANE_HALF  = 72.f;    // half-width of a walkway
 // Lateral slack on Inside(). This WAS LANE_PITCH -- one constant serving two
 // unrelated jobs, so the walkway spacing also decided how far sideways a
@@ -106,8 +113,12 @@ const int SCAN_REWIND = 24;
 // in the same few seconds would both pass FindBuildSiteNear on the same cell.
 // The resolved site is reserved as well as the cell: neighbouring cells resolve
 // to the same packed site once the ground between them is taken.
+//
+// The radius is one build cell short of the band's own pitch (SiteR), not a
+// fixed number. What it has to catch is two cells collapsing onto one site;
+// what it must not catch is a structure standing edge to edge with the one
+// beside it, which is exactly one pitch away.
 const int RESERVE_TTL = 90 * SECOND;
-const float RESERVE_R = 96.f;
 
 array<float> gColN;   // allowed lateral offsets, per kind, ordered outward
 array<float> gColE;
@@ -139,6 +150,17 @@ array<int> gCursor;    // per kind, where the last successful scan got to
 // committed to. Grown only by slots we USED.
 float gMinLat = 0.f, gMaxLat = 0.f, gMaxDepth = 0.f;
 bool gGrown = false;
+
+// Last few sites accepted, per kind, so a placement can be asked the only
+// question that matters here: did it end up touching one of its neighbours?
+// area= and width= say the base got smaller; they cannot say it got TILED.
+const int TILE_MEMORY = 64;
+array<float> gTileX;
+array<float> gTileZ;
+array<int> gTileKind;
+int gTileNext = 0;
+int gTouch = 0;   // accepted within a pitch of an earlier site of its own kind
+int gApart = 0;
 
 int gPlaced = 0;
 // Why a placement failed, split by cause. One combined counter conflated four

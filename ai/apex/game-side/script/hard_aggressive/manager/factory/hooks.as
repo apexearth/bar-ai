@@ -90,7 +90,11 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T3) != 0)
 		gHaveT3 = true;
 	if ((usage == Unit::UseAs::FACTORY)
-		&& ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) == 0))
+		// A GANTRY IS NOT THE T1 LAB. This tested T2 only, so a T3 plant fell
+		// through and became the base-plan anchor and the commander's repair
+		// target.
+		&& ((Factory::userData[unit.circuitDef.id].attr
+			& (Factory::Attr::T2 | Factory::Attr::T3)) == 0))
 	{
 		@gT1FacUnit = unit;
 		AiLog(T() + "apex: T1 lab on field: " + unit.circuitDef.GetName());

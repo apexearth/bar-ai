@@ -66,6 +66,21 @@ bool Frame()
 		if (f.SqLength2D() < NEAR_ZERO)
 			return false;
 		f.SafeNormalize2D();
+		// TO THE NEAREST CARDINAL. A structure's footprint is an axis-aligned
+		// rectangle on the world lattice -- CTerrainManager::FindBuildSiteByMask
+		// derives its corner from int(pos.x / 16), int(pos.z / 16) and can only
+		// return a position on it. A band frame at any other angle turns a step of
+		// one pitch into a diagonal world offset, so two neighbours a pitch apart
+		// have to be staggered in x and z to avoid overlapping, and the rows they
+		// were meant to form come out as a staircase. Quantising here is what lets
+		// depth and lateral map onto world x and z, and the pitches in EnsureCols
+		// then tile exactly.
+		//
+		// It also makes the four candidates below the four cardinals.
+		if (Abs(f.x) >= Abs(f.z))
+			f = AIFloat3((f.x >= 0.f) ? 1.f : -1.f, 0.f, 0.f);
+		else
+			f = AIFloat3(0.f, 0.f, (f.z >= 0.f) ? 1.f : -1.f);
 		AIFloat3 a(-f.z, 0.f, f.x);
 
 		CCircuitDef@ probe = AxisProbeDef();

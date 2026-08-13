@@ -158,6 +158,37 @@ SOpener@ GetOpenInfo()
 		}},
 		{Factory::legap, array<SQueue> = {
 			SQueue(1.0f, {SO(RT::BUILDER, 5)})
+		}},
+
+		// GANTRIES. Without an entry here a plant takes the default opener at the
+		// bottom of this function, and both consumers of it -- Factory::AiUnitAdded
+		// and Brain::OpenerFirst -- skip any slot whose role GetRoleDef cannot
+		// resolve on that plant. A gantry resolves neither BUILDER nor SCOUT, so the
+		// default reduces to its RAIDER slots alone.
+		//
+		// One of each front-line role instead, in the order targets.as ranks them at
+		// the income a gantry stands at: ASSAULT, SKIRM, RIOT. That same skip is what
+		// lets one list serve all three factions -- Armada's gantry has no
+		// assault-role def, Cortex's has no riot-role one.
+		//
+		// Artillery, heavy and raider are deliberately absent. Each stays reachable
+		// through the quota, which reads a demand for it, and the plant's big unit is
+		// already guaranteed one in flight per plant by Factory::SuperDefFor -- naming
+		// it here would buy it twice.
+		{Factory::armshltx, array<SQueue> = {
+			SQueue(1.0f, {SO(RT::ASSAULT), SO(RT::SKIRM), SO(RT::RIOT)})
+		}},
+		{Factory::armshltxuw, array<SQueue> = {
+			SQueue(1.0f, {SO(RT::ASSAULT), SO(RT::SKIRM), SO(RT::RIOT)})
+		}},
+		{Factory::corgant, array<SQueue> = {
+			SQueue(1.0f, {SO(RT::ASSAULT), SO(RT::SKIRM), SO(RT::RIOT)})
+		}},
+		{Factory::corgantuw, array<SQueue> = {
+			SQueue(1.0f, {SO(RT::ASSAULT), SO(RT::SKIRM), SO(RT::RIOT)})
+		}},
+		{Factory::leggant, array<SQueue> = {
+			SQueue(1.0f, {SO(RT::ASSAULT), SO(RT::SKIRM), SO(RT::RIOT)})
 		}}
 		}, {SO(RT::BUILDER), SO(RT::SCOUT), SO(RT::RAIDER, 3), SO(RT::BUILDER), SO(RT::RAIDER), SO(RT::BUILDER), SO(RT::RAIDER)}
 	);

@@ -125,8 +125,13 @@ IUnitTask@ TidyObsolete(CCircuitUnit@ unit, bool isComm)
 	// Clearing our own obsolete buildings. Both cases are the same act -- pick
 	// one of OUR structures and reclaim it -- so they share ObsoleteReclaim();
 	// what differs is only which defs and where. See its comment for the gates.
+	//
+	// THIS is the position that lets an advanced constructor take the job: `task`
+	// is null here, so the engine declined, and every rule above it declined too.
+	// A full bank is the second half of the condition apexearth named -- there is
+	// nothing this constructor could be buying with the metal instead.
 	if (!isComm) {
-		IUnitTask@ tidy = ObsoleteReclaim(unit);
+		IUnitTask@ tidy = ObsoleteReclaim(unit, aiEconomyMgr.isMetalFull);
 		if (tidy !is null)
 			return tidy;
 	}

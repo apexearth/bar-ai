@@ -64,7 +64,9 @@ void CDefendTask::AssignTo(CCircuitUnit* unit)
 	CCircuitDef* cdef = unit->GetCircuitDef();
 	highestRange = std::max(highestRange, cdef->GetLosRadius());
 
-	if (cdef->IsRoleSupport() && (leader != unit)) {
+	// See CAttackTask::AssignTo: only an escort that cannot join the squad's
+	// fight follows the leader.
+	if (cdef->IsRoleSupport() && !cdef->HasSurfToLand() && (leader != unit)) {
 		unit->PushBack(new CSupportAction(unit));
 	}
 

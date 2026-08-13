@@ -158,20 +158,50 @@
 
 		"unit":      ["armmar", "armraz", "armvang", "armbanth", "armlun", "armthor"],
 
+		// A 0.00 here does not lower a unit's share, it removes its ROLE from the
+		// plant: CFactoryManager::GetFacRoleDef only collects candidates with
+		// probs[i] > 0, and a gantry has one def per role, so the role resolves to
+		// null and every consumer that asks by role -- the opener and the quota --
+		// skips it silently. armlun 0.00 on land was Armada's only skirmish-role T3;
+		// armraz 0.00 in water its only riot-role one.
 		"land": {
-			"tier0": [ 0.05,     0.40,     0.45,      0.00,     0.00,        0.10],
-			"tier1": [ 0.05,     0.30,     0.50,      0.30,     0.00,       0.10],
-            "tier2": [ 0.05,     0.30,     0.40,      0.25,     0.00,       0.25]
+			"tier0": [ 0.05,     0.35,     0.40,      0.00,     0.20,        0.00],
+			"tier1": [ 0.05,     0.25,     0.35,      0.15,     0.10,        0.10],
+            "tier2": [ 0.05,     0.25,     0.25,      0.20,     0.10,        0.15]
         },
-        
+
         "water":{
-			"tier0": [ 0.40,     0.10,     0.20,      0.00,     0.30,        0.00],
-			"tier1": [ 0.30,     0.00,     0.10,      0.10,     0.30,        0.00],
-            "tier2": [ 0.30,     0.00,     0.10,      0.30,     0.40,       0.00]
+			"tier0": [ 0.35,     0.15,     0.20,      0.00,     0.30,        0.00],
+			"tier1": [ 0.30,     0.10,     0.10,      0.10,     0.30,        0.10],
+            "tier2": [ 0.25,     0.10,     0.10,      0.20,     0.25,        0.10]
         },
 
 
 		"caretaker": 30
+	},
+
+	// Armada's underwater gantry. Factory::T3Gantry returns this on a water map,
+	// and it had no entry at all -- factoryDefs.find misses, so GetRoleDef answers
+	// null for every role and nothing on the plant could be asked for by role.
+	// armcroc is omitted on purpose: it has no behaviour.json entry, and
+	// CCircuitDef's mainRole defaults to ASSAULT, so listing it would hand the
+	// assault slot to a 750-metal Turtle.
+	"armshltxuw": {
+		"importance": [0.0, 0.5],
+
+		"require_energy": true,
+
+		"income_tier": [100, 200],
+
+		"unit":      ["armmar", "armlun", "armbanth"],
+
+		"water": {
+			"tier0": [ 0.50,     0.50,     0.00],
+			"tier1": [ 0.35,     0.35,     0.30],
+			"tier2": [ 0.30,     0.30,     0.40]
+		},
+
+		"caretaker": 20
 	},
 
 	// ARMADA Aircraft
@@ -505,11 +535,15 @@
 
 		"unit":      ["corsok", "corshiva", "corkarg", "corcat", "corkorg", "corjugg"],
 
+		// See the note on armshltx: a 0.00 removes the ROLE, not just the share.
+		// corshiva 0.00 at tier2 was Cortex's only assault-role T3, so above
+		// 200 metal/s the plant kept exactly one cheap role -- and corsok at 0.01
+		// meant the fallback path effectively never chose the skirmish one either.
 		"land": {
-			"tier0": [ 1.00, 	0.50,       0.30,      0.20,     0.00,      0.00],
-			"tier1": [ 0.01,	0.30,       0.20,      0.20,     0.20,      0.10],
-            "tier2": [ 0.01,	0.00,       0.20,      0.20,     0.40,      0.20]
-		},	
+			"tier0": [ 0.25, 	0.35,       0.20,      0.20,     0.00,      0.00],
+			"tier1": [ 0.10,	0.30,       0.15,      0.20,     0.15,      0.10],
+            "tier2": [ 0.10,	0.15,       0.15,      0.20,     0.25,      0.15]
+		},
 		"water":{
 			"tier0": [ 1.00, 	0.40,       0.30,      0.20,     0.00,      0.00],
 			"tier1": [ 0.40,	0.20,       0.05,      0.20,     0.20,      0.10],
@@ -526,12 +560,19 @@
 
 		"income_tier": [100, 200],
 
-		"unit":      ["corshiva",  "corkorg"],
+		// buildDefs is this list intersected with the plant's buildoptions, so a
+		// buildable def left out of it is unreachable by any role lookup. The plant
+		// builds corsok and corparrow too, which are its only skirmish- and
+		// raider-role defs; with just corshiva and corkorg listed, and corshiva at
+		// 0.00 above 200 metal/s, the only role it could answer was super.
+		// corsala is omitted: no behaviour.json entry, so mainRole defaults to
+		// ASSAULT and it would take that slot from corshiva at 350 metal.
+		"unit":      ["corshiva", "corsok", "corparrow", "corkorg"],
 
 		"water": {
-			"tier0": [ 0.50,      0.00],
-			"tier1": [ 0.30,      0.20],
-            "tier2": [ 0.00,      0.40]
+			"tier0": [ 0.40,      0.30,      0.30,      0.00],
+			"tier1": [ 0.30,      0.25,      0.20,      0.25],
+            "tier2": [ 0.25,      0.20,      0.15,      0.40]
 		},
 
 		"caretaker": 20
