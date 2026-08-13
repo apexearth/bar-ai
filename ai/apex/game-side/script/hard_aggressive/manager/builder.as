@@ -21,6 +21,7 @@
 #include "builder/mexguard.as"    // mex turrets, home energy ladder, contest towers
 #include "builder/obsolete.as"    // reclaiming our own outdated buildings
 #include "builder/fortify.as"     // per-constructor strike history and dig-in
+#include "builder/defcap.as"      // the defence share cap, and the panic clause
 #include "builder/rules_rezzer.as"     // rez bots flee, salvage and pre-empt
 #include "builder/rules_hold.as"       // keep, or abandon, work already started
 #include "builder/rules_commander.as"  // the commander's own safety and vetoes

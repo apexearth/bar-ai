@@ -314,6 +314,11 @@ array<float> gRaySafe;
 // the way round is still right -- that is what lets a corner read as an arc --
 // but only the contested arc of it is the front.
 array<bool> gRayHot;
+// DID THIS BEARING STOP AT THE MAP EDGE. A ray that walks off the map breaks out
+// of the sample loop before it can meet anybody, so it records hot=false and both
+// FrontLineSpots and FrontBuildSpots skip it -- the two failures are
+// indistinguishable in gRayHot alone, and they need opposite answers.
+array<bool> gRayWall;
 
 // Per lane: the fraction along home->enemy at which that lane's influence
 // crosses. Index 0 is the leftmost lane.
@@ -425,6 +430,7 @@ void RebuildRing(const AIFloat3& in home)
 	gRayR.resize(0);
 	gRaySafe.resize(0);
 	gRayHot.resize(0);
+	gRayWall.resize(0);
 	const float w = float(AiTerrainWidth());
 	const float h = float(AiTerrainHeight());
 	const float reach = sqrt(w * w + h * h) * 0.5f;   // half the map diagonal
@@ -457,17 +463,20 @@ void RebuildRing(const AIFloat3& in home)
 			gRayR.insertLast(reach);
 			gRaySafe.insertLast(0.f);
 			gRayHot.insertLast(false);
+			gRayWall.insertLast(false);
 			continue;
 		}
 		float edge = reach;      // never met them: the whole ray is ours
 		float safe = 0.f;
 		bool hot = false;        // did this bearing find an enemy at all
+		bool wall = false;       // ...or did it just run out of map
 		for (int i = 1; i <= FRONT_SAMPLES; ++i) {
 			const float d = step * float(i);
 			const AIFloat3 p = home + dir * d;
 			if (!OnMap(p)) {
 				if (edge > d)
-					edge = d;    // the map edge is a front we never have to hold
+					edge = d;
+				wall = true;
 				break;
 			}
 			if (ai.GetBuilderThreatAt(p) <= bar)
@@ -482,6 +491,40 @@ void RebuildRing(const AIFloat3& in home)
 		gRayR.insertLast(edge);
 		gRaySafe.insertLast(safe);
 		gRayHot.insertLast(hot);
+		gRayWall.insertLast(wall);
+	}
+
+	// THE WALL IS PART OF THE LINE, NOT THE END OF IT. A bearing that ran out of
+	// map records hot=false, and FrontLineSpots/FrontBuildSpots skip a cold
+	// bearing outright -- so for a player sitting against the map edge the whole
+	// sector between us and that wall emits no build point at all. It is also the
+	// sector a raider hugs to get behind us.
+	//
+	// A wall bearing whose NEIGHBOUR met the enemy is the same front, ending at
+	// the wall, so it adopts that classification. Seeded from copies so the
+	// adoption cannot cascade round the ring in whichever direction the loop
+	// happens to run.
+	//
+	// Its radius is then capped at that neighbour's: a ray that left the map at
+	// long range carries the map's geometry, not the battlefield's, and would
+	// otherwise place a point deeper than the front it is borrowing from.
+	array<bool> seed = gRayHot;
+	array<float> seedR = gRayR;
+	for (uint i = 0; i < gRayHot.length(); ++i) {
+		if (seed[i] || !gRayWall[i])
+			continue;
+		const uint prev = (i + gRayHot.length() - 1) % gRayHot.length();
+		const uint next = (i + 1) % gRayHot.length();
+		float from = -1.f;
+		if (seed[prev] && !gRayWall[prev])
+			from = seedR[prev];
+		if (seed[next] && !gRayWall[next] && ((from < 0.f) || (seedR[next] < from)))
+			from = seedR[next];
+		if (from < 0.f)
+			continue;
+		gRayHot[i] = true;
+		if (gRayR[i] > from)
+			gRayR[i] = from;
 	}
 }
 
@@ -650,6 +693,18 @@ float EdgeSpacing(const AIFloat3& in at, float spacing, float reach)
 	if (d < 0.f)       d = 0.f;
 	if (d > reach)     d = reach;
 	return spacing * (reach + d) / (2.f * reach);
+}
+
+// The same coverage deficit EdgeSpacing corrects for, expressed as a multiplier
+// on how much a turret at this point is WORTH: 1.0 inland, 2.0 hard against the
+// wall, linear between. Spacing and value are the two ways to spend the deficit
+// and they read it from one place.
+float EdgeExposure(const AIFloat3& in at, float reach)
+{
+	if (reach < 1.f)
+		return 1.f;
+	const float s = EdgeSpacing(at, 1.f, reach);
+	return (s > 0.f) ? (1.f / s) : 1.f;
 }
 
 bool FrontLineSpots(array<AIFloat3>& out pts, float spacing, float reach = 0.f)

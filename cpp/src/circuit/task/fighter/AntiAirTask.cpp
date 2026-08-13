@@ -96,7 +96,7 @@ void CAntiAirTask::AssignTo(CCircuitUnit* unit)
 	int squareSize = manager->GetCircuit()->GetPathfinder()->GetSquareSize();
 	CCircuitDef* cdef = unit->GetCircuitDef();
 	ITravelAction* travelAction;
-	if (cdef->IsAttrSiege()) {
+	if (cdef->IsAttrSiege() && (manager->GetCircuit()->GetTunable("apex_siege_fight", 0.f) > 0.f)) {
 		travelAction = new CFightAction(unit, squareSize);
 	} else {
 		travelAction = new CMoveAction(unit, squareSize);
@@ -238,7 +238,11 @@ void CAntiAirTask::OnUnitIdle(CCircuitUnit* unit)
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
-	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
+	// See CAttackTask::OnUnitIdle: a standoff move completes while the target is
+	// still alive, so idle no longer implies "arrived and found nothing".
+	if ((GetTarget() == nullptr)
+		&& (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)))
+	{
 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 		float x = rand() % terrainMgr->GetTerrainWidth();
 		float z = rand() % terrainMgr->GetTerrainHeight();

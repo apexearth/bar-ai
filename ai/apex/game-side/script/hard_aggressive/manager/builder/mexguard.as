@@ -120,8 +120,15 @@ bool IsAdvConDef(CCircuitUnit@ unit)
 // making defenses like rattlesnakes, at 100 metal+ we should be making [Pulsar]
 // T3 defenses..., the old defenses are worthless at these levels."
 //
-// Rattlesnake armamb 2500 / Persecutor cortoast 2500 / Rampart legrampart 2600,
-// then Pulsar armanni 3500 / Bulwark cordoom 3000 / Bastion legbastion 4200.
+// Rattlesnake armamb 2500 / Persecutor cortoast 2500 / Eviscerator legacluster
+// 2300, then Pulsar armanni 3500 / Bulwark cordoom 3000 / Bastion legbastion 4200.
+//
+// Legion's slot held `legrampart`, which is not a turret at all: "Geothermal
+// Antinuke, Jammer, Radar and Drone Platform", buildable only on a geo vent, and
+// its ICBM interceptor makes GetMaxRange() report 72,000 -- which the front-line
+// want reads as its line spacing and its coverage radius. legacluster is the
+// Eviscerator, 1380 range against armamb's 1380 and cortoast's 1390, and is
+// already what build_chain_leg.json hangs off legalab/legavp.
 //
 // EVERY ONE of these is buildable only by an advanced constructor -- armack,
 // armacv, armaca and the levelled commanders, per `unitdef.py <name> --builders`.
@@ -130,27 +137,79 @@ bool IsAdvConDef(CCircuitUnit@ unit)
 // this session turned out to be an unbuildable Pit Bull. So the ladder applies
 // to the builders that can climb it, and everyone else keeps the cheap turret
 // they can actually finish.
-string armtoast("armamb");   string cortoastd("cortoast");  string legramp("legrampart");
+string armtoast("armamb");   string cortoastd("cortoast");  string legramp("legacluster");
 string armpulsar("armanni"); string corpulsar("cordoom");   string legpulsar("legbastion");
 const float DEF_TIER_T2_INCOME = 50.f;
 const float DEF_TIER_T3_INCOME = 100.f;
+
+// THREAT DENIED PER METAL -- the same measure the Brain's defence want scores a
+// tower by, so the ladder and the ranking cannot disagree about what a turret is
+// worth. Brain::TowerDenial is damage and toughness from GetSurfThreat times
+// reach, and Brain::TowerReach clamps the range read, so a def carrying an
+// interceptor cannot poison this the way legrampart poisoned the line's spacing.
+float HeavyWorth(CCircuitDef@ def)
+{
+	if ((def is null) || !def.IsAvailable(ai.frame) || (def.costM <= 0.f))
+		return 0.f;
+	// Not a gun. legrampart -- a geothermal anti-nuke platform -- sat in this
+	// candidate set until 2026-08-12, and TowerDenial's own no-gun case returns a
+	// flat 1.0, which would read here as a cheap tower rather than as no tower.
+	if (def.GetSurfThreat() <= 0.f)
+		return 0.f;
+	return Brain::TowerDenial(def) / def.costM;
+}
+
+// RANK, DO NOT THRESHOLD. apexearth: "at +50 handicap the t2 scorp defense is
+// only worthwhile for a short time. you need the longer range defenses."
+//
+// This returned the highest tier the income cleared, so a later tier won by
+// existing rather than by being better -- and two of the three factions step
+// BACKWARDS in reach at that point: Cortex from a 1,390-range Persecutor at 2,500
+// metal to a 950-range Doomsday at 3,000, Legion from a 1,380-range Eviscerator
+// to an 1,100-range Bastion at 4,200. Handing one def to the Brain also meant its
+// value function never saw the alternative and so could not correct it.
+//
+// The income thresholds keep their OTHER job, which is affordability: a 2,500
+// metal turret is not something a 20 metal/second economy should start, and that
+// is what apexearth's "at 50 metal+ ... at 100 metal+" states. They still decide
+// what ENTERS the set; they no longer decide which member of it wins.
+// Logged only when the answer CHANGES, so it reports the tier decision without
+// adding a line per builder per tick. Which def wins is a runtime question --
+// GetSurfThreat is computed by CircuitAI from the weapon defs, not by us -- so
+// this is the only honest way to read the ranking back.
+string gHeavyPickLast = "";
 
 CCircuitDef@ HeavyDefenceFor(CCircuitUnit@ unit)
 {
 	if (!IsAdvConDef(unit))
 		return null;
 	const float inc = aiEconomyMgr.metal.income;
-	if (inc >= ai.GetTunable("apex_def_t3_income", DEF_TIER_T3_INCOME)) {
-		CCircuitDef@ big = SideDef3(armpulsar, corpulsar, legpulsar);
-		if ((big !is null) && big.IsAvailable(ai.frame))
-			return big;
-	}
+	CCircuitDef@ best = null;
+	float bestWorth = 0.f;
 	if (inc >= ai.GetTunable("apex_def_t2_income", DEF_TIER_T2_INCOME)) {
 		CCircuitDef@ mid = SideDef3(armtoast, cortoastd, legramp);
-		if ((mid !is null) && mid.IsAvailable(ai.frame))
-			return mid;
+		const float w = HeavyWorth(mid);
+		if (w > bestWorth) {
+			@best = mid;
+			bestWorth = w;
+		}
 	}
-	return null;
+	if (inc >= ai.GetTunable("apex_def_t3_income", DEF_TIER_T3_INCOME)) {
+		CCircuitDef@ big = SideDef3(armpulsar, corpulsar, legpulsar);
+		const float w = HeavyWorth(big);
+		if (w > bestWorth) {
+			@best = big;
+			bestWorth = w;
+		}
+	}
+	const string picked = (best is null) ? "none" : best.GetName();
+	if (picked != gHeavyPickLast) {
+		gHeavyPickLast = picked;
+		AiLog(Factory::T() + "apex: heavy-def " + picked
+			+ " worth=" + formatFloat(bestWorth, "", 0, 5)
+			+ " mInc=" + formatFloat(inc, "", 0, 0));
+	}
+	return best;
 }
 
 CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
@@ -198,6 +257,101 @@ CCircuitDef@ FrontTower(CCircuitUnit@ unit, const AIFloat3& in at)
 	if (PastT1Tier())
 		return null;
 	return SideDef3(armllt, corllt, leglht);
+}
+
+// ENERGY UNDER COVER. apexearth: "We should prefer to build solars and wind
+// farms near sentry turrets in the early game."
+//
+// Every turret tier this file can place, not just the Sentry: what a generator
+// needs is a gun that reaches it, and excluding the heavier tiers would switch
+// the preference off exactly as the base gets big enough to need it.
+const int COVER_TIERS = 5;
+// Fraction of the turret's OWN weapon range, read per def so a modoption that
+// retunes weapons cannot silently turn this into a fixed elmo count. The value
+// is MEX_IN_RANGE's ratio (420 against the 430 armllt/corllt/leglht reach),
+// which is this file's existing answer to "is that thing covered".
+const float COVER_FRAC = 0.90f;
+
+CCircuitDef@ CoverDef(int tier)
+{
+	if (tier == 0) return SideDef3(armllt, corllt, leglht);
+	if (tier == 1) return SideDef3(armbeamer, corhllt, legmg);
+	if (tier == 2) return SideDef3(armpb, corvipe, legapopupdef);
+	if (tier == 3) return SideDef3(armtoast, cortoastd, legramp);
+	return SideDef3(armpulsar, corpulsar, legpulsar);
+}
+
+// Nearest standing turret of this def, ignoring any sitting forward of the
+// ground we are willing to keep energy on -- a guard on a contested mex is
+// cover, but it is not somewhere to grow the economy.
+bool NearestCover(CCircuitDef@ def, const AIFloat3& in from,
+		AIFloat3& out at, float& out dist)
+{
+	if (def is null)
+		return false;
+	array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(def, from, MEX_GUARD_REACH);
+	if (have is null)
+		return false;
+	bool got = false;
+	float best = 0.f;
+	AIFloat3 bestAt;
+	for (uint i = 0; i < have.length(); ++i) {
+		if (have[i] is null)
+			continue;
+		const AIFloat3 p = have[i].GetPos(ai.frame);
+		if (!OnMap(p) || (FrontT(p) >= MEX_GUARD_MID_FRAC))
+			continue;
+		const float d = from.distance2D(p);
+		if (!got || (d < best)) {
+			best = d;
+			bestAt = p;
+			got = true;
+		}
+	}
+	if (!got)
+		return false;
+	at = bestAt;
+	dist = best;
+	return true;
+}
+
+// FindBuildSiteNear spirals OUTWARD, so once the ground inside a turret's reach
+// is full it answers past the radius and this declines: the turret's own range
+// is what bounds how much energy gathers under it, with nothing counting or
+// capping. Declining always falls through to the ordinary layout.
+bool CoveredSpot(CCircuitUnit@ unit, CCircuitDef@ gen, AIFloat3& out spot)
+{
+	if ((gen is null) || (ai.GetTunable("apex_energy_cover", 1.f) <= 0.f))
+		return false;
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	if (!OnMap(me))
+		return false;
+	CCircuitDef@ best = null;
+	AIFloat3 bestAt;
+	float bestD = 0.f;
+	for (int tier = 0; tier < COVER_TIERS; ++tier) {
+		CCircuitDef@ def = CoverDef(tier);
+		AIFloat3 at;
+		float d = 0.f;
+		if (!NearestCover(def, me, at, d))
+			continue;
+		if ((best is null) || (d < bestD)) {
+			@best = def;
+			bestAt = at;
+			bestD = d;
+		}
+	}
+	if (best is null)
+		return false;
+	const float cover = best.GetMaxRange()
+			* ai.GetTunable("apex_energy_cover_frac", COVER_FRAC);
+	if (cover <= 0.f)
+		return false;
+	const AIFloat3 site = ai.FindBuildSiteNear(gen, bestAt, cover);
+	if (!OnMap(site) || (site.distance2D(bestAt) > cover))
+		return false;
+	spot = site;
+	return true;
 }
 
 // The home crew's actual job: build the energy the base runs on.
@@ -284,13 +438,7 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		// fusion on its own, at whatever pace the economy actually supports.
 		CCircuitDef@ wind = SideDef3(armwin, corwin, legwin);
 		CCircuitDef@ sol = SideDef3(armsolar, corsolar, legsolar);
-		CCircuitDef@ adv = null;
-		// armadvsol costs 5,000 energy to BUILD against armsolar's zero, so
-		// below that bar it is paid for out of energy we do not have.
-		// apexearth: "We shouldn't make advanced solar until we have ~200
-		// energy per second."
-		if (aiEconomyMgr.energy.income >= ADVSOL_MIN_ENERGY)
-			@adv = SideDef3(armadvsol, coradvsol, legadvsol);
+		CCircuitDef@ adv = AdvSolDef();
 		// A reactor is 4,300-9,700 metal against a turbine's 40, and this function
 		// is offered a constructor about thirty times a game-minute. Without a
 		// cooldown every idle builder queues its own reactor off the same reading
@@ -387,7 +535,16 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		via = "heavy";
 	else if (rear == 2)
 		via = "rear";
-	if (rear == 0) {
+	bool placed = (rear != 0);
+	// A generator under a turret DOES become the packing anchor, where a reactor
+	// deliberately does not: cover is ground we want the eco block to grow on.
+	if (!placed && !isConv && !pickedReactor && CoveredSpot(unit, gen, spot)) {
+		via = "cover";
+		gEcoLast = spot;
+		gEcoPacked = true;
+		placed = true;
+	}
+	if (!placed) {
 	if (!Base::Spot(unit, gen, Base::ECO, spot)) {
 		// PACK against the last thing we built, not around home.
 		//

@@ -62,23 +62,35 @@ int PulsarCap()
 		cap += PULSAR_FULL_BONUS;
 	return cap;
 }
-// A flat standing count answered two aircraft and forty identically. These are
-// 80 metal each and only built once the enemy actually flies, so the ceiling can
-// be generous; the floor is what makes air pick someone else.
+// TWO TERMS, NOT ONE RATIO. apexearth, 2026-08-12: "Ensure we have basic coverage
+// of our bases with air defense. Then do a basic 10% metal ratio on top of that.
+// SO if the enemy makes 10 dragons we'd add on some good AA defense to counter
+// that."
+//
+// FLOOR -- basic cover, per player, once air has been SEEN. It does not scale with
+// the economy and it is not a share of anything: a base either has something
+// shooting upwards or it does not. Where those turrets go is the coverage half of
+// the same sentence, and Brain::AirCoverWant owns it -- least-covered extractor
+// first, counting work already ordered.
 const int   AA_MIN            = 2;
-const int   AA_MAX            = 12;
-const float AA_PER_AIR        = 1000.f;  // one more turret per this much enemy air
-// Metal of AA worth building per metal of enemy air. apexearth, 2026-08-12: "we
-// only need like 20% the cost of air defense for the amount of enemy air they
-// have" (revised up from the 0.1 he first estimated). A turret sits still, needs
-// no escort and shoots anything overhead, so it answers far more than its cost in
-// aircraft. Both AA rules read this, so the trade is stated once.
-const float AA_VS_AIR = 0.2f;
+// TOP-UP -- metal of AA per metal of their air, ON TOP of the floor, and delivered
+// end to end. In METAL rather than in turrets, so the same 10% buys more Thistles
+// (80) than Plutos (820) and one number covers all six defs.
+//
+// What this replaces multiplied 0.2 against a per-metal divisor as well (the old
+// AA_PER_AIR 1000 / AA_HEAVY_PER_AIR 1800), so what actually arrived was 1.6-3.5%
+// of enemy air value -- two dampeners stacked, one of them by accident.
+const float AA_VS_AIR = 0.10f;
 
-float AAWanted(float enemyAir, float perAir, int floorCount)
+// Turrets the side should hold BEYOND basic cover. Rounded, not truncated --
+// apexearth: "round it." int() was turning a want of 1.98 into 1, which threw
+// away most of a turret at every value.
+int AATopUp(float enemyAir, float costM)
 {
+	if ((enemyAir <= 0.f) || (costM <= 1.f))
+		return 0;
 	const float k = ai.GetTunable("apex_aa_vs_air", AA_VS_AIR);
-	return float(floorCount) + (enemyAir * k) / perAir;
+	return int((enemyAir * k) / costM + 0.5f);
 }
 
 // A TURRET MUST COVER SOMETHING. apexearth: "purple is still making lots of
@@ -151,16 +163,16 @@ int gNextPulsar = 0;
 int gNextAA = 0;
 int gNextAADiag = 0;  // temporary diagnostic, see CheapAA
 
-// armrl/corrl/legrl is DETERRENCE, not an answer: 80 metal, and CheapAA caps at
-// AA_MAX=12 regardless of how much air the enemy actually has. apexearth,
-// watching a game lost from this exact hole: "the enemies attacked us with
+// armrl/corrl/legrl is DETERRENCE, not an answer: 80 metal. apexearth, watching a
+// game lost from this exact hole: "the enemies attacked us with
 // like ten gunships on one of our bases, and we had like eight of the light
 // AA. They did nothing. Light AA is so bad versus T2 gunships."
 //
 // So a second, heavier tier: cormadsam/armferret/legflak. All VTOL-only
 // structures, one tier up in cost (315-820 metal against corrl's 80) and
-// correspondingly harder-hitting. Gated on enemyAir being a real strike force
-// rather than CheapAA's "the enemy owns one aircraft" bar, and on income.
+// correspondingly harder-hitting. Which tier AADefFor picks is a question about
+// ground, not about how much they fly; AATopUp then sizes either one by its own
+// cost, so the choice of tier changes the turret, never the metal.
 //
 // OFF. Measured worse, not better -- the same failure this comment set out to
 // avoid. 8-game control vs BARb:stable:hard_aggressive, Comet Catcher 4v4 +25%
@@ -180,14 +192,6 @@ int gNextAADiag = 0;  // temporary diagnostic, see CheapAA
 // switch meant we have been building NO good AA at all.
 // apexearth: "we arent making the better AA early enough in our bases."
 const bool  AA_HEAVY_ON          = true;
-// Earlier than "two-plus real attack aircraft": by the time that much air is
-// overhead the mexes it came for are already dying, and a Ferret takes time to
-// build. One committed gunship is enough to want the better turret.
-const float AA_HEAVY_ENEMY_AIR   = 1200.f;
-const int   AA_HEAVY_MIN         = 1;
-// No ceiling. The enemy's own air value is the proportion this scales on, which
-// is what a cap here was overriding. apexearth: "no AA heavy max".
-const float AA_HEAVY_PER_AIR     = 1800.f;
 const float AA_HEAVY_MIN_INCOME  = 20.f;
 const int   AA_HEAVY_PERIOD      = 25 * SECOND;
 int gNextHeavyAA = 0;
@@ -231,11 +235,31 @@ int gNextDeter = 0;
 // running dry is 3,000 metal doing nothing. Placed by the coverage score, so
 // shields spread across the approaches instead of stacking on one.
 string armgate("armgate"); string corgate("corgate"); string legdeflector("legdeflector");
-const float SHIELD_MIN_ENERGY = 1500.f;
-const int   SHIELD_MAX        = 3;
+// WHAT A SHIELD ACTUALLY COSTS TO RUN, read from the def rather than guessed at:
+// all three declare energyupkeep 0 and powerregenenergy 562.5, so a dome draws
+// nothing idle and 562.5 energy/second while regenerating what it just absorbed.
+// That draw is the honest gate. The margin covers the rest of the base continuing
+// to run through the burst; it is a chosen number, and isEnergyStalling above is
+// the real-time backstop either way.
+const float SHIELD_REGEN_DRAW  = 562.5f;
+const float SHIELD_DRAW_MARGIN = 1.5f;
+// HOW MANY, AS ECONOMY RATHER THAN AS A CEILING. apexearth: "We should be making
+// tons of T3 defenses and shields late in the game", against his standing rule
+// that nothing gets a hard cap. Seconds of income per dome, against the def's OWN
+// cost so the three factions differ correctly and the count follows the economy
+// with nothing to raise later.
+const float SHIELD_INCOME_SECS = 100.f;
 const int   SHIELD_PERIOD     = 60 * SECOND;
 int gNextShield = 0;
 int gShieldsAsked = 0;
+
+int ShieldsAfforded(CCircuitDef@ dome)
+{
+	if ((dome is null) || (dome.costM <= 0.f))
+		return 0;
+	const float secs = ai.GetTunable("apex_shield_income_secs", SHIELD_INCOME_SECS);
+	return 1 + int(aiEconomyMgr.metal.income * secs / dome.costM);
+}
 
 IUnitTask@ Shield(CCircuitUnit@ unit)
 {
@@ -243,12 +267,19 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 		return null;
 	if (unit.circuitDef.costM < ADV_CON_COST)
 		return null;                       // T2 constructors only
-	if (aiEconomyMgr.energy.income < SHIELD_MIN_ENERGY)
+	// The rate limit the old ceiling was doing implicitly. gNextShield was
+	// assigned below and never read, so with the ceiling gone nothing spaced these
+	// out at all.
+	if (ai.frame < gNextShield)
+		return null;
+	if (aiEconomyMgr.energy.income < SHIELD_REGEN_DRAW
+			* ai.GetTunable("apex_shield_draw_margin", SHIELD_DRAW_MARGIN))
 		return null;
 	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
 		return null;
 	CCircuitDef@ dome = SideDef3(armgate, corgate, legdeflector);
-	if ((dome is null) || !dome.IsAvailable(ai.frame) || (dome.count >= SHIELD_MAX))
+	if ((dome is null) || !dome.IsAvailable(ai.frame)
+		|| (dome.count >= ShieldsAfforded(dome)))
 		return null;
 	if (gShieldsAsked - dome.count >= 1)
 		return null;                       // one at a time; they are not cheap
@@ -262,8 +293,9 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	++gShieldsAsked;
 	gNextShield = ai.frame + SHIELD_PERIOD;
 	AiLog(Factory::T() + "apex: shield " + dome.GetName() + " standing=" + dome.count
-		+ "/" + SHIELD_MAX
-		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
+		+ "/" + ShieldsAfforded(dome)
+		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
+		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
 	return post;
 }
 
@@ -282,27 +314,81 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 // top of each other. Orders made here are recorded in the same ledger so the two
 // paths cannot cluster against each other either.
 //
-// Energy, not metal, is what this costs: 5,200-8,500 to build and 40/s upkeep
-// forever, against ~150 metal. Gated accordingly.
-const int   JAMMER_MAX        = 3;
-const float JAMMER_MIN_ENERGY = 150.f;
+// THE ADVANCED JAMMER, AND IT IS ALSO THE CHEAP ONE. apexearth: "we also have no
+// t2 jammer (the advanced kind) in the middle of our base to help protect from
+// enemy artillery."
+//
+// armveil Veil / corshroud Shroud / legajam Erebus are each named "Long-Range
+// Jamming Tower" in the game's own defs: 125-130 metal against armjamt's 240, and
+// 700-760 elmos of jam radius against 360-500 -- two to four times the AREA
+// hidden, for less metal. What they cost is ENERGY: 19,000-20,000 to build and
+// 125/second forever, against the short tower's 5,200-8,500 and 40/second. The
+// short defs stay as the fallback so a side that cannot build the long one yet is
+// not left with nothing.
 const int   JAMMER_PERIOD     = 45 * SECOND;
-const float JAMMER_REACH      = 700.f;   // search radius around the chosen anchor
+const float JAMMER_UPKEEP_LONG  = 125.f;
+const float JAMMER_UPKEEP_SHORT = 40.f;
+// Jam radius of the SMALLEST of each triple (corshroud 700, corjamt 360), so the
+// placement is right for every faction rather than for the best one.
+const float JAMMER_COVER_LONG   = 700.f;
+const float JAMMER_COVER_SHORT  = 360.f;
+// Income per unit of upkeep before we will run one. The rule already ran a
+// 40/second tower on 150/second of income; this is that same ratio rounded up,
+// applied to whichever def we actually place, so the number moves with the tower
+// instead of being a constant that only ever suited the short one.
+const float JAMMER_UPKEEP_MARGIN = 4.f;
+// How much of our energy income jamming may hold in total. This replaces a hard
+// JAMMER_MAX of 3. Metal is not the constraint -- 125 metal is nothing -- so the
+// bound is on the resource that actually pays, which is why this is not the
+// shield's metal-seconds rule.
+const float JAMMER_ENERGY_SHARE  = 0.10f;
 int gNextJammer   = 0;
 int gJammersAsked = 0;
 
+// The long-range tower if we can build it, the short one otherwise. `isLong` is
+// what the upkeep, the coverage radius and the affordable count all read.
+CCircuitDef@ JammerDefFor(bool& out isLong)
+{
+	isLong = true;
+	CCircuitDef@ far = SideDef3(armveil, corshroud, legajam);
+	if ((far !is null) && far.IsAvailable(ai.frame))
+		return far;
+	isLong = false;
+	return SideDef3(armjamt, corjamt, legjam2);
+}
+
+int JammersAfforded(float upkeep)
+{
+	if (upkeep <= 0.f)
+		return 0;
+	const float share = ai.GetTunable("apex_jammer_energy_share", JAMMER_ENERGY_SHARE);
+	return 1 + int(aiEconomyMgr.energy.income * share / upkeep);
+}
+
 IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 {
+	// THE ONE GUARD THAT READS THE ACTUAL GRID. An energy stall stops the whole
+	// economy, not just this -- UpdateEconomyTasks returns early on it -- and it is
+	// the only signal here that moves when something else (a converter rule, say)
+	// starts eating the surplus. The income test below cannot see that.
 	if (aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (!gHomeSet)
 		return null;
+	if (ai.frame < gNextJammer)
+		return null;
 	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
 		return null;
-	if (aiEconomyMgr.energy.income < JAMMER_MIN_ENERGY)
+	bool isLong = false;
+	CCircuitDef@ jam = JammerDefFor(isLong);
+	if ((jam is null) || !jam.IsAvailable(ai.frame))
 		return null;
-	CCircuitDef@ jam = SideDef3(armjamt, corjamt, legjam2);
-	if ((jam is null) || !jam.IsAvailable(ai.frame) || (int(jam.count) >= JAMMER_MAX))
+	const float upkeep = isLong ? JAMMER_UPKEEP_LONG : JAMMER_UPKEEP_SHORT;
+	const float cover  = isLong ? JAMMER_COVER_LONG  : JAMMER_COVER_SHORT;
+	if (aiEconomyMgr.energy.income
+		< upkeep * ai.GetTunable("apex_jammer_upkeep_margin", JAMMER_UPKEEP_MARGIN))
+		return null;
+	if (int(jam.count) >= JammersAfforded(upkeep))
 		return null;
 	// Asked-minus-standing, the same idiom NukeSilo and Shield use: Enqueue does
 	// not dedup and a jammer takes a while, so counting only what stands orders
@@ -310,15 +396,26 @@ IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 	if (gJammersAsked - int(jam.count) >= 1)
 		return null;
 
-	// The first one covers the base itself; later ones move out to the approaches,
-	// which is where something worth hiding from radar is actually walking.
-	AIFloat3 anchor = gHomePos;
+	// THE MIDDLE OF THE BASE, WHICH IS NOT WHERE WE SPAWNED. apexearth wants this
+	// one central, against artillery hunting what we have built. gHomePos is the
+	// START position and never moves, so as the base grows forward it ends up
+	// behind everything worth hiding -- the same fault territory.as records for
+	// every other positional measure. TerritoryCentre is the centroid of the metal
+	// clusters we hold, and falls back to gHomePos before we hold any.
+	//
+	// Later ones move out to the approaches, which is where something worth hiding
+	// from radar is actually walking.
+	AIFloat3 anchor = Military::TerritoryCentre();
 	if (jam.count > 0) {
 		AIFloat3 border;
 		if (Military::BorderPos(border, uint(jam.count) - 1))
 			anchor = border;
 	}
-	const AIFloat3 site = ai.FindBuildSiteNear(jam, anchor, JAMMER_REACH);
+	if (!OnMap(anchor))
+		return null;
+	// Half the jam radius, so wherever the spiral lands the anchor is still inside
+	// the disc this tower hides. A flat 700 was wider than corjamt covers at all.
+	const AIFloat3 site = ai.FindBuildSiteNear(jam, anchor, cover * 0.5f);
 	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
 		return null;
 	if (AreaHasJammer(site))
@@ -333,7 +430,8 @@ IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 	++gJammersAsked;
 	gNextJammer = ai.frame + JAMMER_PERIOD;
 	AiLog(Factory::T() + "apex: base-jammer " + jam.GetName()
-		+ " standing=" + jam.count + "/" + JAMMER_MAX
+		+ " standing=" + jam.count + "/" + JammersAfforded(upkeep)
+		+ (isLong ? " long" : " short")
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
 	return post;
 }
@@ -732,15 +830,29 @@ CCircuitDef@ AADefFor(CCircuitUnit@ unit)
 	return SideDef3(armrl, corrl, legrl);
 }
 
+// WHAT THE WHOLE SIDE SHOULD HOLD: everyone's basic cover, plus the shared top-up.
+// Military::TeamAA() sums the side, so the floor has to be multiplied by how many
+// of us there are -- comparing a team-wide count against one player's floor is the
+// arithmetic that let one player's turrets answer the side's entire air threat
+// while three players held none.
+//
+// No tier branch. The divisor is the def's OWN cost, so Armada, Cortex and Legion
+// size identically without any of them being named. The `costM > 400` test this
+// replaces was true for legflak (820) and false for armferret (360) and cormadsam
+// (315), so two factions out of three sized their good turret with the cheap
+// tier's constants.
+//
+// No ceiling either: 10% of their air metal is its own bound, which is what the
+// old AA_MAX of 12 was overriding.
 int AAWantedNow(CCircuitUnit@ unit, float enemyAir)
 {
 	CCircuitDef@ aa = AADefFor(unit);
-	const bool isHeavy = (aa !is null) && (aa.costM > 400.f);
-	int want = isHeavy
-			? int(AAWanted(enemyAir - AA_HEAVY_ENEMY_AIR, AA_HEAVY_PER_AIR, AA_HEAVY_MIN))
-			: int(AAWanted(enemyAir, AA_PER_AIR, AA_MIN));
-	if (!isHeavy && (want > AA_MAX))
-		want = AA_MAX;
+	array<Id>@ mates = ai.GetTeamIds();
+	const int players = ((mates is null) || (mates.length() == 0))
+			? 1 : int(mates.length());
+	int want = players * AA_MIN;
+	if (aa !is null)
+		want += AATopUp(enemyAir, aa.costM);
 	return (want < 1) ? 1 : want;
 }
 

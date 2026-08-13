@@ -61,6 +61,19 @@ const float FQ_CLAIM_RANGE = 400.f;
 // observed application lag (~45 sim-seconds at the benchmark's speed cap).
 const int FQ_LOST = 90 * SECOND;
 
+// HOW MANY ESCORTS OF ONE KIND EACH SQUAD IS BOUGHT.
+//
+// apexearth: "Attach a maximum of 2 jammer and 2 radar to the squads." His
+// number, stated as a number, and it bounds a SQUAD's escort rather than the
+// army's: what gets built is this times the number of squads on the field, and
+// that count rises with the army the economy can pay for. There is no ceiling
+// on the total.
+//
+// ESCORT_PER_SQUAD in task/fighter/SupportTask.cpp is the matching attachment
+// cap. Move one and the other must move too, or we buy escorts no squad will
+// take.
+const int ESCORT_PER_SQUAD = 2;
+
 array<Id> gFQId;                 // factories we drive, by id
 array<CCircuitUnit@> gFQFac;     // ...and their handles, parallel to gFQId
 array<int> gFQSeen;              // ...and the queue depth we last observed
@@ -355,18 +368,33 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	}
 
 	// EYES AND COVER FOR EACH SQUAD. apexearth: "can you make it so we always have
-	// a radar and a jammer built and attached to each squad?"
+	// a radar and a jammer built and attached to each squad?", and watching:
+	// "Attach a maximum of 2 jammer and 2 radar to the squads."
 	//
-	// corvoyr (Augur) and corspec (Deceiver) are role SUPPORT, and SUPPORT is not
-	// in gMix -- so a driven line could not build either of them at all, the same
-	// gap that once hid HEAVY and AH. One per squad on the field.
+	// NAMED, NOT ASKED FOR BY ROLE. aiFactoryMgr.GetRoleDef(fac, SUPPORT) is a
+	// weighted RANDOM DRAW over every main-role-support def the line can build,
+	// re-rolled on every call (CFactoryManager::GetFacRoleDef) -- it is that
+	// line's support roulette, not its radar. Factory::EyeDefFor holds the
+	// per-faction pair and is the same table the eyes-for-the-guns rule used
+	// before a driven line stopped reaching it.
+	//
+	// Radar entry first: floors are checked top-down and the first one short
+	// wins, so the eyes are bought before the cover. The jammer is the
+	// second-order want -- denying their targeting matters after we can see.
+	//
+	// EyeDefFor returns null for every T1 line, because no faction has a T1
+	// mobile radar or jammer. There are no escorts before T2, by construction.
 	{
-		const uint squads = Military::SquadCount();
+		const uint squads = Military::EscortSquadCount();
 		if (squads > 0) {
-			CCircuitDef@ sup = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::SUPPORT);
-			if ((sup !is null) && sup.IsAvailable(ai.frame)) {
-				defs.insertLast(sup);
-				want.insertLast(int(squads));
+			const int per = int(ai.GetTunable("apex_escort_per_squad",
+					float(ESCORT_PER_SQUAD)));
+			for (int k = 0; k < 2; ++k) {
+				CCircuitDef@ eye = Factory::EyeDefFor(fac.circuitDef, k == 1);
+				if ((eye is null) || !eye.IsAvailable(ai.frame))
+					continue;
+				defs.insertLast(eye);
+				want.insertLast(per * int(squads));
 				isFloor.insertLast(true);
 			}
 		}

@@ -67,6 +67,16 @@ array<IUnitTask@> gJoinTasks;
 int gConJoined = 0;
 int gNextJoinLog = 0;
 
+// WHY A JOIN WAS REFUSED. Only successes were logged, so a duplicate reactor
+// could not be attributed to any of the three conditions below; per-reason
+// totals are what let ONE game answer that, since the line itself is sampled.
+int gConJoinMiss = 0;
+int gMissNoCap = 0;       // the task already holds its builder cap
+int gMissFar = 0;         // nearest candidate sits beyond JOIN_RANGE
+int gMissUnassigned = 0;  // task exists but nobody has been given it yet
+int gMissNone = 0;        // no task for this def at all -- the ordinary case
+int gNextJoinMissLog = 0;
+
 // Deliberately not MEX/MEXUP/GEO/GEOUP -- those are per-spot, two of them are
 // two different spots, and stacking constructors on one is the opposite of what
 // expansion wants (see SaferMex). Not DEFENCE either: two towers at two places
@@ -119,6 +129,13 @@ IUnitTask@ JoinTaskFor(const CCircuitDef@ want, CCircuitUnit@ unit)
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	IUnitTask@ best = null;
 	float bestDist = JOIN_RANGE;
+	// The refusal of the NEAREST candidate we could not take. bestDist only
+	// shrinks once `best` is set, so while best is null every "far" rejection
+	// really is beyond JOIN_RANGE rather than merely second-nearest.
+	string why = "none";
+	float whyDist = 0.f;
+	uint whyBusy = 0;
+	bool whySet = false;
 	for (uint i = 0; i < gJoinTasks.length(); ++i) {
 		IUnitTask@ cand = gJoinTasks[i];
 		if (cand is null)
@@ -126,15 +143,28 @@ IUnitTask@ JoinTaskFor(const CCircuitDef@ want, CCircuitUnit@ unit)
 		const CCircuitDef@ has = cand.buildDef;
 		if ((has is null) || (has.id != want.id))
 			continue;
-		array<CCircuitUnit@>@ busy = cand.GetUnits();
-		if ((busy is null) || (busy.length() == 0) || (busy.length() >= cap))
-			continue;
 		const AIFloat3 where = cand.GetBuildPos();
 		if (!OnMap(where))
 			continue;
+		array<CCircuitUnit@>@ busy = cand.GetUnits();
+		const uint nbusy = (busy is null) ? 0 : busy.length();
 		const float dist = here.distance2D(where);
-		if (dist >= bestDist)
+		string bad = "";
+		if (nbusy == 0)
+			bad = "unassigned";
+		else if (nbusy >= cap)
+			bad = "nocap";
+		else if (dist >= bestDist)
+			bad = "far";
+		if (bad != "") {
+			if (!whySet || (dist < whyDist)) {
+				whySet = true;
+				why = bad;
+				whyDist = dist;
+				whyBusy = nbusy;
+			}
 			continue;
+		}
 		@best = cand;
 		bestDist = dist;
 	}
@@ -146,8 +176,29 @@ IUnitTask@ JoinTaskFor(const CCircuitDef@ want, CCircuitUnit@ unit)
 				+ " -> " + want.GetName() + " dist=" + formatFloat(bestDist, "", 0, 0)
 				+ " cap=" + cap + " joined=" + gConJoined);
 		}
+		return best;
 	}
-	return best;
+	++gConJoinMiss;
+	if (why == "nocap")
+		++gMissNoCap;
+	else if (why == "far")
+		++gMissFar;
+	else if (why == "unassigned")
+		++gMissUnassigned;
+	else
+		++gMissNone;
+	if (ai.frame >= gNextJoinMissLog) {
+		gNextJoinMissLog = ai.frame + 5 * SECOND;
+		AiLog(Factory::T() + "apex: con-join-miss " + unit.circuitDef.GetName()
+			+ " -> " + want.GetName() + " why=" + why
+			+ " dist=" + formatFloat(whyDist, "", 0, 0)
+			+ " cap=" + cap + " busy=" + whyBusy
+			+ " cost=" + formatFloat(want.costM, "", 0, 0)
+			+ " miss=" + gConJoinMiss
+			+ " nocap=" + gMissNoCap + " far=" + gMissFar
+			+ " unassigned=" + gMissUnassigned + " none=" + gMissNone);
+	}
+	return null;
 }
 
 IUnitTask@ JoinDuplicateBuild(CCircuitUnit@ unit, bool isComm, IUnitTask@ offer)

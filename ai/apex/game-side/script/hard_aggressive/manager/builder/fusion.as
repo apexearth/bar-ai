@@ -38,13 +38,65 @@ const float AFFORD_SECONDS = 90.f;
 // different rules. This is the single answer they all use now.
 CCircuitDef@ SolarDef()
 {
-	if (aiEconomyMgr.energy.income
-			>= ai.GetTunable("apex_advsol_energy", ADVSOL_MIN_ENERGY)) {
-		CCircuitDef@ adv = SideDef3(armadvsol, coradvsol, legadvsol);
-		if ((adv !is null) && adv.IsAvailable(ai.frame))
-			return adv;
-	}
+	CCircuitDef@ adv = AdvSolDef();
+	if (adv !is null)
+		return adv;
 	return SideDef3(armsolar, corsolar, legsolar);
+}
+
+// count is incremented on unit CREATION, nanoframe included
+// (CCircuitAI::RegisterTeamUnit), so this reads as "we are making one".
+int ReactorCount()
+{
+	int n = 0;
+	CCircuitDef@ plain = SideDef3(armfus, corfus, legfus);
+	if (plain !is null)
+		n += plain.count;
+	CCircuitDef@ adv = SideDef3(armafus, corafus, legafus);
+	if (adv !is null)
+		n += adv.count;
+	CCircuitDef@ sea = SideDef3(armuwfus, coruwfus, coruwfus);
+	if (sea !is null)
+		n += sea.count;
+	return n;
+}
+
+bool HaveReactor()
+{
+	return ReactorCount() > 0;
+}
+
+// HOW MANY REACTOR TASKS MAY BE IN FLIGHT -- NOT A CEILING ON HOW MANY REACTORS
+// WE MAY OWN. It bounds unfinished WORK, and every reactor that finishes frees
+// its slot, so the number we end up with is still whatever the economy pays for.
+//
+// AFFORD_SECONDS is already this file's answer to "can income pay for this
+// generator", so asking how many times over income covers it inside the same
+// window is the same test applied to concurrency. Floor of one: the first
+// reactor is never blocked. No ceiling -- a richer economy may run more.
+int ReactorsInFlight(float cost)
+{
+	if (cost < 1.f)
+		return 1;
+	const int n = int(aiEconomyMgr.metal.income * AFFORD_SECONDS / cost);
+	return (n < 1) ? 1 : n;
+}
+
+// THE ADVANCED COLLECTOR, OR NULL ONCE IT IS OBSOLETE. apexearth: "Once we're
+// making fusions, we must stop making advanced solars. Advanced solars become
+// obsolete after we have fusions."
+//
+// obsolete.as already names a reactor as this def's successor and reclaims it,
+// so without this the same def was built and torn down at the same time.
+CCircuitDef@ AdvSolDef()
+{
+	if (HaveReactor())
+		return null;
+	if (aiEconomyMgr.energy.income
+			< ai.GetTunable("apex_advsol_energy", ADVSOL_MIN_ENERGY))
+		return null;
+	CCircuitDef@ adv = SideDef3(armadvsol, coradvsol, legadvsol);
+	return ((adv !is null) && adv.IsAvailable(ai.frame)) ? adv : null;
 }
 
 
@@ -186,6 +238,23 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 
 	CCircuitDef@ want = FusionDef(unit);
 
+	// Outstanding bound. count sees FINISHED buildings only and Enqueue does not
+	// dedup, so the cooldown alone re-asks for the whole minutes a reactor takes.
+	// Left inside the null check so a missing def still reaches the diagnostic.
+	if (want !is null) {
+		const int allowed = ReactorsInFlight(want.costM);
+		const int built = ReactorCount();
+		int outstanding = gFusionsAsked - built;
+		// HomeEnergy builds reactors without touching gFusionsAsked, so this can
+		// drift negative; resetting on the far side keeps a desync from wedging it.
+		if (outstanding > allowed * 2) {
+			gFusionsAsked = built;
+			outstanding = 0;
+		}
+		if (outstanding >= allowed)
+			return null;
+	}
+
 	// Instrumented because the first run of this rule fired ZERO times in 24
 	// minutes while every gate above it read clear -- bank 1237/1250 against a
 	// bar of 55%, haveT2 set, income 87 -- and there was no way to tell which of
@@ -193,7 +262,13 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// whole runs before.
 	AIFloat3 spot;
 	const bool okDef = (want !is null) && want.IsAvailable(ai.frame);
-	const bool okSpot = okDef && BandSpot(unit, want, false, spot);
+	// BandSpot's deep band is only the BACK of the base while the latched axis
+	// points at the enemy, so it cannot be the only answer for a reactor.
+	// ReactorSpot declining falls through to exactly the old placement.
+	int rear = 0;
+	if (okDef)
+		rear = ReactorSpot(unit, want, spot);
+	const bool okSpot = okDef && ((rear != 0) || BandSpot(unit, want, false, spot));
 	IUnitTask@ post = okSpot
 		? aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, want, spot, 0.f))
@@ -214,8 +289,17 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	gNextFusion = ai.frame + (Factory::EcoLeadActive()
 			? FUSION_PERIOD : int(float(FUSION_PERIOD) * FUSION_OTHER_MULT));
 	++gFusionsAsked;
+	// at= is what separates this path from HomeEnergy's and from the C++
+	// placement in a log: without a position all three look alike.
+	string via = "band";
+	if (rear == 1)
+		via = "heavy";
+	else if (rear == 2)
+		via = "rear";
 	AiLog(Factory::T() + "apex: eco fusion " + want.GetName()
 		+ " standing=" + want.count + " asked=" + gFusionsAsked
+		+ " at=" + int(spot.x) + "," + int(spot.z)
+		+ " via=" + via
 		+ " bank=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0));
 	return post;
 }

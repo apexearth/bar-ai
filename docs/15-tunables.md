@@ -47,7 +47,8 @@ Verified 2026-08-09 by reading every call site.
 | `apex_squad_spacing` | 96 | C++ `SquadTask.cpp` `ActivePath` | lateral spacing of a travelling line |
 | `apex_range_mod` | 0.95 (`STANDOFF_RANGE_MOD`) | C++ `FighterTask.cpp` + `SquadTask.cpp` `Attack` | standoff as a fraction of the unit's own `GetMaxRange()` |
 | `apex_los_standoff` | 1 (on) | C++ `FighterTask.cpp` + `SquadTask.cpp` `Attack` | 0 restores clamping the standoff to the unit's own `losRadius` even when it can see the target |
-| `apex_standoff_hold` | 1 (on) | C++ `CircuitUnit.cpp` `Attack(pos, ...)` | 0 restores the trailing fight order marching to the enemy's own position instead of ending at the standoff ring |
+| `apex_prefer_target` | 1 (on) | C++ `CircuitUnit.cpp` `Attack(pos, ...)` | 0 restores `CMD_ATTACK` + `CMD_FIGHT` behind the standoff move instead of move + set-target |
+| `apex_siege_fight` | 0 (off) | C++ the eight fighter `AssignTo` | 1 restores `CFightAction` travel for `siege` defs instead of `CMoveAction` |
 | `apex_orbit_rate` | 0.18 | C++ `SquadTask.cpp` `Attack` | rate the standoff ring precesses |
 | `apex_reclaim_energy_dist` | 900 | C++ `EconomyManager.cpp` `UpdateReclaimTasks` | how far a constructor may walk for a tree |
 | `apex_wind_per_metal` | 1.0 | AngelScript `builder/mexguard.as` | 0 restores picking wind-vs-solar on raw output |

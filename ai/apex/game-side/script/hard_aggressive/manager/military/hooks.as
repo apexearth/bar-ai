@@ -172,6 +172,30 @@ uint SquadCount()
 	return n;
 }
 
+// Squads an ESCORT can attach to.
+//
+// SquadCount above counts EVERY fighter task -- rally, guard, defend, scout,
+// raid, attack, bomb, arty, AA, AH, support, super -- because until
+// GetFightType was bound nothing could tell them apart. CSupportTask only ever
+// joins an ATTACK task, or a DEFEND task when there is no attack at all, so
+// those two are the only ones that can take a radar or a jammer.
+uint EscortSquadCount()
+{
+	uint attack = 0;
+	uint defend = 0;
+	for (uint i = 0; i < gSquads.length(); ++i) {
+		array<CCircuitUnit@>@ on = gSquads[i].GetUnits();
+		if ((on is null) || (on.length() == 0))
+			continue;
+		const int ft = gSquads[i].GetFightType();
+		if (ft == int(Task::FightType::ATTACK))
+			++attack;
+		else if (ft == int(Task::FightType::DEFEND))
+			++defend;
+	}
+	return (attack > 0) ? attack : defend;
+}
+
 // Where our own defences stand.
 //
 // Nothing in the ~405 bindings enumerates friendly units or asks "what is
@@ -187,6 +211,13 @@ uint SquadCount()
 array<int>      gFenceId;
 array<AIFloat3> gFencePos;
 
+// WHERE A TOWER OF OURS DIED. AiUnitRemoved dropped the position and kept
+// nothing, so ground that had just proved it needs defending read identical to
+// ground nobody has ever contested. Nothing else in the AI records this: the
+// FENCE removal event is the only notice we get.
+array<AIFloat3> gFenceLostPos;
+array<int>      gFenceLostAt;
+
 uint FenceCountNear(const AIFloat3& in pos, float radius)
 {
 	uint n = 0;
@@ -195,6 +226,29 @@ uint FenceCountNear(const AIFloat3& in pos, float radius)
 			++n;
 	}
 	return n;
+}
+
+// How recently, and how repeatedly, we have lost a tower near here. Zero is
+// "never"; each loss contributes its remaining freshness, so a position that has
+// eaten several towers scores above one that has eaten one. Expired entries are
+// dropped as they are walked, which is the only place this list shrinks.
+float FenceLostNear(const AIFloat3& in pos, float radius)
+{
+	const float life = ai.GetTunable("apex_fence_loss_memory", 180.f) * float(SECOND);
+	if (life <= 0.f)
+		return 0.f;
+	float w = 0.f;
+	for (int i = int(gFenceLostAt.length()) - 1; i >= 0; --i) {
+		const float age = float(ai.frame - gFenceLostAt[i]);
+		if (age > life) {
+			gFenceLostPos.removeAt(i);
+			gFenceLostAt.removeAt(i);
+			continue;
+		}
+		if (gFenceLostPos[i].distance2D(pos) <= radius)
+			w += 1.f - (age / life);
+	}
+	return w;
 }
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
@@ -222,6 +276,10 @@ void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 	const int id = unit.id;
 	for (uint i = 0; i < gFenceId.length(); ++i) {
 		if (gFenceId[i] == id) {
+			if (OnMap(gFencePos[i])) {
+				gFenceLostPos.insertLast(gFencePos[i]);
+				gFenceLostAt.insertLast(ai.frame);
+			}
 			gFenceId.removeAt(i);
 			gFencePos.removeAt(i);
 			return;

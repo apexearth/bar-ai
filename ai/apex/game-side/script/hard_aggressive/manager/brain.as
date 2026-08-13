@@ -366,11 +366,244 @@ const float FRONT_FENCE_SPREAD = 700.f;   // how far apart cover counts as sprea
 // the neighbouring valid ground. Scaled off the same number for that reason.
 const float FRONT_SITE_FRAC = 0.9f;
 
+// A RANGE READ IS NOT AUTOMATICALLY A GUN'S RANGE, AND AN ABSURD ONE MUST NOT BE
+// ABLE TO REACH ANYTHING. GetMaxRange is the def's longest weapon, whatever that
+// weapon is for: an anti-nuke's interceptor reports 72,000 elmos, and legrampart
+// carries one. Read unclamped it set the front line's SPACING and the radius
+// FenceCountNear counts cover over, so one such def made the line a single point,
+// made every tower on the map count as cover, and drove the want's value to zero
+// -- silently, for one faction. This is the second time a bad range read has
+// zeroed a want, so the clamp is general: nothing downstream sees a raw range.
+//
+// Bounded by the longest real static DIRECT-FIRE gun any of the three factions
+// fields -- legperdition at 2,300 elmos, 5.35x the light turret's 430-435.
+// Anything reporting more than that is carrying artillery or an interceptor, not
+// a line gun.
+const float DEF_REACH_CAP = 6.0f;
+
+float LightTowerRange()
+{
+	CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
+	const float r = (light is null) ? 0.f : light.GetMaxRange();
+	return (r > 1.f) ? r : 430.f;   // armllt/leglht 430, corllt 435
+}
+
+// The def's usable weapon reach, clamped. Every consumer of a tower's range in
+// this file goes through here.
+float TowerReach(const CCircuitDef@ tower)
+{
+	if (tower is null)
+		return 0.f;
+	const float r = tower.GetMaxRange();
+	if (r <= 0.f)
+		return 0.f;
+	const float cap = LightTowerRange()
+			* ai.GetTunable("apex_def_reach_cap", DEF_REACH_CAP);
+	return (r > cap) ? cap : r;
+}
+
 float FrontSiteSearch(const CCircuitDef@ tower)
 {
-	const float r = (tower is null) ? 0.f : tower.GetMaxRange();
+	const float r = TowerReach(tower);
 	const float s = r * ai.GetTunable("apex_front_site_frac", FRONT_SITE_FRAC);
 	return (s < 400.f) ? 400.f : s;
+}
+
+// WHAT THE TURRET IS WORTH -- not the fact that a turret is being built.
+//
+// Score() is value/cost, and the value above it was a constant. Four of
+// apexearth's complaints are that one line:
+//
+//   the map edge ("we need EXTRA defense on the edges to compensate"), rebuilding
+//   ("kills whatever we have and then we don't seem to rebuild it with any
+//   urgency"), the advanced plant ("the T2 lab dying because it was placed and NO
+//   turrets were made anywhere near it") and the heavy tier ("Where's our T2 and
+//   T3 defenses?"). A constant value divided by cost makes a 3,500-metal
+//   Annihilator score ~18x worse than a 190-metal Beamer, so the line got weaker
+//   as the economy grew; and it made empty grass at the map's centre score exactly
+//   as high as the wall in front of our own factory.
+//
+// Three multipliers and one addition, none of them a bare number:
+//
+//  - WHAT IT DENIES, which is damage AND reach. GetSurfThreat is CircuitAI's own
+//    measure, taken RELATIVE to the cheapest turret we would ever place --
+//    relative, so FRONT_FENCE_VALUE keeps its calibration and only the ORDERING
+//    between tiers changes. It contains no range: CircuitDef.h GetSurfThreat is
+//    surfThrDmg * sqrt(health + shield), and surfThrDmg is sqrt(dps) * dmg^0.25.
+//    So range is a second, multiplied term. apexearth: "at +50 handicap the t2
+//    scorp defense is only worthwhile for a short time. you need the longer range
+//    defenses."
+//
+//    LINEAR in range, not squared: this want holds a LINE, and a turret of range
+//    R holds R/Rlight as much of it -- the identical quantity FrontLineSpots
+//    already spaces the line by. Squared would value a disc instead, and would
+//    promote Cortex's 950-range Doomsday over its 1390-range Persecutor by
+//    accident of the damage term. Multiplied by the damage term rather than
+//    replacing it, and skipped entirely for a def with no surface gun, so
+//    something that outranges everything and kills nothing gains nothing.
+//
+//    Deliberately not proportional to cost either: value that scales with cost
+//    makes score constant and deletes the tier distinction altogether, which is
+//    a different bug.
+//  - HOW EXPOSED IT IS. Exactly the coverage deficit EdgeSpacing already computes
+//    for the line's spacing -- at the wall a point is covered from one side
+//    instead of two, so the same threat needs twice the defence there.
+//  - WHAT IS BEHIND IT, over what the turret costs.
+//  - GROUND WE HAVE JUST BEEN PUSHED OFF, added rather than multiplied so it
+//    still lifts a stretch whose other terms are all small. A position that ate a
+//    turret has proved it is worth defending.
+//
+// The reference is the metal a raid would take off us if it got through -- an
+// advanced plant is ~2,000 -- so the multiplier is ~2x with one behind the line.
+const float DEF_ASSET_REF   = 2000.f;
+const float DEF_LOSS_WEIGHT = 1.5f;
+
+// CAN THIS TURRET SHOOT BACK AT WHAT IS SHELLING IT.
+//
+// apexearth, given two candidate reasons why range matters to him -- (1) artillery
+// shells a short turret from outside its reach, so its DPS never happens, (2) a
+// longer turret covers more line: "1 and 2 here are correct. but 1 is the biggest
+// issue. they can't even hit the things that cna see them and easily kill them."
+//
+// That is why threat-per-metal flatters the Scorpion. corvipe reaches 730 and
+// scores nearly double a 1,390-range Persecutor on damage and cost alone, while
+// armmerl and corvroc -- BAR's own description, "Stealthy Rocket Launcher - good
+// vs. static defense" -- shell it from 1,300.
+//
+// Neither input is a constant standing in for the enemy. HOW FAR A BESIEGER
+// REACHES is the longest range among the game's own besieging defs, resolved by
+// name. HOW MUCH IT MATTERS is GetEnemyCost(ARTY) -- what we have actually seen.
+//
+// The static siege guns are deliberately NOT in the list: nothing we would put on
+// a line answers a 4,650-range armbrtha or a 4,950-range corint, and including
+// them would drive every turret's factor to ~0.08 and delete defence outright.
+//
+// DELIBERATELY NOT NORMALISED against the light turret. Normalising restores the
+// light turret to 1.0 but inflates every heavy turret 5-9x, which drives the fence
+// want hard against mex upgrades -- measured on paper before this shipped. Left as
+// it is, the factor sits in [1-s, 1] and can only ever LOWER a turret's value, so
+// this cannot be the thing that grows defence spend. Do not "tidy" it.
+const float SIEGE_SOFT = 2.f;
+float gSiegeReach = -1.f;
+float gSiegeRef   = -1.f;
+
+float SiegeReach()
+{
+	if (gSiegeReach >= 0.f)
+		return gSiegeReach;   // defs do not change during a game
+	array<string> guns;
+	guns.insertLast("armmart");  guns.insertLast("cormart");
+	guns.insertLast("legmed");   guns.insertLast("armmerl");
+	guns.insertLast("corvroc");  guns.insertLast("corhrk");
+	float far = 0.f;
+	float cheapest = 0.f;
+	for (uint i = 0; i < guns.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(guns[i]);
+		if (d is null)
+			continue;
+		const float r = d.GetMaxRange();
+		if (r > far)
+			far = r;
+		if ((d.costM > 0.f) && ((cheapest <= 0.f) || (d.costM < cheapest)))
+			cheapest = d.costM;
+	}
+	gSiegeReach = far;
+	gSiegeRef = cheapest;
+	return gSiegeReach;
+}
+
+// HOW SIEGED WE ARE, saturating rather than proportional. Their artillery does not
+// have to be most of their army for a short turret to be worthless -- one
+// Ambassador kills a Scorpion for free -- so this is arty/(arty + one besieger's
+// cost), which reads 0.5 at a single cheapest-besieger's worth and 0.75 at three.
+// The reference is that def's own costM, read rather than typed.
+//
+// UNKNOWN READS AS ZERO PENALTY, and that is the safe direction here rather than a
+// breach of the unknown-is-never-none rule -- it is not a bug. This term only ever
+// REDUCES value, so an unscouted enemy keeps the cheap turrets available, which is
+// what was asked for: a Scorpion is genuinely fine against raiders. Suppressing
+// them on a guess is the expensive error; keeping them is the cheap one.
+float SiegeFraction()
+{
+	SiegeReach();
+	if (gSiegeRef <= 0.f)
+		return 0.f;
+	const float arty = aiEnemyMgr.GetEnemyCost(Unit::Role::ARTY.type);
+	if (arty <= 0.f)
+		return 0.f;
+	return arty / (arty + gSiegeRef);
+}
+
+// 1.0 when we out-reach the besieger, decaying smoothly as we fall short --
+// squared, because both the share of the engagement in which we can reply and the
+// time we survive under fire fall with the shortfall. CLIPPED at 1: once we can
+// reach them, extra reach is the LINE term's business, which is what stops the two
+// double-counting.
+float SiegeFactor(float reach)
+{
+	const float s = SiegeFraction();
+	if (s <= 0.f)
+		return 1.f;
+	const float far = SiegeReach();
+	if (far <= 1.f)
+		return 1.f;   // could not read it: no penalty
+	float q = reach / far;
+	if (q > 1.f)
+		q = 1.f;
+	return (1.f - s) + s * pow(q, ai.GetTunable("apex_siege_soft", SIEGE_SOFT));
+}
+
+float TowerDenial(CCircuitDef@ tower)
+{
+	if (tower is null)
+		return 1.f;
+	CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
+	const float t = tower.GetSurfThreat();
+	const float b = (light is null) ? 0.f : light.GetSurfThreat();
+	if ((t <= 0.f) || (b <= 0.f))
+		return 1.f;   // no surface gun: no credit at all, range included
+	float v = t / b;
+	const float lr = LightTowerRange();
+	const float tr = TowerReach(tower);
+	if ((lr > 0.f) && (tr > lr))
+		v *= tr / lr;
+	// ...and how much of that damage actually lands on what is shooting at us.
+	v *= SiegeFactor(tr);
+	return v;
+}
+
+// The expensive things a raid actually wants, valued at what losing them costs.
+// Each resolves through SideDef3 so Armada, Cortex and Legion all answer, and
+// GetOwnUnitsOfDef is position-scoped so this is "behind THIS point", not a
+// global tally.
+float AssetsBehind(const AIFloat3& in at, float radius)
+{
+	array<CCircuitDef@> defs;
+	defs.insertLast(Factory::AdvCounterpart());
+	defs.insertLast(SideDef3("armshltx", "corgant", "leggant"));
+	defs.insertLast(SideDef3("armfus", "corfus", "legfus"));
+	defs.insertLast(SideDef3("armafus", "corafus", "legafus"));
+	float m = 0.f;
+	for (uint i = 0; i < defs.length(); ++i) {
+		if (defs[i] is null)
+			continue;
+		array<CCircuitUnit@>@ ours = ai.GetOwnUnitsOfDef(defs[i], at, radius);
+		if (ours is null)
+			continue;
+		m += float(ours.length()) * defs[i].costM;
+	}
+	return m;
+}
+
+float DefenceValue(CCircuitDef@ tower, const AIFloat3& in at, float span)
+{
+	float v = TowerDenial(tower);
+	v *= Military::EdgeExposure(at, span);
+	v *= 1.f + AssetsBehind(at, span)
+			/ ai.GetTunable("apex_def_asset_ref", DEF_ASSET_REF);
+	v += ai.GetTunable("apex_def_loss_weight", DEF_LOSS_WEIGHT)
+			* Military::FenceLostNear(at, span);
+	return v;
 }
 
 // COVERING AN EXTRACTOR, as a WANT rather than as a rule that places its own
@@ -468,6 +701,43 @@ Want@ MexCoverWant(CCircuitUnit@ unit)
 // extractor, which is what their air is actually hunting.
 const float AIR_COVER_VALUE = 0.8f;
 
+// AN ORDER IS NOT A TURRET, AND EVERY READ BELOW WAS FINISH-ONLY.
+//
+// CCircuitAI::GetOwnUnitsOfDef skips u->GetUnit()->IsBeingBuilt(), so a turret we
+// have already started does not count as cover; Military::gFencePos is filled from
+// the FENCE finished handler, so it does not either. Between "ordered" and
+// "finished" this want sees the ground it just claimed as bare, and every builder
+// asking in that window gets the same answer.
+//
+// Builder::gDigOrderPos exists for exactly this and AA never used it. Same shape,
+// scoped to AA so an AA order cannot suppress a ground tower or the reverse.
+const int AA_ORDER_TTL = 90 * SECOND;
+array<AIFloat3> gAAOrderPos;
+array<int>      gAAOrderAt;
+
+void NoteAAOrder(const AIFloat3& in pos)
+{
+	gAAOrderPos.insertLast(pos);
+	gAAOrderAt.insertLast(ai.frame);
+}
+
+// Standing AA plus AA still on order, within radius. Expired entries drop as they
+// are walked: a task can be aborted and there is no completion hook to clear it.
+uint AACoverNear(CCircuitDef@ aa, const AIFloat3& in at, float radius)
+{
+	array<CCircuitUnit@>@ ours = ai.GetOwnUnitsOfDef(aa, at, radius);
+	uint n = (ours is null) ? 0 : ours.length();
+	for (int i = int(gAAOrderAt.length()) - 1; i >= 0; --i) {
+		if (ai.frame - gAAOrderAt[i] > AA_ORDER_TTL) {
+			gAAOrderAt.removeAt(i);
+			gAAOrderPos.removeAt(i);
+		} else if (gAAOrderPos[i].distance2D(at) <= radius) {
+			++n;
+		}
+	}
+	return n;
+}
+
 Want@ AirCoverWant(CCircuitUnit@ unit)
 {
 	// AirThreatSeen, not GetEnemyCost(AIR): air constructors and air scouts carry
@@ -482,9 +752,14 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 	// The floor still applies, but only once air exists to deter.
 	if (enemyAir < 1.f)
 		return null;
+	// OUR OWN BASIC COVER FIRST, THE SIDE'S TOP-UP SECOND. The floor is what stops a
+	// base having nothing overhead, so it is never charged against the team budget;
+	// the budget bounds what we hold BEYOND it. Counted over both tiers -- this read
+	// aa.count, the count of one def, so a switch from Thistle to SAM re-opened the
+	// floor and bought two more.
 	const int want = Builder::AAWantedNow(unit, enemyAir);
-	if (aa.count < Builder::AA_MIN) {
-		// per-base deterrence floor, counted on our own turrets
+	if (Military::OwnStaticAA() < uint(Builder::AA_MIN)) {
+		// basic cover for this player, placed by the loop below
 	} else if (Military::TeamAA() >= float(want)) {
 		return null;
 	}
@@ -497,31 +772,38 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 			ai.GetTunable("apex_front_reach", 2200.f));
 	if ((mine is null) || (mine.length() == 0))
 		return null;
+	// The turret's own reach is both the cover radius and the value's span, so a
+	// SAM covers more extractors than a Thistle and is valued over more of them.
+	// TowerReach, not GetMaxRange: every range read in this file goes through the
+	// clamp, so no def carrying an interceptor can set a cover radius. A no-op for
+	// the AA defs themselves -- 765 to 1,125 against a 2,610 cap.
+	const float span = TowerReach(aa);
+	const AIFloat3 me = unit.GetPos(ai.frame);
 	AIFloat3 best;
 	bool have = false;
 	uint fewest = 0;
+	float bestD = 0.f;
+	uint bare = 0;
 	for (uint i = 0; i < mine.length(); ++i) {
 		if (mine[i] is null)
 			continue;
 		const AIFloat3 at = mine[i].GetPos(ai.frame);
 		if (!OnMap(at) || Builder::TooCrowded(at))
 			continue;
-		// COUNT THE AA, NOT THE FENCES. This asked FenceCountNear, which reads
-		// gFencePos, which Military::AiUnitAdded fills only for units arriving as
-		// UseAs::FENCE. An AA turret we have just built does not raise that count,
-		// so the mex we picked as "least covered" stayed the least covered and was
-		// picked again, and again. apexearth, watching: "I'm seeing cases where we
-		// build unusually large AA clusters (6 aa all together in one spot) at just
-		// 6m into the game."
-		//
-		// Asking how many of THIS TURRET we already own within its own reach needs
-		// no registry and cannot drift from what is actually standing.
-		array<CCircuitUnit@>@ cover = ai.GetOwnUnitsOfDef(aa, at, aa.GetMaxRange());
-		const uint near = (cover is null) ? 0 : cover.length();
+		const uint near = AACoverNear(aa, at, span);
+		if (near == 0)
+			++bare;
 		if (near > 0)
-			continue;               // this extractor is already covered
-		if (!have || (near < fewest)) {
+			continue;               // covered, or already spoken for
+		// NEAREST OF THE BARE ONES. Every candidate that survives the filter has a
+		// count of zero, so `!have || near < fewest` picked whichever extractor came
+		// first out of GetOwnUnitsOfDef -- the same one for every builder in the
+		// base, every call, until one of them finished. Distance is what makes two
+		// builders standing in different places choose differently.
+		const float d = me.distance2D(at);
+		if (!have || (near < fewest) || ((near == fewest) && (d < bestD))) {
 			fewest = near;
+			bestD = d;
 			best = at;
 			have = true;
 		}
@@ -534,9 +816,22 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 	if (!OnMap(site))
 		return null;
 
+	// WHAT THIS PATCH OF SKY IS WORTH, not the fact that AA is wanted somewhere.
+	// The value was a bare constant, and it logged as aa=0.0051 in every sample of
+	// a 40-minute game: a base with no AA at all proposed exactly what a base with
+	// nine proposed, so whoever asked first spent the whole team's allowance.
+	//
+	// `mine` is scoped to the builder, so `uncovered` is a LOCAL reading -- the
+	// builder standing at the base with nothing overhead proposes at ~1.0 and the
+	// one standing in the blob proposes at ~0.1. DefenceValue is the same function
+	// the front line uses; for an AA def TowerDenial returns 1.0 (no surface gun),
+	// so what it contributes here is exposure, what is parked behind the point, and
+	// whether we have recently lost a tower there.
+	const float uncovered = float(bare) / float(mine.length());
+
 	Want@ w = Want();
 	w.kind = "aa";          // its own budget row; Act() handles it as a fence
-	w.value = AIR_COVER_VALUE;
+	w.value = AIR_COVER_VALUE * uncovered * DefenceValue(aa, site, span);
 	w.cost = aa.costM;
 	w.pos = site;
 	@w.def = aa;
@@ -556,7 +851,9 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	CCircuitDef@ tower = Builder::FrontTower(unit, unit.GetPos(ai.frame));
 	if ((tower is null) || !tower.IsAvailable(ai.frame))
 		return null;
-	float span = tower.GetMaxRange();
+	// TowerReach, not GetMaxRange: an anti-nuke's interceptor reports 72,000, and
+	// this number is both the line's spacing and the radius cover is counted over.
+	float span = TowerReach(tower);
 	if (span < 200.f)
 		span = 200.f;   // a def with no usable range must not collapse the line
 	// OVERLAP, DON'T JUST TOUCH. apexearth: "you'll want to make sure they overlap
@@ -645,7 +942,7 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 
 	Want@ w = Want();
 	w.kind = "fence";
-	w.value = FRONT_FENCE_VALUE * uncovered;
+	w.value = FRONT_FENCE_VALUE * uncovered * DefenceValue(tower, best, span);
 	w.cost = tower.costM;
 	w.pos = best;
 	@w.def = tower;
@@ -979,7 +1276,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		// Expansion is never blocked by a pending upgrade: a new extractor is
 		// worth five upgrades per metal, and they are not alternatives -- one
 		// takes ground, the other improves ground already held.
-		if ((w.kind != "mexup") && (w.kind != "mex") && haveMexUp)
+		//
+		// A COVERAGE GAP IS NOT OPTIONAL SPENDING EITHER. apexearth: "if an area
+		// lacks coverage then that build order to cover it is much more important
+		// than adding defense to some other area that already has coverage."
+		//
+		// `have` on a defence want is FenceCountNear at the chosen point, so zero
+		// means nothing at all is in range of that stretch -- not "thin", bare.
+		// Thickening a stretch that already has cover still waits for the upgrade,
+		// which is what keeps this from becoming a general exemption.
+		const bool gap = ((w.kind == "fence") || (w.kind == "aa")) && (w.have == 0);
+		if ((w.kind != "mexup") && (w.kind != "mex") && haveMexUp && !gap)
 			continue;
 		// "aa" is placed exactly like a fence -- a DEFENCE build task at a chosen
 		// site. Only the budget row it is scored against differs.
@@ -998,6 +1305,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 					prio, w.def, w.pos, SQUARE_SIZE * 4));
 			if (t !is null) {
 				++gFenceOrders;
+				if (w.kind == "aa")
+					NoteAAOrder(w.pos);
 				const float fwd = Military::ForwardFraction(w.pos);
 				if (fwd < 0.10f)
 					++gFenceNear;

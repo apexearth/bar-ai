@@ -311,10 +311,19 @@ AIFloat3 CRetreatTask::GetRallyPos(CCircuitUnit* unit) const
 // Push the destination directly away from the enemy centroid instead. Only for
 // the commander: everything else retreats to be repaired, and a repair pad
 // behind the base is no use to it.
+//
+// The push applies to the base-centre case ONLY. A haven is an assistant's own
+// position -- GetAssistRange is that unit's build distance -- so standing on it
+// is the free repair, and COMM_REAR_DIST puts the commander outside it. Update()
+// will not release a commander below its own retreat threshold, so a commander
+// pushed out of repair range is held until idle autoheal carries it there.
 AIFloat3 CRetreatTask::GetRearHaven(CCircuitUnit* unit, const AIFloat3& haven) const
 {
 	CCircuitAI* circuit = manager->GetCircuit();
 	if (!unit->GetCircuitDef()->IsRoleComm()) {
+		return haven;
+	}
+	if (utils::is_valid(circuit->GetFactoryManager()->GetClosestHaven(unit))) {
 		return haven;
 	}
 

@@ -562,7 +562,11 @@ local function dump(reason)
 				local ud = UnitDefs[Spring.GetUnitDefID(uID) or -1]
 				if ud ~= nil and ud.canAttack and (ud.maxWeaponRange or 0) > 0 then
 					armed = armed + 1
-					local t = tonumber(Spring.GetUnitRulesParam(uID, "targetID"))
+					-- GetUnitRulesParam returns nil when unset, and tonumber(nil)
+					-- RAISES rather than returning nil -- which took the whole
+					-- export down on the first untargeted unit.
+					local raw = Spring.GetUnitRulesParam(uID, "targetID")
+					local t = raw ~= nil and tonumber(raw) or nil
 					if t ~= nil and t >= 0 then
 						targeted = targeted + 1
 					end

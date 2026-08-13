@@ -40,6 +40,9 @@ public:
 	virtual void OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker) override;
 
 	FightType GetFightType() const { return fightType; }
+	// Name for a FightType ordinal. Bounds-checked, so it is safe to call on
+	// a value recovered from the task registry rather than from an object.
+	static const char* FightTypeName(int ft);
 	const springai::AIFloat3& GetPosition() const { return position; }
 
 	float GetAttackPower() const { return attackPower; }

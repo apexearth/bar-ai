@@ -345,6 +345,13 @@ public:
 	float GetSpeed()        const { return speed; }
 	float GetLosRadius()    const { return losRadius; }
 	float GetSonarRadius()  const { return sonarRadius; }
+	// CMilitaryManager sets isRadar/isJammer only inside the IMMOBILE branch of
+	// its def loop, so IsRadar()/IsJammer() are false for every mobile radar and
+	// jammer. Those flags cannot simply be widened: ISensorTask, CRadarTask and
+	// CSonarTask use them as the predicate for picking a STRUCTURE to build.
+	// These are the raw radii instead, read once alongside losRadius.
+	float GetRadarRadius()  const { return radarRadius; }
+	float GetJammerRadius() const { return jammerRadius; }
 	float GetCostM()        const { return costM; }
 	float GetCostE()        const { return costE; }
 	float GetUpkeepM()      const { return upkeepM; }
@@ -495,6 +502,8 @@ private:
 	float speed;
 	float losRadius;
 	float sonarRadius;
+	float radarRadius;
+	float jammerRadius;
 	float costM;
 	float costE;
 	float upkeepM;

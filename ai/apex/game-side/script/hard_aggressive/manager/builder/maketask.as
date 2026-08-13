@@ -13,7 +13,20 @@ namespace Builder {
 // The rules themselves live in rules_*.as; the signatures take isComm/isAdvCon
 // rather than recomputing them so the bodies are unchanged from when they were
 // inline here.
+// THE ENGINE'S ENTRY POINT. TaskModuleScript looks up this exact signature.
+//
+// The ladder is MakeTaskInner below; this exists so the defence-share cap has ONE
+// site. Defence work reaches a constructor from eleven script Enqueues and from
+// the engine's own elector and build_chain porcupine entries, and the only thing
+// they all pass through is the answer returned here. See defcap.as.
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
+{
+	const bool isCommander = (unit !is null)
+			&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	return DefenceShareScreen(unit, isCommander, MakeTaskInner(unit));
+}
+
+IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 {
 // 	AiDelPoint(lastPos);
 // 	lastPos = unit.GetPos(ai.frame);
@@ -217,13 +230,21 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
-	// Nothing above answered. For every other builder that is fine -- the engine
-	// asks again shortly. For the commander it is measured idle time on the
-	// biggest builder we own, so it gets a last resort of its own.
+	// For the commander this is measured idle time on the biggest builder we own,
+	// so it gets a last resort of its own.
 	@t = CommanderIdleWork(unit, isComm);
 	if (isComm && (t is null))
 		++gCommEndNull;
-	return t;
+	if (t !is null)
+		return t;
+
+	// THE LAST LINE, BELOW EVERY OTHER RULE. Two things are already proven true
+	// here and they are the whole reason this position is safe: `task` is null,
+	// because the `if (task !is null) return task` above returned otherwise -- so
+	// the engine declined on this call; and Brain::AskingForNewWork was true at
+	// the top of the optional block, so this unit holds IDLE/NIL/WAIT. It has no
+	// work to displace. Assist::Fallback enqueues no building.
+	return Assist::Fallback(unit, isComm);
 }
 
 }  // namespace Builder

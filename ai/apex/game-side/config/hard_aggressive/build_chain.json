@@ -51,8 +51,16 @@
 	// Index 22 (armtarg/cortarg/legtarg) is deliberately absent: this list is
 	// per-player, so it produced one Pinpointer for every AI on the side. The
 	// count that matters is the team's, so Builder::Pinpointer owns them now.
+	// GROUND ONLY, like "land" above. CMilitaryManager::MakeBaseDefence fires once
+	// when the first factory finishes and UpdateDefence builds each entry on an
+	// ABSOLUTE frame, with no air check anywhere in the path. Index 2
+	// (armrl/corrl/legrl) and index 10 (armflak/corflak/legflak) are anti-air, so
+	// every player put up a turret against aircraft on a clock. apexearth: "we make
+	// like 3 AA in our base early game before we have *ever* seen any enemy air."
+	// AA is demand-driven through Brain::AirCoverWant, which will not propose until
+	// air has actually been seen.
 	"base": [
-		[3, 420], [2, 520], [4, 760], [10, 1200], [14, 1250], [12, 1600]
+		[3, 420], [4, 760], [14, 1250], [12, 1600]
 	],
 
 	//superweapons get only build when there is nothing else to do
@@ -222,6 +230,9 @@
 			]
 		},
 		"coravp": {
+			"hub": [
+				[{"unit": "corvipe", "category": "defence", "offset": {"front": 100}, "priority": "low"}]
+			]
 		},
 
 

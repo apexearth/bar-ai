@@ -337,6 +337,23 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	if (LandIsPrecious() && (want is SmallConvDef(unit)))
 		return null;
 
+	// The outstanding bound EcoConverters already carries, for the reason its own
+	// comment gives: count sees FINISHED buildings only and Enqueue does not
+	// dedup, so without this the cooldown alone re-asks forever. An unassigned
+	// task also holds a slot in the shared build-task budget for 300s, which is
+	// the budget mex expansion draws from.
+	CCircuitDef@ smallConv = SmallConvDef(unit);
+	CCircuitDef@ bigConv = BigConvDef(unit);
+	const int built = ((smallConv is null) ? 0 : smallConv.count)
+			+ ((bigConv is null) ? 0 : bigConv.count);
+	int outstanding = gConverts - built;
+	if (outstanding > CONV_STALE) {
+		gConverts = built;
+		outstanding = 0;
+	}
+	if (outstanding >= CONV_INFLIGHT)
+		return null;
+
 	AIFloat3 spot;
 	if (!ConvSpot(unit, want, spot))
 		return null;

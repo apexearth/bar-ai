@@ -16,10 +16,12 @@
 #include "script/MilitaryScript.h"
 #include "setup/SetupManager.h"
 #include "setup/DefenceData.h"
+#include "task/UnitTask.h"
 #include "task/NilTask.h"
 #include "task/IdleTask.h"
 #include "task/RetreatTask.h"
 #include "task/builder/DefenceTask.h"
+#include "task/fighter/FighterTask.h"
 #include "task/fighter/RallyTask.h"
 #include "task/fighter/GuardTask.h"
 #include "task/fighter/DefendTask.h"
@@ -73,6 +75,36 @@ CMilitaryManager::~CMilitaryManager()
 {
 }
 
+#if CIRCUIT_TASK_REGISTRY
+namespace {
+// True when `task` is not a live object, in which case the caller must avoid
+// EVERY dereference of it -- the vtable fetch is the fault. Nothing here reads
+// *task: the names come from what the registry recorded while it was alive.
+bool IsTaskStale(CCircuitAI* circuit, CCircuitUnit* unit, const IUnitTask* task,
+		const char* at)
+{
+	const IUnitTask::SLiveness live = IUnitTask::Probe(task);
+	if (live.live) {
+		return false;
+	}
+	static int staleHits = 0;  // AI event path is single-threaded
+	const int n = ++staleHits;
+	if ((n <= 20) || (n % 100 == 0)) {
+		const int frame = circuit->GetLastFrame();
+		circuit->LOG("apex STALETASK: at=%s unit=%s id=%i taskFrame=%i frame=%i"
+				" age=%i task=%p lastType=%s/%s known=%i hits=%i",
+				at, unit->GetCircuitDef()->GetDef()->GetName(), unit->GetId(),
+				unit->GetTaskFrame(), frame, frame - unit->GetTaskFrame(),
+				(const void*)task, IUnitTask::TypeName(live.type),
+				(live.type == IUnitTask::Type::FIGHTER)
+						? IFighterTask::FightTypeName(live.sub) : "-",
+				int(live.known), n);
+	}
+	return true;
+}
+} // namespace
+#endif
+
 void CMilitaryManager::InitHandlers()
 {
 	/*
@@ -117,14 +149,43 @@ void CMilitaryManager::InitHandlers()
 	auto attackerIdleHandler = [this](CCircuitUnit* unit) {
 		// NOTE: Avoid instant task reassignment, though it may be not relevant for attackers
 		if (this->circuit->GetLastFrame() > unit->GetTaskFrame()/* + FRAMES_PER_SEC*/) {
-			unit->GetTask()->OnUnitIdle(unit);
+			IUnitTask* task = unit->GetTask();
+#if CIRCUIT_TASK_REGISTRY
+			if (IsTaskStale(this->circuit, unit, task, "idle")) {
+				return;  // survive and keep logging, instead of faulting on the vtable
+			}
+#endif
+			task->OnUnitIdle(unit);
 		}
 	};
-	auto attackerDamagedHandler = [](CCircuitUnit* unit, CEnemyInfo* attacker) {
-		unit->GetTask()->OnUnitDamaged(unit, attacker);
+	auto attackerDamagedHandler = [this](CCircuitUnit* unit, CEnemyInfo* attacker) {
+		IUnitTask* task = unit->GetTask();
+#if CIRCUIT_TASK_REGISTRY
+		if (IsTaskStale(this->circuit, unit, task, "damaged")) {
+			return;  // nothing to unwind here; the handler only forwards
+		}
+#endif
+		task->OnUnitDamaged(unit, attacker);
 	};
 	auto attackerDestroyedHandler = [this](CCircuitUnit* unit, CEnemyInfo* attacker) {
 		IUnitTask* task = unit->GetTask();
+#if CIRCUIT_TASK_REGISTRY
+		if (IsTaskStale(this->circuit, unit, task, "destroyed")) {
+			// Skip the two task calls and the NIL test -- all three read *task.
+			// The accounting below still has to run: attackerCreatedHandler
+			// already did AddArmyCost/army.insert for this unit, and the NIL
+			// branch only fires when OnUnitDestroyed changed the task, which
+			// cannot have happened when it was never called. Returning early
+			// instead would leave army cost inflated for the rest of the game.
+			DelArmyCost(unit);
+			army.erase(unit);
+			if (unit->GetCircuitDef()->IsAttrStock()) {
+				stockpilers.erase(unit);
+			}
+			UnitRemoved(unit, UseAs::COMBAT);
+			return;
+		}
+#endif
 		task->OnUnitDestroyed(unit, attacker);  // can change task
 		unit->GetTask()->RemoveAssignee(unit);  // Remove unit from IdleTask
 

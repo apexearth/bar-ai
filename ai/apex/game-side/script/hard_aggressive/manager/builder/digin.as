@@ -91,6 +91,11 @@ string armjamt("armjamt");
 string corjamt("corjamt");
 string legjam2("legjam");
 string legajam("legajam");
+// The long-range triple. All three are named "Long-Range Jamming Tower" in the
+// game's own defs and are the ones BaseJammer places; legajam above is Legion's
+// and was already listed here without anything ever building it.
+string armveil("armveil");
+string corshroud("corshroud");
 const float JAMMER_AREA     = 900.f;   // jammer coverage is wider than a defence fence
 const int   JAMMER_ORDER_TTL = 180 * SECOND;   // jammers are slow to build; outlive DIG_ORDER_TTL
 array<AIFloat3> gJammerPos;
@@ -101,7 +106,8 @@ bool IsJammerDef(const CCircuitDef@ def)
 	if (def is null)
 		return false;
 	const string name = def.GetName();
-	return (name == armjamt) || (name == corjamt) || (name == legjam2) || (name == legajam);
+	return (name == armjamt) || (name == corjamt) || (name == legjam2) || (name == legajam)
+		|| (name == armveil) || (name == corshroud);
 }
 
 // Returns true if a jammer already stands (or was recently ordered) within

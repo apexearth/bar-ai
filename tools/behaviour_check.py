@@ -41,6 +41,10 @@ MARKERS = {
     "crew_front": "apex: crew front",
     "crew_mex_done": "mex job done",
     "assist": "apex: assist",
+    # Deliberately not an "apex: assist" prefix: the marker above must keep
+    # measuring the assist bots alone, or a change to one hides a change to the
+    # other.
+    "idle_assist": "apex: idle-assist",
     "gantry": "building T3 gantry",
     "engage": "engage TAKE",
     "air_rearm": "air strike spent",

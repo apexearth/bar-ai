@@ -35,6 +35,29 @@ IFighterTask::IFighterTask(ITaskModule* mgr, FightType type, float powerMod, int
 		, attackFrame(-1)
 		, target(nullptr)
 {
+#if CIRCUIT_TASK_REGISTRY
+	// Recorded HERE, not in IUnitTask's ctor: the derived part does not exist
+	// yet at that point. Registering the subtype while the object is alive is
+	// what lets a stale-pointer report name the task without reading freed
+	// memory.
+	IUnitTask::NoteSubtype(this, int(type));
+#endif
+}
+
+const char* IFighterTask::FightTypeName(int ft)
+{
+	static const char* NAMES[] = {
+		"RALLY", "GUARD", "DEFEND", "SCOUT", "RAID", "ATTACK", "BOMB",
+		"MELEE", "ARTY", "AA", "AH", "SUPPORT", "SUPER"
+	};
+	// Unlike script/task.as's hand-maintained copy of this enum, this table is
+	// checked: add or reorder a FightType and the build stops here.
+	static_assert(sizeof(NAMES) / sizeof(NAMES[0]) == size_t(FightType::_SIZE_),
+			"FightTypeName table is out of step with FightType");
+	if ((ft < 0) || (ft >= int(FightType::_SIZE_))) {
+		return "-";
+	}
+	return NAMES[ft];
 }
 
 IFighterTask::~IFighterTask()

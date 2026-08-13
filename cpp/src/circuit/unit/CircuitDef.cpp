@@ -202,6 +202,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	speed        = def->GetSpeed();  // elmos per second
 	losRadius    = def->GetLosRadius();
 	sonarRadius  = def->GetSonarRadius();
+	radarRadius  = def->GetRadarRadius();
+	jammerRadius = def->GetJammerRadius();
 	costM        = def->GetCost(resM);
 	costE        = def->GetCost(resE);
 	upkeepM      = def->GetUpkeep(resM);

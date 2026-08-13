@@ -295,7 +295,7 @@ void CAttackTask::AssignTo(CCircuitUnit* unit)
 
 	int squareSize = manager->GetCircuit()->GetPathfinder()->GetSquareSize();
 	ITravelAction* travelAction;
-	if (cdef->IsAttrSiege()) {
+	if (cdef->IsAttrSiege() && (manager->GetCircuit()->GetTunable("apex_siege_fight", 0.f) > 0.f)) {
 		travelAction = new CFightAction(unit, squareSize);
 	} else {
 		travelAction = new CMoveAction(unit, squareSize);
@@ -537,7 +537,13 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
-	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
+	// Only reroll the objective when there is nothing here to shoot. A unit that
+	// finishes its standoff move while the target lives is idle by design now
+	// that the move is the whole order, and it stands within lowestRange of the
+	// objective by construction -- which is this test.
+	if ((GetTarget() == nullptr)
+		&& (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)))
+	{
 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 		float x = rand() % terrainMgr->GetTerrainWidth();
 		float z = rand() % terrainMgr->GetTerrainHeight();

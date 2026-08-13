@@ -14,6 +14,7 @@
 #include "setup/SetupManager.h"
 #include "terrain/TerrainManager.h"
 #include "task/builder/BuilderTask.h"
+#include "task/fighter/FighterTask.h"
 #include "unit/CircuitUnit.h"
 #include "CircuitAI.h"
 #include "util/GameAttribute.h"
@@ -566,6 +567,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
 	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
 }
 
+// Which kind of fight a task is. The script keeps its own register of fighter
+// tasks (Military::gSquads) but could not tell an attack squad from a raid,
+// scout, guard or support task, so anything counting "squads" counted all of
+// them. Returns FightType::_SIZE_ for a task that is not a fighter task at all,
+// rather than downcasting blind the way the GetBuildType binding below does.
+static int IUnitTask_GetFightType(IUnitTask* task)
+{
+	return (task->GetType() == IUnitTask::Type::FIGHTER)
+			? int(static_cast<IFighterTask*>(task)->GetFightType())
+			: int(IFighterTask::FightType::_SIZE_);
+}
+
 static CScriptArray* IUnitTask_GetUnits(IUnitTask* task)
 {
 	// Without caching arrayType can be extracted by:
@@ -804,6 +817,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectProperty("IUnitTask", "CCircuitUnit@ const target", asOFFSET(IBuilderTask, target)); ASSERT(r >= 0);
 	gUnitArrayType = engine->GetTypeInfoByDecl("array<CCircuitUnit@>");
 	r = engine->RegisterObjectMethod("IUnitTask", "array<CCircuitUnit@>@ GetUnits() const", asFUNCTION(IUnitTask_GetUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "int GetFightType() const", asFUNCTION(IUnitTask_GetFightType), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
 

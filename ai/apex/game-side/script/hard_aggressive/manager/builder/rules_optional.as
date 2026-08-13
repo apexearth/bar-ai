@@ -32,13 +32,15 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			// the eco cluster below (open-ended investment, correctly deferred
 			// until the economy has actually teched), CheapAA is already a
 			// tightly self-gated reactive deterrent: it requires enemyAir >= 1
-			// (a real observed threat, not a forecast), caps at AA_MIN..AA_MAX,
-			// and is throttled by AA_PERIOD -- it cannot crowd out expansion the
-			// way the rest of this cluster measurably did.
+			// (a real observed threat, not a forecast), is bounded by the side's
+			// basic cover plus AA_VS_AIR of their air metal, and is throttled by
+			// AA_PERIOD -- it cannot crowd out expansion the way the rest of this
+			// cluster measurably did.
 			// The better turret sits beside the cheap one, outside the phase
 			// gate, for the same reason CheapAA was carved out of it: it answers
-			// OBSERVED enemy air rather than forecasting, it is bounded at 1..4,
-			// and the def is T2 so it cannot fire before the tech exists anyway.
+			// OBSERVED enemy air rather than forecasting, it is bounded by the
+			// same ratio, and the def is T2 so it cannot fire before the tech
+			// exists anyway.
 			// Inside the gate it needed gHaveT2 AND an ECO/HOME crew role, which
 			// is why the good AA never appeared in time.
 			IUnitTask@ deter = HomeDeter(unit);

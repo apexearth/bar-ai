@@ -529,34 +529,42 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 
 void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
 {
-	// `pos` is a standoff point on a ring of this unit's own weapon range. The
-	// trailing fight order below is queued BEHIND the move and the attack, so
-	// once either finishes it walks the unit the rest of the way in and the
-	// standoff is spent -- which is what a long gun drifting into the enemy
-	// line looks like. It exists for the no-LOS case: a target we only
-	// remember has to be walked up to. When the target is in radar or LOS
-	// there is nothing to walk towards, so the fight order ends at the ring.
-	// Melee keeps the old destination; arriving is the whole weapon.
-	const bool hold = (manager->GetCircuit()->GetTunable("apex_standoff_hold", 1.f) > 0.f)
-			&& !circuitDef->IsAttrMelee() && enemy->IsInRadarOrLOS();
-	const AIFloat3 fightPos = hold ? pos : enemy->GetPos();
+	// `pos` is a standoff point on a ring of this unit's own weapon range, and
+	// the orders that used to follow it threw it away. CMD_FIGHT re-acquires the
+	// CLOSEST enemy within maxRange + 100*moveState^2 and pushes its own
+	// CMD_ATTACK to the front of the queue (CMobileCAI::ExecuteFight), and
+	// CMD_ATTACK calls StopMove() the moment a weapon bears
+	// (CMobileCAI::ExecuteObjectAttack). Either one discards both the distance
+	// and the target chosen here.
+	//
+	// Move plus set-target instead. The move order ends at the ring;
+	// unit_target_on_the_move re-applies the preference every 5 frames on its
+	// own, so no repeat order is needed and weapons fire while the unit walks.
+	// Anything else in range is still answered by engine auto-targeting, which
+	// yields to a user target only while that target can actually be hit
+	// (CWeapon::AllowWeaponAutoTarget).
+	//
+	// Three cases keep the old orders, because set-target cannot express them:
+	// a cloaked target must be attacked as ground, a contact held on radar only
+	// is dropped by the gadget within 15 frames and the fight order IS the
+	// walk-in that gains LOS, and melee delivers its damage by arriving.
+	const bool prefer = (manager->GetCircuit()->GetTunable("apex_prefer_target", 1.f) > 0.f)
+			&& !isGround && !circuitDef->IsAttrMelee() && enemy->IsInLOS();
 	TRY_UNIT(manager->GetCircuit(), this,
-		if (circuitDef->IsAttrMelee()) {
-			if (IsJumpReady()) {
-				CmdJumpTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
-				CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
-			} else {
-				CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
-			}
+		if (circuitDef->IsAttrMelee() && IsJumpReady()) {
+			CmdJumpTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+			CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 		} else {
 			CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
 		}
-		if (isGround) {  // los-cheat related
-			CmdAttackGround(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
-		} else {
-			unit->Attack(enemy->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+		if (!prefer) {
+			if (isGround) {  // los-cheat related
+				CmdAttackGround(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+			} else {
+				unit->Attack(enemy->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+			}
+			CmdFightTo(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // los-cheat related
 		}
-		CmdFightTo(fightPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // los-cheat related
 		CmdWantedSpeed(NO_SPEED_LIMIT);
 		CmdSetTarget(target);
 		if (circuitDef->IsAttrOnOff()) {

@@ -109,6 +109,9 @@ public:
 
 	CCircuitUnit* GetLeader() const { return leader; }
 	const springai::AIFloat3& GetLeaderPos(int frame) const;
+	// Public because CSupportAction sizes an escort's standoff off it, and the
+	// action is not a member of the task.
+	float GetSpreadRadius() const;
 
 	// role heavy + attribute melee: corjugg (Behemoth), corkorg (Juggernaut),
 	// armbanth (Titan), armraz. All of them detonate on death, so the value is
@@ -125,7 +128,6 @@ private:
 protected:
 	ISquadTask* GetMergeTask();
 	springai::AIFloat3 LinePos(CCircuitUnit* unit, const springai::AIFloat3& centre) const;
-	float GetSpreadRadius() const;
 	float GetCohesionScale() const;
 	bool IsMustRegroup();
 	void ActivePath(float speed = NO_SPEED_LIMIT);

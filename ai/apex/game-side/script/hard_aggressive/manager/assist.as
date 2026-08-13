@@ -73,6 +73,10 @@ const int GUARD_TIMEOUT = 60 * SECOND;
 
 const float FRONT_SCORE = 4.f;
 const float DEFENCE_SCORE = 6.f;
+// Ranked between "is working" (+1) and "is front crew" (+4): it re-orders which
+// working constructor gets joined without overriding the front, which is where
+// defences are built.
+const float ADV_SCORE = 3.f;
 
 int gSites = 0;
 int gGuards = 0;
@@ -127,7 +131,7 @@ array<CCircuitUnit@> Constructors(CCircuitUnit@ skip)
 // while it is null -- so a task with a live target is assistable by any builder,
 // and one without it is not unless the bot happens to have that def in its
 // buildoptions. target is the gate, not a preference.
-IUnitTask@ BestSite(CCircuitUnit@ unit)
+IUnitTask@ BestSite(CCircuitUnit@ unit, bool allowDefence = true)
 {
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	array<CCircuitUnit@> cons = Constructors(unit);
@@ -140,6 +144,11 @@ IUnitTask@ BestSite(CCircuitUnit@ unit)
 			continue;
 		const int bt = t.GetBuildType();
 		if (!IsBuildWork(bt) || (t.target is null))
+			continue;
+		// Refused a new tower by the defence-share cap: joining an existing one
+		// walks the constructor to the same place the cap just declined to send
+		// it, and counts against the same share. See Builder::DefenceShareScreen.
+		if (!allowDefence && IsDefenceWork(bt))
 			continue;
 		const AIFloat3 where = t.GetBuildPos();
 		if (!OnMap(where))
@@ -196,6 +205,11 @@ CCircuitUnit@ BestVip(CCircuitUnit@ unit)
 		float score = isWorking ? 2.f : 1.f;
 		if (isFront)
 			score += FRONT_SCORE;
+		// apexearth: "at T2 fall back to assisting t2 cons." A preference, not a
+		// filter: an advanced constructor is the only one that can be on a moho, a
+		// reactor or a gantry, so a lathe-second beside it buys the most.
+		if (c.circuitDef.costM >= Builder::ADV_CON_COST)
+			score += ADV_SCORE;
 		score /= (1.f + dist / ASSIST_RANGE);
 		if (score > bestScore) {
 			bestScore = score;
@@ -256,6 +270,61 @@ IUnitTask@ Work(CCircuitUnit@ unit)
 	return shadow;
 }
 
+// THE TERMINAL FALLBACK. Called from the last line of Builder::AiMakeTask.
+//
+// apexearth: "I see 5+ idle cons on blue and instead of making some DAMN
+// DEFENSES they just do nothing. ugh... lol at T2 fall back to assisting t2
+// cons."
+//
+// Returning null from AiMakeTask is not "ask again later": ITaskModule::
+// AssignTask does nothing when MakeTask returns null, so the unit is never taken
+// out of CIdleTask and CIdleTask::Update asks again every 8 frames for the same
+// null.
+//
+// Both legs JOIN work that already exists -- nothing is enqueued but a GUARD, so
+// this cannot outbid expansion for constructor time. GUARD is also the one build
+// type IBuilderTask::Reevaluate re-elects even when the unit is standing in
+// range (it skips the in-range early return for GUARD alone), so a constructor
+// parked here is re-offered every task the engine holds, every update, and
+// leaves the moment one is worth taking.
+int gFallbacks = 0;
+
+IUnitTask@ Fallback(CCircuitUnit@ unit, bool isComm, bool allowDefence = true)
+{
+	// The commander has CommanderIdleWork immediately above this, and
+	// CBRepairTask::CanAssignTo refuses it outright.
+	if ((unit is null) || isComm)
+		return null;
+	if (ai.GetTunable("apex_idle_assist", 1.f) <= 0.f)
+		return null;
+	if (!OnMap(unit.GetPos(ai.frame)))
+		return null;
+
+	IUnitTask@ site = BestSite(unit, allowDefence);
+	if (site !is null) {
+		++gFallbacks;
+		AiLog(Factory::T() + "apex: idle-assist " + unit.circuitDef.GetName()
+			+ " -> site " + int(site.GetBuildType()) + " n=" + gFallbacks);
+		return site;
+	}
+
+	CCircuitUnit@ vip = BestVip(unit);
+	if (vip is null)
+		return null;
+	IUnitTask@ shadow = aiBuilderMgr.Enqueue(TaskB::Guard(
+			Task::Priority::NORMAL, vip, true, GUARD_TIMEOUT));
+	if (shadow is null)
+		return null;
+	gGuardBot.insertLast(int(unit.id));
+	gGuardVip.insertLast(int(vip.id));
+	++gFallbacks;
+	AiLog(Factory::T() + "apex: idle-assist " + unit.circuitDef.GetName()
+		+ " -> shadow " + vip.circuitDef.GetName()
+		+ ((vip.circuitDef.costM >= Builder::ADV_CON_COST) ? " (adv)" : "")
+		+ " n=" + gFallbacks);
+	return shadow;
+}
+
 int gNextLog = 0;
 
 void Update()
@@ -279,7 +348,8 @@ void Update()
 		return;
 	gNextLog = ai.frame + 60 * SECOND;
 	AiLog(Factory::T() + "apex: assist sites=" + gSites
-		+ " guards=" + gGuards + " shadowing=" + gGuardBot.length());
+		+ " guards=" + gGuards + " shadowing=" + gGuardBot.length()
+		+ " fallback=" + gFallbacks);
 }
 
 }  // namespace Assist

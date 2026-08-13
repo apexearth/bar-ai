@@ -149,7 +149,11 @@ void ExpandDiag()
 		if (c is null)
 			continue;
 		IUnitTask@ t = c.task;
-		if (t is null) {
+		// CCircuitUnit::task points at the shared CIdleTask singleton for a builder
+		// with nothing to do, so it is never null and `t is null` cannot count an
+		// idle unit. AskingForNewWork is the same IDLE/NIL/WAIT test the ladder
+		// itself gates on.
+		if ((t is null) || Brain::AskingForNewWork(c)) {
 			++idle;
 			continue;
 		}

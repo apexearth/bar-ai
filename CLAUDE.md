@@ -482,6 +482,32 @@ organizer reads a conclusion, not a transcript.
 **Every agent runs on Opus**, declared in its own frontmatter so it does not
 silently follow the session model.
 
+**Keep agents SHORT-LIVED. Do not build up long-running ones.** Continuing an
+agent resumes it from its full transcript, so a fifth task costs the first four
+again. Measured 2026-08-12: single agents reached 345k, 337k and 328k tokens,
+and the 337k one was answering a question it could have taken fresh in a
+fraction of that. apexearth: *"You're wasting a lot of tokens/usage by doing it
+like this. Prefer to NOT have long running agents."*
+
+So: **spawn a fresh agent per task by default.** Continue an existing one only
+when the *unwritten* context genuinely matters — mid-implementation of a patch
+it just designed, or a correction to work it has in its hands right now. Two or
+three exchanges is the normal ceiling.
+
+That only works if findings live in the repo rather than in transcripts, which
+makes the next rule load-bearing rather than tidy:
+
+**Write the finding down before the agent ends.** `CHANGES.md` for what changed
+and what was measured, `ISSUES.md` for what is wrong and not yet fixed. A
+finding left in a transcript is one you will pay to rediscover, and it forces
+the long-running-agent pattern that costs the tokens. When several agents run
+at once they will all decline to edit `CHANGES.md` to avoid colliding — so the
+ORGANIZER writes it, not them. Ask each agent for the one paragraph it would
+have written, and land them together.
+
+Corollary for dispatch: put the distilled context in the PROMPT. A fresh agent
+given the three facts it needs outperforms a stale one carrying three hundred.
+
 **Never leave apexearth idle.** If he has said he is around, a windowed game
 runs the entire time the fleet and the smoke runs do — launch it *first*, then
 dispatch. Kill it and hand him a fresh one if a smoke run finishes early and

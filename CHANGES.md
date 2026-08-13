@@ -89,6 +89,104 @@ Unresolved and needing the DLL work first: push-vs-aid arbitration by metal valu
 (`ai.GetEnemyCostAt` is bound, but `TV_PUSH` carries only an end frame, so "what
 the push is attacking" has no location to price).
 
+## 2026-08-12: Fight is the wrong primitive -- move, and set-target the preference
+
+Layer 3 (C++), `unit/CircuitUnit.cpp` and the eight fighter `AssignTo`.
+**Needs a DLL rebuild.** Supersedes `apex_standoff_hold` from the entry below,
+which is deleted.
+
+apexearth: "We are using a lot of Fight commands (which stops the unit from
+moving when it's in range to fire). We should instead be using move commands to
+stay mobile, be able to stay at longer range from enemies, and use 'set target'
+to pick which unit we would *prefer* to shoot at." Then, watching: "I still see
+our rocket bots do 'fight' orders and they die very easily when they do that."
+
+**What `CMD_FIGHT` actually does**, read from the engine, is worse than "it
+halts you". `CMobileCAI::ExecuteFight` (`MobileCAI.cpp:489`) searches
+`maxRange + 100*moveState^2` -- up to +400 elmos on ROAM -- and at `:558` does
+`commandQue.push_front(Command(CMD_ATTACK, ..., enemy->id))`. The attack it
+manufactures is on the CLOSEST enemy, not ours. `ExecuteObjectAttack:767` then
+calls `StopMove()` under its own comment *"we are already in range with our
+biggest weapon, so stop moving"*. So every Fight order we issue discards both
+the target we chose and the standoff we computed. Corroboration that the number
+in this whole line of work is the engine's own: `MobileCAI.cpp:788` treats
+`maxRange * 0.9f` as "close enough".
+
+**Set-target is reachable from an AI. Verified, not assumed, then measured.**
+`UNIT_SET_TARGET = 34923` (`BAR.sdd/modules/customcommands.lua:34`) is handled by
+`luarules/gadgets/unit_target_on_the_move.lua`, which BAR ships in both trees --
+we add no archive content and no synced Lua. It registers the id, inserts the
+cmdDesc for every def with `canAttack` and `maxWeaponRange > 0` (`:79-83` -- no
+faction, role or tier filter, so parity is automatic), and consumes the command
+in `gadget:AllowCommand` with no playerID, team or `fromLua` filter. An AI order
+arrives `fromSynced=true, fromLua=false` via `SelectedUnitsHandler.cpp:766`, and
+`eventHandler.AllowCommand` runs before `AllowedCommand`, so cmdDesc validation
+never even applies. `AICallback.cpp:369` forwards options unchanged and adds no
+`INTERNAL_ORDER`, so the gadget computes `userTarget = true` and the preference
+outranks auto-targets in `Weapon.cpp:692`. The gadget re-applies the target
+every 5 frames by itself (`GameFrame`, `n % 5 == 4`), at zero AI command cost.
+
+Measured before writing any of this: a 14-minute 4v4 with `armed`/`setTarget`
+counters added to `dev_stats_export.lua` showed peak `setTarget` of 1-3 against
+21-54 armed units on apex and a uniform 0 on stock. The transport works and only
+apex uses it; the target was not sticking.
+
+Changes:
+
+- **`CCircuitUnit::Attack(pos, enemy, ...)` issues move + set-target**, dropping
+  `CMD_ATTACK` and `CMD_FIGHT`, gated on `apex_prefer_target`. Three cases keep
+  the old orders because set-target cannot express them: a cloaked target (must
+  be attacked as ground), a contact held on radar only (the gadget drops it
+  within 15 frames, and the fight order IS the walk-in that gains LOS), and
+  melee. Uses `IsInLOS()`, not `IsInRadarOrLOS()`, for exactly that reason.
+- **`IsAttrSiege()` no longer selects `CFightAction` travel**, in all eight
+  fighter `AssignTo`; `apex_siege_fight=1` restores it. The siege attribute is
+  carried by 30 Armada/Cortex defs and 7 Legion defs and is very nearly the
+  long-range roster, so our longest guns were the ones travelling on the
+  primitive that halts them at first contact. Side effect: `SetLateral` is set
+  on `ITravelAction` for every squad member (`SquadTask.cpp:508`) but only
+  `CMoveAction::Update` reads it, so those 37 defs were being given a line
+  offset their travel action silently discarded -- they get the formation now.
+- **`OnUnitIdle` only rerolls the objective to a random map point when there is
+  no target** (`CAttackTask`, `CAntiAirTask`, `CAntiHeavyTask`). This is not
+  optional: with the move order as the whole order, a unit reaching its ring
+  goes idle while the target still lives, and the pre-existing reroll fires
+  when the leader is within `lowestRange` of the objective -- which standing on
+  the ring guarantees. Under the old orders the `CMD_ATTACK` kept units busy and
+  masked it.
+
+Kept on Fight deliberately: the seven no-target sites -- every `Fallback()` and
+`CDefendTask::Start`'s radial rally. They run with nothing to set-target, and
+Move-only there would walk units past enemies without engaging.
+
+**corstorm, the unit apexearth named, is covered -- but by the siege swap, not
+by the standoff work.** Role `artillery` is excluded from `WantsMassing`
+(`military/hooks.as:37`), so it falls to `DefaultMakeTask`, whose types map
+sends `ROLE_TYPE(ARTY)` to `CArtilleryTask` -- one solo task per unit. An
+earlier note in this file said artillery needed nothing because that task is
+`HOLD_POS` and paths to an acceptance radius of its full range. That was true
+of the PATH and missed the TRAVEL ACTION: `ArtilleryTask.cpp:54` was selecting
+`CFightAction` for siege defs, so every leg was a Fight order, and a `HOLD_POS`
+unit on a Fight order halts the instant anything enters its range and has no
+standoff to fall back to. That is the reported death.
+
+**Residual, not fixed, and the first thing to look at if corstorm does not
+improve:** `CArtilleryTask::Fallback` (`ArtilleryTask.cpp:342`) fight-moves to a
+`rand()` map point whenever no static enemy is known, which early game is most
+of the time. It bypasses the travel action, so the swap does not touch it. It is
+one of the seven no-target sites and was left alone by instruction.
+
+**`"limit": 10` on corstorm is enforced.** `CCircuitDef::IsAvailable()` is
+`maxThisUnit > count` (`CircuitDef.h:222`) against the live count, and
+`FactoryManager.cpp:431` sets it from the config key. Telemetry from the same
+run shows 1430 metal of corstorm in `top=` by minute 14 = 13 units, but `top=`
+is cumulative metal invested, not standing, so 13 built against a standing cap
+of 10 is consistent with the cap binding and rebuilding after losses. It cannot
+be confirmed without a standing per-def count, which the gadget does not export.
+Left alone: hard caps are a policy question for apexearth.
+
+**NOT MEASURED.** No rebuild was run.
+
 ## 2026-08-12: the standoff was silently reverted by a factory commit, and the ring leaked
 
 Layer 3 (C++), `task/fighter/FighterTask.{h,cpp}`, `task/fighter/SquadTask.{h,cpp}`,
@@ -144,16 +242,15 @@ Three changes:
   to close to acquire; once it can see, there is nothing left to walk towards.
 - **The trailing fight order ends at the standoff ring instead of the enemy's
   own position** (`CCircuitUnit::Attack(pos, ...)`, gated on
-  `apex_standoff_hold`). The standoff order is a queue --
-  `Move(ring), Attack(enemy), Fight(enemyPos)` -- and the third command marches
-  the unit the rest of the way in as soon as either of the first two finishes,
-  which is up to 2s for an ATTACK task and up to 8s for a DEFEND task
-  (`updCount % 4` / `% 16` at ~0.5s per task update). Melee keeps the old
-  destination, and so does any unit whose target it cannot see: that no-LOS walk
-  is what the order was written for.
+  `apex_standoff_hold`). **SUPERSEDED the same night -- see the entry below;
+  the fight order is gone entirely in the visible-target case and
+  `apex_standoff_hold` no longer exists.** Two claims in this bullet were also
+  wrong and are corrected there: a task Updates every ~1s, not ~0.5s
+  (`TEAM_SLOWUPDATE_RATE = 30`), so the leak window is ~4s for an ATTACK task
+  and ~16s for a DEFEND task, twice what was written here.
 
 Control arm, no rebuild needed:
-`--modoption apex_range_mod=0.9 --modoption apex_los_standoff=0 --modoption apex_standoff_hold=0`.
+`--modoption apex_range_mod=0.9 --modoption apex_los_standoff=0`.
 
 **NOT MEASURED.** No rebuild was run, so nothing here is in a DLL yet.
 
