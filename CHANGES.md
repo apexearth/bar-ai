@@ -18,6 +18,39 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-13: duplicate energy builds were checked against the wrong position
+
+Layer 2 (AngelScript), `builder/joinbuild.as`, `fusion.as`, `mexguard.as`. The
+gap the same-day reactor-parallelism fix (below) missed.
+
+apexearth, watching two different windowed games after that fix had landed:
+"I am actively seeing us build 5 AFUS at the same time" (first game) and "I
+still see multiple advanced solars being built (~20m in)... a single team going
+off making ~4 of them all at the same time" (second game, same build still
+deployed). Traced in `matches/20260813-222958-*`: team t3 enqueued 5 separate
+armadvsol tasks in an 8-game-second window, four of the five landing within
+~200 elmos of each other -- while the join system was demonstrably working
+elsewhere in the same log (`con-join(direct)` successes visible seconds apart).
+
+**`JoinTaskFor(want, unit)` measured distance from `unit.GetPos(ai.frame)` --
+the CALLING BUILDER's current position -- never from the spot `HomeEnergy`/
+`EcoFusion` was about to place the building at.** Both callers compute `spot`
+via `ReactorSpot`/`BandSpot`/`CoveredSpot`/`Base::Spot` *before* the join
+check, and never passed it in. So five idle constructors scattered around one
+base each asked "is there a joinable task near ME" from five different
+locations, each got "no", and each then independently computed a spot from the
+same pack/band placement logic -- landing the five spots close together even
+though the five builders that picked them were not.
+
+Changed `JoinTaskFor`'s signature to take the caller's `spot` and check
+duplicate-ness against THAT, not the builder's position: the question this
+function answers is "is the site I am about to build a duplicate", which only
+the site's own position can answer. Walk-cost-to-assist is a different
+question, relevant only to a caller with no spot computed yet -- neither of
+the two callers of this function is that caller. Smoke-tested clean (no
+compile errors, no crash, full run). Not yet re-watched to confirm the burst
+is gone.
+
 ## 2026-08-13: radar towers were placed only where a wall also went up
 
 Layer 3 (C++) + layer 2 (AngelScript), the other half of the 0a fix above.

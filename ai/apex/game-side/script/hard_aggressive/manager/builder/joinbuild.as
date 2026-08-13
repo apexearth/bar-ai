@@ -125,12 +125,26 @@ void JoinForget(IUnitTask@ task)
 // the best existing task for `want` within JOIN_RANGE and under its builder
 // cap, or null if there is none. A task nobody has been given yet still counts:
 // the caller's alternative is a SECOND task for the same thing.
-IUnitTask@ JoinTaskFor(const CCircuitDef@ want, CCircuitUnit@ unit)
+//
+// `spot` is the SITE the caller is about to build at, not the unit's current
+// position. apexearth, watching, at two different games: "I am actively seeing
+// us build 5 AFUS at the same time" and "I still see multiple advanced solars
+// being built... a single team going off making ~4 of them all at the same
+// time." Measured in matches/20260813-222958: five idle constructors scattered
+// around one base each called this with THEIR OWN position, found nothing
+// within JOIN_RANGE of themselves, and each then independently computed a spot
+// via the same pack/band logic -- landing the five spots within ~200 elmos of
+// each other despite the five builders not being near each other at all. The
+// question this function answers is "is the SITE I am about to build a
+// duplicate", which only the site's own position can answer; the builder's
+// distance from it is a walk-cost concern for a caller with no spot yet, not
+// this one.
+IUnitTask@ JoinTaskFor(const CCircuitDef@ want, CCircuitUnit@ unit, const AIFloat3& in spot)
 {
 	if ((want is null) || (want.costM < JOIN_MIN_COST) || (unit is null))
 		return null;
 	const uint cap = JoinBuilderCap(want.costM);
-	const AIFloat3 here = unit.GetPos(ai.frame);
+	const AIFloat3 here = spot;
 	IUnitTask@ best = null;
 	float bestDist = 0.f;
 	float bestScore = JOIN_RANGE;

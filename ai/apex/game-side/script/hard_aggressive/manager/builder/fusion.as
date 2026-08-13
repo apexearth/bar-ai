@@ -275,9 +275,11 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// so JoinDuplicateBuild -- which only screens an offer DefaultMakeTask made
 	// -- never saw it, and every constructor reaching here started its own
 	// reactor. Neither the counter nor the cooldown moves for a join: nothing
-	// new was asked for.
-	if (okDef) {
-		IUnitTask@ already = Builder::JoinTaskFor(want, unit);
+	// new was asked for. Checked against `spot`, not the unit -- a task nobody
+	// has been given yet still counts, and duplicate-ness is a property of the
+	// SITE, not of which builder happened to notice it.
+	if (okDef && okSpot) {
+		IUnitTask@ already = Builder::JoinTaskFor(want, unit, spot);
 		if (already !is null)
 			return already;
 	}

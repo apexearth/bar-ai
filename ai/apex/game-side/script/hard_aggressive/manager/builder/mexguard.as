@@ -591,8 +591,11 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// made; this rule ENQUEUES directly, so it bypassed that check entirely and
 	// every constructor that reached it started another reactor. Ask the same
 	// question here, before enqueueing: if one of these is already under way
-	// within reach, join it.
-	IUnitTask@ already = Builder::JoinTaskFor(gen, unit);
+	// within reach, join it. Checked against `spot` -- the site about to be
+	// built, not the unit -- since builders scattered around the base each
+	// computed a nearby-but-distinct spot and none of them were near ENOUGH TO
+	// EACH OTHER to catch it when the check was keyed on their own position.
+	IUnitTask@ already = Builder::JoinTaskFor(gen, unit, spot);
 	if (already !is null)
 		return already;
 
