@@ -18,6 +18,55 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-13: a T1 constructor was blocked by a job only a T2 one can do
+
+Layer 2, `manager/brain.as` (`Brain::Decide`), `manager/crew.as` (`Retire`).
+
+apexearth, watching live: "I noticed last game when we should have cons making
+energy at home they instead went out to make turrets. It was still really early
+in the game."
+
+`Brain::Decide` refuses the whole optional class while a mex upgrade is in reach
+— correct, and measured on 2026-08-12 (picks 13 → 20, T2 mex share 17.6% →
+15.1%). But the scan that set `haveMexUp` did not skip wants the *current*
+builder cannot take, and a moho is `needsAdvCon`. **A T1 constructor was told its
+job was the upgrade, about a job it is physically unable to build.** Its only
+escape was the coverage-gap exemption added the same night (`fence`/`aa` with
+`have == 0`), which early in a game is true of every site — so its entire menu
+collapsed to `{mex, fence}`. `Brain::Decide` also sits above `OptionalWork` in
+`MakeTaskInner`, so a returned fence short-circuits the ladder's separate route
+to `HomeEnergy` as well.
+
+Measured, apex side, first 8 game-minutes, `matches/`:
+
+| | `brain picks energy` | `apex: home energy` |
+|---|---|---|
+| pre-change (three runs) | **0** of up to 64 | 163, 168 / 25, 24, 17 |
+| post-change, paired run | **7** | 21 |
+
+The first front-defence order was going out at **frame 18** — before the first
+mex. The fix is a `continue` on `needsAdvCon && !isAdvCon` inside the scan: a
+STOP, not a spend, and a no-op for an advanced constructor, which is the case the
+2026-08-12 measurement was taken on.
+
+Paired 6v6 on Painted Desert, seed 93, apex relative to stock at minute 8 —
+metal produced 0.80x → **1.04x**, mex 26 vs 28 → **27 vs 18**, defence spend
+unchanged at ~2.9x stock. **The seed does not reproduce** (multithreaded DLL) and
+the two games diverged wholesale in absolute terms, so read the ratios, not the
+totals; this is one run each, not a tournament.
+
+Alongside it, `Crew::Retire` chose FRONT for any constructor closer to the line
+than to home — an implicit 50/50 split that bounds nothing. apexearth: "I think
+we should devote fewer cons to the frontline... can we turn that ratio down?"
+Now scaled by `apex_front_crew_bias` (default 0.7), so a constructor must be
+clearly forward to stay. Same paired run, mex-job retirements to front 7/18 →
+5/17. Too small a sample to be an effect on its own.
+
+Not fixed, found in the same pass: `BudgetMult` hands DEFENCE its `BUDGET_MAX`
+ceiling of 2.0 whenever the defence share is near zero — which is precisely the
+opening. That is a structural pro-defence bias independent of the above, and it
+predates it.
+
 ## 2026-08-12: ally aid — the signal was already there, the response needs the DLL
 
 Layer 2, `manager/military/defenceline.as`, `manager/military/posture.as`.

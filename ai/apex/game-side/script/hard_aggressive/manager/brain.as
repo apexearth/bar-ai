@@ -1257,8 +1257,18 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// picks rose from 13 to 20 per batch and T2 mex share fell 17.6% -> 15.1%.
 	// Ranking decides order among optional things; it does not get to displace
 	// the economy that pays for them.
+	//
+	// ONLY AN UPGRADE **THIS** BUILDER COULD DO BLOCKS ANYTHING. The loop below
+	// skips a want with needsAdvCon for a builder that is not advanced, and the
+	// moho is exactly such a want -- so a T1 constructor was blocked out of the
+	// whole optional class by a job it is physically unable to take, leaving it
+	// only the two kinds that bypass this test. That is a STOP, not a spend: for
+	// an advanced constructor nothing changes, which is the case the measurement
+	// above was taken on.
 	bool haveMexUp = false;
 	for (uint i = 0; i < order.length(); ++i) {
+		if (order[i].needsAdvCon && !isAdvCon)
+			continue;
 		if (order[i].kind == "mexup") {
 			haveMexUp = true;
 			break;

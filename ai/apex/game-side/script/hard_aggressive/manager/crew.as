@@ -50,6 +50,9 @@ const int DRY_LIMIT = 6;
 // cover, that the towers would stack, or that we cannot pay -- all of which are
 // checked at the point of placement instead.
 const float FRONT_SPACING = 320.f;   // don't stack towers on one spot
+// Share of its own home-distance a retiring mex constructor must be within of
+// the front to stay there. 1.0 reproduces the old midpoint test.
+const float FRONT_CREW_BIAS = 0.7f;
 array<AIFloat3> gFrontPlaced;
 
 // How many constructors hold the mex job at once.
@@ -209,8 +212,16 @@ void Retire(CCircuitUnit@ unit, int slot)
 	const AIFloat3 at = unit.GetPos(ai.frame);
 	int role = ECO;
 	AIFloat3 line;
+	// HOW FORWARD IS FORWARD ENOUGH. The test was "closer to the line than to
+	// home", which is an implicit 50/50 split by position and bounds nothing --
+	// on a wide front half the retiring mex crew stays out there. apexearth:
+	// "I think we should devote fewer cons to the frontline... can we turn that
+	// ratio down?" Below 1.0 a constructor must be CLEARLY forward to stay; at
+	// 1.0 this is the old behaviour exactly.
 	if (Builder::gHomeSet && Front::FrontNear(at, line)
-			&& (at.distance2D(line) < at.distance2D(Builder::gHomePos)))
+			&& (at.distance2D(line)
+				< at.distance2D(Builder::gHomePos)
+					* ai.GetTunable("apex_front_crew_bias", FRONT_CREW_BIAS)))
 	{
 		role = FRONT;
 	}
