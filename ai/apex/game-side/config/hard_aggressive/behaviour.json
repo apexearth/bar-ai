@@ -904,9 +904,8 @@
 		"armrectr": {
 			"role": ["support"],		//["builder"],	["raider", "support"]	//["skirmish", "support"],
 			//"attribute": ["support"],
-			"retreat": 0.6,
+			"retreat": 0.6
 			//"buildspeed": 0.1,
-			"limit":60
 		},
 		"armrock": {
 			"role": ["assault"],

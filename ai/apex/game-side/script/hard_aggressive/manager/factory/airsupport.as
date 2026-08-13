@@ -22,12 +22,15 @@ const int BOTLAB_FROM = 8 * MINUTE;
 // By name, not by role: BuilderManager routes these through UseAs::REZZER, but
 // the config ROLES disagree across factions ("support" for Armada and Legion,
 // "rezzer" for Cortex), so GetRoleDef is not a reliable way to ask for one.
-const int REZ_FLOOR    = 8;
 // apexearth: "a rezbot costs like what, 130 metal?... so for every 500
 // wrecked metal seen make 1 rezbot???" armrectr is 130m; 500 leaves real
 // margin (a rez bot earns back multiples of its own cost per wreck it
 // actually processes) rather than breaking even on the first pile it finds.
 const float REZ_METAL_PER_BOT = 500.f;
+// apexearth: "can we make sure we have ~10 rezbots for every 100 metal at
+// least?" -- per 100 metal/second of INCOME, the unit every other standing
+// count in this file family is derived in.
+const float REZ_PER_INCOME = 0.1f;
 const int REZ_SPACING  = 20 * SECOND;
 // One assist bot per this long while the bank is full. Short, because the
 // condition is self-limiting -- when the build power catches up with income the
@@ -59,6 +62,18 @@ string armrectr("armrectr"); string cornecro("cornecro"); string legrezbot("legr
 CCircuitDef@ RezBotDef()
 {
 	return SideDef3(armrectr, cornecro, legrezbot);
+}
+
+// The two terms combine with max(), never min(): the reclaim term is what the
+// field is offering right now, the income term is what the economy can always
+// afford to keep standing, and the larger one is the answer. Below ~10 m/s the
+// income term is zero, which keeps "not important at t zero" true.
+int RezBotsWanted()
+{
+	const int byIncome = int(SteadyIncome()
+			* ai.GetTunable("apex_rez_per_income", REZ_PER_INCOME));
+	const int byReclaim = int(Builder::WreckSeenValue() / REZ_METAL_PER_BOT);
+	return (byIncome > byReclaim) ? byIncome : byReclaim;
 }
 
 // False once the pooling strategy has been given up on (Military::RUSH_GIVEUP).

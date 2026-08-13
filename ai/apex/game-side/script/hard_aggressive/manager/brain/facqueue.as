@@ -414,17 +414,17 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	// fire. Order matters: floors are checked top-down and the first one short
 	// wins, so build power stays ahead of eyes, and eyes ahead of these.
 	//
-	// Rez bots, gated exactly as the rule was: one per REZ_METAL_PER_BOT of wreck
-	// we have actually SEEN, capped at REZ_FLOOR. apexearth: "it isn't really
-	// important until you have stuff to reclaim or to resurrect."
+	// Rez bots: the larger of what the wreck field is offering and what the
+	// income justifies. apexearth: "it isn't really important until you have
+	// stuff to reclaim or to resurrect", and later "~10 rezbots for every 100
+	// metal at least".
 	if (Factory::HaveT1BotLab()) {
 		CCircuitDef@ lab = Factory::T1BotLab();
 		CCircuitDef@ rez = Factory::RezBotDef();
 		if ((lab !is null) && (rez !is null) && (fac.circuitDef.id == lab.id)
 			&& rez.IsAvailable(ai.frame))
 		{
-			const int byReclaim = int(Builder::WreckSeenValue() / Factory::REZ_METAL_PER_BOT);
-			const int n = (byReclaim < Factory::REZ_FLOOR) ? byReclaim : Factory::REZ_FLOOR;
+			const int n = Factory::RezBotsWanted();
 			if (n > 0) {
 				defs.insertLast(rez);
 				want.insertLast(n);

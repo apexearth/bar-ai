@@ -624,8 +624,7 @@
 			},
 			"legrezbot": {
 				"role": ["support"],
-				"retreat": 0.6,
-				"limit":60
+				"retreat": 0.6
 			},
 	
 			// adv bot - legalab

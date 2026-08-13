@@ -137,10 +137,15 @@ void CDefendTask::Update()
 		CCircuitAI* circuitAI = manager->GetCircuit();
 		const bool onFront = circuitAI->HasFrontPos()
 				&& (position.SqDistance2D(circuitAI->GetFrontPos()) < SQUARE(FRONT_HOLD_RANGE));
-		if (onFront && (attackPower < maxPower * FRONT_HOLD_POWER)) {
-			return;   // not strong enough to leave the line uncovered
-		}
-		if ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty()) {
+		// THE HOLD MUST NOT SKIP THE MERGE BELOW. Returning here jumped over
+		// GetMergeTask(), and merging is the ONLY way a defence pool can grow:
+		// CMilitaryManager::Enqueue builds a fresh one-unit CDefendTask for every
+		// unit, and DefaultMakeTask scans GUARD tasks only. So a pool whose units
+		// were individually weaker than the bar could never combine to reach it
+		// and stood in base for the rest of the game, while anything already over
+		// the bar promoted and left alone.
+		const bool held = onFront && (attackPower < maxPower * FRONT_HOLD_POWER);
+		if (!held && ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty())) {
 			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
 			decltype(units) tmpUnits = units;
 			for (CCircuitUnit* unit : tmpUnits) {

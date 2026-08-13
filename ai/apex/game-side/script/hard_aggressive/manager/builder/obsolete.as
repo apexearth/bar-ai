@@ -123,6 +123,52 @@ bool AskedFor(int id)
 	return false;
 }
 
+// A building we are eating and a building worth repairing are the same building
+// to two systems that never speak. CBuilderManager's buildingDamagedHandler
+// (module/BuilderManager.cpp:210) enqueues a HIGH repair for any own structure
+// that takes damage without consulting its own reclaimUnits map -- the guard the
+// abandoned-building scan at :1617 does use -- and CBRepairTask::Reevaluate only
+// retires the task once health is full, which a reclaim in progress guarantees
+// it never is.
+//
+// reclaimUnits is not bound to AngelScript, so this mirrors it from the task
+// events we already take. Both arrays hold LIVE tasks only, and the id is
+// snapshotted at add time: CCircuitUnit is NOCOUNT, so a stored handle would
+// outlive the unit.
+array<IUnitTask@> gDoomedTask;
+array<int>        gDoomedId;
+array<IUnitTask@> gStructRepair;
+array<int>        gStructRepairId;
+int gRepairsCancelled = 0;
+
+bool IsDoomed(int id)
+{
+	for (uint i = 0; i < gDoomedId.length(); ++i) {
+		if (gDoomedId[i] == id)
+			return true;
+	}
+	return false;
+}
+
+// Aborting mutates gStructRepair through AiTaskRemoved, so the victims are
+// collected first; IUnitTask is refcounted, so the local handles stay valid.
+void CancelDoomedRepairs()
+{
+	if ((gStructRepair.length() == 0) || (gDoomedId.length() == 0))
+		return;
+	array<IUnitTask@> kill;
+	for (uint i = 0; i < gStructRepair.length(); ++i) {
+		if ((gStructRepair[i] !is null) && IsDoomed(gStructRepairId[i]))
+			kill.insertLast(gStructRepair[i]);
+	}
+	for (uint i = 0; i < kill.length(); ++i) {
+		++gRepairsCancelled;
+		AiLog(Factory::T() + "apex: dropping repair of a building we are"
+			+ " reclaiming (#" + gRepairsCancelled + ")");
+		kill[i].Abort();
+	}
+}
+
 // Cheap mobile build power, unlocked at the moment it can no longer cost us the
 // advanced constructor.
 //

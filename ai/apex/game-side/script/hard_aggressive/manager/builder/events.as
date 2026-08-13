@@ -25,8 +25,21 @@ void AiTaskAdded(IUnitTask@ task)
 		gDefTasks.insertLast(task);
 	} else if (bt == Task::BuildType::REPAIR) {
 		CCircuitUnit@ hurt = task.target;
-		if ((hurt !is null) && hurt.circuitDef.IsMobile())
-			gArmyRepairs.insertLast(task);
+		if (hurt !is null) {
+			if (hurt.circuitDef.IsMobile()) {
+				gArmyRepairs.insertLast(task);
+			} else {
+				gStructRepair.insertLast(task);
+				gStructRepairId.insertLast(hurt.id);
+			}
+		}
+	} else if (bt == Task::BuildType::RECLAIM) {
+		// Feature reclaims carry no target and are not registered.
+		CCircuitUnit@ doomed = task.target;
+		if (doomed !is null) {
+			gDoomedTask.insertLast(task);
+			gDoomedId.insertLast(doomed.id);
+		}
 	}
 // 	if (task.GetType() != Task::Type::BUILDER)
 // 		return;
@@ -106,6 +119,21 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 		for (uint i = 0; i < gArmyRepairs.length(); ++i) {
 			if (gArmyRepairs[i] is task) {
 				gArmyRepairs.removeAt(i);
+				break;
+			}
+		}
+		for (uint i = 0; i < gStructRepair.length(); ++i) {
+			if (gStructRepair[i] is task) {
+				gStructRepair.removeAt(i);
+				gStructRepairId.removeAt(i);
+				break;
+			}
+		}
+	} else if (bt == Task::BuildType::RECLAIM) {
+		for (uint i = 0; i < gDoomedTask.length(); ++i) {
+			if (gDoomedTask[i] is task) {
+				gDoomedTask.removeAt(i);
+				gDoomedId.removeAt(i);
 				break;
 			}
 		}

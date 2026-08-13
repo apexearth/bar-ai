@@ -119,18 +119,16 @@ IUnitTask@ RezBotFloor(CCircuitUnit@ unit)
 			// the sighting back instead of taking its own blind sample.
 			// apexearth: "if theres any reclaim we've seen on the map...
 			// start making some... a rezbot costs like what, 130 metal?...
-			// so for every 500 wrecked metal seen make 1 rezbot???" REZ_FLOOR
-			// still caps the ceiling so a battlefield's worth of corpses
-			// cannot balloon this past a sane standing count.
+			// so for every 500 wrecked metal seen make 1 rezbot???"
 			const float wreckValue = Builder::WreckSeenValue();
-			const int wantByReclaim = int(wreckValue / REZ_METAL_PER_BOT);
-			const int want = (wantByReclaim < REZ_FLOOR) ? wantByReclaim : REZ_FLOOR;
+			const int want = RezBotsWanted();
 			if (ai.frame >= gNextRezDiag) {
 				gNextRezDiag = ai.frame + 15 * SECOND;
 				AiLog(T() + "apex: rez-diag lab=" + (lab !is null ? lab.GetName() : "null")
 					+ " rez=" + (rez !is null ? rez.GetName() : "null")
 					+ " rezCount=" + (rez !is null ? rez.count : -1)
 					+ " wreckSeen=" + formatFloat(wreckValue, "", 0, 0)
+					+ " inc=" + formatFloat(SteadyIncome(), "", 0, 0)
 					+ " want=" + want);
 			}
 			if (rez.count < want) {

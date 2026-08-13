@@ -18,6 +18,136 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-13: the front-hold gate skipped the merge, so the army could never mass
+
+Layer 3 (C++), `task/fighter/DefendTask.cpp`. **This is our own bug, added with
+the front-hold gate and not present in stock.**
+
+apexearth has raised this in some form every session: "as always we suck at
+attacking and make crazy quantities of defenses (lol)", and earlier the same
+night, "at 400 metal per second we are still making lasher trucks and we have
+257 of them. and they all just stay in our base... none of them leave."
+
+`CDefendTask::Update`'s hold `return`s before `GetMergeTask()`, and **merging is
+the only way a defence pool can grow**: `CMilitaryManager::Enqueue` builds a
+fresh one-unit `CDefendTask` per unit, and `DefaultMakeTask` scans GUARD tasks
+only. A unit above the bar promoted and left ALONE; a unit below it was held,
+could not merge, and had its bar rewritten to `GetPreMaxGroupThreat()` — the
+enemy's second-largest k-means cluster, logged reaching 3,561 — which a one-unit
+pool forbidden to merge can never reach. It then stood where `Start` put it for
+the rest of the game. One `return` produced both the frozen mass and the
+one-unit attacks.
+
+Pre-change, 18 games: 8 of 18 had **zero** attack squads ever; 27% of engage
+decisions were one unit, 39% two or fewer.
+
+Fixed by making the hold suppress *promotion* without skipping the merge below
+it. **A STOP: no build power, no metal, nothing in `AiMakeTask` moves.**
+
+Paired 6v6, Aethermoor Creek, seed 11, **`--handicap 50`**, speed 3 — the first
+measurement in this repo taken at an income apexearth actually plays at (~174
+m/s per team, against 4-9 on the standard benchmark):
+
+| | before | after |
+|---|---|---|
+| outcome | **lost at 30.2 min** | alive at the 40 min cap |
+| metal produced | 313,277 (stock 541,664) | 1,997,384 (stock 1,870,411) |
+| metal killed | 48,000 (stock 233,544) | 690,490 (stock 487,004) |
+| own mobile lost | 155,291 (stock 74,269) | 468,380 (stock **760,286**) |
+| engage decisions | 91 | 138 |
+| largest squad | 13 | **30** |
+
+**Read these with the length caveat**: the before run ENDED at 30.2 min because
+we died, the after run ran the full 40, so every cumulative total is flattered.
+The outcome and the per-side ratios are the real content — we went from killing
+a fifth of what stock killed to out-killing it while losing less army than it.
+
+**One thing did NOT move, and it is the agent's own falsifier**: engage decisions
+at two units or fewer went 49% -> 53%, i.e. no better. That is consistent with
+the second defect, deliberately left for a separate measurement —
+`quota.attack = 20` (`behaviour.json`, `MilitaryManager.cpp:429`) is BELOW one
+real unit's power (median 31), so a single unit clears the attack bar by itself.
+Merging now happens (largest squad 13 -> 30); the bar for leaving is still low
+enough that singletons qualify.
+
+Also recorded, latent, not fixed: `Enqueue(TaskF::Common(FightType::MELEE))`
+falls into `switch`'s `default:` and builds a `CRallyTask` with `maxPower = 1`,
+whose `Start` hands every unit its own `CAttackTask` — so the
+`BaseUnderAttack() || BaseContested()` branch at `military/hooks.as:161` shatters
+a pool into singletons. The comment there claiming such a pool "never converts"
+is false. `BaseContested()` is rare, so this is not the main driver.
+
+`CAllyTeam::AddEnemyCost` **is** decremented, but only on `EnemyDestroyed`, so
+enemies that die unseen are counted forever. The high-water-mark theory recorded
+earlier is half right; it inflates an already-unreachable bar rather than being
+the cause.
+
+## 2026-08-13: rez bots had a hard cap of 8, and two of them
+
+Layer 2, `manager/factory/airsupport.as`, `manager/brain/facqueue.as`,
+`manager/factory/rules_recruit.as`; `behaviour.json`, `behaviour_leg.json`.
+
+apexearth: "can we make sure we have ~10 rezbots for every 100 metal at least?"
+
+`REZ_FLOOR = 8` was named a floor and used as a **ceiling**, via `min()`, in two
+separate live code paths, with no income term at all. Measured binding:
+`wreckSeen=9943 want=8`, where the reclaim term alone wanted 19. At 400 metal/s
+he asked for 40 and the formula produced **8 at its theoretical maximum** —
+usually less, since `WreckSeenValue()` is a decaying peak with a 3-minute TTL.
+
+Now `RezBotsWanted()` = `max(income * apex_rez_per_income, wreckSeen / 500)`.
+The two terms combine with max, never min: the reclaim term is what the field is
+offering now, the income term is what the economy can always afford to keep
+standing. Below ~10 m/s the income term is zero, preserving "not important until
+you have stuff to reclaim".
+
+Second hard cap removed in the same pass: `"limit": 60` on `armrectr` and
+`legrezbot`, which binds at 600 m/s — and which **`cornecro` never had**, so
+Armada and Legion silently stalled where Cortex did not. The usual faction-parity
+break.
+
+Cost is not metal (130m each) but **factory time on the single T1 bot lab**:
+18.7 s per bot, so reaching 40 from zero is ~12 min of exclusive bot-lab output,
+displacing T1 raider production from that line while the floor is short. The
+falsifier to watch: if the count plateaus far below `want`, the constraint is
+supply, not demand — one lab at 150 workertime cannot sustain 40 against
+attrition — and the answer is a second lab, not a bigger floor. `inc=` was added
+to the rez diagnostic so the next run shows which term binds.
+
+## 2026-08-13: a rezbot and a con turret fought each other over a windmill forever
+
+Layer 2, `manager/builder/obsolete.as`, `manager/builder/events.as`, `main.as`.
+
+apexearth, watching: "I see a rezbot reclaiming a windmill while a con turret
+heals the windmill... its stuck at 99%."
+
+BAR sets `reclaim.unitMethod = 1` (`gamedata/modrules.lua:24`), so reclaiming a
+**finished** structure sets `buildProgressStep = 0`, skips `TurnIntoNanoframe()`
+and drains **health only** — the unit dies solely when health reaches zero. The
+99% apexearth saw is the health bar, not build progress. Repair restores the same
+health, and `armnanotc` and `armrectr` are both `workertime = 200`, so one con
+turret exactly cancels one rezbot. An exact, permanent tie.
+
+Nothing complained because repair costs no metal (`repairCostFactor.metal = 0`)
+and no energy (BAR sets it), and the reclaimer earns `order.add = 0` until the
+kill — both units consumed and produced nothing, so no economic signal existed.
+
+`CBuilderManager::buildingDamagedHandler` (`BuilderManager.cpp:210`) enqueues a
+HIGH repair for any damaged own structure **without consulting `reclaimUnits`** —
+the guard its own abandoned-building scan at `:1617` does use — and
+`CBRepairTask::Reevaluate` only retires the task when health is full, which a
+live reclaim guarantees never happens.
+
+`reclaimUnits` is not bound to AngelScript, so `events.as` now mirrors live
+own-unit reclaim targets and own-structure repair tasks, and
+`Builder::CancelDoomedRepairs()` aborts any repair whose target we are eating.
+**Frees 200 build power per firing and enqueues nothing.** Fired 3 times in a
+30-minute 6v6 — low, which is what we want; hundreds would mean we keep eating a
+building the enemy keeps re-damaging, and the answer would be a different victim.
+
+The one-line C++ version belongs upstream and should go in next time the DLL is
+built anyway: `if (!unit->IsAttrNoRepair() && !IsReclaimUnit(unit))`.
+
 ## 2026-08-13: a T1 constructor was blocked by a job only a T2 one can do
 
 Layer 2, `manager/brain.as` (`Brain::Decide`), `manager/crew.as` (`Retire`).
