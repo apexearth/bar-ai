@@ -318,6 +318,59 @@ def check_engine_side(variant_dir: Path, variant: str, rep: Report) -> list[str]
 BASELINE = REPO / "reference" / "barb-stable" / "game-side"
 
 
+# AngelScript reserved words. A local named `out` cost a whole run on
+# 2026-08-13: the compiler emitted 60 errors, the variant was disabled, and the
+# match still finished and reported a normal-looking loss. Nothing else in this
+# repo compiles the script, so this is the only pre-deploy chance to catch it.
+AS_RESERVED = {
+    "and", "abstract", "auto", "bool", "break", "case", "cast", "class",
+    "const", "continue", "default", "do", "double", "else", "enum", "explicit",
+    "external", "false", "final", "float", "for", "from", "funcdef", "function",
+    "get", "if", "import", "in", "inout", "int", "int8", "int16", "int32",
+    "int64", "interface", "is", "mixin", "namespace", "not", "null", "or",
+    "out", "override", "private", "property", "protected", "return", "set",
+    "shared", "super", "switch", "this", "true", "try", "typedef", "uint",
+    "uint8", "uint16", "uint32", "uint64", "void", "while", "xor",
+}
+
+# The only reserved words that may legally stand in the TYPE position. Without
+# this, `return null;` parses as type `return` / name `null` and the check
+# reports 1089 lines of nothing.
+AS_TYPE_WORDS = {
+    "bool", "int", "int8", "int16", "int32", "int64", "uint", "uint8",
+    "uint16", "uint32", "uint64", "float", "double", "void", "array",
+}
+
+# `array<T> name`, `array<T>@ name`, `Type@ name`, `int name`, `const float name`
+_AS_DECL = re.compile(
+    r"^\s*(?:const\s+)?"
+    r"(?P<type>array\s*<[^>]*>|[A-Za-z_][A-Za-z0-9_:]*)\s*@?\s*"
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?:=[^=]|;|\))"
+)
+
+
+def _as_type_ok(tok: str) -> bool:
+    tok = tok.split("<", 1)[0].strip()
+    return tok not in AS_RESERVED or tok in AS_TYPE_WORDS
+
+
+def check_angelscript(script_root: Path, rep: Report) -> None:
+    """Declarations whose NAME is a reserved word -- a hard compile error."""
+    if not script_root.is_dir():
+        return
+    for path in sorted(script_root.rglob("*.as")):
+        rel = path.relative_to(script_root.parent).as_posix()
+        for n, raw in enumerate(path.read_text(encoding="utf8",
+                                               errors="replace").splitlines(), 1):
+            line = raw.split("//", 1)[0]
+            m = _AS_DECL.match(line)
+            if (m and m.group("name") in AS_RESERVED
+                    and _as_type_ok(m.group("type"))):
+                rep.error(f"{rel}:{n}: '{m.group('name')}' is an AngelScript "
+                          f"reserved word -- this is a compile error, and a "
+                          f"compile error disables the whole variant silently")
+
+
 def check_variant(variant: str, units: set[str]) -> Report:
     rep = Report()
     vdir = AI_DIR / variant
@@ -329,6 +382,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
     check_configs(cfg_root, units, rep, base)
     if cfg_root.is_dir():
         check_parity(cfg_root, rep)
+    check_angelscript(script_root, rep)
 
     on_disk = sorted(d.name for d in cfg_root.iterdir() if d.is_dir()) if cfg_root.is_dir() else []
     if declared:

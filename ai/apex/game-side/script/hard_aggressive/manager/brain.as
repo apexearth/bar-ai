@@ -1053,6 +1053,12 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 			return home;
 		if (Builder::EnergyWasting())
 			return null;   // the converter want owns this case
+		// A base with a reactor standing does not want a 20-energy panel. This
+		// fallback is for the cases HomeEnergy cannot PLACE, not the ones where
+		// it declined on purpose -- otherwise it just swaps the turbine for a
+		// solar and the ladder still never climbs.
+		if (Builder::HaveReactor())
+			return null;
 		CCircuitDef@ gen = Builder::SolarDef();
 		if ((gen is null) || !gen.IsAvailable(ai.frame))
 			return null;

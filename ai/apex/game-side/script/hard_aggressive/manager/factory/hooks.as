@@ -79,12 +79,18 @@ CCircuitUnit@ gT1FacUnit = null;
 // so a player that lost its last one had no way back. See HaveAnyFactory()
 // and its use in the commander branch below.
 int gFactoryCount = 0;
+// Every live factory, not just the base-plan anchor. The nano band is latched to
+// the FIRST factory for the whole game, so every plant built after it -- and the
+// whole base once that one is reclaimed -- had no way to ask for a caretaker.
+array<CCircuitUnit@> gFacUnits;
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	Brain::NoteSpend(unit, usage);
-	if (usage == Unit::UseAs::FACTORY)
+	if (usage == Unit::UseAs::FACTORY) {
 		++gFactoryCount;
+		gFacUnits.insertLast(unit);
+	}
 	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T2) != 0)
 		gHaveT2 = true;
 	if ((Factory::userData[unit.circuitDef.id].attr & Factory::Attr::T3) != 0)
@@ -145,8 +151,17 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 {
-	if (usage == Unit::UseAs::FACTORY)
+	if (usage == Unit::UseAs::FACTORY) {
 		--gFactoryCount;
+		// NOCOUNT: the handle is not nulled when the engine frees the unit, so
+		// this must be removed here or ThinnestFactory reads freed memory.
+		for (uint i = 0; i < gFacUnits.length(); ++i) {
+			if (gFacUnits[i] is unit) {
+				gFacUnits.removeAt(i);
+				break;
+			}
+		}
+	}
 	// CCircuitUnit is registered NOCOUNT, so a handle is not nulled when the
 	// engine destroys the unit and `is null` stays false on freed memory.
 	// Leaving this unset crashed UpdateRushReclaim's Enqueue (0xc0000005).

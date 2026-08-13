@@ -444,15 +444,20 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		// cooldown every idle builder queues its own reactor off the same reading
 		// of the same income. The cheap rungs stay uncapped -- overbuilding wind
 		// is self-correcting, overbuilding fusions is the economy.
-		CCircuitDef@ fus = null;
+		// THE COOLDOWN BOUNDS HOW OFTEN A REACTOR IS STARTED, NOT WHICH RUNG WE
+		// ARE ON. Nulling the reactor rungs for the ranking demoted the ladder to
+		// its bottom step while the cooldown held -- and AdvSolDef() is already
+		// null once any reactor stands, so the only candidates left were wind and
+		// solar. Measured 2026-08-13 at +50 handicap: 1,787 of ~2,065 home-energy
+		// placements were armwin, 1,004 of them above 5,000 energy income. Rank
+		// the reactors always; if one wins while the cooldown holds, decline the
+		// builder rather than handing it a turbine.
+		CCircuitDef@ fus = FusionDef(unit);
 		CCircuitDef@ afus = null;
-		if (ai.frame >= gNextFusion) {
-			@fus = FusionDef(unit);
-			// armacsub/coracsub carry the underwater reactor and no land one, and
-			// there is no naval advanced reactor to reach for.
-			if (!IsNavalBuilder(unit))
-				@afus = SideDef3(armafus, corafus, legafus);
-		}
+		// armacsub/coracsub carry the underwater reactor and no land one, and
+		// there is no naval advanced reactor to reach for.
+		if (!IsNavalBuilder(unit))
+			@afus = SideDef3(armafus, corafus, legafus);
 
 		// WIND vs SOLAR IS A PER-METAL QUESTION, AND RAW OUTPUT ANSWERS IT WRONG.
 		//
@@ -513,6 +518,8 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 			if (e > best) { best = e; @gen = afus; pickedReactor = true; }
 		}
 	}
+	if (pickedReactor && (ai.frame < gNextFusion))
+		return null;   // a reactor won; wait for it rather than dropping a rung
 	if ((gen is null) || !gen.IsAvailable(ai.frame))
 		return null;
 	const bool isConv = EnergyWasting();

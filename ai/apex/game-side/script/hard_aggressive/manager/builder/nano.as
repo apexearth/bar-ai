@@ -137,6 +137,46 @@ CCircuitDef@ NanoDef()
 	return SideDef3(armnanotc, cornanotc, legnanotc);
 }
 
+// armnanotc.lua builddistance = 400. Past that a turret assists nothing, and the
+// nano band runs out to 1345 from an anchor latched to the FIRST factory -- so
+// only its first 26 slots of 160 could ever reach the thing they were built for.
+const float NANO_ASSIST_R = 400.f;
+
+// Our factories, thinnest first by construction turrets already inside assist
+// range. EVERY one is returned, not just the thinnest: measured 2026-08-13, only
+// 29% of nanos resolved a site when the single thinnest factory was the one
+// chance -- its 400-elmo neighbourhood fills, FindBuildSiteNear fails, and the
+// nano fell all the way back to a band slot up to 1345 away. Not a cap: what
+// bounds this is the ground running out at every plant we own.
+array<CCircuitUnit@> FactoriesByNeed()
+{
+	array<CCircuitUnit@> ranked;
+	array<int> need;
+	CCircuitDef@ nano = NanoDef();
+	if (nano is null)
+		return ranked;
+	for (uint i = 0; i < Factory::gFacUnits.length(); ++i) {
+		CCircuitUnit@ f = Factory::gFacUnits[i];
+		if (f is null)
+			continue;
+		const AIFloat3 at = f.GetPos(ai.frame);
+		if (!OnMap(at))
+			continue;
+		array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(nano, at, NANO_ASSIST_R);
+		const int n = (have is null) ? 0 : int(have.length());
+		uint slot = ranked.length();
+		for (uint j = 0; j < need.length(); ++j) {
+			if (n < need[j]) {
+				slot = j;
+				break;
+			}
+		}
+		ranked.insertAt(slot, f);
+		need.insertAt(slot, n);
+	}
+	return ranked;
+}
+
 // Turrets we hold. aiBuilderMgr.GetWorkerCount() counts these as workers, so any
 // cap meant for MOBILE constructors has to subtract them.
 int NanoCount()
@@ -267,6 +307,13 @@ const int   FRONT_NANO_PERIOD = 45 * SECOND;
 const float FRONT_NANO_INCOME = 90.f;   // a real economy, not an early one
 const float FRONT_NANO_SHARE  = 0.15f;  // of NanoCap(), so it stays a minority
 int gNextFrontNano = 0;
+// AROUND the line, not on one point of it. apexearth: "just have nanos be built
+// around the frontline. that's the proper thing to do there." FrontNear returns
+// the front cell nearest the CONSTRUCTOR, so several builders working the same
+// stretch all resolve to the same cell and stack there; this spreads them the
+// way gFrontPlaced spreads the front towers in crew.as.
+const float FRONT_NANO_SPACING = 420.f;
+array<AIFloat3> gFrontNanoPlaced;
 
 IUnitTask@ FrontNano(CCircuitUnit@ unit)
 {
@@ -297,11 +344,18 @@ IUnitTask@ FrontNano(CCircuitUnit@ unit)
 	AIFloat3 place = ai.FindBuildSiteNear(want, spot, 600.f);
 	if (!OnMap(place))
 		return null;
+	for (uint i = 0; i < gFrontNanoPlaced.length(); ++i) {
+		if (gFrontNanoPlaced[i].distance2D(place) < FRONT_NANO_SPACING)
+			return null;
+	}
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::NANO,
 			Task::Priority::NORMAL, want, place, 0.f));
 	if (post is null)
 		return null;
+	gFrontNanoPlaced.insertLast(place);
 	gNextFrontNano = ai.frame + FRONT_NANO_PERIOD;
+	AiLog(Factory::T() + "apex: front nano " + want.GetName()
+		+ " standing=" + want.count + " posts=" + gFrontNanoPlaced.length());
 	return post;
 }
 
@@ -358,8 +412,26 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	if (outstanding >= NanoInFlight())
 		return null;
 
+	// A CARETAKER HAS TO REACH SOMETHING. apexearth: "con turrets are not being
+	// made near factories very well, usually we just have con turrets in the
+	// middle of nowhere." The band is tried only once no factory has room left.
 	AIFloat3 here;
-	if (!BandSpot(unit, want, true, here))
+	bool sited = false;
+	array<CCircuitUnit@> facs = FactoriesByNeed();
+	for (uint i = 0; (i < facs.length()) && !sited; ++i) {
+		const AIFloat3 site = ai.FindBuildSiteNear(want, facs[i].GetPos(ai.frame),
+				NANO_ASSIST_R);
+		// GetOwnUnitsOfDef skips nanoframes, so a turret already on the way is
+		// invisible to FactoriesByNeed; the site reservation is what stops the
+		// same factory being picked for the same ground every period.
+		if (OnMap(site) && !Base::SiteTaken(Base::NANO, site)
+				&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
+			Base::ReserveSite(site);
+			here = site;
+			sited = true;
+		}
+	}
+	if (!sited && !BandSpot(unit, want, true, here))
 		return null;
 
 	// Nanos go TIGHT, right next to each other, on a grid pitch that leaves the
@@ -374,6 +446,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	gNextNano = ai.frame + NANO_PERIOD;
 	++gNanosAsked;
 	AiLog(Factory::T() + "apex: eco nano " + want.GetName()
+		+ " at=" + (sited ? "fac" : "band")
 		+ " standing=" + want.count + " asked=" + gNanosAsked
 		+ " bank=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
 		+ "/" + formatFloat(aiEconomyMgr.metal.storage, "", 0, 0));
