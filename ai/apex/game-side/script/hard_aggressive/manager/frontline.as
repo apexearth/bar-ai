@@ -40,7 +40,22 @@ const float FOE_FRAC = 0.10f;
 const float CHOKE_NEAR = 600.f;
 // How much further than the closest front cell a cell may sit and still count
 // as front. Beyond this it is enemy-facing flank, not the line.
-const float FRONT_BAND = 3000.f;
+//
+// This was a flat 3,000 elmos, and an absolute distance cannot mean the same
+// thing on two maps. Model the perimeter as a ring of radius R about our
+// centroid with the enemy at distance D: the closest cell sits at D - R, and a
+// cell at bearing theta off the axis to them at sqrt(D^2 - 2DR cos(theta) + R^2),
+// so keeping everything within (closest + band) keeps the arc
+// |theta| <= acos(1 - band/R). band = R keeps the enemy-facing half, band = R/2
+// keeps +/-60 degrees. That angle depends on band/R and NOT on D, which is why
+// the band belongs in units of our own territory radius: a fraction of the
+// home-to-enemy separation would mean a different arc every time either side's
+// holdings changed.
+//
+// R is measured from the perimeter this same scan just built, so nothing about
+// it is assumed. FRONT_BAND_FRAC is the one policy number left: how wide a front
+// one player holds, as a share of its own territory radius.
+const float FRONT_BAND_FRAC = 1.0f;
 const int RECLASSIFY = 10 * SECOND;
 const int SEAM_N = 40;
 
@@ -175,6 +190,31 @@ bool Mine(const AIFloat3& in p)
 			return false;
 	}
 	return true;
+}
+
+// The radius of what we hold: mean distance from our centroid to the perimeter
+// this scan found. Declared after gPerim/gOurMid because a global read above its
+// own declaration is a `No matching symbol` that disables the whole variant.
+float TerritoryRadius()
+{
+	if (gPerim.length() == 0)
+		return 0.f;
+	float sum = 0.f;
+	for (uint k = 0; k < gPerim.length(); ++k)
+		sum += gPerim[k].distance2D(gOurMid);
+	return sum / float(gPerim.length());
+}
+
+float FrontBand()
+{
+	float b = TerritoryRadius()
+			* ai.GetTunable("apex_front_band_frac", FRONT_BAND_FRAC);
+	// A band under the grid's own resolution cannot mean anything: the perimeter
+	// is quantised at one cell, so one cell diagonal is the floor.
+	const float cw = float(AiTerrainWidth()) / float(SEAM_N);
+	const float ch = float(AiTerrainHeight()) / float(SEAM_N);
+	const float least = sqrt(cw * cw + ch * ch);
+	return (b < least) ? least : b;
 }
 
 void Scan()
@@ -344,11 +384,12 @@ void Scan()
 		if (gMine[k] && ((closeMine < 0.f) || (d < closeMine)))
 			closeMine = d;
 	}
+	const float band = FrontBand();
 	for (uint k = 0; k < gPerim.length(); ++k) {
 		if (gEdge[k] != FRONT)
 			continue;
 		const float ref = (gMine[k] && (closeMine >= 0.f)) ? closeMine : closeTeam;
-		if (gPerim[k].distance2D(gFoeMid) > ref + FRONT_BAND)
+		if (gPerim[k].distance2D(gFoeMid) > ref + band)
 			gEdge[k] = BACK;
 	}
 }
@@ -417,6 +458,7 @@ void Update()
 			+ " foeKnown=" + (gFoeKnown ? 1 : 0)
 			+ " cAlly=" + gDbgAlly + " cFoe=" + gDbgFoe
 			+ " bar=" + int(gPresAlly) + "/" + int(gPresFoe)
+			+ " R=" + int(TerritoryRadius()) + " band=" + int(FrontBand())
 			+ " ourMid=" + int(gOurMid.x) + "," + int(gOurMid.z)
 			+ " foeMid=" + int(gFoeMid.x) + "," + int(gFoeMid.z)
 			+ " lane=" + int(aiSetupMgr.GetLanePos().x) + "," + int(aiSetupMgr.GetLanePos().z)

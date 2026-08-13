@@ -320,6 +320,38 @@ array<bool> gRayHot;
 // indistinguishable in gRayHot alone, and they need opposite answers.
 array<bool> gRayWall;
 
+// THE RING'S OWN SAMPLE COUNT. The march below stops at the edge of our own
+// territory instead of running to the map edge, so most rays break after a
+// handful of samples and a finer step costs almost nothing -- while the step is
+// what the radius is quantised to, and at 14 samples over half the map diagonal
+// that was 366 elmos on a 16x12 map.
+const int RING_SAMPLES = 28;
+// TWO FIELDS, TWO BARS -- never their difference.
+//
+// GetNetInflAt is allyInfl - enemyInfl, both refilled to INFL_BASE = 0 every
+// update and accumulated only from friendly units and KNOWN enemies
+// (CInfluenceMap::Prepare/AddEnemy). So it reads exactly 0 over every cell
+// nobody has been near, and a `< 0` test walks straight through no-man's-land to
+// the first cell an enemy is standing in. Same trap Front::Scan documents: net
+// influence reads 77 beside our base and exactly 0 on ground nobody has been
+// near, and most of the map is the second kind.
+//
+// So ally and enemy are tested SEPARATELY, each against a share of its own peak
+// over this same sample set. The two fields are not on one scale -- ally counts
+// every armed unit the whole ally team owns, enemy counts only what we have
+// seen -- so one absolute floor cannot serve both.
+//
+// The fractions are Front::TERRITORY_FRAC and Front::FOE_FRAC, restated rather
+// than referenced: manager/military.as is included before manager/frontline.as
+// (see main.as), so the Front:: namespace does not exist yet at this line and
+// naming it is a `No matching symbol` that disables the whole variant.
+const float RING_ALLY_FRAC  = 0.03f;
+const float RING_ALLY_FLOOR = 1.0f;
+const float RING_FOE_FRAC   = 0.10f;
+const float RING_FOE_FLOOR  = 1.0f;
+float gRingAllyBar = RING_ALLY_FLOOR;
+float gRingFoeBar  = RING_FOE_FLOOR;
+
 // Per lane: the fraction along home->enemy at which that lane's influence
 // crosses. Index 0 is the leftmost lane.
 array<float> gFrontLane;
@@ -423,8 +455,23 @@ void RebuildFront()
 	FrontDiag();
 }
 
-// One ray per bearing. Each walks outward until the influence turns enemy, and
-// records both where that happened and how far out a builder could still work.
+// One ray per bearing, each finding THE EDGE OF WHAT WE HOLD on that bearing.
+//
+// It used to walk until GetNetInflAt went negative, which is not the edge of our
+// territory -- it is the first cell where a KNOWN enemy outweighs us, i.e. their
+// own front rank. Every ray therefore crossed the whole of no-man's-land (net
+// influence is exactly 0 there) and stopped on top of them, and the constructors
+// this line sites were then sent to 88% of that distance.
+// apexearth, watching: "Our cons kept dying that game because no military was
+// protecting them while they tried to make defenses. They built a bit too far up
+// on the front line."
+//
+// Now: our own influence says how far out we hold, theirs says where they are,
+// each against its own bar, and the radius is the last sample that was ours and
+// free of them. That answer needs no vision at all -- it exists from minute one
+// and it does not move when a raid drives past -- which is the same reason
+// Front:: settled on the outer edge of our own influence region after three
+// definitions that needed to see the enemy died against measurement.
 void RebuildRing(const AIFloat3& in home)
 {
 	gRayR.resize(0);
@@ -434,7 +481,7 @@ void RebuildRing(const AIFloat3& in home)
 	const float w = float(AiTerrainWidth());
 	const float h = float(AiTerrainHeight());
 	const float reach = sqrt(w * w + h * h) * 0.5f;   // half the map diagonal
-	const float step = reach / float(FRONT_SAMPLES);
+	const float step = reach / float(RING_SAMPLES);
 	const float bar = ai.GetTunable("apex_build_threat_bar", 1.f);
 
 	// NOTHING BEHIND US IS FRONT. apexearth: "We know theres no AI with a start
@@ -451,9 +498,60 @@ void RebuildRing(const AIFloat3& in home)
 	const bool rearToo = ai.GetTunable("apex_front_rear_arc", 0.f) > 0.f;
 	AIFloat3 toEnemy = aiEnemyMgr.GetEnemyPos() - home;
 	const bool haveBearing = toEnemy.SqLength2D() > NEAR_ZERO;
+	const float sep = haveBearing ? sqrt(toEnemy.SqLength2D()) : 0.f;
 	if (haveBearing)
 		toEnemy.SafeNormalize2D();
 
+	// AND NOT PAST THE ENEMY. GetAllyInflAt is ally-WIDE, so a bearing running
+	// sideways along the team's holdings never leaves friendly influence and would
+	// report a radius of half the map -- ground an ally holds, drawn as our front
+	// and offered as our build line. BorderPos in this same file already states
+	// the rule this reuses: "A site further from home than the enemy centroid is
+	// not ours to hold -- that is an ally's ground on the far side of the map."
+	float march = reach;
+	if (haveBearing && (sep > step) && (sep < march))
+		march = sep;
+
+	// PASS 1: the two peaks, over exactly the samples pass 2 will march. Every
+	// read is OnMap-guarded -- CInfluenceMap::PosToXZ does no bounds check at all
+	// (`x = (int)pos.x / squareSize`) and indexes enemyInfl[z * width + x] off the
+	// raw position, the same unchecked pattern that made GetBuilderThreatAt kill
+	// the engine at frame 3.
+	float maxAlly = 0.f;
+	float maxFoe = 0.f;
+	for (int r = 0; r < FRONT_RAYS; ++r) {
+		const float ang = 6.2831853f * float(r) / float(FRONT_RAYS);
+		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
+		if (!rearToo && haveBearing
+			&& ((dir.x * toEnemy.x + dir.z * toEnemy.z) <= 0.f))
+			continue;
+		for (int i = 1; i <= RING_SAMPLES; ++i) {
+			const float d = step * float(i);
+			if (d > march)
+				break;
+			const AIFloat3 p = home + dir * d;
+			if (!OnMap(p))
+				break;
+			const float a = ai.GetAllyInflAt(p);
+			const float f = ai.GetEnemyInflAt(p);
+			if (a > maxAlly) maxAlly = a;
+			if (f > maxFoe) maxFoe = f;
+		}
+	}
+	gRingAllyBar = maxAlly * RING_ALLY_FRAC;
+	if (gRingAllyBar < RING_ALLY_FLOOR)
+		gRingAllyBar = RING_ALLY_FLOOR;
+	// NOTHING SEEN IS NOT NOTHING THERE. With maxFoe at 0 the bar sits on its
+	// floor and no sample can ever reach it, so the ray falls through to the ally
+	// test and answers "our territory ends here" -- a real measurement rather than
+	// a guess about an enemy we have not found. That is the point of splitting the
+	// two tests: a rear player, whose own influence map holds no enemy at all,
+	// still gets a line instead of concluding there is no front.
+	gRingFoeBar = maxFoe * RING_FOE_FRAC;
+	if (gRingFoeBar < RING_FOE_FLOOR)
+		gRingFoeBar = RING_FOE_FLOOR;
+
+	// PASS 2: march.
 	for (int r = 0; r < FRONT_RAYS; ++r) {
 		const float ang = 6.2831853f * float(r) / float(FRONT_RAYS);
 		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
@@ -466,31 +564,39 @@ void RebuildRing(const AIFloat3& in home)
 			gRayWall.insertLast(false);
 			continue;
 		}
-		float edge = reach;      // never met them: the whole ray is ours
+		float edge = 0.f;        // last sample that was still ours
 		float safe = 0.f;
-		bool hot = false;        // did this bearing find an enemy at all
-		bool wall = false;       // ...or did it just run out of map
-		for (int i = 1; i <= FRONT_SAMPLES; ++i) {
+		bool wall = false;       // did it run out of map
+		for (int i = 1; i <= RING_SAMPLES; ++i) {
 			const float d = step * float(i);
+			if (d > march)
+				break;
 			const AIFloat3 p = home + dir * d;
 			if (!OnMap(p)) {
-				if (edge > d)
-					edge = d;
 				wall = true;
 				break;
 			}
+			// THEM FIRST, so a cell they hold can never be recorded as ours. This
+			// is also what keeps the line out of the battle itself: where both
+			// fields are up, the last ground a builder can be sent to is the cell
+			// BEFORE the one they are standing in.
+			if (ai.GetEnemyInflAt(p) >= gRingFoeBar)
+				break;
+			if (ai.GetAllyInflAt(p) < gRingAllyBar)
+				break;   // our territory ended at the previous sample
+			edge = d;
+			// Only inside our own ground: past the radius the answer is not used,
+			// and this is the expensive read of the three.
 			if (ai.GetBuilderThreatAt(p) <= bar)
 				safe = d;
-			const float inf = ai.GetNetInflAt(p);
-			if (inf < 0.f) {
-				edge = d;
-				hot = true;
-				break;
-			}
 		}
-		gRayR.insertLast(edge);
+		// A bearing we hold nothing on carries `reach`, not 0. OnBorder compares a
+		// position against gRayR on its own bearing WITHOUT consulting gRayHot, so
+		// a 0 here would make every position in that sector read "on the border" --
+		// this is the same sentinel the rear arc above already uses.
+		gRayR.insertLast((edge > 0.f) ? edge : reach);
 		gRaySafe.insertLast(safe);
-		gRayHot.insertLast(hot);
+		gRayHot.insertLast(edge > 0.f);
 		gRayWall.insertLast(wall);
 	}
 
@@ -508,23 +614,42 @@ void RebuildRing(const AIFloat3& in home)
 	// Its radius is then capped at that neighbour's: a ray that left the map at
 	// long range carries the map's geometry, not the battlefield's, and would
 	// otherwise place a point deeper than the front it is borrowing from.
+	// It adopts the neighbour's SAFE EDGE as well as its radius. Under the older
+	// rule a wall ray accumulated `safe` for every on-map sample before it broke;
+	// `safe` is now only recorded inside our own territory, so a wall ray holding
+	// none of its own would carry safe=0 and FrontLineSpots would drop it again
+	// for a different reason. Where the borrowed point actually lands is still
+	// re-checked by Builder::ThreatFor and FindBuildSiteNear before anything is
+	// ordered there.
 	array<bool> seed = gRayHot;
 	array<float> seedR = gRayR;
+	array<float> seedS = gRaySafe;
 	for (uint i = 0; i < gRayHot.length(); ++i) {
 		if (seed[i] || !gRayWall[i])
 			continue;
 		const uint prev = (i + gRayHot.length() - 1) % gRayHot.length();
 		const uint next = (i + 1) % gRayHot.length();
-		float from = -1.f;
-		if (seed[prev] && !gRayWall[prev])
-			from = seedR[prev];
-		if (seed[next] && !gRayWall[next] && ((from < 0.f) || (seedR[next] < from)))
-			from = seedR[next];
-		if (from < 0.f)
+		uint src = 0;
+		bool haveSrc = false;
+		if (seed[prev] && !gRayWall[prev]) {
+			src = prev;
+			haveSrc = true;
+		}
+		if (seed[next] && !gRayWall[next]
+			&& (!haveSrc || (seedR[next] < seedR[src])))
+		{
+			src = next;
+			haveSrc = true;
+		}
+		if (!haveSrc)
 			continue;
 		gRayHot[i] = true;
-		if (gRayR[i] > from)
-			gRayR[i] = from;
+		if (gRayR[i] > seedR[src])
+			gRayR[i] = seedR[src];
+		if (gRaySafe[i] <= 0.f)
+			gRaySafe[i] = seedS[src];
+		if (gRaySafe[i] > gRayR[i])
+			gRaySafe[i] = gRayR[i];
 	}
 }
 
@@ -594,6 +719,43 @@ void FrontDiag()
 		+ " max=" + formatFloat(hi, "", 0, 2)
 		+ " uncontested=" + uncontested
 		+ " gap=" + formatFloat(FrontLaneGap(), "", 0, 0));
+
+	// THE RING, WHICH IS WHAT ACTUALLY SITES DEFENCE. Everything above describes
+	// the LANE scan; FrontLineSpots, FrontCurve and OnBorder all read gRayR, and
+	// nothing reported it -- so "the towers are too far up" and "the front is
+	// where we think it is" could not be told apart from a log.
+	//
+	// r/sep is the radius as a share of the home->enemy separation: the fraction
+	// of the way to the enemy this line sits at, directly comparable with
+	// front-diag's own mean.
+	float rSum = 0.f;
+	float rMin = -1.f;
+	float rMax = 0.f;
+	float sSum = 0.f;
+	int hotN = 0;
+	for (uint i = 0; i < gRayR.length(); ++i) {
+		if ((i >= gRayHot.length()) || !gRayHot[i])
+			continue;
+		++hotN;
+		rSum += gRayR[i];
+		if ((rMin < 0.f) || (gRayR[i] < rMin))
+			rMin = gRayR[i];
+		if (gRayR[i] > rMax)
+			rMax = gRayR[i];
+		if ((i < gRaySafe.length()) && (gRayR[i] > 1.f))
+			sSum += gRaySafe[i] / gRayR[i];
+	}
+	float axis = sqrt(gFrontFwd.SqLength2D());
+	if (axis < 1.f)
+		axis = 1.f;
+	const float hn = float((hotN > 0) ? hotN : 1);
+	AiLog(Factory::T() + "apex: ring-diag rays=" + hotN + "/" + gRayR.length()
+		+ " sep=" + int(axis)
+		+ " r/sep mean=" + formatFloat(rSum / hn / axis, "", 0, 2)
+		+ " min=" + formatFloat(((rMin < 0.f) ? 0.f : rMin) / axis, "", 0, 2)
+		+ " max=" + formatFloat(rMax / axis, "", 0, 2)
+		+ " safe/r=" + formatFloat(sSum / hn, "", 0, 2)
+		+ " bar=" + int(gRingAllyBar) + "/" + int(gRingFoeBar));
 }
 
 // Which lane a position falls in, and how far along the axis it sits.
