@@ -110,7 +110,14 @@ int gCreated = 0;
 int gJoined = 0;
 int gCovered = 0;    // refused: this ground is already requested
 int gFull = 0;       // refused: the income cannot feed another of this def
-int gNextLog = 0;
+
+// PER-DEF, NOT GLOBAL. A single shared cooldown meant a burst on one def (say
+// six armadvsol requested close together) could be silenced by an unrelated
+// def's log resetting the same timer moments earlier -- exactly the failure
+// mode apexearth asked to diagnose (multiple advanced solars appearing to
+// build at once with nothing in the log explaining why). Sized and indexed
+// like gNextFactoryRequest in sitesafety.as.
+array<int> gNextDefLog(ai.GetDefCount() + 1);
 
 // IUnitTask is refcounted, so a held handle stays valid, and every removal
 // funnels through DequeueTask -> AiTaskRemoved.
@@ -390,11 +397,17 @@ IUnitTask@ Create(CCircuitDef@ want, Task::BuildType bt, Task::Priority prio,
 
 void Log(CCircuitDef@ want, const string& in what)
 {
-	if (ai.frame < gNextLog)
+	const int id = want.id;
+	const bool tracked = (id >= 0) && (uint(id) < gNextDefLog.length());
+	if (tracked && (ai.frame < gNextDefLog[id]))
 		return;
-	gNextLog = ai.frame + 10 * SECOND;
+	if (tracked)
+		gNextDefLog[id] = ai.frame + 10 * SECOND;
+	// inFlight/cap answer the actual question a burst of one def raises: was
+	// this "new" allowed because the economy could genuinely feed another one
+	// in parallel, or did it slip past a cap that should have refused it.
 	AiLog(Factory::T() + "apex: request " + what + " " + want.GetName()
-		+ " cap=" + InFlightCap()
+		+ " inFlight=" + InFlight(want) + " cap=" + InFlightCap()
 		+ " live=" + gLive.length()
 		+ " new=" + gCreated + " join=" + gJoined
 		+ " covered=" + gCovered + " full=" + gFull);

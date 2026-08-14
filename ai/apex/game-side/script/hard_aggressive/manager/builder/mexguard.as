@@ -403,11 +403,17 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		gNextFusion = ai.frame + FUSION_PERIOD;
 	// Converters no longer wait on a clock at all; see the EnergyWasting branch
 	// above for why the bound is a count instead.
+	// unit=<id> ties this creation to a specific builder/constructor, and
+	// inFlight/cap show the exact economy math Requests::Take used to allow
+	// it -- the two pieces needed to tell "several legitimately in parallel
+	// under the income-derived cap" apart from "the cap was bypassed".
 	AiLog(Factory::T() + "apex: home energy " + gen.GetName()
 		+ " standing=" + gen.count
+		+ " unit=" + ((unit !is null) ? int(unit.id) : -1)
 		+ " at=" + int(spot.x) + "," + int(spot.z)
 		+ " fwd=" + formatFloat(FrontT(spot), "", 0, 2)
 		+ " via=" + via
+		+ " inFlight=" + Requests::InFlight(gen) + " cap=" + Requests::InFlightCap()
 		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
 	return post;
