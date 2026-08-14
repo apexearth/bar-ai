@@ -1830,6 +1830,27 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnStructsNear(const springai::AIFloat
 	return out;
 }
 
+std::vector<CCircuitUnit*> CCircuitAI::GetOwnDamagedNear(const springai::AIFloat3& pos, float radius)
+{
+	std::vector<CCircuitUnit*> out;
+	const float sqRadius = radius * radius;
+	const int frame = GetLastFrame();
+	for (auto& kv : teamUnits) {
+		CCircuitUnit* u = kv.second;
+		if ((u == nullptr) || (u->GetCircuitDef() == nullptr) || !u->GetCircuitDef()->IsMobile()) {
+			continue;
+		}
+		if (u->GetUnit()->IsBeingBuilt() || (u->GetHealthPercent() >= 1.f)) {
+			continue;
+		}
+		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
+			continue;
+		}
+		out.push_back(u);
+	}
+	return out;
+}
+
 float CCircuitAI::GetPathLength(CCircuitUnit* unit, const springai::AIFloat3& to)
 {
 	if ((unit == nullptr) || (unit->GetCircuitDef() == nullptr)) {

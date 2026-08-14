@@ -2,11 +2,12 @@ namespace Builder {
 
 // Screening what DefaultMakeTask hands back.
 //
-// mex/mexup/geo/geoup offers are not taken unconditionally here: brain.as's
-// MexWant ranks mex on economic value inside Brain::Decide, and
+// mexup/geo/geoup offers are not taken unconditionally here: brain.as's
+// MexUpgradeWant ranks them on economic value inside Brain::Decide, and
 // `if (task !is null) return task;` in maketask.as's MakeTaskInner already
-// returns any leftover engine offer -- mex included -- once nothing else
-// claimed the builder. That is the whole of "last resort".
+// returns any leftover engine offer once nothing else claimed the builder.
+// That is the whole of "last resort". A bare MEX offer is the exception --
+// see MexOffer below.
 
 // THE ENGINE WAS ALREADY SENDING SOMEBODY AND WE KEPT SAYING NO.
 //
@@ -19,6 +20,34 @@ namespace Builder {
 //
 // A STOP, not a spend: it enqueues nothing and can only decline to discard work
 // already ordered and already staffed.
+// A MEX THE ENGINE ALREADY ELECTED A BUILDER FOR OUTRANKS ANY OPTIONAL WANT.
+//
+// FindOpenMexSpot -- the only mex search a script can run -- deliberately
+// excludes ally-zone spots (EconomyManager.cpp's predicate:
+// `!terrainMgr->IsZoneAlly(p)`; it exists for frontier reroutes, not home
+// territory), so MexWant in brain.as never proposes, and can never win, a
+// home mex. DefaultMakeTask's own native mex-task creation still covers home
+// spots, but only on its own scan cadence, not synchronously with a builder's
+// next election. In the gap, an idle builder standing right next to an
+// unclaimed home mex was seen to sit idle and then walk off to an optional
+// want (gantry, nano, ...) instead, because those wants don't depend on
+// FindOpenMexSpot and can fire the moment the builder goes idle. Once the
+// engine's own scan DOES offer that mex, take it before anything optional
+// gets a turn.
+IUnitTask@ MexOffer(IUnitTask@ task, CCircuitUnit@ unit)
+{
+	if (ai.GetTunable("apex_take_mex_offer", 1.f) <= 0.f)
+		return null;
+	if ((task is null) || (task.GetType() != Task::Type::BUILDER))
+		return null;
+	if (task.GetBuildType() != int(Task::BuildType::MEX))
+		return null;
+	const AIFloat3 at = task.GetBuildPos();
+	if (OnMap(at) && (ThreatFor(unit, at) > CON_THREAT_VETO))
+		return null;
+	return task;
+}
+
 IUnitTask@ FrontDefenceOffer(IUnitTask@ task)
 {
 	// Default OFF: the refusal this addresses is not the binding one -- see

@@ -620,9 +620,35 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 	const float rangeMod = manager->GetCircuit()->GetTunable("apex_range_mod", STANDOFF_RANGE_MOD);
 	const bool losStandoff = manager->GetCircuit()->GetTunable("apex_los_standoff", 1.f) > 0.f;
 
+	// apexearth: "certain lower hp units have to be way more careful than
+	// high hp units." Baseline is THIS squad's own average health, not a
+	// global constant -- whatever mix of units is actually fighting together
+	// sets its own reference point, so a Hound reads as fragile next to
+	// Mammoths without a per-unit-type special case, and the same code path
+	// covers any low-HP def on any faction.
+	float squadHealthSum = 0.f;
+	int squadUnitCount = 0;
+	for (const auto& kv : rangeUnits) {
+		CCircuitDef* def = (*kv.second.begin())->GetCircuitDef();
+		if (def != nullptr) {
+			squadHealthSum += def->GetHealth() * kv.second.size();
+			squadUnitCount += (int)kv.second.size();
+		}
+	}
+	const float avgSquadHealth = (squadUnitCount > 0) ? (squadHealthSum / squadUnitCount) : 1.f;
+	const float fragileCap = manager->GetCircuit()->GetTunable("apex_fragile_cap", FRAGILE_CAP);
+	const float fragileScale = manager->GetCircuit()->GetTunable("apex_fragile_standoff_scale", FRAGILE_STANDOFF_SCALE);
+
 	int row = 0;
 	for (const auto& kv : rangeUnits) {
 		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
+		// >1 only when this row is below the squad's own average health;
+		// clamped at 1 so an above-average (tankier) row is never given LESS
+		// caution than the flat baseline -- this only ever adds standoff, it
+		// never removes it.
+		const float fragility = (rowDef != nullptr)
+				? std::min(std::max(avgSquadHealth / std::max(rowDef->GetHealth(), 1.f), 1.f), fragileCap)
+				: 1.f;
 		// Each row stands at ITS OWN weapon range. A fraction of 0.8 walked every row
 		// 20% inside its reach, which throws away the whole point of keeping the
 		// long-ranged units in an outer row -- a Banisher at 800 was standing at
@@ -718,7 +744,29 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		const bool outranged = !isArty && !powerDominant && !glassCannon
 				&& (edef != nullptr) && (edef->GetMaxRange() > kv.first);
 		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
-		const float range = standoff * rangeMod;
+		// A fragile row (below the squad's own average health) stands further
+		// out on top of the normal 90% margin -- e.g. fragility==2 (half the
+		// squad's average HP) at the default scale adds 25% more standoff.
+		float range = standoff * rangeMod * (1.f + (fragility - 1.f) * fragileScale);
+		// apexearth, watching, same night as the LOS-static fix: "I see rocket
+		// bots walk into turrets and die too... hounds still make this
+		// mistake" -- reported AFTER that fix was live, so this is a second,
+		// distinct cause. When `!outranged` (our row's raw range >= the
+		// target's), standoff is OUR OWN range with no reference to theirs, and
+		// rangeMod then shrinks it by 10% unconditionally. A target whose range
+		// sits within that 10% band -- corhlt 620 vs Hound's 650, 650*0.9=585 --
+		// reads as "outranged=false" (we do out-range it) yet the shrunk
+		// standoff (585) lands INSIDE its 620 reach. Floor at the target's own
+		// range only in this genuinely-outranging branch; the intentional dives
+		// (isArty/powerDominant/glassCannon, which route standoff through
+		// kv.first for the opposite reason -- closing on purpose) are
+		// unaffected because none of those leave `weOutrange` true without also
+		// being a real range edge.
+		const bool weOutrange = !outranged && (edef != nullptr) && (edef->GetMaxRange() <= kv.first)
+				&& !isArty && !powerDominant && !glassCannon;
+		if (weOutrange) {
+			range = std::max(range, edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN);
+		}
 		// NOTE: 1st unit in 1st row will scout, ignoring GetTarget()->IsInRadarOrLOS()
 		//       as unit may wobble back and forth without firing if turret turn is slow.
 		// Floored at `range`. apexearth, watching Hounds (650 weapon range,
@@ -784,7 +832,11 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		CThreatMap* angleThreatMap = manager->GetCircuit()->GetThreatMap();
 		const float threat1 = angleThreatMap->GetThreatAt(testUnit, newPos1);
 		const float threat2 = angleThreatMap->GetThreatAt(testUnit, newPos2);
-		const float threatSpread = std::max(threat1, threat2) * 0.1f;
+		// A fragile row needs a smaller threat gap to prefer the safer side --
+		// same 10% baseline, tightened by the row's own fragility so a Hound
+		// picks the safer angle more decisively than a Mammoth on the same pair
+		// of candidate spots.
+		const float threatSpread = std::max(threat1, threat2) * (0.1f / fragility);
 		const bool flipForSafety = (std::fabs(threat1 - threat2) > threatSpread) && (threat2 < threat1);
 		const bool flipForDistance = (std::fabs(threat1 - threat2) <= threatSpread)
 				&& (testPos.SqDistance2D(newPos1) > testPos.SqDistance2D(newPos2));

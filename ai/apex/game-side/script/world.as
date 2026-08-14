@@ -12,29 +12,15 @@ bool OnMap(const AIFloat3& in p)
 		&& (p.x < float(AiTerrainWidth())) && (p.z < float(AiTerrainHeight()));
 }
 
-// Does apex's own game-side behaviour run at all?
-//
-// Everything this variant adds on top of stock is TEAM machinery: pool the
-// team's metal behind one elected tech lead, hold the followers back to defend,
-// elect an eco lead and an air slot, run a shared front line. With no allies
-// there is nobody to pool from, nobody to hold ground and no line to share, and
-// the machinery runs against itself -- see CHANGES.md 2026-08-10 for the
-// per-layer measurement that establishes the size of it.
-//
-// `apex_solo_stock=0` restores the old behaviour for an A/B.
-// Cached: GetTeamIds is an engine callback and this is read on every task
-// decision. The ally roster is fixed for the game, so the first answer with a
-// populated roster is the answer.
-int gApexActive = -1;
-
+// Does apex's own game-side behaviour run at all? Always yes -- apex ran its
+// own logic only when it had allies (2026-08-10), on the measurement that a
+// solo game had nobody to pool metal with, hold ground for, or share a front
+// line with. Removed 2026-08-14: that measurement predates multiple crash
+// fixes, the commander opening fixes, and squad cohesion/positioning fixes,
+// and apexearth wants apex running its own logic regardless of ally count.
+// Every call site still calls this rather than being ripped out directly, so
+// reinstating the gate (if ever warranted) is a one-function change again.
 bool ApexActive()
 {
-	if (gApexActive < 0) {
-		array<Id>@ mates = ai.GetTeamIds();
-		if ((mates is null) || (mates.length() == 0))
-			return true;   // roster not up yet; do not latch on it
-		gApexActive = ((mates.length() > 1)
-			|| (ai.GetTunable("apex_solo_stock", 1.f) <= 0.f)) ? 1 : 0;
-	}
-	return gApexActive == 1;
+	return true;
 }

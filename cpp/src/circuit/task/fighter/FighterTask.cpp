@@ -6,6 +6,7 @@
  */
 
 #include "task/fighter/FighterTask.h"
+#include "task/fighter/SquadTask.h"  // OUTRANGED_SAFETY_MARGIN
 #include "task/RetreatTask.h"
 #include "map/InfluenceMap.h"
 #include "map/ThreatMap.h"
@@ -267,7 +268,16 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
 	const float rangeMod = circuit->GetTunable("apex_range_mod", STANDOFF_RANGE_MOD);
 	const bool seesTarget = (circuit->GetTunable("apex_los_standoff", 1.f) > 0.f)
 			&& !isStatic && GetTarget()->IsInRadarOrLOS();
-	float range = cdef->GetMaxRange() * rangeMod;
+	// Same gap ISquadTask::Attack had before the 2026-08-14 outrange-margin fix
+	// (SquadTask.cpp), but wider here: this path had no reference to the
+	// target's own range AT ALL, so a lone/scout unit facing anything within
+	// (or above) its own weapon range -- not just the 90-100% band -- shrunk
+	// straight past its target's reach with nothing to stop it.
+	const bool outranged = (edef != nullptr) && (edef->GetMaxRange() > cdef->GetMaxRange());
+	float range = (outranged ? edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN : cdef->GetMaxRange()) * rangeMod;
+	if (!outranged && (edef != nullptr)) {
+		range = std::max(range, edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN);
+	}
 	if (!seesTarget) {
 		range = std::min(range, cdef->GetLosRadius() * rangeMod);
 	}

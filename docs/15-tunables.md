@@ -99,12 +99,6 @@ are expected to be re-landed one at a time, and each will want its tunable back.
 `apex_attack_minpower_threat`, `apex_scout_threat` and `apex_reclaim_energy_dist`
 live in MilitaryManager/EconomyManager and are unaffected.
 
-## Added 2026-08-10
-
-| name | default | read by | what it does |
-|---|---|---|---|
-| `apex_solo_stock` | 1 (on) | AngelScript `script/world.as` `ApexActive()` | 0 makes apex run its own game-side rules even with no allies, i.e. the pre-2026-08-10 behaviour |
-
 ## The raid-the-economy set
 
 Added alongside the raiding work; verified 2026-08-09 by reading every call

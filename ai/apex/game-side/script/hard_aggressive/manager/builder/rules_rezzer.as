@@ -73,6 +73,55 @@ IUnitTask@ RezzerEatCorpse(CCircuitUnit@ unit)
 	return null;
 }
 
+// The floor for a rez bot that has nothing else claiming it: repair a nearby
+// damaged mobile unit rather than stand still. Rez bots are explicitly a
+// rez/repair/reclaim unit (armrectr/cornecro/legrezbot's own tooltip), but
+// nothing in the engine ever proposes this for them -- CBuilderManager only
+// registers a damagedHandler for builders/rez-bots taking damage themselves
+// and for static structures (BuilderManager.cpp's InitHandlers), never for an
+// ordinary mobile combat unit, so no REPAIR task is ever created for one no
+// matter how long it stands there hurt. Reuses WRECK_SEARCH above, the same
+// bot's own existing search reach, rather than a new number -- Assist::
+// ASSIST_RANGE would fit as well but assist.as is included after builder.as
+// (see main.as), so its constants are not visible here yet.
+//
+// Ranked ABOVE the tree-reclaim floor (IdleFeatureReclaim in maketask.as):
+// keeping an existing unit alive is worth more than a handful of scrap metal,
+// and this returns null immediately whenever nothing needs it, so it never
+// competes with real work above it in the pipeline.
+int gNextRezRepair = 0;
+
+IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
+{
+	if (!IsRezzer(unit) || (ai.frame < gNextRezRepair))
+		return null;
+	gNextRezRepair = ai.frame + REZ_WRECK_PERIOD;
+
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	array<CCircuitUnit@>@ hurt = ai.GetOwnDamagedNear(here, WRECK_SEARCH);
+	if ((hurt is null) || (hurt.length() == 0))
+		return null;
+
+	CCircuitUnit@ best = null;
+	float bestDist = WRECK_SEARCH;
+	for (uint i = 0; i < hurt.length(); ++i) {
+		CCircuitUnit@ u = hurt[i];
+		if ((u is null) || (u is unit))
+			continue;
+		const float dist = here.distance2D(u.GetPos(ai.frame));
+		if (dist >= bestDist)
+			continue;
+		bestDist = dist;
+		@best = u;
+	}
+	if (best is null)
+		return null;
+	if (ThreatFor(unit, best.GetPos(ai.frame)) > CON_THREAT_VETO)
+		return null;
+
+	return aiBuilderMgr.Enqueue(TaskB::Repair(Task::Priority::NORMAL, best));
+}
+
 IUnitTask@ RezzerPreemptReclaim(CCircuitUnit@ unit, bool isComm, IUnitTask@ task)
 {
 	// Reached by an idle builder, and by one whose only offer was refused above.

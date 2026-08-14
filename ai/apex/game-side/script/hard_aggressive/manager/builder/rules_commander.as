@@ -218,11 +218,48 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				if (flee !is null)
 					return flee;
 			} else {
-				// Economy before factory, once actually safe: a rebuilt
-				// factory with no income behind it just gets lost the same
-				// way again. Bounded to OpeningMexReach (same as opening step
-				// 1) rather than FindOpenMexSpot's whole-map search, so a
-				// distant mex cannot starve the factory rebuild below forever.
+				// ALREADY WALKING TO OR BUILDING THE FACTORY: hold it, before
+				// trying anything else. Without this, every Reevaluate ran the
+				// mex/rebuild logic below from scratch off the commander's
+				// CURRENT (moving) position, FindOpenMexSpot always found a
+				// fresh in-reach spot -- the OpeningMexReach bound stops one
+				// jump, not a chain -- and the factory request further down was
+				// made once and then abandoned before the commander ever
+				// reached the site. See ISSUES.md 2026-08-14, "commander
+				// chains nearby mexes forever, factory never requested".
+				IUnitTask@ held = unit.task;
+				if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
+					&& (held.GetBuildType() == Task::BuildType::FACTORY))
+					return held;
+
+				// STEP 3 OUTRANKS ANOTHER MEX, once safe and income is judged
+				// sufficient (OpeningNeedsEconomy released): request the
+				// factory FIRST, and only fall to mex if none is buildable
+				// right now. HaveAnyFactory counts FINISHED factories, so
+				// while the first lab is still a nanoframe this branch stays
+				// true; the task-count check stops a second rebuild request
+				// once one is in flight (caught by the held-check above once
+				// it is actually assigned to this unit).
+				CCircuitDef@ lab = Factory::T1BotLab();
+				if ((lab !is null) && lab.IsAvailable(ai.frame)
+					&& (lab.count <= 0)
+					&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) <= 0))
+				{
+					IUnitTask@ rebuild = Requests::Take(unit, lab,
+							Task::BuildType::FACTORY, Task::Priority::HIGH,
+							unit.GetPos(ai.frame), 0.f, 0.f);
+					if (rebuild !is null) {
+						AiLog(Factory::T() + "apex: commander rebuilding a factory -- we have none");
+						return rebuild;
+					}
+				}
+
+				// No factory buildable right now (def unavailable, or the
+				// request pool declined): keep the commander on economy
+				// rather than idle. Bounded to OpeningMexReach (same as
+				// opening step 1) rather than FindOpenMexSpot's whole-map
+				// search, so a distant mex cannot starve the factory request
+				// above forever.
 				const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
 				if (spot >= 0) {
 					IUnitTask@ mex = aiEconomyMgr.EnqueueMexAt(unit, spot);
@@ -232,23 +269,6 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 						AiLog(Factory::T() + "apex: commander economy-first, no factory yet -- mex before rebuild");
 						return mex;
 					}
-				}
-			}
-
-			// HaveAnyFactory counts FINISHED factories, so while the first lab
-			// is still a nanoframe this branch stays true; the task-count check
-			// stops it re-enqueuing another rebuild for the same gap.
-			CCircuitDef@ lab = Factory::T1BotLab();
-			if ((lab !is null) && lab.IsAvailable(ai.frame)
-				&& (lab.count <= 0)
-				&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) <= 0))
-			{
-				IUnitTask@ rebuild = Requests::Take(unit, lab,
-						Task::BuildType::FACTORY, Task::Priority::HIGH,
-						unit.GetPos(ai.frame), 0.f, 0.f);
-				if (rebuild !is null) {
-					AiLog(Factory::T() + "apex: commander rebuilding a factory -- we have none");
-					return rebuild;
 				}
 			}
 		}

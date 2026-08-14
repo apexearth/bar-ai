@@ -279,6 +279,16 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	if ud == nil then
 		return
 	end
+	-- Per-building completion EVENT, not a periodic snapshot. dump() below only
+	-- fires every 2 game-minutes, so "what did we build in the first N minutes"
+	-- for an arbitrary N had to be read off the nearest snapshot. One line per
+	-- building gives an exact frame, so any window can be answered precisely.
+	if ud.isBuilding then
+		local f = Spring.GetGameFrame()
+		Spring.Echo(string.format("[BARAI_BUILD] team=%d ally=%d frame=%d min=%.2f unit=%s cost=%d",
+			unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
+			f, f / 1800, ud.name, ud.metalCost or 0))
+	end
 	if isJammerTower(ud) then
 		jamTowers[unitTeam] = (jamTowers[unitTeam] or 0) + 1
 	end

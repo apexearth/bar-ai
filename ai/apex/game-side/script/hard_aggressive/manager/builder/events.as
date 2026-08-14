@@ -26,6 +26,17 @@ void AiTaskAdded(IUnitTask@ task)
 		AiLog(Factory::T() + "apex: energy-task-added " + task.buildDef.GetName()
 			+ " at=" + int(at.x) + "," + int(at.z));
 	}
+	// CONVERT was invisible here entirely -- 2026-08-14, a match showed HomeEnergy/
+	// EcoConverters creating dozens of armmmkr requests (Requests::Take's own "new"
+	// counter) with the def's .count staying at 0 the whole game and energyExcess
+	// pinned at the storage ceiling for 12+ minutes, but no log said whether each
+	// request was ever even assigned a worker before disappearing. Same shape as the
+	// reactor log above, unconditional (converters have no metal floor worth gating on).
+	if (bt == int(Task::BuildType::CONVERT) && (task.buildDef !is null)) {
+		const AIFloat3 at = task.GetBuildPos();
+		AiLog(Factory::T() + "apex: convert-task-added " + task.buildDef.GetName()
+			+ " at=" + int(at.x) + "," + int(at.z));
+	}
 	if (bt == Task::BuildType::MEXUP) {
 		gMexUpPos = task.GetBuildPos();
 		gMexUpActive = true;
@@ -122,6 +133,20 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 			+ " workers=" + ((had !is null) ? had.length() : 0)
 			+ " unit=" + (hasWorker ? int(had[0].id) : -1)
 			+ " at=" + int(at.x) + "," + int(at.z));
+	}
+	// Paired with convert-task-added above; only the >=2000-metal reactor tier
+	// was previously logged, leaving converters (the def actually implicated in
+	// the 2026-08-14 "energy wasted, nothing converts" investigation) invisible.
+	if (bt == int(Task::BuildType::CONVERT) && (task.buildDef !is null)) {
+		array<CCircuitUnit@>@ cHad = task.GetUnits();
+		const AIFloat3 cAt = task.GetBuildPos();
+		const bool cHasWorker = (cHad !is null) && (cHad.length() > 0) && (cHad[0] !is null);
+		AiLog(Factory::T() + "apex: convert-task-removed " + task.buildDef.GetName()
+			+ " done=" + (done ? "1" : "0")
+			+ " hadNanoframe=" + ((task.target !is null) ? "1" : "0")
+			+ " workers=" + ((cHad !is null) ? cHad.length() : 0)
+			+ " unit=" + (cHasWorker ? int(cHad[0].id) : -1)
+			+ " at=" + int(cAt.x) + "," + int(cAt.z));
 	}
 	Requests::Forget(task);
 	if (bt == Task::BuildType::MEXUP) {

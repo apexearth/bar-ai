@@ -236,6 +236,16 @@ share a shape: the thing didn't work, and nothing said so.
   picks the highest by `VersionCompare` — `stable` beats `apex`. Nothing logs a
   problem; the AI simply plays like stock. See "Three axes" above, and test with
   `run_match.py --drop-ai-version`.
+- **A plain 1v1 (no allies) used to silently run stock, on purpose — REMOVED
+  2026-08-14.** `world.as`'s `ApexActive()` used to latch false whenever the
+  AI's own ally team had no teammates (`mates.length() <= 1`), which caused
+  `Builder::MakeTaskInner` and five other call sites to fall through to stock
+  CircuitAI logic for the whole game — measured 2026-08-14 as zero `apex:` log
+  lines over 4628 frames in a watched 1v1. apexearth judged that measurement
+  stale against everything fixed since and had the gate removed outright:
+  `ApexActive()` now unconditionally returns `true`, the `apex_solo_stock`
+  tunable is gone, and apex runs its own logic in every game regardless of
+  ally count. Confirm apex is running with `grep "apex:" infolog.txt`.
 - **An AngelScript compile error disables the whole variant, and the match still
   runs.** It plays as near-stock and reports a normal result. A 12-minute "the
   rush never fires" investigation was really a one-line syntax error. **Always**

@@ -113,6 +113,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// through to `if (task !is null) return task;` further down, which returns
 	// any leftover engine offer -- mex included -- once nothing else claimed the
 	// builder. That is the whole of "last resort"; no dedicated rule is needed.
+	//
+	// EXCEPT when the engine's offer is ALREADY a mex: see MexOffer in
+	// rules_offer.as for why Brain::Decide cannot be trusted to rank a home mex
+	// at all in that case, let alone correctly.
+	@t = MexOffer(task, unit);
+	if (t !is null)
+		return t;
 
 	// STEP 2 OF THE OPENING, AND ONLY DURING IT.
 	//
@@ -226,6 +233,24 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 	@t = TidyObsolete(unit, isComm);
+	if (t !is null)
+		return t;
+
+	// Rez bots only, and above the tree-reclaim floor below: a nearby damaged
+	// unit that keeps existing is worth more than a handful of scrap metal, and
+	// nothing above this claimed the bot, so there is no real work to displace.
+	// See RezzerRepairNearby's own comment for why the engine never proposes
+	// this on its own.
+	@t = RezzerRepairNearby(unit);
+	if (t !is null)
+		return t;
+
+	// THE FLOOR: task is null, we are past every productive rule above, and the
+	// unit is otherwise going to stand still. Reclaiming a tree is strictly
+	// better than idling -- see IdleFeatureReclaim's comment in reclaim.as for
+	// why the metal-value floors above (ScavengeWrecks, TidyObsolete) never
+	// covered this case.
+	@t = IdleFeatureReclaim(unit, isComm);
 	if (t !is null)
 		return t;
 

@@ -106,6 +106,20 @@ IUnitTask@ HoldWorkInProgress(CCircuitUnit@ unit, bool isComm)
 		IUnitTask@ busy = unit.task;
 		if ((busy !is null) && (SiteBuildName(busy) != ""))
 			return busy;
+		// RECLAIM is deliberately excluded from SiteBuildName (see its comment),
+		// which left it unheld here: AbandonUnsafeSite already re-checks safety
+		// for a reclaim every tick and refuses it explicitly when it goes hot, so
+		// a reclaim that survives that check is exactly as "still wanted" as a
+		// mex or an energy building is. Without this, a builder mid-reclaim fell
+		// through every tick to a fresh DefaultMakeTask offer, which differs in
+		// build type from RECLAIM and so swaps the unit off the walk -- the
+		// mex-A/mex-B flip-flop apexearth watched live, just as documented at
+		// the top of AiMakeTask for the commander's own hold.
+		if ((busy !is null) && (busy.GetType() == Task::Type::BUILDER)
+			&& (busy.GetBuildType() == Task::BuildType::RECLAIM))
+		{
+			return busy;
+		}
 	}
 	return null;
 }

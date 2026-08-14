@@ -5,6 +5,391 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
+## OPEN: rez-bot repair fix lands only after a DLL rebuild+deploy -- not yet live-confirmed (2026-08-14)
+
+apexearth, live: "we have a lot of rezbots standing around doing nothing while
+units next to them need to be repaired." Root cause and fix in
+`changes/2026-08-14.md`: `CBuilderManager` never registers a `damagedHandler`
+for ordinary mobile combat units (only for builders/rez-bots' own damage and
+for static structures), so no REPAIR task is ever created for a hurt unit in
+the field. Added `CCircuitAI::GetOwnDamagedNear` (C++,
+`cpp/src/circuit/CircuitAI.cpp`/`.h` + `InitScript.cpp` binding) and
+`Builder::RezzerRepairNearby` (AngelScript, `manager/builder/rules_rezzer.as`,
+wired into `manager/builder/maketask.as`). **This needs a `SkirmishAI.dll`
+rebuild (`docs/06-building-the-dll.md`) and `deploy_ai.py deploy apex` before
+it does anything** -- the AngelScript half is inert until the new
+`ai.GetOwnDamagedNear` binding actually exists in the running engine. Delete
+this entry once a rebuilt/deployed run shows rez bots picking up REPAIR tasks
+on damaged field units.
+
+---
+
+## OPEN: advanced converter (armmmkr) requested dozens of times, never completes once -- energy spills at the storage cap for 12+ minutes (2026-08-14)
+
+apexearth, live: "we have really stalled and it seems like we aren't making
+any energy." Measured from `matches/20260814-214851-...` (Apex/Armada vs
+BARb/Cortex, lost 26.6m): `[BARAI_STATS] team=0` `energyExcess` plateaus at
+114,985-124,055 (storage cap) from minute 14 to 26 while `energyProduced`
+climbs from 185k to 1.35M -- almost everything made past minute 16 is spilled.
+`allBuilt=` never once includes `armmmkr` for the whole match despite `apex:
+home energy armmmkr` (a genuine NEW creation, confirmed via the `created`
+flag in `Requests::Take`) firing 18 times in the throttled log and a
+cumulative `new=` counter reaching 99 by minute 16, with zero `covered`/
+`full`/`claim` events for the def. One requesting unit proposed 3 different
+armmmkr sites within 6 seconds. `Requests::InFlight(armmmkr)` samples at
+exactly 1 the entire match (never 2+) even as the income-derived cap grows to
+17. Compare an earlier same-night match (`20260814-163003`) where armmmkr DOES
+complete (2,660 metal invested) and InFlight genuinely reaches 2-4
+concurrently.
+
+**Ruled out** (see `changes/2026-08-14.md` for the full trace): `MexOffer`
+(only screens an already-MEX-typed offer), `HoldWorkInProgress`'s RECLAIM
+extension (additive; CONVERT was already held via `SiteBuildName`),
+`forcedFusion` (doesn't touch the `isConv` branch HomeEnergy takes here), and
+a threat-veto misread (zero `con-veto abandon ... convert` lines in the log).
+
+**Not yet isolated:** why each armmmkr request dies before completing one
+unit -- killed builder, an engine-side site-validity rejection after the
+script's speculative grid reservation, or something else. The
+`AiTaskAdded`/`AiTaskRemoved` lifecycle log was scoped to reactor-tier ENERGY
+(>=2000 metal) only, so CONVERT tasks were invisible to it; extended
+(`manager/builder/events.as`, `apex: convert-task-added`/`convert-task-
+removed`, fields `done`/`hadNanoframe`/`workers`/`unit`/`at`) as a pure
+diagnostic, no behaviour change. **Needs one more watched/completed match with
+this new logging** to read `hadNanoframe` on the removed events and settle
+whether this is combat losses (expected, not a bug) or a genuine construction
+mechanism failure (a real regression).
+
+---
+
+## PATCHED, NOT YET LIVE-CONFIRMED: builder mid-walk thrashing + no idle-reclaim floor (2026-08-14)
+
+apexearth, watching Altair_Crossing_V4.1: "construction bots walking around,
+then turning around and going the other way, walking towards a mex, stopping,
+going somewhere else... sometimes they'll just stand still for a while... in
+this map there are trees, we could at least reclaim trees." Two mechanisms,
+both in `manager/builder/`:
+
+- `HoldWorkInProgress` (`rules_hold.as`) is the general-path re-election guard
+  but gated on `SiteBuildName(busy) != ""`, and `SiteBuildName`
+  (`sitesafety.as:245`) deliberately excludes `Task::BuildType::RECLAIM` -- so
+  a builder mid-reclaim was never held, fell through to a fresh
+  `DefaultMakeTask` offer every tick, and got swapped off the walk by
+  `IBuilderTask::Reevaluate` whenever the offer's build type differed. Fixed
+  by holding RECLAIM the same way (already re-verified safe every tick by
+  `AbandonUnsafeSite`).
+- No rule proposed reclaiming neutral map features (trees) at all --
+  `ScavengeWrecks`/`TidyObsolete` only cover rich wreck piles and our own
+  obsolete buildings, both gated well above a tree's metal value by design.
+  Added `IdleFeatureReclaim` (`reclaim.as`), wired into `maketask.as`'s
+  genuinely-idle floor (below `TidyObsolete`, non-commander only), reusing
+  `EnqueueWreckReclaim` with `minMetal=1` instead of new scoring logic.
+
+Not yet run against a match or watched live -- `tools/check.py` passes, no
+match launched per instruction (a watch game may have been active). Delete
+this entry once a watched game shows steady mex walks and idle builders
+eating nearby trees instead of standing still.
+
+## FIXED (mechanism confirmed live) but SYMPTOM NOT YET RESOLVED: solo tower-dive via LOS-confirmation fallback (2026-08-14)
+
+apexearth, watching, same session as the fragility fix below: "I'll have one
+hound standing outside range shooting at a tower, then the next will walk
+into range of that tower and shoot at it and die." Root cause in
+`CCircuitUnit::Attack(pos, enemy, isGround, isStatic, timeout)`,
+`cpp/src/circuit/unit/CircuitUnit.cpp:530-575`: when `enemy->IsInLOS()`
+reads false (common for a unit correctly holding standoff at its own weapon
+range, which routinely exceeds its sight range -- Hound 650 vs ~400), the
+function queues `CmdFightTo(enemy->GetPos())`, walking the unit to the
+target's OWN position rather than the standoff ring. Intended for mobile
+radar-only ghosts; fires just as often against static towers, whose
+position needs no LOS to confirm. Fixed by exempting `isStatic` targets
+from the LOS requirement (`CircuitUnit.cpp:551-552`).
+
+**This was built, deployed and watched (DLL timestamp confirmed built and
+deployed before the match started), and the symptom was reported again in
+that exact watch**: "I see rocket bots walk into turrets and die too...
+they out range these things but walk into their death... hounds still make
+this mistake." So this fix is real and live, but was not the only cause --
+see the next entry for the second mechanism found and patched. Do not
+re-diagnose THIS mechanism; the LOS-reissue path is confirmed fixed. Delete
+this entry once a watch confirms the second fix (below) closes the symptom.
+
+## PATCHED, NOT YET LIVE-CONFIRMED: standoff margin could land inside a near-parity tower's range (2026-08-14)
+
+Second mechanism behind the same "Hound/rocket bot walks into tower range and
+dies" report, found AFTER the LOS-confirmation fix above was already live and
+still reproduced. In `ISquadTask::Attack`, `SquadTask.cpp:744-746` (before
+this fix): when a row genuinely out-ranges its target (`!outranged` branch),
+`standoff` was set to the row's OWN weapon range with no reference to the
+target's range at all, then shrunk 10% by `STANDOFF_RANGE_MOD`. Any target
+whose range sits within 90-100% of the row's own range then reads as
+"outranged" while the shrunk stand-off lands inside its reach anyway --
+confirmed with `tools/unitdef.py`: Hound (`armfido`, 650 range) vs `corhlt`
+(Warden tower, 620 range): 650*0.9=585 < 620. Fixed by flooring the computed
+range at the target's own range (`OUTRANGED_SAFETY_MARGIN`, 1.1x) whenever
+this "we out-range them" branch applies and none of the intentional-dive
+exemptions (`isArty`/`powerDominant`/`glassCannon`) do.
+`cpp/src/circuit/task/fighter/SquadTask.cpp:744-763`. Rebuilt clean via
+docker, `sync_cpp.py status` confirms `cpp/`/`vendor` match. **Not deployed,
+no match run** -- a watch game was in progress. Delete this entry once a
+watched game with Hounds/Rocketeers vs towers shows standoff holding outside
+tower range and the "walk in and die" report stops recurring. If it recurs a
+THIRD time, check whether Hound/Rocketeer squads route through
+`ISquadTask::Attack` at all (task-type assignment in `behaviour.json`) before
+patching this file again.
+
+## THIRD PASS, SAME REPORT: re-audited standoff/order path end-to-end, found no bypass for `CAttackTask` -- one narrower, real gap fixed in the SOLO path (2026-08-14)
+
+apexearth pushed back on the pass-2 fix above before it was even deployed:
+"that's probably not the real cause because I see them walk much closer than
+what you're talking about" -- the 35-elmo band pass 2 closed is far smaller
+than what he describes. Also clarified intent: `STANDOFF_RANGE_MOD=0.90` is
+deliberate (a buffer against range-flicker), not a bug to relax.
+
+Re-read `ISquadTask::Attack` end to end and `CCircuitUnit::Attack`'s non-melee
+branches (`SquadTask.cpp:576-943`, `CircuitUnit.cpp:530-582`) looking for an
+ORDER PATH that bypasses the ring position entirely, not another formula
+error:
+- For a static target, non-ground, non-melee (Hound/Rocketeer vs. a tower):
+  `prefer` is unconditionally true (the pass-1 fix), so `CCircuitUnit::Attack`
+  issues ONLY `CmdMoveTo(pos)` with `pos` = the ring standoff point computed in
+  `SquadTask.cpp`. No `unit->Attack(enemy->GetUnit())`, no `CmdFightTo(enemy->
+  GetPos())` reaches the engine for this exact case -- confirmed by re-reading
+  the branch, not assumed.
+- No AngelScript path issues a raw attack-move at a tower's own position:
+  grepped `manager/military/**/*.as` for `Attack(`/`FightTo`/`MoveTo` --
+  the only hits are `unblock.as` (stuck-unit deconfliction, unrelated) and
+  `posture.as`/`hooks.as` (no direct order issuance). No "siege a defended
+  position" task type exists at script level; `killingblow.as` only sets
+  posture, never issues unit orders.
+- `CMilitaryManager::DefaultMakeTask` (`MilitaryManager.cpp:2049-2126`) routes
+  every unit with role `assault` (armfido/Hound, armrock/Rocketeer both are)
+  to `IFighterTask::FightType::ATTACK` -> `CAttackTask` -- the SAME squad path
+  already audited. `CScoutTask` is reachable only via `IsRoleScout()`, which
+  neither unit has.
+- The travel-phase path BEFORE `ENGAGE` triggers (`CAttackTask::Update`,
+  `AttackTask.cpp:452-546`) already stops at `pathRange = highestRange - eps`
+  from the target and is threat-weighted (`ATTACK_THREAT_MOD`, `threatCeiling`
+  from squad power) -- consistent with "stop outside range," not a dive.
+
+**Found one real, additional gap, but in the wrong task for this report.**
+`IFighterTask::Attack` (`FighterTask.cpp:225-277`, the SOLO/scout standoff
+path used only by `CScoutTask`) computed `range = cdef->GetMaxRange() *
+rangeMod` with **no reference to the target's range at all** -- not even the
+90-100% band pass 2 fixed in the squad path, but ANY degree of outranging.
+Fixed to mirror the squad path's outrange floor (`FighterTask.cpp:267-276`,
+reuses `OUTRANGED_SAFETY_MARGIN` from `SquadTask.h`). This is real and worth
+keeping, but Hound/Rocketeer are role `assault`, not `scout`, so they never
+go through this function -- **this fix does not explain the reported
+symptom** and should not be presented as pass 3's answer to it.
+
+**No third mechanism found in `CAttackTask`'s own path with the confidence of
+passes 1-2.** Two honest possibilities left, neither confirmed:
+1. apexearth's comment may describe the pre-pass-1/2 symptom from memory/
+   general impression rather than a fresh observation against a build with
+   both fixes deployed -- pass 2 was explicitly not yet deployed when he made
+   the remark. Needs a genuinely fresh watch with both fixes live before
+   concluding there IS a third bug.
+2. If it recurs after that watch: the travel-phase pathfinding query
+   (`AttackTask.cpp:536-540`) is threat-weighted, not threat-blocked below its
+   ceiling -- on a map with a narrow approach (Altair_Crossing was the map in
+   play), the shortest-cost route to the correct, far standoff point could
+   legitimately pass transiently closer to a tower than the final position,
+   which would look identical to "walked into range" on screen even though
+   the unit does not linger there. Add a one-shot LOG of `curPos` distance
+   to target the first frame `ENGAGE` triggers to distinguish "stood at the
+   wrong distance" from "passed through on the way to the right one."
+
+Built via docker (`FighterTask.cpp.obj` recompiled, linked clean). **Not
+deployed, no match run** per instruction. Delete this entry, and the pass-2
+entry above, only once a watch with both live shows Hounds/Rocketeers holding
+outside tower range with no dive.
+
+## PATCHED, NOT YET LIVE-CONFIRMED: fragile-unit standoff/angle scaling (2026-08-14)
+
+apexearth, watching, after the standoff/LOS-floor/ring-safety fix already
+landed the same night: "Hounds still walk much too close to enemies. They
+aren't tough - they really need to be more careful with themselves...
+certain lower hp units have to be way more careful than high hp units."
+Confirmed no separate kiting/skirmisher code path exists that the earlier fix
+missed -- everything funnels through `ISquadTask::Attack`
+(`SquadTask.cpp`)/`IFighterTask::Attack`, the same place already touched --
+but the standoff margin (`STANDOFF_RANGE_MOD`) and the ring-safety threat
+threshold were both FLAT constants, identical for a glass-cannon Hound and a
+tanky Mammoth. `GetRetreat()` is per-unit-def but hand-set in JSON, not
+derived from HP.
+
+Added a `fragility` ratio per row (`avgSquadHealth / rowDef->GetHealth()`,
+squad-relative baseline, clamped `[1, FRAGILE_CAP]`) applied to both the
+standoff distance and the ring-safety threshold in `ISquadTask::Attack`.
+Compiled clean via the docker toolchain, `sync_cpp.py status` confirms
+`cpp/`/`vendor` match. **Not deployed, no match run** (explicit instruction --
+a watch game may have been running). Needs: deploy once the console is free,
+then a self-play test with Armada (Hound actually in the roster) confirming
+(a) `fragility` actually deviates from 1 in real mixed squads rather than
+squads usually being HP-uniform by weapon-range grouping, and (b) K/D/static-
+kills move the same direction as the earlier standoff fix did. See
+`changes/2026-08-14.md` for the full mechanism and formula.
+
+## PATCHED, NOT YET LIVE-CONFIRMED: Sharpshooter (armsnipe, anti-heavy "sniper") had a zeroed factory ratio through tier1 (2026-08-14)
+
+apexearth, watching a 1v1 (Apex/Armada vs BARb/Cortex): "I don't see us
+making snipers, just sprinters hounds and fatboys... Enemy has us countered
+... we don't have the appropriate unit types to counter their mammoths
+(snipers)." Confirmed via `tools/unitdef.py`: Sprinter=`armfast`,
+Hound=`armfido`, Fatboy=`armfboy`, Mammoth=`corsumo` (Cortex, role `heavy`),
+and the unit he means by "sniper" is `armsnipe` ("Sharpshooter"/"Sniper
+Bot", role `anti_heavy_ass`) -- all from Armada's `armalab` (T2 bot lab).
+`response.json`'s `anti_heavy_ass` entry already targets `heavy` at
+importance 20 (the highest in the table), so the response side was not the
+gap. Mechanism: `factory.json:67-68`'s `armalab` land/water ratio tables had
+`armsnipe` at 0.00 for BOTH tier0 and tier1 (income < 30), while Sprinter/
+Hound/Fatboy -- the three units he actually saw -- are all nonzero there.
+Same shape as the `armpw`-raider zero already documented in CLAUDE.md. Patched:
+raised `armsnipe` tier1 to 0.05 (land and water, matching `armfboy`'s own
+tier1 share) and Legion's parity unit `legsrail` (`factory_leg.json:39`) tier1
+to 0.10 (matching `legbart`'s tier1 share); tier0 left at 0.00 on both. Not
+yet live-confirmed -- needs a fresh watched 1v1 where income sits 1-30 and the
+enemy fields heavy-role units, with `allBuilt=` showing nonzero `armsnipe`/
+`legsrail` metal, and `tools/composition.py` checked to confirm the raise
+didn't just cannibalize Sprinter/Hound/Fatboy's own share 1:1.
+
+## PATCHED, NOT YET LIVE-CONFIRMED: idle con next to an unclaimed home mex walked off instead (2026-08-14)
+
+apexearth, watching a 1v1: a con stood idle next to an unclaimed, undefended
+mex, then walked away to something else instead of claiming it. Mechanism:
+`FindOpenMexSpot` (`EconomyManager.cpp:1000`) -- the only mex search a script
+can run -- deliberately excludes ally-zone spots, so `brain.as`'s `MexWant`
+never proposes a home mex and cannot win it inside `Brain::Decide`'s ranking.
+`DefaultMakeTask`'s own native mex-task creation still covers home spots, but
+only on its own scan cadence, not synchronously with the builder's next
+election, and in that gap an optional want (gantry, nano, ...) can fire first
+since it does not depend on `FindOpenMexSpot`. Patched (`Builder::MexOffer`,
+`manager/builder/rules_offer.as`, called from `maketask.as:120`) to take the
+engine's own mex offer ahead of every optional want once it arrives, which
+narrows the window but does not close it -- there is still no script-side
+query for an ally-zone open mex spot, so the tick before the engine's scan
+reaches the spot remains exposed. Closing that fully needs a new/adjusted C++
+binding. Not yet re-watched live -- needs a fresh 1v1 to confirm the con no
+longer walks off an adjacent unclaimed home mex.
+
+UPDATE 2026-08-14 (later, live report from Altair_Crossing_V4.1): a
+DIFFERENT symptom that looks related but is not closed by `MexOffer` --
+apexearth built a tower right next to two mexes and neither got claimed for
+several minutes (too long to be the brief idle-then-walk-off window above).
+No infolog for that game was available to confirm from `con-veto`/`mex
+guard` lines (only stale/harness infologs on disk), so this is a code-level
+finding, not a live-confirmed one. Two candidate mechanisms, not
+distinguished without the actual log:
+1. `Builder::ThreatFor` (`manager/builder/sitesafety.as:173`) and
+   `MexHeat` (`sitesafety.as:134`) never give any credit for our OWN static
+   defence. `ThreatFor` vetoes on raw enemy proximity (`GetEnemyCostAt`,
+   LOS-gated, 600-elmo radius) or the real threat map; `MexHeat` only
+   relaxes the GEOMETRIC PastFront fallback, not a real reading. So a mex
+   next to a tower we just built precisely to secure that ground reads
+   exactly as hot as one with no defence at all, for as long as any enemy
+   unit loiters in LOS nearby -- which is plausible for many minutes at a
+   contested border tile, and is arguably the actual reason he put a tower
+   there. No existing helper reads "is there completed friendly defence
+   covering this point" to fold into the veto; adding one safely needs a
+   real match's `con-veto` log to confirm this is what actually fired
+   before writing it blind.
+2. Compounding possibility, not exclusive: if these two mex spots are
+   ally-zone (home) ground, `FindOpenMexSpot` excludes them from every
+   script query (see above), so they can ONLY ever be claimed on
+   `DefaultMakeTask`'s own native scan cadence -- if that scan simply never
+   re-offered these two particular spots in the observed window, no script
+   change closes it; only a C++ scan-cadence/binding fix would.
+Left unpatched: no log evidence to prefer one mechanism over the other, and
+guessing between an eco-facing threat-model change and a C++ binding change
+risks the wrong fix. Next watched game should grep for
+`apex: con-veto`/`apex: mex guard` near the two mex spots' timestamps to
+settle it.
+
+## PATCHED, NOT YET LIVE-CONFIRMED: first high-quality defence placed off in a map corner (2026-08-14)
+
+apexearth, watching a 1v1: the AI's first significant static defence (the
+big gun / T3 dome / line jammer -- everything `BorderPos` places, see
+`manager/military/territory.as:92`) appeared off in a corner of the map
+rather than at the base. Mechanism: `BorderPos` ranked owned metal clusters
+purely by `(cover + 1) * distanceToEnemy`, with no term for distance from
+home and no check that the site is actually on contested ground -- so a lone
+early forward expansion mex, merely happening to sit closer to
+`GetEnemyPos()` than the base does, beat the base outright while having zero
+cover. Patched to gate eligibility on `OnBorder` (the same contested-line
+test `RebuildFront`'s ray model already computes) once a front exists, and to
+fall back explicitly to `Builder::gHomePos` for rank 0 when it does not. Not
+yet re-watched live -- needs a fresh 1v1 to confirm the big gun/dome/jammer
+now lands at or near the base instead of a remote expansion.
+
+## PATCHED, NOT YET LIVE-CONFIRMED: commander chains nearby mexes forever, factory never requested (2026-08-14)
+
+**Update, same evening: the fix above was never exercised in the watched
+match that "confirmed" it was still broken.** apexearth re-watched after the
+patch and reported the exact same symptom (four mexes, full metal bank, no
+factory). Diagnosis of THAT match's own infolog: `world.as`'s `ApexActive()`
+latches false whenever `ai.GetTeamIds().length() <= 1` -- true for every
+solo/no-ally match, which a plain 1v1 always is. `Builder::MakeTaskInner`
+checks that gate first (`maketask.as:45-46`) and returns bare
+`aiBuilderMgr.DefaultMakeTask(unit)` when it's false -- 100% stock
+`CBuilderManager` logic, skipping `CommanderTask` (and every other apex rule)
+entirely. The infolog had zero `apex:` lines over 4628 frames, confirming
+nothing custom ran at all; the commander behavior watched was stock BARb's,
+not this AI's, both before and after the patch. Fixed the HARNESS default,
+not the AI: `tools/run_match.py` now sets `apex_solo_stock=0` automatically
+whenever `per_side==1` (a true no-ally match), so `--watch` runs actually
+exercise this AI's logic unless the caller explicitly asks for the
+solo-stock fallback. The `CommanderTask` reordering fix itself is still
+unconfirmed either way -- it needs a fresh watch now that the harness will
+actually route through it.
+
+**Update, same evening: apexearth had the gate removed outright rather than
+patched around.** The 2026-08-10 rationale for `ApexActive()` was judged stale
+against everything fixed since (crash fixes, commander opening fixes, squad
+cohesion/positioning fixes). `ApexActive()` now unconditionally returns
+`true`, the `apex_solo_stock` tunable no longer exists anywhere, and the
+`run_match.py` harness default above is gone -- apex runs its own logic in
+every game, allies or not. The `CommanderTask` fix now needs a fresh watch
+under this, not the harness workaround.
+
+apexearth, watching a 1v1 (Comet Catcher): full metal bank, commander just
+keeps walking to the next mex, no factory, no solars, well past opening
+timing. `CommanderTask`'s economy-first branch (`rules_commander.as:211-273`)
+is the AI's ONLY path to ever requesting the first factory, and it ran the mex
+lookup BEFORE the factory-rebuild request, unconditionally, every
+`AiMakeTask` re-election. `2aa2cf9`'s `OpeningMexReach()` (700 elmo) only
+bounds a single jump; `FindOpenMexSpot` re-searches from the commander's
+CURRENT (moving) position every tick, so the next-nearest spot is again inside
+700 forever -- confirmed structurally AND against a different infolog from the
+same evening (`matches/20260814-180430-.../infolog.txt:2149-2168`,
+frames 306-537): `commander economy-first, no factory yet -- mex before
+rebuild` repeating multiple times per frame, `commander rebuilding a factory`
+appearing between them but never sticking.
+
+Applied fix (`rules_commander.as`, same block): (1) if the commander is
+already holding a FACTORY-type task, return it immediately, before any mex
+lookup -- this is what actually breaks the chain, since without it a task
+just assigned this tick is abandoned on the very next re-election once the
+commander has moved and a fresh mex spot opens. (2) reordered so the factory
+rebuild request is attempted BEFORE the mex fallback, so a first request goes
+out as soon as economy is judged sufficient, and mex is only offered when the
+factory request is genuinely unavailable (def missing, or one already in
+flight and not yet visible on `unit.task`). No hard cap added, no flag beyond
+"do we currently hold a factory task" (real, reentrant, re-derived every
+call -- survives a post-wipe rebuild the same as the opening).
+
+NOT YET LIVE-CONFIRMED: verified against a same-day infolog showing the same
+mechanism (not the exact match apexearth watched, which produced zero
+`apex:` lines -- likely a different run or truncated log). Still need: a
+fresh `--watch` run showing `commander economy-first` firing at most once
+before `commander rebuilding a factory` sticks, and `mex2`/`mex4`/`mex8` +
+`techStart` from `[BARAI_STATS]` compared before/after to confirm the factory
+now actually gets built instead of the mex chain continuing indefinitely.
+Also worth re-checking `OpeningNeedsEconomy()`'s escape valve
+(`opening.as:45-78`, releases once no energy task is in flight rather than
+once income clears the target) if factory timing is still late after this
+fix lands.
+
 ## ABANDONED: Linux/ASan harness for the buildTasks crash (2026-08-14) -- back to Windows addr2line
 
 Built a native Linux + AddressSanitizer build (`vendor/engine/build-amd64-linux/`,

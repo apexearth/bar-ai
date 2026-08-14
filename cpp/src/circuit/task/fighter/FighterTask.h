@@ -22,6 +22,18 @@ namespace circuit {
 // them; 0.9 leaves the margin he asked for.
 #define STANDOFF_RANGE_MOD	0.90f
 
+// A row's standoff/safe-angle caution scales with how fragile its OWN def is
+// relative to the average health of whatever else is fighting alongside it
+// in the same squad -- self-normalizing per engagement, not a per-unit-type
+// special case. FRAGILE_STANDOFF_SCALE is the extra standoff fraction added
+// at the fragility cap (e.g. 0.25 = up to +25% standoff for a row at half the
+// squad's average health); FRAGILE_CAP bounds how far one glass-cannon def
+// can push it. Runtime: apex_fragile_standoff_scale, apex_fragile_cap.
+// apexearth: "certain lower hp units have to be way more careful than high
+// hp units."
+#define FRAGILE_STANDOFF_SCALE	0.25f
+#define FRAGILE_CAP	2.0f
+
 class CEnemyInfo;
 
 class IFighterTask: public IUnitTask {

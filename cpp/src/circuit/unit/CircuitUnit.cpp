@@ -548,8 +548,16 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
 	// a cloaked target must be attacked as ground, a contact held on radar only
 	// is dropped by the gadget within 15 frames and the fight order IS the
 	// walk-in that gains LOS, and melee delivers its damage by arriving.
+	// A static target's position never changes, so it needs no fresh LOS to
+	// stay accurate the way a mobile radar-only contact does -- the "walk to
+	// its actual position to confirm it" fallback below exists for ghosts,
+	// not towers. A weapon range that exceeds sight radius (e.g. Hound: 650
+	// range, ~400 sight -- see the squad-path fix in SquadTask.cpp) reads
+	// IsInLOS()==false while correctly holding standoff, so without this the
+	// fallback sent the unit walking to the tower's own ground position,
+	// straight past the standoff ring it had just reached.
 	const bool prefer = (manager->GetCircuit()->GetTunable("apex_prefer_target", 1.f) > 0.f)
-			&& !isGround && !circuitDef->IsAttrMelee() && enemy->IsInLOS();
+			&& !isGround && !circuitDef->IsAttrMelee() && (isStatic || enemy->IsInLOS());
 	TRY_UNIT(manager->GetCircuit(), this,
 		if (circuitDef->IsAttrMelee() && IsJumpReady()) {
 			CmdJumpTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);

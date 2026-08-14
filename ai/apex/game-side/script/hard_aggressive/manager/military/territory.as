@@ -89,24 +89,45 @@ void NoteSite(int cluster, const AIFloat3& in pos)
 // front -- but among those, the emptiest ground wins.
 const float COVER_RADIUS = 900.f;
 
+// "Nearest to the enemy centroid" alone picked a lone forward expansion mex
+// over the base itself whenever that expansion happened to be closer to
+// GetEnemyPos() -- a real hit for the big gun (armanni/cordoom/legbastion,
+// the first high-value tower this AI builds) landing in a map corner while
+// the base it was meant to anchor got nothing. RebuildFront's ray model
+// already knows which of our sites are actually on the contested line
+// (OnBorder); a site we hold that no ray ever crossed is an unpressured
+// outpost, not a front, however close it sits to the enemy's average
+// position. Gate eligibility on that before ranking by distance.
 bool BorderPos(AIFloat3& out p, uint rank)
 {
 	if (gSitePos.length() == 0)
 		return false;
 	AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 	const float reach = Builder::gHomeSet ? Builder::gHomePos.distance2D(e) : -1.f;
+	RebuildFront();
+	const bool haveFront = gFrontValid && (gRayR.length() > 0);
 
 	// The forward edge: the nearest eligible site to the enemy sets the band.
 	float edge = -1.f;
 	for (uint i = 0; i < gSitePos.length(); ++i) {
 		if ((reach > 0.f) && (gSitePos[i].distance2D(Builder::gHomePos) > reach))
 			continue;
+		if (haveFront && !OnBorder(gSitePos[i]))
+			continue;
 		const float d = gSitePos[i].distance2D(e);
 		if ((edge < 0.f) || (d < edge))
 			edge = d;
 	}
-	if (edge < 0.f)
+	// No site sits on an established line yet -- rank 0 falls back to home,
+	// which is where a first defence belongs before there is a real front to
+	// anchor it to, rather than the nearest-to-enemy site by default.
+	if (edge < 0.f) {
+		if ((rank == 0) && Builder::gHomeSet) {
+			p = Builder::gHomePos;
+			return true;
+		}
 		return false;
+	}
 
 	// COVERAGE, not a wall on one bearing.
 	//
@@ -115,7 +136,8 @@ bool BorderPos(AIFloat3& out p, uint rank)
 	// flanks ineligible, so towers still stacked in one place and the enemy
 	// still walked around them into the economy.
 	//
-	// Every site we hold is eligible. Score = (defences already near it + 1) x
+	// Every site on the established line is eligible (all of them, once we have
+	// one -- see haveFront above). Score = (defences already near it + 1) x
 	// distance to the enemy, lowest wins. Two properties fall out of that product:
 	// an UNDEFENDED site always outranks a defended one at the same distance, so
 	// cover spreads before it thickens; and among equally undefended sites the
@@ -130,6 +152,8 @@ bool BorderPos(AIFloat3& out p, uint rank)
 		bool found = false;
 		for (uint i = 0; i < gSitePos.length(); ++i) {
 			if ((reach > 0.f) && (gSitePos[i].distance2D(Builder::gHomePos) > reach))
+				continue;
+			if (haveFront && !OnBorder(gSitePos[i]))
 				continue;
 			const float d = gSitePos[i].distance2D(e);
 			const float cover = float(FenceCountNear(gSitePos[i], COVER_RADIUS));

@@ -158,10 +158,11 @@ int gNextCommFleeLog = 0;
 // forward-declaration reason as CON_THREAT_VETO above.
 const float RESOURCE_CRISIS_FRAC = 0.05f;
 
-IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
+IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority,
+		float minMetal = WRECK_MIN)
 {
 	const AIFloat3 pos = unit.GetPos(ai.frame);
-	const AIFloat3 wreck = ai.GetBestWreckPos(pos, WRECK_SEARCH, WRECK_MIN);
+	const AIFloat3 wreck = ai.GetBestWreckPos(pos, WRECK_SEARCH, minMetal);
 	if (wreck.x < 0.f)
 		return null;   // nothing worth the trip
 	// Shared by the idle-builder fallback and the rezzer-eats-wreck path:
@@ -171,6 +172,24 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
 		return null;
 	return aiBuilderMgr.Enqueue(TaskB::Reclaim(priority, wreck,
 			1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+}
+
+// The genuinely-idle floor: nothing above this call in AiMakeTask found
+// anything worth doing, `task` is null (the engine declined too), and metal
+// is not even empty -- ScavengeWrecks' minMetal=55/WRECK_RICH=400 bars exist
+// specifically to stop a rich target from being passed up for a twig, which
+// says nothing about standing still with an empty queue. GetBestWreckPos'
+// underlying GetFeaturesIn (CircuitAI.cpp) returns every reclaimable feature
+// in radius, trees included -- they were never invisible, only priced out by
+// those same floors. min=1 asks for "anything at all"; a bare +TREES_WORTH
+// floor above zero keeps a con from being sent to eat a rock with 0 content.
+const float IDLE_RECLAIM_MIN = 1.f;
+
+IUnitTask@ IdleFeatureReclaim(CCircuitUnit@ unit, bool isComm)
+{
+	if (isComm)
+		return null;
+	return EnqueueWreckReclaim(unit, Task::Priority::LOW, IDLE_RECLAIM_MIN);
 }
 
 // Rez bots are the only units in BAR that can resurrect at all -- armrectr,

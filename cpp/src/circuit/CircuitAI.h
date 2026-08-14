@@ -281,6 +281,12 @@ public:
 	// cannot answer "what of ours is standing in the way" -- it only answers it
 	// for the factions someone remembered to list.
 	std::vector<CCircuitUnit*> GetOwnStructsNear(const springai::AIFloat3& pos, float radius);
+	// Our own damaged MOBILE units near pos, whatever their def. BuilderManager
+	// never registers a damagedHandler for ordinary combat unit defs (only for
+	// builders/rez-bots themselves and for static structures), so nothing ever
+	// creates a REPAIR task for a hurt tank standing in the field -- the script
+	// has to find one itself.
+	std::vector<CCircuitUnit*> GetOwnDamagedNear(const springai::AIFloat3& pos, float radius);
 	// Engine path length for this unit's move type, or -1 when there is no path.
 	// CircuitAI's own areas come from CTerrainData and are terrain-only, so a
 	// pocket walled in by BUILDINGS is invisible to CanMoveToPos. The engine's
