@@ -5,22 +5,54 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
-## NEW: native crash at ~26.4 game-minutes, access violation in SkirmishAI.dll (2026-08-14, watching)
+## NEW: dangling IBuilderTask* crash in MakeBuilderTask/MakeCommDangerTask, root cause not found (2026-08-14, watching)
 
-**apexearth, watching the windowed 8v8 (+70 handicap):** "had a crash there."
-`matches/20260814-034141-*/result.json`: `crashed: true`, `exit_code` is the
-Windows access-violation code as unsigned, and the infolog confirms it plainly:
-`Error: Exception: Access violation (0xc0000005)` at `f=0047450` (~26.4 game
-minutes), `Error: This stacktrace indicates a problem with a skirmish AI.`
+**apexearth, watching two more windowed games (+70 handicap):** "we are still
+crashing." Symbolized three separate crash instances against the local
+RelWithDebInfo build (full DWARF; `docs/06-building-the-dll.md`'s docker
+toolchain has `x86_64-w64-mingw32-addr2line`; the crash log's offsets need the
+DLL's actual `ImageBase` added — `0x1e33b0000` for this build, `objdump -p`).
 
-Not root-caused. The stack trace is DLL-offset only (`SkirmishAI.dll
-[0x0000000000030304]` etc., 17 frames deep into our own code) with no symbols
-to resolve against — needs a debug build or a symbol map to turn into function
-names. Ruled out as related to tonight's session's changes: every edit tonight
-was AngelScript only (`ai/apex/game-side/script/**`), and the crash is native
-(C++, `SkirmishAI.dll`), so it predates this session's work and would
-reproduce on prior commits too. Needs its own pass with a debug/symbol build
-and a repro at a similar game length before it can be attributed.
+One of the three (`matches/20260814-070748-*`, `CIdleTask::Update` ->
+`ass->GetTask()->Start(ass)` with no null check, `IdleTask.cpp:72`) is now
+**fixed and verified**: `CBEnergyTask::Start`'s own comment already documented
+that `AssignTask` can leave a unit taskless (a pending PathRequest makes it a
+no-op), and the line dereferenced the result unconditionally. Rebuilt via
+docker, redeployed, ran a fresh 25-minute test — did not recur.
+
+The other two (`matches/20260814-034141-*` and a third from
+`matches/20260814-073940-*`) are a DIFFERENT, still-open bug: both crash on
+the identical first line of an identical pattern in `BuilderManager.cpp` --
+`MakeBuilderTask` (line 1397) and `MakeCommDangerTask` (line 1269), both
+iterating `buildTasks` (`std::vector<std::set<IBuilderTask*>>`) and calling
+`candidate->CanAssignTo(unit)`. Consistent with a dangling `IBuilderTask*`
+surviving in that container. **Audited every C++ file this repo has ever
+modified** (`git log -- cpp/src/circuit/`, ~40 files) for a bare `delete` on a
+task pointer bypassing the ref-counted lifecycle — the exact bug class from
+`changes/2026-08-09.md`'s "C++ deleted tasks the script held" (three sites,
+fixed in `943db65`) — and found nothing beyond those three already-fixed
+sites. Both crashing functions are unmodified upstream code, and `DequeueTask`
+does erase from `buildTasks` synchronously on every normal removal path, so
+the leak (if that's what it is) is not in a `buildTasks`-adjacent site read so
+far. Not reproduced under a memory-error tool.
+
+**A genuinely independent, strong secondary finding** while chasing this:
+`IBuilderTask::Reevaluate` (`BuilderTask.cpp:472-480`, unmodified upstream)
+self-aborts any task costing over 1000 metal with no nanoframe yet
+(`target == nullptr`) if average income drops under 60% of a saved baseline
+and under half the current pull, for either resource. This is a very plausible
+explanation for the separate "fusion reactors never finish" finding — armfus
+is 4300 metal, and BAR income swings 40%+ routinely (a lost mex, a raid). Not
+yet confirmed as THE mechanism (would need matching a `savedIncome` read
+against a live trace), but it is a real, well-evidenced lead for whoever picks
+this up next, independent of the dangling-pointer crash above.
+
+**Next step, not yet done**: rebuild with AddressSanitizer and reproduce. Manual
+reading of every plausible call site (task construction, `DequeueTask`,
+`AbortTask`, the `MakeEconomyTasks` call both crashing functions make right
+before their loop) did not find it; a sanitizer will report the actual
+use-after-free the moment it happens, with both the free and the bad-access
+stack, instead of more guessing.
 
 ## NEW: anti-air coverage is lacking (2026-08-13, watching)
 
