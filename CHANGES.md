@@ -18,6 +18,96 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-13/14: the army answers one breach at a time, not all of them at once
+
+Layer 3 (C++), `CircuitAI.cpp/.h`, `module/MilitaryManager.cpp/.h`,
+`task/fighter/SquadTask.cpp`. apexearth, twice in one watching session: "once
+enemies break through one part of the frontline that army goes around our
+entire frontline to hit us in the back", and later "we're losing our main
+base and our own army is walking around the back to a neighbor's base instead
+of protecting ourselves."
+
+Every DEFEND pool was pulled to the SAME single anchor each pass:
+`GetGuardAnchor` took `GetAttackHotspot`, one cost-weighted centroid of ALL
+recent losses, so two simultaneous breaches averaged to a point between them
+that was neither, and the whole army walked there.
+
+**Falsified before implementing**, per this repo's own discipline about
+checking a premise before spending C++ effort on it: a temporary AngelScript
+sampler over `gSquads` (25 game-min 4v4) found 2+ live DEFEND pools in 135 of
+301 samples, up to 7 simultaneously, separated by thousands of elmos — so
+per-task anchoring had something real to steer.
+
+Three changes. `CCircuitAI` now keeps losses as up to 8 decaying spots instead
+of one centroid (`NoteLossAt` merges into the nearest spot within a new
+tunable `apex_hot_radius`, default 1000 elmos, else takes a free slot, else
+overwrites the weakest); `GetAttackHotspot` keeps its signature and returns
+the heaviest spot, identical to the old value while only one fight is
+running. `CMilitaryManager::GetGuardAnchor` gained a per-pool overload scoring
+each spot by unanswered threat over distance, and `UpdateDefenceTasks` now
+anchors each pool inside the loop, heaviest pool first, subtracting each
+pool's `attackPower` from the spot it takes so the next pool naturally prefers
+the next-worst breach — no cap, no exclusivity, a spot's demand simply
+depletes as coverage arrives. `FillFrontPos` routes attack squads with no
+target through the same logic; squads already committed to a target are
+untouched, so this cannot revert to the "never attack while contested" stance
+that was tried and reverted earlier (`hooks.as`). Finally
+`ISquadTask::CheckMergeTask` refuses to merge two DEFEND pools whose anchors
+are more than `apex_hot_radius` apart, without which the split undoes itself
+on the next merge check.
+
+One noted behavioural risk: `HOT_MIN_WEIGHT` (250 metal) now gates per spot
+rather than on the total, so harassment spread wider than the merge radius
+takes longer to register as an anchor than before.
+
+Smoke-tested clean (no compile errors, no crash, no duplicate registration).
+**Not yet measured** — needs a watched game with a real two-front breach to
+confirm the army actually splits toward both.
+
+## 2026-08-13/14: generator tier selection is one energy-per-metal ranking — VERIFIED
+
+Layer 2 (AngelScript), `builder/mexguard.as` `HomeEnergy`, `builder/fusion.as`.
+apexearth, watching live: "I see us making basic solars when we have over 2000
+energy per second... once we get to fusion and afus we should only be
+dedicating our economy to making fusion and up. You don't need to wait for
+some 'bank of metal' before starting a fusion."
+
+Three causes, confirmed against real unit data:
+
+1. The ladder decided wind-vs-solar per metal, then ranked that winner
+   against advanced solar and the reactors by RAW `GetEnergyMake()` output —
+   on the belief that per-metal ranking would pin the choice on wind forever.
+   The defs refute it: armsolar 20e/155m = 0.129 energy per metal, armadvsol
+   75/350 = 0.214, armfus 1000/4300 = 0.233, armafus 3000/9700 = 0.309 —
+   energy-per-metal RISES monotonically up the ladder. Only wind is
+   map-dependent enough to ever beat a reactor (12 wind/40m = 0.300, on par
+   with afus, not dominant). One unified per-metal ranking over all five
+   candidates therefore climbs the tech tree unaided.
+2. `AdvSolDef()` retired advanced solar once a reactor stood, but nothing
+   retired PLAIN solar — any moment the reactor rungs were transiently
+   unavailable dropped the ladder back onto a 20-energy panel. `armsolar` is
+   now excluded whenever `HaveReactor()`.
+3. `AffordableGen`'s `costM/costE > income * 90s` bank gate is deleted — it
+   had no caller outside this selection block. The concurrency problem it was
+   standing in for is now held by `JoinBuilderCap`/`JoinTaskFor`/
+   `SpotCollides` (landed earlier the same session), which bound builders per
+   site by income directly. `AFFORD_SECONDS` survives only in
+   `ReactorsInFlight`, a different question (concurrent task count, not tier
+   choice).
+
+**Verified, not just smoke-tested**, 8v8 Comet Catcher, 25 game-minutes,
+scripted scan of every `home energy` log line: **zero** instances of basic
+solar built after any team's reactor existed (all 8 teams got one), and
+**zero** instances of solar built above 250 e/s income at all. At 900-1700 e/s
+the ladder now correctly picks `armafus`. No compile errors, no crash, no
+duplicate C++ registration.
+
+Not implemented: wind is not excluded once a reactor exists — it stays a
+candidate and wins or loses purely on its per-metal score (0.300 on a 12-wind
+map vs afus's 0.309), which is arguably the "sometimes wind can be supreme"
+case apexearth described. Worth confirming whether he wants wind retired too;
+currently it is decided by the same economics as everything else in this pass.
+
 ## 2026-08-13: duplicate energy buildings landed on the identical tile — VERIFIED
 
 Layer 2 (AngelScript), `builder/joinbuild.as`, `mexguard.as`, `fusion.as`. Third

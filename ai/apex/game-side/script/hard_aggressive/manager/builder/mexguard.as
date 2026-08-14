@@ -422,22 +422,23 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		if ((gen is null) || !gen.IsAvailable(ai.frame))
 			@gen = SmallConvDef(unit);
 	} else {
-		// Pick the BIGGEST generator the economy can pay for.
+		// PICK THE BEST ENERGY PER METAL, ACROSS THE WHOLE LADDER AT ONCE.
 		//
-		// Ranking by energy-per-metal can never tier up. A wind turbine is 40
-		// metal and a fusion 4,300 for 1,000 energy, so the turbine wins that
-		// ratio at every income there will ever be -- the ladder has no top step,
-		// it has no steps at all. GetEnergyMake() still decides wind against
-		// solar, where the ratio question is real and map-dependent: it reports
-		// what a def actually produces on THIS map, so a turbine is compared at
-		// the map's own wind with no wind API needed.
-		//
-		// AffordableGen is the tiering rule, and it is economic power rather than
-		// a tier check or a clock: a reactor becomes eligible exactly when income
-		// can pay for it. That walks wind -> advanced solar -> fusion -> advanced
-		// fusion on its own, at whatever pace the economy actually supports.
+		// This block used to decide wind against solar per metal and then rank
+		// that winner against advanced solar and the reactors by RAW OUTPUT,
+		// because per-metal ranking was believed unable to tier up. The defs say
+		// otherwise: energy per metal RISES from solar through advanced solar to
+		// fusion and advanced fusion, so one unified per-metal ranking climbs the
+		// ladder unaided. Only wind is map-dependent enough to ever beat a
+		// reactor, which is the whole of the special-casing that is needed.
 		CCircuitDef@ wind = SideDef3(armwin, corwin, legwin);
-		CCircuitDef@ sol = SideDef3(armsolar, corsolar, legsolar);
+		// PLAIN SOLAR RETIRES WHEN A REACTOR STANDS, exactly as AdvSolDef already
+		// retires the advanced one. Only advanced solar was being retired, so any
+		// moment the reactor rungs were unavailable dropped the ladder onto a
+		// 20-energy panel. apexearth, watching live: "I see us making basic solars
+		// when we have over 2000 energy per second."
+		CCircuitDef@ sol = HaveReactor()
+				? null : SideDef3(armsolar, corsolar, legsolar);
 		CCircuitDef@ adv = AdvSolDef();
 		// A reactor is 4,300-9,700 metal against a turbine's 40, and this function
 		// is offered a constructor about thirty times a game-minute. Without a
@@ -459,64 +460,21 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		if (!IsNavalBuilder(unit))
 			@afus = SideDef3(armafus, corafus, legafus);
 
-		// WIND vs SOLAR IS A PER-METAL QUESTION, AND RAW OUTPUT ANSWERS IT WRONG.
-		//
-		// The ladder below ranks by raw output so that it can TIER UP -- ranking
-		// by energy-per-metal would pin it on wind turbines forever, since a
-		// 40-metal turbine beats a 4,300-metal fusion on that ratio at every
-		// income there will ever be. But applying raw output to the wind/solar
-		// pair specifically decides it backwards: armsolar makes 20 against a
-		// turbine's output of the MAP'S WIND, and almost no map has wind above
-		// 20, so solar wins essentially everywhere -- while costing 155 metal
-		// against the turbine's 40.
-		//
-		// Per metal on a 12-wind map: wind 12/40 = 0.300, solar 20/155 = 0.129.
-		// Break-even is around 5.2 wind. apexearth: "this map has tons of wind,
-		// we should never make any solars on a map like this one... generally if
-		// average wind is greater than ~7.5 then wind is better. and this map has
-		// 12 wind MINIMUM."
-		//
-		// So decide the pair on cost-effectiveness, then hand the winner to the
-		// raw-output ladder, which keeps its ability to tier up to reactors.
-		CCircuitDef@ t1 = null;
-		float t1Make = -1.f;
-		if (ai.GetTunable("apex_wind_per_metal", 1.f) > 0.f) {
-			float bestPerM = -1.f;
-			if (AffordableGen(wind) && (wind.costM > 0.f)) {
-				const float e = aiEconomyMgr.GetEnergyMake(wind);
-				bestPerM = e / wind.costM; @t1 = wind; t1Make = e;
-			}
-			if (AffordableGen(sol) && (sol.costM > 0.f)) {
-				const float e = aiEconomyMgr.GetEnergyMake(sol);
-				if ((e / sol.costM) > bestPerM) { bestPerM = e / sol.costM; @t1 = sol; t1Make = e; }
-			}
-		} else {
-			if (AffordableGen(wind)) {
-				const float e = aiEconomyMgr.GetEnergyMake(wind);
-				if (e > t1Make) { t1Make = e; @t1 = wind; }
-			}
-			if (AffordableGen(sol)) {
-				const float e = aiEconomyMgr.GetEnergyMake(sol);
-				if (e > t1Make) { t1Make = e; @t1 = sol; }
-			}
-		}
-
+		// ONE RANKING PASS. A reactor no longer waits for a bank of metal to
+		// fill before it may be chosen -- apexearth: "You don't need to wait for
+		// some 'bank of metal' before starting a fusion or anything like that."
+		// Order matters only for pickedReactor: nothing after afus can win.
 		float best = -1.f;
-		if (t1 !is null) {
-			best = t1Make; @gen = t1;
-		}
-		if (AffordableGen(adv)) {
-			const float e = aiEconomyMgr.GetEnergyMake(adv);
-			if (e > best) { best = e; @gen = adv; }
-		}
-		if (AffordableGen(fus)) {
-			const float e = aiEconomyMgr.GetEnergyMake(fus);
-			if (e > best) { best = e; @gen = fus; pickedReactor = true; }
-		}
-		if (AffordableGen(afus)) {
-			const float e = aiEconomyMgr.GetEnergyMake(afus);
-			if (e > best) { best = e; @gen = afus; pickedReactor = true; }
-		}
+		float v = EnergyValuePerMetal(wind);
+		if (v > best) { best = v; @gen = wind; }
+		v = EnergyValuePerMetal(sol);
+		if (v > best) { best = v; @gen = sol; }
+		v = EnergyValuePerMetal(adv);
+		if (v > best) { best = v; @gen = adv; }
+		v = EnergyValuePerMetal(fus);
+		if (v > best) { best = v; @gen = fus; pickedReactor = true; }
+		v = EnergyValuePerMetal(afus);
+		if (v > best) { best = v; @gen = afus; pickedReactor = true; }
 	}
 	if (pickedReactor && (ai.frame < gNextFusion))
 		return null;   // a reactor won; wait for it rather than dropping a rung

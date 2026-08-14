@@ -100,15 +100,20 @@ CCircuitDef@ AdvSolDef()
 }
 
 
-bool AffordableGen(CCircuitDef@ d)
+// HOW GOOD A GENERATOR IS, IN ENERGY PER METAL -- the single ranking every rung
+// of the ladder is judged by. -1 means "not a candidate": no def, not yet
+// buildable, or no cost to divide by.
+//
+// GetEnergyMake reports what a def makes on THIS map, so a wind turbine is
+// scored at the map's own wind speed with no wind API needed. Nothing here asks
+// whether the bank can pay: how many builders may pile onto one expensive site
+// is bounded by income in JoinBuilderCap, which is the constraint the old
+// AFFORD_SECONDS bank gate was standing in for.
+float EnergyValuePerMetal(CCircuitDef@ d)
 {
-	if ((d is null) || !d.IsAvailable(ai.frame))
-		return false;
-	if (d.costM > aiEconomyMgr.metal.income * AFFORD_SECONDS)
-		return false;
-	if (d.costE > aiEconomyMgr.energy.income * AFFORD_SECONDS)
-		return false;
-	return true;
+	if ((d is null) || !d.IsAvailable(ai.frame) || (d.costM <= 0.f))
+		return -1.f;
+	return aiEconomyMgr.GetEnergyMake(d) / d.costM;
 }
 // How far from home to look when the grid has no cell left.
 const float ECO_FALLBACK_RANGE = 1400.f;
