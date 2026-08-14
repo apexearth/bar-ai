@@ -16,6 +16,16 @@ void AiTaskAdded(IUnitTask@ task)
 		return;
 	const int bt = task.GetBuildType();
 	Requests::Register(task);
+	// Paired with the energy-task-removed log below: same def+position lets
+	// the two be matched up in a trace to read a reactor's actual lifespan
+	// (added-frame to removed-frame) rather than inferring it from gaps.
+	if ((bt == int(Task::BuildType::ENERGY)) && (task.buildDef !is null)
+		&& (task.buildDef.costM >= 2000.f))
+	{
+		const AIFloat3 at = task.GetBuildPos();
+		AiLog(Factory::T() + "apex: energy-task-added " + task.buildDef.GetName()
+			+ " at=" + int(at.x) + "," + int(at.z));
+	}
 	if (bt == Task::BuildType::MEXUP) {
 		gMexUpPos = task.GetBuildPos();
 		gMexUpActive = true;
@@ -92,6 +102,27 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 	if (task.GetType() != Task::Type::BUILDER)
 		return;
 	const int bt = task.GetBuildType();
+	// WAS THIS FINISHED, OR ABANDONED MID-BUILD? `done` says which; `target`
+	// (set only once the nanoframe exists, IBuilderTask::SetTarget) says
+	// whether it ever got that far at all. apexearth: still seeing multiple
+	// reactors "built" (started) at once -- if most of them are actually
+	// getting cancelled here with done=false and no nanoframe, the visible
+	// symptom is scattered half-started sites, not real duplicate completion.
+	// Scoped to the expensive reactor tier only; this fires often enough on
+	// cheap defs (solar, wind) to be noise there.
+	if ((bt == int(Task::BuildType::ENERGY)) && (task.buildDef !is null)
+		&& (task.buildDef.costM >= 2000.f))
+	{
+		array<CCircuitUnit@>@ had = task.GetUnits();
+		const AIFloat3 at = task.GetBuildPos();
+		const bool hasWorker = (had !is null) && (had.length() > 0) && (had[0] !is null);
+		AiLog(Factory::T() + "apex: energy-task-removed " + task.buildDef.GetName()
+			+ " done=" + (done ? "1" : "0")
+			+ " hadNanoframe=" + ((task.target !is null) ? "1" : "0")
+			+ " workers=" + ((had !is null) ? had.length() : 0)
+			+ " unit=" + (hasWorker ? int(had[0].id) : -1)
+			+ " at=" + int(at.x) + "," + int(at.z));
+	}
 	Requests::Forget(task);
 	if (bt == Task::BuildType::MEXUP) {
 		gMexUpActive = false;

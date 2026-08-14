@@ -151,6 +151,22 @@ uint Workers(IUnitTask@ t)
 	return (busy is null) ? 0 : busy.length();
 }
 
+// HOW CLOSE TO DONE. `target` is the nanoframe (IBuilderTask::SetTarget,
+// null until it exists) and a unit under construction reports its build
+// percentage through health percent -- 0 for nothing yet, 1 for finished.
+// apexearth: "if we are in progress on more than one, we reassign ourselves
+// to focus on the one that is more close to being complete... focus as much
+// build power as we can on just the one building". This is the signal that
+// lets JoinFor/ClaimFor/Redirect do that instead of picking on distance
+// alone -- a half-built nanoframe should win over a fresh one within reach.
+float Progress(IUnitTask@ t)
+{
+	if (t is null)
+		return 0.f;
+	CCircuitUnit@ nano = t.target;
+	return (nano is null) ? 0.f : nano.GetHealthPercent();
+}
+
 // The same job, for matching purposes. Same def always; and one reactor rung
 // counts as another, because HomeEnergy re-ranks fusion against advanced fusion
 // every call and each rung was otherwise blind to the other rung's work. Only a
@@ -311,7 +327,8 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		return null;
 	const uint cap = InFlightCap();
 	IUnitTask@ best = null;
-	float bestScore = REACH;
+	float bestProgress = -1.f;
+	float bestDist = REACH;
 	for (uint i = 0; i < gLive.length(); ++i) {
 		IUnitTask@ cand = gLive[i];
 		if (cand is null)
@@ -325,26 +342,33 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		const float dist = spot.distance2D(where);
 		if (dist >= REACH)
 			continue;
-		// An assigned request is worth joining over an unassigned one at a
-		// similar distance: somebody is already walking to it. A preference,
-		// not an override -- a much closer proposal still wins.
-		const float score = (busy > 0) ? (dist - ASSIGNED_BIAS) : dist;
-		if (score >= bestScore)
-			continue;
 		if ((unit !is null) && (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO))
 			continue;
+		// PROGRESS FIRST, DISTANCE ONLY BREAKS A TIE. A half-built nanoframe
+		// always outranks a fresh one within reach -- concentrating build
+		// power on whichever is closer to done, rather than spreading it
+		// thin across several that each individually take longer to finish
+		// and so sit exposed to the idle/order-drop abort path longer.
+		const float progress = Progress(cand);
+		if ((progress < bestProgress) || ((progress == bestProgress) && (dist >= bestDist)))
+			continue;
 		@best = cand;
-		bestScore = score;
+		bestProgress = progress;
+		bestDist = dist;
 	}
 	return best;
 }
 
-// The nearest request for this def that NOBODY is working. No cost floor: this
-// is not "come and help", it is "this order is unowned, take it" -- so the walk
-// is the walk the builder would have made to its own site anyway.
+// The request for this def that NOBODY is working, ranked by progress first
+// (a nanoframe abandoned mid-build -- its worker died, got vetoed off, or
+// hit the idle/order-drop retry ceiling -- is exactly the case to finish
+// before starting anything fresh) and distance second. No cost floor: this
+// is not "come and help", it is "this order is unowned, take it" -- so the
+// walk is the walk the builder would have made to its own site anyway.
 IUnitTask@ ClaimFor(CCircuitDef@ want, const AIFloat3& in spot)
 {
 	IUnitTask@ best = null;
+	float bestProgress = -1.f;
 	float bestDist = REACH;
 	for (uint i = 0; i < gLive.length(); ++i) {
 		IUnitTask@ cand = gLive[i];
@@ -359,9 +383,13 @@ IUnitTask@ ClaimFor(CCircuitDef@ want, const AIFloat3& in spot)
 		if (!OnMap(where))
 			continue;
 		const float dist = spot.distance2D(where);
-		if (dist >= bestDist)
+		if (dist >= REACH)
+			continue;
+		const float progress = Progress(cand);
+		if ((progress < bestProgress) || ((progress == bestProgress) && (dist >= bestDist)))
 			continue;
 		@best = cand;
+		bestProgress = progress;
 		bestDist = dist;
 	}
 	return best;
@@ -447,6 +475,7 @@ IUnitTask@ Redirect(CCircuitUnit@ unit, bool isComm, IUnitTask@ offer)
 	const uint cap = InFlightCap();
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	IUnitTask@ best = null;
+	float bestProgress = -1.f;
 	float bestDist = REACH;
 	for (uint i = 0; i < gLive.length(); ++i) {
 		IUnitTask@ cand = gLive[i];
@@ -464,11 +493,17 @@ IUnitTask@ Redirect(CCircuitUnit@ unit, bool isComm, IUnitTask@ offer)
 		if (!OnMap(where))
 			continue;
 		const float dist = here.distance2D(where);
-		if (dist >= bestDist)
+		if (dist >= REACH)
 			continue;
 		if (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO)
 			continue;
+		// Same rule as JoinFor/ClaimFor: fold onto whichever is furthest
+		// along, not merely nearest.
+		const float progress = Progress(cand);
+		if ((progress < bestProgress) || ((progress == bestProgress) && (dist >= bestDist)))
+			continue;
 		@best = cand;
+		bestProgress = progress;
 		bestDist = dist;
 	}
 	if (best is null)
