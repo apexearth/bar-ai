@@ -678,8 +678,15 @@ do?* If yes, ask.
 
 The long "tried X, measured Y, reverted" blocks already in `factory.as` are
 load-bearing: they stop a failed experiment being retried. That is not licence
-to add more of them. Three rules, each from a real mistake:
+to add more of them. Four rules, each from a real mistake:
 
+- **A code comment is not a session transcript.** apexearth, 2026-08-14, after
+  a comment quoted his own complaint verbatim, listed a measured number, and
+  narrated the fix history: "quit flooding our comments with events of our
+  work, just state a concise 'why' and let that be it." One line: what this
+  code does that looks wrong otherwise, and the reason. Not what was reported,
+  not what was measured, not the session's timeline — those go in `CHANGES.md`
+  (see the next rule) or nowhere.
 - **Never state a cause you did not measure.** A spacing fix was annotated "that
   is how a cap of 6 produced 15-20 constructors" — the cap holding at ≤6 had
   been measured; the claim about the overshoot never was. If it was reasoning,

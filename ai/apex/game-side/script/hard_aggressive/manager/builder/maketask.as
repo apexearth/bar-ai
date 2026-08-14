@@ -143,6 +143,16 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	}
 
 	@t = ExpansionAlwaysWins(task);
+	if ((t !is null) && OpeningExpansionAllowed(unit, t))
+		return t;
+
+	// STEP 2 OF THE OPENING, AND ONLY DURING IT.
+	//
+	// Below expansion so the mexes still come first, above everything optional
+	// so the opening is not spent on a turret or a converter. Inert the moment
+	// a factory exists or a factory task is active -- see builder/opening.as
+	// for the C++ latch this replaces.
+	@t = OpeningEnergy(unit);
 	if (t !is null)
 		return t;
 
@@ -168,7 +178,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// Before any optional spending: if the engine just offered a SECOND task for
 	// a building one of ours already started (or is walking to), take that one
 	// instead. A redirect of an offer already made -- it enqueues nothing.
-	@t = JoinDuplicateBuild(unit, isComm, task);
+	@t = Requests::Redirect(unit, isComm, task);
 	if (t !is null)
 		return t;
 

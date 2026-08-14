@@ -27,6 +27,7 @@ Older reference/appendix material with no date of its own (binding tables, confi
 
 ### 2026-08-14
 
+- 2026-08-14: opening-sequence income gate made economy-only, no time cap
 - 2026-08-14: many DIFFERENT sites of the same building opened at once — VERIFIED
 
 Full detail: `changes/2026-08-14.md`

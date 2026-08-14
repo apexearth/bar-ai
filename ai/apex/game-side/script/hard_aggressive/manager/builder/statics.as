@@ -119,6 +119,12 @@ int AATopUp(float enemyAir, float costM)
 // near each other, thats not a bad thing."
 const float BLOB_RADIUS = 420.f;
 
+// The circle one AA request covers. apexearth's own example of an AREA request
+// rather than a point, and deliberately smaller than BLOB_RADIUS: this says
+// "that order is already placed", not "this ground has enough AA", which is
+// what TooCrowded above answers.
+const float AA_AREA = 200.f;
+
 bool TooCrowded(const AIFloat3& in at)
 {
 	const bool onLine = Military::OnBorder(at) || Military::NearFront(at);
@@ -147,10 +153,16 @@ IUnitTask@ AAOrder(CCircuitUnit@ unit, CCircuitDef@ aa, int want, float enemyAir
 	// like the light laser turrets and popup air defense turrets."
 	if (!Military::DefenceAllowedAt(here, aa))
 		return null;
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, aa, here, DEF_SHAKE));
+	// AA is the area case apexearth described -- "I want AA defense built in this
+	// 200 elmo circle" -- so the request owns a circle, not a point: another AA
+	// of this def already ordered anywhere in it is this order, already placed.
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, aa, Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, here, AA_AREA, DEF_SHAKE, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	gNextAA = ai.frame + AA_PERIOD;
 	AiLog(Factory::T() + "apex: cheap-aa " + aa.GetName() + " mine=" + aa.count
 		+ " team=" + formatFloat(Military::TeamAA(), "", 0, 0)
@@ -286,10 +298,13 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	AIFloat3 spot;
 	if (!Military::BorderPos(spot, uint(dome.count)) && !Military::FrontLinePos(spot))
 		return null;
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, dome, spot, 0.f));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, dome, Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, spot, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	++gShieldsAsked;
 	gNextShield = ai.frame + SHIELD_PERIOD;
 	AiLog(Factory::T() + "apex: shield " + dome.GetName() + " standing=" + dome.count
@@ -421,10 +436,13 @@ IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 	if (AreaHasJammer(site))
 		return null;   // would stack on one we already have; try again next period
 
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::RADAR,
-			Task::Priority::NORMAL, jam, site, 0.f));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, jam, Task::BuildType::RADAR,
+			Task::Priority::NORMAL, site, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	gJammerPos.insertLast(site);
 	gJammerAt.insertLast(ai.frame);
 	++gJammersAsked;
@@ -454,10 +472,13 @@ IUnitTask@ HomeDeter(CCircuitUnit@ unit)
 	const AIFloat3 site = ai.FindBuildSiteNear(tower, gHomePos, DETER_RADIUS);
 	if (!OnMap(site))
 		return null;
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, tower, site, 0.f));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, tower, Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, site, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	gNextDeter = ai.frame + DETER_PERIOD;
 	AiLog(Factory::T() + "apex: home-deter " + tower.GetName()
 		+ " standing=" + Military::FenceCountNear(gHomePos, DETER_RADIUS)
@@ -517,10 +538,13 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 				return null;
 		}
 	}
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, gun, spot, DEF_SHAKE));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, gun, Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, spot, 0.f, DEF_SHAKE, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	++gPulsarsAsked;
 	AiLog(Factory::T() + "apex: pulsar " + gun.GetName() + " standing=" + gun.count
 		+ "/" + PulsarCap() + " at-" + where
@@ -658,10 +682,13 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
 		return null;
 
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::BIG_GUN,
-			Task::Priority::NORMAL, silo, site, 0.f));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, silo, Task::BuildType::BIG_GUN,
+			Task::Priority::NORMAL, site, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	++gNukesAsked;
 	AiLog(Factory::T() + "apex: nuke silo " + silo.GetName()
 		+ " standing=" + silo.count + " asked=" + gNukesAsked
@@ -806,10 +833,13 @@ IUnitTask@ Pinpointer(CCircuitUnit@ unit)
 	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
 		return null;
 
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::RADAR,
-			Task::Priority::NORMAL, targ, site, 0.f));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, targ, Task::BuildType::RADAR,
+			Task::Priority::NORMAL, site, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	gPinpointAskedAt = ai.frame;
 	gNextPinpoint = ai.frame + PINPOINT_PERIOD;
 	AiLog(Factory::T() + "apex: pinpointer " + targ.GetName()

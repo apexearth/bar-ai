@@ -15,7 +15,7 @@ void AiTaskAdded(IUnitTask@ task)
 	if (task.GetType() != Task::Type::BUILDER)
 		return;
 	const int bt = task.GetBuildType();
-	JoinRegister(task);
+	Requests::Register(task);
 	if (bt == Task::BuildType::MEXUP) {
 		gMexUpPos = task.GetBuildPos();
 		gMexUpActive = true;
@@ -92,7 +92,7 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 	if (task.GetType() != Task::Type::BUILDER)
 		return;
 	const int bt = task.GetBuildType();
-	JoinForget(task);
+	Requests::Forget(task);
 	if (bt == Task::BuildType::MEXUP) {
 		gMexUpActive = false;
 	} else if (bt == Task::BuildType::DEFENCE) {

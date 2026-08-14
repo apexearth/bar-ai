@@ -306,6 +306,10 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 	if (ThreatFor(unit, site) > CON_THREAT_VETO)
 		return null;
 
+	// Same as the gantry: a factory task carries a reprDef Requests cannot know,
+	// so ask permission and enqueue our own shape.
+	if (!Requests::Allowed(adv, Task::BuildType::FACTORY, site, 0.f))
+		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Factory(Task::Priority::HIGH,
 			adv, site, null, 0.f));
 	if (post is null)

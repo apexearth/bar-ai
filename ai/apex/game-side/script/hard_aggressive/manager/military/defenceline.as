@@ -34,8 +34,8 @@ void UpdateFrontGun()
 	gBigGunPlaced = true;
 	AiLog(Factory::T() + "apex: big gun " + gun.GetName() + " at the territory edge");
 	// BUNKER takes only a def and a position -- no target, no spot id.
-	aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::BUNKER,
-			Task::Priority::NORMAL, gun, front, 0.f));
+	Requests::Take(null, gun, Task::BuildType::BUNKER,
+			Task::Priority::NORMAL, front, 0.f, 0.f);
 }
 
 // Near the front line, in metres rather than as a fraction -- for callers that

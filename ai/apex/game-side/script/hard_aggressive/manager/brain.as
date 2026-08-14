@@ -1067,8 +1067,8 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 			spot = Builder::gHomePos;
 		if (!OnMap(spot))
 			return null;
-		return aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
-				Task::Priority::NORMAL, gen, spot, SQUARE_SIZE * 8));
+		return Requests::Take(unit, gen, Task::BuildType::ENERGY,
+				Task::Priority::NORMAL, spot, 0.f, SQUARE_SIZE * 8);
 	}
 	if (kind == "convert")
 		return Builder::EnergyConverter(unit);
@@ -1317,9 +1317,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			// aborted.
 			const Task::Priority prio = (ai.GetTunable("apex_front_now", 0.f) > 0.f)
 					? Task::Priority::NOW : Task::Priority::NORMAL;
-			IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-					prio, w.def, w.pos, SQUARE_SIZE * 4));
-			if (t !is null) {
+			// A defence request owns its patch of ground, not the whole def:
+			// two towers at two places on the line are both wanted. Requests
+			// refuses only a second order for THIS stretch.
+			bool made = false;
+			IUnitTask@ t = Requests::Take(unit, w.def, Task::BuildType::DEFENCE,
+					prio, w.pos, 0.f, SQUARE_SIZE * 4, made);
+			if (made) {
 				++gFenceOrders;
 				if (w.kind == "aa")
 					NoteAAOrder(w.pos);

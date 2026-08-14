@@ -12,13 +12,14 @@
 #include "builder/sitesafety.as"  // OnMap, front fractions, ThreatFor, veto logging
 #include "builder/mexwork.as"     // reroute a refused mex to a colder spot
 #include "builder/mexowner.as"    // upgrades-outstanding test, offer counters
-#include "builder/joinbuild.as"   // help the identical building already started
+#include "builder/requests.as"    // namespace Requests: one queue for what we ask to be built
 #include "builder/digin.as"       // fence/jammer area bookkeeping
 #include "builder/converter.as"   // energy converters, rear positions
 #include "builder/nano.as"        // nano turrets, unit-cap shares, surplus gantry
 #include "builder/fusion.as"      // reactors and the affordability test
 #include "builder/statics.as"     // AA, pulsar, shield, deterrent, nuke silo
 #include "builder/mexguard.as"    // mex turrets, home energy ladder, contest towers
+#include "builder/opening.as"     // the first-factory gate: mexes, then income, then the lab
 #include "builder/obsolete.as"    // reclaiming our own outdated buildings
 #include "builder/fortify.as"     // per-constructor strike history and dig-in
 #include "builder/defcap.as"      // the defence share cap, and the panic clause

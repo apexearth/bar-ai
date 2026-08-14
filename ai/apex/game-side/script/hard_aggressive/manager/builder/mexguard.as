@@ -453,17 +453,38 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		// placements were armwin, 1,004 of them above 5,000 energy income. Rank
 		// the reactors always; if one wins while the cooldown holds, decline the
 		// builder rather than handing it a turbine.
-		CCircuitDef@ fus = FusionDef(unit);
-		CCircuitDef@ afus = null;
-		// armacsub/coracsub carry the underwater reactor and no land one, and
-		// there is no naval advanced reactor to reach for.
-		if (!IsNavalBuilder(unit))
-			@afus = SideDef3(armafus, corafus, legafus);
+		// FusionDef ALREADY returns armafus once the economy and reactor count
+		// justify it (metal.income >= AFUS_INCOME AND plain.count >= AFUS_AFTER),
+		// and armfus otherwise -- that IS the tier gate. A second, unconditioned
+		// fetch of armafus used to sit here and get ranked on its own: armafus
+		// scores highest of every candidate on energy-per-metal (0.309), so it
+		// won this ranking on frame 1 of every game, at ~7 metal/s, with no T2/T3
+		// constructor able to build it -- then sat as a permanently stuck,
+		// unworkable request that blocked HomeEnergy from ever proposing anything
+		// buildable again. Measured live: energy income frozen at exactly 30 for
+		// over a minute, one wind turbine and nothing else, opening gate unable to
+		// clear because the request it was waiting on could never finish. One
+		// reactor candidate now, chosen by FusionDef, so an ungated armafus can
+		// never win this ranking again.
+		// NOT BEFORE THE FIRST FACTORY. A reactor is a multi-minute commitment of
+		// build power (armfus is 4,300 metal against a T1 lab's 500), and the
+		// opening has exactly one low-buildpower builder -- the commander -- to
+		// spend it with. apexearth's own opening sequence never mentions a
+		// reactor at all: mexes, ~80 energy/s and ~5+ metal/s, the first lab, a
+		// sentry, expand. Once the commander's hold-in-progress protection
+		// correctly kept it committed to a job (see VetoCommanderHold), a reactor
+		// winning this ranking meant the single opening builder spent the whole
+		// window slowly grinding one out instead of ever reaching the lab.
+		// Measured live: 2 of 3 five-minute opens never got a factory at all with
+		// armfus in the running; the third took 4.7 minutes. This is a phase
+		// exclusion, not a bank gate -- once the first factory exists, more
+		// builders exist too, and the reactor is judged on the exact same
+		// per-metal merit as everything else, unrestricted.
+		CCircuitDef@ fus = Factory::HaveAnyFactory() ? FusionDef(unit) : null;
 
 		// ONE RANKING PASS. A reactor no longer waits for a bank of metal to
 		// fill before it may be chosen -- apexearth: "You don't need to wait for
 		// some 'bank of metal' before starting a fusion or anything like that."
-		// Order matters only for pickedReactor: nothing after afus can win.
 		float best = -1.f;
 		float v = EnergyValuePerMetal(wind);
 		if (v > best) { best = v; @gen = wind; }
@@ -473,8 +494,6 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		if (v > best) { best = v; @gen = adv; }
 		v = EnergyValuePerMetal(fus);
 		if (v > best) { best = v; @gen = fus; pickedReactor = true; }
-		v = EnergyValuePerMetal(afus);
-		if (v > best) { best = v; @gen = afus; pickedReactor = true; }
 	}
 	if (pickedReactor && (ai.frame < gNextFusion))
 		return null;   // a reactor won; wait for it rather than dropping a rung
@@ -545,33 +564,20 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// AFUS at the same time. Our builders should see one is already being built
 	// and choose to assist in building that instead."
 	//
-	// Builder::JoinDuplicateBuild only redirects an OFFER that DefaultMakeTask
-	// made; this rule ENQUEUES directly, so it bypassed that check entirely and
-	// every constructor that reached it started another reactor. Ask the same
-	// question here, before enqueueing: if one of these is already under way
-	// within reach, join it. Checked against `spot` -- the site about to be
-	// built, not the unit -- since builders scattered around the base each
-	// computed a nearby-but-distinct spot and none of them were near ENOUGH TO
-	// EACH OTHER to catch it when the check was keyed on their own position.
-	IUnitTask@ already = Builder::JoinTaskFor(gen, unit, spot);
-	if (already !is null)
-		return already;
-	// The join above is capped by what the economy can feed; a full cap must
-	// never excuse starting ANOTHER site of the same def, whether on the same
-	// ground (SpotCollides) or a different one nearby (SitesInFlight) --
-	// measured live: 6-8 armadvsol standing at once for one player, all at
-	// different tiles, because each capped-out site handed the next idle
-	// builder a brand new one instead of making it wait. Decline outright
-	// rather than start a site the economy cannot also feed -- the ladder
-	// will try this unit again next update.
-	if (Builder::SiteBlocked(gen, spot))
-		return null;
-
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(
+	// The ladder above decides WHAT to build; whether that may be started here
+	// and now, or should join one already requested, is Requests' single answer.
+	// The site is what it is asked about, not the builder: constructors
+	// scattered around one base each computed a nearby-but-distinct spot, and
+	// none of them were near enough to EACH OTHER for a builder-keyed check to
+	// catch it.
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, gen,
 			isConv ? Task::BuildType::CONVERT : Task::BuildType::ENERGY,
-			Task::Priority::NORMAL, gen, spot, 0.f));
+			Task::Priority::NORMAL, spot, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;   // joined one already requested; nothing new was asked for
 	if (pickedReactor)
 		gNextFusion = ai.frame + FUSION_PERIOD;
 	// Converters no longer wait on a clock at all; see the EnergyWasting branch

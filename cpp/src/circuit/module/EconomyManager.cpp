@@ -1541,6 +1541,11 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
 {
 	ZoneScoped;
 
+	// DISABLED 2026-08-14: a second, uncoordinated def-picker for energy
+	// (economy.json-driven, randomized per-def limits) competing with the
+	// AngelScript ladder in HomeEnergy/EnergyValuePerMetal. See CHANGES.md.
+	return nullptr;
+
 	CBuilderManager* builderMgr = circuit->GetBuilderManager();
 	if (!builderMgr->CanEnqueueTask(32)) {
 		return nullptr;

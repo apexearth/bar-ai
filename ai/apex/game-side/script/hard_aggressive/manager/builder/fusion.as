@@ -107,7 +107,7 @@ CCircuitDef@ AdvSolDef()
 // GetEnergyMake reports what a def makes on THIS map, so a wind turbine is
 // scored at the map's own wind speed with no wind API needed. Nothing here asks
 // whether the bank can pay: how many builders may pile onto one expensive site
-// is bounded by income in JoinBuilderCap, which is the constraint the old
+// is bounded by income in Requests::InFlightCap, which is the constraint the old
 // AFFORD_SECONDS bank gate was standing in for.
 float EnergyValuePerMetal(CCircuitDef@ d)
 {
@@ -276,27 +276,18 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	if (okDef)
 		rear = ReactorSpot(unit, want, spot);
 	const bool okSpot = okDef && ((rear != 0) || BandSpot(unit, want, false, spot));
-	// Join before enqueueing, same as HomeEnergy. This rule ENQUEUES directly,
-	// so JoinDuplicateBuild -- which only screens an offer DefaultMakeTask made
-	// -- never saw it, and every constructor reaching here started its own
-	// reactor. Neither the counter nor the cooldown moves for a join: nothing
-	// new was asked for. Checked against `spot`, not the unit -- a task nobody
-	// has been given yet still counts, and duplicate-ness is a property of the
-	// SITE, not of which builder happened to notice it.
-	bool blockedByCap = false;
-	if (okDef && okSpot) {
-		IUnitTask@ already = Builder::JoinTaskFor(want, unit, spot);
-		if (already !is null)
-			return already;
-		// A full cap must never excuse a second reactor, same ground or a
-		// different one -- see the identical guard and its measurement in
-		// HomeEnergy.
-		blockedByCap = Builder::SiteBlocked(want, spot);
+	// Same handoff as HomeEnergy: this rule decides a reactor is wanted here,
+	// Requests decides whether that is a new one or joining one already
+	// requested. Neither the counter nor the cooldown moves for a join --
+	// nothing new was asked for.
+	bool created = false;
+	IUnitTask@ post = null;
+	if (okSpot) {
+		@post = Requests::Take(unit, want, Task::BuildType::ENERGY,
+				Task::Priority::NORMAL, spot, 0.f, 0.f, created);
 	}
-	IUnitTask@ post = (okSpot && !blockedByCap)
-		? aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
-				Task::Priority::NORMAL, want, spot, 0.f))
-		: null;
+	if ((post !is null) && !created)
+		return post;
 	if (post is null) {
 		if (ai.frame >= gNextFusionLog) {
 			gNextFusionLog = ai.frame + 60 * SECOND;

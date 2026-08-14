@@ -196,9 +196,9 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 			if (RearPos(unit, back)) {
 				CCircuitDef@ safe = SideDef3(armsolar, corsolar, legsolar);
 				if ((safe !is null) && safe.IsAvailable(ai.frame)) {
-					IUnitTask@ hide = aiBuilderMgr.Enqueue(TaskB::Common(
+					IUnitTask@ hide = Requests::Take(unit, safe,
 							Task::BuildType::ENERGY, Task::Priority::NORMAL,
-							safe, back, SQUARE_SIZE * 8));
+							back, 0.f, SQUARE_SIZE * 8);
 					if (hide !is null) {
 						gNextCommHide = ai.frame + COMM_HIDE_PERIOD;
 						AiLog(Factory::T() + "apex: commander to the back wall, enemy "
@@ -296,9 +296,9 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				&& (lab.count <= 0)
 				&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) <= 0))
 			{
-				IUnitTask@ rebuild = aiBuilderMgr.Enqueue(TaskB::Common(
+				IUnitTask@ rebuild = Requests::Take(unit, lab,
 						Task::BuildType::FACTORY, Task::Priority::HIGH,
-						lab, unit.GetPos(ai.frame), 0.f));
+						unit.GetPos(ai.frame), 0.f, 0.f);
 				if (rebuild !is null) {
 					AiLog(Factory::T() + "apex: commander rebuilding a factory -- we have none");
 					return rebuild;
@@ -379,8 +379,8 @@ IUnitTask@ CommanderIdleWork(CCircuitUnit@ unit, bool isComm)
 		&& (ai.frame >= gNextCommEnergy)) {
 		CCircuitDef@ gen = SolarDef();
 		if ((gen !is null) && gen.IsAvailable(ai.frame)) {
-			IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
-					Task::Priority::NORMAL, gen, gHomePos, SQUARE_SIZE * 8));
+			IUnitTask@ post = Requests::Take(unit, gen, Task::BuildType::ENERGY,
+					Task::Priority::NORMAL, gHomePos, 0.f, SQUARE_SIZE * 8);
 			if (post !is null) {
 				gNextCommEnergy = ai.frame + COMM_ASSIST_PERIOD;
 				++gCommIdleJobs;
@@ -423,6 +423,11 @@ IUnitTask@ HomeTower(CCircuitUnit@ unit, bool isComm)
 {
 	if (!isComm || !CommRules() || !gHomeSet || (ai.frame < gNextHomeTower))
 		return null;
+	// STEP 4 COMES AFTER STEP 3. This rule sits above DefaultMakeTask, so
+	// during the opening it can take the commander off the economy the first
+	// lab is waiting on. The turret is cheap; the commander's time here is not.
+	if (OpeningNeedsEconomy())
+		return null;
 	// One outstanding order at a time. See gHomeTowerTask.
 	if (IsDefenceTaskLive(gHomeTowerTask))
 		return null;
@@ -444,8 +449,8 @@ IUnitTask@ HomeTower(CCircuitUnit@ unit, bool isComm)
 	const AIFloat3 site = ai.FindBuildSiteNear(tower, gHomePos, HOME_TOWER_RADIUS);
 	if (!OnMap(site))
 		return null;
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::HIGH, tower, site, 0.f));
+	IUnitTask@ post = Requests::Take(unit, tower, Task::BuildType::DEFENCE,
+			Task::Priority::HIGH, site, 0.f, 0.f);
 	if (post is null)
 		return null;
 	@gHomeTowerTask = post;
@@ -524,10 +529,13 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)
 
 	// DefenceAllowedAt is not asked: it bounds the FRONT allowance and refuses the
 	// rear, where extractors are.
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::HIGH, tower, site, 0.f));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, tower, Task::BuildType::DEFENCE,
+			Task::Priority::HIGH, site, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	// Without this the mex reads bare again next tick: FENCE only fires on a
 	// FINISHED turret, so nothing suppresses the repeat until it is built.
 	// Measured without it: 170 sentries for a player holding one extractor.
@@ -595,7 +603,26 @@ IUnitTask@ VetoCommanderHold(CCircuitUnit@ unit, bool isComm, IUnitTask@ task)
 		// for some time after making the first mex, takes him a while to figure
 		// out what to do next." Measured: 14 comm-hold vetoes before minute 7,
 		// in bursts of seven, five game-seconds apart.
-		const bool reallyWorking = (held !is null) && (held.target !is null);
+		//
+		// EXCEPT the walk to the first factory itself, which this same reasoning
+		// left completely unprotected: `target` stays null for the whole walk, so
+		// `reallyWorking` reads false the entire time the commander is en route,
+		// and the very next tick that proposes anything else (the opening gate
+		// flip-flopping, a mex guard, a home tower) swapped the commander off the
+		// walk with nothing to show for it -- there is no second builder in the
+		// opening to pick the abandoned task back up, so it sat at workers=0 for
+		// the rest of the game. Measured live: the FIRST factory task offered,
+		// five seconds in, was still unclaimed at game end. A factory is the one
+		// build in the opening worth protecting mid-walk on its own name alone,
+		// same as firstFactory above already refuses to let a held MEX block it
+		// from being taken in the first place -- this is that same exemption
+		// applied to KEEPING it once assigned.
+		const bool holdingFirstFactory = (held !is null)
+				&& (held.GetType() == Task::Type::BUILDER)
+				&& (held.GetBuildType() == Task::BuildType::FACTORY)
+				&& !Factory::HaveAnyFactory();
+		const bool reallyWorking = holdingFirstFactory
+				|| ((held !is null) && (held.target !is null));
 		if (reallyWorking && (heldKind != "") && (held.GetBuildType() != task.GetBuildType())
 			&& (ThreatFor(unit, held.GetBuildPos()) <= CON_THREAT_VETO))
 		{

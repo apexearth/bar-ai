@@ -293,10 +293,13 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 	// Shake ZERO. The site came back from the terrain manager, so it is already
 	// the buildable spot -- letting the engine slide it again is exactly the
 	// sprawl this grid exists to stop.
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::CONVERT,
-			Task::Priority::NORMAL, want, spot, 0.f));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, want, Task::BuildType::CONVERT,
+			Task::Priority::NORMAL, spot, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	gNextEcoConv = ai.frame + (Factory::EcoLeadActive()
 			? CONV_PERIOD : int(float(CONV_PERIOD) * CONV_OTHER_MULT));
 	++gEcoConvAsked;
@@ -357,10 +360,13 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	AIFloat3 spot;
 	if (!ConvSpot(unit, want, spot))
 		return null;
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::CONVERT,
-			Task::Priority::NORMAL, want, spot, 0.f));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, want, Task::BuildType::CONVERT,
+			Task::Priority::NORMAL, spot, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	gNextConvert = ai.frame + CONVERT_PERIOD;
 	++gConverts;
 	AiLog(Factory::T() + "apex: converter " + want.GetName()

@@ -107,8 +107,8 @@ IUnitTask@ MetalFullFallback(CCircuitUnit@ unit, bool isComm)
 	{
 		CCircuitDef@ gen = SolarDef();
 		if ((gen !is null) && gen.IsAvailable(ai.frame)) {
-			IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::ENERGY,
-					Task::Priority::NORMAL, gen, gHomePos, SQUARE_SIZE * 8));
+			IUnitTask@ post = Requests::Take(unit, gen, Task::BuildType::ENERGY,
+					Task::Priority::NORMAL, gHomePos, 0.f, SQUARE_SIZE * 8);
 			if (post !is null) {
 				gNextMetalFullDef = ai.frame + METAL_FULL_DEF_PERIOD;
 				AiLog(Factory::T() + "apex: metal-full-fallback " + unit.circuitDef.GetName()

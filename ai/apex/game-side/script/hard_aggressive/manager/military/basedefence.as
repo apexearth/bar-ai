@@ -45,9 +45,12 @@ void PlaceLineJammer(const AIFloat3& in spot)
 	}
 	if (!OnMap(back))
 		return;
-	IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, jam, back, SQUARE_SIZE * 16));
-	if (t !is null) {
+	// No builder in hand: this places the order for whoever the engine elects,
+	// and gets the same one-order-per-patch-of-ground protection.
+	bool created = false;
+	Requests::Take(null, jam, Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, back, 0.f, SQUARE_SIZE * 16, created);
+	if (created) {
 		AiLog(Factory::T() + "apex: line-jammer " + jam.GetName()
 			+ " standing=" + jam.count);
 	}

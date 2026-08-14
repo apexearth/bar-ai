@@ -388,11 +388,14 @@ IUnitTask@ FrontWork(CCircuitUnit@ unit)
 	const AIFloat3 site = ai.FindBuildSiteNear(tower, spot, FRONT_SUPPORT_R);
 	if (!OnMap(site))
 		return null;
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, tower,
 			isTurret ? Task::BuildType::DEFENCE : Task::BuildType::NANO,
-			Task::Priority::NORMAL, tower, site, 0.f));
+			Task::Priority::NORMAL, site, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	if (isTurret)
 		gFrontPlaced.insertLast(spot);
 	AiLog(Factory::T() + "apex: crew front " + unit.circuitDef.GetName()

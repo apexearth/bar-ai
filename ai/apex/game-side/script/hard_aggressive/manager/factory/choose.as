@@ -79,11 +79,47 @@ int PlantsWanted(const CCircuitDef@ fac)
 	return (want < 1) ? 1 : want;
 }
 
+// How many T1-tier plants we hold in TOTAL, across every type. PlantsWanted is
+// per def, so a first bot lab and a first vehicle plant each read count=0.
+int T1PlantCount()
+{
+	int n = 0;
+	for (uint i = 0; i < gFacUnits.length(); ++i) {
+		if (gFacUnits[i] is null)
+			continue;
+		if ((userData[gFacUnits[i].circuitDef.id].attr & (Attr::T2 | Attr::T3)) == 0)
+			++n;
+	}
+	return n;
+}
+
+int gNextOpenGateLog = 0;
+int gNextT1TotalLog = 0;
+
 // The plant curve is applied ONCE, here, rather than at each of the dozen
 // returns inside ChooseFactory. Only the opening is exempt -- see below for why
 // that is not the same thing as isStart.
 CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isReset)
 {
+	// STEP 3 OF THE OPENING: the first lab waits for the income step 2 buys.
+	// Not gated on isStart -- that flag is also true on the recovery path (see
+	// below) -- but on owning no factory at all, which is what "first" means,
+	// so a wiped team with one surviving constructor re-enters this same gate
+	// from its own current readings rather than being treated as past it.
+	// No clock: Builder::OpeningNeedsEconomy() cannot deadlock a player whose
+	// income never arrives, because OpeningEnergy stops proposing work the
+	// moment HomeEnergy has nothing beneficial left to place -- see opening.as.
+	if (ApexActive() && Builder::OpeningNeedsEconomy()) {
+		if (ai.frame >= gNextOpenGateLog) {
+			gNextOpenGateLog = ai.frame + 30 * SECOND;
+			AiLog(T() + "apex: opening gate holds the first factory -- e="
+				+ formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
+				+ "/" + formatFloat(Builder::OpeningEnergyGate(), "", 0, 0)
+				+ " m=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+				+ "/" + formatFloat(Builder::OpeningMetalGate(), "", 0, 1));
+		}
+		return null;
+	}
 	CCircuitDef@ want = ChooseFactory(pos, isStart, isReset);
 	// isStart IS NOT "the first factory of the game", and exempting it was a hole
 	// the size of the whole cap. CFactoryManager::UpdateIdle
@@ -116,6 +152,41 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 				+ " m/s -- no more of this type yet");
 		}
 		return null;
+	}
+
+	// A SECOND T1 LINE IS A PURCHASE THAT COMPETES WITH THE T2 PLANT.
+	//
+	// apexearth: "Build our first T1 lab. Just 1 until we have better economy to
+	// afford more than 1. Usually better to save for T2 lab instead of buying a
+	// second T1 lab before T2."
+	//
+	// The cap above is per DEF, so a first bot lab and a first vehicle plant
+	// both read count=0 and both passed it. Measured 2026-08-14, one 25-minute
+	// 4v4: teams 0, 4 and 6 each finished holding one armlab AND one armvp.
+	//
+	// Not a ban and not a new number: the SAME curve, read on the T1 total
+	// instead of per type, and lifted entirely once an advanced plant stands --
+	// at which point the second line is no longer competing with the tech step.
+	// Naval and air are exempt: a shipyard is the only route to water metal and
+	// carries its own income floors, and the air-plant branches carry theirs.
+	if (!gHaveT2
+		&& ((userData[want.id].attr & (Attr::T2 | Attr::T3)) == 0)
+		&& !IsAirFactory(want))
+	{
+		CCircuitDef@ navy = NavalOpening();
+		if (!((navy !is null) && (want is navy))) {
+			const int t1have = T1PlantCount();
+			if ((t1have >= 1) && (t1have >= allowed)) {
+				if (ai.frame >= gNextT1TotalLog) {
+					gNextT1TotalLog = ai.frame + 60 * SECOND;
+					AiLog(T() + "apex: " + want.GetName() + " refused -- " + t1have
+						+ " T1 plant(s) already and no T2 yet, at "
+						+ formatFloat(SteadyIncome(), "", 0, 0)
+						+ " m/s the T2 plant is the better buy");
+				}
+				return null;
+			}
+		}
 	}
 	return want;
 }

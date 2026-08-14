@@ -279,6 +279,10 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 	if (ThreatFor(unit, site) > CON_THREAT_VETO)
 		return null;
 
+	// A factory task carries a reprDef Requests cannot know, so this one builds
+	// its own and asks permission instead of handing the job over.
+	if (!Requests::Allowed(gant, Task::BuildType::FACTORY, site, 0.f))
+		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Factory(Task::Priority::HIGH,
 			gant, site, null, 0.f));
 	if (post is null)
@@ -348,10 +352,13 @@ IUnitTask@ FrontNano(CCircuitUnit@ unit)
 		if (gFrontNanoPlaced[i].distance2D(place) < FRONT_NANO_SPACING)
 			return null;
 	}
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::NANO,
-			Task::Priority::NORMAL, want, place, 0.f));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, want, Task::BuildType::NANO,
+			Task::Priority::NORMAL, place, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	gFrontNanoPlaced.insertLast(place);
 	gNextFrontNano = ai.frame + FRONT_NANO_PERIOD;
 	AiLog(Factory::T() + "apex: front nano " + want.GetName()
@@ -439,10 +446,13 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	// other usually." Spreading them was the earlier fix for a naval builder
 	// walling itself in, and it was the wrong trade -- it bought walkability with
 	// sprawl. Tight rows plus lanes is what buys both.
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::NANO,
-			Task::Priority::NORMAL, want, here, 0.f));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, want, Task::BuildType::NANO,
+			Task::Priority::NORMAL, here, 0.f, 0.f, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	gNextNano = ai.frame + NANO_PERIOD;
 	++gNanosAsked;
 	AiLog(Factory::T() + "apex: eco nano " + want.GetName()

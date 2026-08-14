@@ -654,10 +654,13 @@ IUnitTask@ ContestDefence(CCircuitUnit@ unit, const string& in kind,
 		return null;
 	if (!AreaNeedsDefence(spot))
 		return null;
-	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, tower, spot, DEF_SHAKE));
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, tower, Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, spot, 0.f, DEF_SHAKE, created);
 	if (post is null)
 		return null;
+	if (!created)
+		return post;
 	NoteDigOrder(spot);
 	gNextConDef = ai.frame + DEF_PERIOD;
 	gConDefPos = spot;
