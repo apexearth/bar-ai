@@ -672,7 +672,17 @@ int AAWantedNow(CCircuitUnit@ unit, float enemyAir)
 	array<Id>@ mates = ai.GetTeamIds();
 	const int players = ((mates is null) || (mates.length() == 0))
 			? 1 : int(mates.length());
-	int want = players * AA_MIN;
+	// NO SCOUTED AIR, LESS DETERRENCE FLOOR. apexearth, watching a 1v1 vs a
+	// ground-only opponent: "if we don't see enemy air let's make less AA...
+	// we can see the enemy is vehicles." The floor used to be unconditional
+	// -- AA_MIN applied whether or not any air had ever been seen, which is
+	// what made this read as a fixed tax rather than deterrence. enemyAir is
+	// Military::AirThreatSeen(), already floored to 0 below AA_IGNORE, so
+	// this reuses that signal rather than adding a second one.
+	const int floorPer = (enemyAir > 0.f)
+			? AA_MIN
+			: int(ai.GetTunable("apex_aa_min_noscout", float(AA_MIN) * 0.5f));
+	int want = players * floorPer;
 	if (aa !is null)
 		want += AATopUp(enemyAir, aa.costM);
 	return (want < 1) ? 1 : want;

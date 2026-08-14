@@ -16,7 +16,11 @@ namespace circuit {
 // Fraction of a unit's OWN GetMaxRange() it stands off at. One name for both
 // standoff sites -- IFighterTask::Attack and ISquadTask::Attack -- so a
 // per-unit fraction cannot drift between them again. Runtime: apex_range_mod.
-#define STANDOFF_RANGE_MOD	0.95f
+// apexearth: "we should aim to be at around 90% of our maximum attack range.
+// We should not move any closer." 0.95 put units close enough to the edge
+// that the enemy's own return fire (same range, or closing slightly) reached
+// them; 0.9 leaves the margin he asked for.
+#define STANDOFF_RANGE_MOD	0.90f
 
 class CEnemyInfo;
 

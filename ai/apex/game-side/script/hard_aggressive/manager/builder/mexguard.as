@@ -286,6 +286,16 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// home crew is never out of work.
 	CCircuitDef@ gen = null;
 	bool pickedReactor = false;
+	// FORCED FUSION overrides the whole ranking below, including its cooldown
+	// -- see the two checks where it is set. apexearth: "make us choose fusion
+	// instead of advanced solar if we have ~50 metal/s or more. We shouldn't
+	// make any other energy buildings while trying to make this fusion. It is
+	// very expensive so we should get it built asap." Skipping the cooldown
+	// is deliberate: Requests::Take already refuses a second fusion request
+	// and joins the one already in flight instead, so bypassing the cooldown
+	// here means "keep sending builders to the one reactor", not "start
+	// another".
+	bool forcedFusion = false;
 	if (EnergyWasting()) {
 		// No cooldown between converters: the real bound is the engine's finite
 		// economy task budget (CEconomyManager::MakeEconomyTasks needs
@@ -324,18 +334,35 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		// too and the reactor competes on the same per-metal merit as everything
 		// else, unrestricted.
 		CCircuitDef@ fus = Factory::HaveAnyFactory() ? FusionDef(unit) : null;
-
-		float best = -1.f;
-		float v = EnergyValuePerMetal(wind);
-		if (v > best) { best = v; @gen = wind; }
-		v = EnergyValuePerMetal(sol);
-		if (v > best) { best = v; @gen = sol; }
-		v = EnergyValuePerMetal(adv);
-		if (v > best) { best = v; @gen = adv; }
-		v = EnergyValuePerMetal(fus);
-		if (v > best) { best = v; @gen = fus; pickedReactor = true; }
+		const bool fusionAvailable = (fus !is null) && fus.IsAvailable(ai.frame);
+		// PREFER: rich enough that a reactor is simply the better spend, no
+		// need to wait for the per-metal ranking to notice.
+		const bool preferFusion = fusionAvailable
+				&& (aiEconomyMgr.metal.income
+					>= ai.GetTunable("apex_fusion_prefer_income", FUSION_PREFER_INCOME));
+		// IN-FLIGHT: one is already requested and not yet standing -- send
+		// this builder to it instead of starting something else, so build
+		// power concentrates on the one expensive building instead of
+		// spreading across it plus whatever the ranking would otherwise pick.
+		const bool fusionInFlight = fusionAvailable && !HaveReactor()
+				&& (Requests::InFlight(fus) > 0);
+		forcedFusion = preferFusion || fusionInFlight;
+		if (forcedFusion) {
+			@gen = fus;
+			pickedReactor = true;
+		} else {
+			float best = -1.f;
+			float v = EnergyValuePerMetal(wind);
+			if (v > best) { best = v; @gen = wind; }
+			v = EnergyValuePerMetal(sol);
+			if (v > best) { best = v; @gen = sol; }
+			v = EnergyValuePerMetal(adv);
+			if (v > best) { best = v; @gen = adv; }
+			v = EnergyValuePerMetal(fus);
+			if (v > best) { best = v; @gen = fus; pickedReactor = true; }
+		}
 	}
-	if (pickedReactor && (ai.frame < gNextFusion))
+	if (pickedReactor && !forcedFusion && (ai.frame < gNextFusion))
 		return null;   // a reactor won; wait for it rather than dropping a rung
 	if ((gen is null) || !gen.IsAvailable(ai.frame))
 		return null;

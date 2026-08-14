@@ -149,6 +149,10 @@ int gNextConv = 0;
 // Metal income above which a reactor is worth it regardless of role. A fusion
 // is ~4,300 metal and pays for every advanced thing that follows.
 const float FUSION_SOLO_INCOME = 30.f;
+// apexearth: choose fusion over advanced solar outright once income clears
+// this, rather than waiting for the per-metal ranking to (unreliably) favor
+// it -- see HomeEnergy's forcedFusion override.
+const float FUSION_PREFER_INCOME = 50.f;
 // How much longer a non-eco-lead waits between reactors.
 const float FUSION_OTHER_MULT = 2.0f;
 const int   FUSION_PERIOD   = 45 * SECOND;

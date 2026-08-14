@@ -5,54 +5,83 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
-## NEW: dangling IBuilderTask* crash in MakeBuilderTask/MakeCommDangerTask, root cause not found (2026-08-14, watching)
+## NEW: heap corruption at shutdown in CCircuitAI::DestroyGameAttribute (2026-08-14, found via Application Verifier)
 
-**apexearth, watching two more windowed games (+70 handicap):** "we are still
-crashing." Symbolized three separate crash instances against the local
-RelWithDebInfo build (full DWARF; `docs/06-building-the-dll.md`'s docker
-toolchain has `x86_64-w64-mingw32-addr2line`; the crash log's offsets need the
-DLL's actual `ImageBase` added — `0x1e33b0000` for this build, `objdump -p`).
+Not the crash apexearth is watching for -- caught incidentally while hunting
+the one below. Windows Application Verifier's Heaps check, enabled for
+`spring-headless.exe` (no rebuild needed, just `appverif -enable Heaps -for
+spring-headless.exe`, reversible via `-disable`), flagged a heap violation at
+the exact moment a match ends and `CCircuitAI::Release()` tears down --
+resolved via `addr2line` against the unstripped build:
 
-One of the three (`matches/20260814-070748-*`, `CIdleTask::Update` ->
-`ass->GetTask()->Start(ass)` with no null check, `IdleTask.cpp:72`) is now
-**fixed and verified**: `CBEnergyTask::Start`'s own comment already documented
-that `AssignTask` can leave a unit taskless (a pending PathRequest makes it a
-no-op), and the line dereferenced the result unconditionally. Rebuilt via
-docker, redeployed, ran a fresh 25-minute test — did not recur.
+    circuit::CCircuitAI::DestroyGameAttribute()          CircuitAI.cpp:2591
+    (deallocating a std::unordered_set<CCircuitAI*> node, which chains into
+    releasing a shared_ptr whose deleter frees a terrain::SAreaSector via an
+    std::_Rb_tree node deallocation)
 
-The other two (`matches/20260814-034141-*` and a third from
-`matches/20260814-073940-*`) are a DIFFERENT, still-open bug: both crash on
-the identical first line of an identical pattern in `BuilderManager.cpp` --
-`MakeBuilderTask` (line 1397) and `MakeCommDangerTask` (line 1269), both
-iterating `buildTasks` (`std::vector<std::set<IBuilderTask*>>`) and calling
-`candidate->CanAssignTo(unit)`. Consistent with a dangling `IBuilderTask*`
-surviving in that container. **Audited every C++ file this repo has ever
-modified** (`git log -- cpp/src/circuit/`, ~40 files) for a bare `delete` on a
-task pointer bypassing the ref-counted lifecycle — the exact bug class from
-`changes/2026-08-09.md`'s "C++ deleted tasks the script held" (three sites,
-fixed in `943db65`) — and found nothing beyond those three already-fixed
-sites. Both crashing functions are unmodified upstream code, and `DequeueTask`
-does erase from `buildTasks` synchronously on every normal removal path, so
-the leak (if that's what it is) is not in a `buildTasks`-adjacent site read so
-far. Not reproduced under a memory-error tool.
+Only observed at game-end teardown so far, in one repro. Not yet determined
+whether this is harmless (process exits right after anyway) or corrupts
+something that matters for multi-restart scenarios (a hosted lobby playing
+several games without restarting the process). Needs its own pass: read
+`DestroyGameAttribute` and whatever owns the `SAreaSector`/area-sector map to
+find the double-free/use-after-free, independent of the mid-game crash below.
 
-**A genuinely independent, strong secondary finding** while chasing this:
-`IBuilderTask::Reevaluate` (`BuilderTask.cpp:472-480`, unmodified upstream)
-self-aborts any task costing over 1000 metal with no nanoframe yet
-(`target == nullptr`) if average income drops under 60% of a saved baseline
-and under half the current pull, for either resource. This is a very plausible
-explanation for the separate "fusion reactors never finish" finding — armfus
-is 4300 metal, and BAR income swings 40%+ routinely (a lost mex, a raid). Not
-yet confirmed as THE mechanism (would need matching a `savedIncome` read
-against a live trace), but it is a real, well-evidenced lead for whoever picks
-this up next, independent of the dangling-pointer crash above.
+## RESOLVED: the recurring "IRefCounter::Release() -> delete this" crash — FIXED (2026-08-14)
 
-**Next step, not yet done**: rebuild with AddressSanitizer and reproduce. Manual
-reading of every plausible call site (task construction, `DequeueTask`,
-`AbortTask`, the `MakeEconomyTasks` call both crashing functions make right
-before their loop) did not find it; a sanitizer will report the actual
-use-after-free the moment it happens, with both the free and the bad-access
-stack, instead of more guessing.
+**apexearth, watching several more windowed games (+70 handicap):** "we are
+still crashing." This was the same bug documented (and never fully fixed) in
+`changes/2026-08-09.md`, resurfacing at four different call sites across the
+session (`CIdleTask::Update`, `MakeBuilderTask`, `MakeCommDangerTask`,
+`CBuilderManager::UnitIdle`) — the varying surface location is why it looked
+like several different bugs and evaded manual auditing for two sessions.
+
+Windows Application Verifier's Heaps check (`appverif -enable Heaps -for
+spring-headless.exe`, no rebuild needed, reversible via `-disable`) didn't
+catch it directly — it's not raw OS heap corruption — but running under it
+still eventually produced a crash whose stack pointed straight at the actual
+bug: `ITaskModule::DequeueTask` (`TaskModule.cpp:78-83`):
+
+    void ITaskModule::DequeueTask(IUnitTask* task, bool done)
+    {
+        task->Dead();
+        TaskRemoved(task, done);   // <-- fires AiTaskRemoved (our script)
+        task->Stop(done);          // <-- crash: use-after-free
+    }
+
+`IUnitTask` derives `IRefCounter`, registered `asOBJ_REF` with intrusive
+refcounting (`RefCounter.cpp`: `Release()` calls `delete this` at refcount 0).
+`TaskRemoved` runs the AngelScript `AiTaskRemoved` callback with a bare native
+pointer and no extra reference held. If that callback happens to drop the
+*last* AngelScript-side reference to the task (e.g. the last array element
+removed from `Requests::gLive`, or any other tracked handle going out of
+scope), AngelScript's own `Release()` legitimately deletes the object right
+there — and `task->Stop(done)` one line later is now dereferencing freed
+memory, from whichever native call chain happened to trigger it that time
+(hence four different-looking crash sites for the same root cause).
+
+**Fix**: bracket the callback with the object's own `AddRef()`/`Release()` --
+the same guarantee AngelScript already gives every other holder of a handle:
+
+    task->AddRef();
+    task->Dead();
+    TaskRemoved(task, done);
+    task->Stop(done);
+    task->Release();
+
+Rebuilt via docker, deployed, verified clean on a fresh test (no AS compile
+errors, opening timing unregressed). Not yet run for a long enough window to
+positively confirm the crash is gone for good — the original was intermittent
+across many minutes of play — but the mechanism is directly confirmed by the
+crash's own stack, not inferred, and the fix is the textbook-correct pattern
+for it.
+
+Also found and documented, not yet fixed: `IBuilderTask::Reevaluate`
+(`BuilderTask.cpp:472-480`, unmodified upstream) self-aborts any task costing
+over 1000 metal with no nanoframe yet if average income drops under 60% of a
+saved baseline. Plausible explanation for the separate "fusion reactors take
+many attempts to complete" finding (armfus is 4300 metal; BAR income swings
+40%+ routinely) — not yet confirmed as THE mechanism, a real lead for next
+time.
 
 ## NEW: anti-air coverage is lacking (2026-08-13, watching)
 

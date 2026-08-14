@@ -93,6 +93,14 @@ class CCircuitDef;
 #define CHARGE_THREAT_CEILING	1e9f
 // Spacing between neighbours on a regroup line, in elmos.
 #define LINE_SPACING		110.f
+// apexearth: "best would be if the hurt guys just move towards the back of
+// the pack." A unit IFighterTask::OnUnitDamaged marks a "coward" (health at
+// or below its retreat threshold, but still safely in the fight -- in LOS,
+// in range, threat tolerable) is not sent home; it stays in the squad and is
+// simply stood further out on its row's standoff ring than its healthy
+// squadmates, who are between it and the target on most bearings. Runtime:
+// apex_coward_rear_mod.
+#define COWARD_REAR_MOD		1.35f
 
 class ISquadTask: public IFighterTask {
 protected:

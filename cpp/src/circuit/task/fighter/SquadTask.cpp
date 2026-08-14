@@ -721,9 +721,22 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		const float range = standoff * rangeMod;
 		// NOTE: 1st unit in 1st row will scout, ignoring GetTarget()->IsInRadarOrLOS()
 		//       as unit may wobble back and forth without firing if turret turn is slow.
+		// Floored at `range`. apexearth, watching Hounds (650 weapon range,
+		// 400 sight -- see the 2026-08-09 EyesForTheGuns note): "I see our
+		// hound units running much too deep into enemy territory while
+		// fighting enemies from too close up." min(kv.first, losRadius) is
+		// exactly sight radius whenever sight is the smaller of the two --
+		// true by construction for any unit this scouting behaviour was
+		// meant to matter for -- so the scout used to walk in to 400 on a
+		// 650-range gun, well inside the safe standoff. The mobile-radar
+		// escort (EyesForTheGuns) is the intended fix for a blind gun now;
+		// this block should never send the gun itself in closer than the
+		// standoff it would otherwise hold. For any row whose sight already
+		// reaches past its own standoff distance, min(...)*rangeMod already
+		// equals `range`, so the max() below is a no-op there.
 		float range0 = range;
 		if ((row++ == 0) && losStandoff && (isStatic || !GetTarget()->IsInRadarOrLOS())) {
-			range0 = std::min(kv.first, rowDef->GetLosRadius()) * rangeMod;
+			range0 = std::max(range, std::min(kv.first, rowDef->GetLosRadius()) * rangeMod);
 		}
 		// The arc a row may occupy. At 0.9*PI a squad packs into a half circle on
 		// one side of the target, which is a single AOE footprint -- and the wider
@@ -757,8 +770,25 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		const float end2 = alpha - beta;
 		AIFloat3 newPos1(tPos.x + range * cosf(end1), tPos.y, tPos.z + range * sinf(end1));
 		AIFloat3 newPos2(tPos.x + range * cosf(end2), tPos.y, tPos.z + range * sinf(end2));
-		const AIFloat3 testPos = (*kv.second.begin())->GetPos(frame);
-		if (testPos.SqDistance2D(newPos1) > testPos.SqDistance2D(newPos2)) {
+		CCircuitUnit* testUnit = *kv.second.begin();
+		const AIFloat3 testPos = testUnit->GetPos(frame);
+		// apexearth: "we should try to choose safer angles." The two ring ends
+		// are geometrically equivalent (same range, mirrored arc); which one this
+		// row actually walks toward used to be picked on distance alone -- purely
+		// "which side is less travel," with no regard for what is on that side.
+		// Reuses the same GetThreatAt this function already calls per-unit below
+		// for the standoff veto, just sampled once per row on the two candidate
+		// ends instead of the one position a unit is already walking to. Distance
+		// stays the tiebreak when neither side is meaningfully more dangerous, so
+		// a squad does not zigzag between two near-identical tiles.
+		CThreatMap* angleThreatMap = manager->GetCircuit()->GetThreatMap();
+		const float threat1 = angleThreatMap->GetThreatAt(testUnit, newPos1);
+		const float threat2 = angleThreatMap->GetThreatAt(testUnit, newPos2);
+		const float threatSpread = std::max(threat1, threat2) * 0.1f;
+		const bool flipForSafety = (std::fabs(threat1 - threat2) > threatSpread) && (threat2 < threat1);
+		const bool flipForDistance = (std::fabs(threat1 - threat2) <= threatSpread)
+				&& (testPos.SqDistance2D(newPos1) > testPos.SqDistance2D(newPos2));
+		if (flipForSafety || flipForDistance) {
 			delta = -delta;
 			beta = -beta;
 		}
@@ -802,7 +832,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				// into a second enemy.
 				const float orbit = ORBIT_RATE * (frame / (float)FRAMES_PER_SEC) * orbitDir;
 				const float angle = alpha + beta + orbit;
-				const float r = (iterNum == 0) ? range0 : range;
+				float r = (iterNum == 0) ? range0 : range;
+				// Screened, not withdrawn: a coward stands further out on the
+				// same ring instead of leaving the fight, so healthier
+				// squadmates on the same bearing sit between it and the
+				// target. This is not the reverted "never retreat" change --
+				// that forced EVERY unit to fight to the death in place; this
+				// only repositions a unit that OnUnitDamaged already judged
+				// safe enough not to need a full retreat.
+				if (cowards.find(unit) != cowards.end()) {
+					r *= manager->GetCircuit()->GetTunable("apex_coward_rear_mod", COWARD_REAR_MOD);
+				}
 				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
 				CTerrainManager::CorrectPosition(newPos);
 
@@ -820,9 +860,24 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				// stepping into the hotter spot. Small multiplicative
 				// tolerance so a unit doesn't flip-flop between two tiles of
 				// near-identical threat every isRepeatAttack tick.
+				//
+				// Gated on already being in range. The candidate ring point sits
+				// at THIS unit's own weapon range of the target, which is by
+				// construction inside (or adjacent to) the target's own threat
+				// radius -- so for a unit still closing distance, newPos reads
+				// higher threat than curPos on essentially every step, and the
+				// veto held it at curPos forever: CmdSetTarget still went out
+				// below, so the unit showed a target with no move ever following
+				// it. Only a unit already standing within its own standoff range
+				// (i.e. already trading fire, which is what the comment above
+				// describes) should be offered the choice to hold instead of
+				// stepping into a hotter spot.
 				CThreatMap* threatMap = manager->GetCircuit()->GetThreatMap();
 				const AIFloat3& curPos = unit->GetPos(frame);
-				if (threatMap->GetThreatAt(unit, newPos) > threatMap->GetThreatAt(unit, curPos) * 1.5f) {
+				const bool alreadyInRange = (curPos.SqDistance2D(tPos) <= SQUARE(r * 1.05f));
+				if (alreadyInRange
+					&& (threatMap->GetThreatAt(unit, newPos) > threatMap->GetThreatAt(unit, curPos) * 1.5f))
+				{
 					newPos = curPos;
 				}
 
