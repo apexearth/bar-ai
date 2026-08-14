@@ -26,14 +26,23 @@ several games without restarting the process). Needs its own pass: read
 `DestroyGameAttribute` and whatever owns the `SAreaSector`/area-sector map to
 find the double-free/use-after-free, independent of the mid-game crash below.
 
-## RESOLVED: the recurring "IRefCounter::Release() -> delete this" crash — FIXED (2026-08-14)
+## PARTIALLY FIXED: the recurring "IRefCounter::Release() -> delete this" crash (2026-08-14)
 
 **apexearth, watching several more windowed games (+70 handicap):** "we are
-still crashing." This was the same bug documented (and never fully fixed) in
-`changes/2026-08-09.md`, resurfacing at four different call sites across the
-session (`CIdleTask::Update`, `MakeBuilderTask`, `MakeCommDangerTask`,
-`CBuilderManager::UnitIdle`) — the varying surface location is why it looked
-like several different bugs and evaded manual auditing for two sessions.
+still crashing," repeated after each of the two fixes below. This is the same
+bug documented (and never fully fixed) in `changes/2026-08-09.md`, and it has
+now been confirmed at FIVE different call sites across the session
+(`CIdleTask::Update`, `MakeBuilderTask`, `MakeCommDangerTask`,
+`CBuilderManager::UnitIdle`, `ITaskModule::AssignTask`) — the varying surface
+location is why it looked like several different bugs and evaded manual
+auditing for two sessions, and why fixing one confirmed site (below) was not
+the same as fixing the disease.
+
+**Status: two confirmed sites fixed (`DequeueTask`, `AssignTask`); a genuine
+fifth crash after the first fix proves the pattern has more instances than
+were found by reading alone.** Do not treat "fixed" as final until a long
+watched game actually goes without one — this entry has been wrong about that
+twice already tonight.
 
 Windows Application Verifier's Heaps check (`appverif -enable Heaps -for
 spring-headless.exe`, no rebuild needed, reversible via `-disable`) didn't
@@ -69,11 +78,46 @@ the same guarantee AngelScript already gives every other holder of a handle:
     task->Release();
 
 Rebuilt via docker, deployed, verified clean on a fresh test (no AS compile
-errors, opening timing unregressed). Not yet run for a long enough window to
-positively confirm the crash is gone for good — the original was intermittent
-across many minutes of play — but the mechanism is directly confirmed by the
-crash's own stack, not inferred, and the fix is the textbook-correct pattern
-for it.
+errors, opening timing unregressed).
+
+**It crashed again anyway, ~26 minutes into the very next watched game**
+(`matches/20260814-174501-*`), same `IRefCounter::Release()` signature, a
+DIFFERENT call chain: `CBuilderManager::AssignTask(unit)` (the single-arg,
+"auto-assign" overload) -> `ITaskModule::AssignTask(CCircuitUnit*)`
+(`TaskModule.cpp:70-76`) -> `MakeTask(unit)` (runs `AiMakeTask`, our whole
+script pipeline) -> `task->AssignTo(unit)`. Identical shape to the first
+fix -- a raw pointer used again after a call into script that can drop
+references -- just a different function that never went through
+`DequeueTask` at all. Same fix pattern applied to both `AssignTask`
+overloads in `TaskModule.cpp` (the two-arg version's `task->Start(unit)`
+also runs script by the same reasoning, guarded too even though it hasn't
+crashed yet -- same shape, same fix, no reason to wait for a sixth crash to
+apply it):
+
+    IUnitTask* task = MakeTask(unit);
+    if (task != nullptr) {
+        task->AddRef();
+        task->AssignTo(unit);
+        task->Release();
+    }
+
+Rebuilt, redeployed, clean compile. A 40-minute background test is running
+past the ~25-26m window where every crash so far has landed, to get some
+signal before the next watched game.
+
+**Structurally similar but NOT yet fixed**: `TaskAdded(task); return task;`
+in `CBuilderManager::Enqueue` (both overloads), `CFactoryManager::Enqueue`,
+`CMilitaryManager::Enqueue` (`BuilderManager.cpp:741,766,774`,
+`FactoryManager.cpp:820,849`, `MilitaryManager.cpp:742,778`) has the same
+"script call, then native code still uses the raw pointer" shape, but the
+"use" here is just returning the pointer to an arbitrary caller further up
+the stack -- an AddRef-then-Release bracket INSIDE `Enqueue` would not
+actually protect the caller (releasing before `return` just moves the
+deletion to the instant before the caller gets the pointer). Protecting this
+shape properly needs the guard to outlive the function, which is a bigger
+change than the two fixed so far. Not confirmed as a real crash site, but
+the same audit that found the first two sites should check this one before
+declaring the disease cured.
 
 Also found and documented, not yet fixed: `IBuilderTask::Reevaluate`
 (`BuilderTask.cpp:472-480`, unmodified upstream) self-aborts any task costing

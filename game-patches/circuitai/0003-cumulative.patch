@@ -2343,6 +2343,33 @@ index c167603..be41aa3 100644
  	struct SScoutPoint {
  		int spotNum;  // last used spot number in cluster
  		int scouted;  // times this point was scouted
+diff --git a/src/circuit/module/TaskModule.cpp b/src/circuit/module/TaskModule.cpp
+index e6c27f5..e970eee 100644
+--- a/src/circuit/module/TaskModule.cpp
++++ b/src/circuit/module/TaskModule.cpp
+@@ -77,9 +77,22 @@ void ITaskModule::AssignTask(CCircuitUnit* unit)
+ 
+ void ITaskModule::DequeueTask(IUnitTask* task, bool done)
+ {
++	// TaskRemoved() runs the script's AiTaskRemoved callback, which can hold
++	// the only remaining AngelScript-side reference to this task (e.g. the
++	// last element removed from a tracking array). IUnitTask is asOBJ_REF
++	// with intrusive refcounting (RefCounter.cpp) -- if that callback drops
++	// the last script reference, Release() deletes the object right there,
++	// and task->Stop(done) below becomes a use-after-free on this function's
++	// own raw pointer. Confirmed live: symbolized crash at exactly this line
++	// (IRefCounter::Release() -> delete this, reached through the script
++	// callback, native frame resuming into the freed object). Holding our
++	// own reference across the callback is the same guarantee AngelScript's
++	// own handle assignment already gives every other caller.
++	task->AddRef();
+ 	task->Dead();
+ 	TaskRemoved(task, done);
+ 	task->Stop(done);
++	task->Release();
+ }
+ 
+ IUnitTask* ITaskModule::MakeTask(CCircuitUnit* unit)
 diff --git a/src/circuit/resource/MetalManager.cpp b/src/circuit/resource/MetalManager.cpp
 index d5e10a6..af45b33 100644
 --- a/src/circuit/resource/MetalManager.cpp
@@ -5192,10 +5219,10 @@ index 0400f8d..01b4d6c 100644
  	CTerrainManager::CorrectPosition(newPos);
  	unit->Attack(newPos, GetTarget(), targetTile, GetTarget()->GetUnit()->IsCloaked(), isStatic, frame + FRAMES_PER_SEC * 60);
 diff --git a/src/circuit/task/fighter/FighterTask.h b/src/circuit/task/fighter/FighterTask.h
-index e1d90c4..5f57950 100644
+index e1d90c4..11942f6 100644
 --- a/src/circuit/task/fighter/FighterTask.h
 +++ b/src/circuit/task/fighter/FighterTask.h
-@@ -13,7 +13,10 @@
+@@ -13,7 +13,14 @@
  
  namespace circuit {
  
@@ -5203,11 +5230,15 @@ index e1d90c4..5f57950 100644
 +// Fraction of a unit's OWN GetMaxRange() it stands off at. One name for both
 +// standoff sites -- IFighterTask::Attack and ISquadTask::Attack -- so a
 +// per-unit fraction cannot drift between them again. Runtime: apex_range_mod.
-+#define STANDOFF_RANGE_MOD	0.95f
++// apexearth: "we should aim to be at around 90% of our maximum attack range.
++// We should not move any closer." 0.95 put units close enough to the edge
++// that the enemy's own return fire (same range, or closing slightly) reached
++// them; 0.9 leaves the margin he asked for.
++#define STANDOFF_RANGE_MOD	0.90f
  
  class CEnemyInfo;
  
-@@ -37,6 +40,9 @@ public:
+@@ -37,6 +44,9 @@ public:
  	virtual void OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker) override;
  
  	FightType GetFightType() const { return fightType; }
@@ -5557,7 +5588,7 @@ index b4b43c1..8ef4210 100644
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..d0940ca 100644
+index 0d59b65..0da5e1d 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -10,14 +10,17 @@
@@ -5862,7 +5893,7 @@ index 0d59b65..d0940ca 100644
  	auto it = rangeUnits.begin()->second.begin();
  	std::advance(it, rangeUnits.begin()->second.size() / 2);  // TODO: Optimize
  	AIFloat3 dir = (*it)->GetPos(frame) - tPos;
-@@ -418,23 +617,140 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -418,31 +617,178 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -5971,11 +6002,24 @@ index 0d59b65..d0940ca 100644
 +		const float range = standoff * rangeMod;
  		// NOTE: 1st unit in 1st row will scout, ignoring GetTarget()->IsInRadarOrLOS()
  		//       as unit may wobble back and forth without firing if turret turn is slow.
++		// Floored at `range`. apexearth, watching Hounds (650 weapon range,
++		// 400 sight -- see the 2026-08-09 EyesForTheGuns note): "I see our
++		// hound units running much too deep into enemy territory while
++		// fighting enemies from too close up." min(kv.first, losRadius) is
++		// exactly sight radius whenever sight is the smaller of the two --
++		// true by construction for any unit this scouting behaviour was
++		// meant to matter for -- so the scout used to walk in to 400 on a
++		// 650-range gun, well inside the safe standoff. The mobile-radar
++		// escort (EyesForTheGuns) is the intended fix for a blind gun now;
++		// this block should never send the gun itself in closer than the
++		// standoff it would otherwise hold. For any row whose sight already
++		// reaches past its own standoff distance, min(...)*rangeMod already
++		// equals `range`, so the max() below is a no-op there.
  		float range0 = range;
 -		if ((row++ == 0) && (isStatic || !GetTarget()->IsInRadarOrLOS())) {
 -			range0 = std::min(kv.first, rowDef->GetLosRadius()) * RANGE_MOD;
 +		if ((row++ == 0) && losStandoff && (isStatic || !GetTarget()->IsInRadarOrLOS())) {
-+			range0 = std::min(kv.first, rowDef->GetLosRadius()) * rangeMod;
++			range0 = std::max(range, std::min(kv.first, rowDef->GetLosRadius()) * rangeMod);
  		}
 -		const float maxDelta = (M_PI * 0.9f) / kv.second.size();
 +		// The arc a row may occupy. At 0.9*PI a squad packs into a half circle on
@@ -6007,7 +6051,34 @@ index 0d59b65..d0940ca 100644
  
  		float beta = -delta * (kv.second.size() / 2);
  		const float end1 = alpha + beta;
-@@ -458,10 +774,83 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+ 		const float end2 = alpha - beta;
+ 		AIFloat3 newPos1(tPos.x + range * cosf(end1), tPos.y, tPos.z + range * sinf(end1));
+ 		AIFloat3 newPos2(tPos.x + range * cosf(end2), tPos.y, tPos.z + range * sinf(end2));
+-		const AIFloat3 testPos = (*kv.second.begin())->GetPos(frame);
+-		if (testPos.SqDistance2D(newPos1) > testPos.SqDistance2D(newPos2)) {
++		CCircuitUnit* testUnit = *kv.second.begin();
++		const AIFloat3 testPos = testUnit->GetPos(frame);
++		// apexearth: "we should try to choose safer angles." The two ring ends
++		// are geometrically equivalent (same range, mirrored arc); which one this
++		// row actually walks toward used to be picked on distance alone -- purely
++		// "which side is less travel," with no regard for what is on that side.
++		// Reuses the same GetThreatAt this function already calls per-unit below
++		// for the standoff veto, just sampled once per row on the two candidate
++		// ends instead of the one position a unit is already walking to. Distance
++		// stays the tiebreak when neither side is meaningfully more dangerous, so
++		// a squad does not zigzag between two near-identical tiles.
++		CThreatMap* angleThreatMap = manager->GetCircuit()->GetThreatMap();
++		const float threat1 = angleThreatMap->GetThreatAt(testUnit, newPos1);
++		const float threat2 = angleThreatMap->GetThreatAt(testUnit, newPos2);
++		const float threatSpread = std::max(threat1, threat2) * 0.1f;
++		const bool flipForSafety = (std::fabs(threat1 - threat2) > threatSpread) && (threat2 < threat1);
++		const bool flipForDistance = (std::fabs(threat1 - threat2) <= threatSpread)
++				&& (testPos.SqDistance2D(newPos1) > testPos.SqDistance2D(newPos2));
++		if (flipForSafety || flipForDistance) {
+ 			delta = -delta;
+ 			beta = -beta;
+ 		}
+@@ -458,10 +804,83 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				|| (unit->GetTarget() != GetTarget())
  				|| (unit->GetTargetTile() != targetTile))
  			{

@@ -62,16 +62,33 @@ void ITaskModule::Release()
 
 void ITaskModule::AssignTask(CCircuitUnit* unit, IUnitTask* task)
 {
+	// Same guard as DequeueTask below: task->Start(unit) can run script
+	// (Start() dispatches through the task hierarchy, and several task types
+	// call into script-visible state from there), and RemoveAssignee/AssignTo
+	// give script two more chances to drop a reference before Start() runs.
+	// Hold our own across the whole sequence.
+	task->AddRef();
 	unit->GetTask()->RemoveAssignee(unit);
 	task->AssignTo(unit);
 	task->Start(unit);
+	task->Release();
 }
 
 void ITaskModule::AssignTask(CCircuitUnit* unit)
 {
+	// MakeTask(unit) runs the script's AiMakeTask top to bottom -- confirmed
+	// live as a second instance of the DequeueTask bug (same
+	// IRefCounter::Release() -> delete this signature, this call chain
+	// instead): whatever script does while computing an answer can drop the
+	// last reference to some OTHER tracked task, and if the returned task
+	// itself is affected the same way, AssignTo(unit) below dereferences it
+	// freed. AddRef the moment we have it, for the same reason DequeueTask
+	// does.
 	IUnitTask* task = MakeTask(unit);
 	if (task != nullptr) {
+		task->AddRef();
 		task->AssignTo(unit);
+		task->Release();
 	}
 }
 
