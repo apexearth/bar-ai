@@ -5,6 +5,36 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
+## ABANDONED: Linux/ASan harness for the buildTasks crash (2026-08-14) -- back to Windows addr2line
+
+Built a native Linux + AddressSanitizer build (`vendor/engine/build-amd64-linux/`,
+docker's `recoil-build-amd64-linux` image) specifically to catch the
+still-unresolved `MakeBuilderTask`/`buildTasks` dangling-pointer crash (see the
+"IRefCounter" entry below), since MinGW's cross-toolchain has no `-fsanitize=
+address`. It never got there: two different scenario configs each hit a
+DIFFERENT crash during AI **init**, before the game even starts --
+
+- 8v8 +70 handicap: null `CEnemyManager*` in `CEnemyManager_GetEnemyPos`
+  (`InitScript.cpp:383`), at literally frame 0. Tried gating the one unguarded
+  `aiEnemyMgr.GetEnemyPos()` call site (`baseplan/axis.as`) behind
+  `Builder::gHomeSet` to match every other caller -- no effect; `gHomeSet` is
+  already true by frame 0 (set on the commander's own `AiUnitFinished`, and the
+  commander is a starting unit), so nothing was actually gated.
+- 2v2 follow-up: null `CCircuitDef*` in `CMetalManager::ClusterizeMetal`
+  during `CAllyTeam::Init`.
+
+Neither reproduces on the shipped Windows build. Read as init-order fragility
+in the hand-assembled Linux build itself (a partial `cmake --install` was
+worked around by manually copying `.so`s into place, not a clean full
+build+install), not a real player-facing bug. apexearth's call: not worth
+the effort relative to the cost (~40 min per docker run to find out). The
+three sites already fixed this session were all found the other way -- a real
+Windows crash symbolized via `addr2line` against the `ImageBase`-adjusted
+offset -- so that pipeline is what continues to be used as further crashes
+surface. `vendor/engine/build-amd64-linux/` and the `asan_*` logs/writedirs
+are left in place in case it's worth revisiting later; nothing further
+planned there.
+
 ## NEW: heap corruption at shutdown in CCircuitAI::DestroyGameAttribute (2026-08-14, found via Application Verifier)
 
 Not the crash apexearth is watching for -- caught incidentally while hunting

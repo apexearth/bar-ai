@@ -53,7 +53,9 @@ bool Frame()
 	if (!gAxisSet) {
 		AIFloat3 toward;
 		bool have = Front::FrontNear(gAnchor, toward);
-		if (!have) {
+		// Every other GetEnemyPos() caller in this AI waits for gHomeSet first;
+		// this was the one spot that didn't, and it runs as early as frame 0.
+		if (!have && Builder::gHomeSet) {
 			toward = aiEnemyMgr.GetEnemyPos();
 			have = OnMap(toward);
 		}
