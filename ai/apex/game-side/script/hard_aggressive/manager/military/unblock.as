@@ -3,11 +3,6 @@ namespace Military {
 //------------------------------------------------------------------------------
 // UNITS WALLED IN BY OUR OWN BUILDINGS.
 //
-// apexearth: "we need to detect units that are blocked and reclaim cheapest
-// buildings we can to unblock their movement. This often happens in late game
-// where units are completely locked into an area and cannot move outside.
-// Usually theres just 1 or 2 buildings in the way."
-//
 // Why nothing already catches this:
 //
 //  - CircuitAI's own reachability test is CTerrainManager::CanMoveToPos, which
@@ -108,21 +103,14 @@ bool UnblockAsked(Id id)
 // ASKING THE UNIT TO WALK REPLACES ASKING THE ENGINE FOR A PATH.
 //
 // ai.GetPathLength reaches CAICallback::InitPath -> QTPFS RequestPath, which
-// runs a real search and creates entities in the path manager's registry. The
-// AI runs on ONE machine, so that work happens on the host and nowhere else --
-// and QTPFS's own ExecuteQueuedSearches carries the warning "Do NOT impact this
-// group while the background tasks are running". Measured over paired network
-// games: with this rule on, the peer diverged in every run; off, none.
-//
-// The engine call was only ever a way to tell a PENNED unit from a PARKED one,
-// since a defender holding the line is also motionless for minutes. An order to
-// move separates them just as well: the parked one obeys, the walled-in one
-// cannot. Issuing a move is a netted command like any other, and reading a
-// position is a read, so nothing here executes on the host alone.
-//
-// It is also the better test. Eight rays can miss the gap the engine would
-// route through, and a path query that succeeds does not prove the unit will
-// actually traverse it.
+// runs a real search on the host only, and QTPFS's own ExecuteQueuedSearches
+// warns "Do NOT impact this group while the background tasks are running" --
+// it desynced every paired-network test run with this AI on. An order to move
+// separates a PENNED unit from a PARKED one just as well (the parked one
+// obeys, the walled-in one cannot), and both issuing a move and reading a
+// position are netted, so nothing here executes on the host alone. It is also
+// the better test: eight rays can miss a gap the engine would route through,
+// and a path query succeeding does not prove the unit will traverse it.
 array<Id>       gTestId;      // unit under a move test
 array<AIFloat3> gTestFrom;    // where it stood when the order went out
 array<int>      gTestFrame;   // when it went out

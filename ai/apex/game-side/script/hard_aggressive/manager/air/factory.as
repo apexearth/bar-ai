@@ -51,11 +51,7 @@ IUnitTask@ MakeFactoryTask(CCircuitUnit@ fac)
 	ResolveDefs();
 
 	// The BASIC plant's one job: an air constructor, because FactoryToBuild will
-	// not ask for the advanced plant until HaveAirCon() is true. Nothing was
-	// producing one -- this function answered only for gPlant2, so the chain
-	// needed a constructor that the only plant we owned was never told to build.
-	// Measured across 8 games: 133 of 134 samples read cons=0, and 0 bombers were
-	// ever built.
+	// not ask for the advanced plant until HaveAirCon() is true.
 	if ((gPlant1 !is null) && (fac.circuitDef.id == gPlant1.id)) {
 		// The air constructor first -- it is the only route to the advanced
 		// plant, and nothing else was ever going to build one.
@@ -70,9 +66,8 @@ IUnitTask@ MakeFactoryTask(CCircuitUnit@ fac)
 			}
 			return con;
 		}
-		// Then the strike force itself, in the BASIC tier. Waiting for the
-		// advanced plant is what left this strategy holding six bombers at the
-		// end of a game.
+		// Then the strike force itself, in the BASIC tier -- do not wait for the
+		// advanced plant.
 		CCircuitDef@ want1 = NextAirDef(false);
 		if (want1 is null)
 			return null;

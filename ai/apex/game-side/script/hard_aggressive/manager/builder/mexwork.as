@@ -1,29 +1,18 @@
 namespace Builder {
 
 // Live MEX build tasks, so a refused one can be traded for a colder one.
-//
-// The script cannot enumerate metal spots -- no CMetalManager type is registered
-// -- and a MEX task built here would carry spotId -1, which CBMexTask hands
-// straight to mexSpots[spotId]. AiTaskAdded is the only place a MEX task is ever
-// visible. IUnitTask is refcounted, so a held handle keeps the object alive, and
-// every removal funnels through DequeueTask, which calls AiTaskRemoved.
+// The script cannot enumerate metal spots, so a MEX task built here carries
+// spotId -1 (CBMexTask indexes mexSpots[spotId]) unless tracked from
+// AiTaskAdded through to DequeueTask -> AiTaskRemoved.
 array<IUnitTask@> gMexTasks;
 
-// How many extractor jobs are already outstanding. A function rather than a
-// direct read of the array because main.as includes brain.as BEFORE builder.as,
-// so a global declared here is not visible to the Brain -- functions are
-// module-wide, globals are not.
+// Function rather than a direct array read: main.as includes brain.as before
+// builder.as, so a global declared here isn't visible to the Brain, but
+// functions are module-wide.
 //
-// This is the bound on the Brain's expansion want. Without it that want, being
-// the highest-value thing on the board by a factor of five, re-proposed on every
-// call and enqueued 97 extractor tasks in a single game -- an unassigned task
-// holds its slot for 300s and the engine's economy generator refuses new work
-// above workers * 8, so the spam starves the very thing it is trying to buy.
-// Defence jobs already ordered and not yet finished. Same contract and same
-// reason as the mex one below: a want that re-proposes on every call enqueues
-// faster than builders can walk, and an unassigned task holds its slot for 300
-// seconds against the engine's economy budget. Measured on the front-defence
-// want's first run: 101 orders, 15 towers standing.
+// This bounds the Brain's expansion want: an unassigned task holds its slot
+// for 300s and the engine refuses new economy work above workers * 8, so an
+// unbounded want re-proposing every call starves the thing it's trying to buy.
 array<IUnitTask@> gDefTasks;
 
 uint OutstandingDefenceTasks()
@@ -31,20 +20,18 @@ uint OutstandingDefenceTasks()
 	return gDefTasks.length();
 }
 
-// Is a defence job already ordered near here? The right bound for a want that
-// picks a POSITION: a global count refuses the Brain because MexGuard and
-// Fortify filled the register, which is how one arm ordered three towers while
-// 54 went up around it. What matters is whether this spot is already spoken for.
+// Is a defence job already ordered near here? Bound per-position rather than
+// by a global count, so entries from other wants (MexGuard, Fortify) don't
+// starve this one.
 bool DefenceTaskNear(const AIFloat3& in pos, float radius)
 {
 	const float sq = radius * radius;
 	for (uint i = 0; i < gDefTasks.length(); ++i) {
 		if (gDefTasks[i] is null)
 			continue;
-		// ONLY A TASK SOMEBODY IS ON COUNTS AS SPOKEN FOR. An order with no
-		// builder on it is not cover, it is an orphan -- measured, 90% of the
-		// Brain's front orders sat exactly like that at 90 seconds -- and
-		// treating it as cover is what stops anyone ever going back for it.
+		// Only a task with a builder on it counts as spoken for. An unmanned
+		// order is an orphan, not cover, and treating it as cover is what
+		// would stop anyone ever going back for it.
 		array<CCircuitUnit@>@ on = gDefTasks[i].GetUnits();
 		if ((on is null) || (on.length() == 0))
 			continue;
@@ -59,17 +46,13 @@ bool DefenceTaskNear(const AIFloat3& in pos, float radius)
 	return false;
 }
 
-// Defence ALREADY ORDERED here, and the dearest of it. The companion to
-// Military::FenceGunsNear, which sees only finished towers: the FENCE event fires
-// on completion and CCircuitAI::GetOwnUnitsOfDef skips IsBeingBuilt, so without
-// this half a crowd test reads bare ground for the whole build time and six more
-// can start at once.
+// Defence already ordered here, and the dearest of it. Companion to
+// Military::FenceGunsNear, which only sees finished towers (FENCE fires on
+// completion, GetOwnUnitsOfDef skips IsBeingBuilt) and so reads bare ground
+// for the whole build time without this.
 //
-// Unlike DefenceTaskNear this counts orders with NOBODY on them. A queued tower is
-// not cover, but it is metal already committed to this spot, and the burst being
-// refused is exactly the one where no builder has been elected yet. Entries leave
-// the register through DequeueTask -> AiTaskRemoved, so an aborted order stops
-// counting on its own.
+// Unlike DefenceTaskNear this counts orders with nobody on them yet, since a
+// queued tower is metal already committed even before a builder is elected.
 uint DefenceOrdersNear(const AIFloat3& in pos, float radius, float& out topCost)
 {
 	topCost = 0.f;
@@ -95,10 +78,9 @@ uint DefenceOrdersNear(const AIFloat3& in pos, float radius, float& out topCost)
 	return n;
 }
 
-// Is this task still on the books? Every removal funnels through DequeueTask ->
-// AiTaskRemoved, so a task that has left gDefTasks was aborted or finished, and
-// one still in it is queued. Those two failures have opposite fixes and are
-// indistinguishable from a count of standing towers.
+// Is this task still on the books? A count of standing towers can't tell
+// queued-but-unbuilt from aborted; gDefTasks membership can (removal always
+// funnels through DequeueTask -> AiTaskRemoved).
 bool IsDefenceTaskLive(IUnitTask@ task)
 {
 	if (task is null)
@@ -110,15 +92,10 @@ bool IsDefenceTaskLive(IUnitTask@ task)
 	return false;
 }
 
-// Orders on the books for the FRONT specifically. The defence budget counted
-// standing towers only, which is a bound that cannot bind while the orders are
-// not finishing: front towers stood at zero all game, so the budget read "no
-// front defence yet" and approved every request. One player ordered 140 in
-// fourteen minutes and that constructor time is the economy -- metal produced
-// fell 29,148 -> 19,445 per player against an unchanged opponent.
-//
-// In METAL, because the budget it feeds is a share of metal: a Sentry and a
-// Pulsar are not one unit of front line each.
+// Orders on the books for the FRONT specifically, in metal. A budget counting
+// only standing towers can never bind while front towers aren't finishing, so
+// this counts in-flight orders too. Metal rather than a unit count because a
+// Sentry and a Pulsar are not one unit of front line each.
 float OutstandingFrontCost()
 {
 	float m = 0.f;
@@ -199,21 +176,11 @@ string armmex("armmex");
 string cormex("cormex");
 string legmex("legmex");
 
-// apexearth: "we aren't doing too bad here but it feels noticeably less good
-// than yesterday" -> traced (2026-08-05) to the factory-cap veto below leaving
-// a refused constructor fully idle -- its own comment already says so: "CIdleTask
-// assigns whatever comes back... simply leaves the unit idle until the next idle
-// sweep." A timeline (analyze_stats.py) on Armada,Armada showed mex count
-// dead even with stock through minute 6, then falling behind by minute 8 --
-// entirely in the T1 window -- and infolog con-veto counts showed "factory-cap"
-// as the dominant refusal reason for armck specifically (26 of 45 in one game,
-// more than mex+mexup combined). SaferMex (above) cannot help here: it matches
-// candidates by the REFUSED task's own buildDef, and a factory-cap refusal's
-// buildDef is a factory, not a mex. But the basic T1 mex is buildable by every
-// side's T1 constructor by design (this is what those constructors are FOR),
-// so it does not need the "engine already proved buildability" trick SaferMex
-// relies on for tiers that vary per-constructor (armck builds armmex, armack
-// only armmoho -- see SaferMex's own comment).
+// A factory-cap refusal's buildDef is a factory, not a mex, so SaferMex above
+// (which matches candidates by the refused task's own buildDef) can't reroute
+// it. This can fall back to the plain T1 mex directly instead, since every
+// side's T1 constructor can build it by design and doesn't need SaferMex's
+// per-constructor buildability check.
 IUnitTask@ FallbackMex(CCircuitUnit@ unit)
 {
 	const CCircuitDef@ want = SideDef3(armmex, cormex, legmex);

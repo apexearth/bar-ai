@@ -1,9 +1,8 @@
 namespace Builder {
 
-// Contest the mex rather than sit on it. apexearth: "build defenses a safe
-// distance from the mex we desire to control. That is usually what I would do."
-// The standoff walks back toward our own start until the threat map reads clear,
-// so it is set by the enemy's reach rather than by a constant.
+// Contest the mex rather than sit on it: the standoff walks back toward our own
+// start until the threat map reads clear, so it is set by the enemy's reach
+// rather than by a constant.
 const float DEF_STEP    = 160.f;
 const int   DEF_STEPS   = 6;
 const float DEF_SPACING = 500.f;
@@ -13,27 +12,17 @@ AIFloat3 gConDefPos;
 bool gConDefPlaced = false;
 int  gNextConDef = 0;
 
-// apexearth: "its terrible if they just get full of metal and stop doing
-// anything." AA/HeavyAA/Pulsar/ContestDefence/EcoFusion all gate off while
-// aiEconomyMgr.isEnergyStalling, so a team can end up with every one of
-// those rules simultaneously refusing to fire while metal keeps piling up
-// with nowhere to go -- a fully idle unit sitting on a capped bank. Metal
-// overflowing and doing nothing is strictly worse than spending some of a
-// stalling energy reserve on cheap ground defense, so the last-resort
-// fallback at the end of AiMakeTask bypasses that gate deliberately.
+// AA/HeavyAA/Pulsar/ContestDefence/EcoFusion all gate off while
+// aiEconomyMgr.isEnergyStalling, so all of them can refuse to fire at once
+// while metal piles up unspent. This last-resort fallback bypasses that gate
+// deliberately -- spending stalling energy on cheap ground defence beats
+// letting metal overflow doing nothing.
 const int METAL_FULL_DEF_PERIOD = 30 * SECOND;
 int gNextMetalFullDef = 0;
 
 // How much defence has to already stand here before we stop adding to it.
-//
-// apexearth, asking for the dig-in behaviour back: "Last time it seemed
-// unbounded so this time only do it if there seems to be a lack of defenses in
-// the area already." The unbounded version was one of twelve spending rules that
-// together cut metal production 4.3x -- every one of them confirmed firing, and
-// the dig-in fortresses were among the most expensive.
-//
-// gConDefPos is not that bound: it remembers only the ONE most recent tower, so
-// it cannot see a porcupine cluster build_chain already put here.
+// gConDefPos alone is not that bound -- it remembers only the ONE most recent
+// tower, so it cannot see a porcupine cluster build_chain already put here.
 // Military::FenceCountNear reads the register of every finished defence we own,
 // whatever placed it.
 const float DIG_AREA      = 700.f;
@@ -68,25 +57,18 @@ uint DefenceAround(const AIFloat3& in pos)
 }
 
 const int   TROUBLE_HITS    = 3;
-// No ceiling. apexearth: "we don't want that cap" -- what bounds a fence is
-// how often this position has actually been shot at, which the hit count below
-// already expresses.
+// No ceiling: what bounds a fence is how often this position has actually been
+// shot at, which the hit count below already expresses.
 const uint DIG_FENCE_PER_TROUBLE = 1;
 
-// apexearth: "Areas should have a general limit to how much they'll build
-// there, especially on things like jammers... I often see many jammers all
-// close together." Traced: build_chain.json attaches a jammer to MULTIPLE
-// separate parent hubs independently (e.g. armjamt on three different hook
-// triggers), each firing once per matching parent instance finishing, at a
-// fixed offset from THAT parent -- with nothing checking whether a jammer
-// already stands nearby from a DIFFERENT parent's hub. Three fusions built
-// near each other (normal) produce three jammers near each other too.
-//
-// SiteBuildName() has no "jammer" kind at all (jammers fall through its
-// whitelist as ""), so the existing con-veto/threat-check block never sees
-// them. Same pattern as DefenceAround/gDigOrderPos above (no completion
-// hook to clear an order against, so track by TTL instead), scoped to the
-// four jammer defs actually seen in build_chain.json this session.
+// build_chain.json attaches a jammer to MULTIPLE separate parent hubs
+// independently, each firing at a fixed offset from its own parent with
+// nothing checking whether a jammer already stands nearby from a DIFFERENT
+// parent's hub -- so several fusions near each other (normal) produce several
+// jammers stacked near each other too. SiteBuildName() has no "jammer" kind
+// (falls through its whitelist as ""), so the existing con-veto/threat-check
+// block never sees them. Tracked here the same way gDigOrderPos is, by TTL
+// rather than a completion hook.
 string armjamt("armjamt");
 string corjamt("corjamt");
 string legjam2("legjam");
@@ -128,33 +110,15 @@ bool AreaHasJammer(const AIFloat3& in pos)
 }
 
 // How much defence an area needs, given how dangerous it has proven to be.
+// hits is the count of times the constructor working here has been struck --
+// unlike GetBuilderThreatAt (reads zero almost everywhere and crashes off-map),
+// this is a real, positional measure: something shot us, here.
 //
-// apexearth: "This area is dangerous, and therefore, I should defend it better
-// than it already is defended." DIG_MAX_FENCE was a flat 2 -- the same bar for a
-// quiet back mex and a spot the enemy army is walking through.
-//
-// hits is the count of times the constructor working here has been struck. It is
-// already tracked per constructor for the dig-in trigger, and unlike
-// GetBuilderThreatAt -- which reads zero 97% of the time and crashes off-map --
-// it is a real, positional measure of danger: something shot us, here.
-// A SCOUT IS NOT A SIEGE. apexearth, watching: "one of our bases was attacked by
-// an annoying scout, and afterwards, they made fifteen or more light laser
-// turrets. None of the other bases do this."
-//
-// Because the escalation ran on HIT COUNT, and only on hit count. The last term
-// here was `hits / 12`, linear and with no top, while gConHits clears only after
-// 90 quiet seconds -- so one cheap unit plinking one constructor drove that
-// base's wanted fence up indefinitely, and every base nobody shot at stayed at
-// the floor. It could not tell a Flea from a Fatboy push.
-//
-// Hits stay as the TRIGGER, which is what they are good for: something is
-// shooting here, and unlike GetBuilderThreatAt that reading is real. What they
-// no longer do is set the AMOUNT. Escalation now saturates at three extra --
-// past that more towers stop answering the question -- and the whole thing is
-// scaled by the defence category's budget, so an area can only keep escalating
-// while defence as a whole is still under its share of our metal. See
-// brain/budget.as and targets.as SPEND_DEFENCE: that is the economic bound, and
-// it moves with income instead of being a number typed in here.
+// Hits are the TRIGGER only, not the AMOUNT: escalation saturates at three
+// extra so a single cheap harasser cannot drive the want up indefinitely, and
+// the whole result is scaled by the defence category's economic budget (see
+// brain/budget.as, targets.as SPEND_DEFENCE), so an area can only keep
+// escalating while defence overall is still under its share of our metal.
 uint FenceWanted(int hits)
 {
 	uint want = DIG_MAX_FENCE;

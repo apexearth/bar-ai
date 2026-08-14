@@ -15,19 +15,10 @@ void ResolveDefs()
 		@gPlant1 = ai.GetCircuitDef("legap");   @gPlant2 = ai.GetCircuitDef("legaap");
 		@gCon1   = ai.GetCircuitDef("legca");   @gCon2   = ai.GetCircuitDef("legaca");
 		@gBomber = ai.GetCircuitDef("legphoenix"); @gFighter = ai.GetCircuitDef("legvenator");
-		// gBomber1 is the BASIC tier: a reusable strike unit built off the T1 plant,
-		// held and released in waves (see Release()/ScaledBombers() below), the same
-		// way corshad/armthund are. legkam ("Martyr") is a one-shot kamikaze drone,
-		// unlike those two -- looked like a bug and was swapped for legmos
-		// ("Mosquito") on 2026-08-05, but that regressed a confirmed Legion,Legion
-		// batch 43.8% -> 31.2%. legmos's weapon has stockpile=true (a 1.8s build-up,
-		// 4-shot cap, like a nuke silo) -- Release()'s hold-then-send logic has no
-		// stockpile-order step, so these almost certainly flew in with zero shots
-		// loaded and did nothing, worse than a kamikaze that at least explodes.
-		// Reverted. legap's roster (legca, legfig, legkam, legcib, legmos, leglts,
-		// legatrans) has no conventional always-loaded reusable bomber -- legkam is
-		// the least-bad fit until a real alternative is found (or gBomber1 is left
-		// null for Legion and this basic tier is skipped entirely).
+		// gBomber1 is the BASIC tier held/released like corshad/armthund. legap has
+		// no conventional always-loaded reusable bomber, so legkam (a one-shot
+		// kamikaze) stands in; a stockpile-weapon unit does not work here because
+		// Release()'s hold-then-send logic has no stockpile-order step.
 		@gBomber1 = ai.GetCircuitDef("legkam"); @gFighter1 = ai.GetCircuitDef("legfig");
 	} else {
 		@gPlant1 = ai.GetCircuitDef("armap");   @gPlant2 = ai.GetCircuitDef("armaap");
@@ -69,10 +60,8 @@ void RunElection()
 		}
 	}
 	if (best < 0) {
-		// Say so. An unmet income bar and a script that never compiled produce the
-		// same silence, and this bar is deliberately set above what the 4v4
-		// benchmark reaches -- so "no air all game" is the expected result there
-		// and has to be distinguishable from a broken build.
+		// Log it: an unmet income bar and a script that never compiled produce the
+		// same silence otherwise.
 		if (ai.frame >= gNextElectLog) {
 			gNextElectLog = ai.frame + 60 * SECOND;
 			AiLog(Factory::T() + "apex: no air assassin, best ally income "

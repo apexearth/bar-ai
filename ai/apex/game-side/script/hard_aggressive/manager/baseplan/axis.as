@@ -42,11 +42,8 @@ bool Frame()
 			return false;
 		}
 	} else if (!gAnchorFinal && (Factory::gT1FacUnit !is null)) {
-		// Promote from the commander's start to the factory, once. Moving the
-		// anchor after anything is standing would slide every row out from under
-		// it, and what was a lane would become a row -- so the promotion is also
-		// what makes the anchor final, and it is given a deadline in case no
-		// factory ever appears.
+		// Promote once from the commander's start to the factory; moving the anchor
+		// after anything is standing would slide every row out from under it.
 		gAnchor = Factory::gT1FacUnit.GetPos(ai.frame);
 	}
 	if (!gAnchorFinal
@@ -66,17 +63,11 @@ bool Frame()
 		if (f.SqLength2D() < NEAR_ZERO)
 			return false;
 		f.SafeNormalize2D();
-		// TO THE NEAREST CARDINAL. A structure's footprint is an axis-aligned
-		// rectangle on the world lattice -- CTerrainManager::FindBuildSiteByMask
-		// derives its corner from int(pos.x / 16), int(pos.z / 16) and can only
-		// return a position on it. A band frame at any other angle turns a step of
-		// one pitch into a diagonal world offset, so two neighbours a pitch apart
-		// have to be staggered in x and z to avoid overlapping, and the rows they
-		// were meant to form come out as a staircase. Quantising here is what lets
-		// depth and lateral map onto world x and z, and the pitches in EnsureCols
-		// then tile exactly.
-		//
-		// It also makes the four candidates below the four cardinals.
+		// TO THE NEAREST CARDINAL. FindBuildSiteByMask derives its corner from
+		// int(pos.x / 16), int(pos.z / 16), so a band frame at any other angle
+		// turns a step of one pitch into a diagonal offset and the rows stagger
+		// into a staircase instead of tiling. Also makes the four candidates below
+		// the four cardinals.
 		if (Abs(f.x) >= Abs(f.z))
 			f = AIFloat3((f.x >= 0.f) ? 1.f : -1.f, 0.f, 0.f);
 		else
@@ -115,11 +106,9 @@ bool Frame()
 			+ " axis front=" + front + " kept=" + best);
 	}
 
-	// Hand the frame down to C++, which snaps every non-fixed placement onto it
-	// -- including the ones stock task selection makes, which is the whole base
-	// rather than the handful of structures this file positions itself. Held back
-	// until the anchor is final: a grid that moves is worse than none, because
-	// everything already standing is then off it.
+	// Hand the frame down to C++, which snaps every non-fixed placement onto it,
+	// including stock task selection's. Held back until the anchor is final: a
+	// grid that moves puts everything already standing off it.
 	if (!gPublished && gAnchorFinal) {
 		gPublished = true;
 		ai.SetBaseGrid(gAnchor, gFwd, GRID_CELL, LANE_PITCH, LANE_HALF, GRID_RANGE);

@@ -15,20 +15,17 @@ namespace Builder {
 const float WRECK_SEARCH  = 2200.f;  // reach the whole approach, not just home
 const float WRECK_MIN     = 55.f;    // a repelled push leaves many small bodies
 // A body worth INTERRUPTING a build for, and how far we will go to reach one.
-// Reclaim previously required either an empty bank or an idle builder, so a
-// constructor holding any task walked straight past a field of wrecks.
-// apexearth, after a repelled push: "theres 1000+ metal in front of us and we
-// don't even care". This variant's plan is to make the enemy pay for our
-// economy and then eat the bodies -- that third step is the one that funds
-// everything, and it was not happening.
+// A constructor holding any task would otherwise walk straight past a field
+// of wrecks: reclaim required either an empty bank or an idle builder before
+// this.
+//
 // Deliberately a HIGH bar and a SHORT reach: this displaces real work, so it
 // must only fire for a body big enough to be worth more than what it interrupts,
 // and close enough that the walk is not the cost.
-// TOTAL metal in the field, not the biggest single body: a repelled push leaves
-// a dozen dead T1s, none of them individually large, and that is exactly the
-// pile worth eating. apexearth: "often its a dozen t1 that just died... still
-// its a lot of metal we should be eating... the building will still get made
-// faster if we grab the metal - then we can make the building without waiting!"
+//
+// TOTAL metal in the field, not the biggest single body: a repelled push
+// leaves a dozen dead T1s, none of them individually large, and that is
+// exactly the pile worth eating.
 const float WRECK_RICH    = 400.f;   // total reclaimable within WRECK_RICH_R
 const float WRECK_RICH_R  = 1400.f;
 const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
@@ -157,9 +154,8 @@ const float CON_THREAT_VETO = 4.0f;
 // needs globals declared before use, and the shims fix the order of the files.
 int gNextCommFleeLog = 0;
 
-// apexearth: "have our units never assist another unit build something if
-// we are out of a resource (<5%)." Declared here, ahead of AiMakeTask's use
-// of it, for the same forward-declaration reason as CON_THREAT_VETO above.
+// Declared here, ahead of AiMakeTask's use of it, for the same
+// forward-declaration reason as CON_THREAT_VETO above.
 const float RESOURCE_CRISIS_FRAC = 0.05f;
 
 IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
@@ -168,10 +164,9 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority)
 	const AIFloat3 wreck = ai.GetBestWreckPos(pos, WRECK_SEARCH, WRECK_MIN);
 	if (wreck.x < 0.f)
 		return null;   // nothing worth the trip
-	// apexearth, watching live: "even our advanced cons are chasing wrecks
-	// which are dangerous." Shared by the idle-builder fallback and the
-	// rezzer-eats-wreck path; neither checked whether the wreck itself sits
-	// somewhere safe before sending a constructor to it.
+	// Shared by the idle-builder fallback and the rezzer-eats-wreck path:
+	// neither checked whether the wreck itself sits somewhere safe before
+	// sending a constructor to it.
 	if (ThreatFor(unit, wreck) > CON_THREAT_VETO)
 		return null;
 	return aiBuilderMgr.Enqueue(TaskB::Reclaim(priority, wreck,
@@ -239,21 +234,13 @@ int RezCount()
 // fraction of its build cost. That is the same efficiency argument that makes
 // T1 spam good -- a resurrected Thug is far cheaper than a built one.
 //
-// This used to require a FULL bank before it would allow a resurrect, which in
-// practice never happened, so rez bots only ever reclaimed. Measured on
-// Glitters: stock spent 27,385 metal resurrecting in a game it dominated on
-// army 96k to 23.6k, while apex spent 0.
-//
-// Reclaim is now preferred only while metal is genuinely the binding
-// constraint: before we own an advanced factory, or when the bank is actually
-// empty and a build is stalled on it.
-// apexearth: "requiring full is a bit nuts, I think 90% is a good limit", and
-// earlier "if we have absolutely no metal, then reclaim". Read together: keep
-// resurrecting across almost the whole band and fall back to reclaim only when
-// the bank is genuinely scarce.
+// Reclaim is preferred only while metal is genuinely the binding constraint:
+// before we own an advanced factory, or when the bank is actually empty and a
+// build is stalled on it. Otherwise resurrect across almost the whole band
+// and fall back to reclaim only when the bank is genuinely scarce.
 //
 // Note isMetalFull is already storage*0.8 and isMetalEmpty storage*0.2
-// (economy.as), so the original gate was "above 80%", not literally full.
+// (economy.as), so REZ_METAL_FLOOR's 0.10 is well below either.
 const float REZ_METAL_FLOOR = 0.10f;   // reclaim below this share of storage
 
 bool PreferReclaim()
@@ -267,9 +254,8 @@ bool PreferReclaim()
 	// Behind on the field, the completion risk is the whole argument: a resurrect
 	// credits nothing until it finishes, so a bot pushed off one has spent the
 	// time for no metal, while reclaim banks continuously and survives being
-	// interrupted. Same reasoning as RezSpotHot, on the team's position instead of
-	// this bot's tile. apexearth: "our resurrection box should be more likely to
-	// reclaim when we're losing."
+	// interrupted. Same reasoning as RezSpotHot, on the team's position instead
+	// of this bot's tile.
 	if (Military::LosingGround())
 		return true;
 	return aiEconomyMgr.metal.current

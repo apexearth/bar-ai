@@ -1,60 +1,34 @@
 namespace Front {
 
-// Where our territory ends and the enemy's is about to begin.
-//
-// Four definitions died against measurement, in this order:
-//   1. Cells where BOTH sides are present. One Jade 8v8 scan: 339 ally cells,
-//      56 enemy cells, ZERO holding both. Where one side is strong the other
-//      reads ~0, so the fields are disjoint and the test only fires where both
-//      are too faint to mean anything.
-//   2. The boundary between the two fields. Found 2-3 cells. Enemy influence
-//      counts only KNOWN enemy units and is far too sparse to draw a line with.
-//   3. The edge of our influence at a 15%-of-peak bar. That bar picks out the
-//      dense CORE of our territory, so its edge sat BEHIND our own army and was
-//      full of gaps.
-//   4. That same ring, undirected. Half of any ring faces our own rear, which
-//      is a danger zone but is not a front line.
-//
-// So: territory is a LOW bar (anything we meaningfully hold), its perimeter
-// wraps the whole territory, and the ring is then split by direction -- the part
-// facing the enemy is the FRONT, the part facing our own fog is the BACK.
-// Before we have seen any enemy there is no direction to split on, and the
-// front is honestly UNKNOWN rather than guessed.
+// Where our territory ends and the enemy's is about to begin: the outer
+// perimeter of a LOW-bar territory field (ally-influence presence, not a
+// "both sides present" or "field boundary" test -- neither has enough
+// coverage to draw a line with), split by direction from our centroid to the
+// enemy's so the part facing our own fog reads as BACK, not FRONT. With no
+// enemy sighted yet there is no direction to split on, so the front reads
+// UNKNOWN rather than guessed.
 
 const float MIN_WIDTH = 80.f;
 const float MAX_WIDTH = 2000.f;
 
-// Territory is everything we meaningfully hold, not only where we are massed.
-// At 15% of peak this picked out the core alone and the ring sat behind our own
-// army. Ally influence peaks ~520, so 3% is ~15 -- clear of numerical noise, but
-// it includes the thin edges we really do hold.
+// Territory is everything we meaningfully hold, not only where we are massed;
+// a higher fraction of peak selects only the dense core and its edge sits
+// behind our own army.
 const float TERRITORY_FLOOR = 1.0f;
 const float TERRITORY_FRAC = 0.03f;
-// Enemy influence is on another scale entirely -- it counts only what we have
-// SEEN, and peaks under 33 against ally's 520 -- so it gets its own bar. An
-// absolute floor of 5 once erased it completely and every AI read cFoe=0 for a
-// whole game, which made the front vanish instead of move.
+// Enemy influence counts only what we have SEEN and peaks far below ally's, so
+// it needs its own (relative, not absolute) bar or it reads zero everywhere.
 const float FOE_FLOOR = 1.0f;
 const float FOE_FRAC = 0.10f;
 
 const float CHOKE_NEAR = 600.f;
 // How much further than the closest front cell a cell may sit and still count
-// as front. Beyond this it is enemy-facing flank, not the line.
-//
-// This was a flat 3,000 elmos, and an absolute distance cannot mean the same
-// thing on two maps. Model the perimeter as a ring of radius R about our
-// centroid with the enemy at distance D: the closest cell sits at D - R, and a
-// cell at bearing theta off the axis to them at sqrt(D^2 - 2DR cos(theta) + R^2),
-// so keeping everything within (closest + band) keeps the arc
-// |theta| <= acos(1 - band/R). band = R keeps the enemy-facing half, band = R/2
-// keeps +/-60 degrees. That angle depends on band/R and NOT on D, which is why
-// the band belongs in units of our own territory radius: a fraction of the
-// home-to-enemy separation would mean a different arc every time either side's
-// holdings changed.
-//
-// R is measured from the perimeter this same scan just built, so nothing about
-// it is assumed. FRONT_BAND_FRAC is the one policy number left: how wide a front
-// one player holds, as a share of its own territory radius.
+// as front; beyond this it is enemy-facing flank, not the line. Expressed as a
+// fraction of our own territory radius R (ring of radius R about our centroid)
+// rather than an absolute distance, because the arc half-angle
+// acos(1 - band/R) depends only on band/R, not on distance to the enemy --
+// an absolute band or a fraction of home-to-enemy separation would each cover
+// a different arc as either side's holdings changed.
 const float FRONT_BAND_FRAC = 1.0f;
 const int RECLASSIFY = 10 * SECOND;
 const int SEAM_N = 40;
@@ -136,22 +110,12 @@ int Classify(const AIFloat3& in pos)
 
 // SECTORS: which part of the team's line is THIS AI's to hold.
 //
-// Territory is measured from ally-wide influence, so every AI on the team
-// computes the same perimeter and the same enemy bearing -- and then all of them
-// anchored on the same few cells, because the trim below keeps only the arc
-// nearest the enemy and that arc belongs to whichever ally happens to sit
-// furthest forward. apexearth: "I routinely see our units patrolling behind our
-// own allies bases. meanwhile, the enemy is attacking one of our frontline bases
-// and our huge army isn't there to protect it."
-//
-// Same failure the defence placement had (territory.as: ranking every site by
-// distance to ONE enemy point sent every tower down one bearing), one level up:
-// a single closest-approach test cannot describe a line held by eight players.
-//
-// A cell belongs to the ally whose home is nearest it -- a Voronoi split of the
-// line over the team, which is how a human team divides a front. It needs the
-// allies' home positions, and nothing enumerates them, so they are pooled the
-// same way the enemy bearing already is.
+// Territory is ally-wide, so every AI computes the same perimeter and the same
+// closest-approach trim, which without a split anchors every ally on whichever
+// player sits furthest forward. A cell belongs to the ally whose home is
+// nearest it -- a Voronoi split of the line over the team. Home positions
+// aren't otherwise enumerated, so they're pooled the same way the enemy
+// bearing is.
 void ReadMates()
 {
 	gMateX.resize(0);
@@ -249,14 +213,9 @@ void Scan()
 			const int me = i * SEAM_N + j;
 			const AIFloat3 p = GridPos(i, j);
 			// Territory is where we are ON TOP, not merely where we are present.
-			// Ally influence counts MOBILE units, so an army pushing into enemy
-			// ground painted that ground as ours, the perimeter followed the army
-			// instead of our holdings, and the front got drawn deep inside enemy
-			// territory -- apexearth: "i see the front lines are often drawn where
-			// it's full of enemies. How are we supposed to hold or make defense on
-			// any sort of front line when it's in any territory?" Every tower
-			// request there then died to the danger veto: 202 requests, 8,360
-			// metal of defence actually built.
+			// Ally influence counts mobile units, so an army pushing into enemy
+			// ground would paint that ground as ours and the front would follow
+			// the army instead of our holdings -- gated on av > fv too.
 			const float av = ai.GetAllyInflAt(p);
 			const float fv = ai.GetEnemyInflAt(p);
 			const bool a = (av >= gPresAlly) && (av > fv);
@@ -285,14 +244,10 @@ void Scan()
 		gOurMid.x = ox / ow;
 		gOurMid.z = oz / ow;
 	}
-	// Share the enemy bearing across the team.
-	//
-	// Each AI's influence map holds only what THAT AI knows, and rear players
-	// never see anyone -- measured at 248 of 400 samples reading cFoe=0 in one
-	// Jade 8v8. Alone, those players conclude there is no front and place
-	// nothing, and if the drawing AI happens to be one of them the overlay is
-	// empty all game. The sighting a forward teammate has is just as true for
-	// everyone behind them, so it is pooled.
+	// Share the enemy bearing across the team: each AI's influence map holds
+	// only what that AI has itself seen, so a rear player alone would read no
+	// enemy and no front at all, even though a forward teammate's sighting is
+	// just as true for it.
 	if (fw > 0.f) {
 		ai.PublishTeamValue(TV_FOE_X, fx / fw);
 		ai.PublishTeamValue(TV_FOE_Z, fz / fw);
@@ -341,17 +296,13 @@ void Scan()
 				gEdge.insertLast(NONE);
 				continue;
 			}
-			// Facing them is necessary but not sufficient. The far flank of a
-			// large territory faces the enemy too and is nowhere near them;
-			// apexearth: "should prefer frontlines near enemies". So the front
-			// is the enemy-facing arc that is also within a band of the closest
-			// approach to their territory.
-			//
-			// Measured from OUR OWN home for the cells that are ours, not from the
-			// team centroid. That centroid is the same point for every AI on the
-			// team, so a player sitting on a flank had its entire border projecting
-			// backwards along the team bearing and classified as back line -- it
-			// had no front of its own, and its army anchored on somebody else's.
+			// Facing them is necessary but not sufficient -- the far flank of a
+			// large territory faces the enemy too and is nowhere near them, so
+			// the trim below also requires closeness. Measured from OUR OWN home
+			// for cells that are ours, not the team centroid: the team centroid
+			// is the same point for every ally, so a flank player's whole border
+			// would project backwards along the team bearing and read as back
+			// line, leaving it with no front of its own.
 			const float rx = (mine && Builder::gHomeSet) ? Builder::gHomePos.x : gOurMid.x;
 			const float rz = (mine && Builder::gHomeSet) ? Builder::gHomePos.z : gOurMid.z;
 			const float facing = (p.x - rx) * (gFoeMid.x - rx)
@@ -364,13 +315,10 @@ void Scan()
 		}
 	}
 
-	// Trim the enemy-facing arc down to the part actually near them. On a large
-	// territory the far flank faces the enemy too and is nowhere near the
-	// fighting; keeping it made the line span our whole border.
-	// Trimmed PER SECTOR. One closest-approach figure for the whole team keeps
-	// only the arc in front of whichever ally stands furthest forward, and demotes
-	// every other player's frontage to back line -- which is how eight AIs came to
-	// share one anchor behind one ally's base.
+	// Trim the enemy-facing arc down to the part actually near them, trimmed
+	// PER SECTOR: one closest-approach figure for the whole team would keep only
+	// the arc in front of whichever ally stands furthest forward and demote
+	// every other player's frontage to back line.
 	if (!gFoeKnown)
 		return;
 	float closeMine = -1.f;
@@ -396,11 +344,9 @@ void Scan()
 
 // Mean projection of an edge kind onto the direction from our territory centroid
 // toward the enemy, in elmos. FRONT must come out positive and BACK negative.
-//
-// Measured against each AI's own BASE first, which was confounded: the perimeter
-// is ally-WIDE, so a player sitting on the enemy-facing corner has the team's
-// far back edge further from it than the front is, and the comparison came out
-// a coin flip (228 vs 237) while the geometry was actually fine.
+// Projected from the team centroid, not each AI's own base -- the perimeter is
+// ally-wide, so measuring from one player's base can put the team's far edge
+// further from it than the near edge, which isn't a geometry defect.
 float MeanDist(int kind)
 {
 	const float dx = gFoeMid.x - gOurMid.x;
@@ -472,15 +418,10 @@ void Update()
 }
 
 // Where the front should be before anyone has seen anything, from start-box
-// geometry alone. apexearth: "do we know the centerpoint of our startbox
-// compared to centerpoint of enemy start box? divide the map in half based on
-// the angles and midpoint there and bam you have around where the frontline
-// should be."
-//
-// The engine already derives exactly this: CSetupManager spreads the allies
-// along a line taken from the start-box geometry and hands each AI its own slot
-// as lanePos, so it is a per-player share of that midline rather than one point
-// the whole team crowds. Now bound to script.
+// geometry alone. CSetupManager already derives this: it spreads the allies
+// along a line taken from the start-box geometry and hands each AI its own
+// slot as lanePos, a per-player share of that midline rather than one point
+// the whole team would crowd.
 bool LaneFront(AIFloat3& out spot)
 {
 	const AIFloat3 lane = aiSetupMgr.GetLanePos();
@@ -491,12 +432,9 @@ bool LaneFront(AIFloat3& out spot)
 }
 
 // Nearest point on the front to `from`. Falls back to the start-box lane while
-// no enemy has been seen, so the opening has a sensible prior instead of
-// nothing.
-// OUR SECTOR FIRST. Nearest-front-cell over the whole team line is what put the
-// anchor behind an ally: their frontage is genuinely nearer to us than our own
-// once the trim has demoted ours. Only if we own no front cell at all -- a rear
-// player with nothing of its own on the line -- does the team line answer.
+// no enemy has been seen. Tries our own sector first -- nearest-cell over the
+// whole team line can pick an ally's frontage once the trim has demoted ours
+// -- and only falls through to the team line if we own no front cell at all.
 bool FrontNear(const AIFloat3& in from, AIFloat3& out spot)
 {
 	if (!gFoeKnown)
@@ -560,24 +498,14 @@ bool IsFrontKnown() { return gFoeKnown; }
 // Allies and spectators see these. Off for anything but a watched game.
 const bool DRAW = false;  // ON draws real map markers -- allies see them
 
-// The server DROPS map-draw commands once 25 arrive with under 50ms between
-// each -- GameServer.cpp, NETMSG_MAPDRAW:
-//
-//     mapDrawTimings[a].second > 25  ->  break
-//
-// It is anti-DOS, it is silent, and it comments that the rate "is impossible to
-// reach manually, but (very) easily through Lua". An AI hits it just as easily:
-// ~80 front segments plus ~78 chokepoint segments went out in one burst every
-// 10 seconds, so the first 25 drew and the rest vanished with no error anywhere.
-// That is the whole mystery of the missing overlay, and of the chokepoint layer
-// being "missing a bunch of where these should be".
-//
-// So drawing is queued and metered: a small batch per tick, with the tick gap
-// resetting the server's consecutive-command counter.
-// Sized against the server's 25-in-a-row/50ms drop rule. AiUpdate runs every 30
-// frames, which is 1 game second -- but the server's window is REAL time, so at
-// speed 20 that tick gap is only ~50ms and consecutive ticks can start sharing
-// one window. A smaller batch keeps the running count clear of 25 even then.
+// The server silently drops map-draw commands once 25 arrive with under 50ms
+// between each (GameServer.cpp NETMSG_MAPDRAW: `mapDrawTimings[a].second > 25
+// -> break`), so drawing everything in one burst per rescan loses most of it
+// with no error. Queued and metered instead: a small batch per tick, so the
+// gap between ticks keeps the server's consecutive-command count clear.
+// AiUpdate's tick is 1 game second but the server's window is REAL time, so at
+// high sim speed consecutive ticks can still share one 50ms window -- keep the
+// batch small enough to stay under 25 even then.
 const uint DRAW_PER_TICK = 8;
 array<AIFloat3> gQueueA;
 array<AIFloat3> gQueueB;   // == A means erase-at-A rather than line A->B
@@ -602,18 +530,10 @@ void PumpDraw()
 	}
 }
 
-// THE COMPUTED FRONT, ON SCREEN. apexearth: "If you think it's helpful, you can
-// draw the perceived front line on the screen for me to see."
-//
-// It is helpful: every disagreement tonight between what he sees and what the
-// telemetry says has come from the AI and the human measuring from different
-// places. Drawing what the AI believes settles that by eye in seconds.
-//
-// Segments between consecutive points of Military::FrontCurve -- the influence
-// crossing, lane by lane. Redrawn on a slow cadence because the server drops
-// map-draw commands after 25 in a row inside 50ms and BAR's own widget erases
-// every mark after 60 seconds, so this repaints inside that window rather than
-// accumulating.
+// Draws the computed front on the map: segments between consecutive points of
+// Military::FrontCurve, the influence crossing lane by lane. Redrawn on a slow
+// cadence -- BAR's own auto-mapmark-eraser widget removes every mark after 60
+// seconds, so this repaints inside that window rather than accumulating.
 int gNextFrontDraw = 0;
 array<AIFloat3> gFrontDrawn;
 
@@ -639,18 +559,12 @@ void DrawFrontLine()
 		return;
 	// THE LINE ENDS WHERE IT RUNS OUT, IT DOES NOT WRAP ROUND THE BACK.
 	//
-	// apexearth: "You saw how the frontline now wraps around our half of the map?
-	// ... essentially if the frontline hits the edge of the map we should stop
-	// there."
-	//
-	// FrontCurve emits only the contested bearings, so the arc has gaps in it
-	// wherever a ray met nobody or walked off the map. Joining every consecutive
-	// pair then draws a chord straight across our own half between the two ends of
-	// the arc, which is the wrap he is describing -- a drawing artefact on top of
-	// a curve that is already correct.
-	//
-	// Neighbouring bearings sit one ring-step apart; anything much wider than that
-	// is not a neighbour, it is the gap. Break the polyline there.
+	// FrontCurve emits only the contested bearings, so the arc has gaps wherever
+	// a ray met nobody or walked off the map. Joining every consecutive pair
+	// regardless would draw a chord straight across our own half between the
+	// two ends of the arc. Neighbouring bearings sit one ring-step apart;
+	// anything much wider than that is the gap, not a neighbour -- break the
+	// polyline there instead.
 	const float step = 6.2831853f / float(Military::FRONT_RAYS);
 	for (uint i = 1; i < line.length(); ++i) {
 		if (!OnMap(line[i - 1]) || !OnMap(line[i]))
@@ -668,10 +582,10 @@ void Draw()
 	if (!DRAW)
 		return;
 
-	// ONE AI draws. Ally influence is ally-WIDE, so all eight compute virtually
-	// the same perimeter -- and DeletePointsAndLines erases other players' marks
-	// at that position too, so they spent the game erasing each other's lines.
-	// That is why the overlay faded out mid-game.
+	// ONE AI draws. Ally influence is ally-wide, so every teammate computes
+	// virtually the same perimeter, and DeletePointsAndLines erases marks at a
+	// position regardless of who drew them -- multiple drawers would erase each
+	// other's lines.
 	if (ai.teamId != Factory::ElectorTeamId())
 		return;
 
@@ -705,11 +619,8 @@ void Draw()
 	}
 	gDrawn = true;
 
-	// Chokepoints must be REDRAWN, not drawn once. BAR ships the "Auto mapmark
-	// eraser" widget (luaui/Widgets/map_auto_mapmark_eraser.lua) with
-	// eraseTime = 60, which deletes every mark 60 seconds after it appears. A
-	// draw-once layer therefore vanishes a minute in. That same widget is why
-	// marks cannot accumulate, so the erase bookkeeping here is belt and braces.
+	// Chokepoints must be REDRAWN, not drawn once: BAR's auto-mapmark-eraser
+	// widget (eraseTime = 60) deletes every mark a minute after it appears.
 	for (uint k = 0; k < gIdx.length(); ++k) {
 		AIFloat3 e1, e2;
 		if (ai.GetChokePointEnds(gIdx[k], e1, e2))

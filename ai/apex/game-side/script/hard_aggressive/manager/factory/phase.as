@@ -1,22 +1,8 @@
 namespace Factory {
 
-// BUILD_PHASE, per docs/12-build-phases.md (apexearth's design). Diagnostic
-// only: computes and logs a phase number so a future session can check it
-// against real telemetry before gating any existing rule behind it. Gating
-// rules is the actual fix for the crowding-out pattern this session
-// independently reconfirmed five times (see notes/open-issues.md, "SESSION
-// SYNTHESIS") -- this is deliberately NOT that yet. Doing that blind, this
-// late in an unsupervised session, risks becoming "one more && on rules that
-// still all want to fire", which the design doc itself names as the way this
-// fails to help.
-//
-// Driven from STATE per the doc's own first rule (never a clock), so it can
-// fall back down on its own the moment a signal drops -- no ratchet, no
-// separate distress flag needed, because nothing is being latched here.
-// Thresholds are a first approximation from constants already used elsewhere
-// in this file (RUSH_MIN_METAL-scale for pre-T2, FUSION_KEEP for pre-T3) --
-// calibrate against composition.py's own per-phase breakdown once telemetry
-// exists, per the doc's measurement plan.
+// BUILD_PHASE, per docs/12-build-phases.md. Driven from state (income,
+// gHaveT2, fusion count, gantry), never a frame, so it falls back down on its
+// own the moment a signal drops -- nothing here is latched.
 int gLastPhase = -1;
 int gNextPhaseLog = 0;
 
@@ -46,19 +32,9 @@ int ComputePhase()
 		return 4;                                          // T2
 	if (MayPursueT2() && RushReady())
 		return 3;                                          // pre-T2
-	// ECONOMIC POWER, not mex count. apexearth: "we should never gate purely on
-	// mex count. you can gate by economic power."
-	//
-	// A count is the wrong measure twice over: it ignores where the metal is
-	// actually coming from (reclaim, converters, a richer spot), and it traps a
-	// player that cannot expand. Measured: t0 and t3 sat at 2 mexes and phase 1
-	// for thirty minutes, and phase 1 is below every economic rule in the AI --
-	// the whole cluster needs phase >= 4 -- so they could not build the economy
-	// that would have got them out. Mex count is kept only as an alternative way
-	// to reach the rung, never as the sole way.
-	// NO mex-count clause, not even as an alternative route to the rung.
-	// apexearth, twice: "we should never gate purely on mex count", then
-	// "remember, NO gates based on mex count. DO NOT DO THAT."
+	// Gated on income, never mex count: a count ignores where metal actually
+	// comes from and can trap a player that cannot expand -- a low mex count in
+	// a strong economy must not cap the phase.
 	if (mInc >= PHASE_BUILDUP_INCOME)
 		return 2;                                          // build up
 	if (mInc >= PHASE_EXPAND_INCOME)
@@ -107,18 +83,10 @@ void UpdateTeamCoord()
 	UpdateEcoLead();
 }
 
-// Extractors we hold, counting one under construction as still held.
-//
-// An upgrade REPLACES the unit: the T1 extractor is destroyed and an advanced
-// one is laid down in its place, so a plain unit count reads every upgrade as a
-// lost mex for the whole build -- 14,100 build time for legmoho. The eco lead
-// upgrades more mexes than anyone on its team, so the release condition fired
-// hardest on the player doing the most of what the role exists to do.
-//
-// GetDefBuildProgress reports the best progress toward a def and -1 when none is
-// being built, so a nanoframe of any advanced extractor credits one back. It
-// cannot distinguish two simultaneous upgrades; the sustain window below covers
-// what this does not.
+// Extractors held, counting one under construction as still held: an upgrade
+// destroys the T1 extractor and replaces it, so a plain unit count would read
+// every upgrade as a lost mex for the whole build. GetDefBuildProgress credits
+// one back per nanoframe but can't distinguish two simultaneous upgrades.
 uint MexCount()
 {
 	uint n = 0;

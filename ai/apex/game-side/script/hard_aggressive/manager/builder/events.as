@@ -169,17 +169,10 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 
 // Commander safety, issued as a raw move order rather than a task.
 //
-// Commander survival is the measured determinant of these games: 2.3-3.0 lost
-// when we lose, 0.0-1.3 when we win, across four runs. Every commander.json
-// lever was tried individually and none moved it, because `hide` needs elapsed
-// time AND a global threat bar while these deaths happen with the commander out
-// working somewhere specific.
-//
-// Expressing the response as a task returned from AiMakeTask lost 0-20 with
-// metal at 6,631 -- that hook is the ONLY place the commander gets work, so a
-// retreat task replaces everything it would have built. CmdMoveTo issues the
-// order directly and leaves the task slot alone, so it keeps its job and simply
-// walks away from the danger first.
+// A task returned from AiMakeTask replaces everything the commander would
+// have built, since that hook is the ONLY place it gets work. CmdMoveTo
+// issues the order directly and leaves the task slot alone, so the commander
+// keeps its job and simply walks away from the danger first.
 CCircuitUnit@ gComm = null;
 AIFloat3 gHomePos;
 bool gHomeSet = false;
@@ -187,63 +180,36 @@ const float COM_DANGER_RADIUS = 800.f;
 const float COM_DANGER_FOES   = 3.f;   // a lone scout reads 1; a raid is 3+
 int gNextComMove = 0;
 
-// UpdateCommanderSafety() REMOVED, not merely disabled.
-//
-// Exit-code audit: aborts (exit -1003) went from 0-2 per 20-game run to 14-17
-// the moment it landed, and stayed there for four consecutive runs. The engine
-// was dying, so the "3-1, commanders solved" result came from the few games that
-// survived, and the 82% I reported as mutual turtling was 82% aborted.
-//
-// Unsafe is one of: CmdMoveTo issued outside a task context, or GetEnemyCostAt's
-// GetEnemyUnitsIn walk. Both bindings remain registered but nothing calls them,
-// so no script path can reach either. They need isolating and testing one at a
-// time in a throwaway variant before anything depends on them again.
+// UpdateCommanderSafety() REMOVED, not merely disabled: it crashed the engine
+// (exit -1003). Unsafe is one of CmdMoveTo issued outside a task context, or
+// GetEnemyCostAt's GetEnemyUnitsIn walk. Both bindings remain registered but
+// nothing calls them, so no script path can reach either; isolate and test
+// one at a time before depending on them again.
 
-// Diagnostic only. ai.GetBuilderThreatAt reads the engine's own per-position
-// threat map -- the thing mobileThreat (a global scalar) and GetEnemyCostAt (a
-// unit count, which crashed) were both standing in for. Log it where the
-// commander actually is, so a retreat threshold can be set from measurement
-// rather than invented. Nothing acts on this yet: the last two attempts to act
-// immediately on a new signal cost 0-20 and four days of wrong conclusions.
-// Commander retreat, triggered on HEALTH rather than position threat.
+// Diagnostic only: ai.GetBuilderThreatAt reads the engine's own per-position
+// threat map, logged where the commander actually is so a retreat threshold
+// can be set from measurement rather than invented.
 //
-// Measured across 10 games: ai.GetBuilderThreatAt readings within 30s of a
-// commander dying were LOWER than baseline (3% nonzero vs 8%). The map is not
-// broken -- it is being sampled in the wrong place. apexearth: "sometimes a com
-// dies to that 1 or 2 last plasma shots from a distance while it is running
-// away". The killer is at range, so the victim's own position reads clean right
-// up until it dies.
+// Commander retreat is triggered on HEALTH rather than position threat: the
+// position threat map reads LOWER than baseline right up until the commander
+// dies, because a shooter at range leaves the victim's own tile reading
+// clean. Health loss is unambiguous regardless of the shooter's range.
 //
-// Health loss is unambiguous and fires whether the shooter is adjacent or 800
-// elmos off. 60% is a reasoned starting point, not a measured one: retreating at
-// 25% is too late when the last two shots can finish you mid-flight, so the bar
-// has to leave enough health to escape ON. Also: "the risk should probably be
-// divided by their % of health" -- at 60% the same incoming fire is already
-// worth far more than at full.
-//
-// Unlike the earlier position-based attempt -- which fired whenever 3+ enemies
-// were within 800, returned a Patrol task from AiMakeTask, and destroyed the
-// economy (0-20, metal 6,631) -- this fires only when the commander has actually
-// been hurt, which is rare. A commander that is being shot SHOULD stop building.
-// 0.85, was 0.60. At 0.60 the commander stood there until it had lost FORTY
-// PERCENT of its health, by which point it is inside an army. Measured in a
-// watched 4v4: three commanders died and this fired once. 0.85 means it leaves
-// on the first real damage, which is the whole point -- apexearth: "our guys are
-// still just standing in the middle of the base about to be killed, like a bunch
-// of idiots."
+// 0.85: at a lower bar the commander stays until it has lost a large share of
+// health, by which point it is already inside an army; this leaves on the
+// first real damage instead, since a commander under fire should stop
+// building rather than finish the job.
 const float COM_RETREAT_HEALTH = 0.85f;
 int gNextRetreatLog = 0;
 
 int gNextThreatLog = 0;
 
-// Health added alongside threat (both were logged separately before, neither
-// with the other). There is no AiUnitDestroyed hook in this script -- the
-// engine warns "Script: 'void AiUnitDestroyed(CCircuitUnit@)' not found!" at
-// every match start -- so the only way to see a commander's last moments from
-// the infolog is the gap between this heartbeat's last line and the point it
-// stops. A health trace turns "the log stopped at 13.3m" into "health was
-// still N% at 13.3m" or "already retreating and dropping fast", which is the
-// difference between "died suddenly" and "the existing retreat failed slowly".
+// There is no AiUnitDestroyed hook in this script -- the engine warns
+// "Script: 'void AiUnitDestroyed(CCircuitUnit@)' not found!" at every match
+// start -- so the only way to see a commander's last moments from the
+// infolog is the gap between this heartbeat's last line and the point it
+// stops. Logging health here turns that gap into "health was still N%" or
+// "already retreating", distinguishing a sudden death from a failed retreat.
 void LogCommanderThreat(CCircuitUnit@ unit)
 {
 	if (ai.frame < gNextThreatLog)
@@ -350,11 +316,8 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 		// already exists, within 2000 elmos, in a fixed type order that puts
 		// ENERGY/STORE/FACTORY/NANO ahead of MEXUP, and it returns nullptr
 		// outright once the unit is on a GUARD task. Nothing ever calls
-		// DelAttribute. T1 constructors cost 110-135 and T2 cost 340-550, so this
-		// branch caught the first advanced constructor of the game, every game,
-		// and pinned the one unit that can upgrade a mex to a rule that cannot
-		// create the task. apexearth, watching: "they also have a t2 con which
-		// they aren't doing anything with."
+		// DelAttribute, so this branch would otherwise pin the one unit that can
+		// upgrade a mex to a rule that cannot create that task.
 		if (energizer2 is null) {
 			@energizer2 = unit;
 			unit.AddAttribute(Unit::Attr::BASE.type);

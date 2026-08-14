@@ -1,20 +1,10 @@
 namespace Factory {
 
-// A mobile radar travelling with the army, for the units whose guns outrange
-// their own eyes.
-//
-// apexearth: "Some units have long range but poor LOS - when we have units like
-// this we should have them bring a radar unit with them (jammer too if possible)
-// so that they can see what they should fire at... one example is the Hound
-// unit."
-//
-// The escort mechanism is stock and already correct: every mobile radar and
-// jammer carries role "support" in behaviour.json, CMilitaryManager routes a
-// support unit into CSupportTask, and CSupportTask paths to the nearest
-// ATTACK/DEFEND squad leader and joins that squad. What was missing is the unit
-// -- these sit at 0.00-0.05 in the factory.json ratio tables against 0.40 for
-// the guns they would be spotting for. This recruits one directly, the same way
-// LateRadarPlane does, once there is an army for it to travel with.
+// Mobile radar for units whose guns outrange their own LOS. The escort itself
+// is stock and correct (radar/jammer carry role "support", CSupportTask joins
+// the nearest squad) -- what was missing is the unit: these sit at 0.00-0.05 in
+// factory.json's ratios against 0.40 for the guns they'd spot for. Recruited
+// directly here, same as LateRadarPlane.
 
 // Which defs are "blind guns" is DERIVED rather than listed: GetMaxRange() and
 // losRadius are both bound, so the set is read off the unit defs at runtime and
@@ -24,8 +14,7 @@ const float EYES_MIN_RANGE = 650.f;   // below this the gap is not worth paying 
 const float EYES_MAX_RANGE = 3000.f;  // anti-ship missiles carry range 72000
 
 const int EYES_PER_RADAR = 5;   // blind guns fielded per mobile radar wanted
-// No ceiling: one mobile radar per EYES_PER_RADAR blind guns, all the way up.
-// apexearth: "we don't want radar max cap, we don't want jammer max".
+// No ceiling: scales with blind-gun count all the way up.
 const int EYES_PER_JAM   = 10;  // the jammer is the second-order want
 // No ceiling on jammers either, same reason as the radar above.
 const int EYES_SPACING   = 30 * SECOND;
@@ -67,14 +56,10 @@ int BlindGunCount()
 	return n;
 }
 
-// Named per factory rather than asked for by role: the radar, the jammer and
-// the assist bot all carry role "support", so GetRoleDef(SUPPORT) cannot tell
-// them apart -- the same reason RezBotDef names its defs. Dispatching on the
-// factory's own def keeps it to the units that factory actually builds, which
-// is what stops the request being a silent no-op.
-//
-// Naval is left out on purpose. A T2 ship already carries 1000-2950 radar of
-// its own, so a shipyard has nothing to fix here.
+// Named per factory rather than by role: radar, jammer and the assist bot all
+// carry role "support", so GetRoleDef(SUPPORT) can't tell them apart (same
+// reason RezBotDef names its defs). Naval is excluded -- a T2 ship already
+// carries its own radar, so a shipyard has nothing to fix here.
 CCircuitDef@ EyeDefFor(const CCircuitDef@ facDef, bool jammer)
 {
 	if (facDef is null)

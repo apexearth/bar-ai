@@ -1,12 +1,7 @@
 //==============================================================================
 // TARGETS -- every build ratio this AI aims at, as curves over economic power.
 //
-// apexearth: "I want to have a pretty easy to look at and modify file to manage
-// our army composition targets", then "I need to be able to split this into
-// economic brackets somehow. Or to be able to build a curve. Raiders at .3 to
-// start is OK but later on I want it lower."
-//
-// So every row below is a CURVE, read against metal income. One shared income
+// Every row below is a CURVE, read against metal income. One shared income
 // axis, one row per thing, interpolated between the columns -- below the first
 // column the first value holds, above the last the last value holds.
 //
@@ -42,13 +37,10 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 //------------------------------------------------------------------------------
 // 1. HOW THE METAL IS SPLIT, by what it is FOR.
 //
-// Measured live before this existed: army 0.11-0.21, defence 0.25-0.35,
-// buildpower 0.33-0.39. Nothing claimed metal for the army, so it got whatever
-// towers and constructors left behind -- which is why the trade ratio sat at
-// 0.39 against stock's 1.22.
-//
 // Early the economy and build power matter most; once there is an economy to
-// spend, the army takes the largest share.
+// spend, the army takes the largest share. Nothing else here claims metal for
+// the army by default, so without this split it gets only what towers and
+// constructors leave behind.
 //
 // RELATIVE WEIGHTS -- they do NOT have to add up to anything. {3, 1, 2, 2} says
 // the same as {0.375, 0.125, 0.25, 0.25}; raise one row and the others fall by
@@ -56,22 +48,15 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 // than as decimals that happen to sum to one.
 //                            8     20     50    100    300
 //------------------------------------------------------------------------------
-// LAND DEFENCE AND AIR DEFENCE ARE SEPARATE ROWS, AND THEY MUST BE.
-//
-// apexearth, 2026-08-12: "dampening defense at 10% is what I said to do for Air
-// defenses. I do not mean we should do that for land defenses." The old single
-// SPEND_DEFENCE row carried the number he gave for ANTI-AIR and applied it to
-// every tower, and AirCoverWant and FrontDefenceWant both proposed under the
-// same "fence" kind, so they competed for one allowance.
-//
-// SPEND_AIRDEF keeps the row he specified, unchanged, and now means only what he
-// meant by it.
+// LAND DEFENCE AND AIR DEFENCE ARE SEPARATE ROWS, AND THEY MUST BE: a single
+// SPEND_DEFENCE row applies one dampening figure to every tower, but
+// AirCoverWant and FrontDefenceWant both propose under the same "fence" kind
+// and so competed for one allowance.
 //
 // Every entry is tunable (apex_share_defence, apex_share_airdef).
 //                            8     20     50    100    300
 array<float> SPEND_ARMY       = {  3.f,   4.f,   5.f,   6.f,   10.f};
-// TEN PERCENT OF EVERYTHING WE BUILD, AT EVERY INCOME. apexearth, 2026-08-13:
-// "Let's try defence at 10%."
+// TEN PERCENT OF EVERYTHING WE BUILD, AT EVERY INCOME.
 //
 // These are relative weights, so a row cannot state a percentage on its own --
 // each entry below is set to one ninth of the sum of the other four rows at that
@@ -96,10 +81,9 @@ array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
 //     HEAVY   -> the T2 push units                        (Fatboy)
 //     AH/AHA  -> anti-heavy; snipers and tank-killers     (Sharpshooter)
 //
-// Chaff fades as the economy grows -- "Raiders at .3 to start is OK but later on
-// I want it lower", and a 54-metal Pawn dies to one shot from anything a real
-// economy fields. The heavy and anti-heavy rows climb to meet it, because that
-// is what the metal buys instead.
+// Chaff fades as the economy grows -- a 54-metal Pawn dies to one shot from
+// anything a real economy fields. The heavy and anti-heavy rows climb to meet
+// it, because that is what the metal buys instead.
 //
 // THESE ROWS ARE READ IN TWO DIFFERENT UNITS. Brain::NextForMix weighs them against
 // held METAL (mix.as: `held = count * costM`), while Brain::QuotaFor turns them into
@@ -114,16 +98,10 @@ array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
 // much of this table is spent by the T2 lines rather than by the gantry.
 //                            8     20     50    100    300
 //------------------------------------------------------------------------------
-// RAIDERS ARE A T1 UNIT. apexearth: "We should make more snipers, fatboys,
-// jammers, *no* T2 raiders." A raider's job is reaching undefended ground early;
-// once both sides hold a line it is metal walking into a turret. The row goes to
-// zero above the T1 economy rather than tapering, because "some" T2 raiders is
-// what a taper buys and he asked for none.
-// Never zero past T1. It read {..., 0, 0, 0}, so from 50 metal/s upward we built
-// no cheap fast unit at all -- exactly when enemy jammers make seeing them the
-// problem. apexearth: "once we are in T2 phase the only T1 we should make is the
-// lightest T1 units, not a TON of them, and their behavior should be far more
-// suicidal." A small standing share of 42-metal Grunts is a lot of eyes.
+// RAIDERS ARE A T1 UNIT: their job is reaching undefended ground early, and
+// once both sides hold a line a raider is metal walking into a turret. Never
+// zero past T1, though -- a small standing share of 42-metal Grunts is eyes,
+// which matters exactly when enemy jammers make seeing them the problem.
 array<float> ROLE_RAIDER  = {0.35f, 0.10f, 0.05f, 0.04f, 0.03f};
 array<float> ROLE_ASSAULT = {0.35f, 0.2f, 0.24f, 0.18f, 0.08f};
 array<float> ROLE_SKIRM   = {0.12f, 0.25f, 0.17f, 0.15f, 0.14f};

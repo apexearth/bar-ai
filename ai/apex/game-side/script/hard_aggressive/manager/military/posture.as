@@ -10,31 +10,22 @@ void UpdateRaidCaution()
 }
 
 //------------------------------------------------------------------------------
-// Coordinated team push -- the "something extra" that punches through a line.
+// Coordinated team push.
 //
-// apexearth: "usually you need something extra to punch through defenses and
-// win a game... to defeat human players Apex AI must be unpredictable and
-// dangerous", and the AIs should "cooperate with other Apex AIs to create
-// united strategies".
-//
-// The failure this addresses is structural, not a tuning error. Every instance
-// judges every fight ALONE: CAttackTask's engage test compares one squad's
-// power against the local defenders. Four allied squads that would each win
-// together therefore each refuse separately, and the team trickles. That is
-// exactly what a human punishes, and it is what the live 10-AI game showed --
-// 3,973 target groups refused across 492 decisions.
+// The failure this addresses is structural: every instance judges every fight
+// ALONE, since CAttackTask's engage test compares one squad's power against
+// the local defenders. Four allied squads that would each win together
+// therefore each refuse separately, and the team trickles (measured live:
+// 3,973 target groups refused across 492 decisions).
 //
 // So: the elector totals the ALLY TEAM's army, and when the team as a whole
 // clearly outweighs the enemy it declares a push window on the shared
 // blackboard. Every instance reads the same flag and, for that window, accepts
 // worse local odds (SetEngageBoost) and lifts its attack cap. They commit
-// together or not at all.
+// together or not at all -- the army is idle right up until it is not, and the
+// trigger is a STATE (relative army value) rather than a clock, so there is no
+// timing to learn.
 //
-// Why this is dangerous to a human rather than merely aggressive: the army is
-// visibly idle right up until it is not, and then several bases empty at once
-// from different directions. The unpredictability is a side effect of the
-// trigger being a STATE (relative army value) rather than a clock -- there is
-// no timing to learn.
 // TV_ARMY and TeamArmyCost() already exist above (UpdateKillingBlow publishes
 // it every tick); reuse them rather than declaring a second copy.
 const string TV_PUSH = "push";     // elector's answer: frame the window ends
@@ -51,18 +42,15 @@ const int   PUSH_COOLDOWN = 3 * MINUTE;
 // test demands -- squads still refuse a genuinely hopeless fight, but stop
 // refusing the ones the rest of the team is about to join.
 const float PUSH_BOOST   = 0.55f;
-// Engage bias while an advanced plant is going up. apexearth, watching a 1v1:
-// "when we are making a t2 lab we should ***not*** attack... im seeing we end up
-// with no army left when t2 lab comes up." A T2 lab is the most expensive thing
-// bought so far, and it is bought with metal that is NOT going into army -- so
-// the moment we commit to it is exactly the moment we can least afford to trade
-// the army we already have.
+// Engage bias while an advanced plant is going up: a T2 lab is bought with
+// metal that is NOT going into army, so the moment we commit to it is exactly
+// the moment we can least afford to trade the army we already have.
 //
-// Above 1 is cautious (PUSH_BOOST 0.55 is the aggressive direction). This raises
-// only the bar to START an attack: CONTINUE_MARGIN governs fights already
-// joined, and defence runs through CDefendTask, which does not consult this at
-// all. So we still hold ground and still finish what we are in -- we just stop
-// walking out to start new fights while the lab is unfinished.
+// Above 1 is cautious (PUSH_BOOST 0.55 is the aggressive direction). This
+// raises only the bar to START an attack: CONTINUE_MARGIN governs fights
+// already joined, and defence runs through CDefendTask, which does not
+// consult this at all -- we still hold ground and finish what we are in, we
+// just stop starting new fights while the lab is unfinished.
 const float T2_HOLD_BOOST = 1.60f;
 const float PUSH_QUOTA   = 200.f;
 // Nothing to push with. Below this the "ratio" is noise -- two scouts against
@@ -70,26 +58,17 @@ const float PUSH_QUOTA   = 200.f;
 const float PUSH_MIN_ARMY = 2500.f;
 
 //------------------------------------------------------------------------------
-// Personality.
-//
-// apexearth: "the AI should have different types of personalities... to defeat
-// human players Apex AI must be unpredictable and dangerous."
-//
-// A human learns an AI by watching one game and assuming the next is the same.
-// Ten identically-tuned Apex instances are one opponent repeated ten times, and
-// perfectly predictable once solved. A per-instance trait, rolled at runtime and
-// never announced, means the same lineup plays differently every match and the
-// player cannot know which base in front of them is the cautious one.
+// Personality: a per-instance trait, rolled at runtime and never announced, so
+// identically-tuned Apex instances do not all play as one predictable opponent.
 //
 // Expressed as a multiplier on the SAME engage-margin lever the team push uses,
-// deliberately: it composes with everything already tuned instead of adding a
-// second decision system that can disagree with the first. A personality shifts
-// how readily this instance takes a fight; it does not invent new behaviour, so
-// the blast radius is bounded and it cannot deadlock a role election.
+// so it composes with everything already tuned instead of adding a second
+// decision system that can disagree with the first; it shifts how readily an
+// instance takes a fight rather than inventing new behaviour, bounding its
+// blast radius.
 //
-// The team push OVERRIDES personality (see UpdateTeamPush): when the team commits
-// everyone commits, including the cautious ones. Cooperation beats temperament,
-// which is the point of having both.
+// The team push OVERRIDES personality (see UpdateTeamPush): when the team
+// commits, everyone commits, including the cautious ones.
 const int PERSONA_ROLL_FRAME = 10 * SECOND;   // after Init, so teamId is settled
 int   gPersona     = -1;
 float gPersonaBias = 1.f;
@@ -128,33 +107,20 @@ void UpdateTeamPush()
 	// One writer, same pattern as the tech-lead and air-lead elections.
 	if (Factory::ElectorTeamId() == ai.teamId) {
 		const float teamArmy = TeamArmyCost();
-		// EnemyArmyCost() only accumulates on EnemyEnterLOS, so an enemy we have
-		// not looked at reads as ZERO -- and `army > 0 * 1.6` is true for any
-		// army at all. Observed on the first run of this rule: every push logged
-		// "vs enemy 0", i.e. it was firing on ignorance rather than on advantage.
-		// EnemyArmyFloor() already exists for exactly this ("a refused query is
-		// unknown, never no enemies"), so treat it as the floor.
+		// EnemyArmyCost() only accumulates on EnemyEnterLOS, so an unscouted
+		// enemy reads as ZERO and `army > 0 * 1.6` is true for any army at all --
+		// a push fired on ignorance rather than advantage. EnemyArmyFloor() is
+		// "a refused query is unknown, never no enemies", so it is used as the
+		// floor for the unscouted case. This matters more than an ordinary
+		// threshold: a declared push both halves the engagement bar (PUSH_BOOST)
+		// and sets IsCommitted, which stops every non-commander retreating, so a
+		// push on a bad estimate is an army that cannot disengage.
+		//
+		// The substitution applies ONLY to the unscouted case: raising a SEEN
+		// estimate up to teamArmy as well would make foe >= teamArmy
+		// unconditionally, and the test below would then always read false.
 		const float seen = EnemyFieldCost();
 		const float floorFoe = EnemyArmyFloor();
-		// Never push on IGNORANCE. EnemyArmyFloor is
-		// PORC_THREAT_PER_ENEMY * teams -- 90 metal on a 6v6, less than one
-		// scout -- so `teamArmy > foe * 1.6` was satisfied by any army at all
-		// and the only real gate was PUSH_MIN_ARMY. An unscouted enemy is
-		// assumed to MATCH us rather than to be absent, which makes the
-		// superiority test unpassable until we have actually seen that we are
-		// ahead.
-		//
-		// This matters more than an ordinary threshold because a declared push
-		// both halves the engagement bar (PUSH_BOOST) and sets IsCommitted,
-		// which stops every non-commander retreating at all -- so a push taken
-		// on a bad estimate is not a worse trade, it is an army that cannot
-		// disengage. apexearth: "For us to be willing to push like that, we have
-		// to have superior army to the enemy's."
-		//
-		// The substitution applies ONLY to the unscouted case. Raising a SEEN
-		// estimate up to teamArmy as well makes foe >= teamArmy unconditionally,
-		// and the test below then reads `teamArmy > teamArmy * 1.6` -- false for
-		// every army, so no push can ever be declared.
 		const float foe = (seen > floorFoe) ? seen : teamArmy;
 		const bool worth = (teamArmy >= PUSH_MIN_ARMY)
 				&& (teamArmy > foe * PUSH_TEAM_RATIO);
@@ -177,9 +143,8 @@ void UpdateTeamPush()
 	const bool pushing = (ai.frame < until) && !Factory::EcoLeadActive();
 	if (pushing) {
 		ai.SetEngageBoost(PUSH_BOOST);
-		// Commitment is the whole point. apexearth: "the real key there is
-		// 'commitment'... if we back off we certainly won't succeed." Units in a
-		// declared push stop retreating to heal; see CCircuitAI::IsCommitted.
+		// Units in a declared push stop retreating to heal; see
+		// CCircuitAI::IsCommitted.
 		ai.SetCommitted(true);
 		if (aiMilitaryMgr.quota.attack < PUSH_QUOTA)
 			aiMilitaryMgr.quota.attack = PUSH_QUOTA;
@@ -202,29 +167,14 @@ void UpdateTeamPush()
 		if (teching && (T2_HOLD_BOOST > boost))
 			boost = T2_HOLD_BOOST;
 		ai.SetEngageBoost(boost);
-		// Commitment is NOT only for declared pushes.
-		//
-		// IsCommitted is the one thing that stops a unit leaving a fight at its
-		// own 60% health threshold, and it was wired exclusively to the team
-		// push -- which is rare. So in ordinary fighting a squad dissolves one
-		// unit at a time, each leaving as it drops below the bar, and the damage
-		// already spent buys nothing. apexearth: "we will lose half of our army
-		// to a turret that was almost killed, but then we ran away. And then the
-		// turret never died... our fighting just looks really, really, really
-		// bad."
-		//
-		// TRIED AND REVERTED, 2026-08-08: `SetCommitted(TeamArmyCost() >=
-		// PUSH_MIN_ARMY)` -- commit outside a declared push too, so squads stop
-		// dissolving one unit at a time at the 0.6 health bar. Measured on one
-		// 18-minute 5v5 Cortex mirror: army K/D 0.38 against stock's 1.73, and
-		// mobile losses 69,824 against 35,796. Blanket commitment means every
-		// bad fight is fought to the death, which is worse than leaving them.
-		//
-		// The underlying complaint is still real and still unfixed -- "we will
-		// lose half of our army to a turret that was almost killed, but then we
-		// ran away." The answer is not "never retreat"; it is retreating as a
-		// SQUAD rather than per unit, and finishing a target that is nearly
-		// dead. Both live in the C++ fighter tasks.
+		// IsCommitted stops a unit leaving a fight at its 60% health threshold,
+		// and is wired only to the team push (rare) -- so in ordinary fighting a
+		// squad dissolves one unit at a time as each drops below the bar.
+		// Committing outside a declared push was tried and reverted: it made
+		// every bad fight fight to the death (army K/D 0.38 vs stock's 1.73 in
+		// one measured mirror), which is worse than leaving. The real fix is
+		// retreating as a SQUAD rather than per unit, and finishing a nearly-dead
+		// target; both live in the C++ fighter tasks.
 		ai.SetCommitted(false);
 		gPushLogged = false;
 	}
@@ -297,10 +247,7 @@ void UpdateCorridorProbe()
 		+ " w=" + formatFloat(fw, "", 0, 0));
 }
 
-// THE ARMY HOLDS WHERE THE LANE IS. apexearth: "purple had like 10+ mammoths in
-// the center of their base, and instead of protecting the edge of their base they
-// just stayed in the center... standing in the center of your base is *not*
-// defending your base."
+// THE ARMY HOLDS WHERE THE LANE IS.
 //
 // CMilitaryManager::FillFrontPos takes the metal cluster nearest lanePos and
 // returns that cluster's defence points, so lanePos is the whole answer to where
@@ -321,11 +268,6 @@ AIFloat3 gLaneAt;
 const float LANE_STICKY = 900.f;
 
 // THE LIGHT T1 STOPS BEING A RAIDER AND BECOMES EYES, BUT ONLY IN T2 PHASE.
-//
-// apexearth: "once we are in T2 phase the only T1 we should make is the lightest
-// T1 units... their behavior should be far more suicidal... they run in to spot
-// the enemy" -- and, on the early game, "this is only when they're being used as
-// spam, not early game behavior."
 //
 // Two halves. This one is willingness to die: behaviour.json states ONE retreat
 // value for the whole game, so the config cannot express a posture that changes,
@@ -393,24 +335,18 @@ void UpdateLanePos()
 	gNextLane = ai.frame + 10 * SECOND;
 	if (!Builder::gHomeSet)
 		return;
-	// THE FRONT ITSELF, not a fraction of the way to it. apexearth: "our superior
-	// offensive armies often regroup too close to the front of our base. They
-	// should regroup on the frontline somewhere in relative safety." FrontNear
-	// returns the nearest perimeter point that is a FRONT edge, preferring ground
-	// we hold; FillFrontPos then picks a cluster there whose influence is ours and
-	// which is reachable, so safety is the predicate's job rather than a setback we
+	// THE FRONT ITSELF, not a fraction of the way to it. FrontNear returns the
+	// nearest perimeter point that is a FRONT edge, preferring ground we hold;
+	// FillFrontPos then picks a cluster there whose influence is ours and which
+	// is reachable, so safety is the predicate's job rather than a setback we
 	// would have to guess at.
-	// TOWARD THE ENEMY, OR NOT AT ALL. FrontNear returns the NEAREST perimeter
-	// point classified FRONT, with no direction test -- and before the enemy is
-	// located, a bearing that simply runs off the map edge is classified the same
-	// way. So the nearest "front" could be behind us, and the anchor flip-flopped
-	// between mid-map and our own back edge every ten seconds. apexearth, reading
-	// the ping: "sometimes we're massing in mid and other times we are massing in
-	// the back edge of the map."
 	//
-	// ForwardFraction is positive toward the enemy, so requiring it rules out the
-	// rear perimeter, and IsFrontKnown keeps us on the deterministic fallback until
-	// there is a real front to stand on.
+	// Toward the enemy, or not at all: FrontNear has no direction test, so
+	// before the enemy is located a bearing running off the map edge classified
+	// the same as a real front, and the anchor flip-flopped between mid-map and
+	// our own back edge. ForwardFraction is positive toward the enemy, so
+	// requiring it rules out the rear perimeter, and IsFrontKnown keeps us on
+	// the deterministic fallback until there is a real front to stand on.
 	AIFloat3 lane;
 	bool onFront = Front::IsFrontKnown()
 		&& Front::FrontNear(Builder::gHomePos, lane)
@@ -426,12 +362,11 @@ void UpdateLanePos()
 	if (!OnMap(lane))
 		return;
 
-	// COMMIT TO AN ANCHOR. apexearth: "imagine constantly trying to go to front and
-	// then to back, you only ever end up in the middle." A regroup point that moves
-	// every ten seconds is an army permanently in transit, and averaging two
-	// candidates is exactly the middle of the map. So a new anchor has to be a
-	// MEANINGFUL distance from the one we are already using before we adopt it --
-	// small drift is ignored, a genuine shift of the front is not.
+	// COMMIT TO AN ANCHOR. A regroup point that moves every ten seconds is an
+	// army permanently in transit, and averaging two candidates is exactly the
+	// middle of the map. So a new anchor has to be a MEANINGFUL distance from
+	// the one already in use before it is adopted -- small drift is ignored, a
+	// genuine shift of the front is not.
 	if (OnMap(gLaneAt)
 		&& (lane.distance2D(gLaneAt) < ai.GetTunable("apex_lane_sticky", LANE_STICKY)))
 	{
@@ -448,10 +383,8 @@ void UpdateLanePos()
 	// therefore being applied to the anchor nothing consumed.
 	ai.SetFrontPos(lane);
 
-	// WHY THE ARMY IS THERE, ON THE MAP. apexearth: "if you can ping on the map to
-	// identify *why* units are doing things I could be able to tell you better
-	// whats going on." This is the anchor FillFrontPos picks the regroup cluster
-	// from, so it is the single most useful thing to see.
+	// WHY THE ARMY IS THERE, ON THE MAP: this is the anchor FillFrontPos picks
+	// the regroup cluster from, so it is the single most useful thing to see.
 	// OFF BY DEFAULT: this is a map marker human allies see. The harness turns it
 	// back on with --modoption apex_ping=1; see apex_draw_front in frontline.as.
 	if (ai.GetTunable("apex_ping", 0.f) > 0.f) {
@@ -498,19 +431,14 @@ void UpdatePosture()
 	}
 	// A HOLD MUST NEVER STOP US DEFENDING OUR OWN GROUND.
 	//
-	// The hold is entered when our army shrinks -- which is precisely what being
-	// attacked looks like. So an enemy army walking into a base drove the army
-	// that should answer it into a 45-second-to-6-minute posture whose whole
-	// effect is quota.attack = 240, i.e. no group is ever large enough to engage.
-	// apexearth, watching: "When our base is under attack, we have armies from our
-	// allies running away instead of helping. Like, we totally had an opportunity
-	// to wipe out the enemy army, but instead we just ran away."
-	//
-	// The hold is for the case it was built for: stop feeding the army into THEIR
-	// base while losing the trade. Enemies in ours is the opposite situation --
-	// short supply lines, our defences shooting, their army out of position -- and
-	// it is the one moment the trade is in our favour. Released the same way the
-	// killing blow releases it.
+	// The hold is entered when our army shrinks -- precisely what being attacked
+	// looks like -- so an enemy walking into our base drove the army that should
+	// answer it into a posture whose whole effect is quota.attack = 240, i.e. no
+	// group is ever large enough to engage. The hold is for the case it was
+	// built for: stop feeding the army into THEIR base while losing the trade.
+	// Enemies in ours is the opposite -- short supply lines, our defences
+	// shooting, their army out of position -- and the one moment the trade is in
+	// our favour. Released the same way the killing blow releases it.
 	if (gTurtle && (ai.GetTunable("apex_hold_release", 1.f) > 0.f)
 		&& (BaseContested() || Builder::BaseUnderAttack())) {
 		gTurtle = false;
@@ -522,12 +450,9 @@ void UpdatePosture()
 	UpdateAirThreat();
 	UpdateCorridorProbe();
 	Commander::UpdateCaution();
-	// DISABLED. Exit-code audit: aborts (exit -1003) jumped from 0-2 per 20-game
-	// run to 14-17 the moment this landed, and stayed there. The engine is dying,
-	// not stalemating -- which means the "3-1, commanders solved" reading was
-	// drawn from the handful of games that survived, and the 82% I reported as
-	// mutual turtling was 82% aborted. Either CmdMoveTo issued outside a task
-	// context or GetEnemyCostAt's GetEnemyUnitsIn walk is unsafe here.
+	// DISABLED: engine aborts (exit -1003) jumped sharply the moment this
+	// landed. Either CmdMoveTo issued outside a task context or
+	// GetEnemyCostAt's GetEnemyUnitsIn walk is unsafe here.
 	// Builder::UpdateCommanderSafety();
 	if (ai.frame < gNextSample)
 		return;
@@ -597,12 +522,9 @@ void UpdatePosture()
 // promotes to ATTACK, which is the value DefaultMakeTask would have used.
 //------------------------------------------------------------------------------
 
-// Fodder is exempt. apexearth: "we don't care about grouping these up ... they
-// are fodder." Holding a 21-metal Tick back to build a mass buys nothing; its
-// job is vision and pulled fire, and both only happen forward. Cost AND role,
-// so a cheap AA or bomber is not swept in: the units meant here are Tick
-// (armflea 21), Rascal (corfav 26), Wheelie (legscout 25), Rover (armfav 31),
-// Grunt (corak 42) and Pawn (armpw 54).
+// Fodder is exempt from massing: holding a 21-metal Tick back to build a mass
+// buys nothing, since its job is vision and pulled fire, both forward-only.
+// Cost AND role, so a cheap AA or bomber is not swept in.
 const float FODDER_COST = 100.f;
 
 }  // namespace Military

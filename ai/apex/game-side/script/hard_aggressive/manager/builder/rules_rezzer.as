@@ -7,33 +7,25 @@ IUnitTask@ RezzerFlee(CCircuitUnit@ unit)
 {
 	// Rez bots have no buildoptions and cannot dig in like an ordinary
 	// constructor -- Fortify/ContestTower never apply to them -- so a hit here
-	// means flee, not fortify. And nothing else in the task pipeline ever calls
-	// ConDugIn for them, since every rez rule returns early: a bot
-	// that commits to a resurrect has nothing re-checking it while the task
-	// runs. apexearth, watching an enemy army arrive live: "eight rez bots
-	// resurrecting... they have no time... they keep rezzing... and die...
-	// lots of metal around, all could have been taken... our bad logic
-	// prevented us from taking that metal and running."
+	// means flee, not fortify. Nothing else in the pipeline calls ConDugIn for
+	// them either, since every rez rule returns early.
 	//
 	// RezSpotHot/PreferReclaim below only gate which task gets ASSIGNED, and
 	// RezSpotHot's ThreatFor falls back to PastFront() geometry once the
-	// position threat map reads zero -- which ThreatFor's own comment says is
-	// ~97% of the time -- so an enemy push that has not crossed the front's
-	// 72% line still reads "safe" while standing on the bot. ConDugIn's
-	// HP-drop tracking is a real positional signal instead: something shot us,
-	// HERE. One hit is enough -- unlike an armed constructor, a rez bot cannot
-	// answer fire by digging in, only by leaving.
+	// position threat map reads zero (the common case -- see ThreatFor's own
+	// comment), so an enemy push short of the front's 72% line still reads
+	// "safe" while standing on the bot. ConDugIn's HP-drop tracking is a real
+	// positional signal instead: something shot us, HERE. One hit is enough --
+	// unlike an armed constructor, a rez bot cannot dig in, only leave.
 	if (IsRezzer(unit)) {
 		ConDugIn(unit);   // side effect: refreshes gConHits/gConHp for this bot
 		if (gConHits[ConSlot(unit)] > 0) {
 			IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
 			if (flee !is null) {
 				// TROUBLE_WINDOW holds this true for up to 90s per hit, so without a
-				// log throttle this call re-logs on every AiMakeTask re-entry while
-				// fleeing -- 399 lines in one 15-minute smoke test. EnqueueRetreat
-				// itself is called every time regardless (same as the commander
-				// retreat above), on the same assumption that re-enqueuing an
-				// existing retreat is a cheap no-op, not a restart.
+				// log throttle this re-logs on every AiMakeTask re-entry while fleeing.
+				// EnqueueRetreat is called every time regardless, on the assumption
+				// that re-enqueuing an existing retreat is a cheap no-op.
 				if (ai.frame >= gNextRezFleeLog) {
 					gNextRezFleeLog = ai.frame + 20 * SECOND;
 					AiLog(Factory::T() + "apex: rez bot taking fire, retreating with whatever it banked");
@@ -47,13 +39,10 @@ IUnitTask@ RezzerFlee(CCircuitUnit@ unit)
 
 IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 {
-	// Rez bots work the DEFENCE LINE, not wherever they happen to stand.
-	//
-	// apexearth: "if we are losing then reclaim becomes even more important, as
-	// those defenses kill enemies on our border -- we can resurrect or reclaim
-	// the metal". The corpses pile up where the fighting is, and the search below
-	// only reaches 2200 elmos from the bot itself, so a bot idling at home never
-	// finds them. Search from the front instead while we are behind.
+	// Rez bots work the DEFENCE LINE, not wherever they happen to stand. The
+	// corpses pile up where the fighting is, and the search below only reaches
+	// 2200 elmos from the bot itself, so a bot idling at home never finds them.
+	// Search from the front instead while we are behind.
 	if (IsRezzer(unit) && Military::LosingGround() && (ai.frame >= gNextRezWreck)) {
 		AIFloat3 front;
 		if (Military::FrontLinePos(front)) {
@@ -101,20 +90,16 @@ IUnitTask@ RezzerPreemptReclaim(CCircuitUnit@ unit, bool isComm, IUnitTask@ task
 	if (isComm || !IsRezzer(unit) || (ai.frame < gNextWreck))
 		return task;
 	// Stop pre-empting once the reactor the metal was for is already standing.
-	// apexearth: "resurrecting a titan is only useful sometimes. oftentimes that
-	// sudden boost in resources will pay for an AFUS and that can be a big deal
-	// if you don't have an AFUS yet!" So the choice is not reclaim-versus-
-	// resurrect in the abstract -- it is what the metal is FOR. Before the
-	// advanced reactor exists a field of corpses is the fastest way to it, and
-	// after it exists the corpse is worth more standing back up than melted.
-	// Falling through hands the bot to DefaultMakeTask, which gives a rezzer a
-	// RESURRECT unconditionally (UpdateReclaimTasks takes isResurrect straight
-	// from IsAbleToResurrect).
-	// ...and only where the bot can afford the time. apexearth: "rezzing takes
-	// MUCH LONGER than reclaiming... so if in a dangerous area you should
-	// generally reclaim." A resurrect that is interrupted returns nothing at all,
-	// where a reclaim banks metal continuously as it goes, so under threat the
-	// slow option is not merely worse, it is a total loss.
+	// The choice is not reclaim-versus-resurrect in the abstract -- it is what
+	// the metal is FOR. Before the advanced reactor exists a field of corpses is
+	// the fastest way to it; after it exists the corpse is worth more standing
+	// back up than melted. Falling through hands the bot to DefaultMakeTask,
+	// which gives a rezzer a RESURRECT unconditionally (UpdateReclaimTasks takes
+	// isResurrect straight from IsAbleToResurrect).
+	//
+	// ...and only where the bot can afford the time: a resurrect that is
+	// interrupted returns nothing at all, where a reclaim banks metal
+	// continuously as it goes, so under threat the slow option is a total loss.
 	if (!IsNavalBuilder(unit)
 		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
 	{

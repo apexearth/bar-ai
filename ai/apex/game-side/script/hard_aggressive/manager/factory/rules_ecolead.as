@@ -5,21 +5,13 @@ namespace Factory {
 
 IUnitTask@ AirConMinimum(CCircuitUnit@ unit)
 {
-	// The eco lead's factory. Build power while it is short of it, then nothing
-	// at all -- an idle line is the point, not a failure. Every unit this factory
-	// does not make is income the builders spend on mexes, energy and the T2/T3
-	// economy instead, which is the entire reason the role exists.
-	//
-	// This sits AFTER the advanced-constructor branch above deliberately: handing
-	// advanced cons to the rest of the team is the tech lead's job and the eco
-	// lead is still the tech lead. It only replaces what would otherwise be army.
-	// The advanced air plant can only be built by an AIR constructor, and the T1
-	// air plant's own ratios give constructors about 5% -- so a player can hold
-	// the air slot all game and never produce one. Without the advanced plant
-	// there are no fighters at all, because FactoryManager's isAvailableDef
-	// requires (isActive || IsAttrRare()) and isActive goes false for a T1
-	// factory the moment its owner has any T2 factory. Fighters are not rare.
-	// One constructor unlocks the plant; after that the ratios decide.
+	// The eco lead's factory: build power while short, then nothing -- an idle
+	// line means income goes to builders instead of army, which is the role's
+	// point. Placed after the advanced-con branch since eco lead is still tech
+	// lead. T1 air ratios give constructors only ~5%, and once any T2 factory
+	// exists a T1 factory's isActive goes false (isAvailableDef needs
+	// isActive || IsAttrRare, and fighters aren't rare) -- so without this,
+	// the advanced air plant, and all fighters, may never unlock.
 	if (IsAirFactory(unit.circuitDef) && (AirConCount() < AIR_CON_MIN)
 		&& (ai.frame >= gNextEcoAirCon))
 	{
@@ -40,12 +32,9 @@ IUnitTask@ AirConMinimum(CCircuitUnit@ unit)
 IUnitTask@ EcoLeadLine(CCircuitUnit@ unit, bool &out taken)
 {
 	taken = false;
-	// A gantry is the declared win condition, and the eco lead builds no army by
-	// design -- so a gantry it came by, built or resurrected, produced nothing at
-	// all. It has no BUILDER-role unit either, so the constructor branch below
-	// cannot absorb it and it falls through to `return null` every call.
-	// apexearth: "our eco guy ressurrected a gantry and then never made any unit
-	// from it". Owning one overrides the rule.
+	// A gantry has no BUILDER-role unit, so the constructor branch below cannot
+	// absorb it and it would otherwise fall through to null forever. Owning one
+	// overrides the eco-lead idle-line rule.
 	CCircuitDef@ gantDef = T3Gantry();
 	const bool isOwnGantry = (gantDef !is null)
 			&& (unit.circuitDef.id == gantDef.id);
@@ -70,12 +59,9 @@ IUnitTask@ EcoLeadLine(CCircuitUnit@ unit, bool &out taken)
 			taken = true;
 			return null;
 		}
-		// GetWorkerCount() counts every worker we own, and a nano turret IS one --
-		// observed live, the eco lead logged cons=25 against a cap of 16 while
-		// standing on eleven turrets. Left alone, the rectangle eats the mobile
-		// constructor budget and the player ends up with turrets and nobody to
-		// walk to the next mex. Count the turrets back out -- and rez bots too,
-		// which CBuilderManager puts in `workers` without any build power.
+		// GetWorkerCount() counts every worker we own, including nano turrets and
+		// rez bots (CBuilderManager puts both in `workers`), so both must be
+		// subtracted or turrets alone can fill the mobile-con budget.
 		if ((int(aiBuilderMgr.GetWorkerCount()) - Builder::NanoCount() - Builder::RezCount()
 				< int(ECO_CON_CAP))
 			&& (ai.frame >= gNextEcoCon))

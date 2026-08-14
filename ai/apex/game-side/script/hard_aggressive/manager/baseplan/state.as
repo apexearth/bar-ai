@@ -1,31 +1,16 @@
 namespace Base {
 
 
-// One base layout, shared by every rule that places a structure.
-//
-// What this replaces: three separate lattices -- BandSpot (nano rows plus eco
-// flanks), ConvSpot (the converter block) and RearPos (converters, again) --
-// each re-deriving its own axis from gHomePos and the enemy centroid, none
-// aware of the others, and none asking whether anything can stand where it
-// pointed. Everything else went out as a position plus a shake radius and the
-// engine slid it anywhere inside that radius. There was no footprint, no rows
-// and no lanes, which is why the radius could only ever trade sprawl against
-// self-walling.
-//
-// The model here is the one a human uses: an anchored rectangle, structures on
-// a grid pitch inside it, and walkways left empty at a fixed spacing so the
-// base stays crossable however densely it fills in.
+// One base layout, shared by every rule that places a structure: an anchored
+// rectangle, structures on a grid pitch inside it, walkways left empty at a
+// fixed spacing so the base stays crossable however densely it fills in.
 
 // --- the frame ---------------------------------------------------------------
 //
-// Anchor is the first factory once there is one, latched, because a factory is
-// where the base actually centres; the commander's start position stands in
-// until then. Axis points at the front, so the base grows BACKWARD, away from
-// the fighting.
-//
-// Both are latched once set. An anchor or axis that keeps re-deriving is worse
-// than a slightly wrong one -- it moves the whole grid out from under every
-// structure already standing, and what was a lane becomes a row.
+// Anchor is the first factory once there is one, latched (commander's start
+// stands in until then). Axis points at the front, so the base grows BACKWARD.
+// Both are latched once set: re-deriving would move the whole grid out from
+// under every structure already standing.
 AIFloat3 gAnchor;
 AIFloat3 gFwd;      // unit vector, anchor -> front
 AIFloat3 gAcross;   // unit vector, perpendicular
@@ -37,25 +22,15 @@ const int ANCHOR_DEADLINE = 3 * MINUTE;
 
 // --- grid geometry -----------------------------------------------------------
 //
-// Lanes are defined in WORLD offsets rather than column indices, so that bands
-// with different pitches still leave their gaps in the same places and the gaps
-// line up into an actual corridor. The lane at lateral 0 is the axis itself:
-// the road out of the factory toward the front.
+// Lanes are defined in WORLD offsets rather than column indices, so bands with
+// different pitches still leave their gaps in the same places and line up into
+// an actual corridor. The lane at lateral 0 is the axis itself.
 //
-// BUILD_CELL is the engine's own build square and the invariant every band pitch
-// has to satisfy. CTerrainManager::CorrectPosition truncates a build position to
-// a multiple of SQUARE_SIZE * 2, and FindBuildSiteByMask derives its search
-// corner as int(pos / (SQUARE_SIZE * 2)), so a candidate site can only ever land
-// on that lattice. A band pitch that is not a whole multiple of it cannot be
-// held: consecutive cells truncate alternately down and up, and two neighbours
-// meant to touch end up one build square apart.
-//
-// A structure's footprint is footprintX * BUILD_CELL elmos, so every footprint
-// is a whole number of build cells too. A band whose pitch equals the footprint
-// of what stands in it therefore tiles exactly; a pitch LARGER than the
-// footprint is a gap the site search cannot close, while a pitch smaller is
-// closed by the search itself, since it takes the nearest position the blocking
-// map allows and that is the edge-adjacent one.
+// BUILD_CELL is the invariant every band pitch must satisfy: CorrectPosition
+// truncates a build position to a multiple of SQUARE_SIZE * 2, and
+// FindBuildSiteByMask derives its search corner the same way, so a pitch that
+// is not a whole multiple of it truncates alternately down and up and
+// neighbours meant to touch end up a build square apart.
 const float BUILD_CELL = 16.f;    // SQUARE_SIZE * 2; the engine's build square
 // The site-search reach and band slack below, and nothing else. Band pitches are
 // per band and live in EnsureCols.
@@ -63,16 +38,10 @@ const float CELL       = 72.f;
 const float GRID_CELL  = 8.f;     // SQUARE_SIZE; the pitch published to C++
 const float LANE_PITCH = 720.f;   // spacing between walkways, in world offset
 const float LANE_HALF  = 72.f;    // half-width of a walkway
-// Lateral slack on Inside(). This WAS LANE_PITCH -- one constant serving two
-// unrelated jobs, so the walkway spacing also decided how far sideways a
-// position could be and still count as "in the base". At 720 that bound
-// rejected ground the base genuinely needed, and Inside() gates the work that
-// grows it. Measured, 8 seeds, 1v1 Altair vs easy, 16 min: total mex 56 -> 81
-// (+45%) and metal 109,705 -> 139,406 (+27%), better in 7 of 8 seeds, with the
-// walkways left ON -- an earlier run that removed them scored the same, so the
-// gain was never the corridors.
-// Effectively unbounded: depth still bounds the band, and GRID_RANGE still
-// bounds the grid in C++. This is only the lateral test.
+// Lateral slack on Inside(). Kept separate from LANE_PITCH, which used to also
+// serve as this bound and rejected ground the base needed. Effectively
+// unbounded: depth still bounds the band, and GRID_RANGE still bounds the grid
+// in C++. This is only the lateral test.
 const float BAND_LAT_SLACK = 100000.f;
 const float HALF_SPAN  = 1512.f;  // lateral cap; a bound, not a target
 const float GRID_RANGE = 2200.f;  // beyond this a placement is not "in the base"
@@ -92,13 +61,9 @@ array<float> BAND_HALF;
 array<int>   BAND_ROWS;
 
 // How far from a cell centre the site search may reach, and how far outside the
-// band's own rectangle the site it comes back with may sit.
-//
-// The site is accepted on being clear of a walkway and inside the band, not on
-// landing near the cell centre. block_map.json already fixes the spacing between
-// any two structures -- structures of a class ignore each other and pack edge to
-// edge, everything else gets a yard -- so a second spacing rule layered on top of
-// it can only be looser than that one or fight it.
+// band's own rectangle the site it comes back with may sit. The site is
+// accepted on being clear of a walkway and inside the band, not on landing near
+// the cell centre -- block_map.json already fixes structure-to-structure spacing.
 const float SEEK       = CELL * 2.f;
 const float SEEK_LOOSE = CELL * 4.f;
 const float BAND_SLACK = CELL * 2.f;
@@ -110,14 +75,9 @@ const int SCAN_MAX    = 96;
 const int SCAN_REWIND = 24;
 
 // A handed-out cell is not blocked until its nanoframe exists, so two requests
-// in the same few seconds would both pass FindBuildSiteNear on the same cell.
-// The resolved site is reserved as well as the cell: neighbouring cells resolve
-// to the same packed site once the ground between them is taken.
-//
-// The radius is one build cell short of the band's own pitch (SiteR), not a
-// fixed number. What it has to catch is two cells collapsing onto one site;
-// what it must not catch is a structure standing edge to edge with the one
-// beside it, which is exactly one pitch away.
+// within the TTL would both pass FindBuildSiteNear on the same cell. The
+// resolved site is reserved too: neighbouring cells can resolve to the same
+// packed site once the ground between them is taken.
 const int RESERVE_TTL = 90 * SECOND;
 
 array<float> gColN;   // allowed lateral offsets, per kind, ordered outward
@@ -127,13 +87,9 @@ bool gColsBuilt = false;
 
 // Slot visit order, per kind: row * 1000 + column index, nearest the band's own
 // origin first. The index a caller sees is a position in THIS list, not a
-// row-major cell number.
-//
-// Row-major order walks one row across every column before stepping back a row,
-// so a band fills as a line the full width of the column list before it ever
-// gains depth. Ordering by distance instead makes it accrete outward from a
-// point, which is the shape CTerrainManager::FindBuildSite's distance-sorted
-// offset table produces for a caller that keeps passing the same position.
+// row-major cell number. Ordering by distance instead of row-major makes the
+// band accrete outward from a point rather than filling a full-width line
+// before gaining depth.
 array<int> gOrdN;
 array<int> gOrdE;
 array<int> gOrdH;
@@ -163,9 +119,8 @@ int gTouch = 0;   // accepted within a pitch of an earlier site of its own kind
 int gApart = 0;
 
 int gPlaced = 0;
-// Why a placement failed, split by cause. One combined counter conflated four
-// unrelated things and was read as "the base is full" when it may have been
-// none of them -- apexearth: "noroom is wrong".
+// Why a placement failed, split by cause: a combined counter can't tell "base
+// is full" from a threat veto or a busy reservation.
 int gNoRoom = 0;      // scan exhausted: every reason below, summed
 int gFailBand = 0;    // ran off the end of the band's rows
 int gFailHot = 0;     // cells rejected by the threat veto

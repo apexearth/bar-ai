@@ -1,32 +1,16 @@
 namespace Builder {
 
-// Reclaiming OUR OWN buildings. apexearth: "we are full of crappy buildings in
-// the later game... when we're wealthy all the old buildings like wind should be
-// reclaimed, all the T1.5 turrets should be reclaimed in favor of the bigger
-// turrets", and "the tight packing is great, its the damned t1 buildings we
-// never reclaim."
+// Reclaiming OUR OWN buildings. Not an economy activity: what this buys is
+// GROUND, what it costs is constructor time, so every decision here is about
+// which cell somebody else wants (see VALUE_* and GroundValue), never about the
+// metal that comes back. Two triggers share the mechanism: a large footprint
+// that just failed to place (CBFactoryTask::FindBuildSite -> NoteBuildBlocked),
+// and towers/economy that have been superseded.
 //
-// THIS IS NOT AN ECONOMY ACTIVITY. What the act buys is the GROUND; what it
-// costs is constructor time, which is the scarce one. So every decision below is
-// about which cell somebody else wants -- the ranking is the whole design, see
-// VALUE_* and GroundValue -- and never about the metal that comes back.
-//
-// Two cases share the mechanism:
-//
-// 1. apexearth: "when theres no room to build a gantry we need to reclaim
-//    older t1 buildings." C++ reports where a large footprint failed to place
-//    (CBFactoryTask::FindBuildSite -> NoteBuildBlocked); that spot is the
-//    highest-ranked ground there is.
-// 2. apexearth: "once game is clearly in t3/t2 stage we need to reclaim all
-//    our t1 and t1.5 defenses." Those towers stop earning against T2/T3 units
-//    and hold a cell the base has better uses for.
-//
-// Targets are named defs, NOT a computed tier. CCircuitDef carries no tech
-// level, so any tier test would be a heuristic -- and the failure mode here is
-// reclaiming our own base, which is not a thing to be approximate about. These
-// are exactly the towers ContestTower/MetalFullTower build, and the solar every
-// opening puts down, so the list cannot drift away from what we actually own.
-// Never mexes, never factories, never anything armed above T1.5.
+// Targets are named defs, NOT a computed tier -- CCircuitDef carries no tech
+// level, so a tier test would be a heuristic, and the failure mode here is
+// reclaiming our own base. Never mexes, never factories, never anything armed
+// above T1.5.
 const int OBSOLETE_PERIOD = 20 * SECOND;
 const float OBSOLETE_NEAR = 900.f;     // around a blocked build site
 // Income a T2 player must clear before stripping its own T1 defences. A player
@@ -65,29 +49,13 @@ float ValueRate(int value)
 }
 
 // What a piece of ground is WORTH, expressed as the energy income standing on
-// the base.
-//
-// apexearth: "late into a game, land becomes very valuable... To have very cheap
-// ineffective buildings taking up your space is very bad, and it only becomes
-// more and more bad", and then the arithmetic: "you can fit, like, four wind
-// turbines on the same amount of land that you can fit an advanced fusion...
-// do you want sixty energy from that land? or do you want three thousand energy
-// from that land?"
-//
-// Read from the defs: armafus produces 3000 energy, armfus 1000, armsolar 20,
-// a wind turbine varies around 60. So the cost of leaving T1 eco standing is not
-// its metal, it is the reactor that cannot go there -- and that cost rises with
-// every reactor we could otherwise afford. Energy income is the direct measure
-// of how far past T1 the grid is, so it is what sets the clearing rate.
-//
-// A clock cannot express that, and neither can a clutter count: at one reclaim
-// per 20 seconds the live game had junk RISE from 43 to 67 while 27 reclaims
-// fired.
-//
-// ENERGY INCOME AND NOT THE METAL BANK is the wealth term. A pinned bank prices
-// the metal a reclaim returns, which is the resource this act does not care
-// about; energy income prices the ground. The rate rises with it continuously --
-// there is no state in which clearing is switched on.
+// the base. The cost of leaving T1 eco standing is not its metal, it is the
+// reactor that cannot go there, and that cost rises with every reactor we could
+// otherwise afford -- energy income is the direct measure of how far past T1
+// the grid is, so it sets the clearing rate. ENERGY INCOME, NOT THE METAL BANK:
+// a pinned bank prices the metal a reclaim returns, which this act does not
+// care about; energy income prices the ground, continuously rather than as an
+// on/off state.
 int ObsoletePeriod(int value)
 {
 	const float e = aiEconomyMgr.energy.income;
@@ -170,32 +138,18 @@ void CancelDoomedRepairs()
 }
 
 // Cheap mobile build power, unlocked at the moment it can no longer cost us the
-// advanced constructor.
-//
-// armfark (Butler, 210m, 140 build power) and corfast (Twitcher, 210m) are
-// parked as role "support" in behaviour.json rather than "builder".
-// CFactoryManager::GetFacRoleDef filters the recruit draw on GetMainRole, so at
-// builder weight they win a share of it against armack -- delaying the team's
-// single shared advanced constructor, which is what gates T2 mex upgrades.
-//
-// That objection is entirely about the RACE for the first one. Once we hold an
-// advanced constructor there is nothing left to delay, and 210 metal for 140
-// build power is the cheapest build power there is. Legion needs no equivalent:
+// advanced constructor: armfark/corfast are parked at role "support" rather
+// than "builder" because CFactoryManager::GetFacRoleDef would otherwise let
+// them win a share of the recruit draw against armack and delay the team's
+// single shared advanced constructor. That objection is only about the RACE for
+// the first one -- once we hold an advanced constructor, 210 metal for 140
+// build power is the cheapest build power there is. Legion needs no promotion:
 // legaceb is already role builder in behaviour_leg.json.
-//
-// apexearth: "don't forget about those t2 assist bots with build power. those
-// little guys are like mobile nano turrets and might be useful for AI even
-// moreso than humans."
 string armfark("armfark"); string corfast("corfast"); string legaceb("legaceb");
 bool gAssistPromoted = false;
 
 // Assist bots and advanced constructors get their limit from the economy every
 // tick, not from a number in behaviour.json.
-//
-// apexearth: "same with adv cons, make tons of them... we shouldn't have any hard
-// caps, everything needs to be balanced based on the economy/game progression",
-// and "in a game like that we'd need like a ton of nano turrets, 100s of butlers,
-// all working to make the expensive stuff."
 const float ASSIST_PER_INCOME = 3.f;
 const float ASSIST_CAP_SHARE  = 0.20f;
 
@@ -266,15 +220,11 @@ bool HaveHeavyDefence()
 	return false;
 }
 
-// IN FAVOR OF THE BIGGER TURRETS, which is a claim about a piece of ground and
-// not about the roster: HaveHeavyDefence answers "do we own one anywhere", and
-// that authorises eating a Beamer on the far side of the base from the only
-// Pulsar we have. The successor has to reach the cell the old tower holds.
-//
-// FOLLOWS the upgrade, never triggers it. Enqueueing the heavy turret from here
-// would put a 680-2,500 metal DEFENCE task in a rule that runs above the economy
-// offers, and would take the old tower down while its heir was still a nanoframe
-// -- which is the complaint this gate exists to answer.
+// FOLLOWS the heavy-turret upgrade, never triggers it: enqueueing the heavy
+// turret from here would put a costly DEFENCE task in a rule that runs above
+// the economy offers, and would take the old tower down while its heir was
+// still a nanoframe. HaveHeavyDefence only answers "do we own one anywhere", so
+// HeavyCoverAt below is what checks the successor actually reaches this cell.
 array<AIFloat3> gCoverAt;
 array<float>    gCoverR;
 
@@ -350,18 +300,12 @@ array<string> ObsoleteDefenceNames()
 	return names;
 }
 
-// WHICH of our copies to eat is a space question. apexearth: "reclaim what's
-// stranded outside the footprint or sitting in a lane" -- a structure in a
-// walkway is what makes the base uncrossable, one mid-footprint is standing
-// where the next reactor goes. The periphery ranks LAST rather than first:
-// nobody is waiting for that cell, and a T1 constructor moves at 36 elmos/s, so
-// the walk out and back costs more time than the reclaim.
-//
-// A TURRET IS SCORED THE OTHER WAY ROUND. "Outside the footprint" describes
-// every tower on the line -- the ones still doing the job they were built for.
-// apexearth: "we reclaim our t1.5 defenses far before we even build our T2+
-// defenses, and we have a horrible lack of T2+ defenses." So a defence entry is
-// eligible only where it is base clutter, and -1 says it is not a target at all.
+// WHICH of our copies to eat is a space question: a walkway structure blocks
+// the base, a mid-footprint one sits where the next reactor goes, so the
+// periphery ranks LAST -- nobody is waiting for that cell. A TURRET IS SCORED
+// THE OTHER WAY ROUND: "outside the footprint" describes every tower still
+// doing its job on the line, so a defence entry is eligible only where it is
+// base clutter, and -1 says it is not a target at all.
 //
 // InLaneAt is asked only of positions already known to be inside: it tests the
 // lateral offset alone, so a building a screen away on the same band would
@@ -385,11 +329,9 @@ string ValueWhy(int value)
 }
 
 // ONE pass over every candidate def, ranked by ground and then by how far the
-// constructor has to walk. Per-def lists each returning on their first hit meant
-// whichever ran first took nearly everything: measured in a live 37-minute game,
-// 272 armwin and 63 armmakr against 3 armllt. Ranking across the whole set is
-// also the only form in which "prefer the target whose ground someone wants" can
-// be expressed at all.
+// constructor has to walk -- per-def lists that each return on their first hit
+// let whichever ran first take nearly everything. Ranking across the whole set
+// is the only way to express "prefer the target whose ground someone wants".
 CCircuitUnit@ ObsoletePick(CCircuitUnit@ unit, int floorValue, bool haveBlocked,
 		const AIFloat3& in blocked, string& out defName, int& out value)
 {
@@ -499,18 +441,12 @@ IUnitTask@ ObsoleteUrgent(CCircuitUnit@ unit)
 IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit, bool allowAdv = false,
 		int minValue = VALUE_NONE)
 {
-	// NOT THE ADVANCED CONSTRUCTORS. apexearth: "I see T2 con time is being used
-	// to reclaim obsolete buildings. Let's not have that be important for them at
-	// all. Rezbots, T1 cons, and con turrets can do that." An advanced con is the
-	// only unit that can build a moho, a reactor or a heavy turret, and there are
-	// never many; tidying is work anything else can do.
-	//
-	// allowAdv is the one exception, and only the caller can establish it: the
-	// last-resort path runs after the engine's own offer came back null and after
-	// every rule above declined, so there is no moho for this constructor to be
-	// taken off. It is passed the bank state as well -- apexearth, watching an
-	// 8v8: "These guys have tons of metal so they could spend some time reclaiming
-	// old stuff." The promoted path above the economy offers never passes it.
+	// NOT THE ADVANCED CONSTRUCTORS: an advanced con is the only unit that can
+	// build a moho, a reactor or a heavy turret, and there are never many, so
+	// tidying is work anything else can do. allowAdv is the one exception, set
+	// only by the last-resort path -- it runs after the engine's own offer came
+	// back null and every rule above declined, so there is no moho left to be
+	// taken off. The promoted path above the economy offers never passes it.
 	if (IsAdvConDef(unit) && !allowAdv)
 		return null;
 	// Two rate limits, because the permit depends on what the scan finds. The
@@ -547,25 +483,17 @@ IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit, bool allowAdv = false,
 	return ReclaimOwnDef(pick, defName, value);
 }
 
-// T1 economy and AA that a T2/T3 base has outgrown. Per-faction, because a
-// name list that only covers Cortex is the recurring faction-parity trap.
+// T1 economy and AA that a T2/T3 base has outgrown. Per-faction, since a name
+// list covering only one faction is the recurring parity trap.
 //
-// The T1 converter and the T1 AA turret belong here -- apexearth: "those become
-// trash long into a game". What had to change is the two rules that were
-// REBUILDING them behind us: CheapAA and the generic EnergyConverter both now
-// stand down past T1 tier, so reclaiming one no longer queues its replacement.
-// REPLACE, DO NOT JUST REMOVE. apexearth, watching: "I saw us reclaiming t1
-// converters before t2 converters were even made. Should replace t1s with t2s
-// otherwise we just lower our metal income."
-//
-// PastT1Tier() asks whether we have TECHED, never whether the replacement was
-// actually built -- so a base at T2 with the income for it tore out its cheap
-// converters and its solars while nothing had taken over the job. Both of those
-// are income: a converter IS metal income, and a solar is what runs it.
-//
-// So each of those two entries now waits for its own successor to be standing.
-// Wind and the T1 AA turret are unconditional: wind is superseded by any
-// generator at all, and the AA turret is not economy.
+// REPLACE, DO NOT JUST REMOVE: PastT1Tier() asks whether we have TECHED, never
+// whether the replacement was actually built, so a converter or solar entry
+// waits for its own successor to be standing before it is eligible -- both of
+// those are metal income, and tearing them out before the replacement exists
+// just lowers it. CheapAA and the generic EnergyConverter both stand down past
+// T1 tier, so reclaiming one no longer queues its replacement. Wind and the T1
+// AA turret are unconditional: wind is superseded by any generator at all, and
+// the AA turret is not economy.
 bool HaveReplacementFor(const string& in name)
 {
 	CCircuitDef@ better = null;

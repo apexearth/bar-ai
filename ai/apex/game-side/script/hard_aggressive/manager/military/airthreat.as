@@ -41,17 +41,11 @@ void CapHeavyAA(CCircuitDef@ def, int spare)
 		def.maxThisUnit = def.count + spare;
 }
 
-// The enemy air value that is safe to REACT to, for callers outside this file.
-//
-// Raw GetEnemyCost(AIR) is not "enemy aircraft": behaviour.json gives air
-// constructors ["builder","air"] and air scouts ["scout","air"], and
-// CFactoryManager hands the AIR enemy role to everything that IsAbleToFly, so two
-// enemy air cons read as ~680 metal of "air". gAirAvg is that number with the
-// builder/scout share discounted and time-averaged, and AA_IGNORE is the floor
-// below which it is not worth answering at all.
-//
-// Returns 0 rather than a small number below the floor, so a caller that
-// normalises demands cannot have a rounding error turn into an army of Jethros.
+// The enemy air value safe to REACT to. GetEnemyCost(AIR) also counts air
+// builders/scouts (behaviour.json roles, and CFactoryManager gives AIR to
+// anything IsAbleToFly); gAirAvg discounts and time-averages that. Returns 0
+// below AA_IGNORE rather than a small nonzero a normalising caller could round
+// into overreaction.
 float AirThreatSeen()
 {
 	if (gAirAvg < AA_IGNORE)
@@ -99,15 +93,9 @@ void UpdateAirThreat()
 	const bool worth = (gAirAvg >= AA_IGNORE);
 	const float scale = worth ? AirScale(share) : 0.f;
 
-	// factor is the divisor in RoleProbability's first gate: AA is built while
-	// enemyAir * ratio >= aaCost * factor, so aaCost tops out at
-	// ratio/factor * enemyAir. That gate, not maxPercent, is what binds while the
-	// enemy's air is small -- and it counts their air constructors as air.
-	// The mobile-AA lever does not exist. GetResponseInfo/SResponseInfo are not
-	// registered on CMilitaryManager -- only DefaultMakeTask, Enqueue,
-	// EnqueueRetreat, DefaultMakeDefence and GetGuardTaskNum are. response.json's
-	// anti_air weighting is therefore unreachable from script and needs a binding
-	// before it can be scaled. Static AA below is real.
+	// The mobile-AA lever does not exist: GetResponseInfo/SResponseInfo are not
+	// registered on CMilitaryManager, so response.json's anti_air weighting is
+	// unreachable from script. Static AA below is the only lever this can pull.
 
 	// count includes nanoframes, so a turret still building holds its own slot.
 	int heavyWant = int(gAirAvg * scale / AA_HEAVY_PER);

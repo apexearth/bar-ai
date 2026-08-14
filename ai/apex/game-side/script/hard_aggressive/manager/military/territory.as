@@ -22,10 +22,9 @@ namespace Military {
 // exists -- it sits one level below this hook. So the hook's real job is deciding
 // whether to ask at all, and its honest inputs for that are global.
 //
-// Hence: ask once the enemy actually fields an army, and skip while it does not,
-// which is the user's "if enemies are really far away then probably not needed
-// right away". Sites outside our own footprint bypass that gate; see below for
-// why that is a proxy rather than proximity.
+// Hence: ask once the enemy actually fields an army, and skip while it does
+// not. Sites outside our own footprint bypass that gate; see below for why
+// that is a proxy rather than proximity.
 //------------------------------------------------------------------------------
 // behaviour.json sets quota.attack = 15 -- the group threat at which BARb itself
 // rates a force worth attacking. Read that as one enemy player's worth of fielded
@@ -38,11 +37,6 @@ const float PORC_THREAT_PER_ENEMY = 15.f;
 const float PORC_RELEASE = 0.8f;
 
 // CONTROLLED TERRITORY, and its forward edge.
-//
-// apexearth: "if you could almost split the map up into a grid and build
-// controlled territories on that grid, then ideally what you try to form is a
-// line on the edge of our controlled territory in order to block all enemy
-// movement from crossing over into our territory."
 //
 // The grid already exists and is not ours to invent: CMilitaryManager walks the
 // metal clusters and calls this hook for every one our side has taken
@@ -78,20 +72,15 @@ void NoteSite(int cluster, const AIFloat3& in pos)
 // The rank-th of our holdings, counted from the enemy inwards. rank 0 is the tip
 // of our territory.
 //
-// A site further from home than the enemy centroid is is not ours to hold -- that
+// A site further from home than the enemy centroid is not ours to hold -- that
 // is an ally's ground on the far side of the map, and a tower we send a builder
 // across the map to place is a tower that arrives after the fight.
-// Cover the border, do not crowd one bearing.
 //
-// This ranked our sites purely by distance to aiEnemyMgr.GetEnemyPos() -- a
-// SINGLE point, the enemy centroid -- so rank 0 was the site nearest that
-// bearing, rank 1 the next nearest, and every tower we ever built marched
-// toward the same compass direction. Whichever flank the centroid did not
-// point at got nothing, however much of our territory sat on it.
-// apexearth, watching: "the AI controls so much on the right because we never
-// build any defenses on the right... AI has free right to just walk around our
-// defenses", and earlier, with a screenshot: "we do stuff like this and the
-// enemy can just go around most of our towers very easily."
+// Cover the border, do not crowd one bearing: ranking sites purely by distance
+// to aiEnemyMgr.GetEnemyPos() -- a SINGLE point, the enemy centroid -- made
+// every tower march toward the same compass direction, and whichever flank the
+// centroid did not point at got nothing however much of our territory sat on
+// it.
 //
 // Coverage instead: among the sites on our forward edge, take the one that is
 // least defended already. gFencePos is the register of every defence we own,
@@ -121,13 +110,10 @@ bool BorderPos(AIFloat3& out p, uint rank)
 
 	// COVERAGE, not a wall on one bearing.
 	//
-	// The first version of this restricted candidates to sites within one band of
-	// the forward edge, which fixed WHICH forward site got the tower and left the
-	// flanks ineligible -- so the towers still stacked in one place and the enemy
-	// still walked around them into the economy. apexearth, with a screenshot:
-	// "any idea how to fix our defense placement so AI can stop just walking
-	// around them to attack our eco from the back? Happens all the time. You can
-	// see we have a ton of defense being built - all concentrated in one spot."
+	// An earlier version restricted candidates to sites within one band of the
+	// forward edge, which fixed WHICH forward site got the tower but left the
+	// flanks ineligible, so towers still stacked in one place and the enemy
+	// still walked around them into the economy.
 	//
 	// Every site we hold is eligible. Score = (defences already near it + 1) x
 	// distance to the enemy, lowest wins. Two properties fall out of that product:
@@ -169,18 +155,10 @@ bool BorderPos(AIFloat3& out p, uint rank)
 
 // THE FRONT IS BETWEEN US AND THEM, NOT WHEREVER WE HAPPEN TO HAVE BUILT.
 //
-// This measured against BorderPos(edge, 0), and that edge is the closest of OUR
-// OWN defence sites to the enemy -- so the definition was self-referential. With
-// everything we own sitting at home, home became the border and every rear tower
-// passed. Measured from positional telemetry, 12 minutes, +50: our four players
-// held 53 defences with 0-17% of them past a quarter of the way to the enemy and
-// median positions of -0.22 to 0.14 along the home->enemy axis, i.e. at or
-// BEHIND our own base centroid -- and the rear-share check refused none of them,
-// because every one read as "on the border".
-//
-// apexearth, repeatedly and again tonight: "We're making tons of defenses but
-// few of them are on the front line. We need to be putting 90% of our defenses
-// on the front line."
+// This used to be measured against BorderPos(edge, 0), which is the closest of
+// OUR OWN defence sites to the enemy -- a self-referential definition. With
+// everything we own sitting at home, home became the border and every rear
+// tower passed the check.
 //
 // So it is geometry now: how far along the line from our base to theirs a
 // position sits. 0 is our base, 1 is theirs, and anything past FRONT_FRACTION
@@ -191,12 +169,9 @@ const float FRONT_FRACTION = 0.30f;
 
 // WHERE OUR TERRITORY ACTUALLY IS, not where we spawned.
 //
-// Everything positional measured from Builder::gHomePos, the START position. It
-// never moves, so as the base grows forward the origin stays behind it and a
-// tower behind the real base still reads as "forward". apexearth, watching:
-// "we're basically making tons of defense, but we're making it all, like, behind
-// our base" -- true on screen and false to the AI, at the same time, because the
-// two were measuring from different places.
+// Everything positional used to measure from Builder::gHomePos, the START
+// position. It never moves, so as the base grows forward the origin stays
+// behind it and a tower behind the real base still read as "forward".
 //
 // gSitePos is every metal cluster our side holds, which this file's own comment
 // already calls our territory: CMilitaryManager offers this hook one position
@@ -235,35 +210,24 @@ float ForwardFraction(const AIFloat3& in pos)
 
 // THE FRONT LINE, AS A CURVE ACROSS THE MAP, COMPUTED FROM THE BATTLEFIELD.
 //
-// apexearth: "We need this to work in a hosted game. Figure out how to do front
-// lines properly in a hosted game. This should be easily possible and computable
-// based on the current battlefield", then: "You also need to be drawing a line
-// across the entire map. So maybe you find the influence zones, and you create a
-// curve on the map of a collection of points, and draw that across the edge of
-// the map, that is around where your frontline is."
-//
-// So: not one marker, a CURVE. The influence map is engine-side and always
-// present -- GetNetInflAt is ally minus enemy -- so the front is where that
-// crosses zero, which is his own definition of it: "where OUR territory ends and
-// the ENEMY'S begins". Sampled once per lane across the width of the map, the
-// crossings form a line that bulges where they have pushed into us and recedes
-// where we have pushed into them.
+// Not one marker, a CURVE. The influence map is engine-side and always present
+// -- GetNetInflAt is ally minus enemy -- so the front is where that crosses
+// zero: "where OUR territory ends and the ENEMY'S begins". Sampled once per
+// lane across the width of the map, the crossings form a line that bulges
+// where they have pushed into us and recedes where we have pushed into them.
 //
 // Nothing here is a gadget. The old source read ai_frontx_<team>, published by
-// dev_team_income.lua, which exists only in BAR.sdd -- so in a hosted game it
-// returned nothing at all while on the bench it was permissive enough to call a
-// tower at -0.17 "near the front". Both wrong, in opposite directions.
+// dev_team_income.lua, which exists only in BAR.sdd, so in a hosted game it
+// returned nothing at all.
 //
 // Forward is the bearing from our base to the enemy centroid: a poor answer to
 // "where is that raider", a fine one to "which way is the enemy", which is all
 // it is asked. Lanes run perpendicular to it. Before contact there is no
 // crossing and the opening answer is the one the start boxes give -- halfway.
-// LANES SPAN THE MAP, they are not a fixed width. 11 lanes at 900 elmos covers
-// 9,900 -- fine on Comet Catcher and nowhere near edge to edge on an 8v8 map,
-// where the drawn line visibly stopped a third of the way down. apexearth, from
-// a screenshot of a hosted game. The count is fixed and the SPACING follows the
-// map's diagonal, so the line always reaches both edges whatever it is playing
-// on.
+// LANES SPAN THE MAP, they are not a fixed width: the count is fixed and the
+// SPACING follows the map's diagonal, so the line always reaches both edges
+// whatever it is playing on -- a fixed-width lane visibly stopped a third of
+// the way down an 8v8 map.
 const int FRONT_LANES = 6;            // each side of centre, so 13 lanes
 
 float FrontLaneGap()
@@ -280,17 +244,12 @@ const float FRONT_SETBACK  = 0.12f;   // build this far inside it, not on it
 
 // THE FRONT IS A RING AROUND WHAT WE HOLD, NOT A LINE ACROSS ONE BEARING.
 //
-// apexearth, from a screenshot of his team boxed into the top-left corner of an
-// 8v8: "at this point in the game our frontline should appear diagonal just on
-// this little edge of the map." The drawn line was four near-vertical strokes
-// down the left quarter instead.
-//
-// Both are correct descriptions of the same model failing. Lanes are laid
-// perpendicular to ONE bearing -- our centre to the enemy CENTROID -- so the
-// front they describe is always a straight line facing one direction. A team in
-// a corner is surrounded across ninety degrees or more, and the average of all
-// those enemies points somewhere down the middle, so the lanes end up
-// perpendicular to a direction no individual enemy is actually on.
+// Lanes are laid perpendicular to ONE bearing -- our centre to the enemy
+// CENTROID -- so the front they describe is always a straight line facing one
+// direction. A team in a corner is surrounded across ninety degrees or more,
+// and the average of all those enemies points somewhere down the middle, so
+// the lanes end up perpendicular to a direction no individual enemy is
+// actually on.
 //
 // Sampling RADIALLY has no preferred direction: one ray per bearing, each
 // finding its own crossing, and the shape that falls out is whatever the
@@ -306,13 +265,11 @@ array<float> gRayR;
 array<float> gRaySafe;
 // DID THIS BEARING ACTUALLY MEET ANYBODY. A ray that ran its whole length
 // without finding enemy influence, or that walked off the map, has no front on
-// it -- it is our own rear, or the edge of the world.
-//
-// apexearth, with a screenshot: "Look at this weird circle of turrets purple
-// made." Emitting every ray as a build point turns the ring into a literal
-// circle of towers around the base, most of them facing nothing. Sampling all
-// the way round is still right -- that is what lets a corner read as an arc --
-// but only the contested arc of it is the front.
+// it -- it is our own rear, or the edge of the world. Emitting every ray as a
+// build point turns the ring into a literal circle of towers around the base,
+// most of them facing nothing; sampling all the way round is still right --
+// that is what lets a corner read as an arc -- but only the contested arc of
+// it is the front.
 array<bool> gRayHot;
 // DID THIS BEARING STOP AT THE MAP EDGE. A ray that walks off the map breaks out
 // of the sample loop before it can meet anybody, so it records hot=false and both
@@ -407,29 +364,22 @@ void RebuildFront()
 			const AIFloat3 p = origin + fwd * t;
 			if (!OnMap(p))
 				break;
-			// THE SAFE GROUND CLOSEST TO THE LINE. apexearth: "just pull the line
-			// back for where to make defenses."
+			// THE SAFE GROUND CLOSEST TO THE LINE: the FURTHEST workable sample,
+			// not the first threatened one. The engine's own CanReachAtSafe tests
+			// threat at the DESTINATION plus whether a path exists, not a clear
+			// straight line, so stopping at the first threat wrongly collapsed
+			// the whole lane onto the base whenever one raider sat close in.
 			//
-			// The FURTHEST workable sample, not the first threatened one. Stopping
-			// at the first threat was my own assumption -- that a quiet pocket
-			// beyond a hot band cannot be walked to -- and it is wrong: the engine
-			// tests CanReachAtSafe, which is threat at the DESTINATION plus whether
-			// a path exists at all, not a clear straight line. One raider sitting
-			// 0.08 out therefore collapsed the whole lane onto the base.
-			//
-			// THE SAME BAR THE ENGINE USES, not a stricter one. CanReachAtSafe
-			// tests `GetBuilderThreatAt(pos) > THREAT_MIN`, and THREAT_MIN is 1.0
-			// (util/Defines.h) while the accessor has already subtracted
-			// THREAT_BASE. Testing `> 0` instead put the safe edge at 0.00-0.08 in
-			// every lane of every game.
+			// THE SAME BAR THE ENGINE USES: CanReachAtSafe tests
+			// `GetBuilderThreatAt(pos) > THREAT_MIN` (1.0, util/Defines.h), and
+			// the accessor has already subtracted THREAT_BASE, so testing `> 0`
+			// instead put the safe edge one step from the base in every lane.
 			if (ai.GetBuilderThreatAt(p) <= ai.GetTunable("apex_build_threat_bar", 1.f))
 				safe = t;
 			// EMPTY GROUND IS NOBODY'S, NOT THEIRS. GetNetInflAt is ally minus
-			// enemy, so ground neither side has been near reads exactly 0 -- and
-			// testing `<= 0` called the first such sample the crossing. Every lane
-			// on a flank we simply had not walked into therefore put the front one
-			// step from our own base: measured min=0.08 across every 30-second
-			// sample of two games, which is the first sample, every time.
+			// enemy, so ground neither side has been near reads exactly 0, and
+			// testing `<= 0` called the first such sample the crossing -- putting
+			// the front one step from our own base on any flank not yet walked.
 			const float inf = ai.GetNetInflAt(p);
 			if (inf > 0.f) {
 				ours = t;      // still ours out to here
@@ -457,14 +407,11 @@ void RebuildFront()
 
 // One ray per bearing, each finding THE EDGE OF WHAT WE HOLD on that bearing.
 //
-// It used to walk until GetNetInflAt went negative, which is not the edge of our
-// territory -- it is the first cell where a KNOWN enemy outweighs us, i.e. their
-// own front rank. Every ray therefore crossed the whole of no-man's-land (net
-// influence is exactly 0 there) and stopped on top of them, and the constructors
-// this line sites were then sent to 88% of that distance.
-// apexearth, watching: "Our cons kept dying that game because no military was
-// protecting them while they tried to make defenses. They built a bit too far up
-// on the front line."
+// It used to walk until GetNetInflAt went negative, which is not the edge of
+// our territory -- it is the first cell where a KNOWN enemy outweighs us, i.e.
+// their own front rank. Every ray therefore crossed the whole of no-man's-land
+// (net influence is exactly 0 there) and stopped on top of them, sending
+// constructors to build too far forward and get killed doing it.
 //
 // Now: our own influence says how far out we hold, theirs says where they are,
 // each against its own bar, and the radius is the last sample that was ours and
@@ -484,17 +431,16 @@ void RebuildRing(const AIFloat3& in home)
 	const float step = reach / float(RING_SAMPLES);
 	const float bar = ai.GetTunable("apex_build_threat_bar", 1.f);
 
-	// NOTHING BEHIND US IS FRONT. apexearth: "We know theres no AI with a start
-	// point behind us, and theres no room back there for there to be any threat."
+	// NOTHING BEHIND US IS FRONT.
 	//
 	// Firmer than asking the influence map, which answers about this tick: a
-	// bearing pointing away from every enemy cannot become the front line because
-	// there is nobody back there to make one. Excluding the rear half outright
-	// also stops the ring closing on itself, which is what wrapped the drawn line
-	// around our own half of the map.
+	// bearing pointing away from every enemy cannot become the front line
+	// because there is nobody back there to make one. Excluding the rear half
+	// outright also stops the ring closing on itself, which is what wrapped the
+	// drawn line around our own half of the map.
 	//
-	// apex_front_rear_arc=1 restores the full ring for the case he allowed for --
-	// "on some weird maps this may be valid" -- e.g. genuinely surrounded.
+	// apex_front_rear_arc=1 restores the full ring for a genuinely surrounded
+	// base.
 	const bool rearToo = ai.GetTunable("apex_front_rear_arc", 0.f) > 0.f;
 	AIFloat3 toEnemy = aiEnemyMgr.GetEnemyPos() - home;
 	const bool haveBearing = toEnemy.SqLength2D() > NEAR_ZERO;
@@ -807,10 +753,9 @@ float FrontFractionAt(const AIFloat3& in pos)
 // THE FRONT LINE ITSELF: where our territory ends, per contested bearing.
 //
 // This is a statement about the battlefield, and it is what gets DRAWN. It is
-// NOT a list of places to build -- conflating the two is why the drawn line came
-// out "super tiny and weird" (apexearth): it was showing the build spots, which
-// clamp to the safe edge and drop most bearings, so what appeared on screen was
-// a few stubs near the base rather than the front.
+// NOT a list of places to build -- conflating the two once showed build spots
+// (clamped to the safe edge, dropping most bearings) instead of the front, so
+// the drawn line was a few stubs near the base rather than the actual front.
 bool FrontCurve(array<AIFloat3>& out pts)
 {
 	RebuildFront();
@@ -831,12 +776,8 @@ bool FrontCurve(array<AIFloat3>& out pts)
 
 // A CONTINUOUS LINE, SPACED BY WHAT A TURRET CAN ACTUALLY SHOOT.
 //
-// apexearth: "we need no 'gaps' there. So a line of turrets are needed, all
-// within range of each other's firing radius, so no 'leaks' can get through."
-//
-// That is a definite objective, and it is the first one this AI has had for
-// defence: sample the arc at intervals of the turret's OWN weapon range, so a
-// raider cannot pass between two of them. The spacing is read from the def via
+// Sample the arc at intervals of the turret's OWN weapon range, so a raider
+// cannot pass between two of them. The spacing is read from the def via
 // GetMaxRange rather than guessed -- the old FRONT_FENCE_SPREAD was a flat 700
 // for an armllt that reaches 430 and a Rattlesnake that reaches much further,
 // which leaves a hole in one case and wastes metal in the other.
@@ -845,12 +786,9 @@ bool FrontCurve(array<AIFloat3>& out pts)
 // points 785 elmos apart at radius 3000 and 130 apart at radius 500, so the same
 // ring is full of holes far out and stacked up close. Arc length is the honest
 // unit for "no gaps".
-// EXTRA DENSITY AT THE MAP EDGE, DERIVED RATHER THAN GUESSED.
-//
-// apexearth: "If you attack map center you'll be hit on all sides from the
-// defensive turrets. If you attack through map edge you're only hit by in front
-// and to one side (not two sides)... so we need EXTRA defense on the edges to
-// compensate for this."
+// EXTRA DENSITY AT THE MAP EDGE, DERIVED RATHER THAN GUESSED. A point deep in
+// the interior is engaged from all sides; a point at the map edge only from
+// the interior side, so it needs denser cover to match.
 //
 // The geometry is exact. A point on the line is engaged by every turret within
 // range R OF IT ALONG THE LINE. In the interior that is a span of 2R -- R of
@@ -1015,12 +953,11 @@ bool OnBorder(const AIFloat3& in pos)
 
 // What the enemy's mobile army is WORTH, in metal.
 //
-// Not mobileThreat: UpdateMassing's own comment already warns that threat and
-// armyCost are different units, and it is right -- observed army=10727 against
-// enemyThr=296, so a threat-vs-metal comparison reads "we are ahead" almost
-// always and any gate built on it never fires. GetEnemyCost returns
-// enemyInfos[type].cost, a metal sum, which is directly comparable to armyCost
-// (accumulated from GetCostM). Summed over the roles that actually fight.
+// Not mobileThreat: threat and armyCost are different units (a
+// threat-vs-metal comparison reads "we are ahead" almost always and any gate
+// built on it never fires). GetEnemyCost returns enemyInfos[type].cost, a
+// metal sum, directly comparable to armyCost (accumulated from GetCostM).
+// Summed over the roles that actually fight.
 // Mobile roles only. A building we saw once is still there; a raider is not.
 // GetEnemyCostFresh counts only what was seen inside the manager's freshness
 // window; the remainder is a ghost, weighted by apex_ghost_weight. At the
@@ -1046,13 +983,11 @@ float EnemyArmyCost()
 
 // THE WHOLE ENEMY ARMY, INCLUDING THE PART THAT DECIDES GAMES.
 //
-// EnemyArmyCost above sums six roles and counts NEITHER heavy NOR super, so 40
-// unit defs -- armbanth, armthor, corgol, corjugg, corkorg, corsumo,
-// legeheatraymech and the rest -- are worth exactly zero to us. Measured in a
-// 40-minute 8v8: BARb fielded 849,790 metal of T3, all of it invisible, and
-// every one of our seven team pushes was declared while we were 17-50% BEHIND
-// on real standing army. A declared push sets IsCommitted, so no unit may
-// retreat -- that is not a worse trade, it is an army that cannot disengage.
+// EnemyArmyCost above sums six roles and counts NEITHER heavy NOR super, so
+// dozens of T3 unit defs -- armbanth, corjugg, corkorg, legeheatraymech and the
+// rest -- are worth exactly zero to us. A declared push sets IsCommitted, so
+// no unit may retreat, and committing while genuinely behind on real standing
+// army (T3 invisible to the estimate) is an army that cannot disengage.
 //
 // Ten defs carry a counted role AND heavy and are double-counted here.
 // Over-counting an enemy is the safe error; reading their Korgoths as absent is
@@ -1072,9 +1007,8 @@ const float BEHIND_RATIO = 1.0f;
 // ENEMIES HOLDING GROUND IN OUR OWN BASE, WITHOUT AN INVENTED THRESHOLD.
 //
 // Builder::BaseUnderAttack asks whether the enemy CENTROID is within 2200 of
-// home, and in a 4v4 the centroid of eight enemies sits in the middle of the map
-// forever: measured 0 firings across three 16-minute games. It catches a massed
-// push on a 1v1 and nothing else.
+// home, and in a team game the centroid of several enemies sits in the middle
+// of the map forever, so it never fires except on a 1v1 massed push.
 //
 // Net influence is ally minus enemy at a point (CInfluenceMap::GetInfluenceAt
 // returns influence - INFL_BASE), so its ZERO CROSSING is the question already

@@ -11,20 +11,13 @@ bool IsFodder(const CCircuitDef@ cdef)
 // which is assault, skirmish and the custom roles bound to assault -- plus riot
 // when no guard task can take the unit. Everything else keeps stock routing.
 //
-// GROUND AA TRAVELS WITH THE ARMY. Stock routes the AA role to FightType::AA,
-// and CAntiAirTask's constructor seeds its position with
-// `rand() % terrainWidth/Height` -- an AA squad's destination is a random point
-// on the map, unrelated to where our army is or where their air is flying. It
-// also merges only same-def units (CanAssignTo compares against the leader's
-// circuitDef), so it accumulates one big single-type blob rather than spreading
-// a couple of escorts over the front.
-//
-// Aircraft are excluded: fighters keep FightType::AA because Air:: owns them,
-// and a fighter parked in a ground squad cannot intercept anything.
-//
-// apexearth: "our armies often need at least 1 or 2 AA units attached to them
-// but theres a lot of times I don't see that... previously I'm seeing squads of
-// 8 aa units very early in the game."
+// Ground AA is pulled into the massing pool too: stock routes the AA role to
+// FightType::AA, and CAntiAirTask seeds its position with
+// `rand() % terrainWidth/Height` -- unrelated to where our army or their air
+// is -- and merges only same-def units, so it accumulates one single-type blob
+// instead of spreading escorts over the front. Aircraft are excluded: fighters
+// keep FightType::AA because Air:: owns them, and a fighter parked in a ground
+// squad cannot intercept anything.
 bool WantsMassing(const CCircuitDef@ cdef)
 {
 	if (cdef.IsRoleAny(Unit::Role::SCOUT.mask | Unit::Role::SUPPORT.mask))
@@ -63,46 +56,22 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// The set of defs the spam posture applies to, discovered rather than
 		// listed. See NoteFodderDef.
 		NoteFodderDef(cdef);
-		// IN SPAM PHASE THEY DO NOT FORM SQUADS. apexearth: "they shouldn't form
-		// squads, they spread out and waste enemy firepower... they run in to spot
-		// the enemy with little regard for their safety."
-		//
-		// CScoutTask is the only fighter task in CircuitAI that cannot become a
-		// group: it derives from IFighterTask and not ISquadTask, so it has no
-		// CheckMergeTask and no other task can absorb it, and its CanAssignTo is
-		// `units.empty() && IsRoleScout()` -- one unit, forever. The role half of
-		// that gate is bypassed here because ITaskModule::AssignTask calls
-		// AssignTo directly on whatever MakeTask returns; CanAssignTo only guards
-		// the merge and re-assignment paths, which is exactly the part we want
-		// closed. So a raider-role Grunt can hold a scout task, and nothing can
-		// join it.
-		//
-		// Where each one goes is CMilitaryManager::GetScoutPosition, which claims
-		// an unscouted metal cluster per task and skips any cluster another scout
-		// task already holds -- so N of them spread over N clusters instead of
-		// walking the same lane. Unlooked-at ground reads as zero threat, so the
-		// ground they are sent to is by construction the ground we know least
-		// about, which is where the enemy estimate is wrong.
-		//
-		// It also drops the quota.scout ceiling for them: that gate lives in
-		// DefaultMakeTask, and this does not go through it. Two eyes was a cap,
-		// and how many we field is a production question, not a routing one.
+		// In spam phase they do not form squads: CScoutTask is the only fighter
+		// task in CircuitAI that cannot become a group (derives from IFighterTask,
+		// not ISquadTask, so no CheckMergeTask), and it is used here regardless of
+		// role -- ITaskModule::AssignTask calls AssignTo directly on whatever
+		// MakeTask returns, bypassing CanAssignTo's role check. Each task's
+		// destination (CMilitaryManager::GetScoutPosition) claims its own
+		// unscouted metal cluster, so N of them spread over N clusters instead of
+		// walking the same lane. This also drops the quota.scout ceiling, since it
+		// does not route through DefaultMakeTask.
 		if (SpamPhase())
 			return aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::SCOUT));
-		// BEFORE SPAM PHASE, RAIDERS GROUP BEFORE THEY GO. This used to send every
-		// raider straight to its own RAID task the moment it was built, skipping
-		// the pool stock parks them in -- Defend(RAID, quota.raid.min) -- which
-		// holds them until they add up to that much power and then promotes them
-		// TOGETHER. The shortcut got each raider moving sooner and guaranteed it
-		// moved alone, so we trickled ones and twos into a map being raided by
-		// packs. quota.raid is configured for the pack -- we were routing around
-		// it. UpdateRaidCaution raises the promotion floor further while we are
-		// still on T1, which is the same instruction stated in power.
-		// apexearth: "they raid us and we never raid them.... they'll attack with
-		// like 15 grunts all together... wiping out a lot of our stuff.... we
-		// never really do that to the enemy... It really sets the stage/posture
-		// for the T2 phase of the game. we *start* the t2 phase behind because of
-		// all that raiding."
+		// Before spam phase, raiders group before they go: routing straight to a
+		// RAID task per unit bypassed the pool (Defend(RAID, quota.raid.min)) that
+		// holds them until they add up to that power and promotes them together,
+		// so they trickled out alone instead of massing into a raid pack.
+		// UpdateRaidCaution raises the promotion floor further while still on T1.
 		return aiMilitaryMgr.DefaultMakeTask(unit);
 	}
 	// Before the massing pool: a super that reaches WantsMassing is excluded
@@ -113,48 +82,27 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (WantsMassing(cdef)) {
 		// WHILE OUR BASE IS BEING HIT, THE POOL DOES NOT LEAVE.
 		//
-		// apexearth, for the third time: "when an enemy attacks us we should
-		// converge on them and kill them but instead we just stand around doing
-		// nothing to help our base... heck our armies actively run away from our
-		// base when our base is under attack", and "early on we could wipe out
-		// enemy armies but instead we let them beat us up."
-		//
-		// The third argument is a PROMOTION TRIGGER: at that much power the DEFEND
-		// task converts to ATTACK and marches on the enemy. So the moment we have
-		// enough army to defend ourselves is the exact moment it leaves -- which
-		// is what he is watching. Nothing in it ever asked whether home was under
-		// attack.
-		//
-		// Promoting to MELEE instead is what holds it: this file's own comment
-		// records that nothing in CircuitAI ever enqueues a MELEE task, and
+		// quota.attack (the third argument) is a PROMOTION TRIGGER: at that much
+		// power the DEFEND task converts to ATTACK and marches on the enemy, so
+		// the moment we have enough army to defend ourselves is the moment it
+		// leaves, whether or not home is under attack. Promoting to MELEE instead
+		// holds it: nothing in CircuitAI ever enqueues a MELEE task, and
 		// UpdateDefenceTasks only rewrites maxPower for tasks that promote to
-		// ATTACK -- so a MELEE-promoting task keeps the power we gave it and never
-		// converts. The pool stays a defence, and CDefendTask sends it at whatever
-		// is threatening us.
+		// ATTACK, so a MELEE-promoting task keeps the power we gave it and never
+		// converts -- the pool stays a defence and CDefendTask sends it at
+		// whatever is threatening us. It reverts by itself: this only decides the
+		// task a unit is joining now, so once the attack is over, new units pool
+		// into ordinary attack-promoting tasks again.
 		//
-		// It reverts by itself: this only decides the task a unit is joining now,
-		// so once the attack is over, new units pool into ordinary attack-promoting
-		// tasks again.
-		// AN ALLY BEING OVERRUN COUNTS AS OUR BASE BEING HIT. apexearth: "it's not
-		// just about our own base. It's about seeing that an ally's base is in
-		// their attack and going to assist them."
-		//
-		// AllyAidPos is the heaviest fight on our side within reach, our own
-		// included, from the loss-weighted hotspot each player now publishes. It
-		// is also a far better "we are under attack" trigger than
-		// BaseUnderAttack(), which fired twice in six games because it asks about
-		// enemy influence at our own start position.
-		// MEASURED AND REVERTED, 2026-08-11. Gating this on AllyAidPos -- any ally
-		// losing 300 metal within 6,000 elmos -- is true almost continuously in a
-		// 4v4, so the pool never promoted to ATTACK at all and the army was ground
-		// down in place: at minute 20, army 4,676 against stock's 15,309 (from
-		// 9,467/13,244) and metal lost 42,166 against 16,332.
-		//
-		// The publishing side is kept and is sound; what is wrong is the RESPONSE.
-		// "An ally is being hurt somewhere" must change where the army goes, not
-		// forbid it from ever attacking -- a permanent defensive stance is how you
-		// lose slowly. Sending a FRACTION of the army needs a per-task position,
-		// which this layer does not have; see CHANGES.md before trying again.
+		// An ally being overrun counts as our base being hit: AllyAidPos is the
+		// heaviest fight on our side within reach, our own included, from the
+		// loss-weighted hotspot each player publishes -- a better "under attack"
+		// trigger than BaseUnderAttack(), which only asks about enemy influence
+		// at our own start position. It is not gated on here, though: any ally
+		// losing metal within reach is true almost continuously in a 4v4, so
+		// gating the pool on it kept the army permanently defensive and ground
+		// down in place instead of attacking. Publishing stays; the response
+		// needs a per-task position this layer does not have -- see CHANGES.md.
 		if ((ai.GetTunable("apex_defend_home", 1.f) > 0.f)
 			&& (Builder::BaseUnderAttack() || BaseContested()))
 		{
@@ -312,11 +260,8 @@ float FenceLostNear(const AIFloat3& in pos, float radius)
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	Brain::NoteSpend(unit, usage);
-	// SUPERS GET STUCK MOST, AND WERE NEVER REGISTERED. A Karganeth arrives as
-	// SUPER, not COMBAT, so the walled-in detector never saw the units most
-	// likely to be walled in. apexearth, watching a 1v1: "I'm actively in a good
-	// situation where Karganeths are blocked" -- and the rule fired zero times
-	// in that entire game.
+	// A Karganeth arrives as SUPER, not COMBAT, so the walled-in detector never
+	// saw the units most likely to be walled in unless SUPER is registered too.
 	if ((usage == Unit::UseAs::COMBAT) || (usage == Unit::UseAs::SUPER))
 		NotePenned(unit);
 	if (usage != Unit::UseAs::FENCE)

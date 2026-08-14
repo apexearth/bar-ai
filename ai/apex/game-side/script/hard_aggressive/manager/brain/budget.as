@@ -3,33 +3,21 @@ namespace Brain {
 //------------------------------------------------------------------------------
 // WHERE THE BUILD RATIO IS DEFINED.
 //
-// apexearth: "So if we focus on defenses more than the enemy, or if we focus on
-// economy more than the enemy, we're not gonna have as much army as them. Where
-// do we define our target build ratios?"
-//
-// Nowhere, until this file. Four independent governors decided it between them
-// and none could see the others: gMix set ratios WITHIN the army, the fence
-// budget capped defence against income, the Wants ranking bought economy on
-// metal-per-second, and the constructor and plant curves bought build power. The
-// split BETWEEN those four was an outcome nobody chose -- composition.py reports
-// it after the fact -- and army was always last in the queue because it is the
-// only one with no rule claiming metal for it.
-//
-// That is what the unit limits were secretly doing. Measured 2026-08-11 over
-// four 6-game arms: every cap removed moved metal into constructors, factories
-// and towers, and the standing army fell every time. The caps were a proxy for
-// this file.
+// Four independent governors used to decide it between them, none able to see
+// the others: gMix set ratios WITHIN the army, the fence budget capped defence
+// against income, the Wants ranking bought economy on metal-per-second, and the
+// constructor and plant curves bought build power. The split BETWEEN those four
+// was an outcome nobody chose, and army was always last because it had no rule
+// claiming metal for it.
 //
 // SPEND IS COUNTED FROM WHAT FINISHES. Every manager's AiUnitAdded already
-// receives Unit::UseAs, which is the engine's own answer to "what is this unit
-// for", so the categories cost nothing to maintain and cannot drift from what
-// was actually built.
+// receives Unit::UseAs, the engine's own answer to "what is this unit for", so
+// the categories cost nothing to maintain and cannot drift from what was built.
 //------------------------------------------------------------------------------
 
-// AIRDEF IS ITS OWN ROW. apexearth: "dampening defense at 10% is what I said to
-// do for Air defenses. I do not mean we should do that for land defenses." The
-// two shared one category and one want kind, so the number he gave for anti-air
-// was throttling every tower on the map. See targets.as.
+// AIRDEF IS ITS OWN ROW. Anti-air and land defence used to share one category
+// and one want kind, so a number meant only for anti-air throttled every tower
+// on the map. See targets.as.
 enum Cat { ARMY = 0, DEFENCE = 1, AIRDEF = 2, ECONOMY = 3, BUILDPOWER = 4, CATS = 5 };
 
 array<float> gSpent(CATS, 0.f);
@@ -37,21 +25,13 @@ float gSpentTotal = 0.f;
 int gNextBudgetLog = 0;
 
 // The target split of METAL SPENT. Deliberately one table in one place, so the
-// question "what are we trying to build" has a single answer that can be argued
-// with. Every entry is tunable.
+// question "what are we trying to build" has a single answer. Every entry is
+// tunable.
 //
-// These are a starting point, not a measurement: they are close to what the
-// pre-Brain build actually produced (army 35.6%, defence 22.2%, constructors
-// 10.5%, factories 11.1%) with army raised, because that build was itself losing
-// the trade and stock fields more army than either of us.
-// RELATIVE WEIGHTS, NOT PERCENTAGES. apexearth: "Easier for me if I don't have
-// to do math here and you interpret it proportionally."
-//
-// So the four rows in targets.as are read at the current income and then
-// normalised against each other. {3, 1, 2, 2} and {0.375, 0.125, 0.25, 0.25}
-// mean exactly the same thing, and raising one row lowers the others without
-// anything having to be re-balanced by hand -- the same contract the ROLE_ rows
-// already had.
+// RELATIVE WEIGHTS, NOT PERCENTAGES: the four rows in targets.as are read at the
+// current income and normalised against each other, so raising one row lowers
+// the others without anything having to be re-balanced by hand -- the same
+// contract the ROLE_ rows already had.
 float RawTarget(Cat c)
 {
 	if (c == ARMY)
@@ -126,12 +106,9 @@ float ShareOf(Cat c)
 
 // How much a category's next purchase is worth, relative to its target.
 //
-// Above target it is damped, below target it is boosted, and at target it is
-// unchanged -- the same "furthest below target wins" shape the army mix already
-// uses for roles, applied one level up to the categories themselves. Bounded
-// both ways so a category can never be switched off: being over budget makes
-// something less attractive, never forbidden. apexearth, twice: nothing should
-// have a hard cap.
+// Above target it is damped, below target boosted -- the same "furthest below
+// target wins" shape the army mix uses for roles, one level up. Bounded both
+// ways so a category can never be switched off entirely.
 const float BUDGET_MIN = 0.35f;
 const float BUDGET_MAX = 2.0f;
 

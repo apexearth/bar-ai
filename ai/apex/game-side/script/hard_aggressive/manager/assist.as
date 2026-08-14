@@ -2,10 +2,6 @@ namespace Assist {
 
 // What the T2 assist bots do once PromoteAssistBots has made them buildable.
 //
-// apexearth: "start using butlers and the equivalents from cortex and legion.
-// Those guys can assist our constructors to build things (like front line
-// defenses!) much faster."
-//
 // Promotion only makes them appear. Left alone they reach DefaultMakeTask and
 // pick their own separate buildings, which is the opposite of assisting: 140
 // build power spread over its own solar is worth less than the same 140 poured
@@ -205,9 +201,9 @@ CCircuitUnit@ BestVip(CCircuitUnit@ unit)
 		float score = isWorking ? 2.f : 1.f;
 		if (isFront)
 			score += FRONT_SCORE;
-		// apexearth: "at T2 fall back to assisting t2 cons." A preference, not a
-		// filter: an advanced constructor is the only one that can be on a moho, a
-		// reactor or a gantry, so a lathe-second beside it buys the most.
+		// A preference, not a filter: an advanced constructor is the only one
+		// that can be on a moho, a reactor or a gantry, so a lathe-second beside
+		// it buys the most.
 		if (c.circuitDef.costM >= Builder::ADV_CON_COST)
 			score += ADV_SCORE;
 		score /= (1.f + dist / ASSIST_RANGE);
@@ -271,10 +267,6 @@ IUnitTask@ Work(CCircuitUnit@ unit)
 }
 
 // THE TERMINAL FALLBACK. Called from the last line of Builder::AiMakeTask.
-//
-// apexearth: "I see 5+ idle cons on blue and instead of making some DAMN
-// DEFENSES they just do nothing. ugh... lol at T2 fall back to assisting t2
-// cons."
 //
 // Returning null from AiMakeTask is not "ask again later": ITaskModule::
 // AssignTask does nothing when MakeTask returns null, so the unit is never taken

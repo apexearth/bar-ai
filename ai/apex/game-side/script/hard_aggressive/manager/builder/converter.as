@@ -10,19 +10,10 @@ string armpb("armpb");
 string corvipe("corvipe");
 string legapopupdef("legapopupdef");
 
-// T1 energy converters, at the back wall. apexearth: "t1 energy converters are
-// super duper cheap, to make t1 cons, send them to the back wall, and make
-// converters should be a super easy and safe task to do."
-//
-// The costs, read from the defs: 1 metal, 1,150 energy, 2,600 buildtime (a mex is
-// 50 / 500 / 1,800). So this is free in the scarce resource, paid for in the one
-// being thrown away -- 131,422 energy wasted per player in the last 8 games, or
-// about 114 converters' worth -- and the only real price is builder TIME.
-//
-// Which is why the floor below matters more than anything else here. Every rule
-// added this session was of the form "if X then take a constructor", and with one
-// constructor that is all of the build power rather than a share of it. This one
-// asks whether we can spare a builder first, and never takes the last two.
+// T1 energy converters: 1 metal, 1,150 energy, 2,600 buildtime -- free in the
+// scarce resource, paid for in the one being thrown away. The only real cost is
+// builder TIME, which is why the floor below checks we can spare a builder
+// first and never takes the last two.
 string armmakr("armmakr");
 string cormakr("cormakr");
 string legeconv("legeconv");
@@ -72,41 +63,22 @@ const float CONVERT_MIN_SPARE = 70.f; // one converter's draw of unused energy
 const int   CONVERT_PERIOD    = 25 * SECOND;
 const float REAR_DISTANCE     = 450.f;
 
-// Enemy centroid this close to home means they are in the base.
-// 2200, was 1100. GetEnemyPos is the centroid of ALL enemies, so on a 4v4 with
-// them spread out it sits mid-map and reads far from every base even while one
-// of them is standing in ours. Measured: fired once in a 20-minute game while
-// three commanders died. Widening trades precision for actually firing; the
-// commander only takes a back-wall job, so a false positive costs one solar
-// built somewhere safe.
+// Enemy centroid this close to home means they are in the base. Widened from
+// GetEnemyPos's raw reading, since that is the centroid of ALL enemies and on a
+// spread-out team sits mid-map even while one enemy is standing in our base.
 const float COMM_BASE_DANGER = 2200.f;
 const int   COMM_HIDE_PERIOD = 30 * SECOND;
 int gNextCommHide = 0;
-// OFF. On Comet Catcher 4v4 the enemy TEAM CENTROID sits under COMM_BASE_DANGER
-// from ~1 minute in and stays there for the whole game (logged distances
-// 1300-2200 throughout), because the map is small enough that four spread-out
-// enemies average close to home regardless of whether anyone is actually
-// attacking. BaseUnderAttack() was not reading a threat on this map; it was
-// reading map scale. That fired this branch roughly every COMM_HIDE_PERIOD for
-// the entire game, spending the commander's build time -- normally the single
-// fastest builder early -- on repeat back-wall solars instead of the opening
-// build.
-//
-// Measured, 8-game control vs BARb:stable:hard_aggressive, Comet Catcher 4v4
-// +25% Cortex/Cortex, 25 min: paired K/D log-ratio went from t=-13..-17
-// (apex crushed every game, decided 0-5/0-7) to t=-0.87, not distinguishable
-// from even (1-1 head to head, apex won one outright, 6/8 games ran the full
-// 25 minutes instead of collapsing by minute 6-10). This was the single
-// largest lever found in the session -- see notes/open-issues.md.
-//
-// COM_RETREAT_HEALTH (health-based retreat) is unaffected by this flag and is
-// still the thing that pulls a commander out of real danger.
+// OFF. On a small 4v4 map the enemy team centroid can sit under COMM_BASE_DANGER
+// for the whole game regardless of whether anyone is actually attacking, since
+// BaseUnderAttack() at map-centroid scale reads map size rather than threat --
+// this fired the commander's back-wall job on repeat instead of its opening
+// build. COM_RETREAT_HEALTH (health-based retreat) is unaffected by this flag
+// and still pulls a commander out of real danger.
 const bool COMM_BACK_WALL_ON = false;
 string armsolar("armsolar");  string corsolar("corsolar");  string legsolar("legsolar");
-// Obsolete T1 economy and AA, by faction. apexearth at 35 min: "we are *not*
-// reclaiming our t1 buildings like wind turbines, t1 energy converters, t1 air
-// defense". ObsoleteReclaim only ever looked at defence towers and the opening
-// solar, so all of this stood untouched for the whole game.
+// Obsolete T1 economy and AA, by faction; ObsoleteReclaim only looked at
+// defence towers and the opening solar, so this was previously untouched.
 // Names verified against the pinned tree with tools/unitdef.py: Legion's
 // converter is legeconv, NOT legmakr, which does not exist in either tree.
 // Only the wind turbines are new here: armmakr/cormakr/legeconv and
@@ -118,18 +90,10 @@ bool BaseUnderAttack()
 {
 	if (!gHomeSet)
 		return false;
-	// ASK ABOUT OUR BASE, NOT ABOUT THE AVERAGE OF EVERY ENEMY ON THE MAP.
-	//
-	// This tested the distance from home to GetEnemyPos(), which is the CENTROID
-	// of all known enemies. In a 4v4 that sits somewhere in midfield and comes
-	// within COMM_BASE_DANGER of our base essentially never -- so this returned
-	// false while a raiding party was inside the base, and every rule keyed on it
-	// stood down: the posture hold-release, the commander's back-wall work, and
-	// most recently the army's refusal to leave home. apexearth, three times over:
-	// "our armies actively run away from our base when our base is under attack."
-	//
-	// Enemy influence AT our own position is the local measurement, and it is the
-	// same signal the commander's flee rule already trusts.
+	// Enemy influence AT our own position, not distance to GetEnemyPos() (the
+	// centroid of all known enemies, which in a team game rarely comes near our
+	// base even during a raid) -- the same local signal the commander's flee
+	// rule already trusts.
 	if (ai.GetEnemyInflAt(gHomePos)
 		> ai.GetTunable("apex_base_attack_infl", 0.f))
 	{
@@ -172,35 +136,19 @@ float EnergySpare()
 	return aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
 }
 
-// Are we actually THROWING ENERGY AWAY?
-//
-// income - pull is not that number and reading it as though it were is what kept
-// the converter block to a handful of buildings: the eco lead logged spareE of
-// 72-216 while the engine recorded 12.8 million energy wasted per game, 46.7% of
-// everything it made. Pull counts demand that is being met from storage as well
-// as from income, so a base that is spilling can still show almost no "spare".
-//
-// A full store is unambiguous -- Economy::AiUpdateEconomy sets isEnergyFull at
-// 88% of storage, and past that every joule made is a joule binned.
+// income - pull understates waste, since pull counts demand met from storage as
+// well as from income -- a spilling base can still show almost no "spare". A
+// full store is unambiguous: Economy::AiUpdateEconomy sets isEnergyFull at 88%
+// of storage, and past that every joule made is a joule binned.
 bool EnergyWasting()
 {
 	return aiEconomyMgr.isEnergyFull || (EnergySpare() >= CONVERT_MIN_SPARE);
 }
 
-// The eco lead's converter BLOCK -- a packed rectangle, not the one-every-25s
-// trickle the generic rule below places.
-//
-// Measured over 8 sixty-minute games: the eco lead threw away 12.8 million
-// energy per game, 46.7% of everything it made, while a normal teammate wasted
-// 22.5%. A converter eats 70 energy/s and returns 1 metal/s
-// (energyconv_capacity 70, efficiency 1/70, read from armmakr.lua), and costs
-// ONE metal to build. That spill is worth roughly sixty converters, i.e. about
-// sixty metal a second, for essentially no metal outlay.
-//
-// apexearth sent the blueprint tutorial for this: humans lay energy and
-// conversion out as dense packed rectangles rather than scattering them. The
-// rectangle now comes from Base::, which owns one grid for the whole base;
-// what is left here is only how fast and how many.
+// The eco lead's converter BLOCK -- a packed rectangle from Base::'s shared
+// grid, not the one-every-25s trickle the generic rule below places. A
+// converter eats 70 energy/s and returns 1 metal/s for 1 metal to build, so
+// spare energy is worth converting at essentially no metal outlay.
 const int   CONV_PERIOD    = 6 * SECOND;
 const int   CONV_INFLIGHT  = 6;
 const int   CONV_STALE     = 16;
@@ -227,40 +175,21 @@ bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 
 IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 {
-	// The eco lead's converter BLOCK is a team behaviour; converting a surplus
-	// is not. Solo, or as a normal teammate, EnergyWasting() below is the real
-	// condition -- see the fusion bug for what happens when a role is the only
-	// gate on an economic behaviour.
-	// Same principle as the reactor above: a surplus is a surplus whoever owns
-	// it. The eco lead's contribution is the packed BLOCK and a faster cadence,
-	// not the exclusive right to convert. EnergyWasting() below is the gate.
-	// Only while energy is actually being binned, and self-limiting: every
-	// converter raises pull by 70, so the store drains and this stops on its own.
+	// The eco lead's contribution is the packed BLOCK and a faster cadence, not
+	// exclusive permission to convert -- EnergyWasting() below is the gate for
+	// everyone. Self-limiting: every converter raises pull by 70, so the store
+	// drains and this stops on its own.
 	if (!EnergyWasting())
 		return null;
 
-	// An ADVANCED converter when the constructor asking can build one.
-	//
-	// apexearth: "at late game they're making advanced energy converters ... they
-	// give you ten energy conversion each and six hundred energy of cost ... and
-	// you just don't have to make so many little ones. They're also a lot more
-	// durable." Confirmed against the defs: armmmkr is 380 metal for 600 E/s at
-	// efficiency 0.01724 -- 10.3 metal/s, against the small one's 1.0 -- and it is
-	// also better per joule, 1 metal per 58 energy against 1 per 70. Health 445
-	// against 167.
-	//
-	// Chosen off the BUILDER's cost, not off gHaveAdvCon: only advanced
-	// constructors carry armmmkr in their buildoptions, and handing a T1
-	// constructor a task it cannot build is dropped silently -- the failure that
-	// once cost 33 rush requests and an entire tech path.
-	// Two ways to earn the advanced one. The asking constructor being advanced is
-	// the safe case -- it can certainly build it. Otherwise, once the small block
-	// is established and the team holds advanced constructors, ask anyway and let
-	// one of them pick the task up: if nothing claims it the small block is still
-	// standing and still converting, so the downside is bounded.
-	//
-	// Measured before this: a 40-minute game placed nine converters and every one
-	// was armmakr, because the branch is nearly always reached by a T1 builder.
+	// An advanced converter when the constructor asking can build one. Chosen off
+	// the BUILDER's cost, not off gHaveAdvCon: only advanced constructors carry
+	// armmmkr in their buildoptions, and handing a T1 constructor a task it can't
+	// build is dropped silently. Two ways to earn it: the asking constructor
+	// being advanced is the safe case; otherwise, once the small block is
+	// established and the team holds advanced constructors, ask anyway and let
+	// one pick the task up -- if nothing claims it the small block keeps
+	// converting, so the downside is bounded.
 	const bool advBuilder = ((unit.circuitDef.costM >= ADV_CON_COST)
 			&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		|| (gHaveAdvCon && (SmallConvCount(unit) >= ADV_CONV_AFTER));
@@ -323,13 +252,11 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 
 	// The T1 converter is what THIS constructor can build: armck/armcv carry
 	// armmakr, corck/corcv cormakr, legck/legcv legeconv, and the ship
-	// constructors carry only the naval def. Asking a ground constructor for
-	// armfmkr produced 95 requests and zero converters; the mirror of that is what
-	// SmallConvDef avoids for naval builders.
-	// Upgrade rather than keep laying T1. Once the advanced converter is
-	// buildable the small one is what ObsoleteReclaim is trying to clear, and
-	// this rule was replacing them as fast as they were eaten -- 176 armmakr
-	// enqueued against 63 reclaimed in one 37-minute game.
+	// constructors carry only the naval def. SmallConvDef avoids the mirror case
+	// (a naval builder handed the land def) the same way.
+	// Upgrade rather than keep laying T1: once the advanced converter is
+	// buildable, ObsoleteReclaim is trying to clear the small ones, and this rule
+	// was previously replacing them as fast as they were reclaimed.
 	CCircuitDef@ want = BigConvDef(unit);
 	if ((want is null) || !want.IsAvailable(ai.frame))
 		@want = SmallConvDef(unit);

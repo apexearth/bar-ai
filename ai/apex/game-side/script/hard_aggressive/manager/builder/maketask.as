@@ -5,20 +5,15 @@ namespace Builder {
 // DefaultMakeTask() only screens or replaces the offer the engine made.
 //
 // ORDER IS THE DESIGN HERE. Anything placed above DefaultMakeTask can claim a
-// constructor before mex expansion is even offered, which is how twelve
-// individually reasonable rules cut metal production 4.3x -- see CHANGES.md
-// 2026-08-01. Adding a rule means choosing where in this list it goes, and that
-// choice is the whole decision.
+// constructor before mex expansion is even offered. Adding a rule means
+// choosing where in this list it goes.
 //
 // The rules themselves live in rules_*.as; the signatures take isComm/isAdvCon
-// rather than recomputing them so the bodies are unchanged from when they were
-// inline here.
-// THE ENGINE'S ENTRY POINT. TaskModuleScript looks up this exact signature.
+// rather than recomputing them.
 //
-// The ladder is MakeTaskInner below; this exists so the defence-share cap has ONE
-// site. Defence work reaches a constructor from eleven script Enqueues and from
-// the engine's own elector and build_chain porcupine entries, and the only thing
-// they all pass through is the answer returned here. See defcap.as.
+// TaskModuleScript looks up this exact signature. MakeTaskInner below does the
+// ranking; this wrapper exists only so the defence-share cap has ONE site every
+// path passes through -- see defcap.as.
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 	const bool isCommander = (unit !is null)
@@ -67,14 +62,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return t;
 
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
-	// Only an advanced constructor can build a moho, so it is the one unit that
-	// can convert a mex into the biggest economy step available. The two wreck
-	// rules below sit ahead of the "never displace real work" line and so can
-	// take it off exactly that job -- and the reclaim they hand it is an AREA
-	// order (CmdReclaimInArea with CONTROL_KEY, which deliberately ignores the
-	// autoreclaimable filter), so it eats whatever is in the circle. apexearth,
-	// watching live: "our t2 con is wasting his time reclaiming trees instead
-	// of upgrading mexes."
+	// Only an advanced constructor can build a moho. The wreck rules below sit
+	// ahead of the "never displace real work" line and hand it an AREA reclaim
+	// (CmdReclaimInArea with CONTROL_KEY, which ignores the autoreclaimable
+	// filter), so it can be pulled off a moho onto whatever is in the circle.
 	const bool isAdvCon = !isComm && (unit.circuitDef.costM >= ADV_CON_COST);
 
 	@t = HoldDefenceInProgress(unit, isComm);
@@ -92,15 +83,11 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 
 	// THE ADVANCED PLANT OUTRANKS EXPANSION, ONCE AND ONLY ONCE.
 	//
-	// apexearth: "once we make ~30+ metal per second we definitely should be
-	// making a T2 lab with high priority in a SAFE location behind our base."
-	// High priority means above DefaultMakeTask, which is where mex expansion
-	// lives -- so this is the one rule deliberately placed in the zone the header
-	// warns about, and it is bounded to match: one plant, one builder, only while
-	// no factory task exists at all, only before we have T2, and only on a
-	// reclaim-proof income reading. It is also a redirect rather than a new class
-	// of spend -- the engine builds this plant regardless, later and wherever
-	// FindBuildSite lands it.
+	// Deliberately placed above DefaultMakeTask, and bounded to match: one
+	// plant, one builder, only while no factory task exists at all, only before
+	// we have T2, and only on a reclaim-proof income reading. A redirect rather
+	// than a new class of spend -- the engine builds this plant regardless,
+	// later and wherever FindBuildSite lands it.
 	@t = AdvancedPlantAtRear(unit);
 	if (t !is null)
 		return t;
@@ -121,24 +108,11 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		CommDiag();
 	}
 
-	// EXPANSION IS A WANT NOW, NOT AN EARLY RETURN. ExpansionAlwaysWins used to
-	// sit here and take any mex offer immediately, ahead of energy, defence and
-	// everything Brain::Decide ranks -- exactly backwards from what it was meant
-	// to be. apexearth: "ExpansionAlwaysWins was always supposed to be a 'last
-	// resort' task when there's nothing better to do. The mentality is -
-	// 'nothing super urgent, so let's keep expanding our economy'." Measured
-	// live, 8v8: of every offer the engine made, 493 were mex against 46
-	// everything else combined, because a mex-rich map means a mex is almost
-	// always available to grab first. brain.as's own MexWant already ranks mex
-	// against every other option on real economic value (0.033 metal/metal
-	// against a reactor's 0.0034 -- expansion earns most wins on merit, it does
-	// not need a queue-jump to get them) and documents this exact intent:
-	// apexearth, "expansion always wins is now being replaced by logic in the
-	// brain." This early return was the one piece of that move that never
-	// actually happened. Nothing new is needed to make expansion the true last
-	// resort: `if (task !is null) return task;` further down already returns
-	// ANY leftover engine offer, mex included, once nothing else claimed the
-	// builder -- that is the whole of "last resort", already in the pipeline.
+	// EXPANSION IS A WANT, NOT AN EARLY RETURN: it competes in Brain::Decide,
+	// ranked on economic value against every other option, and otherwise falls
+	// through to `if (task !is null) return task;` further down, which returns
+	// any leftover engine offer -- mex included -- once nothing else claimed the
+	// builder. That is the whole of "last resort"; no dedicated rule is needed.
 
 	// STEP 2 OF THE OPENING, AND ONLY DURING IT.
 	//
@@ -156,19 +130,6 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
-	// A TURRET ON A MEX MUST NOT OUTRANK UPGRADING ONE.
-	//
-	// This rule used to sit ABOVE DefaultMakeTask, so a constructor that the
-	// engine would have sent to a MEXUP built a guard tower instead -- measured
-	// in a 1v1: 162 mex-guard picks against 4 upgrades all game, t2Mex still 1
-	// at eighteen minutes. apexearth, for the fifth time: "still are not
-	// prioritising mex upgrades... there's probably special logic in here, and
-	// it is overriding our mex stuff."
-	//
-	// Moved above DefaultMakeTask 2026-08-12 at apexearth's request -- "if we have
-	// an unguarded mex then guarding it should be a boosted priority" -- so this
-	// second call would only ever find what the first one already declined.
-	//
 	// Before any optional spending: if the engine just offered a SECOND task for
 	// a building one of ours already started (or is walking to), take that one
 	// instead. A redirect of an offer already made -- it enqueues nothing.
@@ -180,26 +141,18 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// RE-ELECTION RATHER THAN A REQUEST FOR WORK.
 	//
 	// IBuilderTask::Reevaluate calls MakeTask on every task update for a builder
-	// that has not reached its site yet, purely to ask "is there something more
-	// important?", and reassigns only on a different build type. Each of our
-	// enqueueing rules answering that question creates a task -- and if the type
-	// matches, the builder stays where it was and the new task is an orphan with
-	// no worker. See Brain::AskingForNewWork for the measurement.
-	//
-	// Handing back the engine's own offer keeps CircuitAI's re-election working
-	// (that offer is an existing task, not a new one); what stops is US inventing
+	// that has not reached its site yet, and reassigns only on a different build
+	// type. Handing back the engine's own offer keeps that re-election working
+	// (it is an existing task, not a new one); what stops here is US inventing
 	// work for a builder that already has some.
 	//
 	// EXCEPT this return bypasses VetoCommanderHold entirely: if AskingForNewWork
 	// is already false because the commander is mid-walk to a held task, `task`
 	// here is just this tick's fresh DefaultMakeTask offer, and if IT differs in
 	// build type from what is held, returning it swaps the commander off the walk
-	// before VetoCommanderHold -- which lives further down, past this early
-	// return -- ever gets a chance to protect it. Measured live: the first
-	// factory task, offered five seconds in, sat at workers=0 for a whole
-	// 5-minute game because of exactly this. Ask the same "is this the first
-	// factory, already assigned" question here, first, so the walk is protected
-	// on every path, not only the one that reaches VetoCommanderHold.
+	// before VetoCommanderHold -- further down -- ever gets a chance to protect
+	// it. So the same "is this the first factory, already assigned" check runs
+	// here too, first, so the walk is protected on every path.
 	if (isComm && CommRules()) {
 		IUnitTask@ held = unit.task;
 		if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
@@ -211,18 +164,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		}
 	}
 	if (!Brain::AskingForNewWork(unit)) {
-		// A REAL ENERGY CRISIS BREAKS THE HOLD. Brain::Decide's own energy want
-		// already carries a 6x stall multiplier (ENERGY_STALL_MULT, brain.as)
-		// to win the ranking once it is reached -- but AskingForNewWork gates
-		// entry to Decide on the unit being genuinely free, so a commander
-		// already committed to something else (a mex, a tower) never got a
-		// chance to be asked at all, no matter how starved energy got.
-		// apexearth: "make sure the commander will build energy when they run
-		// out of energy at this early stage. It can be easy to stall the
-		// early build if we're not careful with that." Scoped to a real
-		// crisis (<5% of storage, same threshold VetoCrisisAssist already
-		// uses) and to the commander specifically -- it is the one unit whose
-		// hold protection is strong enough to matter here -- and never
+		// A REAL ENERGY CRISIS BREAKS THE HOLD. AskingForNewWork gates entry to
+		// Brain::Decide (whose own energy want carries a stall multiplier,
+		// ENERGY_STALL_MULT in brain.as) on the unit being genuinely free, so a
+		// commander already committed to something else never got asked, no
+		// matter how starved energy got. Scoped to a real crisis (<5% of
+		// storage, same bar VetoCrisisAssist uses) and to the commander, the
+		// one unit whose hold protection is strong enough to matter here; never
 		// overrides a build that is itself already the fix.
 		const bool energyCrisis = isComm
 				&& (aiEconomyMgr.energy.storage > 0.f)
@@ -262,14 +210,9 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return t;
 
 	if (task !is null) {
-		// THE MISSING LOG. Everything else the commander does (energy, factory,
-		// home tower) logs when it fires; this catch-all -- which is where every
-		// mex/mexup/geo offer the engine makes actually gets taken -- never did,
-		// so a trace of "what is the commander building" had a hole exactly where
-		// mex spam would show up. Rate-limited on the task handle changing, not
-		// on a timer, so it logs once per acceptance rather than once per
-		// re-election tick (AiMakeTask re-runs this every update for a builder
-		// still walking to its site).
+		// Rate-limited on the task handle changing, not a timer, so this logs
+		// once per acceptance rather than once per re-election tick (AiMakeTask
+		// re-runs this every update for a builder still walking to its site).
 		if (isComm && (task !is gCommLastLogged)) {
 			@gCommLastLogged = task;
 			AiLog(Factory::T() + "apex: commander accepted " + SiteBuildName(task)
@@ -298,12 +241,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
-	// THE LAST LINE, BELOW EVERY OTHER RULE. Two things are already proven true
-	// here and they are the whole reason this position is safe: `task` is null,
-	// because the `if (task !is null) return task` above returned otherwise -- so
-	// the engine declined on this call; and Brain::AskingForNewWork was true at
-	// the top of the optional block, so this unit holds IDLE/NIL/WAIT. It has no
-	// work to displace. Assist::Fallback enqueues no building.
+	// THE LAST LINE, BELOW EVERY OTHER RULE. Safe because `task` is null here (the
+	// engine declined) and Brain::AskingForNewWork was true above, so this unit
+	// holds IDLE/NIL/WAIT and has no work to displace. Assist::Fallback enqueues
+	// no building.
 	return Assist::Fallback(unit, isComm);
 }
 

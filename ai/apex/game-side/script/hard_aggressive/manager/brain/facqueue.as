@@ -3,32 +3,18 @@ namespace Brain {
 //------------------------------------------------------------------------------
 // QUOTA MODE: A FACTORY IS TOLD HOW MANY, NOT WHAT NEXT.
 //
-// apexearth: "'Quota Mode' -- where you simply set a desired target quantity and
-// the factory will make sure we build up to that quantity", and on how the
-// target is reached: "Calculate how much total army you want, then fill up the
-// quota to the ratio of those units that you want. (round up). Remember each
-// factory has it's own unique quota."
+// Each driven line holds a target COUNT per unit type, and every tick we order
+// only the shortfall -- quota minus what we hold minus what is already on its
+// way. A quota that is met orders nothing, which bounds production without a
+// cap: the target itself is economic.
 //
-// So each driven line holds a target COUNT per unit type, and every tick we
-// order only the shortfall -- quota minus what we hold minus what is already on
-// its way. A quota that is met orders nothing, which is what bounds production
-// without anything having a cap: the target itself is economic.
-//
-// REPEAT IS OFF, AND THAT IS THE WHOLE POINT. The first version of this file
-// laid a composition down and set CmdRepeat(true). apexearth: "With repeat being
-// on the amount you've queued will never go down. So you just have factory #s
-// that will perpetually keep going higher." Measured in that run: 129 orders
-// issued against 253 combat units registered on one line -- production had come
-// loose from the plan. Worse, a floor inside the loop can never leave it: the
-// constructor was one order in ten, and the re-lay test needed a third of the
-// composition to move, so Builder::ConsWantedFor -- the economy curve that is
-// supposed to bound constructors -- could not bind at all.
+// REPEAT IS OFF: with repeat on, a floor inside the fill loop can never leave
+// it, so the composition comes loose from the plan and one role can consume the
+// whole line.
 //
 // Orders are issued ONE AT A TIME AND INTERLEAVED, round-robin over the types
 // that are short, so the line builds the ratio rather than a run of one type.
-// apexearth: "If you add 5 then instead of spreading out our build we'll build 5
-// of one type and then 5 of the next, etc... that is not good." The count
-// argument of CmdBuildUnit is therefore always 1.
+// The count argument of CmdBuildUnit is therefore always 1.
 //
 // THE TWO SCHEMES STILL CANNOT SHARE A FACTORY. CRecruitTask::Finish() calls
 // Cancel(), which CmdRemoves every build order still queued, so one recruit task
@@ -52,22 +38,17 @@ const float FQ_AHEAD_DEFAULT = 2.f;
 // come off it. Units appear on the factory's build pad.
 const float FQ_CLAIM_RANGE = 400.f;
 
-// AN ORDER WE SENT THAT NEVER APPEARS IS PRESUMED LOST AFTER THIS.
-//
-// The reconciliation below waits for the queue read to confirm what we sent, so
-// an order the engine REFUSED -- asking a line for a def it cannot build is a
-// silent no-op -- would otherwise wedge the line for the rest of the game. This
-// is the escape hatch, and it is deliberately much longer than the worst
-// observed application lag (~45 sim-seconds at the benchmark's speed cap).
+// AN ORDER WE SENT THAT NEVER APPEARS IS PRESUMED LOST AFTER THIS. An order the
+// engine REFUSED -- asking a line for a def it cannot build is a silent no-op --
+// would otherwise wedge the line for the rest of the game. Deliberately much
+// longer than the worst observed application lag (~45 sim-seconds at the
+// benchmark's speed cap).
 const int FQ_LOST = 90 * SECOND;
 
-// HOW MANY ESCORTS OF ONE KIND EACH SQUAD IS BOUGHT.
-//
-// apexearth: "Attach a maximum of 2 jammer and 2 radar to the squads." His
-// number, stated as a number, and it bounds a SQUAD's escort rather than the
-// army's: what gets built is this times the number of squads on the field, and
-// that count rises with the army the economy can pay for. There is no ceiling
-// on the total.
+// HOW MANY ESCORTS OF ONE KIND EACH SQUAD IS BOUGHT. Bounds a SQUAD's escort,
+// not the army's: what gets built is this times the number of squads on the
+// field, which rises with the army the economy can pay for -- no ceiling on
+// the total.
 //
 // ESCORT_PER_SQUAD in task/fighter/SupportTask.cpp is the matching attachment
 // cap. Move one and the other must move too, or we buy escorts no squad will
@@ -174,36 +155,19 @@ void FQForget(Id id)
 
 // HOW MANY UNITS THIS LINE IS FOR: the unit limit, less what we already hold.
 //
-// apexearth: "Take a look at your unit limit and divvy up your quota based on
-// something reasonable. Let's say you have 100 buildings, 2000 unit limit,
-// you're in T1... then your split is on 1900 available units."
+// THE LIMIT IS PER PLAYER, AND IT IS NOT GetUnitMax. GetUnitMax is
+// unitHandler.MaxUnits(), the whole map's cap -- sizing against it inflates
+// the target so every combat ratio reads 0.00 and array order decides the
+// composition instead of the mix. GetUnitLimit is teamHandler.Team(ours)->
+// GetMaxUnits(), BAR's "Max Units Per Player" modoption, which is the actual
+// per-player budget.
 //
-// The previous sizing was a share of metal we had ALREADY SPENT, and it was
-// wrong in the way that matters: it lagged, so a met quota stopped the line, and
-// a stopped line is how apex fielded army 0/2700/150/0 against stock's
-// 5455/6435/5595/6865 in a 22-minute 4v4.
-//
-// THE LIMIT IS PER PLAYER, AND IT IS NOT GetUnitMax.
-//
-// GetUnitMax is unitHandler.MaxUnits() -- the whole map's cap,
-// min(maxUnitsPerTeam * activeTeams, 32000). Sized on that, a bot lab's raider
-// target came out at 20,296 and every combat ratio printed 0.00, so the
-// composition was decided by the order of a C++ array rather than by the mix.
-//
-// GetUnitLimit is teamHandler.Team(ours)->GetMaxUnits(), which is BAR's
-// "Max Units Per Player" modoption: default 2000, min 500, max 32000, and the
-// host can change it. That is the budget this divides up.
-//
-// The quota is TEAM-WIDE, not per line, because the count it is compared against
-// is team-wide: CCircuitDef::count is every unit of that def we own, with no way
-// to ask which factory made it (the bound surface has no per-factory census, and
-// BAR's own quota widget only manages it by watching UnitCreated in unsynced Lua,
-// which an AI cannot do). Dividing the target by the number of lines while
-// comparing against an undivided count made the team stop at 1/lines of what was
-// intended. Each line still gets its own quota in SHAPE -- QuotaFor normalises
-// over the roles that line can actually build, so a bot lab and a vehicle plant
-// want different things -- and they fill toward one shared target instead of
-// double-counting it.
+// The quota is TEAM-WIDE, not per line: CCircuitDef::count has no per-factory
+// breakdown, so dividing the target by the number of lines while comparing
+// against an undivided count stopped the team at 1/lines of what was
+// intended. Each line still gets its own quota in SHAPE -- QuotaFor
+// normalises over the roles that line can actually build -- and they fill
+// toward one shared target instead of double-counting it.
 int SlotsForArmy()
 {
 	const int limit = ai.GetUnitLimit();
@@ -215,20 +179,13 @@ int SlotsForArmy()
 	return (free > 0) ? free : 0;
 }
 
-// WHAT A TIER IS STILL WORTH ONCE THE NEXT ONE IS ON THE FIELD.
+// WHAT A TIER IS STILL WORTH ONCE THE NEXT ONE IS ON THE FIELD. Dropping a
+// tier's share below what we already hold makes its line go quiet, since a
+// met quota orders nothing.
 //
-// apexearth: "Later when you get to T2 you reduce your target T1, removing some
-// entirely, and now target to create T2 units... later on when T3 is on the
-// field, adjust your T2 army accordingly."
-//
-// Dropping a tier's share below what we already hold is what makes its line go
-// quiet, because a quota already met orders nothing. That is the one place in
-// this design where the absolute number does real work.
-// THE TIER OF THE LINE, NOT OF THE UNIT. Factory::userData carries T2/T3 for
-// FACTORY defs only -- main.as tags eleven plants and nothing else -- so asking
-// it about a unit def answered "T1" for every unit in the game, and once a
-// gantry stood, apex_quota_t1_after_t3 (0.0) zeroed the target for everything
-// that gantry could build.
+// THE TIER OF THE LINE, NOT OF THE UNIT: Factory::userData carries T2/T3 for
+// FACTORY defs only, so asking it about a unit def would answer "T1" for
+// everything and zero the target for whatever a gantry could build.
 float TierShare(CCircuitUnit@ fac)
 {
 	const int attr = Factory::userData[fac.circuitDef.id].attr;
@@ -275,9 +232,7 @@ bool T2ArmyShort(CCircuitUnit@ fac)
 
 // Cortex's "scout" IS the resurrection bot -- behaviour.json gives cornecro the
 // scout role because the bot lab has no other -- so asking for a scout early
-// buys a 130-metal rezzer. apexearth: "we don't need those super early on unless
-// there is energy or metal to reclaim that would be useful." Same reclaim test
-// the rez floor uses.
+// buys a 130-metal rezzer. Same reclaim test the rez floor uses.
 bool ScoutWorthIt(CCircuitDef@ scout)
 {
 	if (scout is null)
@@ -299,21 +254,14 @@ int RoundUp(float v)
 
 // THE QUOTA FOR ONE LINE: a target count per unit type it can build.
 //
-// The combat roles come from the mix -- the same base/counter blend NextForMix
-// reads -- turned from a share of metal into a count of units by the cost of the
-// unit that fills the role, rounded up. Build power and eyes are quantities
-// already, and keep the curves that own them: Builder::ConsWantedFor is what an
-// economy is worth in constructors, and the scout floor scales with the ground
-// there is to watch.
+// Combat roles come from the mix, turned from a share of metal into a count
+// by the cost of the unit that fills the role, rounded up. Build power and
+// eyes are quantities already and keep the curves that own them.
 //
-// `isFloor` marks the two entries that are QUANTITIES rather than shares.
-// Everything here used to be one flat list ranked by have/want, and that quietly
-// handed the composition to array order: a constructor wanting 3 and a raider
-// wanting 1200 both read ratio 0.00 while we held none of either, FillQuota broke
-// the tie with a strict `<`, and the constructor was simply first in the list. So
-// a driven line built constructors and nothing else. Floors are now CHECKED as
-// floors -- below the number, build it -- and the ratio only ever chooses between
-// combat roles, which is the one thing it is meaningful for.
+// `isFloor` marks entries that are QUANTITIES rather than shares. A flat list
+// ranked by have/want handed the composition to array order when every ratio
+// tied at 0.00, so floors are CHECKED as floors -- below the number, build it
+// -- and the ratio only ever chooses between combat roles.
 void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		array<bool>@ isFloor)
 {
@@ -324,12 +272,8 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	if ((fac is null) || (gMix.length() == 0))
 		return;
 
-	// T2 CONS BUT NO T2 ARMY: army is the only thing this line makes.
-	//
-	// apexearth: "if we have t2 cons but no t2 military then military is our #1
-	// priority. we shouldn't build anything like a decoy, a spybot, a raider, bad
-	// fighting unit, artillery, if we have too few assault, heavy, or bannisher
-	// type T2 military units to protect us."
+	// T2 CONS BUT NO T2 ARMY: army is the only thing this line makes until
+	// the core T2 combat roles are covered.
 	if (T2ArmyShort(fac)) {
 		array<Type> core = {RT::ASSAULT, RT::HEAVY, RT::AH, RT::AHA};
 		for (uint c = 0; c < core.length(); ++c) {
@@ -371,23 +315,18 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		}
 	}
 
-	// EYES AND COVER FOR EACH SQUAD. apexearth: "can you make it so we always have
-	// a radar and a jammer built and attached to each squad?", and watching:
-	// "Attach a maximum of 2 jammer and 2 radar to the squads."
+	// EYES AND COVER FOR EACH SQUAD.
 	//
 	// NAMED, NOT ASKED FOR BY ROLE. aiFactoryMgr.GetRoleDef(fac, SUPPORT) is a
 	// weighted RANDOM DRAW over every main-role-support def the line can build,
-	// re-rolled on every call (CFactoryManager::GetFacRoleDef) -- it is that
-	// line's support roulette, not its radar. Factory::EyeDefFor holds the
-	// per-faction pair and is the same table the eyes-for-the-guns rule used
-	// before a driven line stopped reaching it.
+	// re-rolled every call -- it is that line's support roulette, not its radar.
+	// Factory::EyeDefFor holds the per-faction pair instead.
 	//
 	// Radar entry first: floors are checked top-down and the first one short
-	// wins, so the eyes are bought before the cover. The jammer is the
-	// second-order want -- denying their targeting matters after we can see.
+	// wins, so the eyes are bought before the jammer cover.
 	//
 	// EyeDefFor returns null for every T1 line, because no faction has a T1
-	// mobile radar or jammer. There are no escorts before T2, by construction.
+	// mobile radar or jammer -- no escorts before T2, by construction.
 	{
 		const uint squads = Military::EscortSquadCount();
 		if (squads > 0) {
@@ -404,20 +343,15 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		}
 	}
 
-	// FLOORS THE OLD PRODUCTION RULES USED TO HOLD.
-	//
-	// A driven line is answered by Brain::FactoryQueueTask and never reaches the
-	// rules below it in Factory::AiMakeTask, so RezBotFloor, AirConMinimum and
-	// nine others simply stopped running when the Brain took the line. Each of
-	// them is a quota in disguise -- "keep N of this thing" -- so each belongs
-	// here as a floor entry carrying its own gate, not as a rule that can never
-	// fire. Order matters: floors are checked top-down and the first one short
-	// wins, so build power stays ahead of eyes, and eyes ahead of these.
+	// FLOORS THE OLD PRODUCTION RULES USED TO HOLD. A driven line never reaches
+	// Factory::AiMakeTask's rules below it, so RezBotFloor, AirConMinimum and the
+	// rest simply stopped running when the Brain took the line. Each is a quota
+	// in disguise, so each belongs here as a floor entry with its own gate.
+	// Order matters: floors are checked top-down, so build power stays ahead of
+	// eyes, and eyes ahead of these.
 	//
 	// Rez bots: the larger of what the wreck field is offering and what the
-	// income justifies. apexearth: "it isn't really important until you have
-	// stuff to reclaim or to resurrect", and later "~10 rezbots for every 100
-	// metal at least".
+	// income justifies.
 	if (Factory::HaveT1BotLab()) {
 		CCircuitDef@ lab = Factory::T1BotLab();
 		CCircuitDef@ rez = Factory::RezBotDef();
@@ -447,13 +381,11 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		}
 	}
 
-	// A GANTRY THAT IS STANDING IS NEVER IDLE. apexearth, watching: "make sure T3
-	// gantries are always building... if in doubt.. make a juggernaut or behemoth
-	// huge T3". Named rather than asked for by role: GetFacRoleDef skips any def
-	// whose factory.json tier probability is zero, and the super column is 0.00 at
-	// tier0, so the role resolves to null exactly when the plant is new.
-	// One in flight per plant -- a gantry builds one unit at a time, and how many
-	// plants exist is already what WantMoreGantries derives from the economy.
+	// A GANTRY THAT IS STANDING IS NEVER IDLE. Named rather than asked for by
+	// role: GetFacRoleDef skips any def whose factory.json tier probability is
+	// zero, and the super column is 0.00 at tier0, so the role resolves to null
+	// exactly when the plant is new. One in flight per plant, since a gantry
+	// builds one unit at a time.
 	if ((Factory::userData[fac.circuitDef.id].attr & Factory::Attr::T3) != 0) {
 		CCircuitDef@ big = Factory::SuperDefFor(fac.circuitDef);
 		if ((big !is null) && big.IsAvailable(ai.frame)) {
@@ -467,15 +399,11 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	array<float> counter = CounterShares(fac, weight);
 	array<float> base = BaseShares();
 
-	// THE SHARE IS OF THE ARMY, NOT OF THIS LINE. The shares used to be
-	// renormalised over the roles this line could build, so every line aimed to
-	// fill the whole slot budget out of whatever roles it had left -- and a role
-	// row is zeroed as income rises, so late a line is often down to one. Target()
-	// already sums to 1 across the mix, so taking it straight is what makes the
-	// budget divide instead of being claimed once per line.
-	//
-	// The scaling is uniform per line either way, so this moves only where a line
-	// goes quiet, never which unit it picks next.
+	// THE SHARE IS OF THE ARMY, NOT OF THIS LINE. Renormalising over the roles a
+	// line could build made every line aim to fill the whole slot budget from
+	// whatever roles it had left. Target() already sums to 1 across the mix, so
+	// taking it straight makes the budget divide across lines instead of being
+	// claimed once per line.
 	const float slots = float(SlotsForArmy());
 	const float tier = TierShare(fac);
 	for (uint i = 0; i < gMix.length(); ++i) {
@@ -493,43 +421,26 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 
 // FILLING THE QUOTA, THE WAY BAR'S OWN QUOTA MODE DOES IT.
 //
-// apexearth: "You are not using Quota mode. You are just adding a lot of things
-// on the Queue mode."
+// BAR's own widget (luaui/Widgets/unit_factory_quota.lua) reads the queue with
+// Spring.GetFactoryCommands and adds ONE unit every 15 frames, whichever type
+// has the lowest count/quota ratio, only while its own previous order is no
+// longer at the head -- the queue never grows.
 //
-// He was right, and the reason was mechanical: every earlier version had to
-// GUESS what was already on the factory, because nothing in the bound surface
-// reads a unit's command queue. Tracking orders by type left phantoms that
-// silenced the line; crediting any nearby unit over-credited and kept appending.
-// Both are the same mistake in different clothes.
+// CCircuitUnit::CountQueued reads the same queue but NOT with the same timing:
+// the widget's order is applied before its next read, ours goes out over the
+// network and lands whenever that message is consumed -- measured ~45
+// sim-seconds later at the benchmark's speed cap. Topping up against the raw
+// read for that whole window issues one order per tick, so the throttle here
+// counts what it SENT and uses the queue read only to confirm it. See
+// docs/19-factory-through-brain.md, "Bug 1".
 //
-// BAR's own widget (luaui/Widgets/unit_factory_quota.lua) does not guess. It
-// reads the queue with Spring.GetFactoryCommands, and every 15 frames it adds
-// ONE unit -- whichever type has the lowest count/quota ratio -- and only while
-// its own previous order is no longer at the head. The queue never grows.
-//
-// CCircuitUnit::CountQueued reads the same queue but NOT with the same timing,
-// and the throttle below is unsound because of it. The widget's order is applied
-// before its next read; ours goes out over the network and is applied whenever
-// that message is consumed -- measured ~45 sim-seconds later at benchmark speed,
-// ~1 at --speed 3. For those 45 ticks this reads an empty line and adds another
-// order every tick: 56 orders committed to one bot lab in its first 45 seconds,
-// all constructors, which is ~20 minutes of production. A throttle here has to
-// count what it SENT and use the queue read only to confirm it.
-// See docs/19-factory-through-brain.md, "Bug 1".
-//
-// Nothing here replaces the factory's queue. A replace would take the unit
-// under construction with it, and the widget goes out of its way not to do that
-// either -- it refuses to displace a build more than 7.5% done.
-// THE ADVANCED CONSTRUCTOR JUMPS THE QUEUE.
-//
-// apexearth: "(force your advanced cons to build first by giving them an
-// inserted queue mode order)".
-//
-// A new advanced plant is the one moment where order matters more than ratio:
-// everything the tier change is for -- upgraded extractors, the T2 economy, the
-// plants that follow -- waits on that constructor, and behind a queue of army it
-// arrives minutes late. CmdInsertBuild is CMD_INSERT, so it goes to the front
-// WITHOUT clearing the queue or touching the unit under construction.
+// Nothing here replaces the factory's queue -- a replace would take the unit
+// under construction with it.
+// THE ADVANCED CONSTRUCTOR JUMPS THE QUEUE. A new advanced plant is the one
+// moment where order matters more than ratio: everything the tier change is
+// for waits on that constructor, and behind a queue of army it arrives minutes
+// late. CmdInsertBuild is CMD_INSERT, so it goes to the front WITHOUT clearing
+// the queue or touching the unit under construction.
 //
 // Once per line: gFQConDone records that this line has had its jump.
 array<Id> gFQConDone;
@@ -543,19 +454,11 @@ bool ConAlreadyJumped(Id id)
 	return false;
 }
 
-// THE OPENING IS NOT THROWN AWAY WHEN WE TAKE THE LINE.
-//
-// Taking a factory aborts the recruit tasks on it, which includes the OPENER --
-// the specific first units Opener::GetOpener lays down for that plant, in order.
-// Green's log, 0.9 min: "facqueue aborted 10 recruit task(s) still holding
-// corlab" -- the whole opening, gone, replaced a second later by whatever the
-// quota ratio happened to want. apexearth: "green is still not acting normal",
-// and it does the same thing every game because the opener is aborted every
-// game.
-//
-// So the opener is re-issued as our own orders. Inserted in REVERSE: CMD_INSERT
-// puts each order at the front, so laying them backwards is what makes the queue
-// read forwards.
+// THE OPENING IS NOT THROWN AWAY WHEN WE TAKE THE LINE. Taking a factory aborts
+// the recruit tasks on it, which includes the OPENER -- the specific first
+// units Opener::GetOpener lays down for that plant, in order -- so it is
+// re-issued as our own orders. Inserted in REVERSE: CMD_INSERT puts each order
+// at the front, so laying them backwards is what makes the queue read forwards.
 void OpenerFirst(int line)
 {
 	CCircuitUnit@ fac = gFQFac[line];
@@ -607,17 +510,11 @@ void FillQuota(int line)
 	const int ahead = int(ai.GetTunable("apex_fac_ahead", FQ_AHEAD_DEFAULT));
 	const int depth = fac.CountQueued(null);
 
-	// RECONCILE WHAT WE SENT WITH WHAT THE ENGINE HAS APPLIED.
-	//
-	// An AI order is not applied when it is issued: CAICallback::GiveOrder only
-	// does clientNet->Send(SendAICommand(...)), and the command lands when that
-	// message is consumed -- measured ~45 sim-seconds later at the benchmark's
-	// speed cap, ~1 at --speed 3. Topping up against the raw read therefore issues
-	// one order per tick for the whole lag window: 56 orders onto one bot lab in
-	// its first 45 seconds, all constructors, which is about twenty minutes of
-	// production. So the read is treated as DELAYED CONFIRMATION of what we sent,
-	// never as the whole truth. Growth in the queue since last tick is our own
-	// orders becoming visible.
+	// RECONCILE WHAT WE SENT WITH WHAT THE ENGINE HAS APPLIED. An AI order is not
+	// applied when issued -- CAICallback::GiveOrder just sends it over the
+	// network, and it lands whenever that message is consumed -- so the read is
+	// treated as DELAYED CONFIRMATION of what we sent, never as the whole truth.
+	// Growth in the queue since last tick is our own orders becoming visible.
 	const int grew = depth - gFQSeen[line];
 	if (grew > 0)
 		PendDrop(line, grew);
@@ -682,12 +579,9 @@ void FillQuota(int line)
 		return;      // every quota met: the line stops, which is the point
 
 	// INSERT, NEVER SHIFT-APPEND. FactoryCAI::GetCountMultiplierFromOptions is
-	// `if (opts & SHIFT_KEY) ret *= 5`, so every append we made was FIVE units,
-	// not one -- which is why the line kept filling up however low the look-ahead
-	// was set. apexearth: "you're sending their command with shift, which adds 5",
-	// and "queuing army 5 at a time is no good... just queue 2 or 3 of what you
-	// want". CMD_INSERT carries no multiplier, which is exactly why BAR's own
-	// quota widget uses it rather than a shift-append.
+	// `if (opts & SHIFT_KEY) ret *= 5`, so an append is FIVE units, not one.
+	// CMD_INSERT carries no multiplier, which is why BAR's own quota widget
+	// uses it rather than a shift-append.
 	fac.CmdInsertBuild(best, false);
 	PendAdd(line, best);
 	gFQAt[line] = ai.frame;
@@ -707,16 +601,13 @@ void FillQuota(int line)
 // A RECRUIT TASK ALREADY ASSIGNED TO THIS FACTORY WILL WIPE OUR QUEUE.
 //
 // CRecruitTask::Finish() calls Cancel(), which CmdRemoves every build order left
-// on the factory -- it does not know, or care, which of them were its own. A line
-// we take mid-game has such tasks on it already, from the opener and from
-// whatever the mix enqueued before the takeover, and each one that completes
-// silences the line until the stuck detector notices 90 seconds later. Measured
-// 2026-08-12: a taken vehicle plant produced 5 units in 6 minutes, and the units
-// that DID appear were ones we had never ordered.
+// on the factory -- it does not know, or care, which of them were its own. A
+// line taken mid-game has such tasks on it already, and each one that completes
+// silences the line until the stuck detector notices 90 seconds later.
 //
 // Factory::gQTask is the pending recruit list, mirrored from the task hooks
-// because CFactoryManager::GetTasks is not bound. Aborting is safe here and only
-// here: it happens once, before our first order goes down.
+// because CFactoryManager::GetTasks is not bound. Aborting is safe here and
+// only here: it happens once, before our first order goes down.
 void AbortRecruitsOn(CCircuitUnit@ fac)
 {
 	array<IUnitTask@> doomed;
@@ -726,10 +617,9 @@ void AbortRecruitsOn(CCircuitUnit@ fac)
 			continue;
 		array<CCircuitUnit@>@ on = t.GetUnits();
 		// An UNSTARTED recruit task -- no factory has taken it -- is the backlog
-		// that made CFactoryManager want more factories. Nothing can ever start
-		// it once we drive the lines, because a driven line refuses recruits, so
-		// it would sit in the pending list for the rest of the game. A factory we
-		// do NOT drive can create its own again on its next ask.
+		// that made CFactoryManager want more factories. Once every line is
+		// driven, nothing can ever start it (a driven line refuses recruits), so
+		// it would sit forever. A factory we do NOT drive can create its own again.
 		if ((on is null) || (on.length() == 0)) {
 			doomed.insertLast(t);
 			continue;
@@ -786,12 +676,11 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 // Recruit orders nobody can ever start, swept up as they appear.
 //
 // AbortRecruitsOn clears the backlog when a line is TAKEN, which is not enough:
-// Factory::AiUnitAdded enqueues an opener for every new factory, and once every
-// line is driven those orders can never be assigned to anything. They then sit
-// in the pending list forever, and a pending list that never drains is one of
-// the things CFactoryManager answers by building another factory -- the seven
-// bot labs above. Only while we drive every factory we own; below that, a line
-// we do not drive can still take them.
+// every new factory gets an opener enqueued, and once every line is driven
+// those orders can never be assigned to anything and sit in the pending list
+// forever -- which is one of the things CFactoryManager answers by building
+// another factory. Only while we drive every factory we own; below that, a
+// line we do not drive can still take them.
 int gNextSweep = 0;
 
 void SweepDeadRecruits()

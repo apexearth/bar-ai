@@ -1,53 +1,19 @@
 namespace Builder {
 
-// A light turret on an undefended mex.
+// A light turret on an undefended mex: cheap relative to the mex it protects
+// and the army time a leak costs. Distinct from ContestTower, which refuses a
+// T1 turret past that tier -- here the cheap turret only has to beat a scout.
 //
-// apexearth: "We're losing too many mexes to tiny units from the enemies because
-// we aren't making an llt to defend them... it just takes that little bit of
-// metal to save mexes from dying.. its very worth doing in the early game... our
-// armies waste so much time chasing leaks around."
-//
-// The turret is 130-150 metal against a mex at 620 plus whatever the raid then
-// costs in army attention, so this pays for itself on the first leak it stops.
-// Distinct from ContestTower, which deliberately refuses a T1 turret once we are
-// past that tier: at a mex the cheap turret is the right answer precisely because
-// it only has to beat a scout.
-// HOW FAR FROM THE MEX A GUARD MAY BE PLACED.
-//
-// apexearth, watching: "We still have a lot of mexes that don't get guarded."
-// This was 260, commented "turret sits on top of the mex", and that comment was
-// written for a 32-elmo LLT. MexGuardTower returns armanni/armamb/legbastion
-// (64-80 elmos) once income passes 50-100 m/s, and armpb/corvipe for any
-// advanced constructor -- so on a 64-elmo mex sitting on its own resource-spot
-// terrain, 260 is a thin annulus, FindBuildSiteNear returns nothing, and the
-// rule returns null WITHOUT SAYING SO. A guard that is never placed and a guard
-// that is refused look identical from the log.
-//
-// 400 is the largest value that keeps the invariant below: a guard must land
-// within MEX_IN_RANGE (420) of the mex or it does not cover what it was built
-// for, and MEX_IN_RANGE cannot be named here because AngelScript resolves
-// globals in declaration order and it is declared further down this file.
+// Must land within MEX_IN_RANGE (420) of the mex; MEX_IN_RANGE can't be named
+// here since AngelScript resolves globals in declaration order and it's
+// declared later in this file, so this radius is set below that value directly.
 const float MEX_GUARD_RADIUS = 400.f;
-// HOW MANY TURRETS A MEX WANTS IS A FUNCTION OF WHERE IT SITS.
-//
-// apexearth: "The closer our metal extractors are to the enemy, the more
-// defenses we should be building on them. All of our mexes need to have at
-// least 1 turret in range to defend it."
-//
-// FrontT projects a position onto the home->enemy-centroid axis: 0 at our base,
-// 1 at the enemy. That is the same measure the constructor safety rules already
-// use, so a forward mex here is forward by the AI's own existing definition.
-//
-// The floor is 1 and never 0, at any income and any distance. LandIsPrecious
-// only decides whether a REAR mex also gets a second one -- it may not take the
-// last turret off a mex, and it does not apply forward at all, where the ground
-// being contested is the whole reason the turrets are there.
-// The thresholds are set against the range WE ACTUALLY HOLD, not against the
-// 0..1 the axis defines. Measured over a 20-minute 4v4, 76 guard placements: our
-// own mexes span frontT -0.01 to 0.44 and stop there, because a mex past midfield
-// is the enemy's. Thresholds of 0.35/0.60 put 69 of 76 in the rear tier and fired
-// the forward tier zero times -- a gradient that does not engage is not a
-// gradient. 0.20/0.40 splits the range we occupy into three populated tiers.
+// Guard count scales with how forward the mex is. FrontT is the home->enemy
+// axis used elsewhere for constructor safety. Floor is 1, never 0: only
+// LandIsPrecious may add a second guard on a REAR mex, never remove the one on
+// a forward mex. Thresholds are set against the range of frontT our own mexes
+// actually occupy (well under the 0..1 the axis defines), so all three tiers
+// see traffic instead of everything landing in one bucket.
 const float MEX_GUARD_MID_FRAC = 0.20f;
 const float MEX_GUARD_FWD_FRAC = 0.40f;
 
@@ -60,15 +26,12 @@ uint MexGuardWanted(const AIFloat3& in at)
 		return 3;
 	return LandIsPrecious() ? 1 : 2;
 }
-// How far a constructor will travel to guard one. Measured on the first run:
-// a turret was ordered on a mex 3,029 elmos away, which is the walk that gets
-// constructors killed and is why this rule has to be about the mex you are
-// standing next to.
+// How far a constructor will travel to guard one -- kept short so a builder
+// isn't sent on a cross-map walk that gets it killed.
 const float MEX_GUARD_REACH  = 1200.f;
-// A mex with NOTHING covering it is the exception to that, because the
-// alternative to a long walk is the mex staying bare forever: no constructor
-// may ever pass within 1200 of it. Ordinary constructors only -- the commander
-// keeps the short reach, since walking it across the map is how games are lost.
+// A mex with NOTHING covering it gets a longer reach, since the alternative is
+// it staying bare forever. Ordinary constructors only -- the commander keeps
+// the short reach, since walking it across the map is how games are lost.
 const float MEX_BARE_REACH   = 2400.f;
 // Radius counted when asking how thick defence around a mex already is.
 const float MEX_COVER_RADIUS = 700.f;
@@ -89,26 +52,14 @@ CCircuitDef@ MexDef()
 	return SideDef3(armmex, cormex, legmex);
 }
 
-// WHAT A SENTRY IS AND IS NOT FOR. apexearth: "we still make too many t1
-// turrets, need to make much more t1.5 turrets to protect those forward bases
-// early game", alongside "in early game we should put a light laser turret near
-// every mex spot".
+// Position decides tower tier: an 85-metal Sentry suits a quiet rear extractor,
+// the 190-metal Beamer (also used by statics.as) suits a forward base a raid
+// arrives at in force.
 //
-// Both, and the position decides which: an 85-metal Sentry is the right answer
-// for a quiet extractor behind the line, and the wrong one for a forward base,
-// where a raid arrives in force and a Sentry is a speed bump. The Beamer is 190
-// metal for materially more gun -- the same def statics.as reaches for when it
-// wants something an attack cannot simply walk past.
-// A COMMANDER IS NOT AN ADVANCED CONSTRUCTOR, WHATEVER IT COSTS. The tier here
-// is decided by cost, ADV_CON_COST is 300, and armcom costs 2700 -- so every
-// tower the commander was ever asked to build was a Pit Bull, which
-// `unitdef.py armpb --builders` lists as buildable by armcomlvl4 and up. A
-// level-1 commander cannot build one, and asking for it is a silent no-op.
-//
-// This is why the commander still left its mexes bare after CommanderMexGuard
-// was added to fix exactly that: the rule fired and the def was unbuildable.
-// apexearth: humans "walk their commanders to the front, capturing mexes on the
-// way, making some llts" -- an llt is what it can actually build.
+// The commander is excluded from the advanced-constructor tier regardless of
+// cost: tier is otherwise decided purely by costM >= ADV_CON_COST, and armcom
+// (2700) clears that, but only armcomlvl4+ can build the advanced towers --
+// asking a level-1 commander for one is a silent no-op.
 bool IsAdvConDef(CCircuitUnit@ unit)
 {
 	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
@@ -116,67 +67,39 @@ bool IsAdvConDef(CCircuitUnit@ unit)
 	return unit.circuitDef.costM >= ADV_CON_COST;
 }
 
-// THE TOWER TIER FOLLOWS THE ECONOMY. apexearth: "At 50 metal+ we should be
-// making defenses like rattlesnakes, at 100 metal+ we should be making [Pulsar]
-// T3 defenses..., the old defenses are worthless at these levels."
+// Tower tier follows economy income (T2 turret at 50 m/s, T3 at 100 m/s).
+// Legion's slot uses legacluster, not legrampart: legrampart is a geothermal
+// anti-nuke/jammer/radar platform buildable only on a geo vent, and its ICBM
+// interceptor makes GetMaxRange() report 72,000, which would corrupt the
+// front-line spacing/coverage reads that use this tower's range.
 //
-// Rattlesnake armamb 2500 / Persecutor cortoast 2500 / Eviscerator legacluster
-// 2300, then Pulsar armanni 3500 / Bulwark cordoom 3000 / Bastion legbastion 4200.
-//
-// Legion's slot held `legrampart`, which is not a turret at all: "Geothermal
-// Antinuke, Jammer, Radar and Drone Platform", buildable only on a geo vent, and
-// its ICBM interceptor makes GetMaxRange() report 72,000 -- which the front-line
-// want reads as its line spacing and its coverage radius. legacluster is the
-// Eviscerator, 1380 range against armamb's 1380 and cortoast's 1390, and is
-// already what build_chain_leg.json hangs off legalab/legavp.
-//
-// EVERY ONE of these is buildable only by an advanced constructor -- armack,
-// armacv, armaca and the levelled commanders, per `unitdef.py <name> --builders`.
-// Handing one to a T1 constructor is not a downgrade, it is a silent no-op: the
-// request is dropped with no error, which is exactly how every commander tower
-// this session turned out to be an unbuildable Pit Bull. So the ladder applies
-// to the builders that can climb it, and everyone else keeps the cheap turret
-// they can actually finish.
+// All of these are buildable only by an advanced constructor; handing one to a
+// T1 constructor is a silent no-op, so the ladder only applies where it can
+// actually climb it.
 string armtoast("armamb");   string cortoastd("cortoast");  string legramp("legacluster");
 string armpulsar("armanni"); string corpulsar("cordoom");   string legpulsar("legbastion");
 const float DEF_TIER_T2_INCOME = 50.f;
 const float DEF_TIER_T3_INCOME = 100.f;
 
-// THREAT DENIED PER METAL -- the same measure the Brain's defence want scores a
-// tower by, so the ladder and the ranking cannot disagree about what a turret is
-// worth. Brain::TowerDenial is damage and toughness from GetSurfThreat times
-// reach, and Brain::TowerReach clamps the range read, so a def carrying an
-// interceptor cannot poison this the way legrampart poisoned the line's spacing.
+// Threat denied per metal -- the same measure Brain's defence want uses, so this
+// ranking and that one agree on what a turret is worth.
 float HeavyWorth(CCircuitDef@ def)
 {
 	if ((def is null) || !def.IsAvailable(ai.frame) || (def.costM <= 0.f))
 		return 0.f;
-	// Not a gun. legrampart -- a geothermal anti-nuke platform -- sat in this
-	// candidate set until 2026-08-12, and TowerDenial's own no-gun case returns a
-	// flat 1.0, which would read here as a cheap tower rather than as no tower.
+	// Not a gun: TowerDenial's no-gun case returns a flat 1.0, which would read
+	// as a cheap tower rather than no tower.
 	if (def.GetSurfThreat() <= 0.f)
 		return 0.f;
 	return Brain::TowerDenial(def) / def.costM;
 }
 
-// RANK, DO NOT THRESHOLD. apexearth: "at +50 handicap the t2 scorp defense is
-// only worthwhile for a short time. you need the longer range defenses."
-//
-// This returned the highest tier the income cleared, so a later tier won by
-// existing rather than by being better -- and two of the three factions step
-// BACKWARDS in reach at that point: Cortex from a 1,390-range Persecutor at 2,500
-// metal to a 950-range Doomsday at 3,000, Legion from a 1,380-range Eviscerator
-// to an 1,100-range Bastion at 4,200. Handing one def to the Brain also meant its
-// value function never saw the alternative and so could not correct it.
-//
-// The income thresholds keep their OTHER job, which is affordability: a 2,500
-// metal turret is not something a 20 metal/second economy should start, and that
-// is what apexearth's "at 50 metal+ ... at 100 metal+" states. They still decide
-// what ENTERS the set; they no longer decide which member of it wins.
-// Logged only when the answer CHANGES, so it reports the tier decision without
-// adding a line per builder per tick. Which def wins is a runtime question --
-// GetSurfThreat is computed by CircuitAI from the weapon defs, not by us -- so
-// this is the only honest way to read the ranking back.
+// Ranked, not thresholded to "highest tier income clears": reach does not
+// increase monotonically with cost across factions, so the higher tier can be a
+// shorter-range turret. Income still gates which tiers may enter the ranking
+// (affordability); it no longer decides which member wins.
+// Logged only on change, since GetSurfThreat (and so the winner) is a runtime
+// read from the engine's weapon defs, not something we compute ourselves.
 string gHeavyPickLast = "";
 
 CCircuitDef@ HeavyDefenceFor(CCircuitUnit@ unit)
@@ -227,15 +150,10 @@ CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 	return SideDef3(armllt, corllt, leglht);
 }
 
-// WHAT TO BUILD ON THE LINE ITSELF, which is not the same question as what to
-// put on a mex. An advanced constructor at a mex gets a Pit Bull, and the Brain's
-// front request inherited that: 20+ Pit Bulls ordered per player per game at 0.38
-// to 0.70 of the way to the enemy, and ZERO ever finished. It is 680 metal,
-// 14,000 energy and 15,000 build time -- roughly a minute of undisturbed work by
-// one advanced constructor, standing on contested ground.
-//
-// The A/B arm below builds the same thing the T1 path already builds on the
-// border instead. apex_front_pb=1 restores the Pit Bull.
+// Distinct from MexGuardTower's answer: a Pit Bull (680m/14,000E/15,000 build)
+// takes roughly a minute of undisturbed advanced-constructor work, which the
+// front line rarely offers, so this defaults to the cheaper T1-path tower
+// instead. apex_front_pb=1 restores the Pit Bull.
 CCircuitDef@ FrontTower(CCircuitUnit@ unit, const AIFloat3& in at)
 {
 	// The line gets the same tiering as anything else: a Beamer is not what a
@@ -248,23 +166,17 @@ CCircuitDef@ FrontTower(CCircuitUnit@ unit, const AIFloat3& in at)
 	CCircuitDef@ mid = SideDef3(armbeamer, corhllt, legmg);
 	if ((mid !is null) && mid.IsAvailable(ai.frame))
 		return mid;
-	// NOTHING, rather than a light laser, once the economy is past that tier.
-	// apexearth: "the old defenses are worthless at these levels." Returning null
-	// STOPS the work instead of redirecting it -- the same thing ContestTower
-	// already does for the same reason -- so a T1 constructor that cannot build
-	// anything worth having goes back to the economy instead of adding another 85
-	// metal turret to the pile the blob audit keeps flagging.
+	// Null rather than a light laser once past that tier -- same as ContestTower:
+	// stops the work instead of redirecting it, so the constructor returns to
+	// economy work rather than building a turret not worth the metal.
 	if (PastT1Tier())
 		return null;
 	return SideDef3(armllt, corllt, leglht);
 }
 
-// ENERGY UNDER COVER. apexearth: "We should prefer to build solars and wind
-// farms near sentry turrets in the early game."
-//
-// Every turret tier this file can place, not just the Sentry: what a generator
-// needs is a gun that reaches it, and excluding the heavier tiers would switch
-// the preference off exactly as the base gets big enough to need it.
+// Every turret tier this file can place, not just the light one: a generator
+// only needs a gun that reaches it, and excluding the heavier tiers would turn
+// this preference off exactly as the base grows enough to need it.
 const int COVER_TIERS = 5;
 // Fraction of the turret's OWN weapon range, read per def so a modoption that
 // retunes weapons cannot silently turn this into a fixed elmo count. The value
@@ -354,137 +266,65 @@ bool CoveredSpot(CCircuitUnit@ unit, CCircuitDef@ gen, AIFloat3& out spot)
 	return true;
 }
 
-// The home crew's actual job: build the energy the base runs on.
-//
-// apexearth: "I do not think the 'home' cons are actually focusing on economy...
-// the stage before fusion when we should be making advanced solars - we just
-// aren't making many of those at all... so our overall economy is much further
-// behind the enemies."
-//
-// He is right, and the reason is placement in the ladder. Advanced solar existed
-// only as a LAST-RESORT fallback at the very end of AiMakeTask, behind a
-// cooldown and behind every other offer. Nothing owned it. armadvsol is 350
-// metal for 75 energy against armsolar's 155 for 20 -- more than twice the
-// energy per metal, and it is the whole pre-fusion energy curve.
-//
-// Bounded by demand, not a clock: we stop when energy is already being wasted.
+// The home crew's actual job: build the energy the base runs on, ranked by
+// energy-per-metal so advanced solar is reached on its own merit rather than as
+// a last-resort fallback nothing else owned. Bounded by demand, not a clock: we
+// stop when energy is already being wasted.
 IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 {
-	// ANY BUILDER MAY MAKE ENERGY. apexearth: "Always be building energy", and
-	// then "Allow others outside of home crew too...".
-	//
-	// The crew role decided WHO, and that made "always" false: this returned null
-	// for every constructor outside the two-strong HOME crew, so the Brain's
-	// energy want -- the one it proposes every single tick -- did nothing for the
-	// rest of the base. Measured against the pre-Brain build at minute 14, energy
-	// produced 206,124 -> 170,830 per player while waste tripled.
-	//
-	// The crew still decides who does it BY DEFAULT, because a home constructor
-	// reaches this through its own rule before the Brain ever ranks anything.
-	// What is gone is the refusal: when the ranking says energy is the best use
-	// of this builder, the builder is allowed to build it.
-	//
-	// Off with apex_energy_any=0, which restores the crew-only behaviour.
+	// The crew role decides who reaches this rule by default (a home constructor
+	// gets here before the Brain ranks anything); apex_energy_any=0 restores the
+	// old refusal for everyone outside the HOME crew.
 	if ((Crew::RoleOf(unit) != Crew::HOME)
 		&& (ai.GetTunable("apex_energy_any", 1.f) <= 0.f))
 	{
 		return null;
 	}
-	// NO metal-empty gate. "Don't spend when broke" is exactly backwards for the
-	// one thing that ends being broke: a solar is 155 metal and pays back
-	// forever, which at 13 metal/second is twelve seconds of income. Measured:
-	// t0 sat pinned near zero bank for 30 minutes with home=2 constructors whose
-	// only job this is, and fired it ZERO times. The engine already refuses what
-	// it truly cannot afford, so the guard bought nothing and cost everything.
-	//
-	// apexearth's rule, verbatim: "maxEnergy ? buildConverters : buildEnergy".
-	//
-	// The point is that the home crew is NEVER out of work -- one branch or the
-	// other always applies. My previous version declined whenever energy looked
-	// momentarily plentiful, which in the early game is nearly always, so the
-	// home crew sat idle and the economy fell behind: "only sinbearer seems to
-	// be doing much eco".
+	// No metal-bank gate: the engine already refuses what it truly can't afford,
+	// and a solar pays back in seconds of income, so gating on bank state just
+	// leaves the crew idle. One of the two branches below always applies, so the
+	// home crew is never out of work.
 	CCircuitDef@ gen = null;
 	bool pickedReactor = false;
 	if (EnergyWasting()) {
-		// NO PERIOD BETWEEN CONVERTERS. apexearth: "It doesn't make sense for us to
-		// have that at all. We don't need some period between creating these
-		// things. That's a very bad idea."
-		//
-		// What the timer was standing in for is real but is not a timer: the
-		// engine's economy budget is finite (CEconomyManager::MakeEconomyTasks
-		// returns null unless buildTasksCount < workers * 8) and an unassigned task
-		// holds its slot for 300s. The bound for that is a COUNT -- how many the
-		// spill can actually feed -- which the Brain's convert want already applies
-		// as income/draw. A clock only makes us slow to fix a surplus.
-		// Spilling energy: turn it into metal.
+		// No cooldown between converters: the real bound is the engine's finite
+		// economy task budget (CEconomyManager::MakeEconomyTasks needs
+		// buildTasksCount < workers * 8, and an unassigned task holds its slot
+		// 300s), which is a COUNT, not a timer -- applied via the Brain's convert
+		// want as income/draw.
 		@gen = BigConvDef(unit);
 		if ((gen is null) || !gen.IsAvailable(ai.frame))
 			@gen = SmallConvDef(unit);
 	} else {
-		// PICK THE BEST ENERGY PER METAL, ACROSS THE WHOLE LADDER AT ONCE.
-		//
-		// This block used to decide wind against solar per metal and then rank
-		// that winner against advanced solar and the reactors by RAW OUTPUT,
-		// because per-metal ranking was believed unable to tier up. The defs say
-		// otherwise: energy per metal RISES from solar through advanced solar to
-		// fusion and advanced fusion, so one unified per-metal ranking climbs the
-		// ladder unaided. Only wind is map-dependent enough to ever beat a
-		// reactor, which is the whole of the special-casing that is needed.
+		// One unified energy-per-metal ranking across the whole ladder: per-metal
+		// value rises from solar through advsol to fusion/advfusion, so this
+		// climbs the ladder unaided. Only wind is map-dependent enough to ever
+		// beat a reactor.
 		CCircuitDef@ wind = SideDef3(armwin, corwin, legwin);
-		// PLAIN SOLAR RETIRES WHEN A REACTOR STANDS, exactly as AdvSolDef already
-		// retires the advanced one. Only advanced solar was being retired, so any
-		// moment the reactor rungs were unavailable dropped the ladder onto a
-		// 20-energy panel. apexearth, watching live: "I see us making basic solars
-		// when we have over 2000 energy per second."
+		// Plain solar retires once a reactor stands, same as AdvSolDef already
+		// does for advanced solar -- otherwise any moment the reactor rungs were
+		// unavailable dropped the ladder back to a 20-energy panel.
 		CCircuitDef@ sol = HaveReactor()
 				? null : SideDef3(armsolar, corsolar, legsolar);
 		CCircuitDef@ adv = AdvSolDef();
-		// A reactor is 4,300-9,700 metal against a turbine's 40, and this function
-		// is offered a constructor about thirty times a game-minute. Without a
-		// cooldown every idle builder queues its own reactor off the same reading
-		// of the same income. The cheap rungs stay uncapped -- overbuilding wind
-		// is self-correcting, overbuilding fusions is the economy.
-		// THE COOLDOWN BOUNDS HOW OFTEN A REACTOR IS STARTED, NOT WHICH RUNG WE
-		// ARE ON. Nulling the reactor rungs for the ranking demoted the ladder to
-		// its bottom step while the cooldown held -- and AdvSolDef() is already
-		// null once any reactor stands, so the only candidates left were wind and
-		// solar. Measured 2026-08-13 at +50 handicap: 1,787 of ~2,065 home-energy
-		// placements were armwin, 1,004 of them above 5,000 energy income. Rank
-		// the reactors always; if one wins while the cooldown holds, decline the
-		// builder rather than handing it a turbine.
-		// FusionDef ALREADY returns armafus once the economy and reactor count
-		// justify it (metal.income >= AFUS_INCOME AND plain.count >= AFUS_AFTER),
-		// and armfus otherwise -- that IS the tier gate. A second, unconditioned
-		// fetch of armafus used to sit here and get ranked on its own: armafus
-		// scores highest of every candidate on energy-per-metal (0.309), so it
-		// won this ranking on frame 1 of every game, at ~7 metal/s, with no T2/T3
-		// constructor able to build it -- then sat as a permanently stuck,
-		// unworkable request that blocked HomeEnergy from ever proposing anything
-		// buildable again. Measured live: energy income frozen at exactly 30 for
-		// over a minute, one wind turbine and nothing else, opening gate unable to
-		// clear because the request it was waiting on could never finish. One
-		// reactor candidate now, chosen by FusionDef, so an ungated armafus can
-		// never win this ranking again.
-		// NOT BEFORE THE FIRST FACTORY. A reactor is a multi-minute commitment of
-		// build power (armfus is 4,300 metal against a T1 lab's 500), and the
-		// opening has exactly one low-buildpower builder -- the commander -- to
-		// spend it with. apexearth's own opening sequence never mentions a
-		// reactor at all: mexes, ~80 energy/s and ~5+ metal/s, the first lab, a
-		// sentry, expand. Once the commander's hold-in-progress protection
-		// correctly kept it committed to a job (see VetoCommanderHold), a reactor
-		// winning this ranking meant the single opening builder spent the whole
-		// window slowly grinding one out instead of ever reaching the lab.
-		// Measured live: 2 of 3 five-minute opens never got a factory at all with
-		// armfus in the running; the third took 4.7 minutes. This is a phase
-		// exclusion, not a bank gate -- once the first factory exists, more
-		// builders exist too, and the reactor is judged on the exact same
-		// per-metal merit as everything else, unrestricted.
+		// Reactors are always ranked (never nulled while the start cooldown
+		// holds); if one wins during cooldown the caller declines rather than
+		// falling back to a cheaper rung, so overbuilding wind/solar stays
+		// self-correcting instead of the ladder silently regressing.
+		// FusionDef already gates the fusion/advanced-fusion tier on income and
+		// standing count -- fetch its answer as the single reactor candidate here.
+		// An earlier, separately-fetched unconditioned armafus scored highest of
+		// every candidate on energy-per-metal and so always won this ranking
+		// regardless of whether any constructor could build it, permanently
+		// blocking the request queue; do not reintroduce a second armafus fetch.
+		// Excluded before the first factory exists: a reactor is a multi-minute
+		// build-power commitment the opening's single low-buildpower builder (the
+		// commander) cannot spare, so it would win this ranking and starve the
+		// path to the first factory. Once any factory exists, more builders exist
+		// too and the reactor competes on the same per-metal merit as everything
+		// else, unrestricted.
 		CCircuitDef@ fus = Factory::HaveAnyFactory() ? FusionDef(unit) : null;
 
-		// ONE RANKING PASS. A reactor no longer waits for a bank of metal to
-		// fill before it may be chosen -- apexearth: "You don't need to wait for
-		// some 'bank of metal' before starting a fusion or anything like that."
 		float best = -1.f;
 		float v = EnergyValuePerMetal(wind);
 		if (v > best) { best = v; @gen = wind; }
@@ -500,13 +340,9 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	if ((gen is null) || !gen.IsAvailable(ai.frame))
 		return null;
 	const bool isConv = EnergyWasting();
-	// The grid is a PREFERENCE, never a veto. Base::Spot failing means the
-	// lattice has no free cell -- measured on Callisto, t0 hit noroom=67 and
-	// placed=0 and therefore built no economy at all for the whole game, while
-	// players whose grid was working (placed=13, 29) built normally. A layout
-	// rule that cannot find a tidy spot must still put the building down.
-	// apexearth: "we run out of room due to our terribly inefficient placement
-	// of buildings."
+	// The grid is a preference, never a veto: Base::Spot failing just means the
+	// lattice has no free cell, and a layout rule that can't find a tidy spot
+	// must still place the building rather than block the economy.
 	AIFloat3 spot;
 	// A reactor is placed on exposure rather than on the layout, and never packed
 	// against the last eco building: ReactorSpot leaves gEcoLast alone so the eco
@@ -530,19 +366,10 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	}
 	if (!placed) {
 	if (!Base::Spot(unit, gen, Base::ECO, spot)) {
-		// PACK against the last thing we built, not around home.
-		//
-		// The old fallback searched outward from the base centre across
-		// ECO_FALLBACK_RANGE, so every building landed in whatever hole it found
-		// first -- far from the previous one. That is the scatter apexearth is
-		// looking at: "we build like idiots... enemy builds much more
-		// efficiently with space than we do", with stock BARb laying solid
-		// rectangles of forty buildings while we spread confetti.
-		//
-		// FindBuildSiteNear spirals OUTWARD from the point given, so seeding it
-		// on the last placement with a tight radius chains buildings edge to
-		// edge into rows and blocks. Falling back to home only when that fails
-		// starts a fresh block instead of abandoning the build.
+		// Packs against the last thing we built rather than searching outward
+		// from base centre: FindBuildSiteNear spirals outward from the point
+		// given, so seeding it on the last placement with a tight radius chains
+		// buildings edge to edge into rows instead of scattering them.
 		if (gEcoPacked)
 			spot = ai.FindBuildSiteNear(gen, gEcoLast, ECO_PACK_RANGE);
 		if (!gEcoPacked || !OnMap(spot)) {
@@ -560,16 +387,10 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		gEcoPacked = true;
 	}
 	}
-	// ONE AT A TIME. apexearth, watching live: "I am actively seeing us build 5
-	// AFUS at the same time. Our builders should see one is already being built
-	// and choose to assist in building that instead."
-	//
-	// The ladder above decides WHAT to build; whether that may be started here
-	// and now, or should join one already requested, is Requests' single answer.
-	// The site is what it is asked about, not the builder: constructors
-	// scattered around one base each computed a nearby-but-distinct spot, and
-	// none of them were near enough to EACH OTHER for a builder-keyed check to
-	// catch it.
+	// The ladder above decides WHAT to build; whether that starts here and now or
+	// joins one already requested is Requests' answer, keyed on the SITE rather
+	// than the builder -- constructors scattered around a base compute distinct
+	// nearby spots, so a builder-keyed check would miss the duplication.
 	bool created = false;
 	IUnitTask@ post = Requests::Take(unit, gen,
 			isConv ? Task::BuildType::CONVERT : Task::BuildType::ENERGY,
@@ -596,16 +417,9 @@ CCircuitDef@ ContestTower(CCircuitUnit@ unit)
 {
 	if (IsAdvConDef(unit))
 		return SideDef3(armpb, corvipe, legapopupdef);
-	// Nothing rather than a light laser once we are past its tier. The tower was
-	// chosen from the CONSTRUCTOR's cost alone, so a T1 constructor kept being
-	// offered one however late the game was -- apexearth, watching at 25 minutes
-	// on 130 metal/second: "i still see some of our cons retreating from front
-	// line to build a light laser turret, the t1 super crappy turret... at this
-	// point we shouldn't be making those anymore."
-	//
-	// Returning null STOPS work rather than redirecting it, which is why it is
-	// safe to add on its own: the constructor falls through to whatever it would
-	// have done next instead of walking home for a 150-metal turret.
+	// Null rather than a light laser once past that tier: stops the work rather
+	// than redirecting it, so the constructor falls through to whatever it would
+	// have done next instead of walking home for a low-value turret.
 	if (PastT1Tier())
 		return null;
 	return SideDef3(armllt, corllt, leglht);

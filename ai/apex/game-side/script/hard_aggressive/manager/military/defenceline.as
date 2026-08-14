@@ -61,56 +61,34 @@ bool NearFront(const AIFloat3& in pos)
 
 // THE FRONT LINE IS A TEAM OBJECT, SO ITS BUDGET IS A TEAM BUDGET.
 //
-// apexearth, from a hosted 8v8: "lol its always teal doing this, idk why."
-//
-// Two mechanisms, both deterministic, both mine. Factory::ElectorTeamId picks
-// the LOWEST team id and hands out the lead roles, so the same slots hold the
-// same roles in every game -- and AiMakeDefence returned outright for a lead,
-// meaning defence landed entirely on whoever the election never picks. Teal was
-// not behaving oddly; teal was never elected.
-//
-// And each player sized the front against its OWN income and counted only its
-// OWN towers, so four players each independently decided how much line to hold.
-// The line in front of our bases is one object, its length does not depend on
-// how many of us there are, and the budget for it should not either.
-//
-// Published per player and summed: same mechanism the killing blow already uses
-// for army value, and it needs no gadget.
+// Factory::ElectorTeamId always picks the same (lowest id) player for the lead
+// roles, so a per-player defence budget landed entirely on whichever slots the
+// election never picks. The line in front of our bases is one object shared by
+// the team, so its budget is published per player and summed here, the same
+// mechanism the killing blow already uses for army value.
 const string TV_FFENCE = "ffence";
 const string TV_MINC   = "minc";
-// A BUDGET DENOMINATED IN TOWERS CANNOT BOUND A SHARE OF METAL. The front budget
-// counted towers against income, so the same allowance bought a Sentry and a
-// Pulsar, and nothing in it could see what the rest of the team was building
-// instead. These two carry the front line's METAL and the player's TOTAL metal
-// spend, so the bound becomes the same quantity targets.as states: a share.
+// A budget denominated in towers cannot bound a share of metal: it let the same
+// allowance buy a Sentry and a Pulsar. These two carry the front line's METAL
+// and the player's TOTAL metal spend, so the bound is a share, as targets.as
+// states it elsewhere.
 const string TV_FMETAL = "fmetal";
 const string TV_MSPEND = "mspend";
 // ANTI-AIR IS ONE TEAM ANSWER TO ONE TEAM'S AIRCRAFT.
 //
-// apexearth, watching: "We used to have a problem with teal making tons of light
-// turrets. But now in this game, I see teal making lots of anti air."
-//
-// Same bug as the light turrets and the same shape as the front budget was.
-// GetEnemyCost(AIR) is the value of the WHOLE ENEMY TEAM'S air, while
-// CCircuitDef::count is only our OWN turrets -- so every player sizes its answer
-// against all of their aircraft and counts none of its allies' turrets. Four
-// players independently build the whole team's AA, and it piles onto whichever
-// slot has spare constructor time, which the election makes the same slot every
-// game.
+// GetEnemyCost(AIR) is the WHOLE ENEMY TEAM'S air value, while CCircuitDef::count
+// is only our OWN turrets, so each player independently sized its answer against
+// all enemy aircraft while counting none of its allies' turrets -- the AA piled
+// onto whichever slot the election gives spare constructor time.
 const string TV_AA = "aa";
-// WHERE EACH OF US IS BEING HURT. apexearth: "its 4 different AI right so this is
-// just ally defense forces coming to aid (so long as the distance is not too
-// great)."
+// WHERE EACH OF US IS BEING HURT.
 //
-// CCircuitAI::GetAttackHotspot is the heaviest of the cost-weighted, decaying
-// spots where WE have lost units. It is per-AI -- NoteLossAt only
-// ever accumulates our own losses -- so a player cannot see an ally being
-// overrun, which is why nobody ever turns up to help.
-//
-// Published as three floats and read back the same way the front budget and the
-// AA count already are. Nothing coordinates the response: each player picks the
-// heaviest fight it can reach and goes. Four players doing that independently is
-// what looks like a converging attack from the outside.
+// CCircuitAI::GetAttackHotspot is the heaviest cost-weighted decaying spot where
+// WE have lost units, and it is per-AI (NoteLossAt only accumulates our own
+// losses), so a player cannot see an ally being overrun. Published as three
+// floats and read back the same way the front budget and AA count already are;
+// nothing coordinates the response beyond that -- each player picks the
+// heaviest reachable fight and goes.
 const string TV_AIDX = "aidx";
 const string TV_AIDZ = "aidz";
 const string TV_AIDW = "aidw";
@@ -214,8 +192,7 @@ float BaseSeparation()
 }
 
 // The worst fight an ALLY is losing that we could actually reach. Weight is
-// metal lost there, so "worst" means most expensive, and the reach bound is
-// apexearth's "so long as the distance is not too great".
+// metal lost there, so "worst" means most expensive, bounded by reach.
 bool AllyAidPos(const AIFloat3& in from, AIFloat3& out at, float& out weight, int& out who)
 {
 	who = -1;
@@ -258,11 +235,10 @@ bool AllyAidPos(const AIFloat3& in from, AIFloat3& out at, float& out weight, in
 	return have;
 }
 
-// AS FAR TOWARD THEM AS WE STILL CONTEST. apexearth, on helping a player who is
-// already losing: "Go, but only as far as contested ground." Bisect the segment
-// from our end to theirs and stop at the influence zero crossing, so we reach
-// survivors and sit on the attacker's flank instead of walking into ground we
-// have already lost.
+// As far toward an ally in trouble as ground is still contested: bisect the
+// segment from our end to theirs and stop at the influence zero crossing, so
+// we reach survivors and sit on the attacker's flank instead of walking into
+// ground already lost.
 bool AidClampToContested(const AIFloat3& in from, const AIFloat3& in to, AIFloat3& out at)
 {
 	if (!OnMap(from) || !OnMap(to))
@@ -333,40 +309,20 @@ float TeamAA()
 
 // THE ONE ANSWER TO "MAY A TOWER GO HERE".
 //
-// apexearth: "Clean up those other systems that are placing the unwanted
-// towers." Three of them placed defence without ever consulting the defence
-// policy -- MexGuard put one on every extractor, Fortify put one wherever a
-// constructor happened to be shot, and build_chain.json bolted one onto every
-// factory -- so the income budget, the front-line rule and the rear share
-// applied to a minority of what we actually built. Measured: 50 defence
-// structures, 21 of them armllt, effectively none forward.
+// Placement used to happen in three other places that never consulted the
+// defence policy -- MexGuard on every extractor, Fortify wherever a constructor
+// was shot, build_chain.json on every factory -- so the income budget and the
+// front/rear shares only ever applied to a minority of what was actually built.
+// Every placement now asks this first, in order: is defence already over its
+// budget share, is this the rear and has the rear had its share, is the ground
+// already covered (unless what we are placing is better than what covers it).
 //
-// Every placement now asks this first. It answers three questions in the order
-// they matter, and each of them is economic or positional -- never a count typed
-// in here:
-//   1. is defence already over the share targets.as gives it,
-//   2. is this the rear, and has the rear had its tenth,
-//   3. ...unless we are actually being attacked, when a tower beats the curve.
-//   4. and, whatever the budget says, is this ground already covered -- unless
-//      what we are placing is better than what covers it.
-//
-// SIX TOWERS COVERING THE SAME GROUND IS ONE TOWER'S COVER, FIVE TIMES OVER.
-// apexearth, watching a 6v6 at +50: "we make too many towers at the front. we
-// need to learn that we have too many towers at the front in one spot and start
-// spreading them out or stop making them. If a tower already has 6 other towers
-// in it's range then maybe we should stop making more unless we're making a
-// higher tier of tower."
-//
-// Every other clause in this gate is economic or positional, and neither could
-// see this: a blob and a line cost the same metal and sit at the same forward
-// fraction. The radius is the placed turret's own weapon range through
-// Brain::TowerReach (CCircuitDef::GetMaxRange, clamped -- legrampart's ICBM
-// interceptor reports 72,000), so a Beamer line and a Pulsar line are each judged
-// at their own spacing rather than at a number typed in here.
-//
-// The tier exemption is what keeps this from being a ceiling: a better turret may
-// always go in, at any density, so density can never stop the defence climbing
-// with the economy. It only stops the same turret being repeated.
+// The crowd check's radius is the placed turret's own weapon range
+// (Brain::TowerReach / CCircuitDef::GetMaxRange, clamped), so a Beamer line and
+// a Pulsar line are each judged at their own spacing. The tier exemption keeps
+// the crowd check from being a ceiling: a better turret may always go in at any
+// density, so density only stops the SAME turret repeating, never the defence
+// climbing with the economy.
 //
 // `def` null means the caller does not know what will be placed. Unknown can
 // never be "higher tier", so it is a refusal on crowded ground -- which is why
@@ -378,8 +334,8 @@ bool CrowdAllows(const AIFloat3& in pos, CCircuitDef@ def)
 	const float most = ai.GetTunable("apex_fence_crowd", 6.f);
 	if (most <= 0.f)
 		return true;
-	// A def with no surface gun -- anti-air, a jammer -- is not what he is
-	// describing and is bounded by its own rule (Brain::AACoverNear).
+	// A def with no surface gun -- anti-air, a jammer -- is bounded by its own
+	// rule instead (Brain::AACoverNear).
 	if ((def !is null) && (def.GetSurfThreat() <= 0.f))
 		return true;
 	float span = (def is null) ? Brain::LightTowerRange() : Brain::TowerReach(def);
@@ -412,20 +368,14 @@ bool CrowdAllows(const AIFloat3& in pos, CCircuitDef@ def)
 // WHAT THE ENGINE'S OWN LADDER WOULD PUT HERE.
 //
 // AiMakeDefence has no def to offer the crowd cap -- DefaultMakeDefence chooses
-// inside C++, after we have already answered -- so it asked with null, and null
-// can never be "higher tier". The tier exemption, which is the one clause that
-// keeps the crowd cap from being a ceiling on the whole defence budget, therefore
-// could not fire on the single path that places most of our towers.
+// inside C++, after we have already answered -- so without this the tier
+// exemption could never fire on the path that places most of our towers.
 //
-// This is the same list, in the same order: build_chain.json porcupine "land"
-// [0, 3, 5, 4, 8, 12] resolved against each faction's unit array. It is walked the
-// way CMilitaryManager::DefaultMakeDefence walks it -- cumulative cost against an
-// income-derived maxCost -- and the DEAREST rung that still fits is the answer,
-// because that is the tier this economy is buying. The 32 is the config's own
-// amount factor for a 20x20 map (48 for 10x10, so this under-claims on a small
-// one) and ecoFactor is omitted, which under-claims again under a resource bonus.
-// Both errors point the same way: toward asking with a cheaper def, i.e. toward
-// refusing rather than exempting.
+// Mirrors build_chain.json's porcupine "land" ladder [0, 3, 5, 4, 8, 12] and
+// walks it the way CMilitaryManager::DefaultMakeDefence does -- cumulative cost
+// against an income-derived maxCost -- returning the dearest rung that still
+// fits. LADDER_AMOUNT and ecoFactor are approximated from the config, both in
+// the direction of under-claiming (refusing rather than wrongly exempting).
 const float LADDER_AMOUNT = 32.f;
 
 CCircuitDef@ LadderDef()
@@ -460,58 +410,34 @@ bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 	if (!CrowdAllows(pos, def))
 		return false;
 
-	// BEING ATTACKED RAISES THE BUDGET; IT DOES NOT REMOVE IT.
+	// Being attacked raises the budget; it does not remove it -- returning true
+	// outright while contested switched the gate off almost the whole game
+	// (contested reads true for most of it), so pressure now only multiplies the
+	// allowance, and the rear share still has to hold.
 	//
-	// This returned true outright while contested, and measured at +50 the base
-	// reads contested for most of the game -- so the gate switched itself off
-	// exactly while the towers were being built, and the count went back to 70
-	// with none of them forward. Under attack we can afford more defence, not
-	// unlimited defence, and the rear share still has to hold or we wall the
-	// wrong end of the map.
-	// BEING BELOW THE SHARE IS THE THING THE SHARE MEASURES. apexearth: "We're
-	// definitely out of control with building certain things like the light laser
-	// turrets and popup air defense turrets."
-	//
-	// BudgetMult(DEFENCE) is target/have, so it reads 2.0 for exactly as long as
-	// defence is under its target -- and it was used here to RAISE the allowance,
-	// which is the bound arguing with itself: the further below target we are, the
-	// more we are allowed to build, until we are not below it any more. Against a
-	// share test that is circular and cancels the bound outright. Only pressure
-	// multiplies now, and only the target share; BudgetMult still ranks defence
-	// against the other categories where it belongs, in Brain.
+	// pressureAllow used to also apply BudgetMult(DEFENCE) (target/have), which
+	// is circular against a share test: the further below target we are, the
+	// more we are allowed to build, cancelling the bound. Dropped; BudgetMult
+	// still ranks defence against other categories in Brain.
 	float pressureAllow = (gTurtle || BaseContested()) ? 2.f : 1.f;
-	// ROLE CHANGES HOW MUCH, NEVER WHETHER. A lead used to return outright, which
-	// put the whole job on the players the election never picks. It buys less
-	// now -- its metal is wanted for the plant and the T2 mexes -- but it is not
-	// forbidden, which is his standing rule and the same fault as the eco-lead
-	// exclusivity he caught before.
+	// A lead buys less defence, never none -- its metal is wanted for the plant
+	// and T2 mexes, but a role changes how much, never whether.
 	if (Factory::IsDesignatedLead() && !gPorcArmed && !gTurtle && !LosingGround())
 		pressureAllow *= ai.GetTunable("apex_lead_defence", 0.35f);
 	const float per = ai.GetTunable("apex_fence_per_income", 0.8f) * pressureAllow;
 	const float budget = 1.f + aiEconomyMgr.metal.income * per;
 
-	// TWO JOBS, TWO ALLOWANCES. apexearth: "I just want to make sure we are
-	// staying organized... I was wondering if we're depending on unrelated things
-	// to get our frontline defence created."
+	// Two jobs, two allowances: holding the line and guarding an extractor used
+	// to share one budget, so numerous nearby mex guards spent it and the front
+	// request was refused for being over it -- the front line's size depended on
+	// how many mexes we owned. Each job now counts only its own standing towers
+	// against its own share, from targets.as DEF_FRONT / DEF_LOCAL.
 	//
-	// We were. Holding the line and guarding an extractor shared one budget, and
-	// mex guards are numerous and near home -- so they spent the allowance and the
-	// Brain's front request was then refused for being over it. The front line
-	// depended on how many mexes we happened to own, which is exactly the coupling
-	// he is asking about. Each job now counts only its own standing towers against
-	// its own share, from targets.as DEF_FRONT / DEF_LOCAL.
-	// NOTHING BEHIND OUR OWN BASE. apexearth, watching: "we're basically making
-	// tons of defense, but we're making it all, like, behind our base."
-	//
-	// The gate only ever asked "is this forward?", and treated everything else as
-	// local work worth an allowance -- which lumps a tower covering a rear mex in
-	// with a tower on the far side of our own start position. Measured, our
-	// players' median defence sat at -0.17 to -0.12 along the home->enemy axis:
-	// past the base, away from the enemy. Ground the enemy can only reach by
-	// walking through everything else we own does not need a turret.
-	//
-	// Exception is the same one as everywhere else: if they are actually in our
-	// ground, they got there somehow and the geometry no longer argues.
+	// Nothing behind our own base: the gate only ever asked "is this forward?"
+	// and treated everything else as local work worth an allowance, lumping a
+	// rear-mex tower in with one behind our own start position. Ground the
+	// enemy can only reach by walking through everything else we own does not
+	// need a turret -- except when they are actually standing on it.
 	if ((ForwardFraction(pos) < 0.f) && !gTurtle && !BaseContested())
 		return false;
 
@@ -579,47 +505,28 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 			+ " enemies=" + ai.GetEnemyTeamSize());
 	}
 
-	// Something to defend against. Frontier sites skip this test, and so does the
-	// opening: before either side has an army a single known raider still justifies
-	// one tower, which is what the old gate's `mobileThreat > 0` clause bought.
-	// A site on the team's defence line is worth building whatever the global
-	// threat gate says: that is where the attacks land, and a tower there that
-	// arrives late is a tower that arrives never. apexearth: "treat defenses
-	// more important, at least when they're at that team defense area in the
-	// middle".
-	// The tech lead's job is narrow: get the plant up, make advanced cons, make
-	// T2 mexes, then keep scaling economy. apexearth: "they shouldn't even really
-	// be building too many defenses unless they are feeling threatened -- focus
-	// on eco and the T2". Every tower it builds is metal the team pooled for tech
-	// spent on something else. Threat still overrides: staying alive is the one
-	// early job it does have.
-	// The lead's reticence is a smaller budget now, not a refusal -- see
-	// DefenceAllowedAt.
+	// Something to defend against. The opening bypasses this test: before either
+	// side has an army, a single known raider still justifies one tower. A site
+	// on the team's defence line is worth building regardless of the global
+	// threat gate -- that is where attacks land, and a tower there that arrives
+	// late arrives never.
+	//
+	// The tech lead's reticence toward defence is a smaller budget (see
+	// DefenceAllowedAt), not a refusal -- its job is the plant, advanced cons and
+	// T2 mexes, but threat still overrides since staying alive is its one early
+	// job too.
 
 	// The edge of what we hold, with the gadget front kept as a second opinion
 	// where it exists.
 	const bool onLine = OnBorder(pos) || NearFront(pos);
 
 	const bool early = (ai.frame <= 5 * MINUTE) && (threat > 0.f);
-	// A BACK-LINE cluster needs more than "the enemy owns an army somewhere".
-	// gPorcArmed is global and trips as early as 2.3 min, so on its own it let
-	// every quiet rear mex through and they got walled while the front had
-	// nothing. apexearth: "too much defenses being spent in the back line when
-	// they could have been made up front to support the front line."
-	//
-	// Border sites are unchanged -- that is where the fighting is.
-	//
-	// LosingGround() used to open this gate too, which made every rear cluster on
-	// the map eligible the moment we fell behind. Being behind is precisely when
-	// build power must go to army instead, and the border is already covered by
-	// the clause above, so it no longer bypasses the rear guard.
-	// A PIERCED FRONT IS WHY THE BASE NEEDS COVER TOO. apexearth: "when frontlines
-	// do get pierced, it is these little raider units that do lots of damage to
-	// us. Easily avoidable with basic base defense coverage." This refused every
-	// non-border cluster outright -- 21 "refused here, rear" in one game -- so a
-	// raider that got through met nothing. The rear is allowed again, but only
-	// while the defence budget is genuinely unspent, which is what stops it going
-	// back to walling quiet mexes.
+	// A back-line cluster needs more than "the enemy owns an army somewhere":
+	// gPorcArmed alone let every quiet rear mex through while the front had
+	// nothing. Border sites bypass this -- that is where the fighting is. The
+	// rear is allowed only while the defence budget is genuinely unspent, so a
+	// raider that pierces the front still meets something without going back to
+	// walling quiet mexes.
 	if (!onLine && !early && !Brain::UnderBudget("fence"))
 		return;
 
@@ -629,13 +536,9 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 		&& !early && !onLine)
 		return;
 
-	// A front-line cluster still needs an enemy army to be worth walling. On a
-	// small map almost every cluster reads as on-line, so `onLine` alone approved
-	// the whole map and DefaultMakeDefence put a tower on every defence point.
-	// Measured over five tournaments: static defence 15.5-21% of our metal
-	// against stock's 7-8.4%, and halving our own front-tower rule
-	// (PORC_ADD_CAP 4 -> 2) moved it 16.4% -> 16.8%, i.e. not at all -- the spend
-	// is this call, not ours.
+	// A front-line cluster still needs an enemy army to be worth walling: on a
+	// small map almost every cluster reads as on-line, so `onLine` alone would
+	// approve the whole map and DefaultMakeDefence would tower every point.
 	if (!gPorcArmed && !gTurtle && !LosingGround() && !early)
 		return;
 
@@ -683,7 +586,7 @@ const float AA_MAX_PCT   = 0.50f;
 // 820/750, corflak/corerad 850/800, legflak 820).
 const float AA_HEAVY_PER = 1500.f;
 // No ceiling: heavy AA is already proportional to the enemy's observed air
-// value through AA_HEAVY_PER. apexearth: "no AA heavy max".
+// value through AA_HEAVY_PER.
 
 // Air is over-counted and ground under-counted by simple visibility: aircraft
 // fly over us constantly, ground sits in fog. Weight ground up, and average both

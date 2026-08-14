@@ -2,15 +2,13 @@ namespace Builder {
 
 // How many of ONE factory def (standing + under construction, this player's
 // own count -- CCircuitDef is per-instance) is enough. Past this, refuse the
-// engine's own DefaultMakeTask offer of another one. Not zero-risk to set
-// low: a strong economy legitimately wants more than one bot lab to
-// parallelize production, so this is deliberately generous rather than
-// tuned tight -- the bug this guards against was 8-10 in a few minutes, not
-// a healthy player choosing a second or third.
-// Derived from income rather than fixed. A player on 400 metal/second and a
-// player on 40 do not want the same number of plants, and a full bank means the
-// plants we have are not keeping up -- apexearth: "if we are full on metal then
-// obviously we need more factories/builders spending it."
+// engine's own DefaultMakeTask offer of another one. Deliberately generous
+// rather than tuned tight: a strong economy legitimately wants more than one
+// bot lab to parallelize production.
+//
+// Derived from income rather than fixed: a player on 400 metal/second and a
+// player on 40 do not want the same number of plants, and a full bank means
+// the plants we have are not keeping up with what we can spend.
 const float FACTORY_PER_INCOME  = 60.f;
 const int   FACTORY_FULL_BONUS  = 2;
 
@@ -24,13 +22,11 @@ int FactoryTypeCap()
 
 // The count cap alone does not close the race that causes the overshoot:
 // CCircuitDef.count only increments once a builder's nanolathe actually
-// STARTS the structure (same delay HaveT1BotLab() had), so several idle
-// constructors evaluated inside that walk-to-site window can all read the
-// same under-cap count and all get granted a build in turn -- apexearth,
-// watching live minutes after the count-cap fix shipped: "teal has 7 or 8
-// t1 botlabs... keeps making more over time... this is a bug." Same
-// per-def spacing-gate pattern gRezzerDefs/REZ_SPACING already use
-// elsewhere in this file for the identical class of race.
+// STARTS the structure, so several idle constructors evaluated inside that
+// walk-to-site window can all read the same under-cap count and all get
+// granted a build in turn. Same per-def spacing-gate pattern
+// gRezzerDefs/REZ_SPACING already use elsewhere in this file for the
+// identical class of race.
 const int FACTORY_REQUEST_SPACING = 30 * SECOND;
 array<int> gNextFactoryRequest(ai.GetDefCount() + 1);
 
@@ -60,8 +56,6 @@ const float CON_FAR_FRAC = 0.72f;
 // income from it. The general bar also uses the enemy CENTROID, which on an 8v8
 // is the average of sixteen scattered players and therefore sits mid-map -- so
 // 0.72 of the way to it lands in neutral ground we should simply be taking.
-// apexearth, ten minutes into a game: "we've left a lot of open mexes that we
-// should have easily just gone ahead and taken."
 const float MEX_FAR_FRAC = 0.92f;
 
 // The raw projection of a position onto the home->enemy axis: 0 at our base,
@@ -133,15 +127,10 @@ bool PastFrontFrac(const AIFloat3& in where, float frac)
 //
 // Shared by both places a threat check can end a mex task -- refuse (before
 // ever accepting one) and abandon (Reevaluate re-checks a task already in
-// progress on every step of the walk to it). apexearth, watching live: "the
-// commander only goes forward to build mexes -- we lose fights and end up
-// with almost none. Need more constructor aggression in building mexes
-// behind us." Traced to the refuse path having this exemption and the
-// abandon path NOT having it: a constructor could accept a rear mex fine,
-// then get knocked off it on a later re-evaluation by the exact same
-// unprotected geometric-fallback reading -- five abandon events on the same
-// mex in under 30 seconds, all at threat=5, barely over CON_THREAT_VETO's
-// 4.0. One rule, one place, used by both callers now.
+// progress on every step of the walk to it). Without this, a constructor
+// could accept a rear mex fine, then get knocked off it on a later
+// re-evaluation by the same unprotected geometric-fallback reading that the
+// refuse path exempts. One rule, one place, used by both callers now.
 float MexHeat(const AIFloat3& in site, float heat)
 {
 	if ((heat > CON_THREAT_VETO) && !PastFrontFrac(site, MEX_FAR_FRAC))
@@ -177,11 +166,8 @@ int gNextFoeDiag = 0;
 // Every DEFENCE task in this file passed SQUARE_SIZE*2 or *4 -- 16 or 32 elmos
 // -- while TaskB::Common's own default is SQUARE_SIZE*32, i.e. 256. That
 // effectively demanded a buildable site on the exact point handed in, and the
-// points come from StandoffPos/geometry with no buildability check at all.
-// Measured consequence: script-placed towers were ACCEPTED by a builder (probe
-// inside IBuilderTask::CanAssignTo showed corllt accepted six times in one
-// game) and then never completed, while stock CircuitAI's own defence, which
-// picks sites from real defence clusters, built normally.
+// points come from StandoffPos/geometry with no buildability check at all,
+// so a builder could accept the task and then never complete it.
 const float DEF_SHAKE = SQUARE_SIZE * 32;
 
 float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
@@ -198,8 +184,7 @@ float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 	// 1-D test and wrong in two ways that matter here: with enemies spread out
 	// the centroid sits where nobody is, and the projection ignores
 	// perpendicular distance entirely -- so a site beside an enemy army, but
-	// not far along that axis, reads perfectly safe. That is the shape of
-	// apexearth's report: "I still see cons running into enemy fire too much."
+	// not far along that axis, reads perfectly safe.
 	//
 	// GetEnemyCostAt returns a COUNT of enemy units in the radius despite its
 	// name (CircuitAI.cpp). It is LOS-gated, which is acceptable precisely
@@ -216,11 +201,9 @@ float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 	}
 	if (foes >= CON_FOE_COUNT)
 		return CON_THREAT_VETO + 1.f;
-	// THE THREAT MAP READS ZERO. Measured over a 20-minute 4v4: 121 samples, 0
-	// nonzero, max 0.00 -- so every CON_THREAT_VETO test passed unconditionally
-	// and constructors walked wherever they liked. apexearth, watching: "still
-	// see us sending construction units directly into clearly very dangerous
-	// area". Same dead signal that stopped the commander retreat ever firing.
+	// THE THREAT MAP READS ZERO almost everywhere, so a CON_THREAT_VETO test
+	// against it alone passes unconditionally and constructors walk wherever
+	// they like. Same dead signal that stopped the commander retreat ever firing.
 	//
 	// Geometry is the fallback: a site past the front is treated as hostile.
 	// Crude next to a real threat map, but it is answering with data that exists.
@@ -237,24 +220,18 @@ bool RezSpotHot(CCircuitUnit@ unit)
 }
 
 // Earlier than RezSpotHot's own front-crossing line (PastFront's 72%), and
-// gated on a team-state signal rather than distance alone. apexearth: "make
-// our rezbots reclaim instead of resurrecting when they are in danger. If
-// the enemy influence is creeping towards them... By the time they even
-// take damage it is almost always too late."
+// gated on a team-state signal rather than distance alone, so a rez bot can
+// switch to reclaiming before it actually takes damage.
 //
-// A raw distance-to-enemy-centroid proxy was tried for exactly this kind of
-// early warning already (BaseUnderAttack(), for commander safety) and
-// measured actively harmful on this map: Comet Catcher is small enough that
-// the enemy centroid sits close to home from ~1 minute in for the ENTIRE
-// game regardless of whether anyone is actually attacking -- it read map
-// scale, not danger, and crushed the win rate before being disabled
-// (COMM_BACK_WALL_ON, see its own comment). Do not repeat that mistake here.
+// A raw distance-to-enemy-centroid proxy (BaseUnderAttack(), for commander
+// safety) is not reused here: on a small map the centroid sits close to home
+// from minute one regardless of whether anyone is attacking, reading map
+// scale rather than danger.
 //
 // PastFrontFrac is relative instead of absolute -- how far along the
 // home->enemy axis THIS position specifically sits -- and combining it with
-// Military::LosingGround() (already used by PreferReclaim() for the same
-// "we are under pressure" reasoning) keeps this from firing on ordinary
-// forward positioning during a game we are winning.
+// Military::LosingGround() (the same "under pressure" signal PreferReclaim()
+// uses) keeps this from firing on ordinary forward positioning while winning.
 const float REZ_EXPOSED_FRAC = 0.55f;
 
 bool RezBotExposed(CCircuitUnit@ unit)

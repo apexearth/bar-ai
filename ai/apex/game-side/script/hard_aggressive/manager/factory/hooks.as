@@ -1,20 +1,11 @@
 namespace Factory {
 
-// THE PENDING RECRUIT QUEUE, MIRRORED IN SCRIPT.
-//
-// CFactoryManager owns the real one (factoryTasks) and throttles its OWN
-// producers against it: UpdateBuildPower and UpdateFirePower both open with
-// CanEnqueueTask(), which is `factoryTasks.size() < factories.size() * 2`.
-// Neither that nor GetTasks is registered in FactoryScript.cpp -- the bound
-// surface is DefaultMakeTask, Enqueue, GetRoleDef and GetFactoryCount -- so
-// every Enqueue our rules make is blind and appends unconditionally. Enqueue
-// itself is `new CRecruitTask` + push_back: no dedup, no cap, no look at what
-// is already queued. A task leaves only via DequeueTask, when its unit
-// finishes or it is aborted.
-//
-// These two hooks are the only view of that list available from here, so the
-// register is rebuilt from them. Recruit tasks arrive as manager type FACTORY
-// with build type RECRUIT.
+// The pending recruit queue, mirrored in script. CFactoryManager's own list
+// (factoryTasks) and its throttle (CanEnqueueTask) are not bound to
+// FactoryScript.cpp -- only DefaultMakeTask, Enqueue, GetRoleDef and
+// GetFactoryCount are -- so every Enqueue our rules make is blind and appends
+// unconditionally, with no dedup or cap. These two hooks are the only view of
+// that list available from here, so the register is rebuilt from them.
 array<IUnitTask@> gQTask;
 
 void AiTaskAdded(IUnitTask@ task)
@@ -74,10 +65,7 @@ uint QueueUnstarted()
 CCircuitUnit@ gT1FacUnit = null;
 
 // How many factories THIS instance currently has standing, of any kind or
-// tier. Nothing in this codebase asked "do we have any factory at all" --
-// grepped, zero hits for BuildType::FACTORY logic anywhere in builder.as --
-// so a player that lost its last one had no way back. See HaveAnyFactory()
-// and its use in the commander branch below.
+// tier. See HaveAnyFactory() and its use in the commander branch below.
 int gFactoryCount = 0;
 // Every live factory, not just the base-plan anchor. The nano band is latched to
 // the FIRST factory for the whole game, so every plant built after it -- and the
@@ -174,16 +162,10 @@ void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 		Brain::ReleaseFactory(unit.id);
 }
 
-// Any factory at all, of any kind or tier -- not just the T1 opener.
-// apexearth, watching a Comet Catcher 4v4 live: "something still seems to
-// make our AI go super dumb and just stop making any progress... it feels
-// more like we disappeared." Traced with tools/spending_timeline.py: a
-// player's last factory died at exactly the minute its spending (T1/T2/
-// factories/defence, all of it) flatlined to zero, and its commander then
-// did nothing for the next three minutes -- banking metal it never spent --
-// before dying to an ambush. See the commander branch in builder.as, which
-// is the only place this matters: any other builder that could have used
-// this is, by definition of the state being checked, already dead.
+// Any factory at all, of any kind or tier -- not just the T1 opener. See the
+// commander branch in builder.as, which is the only place this matters: any
+// other builder that could have used this is, by definition of the state
+// being checked, already dead.
 bool HaveAnyFactory()
 {
 	return gFactoryCount > 0;
@@ -200,17 +182,9 @@ void AiSave(OStream& ostream)
 /*
  * New factory switch condition; switch event is also based on eco + caretakers.
  */
-// Every AiLog line was unanchored in time, so a log could show the rush firing
-// while saying nothing about *when* -- which is the only thing that matters for a
-// deadline of "T2 before 10 minutes". Stamp everything.
-// Log prefix: game time AND team id.
-//
-// Every AI instance on the map writes to one infolog behind the same
-// "Skirmish AI <BARbarIAn Apex-apex>:" prefix, so without the team id four
-// players' lines are indistinguishable. That made the questions this strategy
-// actually raises -- who is the lead, who is slinging, who teched first --
-// unanswerable from a log, and forced them to be guessed at instead. Prefix
-// every line and they become a per-team timeline. tools/trace_flow.py parses it.
+// Log prefix: game time AND team id. Every AI instance on the map writes to
+// one infolog behind the same shared prefix, so without the team id, four
+// players' lines are indistinguishable. tools/trace_flow.py parses this.
 string T()
 {
 	return "[" + formatFloat(float(ai.frame) / float(MINUTE), "", 0, 1) + "m t"
@@ -231,11 +205,9 @@ void UpdateRushReclaim()
 		return;
 	if (gT1FacUnit is null)
 		return;
-	// Only when the metal is actually wanted. apexearth, watching a 1v1: "we
-	// reclaimed the t1 lab but we still had plenty of resource so that wasn't
-	// necessary." The rule exists to unstick a rush that cannot afford the
-	// plant; with a full bank it is destroying a working factory to bank metal
-	// that is already spilling.
+	// Only when the metal is actually wanted: the rule exists to unstick a rush
+	// that cannot afford the plant; with a full bank it is destroying a working
+	// factory to bank metal that is already spilling.
 	if (aiEconomyMgr.isMetalFull || (aiEconomyMgr.metal.current > RECLAIM_LAB_BANK))
 		return;
 	// The advanced plant must EXIST, not merely have been chosen.

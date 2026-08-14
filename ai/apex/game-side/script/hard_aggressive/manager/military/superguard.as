@@ -3,10 +3,6 @@ namespace Military {
 //------------------------------------------------------------------------------
 // T3 HEAVIES STAND ON THE DEFENCE LINE INSTEAD OF WALKING OUT ALONE.
 //
-// apexearth: "we make T3 units but then fail to really defend ourselves using
-// that T3... they're often the toughest things in the game so they should be
-// standing in front of our T3 defense helping to defend the base."
-//
 // CMilitaryManager::DefaultMakeTask has one branch for the SUPER role, and for a
 // MOBILE super it is `Enqueue(TaskF::Common(ATTACK))` -- a brand new CAttackTask
 // holding exactly one unit, the frame that unit finishes. So a Korgoth crosses
@@ -51,8 +47,7 @@ int gSuperHeld = 0;
 // attribute melee is corjugg (Behemoth), corkorg (Juggernaut) and armbanth
 // (Titan) -- the ones that detonate on death. Their value is delivered by
 // ARRIVING at something of the enemy's, so parking one on our own defence line
-// is the one place it can never pay for itself. apexearth: "these are extremely
-// powerful units which should be braver than usual and attack enemy bases."
+// is the one place it can never pay for itself.
 //
 // The same pair keys CAttackTask's charge in C++: it ignores the engage margin
 // (FindTarget) and paths straight at the target rather than round the map edge

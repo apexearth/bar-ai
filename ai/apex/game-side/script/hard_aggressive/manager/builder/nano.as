@@ -1,16 +1,9 @@
 namespace Builder {
 
 // Construction turrets for the eco lead, laid out as rows behind the base rather
-// than piled where a constructor happens to stand.
-//
-// apexearth: "ideally it creates a long rectangle of nanos and builds the eco
-// all around those", and separately "boost its build power or start building
-// more in parallel if it's used all the nanos in one area already". A turret
-// only assists what is inside its radius, so stacking them on one yard
-// saturates: the tenth turret queues behind the same work as the first.
-//
-// apexearth: "the organization of the eco and the nanoturrets is very important
-// to an efficient strategy."
+// than piled where a constructor happens to stand. A turret only assists what
+// is inside its radius, so stacking them on one yard saturates: the tenth
+// turret queues behind the same work as the first.
 string armnanotc("armnanotc"); string cornanotc("cornanotc"); string legnanotc("legnanotc");
 
 // Nanos take the band nearest the anchor so their assist radius reaches both the
@@ -21,28 +14,15 @@ bool BandSpot(CCircuitUnit@ unit, CCircuitDef@ def, bool nano, AIFloat3& out spo
 	return Base::Spot(unit, def, nano ? Base::NANO : Base::HEAVY, spot);
 }
 
-// Only while metal is genuinely piling up. The eco lead's measured failure is
-// income it has no capacity to spend -- over 7 sixty-minute games it PRODUCED
-// 23% more metal than its teammates and BUILT 36% less, holding 12 constructors
-// to their 28, and it was the only player never to reach T3. Buying the capacity
-// to spend is what converts that bank into economy.
-//
-// Gating on the bank rather than on income is what keeps this off the list of
-// rules that quietly ate the economy: when metal is tight this cannot fire at
-// all, so it never displaces a mex upgrade.
+// Only while metal is genuinely piling up. Gating on the bank rather than on
+// income keeps this off the list of rules that quietly eat the economy: when
+// metal is tight this cannot fire at all, so it never displaces a mex upgrade.
 const float NANO_MIN_BANK = 0.5f;   // share of metal storage standing unspent
 const float NANO_RICH_BANK = 0.2f;  // ...once income alone justifies the turret
-// MEASURED AGAINST INTUITION, AND INTUITION LOST HERE.
-//
-// apexearth: "I make nano turrets even at less than 20m/sec." Tried at 15, on
-// its own, 6 games vs medium at +100: turrets FELL 15.0 -> 13.5 per player,
-// army 1,811,160 -> 1,506,964, waste 1.6% -> 5.8%. Building them early appears
-// to take metal from the expansion that would have paid for more of them later.
-//
-// That is a statement about THIS benchmark, not about his games -- a human
-// places them where they are needed and keeps them busy, and the 20-minute
-// +100 format rewards compounding economy over early build power. Left tunable
-// so the question can be reopened cheaply.
+// Building nanos below this income measured as taking metal from the expansion
+// that would have paid for more of them later, on the benchmark's short-game
+// format; a human keeps early turrets busy in a way the benchmark does not
+// model, so this is left tunable rather than trusted as a general answer.
 const float NANO_INCOME_GATE_DEF = 60.f;
 
 float NanoIncomeGate()
@@ -55,12 +35,8 @@ float NanoIncomeGate()
 // The engine's own per-player unit limit, from the `maxunits` modoption
 // (modoptions.lua: default 2000, min 500, max 32000).
 //
-// This is the only real ceiling there is, and it is the one worth respecting --
-// apexearth: "you can detect the in-game hard unit cap (usually 2000 units per
-// player) and do a proportion cap but still it should be a high cap, need lots
-// of builders to make the big units... 20 titans goes a long way in a game
-// and... thats just 20 units :)". Slots spent on build power buy the few slots
-// that matter.
+// This is the only real ceiling there is: slots spent on build power buy the
+// few slots that matter for the expensive units this cap otherwise starves.
 int gUnitCap = 0;
 
 int UnitCap()
@@ -100,15 +76,11 @@ int NanoCap()
 	const int ceiling = CapShare(NANO_CAP_SHARE);
 	return (cap > ceiling) ? ceiling : cap;
 }
-// HOW MANY MAY BE UNDER CONSTRUCTION AT ONCE. This, not NanoCap(), is what was
-// actually limiting us. apexearth: "there are a lot of times when I'm playing and
-// I need to build a lot more nanoturrets to keep up with the amount of energy and
-// resources that I have. When players play, they can have hundreds of these."
-//
-// Measured across 6 games at +100: 533 turrets over 48 player-games -- 11 each --
-// while NanoCap() allowed 42 at 100 metal/s and 102 at 400. The cap was never
-// reached because only FOUR could ever be in flight, at one order per period.
-// Four in flight is a trickle on an economy that can pay for twenty at once.
+// HOW MANY MAY BE UNDER CONSTRUCTION AT ONCE -- this, not NanoCap(), was what
+// was actually limiting turret counts: NanoCap() allowed far more than were
+// ever reached because only a handful could be in flight at one order per
+// period. A trickle-in-flight limit starves a cap that would otherwise be paid
+// for by the economy.
 const int   NANO_INFLIGHT_BASE = 4;
 const float NANO_INFLIGHT_PER_INCOME = 25.f;   // one more in flight per this much
 const int   NANO_INFLIGHT_FULL = 12;           // extra while the bank is at the cap
@@ -122,11 +94,9 @@ int NanoInFlight()
 }
 const int   NANO_STALE    = 12;   // beyond this the counter has drifted, resync
 const int   NANO_PERIOD   = 15 * SECOND;
-// While the bank is at the cap, order them as fast as the placement allows and
-// let far more of them be in flight at once. apexearth: "in a game like that we'd
-// need like a ton of nano turrets, 100s of butlers, all working to make the
-// expensive stuff." A period is the wrong bound for that -- the thing that should
-// stop us is running out of bank or of ground, both of which are checked anyway.
+// While the bank is at the cap, order them as fast as placement allows and let
+// far more be in flight at once -- a period is the wrong bound here, since what
+// should stop us is running out of bank or of ground, both checked anyway.
 const int   NANO_FULL_PERIOD   = 1 * SECOND;
 const int   NANO_FULL_INFLIGHT = 24;
 int gNextNano = 0;
@@ -143,11 +113,10 @@ CCircuitDef@ NanoDef()
 const float NANO_ASSIST_R = 400.f;
 
 // Our factories, thinnest first by construction turrets already inside assist
-// range. EVERY one is returned, not just the thinnest: measured 2026-08-13, only
-// 29% of nanos resolved a site when the single thinnest factory was the one
-// chance -- its 400-elmo neighbourhood fills, FindBuildSiteNear fails, and the
-// nano fell all the way back to a band slot up to 1345 away. Not a cap: what
-// bounds this is the ground running out at every plant we own.
+// range. EVERY one is returned, not just the thinnest: a single factory's
+// 400-elmo neighbourhood fills, FindBuildSiteNear fails, and the nano falls all
+// the way back to a band slot far away. What bounds this is the ground running
+// out at every plant we own, not a count.
 array<CCircuitUnit@> FactoriesByNeed()
 {
 	array<CCircuitUnit@> ranked;
@@ -185,11 +154,8 @@ int NanoCount()
 	return (d is null) ? 0 : d.count;
 }
 
-// Where our construction turrets actually stand, as a centroid.
-//
-// apexearth: "we should try to place gantries near existing nano turrets so they
-// build faster". A gantry is 8,400 metal and a Titan far more, so the difference
-// between building one inside an assist field and outside it is minutes.
+// Where our construction turrets actually stand, as a centroid: a gantry built
+// inside an assist field finishes in a fraction of the time one outside it does.
 bool NanoCluster(AIFloat3& out spot)
 {
 	CCircuitDef@ d = NanoDef();
@@ -217,10 +183,6 @@ bool NanoCluster(AIFloat3& out spot)
 }
 
 // Metal is at the cap and we are not converting it into anything.
-//
-// apexearth: "we're totally metal full and just aren't able to spend it... If we
-// are metal full we need to just keep making more gantries and more butler
-// assist guys and more nano turrets."
 bool MetalFull()
 {
 	return aiEconomyMgr.isMetalFull;
@@ -249,14 +211,8 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 
 	// A gantry is a 16x16 footprint -- the largest thing we ever place -- and on
 	// a hilly map there may be no flat square that big anywhere near the nanos.
-	// This used to be ONE FindBuildSiteNear call at a fixed radius: when it
-	// failed it returned null and said nothing, every call, for the whole game.
-	// apexearth, on Carrot Mountains: "it has lots of hills... i think gantry
-	// locations are hard to find. can you help make sure we find spots for them?"
-	//
-	// Widen instead of giving up. Assisting nanos are a preference, not a
-	// requirement -- a gantry built across the base still builds; a gantry that
-	// never gets placed does not.
+	// Widen instead of giving up: assisting nanos are a preference, not a
+	// requirement, and a gantry built across the base beats one never placed.
 	AIFloat3 near;
 	const bool haveNano = NanoCluster(near);
 	if (!haveNano)
@@ -295,27 +251,20 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 	return post;
 }
 
-// A TURRET ON THE FRONT IS A REPAIR STATION. apexearth: "on frontlines they're
-// also useful for repairing."
-//
-// Distinct from EcoNano below in purpose and in placement: that one buys build
-// power beside the factories, this one keeps the defence line and the army
-// standing by repairing them where they fight. Same 210-metal unit, and it is
-// the cheapest repair in the game -- a damaged Pulsar or a mauled squad
-// otherwise walks home or dies.
-// Later and fewer than the first attempt: 40 metal/s and one every 20 s put
-// them up while the economy was still compounding, and they cost 15% army
-// alongside the gate change. A repair station is worth having once there is
-// something worth repairing.
+// A turret on the front is a repair station. Distinct from EcoNano below in
+// purpose and placement: that one buys build power beside the factories, this
+// one keeps the defence line and the army standing by repairing them where
+// they fight. Gated later and to a smaller share than an earlier attempt,
+// which put them up while the economy was still compounding and cost army
+// share for it -- a repair station is worth having once there is something
+// worth repairing.
 const int   FRONT_NANO_PERIOD = 45 * SECOND;
 const float FRONT_NANO_INCOME = 90.f;   // a real economy, not an early one
 const float FRONT_NANO_SHARE  = 0.15f;  // of NanoCap(), so it stays a minority
 int gNextFrontNano = 0;
-// AROUND the line, not on one point of it. apexearth: "just have nanos be built
-// around the frontline. that's the proper thing to do there." FrontNear returns
-// the front cell nearest the CONSTRUCTOR, so several builders working the same
-// stretch all resolve to the same cell and stack there; this spreads them the
-// way gFrontPlaced spreads the front towers in crew.as.
+// AROUND the line, not on one point of it: FrontNear returns the front cell
+// nearest the CONSTRUCTOR, so several builders working the same stretch all
+// resolve to the same cell and stack there without this spacing.
 const float FRONT_NANO_SPACING = 420.f;
 array<AIFloat3> gFrontNanoPlaced;
 
@@ -340,8 +289,8 @@ IUnitTask@ FrontNano(CCircuitUnit@ unit)
 		return null;
 	if (!OnMap(spot))
 		return null;
-	// BEHIND the line, not on it. apexearth: "never send a constructor to build a
-	// tower in a dangerous place."
+	// BEHIND the line, not on it: never send a constructor to build somewhere
+	// dangerous.
 	if (ThreatFor(unit, spot) > CON_THREAT_VETO)
 		return null;
 
@@ -368,21 +317,11 @@ IUnitTask@ FrontNano(CCircuitUnit@ unit)
 
 IUnitTask@ EcoNano(CCircuitUnit@ unit)
 {
-	// Turrets are for the eco lead OR for anyone whose bank is full: a player at
-	// the metal cap is wasting income, and build power is the thing that turns it
-	// back into units.
-	// BUILD POWER SHOULD TRACK INCOME, NOT ONLY A FULL BANK.
-	//
-	// The old gate was "eco lead, or metal is FULL". Measured after raising the
-	// in-flight limit: 576 turrets across 48 player-games, 12 each, on economies
-	// running 100-400 metal/s -- because a full bank is a rare instant, not a
-	// state. apexearth: "I need to build a lot more nanoturrets to keep up with
-	// the amount of energy and resources that I have. When players play, they can
-	// have hundreds of these."
-	//
-	// A turret is 210 metal for 140 build power that never walks anywhere. At
-	// NANO_INCOME_GATE metal/second the income alone pays for one every few
-	// seconds, so the bank check below is what should decide, not a cap event.
+	// BUILD POWER SHOULD TRACK INCOME, NOT ONLY A FULL BANK: a full bank is a
+	// rare instant, not a state, so gating solely on "eco lead, or metal full"
+	// starved turret count on a compounding economy. Above NANO_INCOME_GATE,
+	// income alone pays for one every few seconds, so the bank check below is
+	// what should decide, not a cap event.
 	const bool richEnough = (aiEconomyMgr.metal.income >= NanoIncomeGate());
 	// Three independent reasons, not a role gate: the eco lead builds them as its
 	// job, anyone at the metal cap needs the sink, and any real income justifies
@@ -419,9 +358,8 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	if (outstanding >= NanoInFlight())
 		return null;
 
-	// A CARETAKER HAS TO REACH SOMETHING. apexearth: "con turrets are not being
-	// made near factories very well, usually we just have con turrets in the
-	// middle of nowhere." The band is tried only once no factory has room left.
+	// A caretaker has to reach something: the band is tried only once no factory
+	// has room left.
 	AIFloat3 here;
 	bool sited = false;
 	array<CCircuitUnit@> facs = FactoriesByNeed();
@@ -442,10 +380,8 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		return null;
 
 	// Nanos go TIGHT, right next to each other, on a grid pitch that leaves the
-	// walkways clear. apexearth: "nano's should be placed right next to each
-	// other usually." Spreading them was the earlier fix for a naval builder
-	// walling itself in, and it was the wrong trade -- it bought walkability with
-	// sprawl. Tight rows plus lanes is what buys both.
+	// walkways clear -- spreading them out was the wrong trade against a naval
+	// builder walling itself in; tight rows plus lanes buys both.
 	bool created = false;
 	IUnitTask@ post = Requests::Take(unit, want, Task::BuildType::NANO,
 			Task::Priority::NORMAL, here, 0.f, 0.f, created);

@@ -1,22 +1,13 @@
 namespace Builder {
 
-// What the AI knows about which extractors are ours.
+// True while we own a plain mex and can build the advanced one. The big
+// optional investments below (gantry, nuke silo, Pulsar) test this before
+// spending: a moho pays for them, they do not pay for it.
 //
-// The ally-mexup VETO that used to live here is gone. apexearth: "that whole bit
-// of code where we refuse to build mex upgrades for allies is a terrible idea."
-// It was written for a real failure -- CEconomyManager picks the upgrade spot
-// through the ALLY-wide GetFriendlyUnit lookup, so an ally's extractor can be
-// offered and the task cannot complete -- but the cure was worse: it needed to
-// know which mexes were ours, got that wrong (ourMexes=4 on a side holding 150+),
-// and silently refused OUR OWN upgrades. An aborted task costs one constructor
-// trip; refusing upgrades costs the whole metal economy.
-//
-// UPGRADES FIRST. apexearth, repeatedly: "we make pinpoints or nuke launchers
-// before upgrading any mex... you still aren't doing tier 2 mex building first."
-//
-// True while we own a plain mex and can build the advanced one. The big optional
-// investments below (gantry, nuke silo, Pulsar) test this before spending: a
-// moho pays for them, they do not pay for it.
+// CEconomyManager picks the upgrade spot through an ALLY-wide GetFriendlyUnit
+// lookup, so an ally's extractor can be offered and the task fails to
+// complete -- an aborted task costs one constructor trip, which is cheaper
+// than a veto that misidentifies our own mexes and refuses our upgrades.
 bool MexUpgradesOutstanding()
 {
 	// Literals, not the armmoho/cormoho/legmoho globals: those are declared in
@@ -31,27 +22,18 @@ bool MexUpgradesOutstanding()
 }
 
 
-// WHAT THE ENGINE ACTUALLY OFFERS.
-//
-// Three sessions have now argued about why mex upgrades are rare without ever
-// measuring whether the engine OFFERS one. Everything downstream -- the guard
-// that used to be here, the ladder order, the optional rules -- can only lose
-// offers that were made. One line a minute, counting offers by build type, so
-// "we never upgrade" can be attributed to supply or to demand rather than
-// guessed at.
+// Counts what the engine actually offers, by build type, so a low mex-upgrade
+// rate can be attributed to supply (engine never offers one) vs demand
+// (something downstream loses offers that were made).
 int gOfferMexUp = 0;
 int gOfferMex = 0;
 int gOfferOther = 0;
 int gOfferNull = 0;
 int gNextOfferLog = 0;
 
-// SPLIT BY BUILDER TIER, or the number means nothing.
-//
-// metalDefs.GetBuildDefs(unit->GetCircuitDef()) limits the upgrade search to
-// defs THIS unit can build, and only an advanced constructor can build a moho.
-// So every T1 constructor's call is structurally incapable of being offered a
-// MEXUP, and counting them together buried the real rate: 0.4% across all
-// builders says nothing about whether the advanced ones are being offered work.
+// Split by builder tier: metalDefs.GetBuildDefs limits the search to defs the
+// unit can build, and only an advanced constructor can build a moho, so
+// pooling T1 and T2 offers together dilutes the rate that actually matters.
 int gAdvOfferMexUp = 0;
 int gAdvOfferOther = 0;
 int gAdvOfferNull = 0;

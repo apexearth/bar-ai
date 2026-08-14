@@ -67,16 +67,10 @@ void EnsureCols()
 	if (gColsBuilt)
 		return;
 	gColsBuilt = true;
-	// Pitch is the FOOTPRINT of what stands in the band, in whole build cells,
-	// because that is the only pitch on which two of them touch.
-	//
-	// NANO 48: a construction turret is footprintX 3, and only turrets are given
-	// this band. ECO 64: advanced solar and the advanced converter are both
-	// footprintX 4, and they are what the eco block is made of once the economy
-	// is real; the 5-footprint solar spills one build cell past its cell and the
-	// site search closes that itself. HEAVY 144 is deliberately looser than the
-	// 6-footprint reactor that stands in it -- see BAND_BACK above for why heavy
-	// energy is not packed.
+	// Pitch is the FOOTPRINT of what stands in the band, in whole build cells --
+	// the only pitch on which two of them touch. HEAVY is deliberately looser
+	// than the reactor's own footprint; the site search closes any gap smaller
+	// than the pitch by taking the nearest position the blocking map allows.
 	BAND_BACK = {216.f, 576.f, 1440.f};
 	BAND_ROW  = { 48.f,  64.f,  144.f};
 	BAND_COL  = { 48.f,  64.f,  144.f};
@@ -129,14 +123,9 @@ bool SlotAt(int kind, int index, float& out lat, float& out depth)
 	return true;
 }
 
-// --- axis validation --------------------------------------------------------
-//
-// The axis is latched once and every band projects backward from it, so an axis
-// pointing into water or a cliff face makes the whole rectangle unbuildable and
-// nothing ever recovers. Before latching, the four right-angle orientations are
-// probed with a real structure and the front-derived one is kept unless it is
-// far worse than an alternative -- the base is meant to grow away from the
-// fighting, and that is worth giving up only when it cannot be built on at all.
+// The axis is latched once, so a bad choice (water, a cliff face) makes the
+// whole rectangle unbuildable permanently. Probe all four right-angle
+// orientations and keep the front-derived one unless another is far better.
 const int AXIS_PROBE_ROWS = 4;
 const uint AXIS_PROBE_STEP = 3;
 

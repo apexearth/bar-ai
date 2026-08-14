@@ -1,14 +1,9 @@
 namespace Builder {
 
 // A constructor that keeps getting shot will not expand, whatever the threat map
-// says at the instant we ask. apexearth: "if a con has to retreat too much in its
-// recent history it should just go into safety and make defenses. Because at that
-// point it's unable to expand due to threats."
-//
-// History rather than prediction, because prediction demonstrably misses:
-// ContestDefence above fires off ThreatFor at the build site, and in a watched
-// 20-minute game constructors died with con-veto firing ZERO times -- the shooter
-// is outside the tile being tested. Losing health is not a forecast.
+// says at the instant we ask. History rather than prediction: ThreatFor tests
+// the build site itself, and a constructor can be struck by something outside
+// that tile. Losing health is not a forecast.
 // (declared above FenceWanted, which needs it)
 const int   TROUBLE_WINDOW  = 90 * SECOND;   // quiet for this long and the count clears
 const int   FORTIFY_TIME    = 120 * SECOND;  // how long a struck con stays dug in

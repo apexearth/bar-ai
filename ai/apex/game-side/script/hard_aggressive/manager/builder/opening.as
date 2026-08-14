@@ -1,81 +1,40 @@
 namespace Builder {
 
-// THE OPENING SEQUENCE, IN THE ORDER apexearth ASKED FOR IT.
+// THE OPENING SEQUENCE:
+//   1. take the mexes already in reach (Brain::MexWant, ranked against
+//      everything else Brain::Decide considers -- see rules_offer.as/brain.as)
+//   2. get income up (this file)
+//   3. THEN the first T1 lab, and only that one (T1-total gate, factory/choose.as)
+//   4. a sentry in the base (HomeTower, waits for the lab)
+//   5. back out for more mexes and to the front line (AiMakeDefence)
 //
-//   1. take the mexes already in reach (usually one to three, sometimes none)
-//   2. get income up -- about 80 energy/s and 5+ metal/s
-//   3. THEN the first T1 lab, and only that one
-//   4. a sentry in the base
-//   5. back out for more mexes and walk to the front line
-//
-// Step 1 is now Brain::MexWant, ranked on economic value against everything
-// else Brain::Decide considers -- see rules_offer.as and brain.as, 2026-08-14
-// -- rather than an early, unconditional take; step 5 is existing behaviour,
-// AiMakeDefence's. Step 3's "only that one" is the T1-total gate in
-// factory/choose.as; step 4 is HomeTower, which now waits for the lab. What
-// lives here is step 2, which nothing in the script ever did.
-//
-// It used to be done in C++, invisibly. CEconomyManager::UpdateFactoryTasks
-// compares income against the factory's own draw, and when it falls short it
-// sets the sticky isEnergyRequired and calls UpdateEnergyTasks on the spot to
-// buy the energy that clears it (EconomyManager.cpp:1816-1820; the latch is
-// cleared only by CBEnergyTask::Finish/Cancel). With UpdateEnergyTasks
-// disabled that call builds nothing, so the latch is set and the factory is
-// blocked -- at EconomyManager.cpp:1752, before any other check -- until some
-// unrelated energy task of ours happens to finish. That is why the first
-// factory now lands at an erratic time, with several mexes ahead of it.
-//
-// Both numbers are apexearth's, from watching, and both are tunables so a
-// measurement can move them rather than an argument.
-//
-// REVERTED to 80. apexearth: "a commander alone generates 30 e/s" -- the
-// eInc=30 read at 0.4m in every opening test was the COMMANDER'S OWN passive
-// output, not one generator finished, meaning almost nothing had actually been
-// built yet at that point. The gate was never the problem; a commander with
-// real buildpower taking 3-4 minutes to add 50 more e/s on top of that is the
-// actual bug, and lowering the target would have hidden it rather than fixed
-// it. Investigate why build POWER is not converting into finished generators
-// -- commander idle time, task-switch thrash -- before touching this number
-// again.
+// Step 2 used to happen invisibly in C++: CEconomyManager::UpdateFactoryTasks
+// blocks the factory behind a sticky isEnergyRequired latch
+// (EconomyManager.cpp:1752/1816-1820) that only UpdateEnergyTasks clears. With
+// that disabled the latch never clears on its own, so this gate replaces it
+// explicitly.
 float OpeningEnergyGate() { return ai.GetTunable("apex_opening_energy_gate", 80.f); }
 float OpeningMetalGate()  { return ai.GetTunable("apex_opening_metal_gate", 5.f); }
 
-// "NEARBY", APEXEARTH'S OWN FIGURE: "within 5 seconds of walking... ~700 elmo
-// range." Originally bounded step 1 itself (ExpansionAlwaysWins taking any mex
-// the engine offered, unconditionally, ate the whole opening on a mex-rich
-// map -- apexearth: "you're walking around full of metal making more metal
-// extractors rather than starting your base"). Step 1 is a ranked want now
-// (see the header note above) and no longer needs its own gate, but the same
-// reach still bounds the post-3-minute factory-rebuild fallback in
-// rules_commander.as ("a safe mex spot still exists nearby").
+// Bounds the post-opening factory-rebuild mex fallback in rules_commander.as
+// (a mex must be genuinely close to be worth taking over rebuilding the lab).
 float OpeningMexReach() { return ai.GetTunable("apex_opening_mex_reach", 700.f); }
 
-// NO CLOCK, ON PURPOSE. apexearth: code this open-ended -- a team wiped down
-// to one constructor must re-derive the same opening from its CURRENT economy,
-// not be told "you're 40 minutes in, skip the gates". A time-based escape
-// valve is exactly the kind of thing that would relatch WRONG after a wipe:
-// the surviving constructor's own opening would read as already past its
-// deadline before it ever got to build the energy this gate exists to buy.
+// NO CLOCK, ON PURPOSE: a team wiped to one constructor must re-derive this
+// gate from its CURRENT economy, not from elapsed game time.
 //
-// OpeningEnergy below only ever proposes work through HomeEnergy, which is
-// itself demand-bounded and returns null the moment there is no beneficial
-// generator or converter left to place -- so a builder that hits that never
-// gets stuck on step 2. But `AiGetFactoryToBuild` (factory/choose.as) cannot
-// see that: it has no unit to ask HomeEnergy through, so it can only re-read
-// this gate. Without a second signal it would hold the first factory FOREVER
-// on a spot that can never reach the income gate at all -- a real deadlock,
-// not a hypothetical one, for exactly the starved-economy case this was
-// written to survive. The signal is `aiBuilderMgr.GetTaskCountOf(ENERGY)`:
-// while it is nonzero, step 2 is actively buying the income this gate is
-// waiting on and holding is correct; the moment it drops to zero with income
-// still short, nothing is left in flight to close the gap, and the gate
-// releases. Still no clock, no count, no invented number -- a real state
-// read, of the same queue Requests::Register tracks.
+// AiGetFactoryToBuild (factory/choose.as) has no unit to route through
+// HomeEnergy, so it can only re-read this gate -- without a second signal it
+// would hold the first factory forever on a spot that can never reach the
+// income target. The escape is `aiBuilderMgr.GetTaskCountOf(ENERGY)`: while
+// nonzero, step 2 is actively buying the shortfall and holding is correct;
+// once it drops to zero with income still short, nothing is left in flight
+// to close the gap and the gate releases. Still a real state read, not a
+// clock or invented number.
 int gOpenGateLog = 0;
 int gOpenEnergyJobs = 0;
-// Highest metal income this player has ever read. Never reset -- that is the
-// point: it is what lets the gate tell "still climbing from zero, first time"
-// apart from "was fine, just got raided down to zero" without a clock.
+// Never reset: lets the gate tell "still climbing from zero" apart from
+// "was fine, just raided down to zero" without a clock.
 float gOpenPeakMetalIncome = 0.f;
 
 // Is the opening gate holding the first factory back right now? Read entirely
@@ -103,17 +62,11 @@ bool OpeningNeedsEconomy()
 		|| (mInc < OpeningMetalGate());
 	if (!short_)
 		return false;
-	// MEASURED 2026-08-14, +70 handicap 8v8: four of eight teams held this gate
-	// to the 25-minute cap and never released. Every one had e=133/80 (energy
-	// fine) and m=0.0/5.0 -- not "still climbing", RAIDED. `GetTaskCountOf(ENERGY)`
-	// stayed nonzero the whole time because dozens of energy tasks were queued
-	// and simply could never finish without metal, so the queue-empty escape
-	// below never saw an empty queue. Holding a factory back here helps no one:
-	// nothing can be built at all, factory or otherwise, without metal income,
-	// so refusing the factory only removes an option, it does not fix the
-	// shortage. Once this player has ever cleared the metal gate and current
-	// income has since collapsed near zero, that is a raid, not an opening --
-	// release, and let expansion/defence do their own job at recovering income.
+	// A metal income that has cleared the gate before and has since collapsed
+	// near zero is a raid, not a slow-starting opening -- queued energy tasks
+	// can stall forever with no metal to finish them, so the queue-empty escape
+	// below never fires on its own. Release and let expansion/defence recover
+	// income instead of holding the factory back for no benefit.
 	if ((gOpenPeakMetalIncome >= OpeningMetalGate()) && (mInc < 1.f))
 		return false;
 	// Short of the gate AND nothing is currently being built to close the gap:

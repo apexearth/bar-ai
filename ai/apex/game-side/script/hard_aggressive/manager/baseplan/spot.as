@@ -12,10 +12,8 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 		return false;
 	SweepReserves();
 
-	// The band's own rectangle, with slack. This is what replaced the old check
-	// that a site had to land within a fixed distance of the cell centre: the
-	// packing pitch belongs to block_map, and the only thing the layout still has
-	// to enforce is that a structure stays in its band and out of a walkway.
+	// The band's own rectangle, with slack. Packing pitch belongs to block_map;
+	// the layout only has to enforce that a site stays in its band and off a walkway.
 	const float depthLo = BAND_BACK[kind] - BAND_SLACK;
 	const float depthHi = BAND_BACK[kind] + float(BAND_ROWS[kind]) * BAND_ROW[kind] + BAND_SLACK;
 	const float latHi = HALF_SPAN + BAND_SLACK;
@@ -80,13 +78,9 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 	return false;
 }
 
-// Can we still tech up?
-//
-// "No room to build a gantry" is the end state sprawl produces, and it was only
-// ever visible as a build that quietly never happened. This asks the terrain
-// manager the question directly -- is there a site for an advanced lab near the
-// base, and how far out did it have to go to find one -- so the layout can be
-// judged on the thing it is for rather than on a win rate.
+// Can we still tech up? Asks the terrain manager directly whether a site for an
+// advanced lab exists near the base, rather than inferring it from a build that
+// quietly never happens.
 const float TECH_PROBE_R = 1800.f;
 
 CCircuitDef@ TechProbeDef()

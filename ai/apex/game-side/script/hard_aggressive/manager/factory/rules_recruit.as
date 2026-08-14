@@ -3,17 +3,10 @@ namespace Factory {
 // Recruiting floors: things a factory must produce some of, regardless of
 // what the ratios in factory.json would otherwise pick.
 
-// WHICH RULE ANSWERS THE FACTORY, AND HOW OFTEN IT IS ASKED.
-//
-// AiMakeTask is demand-driven: CIdleTask::Update assigns, and the engine
-// re-asks whenever the line has nothing to do. So the CALL RATE is the
-// factory's idle rate, and the winner names the rule that answered.
-//
-// This is the only way to see any of it from script. CFactoryManager exposes
-// DefaultMakeTask, Enqueue, GetRoleDef and GetFactoryCount and nothing else --
-// neither GetTasks nor CanEnqueueTask is bound, so the pending recruit queue's
-// depth is invisible here. Every Enqueue we make is therefore blind: it cannot
-// see what is already queued.
+// AiMakeTask is demand-driven (CIdleTask::Update re-asks whenever idle), so
+// call rate is the factory's idle rate. CFactoryManager exposes no way to read
+// the pending queue (no GetTasks/CanEnqueueTask), so every Enqueue here is
+// blind to what's already queued -- this diagnostic is the only visibility.
 array<string> gFacWho;
 array<int>    gFacHits;
 int gFacCalls = 0;
@@ -57,17 +50,11 @@ void FactoryDiag(CCircuitUnit@ unit)
 
 IUnitTask@ AssistantWork(CCircuitUnit@ unit)
 {
-	// Nano turrets register with the FACTORY manager (CFactoryManager keeps
-	// assistants alongside factories), so they arrive here -- but every branch
-	// below is written about a factory choosing what to RECRUIT, and none can
-	// produce a valid task for one. Several end in `return null`, and for an
-	// assistant that means no task at all: CFactoryManager::DefaultMakeTask is
-	// the only thing that routes it to CreateAssistTask. The eco lead's block
-	// is the worst case -- an unconditional `return null` for anything that is
-	// not an air plant or a constructor-capable factory -- which left every
-	// turret that player owned permanently idle. apexearth, watching an 8v8
-	// live: "blue's turrets are not doing anything at all"; blue was team 0,
-	// the eco lead. Hand assistants straight to DefaultMakeTask.
+	// Nano turrets register with the FACTORY manager alongside factories, so
+	// they arrive here -- but every branch below is about RECRUITING and none
+	// can produce a task for one, so an unconditional `return null` here left
+	// every turret permanently idle. Only DefaultMakeTask routes an assistant to
+	// CreateAssistTask, so hand it there directly.
 	CCircuitDef@ nano = Builder::NanoDef();
 	if ((nano !is null) && (unit.circuitDef.id == nano.id))
 		return aiFactoryMgr.DefaultMakeTask(unit);
@@ -76,50 +63,25 @@ IUnitTask@ AssistantWork(CCircuitUnit@ unit)
 
 IUnitTask@ RezBotFloor(CCircuitUnit@ unit)
 {
-	// Rez bots from the bot lab, before anything else that lab would make --
-	// but only once there is something to reclaim or resurrect. apexearth,
-	// watching a Comet Catcher 4v4 live: "we build rez bots before we build
-	// anything else. Resurrection bots are certainly useful, but at t zero,
-	// it's not important. It isn't really important until you have stuff to
-	// reclaim or to resurrect." At game start nothing has died on either
-	// side, so this floor was competing HIGH-priority for the bot lab's very
-	// first slots against the opening mex/army push for a benefit that does
-	// not exist yet. Gated on the same wreck search EnqueueWreckReclaim
-	// already uses (WRECK_SEARCH/WRECK_MIN in builder.as) rather than a
-	// clock: it self-corrects the moment the first skirmish or scout death
-	// actually produces something worth reclaiming, instead of guessing a
-	// fixed early-game delay.
-	//
-	// Placed high (once armed) for the same reason the fighter floor is: it
-	// is a floor, not a strategy, and the branches below it -- the catch-up
-	// push, the constructor line -- would otherwise take every slot the lab
-	// has.
+	// Rez bots from the bot lab, only once there is something to reclaim or
+	// resurrect -- at game start nothing has died, so this floor would otherwise
+	// compete HIGH-priority against the opening mex/army push for no benefit.
+	// Gated on the same wreck search EnqueueWreckReclaim uses (builder.as), so it
+	// self-corrects the moment a wreck actually exists rather than guessing a
+	// fixed delay. Placed high once armed, same as the fighter floor: it's a
+	// floor, not a strategy, and the branches below would otherwise take every
+	// slot the lab has.
 	if (HaveT1BotLab() && (ai.frame >= gNextRez)) {
 		CCircuitDef@ lab = T1BotLab();
 		CCircuitDef@ rez = RezBotDef();
 		if ((lab !is null) && (rez !is null) && (unit.circuitDef.id == lab.id)
 			&& rez.IsAvailable(ai.frame))
 		{
-			// Replaced the binary "is there a wreck at all" armed-check, then
-			// a scaled-but-still-blind-query version. Root cause found: found
-			// via SSkirmishAICallbackImpl::getFeaturesIn -- the non-cheat path
-			// is `GetCallBack(id)->GetFeatures(...)`, which is LOS-gated, not
-			// a plain spatial query. There is no unit standing at home or at
-			// an enemy-centroid midpoint, so those queries return empty no
-			// matter the radius -- confirmed live: even a 50000-elmo sanity
-			// radius from home returned wreckValueHuge=0 in a game with
-			// mKillReal in the thousands. This matches the project's other
-			// LOS/vision-gated-callback surprises.
-			//
-			// Fix: stop querying from a point with no vision. Every mobile
-			// builder already scans WRECK_RICH_R around itself for the
-			// "rich corpse pile" check every ~3s (builder.as); that scan DOES
-			// have vision, because a unit is standing right there. It now
-			// records what it sees via Builder::NoteWreckSeen, and this reads
-			// the sighting back instead of taking its own blind sample.
-			// apexearth: "if theres any reclaim we've seen on the map...
-			// start making some... a rezbot costs like what, 130 metal?...
-			// so for every 500 wrecked metal seen make 1 rezbot???"
+			// getFeaturesIn is LOS-gated (SSkirmishAICallbackImpl::getFeaturesIn
+			// -> GetCallBack(id)->GetFeatures), not a plain spatial query, so
+			// querying from a point with no unit standing there returns empty
+			// regardless of radius. Reads Builder::NoteWreckSeen instead, which
+			// mobile builders populate from their own in-vision wreck scan.
 			const float wreckValue = Builder::WreckSeenValue();
 			const int want = RezBotsWanted();
 			if (ai.frame >= gNextRezDiag) {
@@ -147,27 +109,15 @@ IUnitTask@ RezBotFloor(CCircuitUnit@ unit)
 
 IUnitTask@ BankBuysBuildPower(CCircuitUnit@ unit)
 {
-	// A FULL BANK BUYS BUILD POWER, whatever faction we are.
-	//
-	// apexearth: "it could be the sort of thing where you see that you're full of
-	// metal, and so you have greater odds to make a butler because of the excess
-	// build power. would be same for any faction in that logic."
-	//
-	// This replaces a hand-tuned ratio bump for armfark alone, which would have
-	// been an Armada-only fix to a problem all three factions have -- exactly the
-	// faction-parity trap CLAUDE.md records. Being metal-full is the condition
-	// that makes the trade obviously right: 210 metal for 140 build power turns a
-	// bank we are visibly failing to spend into the thing that spends it, and the
-	// standing limit is already 200, so the cap was never what stopped us.
-	//
-	// Gated on the bank rather than a count, so it self-corrects: the moment the
-	// extra build power drains the bank, this stops asking and the ordinary
-	// ratios take the slot back.
+	// A full bank buys build power, faction-agnostic (replaces a hand-tuned
+	// armfark-only ratio bump). Gated on the bank rather than a count, so it
+	// self-corrects: once the extra build power drains it, ordinary ratios take
+	// the slot back.
 	if (aiEconomyMgr.isMetalFull && (ai.frame >= gNextAssistBot)) {
-		// Ask THIS factory for its support-role unit and only take it if that is
-		// the assist bot. Enqueueing a def the factory cannot build is a silent
-		// no-op -- 33 dropped requests and zero errors, per CLAUDE.md -- so the
-		// factory's own build options have to be the authority, not a name list.
+		// Ask THIS factory for its support-role unit and only take it if it's the
+		// assist bot -- enqueueing a def the factory can't build is a silent no-op
+		// (see CLAUDE.md), so the factory's own build options must be the
+		// authority, not a name list.
 		CCircuitDef@ bot = Assist::OurBotDef();
 		CCircuitDef@ sup = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::SUPPORT.type);
 		if ((bot !is null) && (sup !is null) && (sup.id == bot.id)
@@ -191,19 +141,11 @@ IUnitTask@ BankBuysBuildPower(CCircuitUnit@ unit)
 
 IUnitTask@ LateRadarPlane(CCircuitUnit@ unit)
 {
-	// Radar planes in the late game, to find what is left.
-	//
-	// apexearth: "when we're clearly winning we should make T2 radar planes and
-	// find the last com so we know where to send our armies." A surviving
-	// commander rebuilds, and a won game that runs another fifteen minutes is
-	// how that happens.
-	//
-	// Recruited directly rather than left to the factory ratios: armawac and
-	// corawac appear ONLY in the advanced air plant's list (0.05/0.0), and that
-	// plant is exactly the one that does not get built -- every sample of a
-	// hosted 11v13 read plants=1,0. Legion's legwhisper is not in behaviour.json
-	// at all, so it has no role and no ratio anywhere. Naming the def sidesteps
-	// all three problems and covers every faction.
+	// Late-game radar planes to find a surviving commander before it rebuilds.
+	// Named directly rather than left to factory ratios: armawac/corawac sit at
+	// 0.05/0.0 in the advanced air plant's list and legwhisper has no role or
+	// ratio in behaviour.json at all, so ratio-driven production would rarely
+	// or never build one.
 	if (IsAirFactory(unit.circuitDef) && LateGame() && (ai.frame >= gNextScout)) {
 		CCircuitDef@ eye = RadarPlaneDef();
 		if ((eye !is null) && eye.IsAvailable(ai.frame) && (eye.count < 1 + int(aiEconomyMgr.metal.income / LATE_SCOUT_INCOME))) {
@@ -221,16 +163,11 @@ IUnitTask@ LateRadarPlane(CCircuitUnit@ unit)
 
 IUnitTask@ LateFighterScreen(CCircuitUnit@ unit)
 {
-	// A standing fighter screen in the late game, from ANY air plant we own.
-	//
-	// Above every other branch, including the eco lead's constructor line: this
-	// is a floor of eight aircraft, not a strategy, and the whole point is that
-	// it is never the thing that gets skipped. Air::MakeFactoryTask keeps
-	// priority over it because the assassin strike is timed and this is not.
-	//
-	// GetRoleDef(AA) returns whatever THIS plant can build -- the T1 plant's
-	// fighter, or Hawk/Vamp/Venator from the advanced one -- so it never asks for
-	// an aircraft the factory cannot make.
+	// Standing late-game fighter screen from any air plant. A floor, not a
+	// strategy -- placed above every other branch so it's never the thing
+	// skipped. Air::MakeFactoryTask still outranks it since the assassin strike
+	// is timed and this isn't. GetRoleDef(AA) returns whatever this plant can
+	// build, so it never asks for an aircraft the factory can't make.
 	if (IsAirFactory(unit.circuitDef) && LateGame() && (ai.frame >= gNextFighter)) {
 		CCircuitDef@ fig = aiFactoryMgr.GetRoleDef(unit.circuitDef, Unit::Role::AA.type);
 		if ((fig !is null) && (fig.count < 1 + int(aiEconomyMgr.metal.income / LATE_FIGHTER_INCOME))) {

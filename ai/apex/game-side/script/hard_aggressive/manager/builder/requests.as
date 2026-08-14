@@ -2,21 +2,13 @@ namespace Requests {
 
 // ONE PLACE DECIDES WHETHER A BUILDING MAY BE STARTED.
 //
-// Before this, at least seven independent places each answered "should I start
-// this building" -- HomeEnergy, EcoFusion, JoinTaskFor, SpotCollides, BusyOnDef,
-// SiteBlocked and the C++ economy generator -- each with its own registry and
-// its own blind spot to the others. Fixing one shape of duplicate simply moved
-// the duplicate to a shape the next registry could not see. apexearth, after the
-// sixth such fix: "we need to pick an architecture that is going to work."
+// A request queue: something decides we want a building; the request is
+// placed once; whoever takes it works it; if the worker is pulled away the
+// request goes back to being available; when the building is up the request
+// is gone. There is no way to place the same request twice.
 //
-// The architecture is his: a request queue. Something decides we want a
-// building; the request is placed once; whoever takes it works it; if the worker
-// is pulled away the request goes back to being available; when the building is
-// up the request is gone. There is no way to place the same request twice.
-//
-// THE REQUEST RECORD IS THE ENGINE'S OWN TASK, not a parallel structure, and
-// that is what makes the lifecycle real rather than bookkeeping we have to keep
-// in step:
+// THE REQUEST RECORD IS THE ENGINE'S OWN TASK, not a parallel structure, so
+// the lifecycle is real rather than bookkeeping kept in step by hand:
 //
 //   proposed     an IBuilderTask in the queue with no assignee. Available: the
 //                next caller that wants this def here is handed THIS task.
@@ -24,15 +16,13 @@ namespace Requests {
 //   in-progress  `target` is set -- IBuilderTask::SetTarget runs when the
 //                nanoframe appears (BuilderTask.cpp:403).
 //   cancelled    the builder was reassigned; the task keeps its place in the
-//                queue with no assignee, i.e. it is proposed again. Nothing here
-//                has to notice.
+//                queue with no assignee, i.e. it is proposed again.
 //   done/aborted DequeueTask -> AiTaskRemoved -> Forget.
 //
-// AND IT SEES EVERY PRODUCER, not just the script ones. Every task, including
+// AND IT SEES EVERY PRODUCER, not just the script ones: every task, including
 // those made by C++ (DefaultMakeDefence, MakeEconomyTasks, build_chain), is
 // created through CBuilderManager::Enqueue, which fires TaskAdded
-// (BuilderManager.cpp:744) -> AiTaskAdded -> Register below. That is the
-// property the old per-rule registries never had.
+// (BuilderManager.cpp:744) -> AiTaskAdded -> Register below.
 
 // -- what is governed --------------------------------------------------------
 //
@@ -178,9 +168,7 @@ bool SameJob(const CCircuitDef@ has, const CCircuitDef@ want, uint busy)
 // them.
 //
 // `radius` 0 means the exact point in `spot`. `radius` > 0 means "anywhere in
-// this circle would do", which is what defence and AA placement actually want:
-// apexearth, "can request energy to be built wherever, or can say 'I want AA
-// defense built in this 200 elmo circle'".
+// this circle would do", which is what defence and AA placement actually want.
 //
 // `unit` may be null: a manager-side caller placing an order for whoever the
 // engine elects gets the same duplicate protection, and simply has nobody to

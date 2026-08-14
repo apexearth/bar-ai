@@ -1,40 +1,15 @@
 namespace Builder {
 
-// Pulsars, and cheap AA. Both are things stock does that we do not.
-//
-// apexearth: "I don't see all that many pulsars in our defense lineup either.
-// Pulsars would be a pretty good counter to hold back the onslaught." Pulsar is
-// armanni -- and it is stock BARb's single largest metal sink, 14.0% of
-// everything it builds, while ours is ~0%. Their defence outspends their army.
-// It sits at porcupine.land index 12, which an ordinary cluster never reaches
-// because porcupine.prevent is 2.
-//
-// And on AA: "lots of the time people just make AA because its so cheap, and if
-// you have like 3 or 4 of them then the enemy air actively avoids you." That is
-// DETERRENCE, not attrition -- armrl is 80 metal against flak's 820, so four of
-// them is 320 metal to change the enemy's target selection. An earlier design
-// sized flak at 45% of enemy air VALUE, up to 30 turrets and 24,600 metal, to
-// kill an air force it could have simply discouraged.
+// Pulsars and cheap AA. Cheap AA is deliberately sized as deterrence (metal to
+// shift enemy targeting), not as attrition against measured enemy air value.
 string armanni("armanni");   string cordoom("cordoom");   string legbastion("legbastion");
 string armrl("armrl");       string corrl("corrl");       string legrl("legrl");
 
 const float PULSAR_MIN_INCOME = 60.f;
-// apexearth: "we need at least 1000 energy per second before we should start
-// thinking about making those". One fusion is armfus 1000 / corfus 1100 / legfus 1200.
+// One fusion's output (armfus 1000 / corfus 1100 / legfus 1200).
 const float PULSAR_MIN_ENERGY = 1000.f;
-// Derived, not fixed. A flat 1 meant a player on 400 metal/second held exactly
-// as many T3 defence towers as one on 60 -- and it was the reason "make more T3
-// defence" produced nothing even after the LRPC stopped stealing the pick.
-//
-// The comment this replaces recorded that 4 towers reached 22% of all metal
-// "while we held one T2 constructor"; that ratio was a symptom of an economy
-// that could not spend, and the constructor caps that caused it are gone.
-// apexearth: "we need to be making way more t3 defense when we're metal full".
-// One per this much metal income. Halved from 120: at 120 a player on 240 metal/s
-// -- a normal hosted mid-game -- was allowed THREE, and apexearth rates these as
-// the best defensive metal in the game: "they're so good for defense we should
-// try not to [cap them]". Still derived rather than flat, so a poor player does
-// not bankrupt itself on 3,000-4,200 metal towers.
+// Scaled by income rather than fixed, so the count of these T3 towers held
+// tracks economy size instead of being the same at every income level.
 const float PULSAR_PER_INCOME = 60.f;
 // And more headroom while the bank is full, which is the state where a tower is
 // paid for out of metal we are otherwise wasting.
@@ -43,18 +18,8 @@ const int   PULSAR_FULL_BONUS = 5;
 const int   PULSAR_CONCURRENT = 2;
 int gPulsarsAsked = 0;
 
-// NO HARD CAP. apexearth, twice now: "we shouldn't have any hard caps,
-// everything needs to be balanced based on the economy/game progression", and
-// on this specific number: "no no no don't you ever do such a thing like limit
-// to 4 max T3 towers."
-//
-// A ceiling of 4 was added here after he saw twenty go up and removed the same
-// day. It is the wrong tool: at 400 metal/s twenty big guns may well be
-// affordable, and the real complaint was that they were built INSTEAD of
-// advancing, not that they existed. What bounds them now is the Brain's
-// ranking -- a want's value decays per copy already standing (value / (1 +
-// have)), so the eighth gun scores an eighth of the first and loses to
-// everything else long before the metal runs out.
+// NO HARD CAP: count is bounded by economy (PulsarCap) and by the Brain's
+// per-copy value decay, not by a fixed ceiling.
 int PulsarCap()
 {
 	int cap = 1 + int(aiEconomyMgr.metal.income / PULSAR_PER_INCOME);
@@ -62,29 +27,16 @@ int PulsarCap()
 		cap += PULSAR_FULL_BONUS;
 	return cap;
 }
-// TWO TERMS, NOT ONE RATIO. apexearth, 2026-08-12: "Ensure we have basic coverage
-// of our bases with air defense. Then do a basic 10% metal ratio on top of that.
-// SO if the enemy makes 10 dragons we'd add on some good AA defense to counter
-// that."
-//
-// FLOOR -- basic cover, per player, once air has been SEEN. It does not scale with
-// the economy and it is not a share of anything: a base either has something
-// shooting upwards or it does not. Where those turrets go is the coverage half of
-// the same sentence, and Brain::AirCoverWant owns it -- least-covered extractor
-// first, counting work already ordered.
+// TWO TERMS: a flat per-player floor (basic cover, regardless of economy) plus
+// a top-up sized in metal-of-AA per metal-of-enemy-air, so the ratio is not
+// diluted by a second hidden divisor.
 const int   AA_MIN            = 2;
-// TOP-UP -- metal of AA per metal of their air, ON TOP of the floor, and delivered
-// end to end. In METAL rather than in turrets, so the same 10% buys more Thistles
-// (80) than Plutos (820) and one number covers all six defs.
-//
-// What this replaces multiplied 0.2 against a per-metal divisor as well (the old
-// AA_PER_AIR 1000 / AA_HEAVY_PER_AIR 1800), so what actually arrived was 1.6-3.5%
-// of enemy air value -- two dampeners stacked, one of them by accident.
+// In METAL rather than turret count, so the same ratio buys more of a cheap
+// turret than an expensive one and one constant covers all factions.
 const float AA_VS_AIR = 0.10f;
 
-// Turrets the side should hold BEYOND basic cover. Rounded, not truncated --
-// apexearth: "round it." int() was turning a want of 1.98 into 1, which threw
-// away most of a turret at every value.
+// Turrets the side should hold BEYOND basic cover. Rounded, not truncated, so
+// a want of 1.98 is not thrown away down to 1.
 int AATopUp(float enemyAir, float costM)
 {
 	if ((enemyAir <= 0.f) || (costM <= 1.f))
@@ -93,36 +45,16 @@ int AATopUp(float enemyAir, float costM)
 	return int((enemyAir * k) / costM + 0.5f);
 }
 
-// A TURRET MUST COVER SOMETHING. apexearth: "purple is still making lots of
-// towers in the back of their base."
-//
-// CheapAA and Fortify both place at the CONSTRUCTOR'S OWN POSITION -- wherever it
-// happened to be standing when the rule fired. Constructors idle in the back of
-// the base, so that is where the towers go, and the blob audit shows the result:
-// 27 turrets at forward fraction 0.03, eight of them AA and eight dig-ins,
-// covering nothing.
-//
-// Every gate added to this so far measured the POSITION and let them through:
-// "nothing behind us" refuses ForwardFraction < 0, and a base's back yard reads
-// +0.01 to +0.09 -- forward of the territory centroid, technically.
-//
-// The honest test is DENSITY, not position.
-// The anti-blob rule, and it is about DENSITY rather than position, because
-// position is what every previous attempt tested and none of them caught this.
-// The same radius the audit clusters on, so what the tool calls a blob is what
-// the AI refuses to start.
-//
-// NOT a cap on how much defence we may hold -- it says nothing about the total,
-// only that the eighth turret within 420 elmos of the same spot adds nothing the
-// seventh did not. On the line, where the fighting actually concentrates, the
-// allowance is higher: apexearth, "in late game if theres like 10 pulsars all
-// near each other, thats not a bad thing."
+// DENSITY, not position, is the anti-blob test: CheapAA and Fortify place at the
+// constructor's own position, so a position-only gate (e.g. "not behind the
+// front") never catches turrets piling up in the back of the base. Not a total
+// cap -- the eighth turret within this radius adds nothing the seventh did not,
+// but the line itself is allowed a higher density (see TooCrowded).
 const float BLOB_RADIUS = 420.f;
 
-// The circle one AA request covers. apexearth's own example of an AREA request
-// rather than a point, and deliberately smaller than BLOB_RADIUS: this says
-// "that order is already placed", not "this ground has enough AA", which is
-// what TooCrowded above answers.
+// The circle one AA request covers. Smaller than BLOB_RADIUS on purpose: this
+// answers "is that order already placed", not "does this ground have enough
+// AA" (TooCrowded above answers that one).
 const float AA_AREA = 200.f;
 
 bool TooCrowded(const AIFloat3& in at)
@@ -145,17 +77,12 @@ IUnitTask@ AAOrder(CCircuitUnit@ unit, CCircuitDef@ aa, int want, float enemyAir
 	// build a heap in the back of the base. See TooCrowded.
 	if (TooCrowded(here))
 		return null;
-	// ANTI-AIR IS DEFENCE AND ANSWERS TO THE DEFENCE POLICY. Measured, armferret
-	// and armrl were 31 of the ~57 towers we held, and neither rule had ever been
-	// asked whether another one was affordable or wanted here -- they place at the
-	// CONSTRUCTOR'S OWN POSITION, which is wherever it happened to be standing.
-	// apexearth: "We're definitely out of control with building certain things
-	// like the light laser turrets and popup air defense turrets."
+	// Anti-air answers to the defence policy too, since it also places at the
+	// constructor's own position rather than by where it's actually wanted.
 	if (!Military::DefenceAllowedAt(here, aa))
 		return null;
-	// AA is the area case apexearth described -- "I want AA defense built in this
-	// 200 elmo circle" -- so the request owns a circle, not a point: another AA
-	// of this def already ordered anywhere in it is this order, already placed.
+	// AA owns a circle, not a point: another AA of this def already ordered
+	// anywhere in it counts as this order, already placed.
 	bool created = false;
 	IUnitTask@ post = Requests::Take(unit, aa, Task::BuildType::DEFENCE,
 			Task::Priority::NORMAL, here, AA_AREA, DEF_SHAKE, created);
@@ -175,54 +102,19 @@ int gNextPulsar = 0;
 int gNextAA = 0;
 int gNextAADiag = 0;  // temporary diagnostic, see CheapAA
 
-// armrl/corrl/legrl is DETERRENCE, not an answer: 80 metal. apexearth, watching a
-// game lost from this exact hole: "the enemies attacked us with
-// like ten gunships on one of our bases, and we had like eight of the light
-// AA. They did nothing. Light AA is so bad versus T2 gunships."
-//
-// So a second, heavier tier: cormadsam/armferret/legflak. All VTOL-only
-// structures, one tier up in cost (315-820 metal against corrl's 80) and
-// correspondingly harder-hitting. Which tier AADefFor picks is a question about
-// ground, not about how much they fly; AATopUp then sizes either one by its own
-// cost, so the choice of tier changes the turret, never the metal.
-//
-// OFF. Measured worse, not better -- the same failure this comment set out to
-// avoid. 8-game control vs BARb:stable:hard_aggressive, Comet Catcher 4v4 +25%
-// Cortex/Cortex, 25 min, against the back-wall-fix baseline (see CHANGES.md,
-// commander back-wall hiding): head to head 1-1 -> 0-5, metal produced
-// 40,743 -> 27,382, static defence share 10.6% -> 11.5%, wiped-out player-games
-// 9/32 -> 13/32. One game in a smaller trial run did win the economy and K/D
-// outright (265,925 metal, K/D 1.13), so the mechanism is not obviously always
-// bad -- it may need a higher income floor, a lower AA_HEAVY_MAX, or gating on
-// SUSTAINED enemy air rather than a one-shot cost reading. Left in place,
-// disabled, rather than deleted, since re-testing a narrower version is
-// plausible future work.
-// Back ON. It was switched off after a version that sized flak at 45% of enemy
-// air VALUE -- up to 30 turrets and 24,600 metal to kill an air force it could
-// have discouraged. The constants below are that design's replacement and are
-// bounded at 1..4, so the reason for the kill switch no longer applies, and the
-// switch meant we have been building NO good AA at all.
-// apexearth: "we arent making the better AA early enough in our bases."
+// armrl/corrl/legrl is DETERRENCE, not an answer versus T2 air. A second,
+// heavier VTOL-only tier (cormadsam/armferret/legflak) sizes by the same
+// metal-vs-enemy-air ratio; AADefFor picks the tier by ground, AATopUp sizes
+// whichever one is picked by its own cost.
 const bool  AA_HEAVY_ON          = true;
 const float AA_HEAVY_MIN_INCOME  = 20.f;
 const int   AA_HEAVY_PERIOD      = 25 * SECOND;
 int gNextHeavyAA = 0;
 string armferret("armferret"); string cormadsam("cormadsam"); string legflak("legflak");
 
-// A FEW TOWERS AT HOME, EARLY, TO NOT BE WORTH RAIDING.
-//
-// apexearth: "need more t1.5 defenses around our home base in the early game...
-// enemy raids are able to get all the way in, the t1.5 defense would deter them
-// from even trying - we don't need a ton, just enough to convince them not to do
-// it." Same argument the cheap-AA floor already rests on: deterrence changes the
-// enemy's target selection, which is worth far more than the turret's own dps.
-//
-// This is a SPEND rule, the class CLAUDE.md records as having cut metal
-// production 4.3x when twelve of them were added at once, so it is bounded hard:
-// a standing count of DETER_HOME_MAX, only near home, only before an advanced
-// factory exists, and only once there is income to pay for it. Beamer 190 /
-// Twin Guard 195 against a Sentry's 85 -- the point is a tower a raider cannot
-// simply run past, not a cheaper one we build more of.
+// A few towers at home, early, so a raid is not worth attempting: the same
+// deterrence argument the cheap-AA floor rests on. Bounded hard (standing cap,
+// near home only, before an advanced factory) since this is a spend rule.
 string armbeamer("armbeamer"); string corhllt("corhllt"); string legmg("legmg");
 const int   DETER_HOME_MAX    = 3;
 const float DETER_MIN_INCOME  = 8.f;
@@ -230,36 +122,21 @@ const float DETER_RADIUS      = 900.f;
 const int   DETER_PERIOD      = 30 * SECOND;
 int gNextDeter = 0;
 
-// SHIELDS OVER THE BASE. apexearth: "If we can have these really surrounding our
-// base it is greatttt defense. + add shields."
-//
-// armgate Keeper 3,000m/54,000e, corgate Overseer 3,200m/55,000e, legdeflector
-// Soteria 3,200m/55,000e -- near-identical, so one rule covers all three.
-//
-// I first recorded "Legion has no equivalent, verified" after `leggate` returned
-// nothing. That was one guessed name and it was wrong; apexearth: "legion does
-// have shields!" Found properly by reading how armgate declares its own -- the
-// field is `weapontype = "Shield"`, not the `shieldpower` I grepped for -- which
-// lists legdeflector and leggatet3. Exactly the absence-from-one-search trap
-// CLAUDE.md is written against.
+// Shields over the base: armgate/corgate/legdeflector are near-identical
+// (~3,000m/~55,000e), so one rule covers all three. Legion's is legdeflector,
+// declared with weapontype "Shield" rather than a shieldpower field.
 //
 // Gated on ENERGY rather than metal: a shield's real cost is its upkeep, and one
 // running dry is 3,000 metal doing nothing. Placed by the coverage score, so
 // shields spread across the approaches instead of stacking on one.
 string armgate("armgate"); string corgate("corgate"); string legdeflector("legdeflector");
-// WHAT A SHIELD ACTUALLY COSTS TO RUN, read from the def rather than guessed at:
-// all three declare energyupkeep 0 and powerregenenergy 562.5, so a dome draws
+// All three declare energyupkeep 0 and powerregenenergy 562.5, so a dome draws
 // nothing idle and 562.5 energy/second while regenerating what it just absorbed.
-// That draw is the honest gate. The margin covers the rest of the base continuing
-// to run through the burst; it is a chosen number, and isEnergyStalling above is
-// the real-time backstop either way.
+// That draw is the real gate; the margin covers the rest of the base through it.
 const float SHIELD_REGEN_DRAW  = 562.5f;
 const float SHIELD_DRAW_MARGIN = 1.5f;
-// HOW MANY, AS ECONOMY RATHER THAN AS A CEILING. apexearth: "We should be making
-// tons of T3 defenses and shields late in the game", against his standing rule
-// that nothing gets a hard cap. Seconds of income per dome, against the def's OWN
-// cost so the three factions differ correctly and the count follows the economy
-// with nothing to raise later.
+// Seconds of income per dome, against the def's OWN cost, so the count follows
+// the economy rather than sitting at a fixed ceiling.
 const float SHIELD_INCOME_SECS = 100.f;
 const int   SHIELD_PERIOD     = 60 * SECOND;
 int gNextShield = 0;
@@ -314,32 +191,16 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	return post;
 }
 
-// JAMMERS OVER THE BASE. apexearth: "we need to ensure our base is covered by
-// jammers."
+// Jammers over the base, ordered directly rather than left to the build_chain
+// hubs on armrad/corrad/armfrad/corfrad -- a hub fires only when its exact
+// parent finishes, so base jamming was a side effect of whether a radar tower
+// happened to get built. Def names and the AreaHasJammer anti-clustering ledger
+// are shared with digin.as so the two placement paths cannot cluster together.
 //
-// Nothing was placing them deliberately. The only jammer entries in the game are
-// build_chain.json hubs hanging off armrad/corrad/armfrad/corfrad, and a hub fires
-// only when its exact parent unit FINISHES -- so base jamming was a side effect of
-// whether a radar tower happened to get built, at "low" priority, behind a Pulsar
-// and a Big Bertha in the same list. armjamt/corjamt/legjam are 115-240 metal;
-// this asks for them directly instead.
-//
-// The def names, IsJammerDef and the AreaHasJammer anti-clustering ledger already
-// exist in digin.as -- built for the chain path, which stacked three jammers on
-// top of each other. Orders made here are recorded in the same ledger so the two
-// paths cannot cluster against each other either.
-//
-// THE ADVANCED JAMMER, AND IT IS ALSO THE CHEAP ONE. apexearth: "we also have no
-// t2 jammer (the advanced kind) in the middle of our base to help protect from
-// enemy artillery."
-//
-// armveil Veil / corshroud Shroud / legajam Erebus are each named "Long-Range
-// Jamming Tower" in the game's own defs: 125-130 metal against armjamt's 240, and
-// 700-760 elmos of jam radius against 360-500 -- two to four times the AREA
-// hidden, for less metal. What they cost is ENERGY: 19,000-20,000 to build and
-// 125/second forever, against the short tower's 5,200-8,500 and 40/second. The
-// short defs stay as the fallback so a side that cannot build the long one yet is
-// not left with nothing.
+// The long-range triple (armveil/corshroud/legajam) is cheaper in metal and
+// covers 2-4x the area of the short tower, at the cost of far higher energy
+// upkeep; the short defs remain the fallback for a side that cannot build the
+// long one yet.
 const int   JAMMER_PERIOD     = 45 * SECOND;
 const float JAMMER_UPKEEP_LONG  = 125.f;
 const float JAMMER_UPKEEP_SHORT = 40.f;
@@ -347,15 +208,11 @@ const float JAMMER_UPKEEP_SHORT = 40.f;
 // placement is right for every faction rather than for the best one.
 const float JAMMER_COVER_LONG   = 700.f;
 const float JAMMER_COVER_SHORT  = 360.f;
-// Income per unit of upkeep before we will run one. The rule already ran a
-// 40/second tower on 150/second of income; this is that same ratio rounded up,
-// applied to whichever def we actually place, so the number moves with the tower
-// instead of being a constant that only ever suited the short one.
+// Income per unit of upkeep before we will run one, applied to whichever def we
+// actually place so the bar moves with the tower rather than fitting only one.
 const float JAMMER_UPKEEP_MARGIN = 4.f;
-// How much of our energy income jamming may hold in total. This replaces a hard
-// JAMMER_MAX of 3. Metal is not the constraint -- 125 metal is nothing -- so the
-// bound is on the resource that actually pays, which is why this is not the
-// shield's metal-seconds rule.
+// Share of energy income jamming may hold in total. Metal is not the
+// constraint here (125 metal is nothing), so the bound is on energy upkeep.
 const float JAMMER_ENERGY_SHARE  = 0.10f;
 int gNextJammer   = 0;
 int gJammersAsked = 0;
@@ -411,15 +268,10 @@ IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 	if (gJammersAsked - int(jam.count) >= 1)
 		return null;
 
-	// THE MIDDLE OF THE BASE, WHICH IS NOT WHERE WE SPAWNED. apexearth wants this
-	// one central, against artillery hunting what we have built. gHomePos is the
-	// START position and never moves, so as the base grows forward it ends up
-	// behind everything worth hiding -- the same fault territory.as records for
-	// every other positional measure. TerritoryCentre is the centroid of the metal
-	// clusters we hold, and falls back to gHomePos before we hold any.
-	//
-	// Later ones move out to the approaches, which is where something worth hiding
-	// from radar is actually walking.
+	// The middle of the base, not the spawn point: gHomePos never moves, so as the
+	// base grows forward it ends up behind everything worth hiding. TerritoryCentre
+	// is the centroid of the metal clusters we hold instead, falling back to
+	// gHomePos before we hold any. Later ones move out to the approaches.
 	AIFloat3 anchor = Military::TerritoryCentre();
 	if (jam.count > 0) {
 		AIFloat3 border;
@@ -511,23 +363,14 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	CCircuitDef@ gun = SideDef3(armanni, cordoom, legbastion);
 	if ((gun is null) || !gun.IsAvailable(ai.frame) || (gun.count >= PulsarCap()))
 		return null;
-	// Cap how many are going up AT ONCE, which is a different question from how
-	// many we end up with. Each is 3,000-4,200 metal, so six simultaneous
-	// nanoframes is most of a mid-game bank frozen in half-built towers that
-	// defend nothing until they finish. apexearth: "probably you want to limit
-	// how many we make at once to like 2 or 3. (sometimes I see 6 going up all at
-	// once)". Same asked-minus-standing idiom NukeSilo uses.
+	// Caps how many are going up AT ONCE (a different question from how many we
+	// end up with): each is 3,000-4,200 metal, so several simultaneous nanoframes
+	// freeze most of a mid-game bank in towers that defend nothing until they
+	// finish. Same asked-minus-standing idiom NukeSilo uses.
 	if (gPulsarsAsked - gun.count >= PULSAR_CONCURRENT)
 		return null;
-	// On the line, not in the base. StandoffPos walks from the point it is handed
-	// TOWARD home and stops at the first safe step -- right for ContestDefence,
-	// which hands it a real enemy hotspot, but this call handed it the
-	// constructor's own position, and the constructors that pass the T2 cost gate
-	// are standing in the base. Every gun therefore landed one step further into
-	// the base, which is the same border-ranked placement the porc path already
-	// uses correctly.
-	// apexearth: "they're still good for a frontline, but i just see a lot made
-	// way back behind in the base... taking up valuable room."
+	// On the line, not in the base: border/front position first, StandoffPos
+	// (walks toward home to the first safe step) only as a last resort.
 	AIFloat3 spot;
 	string where = "border";
 	if (!Military::BorderPos(spot, uint(gun.count))) {
@@ -554,33 +397,16 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 
 // One nuclear launcher per player, as early as the economy can carry it -- and
 // as many as we like once both banks are over 80% and the income is going to
-// waste anyway.
+// waste anyway. Nuke target selection itself lives in the C++ SuperTask and is
+// not something this rule controls.
 //
-// apexearth: "Let's make sure all our guys make at least 1 nuke launcher per
-// game - seems like they'd be effective. Usually the earlier the better."
-//
-// CONFIRMED FIRING 2026-08-08 -- apexearth watching: "i did see nuke silos going
-// up". What is still unknown is whether they are USED well: the one that landed
-// was not on an enemy base. Nuke target selection lives in the C++ SuperTask and
-// has not been audited.
-//
-// Costs from the pinned tree: armsilo 8100 metal / 90,000 energy, corsilo and
-// legsilo 7700 / 82,000. The energy is what actually gates it -- that is roughly
-// a fusion-minute -- so the bar is set on energy income rather than on metal or a
-// clock. Advanced constructors only: armsilo's buildoptions list armack/armacv/
-// armaca and their heavy variants, so asking a T1 constructor is a silent no-op.
+// The energy cost (90,000/82,000 to build) is what actually gates it, roughly a
+// fusion-minute, so the bar is set on energy income rather than metal or a
+// clock. Advanced constructors only -- a T1 constructor cannot build one.
 string armsilo("armsilo"); string corsilo("corsilo"); string legsilo("legsilo");
 
-// Measured on a 6v6 medium map at Handicap 50: peak energy income 1230 with zero
-// fusions standing, so a bar of 1800 was unreachable and "one per game" never
-// happened there. Set below what a mid-sized game actually reaches -- apexearth:
-// "make sure all our guys make at least 1 nuke launcher per game... usually the
-// earlier the better."
-// 1000/50 was set for a medium map before this had ever been watched, and it
-// measured badly -- apexearth: "making nukes hurt us because we weren't healthy
-// enough." A silo is 8,100 metal and 90,000 energy BEFORE a single missile, and
-// we already build only 40-60% of stock's metal, so it has to come out of real
-// surplus rather than out of the army budget.
+// A silo is 8,100 metal and 90,000 energy before a single missile, so it has to
+// come out of real surplus rather than the army budget.
 const float NUKE_MIN_ENERGY = 2500.f;
 const float NUKE_MIN_INCOME = 150.f;
 
@@ -599,10 +425,8 @@ CCircuitDef@ NukeDef()
 	return SideDef3(armsilo, corsilo, legsilo);
 }
 
-// apexearth: "when we are full on metal and energy (>80%) we should keep making
-// more nuke launchers." A silo is 8,100 metal and 90,000 energy, and the energy
-// is the half that actually hurts -- so a metal bank at the cap on its own is
-// not enough to say the next one is free.
+// Energy is the half of the cost that actually hurts (90,000 to build), so a
+// metal bank at the cap on its own is not enough to say the next one is free.
 bool NukeSurplus()
 {
 	return (aiEconomyMgr.metal.storage > 0.f) && (aiEconomyMgr.energy.storage > 0.f)
@@ -612,14 +436,10 @@ bool NukeSurplus()
 
 int NukeCap()
 {
-	// One is the point of the rule. Both banks at the cap removes the cap
-	// entirely -- apexearth: "if we are full on metal we should make the limit
-	// unlimited to allow us to keep making more." Resources sitting at storage
-	// are already wasted, so there is nothing left for another silo to displace.
-	//
-	// Note this is a cap on how many may STAND, not on how many at once: the
-	// outstanding test below still allows only one in flight, which serialises
-	// them and matches "build expensive structures ONE AT A TIME, assisted".
+	// Both banks at the cap removes the cap entirely: resources sitting at
+	// storage are already wasted, so there is nothing left for another silo to
+	// displace. Caps how many may STAND, not how many at once -- the outstanding
+	// test below still serialises to one in flight.
 	return NukeSurplus() ? 999 : 1;
 }
 
@@ -630,15 +450,11 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 	if (unit.circuitDef.costM < ADV_CON_COST)
 		return null;
 	// The income and half-bank bars are a proxy for "can we afford one without
-	// starving the rest". Both banks sitting over 80% answers that question
-	// directly, so the proxy is skipped rather than allowed to veto it.
-	// THE ENERGY FLOOR IS NOT A PROXY, IT IS THE RUNNING COST. A missile is
-	// 90,000 energy to stockpile, so a silo on a thin grid does not merely cost
-	// its build price, it holds the whole economy down for as long as it stands.
-	// A full bank does not answer that: storage is small next to a reactor's
-	// output, and it was full precisely because nothing else was spending.
-	// apexearth, watching live: "now we have no energy because we have a nuke
-	// launcher with only 1500 energy income."
+	// starving the rest"; both banks over 80% answers that directly, so the proxy
+	// is skipped. The energy floor is not itself a proxy -- it is the running
+	// cost: a missile is 90,000 energy to stockpile, so a silo on a thin grid
+	// holds the whole economy down for as long as it stands, which a full bank
+	// (storage is small next to a reactor's output) does not tell you.
 	if (aiEconomyMgr.energy.income < NUKE_MIN_ENERGY)
 		return null;
 	const bool surplus = NukeSurplus();
@@ -663,13 +479,10 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 	if ((standing >= NukeCap()) || (gNukesAsked - gNukesPeak >= 1))
 		return null;
 
-	// Behind the base, in the nano field where it will actually get finished.
-	// WIDEN, DO NOT GIVE UP. This copied GANTRY_NEAR_NANO from the gantry rule
-	// but not the gantry's fallback: the nano cluster is the densest patch of the
-	// base, a silo is 112 elmos, and a 700 search there routinely finds nothing.
-	// A nuke silo is a once-per-game structure gated behind a long income ramp,
-	// so one failed search WAS the whole behaviour, and it returned null in
-	// silence. Same shape the gantry rule already fixed for itself.
+	// Behind the base, in the nano field, widening the search rather than giving
+	// up on the first failure: the nano cluster is the densest patch of the base
+	// and a narrow radius there routinely finds nothing. Same fallback shape the
+	// gantry rule uses.
 	AIFloat3 near;
 	const bool haveNano = NanoCluster(near);
 	if (!haveNano)
@@ -697,19 +510,10 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 	return post;
 }
 
-// Pinpointers, three for the WHOLE TEAM.
-//
-// apexearth: "Ensure that we make pinpointer style units (for Armada, Cortex,
-// and Legion) - the entire team only needs 3 max."
-//
-// armtarg/cortarg/legtarg, "Enhanced Radar Targeting, more facilities enhance
-// accuracy". 800-810 metal and 7,200-7,500 energy each, so three is ~2,400 metal
-// spread across the whole side -- but the cap has to be a TEAM cap, not a per
-// player one, or eight instances each build "just one" and the side pays eight
-// times for an effect that stopped stacking at three.
-//
-// Advanced constructors only: armtarg lists armaca/armack/armacv and their heavy
-// variants, and asking a T1 constructor is a silent no-op.
+// Pinpointers (armtarg/cortarg/legtarg), capped at three for the WHOLE TEAM --
+// the cap has to be a team cap rather than a per-player one, or every player
+// builds "just" three and the side pays many times over for an effect that
+// stops stacking at three. Advanced constructors only.
 string armtarg("armtarg"); string cortarg("cortarg"); string legtarg("legtarg");
 
 // Published as this player's standing-plus-outstanding count; every instance
@@ -848,10 +652,8 @@ IUnitTask@ Pinpointer(CCircuitUnit@ unit)
 	return post;
 }
 
-// THE SIZING, KEPT; THE PLACEMENT, GONE. CheapAA and HeavyAA chose a def and a
-// count correctly and then put the turret at the constructor's feet, which is a
-// third of the rearward blobs. Brain::AirCoverWant asks these two and places over
-// an extractor -- what their air is actually hunting.
+// Sizing only, not placement: Brain::AirCoverWant asks this for a def/count and
+// places over an extractor rather than at the constructor's feet.
 CCircuitDef@ AADefFor(CCircuitUnit@ unit)
 {
 	CCircuitDef@ heavy = SideDef3(armferret, cormadsam, legflak);
@@ -860,20 +662,10 @@ CCircuitDef@ AADefFor(CCircuitUnit@ unit)
 	return SideDef3(armrl, corrl, legrl);
 }
 
-// WHAT THE WHOLE SIDE SHOULD HOLD: everyone's basic cover, plus the shared top-up.
-// Military::TeamAA() sums the side, so the floor has to be multiplied by how many
-// of us there are -- comparing a team-wide count against one player's floor is the
-// arithmetic that let one player's turrets answer the side's entire air threat
-// while three players held none.
-//
-// No tier branch. The divisor is the def's OWN cost, so Armada, Cortex and Legion
-// size identically without any of them being named. The `costM > 400` test this
-// replaces was true for legflak (820) and false for armferret (360) and cormadsam
-// (315), so two factions out of three sized their good turret with the cheap
-// tier's constants.
-//
-// No ceiling either: 10% of their air metal is its own bound, which is what the
-// old AA_MAX of 12 was overriding.
+// Team-wide want: Military::TeamAA() sums the side, so the floor is multiplied
+// by player count rather than compared against one player's floor alone. No
+// tier branch -- the divisor is the def's own cost, so all three factions size
+// identically. No ceiling -- the ratio is its own bound.
 int AAWantedNow(CCircuitUnit@ unit, float enemyAir)
 {
 	CCircuitDef@ aa = AADefFor(unit);

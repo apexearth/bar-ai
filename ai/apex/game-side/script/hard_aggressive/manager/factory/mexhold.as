@@ -22,26 +22,14 @@ float UpdateMexHold()
 	return gMexHold;
 }
 
-// Detects a player boxed in -- out of reachable expansion for its CURRENT
-// move type, not merely "the map has some water". apexearth, watching an
-// 8v8 live: a player started on a small strip of land, chose bots, and
-// stood doing nothing once local mexes ran out, with an ocean it could not
-// build ships on (no shipyard, bots-only) and mexes on a nearby hill it
-// could not reach (no air con) -- IsMixedWaterMap() gates the shipyard
-// trigger on the MAP's average land%, which reads "mostly land" and never
-// fires for a player boxed onto a small peninsula regardless of THEIR own
-// situation. No terrain-height query is registered to script (checked
-// vendor/engine/.../InitScript.cpp), so a true geometric "am I landlocked"
-// test would need a new C++ binding -- too large a change to add blind this
-// late in an unsupervised session, especially after this session's own
-// experience with an under-tested C++ addition crashing the engine.
-//
-// This is the binding-free alternative: detect the SYMPTOM instead of the
-// geometric cause. A player with spare build capacity whose mex count has
-// not grown in a long time, well past the opening, is out of reachable
-// expansion for SOME reason -- water, cliffs, an enemy wall, a hill --
-// and trying an alternative move type (naval here; air is the harder case,
-// left for a future session per the note below) is a reasonable response
+// Detects a player boxed in -- out of reachable expansion for its CURRENT move
+// type -- by SYMPTOM rather than geometry: no terrain-height query is
+// registered to script, so a true "am I landlocked" test would need a new C++
+// binding. IsMixedWaterMap() alone is not enough here because it gates on the
+// MAP's average land%, which reads "mostly land" and misses a player boxed
+// onto a small peninsula. A player with spare build capacity whose mex count
+// has not grown in a long time is out of reachable expansion for SOME reason,
+// and trying naval as an alternative move type is a reasonable response
 // regardless of which reason it is.
 const int   STALL_MIN_FRAME  = 6 * MINUTE;   // let the opening actually happen first
 const int   STALL_DURATION   = 3 * MINUTE;   // no mex growth for this long
@@ -79,17 +67,10 @@ bool AlliesHurting()
 // metal is already going there.
 // Whether the role is allowed on a team under BIG_TEAM.
 //
-// Off by default, and the reason is measured: on a four-player team a player
-// fielding no army is a quarter of the army missing, which is the same
-// arithmetic that bars the air opening and the constructor monopoly there
-// (standing army 17.8k against 25.4k, real K/D 0.70 against 1.24).
-//
-// RE-TESTED 2026-08-02 against the current, much stronger role and the verdict
-// held. Six 4v4 games each way, same three maps and seeds, only this flag
-// differing: OFF went 2-1 on 904,267 metal and 166,643 army; ON went 0-4 on
-// 516,702 metal and 80,671 army, and its games ended SOONER (41 min against 48)
-// -- it is not slower, it is dead earlier. Build power, converters and air
-// constructors do not buy back the quarter of the team that stops fighting.
+// Off by default: on a four-player team, a player fielding no army is a
+// quarter of the army missing -- the same arithmetic that bars the air
+// opening. Build power, converters and air constructors do not buy back the
+// quarter of the team that stops fighting.
 const bool ECO_ON_SMALL_TEAMS = false;
 
 bool IsEcoLead()
@@ -111,13 +92,10 @@ void UpdateEcoLead()
 
 	// Military::gTurtle is deliberately NOT a condition here, for the same reason
 	// LosingGround() is not: the hold fires when our own army SHRINKS, and this
-	// player builds no army, so it can neither avoid the hold nor recover from
-	// it. Measured in the same run: HOLD at 8.7 min on army 1897 -> 1266, RESUME
-	// only at 15.0 on army 110 -- the maximum hold, six minutes, expiring rather
-	// than recovering. As a gate it removed the role from the game.
-	// A TEAM ROLE NEEDS A TEAM. apexearth, watching a 1v1: "it certainly
-	// shouldn't be solo running the eco lead role." The role trades this
-	// player's army for the team's economy; with no team it just means no army.
+	// player builds no army, so it can neither avoid the hold nor recover from it
+	// -- as a gate it would remove the role from the game entirely.
+	// A team role needs a team: it trades this player's army for the team's
+	// economy, so with no team it just means no army.
 	array<Id>@ roster = ai.GetTeamIds();
 	const bool haveTeam = (roster !is null) && (roster.length() > 1);
 	gEcoActive = haveTeam && mine && !gHurt && !allies;
@@ -145,18 +123,11 @@ void UpdateEcoLead()
 	}
 }
 
-// TEAM ROLES DO NOT EXIST WITHOUT A TEAM, AND NEITHER DO THE PATHS THAT READ
-// THEM.
-//
-// apexearth: "this is that eco logic contaminating a 1v1 game still. Even though
-// I said 'no eco role in 1v1 games' we still have the logic buried in there,
-// causing all sorts of hidden hard to understand bugs. The entire eco pathway of
-// code needs to be disabled."
-//
-// He is right, and the fusion bug is the proof: the reactor rule asked
-// EcoLeadActive() as its ONLY gate, so with no eco lead nobody ever built a
-// reactor -- a solo player simply never teched its energy. Disabling the ROLE
-// silently disabled a behaviour that had nothing to do with teams.
+// Team roles do not exist without a team, and neither do the paths that read
+// them. The fusion bug was the proof: the reactor rule asked EcoLeadActive() as
+// its ONLY gate, so with no eco lead nobody ever built a reactor -- a solo
+// player simply never teched its energy. Disabling the ROLE silently disabled a
+// behaviour that had nothing to do with teams.
 //
 // So the rule is now: every consumer of a team role must be one of
 //   (a) genuinely team-only -- it coordinates with allies, and is skipped solo;

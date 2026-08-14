@@ -58,23 +58,11 @@ bool HaveAirCon()
 CCircuitDef@ FactoryToBuild()
 {
 	ResolveDefs();
-	// A SECOND basic plant as soon as we are committed and short of a force.
-	// Two plants is twice the aircraft per minute, and the strike is bounded by
-	// minutes, not by metal -- 12 basic bombers is only ~1,800.
-	//
-	// This used to require the ADVANCED plant first. Measured in a hosted 11v13:
-	// every sample read plants=1,0 -- the advanced plant never finished, so the
-	// second basic one was never reachable, and four minutes of a single plant
-	// is about six aircraft. The strike released on the deadline at 6 bombers
-	// and 4 fighters against 12 and 8. Throughput has to come before tier.
-	//
-	// Gated on ECONOMY as well as commitment. apexearth, watching live:
-	// "shouldn't make 2 t1 air labs at a t1 phase, just 1 max... you can have
-	// more when economy is stronger." Committing is not the same as affording:
-	// a second 690-metal plant during the T1 phase competes with the expansion
-	// that pays for the aircraft, and two half-fed plants build no faster than
-	// one fed one. The throughput argument above is right once the income is
-	// there, which is what AIR_SECOND_PLANT_INCOME asks.
+	// A SECOND basic plant once committed and short of a force -- twice the
+	// aircraft per minute, and the strike is bounded by minutes, not by metal.
+	// Gated on ECONOMY as well as commitment: a second plant mid-T1 competes
+	// with the expansion that pays for the aircraft, so it waits for
+	// AIR_SECOND_PLANT_INCOME rather than firing on commitment alone.
 	if (Committed() && !Massed()
 		&& (aiEconomyMgr.metal.income >= AIR_SECOND_PLANT_INCOME)
 		&& (gPlant1 !is null) && gPlant1.IsAvailable(ai.frame) && (Have(gPlant1) == 1))

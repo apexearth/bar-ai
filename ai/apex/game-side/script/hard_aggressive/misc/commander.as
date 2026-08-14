@@ -8,45 +8,22 @@ string corcom("corcom");
 string legcom("legcom");
 
 //------------------------------------------------------------------------------
-// "At T1 he can be our action hero. Once there is heavy T2 in the game the
-// commander needs to be careful."
-//
-// This is telemetry only. There is no lever here, and the reason is worth
-// keeping: an earlier revision wrote aiBuilderMgr.dangerHysteresis, which exists
-// in vendor/circuitai (CBuilderManager stamps a dangerTime and keeps the comm
-// near base while dangerTime + dangerHysteresis >= frame) but NOT in the tree we
-// actually deploy. vendor/engine/AI/Skirmish/BARb is the tree matching the
-// shipped DLL -- it alone defines GetBestWreckPos and SendResources, which these
-// scripts already call successfully -- and there the comm branch of
-// CBuilderManager::MakeTask (BuilderManager.cpp:967-984) is stateless: it
-// re-reads GetEnemyInflAt(comm pos) against commander.json's hide.threat on every
-// call. No dangerTime, no dangerHysteresis field, and no such property on the
-// registered CBuilderManager, whose entire surface is DefaultMakeTask, Enqueue,
-// EnqueueRetreat and GetWorkerCount. Assigning it was a compile error, and per
-// CLAUDE.md one of those disables the WHOLE AI silently while the match still
-// runs near-stock -- so it would have invalidated every result it was measured by.
-//
-// Scaling commander caution therefore needs either a commander.json hide.threat
-// change or a new C++ binding. Until then, log the input so the next attempt
-// starts from data. Check bindings against vendor/engine, never vendor/circuitai.
+// Telemetry only -- no lever here. `aiBuilderMgr.dangerHysteresis` exists in
+// vendor/circuitai but not on the registered CBuilderManager in the tree we
+// actually deploy (vendor/engine/AI/Skirmish/BARb); its surface is only
+// DefaultMakeTask, Enqueue, EnqueueRetreat, GetWorkerCount. Assigning it is a
+// compile error that disables the whole AI silently. Check bindings against
+// vendor/engine, never vendor/circuitai. Scaling commander caution needs a
+// commander.json hide.threat change or a new C++ binding; this just logs the
+// input.
 
-// Trigger on metal we have actually identified. CEnemyManager adds a unit's metal
-// cost to its role buckets when it first enters LOS and only subtracts it when
-// the unit dies, so GetEnemyCost(RT::HEAVY) is a standing count of live enemy
-// heavies rather than an LOS snapshot; it does not flicker as they move in and
-// out of vision.
-//
-// Calibrated off real unit costs rather than a guess. The cheapest def carrying
-// the "heavy" role in this profile's behaviour configs is armmar at 970 metal,
-// then legaheattank 1250, armfboy 1400, corshiva 1550, corgol 1650, cortrem 1850,
-// corsumo 2200, leginc 2300, corkarg 2500. A commander is 2700 metal and 3700 hp
-// and loses to any one of them. 900 therefore reads as "one enemy T2 heavy, any
-// faction, is on the field", which is the line the user drew.
-//
-// The 400 that never fired was measured against a THREAT figure, and threat is
-// cost-independent: defThreat = sqrt(dps) * dmg^0.25 * sqrt(hp) / 128, roughly 1.5
-// for a T1 raider and 30 for a Sumo. 400 of that needed a dozen heavies alive at
-// once, so no game reached it. Cost is the scale that matches the sentence.
+// Cost-based, not threat-based: defThreat is cost-independent
+// (sqrt(dps) * dmg^0.25 * sqrt(hp) / 128), so a metal threshold reads "one
+// enemy T2 heavy is on the field" where a threat threshold does not fire until
+// several are alive at once. GetEnemyCost(RT::HEAVY) is a standing live count
+// (CEnemyManager adds on first LOS, subtracts on death), not an LOS snapshot.
+// 900 sits at roughly the cheapest T2 "heavy"-role unit cost, below which a
+// commander (2700 metal, 3700 hp) starts losing 1:1 fights.
 const float COM_HEAVY_METAL = 900.f;
 
 bool gCautious = false;
@@ -63,10 +40,9 @@ void UpdateCaution()
 			+ " enemyHeavy=" + formatFloat(heavy, "", 0, 0));
 	}
 
-	// Heartbeat. "The threshold never fired" and "the input is dead" look
-	// identical in a log that only prints on transitions, which is exactly how the
-	// 400 went unnoticed. workers is in here because the C++ gate also wants
-	// GetWorkerCount() > 2 before any commander caution applies at all.
+	// Heartbeat, since a transition-only log can't distinguish "never fired"
+	// from "input is dead". workers is logged because the C++ gate also
+	// requires GetWorkerCount() > 2 before any commander caution applies.
 	if (ai.frame >= gNextLog) {
 		gNextLog = ai.frame + 2 * MINUTE;
 		AiLog(Factory::T() + "apex: comm heavy=" + formatFloat(heavy, "", 0, 0)

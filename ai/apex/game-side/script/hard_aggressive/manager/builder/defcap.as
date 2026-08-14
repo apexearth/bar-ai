@@ -2,15 +2,10 @@ namespace Builder {
 
 // HOW MUCH OF THE CONSTRUCTOR POOL MAY BE POINTED AT DEFENCE.
 //
-// apexearth, as policy: "We should limit how many cons can be making defenses to
-// 50% of our cons unless our base is under attack and we need to panic build."
-//
-// A SHARE, not a count -- it needs no revisiting as the pool grows, and it is the
-// same shape as the rest of this codebase's bounds.
-//
-// What he is solving, said immediately after: "Our cons kept dying that game
-// because no military was protecting them while they tried to make defenses. They
-// built a bit too far up on the front line."
+// A SHARE, not a count -- it needs no revisiting as the pool grows, and it
+// matches the rest of this codebase's bounds. Guards against constructors
+// dying while undefended, building towers too far forward with no military
+// covering them.
 
 // The share above which no NEW defence election is accepted. Read from a tunable
 // so it is an experiment rather than a decree.

@@ -3,30 +3,19 @@ namespace Brain {
 //------------------------------------------------------------------------------
 // THE MACRO VIEW. Rules propose; this decides.
 //
-// apexearth: "what if we created a stack/list of all the things we wanted to do
-// and then properly prioritized them after in some process which has a better
-// macro view?" and "I want it to generally be a macro-view brain/logic center."
-//
-// The ladder in builder/maketask.as makes POSITION the only priority: the first
-// rule that returns a task wins, so importance is expressed by where a rule sits
-// rather than by what it is worth. Measured 2026-08-10: CommanderMexGuard sat
-// one line above DefaultMakeTask and took 162 constructor-picks against 4 mex
-// upgrades in a single game.
-//
-// Here a rule states a WANT -- what it would do, what that is worth, what it
-// costs -- with no side effects. Decide() ranks the list and only then acts, and
-// the whole ranking is logged so a pick can be argued with. docs/18-brain.md
-// describes what is built here and what is still only designed.
+// The ladder in builder/maketask.as makes POSITION the priority: the first rule
+// that returns a task wins. Here a rule states a WANT -- what it would do, what
+// that is worth, what it costs -- with no side effects, and Decide() ranks the
+// list and acts. docs/18-brain.md describes the design.
 //
 // Only the mex-upgrade want is enqueued by this file. Every other kind names an
 // existing rule in Execute(), which keeps its own preconditions -- the ranking
 // decides ORDER, not eligibility. A new want therefore needs a Propose() call
 // AND a line in Execute(), or it ranks and can never fire.
 //
-// VALUE IS METAL PER SECOND GAINED, PER METAL SPENT. That is the one unit every
-// economic want can be expressed in, and it is why an upgrade can be compared to
-// a reactor at all. Defence and offence need their own terms (threat denied,
-// enemy metal removed) and are deliberately not here yet.
+// Value is metal per second gained, per metal spent -- the one unit every
+// economic want can be expressed in. Defence and offence need their own terms
+// and are deliberately not here yet.
 //------------------------------------------------------------------------------
 
 // How far a constructor will look for one of our extractors to upgrade.
@@ -47,11 +36,8 @@ const float PINPOINT_VALUE = 0.5f;   // targeting support, cheap and bounded
 // The standing eco rules, as values rather than as "always".
 //
 // A converter eats 70 energy/s and returns 1 metal/s for ~1 metal to build
-// (energyconv_capacity 70, efficiency 1/70, read from armmakr.lua), so while
-// energy is spilling it is the best metal-per-metal in the game by a wide
-// margin -- and that is exactly the state measured at 41.5% metal waste with
-// idle factories. Energy itself is scored on what it unlocks, and is URGENT
-// rather than merely valuable when the grid is stalling: UpdateEconomyTasks
+// (armmakr.lua), the best metal-per-metal while energy spills. Energy itself
+// is URGENT rather than merely valuable when the grid stalls: UpdateEconomyTasks
 // returns early on IsEnergyStalling, so a stall stops every other economy task
 // including mex upgrades.
 const float CONVERT_VALUE     = 1.0f;    // metal/s per converter, while spilling
@@ -63,18 +49,14 @@ const float CONVERT_DRAW_BIG  = 600.f;   // armmmkr, 380 metal, 10.3 metal/s bac
 const float BIG_CONV_VALUE    = 10.3f;
 const float ENERGY_VALUE      = 1.2f;    // metal/s equivalent of a generator step
 const float ENERGY_STALL_MULT = 6.0f;    // a stall blocks the whole economy
-// BOTH BANKS FULL MEANS INCOME IS NOT THE PROBLEM. apexearth: "if we are full on
-// energy AND metal, then we can probably decrease all of our eco priority by
-// some multiplier." More income buys nothing when neither resource can be
-// stored or spent -- the constraint has moved to build power and to what we do
-// with the surplus, so everything economic drops behind the things that spend.
+// BOTH BANKS FULL MEANS INCOME IS NOT THE PROBLEM. More income buys nothing when
+// neither resource can be stored or spent, so everything economic drops behind
+// the things that spend.
 const float ECO_SATED_MULT    = 0.25f;
-// BUILD POWER IS WHAT A FULL BANK ACTUALLY NEEDS. apexearth: "in matches where
-// we are +100 handicap it's easy to max out the economy and have a hard time
-// using all the resources." A nano turret converts banked metal back into units
-// at ~7 metal/s of build power for ~300 metal, which beats every income want
-// once income is no longer the constraint. Scored high only while sated, so it
-// cannot crowd out expansion in a normal game.
+// BUILD POWER IS WHAT A FULL BANK ACTUALLY NEEDS. A nano turret converts banked
+// metal back into units at ~7 metal/s of build power for ~300 metal, which beats
+// every income want once income is no longer the constraint. Scored high only
+// while sated, so it cannot crowd out expansion in a normal game.
 const float NANO_VALUE        = 7.0f;
 // A front turret repairs instead of producing, so its value is what it keeps
 // alive rather than what it builds. Lower than a base nano's build power, and
@@ -86,22 +68,14 @@ bool EcoSated()
 	return aiEconomyMgr.isMetalFull && aiEconomyMgr.isEnergyFull;
 }
 
-// ARMY IS NOT THE RESIDUAL. Measured 2026-08-11 across four arms: every cap I
-// removed moved metal into constructors, factories and towers, and the standing
-// army fell every time -- 4,605 on the pre-Brain build down to 3,943 -- with the
-// trade ratio following it down. Nothing in this AI ever gave army a claim on
-// metal. Economy wants compete with economy wants, defence has an income budget,
-// and the army is whatever is left.
+// ARMY IS NOT THE RESIDUAL. Economy defers when we are losing the army fight,
+// the same shape as ECO_SATED_MULT but opposite cause: there the constraint
+// moved to build power, here to the front.
 //
-// So the economy defers when we are losing the army fight, exactly as it already
-// defers when both banks are full. Same shape as ECO_SATED_MULT, opposite cause:
-// there the constraint has moved to build power, here it has moved to the front.
-// Both are the economy noticing that more income is not the thing we lack.
-//
-// Scaled by HOW FAR behind, not switched: at parity nothing changes, and the
-// damping deepens as the gap does, so this cannot latch us out of expanding.
-// EnemyArmyCost only accumulates on sighting, so an unscouted enemy reads small
-// and the multiplier stays near 1 -- ignorance never damps the economy.
+// Scaled by HOW FAR behind, not switched, so this cannot latch us out of
+// expanding. EnemyArmyCost only accumulates on sighting, so an unscouted enemy
+// reads small and the multiplier stays near 1 -- ignorance never damps the
+// economy.
 const float ARMY_DEFICIT_FLOOR = 0.35f;   // most the economy is ever damped
 
 float ArmyDeficitMult()
@@ -121,8 +95,8 @@ Cat BudgetCatOf(const string& in kind)
 	if ((kind == "nano") || (kind == "frontnano") || (kind == "gantry"))
 		return BUILDPOWER;
 	// "aa" is anti-air cover and spends from the air-defence row; "fence" is the
-	// land line. They shared one kind and one budget until 2026-08-12, which put
-	// apexearth's anti-air number in charge of every ground tower. See targets.as.
+	// land line. They must stay separate budgets, or the air-defence share ends
+	// up governing every ground tower. See targets.as.
 	if (kind == "aa")
 		return AIRDEF;
 	if ((kind == "fence") || (kind == "pulsar") || (kind == "silo")
@@ -156,14 +130,9 @@ class Want
 
 	int have = 0;         // how many of this we already hold
 
-	// VALUE PER METAL, WITH DIMINISHING RETURNS.
-	//
-	// Ranking on value/cost alone hands the game to whatever is cheapest: a
-	// Pinpointer at 0.5 metal/s and ~800 metal scores higher than a silo at 4.0
-	// and 8,100, so the first ranked run picked pinpoint whenever no upgrade was
-	// in reach. Halving the value per copy already standing is what stops one
-	// cheap thing winning forever, and it is the real shape -- the second
-	// Pinpointer is worth much less than the first.
+	// VALUE PER METAL, WITH DIMINISHING RETURNS. Ranking on value/cost alone
+	// hands the game to whatever is cheapest. Halving the value per copy
+	// already standing is what stops one cheap thing winning forever.
 	float Score() const
 	{
 		float scaled = value / (1.f + float(have));
@@ -197,10 +166,9 @@ int gFenceNear = 0;   // ordered inside 0.10 of the way to the enemy
 int gFenceMid = 0;    // 0.10 - 0.25
 int gFenceFar = 0;    // past 0.25
 
-// DID THE ORDER BECOME A TOWER? Aim and outcome have only ever been measured
-// separately -- orders from the log, standing towers from the position gadget --
-// and a request aimed at 0.4 that never gets built looks identical, at the end of
-// the game, to a request that was never aimed forward at all.
+// DID THE ORDER BECOME A TOWER? Orders and standing towers are tracked
+// separately, so a request that was aimed but never built looks identical, at
+// the end of the game, to one that was never aimed forward at all.
 array<AIFloat3> gAimPos;
 array<int> gAimAt;
 array<IUnitTask@> gAimTask;
@@ -277,23 +245,12 @@ void Propose(Want@ w)
 
 // EXPANSION AS A WANT, NOT AS A POSITION IN A LIST.
 //
-// apexearth: "potentially, expansion always wins is now being replaced by logic
-// in the brain", and "a lot of the concepts and things that I had added in the
-// past are now the brain's responsibility."
-//
-// ExpansionAlwaysWins (rules_offer.as, deleted 2026-08-14) used to protect
-// expansion by SITTING EARLY: it took the engine's offer whenever that offer
-// happened to be a mex. It could not help when the engine offered something
-// else, or nothing -- and the engine's economy generator is budgeted
-// (MakeEconomyTasks refuses above workers * 8), so "nothing" was common
-// exactly when the base was busiest. Measured 6 games at minute 14: we held 10
-// extractors to stock's 13 and made 12,303 metal to their 17,185.
-//
-// It does not need protecting once it has a number. A plain extractor yields
-// ~1.8 metal/second for ~50 metal, which is 0.033 per metal against a moho
-// upgrade's 0.0058 and a reactor's 0.0034 -- expansion outranks an upgrade five
-// to one and a reactor ten to one on value alone, which is the right answer and
-// the one the ladder was hard-coding by hand.
+// ExpansionAlwaysWins (rules_offer.as, deleted 2026-08-14) protected expansion
+// by taking the engine's offer whenever it happened to be a mex, which could not
+// help when the engine offered something else or nothing. A plain extractor
+// yields ~1.8 metal/s for ~50 metal against a moho upgrade's 0.0058/metal and a
+// reactor's 0.0034/metal, so expansion outranks both on value alone without
+// needing to be hard-coded first in the list.
 //
 // Any builder, not just an advanced one: taking ground is T1 work.
 const float MEX_INCOME_GAIN = 1.8f;   // armmex extraction, read from the defs
@@ -303,12 +260,10 @@ Want@ MexWant(CCircuitUnit@ unit)
 	CCircuitDef@ mex = SideDef3("armmex", "cormex", "legmex");
 	if ((mex is null) || !mex.IsAvailable(ai.frame))
 		return null;
-	// BOUNDED BY BUILD POWER, WHICH IS WHAT ACTUALLY LIMITS EXPANSION. Nothing
-	// else does: every open spot is worth the same, so this want re-proposes for
-	// every builder on every call and enqueued 97 extractor tasks in one game
-	// before this line existed. One outstanding job per worker is the honest
-	// ceiling -- a job nobody can walk to is a slot held for 300 seconds against
-	// the engine's economy budget.
+	// BOUNDED BY BUILD POWER. Every open spot is worth the same, so this want
+	// re-proposes for every builder on every call unless capped. One outstanding
+	// job per worker is the honest ceiling -- a job nobody can walk to is a slot
+	// held for 300 seconds against the engine's economy budget.
 	if (Builder::OutstandingMexTasks() >= aiBuilderMgr.GetWorkerCount())
 		return null;
 	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
@@ -329,57 +284,33 @@ Want@ MexWant(CCircuitUnit@ unit)
 
 // DEFENCE THE BRAIN ASKS FOR, ON THE LINE IT CHOSE.
 //
-// apexearth: "Make it so we actively place defenses on the frontline. This is
-// something the brain should ask for."
+// Every tower before this was placed by somebody else and merely approved or
+// refused here -- MexGuard picked the mex, Fortify picked wherever a
+// constructor was standing when it got shot. Here the Brain proposes a
+// POSITION: Military::FrontCurve is the influence crossing sampled lane by
+// lane, and the pick is the point on it with the least standing cover, so
+// cover spreads along the line before it thickens anywhere on it.
 //
-// Every tower until now was placed by somebody else and merely approved or
-// refused here: MexGuard picked the mex, Fortify picked wherever a constructor
-// was standing when it got shot, and the gate could only say yes or no to a spot
-// it had no part in choosing. Measured across every arrangement of that, 12
-// minutes at +50: 0% of our defences sat past a quarter of the way to the enemy
-// while stock had a player at 86% forward.
-//
-// So the Brain proposes a POSITION now. Military::FrontCurve is the influence
-// crossing sampled lane by lane across the map, and the pick is the point on it
-// that has the least standing near it -- cover spreads along the line before it
-// thickens anywhere on it. The def follows the position, as it does at a mex:
-// the Beamer where a raid arrives in force, the Sentry behind.
-//
-// Value is deliberately modest. Defence's real currency is threat denied per
-// metal, which this file does not yet speak; what actually bounds it is the
-// DEFENCE category budget from targets.as, applied to every want through
-// BudgetMult. This one competes there like everything else.
+// Value is deliberately modest -- defence's real currency is threat denied per
+// metal, which this file does not yet speak -- so what actually bounds it is
+// the DEFENCE category budget from targets.as via BudgetMult.
 const float FRONT_FENCE_VALUE = 1.2f;
 const float FRONT_FENCE_SPREAD = 700.f;   // how far apart cover counts as spread
-// HOW FAR TO LOOK FOR GROUND THE TOWER FITS ON.
-//
-// Was 400 -- less than the 435 range of the cheapest tower it places, and a
-// fraction of the 1400 that armanni/cortoast reach. The samples this searches
-// around are raw geometry (see the call site), so they land on slopes, in water
-// and inside buildings; a lake or a cliff face is routinely wider than 400
-// elmos, and FrontLineSpots is deterministic, so a spot that fails once fails on
-// every call for the rest of the game. Failure returns null and the want is
-// never proposed at all -- silent, and a candidate for why the front line is
-// ordered far more often than it is built.
-//
-// The line's own spacing is computed from the tower's GetMaxRange (about 1120
-// elmos apart for an armanni), so a nudge smaller than that cannot even reach
-// the neighbouring valid ground. Scaled off the same number for that reason.
+// HOW FAR TO LOOK FOR GROUND THE TOWER FITS ON. The samples searched around are
+// raw geometry, so they land on slopes, in water and inside buildings, and
+// FrontLineSpots is deterministic -- a spot that fails once fails on every call
+// for the rest of the game, and failure means the want is silently never
+// proposed. Scaled off the tower's own range so the search can reach the
+// neighbouring valid ground on the line.
 const float FRONT_SITE_FRAC = 0.9f;
 
-// A RANGE READ IS NOT AUTOMATICALLY A GUN'S RANGE, AND AN ABSURD ONE MUST NOT BE
-// ABLE TO REACH ANYTHING. GetMaxRange is the def's longest weapon, whatever that
-// weapon is for: an anti-nuke's interceptor reports 72,000 elmos, and legrampart
-// carries one. Read unclamped it set the front line's SPACING and the radius
-// FenceCountNear counts cover over, so one such def made the line a single point,
-// made every tower on the map count as cover, and drove the want's value to zero
-// -- silently, for one faction. This is the second time a bad range read has
-// zeroed a want, so the clamp is general: nothing downstream sees a raw range.
-//
-// Bounded by the longest real static DIRECT-FIRE gun any of the three factions
-// fields -- legperdition at 2,300 elmos, 5.35x the light turret's 430-435.
-// Anything reporting more than that is carrying artillery or an interceptor, not
-// a line gun.
+// A RANGE READ IS NOT AUTOMATICALLY A GUN'S RANGE. GetMaxRange is the def's
+// longest weapon whatever it is for -- an anti-nuke's interceptor reports
+// 72,000 elmos, and legrampart carries one. Read unclamped, that range sets the
+// line's spacing and the radius cover is counted over, so it can collapse the
+// line to a point and zero the want's value. Bounded by the longest real static
+// direct-fire gun any faction fields (legperdition, 2,300 elmos) -- anything
+// above that is artillery or an interceptor, not a line gun.
 const float DEF_REACH_CAP = 6.0f;
 
 float LightTowerRange()
@@ -412,78 +343,38 @@ float FrontSiteSearch(const CCircuitDef@ tower)
 
 // WHAT THE TURRET IS WORTH -- not the fact that a turret is being built.
 //
-// Score() is value/cost, and the value above it was a constant. Four of
-// apexearth's complaints are that one line:
+// Value is three multipliers and one addition, none of them a bare number:
 //
-//   the map edge ("we need EXTRA defense on the edges to compensate"), rebuilding
-//   ("kills whatever we have and then we don't seem to rebuild it with any
-//   urgency"), the advanced plant ("the T2 lab dying because it was placed and NO
-//   turrets were made anywhere near it") and the heavy tier ("Where's our T2 and
-//   T3 defenses?"). A constant value divided by cost makes a 3,500-metal
-//   Annihilator score ~18x worse than a 190-metal Beamer, so the line got weaker
-//   as the economy grew; and it made empty grass at the map's centre score exactly
-//   as high as the wall in front of our own factory.
-//
-// Three multipliers and one addition, none of them a bare number:
-//
-//  - WHAT IT DENIES, which is damage AND reach. GetSurfThreat is CircuitAI's own
-//    measure, taken RELATIVE to the cheapest turret we would ever place --
-//    relative, so FRONT_FENCE_VALUE keeps its calibration and only the ORDERING
-//    between tiers changes. It contains no range: CircuitDef.h GetSurfThreat is
-//    surfThrDmg * sqrt(health + shield), and surfThrDmg is sqrt(dps) * dmg^0.25.
-//    So range is a second, multiplied term. apexearth: "at +50 handicap the t2
-//    scorp defense is only worthwhile for a short time. you need the longer range
-//    defenses."
-//
-//    LINEAR in range, not squared: this want holds a LINE, and a turret of range
-//    R holds R/Rlight as much of it -- the identical quantity FrontLineSpots
-//    already spaces the line by. Squared would value a disc instead, and would
-//    promote Cortex's 950-range Doomsday over its 1390-range Persecutor by
-//    accident of the damage term. Multiplied by the damage term rather than
-//    replacing it, and skipped entirely for a def with no surface gun, so
-//    something that outranges everything and kills nothing gains nothing.
-//
-//    Deliberately not proportional to cost either: value that scales with cost
-//    makes score constant and deletes the tier distinction altogether, which is
-//    a different bug.
-//  - HOW EXPOSED IT IS. Exactly the coverage deficit EdgeSpacing already computes
-//    for the line's spacing -- at the wall a point is covered from one side
-//    instead of two, so the same threat needs twice the defence there.
+//  - WHAT IT DENIES: GetSurfThreat (damage) relative to the cheapest turret we
+//    would place, times range LINEARLY (not squared -- this want holds a LINE,
+//    and a turret of range R holds R/Rlight of it, the same quantity
+//    FrontLineSpots spaces by; squaring would value a disc instead). Skipped
+//    entirely for a def with no surface gun, and deliberately not proportional
+//    to cost, which would delete the tier distinction.
+//  - HOW EXPOSED IT IS: the coverage deficit EdgeSpacing already computes for
+//    the line's spacing -- a wall point is covered from one side instead of two.
 //  - WHAT IS BEHIND IT, over what the turret costs.
 //  - GROUND WE HAVE JUST BEEN PUSHED OFF, added rather than multiplied so it
-//    still lifts a stretch whose other terms are all small. A position that ate a
-//    turret has proved it is worth defending.
+//    lifts a stretch whose other terms are small without dominating them.
 //
-// The reference is the metal a raid would take off us if it got through -- an
-// advanced plant is ~2,000 -- so the multiplier is ~2x with one behind the line.
+// The reference for "what is behind it" is the metal a raid would take off us
+// if it got through -- an advanced plant is ~2,000 metal.
 const float DEF_ASSET_REF   = 2000.f;
 const float DEF_LOSS_WEIGHT = 1.5f;
 
-// CAN THIS TURRET SHOOT BACK AT WHAT IS SHELLING IT.
+// CAN THIS TURRET SHOOT BACK AT WHAT IS SHELLING IT. Threat-per-metal alone
+// flatters a short-range turret that artillery can shell for free -- corvipe at
+// 730 range scores nearly double a 1,390-range Persecutor on damage and cost
+// alone. HOW FAR A BESIEGER REACHES is the longest range among the game's own
+// besieging defs, resolved by name; HOW MUCH IT MATTERS is GetEnemyCost(ARTY).
 //
-// apexearth, given two candidate reasons why range matters to him -- (1) artillery
-// shells a short turret from outside its reach, so its DPS never happens, (2) a
-// longer turret covers more line: "1 and 2 here are correct. but 1 is the biggest
-// issue. they can't even hit the things that cna see them and easily kill them."
+// Static siege guns are deliberately excluded: nothing we place on a line
+// answers a 4,650-range armbrtha, and including them would drive every turret's
+// factor to ~0.08 and delete defence outright.
 //
-// That is why threat-per-metal flatters the Scorpion. corvipe reaches 730 and
-// scores nearly double a 1,390-range Persecutor on damage and cost alone, while
-// armmerl and corvroc -- BAR's own description, "Stealthy Rocket Launcher - good
-// vs. static defense" -- shell it from 1,300.
-//
-// Neither input is a constant standing in for the enemy. HOW FAR A BESIEGER
-// REACHES is the longest range among the game's own besieging defs, resolved by
-// name. HOW MUCH IT MATTERS is GetEnemyCost(ARTY) -- what we have actually seen.
-//
-// The static siege guns are deliberately NOT in the list: nothing we would put on
-// a line answers a 4,650-range armbrtha or a 4,950-range corint, and including
-// them would drive every turret's factor to ~0.08 and delete defence outright.
-//
-// DELIBERATELY NOT NORMALISED against the light turret. Normalising restores the
-// light turret to 1.0 but inflates every heavy turret 5-9x, which drives the fence
-// want hard against mex upgrades -- measured on paper before this shipped. Left as
-// it is, the factor sits in [1-s, 1] and can only ever LOWER a turret's value, so
-// this cannot be the thing that grows defence spend. Do not "tidy" it.
+// DELIBERATELY NOT NORMALISED against the light turret -- normalising inflates
+// every heavy turret 5-9x and drives the fence want hard against mex upgrades.
+// The factor stays in [1-s, 1] and can only ever LOWER a turret's value.
 const float SIEGE_SOFT = 2.f;
 float gSiegeReach = -1.f;
 float gSiegeRef   = -1.f;
@@ -513,17 +404,13 @@ float SiegeReach()
 	return gSiegeReach;
 }
 
-// HOW SIEGED WE ARE, saturating rather than proportional. Their artillery does not
-// have to be most of their army for a short turret to be worthless -- one
-// Ambassador kills a Scorpion for free -- so this is arty/(arty + one besieger's
-// cost), which reads 0.5 at a single cheapest-besieger's worth and 0.75 at three.
-// The reference is that def's own costM, read rather than typed.
+// HOW SIEGED WE ARE, saturating rather than proportional: arty/(arty + one
+// besieger's cost), so a short turret does not need to face most of the enemy
+// army to read as worthless.
 //
-// UNKNOWN READS AS ZERO PENALTY, and that is the safe direction here rather than a
-// breach of the unknown-is-never-none rule -- it is not a bug. This term only ever
-// REDUCES value, so an unscouted enemy keeps the cheap turrets available, which is
-// what was asked for: a Scorpion is genuinely fine against raiders. Suppressing
-// them on a guess is the expensive error; keeping them is the cheap one.
+// UNKNOWN READS AS ZERO PENALTY: this term only ever reduces value, so an
+// unscouted enemy keeps the cheap turrets available rather than suppressing them
+// on a guess.
 float SiegeFraction()
 {
 	SiegeReach();
@@ -608,29 +495,15 @@ float DefenceValue(CCircuitDef@ tower, const AIFloat3& in at, float span)
 }
 
 // COVERING AN EXTRACTOR, as a WANT rather than as a rule that places its own
-// tower. apexearth: "do the consolidation."
+// tower. MexGuard's reason was always sound -- a bare extractor is free metal
+// for one raider -- but its placement produced blobs by choosing a site with no
+// reference to anything else being built. Here the reason becomes a proposal
+// that competes with the line on value, and one placement path serves both.
 //
-// MexGuard's REASON was always sound -- a bare extractor is free metal for one
-// raider -- and it was its PLACEMENT that produced blobs: it chose a mex, then a
-// site next to it, with no reference to anything else we were building. Here the
-// reason becomes a proposal that competes with the line on value, and one
-// placement path serves both.
-//
-// A mex with nothing in firing range of it outranks a mex that merely wants a
-// second turret, which is what makes cover spread before it thickens.
-// A BARE MEX IS HIGH PRIORITY, and the value says why rather than asserting it.
-// apexearth: "A mex with no turret in range to defend it is a high priority
-// target for building a turret to defend that area."
-//
-// Everything else in this file is valued in metal per second, so this is too: an
-// extractor makes 1.8/s (armmex, read from the defs -- the same figure
-// MEXUP_INCOME_GAIN is derived against), and an uncovered one is that income plus
-// its 620 metal standing in front of anything that wanders past. The turret is 85.
-//
-// Scaled by exposure, because a bare extractor on the front is raided and one
-// behind the base mostly is not -- FrontT is 0 at home and 1 at the enemy, the
-// same measure every other positional rule uses. At home this scores about four
-// times a mex upgrade per metal; on the front, twelve.
+// Valued in metal/second like everything else here: an extractor makes 1.8/s
+// (armmex) plus its 620 metal standing exposed against a raid, scaled by
+// exposure (FrontT, 0 at home / 1 at the enemy) so a bare mex on the front
+// outranks a mex that merely wants a second turret.
 const float MEX_INCOME_AT_RISK = 1.8f;
 const float MEX_EXPOSURE_MULT  = 3.0f;
 
@@ -703,15 +576,11 @@ Want@ MexCoverWant(CCircuitUnit@ unit)
 const float AIR_COVER_VALUE = 0.8f;
 
 // AN ORDER IS NOT A TURRET, AND EVERY READ BELOW WAS FINISH-ONLY.
-//
-// CCircuitAI::GetOwnUnitsOfDef skips u->GetUnit()->IsBeingBuilt(), so a turret we
-// have already started does not count as cover; Military::gFencePos is filled from
-// the FENCE finished handler, so it does not either. Between "ordered" and
-// "finished" this want sees the ground it just claimed as bare, and every builder
-// asking in that window gets the same answer.
-//
-// Builder::gDigOrderPos exists for exactly this and AA never used it. Same shape,
-// scoped to AA so an AA order cannot suppress a ground tower or the reverse.
+// GetOwnUnitsOfDef skips units still under construction, and Military::gFencePos
+// only fills from the FENCE finished handler, so between "ordered" and
+// "finished" this want sees the ground it just claimed as bare. Builder::
+// gDigOrderPos exists for exactly this and AA never used it; scoped separately
+// here so an AA order cannot suppress a ground tower or the reverse.
 const int AA_ORDER_TTL = 90 * SECOND;
 array<AIFloat3> gAAOrderPos;
 array<int>      gAAOrderAt;
@@ -817,17 +686,14 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 	if (!OnMap(site))
 		return null;
 
-	// WHAT THIS PATCH OF SKY IS WORTH, not the fact that AA is wanted somewhere.
-	// The value was a bare constant, and it logged as aa=0.0051 in every sample of
-	// a 40-minute game: a base with no AA at all proposed exactly what a base with
-	// nine proposed, so whoever asked first spent the whole team's allowance.
+	// WHAT THIS PATCH OF SKY IS WORTH, not the fact that AA is wanted somewhere. A
+	// bare constant here let whoever asked first spend the whole team's allowance
+	// regardless of coverage.
 	//
-	// `mine` is scoped to the builder, so `uncovered` is a LOCAL reading -- the
-	// builder standing at the base with nothing overhead proposes at ~1.0 and the
-	// one standing in the blob proposes at ~0.1. DefenceValue is the same function
-	// the front line uses; for an AA def TowerDenial returns 1.0 (no surface gun),
-	// so what it contributes here is exposure, what is parked behind the point, and
-	// whether we have recently lost a tower there.
+	// `mine` is scoped to the builder, so `uncovered` is a LOCAL reading: a bare
+	// base proposes near 1.0, a blob proposes near 0.1. DefenceValue is the same
+	// function the front line uses; TowerDenial returns 1.0 for an AA def (no
+	// surface gun), so exposure and what is behind the point are what it adds.
 	const float uncovered = float(bare) / float(mine.length());
 
 	Want@ w = Want();
@@ -844,11 +710,9 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 Want@ FrontDefenceWant(CCircuitUnit@ unit)
 {
 	FenceSweep();
-	// THE LINE IS SPACED BY THE TURRET'S OWN RANGE. apexearth: "a line of turrets
-	// are needed, all within range of each other's firing radius, so no 'leaks'
-	// can get through." So the def is chosen FIRST -- it decides how far apart the
-	// line's positions are -- and a Rattlesnake line is correctly sparser than a
-	// Beamer line rather than both being a flat 700 elmos.
+	// THE LINE IS SPACED BY THE TURRET'S OWN RANGE. The def is chosen FIRST -- it
+	// decides how far apart the line's positions are -- so a Rattlesnake line is
+	// correctly sparser than a Beamer line rather than both being a flat spacing.
 	CCircuitDef@ tower = Builder::FrontTower(unit, unit.GetPos(ai.frame));
 	if ((tower is null) || !tower.IsAvailable(ai.frame))
 		return null;
@@ -857,11 +721,10 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	float span = TowerReach(tower);
 	if (span < 200.f)
 		span = 200.f;   // a def with no usable range must not collapse the line
-	// OVERLAP, DON'T JUST TOUCH. apexearth: "you'll want to make sure they overlap
-	// by ~20% on that firing range circle." At spacing == range the neighbour sits
-	// exactly on the edge of the circle, so anything walking the seam is engaged
-	// by one turret at its worst range and by nothing else. Pulling the spacing in
-	// by a fifth means every point on the line is covered by two.
+	// OVERLAP, DON'T JUST TOUCH. At spacing == range a neighbour sits exactly on
+	// the edge of the circle, so anything walking the seam is engaged by one
+	// turret at its worst range only. Pulling spacing in by a fifth covers every
+	// point on the line by two turrets.
 	const float overlap = ai.GetTunable("apex_front_overlap", 0.2f);
 	const float spacing = span * (1.f - overlap);
 
@@ -872,15 +735,12 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	if (!Military::FrontLineSpots(line, spacing, span) || (line.length() == 0))
 		return null;
 
-	// A TASK NOBODY CAN REACH IS NEVER ASSIGNED TO ANYONE. Measured: of 235 front
-	// orders across two games, 7 became towers and every single failure was still
-	// on the books 90 seconds later with NO worker on it -- not dropped, not
-	// killed, just never picked up. The builder manager elects units onto tasks by
-	// its own cost-and-distance ranking, so a request 3,000 elmos away loses to
-	// every nearer piece of work, forever, however good the position is.
-	//
-	// So the Brain asks the builder in front of it to cover the stretch of line in
-	// front of IT, rather than the best point on the whole curve.
+	// A TASK NOBODY CAN REACH IS NEVER ASSIGNED TO ANYONE. The builder manager
+	// elects units onto tasks by its own cost-and-distance ranking, so a request
+	// far from any builder loses to every nearer piece of work, forever, however
+	// good the position is. So the Brain asks the builder in front of it to cover
+	// the stretch of line in front of IT, rather than the best point on the whole
+	// curve.
 	const AIFloat3 me = unit.GetPos(ai.frame);
 	const float reach = ai.GetTunable("apex_front_reach", 2200.f);
 	AIFloat3 best;
@@ -893,13 +753,12 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 		const float d = me.distance2D(line[i]);
 		if (d > reach)
 			continue;
-		// Never send a builder somewhere it cannot survive to finish. apexearth:
-		// "what is the point in trying to make a tower that can never be built?"
+		// Never send a builder somewhere it cannot survive to finish.
 		if (Builder::ThreatFor(unit, line[i]) > Builder::CON_THREAT_VETO)
 			continue;
-		// Already ordered here: a want that re-proposes every call enqueued 101
-		// towers for 15 that got built, and each unassigned task holds its slot
-		// for 300 seconds against the engine's budget.
+		// Already ordered here: a want that re-proposes every call would enqueue
+		// many towers for few that get built, each holding its slot for 300
+		// seconds against the engine's budget.
 		if (Builder::DefenceTaskNear(line[i], spacing))
 			continue;
 		// A gap is a stretch of line with nothing in range of it.
@@ -919,20 +778,16 @@ Want@ FrontDefenceWant(CCircuitUnit@ unit)
 	if (!Military::DefenceAllowedAt(best, tower))
 		return null;
 
-	// A POINT ON A CURVE IS NOT A BUILD SITE. Every other placement in this AI
-	// runs its position through FindBuildSiteNear first; this one handed the raw
-	// sample straight to Enqueue. The samples are geometry -- fourteen steps along
-	// a bearing -- so they land on slopes, in water and inside existing buildings
-	// as often as not.
+	// A POINT ON A CURVE IS NOT A BUILD SITE. The samples are raw geometry, so
+	// they land on slopes, in water and inside existing buildings as often as
+	// not -- run through FindBuildSiteNear like every other placement in this AI.
 	best = ai.FindBuildSiteNear(tower, best, FrontSiteSearch(tower));
 	if (!OnMap(best))
 		return null;
 
-	// HOW MUCH THE LINE IS WORTH RIGHT NOW, rather than a constant. A line with
-	// nothing on it is the most valuable thing a builder can be doing; a line
-	// already covered end to end is worth almost nothing, and should lose to a mex
-	// upgrade without anyone having to write a rule saying so. That is the whole
-	// point of the want being ranked instead of sitting in the pipeline.
+	// HOW MUCH THE LINE IS WORTH RIGHT NOW, rather than a constant. A bare line is
+	// the most valuable thing a builder can do; a line already covered end to end
+	// should lose to a mex upgrade without a separate rule saying so.
 	uint bare = 0;
 	for (uint i = 0; i < line.length(); ++i) {
 		if (OnMap(line[i]) && (Military::FenceCountNear(line[i], span) == 0))
@@ -1030,25 +885,16 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 	if (kind == "pinpoint")
 		return Builder::Pinpointer(unit);
 	if (kind == "energy") {
-		// ALWAYS BE BUILDING ENERGY. apexearth: "The rule is really simple. Always
-		// be building energy. Build converters if we are wasting energy. If we are
-		// full of both energy and metal then making more energy becomes less
-		// important."
+		// ALWAYS BE BUILDING ENERGY, CONVERT WHEN IT SPILLS. All three clauses are
+		// in Decide -- the want is proposed every tick, the converter want is gated
+		// on EnergyWasting, and ECO_SATED_MULT damps both when the banks are full.
 		//
-		// All three clauses are in Decide -- the want is proposed every tick, the
-		// converter want is gated on EnergyWasting, and ECO_SATED_MULT damps both
-		// when the banks are full. The first one has never actually fired: this
-		// called HomeEnergy, which returns null for any constructor that is not in
-		// the HOME crew (Crew::RoleOf), so the highest-value want in the ranking
-		// silently did nothing for every other builder. Measured against the
-		// pre-Brain build at minute 14: energy produced 206,124 -> 170,830.
-		//
-		// HomeEnergy no longer refuses on crew role, so it answers for any
-		// builder and keeps the ladder that tiers wind -> advanced solar ->
-		// fusion. The fallback below is for the cases it still declines -- a
-		// naval builder with no reachable site, a def not yet available -- and
-		// places on the same base grid so it lands in the eco band rather than
-		// wherever the unit happens to be standing.
+		// HomeEnergy answers for any builder, not just the HOME crew, and keeps
+		// the ladder that tiers wind -> advanced solar -> fusion. The fallback
+		// below is for the cases it still declines -- a naval builder with no
+		// reachable site, a def not yet available -- and places on the same base
+		// grid so it lands in the eco band rather than wherever the unit happens
+		// to be standing.
 		IUnitTask@ home = Builder::HomeEnergy(unit);
 		if (home !is null)
 			return home;
@@ -1105,74 +951,38 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	if (!AskingForNewWork(unit))
 		return null;
 	Clear();
-	// THE BRAIN WAS INERT FOR THE WHOLE EARLY GAME.
-	//
-	// This read `if (!isAdvCon) return null;`, and isAdvCon is cost >= 300, i.e.
-	// a T2 constructor. Measured: conT2 is 0 at minute 12 in every game sampled,
-	// and `apex: brain wants=` appears ZERO times in a 12-minute infolog. So the
-	// Wants faculty -- the thing that is supposed to rank what our metal buys --
-	// did not run at all until an advanced constructor existed, which is after
-	// the window where our economy actually falls behind.
-	//
-	// Only some wants genuinely need an advanced builder: a moho, a gantry, a
-	// silo. Energy, converters and nano turrets are ordinary T1 work. So the test
-	// moves from the whole function to the individual want, which is what
-	// needsAdvCon was for.
+	// THE BRAIN MUST RUN BEFORE T2 EXISTS. Only some wants genuinely need an
+	// advanced builder -- a moho, a gantry, a silo. Energy, converters and nano
+	// turrets are ordinary T1 work, so the eligibility test lives on the
+	// individual want (needsAdvCon), not on the whole function.
 
-	// NOTHING OPTIONAL BEFORE T2 EXISTS.
-	//
-	// apexearth, watching a 4v4 at +25: "something's going wrong this game where
-	// our guys are not going to t2." The lead logged "building advanced plant
-	// coravp" fifty times with haveT2 still 0 -- the plant was requested over and
-	// over while constructors went to converters, nanos and reactors, all of
-	// which this session had just ungated for every player. Each was individually
-	// reasonable and together they starved the one building that unlocks the
-	// rest.
-	//
-	// Before an advanced factory stands, the only thing worth a constructor is
-	// expansion. This is the 2026-08-01 displacement finding arriving through the
-	// Brain rather than through the ladder.
+	// NOTHING OPTIONAL BEFORE T2 EXISTS. Before an advanced factory stands, the
+	// only thing worth a constructor is expansion -- every optional want (nanos,
+	// gantries, converter growth) would otherwise compete with the constructor
+	// that unlocks T2 itself.
 	const bool preT2 = !Factory::gHaveT2;
 
 	Propose(MexWant(unit));
-	// STEP 4 COMES AFTER STEP 3, same exclusion as HomeTower/CommanderMexGuard
-	// in rules_commander.as. Before any factory exists there is exactly one
-	// builder in the game -- the commander -- so this is really "don't send
-	// the opening builder to the front instead of the lab." Traced live, 8v8
-	// +70 handicap: FrontDefenceWant won 3 times in a row (1.5m, 2.1m, 2.3m),
-	// each sending the commander to walk to a front site, and the T1 lab
-	// wasn't requested until 3.0m as a direct result.
+	// Before any factory exists there is exactly one builder in the game -- the
+	// commander -- so this gate stops the opening builder walking to a front
+	// site instead of requesting the first lab.
 	if (Factory::HaveAnyFactory()) {
 		Propose(FrontDefenceWant(unit));
-		// MexCoverWant is the same "fence" kind as FrontDefenceWant above --
-		// gating one and not the other left this one still winning the
-		// commander's turn pre-lab. Traced live: fence=0.0960 still appeared
-		// in brain wants at 1.5m with no factory anywhere, sourced from here.
+		// Same "fence" kind as FrontDefenceWant above; gating only one left the
+		// other still able to win the commander's turn pre-lab.
 		Propose(MexCoverWant(unit));
 	}
 	Propose(AirCoverWant(unit));
 	Propose(MexUpgradeWant(unit));
 	// The optional class. Costs are read from the defs so a score means
 	// something; where a def is missing the want is simply not proposed.
-	// ALWAYS MAKE ENERGY, AND CONVERT WHEN IT SPILLS -- as scores, so they can
-	// be compared rather than merely obeyed. apexearth: "we had built custom eco
-	// logic... always make energy, and if max energy make energy converters."
-	// ALWAYS, not only when already broke. The rule this implements is "always
-	// make energy, and if max energy make energy converters" -- but the code only
-	// proposed energy `if (isEnergyStalling)`, which is the state where the grid
-	// has ALREADY run out. So the Brain never grew energy ahead of demand; growth
-	// happened only through rules that bypass this ranking entirely, each of which
-	// put down a basic collector. apexearth: "we make too many basic solars and
-	// not enough advanced solars."
 	//
-	// A stall is urgency, so it stays a multiplier rather than the gate.
-	// ...BUT NOT WHILE IT IS SPILLING. The rule is "always be building energy;
-	// build converters if we are wasting energy" -- two clauses, and proposing
-	// both at once means the generator want keeps winning and the spill grows.
-	// Measured when this was unconditional: energy produced 315,333 per player
-	// against stock's 169,414, of which 180,306 was WASTED, while metal fell to
-	// 10,331 and the trade ratio collapsed to 0.11. More generators is the answer
-	// to a shortage, never to a surplus.
+	// ALWAYS MAKE ENERGY, CONVERT WHEN IT SPILLS -- as scores rather than gates,
+	// so the two compete instead of the energy want only firing once the grid
+	// has already run dry. A stall is urgency, so it stays a multiplier rather
+	// than the gate, and the energy want is skipped entirely while spilling --
+	// proposing both at once just makes the generator keep winning and the spill
+	// grow.
 	if (!Builder::EnergyWasting()) {
 		Want@ e = Simple("energy",
 				ENERGY_VALUE * (aiEconomyMgr.isEnergyStalling ? ENERGY_STALL_MULT : 1.f),
@@ -1189,21 +999,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	}
 	// NO preT2 GATE. Spilling energy is spilling energy, and a converter is 1
 	// metal to build -- the cheapest metal in the game while the grid overflows.
-	// Blocking this before an advanced plant existed threw the surplus away in
-	// exactly the window our economy is weakest: measured 22,000-28,000 energy
-	// wasted per side by minute 10.
-	// BOUNDED BY THE SPILL, NOT BY A SCORE. A converter costs 1 metal, and
-	// Score() deliberately skips the per-metal division below a cost of 1, so it
-	// ranks 1.0 against a reactor's 0.003 and wins every single tick. That is not
-	// wrong as economics -- while energy overflows it IS the best metal-per-metal
-	// in the game -- but it has no natural stopping point, so the bound has to be
-	// the thing it feeds on: one converter draws 70 energy/second, so the grid
-	// supports income/70 of them and no more.
-	// THE ADVANCED CONVERTER, WHENEVER WE CAN BUILD ONE. apexearth: "spacing also
-	// matters... that cheap e converter takes up a lot of room and is very
-	// fragile, so the advanced version is almost always better." Nine armmakr to
-	// match one armmmkr's 600-energy draw is nine footprints in the eco band and
-	// nine things that die to one shell. This proposed the small one by name.
+	// BOUNDED BY THE SPILL, NOT BY A SCORE. Score() skips the per-metal division
+	// below a cost of 1, so a converter ranks 1.0 and wins every tick -- correct
+	// while energy overflows, but with no natural stopping point, so the bound
+	// is what it feeds on: one converter draws 70 energy/s, so the grid supports
+	// income/70 of them and no more.
+	// THE ADVANCED CONVERTER, WHENEVER WE CAN BUILD ONE. Nine armmakr to match
+	// one armmmkr's 600-energy draw is nine footprints in the eco band and nine
+	// things that die to one shell.
 	if (Builder::EnergyWasting()) {
 		CCircuitDef@ big = Builder::BigConvDef(unit);
 		const bool useBig = isAdvCon && (big !is null) && big.IsAvailable(ai.frame);
@@ -1223,12 +1026,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// Spend the surplus rather than growing it further.
 	if (!preT2 && (EcoSated() || aiEconomyMgr.isMetalFull))
 		Propose(Simple("nano", NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc"), false));
-	// ON by default. Attribution showed the income gate, not these, caused the
-	// army drop -- and K/D was the one number that went UP with them (1.49 ->
-	// 1.54). apexearth: "notice how our KD went up with the nanodefense. Maybe
-	// we're just building them a little bit too early, or making too many at
-	// once. Probably a good thing to have on, just be reasonable about it."
-	// So: kept, later and fewer (see FRONT_NANO_* in builder/nano.as).
+	// ON by default: attribution found the income gate, not front nanos, caused
+	// the army drop. Kept, later and fewer (see FRONT_NANO_* in builder/nano.as).
 	if (!preT2 && (ai.GetTunable("apex_front_nano", 1.f) > 0.f))
 		Propose(Simple("frontnano", FRONT_NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc"), false));
 
@@ -1242,13 +1041,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	if (gWants.length() == 0)
 		return null;
 
-	// Descending by score, first rule that accepts wins.
-	//
-	// Ranking every under-budget category ahead of every at-budget one was tried
-	// 2026-08-12 and measured WORSE: fence orders 19 -> 6, mexes 10-19 -> 5-11.
-	// Early on nothing has been built, so every category reads under target and
-	// the partition decides nothing while destabilising the order. Coverage
-	// scaling in the want's own value is the lever that works instead.
+	// Descending by score, first rule that accepts wins. Ranking every
+	// under-budget category ahead of every at-budget one was tried and measured
+	// worse: early on everything reads under target, so the partition decides
+	// nothing while destabilising the order. Coverage scaling in the want's own
+	// value is the lever that works instead.
 	array<Want@> order = gWants;
 	for (uint i = 0; i < order.length(); ++i) {
 		for (uint j = i + 1; j < order.length(); ++j) {
@@ -1269,22 +1066,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	}
 
 	// UPGRADES ARE NOT OPTIONAL SPENDING. If an upgrade is in reach, this
-	// constructor's job is the upgrade -- and if the enqueue happens to fail
-	// (spot taken, already upgrading), it goes back to the engine's own work
-	// rather than starting a Pulsar instead.
+	// constructor's job is the upgrade -- if the enqueue fails (spot taken,
+	// already upgrading), it goes back to the engine's own work rather than
+	// starting a Pulsar instead. Ranking decides order among optional things;
+	// it does not get to displace the economy that pays for them.
 	//
-	// Measured: with the optional class executing whenever it outranked nothing,
-	// picks rose from 13 to 20 per batch and T2 mex share fell 17.6% -> 15.1%.
-	// Ranking decides order among optional things; it does not get to displace
-	// the economy that pays for them.
-	//
-	// ONLY AN UPGRADE **THIS** BUILDER COULD DO BLOCKS ANYTHING. The loop below
-	// skips a want with needsAdvCon for a builder that is not advanced, and the
-	// moho is exactly such a want -- so a T1 constructor was blocked out of the
-	// whole optional class by a job it is physically unable to take, leaving it
-	// only the two kinds that bypass this test. That is a STOP, not a spend: for
-	// an advanced constructor nothing changes, which is the case the measurement
-	// above was taken on.
+	// ONLY AN UPGRADE **THIS** BUILDER COULD DO BLOCKS ANYTHING: a T1 constructor
+	// must not be blocked out of the whole optional class by a moho it is
+	// physically unable to build.
 	bool haveMexUp = false;
 	for (uint i = 0; i < order.length(); ++i) {
 		if (order[i].needsAdvCon && !isAdvCon)
@@ -1307,14 +1096,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		// worth five upgrades per metal, and they are not alternatives -- one
 		// takes ground, the other improves ground already held.
 		//
-		// A COVERAGE GAP IS NOT OPTIONAL SPENDING EITHER. apexearth: "if an area
-		// lacks coverage then that build order to cover it is much more important
-		// than adding defense to some other area that already has coverage."
-		//
-		// `have` on a defence want is FenceCountNear at the chosen point, so zero
-		// means nothing at all is in range of that stretch -- not "thin", bare.
-		// Thickening a stretch that already has cover still waits for the upgrade,
-		// which is what keeps this from becoming a general exemption.
+		// A COVERAGE GAP IS NOT OPTIONAL SPENDING EITHER. `have` on a defence want
+		// is FenceCountNear at the chosen point, so zero means bare, not thin.
+		// Thickening a stretch that already has cover still waits for the
+		// upgrade, which keeps this from becoming a general exemption.
 		const bool gap = ((w.kind == "fence") || (w.kind == "aa")) && (w.have == 0);
 		if ((w.kind != "mexup") && (w.kind != "mex") && haveMexUp && !gap)
 			continue;
@@ -1322,13 +1107,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		// site. Only the budget row it is scored against differs.
 		if ((w.kind == "fence") || (w.kind == "aa")) {
 			// PRIORITY IS WHAT DECIDES WHETHER ANYONE IS EVER SENT.
-			// CBuilderManager::MakeBuilderTask, the engine's own elector, skips a
-			// candidate whose site is threatened and enemy-influenced -- except
-			// when the task is NOW, where its own comment reads "Disregard
-			// safety". A front site is threatened and enemy-influenced by
-			// definition, so at NORMAL these orders are unelectable and sit on the
-			// books forever: measured 48-105 alive with no worker against 1-18
-			// aborted.
+			// CBuilderManager::MakeBuilderTask skips a candidate whose site is
+			// threatened and enemy-influenced -- except at NOW, whose own comment
+			// reads "Disregard safety". A front site is threatened and
+			// enemy-influenced by definition, so at NORMAL these orders sit on
+			// the books forever, unelectable.
 			const Task::Priority prio = (ai.GetTunable("apex_front_now", 0.f) > 0.f)
 					? Task::Priority::NOW : Task::Priority::NORMAL;
 			// A defence request owns its patch of ground, not the whole def:

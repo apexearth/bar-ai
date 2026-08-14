@@ -43,21 +43,11 @@ void Release(const string& in why)
 		+ " enemyAA=" + formatFloat(EnemyAACost(), "", 0, 0));
 }
 
-// Release the strike because the LAND army is going in right now.
-//
-// apexearth: "sometimes a combination of an air bombing raid on that front-line
-// at the time our land army is engaging there (like they're actually there, not
-// 2000 elos away walking towards it) is a great combination of army and air. Our
-// AI needs to have this advanced ability to coordinate at the right times."
-//
-// The assassin's own triggers are Massed() and AIR_DEADLINE -- both about the
-// air force's internal state, neither aware of what the ground army is doing. A
-// team push is the moment the ground army commits, so it is exactly the moment
-// bombers are worth spending: the enemy's attention and its repair are already
-// on the land assault.
-//
-// HalfMassed() rather than Massed(): a coordinated half-strike lands with the
-// push, and a full one that lands two minutes later does not. Returns whether it
+// Release the strike because the LAND army is going in right now: the
+// assassin's own triggers (Massed()/AIR_DEADLINE) know nothing about the ground
+// army, but a team push is exactly when the enemy's attention and repair are on
+// the land assault. HalfMassed() rather than Massed(): a coordinated half-strike
+// lands with the push; a full one two minutes later does not. Returns whether it
 // fired so the caller can log it.
 bool ReleaseForPush()
 {
@@ -72,17 +62,9 @@ bool ReleaseForPush()
 // How many aircraft still flying counts as "the strike force still exists".
 const int STRIKE_SPENT_BELOW = 3;
 
-// Re-arm once the wave is spent.
-//
-// gStrike is set on Release and was NEVER reset. HoldsUnit returns false while
-// it is set, so before the first strike new aircraft are held at base and massed
-// -- and after it, every plane we build is released the moment it rolls out,
-// alone, into the same defended airspace. apexearth: "we keep our air assassin
-// role on 'attack' even once we've lost all our attack force.... so we just keep
-// sending them in as we build."
-//
-// Massing is the entire point of the role, so once the force is gone the right
-// state is the one we started in: hold and rebuild.
+// Re-arm once the wave is spent. HoldsUnit returns false while gStrike is set,
+// so without this every plane built after the first strike is released alone
+// into the same defended airspace instead of massing again.
 void ReArm()
 {
 	if (!gStrike)
@@ -124,20 +106,13 @@ void Update()
 	if (Committed() && !Massed())
 		Economy::isSwitchAssist = true;
 
-	// Do not start an air force while the ground war is being lost badly.
-	//
-	// apexearth: "we should not do these air assassin strategies if we're losing
-	// the ground war considerably." The assassin costs 7,000-9,000 metal of one
-	// player's production and deliberately fields no ground army while it builds
-	// -- which is affordable from a stable position and suicidal from a losing
-	// one. A raid also only pays if there is still a game to win when it lands.
-	//
-	// GROUND_LOST_RATIO, not Military::LosingGround(): that fires at parity
-	// (enemy > ours * 1.0), which is normal mid-game and would cancel the
-	// strategy almost always. "Considerably" is the ask, so this wants a real
-	// deficit. Checked only before COMMITTING -- a force already paid for is
-	// better spent than abandoned, and Update()'s own abort path handles the
-	// case where anti-air appears mid-build.
+	// Do not start an air force while the ground war is being lost badly: the
+	// assassin fields no ground army while it builds, affordable from a stable
+	// position and not from a losing one. GROUND_LOST_RATIO rather than
+	// Military::LosingGround(), which fires at mere parity and would cancel the
+	// strategy almost always -- this wants a real deficit. Checked only before
+	// COMMITTING; a force already paid for is better spent than abandoned, and
+	// Update()'s own abort path below handles anti-air appearing mid-build.
 	const float ourGround = Military::TeamArmyCost();
 	const float foeGround = Military::EnemyArmyCost();
 	if (!Committed() && (foeGround > ourGround * GROUND_LOST_RATIO)) {
@@ -173,10 +148,8 @@ void Update()
 		Release("deadline");
 	}
 
-	// Why we are NOT armed, when we hold the role. Without this the only evidence
-	// is silence: measured twice, the assassin was elected (63 and 81 metal/s)
-	// and never armed, and nothing in the log said whether the blocker was the
-	// clock, the enemy's anti-air, or an abort.
+	// Why we are NOT armed, when we hold the role -- without this the only
+	// evidence is silence, indistinguishable from a dead build.
 	if (!Armed() && (ai.frame >= gNextLog)) {
 		gNextLog = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: air lead NOT armed"

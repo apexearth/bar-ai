@@ -1,37 +1,15 @@
 namespace Factory {
 
-// The advanced plant has to be one our own constructors can actually build.
-// Measured: the rusher opened a BOT lab, whose constructor (corck) can build
-// only coralab, while this function forced coravp -- the advanced VEHICLE plant.
-// All 33 rush requests in a 14-minute game asked for a factory nothing on the
-// field could place, were silently dropped, and T2 never started. The earlier
-// "prefer Gollums over Sumos" bias that introduced coravp here was measured on
-// games where a vehicle plant happened to be the opening, so it never showed up
-// as a failure -- it just quietly disabled the whole rush on bot openings.
+// The advanced plant has to be one our own constructors can actually build --
+// AdvCounterpart() below matches by T1_FAC index, so an entry here must be
+// buildable by that same T1 factory's own constructor.
 // Index-paired: T2_FAC[i] is the advanced counterpart of T1_FAC[i]. corasy
 // appears twice because it serves both Cortex and Legion; that is safe because
 // AdvCounterpart returns on the first T1_FAC name match and OwnAdvProgress takes
 // a max over the whole array.
-// legap/legaap are deliberately NOT in these arrays. Adding them (so
-// AdvCounterpart() resolves a T2 counterpart and enables the T1-lab-reclaim
-// rush for Legion air openers) was tried in isolation and confirmed, clean
-// and solo, as a severe regression: legion-t1fac-only-16 went 2-14 (12.5%,
-// 95% CI excludes 50%) against a established clean 43.8% baseline -- worse
-// than leaving the "bug" alone. Whatever the mechanism (legap/legaap's
-// cost/build-time/role may make the reclaim trade bad specifically for
-// Legion), this is NOT free to fix the way it looked from the code alone.
-// See notes/open-issues.md #35/#37/#38. Do not re-add without a new,
-// isolated, positive confirmation.
-// legap/legaap are deliberately NOT in these arrays. Two independent solo
-// batches (legion-t1fac-only-16: 12.5%, legion-t1fac-retest-16: 37.5%)
-// pool to 25% (8/32) against Legion's own pooled baseline of 37.5%
-// (12/32) -- z=-1.08, not statistically significant. This is the fully
-// resolved conclusion after two rounds of testing: adding legap/legaap
-// has NO confirmed effect on Legion's win rate, positive or negative,
-// once properly powered. Left out (no positive evidence to keep the
-// change) rather than re-added. See notes/open-issues.md #38/#45/#47 for
-// the full arc of this investigation, including the initial single-batch
-// result that looked like a real regression before more data resolved it.
+// legap/legaap are deliberately NOT in these arrays -- no confirmed win-rate
+// effect either way once retested at power. See notes/open-issues.md #38/#45/#47
+// before re-adding.
 array<string> T1_FAC = {armlab, armvp, armsy, armap,
                         corlab, corvp, corsy, corap,
                         leglab, legvp, legsy};
@@ -79,19 +57,11 @@ float OwnAdvProgress()
 	return best;
 }
 
-// Two separate reasons to refuse an air OPENING.
-//
-// 1. On a small team it is simply a losing choice: "on a 4v4 nobody should go
-//    air, to main air on a 4v4 is a recipe for loss -- we'd beat BARb if we just
-//    did 4x ground". One of four players contributing no ground army is a
-//    quarter of the team missing. On a big team one air player is affordable and
-//    can be useful, so only the lead is barred there.
-// 2. Air is a bad sling target regardless of team size: the team pools its metal
-//    into one player expecting a T2 ground push, and an air opening cannot give
-//    them one.
-//
-// This gates the opening factory only. A later air plant, once the ground game
-// is established, is fine and is left alone.
+// Two reasons to refuse an air OPENING: on a small team, one of four players
+// contributing no ground army is a quarter of the team missing; on any team
+// size, the team pools metal into the lead expecting a T2 ground push, which an
+// air opening cannot deliver. Gates the opening factory only -- a later air
+// plant, once the ground game is established, is left alone.
 const uint BIG_TEAM = 6;   // same threshold the rush attack quota uses
 
 array<string> AIR_FAC = {armap, armaap, corap, coraap, legap, legaap};
@@ -156,20 +126,11 @@ bool MayOpenAir()
 	return ai.teamId == AirSlotTeamId();
 }
 
-// Ground opening when the default picks air.
-//
-// This returned the VEHICLE plant unconditionally, on a "Gollums push where
-// Sumos hold" argument. Measured over two 8v8 games: apex fielded 83% and 86%
-// of its army metal as vehicles, against stock's 43% and 63% as BOTS.
-// apexearth: "We tend to have a high portion of our units be vehicles. Can we
-// try to split more evenly?"
-//
-// Bots preferred, three in four. apexearth: "i think we should prefer bots".
-// Keyed on team id so an ally team divides in a fixed proportion and each
-// player's choice is stable across the game rather than changing if it is asked
-// twice. Bots climb terrain vehicles cannot and carry the rez bot, which is the
-// single biggest measured gap against stock; the remaining quarter keeps the
-// heavy assault line available.
+// Ground opening when the default picks air. Bots preferred, three in four --
+// they climb terrain vehicles cannot and carry the rez bot -- with the
+// remaining quarter keeping the heavy assault line available. Keyed on team id
+// so an ally team divides in a fixed proportion and each player's choice stays
+// stable across the game.
 CCircuitDef@ GroundOpening()
 {
 	const string side = ai.GetSideName();
@@ -195,13 +156,10 @@ bool IsWaterMap()
 }
 
 // A map can carry a great deal of water and still not be a "water map".
-//
-// IsWaterMap gates on land < 40%, i.e. water > 60%. That is the right test for
-// the OPENING factory -- you do not open naval on a land majority -- but every
-// other naval branch hangs off it too, so on anything in between the AI builds
-// no naval unit of any kind. Observed on Supreme Isthmus: the boat move-types
-// (boat4/boat5/boat9) cover 39-40% of the map and the side finished the game
-// with zero shipyards, zero ships, and the sea uncontested.
+// IsWaterMap gates on land < 40% -- the right test for the OPENING factory,
+// since you do not open naval on a land majority -- but every other naval
+// branch hangs off it too, so without this test the AI built no naval unit of
+// any kind on a map with water in the 20-60% range.
 const float NAVY_MIN_WATER_PCT = 20.f;
 // A T1 shipyard is ~700 metal before a single hull comes out of it, so it waits
 // for an economy rather than competing with the opening.
@@ -209,17 +167,9 @@ const float NAVY_MIN_INCOME = 15.f;
 // Separate, lower floor for the ExpansionStalled() rescue case below. A player
 // genuinely boxed onto a small peninsula plateaus BELOW NAVY_MIN_INCOME
 // precisely because it has no more land to expand onto -- gating the escape
-// valve on the same income bar the AI needs the escape valve to reach is a
-// deadlock, not a safeguard. This is a rescue, not a luxury expansion, so it
-// asks only for enough to not immediately go bankrupt building the yard.
-// Measured on Crater Islands (63% land, 4v4): the four players finished the
-// game on 2.4, 5.1, 5.2 and 13.3 metal/s, so even 6 was out of reach for three
-// of them and exactly one ever built a yard. On a map where a third of the
-// metal is across water, the yard is not a luxury bought out of surplus -- it
-// is the only route to any surplus at all, so the bar has to sit below what the
-// map actually produces before it is contested. The branch this gates still
-// sits below the tech rush, the bot lab and the gantry, so it only ever takes a
-// factory slot nothing else wanted.
+// valve on the same income bar it exists to unblock is a deadlock, not a
+// safeguard. This is a rescue, not a luxury expansion, so it asks only for
+// enough to not immediately go bankrupt building the yard.
 const float NAVY_MIN_INCOME_STALLED = 6.f;
 // Land share at or below which a MIXED map counts as water-heavy and uses the
 // stalled floor above. Crater Islands is 63%; a 75-80% land map is not really
@@ -293,74 +243,33 @@ CCircuitDef@ AdvCounterpart()
 	return null;
 }
 
-// T3 is this variant's WIN CONDITION, and it has never once been reached: mean
-// T3 metal across 36 measured player-games is exactly zero. The doctrine is
-// hold cheaply, out-eco behind the wall, then finish with T3 -- but nothing ever
-// decided to build the gantry, so every game was decided at T2 by whoever had
-// more army. Without this the rest of the plan has no ending.
-//
-// Gated on a real economy rather than a clock: the gantry is expensive and
-// starting one the economy cannot finish is the same trap that starting an
-// unaffordable T2 plant was.
-// Was 38. apex's economy runs poorer than stock's by design-cost, so 38 was
-// reached only near game end -- 420 metal of T3 fielded, a token rather than the
-// hammer the doctrine calls for. 26 is still a real economy and leaves time to
-// actually build a T3 force with it.
-// apexearth, on when a human commits to T3: "you shouldn't really be making big
-// T3 until you're usually over 100m per second. That's after having 1 or 2 afus
-// usually." That matches the arithmetic measured here -- a Korgoth is ~11,000
-// metal, so at 40 m/s one unit costs 275 seconds of the whole team's income, and
-// the two or three we ever fielded were exactly what that affords.
-//
-// The gate was 26, roughly four times too low: it committed to a gantry the
-// economy could not feed, which is why T3 spend sat near 3,500 for a whole game
-// while the metal would have bought a real T2 force instead. 100 is the real
-// bar, and reaching it is an ECONOMY problem -- advanced fusion first.
+// T3 is this variant's declared win condition -- hold cheaply, out-eco behind
+// the wall, then finish with T3. Gated on a real economy rather than a clock:
+// starting a gantry the economy cannot finish is the same trap an unaffordable
+// T2 plant was.
 const float T3_METAL_INCOME = 100.f;
 
-// Income alone is the wrong gate. Observed live: the team reached 100 metal/s,
-// committed to an ~8000-metal gantry, and lost every engagement on the map
-// while it built -- the same metal spent on T2 units would have held the line.
-// A gantry is only worth starting from a position that is not collapsing.
-//
-// Two conditions, both from signals already maintained here:
+// Income alone is the wrong gate: a gantry is only worth starting from a
+// position that is not collapsing.
 //   gTurtle       -- Military sets this when our army value fell 18% in 20s
-//                    while the enemy still fields a mobile force. That is
-//                    precisely "we are losing trades right now".
+//                    while the enemy still fields a mobile force: "we are
+//                    losing trades right now".
 //   army vs threat -- and we should at least be matching what they field, not
 //                    merely have stopped bleeding.
 const float T3_ARMY_RATIO = 1.0f;
 
-// Metal income above which the gTurtle and army-ratio vetoes stop applying, so a
-// gantry gets placed while we are LOSING -- which is the case they were refusing.
-// See T3Worthwhile().
-//
-// 150, only 50 above the T3_METAL_INCOME floor, because the point is to catch
-// the situation early rather than to mark an elite economy. At 150 m/s a gantry
-// is 56 seconds of income and a Shiva is 10; if enemy T3 is in the base, that is
-// already worth spending whatever the army ratio says. The live observation that
-// prompted this was a player at 398 m/s building nothing, so the bar only has to
-// sit far enough below that to trigger well before the game is decided.
+// Metal income above which the gTurtle and army-ratio vetoes stop applying, so
+// a gantry gets placed even while we are losing -- at high income a gantry is
+// a small fraction of one tick of income, so refusing to spend it on the
+// counter to what's killing us is wrong at any army ratio. See T3Worthwhile().
 const float T3_INCOME_URGENT = 150.f;
 
 // One gantry per this much metal income, floor 1, cap GANTRY_MAX.
 //
-// gHaveT3 is a latch set the moment the first gantry appears, and both build
-// decisions tested !gHaveT3 -- so the AI built exactly ONE gantry per game at any
-// income. Reported from a hosted game: "for a very long time no gantries were
-// being made, except for the first one." A gantry builds one unit at a time, so
-// at the 400 m/s these games reach that single plant is the throughput ceiling on
-// the whole T3 win condition.
-//
-// gHaveT3 itself stays -- military.as reads it for big-gun placement -- it just
-// no longer decides whether to build another.
-// Measured 2026-08-08, 6-game 8v8 at Handicap 50: we field 2 T3 plants where
-// stock fields 7, and 16 "building T3 gantry" decisions produced 2 gantries. At
-// 150 a player on 400 metal/second wants only 2 -- so the cap, not the economy,
-// is the throughput ceiling. Space is not the constraint either: techroom=-1
-// occurred zero times in 1,907 samples, so there was always somewhere to put one.
-//
-// 100/6 gives 4 gantries at 400 m/s and 6 at 600, still short of stock's 7.
+// gHaveT3 is a latch set the moment the first gantry appears; both build
+// decisions used to test !gHaveT3, so the AI built exactly ONE gantry per game
+// at any income. gHaveT3 itself stays -- military.as reads it for big-gun
+// placement -- it just no longer gates whether to build another.
 const float GANTRY_PER_INCOME = 100.f;
 const int   GANTRY_MAX        = 6;
 // Extra plants allowed while the bank is at the cap.
@@ -372,9 +281,7 @@ const int   GANTRY_SURPLUS_BONUS = 4;
 const float GANTRY_PER_ENERGY = 5000.f;
 
 // A T1 bot lab is wanted for the whole game, not just the opening: it is the
-// cheap assault spam and the only source of rez bots. apexearth: "one T2
-// assault unit costs like 5 or 6 T1 assault units, and that many T1s can kill
-// the T2 if the T2 doesn't have a good mass".
+// cheap assault spam and the only source of rez bots.
 CCircuitDef@ T1BotLab()
 {
 	return SideDef3(armlab, corlab, leglab);
@@ -403,12 +310,9 @@ bool WantMoreGantries()
 		want = GANTRY_MAX;
 	// A full bank means the cap is the wrong number: income says what we can
 	// sustain, a full bank says we are already failing to spend what we have.
-	// apexearth: "If we are metal full we need to just keep making more gantries."
 	if (aiEconomyMgr.isMetalFull)
 		want += GANTRY_SURPLUS_BONUS;
 	// One gantry per GANTRY_PER_ENERGY of income, and none below it.
-	// apexearth, watching two go up on 1,300 energy: "I think you can do
-	// something like 1 gantry for every 5000 energy as a limit."
 	int engyWant = int(aiEconomyMgr.energy.income / GANTRY_PER_ENERGY);
 	if (want > engyWant)
 		want = engyWant;
@@ -421,19 +325,8 @@ bool T3Worthwhile()
 	if (inc <= T3_METAL_INCOME)
 		return false;
 	// Above a large economy the two vetoes below block exactly the case they
-	// should permit, so they stop applying.
-	//
-	// Observed live in a hosted +40% game: the best player was on 398 metal/s
-	// with enemy T3 already in the base, and built no gantry at all. gTurtle was
-	// set -- that is what "their army is on our doorstep" looks like -- and our
-	// armyCost was below theirs precisely because they had T3 and we did not. So
-	// both vetoes fired for the same reason, and the AI stood still.
-	//
-	// Those vetoes were calibrated when a gantry was a large, irreversible bet.
-	// It is not at this income. Real costs: corgant 8400, corshiva 1550,
-	// armbanth 13500. At 398 m/s that is 21 s, 4 s and 34 s of income. Refusing
-	// to spend 21 seconds of income on the counter to the thing killing you is
-	// the wrong answer at any army ratio.
+	// should permit -- enemy T3 already in the base is precisely what sets
+	// gTurtle and drags our armyCost below theirs -- so they stop applying.
 	if (inc >= T3_INCOME_URGENT)
 		return true;
 	if (Military::gTurtle)

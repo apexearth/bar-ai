@@ -25,14 +25,10 @@ void RunElection()
 
 	const uint quota = TechLeadQuota();
 
-	// Incumbents first. A slot is kept while its holder still has a plant or a
-	// nanoframe, or is still able to pay for one -- reopening only on a genuine
-	// loss is what stops the role flapping between two teams whose progress is
-	// neck and neck.
-	//
-	// Deliberately NOT bounded by Military::RUSH_GIVEUP: that made retention
-	// unconditional past 15 min, so a lead that lost its plant kept the slot
-	// and it never reopened. TV_ADV already tracks the loss live.
+	// Incumbents first: a slot is kept while its holder still has (or can afford)
+	// a plant, so it reopens only on a genuine loss rather than flapping between
+	// close teams. Not bounded by Military::RUSH_GIVEUP -- TV_ADV already tracks
+	// the loss live, so a separate frame bound is unnecessary.
 	array<int> leads;
 	for (uint s = 0; s < quota; ++s) {
 		const int held = int(ai.ReadTeamValue(ai.teamId, LeadKey(s), -1.f));
@@ -45,11 +41,9 @@ void RunElection()
 		}
 	}
 
-	// Fill whatever is left. Committed teams rank first, by how far along their
-	// plant is; then, for slots still empty, the FURTHEST-BACK team that could
-	// afford one -- the player who goes helpless should be the one least likely
-	// to be attacked while it is. Richest-that-is-ready ignored position
-	// entirely, which is how the front-line player ended up teching.
+	// Fill remaining slots: committed teams first by plant progress, then for
+	// empty slots the FURTHEST-BACK team that could afford one -- the player who
+	// goes helpless while teching should be least likely to be attacked for it.
 	while (leads.length() < quota) {
 		int best = -1;
 		float bestProgress = 0.f;

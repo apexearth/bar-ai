@@ -19,19 +19,11 @@ float RushAttackQuota()
 const float RUSH_TEAM_DEFEND = 60.f;
 
 // The attack quota to hold for the REST of the game, once the rush window and
-// any turtle hold are over. Not gAttackBase: that is stock BARb's value, read
-// off the config at startup, and in apexearth's live multiplayer game it was
-// 15 -- so from mid-game on, only fifteen units per player were ever allowed to
-// attack and everything above that stood in the base. apexearth, watching that
-// game: "our units don't attack enough... i see a lot of our T3 units just
-// hangin out and not fighting", and separately "we aren't aggressive enough vs
-// humans early on".
-//
-// A cap that low also wastes the expensive end of the army first: the fifteen
-// slots fill with whatever exists when the window opens, and a T3 unit finished
-// afterwards simply never gets one. Set well above any realistic standing army
-// so the quota stops being the thing that decides, and the engage test (which
-// actually looks at the odds) decides instead.
+// any turtle hold are over. Not gAttackBase: that is stock BARb's config value
+// (15 in a live multiplayer game), which caps only fifteen units per player at
+// attacking and fills first-come, so a T3 unit finished later never gets a
+// slot. Set well above any realistic standing army so the quota stops deciding
+// and the engage test (which looks at the odds) decides instead.
 const float LATE_ATTACK_QUOTA = 200.f;
 
 bool gRushDefenceHeld = false;
@@ -72,10 +64,10 @@ void UpdateRushRole()
 	// Past the deadline this must still run, to hand the quota back. Returning
 	// early instead left the lead pinned at RushAttackQuota() -- 400, i.e. never
 	// attack -- for the entire rest of the game.
-	// SOLO HAS NO ONE TO RUSH FOR. The rusher trades its own army for the
-	// team's tech, and its quota of 400 means "never attack". With no allies
-	// that is a player that neither fights nor is covered by anyone -- observed
-	// live in a 1v1: "designated T2 rusher -- skipping T1 army until 15m".
+	//
+	// Solo has no one to rush for: the rusher trades its own army for the
+	// team's tech, and a quota of 400 means never attacking. With no allies
+	// that is a player who neither fights nor is covered by anyone.
 	array<Id>@ roster = ai.GetTeamIds();
 	const bool haveTeam = (roster !is null) && (roster.length() > 1);
 	if (!haveTeam || (ai.frame > RUSH_GIVEUP) || !Factory::IsDesignatedLead()) {
@@ -101,14 +93,9 @@ void UpdateRushRole()
 	aiMilitaryMgr.quota.attack = RushAttackQuota();
 }
 
-// The eco lead as the team's bank.
-//
-// apexearth: "if allies are hurting or we see our army losing it could share
-// metal to teammates. It can also share a fus or afus to help them." This is the
-// other half of the role -- it is measurably the richest player on the team
-// (+59% metal produced over its teammates) and the one least able to use metal
-// in a hurry, so when someone else is in trouble the metal is worth more in
-// their hands than banked in ours.
+// The eco lead as the team's bank: it is measurably the richest player on the
+// team and the one least able to use metal in a hurry, so when someone else is
+// in trouble the metal is worth more in their hands than banked in ours.
 //
 // Deliberately keyed on IsEcoLead(), NOT EcoLeadActive(): an ally dying is one
 // of the conditions that STANDS THE ROLE DOWN, so gating aid on the role being
@@ -211,24 +198,20 @@ void UpdateSling()
 	if (Factory::LeadHasPlant(lead))
 		return;
 
-	// Stop while the lead is at cap. Measured 2026-08-02: ~269,000 metal went
-	// into a lead whose bank sat above storage from minute 8 -- every point of
-	// it wasted, while the givers ran empty and stopped expanding.
+	// Stop while the lead is at cap: metal banked above storage is wasted while
+	// the givers run empty and stop expanding.
 	if (Factory::LeadIsSaturated(lead))
 		return;
 
-	// Do not feed someone who is already banking metal -- that is just moving
-	// waste around. Only sling while the lead is actually spending everything.
-	// ai.GetTeamMetalFill() reports 1.0 unconditionally: the engine does not
-	// expose another team's storage to us, so the C++ fallback read "unknown" as
-	// "full" and withheld every single transfer -- slinging never once fired in
-	// any test tonight. Observed live: it logged fill=1 while the lead sat under
-	// half metal. Drop the dependency; the feeder already only gives away what
-	// it holds above SLING_KEEP, so it cannot starve itself.
-	// Over half full while the lead is still paying for its plant: that metal is
-	// doing nothing, and the lead is the only thing the team is waiting on. Send
-	// the whole excess instead of trickling a lump -- observed live, a follower
-	// sat on a full bank at 9 min while the plant crawled to 75%.
+	// Do not feed someone already banking metal -- that just moves waste around;
+	// only sling while the lead is actually spending everything.
+	// ai.GetTeamMetalFill() reports 1.0 unconditionally (the engine does not
+	// expose another team's storage to us), so the fallback read "unknown" as
+	// "full" and withheld every transfer. Dropped; the feeder already only gives
+	// away what it holds above SLING_KEEP, so it cannot starve itself.
+	// Over half full while the lead is still paying for its plant, send the
+	// whole excess rather than trickling a lump -- that metal is doing nothing
+	// and the lead is the only thing the team is waiting on.
 	const float store = aiEconomyMgr.metal.storage;
 	const float flood = store * SLING_FLOOD_FRAC;
 	float amount = 0.f;
@@ -252,85 +235,37 @@ void UpdateSling()
 // Attack in a mass, not a trickle.
 //
 // quota.attack is a MINIMUM: the AI will not launch until it has that much
-// army. Stock sits low, so it attacks with whatever happens to be to hand and
-// feeds units into fights piecemeal -- which is exactly how an army gets ground
-// down without ever threatening anything. apexearth: "store up an army until
-// it's a really nice size and then attack with a big mass".
+// army. A low value attacks with whatever is to hand and feeds units into
+// fights piecemeal, which grinds an army down without ever threatening
+// anything. Lowering minAttackers globally is known to be catastrophic
+// (15 -> 6 scored 0-10); this file's values move the other way.
 //
-// The threshold grows with the game rather than being one number: a 12-unit
-// push is a real threat at 8 minutes and an irrelevance at 25, when the enemy
-// fields T2 and T3. Growing it also means the accumulated mass keeps pace with
-// what it has to break through.
-//
-// Direction matters and is already measured: lowering minAttackers 15 -> 6 was
-// catastrophic (0-10). This moves the other way.
-// Timeline of eleven LOST games, sampled every 2 game-minutes: apex and stock
-// are level on army and metal through minute 8, then diverge hard -- army 10.4k
-// vs 15.9k at ten minutes, 9.9k vs 22.4k at fourteen. And apex's army PEAKS
-// at minute 4 and declines from there (11.8k -> 9.9k -> 7.0k) while stock's
-// grows continuously. We stop replacing losses exactly as the T2 transition
-// begins, and never recover.
-//
-// Massing started at 8 minutes, precisely where the divergence begins: holding
-// units back during the transition, when the army is already shrinking, compounds
-// it. Push it past the transition so the force is rebuilt first and massed after.
-// How much army we insist on before committing, driven by the armies on the
-// field rather than by a clock.
-//
-// apexearth: "can you make massing based on how large the armies are? doesn't
-// seem like it should be a time based thing. In fact, usually doing things by
-// time is wrong." The clock version started at 14 minutes; measured 2026-08-02,
-// apex and stock are indistinguishable through minute 4 and apex collapses at
-// minute 6, so the gate arrived eight minutes after the bleeding started. Its
-// first sample read "army=820 enemyArmy=11973 ratio=14.60".
-//
-// UNITS. quota.attack is CAttackTask's minPower, in the engine's power units.
-// armyCost and EnemyArmyCost() are metal. Observed together in one line:
-// want=48, army=820, enemyArmy=11973 -- three different scales. They must never
-// be assigned or compared across. Only the RATIO theirs/ours is dimensionless,
-// so that is the sole bridge used here; the output stays in quota units and
-// inside the range below that is already known to work.
-// POWER, not units: a Grunt is 0.9, so 30 demanded ~33 of them before any attack
-// would form at all -- and apexearth's own figure, quoted in MassWant above, is
-// "~10 grunts". 12 is roughly 13 Grunts or 8 Thugs: a real group, not a trickle,
-// and reachable. At 30 the army regrouped and never went. apexearth, watching:
-// "we will lose this game because we keep moving our army towards the back of
-// the base... our regrouping behavior makes it so we never are able to push."
+// quota.attack is a POWER sum (CAttackTask's minPower), not a unit count and
+// not metal -- armyCost/EnemyArmyCost() are metal, so only the dimensionless
+// ratio theirs/ours bridges the two; the output stays in quota units. A Grunt
+// is ~0.9 power, so MASS_FLOOR of 12 is roughly 13 Grunts or 8 Thugs: a real
+// group, not a trickle.
 const float MASS_FLOOR  = 12.f;   // even when ahead, never trickle 2-3 units
 // Ratio at or above which we stop attacking and let them come to the defences.
 const float MASS_HOLD_RATIO = 1.5f;
 const float MASS_CAP    = 48.f;
-// Now a metal-vs-metal ratio, so 1.0 is a real parity point. It used to compare
-// aiEnemyMgr.mobileThreat against armyCost; across eight 4v4 infologs that ratio
-// logged 0.02-0.14 and never once approached 0.95, so the clause below could not
-// fire and "refuse bad trades" did nothing all game. EnemyArmyCost() sums
-// GetEnemyCost over the fighting roles, which is the same unit as armyCost.
+// A metal-vs-metal ratio, so 1.0 is a real parity point. EnemyArmyCost() sums
+// GetEnemyCost over the fighting roles, the same unit as armyCost -- not
+// aiEnemyMgr.mobileThreat, which is a different scale and never approaches 1.
 const float ATTACK_EDGE = 0.95f;
 int gNextMassLog = 0;
 
-// EnemyArmyCost() sums only the mobile fighting roles (its own comment says
-// "the enemy's MOBILE army"), so a defended chokepoint -- several turrets --
-// reads identically to open ground as long as mobile counts match. apexearth,
-// watching: "we do something in the early game which is running into enemy
-// towers ... I've seen us lose ~10 army to a single tower." Confirmed in
-// matches/watch-comet-catcher-4v4-8/infolog.txt: "mass want=30 army=4250
-// enemyArmy=4072 ratio=0.96" at 10.0min, then armyReal 4250 -> 0 by 11.5min --
-// the ratio said "even fight, go," and the enemy's static defence was invisible
-// to it the whole time.
+// EnemyArmyCost() sums only the mobile fighting roles, so a defended
+// chokepoint reads identically to open ground as long as mobile counts match
+// -- static defence is otherwise invisible to the massing decision.
 //
-// Weighted at half, not 1:1 with EnemyArmyCost(): a turret is a sunk cost with
-// no upkeep, cannot retreat or redeploy, and only threatens the ground it
-// covers, unlike a mobile unit of the same value which threatens everywhere
-// and is continuously replaced. Folding it in at full weight would let a
-// static-heavy base pin quota.attack at MASS_CAP for the rest of the game
-// (EnemyArmyCost() only ever grows once a wall is up); this is scoped to
-// MassWant()/UpdateMassing() only, not EnemyArmyCost() itself, so
-// KillingBlow() and T3Worthwhile() -- which read EnemyArmyCost() directly --
-// are unaffected, and the killing-blow override (gKilling, above) still bypasses
-// this entirely once we are dominant. Unweighted, unmeasured constant; retune
-// from a watched game rather than a benchmark tournament, per the T3-worthwhile
-// income lesson above -- turret density is a map/base-layout property a
-// standard-scale benchmark may not reproduce at all.
+// Weighted at half, not 1:1: a turret is a sunk cost with no upkeep, cannot
+// retreat or redeploy, and only threatens the ground it covers, unlike a
+// mobile unit of the same value. Folding it in at full weight would let a
+// static-heavy base pin quota.attack at MASS_CAP for the rest of the game, so
+// this is scoped to MassWant()/UpdateMassing() only -- KillingBlow() and
+// T3Worthwhile(), which read EnemyArmyCost() directly, are unaffected, and the
+// killing-blow override still bypasses this once we are dominant.
 const float STATIC_DEFENSE_WEIGHT = 0.5f;
 
 }  // namespace Military

@@ -1,14 +1,7 @@
 namespace Builder {
 
-// Fusions, placed in the economy lanes of the same band.
-//
-// The eco lead built NO fusion at all in the game that was read unit by unit,
-// while every one of its teammates had one -- it is the player with the largest
-// income and it was not buying the thing that turns income into late game. Left
-// to stock task selection it spends on mexes and stalls there.
-//
-// 4,300 metal each in this game tree (upstream says 3,350 -- read from the defs,
-// not remembered), so this is self-limiting against the bank: one fusion drops
+// Fusions, placed in the economy lanes of the same band. 4,300 metal each in
+// this game tree, so this is self-limiting against the bank: one fusion drops
 // us under the gate until the economy refills it.
 string armfus("armfus"); string corfus("corfus"); string legfus("legfus");
 string armafus("armafus"); string corafus("corafus"); string legafus("legafus");
@@ -20,8 +13,6 @@ string armafus("armafus"); string corafus("corafus"); string legafus("legafus");
 string armuwfus("armuwfus"); string coruwfus("coruwfus");
 string armadvsol("armadvsol"); string coradvsol("coradvsol"); string legadvsol("legadvsol");
 // Energy income before the advanced collector is worth its 5,000-energy build.
-// apexearth: "we make too many basic solars and not enough advanced solars...
-// if we make over 250 energy per second then make advanced solars."
 const float ADVSOL_MIN_ENERGY = 250.f;
 // A generator is affordable when income covers its BUILD cost -- both resources --
 // inside this many seconds. This is the whole tiering rule: nothing else decides
@@ -82,12 +73,9 @@ int ReactorsInFlight(float cost)
 	return (n < 1) ? 1 : n;
 }
 
-// THE ADVANCED COLLECTOR, OR NULL ONCE IT IS OBSOLETE. apexearth: "Once we're
-// making fusions, we must stop making advanced solars. Advanced solars become
-// obsolete after we have fusions."
-//
-// obsolete.as already names a reactor as this def's successor and reclaims it,
-// so without this the same def was built and torn down at the same time.
+// Null once a reactor stands: obsolete.as already names a reactor as this def's
+// successor and reclaims it, so without this the same def was built and torn
+// down at the same time.
 CCircuitDef@ AdvSolDef()
 {
 	if (HaveReactor())
@@ -124,15 +112,10 @@ bool gEcoPacked = false;
 // Energy income wanted per point of metal income before the grid is 'enough'.
 const float ENERGY_LEAD_RATIO = 12.f;
 
-// THE LADDER HAS A TOP RUNG AND WE NEVER CLIMBED IT. apexearth: "we have 9
-// fusions but don't seem to care to make any AFUS."
-//
 // An advanced fusion is roughly three reactors in one building and one
 // footprint, which matters once the base is full of them. Chosen once the
 // economy can pay for it and the constructor can actually build it -- asking a
-// T1 constructor for one is the silent no-op this repo has been bitten by.
-// Roughly where a human gets to it -- two fusions and a few advanced converters
-// in, well under 100 m/s. An expectation, not a rule; both are tunable.
+// T1 constructor for one is a silent no-op. Both thresholds are tunable.
 const float AFUS_INCOME = 70.f;    // metal/s at which the big reactor pays
 const int   AFUS_AFTER  = 2;       // ...and only once two plain ones are up
 
@@ -151,21 +134,14 @@ CCircuitDef@ FusionDef(CCircuitUnit@ unit)
 	return plain;
 }
 
-// Converters get the same cooldown a reactor gets, and for the same reason: a
-// script-side aiBuilderMgr.Enqueue is bound straight to CBuilderManager::Enqueue
-// with no CanEnqueueTask check (BuilderScript.cpp:67), while the C++ economy
-// generator that creates mex and mex-upgrade tasks is budgeted --
-// CEconomyManager::MakeEconomyTasks returns null on
-// !CanEnqueueTask() == !(buildTasksCount < workers.size() * 8). An unassigned
-// build task holds its slot for ASSIGN_TIMEOUT (300s) before ITaskModule::Update
-// aborts it, so an uncooled rung spends that shared budget faster than it can be
-// reclaimed.
-// The cooldown is about the ADVANCED converter, which is 380 metal and 21,000
-// energy to build. A cheap one costs ONE metal, and the spill already says how
-// many the grid can feed -- so serialising those at 90 seconds apiece meant a
-// base overflowing energy crawled towards the fix a converter and a half per
-// game minute. apexearth: "Don't be afraid to make more than one tier1
-// converter at a time."
+// The cooldown exists because script-side Enqueue has no CanEnqueueTask check
+// (BuilderScript.cpp:67), unlike the C++ economy generator, which is budgeted
+// via CEconomyManager::MakeEconomyTasks (buildTasksCount < workers.size() * 8)
+// and whose unassigned tasks hold a slot for ASSIGN_TIMEOUT (300s) -- an
+// uncooled rung can spend that shared budget faster than it's reclaimed.
+// The cooldown applies only to the advanced converter (380 metal); the cheap T1
+// converter (1 metal) is not serialised, since the spill already bounds how
+// many the grid can feed.
 const int   HOME_CONV_PERIOD = 90 * SECOND;
 const int   HOME_CONV_T1_PERIOD = 3 * SECOND;   // enough to not queue duplicates
 int gNextConv = 0;
@@ -184,11 +160,9 @@ int gFusionsAsked = 0;
 
 IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 {
-	// Diagnostic for notes/next-session-hypotheses.md #2: unconditional (ahead of
-	// every early return below) so it also shows how often this function's OWN
-	// gates are what block it, versus DefaultMakeTask falling through to the
-	// engine's score-sorted energy list (economy.json) further down, where solar
-	// and advsol sort ahead of fusion's default e-income bar.
+	// Unconditional, ahead of every early return below, so it also shows how
+	// often this rule's OWN gates block it versus DefaultMakeTask's fallback
+	// energy list ranking solar/advsol ahead of fusion.
 	if (ai.frame >= gNextFusionDiagLog) {
 		gNextFusionDiagLog = ai.frame + FUSION_DIAG_PERIOD;
 		CCircuitDef@ solarDef = SideDef3(armadvsol, coradvsol, legadvsol);
@@ -202,28 +176,11 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 			+ " fusCount=" + FusionDef(unit).count);
 	}
 
-	// A REACTOR IS NOT A TEAM ROLE. This required EcoLeadActive(), which is an
-	// election among ALLIES -- so a solo player never built a fusion at all, and
-	// in a team game only one player ever did. apexearth, watching a 1v1 against
-	// hard: "hard AI dominating us, making fusions way earlier even though we
-	// seemed to have good early game mexes... we are full metal but haven't even
-	// started a fusion."
-	//
-	// Anyone whose economy has outgrown solar belongs on reactors. The eco lead
-	// still gets its own faster cadence below; this is the floor for everyone
-	// else.
-	// NO "NEVER" ON ECONOMY. apexearth: "non-eco players should always build
-	// fusions and converters when they get to the proper economy. Shouldn't ever
-	// have that kind of logic that says 'never do this' when it comes to eco."
-	//
-	// The role decides the CADENCE, not the permission: the eco lead comes back
-	// to this sooner because that is its job, and everyone else builds a reactor
-	// the moment their own economy justifies one. The conditions below -- T2
-	// exists, the bank can pay, energy is not already spilling -- are the real
-	// answer, and they are the same for every player.
-	// apexearth: "after I go T2, upgrade my mexes, I'm usually then making a
-	// fusion. and I usually have over 30 metal per second after having upgraded my
-	// mexes." Steady income, so a reclaim burst does not trigger one early.
+	// A reactor is not gated on EcoLeadActive() (an ally election, false for a
+	// solo player). The role decides CADENCE only, not permission: eco lead comes
+	// back to this sooner, everyone else builds a reactor once their own economy
+	// clears these same conditions.
+	// Steady income, so a reclaim burst does not trigger one early.
 	if (Factory::SteadyIncome()
 		< ai.GetTunable("apex_fusion_income", FUSION_SOLO_INCOME))
 	{
@@ -233,11 +190,8 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// repo has been bitten by before.
 	if (!Factory::gHaveT2)
 		return null;
-	// Not while we are already spilling energy. Measured over 8 games, the eco
-	// lead wasted 46.7% of every joule it made -- 12.8 million per game against a
-	// teammate's 2.2 -- so another 4,300-metal reactor was buying more of the one
-	// thing it already could not use. Converters below turn that spill into
-	// metal; a reactor only helps once the spill is gone.
+	// Not while already spilling energy: a reactor only helps once the spill is
+	// gone; converters (elsewhere) turn the spill into metal first.
 	if (EnergyWasting())
 		return null;
 
@@ -262,11 +216,6 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 			return null;
 	}
 
-	// Instrumented because the first run of this rule fired ZERO times in 24
-	// minutes while every gate above it read clear -- bank 1237/1250 against a
-	// bar of 55%, haveT2 set, income 87 -- and there was no way to tell which of
-	// def, placement or enqueue was refusing. Guessing at that has cost this repo
-	// whole runs before.
 	AIFloat3 spot;
 	const bool okDef = (want !is null) && want.IsAvailable(ai.frame);
 	// BandSpot's deep band is only the BACK of the base while the latched axis
