@@ -97,3 +97,39 @@ boundary.
 Benchmark against **the same profile** in stock BARb, or you're comparing
 profiles rather than your change. Ten games with side swapping is a weak signal;
 say so rather than declaring victory. See the `bar-benchmark` skill.
+
+## build_chain.json evaluates in ways the config does not suggest
+
+Verified 2026-07-29 against `task/builder/BuildChain.cpp`, `BuilderTask.cpp`,
+`module/BuilderManager.cpp`. Each of these broke a confident diagnosis.
+
+- **A hub fires only when its exact parent unit FINISHES.** If the parent is
+  never built, the child's condition is never evaluated — not false, *unrolled*.
+  Jammer towers hung off `armanni`/`cordoom` and were never built once in a
+  30-game sample; their `chance: 0.8` never rolled.
+- **`porcupine.prevent` (1) means an ordinary cluster only ever gets
+  `landDefenders[0]`.** `DefaultMakeDefence` walks
+  `num = isPorc ? defenders.size() : preventCount`. Anything at a later
+  porcupine index is unreachable outside a porc cluster.
+- **Conditions cannot be combined.** `SBuildInfo::condition` is one enum; the
+  parser takes `getMemberNames().front()` and jsoncpp sorts keys alphabetically,
+  so `{"m_inc>": 10, "chance": 0.5}` silently becomes chance-only.
+- **A condition is evaluated ONCE**, when the parent finishes, and never
+  re-checked. It samples one moment. Nano gates of `m_inc>22..46` produced zero
+  nanos because they were sampled at a 5.7-min T2 lab (income 10-15), not
+  because the numbers were merely high.
+- Vocabulary: `energy` is `!IsEnergyStalling() && IsEnergyFull()` = "we have
+  plenty" — right for expensive-to-build or upkeep-heavy things (a jammer costs
+  5200-19000 E to build), wrong for a fusion (storage is small early, so it
+  fires far too soon). `wind` uses `IsEnergyStalling()` = "we need energy now".
+  `m_inc>` tests METAL income only.
+
+Upstream bugs found in the same pass, still present in `barb-stable`:
+`legbombard` has no builder anywhere; `armfmd` is not a unit def (Armada's
+anti-nuke is `armamd`); `armnanotct2`/`cornanotct2`/`legnanotct2` are buildable
+by nobody; several porcupine entries carry `"on": false` and are built inert.
+
+**Faction parity**: work done for Cortex has repeatedly been forgotten for
+Armada and Legion, and terrain blocks are a second axis of the same trap — a
+`land` ratio fix leaves `air` and `water` at stock values, so the change simply
+does not exist on those maps.

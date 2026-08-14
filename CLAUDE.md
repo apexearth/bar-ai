@@ -330,39 +330,10 @@ share a shape: the thing didn't work, and nothing said so.
 
 ## build_chain.json evaluates in ways the config does not suggest
 
-Verified 2026-07-29 against `task/builder/BuildChain.cpp`, `BuilderTask.cpp`,
-`module/BuilderManager.cpp`. Each of these broke a confident diagnosis.
-
-- **A hub fires only when its exact parent unit FINISHES.** If the parent is
-  never built, the child's condition is never evaluated — not false, *unrolled*.
-  Jammer towers hung off `armanni`/`cordoom` and were never built once in a
-  30-game sample; their `chance: 0.8` never rolled.
-- **`porcupine.prevent` (1) means an ordinary cluster only ever gets
-  `landDefenders[0]`.** `DefaultMakeDefence` walks
-  `num = isPorc ? defenders.size() : preventCount`. Anything at a later
-  porcupine index is unreachable outside a porc cluster.
-- **Conditions cannot be combined.** `SBuildInfo::condition` is one enum; the
-  parser takes `getMemberNames().front()` and jsoncpp sorts keys alphabetically,
-  so `{"m_inc>": 10, "chance": 0.5}` silently becomes chance-only.
-- **A condition is evaluated ONCE**, when the parent finishes, and never
-  re-checked. It samples one moment. Nano gates of `m_inc>22..46` produced zero
-  nanos because they were sampled at a 5.7-min T2 lab (income 10-15), not
-  because the numbers were merely high.
-- Vocabulary: `energy` is `!IsEnergyStalling() && IsEnergyFull()` = "we have
-  plenty" — right for expensive-to-build or upkeep-heavy things (a jammer costs
-  5200-19000 E to build), wrong for a fusion (storage is small early, so it
-  fires far too soon). `wind` uses `IsEnergyStalling()` = "we need energy now".
-  `m_inc>` tests METAL income only.
-
-Upstream bugs found in the same pass, still present in `barb-stable`:
-`legbombard` has no builder anywhere; `armfmd` is not a unit def (Armada's
-anti-nuke is `armamd`); `armnanotct2`/`cornanotct2`/`legnanotct2` are buildable
-by nobody; several porcupine entries carry `"on": false` and are built inert.
-
-**Faction parity**: work done for Cortex has repeatedly been forgotten for
-Armada and Legion, and terrain blocks are a second axis of the same trap — a
-`land` ratio fix leaves `air` and `water` at stock values, so the change simply
-does not exist on those maps.
+See the `barb-tuning` skill for the full mechanics (hub firing, condition
+evaluation, `prevent` semantics, `energy`/`wind` vocabulary) and the upstream
+bugs found alongside them — verified 2026-07-29 against `BuildChain.cpp`,
+`BuilderTask.cpp`, `BuilderManager.cpp`.
 
 ## Why "mass T3" does not happen: arithmetic, not plumbing
 
@@ -537,62 +508,12 @@ So the default order is:
 Corollary: never leave him idle while a control runs. Launch the watch run, then
 do the slow measuring alongside it.
 
-## Judging a run — do these, in this order
+## Judging a run
 
-`python tools/review.py <run> --control <run>` runs all of this and withholds a
-verdict when a gate fails. Prefer it to doing the steps by hand; the steps are
-listed because each one is here for a reason.
-
-Every item is here because skipping it produced a confident wrong answer.
-
-1. **Did it actually run?** `grep -ciE "\.as \([0-9]+, [0-9]+\) : ERR"` over the
-   infolog, and confirm the variant loaded. A compile error disables the variant
-   and the match still reports a normal result.
-2. **Run a control.** Deploy unmodified HEAD, run the *same* games, compare. On
-   2026-08-02 a change was blamed for a 0-7 tournament; the control lost too, and
-   the collapse turned out to predate it by weeks. Never attribute an effect
-   without the baseline in hand.
-3. **Compare equal samples.** 8 games against a 5-game control is not a
-   comparison. Wait for both to finish.
-4. **Standing counters are not end-state.** Constructors, army and `mCon` go to
-   ZERO when a team dies, so the last sample of a lost game is a corpse.
-   `composition.py` now reports these as PEAK and prints how many player-games
-   ended wiped out — read that line. Cumulative counters (metal, kills, losses)
-   are fine at the end. Reading end-state as the story once produced "apex builds
-   1 constructor to stock's 10" when apex actually held MORE constructors all
-   game; the diagnosis was backwards for an hour.
-5. **Cross-check the timeline before believing a total.**
-   `analyze_stats.py <run>` samples every 2 game-minutes. Totals hide when
-   something happened, and "when" is usually the finding — the same run showed
-   both AIs level to minute 4 and separating at minute 6.
-6. **A grep that returns nothing means the pattern is stale until proven
-   otherwise.** Log formats drift. `"sent .* metal to lead"` returned zero and
-   was reported as "slinging never fired" when 269,000 metal had moved; the
-   message had lost the word "metal" and was rate-limited 1-in-40. Confirm the
-   pattern matches something before concluding it is absent.
-7. **Check the configuration is legitimate.** Comet Catcher is a 4v4 map
-   (16x12); dozens of runs were done on it at 8v8, which starves every player and
-   invalidates the economy. Match player count to map size, and note that
-   `IsSmallTeam()` (< 6 per side) takes different code paths entirely.
-8. **Benchmark economics are not hosted economics.** Per-team metal income at
-   7 min: hosted games 12-41/s, this benchmark 4-9/s. Behaviours gated on income
-   (the air assassin needs 40/s) never fire here at all. If a change targets
-   something seen in a hosted game, confirm the benchmark can even reproduce the
-   condition before trusting a null result.
-9. **The default speed cap degrades the AI, and it degrades OURS more than
-   stock's.** Measured 2026-08-12, one build, one seed, 4v4, 8 game minutes,
-   the only variable being `--speed`: commander idle **59-81% for apex and 21-39%
-   for stock at the default cap (~37x), against 3-4% for both at `--speed 3`** —
-   and at the default cap apex fielded zero combat units in twelve minutes while
-   at `--speed 3` it fielded a normal army. The mechanism is the async-order
-   entry in the silent-failures list: at 37x the engine applies our orders ~45
-   sim-seconds late, so any read-then-decide loop reads a stale world and
-   re-issues. **The more commands a change makes the AI issue, the worse the
-   benchmark makes it look.** Anything touching production, task assignment or
-   command volume must be measured at a speed where it behaves, and the run
-   checked against a control at the SAME speed. `facQueued` in
-   `dev_stats_export.lua` is the tell: if apex's factories hold tens of orders
-   where stock holds 0-3, the run is measuring the harness.
+`python tools/review.py <run> --control <run>` runs the full checklist and
+withholds a verdict when a gate fails — see the `bar-benchmark` skill for the
+nine-step breakdown and why each step is there (every one exists because
+skipping it produced a confident wrong answer at least once).
 
 ## Harness discipline
 

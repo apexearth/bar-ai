@@ -5,10 +5,25 @@ description: Run and interpret headless AI-vs-AI matches in Beyond All Reason to
 
 # Benchmarking a BAR AI change
 
-The point of the harness is to answer "did that change help?" — which is harder
-than it looks, because BARb-vs-BARb outcomes are very noisy.
+Treat every run as an experiment, not a demo. BARb-vs-BARb outcomes are noisy,
+so the question is never "did it win" — it's "does this result survive a
+control, a decent sample size, and a look at the metric over time."
 
-## One-time setup
+## Method
+
+1. Change **one thing**. State what you're testing before you run it.
+2. Run a **control** — the unmodified baseline — under identical settings
+   (map, seed, speed, player count). Never judge a treatment without one run
+   alongside it; a bad result on its own could be a pre-existing regression,
+   not your change.
+3. Take **equal-sized samples** of control and treatment. A handful of games
+   is a weak signal either way — say so rather than declaring victory.
+4. Judge a metric by its **behaviour over the timeline**, not its value at
+   game-end (see below — this is the part most likely to mislead).
+5. Report the counts and what they show, including when it's within noise.
+   Don't round a coin flip up to a finding.
+
+## Setup
 
 ```bash
 python tools/deploy_ai.py gadgets
@@ -18,7 +33,7 @@ Installs `dev_autoquit.lua` into `BAR.sdd`. Without it a match runs to the frame
 cap instead of ending at game over, and no winner is recorded. It is inert unless
 the start script sets `dev_autoquit=1`, so it cannot affect normal play.
 
-## Single match
+## Running matches
 
 ```bash
 python tools/run_match.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
@@ -28,14 +43,8 @@ python tools/run_match.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
 Spec format `ShortName[:Version[:profile]]`, or `lua:SimpleAI` for a LuaAI.
 Output lands in `matches/<stamp>-<slug>/`: `script.txt`, `infolog.txt`,
 `result.json`, optionally the replay (`--replay`).
-
-Reference timing on this machine: a 27 game-minute match ≈ 44 s wall (~37×
-realtime), plus ~35 s the first time while the archive cache builds.
-
-Useful flags: `--windowed` (run in `spring.exe` to watch it), `--dry-run` (print
-the start script and stop), `--speed`, `--engine`.
-
-## Batch
+Useful flags: `--windowed` (watch it live), `--dry-run` (print the start
+script and stop), `--speed`, `--engine`.
 
 ```bash
 python tools/run_tournament.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
@@ -43,11 +52,30 @@ python tools/run_tournament.py --a BARb:apex:hard_aggressive --b BARb:stable:har
 python tools/run_tournament.py --report          # re-summarise the ledger
 ```
 
-Sides swap every other game — team 0 and team 1 do not get equivalent start
-positions on most maps, so without the swap you are measuring the map. Results
+Sides swap every other game — without the swap you're measuring the map's
+starting-position asymmetry, not your change. Vary the map across the batch
+too: a config change routinely helps on one map and hurts on another. Results
 append to `matches/tournament.jsonl`.
 
-## Reading results honestly
+## Judge the timeline, not the end state
+
+This is the single most common way to misread a run. Standing counters —
+constructors, army size, `mCon` — go to **zero** when a team loses, so the
+last sample of a lost game is a corpse, not data. Reading only the end state
+has produced backwards conclusions here before (a team that actually held
+*more* constructors all game read as building "1 to the other side's 10"
+because the sample was taken after it died).
+
+- `analyze_stats.py <run>` samples every couple of game-minutes. Use it. The
+  timeline shows *when* two runs diverge, which is usually the actual finding
+  — a cumulative total or an end-of-game snapshot hides it.
+- Cumulative counters (total metal produced, kills, losses) are safe to read
+  at the end; standing/instantaneous ones are not.
+- `composition.py` reports standing counters as PEAK for this reason, and
+  flags how many player-games ended wiped out — read that line before trusting
+  a composition claim.
+
+## Reading run status honestly
 
 `result.json` → `result.reason`:
 
@@ -58,23 +86,36 @@ append to `matches/tournament.jsonl`.
 | `walltimeout` | the process was killed; something is wrong |
 | `unknown` | the autoquit gadget isn't installed, or it didn't run |
 
-Also check `desync` and `ai_errors` — an AI that threw exceptions all game is not
-a valid data point.
+Also check `desync` and `ai_errors` — an AI that threw exceptions all game is
+not a valid data point. Only `gameover` matches count toward a win rate; a
+change that pushes matches into `timelimit` instead has changed the game
+length distribution, which is itself a finding worth reporting, not hiding.
 
-**Interpretation rules:**
+Comparing `hard_aggressive` against `hard` compares two profiles, not two
+variants — to isolate your change, benchmark against **the same profile** in
+stock BARb.
 
-- A single match tells you nothing. 10 games with side swapping is a weak signal.
-- Only `gameover` matches count toward win rate. A change that pushes lots of
-  matches into `timelimit` has changed the game length distribution, which is
-  itself a finding — report it rather than hiding it.
-- Comparing `hard_aggressive` against `hard` compares two profiles, not two
-  variants. To isolate your change, benchmark your variant against **the same
-  profile** in stock BARb.
-- Vary the map. Config changes routinely help on one map and hurt on another.
-- Change one thing per benchmark run.
+## Confounds to rule out before trusting a result
 
-When reporting to the user, give the counts and the reason breakdown, not just a
-percentage. Say plainly when a result is within noise.
+Don't assume you know the numbers ahead of time — measure them on the run in
+front of you. Two ways this harness has produced a misleading result:
+
+- **The benchmark's pace may not match what you're trying to reproduce.**
+  If a behaviour is gated on some in-game condition (an income threshold, a
+  unit count, elapsed time), check what that condition's actual value is in
+  *this* run before concluding the behaviour is broken — a benchmark that
+  never reaches the gate will never show it firing, and that's a setup
+  problem, not a bug. Don't carry forward last month's measured numbers as if
+  they still apply; conditions in a fast-moving codebase drift.
+- **Simulation speed can distort AI behaviour, not just wall-clock time.**
+  Orders given to a unit are sent over the network and applied when that
+  message is processed, not the instant you issue them — so at a high sim
+  speed, code that reads a unit's state and issues more work based on it can
+  read stale state and pile up backlog. If you're testing anything that
+  touches production, task assignment, or command volume, check the actual
+  command backlog (e.g. `facQueued` in `dev_stats_export.lua`) rather than
+  assuming a given `--speed` is safe, and always compare treatment against a
+  control run at the **same** speed.
 
 ## When a match misbehaves
 
@@ -95,6 +136,18 @@ both; if you hand-wrote a script, that's the usual cause.
 **Wrong game loads** — `GameType` must be `Beyond All Reason $VERSION` for the
 `.sdd` checkout; `$VERSION` is literal. `python tools/unitsync.py games`.
 
+**A compile error can disable the whole AI and still report a normal
+result.** Grep the infolog before trusting anything else:
+`grep -ciE "\.as \([0-9]+, [0-9]+\) : ERR" infolog.txt`
+
+**A grep that returns nothing means the pattern is stale, not that the thing
+is absent.** Log formats drift over time — confirm the pattern matches
+*something* in a run you know fired before concluding it never fires.
+
+**Player count vs. map size.** Match the number of players to what the map is
+built for; a mismatch starves everyone and invalidates the economy for the
+whole run.
+
 ## Digging into a match
 
 ```bash
@@ -107,3 +160,6 @@ grep -aiE "error|exception" $D/infolog.txt | head    # failures
 The AI's own `AiLog()` output appears prefixed with its display name, so
 instrumenting AngelScript and reading it back from a headless run is a fast
 debugging loop — much faster than launching the client.
+
+`python tools/review.py <run> --control <run>` runs the checks above as a
+gate and withholds a verdict when one fails. Prefer it to doing them by hand.
