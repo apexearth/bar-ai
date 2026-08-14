@@ -49,33 +49,35 @@ mechanisms:
    at every income step, apexearth's explicit number ("Let's try defence at
    10%"). See CHANGES.md. Smoke-tested clean; needs a tournament + a watched
    game before this half can be closed out.
-2. **Army does not redeploy to a breakout — INVESTIGATED, DESIGNED, NOT YET
-   IMPLEMENTED.** Confirmed: every DEFEND pool is pulled toward the SAME single
+2. **Army does not redeploy to a breakout — FIX LANDED 2026-08-13/14, NOT YET
+   MEASURED.** Confirmed: every DEFEND pool was pulled toward the SAME single
    anchor point (`GetGuardAnchor`) each pass — either one cost-weighted
    centroid of all recent losses (`GetAttackHotspot`) or one sticky front
-   point, never a per-sector position. Two simultaneous breaches average to a
-   point between them that is neither. A previous responsiveness attempt
+   point, never a per-sector position. Two simultaneous breaches averaged to a
+   point between them that was neither. A previous responsiveness attempt
    (freeze new units near-base while contested) was tried, measured, and
    reverted (`hooks.as`) — its own comment names the missing capability: "a
    per-task position, which this layer does not have."
-   Design (C++, layer 3): turn the hotspot from one centroid into a small
-   fixed-size set of loss spots; make `GetGuardAnchor` per-task, scored by
-   remaining unanswered threat at each spot divided by distance, subtracting
-   already-assigned power as pools are assigned so later pools naturally pick
-   the next-worst breach; stop `CheckMergeTask` from merging DEFEND pools
-   anchored to different spots back into one blob.
-   **Before implementing: run the cheap falsifier the investigating agent
-   flagged.** Log `GetTasks(DEFEND).size()` and each task's `attackPower`/
-   `position` every 20s in one game. If there is typically only ONE live
-   DEFEND pool, per-task anchoring changes nothing — the fix would need to
-   SPLIT pools, not steer them, which is a different and larger change. Check
-   this before spending the C++ implementation effort.
+   **Falsifier checked before implementing, per this repo's own discipline**:
+   a temporary AngelScript sampler over `gSquads` found 2+ live DEFEND pools
+   in 135 of 301 samples (up to 7), thousands of elmos apart — per-task
+   anchoring had something real to steer.
+   Implemented (C++, layer 3): the hotspot is now a small fixed-size set of
+   loss spots instead of one centroid; `GetGuardAnchor` gained a per-task
+   overload scored by remaining unanswered threat at each spot divided by
+   distance, subtracting already-assigned power as pools are assigned so
+   later pools naturally pick the next-worst breach; `CheckMergeTask` no
+   longer merges DEFEND pools anchored to different spots back into one blob.
+   See CHANGES.md. Smoke-tested clean (no compile errors, no crash). **Not yet
+   measured** — needs a watched game with a real two-front breach to confirm
+   the army actually splits toward both sides.
    **Further evidence, same watching session, after the defence-share fix
    deployed:** "we're losing our main base and our own army is walking around
    the back to a neighbor's base instead of protecting ourselves. I do see
    that defenses are less strong." Consistent with the diagnosis above — with
    defence now correctly weaker (working as intended), the missing
-   redeployment mechanism is more exposed, not less relevant.
+   redeployment mechanism was more exposed, not less relevant. This is the
+   report that motivated implementing the fix rather than leaving it designed.
 
 ## NEW: the defensive front line is spread thin instead of massed on a line (2026-08-13, watching)
 
