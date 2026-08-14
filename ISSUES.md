@@ -5,6 +5,23 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
+## NEW: native crash at ~26.4 game-minutes, access violation in SkirmishAI.dll (2026-08-14, watching)
+
+**apexearth, watching the windowed 8v8 (+70 handicap):** "had a crash there."
+`matches/20260814-034141-*/result.json`: `crashed: true`, `exit_code` is the
+Windows access-violation code as unsigned, and the infolog confirms it plainly:
+`Error: Exception: Access violation (0xc0000005)` at `f=0047450` (~26.4 game
+minutes), `Error: This stacktrace indicates a problem with a skirmish AI.`
+
+Not root-caused. The stack trace is DLL-offset only (`SkirmishAI.dll
+[0x0000000000030304]` etc., 17 frames deep into our own code) with no symbols
+to resolve against — needs a debug build or a symbol map to turn into function
+names. Ruled out as related to tonight's session's changes: every edit tonight
+was AngelScript only (`ai/apex/game-side/script/**`), and the crash is native
+(C++, `SkirmishAI.dll`), so it predates this session's work and would
+reproduce on prior commits too. Needs its own pass with a debug/symbol build
+and a repro at a similar game length before it can be attributed.
+
 ## NEW: anti-air coverage is lacking (2026-08-13, watching)
 
 **apexearth, watching the windowed 8v8:** "We lack anti air coverage."

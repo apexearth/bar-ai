@@ -38,6 +38,7 @@ const int COMM_STUCK_TICKS = 60;
 int gCommStuck = 0;
 int gCommUnstuck = 0;
 int gNextCommDiag = 0;
+IUnitTask@ gCommLastLogged = null;  // see maketask.as's catch-all accept log
 
 // WHY THE COMMANDER IS STANDING THERE, attributed instead of guessed.
 //
@@ -254,10 +255,24 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 		// Factory::HaveAnyFactory()'s own comment for how this was found.
 		// Below every safety check above: a commander actively fleeing or
 		// hiding from a real threat must keep doing that, not detour to a
-		// build site. Gated past the opening (3 min) so this never competes
-		// with the normal game-start sequence, which already places the
-		// first factory through its own, separately-verified path.
-		if (!Factory::HaveAnyFactory() && (ai.frame >= 3 * MINUTE)) {
+		// build site.
+		//
+		// WAS a literal `ai.frame >= 3 * MINUTE`, on the theory that the
+		// engine's own AiGetFactoryToBuild path (factory/choose.as) already
+		// places the first factory earlier and this would just be a backstop.
+		// Traced live, 8v8 +70 handicap: that path's own gate-holding log
+		// ("opening gate holds the first factory") never printed ONCE in any
+		// of eight players across three matches -- it was never even being
+		// asked -- so THIS was the only path that ever requested a factory,
+		// and it was dead on a stopwatch regardless of economy. Every lab in
+		// that scenario landed in a tight 3.0-4.4m band no matter how income
+		// varied, which is the clock, not the game. Gate on the same signal
+		// step 2 already uses instead: once OpeningNeedsEconomy() is no
+		// longer holding (income cleared, or the escape valve released it),
+		// there is nothing left to wait for -- no clock needed, and a wiped
+		// team with one surviving constructor re-enters this correctly from
+		// its own current economy rather than a fixed elapsed time.
+		if (!Factory::HaveAnyFactory() && !OpeningNeedsEconomy()) {
 			// apexearth, watching live: "when we have 0 buildings, we
 			// shouldn't start by making a lab... green ran out of
 			// everything, his first building to make after that was a
@@ -446,7 +461,17 @@ IUnitTask@ HomeTower(CCircuitUnit@ unit, bool isComm)
 	// STEP 4 COMES AFTER STEP 3. This rule sits above DefaultMakeTask, so
 	// during the opening it can take the commander off the economy the first
 	// lab is waiting on. The turret is cheap; the commander's time here is not.
-	if (OpeningNeedsEconomy())
+	//
+	// OpeningNeedsEconomy() alone is not "step 3 is done" -- it is only the
+	// step-2 energy gate, and its own escape valve releases the moment no
+	// energy task is in flight, which can be almost immediately if the single
+	// opening builder simply hasn't been asked for another one yet. Measured
+	// 8v8 +70 handicap: the gate released at 1.2m with no factory anywhere,
+	// and this rule then won the commander's turn on every re-election ahead
+	// of the (also newly eligible) factory offer -- armllt requested at 1.2,
+	// 1.6, 2.7, 3.5, 3.8m while the T1 lab didn't land until 3.5-4.0m, team-
+	// wide. Gate on the actual step-3 condition, not its proxy.
+	if (OpeningNeedsEconomy() || !Factory::HaveAnyFactory())
 		return null;
 	// One outstanding order at a time. See gHomeTowerTask.
 	if (IsDefenceTaskLive(gHomeTowerTask))
@@ -508,6 +533,15 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)
 	if (ai.GetTunable("apex_mex_sentry", 1.f) <= 0.f)
 		return null;
 	if (isComm && !CommRules())
+		return null;
+	// STEP 4 COMES AFTER STEP 3, same as HomeTower. This rule has no phase
+	// exclusion for the COMMANDER specifically (any other builder guarding a
+	// mex is not the sole opening builder, so it costs nothing there): traced
+	// live, 8v8 +70 handicap -- the commander took 4 mexes by 0.6m, then spent
+	// 1.2m to 3.8m walking to and building two sentries before the T1 lab was
+	// even requested. apexearth still wants the commander guarding mexes it
+	// just made; the ordering, not the behaviour, was wrong.
+	if (isComm && !Factory::HaveAnyFactory())
 		return null;
 	CCircuitDef@ mex = MexDef();
 	if ((mex is null) || (mex.count <= 0))

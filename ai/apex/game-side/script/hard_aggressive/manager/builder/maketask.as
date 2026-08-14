@@ -210,8 +210,28 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			return held;
 		}
 	}
-	if (!Brain::AskingForNewWork(unit))
-		return task;
+	if (!Brain::AskingForNewWork(unit)) {
+		// A REAL ENERGY CRISIS BREAKS THE HOLD. Brain::Decide's own energy want
+		// already carries a 6x stall multiplier (ENERGY_STALL_MULT, brain.as)
+		// to win the ranking once it is reached -- but AskingForNewWork gates
+		// entry to Decide on the unit being genuinely free, so a commander
+		// already committed to something else (a mex, a tower) never got a
+		// chance to be asked at all, no matter how starved energy got.
+		// apexearth: "make sure the commander will build energy when they run
+		// out of energy at this early stage. It can be easy to stall the
+		// early build if we're not careful with that." Scoped to a real
+		// crisis (<5% of storage, same threshold VetoCrisisAssist already
+		// uses) and to the commander specifically -- it is the one unit whose
+		// hold protection is strong enough to matter here -- and never
+		// overrides a build that is itself already the fix.
+		const bool energyCrisis = isComm
+				&& (aiEconomyMgr.energy.storage > 0.f)
+				&& (aiEconomyMgr.energy.current < aiEconomyMgr.energy.storage * RESOURCE_CRISIS_FRAC)
+				&& (SiteBuildName(unit.task) != "energy")
+				&& (SiteBuildName(unit.task) != "convert");
+		if (!energyCrisis)
+			return task;
+	}
 
 	// THE MACRO VIEW GETS ITS SAY BEFORE ANY OPTIONAL SPENDING.
 	//
@@ -241,8 +261,23 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
-	if (task !is null)
+	if (task !is null) {
+		// THE MISSING LOG. Everything else the commander does (energy, factory,
+		// home tower) logs when it fires; this catch-all -- which is where every
+		// mex/mexup/geo offer the engine makes actually gets taken -- never did,
+		// so a trace of "what is the commander building" had a hole exactly where
+		// mex spam would show up. Rate-limited on the task handle changing, not
+		// on a timer, so it logs once per acceptance rather than once per
+		// re-election tick (AiMakeTask re-runs this every update for a builder
+		// still walking to its site).
+		if (isComm && (task !is gCommLastLogged)) {
+			@gCommLastLogged = task;
+			AiLog(Factory::T() + "apex: commander accepted " + SiteBuildName(task)
+				+ " at " + formatFloat(task.GetBuildPos().x, "", 0, 0)
+				+ "," + formatFloat(task.GetBuildPos().z, "", 0, 0));
+		}
 		return task;   // strictly additive: never displace real work
+	}
 
 	@t = MetalFullFallback(unit, isComm);
 	if (t !is null)

@@ -1135,8 +1135,21 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	const bool preT2 = !Factory::gHaveT2;
 
 	Propose(MexWant(unit));
-	Propose(FrontDefenceWant(unit));
-	Propose(MexCoverWant(unit));
+	// STEP 4 COMES AFTER STEP 3, same exclusion as HomeTower/CommanderMexGuard
+	// in rules_commander.as. Before any factory exists there is exactly one
+	// builder in the game -- the commander -- so this is really "don't send
+	// the opening builder to the front instead of the lab." Traced live, 8v8
+	// +70 handicap: FrontDefenceWant won 3 times in a row (1.5m, 2.1m, 2.3m),
+	// each sending the commander to walk to a front site, and the T1 lab
+	// wasn't requested until 3.0m as a direct result.
+	if (Factory::HaveAnyFactory()) {
+		Propose(FrontDefenceWant(unit));
+		// MexCoverWant is the same "fence" kind as FrontDefenceWant above --
+		// gating one and not the other left this one still winning the
+		// commander's turn pre-lab. Traced live: fence=0.0960 still appeared
+		// in brain wants at 1.5m with no factory anywhere, sourced from here.
+		Propose(MexCoverWant(unit));
+	}
 	Propose(AirCoverWant(unit));
 	Propose(MexUpgradeWant(unit));
 	// The optional class. Costs are read from the defs so a score means
