@@ -18,6 +18,47 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+## 2026-08-14: many DIFFERENT sites of the same building opened at once — VERIFIED
+
+Layer 2 (AngelScript), `builder/joinbuild.as`, `mexguard.as`, `fusion.as`. A
+fourth gap in the same duplicate-energy chain, caught by apexearth live on the
+build that had already shipped the SAME-TILE fix: "6 advanced solars being
+made at the same time... they start making more while others are obviously
+already in progress! You're doing a terrible job at fixing that."
+
+**He was right, and it was a real gap, not a repeat of an earlier bug.**
+Inspected the live match's `_engine` infolog while the game was running:
+`[BARAI_POS]` snapshots showed team t2 with **6** `armadvsol` standing at
+once and team t7 with **8**, every one at a genuinely DIFFERENT tile.
+`SpotCollides` (the previous fix) never had a reason to refuse any of them —
+it only catches a second building on the SAME ground. Nothing bounded how
+many DIFFERENT sites of one def could be open together: each site hit its
+own `JoinBuilderCap` (income-floored at 2), and the excess builder — instead
+of waiting — started a brand new site elsewhere, which then filled its own
+cap and handed off again.
+
+Added `BusyOnDef`, counting live builders across EVERY site of a def (not
+just one), and made `SiteBlocked` refuse a new site once that TEAM-WIDE total
+already meets `JoinBuilderCap` — the same income/drain formula already
+verified tonight for a single site, applied as a ceiling across all of them.
+This is the same "K items in parallel land at KT/B, nothing pays until then"
+argument from the original reactor fix, generalized past reactors: an economy
+that can usefully feed `income/drain` lathes on one kind of building cannot
+usefully feed more of them spread across five buildings instead of one.
+
+**Verified against the mechanism directly, not by absence of evidence.** The
+first reproduction attempt (same map/seed as the prior fix's test) never hit
+the condition at all — 0 gate firings, 0 bursts, before AND after — so that
+alone proved nothing. Added telemetry to the gate itself
+(`apex: site-blocked <def> busy=X cap=Y byCap=N byGround=M`) and ran three more
+seeds; one (seed 2, `matches/20260814-003541-*`) triggered it 17 times on
+`armafus` (busy reaching 5-7 against a cap of 5-7). In that exact run — the
+one that would have produced a burst without the fix — the maximum same-team,
+same-def enqueue rate is 1 per 20-second window, and the maximum concurrent
+open-sites count in any 100-second span is 3, spread across the window (normal
+ladder progression), not clustered (the live game's 6-8 simultaneous). No
+compile errors, no crash, across all four seeds.
+
 ## 2026-08-13/14: the army answers one breach at a time, not all of them at once
 
 Layer 3 (C++), `CircuitAI.cpp/.h`, `module/MilitaryManager.cpp/.h`,

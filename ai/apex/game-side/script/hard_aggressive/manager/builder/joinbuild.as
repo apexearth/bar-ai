@@ -106,6 +106,75 @@ bool SpotCollides(const CCircuitDef@ want, const AIFloat3& in spot)
 	return false;
 }
 
+// HOW MANY BUILDERS, TOTAL ACROSS EVERY SITE OF ONE DEF, may be working AT
+// THE SAME TIME -- the same JoinBuilderCap formula (income/drain) already
+// verified tonight for a SINGLE site, now applied as a TEAM-WIDE ceiling
+// instead. SpotCollides only refused a second building on the SAME ground;
+// nothing stopped a capped-out site from handing its next idle builder a
+// BRAND NEW site instead of making it wait, because per-site capping alone
+// has no memory of how many OTHER sites of the same def already exist.
+// apexearth, watching live, on the build that already shipped SpotCollides:
+// "6 advanced solars being made at the same time... they start making more
+// while others are obviously already in progress." Measured in that same
+// running game: team t2 stood 6 armadvsol at once, team t7 stood 8 -- all at
+// genuinely different tiles, so SpotCollides never saw a reason to refuse
+// any single one of them.
+//
+// This is the exact "K items in parallel land at KT/B, nothing pays until
+// then" argument from tonight's reactor fix, generalized past reactors: an
+// economy that can usefully feed `income/drain` LATHES on one kind of
+// building cannot usefully feed more than that spread across five buildings
+// instead of one. Below the cap, a second (or third) site is free to open --
+// the ladder's own distance/bias preference decides whether that is more
+// efficient than piling every builder onto the first. Above it, a new site
+// is not more economy, it is the same builders arriving later.
+uint BusyOnDef(const CCircuitDef@ want)
+{
+	if (want is null)
+		return 0;
+	uint total = 0;
+	for (uint i = 0; i < gJoinTasks.length(); ++i) {
+		IUnitTask@ cand = gJoinTasks[i];
+		if ((cand is null) || (cand.buildDef is null) || (cand.buildDef.id != want.id))
+			continue;
+		array<CCircuitUnit@>@ busy = cand.GetUnits();
+		if (busy !is null)
+			total += busy.length();
+	}
+	return total;
+}
+
+int gSiteBlockedByCap = 0;
+int gSiteBlockedByGround = 0;
+int gNextSiteBlockLog = 0;
+
+// One call for the whole "should a NEW site of this def start" question:
+// combines the team-wide builder ceiling above with SpotCollides's ground
+// check, so every caller asks one thing instead of two in a particular
+// order.
+bool SiteBlocked(const CCircuitDef@ want, const AIFloat3& in spot)
+{
+	if (want is null)
+		return true;
+	const uint busy = BusyOnDef(want);
+	const uint cap = JoinBuilderCap(want.costM);
+	if (busy >= cap) {
+		++gSiteBlockedByCap;
+		if (ai.frame >= gNextSiteBlockLog) {
+			gNextSiteBlockLog = ai.frame + 10 * SECOND;
+			AiLog(Factory::T() + "apex: site-blocked " + want.GetName()
+				+ " busy=" + busy + " cap=" + cap
+				+ " byCap=" + gSiteBlockedByCap + " byGround=" + gSiteBlockedByGround);
+		}
+		return true;
+	}
+	if (SpotCollides(want, spot)) {
+		++gSiteBlockedByGround;
+		return true;
+	}
+	return false;
+}
+
 array<IUnitTask@> gJoinTasks;
 int gConJoined = 0;
 int gNextJoinLog = 0;

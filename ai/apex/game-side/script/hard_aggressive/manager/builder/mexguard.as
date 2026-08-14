@@ -557,12 +557,14 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	if (already !is null)
 		return already;
 	// The join above is capped by what the economy can feed; a full cap must
-	// never excuse building a SECOND copy on the same ground. Measured live:
-	// once the cap was reached, ai.FindBuildSiteNear kept returning the exact
-	// same tile to every further builder, because a queued-but-not-yet-started
-	// task is invisible to the engine's own site search. Decline outright
-	// rather than duplicate -- the ladder will try this unit again next update.
-	if (Builder::SpotCollides(gen, spot))
+	// never excuse starting ANOTHER site of the same def, whether on the same
+	// ground (SpotCollides) or a different one nearby (SitesInFlight) --
+	// measured live: 6-8 armadvsol standing at once for one player, all at
+	// different tiles, because each capped-out site handed the next idle
+	// builder a brand new one instead of making it wait. Decline outright
+	// rather than start a site the economy cannot also feed -- the ladder
+	// will try this unit again next update.
+	if (Builder::SiteBlocked(gen, spot))
 		return null;
 
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Common(
