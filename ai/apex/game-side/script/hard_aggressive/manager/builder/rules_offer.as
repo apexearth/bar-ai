@@ -1,47 +1,27 @@
 namespace Builder {
 
 // Screening what DefaultMakeTask hands back.
-
-IUnitTask@ ExpansionAlwaysWins(IUnitTask@ task)
-{
-	// EXPANSION IS NEVER OVERRIDDEN.
-	//
-	// Everything below this line can null `task` -- threat vetoes, the comm-hold
-	// rule, the assist gate -- and every one of them was written about some other
-	// build type. When the engine hands back a MEX, MEXUP, GEO or GEOUP it has
-	// already decided we should expand, at Priority::HIGH, from the one function
-	// that creates that work at all (CEconomyManager::MakeEconomyTasks). Refusing
-	// it does not defer expansion, it discards the only offer of it.
-	//
-	// This repo has the collapse on record: mex upgrades 11 -> 2 across a session
-	// where twelve rules were added in front of DefaultMakeTask, each individually
-	// reasonable. Today's 1v1 measurements found the same shape from the other
-	// end -- MEX tasks standing unworked at 2, 4, 8, 13, 23 while no builder was
-	// on one for fourteen minutes.
-	//
-	// Taken from Felnious/Skirmish, which reaches the same conclusion structurally
-	// rather than by tuning: the same six lines appear in five of its role files.
-	// See docs/13-other-ais.md. It is a STOP, not a spend -- it enqueues nothing
-	// and cannot cost constructor time, it only declines to throw work away.
-	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)) {
-		const int bt = task.GetBuildType();
-		if ((bt == int(Task::BuildType::MEX)) || (bt == int(Task::BuildType::MEXUP))
-			|| (bt == int(Task::BuildType::GEO)) || (bt == int(Task::BuildType::GEOUP)))
-		{
-			return task;
-		}
-	}
-	return null;
-}
+//
+// ExpansionAlwaysWins used to live here: an early, unconditional take of any
+// MEX/MEXUP/GEO/GEOUP offer, ahead of energy, defence and Brain::Decide's
+// ranked wants. Removed 2026-08-14 -- apexearth: "ExpansionAlwaysWins was
+// always supposed to be a 'last resort' task when there's nothing better to
+// do," which is the opposite of where it sat. brain.as's MexWant already
+// ranks mex on real economic value inside Brain::Decide, and
+// `if (task !is null) return task;` in maketask.as's MakeTaskInner already
+// returns any leftover engine offer -- mex included -- once nothing else
+// claimed the builder. That is the whole of "last resort"; no replacement
+// function was needed. Measured live, 8v8: mex offers had outnumbered every
+// other type 493:46 with the early return in place.
 
 // THE ENGINE WAS ALREADY SENDING SOMEBODY AND WE KEPT SAYING NO.
 //
-// Same shape as ExpansionAlwaysWins, for the same reason. CBuilderManager's own
-// elector (MakeBuilderTask) walks the queued tasks and hands back the one it has
-// chosen a builder for. When that is the Brain's front tower, every rule below
-// ExpansionAlwaysWins gets to answer instead -- Brain::Decide most of all, which
-// cheerfully orders ANOTHER front tower -- and the offer is thrown away. It is
-// only honoured at the very bottom of AiMakeTask, by which point nothing is left.
+// CBuilderManager's own elector (MakeBuilderTask) walks the queued tasks and
+// hands back the one it has chosen a builder for. When that is the Brain's
+// front tower, every rule below gets to answer instead -- Brain::Decide most
+// of all, which cheerfully orders ANOTHER front tower -- and the offer is
+// thrown away. It is only honoured at the very bottom of AiMakeTask, by which
+// point nothing is left.
 //
 // Measured: the front orders are not aborted and are not unreachable, they are
 // alive and unstaffed -- 48-105 queued with no worker against 1-18 aborted, per

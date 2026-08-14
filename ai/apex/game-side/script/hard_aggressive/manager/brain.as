@@ -281,12 +281,13 @@ void Propose(Want@ w)
 // in the brain", and "a lot of the concepts and things that I had added in the
 // past are now the brain's responsibility."
 //
-// ExpansionAlwaysWins protects expansion by SITTING EARLY: it takes the engine's
-// offer when that offer happens to be a mex. It cannot help when the engine
-// offers something else, or nothing -- and the engine's economy generator is
-// budgeted (MakeEconomyTasks refuses above workers * 8), so "nothing" is common
-// exactly when the base is busiest. Measured 6 games at minute 14: we hold 10
-// extractors to stock's 13 and make 12,303 metal to their 17,185.
+// ExpansionAlwaysWins (rules_offer.as, deleted 2026-08-14) used to protect
+// expansion by SITTING EARLY: it took the engine's offer whenever that offer
+// happened to be a mex. It could not help when the engine offered something
+// else, or nothing -- and the engine's economy generator is budgeted
+// (MakeEconomyTasks refuses above workers * 8), so "nothing" was common
+// exactly when the base was busiest. Measured 6 games at minute 14: we held 10
+// extractors to stock's 13 and made 12,303 metal to their 17,185.
 //
 // It does not need protecting once it has a number. A plain extractor yields
 // ~1.8 metal/second for ~50 metal, which is 0.033 per metal against a moho

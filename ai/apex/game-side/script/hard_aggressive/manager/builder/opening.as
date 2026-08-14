@@ -8,11 +8,12 @@ namespace Builder {
 //   4. a sentry in the base
 //   5. back out for more mexes and walk to the front line
 //
-// Step 1 is ExpansionAlwaysWins, reach-limited during the opening by
-// OpeningExpansionAllowed below; step 5 is existing behaviour, AiMakeDefence's.
-// Step 3's "only that one" is the T1-total gate in factory/choose.as; step 4 is
-// HomeTower, which now waits for the lab. What lives here is step 2 (which
-// nothing in the script ever did) and the step 1 reach limit.
+// Step 1 is now Brain::MexWant, ranked on economic value against everything
+// else Brain::Decide considers -- see rules_offer.as and brain.as, 2026-08-14
+// -- rather than an early, unconditional take; step 5 is existing behaviour,
+// AiMakeDefence's. Step 3's "only that one" is the T1-total gate in
+// factory/choose.as; step 4 is HomeTower, which now waits for the lab. What
+// lives here is step 2, which nothing in the script ever did.
 //
 // It used to be done in C++, invisibly. CEconomyManager::UpdateFactoryTasks
 // compares income against the factory's own draw, and when it falls short it
@@ -39,34 +40,15 @@ namespace Builder {
 float OpeningEnergyGate() { return ai.GetTunable("apex_opening_energy_gate", 80.f); }
 float OpeningMetalGate()  { return ai.GetTunable("apex_opening_metal_gate", 5.f); }
 
-// STEP 1 HAD NO CEILING, SO IT ATE THE WHOLE OPENING. ExpansionAlwaysWins takes
-// every mex the engine offers, unconditionally, and the engine keeps offering
-// them to every free builder -- so on a mex-rich start every constructor chases
-// the NEXT one instead of ever reaching step 2, metal banks sit full because
-// nothing is spending it on energy, and the first lab lands whenever income
-// happens to compound anyway. apexearth: "you're walking around full of metal
-// making more metal extractors rather than starting your base," and, on what
-// "nearby" meant in step 1 all along: "within 5 seconds of walking... ~700
-// elmo range."
-//
-// Reach, not count -- this repo does not gate on how MANY mexes, only on how
-// FAR one is from the builder being asked to take it. A mex within reach is
-// still free money and stays first in line; one further out is deferred to
-// step 2 for now, not refused for good -- the engine's own offer is untouched
-// and will still be there once the opening ends.
+// "NEARBY", APEXEARTH'S OWN FIGURE: "within 5 seconds of walking... ~700 elmo
+// range." Originally bounded step 1 itself (ExpansionAlwaysWins taking any mex
+// the engine offered, unconditionally, ate the whole opening on a mex-rich
+// map -- apexearth: "you're walking around full of metal making more metal
+// extractors rather than starting your base"). Step 1 is a ranked want now
+// (see the header note above) and no longer needs its own gate, but the same
+// reach still bounds the post-3-minute factory-rebuild fallback in
+// rules_commander.as ("a safe mex spot still exists nearby").
 float OpeningMexReach() { return ai.GetTunable("apex_opening_mex_reach", 700.f); }
-
-bool OpeningExpansionAllowed(CCircuitUnit@ unit, IUnitTask@ task)
-{
-	if (!OpeningNeedsEconomy())
-		return true;
-	if ((unit is null) || (task is null))
-		return true;
-	const AIFloat3 at = task.GetBuildPos();
-	if (!OnMap(at))
-		return true;
-	return unit.GetPos(ai.frame).distance2D(at) <= OpeningMexReach();
-}
 
 // NO CLOCK, ON PURPOSE. apexearth: code this open-ended -- a team wiped down
 // to one constructor must re-derive the same opening from its CURRENT economy,

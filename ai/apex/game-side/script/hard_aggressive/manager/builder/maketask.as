@@ -112,27 +112,6 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	@t = CommanderMexGuard(unit, isComm);
 	if (t !is null)
 		return t;
-	// EXPANSION OUTRANKS OPTIONAL SPENDING.
-	//
-	// The header above says order is the design and that anything placed before
-	// DefaultMakeTask claims a constructor before expansion is even considered.
-	// OptionalWork and Fortify were both placed there, and between them they can
-	// claim a builder for AA, a deterrence tower, an energy converter, a gantry,
-	// a nuke silo, a Pulsar, a shield or a dig-in -- so a constructor that could
-	// have been upgrading a mex spends itself on any of those first.
-	//
-	// apexearth, watching an 8v8: "in our build order we should prefer to make
-	// T2 mex upgrades on OUR mexes instead of making something like an advanced
-	// metal converter, or a rattlesnake. I see purple making those two things at
-	// the same time instead of properly focusing on increasing their metal
-	// income."
-	//
-	// This is the 2026-08-01 failure mode exactly: twelve rules were added ahead
-	// of DefaultMakeTask, every one of them fired, and metal production fell
-	// 4.3x because mex upgrades live behind them. Asking the engine FIRST and
-	// taking the offer only when it is expansion costs nothing -- ExpansionAlwaysWins
-	// returns null for every other build type, so the optional rules below still
-	// get their turn on the same offer.
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 	NoteOffer(unit, task, isAdvCon);
 	if (isComm) {
@@ -142,9 +121,24 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		CommDiag();
 	}
 
-	@t = ExpansionAlwaysWins(task);
-	if ((t !is null) && OpeningExpansionAllowed(unit, t))
-		return t;
+	// EXPANSION IS A WANT NOW, NOT AN EARLY RETURN. ExpansionAlwaysWins used to
+	// sit here and take any mex offer immediately, ahead of energy, defence and
+	// everything Brain::Decide ranks -- exactly backwards from what it was meant
+	// to be. apexearth: "ExpansionAlwaysWins was always supposed to be a 'last
+	// resort' task when there's nothing better to do. The mentality is -
+	// 'nothing super urgent, so let's keep expanding our economy'." Measured
+	// live, 8v8: of every offer the engine made, 493 were mex against 46
+	// everything else combined, because a mex-rich map means a mex is almost
+	// always available to grab first. brain.as's own MexWant already ranks mex
+	// against every other option on real economic value (0.033 metal/metal
+	// against a reactor's 0.0034 -- expansion earns most wins on merit, it does
+	// not need a queue-jump to get them) and documents this exact intent:
+	// apexearth, "expansion always wins is now being replaced by logic in the
+	// brain." This early return was the one piece of that move that never
+	// actually happened. Nothing new is needed to make expansion the true last
+	// resort: `if (task !is null) return task;` further down already returns
+	// ANY leftover engine offer, mex included, once nothing else claimed the
+	// builder -- that is the whole of "last resort", already in the pipeline.
 
 	// STEP 2 OF THE OPENING, AND ONLY DURING IT.
 	//
