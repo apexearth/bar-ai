@@ -102,8 +102,8 @@ const string TV_AA = "aa";
 // just ally defense forces coming to aid (so long as the distance is not too
 // great)."
 //
-// CCircuitAI::GetAttackHotspot is a cost-weighted centroid of where WE have lost
-// units, decayed so it follows the current fight. It is per-AI -- NoteLossAt only
+// CCircuitAI::GetAttackHotspot is the heaviest of the cost-weighted, decaying
+// spots where WE have lost units. It is per-AI -- NoteLossAt only
 // ever accumulates our own losses -- so a player cannot see an ally being
 // overrun, which is why nobody ever turns up to help.
 //

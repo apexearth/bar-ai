@@ -217,11 +217,24 @@ ISquadTask* ISquadTask::CheckMergeTask()
 	std::shared_ptr<CQueryLineMap> query = std::static_pointer_cast<CQueryLineMap>(
 			pathfinder->CreateLineMapQuery(leader, circuit->GetThreatMap(), pos));
 
+	// A garrison anchored to one breach must not merge back into one anchored to
+	// another -- CMilitaryManager::UpdateDefenceTasks gives each DEFEND pool the
+	// worst breach still unanswered, and a merge undoes that split immediately.
+	// Same radius the loss spots themselves are merged at, so "a different spot"
+	// means the same thing on both sides.
+	const bool isSplitAnchor = (fightType == FightType::DEFEND) && utils::is_valid(position);
+	const float anchorRadius = isSplitAnchor ? circuit->GetTunable("apex_hot_radius", 1000.f) : .0f;
+
 	const std::set<IFighterTask*>& tasks = static_cast<CMilitaryManager*>(manager)->GetTasks(fightType);
 	for (const IFighterTask* candidate : tasks) {
 		if ((candidate == this)
 			|| (candidate->GetAttackPower() < attackPower)
 			|| !candidate->CanAssignTo(leader))
+		{
+			continue;
+		}
+		if (isSplitAnchor && utils::is_valid(candidate->GetPosition())
+			&& (position.distance2D(candidate->GetPosition()) > anchorRadius))
 		{
 			continue;
 		}

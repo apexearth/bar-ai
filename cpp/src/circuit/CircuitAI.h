@@ -196,11 +196,20 @@ public:
 	bool IsCommanderWreck(springai::Feature* f);
 	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 	void NoteTrade(bool isKill, CCircuitDef* cdef);
-	// WHERE we are losing units, as a cost-weighted decaying centroid. The AI
-	// had no location for incoming attacks at all -- ApproachThreat() is a
-	// global scalar -- so defence was placed by geometry alone.
+	// WHERE we are losing units, cost-weighted and decaying. The AI had no
+	// location for incoming attacks at all -- ApproachThreat() is a global
+	// scalar -- so defence was placed by geometry alone.
 	void NoteLossAt(const springai::AIFloat3& pos, float costM);
 	bool GetAttackHotspot(springai::AIFloat3& outPos, float& outWeight);
+	// One place we are being hit. Several fights run at once, so the losses are
+	// kept as a small set of spots rather than one centroid: two breaches
+	// averaged to a point between them that was neither.
+	struct SHotSpot {
+		springai::AIFloat3 pos = ZeroVector;
+		float weight = .0f;
+	};
+	// Decayed as a side effect, exactly as GetAttackHotspot is.
+	const std::vector<SHotSpot>& GetHotSpots();
 	// BWEM chokepoints. Computed every game by CGridAnalyzer and, until now,
 	// reachable from nowhere: DefenceData pushes them into defPoints but every
 	// consumer selects via GetDefIndices(cluster), which only ever indexes the
@@ -367,9 +376,10 @@ private:
 	#define HOT_DECAY_PERIOD	(FRAMES_PER_SEC * 20)
 	#define HOT_DECAY			0.80f   // ~1 min half-life
 	#define HOT_MIN_WEIGHT		250.f   // metal lost before the spot means anything
-	springai::AIFloat3 hotSum = ZeroVector;   // cost-weighted position sum
-	float hotWeight = .0f;
+	#define HOT_SPOT_NUM		8
+	std::vector<SHotSpot> hotSpots;
 	int hotDecayFrame = 0;
+	void DecayHotSpots();
 	bool isCommitted = false;
 // <<< Recent trade record ---- END
 

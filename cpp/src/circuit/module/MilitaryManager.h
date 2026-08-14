@@ -135,6 +135,12 @@ public:
 	springai::AIFloat3 GetScoutPosition(CCircuitUnit* unit);
 	void ClearScoutPosition(IUnitTask* task);
 	bool GetGuardAnchor(springai::AIFloat3& outPos) const;
+	// Per-pool anchor. `assigned` is parallel to CCircuitAI::GetHotSpots() and
+	// holds the power already sent to each spot this pass, so a spot that is
+	// covered stops attracting the next pool; the chosen index comes back in
+	// outSpot for the caller to add to.
+	bool GetGuardAnchor(const springai::AIFloat3& from, const std::vector<float>& assigned,
+			springai::AIFloat3& outPos, int& outSpot) const;
 	void FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions);
 	void FillDefencePos(CCircuitUnit* unit, F3Vec& outPositions);
 	springai::AIFloat3 GetDefenceStand();

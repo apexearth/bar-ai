@@ -1282,12 +1282,11 @@ AIFloat3 CMilitaryManager::GetDefenceStand()
 // ends up garrisoning the base while a border base burns.
 bool CMilitaryManager::GetGuardAnchor(AIFloat3& outPos) const
 {
-	// A leak behind the line outranks the line. GetAttackHotspot is the
-	// cost-weighted decaying centroid of OUR OWN losses, so it points at the
-	// fighting rather than at geometry. It is a centroid of every loss though,
-	// including an army dying on the far side of the map, so it is only followed
-	// where we are not the weaker side -- otherwise the garrison marches into the
-	// enemy base to defend it.
+	// A leak behind the line outranks the line. GetAttackHotspot is the heaviest
+	// of OUR OWN decaying loss spots, so it points at the fighting rather than at
+	// geometry. That spot can be an army dying on the far side of the map, so it
+	// is only followed where we are not the weaker side -- otherwise the garrison
+	// marches into the enemy base to defend it.
 	AIFloat3 hot;
 	float weight;
 	if (circuit->GetAttackHotspot(hot, weight) && circuit->IsPosOnMap(hot)
@@ -1303,6 +1302,54 @@ bool CMilitaryManager::GetGuardAnchor(AIFloat3& outPos) const
 	return false;
 }
 
+// The same question asked from ONE pool's position: which unanswered breach is
+// worth this pool walking to. Spots are scored by the threat still standing on
+// them minus what has already been sent, over the distance to get there, so two
+// pools take two breaches instead of both taking the heaviest one.
+bool CMilitaryManager::GetGuardAnchor(const AIFloat3& from, const std::vector<float>& assigned,
+		AIFloat3& outPos, int& outSpot) const
+{
+	outSpot = -1;
+	if (!utils::is_valid(from)) {
+		return false;
+	}
+	const std::vector<CCircuitAI::SHotSpot>& spots = circuit->GetHotSpots();
+	if (spots.empty()) {
+		return false;
+	}
+	CThreatMap* threatMap = circuit->GetThreatMap();
+	CInfluenceMap* inflMap = circuit->GetInflMap();
+	const float squareSize = float(threatMap->GetSquareSize());
+
+	float bestScore = .0f;
+	for (unsigned i = 0; i < spots.size(); ++i) {
+		const CCircuitAI::SHotSpot& spot = spots[i];
+		if ((spot.weight < HOT_MIN_WEIGHT) || !circuit->IsPosOnMap(spot.pos)) {
+			continue;
+		}
+		// Same gate as the single-anchor version: a spot on ground we do not hold
+		// is a fight we are losing elsewhere, not a breach to garrison.
+		if (inflMap->GetInfluenceAt(spot.pos) <= -INFL_EPS) {
+			continue;
+		}
+		const float already = (i < assigned.size()) ? assigned[i] : .0f;
+		const float remaining = threatMap->GetThreatAt(spot.pos) - already;
+		if (remaining <= .0f) {
+			continue;
+		}
+		const float score = remaining / (from.distance2D(spot.pos) + squareSize);
+		if (score > bestScore) {
+			bestScore = score;
+			outSpot = int(i);
+		}
+	}
+	if (outSpot < 0) {
+		return false;
+	}
+	outPos = spots[outSpot].pos;
+	return true;
+}
+
 void CMilitaryManager::FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions)
 {
 	outPositions.clear();
@@ -1310,7 +1357,16 @@ void CMilitaryManager::FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions)
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	SArea* area = unit->GetArea();
 	AIFloat3 anchor;
-	if (GetGuardAnchor(anchor) && terrainMgr->CanMoveToPos(area, anchor)) {
+	// Both callers reach here with no target of their own, so an ATTACK squad
+	// rallies on the same per-pool anchor a garrison does. A squad that HAS a
+	// target never comes through here.
+	int spot = -1;
+	const std::vector<float> none;
+	// GetThreatAt reads whichever layer was selected last; select this unit's.
+	circuit->GetThreatMap()->SetThreatType(unit);
+	const bool hasAnchor = GetGuardAnchor(unit->GetPos(circuit->GetLastFrame()), none, anchor, spot)
+			|| GetGuardAnchor(anchor);
+	if (hasAnchor && terrainMgr->CanMoveToPos(area, anchor)) {
 		outPositions.push_back(anchor);
 		return;
 	}
@@ -1644,12 +1700,43 @@ void CMilitaryManager::UpdateDefenceTasks()
 	// agree: where we are being hit, else the front. Only while the task has no
 	// target of its own -- an engaged task writes its target into position and
 	// must not be pulled off it.
-	AIFloat3 anchor;
-	const bool hasAnchor = GetGuardAnchor(anchor);
+	//
+	// PER POOL, not one anchor for all of them. Every garrison used to be sent to
+	// the single heaviest point, so two breaches at once pulled the whole army to
+	// one of them (or, when it was a centroid, to a point between them that was
+	// neither). Heaviest pool picks first and its power is subtracted from that
+	// spot's demand, so the next pool prefers the next-worst breach. With one
+	// fight running there is one spot and this is the old behaviour exactly.
+	std::vector<CDefendTask*> defTasks;
+	defTasks.reserve(tasks.size());
 	for (IFighterTask* task : tasks) {
-		CDefendTask* dt = static_cast<CDefendTask*>(task);
-		if (hasAnchor && (dt->GetTarget() == nullptr)) {
-			dt->SetPosition(anchor);
+		defTasks.push_back(static_cast<CDefendTask*>(task));
+	}
+	std::sort(defTasks.begin(), defTasks.end(), [](const CDefendTask* a, const CDefendTask* b) {
+		return a->GetAttackPower() > b->GetAttackPower();
+	});
+	std::vector<float> assigned(circuit->GetHotSpots().size(), .0f);
+	AIFloat3 fallback;
+	const bool hasFallback = GetGuardAnchor(fallback);
+	const int frame = circuit->GetLastFrame();
+	for (CDefendTask* dt : defTasks) {
+		if (dt->GetTarget() == nullptr) {
+			CCircuitUnit* leader = dt->GetLeader();
+			const AIFloat3& from = (leader != nullptr) ? dt->GetLeaderPos(frame) : dt->GetPosition();
+			if (leader != nullptr) {
+				// GetThreatAt reads whichever layer was selected last.
+				circuit->GetThreatMap()->SetThreatType(leader);
+			}
+			AIFloat3 anchor;
+			int spot = -1;
+			if (GetGuardAnchor(from, assigned, anchor, spot)) {
+				dt->SetPosition(anchor);
+				if (spot < int(assigned.size())) {
+					assigned[spot] += dt->GetAttackPower();
+				}
+			} else if (hasFallback) {
+				dt->SetPosition(fallback);
+			}
 		}
 //		STerrainMapArea* area = dt->GetLeader()->GetArea();
 //		CMetalData::PointPredicate predicate = [em, tm, area, &spots, &clusters](const int index) {

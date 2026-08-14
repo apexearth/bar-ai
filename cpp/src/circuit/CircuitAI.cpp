@@ -60,6 +60,7 @@
 //#include "WrappCurrentCommand.h"
 
 #include <fstream>
+#include <limits>
 
 namespace circuit {
 
@@ -1988,28 +1989,94 @@ float CCircuitAI::GetNetInflAt(const AIFloat3& pos) const
 // Cost-weighted so a dead constructor or a dead tank moves it and a dead scout
 // barely does. Decayed so it tracks the CURRENT attack rather than accumulating
 // every fight of the game into a meaningless average.
+//
+// Kept as a small set of spots rather than one centroid: a loss merges into the
+// nearest spot within apex_hot_radius, else takes a free slot, else overwrites
+// the weakest. Two simultaneous breaches stay two positions, which is what lets
+// separate garrisons answer separate breaches.
 void CCircuitAI::NoteLossAt(const springai::AIFloat3& pos, float costM)
 {
 	if ((costM <= .0f) || !utils::is_valid(pos)) {
 		return;
 	}
-	hotSum += pos * costM;
-	hotWeight += costM;
+	const float radius = GetTunable("apex_hot_radius", 1000.f);
+
+	int best = -1;
+	float bestSqDist = radius * radius;
+	int weakest = -1;
+	float weakestWeight = std::numeric_limits<float>::max();
+	for (unsigned i = 0; i < hotSpots.size(); ++i) {
+		const float sqDist = hotSpots[i].pos.SqDistance2D(pos);
+		if (sqDist <= bestSqDist) {
+			bestSqDist = sqDist;
+			best = int(i);
+		}
+		if (hotSpots[i].weight < weakestWeight) {
+			weakestWeight = hotSpots[i].weight;
+			weakest = int(i);
+		}
+	}
+	if (best >= 0) {
+		SHotSpot& spot = hotSpots[best];
+		const float total = spot.weight + costM;
+		spot.pos = (spot.pos * spot.weight + pos * costM) / total;
+		spot.weight = total;
+		return;
+	}
+	if (hotSpots.size() < HOT_SPOT_NUM) {
+		SHotSpot spot;
+		spot.pos = pos;
+		spot.weight = costM;
+		hotSpots.push_back(spot);
+		return;
+	}
+	if ((weakest >= 0) && (hotSpots[weakest].weight < costM)) {
+		hotSpots[weakest].pos = pos;
+		hotSpots[weakest].weight = costM;
+	}
 }
 
-bool CCircuitAI::GetAttackHotspot(springai::AIFloat3& outPos, float& outWeight)
+void CCircuitAI::DecayHotSpots()
 {
 	const int frame = GetLastFrame();
-	if (frame >= hotDecayFrame + HOT_DECAY_PERIOD) {
-		hotDecayFrame = frame;
-		hotSum *= HOT_DECAY;
-		hotWeight *= HOT_DECAY;
+	if (frame < hotDecayFrame + HOT_DECAY_PERIOD) {
+		return;
 	}
-	if (hotWeight < HOT_MIN_WEIGHT) {
+	hotDecayFrame = frame;
+	// A spot decayed to nothing is a fight that finished; dropping it frees the
+	// slot for the next one rather than holding a stale position for the game.
+	for (int i = int(hotSpots.size()) - 1; i >= 0; --i) {
+		hotSpots[i].weight *= HOT_DECAY;
+		if (hotSpots[i].weight < 1.f) {
+			hotSpots.erase(hotSpots.begin() + i);
+		}
+	}
+}
+
+const std::vector<CCircuitAI::SHotSpot>& CCircuitAI::GetHotSpots()
+{
+	DecayHotSpots();
+	return hotSpots;
+}
+
+// The heaviest single spot. Identical to the old centroid while only one fight
+// is running, which is the case this used to be right for.
+bool CCircuitAI::GetAttackHotspot(springai::AIFloat3& outPos, float& outWeight)
+{
+	DecayHotSpots();
+	int best = -1;
+	float bestWeight = HOT_MIN_WEIGHT;
+	for (unsigned i = 0; i < hotSpots.size(); ++i) {
+		if (hotSpots[i].weight >= bestWeight) {
+			bestWeight = hotSpots[i].weight;
+			best = i;
+		}
+	}
+	if (best < 0) {
 		return false;
 	}
-	outPos = hotSum / hotWeight;
-	outWeight = hotWeight;
+	outPos = hotSpots[best].pos;
+	outWeight = hotSpots[best].weight;
 	return true;
 }
 
