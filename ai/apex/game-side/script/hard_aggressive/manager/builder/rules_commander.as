@@ -25,9 +25,16 @@ int gCommIdleUnsafe = 0;    // CommanderIdleWork refused: standing in threat
 int gCommIdleNoJob = 0;     //   ... refused: mex, assist and energy all declined
 int gMexSentries = 0;       // guard turrets placed on bare extractors
 // Consecutive AiUpdates the commander has held a build task with no engine
-// order. Well above a path query's latency at normal speed, so this fires on a
-// task that is genuinely never going to start.
-const int COMM_STUCK_TICKS = 15;
+// order. Was 15 -- claimed to be "well above a path query's latency at normal
+// speed" without ever being checked against it. CLAUDE.md's own measured gotcha
+// says otherwise: "a factory read CountQueued == 0 for 45 consecutive AiUpdates
+// ... and then took all 56 queued orders in one tick" at the benchmark's default
+// speed cap. At 15 this self-sabotaged: every opening test tonight showed
+// "commander stuck on bt13 ... dropping it" firing 6-8 times over 4+ minutes,
+// each one aborting a factory order that the engine simply had not gotten to
+// yet, restarting the whole assignment from scratch. Set above the documented
+// lag with margin, not re-guessed.
+const int COMM_STUCK_TICKS = 60;
 int gCommStuck = 0;
 int gCommUnstuck = 0;
 int gNextCommDiag = 0;
@@ -271,13 +278,26 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				// Economy before factory, once actually safe: a rebuilt
 				// factory with no income behind it just gets lost the same
 				// way again. Only while a safe, reachable mex spot still
-				// exists nearby -- once none is left, fall through to the
-				// factory rebuild below rather than stalling forever
-				// waiting for a spot that isn't there.
+				// exists NEARBY -- once none is left, fall through to the
+				// factory rebuild below rather than stalling forever waiting
+				// for a spot that isn't there.
+				//
+				// "Nearby" was unbounded: FindOpenMexSpot searches the whole
+				// map, so on any real map there is always ANOTHER spot
+				// somewhere, just farther away -- this fired every single
+				// re-election from 3m onward in every opening test tonight,
+				// permanently starving the rebuild below rather than
+				// eventually falling through to it. Same reach as step 1 of
+				// the opening (OpeningMexReach, apexearth's own "~700 elmo"
+				// figure) so a genuinely close mex still wins, and a distant
+				// one no longer blocks the one thing this whole block exists
+				// to do once the close ones are gone.
 				const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
 				if (spot >= 0) {
 					IUnitTask@ mex = aiEconomyMgr.EnqueueMexAt(unit, spot);
-					if (mex !is null) {
+					if ((mex !is null)
+						&& (unit.GetPos(ai.frame).distance2D(mex.GetBuildPos()) <= OpeningMexReach()))
+					{
 						AiLog(Factory::T() + "apex: commander economy-first, no factory yet -- mex before rebuild");
 						return mex;
 					}

@@ -26,6 +26,16 @@ namespace Builder {
 //
 // Both numbers are apexearth's, from watching, and both are tunables so a
 // measurement can move them rather than an argument.
+//
+// REVERTED to 80. apexearth: "a commander alone generates 30 e/s" -- the
+// eInc=30 read at 0.4m in every opening test was the COMMANDER'S OWN passive
+// output, not one generator finished, meaning almost nothing had actually been
+// built yet at that point. The gate was never the problem; a commander with
+// real buildpower taking 3-4 minutes to add 50 more e/s on top of that is the
+// actual bug, and lowering the target would have hidden it rather than fixed
+// it. Investigate why build POWER is not converting into finished generators
+// -- commander idle time, task-switch thrash -- before touching this number
+// again.
 float OpeningEnergyGate() { return ai.GetTunable("apex_opening_energy_gate", 80.f); }
 float OpeningMetalGate()  { return ai.GetTunable("apex_opening_metal_gate", 5.f); }
 

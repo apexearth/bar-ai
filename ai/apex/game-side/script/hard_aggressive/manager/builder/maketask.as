@@ -195,6 +195,27 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// Handing back the engine's own offer keeps CircuitAI's re-election working
 	// (that offer is an existing task, not a new one); what stops is US inventing
 	// work for a builder that already has some.
+	//
+	// EXCEPT this return bypasses VetoCommanderHold entirely: if AskingForNewWork
+	// is already false because the commander is mid-walk to a held task, `task`
+	// here is just this tick's fresh DefaultMakeTask offer, and if IT differs in
+	// build type from what is held, returning it swaps the commander off the walk
+	// before VetoCommanderHold -- which lives further down, past this early
+	// return -- ever gets a chance to protect it. Measured live: the first
+	// factory task, offered five seconds in, sat at workers=0 for a whole
+	// 5-minute game because of exactly this. Ask the same "is this the first
+	// factory, already assigned" question here, first, so the walk is protected
+	// on every path, not only the one that reaches VetoCommanderHold.
+	if (isComm && CommRules()) {
+		IUnitTask@ held = unit.task;
+		if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
+			&& (held.GetBuildType() == Task::BuildType::FACTORY)
+			&& !Factory::HaveAnyFactory()
+			&& (ThreatFor(unit, held.GetBuildPos()) <= CON_THREAT_VETO))
+		{
+			return held;
+		}
+	}
 	if (!Brain::AskingForNewWork(unit))
 		return task;
 
