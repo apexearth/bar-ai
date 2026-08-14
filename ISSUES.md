@@ -101,9 +101,35 @@ apply it):
         task->Release();
     }
 
-Rebuilt, redeployed, clean compile. A 40-minute background test is running
-past the ~25-26m window where every crash so far has landed, to get some
-signal before the next watched game.
+Rebuilt, redeployed, clean compile.
+
+**Crashed a THIRD time**, a 40-minute background repro this time
+(`matches/20260814-175707-*`, 29 minutes in), same signature, back at
+`CIdleTask::Update` -- but not the same line as the first `IdleTask.cpp` fix.
+This one is `task->Start(ass)` at the tail of the loop (`IdleTask.cpp:79`
+before this fix): `ass->GetTask()` fetches the unit's current task via a bare
+native pointer -- `CCircuitUnit::SetTask` does a plain `this->task = task;`
+with no `AddRef`, confirming native ownership of a unit's current task was
+never reference-counted from the engine's own side, it relies entirely on
+`buildTasks`/`updateTasks` membership and explicit `DequeueTask`/`AbortTask`
+calls -- and `Start()` on it can run script exactly like `AssignTo`/
+`TaskRemoved` do. My earlier fix to this same function only null-checked the
+result; it never guarded against USE-AFTER-FREE, only against the task
+never having existed. Same bracket applied:
+
+    IUnitTask* task = ass->GetTask();
+    if (task != nullptr) {
+        task->AddRef();
+        task->Start(ass);
+        task->Release();
+    }
+
+Rebuilt, redeployed, clean compile, clean 5-minute sanity test. A fourth
+40-minute background repro is running. **Given the pattern (three real sites
+found by three separate crashes, all the exact same shape, none found by
+reading alone until a crash pointed at them) treat this whole class as
+UNVERIFIED until a genuinely long watched game goes without one** -- do not
+report this as fixed again without that.
 
 **Structurally similar but NOT yet fixed**: `TaskAdded(task); return task;`
 in `CBuilderManager::Enqueue` (both overloads), `CFactoryManager::Enqueue`,

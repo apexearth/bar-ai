@@ -308,9 +308,18 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	} else {
 		// One unified energy-per-metal ranking across the whole ladder: per-metal
 		// value rises from solar through advsol to fusion/advfusion, so this
-		// climbs the ladder unaided. Only wind is map-dependent enough to ever
-		// beat a reactor.
-		CCircuitDef@ wind = SideDef3(armwin, corwin, legwin);
+		// climbs the ladder unaided.
+		// Wind retires once a reactor stands, same as plain solar below.
+		// apexearth, watching: after our first fusion, a T1 con still built a
+		// wind turbine while metal-full -- not worth a builder's time once a
+		// reactor covers the base; that builder is better spent on a nano,
+		// assisting a factory, or anything else once this rung stops being
+		// offered. Previously ranked unconditionally on the theory that a
+		// windy map's per-metal value could beat a reactor's, but a builder's
+		// TIME is the scarcer resource once a reactor exists, not per-metal
+		// efficiency of the marginal watt.
+		CCircuitDef@ wind = HaveReactor()
+				? null : SideDef3(armwin, corwin, legwin);
 		// Plain solar retires once a reactor stands, same as AdvSolDef already
 		// does for advanced solar -- otherwise any moment the reactor rungs were
 		// unavailable dropped the ladder back to a 20-energy panel.
