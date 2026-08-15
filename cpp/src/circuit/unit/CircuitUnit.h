@@ -87,6 +87,12 @@ public:
 	terrain::SArea* GetArea() const { return area; }
 
 	void ClearAct();
+	// Shadows the inherited CActionList::Clear: the base deletes the actions
+	// but cannot null this class's dgunAct/travelAct caches, leaving them
+	// dangling at freed memory -- every later read is a UAF and StateWait()
+	// through them was a heap-corrupting write. Through a CCircuitUnit*,
+	// clearing MUST go through ClearAct.
+	void Clear() { ClearAct(); }
 	void PushDGunAct(CDGunAction* action);
 	CDGunAction* GetDGunAct() const { return dgunAct; }
 	void PushTravelAct(ITravelAction* action);

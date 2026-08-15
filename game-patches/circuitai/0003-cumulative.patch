@@ -5454,6 +5454,141 @@ index f210b3a..900610d 100644
  
  		if (++i >= updateSlice) {
  			break;
+diff --git a/src/circuit/task/NilTask.cpp b/src/circuit/task/NilTask.cpp
+index a5d683d..8c30107 100644
+--- a/src/circuit/task/NilTask.cpp
++++ b/src/circuit/task/NilTask.cpp
+@@ -1,65 +1,65 @@
+-/*
+- * NilTask.cpp
+- *
+- *  Created on: May 29, 2015
+- *      Author: rlcevg
+- */
+-
+-#include "task/NilTask.h"
+-#include "module/TaskModule.h"
+-#include "setup/SetupManager.h"
+-#include "unit/CircuitUnit.h"
+-#include "unit/action/AntiCapAction.h"
+-#include "CircuitAI.h"
+-#include "util/Utils.h"
+-
+-namespace circuit {
+-
+-CNilTask::CNilTask(ITaskModule* mgr)
+-		: IUnitTask(mgr, IUnitTask::Priority::LOW, Type::NIL, -1)
+-{
+-}
+-
+-CNilTask::~CNilTask()
+-{
+-}
+-
+-void CNilTask::AssignTo(CCircuitUnit* unit)
+-{
+-	unit->SetTask(this);
+-
+-	if (!unit->GetCircuitDef()->IsMobile() && manager->GetCircuit()->GetSetupManager()->IsAntiCap()) {
+-		unit->PushBack(new CAntiCapAction(unit));
+-	}
+-}
+-
+-void CNilTask::RemoveAssignee(CCircuitUnit* unit)
+-{
+-	unit->Clear();
+-}
+-
+-void CNilTask::Start(CCircuitUnit* unit)
+-{
+-}
+-
+-void CNilTask::Update()
+-{
+-}
+-
+-void CNilTask::Stop(bool done)
+-{
+-}
+-
+-void CNilTask::OnUnitIdle(CCircuitUnit* unit)
+-{
+-}
+-
+-void CNilTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+-{
+-}
+-
+-void CNilTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+-{
+-}
+-
+-} // namespace circuit
++/*
++ * NilTask.cpp
++ *
++ *  Created on: May 29, 2015
++ *      Author: rlcevg
++ */
++
++#include "task/NilTask.h"
++#include "module/TaskModule.h"
++#include "setup/SetupManager.h"
++#include "unit/CircuitUnit.h"
++#include "unit/action/AntiCapAction.h"
++#include "CircuitAI.h"
++#include "util/Utils.h"
++
++namespace circuit {
++
++CNilTask::CNilTask(ITaskModule* mgr)
++		: IUnitTask(mgr, IUnitTask::Priority::LOW, Type::NIL, -1)
++{
++}
++
++CNilTask::~CNilTask()
++{
++}
++
++void CNilTask::AssignTo(CCircuitUnit* unit)
++{
++	unit->SetTask(this);
++
++	if (!unit->GetCircuitDef()->IsMobile() && manager->GetCircuit()->GetSetupManager()->IsAntiCap()) {
++		unit->PushBack(new CAntiCapAction(unit));
++	}
++}
++
++void CNilTask::RemoveAssignee(CCircuitUnit* unit)
++{
++	unit->ClearAct();  // NOT the inherited CActionList::Clear -- that deletes the actions but leaves dgunAct/travelAct dangling (the heap-corruption writer)
++}
++
++void CNilTask::Start(CCircuitUnit* unit)
++{
++}
++
++void CNilTask::Update()
++{
++}
++
++void CNilTask::Stop(bool done)
++{
++}
++
++void CNilTask::OnUnitIdle(CCircuitUnit* unit)
++{
++}
++
++void CNilTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
++{
++}
++
++void CNilTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
++{
++}
++
++} // namespace circuit
 diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
 index 6e9ed66..ba8717f 100644
 --- a/src/circuit/task/RetreatTask.cpp
@@ -6746,7 +6881,7 @@ index 6e9ed66..ba8717f 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/UnitTask.cpp b/src/circuit/task/UnitTask.cpp
-index 622a311..9404efa 100644
+index 622a311..62049c1 100644
 --- a/src/circuit/task/UnitTask.cpp
 +++ b/src/circuit/task/UnitTask.cpp
 @@ -1,194 +1,365 @@
@@ -7197,7 +7332,7 @@ index 622a311..9404efa 100644
 +{
 +	pathQueries.erase(unit);
 +	units.erase(unit);
-+	unit->Clear();
++	unit->ClearAct();  // NOT the inherited CActionList::Clear -- that deletes the actions but leaves dgunAct/travelAct dangling (the heap-corruption writer)
 +
 +	manager->GetIdleTask()->AssignTo(unit);
 +
@@ -7216,7 +7351,7 @@ index 622a311..9404efa 100644
 +
 +	CIdleTask* idleTask = manager->GetIdleTask();
 +	for (CCircuitUnit* unit : units) {
-+		unit->Clear();
++		unit->ClearAct();  // NOT the inherited CActionList::Clear -- that deletes the actions but leaves dgunAct/travelAct dangling (the heap-corruption writer)
 +		idleTask->AssignTo(unit);
 +	}
 +	units.clear();
@@ -15043,6 +15178,23 @@ index aab872c..954860d 100644
  		CmdWantedSpeed(NO_SPEED_LIMIT);
  		CmdSetTarget(target);
  		if (circuitDef->IsAttrOnOff()) {
+diff --git a/src/circuit/unit/CircuitUnit.h b/src/circuit/unit/CircuitUnit.h
+index 37d2080..744ced7 100644
+--- a/src/circuit/unit/CircuitUnit.h
++++ b/src/circuit/unit/CircuitUnit.h
+@@ -87,6 +87,12 @@ public:
+ 	terrain::SArea* GetArea() const { return area; }
+ 
+ 	void ClearAct();
++	// Shadows the inherited CActionList::Clear: the base deletes the actions
++	// but cannot null this class's dgunAct/travelAct caches, leaving them
++	// dangling at freed memory -- every later read is a UAF and StateWait()
++	// through them was a heap-corrupting write. Through a CCircuitUnit*,
++	// clearing MUST go through ClearAct.
++	void Clear() { ClearAct(); }
+ 	void PushDGunAct(CDGunAction* action);
+ 	CDGunAction* GetDGunAct() const { return dgunAct; }
+ 	void PushTravelAct(ITravelAction* action);
 diff --git a/src/circuit/unit/CoreUnit.h b/src/circuit/unit/CoreUnit.h
 index 4ebf10b..e69b77f 100644
 --- a/src/circuit/unit/CoreUnit.h

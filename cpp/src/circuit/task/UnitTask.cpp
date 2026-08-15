@@ -251,7 +251,7 @@ void IUnitTask::RemoveAssignee(CCircuitUnit* unit)
 {
 	pathQueries.erase(unit);
 	units.erase(unit);
-	unit->Clear();
+	unit->ClearAct();  // NOT the inherited CActionList::Clear -- that deletes the actions but leaves dgunAct/travelAct dangling (the heap-corruption writer)
 
 	manager->GetIdleTask()->AssignTo(unit);
 
@@ -270,7 +270,7 @@ void IUnitTask::Stop(bool done)
 
 	CIdleTask* idleTask = manager->GetIdleTask();
 	for (CCircuitUnit* unit : units) {
-		unit->Clear();
+		unit->ClearAct();  // NOT the inherited CActionList::Clear -- that deletes the actions but leaves dgunAct/travelAct dangling (the heap-corruption writer)
 		idleTask->AssignTo(unit);
 	}
 	units.clear();
