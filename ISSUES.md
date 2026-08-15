@@ -1278,8 +1278,27 @@ crash #7 at 63 game-minutes in `UnitMoveFailed` was the finder), the soak
 rotation has run Glitters 97m + Glitters 47m + Comet 41m + Ascendancy 41m
 + Adamantium 57m + Glitters 37m crash-free, with the two crashes found en
 route (ring-clamp at ~35m, unit->task at 63m) each fixed and the loop
-continued. The class dies one uncounted pointer at a time; unit->task was
-the last known holder of a bare task pointer.
+continued. The class dies one uncounted pointer at a time.
+
+**Morning tally (06:30):** ~20 long 8v8 soaks over the night across
+Glitters/Comet/Ascendancy/Adamantium. FIVE crash mechanisms found and
+fixed in sequence, each surfacing only after the previous fix let games
+run deeper: (1) counted buildTasks membership (freed candidate in the
+MakeCommDangerTask iteration, ~35m); (2) AssignTask reference-transfer
+(stale unit->GetTask() re-read in IdleTask); (3) ring-angle threat
+sampling clamped on-map (watched game, ~30m); (4) counted unit->task
+pointer (UnitMoveFailed on a freed task, 63m); (5) aux target maps
+(repairUnits et al) erased unconditionally on dequeue + repair tasks
+resolving their target LIVE by id instead of a cached pointer that a
+one-slot-map eviction left dangling (85m and 48m finders). After fix (5):
+soak #29 Comet 47m crash-free; #30 running at report time. Every fix is
+committed individually with its mechanism.
+
+**8v8 win-rate is the morning's gameplay item:** overnight record roughly
+4W/16L by gameover; every loss is a full 8-commander wipe in the 25-45m
+window while the economy leads -- commander survival in the late-game
+grind, not economy, decides these. The 1v1 benchmark (12-0) does not
+transfer to 8v8.
 
 **2026-08-15, SIXTH crash, and it exposed why the AddRef brackets are not
 enough.** apexearth's watched 8v8 crashed at frame 47331; addr2line (docker
