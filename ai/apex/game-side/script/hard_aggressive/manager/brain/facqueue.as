@@ -202,11 +202,27 @@ float TierShare(CCircuitUnit@ fac)
 
 // How many core T2 fighters count as "protected". Scales with the economy that
 // has to be defended rather than being a fixed number.
+// Same reactive term `Military::DefenceAllowedAt`'s pressureAllow already
+// uses for the defence BUDGET, applied here to the army-vs-constructor FLOOR
+// -- confirmed 2026-08-15 there was no such connection anywhere on this side
+// at all: facqueue.as had zero references to LosingGround/BaseContested/
+// gTurtle before this. apexearth: "if our brain sees we're taking a lot of
+// damage it should be prioritizing making army... we don't adapt to the
+// situation at all." Scales an EXISTING income-derived floor up under real
+// pressure rather than adding a new mechanism or a flat cap; recomputed
+// every call, so it relaxes back to normal the moment the pressure clears,
+// same as pressureAllow does.
+float ArmyPressureMod()
+{
+	return (Military::LosingGround() || Military::BaseContested())
+			? ai.GetTunable("apex_army_pressure_mod", 2.f) : 1.f;
+}
+
 int T2CoreWanted()
 {
 	const float inc = Factory::SteadyIncome();
 	const float per = ai.GetTunable("apex_t2_core_per_income", 6.f);
-	int n = int(inc / per);
+	int n = int(inc / per * ArmyPressureMod());
 	const int floorN = int(ai.GetTunable("apex_t2_core_min", 4.f));
 	return (n < floorN) ? floorN : n;
 }
@@ -236,7 +252,7 @@ int T1CoreWanted()
 {
 	const float inc = Factory::SteadyIncome();
 	const float per = ai.GetTunable("apex_t1_core_per_income", 6.f);
-	int n = int(inc / per);
+	int n = int(inc / per * ArmyPressureMod());
 	const int floorN = int(ai.GetTunable("apex_t1_core_min", 4.f));
 	return (n < floorN) ? floorN : n;
 }

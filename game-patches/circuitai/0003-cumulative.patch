@@ -1720,6 +1720,35 @@ index 2925da7..3e286d4 100644
  
  	struct SConvertExt {
  		float energyUse;
+diff --git a/src/circuit/module/FactoryManager.cpp b/src/circuit/module/FactoryManager.cpp
+index dda9b5a..601e80c 100644
+--- a/src/circuit/module/FactoryManager.cpp
++++ b/src/circuit/module/FactoryManager.cpp
+@@ -1706,7 +1706,23 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
+ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& facDef) const
+ {
+ 	CEconomyManager* economyMgr = circuit->GetEconomyManager();
+-	const float metalIncome = std::min(economyMgr->GetAvgMetalIncome(), economyMgr->GetAvgEnergyIncome()) * economyMgr->GetEcoFactor();
++	// apex: was min(metal, energy) * ecoFactor -- tier (and so composition
++	// PROPORTIONS, not just affordability) silently capped to whichever
++	// resource happened to be scarcer at that instant, even for a def whose
++	// own metal:energy cost ratio isn't remotely balanced 1:1. A handful of
++	// bad energy minutes (this AI has had several separate, since-fixed
++	// energy-management bugs the same night) would drag the WHOLE roster
++	// down to a low tier, hardest on exactly the units with the highest
++	// energy-to-metal cost (Sniper ~29:1, Welder ~17:1) even though metal
++	// income alone would already justify a much stronger composition.
++	// isRequireEnergy && IsEnergyEmpty() a few lines below is the real,
++	// separate safety valve for "cannot actually afford this in energy right
++	// now" -- a genuine crisis check, not a proportion-shaping one -- so this
++	// term was redundant with it, not the only thing preventing overreach.
++	// apexearth: "I just want our proportions to build correctly" -- metal
++	// alone drives tier here now; the existing energy-crisis check still
++	// gates unaffordable choices.
++	const float metalIncome = economyMgr->GetAvgMetalIncome() * economyMgr->GetEcoFactor();
+ 	const bool isWaterMap = circuit->GetTerrainManager()->IsWaterMap();
+ 	const float enemyTotalAirCost = circuit->GetEnemyManager()->GetEnemyCost(ROLE_TYPE(AIR));
+ 	const float allyAACost = circuit->GetMilitaryManager()->GetRoleCost(ROLE_TYPE(AA)) * circuit->GetAllyTeam()->GetAliveSize();
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
 index a44c20b..db78054 100644
 --- a/src/circuit/module/MilitaryManager.cpp
@@ -2726,18 +2755,20 @@ index 193efa9..519c7f6 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..7d3264a 100644
+index 2839b72..cb798d6 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
-@@ -14,6 +14,7 @@
+@@ -14,7 +14,9 @@
  #include "setup/SetupManager.h"
  #include "terrain/TerrainManager.h"
  #include "task/builder/BuilderTask.h"
 +#include "task/fighter/FighterTask.h"
  #include "unit/CircuitUnit.h"
++#include "unit/action/DGunAction.h"
  #include "CircuitAI.h"
  #include "util/GameAttribute.h"
-@@ -34,6 +35,9 @@
+ #include "util/MaskHandler.h"
+@@ -34,6 +36,9 @@
  #include "Game.h"
  #include "Team.h"
  #include "Lua.h"
@@ -2747,7 +2778,7 @@ index 2839b72..7d3264a 100644
  
  namespace circuit {
  
-@@ -169,6 +173,96 @@ static std::string CCircuitAI_GetMapName(CCircuitAI* circuit)
+@@ -169,6 +174,96 @@ static std::string CCircuitAI_GetMapName(CCircuitAI* circuit)
  	return circuit->GetMap()->GetName();
  }
  
@@ -2844,13 +2875,32 @@ index 2839b72..7d3264a 100644
  static int CCircuitAI_GetLeadTeamId(CCircuitAI* circuit)
  {
  	return circuit->GetAllyTeam()->GetLeaderId();
-@@ -195,6 +289,250 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +290,269 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
 +static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 +{
 +	unit->CmdMoveTo(pos);
++}
++
++// apex: for a script-driven D-gun raid (commander cloaks in and D-guns a
++// target when energy allows -- apexearth's request). CmdCloak already exists
++// on CCircuitUnit (used natively by RetreatTask's own cloak-on-retreat
++// logic) but was never exposed to script. PushDGun wraps PushDGunAct +
++// CDGunAction -- once pushed, CDGunAction's own Update() handles target
++// selection, line-of-sight, and firing every few ticks entirely on its own
++// (DGunAction.cpp), including its own energy-affordability check
++// (IsDGunReady). Script only needs to get the unit close enough and push
++// this once; it does not need to pick or track a target itself.
++static void CCircuitUnit_CmdCloak(CCircuitUnit* unit, bool state)
++{
++	unit->CmdCloak(state);
++}
++
++static void CCircuitUnit_PushDGun(CCircuitUnit* unit, float range)
++{
++	unit->PushDGunAct(new CDGunAction(unit, range));
 +}
 +
 +static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
@@ -3095,7 +3145,7 @@ index 2839b72..7d3264a 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -240,6 +578,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -240,6 +598,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -3114,7 +3164,7 @@ index 2839b72..7d3264a 100644
  static CScriptArray* IUnitTask_GetUnits(IUnitTask* task)
  {
  	// Without caching arrayType can be extracted by:
-@@ -478,6 +828,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -478,6 +848,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectProperty("IUnitTask", "CCircuitUnit@ const target", asOFFSET(IBuilderTask, target)); ASSERT(r >= 0);
  	gUnitArrayType = engine->GetTypeInfoByDecl("array<CCircuitUnit@>");
  	r = engine->RegisterObjectMethod("IUnitTask", "array<CCircuitUnit@>@ GetUnits() const", asFUNCTION(IUnitTask_GetUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -3122,7 +3172,7 @@ index 2839b72..7d3264a 100644
  	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
  
-@@ -494,11 +845,54 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -494,11 +865,54 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetLeadTeamId() const", asFUNCTION(CCircuitAI_GetLeadTeamId), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -3177,7 +3227,7 @@ index 2839b72..7d3264a 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -556,6 +950,17 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +970,17 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -3195,7 +3245,7 @@ index 2839b72..7d3264a 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +969,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +989,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -3219,7 +3269,7 @@ index 2839b72..7d3264a 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +995,31 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +1015,35 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -3229,6 +3279,10 @@ index 2839b72..7d3264a 100644
 +	// retreat task substitutes for everything it would otherwise build. A raw
 +	// command moves the unit without consuming its task slot.
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	// apex: for the commander D-gun raid want -- see CCircuitUnit_PushDGun's
++	// own comment for why script only needs to get close and push once.
++	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdCloak(bool)", asFUNCTION(CCircuitUnit_CmdCloak), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitUnit", "void PushDGun(float)", asFUNCTION(CCircuitUnit_PushDGun), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	// A factory told to repeat re-queues what it finishes, so a spam lab keeps
 +	// producing instead of waiting to be handed each unit as a separate task.
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdRepeat(bool)", asFUNCTION(CCircuitUnit_CmdRepeat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -3251,7 +3305,7 @@ index 2839b72..7d3264a 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +1032,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +1056,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -3261,7 +3315,7 @@ index 2839b72..7d3264a 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +1153,14 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +1177,14 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -3391,7 +3445,7 @@ index f210b3a..dae0777 100644
  		if (++i >= updateSlice) {
  			break;
 diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
-index 7c69263..82a7e13 100644
+index 7c69263..16355e1 100644
 --- a/src/circuit/task/RetreatTask.cpp
 +++ b/src/circuit/task/RetreatTask.cpp
 @@ -11,8 +11,10 @@
@@ -3651,7 +3705,31 @@ index 7c69263..82a7e13 100644
  	if (unitPos.SqDistance2D(haven) > SQUARE(maxDist)) {
  		// TODO: push MoveAction into unit? to avoid enemy fire
  		TRY_UNIT(circuit, unit,
-@@ -248,7 +449,11 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -240,7 +441,22 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+ 		)
+ 		// TODO: Add fail counter?
+ 	} else {
+-		if ((circuit->GetBindedRole(cdef->GetMainRole()) == ROLE_TYPE(BUILDER))
++		// apex: excluded the commander. This shortcut ends a retreat the
++		// moment a builder is merely near its haven, if the team has 2 or
++		// fewer workers left -- "we can't afford an idle builder, get back to
++		// work" -- with no check that the haven is actually safe. For the
++		// commander that fights directly against the script's own flee-
++		// influence watchdog (rules_commander.as/events.as): forced back onto
++		// retreat, travels near haven, immediately Recovered() here
++		// regardless of danger, goes idle, re-forced ~3s later by the
++		// watchdog, repeat -- measured 2026-08-15 firing continuously for a
++		// full 28-minute match (noTask climbing in lockstep with the forced
++		// counter, never settling). A low worker count is exactly when the
++		// commander is most likely to BE one of only a few builders left,
++		// so this condition is trivially satisfied in the scenario that
++		// matters most.
++		if (!cdef->IsRoleComm()
++			&& (circuit->GetBindedRole(cdef->GetMainRole()) == ROLE_TYPE(BUILDER))
+ 			&& (circuit->GetBuilderManager()->GetWorkerCount() <= 2))
+ 		{
+ 			Recovered(unit);
+@@ -248,7 +464,11 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  		}
  
  		// TODO: push WaitAction into unit

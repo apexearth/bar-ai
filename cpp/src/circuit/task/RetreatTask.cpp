@@ -441,7 +441,22 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
 		)
 		// TODO: Add fail counter?
 	} else {
-		if ((circuit->GetBindedRole(cdef->GetMainRole()) == ROLE_TYPE(BUILDER))
+		// apex: excluded the commander. This shortcut ends a retreat the
+		// moment a builder is merely near its haven, if the team has 2 or
+		// fewer workers left -- "we can't afford an idle builder, get back to
+		// work" -- with no check that the haven is actually safe. For the
+		// commander that fights directly against the script's own flee-
+		// influence watchdog (rules_commander.as/events.as): forced back onto
+		// retreat, travels near haven, immediately Recovered() here
+		// regardless of danger, goes idle, re-forced ~3s later by the
+		// watchdog, repeat -- measured 2026-08-15 firing continuously for a
+		// full 28-minute match (noTask climbing in lockstep with the forced
+		// counter, never settling). A low worker count is exactly when the
+		// commander is most likely to BE one of only a few builders left,
+		// so this condition is trivially satisfied in the scenario that
+		// matters most.
+		if (!cdef->IsRoleComm()
+			&& (circuit->GetBindedRole(cdef->GetMainRole()) == ROLE_TYPE(BUILDER))
 			&& (circuit->GetBuilderManager()->GetWorkerCount() <= 2))
 		{
 			Recovered(unit);

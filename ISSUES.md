@@ -5,6 +5,33 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
+## OPEN: Sniper (armsnipe) and Welder (armzeus) never built even once, despite a real nonzero baseline weight
+
+apexearth, across many games tonight: "not one sniper or welder was ever
+built. This is definitely a bug in behavior." Earlier tonight's fix raised
+both from a hard 0.00 to a real 0.12-0.20 across tier1-4 of `armalab` --
+confirmed NOT sufficient. Checked a real 28-minute post-fix match
+(`matches/20260815-014416-...`): reached T2, `allBuilt=` has 24 entries
+including several `armalab` siblings (armfido, armthund, armspid, armfast,
+armham, armrock) -- armsnipe/armzeus absent from all of them.
+
+Ruled out: `isEnemyInArea` (`FactoryManager.cpp:1589`, one of the hard
+filters gating whether a def even enters the roulette-wheel candidate pool
+at all) -- it's a geography/scouting check, not role-specific, so it can't
+explain why THESE TWO specifically never draw while siblings in the same
+list do.
+
+Not yet checked: `bd->IsAvailable(frame)` (a per-def readiness/limit gate,
+part of the same `isAvailableDef` filter chain) and whether `response.json`'s
+`max_percent` for their roles (`skirmish` for armzeus, `anti_heavy_ass` for
+armsnipe) caps them out structurally. Both units have an unusually high
+energy-to-metal cost ratio (armsnipe 680M/20000E ≈ 29 E/M, armzeus
+350M/6100E ≈ 17 E/M) -- worth checking against this AI's own documented
+energy-management issues (converter/geo bugs found and fixed the same
+night) before assuming it's a factory-weight problem at all.
+
+---
+
 ## OPEN, MINOR: commander noTask watchdog can fire repeatedly at low near-threshold influence (2026-08-15)
 
 The `CommIdleAttribute()` noTask watchdog (`events.as`/`rules_commander.as`,

@@ -46,12 +46,25 @@
 		// which would be capable of defending us") even after the first cut.
 		// Zeroed in "land" (what this measurement covers); air/water tables
 		// below untouched -- no evidence gathered there yet.
+		//
+		// armpw (index 1, Pawn) held 0.30 through tier2/3/4 (income
+		// 25-100 -- most of a real game's mid-to-late stretch), by far the
+		// largest single share of this lab at every tier except the very
+		// top. Same shape as the pre-fix Hound bug: a cheap early-game raider
+		// never tapering down as income grows into the range where the
+		// enemy fields real T1/T2 answers. Measured 2026-08-15: armpw
+		// cumulative metal (3024) dwarfed every other combat unit at 15-20
+		// minutes -- apexearth, watching: "they're really worthless at this
+		// point of the game... we need thugs, rocket bots, etc." Tapered
+		// tier2/3/4 down toward tier5's already-correct near-zero, same
+		// smoothing-not-cliff approach as the Hound fix; tier0/1 (the
+		// legitimate early raider window) left at 0.70.
 		"land": {
 			"tier0": [ 0.25,    0.70,    0.05,       0.00,      0.20,     0.00,      0.00,     0.30],
 			"tier1": [ 0.25,    0.70,    0.05,       0.00,      0.00,     0.00,      0.00,     0.30],
-			"tier2": [ 0.35,    0.30,    0.05,       0.15,      0.45,     0.00,      0.10,     0.10],
-			"tier3": [ 0.35,    0.30,    0.05,       0.10,      0.40,     0.00,      0.15,     0.10],
-			"tier4": [ 0.15,    0.30,    0.05,       0.00,      0.40,     0.00,      0.10,     0.10],
+			"tier2": [ 0.35,    0.10,    0.05,       0.15,      0.45,     0.00,      0.10,     0.10],
+			"tier3": [ 0.35,    0.05,    0.05,       0.10,      0.40,     0.00,      0.15,     0.10],
+			"tier4": [ 0.15,    0.02,    0.05,       0.00,      0.40,     0.00,      0.10,     0.10],
 			"tier5": [ 0.15,    0.00,    0.05,       0.00,      0.00,     0.00,      0.00,     0.10]
 		},
 		"air": {
@@ -431,12 +444,22 @@
 
 		"unit":      ["corck", "corak", "cornecro", "corstorm", "corthud", "corcrash"],
 
+		// corak (index 1, Pawn's Cortex counterpart) spiked BACK UP to 0.40 at
+		// tier3 after tapering to 0.20 at tier2 -- not a smooth taper, a
+		// mid-tier bump -- while corthud (Thug, index 4) dropped from 0.40
+		// straight to 0.00 at tier3/4. Same shape as the Armada armpw fix
+		// above (raider dominating well past its useful window) plus a second
+		// gap (Thug hard-zeroed exactly where it should be taking over).
+		// Smoothed corak down monotonically and gave corthud a real tier3/4
+		// share instead of a cliff to zero. Not independently measured for
+		// Cortex -- extended by the same reasoning/shape as the measured
+		// Armada case, per this session's established faction-parity pattern.
 		"land": {
 			"tier0": [ 0.25,    0.55,    0.05,      0.01,       0.40,      	0.06],
 			"tier1": [ 0.30,    0.40,    0.05,      0.30,       0.40,      	0.06],
-			"tier2": [ 0.30,    0.20,    0.05,      0.15,       0.40,      	0.06],
-			"tier3": [ 0.05,    0.40,    0.05,      0.00,       0.00,      	0.06],
-			"tier4": [ 0.05,	0.00,	 0.05,		0.00,		0.00,		0.06]
+			"tier2": [ 0.30,    0.15,    0.05,      0.15,       0.40,      	0.06],
+			"tier3": [ 0.05,    0.05,    0.05,      0.00,       0.20,      	0.06],
+			"tier4": [ 0.05,	0.02,	 0.05,		0.00,		0.15,		0.06]
 		},
 		"air": {
 			"tier0": [ 0.25,    0.60,    0.09,       0.01,       0.08,      0.10],

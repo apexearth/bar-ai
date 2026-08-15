@@ -16,6 +16,7 @@
 #include "task/builder/BuilderTask.h"
 #include "task/fighter/FighterTask.h"
 #include "unit/CircuitUnit.h"
+#include "unit/action/DGunAction.h"
 #include "CircuitAI.h"
 #include "util/GameAttribute.h"
 #include "util/MaskHandler.h"
@@ -292,6 +293,25 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
 static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 {
 	unit->CmdMoveTo(pos);
+}
+
+// apex: for a script-driven D-gun raid (commander cloaks in and D-guns a
+// target when energy allows -- apexearth's request). CmdCloak already exists
+// on CCircuitUnit (used natively by RetreatTask's own cloak-on-retreat
+// logic) but was never exposed to script. PushDGun wraps PushDGunAct +
+// CDGunAction -- once pushed, CDGunAction's own Update() handles target
+// selection, line-of-sight, and firing every few ticks entirely on its own
+// (DGunAction.cpp), including its own energy-affordability check
+// (IsDGunReady). Script only needs to get the unit close enough and push
+// this once; it does not need to pick or track a target itself.
+static void CCircuitUnit_CmdCloak(CCircuitUnit* unit, bool state)
+{
+	unit->CmdCloak(state);
+}
+
+static void CCircuitUnit_PushDGun(CCircuitUnit* unit, float range)
+{
+	unit->PushDGunAct(new CDGunAction(unit, range));
 }
 
 static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
@@ -1001,6 +1021,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// retreat task substitutes for everything it would otherwise build. A raw
 	// command moves the unit without consuming its task slot.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	// apex: for the commander D-gun raid want -- see CCircuitUnit_PushDGun's
+	// own comment for why script only needs to get close and push once.
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdCloak(bool)", asFUNCTION(CCircuitUnit_CmdCloak), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void PushDGun(float)", asFUNCTION(CCircuitUnit_PushDGun), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// A factory told to repeat re-queues what it finishes, so a spam lab keeps
 	// producing instead of waiting to be handed each unit as a separate task.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdRepeat(bool)", asFUNCTION(CCircuitUnit_CmdRepeat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

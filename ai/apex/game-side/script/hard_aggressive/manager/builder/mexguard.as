@@ -498,6 +498,26 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		gEcoPacked = true;
 	}
 	}
+	// Reactors are already threat-checked inside ReactorSpot; nothing else on
+	// this path was. Measured 2026-08-15: converters kept getting proposed at
+	// unsafe spots (Base::Spot/CoveredSpot/pack have no safety notion at all),
+	// dispatched, and aborted by AbandonUnsafeSite before a nanoframe ever
+	// formed -- repeatedly, at several DIFFERENT bad spots in a row, so energy
+	// kept overflowing with zero converters ever landing despite constant
+	// activity. Screen here, before dispatch, instead of relying entirely on
+	// the reactive abandon check: retry once at the safe home fallback, then
+	// decline rather than send a builder to die on arrival.
+	if (!pickedReactor && (ThreatFor(unit, spot) > CON_THREAT_VETO)) {
+		const AIFloat3 safeSpot = ai.FindBuildSiteNear(gen, gHomePos, ECO_FALLBACK_RANGE);
+		if (OnMap(safeSpot) && (ThreatFor(unit, safeSpot) <= CON_THREAT_VETO)) {
+			spot = safeSpot;
+			via = "home-safe";
+			gEcoLast = spot;
+			gEcoPacked = true;
+		} else {
+			return null;
+		}
+	}
 	// The ladder above decides WHAT to build; whether that starts here and now or
 	// joins one already requested is Requests' answer, keyed on the SITE rather
 	// than the builder -- constructors scattered around a base compute distinct
