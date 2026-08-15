@@ -166,7 +166,11 @@ protected:
 	// already spatially close, so one check covers all of them well enough.
 	int nextMetalEmptyReclaim = 0;
 
-	decltype(units)::const_iterator unitIt;  // update iterator
+	// Update cursor as a KEY, not a stored iterator: Reevaluate can reassign
+	// any unit (erasing it from `units`) while the stagger walks, and a stored
+	// iterator dangles. The pointer is only ever an ordering key for
+	// upper_bound -- never dereferenced -- so a freed unit cannot hurt it.
+	CCircuitUnit* nextCursor;  // update cursor
 
 	std::set<CCircuitUnit*> traveled;
 	std::set<CCircuitUnit*> executors;

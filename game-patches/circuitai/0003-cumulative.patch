@@ -7596,10 +7596,10 @@ index 275db3a..ccdf5a5 100644
 +
 +#endif // SRC_CIRCUIT_TASK_UNITTASK_H_
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index ad0ed7f..73c88d0 100644
+index ad0ed7f..51fa39b 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
-@@ -1,981 +1,988 @@
+@@ -1,981 +1,985 @@
 -/*
 - * BuilderTask.cpp
 - *
@@ -8652,7 +8652,7 @@ index ad0ed7f..73c88d0 100644
 +		, nextTask(nullptr)
 +		, initiator(nullptr)
 +		, buildFails(0)
-+		, unitIt(units.end())
++		, nextCursor(nullptr)
 +{
 +	CEconomyManager* economyMgr = manager->GetCircuit()->GetEconomyManager();
 +	savedIncome.metal = economyMgr->GetAvgMetalIncome();
@@ -8674,7 +8674,7 @@ index ad0ed7f..73c88d0 100644
 +		, initiator(nullptr)
 +		, savedIncome({0.f, 0.f})
 +		, buildFails(0)
-+		, unitIt(units.end())
++		, nextCursor(nullptr)
 +{
 +}
 +
@@ -8746,9 +8746,6 @@ index ad0ed7f..73c88d0 100644
 +
 +void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
 +{
-+	if ((units.find(unit) == unitIt) && (unitIt != units.end())) {
-+		++unitIt;
-+	}
 +	if (initiator == unit) {
 +		initiator = nullptr;
 +	}
@@ -9031,12 +9028,12 @@ index ad0ed7f..73c88d0 100644
 +	if (units.empty()) {
 +		return nullptr;
 +	}
-+	if (unitIt == units.end()) {
-+		unitIt = units.begin();
++	auto it = (nextCursor == nullptr) ? units.begin() : units.upper_bound(nextCursor);
++	if (it == units.end()) {
++		it = units.begin();
 +	}
-+	CCircuitUnit* unit = *unitIt;
-+	++unitIt;
-+	return unit;
++	nextCursor = *it;
++	return nextCursor;
 +}
 +
 +void IBuilderTask::Update(CCircuitUnit* unit)
@@ -9569,6 +9566,23 @@ index ad0ed7f..73c88d0 100644
 +#endif
 +
 +} // namespace circuit
+diff --git a/src/circuit/task/builder/BuilderTask.h b/src/circuit/task/builder/BuilderTask.h
+index d295f66..7e9d23e 100644
+--- a/src/circuit/task/builder/BuilderTask.h
++++ b/src/circuit/task/builder/BuilderTask.h
+@@ -166,7 +166,11 @@ protected:
+ 	// already spatially close, so one check covers all of them well enough.
+ 	int nextMetalEmptyReclaim = 0;
+ 
+-	decltype(units)::const_iterator unitIt;  // update iterator
++	// Update cursor as a KEY, not a stored iterator: Reevaluate can reassign
++	// any unit (erasing it from `units`) while the stagger walks, and a stored
++	// iterator dangles. The pointer is only ever an ordering key for
++	// upper_bound -- never dereferenced -- so a freed unit cannot hurt it.
++	CCircuitUnit* nextCursor;  // update cursor
+ 
+ 	std::set<CCircuitUnit*> traveled;
+ 	std::set<CCircuitUnit*> executors;
 diff --git a/src/circuit/task/common/RepairTask.cpp b/src/circuit/task/common/RepairTask.cpp
 index d9c44e8..1c78814 100644
 --- a/src/circuit/task/common/RepairTask.cpp

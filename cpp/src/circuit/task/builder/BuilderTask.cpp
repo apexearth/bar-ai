@@ -69,7 +69,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
 		, nextTask(nullptr)
 		, initiator(nullptr)
 		, buildFails(0)
-		, unitIt(units.end())
+		, nextCursor(nullptr)
 {
 	CEconomyManager* economyMgr = manager->GetCircuit()->GetEconomyManager();
 	savedIncome.metal = economyMgr->GetAvgMetalIncome();
@@ -91,7 +91,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
 		, initiator(nullptr)
 		, savedIncome({0.f, 0.f})
 		, buildFails(0)
-		, unitIt(units.end())
+		, nextCursor(nullptr)
 {
 }
 
@@ -163,9 +163,6 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
 
 void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
 {
-	if ((units.find(unit) == unitIt) && (unitIt != units.end())) {
-		++unitIt;
-	}
 	if (initiator == unit) {
 		initiator = nullptr;
 	}
@@ -448,12 +445,12 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
 	if (units.empty()) {
 		return nullptr;
 	}
-	if (unitIt == units.end()) {
-		unitIt = units.begin();
+	auto it = (nextCursor == nullptr) ? units.begin() : units.upper_bound(nextCursor);
+	if (it == units.end()) {
+		it = units.begin();
 	}
-	CCircuitUnit* unit = *unitIt;
-	++unitIt;
-	return unit;
+	nextCursor = *it;
+	return nextCursor;
 }
 
 void IBuilderTask::Update(CCircuitUnit* unit)
