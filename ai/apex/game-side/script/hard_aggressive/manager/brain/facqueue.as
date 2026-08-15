@@ -196,8 +196,32 @@ float TierShare(CCircuitUnit@ fac)
 			? ai.GetTunable("apex_quota_t2_after_t3", 0.4f) : 1.f;
 	if (Factory::gHaveT3)
 		return ai.GetTunable("apex_quota_t1_after_t3", 0.f);
-	return Factory::gHaveT2
-		? ai.GetTunable("apex_quota_t1_after_t2", 0.25f) : 1.f;
+	if (!Factory::gHaveT2)
+		return 1.f;
+	// The cut PHASES IN with the T2 army actually fielded, not the plant
+	// standing: apexearth, watching the transition -- "we end up with a small
+	// count of T2 versus a lot of enemy T1... we lack enough ranged damage
+	// and tankiness as we're transitioning." While the T2 core is thin the T1
+	// line keeps near-full weight; at a covered core it bottoms at the tunable.
+	const float base = ai.GetTunable("apex_quota_t1_after_t2", 0.25f);
+	float frac = 1.f;
+	for (uint i = 0; i < gFQFac.length(); ++i) {
+		if ((Factory::userData[gFQFac[i].circuitDef.id].attr & Factory::Attr::T2) == 0)
+			continue;
+		array<Type> core = {RT::ASSAULT, RT::HEAVY, RT::AH, RT::AHA};
+		int have = 0;
+		for (uint c = 0; c < core.length(); ++c) {
+			CCircuitDef@ d = aiFactoryMgr.GetRoleDef(gFQFac[i].circuitDef, core[c]);
+			if (d !is null)
+				have += d.count;
+		}
+		const int wantN = T2CoreWanted();
+		frac = (wantN <= 0) ? 1.f : float(have) / float(wantN);
+		if (frac > 1.f)
+			frac = 1.f;
+		break;
+	}
+	return base + (1.f - base) * (1.f - frac);
 }
 
 // How many core T2 fighters count as "protected". Scales with the economy that
@@ -383,8 +407,17 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, core[c]);
 			if ((d is null) || !d.IsAvailable(ai.frame))
 				continue;
+			int n = T1CoreWanted();
+			// Raiders die fastest, so an equal-count floor spends the T2
+			// transition refilling pawns. apexearth, watching: "we only seem
+			// to make T1 raiders once we have T2... pawns need to be parts of
+			// our army squads and help be the fodder/chaff" -- post-T2 the
+			// raider ration drops to a chaff share while riot/skirm (the
+			// ranged, tanky line-holders) keep the full count.
+			if ((core[c] == RT::RAIDER) && Factory::gHaveT2)
+				n = (n + 2) / 3;
 			defs.insertLast(d);
-			want.insertLast(T1CoreWanted());
+			want.insertLast(n);
 			isFloor.insertLast(false);      // balanced, not first-listed-first; see T2 block
 		}
 		if (defs.length() > 0)
