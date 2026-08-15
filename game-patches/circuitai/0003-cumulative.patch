@@ -17043,10 +17043,10 @@ index 5ccf63a..7d6f8a3 100644
 +
 +#endif // SRC_CIRCUIT_UNIT_ENEMY_ENEMYMANAGER_H_
 diff --git a/src/circuit/unit/enemy/EnemyUnit.cpp b/src/circuit/unit/enemy/EnemyUnit.cpp
-index 037c7d1..67e801f 100644
+index 037c7d1..e9c2eab 100644
 --- a/src/circuit/unit/enemy/EnemyUnit.cpp
 +++ b/src/circuit/unit/enemy/EnemyUnit.cpp
-@@ -1,226 +1,245 @@
+@@ -1,226 +1,261 @@
 -/*
 - * EnemyUnit.cpp
 - *
@@ -17311,6 +17311,22 @@ index 037c7d1..67e801f 100644
 +	}
 +}
 +
++void* CEnemyInfo::operator new(std::size_t sz)
++{
++	void* p = VirtualAlloc(nullptr, sz, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
++	if (p == nullptr) {
++		throw std::bad_alloc();
++	}
++	return p;
++}
++
++void CEnemyInfo::operator delete(void* p)
++{
++	if (p != nullptr) {
++		VirtualFree(p, 0, MEM_DECOMMIT);  // keep reserved: address never reused
++	}
++}
++
 +float SEnemyData::GetDefDamage() const
 +{
 +	if (cdef == nullptr) {  // unknown enemy is a threat
@@ -17519,10 +17535,10 @@ index 037c7d1..67e801f 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/unit/enemy/EnemyUnit.h b/src/circuit/unit/enemy/EnemyUnit.h
-index 913b5c0..d49931b 100644
+index 913b5c0..ef0c004 100644
 --- a/src/circuit/unit/enemy/EnemyUnit.h
 +++ b/src/circuit/unit/enemy/EnemyUnit.h
-@@ -1,251 +1,262 @@
+@@ -1,251 +1,268 @@
 -/*
 - * EnemyUnit.h
 - *
@@ -17977,6 +17993,12 @@ index 913b5c0..d49931b 100644
 +	CEnemyInfo& operator=(const CEnemyInfo&) = delete;
 +	CEnemyInfo(CEnemyUnit* data);
 +	virtual ~CEnemyInfo();
++
++	// CRASH DIAGNOSTIC (temporary): same guard-page treatment as ICoreUnit --
++	// fighter tasks cache CEnemyInfo* and it is raw-deleted on enemy death.
++	// Defined in EnemyUnit.cpp.
++	static void* operator new(std::size_t sz);
++	static void operator delete(void* p);
 +
 +	void BindTask(IFighterTask* task) { tasks.insert(task); }
 +	void UnbindTask(IFighterTask* task) { tasks.erase(task); }
