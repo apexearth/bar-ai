@@ -816,7 +816,7 @@ CRecruitTask* CFactoryManager::Enqueue(const TaskS::SRecruitTask& ti)
 {
 	CRecruitTask* task = new CRecruitTask(this, ti.priority, ti.buildDef, ti.position, ti.type, ti.radius);
 	factoryTasks.push_back(task);
-	updateTasks.push_back(task);
+	PushUpdate(task);
 	TaskAdded(task);
 	return task;
 }
@@ -845,7 +845,7 @@ IUnitTask* CFactoryManager::Enqueue(const TaskS::SServSTask& ti)
 		} break;
 	}
 
-	updateTasks.push_back(task);
+	PushUpdate(task);
 	TaskAdded(task);
 	return task;
 }

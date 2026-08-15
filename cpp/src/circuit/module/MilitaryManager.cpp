@@ -738,7 +738,7 @@ IFighterTask* CMilitaryManager::Enqueue(const TaskF::SFightTask& ti)
 	}
 
 	fightTasks[static_cast<IFighterTask::FT>(ti.type)].insert(task);
-	updateTasks.push_back(task);
+	PushUpdate(task);
 	TaskAdded(task);
 	return task;
 }
@@ -774,7 +774,7 @@ bool CMilitaryManager::IsRecentSuperTarget(const AIFloat3& pos, float sqRadius, 
 CRetreatTask* CMilitaryManager::EnqueueRetreat()
 {
 	CRetreatTask* task = new CRetreatTask(this);
-	updateTasks.push_back(task);
+	PushUpdate(task);
 	TaskAdded(task);
 	return task;
 }

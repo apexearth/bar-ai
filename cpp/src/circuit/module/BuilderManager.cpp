@@ -630,7 +630,7 @@ void CBuilderManager::ActivateTask(IBuilderTask* task)
 		task->AddRef();
 		buildTasksCount++;
 	}
-	updateTasks.push_back(task);
+	PushUpdate(task);
 	task->Activate();
 }
 
@@ -741,7 +741,7 @@ IBuilderTask* CBuilderManager::Enqueue(const TaskB::SBuildTask& ti)
 		buildTasks[static_cast<IBuilderTask::BT>(ti.type)].insert(task);
 		task->AddRef();  // counted membership, see ActivateTask
 		buildTasksCount++;
-		updateTasks.push_back(task);
+		PushUpdate(task);
 	} else {
 		task->Deactivate();
 	}
@@ -769,7 +769,7 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
 		} break;
 	}
 
-	updateTasks.push_back(task);
+	PushUpdate(task);
 	TaskAdded(task);
 	return task;
 }
@@ -777,7 +777,7 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
 CRetreatTask* CBuilderManager::EnqueueRetreat()
 {
 	CRetreatTask* task = new CRetreatTask(this);
-	updateTasks.push_back(task);
+	PushUpdate(task);
 	TaskAdded(task);
 	return task;
 }
@@ -1813,7 +1813,7 @@ void CBuilderManager::Load(std::istream& is)
 				buildTasks[i].insert(task);
 				task->AddRef();  // counted membership, see ActivateTask
 				buildTasksCount++;
-				updateTasks.push_back(task);
+				PushUpdate(task);
 				if (!isValid) {
 #ifdef DEBUG_SAVELOAD
 					circuit->LOG("Invalid task");

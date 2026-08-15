@@ -10,6 +10,7 @@
 
 #include "module/Module.h"
 
+#include <algorithm>
 #include <vector>
 
 namespace circuit {
@@ -75,6 +76,15 @@ protected:
 	CIdleTask* idleTask;
 	CPlayerTask* playerTask;
 
+	// CRASH DIAGNOSTIC (temporary): all pushes go through PushUpdate so a
+	// duplicate listing — which the reaper would double-ClearRelease, the
+	// actionUnits disease all over again — traps AT THE PUSH that creates it.
+	void PushUpdate(IUnitTask* task) {
+		if (std::find(updateTasks.begin(), updateTasks.end(), task) != updateTasks.end()) {
+			__builtin_trap();
+		}
+		updateTasks.push_back(task);
+	}
 	std::vector<IUnitTask*> updateTasks;  // owner
 	unsigned int updateIterator;
 

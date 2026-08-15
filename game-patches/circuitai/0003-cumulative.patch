@@ -257,10 +257,10 @@ index 0bdafed..b62fd28 100644
  // <<< Recent trade record ---- END
  
 diff --git a/src/circuit/module/BuilderManager.cpp b/src/circuit/module/BuilderManager.cpp
-index a62be4f..46d9544 100644
+index a62be4f..3fcdb7c 100644
 --- a/src/circuit/module/BuilderManager.cpp
 +++ b/src/circuit/module/BuilderManager.cpp
-@@ -621,7 +621,13 @@ const std::set<IBuilderTask*>& CBuilderManager::GetTasks(IBuilderTask::BuildType
+@@ -621,10 +621,16 @@ const std::set<IBuilderTask*>& CBuilderManager::GetTasks(IBuilderTask::BuildType
  void CBuilderManager::ActivateTask(IBuilderTask* task)
  {
  	if ((task->GetType() == IUnitTask::Type::BUILDER) && (task->GetBuildType() < IBuilderTask::BuildType::_SIZE_)) {
@@ -273,15 +273,40 @@ index a62be4f..46d9544 100644
 +		task->AddRef();
  		buildTasksCount++;
  	}
- 	updateTasks.push_back(task);
-@@ -733,6 +739,7 @@ IBuilderTask* CBuilderManager::Enqueue(const TaskB::SBuildTask& ti)
+-	updateTasks.push_back(task);
++	PushUpdate(task);
+ 	task->Activate();
+ }
+ 
+@@ -733,8 +739,9 @@ IBuilderTask* CBuilderManager::Enqueue(const TaskB::SBuildTask& ti)
  
  	if (ti.isActive) {
  		buildTasks[static_cast<IBuilderTask::BT>(ti.type)].insert(task);
 +		task->AddRef();  // counted membership, see ActivateTask
  		buildTasksCount++;
- 		updateTasks.push_back(task);
+-		updateTasks.push_back(task);
++		PushUpdate(task);
  	} else {
+ 		task->Deactivate();
+ 	}
+@@ -762,7 +769,7 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
+ 		} break;
+ 	}
+ 
+-	updateTasks.push_back(task);
++	PushUpdate(task);
+ 	TaskAdded(task);
+ 	return task;
+ }
+@@ -770,7 +777,7 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
+ CRetreatTask* CBuilderManager::EnqueueRetreat()
+ {
+ 	CRetreatTask* task = new CRetreatTask(this);
+-	updateTasks.push_back(task);
++	PushUpdate(task);
+ 	TaskAdded(task);
+ 	return task;
+ }
 @@ -781,10 +788,11 @@ void CBuilderManager::AssignTask(CCircuitUnit* unit, IUnitTask* task)
  	static_cast<CBuilderScript*>(script)->TaskAssigned(unit);
  }
@@ -396,14 +421,17 @@ index a62be4f..46d9544 100644
  SBuildChain* CBuilderManager::GetBuildChain(IBuilderTask::BuildType buildType, CCircuitDef* cdef) const
  {
  	auto it1 = buildChains.find(static_cast<IBuilderTask::BT>(buildType));
-@@ -1745,6 +1811,7 @@ void CBuilderManager::Load(std::istream& is)
+@@ -1745,8 +1811,9 @@ void CBuilderManager::Load(std::istream& is)
  			if (task != nullptr) {
  				const bool isValid = is >> *task;
  				buildTasks[i].insert(task);
 +				task->AddRef();  // counted membership, see ActivateTask
  				buildTasksCount++;
- 				updateTasks.push_back(task);
+-				updateTasks.push_back(task);
++				PushUpdate(task);
  				if (!isValid) {
+ #ifdef DEBUG_SAVELOAD
+ 					circuit->LOG("Invalid task");
 diff --git a/src/circuit/module/BuilderManager.h b/src/circuit/module/BuilderManager.h
 index 0c44d3f..dc8cd13 100644
 --- a/src/circuit/module/BuilderManager.h
@@ -570,7 +598,7 @@ index 6f59eec..3e286d4 100644
  	bool IsIgnoreStallingPull(const IBuilderTask* task) const;
  	void CorrectResourcePull(float metal, float energy);
 diff --git a/src/circuit/module/FactoryManager.cpp b/src/circuit/module/FactoryManager.cpp
-index dda9b5a..b4d0a30 100644
+index dda9b5a..e7c8983 100644
 --- a/src/circuit/module/FactoryManager.cpp
 +++ b/src/circuit/module/FactoryManager.cpp
 @@ -1,1784 +1,1812 @@
@@ -3176,7 +3204,7 @@ index dda9b5a..b4d0a30 100644
 +{
 +	CRecruitTask* task = new CRecruitTask(this, ti.priority, ti.buildDef, ti.position, ti.type, ti.radius);
 +	factoryTasks.push_back(task);
-+	updateTasks.push_back(task);
++	PushUpdate(task);
 +	TaskAdded(task);
 +	return task;
 +}
@@ -3205,7 +3233,7 @@ index dda9b5a..b4d0a30 100644
 +		} break;
 +	}
 +
-+	updateTasks.push_back(task);
++	PushUpdate(task);
 +	TaskAdded(task);
 +	return task;
 +}
@@ -4171,7 +4199,7 @@ index dda9b5a..b4d0a30 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index 4d85d25..db78054 100644
+index 4d85d25..7c586c0 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -16,10 +16,12 @@
@@ -4271,6 +4299,24 @@ index 4d85d25..db78054 100644
  		task->OnUnitDestroyed(unit, attacker);  // can change task
  		unit->GetTask()->RemoveAssignee(unit);  // Remove unit from IdleTask
  
+@@ -677,7 +738,7 @@ IFighterTask* CMilitaryManager::Enqueue(const TaskF::SFightTask& ti)
+ 	}
+ 
+ 	fightTasks[static_cast<IFighterTask::FT>(ti.type)].insert(task);
+-	updateTasks.push_back(task);
++	PushUpdate(task);
+ 	TaskAdded(task);
+ 	return task;
+ }
+@@ -713,7 +774,7 @@ bool CMilitaryManager::IsRecentSuperTarget(const AIFloat3& pos, float sqRadius,
+ CRetreatTask* CMilitaryManager::EnqueueRetreat()
+ {
+ 	CRetreatTask* task = new CRetreatTask(this);
+-	updateTasks.push_back(task);
++	PushUpdate(task);
+ 	TaskAdded(task);
+ 	return task;
+ }
 @@ -941,7 +1002,15 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
  		}
  	}
@@ -4595,10 +4641,18 @@ index e6c27f5..4e2feb2 100644
  
  IUnitTask* ITaskModule::MakeTask(CCircuitUnit* unit)
 diff --git a/src/circuit/module/TaskModule.h b/src/circuit/module/TaskModule.h
-index e2094ce..fb5c073 100644
+index e2094ce..95330bd 100644
 --- a/src/circuit/module/TaskModule.h
 +++ b/src/circuit/module/TaskModule.h
-@@ -32,7 +32,13 @@ public:
+@@ -10,6 +10,7 @@
+ 
+ #include "module/Module.h"
+ 
++#include <algorithm>
+ #include <vector>
+ 
+ namespace circuit {
+@@ -32,7 +33,13 @@ public:
  	void Release();
  
  	virtual void AssignTask(CCircuitUnit* unit, IUnitTask* task);
@@ -4612,6 +4666,22 @@ index e2094ce..fb5c073 100644
 +	virtual IUnitTask* AssignTask(CCircuitUnit* unit);
  protected:
  	virtual void DequeueTask(IUnitTask* task, bool done = false);
+ 
+@@ -69,6 +76,15 @@ protected:
+ 	CIdleTask* idleTask;
+ 	CPlayerTask* playerTask;
+ 
++	// CRASH DIAGNOSTIC (temporary): all pushes go through PushUpdate so a
++	// duplicate listing — which the reaper would double-ClearRelease, the
++	// actionUnits disease all over again — traps AT THE PUSH that creates it.
++	void PushUpdate(IUnitTask* task) {
++		if (std::find(updateTasks.begin(), updateTasks.end(), task) != updateTasks.end()) {
++			__builtin_trap();
++		}
++		updateTasks.push_back(task);
++	}
+ 	std::vector<IUnitTask*> updateTasks;  // owner
+ 	unsigned int updateIterator;
  
 diff --git a/src/circuit/script/BuilderScript.cpp b/src/circuit/script/BuilderScript.cpp
 index 9c78355..de282ad 100644
