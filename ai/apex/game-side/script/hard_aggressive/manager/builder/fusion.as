@@ -79,21 +79,22 @@ bool ReactorSectionClear(const AIFloat3& in spot)
 // A blocked spot is pushed straight out of the offending section to the
 // boundary and re-sited locally; a veto alone would stall reactors outright,
 // since the band placement re-proposes the same crowded spot forever.
-bool SectionSafeSpot(CCircuitDef@ want, AIFloat3& inout spot)
+bool SectionSafeSpot(CCircuitDef@ want, const AIFloat3& in cur, AIFloat3& out spot)
 {
-	if (ReactorSectionClear(spot))
+	spot = cur;
+	if (ReactorSectionClear(cur))
 		return true;
 	const float gap = ai.GetTunable("apex_reactor_spacing", REACTOR_SECTION);
 	int nearest = -1;
 	float best = 1.0e18f;
 	for (uint i = 0; i < gFusions.length(); ++i) {
-		const float d = gFusions[i].GetPos(ai.frame).distance2D(spot);
+		const float d = gFusions[i].GetPos(ai.frame).distance2D(cur);
 		if (d < best) { best = d; nearest = int(i); }
 	}
 	if (nearest < 0)
 		return true;
 	const AIFloat3 anchor = gFusions[uint(nearest)].GetPos(ai.frame);
-	AIFloat3 dir = spot - anchor;
+	AIFloat3 dir = cur - anchor;
 	if (dir.SqLength2D() < 1.f) {
 		dir = gHomePos - anchor;   // degenerate: shove toward home
 		if (dir.SqLength2D() < 1.f)
@@ -300,8 +301,13 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 		rear = ReactorSpot(unit, want, spot);
 	bool okSpot = okDef && ((rear != 0) || BandSpot(unit, want, false, spot));
 	// Out of any existing reactor's chain-blast section, or shifted out of it.
-	if (okSpot && !SectionSafeSpot(want, spot))
-		okSpot = false;
+	if (okSpot) {
+		AIFloat3 sectioned;
+		if (SectionSafeSpot(want, spot, sectioned))
+			spot = sectioned;
+		else
+			okSpot = false;
+	}
 	// Same handoff as HomeEnergy: this rule decides a reactor is wanted here,
 	// Requests decides whether that is a new one or joining one already
 	// requested. Neither the counter nor the cooldown moves for a join --

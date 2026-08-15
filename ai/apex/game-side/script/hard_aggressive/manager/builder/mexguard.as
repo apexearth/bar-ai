@@ -571,8 +571,12 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// than the builder -- constructors scattered around a base compute distinct
 	// nearby spots, so a builder-keyed check would miss the duplication.
 	// Reactors stay in sections -- see fusion.as ReactorSectionClear.
-	if (IsFusion(gen) && !SectionSafeSpot(gen, spot))
-		return null;
+	if (IsFusion(gen)) {
+		AIFloat3 sectioned;
+		if (!SectionSafeSpot(gen, spot, sectioned))
+			return null;
+		spot = sectioned;
+	}
 	bool created = false;
 	IUnitTask@ post = Requests::Take(unit, gen,
 			isConv ? Task::BuildType::CONVERT : Task::BuildType::ENERGY,
