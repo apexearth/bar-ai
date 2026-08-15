@@ -553,6 +553,13 @@ void CRetreatTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 
 void CRetreatTask::CheckRepairer(CCircuitUnit* newRep)
 {
+	// A repair executor can reach this through IRepairTask::Execute while the
+	// retreat has already shed its last assignee (DoneTask pending) --
+	// *units.begin() on an empty set dereferenced end() and crashed a watched
+	// game at 19:49 (2026-08-15, inlined IsRoleComm on garbage).
+	if (units.empty()) {
+		return;
+	}
 	CCircuitUnit* unit = *units.begin();
 	if (unit->GetCircuitDef()->IsRoleComm()) {
 		return;

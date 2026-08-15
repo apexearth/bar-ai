@@ -239,8 +239,24 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// back to this sooner, everyone else builds a reactor once their own economy
 	// clears these same conditions.
 	// Steady income, so a reclaim burst does not trigger one early.
-	if (Factory::SteadyIncome()
-		< ai.GetTunable("apex_fusion_income", FUSION_SOLO_INCOME))
+	//
+	// OR: the advsol farm has already proven the demand. The income bar is
+	// per-player and solo-calibrated; in a team game players sit under it for
+	// twenty minutes while stacking advanced solars -- once the metal already
+	// sunk into them exceeds a fusion's cost, the economy has demonstrated it
+	// wants fusion-scale energy and the bar has nothing left to protect
+	// (apexearth, watching: a player "makes the fusion far far too late";
+	// measured 20-30 minute firsts and two players never, one 8v8).
+	bool investedEnough = false;
+	{
+		CCircuitDef@ advsol = SideDef3(armadvsol, coradvsol, legadvsol);
+		CCircuitDef@ plainFus = SideDef3(armfus, corfus, legfus);
+		if ((advsol !is null) && (plainFus !is null))
+			investedEnough = float(advsol.count) * advsol.costM >= plainFus.costM;
+	}
+	if (!investedEnough
+		&& (Factory::SteadyIncome()
+			< ai.GetTunable("apex_fusion_income", FUSION_SOLO_INCOME)))
 	{
 		return null;
 	}

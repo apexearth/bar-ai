@@ -689,7 +689,15 @@ void CAttackTask::FindTarget()
 		// influence >= INFL_SAFE covered a median 85% of the base->enemy axis
 		// (p75 95%), waiving the odds check on effectively the whole map and
 		// feeding every under-strength squad into any fight it could see.
-		const bool isHome = inflMap->GetAllyDefendInflAt(group.pos) > INFL_EPS;
+		// OUR GROUND OR OUR PERIMETER, either one: the defended-perimeter-only
+		// scoping made the army stand aside while a push rolled through home
+		// territory into the base -- apexearth, watching, 2026-08-15: "we're
+		// still running from enemy army and give them free damage into our
+		// base... if our base is being pushed we have to prioritize defense
+		// and meet that army and destroy it." His live verdict outranks the
+		// noise-floor K/D that motivated the narrow scope.
+		const bool isHome = (inflMap->GetInfluenceAt(group.pos) >= INFL_SAFE)
+				|| (inflMap->GetAllyDefendInflAt(group.pos) > INFL_EPS);
 		const bool holdsPrev = wasEngaged && (prevTarget != nullptr)
 				&& (std::find(group.units.begin(), group.units.end(), prevTarget->GetId()) != group.units.end());
 		const float groupMargin = holdsPrev ? CONTINUE_MARGIN : TradeScaledMargin(circuit);

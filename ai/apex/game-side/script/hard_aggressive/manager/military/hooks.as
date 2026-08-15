@@ -31,7 +31,14 @@ bool WantsMassing(const CCircuitDef@ cdef)
 		return aiMilitaryMgr.GetGuardTaskNum() == 0;
 	if (role == RT::AA)
 		return false;
-	return (role != RT::RAIDER) && (role != RT::ARTY)
+	// Raiders raid EARLY, then fight as army: apexearth, watching 14m in --
+	// "all our raiders are still trying to fight like raiders, finding a way
+	// behind enemy lines... but there is no way around... we need to be
+	// trying to use them as an army." gHaveT2 is the codebase's early/late
+	// split; before it, raiding pays, after it the flanks are walled.
+	if (role == RT::RAIDER)
+		return Factory::gHaveT2;
+	return (role != RT::ARTY)
 		&& (role != RT::AH) && (role != RT::BOMBER) && (role != RT::MINE)
 		&& (role != RT::SUPER) && (role != RT::SCOUT) && (role != RT::SUPPORT);
 }
