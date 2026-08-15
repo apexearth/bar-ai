@@ -228,6 +228,15 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 			return null;
 	}
 
+	// Only an asker that can actually BUILD the reactor may request one --
+	// measured (8v8 Glitters, 20260815-064126): 208 fusion tasks handed to
+	// T1 constructors, every one a guaranteed capability-guard null, zero
+	// fusions built all game while stock built nine on the same income. The
+	// early return leaves the want standing for the next advanced constructor
+	// that reaches this rule instead of burning it on a unit that cannot act.
+	if ((want !is null) && !unit.circuitDef.CanBuild(want))
+		return null;
+
 	AIFloat3 spot;
 	const bool okDef = (want !is null) && want.IsAvailable(ai.frame);
 	// BandSpot's deep band is only the BACK of the base while the latched axis

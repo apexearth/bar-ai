@@ -400,6 +400,16 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		CCircuitDef@ sol = HaveReactor()
 				? null : SideDef3(armsolar, corsolar, legsolar);
 		CCircuitDef@ adv = AdvSolDef();
+		// Per-asker capability, same gap as the converter/reactor rungs below:
+		// the commander cannot build the advanced solar (measured 229 blocked
+		// tasks in one game, each a wasted election), and only rungs the asking
+		// unit can actually build may enter the ranking at all.
+		if ((wind !is null) && !unit.circuitDef.CanBuild(wind))
+			@wind = null;
+		if ((sol !is null) && !unit.circuitDef.CanBuild(sol))
+			@sol = null;
+		if ((adv !is null) && !unit.circuitDef.CanBuild(adv))
+			@adv = null;
 		// Reactors are always ranked (never nulled while the start cooldown
 		// holds); if one wins during cooldown the caller declines rather than
 		// falling back to a cheaper rung, so overbuilding wind/solar stays

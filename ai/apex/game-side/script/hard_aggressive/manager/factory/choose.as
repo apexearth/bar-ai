@@ -198,7 +198,29 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 		CCircuitDef@ t2mex2 = SideDef3(armmoho, cormoho, legmoho);
 		const bool haveT2Mex2 = (t2mex2 !is null) && (t2mex2.count > 0);
 		const int t2have = T2PlantCount();
-		const bool stillCompeting2 = !haveAdvCon2 || !haveT2Mex2;
+		// A GIFTED advanced constructor makes the first T2 plant's main early
+		// product redundant -- the fusion IS the better first buy then.
+		// apexearth 2026-08-15: "making your first fusion should come before
+		// making your first T2 lab (if you were given a T2 con by a teammate)."
+		// Held only while the gifted con is actually alive to build it and the
+		// economy clears the fusion ladder's own income bar -- either failing
+		// releases the plant, so this cannot deadlock the tech path.
+		if ((t2have == 0) && Builder::gGotAdvCon && haveAdvCon2
+			&& !Builder::HaveReactor()
+			&& (SteadyIncome() >= ai.GetTunable("apex_fusion_income", 30.f)))
+		{
+			if (ai.frame >= gNextT2TotalLog) {
+				gNextT2TotalLog = ai.frame + 60 * SECOND;
+				AiLog(T() + "apex: " + want.GetName() + " held -- gifted adv con"
+					+ " builds the first fusion before the first T2 plant");
+			}
+			return null;
+		}
+		// The first fusion also comes before a SECOND T2 line: apexearth,
+		// watching, 2026-08-15: "we make our second T2 lab before making our
+		// first fusion... it slows down our economy by a lot."
+		const bool stillCompeting2 = !haveAdvCon2 || !haveT2Mex2
+				|| !Builder::HaveReactor();
 		if (stillCompeting2 ? (t2have >= 1) : (t2have >= allowed)) {
 			if (ai.frame >= gNextT2TotalLog) {
 				gNextT2TotalLog = ai.frame + 60 * SECOND;

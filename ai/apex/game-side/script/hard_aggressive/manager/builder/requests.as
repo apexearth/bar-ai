@@ -245,6 +245,15 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	created = false;
 	if ((want is null) || !OnMap(spot))
 		return null;
+	// THE one chokepoint every request rule passes through: an asker that
+	// cannot build the def gets null BEFORE any task is enqueued, so the rule
+	// falls through to its next option instead of leaving an orphan task and a
+	// wasted election. GuardBuildCapability still backstops the pipeline's
+	// return, but by then Take had already enqueued -- measured (8v8 Glitters
+	// 20260815-065302): 975 armck->armfus, 777 ->armmoho, 594 comm->advsol per
+	// game, all guard-nulled after the orphan already existed.
+	if ((unit !is null) && !unit.circuitDef.CanBuild(want))
+		return null;
 
 	const int type = int(bt);
 	if (!Governed(type)) {
@@ -368,6 +377,9 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		const uint busy = Workers(cand);
 		if ((busy >= cap) || !SameJob(cand.buildDef, want, busy))
 			continue;
+		if ((unit !is null) && (cand.buildDef !is null)
+			&& !unit.circuitDef.CanBuild(cand.buildDef))
+			continue;   // cross-def match the asker cannot build; see Redirect
 		const AIFloat3 where = cand.GetBuildPos();
 		if (!OnMap(where))
 			continue;
@@ -524,6 +536,12 @@ IUnitTask@ Redirect(CCircuitUnit@ unit, bool isComm, IUnitTask@ offer)
 		if ((busy == 0) || (busy >= cap))
 			continue;
 		if (!SameJob(cand.buildDef, want, busy))
+			continue;
+		// SameJob allows cross-def matches (reactor classes), so the offered
+		// def proves nothing about the CANDIDATE's def -- an armck redirected
+		// onto an armafus site loops through the capability guard forever
+		// (measured 60k blocked elections in one long 8v8).
+		if ((cand.buildDef !is null) && !unit.circuitDef.CanBuild(cand.buildDef))
 			continue;
 		const AIFloat3 where = cand.GetBuildPos();
 		if (!OnMap(where))

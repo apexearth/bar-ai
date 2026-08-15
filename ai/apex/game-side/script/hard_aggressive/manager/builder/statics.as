@@ -237,6 +237,108 @@ int JammersAfforded(float upkeep)
 	return 1 + int(aiEconomyMgr.energy.income * share / upkeep);
 }
 
+// EYES OVER THE GROUND WE HOLD. CMilitaryManager::DefaultMakeSensors refuses
+// to place radar inside our own zone (IsZoneAlly early-return) and only fires
+// at contested clusters, so held territory is radar-dark by construction --
+// the enemy model reads near-zero all game and every engagement is a surprise.
+// One radar at the territory centre, then one per border rank: coverage grows
+// with the ground held, never a fixed count. Standing positions are tracked in
+// gRadarStand (events.as) so a dead radar's rank re-opens.
+const int   RADAR_PERIOD    = 20 * SECOND;
+const float RADAR_COVER     = 1600.f;          // spacing well inside the T1 triple's radius
+const int   RADAR_ORDER_TTL = 2 * 60 * SECOND; // an ask that never built stops blocking
+array<AIFloat3> gRadarStand;   // standing radar towers, kept by events.as
+array<AIFloat3> gRadarAskPos;  // asks in flight, TTL-bounded
+array<int>      gRadarAskAt;
+int gNextRadar = 0;
+
+CCircuitDef@ RadarTowerDef()
+{
+	return SideDef3("armrad", "corrad", "legrad");
+}
+
+// Ledger accessors for main.as's AiUnitFinished/AiUnitDestroyed -- functions
+// are visible module-wide regardless of include order, globals are not.
+void RadarStandAdd(const AIFloat3& in pos)
+{
+	gRadarStand.insertLast(pos);
+	AiLog(Factory::T() + "apex: radar-net standing +1 = " + gRadarStand.length());
+}
+
+void RadarStandRemoveNear(const AIFloat3& in pos)
+{
+	int nearest = -1;
+	float best = 1.0e18f;
+	for (uint i = 0; i < gRadarStand.length(); ++i) {
+		const float d = gRadarStand[i].distance2D(pos);
+		if (d < best) { best = d; nearest = int(i); }
+	}
+	if (nearest >= 0)
+		gRadarStand.removeAt(uint(nearest));
+}
+
+bool AreaHasRadar(const AIFloat3& in pos)
+{
+	for (int i = int(gRadarAskAt.length()) - 1; i >= 0; --i) {
+		if (ai.frame - gRadarAskAt[i] > RADAR_ORDER_TTL) {
+			gRadarAskAt.removeAt(i);
+			gRadarAskPos.removeAt(i);
+		} else if (gRadarAskPos[i].distance2D(pos) <= RADAR_COVER) {
+			return true;
+		}
+	}
+	for (uint i = 0; i < gRadarStand.length(); ++i) {
+		if (gRadarStand[i].distance2D(pos) <= RADAR_COVER)
+			return true;
+	}
+	return false;
+}
+
+IUnitTask@ RadarNet(CCircuitUnit@ unit)
+{
+	if (!gHomeSet || !Factory::HaveAnyFactory())
+		return null;                       // never touches the opening
+	if (ai.frame < gNextRadar)
+		return null;
+	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
+		return null;
+	CCircuitDef@ rad = RadarTowerDef();
+	if ((rad is null) || !rad.IsAvailable(ai.frame)
+		|| !unit.circuitDef.CanBuild(rad))
+		return null;
+	// Centre of held ground first, then out along the border ranks, indexed by
+	// what actually STANDS -- a border radar dying re-opens its rank.
+	AIFloat3 anchor = Military::TerritoryCentre();
+	const uint standing = gRadarStand.length();
+	if (standing > 0) {
+		AIFloat3 border;
+		if (!Military::BorderPos(border, standing - 1))
+			return null;                   // every rank covered: done for now
+		anchor = border;
+	}
+	if (!OnMap(anchor) || AreaHasRadar(anchor))
+		return null;
+	const AIFloat3 site = ai.FindBuildSiteNear(rad, anchor, RADAR_COVER * 0.4f);
+	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
+		return null;
+	if (AreaHasRadar(site))
+		return null;
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, rad, Task::BuildType::RADAR,
+			Task::Priority::NORMAL, site, 0.f, 0.f, created);
+	if (post is null)
+		return null;
+	if (!created)
+		return post;
+	gRadarAskPos.insertLast(site);
+	gRadarAskAt.insertLast(ai.frame);
+	gNextRadar = ai.frame + RADAR_PERIOD;
+	AiLog(Factory::T() + "apex: radar-net " + rad.GetName()
+		+ " standing=" + gRadarStand.length()
+		+ " at=" + int(site.x) + "," + int(site.z));
+	return post;
+}
+
 IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 {
 	// THE ONE GUARD THAT READS THE ACTUAL GRID. An energy stall stops the whole

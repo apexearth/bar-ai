@@ -1,5 +1,67 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN: combat conversion -- army trades at ~0.5 K/D in metal and cannot finish a 2x lead inside 30 minutes (2026-08-15)
+
+THE strategic deficit, measured across 56 tournament games tonight: we
+out-produce stock ~2x and lead 26/32 games at the 30-minute cap, but army
+K/D in metal is 0.33-0.82 against stock's 0.92-1.42 (`tools/fight1v1.py`
+per tournament; note the noise floor -- two IDENTICAL baseline runs
+scored 0.82 and 0.59, so single-tournament K/D deltas under ~0.3 are not
+signal). 28 of 32 random-map games timed out undecided.
+
+**Vision fixed, trade unchanged.** The first mechanism found was
+blindness: `apexfoe raw=0` for the first 14 minutes of the worst game
+(K/D 0.10), enemy model ~500 vs a real 3000+ army at 30m, radar ~3 towers/
+game -- `CMilitaryManager::DefaultMakeSensors` refuses to place radar
+inside our own zone (`IsZoneAlly` early-return, MilitaryManager.cpp:1060)
+and only fires at contested clusters. Landed `Builder::RadarNet`
+(statics.as; ledger hooks in main.as `AiUnitFinished`/`AiUnitDestroyed`,
+which were engine-looked-up but unimplemented): territory-centre-then-
+border-ranks anchor ladder, standing-position ledger so dead radars
+re-open their rank, coverage scales with ground held. CONFIRMED WORKING
+(coverage grows, enemy model reads 1000-2300 late-game instead of ~300)
+-- but the 12-game re-run's K/D was 0.33, no improvement. Vision was
+necessary, not sufficient.
+
+**MEASURED 2026-08-15: the isHome exemption covers the map, which is why
+nothing else moves the needle.** `CAttackTask::FindTarget` waives the odds
+check entirely wherever net influence >= INFL_SAFE (2.0). The `home-edge`
+sampler (massing.as, 60s cadence) across the 12-game engage-neutral
+tournament: median **85%** of the base->enemy axis reads as "home"
+(p25 67%, p75 95%, n=294). Every odds-related fix so far (scale-units bug,
+trade-scaled margins, thrMod 0.6-0.8 -> 1.0 neutral, radar-net vision)
+sits BEHIND this bypass on the ground where most fights actually happen --
+measured K/D across four tournaments: 0.82 / 0.59 / 0.33 / 0.48, all
+noise-band, no fix moved it. **Scoping fix LANDED 2026-08-15, apexearth-approved** ("Sounds like the
+right fix"): `isHome = inflMap->GetAllyDefendInflAt(group.pos) > INFL_EPS`
+(AttackTask.cpp) -- the defence-influence field around actual defence
+structures instead of anywhere our units have walked. First 12-game
+measurement (`tournaments/20260814-233602-ishome-scope-check`): K/D 0.635
+-- best of the last four same-map runs (0.59/0.33/0.48) but still inside
+the two-identical-baselines noise band (0.59-0.82), so NOT yet claimable
+as an improvement; 8/12 games decided (6-2), the most decisive run of the
+night, zero crashes. Needs either a large batch or apexearth watching to
+close. Also landed this pass: army-scaled squad floor
+(`Military::MassFloor`, `apex_mass_per_army` 0.0017, binds at hosted-game
+scale, benchmark unchanged) and quota.attack now tracks want both ways
+(the up-only ratchet would have wedged after losing a scaled-up army).
+
+**Where the deficit actually lives, still open:** which fights get taken.
+The army bleeds continuously (army value FALLING minute-over-minute while
+the enemy's rises, e.g. 1870->937 over minutes 18-21 of t012) rather than
+dying in a few big pushes -- piecemeal engagement, not one bad battle.
+Next investigation belongs to military-engagement: massing/attack-quota
+behaviour with a material lead, and the still-unmeasured standoff/
+fragility passes in the entries below. A watched game is the right next
+instrument -- the benchmark's noise floor cannot rank engagement changes.
+
+Related fixes landed the same night (both STOP-class, measured firing):
+rez bots (no buildoptions at all) routed out of the build pipeline
+(maketask.as -- was 1443 blocked tasks/game); `GuardBuildCapability` no
+longer nulls REPAIR/RECLAIM/RESURRECT tasks, whose buildDef is the
+TARGET's def, not a construction (was silently killing commander assists,
+291/game). Blocked-task log: 497 -> 11 per game.
+
 What is broken or missing, with the evidence for it. `CHANGES.md` says what was
 done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
@@ -1208,6 +1270,24 @@ several games without restarting the process). Needs its own pass: read
 find the double-free/use-after-free, independent of the mid-game crash below.
 
 ## PARTIALLY FIXED: the recurring "IRefCounter::Release() -> delete this" crash (2026-08-14)
+
+**2026-08-15, SIXTH crash, and it exposed why the AddRef brackets are not
+enough.** apexearth's watched 8v8 crashed at frame 47331; addr2line (docker
+image toolchain, `x86_64-w64-mingw32-addr2line`, ImageBase+offset) resolved
+it to `CIdleTask::Update` at the `task->Start(ass)` INSIDE the existing
+AddRef bracket, with a null-vtable call (exception address 0x0). The
+bracket cannot help when `ass->GetTask()` returns an ALREADY-dangling
+pointer: `manager->AssignTask(ass)` one line earlier runs the whole script
+pipeline (AiMakeTask, then CBuilderManager's TaskAssigned hook), either of
+which can abort/complete tasks, and `CCircuitUnit::SetTask` is a bare
+assignment -- AddRef on freed memory protects nothing. **Fix, landed and
+rebuilt:** `ITaskModule::AssignTask(CCircuitUnit*)` now RETURNS the task it
+assigned with one reference transferred to the caller (TaskModule.h/.cpp,
+BuilderManager.h/.cpp override), and `CIdleTask::Update` uses that return
+value -- never re-reading the unit's task pointer -- guarded by `IsDead()`
+before Start and Released after. 12 tournament games + a 25-min smoke on
+the new DLL: zero crashes. Same caveat as every previous entry here: only a
+long watched game closes it.
 
 **apexearth, watching several more windowed games (+70 handicap):** "we are
 still crashing," repeated after each of the two fixes below. This is the same

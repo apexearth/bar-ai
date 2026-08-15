@@ -10,7 +10,7 @@
 		"raid": [6.0, 150.0],  // [<min>, <avg>] power of raider squad 2.5,48
 		"attack": 20.0,  // min power of attack group ---- was 40
 		"thr_mod": {				//AI attacks everything with final threat (after all calculations) <= 1
-			"attack": [0.6, 0.8],  // [<min>, <max>] enemy threat multiplier for target selection of attack task |  values <1 makes enemy group seem less of an thread for ai => ai attacks stronger groups than it own | org=0.25, 0.3
+			"attack": [1.0, 1.0],  // [<min>, <max>] enemy threat multiplier for target selection of attack task. Neutral: count the enemy at face value -- aggression comes from the trade-scaled engage margin, not from discounting the enemy (was 0.6/0.8; measured 0.5 army K/D). org=0.25, 0.3
 			"defence": [1.0, 1.0],  // apexearth: "even our allies don't come to help".
 			// This sizes the DEFENCE group against the attacker, and at 0.3-0.5 it
 			// computed that group for an enemy a third to a half of its real

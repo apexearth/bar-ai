@@ -541,6 +541,12 @@ skipping it produced a confident wrong answer at least once).
 
 ## Harness discipline
 
+- **Never run two matches on one engine write-dir.** Both engines write the
+  same `infolog.txt` and config tree; measured 2026-08-15, a watch game beside
+  a long soak run broke the watch game's AI outright and filled the soak's log
+  with interleaved binary garbage. `run_match.py` now pidfile-guards
+  `matches/_engine` and auto-suffixes a busy dir, but a hand-launched engine
+  bypasses that -- check `engine.pid` first.
 - **Never edit a file a running tournament uses.** Editing `run_match.py`
   mid-run killed 17 matches with an `AttributeError`. The repo `ai/<variant>/`
   tree is safe to edit while running; deploying is what swaps live files.

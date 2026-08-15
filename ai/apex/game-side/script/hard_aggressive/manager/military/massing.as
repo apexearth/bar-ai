@@ -43,19 +43,40 @@ float MassWant()
 	// unit count or metal value, so it cannot be derived directly from a metal
 	// figure.
 	if (ai.GetTunable("apex_mass_vs_army", 0.f) <= 0.f)
-		return ai.GetTunable("apex_mass_floor", MASS_FLOOR);
+		return MassFloor();
 
 	const float ours = TeamArmyCost();
 	const float theirs = EnemyMassingThreat();
 	if (ours <= 1.f)
 		return MASS_CAP;
+	const float floorNow = MassFloor();
+	const float capNow = (MASS_CAP > floorNow) ? MASS_CAP : floorNow;
 	const float ratio = theirs / ours;
 	if (ratio <= ATTACK_EDGE)
-		return MASS_FLOOR;                    // ahead: move, but as a group
+		return floorNow;                      // ahead: move, but as a group
 	if (ratio >= MASS_HOLD_RATIO)
-		return MASS_CAP;                      // outmatched: hold
+		return capNow;                        // outmatched: hold
 	const float t = (ratio - ATTACK_EDGE) / (MASS_HOLD_RATIO - ATTACK_EDGE);
-	return MASS_FLOOR + t * (MASS_CAP - MASS_FLOOR);
+	return floorNow + t * (capNow - floorNow);
+}
+
+// The floor scales with our own army: a fixed 12-power squad is a real group
+// over a 2k-metal army and a suicide trickle over 100k. Sized as a share of
+// standing army value, converted at Grunt-class power-per-metal (~0.017,
+// LogUnitPower); floored at the old constant so the opening is unchanged.
+// apexearth 2026-08-15: the squad minimum scales with economy/army, not flat.
+float gQuotaConfig = -1.f;   // behaviour.json's quota.attack, read once at start
+
+float MassFloor()
+{
+	if (gQuotaConfig < 0.f)
+		gQuotaConfig = aiMilitaryMgr.quota.attack;
+	float base = ai.GetTunable("apex_mass_floor", MASS_FLOOR);
+	if (base < gQuotaConfig)
+		base = gQuotaConfig;   // never undercut the config's own opening minimum
+	const float scaled = TeamArmyCost()
+			* ai.GetTunable("apex_mass_per_army", 0.0017f);
+	return (scaled > base) ? scaled : base;
 }
 
 void UpdateMassing()
@@ -84,11 +105,12 @@ void UpdateMassing()
 	// Keyed on "demanding more than the floor", not on reaching the cap: the
 	// interpolated want can sit just under MASS_HOLD_RATIO and never touch
 	// MASS_CAP, so a deadline keyed on the cap would never fire.
-	if (want > MASS_FLOOR + 1.f) {
+	const float floorNow = MassFloor();
+	if (want > floorNow + 1.f) {
 		if (gHoldSince < 0)
 			gHoldSince = ai.frame;
 		if ((holdSecs > 0.f) && (ai.frame - gHoldSince > int(holdSecs) * SECOND)) {
-			want = MASS_FLOOR;
+			want = floorNow;
 			gHoldSince = ai.frame;   // restart, so we alternate hold and commit
 			AiLog(Factory::T() + "apex: mass hold expired, committing at floor");
 		}
@@ -99,12 +121,36 @@ void UpdateMassing()
 	if (ai.frame >= gNextMassLog) {
 		gNextMassLog = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: mass want=" + formatFloat(want, "", 0, 0)
+			+ " floor=" + formatFloat(floorNow, "", 0, 0)
 			+ " army=" + formatFloat(ours, "", 0, 0)
 			+ " enemyArmy=" + formatFloat(theirs, "", 0, 0)
 			+ " ratio=" + formatFloat((ours > 0.f) ? theirs / ours : 0.f, "", 0, 2));
+		// HOW BIG "HOME GROUND" IS: CAttackTask's isHome waives the odds check
+		// wherever net influence >= INFL_SAFE (2.0). Walk the home->enemy axis
+		// and log where that isoline actually ends, against the full distance,
+		// so the exemption's reach is a measured number and not a guess.
+		if (Builder::gHomeSet) {
+			const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+			const float total = Builder::gHomePos.distance2D(foe);
+			if ((total > 1.f) && OnMap(foe)) {
+				float safeDist = 0.f;
+				for (float d = 200.f; d < total; d += 200.f) {
+					AIFloat3 p = Builder::gHomePos + (foe - Builder::gHomePos) * (d / total);
+					if (!OnMap(p) || (ai.GetAllyInflAt(p) - ai.GetEnemyInflAt(p) < 2.f))
+						break;
+					safeDist = d;
+				}
+				AiLog(Factory::T() + "apex: home-edge safe=" + int(safeDist)
+					+ " of " + int(total) + " ("
+					+ formatFloat(100.f * safeDist / total, "", 0, 0) + "%)");
+			}
+		}
 	}
-	if (aiMilitaryMgr.quota.attack < want)
-		aiMilitaryMgr.quota.attack = want;
+	// Tracks the want BOTH ways: with an army-scaled floor, a ratchet that only
+	// rises would leave the bar stuck at a dead army's size -- a side that just
+	// lost 30k of army could never form another attack. gKilling/gTurtle return
+	// early above, so nothing else owns the quota while this writes it.
+	aiMilitaryMgr.quota.attack = want;
 }
 
 //------------------------------------------------------------------------------

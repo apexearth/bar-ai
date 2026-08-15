@@ -41,6 +41,13 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			IUnitTask@ deter = HomeDeter(unit);
 			if (deter !is null)
 				return deter;
+			// Carved out of the phase gate for the same reason as CheapAA: a
+			// 60-metal tower, one uncovered anchor at a time, and blindness is
+			// what it answers -- the engine's own sensor pass never covers held
+			// ground at all (see RadarNet's comment).
+			IUnitTask@ eyes = RadarNet(unit);
+			if (eyes !is null)
+				return eyes;
 			// BUILD_PHASE gate on the remaining optional economy cluster: before an
 			// advanced factory actually exists (gLastPhase>=4, i.e. gHaveT2), a
 			// constructor's only job is expansion and reaching T2. HeavyAA, Pulsar,

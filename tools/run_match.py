@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import re
 import shutil
@@ -426,6 +427,27 @@ def run(args) -> int:
 
     outdir.mkdir(parents=True, exist_ok=True)
     write_dir.mkdir(parents=True, exist_ok=True)
+
+    # Two engines sharing one write-dir interleave into the same infolog.txt
+    # and stomp each other's config -- measured 2026-08-15: a watch game
+    # launched beside a long soak run broke the watch game's AI outright and
+    # corrupted the soak's log. A pidfile marks the dir busy; if its process is
+    # still alive, silently side-step to a suffixed dir instead.
+    pidfile = write_dir / "engine.pid"
+    try:
+        other = int(pidfile.read_text().strip())
+    except (OSError, ValueError):
+        other = 0
+    if other:
+        alive = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {other}", "/NH"],
+            capture_output=True, text=True).stdout
+        if str(other) in alive:
+            write_dir = write_dir.parent / f"{write_dir.name}-{os.getpid()}"
+            write_dir.mkdir(parents=True, exist_ok=True)
+            pidfile = write_dir / "engine.pid"
+            print(f"write-dir busy (engine pid {other}); using {write_dir}")
+    pidfile.write_text(str(os.getpid()))
 
     script = build_script(
         ais, map_name, game_name, args.minutes, args.seed,

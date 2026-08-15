@@ -74,7 +74,7 @@ void ITaskModule::AssignTask(CCircuitUnit* unit, IUnitTask* task)
 	task->Release();
 }
 
-void ITaskModule::AssignTask(CCircuitUnit* unit)
+IUnitTask* ITaskModule::AssignTask(CCircuitUnit* unit)
 {
 	// MakeTask(unit) runs the script's AiMakeTask top to bottom -- confirmed
 	// live as a second instance of the DequeueTask bug (same
@@ -88,8 +88,11 @@ void ITaskModule::AssignTask(CCircuitUnit* unit)
 	if (task != nullptr) {
 		task->AddRef();
 		task->AssignTo(unit);
-		task->Release();
+		// The reference is NOT released here: it transfers to the caller, so
+		// the returned pointer is guaranteed alive however much script ran
+		// during AssignTo. See the declaration's comment.
 	}
+	return task;
 }
 
 void ITaskModule::DequeueTask(IUnitTask* task, bool done)

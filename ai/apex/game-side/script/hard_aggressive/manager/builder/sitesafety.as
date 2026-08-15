@@ -31,17 +31,17 @@ IUnitTask@ Retreat(CCircuitUnit@ unit)
 // bot lab to parallelize production.
 //
 // Derived from income rather than fixed: a player on 400 metal/second and a
-// player on 40 do not want the same number of plants, and a full bank means
-// the plants we have are not keeping up with what we can spend.
+// player on 40 do not want the same number of plants. A full bank does NOT
+// raise this: at low income a full bank means the one plant we have is not
+// being fed or run -- a build-power problem the con/nano/assist rules already
+// answer -- and the old flat +2 here let a starved 13 m/s player sanction a
+// second lab off exactly that signal. apexearth, watching, 2026-08-15: "We
+// couldn't even fully support 1 -- so why would we make a second?"
 const float FACTORY_PER_INCOME  = 60.f;
-const int   FACTORY_FULL_BONUS  = 2;
 
 int FactoryTypeCap()
 {
-	int cap = 1 + int(aiEconomyMgr.metal.income / FACTORY_PER_INCOME);
-	if (aiEconomyMgr.isMetalFull)
-		cap += FACTORY_FULL_BONUS;
-	return cap;
+	return 1 + int(aiEconomyMgr.metal.income / FACTORY_PER_INCOME);
 }
 
 // The count cap alone does not close the race that causes the overshoot:

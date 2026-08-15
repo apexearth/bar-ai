@@ -68,22 +68,18 @@ void CIdleTask::Update()
 
 		it = updateUnits.erase(it);
 
-		manager->AssignTask(ass);  // should RemoveAssignee() on AssignTo()
-		// AssignTask can legitimately leave the unit taskless -- Start()'s own
-		// comment above documents the case (a pending PathRequest making
-		// AssignTask() a no-op) -- and this dereferenced it unconditionally.
-		// Traced live via addr2line against a debug build: three access
-		// violations here across the session, all with this exact frame.
-		// unit->task is a bare native pointer (CCircuitUnit::SetTask does no
-		// AddRef -- native ownership is tracked separately, via buildTasks/
-		// updateTasks membership and explicit DequeueTask/AbortTask), so
-		// nothing protects it from the same script-drops-last-reference race
-		// as DequeueTask/AssignTask once Start() itself runs script. Hold our
-		// own reference across the call, same fix, same reason.
-		IUnitTask* task = ass->GetTask();
+		// The task comes back from AssignTask itself, with a reference
+		// transferred -- never re-read ass->GetTask() here: AssignTask runs
+		// script (AiMakeTask, TaskAssigned) which can abort or complete
+		// tasks, and the unit's bare task pointer is not refcounted. The
+		// previous AddRef bracket around a re-read pointer still crashed
+		// (2026-08-15, frame 47331, null vtable call at Start): AddRef on an
+		// already-freed object protects nothing.
+		IUnitTask* task = manager->AssignTask(ass);  // should RemoveAssignee() on AssignTo()
 		if (task != nullptr) {
-			task->AddRef();
-			task->Start(ass);
+			if (!task->IsDead()) {
+				task->Start(ass);
+			}
 			task->Release();
 		}
 

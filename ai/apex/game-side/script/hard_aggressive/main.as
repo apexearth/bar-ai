@@ -89,6 +89,20 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Builder::UpdateSiege();
 }
 
+// The per-unit FINISHED event, all managers -- unlike Builder::AiUnitAdded,
+// which is the ECONOMY module's hook and fires only for economy-tracked units
+// (a radar tower never reaches it). Looked up by name, same as AiUnitDestroyed.
+void AiUnitFinished(CCircuitUnit@ unit)
+{
+	if (unit is null)
+		return;
+	// RadarNet's standing ledger: positions, because coverage is a place, and
+	// a dead radar must re-open its border rank (a count cannot say where).
+	CCircuitDef@ radDef = Builder::RadarTowerDef();
+	if ((radDef !is null) && (unit.circuitDef.id == radDef.id))
+		Builder::RadarStandAdd(unit.GetPos(ai.frame));
+}
+
 // CInitScript::UnitDestroyed (InitScript.cpp:1224) looks this exact signature
 // up and calls it for every one of OUR units destroyed, across all managers --
 // it was simply never implemented, which is the "AiUnitDestroyed ... not
@@ -103,6 +117,9 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	IUnitTask@ t = unit.task;
 	const int tt = (t is null) ? -1 : t.GetType();
 	const int bt = ((t !is null) && (tt == Task::Type::BUILDER)) ? t.GetBuildType() : -1;
+	CCircuitDef@ radDefGone = Builder::RadarTowerDef();
+	if ((cdef !is null) && (radDefGone !is null) && (cdef.id == radDefGone.id))
+		Builder::RadarStandRemoveNear(at);
 	const string hist = Builder::TakeHistFor(int(unit.id));
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")
 		+ " id=" + unit.id + " frame=" + ai.frame

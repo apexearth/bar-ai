@@ -37,6 +37,13 @@ IUnitTask@ GuardBuildCapability(CCircuitUnit@ unit, IUnitTask@ task)
 		return task;
 	if (task.GetType() != Task::Type::BUILDER)
 		return task;
+	// Only CONSTRUCTION types carry a def the worker must be able to BUILD.
+	// REPAIR/RECLAIM/RESURRECT/RECRUIT tasks put the TARGET's def in buildDef
+	// (a repair of an armck reads buildDef=armck), so checking those against
+	// buildOptions blocked legitimate assist/repair work -- measured 291
+	// commander-assists-advsol and 43 con-repairs-con nulled in one game.
+	if (int(task.GetBuildType()) >= int(Task::BuildType::REPAIR))
+		return task;
 	CCircuitDef@ def = task.buildDef;
 	if (def is null)
 		return task;
@@ -87,6 +94,21 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	@t = RezzerEatCorpse(unit);
 	if (t !is null)
 		return t;
+
+	// A REZ BOT BUILDS NOTHING (armrectr/cornecro buildoptions are empty), so
+	// every build rule below is a guaranteed GuardBuildCapability block for it
+	// -- measured 1443 blocked tasks for cornecro in one 30-minute game, each
+	// one a wasted election. Rez work, repair, the engine's own reclaim/rez
+	// offers, then idle feature reclaim; never the build pipeline.
+	if (IsRezzer(unit)) {
+		@t = RezzerRepairNearby(unit);
+		if (t !is null)
+			return t;
+		@t = aiBuilderMgr.DefaultMakeTask(unit);
+		if (t !is null)
+			return GuardBuildCapability(unit, t);
+		return IdleFeatureReclaim(unit, false);
+	}
 
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	// Only an advanced constructor can build a moho. The wreck rules below sit

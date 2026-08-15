@@ -818,6 +818,13 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		const float end2 = alpha - beta;
 		AIFloat3 newPos1(tPos.x + range * cosf(end1), tPos.y, tPos.z + range * sinf(end1));
 		AIFloat3 newPos2(tPos.x + range * cosf(end2), tPos.y, tPos.z + range * sinf(end2));
+		// A ring end around a target near the map border lands off-map, and
+		// GetThreatAt indexes the threat array UNCHECKED (its bounds assert is
+		// compiled out in release) -- crashed a live watched game 2026-08-15
+		// (frame ~0x, AV in CThreatMap::GetThreatAt from this exact call).
+		// Same clamp the per-unit standoff path below already applies.
+		CTerrainManager::CorrectPosition(newPos1);
+		CTerrainManager::CorrectPosition(newPos2);
 		CCircuitUnit* testUnit = *kv.second.begin();
 		const AIFloat3 testPos = testUnit->GetPos(frame);
 		// apexearth: "we should try to choose safer angles." The two ring ends

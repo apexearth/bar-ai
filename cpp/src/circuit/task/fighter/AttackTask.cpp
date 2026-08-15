@@ -682,9 +682,14 @@ void CAttackTask::FindTarget()
 		// when the group is closer to our base than we are, i.e. defending home,
 		// where taking a worse fight is correct.
 		const float scale = std::min(distBE / obDist, 1.f);
-		// No margin is demanded on our own ground: a defender that waits for
-		// favourable odds has already lost the thing it was defending.
-		const bool isHome = inflMap->GetInfluenceAt(group.pos) >= INFL_SAFE;
+		// No margin is demanded inside the DEFENDED PERIMETER: a defender that
+		// waits for favourable odds has already lost the thing it was defending.
+		// The perimeter is the defence-influence field around actual defence
+		// structures, not general unit influence -- measured 2026-08-15, net
+		// influence >= INFL_SAFE covered a median 85% of the base->enemy axis
+		// (p75 95%), waiving the odds check on effectively the whole map and
+		// feeding every under-strength squad into any fight it could see.
+		const bool isHome = inflMap->GetAllyDefendInflAt(group.pos) > INFL_EPS;
 		const bool holdsPrev = wasEngaged && (prevTarget != nullptr)
 				&& (std::find(group.units.begin(), group.units.end(), prevTarget->GetId()) != group.units.end());
 		const float groupMargin = holdsPrev ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
