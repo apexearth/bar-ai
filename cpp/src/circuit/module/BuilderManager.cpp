@@ -803,23 +803,37 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
 			if (taskB->GetBuildType() >= IBuilderTask::BuildType::_SIZE_) {
 				break;
 			}
-			std::set<IBuilderTask*>& tasks = buildTasks[static_cast<IBuilderTask::BT>(taskB->GetBuildType())];
-			auto it = tasks.find(taskB);
-			if (it == tasks.end()) {
-				break;
-			}
+			// The target-keyed maps are erased UNCONDITIONALLY, before the
+			// buildTasks membership branch: a task dequeued while not listed
+			// there (the break below) used to leave a stale repairUnits entry
+			// pointing at memory the update reaper then freed -- UnitDestroyed
+			// aborted through it 85 minutes into a soak (2026-08-15).
 			switch (taskB->GetBuildType()) {
 				case IBuilderTask::BuildType::REPAIR: {
-					repairUnits.erase(static_cast<CBRepairTask*>(taskB)->GetTargetId());
+					auto itre = repairUnits.find(static_cast<CBRepairTask*>(taskB)->GetTargetId());
+					if ((itre != repairUnits.end()) && (itre->second == taskB)) {
+						repairUnits.erase(itre);
+					}
 				} break;
 				case IBuilderTask::BuildType::RECLAIM: {
-					reclaimUnits.erase(taskB->GetTarget());
+					auto itcl = reclaimUnits.find(taskB->GetTarget());
+					if ((itcl != reclaimUnits.end()) && (itcl->second == taskB)) {
+						reclaimUnits.erase(itcl);
+					}
 				} break;
 				case IBuilderTask::BuildType::RESURRECT: {
 				} break;
 				default: {
-					unfinishedUnits.erase(taskB->GetTarget());
+					auto itun = unfinishedUnits.find(taskB->GetTarget());
+					if ((itun != unfinishedUnits.end()) && (itun->second == taskB)) {
+						unfinishedUnits.erase(itun);
+					}
 				} break;
+			}
+			std::set<IBuilderTask*>& tasks = buildTasks[static_cast<IBuilderTask::BT>(taskB->GetBuildType())];
+			auto it = tasks.find(taskB);
+			if (it == tasks.end()) {
+				break;
 			}
 			tasks.erase(it);
 			buildTasksCount--;

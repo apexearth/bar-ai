@@ -198,7 +198,7 @@ index 0bdafed..31c719e 100644
  // <<< Recent trade record ---- END
  
 diff --git a/src/circuit/module/BuilderManager.cpp b/src/circuit/module/BuilderManager.cpp
-index a62be4f..dc33f43 100644
+index a62be4f..b5023e7 100644
 --- a/src/circuit/module/BuilderManager.cpp
 +++ b/src/circuit/module/BuilderManager.cpp
 @@ -621,7 +621,13 @@ const std::set<IBuilderTask*>& CBuilderManager::GetTasks(IBuilderTask::BuildType
@@ -237,8 +237,50 @@ index a62be4f..dc33f43 100644
  }
  
  void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
-@@ -815,6 +823,11 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
+@@ -795,26 +803,45 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
+ 			if (taskB->GetBuildType() >= IBuilderTask::BuildType::_SIZE_) {
+ 				break;
  			}
+-			std::set<IBuilderTask*>& tasks = buildTasks[static_cast<IBuilderTask::BT>(taskB->GetBuildType())];
+-			auto it = tasks.find(taskB);
+-			if (it == tasks.end()) {
+-				break;
+-			}
++			// The target-keyed maps are erased UNCONDITIONALLY, before the
++			// buildTasks membership branch: a task dequeued while not listed
++			// there (the break below) used to leave a stale repairUnits entry
++			// pointing at memory the update reaper then freed -- UnitDestroyed
++			// aborted through it 85 minutes into a soak (2026-08-15).
+ 			switch (taskB->GetBuildType()) {
+ 				case IBuilderTask::BuildType::REPAIR: {
+-					repairUnits.erase(static_cast<CBRepairTask*>(taskB)->GetTargetId());
++					auto itre = repairUnits.find(static_cast<CBRepairTask*>(taskB)->GetTargetId());
++					if ((itre != repairUnits.end()) && (itre->second == taskB)) {
++						repairUnits.erase(itre);
++					}
+ 				} break;
+ 				case IBuilderTask::BuildType::RECLAIM: {
+-					reclaimUnits.erase(taskB->GetTarget());
++					auto itcl = reclaimUnits.find(taskB->GetTarget());
++					if ((itcl != reclaimUnits.end()) && (itcl->second == taskB)) {
++						reclaimUnits.erase(itcl);
++					}
+ 				} break;
+ 				case IBuilderTask::BuildType::RESURRECT: {
+ 				} break;
+ 				default: {
+-					unfinishedUnits.erase(taskB->GetTarget());
++					auto itun = unfinishedUnits.find(taskB->GetTarget());
++					if ((itun != unfinishedUnits.end()) && (itun->second == taskB)) {
++						unfinishedUnits.erase(itun);
++					}
+ 				} break;
+ 			}
++			std::set<IBuilderTask*>& tasks = buildTasks[static_cast<IBuilderTask::BT>(taskB->GetBuildType())];
++			auto it = tasks.find(taskB);
++			if (it == tasks.end()) {
++				break;
++			}
  			tasks.erase(it);
  			buildTasksCount--;
 +			// The counted membership reference (see ActivateTask) is dropped
@@ -249,7 +291,7 @@ index a62be4f..dc33f43 100644
  		} break;
  		default: break;
  	}
-@@ -1745,6 +1758,7 @@ void CBuilderManager::Load(std::istream& is)
+@@ -1745,6 +1772,7 @@ void CBuilderManager::Load(std::istream& is)
  			if (task != nullptr) {
  				const bool isValid = is >> *task;
  				buildTasks[i].insert(task);
