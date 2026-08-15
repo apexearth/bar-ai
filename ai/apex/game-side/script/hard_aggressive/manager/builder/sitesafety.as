@@ -1,5 +1,29 @@
 namespace Builder {
 
+// CBuilderManager::EnqueueRetreat (BuilderManager.cpp) always `new
+// CRetreatTask(this)` -- no dedup against an existing one, unlike every
+// IBuilderTask path this codebase re-elects through (Requests::Take joins an
+// in-flight request by SITE; retreat has no such join). Every call site here
+// used to call it fresh on each re-election on the assumption that
+// re-enqueuing an existing retreat was a cheap no-op -- it is not: a fresh
+// CRetreatTask means a fresh AssignTo/RemoveAssignee pair on the SAME unit,
+// which tears down and rebuilds the travel action and toggles fire state
+// (AssignTo sets RETURN for a cloak-capable unit; RemoveAssignee restores the
+// def's default OPEN) every re-election, roughly once a second, for as long
+// as the flee condition holds. apexearth, watching a commander under
+// continuous real threat the whole match (enemy influence 1.4-38 for eleven
+// straight minutes, never near zero): "swapping between fire at will and
+// return fire, idk what else they're thinking about... standing around doing
+// nothing." The commander was correctly told to flee every time -- it just
+// never got to finish leaving.
+IUnitTask@ Retreat(CCircuitUnit@ unit)
+{
+	IUnitTask@ held = unit.task;
+	if ((held !is null) && (held.GetType() == Task::Type::RETREAT))
+		return held;
+	return aiBuilderMgr.EnqueueRetreat();
+}
+
 // How many of ONE factory def (standing + under construction, this player's
 // own count -- CCircuitDef is per-instance) is enough. Past this, refuse the
 // engine's own DefaultMakeTask offer of another one. Deliberately generous

@@ -613,14 +613,23 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 	// AirThreatSeen, not GetEnemyCost(AIR): air constructors and air scouts carry
 	// the AIR role, so the raw cost reads enemy ECONOMY as aircraft and sized the
 	// turret count off it. The army mix was corrected for this; this was not.
-	const float enemyAir = Military::AirThreatSeen();
+	// Sized off the larger of the smoothed and this-tick reading (AirThreatNow)
+	// so a freshly-detected raid is not sized off a stale 0 average while it is
+	// still climbing -- see AirThreatNow, airthreat.as.
+	const float enemyAirFast = Military::AirThreatNow();
+	const float enemyAir = (enemyAirFast > Military::AirThreatSeen())
+			? enemyAirFast : Military::AirThreatSeen();
 	CCircuitDef@ aa = Builder::AADefFor(unit);
 	if ((aa is null) || !aa.IsAvailable(ai.frame))
 		return null;
 	// NO AIR SEEN, NO AA. Letting the deterrence floor stand before any sighting
 	// was tried and put three SAMs in the base against an enemy with no aircraft.
 	// The floor still applies, but only once air exists to deter.
-	if (enemyAir < 1.f)
+	// Gate on the FAST reading, not the 240s-smoothed average: a raid can develop
+	// and do its damage well inside that window, and gating on the average left
+	// this returning null for nearly the whole of a 19-minute match while airRaw
+	// climbed 150->4924 (2026-08-14).
+	if (enemyAirFast < 1.f)
 		return null;
 	// OUR OWN BASIC COVER FIRST, THE SIDE'S TOP-UP SECOND. The floor is what stops a
 	// base having nothing overhead, so it is never charged against the team budget;

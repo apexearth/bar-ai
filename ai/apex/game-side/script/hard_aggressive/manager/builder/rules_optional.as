@@ -7,6 +7,12 @@ namespace Builder {
 IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 {
 	if (!isComm) {
+		// A damaged structure nearby (e.g. an HLT under fire) outranks the same
+		// stand-down RepairNear does for a wounded ally -- see RepairStructureNearby's
+		// own comment for why nothing else in the pipeline ever claims it.
+		IUnitTask@ structRepair = RepairStructureNearby(unit);
+		if (structRepair !is null)
+			return structRepair;
 		// con-heal (RepairNear) stays reflexive and ungated -- it answers
 		// something happening now (a nearby wounded unit) rather than
 		// claiming a slice of surplus, per docs/12-build-phases.md's own
@@ -196,11 +202,19 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 		return null;
 	if (Factory::SteadyIncome() < ai.GetTunable("apex_t2_income", 30.f))
 		return null;
-	// Someone is already on it -- ours or the engine's. Either way, not twice.
-	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) > 0)
-		return null;
 	CCircuitDef@ adv = Factory::AdvCounterpart();
 	if ((adv is null) || !adv.IsAvailable(ai.frame) || (adv.count > 0))
+		return null;
+	// Someone is already walking to start THIS plant -- ours or the engine's,
+	// either way not twice. GetTaskCountOf(FACTORY) used to gate this, but it
+	// counts every factory task team-wide, so an ordinary second T1 lab being
+	// built at the same time silently vetoed this whole rule and let
+	// DefaultMakeTask place the advanced plant instead -- with no rear bias,
+	// wherever FindBuildSite landed it (see the comment at the call site).
+	// GetDefBuildProgress is per-def and turns >=0 as soon as a nanoframe
+	// exists, closing the same race adv.count above closes, without firing on
+	// an unrelated factory.
+	if (ai.GetDefBuildProgress(adv) >= 0.f)
 		return null;
 
 	const AIFloat3 rear = RearOfBase(ai.GetTunable("apex_t2_rear_dist", T2_REAR_DIST));

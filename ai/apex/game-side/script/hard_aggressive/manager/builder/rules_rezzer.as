@@ -20,12 +20,13 @@ IUnitTask@ RezzerFlee(CCircuitUnit@ unit)
 	if (IsRezzer(unit)) {
 		ConDugIn(unit);   // side effect: refreshes gConHits/gConHp for this bot
 		if (gConHits[ConSlot(unit)] > 0) {
-			IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+			IUnitTask@ flee = Retreat(unit);
 			if (flee !is null) {
 				// TROUBLE_WINDOW holds this true for up to 90s per hit, so without a
 				// log throttle this re-logs on every AiMakeTask re-entry while fleeing.
-				// EnqueueRetreat is called every time regardless, on the assumption
-				// that re-enqueuing an existing retreat is a cheap no-op.
+				// Retreat() (sitesafety.as) reuses the held RETREAT task instead of
+				// re-enqueuing fresh each time -- EnqueueRetreat itself always
+				// allocates a new CRetreatTask with no dedup.
 				if (ai.frame >= gNextRezFleeLog) {
 					gNextRezFleeLog = ai.frame + 20 * SECOND;
 					AiLog(Factory::T() + "apex: rez bot taking fire, retreating with whatever it banked");
@@ -42,8 +43,12 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 	// Rez bots work the DEFENCE LINE, not wherever they happen to stand. The
 	// corpses pile up where the fighting is, and the search below only reaches
 	// 2200 elmos from the bot itself, so a bot idling at home never finds them.
-	// Search from the front instead while we are behind.
-	if (IsRezzer(unit) && Military::LosingGround() && (ai.frame >= gNextRezWreck)) {
+	// Search from the front whenever we are behind, OR whenever nothing local
+	// is worth eating -- a LosingGround()-only gate left rez bots entirely
+	// home-bound while winning, which is exactly when the front piles up the
+	// most corpses.
+	if (IsRezzer(unit) && (ai.frame >= gNextRezWreck)
+			&& (Military::LosingGround() || (ai.GetBestWreckPos(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN).x < 0.f))) {
 		AIFloat3 front;
 		if (Military::FrontLinePos(front)) {
 			gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
@@ -89,13 +94,22 @@ IUnitTask@ RezzerEatCorpse(CCircuitUnit@ unit)
 // keeping an existing unit alive is worth more than a handful of scrap metal,
 // and this returns null immediately whenever nothing needs it, so it never
 // competes with real work above it in the pipeline.
-int gNextRezRepair = 0;
+//
+// Gated PER BOT (via ConSlot), not by one shared clock. A single global gate
+// here (as gNextRezWreck/gNextWreck use, correctly, for their own expensive
+// scans) caps the whole team to one new repair assignment per REZ_WRECK_PERIOD
+// regardless of how many rez bots are idle -- during a fight where several
+// units take chip damage at once, that serializes response across the whole
+// squad instead of each idle bot claiming its own nearest target immediately.
 
 IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 {
-	if (!IsRezzer(unit) || (ai.frame < gNextRezRepair))
+	if (!IsRezzer(unit))
 		return null;
-	gNextRezRepair = ai.frame + REZ_WRECK_PERIOD;
+	const int slot = ConSlot(unit);
+	if (ai.frame < gConNextRepair[slot])
+		return null;
+	gConNextRepair[slot] = ai.frame + REZ_WRECK_PERIOD;
 
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	array<CCircuitUnit@>@ hurt = ai.GetOwnDamagedNear(here, WRECK_SEARCH);

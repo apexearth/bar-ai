@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..ff95410 100644
+index aeea933..9a2e7c2 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,6 +18,8 @@
@@ -81,7 +81,7 @@ index aeea933..ff95410 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1488,6 +1513,748 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+@@ -1488,6 +1513,769 @@ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  	delete unit;
  }
  
@@ -392,6 +392,27 @@ index aeea933..ff95410 100644
 +			continue;
 +		}
 +		if (u->GetUnit()->IsBeingBuilt()) {
++			continue;
++		}
++		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
++			continue;
++		}
++		out.push_back(u);
++	}
++	return out;
++}
++
++std::vector<CCircuitUnit*> CCircuitAI::GetOwnDamagedNear(const springai::AIFloat3& pos, float radius)
++{
++	std::vector<CCircuitUnit*> out;
++	const float sqRadius = radius * radius;
++	const int frame = GetLastFrame();
++	for (auto& kv : teamUnits) {
++		CCircuitUnit* u = kv.second;
++		if ((u == nullptr) || (u->GetCircuitDef() == nullptr) || !u->GetCircuitDef()->IsMobile()) {
++			continue;
++		}
++		if (u->GetUnit()->IsBeingBuilt() || (u->GetHealthPercent() >= 1.f)) {
 +			continue;
 +		}
 +		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
@@ -831,10 +852,10 @@ index aeea933..ff95410 100644
  {
  	// NOTE: See notes in MobileSlave or other economy->SendUnits places
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..5724f4f 100644
+index b4f4f40..31c719e 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -149,6 +149,147 @@ private:
+@@ -149,6 +149,153 @@ private:
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
  	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
@@ -970,6 +991,12 @@ index b4f4f40..5724f4f 100644
 +	// cannot answer "what of ours is standing in the way" -- it only answers it
 +	// for the factions someone remembered to list.
 +	std::vector<CCircuitUnit*> GetOwnStructsNear(const springai::AIFloat3& pos, float radius);
++	// Our own damaged MOBILE units near pos, whatever their def. BuilderManager
++	// never registers a damagedHandler for ordinary combat unit defs (only for
++	// builders/rez-bots themselves and for static structures), so nothing ever
++	// creates a REPAIR task for a hurt tank standing in the field -- the script
++	// has to find one itself.
++	std::vector<CCircuitUnit*> GetOwnDamagedNear(const springai::AIFloat3& pos, float radius);
 +	// Engine path length for this unit's move type, or -1 when there is no path.
 +	// CircuitAI's own areas come from CTerrainData and are terrain-only, so a
 +	// pocket walled in by BUILDINGS is invisible to CanMoveToPos. The engine's
@@ -982,7 +1009,7 @@ index b4f4f40..5724f4f 100644
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
-@@ -161,6 +302,8 @@ public:
+@@ -161,6 +308,8 @@ public:
  
  	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
  private:
@@ -991,7 +1018,7 @@ index b4f4f40..5724f4f 100644
  	std::pair<CEnemyInfo*, bool> RegisterEnemyInfo(ICoreUnit::Id unitId, bool isInLOS = false);
  	CEnemyInfo* RegisterEnemyInfo(springai::Unit* e);
  	void UnregisterEnemyInfo(CEnemyInfo* enemy);
-@@ -205,6 +348,41 @@ private:
+@@ -205,6 +354,41 @@ private:
  	bool isAllyBaseAvoid;
  // <<< AIOptions.lua ---- END
  
@@ -1057,7 +1084,7 @@ index 4222197..0c44d3f 100644
  	void ActivateTask(IBuilderTask* task);
  
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e90..66eba39 100644
+index 2b84e90..a81239f 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
 @@ -9,6 +9,7 @@
@@ -1130,7 +1157,7 @@ index 2b84e90..66eba39 100644
  	if (mexSpots[spotId].isOpen == value) {
  		return;
  	}
-@@ -934,6 +965,90 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
+@@ -934,6 +965,174 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
  	value ? --mexCount : ++mexCount;
  }
  
@@ -1218,10 +1245,94 @@ index 2b84e90..66eba39 100644
 +			IBuilderTask::Priority::HIGH, mexDef, pos, spotId));
 +}
 +
++// apex: geo spot queries a script can call safely, mirroring the mex trio
++// above. Deliberately no IsZoneAlly exclusion -- a geo vent at home is a
++// normal HomeEnergy candidate, not a frontier-only reroute.
++int CEconomyManager::FindOpenGeoSpot(CCircuitUnit* unit, const AIFloat3& pos)
++{
++	if (unit == nullptr) {
++		return -1;
++	}
++	const int frame = circuit->GetLastFrame();
++	std::vector<CCircuitDef*> geoCands;
++	for (CCircuitDef* gDef : geoDefs.GetBuildDefs(unit->GetCircuitDef())) {
++		if (gDef->IsAvailable(frame)) {
++			geoCands.push_back(gDef);
++		}
++	}
++	if (geoCands.empty()) {
++		return -1;
++	}
++
++	// CanReachAtSafe reads whichever threat layer was selected last, same as
++	// FindOpenMexSpot.
++	circuit->GetThreatMap()->SetThreatType(unit);
++
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	CMap* map = circuit->GetMap();
++	const CEnergyData::Geos& geos = circuit->GetEnergyManager()->GetSpots();
++	float minDistSq = std::numeric_limits<float>::max();
++	int index = -1;
++	for (unsigned i = 0; i < geoSpots.size(); ++i) {
++		if (!IsOpenGeoSpot(i)) {
++			continue;
++		}
++		const AIFloat3& p = geos[i];
++		const float distSq = p.SqDistance2D(pos);
++		if (minDistSq <= distSq) {
++			continue;
++		}
++		if (!terrainMgr->CanReachAtSafe(unit, p, unit->GetCircuitDef()->GetBuildDistance())) {
++			continue;
++		}
++		for (CCircuitDef* gDef : geoCands) {
++			if (terrainMgr->CanBeBuiltAt(gDef, p) && map->IsPossibleToBuildAt(gDef->GetDef(), p, UNIT_NO_FACING)) {
++				minDistSq = distSq;
++				index = i;
++				break;
++			}
++		}
++	}
++	return index;
++}
++
++AIFloat3 CEconomyManager::GetGeoSpotPos(int spotId) const
++{
++	if (!IsValidGeoSpot(spotId)) {
++		return -RgtVector;
++	}
++	return circuit->GetEnergyManager()->GetSpots()[spotId];
++}
++
++IBuilderTask* CEconomyManager::EnqueueGeoAt(CCircuitUnit* unit, int spotId)
++{
++	if ((unit == nullptr) || !IsValidGeoSpot(spotId) || !IsOpenGeoSpot(spotId)) {
++		return nullptr;
++	}
++	const AIFloat3& pos = circuit->GetEnergyManager()->GetSpots()[spotId];
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	CMap* map = circuit->GetMap();
++	const int frame = circuit->GetLastFrame();
++	CCircuitDef* geoDef = nullptr;
++	for (CCircuitDef* gDef : geoDefs.GetBuildDefs(unit->GetCircuitDef())) {
++		if (gDef->IsAvailable(frame) && terrainMgr->CanBeBuiltAt(gDef, pos)
++			&& map->IsPossibleToBuildAt(gDef->GetDef(), pos, UNIT_NO_FACING))
++		{
++			geoDef = gDef;
++			break;
++		}
++	}
++	if (geoDef == nullptr) {
++		return nullptr;
++	}
++	return circuit->GetBuilderManager()->Enqueue(TaskB::Spot(IBuilderTask::BuildType::GEO,
++			IBuilderTask::Priority::NORMAL, geoDef, pos, spotId));
++}
++
  bool CEconomyManager::IsIgnorePull(const IBuilderTask* task) const
  {
  	if (mexMax != std::numeric_limits<decltype(mexMax)>::max()) {
-@@ -1026,6 +1141,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1026,6 +1225,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  		return nullptr;
  	}
  
@@ -1235,7 +1346,7 @@ index 2b84e90..66eba39 100644
  	if (IsEnergyStalling()) {
  		return UpdateEnergyTasks(position, unit);
  	}
-@@ -1034,7 +1156,51 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1034,7 +1240,51 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  	const int frame = circuit->GetLastFrame();
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  
@@ -1288,7 +1399,7 @@ index 2b84e90..66eba39 100644
  		const std::vector<CCircuitDef*>& mexDefOptions = metalDefs.GetBuildDefs(unit->GetCircuitDef());
  		std::vector<std::pair<CCircuitDef*, float>> mexDefs;
  		float maxRange = 0.f;
-@@ -1052,16 +1218,38 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1052,16 +1302,38 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  			CMetalManager* metalMgr = circuit->GetMetalManager();
  			const CMetalData::Metals& spots = metalMgr->GetSpots();
  			CCircuitDef* mexDef = nullptr;
@@ -1332,7 +1443,7 @@ index 2b84e90..66eba39 100644
  						if (curMex == nullptr) {
  							continue;
  						}
-@@ -1071,19 +1259,91 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1071,19 +1343,91 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  						}
  					}
  					if (curExtract <= 0.f) {
@@ -1425,7 +1536,7 @@ index 2b84e90..66eba39 100644
  			builderMgr->SetCanUpMex(unit->GetCircuitDef(), index != -1);
  			if (index != -1) {
  				const AIFloat3& pos = spots[index].position;
-@@ -1214,7 +1474,34 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
+@@ -1214,7 +1558,34 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
  			}
  		}
  		float reclaimValue = featDef->GetContainedResource(metalRes)/* * feature->GetReclaimLeft()*/;
@@ -1460,7 +1571,7 @@ index 2b84e90..66eba39 100644
  		if (reclaimValue < 1.0f) {
  			continue;
  		}
-@@ -1254,6 +1541,11 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1254,6 +1625,11 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  {
  	ZoneScoped;
  
@@ -1472,7 +1583,7 @@ index 2b84e90..66eba39 100644
  	CBuilderManager* builderMgr = circuit->GetBuilderManager();
  	if (!builderMgr->CanEnqueueTask(32)) {
  		return nullptr;
-@@ -1278,6 +1570,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1278,6 +1654,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  	const int frame = circuit->GetLastFrame();
  	float bestResDist = std::numeric_limits<float>::max();
  
@@ -1502,7 +1613,7 @@ index 2b84e90..66eba39 100644
  	const auto& infos = energyDefs.GetInfos();
  	const float curWind = circuit->GetMap()->GetCurWind();
  	auto checkWind = [curWind, terrainMgr, position, metalIncome, energyIncome, &infos](unsigned i) {
-@@ -1308,12 +1623,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1308,12 +1707,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  				if (engy.cdef->IsWind() && !checkWind(i)) {
  					continue;
  				}
@@ -1517,7 +1628,7 @@ index 2b84e90..66eba39 100644
  					if (bestResDist > resDist) {
  						bestResDist = resDist;
  						bestDef = engy.cdef;
-@@ -1571,6 +1886,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1571,6 +1970,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		}
  	}
  
@@ -1537,7 +1648,7 @@ index 2b84e90..66eba39 100644
  	factoryTask->SetPosition(buildPos);
  
  	if (factoryTask->IsPlop()
-@@ -1589,7 +1917,16 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1589,7 +2001,16 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		factoryTask = nullptr;
  		return task;
  	} else {
@@ -1556,10 +1667,10 @@ index 2b84e90..66eba39 100644
  	}
  
 diff --git a/src/circuit/module/EconomyManager.h b/src/circuit/module/EconomyManager.h
-index 2925da7..6f59eec 100644
+index 2925da7..3e286d4 100644
 --- a/src/circuit/module/EconomyManager.h
 +++ b/src/circuit/module/EconomyManager.h
-@@ -107,15 +107,26 @@ public:
+@@ -107,15 +107,35 @@ public:
  	bool IsExcessed() const { return metalProduced > metalUsed; }
  	int GetBuildDelay() const { return buildDelay; }
  
@@ -1589,10 +1700,19 @@ index 2925da7..6f59eec 100644
 +	int FindOpenMexSpot(CCircuitUnit* unit, const springai::AIFloat3& pos);
 +	springai::AIFloat3 GetMexSpotPos(int spotId) const;
 +	IBuilderTask* EnqueueMexAt(CCircuitUnit* unit, int spotId);
++	// apex: same pattern as the mex trio above, for geo vents -- HomeEnergy had
++	// no way to see a geo spot at all, so geothermal (very high energy/metal,
++	// GetEnergyMake already prices it correctly) never entered its ranking.
++	// Unlike FindOpenMexSpot this does NOT exclude ally-zone ground: a geo vent
++	// sitting inside our own base is exactly the case we want, not a frontier
++	// reroute.
++	int FindOpenGeoSpot(CCircuitUnit* unit, const springai::AIFloat3& pos);
++	springai::AIFloat3 GetGeoSpotPos(int spotId) const;
++	IBuilderTask* EnqueueGeoAt(CCircuitUnit* unit, int spotId);
  	bool IsIgnorePull(const IBuilderTask* task) const;
  	bool IsIgnoreStallingPull(const IBuilderTask* task) const;
  	void CorrectResourcePull(float metal, float energy);
-@@ -202,6 +213,7 @@ private:
+@@ -202,6 +222,7 @@ private:
  		float speed;
  	};
  	CAvailList<SMetalExt> metalDefs;
@@ -2344,10 +2464,42 @@ index c167603..be41aa3 100644
  		int spotNum;  // last used spot number in cluster
  		int scouted;  // times this point was scouted
 diff --git a/src/circuit/module/TaskModule.cpp b/src/circuit/module/TaskModule.cpp
-index e6c27f5..e970eee 100644
+index e6c27f5..d05d8b1 100644
 --- a/src/circuit/module/TaskModule.cpp
 +++ b/src/circuit/module/TaskModule.cpp
-@@ -77,9 +77,22 @@ void ITaskModule::AssignTask(CCircuitUnit* unit)
+@@ -62,24 +62,54 @@ void ITaskModule::Release()
+ 
+ void ITaskModule::AssignTask(CCircuitUnit* unit, IUnitTask* task)
+ {
++	// Same guard as DequeueTask below: task->Start(unit) can run script
++	// (Start() dispatches through the task hierarchy, and several task types
++	// call into script-visible state from there), and RemoveAssignee/AssignTo
++	// give script two more chances to drop a reference before Start() runs.
++	// Hold our own across the whole sequence.
++	task->AddRef();
+ 	unit->GetTask()->RemoveAssignee(unit);
+ 	task->AssignTo(unit);
+ 	task->Start(unit);
++	task->Release();
+ }
+ 
+ void ITaskModule::AssignTask(CCircuitUnit* unit)
+ {
++	// MakeTask(unit) runs the script's AiMakeTask top to bottom -- confirmed
++	// live as a second instance of the DequeueTask bug (same
++	// IRefCounter::Release() -> delete this signature, this call chain
++	// instead): whatever script does while computing an answer can drop the
++	// last reference to some OTHER tracked task, and if the returned task
++	// itself is affected the same way, AssignTo(unit) below dereferences it
++	// freed. AddRef the moment we have it, for the same reason DequeueTask
++	// does.
+ 	IUnitTask* task = MakeTask(unit);
+ 	if (task != nullptr) {
++		task->AddRef();
+ 		task->AssignTo(unit);
++		task->Release();
+ 	}
+ }
  
  void ITaskModule::DequeueTask(IUnitTask* task, bool done)
  {
@@ -2495,7 +2647,7 @@ index 3838196..9c78355 100644
  
  CBuilderScript::~CBuilderScript()
 diff --git a/src/circuit/script/EconomyScript.cpp b/src/circuit/script/EconomyScript.cpp
-index 193efa9..343ae19 100644
+index 193efa9..519c7f6 100644
 --- a/src/circuit/script/EconomyScript.cpp
 +++ b/src/circuit/script/EconomyScript.cpp
 @@ -8,6 +8,8 @@
@@ -2507,7 +2659,7 @@ index 193efa9..343ae19 100644
  #include "util/Utils.h"
  #include "angelscript/include/angelscript.h"
  
-@@ -15,6 +17,21 @@ namespace circuit {
+@@ -15,6 +17,36 @@ namespace circuit {
  
  using namespace springai;
  
@@ -2526,10 +2678,25 @@ index 193efa9..343ae19 100644
 +	return mgr->EnqueueMexAt(unit, spotId);
 +}
 +
++static int CEconomyManager_FindOpenGeoSpot(CEconomyManager* mgr, CCircuitUnit* unit, const AIFloat3& pos)
++{
++	return mgr->FindOpenGeoSpot(unit, pos);
++}
++
++static AIFloat3 CEconomyManager_GetGeoSpotPos(CEconomyManager* mgr, int spotId)
++{
++	return mgr->GetGeoSpotPos(spotId);
++}
++
++static IUnitTask* CEconomyManager_EnqueueGeoAt(CEconomyManager* mgr, CCircuitUnit* unit, int spotId)
++{
++	return mgr->EnqueueGeoAt(unit, spotId);
++}
++
  CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
  		: IModuleScript(scr, mgr)
  {
-@@ -40,6 +57,12 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
+@@ -40,6 +72,17 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
  	r = engine->RegisterObjectProperty("CEconomyManager", "float reclEnergyEff", asOFFSET(CEconomyManager, reclEnergyEff)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEconomyManager", "float GetMetalMake(const CCircuitDef@) const", asMETHOD(CEconomyManager, GetMetalMake), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEconomyManager", "float GetEnergyMake(const CCircuitDef@) const", asMETHOD(CEconomyManager, GetEnergyMake), asCALL_THISCALL); ASSERT(r >= 0);
@@ -2539,11 +2706,16 @@ index 193efa9..343ae19 100644
 +	r = engine->RegisterObjectMethod("CEconomyManager", "int FindOpenMexSpot(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CEconomyManager_FindOpenMexSpot), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CEconomyManager", "AIFloat3 GetMexSpotPos(int) const", asFUNCTION(CEconomyManager_GetMexSpotPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CEconomyManager", "IUnitTask@+ EnqueueMexAt(CCircuitUnit@, int)", asFUNCTION(CEconomyManager_EnqueueMexAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	// apex: same trio for geo vents -- see EconomyManager.h's comment on
++	// FindOpenGeoSpot for why HomeEnergy needed this.
++	r = engine->RegisterObjectMethod("CEconomyManager", "int FindOpenGeoSpot(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CEconomyManager_FindOpenGeoSpot), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CEconomyManager", "AIFloat3 GetGeoSpotPos(int) const", asFUNCTION(CEconomyManager_GetGeoSpotPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CEconomyManager", "IUnitTask@+ EnqueueGeoAt(CCircuitUnit@, int)", asFUNCTION(CEconomyManager_EnqueueGeoAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  }
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..9568f94 100644
+index 2839b72..7d3264a 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -14,6 +14,7 @@
@@ -2661,7 +2833,7 @@ index 2839b72..9568f94 100644
  static int CCircuitAI_GetLeadTeamId(CCircuitAI* circuit)
  {
  	return circuit->GetAllyTeam()->GetLeaderId();
-@@ -195,6 +289,239 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +289,250 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
@@ -2858,6 +3030,17 @@ index 2839b72..9568f94 100644
 +	return arr;
 +}
 +
++static CScriptArray* CCircuitAI_GetOwnDamagedNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
++{
++	const std::vector<CCircuitUnit*> found = circuit->GetOwnDamagedNear(pos, radius);
++	CScriptArray* arr = CScriptArray::Create(gUnitArrayType, found.size());
++	asUINT i = 0;
++	for (CCircuitUnit* unit : found) {
++		arr->SetValue(i++, &unit);
++	}
++	return arr;
++}
++
 +static float CCircuitAI_GetPathLength(CCircuitAI* circuit, CCircuitUnit* unit, const AIFloat3& to)
 +{
 +	return circuit->GetPathLength(unit, to);
@@ -2901,7 +3084,7 @@ index 2839b72..9568f94 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -240,6 +567,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -240,6 +578,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -2920,7 +3103,7 @@ index 2839b72..9568f94 100644
  static CScriptArray* IUnitTask_GetUnits(IUnitTask* task)
  {
  	// Without caching arrayType can be extracted by:
-@@ -478,6 +817,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -478,6 +828,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectProperty("IUnitTask", "CCircuitUnit@ const target", asOFFSET(IBuilderTask, target)); ASSERT(r >= 0);
  	gUnitArrayType = engine->GetTypeInfoByDecl("array<CCircuitUnit@>");
  	r = engine->RegisterObjectMethod("IUnitTask", "array<CCircuitUnit@>@ GetUnits() const", asFUNCTION(IUnitTask_GetUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -2928,7 +3111,7 @@ index 2839b72..9568f94 100644
  	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
  
-@@ -494,11 +834,53 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -494,11 +845,54 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetLeadTeamId() const", asFUNCTION(CCircuitAI_GetLeadTeamId), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -2975,6 +3158,7 @@ index 2839b72..9568f94 100644
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEngageBoost() const", asMETHOD(CCircuitAI, GetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnDamagedNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnDamagedNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetPathLength(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GetPathLength), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -2982,7 +3166,7 @@ index 2839b72..9568f94 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -556,6 +938,12 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +950,17 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -2992,10 +3176,15 @@ index 2839b72..9568f94 100644
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBuildDistance() const", asMETHOD(CCircuitDef, GetBuildDistance), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMex() const", asMETHOD(CCircuitDef, IsMex), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsBuilder() const", asMETHOD(CCircuitDef, IsBuilder), asCALL_THISCALL); ASSERT(r >= 0);
++	// Native buildOptions lookup (an unordered_set::find), already computed for
++	// CircuitAI's own task assignment -- exposing it lets script guard a task
++	// against the "no constructor of ours can build this" silent no-op instead
++	// of approximating capability from cost or name (see IsAdvConDef).
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool CanBuild(CCircuitDef@) const", asMETHODPR(CCircuitDef, CanBuild, (const CCircuitDef*) const, bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +952,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +969,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -3019,7 +3208,7 @@ index 2839b72..9568f94 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +978,31 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +995,31 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -3051,7 +3240,7 @@ index 2839b72..9568f94 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +1015,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +1032,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -3061,7 +3250,7 @@ index 2839b72..9568f94 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +1136,14 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +1153,14 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -3162,10 +3351,10 @@ index 4863ac9..0e42800 100644
  	void ReadConfig();
  	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
 diff --git a/src/circuit/task/IdleTask.cpp b/src/circuit/task/IdleTask.cpp
-index f210b3a..67c9bfa 100644
+index f210b3a..dae0777 100644
 --- a/src/circuit/task/IdleTask.cpp
 +++ b/src/circuit/task/IdleTask.cpp
-@@ -69,7 +69,15 @@ void CIdleTask::Update()
+@@ -69,7 +69,23 @@ void CIdleTask::Update()
  		it = updateUnits.erase(it);
  
  		manager->AssignTask(ass);  // should RemoveAssignee() on AssignTo()
@@ -3173,11 +3362,19 @@ index f210b3a..67c9bfa 100644
 +		// AssignTask can legitimately leave the unit taskless -- Start()'s own
 +		// comment above documents the case (a pending PathRequest making
 +		// AssignTask() a no-op) -- and this dereferenced it unconditionally.
-+		// Traced live via addr2line against a debug build: two access
-+		// violations here in one session, both with this exact frame.
++		// Traced live via addr2line against a debug build: three access
++		// violations here across the session, all with this exact frame.
++		// unit->task is a bare native pointer (CCircuitUnit::SetTask does no
++		// AddRef -- native ownership is tracked separately, via buildTasks/
++		// updateTasks membership and explicit DequeueTask/AbortTask), so
++		// nothing protects it from the same script-drops-last-reference race
++		// as DequeueTask/AssignTask once Start() itself runs script. Hold our
++		// own reference across the call, same fix, same reason.
 +		IUnitTask* task = ass->GetTask();
 +		if (task != nullptr) {
++			task->AddRef();
 +			task->Start(ass);
++			task->Release();
 +		}
  
  		if (++i >= updateSlice) {
@@ -5104,10 +5301,18 @@ index bfc3caf..e2c8aa8 100644
  		if (checkPower <= threatMap->GetThreatAt(ePos)) {
  			continue;
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
-index 0400f8d..01b4d6c 100644
+index 0400f8d..9bbe25b 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp
 +++ b/src/circuit/task/fighter/FighterTask.cpp
-@@ -35,6 +35,29 @@ IFighterTask::IFighterTask(ITaskModule* mgr, FightType type, float powerMod, int
+@@ -6,6 +6,7 @@
+  */
+ 
+ #include "task/fighter/FighterTask.h"
++#include "task/fighter/SquadTask.h"  // OUTRANGED_SAFETY_MARGIN
+ #include "task/RetreatTask.h"
+ #include "map/InfluenceMap.h"
+ #include "map/ThreatMap.h"
+@@ -35,6 +36,29 @@ IFighterTask::IFighterTask(ITaskModule* mgr, FightType type, float powerMod, int
  		, attackFrame(-1)
  		, target(nullptr)
  {
@@ -5137,7 +5342,7 @@ index 0400f8d..01b4d6c 100644
  }
  
  IFighterTask::~IFighterTask()
-@@ -100,6 +123,24 @@ void IFighterTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -100,6 +124,24 @@ void IFighterTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -5162,7 +5367,7 @@ index 0400f8d..01b4d6c 100644
  void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
  	CCircuitAI* circuit = manager->GetCircuit();
-@@ -112,18 +153,29 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -112,18 +154,29 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		return;
  	}
  
@@ -5194,7 +5399,7 @@ index 0400f8d..01b4d6c 100644
  			circuit->GetBuilderManager()->Enqueue(TaskB::Repair(IBuilderTask::Priority::NOW, unit));
  		}
  		if (healthPerc < cdef->GetSelfDHP()) {
-@@ -203,7 +255,22 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
+@@ -203,7 +256,31 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
  	CCircuitDef* edef = GetTarget()->GetCircuitDef();
  	const bool isStatic = (edef != nullptr) && !edef->IsMobile();
  
@@ -5211,7 +5416,16 @@ index 0400f8d..01b4d6c 100644
 +	const float rangeMod = circuit->GetTunable("apex_range_mod", STANDOFF_RANGE_MOD);
 +	const bool seesTarget = (circuit->GetTunable("apex_los_standoff", 1.f) > 0.f)
 +			&& !isStatic && GetTarget()->IsInRadarOrLOS();
-+	float range = cdef->GetMaxRange() * rangeMod;
++	// Same gap ISquadTask::Attack had before the 2026-08-14 outrange-margin fix
++	// (SquadTask.cpp), but wider here: this path had no reference to the
++	// target's own range AT ALL, so a lone/scout unit facing anything within
++	// (or above) its own weapon range -- not just the 90-100% band -- shrunk
++	// straight past its target's reach with nothing to stop it.
++	const bool outranged = (edef != nullptr) && (edef->GetMaxRange() > cdef->GetMaxRange());
++	float range = (outranged ? edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN : cdef->GetMaxRange()) * rangeMod;
++	if (!outranged && (edef != nullptr)) {
++		range = std::max(range, edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN);
++	}
 +	if (!seesTarget) {
 +		range = std::min(range, cdef->GetLosRadius() * rangeMod);
 +	}
@@ -5219,10 +5433,10 @@ index 0400f8d..01b4d6c 100644
  	CTerrainManager::CorrectPosition(newPos);
  	unit->Attack(newPos, GetTarget(), targetTile, GetTarget()->GetUnit()->IsCloaked(), isStatic, frame + FRAMES_PER_SEC * 60);
 diff --git a/src/circuit/task/fighter/FighterTask.h b/src/circuit/task/fighter/FighterTask.h
-index e1d90c4..11942f6 100644
+index e1d90c4..521a9d7 100644
 --- a/src/circuit/task/fighter/FighterTask.h
 +++ b/src/circuit/task/fighter/FighterTask.h
-@@ -13,7 +13,14 @@
+@@ -13,7 +13,26 @@
  
  namespace circuit {
  
@@ -5235,10 +5449,22 @@ index e1d90c4..11942f6 100644
 +// that the enemy's own return fire (same range, or closing slightly) reached
 +// them; 0.9 leaves the margin he asked for.
 +#define STANDOFF_RANGE_MOD	0.90f
++
++// A row's standoff/safe-angle caution scales with how fragile its OWN def is
++// relative to the average health of whatever else is fighting alongside it
++// in the same squad -- self-normalizing per engagement, not a per-unit-type
++// special case. FRAGILE_STANDOFF_SCALE is the extra standoff fraction added
++// at the fragility cap (e.g. 0.25 = up to +25% standoff for a row at half the
++// squad's average health); FRAGILE_CAP bounds how far one glass-cannon def
++// can push it. Runtime: apex_fragile_standoff_scale, apex_fragile_cap.
++// apexearth: "certain lower hp units have to be way more careful than high
++// hp units."
++#define FRAGILE_STANDOFF_SCALE	0.25f
++#define FRAGILE_CAP	2.0f
  
  class CEnemyInfo;
  
-@@ -37,6 +44,9 @@ public:
+@@ -37,6 +56,9 @@ public:
  	virtual void OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker) override;
  
  	FightType GetFightType() const { return fightType; }
@@ -5588,7 +5814,7 @@ index b4b43c1..8ef4210 100644
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..0da5e1d 100644
+index 0d59b65..eeb8943 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -10,14 +10,17 @@
@@ -5893,17 +6119,43 @@ index 0d59b65..0da5e1d 100644
  	auto it = rangeUnits.begin()->second.begin();
  	std::advance(it, rangeUnits.begin()->second.size() / 2);  // TODO: Optimize
  	AIFloat3 dir = (*it)->GetPos(frame) - tPos;
-@@ -418,31 +617,178 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -418,31 +617,230 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
 +	const float rangeMod = manager->GetCircuit()->GetTunable("apex_range_mod", STANDOFF_RANGE_MOD);
 +	const bool losStandoff = manager->GetCircuit()->GetTunable("apex_los_standoff", 1.f) > 0.f;
 +
++	// apexearth: "certain lower hp units have to be way more careful than
++	// high hp units." Baseline is THIS squad's own average health, not a
++	// global constant -- whatever mix of units is actually fighting together
++	// sets its own reference point, so a Hound reads as fragile next to
++	// Mammoths without a per-unit-type special case, and the same code path
++	// covers any low-HP def on any faction.
++	float squadHealthSum = 0.f;
++	int squadUnitCount = 0;
++	for (const auto& kv : rangeUnits) {
++		CCircuitDef* def = (*kv.second.begin())->GetCircuitDef();
++		if (def != nullptr) {
++			squadHealthSum += def->GetHealth() * kv.second.size();
++			squadUnitCount += (int)kv.second.size();
++		}
++	}
++	const float avgSquadHealth = (squadUnitCount > 0) ? (squadHealthSum / squadUnitCount) : 1.f;
++	const float fragileCap = manager->GetCircuit()->GetTunable("apex_fragile_cap", FRAGILE_CAP);
++	const float fragileScale = manager->GetCircuit()->GetTunable("apex_fragile_standoff_scale", FRAGILE_STANDOFF_SCALE);
++
  	int row = 0;
  	for (const auto& kv : rangeUnits) {
  		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
 -		const float range = kv.first * RANGE_MOD;
++		// >1 only when this row is below the squad's own average health;
++		// clamped at 1 so an above-average (tankier) row is never given LESS
++		// caution than the flat baseline -- this only ever adds standoff, it
++		// never removes it.
++		const float fragility = (rowDef != nullptr)
++				? std::min(std::max(avgSquadHealth / std::max(rowDef->GetHealth(), 1.f), 1.f), fragileCap)
++				: 1.f;
 +		// Each row stands at ITS OWN weapon range. A fraction of 0.8 walked every row
 +		// 20% inside its reach, which throws away the whole point of keeping the
 +		// long-ranged units in an outer row -- a Banisher at 800 was standing at
@@ -5999,7 +6251,29 @@ index 0d59b65..0da5e1d 100644
 +		const bool outranged = !isArty && !powerDominant && !glassCannon
 +				&& (edef != nullptr) && (edef->GetMaxRange() > kv.first);
 +		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
-+		const float range = standoff * rangeMod;
++		// A fragile row (below the squad's own average health) stands further
++		// out on top of the normal 90% margin -- e.g. fragility==2 (half the
++		// squad's average HP) at the default scale adds 25% more standoff.
++		float range = standoff * rangeMod * (1.f + (fragility - 1.f) * fragileScale);
++		// apexearth, watching, same night as the LOS-static fix: "I see rocket
++		// bots walk into turrets and die too... hounds still make this
++		// mistake" -- reported AFTER that fix was live, so this is a second,
++		// distinct cause. When `!outranged` (our row's raw range >= the
++		// target's), standoff is OUR OWN range with no reference to theirs, and
++		// rangeMod then shrinks it by 10% unconditionally. A target whose range
++		// sits within that 10% band -- corhlt 620 vs Hound's 650, 650*0.9=585 --
++		// reads as "outranged=false" (we do out-range it) yet the shrunk
++		// standoff (585) lands INSIDE its 620 reach. Floor at the target's own
++		// range only in this genuinely-outranging branch; the intentional dives
++		// (isArty/powerDominant/glassCannon, which route standoff through
++		// kv.first for the opposite reason -- closing on purpose) are
++		// unaffected because none of those leave `weOutrange` true without also
++		// being a real range edge.
++		const bool weOutrange = !outranged && (edef != nullptr) && (edef->GetMaxRange() <= kv.first)
++				&& !isArty && !powerDominant && !glassCannon;
++		if (weOutrange) {
++			range = std::max(range, edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN);
++		}
  		// NOTE: 1st unit in 1st row will scout, ignoring GetTarget()->IsInRadarOrLOS()
  		//       as unit may wobble back and forth without firing if turret turn is slow.
 +		// Floored at `range`. apexearth, watching Hounds (650 weapon range,
@@ -6070,7 +6344,11 @@ index 0d59b65..0da5e1d 100644
 +		CThreatMap* angleThreatMap = manager->GetCircuit()->GetThreatMap();
 +		const float threat1 = angleThreatMap->GetThreatAt(testUnit, newPos1);
 +		const float threat2 = angleThreatMap->GetThreatAt(testUnit, newPos2);
-+		const float threatSpread = std::max(threat1, threat2) * 0.1f;
++		// A fragile row needs a smaller threat gap to prefer the safer side --
++		// same 10% baseline, tightened by the row's own fragility so a Hound
++		// picks the safer angle more decisively than a Mammoth on the same pair
++		// of candidate spots.
++		const float threatSpread = std::max(threat1, threat2) * (0.1f / fragility);
 +		const bool flipForSafety = (std::fabs(threat1 - threat2) > threatSpread) && (threat2 < threat1);
 +		const bool flipForDistance = (std::fabs(threat1 - threat2) <= threatSpread)
 +				&& (testPos.SqDistance2D(newPos1) > testPos.SqDistance2D(newPos2));
@@ -6078,7 +6356,7 @@ index 0d59b65..0da5e1d 100644
  			delta = -delta;
  			beta = -beta;
  		}
-@@ -458,10 +804,83 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -458,10 +856,83 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				|| (unit->GetTarget() != GetTarget())
  				|| (unit->GetTargetTile() != targetTile))
  			{
@@ -6812,7 +7090,7 @@ index cd0b54a..15dcd39 100644
  	float costE;
  	float upkeepM;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index 2f597be..a9c61a9 100644
+index 2f597be..1e4b61b 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -290,6 +290,13 @@ void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout)
@@ -6852,7 +7130,7 @@ index 2f597be..a9c61a9 100644
  }
  
  void CCircuitUnit::CmdCloak(bool state)
-@@ -508,23 +529,42 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -508,23 +529,50 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  
  void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
  {
@@ -6875,8 +7153,16 @@ index 2f597be..a9c61a9 100644
 +	// a cloaked target must be attacked as ground, a contact held on radar only
 +	// is dropped by the gadget within 15 frames and the fight order IS the
 +	// walk-in that gains LOS, and melee delivers its damage by arriving.
++	// A static target's position never changes, so it needs no fresh LOS to
++	// stay accurate the way a mobile radar-only contact does -- the "walk to
++	// its actual position to confirm it" fallback below exists for ghosts,
++	// not towers. A weapon range that exceeds sight radius (e.g. Hound: 650
++	// range, ~400 sight -- see the squad-path fix in SquadTask.cpp) reads
++	// IsInLOS()==false while correctly holding standoff, so without this the
++	// fallback sent the unit walking to the tower's own ground position,
++	// straight past the standoff ring it had just reached.
 +	const bool prefer = (manager->GetCircuit()->GetTunable("apex_prefer_target", 1.f) > 0.f)
-+			&& !isGround && !circuitDef->IsAttrMelee() && enemy->IsInLOS();
++			&& !isGround && !circuitDef->IsAttrMelee() && (isStatic || enemy->IsInLOS());
  	TRY_UNIT(manager->GetCircuit(), this,
 -		if (circuitDef->IsAttrMelee()) {
 -			if (IsJumpReady()) {

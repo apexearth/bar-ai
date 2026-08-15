@@ -80,12 +80,35 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Crew::Update();
 	Assist::Update();
 	Builder::CommIdleAttribute();
+	Builder::SampleTaskHist();
 	Builder::PromoteAssistBots();
 	Builder::UpdateEconomicCaps();
 	Builder::AdvConDiag();
 	Builder::ExpandDiag();
 	Builder::CancelDoomedRepairs();
 	Builder::UpdateSiege();
+}
+
+// CInitScript::UnitDestroyed (InitScript.cpp:1224) looks this exact signature
+// up and calls it for every one of OUR units destroyed, across all managers --
+// it was simply never implemented, which is the "AiUnitDestroyed ... not
+// found!" warning at every match start. Task history is builder-crew only;
+// see Builder::SampleTaskHist/TakeHistFor in manager/builder/events.as.
+void AiUnitDestroyed(CCircuitUnit@ unit)
+{
+	if (unit is null)
+		return;
+	const CCircuitDef@ cdef = unit.circuitDef;
+	const AIFloat3 at = unit.GetPos(ai.frame);
+	IUnitTask@ t = unit.task;
+	const int tt = (t is null) ? -1 : t.GetType();
+	const int bt = ((t !is null) && (tt == Task::Type::BUILDER)) ? t.GetBuildType() : -1;
+	const string hist = Builder::TakeHistFor(int(unit.id));
+	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")
+		+ " id=" + unit.id + " frame=" + ai.frame
+		+ " at=" + int(at.x) + "," + int(at.z)
+		+ " curTask=t" + tt + "b" + bt
+		+ " hist=[" + hist + "]");
 }
 
 }  // namespace Main

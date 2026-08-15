@@ -127,6 +127,15 @@ public:
 	int FindOpenMexSpot(CCircuitUnit* unit, const springai::AIFloat3& pos);
 	springai::AIFloat3 GetMexSpotPos(int spotId) const;
 	IBuilderTask* EnqueueMexAt(CCircuitUnit* unit, int spotId);
+	// apex: same pattern as the mex trio above, for geo vents -- HomeEnergy had
+	// no way to see a geo spot at all, so geothermal (very high energy/metal,
+	// GetEnergyMake already prices it correctly) never entered its ranking.
+	// Unlike FindOpenMexSpot this does NOT exclude ally-zone ground: a geo vent
+	// sitting inside our own base is exactly the case we want, not a frontier
+	// reroute.
+	int FindOpenGeoSpot(CCircuitUnit* unit, const springai::AIFloat3& pos);
+	springai::AIFloat3 GetGeoSpotPos(int spotId) const;
+	IBuilderTask* EnqueueGeoAt(CCircuitUnit* unit, int spotId);
 	bool IsIgnorePull(const IBuilderTask* task) const;
 	bool IsIgnoreStallingPull(const IBuilderTask* task) const;
 	void CorrectResourcePull(float metal, float energy);

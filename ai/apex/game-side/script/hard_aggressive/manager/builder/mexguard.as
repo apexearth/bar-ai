@@ -52,6 +52,32 @@ CCircuitDef@ MexDef()
 	return SideDef3(armmex, cormex, legmex);
 }
 
+// Geothermal (armgeo/corgeo/leggeo): a T1-con-buildable generator with an
+// energy/metal ratio far above solar's, but it only exists on a fixed vent
+// tile, not anywhere the ordinary layout grid can place it. GetEnergyMake
+// already prices it correctly (CEconomyManager::GetEnergyMake reads the
+// geo-specific "make" value for any def with IsNeedGeo()), so it slots into
+// the same per-metal ranking as every other rung once HomeEnergy can find a
+// vent at all -- see aiEconomyMgr.FindOpenGeoSpot's own comment for why that
+// query did not exist until now.
+string armgeo("armgeo"); string corgeo("corgeo"); string leggeo("leggeo");
+
+CCircuitDef@ GeoDef()
+{
+	return SideDef3(armgeo, corgeo, leggeo);
+}
+
+// apexearth, watching an E-stall he traced to an early geo: "geos are a bit
+// e-expensive to make. Usually you don't want to start one at less than
+// 300 e/s." armgeo costs 13,000 ENERGY to build (against a mere 560 metal),
+// so EnergyValuePerMetal's make/cost ratio alone -- the same ranking that
+// correctly orders wind/solar/adv-solar/fusion -- looks excellent for geo at
+// any income, since it only measures ongoing efficiency, not whether the
+// economy can survive paying the up-front energy cost. Same shape as
+// FUSION_PREFER_INCOME just above: a real number from him, not derived, kept
+// as a tunable rather than hand-waved.
+const float GEO_MIN_INCOME = 300.f;
+
 // Position decides tower tier: an 85-metal Sentry suits a quiet rear extractor,
 // the 190-metal Beamer (also used by statics.as) suits a forward base a raid
 // arrives at in force.
@@ -286,6 +312,8 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// home crew is never out of work.
 	CCircuitDef@ gen = null;
 	bool pickedReactor = false;
+	int geoSpotId = -1;
+	bool pickedGeo = false;
 	// FORCED FUSION overrides the whole ranking below, including its cooldown
 	// -- see the two checks where it is set. apexearth: "make us choose fusion
 	// instead of advanced solar if we have ~50 metal/s or more. We shouldn't
@@ -302,7 +330,15 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		// buildTasksCount < workers * 8, and an unassigned task holds its slot
 		// 300s), which is a COUNT, not a timer -- applied via the Brain's convert
 		// want as income/draw.
-		@gen = BigConvDef(unit);
+		//
+		// armmmkr's own buildoptions (tools/unitdef.py: armaca/armack/armacv and
+		// armcomlvl5+ only, never armck) mean handing it to whichever constructor
+		// reached this rule is a no-op the moment that constructor is a T1 con --
+		// 2026-08-14: every one of 24 armmmkr requests in a match died with
+		// hadNanoframe=0 before conT2 ever left zero. IsAdvConDef is the same
+		// cost-based capability proxy mexguard.as already uses for the advanced
+		// tower tier, for the same reason (no CanBuild binding exists).
+		@gen = IsAdvConDef(unit) ? BigConvDef(unit) : null;
 		if ((gen is null) || !gen.IsAvailable(ai.frame))
 			@gen = SmallConvDef(unit);
 	} else {
@@ -342,7 +378,13 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		// path to the first factory. Once any factory exists, more builders exist
 		// too and the reactor competes on the same per-metal merit as everything
 		// else, unrestricted.
-		CCircuitDef@ fus = Factory::HaveAnyFactory() ? FusionDef(unit) : null;
+		//
+		// armfus is built by armaca/armack/armacv/armcomlvl5+ only (verified with
+		// tools/unitdef.py --builders), never a T1 con -- same capability gap as
+		// the converter branch above, and the same fix: only offer the reactor
+		// rung to a constructor that can actually build it.
+		CCircuitDef@ fus = (Factory::HaveAnyFactory() && IsAdvConDef(unit))
+				? FusionDef(unit) : null;
 		const bool fusionAvailable = (fus !is null) && fus.IsAvailable(ai.frame);
 		// PREFER: rich enough that a reactor is simply the better spend, no
 		// need to wait for the per-metal ranking to notice.
@@ -360,6 +402,23 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 			@gen = fus;
 			pickedReactor = true;
 		} else {
+			// armgeo's own buildoptions (tools/unitdef.py --builders) start at
+			// armcomlvl3 -- a level-1/2 commander cannot build it. Same blanket
+			// comm exclusion IsAdvConDef already uses above for the tower tier,
+			// for the same reason: no level query exists from script, so this
+			// stays conservative rather than offering it and relying on
+			// GuardBuildCapability to silently decline (measured: exactly this
+			// happened once in a 10-minute smoke test).
+			const bool geoAffordable = aiEconomyMgr.energy.income
+					>= ai.GetTunable("apex_geo_min_income", GEO_MIN_INCOME);
+			CCircuitDef@ geo = (geoAffordable && !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+					? GeoDef() : null;
+			float geoValue = -1.f;
+			if ((geo !is null) && geo.IsAvailable(ai.frame)) {
+				geoSpotId = aiEconomyMgr.FindOpenGeoSpot(unit, unit.GetPos(ai.frame));
+				if (geoSpotId >= 0)
+					geoValue = EnergyValuePerMetal(geo);
+			}
 			float best = -1.f;
 			float v = EnergyValuePerMetal(wind);
 			if (v > best) { best = v; @gen = wind; }
@@ -369,12 +428,28 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 			if (v > best) { best = v; @gen = adv; }
 			v = EnergyValuePerMetal(fus);
 			if (v > best) { best = v; @gen = fus; pickedReactor = true; }
+			if (geoValue > best) { best = geoValue; @gen = geo; pickedReactor = false; pickedGeo = true; }
 		}
 	}
 	if (pickedReactor && !forcedFusion && (ai.frame < gNextFusion))
 		return null;   // a reactor won; wait for it rather than dropping a rung
 	if ((gen is null) || !gen.IsAvailable(ai.frame))
 		return null;
+	// Geo has its own placement: a specific vent tile carrying a spotId, not
+	// the layout grid every other rung below goes through. Take the vent
+	// directly rather than falling into Base::Spot/ReactorSpot, which have no
+	// notion of "this must be built exactly here".
+	if (pickedGeo) {
+		IUnitTask@ geoPost = aiEconomyMgr.EnqueueGeoAt(unit, geoSpotId);
+		if (geoPost !is null) {
+			AiLog(Factory::T() + "apex: home energy " + gen.GetName()
+				+ " geo spot=" + geoSpotId
+				+ " unit=" + ((unit !is null) ? int(unit.id) : -1)
+				+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+				+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
+		}
+		return geoPost;
+	}
 	const bool isConv = EnergyWasting();
 	// The grid is a preference, never a veto: Base::Spot failing just means the
 	// lattice has no free cell, and a layout rule that can't find a tidy spot

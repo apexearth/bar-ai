@@ -19,6 +19,7 @@ array<float> gConHp;
 array<int>   gConDigUntil;
 array<int>   gConNextDig;
 array<int>   gConTouch;
+array<int>   gConNextRepair;   // per-bot gate for RezzerRepairNearby -- see there
 int gConFortified = 0;
 int gNextFortifyLog = 0;
 
@@ -43,6 +44,7 @@ int ConSlot(CCircuitUnit@ unit)
 				gConDigUntil.removeAt(i);
 				gConNextDig.removeAt(i);
 				gConTouch.removeAt(i);
+				gConNextRepair.removeAt(i);
 			}
 		}
 	}
@@ -53,6 +55,7 @@ int ConSlot(CCircuitUnit@ unit)
 	gConDigUntil.insertLast(0);
 	gConNextDig.insertLast(0);
 	gConTouch.insertLast(ai.frame);
+	gConNextRepair.insertLast(0);
 	return int(gConId.length()) - 1;
 }
 
@@ -216,6 +219,55 @@ bool RepairNear(CCircuitUnit@ unit)
 			return true;
 	}
 	return false;
+}
+
+// A damaged STATIC structure (e.g. an HLT under fire) already gets a native
+// REPAIR task -- CBuilderManager::InitHandlers' buildingDamagedHandler enqueues
+// one unconditionally on damage, unlike the mobile-unit case RezzerRepairNearby
+// exists for. But nobody ever picks it up: CBuilderManager::MakeTask's own
+// ranking skips any non-NOW-priority task sitting on ANY negative influence at
+// all (a bare boolean, not a graded threat check), so a structure actively being
+// shot at is never OFFERED via DefaultMakeTask -- and separately, RepairTask.cpp's
+// CanAssignTo hard-excludes IsRoleComm() from repair tasks, so the commander
+// could not take it even when reachable. AssignTask (TaskModule.cpp) never
+// re-checks CanAssignTo when the script hands back a task directly, so -- same as
+// RezzerRepairNearby -- enqueuing the SAME target explicitly bypasses both.
+IUnitTask@ RepairStructureNearby(CCircuitUnit@ unit)
+{
+	if (gStructRepair.length() == 0)
+		return null;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (!OnMap(here))
+		return null;
+	CCircuitUnit@ best = null;
+	float bestDist = REPAIR_REACH;
+	for (uint i = 0; i < gStructRepair.length(); ++i) {
+		IUnitTask@ cand = gStructRepair[i];
+		if (cand is null)
+			continue;
+		CCircuitUnit@ target = cand.target;
+		if (target is null)
+			continue;
+		array<CCircuitUnit@>@ busy = cand.GetUnits();
+		if ((busy !is null) && (busy.length() > 0))
+			continue;                       // already claimed
+		const AIFloat3 where = target.GetPos(ai.frame);
+		if (!OnMap(where))
+			continue;
+		const float dist = here.distance2D(where);
+		if (dist >= bestDist)
+			continue;
+		// Same graded threshold every other reflex in this file uses -- repairing
+		// a structure we already committed to is judged the same as answering any
+		// other "something happening now", not a fresh investment into danger.
+		if (ThreatFor(unit, where) > CON_THREAT_VETO)
+			continue;
+		bestDist = dist;
+		@best = target;
+	}
+	if (best is null)
+		return null;
+	return aiBuilderMgr.Enqueue(TaskB::Repair(Task::Priority::HIGH, best));
 }
 
 }  // namespace Builder

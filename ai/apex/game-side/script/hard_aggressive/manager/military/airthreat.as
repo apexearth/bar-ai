@@ -53,6 +53,16 @@ float AirThreatSeen()
 	return gAirAvg;
 }
 
+// Gate presence on this, not AirThreatSeen(): it is this tick's reading, not a
+// 240s EMA of it, so a raid is answered as it develops rather than four minutes
+// later. Still floored at AA_IGNORE so a single overflight is not a "threat".
+float AirThreatNow()
+{
+	if (gAirRaw < AA_IGNORE)
+		return 0.f;
+	return gAirRaw;
+}
+
 // How seriously to take their air, 0..1. One number, used by both levers.
 float AirScale(float share)
 {
@@ -68,9 +78,17 @@ void UpdateAirThreat()
 {
 	ResolveHeavyAA();
 
-	const float airRaw = aiEnemyMgr.GetEnemyCost(RT::AIR);
-	const float soft = aiEnemyMgr.GetEnemyCost(Unit::Role::BUILDER.type)
-	                 + aiEnemyMgr.GetEnemyCost(Unit::Role::SCOUT.type);
+	// Fresh, not GetEnemyCost: GetEnemyCost never forgets a unit once registered
+	// (EnemyManager.h/.cpp), so one early air scout, seen once and since dead,
+	// pinned this reading above AA_IGNORE for the rest of the match -- and once
+	// AirThreatNow() (below) started gating presence off this same tick's value,
+	// that stale sighting opened the AA gate permanently the instant it was seen,
+	// not just eventually via the smoothed average. GetEnemyCostFresh only counts
+	// what was seen within the last freshFrames (60s default), so the reading
+	// actually falls back to 0 once the sighting goes stale.
+	const float airRaw = aiEnemyMgr.GetEnemyCostFresh(RT::AIR);
+	const float soft = aiEnemyMgr.GetEnemyCostFresh(Unit::Role::BUILDER.type)
+	                 + aiEnemyMgr.GetEnemyCostFresh(Unit::Role::SCOUT.type);
 	float softAir = (airRaw < soft) ? airRaw : soft;
 	if (softAir > SOFT_AIR_CAP)
 		softAir = SOFT_AIR_CAP;
@@ -78,6 +96,7 @@ void UpdateAirThreat()
 	if (air < 0.f)
 		air = 0.f;
 	const float ground = EnemyGroundCost() * GROUND_UNSEEN;
+	gAirRaw = air;
 
 	if (gAirAvg < 0.f) {
 		gAirAvg = air;
@@ -90,15 +109,24 @@ void UpdateAirThreat()
 
 	const float total = gAirAvg + gGroundAvg;
 	const float share = (total > 0.f) ? gAirAvg / total : 0.f;
-	const bool worth = (gAirAvg >= AA_IGNORE);
+	// Also worth it off the raw reading: gating purely on the smoothed average
+	// left scale at 0 (and so heavyWant at 0) for however long the 240s EMA
+	// took to catch up to an already-large airRaw.
+	const bool worth = (gAirAvg >= AA_IGNORE) || (gAirRaw >= AA_IGNORE);
 	const float scale = worth ? AirScale(share) : 0.f;
 
 	// The mobile-AA lever does not exist: GetResponseInfo/SResponseInfo are not
 	// registered on CMilitaryManager, so response.json's anti_air weighting is
 	// unreachable from script. Static AA below is the only lever this can pull.
 
+	// Sized off the larger of the smoothed and this-tick reading: gAirAvg alone
+	// left heavyWant at 0 while airRaw climbed 150->4924 over ~10 minutes (see
+	// gAirRaw comment, defenceline.as) because the 240s average had not caught
+	// up. share/scale stay off the smoothed value so a single spike does not
+	// swing the RATIO, only how much of the already-scaled demand counts.
+	const float heavyBasis = (gAirRaw > gAirAvg) ? gAirRaw : gAirAvg;
 	// count includes nanoframes, so a turret still building holds its own slot.
-	int heavyWant = int(gAirAvg * scale / AA_HEAVY_PER);
+	int heavyWant = int(heavyBasis * scale / AA_HEAVY_PER);
 	const int heavyHave = LiveCount(gFlak) + LiveCount(gHeavy);
 	const int spare = (heavyWant > heavyHave) ? (heavyWant - heavyHave) : 0;
 	CapHeavyAA(gFlak, spare);

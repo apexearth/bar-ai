@@ -601,5 +601,13 @@ const float SOFT_AIR_WEIGHT = 0.10f;
 const float SOFT_AIR_CAP = 2500.f;
 float gAirAvg    = -1.f;
 float gGroundAvg = -1.f;
+// Unsmoothed reading from the same tick gAirAvg is fed from. gAirAvg's 240s
+// time constant means a raid that starts and finishes well inside that window
+// reads near-zero on the average for most of its length -- this is what let a
+// bombing run climb airRaw 150 -> 4924 metal over ~10 minutes while the smoothed
+// gate never crossed AA_IGNORE until 2 minutes before the match ended (measured
+// 2026-08-14, matches/20260814-222654-...). Presence should react to what is
+// happening now; only the COUNT built should stay smoothed against a blip.
+float gAirRaw    = -1.f;
 
 }  // namespace Military

@@ -85,6 +85,18 @@ bool RushReady()
 	// is the only gate on committing to T2.
 	if (aiEconomyMgr.metal.income < ai.GetTunable("apex_rush_min_metal", RUSH_MIN_METAL))
 		return false;
+	// RushBuildPower idles the factory's own army line and AiIsSwitchAllowed
+	// waives the normal army-value requirement for this branch, so committing
+	// here means fielding nothing new while the plant goes up. Pooled teams
+	// absorb that on a teammate's front; alone there is no one else on the
+	// board, so the same commit is fielding nothing while the ENTIRE board is
+	// undefended. LosingGround/BaseContested are the signals defenceline.as
+	// already uses for this exact question ("is now safe to stop defending
+	// and commit"); no team-size branch, since the risk is the same shape in
+	// both cases and pooling only changes how often it is covered by someone
+	// else.
+	if (Military::LosingGround() || Military::BaseContested())
+		return false;
 	return (aiEconomyMgr.energy.income > RUSH_ENERGY_TARGET)
 		|| ((ai.frame > RUSH_LATEST) && (aiEconomyMgr.energy.income > RUSH_ENERGY_FLOOR));
 }

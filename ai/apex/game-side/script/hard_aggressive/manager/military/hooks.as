@@ -11,13 +11,17 @@ bool IsFodder(const CCircuitDef@ cdef)
 // which is assault, skirmish and the custom roles bound to assault -- plus riot
 // when no guard task can take the unit. Everything else keeps stock routing.
 //
-// Ground AA is pulled into the massing pool too: stock routes the AA role to
-// FightType::AA, and CAntiAirTask seeds its position with
-// `rand() % terrainWidth/Height` -- unrelated to where our army or their air
-// is -- and merges only same-def units, so it accumulates one single-type blob
-// instead of spreading escorts over the front. Aircraft are excluded: fighters
-// keep FightType::AA because Air:: owns them, and a fighter parked in a ground
-// squad cannot intercept anything.
+// Ground AA does NOT want massing. It was pulled in briefly (2026-08-14) to
+// dodge CAntiAirTask's `rand() % terrainWidth/Height` blob positioning, but
+// every AA-role def here (armjeth/corsent/legaabot, and the static
+// armrl/corrl/legrl and armferret/cormadsam/legflak) is `onlytargetcategory
+// VTOL` -- it cannot hit a ground unit at all. WantsMassing feeds the
+// Defend->ATTACK pool (see below), so that put weapon-less units into an
+// offensive ground push, where they died for nothing: apexearth watching
+// live, 2026-08-14, "we've sent in those AA units to attack and they've been
+// killed... worthless." Losing the blob-position fix costs less than that.
+// Aircraft are excluded the same way: fighters keep FightType::AA because
+// Air:: owns them, and a fighter parked in a ground squad cannot intercept.
 bool WantsMassing(const CCircuitDef@ cdef)
 {
 	if (cdef.IsRoleAny(Unit::Role::SCOUT.mask | Unit::Role::SUPPORT.mask))
@@ -26,7 +30,7 @@ bool WantsMassing(const CCircuitDef@ cdef)
 	if (role == RT::RIOT)
 		return aiMilitaryMgr.GetGuardTaskNum() == 0;
 	if (role == RT::AA)
-		return !cdef.IsAbleToFly();
+		return false;
 	return (role != RT::RAIDER) && (role != RT::ARTY)
 		&& (role != RT::AH) && (role != RT::BOMBER) && (role != RT::MINE)
 		&& (role != RT::SUPER) && (role != RT::SCOUT) && (role != RT::SUPPORT);

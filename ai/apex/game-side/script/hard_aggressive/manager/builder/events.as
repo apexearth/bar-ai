@@ -10,6 +10,87 @@ AIFloat3 gMexUpPos;
 bool gMexUpActive = false;
 int  gCommAssistNext = 0;
 
+// Rolling per-unit task history for AiUnitDestroyed (main.as) to log on
+// death. Sampled from Crew::gId rather than hooked off AiTaskAdded: a task is
+// added with no worker yet (requests.as), so a unit can't be identified at
+// that event -- reading each crew member's own task periodically, the same
+// shape AdvConDiag already uses, is the only place unit and task are both
+// known. Builder crew only: combat units never join Crew::gId and there is no
+// binding to enumerate all of our units. One ";"-joined string per unit
+// rather than array<array<string>>, matching this file's flat-parallel-array
+// style elsewhere (gAdvId/gAdvX/gAdvZ) instead of an unproven nested type.
+array<int>    gHistId;
+array<string> gHistBuf;
+const uint TASK_HIST_MAX = 4;          // ring size per unit
+int gNextHistSample = 0;
+const int HIST_SAMPLE_PERIOD = 10 * SECOND;
+
+int HistSlot(int id)
+{
+	for (uint i = 0; i < gHistId.length(); ++i) {
+		if (gHistId[i] == id)
+			return int(i);
+	}
+	return -1;
+}
+
+void SampleTaskHist()
+{
+	if (ai.frame < gNextHistSample)
+		return;
+	gNextHistSample = ai.frame + HIST_SAMPLE_PERIOD;
+	for (uint i = 0; i < Crew::gId.length(); ++i) {
+		CCircuitUnit@ u = ai.GetTeamUnit(Id(Crew::gId[i]));
+		if (u is null)
+			continue;
+		IUnitTask@ t = u.task;
+		if (t is null)
+			continue;
+		const int tt = t.GetType();
+		const int bt = (tt == Task::Type::BUILDER) ? t.GetBuildType() : -1;
+		const string tag = "t" + tt + "b" + bt + "@";
+		int s = HistSlot(int(u.id));
+		if (s < 0) {
+			gHistId.insertLast(int(u.id));
+			gHistBuf.insertLast("");
+			s = int(gHistId.length()) - 1;
+		}
+		array<string>@ parts = gHistBuf[s].split(";");
+		// split("") on an empty string returns one empty element, not zero --
+		// drop it so a fresh slot doesn't start with a stray blank entry.
+		if ((parts.length() == 1) && (parts[0] == ""))
+			parts.removeLast();
+		// Record a TRANSITION, not a repeat of the same job every sample --
+		// otherwise ten minutes on one mex fills the whole ring with itself.
+		if ((parts.length() > 0) && (parts[parts.length() - 1].findFirst(tag) == 0))
+			continue;
+		parts.insertLast(tag + ai.frame);
+		while (parts.length() > TASK_HIST_MAX)
+			parts.removeAt(0);
+		string joined = "";
+		for (uint j = 0; j < parts.length(); ++j) {
+			if (j > 0)
+				joined += ";";
+			joined += parts[j];
+		}
+		gHistBuf[s] = joined;
+	}
+}
+
+// Read and DROP a unit's history. Called exactly once, from AiUnitDestroyed,
+// so the arrays stay bounded to units currently on the crew rather than
+// growing for every unit built across a whole match.
+string TakeHistFor(int id)
+{
+	const int s = HistSlot(id);
+	if (s < 0)
+		return "";
+	const string hist = gHistBuf[s];
+	gHistId.removeAt(uint(s));
+	gHistBuf.removeAt(uint(s));
+	return hist;
+}
+
 void AiTaskAdded(IUnitTask@ task)
 {
 	if (task.GetType() != Task::Type::BUILDER)
@@ -260,12 +341,10 @@ int gNextRetreatLog = 0;
 
 int gNextThreatLog = 0;
 
-// There is no AiUnitDestroyed hook in this script -- the engine warns
-// "Script: 'void AiUnitDestroyed(CCircuitUnit@)' not found!" at every match
-// start -- so the only way to see a commander's last moments from the
-// infolog is the gap between this heartbeat's last line and the point it
-// stops. Logging health here turns that gap into "health was still N%" or
-// "already retreating", distinguishing a sudden death from a failed retreat.
+// main.as now implements AiUnitDestroyed and logs death directly. This
+// heartbeat still earns its keep: it shows "health was still N%" or "already
+// retreating" in the seconds BEFORE that one-shot line, which the death line
+// alone can't.
 void LogCommanderThreat(CCircuitUnit@ unit)
 {
 	if (ai.frame < gNextThreatLog)

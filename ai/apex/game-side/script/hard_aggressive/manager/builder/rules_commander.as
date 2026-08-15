@@ -86,9 +86,16 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 		// that arrives in force kills a commander from full health before that
 		// ever fires. Uses the INFLUENCE map, not ai.GetBuilderThreatAt: threat
 		// reads clean at the victim's own tile when the killer is at range;
-		// influence is not fooled by that. DEFAULT OFF -- no measured threshold,
-		// switched on per-match for the A/B that sets it.
-		const float fleeInfl = ai.GetTunable("apex_comm_flee_influence", 0.f);
+		// influence is not fooled by that.
+		//
+		// Was DEFAULT OFF pending a measured threshold. Turned on 2026-08-14
+		// after a watched match's own commander sampled threat=0.00 hp=100 at
+		// frame 26745 and was destroyed 930 frames later with no sample in
+		// between -- the exact clean-until-dead failure this exists to catch.
+		// The threshold reuses BaseUnderAttack's own calibration (converter.as),
+		// which already treats ANY nonzero GetEnemyInflAt at a fixed point as
+		// "attacked" -- this asks the same question at the commander's own tile.
+		const float fleeInfl = ai.GetTunable("apex_comm_flee_influence", 0.01f);
 		if (fleeInfl > 0.f) {
 			const float hereInfl = ai.GetEnemyInflAt(unit.GetPos(ai.frame));
 			if (hereInfl > fleeInfl) {
@@ -97,7 +104,7 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 					AiLog(Factory::T() + "apex: commander leaving, enemy influence "
 						+ formatFloat(hereInfl, "", 0, 2) + " > " + formatFloat(fleeInfl, "", 0, 2));
 				}
-				IUnitTask@ bail = aiBuilderMgr.EnqueueRetreat();
+				IUnitTask@ bail = Retreat(unit);
 				if (bail !is null)
 					return bail;
 			}
@@ -111,6 +118,16 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 			IUnitTask@ home = HomeTower(unit, isComm);
 			if (home !is null)
 				return home;
+			// HomeTower only ever builds a MISSING tower -- an existing one taking
+			// damage (the commander standing right next to it) is left alone by
+			// every other rule here too. RepairStructureNearby is the one path that
+			// reaches it: the engine's own repair task for it exists (buildingDamaged
+			// Handler) but native ranking never offers it to a commander at all
+			// (RepairTask.cpp's CanAssignTo excludes IsRoleComm unconditionally) --
+			// see that function's own comment.
+			IUnitTask@ homeRepair = RepairStructureNearby(unit);
+			if (homeRepair !is null)
+				return homeRepair;
 		}
 		const float hp = unit.GetHealthPercent();
 		if (hp < COM_RETREAT_HEALTH) {
@@ -126,7 +143,7 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				AiLog(Factory::T() + "apex: commander retreating at "
 					+ formatFloat(hp * 100.f, "", 0, 0) + "% health, frame=" + ai.frame);
 			}
-			IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+			IUnitTask@ flee = Retreat(unit);
 			if (flee !is null) {
 				++gCommRetreatHp;
 				return flee;
@@ -148,7 +165,7 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 			// commander somewhere to walk to; building one on a full bank is
 			// pure waste.
 			if (aiEconomyMgr.isEnergyFull) {
-				IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+				IUnitTask@ flee = Retreat(unit);
 				if (flee !is null) {
 					gNextCommHide = ai.frame + COMM_HIDE_PERIOD;
 					return flee;
@@ -184,7 +201,7 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				const float heat = ThreatFor(unit, held.GetBuildPos());
 				if (heat > CON_THREAT_VETO) {
 					LogConVeto(unit, "comm-abandon", kind, heat);
-					IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+					IUnitTask@ flee = Retreat(unit);
 					if (flee !is null)
 						return flee;
 				}
@@ -214,7 +231,7 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 			// must keep fleeing, not stop to build.
 			const float hereThreat = ThreatFor(unit, unit.GetPos(ai.frame));
 			if (hereThreat > CON_THREAT_VETO) {
-				IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+				IUnitTask@ flee = Retreat(unit);
 				if (flee !is null)
 					return flee;
 			} else {

@@ -185,14 +185,15 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 	// An advanced converter when the constructor asking can build one. Chosen off
 	// the BUILDER's cost, not off gHaveAdvCon: only advanced constructors carry
 	// armmmkr in their buildoptions, and handing a T1 constructor a task it can't
-	// build is dropped silently. Two ways to earn it: the asking constructor
-	// being advanced is the safe case; otherwise, once the small block is
-	// established and the team holds advanced constructors, ask anyway and let
-	// one pick the task up -- if nothing claims it the small block keeps
-	// converting, so the downside is bounded.
-	const bool advBuilder = ((unit.circuitDef.costM >= ADV_CON_COST)
-			&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-		|| (gHaveAdvCon && (SmallConvCount(unit) >= ADV_CONV_AFTER));
+	// build is NOT a bounded no-op -- Requests::Take/Create binds the ASKING unit
+	// to the task it just created, so the engine attaches an incapable worker and
+	// drops the task again within a few frames (hadNanoframe=0 every time,
+	// measured 2026-08-14: 24/24 armmmkr requests in one match). The previous
+	// "ask anyway once the team holds advanced constructors" bypass is what did
+	// this -- removed; only the constructor that can actually build the def may
+	// request it now.
+	const bool advBuilder = (unit.circuitDef.costM >= ADV_CON_COST)
+		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	CCircuitDef@ small = SmallConvDef(unit);
 	CCircuitDef@ big = BigConvDef(unit);
 	CCircuitDef@ want = (advBuilder && (big !is null) && big.IsAvailable(ai.frame))
@@ -257,7 +258,19 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	// Upgrade rather than keep laying T1: once the advanced converter is
 	// buildable, ObsoleteReclaim is trying to clear the small ones, and this rule
 	// was previously replacing them as fast as they were reclaimed.
-	CCircuitDef@ want = BigConvDef(unit);
+	//
+	// BigConvDef's IsAvailable(frame) is a TEAM-wide tech gate, not a per-unit
+	// buildOptions check -- unlike EcoConverters above, this rule had no
+	// advBuilder guard, so a T1 con or the commander was handed armmmkr (its
+	// buildoptions never carry it) every time it asked for work. Measured
+	// 2026-08-14: 1,100+ "BUG blocked ... -> armmmkr (not in buildOptions)"
+	// lines in one match, GuardBuildCapability dropping every one of them, so
+	// no converter of either tier ever actually got built by these workers and
+	// the resulting permanent EnergyWasting()==1 gated EcoFusion shut for the
+	// whole game (fusCount=0 from 8m to 20.8m despite income to 293/s).
+	const bool advBuilder = (unit.circuitDef.costM >= ADV_CON_COST)
+		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	CCircuitDef@ want = advBuilder ? BigConvDef(unit) : null;
 	if ((want is null) || !want.IsAvailable(ai.frame))
 		@want = SmallConvDef(unit);
 	if ((want is null) || !want.IsAvailable(ai.frame))

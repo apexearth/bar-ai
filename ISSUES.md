@@ -5,6 +5,507 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
+## PATCHED, NOT YET MEASURED: front-line defence share below local/rear share in the opening income bracket -- `Targets::DEF_FRONT`/`DEF_LOCAL` (2026-08-14)
+
+apexearth, live: "we aren't guarding the front of our base well with
+turrets." `targets.as:131-132` had `DEF_LOCAL` (mex guards, dig-ins) equal to
+or above `DEF_FRONT` (the Brain's front line) for the whole opening income
+bracket (8-20 m/s), the section's own comment warning about exactly this.
+Rebalanced so front leads local at every income column -- see `changes/
+2026-08-14.md` for the match evidence (rear 21 standing vs 3 front orders in
+one match). Needs a deploy + watched/measured pass before closing.
+
+**Separate, unresolved sub-question found while diagnosing the above**: the
+Brain's `FrontDefenceWant` (`manager/brain.as:719`) stopped issuing new front
+orders after #3 at 3.5 minutes, in a match where the front curve (`fwd=`,
+`ForwardFraction`) was visibly shrinking (losing ground) for the following 12
+minutes -- exactly when more front cover should be wanted, not less. Two
+plausible mechanisms, neither checked yet: `FrontLineSpots`
+(`territory.as:857`) finding no `have==0` gap once a short curve reads
+covered by 3 turrets' nominal range, or `Builder::DefenceTaskNear` blocking a
+re-request at a stretch whose order was placed but never built (no builder
+survived the walk, or none was ever elected). Needs a match with `apex: brain
+orders front defence #N` logged past #10 (the throttle only prints #1-3 then
+every 10th) compared against one that stalls the way this one did.
+
+---
+
+## PATCHED, NOT YET MEASURED: commander sits on a full metal bank after a base wipe, never rebuilds the lab -- one-sided escape valve in `OpeningNeedsEconomy()` (2026-08-14)
+
+apexearth, live: "our guy lost his main base, now he's running around hiding
+with a full metal bank... he needs to make T1 labs asap... Commander doesn't
+seem to rebuild the core lab after losing everything." Not a regression of the
+held-task stickiness fix (`rules_commander.as:237-240`/`maketask.as:190-199`)
+-- those only ever return an EXISTING factory task, never swallow a fresh
+request. The real gate is `OpeningNeedsEconomy()` (`manager/builder/
+opening.as:45`, itself added earlier the same night): its raid-collapse escape
+checked METAL income only. A wipe that kills generators but leaves mexes (and
+a banked stockpile) standing collapses ENERGY income while metal stays fine,
+so `short_` stays true on the energy term forever and the gate never releases
+-- `rules_commander.as:218`'s factory-rebuild branch stays blocked
+indefinitely. **Fix:** added a symmetric `gOpenPeakEnergyIncome` escape,
+mirroring the existing metal one. See `changes/2026-08-14.md`. **Not deployed
+or measured** -- no accessible infolog for the live game (stale since
+2026-08-13). Confirm on the next watched game with a full base wipe: `apex:
+commander rebuilding a factory -- we have none` should log once energy income
+collapses, not stay silent while `apex: opening economy-first` repeats
+forever. Delete this entry once measured.
+
+---
+
+## PATCHED, NOT YET MEASURED: builders walk long distances to join/assist a build that finishes before they arrive -- added an ETA-vs-remaining-build-time guard, but the ETA is a flat-speed approximation (2026-08-14)
+
+apexearth, live: "our units are willing to walk long distances to build a
+building which would be built by the time they get there." `Requests::JoinFor`
+and `Requests::Redirect` (`manager/builder/requests.as`) ranked candidate
+sites on build progress then distance only -- no check on whether the walk
+itself outlasts the remaining build. Added `WorthJoining()`: estimates
+remaining build time as `costM * (1-progress) / (DRAIN * busyWorkers)` and
+skips the candidate if `dist / ASSUMED_CON_SPEED` exceeds it (counted in new
+`gTooFar`, in the `apex: request ...` log line). **This is a real arithmetic
+estimate, not exact**: `CCircuitDef`/`CCircuitUnit` expose no move-speed
+binding to AngelScript (grepped `InitScript.cpp`, confirmed absent), so the
+travel time uses one flat `ASSUMED_CON_SPEED = 40` elmos/s for every unit
+regardless of its actual speed (real T1 con speeds: armck/corck bots 36,
+armcv/corcv vehicles 54) -- a fast vehicle con could be wrongly turned away
+from a join still worth making. Not deployed or run tonight (apexearth
+watching a game). Confirm with `behaviour_check.py`/`composition.py` after
+deploy: watch for `tooFar` counts in the request log, and check `JoinFor`
+picks (site progress vs. distance) no longer include cases where the site
+would clearly finish first. If the flat-speed approximation proves too coarse
+in practice, the real fix is binding `CCircuitDef::GetSpeed()` to script
+(`cpp/src/circuit/script/InitScript.cpp`) -- a C++ change, not done here.
+Delete this entry once measured.
+
+---
+
+## PATCHED, NOT YET MEASURED: AA overbuilt with zero current enemy air -- `GetEnemyCost` never decays (2026-08-14)
+
+apexearth, live: "We've made 5 AA units while the enemy has no air... cost 125
+metal each... Worthless." `Military::UpdateAirThreat()`
+(`manager/military/airthreat.as`) fed `gAirRaw`/`gAirAvg` from
+`aiEnemyMgr.GetEnemyCost(RT::AIR)`, which never forgets a unit once seen (dead
+or not, per `EnemyManager.h:80-86`) and is monotonic non-decreasing -- one
+early enemy air scout/con permanently pinned the reading above `AA_IGNORE`
+for the rest of the match, keeping `Brain::AirCoverWant()`'s presence gate
+open and `Builder::AAWantedNow()`'s per-player floor drawing indefinitely
+with no real air left to answer. Pre-existing (the 240s EMA was always going
+to climb past `AA_IGNORE` and never fall back eventually too), but tonight's
+`AirThreatNow()` presence-gate fix collapsed the lag to zero, making it fire
+the same tick instead of minutes later -- which is why it only became visible
+tonight. **Fix:** swapped the raw input to `GetEnemyCostFresh` (already
+bound, already used elsewhere for the same reason in
+`manager/military/territory.as:744`'s `GhostDiag()`), which only counts
+sightings within `freshFrames` (60s default) and genuinely decays. See
+`changes/2026-08-14.md`. **Not deployed or measured** -- no accessible
+infolog for the live-hosted game that prompted the report (`data/infolog.txt`
+stale since 2026-08-13). Confirm on the next watched game: `apexaa: airRaw=`
+should fall back toward 0 within ~60s once the enemy's air is gone/unseen, and
+`aaT1` should stop climbing once it does. Delete this entry once measured.
+
+---
+
+## PATCHED, NOT YET MEASURED: T2 lab placed in front of the enemy base -- overbroad `GetTaskCountOf(FACTORY)` gate (2026-08-14)
+
+apexearth, watching a fresh 1v1: "We built a T2 lab right in front of the
+enemy's base." `Builder::AdvancedPlantAtRear`
+(`manager/builder/rules_optional.as:191`) already places the T2 lab
+home-safely via `RearOfBase()` + a `ThreatFor` veto, and sits above
+`DefaultMakeTask`, so it wins when it fires -- but it bailed on
+`aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) > 0`, which counts
+by BuildType only (`cpp/src/circuit/module/BuilderManager.h:279`), so an
+ordinary unrelated second T1 lab under construction silently vetoed it,
+falling through to stock `DefaultMakeTask` with no home bias at all -- exactly
+what the rule's own comment already predicted. **Not the same mechanism as
+tonight's `BorderPos`/`OnBorder` fix** for static defence -- factory placement
+never touches `BorderPos`. Fixed: replaced the gate with
+`ai.GetDefBuildProgress(adv) >= 0.f`, per-def, which closes the intended race
+(two builders grabbing the same rear-plant request) without tripping on an
+unrelated factory; `Requests::Allowed`'s per-def `InFlight` check two lines
+below already covered that race correctly and made the old gate redundant.
+See `changes/2026-08-14.md`. **No infolog exists for the live-watched game
+itself** (hosted MP writes to `data/infolog.txt`, last touched before this
+session) -- diagnosis is from code reading plus a tournament log showing the
+rear rule places correctly whenever its gate lets it. Confirm on the next
+watched game: `apex: T2 plant <def> at the rear` should log even with a second
+T1 lab mid-build, and no T2 lab should land forward of the front. Delete this
+entry once measured.
+
+---
+
+## PATCHED, NOT YET MEASURED: 1v1 T2 commit read only economy, never safety (2026-08-14)
+
+Same report as above ("T2 lab right in front of the enemy's base"), the WHEN
+half rather than the WHERE half. `Factory::RushReady()`
+(`manager/factory/techlead.as`) already collapses solo to the stricter
+follower bar (`FollowerEconomyReady()`: metal>=25, energy>=600) since
+`IsDesignatedLead()` needs allies -- checked against the most recent watched
+1v1 (`matches/20260815-001117-.../infolog.txt`), the economy gate was
+genuinely met (mInc 27-31, eInc 687) at the 5.4 min commit, not thin. But
+`RushReady()`/`AiIsSwitchAllowed`/`RushBuildPower` never check whether it is
+SAFE to commit -- committing idles the factory's own army line and waives the
+normal army-value switch check, fine when a teammate is holding the front,
+not fine alone. Fixed: `RushReady()` now also requires
+`!Military::LosingGround() && !Military::BaseContested()`
+(`manager/military/territory.as:1041,1048`), the same signals
+`defenceline.as` already uses for this exact question. Uniform across team
+sizes, not a team-count branch (the 2026-08-10 `!IsSmallTeam()` attempt was
+negative, but ran under the since-removed `ApexActive()` solo gate that made
+apex's own rush logic dead code in every 1v1 at the time -- that measurement
+cannot be trusted now that `ApexActive()` always returns true). See
+`changes/2026-08-14.md`. **Not yet measured** -- no match run in this task's
+scope. Confirm on the next watched 1v1: T2 should not commit while
+`Military::LosingGround()`/`BaseContested()` are true, and a 1v1 that never
+sees enemy pressure near home should be unaffected (both signals stay false).
+Delete this entry once measured.
+
+---
+
+## PATCHED, NOT YET MEASURED: commander lost with a clean threat sample 930 frames before death -- flee-influence tunable turned on (2026-08-14)
+
+apexearth watched a match live and reported "our commander was being too brave."
+Confirmed against that same match,
+`matches/20260814-233416-Apex-apex-hard_aggressive_vs_BARb-stable-hard/infolog.txt`:
+`COMMANDER LOST frame=27675 hp=-2`, and the last `apex: comm threat=` sample
+before it, 930 frames (~31s, one sample period) earlier at frame 26745, read
+`threat=0.00 hp=100`. The commander died alongside a cluster of other units
+sharing its build task (`armrectr` x3, `armwar` x2, `armck`, `armjeth`,
+`armmex`) all at the same position, all destroyed in the same tick -- a
+sudden local strike, not a slow attrition the periodic threat sample could
+have caught. Not offensive risk-taking (the commander has no combat/attack
+logic and is excluded from `Fortify`/squad combat) and not a rule sending it
+somewhere dangerous (its last accepted task, `mexup`, was ~900 elmos from the
+death site). This is trap #2 from `commander-opening`'s domain notes,
+reproduced: local threat reads clean right up to death.
+
+**Patch:** `manager/builder/rules_commander.as`'s `apex_comm_flee_influence`
+tunable already existed for exactly this (enemy INFLUENCE at the commander's
+own tile, which is not fooled by a killer at range the way the threat map
+is) but shipped compiled-default 0 (off), "no measured threshold." Turned on
+at 0.01 -- the same "any nonzero `GetEnemyInflAt` reading = attacked"
+calibration `BaseUnderAttack()` (`converter.as`) already uses, not a new
+invented number. **Not deployed or re-run** by this pass (out of scope for
+the agent that made it). Confirm on the next watched/tournament run: does
+`commLost` improve, and does `apex: commander leaving, enemy influence`
+actually fire before a death instead of after. Delete this entry once
+measured.
+
+---
+
+## OPEN, FOLLOW-UP (not started): support role needs splitting into radar/jammer/spec-ops (2026-08-14)
+
+Distinct from the zero-unfreeze landed in the "FOURTH PASS" entry below --
+that only stopped the hard-zero on individual defs (`corvoyr`/`corspec`/
+`armmark`/`armjam`/`cormabm`/`legaradk`/`legajamk`, 0.00->0.03 at low tiers).
+It did NOT address the underlying taxonomy problem apexearth called out:
+mobile radar, jammer and spec-ops units are ALL lumped into one generic
+`behaviour.json` role `"support"`, which carries `response.json`'s lowest
+`importance` (2.00) and `max_percent` (0.20) of the whole table -- a jammer
+and a spec-ops raider have nothing in common tactically and compete for the
+same undersized response budget. A real fix needs its own role categories
+(e.g. `radar`, `jammer`, `spec_ops`) each with their own `response.json`
+entry, sized on what each actually does -- real design work, not a config
+tweak, and needs its own session per the task that produced this entry.
+
+---
+
+## PATCHED, NOT YET MEASURED: `EnergyConverter` handed armmmkr to units that can't build it, stalling conversion and blocking fusion all game (2026-08-14)
+
+Live match `matches/20260814-231356-Apex-apex-hard_aggressive_vs_BARb-stable-hard`:
+zero fusions built the whole game despite income reaching 293 m/s and
+`energyExcess=249375.2` at end. Root cause: `EnergyConverter`
+(`manager/builder/converter.as`) picked `BigConvDef(unit)` off a team-wide
+tech-availability check with no per-unit buildOptions guard, so T1 cons and
+the commander were handed armmmkr constantly (1,100+ `BUG blocked ...
+armmmkr` lines, one match). `GuardBuildCapability` correctly vetoed each one,
+but the veto is a null return, not a fallback to the buildable T1 def, so
+these workers built no converter at all. Conversion capacity never kept up
+with income, `EnergyWasting()` stayed true the whole game, and `EcoFusion`
+(`fusion.as:199`) refuses by design while wasting is true. Patched with the
+same `advBuilder` guard `EcoConverters` already carries. Not yet re-run —
+confirm `fusCount` and `energyExcess` in the next watched/tournament run,
+then delete this entry.
+
+---
+
+## OPEN, LOW CONFIDENCE: defence's under-attack escalation is a boolean, not graduated by severity (2026-08-14)
+
+apexearth wanted excess con power redirected into defence during a sustained
+attack. That mechanism already exists and was firing correctly in the match
+that prompted the request (`defenceline.as:422`, `pressureAllow = (gTurtle ||
+BaseContested()) ? 2.f : 1.f` — doubles the front-line metal budget;
+`BaseContested()`, `territory.as:1041`, reads live net influence at home, not
+economy). See `changes/2026-08-14.md` for the full telemetry from
+`matches/20260814-225550-...` — `mDefence` climbed through the loss window and
+requests (`armllt`/`armbeamer`) kept firing at rising cap right to shutdown;
+the base was lost to total overrun in the final ~60-90s, not to defence being
+undervalued or under-requested.
+
+Left open only because the escalation term itself is coarse: a flat 2x that
+trips only once the enemy already holds net influence at home (late), rather
+than scaling with how badly we're losing (`EnemyArmyCost()/armyCost`,
+`GetAttackHotspot` weight, or recent-loss rate as a leading indicator). No
+patch proposed — one match showed the pipeline working, not failing, so
+tightening this without a match that shows genuine under-firing would be
+tuning on impatience rather than evidence (see CLAUDE.md "Ask before inventing
+policy" / "Economy over static numbers"). Re-open with real evidence of
+under-request before touching `pressureAllow`.
+
+## PARTIALLY FIXED, awaiting tournament confirmation: T1 factory queue has no combat floor -- the con quota can own 100% of the line (2026-08-14)
+
+LIVE report, apexearth watching: "our base is being hit/attacked and we're
+only making cons... losing this game for sure" /
+"if all our factory time is spent on cons then we'll have a small army" /
+"the game wasn't even at T2 phase yet... we don't even have enough work or
+need for cons." Match:
+`matches/20260814-225550-Apex-apex-hard_aggressive_vs_BARb-stable-hard/`,
+shutdown frame 19724, `armed=10` vs `ownBuilders=19`, `facCount=1` the whole
+game.
+
+`brain/facqueue.as:265` `QuotaFor` inserts the constructor want
+(`Builder::ConsWantedFor`, `*1.5+1` under `isMetalFull`) as a FLOOR first,
+and the consuming loop (`:541-553`) `break`s on the first short floor --
+combat defs live only in the ratio section below, reached only once every
+floor is met. `T2ArmyShort`/`T2CoreWanted` (`:205-231`) already give combat
+roles priority over the con floor, but ONLY once the line has T2
+buildoptions AND an advanced con already built (`:218-222`) -- there is no
+equivalent protection while T1-only, which is exactly this match's whole
+11 minutes. Measured: frame 7200->10800, `mLostMobile` 110->1575 while
+cumulative `cheapBuilt armck` 550->1430 against `conT1` (alive) only 5->7 --
+constructors were dying and being replaced in a loop instead of the line
+ever reaching a combat def. By shutdown `armck` cumulative 2200 vs all
+mobile combat (`armfav+armflash+armflea`) 749 -- 3x the factory metal into
+cons.
+
+**Implemented and smoke-tested this pass.** Added `T1ArmyShort`/
+`T1CoreWanted` (`facqueue.as`, next to `T2ArmyShort`), same income-scaled
+floor-only shape, gated on the line having neither `Factory::Attr::T2` nor
+`Factory::Attr::T3` (T1-only). Used `RT::RAIDER`/`RIOT`/`SKIRM`, not
+`T2ArmyShort`'s `RT::ASSAULT`/`HEAVY`/`AH`/`AHA` -- those roles are already
+confirmed resolving on a T1-only line via `QuotaFor`'s own unconditional ratio
+section, so no new uncertainty there. Deployed, compiled clean (`grep ERR`
+empty across three headless smoke runs), and confirmed FIRING with a temporary
+debug log (`apex: DEBUG T1ArmyShort fired ... want=4` at frame 1365, then not
+again once the floor was met) before removing the log and redeploying the
+final version. On the clean run, a still-T1-only line (`facCount=1` the whole
+8-minute match) showed cons (`armck`) capping at 330 metal and holding flat
+while combat (`armflea`, RT::RAIDER) kept growing (21 -> 84 -> 105) for the
+rest of the match -- the con floor no longer owns the whole queue once met.
+
+**Not yet closed.** Only an 8-minute 1v1 smoke test was run, not a
+tournament/composition.py comparison against the pre-fix baseline at matching
+scale -- the original report's ~7:1 con:combat ratio over 11 minutes was not
+directly reproduced or disproved. Re-check with `python tools/composition.py`
+on a longer/matched run before deleting this entry. See
+`changes/2026-08-14.md` for the full trace, tunables
+(`apex_t1_core_per_income`, `apex_t1_core_min`), and match dirs.
+
+---
+
+## OPEN: general CanBuild guard -- landed, not deployed, not measured-confirmed (2026-08-14)
+
+Follow-up to tonight's `IsAdvConDef` fix (T1 constructors handed advanced-only
+converter/fusion defs, 45/45 = 100% silent task-death). Generalizes it: added
+a native `CCircuitDef::CanBuild` binding (`cpp/src/circuit/script/InitScript.cpp:958-963`,
+wraps the already-existing `CircuitDef.h:203` buildOptions lookup) and a single
+pipeline-wide guard, `Builder::GuardBuildCapability` in
+`ai/apex/game-side/script/hard_aggressive/manager/builder/maketask.as`, called
+from `AiMakeTask` on every returned task. C++ rebuilt via docker
+(`ninja BARb` succeeded), `sync_cpp.py apply`'d and
+`game-patches/circuitai/0003-cumulative.patch` regenerated. **Not deployed, no
+match run, no `behaviour_check`/`composition` pass this session** -- per
+instructions for this task. Confirm before deleting this entry: deploy, run a
+watched or tournament match, grep the infolog for `apex: BUG blocked` (should
+be rare/zero if upstream rules are already correct -- the guard existing and
+never firing is the expected good outcome) and confirm no AngelScript compile
+error (`grep -oiE "[a-z_]+\.as \([0-9]+, [0-9]+\) : ERR .{0,80}" infolog.txt`).
+
+---
+
+## OPEN, FOURTH PASS: Hound baseline tier1/2 smoothed + support hard-zeros unfrozen -- LANDED, not yet measured (2026-08-14)
+
+apexearth watched a fresh match with BOTH tonight's fixes deployed
+(`matches/20260814-231356-...`) and reported no change: "why are we still
+making pretty much only hounds?" `top=armfido:31065,...`, `armfboy` reached
+only 1400 cumulative, `armsnipe` doesn't appear in `allBuilt=` at all despite
+the tier0 0.00->0.03 bump.
+
+**Root cause, traced through `FactoryManager.cpp:1694-1704`:** the roulette
+wheel weight for a candidate is `RoleProbability(bd) * (probs[i] + reWeight)`,
+falling back to plain `probs[i]` whenever `RoleProbability` returns 0 (which it
+does once a role's share of `armyCost` exceeds `response.json`'s
+`max_percent`, or the `vs` condition isn't met at all). So response.json's
+`reWeight` is *additive on top of* the factory.json baseline `probs[i]`, never
+independent of it, and `max_percent` only throttles the response term -- the
+underlying baseline draw keeps going regardless of cap.
+
+`factory.json`'s `armalab.land` baseline (income tiers 1<=x<30 / 30<=x<60 /
+60<=x<80 / >=80, `GetFacTierProbs`, `FactoryManager.cpp:1744`): `armfido`
+0.50/0.45/0.40/0.15/0.15 across tier0-4 vs `armfboy` 0.03/0.05/0.15/0.30/0.30
+and `armsnipe` 0.03/0.05/0.20/0.20/0.20 (tonight's earlier fix only touched
+tier0). At **tier1 -- the income band most of a 20-minute game's early-mid
+build time sits in -- armfido's baseline is 9x armfboy/armsnipe's (0.45 vs
+0.05)**, entirely independent of any response boost. Only at tier3/4 does the
+table flip (armfido 0.15 vs armfboy 0.30) -- but by then a large fraction of
+cumulative `allBuilt=` metal has already been spent at the tier1/2 ratio,
+which is what cumulative totals over a whole game measure. This is why the
+`assault.max_percent` cut (0.8->0.4) landed earlier tonight did essentially
+nothing: it caps the response bonus, not the baseline that's actually doing
+the work.
+
+**Sniper's total absence** is consistent with variance on a genuinely tiny
+weight (0.03-0.05 baseline against a pool where `armfido` alone is 9-13x
+larger at the tiers most decisions land in) rather than a second zeroing bug
+-- tier2/tier3 values (0.20) were never touched and are not zero, they're just
+competing against a much bigger `armfido` slice most of the time.
+
+**PATCH (LANDED this pass, `factory.json`/`factory_leg.json`):** smoothed
+`armalab.land` tier1/tier2 from the pass-3 cliff toward the already-tuned
+tier3 shape instead of inventing new numbers: `armfido` tier1 0.45->0.30,
+tier2 0.40->0.20 (tier3 stays 0.15, unchanged); `armfboy` tier1 0.05->0.15,
+tier2 0.15->0.25 (tier3 stays 0.30); `armsnipe` tier1 0.05->0.12 (tier2 was
+already 0.20, matching tier3, left alone). `.water` was left untouched --
+checked and it was already smooth (`armfido` 0.50/0.40/0.20/0.10, no cliff),
+so nothing to fix there.
+
+**Correction to the Sniper/Fatboy entry below: Legion DOES have a T2
+assault+heavy twin.** `leginc` (`behaviour_leg.json`) carries
+`"role": ["heavy", "assault"]` and lives in `legalab` itself (not `leggant`
+as previously written -- `legkeres` is a separate T3 unit). `leginc` was
+hard-zeroed at tier0/1/2 (0.00/0.00/0.00) then cliffed to 0.40 at tier3 --
+the same shape as pre-fix Sniper/Fatboy, just more extreme (literal zero, not
+just low). Unfroze it: tier0 0.00->0.03, tier1 0.00->0.10, tier2 0.00->0.20,
+ramping toward the unchanged tier3 0.40.
+
+`coralab`'s assault-role T2 bot is `cormort` (confirmed via
+`tools/unitdef.py`/`behaviour.json`, role `["assault"]`); its Cortex heavy
+sibling is `corsumo` (role `["heavy"]`). Applied the same direction of
+correction: `cormort` tier1 0.40->0.30, tier2 0.20->0.15; `corsumo` tier1
+0.10->0.15 (tier2 already 0.20, left alone).
+
+**Support-role hard-zeros unfrozen** (same 0.00->0.03 bump used as precedent
+for Sniper/Fatboy tier0, applied only where a cell was a literal 0.00 at
+tier0/tier1 -- see the follow-up entry below for the full role-split, not
+attempted this pass): `armalab.land.tier0` `armmark` 0.00->0.03;
+`coralab.land.tier0/tier1` `corspec` 0.00/0.00->0.03/0.03;
+`coralab.water.tier1/tier2` `corvoyr` 0.00/0.00->0.03/0.03; `coravp.land/air/
+water.tier0` `cormabm` 0.00->0.03 (all three), plus `water.tier1` 0.00->0.03;
+`armavp.land/air/water.tier0` `armjam` 0.00->0.03 (all three), plus
+`air.tier1` 0.00->0.03; `legalab.land.tier0/tier1` `legaradk`/`legajamk`
+0.00/0.00->0.03/0.03 each.
+
+`python tools/check.py` run after all edits: no new errors introduced (the 3
+`legamsub`/`leggantuw`/`legplat` errors reported are pre-existing, in
+`behaviour_leg.json`, untouched by this pass).
+
+**Not deployed, no match run**, per instruction -- next step is deploy, then
+`allBuilt=`/`composition.py` on a watched or tournament game to confirm
+`armfido`'s share falls, `armfboy`/`armsnipe`/`leginc` actually get built, and
+that Cortex/Legion combat mix moved with Armada's rather than staying flat.
+
+Full math in `changes/2026-08-14.md`.
+
+---
+
+## OPEN: Sniper/Fatboy tier0 baseline bump vs Hound -- landed, not yet measured-confirmed (2026-08-14)
+
+Follow-up to the Sniper zero-fix and the `assault.max_percent` cap fix earlier
+tonight. apexearth: Sniper and Fatboy should also be credited as strong static
+counters, alongside Hound. `response.json` already weights both above Hound
+(`anti_heavy_ass`/`heavy` static importance 10.00 vs `assault`'s 5.00) so no
+response.json change was made. The actual bottleneck is `factory.json`'s
+tier0/tier1 baseline: `armalab.land`/`.water` tier0 had `armfboy`/`armsnipe`
+both at 0.00 against `armfido` at 0.50 -- since `RoleProbability` multiplies
+the response boost onto this baseline rather than drawing independently, a
+near-zero baseline stays near-zero regardless of response weighting. Bumped
+tier0 `armfboy`/`armsnipe` 0.00 -> 0.03 in `factory.json`, and Legion's Sniper
+twin `legsrail` 0.00 -> 0.03 in `factory_leg.json`'s `legalab.land.tier0`.
+**Correction (2026-08-14, fourth pass): the "no T2 Fatboy twin" claim above
+was wrong** -- `leginc` (`legalab`, role `["heavy","assault"]`) is Legion's T2
+assault+heavy unit; `legkeres` is a separate T3 unit in `leggant` and is not
+relevant here. `leginc` was hard-zeroed through tier2 and has since been
+unfrozen -- see the entry above. Also noted:
+`legsrail`'s behaviour_leg.json role is `anti_heavy`, not `anti_heavy_ass`
+like Armada's `armsnipe` -- unconfirmed whether that's deliberate. Full
+mechanism in `changes/2026-08-14.md`. **Not yet measured** -- confirm via
+`allBuilt=` for `armsnipe`/`armfboy` in the next watched or tournament game
+before deleting this entry.
+
+---
+
+## OPEN: AA gate decoupled from 240s smoothing -- landed, not yet measured-confirmed (2026-08-14)
+
+apexearth, live: "we get bombed by the enemy and aren't making any AA...
+we plateau and don't do anything greater." Root cause: `AirCoverWant`
+(`manager/brain.as`) and `UpdateAirThreat`'s heavy-AA sizing
+(`manager/military/airthreat.as`) both gated on `gAirAvg`, a 240s EMA
+(`AIR_AVG_SECONDS`, `manager/military/defenceline.as:595`) floored at
+`AA_IGNORE=500`. In `matches/20260814-222654-Apex-apex-hard_aggressive_vs_BARb-stable-hard`,
+`airRaw` (this tick's true enemy air cost) climbed 150 -> 4924 over minutes
+12-20 while the gated smoothed value only reached 948 by the match's last log
+line -- `apex: cheap-aa` never fired once, `aaT1` stayed 0 all game,
+`allBuilt=` shows one `corrl` (80 metal) and zero heavy AA. Fix: added
+`gAirRaw`/`Military::AirThreatNow()` (unsmoothed, same floor) for the
+PRESENCE gate; sizing (`AAWantedNow`, `heavyWant`) now uses
+`max(raw, smoothed)` so a detected raid is answered the same tick instead of
+up to 4 minutes later, while the smoothed value still bounds the RATIO so a
+single overflight can't swing the count. Full mechanism in
+`changes/2026-08-14.md`. **Not yet re-measured against a live game** --
+confirm via the next watched game's `apexaa:`/`apex: cheap-aa` lines and
+`aaT1` before deleting this entry.
+
+**FOLLOW-UP, same day**: the next watched game confirmed `AirThreatNow`
+itself is NOT the problem -- `apexaa:` logged `airRaw=0` the entire match, and
+the mobile AA apexearth saw built-then-killed (`armjeth`, 125 metal, matching
+his count) came from an UNRELATED flat weight in `factory.json`'s general
+vehicle pool, not from this gate. See `changes/2026-08-14.md`
+("AA built with zero enemy air, and AA killed doing ground attacks") for the
+two separate mechanisms and fixes (factory.json weight cut 0.05-0.06 -> 0.02;
+`WantsMassing` no longer pools ground AA into the ATTACK-promoting massing
+pool). Neither fix is tournament-confirmed yet.
+
+---
+
+## OPEN: "skirmish"/"riot" T2 roles are single-def in both armalab and coralab, same shape as the assault cap just lowered (2026-08-14)
+
+Not yet fixed or measured. `armzeus` is the sole `role: ["skirmish"]` def and
+`armmav` the sole `role: ["riot"]` def in `armalab`'s 16-unit list
+(`ai/apex/game-side/config/hard_aggressive/behaviour.json:962,975`); Cortex's
+`corcan`/mirrors the same "skirmish" singleton in `coralab`. Both response
+entries still carry `max_percent: 0.8` (`response.json:44-50,58-64`) --
+identical structural risk to the `assault` fix below (any single def response
+can claim up to 80% of standing army cost). Not touched this session because
+the assault case was the one with direct telemetry proof (`armfido` at 62% of
+combat metal); these two are argued from the same code shape, not measured.
+Fix by the same reasoning if a future watched game shows `armzeus` or `armmav`
+dominating comparably: lower `max_percent` to match apex's own already-set
+0.4-0.5 ceiling for other single-def T2 roles (`anti_heavy`/`anti_heavy_ass`/
+`heavy`), not stock's inherited 1.0/0.5.
+
+---
+
+## OPEN: rez bots never position toward the army/front while winning -- fix designed, not implemented (2026-08-14)
+
+apexearth, live: "our rezbots don't support our army/fighting... Reclaim,
+Resurrection, Repair... they aren't doing much of it at all." Confirmed:
+`RezzerFrontSalvage` (`manager/builder/rules_rezzer.as:40-60`) is the ONLY rez
+rule that reaches beyond the bot's own position, and it only fires when
+`Military::LosingGround()` -- so rez bots follow a retreating front but never
+an advancing one. Every other rez rule searches `WRECK_SEARCH` (2200 elmos)
+from the bot's current position only. No escort/follow pattern exists
+anywhere in the codebase to reuse. Telemetry (`matches/20260814-222654-...`):
+rez bots built to 2080 metal, `mRezSpend` only 110 by minute 18, against
+thousands of `mKillMobile`/`mLostMobile` -- corpses existed, bots weren't
+there. Proposed fix (see `changes/2026-08-14.md` for full writeup): broaden
+the gate so `RezzerFrontSalvage` also fires when winning/pushing and the
+bot's local search is empty, reusing the existing `FrontLinePos()` (already
+win/lose-agnostic) and `ThreatFor`/`CON_THREAT_VETO` safety check. Layer 2
+only, no DLL rebuild needed. Delete this entry once implemented and a run
+shows `mRezSpend` rising relative to `mKillMobile`/`mLostMobile` while
+attacking, not just defending.
+
+---
+
 ## OPEN: rez-bot repair fix lands only after a DLL rebuild+deploy -- not yet live-confirmed (2026-08-14)
 
 apexearth, live: "we have a lot of rezbots standing around doing nothing while
@@ -22,43 +523,141 @@ it does anything** -- the AngelScript half is inert until the new
 this entry once a rebuilt/deployed run shows rez bots picking up REPAIR tasks
 on damaged field units.
 
+**2026-08-14 follow-up:** apexearth reported (after this landed, watching a
+fresh game) "our rezbots still don't repair fast enough." Found and fixed a
+real bug in the same rule: `RezzerRepairNearby`'s throttle (`gNextRezRepair`)
+was a single global frame counter shared by every rez bot on the team, so at
+most one bot on the whole side could be handed a new repair target per
+`REZ_WRECK_PERIOD` (1s) no matter how many were idle. Changed to a per-bot
+gate (`gConNextRepair[ConSlot(unit)]`, `manager/builder/fortify.as` +
+`rules_rezzer.as`) -- see `changes/2026-08-14.md` for the full writeup,
+including why the engine's native area-repair `CMD_REPAIR` (4-param) order
+apexearth suggested is not a clean fit here (no C++ binding exists for it, and
+wiring it in bypasses CircuitAI's whole task-tracking model). The residual
+one-task-one-target-to-completion model is real and NOT fixed by this --
+would need new C++ to change. Not deployed/measured this pass.
+
 ---
 
-## OPEN: advanced converter (armmmkr) requested dozens of times, never completes once -- energy spills at the storage cap for 12+ minutes (2026-08-14)
+## OPEN: commander and rez bot both idle beside a damaged HLT under fire -- not yet live-confirmed (2026-08-14)
 
-apexearth, live: "we have really stalled and it seems like we aren't making
-any energy." Measured from `matches/20260814-214851-...` (Apex/Armada vs
-BARb/Cortex, lost 26.6m): `[BARAI_STATS] team=0` `energyExcess` plateaus at
-114,985-124,055 (storage cap) from minute 14 to 26 while `energyProduced`
-climbs from 185k to 1.35M -- almost everything made past minute 16 is spilled.
-`allBuilt=` never once includes `armmmkr` for the whole match despite `apex:
-home energy armmmkr` (a genuine NEW creation, confirmed via the `created`
-flag in `Requests::Take`) firing 18 times in the throttled log and a
-cumulative `new=` counter reaching 99 by minute 16, with zero `covered`/
-`full`/`claim` events for the def. One requesting unit proposed 3 different
-armmmkr sites within 6 seconds. `Requests::InFlight(armmmkr)` samples at
-exactly 1 the entire match (never 2+) even as the income-derived cap grows to
-17. Compare an earlier same-night match (`20260814-163003`) where armmmkr DOES
-complete (2,660 metal invested) and InFlight genuinely reaches 2-4
-concurrently.
+apexearth, live, a DIFFERENT match than the mobile-unit rez-bot fix above: "Our
+HLT turret is being shot and the commander and rezbot nearby didn't try to heal
+it -- they just sat idle." Distinct mechanism from the mobile-unit case:
+`CBuilderManager` DOES register a `damagedHandler` for static structures
+(`buildingDamagedHandler`, `BuilderManager.cpp` `InitHandlers`) and it
+unconditionally enqueues a HIGH-priority `TaskB::Repair` the instant one takes
+damage -- the task exists. Two separate native reasons nobody ever gets it:
 
-**Ruled out** (see `changes/2026-08-14.md` for the full trace): `MexOffer`
-(only screens an already-MEX-typed offer), `HoldWorkInProgress`'s RECLAIM
-extension (additive; CONVERT was already held via `SiteBuildName`),
-`forcedFusion` (doesn't touch the `isConv` branch HomeEnergy takes here), and
-a threat-veto misread (zero `con-veto abandon ... convert` lines in the log).
+1. `CBuilderManager::MakeTask`/`MakeCommTask`'s own ranking loop
+   (`BuilderManager.cpp` ~line 1074) skips any task at NOT-`NOW` priority
+   (repair is `HIGH`) sitting on ANY negative influence at all --
+   `inflMap->GetInfluenceAt(testPos) < -INFL_EPS`, a bare boolean, not a graded
+   threat check -- so a structure actively being shot at is by definition never
+   offered via `DefaultMakeTask` to anyone.
+2. `CBRepairTask::CanAssignTo` (`task/builder/RepairTask.cpp:37-39`) hard-excludes
+   `IsRoleComm()` from ANY repair task, structure or mobile, at the native
+   ranking layer -- independent of (1), so the commander specifically could
+   never take one even from a safe distance.
 
-**Not yet isolated:** why each armmmkr request dies before completing one
-unit -- killed builder, an engine-side site-validity rejection after the
-script's speculative grid reservation, or something else. The
-`AiTaskAdded`/`AiTaskRemoved` lifecycle log was scoped to reactor-tier ENERGY
-(>=2000 metal) only, so CONVERT tasks were invisible to it; extended
-(`manager/builder/events.as`, `apex: convert-task-added`/`convert-task-
-removed`, fields `done`/`hadNanoframe`/`workers`/`unit`/`at`) as a pure
-diagnostic, no behaviour change. **Needs one more watched/completed match with
-this new logging** to read `hadNanoframe` on the removed events and settle
-whether this is combat losses (expected, not a bug) or a genuine construction
-mechanism failure (a real regression).
+**Fix (Layer 2 only, no DLL rebuild):** `AssignTask` (`TaskModule.cpp:70-76`)
+never re-checks `CanAssignTo` when the script hands back a task directly -- the
+same property tonight's `RezzerRepairNearby` already relies on for the
+mobile-unit gap. Added `Builder::RepairStructureNearby` (`manager/builder/
+fortify.as`), which scans the existing `gStructRepair` registry (already
+populated by `AiTaskAdded`, previously used only to abort doomed repairs in
+`obsolete.as`) for an unclaimed target within `REPAIR_REACH` passing the same
+`ThreatFor <= CON_THREAT_VETO` graded check every other reflex in this file
+uses, and enqueues that exact target directly -- bypassing both native gates at
+once. Wired into `rules_optional.as` (ahead of `RepairNear`, same reflexive/
+ungated slot, non-commander builders) and `rules_commander.as` (right after
+`HomeTower`, which only ever builds a MISSING tower and is silent once one
+already exists and is merely damaged).
+
+Reasoned from `vendor/circuitai` C++ and existing script patterns, not yet
+run. Delete this entry once a match shows a con or the commander taking a
+REPAIR task on a damaged structure while it is under fire (`apex: ` log line
+would need adding if this needs to be traced explicitly -- none was added this
+pass to keep the change minimal).
+
+---
+
+## FIXED (deploy + measure pending): advanced converter/fusion handed to constructors that cannot build them -- 100% failure, not combat losses (2026-08-14)
+
+Root cause isolated from the diagnostic added earlier tonight. New match
+`matches/20260814-222654-...`, apexearth live: "we sit at full metal and
+aren't building any more energy 15m into the game... stopped making more
+energy at around 1200 energy."
+
+**`hadNanoframe` settles it: every single removal is `hadNanoframe=0`.** 24/24
+`convert-task-removed armmmkr` and 21/21 `energy-task-removed armfus` events
+in this match read `hadNanoframe=0` -- the task never got far enough to place
+a nanoframe, let alone lose one to combat. `done=0` on all of them too. Not
+combat losses. `manager/builder/events.as:144-149`,
+`manager/builder/events.as:130-135`.
+
+**Mechanism:** `tools/unitdef.py armmmkr --builders` / `armfus --builders` --
+both are built by `armaca/armack/armacv/armcomlvl5-10/armhaca/armhack/armhacv/
+armsack/armsacv` only. **Never `armck`, the ordinary T1 constructor.** But
+`Builder::HomeEnergy` (`manager/builder/mexguard.as`) picked `BigConvDef(unit)`
+(armmmkr) whenever `EnergyWasting()` was true, and `fus` (armfus/armafus) by
+pure energy-per-metal ranking, for **whatever constructor reached the rule** --
+no capability check on `unit` at all. `Builder::EcoConverters`
+(`manager/builder/converter.as:185-195`) had a matching bug: its `advBuilder`
+gate had a bypass, `gHaveAdvCon && SmallConvCount(unit) >= ADV_CONV_AFTER`,
+that let a plain T1 con request the advanced converter "on the theory nothing
+claims it if it can't build it" -- but `Requests::Take`/`Create` binds the
+ASKING unit to the task it just created (`aiBuilderMgr.Enqueue(TaskB::Common(
+..., unit, ...))`), so the incapable unit gets attached as a worker
+immediately, and the engine drops the task again a few frames later. Same
+shape as the already-documented `IsAdvConDef` comment at
+`mexguard.as:59-68` ("only armcomlvl4+ can build the advanced towers -- asking
+a level-1 commander for one is a silent no-op") -- this bug is that exact
+class, just on the reactor and advanced-converter rungs of `HomeEnergy`, which
+had never had the same guard applied.
+
+Log evidence, `matches/20260814-222654-...`/infolog.txt: e.g. lines
+1993-2021 show the same worker (`unit=20146`) handed a fresh armmmkr task at
+five different grid cells in under 20 seconds (2384,3184 / 2192,2800 /
+2144,3424 / 2128,2800 / 2000,3184 / 2256,2736), every single one removed
+within 2-96 frames (0.07-3s), `hadNanoframe=0` each time. Confirmed with
+`[BARAI_STATS]`: `conT2=0` (zero advanced constructors) through frame 14400
+(8 minutes), yet armfus/armmmkr requests started at frame 25 (game start,
+handed to the commander, itself likely below the armcomlvl5 threshold) and
+continued through the whole 0-10 minute window before any unit capable of
+building either def existed.
+
+**This also explains "stopped making more energy at ~15m":** once
+`EnergyWasting()`/`isEnergyFull` goes true, `HomeEnergy`'s `isConv` branch
+takes over exclusively -- it does NOT fall through to the solar/advsol/wind
+branch that would add more generators (by design: more generation is
+pointless while spilling). With the converter target unbuildable, every
+constructor reaching `HomeEnergy` funneled into a doomed armmmkr request and
+nothing else, so BOTH more generation and the converter that would have used
+the spare energy stopped at once -- not `HaveReactor()` blocking new
+generators (that gate is working as intended), and not a real "want stopped
+scaling with income" bug.
+
+**PATCH:** `manager/builder/mexguard.as` -- `HomeEnergy`'s converter branch
+now uses `IsAdvConDef(unit) ? BigConvDef(unit) : null` (falls through to
+`SmallConvDef`, armmakr, which `armck` CAN build) instead of unconditional
+`BigConvDef(unit)`; the fusion branch now gates `fus` on
+`Factory::HaveAnyFactory() && IsAdvConDef(unit)`. `manager/builder/
+converter.as` -- `EcoConverters`' `advBuilder` bypass clause removed; only a
+genuine advanced constructor (cost-based proxy, same as `IsAdvConDef`,
+excluding the commander for the same unknowable-level reason) may request
+`BigConvDef`.
+
+**COST:** none new -- this removes spend on a task class that was never
+completing, and lets `SmallConvDef` (armmakr, buildable by the T1 cons that
+were being wasted on the broken path) absorb spare energy instead once a
+T1 con reaches the rule.
+**CONFIDENCE:** high on the mechanism (verified builder lists via
+`tools/unitdef.py`, 45/45 `hadNanoframe=0` across both defs in this match,
+`conT2=0` through the whole window the earliest failed requests occurred in).
+**Not yet deployed or measured** per instruction -- next step is deploy +
+watch/`composition.py` to confirm armmmkr/armfus actually complete and
+`energyExcess` stops pinning at the storage ceiling.
 
 ---
 
@@ -305,6 +904,29 @@ guessing between an eco-facing threat-model change and a C++ binding change
 risks the wrong fix. Next watched game should grep for
 `apex: con-veto`/`apex: mex guard` near the two mex spots' timestamps to
 settle it.
+
+UPDATE 2026-08-14 (later still, after both fixes above were live): "we are
+still walking past mexes without building with our cons" -- a THIRD, distinct
+mechanism: a MOVING con (already assigned a task), not an idle one.
+`Builder::HoldWorkInProgress` (`manager/builder/rules_hold.as:94`) returns the
+currently held task unconditionally for any task with a nonempty
+`SiteBuildName`, and it runs BEFORE `aiBuilderMgr.DefaultMakeTask` in
+`MakeTaskInner` (`maketask.as:107` vs `:129`) -- so a builder walking to a
+factory/nano/energy site never even reaches `DefaultMakeTask`/`MexOffer`
+during its ~1/second re-election (`IBuilderTask::Reevaluate`,
+`BuilderTask.cpp:534`, confirmed still firing on a walking builder -- the
+"moving units don't reconsider" assumption was wrong; what's actually true is
+narrower: the SCRIPT'S OWN hold, added to stop a flip-flop, blocks the offer
+regardless). Patched: `Builder::PassingMex` (`rules_hold.as:22`), called from
+`maketask.as:113` immediately ahead of `HoldWorkInProgress`, using the same
+`FindOpenMexSpot`/`GetMexSpotPos`/`EnqueueMexAt` path as `MexOffer`, gated on
+a geometric "on the way" test (extra detour distance <= 35% of distance still
+to travel), not a value threshold. Inherits `FindOpenMexSpot`'s ally-zone
+exclusion, so this only closes the FRONTIER half of the walking-past gap; a
+moving con passing a HOME mex still depends on `MexOffer`'s narrower
+mechanism. Not deployed, no match run (apexearth was watching live at the
+time) -- needs a fresh watched game or a tournament composition check
+(`python tools/composition.py`, mex upgrades vs a control) to confirm.
 
 ## PATCHED, NOT YET LIVE-CONFIRMED: first high-quality defence placed off in a map corner (2026-08-14)
 

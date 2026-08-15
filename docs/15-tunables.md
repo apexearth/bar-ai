@@ -51,7 +51,7 @@ Verified 2026-08-09 by reading every call site.
 | `apex_siege_fight` | 0 (off) | C++ the eight fighter `AssignTo` | 1 restores `CFightAction` travel for `siege` defs instead of `CMoveAction` |
 | `apex_orbit_rate` | 0.18 | C++ `SquadTask.cpp` `Attack` | rate the standoff ring precesses |
 | `apex_reclaim_energy_dist` | 900 | C++ `EconomyManager.cpp` `UpdateReclaimTasks` | how far a constructor may walk for a tree |
-| `apex_comm_flee_influence` | 0 (off) | AngelScript `builder/rules_commander.as` | enemy influence at which the commander leaves |
+| `apex_comm_flee_influence` | 0.01 (on 2026-08-14) | AngelScript `builder/rules_commander.as` | enemy influence at which the commander leaves |
 | `apex_rush_min_metal` | 14 (`RUSH_MIN_METAL`) | AngelScript `factory/techlead.as` | income the tech rush waits for |
 | `apex_unblock` | 1 (on) | AngelScript `military/unblock.as` | 0 stops reclaiming our own cheap buildings to free a unit walled in by them |
 | `apex_front_nano` | 1 (on) | AngelScript `brain.as` `Decide` | 0 stops the Brain proposing a nano turret behind the front line |

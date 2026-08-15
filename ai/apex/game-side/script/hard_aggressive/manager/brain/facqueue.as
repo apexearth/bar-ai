@@ -230,6 +230,38 @@ bool T2ArmyShort(CCircuitUnit@ fac)
 	return have < T2CoreWanted();
 }
 
+// How many T1 front-line units count as "protected". Scales with the economy,
+// same shape as T2CoreWanted.
+int T1CoreWanted()
+{
+	const float inc = Factory::SteadyIncome();
+	const float per = ai.GetTunable("apex_t1_core_per_income", 6.f);
+	int n = int(inc / per);
+	const int floorN = int(ai.GetTunable("apex_t1_core_min", 4.f));
+	return (n < floorN) ? floorN : n;
+}
+
+// A LINE THAT HAS NEVER TECHED: no T2/T3 attr, so T2ArmyShort never fires for
+// it and the con floor below is the first floor checked -- a line that never
+// techs can spend its whole queue on constructors with nothing to stop it.
+// RAIDER/RIOT/SKIRM are the roles gMix already builds off a T1 line (see the
+// ratio section below), so GetRoleDef is known to resolve them there; ASSAULT/
+// HEAVY/AH/AHA are T2ArmyShort's own core and are not what a T1 lab offers.
+bool T1ArmyShort(CCircuitUnit@ fac)
+{
+	const int attr = Factory::userData[fac.circuitDef.id].attr;
+	if ((attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
+		return false;      // T2ArmyShort covers a line that has already teched
+	array<Type> core = {RT::RAIDER, RT::RIOT, RT::SKIRM};
+	int have = 0;
+	for (uint i = 0; i < core.length(); ++i) {
+		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, core[i]);
+		if (d !is null)
+			have += d.count;
+	}
+	return have < T1CoreWanted();
+}
+
 // Cortex's "scout" IS the resurrection bot -- behaviour.json gives cornecro the
 // scout role because the bot lab has no other -- so asking for a scout early
 // buys a 130-metal rezzer. Same reclaim test the rez floor uses.
@@ -282,6 +314,23 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 				continue;
 			defs.insertLast(d);
 			want.insertLast(T2CoreWanted());
+			isFloor.insertLast(true);
+		}
+		if (defs.length() > 0)
+			return;      // nothing else off this line until the army exists
+	}
+
+	// A T1-ONLY LINE: same idea as T2ArmyShort, for a line that has never
+	// teched at all and would otherwise never see anything but the con floor
+	// below (see the fill loop's floor-priority-order comment).
+	if (T1ArmyShort(fac)) {
+		array<Type> core = {RT::RAIDER, RT::RIOT, RT::SKIRM};
+		for (uint c = 0; c < core.length(); ++c) {
+			CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, core[c]);
+			if ((d is null) || !d.IsAvailable(ai.frame))
+				continue;
+			defs.insertLast(d);
+			want.insertLast(T1CoreWanted());
 			isFloor.insertLast(true);
 		}
 		if (defs.length() > 0)

@@ -18,7 +18,34 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 	const bool isCommander = (unit !is null)
 			&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
-	return DefenceShareScreen(unit, isCommander, MakeTaskInner(unit));
+	IUnitTask@ task = DefenceShareScreen(unit, isCommander, MakeTaskInner(unit));
+	return GuardBuildCapability(unit, task);
+}
+
+// GENERAL CAPABILITY GUARD -- generalizes the 2026-08-14 IsAdvConDef fix.
+//
+// mexguard.as/converter.as patched two call sites after a T1 constructor
+// handed an advanced-only def died its task every single time (45/45
+// samples, zero engine errors -- see CHANGES.md). Any rule above this line
+// can make the same mistake for any def; this is the one place every one of
+// them passes through before the engine ever sees the order. CanBuild is
+// CircuitAI's own buildOptions lookup (an unordered_set::find already kept
+// for native task assignment), not a re-derivation from cost or name.
+IUnitTask@ GuardBuildCapability(CCircuitUnit@ unit, IUnitTask@ task)
+{
+	if ((task is null) || (unit is null))
+		return task;
+	if (task.GetType() != Task::Type::BUILDER)
+		return task;
+	CCircuitDef@ def = task.buildDef;
+	if (def is null)
+		return task;
+	if (unit.circuitDef.CanBuild(def))
+		return task;
+
+	AiLog("apex: BUG blocked " + unit.circuitDef.GetName() + " -> "
+		+ def.GetName() + " (not in buildOptions)");
+	return null;
 }
 
 IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
@@ -75,6 +102,15 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 	@t = AbandonUnsafeSite(unit, isComm);
+	if (t !is null)
+		return t;
+
+	// AHEAD OF THE HOLD BELOW, ON PURPOSE: HoldWorkInProgress returns the held
+	// task unconditionally for any named site, which is exactly what stops a
+	// walking builder ever reaching DefaultMakeTask/MexOffer again -- see
+	// PassingMex's own comment for why that turned "walked past an unclaimed
+	// mex" into a standing gap rather than a one-off.
+	@t = PassingMex(unit, isComm);
 	if (t !is null)
 		return t;
 	@t = HoldWorkInProgress(unit, isComm);

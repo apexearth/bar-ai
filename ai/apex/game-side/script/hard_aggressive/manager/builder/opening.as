@@ -36,6 +36,13 @@ int gOpenEnergyJobs = 0;
 // Never reset: lets the gate tell "still climbing from zero" apart from
 // "was fine, just raided down to zero" without a clock.
 float gOpenPeakMetalIncome = 0.f;
+// Same idea, energy side. A base wipe that takes the generators but leaves
+// mexes standing collapses ENERGY income while metal income (and any banked
+// metal) stays healthy -- without this the metal-only escape below never
+// fires, `short_` stays true on the energy term alone, and the gate holds
+// the factory rebuild back indefinitely waiting for energy income that has
+// nothing left to produce it from.
+float gOpenPeakEnergyIncome = 0.f;
 
 // Is the opening gate holding the first factory back right now? Read entirely
 // from CURRENT standing state -- factory count, active factory task, income,
@@ -56,9 +63,12 @@ bool OpeningNeedsEconomy()
 	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) > 0)
 		return false;
 	const float mInc = aiEconomyMgr.metal.income;
+	const float eInc = aiEconomyMgr.energy.income;
 	if (mInc > gOpenPeakMetalIncome)
 		gOpenPeakMetalIncome = mInc;
-	const bool short_ = (aiEconomyMgr.energy.income < OpeningEnergyGate())
+	if (eInc > gOpenPeakEnergyIncome)
+		gOpenPeakEnergyIncome = eInc;
+	const bool short_ = (eInc < OpeningEnergyGate())
 		|| (mInc < OpeningMetalGate());
 	if (!short_)
 		return false;
@@ -68,6 +78,13 @@ bool OpeningNeedsEconomy()
 	// below never fires on its own. Release and let expansion/defence recover
 	// income instead of holding the factory back for no benefit.
 	if ((gOpenPeakMetalIncome >= OpeningMetalGate()) && (mInc < 1.f))
+		return false;
+	// Same collapse, energy side: generators destroyed while mexes (and any
+	// banked metal) survive. Without this the commander sits on a full metal
+	// bank forever "buying energy" it has nothing left standing to build,
+	// because `short_` above stays true on the energy term alone and the
+	// metal escape does not apply when metal itself never collapsed.
+	if ((gOpenPeakEnergyIncome >= OpeningEnergyGate()) && (eInc < 1.f))
 		return false;
 	// Short of the gate AND nothing is currently being built to close the gap:
 	// step 2 has run out of beneficial ground, not merely not-yet-caught-up.

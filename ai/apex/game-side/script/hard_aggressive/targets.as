@@ -128,8 +128,16 @@ array<float> ROLE_AHA     = {0.00f, 0.00f, 0.07f, 0.10f, 0.11f};
 // Relative weights, like everything else here.
 //                       8     20     50    100    300
 //------------------------------------------------------------------------------
-array<float> DEF_FRONT = {1.f,  2.f,  3.f,  3.f,  3.f};   // the Brain's line
-array<float> DEF_LOCAL = {2.f,  2.f,  1.f,  1.f,  1.f};   // mex guards, dig-ins
+// The opening columns used to give LOCAL a bigger or equal share than FRONT
+// (1:2, then 2:2) -- exactly the risk this section's own comment warns about,
+// and exactly backwards for the opening, when the enemy is closest and a
+// raider is cheapest: measured 2026-08-14 (matches/20260815-003604-...),
+// rear/local towers reached 21 standing by minute 10.6 while the Brain's
+// front-line want placed 3 orders total and stalled, and the engine-driven
+// front path spent the whole window refused by its own per-spot crowd cap
+// instead of opening a new spot. Front now leads local at every column.
+array<float> DEF_FRONT = {2.f,  3.f,  3.f,  3.f,  3.f};   // the Brain's line
+array<float> DEF_LOCAL = {1.f,  1.5f, 1.f,  1.f,  1.f};   // mex guards, dig-ins
 
 //------------------------------------------------------------------------------
 // 3. HOW FAR THE OBSERVED ENEMY MOVES THE MIX.

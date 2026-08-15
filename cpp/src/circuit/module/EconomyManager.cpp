@@ -1049,6 +1049,90 @@ IBuilderTask* CEconomyManager::EnqueueMexAt(CCircuitUnit* unit, int spotId)
 			IBuilderTask::Priority::HIGH, mexDef, pos, spotId));
 }
 
+// apex: geo spot queries a script can call safely, mirroring the mex trio
+// above. Deliberately no IsZoneAlly exclusion -- a geo vent at home is a
+// normal HomeEnergy candidate, not a frontier-only reroute.
+int CEconomyManager::FindOpenGeoSpot(CCircuitUnit* unit, const AIFloat3& pos)
+{
+	if (unit == nullptr) {
+		return -1;
+	}
+	const int frame = circuit->GetLastFrame();
+	std::vector<CCircuitDef*> geoCands;
+	for (CCircuitDef* gDef : geoDefs.GetBuildDefs(unit->GetCircuitDef())) {
+		if (gDef->IsAvailable(frame)) {
+			geoCands.push_back(gDef);
+		}
+	}
+	if (geoCands.empty()) {
+		return -1;
+	}
+
+	// CanReachAtSafe reads whichever threat layer was selected last, same as
+	// FindOpenMexSpot.
+	circuit->GetThreatMap()->SetThreatType(unit);
+
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	CMap* map = circuit->GetMap();
+	const CEnergyData::Geos& geos = circuit->GetEnergyManager()->GetSpots();
+	float minDistSq = std::numeric_limits<float>::max();
+	int index = -1;
+	for (unsigned i = 0; i < geoSpots.size(); ++i) {
+		if (!IsOpenGeoSpot(i)) {
+			continue;
+		}
+		const AIFloat3& p = geos[i];
+		const float distSq = p.SqDistance2D(pos);
+		if (minDistSq <= distSq) {
+			continue;
+		}
+		if (!terrainMgr->CanReachAtSafe(unit, p, unit->GetCircuitDef()->GetBuildDistance())) {
+			continue;
+		}
+		for (CCircuitDef* gDef : geoCands) {
+			if (terrainMgr->CanBeBuiltAt(gDef, p) && map->IsPossibleToBuildAt(gDef->GetDef(), p, UNIT_NO_FACING)) {
+				minDistSq = distSq;
+				index = i;
+				break;
+			}
+		}
+	}
+	return index;
+}
+
+AIFloat3 CEconomyManager::GetGeoSpotPos(int spotId) const
+{
+	if (!IsValidGeoSpot(spotId)) {
+		return -RgtVector;
+	}
+	return circuit->GetEnergyManager()->GetSpots()[spotId];
+}
+
+IBuilderTask* CEconomyManager::EnqueueGeoAt(CCircuitUnit* unit, int spotId)
+{
+	if ((unit == nullptr) || !IsValidGeoSpot(spotId) || !IsOpenGeoSpot(spotId)) {
+		return nullptr;
+	}
+	const AIFloat3& pos = circuit->GetEnergyManager()->GetSpots()[spotId];
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	CMap* map = circuit->GetMap();
+	const int frame = circuit->GetLastFrame();
+	CCircuitDef* geoDef = nullptr;
+	for (CCircuitDef* gDef : geoDefs.GetBuildDefs(unit->GetCircuitDef())) {
+		if (gDef->IsAvailable(frame) && terrainMgr->CanBeBuiltAt(gDef, pos)
+			&& map->IsPossibleToBuildAt(gDef->GetDef(), pos, UNIT_NO_FACING))
+		{
+			geoDef = gDef;
+			break;
+		}
+	}
+	if (geoDef == nullptr) {
+		return nullptr;
+	}
+	return circuit->GetBuilderManager()->Enqueue(TaskB::Spot(IBuilderTask::BuildType::GEO,
+			IBuilderTask::Priority::NORMAL, geoDef, pos, spotId));
+}
+
 bool CEconomyManager::IsIgnorePull(const IBuilderTask* task) const
 {
 	if (mexMax != std::numeric_limits<decltype(mexMax)>::max()) {

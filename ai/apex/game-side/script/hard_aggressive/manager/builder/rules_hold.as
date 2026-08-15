@@ -2,6 +2,54 @@ namespace Builder {
 
 // Work already in progress, and the two reasons to drop it.
 
+// "On the way, not a special trip." HoldWorkInProgress (below) returns the
+// held task unconditionally for any named site, so once a builder is mid-walk
+// to a factory/nano/energy/etc. it never reaches DefaultMakeTask/MexOffer
+// again until it arrives or the site becomes unsafe -- confirmed against
+// IBuilderTask::Reevaluate (task/builder/BuilderTask.cpp:534), which DOES
+// call MakeTask on this builder roughly once a second while it travels, but
+// the script never lets that offer through. apexearth watched this live
+// 2026-08-14 as "we are still walking past mexes without building with our
+// cons" -- a moving con, not an idle one (that gap was MexOffer, same night).
+//
+// The detour test is geometric, not a value threshold: extra distance to
+// swing through the mex before continuing to the original site, against
+// distance still left to travel there. A permanent mex is worth far more
+// than a short detour, but this only ever fires for one that is genuinely on
+// or near the path already being walked.
+const float PASS_MEX_DETOUR_FRAC = 0.35f;
+
+IUnitTask@ PassingMex(CCircuitUnit@ unit, bool isComm)
+{
+	if (ai.GetTunable("apex_take_passing_mex", 1.f) <= 0.f)
+		return null;
+	if (isComm)
+		return null;
+	IUnitTask@ busy = unit.task;
+	if (busy is null)
+		return null;
+	const string kind = SiteBuildName(busy);
+	// Nothing to improve on a walk that is already expansion.
+	if ((kind == "") || (kind == "mex") || (kind == "mexup"))
+		return null;
+
+	const AIFloat3 pos = unit.GetPos(ai.frame);
+	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, pos);
+	if (spot < 0)
+		return null;
+	const AIFloat3 mpos = aiEconomyMgr.GetMexSpotPos(spot);
+	if (OnMap(mpos) && (ThreatFor(unit, mpos) > CON_THREAT_VETO))
+		return null;
+
+	const AIFloat3 dest = busy.GetBuildPos();
+	const float remaining = sqrt(pos.SqDistance2D(dest));
+	const float detour = sqrt(pos.SqDistance2D(mpos)) + sqrt(mpos.SqDistance2D(dest)) - remaining;
+	if (detour > remaining * PASS_MEX_DETOUR_FRAC)
+		return null;
+
+	return aiEconomyMgr.EnqueueMexAt(unit, spot);
+}
+
 IUnitTask@ HoldDefenceInProgress(CCircuitUnit@ unit, bool isComm)
 {
 	// Let a constructor FINISH the defence it already started.
@@ -64,7 +112,7 @@ IUnitTask@ AbandonUnsafeSite(CCircuitUnit@ unit, bool isComm)
 				IUnitTask@ post = ContestDefence(unit, kind, heat, held.GetBuildPos());
 				if (post !is null)
 					return post;
-				IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+				IUnitTask@ flee = Retreat(unit);
 				if (flee !is null)
 					return flee;
 			}
@@ -82,7 +130,7 @@ IUnitTask@ AbandonUnsafeSite(CCircuitUnit@ unit, bool isComm)
 				++gConAbandoned;
 				ConStrike(unit);
 				LogConVeto(unit, "abandon", "reclaim", heat);
-				IUnitTask@ flee = aiBuilderMgr.EnqueueRetreat();
+				IUnitTask@ flee = Retreat(unit);
 				if (flee !is null)
 					return flee;
 			}

@@ -32,6 +32,21 @@ static IUnitTask* CEconomyManager_EnqueueMexAt(CEconomyManager* mgr, CCircuitUni
 	return mgr->EnqueueMexAt(unit, spotId);
 }
 
+static int CEconomyManager_FindOpenGeoSpot(CEconomyManager* mgr, CCircuitUnit* unit, const AIFloat3& pos)
+{
+	return mgr->FindOpenGeoSpot(unit, pos);
+}
+
+static AIFloat3 CEconomyManager_GetGeoSpotPos(CEconomyManager* mgr, int spotId)
+{
+	return mgr->GetGeoSpotPos(spotId);
+}
+
+static IUnitTask* CEconomyManager_EnqueueGeoAt(CEconomyManager* mgr, CCircuitUnit* unit, int spotId)
+{
+	return mgr->EnqueueGeoAt(unit, spotId);
+}
+
 CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
 		: IModuleScript(scr, mgr)
 {
@@ -63,6 +78,11 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
 	r = engine->RegisterObjectMethod("CEconomyManager", "int FindOpenMexSpot(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CEconomyManager_FindOpenMexSpot), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEconomyManager", "AIFloat3 GetMexSpotPos(int) const", asFUNCTION(CEconomyManager_GetMexSpotPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEconomyManager", "IUnitTask@+ EnqueueMexAt(CCircuitUnit@, int)", asFUNCTION(CEconomyManager_EnqueueMexAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	// apex: same trio for geo vents -- see EconomyManager.h's comment on
+	// FindOpenGeoSpot for why HomeEnergy needed this.
+	r = engine->RegisterObjectMethod("CEconomyManager", "int FindOpenGeoSpot(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CEconomyManager_FindOpenGeoSpot), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEconomyManager", "AIFloat3 GetGeoSpotPos(int) const", asFUNCTION(CEconomyManager_GetGeoSpotPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEconomyManager", "IUnitTask@+ EnqueueGeoAt(CCircuitUnit@, int)", asFUNCTION(CEconomyManager_EnqueueGeoAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 }
 
 CEconomyScript::~CEconomyScript()

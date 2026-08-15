@@ -79,6 +79,38 @@ const float ASSIGNED_BIAS = 400.f;
 // duplicates onto one tile.
 const float JOIN_MIN_COST = 200.f;
 
+// WORTH THE WALK. A site's remaining build time is (unbuilt metal) / (build
+// power already on it); if that is shorter than this unit's walk there, the
+// walk buys nothing -- the site finishes, or gets close enough that one more
+// constructor is negligible, before it could arrive. apexearth, watching
+// 2026-08-14: "our units are willing to walk long distances to build a
+// building which would be built by the time they get there."
+//
+// APPROXIMATE, not exact, for two reasons: CCircuitDef exposes no move-speed
+// binding to script (grep of InitScript.cpp confirmed, 2026-08-14), so travel
+// time uses one flat assumed speed rather than the joining unit's own -- a
+// fast vehicle con may be turned away from a join that would in fact still be
+// worth it, while a slow bot con is the case this actually protects. And the
+// site's current build power is read as DRAIN per worker already assigned
+// (the same per-constructor pull InFlightCap uses elsewhere), not the site's
+// true buildSpeed, which script cannot read either.
+const float ASSUMED_CON_SPEED = 40.f;  // elmos/s; armck/corck are 36, armcv/corcv 54 (unit defs, 2026-08-14)
+
+bool WorthJoining(float dist, float progress, float costM, uint busy)
+{
+	if (dist <= 0.f)
+		return true;
+	const float remainingMetal = costM * (1.f - progress);
+	if (remainingMetal <= 0.f)
+		return false;   // effectively done; nothing left for another builder to add
+	const float buildRate = DRAIN * float((busy > 0) ? busy : 1);
+	const float remainingTime = remainingMetal / buildRate;
+	const float travelTime = dist / ASSUMED_CON_SPEED;
+	return travelTime <= remainingTime;
+}
+
+int gTooFar = 0;    // refused: this site will finish (or near enough) before the walk
+
 // HOW MANY REQUESTS OF ONE DEF MAY BE IN FLIGHT AT ONCE, from what the ECONOMY
 // can feed -- never a flat number and never a clock.
 //
@@ -344,12 +376,16 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 			continue;
 		if ((unit !is null) && (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO))
 			continue;
+		const float progress = Progress(cand);
+		if (!WorthJoining(dist, progress, want.costM, busy)) {
+			++gTooFar;
+			continue;
+		}
 		// PROGRESS FIRST, DISTANCE ONLY BREAKS A TIE. A half-built nanoframe
 		// always outranks a fresh one within reach -- concentrating build
 		// power on whichever is closer to done, rather than spreading it
 		// thin across several that each individually take longer to finish
 		// and so sit exposed to the idle/order-drop abort path longer.
-		const float progress = Progress(cand);
 		if ((progress < bestProgress) || ((progress == bestProgress) && (dist >= bestDist)))
 			continue;
 		@best = cand;
@@ -438,7 +474,7 @@ void Log(CCircuitDef@ want, const string& in what)
 		+ " inFlight=" + InFlight(want) + " cap=" + InFlightCap()
 		+ " live=" + gLive.length()
 		+ " new=" + gCreated + " join=" + gJoined
-		+ " covered=" + gCovered + " full=" + gFull);
+		+ " covered=" + gCovered + " full=" + gFull + " tooFar=" + gTooFar);
 }
 
 // -- screening an offer the ENGINE made --------------------------------------
@@ -497,9 +533,13 @@ IUnitTask@ Redirect(CCircuitUnit@ unit, bool isComm, IUnitTask@ offer)
 			continue;
 		if (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO)
 			continue;
+		const float progress = Progress(cand);
+		if (!WorthJoining(dist, progress, want.costM, busy)) {
+			++gTooFar;
+			continue;
+		}
 		// Same rule as JoinFor/ClaimFor: fold onto whichever is furthest
 		// along, not merely nearest.
-		const float progress = Progress(cand);
 		if ((progress < bestProgress) || ((progress == bestProgress) && (dist >= bestDist)))
 			continue;
 		@best = cand;

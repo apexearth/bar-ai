@@ -38,7 +38,7 @@
 		"vs":         ["static", "skirmish",   "riot"],
 		"ratio":      [0.30, 		0.40,		0.40],
 		"importance": [5.00, 		5.00,		5.00],
-		"max_percent": 0.8,
+		"max_percent": 0.4,
 		"eps_step": 0.075
 	},
 	"skirmish": {
