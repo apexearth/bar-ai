@@ -15,6 +15,7 @@
 #include "terrain/TerrainManager.h"  // Only for CorrectPosition
 #include "CircuitAI.h"
 #include "util/Utils.h"
+#include "Log.h"  // complete springai::Log for the LOG macro (REFTRAP diagnostic)
 #ifdef DEBUG_VIS
 #include "task/UnitTask.h"
 #endif
@@ -118,6 +119,20 @@ void CCircuitUnit::SetTask(IUnitTask* task)
 	if (this->task != task) {
 		if (task != nullptr) {
 			task->AddRef();
+		}
+		// CRASH DIAGNOSTIC (temporary): a nil/idle/player singleton about to
+		// be released with no other holder means THIS release is the refcount
+		// imbalance -- dump full context before the RefCounter trap fires.
+		if ((this->task != nullptr) && this->task->IsPermanent() && (this->task->GetRefCount() <= 1)) {
+			CCircuitAI* c = (manager != nullptr) ? manager->GetCircuit() : nullptr;
+			if (c != nullptr) {
+				c->LOG("apex REFTRAP: unit=%d def=%d oldType=%d oldMgr=%p newType=%d newMgr=%p unitMgr=%p refs=%d",
+						(int)GetId(), (int)circuitDef->GetId(),
+						(int)this->task->GetType(), (void*)this->task->GetManager(),
+						(task != nullptr) ? (int)task->GetType() : -1,
+						(task != nullptr) ? (void*)task->GetManager() : nullptr,
+						(void*)manager, this->task->GetRefCount());
+			}
 		}
 		if (this->task != nullptr) {
 			this->task->Release();

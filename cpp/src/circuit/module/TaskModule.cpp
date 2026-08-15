@@ -33,9 +33,9 @@ ITaskModule::~ITaskModule()
 	// Release, not delete: units hold counted references to their current
 	// task (CCircuitUnit::SetTask), nil/idle/player included -- a plain
 	// delete here frees an object somebody may still Release later.
-	if (nilTask != nullptr) nilTask->Release();
-	if (idleTask != nullptr) idleTask->Release();
-	if (playerTask != nullptr) playerTask->Release();
+	if (nilTask != nullptr) { nilTask->ClearPermanent(); nilTask->Release(); }
+	if (idleTask != nullptr) { idleTask->ClearPermanent(); idleTask->Release(); }
+	if (playerTask != nullptr) { playerTask->ClearPermanent(); playerTask->Release(); }
 
 	for (IUnitTask* task : updateTasks) {
 		task->ClearRelease();
@@ -47,6 +47,9 @@ void ITaskModule::Init()
 	nilTask = new CNilTask(this);
 	idleTask = new CIdleTask(this);
 	playerTask = new CPlayerTask(this);
+	nilTask->SetPermanent();
+	idleTask->SetPermanent();
+	playerTask->SetPermanent();
 }
 
 void ITaskModule::Release()

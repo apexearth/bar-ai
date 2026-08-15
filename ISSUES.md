@@ -1443,6 +1443,38 @@ many attempts to complete" finding (armfus is 4300 metal; BAR income swings
 40%+ routinely) — not yet confirmed as THE mechanism, a real lead for next
 time.
 
+**2026-08-15 (midday): the disease is ONE refcount imbalance on a task-module
+SINGLETON, and it corrupts the whole process.** Symbolized with the release
+dbgsym archive (`recoil_2026.07.04_amd64-windows-dbgsym.tar.zst`,
+`addr2line -j .text` with section-relative offsets): the watched-game
+crashes that looked like drawing/ping problems are Lua-heap corruption —
+`sweeplist` (lgc.cpp:412) in the GC, and `luaV_equalval` under
+`CBuilder::SetRepairTarget` — Lua is the victim. Headless reproduces at
+~11-14 game-min on Glitters 8v8 +50 handicap in most games (post-09:59
+builds, the first where the counted `unit->task` bracket actually linked:
+crash rate jumped ~15% → ~90%, i.e. the bracket did not add the bug, it
+converts a pre-existing imbalance into visible frees). Diagnostics built in
+sequence, each landing one step closer:
+(a) poison + underflow trap in `IRefCounter` — corruption still surfaced in
+Lua first;
+(b) guard-page allocator (`IRefCounter::operator new/delete` on VirtualAlloc,
+delete decommits but keeps the address reserved) — faulted at
+`CIdleTask::Update` reading `this->updateSlice`: **a manager's own idleTask
+singleton was deleted mid-Update**;
+(c) `SetPermanent()` on nil/idle/player singletons with a trap on the
+release-to-zero — fired at frame 21290 under
+`UnitFinished → AbortTask(reclaim) → IUnitTask::Stop → idle AssignTo →
+CCircuitUnit::SetTask releasing a singleton with NO other holder` — an
+over-release against zero holders, but of WHICH singleton and whose manager
+the stack cannot say;
+(d) REFTRAP context log in `SetTask` (unit id, old/new task type, manager
+pointers) deployed, loop running. All audits of the explicit AddRef/Release
+pairs (MarkCounted, buildTasks membership, DequeueTask, AssignTask transfer,
+Stop/AssignTo churn) balance on paper; the imbalance is on a path those
+audits have not reached. Guard-page run also produced one Lua sweeplist
+crash NOT caught by the allocator — possibly a second corruption family
+(non-refcounted object), judge after the singleton bug dies.
+
 ## NEW: anti-air coverage is lacking (2026-08-13, watching)
 
 **apexearth, watching the windowed 8v8:** "We lack anti air coverage."

@@ -1,0 +1,54 @@
+/*
+ * RefCounter.h
+ *
+ *  Created on: Apr 6, 2019
+ *      Author: rlcevg
+ */
+
+#ifndef SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
+#define SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
+
+#include <atomic>
+#include <cstddef>
+
+namespace circuit {
+
+/*
+ * WARNING: Use asMETHODPR to register IRefCounter,
+ *          asMETHOD may not detect ptrdiff_t of member function
+ *          (multiple inheritance)
+ */
+class IRefCounter {
+public:
+	IRefCounter();
+	virtual ~IRefCounter();
+
+public:
+	int AddRef();
+	int Release();
+	int GetRefCount() const;
+
+	static constexpr int kPoison = -0x40000000;
+
+	// CRASH DIAGNOSTIC (temporary): singletons (nil/idle/player tasks) must
+	// never be released to zero before their module's dtor; trap at the
+	// over-releasing call so the stack dump names it.
+	void SetPermanent() { permanent = true; }
+	void ClearPermanent() { permanent = false; }
+	bool IsPermanent() const { return permanent; }
+
+	// CRASH DIAGNOSTIC (temporary): each refcounted object lives on its own
+	// VirtualAlloc'd page; delete decommits but never releases the address
+	// range, so ANY use-after-free faults at the guilty instruction instead
+	// of corrupting whoever reused the heap block (observed: Lua GC).
+	static void* operator new(std::size_t sz);
+	static void operator delete(void* p);
+
+private:
+	std::atomic<int> refCount;
+	bool permanent = false;
+};
+
+} // namespace circuit
+
+#endif // SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_

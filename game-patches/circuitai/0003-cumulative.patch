@@ -4447,7 +4447,7 @@ index 7f782e8..be41aa3 100644
  	Handlers2 createdHandler;
  	Handlers1 finishedHandler;
 diff --git a/src/circuit/module/TaskModule.cpp b/src/circuit/module/TaskModule.cpp
-index e6c27f5..ebe0899 100644
+index e6c27f5..4e2feb2 100644
 --- a/src/circuit/module/TaskModule.cpp
 +++ b/src/circuit/module/TaskModule.cpp
 @@ -30,9 +30,12 @@ ITaskModule::ITaskModule(CCircuitAI* circuit, IScript* script)
@@ -4460,13 +4460,23 @@ index e6c27f5..ebe0899 100644
 +	// Release, not delete: units hold counted references to their current
 +	// task (CCircuitUnit::SetTask), nil/idle/player included -- a plain
 +	// delete here frees an object somebody may still Release later.
-+	if (nilTask != nullptr) nilTask->Release();
-+	if (idleTask != nullptr) idleTask->Release();
-+	if (playerTask != nullptr) playerTask->Release();
++	if (nilTask != nullptr) { nilTask->ClearPermanent(); nilTask->Release(); }
++	if (idleTask != nullptr) { idleTask->ClearPermanent(); idleTask->Release(); }
++	if (playerTask != nullptr) { playerTask->ClearPermanent(); playerTask->Release(); }
  
  	for (IUnitTask* task : updateTasks) {
  		task->ClearRelease();
-@@ -62,24 +65,57 @@ void ITaskModule::Release()
+@@ -44,6 +47,9 @@ void ITaskModule::Init()
+ 	nilTask = new CNilTask(this);
+ 	idleTask = new CIdleTask(this);
+ 	playerTask = new CPlayerTask(this);
++	nilTask->SetPermanent();
++	idleTask->SetPermanent();
++	playerTask->SetPermanent();
+ }
+ 
+ void ITaskModule::Release()
+@@ -62,24 +68,57 @@ void ITaskModule::Release()
  
  void ITaskModule::AssignTask(CCircuitUnit* unit, IUnitTask* task)
  {
@@ -5050,6 +5060,220 @@ index d4ebead..9ee2916 100644
 +}
 +
 +} // namespace circuit
+diff --git a/src/circuit/script/RefCounter.cpp b/src/circuit/script/RefCounter.cpp
+index 71d5486..b14e0aa 100644
+--- a/src/circuit/script/RefCounter.cpp
++++ b/src/circuit/script/RefCounter.cpp
+@@ -1,40 +1,74 @@
+-/*
+- * RefCounter.cpp
+- *
+- *  Created on: Apr 6, 2019
+- *      Author: rlcevg
+- */
+-
+-#include "script/RefCounter.h"
+-
+-namespace circuit {
+-
+-IRefCounter::IRefCounter()
+-		: refCount(1)
+-{
+-}
+-
+-IRefCounter::~IRefCounter()
+-{
+-}
+-
+-int IRefCounter::AddRef()
+-{
+-	return ++refCount;  // atomic
+-}
+-
+-int IRefCounter::Release()
+-{
+-	if (--refCount == 0) {  // atomic
+-		delete this;
+-		return 0;
+-	}
+-	return refCount;
+-}
+-
+-int IRefCounter::GetRefCount() const
+-{
+-	return refCount;
+-}
+-
+-} // namespace circuit
++/*
++ * RefCounter.cpp
++ *
++ *  Created on: Apr 6, 2019
++ *      Author: rlcevg
++ */
++
++#include "script/RefCounter.h"
++
++#include <new>
++#include <windows.h>
++
++namespace circuit {
++
++void* IRefCounter::operator new(std::size_t sz)
++{
++	void* p = VirtualAlloc(nullptr, sz, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
++	if (p == nullptr) {
++		throw std::bad_alloc();
++	}
++	return p;
++}
++
++void IRefCounter::operator delete(void* p)
++{
++	if (p != nullptr) {
++		VirtualFree(p, 0, MEM_DECOMMIT);  // keep reserved: the address must never be reused
++	}
++}
++
++IRefCounter::IRefCounter()
++		: refCount(1)
++{
++}
++
++IRefCounter::~IRefCounter()
++{
++	// Poison: any AddRef/Release arriving after destruction reads this and
++	// traps AT THE BAD CALL, so the engine's stack dump names the culprit
++	// instead of whoever later trips over the corrupted heap.
++	refCount.store(kPoison);
++}
++
++int IRefCounter::AddRef()
++{
++	const int prev = refCount.fetch_add(1);
++	if (prev <= 0) {
++		__builtin_trap();  // AddRef on a dead or already-freed object
++	}
++	return prev + 1;
++}
++
++int IRefCounter::Release()
++{
++	const int prev = refCount.fetch_sub(1);
++	if (prev <= 0) {
++		__builtin_trap();  // Release on a dead object: the over-release IS this call
++	}
++	if (permanent && (prev == 1)) {
++		__builtin_trap();  // a singleton released to zero: THIS call is the imbalance
++	}
++	if (prev == 1) {
++		delete this;
++		return 0;
++	}
++	return prev - 1;
++}
++
++int IRefCounter::GetRefCount() const
++{
++	return refCount;
++}
++
++} // namespace circuit
+diff --git a/src/circuit/script/RefCounter.h b/src/circuit/script/RefCounter.h
+index f908a50..afd43d1 100644
+--- a/src/circuit/script/RefCounter.h
++++ b/src/circuit/script/RefCounter.h
+@@ -1,36 +1,54 @@
+-/*
+- * RefCounter.h
+- *
+- *  Created on: Apr 6, 2019
+- *      Author: rlcevg
+- */
+-
+-#ifndef SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
+-#define SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
+-
+-#include <atomic>
+-
+-namespace circuit {
+-
+-/*
+- * WARNING: Use asMETHODPR to register IRefCounter,
+- *          asMETHOD may not detect ptrdiff_t of member function
+- *          (multiple inheritance)
+- */
+-class IRefCounter {
+-public:
+-	IRefCounter();
+-	virtual ~IRefCounter();
+-
+-public:
+-	int AddRef();
+-	int Release();
+-	int GetRefCount() const;
+-
+-private:
+-	std::atomic<int> refCount;
+-};
+-
+-} // namespace circuit
+-
+-#endif // SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
++/*
++ * RefCounter.h
++ *
++ *  Created on: Apr 6, 2019
++ *      Author: rlcevg
++ */
++
++#ifndef SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
++#define SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
++
++#include <atomic>
++#include <cstddef>
++
++namespace circuit {
++
++/*
++ * WARNING: Use asMETHODPR to register IRefCounter,
++ *          asMETHOD may not detect ptrdiff_t of member function
++ *          (multiple inheritance)
++ */
++class IRefCounter {
++public:
++	IRefCounter();
++	virtual ~IRefCounter();
++
++public:
++	int AddRef();
++	int Release();
++	int GetRefCount() const;
++
++	static constexpr int kPoison = -0x40000000;
++
++	// CRASH DIAGNOSTIC (temporary): singletons (nil/idle/player tasks) must
++	// never be released to zero before their module's dtor; trap at the
++	// over-releasing call so the stack dump names it.
++	void SetPermanent() { permanent = true; }
++	void ClearPermanent() { permanent = false; }
++	bool IsPermanent() const { return permanent; }
++
++	// CRASH DIAGNOSTIC (temporary): each refcounted object lives on its own
++	// VirtualAlloc'd page; delete decommits but never releases the address
++	// range, so ANY use-after-free faults at the guilty instruction instead
++	// of corrupting whoever reused the heap block (observed: Lua GC).
++	static void* operator new(std::size_t sz);
++	static void operator delete(void* p);
++
++private:
++	std::atomic<int> refCount;
++	bool permanent = false;
++};
++
++} // namespace circuit
++
++#endif // SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
 diff --git a/src/circuit/task/IdleTask.cpp b/src/circuit/task/IdleTask.cpp
 index f210b3a..6a0cc07 100644
 --- a/src/circuit/task/IdleTask.cpp
@@ -14523,7 +14747,7 @@ index be8a95f..15dcd39 100644
  	float costE;
  	float upkeepM;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index aab872c..28a63dc 100644
+index aab872c..aafa1c6 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -6,6 +6,7 @@
@@ -14534,7 +14758,15 @@ index aab872c..28a63dc 100644
  #include "unit/action/DGunAction.h"
  #include "unit/action/TravelAction.h"
  #include "unit/enemy/EnemyUnit.h"
-@@ -97,6 +98,9 @@ CCircuitUnit::CCircuitUnit(CCircuitAI* circuit, Id unitId, Unit* unit, CCircuitD
+@@ -14,6 +15,7 @@
+ #include "terrain/TerrainManager.h"  // Only for CorrectPosition
+ #include "CircuitAI.h"
+ #include "util/Utils.h"
++#include "Log.h"  // complete springai::Log for the LOG macro (REFTRAP diagnostic)
+ #ifdef DEBUG_VIS
+ #include "task/UnitTask.h"
+ #endif
+@@ -97,6 +99,9 @@ CCircuitUnit::CCircuitUnit(CCircuitAI* circuit, Id unitId, Unit* unit, CCircuitD
  
  CCircuitUnit::~CCircuitUnit()
  {
@@ -14544,7 +14776,7 @@ index aab872c..28a63dc 100644
  	delete command;
  	delete dgun;
  	delete weapon;
-@@ -105,7 +109,21 @@ CCircuitUnit::~CCircuitUnit()
+@@ -105,7 +110,35 @@ CCircuitUnit::~CCircuitUnit()
  
  void CCircuitUnit::SetTask(IUnitTask* task)
  {
@@ -14559,6 +14791,20 @@ index aab872c..28a63dc 100644
 +		if (task != nullptr) {
 +			task->AddRef();
 +		}
++		// CRASH DIAGNOSTIC (temporary): a nil/idle/player singleton about to
++		// be released with no other holder means THIS release is the refcount
++		// imbalance -- dump full context before the RefCounter trap fires.
++		if ((this->task != nullptr) && this->task->IsPermanent() && (this->task->GetRefCount() <= 1)) {
++			CCircuitAI* c = (manager != nullptr) ? manager->GetCircuit() : nullptr;
++			if (c != nullptr) {
++				c->LOG("apex REFTRAP: unit=%d def=%d oldType=%d oldMgr=%p newType=%d newMgr=%p unitMgr=%p refs=%d",
++						(int)GetId(), (int)circuitDef->GetId(),
++						(int)this->task->GetType(), (void*)this->task->GetManager(),
++						(task != nullptr) ? (int)task->GetType() : -1,
++						(task != nullptr) ? (void*)task->GetManager() : nullptr,
++						(void*)manager, this->task->GetRefCount());
++			}
++		}
 +		if (this->task != nullptr) {
 +			this->task->Release();
 +		}
@@ -14567,7 +14813,7 @@ index aab872c..28a63dc 100644
  	SetTaskFrame(manager->GetCircuit()->GetLastFrame());
  	taskState = ETaskState::NONE;
  }
-@@ -529,23 +547,50 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -529,23 +562,50 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  
  void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
  {
