@@ -458,8 +458,15 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
 
 void IBuilderTask::Update(CCircuitUnit* unit)
 {
-	if (Reevaluate(unit) && !unit->GetTravelAct()->IsFinished()) {
-		UpdatePath(unit);  // Execute(unit) within OnTravelEnd
+	if (Reevaluate(unit)) {
+		// Reevaluate runs the script pipeline, which can REASSIGN the unit to
+		// a different task -- RemoveAssignee clears its actions, so the travel
+		// act read here can be null. Crashed a watched game at 3 minutes the
+		// moment the assist-fallback made mid-reevaluation reassignment common.
+		ITravelAction* travel = unit->GetTravelAct();
+		if ((travel != nullptr) && !travel->IsFinished()) {
+			UpdatePath(unit);  // Execute(unit) within OnTravelEnd
+		}
 	}
 }
 

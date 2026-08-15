@@ -6,6 +6,7 @@
  */
 
 #include "unit/CircuitUnit.h"
+#include "task/UnitTask.h"  // full type for the counted task reference
 #include "unit/action/DGunAction.h"
 #include "unit/action/TravelAction.h"
 #include "unit/enemy/EnemyUnit.h"
