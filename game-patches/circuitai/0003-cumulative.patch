@@ -18058,3 +18058,120 @@ index 913b5c0..ef0c004 100644
 +} // namespace circuit
 +
 +#endif // SRC_CIRCUIT_UNIT_ENEMY_ENEMYUNIT_H_
+diff --git a/src/circuit/util/Action.cpp b/src/circuit/util/Action.cpp
+index 07ee544..a559639 100644
+--- a/src/circuit/util/Action.cpp
++++ b/src/circuit/util/Action.cpp
+@@ -1,33 +1,52 @@
+-/*
+- * Action.cpp
+- *
+- *  Created on: Jan 5, 2015
+- *      Author: rlcevg
+- *      Origin: Randy Gaul (http://gamedevelopment.tutsplus.com/tutorials/the-action-list-data-structure-good-for-ui-ai-animations-and-more--gamedev-9264)
+- */
+-
+-#include "util/Action.h"
+-
+-namespace circuit {
+-
+-IAction::IAction(CActionList* owner)
+-		: ownerList(owner)
+-		, isBlocking(false)
+-		, state(State::ACTIVE)
+-{
+-}
+-
+-IAction::~IAction()
+-{
+-}
+-
+-void IAction::OnStart()
+-{
+-}
+-
+-void IAction::OnEnd()
+-{
+-	state = State::HALT;
+-}
+-
+-} // namespace circuit
++/*
++ * Action.cpp
++ *
++ *  Created on: Jan 5, 2015
++ *      Author: rlcevg
++ *      Origin: Randy Gaul (http://gamedevelopment.tutsplus.com/tutorials/the-action-list-data-structure-good-for-ui-ai-animations-and-more--gamedev-9264)
++ */
++
++#include "util/Action.h"
++
++#include <new>
++#include <windows.h>
++
++namespace circuit {
++
++void* IAction::operator new(std::size_t sz)
++{
++	void* p = VirtualAlloc(nullptr, sz, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
++	if (p == nullptr) {
++		throw std::bad_alloc();
++	}
++	return p;
++}
++
++void IAction::operator delete(void* p)
++{
++	if (p != nullptr) {
++		VirtualFree(p, 0, MEM_DECOMMIT);  // keep reserved: address never reused
++	}
++}
++
++IAction::IAction(CActionList* owner)
++		: ownerList(owner)
++		, isBlocking(false)
++		, state(State::ACTIVE)
++{
++}
++
++IAction::~IAction()
++{
++}
++
++void IAction::OnStart()
++{
++}
++
++void IAction::OnEnd()
++{
++	state = State::HALT;
++}
++
++} // namespace circuit
+diff --git a/src/circuit/util/Action.h b/src/circuit/util/Action.h
+index 8e955a4..d0d4e84 100644
+--- a/src/circuit/util/Action.h
++++ b/src/circuit/util/Action.h
+@@ -9,6 +9,8 @@
+ #ifndef SRC_CIRCUIT_UTIL_ACTION_H_
+ #define SRC_CIRCUIT_UTIL_ACTION_H_
+ 
++#include <cstddef>
++
+ namespace circuit {
+ 
+ class CActionList;
+@@ -23,6 +25,13 @@ protected:
+ public:
+ 	virtual ~IAction();
+ 
++	// CRASH DIAGNOSTIC (temporary): guard-page allocation, same treatment as
++	// ICoreUnit/IRefCounter -- actions are raw-deleted (ClearAct/dtors) while
++	// dgunAct/travelAct-style raw pointers can outlive them. Defined in
++	// Action.cpp.
++	static void* operator new(std::size_t sz);
++	static void operator delete(void* p);
++
+ 	virtual void Update(CCircuitAI* circuit) = 0;
+ 	virtual void OnStart();
+ 	virtual void OnEnd();
