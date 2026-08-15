@@ -381,7 +381,9 @@ void CAttackTask::Start(CCircuitUnit* unit)
 		return;
 	}
 	if (!pPath->posPath.empty()) {
-		unit->GetTravelAct()->SetPath(pPath, lowestSpeed);
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetPath(pPath, lowestSpeed);
+		}
 	}
 }
 
@@ -411,7 +413,9 @@ void CAttackTask::Update()
 			CCircuitAI* circuit = manager->GetCircuit();
 			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
 			for (CCircuitUnit* unit : units) {
-				unit->GetTravelAct()->StateWait();
+				if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+					unit->GetTravelAct()->StateWait();
+				}
 				unit->Gather(groupPos, frame);
 			}
 		}
@@ -998,7 +1002,9 @@ void CAttackTask::Fallback()
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
 	for (CCircuitUnit* unit : units) {
-		unit->GetTravelAct()->StateWait();
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->StateWait();
+		}
 		TRY_UNIT(circuit, unit,
 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 			unit->CmdWantedSpeed(lowestSpeed);

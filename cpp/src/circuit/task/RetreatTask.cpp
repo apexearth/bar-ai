@@ -142,7 +142,9 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 	if (unit->GetTravelAct()->GetPath() == nullptr) {
 		std::shared_ptr<CPathInfo> pPath = std::shared_ptr<CPathInfo>(new CPathInfo());
 		pPath->PushPos(startPos, pathfinder);
-		unit->GetTravelAct()->SetPath(pPath);
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetPath(pPath);
+		}
 	}
 
 	bool isNoEndPos = true;
@@ -410,7 +412,9 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
 			return;
 		}
 		if (unit->GetTravelAct() != nullptr) {
-			unit->GetTravelAct()->StateFinish();
+			if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+				unit->GetTravelAct()->StateFinish();
+			}
 		}
 
 		unit->SetTaskFrame(frame);  // avoid UnitIdle on find_pad
@@ -515,7 +519,9 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
 		}
 
 		if (unit->GetTravelAct() != nullptr) {
-			unit->GetTravelAct()->StateFinish();
+			if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+				unit->GetTravelAct()->StateFinish();
+			}
 		}
 		state = State::REGROUP;
 	}
@@ -541,7 +547,9 @@ void CRetreatTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		unit->PushTravelAct(travelAction);
 		unit->SetAllowedToJump(cdef->IsAbleToJump() && !cdef->IsAttrNoJump());
 	}
-	unit->GetTravelAct()->StateActivate();
+	if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+		unit->GetTravelAct()->StateActivate();
+	}
 
 	Start(unit);
 }
@@ -609,11 +617,19 @@ void CRetreatTask::ApplyPath(const CQueryPathSingle* query)
 {
 	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
 	CCircuitUnit* unit = query->GetUnit();
+	// The query completed AFTER the unit's actions were cleared (task switch
+	// or death): GetTravelAct() is null and SetPath through it crashed three
+	// identical tournament games (2026-08-15). The path is simply unwanted.
+	if ((unit == nullptr) || (unit->GetTravelAct() == nullptr)) {
+		return;
+	}
 
 	if (pPath->posPath.empty()) {
 		pPath->PushPos(query->GetEndPos(), manager->GetCircuit()->GetPathfinder());
 	}
-	unit->GetTravelAct()->SetPath(pPath);
+	if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+		unit->GetTravelAct()->SetPath(pPath);
+	}
 }
 
 CCircuitUnit* CRetreatTask::ValidateNewRepairer(const IPathQuery* query, int newRepId) const
@@ -638,6 +654,12 @@ void CRetreatTask::ApplyCostMap(const CQueryCostMap* query, CCircuitUnit* newRep
 	const int frame = circuit->GetLastFrame();
 	CPathFinder* pathfinder = circuit->GetPathfinder();
 	CCircuitUnit* unit = query->GetUnit();
+	// The query completed AFTER the unit's actions were cleared (task switch
+	// or death): GetTravelAct() is null and SetPath through it crashed three
+	// identical tournament games (2026-08-15). The path is simply unwanted.
+	if ((unit == nullptr) || (unit->GetTravelAct() == nullptr)) {
+		return;
+	}
 	AIFloat3 endPos;
 	float range;
 

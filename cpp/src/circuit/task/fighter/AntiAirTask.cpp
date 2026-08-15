@@ -120,7 +120,9 @@ void CAntiAirTask::Start(CCircuitUnit* unit)
 		return;
 	}
 	if (!pPath->posPath.empty()) {
-		unit->GetTravelAct()->SetPath(pPath);
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetPath(pPath);
+		}
 	}
 }
 
@@ -171,7 +173,9 @@ void CAntiAirTask::Update()
 			CCircuitAI* circuit = manager->GetCircuit();
 			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
 			for (CCircuitUnit* unit : units) {
-				unit->GetTravelAct()->StateWait();
+				if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+					unit->GetTravelAct()->StateWait();
+				}
 				TRY_UNIT(circuit, unit,
 					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
 				)
@@ -452,7 +456,9 @@ void CAntiAirTask::ApplyDisengagePath(const CQueryPathSingle* query)
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
 	for (CCircuitUnit* unit : units) {
-		unit->GetTravelAct()->StateWait();
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->StateWait();
+		}
 		TRY_UNIT(circuit, unit,
 			unit->CmdMoveTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 		)
@@ -516,7 +522,9 @@ void CAntiAirTask::FallbackCommPos()
 	{
 		// ApplyCommPos
 		for (CCircuitUnit* unit : units) {
-			unit->GetTravelAct()->StateWait();
+			if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+				unit->GetTravelAct()->StateWait();
+			}
 			unit->Guard(commander, frame + FRAMES_PER_SEC * 60);
 		}
 		return;
@@ -530,7 +538,9 @@ void CAntiAirTask::Fallback()
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
 	for (CCircuitUnit* unit : units) {
-		unit->GetTravelAct()->StateWait();
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->StateWait();
+		}
 		TRY_UNIT(circuit, unit,
 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 		)

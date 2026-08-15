@@ -567,7 +567,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
 			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
 	{
-		unit->GetTravelAct()->StateFinish();
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->StateFinish();
+		}
 		return;
 	}
 
@@ -590,11 +592,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
 {
 	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
 	CCircuitUnit* unit = query->GetUnit();
+	// The query completed AFTER the unit's actions were cleared (task switch
+	// or death): GetTravelAct() is null and SetPath through it crashed three
+	// identical tournament games (2026-08-15). The path is simply unwanted.
+	if ((unit == nullptr) || (unit->GetTravelAct() == nullptr)) {
+		return;
+	}
 
 	if (pPath->path.size() > 2) {
-		unit->GetTravelAct()->SetPath(pPath);
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetPath(pPath);
+		}
 	} else {
-		unit->GetTravelAct()->StateFinish();
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->StateFinish();
+		}
 	}
 }
 

@@ -111,7 +111,9 @@ void CAntiHeavyTask::Start(CCircuitUnit* unit)
 		return;
 	}
 	if (!pPath->posPath.empty()) {
-		unit->GetTravelAct()->SetPath(pPath);
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetPath(pPath);
+		}
 	}
 }
 
@@ -150,7 +152,9 @@ void CAntiHeavyTask::Update()
 			CCircuitAI* circuit = manager->GetCircuit();
 			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
 			for (CCircuitUnit* unit : units) {
-				unit->GetTravelAct()->StateWait();
+				if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+					unit->GetTravelAct()->StateWait();
+				}
 				TRY_UNIT(circuit, unit,
 					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
 				)
@@ -203,7 +207,9 @@ void CAntiHeavyTask::Update()
 			if (unit->GetDGunAct() != nullptr) {
 				unit->GetDGunAct()->StateActivate();
 			}
-			unit->GetTravelAct()->StateWait();
+			if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+				unit->GetTravelAct()->StateWait();
+			}
 
 			if (unit->GetCircuitDef()->IsRoleMine()) {
 				const bool isAttack = (target->GetInfluence() > power);
@@ -492,7 +498,9 @@ void CAntiHeavyTask::FallbackCommPos()
 		circuit->GetTerrainManager()->CanMoveToPos(leader->GetArea(), commander->GetPos(frame)))
 	{
 		for (CCircuitUnit* unit : units) {
-			unit->GetTravelAct()->StateWait();
+			if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+				unit->GetTravelAct()->StateWait();
+			}
 			unit->Guard(commander, frame + FRAMES_PER_SEC * 60);
 		}
 		return;
@@ -500,7 +508,9 @@ void CAntiHeavyTask::FallbackCommPos()
 
 	position = circuit->GetSetupManager()->GetBasePos();
 	for (CCircuitUnit* unit : units) {
-		unit->GetTravelAct()->StateWait();
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->StateWait();
+		}
 		TRY_UNIT(circuit, unit,
 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 		)

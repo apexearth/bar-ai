@@ -448,7 +448,9 @@ void CDefendTask::Fallback()
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
 	for (CCircuitUnit* unit : units) {
-		unit->GetTravelAct()->StateWait();
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->StateWait();
+		}
 		TRY_UNIT(circuit, unit,
 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 			unit->CmdWantedSpeed(lowestSpeed);

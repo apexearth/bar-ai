@@ -230,7 +230,9 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
 	if (unit->Blocker() != nullptr) {
 		return;  // Do not interrupt current action
 	}
-	unit->GetTravelAct()->StateWait();
+	if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+		unit->GetTravelAct()->StateWait();
+	}
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const AIFloat3& tPos = GetTarget()->GetPos();

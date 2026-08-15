@@ -139,8 +139,12 @@ void ISquadTask::Merge(ISquadTask* task)
 		if (unit->GetCircuitDef()->IsRoleSupport()) {
 			continue;
 		}
-		unit->GetTravelAct()->SetPath(lPath);
-		unit->GetTravelAct()->SetState(state);
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetPath(lPath);
+		}
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetState(state);
+		}
 	}
 	units.insert(rookies.begin(), rookies.end());
 	attackPower += task->GetAttackPower();
@@ -517,8 +521,12 @@ void ISquadTask::ActivePath(float speed)
 	const float half = span * scale * 0.5f;
 	int i = 0;
 	for (CCircuitUnit* unit : units) {
-		unit->GetTravelAct()->SetPath(pPath, speed);
-		unit->GetTravelAct()->SetLateral((n > 1) ? (offset[i] * scale - half) : 0.f);
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetPath(pPath, speed);
+		}
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetLateral((n > 1) ? (offset[i] * scale - half) : 0.f);
+		}
 		++i;
 	}
 }
@@ -602,7 +610,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				if (unit->Blocker() != nullptr) {
 					continue;  // Do not interrupt current action
 				}
-				unit->GetTravelAct()->StateWait();
+				if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+					unit->GetTravelAct()->StateWait();
+				}
 
 				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
 			}
@@ -857,7 +867,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 			if (unit->Blocker() != nullptr) {
 				continue;  // Do not interrupt current action
 			}
-			unit->GetTravelAct()->StateWait();
+			if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+				unit->GetTravelAct()->StateWait();
+			}
 
 			if (isRepeatAttack
 				|| (unit->GetTarget() != GetTarget())
@@ -956,7 +968,9 @@ void ISquadTask::Log()
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
-			leader->GetTravelAct()->GetState());
+			if (leader->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+				leader->GetTravelAct()->GetState());
+			}
 	if (leader != nullptr) {
 		circuit->GetDrawer()->AddPoint(leader->GetPos(circuit->GetLastFrame()), leader->GetCircuitDef()->GetDef()->GetName());
 	}

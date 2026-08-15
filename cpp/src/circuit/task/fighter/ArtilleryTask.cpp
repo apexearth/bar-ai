@@ -106,7 +106,9 @@ void CArtilleryTask::Execute(CCircuitUnit* unit)
 	CEnemyInfo* bestTarget = FindTarget(unit, pos);
 
 	if (bestTarget != nullptr) {
-		unit->GetTravelAct()->StateWait();
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->StateWait();
+		}
 
 		TRY_UNIT(circuit, unit,
 			if (!circuit->IsCheating()) {
@@ -274,13 +276,21 @@ void CArtilleryTask::ApplyTargetPath(const CQueryPathMulti* query)
 {
 	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
 	CCircuitUnit* unit = query->GetUnit();
+	// The query completed AFTER the unit's actions were cleared (task switch
+	// or death): GetTravelAct() is null and SetPath through it crashed three
+	// identical tournament games (2026-08-15). The path is simply unwanted.
+	if ((unit == nullptr) || (unit->GetTravelAct() == nullptr)) {
+		return;
+	}
 
 	if (!pPath->posPath.empty()) {
 		if (manager->GetCircuit()->GetThreatMap()->GetThreatAt(pPath->posPath.back()) > THREAT_MIN) {
 			FallbackSafePos(unit);
 		} else {
 			position = pPath->posPath.back();
-			unit->GetTravelAct()->SetPath(pPath);
+			if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+				unit->GetTravelAct()->SetPath(pPath);
+			}
 		}
 	} else {
 		FallbackSafePos(unit);
@@ -314,10 +324,18 @@ void CArtilleryTask::ApplySafePos(const CQueryPathMulti* query)
 {
 	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
 	CCircuitUnit* unit = query->GetUnit();
+	// The query completed AFTER the unit's actions were cleared (task switch
+	// or death): GetTravelAct() is null and SetPath through it crashed three
+	// identical tournament games (2026-08-15). The path is simply unwanted.
+	if ((unit == nullptr) || (unit->GetTravelAct() == nullptr)) {
+		return;
+	}
 
 	const bool proceed = pPath->path.size() > 2;
 	if (proceed) {
-		unit->GetTravelAct()->SetPath(pPath);
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetPath(pPath);
+		}
 	} else {
 		Fallback(unit, proceed);
 	}
@@ -337,7 +355,9 @@ void CArtilleryTask::Fallback(CCircuitUnit* unit, bool proceed)
 	float z = rand() % terrainMgr->GetTerrainHeight();
 	position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
 	position = terrainMgr->GetMovePosition(unit->GetArea(), position);
-	unit->GetTravelAct()->StateWait();
+	if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+		unit->GetTravelAct()->StateWait();
+	}
 	TRY_UNIT(circuit, unit,
 		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 	)

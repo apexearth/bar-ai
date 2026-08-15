@@ -189,7 +189,9 @@ void CRaidTask::Start(CCircuitUnit* unit)
 		return;
 	}
 	if (!pPath->posPath.empty()) {
-		unit->GetTravelAct()->SetPath(pPath);
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->SetPath(pPath);
+		}
 	}
 }
 
@@ -218,7 +220,9 @@ void CRaidTask::Update()
 			CCircuitAI* circuit = manager->GetCircuit();
 			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
 			for (CCircuitUnit* unit : units) {
-				unit->GetTravelAct()->StateWait();
+				if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+					unit->GetTravelAct()->StateWait();
+				}
 				unit->Gather(groupPos, frame);
 			}
 		}
@@ -257,7 +261,9 @@ void CRaidTask::Update()
 					if (unit->Blocker() != nullptr) {
 						continue;  // Do not interrupt current action
 					}
-					unit->GetTravelAct()->StateWait();
+					if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+						unit->GetTravelAct()->StateWait();
+					}
 
 					const AIFloat3& pos = GetTarget()->GetPos();
 					TRY_UNIT(circuit, unit,
@@ -269,7 +275,9 @@ void CRaidTask::Update()
 					if (unit->Blocker() != nullptr) {
 						continue;  // Do not interrupt current action
 					}
-					unit->GetTravelAct()->StateWait();
+					if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+						unit->GetTravelAct()->StateWait();
+					}
 
 					TRY_UNIT(circuit, unit,
 						unit->GetUnit()->Attack(GetTarget()->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
@@ -664,7 +672,9 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
 	for (CCircuitUnit* unit : units) {
-		unit->GetTravelAct()->StateWait();
+		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+			unit->GetTravelAct()->StateWait();
+		}
 		TRY_UNIT(circuit, unit,
 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 		)
