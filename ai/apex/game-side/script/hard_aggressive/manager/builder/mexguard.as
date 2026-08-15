@@ -324,7 +324,44 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// here means "keep sending builders to the one reactor", not "start
 	// another".
 	bool forcedFusion = false;
-	if (EnergyWasting()) {
+	// PANIC SOLAR: apexearth 2026-08-15, watching: "If we are totally out of
+	// energy and our income is less than ~500 then we should just make a
+	// basic solar. Those cost 0 energy to make. They're the go-to panic
+	// solar. And always reclaimable later for the metal." isEnergyStalling
+	// is the existing "totally out of energy" signal (bank near-empty and
+	// income can't keep up with pull -- AiUpdateEconomy in economy.as);
+	// below the income floor, waiting on the per-metal ranking (which can
+	// pick fusion or advanced solar, both slow to help a stall) is the wrong
+	// answer, so skip it and place the cheapest, fastest fix instead.
+	const bool energyPanic = aiEconomyMgr.isEnergyStalling
+			&& (aiEconomyMgr.energy.income < ai.GetTunable("apex_energy_panic_income", 500.f));
+	if (energyPanic) {
+		@gen = SideDef3(armsolar, corsolar, legsolar);
+	} else if (EnergyWasting()) {
+		// apexearth 2026-08-15, after 8 hours of "no fusions" reports: this
+		// branch used to route straight to a converter, meaning a capable
+		// advanced con NEVER got offered fusion while EnergyWasting() was
+		// true -- and EnergyWasting() (bank >=88% full, or spare energy
+		// above CONVERT_MIN_SPARE) turns out to be true almost permanently
+		// once the base matures, because T1 cons keep stacking armadvsol
+		// (the only reactor-tier generator THEY can build, since armfus
+		// requires an advanced con) to fill exactly this branch's own
+		// converter want. That kept the bank topped up, which kept
+		// EnergyWasting() true, which kept blocking the one building that
+		// actually fixes chronic waste at scale -- confirmed in a live
+		// match: fusion-gate diag showed wasting=1 on nearly every sample
+		// from 9 minutes on, income climbing to 375, advsolCount to 64,
+		// fusCount stuck at 0 the entire game. A capable, well-off economy
+		// should still get its reactor here instead of another converter.
+		CCircuitDef@ fusWaste = (Factory::HaveAnyFactory() && IsAdvConDef(unit))
+				? FusionDef(unit) : null;
+		if ((fusWaste !is null) && fusWaste.IsAvailable(ai.frame)
+			&& (aiEconomyMgr.metal.income
+				>= ai.GetTunable("apex_fusion_prefer_income", FUSION_PREFER_INCOME)))
+		{
+			@gen = fusWaste;
+			pickedReactor = true;
+		} else {
 		// No cooldown between converters: the real bound is the engine's finite
 		// economy task budget (CEconomyManager::MakeEconomyTasks needs
 		// buildTasksCount < workers * 8, and an unassigned task holds its slot
@@ -341,6 +378,7 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		@gen = IsAdvConDef(unit) ? BigConvDef(unit) : null;
 		if ((gen is null) || !gen.IsAvailable(ai.frame))
 			@gen = SmallConvDef(unit);
+		}
 	} else {
 		// One unified energy-per-metal ranking across the whole ladder: per-metal
 		// value rises from solar through advsol to fusion/advfusion, so this

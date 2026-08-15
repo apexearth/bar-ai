@@ -104,7 +104,14 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 		// The threshold reuses BaseUnderAttack's own calibration (converter.as),
 		// which already treats ANY nonzero GetEnemyInflAt at a fixed point as
 		// "attacked" -- this asks the same question at the commander's own tile.
-		const float fleeInfl = ai.GetTunable("apex_comm_flee_influence", 0.01f);
+		// apexearth 2026-08-14: the commander is a strong early-game unit and
+		// should stay active then; only later game does it need to play safe.
+		// Factory::gHaveT2 is this codebase's established early/late split
+		// (see CLAUDE.md "Progression is economy, not time"), so gate the
+		// any-influence instant flee to post-T2 -- it still catches the
+		// clean-until-dead late-game snipe this was added for, without
+		// yanking the commander off a lone early scout.
+		const float fleeInfl = Factory::gHaveT2 ? ai.GetTunable("apex_comm_flee_influence", 0.01f) : 0.f;
 		if (fleeInfl > 0.f) {
 			const float hereInfl = ai.GetEnemyInflAt(unit.GetPos(ai.frame));
 			if (hereInfl > fleeInfl) {

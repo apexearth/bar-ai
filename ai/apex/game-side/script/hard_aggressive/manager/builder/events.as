@@ -658,7 +658,13 @@ void CommIdleAttribute()
 		// sampled noTask on 55% of ticks over a ten-minute stretch -- "standing
 		// around doing nothing" while apex: commander leaving kept logging.
 		// Force it back into a task directly rather than waiting.
-		const float fleeInfl = ai.GetTunable("apex_comm_flee_influence", 0.01f);
+		// Same apex_comm_flee_influence, and the same Factory::gHaveT2 gate as
+		// CommanderTask() in rules_commander.as -- this is a SEPARATE read of
+		// the tunable, not shared code, and missing the gate here left the
+		// commander getting force-parked into Retreat pre-T2 off any nearby
+		// influence even after CommanderTask() itself was gated, since this
+		// watchdog fires independently whenever the commander samples noTask.
+		const float fleeInfl = Factory::gHaveT2 ? ai.GetTunable("apex_comm_flee_influence", 0.01f) : 0.f;
 		if ((fleeInfl > 0.f) && (ai.GetEnemyInflAt(u.GetPos(ai.frame)) > fleeInfl)) {
 			if (++gCommNoTaskStreak >= COMM_NOTASK_TICKS) {
 				gCommNoTaskStreak = 0;

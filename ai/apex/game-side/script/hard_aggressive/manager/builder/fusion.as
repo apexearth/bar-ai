@@ -194,10 +194,18 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// repo has been bitten by before.
 	if (!Factory::gHaveT2)
 		return null;
-	// Not while already spilling energy: a reactor only helps once the spill is
-	// gone; converters (elsewhere) turn the spill into metal first.
-	if (EnergyWasting())
-		return null;
+	// apexearth 2026-08-15: this used to refuse while EnergyWasting() (bank
+	// nearly full or spare energy over CONVERT_MIN_SPARE), on the theory that
+	// converters would clear the spill first and a reactor could wait. In
+	// practice EnergyWasting() is true almost permanently once the base
+	// matures -- T1 cons keep stacking armadvsol (the only reactor-tier
+	// generator they can build) to answer exactly this kind of spare energy,
+	// which keeps the bank topped up, which never let this rule see
+	// !EnergyWasting() again. Confirmed live: wasting=1 on nearly every
+	// sample from 9 minutes on, fusCount stuck at 0 through 375 income.
+	// Chronic waste from generator sprawl is what a reactor is FOR, not a
+	// reason to withhold one -- see the same fix in HomeEnergy()'s own
+	// EnergyWasting() branch.
 
 	CCircuitDef@ want = FusionDef(unit);
 

@@ -70,8 +70,25 @@ int T1PlantCount()
 	return n;
 }
 
+// How many T2-tier plants we hold in TOTAL, across every def -- same shape as
+// T1PlantCount(), for the same reason: PlantsWanted() answers for the TIER,
+// not the individual def, so a per-def count check lets two different T2
+// defs each read count=0 and both pass.
+int T2PlantCount()
+{
+	int n = 0;
+	for (uint i = 0; i < gFacUnits.length(); ++i) {
+		if (gFacUnits[i] is null)
+			continue;
+		if ((userData[gFacUnits[i].circuitDef.id].attr & Attr::T2) != 0)
+			++n;
+	}
+	return n;
+}
+
 int gNextOpenGateLog = 0;
 int gNextT1TotalLog = 0;
+int gNextT2TotalLog = 0;
 
 // The plant curve is applied ONCE, here, rather than at each of the dozen
 // returns inside ChooseFactory. Only the opening is exempt -- see below for why
@@ -166,6 +183,31 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 				}
 				return null;
 			}
+		}
+	}
+	// A second T2 line before the first one has paid for its own advanced con
+	// and T2 mex competes for the same metal -- same reasoning as the T1 cap
+	// above. PlantsWanted() depends only on income and tier, not on which T2
+	// def is asked, so applying its answer PER DEF let two different T2
+	// plants (e.g. an advanced bot lab and an advanced vehicle plant) each
+	// read their own count=0 and both pass. apexearth, watching, 2026-08-15:
+	// "we're making a second T2 lab this game... idk why."
+	if ((userData[want.id].attr & Attr::T2) != 0) {
+		CCircuitDef@ advCon2 = aiFactoryMgr.GetRoleDef(want, RT::BUILDER2);
+		const bool haveAdvCon2 = (advCon2 !is null) && (advCon2.count > 0);
+		CCircuitDef@ t2mex2 = SideDef3(armmoho, cormoho, legmoho);
+		const bool haveT2Mex2 = (t2mex2 !is null) && (t2mex2.count > 0);
+		const int t2have = T2PlantCount();
+		const bool stillCompeting2 = !haveAdvCon2 || !haveT2Mex2;
+		if (stillCompeting2 ? (t2have >= 1) : (t2have >= allowed)) {
+			if (ai.frame >= gNextT2TotalLog) {
+				gNextT2TotalLog = ai.frame + 60 * SECOND;
+				AiLog(T() + "apex: " + want.GetName() + " refused -- " + t2have
+					+ " T2 plant(s) already, " + (stillCompeting2 ? "still competing with adv con/T2 mex spend" : "at cap")
+					+ ", at " + formatFloat(SteadyIncome(), "", 0, 0)
+					+ " m/s");
+			}
+			return null;
 		}
 	}
 	return want;

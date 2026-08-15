@@ -71,6 +71,17 @@ bool MayPursueT2()
 // earned the role.
 bool IsDesignatedLead()
 {
+	// Solo, LeadIsDesignated() is unreachable (it early-returns false without
+	// allies), so this used to be false for the whole game -- MayPursueT2()
+	// then fell through to FollowerEconomyReady(), the UNGATED no-bank branch
+	// meant for a teammate who isn't the lead and so isn't leaving anyone
+	// undefended. Solo, that same branch commits to T2 on income alone, with
+	// none of RushReady()'s LosingGround()/BaseContested() safety check --
+	// apexearth, 2026-08-14: "we're helpless" while it built. Solo IS trivially
+	// the lead (see IsTechLead()'s own comment), so route it through the same
+	// path and get the safety check that path is supposed to have.
+	if (!TeamPlay())
+		return true;
 	return LeadIsDesignated() && IsTechLead();
 }
 
