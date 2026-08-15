@@ -1492,6 +1492,24 @@ Diagnostics kept in the build until the loop proves it clean: refcount
 poison/underflow traps, guard-page allocator for refcounted objects,
 singleton cushion trap.
 
+**2026-08-15 (afternoon): SECOND writer found and fixed — `unit->Clear()`
+left `dgunAct`/`travelAct` dangling.** After the double-free fix, Apex-vs-
+stock headless went clean but the Apex mirror still crashed 10/10 (so the
+residual was ours, load-scaled; victims were always small malloc blocks —
+Lua GC objects, the GetTunable string map). Guard-paging IAction caught it:
+`IUnitTask::RemoveAssignee`/`Stop` and `CNilTask::RemoveAssignee` called the
+inherited `CActionList::Clear()`, which deletes the unit's actions but
+cannot null `CCircuitUnit`'s `dgunAct`/`travelAct` caches. Every later read
+through those was the null-vtable crash family; `StateWait()` through them
+wrote a byte into freed small blocks — the heap corruption. Upstream-latent;
+our Reevaluate-heavy reassignment flow widened the exposure window
+enormously. Fix (`1684a98`): call sites use `ClearAct()` and `CCircuitUnit`
+shadows `Clear()` so the unsafe base version is unreachable. 12-game mirror
+verification running; the mirror crashed 10/10 before the fix, so a clean
+sweep is the confirmation gate. Diagnostics (guard pages on tasks / units /
+enemy infos / actions, refcount traps, cushion, PushUpdate dupe trap) stay
+in until then — strip or cheapen after.
+
 ## NEW: anti-air coverage is lacking (2026-08-13, watching)
 
 **apexearth, watching the windowed 8v8:** "We lack anti air coverage."
