@@ -4334,10 +4334,26 @@ index 7f782e8..be41aa3 100644
  	Handlers2 createdHandler;
  	Handlers1 finishedHandler;
 diff --git a/src/circuit/module/TaskModule.cpp b/src/circuit/module/TaskModule.cpp
-index e6c27f5..8f676fc 100644
+index e6c27f5..ebe0899 100644
 --- a/src/circuit/module/TaskModule.cpp
 +++ b/src/circuit/module/TaskModule.cpp
-@@ -62,24 +62,57 @@ void ITaskModule::Release()
+@@ -30,9 +30,12 @@ ITaskModule::ITaskModule(CCircuitAI* circuit, IScript* script)
+ 
+ ITaskModule::~ITaskModule()
+ {
+-	delete nilTask;
+-	delete idleTask;
+-	delete playerTask;
++	// Release, not delete: units hold counted references to their current
++	// task (CCircuitUnit::SetTask), nil/idle/player included -- a plain
++	// delete here frees an object somebody may still Release later.
++	if (nilTask != nullptr) nilTask->Release();
++	if (idleTask != nullptr) idleTask->Release();
++	if (playerTask != nullptr) playerTask->Release();
+ 
+ 	for (IUnitTask* task : updateTasks) {
+ 		task->ClearRelease();
+@@ -62,24 +65,57 @@ void ITaskModule::Release()
  
  void ITaskModule::AssignTask(CCircuitUnit* unit, IUnitTask* task)
  {
@@ -11631,10 +11647,43 @@ index be8a95f..15dcd39 100644
  	float costE;
  	float upkeepM;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index aab872c..1e4b61b 100644
+index aab872c..1fb0b85 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
-@@ -529,23 +529,50 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -97,6 +97,9 @@ CCircuitUnit::CCircuitUnit(CCircuitAI* circuit, Id unitId, Unit* unit, CCircuitD
+ 
+ CCircuitUnit::~CCircuitUnit()
+ {
++	if (task != nullptr) {
++		task->Release();  // the counted reference SetTask holds
++	}
+ 	delete command;
+ 	delete dgun;
+ 	delete weapon;
+@@ -105,7 +108,21 @@ CCircuitUnit::~CCircuitUnit()
+ 
+ void CCircuitUnit::SetTask(IUnitTask* task)
+ {
+-	this->task = task;
++	// The unit's task pointer holds a COUNTED reference: engine events
++	// (UnitMoveFailed, UnitIdle, UnitDamaged) read unit->GetTask() at
++	// arbitrary times, and a task freed by a script-side Release while a unit
++	// still pointed at it crashed live at 63 game-minutes (2026-08-15, AV in
++	// UnitMoveFailed -> GetTask()->GetType()). Same cure as buildTasks
++	// membership: a pointer somebody may dereference owns a reference.
++	if (this->task != task) {
++		if (task != nullptr) {
++			task->AddRef();
++		}
++		if (this->task != nullptr) {
++			this->task->Release();
++		}
++		this->task = task;
++	}
+ 	SetTaskFrame(manager->GetCircuit()->GetLastFrame());
+ 	taskState = ETaskState::NONE;
+ }
+@@ -529,23 +546,50 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  
  void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
  {

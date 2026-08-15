@@ -97,6 +97,9 @@ CCircuitUnit::CCircuitUnit(CCircuitAI* circuit, Id unitId, Unit* unit, CCircuitD
 
 CCircuitUnit::~CCircuitUnit()
 {
+	if (task != nullptr) {
+		task->Release();  // the counted reference SetTask holds
+	}
 	delete command;
 	delete dgun;
 	delete weapon;
@@ -105,7 +108,21 @@ CCircuitUnit::~CCircuitUnit()
 
 void CCircuitUnit::SetTask(IUnitTask* task)
 {
-	this->task = task;
+	// The unit's task pointer holds a COUNTED reference: engine events
+	// (UnitMoveFailed, UnitIdle, UnitDamaged) read unit->GetTask() at
+	// arbitrary times, and a task freed by a script-side Release while a unit
+	// still pointed at it crashed live at 63 game-minutes (2026-08-15, AV in
+	// UnitMoveFailed -> GetTask()->GetType()). Same cure as buildTasks
+	// membership: a pointer somebody may dereference owns a reference.
+	if (this->task != task) {
+		if (task != nullptr) {
+			task->AddRef();
+		}
+		if (this->task != nullptr) {
+			this->task->Release();
+		}
+		this->task = task;
+	}
 	SetTaskFrame(manager->GetCircuit()->GetLastFrame());
 	taskState = ETaskState::NONE;
 }

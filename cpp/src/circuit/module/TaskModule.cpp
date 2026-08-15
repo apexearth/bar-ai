@@ -30,9 +30,12 @@ ITaskModule::ITaskModule(CCircuitAI* circuit, IScript* script)
 
 ITaskModule::~ITaskModule()
 {
-	delete nilTask;
-	delete idleTask;
-	delete playerTask;
+	// Release, not delete: units hold counted references to their current
+	// task (CCircuitUnit::SetTask), nil/idle/player included -- a plain
+	// delete here frees an object somebody may still Release later.
+	if (nilTask != nullptr) nilTask->Release();
+	if (idleTask != nullptr) idleTask->Release();
+	if (playerTask != nullptr) playerTask->Release();
 
 	for (IUnitTask* task : updateTasks) {
 		task->ClearRelease();
