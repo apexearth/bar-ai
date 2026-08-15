@@ -320,6 +320,39 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	if ((fac is null) || (gMix.length() == 0))
 		return;
 
+	// EYES AND COVER FOR EACH SQUAD -- ABOVE the core-army early returns:
+	// armies were fighting blind exactly when fighting, because a perpetually
+	// short core floor meant this block was never reached (armmark/armaser
+	// quota'd 6+6, ~2 built in a whole watched match). Bounded small, so it
+	// cannot eat the line the way the old un-hoisted floors could.
+	//
+	// NAMED, NOT ASKED FOR BY ROLE. aiFactoryMgr.GetRoleDef(fac, SUPPORT) is a
+	// weighted RANDOM DRAW over every main-role-support def the line can build,
+	// re-rolled every call -- it is that line's support roulette, not its radar.
+	// Factory::EyeDefFor holds the per-faction pair instead.
+	//
+	// Radar entry first: floors are checked top-down and the first one short
+	// wins, so the eyes are bought before the jammer cover.
+	//
+	// EyeDefFor returns null for every T1 line, because no faction has a T1
+	// mobile radar or jammer -- no escorts before T2, by construction.
+	{
+		const uint squads = Military::EscortSquadCount();
+		if (squads > 0) {
+			const int per = int(ai.GetTunable("apex_escort_per_squad",
+					float(ESCORT_PER_SQUAD)));
+			for (int k = 0; k < 2; ++k) {
+				CCircuitDef@ eye = Factory::EyeDefFor(fac.circuitDef, k == 1);
+				if ((eye is null) || !eye.IsAvailable(ai.frame))
+					continue;
+				defs.insertLast(eye);
+				want.insertLast(per * int(squads));
+				isFloor.insertLast(true);
+			}
+		}
+	}
+
+
 	// T2 CONS BUT NO T2 ARMY: army is the only thing this line makes until
 	// the core T2 combat roles are covered.
 	//
@@ -382,34 +415,6 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			defs.insertLast(scout);
 			want.insertLast(n);
 			isFloor.insertLast(true);
-		}
-	}
-
-	// EYES AND COVER FOR EACH SQUAD.
-	//
-	// NAMED, NOT ASKED FOR BY ROLE. aiFactoryMgr.GetRoleDef(fac, SUPPORT) is a
-	// weighted RANDOM DRAW over every main-role-support def the line can build,
-	// re-rolled every call -- it is that line's support roulette, not its radar.
-	// Factory::EyeDefFor holds the per-faction pair instead.
-	//
-	// Radar entry first: floors are checked top-down and the first one short
-	// wins, so the eyes are bought before the jammer cover.
-	//
-	// EyeDefFor returns null for every T1 line, because no faction has a T1
-	// mobile radar or jammer -- no escorts before T2, by construction.
-	{
-		const uint squads = Military::EscortSquadCount();
-		if (squads > 0) {
-			const int per = int(ai.GetTunable("apex_escort_per_squad",
-					float(ESCORT_PER_SQUAD)));
-			for (int k = 0; k < 2; ++k) {
-				CCircuitDef@ eye = Factory::EyeDefFor(fac.circuitDef, k == 1);
-				if ((eye is null) || !eye.IsAvailable(ai.frame))
-					continue;
-				defs.insertLast(eye);
-				want.insertLast(per * int(squads));
-				isFloor.insertLast(true);
-			}
 		}
 	}
 

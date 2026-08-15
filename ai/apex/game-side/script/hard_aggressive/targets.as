@@ -104,7 +104,11 @@ array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
 // which matters exactly when enemy jammers make seeing them the problem.
 array<float> ROLE_RAIDER  = {0.35f, 0.10f, 0.05f, 0.04f, 0.03f};
 array<float> ROLE_ASSAULT = {0.35f, 0.2f, 0.24f, 0.18f, 0.08f};
-array<float> ROLE_SKIRM   = {0.12f, 0.25f, 0.17f, 0.15f, 0.14f};
+// Rises with the economy, never falls: apexearth 2026-08-15, watching --
+// "in the first few minutes we want mostly raiders, but as time goes on we
+// want much more thugs, units that are tough and can hold the line."
+// Thug/Hammer (corthud/armham) carry this role.
+array<float> ROLE_SKIRM   = {0.12f, 0.26f, 0.28f, 0.28f, 0.28f};
 array<float> ROLE_RIOT    = {0.10f, 0.10f, 0.10f, 0.09f, 0.08f};
 array<float> ROLE_ARTY    = {0.03f, 0.05f, 0.08f, 0.10f, 0.12f};
 array<float> ROLE_AA      = {0.05f, 0.06f, 0.07f, 0.07f, 0.07f};
