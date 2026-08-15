@@ -73,8 +73,20 @@ void ITaskModule::AssignTask(CCircuitUnit* unit, IUnitTask* task)
 	// call into script-visible state from there), and RemoveAssignee/AssignTo
 	// give script two more chances to drop a reference before Start() runs.
 	// Hold our own across the whole sequence.
+	if (task->IsDead()) {
+		return;  // assigning a dead task re-animates a zombie; see below
+	}
 	task->AddRef();
-	unit->GetTask()->RemoveAssignee(unit);
+	// Bracket the CURRENT task too: RemoveAssignee moves the unit to idle,
+	// and if the unit held the task's last reference, SetTask(idle)'s Release
+	// deletes it MID-CALL -- symbolized live (mirror loop, 2026-08-15) as an
+	// AV on `this->units` right after the idle AssignTo returned.
+	IUnitTask* cur = unit->GetTask();
+	if (cur != nullptr) {
+		cur->AddRef();
+		cur->RemoveAssignee(unit);
+		cur->Release();
+	}
 	task->AssignTo(unit);
 	task->Start(unit);
 	task->Release();
@@ -91,6 +103,14 @@ IUnitTask* ITaskModule::AssignTask(CCircuitUnit* unit)
 	// freed. AddRef the moment we have it, for the same reason DequeueTask
 	// does.
 	IUnitTask* task = MakeTask(unit);
+	// A DEAD task must never be assigned: script-side re-election caches can
+	// return a task that was aborted since it was remembered, and AssignTo
+	// would hand the unit a task no queue owns -- the unit's reference becomes
+	// the last one, and the next reassignment frees the task mid-
+	// RemoveAssignee (the mirror-loop crash family).
+	if ((task != nullptr) && task->IsDead()) {
+		return nullptr;
+	}
 	if (task != nullptr) {
 		task->AddRef();
 		task->AssignTo(unit);

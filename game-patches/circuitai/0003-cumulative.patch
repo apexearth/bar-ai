@@ -4552,7 +4552,7 @@ index 7f782e8..be41aa3 100644
  	Handlers2 createdHandler;
  	Handlers1 finishedHandler;
 diff --git a/src/circuit/module/TaskModule.cpp b/src/circuit/module/TaskModule.cpp
-index e6c27f5..4e2feb2 100644
+index e6c27f5..ef5627b 100644
 --- a/src/circuit/module/TaskModule.cpp
 +++ b/src/circuit/module/TaskModule.cpp
 @@ -30,9 +30,12 @@ ITaskModule::ITaskModule(CCircuitAI* circuit, IScript* script)
@@ -4581,17 +4581,30 @@ index e6c27f5..4e2feb2 100644
  }
  
  void ITaskModule::Release()
-@@ -62,24 +68,57 @@ void ITaskModule::Release()
+@@ -62,24 +68,77 @@ void ITaskModule::Release()
  
  void ITaskModule::AssignTask(CCircuitUnit* unit, IUnitTask* task)
  {
+-	unit->GetTask()->RemoveAssignee(unit);
 +	// Same guard as DequeueTask below: task->Start(unit) can run script
 +	// (Start() dispatches through the task hierarchy, and several task types
 +	// call into script-visible state from there), and RemoveAssignee/AssignTo
 +	// give script two more chances to drop a reference before Start() runs.
 +	// Hold our own across the whole sequence.
++	if (task->IsDead()) {
++		return;  // assigning a dead task re-animates a zombie; see below
++	}
 +	task->AddRef();
- 	unit->GetTask()->RemoveAssignee(unit);
++	// Bracket the CURRENT task too: RemoveAssignee moves the unit to idle,
++	// and if the unit held the task's last reference, SetTask(idle)'s Release
++	// deletes it MID-CALL -- symbolized live (mirror loop, 2026-08-15) as an
++	// AV on `this->units` right after the idle AssignTo returned.
++	IUnitTask* cur = unit->GetTask();
++	if (cur != nullptr) {
++		cur->AddRef();
++		cur->RemoveAssignee(unit);
++		cur->Release();
++	}
  	task->AssignTo(unit);
  	task->Start(unit);
 +	task->Release();
@@ -4609,6 +4622,14 @@ index e6c27f5..4e2feb2 100644
 +	// freed. AddRef the moment we have it, for the same reason DequeueTask
 +	// does.
  	IUnitTask* task = MakeTask(unit);
++	// A DEAD task must never be assigned: script-side re-election caches can
++	// return a task that was aborted since it was remembered, and AssignTo
++	// would hand the unit a task no queue owns -- the unit's reference becomes
++	// the last one, and the next reassignment frees the task mid-
++	// RemoveAssignee (the mirror-loop crash family).
++	if ((task != nullptr) && task->IsDead()) {
++		return nullptr;
++	}
  	if (task != nullptr) {
 +		task->AddRef();
  		task->AssignTo(unit);
