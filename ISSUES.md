@@ -1271,6 +1271,16 @@ find the double-free/use-after-free, independent of the mid-game crash below.
 
 ## PARTIALLY FIXED: the recurring "IRefCounter::Release() -> delete this" crash (2026-08-14)
 
+**Overnight tally, 2026-08-15 (running):** after counted `buildTasks`
+membership, the AssignTask reference-transfer, the ring-clamp, and finally
+a counted `unit->task` pointer (`CCircuitUnit::SetTask` AddRef/Release,
+crash #7 at 63 game-minutes in `UnitMoveFailed` was the finder), the soak
+rotation has run Glitters 97m + Glitters 47m + Comet 41m + Ascendancy 41m
++ Adamantium 57m + Glitters 37m crash-free, with the two crashes found en
+route (ring-clamp at ~35m, unit->task at 63m) each fixed and the loop
+continued. The class dies one uncounted pointer at a time; unit->task was
+the last known holder of a bare task pointer.
+
 **2026-08-15, SIXTH crash, and it exposed why the AddRef brackets are not
 enough.** apexearth's watched 8v8 crashed at frame 47331; addr2line (docker
 image toolchain, `x86_64-w64-mingw32-addr2line`, ImageBase+offset) resolved
