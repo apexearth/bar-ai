@@ -60,6 +60,15 @@ void CIdleTask::Update()
 	while (it != updateUnits.end()) {
 		CCircuitUnit* ass = *it;
 
+		// Zombies (deferred-deleted dead units, CCircuitAI::deadUnits) can
+		// arrive here through stale task memberships; drain them, never
+		// hand them to MakeTask.
+		if (ass->IsDead()) {
+			units.erase(ass);
+			it = updateUnits.erase(it);
+			continue;
+		}
+
 		// get rid of delayed by engine UnitIdle event from previous task
 		if (frame < ass->GetTaskFrame() + 20) {
 			++it;

@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index 0fd0e0b..9a2e7c2 100644
+index 0fd0e0b..3dc3921 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -60,6 +60,7 @@
@@ -10,7 +10,27 @@ index 0fd0e0b..9a2e7c2 100644
  
  namespace circuit {
  
-@@ -1829,6 +1830,27 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnStructsNear(const springai::AIFloat
+@@ -803,6 +804,10 @@ int CCircuitAI::Release(int reason)
+ 	}
+ 	teamUnits.clear();
+ 	garbage.clear();
++	for (CCircuitUnit* unit : deadUnits) {
++		delete unit;
++	}
++	deadUnits.clear();
+ 	for (auto& kv : enemyInfos) {
+ 		delete kv.second;
+ 	}
+@@ -1509,7 +1514,7 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+ void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
+ {
+ 	garbage.erase(unit);
+-	delete unit;
++	deadUnits.insert(unit);  // deferred to Release(); see deadUnits decl
+ }
+ 
+ float CCircuitAI::GetTeamMetalFill(int otherTeamId) const
+@@ -1829,6 +1834,27 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnStructsNear(const springai::AIFloat
  	return out;
  }
  
@@ -38,7 +58,7 @@ index 0fd0e0b..9a2e7c2 100644
  float CCircuitAI::GetPathLength(CCircuitUnit* unit, const springai::AIFloat3& to)
  {
  	if ((unit == nullptr) || (unit->GetCircuitDef() == nullptr)) {
-@@ -1988,28 +2010,94 @@ float CCircuitAI::GetNetInflAt(const AIFloat3& pos) const
+@@ -1988,28 +2014,94 @@ float CCircuitAI::GetNetInflAt(const AIFloat3& pos) const
  // Cost-weighted so a dead constructor or a dead tank moves it and a dead scout
  // barely does. Decayed so it tracks the CURRENT attack rather than accumulating
  // every fight of the game into a meaningless average.
@@ -144,10 +164,18 @@ index 0fd0e0b..9a2e7c2 100644
  }
  
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index 0bdafed..31c719e 100644
+index 0bdafed..b62fd28 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -196,11 +196,20 @@ public:
+@@ -16,6 +16,7 @@
+ #include <memory>
+ #include <unordered_map>
+ #include <map>
++#include <algorithm>
+ #include <set>
+ #include <vector>
+ 
+@@ -196,11 +197,20 @@ public:
  	bool IsCommanderWreck(springai::Feature* f);
  	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
  	void NoteTrade(bool isKill, CCircuitDef* cdef);
@@ -171,7 +199,7 @@ index 0bdafed..31c719e 100644
  	// BWEM chokepoints. Computed every game by CGridAnalyzer and, until now,
  	// reachable from nowhere: DefenceData pushes them into defPoints but every
  	// consumer selects via GetDefIndices(cluster), which only ever indexes the
-@@ -272,6 +281,12 @@ public:
+@@ -272,6 +282,12 @@ public:
  	// cannot answer "what of ours is standing in the way" -- it only answers it
  	// for the factions someone remembered to list.
  	std::vector<CCircuitUnit*> GetOwnStructsNear(const springai::AIFloat3& pos, float radius);
@@ -184,7 +212,38 @@ index 0bdafed..31c719e 100644
  	// Engine path length for this unit's move type, or -1 when there is no path.
  	// CircuitAI's own areas come from CTerrainData and are terrain-only, so a
  	// pocket walled in by BUILDINGS is invisible to CanMoveToPos. The engine's
-@@ -367,9 +382,10 @@ private:
+@@ -309,7 +325,14 @@ public:
+ 	bool UnitControl(CCircuitUnit* unit, bool isEnable);
+ 	bool UnitControl(ICoreUnit::Id unitId, bool isEnable) { return UnitControl(GetTeamUnit(unitId), isEnable); }
+ 
+-	void AddActionUnit(CCircuitUnit* unit) { actionUnits.push_back(unit); }
++	// Dedupe: a unit listed twice is reaped twice on death -- double delete,
++	// double task->Release, and the heap corruption that took Lua down with
++	// it (cushion-trap stack: UpdateActions -> ~CCircuitUnit -> Release).
++	void AddActionUnit(CCircuitUnit* unit) {
++		if (std::find(actionUnits.begin(), actionUnits.end(), unit) == actionUnits.end()) {
++			actionUnits.push_back(unit);
++		}
++	}
+ 
+ private:
+ 	void UpdateActions();
+@@ -323,6 +346,14 @@ private:
+ 	unsigned int actionIterator;
+ 
+ 	std::set<CCircuitUnit*> garbage;
++	// Dead units are parked here instead of freed: task `units` sets can hold
++	// stale memberships past UnitDestroyed (observed live: CSRepairTask
++	// iterating a freed unit, and SetTask on freed unit memory double-releasing
++	// a manager's idleTask to destruction — the Lua-heap-corruption crash
++	// family). A zombie unit keeps valid memory: stale touches become inert
++	// (TRY_UNIT absorbs dead-engine-unit commands) and refcounts stay honest.
++	// Freed in Release(). A set so a double reap cannot park a unit twice.
++	std::set<CCircuitUnit*> deadUnits;
+ // <<< Units ---- END
+ 
+ // >>> AIOptions.lua ---- BEGIN
+@@ -367,9 +398,10 @@ private:
  	#define HOT_DECAY_PERIOD	(FRAMES_PER_SEC * 20)
  	#define HOT_DECAY			0.80f   // ~1 min half-life
  	#define HOT_MIN_WEIGHT		250.f   // metal lost before the spot means anything
@@ -4555,10 +4614,10 @@ index e2094ce..fb5c073 100644
  	virtual void DequeueTask(IUnitTask* task, bool done = false);
  
 diff --git a/src/circuit/script/BuilderScript.cpp b/src/circuit/script/BuilderScript.cpp
-index 9c78355..95de242 100644
+index 9c78355..de282ad 100644
 --- a/src/circuit/script/BuilderScript.cpp
 +++ b/src/circuit/script/BuilderScript.cpp
-@@ -103,6 +103,17 @@ CBuilderScript::CBuilderScript(CScriptManager* scr, CBuilderManager* mgr)
+@@ -103,6 +103,20 @@ CBuilderScript::CBuilderScript(CScriptManager* scr, CBuilderManager* mgr)
  	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ Enqueue(const SBuildTask& in)", asMETHODPR(CBuilderManager, Enqueue, (const TaskB::SBuildTask&), IBuilderTask*), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ Enqueue(const SServBTask& in)", asMETHODPR(CBuilderManager, Enqueue, (const TaskB::SServBTask&), IUnitTask*), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ EnqueueRetreat()", asMETHOD(CBuilderManager, EnqueueRetreat), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4572,7 +4631,10 @@ index 9c78355..95de242 100644
 +	// re-tasks it once it goes idle except the engine's own AiUnitIdle
 +	// callback, which this measurement shows is not prompt enough under
 +	// sustained threat.
-+	r = engine->RegisterObjectMethod("CBuilderManager", "void AssignTask(CCircuitUnit@, IUnitTask@)", asMETHODPR(CBuilderManager, AssignTask, (CCircuitUnit*, IUnitTask*), void), asCALL_THISCALL); ASSERT(r >= 0);
++	// @+ on the task: the VM passes handle params with +1 that the callee must
++	// release; the native AssignTask never does, so plain @ leaked a reference
++	// per call. Auto-handle makes the engine drop the +1 after the call.
++	r = engine->RegisterObjectMethod("CBuilderManager", "void AssignTask(CCircuitUnit@, IUnitTask@+)", asMETHODPR(CBuilderManager, AssignTask, (CCircuitUnit*, IUnitTask*), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ EnqueueMexUp(const AIFloat3& in, CCircuitDef@)", asFUNCTION(CBuilderManager_EnqueueMexUp), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CBuilderManager", "uint GetWorkerCount() const", asMETHOD(CBuilderManager, GetWorkerCount), asCALL_THISCALL); ASSERT(r >= 0);
  	// apex: see BuilderManager.h -- lets script report the task budget that gates
@@ -5061,7 +5123,7 @@ index d4ebead..9ee2916 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/script/RefCounter.cpp b/src/circuit/script/RefCounter.cpp
-index 71d5486..b14e0aa 100644
+index 71d5486..d194cc7 100644
 --- a/src/circuit/script/RefCounter.cpp
 +++ b/src/circuit/script/RefCounter.cpp
 @@ -1,40 +1,74 @@
@@ -5163,8 +5225,8 @@ index 71d5486..b14e0aa 100644
 +	if (prev <= 0) {
 +		__builtin_trap();  // Release on a dead object: the over-release IS this call
 +	}
-+	if (permanent && (prev == 1)) {
-+		__builtin_trap();  // a singleton released to zero: THIS call is the imbalance
++	if (permanent && (prev <= kCushion + 1)) {
++		__builtin_trap();  // pierced the singleton cushion: THIS call is the over-release
 +	}
 +	if (prev == 1) {
 +		delete this;
@@ -5180,10 +5242,10 @@ index 71d5486..b14e0aa 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/script/RefCounter.h b/src/circuit/script/RefCounter.h
-index f908a50..afd43d1 100644
+index f908a50..3500614 100644
 --- a/src/circuit/script/RefCounter.h
 +++ b/src/circuit/script/RefCounter.h
-@@ -1,36 +1,54 @@
+@@ -1,36 +1,59 @@
 -/*
 - * RefCounter.h
 - *
@@ -5255,8 +5317,13 @@ index f908a50..afd43d1 100644
 +	// CRASH DIAGNOSTIC (temporary): singletons (nil/idle/player tasks) must
 +	// never be released to zero before their module's dtor; trap at the
 +	// over-releasing call so the stack dump names it.
-+	void SetPermanent() { permanent = true; }
-+	void ClearPermanent() { permanent = false; }
++	// The cushion turns holder-count noise into a clean signal: a singleton's
++	// count is cushion + born + holders, holders never negative, so ANY
++	// release observing prev <= kCushion+1 is a net over-release -- the trap
++	// fires at the offending call, not at the last legitimate holder's exit.
++	static constexpr int kCushion = 1000000;
++	void SetPermanent() { permanent = true; refCount += kCushion; }
++	void ClearPermanent() { permanent = false; refCount -= kCushion; }
 +	bool IsPermanent() const { return permanent; }
 +
 +	// CRASH DIAGNOSTIC (temporary): each refcounted object lives on its own
@@ -5275,10 +5342,26 @@ index f908a50..afd43d1 100644
 +
 +#endif // SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
 diff --git a/src/circuit/task/IdleTask.cpp b/src/circuit/task/IdleTask.cpp
-index f210b3a..6a0cc07 100644
+index f210b3a..900610d 100644
 --- a/src/circuit/task/IdleTask.cpp
 +++ b/src/circuit/task/IdleTask.cpp
-@@ -68,8 +68,20 @@ void CIdleTask::Update()
+@@ -60,6 +60,15 @@ void CIdleTask::Update()
+ 	while (it != updateUnits.end()) {
+ 		CCircuitUnit* ass = *it;
+ 
++		// Zombies (deferred-deleted dead units, CCircuitAI::deadUnits) can
++		// arrive here through stale task memberships; drain them, never
++		// hand them to MakeTask.
++		if (ass->IsDead()) {
++			units.erase(ass);
++			it = updateUnits.erase(it);
++			continue;
++		}
++
+ 		// get rid of delayed by engine UnitIdle event from previous task
+ 		if (frame < ass->GetTaskFrame() + 20) {
+ 			++it;
+@@ -68,8 +77,20 @@ void CIdleTask::Update()
  
  		it = updateUnits.erase(it);
  
@@ -14747,7 +14830,7 @@ index be8a95f..15dcd39 100644
  	float costE;
  	float upkeepM;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index aab872c..aafa1c6 100644
+index aab872c..954860d 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -6,6 +6,7 @@
@@ -14794,7 +14877,7 @@ index aab872c..aafa1c6 100644
 +		// CRASH DIAGNOSTIC (temporary): a nil/idle/player singleton about to
 +		// be released with no other holder means THIS release is the refcount
 +		// imbalance -- dump full context before the RefCounter trap fires.
-+		if ((this->task != nullptr) && this->task->IsPermanent() && (this->task->GetRefCount() <= 1)) {
++		if ((this->task != nullptr) && this->task->IsPermanent() && (this->task->GetRefCount() <= IRefCounter::kCushion + 1)) {
 +			CCircuitAI* c = (manager != nullptr) ? manager->GetCircuit() : nullptr;
 +			if (c != nullptr) {
 +				c->LOG("apex REFTRAP: unit=%d def=%d oldType=%d oldMgr=%p newType=%d newMgr=%p unitMgr=%p refs=%d",

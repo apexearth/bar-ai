@@ -56,8 +56,8 @@ int IRefCounter::Release()
 	if (prev <= 0) {
 		__builtin_trap();  // Release on a dead object: the over-release IS this call
 	}
-	if (permanent && (prev == 1)) {
-		__builtin_trap();  // a singleton released to zero: THIS call is the imbalance
+	if (permanent && (prev <= kCushion + 1)) {
+		__builtin_trap();  // pierced the singleton cushion: THIS call is the over-release
 	}
 	if (prev == 1) {
 		delete this;

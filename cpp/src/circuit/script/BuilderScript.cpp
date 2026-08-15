@@ -113,7 +113,10 @@ CBuilderScript::CBuilderScript(CScriptManager* scr, CBuilderManager* mgr)
 	// re-tasks it once it goes idle except the engine's own AiUnitIdle
 	// callback, which this measurement shows is not prompt enough under
 	// sustained threat.
-	r = engine->RegisterObjectMethod("CBuilderManager", "void AssignTask(CCircuitUnit@, IUnitTask@)", asMETHODPR(CBuilderManager, AssignTask, (CCircuitUnit*, IUnitTask*), void), asCALL_THISCALL); ASSERT(r >= 0);
+	// @+ on the task: the VM passes handle params with +1 that the callee must
+	// release; the native AssignTask never does, so plain @ leaked a reference
+	// per call. Auto-handle makes the engine drop the +1 after the call.
+	r = engine->RegisterObjectMethod("CBuilderManager", "void AssignTask(CCircuitUnit@, IUnitTask@+)", asMETHODPR(CBuilderManager, AssignTask, (CCircuitUnit*, IUnitTask*), void), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ EnqueueMexUp(const AIFloat3& in, CCircuitDef@)", asFUNCTION(CBuilderManager_EnqueueMexUp), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "uint GetWorkerCount() const", asMETHOD(CBuilderManager, GetWorkerCount), asCALL_THISCALL); ASSERT(r >= 0);
 	// apex: see BuilderManager.h -- lets script report the task budget that gates

@@ -804,6 +804,10 @@ int CCircuitAI::Release(int reason)
 	}
 	teamUnits.clear();
 	garbage.clear();
+	for (CCircuitUnit* unit : deadUnits) {
+		delete unit;
+	}
+	deadUnits.clear();
 	for (auto& kv : enemyInfos) {
 		delete kv.second;
 	}
@@ -1510,7 +1514,7 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
 void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
 {
 	garbage.erase(unit);
-	delete unit;
+	deadUnits.insert(unit);  // deferred to Release(); see deadUnits decl
 }
 
 float CCircuitAI::GetTeamMetalFill(int otherTeamId) const

@@ -16,6 +16,7 @@
 #include <memory>
 #include <unordered_map>
 #include <map>
+#include <algorithm>
 #include <set>
 #include <vector>
 
@@ -324,7 +325,14 @@ public:
 	bool UnitControl(CCircuitUnit* unit, bool isEnable);
 	bool UnitControl(ICoreUnit::Id unitId, bool isEnable) { return UnitControl(GetTeamUnit(unitId), isEnable); }
 
-	void AddActionUnit(CCircuitUnit* unit) { actionUnits.push_back(unit); }
+	// Dedupe: a unit listed twice is reaped twice on death -- double delete,
+	// double task->Release, and the heap corruption that took Lua down with
+	// it (cushion-trap stack: UpdateActions -> ~CCircuitUnit -> Release).
+	void AddActionUnit(CCircuitUnit* unit) {
+		if (std::find(actionUnits.begin(), actionUnits.end(), unit) == actionUnits.end()) {
+			actionUnits.push_back(unit);
+		}
+	}
 
 private:
 	void UpdateActions();
@@ -338,6 +346,14 @@ private:
 	unsigned int actionIterator;
 
 	std::set<CCircuitUnit*> garbage;
+	// Dead units are parked here instead of freed: task `units` sets can hold
+	// stale memberships past UnitDestroyed (observed live: CSRepairTask
+	// iterating a freed unit, and SetTask on freed unit memory double-releasing
+	// a manager's idleTask to destruction — the Lua-heap-corruption crash
+	// family). A zombie unit keeps valid memory: stale touches become inert
+	// (TRY_UNIT absorbs dead-engine-unit commands) and refcounts stay honest.
+	// Freed in Release(). A set so a double reap cannot park a unit twice.
+	std::set<CCircuitUnit*> deadUnits;
 // <<< Units ---- END
 
 // >>> AIOptions.lua ---- BEGIN

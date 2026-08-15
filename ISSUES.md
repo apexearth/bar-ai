@@ -1467,13 +1467,30 @@ release-to-zero — fired at frame 21290 under
 CCircuitUnit::SetTask releasing a singleton with NO other holder` — an
 over-release against zero holders, but of WHICH singleton and whose manager
 the stack cannot say;
-(d) REFTRAP context log in `SetTask` (unit id, old/new task type, manager
-pointers) deployed, loop running. All audits of the explicit AddRef/Release
-pairs (MarkCounted, buildTasks membership, DequeueTask, AssignTask transfer,
-Stop/AssignTo churn) balance on paper; the imbalance is on a path those
-audits have not reached. Guard-page run also produced one Lua sweeplist
-crash NOT caught by the allocator — possibly a second corruption family
-(non-refcounted object), judge after the singleton bug dies.
+(d) REFTRAP context log in `SetTask` showed the drained singleton is always
+an IDLE task with zero holders left — the born ref was stolen earlier;
+(e) the 1M-reference CUSHION on singletons finally trapped the thief at the
+call itself: `CCircuitAI::UpdateActions → DeleteTeamUnit → ~CCircuitUnit →
+task->Release()` — **a unit sat in `actionUnits` TWICE, was reaped twice,
+and `delete`d twice.** The second dtor ran on freed memory: its stale `task`
+field still read the idleTask pointer, so idle was released once per
+double-reap (the drain), and the double `delete` itself is the malloc-heap
+corruption that killed Lua GC sweeps, unit LuaScript calls, and both AI
+DLLs at random.
+
+**FIX (2026-08-15, deployed, verification loop running):** three layers in
+the DLL — (1) `AddActionUnit` dedupes (root cause: duplicate listing);
+(2) `DeleteTeamUnit` defers the actual `delete` to `Release()` via a
+`deadUnits` set (zombie units keep valid memory, so ANY remaining stale
+task-set membership — CSRepairTask iterating a dead nano was observed live —
+becomes inert instead of use-after-free; the set also makes a double reap
+harmless); (3) `CIdleTask::Update` drains dead units instead of handing
+them to MakeTask. Also fixed en route: the script binding
+`AssignTask(CCircuitUnit@, IUnitTask@)` leaked one task reference per call
+(plain `@` param = VM passes +1 the callee must release; now `@+`).
+Diagnostics kept in the build until the loop proves it clean: refcount
+poison/underflow traps, guard-page allocator for refcounted objects,
+singleton cushion trap.
 
 ## NEW: anti-air coverage is lacking (2026-08-13, watching)
 

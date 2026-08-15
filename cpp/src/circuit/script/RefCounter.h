@@ -33,8 +33,13 @@ public:
 	// CRASH DIAGNOSTIC (temporary): singletons (nil/idle/player tasks) must
 	// never be released to zero before their module's dtor; trap at the
 	// over-releasing call so the stack dump names it.
-	void SetPermanent() { permanent = true; }
-	void ClearPermanent() { permanent = false; }
+	// The cushion turns holder-count noise into a clean signal: a singleton's
+	// count is cushion + born + holders, holders never negative, so ANY
+	// release observing prev <= kCushion+1 is a net over-release -- the trap
+	// fires at the offending call, not at the last legitimate holder's exit.
+	static constexpr int kCushion = 1000000;
+	void SetPermanent() { permanent = true; refCount += kCushion; }
+	void ClearPermanent() { permanent = false; refCount -= kCushion; }
 	bool IsPermanent() const { return permanent; }
 
 	// CRASH DIAGNOSTIC (temporary): each refcounted object lives on its own

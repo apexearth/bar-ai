@@ -123,7 +123,7 @@ void CCircuitUnit::SetTask(IUnitTask* task)
 		// CRASH DIAGNOSTIC (temporary): a nil/idle/player singleton about to
 		// be released with no other holder means THIS release is the refcount
 		// imbalance -- dump full context before the RefCounter trap fires.
-		if ((this->task != nullptr) && this->task->IsPermanent() && (this->task->GetRefCount() <= 1)) {
+		if ((this->task != nullptr) && this->task->IsPermanent() && (this->task->GetRefCount() <= IRefCounter::kCushion + 1)) {
 			CCircuitAI* c = (manager != nullptr) ? manager->GetCircuit() : nullptr;
 			if (c != nullptr) {
 				c->LOG("apex REFTRAP: unit=%d def=%d oldType=%d oldMgr=%p newType=%d newMgr=%p unitMgr=%p refs=%d",
