@@ -50,6 +50,16 @@ IUnitTask@ GuardBuildCapability(CCircuitUnit@ unit, IUnitTask@ task)
 	if (unit.circuitDef.CanBuild(def))
 		return task;
 
+	// A worker that cannot BUILD the def can still ASSIST it once a nanoframe
+	// stands -- and a repair task on the nanoframe is exactly that. This is
+	// what a Butler (armfark) is for, and it also breaks the hot re-election
+	// loop: a bare null sent the unit back through the pipeline to receive the
+	// same offer next tick, ~2,500 times a game per pair (measured, 8v8
+	// Glitters 20260815-080058).
+	CCircuitUnit@ frame = task.target;
+	if (frame !is null)
+		return aiBuilderMgr.Enqueue(TaskB::Repair(Task::Priority::NORMAL, frame));
+
 	AiLog("apex: BUG blocked " + unit.circuitDef.GetName() + " -> "
 		+ def.GetName() + " (not in buildOptions)");
 	return null;
