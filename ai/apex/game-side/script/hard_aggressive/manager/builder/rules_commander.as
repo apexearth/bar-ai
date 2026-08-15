@@ -34,6 +34,15 @@ int gCommUnstuck = 0;
 const int COMM_NOTASK_TICKS = 3;
 int gCommNoTaskStreak = 0;
 int gCommForced = 0;
+// Consecutive AiUpdates the commander has HELD a retreat task. CRetreatTask
+// only ends at >98% health, or (for a commander) zero enemy influence at its
+// own tile -- neither is guaranteed to ever arrive while enemies loiter near
+// home, and a unit holding a task is never offered to AiMakeTask again, so a
+// pinned retreat is an absorbing state. Past this, the task is aborted and
+// the commander re-elected through the full pipeline.
+const int COMM_RETREAT_TICKS = 30;
+int gCommRetreatStreak = 0;
+int gCommRetreatCut = 0;
 int gNextCommDiag = 0;
 IUnitTask@ gCommLastLogged = null;  // see maketask.as's catch-all accept log
 
@@ -68,7 +77,8 @@ void CommDiag()
 	AiLog(Factory::T() + "apex: comm-why samples=" + gCDSamples
 		+ " noTask=" + gCDNoTask + " waiting=" + gCDWaiting
 		+ " ordered=" + gCDOrdered + " other=" + gCDOther
-		+ " unstuck=" + gCommUnstuck + " forced=" + gCommForced);
+		+ " unstuck=" + gCommUnstuck + " forced=" + gCommForced
+		+ " retreatCut=" + gCommRetreatCut);
 	AiLog(Factory::T() + "apex: comm-diag offers=" + gCommOffers
 		+ " offerNull=" + gCommOfferNull
 		+ " vetoReclaim=" + gCommVetoReclaim
@@ -114,7 +124,14 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 		const float fleeInfl = Factory::gHaveT2 ? ai.GetTunable("apex_comm_flee_influence", 0.01f) : 0.f;
 		if (fleeInfl > 0.f) {
 			const float hereInfl = ai.GetEnemyInflAt(unit.GetPos(ai.frame));
-			if (hereInfl > fleeInfl) {
+			// A retreat only helps when the ground fled TO is safer than the
+			// ground fled FROM. When home is just as hot, standing at the haven
+			// "retreating" defends nothing -- fall through and keep working;
+			// every build rule's own site-safety veto steers the work off hot
+			// ground anyway.
+			if ((hereInfl > fleeInfl)
+				&& (ai.GetEnemyInflAt(gHomePos) < hereInfl * 0.5f))
+			{
 				if (ai.frame >= gNextCommFleeLog) {
 					gNextCommFleeLog = ai.frame + 15 * SECOND;
 					AiLog(Factory::T() + "apex: commander leaving, enemy influence "

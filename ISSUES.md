@@ -5,30 +5,129 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
-## OPEN: Sniper (armsnipe) and Welder (armzeus) never built even once, despite a real nonzero baseline weight
+## MEASURED-CONFIRMED at tournament scale, 2026-08-15 -- entry kept one cycle for the record, then delete: T2 line builds only Hound -- facqueue core "floors" fill first-listed-first, and factory.json was never in the loop (2026-08-15)
 
-apexearth, across many games tonight: "not one sniper or welder was ever
-built. This is definitely a bug in behavior." Earlier tonight's fix raised
-both from a hard 0.00 to a real 0.12-0.20 across tier1-4 of `armalab` --
-confirmed NOT sufficient. Checked a real 28-minute post-fix match
-(`matches/20260815-014416-...`): reached T2, `allBuilt=` has 24 entries
-including several `armalab` siblings (armfido, armthund, armspid, armfast,
-armham, armrock) -- armsnipe/armzeus absent from all of them.
+**CONFIRMED FIXED, 24 tournament games (2x12, `tournaments/20260814-214257`
+and `-215028`, Geyser Plains, Apex vs stock BARb: 12-0 in decided games).**
+Every T2-reaching game (8 of 24 + both smoke matches) shows 2-4 combat
+types drawing orders instead of one: e.g. armfido 570 alongside armwar
+810/armrock 600/armham 520/armfast 513; Cortex games corsumo/cormort/
+corpyro/corhrk mixes with top share 54-80% BY METAL (heavies cost more per
+count -- count-balanced quotas, not the old 100%-of-orders monoculture).
+T1 lines likewise mixed (armpw/armwar/armham all drawing). Residual
+question, deliberately NOT tuned now: quotas balance by COUNT, so a heavy
+role takes a larger metal share -- if a future watched game shows heavy
+crowding out the rest, the lever is metal-weighting the core wants, a
+policy question for apexearth per CLAUDE.md.
 
-Ruled out: `isEnemyInArea` (`FactoryManager.cpp:1589`, one of the hard
-filters gating whether a def even enters the roulette-wheel candidate pool
-at all) -- it's a geography/scouting check, not role-specific, so it can't
-explain why THESE TWO specifically never draw while siblings in the same
-list do.
+ROOT CAUSE FOUND for the whole Hound/Sniper/Welder complex (supersedes the
+factory.json weight-tuning passes below -- those tables were largely
+irrelevant). The Brain drives every factory line (`apex_fac_queue_brain`
+default 1, `brain/facqueue.as`), which bypasses `CFactoryManager`'s
+roulette entirely: **while a line is driven, `factory.json` tier tables and
+`response.json` decide nothing** except through `GetRoleDef`'s per-role
+draw. Composition is decided in `QuotaFor`.
 
-Not yet checked: `bd->IsAvailable(frame)` (a per-def readiness/limit gate,
-part of the same `isAvailableDef` filter chain) and whether `response.json`'s
-`max_percent` for their roles (`skirmish` for armzeus, `anti_heavy_ass` for
-armsnipe) caps them out structurally. Both units have an unusually high
-energy-to-metal cost ratio (armsnipe 680M/20000E ≈ 29 E/M, armzeus
-350M/6100E ≈ 17 E/M) -- worth checking against this AI's own documented
-energy-management issues (converter/geo bugs found and fixed the same
-night) before assuming it's a factory-weight problem at all.
+Inside `QuotaFor`, the `T2ArmyShort` block inserted ASSAULT/HEAVY/AH/AHA as
+FLOOR entries, and `FillQuota`'s floor loop takes the FIRST short floor
+(`break`). ASSAULT is listed first, ASSAULT on `armalab` resolves only to
+`armfido`, and the floor counts ALIVE units -- so while Hounds die at the
+front, the assault floor is short forever and HEAVY/AHA (armfboy, armsnipe)
+never receive one order. Verbatim from
+`matches/20260815-040355-.../infolog.txt`:
+`facqueue armalab #6890 +1 armfido ... quota: armfido=5/21 armfboy=0/21
+armsnipe=0/21` -- repeatedly, all game. The T1 block has the same shape
+(`armpw=8/16 armwar=2/16 armham=3/16`, always armpw). armzeus (skirmish)
+and armmav (riot) live only in the gMix ratio section, which the early
+return never reaches while the core is short -- hence literally zero of
+each.
+
+**Patch (facqueue.as):** the two core blocks now insert their roles as
+ratio entries (`isFloor=false`), so `FillQuota` balances by have/want
+across the core instead of first-listed-first. Confirm on the next match:
+`quota:` log lines should show armfboy/armsnipe counts rising alongside
+armfido, and `allBuilt=` should stop being ~90% armfido within armalab
+combat. Delete the two factory.json-tuning entries below along with this
+one once measured.
+
+---
+
+## MEASURED-CONFIRMED at tournament scale, 2026-08-15 -- entry kept one cycle for the record, then delete: commander pinned in CRetreatTask for 13 minutes -- retreat is an absorbing state (2026-08-15)
+
+**CONFIRMED FIXED, same 24 tournament games + 2 instrumented smokes.** Zero
+commander deaths in 24 games (control match: died on the pin). `retreatCut`
+fired 3-19 times in every contested game and the commander returned to work
+each time; the new once-a-minute `comm-now` line (prints from the sampler,
+not AiMakeTask, so it cannot go silent when the commander wedges) shows
+commanders holding BUILDER tasks with live orders while under influence
+5-17 -- working through heat instead of standing, exactly the
+safer-ground-gate intent -- and retreating only on real damage (hp 69 ->
+retreat -> repaired -> back to work within 2 minutes, instrumented match
+`20260815-044903`). Overall `commIdle` fell from 56%+wedge-cases to 39-62%
+(mean ~52) vs stock BARb's own 27-65% in the same games; the remaining gap
+is the `waiting` bucket -- see the separate OPEN entry below.
+
+THE stuck-commander mechanism for "he just stands around doing nothing",
+found in `matches/20260815-040355-...`: at 10.8m the any-influence flee
+(`apex_comm_flee_influence`, post-T2) put the commander into a
+`CRetreatTask`; from that frame to its death at 25.7m the commander was
+~100% idle (gadget `commIdle` 89 -> 1615 of 2881 samples), `comm-why` and
+`comm threat=` logging stopped cold (both print from the commander's
+AiMakeTask path, which a unit HOLDING a task never re-enters), and the
+flee log printed exactly once. `CRetreatTask::Update`
+(`RetreatTask.cpp:165-190`) ends the retreat only at >98% health, or for a
+commander at zero enemy influence at its OWN tile -- with enemies loitering
+near home neither ever arrived, `Retreat()`'s dedup kept returning the held
+task, and the noTask watchdog never fires because a held retreat samples as
+"other", not noTask. Absorbing state; the commander stood at the haven
+while the base was ground down.
+
+**Patch, two halves (both needed -- the watchdog alone just re-enters the
+loop through CommanderTask's flee):** (1) `events.as CommIdleAttribute` now
+counts consecutive retreat-held samples and aborts the task after
+`apex_comm_retreat_ticks` (default 30 ≈ 30s), forcing a full re-election;
+(2) `rules_commander.as`'s influence-flee only fires when home ground is
+actually safer (`GetEnemyInflAt(gHomePos) < hereInfl * 0.5`) -- when home
+is just as hot, retreating defends nothing, so the commander keeps working
+and the per-rule site-safety vetoes steer the work. Confirm on the next
+match: `comm-why` keeps printing past a flee, `retreatCut=` > 0 when a
+retreat gets pinned, and gadget `commIdle/commSamp` stays well under the
+56% measured here. Delete once measured.
+
+---
+
+## OPEN: commander holds a build task, site in build range, NO engine order ever issued -- 60s lost per occurrence, source not yet traced (2026-08-15)
+
+Found while confirming the retreat-pin fix. In
+`matches/20260815-042833-.../infolog.txt` the (now position-annotated)
+stuck log shows: `stuck on bt13 ... comm=1500,3787 site=2144,4000
+def=armmex` twice in a row on the SAME site, and `stuck on bt4 ...
+comm=2174,3927 site=2184,3848 def=armsolar` -- the commander 80 elmos from
+the site, i.e. IN build range, holding the task for 60s with
+`CmdQueueSize()==0` before `apex_comm_stuck` dropped it. The `waiting`
+comm-why bucket (task held, no order) accumulated ~8.5 minutes in that
+match's first 12 minutes, mostly in sub-60s chunks the watchdog never trips
+on. Candidate mechanisms, not distinguished: (1) the engine silently
+refusing CmdBuild at a spot that became blocked/claimed (the documented
+silent-no-op class) with the task then never re-siting; (2) a path query
+that never completes; (3) benchmark-speed order-application lag inflating
+the bucket (CLAUDE.md: reads lag ~45 sim-seconds at the speed cap) --
+meaning the sub-60s chunks may not exist at watched/live speed at all.
+Next step: reproduce at `--speed 3` to separate (3) from (1)/(2) before
+touching any code; the stuck log's site/def annotation added 2026-08-15
+gives the repro everything it needs.
+
+**Scale data, 2026-08-15 tournaments:** `waiting` is now the single largest
+commander idle bucket everywhere -- ~34% of samples even in the healthiest
+instrumented game (612/1801), 60-75% of the first 12 minutes in the worst
+(first tournament's t010: repeated 60s stucks on corlab/cormex/corllt, the
+commander parked at one position for minutes at a time). Three games in
+the first 12-game tournament froze ALL commander logging at ~11 minutes
+(comm-why samples 636-794 for 30-minute games) -- terminal state unknown
+there because the diagnostics of the time only printed from AiMakeTask;
+the `comm-now` line added the same day prints from the sampler and closes
+that blind spot, and the second 12-game tournament showed zero freezes.
+This entry is now the main remaining commander-idle work item.
 
 ---
 

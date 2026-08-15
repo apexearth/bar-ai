@@ -226,6 +226,20 @@ Measured on this machine: a 27 game-minute match completes in ~44 s wall
   `hard_aggressive` entry.
 - Engine dirs are wiped on BAR update. Re-run `deploy_ai.py deploy` afterwards.
 
+## The Brain drives the factories — factory.json is mostly NOT in the loop
+
+With `apex_fac_queue_brain` on (the default), `brain/facqueue.as` takes every
+factory line: it aborts recruit tasks, holds the line on a Wait task, and
+issues build orders itself from `QuotaFor`. **While a line is driven,
+`factory.json` tier tables and `response.json` decide nothing** except
+through `GetRoleDef`'s per-role weighted draw. Days were spent tuning
+factory.json weights to fix "only Hounds get built" (2026-08-14) when the
+composition was actually decided by `QuotaFor`'s floor/ratio logic — traced
+2026-08-15 via the `apex: facqueue ... quota:` log lines, which print each
+line's per-def have/want and are the FIRST thing to read for any
+"wrong units built" complaint. Attribute a composition problem to the
+quota before touching any config table.
+
 ## Failure modes that are SILENT — check for these before believing a result
 
 Every one of these has produced a confident, wrong conclusion in this repo. They

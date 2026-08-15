@@ -322,6 +322,11 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 
 	// T2 CONS BUT NO T2 ARMY: army is the only thing this line makes until
 	// the core T2 combat roles are covered.
+	//
+	// NOT floors: floors fill first-listed-first, and the alive-count of the
+	// first role never reaches its want while its units die at the front -- so
+	// the roles after it never get a single order. As ratio entries the fill
+	// loop balances by have/want across the whole core instead.
 	if (T2ArmyShort(fac)) {
 		array<Type> core = {RT::ASSAULT, RT::HEAVY, RT::AH, RT::AHA};
 		for (uint c = 0; c < core.length(); ++c) {
@@ -330,7 +335,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 				continue;
 			defs.insertLast(d);
 			want.insertLast(T2CoreWanted());
-			isFloor.insertLast(true);
+			isFloor.insertLast(false);
 		}
 		if (defs.length() > 0)
 			return;      // nothing else off this line until the army exists
@@ -347,7 +352,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 				continue;
 			defs.insertLast(d);
 			want.insertLast(T1CoreWanted());
-			isFloor.insertLast(true);
+			isFloor.insertLast(false);      // balanced, not first-listed-first; see T2 block
 		}
 		if (defs.length() > 0)
 			return;      // nothing else off this line until the army exists

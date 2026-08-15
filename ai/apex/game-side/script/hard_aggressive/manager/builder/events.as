@@ -647,6 +647,20 @@ void CommIdleAttribute()
 	++gCDSamples;
 	IUnitTask@ t = u.task;
 	const int q = u.CmdQueueSize();
+	// The periodic print lives HERE, not only in the commander's AiMakeTask
+	// path: a commander wedged on a task it never leaves stops entering
+	// AiMakeTask entirely, and the log going silent at exactly the moment it
+	// wedges is what kept this class of bug invisible. Same throttle either way.
+	if (ai.frame >= gNextCommDiag) {
+		CommDiag();
+		const AIFloat3 cp = u.GetPos(ai.frame);
+		const int ty = (t is null) ? -1 : int(t.GetType());
+		AiLog(Factory::T() + "apex: comm-now task=" + ty
+			+ " bt" + ((ty == int(Task::Type::BUILDER)) ? int(t.GetBuildType()) : -1)
+			+ " q=" + q + " pos=" + int(cp.x) + "," + int(cp.z)
+			+ " hp=" + formatFloat(u.GetHealthPercent() * 100.f, "", 0, 0)
+			+ " infl=" + formatFloat(ai.GetEnemyInflAt(cp), "", 0, 2));
+	}
 	if ((t is null) || (t.GetType() == Task::Type::IDLE)
 		|| (t.GetType() == Task::Type::NIL))
 	{
@@ -679,13 +693,34 @@ void CommIdleAttribute()
 		} else {
 			gCommNoTaskStreak = 0;
 		}
+		gCommRetreatStreak = 0;
+	} else if (t.GetType() == Task::Type::RETREAT) {
+		++gCDOther;
+		// CRetreatTask ends only at >98% health, or zero enemy influence at
+		// the commander's own tile -- with enemies loitering near home neither
+		// may ever arrive, and a unit holding a task is never re-elected, so a
+		// pinned retreat holds the commander idle indefinitely. Abort it and
+		// let the pipeline decide again; CommanderTask re-issues the flee if
+		// the ground is still genuinely worth leaving.
+		if (++gCommRetreatStreak >= int(ai.GetTunable("apex_comm_retreat_ticks",
+				float(COMM_RETREAT_TICKS))))
+		{
+			gCommRetreatStreak = 0;
+			++gCommRetreatCut;
+			AiLog(Factory::T() + "apex: commander retreat held too long -- "
+				+ "re-electing (#" + gCommRetreatCut + ")");
+			t.Abort();
+		}
 	} else if (t.GetType() != Task::Type::BUILDER) {
 		++gCDOther;
+		gCommRetreatStreak = 0;
 	} else if (q > 0) {
 		++gCDOrdered;
 		gCommStuck = 0;
+		gCommRetreatStreak = 0;
 	} else {
 		++gCDWaiting;
+		gCommRetreatStreak = 0;
 		// Holding a build task with NO engine order. Briefly that is a pending
 		// path query; sustained, the task is one the commander will never start,
 		// and it will hold it forever because HoldWorkInProgress keeps returning
@@ -693,9 +728,13 @@ void CommIdleAttribute()
 		if (++gCommStuck >= int(ai.GetTunable("apex_comm_stuck", COMM_STUCK_TICKS))) {
 			gCommStuck = 0;
 			++gCommUnstuck;
+			const AIFloat3 cp = u.GetPos(ai.frame);
+			const AIFloat3 at = t.GetBuildPos();
 			AiLog(Factory::T() + "apex: commander stuck on bt"
 				+ t.GetBuildType() + " with no order -- dropping it (#"
-				+ gCommUnstuck + ")");
+				+ gCommUnstuck + ") comm=" + int(cp.x) + "," + int(cp.z)
+				+ " site=" + int(at.x) + "," + int(at.z) + " def="
+				+ ((t.buildDef !is null) ? t.buildDef.GetName() : "?"));
 			t.Abort();
 		}
 	}
