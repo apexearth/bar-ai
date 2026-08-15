@@ -74,7 +74,11 @@ float MassFloor()
 	float base = ai.GetTunable("apex_mass_floor", MASS_FLOOR);
 	if (base < gQuotaConfig)
 		base = gQuotaConfig;   // never undercut the config's own opening minimum
-	const float scaled = TeamArmyCost()
+	// OWN army, not TeamArmyCost: the promotion quota this feeds is per
+	// PLAYER, and scaling it by the whole ally side's army in an 8v8 set a
+	// bar no single player's pool could fill -- measured live as Fatboys
+	// loitering at the home guard anchor all late game, waiting to promote.
+	const float scaled = aiMilitaryMgr.armyCost
 			* ai.GetTunable("apex_mass_per_army", 0.0017f);
 	return (scaled > base) ? scaled : base;
 }
