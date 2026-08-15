@@ -112,7 +112,7 @@ IUnitTask@ TidyObsolete(CCircuitUnit@ unit, bool isComm)
 	// How OFTEN that happens is ObsoletePeriod's job -- a low-ranked target earns
 	// a long cooldown, so a corner turbine costs one walk and not a habit.
 	if (!isComm) {
-		IUnitTask@ tidy = ObsoleteReclaim(unit, aiEconomyMgr.isMetalFull, VALUE_NONE);
+		IUnitTask@ tidy = ObsoleteReclaim(unit, aiEconomyMgr.isMetalFull, true, VALUE_NONE);
 		if (tidy !is null)
 			return tidy;
 	}

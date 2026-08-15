@@ -494,11 +494,11 @@ IUnitTask@ ObsoleteUrgent(CCircuitUnit@ unit)
 			+ " t2=" + (Factory::gHaveT2 ? "1" : "0")
 			+ " t3=" + (Factory::gHaveT3 ? "1" : "0"));
 	}
-	return ObsoleteReclaim(unit, false, OBSOLETE_URGENT_VALUE);
+	return ObsoleteReclaim(unit, false, false, OBSOLETE_URGENT_VALUE);
 }
 
 IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit, bool allowAdv = false,
-		int minValue = VALUE_NONE)
+		bool idle = false, int minValue = VALUE_NONE)
 {
 	// NOT THE ADVANCED CONSTRUCTORS: an advanced con is the only unit that can
 	// build a moho, a reactor or a heavy turret, and there are never many, so
@@ -537,7 +537,11 @@ IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit, bool allowAdv = false,
 		return null;
 	// The permit is computed for the rank actually found, so a cell a gantry
 	// wants is not made to wait behind the cooldown a corner turbine earned.
-	if (ai.frame < gObsoleteTook + ObsoletePeriod(value))
+	// A PROVABLY IDLE unit skips the pacing outright: the cooldown prices the
+	// work this walk displaces, and an idle walk displaces nothing --
+	// apexearth: "rezbots and cons, if they're idling, have them reclaim
+	// obsolete buildings instead."
+	if (!idle && (ai.frame < gObsoleteTook + ObsoletePeriod(value)))
 		return null;
 	return ReclaimOwnDef(pick, defName, value);
 }

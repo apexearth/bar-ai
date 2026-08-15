@@ -117,6 +117,11 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		@t = aiBuilderMgr.DefaultMakeTask(unit);
 		if (t !is null)
 			return GuardBuildCapability(unit, t);
+		// An idle rez bot clears obsolete buildings before eating trees --
+		// same directive as the con idle floor and NanoTidy.
+		@t = ObsoleteReclaim(unit, false, true, VALUE_NONE);
+		if (t !is null)
+			return t;
 		return IdleFeatureReclaim(unit, false);
 	}
 
