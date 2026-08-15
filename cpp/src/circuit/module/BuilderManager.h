@@ -299,15 +299,16 @@ private:
 public:
 	virtual void FallbackTask(CCircuitUnit* unit) override;
 
-	void MarkUnfinishedUnit(CAllyUnit* target, IBuilderTask* task) {
-		unfinishedUnits[target] = task;
-	}
-	void MarkRepairUnit(ICoreUnit::Id targetId, CBRepairTask* task) {
-		repairUnits[targetId] = task;
-	}
-	void MarkReclaimUnit(CAllyUnit* target, CBReclaimTask* task) {
-		reclaimUnits[target] = task;
-	}
+	// The target-keyed maps hold COUNTED references: UnitDestroyed/UnitIdle
+	// dereference their values at arbitrary event times, and an entry whose
+	// task was freed elsewhere crashed two soaks at the same TaskRemoved
+	// stack (2026-08-15). A stale-but-alive task aborts harmlessly; a stale
+	// dangling one is an AV. Eviction of a previous occupant releases it.
+	void MarkUnfinishedUnit(CAllyUnit* target, IBuilderTask* task);
+	void MarkRepairUnit(ICoreUnit::Id targetId, CBRepairTask* task);
+	void MarkReclaimUnit(CAllyUnit* target, CBReclaimTask* task);
+	template <class T>
+	static void MarkCounted(T*& slot, T* task);
 
 	bool IsBuilderInArea(CCircuitDef* buildDef, const springai::AIFloat3& position) const;  // Check if build-area has proper builder
 	bool HasFreeAssists(CCircuitUnit* builder) const;

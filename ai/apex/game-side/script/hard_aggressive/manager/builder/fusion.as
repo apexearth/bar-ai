@@ -57,6 +57,59 @@ bool HaveReactor()
 	return ReactorCount() > 0;
 }
 
+// SECTIONS, NOT A FARM. Reactors closer than this chain their death
+// explosions: measured (match 20260815-150954) five AFUS at ~400-elmo
+// spacing died inside two minutes, two of them 19 frames apart, and each
+// same-frame commander pair died in the middle of that cluster. apexearth:
+// keep advanced fusions spread out into sections so one loss cannot take
+// the base. The gap is derived from that observed 400-elmo chain, with
+// margin; tunable.
+const float REACTOR_SECTION = 700.f;
+
+bool ReactorSectionClear(const AIFloat3& in spot)
+{
+	const float gap = ai.GetTunable("apex_reactor_spacing", REACTOR_SECTION);
+	for (uint i = 0; i < gFusions.length(); ++i) {
+		if (gFusions[i].GetPos(ai.frame).distance2D(spot) < gap)
+			return false;
+	}
+	return true;
+}
+
+// A blocked spot is pushed straight out of the offending section to the
+// boundary and re-sited locally; a veto alone would stall reactors outright,
+// since the band placement re-proposes the same crowded spot forever.
+bool SectionSafeSpot(CCircuitDef@ want, AIFloat3& inout spot)
+{
+	if (ReactorSectionClear(spot))
+		return true;
+	const float gap = ai.GetTunable("apex_reactor_spacing", REACTOR_SECTION);
+	int nearest = -1;
+	float best = 1.0e18f;
+	for (uint i = 0; i < gFusions.length(); ++i) {
+		const float d = gFusions[i].GetPos(ai.frame).distance2D(spot);
+		if (d < best) { best = d; nearest = int(i); }
+	}
+	if (nearest < 0)
+		return true;
+	const AIFloat3 anchor = gFusions[uint(nearest)].GetPos(ai.frame);
+	AIFloat3 dir = spot - anchor;
+	if (dir.SqLength2D() < 1.f) {
+		dir = gHomePos - anchor;   // degenerate: shove toward home
+		if (dir.SqLength2D() < 1.f)
+			return false;
+	}
+	dir.SafeNormalize2D();
+	AIFloat3 cand = anchor + dir * (gap * 1.15f);
+	if (!OnMap(cand))
+		return false;
+	const AIFloat3 site = ai.FindBuildSiteNear(want, cand, 400.f);
+	if (!OnMap(site) || !ReactorSectionClear(site))
+		return false;
+	spot = site;
+	return true;
+}
+
 // HOW MANY REACTOR TASKS MAY BE IN FLIGHT -- NOT A CEILING ON HOW MANY REACTORS
 // WE MAY OWN. It bounds unfinished WORK, and every reactor that finishes frees
 // its slot, so the number we end up with is still whatever the economy pays for.
@@ -245,7 +298,10 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	int rear = 0;
 	if (okDef)
 		rear = ReactorSpot(unit, want, spot);
-	const bool okSpot = okDef && ((rear != 0) || BandSpot(unit, want, false, spot));
+	bool okSpot = okDef && ((rear != 0) || BandSpot(unit, want, false, spot));
+	// Out of any existing reactor's chain-blast section, or shifted out of it.
+	if (okSpot && !SectionSafeSpot(want, spot))
+		okSpot = false;
 	// Same handoff as HomeEnergy: this rule decides a reactor is wanted here,
 	// Requests decides whether that is a new one or joining one already
 	// requested. Neither the counter nor the cooldown moves for a join --

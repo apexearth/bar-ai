@@ -570,6 +570,9 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// joins one already requested is Requests' answer, keyed on the SITE rather
 	// than the builder -- constructors scattered around a base compute distinct
 	// nearby spots, so a builder-keyed check would miss the duplication.
+	// Reactors stay in sections -- see fusion.as ReactorSectionClear.
+	if (IsFusion(gen) && !SectionSafeSpot(gen, spot))
+		return null;
 	bool created = false;
 	IUnitTask@ post = Requests::Take(unit, gen,
 			isConv ? Task::BuildType::CONVERT : Task::BuildType::ENERGY,

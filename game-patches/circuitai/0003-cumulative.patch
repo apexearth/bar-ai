@@ -198,7 +198,7 @@ index 0bdafed..31c719e 100644
  // <<< Recent trade record ---- END
  
 diff --git a/src/circuit/module/BuilderManager.cpp b/src/circuit/module/BuilderManager.cpp
-index a62be4f..b5023e7 100644
+index a62be4f..46d9544 100644
 --- a/src/circuit/module/BuilderManager.cpp
 +++ b/src/circuit/module/BuilderManager.cpp
 @@ -621,7 +621,13 @@ const std::set<IBuilderTask*>& CBuilderManager::GetTasks(IBuilderTask::BuildType
@@ -237,7 +237,7 @@ index a62be4f..b5023e7 100644
  }
  
  void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
-@@ -795,26 +803,45 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
+@@ -795,26 +803,48 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
  			if (taskB->GetBuildType() >= IBuilderTask::BuildType::_SIZE_) {
  				break;
  			}
@@ -257,6 +257,7 @@ index a62be4f..b5023e7 100644
 +					auto itre = repairUnits.find(static_cast<CBRepairTask*>(taskB)->GetTargetId());
 +					if ((itre != repairUnits.end()) && (itre->second == taskB)) {
 +						repairUnits.erase(itre);
++						taskB->Release();  // the counted map reference (MarkCounted)
 +					}
  				} break;
  				case IBuilderTask::BuildType::RECLAIM: {
@@ -264,6 +265,7 @@ index a62be4f..b5023e7 100644
 +					auto itcl = reclaimUnits.find(taskB->GetTarget());
 +					if ((itcl != reclaimUnits.end()) && (itcl->second == taskB)) {
 +						reclaimUnits.erase(itcl);
++						taskB->Release();  // the counted map reference (MarkCounted)
 +					}
  				} break;
  				case IBuilderTask::BuildType::RESURRECT: {
@@ -273,6 +275,7 @@ index a62be4f..b5023e7 100644
 +					auto itun = unfinishedUnits.find(taskB->GetTarget());
 +					if ((itun != unfinishedUnits.end()) && (itun->second == taskB)) {
 +						unfinishedUnits.erase(itun);
++						taskB->Release();  // the counted map reference (MarkCounted)
 +					}
  				} break;
  			}
@@ -291,7 +294,50 @@ index a62be4f..b5023e7 100644
  		} break;
  		default: break;
  	}
-@@ -1745,6 +1772,7 @@ void CBuilderManager::Load(std::istream& is)
+@@ -860,6 +890,42 @@ bool CBuilderManager::HasFreeAssists(CCircuitUnit* builder) const
+ 			&& (!conDef->IsRoleComm() || ((int)assistCount <= circuit->GetSetupManager()->GetAssistFac()));
+ }
+ 
++// The target-keyed maps hold COUNTED references: UnitDestroyed/UnitIdle
++// dereference their values at arbitrary event times, and an entry whose task
++// was freed elsewhere crashed two soaks at the same TaskRemoved stack
++// (2026-08-15). A stale-but-alive task aborts harmlessly; a dangling one is
++// an AV. Eviction of a previous occupant releases it; DequeueTask's erase
++// releases on removal.
++template <class T>
++void CBuilderManager::MarkCounted(T*& slot, T* task)
++{
++	if (slot == task) {
++		return;
++	}
++	if (task != nullptr) {
++		task->AddRef();
++	}
++	if (slot != nullptr) {
++		slot->Release();
++	}
++	slot = task;
++}
++
++void CBuilderManager::MarkUnfinishedUnit(CAllyUnit* target, IBuilderTask* task)
++{
++	MarkCounted(unfinishedUnits[target], task);
++}
++
++void CBuilderManager::MarkRepairUnit(ICoreUnit::Id targetId, CBRepairTask* task)
++{
++	MarkCounted(repairUnits[targetId], task);
++}
++
++void CBuilderManager::MarkReclaimUnit(CAllyUnit* target, CBReclaimTask* task)
++{
++	MarkCounted(reclaimUnits[target], task);
++}
++
+ SBuildChain* CBuilderManager::GetBuildChain(IBuilderTask::BuildType buildType, CCircuitDef* cdef) const
+ {
+ 	auto it1 = buildChains.find(static_cast<IBuilderTask::BT>(buildType));
+@@ -1745,6 +1811,7 @@ void CBuilderManager::Load(std::istream& is)
  			if (task != nullptr) {
  				const bool isValid = is >> *task;
  				buildTasks[i].insert(task);
@@ -300,10 +346,10 @@ index a62be4f..b5023e7 100644
  				updateTasks.push_back(task);
  				if (!isValid) {
 diff --git a/src/circuit/module/BuilderManager.h b/src/circuit/module/BuilderManager.h
-index 0c44d3f..74946aa 100644
+index 0c44d3f..dc8cd13 100644
 --- a/src/circuit/module/BuilderManager.h
 +++ b/src/circuit/module/BuilderManager.h
-@@ -292,7 +292,7 @@ public:
+@@ -292,22 +292,23 @@ public:
  	}
  
  	virtual void AssignTask(CCircuitUnit* unit, IUnitTask* task) override;
@@ -312,6 +358,31 @@ index 0c44d3f..74946aa 100644
  private:
  	virtual void DequeueTask(IUnitTask* task, bool done = false) override;
  
+ public:
+ 	virtual void FallbackTask(CCircuitUnit* unit) override;
+ 
+-	void MarkUnfinishedUnit(CAllyUnit* target, IBuilderTask* task) {
+-		unfinishedUnits[target] = task;
+-	}
+-	void MarkRepairUnit(ICoreUnit::Id targetId, CBRepairTask* task) {
+-		repairUnits[targetId] = task;
+-	}
+-	void MarkReclaimUnit(CAllyUnit* target, CBReclaimTask* task) {
+-		reclaimUnits[target] = task;
+-	}
++	// The target-keyed maps hold COUNTED references: UnitDestroyed/UnitIdle
++	// dereference their values at arbitrary event times, and an entry whose
++	// task was freed elsewhere crashed two soaks at the same TaskRemoved
++	// stack (2026-08-15). A stale-but-alive task aborts harmlessly; a stale
++	// dangling one is an AV. Eviction of a previous occupant releases it.
++	void MarkUnfinishedUnit(CAllyUnit* target, IBuilderTask* task);
++	void MarkRepairUnit(ICoreUnit::Id targetId, CBRepairTask* task);
++	void MarkReclaimUnit(CAllyUnit* target, CBReclaimTask* task);
++	template <class T>
++	static void MarkCounted(T*& slot, T* task);
+ 
+ 	bool IsBuilderInArea(CCircuitDef* buildDef, const springai::AIFloat3& position) const;  // Check if build-area has proper builder
+ 	bool HasFreeAssists(CCircuitUnit* builder) const;
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
 index 7de48a7..a81239f 100644
 --- a/src/circuit/module/EconomyManager.cpp

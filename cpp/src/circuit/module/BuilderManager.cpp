@@ -813,12 +813,14 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
 					auto itre = repairUnits.find(static_cast<CBRepairTask*>(taskB)->GetTargetId());
 					if ((itre != repairUnits.end()) && (itre->second == taskB)) {
 						repairUnits.erase(itre);
+						taskB->Release();  // the counted map reference (MarkCounted)
 					}
 				} break;
 				case IBuilderTask::BuildType::RECLAIM: {
 					auto itcl = reclaimUnits.find(taskB->GetTarget());
 					if ((itcl != reclaimUnits.end()) && (itcl->second == taskB)) {
 						reclaimUnits.erase(itcl);
+						taskB->Release();  // the counted map reference (MarkCounted)
 					}
 				} break;
 				case IBuilderTask::BuildType::RESURRECT: {
@@ -827,6 +829,7 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
 					auto itun = unfinishedUnits.find(taskB->GetTarget());
 					if ((itun != unfinishedUnits.end()) && (itun->second == taskB)) {
 						unfinishedUnits.erase(itun);
+						taskB->Release();  // the counted map reference (MarkCounted)
 					}
 				} break;
 			}
@@ -885,6 +888,42 @@ bool CBuilderManager::HasFreeAssists(CCircuitUnit* builder) const
 	return (guardCount <= (conTaskCnt == 0 ? assistCount / 2 : 2))
 			&& conDef->IsAbleToAssist() && !builder->IsAttrSolo()
 			&& (!conDef->IsRoleComm() || ((int)assistCount <= circuit->GetSetupManager()->GetAssistFac()));
+}
+
+// The target-keyed maps hold COUNTED references: UnitDestroyed/UnitIdle
+// dereference their values at arbitrary event times, and an entry whose task
+// was freed elsewhere crashed two soaks at the same TaskRemoved stack
+// (2026-08-15). A stale-but-alive task aborts harmlessly; a dangling one is
+// an AV. Eviction of a previous occupant releases it; DequeueTask's erase
+// releases on removal.
+template <class T>
+void CBuilderManager::MarkCounted(T*& slot, T* task)
+{
+	if (slot == task) {
+		return;
+	}
+	if (task != nullptr) {
+		task->AddRef();
+	}
+	if (slot != nullptr) {
+		slot->Release();
+	}
+	slot = task;
+}
+
+void CBuilderManager::MarkUnfinishedUnit(CAllyUnit* target, IBuilderTask* task)
+{
+	MarkCounted(unfinishedUnits[target], task);
+}
+
+void CBuilderManager::MarkRepairUnit(ICoreUnit::Id targetId, CBRepairTask* task)
+{
+	MarkCounted(repairUnits[targetId], task);
+}
+
+void CBuilderManager::MarkReclaimUnit(CAllyUnit* target, CBReclaimTask* task)
+{
+	MarkCounted(reclaimUnits[target], task);
 }
 
 SBuildChain* CBuilderManager::GetBuildChain(IBuilderTask::BuildType buildType, CCircuitDef* cdef) const

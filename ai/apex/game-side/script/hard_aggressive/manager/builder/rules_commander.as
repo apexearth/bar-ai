@@ -132,6 +132,38 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 			if ((hereInfl > fleeInfl)
 				&& (ai.GetEnemyInflAt(gHomePos) < hereInfl * 0.5f))
 			{
+				// NEVER flee into the pack: retreats converge on the same last
+				// haven, and a commander death explosion chains at pack range --
+				// four commanders died in ONE frame at ~280-elmo spacing (match
+				// 20260815-154651). With an ally commander already inside
+				// spacing, flee AWAY from it: a solar build at the pushed-out
+				// spot is a destination the task system can actually walk to,
+				// same shape as the back-wall branch below.
+				AIFloat3 packed;
+				if (AllyCommNear(packed)) {
+					AIFloat3 away = unit.GetPos(ai.frame) - packed;
+					if (away.SqLength2D() >= 1.f) {
+						away.SafeNormalize2D();
+						const AIFloat3 spread = unit.GetPos(ai.frame)
+								+ away * ai.GetTunable("apex_comm_spacing", 500.f);
+						CCircuitDef@ safeDef = SideDef3(armsolar, corsolar, legsolar);
+						if (OnMap(spread) && (safeDef !is null)
+							&& safeDef.IsAvailable(ai.frame))
+						{
+							IUnitTask@ apart = Requests::Take(unit, safeDef,
+									Task::BuildType::ENERGY, Task::Priority::NORMAL,
+									spread, 0.f, SQUARE_SIZE * 8);
+							if (apart !is null) {
+								if (ai.frame >= gNextCommFleeLog) {
+									gNextCommFleeLog = ai.frame + 15 * SECOND;
+									AiLog(Factory::T() + "apex: commander spreading "
+										+ "from the pack instead of fleeing into it");
+								}
+								return apart;
+							}
+						}
+					}
+				}
 				if (ai.frame >= gNextCommFleeLog) {
 					gNextCommFleeLog = ai.frame + 15 * SECOND;
 					AiLog(Factory::T() + "apex: commander leaving, enemy influence "

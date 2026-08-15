@@ -311,6 +311,41 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 // issues the order directly and leaves the task slot alone, so the commander
 // keeps its job and simply walks away from the danger first.
 CCircuitUnit@ gComm = null;
+
+// Commander pack spacing -- see CommIdleAttribute's publish block.
+const string TV_COMMX = "commx";
+const string TV_COMMZ = "commz";
+const float COMM_SPACING = 500.f;
+
+// Is another ally commander inside chain-blast range of ours? Out-param is
+// the nearest one's position, for steering away from it.
+bool AllyCommNear(AIFloat3& out other)
+{
+	CCircuitUnit@ u = gComm;
+	if (u is null)
+		return false;
+	const float gap = ai.GetTunable("apex_comm_spacing", COMM_SPACING);
+	const AIFloat3 cp = u.GetPos(ai.frame);
+	const array<int>@ teams = ai.GetTeamIds();
+	float best = 1.0e18f;
+	bool found = false;
+	for (uint i = 0; i < teams.length(); ++i) {
+		if (teams[i] == ai.teamId)
+			continue;
+		const float x = ai.ReadTeamValue(teams[i], TV_COMMX, -1.0e9f);
+		const float z = ai.ReadTeamValue(teams[i], TV_COMMZ, -1.0e9f);
+		if (x < -1.0e8f)
+			continue;
+		AIFloat3 p(x, 0.f, z);
+		const float d = cp.distance2D(p);
+		if ((d < gap) && (d < best)) {
+			best = d;
+			other = p;
+			found = true;
+		}
+	}
+	return found;
+}
 AIFloat3 gHomePos;
 bool gHomeSet = false;
 const float COM_DANGER_RADIUS = 800.f;
@@ -647,6 +682,16 @@ void CommIdleAttribute()
 	++gCDSamples;
 	IUnitTask@ t = u.task;
 	const int q = u.CmdQueueSize();
+	// Every commander publishes its position: a commander death explosion
+	// chains at pack range, and four commanders died in ONE frame at ~280-elmo
+	// spacing when their retreats converged on the same last haven (match
+	// 20260815-154651, the 13-minute 8v8 loss). Spacing needs to know where
+	// the OTHERS are, and this blackboard is the only cross-player channel.
+	{
+		const AIFloat3 cp = u.GetPos(ai.frame);
+		ai.PublishTeamValue(TV_COMMX, cp.x);
+		ai.PublishTeamValue(TV_COMMZ, cp.z);
+	}
 	// The periodic print lives HERE, not only in the commander's AiMakeTask
 	// path: a commander wedged on a task it never leaves stops entering
 	// AiMakeTask entirely, and the log going silent at exactly the moment it
@@ -696,6 +741,19 @@ void CommIdleAttribute()
 		gCommRetreatStreak = 0;
 	} else if (t.GetType() == Task::Type::RETREAT) {
 		++gCDOther;
+		// A PACKED retreat is broken at once, not on the slow timer: the
+		// haven convergence is what stacks commanders into one chain blast.
+		{
+			AIFloat3 packed;
+			if (AllyCommNear(packed)) {
+				gCommRetreatStreak = 0;
+				AiLog(Factory::T() + "apex: commander leaving the pack -- ally "
+					+ "commander " + int(u.GetPos(ai.frame).distance2D(packed))
+					+ " elmos away");
+				t.Abort();
+				return;
+			}
+		}
 		// CRetreatTask ends only at >98% health, or zero enemy influence at
 		// the commander's own tile -- with enemies loitering near home neither
 		// may ever arrive, and a unit holding a task is never re-elected, so a

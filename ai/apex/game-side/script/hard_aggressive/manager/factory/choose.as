@@ -46,7 +46,10 @@ int PlantsWanted(const CCircuitDef@ fac)
 		return 1;
 	int want;
 	if ((userData[fac.id].attr & Attr::T3) != 0)
-		want = int(inc / ai.GetTunable("apex_plants_t3_per", 150.f));
+		// 100, was 150: apexearth 2026-08-15, on losing long 8v8s with a T3
+		// deficit (751k vs 1.3M fielded): "we're probably losing just because
+		// we're not making enough gantries."
+		want = int(inc / ai.GetTunable("apex_plants_t3_per", 100.f));
 	else if ((userData[fac.id].attr & Attr::T2) != 0)
 		want = int(ai.GetTunable("apex_plants_t2_a", -7.0f)
 				+ ai.GetTunable("apex_plants_t2_b", 1.737f) * log(inc));
