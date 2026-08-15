@@ -243,6 +243,30 @@ CCircuitDef@ AdvCounterpart()
 	return null;
 }
 
+// Which T2 counterpart is actually about to be built, not just the ONE
+// remembered opening factory's (gT1Fac/AdvCounterpart above). A team that
+// switches its active T1 factory before teching builds a DIFFERENT def's T2
+// first, and AdvCounterpart keeps answering for the stale opening choice --
+// silently, since it just returns a def nobody is building instead of an
+// error. Measured 2026-08-15: armalab (T2 bot lab) was the actual first T2
+// built, with zero "T2 plant ... at the rear" log lines for it at all (only
+// armavp got them, later, after this armalab died 3.6 minutes post-completion
+// -- exactly the exposed-placement report). Checks every T1 factory type we
+// currently OWN a standing instance of, not just the opening one, and
+// returns the first whose T2 counterpart has not yet started.
+CCircuitDef@ NextT2Counterpart()
+{
+	for (uint i = 0; i < T1_FAC.length(); ++i) {
+		CCircuitDef@ t1 = ai.GetCircuitDef(T1_FAC[i]);
+		if ((t1 is null) || (t1.count <= 0))
+			continue;
+		CCircuitDef@ t2 = ai.GetCircuitDef(T2_FAC[i]);
+		if ((t2 !is null) && (ai.GetDefBuildProgress(t2) < 0.f))
+			return t2;
+	}
+	return null;
+}
+
 // T3 is this variant's declared win condition -- hold cheaply, out-eco behind
 // the wall, then finish with T3. Gated on a real economy rather than a clock:
 // starting a gantry the economy cannot finish is the same trap an unaffordable

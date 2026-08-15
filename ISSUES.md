@@ -5,6 +5,24 @@ done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
 
 ---
 
+## OPEN, MINOR: commander noTask watchdog can fire repeatedly at low near-threshold influence (2026-08-15)
+
+The `CommIdleAttribute()` noTask watchdog (`events.as`/`rules_commander.as`,
+`gCommNoTaskStreak`) was added to fix a severe case -- a commander under
+CONTINUOUS heavy influence (1-99, measured) sitting with literally no task
+55% of the time. Confirmed fixed via smoke test. But the same smoke test also
+showed 8 force-assigns in under a minute at LOW influence (0.16, barely above
+the 0.01 flee threshold) -- likely `CRetreatTask`'s own `Recovered()` clears
+the task quickly at such a weak signal, then the commander immediately reads
+influence-above-0.01 again from a lingering weak source (e.g. a wandering
+scout) and gets re-forced. Not the same failure mode as the severe case
+(commander IS getting real tasks, just some redundant churn at the margin).
+Candidate fix: hysteresis -- once forced, require influence to clear a lower
+"truly safe" threshold (not just re-cross 0.01) before the watchdog goes
+quiet, same shape as the dedup fix's own reasoning. Not implemented; needs a
+match where this specific low-influence pattern is common enough to judge
+whether it is worth the added complexity.
+
 ## PATCHED, NOT YET MEASURED: front-line defence share below local/rear share in the opening income bracket -- `Targets::DEF_FRONT`/`DEF_LOCAL` (2026-08-14)
 
 apexearth, live: "we aren't guarding the front of our base well with

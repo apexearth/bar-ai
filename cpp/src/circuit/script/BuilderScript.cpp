@@ -103,6 +103,17 @@ CBuilderScript::CBuilderScript(CScriptManager* scr, CBuilderManager* mgr)
 	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ Enqueue(const SBuildTask& in)", asMETHODPR(CBuilderManager, Enqueue, (const TaskB::SBuildTask&), IBuilderTask*), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ Enqueue(const SServBTask& in)", asMETHODPR(CBuilderManager, Enqueue, (const TaskB::SServBTask&), IUnitTask*), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ EnqueueRetreat()", asMETHOD(CBuilderManager, EnqueueRetreat), asCALL_THISCALL); ASSERT(r >= 0);
+	// apex: force-assign a just-created task to a specific unit instead of
+	// waiting for the engine's own idle callback to pick it up. Added for the
+	// commander noTask watchdog (events.as CommIdleAttribute) -- a commander
+	// under sustained influence was measured sampling literally no task
+	// (Task::Type::NIL/IDLE) for the majority of ticks in a danger window,
+	// because CRetreatTask is not an IBuilderTask and so never gets the
+	// periodic ~1s Reevaluate() every builder task receives; nothing proactively
+	// re-tasks it once it goes idle except the engine's own AiUnitIdle
+	// callback, which this measurement shows is not prompt enough under
+	// sustained threat.
+	r = engine->RegisterObjectMethod("CBuilderManager", "void AssignTask(CCircuitUnit@, IUnitTask@)", asMETHODPR(CBuilderManager, AssignTask, (CCircuitUnit*, IUnitTask*), void), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ EnqueueMexUp(const AIFloat3& in, CCircuitDef@)", asFUNCTION(CBuilderManager_EnqueueMexUp), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "uint GetWorkerCount() const", asMETHOD(CBuilderManager, GetWorkerCount), asCALL_THISCALL); ASSERT(r >= 0);
 	// apex: see BuilderManager.h -- lets script report the task budget that gates

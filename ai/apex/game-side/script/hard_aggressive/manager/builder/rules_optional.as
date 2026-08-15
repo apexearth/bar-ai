@@ -202,7 +202,12 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 		return null;
 	if (Factory::SteadyIncome() < ai.GetTunable("apex_t2_income", 30.f))
 		return null;
-	CCircuitDef@ adv = Factory::AdvCounterpart();
+	// NextT2Counterpart, not AdvCounterpart: the latter only ever answers for
+	// the single remembered OPENING factory, which silently misses a T2 built
+	// off a factory the team switched to afterward -- see its own comment
+	// in factorydefs.as for the measured miss (armalab built, died, with
+	// zero rear-placement coverage at all).
+	CCircuitDef@ adv = Factory::NextT2Counterpart();
 	if ((adv is null) || !adv.IsAvailable(ai.frame) || (adv.count > 0))
 		return null;
 	// Someone is already walking to start THIS plant -- ours or the engine's,

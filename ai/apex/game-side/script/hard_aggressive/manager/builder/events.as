@@ -651,6 +651,28 @@ void CommIdleAttribute()
 		|| (t.GetType() == Task::Type::NIL))
 	{
 		++gCDNoTask;
+		// CRetreatTask is not an IBuilderTask, so nothing re-evaluates it every
+		// ~1s the way a builder task is -- a commander that goes idle while
+		// AiUnitIdle is slow to re-fire just sits there. Measured 2026-08-15:
+		// a commander under continuous enemy influence (1-99, never near zero)
+		// sampled noTask on 55% of ticks over a ten-minute stretch -- "standing
+		// around doing nothing" while apex: commander leaving kept logging.
+		// Force it back into a task directly rather than waiting.
+		const float fleeInfl = ai.GetTunable("apex_comm_flee_influence", 0.01f);
+		if ((fleeInfl > 0.f) && (ai.GetEnemyInflAt(u.GetPos(ai.frame)) > fleeInfl)) {
+			if (++gCommNoTaskStreak >= COMM_NOTASK_TICKS) {
+				gCommNoTaskStreak = 0;
+				IUnitTask@ fresh = Retreat(u);
+				if (fresh !is null) {
+					aiBuilderMgr.AssignTask(u, fresh);
+					++gCommForced;
+					AiLog(Factory::T() + "apex: commander forced back onto retreat, "
+						+ gCDNoTask + " noTask samples (#" + gCommForced + ")");
+				}
+			}
+		} else {
+			gCommNoTaskStreak = 0;
+		}
 	} else if (t.GetType() != Task::Type::BUILDER) {
 		++gCDOther;
 	} else if (q > 0) {

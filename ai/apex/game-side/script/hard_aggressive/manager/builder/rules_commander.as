@@ -25,6 +25,15 @@ int gMexSentries = 0;       // guard turrets placed on bare extractors
 const int COMM_STUCK_TICKS = 60;
 int gCommStuck = 0;
 int gCommUnstuck = 0;
+// Same shape, for the noTask bucket: consecutive AiUpdates the commander has
+// sampled with literally no task (t is null/IDLE/NIL) while under influence
+// high enough that CommanderTask's flee check would fire. Kept short --
+// unlike a BUILDER task's order-application lag, this measures the gap
+// before the engine's own idle callback re-invokes AiMakeTask at all, which
+// should be near-immediate, not tens of seconds.
+const int COMM_NOTASK_TICKS = 3;
+int gCommNoTaskStreak = 0;
+int gCommForced = 0;
 int gNextCommDiag = 0;
 IUnitTask@ gCommLastLogged = null;  // see maketask.as's catch-all accept log
 
@@ -59,7 +68,7 @@ void CommDiag()
 	AiLog(Factory::T() + "apex: comm-why samples=" + gCDSamples
 		+ " noTask=" + gCDNoTask + " waiting=" + gCDWaiting
 		+ " ordered=" + gCDOrdered + " other=" + gCDOther
-		+ " unstuck=" + gCommUnstuck);
+		+ " unstuck=" + gCommUnstuck + " forced=" + gCommForced);
 	AiLog(Factory::T() + "apex: comm-diag offers=" + gCommOffers
 		+ " offerNull=" + gCommOfferNull
 		+ " vetoReclaim=" + gCommVetoReclaim

@@ -35,19 +35,24 @@
 		"unit":      ["armck", "armpw", "armrectr", "armrock", "armham", "armjeth", "armwar", "armflea"],
 
 		// armjeth (index 5) is a dedicated AA bot: onlytargetcategory VTOL, no
-		// ground weapon at all. This table is the general army mix and is not
-		// gated on any enemy-air reading -- response.json's enemy_air_metal
-		// term is what should scale it up when air is actually seen. A flat
-		// 0.06 here built it against zero enemy air (apexearth, 2026-08-14,
-		// watching live: "5 AA units while the enemy has no air"). Cut to a
-		// trickle; response.json still lifts it when air is real.
+		// ground weapon at all -- against a ground army it is not diversity,
+		// it is dead weight. response.json's enemy_air_metal term already
+		// correctly scales it up from genuine air threat (confirmed 0 when
+		// airRaw=0). A flat 0.02-0.06 baseline here does not need any air
+		// present to draw: measured 2026-08-15, a full land-map game with
+		// airRaw=0 the ENTIRE match still accumulated armjeth 375->1250
+		// metal by minute 22, matching apexearth's repeated report ("8 AA
+		// units... enemy has us countered... AA weren't thugs or centurions
+		// which would be capable of defending us") even after the first cut.
+		// Zeroed in "land" (what this measurement covers); air/water tables
+		// below untouched -- no evidence gathered there yet.
 		"land": {
-			"tier0": [ 0.25,    0.70,    0.05,       0.00,      0.20,     0.02,      0.00,     0.30],
-			"tier1": [ 0.25,    0.70,    0.05,       0.00,      0.00,     0.02,      0.00,     0.30],
-			"tier2": [ 0.35,    0.30,    0.05,       0.15,      0.45,     0.02,      0.10,     0.10],
-			"tier3": [ 0.35,    0.30,    0.05,       0.10,      0.40,     0.02,      0.15,     0.10],
-			"tier4": [ 0.15,    0.30,    0.05,       0.00,      0.40,     0.02,      0.10,     0.10],
-			"tier5": [ 0.15,    0.00,    0.05,       0.00,      0.00,     0.02,      0.00,     0.10]
+			"tier0": [ 0.25,    0.70,    0.05,       0.00,      0.20,     0.00,      0.00,     0.30],
+			"tier1": [ 0.25,    0.70,    0.05,       0.00,      0.00,     0.00,      0.00,     0.30],
+			"tier2": [ 0.35,    0.30,    0.05,       0.15,      0.45,     0.00,      0.10,     0.10],
+			"tier3": [ 0.35,    0.30,    0.05,       0.10,      0.40,     0.00,      0.15,     0.10],
+			"tier4": [ 0.15,    0.30,    0.05,       0.00,      0.40,     0.00,      0.10,     0.10],
+			"tier5": [ 0.15,    0.00,    0.05,       0.00,      0.00,     0.00,      0.00,     0.10]
 		},
 		"air": {
 			"tier0": [ 0.25,    0.64,    0.09,       0.00,      0.00,     0.10,      0.00,     0.30],
@@ -512,11 +517,12 @@
 		"unit":      ["coracv", "correap", "corgol", "cormart", "corsent", "corvroc", "corban", "cortrem", "cormabm",	"corvrad",	"coreter",	"corseal",	"corparrow"],
 
 		// corsent (index 4) is onlytargetcategory VTOL, same as armjeth above --
-		// cut from flat 0.05 for the same reason (2026-08-14).
+		// zeroed in "land" 2026-08-15 (was a nonzero trickle), same measured
+		// reason: a flat baseline draws with zero enemy air ever seen.
 		"land": {
-			"tier0": [ 0.30,     0.35,      0.01,     0.20,      0.02,      0.04,      0.10,     0.00,      0.03,		0.03,		0.00,		0.00,		0.00],
-			"tier1": [ 0.40,     0.30,      0.10,     0.10,      0.02,      0.10,      0.25,     0.05,      0.01,		0.05,		0.05,		0.00,		0.05],
-			"tier2": [ 0.40,     0.25,      0.15,     0.00,      0.02,      0.04,      0.20,     0.05,      0.02,		0.05,		0.05,		0.00,		0.15]
+			"tier0": [ 0.30,     0.35,      0.01,     0.20,      0.00,      0.04,      0.10,     0.00,      0.03,		0.03,		0.00,		0.00,		0.00],
+			"tier1": [ 0.40,     0.30,      0.10,     0.10,      0.00,      0.10,      0.25,     0.05,      0.01,		0.05,		0.05,		0.00,		0.05],
+			"tier2": [ 0.40,     0.25,      0.15,     0.00,      0.00,      0.04,      0.20,     0.05,      0.02,		0.05,		0.05,		0.00,		0.15]
 		},
 		"air": {                                                                                           	             
 			"tier0": [ 0.30,     0.40,      0.01,     0.20,      0.10,      0.03,      0.10,     0.01,     	0.03, 		0.02,		0.02,		0.00,		0.00],

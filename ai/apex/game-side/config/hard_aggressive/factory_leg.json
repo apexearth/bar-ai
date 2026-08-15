@@ -13,13 +13,14 @@
 		"income_tier": [10, 25,  35],
 //Metal Cost
 		"unit":      ["legck",	"leglob",	"legrezbot",	"legbal",	"legcen",	"legkark",	"legaabot",	"leggob"],
-		// legaabot is onlytargetcategory VTOL, same as armjeth/corsent -- cut
-		// from flat 0.06 for the same reason (2026-08-14).
+		// legaabot is onlytargetcategory VTOL, same as armjeth/corsent --
+		// zeroed in "land" 2026-08-15, same measured reason (flat trickle
+		// still drew with zero enemy air seen all match).
 		"land": {			// 10
-			"tier0": [ 0.10,    0.55,    	0.05,       0.00,		0.00,     	0.00,      	0.02,     	0.30],
-			"tier1": [ 0.10,    0.55,    	0.05,       0.00,		0.00,     	0.00,      	0.02,     	0.30],
-			"tier2": [ 0.10,    0.00,    	0.05,       0.40,		0.35,     	0.00,      	0.02,     	0.00],
-			"tier3": [ 0.05,    0.00,    	0.05,       0.30,		0.10,     	0.35,      	0.02,     	0.00]
+			"tier0": [ 0.10,    0.55,    	0.05,       0.00,		0.00,     	0.00,      	0.00,     	0.30],
+			"tier1": [ 0.10,    0.55,    	0.05,       0.00,		0.00,     	0.00,      	0.00,     	0.30],
+			"tier2": [ 0.10,    0.00,    	0.05,       0.40,		0.35,     	0.00,      	0.00,     	0.00],
+			"tier3": [ 0.05,    0.00,    	0.05,       0.30,		0.10,     	0.35,      	0.00,     	0.00]
 		},
 		"air": {
 			"tier0": [ 0.10,    0.55,    	0.09,       0.00,		0.00,     	0.00,      	0.15,     	0.30],
@@ -248,9 +249,11 @@
 		"require_energy": false,		
 		"income_tier": [30],	
 		"unit":      ["legotter", "legdecom", "legamphtank", "legamph", "legfloat", "legaabot", "legadvaabot"],
+		// legaabot/legadvaabot zeroed in "land" 2026-08-15, same reason as
+		// the armjeth/corsent/legaabot cuts above.
 		"land": {
-			"tier0": [ 0.10,        0.00,       0.30,       0.00,       0.60,	0.02,	0.05],
-			"tier1": [ 0.10,        0.00,       0.30,       0.00,       0.60,	0.02,	0.05]
+			"tier0": [ 0.10,        0.00,       0.30,       0.00,       0.60,	0.00,	0.00],
+			"tier1": [ 0.10,        0.00,       0.30,       0.00,       0.60,	0.00,	0.00]
 		},
 		"air": {
 			"tier0": [ 0.10,        0.00,       0.00,       0.00,       0.00,	0.40,	0.50],
