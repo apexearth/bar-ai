@@ -140,7 +140,7 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 	float range;
 
 	if (unit->GetTravelAct()->GetPath() == nullptr) {
-		std::shared_ptr<CPathInfo> pPath = std::make_shared<CPathInfo>();
+		std::shared_ptr<CPathInfo> pPath = std::shared_ptr<CPathInfo>(new CPathInfo());
 		pPath->PushPos(startPos, pathfinder);
 		unit->GetTravelAct()->SetPath(pPath);
 	}

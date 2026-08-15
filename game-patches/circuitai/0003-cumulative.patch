@@ -5611,7 +5611,7 @@ index a5d683d..8c30107 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
-index 6e9ed66..ba8717f 100644
+index 6e9ed66..78b73e0 100644
 --- a/src/circuit/task/RetreatTask.cpp
 +++ b/src/circuit/task/RetreatTask.cpp
 @@ -1,613 +1,673 @@
@@ -6370,7 +6370,7 @@ index 6e9ed66..ba8717f 100644
 +	float range;
 +
 +	if (unit->GetTravelAct()->GetPath() == nullptr) {
-+		std::shared_ptr<CPathInfo> pPath = std::make_shared<CPathInfo>();
++		std::shared_ptr<CPathInfo> pPath = std::shared_ptr<CPathInfo>(new CPathInfo());
 +		pPath->PushPos(startPos, pathfinder);
 +		unit->GetTravelAct()->SetPath(pPath);
 +	}
@@ -14362,9 +14362,18 @@ index b4b43c1..8ef4210 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index ae6cce5..cd0f750 100644
+index ae6cce5..1901c85 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
+@@ -36,7 +36,7 @@ ISquadTask::ISquadTask(ITaskModule* mgr, FightType type, float powerMod)
+ 		, leader(nullptr)
+ 		, groupPos(-RgtVector)
+ 		, prevGroupPos(-RgtVector)
+-		, pPath(std::make_shared<CPathInfo>())
++		, pPath(std::shared_ptr<CPathInfo>(new CPathInfo()))
+ 		, groupFrame(0)
+ 		, attackFrame(-1)
+ {
 @@ -74,7 +74,7 @@ void ISquadTask::AssignTo(CCircuitUnit* unit)
  	// Dual-Weapon Infantry Bot") carries HEAT_RAY at range 360 and
  	// LEGION_SHOTGUN at range 251 (confirmed in units/Legion/Bots/
@@ -15026,6 +15035,639 @@ index 8a50bc2..1616caf 100644
 +		)
 +		state = State::ROAM;  // Not wait
 +	}
++}
++
++} // namespace circuit
+diff --git a/src/circuit/terrain/path/PathInfo.cpp b/src/circuit/terrain/path/PathInfo.cpp
+index 2789622..b20e21c 100644
+--- a/src/circuit/terrain/path/PathInfo.cpp
++++ b/src/circuit/terrain/path/PathInfo.cpp
+@@ -1,21 +1,41 @@
+-/*
+- * PathInfo.cpp
+- *
+- *  Created on: Apr 21, 2022
+- *      Author: rlcevg
+- */
+-
+-#include "terrain/path/PathInfo.h"
+-#include "terrain/path/PathFinder.h"
++/*
++ * PathInfo.cpp
++ *
++ *  Created on: Apr 21, 2022
++ *      Author: rlcevg
++ */
++
++#include "terrain/path/PathInfo.h"
++#include "terrain/path/PathFinder.h"
++
++#include <new>
++#include <windows.h>
+ 
+ namespace circuit {
+ 
+-using namespace springai;
+-
+-void CPathInfo::PushPos(const AIFloat3& pos, CPathFinder* pathfinder)
++void* CPathInfo::operator new(std::size_t sz)
+ {
+-	posPath.push_back(pos);
+-	path.push_back(pathfinder->Pos2PathIndex(pos));
++	void* p = VirtualAlloc(nullptr, sz, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
++	if (p == nullptr) {
++		throw std::bad_alloc();
++	}
++	return p;
+ }
+ 
+-} // namespace circuit
++void CPathInfo::operator delete(void* p)
++{
++	if (p != nullptr) {
++		VirtualFree(p, 0, MEM_DECOMMIT);
++	}
++}
++
++
++using namespace springai;
++
++void CPathInfo::PushPos(const AIFloat3& pos, CPathFinder* pathfinder)
++{
++	posPath.push_back(pos);
++	path.push_back(pathfinder->Pos2PathIndex(pos));
++}
++
++} // namespace circuit
+diff --git a/src/circuit/terrain/path/PathInfo.h b/src/circuit/terrain/path/PathInfo.h
+index 4a6d69e..7ae426e 100644
+--- a/src/circuit/terrain/path/PathInfo.h
++++ b/src/circuit/terrain/path/PathInfo.h
+@@ -1,33 +1,40 @@
+-/*
+- * PathInfo.h
+- *
+- *  Created on: Apr 21, 2022
+- *      Author: rlcevg
+- */
+-
+-#ifndef SRC_CIRCUIT_TERRAIN_PATH_PATHINFO_H_
+-#define SRC_CIRCUIT_TERRAIN_PATH_PATHINFO_H_
+-
+-#include "util/Defines.h"
+-
+-namespace circuit {
+-
+-class CPathFinder;
+-
+-class CPathInfo {
+-public:
+-	CPathInfo(bool last = false) : start(0), isEndPos(last) {}
++/*
++ * PathInfo.h
++ *
++ *  Created on: Apr 21, 2022
++ *      Author: rlcevg
++ */
++
++#ifndef SRC_CIRCUIT_TERRAIN_PATH_PATHINFO_H_
++#define SRC_CIRCUIT_TERRAIN_PATH_PATHINFO_H_
++
++#include "util/Defines.h"
++
++#include <cstddef>
++
++namespace circuit {
++
++class CPathFinder;
++
++class CPathInfo {
++public:
++	CPathInfo(bool last = false) : start(0), isEndPos(last) {}
+ 	~CPathInfo() {}
+ 
+-	void Clear() { posPath.clear(); path.clear(); }  // FIXME: stop TravelAction
+-	void PushPos(const springai::AIFloat3& pos, CPathFinder* pathfinder);
+-
+-	F3Vec posPath;
+-	IndexVec path;
+-	size_t start;
+-	bool isEndPos;
+-};
+-
+-} // namespace circuit
+-
+-#endif // SRC_CIRCUIT_TERRAIN_PATH_PATHINFO_H_
++	// CRASH DIAGNOSTIC (temporary): guard-page allocation; delete decommits
++	// but keeps the address reserved. Defined in the matching .cpp.
++	static void* operator new(std::size_t sz);
++	static void operator delete(void* p);
++
++	void Clear() { posPath.clear(); path.clear(); }  // FIXME: stop TravelAction
++	void PushPos(const springai::AIFloat3& pos, CPathFinder* pathfinder);
++
++	F3Vec posPath;
++	IndexVec path;
++	size_t start;
++	bool isEndPos;
++};
++
++} // namespace circuit
++
++#endif // SRC_CIRCUIT_TERRAIN_PATH_PATHINFO_H_
+diff --git a/src/circuit/terrain/path/PathQuery.cpp b/src/circuit/terrain/path/PathQuery.cpp
+index 2f5585b..c8ccf5f 100644
+--- a/src/circuit/terrain/path/PathQuery.cpp
++++ b/src/circuit/terrain/path/PathQuery.cpp
+@@ -1,38 +1,58 @@
+-/*
+- * PathQuery.cpp
+- *
+- *  Created on: Apr 22, 2020
+- *      Author: rlcevg
+- */
+-
+-#include "terrain/path/PathQuery.h"
++/*
++ * PathQuery.cpp
++ *
++ *  Created on: Apr 22, 2020
++ *      Author: rlcevg
++ */
++
++#include "terrain/path/PathQuery.h"
++
++#include <new>
++#include <windows.h>
+ 
+ namespace circuit {
+ 
+-IPathQuery::IPathQuery(const CPathFinder& pathfinder, int id, Type type)
+-		: pathfinder(pathfinder)
+-		, id(id)
+-		, type(type)
+-		, state(State::NONE)
+-		, canMoveArray(nullptr)
+-		, threatArray(nullptr)
+-		, unit(nullptr)
++void* IPathQuery::operator new(std::size_t sz)
+ {
++	void* p = VirtualAlloc(nullptr, sz, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
++	if (p == nullptr) {
++		throw std::bad_alloc();
++	}
++	return p;
+ }
+ 
+-IPathQuery::~IPathQuery()
++void IPathQuery::operator delete(void* p)
+ {
++	if (p != nullptr) {
++		VirtualFree(p, 0, MEM_DECOMMIT);
++	}
+ }
+-
+-void IPathQuery::Init(const float* canMoveArray, const float* threatArray,
+-		NSMicroPather::CostFunc&& moveFun, NSMicroPather::CostFunc&& threatFun,
+-		CCircuitUnit* unit)
+-{
+-	this->canMoveArray = canMoveArray;
+-	this->threatArray = threatArray;
+-	this->moveFun = moveFun;
+-	this->threatFun = threatFun;
+-	this->unit = unit;  // optional
+-}
+-
+-} // namespace circuit
++
++
++IPathQuery::IPathQuery(const CPathFinder& pathfinder, int id, Type type)
++		: pathfinder(pathfinder)
++		, id(id)
++		, type(type)
++		, state(State::NONE)
++		, canMoveArray(nullptr)
++		, threatArray(nullptr)
++		, unit(nullptr)
++{
++}
++
++IPathQuery::~IPathQuery()
++{
++}
++
++void IPathQuery::Init(const float* canMoveArray, const float* threatArray,
++		NSMicroPather::CostFunc&& moveFun, NSMicroPather::CostFunc&& threatFun,
++		CCircuitUnit* unit)
++{
++	this->canMoveArray = canMoveArray;
++	this->threatArray = threatArray;
++	this->moveFun = moveFun;
++	this->threatFun = threatFun;
++	this->unit = unit;  // optional
++}
++
++} // namespace circuit
+diff --git a/src/circuit/terrain/path/PathQuery.h b/src/circuit/terrain/path/PathQuery.h
+index fbf87bb..8ffc346 100644
+--- a/src/circuit/terrain/path/PathQuery.h
++++ b/src/circuit/terrain/path/PathQuery.h
+@@ -1,62 +1,69 @@
+-/*
+- * PathQuery.h
+- *
+- *  Created on: Apr 22, 2020
+- *      Author: rlcevg
+- */
+-
+-#ifndef SRC_CIRCUIT_TERRAIN_PATH_PATHQUERY_H_
+-#define SRC_CIRCUIT_TERRAIN_PATH_PATHQUERY_H_
+-
++/*
++ * PathQuery.h
++ *
++ *  Created on: Apr 22, 2020
++ *      Author: rlcevg
++ */
++
++#ifndef SRC_CIRCUIT_TERRAIN_PATH_PATHQUERY_H_
++#define SRC_CIRCUIT_TERRAIN_PATH_PATHQUERY_H_
++
+ #include "terrain/path/PathFinder.h"
+ 
+-namespace circuit {
+-
+-class CCircuitUnit;
+-
+-class IPathQuery {
+-public:
+-	enum class Type: char {NONE = 0, SINGLE, MULTI, WIDE, COST, LINE, _SIZE_};
++#include <cstddef>
++
++namespace circuit {
++
++class CCircuitUnit;
++
++class IPathQuery {
++public:
++	enum class Type: char {NONE = 0, SINGLE, MULTI, WIDE, COST, LINE, _SIZE_};
+ 	enum class State: char {NONE = 0, PROCESS, READY, _SIZE_};
+ 
+-protected:
+-	IPathQuery(const CPathFinder& pathfinder, int id, Type type);
+-	virtual ~IPathQuery();
+-
+-public:
+-	int GetId() const { return id; }
+-	Type GetType() const { return type; }
+-
+-	void SetState(State value) { state.store(value); }
+-	State GetState() const { return state.load(); }
+-
+-	void Init(const float* canMoveArray, const float* threatArray,
+-			  NSMicroPather::CostFunc&& moveFun, NSMicroPather::CostFunc&& threatFun,
+-			  CCircuitUnit* unit = nullptr);
+-
+-	const float* GetCanMoveArray() const { return canMoveArray; }
+-	const float* GetThreatArray() const { return threatArray; }
+-	const NSMicroPather::CostFunc& GetMoveFun() const { return moveFun; }
+-	const NSMicroPather::CostFunc& GetThreatFun() const { return threatFun; }
+-	const terrain::SAreaData* GetAreaData() const { return pathfinder.GetAreaData(); }
+-
+-	CCircuitUnit* GetUnit() const { return unit; }
+-
+-protected:
+-	const CPathFinder& pathfinder;  // NOTE: double-check threaded calls
+-
+-	int id;
+-	Type type;
+-	std::atomic<State> state;
+-
+-	const float* canMoveArray;  // outdate after AREA_UPDATE_RATE
+-	const float* threatArray;  // outdate after THREAT_UPDATE_RATE
+-	NSMicroPather::CostFunc moveFun;  // AREA_UPDATE_RATE
+-	NSMicroPather::CostFunc threatFun;  // THREAT_UPDATE_RATE
+-
+-	CCircuitUnit* unit;  // optional, non-safe
+-};
+-
+-} // namespace circuit
+-
+-#endif // SRC_CIRCUIT_TERRAIN_PATH_PATHQUERY_H_
++	// CRASH DIAGNOSTIC (temporary): guard-page allocation; delete decommits
++	// but keeps the address reserved. Defined in the matching .cpp.
++	static void* operator new(std::size_t sz);
++	static void operator delete(void* p);
++
++protected:
++	IPathQuery(const CPathFinder& pathfinder, int id, Type type);
++	virtual ~IPathQuery();
++
++public:
++	int GetId() const { return id; }
++	Type GetType() const { return type; }
++
++	void SetState(State value) { state.store(value); }
++	State GetState() const { return state.load(); }
++
++	void Init(const float* canMoveArray, const float* threatArray,
++			  NSMicroPather::CostFunc&& moveFun, NSMicroPather::CostFunc&& threatFun,
++			  CCircuitUnit* unit = nullptr);
++
++	const float* GetCanMoveArray() const { return canMoveArray; }
++	const float* GetThreatArray() const { return threatArray; }
++	const NSMicroPather::CostFunc& GetMoveFun() const { return moveFun; }
++	const NSMicroPather::CostFunc& GetThreatFun() const { return threatFun; }
++	const terrain::SAreaData* GetAreaData() const { return pathfinder.GetAreaData(); }
++
++	CCircuitUnit* GetUnit() const { return unit; }
++
++protected:
++	const CPathFinder& pathfinder;  // NOTE: double-check threaded calls
++
++	int id;
++	Type type;
++	std::atomic<State> state;
++
++	const float* canMoveArray;  // outdate after AREA_UPDATE_RATE
++	const float* threatArray;  // outdate after THREAT_UPDATE_RATE
++	NSMicroPather::CostFunc moveFun;  // AREA_UPDATE_RATE
++	NSMicroPather::CostFunc threatFun;  // THREAT_UPDATE_RATE
++
++	CCircuitUnit* unit;  // optional, non-safe
++};
++
++} // namespace circuit
++
++#endif // SRC_CIRCUIT_TERRAIN_PATH_PATHQUERY_H_
+diff --git a/src/circuit/terrain/path/QueryPathMulti.cpp b/src/circuit/terrain/path/QueryPathMulti.cpp
+index 94aa1f8..a7f696b 100644
+--- a/src/circuit/terrain/path/QueryPathMulti.cpp
++++ b/src/circuit/terrain/path/QueryPathMulti.cpp
+@@ -1,46 +1,46 @@
+-/*
+- * QueryPathMulti.cpp
+- *
+- *  Created on: Apr 26, 2020
+- *      Author: rlcevg
+- */
+-
+-#include "terrain/path/QueryPathMulti.h"
+-
+-namespace circuit {
+-
+-using namespace springai;
+-
+-CQueryPathMulti::CQueryPathMulti(const CPathFinder& pathfinder, int id)
+-		: IPathQuery(pathfinder, id, Type::MULTI)
+-{
+-}
+-
+-CQueryPathMulti::~CQueryPathMulti()
+-{
+-}
+-
+-void CQueryPathMulti::InitQuery(const AIFloat3& startPos, float maxRange,
+-		const F3Vec& targets, NSMicroPather::HitFunc&& hitTest, bool withGoal,
+-		float maxThreat, bool endPosOnly)
+-{
+-	this->startPos = startPos;
+-	this->maxRange = maxRange;
+-	this->targets = targets;
+-	this->hitTest = hitTest;
+-	this->isWithGoal = withGoal;
+-	this->maxThreat = maxThreat;
+-	this->endPosOnly = endPosOnly;
+-}
+-
+-void CQueryPathMulti::Prepare()
+-{
+-	pPath = std::make_shared<CPathInfo>(endPosOnly);
+-	if (hitTest == nullptr) {
+-		hitTest = [](int2 start, int2 end) {
+-			return true;
+-		};
+-	}
+-}
+-
+-} // namespace circuit
++/*
++ * QueryPathMulti.cpp
++ *
++ *  Created on: Apr 26, 2020
++ *      Author: rlcevg
++ */
++
++#include "terrain/path/QueryPathMulti.h"
++
++namespace circuit {
++
++using namespace springai;
++
++CQueryPathMulti::CQueryPathMulti(const CPathFinder& pathfinder, int id)
++		: IPathQuery(pathfinder, id, Type::MULTI)
++{
++}
++
++CQueryPathMulti::~CQueryPathMulti()
++{
++}
++
++void CQueryPathMulti::InitQuery(const AIFloat3& startPos, float maxRange,
++		const F3Vec& targets, NSMicroPather::HitFunc&& hitTest, bool withGoal,
++		float maxThreat, bool endPosOnly)
++{
++	this->startPos = startPos;
++	this->maxRange = maxRange;
++	this->targets = targets;
++	this->hitTest = hitTest;
++	this->isWithGoal = withGoal;
++	this->maxThreat = maxThreat;
++	this->endPosOnly = endPosOnly;
++}
++
++void CQueryPathMulti::Prepare()
++{
++	pPath = std::shared_ptr<CPathInfo>(new CPathInfo(endPosOnly));
++	if (hitTest == nullptr) {
++		hitTest = [](int2 start, int2 end) {
++			return true;
++		};
++	}
++}
++
++} // namespace circuit
+diff --git a/src/circuit/terrain/path/QueryPathSingle.cpp b/src/circuit/terrain/path/QueryPathSingle.cpp
+index dcfec10..695a2b2 100644
+--- a/src/circuit/terrain/path/QueryPathSingle.cpp
++++ b/src/circuit/terrain/path/QueryPathSingle.cpp
+@@ -1,45 +1,45 @@
+-/*
+- * QueryPathSingle.cpp
+- *
+- *  Created on: Apr 26, 2020
+- *      Author: rlcevg
+- */
+-
+-#include "terrain/path/QueryPathSingle.h"
+-
+-namespace circuit {
+-
+-using namespace springai;
+-
+-CQueryPathSingle::CQueryPathSingle(const CPathFinder& pathfinder, int id)
+-		: IPathQuery(pathfinder, id, Type::SINGLE)
+-{
+-}
+-
+-CQueryPathSingle::~CQueryPathSingle()
+-{
+-}
+-
+-void CQueryPathSingle::InitQuery(const AIFloat3& startPos, const AIFloat3& endPos,
+-		float maxRange, NSMicroPather::HitFunc&& hitTest,
+-		float maxThreat, bool endPosOnly)
+-{
+-	this->startPos = startPos;
+-	this->endPos = endPos;
+-	this->maxRange = maxRange;
+-	this->hitTest = hitTest;
+-	this->maxThreat = maxThreat;
+-	this->endPosOnly = endPosOnly;
+-}
+-
+-void CQueryPathSingle::Prepare()
+-{
+-	pPath = std::make_shared<CPathInfo>(endPosOnly);
+-	if (hitTest == nullptr) {
+-		hitTest = [](int2 start, int2 end) {
+-			return true;
+-		};
+-	}
+-}
+-
+-} // namespace circuit
++/*
++ * QueryPathSingle.cpp
++ *
++ *  Created on: Apr 26, 2020
++ *      Author: rlcevg
++ */
++
++#include "terrain/path/QueryPathSingle.h"
++
++namespace circuit {
++
++using namespace springai;
++
++CQueryPathSingle::CQueryPathSingle(const CPathFinder& pathfinder, int id)
++		: IPathQuery(pathfinder, id, Type::SINGLE)
++{
++}
++
++CQueryPathSingle::~CQueryPathSingle()
++{
++}
++
++void CQueryPathSingle::InitQuery(const AIFloat3& startPos, const AIFloat3& endPos,
++		float maxRange, NSMicroPather::HitFunc&& hitTest,
++		float maxThreat, bool endPosOnly)
++{
++	this->startPos = startPos;
++	this->endPos = endPos;
++	this->maxRange = maxRange;
++	this->hitTest = hitTest;
++	this->maxThreat = maxThreat;
++	this->endPosOnly = endPosOnly;
++}
++
++void CQueryPathSingle::Prepare()
++{
++	pPath = std::shared_ptr<CPathInfo>(new CPathInfo(endPosOnly));
++	if (hitTest == nullptr) {
++		hitTest = [](int2 start, int2 end) {
++			return true;
++		};
++	}
++}
++
++} // namespace circuit
+diff --git a/src/circuit/terrain/path/QueryPathWide.cpp b/src/circuit/terrain/path/QueryPathWide.cpp
+index 5eebb71..d41d22b 100644
+--- a/src/circuit/terrain/path/QueryPathWide.cpp
++++ b/src/circuit/terrain/path/QueryPathWide.cpp
+@@ -1,37 +1,37 @@
+-/*
+- * QueryPathWide.cpp
+- *
+- *  Created on: Jan 18, 2022
+- *      Author: rlcevg
+- */
+-
+-#include "terrain/path/QueryPathWide.h"
+-
+-namespace circuit {
+-
+-using namespace springai;
+-
+-CQueryPathWide::CQueryPathWide(const CPathFinder& pathfinder, int id)
+-		: IPathQuery(pathfinder, id, Type::WIDE)
+-{
+-}
+-
+-CQueryPathWide::~CQueryPathWide()
+-{
+-}
+-
+-void CQueryPathWide::InitQuery(const AIFloat3& startPos, const AIFloat3& endPos,
+-		const IndexVec& targets, int howWide)
+-{
+-	this->startPos = startPos;
+-	this->endPos = endPos;
+-	this->targets = targets;
+-	this->howWide = howWide;
+-}
+-
+-void CQueryPathWide::Prepare()
+-{
+-	pPath = std::make_shared<CPathInfo>(false);
+-}
+-
+-} // namespace circuit
++/*
++ * QueryPathWide.cpp
++ *
++ *  Created on: Jan 18, 2022
++ *      Author: rlcevg
++ */
++
++#include "terrain/path/QueryPathWide.h"
++
++namespace circuit {
++
++using namespace springai;
++
++CQueryPathWide::CQueryPathWide(const CPathFinder& pathfinder, int id)
++		: IPathQuery(pathfinder, id, Type::WIDE)
++{
++}
++
++CQueryPathWide::~CQueryPathWide()
++{
++}
++
++void CQueryPathWide::InitQuery(const AIFloat3& startPos, const AIFloat3& endPos,
++		const IndexVec& targets, int howWide)
++{
++	this->startPos = startPos;
++	this->endPos = endPos;
++	this->targets = targets;
++	this->howWide = howWide;
++}
++
++void CQueryPathWide::Prepare()
++{
++	pPath = std::shared_ptr<CPathInfo>(new CPathInfo(false));
 +}
 +
 +} // namespace circuit

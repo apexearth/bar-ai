@@ -1,0 +1,69 @@
+/*
+ * PathQuery.h
+ *
+ *  Created on: Apr 22, 2020
+ *      Author: rlcevg
+ */
+
+#ifndef SRC_CIRCUIT_TERRAIN_PATH_PATHQUERY_H_
+#define SRC_CIRCUIT_TERRAIN_PATH_PATHQUERY_H_
+
+#include "terrain/path/PathFinder.h"
+
+#include <cstddef>
+
+namespace circuit {
+
+class CCircuitUnit;
+
+class IPathQuery {
+public:
+	enum class Type: char {NONE = 0, SINGLE, MULTI, WIDE, COST, LINE, _SIZE_};
+	enum class State: char {NONE = 0, PROCESS, READY, _SIZE_};
+
+	// CRASH DIAGNOSTIC (temporary): guard-page allocation; delete decommits
+	// but keeps the address reserved. Defined in the matching .cpp.
+	static void* operator new(std::size_t sz);
+	static void operator delete(void* p);
+
+protected:
+	IPathQuery(const CPathFinder& pathfinder, int id, Type type);
+	virtual ~IPathQuery();
+
+public:
+	int GetId() const { return id; }
+	Type GetType() const { return type; }
+
+	void SetState(State value) { state.store(value); }
+	State GetState() const { return state.load(); }
+
+	void Init(const float* canMoveArray, const float* threatArray,
+			  NSMicroPather::CostFunc&& moveFun, NSMicroPather::CostFunc&& threatFun,
+			  CCircuitUnit* unit = nullptr);
+
+	const float* GetCanMoveArray() const { return canMoveArray; }
+	const float* GetThreatArray() const { return threatArray; }
+	const NSMicroPather::CostFunc& GetMoveFun() const { return moveFun; }
+	const NSMicroPather::CostFunc& GetThreatFun() const { return threatFun; }
+	const terrain::SAreaData* GetAreaData() const { return pathfinder.GetAreaData(); }
+
+	CCircuitUnit* GetUnit() const { return unit; }
+
+protected:
+	const CPathFinder& pathfinder;  // NOTE: double-check threaded calls
+
+	int id;
+	Type type;
+	std::atomic<State> state;
+
+	const float* canMoveArray;  // outdate after AREA_UPDATE_RATE
+	const float* threatArray;  // outdate after THREAT_UPDATE_RATE
+	NSMicroPather::CostFunc moveFun;  // AREA_UPDATE_RATE
+	NSMicroPather::CostFunc threatFun;  // THREAT_UPDATE_RATE
+
+	CCircuitUnit* unit;  // optional, non-safe
+};
+
+} // namespace circuit
+
+#endif // SRC_CIRCUIT_TERRAIN_PATH_PATHQUERY_H_

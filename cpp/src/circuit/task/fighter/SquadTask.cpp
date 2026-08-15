@@ -36,7 +36,7 @@ ISquadTask::ISquadTask(ITaskModule* mgr, FightType type, float powerMod)
 		, leader(nullptr)
 		, groupPos(-RgtVector)
 		, prevGroupPos(-RgtVector)
-		, pPath(std::make_shared<CPathInfo>())
+		, pPath(std::shared_ptr<CPathInfo>(new CPathInfo()))
 		, groupFrame(0)
 		, attackFrame(-1)
 {
