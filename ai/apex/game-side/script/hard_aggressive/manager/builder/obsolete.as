@@ -423,6 +423,65 @@ int gNextJunkLog = 0;
 // The promoted path: same act, but ahead of the economy offers instead of behind
 // everything. What keeps it from becoming a constructor sink is the rank floor
 // -- it will only take ground somebody is waiting for.
+// CON TURRETS TIDY THEIR OWN REACH. A nano sits on a native guard/patrol --
+// a task class that never re-elects through AiMakeTask -- so it can never be
+// handed reclaim work by the pipeline: apexearth, watching, "our con turrets
+// should work to reclaim obsolete buildings instead of sitting idle...
+// getting us valuable land/space." Periodic sweep instead: each standing
+// turret is offered the best obsolete building inside its own lathe reach.
+// armnanotc builddistance is 400; the margin keeps a victim's own footprint
+// inside reach.
+const float NANO_TIDY_REACH  = 380.f;
+const int   NANO_TIDY_PERIOD = 20 * SECOND;
+int gNextNanoTidy = 0;
+array<int> gNanoIds;
+
+void NanoNoteBuilt(Id id)
+{
+	gNanoIds.insertLast(int(id));
+}
+
+void NanoNoteGone(Id id)
+{
+	for (int i = int(gNanoIds.length()) - 1; i >= 0; --i) {
+		if (gNanoIds[i] == int(id))
+			gNanoIds.removeAt(uint(i));
+	}
+}
+
+void NanoTidy()
+{
+	if (ai.frame < gNextNanoTidy)
+		return;
+	gNextNanoTidy = ai.frame + NANO_TIDY_PERIOD;
+	for (int i = int(gNanoIds.length()) - 1; i >= 0; --i) {
+		CCircuitUnit@ u = ai.GetTeamUnit(Id(gNanoIds[i]));
+		if (u is null) {
+			gNanoIds.removeAt(uint(i));   // stale id; the unit is gone
+			continue;
+		}
+		IUnitTask@ held = u.task;
+		if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
+			&& (held.GetBuildType() == Task::BuildType::RECLAIM))
+			continue;                     // already tidying
+		string dn;
+		int v;
+		AIFloat3 none;
+		CCircuitUnit@ victim = ObsoletePick(u, 0, false, none, dn, v);
+		if (victim is null)
+			continue;
+		if (u.GetPos(ai.frame).distance2D(victim.GetPos(ai.frame)) > NANO_TIDY_REACH)
+			continue;                     // a turret cannot walk to it
+		IUnitTask@ eat = ReclaimOwnDef(victim, dn, v);
+		if (eat !is null) {
+			aiBuilderMgr.AssignTask(u, eat);
+			AiLog(Factory::T() + "apex: nano-tidy #" + u.id + " reclaims "
+				+ dn + " in reach");
+			return;                       // one per sweep, bounded spend
+		}
+	}
+}
+
 IUnitTask@ ObsoleteUrgent(CCircuitUnit@ unit)
 {
 	if (!PastT1Tier())

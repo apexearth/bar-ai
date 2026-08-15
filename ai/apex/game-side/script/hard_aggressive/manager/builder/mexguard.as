@@ -570,7 +570,7 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// joins one already requested is Requests' answer, keyed on the SITE rather
 	// than the builder -- constructors scattered around a base compute distinct
 	// nearby spots, so a builder-keyed check would miss the duplication.
-	// Reactors stay in sections -- see fusion.as ReactorSectionClear.
+	// Reactors stay in batches -- see fusion.as ReactorBatchOK.
 	if (IsFusion(gen)) {
 		AIFloat3 sectioned;
 		if (!SectionSafeSpot(gen, spot, sectioned))

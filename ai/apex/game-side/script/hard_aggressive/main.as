@@ -87,6 +87,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Builder::ExpandDiag();
 	Builder::CancelDoomedRepairs();
 	Builder::UpdateSiege();
+	Builder::NanoTidy();
 }
 
 // The per-unit FINISHED event, all managers -- unlike Builder::AiUnitAdded,
@@ -101,6 +102,9 @@ void AiUnitFinished(CCircuitUnit@ unit)
 	CCircuitDef@ radDef = Builder::RadarTowerDef();
 	if ((radDef !is null) && (unit.circuitDef.id == radDef.id))
 		Builder::RadarStandAdd(unit.GetPos(ai.frame));
+	CCircuitDef@ nanoDef = Builder::NanoDef();
+	if ((nanoDef !is null) && (unit.circuitDef.id == nanoDef.id))
+		Builder::NanoNoteBuilt(unit.id);
 }
 
 // CInitScript::UnitDestroyed (InitScript.cpp:1224) looks this exact signature
@@ -120,6 +124,9 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	CCircuitDef@ radDefGone = Builder::RadarTowerDef();
 	if ((cdef !is null) && (radDefGone !is null) && (cdef.id == radDefGone.id))
 		Builder::RadarStandRemoveNear(at);
+	CCircuitDef@ nanoGone = Builder::NanoDef();
+	if ((cdef !is null) && (nanoGone !is null) && (cdef.id == nanoGone.id))
+		Builder::NanoNoteGone(unit.id);
 	const string hist = Builder::TakeHistFor(int(unit.id));
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")
 		+ " id=" + unit.id + " frame=" + ai.frame

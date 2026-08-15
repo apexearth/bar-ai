@@ -57,55 +57,67 @@ bool HaveReactor()
 	return ReactorCount() > 0;
 }
 
-// SECTIONS, NOT A FARM. Reactors closer than this chain their death
-// explosions: measured (match 20260815-150954) five AFUS at ~400-elmo
-// spacing died inside two minutes, two of them 19 frames apart, and each
-// same-frame commander pair died in the middle of that cluster. apexearth:
-// keep advanced fusions spread out into sections so one loss cannot take
-// the base. The gap is derived from that observed 400-elmo chain, with
-// margin; tunable.
+// BATCHES, NOT FULL DISPERSION. apexearth: "you'll want to make ~10 afuses
+// all near each other, but you'll want the next batch of 10 afuses to be
+// outside of chainable range." Within a batch reactors pack (shared
+// defence, AA, converters, compact base); BETWEEN batches the gap exceeds
+// chain-blast reach, so one detonation costs at most one batch -- the
+// measured chain (match 20260815-150954: five AFUS at ~400-elmo spacing
+// died in one cascade, commanders included) is contained instead of
+// forbidden. The gap is derived from that observed 400-elmo chain with
+// margin; the batch size is his number.
 const float REACTOR_SECTION = 700.f;
+const int   REACTOR_BATCH   = 10;
 
-bool ReactorSectionClear(const AIFloat3& in spot)
+// How many standing reactors sit within chain reach of this spot.
+int ReactorNeighbors(const AIFloat3& in spot, AIFloat3& out centroid)
 {
 	const float gap = ai.GetTunable("apex_reactor_spacing", REACTOR_SECTION);
+	int n = 0;
+	centroid = AIFloat3(0.f, 0.f, 0.f);
 	for (uint i = 0; i < gFusions.length(); ++i) {
-		if (gFusions[i].GetPos(ai.frame).distance2D(spot) < gap)
-			return false;
+		const AIFloat3 at = gFusions[i].GetPos(ai.frame);
+		if (at.distance2D(spot) < gap) {
+			centroid += at;
+			++n;
+		}
 	}
-	return true;
+	if (n > 0)
+		centroid = centroid * (1.f / float(n));
+	return n;
 }
 
-// A blocked spot is pushed straight out of the offending section to the
-// boundary and re-sited locally; a veto alone would stall reactors outright,
-// since the band placement re-proposes the same crowded spot forever.
+bool ReactorBatchOK(const AIFloat3& in spot)
+{
+	AIFloat3 c;
+	return ReactorNeighbors(spot, c)
+			< int(ai.GetTunable("apex_reactor_batch", float(REACTOR_BATCH)));
+}
+
+// A spot inside a FULL batch is pushed out past the batch boundary to seed
+// the next one; a veto alone would stall reactors, since the band placement
+// re-proposes the same crowded spot forever.
 bool SectionSafeSpot(CCircuitDef@ want, const AIFloat3& in cur, AIFloat3& out spot)
 {
 	spot = cur;
-	if (ReactorSectionClear(cur))
+	if (ReactorBatchOK(cur))
 		return true;
 	const float gap = ai.GetTunable("apex_reactor_spacing", REACTOR_SECTION);
-	int nearest = -1;
-	float best = 1.0e18f;
-	for (uint i = 0; i < gFusions.length(); ++i) {
-		const float d = gFusions[i].GetPos(ai.frame).distance2D(cur);
-		if (d < best) { best = d; nearest = int(i); }
-	}
-	if (nearest < 0)
-		return true;
-	const AIFloat3 anchor = gFusions[uint(nearest)].GetPos(ai.frame);
-	AIFloat3 dir = cur - anchor;
+	AIFloat3 centroid;
+	ReactorNeighbors(cur, centroid);
+	AIFloat3 dir = cur - centroid;
 	if (dir.SqLength2D() < 1.f) {
-		dir = gHomePos - anchor;   // degenerate: shove toward home
+		dir = gHomePos - centroid;   // degenerate: shove toward home
 		if (dir.SqLength2D() < 1.f)
 			return false;
 	}
 	dir.SafeNormalize2D();
-	AIFloat3 cand = anchor + dir * (gap * 1.15f);
+	// Past the far edge of the full batch: centroid + (its radius ~ gap) + gap.
+	AIFloat3 cand = centroid + dir * (gap * 2.2f);
 	if (!OnMap(cand))
 		return false;
 	const AIFloat3 site = ai.FindBuildSiteNear(want, cand, 400.f);
-	if (!OnMap(site) || !ReactorSectionClear(site))
+	if (!OnMap(site) || !ReactorBatchOK(site))
 		return false;
 	spot = site;
 	return true;
