@@ -1715,13 +1715,25 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
 	// down to a low tier, hardest on exactly the units with the highest
 	// energy-to-metal cost (Sniper ~29:1, Welder ~17:1) even though metal
 	// income alone would already justify a much stronger composition.
-	// isRequireEnergy && IsEnergyEmpty() a few lines below is the real,
-	// separate safety valve for "cannot actually afford this in energy right
-	// now" -- a genuine crisis check, not a proportion-shaping one -- so this
-	// term was redundant with it, not the only thing preventing overreach.
-	// apexearth: "I just want our proportions to build correctly" -- metal
-	// alone drives tier here now; the existing energy-crisis check still
-	// gates unaffordable choices.
+	// isRequireEnergy && IsEnergyEmpty() a few lines below was ALSO removed
+	// from this gate, not just the min() term above -- checked, and it was
+	// not the rare crisis valve the previous comment here assumed:
+	// AiUpdateEconomy (economy.as) defines isEnergyEmpty as CURRENT energy
+	// under 20% of STORAGE, an instantaneous read with no smoothing, against
+	// a storage pool that starts small and gets spent down by ordinary
+	// active building constantly -- so it flickers true often in perfectly
+	// healthy play, not just during a real stall. Every flicker used to
+	// reset tier selection all the way back to tier0, discarding whatever
+	// metal income had already earned. Measured 2026-08-15: composition
+	// stayed pinned near tier0 (mostly Hound) until income reached fusion
+	// territory (130 m/s, well past armalab's own top income bracket of 80)
+	// -- apexearth: "it took a shit ton of eco to get us past just making
+	// hounds... your eco thresholds are far too strong." Two fusions gave
+	// enough storage buffer to stop the flicker, which is what actually
+	// unblocked it, not the higher income itself. Metal income alone now
+	// drives tier, full stop; genuine unaffordability is still caught by
+	// this AI's own build-capability guards (CanBuild) and the native
+	// buildoptions check, not a coarse team-wide flag.
 	const float metalIncome = economyMgr->GetAvgMetalIncome() * economyMgr->GetEcoFactor();
 	const bool isWaterMap = circuit->GetTerrainManager()->IsWaterMap();
 	const float enemyTotalAirCost = circuit->GetEnemyManager()->GetEnemyCost(ROLE_TYPE(AIR));
@@ -1733,7 +1745,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
 	tierDbg = 0;
 #endif
 	auto facIt = tiers.begin();
-	if ((metalIncome >= facDef.incomes[facIt->first]) && !(facDef.isRequireEnergy && economyMgr->IsEnergyEmpty())) {
+	if (metalIncome >= facDef.incomes[facIt->first]) {
 		while (facIt != tiers.end()) {
 			if (metalIncome < facDef.incomes[facIt->first]) {
 				break;

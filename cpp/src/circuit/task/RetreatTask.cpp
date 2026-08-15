@@ -357,7 +357,21 @@ void CRetreatTask::Update()
 				: healthPerc > RETREAT_HEALED;
 
 		CCircuitDef* cdef = unit->GetCircuitDef();
-		if (isRepaired && !unit->IsDisarmed(frame)) {
+		// apex: excluded the commander. isRepaired is a pure HP-percentage
+		// check (RETREAT_HEALED=0.98) with NO influence/safety read at all --
+		// correct for a unit that fled because it took damage, since healing
+		// back up really does mean "done fleeing". The commander flees on
+		// INFLUENCE (see rules_commander.as's flee-influence check), almost
+		// always still near-full HP the moment it starts, so isRepaired read
+		// true within 1-2 ticks of EVERY assignment regardless of whether the
+		// danger that triggered the flee was still there -- ending the
+		// retreat almost immediately, every time. This was the dominant cause
+		// of the fire-state-toggle/never-settles symptom (the low-worker-
+		// count haven shortcut fixed earlier the same night was a real but
+		// secondary contributor). Falls through to the branch below instead,
+		// which already gates the commander on real influence
+		// (GetEnemyInflAt < INFL_EPS), not just HP.
+		if (isRepaired && !unit->IsDisarmed(frame) && !cdef->IsRoleComm()) {
 			Recovered(unit);
 		} else if (unit->IsForceUpdate(frame) || isExecute) {
 			Start(unit);

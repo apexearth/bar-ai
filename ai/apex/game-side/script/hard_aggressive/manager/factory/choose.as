@@ -1,5 +1,8 @@
 namespace Factory {
 
+// armmoho/cormoho/legmoho (the T2 mex upgrade) are already declared as
+// globals in techlead.as -- same namespace, one declaration only.
+
 // How many plants of one factory DEF the current income curve allows -- see
 // PlantsWanted(). Per def, not in total: pick.count is this def's own count, so
 // a second bot lab and a first vehicle plant are counted separately.
@@ -121,23 +124,44 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// A second T1 line competes with the T2 plant for the same metal. The cap
 	// above is per DEF, so a first bot lab and a first vehicle plant both read
 	// count=0 and both pass it -- this applies the same curve to the T1 TOTAL
-	// instead, lifted entirely once an advanced plant stands --
-	// at which point the second line is no longer competing with the tech step.
-	// Naval and air are exempt: a shipyard is the only route to water metal and
-	// carries its own income floors, and the air-plant branches carry theirs.
-	if (!gHaveT2
-		&& ((userData[want.id].attr & (Attr::T2 | Attr::T3)) == 0)
+	// instead. Naval and air are exempt: a shipyard is the only route to water
+	// metal and carries its own income floors, and the air-plant branches
+	// carry theirs.
+	//
+	// apexearth: "Before we've gone T2 we really shouldn't be making more
+	// than 1 T1 lab" -- flat, not income-scaled: the comment's own argument
+	// (a second T1 line competes with the T2 plant for the same metal)
+	// doesn't get weaker as income rises, so letting `allowed` climb above 1
+	// pre-T2 was inconsistent with the reasoning already written here.
+	//
+	// "And after we've gone T2 we don't want to immediately make an extra T1
+	// lab before we've spent the ~500 metal on the adv con and another ~500
+	// on the T2 mex... we need to be smart with how we spend our money." The
+	// SAME competition-for-metal argument holds for a short window right
+	// after gHaveT2 flips true: the new line's own advanced constructor and
+	// at least one T2 mex upgrade are the immediate, higher-value spend, so
+	// the second-T1-line refusal now stays active until both exist, instead
+	// of lifting the instant a T2 plant merely stands.
+	if (((userData[want.id].attr & (Attr::T2 | Attr::T3)) == 0)
 		&& !IsAirFactory(want))
 	{
 		CCircuitDef@ navy = NavalOpening();
 		if (!((navy !is null) && (want is navy))) {
+			bool stillCompeting = !gHaveT2;
+			if (!stillCompeting) {
+				CCircuitDef@ advCon = aiFactoryMgr.GetRoleDef(want, RT::BUILDER2);
+				const bool haveAdvCon = (advCon !is null) && (advCon.count > 0);
+				CCircuitDef@ t2mex = SideDef3(armmoho, cormoho, legmoho);
+				const bool haveT2Mex = (t2mex !is null) && (t2mex.count > 0);
+				stillCompeting = !haveAdvCon || !haveT2Mex;
+			}
 			const int t1have = T1PlantCount();
-			if ((t1have >= 1) && (t1have >= allowed)) {
+			if (stillCompeting ? (t1have >= 1) : (t1have >= allowed)) {
 				if (ai.frame >= gNextT1TotalLog) {
 					gNextT1TotalLog = ai.frame + 60 * SECOND;
 					AiLog(T() + "apex: " + want.GetName() + " refused -- " + t1have
-						+ " T1 plant(s) already and no T2 yet, at "
-						+ formatFloat(SteadyIncome(), "", 0, 0)
+						+ " T1 plant(s) already, " + (stillCompeting ? "still competing with tech spend" : "at cap")
+						+ ", at " + formatFloat(SteadyIncome(), "", 0, 0)
 						+ " m/s the T2 plant is the better buy");
 				}
 				return null;

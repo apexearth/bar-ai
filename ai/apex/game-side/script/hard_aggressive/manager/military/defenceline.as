@@ -471,7 +471,23 @@ bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 		return (teamFrontM / teamSpend) < want;
 	}
 	// Local work stays local: a mex guard defends OUR extractor with OUR metal.
-	return float(local) < budget * (lShare / total);
+	//
+	// apexearth: "we need coverage early game, but once we've got it we don't
+	// need much extra... too many T1 defenses at home which we don't really
+	// need." `budget` above is pure income*per with no ceiling, so it keeps
+	// growing the local allowance forever as income rises, long after every
+	// extractor worth guarding already has a tower. Cap it against what
+	// local defence actually protects -- our own mex count -- so the
+	// allowance plateaus once coverage is real instead of continuing to draw
+	// budget off income alone. A flat per-mex multiplier, not
+	// MexGuardWanted's own frontality-scaled count -- this is a team-wide
+	// ceiling on ALL local towers, not one mex's own guard count.
+	CCircuitDef@ ownMex = SideDef3(Builder::armmex, Builder::cormex, Builder::legmex);
+	const int mexCoverCeil = (ownMex is null) ? 0
+			: int(float(ownMex.count) * ai.GetTunable("apex_local_def_per_mex", 1.5f));
+	const float mexBudget = float(mexCoverCeil) + 1.f;
+	const float localBudget = (budget < mexBudget) ? budget : mexBudget;
+	return float(local) < localBudget * (lShare / total);
 }
 
 void AiMakeDefence(int cluster, const AIFloat3& in pos)

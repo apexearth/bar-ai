@@ -1721,10 +1721,10 @@ index 2925da7..3e286d4 100644
  	struct SConvertExt {
  		float energyUse;
 diff --git a/src/circuit/module/FactoryManager.cpp b/src/circuit/module/FactoryManager.cpp
-index dda9b5a..601e80c 100644
+index dda9b5a..b4d0a30 100644
 --- a/src/circuit/module/FactoryManager.cpp
 +++ b/src/circuit/module/FactoryManager.cpp
-@@ -1706,7 +1706,23 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
+@@ -1706,7 +1706,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
  const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& facDef) const
  {
  	CEconomyManager* economyMgr = circuit->GetEconomyManager();
@@ -1738,17 +1738,38 @@ index dda9b5a..601e80c 100644
 +	// down to a low tier, hardest on exactly the units with the highest
 +	// energy-to-metal cost (Sniper ~29:1, Welder ~17:1) even though metal
 +	// income alone would already justify a much stronger composition.
-+	// isRequireEnergy && IsEnergyEmpty() a few lines below is the real,
-+	// separate safety valve for "cannot actually afford this in energy right
-+	// now" -- a genuine crisis check, not a proportion-shaping one -- so this
-+	// term was redundant with it, not the only thing preventing overreach.
-+	// apexearth: "I just want our proportions to build correctly" -- metal
-+	// alone drives tier here now; the existing energy-crisis check still
-+	// gates unaffordable choices.
++	// isRequireEnergy && IsEnergyEmpty() a few lines below was ALSO removed
++	// from this gate, not just the min() term above -- checked, and it was
++	// not the rare crisis valve the previous comment here assumed:
++	// AiUpdateEconomy (economy.as) defines isEnergyEmpty as CURRENT energy
++	// under 20% of STORAGE, an instantaneous read with no smoothing, against
++	// a storage pool that starts small and gets spent down by ordinary
++	// active building constantly -- so it flickers true often in perfectly
++	// healthy play, not just during a real stall. Every flicker used to
++	// reset tier selection all the way back to tier0, discarding whatever
++	// metal income had already earned. Measured 2026-08-15: composition
++	// stayed pinned near tier0 (mostly Hound) until income reached fusion
++	// territory (130 m/s, well past armalab's own top income bracket of 80)
++	// -- apexearth: "it took a shit ton of eco to get us past just making
++	// hounds... your eco thresholds are far too strong." Two fusions gave
++	// enough storage buffer to stop the flicker, which is what actually
++	// unblocked it, not the higher income itself. Metal income alone now
++	// drives tier, full stop; genuine unaffordability is still caught by
++	// this AI's own build-capability guards (CanBuild) and the native
++	// buildoptions check, not a coarse team-wide flag.
 +	const float metalIncome = economyMgr->GetAvgMetalIncome() * economyMgr->GetEcoFactor();
  	const bool isWaterMap = circuit->GetTerrainManager()->IsWaterMap();
  	const float enemyTotalAirCost = circuit->GetEnemyManager()->GetEnemyCost(ROLE_TYPE(AIR));
  	const float allyAACost = circuit->GetMilitaryManager()->GetRoleCost(ROLE_TYPE(AA)) * circuit->GetAllyTeam()->GetAliveSize();
+@@ -1717,7 +1745,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
+ 	tierDbg = 0;
+ #endif
+ 	auto facIt = tiers.begin();
+-	if ((metalIncome >= facDef.incomes[facIt->first]) && !(facDef.isRequireEnergy && economyMgr->IsEnergyEmpty())) {
++	if (metalIncome >= facDef.incomes[facIt->first]) {
+ 		while (facIt != tiers.end()) {
+ 			if (metalIncome < facDef.incomes[facIt->first]) {
+ 				break;
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
 index a44c20b..db78054 100644
 --- a/src/circuit/module/MilitaryManager.cpp
@@ -3445,7 +3466,7 @@ index f210b3a..dae0777 100644
  		if (++i >= updateSlice) {
  			break;
 diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
-index 7c69263..16355e1 100644
+index 7c69263..dec1580 100644
 --- a/src/circuit/task/RetreatTask.cpp
 +++ b/src/circuit/task/RetreatTask.cpp
 @@ -11,8 +11,10 @@
@@ -3665,7 +3686,7 @@ index 7c69263..16355e1 100644
  void CRetreatTask::Update()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
-@@ -171,8 +353,8 @@ void CRetreatTask::Update()
+@@ -171,11 +353,25 @@ void CRetreatTask::Update()
  	for (CCircuitUnit* unit : assignees) {
  		const float healthPerc = unit->GetHealthPercent();
  		bool isRepaired = unit->HasShield()
@@ -3675,8 +3696,26 @@ index 7c69263..16355e1 100644
 +				: healthPerc > RETREAT_HEALED;
  
  		CCircuitDef* cdef = unit->GetCircuitDef();
- 		if (isRepaired && !unit->IsDisarmed(frame)) {
-@@ -230,9 +412,28 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+-		if (isRepaired && !unit->IsDisarmed(frame)) {
++		// apex: excluded the commander. isRepaired is a pure HP-percentage
++		// check (RETREAT_HEALED=0.98) with NO influence/safety read at all --
++		// correct for a unit that fled because it took damage, since healing
++		// back up really does mean "done fleeing". The commander flees on
++		// INFLUENCE (see rules_commander.as's flee-influence check), almost
++		// always still near-full HP the moment it starts, so isRepaired read
++		// true within 1-2 ticks of EVERY assignment regardless of whether the
++		// danger that triggered the flee was still there -- ending the
++		// retreat almost immediately, every time. This was the dominant cause
++		// of the fire-state-toggle/never-settles symptom (the low-worker-
++		// count haven shortcut fixed earlier the same night was a real but
++		// secondary contributor). Falls through to the branch below instead,
++		// which already gates the commander on real influence
++		// (GetEnemyInflAt < INFL_EPS), not just HP.
++		if (isRepaired && !unit->IsDisarmed(frame) && !cdef->IsRoleComm()) {
+ 			Recovered(unit);
+ 		} else if (unit->IsForceUpdate(frame) || isExecute) {
+ 			Start(unit);
+@@ -230,9 +426,28 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  	if (!utils::is_valid(haven)) {
  		haven = circuit->GetSetupManager()->GetBasePos();
  	}
@@ -3705,7 +3744,7 @@ index 7c69263..16355e1 100644
  	if (unitPos.SqDistance2D(haven) > SQUARE(maxDist)) {
  		// TODO: push MoveAction into unit? to avoid enemy fire
  		TRY_UNIT(circuit, unit,
-@@ -240,7 +441,22 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -240,7 +455,22 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  		)
  		// TODO: Add fail counter?
  	} else {
@@ -3729,7 +3768,7 @@ index 7c69263..16355e1 100644
  			&& (circuit->GetBuilderManager()->GetWorkerCount() <= 2))
  		{
  			Recovered(unit);
-@@ -248,7 +464,11 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -248,7 +478,11 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  		}
  
  		// TODO: push WaitAction into unit
