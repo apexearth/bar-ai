@@ -2000,18 +2000,17 @@ Each of these appears in EVERY audited game; run `python tools/audit.py
 <match-dir>` to reproduce. Fixed so far: cordecom mexup loop (177 blocked
 elections/game), corllt light-laser build-eat conflict.
 
-- **Retreat bleed, 40-44% of lost metal.** Units retreat one at a time at
-  their hp threshold and die running (avg fwd ~0.25). The known fix is
-  squad-level retreat (posture.as documents the failed alternative: blanket
-  commitment scored 0.38 K/D). C++ fighter-task work; awaiting go-ahead.
+- **Retreat bleed -- squad retreat landed 2026-08-16 (b09daf9), first
+  measurement 45% -> 20% of lost metal, 12 collective disengages in one
+  game, army at parity with handicapped stock for the first time. One game;
+  needs a second before deleting this entry.**
 - **Taskless deaths, 44-47% of lost metal at home.** Units die holding NIL
   near the base -- the overrun signature: production feeding corpses during a
   base assault. Mechanism not yet attributed (fresh units pre-assignment vs
   task-transition gap).
-- **Hopeless engagements: 72% of TAKEs at edge<0.5** in the audited game, with
-  mass-state army 7k vs enemy 17k. Squads commit at under half the power the
-  strength test says they need. Which exemption (isHome influence waiver,
-  push boost, base-under-attack 400% allowance) drives it is unattributed.
+- **Hopeless engagements: CLOSED as instrument artifact.** With the home=
+  flag on the engage log, away-TAKEs at edge<0.5 measure 0%; the 70%+ figure
+  was odds-waived home defence during losing games.
 - **Target skipping: 44-87 groups skipped in one pass.** Squads refuse every
   worthwhile group and wander -- pairs with apexearth's "approach a
   vulnerable enemy base and turn around".
