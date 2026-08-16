@@ -152,6 +152,20 @@ int ReactorsInFlight(float cost)
 	return (n < 1) ? 1 : n;
 }
 
+// apexearth's own build order, stated as the rule: "I might have ~6 advanced
+// solars... giving me about 1k energy and then I start my fusion." Past that
+// point a panel is the WRONG buy whether or not the fusion exists yet --
+// measured live (8v8 Isthmus): one player stacked 57 advsols to 204 m/s
+// steady with the bank drained to single digits, and the whole team's first
+// fusions slipped to minute 19. The reclaim cliffs only condemn a panel once
+// a reactor STANDS, which is exactly the chicken-and-egg this breaks.
+bool AdvsolPastItsPoint()
+{
+	return (aiEconomyMgr.energy.income
+			>= ai.GetTunable("apex_advsol_stop", 1000.f))
+		&& Factory::gHaveT2;
+}
+
 // Null once a reactor stands: obsolete.as already names a reactor as this def's
 // successor and reclaims it, so without this the same def was built and torn
 // down at the same time.
@@ -162,7 +176,7 @@ CCircuitDef@ AdvSolDef()
 	// to start eating them -- the band between was where the base built and
 	// ate the same def at once. Now both sides flip at the same line.
 	CCircuitDef@ adv = SideDef3(armadvsol, coradvsol, legadvsol);
-	if ((adv is null) || EnergyReclaimable(adv.GetName()))
+	if ((adv is null) || EnergyReclaimable(adv.GetName()) || AdvsolPastItsPoint())
 		return null;
 	if (aiEconomyMgr.energy.income
 			< ai.GetTunable("apex_advsol_energy", ADVSOL_MIN_ENERGY))
@@ -188,7 +202,11 @@ float EnergyValuePerMetal(CCircuitDef@ d)
 	// the same def at once is pure constructor-time loss, and it happened live
 	// (commander building the def the con turrets were eating). ONE predicate,
 	// shared with the reclaim list, decides both sides: EnergyReclaimable.
-	if (EnergyReclaimable(d.GetName()))
+	const string n = d.GetName();
+	if (EnergyReclaimable(n))
+		return -1.f;
+	if (((n == armadvsol) || (n == coradvsol) || (n == legadvsol))
+		&& AdvsolPastItsPoint())
 		return -1.f;
 	return aiEconomyMgr.GetEnergyMake(d) / d.costM;
 }

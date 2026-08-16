@@ -2051,3 +2051,13 @@ IsWaterMap presumably reads the map as land (min_land 75) and every naval
 path stays cold. Naval-water domain: check whether water-START detection vs
 map-share detection is the gate, and whether amphib cons/underwater mexes
 have any path on a mostly-land map. Not started.
+
+## Base sprawl at 8v8 scale: organized construction
+
+apexearth 2026-08-16, 8v8 Isthmus: "our buildings are terribly spread out.
+We need to do much better about organized construction." Long-standing
+USER-FEEDBACK theme; at 8v8 the 40-57-advsol farms amplified it badly. The
+advsol stop (apex_advsol_stop, 1k energy with T2) removes the worst sprawl
+driver; what remains is baseplan-domain: whether Base::Spot's bands hold at
+8-player density and why eco placement escapes to FindBuildSiteNear fallbacks
+(the audited "obsolete-junk standing" numbers say the grid is not packing).
