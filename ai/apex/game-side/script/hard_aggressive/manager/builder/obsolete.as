@@ -11,13 +11,15 @@ namespace Builder {
 // level, so a tier test would be a heuristic, and the failure mode here is
 // reclaiming our own base. Never mexes, never factories, never anything armed
 // above T1.5.
-const int OBSOLETE_PERIOD = 20 * SECOND;
+// 10s base, was 20: apexearth 2026-08-15, "all this obsolete reclaim should
+// happen faster". The energy-income scaling below still compresses it further.
+const int OBSOLETE_PERIOD = 10 * SECOND;
 const float OBSOLETE_NEAR = 900.f;     // around a blocked build site
 // Income a T2 player must clear before stripping its own T1 defences. A player
 // that has merely touched T2 may still be holding a line against T1 armies, and
 // those towers are the line.
 const float OBSOLETE_T2_INCOME = 60.f;
-const int   OBSOLETE_MIN_PERIOD = 3 * SECOND;
+const int   OBSOLETE_MIN_PERIOD = 1 * SECOND;
 // One fusion reactor's output. The unit of "how far past T1 the grid is".
 const float OBSOLETE_ENERGY_SCALE = 1000.f;
 int gNextObsolete = 0;   // earliest frame we may SCAN
@@ -447,8 +449,15 @@ int gNextJunkLog = 0;
 // armnanotc builddistance is 400; the margin keeps a victim's own footprint
 // inside reach.
 const float NANO_TIDY_REACH  = 380.f;
-const int   NANO_TIDY_PERIOD = 20 * SECOND;
+// Every second, not every 20: a turret's lathe is free and junk is ground
+// (apexearth: "nano tidy sweep should run once every second unless it is very
+// heavy"). The batch bound is what keeps the 1s period affordable: at most
+// this many turrets SCAN per sweep, on a rotating cursor, so the per-second
+// cost is flat however many turrets stand.
+const int   NANO_TIDY_PERIOD = 1 * SECOND;
+const int   NANO_TIDY_BATCH  = 6;
 int gNextNanoTidy = 0;
+uint gNanoTidyCursor = 0;
 array<int> gNanoIds;
 
 void NanoNoteBuilt(Id id)
@@ -468,11 +477,21 @@ void NanoTidy()
 {
 	if (ai.frame < gNextNanoTidy)
 		return;
-	gNextNanoTidy = ai.frame + NANO_TIDY_PERIOD;
-	for (int i = int(gNanoIds.length()) - 1; i >= 0; --i) {
+	gNextNanoTidy = ai.frame
+			+ int(ai.GetTunable("apex_nano_tidy_period", float(NANO_TIDY_PERIOD)));
+	const uint total = gNanoIds.length();
+	if (total == 0)
+		return;
+	uint batch = uint(ai.GetTunable("apex_nano_tidy_batch", float(NANO_TIDY_BATCH)));
+	if (batch > total)
+		batch = total;
+	for (uint step = 0; step < batch; ++step) {
+		if (gNanoIds.length() == 0)
+			return;
+		const uint i = (gNanoTidyCursor++) % gNanoIds.length();
 		CCircuitUnit@ u = ai.GetTeamUnit(Id(gNanoIds[i]));
 		if (u is null) {
-			gNanoIds.removeAt(uint(i));   // stale id; the unit is gone
+			gNanoIds.removeAt(i);   // stale id; the unit is gone
 			continue;
 		}
 		IUnitTask@ held = u.task;

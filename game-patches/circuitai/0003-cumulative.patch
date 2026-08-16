@@ -15544,6 +15544,116 @@ index 8a50bc2..1616caf 100644
 +}
 +
 +} // namespace circuit
+diff --git a/src/circuit/task/static/SuperTask.cpp b/src/circuit/task/static/SuperTask.cpp
+index 477ed0e..c5d9cbe 100644
+--- a/src/circuit/task/static/SuperTask.cpp
++++ b/src/circuit/task/static/SuperTask.cpp
+@@ -9,6 +9,7 @@
+ #include "task/fighter/SquadTask.h"
+ #include "map/InfluenceMap.h"
+ #include "module/MilitaryManager.h"
++#include "setup/SetupManager.h"
+ #include "unit/enemy/EnemyUnit.h"
+ #include "unit/ally/AllyUnit.h"
+ #include "unit/CircuitDef.h"
+@@ -54,20 +55,29 @@ static inline float MobileCost(const CEnemyManager::SEnemyGroup& group)
+ // apex: a massed enemy army standing where our own influence reaches -- the push
+ // on our border. GetAllyInflAt is nonzero only within range of our own armed
+ // units and defences, so this is literally "they are on top of our line".
+-static inline bool IsBorderMass(const CEnemyManager::SEnemyGroup& group, CInfluenceMap* inflMap)
++static inline bool IsBorderMass(const CEnemyManager::SEnemyGroup& group, CInfluenceMap* inflMap,
++		float massMin)
+ {
+-	return (MobileCost(group) >= ARMY_MASS_MIN)
++	return (MobileCost(group) >= massMin)
+ 		&& (inflMap->GetAllyInflAt(group.pos) > INFL_EPS);
+ }
+ 
+ // apex: score a candidate. Raw cost picks the biggest blob on the map; this tips
+ // the choice toward the densest STATIC target of comparable value, and above that
+-// toward an army massed on our own ground.
+-static inline float GroupScore(const CEnemyManager::SEnemyGroup& group, CInfluenceMap* inflMap)
++// toward an army massed on our own ground -- and above THAT, one massed at our
++// base. apexearth: "when enemy armies are close to our base we should prioritize
++// nuking the army (if they're big enough)" -- the base target keeps for the next
++// reload, the army at the wall does not.
++static inline float GroupScore(const CEnemyManager::SEnemyGroup& group, CInfluenceMap* inflMap,
++		float massMin, const springai::AIFloat3& basePos, float sqHomeRange, float homeWeight)
+ {
+ 	float score = group.cost + STATIC_WEIGHT * group.roleCosts[ROLE_TYPE(STATIC)];
+-	if (IsBorderMass(group, inflMap)) {
+-		score += ARMY_MASS_WEIGHT * MobileCost(group);
++	if (IsBorderMass(group, inflMap, massMin)) {
++		float w = ARMY_MASS_WEIGHT;
++		if (basePos.SqDistance2D(group.pos) < sqHomeRange) {
++			w += homeWeight;
++		}
++		score += w * MobileCost(group);
+ 	}
+ 	return score;
+ }
+@@ -150,6 +160,13 @@ void CSuperTask::Update()
+ 	CMilitaryManager* militaryMgr = circuit->GetMilitaryManager();
+ 	const float maxSqRange = SQUARE(cdef->GetMaxRange());
+ 	const float sqAoe = SQUARE(cdef->GetAoe() * 1.25f);
++	// apex: the army-priority knobs, tunable. homeRange bounds "close to our
++	// base"; inside it the mass bonus grows by homeWeight.
++	const float massMin = circuit->GetTunable("apex_nuke_army_min", ARMY_MASS_MIN);
++	const float homeWeight = circuit->GetTunable("apex_nuke_home_weight", 4.f);
++	const float blastTrade = circuit->GetTunable("apex_nuke_trade", BLAST_TRADE);
++	const AIFloat3 basePos = circuit->GetSetupManager()->GetBasePos();
++	const float sqHomeRange = SQUARE(militaryMgr->GetBaseDefRange() * 1.5f);
+ 	float cost = 0.f;
+ 	int groupIdx = -1;
+ 	const std::array<const std::set<IFighterTask*>*, 3> avoidTasks = {  // NOTE: ISquadTask only
+@@ -174,8 +191,9 @@ void CSuperTask::Update()
+ 	// own squads defending that line sat inside the blast radius, vetoing it again.
+ 	// Both vetoes are replaced for that case by a value trade: our metal in the
+ 	// blast against theirs. Everything else keeps the old, stricter rules.
+-	auto isTargetValid = [&avoidTasks, frame, sqAoe, aoe, staticShare, inflMap, circuit](const CEnemyManager::SEnemyGroup& group) {
+-		const bool isMass = IsBorderMass(group, inflMap);
++	auto isTargetValid = [&avoidTasks, frame, sqAoe, aoe, staticShare, inflMap, circuit,
++			massMin, blastTrade](const CEnemyManager::SEnemyGroup& group) {
++		const bool isMass = IsBorderMass(group, inflMap, massMin);
+ 		if (!isMass && (inflMap->GetAllyInflAt(group.pos) > INFL_EPS)) {
+ 			return false;
+ 		}
+@@ -187,7 +205,7 @@ void CSuperTask::Update()
+ 		}
+ 		if (isMass) {
+ 			const float ours = FriendlyCostIn(circuit, group.pos, aoe);
+-			if (MobileCost(group) < ours * BLAST_TRADE) {
++			if (MobileCost(group) < ours * blastTrade) {
+ 				return false;  // too much of us standing in it
+ 			}
+ 		} else {
+@@ -218,7 +236,7 @@ void CSuperTask::Update()
+ 	if (cdef->IsHoldFire() || (State::ROAM == state)) {
+ 		for (unsigned i = 0; i < groups.size(); ++i) {
+ 			const CEnemyManager::SEnemyGroup& group = groups[i];
+-			const float score = GroupScore(group, inflMap);
++			const float score = GroupScore(group, inflMap, massMin, basePos, sqHomeRange, homeWeight);
+ 			if ((cost >= score) || (position.SqDistance2D(group.pos) >= maxSqRange)) {
+ 				continue;
+ 			}
+@@ -237,7 +255,7 @@ void CSuperTask::Update()
+ 			}
+ 			const AIFloat3& newVec = (group.pos - position).Normalize2D();
+ 			const float angleMod = M_PI / (2.f * (std::acos(targetVec.dot2D(newVec)) + 1e-2f));
+-			const float score = GroupScore(group, inflMap) * angleMod;
++			const float score = GroupScore(group, inflMap, massMin, basePos, sqHomeRange, homeWeight) * angleMod;
+ 			if (cost >= score) {
+ 				continue;
+ 			}
+@@ -315,7 +333,7 @@ void CSuperTask::Update()
+ 		circuit->LOG("apex: super fire %s stock=%i score=%.0f cost=%.0f static=%.0f mobile=%.0f border=%i at (%.0f,%.0f)",
+ 				cdef->GetDef()->GetName(), unit->GetUnit()->GetStockpile(), cost, chosen.cost,
+ 				chosen.roleCosts[ROLE_TYPE(STATIC)], MobileCost(chosen),
+-				IsBorderMass(chosen, inflMap) ? 1 : 0, targetPos.x, targetPos.z);
++				IsBorderMass(chosen, inflMap, massMin) ? 1 : 0, targetPos.x, targetPos.z);
+ 
+ 		std::string cmd = (!cdef->IsAttrStock() || (unit->GetUnit()->GetStockpile() > 0)) ? "ai_super_fire:" : "ai_super_intention:";
+ 		cmd += utils::int_to_string(unit->GetId()) + "/" + utils::int_to_string(targetPos.x) + "/" + utils::int_to_string(targetPos.z);
 diff --git a/src/circuit/terrain/path/PathInfo.cpp b/src/circuit/terrain/path/PathInfo.cpp
 index 2789622..b20e21c 100644
 --- a/src/circuit/terrain/path/PathInfo.cpp

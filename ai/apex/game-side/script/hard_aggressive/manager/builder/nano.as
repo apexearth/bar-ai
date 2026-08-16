@@ -64,9 +64,11 @@ int CapShare(float share)
 // by a number someone picked. A turret is 210 metal and 140 build power that
 // never walks anywhere, so on a large economy it is the best thing a full bank
 // can become.
-const float NANO_PER_INCOME = 5.f;
+// 4 per income and a 0.16 share, was 5 and 0.12: apexearth 2026-08-15, "I just
+// see us with full metal too often and the solution is more build power."
+const float NANO_PER_INCOME = 4.f;
 const int   NANO_FULL_BONUS = 20;
-const float NANO_CAP_SHARE  = 0.12f;
+const float NANO_CAP_SHARE  = 0.16f;
 
 int NanoCap()
 {
@@ -93,7 +95,7 @@ int NanoInFlight()
 	return n;
 }
 const int   NANO_STALE    = 12;   // beyond this the counter has drifted, resync
-const int   NANO_PERIOD   = 15 * SECOND;
+const int   NANO_PERIOD   = 8 * SECOND;
 // While the bank is at the cap, order them as fast as placement allows and let
 // far more be in flight at once -- a period is the wrong bound here, since what
 // should stop us is running out of bank or of ground, both checked anyway.
