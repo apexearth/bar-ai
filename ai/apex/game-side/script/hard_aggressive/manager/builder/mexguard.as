@@ -578,8 +578,9 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 			if (geoValue > best) { best = geoValue; @gen = geo; pickedReactor = false; pickedGeo = true; }
 		}
 	}
-	if (pickedReactor && !forcedFusion && (ai.frame < gNextFusion))
-		return null;   // a reactor won; wait for it rather than dropping a rung
+	// No clock between reactors -- apexearth: "no cooldown wanted on fusion
+	// ask." Requests::Take dedupes joins and ReactorsInFlight (income+bank
+	// over cost) bounds concurrency; both are economy-derived, a timer is not.
 	if ((gen is null) || !gen.IsAvailable(ai.frame))
 		return null;
 	// Geo has its own placement: a specific vent tile carrying a spotId, not
@@ -684,8 +685,6 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		return null;
 	if (!created)
 		return post;   // joined one already requested; nothing new was asked for
-	if (pickedReactor)
-		gNextFusion = ai.frame + FUSION_PERIOD;
 	// Converters no longer wait on a clock at all; see the EnergyWasting branch
 	// above for why the bound is a count instead.
 	// unit=<id> ties this creation to a specific builder/constructor, and

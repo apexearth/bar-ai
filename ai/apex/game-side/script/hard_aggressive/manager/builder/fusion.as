@@ -404,10 +404,6 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 		}
 		return null;
 	}
-	// Cadence is where the role lives now: the eco lead returns to reactors
-	// sooner because that is its job, everyone else waits longer between them.
-	gNextFusion = ai.frame + (Factory::EcoLeadActive()
-			? FUSION_PERIOD : int(float(FUSION_PERIOD) * FUSION_OTHER_MULT));
 	++gFusionsAsked;
 	// at= is what separates this path from HomeEnergy's and from the C++
 	// placement in a log: without a position all three look alike.

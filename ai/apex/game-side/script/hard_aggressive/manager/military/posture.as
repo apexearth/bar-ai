@@ -34,10 +34,13 @@ const string TV_PUSH = "push";     // elector's answer: frame the window ends
 // higher than the per-squad engage margin: this spends the whole army at once,
 // and being wrong costs the game rather than a squad.
 const float PUSH_TEAM_RATIO = 1.6f;
-// Long enough to cross the map and land, short enough that a push which has
-// clearly failed is not renewed forever.
-const int   PUSH_WINDOW  = 90 * SECOND;
-const int   PUSH_COOLDOWN = 3 * MINUTE;
+// A STATE, NOT A CLOCK -- apexearth: "why even bother with a time based
+// cooldown here? If we are ready we just push more." The push holds exactly
+// while the team outweighs the enemy: entered at PUSH_TEAM_RATIO, kept while
+// above apex_push_keep (hysteresis, so a trade at the line does not flap it),
+// and renewed a few seconds at a time so it lapses by itself the moment the
+// advantage is gone. Losing the trade IS the exit condition; no cooldown.
+const int   PUSH_RENEW = 5 * SECOND;
 // Odds multiplier while pushing. 0.55 roughly halves the surplus the engage
 // test demands -- squads still refuse a genuinely hopeless fight, but stop
 // refusing the ones the rest of the team is about to join.
@@ -96,7 +99,6 @@ void RollPersona()
 }
 
 int  gPushUntil   = 0;
-int  gPushNextOk  = 0;
 bool gPushLogged  = false;
 
 void UpdateTeamPush()
@@ -122,19 +124,23 @@ void UpdateTeamPush()
 		const float seen = EnemyFieldCost();
 		const float floorFoe = EnemyArmyFloor();
 		const float foe = (seen > floorFoe) ? seen : teamArmy;
-		const bool worth = (teamArmy >= PUSH_MIN_ARMY)
-				&& (teamArmy > foe * PUSH_TEAM_RATIO);
 		float until = ai.ReadTeamValue(ai.teamId, TV_PUSH, 0.f);
-		if (worth && (ai.frame >= gPushNextOk) && (ai.frame > until)) {
-			until = float(ai.frame + PUSH_WINDOW);
-			gPushNextOk = ai.frame + PUSH_WINDOW + PUSH_COOLDOWN;
-			AiLog(Factory::T() + "apex: TEAM PUSH -- army "
-				+ formatFloat(teamArmy, "", 0, 0) + " vs enemy "
-				+ formatFloat(foe, "", 0, 0));
-			// Land and air together. Only the air lead has a force to release,
-			// and it no-ops for everyone else.
-			if (Air::ReleaseForPush())
-				AiLog(Factory::T() + "apex: air joins the push");
+		const bool wasPushing = ai.frame < int(until);
+		const float bar = wasPushing ? ai.GetTunable("apex_push_keep", 1.25f)
+		                             : PUSH_TEAM_RATIO;
+		const bool worth = (teamArmy >= PUSH_MIN_ARMY)
+				&& (teamArmy > foe * bar);
+		if (worth) {
+			until = float(ai.frame + PUSH_RENEW);
+			if (!wasPushing) {
+				AiLog(Factory::T() + "apex: TEAM PUSH -- army "
+					+ formatFloat(teamArmy, "", 0, 0) + " vs enemy "
+					+ formatFloat(foe, "", 0, 0));
+				// Land and air together. Only the air lead has a force to
+				// release, and it no-ops for everyone else.
+				if (Air::ReleaseForPush())
+					AiLog(Factory::T() + "apex: air joins the push");
+			}
 		}
 		ai.PublishTeamValue(TV_PUSH, until);
 	}

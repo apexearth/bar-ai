@@ -55,15 +55,13 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 //
 // Every entry is tunable (apex_share_defence, apex_share_airdef).
 //                            8     20     50    100    300
-array<float> SPEND_ARMY       = {  3.f,   4.f,   5.f,   6.f,   10.f};
-// TEN PERCENT OF EVERYTHING WE BUILD, AT EVERY INCOME.
-//
-// These are relative weights, so a row cannot state a percentage on its own --
-// each entry below is set to one ninth of the sum of the other four rows at that
-// income step, which is what makes SPEND_DEFENCE / (all five) come out at 0.100
-// in every column. Change any other row and these have to be recomputed; that is
-// the cost of stating an absolute share in a relative table.
-array<float> SPEND_DEFENCE    = {1.11f, 1.17f, 1.14f, 1.19f, 1.47f};
+// Army raised ~25% and defence ~60% over the 2026-08-15 baseline, out of the
+// economy/buildpower share -- apexearth, after mass rushes kept ending games:
+// "we need more defenses in our base, we need to make more army... we need
+// our army to protect ourselves."
+array<float> SPEND_ARMY       = {3.5f,   5.f,  6.5f,   8.f,   12.f};
+// Was pinned at exactly 10% of the five-row sum; now ~14-15%, on purpose.
+array<float> SPEND_DEFENCE    = { 1.8f,  1.9f,  1.9f,  2.0f,  2.4f};
 array<float> SPEND_AIRDEF     = {  1.f,   2.f,  1.5f,  1.5f,  0.5f};
 array<float> SPEND_ECONOMY    = {3.5f,  2.7f,   2.f,  1.5f,   1.f};
 array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
@@ -141,7 +139,9 @@ array<float> ROLE_AHA     = {0.00f, 0.00f, 0.07f, 0.10f, 0.11f};
 // front path spent the whole window refused by its own per-spot crowd cap
 // instead of opening a new spot. Front now leads local at every column.
 array<float> DEF_FRONT = {2.f,  3.f,  3.f,  3.f,  3.f};   // the Brain's line
-array<float> DEF_LOCAL = {1.f,  1.5f, 1.f,  1.f,  1.f};   // mex guards, dig-ins
+// Local raised past the opening: "more defenses in our base" -- the front
+// still leads at 2:1, but the interior is no longer a rounding error.
+array<float> DEF_LOCAL = {1.f,  1.5f, 1.5f, 1.5f, 1.5f};  // mex guards, dig-ins
 
 //------------------------------------------------------------------------------
 // 3. HOW FAR THE OBSERVED ENEMY MOVES THE MIX.
