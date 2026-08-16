@@ -980,7 +980,12 @@
 			}
 		},
 		"armfido": {
-			"role": ["assault"],
+			// skirmish, was assault -- same reasoning as cormort: apexearth,
+			// "these guys are like the hounds, they need to be careful with
+			// themselves", and the standing Hound complaint is walking into
+			// turrets. armzeus keeps the armalab assault... (it is skirmish
+			// too; the T2ArmyShort assault entry simply skips on Armada).
+			"role": ["skirmish"],
 			"attribute": ["siege"],
 			"slow_target": true,
 			"retreat": 0.5,
@@ -1414,8 +1419,12 @@
 			"attribute": ["melee"]
 		},
 		"cormort": {
-			"role": ["assault"],
-			"attribute":["support"],  //was siege too - but evtl not working correct
+			// skirmish, was assault: the assault role CLOSES on its target,
+			// which is exactly what a mortar bot must never do -- apexearth:
+			// "our sheldons are not properly staying mobile and shooting from
+			// their max range... always avoid being close to any enemy."
+			"role": ["skirmish"],
+			"attribute":["support"],
 			"retreat": 0.85
 		},
 		"corhrk": {
