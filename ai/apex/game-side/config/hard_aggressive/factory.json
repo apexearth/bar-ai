@@ -202,7 +202,7 @@
         },
 
 
-		"caretaker": 30
+		"caretaker": 20
 	},
 
 	// Armada's underwater gantry. Factory::T3Gantry returns this on a water map,
