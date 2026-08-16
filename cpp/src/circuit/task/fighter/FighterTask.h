@@ -13,6 +13,8 @@
 
 namespace circuit {
 
+class CCircuitAI;
+
 // Fraction of a unit's OWN GetMaxRange() it stands off at. One name for both
 // standoff sites -- IFighterTask::Attack and ISquadTask::Attack -- so a
 // per-unit fraction cannot drift between them again. Runtime: apex_range_mod.
@@ -76,6 +78,12 @@ public:
 	// true when the whole squad disengaged together (the asker included);
 	// base tasks have no squad and always answer false.
 	virtual bool TrySquadRetreat(CCircuitUnit* unit) { return false; }
+
+	// Retreat-source telemetry (implemented in FighterTask.cpp; SquadTask's
+	// branches report through these).
+	static void NoteSquadStand(CCircuitAI* c);
+	static void NoteSquadVote(CCircuitAI* c);
+	static void NoteHomeStand(CCircuitAI* c);
 
 protected:
 	void SetTarget(CEnemyInfo* enemy);

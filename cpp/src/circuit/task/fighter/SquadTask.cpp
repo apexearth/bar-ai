@@ -186,6 +186,7 @@ bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
 	if ((leader != nullptr) && (circuit->GetInflMap()->GetAllyInflAt(
 			leader->GetPos(circuit->GetLastFrame())) >= INFL_SAFE)) {
 		cowards.insert(unit);
+		NoteHomeStand(circuit);
 		return true;
 	}
 	float woundedPower = unit->GetCircuitDef()->GetPower();
@@ -197,12 +198,14 @@ bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
 	const float frac = circuit->GetTunable("apex_squad_retreat", 0.35f);
 	if (woundedPower < attackPower * frac) {
 		cowards.insert(unit);  // stands rear (COWARD_REAR_MOD) until the vote passes
+		NoteSquadStand(circuit);
 		return true;  // handled: stay with the squad rather than run alone
 	}
 	CRetreatTask* task = manager->EnqueueRetreat();
 	if (task == nullptr) {
 		return false;
 	}
+	NoteSquadVote(circuit);
 	circuit->LOG("apex: squad retreat units=%d wounded=%.0f/%.0f",
 			(int)units.size(), woundedPower, attackPower);
 	decltype(units) tmpUnits = units;

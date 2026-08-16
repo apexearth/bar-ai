@@ -19,8 +19,34 @@
 #include "unit/enemy/EnemyUnit.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
+#include "Log.h"
 
 namespace circuit {
+
+// Retreat-source telemetry: four rounds of retreat-bleed fixes moved nothing
+// (44-47% of lost metal, four audited games) while the collective vote fired
+// zero times -- so which branch actually creates the retreats has never been
+// observed, only assumed. One process-wide line, rate-limited.
+struct SRetreatSrc {
+	int stuck = 0, los = 0, range = 0, shield = 0, idleCoward = 0,
+		squadStand = 0, squadVote = 0, homeStand = 0;
+	int lastLog = -1000000;
+};
+static SRetreatSrc sRetreatSrc;
+
+static void LogRetreatSrc(CCircuitAI* circuit)
+{
+	if (circuit->GetLastFrame() < sRetreatSrc.lastLog + FRAMES_PER_SEC * 30) {
+		return;
+	}
+	sRetreatSrc.lastLog = circuit->GetLastFrame();
+	circuit->LOG("apex: retreat-src stuck=%d los=%d range=%d shield=%d"
+			" idleCoward=%d squadStand=%d squadVote=%d homeStand=%d",
+			sRetreatSrc.stuck, sRetreatSrc.los, sRetreatSrc.range,
+			sRetreatSrc.shield, sRetreatSrc.idleCoward,
+			sRetreatSrc.squadStand, sRetreatSrc.squadVote,
+			sRetreatSrc.homeStand);
+}
 
 using namespace springai;
 
@@ -106,6 +132,7 @@ void IFighterTask::Update()
 	decltype(units) tmpUnits = shields;
 	for (CCircuitUnit* unit : tmpUnits) {
 		if (!unit->IsShieldCharged(minShield)) {
+			++sRetreatSrc.shield;
 			CRetreatTask* task = manager->EnqueueRetreat();
 			manager->AssignTask(unit, task);
 		}
@@ -130,6 +157,8 @@ void IFighterTask::OnUnitIdle(CCircuitUnit* unit)
 			return;
 		}
 		cowards.erase(it);
+		++sRetreatSrc.idleCoward;
+		LogRetreatSrc(manager->GetCircuit());
 		CRetreatTask* task = manager->EnqueueRetreat();
 		manager->AssignTask(unit, task);
 	} else {
@@ -154,6 +183,10 @@ static inline bool IsWorthRepair(CCircuitDef* cdef)
 {
 	return (cdef->GetCostM() >= REPAIR_WORTH_COST) && !cdef->IsRoleComm();
 }
+
+void IFighterTask::NoteSquadStand(CCircuitAI* c) { ++sRetreatSrc.squadStand; LogRetreatSrc(c); }
+void IFighterTask::NoteSquadVote(CCircuitAI* c)  { ++sRetreatSrc.squadVote;  LogRetreatSrc(c); }
+void IFighterTask::NoteHomeStand(CCircuitAI* c)  { ++sRetreatSrc.homeStand;  LogRetreatSrc(c); }
 
 void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 {
@@ -197,6 +230,8 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		}
 		return;
 	} else if (healthPerc < 0.2f) {  // stuck units workaround: they don't shoot and don't see distant threat
+		++sRetreatSrc.stuck;
+		LogRetreatSrc(circuit);
 		CRetreatTask* task = manager->EnqueueRetreat();
 		manager->AssignTask(unit, task);
 		return;
@@ -213,6 +248,8 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const float range = cdef->GetMaxRange();
 	if ((target == nullptr) || !target->IsInLOS()) {
+		++sRetreatSrc.los;
+		LogRetreatSrc(circuit);
 		CRetreatTask* task = manager->EnqueueRetreat();
 		manager->AssignTask(unit, task);
 		return;
@@ -221,6 +258,8 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 	if ((target->GetPos().SqDistance2D(pos) > SQUARE(range)) ||
 		(threatMap->GetThreatAt(unit, pos) * 2 > threatMap->GetUnitPower(unit)))
 	{
+		++sRetreatSrc.range;
+		LogRetreatSrc(circuit);
 		CRetreatTask* task = manager->EnqueueRetreat();
 		manager->AssignTask(unit, task);
 		return;
