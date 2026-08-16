@@ -238,6 +238,22 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	return Take(unit, want, bt, prio, spot, radius, shake, created);
 }
 
+// DEAD HANDLES ARE DROPPED, NOT SERVED. AiTaskRemoved -> Forget is the normal
+// exit, but any removal that misses it leaves a dead task in gLive -- and a
+// dead task returned from here is refused by AssignTask (it has no owner
+// queue), so the asking constructor idles forever on the same stale handle.
+// Observed live: advanced cons idle at full metal while EcoFusion's request
+// kept resolving to a dead cover task.
+void SweepDead()
+{
+	for (uint i = 0; i < gLive.length(); ) {
+		if ((gLive[i] is null) || gLive[i].IsDead())
+			gLive.removeAt(i);
+		else
+			++i;
+	}
+}
+
 IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 		Task::Priority prio, const AIFloat3& in spot, float radius, float shake,
 		bool &out created)
@@ -245,6 +261,7 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	created = false;
 	if ((want is null) || !OnMap(spot))
 		return null;
+	SweepDead();
 	// THE one chokepoint every request rule passes through: an asker that
 	// cannot build the def gets null BEFORE any task is enqueued, so the rule
 	// falls through to its next option instead of leaving an orphan task and a

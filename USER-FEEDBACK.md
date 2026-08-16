@@ -10,6 +10,24 @@ work is cheaper than being told the same thing a fourth time.
 
 ---
 
+## The Brain owns (nearly) all building — standing architecture goal
+
+2026-08-15, watching: "We should have almost all our building going through
+the brain... the brain should 'want' economic expansion. It should want this
+pretty much always. Only time to stop wanting that is when it believes we're
+a lot more powerful than the enemy and at that point we can just dedicate to
+attacking."
+
+So: a standing **economic-expansion want** in the Brain, near-always on, whose
+value falls only when our power clearly dominates the enemy's (the killing-blow
+signal already measures this) — at which point spending shifts to the attack.
+Migration direction: the maketask-ladder spenders (EcoFusion, mex upgrades,
+expansion) become Brain wants under the ratio-value scoring he specified
+("values 4 and 7 → a 4:7 spend ratio"). **UNRESOLVED** — ratio scoring landed
+2026-08-15 (`cd6cf75`); the ladder-to-Brain migration has not started.
+
+---
+
 ## Current priority (2026-08-08)
 
 He set this explicitly after a session that added many features at once:
