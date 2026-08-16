@@ -1,5 +1,26 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN: commander task churn — big flap fixed, residual remains (2026-08-16)
+
+apexearth, watching a 1v1 loss (20260816-214025, out-econed 2.7x): "He
+constantly changes his mind... walks a long distance and then just turns
+around." The comm-switch diag (TEMP, maketask.as) measured 25+ MEX<->GUARD
+build-type flips in 10 seconds; each flip enqueued an orphan mex claim so
+the next election picked a farther spot (1667->3508 elmos). Root cause
+FIXED (b9d8623): VetoCommanderHold and CommanderIdleWork gated "really
+working" on `held.target` (nanoframe), null for the whole walk — a walking
+commander was swappable every tick and got handed a solar each
+COMM_ASSIST_PERIOD.
+
+Same-seed rerun (20260816-215419): switch storm gone (75->52 switches),
+mex-at-2 improved 2869->1711 frames — but stock does it in 832, and a
+smaller flap remains at 1.2-1.5m: ~5 bt13(mex,1113-1501)<->bt22(395,
+walked=0) flips, 2-11s holds, source unattributed (bt22 could be GUARD or
+a non-BUILDER task misread — diag lacked the task type; `ty` field added).
+Also comm-why `waiting` (task but no engine order, i.e. path queries) is
+39% of samples — worth its own look. Next: attribute the residual flap via
+the ty field, then remove the TEMP diag.
+
 ## OPEN: combat conversion -- army trades at ~0.5 K/D in metal and cannot finish a 2x lead inside 30 minutes (2026-08-15)
 
 THE strategic deficit, measured across 56 tournament games tonight: we

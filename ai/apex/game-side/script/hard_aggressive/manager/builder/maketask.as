@@ -46,6 +46,7 @@ void CommChurnDiag(CCircuitUnit@ unit, IUnitTask@ task)
 		++gCommChurnN;
 		const AIFloat3 site = task.GetBuildPos();
 		AiLog(Factory::T() + "apex: comm-switch #" + gCommChurnN
+			+ " ty" + int(task.GetType())
 			+ " bt" + gCommChurnBt + "->bt" + bt
 			+ " held=" + ((ai.frame - gCommChurnFrame) / SECOND) + "s"
 			+ " walked=" + formatFloat(here.distance2D(gCommChurnPos), "", 0, 0)
