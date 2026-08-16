@@ -753,8 +753,33 @@ void FillQuota(int line)
 			}
 		}
 	}
-	if (best is null)
-		return;      // every quota met: the line stops, which is the point
+	if (best is null) {
+		// EVERY QUOTA MET IS NOT A REASON TO IDLE AT WAR. The wants are
+		// BALANCE targets, and the cost-normalization shrank their absolute
+		// counts -- measured live: an idle T2 factory for a full minute at a
+		// full metal bank while losing (apexearth: "we think we have enough
+		// army or something? thats nuts"). With metal to spend, keep building
+		// the def whose have/want ratio is lowest; the quota still decides
+		// WHAT, it no longer decides WHETHER.
+		if (aiEconomyMgr.metal.current
+				< aiEconomyMgr.metal.storage
+					* ai.GetTunable("apex_overflow_build_frac", 0.5f))
+			return;
+		float worstOver = 1.0e18f;
+		for (uint i = 0; i < defs.length(); ++i) {
+			if ((want[i] <= 0) || isFloor[i])
+				continue;
+			const int have = defs[i].count + fac.CountQueued(defs[i])
+					+ PendCount(line, defs[i]);
+			const float ratio = float(have) / float(want[i]);
+			if (ratio < worstOver) {
+				worstOver = ratio;
+				@best = defs[i];
+			}
+		}
+		if (best is null)
+			return;
+	}
 
 	// INSERT, NEVER SHIFT-APPEND. FactoryCAI::GetCountMultiplierFromOptions is
 	// `if (opts & SHIFT_KEY) ret *= 5`, so an append is FIVE units, not one.
