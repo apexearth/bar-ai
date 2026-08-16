@@ -161,6 +161,16 @@ def check_military(text, rep):
                 f"max {max(skips)} groups skipped in one pass"
                 + ("" if max(skips) < 30 else " -- squads refusing and"
                    " wandering"))
+    # near-miss refusals: bestRef close to 1.0 means one merge or a small
+    # margin change would have taken the target; low means hopeless anyway.
+    refs = [float(r) for r in re.findall(r"bestRef=([\d.]+)", text)
+            if float(r) > 0]
+    if refs:
+        near = sum(1 for r in refs if r >= 0.7) / len(refs)
+        rep.add("MILITARY", True, "refusal-nearness",
+                f"{near:.0%} of refusal passes had a best-refused >= 0.7 "
+                f"({len(refs)} passes, median "
+                f"{sorted(refs)[len(refs)//2]:.2f})")
     # massing: want vs actual army ratio at last samples
     mass = re.findall(r"mass want=(\d+) floor=(\d+) army=(\d+)"
                       r" enemyArmy=(\d+)", text)
