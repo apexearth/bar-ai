@@ -63,12 +63,19 @@ int PlantsWanted(const CCircuitDef@ fac)
 // per def, so a first bot lab and a first vehicle plant each read count=0.
 int T1PlantCount()
 {
+	// DEF COUNTS, NOT THE STANDING LIST: CCircuitDef::count includes the
+	// nanoframe, so two constructors starting plants in the same window both
+	// counting "zero standing" cannot double-open (seen live as Legion: two
+	// T1 plants pre-T2 straight through the gate). All factions' land plants
+	// are summed because resurrection hands us cross-faction labs.
+	array<string> plants = {"armlab", "armvp", "armap", "armhp",
+	                        "corlab", "corvp", "corap", "corhp",
+	                        "leglab", "legvp", "legap", "leghp"};
 	int n = 0;
-	for (uint i = 0; i < gFacUnits.length(); ++i) {
-		if (gFacUnits[i] is null)
-			continue;
-		if ((userData[gFacUnits[i].circuitDef.id].attr & (Attr::T2 | Attr::T3)) == 0)
-			++n;
+	for (uint i = 0; i < plants.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(plants[i]);
+		if (d !is null)
+			n += int(d.count);
 	}
 	return n;
 }
