@@ -121,13 +121,16 @@ def check_military(text, rep):
     for m in re.finditer(
             r"m t(\d+)\].*unit-destroyed \S+ id=(\d+) frame=(\d+)"
             r" at=\S+ curTask=t(-?\d+)b(-?\d+)f(-?\d+) cost=(\d+)"
-            r" fwd=\S+(?: built=(\d))?", text):
+            r" fwd=\S+(?: built=(\d))?(?: mob=(\d))?", text):
         key = (m.group(1), m.group(2))
         if key in seen or int(m.group(3)) >= cutoff:
             continue
         seen.add(key)
         if m.group(8) == "0":
             metal["under-construction"] += float(m.group(7))
+            continue
+        if m.group(9) == "0":
+            metal["structure"] += float(m.group(7))
             continue
         tt = int(m.group(4))
         lab = {4: "retreat", 0: "nil", 7: "fight", 5: "build",
@@ -140,7 +143,11 @@ def check_military(text, rep):
         rep.add("MILITARY", r < 0.25, "retreat-bleed",
                 f"{r:.0%} of lost metal died retreating")
         rep.add("MILITARY", n < 0.25, "taskless-deaths",
-                f"{n:.0%} died holding no task (base overrun signature)")
+                f"{n:.0%} of lost metal was mobile units holding no task")
+        s = metal.get("structure", 0) / total
+        rep.add("MILITARY", s < 0.35, "base-attrition",
+                f"{s:.0%} of lost metal was standing structures"
+                + ("" if s < 0.35 else " -- the base is being eaten"))
     else:
         rep.add("MILITARY", True, "death-attribution", "no death data")
     # engage decisions: share of TAKEs at hopeless odds, and skip volume.

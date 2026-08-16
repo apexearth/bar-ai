@@ -24,7 +24,8 @@ LINE = re.compile(
     r"\[(?P<min>[\d.]+)m t(?P<team>\d+)\] apex: unit-destroyed (?P<name>\S+)"
     r" id=\d+ frame=\d+ at=(?P<x>-?\d+),(?P<z>-?\d+)"
     r" curTask=t(?P<tt>-?\d+)b(?P<bt>-?\d+)f(?P<ft>-?\d+)"
-    r" cost=(?P<cost>\d+) fwd=(?P<fwd>-?[\d.]+)(?: built=(?P<built>\d))?")
+    r" cost=(?P<cost>\d+) fwd=(?P<fwd>-?[\d.]+)(?: built=(?P<built>\d))?"
+    r"(?: mob=(?P<mob>\d))?")
 
 
 def label(tt, bt, ft):
@@ -80,7 +81,9 @@ def main():
             continue
         if m["built"] == "0":
             key = "under-construction"   # a nanoframe holds no task; full def
-        else:                            # cost here overstates the real loss
+        elif m["mob"] == "0":
+            key = "structure"            # buildings hold NIL for life; their
+        else:                            # deaths are base attrition, not army
             key = label(int(m["tt"]), int(m["bt"]), int(m["ft"]))
         c = float(m["cost"])
         metal[key] += c

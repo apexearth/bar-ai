@@ -159,6 +159,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		+ " cost=" + int((cdef !is null) ? cdef.costM : 0.f)
 		+ " fwd=" + formatFloat(Military::ForwardFraction(at), "", 0, 2)
 		+ " built=" + (WasFinished(int(unit.id)) ? 1 : 0)
+		+ " mob=" + (((cdef !is null) && cdef.IsMobile()) ? 1 : 0)
 		+ " hist=[" + hist + "]");
 }
 
