@@ -406,10 +406,13 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		array<Type> core = {RT::ASSAULT, RT::HEAVY, RT::AH, RT::AHA};
 		for (uint c = 0; c < core.length(); ++c) {
 			CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, core[c]);
-			if ((d is null) || !d.IsAvailable(ai.frame))
+			if ((d is null) || !d.IsAvailable(ai.frame) || (d.costM <= 0.f))
 				continue;
 			defs.insertLast(d);
-			want.insertLast(T2CoreWanted());
+			// Cost-normalized: equal COUNTS of assault and heavy made heavy
+			// metal dominate -- see the metal-ratio comment in the fill loop.
+			want.insertLast(RoundUp(float(T2CoreWanted())
+					* ai.GetTunable("apex_quota_ref_cost", 100.f) / d.costM));
 			isFloor.insertLast(false);
 		}
 		if (defs.length() > 0)
@@ -434,7 +437,11 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			// ranged, tanky line-holders) keep the full count.
 			if ((core[c] == RT::RAIDER) && Factory::gHaveT2)
 				n = (n + 2) / 3;
-			n = RoundUp(float(n) * DefQuotaMod(d));
+			// Cost-normalized like the main fill loop: metal shares, not
+			// count shares.
+			n = RoundUp(float(n) * DefQuotaMod(d)
+					* ai.GetTunable("apex_quota_ref_cost", 100.f)
+					/ ((d.costM > 0.f) ? d.costM : 100.f));
 			defs.insertLast(d);
 			want.insertLast(n);
 			isFloor.insertLast(false);      // balanced, not first-listed-first; see T2 block
@@ -552,7 +559,17 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		if (s <= 0.f)
 			continue;
 		defs.insertLast(d);
-		want.insertLast(RoundUp(s * slots * tier * DefQuotaMod(d)));
+		// METAL ratios, not count ratios: the shares are metal shares, and
+		// comparing them as raw counts made a 20% heavy share into 20% of
+		// SLOTS -- filled with Mammoth-class units at 10-20x a Sheldon's
+		// cost, the metal ballooned and the cheap roles starved (apexearth:
+		// "we still make tons of metal worth of mammoths versus sheldons...
+		// enemy has lots of T1 still but we are refusing to make any").
+		// Normalizing the count by cost lands each role's METAL at its share:
+		// a 140-metal Sheldon gets ~7x the bodies of a 1000-metal heavy.
+		const float ref = ai.GetTunable("apex_quota_ref_cost", 100.f);
+		want.insertLast(RoundUp(s * slots * tier * DefQuotaMod(d)
+				* (ref / d.costM)));
 		isFloor.insertLast(false);
 	}
 }
