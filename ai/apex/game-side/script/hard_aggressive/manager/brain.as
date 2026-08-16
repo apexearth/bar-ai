@@ -133,12 +133,28 @@ class Want
 
 	int have = 0;         // how many of this we already hold
 
-	// VALUE PER METAL, WITH DIMINISHING RETURNS. Ranking on value/cost alone
-	// hands the game to whatever is cheapest. Halving the value per copy
-	// already standing is what stops one cheap thing winning forever.
+	// Metal already standing in this kind (def.count * costM). >= 0 switches
+	// Score() to RATIO semantics -- apexearth: "if a nuke silo has a value of 4
+	// and nanos are 7... I would expect a 4:7 ratio between nanos and nukes."
+	// Scoring value against invested metal makes spend converge to exactly
+	// that: each kind's standing metal approaches its share of the values.
+	// <0 keeps the legacy have-count scoring for wants whose `have` is not a
+	// unit count (fence coverage, mexup, ...).
+	float investedM = -1.f;
+
+	// VALUE AS A SPENDING RATIO (invested path) or value-per-metal with
+	// per-copy halving (legacy path). The legacy /cost division is skipped on
+	// the invested path: cost-normalisation is inherent when the denominator
+	// grows by cost with every copy built.
 	float Score() const
 	{
-		float scaled = value / (1.f + float(have));
+		float scaled;
+		if (investedM >= 0.f) {
+			scaled = value / (1.f + investedM
+					/ ai.GetTunable("apex_value_norm", 1000.f));
+		} else {
+			scaled = value / (1.f + float(have));
+		}
 		// The category budget: what this purchase is worth against the share of
 		// metal its whole category is meant to have. See brain/budget.as -- this
 		// is the one place the army/defence/economy/build-power split is stated,
@@ -153,6 +169,8 @@ class Want
 			if (kind != "mex")
 				scaled *= ArmyDeficitMult();
 		}
+		if (investedM >= 0.f)
+			return scaled;
 		return (cost > 1.f) ? (scaled / cost) : scaled;
 	}
 }
@@ -879,6 +897,7 @@ Want@ Simple(string kind, float value, CCircuitDef@ def, bool advOnly = true)
 	w.value = value;
 	w.cost = def.costM;
 	w.have = def.count;
+	w.investedM = float(def.count) * def.costM;  // ratio scoring; see Want
 	@w.def = def;
 	w.needsAdvCon = advOnly;
 	return w;
@@ -1008,6 +1027,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			// stands. The stall branch used to zero this by hand, which was the
 			// same admission in one special case.
 			e.have = 0;
+			e.investedM = -1.f;  // keep the no-decay intent under ratio scoring
 			Propose(e);
 		}
 	}
@@ -1032,6 +1052,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 					conv, false);
 			if (c !is null) {
 				c.have = 0;   // demand is the spill, not how many already stand
+				c.investedM = -1.f;  // keep the no-decay intent under ratio scoring
 				Propose(c);
 			}
 		}
