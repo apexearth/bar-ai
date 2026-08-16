@@ -52,15 +52,23 @@ def main():
     p = Path(args[0])
     if p.is_dir():
         p = p / "infolog.txt"
+    text = p.read_text(errors="replace")
+    # The end-of-game wipe floods destruction events for whole standing bases
+    # (all on idle tasks); cut the final 90 seconds so the report reads combat.
+    frames = [int(f) for f in re.findall(r" frame=(\d+)", text)]
+    cutoff = (max(frames) - 90 * 30) if frames else 0
     metal = defaultdict(float)
     count = defaultdict(int)
     fwd_sum = defaultdict(float)
     per_team = defaultdict(float)
-    for line in p.read_text(errors="replace").splitlines():
+    for line in text.splitlines():
         m = LINE.search(line)
         if not m:
             continue
         if team is not None and int(m["team"]) != team:
+            continue
+        frm = re.search(r" frame=(\d+)", line)
+        if frm and int(frm.group(1)) >= cutoff:
             continue
         key = label(int(m["tt"]), int(m["bt"]), int(m["ft"]))
         c = float(m["cost"])

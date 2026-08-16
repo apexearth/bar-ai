@@ -1210,12 +1210,16 @@ int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 	if (unit->GetCircuitDef() != nullptr) {
 		NoteLossAt(unit->GetPos(GetLastFrame()), unit->GetCircuitDef()->GetCostM());
 	}
+	// BEFORE the modules: their UnitDestroyed strips the unit's task (task->
+	// OnUnitDestroyed -> RemoveAssignee -> reassigned idle/nil), so the script
+	// hook fired after them read every death as "idle" -- 915 attacker deaths
+	// at 0.94 forward, all masked. The script only does bookkeeping; it needs
+	// the task the unit actually died holding.
+	script->UnitDestroyed(unit);
+
 	for (auto& module : modules) {
 		module->UnitDestroyed(unit, attacker);
 	}
-
-	// FIXME: Experimental. Remove?
-	script->UnitDestroyed(unit);
 
 	return 0;  // signaling: OK
 }
