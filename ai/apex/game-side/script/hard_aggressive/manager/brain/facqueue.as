@@ -194,8 +194,13 @@ float TierShare(CCircuitUnit@ fac)
 	if ((attr & Factory::Attr::T2) != 0)
 		return Factory::gHaveT3
 			? ai.GetTunable("apex_quota_t2_after_t3", 0.4f) : 1.f;
+	// 0.15, was 0.0: a hard zero is an off-switch, not a ratio -- the moment
+	// a gantry stood, every T1 combat want multiplied to nothing and the lab
+	// fell to cons and rezbots (audited iter2: 103 rezbots, 4 Thugs, corthud
+	// entries absent from the quota entirely). T1 chaff still screens the
+	// slow T3 era, and the enemy fields T1 masses to the end.
 	if (Factory::gHaveT3)
-		return ai.GetTunable("apex_quota_t1_after_t3", 0.f);
+		return ai.GetTunable("apex_quota_t1_after_t3", 0.15f);
 	if (!Factory::gHaveT2)
 		return 1.f;
 	// The cut PHASES IN with the T2 army actually fielded, not the plant
