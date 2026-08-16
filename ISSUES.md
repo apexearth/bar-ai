@@ -21,6 +21,12 @@ Also comm-why `waiting` (task but no engine order, i.e. path queries) is
 39% of samples — worth its own look. Next: attribute the residual flap via
 the ty field, then remove the TEMP diag.
 
+Tournament scale (12x 1v1, 20260816-151052-comm-hold-1v1): economy is no
+longer the loss mechanism — apex out-produced stock 950,889 vs 593,222
+metal (1.6x) with metal waste 4.0% vs the broken game's 20%. Losses now
+trace to the standing combat-conversion issue below (army K/D 0.57 vs
+1.08); 7 of 12 games timed out. Residual comm switches 48-118 per 30min.
+
 ## OPEN: combat conversion -- army trades at ~0.5 K/D in metal and cannot finish a 2x lead inside 30 minutes (2026-08-15)
 
 THE strategic deficit, measured across 56 tournament games tonight: we
