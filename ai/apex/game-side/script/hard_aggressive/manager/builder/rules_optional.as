@@ -38,6 +38,20 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			// The better (T2) turret sits beside it, also outside the gate, for
 			// the same reason: it answers observed enemy air, is bounded the same
 			// way, and cannot fire before the tech exists anyway.
+			// THE FIRST FUSION OUTRANKS EVERYTHING OPTIONAL for an advanced
+			// constructor. EcoFusion is otherwise LAST in the phase cluster,
+			// and measured (Angel Crossing, 20260816-045743): every economic
+			// gate green from 14.4 minutes, income to 138, bank to 10k, and
+			// no fusion all game -- the builders that fell through to the rule
+			// were T1 cons, refused by capability without a log, while the adv
+			// cons were claimed higher up (stacking advanced solars among it).
+			// EcoFusion's own gates (mohos standing, in-flight bound) still
+			// decide WHETHER; this only decides how early an adv con asks.
+			if (IsAdvConDef(unit) && !HaveReactor()) {
+				IUnitTask@ firstFus = EcoFusion(unit);
+				if (firstFus !is null)
+					return firstFus;
+			}
 			IUnitTask@ deter = HomeDeter(unit);
 			if (deter !is null)
 				return deter;

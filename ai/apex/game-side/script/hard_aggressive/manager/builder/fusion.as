@@ -246,6 +246,12 @@ int gNextFusionLog = 0;
 int gNextFusionDiagLog = 0;
 int gFusionsAsked = 0;
 
+int MohoCount()
+{
+	CCircuitDef@ moho = SideDef3("armmoho", "cormoho", "legmoho");
+	return (moho is null) ? 0 : int(moho.count);
+}
+
 IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 {
 	// Unconditional, ahead of every early return below, so it also shows how
@@ -261,7 +267,11 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 			+ " steady=" + formatFloat(Factory::SteadyIncome(), "", 0, 0)
 			+ " wasting=" + (EnergyWasting() ? "1" : "0")
 			+ " advsolCount=" + ((solarDef is null) ? -1 : solarDef.count)
-			+ " fusCount=" + FusionDef(unit).count);
+			+ " fusCount=" + FusionDef(unit).count
+			+ " advCon=" + (gHaveAdvCon ? "1" : "0")
+			+ " moho=" + MohoCount()
+			+ " asked=" + gFusionsAsked
+			+ " canBuild=" + (unit.circuitDef.CanBuild(FusionDef(unit)) ? "1" : "0"));
 	}
 
 	// A reactor is not gated on EcoLeadActive() (an ally election, false for a
@@ -284,15 +294,27 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 		if ((advsol !is null) && (plainFus !is null))
 			investedEnough = float(advsol.count) * advsol.costM >= plainFus.costM;
 	}
-	if (!investedEnough
+	// "Some advanced mexes" is proof the T2 economy is real, and the FIRST
+	// fusion then jumps the income bar outright. apexearth: "after we have
+	// some advanced mexes we really should be making that first fusion.
+	// Fusions (economy) are super important in this game. And the efficiency
+	// difference between a fusion and an advanced solar is huge."
+	bool firstFusionDue = false;
+	if (!HaveReactor()) {
+		CCircuitDef@ moho = SideDef3("armmoho", "cormoho", "legmoho");
+		firstFusionDue = (moho !is null) && (float(moho.count)
+				>= ai.GetTunable("apex_first_fusion_mohos", 2.f));
+	}
+	if (!investedEnough && !firstFusionDue
 		&& (Factory::SteadyIncome()
 			< ai.GetTunable("apex_fusion_income", FUSION_SOLO_INCOME)))
 	{
 		return null;
 	}
-	// A T1 constructor cannot build one; asking anyway is the silent no-op this
-	// repo has been bitten by before.
-	if (!Factory::gHaveT2)
+	// A T2 CONSTRUCTOR, not a T2 factory: the factory stood in for "someone
+	// can build it", which gated the WANT on tech the team might hold in a
+	// different form. apexearth: 'Change this to: "We must have a T2 con."'
+	if (!gHaveAdvCon)
 		return null;
 	// apexearth 2026-08-15: this used to refuse while EnergyWasting() (bank
 	// nearly full or spare energy over CONVERT_MIN_SPARE), on the theory that
