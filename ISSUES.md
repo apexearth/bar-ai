@@ -1526,6 +1526,16 @@ never-expiring reclaim ledger — his twice-repeated report), bank-inclusive
 reactor concurrency ("0 delay" between fusions when metal-full), and
 build-side obsolescence (never build a def obsolete.as would reclaim).
 
+## NEW: not enough anti-swarm shot density in defences (2026-08-15, Greenhaven loss)
+
+apexearth: "we lacked land defenses to block enemy mass grunt assaults. If we
+don't have enough shots (fast firing stuff to kill bulk low hp units) then we
+get overwhelmed." The porcupine/defence chooser should weight FAST-FIRING
+towers (LLT/beamer class) up when the enemy composition is cheap-swarm (low
+average unit cost / high armyCheap), instead of the current threat-value
+draw that favours big single-shot towers equally against everything. Not yet
+implemented — needs the enemy-composition signal wired into PorcToBuild.
+
 ## NEW: anti-air coverage is lacking (2026-08-13, watching)
 
 **apexearth, watching the windowed 8v8:** "We lack anti air coverage."

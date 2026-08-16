@@ -162,8 +162,12 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// at least one T2 mex upgrade are the immediate, higher-value spend, so
 	// the second-T1-line refusal now stays active until both exist, instead
 	// of lifting the instant a T2 plant merely stands.
+	// Air's exemption is POST-T2 only. apexearth, after a Greenhaven loss with
+	// bot+vehicle+air all pre-T2: the air plant's own income floors did not
+	// stop it, and pre-T2 the competition-for-metal argument applies to an air
+	// plant exactly as to a second land lab.
 	if (((userData[want.id].attr & (Attr::T2 | Attr::T3)) == 0)
-		&& !IsAirFactory(want))
+		&& (!IsAirFactory(want) || !gHaveT2))
 	{
 		CCircuitDef@ navy = NavalOpening();
 		if (!((navy !is null) && (want is navy))) {

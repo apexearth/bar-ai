@@ -612,9 +612,32 @@ void AdvConFirst(int line)
 		+ fac.id + " inserts " + con.GetName() + " at the front");
 }
 
+// A SURPLUS T1 LINE IS HELD, NOT FED. The plant-count gate stops BUILDING extra
+// T1 labs, but resurrection walks straight past it -- rez bots rebuild lab
+// wrecks (enemy ones included; cross-faction labs in the Greenhaven ledgers),
+// and every fed line drains metal the tech transition needs. Pre-T2, only the
+// OLDEST T1 line gets orders; the rest stand until T2 exists. Holding is
+// reversible; the labs themselves can still be reclaimed or used later.
+bool SurplusT1Line(int line)
+{
+	if (Factory::gHaveT2)
+		return false;
+	CCircuitUnit@ fac = gFQFac[line];
+	if ((Factory::userData[fac.circuitDef.id].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
+		return false;
+	for (uint i = 0; i < uint(line); ++i) {
+		if ((Factory::userData[gFQFac[i].circuitDef.id].attr
+				& (Factory::Attr::T2 | Factory::Attr::T3)) == 0)
+			return true;   // an older T1 line exists; this one waits
+	}
+	return false;
+}
+
 void FillQuota(int line)
 {
 	CCircuitUnit@ fac = gFQFac[line];
+	if (SurplusT1Line(line))
+		return;
 	const int ahead = int(ai.GetTunable("apex_fac_ahead", FQ_AHEAD_DEFAULT));
 	const int depth = fac.CountQueued(null);
 
