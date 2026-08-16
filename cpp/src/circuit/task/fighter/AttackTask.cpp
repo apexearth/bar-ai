@@ -531,8 +531,13 @@ void CAttackTask::Update()
 	if (chargeRoll < 0) {
 		chargeRoll = (rand() % 100 < CHARGE_DIRECT_PCT) ? 1 : 0;
 	}
-	const bool isCharge = (chargeRoll == 1)
-			&& ISquadTask::IsChargeDef(leader->GetCircuitDef());
+	// The killing blow (script blackboard "kill") turns EVERY squad into a
+	// charger: with the enemy clearly beaten, threat-detour pathing is what an
+	// enormous army orbiting a doomsday gun's range ring looks like -- the
+	// caution the ceiling buys is for games still in doubt.
+	const bool overrun = circuit->ReadTeamValue(circuit->GetTeamId(), "kill", 0.f) > 0.f;
+	const bool isCharge = overrun || ((chargeRoll == 1)
+			&& ISquadTask::IsChargeDef(leader->GetCircuitDef()));
 	const float threatCeiling = isCharge
 			? CHARGE_THREAT_CEILING
 			: (ATTACK_CEILING_MOD * attackPower

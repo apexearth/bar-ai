@@ -11805,7 +11805,7 @@ index c3f5e98..fc98a66 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index 91000e2..48d939a 100644
+index 91000e2..f5257fc 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -11870,7 +11870,23 @@ index 91000e2..48d939a 100644
  				unit->Gather(groupPos, frame);
  			}
  		}
-@@ -537,7 +558,13 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -510,8 +531,13 @@ void CAttackTask::Update()
+ 	if (chargeRoll < 0) {
+ 		chargeRoll = (rand() % 100 < CHARGE_DIRECT_PCT) ? 1 : 0;
+ 	}
+-	const bool isCharge = (chargeRoll == 1)
+-			&& ISquadTask::IsChargeDef(leader->GetCircuitDef());
++	// The killing blow (script blackboard "kill") turns EVERY squad into a
++	// charger: with the enemy clearly beaten, threat-detour pathing is what an
++	// enormous army orbiting a doomsday gun's range ring looks like -- the
++	// caution the ceiling buys is for games still in doubt.
++	const bool overrun = circuit->ReadTeamValue(circuit->GetTeamId(), "kill", 0.f) > 0.f;
++	const bool isCharge = overrun || ((chargeRoll == 1)
++			&& ISquadTask::IsChargeDef(leader->GetCircuitDef()));
+ 	const float threatCeiling = isCharge
+ 			? CHARGE_THREAT_CEILING
+ 			: (ATTACK_CEILING_MOD * attackPower
+@@ -537,7 +563,13 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
@@ -11885,7 +11901,7 @@ index 91000e2..48d939a 100644
  		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  		float x = rand() % terrainMgr->GetTerrainWidth();
  		float z = rand() % terrainMgr->GetTerrainHeight();
-@@ -576,6 +603,11 @@ void CAttackTask::FindTarget()
+@@ -576,6 +608,11 @@ void CAttackTask::FindTarget()
  	CInfluenceMap* inflMap = circuit->GetInflMap();
  	CThreatMap* threatMap = circuit->GetThreatMap();
  	threatMap->SetThreatType(leader);
@@ -11897,7 +11913,7 @@ index 91000e2..48d939a 100644
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
  	const int frame = circuit->GetLastFrame();
-@@ -603,6 +635,7 @@ void CAttackTask::FindTarget()
+@@ -603,6 +640,7 @@ void CAttackTask::FindTarget()
  	float bestInfl = .0f;
  	float bestNear = .0f;
  	float bestScale = .0f;
@@ -11905,7 +11921,7 @@ index 91000e2..48d939a 100644
  	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), armbanth
  	// (Titan), corkorg (Korgoth) and armraz all carry role heavy + attribute
  	// melee, and all of them detonate on death -- so the value is delivered by
-@@ -653,9 +686,22 @@ void CAttackTask::FindTarget()
+@@ -653,9 +691,22 @@ void CAttackTask::FindTarget()
  		// when the group is closer to our base than we are, i.e. defending home,
  		// where taking a worse fight is correct.
  		const float scale = std::min(distBE / obDist, 1.f);
@@ -11931,7 +11947,7 @@ index 91000e2..48d939a 100644
  		const bool holdsPrev = wasEngaged && (prevTarget != nullptr)
  				&& (std::find(group.units.begin(), group.units.end(), prevTarget->GetId()) != group.units.end());
  		const float groupMargin = holdsPrev ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
-@@ -778,7 +824,12 @@ void CAttackTask::FindTarget()
+@@ -778,7 +829,12 @@ void CAttackTask::FindTarget()
  			if ((edef != nullptr) && !edef->IsMobile() && !edef->IsAttacker()
  				&& (localInfl <= .0f))
  			{
@@ -11945,7 +11961,7 @@ index 91000e2..48d939a 100644
  				// ...and prefer the ones that actually die in the time a raid
  				// has. A converter is 380 metal behind 445 hitpoints; an
  				// advanced solar is 350 behind 1130. Equal-ish metal, and only
-@@ -816,6 +867,7 @@ void CAttackTask::FindTarget()
+@@ -816,6 +872,7 @@ void CAttackTask::FindTarget()
  				bestInfl = group.influence;
  				bestNear = localInfl;
  				bestScale = scale;
@@ -11953,7 +11969,7 @@ index 91000e2..48d939a 100644
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -834,12 +886,12 @@ void CAttackTask::FindTarget()
+@@ -834,12 +891,12 @@ void CAttackTask::FindTarget()
  		lastEngageLog = frame;
  		const float need = bestInfl * bestScale;
  		circuit->LOG("apex: engage %s units=%d spread=%.0f hp=%.2f coh=%.2f "
@@ -11968,7 +11984,7 @@ index 91000e2..48d939a 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -878,7 +930,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -878,7 +935,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -12003,7 +12019,7 @@ index 91000e2..48d939a 100644
  	if (urgentPositions.empty()) {
  		FallbackBasePos();
  		return;
-@@ -916,8 +994,26 @@ void CAttackTask::FallbackBasePos()
+@@ -916,8 +999,26 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -12031,7 +12047,7 @@ index 91000e2..48d939a 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -950,7 +1046,9 @@ void CAttackTask::Fallback()
+@@ -950,7 +1051,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {

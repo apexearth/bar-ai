@@ -32,6 +32,11 @@ void UpdateKillingBlow()
 	if (now == gKilling)
 		return;
 	gKilling = now;
+	// The C++ attack pather reads this: while the blow is on, squads path like
+	// chargers (pure distance, no threat detour). apexearth, watching the won
+	// endgame: an enormous army orbiting two doomsday guns' range rings
+	// instead of saturating them -- caution is for games still in doubt.
+	ai.PublishTeamValue("kill", now ? 1.f : 0.f);
 	AiLog(Factory::T() + "apex: KILLING BLOW " + (now ? "ON" : "off")
 		+ " teamArmy=" + formatFloat(TeamArmyCost(), "", 0, 0)
 		+ " enemyArmy=" + formatFloat(EnemyFieldCost(), "", 0, 0));
