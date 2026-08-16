@@ -4,6 +4,21 @@ namespace Builder {
 // DefaultMakeTask would offer it. Runs ahead of expansion, so every rule in
 // here spends constructor time -- see CHANGES.md 2026-08-01.
 
+// The mexup-outstanding gates yield at late-game income: the mexup pipeline
+// GUARANTEES an upgrade is always in flight, so a plain
+// !MexUpgradesOutstanding() became a permanent lock -- measured live, 500
+// metal/second and 22k energy with NO gantry at 37 minutes while enemy T3
+// walked in (apexearth: "why aren't we making 3 gantries and 100 nano
+// turrets to support them?"). Same shape as apex_mexup_monopoly_income in
+// Brain::Decide: below the bar upgrades outrank the big spends, above it
+// the economy affords both.
+bool MexUpMonopoly()
+{
+	return MexUpgradesOutstanding()
+		&& (aiEconomyMgr.metal.income
+			< ai.GetTunable("apex_mexup_monopoly_income", 100.f));
+}
+
 IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 {
 	if (!isComm) {
@@ -135,12 +150,12 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 				// A full bank outranks everything else here: the most expensive
 				// thing we can start is the one that drains it fastest. Mex upgrades
 				// still outrank a gantry, silo or Pulsar below (MexUpgradesOutstanding).
-				if (!MexUpgradesOutstanding()) {
+				if (!MexUpMonopoly()) {
 					IUnitTask@ big = SurplusGantry(unit);
 					if (big !is null)
 						return big;
 				}
-				if (!MexUpgradesOutstanding()) {
+				if (!MexUpMonopoly()) {
 					IUnitTask@ nuke = NukeSilo(unit);
 					if (nuke !is null)
 						return nuke;
@@ -168,7 +183,7 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 				if (help !is null)
 					return help;
 				if (!Factory::EcoLeadActive()) {
-					if (!MexUpgradesOutstanding()) {
+					if (!MexUpMonopoly()) {
 						IUnitTask@ gun = Pulsar(unit);
 						if (gun !is null)
 							return gun;
@@ -181,7 +196,7 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 				// can ever displace is ~2,400 metal of expansion across all of
 				// us -- which is why it sits with the one-off structures rather
 				// than behind the compounding economy block below.
-				if (!MexUpgradesOutstanding()) {
+				if (!MexUpMonopoly()) {
 					IUnitTask@ targ = Pinpointer(unit);
 					if (targ !is null)
 						return targ;
