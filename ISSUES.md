@@ -2000,10 +2000,10 @@ Each of these appears in EVERY audited game; run `python tools/audit.py
 <match-dir>` to reproduce. Fixed so far: cordecom mexup loop (177 blocked
 elections/game), corllt light-laser build-eat conflict.
 
-- **Retreat bleed -- squad retreat landed 2026-08-16 (b09daf9), first
-  measurement 45% -> 20% of lost metal, 12 collective disengages in one
-  game, army at parity with handicapped stock for the first time. One game;
-  needs a second before deleting this entry.**
+- **Retreat bleed: CONFIRMED FIXED** (two games: 45% -> 20%, 25%; 12 and 33
+  collective disengages; army ahead of handicapped stock; second game not
+  lost). Entry retained one line for the record; the mechanism is
+  ISquadTask::TrySquadRetreat.
 - **Taskless deaths, 44-47% of lost metal at home.** Units die holding NIL
   near the base -- the overrun signature: production feeding corpses during a
   base assault. Mechanism not yet attributed (fresh units pre-assignment vs
