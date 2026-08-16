@@ -247,8 +247,18 @@ IUnitTask@ ConverterPipeline(CCircuitUnit@ unit)
 		gConvPipeAsked = count;
 		outstanding = 0;
 	}
-	if (underway + outstanding >= 1)
-		return null;   // one at a time
+	// Concurrency scales with the spare energy the converters exist to eat:
+	// serial-one was right for 4,300-metal reactors and wrong here -- measured
+	// live (8v8), a player at 13k energy income used 4.5k and the one-at-a-
+	// time pipeline could never close an 8.5k gap. One extra slot per
+	// apex_conv_per_spare of unconverted energy; spare falls as they finish,
+	// so this self-limits.
+	const float spare = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	int allowed = 1;
+	if (spare > 0.f)
+		allowed += int(spare / ai.GetTunable("apex_conv_per_spare", 1200.f));
+	if (underway + outstanding >= allowed)
+		return null;
 	AIFloat3 spot;
 	if (!ConvSpot(unit, big, spot))
 		return null;

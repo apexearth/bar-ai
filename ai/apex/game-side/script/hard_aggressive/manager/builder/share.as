@@ -122,9 +122,17 @@ bool ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
 	}
 
 	++gAdvConsMade;
-	// Keep at least one for ourselves at all times: the lead is the player whose
-	// job it is to upgrade mexes, and it cannot do that with no constructor.
-	if ((gAdvConsMade - gAdvConsGifted) <= 1)
+	// The keep-floor scales with the lead's OWN economy, not a flat one: at
+	// 8v8 the flat floor gifted seven in a row while the lead ran a 13k-energy
+	// base on a single constructor and its first moho slipped to minute 18
+	// (apexearth: "they only made 1 advanced con for themselves... maybe this
+	// is a tech player issue?"). Half of AdvConsWanted keeps early gifting
+	// unchanged (wanted 2 -> keep 1) and retains the moho/reactor/converter
+	// lanes' workers once the income is real.
+	int keep = AdvConsWanted() / 2;
+	if (keep < 1)
+		keep = 1;
+	if ((gAdvConsMade - gAdvConsGifted) <= keep)
 		return false;
 
 	array<Id>@ mates = ai.GetTeamIds();
