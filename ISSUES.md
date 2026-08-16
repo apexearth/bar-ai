@@ -29,6 +29,19 @@ trace to the standing combat-conversion issue below (army K/D 0.57 vs
 
 ## OPEN: combat conversion -- army trades at ~0.5 K/D in metal and cannot finish a 2x lead inside 30 minutes (2026-08-15)
 
+2026-08-16, apexearth watching a Red Comet 1v1: "we really aren't good at
+early game fighting. kinda feels like the [enemy] AI makes larger squads,
+or maybe we were just behind" -- the same-day tournament rules out
+"behind" (metal produced 1.6x stock) and matches the standing "two v six
+battles" report: engagement size, not economy. Squad massing / commit
+thresholds are the place to look.
+
+Measured (Red Comet 1v1, 20260816-221919): engage-decision squad sizes
+units=1 x31, units=2 x19, units=4 x28 -- the modal fighting group is 1-4
+units. The engage TEST (AttackTask.cpp, margins/edge) is fine; the squads
+ASKING are too small, so the fix is upstream: squad formation/merge size,
+not the commit threshold.
+
 THE strategic deficit, measured across 56 tournament games tonight: we
 out-produce stock ~2x and lead 26/32 games at the 30-minute cap, but army
 K/D in metal is 0.33-0.82 against stock's 0.92-1.42 (`tools/fight1v1.py`
