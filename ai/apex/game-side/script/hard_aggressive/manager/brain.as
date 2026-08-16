@@ -1202,6 +1202,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			continue;
 		}
 		if (w.kind == "mexup") {
+			// Only an asker that can BUILD the moho: cordecom clears the
+			// adv-con cost bar without carrying the moho in buildOptions, and
+			// this want re-elected it into the capability guard 177 times in
+			// one audited game -- a hot loop spending elections on nothing.
+			if ((w.def !is null) && !unit.circuitDef.CanBuild(w.def))
+				continue;
 			// The binding added 2026-08-10. A MEXUP task carries a metal-spot
 			// index as well as a position, so the generic Enqueue could not
 			// express it -- which is why no rule of ours could order an upgrade.

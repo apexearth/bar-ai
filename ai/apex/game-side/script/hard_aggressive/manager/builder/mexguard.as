@@ -268,6 +268,11 @@ CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 		if ((mid !is null) && mid.IsAvailable(ai.frame))
 			return mid;
 	}
+	// Past T1 tier the light laser is on the reclaim list -- handing it back
+	// here is the build-eat conflict the audit flags every game (corllt built
+	// AND reclaimed). Same stand-down FrontTower already does.
+	if (PastT1Tier())
+		return MidTowerDef();
 	return SideDef3(armllt, corllt, leglht);
 }
 
