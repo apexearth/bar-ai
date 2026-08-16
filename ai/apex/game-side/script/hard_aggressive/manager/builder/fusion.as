@@ -135,7 +135,13 @@ int ReactorsInFlight(float cost)
 {
 	if (cost < 1.f)
 		return 1;
-	const int n = int(aiEconomyMgr.metal.income * AFFORD_SECONDS / cost);
+	// The BANK counts alongside income: a full storage is metal already wasted
+	// (excess vanishes), so it pays for reactors NOW. apexearth, watching:
+	// "we're full on metal here... there should be 0 delay" between reactors.
+	// Income-only concurrency serialized them with construction-length gaps
+	// whenever income alone covered just one.
+	const float bank = aiEconomyMgr.metal.current;
+	const int n = int((aiEconomyMgr.metal.income * AFFORD_SECONDS + bank) / cost);
 	return (n < 1) ? 1 : n;
 }
 
@@ -166,6 +172,18 @@ CCircuitDef@ AdvSolDef()
 float EnergyValuePerMetal(CCircuitDef@ d)
 {
 	if ((d is null) || !d.IsAvailable(ai.frame) || (d.costM <= 0.f))
+		return -1.f;
+	// Never BUILD what obsolete.as would immediately reclaim -- building and
+	// tearing down the same def at once is pure constructor-time loss.
+	// apexearth: "if a building is obsolete... we should not be willing to
+	// build more of them." Same tests the reclaim side uses: wind is done once
+	// a reactor stands; the solar family once its named successor stands.
+	const string n = d.GetName();
+	if (((n == armwin) || (n == corwin) || (n == legwin)) && HaveReactor())
+		return -1.f;
+	if (((n == armsolar) || (n == corsolar) || (n == legsolar)
+			|| (n == armadvsol) || (n == coradvsol) || (n == legadvsol))
+			&& HaveReplacementFor(n))
 		return -1.f;
 	return aiEconomyMgr.GetEnergyMake(d) / d.costM;
 }

@@ -1510,6 +1510,22 @@ sweep is the confirmation gate. Diagnostics (guard pages on tasks / units /
 enemy infos / actions, refcount traps, cushion, PushUpdate dupe trap) stay
 in until then — strip or cheapen after.
 
+## NEW: late-game air-economy directives (2026-08-15, apexearth watching)
+
+Two standing asks, not yet implemented:
+1. **Advanced construction aircraft in the late game** — once the economy is
+   large, eco building should shift to air constructors for mobility ("rely on
+   more advanced construction aircraft to efficiently move around and build
+   eco"). Air domain: factory selection + builder role weighting by era.
+2. **Thick fighter screen** — his number: "in an 8v8 that means ~100 or more
+   fighters ALIVE and flying over your base." Scale with economy/team size,
+   not a flat cap; this is an air-lead/AA-baseline sizing question.
+
+Same session, already landed: obsolete-ask TTL (rezbots deadlocked idle on a
+never-expiring reclaim ledger — his twice-repeated report), bank-inclusive
+reactor concurrency ("0 delay" between fusions when metal-full), and
+build-side obsolescence (never build a def obsolete.as would reclaim).
+
 ## NEW: anti-air coverage is lacking (2026-08-13, watching)
 
 **apexearth, watching the windowed 8v8:** "We lack anti air coverage."

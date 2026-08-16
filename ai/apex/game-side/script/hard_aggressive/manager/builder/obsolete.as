@@ -80,13 +80,25 @@ bool LandIsPrecious()
 // pick below is deterministic -- so without this the same still-standing
 // building is re-picked every period and the rate limit is spent on a task that
 // already exists.
+// Entries EXPIRE: reclaim tasks abort readily (income-dip Reevaluate,
+// OnUnitIdle), and a permanent mark deadlocked the whole system -- every
+// standing obsolete building "already asked", rezbots idle for the rest of
+// the game (apexearth reported the idling twice before this was found).
 array<int> gReclaimAsked;
+array<int> gReclaimAskedFrame;
 
 bool AskedFor(int id)
 {
-	for (uint i = 0; i < gReclaimAsked.length(); ++i) {
+	const int ttl = int(ai.GetTunable("apex_obsolete_retry", 45.f)) * SECOND;
+	for (uint i = 0; i < gReclaimAsked.length(); ) {
+		if (ai.frame - gReclaimAskedFrame[i] > ttl) {
+			gReclaimAsked.removeAt(i);
+			gReclaimAskedFrame.removeAt(i);
+			continue;
+		}
 		if (gReclaimAsked[i] == id)
 			return true;
+		++i;
 	}
 	return false;
 }
@@ -390,8 +402,11 @@ IUnitTask@ ReclaimOwnDef(CCircuitUnit@ victim, const string& in defName, int val
 	if (eat is null)
 		return null;
 	gReclaimAsked.insertLast(victim.id);
-	if (gReclaimAsked.length() > 64)
+	gReclaimAskedFrame.insertLast(ai.frame);
+	if (gReclaimAsked.length() > 64) {
 		gReclaimAsked.removeAt(0);
+		gReclaimAskedFrame.removeAt(0);
+	}
 	gObsoleteTook = ai.frame;
 	AiLog(Factory::T() + "apex: obsolete-reclaim " + defName + " #" + victim.id
 		+ " (" + ValueWhy(value) + ") v=" + value);
