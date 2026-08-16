@@ -288,14 +288,14 @@ const float T3_ARMY_RATIO = 1.0f;
 // counter to what's killing us is wrong at any army ratio. See T3Worthwhile().
 const float T3_INCOME_URGENT = 150.f;
 
-// One gantry per this much metal income, floor 1, cap GANTRY_MAX.
+// One gantry per this much metal income, floor 1. No hard cap: the energy
+// bound below and the income term are the ceiling, and both scale.
 //
 // gHaveT3 is a latch set the moment the first gantry appears; both build
 // decisions used to test !gHaveT3, so the AI built exactly ONE gantry per game
 // at any income. gHaveT3 itself stays -- military.as reads it for big-gun
 // placement -- it just no longer gates whether to build another.
 const float GANTRY_PER_INCOME = 100.f;
-const int   GANTRY_MAX        = 6;
 // Extra plants allowed while the bank is at the cap.
 const int   GANTRY_SURPLUS_BONUS = 4;
 // A gantry that is actually building draws 460-620 energy/second on its own, and
@@ -330,8 +330,6 @@ bool WantMoreGantries()
 	int want = int(aiEconomyMgr.metal.income / GANTRY_PER_INCOME);
 	if (want < 1)
 		want = 1;
-	else if (want > GANTRY_MAX)
-		want = GANTRY_MAX;
 	// A full bank means the cap is the wrong number: income says what we can
 	// sustain, a full bank says we are already failing to spend what we have.
 	if (aiEconomyMgr.isMetalFull)

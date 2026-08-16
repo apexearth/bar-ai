@@ -214,6 +214,13 @@ The thing he asked for first and has pushed hardest on.
 - Do not run air-assassin strategies while clearly losing the ground war.
 - One T1 air lab in the T1 phase, not two. More only once the economy is strong.
 - Late game should include heavy air and large T3.
+- **An air lab is MANDATORY once income reaches 100s of metal/second**, and an
+  advanced air plant is "absolutely needed late in game", with plenty of fighter
+  coverage (2026-08-16). Air cons and advanced air cons are the efficient way to
+  build at that stage — prefer them. (Wired: `apex_air_mandatory_income` 100,
+  `apex_adv_air_income` 150, fighter floor `apex_fighter_per` 40.)
+- More shields late game — enemy LRPC becomes the problem, and air handles the
+  late game better generally (2026-08-16).
 
 ## Tech and unit choice
 
