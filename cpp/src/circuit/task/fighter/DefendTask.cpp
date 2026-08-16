@@ -149,7 +149,12 @@ void CDefendTask::Update()
 			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
 			decltype(units) tmpUnits = units;
 			for (CCircuitUnit* unit : tmpUnits) {
+				// Read BEFORE AssignTask: RemoveAssignee erases coward state.
+				const bool coward = IsCoward(unit);
 				manager->AssignTask(unit, task);
+				if (coward) {
+					task->MarkCoward(unit);
+				}
 			}
 //			manager->DoneTask(this);  // NOTE: RemoveAssignee() will abort task
 			return;

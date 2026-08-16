@@ -189,6 +189,14 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		return;
 	}
 
+	// The squad votes before anyone runs alone: measured, 40-45% of all lost
+	// metal died on solo retreats. Below the wounded-fraction bar the unit
+	// stands rear with its squad (the shipped coward mechanism); above it the
+	// whole squad leaves together on one retreat task. Solo retreat remains
+	// for units with no squad and for the stuck-unit workaround above.
+	if (TrySquadRetreat(unit)) {
+		return;
+	}
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const float range = cdef->GetMaxRange();
 	if ((target == nullptr) || !target->IsInLOS()) {

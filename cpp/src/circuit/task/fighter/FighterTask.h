@@ -66,6 +66,16 @@ public:
 	void ClearTarget() { target = nullptr; }  // Only for ~CEnemyUnit
 
 	const std::set<CCircuitUnit*>& GetShields() const { return shields; }
+	// Coward state must survive merges and DEFEND->ATTACK promotion, both of
+	// which move units onto a different task instance -- without this the
+	// rear-standoff resets on every merge boundary.
+	void MarkCoward(CCircuitUnit* unit) { cowards.insert(unit); }
+	bool IsCoward(CCircuitUnit* unit) const { return cowards.count(unit) > 0; }
+
+	// A wounded squad member asks its SQUAD before retreating alone. Returns
+	// true when the whole squad disengaged together (the asker included);
+	// base tasks have no squad and always answer false.
+	virtual bool TrySquadRetreat(CCircuitUnit* unit) { return false; }
 
 protected:
 	void SetTarget(CEnemyInfo* enemy);

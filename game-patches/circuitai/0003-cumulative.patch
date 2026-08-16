@@ -13026,10 +13026,10 @@ index 4b4f4f0..09dd13e 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
-index 3a7ffc9..45a0712 100644
+index 3a7ffc9..00c3c4e 100644
 --- a/src/circuit/task/fighter/DefendTask.cpp
 +++ b/src/circuit/task/fighter/DefendTask.cpp
-@@ -1,434 +1,476 @@
+@@ -1,434 +1,481 @@
 -/*
 - * DefendTask.cpp
 - *
@@ -13615,7 +13615,12 @@ index 3a7ffc9..45a0712 100644
 +			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
 +			decltype(units) tmpUnits = units;
 +			for (CCircuitUnit* unit : tmpUnits) {
++				// Read BEFORE AssignTask: RemoveAssignee erases coward state.
++				const bool coward = IsCoward(unit);
 +				manager->AssignTask(unit, task);
++				if (coward) {
++					task->MarkCoward(unit);
++				}
 +			}
 +//			manager->DoneTask(this);  // NOTE: RemoveAssignee() will abort task
 +			return;
@@ -13941,7 +13946,7 @@ index 3a7ffc9..45a0712 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
-index 60369d1..d514bd2 100644
+index 60369d1..de664e9 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp
 +++ b/src/circuit/task/fighter/FighterTask.cpp
 @@ -6,6 +6,7 @@
@@ -13982,7 +13987,22 @@ index 60369d1..d514bd2 100644
  }
  
  IFighterTask::~IFighterTask()
-@@ -206,7 +230,9 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
+@@ -165,6 +189,14 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+ 		return;
+ 	}
+ 
++	// The squad votes before anyone runs alone: measured, 40-45% of all lost
++	// metal died on solo retreats. Below the wounded-fraction bar the unit
++	// stands rear with its squad (the shipped coward mechanism); above it the
++	// whole squad leaves together on one retreat task. Solo retreat remains
++	// for units with no squad and for the stuck-unit workaround above.
++	if (TrySquadRetreat(unit)) {
++		return;
++	}
+ 	CThreatMap* threatMap = circuit->GetThreatMap();
+ 	const float range = cdef->GetMaxRange();
+ 	if ((target == nullptr) || !target->IsInLOS()) {
+@@ -206,7 +238,9 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
  	if (unit->Blocker() != nullptr) {
  		return;  // Do not interrupt current action
  	}
@@ -13993,7 +14013,7 @@ index 60369d1..d514bd2 100644
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const AIFloat3& tPos = GetTarget()->GetPos();
-@@ -237,7 +263,26 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
+@@ -237,7 +271,26 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
  	// its real engagement distance. GetMaxRange() matches what the rest of
  	// this codebase's combat logic already treats as "how close this unit
  	// needs to get."
@@ -14022,7 +14042,7 @@ index 60369d1..d514bd2 100644
  	CTerrainManager::CorrectPosition(newPos);
  	unit->Attack(newPos, GetTarget(), targetTile, GetTarget()->GetUnit()->IsCloaked(), isStatic, frame + FRAMES_PER_SEC * 60);
 diff --git a/src/circuit/task/fighter/FighterTask.h b/src/circuit/task/fighter/FighterTask.h
-index 82f4aa0..521a9d7 100644
+index 82f4aa0..d65bcf2 100644
 --- a/src/circuit/task/fighter/FighterTask.h
 +++ b/src/circuit/task/fighter/FighterTask.h
 @@ -13,7 +13,26 @@
@@ -14063,6 +14083,23 @@ index 82f4aa0..521a9d7 100644
  	const springai::AIFloat3& GetPosition() const { return position; }
  
  	float GetAttackPower() const { return attackPower; }
+@@ -44,6 +66,16 @@ public:
+ 	void ClearTarget() { target = nullptr; }  // Only for ~CEnemyUnit
+ 
+ 	const std::set<CCircuitUnit*>& GetShields() const { return shields; }
++	// Coward state must survive merges and DEFEND->ATTACK promotion, both of
++	// which move units onto a different task instance -- without this the
++	// rear-standoff resets on every merge boundary.
++	void MarkCoward(CCircuitUnit* unit) { cowards.insert(unit); }
++	bool IsCoward(CCircuitUnit* unit) const { return cowards.count(unit) > 0; }
++
++	// A wounded squad member asks its SQUAD before retreating alone. Returns
++	// true when the whole squad disengaged together (the asker included);
++	// base tasks have no squad and always answer false.
++	virtual bool TrySquadRetreat(CCircuitUnit* unit) { return false; }
+ 
+ protected:
+ 	void SetTarget(CEnemyInfo* enemy);
 diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
 index 1d2e16c..62f9543 100644
 --- a/src/circuit/task/fighter/RaidTask.cpp
@@ -14834,10 +14871,18 @@ index b4b43c1..e0b2fb4 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index ae6cce5..20bd31b 100644
+index ae6cce5..ab011f4 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
-@@ -36,7 +36,7 @@ ISquadTask::ISquadTask(ITaskModule* mgr, FightType type, float powerMod)
+@@ -6,6 +6,7 @@
+  */
+ 
+ #include "task/fighter/SquadTask.h"
++#include "task/RetreatTask.h"
+ #include "map/InfluenceMap.h"
+ #include "map/ThreatMap.h"
+ #include "module/BuilderManager.h"
+@@ -36,7 +37,7 @@ ISquadTask::ISquadTask(ITaskModule* mgr, FightType type, float powerMod)
  		, leader(nullptr)
  		, groupPos(-RgtVector)
  		, prevGroupPos(-RgtVector)
@@ -14846,7 +14891,7 @@ index ae6cce5..20bd31b 100644
  		, groupFrame(0)
  		, attackFrame(-1)
  {
-@@ -74,7 +74,7 @@ void ISquadTask::AssignTo(CCircuitUnit* unit)
+@@ -74,7 +75,7 @@ void ISquadTask::AssignTo(CCircuitUnit* unit)
  	// Dual-Weapon Infantry Bot") carries HEAT_RAY at range 360 and
  	// LEGION_SHOTGUN at range 251 (confirmed in units/Legion/Bots/
  	// legkark.lua's weapondefs). Grouped by min range, a legkark row was
@@ -14855,7 +14900,7 @@ index ae6cce5..20bd31b 100644
  	// target -- needlessly inside its own better weapon's reach, and inside
  	// any enemy with range 251-360 that it never needed to engage that
  	// close. GetMaxRange() is what the outranged-safety-margin standoff
-@@ -139,8 +139,12 @@ void ISquadTask::Merge(ISquadTask* task)
+@@ -139,13 +140,21 @@ void ISquadTask::Merge(ISquadTask* task)
  		if (unit->GetCircuitDef()->IsRoleSupport()) {
  			continue;
  		}
@@ -14870,7 +14915,60 @@ index ae6cce5..20bd31b 100644
  	}
  	units.insert(rookies.begin(), rookies.end());
  	attackPower += task->GetAttackPower();
-@@ -217,6 +221,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
+ 	const std::set<CCircuitUnit*>& sh = task->GetShields();
+ 	shields.insert(sh.begin(), sh.end());
++	// Coward (wounded, standing rear) state was dropped on every merge -- the
++	// TODO above AttackTask's merge path acknowledged it. Same hierarchy, so
++	// the protected set is reachable directly.
++	cowards.insert(task->cowards.begin(), task->cowards.end());
+ 
+ 	const std::map<float, std::set<CCircuitUnit*>>& rangers = task->GetRangeUnits();
+ 	for (const auto& kv : rangers) {
+@@ -155,6 +164,43 @@ void ISquadTask::Merge(ISquadTask* task)
+ 	FindLeader(rookies.begin(), rookies.end());
+ }
+ 
++// The collective disengage. Measured (tools/deaths.py, four games 2026-08-16):
++// 40-45% of all lost metal died on solo RETREAT tasks, each unit peeling off
++// alone at its health bar and run down mid-map -- while CRetreatTask's own
++// line-spread logic sat dead because EnqueueRetreat news a one-unit task per
++// caller. When the squad's wounded (coward) power crosses apex_squad_retreat
++// of its total, everyone leaves TOGETHER on ONE retreat task: group pathing,
++// the line-spread finally live, no lone stragglers donating metal.
++bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
++{
++	if ((unit == nullptr) || (units.size() < 2) || (attackPower <= 1.f)) {
++		return false;
++	}
++	CCircuitAI* circuit = manager->GetCircuit();
++	float woundedPower = unit->GetCircuitDef()->GetPower();
++	for (CCircuitUnit* u : cowards) {
++		if ((u != unit) && (u->GetCircuitDef() != nullptr)) {
++			woundedPower += u->GetCircuitDef()->GetPower();
++		}
++	}
++	const float frac = circuit->GetTunable("apex_squad_retreat", 0.35f);
++	if (woundedPower < attackPower * frac) {
++		cowards.insert(unit);  // stands rear (COWARD_REAR_MOD) until the vote passes
++		return true;  // handled: stay with the squad rather than run alone
++	}
++	CRetreatTask* task = manager->EnqueueRetreat();
++	if (task == nullptr) {
++		return false;
++	}
++	circuit->LOG("apex: squad retreat units=%d wounded=%.0f/%.0f",
++			(int)units.size(), woundedPower, attackPower);
++	decltype(units) tmpUnits = units;
++	for (CCircuitUnit* u : tmpUnits) {
++		manager->AssignTask(u, task);
++	}
++	return true;
++}
++
+ const AIFloat3& ISquadTask::GetLeaderPos(int frame) const
+ {
+ 	return (leader != nullptr) ? leader->GetPos(frame) : GetPosition();
+@@ -217,6 +263,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
  	std::shared_ptr<CQueryLineMap> query = std::static_pointer_cast<CQueryLineMap>(
  			pathfinder->CreateLineMapQuery(leader, circuit->GetThreatMap(), pos));
  
@@ -14885,7 +14983,7 @@ index ae6cce5..20bd31b 100644
  	const std::set<IFighterTask*>& tasks = static_cast<CMilitaryManager*>(manager)->GetTasks(fightType);
  	for (const IFighterTask* candidate : tasks) {
  		if ((candidate == this)
-@@ -225,6 +237,11 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -225,6 +279,11 @@ ISquadTask* ISquadTask::CheckMergeTask()
  		{
  			continue;
  		}
@@ -14897,7 +14995,7 @@ index ae6cce5..20bd31b 100644
  		const ISquadTask* candy = static_cast<const ISquadTask*>(candidate);
  
  		const AIFloat3& tp = candy->GetLeaderPos(frame);
-@@ -504,8 +521,12 @@ void ISquadTask::ActivePath(float speed)
+@@ -504,8 +563,12 @@ void ISquadTask::ActivePath(float speed)
  	const float half = span * scale * 0.5f;
  	int i = 0;
  	for (CCircuitUnit* unit : units) {
@@ -14912,7 +15010,7 @@ index ae6cce5..20bd31b 100644
  		++i;
  	}
  }
-@@ -589,7 +610,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -589,7 +652,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				if (unit->Blocker() != nullptr) {
  					continue;  // Do not interrupt current action
  				}
@@ -14923,7 +15021,7 @@ index ae6cce5..20bd31b 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -604,10 +627,63 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -604,10 +669,63 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -14988,7 +15086,7 @@ index ae6cce5..20bd31b 100644
  		// 20% inside its reach, which throws away the whole point of keeping the
  		// long-ranged units in an outer row -- a Banisher at 800 was standing at
  		// 640, inside the tanks it was supposed to shoot over.
-@@ -699,15 +775,50 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -699,15 +817,50 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  		// maintain.
  		const bool glassCannon = (edef != nullptr) && (rowDef != nullptr)
  				&& (edef->GetHealth() < rowDef->GetHealth());
@@ -15043,7 +15141,7 @@ index ae6cce5..20bd31b 100644
  		}
  		// The arc a row may occupy. At 0.9*PI a squad packs into a half circle on
  		// one side of the target, which is a single AOE footprint -- and the wider
-@@ -741,8 +852,36 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -741,8 +894,36 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  		const float end2 = alpha - beta;
  		AIFloat3 newPos1(tPos.x + range * cosf(end1), tPos.y, tPos.z + range * sinf(end1));
  		AIFloat3 newPos2(tPos.x + range * cosf(end2), tPos.y, tPos.z + range * sinf(end2));
@@ -15082,7 +15180,7 @@ index ae6cce5..20bd31b 100644
  			delta = -delta;
  			beta = -beta;
  		}
-@@ -752,7 +891,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -752,7 +933,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  			if (unit->Blocker() != nullptr) {
  				continue;  // Do not interrupt current action
  			}
@@ -15093,7 +15191,7 @@ index ae6cce5..20bd31b 100644
  
  			if (isRepeatAttack
  				|| (unit->GetTarget() != GetTarget())
-@@ -786,7 +927,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -786,7 +969,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				// into a second enemy.
  				const float orbit = ORBIT_RATE * (frame / (float)FRAMES_PER_SEC) * orbitDir;
  				const float angle = alpha + beta + orbit;
@@ -15112,7 +15210,7 @@ index ae6cce5..20bd31b 100644
  				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
  				CTerrainManager::CorrectPosition(newPos);
  
-@@ -804,9 +955,24 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -804,9 +997,24 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				// stepping into the hotter spot. Small multiplicative
  				// tolerance so a unit doesn't flip-flop between two tiles of
  				// near-identical threat every isRepeatAttack tick.
@@ -15138,7 +15236,7 @@ index ae6cce5..20bd31b 100644
  					newPos = curPos;
  				}
  
-@@ -826,7 +992,9 @@ void ISquadTask::Log()
+@@ -826,7 +1034,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
@@ -15150,7 +15248,7 @@ index ae6cce5..20bd31b 100644
  		circuit->GetDrawer()->AddPoint(leader->GetPos(circuit->GetLastFrame()), leader->GetCircuitDef()->GetDef()->GetName());
  	}
 diff --git a/src/circuit/task/fighter/SquadTask.h b/src/circuit/task/fighter/SquadTask.h
-index 544ee33..2e37be5 100644
+index 544ee33..25ab094 100644
 --- a/src/circuit/task/fighter/SquadTask.h
 +++ b/src/circuit/task/fighter/SquadTask.h
 @@ -29,13 +29,6 @@ class CCircuitDef;
@@ -15182,7 +15280,13 @@ index 544ee33..2e37be5 100644
  
  class ISquadTask: public IFighterTask {
  protected:
-@@ -116,6 +117,9 @@ public:
+@@ -111,11 +112,15 @@ public:
+ 	virtual void RemoveAssignee(CCircuitUnit* unit) override;
+ 
+ 	virtual void Merge(ISquadTask* task);
++	virtual bool TrySquadRetreat(CCircuitUnit* unit) override;
+ 
+ 	const std::map<float, std::set<CCircuitUnit*>>& GetRangeUnits() const { return rangeUnits; }
  
  	CCircuitUnit* GetLeader() const { return leader; }
  	const springai::AIFloat3& GetLeaderPos(int frame) const;
@@ -15192,7 +15296,7 @@ index 544ee33..2e37be5 100644
  
  	// role heavy + attribute melee: corjugg (Behemoth), corkorg (Juggernaut),
  	// armbanth (Titan), armraz. All of them detonate on death, so the value is
-@@ -132,7 +136,6 @@ private:
+@@ -132,7 +137,6 @@ private:
  protected:
  	ISquadTask* GetMergeTask();
  	springai::AIFloat3 LinePos(CCircuitUnit* unit, const springai::AIFloat3& centre) const;

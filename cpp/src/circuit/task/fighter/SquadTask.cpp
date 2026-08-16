@@ -6,6 +6,7 @@
  */
 
 #include "task/fighter/SquadTask.h"
+#include "task/RetreatTask.h"
 #include "map/InfluenceMap.h"
 #include "map/ThreatMap.h"
 #include "module/BuilderManager.h"
@@ -150,6 +151,10 @@ void ISquadTask::Merge(ISquadTask* task)
 	attackPower += task->GetAttackPower();
 	const std::set<CCircuitUnit*>& sh = task->GetShields();
 	shields.insert(sh.begin(), sh.end());
+	// Coward (wounded, standing rear) state was dropped on every merge -- the
+	// TODO above AttackTask's merge path acknowledged it. Same hierarchy, so
+	// the protected set is reachable directly.
+	cowards.insert(task->cowards.begin(), task->cowards.end());
 
 	const std::map<float, std::set<CCircuitUnit*>>& rangers = task->GetRangeUnits();
 	for (const auto& kv : rangers) {
@@ -157,6 +162,43 @@ void ISquadTask::Merge(ISquadTask* task)
 	}
 
 	FindLeader(rookies.begin(), rookies.end());
+}
+
+// The collective disengage. Measured (tools/deaths.py, four games 2026-08-16):
+// 40-45% of all lost metal died on solo RETREAT tasks, each unit peeling off
+// alone at its health bar and run down mid-map -- while CRetreatTask's own
+// line-spread logic sat dead because EnqueueRetreat news a one-unit task per
+// caller. When the squad's wounded (coward) power crosses apex_squad_retreat
+// of its total, everyone leaves TOGETHER on ONE retreat task: group pathing,
+// the line-spread finally live, no lone stragglers donating metal.
+bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
+{
+	if ((unit == nullptr) || (units.size() < 2) || (attackPower <= 1.f)) {
+		return false;
+	}
+	CCircuitAI* circuit = manager->GetCircuit();
+	float woundedPower = unit->GetCircuitDef()->GetPower();
+	for (CCircuitUnit* u : cowards) {
+		if ((u != unit) && (u->GetCircuitDef() != nullptr)) {
+			woundedPower += u->GetCircuitDef()->GetPower();
+		}
+	}
+	const float frac = circuit->GetTunable("apex_squad_retreat", 0.35f);
+	if (woundedPower < attackPower * frac) {
+		cowards.insert(unit);  // stands rear (COWARD_REAR_MOD) until the vote passes
+		return true;  // handled: stay with the squad rather than run alone
+	}
+	CRetreatTask* task = manager->EnqueueRetreat();
+	if (task == nullptr) {
+		return false;
+	}
+	circuit->LOG("apex: squad retreat units=%d wounded=%.0f/%.0f",
+			(int)units.size(), woundedPower, attackPower);
+	decltype(units) tmpUnits = units;
+	for (CCircuitUnit* u : tmpUnits) {
+		manager->AssignTask(u, task);
+	}
+	return true;
 }
 
 const AIFloat3& ISquadTask::GetLeaderPos(int frame) const
