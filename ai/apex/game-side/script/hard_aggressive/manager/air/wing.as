@@ -89,6 +89,32 @@ bool WantsFactory(const CCircuitDef@ facDef)
 	return (want !is null) && (want.id == facDef.id);
 }
 
+// INTEL AIR, outside the strike strategy entirely. Scouts are eyes, not a
+// strike, and the AA ceiling that rightly guards the strike commitment kept
+// whole games at zero air -- apexearth, 60 minutes in: "we have not made any
+// air... Air would help us understand the enemy strength." The air lead
+// builds ONE basic plant once income is real; the facqueue scout floor mans
+// it from there, and Armed()/the strike machinery stay untouched.
+CCircuitDef@ IntelPlantToBuild()
+{
+	if (!IsAirLead())
+		return null;   // one plant per team, same elector as everything else
+	ResolveDefs();
+	if ((gPlant1 is null) || !gPlant1.IsAvailable(ai.frame)
+		|| (Have(gPlant1) > 0))
+		return null;
+	if (aiEconomyMgr.metal.income
+			< ai.GetTunable("apex_intel_air_income", 25.f))
+		return null;
+	return gPlant1;
+}
+
+bool WantsIntelPlant(const CCircuitDef@ facDef)
+{
+	CCircuitDef@ p = IntelPlantToBuild();
+	return (p !is null) && (facDef !is null) && (p.id == facDef.id);
+}
+
 // The advanced air plant has no entry in Opener::GetOpenInfo, so it falls back to
 // the default queue -- three builders, a scout and five raiders. Those raiders are
 // gunships that fly out and attack, which spends the surprise before there is

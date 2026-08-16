@@ -253,7 +253,8 @@ bool PlantApproved(CCircuitDef@ want)
 	// standing (audit flag plant-gate, every audited game). Air::WantsFactory
 	// is true exactly when the committed air lead is asking for this plant.
 	if (((userData[want.id].attr & (Attr::T2 | Attr::T3)) == 0)
-		&& (!IsAirFactory(want) || !Air::WantsFactory(want)))
+		&& (!IsAirFactory(want)
+			|| (!Air::WantsFactory(want) && !Air::WantsIntelPlant(want))))
 	{
 		CCircuitDef@ navy = NavalOpening();
 		if (!((navy !is null) && (want is navy))) {
@@ -450,6 +451,18 @@ CCircuitDef@ ChooseFactory(const AIFloat3& in pos, bool isStart, bool isReset)
 			AiLog(T() + "apex: air assassin building " + airFac.GetName());
 			return airFac;
 		}
+	}
+
+	// INTEL AIR: eyes, not a strike -- fires from apex_intel_air_income (25)
+	// regardless of the enemy AA that gates Armed(). The old late fallback
+	// below proposed a plant the gate then refused every time once the air
+	// exemption was narrowed to Air::WantsFactory -- which is how a 60-minute
+	// 4v4 ended with zero air (apexearth: "Air would help us understand the
+	// enemy strength").
+	CCircuitDef@ intelFac = Air::IntelPlantToBuild();
+	if (intelFac !is null) {
+		AiLog(T() + "apex: intel air plant " + intelFac.GetName());
+		return intelFac;
 	}
 
 	// Somebody has to OWN an air plant for the fighter floor to mean anything.
