@@ -119,11 +119,19 @@ array<int> gAskCount;
 void SweepPlantAsks()
 {
 	const int ttl = int(ai.GetTunable("apex_plant_ask_ttl", 90.f)) * SECOND;
+	// The TTL alone is not enough to expire an ask: a T2 lab at 20 m/s income
+	// is not STARTED inside 90s, so the ask aged out, the gate read have=0
+	// again, and a second armalab was approved and built (watched 2026-08-16).
+	// The engine's factory-task pool is ground truth -- while it still holds a
+	// FACTORY build task per ledger entry, every ask is alive however old it
+	// is. The TTL now only clears asks the pool has actually lost.
+	const bool poolShort = aiBuilderMgr.GetTaskCountOf(
+			int(Task::BuildType::FACTORY)) < gAskDef.length();
 	for (uint i = gAskDef.length(); i > 0; --i) {
 		const uint k = i - 1;
 		if ((gAskDef[k] is null)
 			|| (int(gAskDef[k].count) > gAskCount[k])
-			|| (ai.frame - gAskFrame[k] > ttl))
+			|| (poolShort && (ai.frame - gAskFrame[k] > ttl)))
 		{
 			gAskDef.removeAt(k);
 			gAskFrame.removeAt(k);
