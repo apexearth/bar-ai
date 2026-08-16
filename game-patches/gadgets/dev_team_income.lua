@@ -54,6 +54,14 @@ local ALPHA = 0.03
 local avg = {}   -- teamID -> smoothed metal income
 local next_at = 0
 
+-- Cumulative waste ledger. resPrevExcess is the per-second overflow the engine
+-- threw away after storage and sharing -- income that bought nothing. Summed at
+-- 1s samples it approximates total wasted units; cumulative income is summed
+-- the same way so the two are comparable as a share.
+local waste = {}       -- teamID -> {mW, mI, eW, eI}
+local next_waste_echo = 0
+local WASTE_ECHO = 30 * 60   -- one report line per team per minute
+
 --------------------------------------------------------------------------------
 -- Tech-lead selection: whoever COMMITS first.
 --
@@ -177,8 +185,9 @@ function gadget:GameFrame(frame)
 
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		-- GetTeamResources returns: current, storage, pull, income, expense,
-		-- share, sent, received
-		local _, _, _, income = Spring.GetTeamResources(teamID, "metal")
+		-- share, sent, received, excess
+		local _, _, _, income, _, _, _, _, mExcess =
+			Spring.GetTeamResources(teamID, "metal")
 		if income ~= nil then
 			local prev = avg[teamID]
 			if prev == nil then
@@ -189,6 +198,29 @@ function gadget:GameFrame(frame)
 			Spring.SetGameRulesParam("ai_minc_" .. teamID, avg[teamID])
 			-- Raw value kept alongside for diagnostics.
 			Spring.SetGameRulesParam("ai_mincraw_" .. teamID, income)
+
+			local _, _, _, eIncome, _, _, _, _, eExcess =
+				Spring.GetTeamResources(teamID, "energy")
+			local w = waste[teamID]
+			if w == nil then
+				w = { mW = 0, mI = 0, eW = 0, eI = 0 }
+				waste[teamID] = w
+			end
+			w.mW = w.mW + (mExcess or 0)
+			w.mI = w.mI + income
+			w.eW = w.eW + (eExcess or 0)
+			w.eI = w.eI + (eIncome or 0)
+			Spring.SetGameRulesParam("ai_mwaste_" .. teamID, w.mW)
+			Spring.SetGameRulesParam("ai_ewaste_" .. teamID, w.eW)
+		end
+	end
+
+	if frame >= next_waste_echo then
+		next_waste_echo = frame + WASTE_ECHO
+		for teamID, w in pairs(waste) do
+			Spring.Echo(string.format(
+				"[BARAI_WASTE] frame=%d team=%d mWaste=%.0f mMade=%.0f eWaste=%.0f eMade=%.0f",
+				frame, teamID, w.mW, w.mI, w.eW, w.eI))
 		end
 	end
 

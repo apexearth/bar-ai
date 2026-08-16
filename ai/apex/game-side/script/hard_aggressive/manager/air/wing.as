@@ -117,10 +117,12 @@ CCircuitDef@ IntelPlantToBuild()
 	// The advanced plant, once an air con exists to place it (no ground
 	// constructor of any tier has it -- see FactoryToBuild's comment). This is
 	// where fighters and the advanced air constructors live; without it the
-	// late game has neither.
-	if ((gPlant2 !is null) && gPlant2.IsAvailable(ai.frame)
-		&& (Have(gPlant2) == 0) && HaveAirCon()
-		&& (inc >= ai.GetTunable("apex_adv_air_income", 150.f)))
+	// late game has neither. The count scales with income, one per
+	// apex_adv_air_income of metal -- a rich economy wants several, and
+	// PlantApproved's per-def curve still bounds it.
+	if ((gPlant2 !is null) && gPlant2.IsAvailable(ai.frame) && HaveAirCon()
+		&& (Have(gPlant2)
+			< int(inc / ai.GetTunable("apex_adv_air_income", 150.f))))
 	{
 		return gPlant2;
 	}

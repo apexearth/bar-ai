@@ -221,6 +221,15 @@ The thing he asked for first and has pushed hardest on.
   `apex_adv_air_income` 150, fighter floor `apex_fighter_per` 40.)
 - More shields late game — enemy LRPC becomes the problem, and air handles the
   late game better generally (2026-08-16).
+- **Don't limit advanced air plants to one when rich** — count scales with
+  income, one per `apex_adv_air_income` (150) of metal/s (2026-08-16).
+
+## Efficiency
+
+- **Wasted metal and energy is a valuable metric** (2026-08-16): "everything in
+  this game is about balancing economic expansion with the military." Wired:
+  `dev_team_income.lua` accumulates the engine's overflow (`resPrevExcess`) and
+  `audit.py` reports metal-wasted / energy-wasted shares per game.
 
 ## Tech and unit choice
 

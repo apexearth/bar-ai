@@ -113,6 +113,27 @@ def check_economy(text, rep):
         rep.add("ECONOMY", share < 0.25, "metal-full-time",
                 f"{share:.0%} of samples at cap"
                 + ("" if share < 0.25 else " -- wasted income"))
+    # wasted resources: dev_team_income.lua accumulates the engine's
+    # resPrevExcess (overflow thrown away after storage+sharing) and echoes
+    # cumulative [BARAI_WASTE] lines. Last line per team is the game total.
+    wl = {}
+    for m in re.finditer(r"\[BARAI_WASTE\] frame=\d+ team=(\d+)"
+                         r" mWaste=(\d+) mMade=(\d+) eWaste=(\d+) eMade=(\d+)",
+                         text):
+        wl[m.group(1)] = tuple(int(x) for x in m.groups()[1:])
+    ours = {t[1:] for t in teams}   # "t3" -> "3"
+    rows = [v for k, v in wl.items() if k in ours]
+    if rows:
+        mW = sum(r[0] for r in rows); mI = sum(r[1] for r in rows)
+        eW = sum(r[2] for r in rows); eI = sum(r[3] for r in rows)
+        ms = mW / mI if mI else 0.0
+        es = eW / eI if eI else 0.0
+        rep.add("ECONOMY", ms < 0.10, "metal-wasted",
+                f"{mW:,} of {mI:,} overflowed ({ms:.0%})"
+                + ("" if ms < 0.10 else " -- income buying nothing"))
+        rep.add("ECONOMY", es < 0.30, "energy-wasted",
+                f"{eW:,} of {eI:,} overflowed ({es:.0%})"
+                + ("" if es < 0.30 else " -- feed converters or stop building E"))
     # plant discipline: approvals vs refusals; multiple same-tier approvals
     appr = re.findall(r"plant approved (\S+) have=(\d+)/(\d+) t1=(\d+)"
                       r" t2=(\d+)", text)
