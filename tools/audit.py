@@ -136,14 +136,18 @@ def check_military(text, rep):
                 f"{n:.0%} died holding no task (base overrun signature)")
     else:
         rep.add("MILITARY", True, "death-attribution", "no death data")
-    # engage decisions: share of TAKEs at hopeless odds, and skip volume
-    edges = [float(e) for e in
-             re.findall(r"engage TAKE .* edge=([\d.]+)", text)]
-    if edges:
-        hopeless = sum(1 for e in edges if 0 < e < 0.5) / len(edges)
-        rep.add("MILITARY", hopeless < 0.3, "hopeless-engagements",
-                f"{hopeless:.0%} of TAKEs at edge<0.5 "
-                f"({len(edges)} decisions)")
+    # engage decisions: share of TAKEs at hopeless odds, and skip volume.
+    # home=1 fights (defending our own ground) are odds-waived on purpose and
+    # counted separately -- only AWAY fights at bad odds are the finding.
+    away, home = [], []
+    for m in re.finditer(r"engage TAKE .* edge=([\d.]+).*?(?: home=(\d))?$",
+                         text, re.M):
+        (home if m.group(2) == "1" else away).append(float(m.group(1)))
+    if away:
+        hopeless = sum(1 for e in away if 0 < e < 0.5) / len(away)
+        rep.add("MILITARY", hopeless < 0.3, "hopeless-attacks",
+                f"{hopeless:.0%} of away-TAKEs at edge<0.5 "
+                f"({len(away)} away, {len(home)} home-defence)")
     skips = [int(s) for s in re.findall(r"skipped=(\d+)", text)]
     if skips:
         rep.add("MILITARY", max(skips) < 30, "target-skipping",

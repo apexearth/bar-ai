@@ -48,7 +48,17 @@ CCircuitDef@ SmallConvDef(CCircuitUnit@ unit)
 {
 	if (IsNavalBuilder(unit))
 		return SideDef3(armfmkr, corfmkr, legfeconv);
-	return SideDef3(armmakr, cormakr, legeconv);
+	// Once the advanced converter stands, the T1 one is on the reclaim list
+	// (HaveReplacementFor) -- handing it back here is the converter half of
+	// the build-eat conflict the audit flags (cormakr built AND reclaimed).
+	CCircuitDef@ small = SideDef3(armmakr, cormakr, legeconv);
+	if ((small !is null) && HaveReplacementFor(small.GetName())) {
+		// Null for a builder that cannot make the big one, rather than the
+		// big def: a silent-no-op order is the trap this repo documents.
+		CCircuitDef@ big = BigConvDef(unit);
+		return ((big !is null) && unit.circuitDef.CanBuild(big)) ? big : null;
+	}
+	return small;
 }
 
 CCircuitDef@ BigConvDef(CCircuitUnit@ unit)

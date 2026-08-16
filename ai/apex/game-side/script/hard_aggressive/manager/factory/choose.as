@@ -228,8 +228,12 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// bot+vehicle+air all pre-T2: the air plant's own income floors did not
 	// stop it, and pre-T2 the competition-for-metal argument applies to an air
 	// plant exactly as to a second land lab.
+	// The air exemption is the air STRATEGY's, not any air plant's: exempting
+	// every post-T2 air plant let corap through with three T1-tier plants
+	// standing (audit flag plant-gate, every audited game). Air::WantsFactory
+	// is true exactly when the committed air lead is asking for this plant.
 	if (((userData[want.id].attr & (Attr::T2 | Attr::T3)) == 0)
-		&& (!IsAirFactory(want) || !gHaveT2))
+		&& (!IsAirFactory(want) || !Air::WantsFactory(want)))
 	{
 		CCircuitDef@ navy = NavalOpening();
 		if (!((navy !is null) && (want is navy))) {
