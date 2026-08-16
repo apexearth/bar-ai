@@ -51,7 +51,12 @@ int PlantsWanted(const CCircuitDef@ fac)
 		// we're not making enough gantries."
 		want = int(inc / ai.GetTunable("apex_plants_t3_per", 100.f));
 	else if ((userData[fac.id].attr & Attr::T2) != 0)
-		want = int(ai.GetTunable("apex_plants_t2_a", -7.0f)
+		// -5.8, was -7.0: the old intercept put the SECOND T2 line at 178 m/s
+		// income -- one lab cannot spend a 160-income economy (audited 42% of
+		// samples at the metal cap), and the second-line discipline gates
+		// (own adv con, T2 mex, reactor first) still hold below this curve.
+		// Second line now clears at ~90 m/s, third at ~160.
+		want = int(ai.GetTunable("apex_plants_t2_a", -5.8f)
 				+ ai.GetTunable("apex_plants_t2_b", 1.737f) * log(inc));
 	else
 		want = int(ai.GetTunable("apex_plants_t1_a", -5.892f)
