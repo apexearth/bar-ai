@@ -1504,11 +1504,21 @@ through those was the null-vtable crash family; `StateWait()` through them
 wrote a byte into freed small blocks — the heap corruption. Upstream-latent;
 our Reevaluate-heavy reassignment flow widened the exposure window
 enormously. Fix (`1684a98`): call sites use `ClearAct()` and `CCircuitUnit`
-shadows `Clear()` so the unsafe base version is unreachable. 12-game mirror
-verification running; the mirror crashed 10/10 before the fix, so a clean
-sweep is the confirmation gate. Diagnostics (guard pages on tasks / units /
-enemy infos / actions, refcount traps, cushion, PushUpdate dupe trap) stay
-in until then — strip or cheapen after.
+shadows `Clear()` so the unsafe base version is unreachable.
+
+**CLOSED 2026-08-15 evening — verification complete.** After the last three
+fixes (dangling action caches `1684a98`, null travel-action guards `3a526c8`,
+deferred task release + zombie-task refusal `70eb66d`/`9aac471`):
+mirror tournament **12/12 clean**, prior null-guard tournament 14/14 clean
+partial, apexearth's watched 4v4 ran 51 min clean AND WON, Greenhaven 4v4
+33 min clean. Full-day progression on the mirror reproducer: 10/10 crashed →
+3/12 → 2/5 → 3/16 → 0/12. Nine-plus distinct mechanisms found and fixed,
+all upstream-latent lifecycle bugs amplified by our usage. DIAGNOSTICS STILL
+IN THE BUILD (guard pages on tasks/units/enemy-infos/actions/path-queries,
+refcount poison+cushion traps, PushUpdate dupe trap): address-space cost only
+(~2-4GB reserved per long 8v8, one engine measured 6.4GB resident in a 32-min
+game) — STRIP after one more overnight soak proves the fixes hold at scale;
+keep the cheap traps (poison, cushion, PushUpdate) longer.
 
 ## NEW: late-game air-economy directives (2026-08-15, apexearth watching)
 
