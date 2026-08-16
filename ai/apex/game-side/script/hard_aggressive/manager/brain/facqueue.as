@@ -496,7 +496,14 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			if (n > 0) {
 				defs.insertLast(rez);
 				want.insertLast(n);
-				isFloor.insertLast(true);
+				// A RATIO ENTRY, NOT A FLOOR: rezbots die constantly at the
+				// front, so a floor here never stays met and the first-unmet-
+				// floor rule turned the lab into a rezbot conveyor -- audited
+				// (iter1): cornecro 4/9 unmet floor, corthud 0/212 never
+				// picked, 34 idle-at-full-metal samples, apexearth: "only T1
+				// construction bots were made." Salvage is opportunity, not
+				// existential build power; it balances, it does not pre-empt.
+				isFloor.insertLast(false);
 			}
 		}
 	}
