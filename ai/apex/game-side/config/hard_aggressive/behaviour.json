@@ -959,7 +959,8 @@
                 "limit": 10	
 		},
 		"armzeus": {
-			"role": ["skirmish"],  //is it more skirmish or riot?
+			// assault -- apexearth: "the Arm assault is the welder."
+			"role": ["assault"],
 			"attribute": ["melee"],
 			"threat":{"air": 0.0, "water": 0.0, "surf": 1.2, 
 				"vs":{"artillery": 2.0, "anti_air": 2.0}
@@ -980,7 +981,9 @@
 			}
 		},
 		"armfido": {
-			"role": ["assault"],
+			// artillery -- apexearth's ruling: "Hound should be artillery
+			// too. the Arm assault is the welder."
+			"role": ["artillery"],
 			"attribute": ["siege"],
 			"slow_target": true,
 			"retreat": 0.5,
