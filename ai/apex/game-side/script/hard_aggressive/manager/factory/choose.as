@@ -49,7 +49,13 @@ int PlantsWanted(const CCircuitDef@ fac)
 		// 100, was 150: apexearth 2026-08-15, on losing long 8v8s with a T3
 		// deficit (751k vs 1.3M fielded): "we're probably losing just because
 		// we're not making enough gantries."
-		want = int(inc / ai.GetTunable("apex_plants_t3_per", 100.f));
+		//
+		// No floor-1 for T3 (the generic floor below is skipped): the floor
+		// let the FIRST gantry through at any income, and once factory offers
+		// always won a corgant landed on a 34 m/s economy and bankrupted it
+		// (watched 2026-08-16, 59k produced vs stock's 119k). The first
+		// gantry now waits for the same per-income bar as every later one.
+		return int(inc / ai.GetTunable("apex_plants_t3_per", 100.f));
 	else if ((userData[fac.id].attr & Attr::T2) != 0)
 		// -5.8, was -7.0: the old intercept put the SECOND T2 line at 178 m/s
 		// income -- one lab cannot spend a 160-income economy (audited 42% of
