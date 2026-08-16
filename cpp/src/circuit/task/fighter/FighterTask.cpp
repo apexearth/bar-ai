@@ -116,6 +116,19 @@ void IFighterTask::OnUnitIdle(CCircuitUnit* unit)
 {
 	auto it = cowards.find(unit);
 	if (it != cowards.end()) {
+		// THE IDLE LEAK: a wounded member standing at its rear slot ARRIVES
+		// there, goes idle, and this branch handed it a solo retreat -- home
+		// alone through the fight, from as deep as fwd 1.4. Audited (Altored
+		// 4v4 rematch): 599 units, 44% of lost metal, died on solo retreats
+		// while the collective vote fired ZERO times -- the coward mechanism
+		// was feeding its members one at a time into exactly the deaths it
+		// exists to prevent. While the squad still exists and has a fight, a
+		// coward stays in formation; TrySquadRetreat's vote is the only exit
+		// mid-fight.
+		if ((GetTarget() != nullptr) && (units.size() >= 2)) {
+			unit->SetTaskFrame(manager->GetCircuit()->GetLastFrame());
+			return;
+		}
 		cowards.erase(it);
 		CRetreatTask* task = manager->EnqueueRetreat();
 		manager->AssignTask(unit, task);
