@@ -1982,3 +1982,14 @@ a game, with nothing unusual in the preceding AI log lines.
 The deployed `SkirmishAI.dll` is a 208 MB unstripped build, so those offsets are
 resolvable with addr2line against the matching build if this gets worse. Nobody
 has done that yet. Not reproduced on demand.
+
+## Air transports are unused: badly-placed con turrets stay badly placed
+
+apexearth 2026-08-15: "you can use air transports to move con turrets that are
+not in good spots." A nano is 300+ metal of build power that becomes dead
+weight when its factory is reclaimed or the build cluster moves; the game's
+answer is an air transport (armatlas/corvalk/legatrans), and this AI never
+builds or commands one. Needs C++ (a load-move-unload task; nothing in the
+bound surface issues transport orders). Candidate trigger: a standing nano
+whose lathe reach covers no live factory, no build site and no repair target
+for N minutes, moved to the current nano-band anchor. Not started.

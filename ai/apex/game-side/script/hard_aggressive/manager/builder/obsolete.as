@@ -492,7 +492,9 @@ void NanoTidy()
 			aiBuilderMgr.AssignTask(u, eat);
 			AiLog(Factory::T() + "apex: nano-tidy #" + u.id + " reclaims "
 				+ dn + " in reach");
-			return;                       // one per sweep, bounded spend
+			// One target PER TURRET per sweep, not one per sweep total: a
+			// turret's lathe time is nearly free, and one-per-sweep made a
+			// cluttered base tidy itself at three buildings a minute.
 		}
 	}
 }
