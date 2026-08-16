@@ -180,6 +180,12 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// Above the holds: a held mex on an empty energy bank is exactly the walk
+	// they exist to protect, and protecting it freezes the builder at the site.
+	@t = EnergyBeforeMex(unit);
+	if (t !is null)
+		return t;
+
 	// AHEAD OF THE HOLD BELOW, ON PURPOSE: HoldWorkInProgress returns the held
 	// task unconditionally for any named site, which is exactly what stops a
 	// walking builder ever reaching DefaultMakeTask/MexOffer again -- see

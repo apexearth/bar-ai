@@ -145,6 +145,37 @@ IUnitTask@ AbandonUnsafeSite(CCircuitUnit@ unit, bool isComm)
 	return null;
 }
 
+// A mex (or moho) on an EMPTY energy bank is a frozen build: the engine
+// CmdWaits any non-comm builder that arrives (BuilderTask.cpp:518) and leaves
+// a commander standing at the site building at zero speed -- and in-range
+// Reevaluate never calls MakeTask again, so the script cannot intervene once
+// the builder arrives. apexearth, watching: "the proper thing to do would be
+// to insert the energy build order in front of the mex". So during the WALK
+// (where re-election still reaches us) swap to a solar at the builder's feet;
+// the mex spot stays open and is re-elected the moment the solar stands.
+// Requests::Take's own in-flight cap keeps a whole crew from all doing this
+// at once -- a null grant means energy is already being fixed, keep walking.
+IUnitTask@ EnergyBeforeMex(CCircuitUnit@ unit)
+{
+	if (!aiEconomyMgr.isEnergyEmpty)
+		return null;
+	IUnitTask@ held = unit.task;
+	if ((held is null) || (held.GetType() != Task::Type::BUILDER))
+		return null;
+	const int bt = held.GetBuildType();
+	if ((bt != Task::BuildType::MEX) && (bt != Task::BuildType::MEXUP))
+		return null;
+	CCircuitDef@ gen = SolarDef();
+	if ((gen is null) || !gen.IsAvailable(ai.frame))
+		return null;
+	IUnitTask@ fix = Requests::Take(unit, gen, Task::BuildType::ENERGY,
+			Task::Priority::HIGH, unit.GetPos(ai.frame), 0.f, SQUARE_SIZE * 8);
+	if (fix !is null)
+		AiLog(Factory::T() + "apex: energy first -- solar before "
+			+ SiteBuildName(held) + " (" + unit.circuitDef.GetName() + ")");
+	return fix;
+}
+
 IUnitTask@ HoldWorkInProgress(CCircuitUnit@ unit, bool isComm)
 {
 	// DO NOT DISPLACE WORK ALREADY IN PROGRESS.
