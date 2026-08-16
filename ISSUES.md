@@ -1549,6 +1549,25 @@ enemy is unreachable by ground, shift factory choice and army budget to
 air/naval. Air-map curated list (AcidicQuarry) landed as the cheap special
 case; he explicitly de-prioritized deep work on rare hazard maps.
 
+## NEW: route AROUND super-heavies; don't feed them (2026-08-15, watching)
+
+apexearth: "If an enemy behemoth is around we should walk around it... we
+don't have to fight something that much more powerful than us... at the least
+don't get within range of it, it does crazy damage." Squad logic needs a
+per-super-heavy avoidance disc: when a single enemy unit's power dwarfs the
+squad's, treat its weapon range as terrain (path around, keep attacking the
+base beyond it) instead of engaging or standing in reach. Distinct from the
+squad-vs-static commit rule — a Behemoth chases.
+
+## NEW: Armada T3 loses to Cortex T3 as used (2026-08-15, watching)
+
+apexearth, losing a T3 endgame: "our Armada T3 is inferior to Cortex T3 (at
+least with how we're using it)." Armada T3 skews artillery/sniper (Vanguard,
+Marauder) needing standoff use; Cortex's (Behemoth, Juggernaut) rewards the
+brawl our squads default to. Either faction-aware T3 unit selection or
+role-aware T3 handling (keep Vanguards at range behind the line). Needs a
+composition look at gantry output per faction.
+
 ## NEW: not enough anti-swarm shot density in defences (2026-08-15, Greenhaven loss)
 
 apexearth: "we lacked land defenses to block enemy mass grunt assaults. If we

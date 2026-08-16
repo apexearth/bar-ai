@@ -9935,7 +9935,7 @@ index d9c44e8..1c78814 100644
  
  		IUnitTask* task = repTarget->GetTask();
 diff --git a/src/circuit/task/fighter/AntiAirTask.cpp b/src/circuit/task/fighter/AntiAirTask.cpp
-index de6b207..c4df67c 100644
+index de6b207..804e1da 100644
 --- a/src/circuit/task/fighter/AntiAirTask.cpp
 +++ b/src/circuit/task/fighter/AntiAirTask.cpp
 @@ -1,550 +1,564 @@
@@ -10612,7 +10612,7 @@ index de6b207..c4df67c 100644
 +	}
 +	if (!pPath->posPath.empty()) {
 +		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-+			unit->GetTravelAct()->SetPath(pPath);
++			unit->GetTravelAct()->SetPath(pPath, lowestSpeed);
 +		}
 +	}
 +}
@@ -11054,7 +11054,7 @@ index de6b207..c4df67c 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/AntiHeavyTask.cpp b/src/circuit/task/fighter/AntiHeavyTask.cpp
-index fcca1a0..b97c529 100644
+index fcca1a0..a3b3f4b 100644
 --- a/src/circuit/task/fighter/AntiHeavyTask.cpp
 +++ b/src/circuit/task/fighter/AntiHeavyTask.cpp
 @@ -77,7 +77,7 @@ void CAntiHeavyTask::AssignTo(CCircuitUnit* unit)
@@ -11072,7 +11072,7 @@ index fcca1a0..b97c529 100644
  	if (!pPath->posPath.empty()) {
 -		unit->GetTravelAct()->SetPath(pPath);
 +		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-+			unit->GetTravelAct()->SetPath(pPath);
++			unit->GetTravelAct()->SetPath(pPath, lowestSpeed);
 +		}
  	}
  }
@@ -12099,7 +12099,7 @@ index 91000e2..f5257fc 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
 diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
-index 4b4f4f0..0a911f9 100644
+index 4b4f4f0..09dd13e 100644
 --- a/src/circuit/task/fighter/BombTask.cpp
 +++ b/src/circuit/task/fighter/BombTask.cpp
 @@ -1,435 +1,441 @@
@@ -12633,7 +12633,7 @@ index 4b4f4f0..0a911f9 100644
 +	}
 +	if (!pPath->posPath.empty()) {
 +		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-+			unit->GetTravelAct()->SetPath(pPath);
++			unit->GetTravelAct()->SetPath(pPath, lowestSpeed);
 +		}
 +	}
 +}
@@ -14002,7 +14002,7 @@ index 82f4aa0..521a9d7 100644
  
  	float GetAttackPower() const { return attackPower; }
 diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
-index 1d2e16c..4c2ed33 100644
+index 1d2e16c..62f9543 100644
 --- a/src/circuit/task/fighter/RaidTask.cpp
 +++ b/src/circuit/task/fighter/RaidTask.cpp
 @@ -162,7 +162,7 @@ void CRaidTask::AssignTo(CCircuitUnit* unit)
@@ -14020,7 +14020,7 @@ index 1d2e16c..4c2ed33 100644
  	if (!pPath->posPath.empty()) {
 -		unit->GetTravelAct()->SetPath(pPath);
 +		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-+			unit->GetTravelAct()->SetPath(pPath);
++			unit->GetTravelAct()->SetPath(pPath, lowestSpeed);
 +		}
  	}
  }

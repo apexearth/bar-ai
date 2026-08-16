@@ -190,7 +190,7 @@ void CRaidTask::Start(CCircuitUnit* unit)
 	}
 	if (!pPath->posPath.empty()) {
 		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-			unit->GetTravelAct()->SetPath(pPath);
+			unit->GetTravelAct()->SetPath(pPath, lowestSpeed);
 		}
 	}
 }

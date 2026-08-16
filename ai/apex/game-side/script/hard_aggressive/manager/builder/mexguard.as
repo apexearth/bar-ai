@@ -187,7 +187,11 @@ CCircuitDef@ FrontTower(CCircuitUnit@ unit, const AIFloat3& in at)
 	CCircuitDef@ heavy = HeavyDefenceFor(unit);
 	if (heavy !is null)
 		return heavy;
-	if (ai.GetTunable("apex_front_pb", 0.f) > 0.f)
+	// ON by default -- apexearth: "I never see us making the scorpion style
+	// defense turrets... They can still be useful for protecting us from
+	// raiders and we should have some. They make the T1.5 obsolete." The
+	// build-time concern stays answerable by the tunable.
+	if (ai.GetTunable("apex_front_pb", 1.f) > 0.f)
 		return MexGuardTower(unit, at);
 	CCircuitDef@ mid = SideDef3(armbeamer, corhllt, legmg);
 	if ((mid !is null) && mid.IsAvailable(ai.frame))
