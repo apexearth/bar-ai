@@ -1993,3 +1993,33 @@ builds or commands one. Needs C++ (a load-move-unload task; nothing in the
 bound surface issues transport orders). Candidate trigger: a standing nano
 whose lathe reach covers no live factory, no build site and no repair target
 for N minutes, moved to the current nano-band anchor. Not started.
+
+## Audit backlog (tools/audit.py, 2026-08-16, three consecutive 2v2 losses)
+
+Each of these appears in EVERY audited game; run `python tools/audit.py
+<match-dir>` to reproduce. Fixed so far: cordecom mexup loop (177 blocked
+elections/game), corllt light-laser build-eat conflict.
+
+- **Retreat bleed, 40-44% of lost metal.** Units retreat one at a time at
+  their hp threshold and die running (avg fwd ~0.25). The known fix is
+  squad-level retreat (posture.as documents the failed alternative: blanket
+  commitment scored 0.38 K/D). C++ fighter-task work; awaiting go-ahead.
+- **Taskless deaths, 44-47% of lost metal at home.** Units die holding NIL
+  near the base -- the overrun signature: production feeding corpses during a
+  base assault. Mechanism not yet attributed (fresh units pre-assignment vs
+  task-transition gap).
+- **Hopeless engagements: 72% of TAKEs at edge<0.5** in the audited game, with
+  mass-state army 7k vs enemy 17k. Squads commit at under half the power the
+  strength test says they need. Which exemption (isHome influence waiver,
+  push boost, base-under-attack 400% allowance) drives it is unattributed.
+- **Target skipping: 44-87 groups skipped in one pass.** Squads refuse every
+  worthwhile group and wander -- pairs with apexearth's "approach a
+  vulnerable enemy base and turn around".
+- **Plant-gate exemptions leak.** corap approved with 3 T1-tier plants
+  standing (air exemption), corsy with t1=3 (naval exemption) -- both bypass
+  the T1 total.
+- **Converter build-eat conflict** (cormakr): the converter build rules do not
+  consult the reclaim side's HaveReplacementFor, unlike the energy ladder.
+- **Audit limitation:** build-eat-conflict compares def NAMES only; a front
+  tower built while rear clutter of the same def is eaten is legitimate.
+  Needs positions compared before treating corhllt as a bug.
