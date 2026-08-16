@@ -1536,6 +1536,19 @@ never-expiring reclaim ledger — his twice-repeated report), bank-inclusive
 reactor concurrency ("0 delay" between fusions when metal-full), and
 build-side obsolescence (never build a def obsolete.as would reclaim).
 
+## NEW: composition should answer REACHABILITY (2026-08-15, AcidicQuarry watching)
+
+apexearth: "imagine if this was a map where theres water between us and the
+enemy, we wouldn't want a large land army in such a map." The general rule:
+before investing in a land army, ask whether our ground movetypes' connected
+terrain area CONTAINS the enemy — the engine's terrain analysis already knows
+(CTerrainManager areas, CanMobileReachAt), it just isn't bound to script.
+Sketch: bind `bool GroundCanReach(from, to)` (compare area ids for a
+representative ground movetype); at start and on factory switches, if the
+enemy is unreachable by ground, shift factory choice and army budget to
+air/naval. Air-map curated list (AcidicQuarry) landed as the cheap special
+case; he explicitly de-prioritized deep work on rare hazard maps.
+
 ## NEW: not enough anti-swarm shot density in defences (2026-08-15, Greenhaven loss)
 
 apexearth: "we lacked land defenses to block enemy mass grunt assaults. If we

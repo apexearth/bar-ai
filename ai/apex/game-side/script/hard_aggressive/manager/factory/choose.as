@@ -242,6 +242,25 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	return want;
 }
 
+// Maps where the whole team should open air. Curated: these carry a map-wide
+// ground hazard (or ground-hostile layout) the terrain analysis cannot see.
+// Matched case-insensitively as a substring of the map name.
+bool AirMap()
+{
+	array<string> airMaps = {"acidicquarry"};
+	string name = ai.GetMapName();
+	for (uint i = 0; i < name.length(); ++i) {
+		const uint8 c = name[i];
+		if ((c >= 65) && (c <= 90))
+			name[i] = c + 32;   // ASCII tolower; AngelScript string has no lower()
+	}
+	for (uint i = 0; i < airMaps.length(); ++i) {
+		if (name.findFirst(airMaps[i]) >= 0)
+			return true;
+	}
+	return false;
+}
+
 CCircuitDef@ ChooseFactory(const AIFloat3& in pos, bool isStart, bool isReset)
 {
 	if (!ApexActive())
@@ -275,7 +294,22 @@ CCircuitDef@ ChooseFactory(const AIFloat3& in pos, bool isStart, bool isReset)
 				return sea;
 			}
 		}
-		if (isStart && IsAirFactory(pick) && !MayOpenAir()) {
+		// KNOWN AIR MAPS. Terrain analysis scores factories by traversable
+		// area, and a map-wide hazard like acid is walkable-but-lethal --
+		// invisible to it. This is map knowledge, the same way a human knows
+		// it. apexearth, watching AcidicQuarry: "we should know that we need
+		// to play as air."
+		if (isStart && AirMap() && !IsAirFactory(pick)) {
+			CCircuitDef@ ap = SideDef3(armap, corap, legap);
+			if (ap !is null) {
+				AiLog(T() + "apex: air map (" + ai.GetMapName()
+					+ ") -- opening " + ap.GetName()
+					+ " instead of " + pick.GetName());
+				@gT1Fac = ap;
+				return ap;
+			}
+		}
+		if (isStart && IsAirFactory(pick) && !MayOpenAir() && !AirMap()) {
 			CCircuitDef@ ground = IsWaterMap() ? NavalOpening() : GroundOpening();
 			if (ground !is null) {
 				AiLog(T() + "apex: opening " + pick.GetName() + " -> "
