@@ -1161,6 +1161,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 					prio, w.pos, 0.f, SQUARE_SIZE * 4, made);
 			if (made) {
 				++gFenceOrders;
+				Builder::CloakWithWalls(unit, w.def, w.pos, prio);
 				if (w.kind == "aa")
 					NoteAAOrder(w.pos);
 				const float fwd = Military::ForwardFraction(w.pos);

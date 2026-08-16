@@ -563,6 +563,7 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)
 	// Without this the mex reads bare again next tick: FENCE only fires on a
 	// FINISHED turret, so nothing suppresses the repeat until it is built.
 	NoteDigOrder(site);
+	CloakWithWalls(unit, tower, site, Task::Priority::HIGH);
 	++gMexSentries;
 	if (gMexSentries <= 3 || (gMexSentries % 10 == 0)) {
 		AiLog(Factory::T() + "apex: mex sentry #" + gMexSentries + " "

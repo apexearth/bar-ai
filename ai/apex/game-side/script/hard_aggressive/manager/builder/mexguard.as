@@ -185,6 +185,56 @@ CCircuitDef@ MidTowerDef()
 	return best;
 }
 
+// A Maw-class pop-up reads as a wall block until it fires. Scatter a few real
+// wall segments (8 metal each) beside every one we order, so the enemy cannot
+// tell which block shoots until it does. apexearth: "we should put some walls
+// around it - the enemy will not know which are the defenses and which are
+// the walls... we can be really cheeky like this."
+bool IsMawClass(const CCircuitDef@ d)
+{
+	if (d is null)
+		return false;
+	const string n = d.GetName();
+	return (n == "armclaw") || (n == "cormaw") || (n == "legdtr");
+}
+
+void CloakWithWalls(CCircuitUnit@ unit, CCircuitDef@ towerDef,
+		const AIFloat3& in at, Task::Priority prio)
+{
+	if (!IsMawClass(towerDef))
+		return;
+	CCircuitDef@ wall = SideDef3("armdrag", "cordrag", "legdrag");
+	if ((wall is null) || !wall.IsAvailable(ai.frame))
+		return;
+	const int n = int(ai.GetTunable("apex_maw_cloak_walls", 4.f));
+	const float step = float(SQUARE_SIZE) * 5.f;
+	array<float> dx = {step, -step, 0.f, 0.f, step, -step};
+	array<float> dz = {0.f, 0.f, step, -step, step, -step};
+	array<AIFloat3> ring;
+	for (uint i = 0; i < dx.length(); ++i) {
+		AIFloat3 p = at;
+		p.x += dx[i];
+		p.z += dz[i];
+		ring.insertLast(p);
+	}
+	int placed = 0;
+	for (uint i = 0; (i < ring.length()) && (placed < n); ++i) {
+		if (!OnMap(ring[i]))
+			continue;
+		bool made = false;
+		// Radius one square: neighbouring blocks are their own stretches, so
+		// the ledger refuses a re-ask for THIS block without blocking the next.
+		Requests::Take(unit, wall, Task::BuildType::DEFENCE, prio,
+				ring[i], float(SQUARE_SIZE), float(SQUARE_SIZE) * 2.f, made);
+		if (made)
+			++placed;
+	}
+	if (placed > 0) {
+		AiLog(Factory::T() + "apex: cloaked " + towerDef.GetName() + " with "
+			+ placed + " wall block(s)");
+	}
+}
+
 CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 {
 	CCircuitDef@ heavy = HeavyDefenceFor(unit);
