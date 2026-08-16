@@ -261,6 +261,20 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			return task;
 	}
 
+	// THE FIRST FUSION BEATS THE NEXT MEX UPGRADE for a freshly-free advanced
+	// constructor. Measured (tournament 20260815-223228): 10 games, incomes to
+	// 300, banks to 20k, 20-30 mohos, 45-68 advanced solars -- and zero
+	// fusions, because Brain::Decide's mexup want re-claimed every advanced
+	// con the moment it freed, and the optional-cluster hook below Decide was
+	// never reached by a unit that could act. Bounded hard: only while NO
+	// reactor exists (a nanoframe counts as one), and EcoFusion's own moho
+	// trigger and in-flight bound still decide whether.
+	if (isAdvCon && !HaveReactor()) {
+		@t = EcoFusion(unit);
+		if (t !is null)
+			return t;
+	}
+
 	// THE MACRO VIEW GETS ITS SAY BEFORE ANY OPTIONAL SPENDING.
 	//
 	// Rules below propose one thing each and the first one wins; Brain::Decide
