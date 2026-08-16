@@ -135,7 +135,20 @@ CCircuitDef@ HeavyDefenceFor(CCircuitUnit@ unit)
 	const float inc = aiEconomyMgr.metal.income;
 	CCircuitDef@ best = null;
 	float bestWorth = 0.f;
+	// The popup battery (Pit Bull/Scorpion) ranks ALONGSIDE the heavies, not
+	// beneath them: this function used to win before the popup line in
+	// MexGuardTower could ever run, so at any real income a Bulwark preceded
+	// the first Scorpion -- apexearth: "we are still making doomsday guns
+	// before we ever make a scorpion... enemies just rush into our base in
+	// one big mass and we have nothing." A mass wants shot density spread
+	// over several guns, not one big alpha target.
+	CCircuitDef@ pop = SideDef3(armpb, corvipe, legapopupdef);
 	if (inc >= ai.GetTunable("apex_def_t2_income", DEF_TIER_T2_INCOME)) {
+		const float wp = HeavyWorth(pop);
+		if (wp > bestWorth) {
+			@best = pop;
+			bestWorth = wp;
+		}
 		CCircuitDef@ mid = SideDef3(armtoast, cortoastd, legramp);
 		const float w = HeavyWorth(mid);
 		if (w > bestWorth) {
@@ -144,11 +157,19 @@ CCircuitDef@ HeavyDefenceFor(CCircuitUnit@ unit)
 		}
 	}
 	if (inc >= ai.GetTunable("apex_def_t3_income", DEF_TIER_T3_INCOME)) {
+		// The big gun waits its turn: each one requires apex_big_per_popup
+		// popups standing first. A ratio between the tiers, scaling with how
+		// many big guns already stand -- not a cap on either.
 		CCircuitDef@ big = SideDef3(armpulsar, corpulsar, legpulsar);
-		const float w = HeavyWorth(big);
-		if (w > bestWorth) {
-			@best = big;
-			bestWorth = w;
+		const float per = ai.GetTunable("apex_big_per_popup", 2.f);
+		const bool bigTurn = (pop is null)
+				|| (float(pop.count) >= (float((big is null) ? 0 : big.count) + 1.f) * per);
+		if (bigTurn) {
+			const float w = HeavyWorth(big);
+			if (w > bestWorth) {
+				@best = big;
+				bestWorth = w;
+			}
 		}
 	}
 	const string picked = (best is null) ? "none" : best.GetName();
