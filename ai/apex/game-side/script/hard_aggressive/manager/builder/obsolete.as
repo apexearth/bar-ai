@@ -609,35 +609,89 @@ bool HaveReplacementFor(const string& in name)
 	return (better !is null) && (better.count > 0);
 }
 
+// ONE predicate for both sides. The builder's energy ranking and the reclaim
+// target list must agree exactly, or the base builds and eats the same def at
+// once -- apexearth watched his commander building the def his con turrets
+// were reclaiming. Eligibility = the replacement STANDS (never strip a tier
+// whose successor is not on the field) AND energy income clears a CLIFF, so
+// eating panels can never crash the grid down to one advanced solar.
+// Wind's cliff scales with THIS map's measured wind: a bad-wind map obsoletes
+// turbines sooner. apexearth 2026-08-15: "so long as our energy income is
+// > ~500 we can reclaim solars... >2000 reclaim wind and advanced solar...
+// based on efficiency for the map."
+float EnergyReclaimCliff(const string& in name)
+{
+	if ((name == armsolar) || (name == corsolar) || (name == legsolar))
+		return ai.GetTunable("apex_reclaim_solar_e", 500.f);
+	if ((name == armadvsol) || (name == coradvsol) || (name == legadvsol))
+		return ai.GetTunable("apex_reclaim_advsol_e", 2000.f);
+	if ((name == armwin) || (name == corwin) || (name == legwin)) {
+		const float base = ai.GetTunable("apex_reclaim_wind_e", 2000.f);
+		CCircuitDef@ wind = SideDef3(armwin, corwin, legwin);
+		CCircuitDef@ sol = SideDef3(armadvsol, coradvsol, legadvsol);
+		if ((wind !is null) && (sol !is null)
+			&& (wind.costM > 0.f) && (sol.costM > 0.f))
+		{
+			const float sEpm = aiEconomyMgr.GetEnergyMake(sol) / sol.costM;
+			if (sEpm > 0.f) {
+				float rel = (aiEconomyMgr.GetEnergyMake(wind) / wind.costM) / sEpm;
+				if (rel > 1.f)
+					rel = 1.f;
+				const float scaled = base * rel;
+				return (scaled < 300.f) ? 300.f : scaled;
+			}
+		}
+		return base;
+	}
+	return 0.f;   // converters, AA: the replacement-standing rule alone decides
+}
+
+bool EnergyReclaimable(const string& in name)
+{
+	bool standing;
+	if ((name == armwin) || (name == corwin) || (name == legwin)) {
+		CCircuitDef@ adv = SideDef3(armadvsol, coradvsol, legadvsol);
+		standing = HaveReactor() || ((adv !is null) && (adv.count > 0));
+	} else {
+		standing = HaveReplacementFor(name);
+	}
+	if (!standing)
+		return false;
+	return aiEconomyMgr.energy.income >= EnergyReclaimCliff(name);
+}
+
 array<string> ObsoleteEcoNames()
 {
 	array<string> names;
 	const string side = ai.GetSideName();
 	if (side == "cortex") {
-		names.insertLast(corwin);
-		if (HaveReplacementFor(corsolar))
+		if (EnergyReclaimable(corwin))
+			names.insertLast(corwin);
+		if (EnergyReclaimable(corsolar))
 			names.insertLast(corsolar);
 		if (HaveReplacementFor(cormakr))
 			names.insertLast(cormakr);
-		if (HaveReplacementFor(coradvsol))
+		if (EnergyReclaimable(coradvsol))
 			names.insertLast(coradvsol);
 		names.insertLast(corrl);
 	} else if (side == "legion") {
-		names.insertLast(legwin);
-		if (HaveReplacementFor(legsolar))
+		if (EnergyReclaimable(legwin))
+			names.insertLast(legwin);
+		if (EnergyReclaimable(legsolar))
 			names.insertLast(legsolar);
 		if (HaveReplacementFor(legeconv))
 			names.insertLast(legeconv);
-		if (HaveReplacementFor(legadvsol))
+		if (EnergyReclaimable(legadvsol))
 			names.insertLast(legadvsol);
 		names.insertLast(legrl);
 	} else {
-		names.insertLast(armwin);
-		if (HaveReplacementFor(armsolar))
+		if (EnergyReclaimable(armwin))
+			names.insertLast(armwin);
+		if (EnergyReclaimable(armsolar))
 			names.insertLast(armsolar);
 		if (HaveReplacementFor(armmakr))
 			names.insertLast(armmakr);
-		if (HaveReplacementFor(armadvsol))
+		if (EnergyReclaimable(armadvsol))
 			names.insertLast(armadvsol);
 		names.insertLast(armrl);
 	}

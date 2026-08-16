@@ -32,7 +32,14 @@ CCircuitDef@ SolarDef()
 	CCircuitDef@ adv = AdvSolDef();
 	if (adv !is null)
 		return adv;
-	return SideDef3(armsolar, corsolar, legsolar);
+	// NOT unconditionally the plain panel: after a reactor stood, this branch
+	// handed back the most obsolete def in the game, and the commander built
+	// it while the nano turrets reclaimed it. Null here means "the answer is
+	// a reactor, not a panel" and every caller already handles null.
+	CCircuitDef@ plain = SideDef3(armsolar, corsolar, legsolar);
+	if ((plain !is null) && !EnergyReclaimable(plain.GetName()))
+		return plain;
+	return null;
 }
 
 // count is incremented on unit CREATION, nanoframe included
@@ -150,13 +157,17 @@ int ReactorsInFlight(float cost)
 // down at the same time.
 CCircuitDef@ AdvSolDef()
 {
-	if (HaveReactor())
+	// The reclaim cliff, not HaveReactor(): one standing fusion used to end
+	// all advsol building while the reclaim side needed income past its cliff
+	// to start eating them -- the band between was where the base built and
+	// ate the same def at once. Now both sides flip at the same line.
+	CCircuitDef@ adv = SideDef3(armadvsol, coradvsol, legadvsol);
+	if ((adv is null) || EnergyReclaimable(adv.GetName()))
 		return null;
 	if (aiEconomyMgr.energy.income
 			< ai.GetTunable("apex_advsol_energy", ADVSOL_MIN_ENERGY))
 		return null;
-	CCircuitDef@ adv = SideDef3(armadvsol, coradvsol, legadvsol);
-	return ((adv !is null) && adv.IsAvailable(ai.frame)) ? adv : null;
+	return adv.IsAvailable(ai.frame) ? adv : null;
 }
 
 
@@ -173,17 +184,11 @@ float EnergyValuePerMetal(CCircuitDef@ d)
 {
 	if ((d is null) || !d.IsAvailable(ai.frame) || (d.costM <= 0.f))
 		return -1.f;
-	// Never BUILD what obsolete.as would immediately reclaim -- building and
-	// tearing down the same def at once is pure constructor-time loss.
-	// apexearth: "if a building is obsolete... we should not be willing to
-	// build more of them." Same tests the reclaim side uses: wind is done once
-	// a reactor stands; the solar family once its named successor stands.
-	const string n = d.GetName();
-	if (((n == armwin) || (n == corwin) || (n == legwin)) && HaveReactor())
-		return -1.f;
-	if (((n == armsolar) || (n == corsolar) || (n == legsolar)
-			|| (n == armadvsol) || (n == coradvsol) || (n == legadvsol))
-			&& HaveReplacementFor(n))
+	// Never BUILD what obsolete.as would reclaim -- building and tearing down
+	// the same def at once is pure constructor-time loss, and it happened live
+	// (commander building the def the con turrets were eating). ONE predicate,
+	// shared with the reclaim list, decides both sides: EnergyReclaimable.
+	if (EnergyReclaimable(d.GetName()))
 		return -1.f;
 	return aiEconomyMgr.GetEnergyMake(d) / d.costM;
 }
