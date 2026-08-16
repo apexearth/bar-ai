@@ -55,8 +55,13 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 //
 // Every entry is tunable (apex_share_defence, apex_share_airdef).
 //                            8     20     50    100    300
-// Army raised ~25% over the 2026-08-15 baseline -- apexearth: "we need to
-// make more army... we need our army to protect ourselves."
+// WARNING (build-power review, 2026-08-16): this row is currently consulted
+// by NOTHING that produces combat units -- BudgetCatOf has no "army" kind,
+// and QuotaFor's wants are demand-unbounded anyway (measured wants in the
+// thousands against held in the tens). Army metal share is decided by what
+// ELSE is being built concurrently, not by this number. Kept because the
+// budget log reads it; treat any claimed effect from editing it as false
+// until Cat::ARMY is wired into the metal-allocation level.
 array<float> SPEND_ARMY       = {3.5f,   5.f,  6.5f,   8.f,   12.f};
 // LOW until T3-scale income, then rising -- apexearth: a concentrated mobile
 // army picks one spot in a line and breaks it, so pre-T3 "defenses are

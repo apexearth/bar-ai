@@ -2022,3 +2022,18 @@ elections/game), corllt light-laser build-eat conflict.
 - **Audit limitation:** build-eat-conflict compares def NAMES only; a front
   tower built while rear clutter of the same def is eaten is legitimate.
   Needs positions compared before treating corhllt as a bug.
+
+## Army share 25% -> 14%: the concurrent-construction batch needs a bisect
+
+Build-power review, 2026-08-16, over tournaments 223228 vs the 10-game final:
+army share of built metal fell 25.2% -> 13.7% while total production ROSE to
+134k (day's best). Not the quota (wants measured in the thousands vs held in
+tens; slots never bind) -- the five same-day changes each added CONCURRENT
+construction drawing the same live metal pool factories finish army from:
+nano cap raise, EcoNano-above-Assist, T2 caretakers 6->12, second T2 line at
+90 income, first-fusion priority. SPEND_ARMY is consulted by nothing that
+produces units (see the warning in targets.as); the +25% "raise" was a no-op.
+Mitigation landed: EcoNano preemption now yields while the base is contested.
+REMAINING: re-test nano cap, caretaker ceiling, and second-line curve ONE AT
+A TIME with composition.py against a control -- they went in as a batch and
+cannot currently be individually blamed.

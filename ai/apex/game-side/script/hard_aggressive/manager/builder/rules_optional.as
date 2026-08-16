@@ -146,9 +146,16 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 				// that does it permanently. EcoNano self-gates (placement,
 				// in-flight, pacing), so this claims a builder only when a nano
 				// is actually due.
-				IUnitTask@ nanoFirst = EcoNano(unit);
-				if (nanoFirst !is null)
-					return nanoFirst;
+				// NOT while the base is contested: an assist finishes
+				// something NOW; a new nano is spend on later. The build-power
+				// review traced the batch-wide army-share drop to concurrent
+				// construction crowding the metal pool -- under pressure,
+				// finishing beats expanding build power.
+				if (!BaseUnderAttack() && !Military::BaseContested()) {
+					IUnitTask@ nanoFirst = EcoNano(unit);
+					if (nanoFirst !is null)
+						return nanoFirst;
+				}
 				// Assist bots and front constructors get their standing job here,
 				// where everything protective has already had its say.
 				IUnitTask@ help = Assist::Work(unit);
