@@ -330,6 +330,24 @@ int RoundUp(float v)
 // by the cost of the unit that fills the role, rounded up. Build power and
 // eyes are quantities already and keep the curves that own them.
 //
+// Per-def judgement on top of the role shares. Roles map 1:1 to defs on some
+// lines (Legion's bot lab: RAIDER=Goblin, SKIRM=Satyr), so a unit that is
+// simply weak -- or one that partners another and should flow with it -- has
+// no lever but its whole role's share. This is that lever, tunable.
+// apexearth 2026-08-15, watching: Satyr is cheap, outranges, and screens
+// behind the Karkinos -- more; "Goblin units are really quite bad" -- fewer.
+float DefQuotaMod(const CCircuitDef@ d)
+{
+	if (d is null)
+		return 1.f;
+	const string n = d.GetName();
+	if (n == "leggob")
+		return ai.GetTunable("apex_quota_leggob", 0.4f);
+	if (n == "leglob")
+		return ai.GetTunable("apex_quota_leglob", 1.5f);
+	return 1.f;
+}
+
 // `isFloor` marks entries that are QUANTITIES rather than shares. A flat list
 // ranked by have/want handed the composition to array order when every ratio
 // tied at 0.00, so floors are CHECKED as floors -- below the number, build it
@@ -416,6 +434,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			// ranged, tanky line-holders) keep the full count.
 			if ((core[c] == RT::RAIDER) && Factory::gHaveT2)
 				n = (n + 2) / 3;
+			n = RoundUp(float(n) * DefQuotaMod(d));
 			defs.insertLast(d);
 			want.insertLast(n);
 			isFloor.insertLast(false);      // balanced, not first-listed-first; see T2 block
@@ -533,7 +552,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		if (s <= 0.f)
 			continue;
 		defs.insertLast(d);
-		want.insertLast(RoundUp(s * slots * tier));
+		want.insertLast(RoundUp(s * slots * tier * DefQuotaMod(d)));
 		isFloor.insertLast(false);
 	}
 }

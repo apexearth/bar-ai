@@ -16,17 +16,21 @@
 		// legaabot is onlytargetcategory VTOL, same as armjeth/corsent --
 		// zeroed in "land" 2026-08-15, same measured reason (flat trickle
 		// still drew with zero enemy air seen all match).
+		// leglob (Satyr) stays nonzero at every tier: zero here removes the def
+		// from GetRoleDef's draw, and it is the lab's ONLY skirmisher -- zeroing
+		// tier2/3 deleted the whole skirm share exactly when legkark appears,
+		// the pairing apexearth asked for (Satyrs screen behind the Karkinos).
 		"land": {			// 10
 			"tier0": [ 0.10,    0.55,    	0.05,       0.00,		0.00,     	0.00,      	0.00,     	0.30],
 			"tier1": [ 0.10,    0.55,    	0.05,       0.00,		0.00,     	0.00,      	0.00,     	0.30],
-			"tier2": [ 0.10,    0.00,    	0.05,       0.40,		0.35,     	0.00,      	0.00,     	0.00],
-			"tier3": [ 0.05,    0.00,    	0.05,       0.30,		0.10,     	0.35,      	0.00,     	0.00]
+			"tier2": [ 0.10,    0.30,    	0.05,       0.40,		0.35,     	0.00,      	0.00,     	0.00],
+			"tier3": [ 0.05,    0.30,    	0.05,       0.30,		0.10,     	0.35,      	0.00,     	0.00]
 		},
 		"air": {
 			"tier0": [ 0.10,    0.55,    	0.09,       0.00,		0.00,     	0.00,      	0.15,     	0.30],
 			"tier1": [ 0.10,    0.55,    	0.10,       0.00,		0.00,     	0.00,      	0.15,     	0.30],
-			"tier2": [ 0.10,    0.00,    	0.10,       0.40,		0.35,     	0.00,      	0.15,     	0.00],
-			"tier3": [ 0.10,    0.00,    	0.12,       0.30,		0.10,     	0.35,      	0.15,     	0.00]
+			"tier2": [ 0.10,    0.30,    	0.10,       0.40,		0.35,     	0.00,      	0.15,     	0.00],
+			"tier3": [ 0.10,    0.30,    	0.12,       0.30,		0.10,     	0.35,      	0.15,     	0.00]
 		},
 
 		"caretaker": 3
