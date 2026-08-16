@@ -25,6 +25,12 @@ IUnitTask@ PassingMex(CCircuitUnit@ unit, bool isComm)
 		return null;
 	if (isComm)
 		return null;
+	// A nano turret tidying in place has a busy task and a position -- the
+	// detour math then reads near-zero and it "passes" a mex it can neither
+	// walk to nor build (26 blocked tasks in one audited game).
+	CCircuitDef@ mexDef = SideDef3("armmex", "cormex", "legmex");
+	if ((mexDef !is null) && !unit.circuitDef.CanBuild(mexDef))
+		return null;
 	IUnitTask@ busy = unit.task;
 	if (busy is null)
 		return null;
