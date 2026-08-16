@@ -177,6 +177,17 @@ bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
 		return false;
 	}
 	CCircuitAI* circuit = manager->GetCircuit();
+	// AT HOME THERE IS NOWHERE TO RUN: a squad voting to retreat inside its
+	// own base is run down among its own buildings -- measured (Altored 4v4):
+	// 871 units, 40% of lost metal, dying on RETREAT at fwd 0.18 with
+	// fight-task deaths near zero. On our own ground the wounded stand rear
+	// with the squad and the squad fights; same influence test as the attack
+	// odds waiver. Defending is the one trade at home that favors us.
+	if ((leader != nullptr) && (circuit->GetInflMap()->GetAllyInflAt(
+			leader->GetPos(circuit->GetLastFrame())) >= INFL_SAFE)) {
+		cowards.insert(unit);
+		return true;
+	}
 	float woundedPower = unit->GetCircuitDef()->GetPower();
 	for (CCircuitUnit* u : cowards) {
 		if ((u != unit) && (u->GetCircuitDef() != nullptr)) {

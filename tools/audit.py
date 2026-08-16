@@ -116,10 +116,19 @@ def check_economy(text, rep):
     # plant discipline: approvals vs refusals; multiple same-tier approvals
     appr = re.findall(r"plant approved (\S+) have=(\d+)/(\d+) t1=(\d+)"
                       r" t2=(\d+)", text)
-    # air plants past the totals are the air STRATEGY's sanctioned exemption
+    # air plants past the totals are the air STRATEGY's sanctioned exemption.
+    # Compare each approval against ITS OWN tier only: the t1/t2 counters are
+    # printed post-approval and a T2 plant is not subject to the T1 total (a
+    # coralab at t1=3 flagged here was a false positive).
     air = {"armap", "corap", "legap", "armaap", "coraap", "legaap"}
-    over = [a for a in appr
-            if (int(a[3]) > 2 or int(a[4]) > 2) and a[0] not in air]
+    t2names = {"armalab", "armavp", "coralab", "coravp", "legalab", "legavp"}
+    over = []
+    for a in appr:
+        if a[0] in air:
+            continue
+        tier_count = int(a[4]) if a[0] in t2names else int(a[3])
+        if tier_count > 2:
+            over.append(a)
     rep.add("ECONOMY", len(over) == 0, "plant-gate",
             f"{len(appr)} approvals, {len(over)} past tier totals"
             + (f" e.g. {over[0]}" if over else ""))

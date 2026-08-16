@@ -14973,7 +14973,7 @@ index b4b43c1..e0b2fb4 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index ae6cce5..b3c320a 100644
+index ae6cce5..2f1cdcd 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,6 +6,7 @@
@@ -15026,7 +15026,7 @@ index ae6cce5..b3c320a 100644
  
  	const std::map<float, std::set<CCircuitUnit*>>& rangers = task->GetRangeUnits();
  	for (const auto& kv : rangers) {
-@@ -155,6 +164,43 @@ void ISquadTask::Merge(ISquadTask* task)
+@@ -155,6 +164,54 @@ void ISquadTask::Merge(ISquadTask* task)
  	FindLeader(rookies.begin(), rookies.end());
  }
  
@@ -15043,6 +15043,17 @@ index ae6cce5..b3c320a 100644
 +		return false;
 +	}
 +	CCircuitAI* circuit = manager->GetCircuit();
++	// AT HOME THERE IS NOWHERE TO RUN: a squad voting to retreat inside its
++	// own base is run down among its own buildings -- measured (Altored 4v4):
++	// 871 units, 40% of lost metal, dying on RETREAT at fwd 0.18 with
++	// fight-task deaths near zero. On our own ground the wounded stand rear
++	// with the squad and the squad fights; same influence test as the attack
++	// odds waiver. Defending is the one trade at home that favors us.
++	if ((leader != nullptr) && (circuit->GetInflMap()->GetAllyInflAt(
++			leader->GetPos(circuit->GetLastFrame())) >= INFL_SAFE)) {
++		cowards.insert(unit);
++		return true;
++	}
 +	float woundedPower = unit->GetCircuitDef()->GetPower();
 +	for (CCircuitUnit* u : cowards) {
 +		if ((u != unit) && (u->GetCircuitDef() != nullptr)) {
@@ -15070,7 +15081,7 @@ index ae6cce5..b3c320a 100644
  const AIFloat3& ISquadTask::GetLeaderPos(int frame) const
  {
  	return (leader != nullptr) ? leader->GetPos(frame) : GetPosition();
-@@ -217,6 +263,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -217,6 +274,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
  	std::shared_ptr<CQueryLineMap> query = std::static_pointer_cast<CQueryLineMap>(
  			pathfinder->CreateLineMapQuery(leader, circuit->GetThreatMap(), pos));
  
@@ -15085,7 +15096,7 @@ index ae6cce5..b3c320a 100644
  	const std::set<IFighterTask*>& tasks = static_cast<CMilitaryManager*>(manager)->GetTasks(fightType);
  	for (const IFighterTask* candidate : tasks) {
  		if ((candidate == this)
-@@ -225,6 +279,11 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -225,6 +290,11 @@ ISquadTask* ISquadTask::CheckMergeTask()
  		{
  			continue;
  		}
@@ -15097,7 +15108,7 @@ index ae6cce5..b3c320a 100644
  		const ISquadTask* candy = static_cast<const ISquadTask*>(candidate);
  
  		const AIFloat3& tp = candy->GetLeaderPos(frame);
-@@ -251,7 +310,12 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -251,7 +321,12 @@ ISquadTask* ISquadTask::CheckMergeTask()
  
  ISquadTask* ISquadTask::GetMergeTask()
  {
@@ -15111,7 +15122,7 @@ index ae6cce5..b3c320a 100644
  		return IsMergeSafe() ? CheckMergeTask() : nullptr;
  	}
  	return nullptr;
-@@ -504,8 +568,12 @@ void ISquadTask::ActivePath(float speed)
+@@ -504,8 +579,12 @@ void ISquadTask::ActivePath(float speed)
  	const float half = span * scale * 0.5f;
  	int i = 0;
  	for (CCircuitUnit* unit : units) {
@@ -15126,7 +15137,7 @@ index ae6cce5..b3c320a 100644
  		++i;
  	}
  }
-@@ -589,7 +657,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -589,7 +668,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				if (unit->Blocker() != nullptr) {
  					continue;  // Do not interrupt current action
  				}
@@ -15137,7 +15148,7 @@ index ae6cce5..b3c320a 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -604,10 +674,63 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -604,10 +685,63 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -15202,7 +15213,7 @@ index ae6cce5..b3c320a 100644
  		// 20% inside its reach, which throws away the whole point of keeping the
  		// long-ranged units in an outer row -- a Banisher at 800 was standing at
  		// 640, inside the tanks it was supposed to shoot over.
-@@ -699,15 +822,50 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -699,15 +833,50 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  		// maintain.
  		const bool glassCannon = (edef != nullptr) && (rowDef != nullptr)
  				&& (edef->GetHealth() < rowDef->GetHealth());
@@ -15257,7 +15268,7 @@ index ae6cce5..b3c320a 100644
  		}
  		// The arc a row may occupy. At 0.9*PI a squad packs into a half circle on
  		// one side of the target, which is a single AOE footprint -- and the wider
-@@ -741,8 +899,36 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -741,8 +910,36 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  		const float end2 = alpha - beta;
  		AIFloat3 newPos1(tPos.x + range * cosf(end1), tPos.y, tPos.z + range * sinf(end1));
  		AIFloat3 newPos2(tPos.x + range * cosf(end2), tPos.y, tPos.z + range * sinf(end2));
@@ -15296,7 +15307,7 @@ index ae6cce5..b3c320a 100644
  			delta = -delta;
  			beta = -beta;
  		}
-@@ -752,7 +938,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -752,7 +949,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  			if (unit->Blocker() != nullptr) {
  				continue;  // Do not interrupt current action
  			}
@@ -15307,7 +15318,7 @@ index ae6cce5..b3c320a 100644
  
  			if (isRepeatAttack
  				|| (unit->GetTarget() != GetTarget())
-@@ -786,7 +974,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -786,7 +985,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				// into a second enemy.
  				const float orbit = ORBIT_RATE * (frame / (float)FRAMES_PER_SEC) * orbitDir;
  				const float angle = alpha + beta + orbit;
@@ -15326,7 +15337,7 @@ index ae6cce5..b3c320a 100644
  				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
  				CTerrainManager::CorrectPosition(newPos);
  
-@@ -804,9 +1002,24 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -804,9 +1013,24 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				// stepping into the hotter spot. Small multiplicative
  				// tolerance so a unit doesn't flip-flop between two tiles of
  				// near-identical threat every isRepeatAttack tick.
@@ -15352,7 +15363,7 @@ index ae6cce5..b3c320a 100644
  					newPos = curPos;
  				}
  
-@@ -826,7 +1039,9 @@ void ISquadTask::Log()
+@@ -826,7 +1050,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
