@@ -277,6 +277,27 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// advanced cons are ever claimed here and the rest stay on mohos -- the
 	// bank-refill stampede this hook once caused (mexups halved, metal -33%)
 	// cannot recur.
+	// LANE 0, ahead of the reactor: the moho. apexearth: "we have 3 regular
+	// mexes right in the middle of our base... upgrade priority. Ideally we
+	// have more than 1 advanced con and one works on the mex upgrades while
+	// the other makes the fusion stuff... an upgraded mex gives 4 times the
+	// metal." One upgrade under way at all times, read from the live MEXUP
+	// task count -- no ledger to drift, nothing to resync.
+	if (isAdvCon
+		&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::MEXUP)) == 0))
+	{
+		Brain::Want@ up = Brain::MexUpgradeWant(unit);
+		if ((up !is null) && (up.def !is null)
+			&& unit.circuitDef.CanBuild(up.def))
+		{
+			IUnitTask@ upt = aiBuilderMgr.EnqueueMexUp(up.pos, up.def);
+			if (upt !is null) {
+				AiLog(Factory::T() + "apex: mexup pipeline by "
+					+ unit.circuitDef.GetName());
+				return upt;
+			}
+		}
+	}
 	if (isAdvCon && ReactorPipelineOpen()) {
 		@t = EcoFusion(unit);
 		if (t !is null)
