@@ -2034,6 +2034,9 @@ nano cap raise, EcoNano-above-Assist, T2 caretakers 6->12, second T2 line at
 90 income, first-fusion priority. SPEND_ARMY is consulted by nothing that
 produces units (see the warning in targets.as); the +25% "raise" was a no-op.
 Mitigation landed: EcoNano preemption now yields while the base is contested.
-REMAINING: re-test nano cap, caretaker ceiling, and second-line curve ONE AT
-A TIME with composition.py against a control -- they went in as a batch and
-cannot currently be individually blamed.
+BISECT COMPLETE (three 10-game tournaments, 2026-08-16): the CARETAKER
+ceiling raise (6->12) was the sole culprit -- reverting it alone recovered
+army share to 21.6%, metal to 133k, and swept 10-0. The nano cap raise is
+exonerated (reverting IT cost 4.6pt army share and pushed metal-full to 39%
+median) and the second-line curve rode along in the winning config. Deployed
+state = caretaker 6/3 + nano raise + curve -5.8 + pressure-gated EcoNano.

@@ -64,8 +64,10 @@ int CapShare(float share)
 // by a number someone picked. A turret is 210 metal and 140 build power that
 // never walks anywhere, so on a large economy it is the best thing a full bank
 // can become.
-// 4 per income and a 0.16 share, was 5 and 0.12: apexearth 2026-08-15, "I just
-// see us with full metal too often and the solution is more build power."
+// 4 per income, 0.16 share, 8s pacing -- bisect-confirmed (leg 2, 10 games):
+// reverting these cost 4.6pt of army share and pushed metal-full from 25% to
+// 39% median. The nano raise spends the bank; the caretaker ceiling was the
+// batch's actual regression.
 const float NANO_PER_INCOME = 4.f;
 const int   NANO_FULL_BONUS = 20;
 const float NANO_CAP_SHARE  = 0.16f;
