@@ -312,15 +312,24 @@ IUnitTask@ RadarNet(CCircuitUnit@ unit)
 	if ((rad is null) || !rad.IsAvailable(ai.frame)
 		|| !unit.circuitDef.CanBuild(rad))
 		return null;
-	// Centre of held ground first, then out along the border ranks, indexed by
-	// what actually STANDS -- a border radar dying re-opens its rank.
-	AIFloat3 anchor = Military::TerritoryCentre();
-	const uint standing = gRadarStand.length();
-	if (standing > 0) {
-		AIFloat3 border;
-		if (!Military::BorderPos(border, standing - 1))
-			return null;                   // every rank covered: done for now
-		anchor = border;
+	// THE HOME BASE IS RANK ZERO, unconditionally. TerritoryCentre walks
+	// forward as ground is taken, so the base itself was never a rank of its
+	// own and went dark whenever the early radar died -- apexearth: "we need
+	// a radar in our home base." Then the centre of held ground, then out
+	// along the border ranks, indexed by what actually STANDS -- a radar
+	// dying re-opens its rank.
+	AIFloat3 anchor;
+	if (!AreaHasRadar(gHomePos)) {
+		anchor = gHomePos;
+	} else {
+		anchor = Military::TerritoryCentre();
+		const uint standing = gRadarStand.length();
+		if (standing > 0) {
+			AIFloat3 border;
+			if (!Military::BorderPos(border, standing - 1))
+				return null;               // every rank covered: done for now
+			anchor = border;
+		}
 	}
 	if (!OnMap(anchor) || AreaHasRadar(anchor))
 		return null;
