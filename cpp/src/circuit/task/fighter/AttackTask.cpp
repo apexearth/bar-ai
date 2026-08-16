@@ -642,6 +642,7 @@ void CAttackTask::FindTarget()
 	float bestScale = .0f;
 	int bestSeen = 0;  // was the chosen target's ground in current LOS, or only remembered
 	bool bestHome = false;  // chosen target stands on our own ground (odds waived)
+	float bestRefused = .0f;  // strongest strength-test refusal, as power/need
 	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), armbanth
 	// (Titan), corkorg (Korgoth) and armraz all carry role heavy + attribute
 	// melee, and all of them detonate on death -- so the value is delivered by
@@ -863,6 +864,11 @@ void CAttackTask::FindTarget()
 			const float nearMargin = (enemy == prevTarget) ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
 			if (!isJuggernaut && (localInfl > .0f) && (maxPower < localInfl * nearMargin) && !isHome) {
 				++skippedWeak;
+				// The strongest refusal: near 1.0 means one merge or a small
+				// margin change would have taken it; near 0.2 means hopeless.
+				// This ratio is what decides which fix target-skipping gets.
+				bestRefused = std::max(bestRefused,
+						maxPower / std::max(localInfl * nearMargin, 1.f));
 				continue;
 			}
 
@@ -896,11 +902,11 @@ void CAttackTask::FindTarget()
 		// purpose) from a bad attack -- without it a losing game's audit reads
 		// every base-defence fight as a "hopeless engagement".
 		circuit->LOG("apex: engage %s units=%d spread=%.0f hp=%.2f coh=%.2f "
-				"power=%.0f need=%.0f edge=%.2f skipped=%d near=%.0f seen=%d home=%d",
+				"power=%.0f need=%.0f edge=%.2f skipped=%d bestRef=%.2f near=%.0f seen=%d home=%d",
 				(bestTarget != nullptr) ? "TAKE" : "SKIP",
 				int(units.size()), spread, healthScale,
 				cohesion, maxPower, need,
-				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak,
+				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak, bestRefused,
 				bestNear, bestSeen, bestHome ? 1 : 0);
 	}
 	// Return: target, startPos=leader->pos, endPos=position

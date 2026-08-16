@@ -11885,7 +11885,7 @@ index c3f5e98..fc98a66 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index 91000e2..fef9e05 100644
+index 91000e2..14704cd 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -11993,16 +11993,17 @@ index 91000e2..fef9e05 100644
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
  	const int frame = circuit->GetLastFrame();
-@@ -603,6 +640,8 @@ void CAttackTask::FindTarget()
+@@ -603,6 +640,9 @@ void CAttackTask::FindTarget()
  	float bestInfl = .0f;
  	float bestNear = .0f;
  	float bestScale = .0f;
 +	int bestSeen = 0;  // was the chosen target's ground in current LOS, or only remembered
 +	bool bestHome = false;  // chosen target stands on our own ground (odds waived)
++	float bestRefused = .0f;  // strongest strength-test refusal, as power/need
  	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), armbanth
  	// (Titan), corkorg (Korgoth) and armraz all carry role heavy + attribute
  	// melee, and all of them detonate on death -- so the value is delivered by
-@@ -653,9 +692,22 @@ void CAttackTask::FindTarget()
+@@ -653,9 +693,22 @@ void CAttackTask::FindTarget()
  		// when the group is closer to our base than we are, i.e. defending home,
  		// where taking a worse fight is correct.
  		const float scale = std::min(distBE / obDist, 1.f);
@@ -12028,7 +12029,7 @@ index 91000e2..fef9e05 100644
  		const bool holdsPrev = wasEngaged && (prevTarget != nullptr)
  				&& (std::find(group.units.begin(), group.units.end(), prevTarget->GetId()) != group.units.end());
  		const float groupMargin = holdsPrev ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
-@@ -778,7 +830,12 @@ void CAttackTask::FindTarget()
+@@ -778,7 +831,12 @@ void CAttackTask::FindTarget()
  			if ((edef != nullptr) && !edef->IsMobile() && !edef->IsAttacker()
  				&& (localInfl <= .0f))
  			{
@@ -12042,7 +12043,19 @@ index 91000e2..fef9e05 100644
  				// ...and prefer the ones that actually die in the time a raid
  				// has. A converter is 380 metal behind 445 hitpoints; an
  				// advanced solar is 350 behind 1130. Equal-ish metal, and only
-@@ -816,6 +873,8 @@ void CAttackTask::FindTarget()
+@@ -806,6 +864,11 @@ void CAttackTask::FindTarget()
+ 			const float nearMargin = (enemy == prevTarget) ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
+ 			if (!isJuggernaut && (localInfl > .0f) && (maxPower < localInfl * nearMargin) && !isHome) {
+ 				++skippedWeak;
++				// The strongest refusal: near 1.0 means one merge or a small
++				// margin change would have taken it; near 0.2 means hopeless.
++				// This ratio is what decides which fix target-skipping gets.
++				bestRefused = std::max(bestRefused,
++						maxPower / std::max(localInfl * nearMargin, 1.f));
+ 				continue;
+ 			}
+ 
+@@ -816,6 +879,8 @@ void CAttackTask::FindTarget()
  				bestInfl = group.influence;
  				bestNear = localInfl;
  				bestScale = scale;
@@ -12051,7 +12064,7 @@ index 91000e2..fef9e05 100644
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -833,13 +892,16 @@ void CAttackTask::FindTarget()
+@@ -833,13 +898,16 @@ void CAttackTask::FindTarget()
  	if (frame >= lastEngageLog + FRAMES_PER_SEC * 10) {
  		lastEngageLog = frame;
  		const float need = bestInfl * bestScale;
@@ -12060,17 +12073,18 @@ index 91000e2..fef9e05 100644
 +		// every base-defence fight as a "hopeless engagement".
  		circuit->LOG("apex: engage %s units=%d spread=%.0f hp=%.2f coh=%.2f "
 -				"power=%.0f need=%.0f edge=%.2f skipped=%d near=%.0f",
-+				"power=%.0f need=%.0f edge=%.2f skipped=%d near=%.0f seen=%d home=%d",
++				"power=%.0f need=%.0f edge=%.2f skipped=%d bestRef=%.2f near=%.0f seen=%d home=%d",
  				(bestTarget != nullptr) ? "TAKE" : "SKIP",
  				int(units.size()), spread, healthScale,
  				cohesion, maxPower, need,
- 				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak,
+-				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak,
 -				bestNear);
++				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak, bestRefused,
 +				bestNear, bestSeen, bestHome ? 1 : 0);
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -878,7 +940,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -878,7 +946,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -12105,7 +12119,7 @@ index 91000e2..fef9e05 100644
  	if (urgentPositions.empty()) {
  		FallbackBasePos();
  		return;
-@@ -916,8 +1004,26 @@ void CAttackTask::FallbackBasePos()
+@@ -916,8 +1010,26 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -12133,7 +12147,7 @@ index 91000e2..fef9e05 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -950,7 +1056,9 @@ void CAttackTask::Fallback()
+@@ -950,7 +1062,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
