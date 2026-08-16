@@ -134,6 +134,27 @@ uint InFlightCap()
 	return uint(want);
 }
 
+// HOW MANY WORKERS ONE SITE IS WORTH, from the building's own cost. Piling the
+// whole pool onto one site was the old bound (InFlightCap, an ECONOMY-wide
+// number), which serialized every def to one site until it saturated -- a rich
+// economy that wants several converters or nanos AT ONCE could never open a
+// second site. Each worker adds ~DRAIN metal/s of lathe, so cost/per is the
+// point past which another pair of hands shortens the build less than opening
+// the next site would; parallel site count stays bounded by InFlightCap, i.e.
+// by income. apexearth: "we should be willing to make more than 1 of any
+// building at one time if we are wealthy enough."
+uint SiteWorkerCap(const CCircuitDef@ want)
+{
+	if (want is null)
+		return MIN_INFLIGHT;
+	const float per = ai.GetTunable("apex_site_cost_per_worker", 300.f);
+	uint n = (per > 0.f) ? uint(1.f + want.costM / per) : MIN_INFLIGHT;
+	if (n < MIN_INFLIGHT)
+		n = MIN_INFLIGHT;
+	const uint pool = InFlightCap();
+	return (n > pool) ? pool : n;
+}
+
 // -- the register ------------------------------------------------------------
 
 array<IUnitTask@> gLive;
@@ -254,9 +275,13 @@ void SweepDead()
 	}
 }
 
+// `parallel` is a caller's explicit "open ANOTHER site": it skips the fold onto
+// a nearby same-def request (JoinFor), which otherwise collapses a deliberate
+// burst of distinct sites into one -- the nano burst measured burst=1 forever.
+// The income-derived InFlight cap and the same-ground CoverFor test still hold.
 IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 		Task::Priority prio, const AIFloat3& in spot, float radius, float shake,
-		bool &out created)
+		bool &out created, bool parallel = false)
 {
 	created = false;
 	if ((want is null) || !OnMap(spot))
@@ -283,7 +308,7 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// worth walking to; otherwise back off. Never a second building here.
 	IUnitTask@ cover = CoverFor(want, spot, radius);
 	if (cover !is null) {
-		if ((want.costM >= JOIN_MIN_COST) && (Workers(cover) < InFlightCap())) {
+		if ((want.costM >= JOIN_MIN_COST) && (Workers(cover) < SiteWorkerCap(want))) {
 			++gJoined;
 			Log(want, "join-site");
 			return cover;
@@ -294,14 +319,16 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	}
 	if (!Positional(type)) {
 		// Somewhere else in reach, one of these is already going up.
-		// Serializing onto it is the whole point: the metal starts flowing
-		// sooner and no second site opens that the same builders would only
-		// reach later.
-		IUnitTask@ near = JoinFor(unit, want, spot);
-		if (near !is null) {
-			++gJoined;
-			Log(want, "join-near");
-			return near;
+		// Serializing onto it is the point for an unsaturated site: the metal
+		// starts flowing sooner. A `parallel` caller has already decided the
+		// economy wants ANOTHER site, so only the caps below apply to it.
+		if (!parallel) {
+			IUnitTask@ near = JoinFor(unit, want, spot);
+			if (near !is null) {
+				++gJoined;
+				Log(want, "join-near");
+				return near;
+			}
 		}
 		if (InFlight(want) >= InFlightCap()) {
 			// FULL MEANS TAKE ONE OFF THE QUEUE, NOT STAND STILL. A request
@@ -383,7 +410,8 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 {
 	if (want.costM < JOIN_MIN_COST)
 		return null;
-	const uint cap = InFlightCap();
+	// Per-site saturation, not the economy-wide pool: see SiteWorkerCap.
+	const uint cap = SiteWorkerCap(want);
 	IUnitTask@ best = null;
 	float bestProgress = -1.f;
 	float bestDist = REACH;
@@ -537,7 +565,7 @@ IUnitTask@ Redirect(CCircuitUnit@ unit, bool isComm, IUnitTask@ offer)
 	if (Workers(offer) > 0)
 		return null;   // this offer IS the one under way; taking it is the default
 
-	const uint cap = InFlightCap();
+	const uint cap = SiteWorkerCap(want);
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	IUnitTask@ best = null;
 	float bestProgress = -1.f;

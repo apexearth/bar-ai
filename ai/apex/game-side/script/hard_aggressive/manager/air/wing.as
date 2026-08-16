@@ -112,6 +112,11 @@ CCircuitDef@ IntelPlantToBuild()
 			return gPlant1;
 		if (inc >= ai.GetTunable("apex_air_mandatory_income", 100.f))
 			return gPlant1;
+		// An enemy living on the water makes air the reachability answer, not a
+		// luxury -- the lead's income bar applies to everyone then.
+		if (Military::EnemyAfloat()
+			&& (inc >= ai.GetTunable("apex_intel_air_income", 25.f)))
+			return gPlant1;
 		return null;
 	}
 	// The advanced plant, once an air con exists to place it (no ground
@@ -120,11 +125,18 @@ CCircuitDef@ IntelPlantToBuild()
 	// late game has neither. The count scales with income, one per
 	// apex_adv_air_income of metal -- a rich economy wants several, and
 	// PlantApproved's per-def curve still bounds it.
-	if ((gPlant2 !is null) && gPlant2.IsAvailable(ai.frame) && HaveAirCon()
-		&& (Have(gPlant2)
-			< int(inc / ai.GetTunable("apex_adv_air_income", 150.f))))
-	{
-		return gPlant2;
+	if ((gPlant2 !is null) && gPlant2.IsAvailable(ai.frame) && HaveAirCon()) {
+		int wantN = int(inc / ai.GetTunable("apex_adv_air_income", 150.f));
+		// At least one, once air is mandatory at all or the enemy is afloat:
+		// torpedo bombers, fighters and the advanced air constructors all live
+		// here, and a long game repeatedly ended with none (the income curve
+		// alone reads 0 below 150 m/s, so the plant was never asked for).
+		if ((wantN < 1)
+			&& (Military::EnemyAfloat()
+				|| (inc >= ai.GetTunable("apex_air_mandatory_income", 100.f))))
+			wantN = 1;
+		if (Have(gPlant2) < wantN)
+			return gPlant2;
 	}
 	return null;
 }

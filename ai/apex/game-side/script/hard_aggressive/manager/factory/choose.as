@@ -315,7 +315,13 @@ bool PlantApproved(CCircuitDef@ want)
 	// plants (e.g. an advanced bot lab and an advanced vehicle plant) each
 	// read their own count=0 and both pass. apexearth, watching, 2026-08-15:
 	// "we're making a second T2 lab this game... idk why."
-	if ((userData[want.id].attr & Attr::T2) != 0) {
+	// The intel/mandatory air plant is exempt from the T2-total discipline the
+	// same way it is from the T1 one above: IntelPlantToBuild carries its own
+	// income-scaled count, and holding it behind the LAND T2 budget is how long
+	// games ended with no advanced air plant at all -- at 100-200 m/s the land
+	// labs fill `allowed` and armaap was refused forever.
+	if (((userData[want.id].attr & Attr::T2) != 0)
+		&& !(IsAirFactory(want) && Air::WantsIntelPlant(want))) {
 		CCircuitDef@ advCon2 = aiFactoryMgr.GetRoleDef(want, RT::BUILDER2);
 		const bool haveAdvCon2 = (advCon2 !is null) && (advCon2.count > 0);
 		CCircuitDef@ t2mex2 = SideDef3(armmoho, cormoho, legmoho);
@@ -597,13 +603,19 @@ CCircuitDef@ ChooseFactory(const AIFloat3& in pos, bool isStart, bool isReset)
 	// keeps the luxury floor, since there a yard really is optional.
 	const bool waterHeavy = IsMixedWaterMap()
 			&& (aiTerrainMgr.GetLandPercent() <= NAVY_HEAVY_LAND_PCT);
-	const bool waterEscape = IsWaterMap() || stalled || waterHeavy;
-	if ((IsWaterMap() || IsMixedWaterMap() || stalled) && !HaveShipyard()
+	// The observed enemy living on the water is its own trigger, whatever the
+	// map-wide percentages say: composition follows where the enemy IS, and an
+	// unreachable enemy is the same emergency as stalled expansion, so it gets
+	// the same lower income floor.
+	const bool afloat = Military::EnemyAfloat();
+	const bool waterEscape = IsWaterMap() || stalled || waterHeavy || afloat;
+	if ((IsWaterMap() || IsMixedWaterMap() || stalled || afloat) && !HaveShipyard()
 		&& (aiEconomyMgr.metal.income >= (waterEscape ? NAVY_MIN_INCOME_STALLED : NAVY_MIN_INCOME)))
 	{
 		CCircuitDef@ sy = NavalOpening();
 		if (sy !is null) {
-			AiLog(T() + "apex: " + (stalled ? "expansion stalled"
+			AiLog(T() + "apex: " + (afloat ? "enemy afloat"
+				: stalled ? "expansion stalled"
 				: (IsWaterMap() ? "water map (" : "mixed map (") +
 				formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 0) + "% land)")
 				+ " -- building " + sy.GetName() + " to contest the water"

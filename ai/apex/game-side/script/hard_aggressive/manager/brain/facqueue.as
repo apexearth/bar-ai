@@ -565,6 +565,20 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 					/ ai.GetTunable("apex_fighter_per", 40.f)));
 			isFloor.insertLast(true);
 		}
+		// TORPEDO BOMBERS ANSWER SUBS. The AS role only resolves on the advanced
+		// plant, and nothing else in the whole quota reacts to an underwater
+		// enemy at all -- a sub fleet was unanswerable by construction. Sized by
+		// the sub metal actually seen, so no subs means no entry.
+		const float subSeen = Military::EnemyCostOf(Unit::Role::SUB.type);
+		if (subSeen > 0.f) {
+			CCircuitDef@ torp = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::AS);
+			if ((torp !is null) && torp.IsAvailable(ai.frame)) {
+				defs.insertLast(torp);
+				want.insertLast(1 + int(subSeen
+						/ ai.GetTunable("apex_antisub_per", 1500.f)));
+				isFloor.insertLast(true);
+			}
+		}
 	}
 
 	// A GANTRY THAT IS STANDING IS NEVER IDLE. Named rather than asked for by

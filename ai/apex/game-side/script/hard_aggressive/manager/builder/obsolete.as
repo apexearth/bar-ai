@@ -674,6 +674,8 @@ array<string> ObsoleteEcoNames()
 		if (EnergyReclaimable(coradvsol))
 			names.insertLast(coradvsol);
 		names.insertLast(corrl);
+		if (WallsObsolete())
+			names.insertLast("cordrag");
 	} else if (side == "legion") {
 		if (EnergyReclaimable(legwin))
 			names.insertLast(legwin);
@@ -684,6 +686,8 @@ array<string> ObsoleteEcoNames()
 		if (EnergyReclaimable(legadvsol))
 			names.insertLast(legadvsol);
 		names.insertLast(legrl);
+		if (WallsObsolete())
+			names.insertLast("legdrag");
 	} else {
 		if (EnergyReclaimable(armwin))
 			names.insertLast(armwin);
@@ -694,6 +698,8 @@ array<string> ObsoleteEcoNames()
 		if (EnergyReclaimable(armadvsol))
 			names.insertLast(armadvsol);
 		names.insertLast(armrl);
+		if (WallsObsolete())
+			names.insertLast("armdrag");
 	}
 	return names;
 }

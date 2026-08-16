@@ -1012,6 +1012,49 @@ float EnemyArmyCost()
 	     + EnemyCostOf(Unit::Role::AH.type);
 }
 
+// THE SEEN ENEMY LIVES ON THE WATER, so land production cannot reach them --
+// build ships, seaplanes or air instead. Two signals, because the role table
+// cannot separate a destroyer from a tank (both read RAIDER/ASSAULT): a real
+// sub fleet is unambiguous, and otherwise the enemy's centre of mass sitting
+// beside water a shipyard could float on is the closest thing script can read
+// (no terrain-elevation binding exists; enemyPos is the group centroid from
+// the DLL's GetEnemyPos binding). Cached: FindBuildSiteNear is not free and
+// this is asked per builder election.
+bool gAfloat = false;
+int gNextAfloatCheck = 0;
+int gNextAfloatLog = 0;
+
+bool EnemyAfloat()
+{
+	if (aiTerrainMgr.IsWaterAVoid())
+		return false;
+	if (ai.frame < gNextAfloatCheck)
+		return gAfloat;
+	gNextAfloatCheck = ai.frame + 10 * SECOND;
+	bool now = EnemyCostOf(Unit::Role::SUB.type)
+			>= ai.GetTunable("apex_afloat_sub_cost", 400.f);
+	if (!now && (aiTerrainMgr.GetLandPercent()
+			<= ai.GetTunable("apex_afloat_land_pct", 85.f))) {
+		const AIFloat3 at = aiEnemyMgr.GetEnemyPos();
+		if (OnMap(at)) {
+			CCircuitDef@ sy = Factory::NavalOpening();
+			if (sy !is null) {
+				const AIFloat3 wet = ai.FindBuildSiteNear(sy, at,
+						ai.GetTunable("apex_afloat_near", 900.f));
+				now = OnMap(wet);
+			}
+		}
+	}
+	if (now != gAfloat || (now && (ai.frame >= gNextAfloatLog))) {
+		gNextAfloatLog = ai.frame + 120 * SECOND;
+		AiLog(Factory::T() + "apex: enemy afloat=" + (now ? "1" : "0")
+			+ " subs=" + int(EnemyCostOf(Unit::Role::SUB.type))
+			+ " land%=" + formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 0));
+	}
+	gAfloat = now;
+	return gAfloat;
+}
+
 // THE WHOLE ENEMY ARMY, INCLUDING THE PART THAT DECIDES GAMES.
 //
 // EnemyArmyCost above sums six roles and counts NEITHER heavy NOR super, so

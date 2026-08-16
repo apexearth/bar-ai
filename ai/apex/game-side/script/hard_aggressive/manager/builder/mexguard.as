@@ -219,10 +219,21 @@ bool IsMawClass(const CCircuitDef@ d)
 	return (n == "armclaw") || (n == "cormaw") || (n == "legdtr");
 }
 
+// Past this income the cheek stops paying: the enemy that matters is T2/T3 and
+// walks over wall blocks, so teeth scattered at every popup are just clutter --
+// apexearth: "we scatter the map with dragons teeth which become obsolete once
+// we have over 100 metal per second." Read by CloakWithWalls (stop placing)
+// and ObsoleteEcoNames (start reclaiming), so both sides of the rule agree.
+bool WallsObsolete()
+{
+	return aiEconomyMgr.metal.income
+		>= ai.GetTunable("apex_walls_obsolete_income", 100.f);
+}
+
 void CloakWithWalls(CCircuitUnit@ unit, CCircuitDef@ towerDef,
 		const AIFloat3& in at, Task::Priority prio)
 {
-	if (!IsMawClass(towerDef))
+	if (!IsMawClass(towerDef) || WallsObsolete())
 		return;
 	CCircuitDef@ wall = SideDef3("armdrag", "cordrag", "legdrag");
 	if ((wall is null) || !wall.IsAvailable(ai.frame))

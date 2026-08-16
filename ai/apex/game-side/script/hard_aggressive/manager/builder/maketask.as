@@ -209,6 +209,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// The air plant the intel curve already wants -- mandatory-income lab, the
+	// advanced plant, the enemy-afloat reaction. Same slot and bounds as the
+	// rule above: PlantApproved's ledger is what keeps it one-at-a-time.
+	@t = WantedAirPlant(unit);
+	if (t !is null)
+		return t;
+
 	// A bare extractor outranks expansion, at any tier and for any builder: one
 	// cheap turret per mex, asked once each. It cannot run away -- an extractor
 	// with cover or a pending order is skipped -- and a raided mex costs more than

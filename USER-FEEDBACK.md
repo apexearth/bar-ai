@@ -26,6 +26,14 @@ expansion) become Brain wants under the ratio-value scoring he specified
 ("values 4 and 7 → a 4:7 spend ratio"). **UNRESOLVED** — ratio scoring landed
 2026-08-15 (`cd6cf75`); the ladder-to-Brain migration has not started.
 
+**Corollary, 2026-08-16: "We need to make sure our AI logic does not compete
+with itself. If our designs are not good enough then we consider changing
+them."** Multiple systems claiming the same builders/metal for conflicting
+goals is a design smell to be fixed at the design level, not patched around.
+When a ladder rule and a Brain want fight over the same resource, that is a
+mandate to move the rule into the Brain (or delete one of the two), not to add
+a guard condition.
+
 ---
 
 ## Current priority (2026-08-08)
@@ -120,6 +128,10 @@ The thing he asked for first and has pushed hardest on.
   the point in trying to make a tower that can never be built? You go to some
   really dangerous place and are like, oh, I'm just gonna take a minute and build
   this. It's dumb." Build behind the line, not on it.
+- **UNRESOLVED: dragon's teeth scattered across the map (2026-08-16).** "We
+  scatter the map with 'dragons teeth' which become obsolete once we have over
+  100 metal per second." Two halves: stop scattering them, and treat existing
+  ones as obsolete (reclaim candidates) once income passes ~100 metal/s.
 - **UNRESOLVED: we need T3-grade defence and jammers.** Once T3 is on the field
   the older defences die and there is nothing credible left. Eventually only T3
   units — Titans, Behemoths, Sol, Juggernauts — can hold a broken front.
@@ -179,9 +191,20 @@ The thing he asked for first and has pushed hardest on.
   constructors assisting — not another 3,100-metal factory.
 - **UNRESOLVED: build expensive structures ONE AT A TIME, assisted.** Five LRPCs
   at once in one base. Serialise them and you have a working one far sooner.
+  **Refined 2026-08-16: parallelism scales with wealth.** "We should be willing
+  to make more than 1 of any building at one time if we are wealthy enough and
+  have a strong enough desire for it" — advanced energy converters, nanos, T3
+  defences. The one-at-a-time rule was about a poor economy starting five LRPCs
+  it could not feed; a rich economy with a strong want should run several in
+  parallel. Concurrency is a function of income and desire, not a constant.
 
 ## Naval
 
+- **UNRESOLVED: react to WHERE the enemy actually is (2026-08-16).** "If the
+  enemy is only in the water then we need to make water or make advanced air
+  or seaplanes to attack the enemy in the water." Composition must follow the
+  observed enemy domain, not the map type — an enemy living on water demands
+  ships, seaplanes, or advanced air, even from a land start.
 - **UNRESOLVED: water performance is bad overall.**
 - We die to enemy subs; not enough torpedo launchers or destroyers at T1.
 - **Destroyers and subs are both strong** in late T1 and stay relevant much
@@ -234,6 +257,10 @@ The thing he asked for first and has pushed hardest on.
   late game better generally (2026-08-16).
 - **Don't limit advanced air plants to one when rich** — count scales with
   income, one per `apex_adv_air_income` (150) of metal/s (2026-08-16).
+- **UNRESOLVED: sometimes no advanced air plant at all in a long game
+  (2026-08-16).** Despite the `apex_adv_air_income` wiring above, long games
+  still finish without one. The trigger exists but does not reliably fire —
+  find why (gate never reached? displaced? no builder picks it up?).
 
 ## Efficiency
 

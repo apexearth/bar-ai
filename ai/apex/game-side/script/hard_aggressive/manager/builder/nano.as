@@ -429,8 +429,10 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		if (!ok && !BandSpot(unit, want, true, more))
 			break;
 		bool made2 = false;
+		// parallel=true: the burst has already reserved a distinct site; without
+		// it JoinFor folded every extra request onto site one (burst=1 forever).
 		Requests::Take(unit, want, Task::BuildType::NANO,
-				Task::Priority::NORMAL, more, 0.f, 0.f, made2);
+				Task::Priority::NORMAL, more, 0.f, 0.f, made2, true);
 		if (!made2)
 			break;
 		++gNanosAsked;

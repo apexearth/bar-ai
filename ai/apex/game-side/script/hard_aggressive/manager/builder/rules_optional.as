@@ -354,6 +354,53 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 	return post;
 }
 
+// THE AIR PLANT THE INTEL CURVE WANTS, WITHOUT WAITING FOR THE SWITCH CLOCK.
+//
+// Air::IntelPlantToBuild is otherwise consulted only inside ChooseFactory,
+// which the engine calls on its own factory-switch cadence (AiRandom(550,900)
+// seconds) and only when it proposes a plant of its own -- so the mandatory
+// air lab and the advanced air plant arrived late or never. Same shape as
+// AdvancedPlantAtRear above: a redirect of a build the curve already wants,
+// through PlantApproved (the one gate) and Requests::Allowed, placed at home.
+// The CanBuild test is the whole asker filter -- only an air constructor can
+// place the advanced plant, any ground con the basic one.
+IUnitTask@ WantedAirPlant(CCircuitUnit@ unit)
+{
+	if (!gHomeSet)
+		return null;
+	CCircuitDef@ plant = Air::IntelPlantToBuild();
+	if ((plant is null) || !unit.circuitDef.CanBuild(plant))
+		return null;
+	// Only the cases the switch-clock path actually failed: the mandatory lab
+	// on a rich economy, the advanced plant, the enemy-afloat reaction. The air
+	// lead's early intel lab at 25 m/s keeps its old cadence -- placing THAT
+	// above mex expansion would be a new early spend, not a fix.
+	if (((Factory::userData[plant.id].attr & Factory::Attr::T2) == 0)
+		&& !Military::EnemyAfloat()
+		&& (aiEconomyMgr.metal.income
+			< ai.GetTunable("apex_air_mandatory_income", 100.f)))
+	{
+		return null;
+	}
+	if (ai.GetDefBuildProgress(plant) >= 0.f)
+		return null;   // one already going up somewhere
+	if (!Factory::PlantApproved(plant))
+		return null;
+	AIFloat3 site = ai.FindBuildSiteNear(plant, gHomePos, T2_REAR_SEARCH);
+	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
+		return null;
+	if (!Requests::Allowed(plant, Task::BuildType::FACTORY, site, 0.f))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Factory(Task::Priority::HIGH,
+			plant, site, null, 0.f));
+	if (post is null)
+		return null;
+	AiLog(Factory::T() + "apex: wanted air plant " + plant.GetName()
+		+ " by " + unit.circuitDef.GetName() + " at "
+		+ formatFloat(aiEconomyMgr.metal.income, "", 0, 0) + " m/s");
+	return post;
+}
+
 // WHERE A REACTOR GOES.
 //
 // 0 leaves the placement to the ordinary eco layout, 1 is the grid's heavy band,

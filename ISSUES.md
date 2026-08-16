@@ -2090,7 +2090,13 @@ underwater mexes and water lanes; nothing amphibious or naval was built.
 IsWaterMap presumably reads the map as land (min_land 75) and every naval
 path stays cold. Naval-water domain: check whether water-START detection vs
 map-share detection is the gate, and whether amphib cons/underwater mexes
-have any path on a mostly-land map. Not started.
+have any path on a mostly-land map.
+PARTIAL 2026-08-16: `Military::EnemyAfloat()` (territory.as) now triggers the
+shipyard escape branch and an air/adv-air want when the OBSERVED enemy lives
+on water (subs seen >= apex_afloat_sub_cost, or enemy centroid beside
+floatable water on a <=85%-land map), and enemy subs put a torpedo-bomber
+(RT::AS) floor on air lines. Our OWN desire to expand into quiet water on a
+mostly-land map (underwater mexes with no enemy there) is still unaddressed.
 
 ## Base sprawl at 8v8 scale: organized construction
 
