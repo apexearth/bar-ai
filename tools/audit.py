@@ -74,6 +74,26 @@ def check_health(text, rep):
 
 # --------------------------------------------------------------- economy --
 def check_economy(text, rep):
+    # THE FIRST FACTORY, per player. The opening gate has wedged before
+    # (Supreme Isthmus 8v8: four of eight players never fielded a lab while
+    # cons roamed claiming mexes) -- this check catches the whole class,
+    # whatever the mechanism: any apex team whose first lab is late or absent.
+    teams = set(re.findall(r"m (t\d+)\] apex", text))
+    first_lab = {}
+    for m in re.finditer(r"\[([\d.]+)m (t\d+)\] apex: T1 lab on field", text):
+        t = m.group(2)
+        if t not in first_lab:
+            first_lab[t] = float(m.group(1))
+    missing = sorted(teams - set(first_lab))
+    late = sorted(t for t, mn in first_lab.items() if mn > 4.0)
+    ok = not missing and not late
+    detail = "all players fielded a lab promptly"
+    if missing:
+        detail = f"NO FACTORY EVER: {', '.join(missing)}"
+    elif late:
+        detail = "first lab past 4min: " + ", ".join(
+            f"{t}@{first_lab[t]:.1f}m" for t in late)
+    rep.add("ECONOMY", ok, "first-factory", detail)
     # first fusion ask + first standing, per team
     asks = [(minute_of(l), l) for l in
             re.findall(r".*eco fusion \w+ standing=.*", text)]

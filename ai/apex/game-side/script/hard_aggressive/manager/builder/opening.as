@@ -89,8 +89,32 @@ bool OpeningNeedsEconomy()
 	// Short of the gate AND nothing is currently being built to close the gap:
 	// step 2 has run out of beneficial ground, not merely not-yet-caught-up.
 	// Release rather than hold forever.
-	if ((gOpenEnergyJobs > 0) && (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) == 0))
+	//
+	// NOT gated on gOpenEnergyJobs > 0 any more: on Supreme Isthmus 8v8 a
+	// player's HomeEnergy returned null from the FIRST call (zero energy
+	// requests all game), jobs stayed 0, this escape was disarmed, and the
+	// gate held the factory to 6.6 minutes while cons roamed claiming mexes
+	// -- apexearth: "they just walked around making lots of mexes and not
+	// starting a factory." The metal side standing satisfied is the state
+	// read that separates "step 2 never got a chance" (opening seconds,
+	// mInc still near zero) from "nothing is buying energy and nothing will".
+	if ((gOpenEnergyJobs > 0 || (mInc >= OpeningMetalGate()))
+		&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) == 0))
 		return false;
+	// FAILSAFE, deliberately redundant with everything above: this gate holds
+	// the single most important unlock in the game, and it has wedged once
+	// already on a leg no one predicted (an escape disarmed by jobs==0). An
+	// energy task stuck in flight forever would still hold it today. So: once
+	// metal income stands at several times what the gate protects, the hold
+	// is costing more than the lab it guards -- release, whatever the energy
+	// ledger claims. State-derived, no clock.
+	if (mInc >= OpeningMetalGate() * ai.GetTunable("apex_opening_failsafe", 3.f)) {
+		AiLog(Factory::T() + "apex: OPENING FAILSAFE released the factory --"
+			+ " e=" + formatFloat(eInc, "", 0, 0)
+			+ " m=" + formatFloat(mInc, "", 0, 1)
+			+ " energyTasks=" + aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)));
+		return false;
+	}
 	return true;
 }
 
