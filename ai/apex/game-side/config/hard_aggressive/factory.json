@@ -481,11 +481,15 @@
 
 		"unit":      ["corack",  "corpyro", "corsumo", "corcan", "corfast", "cormort", "corhrk", "coraak", 	"coramph", "cormando", 	"cordecom", "corroach",	"corsktl", "corvoyr", "corspec", "corspy",	"cortermite"],
                                                                                                                                                         
-		"land": {                                                                                                                                       
-			"tier0": [ 0.30,      0.50,      0.00,      0.00,     0.00,      0.20,      0.00,     0.05,     0.00,		0.00,       0.00,		0.00,		0.00,      0.00,		0.03,   	0.00,		0.00],
-			"tier1": [ 0.45,      0.30,      0.15,      0.25,     0.00,      0.30,      0.00,     0.05,     0.00,		0.00,		0.00,		0.00,		0.00,      0.05,		0.03,   	0.05,		0.01],
-			"tier2": [ 0.50,      0.40,      0.20,      0.10,     0.10,      0.15,      0.05,     0.05,     0.00,		0.05,       0.02,		0.00,		0.00,      0.08,		0.08,   	0.05,		0.01]
-		},                                                                                                                                                        
+		// cormort (Sheldon, index 5) raised across every tier -- apexearth:
+		// "I'm often feeling like we don't have enough sheldons when we're
+		// cortex bots." It splits the assault draw with corcan/corsumo, so
+		// the weight is what decides the ratio.
+		"land": {
+			"tier0": [ 0.30,      0.50,      0.00,      0.00,     0.00,      0.35,      0.00,     0.05,     0.00,		0.00,       0.00,		0.00,		0.00,      0.00,		0.03,   	0.00,		0.00],
+			"tier1": [ 0.45,      0.30,      0.15,      0.25,     0.00,      0.45,      0.00,     0.05,     0.00,		0.00,		0.00,		0.00,		0.00,      0.05,		0.03,   	0.05,		0.01],
+			"tier2": [ 0.50,      0.40,      0.20,      0.10,     0.10,      0.35,      0.05,     0.05,     0.00,		0.05,       0.02,		0.00,		0.00,      0.08,		0.08,   	0.05,		0.01]
+		},
 	
 		"water": {                                                                                                                                                  
 			"tier0": [ 0.30,      0.20,      0.01,      0.05,     0.02,      0.10,      0.05,     0.05,     0.00,		0.00,       0.00,		0.00,		0.00,      0.03,		0.03,   	0.00,		0.01],  

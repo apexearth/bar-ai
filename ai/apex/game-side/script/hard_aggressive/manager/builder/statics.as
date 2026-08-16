@@ -164,6 +164,12 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	if (aiEconomyMgr.energy.income < SHIELD_REGEN_DRAW
 			* ai.GetTunable("apex_shield_draw_margin", SHIELD_DRAW_MARGIN))
 		return null;
+	// Not before the first reactor: a dome's value is what stands under it,
+	// and pre-fusion nothing under it is worth the dome. Economy-staged, not
+	// clocked. apexearth 2026-08-15: "we also started making a shield
+	// generator too early."
+	if (!HaveReactor())
+		return null;
 	if (aiBuilderMgr.GetWorkerCount() <= DEF_CON_FLOOR)
 		return null;
 	CCircuitDef@ dome = SideDef3(armgate, corgate, legdeflector);
