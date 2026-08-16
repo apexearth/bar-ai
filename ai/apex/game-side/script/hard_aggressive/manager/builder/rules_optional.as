@@ -139,6 +139,16 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 					if (nuke !is null)
 						return nuke;
 				}
+				// The nano BEFORE the assist job: audited (instr-smoke 2026-08-16),
+				// a factory sat 65 orders unstarted at 162 income while cons won
+				// 648 assist elections against 26 nano requests -- renting a con
+				// as build power forever instead of buying the 210-metal turret
+				// that does it permanently. EcoNano self-gates (placement,
+				// in-flight, pacing), so this claims a builder only when a nano
+				// is actually due.
+				IUnitTask@ nanoFirst = EcoNano(unit);
+				if (nanoFirst !is null)
+					return nanoFirst;
 				// Assist bots and front constructors get their standing job here,
 				// where everything protective has already had its say.
 				IUnitTask@ help = Assist::Work(unit);
