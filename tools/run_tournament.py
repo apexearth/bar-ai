@@ -266,7 +266,7 @@ def main() -> int:
     ap.add_argument("--games", type=int, default=4,
                     help="matches per pairing per map (rounded up to even for side balance)")
     ap.add_argument("--minutes", type=int, default=60, help="in-game minute cap")
-    ap.add_argument("--workers", type=int, default=1,
+    ap.add_argument("--workers", type=int, default=6,
                     help="concurrent matches; ~1 core and ~4.4 GB each in steady state")
     ap.add_argument("--box-size", dest="box_size", type=float, default=0.0,
                     help="start-box size as a map fraction, e.g. 0.35")
