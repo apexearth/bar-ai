@@ -168,6 +168,8 @@ void FQForget(Id id)
 // intended. Each line still gets its own quota in SHAPE -- QuotaFor
 // normalises over the roles that line can actually build -- and they fill
 // toward one shared target instead of double-counting it.
+int gNextMixDiag = 0;
+
 int SlotsForArmy()
 {
 	const int limit = ai.GetUnitLimit();
@@ -563,13 +565,26 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	// claimed once per line.
 	const float slots = float(SlotsForArmy());
 	const float tier = TierShare(fac);
+	// TEMP DIAG: which leg drops each role for this line. Rate-limited; the
+	// late-game T1 labs lost every combat entry and three theories in a row
+	// were wrong -- this prints the actual reason per role.
+	string mixDiag = "";
 	for (uint i = 0; i < gMix.length(); ++i) {
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
-		if ((d is null) || !d.IsAvailable(ai.frame) || (d.costM <= 0.f))
+		if (d is null) {
+			mixDiag += " r" + int(gMix[i].role) + ":null";
 			continue;
+		}
+		if (!d.IsAvailable(ai.frame) || (d.costM <= 0.f)) {
+			mixDiag += " r" + int(gMix[i].role) + ":unavail";
+			continue;
+		}
 		const float s = Target(i, base, counter, weight);
-		if (s <= 0.f)
+		if (s <= 0.f) {
+			mixDiag += " r" + int(gMix[i].role) + ":s0";
 			continue;
+		}
+		mixDiag += " r" + int(gMix[i].role) + ":ok";
 		defs.insertLast(d);
 		// METAL ratios, not count ratios: the shares are metal shares, and
 		// comparing them as raw counts made a 20% heavy share into 20% of
@@ -583,6 +598,12 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		want.insertLast(RoundUp(s * slots * tier * DefQuotaMod(d)
 				* (ref / d.costM)));
 		isFloor.insertLast(false);
+	}
+	if (ai.frame >= gNextMixDiag) {
+		gNextMixDiag = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: mix-diag " + fac.circuitDef.GetName()
+			+ " tier=" + formatFloat(tier, "", 0, 2)
+			+ " slots=" + int(slots) + mixDiag);
 	}
 }
 
