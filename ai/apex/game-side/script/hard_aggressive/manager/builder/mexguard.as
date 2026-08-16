@@ -167,7 +167,7 @@ CCircuitDef@ HeavyDefenceFor(CCircuitUnit@ unit)
 // only). Balance-pick whichever Legion holds fewer of, so both appear.
 CCircuitDef@ MidTowerDef()
 {
-	CCircuitDef@ mid = MidTowerDef();
+	CCircuitDef@ mid = SideDef3(armbeamer, corhllt, legmg);
 	if (ai.GetSideName() != "legion")
 		return mid;
 	CCircuitDef@ hive = ai.GetCircuitDef("leghive");
