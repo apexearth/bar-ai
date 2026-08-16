@@ -422,6 +422,21 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 					* ai.GetTunable("apex_quota_ref_cost", 100.f) / d.costM));
 			isFloor.insertLast(false);
 		}
+		// BUILD POWER IS NOT LOCKED OUT BY THE ARMY. T2CoreWanted scales with
+		// income, so at 300 m/s this block is permanently "short" and the
+		// early return below starved the con curve entirely: 3 armacks all
+		// game against a curve wanting ~18, no hands for the gantry (watched
+		// 2026-08-16, zero T3 vs 54k). A balanced ratio entry, same
+		// cost-normalized shares as the core, so cons interleave with the
+		// army instead of pre-empting it.
+		CCircuitDef@ bcon = aiFactoryMgr.GetRoleDef(fac.circuitDef,
+				Unit::Role::BUILDER.type);
+		if ((bcon !is null) && bcon.IsAvailable(ai.frame) && (bcon.costM > 0.f)) {
+			defs.insertLast(bcon);
+			want.insertLast(RoundUp(float(Builder::ConsWantedFor(bcon))
+					* ai.GetTunable("apex_quota_ref_cost", 100.f) / bcon.costM));
+			isFloor.insertLast(false);
+		}
 		if (defs.length() > 0)
 			return;      // nothing else off this line until the army exists
 	}

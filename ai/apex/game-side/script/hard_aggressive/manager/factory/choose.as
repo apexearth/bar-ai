@@ -124,9 +124,24 @@ void SweepPlantAsks()
 	// again, and a second armalab was approved and built (watched 2026-08-16).
 	// The engine's factory-task pool is ground truth -- while it still holds a
 	// FACTORY build task per ledger entry, every ask is alive however old it
-	// is. The TTL now only clears asks the pool has actually lost.
-	const bool poolShort = aiBuilderMgr.GetTaskCountOf(
-			int(Task::BuildType::FACTORY)) < gAskDef.length();
+	// is. The TTL now only clears asks the pool has actually lost. The pool
+	// count alone was not enough: a task ASSIGNED to a builder leaves it, so
+	// during the walk-and-build phase the pool read empty and the TTL
+	// double-approved armalab again (3.5m + 5.8m, 20260816-223928) -- so
+	// builders currently holding FACTORY work count as live asks too.
+	uint alive = aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY));
+	for (uint i = 0; i < Crew::gId.length(); ++i) {
+		CCircuitUnit@ c = ai.GetTeamUnit(Id(Crew::gId[i]));
+		if (c is null)
+			continue;
+		IUnitTask@ t = c.task;
+		if ((t !is null) && (t.GetType() == Task::Type::BUILDER)
+			&& (t.GetBuildType() == Task::BuildType::FACTORY))
+		{
+			++alive;
+		}
+	}
+	const bool poolShort = alive < gAskDef.length();
 	for (uint i = gAskDef.length(); i > 0; --i) {
 		const uint k = i - 1;
 		if ((gAskDef[k] is null)
