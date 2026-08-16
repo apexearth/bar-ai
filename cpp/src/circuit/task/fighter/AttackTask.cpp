@@ -641,6 +641,7 @@ void CAttackTask::FindTarget()
 	float bestNear = .0f;
 	float bestScale = .0f;
 	int bestSeen = 0;  // was the chosen target's ground in current LOS, or only remembered
+	bool bestHome = false;  // chosen target stands on our own ground (odds waived)
 	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), armbanth
 	// (Titan), corkorg (Korgoth) and armraz all carry role heavy + attribute
 	// melee, and all of them detonate on death -- so the value is delivered by
@@ -873,6 +874,7 @@ void CAttackTask::FindTarget()
 				bestNear = localInfl;
 				bestScale = scale;
 				bestSeen = mapMgr->IsInLOS(ePos) ? 1 : 0;
+				bestHome = isHome;
 				hasGoodTarget |= !isOverpowered;
 			}
 		}
@@ -890,13 +892,16 @@ void CAttackTask::FindTarget()
 	if (frame >= lastEngageLog + FRAMES_PER_SEC * 10) {
 		lastEngageLog = frame;
 		const float need = bestInfl * bestScale;
+		// home=1 separates desperate defence of our own ground (odds waived on
+		// purpose) from a bad attack -- without it a losing game's audit reads
+		// every base-defence fight as a "hopeless engagement".
 		circuit->LOG("apex: engage %s units=%d spread=%.0f hp=%.2f coh=%.2f "
-				"power=%.0f need=%.0f edge=%.2f skipped=%d near=%.0f seen=%d",
+				"power=%.0f need=%.0f edge=%.2f skipped=%d near=%.0f seen=%d home=%d",
 				(bestTarget != nullptr) ? "TAKE" : "SKIP",
 				int(units.size()), spread, healthScale,
 				cohesion, maxPower, need,
 				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak,
-				bestNear, bestSeen);
+				bestNear, bestSeen, bestHome ? 1 : 0);
 	}
 	// Return: target, startPos=leader->pos, endPos=position
 }

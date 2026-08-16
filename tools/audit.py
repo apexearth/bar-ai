@@ -117,11 +117,15 @@ def check_military(text, rep):
     seen = set()
     for m in re.finditer(
             r"m t(\d+)\].*unit-destroyed \S+ id=(\d+) frame=(\d+)"
-            r" at=\S+ curTask=t(-?\d+)b(-?\d+)f(-?\d+) cost=(\d+)", text):
+            r" at=\S+ curTask=t(-?\d+)b(-?\d+)f(-?\d+) cost=(\d+)"
+            r" fwd=\S+(?: built=(\d))?", text):
         key = (m.group(1), m.group(2))
         if key in seen or int(m.group(3)) >= cutoff:
             continue
         seen.add(key)
+        if m.group(8) == "0":
+            metal["under-construction"] += float(m.group(7))
+            continue
         tt = int(m.group(4))
         lab = {4: "retreat", 0: "nil", 7: "fight", 5: "build",
                2: "idle", 3: "wait"}.get(tt, str(tt))

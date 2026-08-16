@@ -24,7 +24,7 @@ LINE = re.compile(
     r"\[(?P<min>[\d.]+)m t(?P<team>\d+)\] apex: unit-destroyed (?P<name>\S+)"
     r" id=\d+ frame=\d+ at=(?P<x>-?\d+),(?P<z>-?\d+)"
     r" curTask=t(?P<tt>-?\d+)b(?P<bt>-?\d+)f(?P<ft>-?\d+)"
-    r" cost=(?P<cost>\d+) fwd=(?P<fwd>-?[\d.]+)")
+    r" cost=(?P<cost>\d+) fwd=(?P<fwd>-?[\d.]+)(?: built=(?P<built>\d))?")
 
 
 def label(tt, bt, ft):
@@ -78,7 +78,10 @@ def main():
         frm = re.search(r" frame=(\d+)", line)
         if frm and int(frm.group(1)) >= cutoff:
             continue
-        key = label(int(m["tt"]), int(m["bt"]), int(m["ft"]))
+        if m["built"] == "0":
+            key = "under-construction"   # a nanoframe holds no task; full def
+        else:                            # cost here overstates the real loss
+            key = label(int(m["tt"]), int(m["bt"]), int(m["ft"]))
         c = float(m["cost"])
         metal[key] += c
         count[key] += 1

@@ -93,10 +93,29 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 // The per-unit FINISHED event, all managers -- unlike Builder::AiUnitAdded,
 // which is the ECONOMY module's hook and fires only for economy-tracked units
 // (a radar tower never reaches it). Looked up by name, same as AiUnitDestroyed.
+// Finished ids, so the death log can say whether a unit ever COMPLETED --
+// without this a base assault's nanoframe kills read as full-cost "taskless"
+// deaths and drowned the real combat attribution (44-47% of "lost metal" in
+// the first audited games). Bounded ring, oldest dropped.
+array<int> gFinishedIds;
+const uint FINISHED_RING = 4096;
+
+bool WasFinished(int id)
+{
+	for (uint i = 0; i < gFinishedIds.length(); ++i) {
+		if (gFinishedIds[i] == id)
+			return true;
+	}
+	return false;
+}
+
 void AiUnitFinished(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
+	gFinishedIds.insertLast(int(unit.id));
+	if (gFinishedIds.length() > FINISHED_RING)
+		gFinishedIds.removeAt(0);
 	// RadarNet's standing ledger: positions, because coverage is a place, and
 	// a dead radar must re-open its border rank (a count cannot say where).
 	CCircuitDef@ radDef = Builder::RadarTowerDef();
@@ -139,6 +158,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		+ " curTask=t" + tt + "b" + bt + "f" + ft
 		+ " cost=" + int((cdef !is null) ? cdef.costM : 0.f)
 		+ " fwd=" + formatFloat(Military::ForwardFraction(at), "", 0, 2)
+		+ " built=" + (WasFinished(int(unit.id)) ? 1 : 0)
 		+ " hist=[" + hist + "]");
 }
 
