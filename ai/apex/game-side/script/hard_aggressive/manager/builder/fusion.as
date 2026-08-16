@@ -257,6 +257,52 @@ int MohoCount()
 	return (moho is null) ? 0 : int(moho.count);
 }
 
+// THE REACTOR PIPELINE: once the first reactor stands, one -- exactly one --
+// fusion or AFUS is under construction at ALL times. apexearth: "we are
+// always making a fusion or afus once we get to that stage... We should only
+// build one at a time. No making a fusion AND afus at the same time."
+// CCircuitDef::count includes nanoframes, so "underway" needs a completion
+// ledger: main.as feeds finished/destroyed events here.
+int gReactorsDone = 0;
+
+bool IsReactorDef(const string& in n)
+{
+	return (n == armfus) || (n == corfus) || (n == legfus)
+		|| (n == armafus) || (n == corafus) || (n == legafus)
+		|| (n == armuwfus) || (n == coruwfus);
+}
+
+void NoteEcoFinished(const string& in n)
+{
+	if (IsReactorDef(n))
+		++gReactorsDone;
+	else if (IsBigConvDef(n))
+		++gBigConvDone;
+}
+
+void NoteEcoGone(const string& in n, bool wasFinished)
+{
+	if (!wasFinished)
+		return;   // a dead nanoframe never counted as done
+	if (IsReactorDef(n) && (gReactorsDone > 0))
+		--gReactorsDone;
+	else if (IsBigConvDef(n) && (gBigConvDone > 0))
+		--gBigConvDone;
+}
+
+int ReactorsUnderway()
+{
+	const int n = ReactorCount() - gReactorsDone;
+	return (n < 0) ? 0 : n;
+}
+
+// Open = nothing building and nothing asked-but-unstarted. gFusionsAsked
+// resyncs against ReactorCount inside EcoFusion, so drift self-heals there.
+bool ReactorPipelineOpen()
+{
+	return (ReactorsUnderway() == 0) && (gFusionsAsked <= ReactorCount());
+}
+
 IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 {
 	// Unconditional, ahead of every early return below, so it also shows how
@@ -310,7 +356,10 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 		firstFusionDue = (moho !is null) && (float(moho.count)
 				>= ai.GetTunable("apex_first_fusion_mohos", 2.f));
 	}
-	if (!investedEnough && !firstFusionDue
+	// The income bar applies only BEFORE the first reactor: after it the
+	// pipeline is continuous -- apexearth: "we are always making a fusion or
+	// afus once we get to that stage."
+	if (!HaveReactor() && !investedEnough && !firstFusionDue
 		&& (Factory::SteadyIncome()
 			< ai.GetTunable("apex_fusion_income", FUSION_SOLO_INCOME)))
 	{
@@ -339,6 +388,11 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// Outstanding bound. count sees FINISHED buildings only and Enqueue does not
 	// dedup, so the cooldown alone re-asks for the whole minutes a reactor takes.
 	// Left inside the null check so a missing def still reaches the diagnostic.
+	// SERIAL: one reactor under construction at a time, fusion or AFUS, never
+	// both. The gap-free half lives in the pipeline hook (maketask.as), which
+	// re-asks the moment ReactorPipelineOpen() reads true again.
+	if ((ai.GetTunable("apex_reactor_serial", 1.f) > 0.f) && !ReactorPipelineOpen())
+		return null;
 	if (want !is null) {
 		const int allowed = ReactorsInFlight(want.costM);
 		const int built = ReactorCount();

@@ -269,13 +269,21 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// never reached by a unit that could act. Bounded hard: only while NO
 	// reactor exists (a nanoframe counts as one), and EcoFusion's own moho
 	// trigger and in-flight bound still decide whether.
-	// ONE ask, not one per adv con: ReactorsInFlight scales with the bank, so
-	// at a full storage this hook pulled FOUR advanced cons off moho work at
-	// once -- measured (tournament 20260815-231903 vs -223228): mex upgrades
-	// halved, team metal rate -33%. The first fusion outranks the next moho;
-	// fusions beyond it queue through the ordinary ladder below.
-	if (isAdvCon && !HaveReactor() && (gFusionsAsked == 0)) {
+	// THE ECONOMY PIPELINES, above the mexup want, ONE claim each: a reactor
+	// (fusion or AFUS, serial -- apexearth: "always making a fusion or afus
+	// once we get to that stage... only build one at a time") and one advanced
+	// converter ("always making the advanced energy converters... we need a
+	// lot"). Each rule refuses while its one slot is occupied, so at most two
+	// advanced cons are ever claimed here and the rest stay on mohos -- the
+	// bank-refill stampede this hook once caused (mexups halved, metal -33%)
+	// cannot recur.
+	if (isAdvCon && ReactorPipelineOpen()) {
 		@t = EcoFusion(unit);
+		if (t !is null)
+			return t;
+	}
+	if (isAdvCon) {
+		@t = ConverterPipeline(unit);
 		if (t !is null)
 			return t;
 	}

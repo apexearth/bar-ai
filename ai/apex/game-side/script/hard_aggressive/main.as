@@ -116,6 +116,10 @@ void AiUnitFinished(CCircuitUnit@ unit)
 	gFinishedIds.insertLast(int(unit.id));
 	if (gFinishedIds.length() > FINISHED_RING)
 		gFinishedIds.removeAt(0);
+	// The reactor/converter pipelines need COMPLETIONS, not creations --
+	// def.count moves on the nanoframe.
+	if (unit.circuitDef !is null)
+		Builder::NoteEcoFinished(unit.circuitDef.GetName());
 	// RadarNet's standing ledger: positions, because coverage is a place, and
 	// a dead radar must re-open its border rank (a count cannot say where).
 	CCircuitDef@ radDef = Builder::RadarTowerDef();
@@ -151,6 +155,8 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	// fraction says WHERE it died (0 home, 1 at the enemy). tools/deaths.py
 	// aggregates these lines into metal-lost-by-last-action.
 	const int ft = ((t !is null) && (tt == Task::Type::FIGHTER)) ? t.GetFightType() : -1;
+	if (cdef !is null)
+		Builder::NoteEcoGone(cdef.GetName(), WasFinished(int(unit.id)));
 	const string hist = Builder::TakeHistFor(int(unit.id));
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")
 		+ " id=" + unit.id + " frame=" + ai.frame

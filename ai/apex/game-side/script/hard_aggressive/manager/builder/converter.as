@@ -44,6 +44,17 @@ bool IsNavalBuilder(CCircuitUnit@ unit)
 	return unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine();
 }
 
+// Completion ledger for the converter pipeline below; fed by main.as via
+// Builder::NoteEcoFinished/NoteEcoGone (fusion.as), which dispatch here.
+int gBigConvDone = 0;
+int gConvPipeAsked = 0;
+
+bool IsBigConvDef(const string& in n)
+{
+	return (n == armmmkr) || (n == cormmkr) || (n == legadveconv)
+		|| (n == armuwmmm) || (n == coruwmmm);
+}
+
 CCircuitDef@ SmallConvDef(CCircuitUnit@ unit)
 {
 	if (IsNavalBuilder(unit))
@@ -181,6 +192,48 @@ int SmallConvCount(CCircuitUnit@ unit)
 bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 {
 	return Base::Spot(unit, def, Base::ECO, spot);
+}
+
+// THE CONVERTER PIPELINE: once a reactor stands, one advanced converter is
+// under construction at all times -- proactive, not spill-reactive.
+// apexearth: "always making the advanced energy converters... we need a lot
+// of these. We tend to be very lax about making them and thats why we can't
+// compete." The old rules below still add MORE on genuine spill; this one
+// guarantees the floor never goes idle. Serial (one in flight), so it can
+// never stampede constructor time the way the 2026-08-01 batch did.
+IUnitTask@ ConverterPipeline(CCircuitUnit@ unit)
+{
+	if (!HaveReactor())
+		return null;   // the stage where conversion pays; his words: "once we
+	                   // get to that stage"
+	CCircuitDef@ big = BigConvDef(unit);
+	if ((big is null) || !big.IsAvailable(ai.frame)
+		|| !unit.circuitDef.CanBuild(big))
+		return null;
+	const int done = gBigConvDone;
+	const int count = int(big.count);
+	const int underway = (count > done) ? (count - done) : 0;
+	int outstanding = gConvPipeAsked - count;
+	if (outstanding < 0) {
+		gConvPipeAsked = count;
+		outstanding = 0;
+	}
+	if (underway + outstanding >= 1)
+		return null;   // one at a time
+	AIFloat3 spot;
+	if (!ConvSpot(unit, big, spot))
+		return null;
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, big, Task::BuildType::CONVERT,
+			Task::Priority::NORMAL, spot, 0.f, 0.f, created);
+	if (post is null)
+		return null;
+	if (!created)
+		return post;
+	++gConvPipeAsked;
+	AiLog(Factory::T() + "apex: converter pipeline " + big.GetName()
+		+ " standing=" + count);
+	return post;
 }
 
 IUnitTask@ EcoConverters(CCircuitUnit@ unit)

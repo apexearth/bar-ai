@@ -2040,3 +2040,14 @@ army share to 21.6%, metal to 133k, and swept 10-0. The nano cap raise is
 exonerated (reverting IT cost 4.6pt army share and pushed metal-full to 39%
 median) and the second-line curve rode along in the winning config. Deployed
 state = caretaker 6/3 + nano raise + curve -5.8 + pressure-gated EcoNano.
+
+## Water on mixed maps is ignored (Supreme Isthmus)
+
+apexearth 2026-08-16, watching the 8v8: "this map has water in it and we
+don't seem to care about water. Might be worth checking our water
+configuration and our desire to expand into water." Supreme Isthmus carries
+underwater mexes and water lanes; nothing amphibious or naval was built.
+IsWaterMap presumably reads the map as land (min_land 75) and every naval
+path stays cold. Naval-water domain: check whether water-START detection vs
+map-share detection is the gate, and whether amphib cons/underwater mexes
+have any path on a mostly-land map. Not started.
