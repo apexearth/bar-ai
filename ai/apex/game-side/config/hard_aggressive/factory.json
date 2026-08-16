@@ -202,7 +202,7 @@
         },
 
 
-		"caretaker": 20
+		"caretaker": 30
 	},
 
 	// Armada's underwater gantry. Factory::T3Gantry returns this on a water map,
@@ -226,7 +226,7 @@
 			"tier2": [ 0.30,     0.30,     0.40]
 		},
 
-		"caretaker": 20
+		"caretaker": 30
 	},
 
 	// ARMADA Aircraft
@@ -593,7 +593,7 @@
 		},
 
 
-		"caretaker": 20
+		"caretaker": 30
 	},
 	"corgantuw": {
 		"importance": [0.0, 0.5],
@@ -617,7 +617,7 @@
             "tier2": [ 0.25,      0.20,      0.15,      0.40]
 		},
 
-		"caretaker": 20
+		"caretaker": 30
 	},
 
 
