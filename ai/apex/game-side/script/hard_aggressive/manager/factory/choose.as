@@ -195,6 +195,21 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// second request sees have=1 and is refused.
 	if ((want is null) || !ApexActive())
 		return want;
+	return PlantApproved(want) ? want : null;
+}
+
+// THE ONE GATE. Every path that gets a plant enqueued -- the engine's three
+// C++ hooks (all through AiGetFactoryToBuild above) AND our own script rules
+// that enqueue a factory directly (Builder::AdvancedPlantAtRear) -- must pass
+// through here, where the caps, the tier discipline, the ledger and the
+// approval log all live. apexearth has reported gate bypasses FOUR times
+// ("we're still making a second T2 lab... whatever you do to fix it is not
+// working"); every one was a second entrance. Do not add another: route it
+// here.
+bool PlantApproved(CCircuitDef@ want)
+{
+	if (want is null)
+		return false;
 	SweepPlantAsks();
 	const int have = int(want.count) + InFlightOf(want);
 	const int allowed = PlantsWanted(want);
@@ -205,7 +220,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 				+ allowed + " at " + formatFloat(SteadyIncome(), "", 0, 0)
 				+ " m/s -- no more of this type yet");
 		}
-		return null;
+		return false;
 	}
 
 	// A second T1 line competes with the T2 plant for the same metal. The cap
@@ -259,7 +274,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 						+ ", at " + formatFloat(SteadyIncome(), "", 0, 0)
 						+ " m/s the T2 plant is the better buy");
 				}
-				return null;
+				return false;
 			}
 		}
 	}
@@ -292,7 +307,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 				AiLog(T() + "apex: " + want.GetName() + " held -- gifted adv con"
 					+ " builds the first fusion before the first T2 plant");
 			}
-			return null;
+			return false;
 		}
 		// The first fusion also comes before a SECOND T2 line: apexearth,
 		// watching, 2026-08-15: "we make our second T2 lab before making our
@@ -307,7 +322,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 					+ ", at " + formatFloat(SteadyIncome(), "", 0, 0)
 					+ " m/s");
 			}
-			return null;
+			return false;
 		}
 	}
 	// Every plant the gate grants is logged and held in the ask ledger; the
@@ -322,7 +337,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 		+ " t2=" + (T2PlantCount() + InFlightTier(Attr::T2))
 		+ " inflight=" + gAskDef.length()
 		+ " at " + formatFloat(SteadyIncome(), "", 0, 0) + " m/s");
-	return want;
+	return true;
 }
 
 // Maps where the whole team should open air. Curated: these carry a map-wide

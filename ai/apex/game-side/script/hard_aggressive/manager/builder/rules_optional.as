@@ -254,6 +254,14 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 	CCircuitDef@ adv = Factory::NextT2Counterpart();
 	if ((adv is null) || !adv.IsAvailable(ai.frame) || (adv.count > 0))
 		return null;
+	// THE ONE GATE, same as every other plant path. This rule enqueued the
+	// advanced plant with its own thin checks and none of the tier discipline
+	// -- the silent second entrance behind every "we're still making a second
+	// T2 lab" report (fourth time, 8v8 Isthmus: T2 labs finishing with zero
+	// approval lines in the log). PlantApproved also records the ledger entry
+	// and prints the approval, so this path finally has attribution.
+	if (!Factory::PlantApproved(adv))
+		return null;
 	// Someone is already walking to start THIS plant -- ours or the engine's,
 	// either way not twice. GetTaskCountOf(FACTORY) used to gate this, but it
 	// counts every factory task team-wide, so an ordinary second T1 lab being

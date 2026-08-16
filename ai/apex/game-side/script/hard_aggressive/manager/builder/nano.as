@@ -243,6 +243,11 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 	// its own and asks permission instead of handing the job over.
 	if (!Requests::Allowed(gant, Task::BuildType::FACTORY, site, 0.f))
 		return null;
+	// THE ONE GATE: every plant enqueue passes Factory::PlantApproved -- the
+	// per-def cap, the ledger and the approval log. A gantry bypassing it was
+	// the same class of silent second entrance as the T2-lab reports.
+	if (!Factory::PlantApproved(gant))
+		return null;
 	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Factory(Task::Priority::HIGH,
 			gant, site, null, 0.f));
 	if (post is null)
