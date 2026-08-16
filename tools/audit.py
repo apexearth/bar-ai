@@ -232,6 +232,27 @@ CHECKS = [check_health, check_economy, check_military, check_efficiency]
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
+    p = Path(sys.argv[1])
+    # A tournament dir: audit every game and aggregate -- single games on
+    # this benchmark are noise (documented 60%->10% win swings unchanged).
+    infologs = sorted(p.glob("matches/*/infolog.txt")) if p.is_dir() else []
+    if len(infologs) > 1:
+        agg = defaultdict(list)
+        for il in infologs:
+            rep = Report()
+            text = il.read_text(errors="replace")
+            for chk in CHECKS:
+                chk(text, rep)
+            for _, ok, name, detail in rep.rows:
+                m = re.search(r"(\d+(?:\.\d+)?)%", detail)
+                agg[name].append((ok, float(m.group(1)) if m else None))
+        print(f"aggregate over {len(infologs)} games:")
+        for name, vals in agg.items():
+            flags = sum(1 for ok, _ in vals if not ok)
+            nums = sorted(v for _, v in vals if v is not None)
+            med = f"  median {nums[len(nums)//2]:.0f}%" if nums else ""
+            print(f"  {name:<28} flagged {flags}/{len(vals)}{med}")
+        return
     text = load(sys.argv[1])
     rep = Report()
     for chk in CHECKS:
