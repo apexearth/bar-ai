@@ -78,8 +78,12 @@ float MassFloor()
 	// PLAYER, and scaling it by the whole ally side's army in an 8v8 set a
 	// bar no single player's pool could fill -- measured live as Fatboys
 	// loitering at the home guard anchor all late game, waiting to promote.
+	// 0.0035 is ~20% of standing army metal per group at Grunt-class
+	// power-per-metal. Was 0.0017 (~10%): apexearth 2026-08-15, watching --
+	// "we are willing to mass much smaller groups whereas the enemy masses
+	// larger groups, our smaller groups spreads us out more."
 	const float scaled = aiMilitaryMgr.armyCost
-			* ai.GetTunable("apex_mass_per_army", 0.0017f);
+			* ai.GetTunable("apex_mass_per_army", 0.0035f);
 	return (scaled > base) ? scaled : base;
 }
 

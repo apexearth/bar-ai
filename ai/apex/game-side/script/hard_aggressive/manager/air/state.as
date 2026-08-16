@@ -45,7 +45,19 @@ int ScaledBombers()
 {
 	const int extra = int(aiEconomyMgr.metal.income / AIR_SCALE_INCOME);
 	const int want = AIR_BOMBERS + extra;
-	return (want > AIR_BOMBERS_MAX) ? AIR_BOMBERS_MAX : want;
+	const int capped = (want > AIR_BOMBERS_MAX) ? AIR_BOMBERS_MAX : want;
+	// A ONE-SHOT basic bomber (Legion's Martyr): each sortie expends the whole
+	// wing, so a reusable-bomber count buys one alpha strike and a pile of
+	// corpses. Until the reusable advanced bomber exists, want a fraction.
+	// apexearth 2026-08-15: "we made too many martyrs... those guys are 1 shot"
+	if ((gBomber1 !is null) && (gBomber1.GetName() == "legkam")
+		&& (Have(gBomber) == 0))
+	{
+		const float s = ai.GetTunable("apex_oneshot_bomber_scale", 0.4f);
+		const int scaled = int(float(capped) * s + 0.99f);
+		return (scaled < 1) ? 1 : scaled;
+	}
+	return capped;
 }
 
 int ScaledFighters()
