@@ -376,10 +376,12 @@ IUnitTask@ CommanderIdleWork(CCircuitUnit@ unit, bool isComm)
 	// VetoCommanderReclaim and VetoCommanderHold null the engine's offer in order
 	// to KEEP the commander on what it is already doing. Handing it fresh work
 	// here caused exactly the task switch those vetoes exist to prevent, so a
-	// commander genuinely mid-job is left alone. `target` is the nanoframe, which
-	// is what separates real work from a task it has not started.
+	// commander genuinely mid-job is left alone. Mid-WALK counts as mid-job:
+	// `target` (the nanoframe) is null the whole way to the site, and gating
+	// on it had this rule hand the walking commander a solar every
+	// COMM_ASSIST_PERIOD -- see VetoCommanderHold's comment.
 	IUnitTask@ held = unit.task;
-	if ((held !is null) && (SiteBuildName(held) != "") && (held.target !is null))
+	if ((held !is null) && (SiteBuildName(held) != ""))
 		return null;
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	if (ThreatFor(unit, here) > CON_THREAT_VETO) {
@@ -615,18 +617,15 @@ IUnitTask@ VetoCommanderHold(CCircuitUnit@ unit, bool isComm, IUnitTask@ task)
 		// refuses every new job while "holding" a task it has not started, and
 		// AiMakeTask returning null leaves it with nothing to do at all.
 		//
-		// EXCEPT the walk to the first factory itself: `target` stays null for
-		// the whole walk, so without an exemption `reallyWorking` reads false
-		// the entire way there and the commander gets swapped off it by the
-		// next competing proposal, with no second builder in the opening to
-		// pick the abandoned task back up. Same exemption firstFactory above
-		// applies to taking the task, applied here to keeping it once assigned.
-		const bool holdingFirstFactory = (held !is null)
-				&& (held.GetType() == Task::Type::BUILDER)
-				&& (held.GetBuildType() == Task::BuildType::FACTORY)
-				&& !Factory::HaveAnyFactory();
-		const bool reallyWorking = holdingFirstFactory
-				|| ((held !is null) && (held.target !is null));
+		// ... AND the walk to any named site: `target` stays null for the whole
+		// walk, so gating on it left the commander swappable the entire way
+		// there -- measured as 25+ MEX<->GUARD build-type flips in 10 seconds
+		// (comm-switch diag, 20260816-214818), each flip enqueueing an orphan
+		// mex claim so the next election picked a farther spot. The stuck
+		// breaker above (COMM_STUCK_TICKS) still cuts a walk whose engine
+		// order never arrives, and comm-abandon still cuts a site gone hot.
+		const bool reallyWorking = (held !is null)
+				&& ((held.target !is null) || (SiteBuildName(held) != ""));
 		if (reallyWorking && (heldKind != "") && (held.GetBuildType() != task.GetBuildType())
 			&& (ThreatFor(unit, held.GetBuildPos()) <= CON_THREAT_VETO))
 		{
