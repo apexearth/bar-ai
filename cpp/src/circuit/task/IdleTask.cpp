@@ -123,9 +123,11 @@ void CIdleTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		// militia pool re-tasks an idle unit within a second; running is what
 		// killed them. Builders keep the retreat: their job is not fighting.
 		CCircuitAI* circuit = manager->GetCircuit();
+		// Defend influence (buildings only) -- ally influence includes nearby
+		// mobile army and read "home" in the open field. See TrySquadRetreat.
 		if (unit->GetCircuitDef()->IsAttacker()
-			&& (circuit->GetInflMap()->GetAllyInflAt(
-					unit->GetPos(circuit->GetLastFrame())) >= INFL_SAFE)) {
+			&& (circuit->GetInflMap()->GetAllyDefendInflAt(
+					unit->GetPos(circuit->GetLastFrame())) > INFL_EPS)) {
 			return;
 		}
 		CRetreatTask* task = manager->EnqueueRetreat();

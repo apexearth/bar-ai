@@ -183,8 +183,13 @@ bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
 	// fight-task deaths near zero. On our own ground the wounded stand rear
 	// with the squad and the squad fights; same influence test as the attack
 	// odds waiver. Defending is the one trade at home that favors us.
-	if ((leader != nullptr) && (circuit->GetInflMap()->GetAllyInflAt(
-			leader->GetPos(circuit->GetLastFrame())) >= INFL_SAFE)) {
+	// GetAllyDefendInflAt, NOT GetAllyInflAt: ally influence counts our own
+	// mobile army, so a squad always stood on its own influence and this
+	// branch read "home" EVERYWHERE -- measured homeStand=3843 against
+	// squadVote=0 in one game; the vote below was unreachable. Defend
+	// influence is written only by our BUILDINGS, the real "at home".
+	if ((leader != nullptr) && (circuit->GetInflMap()->GetAllyDefendInflAt(
+			leader->GetPos(circuit->GetLastFrame())) > INFL_EPS)) {
 		cowards.insert(unit);
 		NoteHomeStand(circuit);
 		return true;

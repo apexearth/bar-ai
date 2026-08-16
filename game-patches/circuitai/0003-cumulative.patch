@@ -5573,7 +5573,7 @@ index f908a50..3500614 100644
 +
 +#endif // SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
 diff --git a/src/circuit/task/IdleTask.cpp b/src/circuit/task/IdleTask.cpp
-index f210b3a..96f2602 100644
+index f210b3a..331195e 100644
 --- a/src/circuit/task/IdleTask.cpp
 +++ b/src/circuit/task/IdleTask.cpp
 @@ -7,6 +7,7 @@
@@ -5623,7 +5623,7 @@ index f210b3a..96f2602 100644
  
  		if (++i >= updateSlice) {
  			break;
-@@ -94,6 +116,18 @@ void CIdleTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -94,6 +116,20 @@ void CIdleTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
  	const float healthPerc = unit->GetHealthPercent();
  	if (healthPerc < unit->GetCircuitDef()->GetRetreat()) {
@@ -5634,9 +5634,11 @@ index f210b3a..96f2602 100644
 +		// militia pool re-tasks an idle unit within a second; running is what
 +		// killed them. Builders keep the retreat: their job is not fighting.
 +		CCircuitAI* circuit = manager->GetCircuit();
++		// Defend influence (buildings only) -- ally influence includes nearby
++		// mobile army and read "home" in the open field. See TrySquadRetreat.
 +		if (unit->GetCircuitDef()->IsAttacker()
-+			&& (circuit->GetInflMap()->GetAllyInflAt(
-+					unit->GetPos(circuit->GetLastFrame())) >= INFL_SAFE)) {
++			&& (circuit->GetInflMap()->GetAllyDefendInflAt(
++					unit->GetPos(circuit->GetLastFrame())) > INFL_EPS)) {
 +			return;
 +		}
  		CRetreatTask* task = manager->EnqueueRetreat();
@@ -15107,7 +15109,7 @@ index b4b43c1..e0b2fb4 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index ae6cce5..093090b 100644
+index ae6cce5..eed9e8a 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,6 +6,7 @@
@@ -15160,7 +15162,7 @@ index ae6cce5..093090b 100644
  
  	const std::map<float, std::set<CCircuitUnit*>>& rangers = task->GetRangeUnits();
  	for (const auto& kv : rangers) {
-@@ -155,6 +164,57 @@ void ISquadTask::Merge(ISquadTask* task)
+@@ -155,6 +164,62 @@ void ISquadTask::Merge(ISquadTask* task)
  	FindLeader(rookies.begin(), rookies.end());
  }
  
@@ -15183,8 +15185,13 @@ index ae6cce5..093090b 100644
 +	// fight-task deaths near zero. On our own ground the wounded stand rear
 +	// with the squad and the squad fights; same influence test as the attack
 +	// odds waiver. Defending is the one trade at home that favors us.
-+	if ((leader != nullptr) && (circuit->GetInflMap()->GetAllyInflAt(
-+			leader->GetPos(circuit->GetLastFrame())) >= INFL_SAFE)) {
++	// GetAllyDefendInflAt, NOT GetAllyInflAt: ally influence counts our own
++	// mobile army, so a squad always stood on its own influence and this
++	// branch read "home" EVERYWHERE -- measured homeStand=3843 against
++	// squadVote=0 in one game; the vote below was unreachable. Defend
++	// influence is written only by our BUILDINGS, the real "at home".
++	if ((leader != nullptr) && (circuit->GetInflMap()->GetAllyDefendInflAt(
++			leader->GetPos(circuit->GetLastFrame())) > INFL_EPS)) {
 +		cowards.insert(unit);
 +		NoteHomeStand(circuit);
 +		return true;
@@ -15218,7 +15225,7 @@ index ae6cce5..093090b 100644
  const AIFloat3& ISquadTask::GetLeaderPos(int frame) const
  {
  	return (leader != nullptr) ? leader->GetPos(frame) : GetPosition();
-@@ -217,6 +277,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -217,6 +282,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
  	std::shared_ptr<CQueryLineMap> query = std::static_pointer_cast<CQueryLineMap>(
  			pathfinder->CreateLineMapQuery(leader, circuit->GetThreatMap(), pos));
  
@@ -15233,7 +15240,7 @@ index ae6cce5..093090b 100644
  	const std::set<IFighterTask*>& tasks = static_cast<CMilitaryManager*>(manager)->GetTasks(fightType);
  	for (const IFighterTask* candidate : tasks) {
  		if ((candidate == this)
-@@ -225,6 +293,11 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -225,6 +298,11 @@ ISquadTask* ISquadTask::CheckMergeTask()
  		{
  			continue;
  		}
@@ -15245,7 +15252,7 @@ index ae6cce5..093090b 100644
  		const ISquadTask* candy = static_cast<const ISquadTask*>(candidate);
  
  		const AIFloat3& tp = candy->GetLeaderPos(frame);
-@@ -251,7 +324,12 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -251,7 +329,12 @@ ISquadTask* ISquadTask::CheckMergeTask()
  
  ISquadTask* ISquadTask::GetMergeTask()
  {
@@ -15259,7 +15266,7 @@ index ae6cce5..093090b 100644
  		return IsMergeSafe() ? CheckMergeTask() : nullptr;
  	}
  	return nullptr;
-@@ -504,8 +582,12 @@ void ISquadTask::ActivePath(float speed)
+@@ -504,8 +587,12 @@ void ISquadTask::ActivePath(float speed)
  	const float half = span * scale * 0.5f;
  	int i = 0;
  	for (CCircuitUnit* unit : units) {
@@ -15274,7 +15281,7 @@ index ae6cce5..093090b 100644
  		++i;
  	}
  }
-@@ -589,7 +671,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -589,7 +676,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				if (unit->Blocker() != nullptr) {
  					continue;  // Do not interrupt current action
  				}
@@ -15285,7 +15292,7 @@ index ae6cce5..093090b 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -604,10 +688,63 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -604,10 +693,63 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -15350,7 +15357,7 @@ index ae6cce5..093090b 100644
  		// 20% inside its reach, which throws away the whole point of keeping the
  		// long-ranged units in an outer row -- a Banisher at 800 was standing at
  		// 640, inside the tanks it was supposed to shoot over.
-@@ -699,15 +836,50 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -699,15 +841,50 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  		// maintain.
  		const bool glassCannon = (edef != nullptr) && (rowDef != nullptr)
  				&& (edef->GetHealth() < rowDef->GetHealth());
@@ -15405,7 +15412,7 @@ index ae6cce5..093090b 100644
  		}
  		// The arc a row may occupy. At 0.9*PI a squad packs into a half circle on
  		// one side of the target, which is a single AOE footprint -- and the wider
-@@ -741,8 +913,36 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -741,8 +918,36 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  		const float end2 = alpha - beta;
  		AIFloat3 newPos1(tPos.x + range * cosf(end1), tPos.y, tPos.z + range * sinf(end1));
  		AIFloat3 newPos2(tPos.x + range * cosf(end2), tPos.y, tPos.z + range * sinf(end2));
@@ -15444,7 +15451,7 @@ index ae6cce5..093090b 100644
  			delta = -delta;
  			beta = -beta;
  		}
-@@ -752,7 +952,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -752,7 +957,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  			if (unit->Blocker() != nullptr) {
  				continue;  // Do not interrupt current action
  			}
@@ -15455,7 +15462,7 @@ index ae6cce5..093090b 100644
  
  			if (isRepeatAttack
  				|| (unit->GetTarget() != GetTarget())
-@@ -786,7 +988,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -786,7 +993,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				// into a second enemy.
  				const float orbit = ORBIT_RATE * (frame / (float)FRAMES_PER_SEC) * orbitDir;
  				const float angle = alpha + beta + orbit;
@@ -15474,7 +15481,7 @@ index ae6cce5..093090b 100644
  				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
  				CTerrainManager::CorrectPosition(newPos);
  
-@@ -804,9 +1016,24 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -804,9 +1021,24 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				// stepping into the hotter spot. Small multiplicative
  				// tolerance so a unit doesn't flip-flop between two tiles of
  				// near-identical threat every isRepeatAttack tick.
@@ -15500,7 +15507,7 @@ index ae6cce5..093090b 100644
  					newPos = curPos;
  				}
  
-@@ -826,7 +1053,9 @@ void ISquadTask::Log()
+@@ -826,7 +1058,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
