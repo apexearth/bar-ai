@@ -199,6 +199,11 @@ int SmallConvCount(CCircuitUnit@ unit)
 bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 {
 	const float pack = ai.GetTunable("apex_conv_pack", 180.f);
+	// apexearth: "5% chance to place one in a new spot... 95% chance to place
+	// one adjacent to the latest placement." The roll is what makes multiple
+	// masses form organically instead of only when a pack is physically full.
+	if (AiRandom(0, 99) < int(ai.GetTunable("apex_conv_new_pct", 5.f)))
+		return Base::Spot(unit, def, Base::ECO, spot);
 	array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(def, gHomePos, 0.f);
 	if ((have !is null) && (have.length() > 0)) {
 		for (int i = int(have.length()) - 1; i >= 0; --i) {
