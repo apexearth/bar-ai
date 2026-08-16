@@ -74,6 +74,20 @@ float AirScale(float share)
 	return s;
 }
 
+// How many heavy static AA the observed air justifies. Factored out so the
+// rule that actually ORDERS them (Builder::HeavyFlak) reads the same number
+// UpdateAirThreat logs -- the two must never disagree.
+int HeavyAAWant()
+{
+	const bool worth = (gAirAvg >= AA_IGNORE) || (gAirRaw >= AA_IGNORE);
+	if (!worth)
+		return 0;
+	const float total = gAirAvg + gGroundAvg;
+	const float share = (total > 0.f) ? gAirAvg / total : 0.f;
+	const float heavyBasis = (gAirRaw > gAirAvg) ? gAirRaw : gAirAvg;
+	return int(heavyBasis * AirScale(share) / AA_HEAVY_PER);
+}
+
 void UpdateAirThreat()
 {
 	ResolveHeavyAA();
@@ -124,9 +138,8 @@ void UpdateAirThreat()
 	// gAirRaw comment, defenceline.as) because the 240s average had not caught
 	// up. share/scale stay off the smoothed value so a single spike does not
 	// swing the RATIO, only how much of the already-scaled demand counts.
-	const float heavyBasis = (gAirRaw > gAirAvg) ? gAirRaw : gAirAvg;
 	// count includes nanoframes, so a turret still building holds its own slot.
-	int heavyWant = int(heavyBasis * scale / AA_HEAVY_PER);
+	int heavyWant = HeavyAAWant();
 	const int heavyHave = LiveCount(gFlak) + LiveCount(gHeavy);
 	const int spare = (heavyWant > heavyHave) ? (heavyWant - heavyHave) : 0;
 	CapHeavyAA(gFlak, spare);

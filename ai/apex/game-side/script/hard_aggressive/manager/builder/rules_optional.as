@@ -55,6 +55,12 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			IUnitTask@ deter = HomeDeter(unit);
 			if (deter !is null)
 				return deter;
+			// Beside HomeDeter, outside the phase gate, for the same reason:
+			// heavy flak answers OBSERVED enemy air (HeavyAAWant is 0 with
+			// none seen) and cannot fire early by construction.
+			IUnitTask@ flakUp = HeavyFlak(unit);
+			if (flakUp !is null)
+				return flakUp;
 			// Carved out of the phase gate for the same reason as CheapAA: a
 			// 60-metal tower, one uncovered anchor at a time, and blindness is
 			// what it answers -- the engine's own sensor pass never covers held

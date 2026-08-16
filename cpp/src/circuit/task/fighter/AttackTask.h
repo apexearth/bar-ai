@@ -42,6 +42,10 @@ private:
 	// -1 until rolled, then 0 = threat-aware route, 1 = straight in. Rolled once
 	// per task so a squad does not change its mind about the route mid-walk.
 	int chargeRoll = -1;
+	// Set when the threat-aware route came back past apex_max_detour times the
+	// straight line: the next query paths charge-style. Cleared on a target
+	// change in FindTarget, so it is a per-objective decision, not a ratchet.
+	bool detourCharge = false;
 };
 
 } // namespace circuit

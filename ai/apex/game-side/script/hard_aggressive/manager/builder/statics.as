@@ -634,6 +634,56 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 int gAntiAsked = 0;
 int gAntiPeak = 0;
 
+// Heavy AA is ORDERED, not merely uncapped: UpdateAirThreat computed a want
+// and only raised maxThisUnit -- nothing ever elected the build. Measured
+// (8v8 Isthmus, 22 min): 18,000 metal of enemy air, heavy=0/4, apexearth:
+// "we have very few anti air buildings to handle when enemy air shows up."
+// Same request shape as AntiNuke below, sited over the nano cluster.
+int gFlakAsked = 0;
+int gFlakPeak = 0;
+int gNextFlak = 0;
+
+IUnitTask@ HeavyFlak(CCircuitUnit@ unit)
+{
+	if (aiEconomyMgr.isEnergyStalling || (ai.frame < gNextFlak))
+		return null;
+	Military::ResolveHeavyAA();
+	CCircuitDef@ flak = Military::gFlak;
+	if ((flak is null) || !flak.IsAvailable(ai.frame)
+		|| !unit.circuitDef.CanBuild(flak))
+		return null;
+	const int want = Military::HeavyAAWant();
+	if (want <= 0)
+		return null;
+	const int standing = int(flak.count) + Military::LiveCount(Military::gHeavy);
+	if (standing > gFlakPeak)
+		gFlakPeak = standing;
+	// Two outstanding at a time: air raids justify parallel builds in a way
+	// one antinuke never does, but the want still bounds the total.
+	if ((standing >= want) || (gFlakAsked - gFlakPeak >= 2))
+		return null;
+	AIFloat3 near;
+	if (!NanoCluster(near))
+		near = gHomePos;
+	AIFloat3 site = ai.FindBuildSiteNear(flak, near, GANTRY_NEAR_NANO);
+	if (!OnMap(site))
+		site = ai.FindBuildSiteNear(flak, gHomePos, GANTRY_SEARCH_WIDE);
+	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
+		return null;
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, flak, Task::BuildType::DEFENCE,
+			Task::Priority::HIGH, site, 0.f, 0.f, created);
+	if (post is null)
+		return null;
+	if (!created)
+		return post;
+	++gFlakAsked;
+	gNextFlak = ai.frame + 15 * SECOND;
+	AiLog(Factory::T() + "apex: heavy-flak " + flak.GetName()
+		+ " standing=" + standing + " want=" + want);
+	return post;
+}
+
 IUnitTask@ AntiNuke(CCircuitUnit@ unit)
 {
 	if (aiEconomyMgr.isEnergyStalling)

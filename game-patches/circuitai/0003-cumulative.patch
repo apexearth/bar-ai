@@ -11885,7 +11885,7 @@ index c3f5e98..fc98a66 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index 91000e2..9b341d7 100644
+index 91000e2..0121367 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -11961,7 +11961,7 @@ index 91000e2..9b341d7 100644
 +	// enormous army orbiting a doomsday gun's range ring looks like -- the
 +	// caution the ceiling buys is for games still in doubt.
 +	const bool overrun = circuit->ReadTeamValue(circuit->GetTeamId(), "kill", 0.f) > 0.f;
-+	const bool isCharge = overrun || ((chargeRoll == 1)
++	const bool isCharge = overrun || detourCharge || ((chargeRoll == 1)
 +			&& ISquadTask::IsChargeDef(leader->GetCircuitDef()));
  	const float threatCeiling = isCharge
  			? CHARGE_THREAT_CEILING
@@ -12055,7 +12055,7 @@ index 91000e2..9b341d7 100644
  				continue;
  			}
  
-@@ -816,6 +879,8 @@ void CAttackTask::FindTarget()
+@@ -816,15 +879,23 @@ void CAttackTask::FindTarget()
  				bestInfl = group.influence;
  				bestNear = localInfl;
  				bestScale = scale;
@@ -12064,7 +12064,12 @@ index 91000e2..9b341d7 100644
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -825,6 +890,9 @@ void CAttackTask::FindTarget()
+ 	}
+ 
+ 	if (bestTarget != nullptr) {
++		if (bestTarget != prevTarget) {
++			detourCharge = false;   // new objective, fresh route judgement
++		}
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
  	}
@@ -12074,7 +12079,7 @@ index 91000e2..9b341d7 100644
  
  	// One line per squad per 10s, TAKE=committing to a target, SKIP=every group
  	// failed the strength test. `edge` is our rated power over what we had to
-@@ -833,13 +901,16 @@ void CAttackTask::FindTarget()
+@@ -833,13 +904,16 @@ void CAttackTask::FindTarget()
  	if (frame >= lastEngageLog + FRAMES_PER_SEC * 10) {
  		lastEngageLog = frame;
  		const float need = bestInfl * bestScale;
@@ -12094,7 +12099,45 @@ index 91000e2..9b341d7 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -878,7 +949,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -853,8 +927,15 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+ 		// walked/direct near 1.0 is a charge up the middle, well above 1.0 is a
+ 		// flank. Rate limited because attack paths are re-queried constantly.
+ 		CCircuitAI* circuit = manager->GetCircuit();
+-		if (circuit->GetLastFrame() >= lastDetourLog + FRAMES_PER_SEC * 20) {
+-			lastDetourLog = circuit->GetLastFrame();
++		// Detour computed EVERY pass, not just on log ticks: it drives the
++		// charge flag below. A walk this many times the straight line is not
++		// a flank, it is evasion -- the army is out of position the whole
++		// trip. Measured live (8v8 Isthmus): detour=4.70; apexearth: "we seem
++		// to want to find safe paths way far away from enemy armies... and
++		// therefore we do a pretty shit job defending ourselves." The next
++		// query for this task paths charge-style (pure distance); FindTarget
++		// clears the flag on a target change, so it is per-objective.
++		{
+ 			const AIFloat3& from = pPath->posPath.front();
+ 			const AIFloat3& to = pPath->posPath.back();
+ 			float walked = 0.f;
+@@ -863,10 +944,15 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+ 			}
+ 			const float direct = from.distance2D(to);
+ 			if (direct > 1.f) {
+-				circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f charge=%d",
+-						walked, direct, walked / direct,
+-						int((chargeRoll == 1) && (leader != nullptr)
+-								&& ISquadTask::IsChargeDef(leader->GetCircuitDef())));
++				detourCharge = (walked / direct)
++						> circuit->GetTunable("apex_max_detour", 2.0f);
++				if (circuit->GetLastFrame() >= lastDetourLog + FRAMES_PER_SEC * 20) {
++					lastDetourLog = circuit->GetLastFrame();
++					circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f charge=%d",
++							walked, direct, walked / direct,
++							int(detourCharge || ((chargeRoll == 1) && (leader != nullptr)
++									&& ISquadTask::IsChargeDef(leader->GetCircuitDef()))));
++				}
+ 			}
+ 		}
+ 		ActivePath(lowestSpeed);
+@@ -878,7 +964,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -12129,7 +12172,7 @@ index 91000e2..9b341d7 100644
  	if (urgentPositions.empty()) {
  		FallbackBasePos();
  		return;
-@@ -916,8 +1013,26 @@ void CAttackTask::FallbackBasePos()
+@@ -916,8 +1028,26 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -12157,7 +12200,7 @@ index 91000e2..9b341d7 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -950,7 +1065,9 @@ void CAttackTask::Fallback()
+@@ -950,7 +1080,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -12168,6 +12211,21 @@ index 91000e2..9b341d7 100644
  		TRY_UNIT(circuit, unit,
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
+diff --git a/src/circuit/task/fighter/AttackTask.h b/src/circuit/task/fighter/AttackTask.h
+index 4fe5877..78e4b70 100644
+--- a/src/circuit/task/fighter/AttackTask.h
++++ b/src/circuit/task/fighter/AttackTask.h
+@@ -42,6 +42,10 @@ private:
+ 	// -1 until rolled, then 0 = threat-aware route, 1 = straight in. Rolled once
+ 	// per task so a squad does not change its mind about the route mid-walk.
+ 	int chargeRoll = -1;
++	// Set when the threat-aware route came back past apex_max_detour times the
++	// straight line: the next query paths charge-style. Cleared on a target
++	// change in FindTarget, so it is a per-objective decision, not a ratchet.
++	bool detourCharge = false;
+ };
+ 
+ } // namespace circuit
 diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
 index 4b4f4f0..09dd13e 100644
 --- a/src/circuit/task/fighter/BombTask.cpp

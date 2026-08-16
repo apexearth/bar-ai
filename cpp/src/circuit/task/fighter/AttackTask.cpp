@@ -536,7 +536,7 @@ void CAttackTask::Update()
 	// enormous army orbiting a doomsday gun's range ring looks like -- the
 	// caution the ceiling buys is for games still in doubt.
 	const bool overrun = circuit->ReadTeamValue(circuit->GetTeamId(), "kill", 0.f) > 0.f;
-	const bool isCharge = overrun || ((chargeRoll == 1)
+	const bool isCharge = overrun || detourCharge || ((chargeRoll == 1)
 			&& ISquadTask::IsChargeDef(leader->GetCircuitDef()));
 	const float threatCeiling = isCharge
 			? CHARGE_THREAT_CEILING
@@ -887,6 +887,9 @@ void CAttackTask::FindTarget()
 	}
 
 	if (bestTarget != nullptr) {
+		if (bestTarget != prevTarget) {
+			detourCharge = false;   // new objective, fresh route judgement
+		}
 		SetTarget(bestTarget);
 		position = GetTarget()->GetPos();
 	}
@@ -924,8 +927,15 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
 		// walked/direct near 1.0 is a charge up the middle, well above 1.0 is a
 		// flank. Rate limited because attack paths are re-queried constantly.
 		CCircuitAI* circuit = manager->GetCircuit();
-		if (circuit->GetLastFrame() >= lastDetourLog + FRAMES_PER_SEC * 20) {
-			lastDetourLog = circuit->GetLastFrame();
+		// Detour computed EVERY pass, not just on log ticks: it drives the
+		// charge flag below. A walk this many times the straight line is not
+		// a flank, it is evasion -- the army is out of position the whole
+		// trip. Measured live (8v8 Isthmus): detour=4.70; apexearth: "we seem
+		// to want to find safe paths way far away from enemy armies... and
+		// therefore we do a pretty shit job defending ourselves." The next
+		// query for this task paths charge-style (pure distance); FindTarget
+		// clears the flag on a target change, so it is per-objective.
+		{
 			const AIFloat3& from = pPath->posPath.front();
 			const AIFloat3& to = pPath->posPath.back();
 			float walked = 0.f;
@@ -934,10 +944,15 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
 			}
 			const float direct = from.distance2D(to);
 			if (direct > 1.f) {
-				circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f charge=%d",
-						walked, direct, walked / direct,
-						int((chargeRoll == 1) && (leader != nullptr)
-								&& ISquadTask::IsChargeDef(leader->GetCircuitDef())));
+				detourCharge = (walked / direct)
+						> circuit->GetTunable("apex_max_detour", 2.0f);
+				if (circuit->GetLastFrame() >= lastDetourLog + FRAMES_PER_SEC * 20) {
+					lastDetourLog = circuit->GetLastFrame();
+					circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f charge=%d",
+							walked, direct, walked / direct,
+							int(detourCharge || ((chargeRoll == 1) && (leader != nullptr)
+									&& ISquadTask::IsChargeDef(leader->GetCircuitDef()))));
+				}
 			}
 		}
 		ActivePath(lowestSpeed);
