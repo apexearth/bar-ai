@@ -174,6 +174,33 @@ static std::string CCircuitAI_GetMapName(CCircuitAI* circuit)
 	return circuit->GetMap()->GetName();
 }
 
+// The engine's Pos2BuildPos snap (GameHelper.cpp): every building lands on the
+// 16-elmo build grid, with a half-square offset when the footprint size has
+// bit 2 set, so EDGES always meet the grid. Script placement math computes
+// intent in raw elmos; snapping the intent with the same rule keeps rows and
+// walkway gaps exact for every footprint instead of drifting +-8 per def.
+// apexearth: "can we try to ensure that we place it on a floored 2 mod grid
+// of the map? ... this is for any buildings."
+static springai::AIFloat3 CCircuitAI_SnapBuildPos(CCircuitAI* circuit, CCircuitDef* cdef, const springai::AIFloat3& pos)
+{
+	if (cdef == nullptr) {
+		return pos;
+	}
+	constexpr float BUILD_SQ = SQUARE_SIZE * 2;
+	springai::AIFloat3 out = pos;
+	if (cdef->GetDef()->GetXSize() & 2) {
+		out.x = std::floor(pos.x / BUILD_SQ) * BUILD_SQ + SQUARE_SIZE;
+	} else {
+		out.x = std::floor((pos.x + SQUARE_SIZE) / BUILD_SQ) * BUILD_SQ;
+	}
+	if (cdef->GetDef()->GetZSize() & 2) {
+		out.z = std::floor(pos.z / BUILD_SQ) * BUILD_SQ + SQUARE_SIZE;
+	} else {
+		out.z = std::floor((pos.z + SQUARE_SIZE) / BUILD_SQ) * BUILD_SQ;
+	}
+	return out;
+}
+
 // THE UNIT LIMIT, AND WHAT WE HAVE SPENT OF IT.
 //
 // apexearth, on how a quota should be sized: "Take a look at your unit limit and
@@ -865,6 +892,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 SnapBuildPos(CCircuitDef@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_SnapBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetEnemyTeamSize() const", asMETHOD(CCircuitAI, GetEnemyTeamSize), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);

@@ -45,6 +45,12 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 			++gFailHot;
 			continue;
 		}
+		// Snap the INTENT to this def's own build grid (the engine's
+		// Pos2BuildPos parity rule) before searching: the search then starts
+		// on a legal cell for this footprint instead of 8 elmos off it, so
+		// rows of mixed footprints stay flush. apexearth: "ensure that we
+		// place it on a floored 2 mod grid... for any buildings."
+		cell = ai.SnapBuildPos(def, cell);
 		const AIFloat3 site = ai.FindBuildSiteNear(def, cell, seek);
 		if (!OnMap(site)) {
 			++gFailTerrain;   // nothing can stand near this cell

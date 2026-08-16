@@ -4818,7 +4818,7 @@ index 343ae19..519c7f6 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 9ad423f..f1838b6 100644
+index 9ad423f..6ce7614 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -14,7 +14,9 @@
@@ -4831,7 +4831,41 @@ index 9ad423f..f1838b6 100644
  #include "CircuitAI.h"
  #include "util/GameAttribute.h"
  #include "util/MaskHandler.h"
-@@ -179,15 +181,37 @@ static std::string CCircuitAI_GetMapName(CCircuitAI* circuit)
+@@ -172,6 +174,33 @@ static std::string CCircuitAI_GetMapName(CCircuitAI* circuit)
+ 	return circuit->GetMap()->GetName();
+ }
+ 
++// The engine's Pos2BuildPos snap (GameHelper.cpp): every building lands on the
++// 16-elmo build grid, with a half-square offset when the footprint size has
++// bit 2 set, so EDGES always meet the grid. Script placement math computes
++// intent in raw elmos; snapping the intent with the same rule keeps rows and
++// walkway gaps exact for every footprint instead of drifting +-8 per def.
++// apexearth: "can we try to ensure that we place it on a floored 2 mod grid
++// of the map? ... this is for any buildings."
++static springai::AIFloat3 CCircuitAI_SnapBuildPos(CCircuitAI* circuit, CCircuitDef* cdef, const springai::AIFloat3& pos)
++{
++	if (cdef == nullptr) {
++		return pos;
++	}
++	constexpr float BUILD_SQ = SQUARE_SIZE * 2;
++	springai::AIFloat3 out = pos;
++	if (cdef->GetDef()->GetXSize() & 2) {
++		out.x = std::floor(pos.x / BUILD_SQ) * BUILD_SQ + SQUARE_SIZE;
++	} else {
++		out.x = std::floor((pos.x + SQUARE_SIZE) / BUILD_SQ) * BUILD_SQ;
++	}
++	if (cdef->GetDef()->GetZSize() & 2) {
++		out.z = std::floor(pos.z / BUILD_SQ) * BUILD_SQ + SQUARE_SIZE;
++	} else {
++		out.z = std::floor((pos.z + SQUARE_SIZE) / BUILD_SQ) * BUILD_SQ;
++	}
++	return out;
++}
++
+ // THE UNIT LIMIT, AND WHAT WE HAVE SPENT OF IT.
+ //
+ // apexearth, on how a quota should be sized: "Take a look at your unit limit and
+@@ -179,15 +208,37 @@ static std::string CCircuitAI_GetMapName(CCircuitAI* circuit)
  // buildings, 2000 unit limit, you're in T1... then your split is on 1900
  // available units."
  //
@@ -4876,7 +4910,7 @@ index 9ad423f..f1838b6 100644
  	for (const auto& kv : circuit->GetTeamUnits()) {
  		if ((kv.second != nullptr) && (kv.second->GetUnit() != nullptr)) {
  			return kv.second->GetUnit()->GetMax();
-@@ -271,6 +295,25 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
+@@ -271,6 +322,25 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
  	unit->CmdMoveTo(pos);
  }
  
@@ -4902,7 +4936,7 @@ index 9ad423f..f1838b6 100644
  static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
  {
  	unit->CmdRepeat(repeat);
-@@ -283,10 +326,34 @@ static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
+@@ -283,10 +353,34 @@ static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
  // either -- so a quota that must not re-order what is already ordered had no
  // way to tell, and each way of inferring it failed differently.
  //
@@ -4941,7 +4975,7 @@ index 9ad423f..f1838b6 100644
  static int CCircuitUnit_CountQueued(CCircuitUnit* unit, CCircuitDef* buildDef)
  {
  	const int wanted = (buildDef == nullptr)
-@@ -312,8 +379,11 @@ static int CCircuitUnit_CountQueued(CCircuitUnit* unit, CCircuitDef* buildDef)
+@@ -312,8 +406,11 @@ static int CCircuitUnit_CountQueued(CCircuitUnit* unit, CCircuitDef* buildDef)
  // factory's queue; the rest append. That is how a player lays down a fresh
  // queue, and it means no separate clear command is needed.
  //
@@ -4955,7 +4989,7 @@ index 9ad423f..f1838b6 100644
  static void CCircuitUnit_CmdBuildUnit(CCircuitUnit* unit, CCircuitDef* buildDef,
  		int count, bool replace)
  {
-@@ -380,6 +450,15 @@ static AIFloat3 CSetupManager_GetLanePos(CSetupManager* mgr)
+@@ -380,6 +477,15 @@ static AIFloat3 CSetupManager_GetLanePos(CSetupManager* mgr)
  	return mgr->GetLanePos();
  }
  
@@ -4971,7 +5005,7 @@ index 9ad423f..f1838b6 100644
  static AIFloat3 CCircuitAI_GetChokePointPos(CCircuitAI* circuit, int idx)
  {
  	return circuit->GetChokePointPos(idx);
-@@ -423,6 +502,17 @@ static CScriptArray* CCircuitAI_GetOwnStructsNear(CCircuitAI* circuit, const AIF
+@@ -423,6 +529,17 @@ static CScriptArray* CCircuitAI_GetOwnStructsNear(CCircuitAI* circuit, const AIF
  	return arr;
  }
  
@@ -4989,7 +5023,7 @@ index 9ad423f..f1838b6 100644
  static float CCircuitAI_GetPathLength(CCircuitAI* circuit, CCircuitUnit* unit, const AIFloat3& to)
  {
  	return circuit->GetPathLength(unit, to);
-@@ -508,6 +598,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -508,6 +625,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -5008,7 +5042,7 @@ index 9ad423f..f1838b6 100644
  static CScriptArray* IUnitTask_GetUnits(IUnitTask* task)
  {
  	// Without caching arrayType can be extracted by:
-@@ -740,12 +842,17 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -740,12 +869,17 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectBehaviour("IUnitTask", asBEHAVE_RELEASE, "void f()", asMETHODPR(IRefCounter, Release, (), int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "int GetRefCount() const", asMETHODPR(IRefCounter, GetRefCount, () const, int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "Type GetType() const", asMETHODPR(IUnitTask, GetType, () const, IUnitTask::Type), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5026,7 +5060,13 @@ index 9ad423f..f1838b6 100644
  	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
  
-@@ -763,6 +870,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -758,11 +892,13 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 SnapBuildPos(CCircuitDef@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_SnapBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetEnemyTeamSize() const", asMETHOD(CCircuitAI, GetEnemyTeamSize), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetLeadTeamId() const", asFUNCTION(CCircuitAI_GetLeadTeamId), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	// Sizing a quota: the unit limit, and what we are already holding of it.
@@ -5034,7 +5074,7 @@ index 9ad423f..f1838b6 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetUnitMax() const", asFUNCTION(CCircuitAI_GetUnitMax), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetTeamUnitCount(bool) const", asFUNCTION(CCircuitAI_GetTeamUnitCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetSideId() const", asMETHOD(CCircuitAI, GetSideId), asCALL_THISCALL); ASSERT(r >= 0);
-@@ -804,6 +912,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -804,6 +940,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEngageBoost() const", asMETHOD(CCircuitAI, GetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -5042,7 +5082,7 @@ index 9ad423f..f1838b6 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetPathLength(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GetPathLength), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -865,8 +974,17 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -865,8 +1002,17 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5060,7 +5100,7 @@ index 9ad423f..f1838b6 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -907,6 +1025,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -907,6 +1053,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	// retreat task substitutes for everything it would otherwise build. A raw
  	// command moves the unit without consuming its task slot.
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -5071,7 +5111,7 @@ index 9ad423f..f1838b6 100644
  	// A factory told to repeat re-queues what it finishes, so a spam lab keeps
  	// producing instead of waiting to be handed each unit as a separate task.
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdRepeat(bool)", asFUNCTION(CCircuitUnit_CmdRepeat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -916,6 +1038,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -916,6 +1066,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	// under the task scheme wipes a standing queue.
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdBuildUnit(CCircuitDef@, int, bool)", asFUNCTION(CCircuitUnit_CmdBuildUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	// Reading the factory's own queue. Pass null to count every build order on it.
@@ -5079,7 +5119,7 @@ index 9ad423f..f1838b6 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "int CountQueued(CCircuitDef@)", asFUNCTION(CCircuitUnit_CountQueued), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	// Jump the queue without clearing it -- how an advanced constructor gets built
  	// first when the tier changes.
-@@ -938,6 +1061,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -938,6 +1089,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CSetupManager", "AIFloat3 GetBasePos() const", asFUNCTION(CSetupManager_GetBasePos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -5087,7 +5127,7 @@ index 9ad423f..f1838b6 100644
  	r = engine->RegisterObjectMethod("CSetupManager", "AIFloat3 GetLanePos() const", asFUNCTION(CSetupManager_GetLanePos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  }
  
-@@ -1057,6 +1181,11 @@ void CInitScript::RegisterMgr()
+@@ -1057,6 +1209,11 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
