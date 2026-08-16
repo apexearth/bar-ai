@@ -123,6 +123,10 @@ The thing he asked for first and has pushed hardest on.
 - **UNRESOLVED: we need T3-grade defence and jammers.** Once T3 is on the field
   the older defences die and there is nothing credible left. Eventually only T3
   units — Titans, Behemoths, Sol, Juggernauts — can hold a broken front.
+  Re-raised 2026-08-16 after a Korgoth walked into the base and ended a game we
+  were winning: "we should have built more T3 defenses." That game: our static
+  defence 11,085 metal vs stock's 38,475 (stock's spend included a 15k
+  Doomsday); our T3 fielded 0 vs their 54,100.
 
 ## Army behaviour
 

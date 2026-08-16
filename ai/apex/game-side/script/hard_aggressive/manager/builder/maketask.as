@@ -261,6 +261,19 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// A FACTORY OFFER IS NEVER OPTIONAL. Every eco rule below (EcoFusion,
+	// converters, Brain wants) early-returns before the engine offer is
+	// accepted, so an approved plant's task sat in the pool while the adv cons
+	// built fusion after fusion -- an armshltx approved at 7.3m was still
+	// unbuilt at 32m with zero T3 fielded against 54k (watched 2026-08-16).
+	// Not for the commander: its walk-hold and safety rules below must keep
+	// the final say on what it accepts.
+	if (!isComm && (task !is null) && (task.GetType() == Task::Type::BUILDER)
+		&& (task.GetBuildType() == Task::BuildType::FACTORY))
+	{
+		return task;
+	}
+
 	// BELOW THIS LINE EVERY RULE ENQUEUES, AND THIS FUNCTION IS OFTEN A
 	// RE-ELECTION RATHER THAN A REQUEST FOR WORK.
 	//
