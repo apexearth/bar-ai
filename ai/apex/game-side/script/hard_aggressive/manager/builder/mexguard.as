@@ -161,6 +161,21 @@ CCircuitDef@ HeavyDefenceFor(CCircuitUnit@ unit)
 	return best;
 }
 
+// Legion's mid tier has TWO good answers: the machine-gun turret and the
+// Hive (300m drone dispenser -- apexearth: "useful T1.5 defense which
+// distracts units a lot"; it never got picked because the trio named legmg
+// only). Balance-pick whichever Legion holds fewer of, so both appear.
+CCircuitDef@ MidTowerDef()
+{
+	CCircuitDef@ mid = MidTowerDef();
+	if (ai.GetSideName() != "legion")
+		return mid;
+	CCircuitDef@ hive = ai.GetCircuitDef("leghive");
+	if ((hive is null) || !hive.IsAvailable(ai.frame) || (mid is null))
+		return (mid !is null) ? mid : hive;
+	return (hive.count < mid.count) ? hive : mid;
+}
+
 CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 {
 	CCircuitDef@ heavy = HeavyDefenceFor(unit);
@@ -169,7 +184,7 @@ CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 	if (IsAdvConDef(unit))
 		return SideDef3(armpb, corvipe, legapopupdef);
 	if (OnMap(at) && (Military::OnBorder(at) || Military::NearFront(at))) {
-		CCircuitDef@ mid = SideDef3(armbeamer, corhllt, legmg);
+		CCircuitDef@ mid = MidTowerDef();
 		if ((mid !is null) && mid.IsAvailable(ai.frame))
 			return mid;
 	}
@@ -193,7 +208,7 @@ CCircuitDef@ FrontTower(CCircuitUnit@ unit, const AIFloat3& in at)
 	// build-time concern stays answerable by the tunable.
 	if (ai.GetTunable("apex_front_pb", 1.f) > 0.f)
 		return MexGuardTower(unit, at);
-	CCircuitDef@ mid = SideDef3(armbeamer, corhllt, legmg);
+	CCircuitDef@ mid = MidTowerDef();
 	if ((mid !is null) && mid.IsAvailable(ai.frame))
 		return mid;
 	// Null rather than a light laser once past that tier -- same as ContestTower:
