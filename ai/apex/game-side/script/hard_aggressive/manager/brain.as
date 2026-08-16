@@ -1187,6 +1187,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			continue;
 		}
 		if (w.kind == "mex") {
+			// Same capability hole as the mexup want one block down: a nano
+			// turret reaching this want was handed 31 mex tasks in one audited
+			// game, every one nulled by the guard as an orphan.
+			CCircuitDef@ mexDef = SideDef3("armmex", "cormex", "legmex");
+			if ((mexDef !is null) && !unit.circuitDef.CanBuild(mexDef))
+				continue;
 			const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
 			if (spot < 0)
 				continue;
