@@ -63,12 +63,12 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 // budget log reads it; treat any claimed effect from editing it as false
 // until Cat::ARMY is wired into the metal-allocation level.
 array<float> SPEND_ARMY       = {3.5f,   5.f,  6.5f,   8.f,   12.f};
-// LOW until T3-scale income, then rising -- apexearth: a concentrated mobile
-// army picks one spot in a line and breaks it, so pre-T3 "defenses are
-// really only good versus raiders"; T3 moves slowly and the T3 towers are
-// powerful, which is when static metal starts paying. ~8-9% early/mid
-// (below even the old 10% pin), ~14% at the 300 column.
-array<float> SPEND_DEFENCE    = { 1.0f,  1.0f,  0.9f,  1.0f,  2.4f};
+// LOW until T3-scale income, then RISING HARD -- apexearth: pre-T3 "defenses
+// are really only good versus raiders", but "at late game we should be
+// aggressive with flak on our front lines, T3 defense too. Right now we are
+// *not* aggressive with this at all." The ramp starts at the 100 column and
+// peaks steep at 300: ~8-9% early/mid, ~12% at 100, ~19% at 300.
+array<float> SPEND_DEFENCE    = { 1.0f,  1.0f,  0.9f,  1.4f,  3.2f};
 array<float> SPEND_AIRDEF     = {  1.f,   2.f,  1.5f,  1.5f,  0.5f};
 array<float> SPEND_ECONOMY    = {3.5f,  2.7f,   2.f,  1.5f,   1.f};
 array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};

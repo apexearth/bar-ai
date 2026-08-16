@@ -662,8 +662,19 @@ IUnitTask@ HeavyFlak(CCircuitUnit@ unit)
 	// one antinuke never does, but the want still bounds the total.
 	if ((standing >= want) || (gFlakAsked - gFlakPeak >= 2))
 		return null;
+	// LATE GAME, FLAK GOES FORWARD: past apex_front_flak_income the front
+	// line gets the flak, not just the base -- apexearth: "at late game we
+	// should be aggressive with flak on our front lines... Right now we are
+	// *not* aggressive with this at all." Base placement remains the early
+	// answer and the fallback when no front spot stands.
 	AIFloat3 near;
-	if (!NanoCluster(near))
+	bool sited = false;
+	if (aiEconomyMgr.metal.income
+			>= ai.GetTunable("apex_front_flak_income", 120.f)) {
+		sited = Military::BorderPos(near, uint(flak.count))
+			|| Military::FrontLinePos(near);
+	}
+	if (!sited && !NanoCluster(near))
 		near = gHomePos;
 	AIFloat3 site = ai.FindBuildSiteNear(flak, near, GANTRY_NEAR_NANO);
 	if (!OnMap(site))
