@@ -161,19 +161,28 @@ CCircuitDef@ HeavyDefenceFor(CCircuitUnit@ unit)
 	return best;
 }
 
-// Legion's mid tier has TWO good answers: the machine-gun turret and the
-// Hive (300m drone dispenser -- apexearth: "useful T1.5 defense which
-// distracts units a lot"; it never got picked because the trio named legmg
-// only). Balance-pick whichever Legion holds fewer of, so both appear.
+// The mid tier is a SET per faction, balance-picked by count so every member
+// keeps appearing: the beam/MG tower, the Maw-class pop-up (armclaw/cormaw/
+// legdtr -- apexearth: "really nice defenses... they look just like walls
+// when not deployed... great for defending against raiders", and NOT legdtf,
+// the scavenger twin nobody can build), and Legion's Hive (apexearth:
+// "useful T1.5 defense which distracts units a lot").
 CCircuitDef@ MidTowerDef()
 {
-	CCircuitDef@ mid = SideDef3(armbeamer, corhllt, legmg);
-	if (ai.GetSideName() != "legion")
-		return mid;
-	CCircuitDef@ hive = ai.GetCircuitDef("leghive");
-	if ((hive is null) || !hive.IsAvailable(ai.frame) || (mid is null))
-		return (mid !is null) ? mid : hive;
-	return (hive.count < mid.count) ? hive : mid;
+	array<CCircuitDef@> cands;
+	cands.insertLast(SideDef3(armbeamer, corhllt, legmg));
+	cands.insertLast(SideDef3("armclaw", "cormaw", "legdtr"));
+	if (ai.GetSideName() == "legion")
+		cands.insertLast(ai.GetCircuitDef("leghive"));
+	CCircuitDef@ best = null;
+	for (uint i = 0; i < cands.length(); ++i) {
+		CCircuitDef@ d = cands[i];
+		if ((d is null) || !d.IsAvailable(ai.frame))
+			continue;
+		if ((best is null) || (d.count < best.count))
+			@best = d;
+	}
+	return best;
 }
 
 CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
