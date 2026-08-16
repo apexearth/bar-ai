@@ -637,14 +637,27 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 	// Mammoths without a per-unit-type special case, and the same code path
 	// covers any low-HP def on any faction.
 	float squadHealthSum = 0.f;
+	float squadPowerSum = 0.f;
 	int squadUnitCount = 0;
 	for (const auto& kv : rangeUnits) {
 		CCircuitDef* def = (*kv.second.begin())->GetCircuitDef();
 		if (def != nullptr) {
 			squadHealthSum += def->GetHealth() * kv.second.size();
+			squadPowerSum += def->GetPower() * kv.second.size();
 			squadUnitCount += (int)kv.second.size();
 		}
 	}
+	// apexearth, watching live: a raider squad of Pawns hovered at "110%" of a
+	// tower's range -- unable to shoot, trickle-dying to pathing jitter -- when
+	// they could easily overwhelm it. A STATIC cannot chase, so standing at its
+	// range is never useful: either the squad wins the dive and must commit, or
+	// the target should not be pressed from here at all. The per-row
+	// powerDominant test cannot see this: one Pawn loses the trade, eight win
+	// it, so the test is squad AGGREGATE power against the target.
+	CCircuitDef* atkDef = (GetTarget() != nullptr) ? GetTarget()->GetCircuitDef() : nullptr;
+	const bool squadOverwhelms = (atkDef != nullptr) && !atkDef->IsMobile()
+			&& (squadPowerSum > atkDef->GetPower()
+					* manager->GetCircuit()->GetTunable("apex_static_commit", POWER_DOMINANCE_RATIO));
 	const float avgSquadHealth = (squadUnitCount > 0) ? (squadHealthSum / squadUnitCount) : 1.f;
 	const float fragileCap = manager->GetCircuit()->GetTunable("apex_fragile_cap", FRAGILE_CAP);
 	const float fragileScale = manager->GetCircuit()->GetTunable("apex_fragile_standoff_scale", FRAGILE_STANDOFF_SCALE);
@@ -751,7 +764,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// maintain.
 		const bool glassCannon = (edef != nullptr) && (rowDef != nullptr)
 				&& (edef->GetHealth() < rowDef->GetHealth());
-		const bool outranged = !isArty && !powerDominant && !glassCannon
+		const bool outranged = !isArty && !powerDominant && !glassCannon && !squadOverwhelms
 				&& (edef != nullptr) && (edef->GetMaxRange() > kv.first);
 		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
 		// A fragile row (below the squad's own average health) stands further

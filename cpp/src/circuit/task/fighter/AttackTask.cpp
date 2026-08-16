@@ -930,7 +930,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
 void CAttackTask::FallbackFrontPos()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	circuit->GetMilitaryManager()->FillFrontPos(leader, urgentPositions);
+	// ADVANCE, don't retrace. apexearth, watching live: a squad kills its one
+	// elected target (a lone mex), finds nothing else visible, and walks all
+	// the way back to the front/base -- with the enemy now undefended. A
+	// healthy squad falls onto REMEMBERED enemy positions first; the front
+	// line and the base are for squads too mauled to press.
+	float hp = 0.f, hpMax = 0.f;
+	for (CCircuitUnit* unit : units) {
+		if (unit->IsDead()) {
+			continue;
+		}
+		hp += unit->GetUnit()->GetHealth();
+		hpMax += unit->GetCircuitDef()->GetHealth();
+	}
+	const bool healthy = (hpMax > 1.f)
+			&& (hp / hpMax >= circuit->GetTunable("apex_press_health", 0.6f));
+	if (healthy) {
+		const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
+		urgentPositions.clear();
+		for (const CEnemyManager::SEnemyGroup& group : groups) {
+			if (utils::is_valid(group.pos) && (group.cost > 1.f)) {
+				urgentPositions.push_back(group.pos);
+			}
+		}
+	}
+	if (urgentPositions.empty() || !healthy) {
+		circuit->GetMilitaryManager()->FillFrontPos(leader, urgentPositions);
+	}
 	if (urgentPositions.empty()) {
 		FallbackBasePos();
 		return;
@@ -968,8 +994,26 @@ void CAttackTask::FallbackBasePos()
 	CCircuitAI* circuit = manager->GetCircuit();
 	CSetupManager* setupMgr = circuit->GetSetupManager();
 
+	// apexearth, watching live: a squad that just WON its fight -- most units
+	// above 80% health -- walked all the way home to stand around, handing the
+	// now-undefended enemy a free rebuild. A healthy squad with nowhere
+	// obvious to go should PRESS toward the enemy's centre of mass, not
+	// retrace half the map; only a mauled squad earns the walk home.
+	float hp = 0.f, hpMax = 0.f;
+	for (CCircuitUnit* unit : units) {
+		if (unit->IsDead()) {
+			continue;
+		}
+		hp += unit->GetUnit()->GetHealth();
+		hpMax += unit->GetCircuitDef()->GetHealth();
+	}
+	const float pressHealth = circuit->GetTunable("apex_press_health", 0.6f);
+	const AIFloat3& foePos = circuit->GetEnemyManager()->GetEnemyPos();
+	const bool press = (hpMax > 1.f) && (hp / hpMax >= pressHealth)
+			&& utils::is_valid(foePos);
+
 	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
-	const AIFloat3& endPos = setupMgr->GetBasePos();
+	const AIFloat3& endPos = press ? foePos : setupMgr->GetBasePos();
 	const float pathRange = DEFAULT_SLACK * 4;
 
 	CPathFinder* pathfinder = circuit->GetPathfinder();

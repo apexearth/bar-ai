@@ -65,6 +65,7 @@ class CScheduler;
 class IModule;
 class CCircuitUnit;
 class CEnemyInfo;
+class IRefCounter;
 class COOAICallback;
 class CEngine;
 class CMap;
@@ -354,6 +355,16 @@ private:
 	// (TRY_UNIT absorbs dead-engine-unit commands) and refcounts stay honest.
 	// Freed in Release(). A set so a double reap cannot park a unit twice.
 	std::set<CCircuitUnit*> deadUnits;
+
+public:
+	// Deferred reference drops: CCircuitUnit::SetTask parks the old task's
+	// Release here instead of running it inline, because the unit's reference
+	// can be the task's LAST and inline Release deletes the task while its own
+	// RemoveAssignee/Stop is still executing. Drained at the top of Update().
+	void DeferRelease(circuit::IRefCounter* obj) { deferredReleases.push_back(obj); }
+private:
+	void DrainDeferredReleases();
+	std::vector<circuit::IRefCounter*> deferredReleases;
 // <<< Units ---- END
 
 // >>> AIOptions.lua ---- BEGIN

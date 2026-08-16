@@ -135,7 +135,16 @@ void CCircuitUnit::SetTask(IUnitTask* task)
 			}
 		}
 		if (this->task != nullptr) {
-			this->task->Release();
+			// DEFERRED: dropping the old task's reference here can be the LAST
+			// one (a dead task kept alive only by this unit), and Release()
+			// would delete it while ITS OWN RemoveAssignee/Stop is still on
+			// the stack -- symbolized live twice (AssignTask path, then the
+			// OnUnitDestroyed path). The release runs at the next safe point.
+			if (manager != nullptr) {
+				manager->GetCircuit()->DeferRelease(this->task);
+			} else {
+				this->task->Release();
+			}
 		}
 		this->task = task;
 	}

@@ -793,6 +793,7 @@ int CCircuitAI::Release(int reason)
 	enemyManager = nullptr;
 	mapManager = nullptr;
 
+	DrainDeferredReleases();  // before the unit dtors below release into it again
 	for (CCircuitUnit* unit : actionUnits) {
 		if (unit->IsDead()) {  // instance is not in teamUnits
 			delete unit;
@@ -829,9 +830,23 @@ int CCircuitAI::Release(int reason)
 	return 0;  // signaling: OK
 }
 
+void CCircuitAI::DrainDeferredReleases()
+{
+	// Swap first: a Release can run dtors that defer further releases.
+	std::vector<IRefCounter*> drain;
+	while (!deferredReleases.empty()) {
+		drain.swap(deferredReleases);
+		for (IRefCounter* obj : drain) {
+			obj->Release();
+		}
+		drain.clear();
+	}
+}
+
 int CCircuitAI::Update(int frame)
 {
 	destroyed.clear();
+	DrainDeferredReleases();
 	lastFrame = frame;
 	if (isResigned) {
 		Release(RELEASE_RESIGN);
