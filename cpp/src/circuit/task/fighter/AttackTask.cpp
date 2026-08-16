@@ -890,6 +890,9 @@ void CAttackTask::FindTarget()
 		SetTarget(bestTarget);
 		position = GetTarget()->GetPos();
 	}
+	// Feeds the accelerated merge check: a refusal pass this close to the bar
+	// means a partner squad is the difference.
+	lastRefused = (bestTarget == nullptr) ? bestRefused : .0f;
 
 	// One line per squad per 10s, TAKE=committing to a target, SKIP=every group
 	// failed the strength test. `edge` is our rated power over what we had to

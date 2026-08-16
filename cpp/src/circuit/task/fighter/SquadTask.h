@@ -114,6 +114,12 @@ public:
 	virtual void Merge(ISquadTask* task);
 	virtual bool TrySquadRetreat(CCircuitUnit* unit) override;
 
+	// The last FindTarget pass's strongest strength-test refusal, as
+	// power/need. Measured (2026-08-16): median 0.82, 69% of refusal passes
+	// >= 0.7 -- squads walk away from fights one merge would win, and the
+	// merge check only ran every 32nd update. A near-miss accelerates it.
+	float lastRefused = .0f;
+
 	const std::map<float, std::set<CCircuitUnit*>>& GetRangeUnits() const { return rangeUnits; }
 
 	CCircuitUnit* GetLeader() const { return leader; }

@@ -11885,7 +11885,7 @@ index c3f5e98..fc98a66 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index 91000e2..14704cd 100644
+index 91000e2..9b341d7 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -12064,7 +12064,17 @@ index 91000e2..14704cd 100644
  				hasGoodTarget |= !isOverpowered;
  			}
  		}
-@@ -833,13 +898,16 @@ void CAttackTask::FindTarget()
+@@ -825,6 +890,9 @@ void CAttackTask::FindTarget()
+ 		SetTarget(bestTarget);
+ 		position = GetTarget()->GetPos();
+ 	}
++	// Feeds the accelerated merge check: a refusal pass this close to the bar
++	// means a partner squad is the difference.
++	lastRefused = (bestTarget == nullptr) ? bestRefused : .0f;
+ 
+ 	// One line per squad per 10s, TAKE=committing to a target, SKIP=every group
+ 	// failed the strength test. `edge` is our rated power over what we had to
+@@ -833,13 +901,16 @@ void CAttackTask::FindTarget()
  	if (frame >= lastEngageLog + FRAMES_PER_SEC * 10) {
  		lastEngageLog = frame;
  		const float need = bestInfl * bestScale;
@@ -12084,7 +12094,7 @@ index 91000e2..14704cd 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -878,7 +946,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -878,7 +949,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -12119,7 +12129,7 @@ index 91000e2..14704cd 100644
  	if (urgentPositions.empty()) {
  		FallbackBasePos();
  		return;
-@@ -916,8 +1010,26 @@ void CAttackTask::FallbackBasePos()
+@@ -916,8 +1013,26 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -12147,7 +12157,7 @@ index 91000e2..14704cd 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -950,7 +1062,9 @@ void CAttackTask::Fallback()
+@@ -950,7 +1065,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -14885,7 +14895,7 @@ index b4b43c1..e0b2fb4 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index ae6cce5..ab011f4 100644
+index ae6cce5..b3c320a 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,6 +6,7 @@
@@ -15009,7 +15019,21 @@ index ae6cce5..ab011f4 100644
  		const ISquadTask* candy = static_cast<const ISquadTask*>(candidate);
  
  		const AIFloat3& tp = candy->GetLeaderPos(frame);
-@@ -504,8 +563,12 @@ void ISquadTask::ActivePath(float speed)
+@@ -251,7 +310,12 @@ ISquadTask* ISquadTask::CheckMergeTask()
+ 
+ ISquadTask* ISquadTask::GetMergeTask()
+ {
+-	if (updCount % 32 == 1) {
++	// A squad that just refused a target it nearly qualified for hunts a
++	// partner at 4x the normal cadence instead of wandering for another
++	// half-minute -- the near-miss fix picked by the bestRef distribution.
++	const bool nearMiss = (lastRefused >= manager->GetCircuit()
++			->GetTunable("apex_nearmiss_merge", 0.7f)) && (updCount % 8 == 5);
++	if ((updCount % 32 == 1) || nearMiss) {
+ 		return IsMergeSafe() ? CheckMergeTask() : nullptr;
+ 	}
+ 	return nullptr;
+@@ -504,8 +568,12 @@ void ISquadTask::ActivePath(float speed)
  	const float half = span * scale * 0.5f;
  	int i = 0;
  	for (CCircuitUnit* unit : units) {
@@ -15024,7 +15048,7 @@ index ae6cce5..ab011f4 100644
  		++i;
  	}
  }
-@@ -589,7 +652,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -589,7 +657,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				if (unit->Blocker() != nullptr) {
  					continue;  // Do not interrupt current action
  				}
@@ -15035,7 +15059,7 @@ index ae6cce5..ab011f4 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -604,10 +669,63 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -604,10 +674,63 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -15100,7 +15124,7 @@ index ae6cce5..ab011f4 100644
  		// 20% inside its reach, which throws away the whole point of keeping the
  		// long-ranged units in an outer row -- a Banisher at 800 was standing at
  		// 640, inside the tanks it was supposed to shoot over.
-@@ -699,15 +817,50 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -699,15 +822,50 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  		// maintain.
  		const bool glassCannon = (edef != nullptr) && (rowDef != nullptr)
  				&& (edef->GetHealth() < rowDef->GetHealth());
@@ -15155,7 +15179,7 @@ index ae6cce5..ab011f4 100644
  		}
  		// The arc a row may occupy. At 0.9*PI a squad packs into a half circle on
  		// one side of the target, which is a single AOE footprint -- and the wider
-@@ -741,8 +894,36 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -741,8 +899,36 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  		const float end2 = alpha - beta;
  		AIFloat3 newPos1(tPos.x + range * cosf(end1), tPos.y, tPos.z + range * sinf(end1));
  		AIFloat3 newPos2(tPos.x + range * cosf(end2), tPos.y, tPos.z + range * sinf(end2));
@@ -15194,7 +15218,7 @@ index ae6cce5..ab011f4 100644
  			delta = -delta;
  			beta = -beta;
  		}
-@@ -752,7 +933,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -752,7 +938,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  			if (unit->Blocker() != nullptr) {
  				continue;  // Do not interrupt current action
  			}
@@ -15205,7 +15229,7 @@ index ae6cce5..ab011f4 100644
  
  			if (isRepeatAttack
  				|| (unit->GetTarget() != GetTarget())
-@@ -786,7 +969,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -786,7 +974,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				// into a second enemy.
  				const float orbit = ORBIT_RATE * (frame / (float)FRAMES_PER_SEC) * orbitDir;
  				const float angle = alpha + beta + orbit;
@@ -15224,7 +15248,7 @@ index ae6cce5..ab011f4 100644
  				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
  				CTerrainManager::CorrectPosition(newPos);
  
-@@ -804,9 +997,24 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -804,9 +1002,24 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				// stepping into the hotter spot. Small multiplicative
  				// tolerance so a unit doesn't flip-flop between two tiles of
  				// near-identical threat every isRepeatAttack tick.
@@ -15250,7 +15274,7 @@ index ae6cce5..ab011f4 100644
  					newPos = curPos;
  				}
  
-@@ -826,7 +1034,9 @@ void ISquadTask::Log()
+@@ -826,7 +1039,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
@@ -15262,7 +15286,7 @@ index ae6cce5..ab011f4 100644
  		circuit->GetDrawer()->AddPoint(leader->GetPos(circuit->GetLastFrame()), leader->GetCircuitDef()->GetDef()->GetName());
  	}
 diff --git a/src/circuit/task/fighter/SquadTask.h b/src/circuit/task/fighter/SquadTask.h
-index 544ee33..25ab094 100644
+index 544ee33..b8724b1 100644
 --- a/src/circuit/task/fighter/SquadTask.h
 +++ b/src/circuit/task/fighter/SquadTask.h
 @@ -29,13 +29,6 @@ class CCircuitDef;
@@ -15294,11 +15318,17 @@ index 544ee33..25ab094 100644
  
  class ISquadTask: public IFighterTask {
  protected:
-@@ -111,11 +112,15 @@ public:
+@@ -111,11 +112,21 @@ public:
  	virtual void RemoveAssignee(CCircuitUnit* unit) override;
  
  	virtual void Merge(ISquadTask* task);
 +	virtual bool TrySquadRetreat(CCircuitUnit* unit) override;
++
++	// The last FindTarget pass's strongest strength-test refusal, as
++	// power/need. Measured (2026-08-16): median 0.82, 69% of refusal passes
++	// >= 0.7 -- squads walk away from fights one merge would win, and the
++	// merge check only ran every 32nd update. A near-miss accelerates it.
++	float lastRefused = .0f;
  
  	const std::map<float, std::set<CCircuitUnit*>>& GetRangeUnits() const { return rangeUnits; }
  
@@ -15310,7 +15340,7 @@ index 544ee33..25ab094 100644
  
  	// role heavy + attribute melee: corjugg (Behemoth), corkorg (Juggernaut),
  	// armbanth (Titan), armraz. All of them detonate on death, so the value is
-@@ -132,7 +137,6 @@ private:
+@@ -132,7 +143,6 @@ private:
  protected:
  	ISquadTask* GetMergeTask();
  	springai::AIFloat3 LinePos(CCircuitUnit* unit, const springai::AIFloat3& centre) const;

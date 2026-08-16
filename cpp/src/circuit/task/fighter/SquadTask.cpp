@@ -310,7 +310,12 @@ ISquadTask* ISquadTask::CheckMergeTask()
 
 ISquadTask* ISquadTask::GetMergeTask()
 {
-	if (updCount % 32 == 1) {
+	// A squad that just refused a target it nearly qualified for hunts a
+	// partner at 4x the normal cadence instead of wandering for another
+	// half-minute -- the near-miss fix picked by the bestRef distribution.
+	const bool nearMiss = (lastRefused >= manager->GetCircuit()
+			->GetTunable("apex_nearmiss_merge", 0.7f)) && (updCount % 8 == 5);
+	if ((updCount % 32 == 1) || nearMiss) {
 		return IsMergeSafe() ? CheckMergeTask() : nullptr;
 	}
 	return nullptr;
