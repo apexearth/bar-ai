@@ -798,9 +798,17 @@ void FillQuota(int line)
 				< aiEconomyMgr.metal.storage
 					* ai.GetTunable("apex_overflow_build_frac", 0.5f))
 			return;
+		// COMBAT ONLY: with the army entries missing (the air-table hole)
+		// this fallback filled the line with rezbots -- 88 alive in one
+		// audited game. Eco defs never overflow-build.
+		CCircuitDef@ conD = aiFactoryMgr.GetRoleDef(fac.circuitDef,
+				Unit::Role::BUILDER.type);
+		CCircuitDef@ rezD = Factory::RezBotDef();
 		float worstOver = 1.0e18f;
 		for (uint i = 0; i < defs.length(); ++i) {
 			if ((want[i] <= 0) || isFloor[i])
+				continue;
+			if ((defs[i] is conD) || (defs[i] is rezD))
 				continue;
 			const int have = defs[i].count + fac.CountQueued(defs[i])
 					+ PendCount(line, defs[i]);
