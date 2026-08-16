@@ -83,14 +83,68 @@ int T1PlantCount()
 // How many T2-tier plants we hold in TOTAL, across every def -- same shape as
 // T1PlantCount(), for the same reason: PlantsWanted() answers for the TIER,
 // not the individual def, so a per-def count check lets two different T2
-// defs each read count=0 and both pass.
+// defs each read count=0 and both pass. DEF COUNTS, NOT gFacUnits: that list
+// fills from AiUnitAdded, i.e. on COMPLETION, and an advanced lab is a
+// nanoframe for minutes -- reading it here let three T2 labs through before
+// the first one registered (seen live 2026-08-15).
 int T2PlantCount()
 {
+	array<string> plants = {"armalab", "armavp", "armaap",
+	                        "coralab", "coravp", "coraap",
+	                        "legalab", "legavp", "legaap"};
 	int n = 0;
-	for (uint i = 0; i < gFacUnits.length(); ++i) {
-		if (gFacUnits[i] is null)
-			continue;
-		if ((userData[gFacUnits[i].circuitDef.id].attr & Attr::T2) != 0)
+	for (uint i = 0; i < plants.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(plants[i]);
+		if (d !is null)
+			n += int(d.count);
+	}
+	return n;
+}
+
+// Approvals this gate has granted whose nanoframe does not exist yet. Even
+// def counts miss the window between "yes, build it" and the builder reaching
+// the site -- a 30s walk, during which every re-ask reads the same counts and
+// passes. Each approval is held against the caps until the def's count rises
+// past what it was when granted (the frame is down, counts cover it now) or a
+// TTL passes (the ask died with its builder; do not dam the tech path).
+array<CCircuitDef@> gAskDef;
+array<int> gAskFrame;
+array<int> gAskCount;
+
+void SweepPlantAsks()
+{
+	const int ttl = int(ai.GetTunable("apex_plant_ask_ttl", 90.f)) * SECOND;
+	for (uint i = gAskDef.length(); i > 0; --i) {
+		const uint k = i - 1;
+		if ((gAskDef[k] is null)
+			|| (int(gAskDef[k].count) > gAskCount[k])
+			|| (ai.frame - gAskFrame[k] > ttl))
+		{
+			gAskDef.removeAt(k);
+			gAskFrame.removeAt(k);
+			gAskCount.removeAt(k);
+		}
+	}
+}
+
+int InFlightOf(const CCircuitDef@ def)
+{
+	int n = 0;
+	for (uint i = 0; i < gAskDef.length(); ++i) {
+		if (gAskDef[i] is def)
+			++n;
+	}
+	return n;
+}
+
+// tierMask: Attr::T2 | Attr::T3 picks those tiers; 0 picks T1 (no tier bit).
+int InFlightTier(int tierMask)
+{
+	int n = 0;
+	for (uint i = 0; i < gAskDef.length(); ++i) {
+		const int attr = userData[gAskDef[i].id].attr;
+		if (tierMask == 0 ? ((attr & (Attr::T2 | Attr::T3)) == 0)
+		                  : ((attr & tierMask) != 0))
 			++n;
 	}
 	return n;
@@ -136,7 +190,8 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// second request sees have=1 and is refused.
 	if ((want is null) || !ApexActive())
 		return want;
-	const int have = want.count;
+	SweepPlantAsks();
+	const int have = int(want.count) + InFlightOf(want);
 	const int allowed = PlantsWanted(want);
 	if (have >= allowed) {
 		if (ai.frame >= gNextPlantCapLog) {
@@ -186,7 +241,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 				const bool haveT2Mex = (t2mex !is null) && (t2mex.count > 0);
 				stillCompeting = !haveAdvCon || !haveT2Mex;
 			}
-			const int t1have = T1PlantCount();
+			const int t1have = T1PlantCount() + InFlightTier(0);
 			if (stillCompeting ? (t1have >= 1) : (t1have >= allowed)) {
 				if (ai.frame >= gNextT1TotalLog) {
 					gNextT1TotalLog = ai.frame + 60 * SECOND;
@@ -211,7 +266,7 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 		const bool haveAdvCon2 = (advCon2 !is null) && (advCon2.count > 0);
 		CCircuitDef@ t2mex2 = SideDef3(armmoho, cormoho, legmoho);
 		const bool haveT2Mex2 = (t2mex2 !is null) && (t2mex2.count > 0);
-		const int t2have = T2PlantCount();
+		const int t2have = T2PlantCount() + InFlightTier(Attr::T2);
 		// A GIFTED advanced constructor makes the first T2 plant's main early
 		// product redundant -- the fusion IS the better first buy then.
 		// apexearth 2026-08-15: "making your first fusion should come before
@@ -246,6 +301,18 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 			return null;
 		}
 	}
+	// Every plant the gate grants is logged and held in the ask ledger; the
+	// C++ side has three enqueue paths and none of them logs, so this line is
+	// the only attribution for "why did a lab appear".
+	gAskDef.insertLast(want);
+	gAskFrame.insertLast(ai.frame);
+	gAskCount.insertLast(int(want.count));
+	AiLog(T() + "apex: plant approved " + want.GetName()
+		+ " have=" + have + "/" + allowed
+		+ " t1=" + (T1PlantCount() + InFlightTier(0))
+		+ " t2=" + (T2PlantCount() + InFlightTier(Attr::T2))
+		+ " inflight=" + gAskDef.length()
+		+ " at " + formatFloat(SteadyIncome(), "", 0, 0) + " m/s");
 	return want;
 }
 
