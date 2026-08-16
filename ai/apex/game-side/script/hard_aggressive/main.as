@@ -127,11 +127,18 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	CCircuitDef@ nanoGone = Builder::NanoDef();
 	if ((cdef !is null) && (nanoGone !is null) && (cdef.id == nanoGone.id))
 		Builder::NanoNoteGone(unit.id);
+	// The fight type IS "the last major action" for a combat unit -- attack,
+	// defend, raid, retreat all leave a distinct value here -- and the forward
+	// fraction says WHERE it died (0 home, 1 at the enemy). tools/deaths.py
+	// aggregates these lines into metal-lost-by-last-action.
+	const int ft = ((t !is null) && (tt == Task::Type::FIGHTER)) ? t.GetFightType() : -1;
 	const string hist = Builder::TakeHistFor(int(unit.id));
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")
 		+ " id=" + unit.id + " frame=" + ai.frame
 		+ " at=" + int(at.x) + "," + int(at.z)
-		+ " curTask=t" + tt + "b" + bt
+		+ " curTask=t" + tt + "b" + bt + "f" + ft
+		+ " cost=" + int((cdef !is null) ? cdef.costM : 0.f)
+		+ " fwd=" + formatFloat(Military::ForwardFraction(at), "", 0, 2)
 		+ " hist=[" + hist + "]");
 }
 
