@@ -5573,10 +5573,18 @@ index f908a50..3500614 100644
 +
 +#endif // SRC_CIRCUIT_SCRIPT_REFCOUNTER_H_
 diff --git a/src/circuit/task/IdleTask.cpp b/src/circuit/task/IdleTask.cpp
-index f210b3a..900610d 100644
+index f210b3a..96f2602 100644
 --- a/src/circuit/task/IdleTask.cpp
 +++ b/src/circuit/task/IdleTask.cpp
-@@ -60,6 +60,15 @@ void CIdleTask::Update()
+@@ -7,6 +7,7 @@
+ 
+ #include "task/IdleTask.h"
+ #include "task/RetreatTask.h"
++#include "map/InfluenceMap.h"
+ #include "module/TaskModule.h"
+ #include "unit/CircuitUnit.h"
+ #include "CircuitAI.h"
+@@ -60,6 +61,15 @@ void CIdleTask::Update()
  	while (it != updateUnits.end()) {
  		CCircuitUnit* ass = *it;
  
@@ -5592,7 +5600,7 @@ index f210b3a..900610d 100644
  		// get rid of delayed by engine UnitIdle event from previous task
  		if (frame < ass->GetTaskFrame() + 20) {
  			++it;
-@@ -68,8 +77,20 @@ void CIdleTask::Update()
+@@ -68,8 +78,20 @@ void CIdleTask::Update()
  
  		it = updateUnits.erase(it);
  
@@ -5615,6 +5623,25 @@ index f210b3a..900610d 100644
  
  		if (++i >= updateSlice) {
  			break;
+@@ -94,6 +116,18 @@ void CIdleTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+ {
+ 	const float healthPerc = unit->GetHealthPercent();
+ 	if (healthPerc < unit->GetCircuitDef()->GetRetreat()) {
++		// AT HOME, A FIGHTER STANDS. Units touch IDLE constantly between task
++		// assignments, and one hit under the (high, 0.5-0.85) retreat bar sent
++		// each on a solo retreat THROUGH its own base -- the audited fwd~0.15
++		// retreat deaths that persisted after both squad-level fixes. The
++		// militia pool re-tasks an idle unit within a second; running is what
++		// killed them. Builders keep the retreat: their job is not fighting.
++		CCircuitAI* circuit = manager->GetCircuit();
++		if (unit->GetCircuitDef()->IsAttacker()
++			&& (circuit->GetInflMap()->GetAllyInflAt(
++					unit->GetPos(circuit->GetLastFrame())) >= INFL_SAFE)) {
++			return;
++		}
+ 		CRetreatTask* task = manager->EnqueueRetreat();
+ 		if (task != nullptr) {
+ 			task->AssignTo(unit);
 diff --git a/src/circuit/task/NilTask.cpp b/src/circuit/task/NilTask.cpp
 index a5d683d..8c30107 100644
 --- a/src/circuit/task/NilTask.cpp

@@ -7,6 +7,7 @@
 
 #include "task/IdleTask.h"
 #include "task/RetreatTask.h"
+#include "map/InfluenceMap.h"
 #include "module/TaskModule.h"
 #include "unit/CircuitUnit.h"
 #include "CircuitAI.h"
@@ -115,6 +116,18 @@ void CIdleTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 {
 	const float healthPerc = unit->GetHealthPercent();
 	if (healthPerc < unit->GetCircuitDef()->GetRetreat()) {
+		// AT HOME, A FIGHTER STANDS. Units touch IDLE constantly between task
+		// assignments, and one hit under the (high, 0.5-0.85) retreat bar sent
+		// each on a solo retreat THROUGH its own base -- the audited fwd~0.15
+		// retreat deaths that persisted after both squad-level fixes. The
+		// militia pool re-tasks an idle unit within a second; running is what
+		// killed them. Builders keep the retreat: their job is not fighting.
+		CCircuitAI* circuit = manager->GetCircuit();
+		if (unit->GetCircuitDef()->IsAttacker()
+			&& (circuit->GetInflMap()->GetAllyInflAt(
+					unit->GetPos(circuit->GetLastFrame())) >= INFL_SAFE)) {
+			return;
+		}
 		CRetreatTask* task = manager->EnqueueRetreat();
 		if (task != nullptr) {
 			task->AssignTo(unit);
