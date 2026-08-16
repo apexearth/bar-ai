@@ -61,12 +61,20 @@ def main():
     count = defaultdict(int)
     fwd_sum = defaultdict(float)
     per_team = defaultdict(float)
+    seen = set()
     for line in text.splitlines():
         m = LINE.search(line)
         if not m:
             continue
         if team is not None and int(m["team"]) != team:
             continue
+        # The engine re-reports dead units (one nano logged 2,350 deaths);
+        # count each (team, id) once, at its first report.
+        uid = re.search(r" id=(\d+)", line)
+        key = (m["team"], uid.group(1) if uid else line)
+        if key in seen:
+            continue
+        seen.add(key)
         frm = re.search(r" frame=(\d+)", line)
         if frm and int(frm.group(1)) >= cutoff:
             continue

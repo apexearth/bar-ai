@@ -1,5 +1,5 @@
 ﻿diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index 0fd0e0b..89e2a59 100644
+index 0fd0e0b..305e37d 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -60,6 +60,7 @@
@@ -53,16 +53,35 @@ index 0fd0e0b..89e2a59 100644
  	lastFrame = frame;
  	if (isResigned) {
  		Release(RELEASE_RESIGN);
-@@ -1190,13 +1210,17 @@ int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
- 	if (unit->GetCircuitDef() != nullptr) {
- 		NoteLossAt(unit->GetPos(GetLastFrame()), unit->GetCircuitDef()->GetCostM());
+@@ -1183,20 +1203,30 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+ 
+ int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+ {
+-	destroyed.insert(unit->GetId());
+-	NoteTrade(false, unit->GetCircuitDef());
+-	// Feeds the attack hotspot: where we are losing things is the best evidence
+-	// available of where the enemy actually is.
+-	if (unit->GetCircuitDef() != nullptr) {
+-		NoteLossAt(unit->GetPos(GetLastFrame()), unit->GetCircuitDef()->GetCostM());
++	// insert().second: this is called repeatedly for a unit already dead
++	// (measured: one nano's id logged 2,350 times over three minutes, pos
++	// (1,1)) -- the set existed but nothing checked it. First call only.
++	const bool firstDeath = destroyed.insert(unit->GetId()).second;
++	if (firstDeath) {
++		NoteTrade(false, unit->GetCircuitDef());
++		// Feeds the attack hotspot: where we are losing things is the best
++		// evidence available of where the enemy actually is. (Repeated calls
++		// were also multiplying this and NoteTrade -- pre-existing.)
++		if (unit->GetCircuitDef() != nullptr) {
++			NoteLossAt(unit->GetPos(GetLastFrame()), unit->GetCircuitDef()->GetCostM());
++		}
++		// BEFORE the modules: their UnitDestroyed strips the unit's task
++		// (task->OnUnitDestroyed -> RemoveAssignee -> reassigned idle/nil),
++		// so the script hook fired after them read every death as "idle".
++		// The script only does bookkeeping; it needs the task the unit
++		// actually died holding.
++		script->UnitDestroyed(unit);
  	}
-+	// BEFORE the modules: their UnitDestroyed strips the unit's task (task->
-+	// OnUnitDestroyed -> RemoveAssignee -> reassigned idle/nil), so the script
-+	// hook fired after them read every death as "idle" -- 915 attacker deaths
-+	// at 0.94 forward, all masked. The script only does bookkeeping; it needs
-+	// the task the unit actually died holding.
-+	script->UnitDestroyed(unit);
 +
  	for (auto& module : modules) {
  		module->UnitDestroyed(unit, attacker);
@@ -74,7 +93,7 @@ index 0fd0e0b..89e2a59 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1509,7 +1533,7 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1509,7 +1539,7 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -83,7 +102,7 @@ index 0fd0e0b..89e2a59 100644
  }
  
  float CCircuitAI::GetTeamMetalFill(int otherTeamId) const
-@@ -1829,6 +1853,27 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnStructsNear(const springai::AIFloat
+@@ -1829,6 +1859,27 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnStructsNear(const springai::AIFloat
  	return out;
  }
  
@@ -111,7 +130,7 @@ index 0fd0e0b..89e2a59 100644
  float CCircuitAI::GetPathLength(CCircuitUnit* unit, const springai::AIFloat3& to)
  {
  	if ((unit == nullptr) || (unit->GetCircuitDef() == nullptr)) {
-@@ -1988,28 +2033,94 @@ float CCircuitAI::GetNetInflAt(const AIFloat3& pos) const
+@@ -1988,28 +2039,94 @@ float CCircuitAI::GetNetInflAt(const AIFloat3& pos) const
  // Cost-weighted so a dead constructor or a dead tank moves it and a dead scout
  // barely does. Decayed so it tracks the CURRENT attack rather than accumulating
  // every fight of the game into a meaningless average.

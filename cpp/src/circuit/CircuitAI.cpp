@@ -1203,19 +1203,25 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
 
 int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 {
-	destroyed.insert(unit->GetId());
-	NoteTrade(false, unit->GetCircuitDef());
-	// Feeds the attack hotspot: where we are losing things is the best evidence
-	// available of where the enemy actually is.
-	if (unit->GetCircuitDef() != nullptr) {
-		NoteLossAt(unit->GetPos(GetLastFrame()), unit->GetCircuitDef()->GetCostM());
+	// insert().second: this is called repeatedly for a unit already dead
+	// (measured: one nano's id logged 2,350 times over three minutes, pos
+	// (1,1)) -- the set existed but nothing checked it. First call only.
+	const bool firstDeath = destroyed.insert(unit->GetId()).second;
+	if (firstDeath) {
+		NoteTrade(false, unit->GetCircuitDef());
+		// Feeds the attack hotspot: where we are losing things is the best
+		// evidence available of where the enemy actually is. (Repeated calls
+		// were also multiplying this and NoteTrade -- pre-existing.)
+		if (unit->GetCircuitDef() != nullptr) {
+			NoteLossAt(unit->GetPos(GetLastFrame()), unit->GetCircuitDef()->GetCostM());
+		}
+		// BEFORE the modules: their UnitDestroyed strips the unit's task
+		// (task->OnUnitDestroyed -> RemoveAssignee -> reassigned idle/nil),
+		// so the script hook fired after them read every death as "idle".
+		// The script only does bookkeeping; it needs the task the unit
+		// actually died holding.
+		script->UnitDestroyed(unit);
 	}
-	// BEFORE the modules: their UnitDestroyed strips the unit's task (task->
-	// OnUnitDestroyed -> RemoveAssignee -> reassigned idle/nil), so the script
-	// hook fired after them read every death as "idle" -- 915 attacker deaths
-	// at 0.94 forward, all masked. The script only does bookkeeping; it needs
-	// the task the unit actually died holding.
-	script->UnitDestroyed(unit);
 
 	for (auto& module : modules) {
 		module->UnitDestroyed(unit, attacker);
