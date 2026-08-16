@@ -28,12 +28,13 @@ class CCircuitAI;
 // relative to the average health of whatever else is fighting alongside it
 // in the same squad -- self-normalizing per engagement, not a per-unit-type
 // special case. FRAGILE_STANDOFF_SCALE is the extra standoff fraction added
-// at the fragility cap (e.g. 0.25 = up to +25% standoff for a row at half the
-// squad's average health); FRAGILE_CAP bounds how far one glass-cannon def
+// at the fragility cap; FRAGILE_CAP bounds how far one glass-cannon def
 // can push it. Runtime: apex_fragile_standoff_scale, apex_fragile_cap.
-// apexearth: "certain lower hp units have to be way more careful than high
-// hp units."
-#define FRAGILE_STANDOFF_SCALE	0.25f
+// Default 0: the pushback scattered the fight shape -- A/B 2026-08-16
+// (fight-control vs fight-fragile0, 12 games each) measured army K/D 0.333
+// with it on against 0.499 off. Rows still stand at their own weapon range,
+// which is what keeps long guns behind the tanks.
+#define FRAGILE_STANDOFF_SCALE	0.f
 #define FRAGILE_CAP	2.0f
 
 class CEnemyInfo;

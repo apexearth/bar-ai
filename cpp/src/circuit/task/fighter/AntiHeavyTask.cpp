@@ -77,7 +77,7 @@ void CAntiHeavyTask::AssignTo(CCircuitUnit* unit)
 
 	int squareSize = circuit->GetPathfinder()->GetSquareSize();
 	ITravelAction* travelAction;
-	if (cdef->IsAttrSiege() && (circuit->GetTunable("apex_siege_fight", 0.f) > 0.f)) {
+	if (cdef->IsAttrSiege() && (circuit->GetTunable("apex_siege_fight", 1.f) > 0.f)) {
 		travelAction = new CFightAction(unit, squareSize);
 	} else {
 		travelAction = new CMoveAction(unit, squareSize);

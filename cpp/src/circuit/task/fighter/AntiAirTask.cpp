@@ -96,7 +96,7 @@ void CAntiAirTask::AssignTo(CCircuitUnit* unit)
 	int squareSize = manager->GetCircuit()->GetPathfinder()->GetSquareSize();
 	CCircuitDef* cdef = unit->GetCircuitDef();
 	ITravelAction* travelAction;
-	if (cdef->IsAttrSiege() && (manager->GetCircuit()->GetTunable("apex_siege_fight", 0.f) > 0.f)) {
+	if (cdef->IsAttrSiege() && (manager->GetCircuit()->GetTunable("apex_siege_fight", 1.f) > 0.f)) {
 		travelAction = new CFightAction(unit, squareSize);
 	} else {
 		travelAction = new CMoveAction(unit, squareSize);

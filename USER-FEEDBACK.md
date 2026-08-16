@@ -140,6 +140,13 @@ The thing he asked for first and has pushed hardest on.
 - **Coordinate air raids with the land engagement** on the same front, at the
   same time.
 - **Penetrate deeper** into places we believe are empty, to kill mexes and bases.
+- **No flat move order may override common sense (2026-08-16, with screenshot):
+  a fragile unit must never blind-walk into enemy fire.** A Sharpshooter walked
+  deep into the enemy army on a plain move order, unable to stop and shoot
+  things well inside its own range. "This is just basic 'well duh of course'
+  logic." Travel for any unit must respect what it can shoot and what can shoot
+  it — halting to fire, standing off, or routing around are all acceptable;
+  walking blind is not.
 - Stop entire armies chasing a few light units off the front line.
 - Do not walk 20x the necessary distance around enemy defences.
 - **Making this kind of strategic logic easy to express is itself a goal.**

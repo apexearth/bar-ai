@@ -45,6 +45,11 @@ local NAMES = {
 	-- Economy-first targeting and group sizing (2026-08-09). The first three of
 	-- the fighter tunables above no longer have a reader; the fighter delta was
 	-- reverted to upstream. These do.
+	-- Formation-coherence A/B (2026-08-16): the per-row fragility pushback
+	-- and standoff modifiers suspected of scattering the fight shape.
+	"apex_fragile_standoff_scale",
+	"apex_fragile_cap",
+	"apex_static_commit",
 	"apex_eco_target",
 	"apex_eco_unseen",
 	"apex_mass_vs_army",
