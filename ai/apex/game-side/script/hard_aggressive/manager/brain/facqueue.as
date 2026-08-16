@@ -487,6 +487,17 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			want.insertLast(Factory::AIR_CON_MIN);
 			isFloor.insertLast(true);
 		}
+		// AIR SCOUTS ARE INTEL, NOT ARMY. apexearth: "air scouts exist to help
+		// us understand if we can attack certain areas" -- and the ghost-weight
+		// posture fix only works if something keeps re-seeing the map. A small
+		// standing floor, income-scaled, kept alive by the line.
+		CCircuitDef@ eye = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::SCOUT.type);
+		if ((eye !is null) && eye.IsAvailable(ai.frame)) {
+			defs.insertLast(eye);
+			want.insertLast(1 + int(aiEconomyMgr.metal.income
+					/ ai.GetTunable("apex_airscout_per", 60.f)));
+			isFloor.insertLast(true);
+		}
 	}
 
 	// A GANTRY THAT IS STANDING IS NEVER IDLE. Named rather than asked for by
