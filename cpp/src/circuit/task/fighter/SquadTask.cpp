@@ -655,9 +655,20 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 	// powerDominant test cannot see this: one Pawn loses the trade, eight win
 	// it, so the test is squad AGGREGATE power against the target.
 	CCircuitDef* atkDef = (GetTarget() != nullptr) ? GetTarget()->GetCircuitDef() : nullptr;
-	const bool squadOverwhelms = (atkDef != nullptr) && !atkDef->IsMobile()
-			&& (squadPowerSum > atkDef->GetPower()
-					* manager->GetCircuit()->GetTunable("apex_static_commit", POWER_DOMINANCE_RATIO));
+	// Against the LOCAL threat at the target, not the lone target's power: the
+	// ground a static stands on is covered by everything beside it, and reading
+	// only the target made a squad "overwhelm" one tower in a row of five and
+	// dive through the rest -- apexearth, after 41% of lost metal died in
+	// attack tasks at 0.72 forward: "We have some false belief that we are
+	// overwhelming something that is superior." GetThreatAt sums every armed
+	// enemy covering the spot, on the same power scale as GetPower().
+	bool squadOverwhelms = false;
+	if ((atkDef != nullptr) && !atkDef->IsMobile() && (leader != nullptr)) {
+		const float localThreat = manager->GetCircuit()->GetThreatMap()
+				->GetThreatAt(leader, GetTarget()->GetPos());
+		squadOverwhelms = squadPowerSum > std::max(localThreat, atkDef->GetPower())
+				* manager->GetCircuit()->GetTunable("apex_static_commit", POWER_DOMINANCE_RATIO);
+	}
 	const float avgSquadHealth = (squadUnitCount > 0) ? (squadHealthSum / squadUnitCount) : 1.f;
 	const float fragileCap = manager->GetCircuit()->GetTunable("apex_fragile_cap", FRAGILE_CAP);
 	const float fragileScale = manager->GetCircuit()->GetTunable("apex_fragile_standoff_scale", FRAGILE_STANDOFF_SCALE);
