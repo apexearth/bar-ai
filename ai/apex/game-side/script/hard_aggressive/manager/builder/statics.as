@@ -506,6 +506,7 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 // fusion-minute, so the bar is set on energy income rather than metal or a
 // clock. Advanced constructors only -- a T1 constructor cannot build one.
 string armsilo("armsilo"); string corsilo("corsilo"); string legsilo("legsilo");
+string armamd("armamd");   string corfmd("corfmd");   string legabm("legabm");
 
 // A silo is 8,100 metal and 90,000 energy before a single missile, so it has to
 // come out of real surplus rather than the army budget.
@@ -609,6 +610,59 @@ IUnitTask@ NukeSilo(CCircuitUnit@ unit)
 		+ " standing=" + silo.count + " asked=" + gNukesAsked
 		+ (surplus ? " surplus" : "")
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
+	return post;
+}
+
+// ANTINUKE -- apexearth: "standard for all games where nukes are allowed."
+// One as soon as a T2 constructor and a modest economy exist; more as income
+// grows (a bigger base has more to lose and more area to cover). No flat cap.
+int gAntiAsked = 0;
+int gAntiPeak = 0;
+
+IUnitTask@ AntiNuke(CCircuitUnit@ unit)
+{
+	if (aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (unit.circuitDef.costM < ADV_CON_COST)
+		return null;
+	if (aiEconomyMgr.metal.income < ai.GetTunable("apex_antinuke_income", 20.f))
+		return null;
+	CCircuitDef@ anti = SideDef3(armamd, corfmd, legabm);
+	if ((anti is null) || !anti.IsAvailable(ai.frame))
+		return null;
+	const int standing = int(anti.count);
+	if (standing > gAntiPeak)
+		gAntiPeak = standing;
+	const int want = 1 + int(aiEconomyMgr.metal.income
+			/ ai.GetTunable("apex_antinuke_per", 150.f));
+	// Outstanding as well as standing, same reason as the silo: Enqueue does
+	// not dedup and this builds slowly.
+	if ((standing >= want) || (gAntiAsked - gAntiPeak >= 1))
+		return null;
+
+	AIFloat3 near;
+	const bool haveNano = NanoCluster(near);
+	if (!haveNano)
+		near = gHomePos;
+	AIFloat3 site = ai.FindBuildSiteNear(anti, near, GANTRY_NEAR_NANO);
+	if (!OnMap(site) && haveNano)
+		site = ai.FindBuildSiteNear(anti, gHomePos, GANTRY_NEAR_NANO);
+	if (!OnMap(site))
+		site = ai.FindBuildSiteNear(anti, gHomePos, GANTRY_SEARCH_WIDE);
+	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
+		return null;
+
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, anti, Task::BuildType::DEFENCE,
+			Task::Priority::NORMAL, site, 0.f, 0.f, created);
+	if (post is null)
+		return null;
+	if (!created)
+		return post;
+	++gAntiAsked;
+	AiLog(Factory::T() + "apex: antinuke " + anti.GetName()
+		+ " standing=" + standing + " want=" + want
+		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0));
 	return post;
 }
 

@@ -31,6 +31,9 @@ const float ENERGY_TO_METAL = 0.014f;
 // argued with from a game rather than defended from a desk.
 const float GANTRY_VALUE   = 2.0f;   // opens T3 production
 const float SILO_VALUE     = 4.0f;   // enemy metal removed, amortised
+// Above NANO_VALUE on purpose: insurance against a game-ending strike loses to
+// nothing recurring, and Score() halves it once the first one stands.
+const float ANTINUKE_VALUE = 8.0f;
 const float PULSAR_VALUE   = 1.5f;   // area denial near the base
 const float PINPOINT_VALUE = 0.5f;   // targeting support, cheap and bounded
 // The standing eco rules, as values rather than as "always".
@@ -100,7 +103,7 @@ Cat BudgetCatOf(const string& in kind)
 	if (kind == "aa")
 		return AIRDEF;
 	if ((kind == "fence") || (kind == "pulsar") || (kind == "silo")
-		|| (kind == "pinpoint"))
+		|| (kind == "pinpoint") || (kind == "antinuke"))
 		return DEFENCE;
 	return ECONOMY;
 }
@@ -889,6 +892,8 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 		return Builder::SurplusGantry(unit);
 	if (kind == "silo")
 		return Builder::NukeSilo(unit);
+	if (kind == "antinuke")
+		return Builder::AntiNuke(unit);
 	if (kind == "pulsar")
 		return Builder::Pulsar(unit);
 	if (kind == "pinpoint")
@@ -1043,6 +1048,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	if (!preT2) {
 	Propose(Simple("gantry", GANTRY_VALUE, SideDef3("armshltx", "corgant", "leggant")));
 	Propose(Simple("silo", SILO_VALUE, SideDef3("armsilo", "corsilo", "legsilo")));
+	// apexearth: "Antinuke should be standard for all games where nukes are
+	// allowed." Until this want existed, land maps had NO antinuke rule at all
+	// -- the only chain carrying one hangs off the FLOATING radar hub.
+	Propose(Simple("antinuke", ANTINUKE_VALUE, SideDef3("armamd", "corfmd", "legabm")));
 	Propose(Simple("pulsar", PULSAR_VALUE, SideDef3("armanni", "cordoom", "legstarfall")));
 	Propose(Simple("pinpoint", PINPOINT_VALUE, SideDef3("armtarg", "cortarg", "legtarg")));
 	}
