@@ -1,4 +1,4 @@
-diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
+﻿diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
 index 0fd0e0b..2960eb6 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
@@ -12980,10 +12980,10 @@ index 4b4f4f0..09dd13e 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
-index 3a7ffc9..8c02027 100644
+index 3a7ffc9..45a0712 100644
 --- a/src/circuit/task/fighter/DefendTask.cpp
 +++ b/src/circuit/task/fighter/DefendTask.cpp
-@@ -1,434 +1,461 @@
+@@ -1,434 +1,476 @@
 -/*
 - * DefendTask.cpp
 - *
@@ -13113,6 +13113,311 @@ index 3a7ffc9..8c02027 100644
 -				&& (position.SqDistance2D(circuitAI->GetFrontPos()) < SQUARE(FRONT_HOLD_RANGE));
 -		if (onFront && (attackPower < maxPower * FRONT_HOLD_POWER)) {
 -			return;   // not strong enough to leave the line uncovered
+-		}
+-		if ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty()) {
+-			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
+-			decltype(units) tmpUnits = units;
+-			for (CCircuitUnit* unit : tmpUnits) {
+-				manager->AssignTask(unit, task);
+-			}
+-//			manager->DoneTask(this);  // NOTE: RemoveAssignee() will abort task
+-			return;
+-		}
+-	}
+-
+-	/*
+-	 * Merge tasks if possible
+-	 */
+-	ISquadTask* task = GetMergeTask();
+-	if (task != nullptr) {
+-		task->Merge(this);
+-		units.clear();
+-		manager->AbortTask(this);
+-		return;
+-	}
+-
+-	/*
+-	 * No regroup
+-	 */
+-	CCircuitAI* circuit = manager->GetCircuit();
+-	const int frame = circuit->GetLastFrame();
+-	bool isExecute = (updCount % 16 == 2);
+-	if (!isExecute) {
+-		for (CCircuitUnit* unit : units) {
+-			isExecute |= unit->IsForceUpdate(frame);
+-		}
+-		if (!isExecute) {
+-			return;
+-		}
+-	} else {
+-		ISquadTask::Update();
+-		if (leader == nullptr) {  // task aborted
+-			return;
+-		}
+-	}
+-
+-	/*
+-	 * Update target
+-	 */
+-	const bool isTargetsFound = FindTarget();
+-
+-	const AIFloat3& startPos = leader->GetPos(frame);
+-	state = State::ROAM;
+-	if ((GetTarget() != nullptr) || isTargetsFound) {
+-		const float slack = (circuit->GetInflMap()->GetAllyDefendInflAt(position) > INFL_EPS) ? 500.f : 300.f;
+-		if (position.SqDistance2D(startPos) < SQUARE(highestRange + slack)) {
+-			state = State::ENGAGE;
+-			Attack(frame);
+-			return;
+-		}
+-	}
+-
+-	if (!IsQueryReady(leader)) {
+-		return;
+-	}
+-
+-	if (!isTargetsFound) {  // enemyPositions.empty()
+-		FallbackFrontPos();
+-		return;
+-	}
+-
+-	CThreatMap* threatMap = circuit->GetThreatMap();
+-	const float eps = threatMap->GetSquareSize() * 2.f;
+-	const float pathRange = std::max(highestRange - eps, eps);
+-
+-	CPathFinder* pathfinder = circuit->GetPathfinder();
+-	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
+-			leader, threatMap,
+-			startPos, pathRange, enemyPositions);
+-	pathQueries[leader] = query;
+-
+-	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
+-		this->ApplyTargetPath(static_cast<const CQueryPathMulti*>(query));
+-	});
+-}
+-
+-void CDefendTask::Merge(ISquadTask* task)
+-{
+-	CCircuitAI* circuit = manager->GetCircuit();
+-	int frame = circuit->GetLastFrame();
+-	const AIFloat3& leadPos = leader->GetPos(frame);
+-	frame += FRAMES_PER_SEC * 60;
+-
+-	const std::set<CCircuitUnit*>& rookies = task->GetAssignees();
+-	for (CCircuitUnit* unit : rookies) {
+-		unit->SetTask(this);
+-
+-		TRY_UNIT(circuit, unit,
+-			unit->CmdFightTo(leadPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
+-		)
+-	}
+-	units.insert(rookies.begin(), rookies.end());
+-	maxPower = std::max(maxPower, static_cast<CDefendTask*>(task)->GetMaxPower());
+-	attackPower += task->GetAttackPower();
+-	const std::set<CCircuitUnit*>& sh = task->GetShields();
+-	shields.insert(sh.begin(), sh.end());
+-
+-	const std::map<float, std::set<CCircuitUnit*>>& rangers = task->GetRangeUnits();
+-	for (const auto& kv : rangers) {
+-		rangeUnits[kv.first].insert(kv.second.begin(), kv.second.end());
+-	}
+-}
+-
+-bool CDefendTask::FindTarget()
+-{
+-	CCircuitAI* circuit = manager->GetCircuit();
+-	CMap* map = circuit->GetMap();
+-	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+-	CThreatMap* threatMap = circuit->GetThreatMap();
+-	CInfluenceMap* inflMap = circuit->GetInflMap();
+-	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
+-	SArea* area = leader->GetArea();
+-	CCircuitDef* cdef = leader->GetCircuitDef();
+-	const float maxPower = attackPower * powerMod;
+-	const float weaponRange = cdef->GetMaxRange() * 0.9f;
+-	const int canTargetCat = cdef->GetTargetCategory();
+-	const int noChaseCat = cdef->GetNoChaseCategory();
+-
+-	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
+-	const float baseRange = circuit->GetMilitaryManager()->GetBaseDefRange();
+-	const float sqBaseRange = SQUARE(baseRange);
+-
+-	CEnemyInfo* bestTarget = nullptr;
+-	float minSqDist = std::numeric_limits<float>::max();
+-
+-	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
+-	enemyPositions.clear();
+-	threatMap->SetThreatType(leader);
+-	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
+-	for (auto& kv : enemies) {
+-		CEnemyInfo* enemy = kv.second;
+-		if (enemy->IsHidden() || (enemy->GetTasks().size() > 2)) {
+-			continue;
+-		}
+-
+-		const AIFloat3& ePos = enemy->GetPos();
+-		if ((inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS)
+-			|| !terrainMgr->CanMoveToPos(area, ePos))
+-		{
+-			continue;
+-		}
+-
+-		const float sqEBDist = basePos.SqDistance2D(ePos);
+-		float checkPower = maxPower;
+-		if (sqEBDist < sqBaseRange) {
+-			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
+-		}
+-		if (checkPower <= threatMap->GetThreatAt(ePos)) {
+-			continue;
+-		}
+-
+-		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
+-		const bool IsInWater = cdef->IsPredictInWater(elevation);
+-		CCircuitDef* edef = enemy->GetCircuitDef();
+-		if (edef != nullptr) {
+-			if (((edef->GetCategory() & canTargetCat) == 0)
+-				|| ((edef->GetCategory() & noChaseCat) != 0)
+-				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
+-				|| (edef->IsAbleToFly() && !(IsInWater ? cdef->HasSubToAir() : cdef->HasSurfToAir())))  // notAA
+-			{
+-				continue;
+-			}
+-			float elevation = map->GetElevationAt(ePos.x, ePos.z);
+-			if (edef->IsInWater(elevation, ePos.y)) {
+-				if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater())) {  // notAW
+-					continue;
+-				}
+-			} else {
+-				if (!(IsInWater ? cdef->HasSubToLand() : cdef->HasSurfToLand())) {  // notAL
+-					continue;
+-				}
+-			}
+-			if ((ePos.y - elevation > weaponRange)
+-				/*|| enemy->IsBeingBuilt()*/)
+-			{
+-				continue;
+-			}
+-		} else {
+-			if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater()) && (ePos.y < -SQUARE_SIZE * 5)) {  // notAW
+-				continue;
+-			}
+-		}
+-
+-		float sqDist = pos.SqDistance2D(ePos);
+-		if (minSqDist > sqDist) {
+-			minSqDist = sqDist;
+-			bestTarget = enemy;
+-		}
+-		enemyPositions.push_back(ePos);
+-	}
+-
+-	if (bestTarget != nullptr) {
+-		SetTarget(bestTarget);
+-		position = GetTarget()->GetPos();
+-	}
+-	if (enemyPositions.empty()) {
+-		return false;
+-	}
+-
+-	return true;
+-	// Return: target, startPos=leader->pos, enemyPositions
+-}
+-
+-void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
+-{
+-	pPath = query->GetPathInfo();
+-
+-	if (!pPath->posPath.empty()) {
+-		ActivePath(lowestSpeed);
+-	} else {
+-		Fallback();
+-	}
+-}
+-
+-void CDefendTask::FallbackFrontPos()
+-{
+-	CCircuitAI* circuit = manager->GetCircuit();
+-	circuit->GetMilitaryManager()->FillFrontPos(leader, urgentPositions);
+-	if (urgentPositions.empty()) {
+-		FallbackBasePos();
+-		return;
+-	}
+-
+-	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
+-	const float pathRange = DEFAULT_SLACK * 4;
+-
+-	CPathFinder* pathfinder = circuit->GetPathfinder();
+-	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
+-			leader, circuit->GetThreatMap(),
+-			startPos, pathRange, urgentPositions);
+-	pathQueries[leader] = query;
+-
+-	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
+-		this->ApplyFrontPos(static_cast<const CQueryPathMulti*>(query));
+-	});
+-}
+-
+-void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
+-{
+-	pPath = query->GetPathInfo();
+-
+-	if (!pPath->path.empty()) {
+-		if (pPath->path.size() > 2) {
+-			ActivePath();
+-		}
+-	} else {
+-		FallbackBasePos();
+-	}
+-}
+-
+-void CDefendTask::FallbackBasePos()
+-{
+-	CCircuitAI* circuit = manager->GetCircuit();
+-	CSetupManager* setupMgr = circuit->GetSetupManager();
+-
+-	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
+-	const AIFloat3& endPos = setupMgr->GetBasePos();
+-	const float pathRange = DEFAULT_SLACK * 4;
+-
+-	CPathFinder* pathfinder = circuit->GetPathfinder();
+-	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
+-			leader, circuit->GetThreatMap(),
+-			startPos, endPos, pathRange);
+-	pathQueries[leader] = query;
+-
+-	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
+-		this->ApplyBasePos(static_cast<const CQueryPathSingle*>(query));
+-	});
+-}
+-
+-void CDefendTask::ApplyBasePos(const CQueryPathSingle* query)
+-{
+-	pPath = query->GetPathInfo();
+-
+-	if (!pPath->path.empty()) {
+-		if (pPath->path.size() > 2) {
+-			ActivePath();
+-		}
+-	} else {
+-		Fallback();
+-	}
+-}
+-
+-void CDefendTask::Fallback()
+-{
+-	// should never happen
+-	CCircuitAI* circuit = manager->GetCircuit();
+-	const int frame = circuit->GetLastFrame();
+-	for (CCircuitUnit* unit : units) {
+-		unit->GetTravelAct()->StateWait();
+-		TRY_UNIT(circuit, unit,
+-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+-			unit->CmdWantedSpeed(lowestSpeed);
+-		)
+-	}
+-}
+-
+-} // namespace circuit
 +/*
 + * DefendTask.cpp
 + *
@@ -13421,7 +13726,22 @@ index 3a7ffc9..8c02027 100644
 +		} else if (atUs) {
 +			checkPower *= 4.0f;   // already in contact: same allowance as at home
 +		}
-+		if (checkPower <= threatMap->GetThreatAt(ePos)) {
++		const float eThreat = threatMap->GetThreatAt(ePos);
++		if (checkPower <= eThreat) {
++			continue;
++		}
++		// PROPORTIONAL RESPONSE. Line 355 below rewrites this task's anchor to
++		// the chosen target, so chasing is the WHOLE pool walking there -- and
++		// the nearest-first choice is value-blind, so a two-raider ping in the
++		// rear pulled every massed pool off the line (apexearth: "I see us move
++		// our entire army way in the back to chase down some petty raiders...
++		// then the enemy just walks into our base and crushes us"). A pool only
++		// walks for a threat worth a real fraction of its own strength; fresh
++		// small pools still pass this gate and peel off to handle intruders,
++		// and anything already in contact (atUs) is always fought.
++		if (!atUs && (eThreat < attackPower
++				* circuit->GetTunable("apex_chase_min_ratio", 0.15f)))
++		{
 +			continue;
 +		}
 +
@@ -13565,311 +13885,7 @@ index 3a7ffc9..8c02027 100644
 +	for (CCircuitUnit* unit : units) {
 +		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
 +			unit->GetTravelAct()->StateWait();
- 		}
--		if ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty()) {
--			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
--			decltype(units) tmpUnits = units;
--			for (CCircuitUnit* unit : tmpUnits) {
--				manager->AssignTask(unit, task);
--			}
--//			manager->DoneTask(this);  // NOTE: RemoveAssignee() will abort task
--			return;
--		}
--	}
--
--	/*
--	 * Merge tasks if possible
--	 */
--	ISquadTask* task = GetMergeTask();
--	if (task != nullptr) {
--		task->Merge(this);
--		units.clear();
--		manager->AbortTask(this);
--		return;
--	}
--
--	/*
--	 * No regroup
--	 */
--	CCircuitAI* circuit = manager->GetCircuit();
--	const int frame = circuit->GetLastFrame();
--	bool isExecute = (updCount % 16 == 2);
--	if (!isExecute) {
--		for (CCircuitUnit* unit : units) {
--			isExecute |= unit->IsForceUpdate(frame);
--		}
--		if (!isExecute) {
--			return;
--		}
--	} else {
--		ISquadTask::Update();
--		if (leader == nullptr) {  // task aborted
--			return;
--		}
--	}
--
--	/*
--	 * Update target
--	 */
--	const bool isTargetsFound = FindTarget();
--
--	const AIFloat3& startPos = leader->GetPos(frame);
--	state = State::ROAM;
--	if ((GetTarget() != nullptr) || isTargetsFound) {
--		const float slack = (circuit->GetInflMap()->GetAllyDefendInflAt(position) > INFL_EPS) ? 500.f : 300.f;
--		if (position.SqDistance2D(startPos) < SQUARE(highestRange + slack)) {
--			state = State::ENGAGE;
--			Attack(frame);
--			return;
--		}
--	}
--
--	if (!IsQueryReady(leader)) {
--		return;
--	}
--
--	if (!isTargetsFound) {  // enemyPositions.empty()
--		FallbackFrontPos();
--		return;
--	}
--
--	CThreatMap* threatMap = circuit->GetThreatMap();
--	const float eps = threatMap->GetSquareSize() * 2.f;
--	const float pathRange = std::max(highestRange - eps, eps);
--
--	CPathFinder* pathfinder = circuit->GetPathfinder();
--	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
--			leader, threatMap,
--			startPos, pathRange, enemyPositions);
--	pathQueries[leader] = query;
--
--	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
--		this->ApplyTargetPath(static_cast<const CQueryPathMulti*>(query));
--	});
--}
--
--void CDefendTask::Merge(ISquadTask* task)
--{
--	CCircuitAI* circuit = manager->GetCircuit();
--	int frame = circuit->GetLastFrame();
--	const AIFloat3& leadPos = leader->GetPos(frame);
--	frame += FRAMES_PER_SEC * 60;
--
--	const std::set<CCircuitUnit*>& rookies = task->GetAssignees();
--	for (CCircuitUnit* unit : rookies) {
--		unit->SetTask(this);
--
--		TRY_UNIT(circuit, unit,
--			unit->CmdFightTo(leadPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
--		)
--	}
--	units.insert(rookies.begin(), rookies.end());
--	maxPower = std::max(maxPower, static_cast<CDefendTask*>(task)->GetMaxPower());
--	attackPower += task->GetAttackPower();
--	const std::set<CCircuitUnit*>& sh = task->GetShields();
--	shields.insert(sh.begin(), sh.end());
--
--	const std::map<float, std::set<CCircuitUnit*>>& rangers = task->GetRangeUnits();
--	for (const auto& kv : rangers) {
--		rangeUnits[kv.first].insert(kv.second.begin(), kv.second.end());
--	}
--}
--
--bool CDefendTask::FindTarget()
--{
--	CCircuitAI* circuit = manager->GetCircuit();
--	CMap* map = circuit->GetMap();
--	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
--	CThreatMap* threatMap = circuit->GetThreatMap();
--	CInfluenceMap* inflMap = circuit->GetInflMap();
--	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
--	SArea* area = leader->GetArea();
--	CCircuitDef* cdef = leader->GetCircuitDef();
--	const float maxPower = attackPower * powerMod;
--	const float weaponRange = cdef->GetMaxRange() * 0.9f;
--	const int canTargetCat = cdef->GetTargetCategory();
--	const int noChaseCat = cdef->GetNoChaseCategory();
--
--	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
--	const float baseRange = circuit->GetMilitaryManager()->GetBaseDefRange();
--	const float sqBaseRange = SQUARE(baseRange);
--
--	CEnemyInfo* bestTarget = nullptr;
--	float minSqDist = std::numeric_limits<float>::max();
--
--	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
--	enemyPositions.clear();
--	threatMap->SetThreatType(leader);
--	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
--	for (auto& kv : enemies) {
--		CEnemyInfo* enemy = kv.second;
--		if (enemy->IsHidden() || (enemy->GetTasks().size() > 2)) {
--			continue;
--		}
--
--		const AIFloat3& ePos = enemy->GetPos();
--		if ((inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS)
--			|| !terrainMgr->CanMoveToPos(area, ePos))
--		{
--			continue;
--		}
--
--		const float sqEBDist = basePos.SqDistance2D(ePos);
--		float checkPower = maxPower;
--		if (sqEBDist < sqBaseRange) {
--			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
--		}
--		if (checkPower <= threatMap->GetThreatAt(ePos)) {
--			continue;
--		}
--
--		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
--		const bool IsInWater = cdef->IsPredictInWater(elevation);
--		CCircuitDef* edef = enemy->GetCircuitDef();
--		if (edef != nullptr) {
--			if (((edef->GetCategory() & canTargetCat) == 0)
--				|| ((edef->GetCategory() & noChaseCat) != 0)
--				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
--				|| (edef->IsAbleToFly() && !(IsInWater ? cdef->HasSubToAir() : cdef->HasSurfToAir())))  // notAA
--			{
--				continue;
--			}
--			float elevation = map->GetElevationAt(ePos.x, ePos.z);
--			if (edef->IsInWater(elevation, ePos.y)) {
--				if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater())) {  // notAW
--					continue;
--				}
--			} else {
--				if (!(IsInWater ? cdef->HasSubToLand() : cdef->HasSurfToLand())) {  // notAL
--					continue;
--				}
--			}
--			if ((ePos.y - elevation > weaponRange)
--				/*|| enemy->IsBeingBuilt()*/)
--			{
--				continue;
--			}
--		} else {
--			if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater()) && (ePos.y < -SQUARE_SIZE * 5)) {  // notAW
--				continue;
--			}
--		}
--
--		float sqDist = pos.SqDistance2D(ePos);
--		if (minSqDist > sqDist) {
--			minSqDist = sqDist;
--			bestTarget = enemy;
--		}
--		enemyPositions.push_back(ePos);
--	}
--
--	if (bestTarget != nullptr) {
--		SetTarget(bestTarget);
--		position = GetTarget()->GetPos();
--	}
--	if (enemyPositions.empty()) {
--		return false;
--	}
--
--	return true;
--	// Return: target, startPos=leader->pos, enemyPositions
--}
--
--void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
--{
--	pPath = query->GetPathInfo();
--
--	if (!pPath->posPath.empty()) {
--		ActivePath(lowestSpeed);
--	} else {
--		Fallback();
--	}
--}
--
--void CDefendTask::FallbackFrontPos()
--{
--	CCircuitAI* circuit = manager->GetCircuit();
--	circuit->GetMilitaryManager()->FillFrontPos(leader, urgentPositions);
--	if (urgentPositions.empty()) {
--		FallbackBasePos();
--		return;
--	}
--
--	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
--	const float pathRange = DEFAULT_SLACK * 4;
--
--	CPathFinder* pathfinder = circuit->GetPathfinder();
--	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
--			leader, circuit->GetThreatMap(),
--			startPos, pathRange, urgentPositions);
--	pathQueries[leader] = query;
--
--	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
--		this->ApplyFrontPos(static_cast<const CQueryPathMulti*>(query));
--	});
--}
--
--void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
--{
--	pPath = query->GetPathInfo();
--
--	if (!pPath->path.empty()) {
--		if (pPath->path.size() > 2) {
--			ActivePath();
--		}
--	} else {
--		FallbackBasePos();
--	}
--}
--
--void CDefendTask::FallbackBasePos()
--{
--	CCircuitAI* circuit = manager->GetCircuit();
--	CSetupManager* setupMgr = circuit->GetSetupManager();
--
--	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
--	const AIFloat3& endPos = setupMgr->GetBasePos();
--	const float pathRange = DEFAULT_SLACK * 4;
--
--	CPathFinder* pathfinder = circuit->GetPathfinder();
--	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
--			leader, circuit->GetThreatMap(),
--			startPos, endPos, pathRange);
--	pathQueries[leader] = query;
--
--	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
--		this->ApplyBasePos(static_cast<const CQueryPathSingle*>(query));
--	});
--}
--
--void CDefendTask::ApplyBasePos(const CQueryPathSingle* query)
--{
--	pPath = query->GetPathInfo();
--
--	if (!pPath->path.empty()) {
--		if (pPath->path.size() > 2) {
--			ActivePath();
--		}
--	} else {
--		Fallback();
--	}
--}
--
--void CDefendTask::Fallback()
--{
--	// should never happen
--	CCircuitAI* circuit = manager->GetCircuit();
--	const int frame = circuit->GetLastFrame();
--	for (CCircuitUnit* unit : units) {
--		unit->GetTravelAct()->StateWait();
--		TRY_UNIT(circuit, unit,
--			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
--			unit->CmdWantedSpeed(lowestSpeed);
--		)
--	}
--}
--
--} // namespace circuit
++		}
 +		TRY_UNIT(circuit, unit,
 +			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 +			unit->CmdWantedSpeed(lowestSpeed);

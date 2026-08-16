@@ -306,7 +306,22 @@ bool CDefendTask::FindTarget()
 		} else if (atUs) {
 			checkPower *= 4.0f;   // already in contact: same allowance as at home
 		}
-		if (checkPower <= threatMap->GetThreatAt(ePos)) {
+		const float eThreat = threatMap->GetThreatAt(ePos);
+		if (checkPower <= eThreat) {
+			continue;
+		}
+		// PROPORTIONAL RESPONSE. Line 355 below rewrites this task's anchor to
+		// the chosen target, so chasing is the WHOLE pool walking there -- and
+		// the nearest-first choice is value-blind, so a two-raider ping in the
+		// rear pulled every massed pool off the line (apexearth: "I see us move
+		// our entire army way in the back to chase down some petty raiders...
+		// then the enemy just walks into our base and crushes us"). A pool only
+		// walks for a threat worth a real fraction of its own strength; fresh
+		// small pools still pass this gate and peel off to handle intruders,
+		// and anything already in contact (atUs) is always fought.
+		if (!atUs && (eThreat < attackPower
+				* circuit->GetTunable("apex_chase_min_ratio", 0.15f)))
+		{
 			continue;
 		}
 
