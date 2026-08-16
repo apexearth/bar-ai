@@ -96,7 +96,10 @@ def check_economy(text, rep):
     # plant discipline: approvals vs refusals; multiple same-tier approvals
     appr = re.findall(r"plant approved (\S+) have=(\d+)/(\d+) t1=(\d+)"
                       r" t2=(\d+)", text)
-    over = [a for a in appr if int(a[3]) > 2 or int(a[4]) > 2]
+    # air plants past the totals are the air STRATEGY's sanctioned exemption
+    air = {"armap", "corap", "legap", "armaap", "coraap", "legaap"}
+    over = [a for a in appr
+            if (int(a[3]) > 2 or int(a[4]) > 2) and a[0] not in air]
     rep.add("ECONOMY", len(over) == 0, "plant-gate",
             f"{len(appr)} approvals, {len(over)} past tier totals"
             + (f" e.g. {over[0]}" if over else ""))
@@ -169,12 +172,25 @@ def check_military(text, rep):
 
 # ------------------------------------------------------------ efficiency --
 def check_efficiency(text, rep):
-    # build-and-reclaim conflict: same def asked and eaten within the game
-    built = set(re.findall(r"request (?:new|join\S*) (\S+)", text))
-    eaten = set(re.findall(r"obsolete-reclaim (\S+) ", text))
-    both = sorted(built & eaten)
+    # build-and-reclaim conflict: a def REQUESTED after its own kind was
+    # already being reclaimed. Building early and eating late (successor
+    # arrived) is the ladder working; only build-after-first-reclaim is a
+    # conflict.
+    first_eat = {}
+    for line in text.splitlines():
+        m = re.search(r"\[([\d.]+)m t\d+\].*obsolete-reclaim (\S+) ", line)
+        if m and m.group(2) not in first_eat:
+            first_eat[m.group(2)] = float(m.group(1))
+    both = set()
+    for line in text.splitlines():
+        m = re.search(r"\[([\d.]+)m t\d+\].*request (?:new|join\S*) (\S+)",
+                      line)
+        if m and float(m.group(1)) > first_eat.get(m.group(2), 1e9):
+            both.add(m.group(2))
+    both = sorted(both)
     rep.add("EFFICIENCY", len(both) == 0, "build-eat-conflict",
-            "none" if not both else f"built AND reclaimed: {', '.join(both)}")
+            "none" if not both
+            else f"requested AFTER reclaim began: {', '.join(both)}")
     # quota starvation: defs wanted but never held (from last quota line/line)
     starved = []
     for line in re.findall(r"facqueue \S+ #\d+ .*quota: (.*)", text)[-8:]:
