@@ -300,11 +300,22 @@ void NoteEcoFinished(const string& in n)
 
 void NoteEcoGone(const string& in n, bool wasFinished)
 {
+	// The ask dies with the reactor, finished or nanoframe: gFusionsAsked
+	// tracks history while ReactorCount tracks the living, so a death leaves
+	// asked > count and ReactorPipelineOpen() reads CLOSED -- and the serial
+	// gate in EcoFusion nulls before the resync there can heal it. Losing
+	// every fusion wedged the pipeline shut exactly when a replacement was
+	// most urgent (teal, 2026-08-16).
+	if (IsReactorDef(n)) {
+		if (gFusionsAsked > 0)
+			--gFusionsAsked;
+		if (wasFinished && (gReactorsDone > 0))
+			--gReactorsDone;
+		return;
+	}
 	if (!wasFinished)
 		return;   // a dead nanoframe never counted as done
-	if (IsReactorDef(n) && (gReactorsDone > 0))
-		--gReactorsDone;
-	else if (IsBigConvDef(n) && (gBigConvDone > 0))
+	if (IsBigConvDef(n) && (gBigConvDone > 0))
 		--gBigConvDone;
 }
 
@@ -442,7 +453,22 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// points at the enemy, so it cannot be the only answer for a reactor.
 	// ReactorSpot declining falls through to exactly the old placement.
 	int rear = 0;
-	if (okDef)
+	// Near the nano cluster first: turrets assist the build, and a reactor
+	// that dies gets replaced at nano speed instead of one lathe's
+	// (apexearth: "prefer making our buildings near nano turrets if
+	// possible"). SectionSafeSpot below still pushes it out of a full
+	// chain-blast batch, so the batching rule keeps the final say.
+	if (okDef) {
+		AIFloat3 nn;
+		if (NanoCluster(nn)) {
+			const AIFloat3 s = ai.FindBuildSiteNear(want, nn, 400.f);
+			if (OnMap(s)) {
+				spot = s;
+				rear = 3;
+			}
+		}
+	}
+	if (okDef && (rear == 0))
 		rear = ReactorSpot(unit, want, spot);
 	bool okSpot = okDef && ((rear != 0) || BandSpot(unit, want, false, spot));
 	// Out of any existing reactor's chain-blast section, or shifted out of it.
@@ -484,6 +510,8 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 		via = "heavy";
 	else if (rear == 2)
 		via = "rear";
+	else if (rear == 3)
+		via = "nano";
 	AiLog(Factory::T() + "apex: eco fusion " + want.GetName()
 		+ " standing=" + want.count + " asked=" + gFusionsAsked
 		+ " at=" + int(spot.x) + "," + int(spot.z)
