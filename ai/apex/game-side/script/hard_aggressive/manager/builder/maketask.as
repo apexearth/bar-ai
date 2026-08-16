@@ -14,12 +14,49 @@ namespace Builder {
 // TaskModuleScript looks up this exact signature. MakeTaskInner below does the
 // ranking; this wrapper exists only so the defence-share cap has ONE site every
 // path passes through -- see defcap.as.
+// TEMP comm-churn diag (apexearth, 2026-08-16, watching: "He constantly
+// changes his mind on what he wants to do. Sometimes walks a long distance and
+// then just turns around."). One line per BUILD-TYPE change -- returning a
+// different handle of the SAME type does not reassign (IBuilderTask::
+// Reevaluate), so only type flips are real mind-changes.
+IUnitTask@ gCommChurnPrev;
+int gCommChurnBt = -99;
+int gCommChurnFrame = 0;
+AIFloat3 gCommChurnPos;
+int gCommChurnN = 0;
+
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 	const bool isCommander = (unit !is null)
 			&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	IUnitTask@ task = DefenceShareScreen(unit, isCommander, MakeTaskInner(unit));
-	return GuardBuildCapability(unit, task);
+	@task = GuardBuildCapability(unit, task);
+	if (isCommander)
+		CommChurnDiag(unit, task);
+	return task;
+}
+
+void CommChurnDiag(CCircuitUnit@ unit, IUnitTask@ task)
+{
+	if ((task is null) || (task is gCommChurnPrev))
+		return;
+	const int bt = int(task.GetBuildType());
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if ((gCommChurnPrev !is null) && (bt != gCommChurnBt)) {
+		++gCommChurnN;
+		const AIFloat3 site = task.GetBuildPos();
+		AiLog(Factory::T() + "apex: comm-switch #" + gCommChurnN
+			+ " bt" + gCommChurnBt + "->bt" + bt
+			+ " held=" + ((ai.frame - gCommChurnFrame) / SECOND) + "s"
+			+ " walked=" + formatFloat(here.distance2D(gCommChurnPos), "", 0, 0)
+			+ " " + SiteBuildName(task)
+			+ " dist=" + (OnMap(site)
+				? formatFloat(here.distance2D(site), "", 0, 0) : "?"));
+	}
+	@gCommChurnPrev = task;
+	gCommChurnBt = bt;
+	gCommChurnFrame = ai.frame;
+	gCommChurnPos = here;
 }
 
 // GENERAL CAPABILITY GUARD -- generalizes the 2026-08-14 IsAdvConDef fix.
