@@ -176,8 +176,13 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	if ((dome is null) || !dome.IsAvailable(ai.frame)
 		|| (dome.count >= ShieldsAfforded(dome)))
 		return null;
-	if (gShieldsAsked - dome.count >= 1)
-		return null;                       // one at a time; they are not cheap
+	// In-flight allowance scales with income: one at a time was right when a
+	// dome was a real spend, but at LRPC-era income the pace, not the count,
+	// was the bottleneck (afforded ~17, ordered 1/minute).
+	if (gShieldsAsked - dome.count
+			>= 1 + int(aiEconomyMgr.metal.income
+				/ ai.GetTunable("apex_shield_flight_per", 250.f)))
+		return null;
 	AIFloat3 spot;
 	if (!Military::BorderPos(spot, uint(dome.count)) && !Military::FrontLinePos(spot))
 		return null;
@@ -189,7 +194,10 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	if (!created)
 		return post;
 	++gShieldsAsked;
-	gNextShield = ai.frame + SHIELD_PERIOD;
+	// The spacing shortens as income grows, same reasoning as the allowance.
+	gNextShield = ai.frame + SHIELD_PERIOD
+			/ (1 + int(aiEconomyMgr.metal.income
+				/ ai.GetTunable("apex_shield_flight_per", 250.f)));
 	AiLog(Factory::T() + "apex: shield " + dome.GetName() + " standing=" + dome.count
 		+ "/" + ShieldsAfforded(dome)
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)

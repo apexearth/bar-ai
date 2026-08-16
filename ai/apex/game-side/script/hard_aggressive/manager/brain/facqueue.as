@@ -538,6 +538,17 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 					/ ai.GetTunable("apex_airscout_per", 60.f)));
 			isFloor.insertLast(true);
 		}
+		// FIGHTER COVER, income-scaled like the scouts. The mandatory late
+		// plants exist partly for this -- apexearth: "plenty of fighter
+		// coverage" -- and the mix's ratio path alone leaves the sky to
+		// whatever slots survive the ground lines.
+		CCircuitDef@ wing = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::AA.type);
+		if ((wing !is null) && wing.IsAvailable(ai.frame)) {
+			defs.insertLast(wing);
+			want.insertLast(1 + int(aiEconomyMgr.metal.income
+					/ ai.GetTunable("apex_fighter_per", 40.f)));
+			isFloor.insertLast(true);
+		}
 	}
 
 	// A GANTRY THAT IS STANDING IS NEVER IDLE. Named rather than asked for by

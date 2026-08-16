@@ -97,16 +97,34 @@ bool WantsFactory(const CCircuitDef@ facDef)
 // it from there, and Armed()/the strike machinery stay untouched.
 CCircuitDef@ IntelPlantToBuild()
 {
-	if (!IsAirLead())
-		return null;   // one plant per team, same elector as everything else
 	ResolveDefs();
-	if ((gPlant1 is null) || !gPlant1.IsAvailable(ai.frame)
-		|| (Have(gPlant1) > 0))
+	const float inc = aiEconomyMgr.metal.income;
+	// The basic plant: the air lead builds the team's early one at intel income;
+	// past apex_air_mandatory_income EVERY player owes themselves one -- air
+	// constructors are the most efficient build power there is, and a mature
+	// economy without them is leaving lathe on the table (apexearth: "An air lab
+	// once we have 100s of metal per second should be mandatory").
+	if ((gPlant1 !is null) && gPlant1.IsAvailable(ai.frame)
+		&& (Have(gPlant1) == 0))
+	{
+		if (IsAirLead()
+			&& (inc >= ai.GetTunable("apex_intel_air_income", 25.f)))
+			return gPlant1;
+		if (inc >= ai.GetTunable("apex_air_mandatory_income", 100.f))
+			return gPlant1;
 		return null;
-	if (aiEconomyMgr.metal.income
-			< ai.GetTunable("apex_intel_air_income", 25.f))
-		return null;
-	return gPlant1;
+	}
+	// The advanced plant, once an air con exists to place it (no ground
+	// constructor of any tier has it -- see FactoryToBuild's comment). This is
+	// where fighters and the advanced air constructors live; without it the
+	// late game has neither.
+	if ((gPlant2 !is null) && gPlant2.IsAvailable(ai.frame)
+		&& (Have(gPlant2) == 0) && HaveAirCon()
+		&& (inc >= ai.GetTunable("apex_adv_air_income", 150.f)))
+	{
+		return gPlant2;
+	}
+	return null;
 }
 
 bool WantsIntelPlant(const CCircuitDef@ facDef)
