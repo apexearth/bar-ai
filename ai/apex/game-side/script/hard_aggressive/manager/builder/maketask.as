@@ -269,7 +269,12 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// never reached by a unit that could act. Bounded hard: only while NO
 	// reactor exists (a nanoframe counts as one), and EcoFusion's own moho
 	// trigger and in-flight bound still decide whether.
-	if (isAdvCon && !HaveReactor()) {
+	// ONE ask, not one per adv con: ReactorsInFlight scales with the bank, so
+	// at a full storage this hook pulled FOUR advanced cons off moho work at
+	// once -- measured (tournament 20260815-231903 vs -223228): mex upgrades
+	// halved, team metal rate -33%. The first fusion outranks the next moho;
+	// fusions beyond it queue through the ordinary ladder below.
+	if (isAdvCon && !HaveReactor() && (gFusionsAsked == 0)) {
 		@t = EcoFusion(unit);
 		if (t !is null)
 			return t;
