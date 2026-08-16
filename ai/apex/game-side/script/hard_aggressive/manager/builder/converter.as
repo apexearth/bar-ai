@@ -189,8 +189,32 @@ int SmallConvCount(CCircuitUnit@ unit)
 // Converters take the eco band of the shared grid. The rectangle they used to
 // get was its own lattice on its own origin, which is how a "packed block" could
 // still land on top of the turret rows.
+// Tightly packed at the back, in one or more masses -- apexearth: "our
+// converters are still very spread out. They should be tightly packed
+// towards the back of our base... can have more than 1 pack/mass of them."
+// Every new converter anchors beside the NEWEST standing one of its def, so
+// a pack grows contiguously; when nothing fits beside the pack any more, the
+// ECO band (the rear of the base grid) seeds the next pack. Serves every
+// caller that places a converter, pipeline and spill rules alike.
 bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 {
+	const float pack = ai.GetTunable("apex_conv_pack", 180.f);
+	array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(def, gHomePos, 0.f);
+	if ((have !is null) && (have.length() > 0)) {
+		for (int i = int(have.length()) - 1; i >= 0; --i) {
+			if (have[i] is null)
+				continue;
+			const AIFloat3 at = have[i].GetPos(ai.frame);
+			if (!OnMap(at))
+				continue;
+			const AIFloat3 site = ai.FindBuildSiteNear(def, at, pack);
+			if (OnMap(site)) {
+				spot = site;   // join the pack, touching its newest member
+				return true;
+			}
+			break;             // the newest pack is full; seed a new one
+		}
+	}
 	return Base::Spot(unit, def, Base::ECO, spot);
 }
 
