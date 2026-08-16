@@ -176,17 +176,21 @@ def check_efficiency(text, rep):
     # already being reclaimed. Building early and eating late (successor
     # arrived) is the ladder working; only build-after-first-reclaim is a
     # conflict.
+    # keyed per (team, def): reclaim eligibility is per PLAYER (successor
+    # standing), so t0 eating what t1 still builds is not a conflict.
     first_eat = {}
     for line in text.splitlines():
-        m = re.search(r"\[([\d.]+)m t\d+\].*obsolete-reclaim (\S+) ", line)
-        if m and m.group(2) not in first_eat:
-            first_eat[m.group(2)] = float(m.group(1))
+        m = re.search(r"m (t\d+)\].*obsolete-reclaim (\S+) ", line)
+        if m and (m.group(1), m.group(2)) not in first_eat:
+            mm = re.search(r"\[([\d.]+)m", line)
+            first_eat[(m.group(1), m.group(2))] = float(mm.group(1))
     both = set()
     for line in text.splitlines():
-        m = re.search(r"\[([\d.]+)m t\d+\].*request (?:new|join\S*) (\S+)",
+        m = re.search(r"\[([\d.]+)m (t\d+)\].*request (?:new|join\S*) (\S+)",
                       line)
-        if m and float(m.group(1)) > first_eat.get(m.group(2), 1e9):
-            both.add(m.group(2))
+        if m and float(m.group(1)) > first_eat.get(
+                (m.group(2), m.group(3)), 1e9):
+            both.add(f"{m.group(3)}({m.group(2)})")
     both = sorted(both)
     rep.add("EFFICIENCY", len(both) == 0, "build-eat-conflict",
             "none" if not both
