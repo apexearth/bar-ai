@@ -292,7 +292,15 @@ IUnitTask@ Fallback(CCircuitUnit@ unit, bool isComm, bool allowDefence = true)
 	if (!OnMap(unit.GetPos(ai.frame)))
 		return null;
 
-	IUnitTask@ site = BestSite(unit, allowDefence);
+	// An advanced constructor never takes the SITE leg. Joining a site puts it
+	// in build range, and IBuilderTask::Reevaluate early-returns in range for
+	// every build type except GUARD -- the con is out of the decision loop until
+	// that structure finishes, exactly the "adv cons too eager to assist" apexearth
+	// watched at 500 m/s. The GUARD leg below is re-elected every update, so a
+	// shadowing adv con still lends its lathe and leaves the moment a gantry,
+	// moho or fusion wants it.
+	IUnitTask@ site = (unit.circuitDef.costM >= Builder::ADV_CON_COST)
+			? null : BestSite(unit, allowDefence);
 	if (site !is null) {
 		++gFallbacks;
 		AiLog(Factory::T() + "apex: idle-assist " + unit.circuitDef.GetName()
