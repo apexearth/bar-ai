@@ -400,8 +400,44 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		return post;
 	gNextNano = ai.frame + NANO_PERIOD;
 	++gNanosAsked;
+	// BURST on a deep bank -- apexearth: "if a building we want to make is
+	// cheap and we have tons of resources we should queue up more than just 1
+	// request... nano turrets, sometimes you can queue up 5 or more at a time
+	// ~20 minutes into the game." One extra per apex_burst_bank_frac (4)
+	// nano-costs of banked metal, bounded by the in-flight headroom, each at
+	// its own reserved site; stops at the first refused request.
+	int batch = int(aiEconomyMgr.metal.current
+			/ (want.costM * ai.GetTunable("apex_burst_bank_frac", 4.f)));
+	const int head = NanoInFlight() - (gNanosAsked - int(want.count));
+	if (batch > head)
+		batch = head;
+	int burst = 1;
+	for (int b = 1; b < batch; ++b) {
+		AIFloat3 more;
+		bool ok = false;
+		array<CCircuitUnit@> facs2 = FactoriesByNeed();
+		for (uint i = 0; (i < facs2.length()) && !ok; ++i) {
+			const AIFloat3 s2 = ai.FindBuildSiteNear(want,
+					facs2[i].GetPos(ai.frame), NANO_ASSIST_R);
+			if (OnMap(s2) && !Base::SiteTaken(Base::NANO, s2)
+					&& (ThreatFor(unit, s2) <= CON_THREAT_VETO)) {
+				Base::ReserveSite(s2);
+				more = s2;
+				ok = true;
+			}
+		}
+		if (!ok && !BandSpot(unit, want, true, more))
+			break;
+		bool made2 = false;
+		Requests::Take(unit, want, Task::BuildType::NANO,
+				Task::Priority::NORMAL, more, 0.f, 0.f, made2);
+		if (!made2)
+			break;
+		++gNanosAsked;
+		++burst;
+	}
 	AiLog(Factory::T() + "apex: eco nano " + want.GetName()
-		+ " at=" + (sited ? "fac" : "band")
+		+ " at=" + (sited ? "fac" : "band") + " burst=" + burst
 		+ " standing=" + want.count + " asked=" + gNanosAsked
 		+ " bank=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
 		+ "/" + formatFloat(aiEconomyMgr.metal.storage, "", 0, 0));

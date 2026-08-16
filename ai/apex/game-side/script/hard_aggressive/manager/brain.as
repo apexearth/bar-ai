@@ -1140,7 +1140,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		// Thickening a stretch that already has cover still waits for the
 		// upgrade, which keeps this from becoming a general exemption.
 		const bool gap = ((w.kind == "fence") || (w.kind == "aa")) && (w.have == 0);
-		if ((w.kind != "mexup") && (w.kind != "mex") && haveMexUp && !gap)
+		// The mexup monopoly ends at late-game income: an upgrade candidate
+		// always exists, so this skip starved every adv-con want forever --
+		// including the front-line T3 turrets only an adv con can build
+		// (apexearth, watching a huge-economy player: "0 T3 turrets at the
+		// front edge of their base"). Past the bar the RANKING decides; the
+		// mexup lane in the pipeline still keeps one upgrade always running.
+		if ((w.kind != "mexup") && (w.kind != "mex") && haveMexUp && !gap
+			&& (aiEconomyMgr.metal.income
+				< ai.GetTunable("apex_mexup_monopoly_income", 100.f)))
 			continue;
 		// "aa" is placed exactly like a fence -- a DEFENCE build task at a chosen
 		// site. Only the budget row it is scored against differs.
