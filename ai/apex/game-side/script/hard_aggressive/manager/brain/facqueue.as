@@ -426,15 +426,16 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		// income, so at 300 m/s this block is permanently "short" and the
 		// early return below starved the con curve entirely: 3 armacks all
 		// game against a curve wanting ~18, no hands for the gantry (watched
-		// 2026-08-16, zero T3 vs 54k). A balanced ratio entry, same
-		// cost-normalized shares as the core, so cons interleave with the
-		// army instead of pre-empting it.
+		// 2026-08-16, zero T3 vs 54k). A balanced ratio entry, so cons
+		// interleave with the army instead of pre-empting it.
+		// The con want is an ABSOLUTE COUNT from the income curve, not a cost
+		// share: normalizing by cost shrank ~18 wanted cons to 3 (armack=7/3
+		// in the quota log, conT2 stuck at 4 while stock held 16).
 		CCircuitDef@ bcon = aiFactoryMgr.GetRoleDef(fac.circuitDef,
 				Unit::Role::BUILDER.type);
-		if ((bcon !is null) && bcon.IsAvailable(ai.frame) && (bcon.costM > 0.f)) {
+		if ((bcon !is null) && bcon.IsAvailable(ai.frame)) {
 			defs.insertLast(bcon);
-			want.insertLast(RoundUp(float(Builder::ConsWantedFor(bcon))
-					* ai.GetTunable("apex_quota_ref_cost", 100.f) / bcon.costM));
+			want.insertLast(Builder::ConsWantedFor(bcon));
 			isFloor.insertLast(false);
 		}
 		if (defs.length() > 0)
