@@ -536,17 +536,20 @@ void CAttackTask::Update()
 	// enormous army orbiting a doomsday gun's range ring looks like -- the
 	// caution the ceiling buys is for games still in doubt.
 	const bool overrun = circuit->ReadTeamValue(circuit->GetTeamId(), "kill", 0.f) > 0.f;
-	const bool isCharge = overrun || detourCharge || ((chargeRoll == 1)
+	const bool isCharge = overrun || ((chargeRoll == 1)
 			&& ISquadTask::IsChargeDef(leader->GetCircuitDef()));
+	// Each risk level halves the threat cost and doubles the ceiling -- more
+	// accepted risk, never zero care (that stays the chargers' privilege).
+	const float riskDiv = float(1 << riskLevel);
 	const float threatCeiling = isCharge
 			? CHARGE_THREAT_CEILING
-			: (ATTACK_CEILING_MOD * attackPower
+			: (ATTACK_CEILING_MOD * riskDiv * attackPower
 					/ circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			leader, circuit->GetThreatMap(),
 			startPos, endPos, pathRange, GetHitTest(),
 			threatCeiling,
-			false, isCharge ? 0.f : ATTACK_THREAT_MOD);
+			false, isCharge ? 0.f : (ATTACK_THREAT_MOD / riskDiv));
 	pathQueries[leader] = query;
 
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
@@ -888,7 +891,7 @@ void CAttackTask::FindTarget()
 
 	if (bestTarget != nullptr) {
 		if (bestTarget != prevTarget) {
-			detourCharge = false;   // new objective, fresh route judgement
+			riskLevel = 0;   // new objective, fresh route judgement
 		}
 		SetTarget(bestTarget);
 		position = GetTarget()->GetPos();
@@ -944,14 +947,16 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
 			}
 			const float direct = from.distance2D(to);
 			if (direct > 1.f) {
-				detourCharge = (walked / direct)
+				const bool tooFar = (walked / direct)
 						> circuit->GetTunable("apex_max_detour", 2.0f);
+				if (tooFar && (riskLevel
+						< int(circuit->GetTunable("apex_max_risk", 3.f)))) {
+					++riskLevel;   // next query accepts more risk, stays aware
+				}
 				if (circuit->GetLastFrame() >= lastDetourLog + FRAMES_PER_SEC * 20) {
 					lastDetourLog = circuit->GetLastFrame();
-					circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f charge=%d",
-							walked, direct, walked / direct,
-							int(detourCharge || ((chargeRoll == 1) && (leader != nullptr)
-									&& ISquadTask::IsChargeDef(leader->GetCircuitDef()))));
+					circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f risk=%d",
+							walked, direct, walked / direct, riskLevel);
 				}
 			}
 		}

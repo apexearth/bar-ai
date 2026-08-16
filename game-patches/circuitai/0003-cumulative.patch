@@ -11885,7 +11885,7 @@ index c3f5e98..fc98a66 100644
 +
 +} // namespace circuit
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index 91000e2..0121367 100644
+index 91000e2..9399706 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -11950,7 +11950,7 @@ index 91000e2..0121367 100644
  				unit->Gather(groupPos, frame);
  			}
  		}
-@@ -510,8 +531,13 @@ void CAttackTask::Update()
+@@ -510,17 +531,25 @@ void CAttackTask::Update()
  	if (chargeRoll < 0) {
  		chargeRoll = (rand() % 100 < CHARGE_DIRECT_PCT) ? 1 : 0;
  	}
@@ -11961,12 +11961,26 @@ index 91000e2..0121367 100644
 +	// enormous army orbiting a doomsday gun's range ring looks like -- the
 +	// caution the ceiling buys is for games still in doubt.
 +	const bool overrun = circuit->ReadTeamValue(circuit->GetTeamId(), "kill", 0.f) > 0.f;
-+	const bool isCharge = overrun || detourCharge || ((chargeRoll == 1)
++	const bool isCharge = overrun || ((chargeRoll == 1)
 +			&& ISquadTask::IsChargeDef(leader->GetCircuitDef()));
++	// Each risk level halves the threat cost and doubles the ceiling -- more
++	// accepted risk, never zero care (that stays the chargers' privilege).
++	const float riskDiv = float(1 << riskLevel);
  	const float threatCeiling = isCharge
  			? CHARGE_THREAT_CEILING
- 			: (ATTACK_CEILING_MOD * attackPower
-@@ -537,7 +563,13 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+-			: (ATTACK_CEILING_MOD * attackPower
++			: (ATTACK_CEILING_MOD * riskDiv * attackPower
+ 					/ circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
+ 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
+ 			leader, circuit->GetThreatMap(),
+ 			startPos, endPos, pathRange, GetHitTest(),
+ 			threatCeiling,
+-			false, isCharge ? 0.f : ATTACK_THREAT_MOD);
++			false, isCharge ? 0.f : (ATTACK_THREAT_MOD / riskDiv));
+ 	pathQueries[leader] = query;
+ 
+ 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
+@@ -537,7 +566,13 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
@@ -11981,7 +11995,7 @@ index 91000e2..0121367 100644
  		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  		float x = rand() % terrainMgr->GetTerrainWidth();
  		float z = rand() % terrainMgr->GetTerrainHeight();
-@@ -576,6 +608,11 @@ void CAttackTask::FindTarget()
+@@ -576,6 +611,11 @@ void CAttackTask::FindTarget()
  	CInfluenceMap* inflMap = circuit->GetInflMap();
  	CThreatMap* threatMap = circuit->GetThreatMap();
  	threatMap->SetThreatType(leader);
@@ -11993,7 +12007,7 @@ index 91000e2..0121367 100644
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
  	const int frame = circuit->GetLastFrame();
-@@ -603,6 +640,9 @@ void CAttackTask::FindTarget()
+@@ -603,6 +643,9 @@ void CAttackTask::FindTarget()
  	float bestInfl = .0f;
  	float bestNear = .0f;
  	float bestScale = .0f;
@@ -12003,7 +12017,7 @@ index 91000e2..0121367 100644
  	// A juggernaut IS the attack. corjugg (Behemoth, 20,000 metal), armbanth
  	// (Titan), corkorg (Korgoth) and armraz all carry role heavy + attribute
  	// melee, and all of them detonate on death -- so the value is delivered by
-@@ -653,9 +693,22 @@ void CAttackTask::FindTarget()
+@@ -653,9 +696,22 @@ void CAttackTask::FindTarget()
  		// when the group is closer to our base than we are, i.e. defending home,
  		// where taking a worse fight is correct.
  		const float scale = std::min(distBE / obDist, 1.f);
@@ -12029,7 +12043,7 @@ index 91000e2..0121367 100644
  		const bool holdsPrev = wasEngaged && (prevTarget != nullptr)
  				&& (std::find(group.units.begin(), group.units.end(), prevTarget->GetId()) != group.units.end());
  		const float groupMargin = holdsPrev ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
-@@ -778,7 +831,12 @@ void CAttackTask::FindTarget()
+@@ -778,7 +834,12 @@ void CAttackTask::FindTarget()
  			if ((edef != nullptr) && !edef->IsMobile() && !edef->IsAttacker()
  				&& (localInfl <= .0f))
  			{
@@ -12043,7 +12057,7 @@ index 91000e2..0121367 100644
  				// ...and prefer the ones that actually die in the time a raid
  				// has. A converter is 380 metal behind 445 hitpoints; an
  				// advanced solar is 350 behind 1130. Equal-ish metal, and only
-@@ -806,6 +864,11 @@ void CAttackTask::FindTarget()
+@@ -806,6 +867,11 @@ void CAttackTask::FindTarget()
  			const float nearMargin = (enemy == prevTarget) ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
  			if (!isJuggernaut && (localInfl > .0f) && (maxPower < localInfl * nearMargin) && !isHome) {
  				++skippedWeak;
@@ -12055,7 +12069,7 @@ index 91000e2..0121367 100644
  				continue;
  			}
  
-@@ -816,15 +879,23 @@ void CAttackTask::FindTarget()
+@@ -816,15 +882,23 @@ void CAttackTask::FindTarget()
  				bestInfl = group.influence;
  				bestNear = localInfl;
  				bestScale = scale;
@@ -12068,7 +12082,7 @@ index 91000e2..0121367 100644
  
  	if (bestTarget != nullptr) {
 +		if (bestTarget != prevTarget) {
-+			detourCharge = false;   // new objective, fresh route judgement
++			riskLevel = 0;   // new objective, fresh route judgement
 +		}
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
@@ -12079,7 +12093,7 @@ index 91000e2..0121367 100644
  
  	// One line per squad per 10s, TAKE=committing to a target, SKIP=every group
  	// failed the strength test. `edge` is our rated power over what we had to
-@@ -833,13 +904,16 @@ void CAttackTask::FindTarget()
+@@ -833,13 +907,16 @@ void CAttackTask::FindTarget()
  	if (frame >= lastEngageLog + FRAMES_PER_SEC * 10) {
  		lastEngageLog = frame;
  		const float need = bestInfl * bestScale;
@@ -12099,7 +12113,7 @@ index 91000e2..0121367 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -853,8 +927,15 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -853,8 +930,15 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  		// walked/direct near 1.0 is a charge up the middle, well above 1.0 is a
  		// flank. Rate limited because attack paths are re-queried constantly.
  		CCircuitAI* circuit = manager->GetCircuit();
@@ -12117,7 +12131,7 @@ index 91000e2..0121367 100644
  			const AIFloat3& from = pPath->posPath.front();
  			const AIFloat3& to = pPath->posPath.back();
  			float walked = 0.f;
-@@ -863,10 +944,15 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -863,10 +947,17 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  			}
  			const float direct = from.distance2D(to);
  			if (direct > 1.f) {
@@ -12125,19 +12139,21 @@ index 91000e2..0121367 100644
 -						walked, direct, walked / direct,
 -						int((chargeRoll == 1) && (leader != nullptr)
 -								&& ISquadTask::IsChargeDef(leader->GetCircuitDef())));
-+				detourCharge = (walked / direct)
++				const bool tooFar = (walked / direct)
 +						> circuit->GetTunable("apex_max_detour", 2.0f);
++				if (tooFar && (riskLevel
++						< int(circuit->GetTunable("apex_max_risk", 3.f)))) {
++					++riskLevel;   // next query accepts more risk, stays aware
++				}
 +				if (circuit->GetLastFrame() >= lastDetourLog + FRAMES_PER_SEC * 20) {
 +					lastDetourLog = circuit->GetLastFrame();
-+					circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f charge=%d",
-+							walked, direct, walked / direct,
-+							int(detourCharge || ((chargeRoll == 1) && (leader != nullptr)
-+									&& ISquadTask::IsChargeDef(leader->GetCircuitDef()))));
++					circuit->LOG("apex: attack path walked=%.0f direct=%.0f detour=%.2f risk=%d",
++							walked, direct, walked / direct, riskLevel);
 +				}
  			}
  		}
  		ActivePath(lowestSpeed);
-@@ -878,7 +964,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -878,7 +969,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -12172,7 +12188,7 @@ index 91000e2..0121367 100644
  	if (urgentPositions.empty()) {
  		FallbackBasePos();
  		return;
-@@ -916,8 +1028,26 @@ void CAttackTask::FallbackBasePos()
+@@ -916,8 +1033,26 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -12200,7 +12216,7 @@ index 91000e2..0121367 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -950,7 +1080,9 @@ void CAttackTask::Fallback()
+@@ -950,7 +1085,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -12212,17 +12228,21 @@ index 91000e2..0121367 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
 diff --git a/src/circuit/task/fighter/AttackTask.h b/src/circuit/task/fighter/AttackTask.h
-index 4fe5877..78e4b70 100644
+index 4fe5877..1ea91e5 100644
 --- a/src/circuit/task/fighter/AttackTask.h
 +++ b/src/circuit/task/fighter/AttackTask.h
-@@ -42,6 +42,10 @@ private:
+@@ -42,6 +42,14 @@ private:
  	// -1 until rolled, then 0 = threat-aware route, 1 = straight in. Rolled once
  	// per task so a squad does not change its mind about the route mid-walk.
  	int chargeRoll = -1;
-+	// Set when the threat-aware route came back past apex_max_detour times the
-+	// straight line: the next query paths charge-style. Cleared on a target
-+	// change in FindTarget, so it is a per-objective decision, not a ratchet.
-+	bool detourCharge = false;
++	// Risk escalation, not a charge flip: each time the threat-aware route
++	// comes back past apex_max_detour times the straight line, this steps up
++	// one -- halving the per-tile threat cost and doubling the ceiling on the
++	// next query -- until the route is acceptable or apex_max_risk is hit.
++	// The path stays threat-aware at every level (apexearth: "wish we could
++	// just choose to accept more risk in our path, not just turn all our
++	// careful logic off"). Reset on a target change in FindTarget.
++	int riskLevel = 0;
  };
  
  } // namespace circuit
