@@ -695,6 +695,56 @@ IUnitTask@ HeavyFlak(CCircuitUnit@ unit)
 	return post;
 }
 
+// PIPELINE LANE: FRONT FORTRESSES. The old path to a front-line big turret
+// needed five soft dependencies to align (a free adv con, winning the
+// election, the fence want, the heavy ladder, the popup ratio) and produced
+// ONE per game -- apexearth, repeatedly: "we still just have one T3 defense
+// ... our logic is terrible around these things." This is the straight
+// version: past apex_front_t3_income the front is OWED big turrets, one per
+// apex_front_t3_per of income, built by the first free adv con, sited on the
+// border ranks. Income-scaled, no cap, one in flight.
+int gFortAsked = 0;
+int gFortPeak = 0;
+
+IUnitTask@ FrontFortress(CCircuitUnit@ unit)
+{
+	if (aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (aiEconomyMgr.metal.income
+			< ai.GetTunable("apex_front_t3_income", 100.f))
+		return null;
+	CCircuitDef@ big = SideDef3(armpulsar, corpulsar, legpulsar);
+	if ((big is null) || !big.IsAvailable(ai.frame)
+		|| !unit.circuitDef.CanBuild(big))
+		return null;
+	const int standing = int(big.count);
+	if (standing > gFortPeak)
+		gFortPeak = standing;
+	const int want = 1 + int(aiEconomyMgr.metal.income
+			/ ai.GetTunable("apex_front_t3_per", 80.f));
+	if ((standing >= want) || (gFortAsked - gFortPeak >= 1))
+		return null;
+	AIFloat3 spot;
+	if (!Military::BorderPos(spot, uint(standing))
+		&& !Military::FrontLinePos(spot))
+		return null;
+	AIFloat3 site = ai.FindBuildSiteNear(big, spot, 700.f);
+	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
+		return null;
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, big, Task::BuildType::DEFENCE,
+			Task::Priority::HIGH, site, 0.f, 0.f, created);
+	if (post is null)
+		return null;
+	if (!created)
+		return post;
+	++gFortAsked;
+	AiLog(Factory::T() + "apex: front fortress " + big.GetName()
+		+ " standing=" + standing + " want=" + want
+		+ " at=" + int(site.x) + "," + int(site.z));
+	return post;
+}
+
 IUnitTask@ AntiNuke(CCircuitUnit@ unit)
 {
 	if (aiEconomyMgr.isEnergyStalling)

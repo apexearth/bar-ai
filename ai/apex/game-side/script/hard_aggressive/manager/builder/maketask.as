@@ -308,6 +308,12 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (t !is null)
 			return t;
 	}
+	// LANE 3: front fortresses, past the T3-income bar. See FrontFortress.
+	if (isAdvCon) {
+		@t = FrontFortress(unit);
+		if (t !is null)
+			return t;
+	}
 
 	// THE MACRO VIEW GETS ITS SAY BEFORE ANY OPTIONAL SPENDING.
 	//

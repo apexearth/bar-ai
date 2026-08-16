@@ -251,6 +251,21 @@ def check_efficiency(text, rep):
     rep.add("EFFICIENCY", len(starved) == 0, "quota-starvation",
             "none" if not starved
             else f"want>=5 held 0 late: {', '.join(starved)}")
+    # LATE-GAME FRONT INVESTMENT: fortresses ordered and idle-at-full-metal
+    # factory samples -- apexearth's two standing complaints, as numbers.
+    forts = re.findall(r"front fortress \S+ standing=(\d+) want=(\d+)", text)
+    peak_inc = max([float(x) for x in
+                    re.findall(r"fusion-gate diag .*?income=([\d.]+)", text)]
+                   or [0])
+    if peak_inc >= 100:
+        rep.add("EFFICIENCY", len(forts) > 0, "front-fortress",
+                f"{len(forts)} orders at peak income {peak_inc:.0f}"
+                + ("" if forts else " -- NONE despite T3-scale economy"))
+    idlefull = len(re.findall(
+        r"factory-diag \S+ mInc=[\d.]+ mCur=\d+ mStor=\d+ isMetalFull=1"
+        r" hasTask=\d+ calls=\d+ queue=0 unstarted=0", text))
+    rep.add("EFFICIENCY", idlefull < 5, "idle-at-full-metal",
+            f"{idlefull} factory samples idle at the metal cap")
     # blocked capability bugs: rules handing defs to units that cannot build
     bugs = len(re.findall(r"apex: BUG blocked", text))
     rep.add("EFFICIENCY", bugs == 0, "capability-blocks",
