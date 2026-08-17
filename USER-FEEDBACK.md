@@ -159,13 +159,18 @@ The thing he asked for first and has pushed hardest on.
   logic." Travel for any unit must respect what it can shoot and what can shoot
   it — halting to fire, standing off, or routing around are all acceptable;
   walking blind is not.
-- **UNRESOLVED (re-raised 2026-08-16): we do not mass as hard as the enemy.**
+- **FIXED 2026-08-16 (measured once): we did not mass as hard as the enemy.**
   "They usually have a really big mass and kill our smaller masses one by one.
   We don't know how big they are until its too late because we can't see them
-  all." Two halves: (1) our army fights as several small masses instead of one
-  big one; (2) intel — an unseen enemy mass reads as small, so we engage into
-  a force we never measured. Same shape as the air-doctrine rule: unknown must
-  not read as "small army", exactly as unknown must not read as "no AA".
+  all." Mechanism (massing.as): ratio-based group sizing was OFF by default,
+  the flat cap of 48 sat below the army-scaled floor past ~14k army, and the
+  sizing estimate discounted unseen enemies to 0.3x and omitted heavy/super
+  entirely. Fixed `e2fefcb`: raw full-field estimate (unknown must not read
+  as "small army", the air-doctrine rule), ratio sizing on, cap 2.5x floor,
+  group share ~35% of standing army. Same-day A/B, 24 games/side: decided
+  games 7-4 -> 14-2, pooled army K/D ours 0.739 -> 0.834 while stock's fell
+  0.897 -> 0.833 (trading at 0.82x of stock -> parity); legion alone 5-0
+  with the CI excluding 50%.
 - Stop entire armies chasing a few light units off the front line.
 - Do not walk 20x the necessary distance around enemy defences.
 - **Making this kind of strategic logic easy to express is itself a goal.**
