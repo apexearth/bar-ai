@@ -405,6 +405,40 @@ CCircuitDef@ LadderDef()
 	return best;
 }
 
+// apexearth 2026-08-17: "the more aggressive we can see that they are, the
+// more we devote to our defenses and the frontline. Then behind that front
+// line we build up our army, and when we're ready, we attack." Continuous,
+// not the binary turtle/contested step: the enemy's fielded mobile army
+// against everything we hold the line with (team army + team front towers),
+// both on the power scale (0.017 power per metal, LogUnitPower). Reads 1
+// while they field no more than apex_aggr_from of our line strength, grows
+// linearly past it, bounded by apex_aggr_max.
+int gNextAggrLog = 0;
+
+float AggressionMult()
+{
+	const float theirs = aiEnemyMgr.mobileThreat;
+	const float lineM = TeamArmyCost() + TeamSum(TV_FMETAL, OwnFrontMetal());
+	const float ours = lineM * 0.017f;
+	if ((ours <= 1.f) || (theirs <= 0.f))
+		return 1.f;
+	const float ratio = theirs / ours;
+	const float from = ai.GetTunable("apex_aggr_from", 0.5f);
+	if (ratio <= from)
+		return 1.f;
+	float m = 1.f + ai.GetTunable("apex_aggr_defence", 1.f) * (ratio - from);
+	const float capM = ai.GetTunable("apex_aggr_max", 3.f);
+	if (m > capM)
+		m = capM;
+	if (ai.frame >= gNextAggrLog) {
+		gNextAggrLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: aggression mult=" + formatFloat(m, "", 0, 2)
+			+ " enemyMobile=" + formatFloat(theirs, "", 0, 0)
+			+ " ourLine=" + formatFloat(ours, "", 0, 0));
+	}
+	return m;
+}
+
 bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 {
 	if (!CrowdAllows(pos, def))
@@ -420,6 +454,10 @@ bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 	// more we are allowed to build, cancelling the bound. Dropped; BudgetMult
 	// still ranks defence against other categories in Brain.
 	float pressureAllow = (gTurtle || BaseContested()) ? 2.f : 1.f;
+	// Aggression-proportional, multiplicative with the binary pressure step:
+	// an enemy fielding twice our line strength doubles-plus the allowance
+	// even before anything of ours is actually being shot.
+	pressureAllow *= AggressionMult();
 	// A lead buys less defence, never none -- its metal is wanted for the plant
 	// and T2 mexes, but a role changes how much, never whether.
 	if (Factory::IsDesignatedLead() && !gPorcArmed && !gTurtle && !LosingGround())
