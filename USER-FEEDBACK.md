@@ -292,6 +292,19 @@ The thing he asked for first and has pushed hardest on.
   still finish without one. The trigger exists but does not reliably fire —
   find why (gate never reached? displaced? no builder picks it up?).
 
+## Hosting performance (2026-08-16, from hosted play)
+
+- **UNRESOLVED: our AI causes pathfinding load and the host lags hard.** "When
+  i host it i end up just lagging too much... plus our units get stuck and we
+  end up stalling hard." Suspects: order churn forcing constant engine
+  repathing (DEFEND positions rewritten every pass), sprawled bases making
+  units thread their own buildings, raw unit count.
+- **UNRESOLVED: when the host lags, the AI goes dumb.** Sim-rate drop delays
+  order application (the measured ~45-sim-sec lag class) and AI update cadence;
+  degradation compounds.
+- **UNRESOLVED: many air labs standing idle while metal-full.** "we have lots
+  of airlabs but we rarely build stuff out of them and we are full on metal."
+
 ## Efficiency
 
 - **Wasted metal and energy is a valuable metric** (2026-08-16): "everything in

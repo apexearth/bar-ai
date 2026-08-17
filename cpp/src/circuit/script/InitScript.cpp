@@ -38,6 +38,8 @@
 #include "Lua.h"
 #include "AISCommands.h"  // UNIT_COMMAND_OPTION_*, used by CmdBuildUnit below
 #include "Command.h"       // springai::Command, for reading a unit's own queue
+
+#include <chrono>          // apex: script-time accounting in Update()
 #include "Sim/Units/CommandAI/Command.h"  // CMD_INSERT
 
 namespace circuit {
@@ -1254,9 +1256,24 @@ void CInitScript::Update()
 	if (mainInfo.update == nullptr) {
 		return;
 	}
+	// apex: the host runs every AI's script -- "it makes me lag" gets a number
+	// before it gets an optimization. One line per game-minute per player.
+	const auto t0 = std::chrono::steady_clock::now();
 	asIScriptContext* ctx = script->PrepareContext(mainInfo.update);
 	script->Exec(ctx);
 	script->ReturnContext(ctx);
+	perfUpdateUs += std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - t0).count();
+	++perfUpdateCalls;
+	const int frame = circuit->GetLastFrame();
+	if (frame >= perfNextLog) {
+		perfNextLog = frame + 1800;   // one game-minute at 30 fps
+		circuit->LOG("apex: perf AiUpdate calls=%u totalMs=%.1f avgUs=%.0f",
+				perfUpdateCalls, perfUpdateUs / 1000.f,
+				(perfUpdateCalls > 0) ? float(perfUpdateUs) / float(perfUpdateCalls) : 0.f);
+		perfUpdateUs = 0;
+		perfUpdateCalls = 0;
+	}
 }
 
 void CInitScript::LuaMessage(const char* inData)
