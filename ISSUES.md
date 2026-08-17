@@ -2098,6 +2098,17 @@ floatable water on a <=85%-land map), and enemy subs put a torpedo-bomber
 (RT::AS) floor on air lines. Our OWN desire to expand into quiet water on a
 mostly-land map (underwater mexes with no enemy there) is still unaddressed.
 
+## One game's adv air plant approved 52 times, built never
+
+2026-08-16 imp-cortex-land t007 (Glacial Gap): `plant approved coraap` 52
+times over the game, 0 standing -- the PlantApproved ask kept dying (TTL
+sweep) and re-approving, so that player never got its advanced air plant
+while the other 23 games in the batch stood 1-4 each. Mechanism not traced:
+Builder::WantedAirPlant enqueues TaskB::Factory HIGH at a home site, so
+either nobody electable could reach/build it (only air cons can) or the task
+kept aborting. One game in 24; check `wanted air plant` vs `facqueue takes
+coraap` in that log before touching anything.
+
 ## Base sprawl at 8v8 scale: organized construction
 
 apexearth 2026-08-16, 8v8 Isthmus: "our buildings are terribly spread out.

@@ -159,6 +159,13 @@ The thing he asked for first and has pushed hardest on.
   logic." Travel for any unit must respect what it can shoot and what can shoot
   it — halting to fire, standing off, or routing around are all acceptable;
   walking blind is not.
+- **UNRESOLVED (re-raised 2026-08-16): we do not mass as hard as the enemy.**
+  "They usually have a really big mass and kill our smaller masses one by one.
+  We don't know how big they are until its too late because we can't see them
+  all." Two halves: (1) our army fights as several small masses instead of one
+  big one; (2) intel — an unseen enemy mass reads as small, so we engage into
+  a force we never measured. Same shape as the air-doctrine rule: unknown must
+  not read as "small army", exactly as unknown must not read as "no AA".
 - Stop entire armies chasing a few light units off the front line.
 - Do not walk 20x the necessary distance around enemy defences.
 - **Making this kind of strategic logic easy to express is itself a goal.**

@@ -11,12 +11,26 @@ namespace Military {
 // MASS_FLOOR so something goes out and the ratio can change.
 int gHoldSince = -1;
 
-// EnemyArmyCost() plus a discounted share of enemy static defence, for sizing
-// the group that commits to an attack. See MassWant() below for why this is
-// not folded into EnemyArmyCost() itself.
+// The enemy mass we SIZE AGAINST, counted pessimistically: raw GetEnemyCost
+// (no ghost discount) over every fighting role INCLUDING heavy and super,
+// plus a discounted share of statics. The 0.3 ghost weight is right for the
+// posture gates -- leaning defensive off dead units loses maps -- and wrong
+// here: a mass seen once and now hidden is exactly the thing that kills our
+// groups one by one, and reading their Korgoths as absent is the unsafe
+// error (see EnemyFieldCost). apexearth: "We don't know how big they are
+// until its too late because we can't see them all" -- unknown must not read
+// as a small army, the same rule air already applies to unseen AA.
 float EnemyMassingThreat()
 {
-	return EnemyArmyCost() + STATIC_DEFENSE_WEIGHT * aiEnemyMgr.GetEnemyCost(RT::STATIC);
+	return aiEnemyMgr.GetEnemyCost(RT::ASSAULT)
+	     + aiEnemyMgr.GetEnemyCost(RT::RAIDER)
+	     + aiEnemyMgr.GetEnemyCost(RT::RIOT)
+	     + aiEnemyMgr.GetEnemyCost(RT::SKIRM)
+	     + aiEnemyMgr.GetEnemyCost(RT::ARTY)
+	     + aiEnemyMgr.GetEnemyCost(RT::AH)
+	     + aiEnemyMgr.GetEnemyCost(RT::HEAVY)
+	     + aiEnemyMgr.GetEnemyCost(RT::SUPER)
+	     + STATIC_DEFENSE_WEIGHT * aiEnemyMgr.GetEnemyCost(RT::STATIC);
 }
 
 // The size a group commits at, from the armies on the field.
@@ -42,7 +56,10 @@ float MassWant()
 	// is a POWER sum (CFighterTask: attackPower += cdef->GetPower()), not a
 	// unit count or metal value, so it cannot be derived directly from a metal
 	// figure.
-	if (ai.GetTunable("apex_mass_vs_army", 0.f) <= 0.f)
+	// ON by default since 2026-08-16: with it off every group committed at the
+	// floor (~20% of our army) whatever the enemy massed, which is the "they
+	// kill our smaller masses one by one" report, made twice.
+	if (ai.GetTunable("apex_mass_vs_army", 1.f) <= 0.f)
 		return MassFloor();
 
 	const float ours = TeamArmyCost();
@@ -50,7 +67,13 @@ float MassWant()
 	if (ours <= 1.f)
 		return MASS_CAP;
 	const float floorNow = MassFloor();
-	const float capNow = (MASS_CAP > floorNow) ? MASS_CAP : floorNow;
+	// The ceiling scales with the floor: a flat MASS_CAP of 48 sits BELOW the
+	// army-scaled floor past ~14k of standing army, which silently collapsed
+	// the whole outmatched branch back to the floor. Against a bigger enemy
+	// mass the group is a multiple of our normal share, not a constant.
+	float capNow = floorNow * ai.GetTunable("apex_mass_cap_mult", 2.5f);
+	if (capNow < MASS_CAP)
+		capNow = MASS_CAP;
 	const float ratio = theirs / ours;
 	if (ratio <= ATTACK_EDGE)
 		return floorNow;                      // ahead: move, but as a group
@@ -78,12 +101,13 @@ float MassFloor()
 	// PLAYER, and scaling it by the whole ally side's army in an 8v8 set a
 	// bar no single player's pool could fill -- measured live as Fatboys
 	// loitering at the home guard anchor all late game, waiting to promote.
-	// 0.0035 is ~20% of standing army metal per group at Grunt-class
-	// power-per-metal. Was 0.0017 (~10%): apexearth 2026-08-15, watching --
-	// "we are willing to mass much smaller groups whereas the enemy masses
-	// larger groups, our smaller groups spreads us out more."
+	// 0.006 is ~35% of standing army metal per group at Grunt-class
+	// power-per-metal. Was 0.0017 (~10%), then 0.0035 (~20%) 2026-08-15 --
+	// apexearth has now said twice that the enemy masses bigger and kills our
+	// smaller groups one by one, so the share rises again; the ratio branch in
+	// MassWant() above is what scales it further when they actually out-mass us.
 	const float scaled = aiMilitaryMgr.armyCost
-			* ai.GetTunable("apex_mass_per_army", 0.0035f);
+			* ai.GetTunable("apex_mass_per_army", 0.006f);
 	return (scaled > base) ? scaled : base;
 }
 
@@ -118,9 +142,14 @@ void UpdateMassing()
 		if (gHoldSince < 0)
 			gHoldSince = ai.frame;
 		if ((holdSecs > 0.f) && (ai.frame - gHoldSince > int(holdSecs) * SECOND)) {
-			want = floorNow;
+			// Commit partway toward the cap, NOT at the floor: expiring straight
+			// to the floor sent a 20%-of-army group into the exact mass we had
+			// been refusing to fight -- the one-by-one deaths again, on a timer.
+			want = floorNow + ai.GetTunable("apex_mass_commit_frac", 0.5f)
+					* (want - floorNow);
 			gHoldSince = ai.frame;   // restart, so we alternate hold and commit
-			AiLog(Factory::T() + "apex: mass hold expired, committing at floor");
+			AiLog(Factory::T() + "apex: mass hold expired, committing at "
+				+ formatFloat(want, "", 0, 0));
 		}
 	} else {
 		gHoldSince = -1;

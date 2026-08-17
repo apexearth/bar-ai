@@ -1021,6 +1021,7 @@ float EnemyArmyCost()
 // the DLL's GetEnemyPos binding). Cached: FindBuildSiteNear is not free and
 // this is asked per builder election.
 bool gAfloat = false;
+int gAfloatStreak = 0;
 int gNextAfloatCheck = 0;
 int gNextAfloatLog = 0;
 
@@ -1034,24 +1035,38 @@ bool EnemyAfloat()
 	bool now = EnemyCostOf(Unit::Role::SUB.type)
 			>= ai.GetTunable("apex_afloat_sub_cost", 400.f);
 	if (!now && (aiTerrainMgr.GetLandPercent()
-			<= ai.GetTunable("apex_afloat_land_pct", 85.f))) {
+			<= ai.GetTunable("apex_afloat_land_pct", 85.f))
+		// A centroid means nothing before an enemy is actually SEEN --
+		// GetEnemyPos returns a default with no groups registered, which read
+		// as afloat at frame 18 of a land game (measured, Glacial Gap).
+		&& (EnemyArmyCost() + EnemyCostOf(Unit::Role::STATIC.type)
+			>= ai.GetTunable("apex_afloat_seen", 500.f)))
+	{
 		const AIFloat3 at = aiEnemyMgr.GetEnemyPos();
 		if (OnMap(at)) {
 			CCircuitDef@ sy = Factory::NavalOpening();
 			if (sy !is null) {
-				const AIFloat3 wet = ai.FindBuildSiteNear(sy, at,
-						ai.GetTunable("apex_afloat_near", 900.f));
-				now = OnMap(wet);
+				// Tight: the enemy's mass must sit ON the water's edge, not a
+				// screen from a lake -- 900 bought shipyards against a land
+				// army camped by frozen lakes.
+				const float near = ai.GetTunable("apex_afloat_near", 350.f);
+				const AIFloat3 wet = ai.FindBuildSiteNear(sy, at, near);
+				now = OnMap(wet) && (wet.distance2D(at) <= near);
 			}
 		}
 	}
-	if (now != gAfloat || (now && (ai.frame >= gNextAfloatLog))) {
+	// LATCH ON A STREAK, not one sample: the centroid jitters as sightings age,
+	// and a flapping answer buys and abandons the reaction repeatedly.
+	gAfloatStreak = now ? (gAfloatStreak + 1) : 0;
+	const bool latched = gAfloatStreak
+			>= int(ai.GetTunable("apex_afloat_streak", 3.f));
+	if (latched != gAfloat || (latched && (ai.frame >= gNextAfloatLog))) {
 		gNextAfloatLog = ai.frame + 120 * SECOND;
-		AiLog(Factory::T() + "apex: enemy afloat=" + (now ? "1" : "0")
+		AiLog(Factory::T() + "apex: enemy afloat=" + (latched ? "1" : "0")
 			+ " subs=" + int(EnemyCostOf(Unit::Role::SUB.type))
 			+ " land%=" + formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 0));
 	}
-	gAfloat = now;
+	gAfloat = latched;
 	return gAfloat;
 }
 
