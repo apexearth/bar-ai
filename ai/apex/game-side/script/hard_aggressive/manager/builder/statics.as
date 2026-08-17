@@ -494,16 +494,62 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	// finish. Same asked-minus-standing idiom NukeSilo uses.
 	if (gPulsarsAsked - gun.count >= PULSAR_CONCURRENT)
 		return null;
-	// On the line, not in the base: border/front position first, StandoffPos
-	// (walks toward home to the first safe step) only as a last resort.
+	// THE LINE THE BRAIN DRAWS, not the site ring. BorderPos picks among OUR
+	// OWN sites on the territory ring, which in practice is the base edge --
+	// watched 2026-08-16: 26 Annihilators standing, every one "at-border",
+	// none on what apexearth calls a front line. Same influence-crossing curve
+	// FrontDefenceWant holds, least-covered stretch first, pulled back a
+	// quarter of the gun's own range so it goes up BEHIND the line; the old
+	// border/standoff answers stay as fallbacks.
 	AIFloat3 spot;
-	string where = "border";
-	if (!Military::BorderPos(spot, uint(gun.count))) {
-		where = "front";
-		if (!Military::FrontLinePos(spot)) {
-			where = "standoff";
-			if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
-				return null;
+	string where = "line";
+	bool sited = false;
+	const float span = Brain::TowerReach(gun);
+	if (span > 200.f) {
+		array<AIFloat3> line;
+		if (Military::FrontLineSpots(line, span * 0.8f, span) && (line.length() > 0)) {
+			bool have = false;
+			uint fewest = 0;
+			for (uint i = 0; i < line.length(); ++i) {
+				if (!OnMap(line[i]))
+					continue;
+				if (Builder::DefenceTaskNear(line[i], span * 0.8f))
+					continue;
+				AIFloat3 back = line[i];
+				if (gHomeSet) {
+					AIFloat3 dir = gHomePos - line[i];
+					if (dir.SqLength2D() > NEAR_ZERO) {
+						dir.SafeNormalize2D();
+						back = line[i] + dir * (span * 0.25f);
+					}
+				}
+				if (!OnMap(back) || (ThreatFor(unit, back) > CON_THREAT_VETO))
+					continue;
+				const uint cover = Military::FenceCountNear(line[i], span);
+				if (!have || (cover < fewest)) {
+					fewest = cover;
+					spot = back;
+					have = true;
+				}
+			}
+			if (have) {
+				const AIFloat3 site = ai.FindBuildSiteNear(gun, spot, span * 0.5f);
+				if (OnMap(site)) {
+					spot = site;
+					sited = true;
+				}
+			}
+		}
+	}
+	if (!sited) {
+		where = "border";
+		if (!Military::BorderPos(spot, uint(gun.count))) {
+			where = "front";
+			if (!Military::FrontLinePos(spot)) {
+				where = "standoff";
+				if (!StandoffPos(unit, unit.GetPos(ai.frame), spot))
+					return null;
+			}
 		}
 	}
 	bool created = false;

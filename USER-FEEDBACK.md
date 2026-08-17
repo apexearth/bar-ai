@@ -171,6 +171,17 @@ The thing he asked for first and has pushed hardest on.
   games 7-4 -> 14-2, pooled army K/D ours 0.739 -> 0.834 while stock's fell
   0.897 -> 0.833 (trading at 0.82x of stock -> parity); legion alone 5-0
   with the CI excluding 50%.
+- **NEW 2026-08-16: units should WANT to stand within their squad's jammer**
+  when the squad has one. Escorts (jammer/radar per squad) are already bought;
+  the positioning half — members, especially fragile ones like snipers,
+  staying inside the jam radius — is squad-movement logic, likely C++
+  (SupportTask/attach). Not started.
+- **Sniper deaths diagnosed 2026-08-16 (live game):** every armsnipe death in
+  the watched game died on a RETREAT task (t4) at fwd 0.07-0.48 — the retreat
+  fires, then they die running. behaviour.json retreat raised 0.6 → 0.95 (a
+  680-metal glass cannon leaves on the first scratch, not at 60% hp). The
+  deeper fix — standoff so damage never starts, and jammer cover above — is
+  still open.
 - Stop entire armies chasing a few light units off the front line.
 - Do not walk 20x the necessary distance around enemy defences.
 - **Making this kind of strategic logic easy to express is itself a goal.**
