@@ -141,9 +141,7 @@
 		},
 		"armckfus": {
 			"hub": [
-				[  
-					
-					{"unit": "armpb", "category": "defence", "offset": [-200, -200], "condition": {"chance": 0.5}},
+				[
 					{"unit": "armferret", "category": "defence", "offset": [-200, 200], "condition": {"air": true}}
 				]
 			]
@@ -182,7 +180,10 @@
 		"corafus": {
 			"hub": [
 				[
-					{"unit": "cordoom", "category": "defence", "offset": [-180, 180]},
+					// No surface gun here: a Doomsday beside the AFUS is the
+					// deepest rear ground we own -- heavy guns belong on the
+					// line (Pulsar/FrontFortress rules). AA stays: air is what
+					// actually reaches an AFUS.
 					{"unit": "cormadsam", "category": "defence", "offset": [-80, 80], "condition": {"air": true}}
 				]
 			]

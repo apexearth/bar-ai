@@ -132,6 +132,17 @@ The thing he asked for first and has pushed hardest on.
   scatter the map with 'dragons teeth' which become obsolete once we have over
   100 metal per second." Two halves: stop scattering them, and treat existing
   ones as obsolete (reclaim candidates) once income passes ~100 metal/s.
+- **T2/T3 defences belong at the FRONT of the base, not the back half
+  (2026-08-17).** "I see our guys making them in the back half of the base and
+  it does nothing to defend us until we're already too far dead." Attributed:
+  the corafus/armckfus build_chain hubs placed a Doomsday/Gambit beside the
+  reactor — deepest rear ground we own — and were removed (AA hub entries
+  stay). Front-line heavies keep coming from Pulsar/FrontFortress line siting.
+- **When losing, shift to army; T1 cons are a floor of 3, not a scaling want
+  (2026-08-17).** His rule verbatim: "Make T1 cons if we have under 3, or if we
+  have extra metal, prefer army always when enemy army seems more powerful than
+  ours." Wired as the con-quota clamp in facqueue (apex_con_min=3,
+  apex_con_outmassed=1.0); metal-full still boosts cons.
 - **UNRESOLVED: we need T3-grade defence and jammers.** Once T3 is on the field
   the older defences die and there is nothing credible left. Eventually only T3
   units — Titans, Behemoths, Sol, Juggernauts — can hold a broken front.

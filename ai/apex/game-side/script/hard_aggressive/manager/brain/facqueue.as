@@ -476,8 +476,19 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	CCircuitDef@ con = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
 	if ((con !is null) && con.IsAvailable(ai.frame)) {
 		int cap = Builder::ConsWantedFor(con);
-		if (aiEconomyMgr.isMetalFull)
+		if (aiEconomyMgr.isMetalFull) {
 			cap = int(float(cap) * ai.GetTunable("apex_con_full_mult", 1.5f)) + 1;
+		} else if ((con.costM < Builder::ADV_CON_COST)
+			&& (Military::EnemyMassingThreat() > Military::TeamArmyCost()
+				* ai.GetTunable("apex_con_outmassed", 1.f)))
+		{
+			// apexearth: a floor of 3 T1 cons; beyond that, more only on surplus
+			// metal, and never while the enemy army outweighs ours -- an unfed
+			// constructor is army the line did not build.
+			const int floorN = int(ai.GetTunable("apex_con_min", 3.f));
+			if (cap > floorN)
+				cap = floorN;
+		}
 		defs.insertLast(con);
 		want.insertLast(cap);
 		isFloor.insertLast(true);
