@@ -145,7 +145,16 @@ void CDefendTask::Update()
 		// and stood in base for the rest of the game, while anything already over
 		// the bar promoted and left alone.
 		const bool held = onFront && (attackPower < maxPower * FRONT_HOLD_POWER);
-		if (!held && ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty())) {
+		// The any-attack-exists shortcut fed solos: each promotion CREATES an
+		// attack task, so after the first real squad -- alive or already dead --
+		// every fresh 1-unit pool saw "an attack exists" and left alone, a
+		// self-sustaining one-by-one stream (measured first-10m squad avg 1.3
+		// vs enemy 2.6). Reinforcements now leave only at a real fraction of
+		// the current quota, which tracks the living army.
+		const float reinforceFrac = circuitAI->GetTunable("apex_reinforce_frac", 0.5f);
+		const bool mayReinforce = !militaryMgr->GetTasks(check).empty()
+				&& (attackPower >= maxPower * reinforceFrac);
+		if (!held && ((attackPower >= maxPower) || mayReinforce)) {
 			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
 			decltype(units) tmpUnits = units;
 			for (CCircuitUnit* unit : tmpUnits) {

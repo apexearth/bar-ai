@@ -22,6 +22,7 @@
 #include "map/InfluenceMap.h"   // unconditionally: the DEBUG_VIS include below is gated
 #include "terrain/path/PathFinder.h"
 #include "task/PlayerTask.h"
+#include "task/fighter/FighterTask.h"
 #include "unit/CircuitUnit.h"
 #include "unit/enemy/EnemyUnit.h"
 #include "unit/enemy/EnemyManager.h"
@@ -890,6 +891,45 @@ int CCircuitAI::Update(int frame)
 		debugDrawer->Refresh();
 	}
 #endif
+
+	// apex: squad sizes, ours against the enemy's, on one comparable line per
+	// 30s. Ours = units on ATTACK/DEFEND tasks; theirs = mobile armed units per
+	// enemy cluster -- the mass that actually arrives, whatever their AI calls it.
+	if ((frame >= squadDiagNextLog) && (militaryManager != nullptr) && (enemyManager != nullptr)) {
+		squadDiagNextLog = frame + 900;
+		int nOwn = 0, uOwn = 0, mOwn = 0;
+		for (IFighterTask::FightType t : {IFighterTask::FightType::ATTACK, IFighterTask::FightType::DEFEND}) {
+			for (IFighterTask* ft : militaryManager->GetTasks(t)) {
+				const int s = (int)ft->GetAssignees().size();
+				if (s <= 0) {
+					continue;
+				}
+				++nOwn;
+				uOwn += s;
+				mOwn = std::max(mOwn, s);
+			}
+		}
+		int nE = 0, uE = 0, mE = 0;
+		for (const CEnemyManager::SEnemyGroup& g : enemyManager->GetEnemyGroups()) {
+			int s = 0;
+			for (const ICoreUnit::Id eId : g.units) {
+				CEnemyInfo* e = GetEnemyInfo(eId);
+				if ((e != nullptr) && (e->GetCircuitDef() != nullptr)
+					&& e->GetCircuitDef()->IsMobile() && e->GetCircuitDef()->IsAttacker()) {
+					++s;
+				}
+			}
+			if (s <= 0) {
+				continue;
+			}
+			++nE;
+			uE += s;
+			mE = std::max(mE, s);
+		}
+		LOG("apex: squadsize own n=%i avg=%.1f max=%i | enemy n=%i avg=%.1f max=%i",
+				nOwn, (nOwn > 0) ? float(uOwn) / nOwn : 0.f, mOwn,
+				nE, (nE > 0) ? float(uE) / nE : 0.f, mE);
+	}
 
 	const uint64_t perfUs = std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - perfT0).count();

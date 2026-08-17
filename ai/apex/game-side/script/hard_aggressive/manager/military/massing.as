@@ -94,9 +94,14 @@ float MassFloor()
 {
 	if (gQuotaConfig < 0.f)
 		gQuotaConfig = aiMilitaryMgr.quota.attack;
-	float base = ai.GetTunable("apex_mass_floor", MASS_FLOOR);
-	if (base < gQuotaConfig)
-		base = gQuotaConfig;   // never undercut the config's own opening minimum
+	// NO FLAT OPENING MINIMUM. The config's 60 exceeded the whole army until
+	// ~3.5k metal, so no pool could legitimately promote in the opening and
+	// every early attack was born through the any-attack-exists bypass as a
+	// solo -- measured 2026-08-17, first-10m squad avg 1.3 vs enemy 2.6.
+	// apexearth: "sizing needs to be dynamic based on what we have." The share
+	// of standing army below is the size; the tunable is only a degenerate-case
+	// guard (~2 Pawns) for an army of nearly nothing.
+	float base = ai.GetTunable("apex_mass_floor", 5.f);
 	// OWN army, not TeamArmyCost: the promotion quota this feeds is per
 	// PLAYER, and scaling it by the whole ally side's army in an 8v8 set a
 	// bar no single player's pool could fill -- measured live as Fatboys
@@ -106,8 +111,13 @@ float MassFloor()
 	// apexearth has now said twice that the enemy masses bigger and kills our
 	// smaller groups one by one, so the share rises again; the ratio branch in
 	// MassWant() above is what scales it further when they actually out-mass us.
+	// ~70% of OWN standing army per group (0.012 metal->power at Grunt-class
+	// 0.017): one force that can win the fight it meets, not two that each
+	// lose it. Was 0.006 (~35%) -- measured 2026-08-17 with the solo-stream
+	// fixed, first-10m groups still averaged 1.5 units against the enemy's
+	// 2.3 with 8-stacks; the share was the remaining term.
 	const float scaled = aiMilitaryMgr.armyCost
-			* ai.GetTunable("apex_mass_per_army", 0.006f);
+			* ai.GetTunable("apex_mass_per_army", 0.012f);
 	return (scaled > base) ? scaled : base;
 }
 

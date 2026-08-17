@@ -538,6 +538,7 @@ private:
 	uint64_t perfFrameMaxUs = 0;
 	unsigned perfFrameCalls = 0;
 	int perfFrameNextLog = 0;
+	int squadDiagNextLog = 0;
 	int skirmishAIId;
 	int teamId;
 	int allyTeamId;
