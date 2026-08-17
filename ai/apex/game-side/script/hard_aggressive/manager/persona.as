@@ -47,14 +47,13 @@ void Become(int k, const string &in why)
 	AiLog(Factory::T() + "apex: persona -> " + NameOf(k) + " (" + why + ")");
 }
 
-// apex_persona: -1 rolls freely; 0..5 forces that Kind and disables
-// adaptation, which is what an A/B needs. Compile default 0 (standard) until
-// the roll gets its own measured pass.
+// apex_persona: -1 rolls freely (default); 0..5 forces that Kind and disables
+// adaptation, which is what an A/B needs.
 void Roll()
 {
 	if (gKind >= 0)
 		return;
-	const int forced = int(ai.GetTunable("apex_persona", 0.f));
+	const int forced = int(ai.GetTunable("apex_persona", -1.f));
 	if (forced >= 0 && forced < int(KINDS)) {
 		Become(forced, "forced");
 		return;
@@ -124,7 +123,7 @@ void Update()
 	if (ai.frame < 10 * SECOND)
 		return;
 	Roll();
-	if (int(ai.GetTunable("apex_persona", 0.f)) >= 0)
+	if (int(ai.GetTunable("apex_persona", -1.f)) >= 0)
 		return;                   // forced persona never adapts
 	if (ai.frame < gNextEval || ai.frame < gSince + DWELL)
 		return;

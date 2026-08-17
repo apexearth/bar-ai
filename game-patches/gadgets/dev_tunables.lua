@@ -55,6 +55,10 @@ local NAMES = {
 	"apex_mass_vs_army",
 	"apex_mass_hold_secs",
 	"apex_mass_floor",
+	"apex_unseen_parity",     -- massing.as: pre-T2 enemy-army parity floor (1.2)
+	"apex_press_health",      -- AttackTask: squad HP fraction below which it stops pressing (0.6)
+	"apex_persona",           -- persona.as: -1 roll freely, 0..5 force a Kind
+	"apex_retreat_cost_secs", -- posture.as: cost-vs-income no-retreat bar, 0 = off
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",
