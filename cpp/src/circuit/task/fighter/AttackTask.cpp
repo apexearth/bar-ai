@@ -218,6 +218,17 @@ static inline float TradeScaledMargin(circuit::CCircuitAI* circuit)
 // things that die in a raid pass from the things that soak one.
 #define SOFT_ECO_DENSITY	0.50f
 #define SOFT_ECO_BONUS		2.0f
+// apex: THE DIVE. A squad already standing in the enemy's own influence is past
+// their wall -- from there a fat unarmed structure (advanced converter, fusion,
+// AFUS) outranks every military target, guarded or not, and the local-army
+// refusal is waived for it: the dive is a commitment, the same shape as the
+// juggernaut charge. apexearth: "If we know we are near the enemy base, we
+// should dive straight into it and prioritize targetting their economy. Don't
+// get distracted by military or towers if an advanced converter or afus is in
+// range." Cost floor is a tunable; 350 clears the advanced converter (380) and
+// everything above it while leaving solars and plain mexes to the ordinary
+// free-eco ordering.
+#define DIVE_ECO_PRIORITY	8.0f
 // apex: how much better a new candidate must look before a squad abandons the
 // target it already chose. FindTarget re-runs every pass and scores purely on
 // the CURRENT geometry, so as the squad moved the ordering churned and it
@@ -661,6 +672,16 @@ void CAttackTask::FindTarget()
 	// CCircuitUnit::Attack already walks a melee unit onto its target rather
 	// than firing from range, so only the DECISION needed changing.
 	const bool isJuggernaut = (cdef != nullptr) && cdef->IsRoleHeavy() && cdef->IsAttrMelee();
+	// apex: see DIVE_ECO_PRIORITY. Enemy influence at the SQUAD's own position
+	// is "we are standing on their ground" -- the same field isHome reads from
+	// the other side.
+	const bool inTheirBase = inflMap->GetEnemyInflAt(pos) >= INFL_SAFE;
+	const float diveCost = circuit->GetTunable("apex_dive_eco_cost", 350.f);
+	// Observable, or it cannot be validated -- same rule as the juggernaut line.
+	if (inTheirBase && (frame >= lastEngageLog + FRAMES_PER_SEC * 10)) {
+		lastEngageLog = frame;
+		circuit->LOG("apex: eco dive -- squad on enemy ground, fat eco outranks all");
+	}
 	// Observable, or it cannot be validated. A behaviour with no log line is a
 	// behaviour nobody can prove ever ran -- which is how this repo has shipped
 	// dead code more than once. Rate limited per task, not per call.
@@ -715,7 +736,11 @@ void CAttackTask::FindTarget()
 		const bool holdsPrev = wasEngaged && (prevTarget != nullptr)
 				&& (std::find(group.units.begin(), group.units.end(), prevTarget->GetId()) != group.units.end());
 		const float groupMargin = holdsPrev ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
-		if (!isJuggernaut && (maxPower <= group.influence * scale * groupMargin) && !isHome) {
+		// inTheirBase waives the group strength test like the juggernaut: a
+		// squad already inside their influence has committed, and refusing every
+		// group there means standing in the middle of their base doing nothing.
+		if (!isJuggernaut && !inTheirBase
+			&& (maxPower <= group.influence * scale * groupMargin) && !isHome) {
 			++skippedWeak;
 			continue;
 		}
@@ -828,6 +853,14 @@ void CAttackTask::FindTarget()
 					localInfl += g.influence;
 				}
 			}
+			// THE DIVE: inside their base, a fat unarmed structure outranks
+			// everything whether it is guarded or not -- see DIVE_ECO_PRIORITY.
+			const bool isDive = inTheirBase && (edef != nullptr)
+					&& !edef->IsMobile() && !edef->IsAttacker()
+					&& (edef->GetCostM() >= diveCost);
+			if (isDive) {
+				prio *= DIVE_ECO_PRIORITY;
+			}
 			// localInfl is already the army standing beside this target. It was
 			// only ever used to REFUSE a target; nothing used it to prefer a safe
 			// one. A static, unarmed, undefended building is exactly that.
@@ -865,7 +898,8 @@ void CAttackTask::FindTarget()
 			}
 
 			const float nearMargin = (enemy == prevTarget) ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
-			if (!isJuggernaut && (localInfl > .0f) && (maxPower < localInfl * nearMargin) && !isHome) {
+			if (!isJuggernaut && !isDive
+				&& (localInfl > .0f) && (maxPower < localInfl * nearMargin) && !isHome) {
 				++skippedWeak;
 				// The strongest refusal: near 1.0 means one merge or a small
 				// margin change would have taken it; near 0.2 means hopeless.

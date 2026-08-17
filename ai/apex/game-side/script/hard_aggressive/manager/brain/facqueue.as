@@ -543,16 +543,41 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			want.insertLast(Factory::AIR_CON_MIN);
 			isFloor.insertLast(true);
 		}
-		// AIR SCOUTS ARE INTEL, NOT ARMY. apexearth: "air scouts exist to help
-		// us understand if we can attack certain areas" -- and the ghost-weight
-		// posture fix only works if something keeps re-seeing the map. A small
-		// standing floor, income-scaled, kept alive by the line.
+		// AIR SCOUTS ARE INTEL, NOT ARMY -- and intel demand is the MAP'S, not
+		// the income's. The income-scaled floor alone put 43 T2 radar planes
+		// over one Prismatic game at ~2k m/s (apexearth: "yes we do need radar
+		// planes too but certainly not 43"). The income term still gates how
+		// fast the fleet appears; the map bound says how many eyes the sky can
+		// possibly need.
 		CCircuitDef@ eye = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::SCOUT.type);
 		if ((eye !is null) && eye.IsAvailable(ai.frame)) {
+			int eyesN = 1 + int(aiEconomyMgr.metal.income
+					/ ai.GetTunable("apex_airscout_per", 60.f));
+			const int eyesCap = 2 + int(sqrt(float(AiTerrainWidth())
+					* float(AiTerrainHeight()))
+					/ ai.GetTunable("apex_airscout_map_per", 3000.f));
+			if (eyesN > eyesCap)
+				eyesN = eyesCap;
 			defs.insertLast(eye);
-			want.insertLast(1 + int(aiEconomyMgr.metal.income
-					/ ai.GetTunable("apex_airscout_per", 60.f)));
+			want.insertLast(eyesN);
 			isFloor.insertLast(true);
+		}
+		// TORPEDO BOMBERS ANSWER AN ENEMY IN THE WATER -- ABOVE the fighter and
+		// bomber floors, which at late-game income are ~50 aircraft each and
+		// would hold this small, urgent floor at the back of the queue exactly
+		// when it matters. The AS role only resolves on the advanced plant, and
+		// nothing else in the whole quota reacts to an underwater enemy at all.
+		// Sized by the sub metal actually seen; an afloat enemy with no subs
+		// sighted still earns the first one.
+		const float subSeen = Military::EnemyCostOf(Unit::Role::SUB.type);
+		if ((subSeen > 0.f) || Military::EnemyAfloat()) {
+			CCircuitDef@ torp = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::AS);
+			if ((torp !is null) && torp.IsAvailable(ai.frame)) {
+				defs.insertLast(torp);
+				want.insertLast(1 + int(subSeen
+						/ ai.GetTunable("apex_antisub_per", 1500.f)));
+				isFloor.insertLast(true);
+			}
 		}
 		// FIGHTER COVER, income-scaled like the scouts. The mandatory late
 		// plants exist partly for this -- apexearth: "plenty of fighter
@@ -565,19 +590,19 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 					/ ai.GetTunable("apex_fighter_per", 40.f)));
 			isFloor.insertLast(true);
 		}
-		// TORPEDO BOMBERS ANSWER SUBS. The AS role only resolves on the advanced
-		// plant, and nothing else in the whole quota reacts to an underwater
-		// enemy at all -- a sub fleet was unanswerable by construction. Sized by
-		// the sub metal actually seen, so no subs means no entry.
-		const float subSeen = Military::EnemyCostOf(Unit::Role::SUB.type);
-		if (subSeen > 0.f) {
-			CCircuitDef@ torp = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::AS);
-			if ((torp !is null) && torp.IsAvailable(ai.frame)) {
-				defs.insertLast(torp);
-				want.insertLast(1 + int(subSeen
-						/ ai.GetTunable("apex_antisub_per", 1500.f)));
-				isFloor.insertLast(true);
-			}
+		// BOMBERS ARE THE AIR ARM'S ARMY. The mix path leaves the BOMBER role to
+		// whatever slots survive the ground lines, which at 2k income meant a sky
+		// of radar planes and no strike force -- apexearth: "we should make lots
+		// of bombers and when we have a good mass of bombers we should just find
+		// their converters or afus and bomb those." Income-scaled like the
+		// fighter floor above it; fighters fill first (floors are top-down), so
+		// the escort exists before the strike.
+		CCircuitDef@ bomb = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::BOMBER);
+		if ((bomb !is null) && bomb.IsAvailable(ai.frame)) {
+			defs.insertLast(bomb);
+			want.insertLast(1 + int(aiEconomyMgr.metal.income
+					/ ai.GetTunable("apex_bomber_per", 40.f)));
+			isFloor.insertLast(true);
 		}
 	}
 

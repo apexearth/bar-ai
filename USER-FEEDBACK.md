@@ -149,6 +149,12 @@ The thing he asked for first and has pushed hardest on.
   into our territory.
 - **Breakthrough doctrine:** punch through the front line, then stay in the back
   lines killing bases. **Commitment** is the key — do not regroup mid-push.
+- **NEW 2026-08-16: near the enemy base, dive for the economy.** "If we know we
+  are near the enemy base, we should dive straight into it and prioritize
+  targetting their economy. Don't get distracted by military or towers if an
+  advanced converter or afus is in range." Target selection, not massing: once
+  inside/near their base, big eco (AFUS, adv converters, fusions) outranks
+  military and towers.
 - **Coordinate air raids with the land engagement** on the same front, at the
   same time.
 - **Penetrate deeper** into places we believe are empty, to kill mexes and bases.
