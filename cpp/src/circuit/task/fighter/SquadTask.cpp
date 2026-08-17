@@ -952,6 +952,36 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 			beta = -beta;
 		}
 
+		// apex: KITING. The ring above is anchored to the current TARGET only --
+		// nothing here reacted when a DIFFERENT enemy closed on the row, and with
+		// the fragility pushback defaulted off a rocketbot row stood still trading
+		// into a shrinking gap ("rocketbots stand still firing... without trying
+		// to keep their distance"). If the nearest armed enemy group has closed
+		// well inside this row's own standoff, each unit's slot moves away from
+		// that enemy to re-open the gap. Charge/melee rows and short-ranged rows
+		// keep closing -- kiting is a long-gun move -- and a squad committed to
+		// overwhelming a static does not back off mid-dive.
+		AIFloat3 kiteFoe = -RgtVector;
+		const float kiteMin = manager->GetCircuit()->GetTunable("apex_kite_min_range", 400.f);
+		const float kiteFrac = manager->GetCircuit()->GetTunable("apex_kite_frac", 0.7f);
+		if ((kiteFrac > 0.f) && (kv.first >= kiteMin)
+			&& !IsChargeDef(rowDef) && !squadOverwhelms)
+		{
+			float bestSq = SQUARE(kv.first * kiteFrac);
+			for (const CEnemyManager::SEnemyGroup& g
+				: manager->GetCircuit()->GetEnemyManager()->GetEnemyGroups())
+			{
+				if (g.influence <= 0.f) {
+					continue;
+				}
+				const float sq = g.pos.SqDistance2D(testPos);
+				if (sq < bestSq) {
+					bestSq = sq;
+					kiteFoe = g.pos;
+				}
+			}
+		}
+
 		int iterNum = 0;
 		for (CCircuitUnit* unit : kv.second) {
 			if (unit->Blocker() != nullptr) {
@@ -1006,6 +1036,21 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				}
 				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
 				CTerrainManager::CorrectPosition(newPos);
+				// The kite step overrides the ring slot: distance to the closing
+				// enemy is restored to this row's own standoff, along the line
+				// away from it. The threat veto below still applies.
+				if (utils::is_valid(kiteFoe)) {
+					const AIFloat3& kcur = unit->GetPos(frame);
+					const float sqFoe = kcur.SqDistance2D(kiteFoe);
+					if (sqFoe < SQUARE(kv.first * kiteFrac)) {
+						AIFloat3 away = kcur - kiteFoe;
+						if (away.SqLength2D() > 1.f) {
+							away.SafeNormalize2D();
+							newPos = kcur + away * (kv.first * rangeMod - sqrtf(sqFoe));
+							CTerrainManager::CorrectPosition(newPos);
+						}
+					}
+				}
 
 				// apexearth: "sometimes our retreat logic takes us into new
 				// threats... it specifically appears to be the logic where we

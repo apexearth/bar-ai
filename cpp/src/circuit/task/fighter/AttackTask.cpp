@@ -736,11 +736,14 @@ void CAttackTask::FindTarget()
 		const bool holdsPrev = wasEngaged && (prevTarget != nullptr)
 				&& (std::find(group.units.begin(), group.units.end(), prevTarget->GetId()) != group.units.end());
 		const float groupMargin = holdsPrev ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
-		// inTheirBase waives the group strength test like the juggernaut: a
-		// squad already inside their influence has committed, and refusing every
-		// group there means standing in the middle of their base doing nothing.
-		if (!isJuggernaut && !inTheirBase
-			&& (maxPower <= group.influence * scale * groupMargin) && !isHome) {
+		// The dive commitment is to FAT ECONOMY, not to any fight on their
+		// ground: a blanket inTheirBase waiver here let any squad -- a lone
+		// survivor included -- engage towers and armies at hopeless odds the
+		// moment it stood on enemy influence. A weak group inside their base is
+		// still scanned, but only its unarmed fat-eco targets qualify (isDive).
+		const bool groupWeak = !isJuggernaut
+				&& (maxPower <= group.influence * scale * groupMargin) && !isHome;
+		if (groupWeak && !inTheirBase) {
 			++skippedWeak;
 			continue;
 		}
@@ -860,6 +863,10 @@ void CAttackTask::FindTarget()
 					&& (edef->GetCostM() >= diveCost);
 			if (isDive) {
 				prio *= DIVE_ECO_PRIORITY;
+			}
+			if (groupWeak && !isDive) {
+				++skippedWeak;
+				continue;  // on their ground under-strength: fat eco only
 			}
 			// localInfl is already the army standing beside this target. It was
 			// only ever used to REFUSE a target; nothing used it to prefer a safe

@@ -1,5 +1,30 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN: reinforcements stream to engaged squads one at a time (2026-08-17)
+
+apexearth, watching: "I even see us have solo units that dive into enemy
+armies and die." One mechanism fixed same day (the blanket inTheirBase
+strength-test waiver in AttackTask::FindTarget let any unit on enemy
+influence engage at any odds — scoped to fat-eco dive targets only). The
+remaining half: a unit assigned to an already-engaged attack task travels
+to it ALONE through contested ground; there is no rally-then-move for
+reinforcements. Fix direction: reinforcements gather at a merge point (or
+attach to the nearest friendly group heading that way) before crossing the
+front. Untouched — needs its own design pass in SquadTask assignment.
+
+## OPEN: base axis 180-flips away from the enemy on corner starts (2026-08-17)
+
+apexearth, watching: bottom-left player faced factories and its Doomsday
+LEFT (map edge). Mechanism read from axis.as: bands grow REARWARD from the
+anchor, so on a corner start the enemy-facing axis pushes the band into the
+map edge, the flipped axis doubles the buildable-cell score, and the
+`s > front * 2` rule takes the flip — after which every axis consumer
+points backward. Facing is now decoupled (GetBaseGridFacing tracks the
+enemy bearing, axis only as fallback), but the band itself still lays rear
+rows TOWARD the enemy on flipped starts, and front-relative placements that
+read gFwd remain suspect. Real fix: separate "band growth direction"
+(terrain question) from "front direction" (enemy question) in axis.as.
+
 ## OPEN: commander task churn — big flap fixed, residual remains (2026-08-16)
 
 apexearth, watching a 1v1 loss (20260816-214025, out-econed 2.7x): "He

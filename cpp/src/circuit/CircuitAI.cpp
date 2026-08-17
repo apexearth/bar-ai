@@ -24,6 +24,7 @@
 #include "task/PlayerTask.h"
 #include "unit/CircuitUnit.h"
 #include "unit/enemy/EnemyUnit.h"
+#include "unit/enemy/EnemyManager.h"
 #include "util/GameAttribute.h"
 #include "util/Utils.h"
 #include "util/Profiler.h"
@@ -1771,10 +1772,23 @@ int CCircuitAI::GetBaseGridFacing(const AIFloat3& pos) const
 	if ((dx * dx + dz * dz) > (gridRange * gridRange)) {
 		return UNIT_NO_FACING;
 	}
-	if (std::fabs(gridFwd.x) >= std::fabs(gridFwd.z)) {
-		return (gridFwd.x >= 0.f) ? UNIT_FACING_EAST : UNIT_FACING_WEST;
+	// The ENEMY bearing, not the band axis: the axis may legally 180-flip for
+	// band room (a corner start scores double the buildable cells facing away),
+	// and a factory obeying the flipped axis exits into the map edge. gridFwd
+	// is only the fallback while no enemy has been seen.
+	float fx = gridFwd.x, fz = gridFwd.z;
+	const AIFloat3& foe = enemyManager->GetEnemyPos();
+	if (utils::is_valid(foe)) {
+		const float ex = foe.x - gridAnchor.x;
+		const float ez = foe.z - gridAnchor.z;
+		if ((ex * ex + ez * ez) > 1.f) {
+			fx = ex; fz = ez;
+		}
 	}
-	return (gridFwd.z >= 0.f) ? UNIT_FACING_SOUTH : UNIT_FACING_NORTH;
+	if (std::fabs(fx) >= std::fabs(fz)) {
+		return (fx >= 0.f) ? UNIT_FACING_EAST : UNIT_FACING_WEST;
+	}
+	return (fz >= 0.f) ? UNIT_FACING_SOUTH : UNIT_FACING_NORTH;
 }
 
 // Snap a build position onto the base grid, leaving the walkways empty.
