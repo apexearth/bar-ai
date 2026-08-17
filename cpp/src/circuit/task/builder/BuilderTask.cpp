@@ -713,6 +713,15 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
 
 void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
 {
+	// apex: inside the published base frame, face the axis (the road to the
+	// front) rather than the map centre, so a factory's exit apron opens onto
+	// ground the grid keeps clear. FactoryTask still rotates through all four
+	// facings if this one cannot place.
+	const int gridFacing = manager->GetCircuit()->GetBaseGridFacing(pos);
+	if (gridFacing != UNIT_NO_FACING) {
+		facing = gridFacing;
+		return;
+	}
 	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
 
 //	facing = UNIT_NO_FACING;

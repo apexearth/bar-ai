@@ -106,9 +106,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	if (!isCommander && (unit !is null) && IdleBackoffHolds(unit))
 		return null;
+	Brain::gDecideDeferred = false;
 	IUnitTask@ task = DefenceShareScreen(unit, isCommander, MakeTaskInner(unit));
 	@task = GuardBuildCapability(unit, task);
-	if (!isCommander && (unit !is null))
+	// A budget-deferred election is not a failed one: no backoff strike, the
+	// engine re-asks next pass and the same decision is made a frame later.
+	if (!isCommander && (unit !is null) && !Brain::gDecideDeferred)
 		NoteIdleElection(unit, task);
 	if (isCommander)
 		CommChurnDiag(unit, task);
@@ -474,6 +477,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	Perf::Add("mt.brain", tp);
 	if (t !is null)
 		return t;
+	// Deferred, not declined: stop here so the unit is not handed lower-ranked
+	// optional work it would never have taken had Decide run this frame.
+	if (Brain::gDecideDeferred)
+		return null;
 
 	tp = Perf::T0();
 	@t = OptionalWork(unit, isComm);

@@ -245,6 +245,10 @@ public:
 	void SetBaseGrid(const springai::AIFloat3& anchor, const springai::AIFloat3& fwd,
 			float cell, float lanePitch, float laneHalf, float range);
 	bool SnapToBaseGrid(const springai::AIFloat3& pos, springai::AIFloat3& outPos) const;
+	// Cardinal facing along the published axis for a position inside the base,
+	// or UNIT_NO_FACING when the grid does not apply. Factories use it so their
+	// exit apron opens onto the road to the front instead of the map centre.
+	int GetBaseGridFacing(const springai::AIFloat3& pos) const;
 	// In-game map markers, for watching what the AI believes. These are ordinary
 	// map points/lines: allies and spectators see them, so anything using these
 	// must stay off by default outside a debug watch.

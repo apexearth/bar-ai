@@ -1761,6 +1761,22 @@ void CCircuitAI::SetBaseGrid(const AIFloat3& anchor, const AIFloat3& fwd,
 	gridRange = range;
 }
 
+int CCircuitAI::GetBaseGridFacing(const AIFloat3& pos) const
+{
+	if ((gridCell <= .0f) || !utils::is_valid(gridAnchor) || !utils::is_valid(pos)) {
+		return UNIT_NO_FACING;
+	}
+	const float dx = pos.x - gridAnchor.x;
+	const float dz = pos.z - gridAnchor.z;
+	if ((dx * dx + dz * dz) > (gridRange * gridRange)) {
+		return UNIT_NO_FACING;
+	}
+	if (std::fabs(gridFwd.x) >= std::fabs(gridFwd.z)) {
+		return (gridFwd.x >= 0.f) ? UNIT_FACING_EAST : UNIT_FACING_WEST;
+	}
+	return (gridFwd.z >= 0.f) ? UNIT_FACING_SOUTH : UNIT_FACING_NORTH;
+}
+
 // Snap a build position onto the base grid, leaving the walkways empty.
 //
 // Returns false whenever the grid should not apply -- no frame published yet, or

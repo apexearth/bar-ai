@@ -978,11 +978,30 @@ bool AskingForNewWork(CCircuitUnit@ unit)
 		|| (t.GetType() == Task::Type::WAIT);
 }
 
+// PER-FRAME DECIDE BUDGET. Elections arrive in bursts (many builders freeing
+// at once), and each Decide is ~1ms (measured: mt.brain avgUs=1065); a burst
+// is a frame spike. Over-budget units are DEFERRED, not refused -- the flag
+// makes AiMakeTask return null without an idle-backoff strike, and the engine
+// re-asks next pass, so the same decision is made a frame later.
+int gDecideFrame = -1;
+int gDecideCount = 0;
+bool gDecideDeferred = false;
+
 // Rank, log, and act on the best want whose rule accepts.
 IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 {
 	if (!AskingForNewWork(unit))
 		return null;
+	if (ai.frame != gDecideFrame) {
+		gDecideFrame = ai.frame;
+		gDecideCount = 0;
+	}
+	if (gDecideCount >= int(ai.GetTunable("apex_decide_per_frame", 4.f))) {
+		gDecideDeferred = true;
+		Perf::Note("mt.brain.defer");
+		return null;
+	}
+	++gDecideCount;
 	Clear();
 	// THE BRAIN MUST RUN BEFORE T2 EXISTS. Only some wants genuinely need an
 	// advanced builder -- a moho, a gantry, a silo. Energy, converters and nano

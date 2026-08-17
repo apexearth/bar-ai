@@ -42,8 +42,11 @@
 		},
 		"fac_strider": {                        //t3 factory 9x9
 			"type": ["rectangle", "factory"],
-			"offset": [0, 4],
-			"yard": [6, 8],
+			// The exit apron: 24 cells (384 elmos) kept clear in FRONT only --
+			// the units this yard exists for are the biggest in the game, and a
+			// blocked gantry mouth strands them (and tanks host pathfinding).
+			"offset": [0, 12],
+			"yard": [6, 24],
 			"ignore":["none"]
 		},
 		"solar": {

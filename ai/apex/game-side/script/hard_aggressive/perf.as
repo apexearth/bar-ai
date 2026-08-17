@@ -55,6 +55,15 @@ void Add(const string &in name, double t0)
 		gMaxUs[idx] = us;
 }
 
+// Count-only section: an event worth tallying that has no duration.
+void Note(const string &in name)
+{
+	if (!On())
+		return;
+	const double t0 = ai.ClockUs();
+	Add(name, t0);
+}
+
 void Flush()
 {
 	if (!On() || ai.frame < gNextLog)
