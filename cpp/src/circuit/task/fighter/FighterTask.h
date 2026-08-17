@@ -80,6 +80,10 @@ public:
 	// base tasks have no squad and always answer false.
 	virtual bool TrySquadRetreat(CCircuitUnit* unit) { return false; }
 
+	// True while the task's chosen target is a fat-economy dive (AttackTask):
+	// members waive the retreat flip for its duration.
+	virtual bool IsDiveCommit() const { return false; }
+
 	// Retreat-source telemetry (implemented in FighterTask.cpp; SquadTask's
 	// branches report through these).
 	static void NoteSquadStand(CCircuitAI* c);

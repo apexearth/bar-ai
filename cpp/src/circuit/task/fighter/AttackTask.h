@@ -26,6 +26,8 @@ public:
 
 	virtual void OnUnitIdle(CCircuitUnit* unit) override;
 
+	virtual bool IsDiveCommit() const override { return diveCommit; }
+
 private:
 	float GetHealthScale();
 	void FindTarget();
@@ -39,6 +41,10 @@ private:
 	float minPower;
 	int lastDetourLog = -1000000;
 	int lastEngageLog = -1000000;
+	int lastWithdrawLog = -1000000;
+	// The chosen target is fat economy on their ground: members waive retreat
+	// while it holds (see IFighterTask::OnUnitDamaged).
+	bool diveCommit = false;
 	// -1 until rolled, then 0 = threat-aware route, 1 = straight in. Rolled once
 	// per task so a squad does not change its mind about the route mid-walk.
 	int chargeRoll = -1;

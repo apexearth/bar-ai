@@ -648,6 +648,8 @@ void CAttackTask::FindTarget()
 	const int noChaseCat = cdef->GetNoChaseCategory();
 
 	CEnemyInfo* bestTarget = nullptr;
+	bool bestDive = false;
+	diveCommit = false;
 	// Tuning inputs. Every metric in the stats export is an OUTCOME; to choose a
 	// number for the cohesion cap or a strength margin we need what the decision
 	// actually saw, at the moment it was made.
@@ -688,6 +690,19 @@ void CAttackTask::FindTarget()
 	if (isJuggernaut && (frame >= lastEngageLog + FRAMES_PER_SEC * 10)) {
 		circuit->LOG("apex: juggernaut charge %s -- ignoring engage margin",
 				cdef->GetDef()->GetName());
+	}
+	// A squad worn below press health on enemy ground stops pressing the fight:
+	// with no target chosen, the no-target path (FallbackFrontPos, next pass)
+	// walks the WHOLE group back to our own front, so hurt members travel
+	// escorted instead of peeling off solo through contested ground. Fat
+	// economy is the exception -- next to advanced converters or a fusion the
+	// kill is worth the squad's life -- so a worn squad still scans, but only
+	// dive-qualified eco targets may hold it forward.
+	const bool wornOut = !isJuggernaut && inTheirBase
+			&& (healthScale < circuit->GetTunable("apex_press_health", 0.6f));
+	if (wornOut && (frame >= lastWithdrawLog + FRAMES_PER_SEC * 10)) {
+		lastWithdrawLog = frame;
+		circuit->LOG("apex: squad worn hp=%.2f -- dive targets only", healthScale);
 	}
 	int skippedWeak = 0;
 	// LINEAR, not squared. `scale` below divides a linear distance by this, and
@@ -864,9 +879,9 @@ void CAttackTask::FindTarget()
 			if (isDive) {
 				prio *= DIVE_ECO_PRIORITY;
 			}
-			if (groupWeak && !isDive) {
+			if ((groupWeak || wornOut) && !isDive) {
 				++skippedWeak;
-				continue;  // on their ground under-strength: fat eco only
+				continue;  // on their ground under-strength or worn: fat eco only
 			}
 			// localInfl is already the army standing beside this target. It was
 			// only ever used to REFUSE a target; nothing used it to prefer a safe
@@ -920,6 +935,7 @@ void CAttackTask::FindTarget()
 			if (minSqDist > sqOEDist) {
 				minSqDist = sqOEDist;
 				bestTarget = enemy;
+				bestDive = isDive;
 				bestInfl = group.influence;
 				bestNear = localInfl;
 				bestScale = scale;
@@ -936,6 +952,7 @@ void CAttackTask::FindTarget()
 		}
 		SetTarget(bestTarget);
 		position = GetTarget()->GetPos();
+		diveCommit = bestDive;
 	}
 	// Feeds the accelerated merge check: a refusal pass this close to the bar
 	// means a partner squad is the difference.

@@ -211,6 +211,14 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		return;
 	}
 
+	// Dive commit: the task's chosen target is fat economy on their ground
+	// (FindTarget's isDive). The kill pays for the squad, and a member that
+	// peels off mid-dive is run down on the walk home anyway -- retreat is
+	// waived for the dive's duration, an effective retreat threshold of 0.
+	if (IsDiveCommit() && !cdef->IsRoleComm()) {
+		return;
+	}
+
 	const float healthPerc = unit->GetHealthPercent();
 
 	if (unit->HasShield()) {

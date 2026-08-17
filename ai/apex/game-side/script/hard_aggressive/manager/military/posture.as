@@ -60,51 +60,17 @@ const float PUSH_QUOTA   = 200.f;
 // one is 2.0 and means nothing.
 const float PUSH_MIN_ARMY = 2500.f;
 
-//------------------------------------------------------------------------------
-// Personality: a per-instance trait, rolled at runtime and never announced, so
-// identically-tuned Apex instances do not all play as one predictable opponent.
-//
-// Expressed as a multiplier on the SAME engage-margin lever the team push uses,
-// so it composes with everything already tuned instead of adding a second
-// decision system that can disagree with the first; it shifts how readily an
-// instance takes a fight rather than inventing new behaviour, bounding its
-// blast radius.
-//
-// The team push OVERRIDES personality (see UpdateTeamPush): when the team
-// commits, everyone commits, including the cautious ones.
-const int PERSONA_ROLL_FRAME = 10 * SECOND;   // after Init, so teamId is settled
-int   gPersona     = -1;
-float gPersonaBias = 1.f;
-string gPersonaName = "standard";
-
-void RollPersona()
-{
-	if (gPersona >= 0)
-		return;
-	// AiRandom is seeded per process; teamId keeps instances from all landing on
-	// the same roll in the same tick.
-	gPersona = (AiRandom(0, 999) + ai.teamId * 7) % 4;
-	if (gPersona == 0) {
-		gPersonaBias = 0.82f;  // berserker: takes fights the others decline
-		gPersonaName = "berserker";
-	} else if (gPersona == 1) {
-		gPersonaBias = 1.18f;  // cautious: hoards, techs, joins pushes only
-		gPersonaName = "cautious";
-	} else {
-		gPersonaBias = 1.f;
-		gPersonaName = "standard";
-	}
-	AiLog(Factory::T() + "apex: personality = " + gPersonaName
-		+ " (engage x" + formatFloat(gPersonaBias, "", 0, 2) + ")");
-}
+// Personality moved to manager/persona.as -- one identity per instance, more
+// axes than the engage margin, and mid-game adaptation. The engage-margin
+// lever it feeds here is unchanged: the team push still OVERRIDES personality
+// (see UpdateTeamPush) -- when the team commits, everyone commits.
 
 int  gPushUntil   = 0;
 bool gPushLogged  = false;
 
 void UpdateTeamPush()
 {
-	if (ai.frame >= PERSONA_ROLL_FRAME)
-		RollPersona();
+	Persona::Update();
 
 	// One writer, same pattern as the tech-lead and air-lead elections.
 	if (Factory::ElectorTeamId() == ai.teamId) {
@@ -169,7 +135,7 @@ void UpdateTeamPush()
 		// cautious 1.18 is not made less careful by this.
 		const float adv = Factory::OwnAdvProgress();
 		const bool teching = (adv >= 0.f) && (adv < 1.f);
-		float boost = gPersonaBias;
+		float boost = Persona::EngageBias();
 		if (teching && (T2_HOLD_BOOST > boost))
 			boost = T2_HOLD_BOOST;
 		ai.SetEngageBoost(boost);
@@ -282,14 +248,15 @@ const float LANE_STICKY = 900.f;
 // where they go and whether they go alone -- Military::AiMakeTask in hooks.as.
 bool gRaiderSuicidal = false;
 
-// Every fodder def we have actually built, discovered as it passes AiMakeTask.
+// Every combat def we have actually built, discovered as it passes AiMakeTask.
 // Nothing in the bindings enumerates CCircuitDefs, and a hand-written per-faction
-// list would be a fourth place to keep parity; IsFodder is already the predicate
-// that decides which units are spam, so the register follows it exactly.
+// list would be a fourth place to keep parity.
 // unit.circuitDef is a const handle and SetRetreat is not const, so the id is
 // round-tripped through ai.GetCircuitDef to get a writable one.
-array<CCircuitDef@> gFodderDef;
-array<float>        gFodderRetreat;   // parallel: the value config gave each def
+array<CCircuitDef@> gPostureDef;
+array<float>        gPostureRetreat;  // parallel: the value config gave each def
+array<bool>         gPostureFodder;   // parallel: registered via IsFodder
+uint gRetreatZeroed = 999;            // last no-retreat count, so the log fires on change
 
 // The one predicate. Routing (hooks.as) and posture must never disagree about
 // whether these units are spam right now, so both ask this.
@@ -298,40 +265,61 @@ bool SpamPhase()
 	return Factory::gHaveT2 && (ai.GetTunable("apex_spam_suicidal", 1.f) > 0.f);
 }
 
-void NoteFodderDef(const CCircuitDef@ cdef)
+void NotePostureDef(const CCircuitDef@ cdef, bool fodder)
 {
 	if (cdef is null)
 		return;
-	for (uint i = 0; i < gFodderDef.length(); ++i) {
-		if (gFodderDef[i].id == cdef.id)
+	for (uint i = 0; i < gPostureDef.length(); ++i) {
+		if (gPostureDef[i].id == cdef.id)
 			return;
 	}
 	CCircuitDef@ d = ai.GetCircuitDef(cdef.id);
 	if (d is null)
 		return;
-	gFodderDef.insertLast(d);
-	gFodderRetreat.insertLast(d.GetRetreat());
-	// A def first seen mid-phase still has to take the posture already in force.
-	d.SetRetreat(gRaiderSuicidal ? 0.f : gFodderRetreat[gFodderRetreat.length() - 1]);
+	gPostureDef.insertLast(d);
+	gPostureRetreat.insertLast(d.GetRetreat());
+	gPostureFodder.insertLast(fodder);
+}
+
+void NoteFodderDef(const CCircuitDef@ cdef)
+{
+	NotePostureDef(cdef, true);
+}
+
+// Measured 2026-08-17 (6x 20m 1v1): a cost-vs-income no-retreat bar at 12s
+// cut army K/D 0.33 -> 0.11 -- retreat is also disengage-and-repair, and
+// units denied it press losing fights at half HP. Default 0 keeps this off;
+// the tunable remains for experiments.
+void ApplyRetreatPosture()
+{
+	const float secs = ai.GetTunable("apex_retreat_cost_secs", 0.f);
+	const float bar = (secs > 0.f) ? (aiEconomyMgr.metal.income * secs) : 0.f;
+	uint zeroed = 0;
+	for (uint i = 0; i < gPostureDef.length(); ++i) {
+		const bool zero = (gPostureFodder[i] && gRaiderSuicidal)
+			|| (gPostureDef[i].costM < bar);
+		gPostureDef[i].SetRetreat(zero ? 0.f : gPostureRetreat[i]);
+		if (zero)
+			++zeroed;
+	}
+	if (zeroed != gRetreatZeroed) {
+		gRetreatZeroed = zeroed;
+		AiLog(Factory::T() + "apex: retreat-bar " + formatFloat(bar, "", 0, 0)
+			+ " metal; no-retreat " + zeroed + "/" + gPostureDef.length() + " defs");
+	}
 }
 
 void UpdateSpamPosture()
 {
 	const bool spam = SpamPhase();
-	if (spam == gRaiderSuicidal)
-		return;
-	gRaiderSuicidal = spam;
-	string names = "";
-	for (uint i = 0; i < gFodderDef.length(); ++i) {
-		gFodderDef[i].SetRetreat(spam ? 0.f : gFodderRetreat[i]);
-		if (i > 0)
-			names += " ";
-		names += gFodderDef[i].GetName();
+	if (spam != gRaiderSuicidal) {
+		gRaiderSuicidal = spam;
+		string how = "raider";
+		if (spam)
+			how = "spotter";
+		AiLog(Factory::T() + "apex: spam posture -> " + how);
 	}
-	string how = "raider";
-	if (spam)
-		how = "spotter";
-	AiLog(Factory::T() + "apex: spam posture -> " + how + " [" + names + "]");
+	ApplyRetreatPosture();
 }
 
 void UpdateLanePos()

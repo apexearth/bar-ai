@@ -91,6 +91,8 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (WantsSuperGuard(cdef) && !SuperReleased())
 		return SuperGuardTask(unit);
 	if (WantsMassing(cdef)) {
+		// Registered so ApplyRetreatPosture can weigh its cost against income.
+		NotePostureDef(cdef, false);
 		// WHILE OUR BASE IS BEING HIT, THE POOL DOES NOT LEAVE.
 		//
 		// quota.attack (the third argument) is a PROMOTION TRIGGER: at that much
