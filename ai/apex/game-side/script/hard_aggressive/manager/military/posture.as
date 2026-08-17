@@ -135,7 +135,9 @@ void UpdateTeamPush()
 		// cautious 1.18 is not made less careful by this.
 		const float adv = Factory::OwnAdvProgress();
 		const bool teching = (adv >= 0.f) && (adv < 1.f);
-		float boost = Persona::EngageBias();
+		// Caution learned from where our metal is currently dying: bleeding
+		// on their ground raises the odds we demand before crossing again.
+		float boost = Persona::EngageBias() * BleedCaution();
 		if (teching && (T2_HOLD_BOOST > boost))
 			boost = T2_HOLD_BOOST;
 		ai.SetEngageBoost(boost);

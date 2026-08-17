@@ -5,6 +5,7 @@
 // -- see builder.as for why.
 #include "military/state.as"        // posture flags and the constants behind them
 #include "military/roles.as"        // rush/eco roles, quotas, metal slinging
+#include "military/deathledger.as"  // where our metal dies, fed back into caution
 #include "military/massing.as"      // how much army to hold back and mass
 #include "military/killingblow.as"  // committing everything to finish a player
 #include "military/basedefence.as"  // approach threat, porcupines, line jammers

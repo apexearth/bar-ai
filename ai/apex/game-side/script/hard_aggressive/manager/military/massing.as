@@ -86,12 +86,15 @@ float MassWant()
 	if (capNow < MASS_CAP)
 		capNow = MASS_CAP;
 	const float ratio = theirs / ours;
+	// Bleeding on their ground also grows the group: the same caution signal
+	// the engage margin uses, applied to how much leaves at once.
+	const float bleed = BleedCaution();
 	if (ratio <= ATTACK_EDGE)
-		return floorNow;                      // ahead: move, but as a group
+		return floorNow * bleed;              // ahead: move, but as a group
 	if (ratio >= MASS_HOLD_RATIO)
 		return capNow;                        // outmatched: hold
 	const float t = (ratio - ATTACK_EDGE) / (MASS_HOLD_RATIO - ATTACK_EDGE);
-	return floorNow + t * (capNow - floorNow);
+	return (floorNow + t * (capNow - floorNow)) * bleed;
 }
 
 // The floor scales with our own army: a fixed 12-power squad is a real group

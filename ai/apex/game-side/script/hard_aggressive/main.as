@@ -78,6 +78,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Perf::Add("upd.TeamCoord", t);
 	t = Perf::T0();
 	Military::UpdateLanePos();
+	Military::UpdateDeathLedger();
 	Military::UpdateSpamPosture();
 	Military::UpdatePosture();
 	Perf::Add("upd.Military", t);
@@ -182,6 +183,13 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	const int ft = ((t !is null) && (tt == Task::Type::FIGHTER)) ? t.GetFightType() : -1;
 	if (cdef !is null)
 		Builder::NoteEcoGone(cdef.GetName(), WasFinished(int(unit.id)));
+	// Finished mobile combat only: nanoframes and builders are not evidence
+	// about whether FIGHTING forward is paying.
+	if ((cdef !is null) && cdef.IsMobile() && WasFinished(int(unit.id))
+		&& (Military::WantsMassing(cdef) || Military::IsFodder(cdef)))
+	{
+		Military::NoteCombatLoss(cdef.costM, Military::ForwardFraction(at));
+	}
 	const string hist = Builder::TakeHistFor(int(unit.id));
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")
 		+ " id=" + unit.id + " frame=" + ai.frame

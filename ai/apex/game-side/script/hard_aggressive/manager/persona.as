@@ -14,7 +14,10 @@ namespace Persona {
 // switch a behaviour off or invent a new one.
 //------------------------------------------------------------------------------
 
-enum Kind { STANDARD = 0, BERSERKER, TURTLE, GREEDY, AIRBOSS, SILOIST, KINDS };
+// REARM is adaptation-only (never rolled): out-fielded, it buys army harder
+// while DEMANDING better odds -- the opposite of berserker's discount, which
+// measured terribly as an out-fielded reaction (Altair, them 3.4 K/D).
+enum Kind { STANDARD = 0, BERSERKER, TURTLE, GREEDY, AIRBOSS, SILOIST, REARM, KINDS };
 
 int    gKind      = -1;          // -1 until rolled
 int    gSince     = 0;           // frame the current persona took effect
@@ -32,6 +35,7 @@ string NameOf(int k)
 	if (k == GREEDY)    return "greedy";
 	if (k == AIRBOSS)   return "airboss";
 	if (k == SILOIST)   return "siloist";
+	if (k == REARM)     return "rearm";
 	return "standard";
 }
 
@@ -78,6 +82,7 @@ void Roll()
 float ShareMult(int c)
 {
 	if (gKind == BERSERKER) return (c == 0) ? 1.35f : 1.f;               // ARMY
+	if (gKind == REARM)     return (c == 0) ? 1.35f : ((c == 1) ? 1.2f : 1.f);
 	if (gKind == TURTLE)    return (c == 1) ? 1.5f : ((c == 2) ? 1.2f : 1.f); // DEFENCE, AIRDEF
 	if (gKind == GREEDY)    return (c == 3) ? 1.35f : 1.f;               // ECONOMY
 	if (gKind == SILOIST)   return (c == 3) ? 1.15f : 1.f;               // silo needs the eco
@@ -104,6 +109,7 @@ float EngageBias()
 	if (gKind == BERSERKER) return 0.82f;
 	if (gKind == TURTLE)    return 1.18f;
 	if (gKind == GREEDY)    return 1.18f;
+	if (gKind == REARM)     return 1.18f;
 	return 1.f;
 }
 
@@ -134,11 +140,18 @@ void Update()
 		Become(TURTLE, "losing ground at home");
 		return;
 	}
+	// A quarter of income dying deep on their ground: stop identifying as the
+	// aggressor, hold the line and let the eco lead win instead.
+	if (Military::ForwardBleedFrac() > 0.25f) {
+		if (gKind == BERSERKER || gKind == STANDARD)
+			Become(TURTLE, "bleeding on their ground");
+		return;
+	}
 	// Their fielded army dwarfs ours: buy army before anything clever.
 	const float ours = Military::TeamArmyCost();
 	const float theirs = Military::EnemyArmyCost();
 	if (theirs > ours * 2.f && ours > 0.f) {
-		Become(BERSERKER, "out-fielded 2:1");
+		Become(REARM, "out-fielded 2:1");
 		return;
 	}
 	// Comfortably ahead on the ground with the income to spend: reach for the

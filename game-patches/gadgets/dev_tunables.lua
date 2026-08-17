@@ -59,6 +59,8 @@ local NAMES = {
 	"apex_press_health",      -- AttackTask: squad HP fraction below which it stops pressing (0.6)
 	"apex_persona",           -- persona.as: -1 roll freely, 0..5 force a Kind
 	"apex_retreat_cost_secs", -- posture.as: cost-vs-income no-retreat bar, 0 = off
+	"apex_bleed_engage",      -- deathledger.as: caution gain per forward-bleed fraction (2)
+	"apex_bleed_cap",         -- deathledger.as: caution ceiling (1.6)
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",
