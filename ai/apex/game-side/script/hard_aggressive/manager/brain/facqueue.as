@@ -867,14 +867,25 @@ void FillQuota(int line)
 		// COMBAT ONLY: with the army entries missing (the air-table hole)
 		// this fallback filled the line with rezbots -- 88 alive in one
 		// audited game. Eco defs never overflow-build.
+		//
+		// FLOOR ENTRIES ARE ELIGIBLE HERE TOO. An air line's fighters, bombers
+		// and torps are all floors, and skipping floors made a full-quota air
+		// lab idle at a full bank forever -- apexearth: "we have lots of
+		// airlabs but we rarely build stuff out of them and we are full on
+		// metal." The role screen below is what keeps cons, rezbots and scouts
+		// out of the overflow, not the floor flag.
 		CCircuitDef@ conD = aiFactoryMgr.GetRoleDef(fac.circuitDef,
 				Unit::Role::BUILDER.type);
 		CCircuitDef@ rezD = Factory::RezBotDef();
 		float worstOver = 1.0e18f;
 		for (uint i = 0; i < defs.length(); ++i) {
-			if ((want[i] <= 0) || isFloor[i])
+			if (want[i] <= 0)
 				continue;
 			if ((defs[i] is conD) || (defs[i] is rezD))
+				continue;
+			if (defs[i].IsRoleAny(Unit::Role::BUILDER.mask)
+				|| defs[i].IsRoleAny(Unit::Role::SCOUT.mask)
+				|| defs[i].IsRoleAny(Unit::Role::SUPPORT.mask))
 				continue;
 			const int have = defs[i].count + fac.CountQueued(defs[i])
 					+ PendCount(line, defs[i]);

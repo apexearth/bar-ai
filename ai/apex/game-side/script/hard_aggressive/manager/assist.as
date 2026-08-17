@@ -127,7 +127,8 @@ array<CCircuitUnit@> Constructors(CCircuitUnit@ skip)
 // while it is null -- so a task with a live target is assistable by any builder,
 // and one without it is not unless the bot happens to have that def in its
 // buildoptions. target is the gate, not a preference.
-IUnitTask@ BestSite(CCircuitUnit@ unit, bool allowDefence = true)
+IUnitTask@ BestSite(CCircuitUnit@ unit, bool allowDefence = true,
+		float range = ASSIST_RANGE)
 {
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	array<CCircuitUnit@> cons = Constructors(unit);
@@ -150,7 +151,7 @@ IUnitTask@ BestSite(CCircuitUnit@ unit, bool allowDefence = true)
 		if (!OnMap(where))
 			continue;
 		const float dist = here.distance2D(where);
-		if (dist > ASSIST_RANGE)
+		if (dist > range)
 			continue;
 		if (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO)
 			continue;
@@ -162,7 +163,7 @@ IUnitTask@ BestSite(CCircuitUnit@ unit, bool allowDefence = true)
 			score += DEFENCE_SCORE;
 		if (Crew::RoleOf(c) == Crew::FRONT)
 			score += FRONT_SCORE;
-		score /= (1.f + dist / ASSIST_RANGE);
+		score /= (1.f + dist / range);
 		if (score > bestScore) {
 			bestScore = score;
 			@best = t;
@@ -174,7 +175,7 @@ IUnitTask@ BestSite(CCircuitUnit@ unit, bool allowDefence = true)
 // Nothing is standing yet, so shadow the constructor that is going to put
 // something up. Front crew first: that is where the defences this was asked for
 // get built.
-CCircuitUnit@ BestVip(CCircuitUnit@ unit)
+CCircuitUnit@ BestVip(CCircuitUnit@ unit, float range = ASSIST_RANGE)
 {
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	array<CCircuitUnit@> cons = Constructors(unit);
@@ -194,7 +195,7 @@ CCircuitUnit@ BestVip(CCircuitUnit@ unit)
 		if (!OnMap(where))
 			continue;
 		const float dist = here.distance2D(where);
-		if (dist > ASSIST_RANGE)
+		if (dist > range)
 			continue;
 		if (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO)
 			continue;
@@ -206,7 +207,7 @@ CCircuitUnit@ BestVip(CCircuitUnit@ unit)
 		// it buys the most.
 		if (c.circuitDef.costM >= Builder::ADV_CON_COST)
 			score += ADV_SCORE;
-		score /= (1.f + dist / ASSIST_RANGE);
+		score /= (1.f + dist / range);
 		if (score > bestScore) {
 			bestScore = score;
 			@best = c;
@@ -292,15 +293,21 @@ IUnitTask@ Fallback(CCircuitUnit@ unit, bool isComm, bool allowDefence = true)
 	if (!OnMap(unit.GetPos(ai.frame)))
 		return null;
 
-	// An advanced constructor never takes the SITE leg. Joining a site puts it
-	// in build range, and IBuilderTask::Reevaluate early-returns in range for
-	// every build type except GUARD -- the con is out of the decision loop until
-	// that structure finishes, exactly the "adv cons too eager to assist" apexearth
-	// watched at 500 m/s. The GUARD leg below is re-elected every update, so a
-	// shadowing adv con still lends its lathe and leaves the moment a gantry,
-	// moho or fusion wants it.
-	IUnitTask@ site = (unit.circuitDef.costM >= Builder::ADV_CON_COST)
-			? null : BestSite(unit, allowDefence);
+	// THE TERMINAL RUNG SEARCHES WIDE: a walk beats standing idle for the rest
+	// of the game, which is what 2,434 idle-still samples in minutes 30-50 of
+	// one hosted session actually were.
+	const float range = ai.GetTunable("apex_idle_assist_range", 3500.f);
+
+	// An advanced constructor takes the SITE leg only at a full bank. Below
+	// that the old reasoning holds -- joining a site locks it out of the
+	// decision loop until the structure finishes (IBuilderTask::Reevaluate
+	// early-returns in range for everything but GUARD), and a moho may want it
+	// any moment. At a full bank nothing above this rung wanted it: the mexup
+	// pipeline, the reactor lane and every Brain want already declined, so the
+	// lock-in displaces nothing and the lathe converts bank into buildings.
+	const bool advMay = aiEconomyMgr.isMetalFull;
+	IUnitTask@ site = ((unit.circuitDef.costM >= Builder::ADV_CON_COST) && !advMay)
+			? null : BestSite(unit, allowDefence, range);
 	if (site !is null) {
 		++gFallbacks;
 		AiLog(Factory::T() + "apex: idle-assist " + unit.circuitDef.GetName()
@@ -308,21 +315,57 @@ IUnitTask@ Fallback(CCircuitUnit@ unit, bool isComm, bool allowDefence = true)
 		return site;
 	}
 
-	CCircuitUnit@ vip = BestVip(unit);
-	if (vip is null)
+	CCircuitUnit@ vip = BestVip(unit, range);
+	if (vip !is null) {
+		IUnitTask@ shadow = aiBuilderMgr.Enqueue(TaskB::Guard(
+				Task::Priority::NORMAL, vip, true, GUARD_TIMEOUT));
+		if (shadow !is null) {
+			gGuardBot.insertLast(int(unit.id));
+			gGuardVip.insertLast(int(vip.id));
+			++gFallbacks;
+			AiLog(Factory::T() + "apex: idle-assist " + unit.circuitDef.GetName()
+				+ " -> shadow " + vip.circuitDef.GetName()
+				+ ((vip.circuitDef.costM >= Builder::ADV_CON_COST) ? " (adv)" : "")
+				+ " n=" + gFallbacks);
+			return shadow;
+		}
+	}
+
+	// LAST: assist the nearest factory. A driven line is never idle late game,
+	// so a guard here converts an otherwise-idle lathe into production speed --
+	// this is the leg that makes the fallback actually terminal (both legs
+	// above need a working CONSTRUCTOR in reach, which a mature quiet base
+	// often has none of).
+	CCircuitUnit@ fac = null;
+	float facDist = range;
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	for (uint i = 0; i < Factory::gFacUnits.length(); ++i) {
+		CCircuitUnit@ f = Factory::gFacUnits[i];
+		if (f is null)
+			continue;
+		const AIFloat3 at = f.GetPos(ai.frame);
+		if (!OnMap(at))
+			continue;
+		if (GuardsOn(int(f.id)) >= GUARD_STACK)
+			continue;
+		const float d = me.distance2D(at);
+		if (d < facDist) {
+			facDist = d;
+			@fac = f;
+		}
+	}
+	if (fac is null)
 		return null;
-	IUnitTask@ shadow = aiBuilderMgr.Enqueue(TaskB::Guard(
-			Task::Priority::NORMAL, vip, true, GUARD_TIMEOUT));
-	if (shadow is null)
+	IUnitTask@ helper = aiBuilderMgr.Enqueue(TaskB::Guard(
+			Task::Priority::NORMAL, fac, true, GUARD_TIMEOUT));
+	if (helper is null)
 		return null;
 	gGuardBot.insertLast(int(unit.id));
-	gGuardVip.insertLast(int(vip.id));
+	gGuardVip.insertLast(int(fac.id));
 	++gFallbacks;
 	AiLog(Factory::T() + "apex: idle-assist " + unit.circuitDef.GetName()
-		+ " -> shadow " + vip.circuitDef.GetName()
-		+ ((vip.circuitDef.costM >= Builder::ADV_CON_COST) ? " (adv)" : "")
-		+ " n=" + gFallbacks);
-	return shadow;
+		+ " -> factory " + fac.circuitDef.GetName() + " n=" + gFallbacks);
+	return helper;
 }
 
 int gNextLog = 0;

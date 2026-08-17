@@ -25,12 +25,91 @@ int gCommChurnFrame = 0;
 AIFloat3 gCommChurnPos;
 int gCommChurnN = 0;
 
+// IDLE-ELECTION BACKOFF. From ~minute 30 of a rich game, hundreds of builders
+// sat on the idle task while every want's own bound was met, and each of them
+// re-ran this whole pipeline every engine pass for another null -- measured
+// 2,434 idle-still samples in minutes 30-50 of one hosted session, pure CPU on
+// the host with no outcome (apexearth: "we run really inefficiently and it
+// makes me lag"). A unit whose election just returned null waits a growing
+// beat before the full pipeline runs again; any real answer clears it. Only
+// units already holding IDLE/NIL -- a unit with work keeps its safety
+// re-elections -- and never the commander.
+array<int> gIdleBackId;
+array<int> gIdleBackUntil;
+array<int> gIdleBackStrikes;
+const uint IDLE_BACK_MAX = 256;
+
+int IdleBackSlot(int id)
+{
+	for (uint i = 0; i < gIdleBackId.length(); ++i) {
+		if (gIdleBackId[i] == id)
+			return int(i);
+	}
+	return -1;
+}
+
+bool IdleOrNil(CCircuitUnit@ unit)
+{
+	IUnitTask@ t = unit.task;
+	if (t is null)
+		return true;
+	const int tt = t.GetType();
+	return (tt == Task::Type::IDLE) || (tt == Task::Type::NIL);
+}
+
+bool IdleBackoffHolds(CCircuitUnit@ unit)
+{
+	if (!IdleOrNil(unit))
+		return false;
+	const int s = IdleBackSlot(int(unit.id));
+	return (s >= 0) && (ai.frame < gIdleBackUntil[s]);
+}
+
+void NoteIdleElection(CCircuitUnit@ unit, IUnitTask@ result)
+{
+	const int id = int(unit.id);
+	int s = IdleBackSlot(id);
+	if (result !is null) {
+		if (s >= 0) {
+			gIdleBackId.removeAt(uint(s));
+			gIdleBackUntil.removeAt(uint(s));
+			gIdleBackStrikes.removeAt(uint(s));
+		}
+		return;
+	}
+	if (!IdleOrNil(unit))
+		return;
+	if (s < 0) {
+		// Scratch, like AdvSlot: drop the lot rather than tracking removals.
+		if (gIdleBackId.length() >= IDLE_BACK_MAX) {
+			gIdleBackId.resize(0);
+			gIdleBackUntil.resize(0);
+			gIdleBackStrikes.resize(0);
+		}
+		gIdleBackId.insertLast(id);
+		gIdleBackUntil.insertLast(0);
+		gIdleBackStrikes.insertLast(0);
+		s = int(gIdleBackId.length()) - 1;
+	}
+	int strikes = gIdleBackStrikes[s] + 1;
+	const int capN = int(ai.GetTunable("apex_idle_backoff_maxmult", 4.f));
+	if (strikes > capN)
+		strikes = capN;
+	gIdleBackStrikes[s] = strikes;
+	gIdleBackUntil[s] = ai.frame
+			+ strikes * int(ai.GetTunable("apex_idle_backoff", 2.f) * float(SECOND));
+}
+
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 	const bool isCommander = (unit !is null)
 			&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	if (!isCommander && (unit !is null) && IdleBackoffHolds(unit))
+		return null;
 	IUnitTask@ task = DefenceShareScreen(unit, isCommander, MakeTaskInner(unit));
 	@task = GuardBuildCapability(unit, task);
+	if (!isCommander && (unit !is null))
+		NoteIdleElection(unit, task);
 	if (isCommander)
 		CommChurnDiag(unit, task);
 	return task;
