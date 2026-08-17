@@ -301,9 +301,15 @@ The thing he asked for first and has pushed hardest on.
   units thread their own buildings, raw unit count.
 - **UNRESOLVED: when the host lags, the AI goes dumb.** Sim-rate drop delays
   order application (the measured ~45-sim-sec lag class) and AI update cadence;
-  degradation compounds.
-- **UNRESOLVED: many air labs standing idle while metal-full.** "we have lots
-  of airlabs but we rarely build stuff out of them and we are full on metal."
+  degradation compounds. Should improve as the CPU fixes land; re-check.
+- **FIXED 2026-08-16 (measured once): idle constructors / idle air labs at a
+  full bank.** Root cause: met quotas + no terminal spend rule. `cfa300e`:
+  idle-election backoff (CPU), Assist::Fallback made terminal (wide radius,
+  adv cons join sites at full bank, factory-guard last leg), facqueue overflow
+  may pick combat floors. Long rich validation game: true-idle adv-con samples
+  fell to 8 (all during an energy stall) from a baseline where they dominated
+  (2,434 in min 30-50 of one hosted session); 69 idle rescues fired; backoff
+  visible as 5us elections vs 820-1000us working ones.
 
 ## Efficiency
 
