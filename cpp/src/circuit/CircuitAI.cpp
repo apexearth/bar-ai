@@ -389,6 +389,11 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
 			struct SEnemyDestroyedEvent* evt = (struct SEnemyDestroyedEvent*)data;
 			CEnemyInfo* enemy = GetEnemyInfo(evt->enemy);
 			if (enemy != nullptr) {
+				// Here, not in the deferred EnemyDestroyed: the attacker id only
+				// exists in this event, and a non-(-1) attacker is by contract
+				// allied with us -- ours iff it is one of our team units.
+				script->EnemyDestroyed(enemy->GetCircuitDef(), enemy->GetPos(),
+						GetTeamUnit(evt->attacker) != nullptr);
 				allyTeam->DyingEnemy(enemy->GetData(), lastFrame);
 				ret = 0;
 			} else {
@@ -1281,6 +1286,11 @@ int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 		// The script only does bookkeeping; it needs the task the unit
 		// actually died holding.
 		script->UnitDestroyed(unit);
+		// Attribution rides a separate optional callback; only fired when the
+		// attacker's def is actually known (see CInitScript::UnitDestroyedBy).
+		if (attacker != nullptr) {
+			script->UnitDestroyedBy(unit, attacker->GetCircuitDef());
+		}
 	}
 
 	for (auto& module : modules) {

@@ -63,6 +63,8 @@ public:
 	void LuaMessage(const char* inData);
 	void UnitFinished(CCircuitUnit* unit);
 	void UnitDestroyed(CCircuitUnit* unit);
+	void UnitDestroyedBy(CCircuitUnit* unit, CCircuitDef* attackerDef);
+	void EnemyDestroyed(CCircuitDef* edef, const springai::AIFloat3& pos, bool byUs);
 
 private:
 	CMaskHandler::TypeMask AddRole(const std::string& name, int actAsRole);
@@ -93,6 +95,10 @@ private:
 	struct SScriptInfo {
 		asIScriptFunction* unitFinished = nullptr;
 		asIScriptFunction* unitDestroyed = nullptr;
+		// Separate optional callbacks so older scripts keep their unchanged
+		// AiUnitDestroyed; both are invoked only with non-null defs.
+		asIScriptFunction* unitDestroyedBy = nullptr;
+		asIScriptFunction* enemyDestroyed = nullptr;
 		asIScriptFunction* update = nullptr;
 		asIScriptFunction* luaMessage = nullptr;
 		asIScriptFunction* receiveMessage = nullptr;

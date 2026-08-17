@@ -202,4 +202,29 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		+ " hist=[" + hist + "]");
 }
 
+// Attribution arrives on a separate optional callback (the DLL fires it right
+// after AiUnitDestroyed, only when the attacker's def is known), so the frozen
+// variants' scripts keep their unchanged AiUnitDestroyed. Same combat filter
+// as the loss ledger: nanoframes and builders say nothing about the army.
+void AiUnitDestroyedBy(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
+{
+	if ((unit is null) || (attackerDef is null))
+		return;
+	const CCircuitDef@ cdef = unit.circuitDef;
+	if ((cdef is null) || !cdef.IsMobile() || !WasFinished(int(unit.id)))
+		return;
+	if (!Military::WantsMassing(cdef) && !Military::IsFodder(cdef))
+		return;
+	Military::NoteDeathSource(cdef.costM, attackerDef);
+}
+
+// An enemy death we witnessed. byUs is true only when the killer was one of
+// OUR OWN units (the event's attacker contract: non-(-1) means allied).
+void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
+{
+	if (edef is null)
+		return;
+	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs);
+}
+
 }  // namespace Main

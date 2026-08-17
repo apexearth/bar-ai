@@ -1251,6 +1251,8 @@ bool CInitScript::Init()
 	mainInfo.receiveMessage = script->GetFunc(mod, "void AiMessage(const string& in, int)");
 	mainInfo.unitFinished = script->GetFunc(mod, "void AiUnitFinished(CCircuitUnit@)");
 	mainInfo.unitDestroyed = script->GetFunc(mod, "void AiUnitDestroyed(CCircuitUnit@)");
+	mainInfo.unitDestroyedBy = script->GetFunc(mod, "void AiUnitDestroyedBy(CCircuitUnit@, CCircuitDef@)");
+	mainInfo.enemyDestroyed = script->GetFunc(mod, "void AiEnemyDestroyed(CCircuitDef@, const AIFloat3& in, bool)");
 	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
 	if (main == nullptr) {
 		return false;
@@ -1321,6 +1323,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
 	}
 	asIScriptContext* ctx = script->PrepareContext(mainInfo.unitDestroyed);
 	ctx->SetArgObject(0, unit);
+	script->Exec(ctx);
+	script->ReturnContext(ctx);
+}
+
+void CInitScript::UnitDestroyedBy(CCircuitUnit* unit, CCircuitDef* attackerDef)
+{
+	if ((mainInfo.unitDestroyedBy == nullptr) || (unit == nullptr) || (attackerDef == nullptr)) {
+		return;
+	}
+	asIScriptContext* ctx = script->PrepareContext(mainInfo.unitDestroyedBy);
+	ctx->SetArgObject(0, unit);
+	ctx->SetArgObject(1, attackerDef);
+	script->Exec(ctx);
+	script->ReturnContext(ctx);
+}
+
+void CInitScript::EnemyDestroyed(CCircuitDef* edef, const springai::AIFloat3& pos, bool byUs)
+{
+	if ((mainInfo.enemyDestroyed == nullptr) || (edef == nullptr)) {
+		return;
+	}
+	asIScriptContext* ctx = script->PrepareContext(mainInfo.enemyDestroyed);
+	ctx->SetArgObject(0, edef);
+	ctx->SetArgAddress(1, &const_cast<springai::AIFloat3&>(pos));
+	ctx->SetArgByte(2, byUs ? 1 : 0);
 	script->Exec(ctx);
 	script->ReturnContext(ctx);
 }
