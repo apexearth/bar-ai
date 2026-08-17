@@ -2097,6 +2097,11 @@ on water (subs seen >= apex_afloat_sub_cost, or enemy centroid beside
 floatable water on a <=85%-land map), and enemy subs put a torpedo-bomber
 (RT::AS) floor on air lines. Our OWN desire to expand into quiet water on a
 mostly-land map (underwater mexes with no enemy there) is still unaddressed.
+MEASURED 2026-08-16 (Jade Empress 1.41, 8 games across two builds): we lose
+the map on ECONOMY, not composition -- post-massing-fix run produced 0.72x
+stock's metal there (1-2 decided) while shipyards ARE built (2-5 per game via
+the mixed-map branch). The open question is water expansion: whether we take
+the underwater mexes stock takes. Land maps same day: produced 1.7-2.7x.
 
 ## One game's adv air plant approved 52 times, built never
 
