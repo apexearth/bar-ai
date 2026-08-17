@@ -185,9 +185,10 @@ The thing he asked for first and has pushed hardest on.
 - **Sniper deaths diagnosed 2026-08-16 (live game):** every armsnipe death in
   the watched game died on a RETREAT task (t4) at fwd 0.07-0.48 — the retreat
   fires, then they die running. behaviour.json retreat raised 0.6 → 0.95 (a
-  680-metal glass cannon leaves on the first scratch, not at 60% hp). The
-  deeper fix — standoff so damage never starts, and jammer cover above — is
-  still open.
+  680-metal glass cannon leaves on the first scratch, not at 60% hp).
+  MEASURED same day (6-game batch): deaths-on-retreat fell 100% → 17%; most
+  now die holding DEFEND duty instead. The deeper fix — standoff so damage
+  never starts, and jammer cover above — is still open.
 - Stop entire armies chasing a few light units off the front line.
 - Do not walk 20x the necessary distance around enemy defences.
 - **Making this kind of strategic logic easy to express is itself a goal.**
