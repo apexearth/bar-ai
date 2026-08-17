@@ -63,7 +63,18 @@ float MassWant()
 		return MassFloor();
 
 	const float ours = TeamArmyCost();
-	const float theirs = EnemyMassingThreat();
+	float theirs = EnemyMassingThreat();
+	// Pre-T2 the enemy model is mostly unscouted ground, and GetEnemyCost only
+	// counts what has entered LOS -- "ahead" in the opening is usually
+	// ignorance. Unknown must not read as zero: until T2 (when the radar net
+	// exists and the model is real) assume a peer fields at least our own army
+	// scaled by apex_unseen_parity, so opening groups commit at real size
+	// instead of trickling across at the floor.
+	if (!Factory::gHaveT2) {
+		const float assumed = ours * ai.GetTunable("apex_unseen_parity", 1.2f);
+		if (theirs < assumed)
+			theirs = assumed;
+	}
 	if (ours <= 1.f)
 		return MASS_CAP;
 	const float floorNow = MassFloor();
