@@ -34,6 +34,11 @@ int gNextBudgetLog = 0;
 // contract the ROLE_ rows already had.
 float RawTarget(Cat c)
 {
+	return RawBase(c) * Persona::ShareMult(int(c));
+}
+
+float RawBase(Cat c)
+{
 	if (c == ARMY)
 		return ai.GetTunable("apex_share_army", Targets::At(Targets::SPEND_ARMY));
 	if (c == DEFENCE)

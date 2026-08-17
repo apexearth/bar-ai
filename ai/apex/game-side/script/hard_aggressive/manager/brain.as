@@ -160,6 +160,7 @@ class Want
 		// is the one place the army/defence/economy/build-power split is stated,
 		// and every want now answers to it.
 		scaled *= BudgetMult(BudgetCatOf(kind));
+		scaled *= Persona::WantMult(kind);
 		if (IsEcoKind(kind)) {
 			if (EcoSated())
 				scaled *= ECO_SATED_MULT;

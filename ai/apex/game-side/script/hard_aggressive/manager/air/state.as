@@ -43,7 +43,8 @@ const int   AIR_BOMBERS_MAX  = 30;
 
 int ScaledBombers()
 {
-	const int extra = int(aiEconomyMgr.metal.income / AIR_SCALE_INCOME);
+	const int extra = int(aiEconomyMgr.metal.income * Persona::AirEagerness()
+			/ AIR_SCALE_INCOME);
 	const int want = AIR_BOMBERS + extra;
 	const int capped = (want > AIR_BOMBERS_MAX) ? AIR_BOMBERS_MAX : want;
 	// A ONE-SHOT basic bomber (Legion's Martyr): each sortie expends the whole

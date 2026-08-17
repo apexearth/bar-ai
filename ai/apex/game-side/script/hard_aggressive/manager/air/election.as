@@ -45,7 +45,8 @@ void RunElection()
 	const bool skipTech = (mates.length() > 1);
 
 	int best = -1;
-	float bestInc = AIR_MIN_INCOME;
+	// An airboss persona lowers its own bar; the election shape is unchanged.
+	float bestInc = AIR_MIN_INCOME / Persona::AirEagerness();
 	float bestSeen = 0.f;
 	for (uint i = 0; i < mates.length(); ++i) {
 		const int t = int(mates[i]);

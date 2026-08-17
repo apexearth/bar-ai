@@ -8,6 +8,7 @@
 #include "manager/military.as"
 #include "manager/builder.as"
 #include "manager/factory.as"
+#include "manager/persona.as"     // per-instance identity: biases, never gates
 #include "manager/brain/facqueue.as"  // ...and drives a factory itself, as a standing queue
 #include "manager/economy.as"
 #include "manager/air.as"
