@@ -1,5 +1,21 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN: fighting groups stay 1-2 units at minutes 3-10 even with the quota raised (2026-08-17)
+
+The early-bleed session (6x20m 1v1 tournaments, Comet Catcher) raised the
+massing want from 5 to 15-25 power pre-T2 (`apex_unseen_parity`) — and the
+`apex: squadsize` sampler still read own avg 1.6-1.9, max-mean 2.4-3.0 at
+minutes 3-10, barely different from baseline. Two mechanisms sit between the
+quota and the field: (1) `apex: mass hold expired, committing at 15` fires as
+early as minute 2 — the hold-deadline (`gHoldSince`) trims the raised want;
+(2) DEFEND pools fill one fresh unit at a time and the sampler counts them
+while filling, so the bottleneck may be fill RATE (factory output split
+across several pools?) rather than the promotion bar. Attribute before
+touching: log per-pool fill counts, then decide. Related: the K/D plateau —
+0.334 baseline rose to 0.44-0.51 across the day's three fight levers and sat
+there; the remaining deficit is engagement shape (rally-before-crossing entry
+below), not quota size.
+
 ## OPEN: reinforcements stream to engaged squads one at a time (2026-08-17)
 
 apexearth, watching: "I even see us have solo units that dive into enemy
