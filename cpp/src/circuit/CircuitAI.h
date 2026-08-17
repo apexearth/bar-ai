@@ -528,6 +528,12 @@ private:
 	bool isResigned : 1;
 	bool isSlave : 1;
 	int lastFrame;
+	// apex: whole-AI frame cost (scheduler jobs, threat/infl maps, task
+	// reevaluation, actions) as one bucket beside the script-only timers.
+	uint64_t perfFrameUs = 0;
+	uint64_t perfFrameMaxUs = 0;
+	unsigned perfFrameCalls = 0;
+	int perfFrameNextLog = 0;
 	int skirmishAIId;
 	int teamId;
 	int allyTeamId;

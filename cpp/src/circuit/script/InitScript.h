@@ -85,6 +85,7 @@ private:
 
 	// apex: script-time accounting for AiUpdate; see Update().
 	uint64_t perfUpdateUs = 0;
+	uint64_t perfUpdateMaxUs = 0;
 	unsigned perfUpdateCalls = 0;
 	int perfNextLog = 0;
 	std::string folderName;

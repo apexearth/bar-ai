@@ -1,5 +1,6 @@
 #include "../side.as"
 #include "../world.as"
+#include "perf.as"
 #include "targets.as"          // EVERY build ratio, in one file
 #include "manager/brain/budget.as"  // the one place the build split is stated
 #include "manager/brain.as"       // macro view: rules propose Wants, this ranks them
@@ -64,21 +65,42 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (!ApexActive())
 		return;
 
+	double t = Perf::T0();
 	Builder::SampleWreckField();   // before the queue that reads WreckSeenValue
+	Perf::Add("upd.WreckField", t);
+	t = Perf::T0();
 	Brain::UpdateFacQueues();
 	Brain::LogFacQueues();
+	Perf::Add("upd.FacQueues", t);
+	t = Perf::T0();
 	Factory::UpdateTeamCoord();
+	Perf::Add("upd.TeamCoord", t);
+	t = Perf::T0();
 	Military::UpdateLanePos();
 	Military::UpdateSpamPosture();
 	Military::UpdatePosture();
+	Perf::Add("upd.Military", t);
+	t = Perf::T0();
 	Factory::SampleIncome();
 	Factory::UpdateRushReclaim();
 	Factory::LogRushState();
+	Perf::Add("upd.FactoryMisc", t);
+	t = Perf::T0();
 	Air::Update();
+	Perf::Add("upd.Air", t);
+	t = Perf::T0();
 	Front::Update();
+	Perf::Add("upd.Front", t);
+	t = Perf::T0();
 	Base::Update();
+	Perf::Add("upd.Base", t);
+	t = Perf::T0();
 	Crew::Update();
+	Perf::Add("upd.Crew", t);
+	t = Perf::T0();
 	Assist::Update();
+	Perf::Add("upd.Assist", t);
+	t = Perf::T0();
 	Builder::CommIdleAttribute();
 	Builder::SampleTaskHist();
 	Builder::PromoteAssistBots();
@@ -88,6 +110,8 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Builder::CancelDoomedRepairs();
 	Builder::UpdateSiege();
 	Builder::NanoTidy();
+	Perf::Add("upd.BuilderMisc", t);
+	Perf::Flush();
 }
 
 // The per-unit FINISHED event, all managers -- unlike Builder::AiUnitAdded,

@@ -40,6 +40,7 @@
 #include "Command.h"       // springai::Command, for reading a unit's own queue
 
 #include <chrono>          // apex: script-time accounting in Update()
+#include <algorithm>
 #include "Sim/Units/CommandAI/Command.h"  // CMD_INSERT
 
 namespace circuit {
@@ -562,6 +563,15 @@ static float CCircuitAI_GetTunable(CCircuitAI* circuit, const std::string& name,
 	return circuit->GetTunable(name.c_str(), defVal);
 }
 
+// apex: monotonic microsecond clock so the script can profile its own sections.
+// Host-local wall time — the AI runs only on the host, so reading it cannot
+// desync; still, use it for logging only, never for a gameplay decision.
+static double CCircuitAI_ClockUs(CCircuitAI* circuit)
+{
+	return double(std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
 static float CCircuitAI_GetDefBuildProgress(CCircuitAI* circuit, CCircuitDef* def)
 {
 	return circuit->GetDefBuildProgress(def);
@@ -916,6 +926,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// adds shares this process, so they can simply read each other.
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetDefBuildProgress(CCircuitDef@) const", asFUNCTION(CCircuitAI_GetDefBuildProgress), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTunable(const string &in, float) const", asFUNCTION(CCircuitAI_GetTunable), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "double ClockUs() const", asFUNCTION(CCircuitAI_ClockUs), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void PublishTeamValue(const string& in, float)", asFUNCTION(CCircuitAI_PublishTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float ReadTeamValue(int, const string& in, float) const", asFUNCTION(CCircuitAI_ReadTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestWreckPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestWreckPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1262,16 +1273,20 @@ void CInitScript::Update()
 	asIScriptContext* ctx = script->PrepareContext(mainInfo.update);
 	script->Exec(ctx);
 	script->ReturnContext(ctx);
-	perfUpdateUs += std::chrono::duration_cast<std::chrono::microseconds>(
+	const uint64_t us = std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - t0).count();
+	perfUpdateUs += us;
+	perfUpdateMaxUs = std::max(perfUpdateMaxUs, us);
 	++perfUpdateCalls;
 	const int frame = circuit->GetLastFrame();
 	if (frame >= perfNextLog) {
 		perfNextLog = frame + 1800;   // one game-minute at 30 fps
-		circuit->LOG("apex: perf AiUpdate calls=%u totalMs=%.1f avgUs=%.0f",
+		circuit->LOG("apex: perf AiUpdate calls=%u totalMs=%.1f avgUs=%.0f maxMs=%.1f",
 				perfUpdateCalls, perfUpdateUs / 1000.f,
-				(perfUpdateCalls > 0) ? float(perfUpdateUs) / float(perfUpdateCalls) : 0.f);
+				(perfUpdateCalls > 0) ? float(perfUpdateUs) / float(perfUpdateCalls) : 0.f,
+				perfUpdateMaxUs / 1000.f);
 		perfUpdateUs = 0;
+		perfUpdateMaxUs = 0;
 		perfUpdateCalls = 0;
 	}
 }

@@ -273,7 +273,9 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	@t = PassingMex(unit, isComm);
 	if (t !is null)
 		return t;
+	double tp = Perf::T0();
 	@t = HoldWorkInProgress(unit, isComm);
+	Perf::Add("mt.hold", tp);
 	if (t !is null)
 		return t;
 
@@ -302,7 +304,9 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	@t = CommanderMexGuard(unit, isComm);
 	if (t !is null)
 		return t;
+	tp = Perf::T0();
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
+	Perf::Add("mt.default", tp);
 	NoteOffer(unit, task, isAdvCon);
 	if (isComm) {
 		++gCommOffers;
@@ -465,11 +469,15 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// Pulsar, Pinpointer, converter, energy, nano -- and acts on the best whose
 	// own rule accepts. It sits here, below the engine's expansion offer, so an
 	// upgrade still outranks everything optional. See docs/18-brain.md.
+	tp = Perf::T0();
 	@t = Brain::Decide(unit, isAdvCon);
+	Perf::Add("mt.brain", tp);
 	if (t !is null)
 		return t;
 
+	tp = Perf::T0();
 	@t = OptionalWork(unit, isComm);
+	Perf::Add("mt.optional", tp);
 	if (t !is null)
 		return t;
 
@@ -482,7 +490,9 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (taken)
 		return task;
 
+	tp = Perf::T0();
 	@t = ScavengeWrecks(unit, isComm, isAdvCon);
+	Perf::Add("mt.scavenge", tp);
 	if (t !is null)
 		return t;
 
@@ -540,7 +550,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// engine declined) and Brain::AskingForNewWork was true above, so this unit
 	// holds IDLE/NIL/WAIT and has no work to displace. Assist::Fallback enqueues
 	// no building.
-	return Assist::Fallback(unit, isComm);
+	tp = Perf::T0();
+	@t = Assist::Fallback(unit, isComm);
+	Perf::Add("mt.fallback", tp);
+	return t;
 }
 
 }  // namespace Builder

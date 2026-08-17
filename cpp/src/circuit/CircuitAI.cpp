@@ -61,6 +61,8 @@
 
 #include <fstream>
 #include <limits>
+#include <chrono>
+#include <algorithm>
 
 namespace circuit {
 
@@ -845,6 +847,7 @@ void CCircuitAI::DrainDeferredReleases()
 
 int CCircuitAI::Update(int frame)
 {
+	const auto perfT0 = std::chrono::steady_clock::now();
 	destroyed.clear();
 	DrainDeferredReleases();
 	lastFrame = frame;
@@ -886,6 +889,22 @@ int CCircuitAI::Update(int frame)
 		debugDrawer->Refresh();
 	}
 #endif
+
+	const uint64_t perfUs = std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - perfT0).count();
+	perfFrameUs += perfUs;
+	perfFrameMaxUs = std::max(perfFrameMaxUs, perfUs);
+	++perfFrameCalls;
+	if (frame >= perfFrameNextLog) {
+		perfFrameNextLog = frame + 1800;   // one game-minute at 30 fps
+		LOG("apex: perf AiFrame calls=%u totalMs=%.1f avgUs=%.0f maxMs=%.1f",
+				perfFrameCalls, perfFrameUs / 1000.f,
+				(perfFrameCalls > 0) ? float(perfFrameUs) / float(perfFrameCalls) : 0.f,
+				perfFrameMaxUs / 1000.f);
+		perfFrameUs = 0;
+		perfFrameMaxUs = 0;
+		perfFrameCalls = 0;
+	}
 
 	return 0;  // signaling: OK
 }
