@@ -17,6 +17,29 @@ int  gVolleyUntil = 0;          // frames: standing orders are left alone
 AIFloat3 gVolleyAt;
 int  gNukeNextLog = 0;
 
+// Where we already fired, so the director never re-nukes the same crater
+// while richer ground stands -- apexearth: "us keep nuking a spot which we'd
+// already nuked a bunch... we know it isn't important." Bounded ring.
+array<AIFloat3> gNukedPos;
+array<int>      gNukedFrame;
+
+bool RecentlyNuked(const AIFloat3 &in p)
+{
+	const int keep = int(ai.GetTunable("apex_nuke_repeat_secs", 300.f)) * SECOND;
+	const float sqR = 900.f * 900.f;
+	for (uint i = 0; i < gNukedPos.length(); ) {
+		if (ai.frame - gNukedFrame[i] > keep) {
+			gNukedPos.removeAt(i);
+			gNukedFrame.removeAt(i);
+			continue;
+		}
+		if (gNukedPos[i].SqDistance2D(p) < sqR)
+			return true;
+		++i;
+	}
+	return false;
+}
+
 bool IsSiloDef(const CCircuitDef@ d)
 {
 	if (d is null)
@@ -83,14 +106,19 @@ void UpdateNukes()
 	AIFloat3 bestPos;
 	int bestAntis = 0;
 	float bestCost = 0.f;
-	const float minValue = ai.GetTunable("apex_nuke_min_value", 4000.f);
+	// 10k floor (apexearth: "filter the metal to target areas of 10k metal
+	// or more if possible") -- with no qualifying target the missiles KEEP
+	// SAVING, which is the point; the stockpile only grows.
+	const float minValue = ai.GetTunable("apex_nuke_min_value", 10000.f);
 	for (int i = 0; i < nGroups; ++i) {
 		const AIFloat3 p = aiEnemyMgr.GetEnemyGroupPos(i);
 		if (!OnMap(p) || (Military::ForwardFraction(p) < 0.35f))
 			continue;
+		if (RecentlyNuked(p))
+			continue;      // the crater is not a target
 		const float cost = aiEnemyMgr.GetEnemyGroupCost(i);
 		if (cost < minValue)
-			continue;      // never spend a warhead on less than twice its cost
+			continue;
 		const int antis = AntisCovering(p);
 		const float score = cost / float(1 + antis);
 		if (score > bestScore) {
@@ -130,6 +158,12 @@ void UpdateNukes()
 		silos[i].CmdAttackGround(bestPos);
 	gVolleyAt = bestPos;
 	gVolleyUntil = ai.frame + 90 * SECOND;
+	gNukedPos.insertLast(bestPos);
+	gNukedFrame.insertLast(ai.frame);
+	if (gNukedPos.length() > 32) {
+		gNukedPos.removeAt(0);
+		gNukedFrame.removeAt(0);
+	}
 	AiLog(Factory::T() + "apex: NUKE VOLLEY " + stock + " missiles ("
 		+ needed + " needed) at " + int(bestPos.x) + "," + int(bestPos.z)
 		+ " worth " + formatFloat(bestCost, "", 0, 0)
