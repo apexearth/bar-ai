@@ -94,6 +94,7 @@ local NAMES = {
 	"apex_nano_snap_r",      -- nano.as: neighbour distance that triggers grid-snap placement (200)
 	"apex_nano_grid_pitch",  -- nano.as: cardinal snap pitch, one 3x3 footprint (24)
 	"apex_nano_form_grace",  -- obsolete.as: seconds before a turret group with only turrets in reach is reclaimed (120)
+	"apex_nano_work_min",    -- nano.as: reachable non-turret structure value required to place a turret (400)
 	"apex_guard_per_income",  -- assist.as: income per extra shadow on one lead (60)
 	"apex_guard_reelect",    -- maketask.as: seconds between a guard's full re-elections (10)
 	"apex_idle_patrol_period", -- maketask.as: seconds between idle-builder patrol re-issues (45)

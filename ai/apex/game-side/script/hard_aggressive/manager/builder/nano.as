@@ -326,6 +326,35 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 // reporting. Turrets exist only as clusters at factories and the economy;
 // army repair is mobile builders' work.
 
+// A turret must reach WORK at birth: something within its 400 build distance
+// that is not another turret, or construction in progress. Without this the
+// band kept placing rows into open ground out to 1345 elmos -- 77% of all
+// placements, each born an orphan for the reclaim to eat later (watched live
+// 2026-08-18, seed 112). Placement stops when useful ground runs out,
+// whatever the cap still allows.
+bool NanoCanReachWork(CCircuitDef@ want, const AIFloat3& in site)
+{
+	array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(site, NANO_ASSIST_R);
+	if (near is null)
+		return false;
+	// By VALUE, not existence: a lone 40-metal turbine was justifying a
+	// 210-metal turret beside it (screenshot, 2026-08-18). The reachable
+	// non-turret structure value must be worth the turret itself.
+	float worth = 0.f;
+	const float need = ai.GetTunable("apex_nano_work_min", 400.f);
+	for (uint k = 0; k < near.length(); ++k) {
+		CCircuitUnit@ o = near[k];
+		if ((o is null) || (o.circuitDef is null))
+			continue;
+		if ((want !is null) && (o.circuitDef.id == want.id))
+			continue;
+		worth += o.circuitDef.costM;
+		if (worth >= need)
+			return true;
+	}
+	return false;
+}
+
 // Snap a turret site onto the grid of an existing neighbour: with another
 // turret within apex_nano_snap_r, the new one goes directly to its top/
 // bottom/left/right at footprint pitch, so blocks form as a perfect grid
@@ -480,6 +509,9 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		return null;
 	if (!sited)
 		{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, here, sn)) here = sn; }
+	// The birth rule, on EVERY path's final site: no reachable work, no turret.
+	if (!NanoCanReachWork(want, here))
+		return null;
 
 	// Nanos go TIGHT, right next to each other, on a grid pitch that leaves the
 	// walkways clear -- spreading them out was the wrong trade against a naval
@@ -512,6 +544,8 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		for (uint i = 0; (i < facs2.length()) && !ok; ++i)
 			ok = NanoSiteAt(unit, want, facs2[i], more);
 		if (!ok && !BandSpot(unit, want, true, more))
+			break;
+		if (!NanoCanReachWork(want, more))
 			break;
 		bool made2 = false;
 		// parallel=true: the burst has already reserved a distinct site; without
