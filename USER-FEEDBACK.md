@@ -36,6 +36,13 @@ task died without ever producing a nanoframe never returned its
 the game. Fixed in `events.as` (`apex: reactor ask returned` log line).
 **UNRESOLVED until a watched game shows every player reaching fusions.**
 
+## Nuke director — CONFIRMED live 2026-08-17
+
+Same-day request and confirmation: "If we save up ~30 nuclear missiles we
+can just spam them all at one enemy location until we hit" → brain/nukes.as
+(volley sized against covering antinukes, C++ auto-fire ceded). Watching,
+hours later: "just saw us drop like 4 or 5 all at once.. and that was epic."
+
 ## The Brain owns (nearly) all building — standing architecture goal
 
 2026-08-15, watching: "We should have almost all our building going through
