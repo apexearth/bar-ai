@@ -906,9 +906,11 @@ int CCircuitAI::Update(int frame)
 		&& (allyTeam->GetLeaderId() == skirmishAIId))
 	{
 		ghostPurgeNext = frame + FRAMES_PER_SEC * 30;
-		const int maxAge = (int)(GetTunable("apex_ghost_purge_min", 10.f)
+		const int confirmedAge = (int)(GetTunable("apex_ghost_purge_secs", 90.f)
+				* FRAMES_PER_SEC);
+		const int unknownAge = (int)(GetTunable("apex_ghost_stale_min", 15.f)
 				* 60.f * FRAMES_PER_SEC);
-		enemyManager->PurgeStaleGhosts(frame, maxAge);
+		enemyManager->PurgeStaleGhosts(frame, confirmedAge, unknownAge);
 	}
 	if ((frame >= squadDiagNextLog) && (militaryManager != nullptr) && (enemyManager != nullptr)) {
 		squadDiagNextLog = frame + 900;

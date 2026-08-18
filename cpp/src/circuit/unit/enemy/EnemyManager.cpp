@@ -390,14 +390,32 @@ void CEnemyManager::DyingEnemy(CEnemyUnit* enemy, int frame)
 // re-registers the unit fresh -- behaviour preserved, memory bounded. The
 // deliberate cost: GetEnemyCost pessimism decays past the purge age, which
 // is also what stopped the repeat-nuking of long-dead ground.
-void CEnemyManager::PurgeStaleGhosts(int frame, int maxAgeFrames)
+// Two tiers (apexearth: "a ten minute timeout is not good enough... if you
+// are viewing an area that had information... and you now have a different
+// set of things there, you replace the past registry information"):
+// HIDDEN is exactly that reconciliation -- CMapManager::HostileInLOS sets it
+// the moment our vision covers an entry's last-known ground and the unit is
+// not there -- so a hidden entry is VISION-CONFIRMED stale and earns only a
+// short fuse (it may have slipped into adjacent fog; the sizing pessimism
+// keeps it that long and no longer). An entry whose ground we NEVER
+// re-viewed is a genuine unknown -- the pessimism the massing sizing relies
+// on -- and keeps the long fuse.
+void CEnemyManager::PurgeStaleGhosts(int frame, int confirmedAgeFrames, int unknownAgeFrames)
 {
 	for (CEnemyUnit* e : enemyUpdates) {
-		if ((e == nullptr) || e->IsDying() || !e->IsHidden()) {
+		if ((e == nullptr) || e->IsDying()) {
 			continue;
 		}
 		const int seen = e->GetSeenFrame();
-		if ((seen >= 0) && (frame - seen > maxAgeFrames)) {
+		if (seen < 0) {
+			continue;
+		}
+		const int age = frame - seen;
+		if (e->IsHidden()) {
+			if (age > confirmedAgeFrames) {
+				DyingEnemy(e, frame);
+			}
+		} else if (e->NotInRadarAndLOS() && (age > unknownAgeFrames)) {
 			DyingEnemy(e, frame);
 		}
 	}
