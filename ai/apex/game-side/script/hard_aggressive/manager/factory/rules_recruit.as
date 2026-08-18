@@ -50,6 +50,11 @@ void FactoryDiag(CCircuitUnit@ unit)
 
 int gNanoElectFrame = -1;
 int gNanoElectN = 0;
+// True when AssistantWork handled a nano turret (elected OR deferred): the
+// caller must stop either way -- a deferred turret falling through the
+// recruit ladder was 124s of a 60m sim walking rules that cannot produce
+// anything for a turret.
+bool gAssistHandled = false;
 
 IUnitTask@ AssistantWork(CCircuitUnit@ unit)
 {
@@ -65,8 +70,10 @@ IUnitTask@ AssistantWork(CCircuitUnit@ unit)
 	// 8v8 sim (2.86ms/call, 71k calls). At most two turret elections per
 	// frame per player, staggered on team-id parity when rich; the rest wait
 	// a frame, which an idle turret cannot tell from waiting for work.
+	gAssistHandled = false;
 	CCircuitDef@ nano = Builder::NanoDef();
 	if ((nano !is null) && (unit.circuitDef.id == nano.id)) {
+		gAssistHandled = true;
 		if (gNanoElectFrame != ai.frame) {
 			gNanoElectFrame = ai.frame;
 			gNanoElectN = 0;

@@ -25,6 +25,10 @@ IUnitTask@ FacMakeInner(CCircuitUnit@ unit)
 	Perf::Add("fac.assist", fT);
 	if (t !is null)
 		return FacWon("assist", t);
+	// A turret AssistantWork handled (elected or budget-deferred) is DONE:
+	// everything below is recruiting, which a turret can never do.
+	if (gAssistHandled)
+		return null;
 	fT = Perf::T0();
 
 	// A LINE THE BRAIN DRIVES IS ANSWERED HERE AND NOWHERE ELSE.
