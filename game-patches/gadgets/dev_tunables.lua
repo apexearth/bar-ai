@@ -91,6 +91,9 @@ local NAMES = {
 	"apex_pulsar_nano_fwd",   -- statics.as: nano-cluster fwd fraction to site the gun there (0.15)
 	"apex_nano_site_min",     -- nano.as: min build cost that attracts a nano beside it (1500)
 	"apex_nano_pack_r",      -- nano.as: tight search radius packing turrets against the block (180)
+	"apex_nano_snap_r",      -- nano.as: neighbour distance that triggers grid-snap placement (200)
+	"apex_nano_grid_pitch",  -- nano.as: cardinal snap pitch, one 3x3 footprint (24)
+	"apex_nano_form_grace",  -- obsolete.as: seconds before a turret group with only turrets in reach is reclaimed (120)
 	"apex_guard_per_income",  -- assist.as: income per extra shadow on one lead (60)
 	"apex_guard_reelect",    -- maketask.as: seconds between a guard's full re-elections (10)
 	"apex_idle_patrol_period", -- maketask.as: seconds between idle-builder patrol re-issues (45)
@@ -101,7 +104,6 @@ local NAMES = {
 	"apex_unblock_still",
 	"apex_unblock_period",
 	"apex_kill_quota",
-	"apex_front_nano",
 	"apex_comm_rules",
 	"apex_mix",
 	"apex_mix_con_income",

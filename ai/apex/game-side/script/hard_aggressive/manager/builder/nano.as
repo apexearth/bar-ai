@@ -172,20 +172,22 @@ bool NanoSiteAt(CCircuitUnit@ unit, CCircuitDef@ want, CCircuitUnit@ fac,
 			AIFloat3 c;
 			c.x = x / n;
 			c.z = z / n;
-			const AIFloat3 site = ai.FindBuildSiteNear(want, c,
+			AIFloat3 site = ai.FindBuildSiteNear(want, c,
 					ai.GetTunable("apex_nano_pack_r", 180.f));
 			if (OnMap(site) && (site.distance2D(fpos) <= NANO_ASSIST_R)
 					&& !Base::SiteTaken(Base::NANO, site)
 					&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
+				SnapToNanoGrid(unit, want, site);
 				Base::ReserveSite(site);
 				here = site;
 				return true;
 			}
 		}
 	}
-	const AIFloat3 site = ai.FindBuildSiteNear(want, fpos, NANO_ASSIST_R);
+	AIFloat3 site = ai.FindBuildSiteNear(want, fpos, NANO_ASSIST_R);
 	if (OnMap(site) && !Base::SiteTaken(Base::NANO, site)
 			&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
+		SnapToNanoGrid(unit, want, site);
 		Base::ReserveSite(site);
 		here = site;
 		return true;
@@ -319,68 +321,57 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 	return post;
 }
 
-// A turret on the front is a repair station. Distinct from EcoNano below in
-// purpose and placement: that one buys build power beside the factories, this
-// one keeps the defence line and the army standing by repairing them where
-// they fight. Gated later and to a smaller share than an earlier attempt,
-// which put them up while the economy was still compounding and cost army
-// share for it -- a repair station is worth having once there is something
-// worth repairing.
-const int   FRONT_NANO_PERIOD = 45 * SECOND;
-const float FRONT_NANO_INCOME = 90.f;   // a real economy, not an early one
-const float FRONT_NANO_SHARE  = 0.15f;  // of NanoCap(), so it stays a minority
-int gNextFrontNano = 0;
-// AROUND the line, not on one point of it: FrontNear returns the front cell
-// nearest the CONSTRUCTOR, so several builders working the same stretch all
-// resolve to the same cell and stack there without this spacing.
-const float FRONT_NANO_SPACING = 420.f;
-array<AIFloat3> gFrontNanoPlaced;
+// Front repair turrets are GONE -- apexearth 2026-08-18, "kill the concept":
+// the trail they left as the front moved was the sparse waste he kept
+// reporting. Turrets exist only as clusters at factories and the economy;
+// army repair is mobile builders' work.
 
-IUnitTask@ FrontNano(CCircuitUnit@ unit)
+// Snap a turret site onto the grid of an existing neighbour: with another
+// turret within apex_nano_snap_r, the new one goes directly to its top/
+// bottom/left/right at footprint pitch, so blocks form as a perfect grid
+// (apexearth 2026-08-18). Falls back to the free-search site when all four
+// cardinal slots are taken.
+bool SnapToNanoGrid(CCircuitUnit@ unit, CCircuitDef@ want, AIFloat3& inout here)
 {
-	if (Factory::EcoLeadActive())
-		return null;
-	if (aiEconomyMgr.metal.income < FRONT_NANO_INCOME)
-		return null;
-	if (aiEconomyMgr.isEnergyStalling)
-		return null;   // a turret is 3200 energy to raise
-
-	CCircuitDef@ want = SideDef3(armnanotc, cornanotc, legnanotc);
-	if ((want is null) || !want.IsAvailable(ai.frame))
-		return null;
-	// Its own share of the cap, so front repair cannot eat the whole allowance.
-	if (float(want.count) >= float(NanoCap()) * (1.f + FRONT_NANO_SHARE))
-		return null;
-
-	AIFloat3 spot;
-	if (!Front::FrontNear(unit.GetPos(ai.frame), spot))
-		return null;
-	if (!OnMap(spot))
-		return null;
-	// BEHIND the line, not on it: never send a constructor to build somewhere
-	// dangerous.
-	if (ThreatFor(unit, spot) > CON_THREAT_VETO)
-		return null;
-
-	AIFloat3 place = ai.FindBuildSiteNear(want, spot, 600.f);
-	if (!OnMap(place))
-		return null;
-	for (uint i = 0; i < gFrontNanoPlaced.length(); ++i) {
-		if (gFrontNanoPlaced[i].distance2D(place) < FRONT_NANO_SPACING)
-			return null;
+	const float snapR = ai.GetTunable("apex_nano_snap_r", 200.f);
+	array<CCircuitUnit@>@ near = ai.GetOwnUnitsOfDef(want, here, snapR);
+	if ((near is null) || (near.length() == 0))
+		return false;
+	CCircuitUnit@ anchor = null;
+	float bestD = snapR + 1.f;
+	for (uint i = 0; i < near.length(); ++i) {
+		if (near[i] is null)
+			continue;
+		const float d = here.distance2D(near[i].GetPos(ai.frame));
+		if (d < bestD) {
+			bestD = d;
+			@anchor = near[i];
+		}
 	}
-	bool created = false;
-	IUnitTask@ post = Requests::Take(unit, want, Task::BuildType::NANO,
-			Task::Priority::NORMAL, place, 0.f, 0.f, created);
-	if (post is null)
-		return null;
-	if (!created)
-		return post;
-	gFrontNanoPlaced.insertLast(place);
-	gNextFrontNano = ai.frame + FRONT_NANO_PERIOD;
-	AiLog(Factory::T() + "apex: front nano " + want.GetName()
-		+ " standing=" + want.count + " posts=" + gFrontNanoPlaced.length());
-	return post;
+	if (anchor is null)
+		return false;
+	const AIFloat3 at = anchor.GetPos(ai.frame);
+	// 3x3 footprint = 24 elmos; touching centres one footprint apart.
+	const float pitch = ai.GetTunable("apex_nano_grid_pitch", 24.f);
+	array<float> dx = {pitch, -pitch, 0.f, 0.f};
+	array<float> dz = {0.f, 0.f, pitch, -pitch};
+	for (uint k = 0; k < 4; ++k) {
+		AIFloat3 cand = at;
+		cand.x += dx[k];
+		cand.z += dz[k];
+		if (!OnMap(cand))
+			continue;
+		const AIFloat3 site = ai.FindBuildSiteNear(want, cand, pitch * 0.5f);
+		if (!OnMap(site) || (site.distance2D(cand) > pitch * 0.5f))
+			continue;
+		if (Base::SiteTaken(Base::NANO, site))
+			continue;
+		if (ThreatFor(unit, site) > CON_THREAT_VETO)
+			continue;
+		here = site;
+		return true;
+	}
+	return false;
 }
 
 IUnitTask@ EcoNano(CCircuitUnit@ unit)
@@ -471,10 +462,11 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		CCircuitUnit@ bigBuild = (gBigBuildId >= 0)
 				? ai.GetTeamUnit(Id(gBigBuildId)) : null;
 		if (bigBuild !is null) {
-			const AIFloat3 site = ai.FindBuildSiteNear(want,
+			AIFloat3 site = ai.FindBuildSiteNear(want,
 					bigBuild.GetPos(ai.frame), NANO_ASSIST_R);
 			if (OnMap(site) && !Base::SiteTaken(Base::NANO, site)
 					&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
+				SnapToNanoGrid(unit, want, site);
 				Base::ReserveSite(site);
 				here = site;
 				sited = true;
@@ -485,6 +477,8 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	}
 	if (!sited && !BandSpot(unit, want, true, here))
 		return null;
+	if (!sited)
+		SnapToNanoGrid(unit, want, here);
 
 	// Nanos go TIGHT, right next to each other, on a grid pitch that leaves the
 	// walkways clear -- spreading them out was the wrong trade against a naval

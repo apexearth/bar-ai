@@ -64,7 +64,6 @@ const float NANO_VALUE        = 7.0f;
 // A front turret repairs instead of producing, so its value is what it keeps
 // alive rather than what it builds. Lower than a base nano's build power, and
 // it only proposes once there is a front to stand behind.
-const float FRONT_NANO_VALUE  = 3.0f;
 
 bool EcoSated()
 {
@@ -95,7 +94,7 @@ float ArmyDeficitMult()
 // Which budget category a want spends from.
 Cat BudgetCatOf(const string& in kind)
 {
-	if ((kind == "nano") || (kind == "frontnano") || (kind == "gantry"))
+	if ((kind == "nano") || (kind == "gantry"))
 		return BUILDPOWER;
 	// "aa" is anti-air cover and spends from the air-defence row; "fence" is the
 	// land line. They must stay separate budgets, or the air-defence share ends
@@ -992,8 +991,6 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 		return Builder::EnergyConverter(unit);
 	if (kind == "nano")
 		return Builder::EcoNano(unit);
-	if (kind == "frontnano")
-		return Builder::FrontNano(unit);
 	return null;
 }
 
@@ -1133,10 +1130,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// Spend the surplus rather than growing it further.
 	if (!preT2 && (EcoSated() || aiEconomyMgr.isMetalFull))
 		Propose(Simple("nano", NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc"), false));
-	// ON by default: attribution found the income gate, not front nanos, caused
-	// the army drop. Kept, later and fewer (see FRONT_NANO_* in builder/nano.as).
-	if (!preT2 && (ai.GetTunable("apex_front_nano", 1.f) > 0.f))
-		Propose(Simple("frontnano", FRONT_NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc"), false));
 
 	if (!preT2) {
 	// ENEMY T3 ON THE FIELD IS A STANDING DEMAND FOR ITS COUNTERS. Raw cost,

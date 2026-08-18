@@ -485,17 +485,21 @@ const int   NANO_TIDY_BATCH  = 6;
 int gNextNanoTidy = 0;
 uint gNanoTidyCursor = 0;
 array<int> gNanoIds;
+array<int> gNanoBorn;
 
 void NanoNoteBuilt(Id id)
 {
 	gNanoIds.insertLast(int(id));
+	gNanoBorn.insertLast(ai.frame);
 }
 
 void NanoNoteGone(Id id)
 {
 	for (int i = int(gNanoIds.length()) - 1; i >= 0; --i) {
-		if (gNanoIds[i] == int(id))
+		if (gNanoIds[i] == int(id)) {
 			gNanoIds.removeAt(uint(i));
+			gNanoBorn.removeAt(uint(i));
+		}
 	}
 }
 
@@ -518,36 +522,45 @@ void NanoTidy()
 		CCircuitUnit@ u = ai.GetTeamUnit(Id(gNanoIds[i]));
 		if (u is null) {
 			gNanoIds.removeAt(i);   // stale id; the unit is gone
+			gNanoBorn.removeAt(i);
 			continue;
 		}
-		// A STRANDED nano works nothing: no own structure but itself within
-		// lathe reach means its factory/anchor is gone. Reclaim it -- the
-		// metal returns and the nano wants rebuild where work actually is,
-		// which is the cheap form of "transport it somewhere useful"
-		// (apexearth: "a lot of nano turrets with nothing to do").
+		// CLUSTERS ONLY (apexearth 2026-08-18): a turret group with nothing but
+		// turrets in its reach works nothing, wherever it stands -- the old
+		// front exemption is gone with the front-nano concept. The formation
+		// grace is what keeps this off a cluster still being seeded: a fresh
+		// turret beside a big build is useful now and judged later.
 		{
-			const AIFloat3 up = u.GetPos(ai.frame);
-			// Front nanos are army repair stations -- bare ground around them
-			// is their job, not strandedness. Rear/base band only.
-			if (Military::ForwardFraction(up) >= 0.35f)
-				continue;
-			array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(up,
-					u.circuitDef.GetBuildDistance() + 64.f);
-			int others = 0;
-			if (near !is null) {
-				for (uint k = 0; k < near.length(); ++k) {
-					if ((near[k] !is null) && (near[k].id != u.id))
-						++others;
+			const int grace = int(ai.GetTunable("apex_nano_form_grace", 120.f)
+					* float(SECOND));
+			if (ai.frame - gNanoBorn[i] >= grace) {
+				const AIFloat3 up = u.GetPos(ai.frame);
+				CCircuitDef@ nd = Builder::NanoDef();
+				array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(up,
+						u.circuitDef.GetBuildDistance() + 64.f);
+				int nonNano = 0;
+				bool building = false;
+				if (near !is null) {
+					for (uint k = 0; k < near.length(); ++k) {
+						CCircuitUnit@ o = near[k];
+						if ((o is null) || (o.id == u.id))
+							continue;
+						if ((nd is null) || (o.circuitDef.id != nd.id))
+							++nonNano;
+						if (!Main::WasFinished(int(o.id)))
+							building = true;
+					}
 				}
-			}
-			if (others == 0) {
-				IUnitTask@ gone = aiBuilderMgr.Enqueue(
-						TaskB::Reclaim(Task::Priority::NORMAL, u));
-				if (gone !is null) {
-					AiLog(Factory::T() + "apex: stranded nano #" + u.id
-						+ " reclaimed -- nothing in reach");
-					gNanoIds.removeAt(i);
-					continue;
+				if ((nonNano == 0) && !building) {
+					IUnitTask@ gone = aiBuilderMgr.Enqueue(
+							TaskB::Reclaim(Task::Priority::NORMAL, u));
+					if (gone !is null) {
+						AiLog(Factory::T() + "apex: orphan nano #" + u.id
+							+ " reclaimed -- only turrets in reach");
+						gNanoIds.removeAt(i);
+						gNanoBorn.removeAt(i);
+						continue;
+					}
 				}
 			}
 		}
