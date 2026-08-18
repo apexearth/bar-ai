@@ -493,6 +493,19 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		@gen = IsAdvConDef(unit) ? BigConvDef(unit) : null;
 		if ((gen is null) || !gen.IsAvailable(ai.frame))
 			@gen = SmallConvDef(unit);
+		// A converter must be FED, not just justified: EnergyWasting() is a
+		// bank test, and the opening's tiny bank fills the moment a builder
+		// idles -- watched live (MP 2026-08-17), two 70-e/s converters went
+		// up at 1.3m against ~104 e/s income and stalled the player. Income
+		// must cover every standing converter's drain plus this one's plus a
+		// working reserve, or the rung waits.
+		if (gen !is null) {
+			const float per = ai.GetTunable("apex_conv_drain", 70.f);
+			const float need = per * float(gen.count + 1)
+					+ ai.GetTunable("apex_conv_reserve", 100.f);
+			if (aiEconomyMgr.energy.income < need)
+				@gen = null;
+		}
 		}
 	} else {
 		// One unified energy-per-metal ranking across the whole ladder: per-metal
