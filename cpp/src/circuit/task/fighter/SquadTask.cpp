@@ -967,28 +967,42 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		if ((kiteFrac > 0.f) && (kv.first >= kiteMin)
 			&& !IsChargeDef(rowDef) && !squadOverwhelms)
 		{
-			// Individual armed enemies, NOT group centroids: a Behemoth beside
-			// this row whose cluster centres hundreds of elmos away read as
-			// "no one near" and the row never kited -- apexearth: "snipers
-			// walking right up next to behemoths... It isn't keeping us safe
-			// from other enemies which may be nearby. We need to be thinking
-			// about all threats, not just our target." Search out to the full
-			// row range around the ring; the per-unit step below still only
-			// moves units the foe has actually closed on.
+			// Individual armed enemies, NOT group centroids -- but never a
+			// walk of the whole enemy registry: ghosts of units killed out
+			// of LOS are never unregistered, so that map grows with game AGE
+			// and a per-row full scan compounded into the worst-frame spikes
+			// apexearth reported ("performance continuously gets worse";
+			// spikeMs 5 -> 78 over 28 minutes with unit count flat). Coarse
+			// pass over the bounded cluster list finds the one nearby group;
+			// the per-unit pass runs only inside it. A Behemoth beside the
+			// row is in whatever cluster is nearest, so the original blind
+			// spot (centroid far, unit close) stays covered at cluster cost.
 			float bestSq = SQUARE(kv.first);
-			for (const auto& ekv : manager->GetCircuit()->GetEnemyInfos()) {
-				CEnemyInfo* e = ekv.second;
-				if ((e == nullptr) || e->IsHidden()) {
-					continue;
+			CCircuitAI* kc = manager->GetCircuit();
+			const CEnemyManager::SEnemyGroup* nearGroup = nullptr;
+			float bestGroupSq = SQUARE(kv.first * 3.f);
+			for (const CEnemyManager::SEnemyGroup& g : kc->GetEnemyManager()->GetEnemyGroups()) {
+				const float sq = g.pos.SqDistance2D(testPos);
+				if ((g.influence > 0.f) && (sq < bestGroupSq)) {
+					bestGroupSq = sq;
+					nearGroup = &g;
 				}
-				CCircuitDef* ed = e->GetCircuitDef();
-				if ((ed == nullptr) || !ed->IsAttacker() || ed->IsAbleToFly()) {
-					continue;
-				}
-				const float sq = e->GetPos().SqDistance2D(testPos);
-				if (sq < bestSq) {
-					bestSq = sq;
-					kiteFoe = e->GetPos();
+			}
+			if (nearGroup != nullptr) {
+				for (const ICoreUnit::Id eId : nearGroup->units) {
+					CEnemyInfo* e = kc->GetEnemyInfo(eId);
+					if ((e == nullptr) || e->IsHidden()) {
+						continue;
+					}
+					CCircuitDef* ed = e->GetCircuitDef();
+					if ((ed == nullptr) || !ed->IsAttacker() || ed->IsAbleToFly()) {
+						continue;
+					}
+					const float sq = e->GetPos().SqDistance2D(testPos);
+					if (sq < bestSq) {
+						bestSq = sq;
+						kiteFoe = e->GetPos();
+					}
 				}
 			}
 		}
