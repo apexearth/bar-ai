@@ -293,7 +293,13 @@ bool PlantApproved(CCircuitDef@ want)
 				const bool haveAdvCon = (advCon !is null) && (advCon.count > 0);
 				CCircuitDef@ t2mex = SideDef3(armmoho, cormoho, legmoho);
 				const bool haveT2Mex = (t2mex !is null) && (t2mex.count > 0);
-				stillCompeting = !haveAdvCon || !haveT2Mex;
+				// ...and a REACTOR: apexearth, after the third second-T1-lab
+				// report -- "we shouldn't make more than 1 until we have a
+				// fusion or better. it really nerfs our early game." The
+				// fusion is the milestone that says the economy is past the
+				// stretch where a duplicate T1 line steals from tech.
+				stillCompeting = !haveAdvCon || !haveT2Mex
+						|| !Builder::HaveReactor();
 			}
 			const int t1have = T1PlantCount() + InFlightTier(0);
 			if (stillCompeting ? (t1have >= 1) : (t1have >= allowed)) {

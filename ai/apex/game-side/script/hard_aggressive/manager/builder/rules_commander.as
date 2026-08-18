@@ -335,9 +335,16 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 					|| ((Factory::userData[lab.id].attr
 						& (Factory::Attr::T2 | Factory::Attr::T3)) != 0))
 					@lab = Factory::T1BotLab();
+				// THROUGH THE GATE, not around it: this Take was the fifth
+				// bypass -- the request never entered the plant-ask ledger,
+				// so during the commander's walk (no nanoframe, no ask) the
+				// engine's recovery path read zero T1 plants and got a SECOND
+				// lab approved (apexearth: "we're also still making 2 T1
+				// labs"). PlantApproved both checks and registers the ask.
 				if ((lab !is null) && lab.IsAvailable(ai.frame)
 					&& (lab.count <= 0)
-					&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) <= 0))
+					&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) <= 0)
+					&& Factory::PlantApproved(lab))
 				{
 					IUnitTask@ rebuild = Requests::Take(unit, lab,
 							Task::BuildType::FACTORY, Task::Priority::HIGH,
