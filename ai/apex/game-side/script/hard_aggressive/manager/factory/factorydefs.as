@@ -126,15 +126,15 @@ bool MayOpenAir()
 	return ai.teamId == AirSlotTeamId();
 }
 
-// Ground opening when the default picks air. Bots preferred, three in four --
-// they climb terrain vehicles cannot and carry the rez bot -- with the
-// remaining quarter keeping the heavy assault line available. Keyed on team id
-// so an ally team divides in a fixed proportion and each player's choice stays
-// stable across the game.
+// Ground opening when the default picks air. An even bot/vehicle split; bots
+// climb terrain vehicles cannot and carry the rez bot, vehicles bring the
+// heavier guns on open ground.
 CCircuitDef@ GroundOpening()
 {
 	const string side = ai.GetSideName();
-	const bool wantBots = ((ai.teamId % 4) != 0);
+	// 50/50, was 3-in-4 bots -- apexearth: "we never seem to care about
+	// vehicles." Rolled per call; only the first factory ever consumes it.
+	const bool wantBots = (AiRandom(0, 99) < 50);
 	if (side == "cortex")
 		return ai.GetCircuitDef(wantBots ? corlab : corvp);
 	if (side == "legion")

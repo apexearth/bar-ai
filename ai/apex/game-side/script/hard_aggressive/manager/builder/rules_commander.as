@@ -322,7 +322,19 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				// true; the task-count check stops a second rebuild request
 				// once one is in flight (caught by the held-check above once
 				// it is actually assigned to this unit).
-				CCircuitDef@ lab = Factory::T1BotLab();
+				// THE SCORED PICK, not a hard-coded bot lab: this branch fires
+				// at every normal game start (no factory exists yet), and the
+				// hard-coded T1BotLab here was why the engine's terrain-scored
+				// choice -- measured picking the vehicle plant about half the
+				// time on Comet -- never decided a single opening. apexearth:
+				// "we *always* seem to start with botlabs. We never seem to
+				// care about vehicles." ChooseFactory keeps the water/air-map
+				// overrides and latches gT1Fac; the bot lab stays the fallback.
+				CCircuitDef@ lab = Factory::ChooseFactory(unit.GetPos(ai.frame), true, false);
+				if ((lab is null)
+					|| ((Factory::userData[lab.id].attr
+						& (Factory::Attr::T2 | Factory::Attr::T3)) != 0))
+					@lab = Factory::T1BotLab();
 				if ((lab !is null) && lab.IsAvailable(ai.frame)
 					&& (lab.count <= 0)
 					&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) <= 0))
