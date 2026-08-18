@@ -121,7 +121,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			gElectFrame = ai.frame;
 			gElectCount = 0;
 		}
-		if (gElectCount >= int(ai.GetTunable("apex_elect_per_frame", 2.f))) {
+		// Income-adaptive: a rich late game has 16 instances sharing one sim
+		// thread and thousands of units already paying the engine's own cost,
+		// so the budget halves exactly when each election is least urgent (a
+		// metal-full base loses nothing to a 10-frame decision).
+		const int electBudget = (aiEconomyMgr.metal.income
+				>= ai.GetTunable("apex_elect_rich_income", 150.f))
+				? 1 : int(ai.GetTunable("apex_elect_per_frame", 2.f));
+		if (gElectCount >= electBudget) {
 			Brain::gDecideDeferred = true;   // reuse: skips NoteIdleElection
 			Perf::Note("mt.elect.defer");
 			return null;
