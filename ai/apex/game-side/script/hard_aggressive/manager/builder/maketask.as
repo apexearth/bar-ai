@@ -121,7 +121,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			gElectFrame = ai.frame;
 			gElectCount = 0;
 		}
-		if (gElectCount >= int(ai.GetTunable("apex_elect_per_frame", 3.f))) {
+		if (gElectCount >= int(ai.GetTunable("apex_elect_per_frame", 2.f))) {
 			Brain::gDecideDeferred = true;   // reuse: skips NoteIdleElection
 			Perf::Note("mt.elect.defer");
 			return null;

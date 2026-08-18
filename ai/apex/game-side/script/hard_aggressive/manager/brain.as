@@ -1032,7 +1032,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		gDecideFrame = ai.frame;
 		gDecideCount = 0;
 	}
-	if (gDecideCount >= int(ai.GetTunable("apex_decide_per_frame", 4.f))) {
+	if (gDecideCount >= int(ai.GetTunable("apex_decide_per_frame", 3.f))) {
 		gDecideDeferred = true;
 		Perf::Note("mt.brain.defer");
 		return null;
