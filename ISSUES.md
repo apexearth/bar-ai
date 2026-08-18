@@ -1,5 +1,26 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN: Cortex builds far more fighters than Armada (2026-08-18)
+
+apexearth, watching the Carrot Mountains 8v8: "Cortex always makes way more
+fighters than Armada does" — a standing faction asymmetry, seen across games
+(that's the finding: repeated report). Candidates, none yet attributed:
+per-side fighter def weights in the air role tables, the fighter floor's
+per-def draw, or a cost difference making the quota fill differently.
+Attribute via the `facqueue ... quota:` lines per side before touching
+config.
+
+## OPEN: advanced con AIRCRAFT idle after their build finishes (2026-08-18)
+
+Watched live (Carrot Mountains 35m): Pink's advanced con aircraft built a
+nuke silo then hovered idle 5+ minutes; idle rezbots and ground cons too.
+Terminal IdlePatrol (landed 2026-08-18) is the safety net — patrol
+auto-assists and moves them home — but the ROOT of why the ladder plus
+Assist::Fallback returned null for an air con for minutes is not yet
+attributed (adv-con exclusions? ThreatFor veto? Fallback's 3500 range with
+nothing in reach?). Grep mt.idlepatrol counts: high numbers mean the ladder
+is starving units the patrol is now papering over.
+
 ## OPEN: secondary variants (ctl/ord/stk) still carry the guessed Legion names (2026-08-18)
 
 `legamsub`/`legplat` exist in NO tree — they were guessed mirrors of

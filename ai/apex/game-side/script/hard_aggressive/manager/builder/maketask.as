@@ -637,7 +637,47 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	tp = Perf::T0();
 	@t = Assist::Fallback(unit, isComm);
 	Perf::Add("mt.fallback", tp);
-	return t;
+	if (t !is null)
+		return t;
+	// BELOW even that: a standing patrol, the same trick the nano turrets got.
+	// A patrolling builder auto-assists/repairs/reclaims whatever it passes and
+	// an air constructor drifts back over the base and finds work -- watched
+	// live 2026-08-18: advanced con aircraft hovering idle 5+ minutes beside a
+	// finished nuke silo, plus idle rezbots and cons. Engine-side behaviour, no
+	// task consumed: the next election can still take the unit the moment real
+	// work exists.
+	IdlePatrol(unit, isComm);
+	return null;
+}
+
+// Unit id -> next frame its idle patrol may be re-issued.
+dictionary gIdlePatrolNext;
+
+void IdlePatrol(CCircuitUnit@ unit, bool isComm)
+{
+	if ((unit is null) || isComm || !unit.circuitDef.IsMobile())
+		return;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (!OnMap(here))
+		return;
+	const string k = "" + int(unit.id);
+	int next = 0;
+	gIdlePatrolNext.get(k, next);
+	if (ai.frame < next)
+		return;
+	gIdlePatrolNext.set(k, ai.frame
+			+ int(ai.GetTunable("apex_idle_patrol_period", 45.f) * float(SECOND)));
+	// Toward home, so the patrol leg crosses the base's work rather than empty
+	// ground; a unit already at home gets a short local leg.
+	AIFloat3 to = gHomePos;
+	if (here.distance2D(gHomePos) < 300.f) {
+		to = here;
+		to.x += 400.f;
+	}
+	if (!OnMap(to))
+		return;
+	unit.CmdPatrolTo(to);
+	Perf::Note("mt.idlepatrol");
 }
 
 }  // namespace Builder

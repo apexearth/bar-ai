@@ -196,6 +196,22 @@ int SmallConvCount(CCircuitUnit@ unit)
 // a pack grows contiguously; when nothing fits beside the pack any more, the
 // ECO band (the rear of the base grid) seeds the next pack. Serves every
 // caller that places a converter, pipeline and spill rules alike.
+// A fresh pack starts inside nano coverage when there is any: the turrets
+// build it at pack speed and the isolated-turret complaint (structures
+// nowhere near the con turrets) shrinks from both sides.
+bool ConvSeed(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
+{
+	AIFloat3 nn;
+	if (NanoCluster(nn)) {
+		const AIFloat3 s = ai.FindBuildSiteNear(def, nn, 400.f);
+		if (OnMap(s) && (ThreatFor(unit, s) <= CON_THREAT_VETO)) {
+			spot = s;
+			return true;
+		}
+	}
+	return Base::Spot(unit, def, Base::ECO, spot);
+}
+
 bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 {
 	const float pack = ai.GetTunable("apex_conv_pack", 180.f);
@@ -203,7 +219,7 @@ bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 	// one adjacent to the latest placement." The roll is what makes multiple
 	// masses form organically instead of only when a pack is physically full.
 	if (AiRandom(0, 99) < int(ai.GetTunable("apex_conv_new_pct", 5.f)))
-		return Base::Spot(unit, def, Base::ECO, spot);
+		return ConvSeed(unit, def, spot);
 	array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(def, gHomePos, 0.f);
 	if ((have !is null) && (have.length() > 0)) {
 		for (int i = int(have.length()) - 1; i >= 0; --i) {
@@ -220,7 +236,7 @@ bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 			break;             // the newest pack is full; seed a new one
 		}
 	}
-	return Base::Spot(unit, def, Base::ECO, spot);
+	return ConvSeed(unit, def, spot);
 }
 
 // THE CONVERTER PIPELINE: once a reactor stands, one advanced converter is

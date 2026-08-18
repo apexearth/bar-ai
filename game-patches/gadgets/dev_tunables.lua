@@ -93,6 +93,7 @@ local NAMES = {
 	"apex_nano_pack_r",      -- nano.as: tight search radius packing turrets against the block (180)
 	"apex_guard_per_income",  -- assist.as: income per extra shadow on one lead (60)
 	"apex_guard_reelect",    -- maketask.as: seconds between a guard's full re-elections (10)
+	"apex_idle_patrol_period", -- maketask.as: seconds between idle-builder patrol re-issues (45)
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",
