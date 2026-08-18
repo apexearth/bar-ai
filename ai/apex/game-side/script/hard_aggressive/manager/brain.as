@@ -1031,7 +1031,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		gDecideFrame = ai.frame;
 		gDecideCount = 0;
 	}
-	if (gDecideCount >= int(ai.GetTunable("apex_decide_per_frame", 3.f))) {
+	// The election TIME budget in maketask.as is the governor now; this count
+	// is only a runaway backstop, set far above normal bursts.
+	if (gDecideCount >= int(ai.GetTunable("apex_decide_per_frame", 12.f))) {
 		gDecideDeferred = true;
 		Perf::Note("mt.brain.defer");
 		return null;

@@ -314,7 +314,10 @@ CCircuitDef@ NextT2Counterpart()
 // the wall, then finish with T3. Gated on a real economy rather than a clock:
 // starting a gantry the economy cannot finish is the same trap an unaffordable
 // T2 plant was.
-const float T3_METAL_INCOME = 100.f;
+// Lowered 100->60 and tunable: apexearth 2026-08-18, "push up the timeline
+// on when we'll build a Gantry" -- also the performance lever, since T3 metal
+// is fewer, bigger units for the same army value.
+float T3_METAL_INCOME() { return ai.GetTunable("apex_t3_income", 60.f); }
 
 // Income alone is the wrong gate: a gantry is only worth starting from a
 // position that is not collapsing.
@@ -329,7 +332,7 @@ const float T3_ARMY_RATIO = 1.0f;
 // a gantry gets placed even while we are losing -- at high income a gantry is
 // a small fraction of one tick of income, so refusing to spend it on the
 // counter to what's killing us is wrong at any army ratio. See T3Worthwhile().
-const float T3_INCOME_URGENT = 150.f;
+float T3_INCOME_URGENT() { return ai.GetTunable("apex_t3_urgent", 110.f); }
 
 // One gantry per this much metal income, floor 1. No hard cap: the energy
 // bound below and the income term are the ceiling, and both scale.
@@ -345,7 +348,9 @@ const int   GANTRY_SURPLUS_BONUS = 4;
 // every rung above is gated on METAL income alone, which says nothing about that.
 // The bar is well above one plant's draw because the base has to keep running
 // too: factories, nanos and converters are all on the same grid.
-const float GANTRY_PER_ENERGY = 5000.f;
+// 5000 held the FIRST gantry hostage to a multi-fusion grid; a building
+// gantry draws ~600, so 3000 leaves the base 2400 while it works.
+float GANTRY_PER_ENERGY() { return ai.GetTunable("apex_gantry_per_energy", 3000.f); }
 
 // A T1 bot lab is wanted for the whole game, not just the opening: it is the
 // cheap assault spam and the only source of rez bots.
@@ -378,7 +383,7 @@ bool WantMoreGantries()
 	if (aiEconomyMgr.isMetalFull)
 		want += GANTRY_SURPLUS_BONUS;
 	// One gantry per GANTRY_PER_ENERGY of income, and none below it.
-	int engyWant = int(aiEconomyMgr.energy.income / GANTRY_PER_ENERGY);
+	int engyWant = int(aiEconomyMgr.energy.income / GANTRY_PER_ENERGY());
 	if (want > engyWant)
 		want = engyWant;
 	return int(gant.count) < want;
@@ -387,12 +392,12 @@ bool WantMoreGantries()
 bool T3Worthwhile()
 {
 	const float inc = aiEconomyMgr.metal.income;
-	if (inc <= T3_METAL_INCOME)
+	if (inc <= T3_METAL_INCOME())
 		return false;
 	// Above a large economy the two vetoes below block exactly the case they
 	// should permit -- enemy T3 already in the base is precisely what sets
 	// gTurtle and drags our armyCost below theirs -- so they stop applying.
-	if (inc >= T3_INCOME_URGENT)
+	if (inc >= T3_INCOME_URGENT())
 		return true;
 	if (Military::gTurtle)
 		return false;

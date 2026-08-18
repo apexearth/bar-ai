@@ -101,7 +101,7 @@ void NoteIdleElection(CCircuitUnit@ unit, IUnitTask@ result)
 }
 
 int gElectFrame = -1;
-int gElectCount = 0;
+double gElectUs = 0.0;
 // Builder id -> next frame its guard may be fully re-elected. GUARD is the one
 // build type Reevaluate re-elects every update even in range, so without this
 // hold every shadowing builder walked the whole ladder every update.
@@ -132,48 +132,30 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		}
 	}
 	Brain::gDecideDeferred = false;
-	// THE WHOLE LADDER IS BUDGETED PER FRAME, not just the Brain: at 8v8
-	// minute 55+ the engine sim alone eats ~24 of the 33ms frame budget, so
-	// the AI's allowance is what is left -- elections beyond the budget defer
-	// exactly like Brain deferrals (no backoff strike, the engine re-asks, a
-	// builder decides a few frames later instead of the frame melting).
+	// A TIME budget, never a count: the count budgets (2/frame, halved and
+	// frame-staggered when rich) rationed builder ACTIVITY to protect frame
+	// time, and stacked with the other throttles the builders visibly did
+	// nothing (apexearth, live 2026-08-18: "by far the largest issue in the
+	// game"). Elections now run freely until this frame has genuinely spent
+	// its election milliseconds; only then do the rest defer to the next
+	// frame. Cheap frames serve every builder; only an expensive frame
+	// rations, and only by what it measured, not by a guess.
 	// Commanders are never deferred.
 	if (!isCommander && (unit !is null)) {
 		if (gElectFrame != ai.frame) {
 			gElectFrame = ai.frame;
-			gElectCount = 0;
+			gElectUs = 0.0;
 		}
-		// Income-adaptive: a rich late game has 16 instances sharing one sim
-		// thread and thousands of units already paying the engine's own cost,
-		// so the budget halves exactly when each election is least urgent (a
-		// metal-full base loses nothing to a 10-frame decision).
-		// A FULL BANK EXEMPTS the halving and the stagger: the whole point of
-		// deferring elections cheaply is that "a metal-full base loses nothing
-		// to a 10-frame decision" -- but a metal-full base is losing income
-		// every frame it is not spending, so it is exactly the base that must
-		// elect at full rate (watched live 2026-08-18: everyone at the cap).
-		const bool rich = !aiEconomyMgr.isMetalFull
-				&& (aiEconomyMgr.metal.income
-					>= ai.GetTunable("apex_elect_rich_income", 150.f));
-		// Rich instances also STAGGER across alternate frames, offset by team
-		// id: 16 instances all electing on the same sim-thread frame is the
-		// cost floor, so half of them use even frames and half odd -- one
-		// extra frame of latency, half the per-frame bill.
-		if (rich && (((ai.frame + ai.teamId) & 1) == 1)) {
-			Brain::gDecideDeferred = true;
-			Perf::Note("mt.elect.defer");
-			return null;
-		}
-		const int electBudget = rich
-				? 1 : int(ai.GetTunable("apex_elect_per_frame", 2.f));
-		if (gElectCount >= electBudget) {
+		if (gElectUs > ai.GetTunable("apex_elect_ms", 6.f) * 1000.f) {
 			Brain::gDecideDeferred = true;   // reuse: skips NoteIdleElection
 			Perf::Note("mt.elect.defer");
 			return null;
 		}
-		++gElectCount;
 	}
+	const double electT0 = ai.ClockUs();
 	IUnitTask@ task = DefenceShareScreen(unit, isCommander, MakeTaskInner(unit));
+	if (!isCommander)
+		gElectUs += ai.ClockUs() - electT0;
 	@task = GuardBuildCapability(unit, task);
 	// A budget-deferred election is not a failed one: no backoff strike, the
 	// engine re-asks next pass and the same decision is made a frame later.

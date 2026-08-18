@@ -228,9 +228,30 @@ bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 			const AIFloat3 at = have[i].GetPos(ai.frame);
 			if (!OnMap(at))
 				continue;
+			// TILE, don't spiral: FindBuildSiteNear returns any legal site,
+			// which stepped the pack diagonally with half-cell offsets
+			// (apexearth's screenshot). Cardinal slots at a grid-true pitch
+			// first; the spiral is only the fallback, snapped onto the
+			// lattice so the pack cannot drift off it.
+			const float pitch = ai.GetTunable("apex_conv_grid_pitch", 32.f);
+			array<float> dx = {pitch, -pitch, 0.f, 0.f};
+			array<float> dz = {0.f, 0.f, pitch, -pitch};
+			for (uint k = 0; k < 4; ++k) {
+				AIFloat3 cand = at;
+				cand.x += dx[k];
+				cand.z += dz[k];
+				cand = ai.SnapBuildPos(def, cand);
+				if (!OnMap(cand))
+					continue;
+				const AIFloat3 tile = ai.FindBuildSiteNear(def, cand, pitch * 0.5f);
+				if (OnMap(tile) && (tile.distance2D(cand) <= pitch * 0.5f)) {
+					spot = ai.SnapBuildPos(def, tile);
+					return true;
+				}
+			}
 			const AIFloat3 site = ai.FindBuildSiteNear(def, at, pack);
 			if (OnMap(site)) {
-				spot = site;   // join the pack, touching its newest member
+				spot = ai.SnapBuildPos(def, site);
 				return true;
 			}
 			break;             // the newest pack is full; seed a new one

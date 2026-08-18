@@ -177,7 +177,7 @@ bool NanoSiteAt(CCircuitUnit@ unit, CCircuitDef@ want, CCircuitUnit@ fac,
 			if (OnMap(site) && (site.distance2D(fpos) <= NANO_ASSIST_R)
 					&& !Base::SiteTaken(Base::NANO, site)
 					&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
-				{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, site, sn)) site = sn; }
+				{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, site, sn)) site = sn; else site = ai.SnapBuildPos(want, site); }
 				Base::ReserveSite(site);
 				here = site;
 				return true;
@@ -187,7 +187,7 @@ bool NanoSiteAt(CCircuitUnit@ unit, CCircuitDef@ want, CCircuitUnit@ fac,
 	AIFloat3 site = ai.FindBuildSiteNear(want, fpos, NANO_ASSIST_R);
 	if (OnMap(site) && !Base::SiteTaken(Base::NANO, site)
 			&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
-		{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, site, sn)) site = sn; }
+		{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, site, sn)) site = sn; else site = ai.SnapBuildPos(want, site); }
 		Base::ReserveSite(site);
 		here = site;
 		return true;
@@ -381,14 +381,18 @@ bool SnapToNanoGrid(CCircuitUnit@ unit, CCircuitDef@ want,
 	if (anchor is null)
 		return false;
 	const AIFloat3 at = anchor.GetPos(ai.frame);
-	// 3x3 footprint = 24 elmos; touching centres one footprint apart.
-	const float pitch = ai.GetTunable("apex_nano_grid_pitch", 24.f);
+	// NOT the 24-elmo footprint: the engine grid (Pos2BuildPos) only lets an
+	// odd-footprint centre sit every 16 elmos, so a 24 pitch is impossible and
+	// the engine shoved every second turret 8 elmos -- the "off by half" in
+	// apexearth's screenshot. 32 is the tightest grid-true pitch.
+	const float pitch = ai.GetTunable("apex_nano_grid_pitch", 32.f);
 	array<float> dx = {pitch, -pitch, 0.f, 0.f};
 	array<float> dz = {0.f, 0.f, pitch, -pitch};
 	for (uint k = 0; k < 4; ++k) {
 		AIFloat3 cand = at;
 		cand.x += dx[k];
 		cand.z += dz[k];
+		cand = ai.SnapBuildPos(want, cand);
 		if (!OnMap(cand))
 			continue;
 		const AIFloat3 site = ai.FindBuildSiteNear(want, cand, pitch * 0.5f);
@@ -496,7 +500,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 					bigBuild.GetPos(ai.frame), NANO_ASSIST_R);
 			if (OnMap(site) && !Base::SiteTaken(Base::NANO, site)
 					&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
-				{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, site, sn)) site = sn; }
+				{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, site, sn)) site = sn; else site = ai.SnapBuildPos(want, site); }
 				Base::ReserveSite(site);
 				here = site;
 				sited = true;
@@ -508,7 +512,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	if (!sited && !BandSpot(unit, want, true, here))
 		return null;
 	if (!sited)
-		{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, here, sn)) here = sn; }
+		{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, here, sn)) here = sn; else here = ai.SnapBuildPos(want, here); }
 	// The birth rule, on EVERY path's final site: no reachable work, no turret.
 	if (!NanoCanReachWork(want, here))
 		return null;
