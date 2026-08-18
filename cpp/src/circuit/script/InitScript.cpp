@@ -333,6 +333,14 @@ static void CCircuitUnit_CmdAttackGround(CCircuitUnit* unit, const AIFloat3& pos
 	unit->CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY);
 }
 
+static void CCircuitUnit_CmdStop(CCircuitUnit* unit)
+{
+	try {
+		unit->CmdStop();
+	} catch (const std::exception& e) {
+	}
+}
+
 static int CCircuitUnit_GetStockpile(CCircuitUnit* unit)
 {
 	// Same inline guard as CCircuitUnit_CmdPriorityBuild above: TRY_UNIT wants
@@ -1155,6 +1163,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdAttackGround(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdAttackGround), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetStockpile()", asFUNCTION(CCircuitUnit_GetStockpile), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdStop()", asFUNCTION(CCircuitUnit_CmdStop), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// apex: for the commander D-gun raid want -- see CCircuitUnit_PushDGun's
 	// own comment for why script only needs to get close and push once.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdCloak(bool)", asFUNCTION(CCircuitUnit_CmdCloak), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

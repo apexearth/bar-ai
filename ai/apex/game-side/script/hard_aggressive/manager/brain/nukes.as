@@ -32,6 +32,8 @@ float gForgetR = 960.f;
 // of stacking in one crater. Silos rotate across it between launches.
 array<AIFloat3> gVolleySpots;
 uint gVolleyTick = 0;
+int gVolleyStock0 = 0;   // pooled stock when the volley launched
+int gVolleyNeed = 0;     // missiles this volley is sized to spend
 
 bool IsSiloDef(const CCircuitDef@ d)
 {
@@ -100,6 +102,19 @@ void UpdateNukes()
 	// launching 5 give them a little bit of area or line/curve so they don't
 	// land all in exactly the same spot."
 	if ((ai.frame < gVolleyUntil) && (stock > 0)) {
+		// THE VOLLEY SPENDS ITS SIZE, NOT THE WHOLE POOL: a 20-deep stockpile
+		// against a 1-missile target drained entirely into one window
+		// (apexearth: "we sent like 20 nukes there"). Fired = stock delta;
+		// at the sized count every silo stands down and the rest keeps
+		// saving for the next target.
+		if (gVolleyStock0 - stock >= gVolleyNeed) {
+			for (uint i = 0; i < silos.length(); ++i)
+				silos[i].CmdStop();
+			gVolleyUntil = ai.frame;
+			AiLog(Factory::T() + "apex: volley complete -- " + (gVolleyStock0 - stock)
+				+ " fired, " + stock + " saved");
+			return;
+		}
 		if (gVolleySpots.length() > 1) {
 			for (uint i = 0; i < silos.length(); ++i) {
 				const uint s = (i + gVolleyTick) % gVolleySpots.length();
@@ -189,8 +204,22 @@ void UpdateNukes()
 		silos[i].CmdAttackGround(gVolleySpots[i % gVolleySpots.length()]);
 	gVolleyAt = bestPos;
 	gVolleyUntil = ai.frame + 90 * SECOND;
+	gVolleyStock0 = stock;
+	gVolleyNeed = needed;
+	// COMMITTING THE VOLLEY SPENDS THE INTEL. Everything remembered in the
+	// whole target area is marked unseen NOW, not 30s later: the missiles are
+	// paid for, and until a scout or radar actually sights enemies there
+	// again (which un-hides them through the engine's own LOS events) the
+	// ground cannot re-qualify -- apexearth, after 20 nukes on one spot:
+	// "diminish the urge to send nukes to the same place until we sight
+	// enemies there again." Lag-proof by construction: no timer, only
+	// sighting revives a target.
+	const int spent = ai.ForgetEnemiesNear(bestPos,
+			ai.GetTunable("apex_nuke_resight_r", 1600.f));
+	AiLog(Factory::T() + "apex: nuke intel spent -- " + spent
+		+ " remembered enemies need re-sighting before this ground qualifies again");
 	gForgetAt = bestPos;
-	gForgetFrame = ai.frame + 30 * SECOND;   // flight time, then the ground is fact
+	gForgetFrame = ai.frame + 30 * SECOND;   // stragglers seen mid-flight
 	// The forget covers the whole spread line, not just the center blast.
 	gForgetR = 960.f + ai.GetTunable("apex_nuke_spread", 450.f)
 			* float(gVolleySpots.length() / 2);
