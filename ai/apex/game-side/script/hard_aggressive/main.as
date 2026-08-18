@@ -130,9 +130,22 @@ const uint FINISHED_RING = 4096;
 
 bool WasFinished(int id)
 {
-	for (uint i = 0; i < gFinishedIds.length(); ++i) {
-		if (gFinishedIds[i] == id)
+	// Binary search: unit ids are handed out monotonically and the ring
+	// appends in finish order, so it stays sorted (engine id REUSE after
+	// 32k units could break ordering; the ring's own 4096 bound makes that
+	// window negligible). The linear walk here ran twice per death and
+	// death-heavy battle frames at 12k units were the late-game spikes.
+	int lo = 0;
+	int hi = int(gFinishedIds.length()) - 1;
+	while (lo <= hi) {
+		const int mid = (lo + hi) / 2;
+		const int v = gFinishedIds[mid];
+		if (v == id)
 			return true;
+		if (v < id)
+			lo = mid + 1;
+		else
+			hi = mid - 1;
 	}
 	return false;
 }
@@ -168,6 +181,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
+	double hkT = Perf::T0();
 	const CCircuitDef@ cdef = unit.circuitDef;
 	const AIFloat3 at = unit.GetPos(ai.frame);
 	IUnitTask@ t = unit.task;
@@ -203,6 +217,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		+ " built=" + (WasFinished(int(unit.id)) ? 1 : 0)
 		+ " mob=" + (((cdef !is null) && cdef.IsMobile()) ? 1 : 0)
 		+ " hist=[" + hist + "]");
+	Perf::Add("hk.destroyed", hkT);
 }
 
 // Attribution arrives on a separate optional callback (the DLL fires it right
@@ -227,7 +242,9 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 {
 	if (edef is null)
 		return;
+	double hkT = Perf::T0();
 	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs);
+	Perf::Add("hk.enemydead", hkT);
 }
 
 }  // namespace Main

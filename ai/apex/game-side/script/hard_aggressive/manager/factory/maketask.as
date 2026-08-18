@@ -10,7 +10,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 	if (!ApexActive())
 		return aiFactoryMgr.DefaultMakeTask(unit);
+	double facT = Perf::T0();
+	IUnitTask@ facR = FacMakeInner(unit);
+	Perf::Add("mt.factory", facT);
+	return facR;
+}
 
+IUnitTask@ FacMakeInner(CCircuitUnit@ unit)
+{
 	FactoryDiag(unit);
 
 	IUnitTask@ t = AssistantWork(unit);
