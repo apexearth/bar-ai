@@ -483,6 +483,18 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// Requests decides whether that is a new one or joining one already
 	// requested. Neither the counter nor the cooldown moves for a join --
 	// nothing new was asked for.
+	// THE DEF MUST MATCH THE GROUND. A naval constructor reaching this rule
+	// gets the underwater def from FusionDef, and the rear-band spot is LAND
+	// -- watched live (8v8 mirror, t13: five dead coruwfus asks at a land
+	// position, fusCount=0 at 146 m/s while its bank piled). An underwater
+	// reactor on dry ground -- or a dry one on the seafloor -- is a permanent
+	// silent no-op, so the mismatch refuses before the ask counter moves.
+	if (okSpot && (want !is null)) {
+		const string wn = want.GetName();
+		const bool uw = (wn == armuwfus) || (wn == coruwfus);
+		if (uw != (spot.y < 0.f))
+			okSpot = false;
+	}
 	bool created = false;
 	IUnitTask@ post = null;
 	if (okSpot) {
