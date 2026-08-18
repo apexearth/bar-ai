@@ -346,7 +346,7 @@ string ValueWhy(int value)
 // constructor has to walk -- per-def lists that each return on their first hit
 // let whichever ran first take nearly everything. Ranking across the whole set
 // is the only way to express "prefer the target whose ground someone wants".
-CCircuitUnit@ ObsoletePick(const AIFloat3& in from, int skipId, int floorValue,
+CCircuitUnit@ ObsoletePick(const AIFloat3& in origin, int skipId, int floorValue,
 		bool haveBlocked, const AIFloat3& in blocked,
 		string& out defName, int& out value)
 {
@@ -362,7 +362,7 @@ CCircuitUnit@ ObsoletePick(const AIFloat3& in from, int skipId, int floorValue,
 	}
 
 	const bool sited = Base::Ready();
-	const AIFloat3 me = from;
+	const AIFloat3 me = origin;
 	CCircuitUnit@ pick = null;
 	float bestDist = 0.f;
 	for (uint i = 0; i < names.length(); ++i) {
@@ -627,10 +627,10 @@ void ObsoleteSweep()
 	// Rank from the blocked cell when there is one -- that is the ground
 	// someone is waiting for; otherwise from home. The walk-distance tiebreak
 	// happens naturally when the engine assigns the nearest constructor.
-	const AIFloat3 from = haveBlocked ? blocked : gHomePos;
+	const AIFloat3 origin = haveBlocked ? blocked : gHomePos;
 	string defName;
 	int value = 0;
-	CCircuitUnit@ pick = ObsoletePick(from, -1, floorValue, haveBlocked,
+	CCircuitUnit@ pick = ObsoletePick(origin, -1, floorValue, haveBlocked,
 			blocked, defName, value);
 	if (pick is null)
 		return;

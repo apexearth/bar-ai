@@ -199,7 +199,8 @@ def check_hubs(node, rel: str, rep: Report, path: str = "") -> None:
 
 
 def check_configs(cfg_root: Path, units: set[str], rep: Report,
-                  baseline: Path | None = None) -> None:
+                  baseline: Path | None = None,
+                  ref_units: set[str] | None = None) -> None:
     """Findings in a file byte-identical to the baseline belong to upstream.
 
     Stock BARb ships a dozen dead unit names (armuwmex, legplat, legamsub...).
@@ -232,8 +233,18 @@ def check_configs(cfg_root: Path, units: set[str], rep: Report,
                 if s not in seen and UNITISH.match(s) and not is_unit(s, units):
                     seen.add(s)
             for name in sorted(seen):
+                # A name the reference tree DOES know is not a typo: extra or
+                # upstream units are defined-but-unavailable in the pinned
+                # game, and an entry for one is inert until a game enables it
+                # -- exactly the forward-compat apexearth wants kept.
+                if ref_units and is_unit(name, ref_units):
+                    (rep.warn if ours else rep.note)(
+                        f"{rel}:{line_of(raw, name)}: '{name}' is upstream/"
+                        f"extra only -- inert in the pinned game, active "
+                        f"when a game ships it")
+                    continue
                 say(f"{rel}:{line_of(raw, name)}: '{name}' is not a unit def "
-                    f"-- requests for it are silently dropped")
+                    f"in ANY tree -- requests for it are silently dropped")
 
 
 def _norm(p: Path) -> bytes:
@@ -379,7 +390,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
 
     declared = check_engine_side(vdir, variant, rep)
     base = BASELINE / "config" if (BASELINE / "config").is_dir() else None
-    check_configs(cfg_root, units, rep, base)
+    check_configs(cfg_root, units, rep, base, ref_units=load_ref_units())
     if cfg_root.is_dir():
         check_parity(cfg_root, rep)
     check_angelscript(script_root, rep)
@@ -401,6 +412,17 @@ def check_variant(variant: str, units: set[str]) -> Report:
             rep.warn(f"profile '{p}' has no script/{p}/init.as")
 
     return rep
+
+
+def load_ref_units() -> set[str]:
+    """Unit names the reference tree (vendor/bar, upstream master) knows.
+
+    Superset context for extra/experimental units that are defined upstream
+    but absent or disabled in the pinned game."""
+    udir = bar_env.REPO / "vendor" / "bar" / "units"
+    if not udir.is_dir():
+        return set()
+    return {p.stem for p in udir.rglob("*.lua")}
 
 
 def load_units() -> set[str]:

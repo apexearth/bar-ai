@@ -71,7 +71,7 @@
 			//	"since": 300,
 			//	"limit": 1
 			//},
-			"legamsub": {
+			"legamphlab": {
 				"role": ["builder"],
 				"build_speed": 7.5 //bp 150
 			},
@@ -91,7 +91,7 @@
 				"since": 420,
 				"build_speed": 10.0 //bp 200
 			},
-			"legplat": {
+			"legsplab": {
 				"role": ["builder"],
 				"build_speed": 10.0,  //bp 200
 				"since": 420.0

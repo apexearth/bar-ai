@@ -1,14 +1,14 @@
 # Open issues — what is wrong with this AI right now
 
-## OPEN: three dead unit names in behaviour_leg.json — requests silently dropped (2026-08-18)
+## OPEN: secondary variants (ctl/ord/stk) still carry the guessed Legion names (2026-08-18)
 
-`tools/check.py`: `legamsub` (line 74), `leggantuw` (line 109), `legplat`
-(line 94) are not unit defs in the pinned tree, so whatever those entries
-were meant to buy never fires and nothing says so. Pre-existing (not from
-the 2026-08-18 batch). Water-flavored names, so low impact on the land maps
-we test — but each is a role/response slot Legion silently lacks. Fix by
-looking up the intended units with `tools/unitdef.py` (never a filename
-guess) and either correcting the names or deleting the entries.
+`legamsub`/`legplat` exist in NO tree — they were guessed mirrors of
+armamsub/armplat; Legion's real defs are `legamphlab` (both trees) and
+`legsplab` (upstream-only). Fixed in `ai/apex` 2026-08-18; `ai/ctl`,
+`ai/ord`, `ai/stk` behaviour_leg.json (and two block_map.json) still have
+them. `leggantuw` is correct and deliberately kept: apexearth wants
+defined-but-unavailable extra units tolerated as forward-compat, and
+check.py now warns rather than errors for names the reference tree knows.
 
 ## OPEN: late-game slowdown is now ENGINE world-state buildup, not AI code (2026-08-18)
 
