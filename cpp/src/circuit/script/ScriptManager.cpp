@@ -12,7 +12,6 @@
 #endif
 #include "CircuitAI.h"
 #include "util/FileSystem.h"
-#include "util/ExtAS.h"
 #include "util/Utils.h"
 #include "util/Profiler.h"
 
@@ -37,34 +36,6 @@ using namespace springai;
 std::string CScriptManager::initName("init");
 std::string CScriptManager::mainName("main");
 
-static void TracyZoneBegin([[maybe_unused]] CProfiler* profiler, const std::string& zoneName, uint32_t color = 0)
-{
-#ifdef CIRCUIT_PROFILING
-	asIScriptContext *ctx = asGetActiveContext();
-//	int column = 0;
-	const char *scriptSection = nullptr;
-	int line = ctx->GetLineNumber(0, nullptr/*&column*/, &scriptSection);
-	asIScriptFunction* func = ctx->GetFunction(0);
-	const char* decl = func->GetDeclaration(true, true, false);
-
-	CProfiler::TracyZoneBegin(line, scriptSection, decl, zoneName, color);
-#endif
-}
-
-static void TracyZoneText([[maybe_unused]] CProfiler* profiler, const std::string& text)
-{
-#ifdef CIRCUIT_PROFILING
-	CProfiler::TracyZoneText(text);
-#endif
-}
-
-static void TracyZoneEnd([[maybe_unused]] CProfiler* profiler)
-{
-#ifdef CIRCUIT_PROFILING
-	CProfiler::TracyZoneEnd();
-#endif
-}
-
 CScriptManager::CScriptManager(CCircuitAI* circuit)
 		: circuit(circuit)
 		, engine(nullptr)
@@ -80,14 +51,12 @@ CScriptManager::~CScriptManager()
 
 void CScriptManager::Init()
 {
-	// apex: AngelScript's documented contract (as_thread.cpp): the application
-	// must call asPrepareMultithread() before any other thread creates a script
-	// engine, or the shared thread manager's unguarded first-AddRef races.
-	// Multiple AI instances create engines on their own threads inside this one
-	// DLL; without this, a 1v1 elimination could destroy the manager the
-	// surviving instance was locking -- native crash at the commander blast
-	// (2026-08-18, seeds 120/121/123/127/130/131/132). Called once per process,
-	// never unprepared: the manager must outlive every engine.
+	// apex: AngelScript's documented contract (as_thread.cpp): call
+	// asPrepareMultithread() before any other thread creates a script engine,
+	// or the shared thread manager's unguarded first-AddRef races. Multiple AI
+	// instances create engines on their own threads inside this one DLL; a 1v1
+	// elimination could destroy the manager the surviving instance was locking
+	// (2026-08-18 commander-blast crash). Once per process, never unprepared.
 	static std::once_flag prepareThreads;
 	std::call_once(prepareThreads, []() { asPrepareMultithread(); });
 	// Create the script engine
@@ -102,7 +71,6 @@ void CScriptManager::Init()
 	r = engine->SetEngineProperty(asEP_USE_CHARACTER_LITERALS,             false); ASSERT(r >= 0);  // Default: false
 	r = engine->SetEngineProperty(asEP_ALLOW_MULTILINE_STRINGS,             true); ASSERT(r >= 0);  //** Default: false
 	r = engine->SetEngineProperty(asEP_ALLOW_IMPLICIT_HANDLE_TYPES,        false); ASSERT(r >= 0);  // Default: false
-	// Fine tuning
 	r = engine->SetEngineProperty(asEP_BUILD_WITHOUT_LINE_CUES,            false); ASSERT(r >= 0);  // Default: false
 	r = engine->SetEngineProperty(asEP_INIT_GLOBAL_VARS_AFTER_BUILD,        true); ASSERT(r >= 0);  // Default: true
 	r = engine->SetEngineProperty(asEP_REQUIRE_ENUM_SCOPE,                 false); ASSERT(r >= 0);  // Default: false
@@ -113,7 +81,6 @@ void CScriptManager::Init()
 	r = engine->SetEngineProperty(asEP_EXPAND_DEF_ARRAY_TO_TMPL,           false); ASSERT(r >= 0);  // Default: false
 	r = engine->SetEngineProperty(asEP_AUTO_GARBAGE_COLLECT,                true); ASSERT(r >= 0);  // Default: true
 	r = engine->SetEngineProperty(asEP_DISALLOW_GLOBAL_VARS,               false); ASSERT(r >= 0);  // Default: false
-	// Fine tuning
 	r = engine->SetEngineProperty(asEP_ALWAYS_IMPL_DEFAULT_CONSTRUCT,      false); ASSERT(r >= 0);  // Default: false
 	r = engine->SetEngineProperty(asEP_COMPILER_WARNINGS,                      2); ASSERT(r >= 0);  //** 0 - dismiss, 1 - emit, 2 - treat as error
 	r = engine->SetEngineProperty(asEP_DISALLOW_VALUE_ASSIGN_FOR_REF_TYPE, false); ASSERT(r >= 0);  // Default: false
@@ -138,7 +105,6 @@ void CScriptManager::Init()
 	// Enable JIT helper instructions; without these,
 	// the JIT will not be invoked
 	r = engine->SetEngineProperty(asEP_INCLUDE_JIT_INSTRUCTIONS, true); ASSERT(r >= 0);
-	r = engine->SetEngineProperty(asEP_JIT_INTERFACE_VERSION,       1); ASSERT(r >= 0);  // Default: 1
 	// Bind the JIT compiler to the engine
 	r = engine->SetJITCompiler(jit); ASSERT(r >= 0);
 #endif
@@ -153,11 +119,8 @@ void CScriptManager::Init()
 	RegisterScriptDictionary(engine);
 	RegisterScriptMath(engine);
 	aatc::RegisterAllContainers(engine);
-	RegisterTracyProfiler();
 
 	engine->SetContextCallbacks(CScriptManager::ProvideContext, CScriptManager::StoreContext, this);
-
-	engine->SetUserData(&typeInfoCache);
 }
 
 void CScriptManager::Release()
@@ -265,19 +228,12 @@ void CScriptManager::ReleaseContext(asIScriptContext* ctx)
 bool CScriptManager::Exec(asIScriptContext* ctx)
 {
 #ifdef CIRCUIT_PROFILING
-	const char* scriptSection = nullptr;
-	int row = 0, col = 0;
-	std::string declAt, nameFunc;
-	asIScriptFunction* func = ctx->GetFunction();
-	{ int r = func->GetDeclaredAt(&scriptSection, &row, &col); ASSERT(r >= 0); }
-	declAt.reserve(256);
-	declAt.append(scriptSection).append(":").append(std::to_string(row)).append(":").append(std::to_string(col));
-	nameFunc.reserve(256);
-	nameFunc.append("AS ").append(func->GetNamespace()).append("::").append(func->GetName());
 	ZoneScoped;
+	std::string nameFunc;
+	nameFunc.reserve(256);
+	nameFunc.append("AS ").append(ctx->GetFunction()->GetNamespace()).append("::").append(ctx->GetFunction()->GetName());
 	ZoneName(nameFunc.c_str(), nameFunc.size());
-	ZoneValue(func->GetId());
-	ZoneText(declAt.c_str(), declAt.size());
+	ZoneValue(ctx->GetFunction()->GetId());
 #endif
 
 	int r = ctx->Execute();
@@ -297,17 +253,6 @@ bool CScriptManager::Exec(asIScriptContext* ctx)
 		return false;
 	}
 	return true;
-}
-
-void CScriptManager::RegisterTracyProfiler()
-{
-	int r;
-	r = engine->RegisterObjectType("CProfiler", 0, asOBJ_REF | asOBJ_NOHANDLE); ASSERT(r >= 0);
-	r = engine->RegisterGlobalProperty("CProfiler tracy", &CProfiler::GetInstance()); ASSERT(r >= 0);
-
-	r = engine->RegisterObjectMethod("CProfiler", "void ZoneBegin(const string &in, uint32 = 0)", asFUNCTION(TracyZoneBegin), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CProfiler", "void ZoneText(const string &in)", asFUNCTION(TracyZoneText), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CProfiler", "void ZoneEnd()", asFUNCTION(TracyZoneEnd), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 }
 
 asIScriptContext* CScriptManager::ProvideContext(asIScriptEngine* engine, void* param)
