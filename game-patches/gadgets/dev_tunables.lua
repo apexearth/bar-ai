@@ -67,6 +67,8 @@ local NAMES = {
 	"apex_brain_roulette",    -- brain.as: 1 = score-proportional draw, 0 = argmax
 	"apex_air_home_wave",     -- air: non-lead aircraft mass at home, strike as a wave (1)
 	"apex_bomb_defend_aa",    -- air: enemy AA metal below which home defense may bomb armies (1000)
+	"apex_counter_t3_norm",   -- brain/statics: enemy heavy+super metal per doubling of pulsar/gantry wants (20000)
+	"apex_bomb_fat_mobile",   -- BombTask: heavy-role mobile above this metal is always bombable (4000)
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",

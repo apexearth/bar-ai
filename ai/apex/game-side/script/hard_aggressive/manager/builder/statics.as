@@ -25,6 +25,12 @@ int PulsarCap()
 	int cap = 1 + int(aiEconomyMgr.metal.income / PULSAR_PER_INCOME);
 	if (aiEconomyMgr.isMetalFull)
 		cap += PULSAR_FULL_BONUS;
+	// One more gun per enemy Behemoth-class unit seen: the pulsar is its
+	// direct counter, and an income-only cap read a T3 spam as no reason
+	// to thicken the line.
+	cap += int((aiEnemyMgr.GetEnemyCost(RT::SUPER)
+			+ aiEnemyMgr.GetEnemyCost(RT::HEAVY))
+			/ ai.GetTunable("apex_counter_t3_norm", 20000.f));
 	return cap;
 }
 // TWO TERMS: a flat per-player floor (basic cover, regardless of economy) plus

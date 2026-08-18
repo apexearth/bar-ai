@@ -119,6 +119,13 @@ void Update()
 			if (defendHome) gBomber1.DelAttribute(Unit::Attr::ANTI_STAT.type);
 			else            gBomber1.AddAttribute(Unit::Attr::ANTI_STAT.type);
 		}
+		// A bombing run never turns around: the bomb is the sortie's whole
+		// value and the flak is thickest on the way BACK OUT -- apexearth:
+		// "Air bombing attacks should never retreat. You'll take 75% losses
+		// and achieve nothing." Previously zeroed only at Release; a wave
+		// that took hits inbound still peeled home with bombs unspent.
+		if (gBomber !is null)  gBomber.SetRetreat(0.f);
+		if (gBomber1 !is null) gBomber1.SetRetreat(0.f);
 		// A held force does not hover through a base invasion: the same tight
 		// condition that permits army targets also releases whatever is massed.
 		if (defendHome && !gStrike && (Bombers() + Fighters() > 0))

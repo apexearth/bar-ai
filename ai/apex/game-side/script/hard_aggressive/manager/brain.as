@@ -1087,7 +1087,19 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		Propose(Simple("frontnano", FRONT_NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc"), false));
 
 	if (!preT2) {
-	Propose(Simple("gantry", GANTRY_VALUE, SideDef3("armshltx", "corgant", "leggant")));
+	// ENEMY T3 ON THE FIELD IS A STANDING DEMAND FOR ITS COUNTERS. Raw cost,
+	// not fresh: a Juggernaut seen once is still coming. Scaled against a
+	// Behemoth's own ~20k cost, so one of theirs roughly doubles the gantry
+	// (our own titans) and pulsar wants, a spam of them dominates the
+	// ranking -- apexearth: "the direct counters to these things are
+	// bombers, pulsars, and titans... we beat them in eco but we'll still
+	// lose if we don't properly counter their spam of these T3 units."
+	const float enemyT3 = aiEnemyMgr.GetEnemyCost(RT::SUPER)
+			+ aiEnemyMgr.GetEnemyCost(RT::HEAVY);
+	const float t3Mult = 1.f + enemyT3
+			/ ai.GetTunable("apex_counter_t3_norm", 20000.f);
+	Propose(Simple("gantry", GANTRY_VALUE * t3Mult,
+			SideDef3("armshltx", "corgant", "leggant")));
 	Propose(Simple("silo", SILO_VALUE, SideDef3("armsilo", "corsilo", "legsilo")));
 	// apexearth: "Antinuke should be standard for all games where nukes are
 	// allowed." Until this want existed, land maps had NO antinuke rule at all
@@ -1099,7 +1111,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// surplus is FOR (apexearth: "we literally need a line of them across the
 	// front of our bases... we're full on metal").
 	{
-		float pv = PULSAR_VALUE;
+		float pv = PULSAR_VALUE * t3Mult;
 		if (aiEconomyMgr.isMetalFull)
 			pv *= ai.GetTunable("apex_pulsar_full_mult", 2.f);
 		Propose(Simple("pulsar", pv, SideDef3("armanni", "cordoom", "legbastion")));

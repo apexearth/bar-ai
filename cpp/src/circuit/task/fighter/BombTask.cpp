@@ -298,9 +298,15 @@ void CBombTask::FindTarget()
 		if (edef != nullptr) {
 			// apex: ANTI_STAT skipped every mobile enemy, which excluded
 			// constructors -- the highest-value target for an eco raid. Builders
-			// and commanders stay eligible; other mobiles are still skipped.
+			// and commanders stay eligible; other mobiles are still skipped --
+			// EXCEPT the Behemoth class: a heavy-role mobile above
+			// apex_bomb_fat_mobile metal is a walking reactor, and bombers are
+			// one of its three direct counters (apexearth). The value-per-HP
+			// scoring then ranks it against static eco on its own merits.
+			const bool fatMobile = edef->IsRoleHeavy()
+					&& (edef->GetCostM() >= circuit->GetTunable("apex_bomb_fat_mobile", 4000.f));
 			const bool skipMobile = isAntiStatic && edef->IsMobile()
-					&& !edef->IsRoleBuilder() && !edef->IsRoleComm();
+					&& !edef->IsRoleBuilder() && !edef->IsRoleComm() && !fatMobile;
 			if ((edef->GetSpeed() > speed)
 				|| skipMobile
 				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore())
