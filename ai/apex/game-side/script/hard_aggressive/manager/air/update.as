@@ -50,7 +50,12 @@ void Intercept()
 		return;
 	if (Fighters() < int(ai.GetTunable("apex_intercept_min_fighters", 4.f)))
 		return;
-	array<Id>@ mates = ai.GetTeamIds();
+	// Cached: team composition never changes mid-game, and calling
+	// GetTeamIds thirty times a second is what exposed the binding's
+	// cross-engine bug in the first place.
+	if (gMatesCache is null)
+		@gMatesCache = ai.GetTeamIds();
+	array<Id>@ mates = gMatesCache;
 	if (mates is null)
 		return;
 	const float bar = ai.GetTunable("apex_intercept_min", 500.f);

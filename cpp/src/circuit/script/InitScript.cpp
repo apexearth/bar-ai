@@ -49,7 +49,6 @@ namespace circuit {
 using namespace springai;
 
 asITypeInfo* gUnitArrayType;  // cache
-asITypeInfo* gIdArrayType;  // cache
 
 CInitScript::SInitInfo::SInitInfo(const SInitInfo& o)
 {
@@ -302,8 +301,15 @@ static int CCircuitAI_GetLeadTeamId(CCircuitAI* circuit)
 
 static CScriptArray* CCircuitAI_GetTeamIds(CCircuitAI* circuit)
 {
+	// The type info MUST come from the calling instance's own engine: a
+	// DLL-global cache held whichever engine registered LAST, so every other
+	// instance built arrays with a foreign engine's type -- cross-engine heap
+	// corruption that crashed at commander-blast allocation storms once a
+	// caller ran hot (2026-08-18, seeds 121/123/127/130/131/132).
+	asITypeInfo* idArrayType =
+			asGetActiveContext()->GetEngine()->GetTypeInfoByDecl("array<Id>");
 	CAllyTeam* allyTeam = circuit->GetAllyTeam();
-	CScriptArray* arr = CScriptArray::Create(gIdArrayType, allyTeam->GetSize());
+	CScriptArray* arr = CScriptArray::Create(idArrayType, allyTeam->GetSize());
 	asUINT i = 0;
 	for (CAllyTeam::Id teamId : allyTeam->GetTeamIds()) {
 		*(CAllyTeam::Id*)arr->At(i++) = teamId;
@@ -1062,7 +1068,6 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetTeamUnitCount(bool) const", asFUNCTION(CCircuitAI_GetTeamUnitCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetSideId() const", asMETHOD(CCircuitAI, GetSideId), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "const string& GetSideName() const", asMETHOD(CCircuitAI, GetSideName), asCALL_THISCALL); ASSERT(r >= 0);
-	gIdArrayType = engine->GetTypeInfoByDecl("array<Id>");
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<Id>@ GetTeamIds() const", asFUNCTION(CCircuitAI_GetTeamIds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SendResources(float, float, int)", asFUNCTION(CCircuitAI_SendResources), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

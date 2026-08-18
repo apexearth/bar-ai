@@ -102,6 +102,7 @@ const string TV_HOMEZ   = "homez";
 int gNextRaidPub = 0;
 int gNextInterceptCmd = 0;
 int gInterceptTarget = -1;
+array<Id>@ gMatesCache = null;
 
 int  gAirLead      = -1;
 int  gLeadCheckedAt = -1000;
