@@ -423,10 +423,10 @@ float AggressionMult()
 	if ((ours <= 1.f) || (theirs <= 0.f))
 		return 1.f;
 	const float ratio = theirs / ours;
-	const float from = ai.GetTunable("apex_aggr_from", 0.5f);
-	if (ratio <= from)
+	const float fromRatio = ai.GetTunable("apex_aggr_from", 0.5f);
+	if (ratio <= fromRatio)
 		return 1.f;
-	float m = 1.f + ai.GetTunable("apex_aggr_defence", 1.f) * (ratio - from);
+	float m = 1.f + ai.GetTunable("apex_aggr_defence", 1.f) * (ratio - fromRatio);
 	const float capM = ai.GetTunable("apex_aggr_max", 3.f);
 	if (m > capM)
 		m = capM;
