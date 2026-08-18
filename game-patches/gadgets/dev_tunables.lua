@@ -86,6 +86,7 @@ local NAMES = {
 	"apex_fighter_per_bomber",-- facqueue.as: fighter cap per standing bomber (2, +4 base)
 	"apex_ghost_purge_secs",  -- CircuitAI: seconds a VISION-CONFIRMED-absent ghost survives (90)
 	"apex_ghost_stale_min",   -- CircuitAI: minutes a never-re-viewed ghost survives (15)
+	"apex_seen_cap_mult",     -- massing.as: enemy estimate ceiling as multiple of peak-seen-at-once (2.5)
 	"apex_pulsar_per_income", -- statics.as: metal/s per pulsar allowed (40)
 	"apex_pulsar_nano_fwd",   -- statics.as: nano-cluster fwd fraction to site the gun there (0.15)
 	"apex_nano_site_min",     -- nano.as: min build cost that attracts a nano beside it (1500)

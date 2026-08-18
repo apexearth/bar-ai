@@ -20,9 +20,32 @@ int gHoldSince = -1;
 // error (see EnemyFieldCost). apexearth: "We don't know how big they are
 // until its too late because we can't see them all" -- unknown must not read
 // as a small army, the same rule air already applies to unseen AA.
+// Rolling peak of RECENTLY-SEEN fighting cost -- apexearth: "if we have
+// seen 100 thugs in/out of fog over 90s but we've only ever seen at max 10
+// at one time... the enemy army is probably sized around ~10." Distinct
+// ids cycling through fog never double-count (verified in the registry),
+// so the case this catches is distinct units DYING unseen while the raw
+// count remembers them. The peak decays slowly (~3min half-life) so a real
+// army briefly hidden does not evaporate.
+float gSeenPeak = 0.f;
+
+float FreshMassingThreat()
+{
+	return aiEnemyMgr.GetEnemyCostFresh(RT::ASSAULT)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::RAIDER)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::RIOT)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::SKIRM)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::ARTY)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::AH)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::HEAVY)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::SUPER);
+}
+
 float EnemyMassingThreat()
 {
-	return aiEnemyMgr.GetEnemyCost(RT::ASSAULT)
+	const float fresh = FreshMassingThreat();
+	gSeenPeak = (fresh > gSeenPeak) ? fresh : (gSeenPeak * 0.9999f);
+	float raw = aiEnemyMgr.GetEnemyCost(RT::ASSAULT)
 	     + aiEnemyMgr.GetEnemyCost(RT::RAIDER)
 	     + aiEnemyMgr.GetEnemyCost(RT::RIOT)
 	     + aiEnemyMgr.GetEnemyCost(RT::SKIRM)
@@ -31,6 +54,13 @@ float EnemyMassingThreat()
 	     + aiEnemyMgr.GetEnemyCost(RT::HEAVY)
 	     + aiEnemyMgr.GetEnemyCost(RT::SUPER)
 	     + STATIC_DEFENSE_WEIGHT * aiEnemyMgr.GetEnemyCost(RT::STATIC);
+	// The sanity ceiling: a GENEROUS multiple of the most we ever saw at
+	// once, never the estimate itself -- limited sensor coverage makes the
+	// peak an undercount, and sizing on an undercount is the 2v6 regression.
+	const float cap = gSeenPeak * ai.GetTunable("apex_seen_cap_mult", 2.5f);
+	if ((gSeenPeak > 1.f) && (raw > cap))
+		raw = cap;
+	return raw;
 }
 
 // The size a group commits at, from the armies on the field.
