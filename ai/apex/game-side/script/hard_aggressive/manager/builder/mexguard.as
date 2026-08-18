@@ -531,10 +531,18 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 		// must cover every standing converter's drain plus this one's plus a
 		// working reserve, or the rung waits.
 		if (gen !is null) {
-			const float per = ai.GetTunable("apex_conv_drain", 70.f);
-			const float need = per * float(gen.count + 1)
-					+ ai.GetTunable("apex_conv_reserve", 100.f);
-			if (aiEconomyMgr.energy.income < need)
+			// SPARE, not a count formula: pull already includes every standing
+			// converter's upkeep, so the honest question is whether the FLOW
+			// can feed one more. The count arithmetic used here first
+			// (income >= 70 x (count+1) + 100) fixed the 1.3m stall but
+			// capped converters at income/70 late game and starved the
+			// convert chain apexearth expects to keep expanding. Big
+			// converters drain 600, not 70.
+			const bool bigConv = gen.costM > 100.f;
+			const float drain = bigConv ? Brain::CONVERT_DRAW_BIG
+					: ai.GetTunable("apex_conv_drain", 70.f);
+			if (Builder::EnergySpare()
+				< drain + ai.GetTunable("apex_conv_reserve", 50.f))
 				@gen = null;
 		}
 		}

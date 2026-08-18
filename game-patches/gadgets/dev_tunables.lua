@@ -76,7 +76,7 @@ local NAMES = {
 	"apex_nuke_spread",       -- nukes.as: step between volley aim points on the spread line (450)
 	"apex_front_from_min",    -- brain.as: game-minutes before proactive front-line spend starts (5)
 	"apex_conv_drain",        -- mexguard.as: energy/s one converter eats (70)
-	"apex_conv_reserve",      -- mexguard.as: spare energy income kept above converter drain (100)
+	"apex_conv_reserve",      -- mexguard.as: spare energy flow kept above the new converter drain (50)
 	"apex_assist_debounce",   -- assist.as: seconds between fallback offers per bot (5)
 	"apex_nuke_resight_r",    -- nukes.as: radius marked unseen at volley commit (1600)
 	"apex_nuke_repeat_decay", -- nukes.as: target value multiplier per prior volley on the same ground (0.5)
