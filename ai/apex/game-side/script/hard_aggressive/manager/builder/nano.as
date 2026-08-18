@@ -203,6 +203,8 @@ int gSurplusGantries = 0;
 const float GANTRY_SEARCH_WIDE = 2600.f;
 int gNextGantryFailLog = 0;
 int gGantrySiteFails = 0;
+int gBigBuildAt = -999;
+int gBigBuildId = -1;
 int gGantrySiteBackoffUntil = 0;
 
 IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
@@ -406,22 +408,33 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	// not low on metal." Unfinished = a struct unit that never hit
 	// AiUnitFinished; the fresh-nanoframe case IS the point.
 	if (!sited && richEnough) {
-		array<CCircuitUnit@>@ around = ai.GetOwnStructsNear(
-				unit.GetPos(ai.frame), 3000.f);
-		CCircuitUnit@ bigBuild = null;
-		float bigCost = ai.GetTunable("apex_nano_site_min", 1500.f);
-		if (around !is null) {
-			for (uint i = 0; i < around.length(); ++i) {
-				CCircuitUnit@ s = around[i];
-				if ((s is null) || (s.circuitDef is null)
-					|| Main::WasFinished(int(s.id)))
-					continue;
-				if (s.circuitDef.costM > bigCost) {
+		// Memoized per second, cheap fields checked FIRST: this scan ran per
+		// EcoNano call and put every struct through Main::WasFinished -- a
+		// linear 4096-ring walk -- which made op.econano the top section of a
+		// whole 8v8 sim (52.8s at 1223us/call). The cost filter drops all but
+		// a handful of candidates before any ring lookup, and the pick holds
+		// for 30 frames.
+		if (ai.frame - gBigBuildAt >= 30) {
+			gBigBuildAt = ai.frame;
+			gBigBuildId = -1;
+			array<CCircuitUnit@>@ around = ai.GetOwnStructsNear(
+					unit.GetPos(ai.frame), 3000.f);
+			float bigCost = ai.GetTunable("apex_nano_site_min", 1500.f);
+			if (around !is null) {
+				for (uint i = 0; i < around.length(); ++i) {
+					CCircuitUnit@ s = around[i];
+					if ((s is null) || (s.circuitDef is null)
+						|| (s.circuitDef.costM <= bigCost))
+						continue;
+					if (Main::WasFinished(int(s.id)))
+						continue;
 					bigCost = s.circuitDef.costM;
-					@bigBuild = s;
+					gBigBuildId = int(s.id);
 				}
 			}
 		}
+		CCircuitUnit@ bigBuild = (gBigBuildId >= 0)
+				? ai.GetTeamUnit(Id(gBigBuildId)) : null;
 		if (bigBuild !is null) {
 			const AIFloat3 site = ai.FindBuildSiteNear(want,
 					bigBuild.GetPos(ai.frame), NANO_ASSIST_R);
