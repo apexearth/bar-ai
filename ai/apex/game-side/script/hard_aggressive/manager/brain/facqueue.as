@@ -555,25 +555,6 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			want.insertLast(Factory::AIR_CON_MIN);
 			isFloor.insertLast(true);
 		}
-		// AIR SCOUTS ARE INTEL, NOT ARMY -- and intel demand is the MAP'S, not
-		// the income's. The income-scaled floor alone put 43 T2 radar planes
-		// over one Prismatic game at ~2k m/s (apexearth: "yes we do need radar
-		// planes too but certainly not 43"). The income term still gates how
-		// fast the fleet appears; the map bound says how many eyes the sky can
-		// possibly need.
-		CCircuitDef@ eye = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::SCOUT.type);
-		if ((eye !is null) && eye.IsAvailable(ai.frame)) {
-			int eyesN = 1 + int(aiEconomyMgr.metal.income
-					/ ai.GetTunable("apex_airscout_per", 60.f));
-			const int eyesCap = 2 + int(sqrt(float(AiTerrainWidth())
-					* float(AiTerrainHeight()))
-					/ ai.GetTunable("apex_airscout_map_per", 3000.f));
-			if (eyesN > eyesCap)
-				eyesN = eyesCap;
-			defs.insertLast(eye);
-			want.insertLast(eyesN);
-			isFloor.insertLast(true);
-		}
 		// TORPEDO BOMBERS ANSWER AN ENEMY IN THE WATER -- ABOVE the fighter and
 		// bomber floors, which at late-game income are ~50 aircraft each and
 		// would hold this small, urgent floor at the back of the queue exactly
@@ -614,6 +595,25 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			defs.insertLast(bomb);
 			want.insertLast(1 + int(aiEconomyMgr.metal.income
 					/ ai.GetTunable("apex_bomber_per", 40.f)));
+			isFloor.insertLast(true);
+		}
+		// AIR SCOUTS LAST: floors fill top-down, so eyes only draw once the
+		// fighters and bombers ahead of them are met -- apexearth: "Lower the
+		// priority on making scout/radar aircraft - they get themselves
+		// killed a lot... Fighters, gunships, and bombers should have more
+		// priority." Rate halved too (per 120 income, was 60); the map bound
+		// still caps the fleet.
+		CCircuitDef@ eye = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::SCOUT.type);
+		if ((eye !is null) && eye.IsAvailable(ai.frame)) {
+			int eyesN = 1 + int(aiEconomyMgr.metal.income
+					/ ai.GetTunable("apex_airscout_per", 120.f));
+			const int eyesCap = 2 + int(sqrt(float(AiTerrainWidth())
+					* float(AiTerrainHeight()))
+					/ ai.GetTunable("apex_airscout_map_per", 3000.f));
+			if (eyesN > eyesCap)
+				eyesN = eyesCap;
+			defs.insertLast(eye);
+			want.insertLast(eyesN);
 			isFloor.insertLast(true);
 		}
 	}

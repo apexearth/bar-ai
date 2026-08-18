@@ -22,7 +22,10 @@ int gPulsarsAsked = 0;
 // per-copy value decay, not by a fixed ceiling.
 int PulsarCap()
 {
-	int cap = 1 + int(aiEconomyMgr.metal.income / PULSAR_PER_INCOME);
+	// "A lot more" (apexearth, third pulsar request today): one per 40 m/s,
+	// was one per 60 -- income-derived, not a flat number.
+	int cap = 1 + int(aiEconomyMgr.metal.income
+			/ ai.GetTunable("apex_pulsar_per_income", 40.f));
 	if (aiEconomyMgr.isMetalFull)
 		cap += PULSAR_FULL_BONUS;
 	// One more gun per enemy Behemoth-class unit seen: the pulsar is its
@@ -517,7 +520,28 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	string where = "line";
 	bool sited = false;
 	const float span = Brain::TowerReach(gun);
-	if (span > 200.f) {
+	// THE NANO CLUSTER FIRST, when it sits toward the front: the turrets
+	// build the gun at lathe speed and repair it under fire -- apexearth:
+	// "we should make more pulsars near where our groupings of nano turrets
+	// are, towards the front of our bases." A rear (eco) cluster falls
+	// through to the front-line siting below.
+	{
+		AIFloat3 nn;
+		if (NanoCluster(nn)
+			&& (Military::ForwardFraction(nn)
+				>= ai.GetTunable("apex_pulsar_nano_fwd", 0.15f)))
+		{
+			const AIFloat3 s = ai.FindBuildSiteNear(gun, nn, 450.f);
+			if (OnMap(s) && (ThreatFor(unit, s) <= CON_THREAT_VETO)
+				&& !Builder::DefenceTaskNear(s, span * 0.5f))
+			{
+				spot = s;
+				where = "nano-cluster";
+				sited = true;
+			}
+		}
+	}
+	if (!sited && (span > 200.f)) {
 		array<AIFloat3> line;
 		if (Military::FrontLineSpots(line, span * 0.8f, span) && (line.length() > 0)) {
 			bool have = false;

@@ -385,6 +385,42 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 			sited = true;
 		}
 	}
+	// With the factories covered and metal healthy, the next-best lathe spot
+	// is the biggest build IN PROGRESS: a reactor going up alone takes
+	// minutes a nano beside it halves -- apexearth: "boost priority on
+	// making more nanos near the buildings we're trying to make when we are
+	// not low on metal." Unfinished = a struct unit that never hit
+	// AiUnitFinished; the fresh-nanoframe case IS the point.
+	if (!sited && richEnough) {
+		array<CCircuitUnit@>@ around = ai.GetOwnStructsNear(
+				unit.GetPos(ai.frame), 3000.f);
+		CCircuitUnit@ bigBuild = null;
+		float bigCost = ai.GetTunable("apex_nano_site_min", 1500.f);
+		if (around !is null) {
+			for (uint i = 0; i < around.length(); ++i) {
+				CCircuitUnit@ s = around[i];
+				if ((s is null) || (s.circuitDef is null)
+					|| Main::WasFinished(int(s.id)))
+					continue;
+				if (s.circuitDef.costM > bigCost) {
+					bigCost = s.circuitDef.costM;
+					@bigBuild = s;
+				}
+			}
+		}
+		if (bigBuild !is null) {
+			const AIFloat3 site = ai.FindBuildSiteNear(want,
+					bigBuild.GetPos(ai.frame), NANO_ASSIST_R);
+			if (OnMap(site) && !Base::SiteTaken(Base::NANO, site)
+					&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
+				Base::ReserveSite(site);
+				here = site;
+				sited = true;
+				AiLog(Factory::T() + "apex: nano sited at the "
+					+ bigBuild.circuitDef.GetName() + " build");
+			}
+		}
+	}
 	if (!sited && !BandSpot(unit, want, true, here))
 		return null;
 

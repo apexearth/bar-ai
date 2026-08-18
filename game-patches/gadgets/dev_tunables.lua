@@ -73,6 +73,9 @@ local NAMES = {
 	"apex_anti_cover",        -- nukes.as: antinuke coverage radius counted at a target (2500)
 	"apex_nuke_per_anti",     -- nukes.as: extra missiles saved per covering antinuke (8)
 	"apex_nuke_min_value",    -- nukes.as: cluster metal below which no warhead is spent (4000)
+	"apex_pulsar_per_income", -- statics.as: metal/s per pulsar allowed (40)
+	"apex_pulsar_nano_fwd",   -- statics.as: nano-cluster fwd fraction to site the gun there (0.15)
+	"apex_nano_site_min",     -- nano.as: min build cost that attracts a nano beside it (1500)
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",
