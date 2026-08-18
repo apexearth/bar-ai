@@ -518,6 +518,37 @@ void NanoTidy()
 			gNanoIds.removeAt(i);   // stale id; the unit is gone
 			continue;
 		}
+		// A STRANDED nano works nothing: no own structure but itself within
+		// lathe reach means its factory/anchor is gone. Reclaim it -- the
+		// metal returns and the nano wants rebuild where work actually is,
+		// which is the cheap form of "transport it somewhere useful"
+		// (apexearth: "a lot of nano turrets with nothing to do").
+		{
+			const AIFloat3 up = u.GetPos(ai.frame);
+			// Front nanos are army repair stations -- bare ground around them
+			// is their job, not strandedness. Rear/base band only.
+			if (Military::ForwardFraction(up) >= 0.35f)
+				continue;
+			array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(up,
+					u.circuitDef.GetBuildDistance() + 64.f);
+			int others = 0;
+			if (near !is null) {
+				for (uint k = 0; k < near.length(); ++k) {
+					if ((near[k] !is null) && (near[k].id != u.id))
+						++others;
+				}
+			}
+			if (others == 0) {
+				IUnitTask@ gone = aiBuilderMgr.Enqueue(
+						TaskB::Reclaim(Task::Priority::NORMAL, u));
+				if (gone !is null) {
+					AiLog(Factory::T() + "apex: stranded nano #" + u.id
+						+ " reclaimed -- nothing in reach");
+					gNanoIds.removeAt(i);
+					continue;
+				}
+			}
+		}
 		IUnitTask@ held = u.task;
 		if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
 			&& (held.GetBuildType() == Task::BuildType::RECLAIM))
