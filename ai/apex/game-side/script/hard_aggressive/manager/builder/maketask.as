@@ -653,6 +653,52 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 // Unit id -> next frame its idle patrol may be re-issued.
 dictionary gIdlePatrolNext;
 
+// CONSTRUCTOR CENSUS: apexearth sees cons standing idle that every idle net
+// misses -- which means they hold tasks they cannot execute. Every 30s, one
+// line per player: builders by task type, and how many have not MOVED since
+// the last sample split by whether they hold a build task. `still-build`
+// high = stuck build tasks (unreachable sites); `still-other` high = stuck
+// guards/retreats. Diagnosis first; the fix follows the census.
+dictionary gCensusPos;
+int gNextCensus = 0;
+
+void ConCensus()
+{
+	if (ai.frame < gNextCensus)
+		return;
+	gNextCensus = ai.frame + 30 * SECOND;
+	int nBuild = 0, nIdle = 0, nWait = 0, nRetreat = 0, nOther = 0;
+	int stillBuild = 0, stillOther = 0;
+	const uint n = Crew::gId.length();
+	for (uint i = 0; i < n; ++i) {
+		CCircuitUnit@ c = ai.GetTeamUnit(Id(Crew::gId[i]));
+		if (c is null)
+			continue;
+		IUnitTask@ t = c.task;
+		const int tt = (t is null) ? -1 : int(t.GetType());
+		bool isBuild = false;
+		if (tt == int(Task::Type::BUILDER)) { ++nBuild; isBuild = true; }
+		else if ((tt == int(Task::Type::IDLE)) || (tt == int(Task::Type::NIL))) ++nIdle;
+		else if (tt == int(Task::Type::WAIT)) ++nWait;
+		else if (tt == int(Task::Type::RETREAT)) ++nRetreat;
+		else ++nOther;
+		const AIFloat3 at = c.GetPos(ai.frame);
+		const string k = "" + Crew::gId[i];
+		string prev;
+		const string cur = int(at.x) + ":" + int(at.z);
+		if (gCensusPos.get(k, prev) && (prev == cur)) {
+			if (isBuild) ++stillBuild; else ++stillOther;
+		}
+		gCensusPos.set(k, cur);
+	}
+	if (n > 0) {
+		AiLog(Factory::T() + "apex: con census n=" + n + " build=" + nBuild
+			+ " idle=" + nIdle + " wait=" + nWait + " retreat=" + nRetreat
+			+ " other=" + nOther + " still-build=" + stillBuild
+			+ " still-other=" + stillOther);
+	}
+}
+
 void IdlePatrol(CCircuitUnit@ unit, bool isComm)
 {
 	if ((unit is null) || isComm || !unit.circuitDef.IsMobile())
