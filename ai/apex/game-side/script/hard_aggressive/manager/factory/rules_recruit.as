@@ -48,6 +48,9 @@ void FactoryDiag(CCircuitUnit@ unit)
 	}
 }
 
+int gNanoElectFrame = -1;
+int gNanoElectN = 0;
+
 IUnitTask@ AssistantWork(CCircuitUnit@ unit)
 {
 	// Nano turrets register with the FACTORY manager alongside factories, so
@@ -55,9 +58,28 @@ IUnitTask@ AssistantWork(CCircuitUnit@ unit)
 	// can produce a task for one, so an unconditional `return null` here left
 	// every turret permanently idle. Only DefaultMakeTask routes an assistant to
 	// CreateAssistTask, so hand it there directly.
+	//
+	// BUDGETED: DefaultMakeTask runs the engine's full assist election with
+	// its spatial scans, and 100+ idle turrets per player re-running it every
+	// pass was mt.factory's 203s -- the single largest script cost of a whole
+	// 8v8 sim (2.86ms/call, 71k calls). At most two turret elections per
+	// frame per player, staggered on team-id parity when rich; the rest wait
+	// a frame, which an idle turret cannot tell from waiting for work.
 	CCircuitDef@ nano = Builder::NanoDef();
-	if ((nano !is null) && (unit.circuitDef.id == nano.id))
+	if ((nano !is null) && (unit.circuitDef.id == nano.id)) {
+		if (gNanoElectFrame != ai.frame) {
+			gNanoElectFrame = ai.frame;
+			gNanoElectN = 0;
+		}
+		const bool rich = aiEconomyMgr.metal.income
+				>= ai.GetTunable("apex_elect_rich_income", 150.f);
+		if (rich && (((ai.frame + ai.teamId) & 1) == 1))
+			return null;
+		if (gNanoElectN >= 2)
+			return null;
+		++gNanoElectN;
 		return aiFactoryMgr.DefaultMakeTask(unit);
+	}
 	return null;
 }
 
