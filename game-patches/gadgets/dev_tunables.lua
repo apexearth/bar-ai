@@ -81,6 +81,7 @@ local NAMES = {
 	"apex_nuke_resight_r",    -- nukes.as: radius marked unseen at volley commit (1600)
 	"apex_nuke_repeat_decay", -- nukes.as: target value multiplier per prior volley on the same ground (0.5)
 	"apex_mex_none_ttl",      -- brain.as: seconds a no-open-mex answer holds (5)
+	"apex_elect_per_frame",   -- maketask.as: builder elections per frame per player (3)
 	"apex_pulsar_per_income", -- statics.as: metal/s per pulsar allowed (40)
 	"apex_pulsar_nano_fwd",   -- statics.as: nano-cluster fwd fraction to site the gun there (0.15)
 	"apex_nano_site_min",     -- nano.as: min build cost that attracts a nano beside it (1500)

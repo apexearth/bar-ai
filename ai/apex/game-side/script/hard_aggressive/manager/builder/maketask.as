@@ -100,6 +100,9 @@ void NoteIdleElection(CCircuitUnit@ unit, IUnitTask@ result)
 			+ strikes * int(ai.GetTunable("apex_idle_backoff", 2.f) * float(SECOND));
 }
 
+int gElectFrame = -1;
+int gElectCount = 0;
+
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 	const bool isCommander = (unit !is null)
@@ -107,6 +110,24 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (!isCommander && (unit !is null) && IdleBackoffHolds(unit))
 		return null;
 	Brain::gDecideDeferred = false;
+	// THE WHOLE LADDER IS BUDGETED PER FRAME, not just the Brain: at 8v8
+	// minute 55+ the engine sim alone eats ~24 of the 33ms frame budget, so
+	// the AI's allowance is what is left -- elections beyond the budget defer
+	// exactly like Brain deferrals (no backoff strike, the engine re-asks, a
+	// builder decides a few frames later instead of the frame melting).
+	// Commanders are never deferred.
+	if (!isCommander && (unit !is null)) {
+		if (gElectFrame != ai.frame) {
+			gElectFrame = ai.frame;
+			gElectCount = 0;
+		}
+		if (gElectCount >= int(ai.GetTunable("apex_elect_per_frame", 3.f))) {
+			Brain::gDecideDeferred = true;   // reuse: skips NoteIdleElection
+			Perf::Note("mt.elect.defer");
+			return null;
+		}
+		++gElectCount;
+	}
 	IUnitTask@ task = DefenceShareScreen(unit, isCommander, MakeTaskInner(unit));
 	@task = GuardBuildCapability(unit, task);
 	// A budget-deferred election is not a failed one: no backoff strike, the

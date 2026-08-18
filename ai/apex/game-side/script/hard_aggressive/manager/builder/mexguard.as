@@ -411,6 +411,17 @@ bool CoveredSpot(CCircuitUnit@ unit, CCircuitDef@ gen, AIFloat3& out spot)
 // energy-per-metal so advanced solar is reached on its own merit rather than as
 // a last-resort fallback nothing else owned. Bounded by demand, not a clock: we
 // stop when energy is already being wasted.
+// Half a second of memo per capability class: HomeEnergy walks the whole
+// generator ladder plus placement (1.8ms/call measured, and the Brain's
+// execute path calls it uncounted). Builders inside the window JOIN the
+// same generator via Requests::Take's dedup, which is the intended shape
+// anyway. Two slots because a T1 con and an adv con see different ladders;
+// a stall bypasses the memo outright -- panic is never stale.
+IUnitTask@ gHomeEnergyMemoT1;
+IUnitTask@ gHomeEnergyMemoAdv;
+int gHomeEnergyAtT1 = -999;
+int gHomeEnergyAtAdv = -999;
+
 IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 {
 	// The crew role decides who reaches this rule by default (a home constructor
@@ -421,6 +432,26 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	{
 		return null;
 	}
+	const bool advAsker = IsAdvConDef(unit);
+	if (!aiEconomyMgr.isEnergyStalling) {
+		IUnitTask@ memo = advAsker ? gHomeEnergyMemoAdv : gHomeEnergyMemoT1;
+		const int at = advAsker ? gHomeEnergyAtAdv : gHomeEnergyAtT1;
+		if (ai.frame - at < 15)
+			return ((memo !is null) && memo.IsDead()) ? null : memo;
+	}
+	IUnitTask@ fresh = HomeEnergyFresh(unit);
+	if (advAsker) {
+		@gHomeEnergyMemoAdv = fresh;
+		gHomeEnergyAtAdv = ai.frame;
+	} else {
+		@gHomeEnergyMemoT1 = fresh;
+		gHomeEnergyAtT1 = ai.frame;
+	}
+	return fresh;
+}
+
+IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
+{
 	// No metal-bank gate: the engine already refuses what it truly can't afford,
 	// and a solar pays back in seconds of income, so gating on bank state just
 	// leaves the crew idle. One of the two branches below always applies, so the
