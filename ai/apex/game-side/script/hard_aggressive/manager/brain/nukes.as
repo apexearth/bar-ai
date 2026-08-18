@@ -27,6 +27,40 @@ AIFloat3 gForgetAt;
 int gForgetFrame = -1;
 float gForgetR = 960.f;
 
+// EVERY REPEAT STRIKE HALVES THE GROUND'S WORTH. apexearth, after an
+// (amazing) volley turned into ~100 missiles at one spot: "each send should
+// diminish that value more and more." Not a cooldown -- a compounding value
+// dampener per ground, so the second volley needs a target twice as rich as
+// the first did, the fifth needs one 16x richer, and genuinely rebuilt
+// bases can still out-bid the skepticism. Persistent for the game; bounded.
+array<AIFloat3> gHitPos;
+array<int>      gHitN;
+
+int StrikesOn(const AIFloat3 &in p)
+{
+	for (uint i = 0; i < gHitPos.length(); ++i) {
+		if (gHitPos[i].SqDistance2D(p) < 900.f * 900.f)
+			return gHitN[i];
+	}
+	return 0;
+}
+
+void NoteStrikeOn(const AIFloat3 &in p)
+{
+	for (uint i = 0; i < gHitPos.length(); ++i) {
+		if (gHitPos[i].SqDistance2D(p) < 900.f * 900.f) {
+			++gHitN[i];
+			return;
+		}
+	}
+	gHitPos.insertLast(p);
+	gHitN.insertLast(1);
+	if (gHitPos.length() > 32) {
+		gHitPos.removeAt(0);
+		gHitN.removeAt(0);
+	}
+}
+
 // The volley's aim points: a line through the target, perpendicular to our
 // approach, stepped at apex_nuke_spread so the blasts tile the base instead
 // of stacking in one crater. Silos rotate across it between launches.
@@ -145,7 +179,14 @@ void UpdateNukes()
 		if (cost < minValue)
 			continue;
 		const int antis = AntisCovering(p);
-		const float score = cost / float(1 + antis);
+		float score = cost / float(1 + antis);
+		// The repeat-strike dampener: halved per prior volley on this ground.
+		const float decay = ai.GetTunable("apex_nuke_repeat_decay", 0.5f);
+		int hits = StrikesOn(p);
+		if (hits > 6)
+			hits = 6;
+		for (int h = 0; h < hits; ++h)
+			score *= decay;
 		if (score > bestScore) {
 			bestScore = score;
 			bestPos = p;
@@ -206,6 +247,7 @@ void UpdateNukes()
 	gVolleyUntil = ai.frame + 90 * SECOND;
 	gVolleyStock0 = stock;
 	gVolleyNeed = needed;
+	NoteStrikeOn(bestPos);
 	// COMMITTING THE VOLLEY SPENDS THE INTEL. Everything remembered in the
 	// whole target area is marked unseen NOW, not 30s later: the missiles are
 	// paid for, and until a scout or radar actually sights enemies there
