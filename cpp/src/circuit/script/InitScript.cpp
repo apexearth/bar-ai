@@ -377,6 +377,39 @@ static int CCircuitAI_ForgetEnemiesNear(CCircuitAI* circuit, const AIFloat3& pos
 	return n;
 }
 
+// apex: can a unit of this def WALK from `from` to `to`? The island question
+// ("do not build land army when alone on an island") is exactly this asked
+// about the T1 tank def from home to the enemy. Uses the terrain analysis's
+// own connected-area model: the area under `from` for this def's move type,
+// then CanMoveToPos to `to`. Immobile or flying defs answer true (they are
+// not walled by water).
+static bool CCircuitAI_CanDefReach(CCircuitAI* circuit, CCircuitDef* cdef,
+		const AIFloat3& from, const AIFloat3& to)
+{
+	if (cdef == nullptr) {
+		return false;
+	}
+	const int mtId = cdef->GetMobileId();
+	if (mtId < 0) {
+		return true;
+	}
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	terrain::SAreaData* areaData = terrainMgr->GetAreaData();
+	if ((areaData == nullptr) || (mtId >= (int)areaData->mobileType.size())) {
+		return false;
+	}
+	const int si = terrainMgr->GetSectorIndex(from);
+	terrain::SMobileType& mt = areaData->mobileType[mtId];
+	if ((si < 0) || (si >= (int)mt.sector.size())) {
+		return false;
+	}
+	terrain::SArea* area = mt.sector[si].area;
+	if (area == nullptr) {
+		return false;
+	}
+	return terrainMgr->CanMoveToPos(area, to);
+}
+
 // apex: how many of a given enemy def stand within radius of pos -- the
 // "count the antinukes covering this spot" primitive, generic on purpose.
 static int CCircuitAI_CountEnemyDefNear(CCircuitAI* circuit, int defId,
@@ -1000,6 +1033,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 SnapBuildPos(CCircuitDef@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_SnapBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetEnemyTeamSize() const", asMETHOD(CCircuitAI, GetEnemyTeamSize), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int CountEnemyDefNear(int, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CountEnemyDefNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReach(CCircuitDef@, const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_CanDefReach), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int ForgetEnemiesNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_ForgetEnemiesNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);

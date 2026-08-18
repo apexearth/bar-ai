@@ -38,6 +38,9 @@ IUnitTask@ RezzerFlee(CCircuitUnit@ unit)
 	return null;
 }
 
+uint gRezSweepIdx = 0;
+int gNextRezSweepLog = 0;
+
 IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 {
 	// Rez bots work the DEFENCE LINE, not wherever they happen to stand. The
@@ -49,9 +52,45 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 	// most corpses.
 	if (IsRezzer(unit) && (ai.frame >= gNextRezWreck)
 			&& (Military::LosingGround() || (ai.GetBestWreckPos(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN).x < 0.f))) {
+		gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
+		// THE WHOLE LINE, NOT ONE POINT -- and blind where vision is missing.
+		// A single FrontLinePos search per period left most of a 10k-elmo
+		// front untouched, and wreck queries are LOS-gated (a corpse field
+		// nobody stands in reads empty), so the battlefield accumulated
+		// thousands of features that the engine then pays for every frame --
+		// measured live (8v8, min 34->55): engine sim 15->28ms/frame, the
+		// late-game slowdown itself. Successive sweeps rotate across the
+		// front stretches; a stretch with no KNOWN wreck is swept blind --
+		// the bot's own arrival provides the vision and the area reclaim
+		// eats whatever stands there. An empty blind sweep costs one walk by
+		// a bot that had nothing local to do anyway.
+		array<AIFloat3> line;
+		if (Military::FrontLineSpots(line, WRECK_RADIUS * 1.5f, WRECK_RADIUS)
+			&& (line.length() > 0))
+		{
+			for (uint tryN = 0; tryN < line.length(); ++tryN) {
+				const AIFloat3 stretch = line[gRezSweepIdx % line.length()];
+				++gRezSweepIdx;
+				if (ThreatFor(unit, stretch) > CON_THREAT_VETO)
+					continue;
+				AIFloat3 spoil = ai.GetBestWreckPos(stretch, WRECK_SEARCH, WRECK_MIN);
+				if (spoil.x < 0.f)
+					spoil = stretch;
+				IUnitTask@ harvest = aiBuilderMgr.Enqueue(TaskB::Reclaim(
+						Task::Priority::HIGH, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+				if (harvest !is null) {
+					if (ai.frame >= gNextRezSweepLog) {
+						gNextRezSweepLog = ai.frame + 60 * SECOND;
+						AiLog(Factory::T() + "apex: rez sweep stretch "
+							+ (gRezSweepIdx % line.length()) + "/" + line.length());
+					}
+					return harvest;
+				}
+				break;
+			}
+		}
 		AIFloat3 front;
 		if (Military::FrontLinePos(front)) {
-			gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
 			const AIFloat3 spoil = ai.GetBestWreckPos(front, WRECK_SEARCH, WRECK_MIN);
 			if (spoil.x >= 0.f) {
 				IUnitTask@ harvest = aiBuilderMgr.Enqueue(TaskB::Reclaim(

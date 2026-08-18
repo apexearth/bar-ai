@@ -900,6 +900,16 @@ int CCircuitAI::Update(int frame)
 	// apex: squad sizes, ours against the enemy's, on one comparable line per
 	// 30s. Ours = units on ATTACK/DEFEND tasks; theirs = mobile armed units per
 	// enemy cluster -- the mass that actually arrives, whatever their AI calls it.
+	// apex: purge stale enemy ghosts, once per ally team (the registry is
+	// shared) on a slow cadence. See CEnemyManager::PurgeStaleGhosts.
+	if ((frame >= ghostPurgeNext) && (enemyManager != nullptr) && (allyTeam != nullptr)
+		&& (allyTeam->GetLeaderId() == skirmishAIId))
+	{
+		ghostPurgeNext = frame + FRAMES_PER_SEC * 30;
+		const int maxAge = (int)(GetTunable("apex_ghost_purge_min", 10.f)
+				* 60.f * FRAMES_PER_SEC);
+		enemyManager->PurgeStaleGhosts(frame, maxAge);
+	}
 	if ((frame >= squadDiagNextLog) && (militaryManager != nullptr) && (enemyManager != nullptr)) {
 		squadDiagNextLog = frame + 900;
 		int nOwn = 0, uOwn = 0, mOwn = 0;

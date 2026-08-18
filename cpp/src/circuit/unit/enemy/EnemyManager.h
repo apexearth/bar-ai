@@ -72,6 +72,7 @@ public:
 
 	void UnregisterEnemyUnit(CEnemyUnit* data);
 	void DyingEnemy(CEnemyUnit* enemy, int frame);
+	void PurgeStaleGhosts(int frame, int maxAgeFrames);
 private:
 	void DyingEnemy(CEnemyUnit* enemy);
 	void DeleteEnemyUnit(CEnemyUnit* data);

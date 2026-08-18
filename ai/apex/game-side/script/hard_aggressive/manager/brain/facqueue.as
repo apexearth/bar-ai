@@ -262,6 +262,11 @@ int T2CoreWanted()
 // cannot yet hold anything.
 bool T2ArmyShort(CCircuitUnit@ fac)
 {
+	// Same island gate as T1ArmyShort: a land line builds no walkers it
+	// cannot deliver.
+	if (Factory::AloneOnIsland() && !Factory::IsAirFactory(fac.circuitDef)
+		&& !Factory::IsNavalFactory(fac.circuitDef))
+		return false;
 	if ((Factory::userData[fac.circuitDef.id].attr & Factory::Attr::T2) == 0)
 		return false;
 	CCircuitDef@ acon = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::BUILDER2);
@@ -296,6 +301,11 @@ int T1CoreWanted()
 // HEAVY/AH/AHA are T2ArmyShort's own core and are not what a T1 lab offers.
 bool T1ArmyShort(CCircuitUnit@ fac)
 {
+	// Land army on an island walks nowhere -- apexearth: "not make land army
+	// when it is on an island alone." Naval and air lines are unaffected.
+	if (Factory::AloneOnIsland() && !Factory::IsAirFactory(fac.circuitDef)
+		&& !Factory::IsNavalFactory(fac.circuitDef))
+		return false;
 	const int attr = Factory::userData[fac.circuitDef.id].attr;
 	if ((attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
 		return false;      // T2ArmyShort covers a line that has already teched

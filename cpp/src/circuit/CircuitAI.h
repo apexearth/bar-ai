@@ -539,6 +539,7 @@ private:
 	unsigned perfFrameCalls = 0;
 	int perfFrameNextLog = 0;
 	int squadDiagNextLog = 0;
+	int ghostPurgeNext = 0;
 	int skirmishAIId;
 	int teamId;
 	int allyTeamId;

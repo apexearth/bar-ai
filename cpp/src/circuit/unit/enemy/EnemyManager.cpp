@@ -379,6 +379,30 @@ void CEnemyManager::DyingEnemy(CEnemyUnit* enemy, int frame)
 	DyingEnemy(enemy);
 }
 
+// apex: GHOSTS ONLY GROW. A unit killed out of LOS never sends
+// EnemyDestroyed, so its entry lives forever -- by minute 60 of an 8v8 the
+// registry holds every enemy that ever existed, and every consumer that
+// walks it (PrepareUpdate, per-def scans, the stock BombTask) pays a cost
+// proportional to game AGE, not to the live world; measured as the AI-C++
+// 6->9 s/min late-game creep. A ghost hidden and unseen for maxAgeFrames
+// dies through the SAME DyingEnemy pipeline a real death uses, so every
+// counter and per-circuit view stays consistent. Re-sighting a purged spot
+// re-registers the unit fresh -- behaviour preserved, memory bounded. The
+// deliberate cost: GetEnemyCost pessimism decays past the purge age, which
+// is also what stopped the repeat-nuking of long-dead ground.
+void CEnemyManager::PurgeStaleGhosts(int frame, int maxAgeFrames)
+{
+	for (CEnemyUnit* e : enemyUpdates) {
+		if ((e == nullptr) || e->IsDying() || !e->IsHidden()) {
+			continue;
+		}
+		const int seen = e->GetSeenFrame();
+		if ((seen >= 0) && (frame - seen > maxAgeFrames)) {
+			DyingEnemy(e, frame);
+		}
+	}
+}
+
 void CEnemyManager::DyingEnemy(CEnemyUnit* enemy)
 {
 	enemyDying.insert(enemy);

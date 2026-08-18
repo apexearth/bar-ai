@@ -75,6 +75,20 @@ bool IsSmallTeam()
 // const handle: CCircuitUnit::circuitDef is a const CCircuitDef@, and a
 // non-const parameter refuses it outright. The other two callers pass mutable
 // handles, which a const parameter still accepts.
+array<string> NAVAL_FAC = {armsy, armasy, corsy, corasy, legsy};
+
+bool IsNavalFactory(const CCircuitDef@ def)
+{
+	if (def is null)
+		return false;
+	const string n = def.GetName();
+	for (uint i = 0; i < NAVAL_FAC.length(); ++i) {
+		if (NAVAL_FAC[i] == n)
+			return true;
+	}
+	return false;
+}
+
 bool IsAirFactory(const CCircuitDef@ def)
 {
 	if (def is null)
@@ -129,6 +143,35 @@ bool MayOpenAir()
 // Ground opening when the default picks air. An even bot/vehicle split; bots
 // climb terrain vehicles cannot and carry the rez bot, vehicles bring the
 // heavier guns on open ground.
+// ALONE ON AN ISLAND, LAND ARMY IS DEAD WEIGHT -- apexearth: "make our AI
+// smart enough to not make land army when it is on an island alone." The
+// question is the terrain analysis's own: can this side's basic tank WALK
+// from home to the enemy? Cached once the answer is real (both positions
+// known); re-asked until then. When false, the opening goes naval/air and
+// the T1 core skips land roles (see facqueue's use).
+int gIslandState = -1;   // -1 unknown, 0 connected, 1 island
+
+bool AloneOnIsland()
+{
+	if (gIslandState >= 0)
+		return gIslandState == 1;
+	if (!Builder::gHomeSet)
+		return false;
+	const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(e))
+		return false;
+	CCircuitDef@ walker = SideDef3("armstump", "corraid", "leggob");
+	if (walker is null)
+		@walker = SideDef3("armpw", "corak", "leggob");
+	if (walker is null)
+		return false;
+	gIslandState = ai.CanDefReach(walker, Builder::gHomePos, e) ? 0 : 1;
+	if (gIslandState == 1)
+		AiLog(Factory::T() + "apex: ISLAND START -- no land path to the enemy,"
+			+ " land army suppressed");
+	return gIslandState == 1;
+}
+
 CCircuitDef@ GroundOpening()
 {
 	const string side = ai.GetSideName();
