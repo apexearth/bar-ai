@@ -125,8 +125,18 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// thread and thousands of units already paying the engine's own cost,
 		// so the budget halves exactly when each election is least urgent (a
 		// metal-full base loses nothing to a 10-frame decision).
-		const int electBudget = (aiEconomyMgr.metal.income
-				>= ai.GetTunable("apex_elect_rich_income", 150.f))
+		const bool rich = aiEconomyMgr.metal.income
+				>= ai.GetTunable("apex_elect_rich_income", 150.f);
+		// Rich instances also STAGGER across alternate frames, offset by team
+		// id: 16 instances all electing on the same sim-thread frame is the
+		// cost floor, so half of them use even frames and half odd -- one
+		// extra frame of latency, half the per-frame bill.
+		if (rich && (((ai.frame + ai.teamId) & 1) == 1)) {
+			Brain::gDecideDeferred = true;
+			Perf::Note("mt.elect.defer");
+			return null;
+		}
+		const int electBudget = rich
 				? 1 : int(ai.GetTunable("apex_elect_per_frame", 2.f));
 		if (gElectCount >= electBudget) {
 			Brain::gDecideDeferred = true;   // reuse: skips NoteIdleElection
