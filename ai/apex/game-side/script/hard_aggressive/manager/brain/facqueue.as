@@ -578,9 +578,19 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		// whatever slots survive the ground lines.
 		CCircuitDef@ wing = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::AA.type);
 		if ((wing !is null) && wing.IsAvailable(ai.frame)) {
+			// ESCORT RATIO, not an independent income curve: fighters loiter
+			// and live while bombers die striking, so an income-only floor
+			// built "a whole ton of fighters" beside an empty bomber pool
+			// (apexearth, watching). The income term still applies, capped
+			// at twice the standing bombers plus a base air-cover four.
+			int fWant = 1 + int(aiEconomyMgr.metal.income
+					/ ai.GetTunable("apex_fighter_per", 40.f));
+			const int fCap = 4 + Air::Bombers()
+					* int(ai.GetTunable("apex_fighter_per_bomber", 2.f));
+			if (fWant > fCap)
+				fWant = fCap;
 			defs.insertLast(wing);
-			want.insertLast(1 + int(aiEconomyMgr.metal.income
-					/ ai.GetTunable("apex_fighter_per", 40.f)));
+			want.insertLast(fWant);
 			isFloor.insertLast(true);
 		}
 		// BOMBERS ARE THE AIR ARM'S ARMY. The mix path leaves the BOMBER role to

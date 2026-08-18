@@ -81,11 +81,12 @@ void ReArm()
 {
 	if (!gStrike)
 		return;
-	int have = 0;
-	if (gBomber !is null) have += gBomber.count;
-	if (gFighter !is null) have += gFighter.count;
-	if (gBomber1 !is null) have += gBomber1.count;
-	if (gFighter1 !is null) have += gFighter1.count;
+	// BOMBERS ONLY: the strike force IS the bombers; fighters loiter at home
+	// and rarely die, so counting them kept `have` above the bar forever --
+	// gStrike never re-armed and every bomber built after the first strike
+	// released SOLO into defended airspace (apexearth, watching: "the few
+	// bombers that I do see are just solo attacking").
+	const int have = Bombers();
 	if (have >= STRIKE_SPENT_BELOW)
 		return;
 	gStrike = false;

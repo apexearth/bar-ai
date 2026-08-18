@@ -83,6 +83,7 @@ local NAMES = {
 	"apex_mex_none_ttl",      -- brain.as: seconds a no-open-mex answer holds (5)
 	"apex_elect_per_frame",   -- maketask.as: builder elections per frame per player (2; 1 when rich)
 	"apex_elect_rich_income", -- maketask.as: income at which the election budget halves (150)
+	"apex_fighter_per_bomber",-- facqueue.as: fighter cap per standing bomber (2, +4 base)
 	"apex_pulsar_per_income", -- statics.as: metal/s per pulsar allowed (40)
 	"apex_pulsar_nano_fwd",   -- statics.as: nano-cluster fwd fraction to site the gun there (0.15)
 	"apex_nano_site_min",     -- nano.as: min build cost that attracts a nano beside it (1500)
