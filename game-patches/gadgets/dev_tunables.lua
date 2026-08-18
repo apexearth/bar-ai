@@ -98,6 +98,7 @@ local NAMES = {
 	"apex_t3_income",        -- factorydefs.as: metal income where T3 becomes worthwhile (60)
 	"apex_t3_urgent",        -- factorydefs.as: metal income where T3 skips the army-ratio veto (110)
 	"apex_gantry_per_energy", -- factorydefs.as: energy income per gantry allowed (3000)
+	"apex_assist_per_income", -- obsolete.as: metal income per assist bot allowed (10)
 	"apex_guard_per_income",  -- assist.as: income per extra shadow on one lead (60)
 	"apex_guard_reelect",    -- maketask.as: seconds between a guard's full re-elections (10)
 	"apex_idle_patrol_period", -- maketask.as: seconds between idle-builder patrol re-issues (45)

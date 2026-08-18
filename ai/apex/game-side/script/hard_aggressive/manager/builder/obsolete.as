@@ -182,9 +182,13 @@ CCircuitDef@ AssistBotDef()
 
 void UpdateEconomicCaps()
 {
-	int want = 2 + int(aiEconomyMgr.metal.income / ASSIST_PER_INCOME);
-	if (aiEconomyMgr.isMetalFull)
-		want *= 2;
+	// income/3, doubled at a full bank, allowed 100-200 assist bots -- the
+	// wandering builder crowd apexearth kept seeing ("we build far more
+	// builders than we need"). A turret is the better build-power sink and
+	// already takes the full-bank bonus, so the bots stay a small mobile
+	// complement that scales gently.
+	int want = 2 + int(aiEconomyMgr.metal.income
+			/ ai.GetTunable("apex_assist_per_income", 10.f));
 	const int ceiling = CapShare(ASSIST_CAP_SHARE);
 	if (want > ceiling)
 		want = ceiling;

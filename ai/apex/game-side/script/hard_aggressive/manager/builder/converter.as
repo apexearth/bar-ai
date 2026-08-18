@@ -384,10 +384,13 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	// Share, not truth: leave enough builders doing ordinary work.
 	if (aiBuilderMgr.GetWorkerCount() <= CONVERT_CON_FLOOR)
 		return null;
-	// Only what the grid can actually feed. Self-limiting -- every converter
-	// raises pull, so spare falls and this stops on its own.
-	const float spare = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
-	if (spare < CONVERT_MIN_SPARE)
+	// A FULL STORE IS LICENSE, whatever income-pull says: with storage at the
+	// cap every joule beyond pull is binned, yet pull tracking income made
+	// spare read ~0 and this gate refused converters while the team wasted
+	// millions of energy (apexearth, live 2026-08-18: "we are full of energy
+	// ... they could be making energy converters"). EnergyWasting() is the
+	// same self-limiting signal with the full-store case handled.
+	if (!EnergyWasting())
 		return null;
 
 	// The T1 converter is what THIS constructor can build: armck/armcv carry

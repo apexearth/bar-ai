@@ -541,8 +541,9 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 			const bool bigConv = gen.costM > 100.f;
 			const float drain = bigConv ? Brain::CONVERT_DRAW_BIG
 					: ai.GetTunable("apex_conv_drain", 70.f);
-			if (Builder::EnergySpare()
-				< drain + ai.GetTunable("apex_conv_reserve", 50.f))
+			if (!aiEconomyMgr.isEnergyFull
+				&& (Builder::EnergySpare()
+					< drain + ai.GetTunable("apex_conv_reserve", 50.f)))
 				@gen = null;
 		}
 		}
