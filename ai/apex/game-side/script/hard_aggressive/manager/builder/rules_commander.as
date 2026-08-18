@@ -208,6 +208,32 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				AiLog(Factory::T() + "apex: commander retreating at "
 					+ formatFloat(hp * 100.f, "", 0, 0) + "% health, frame=" + ai.frame);
 			}
+			// CRITICAL HEALTH: CRetreatTask walks to the haven, and the haven
+			// is the base being overrun -- watched live 2026-08-18, eight
+			// re-elections while health fell 81% -> 40% -> dead in place.
+			// Below this bar the commander is STEERED instead: a raw move
+			// directly away from the enemy centroid, re-issued every election
+			// (commanders are exempt from idle backoff), and null so no task
+			// walks it back into the blast.
+			if (hp < ai.GetTunable("apex_comm_flee_hp", 0.55f)) {
+				AIFloat3 here = unit.GetPos(ai.frame);
+				AIFloat3 away = here - aiEnemyMgr.GetEnemyPos();
+				if (away.SqLength2D() > NEAR_ZERO) {
+					away.SafeNormalize2D();
+					for (int step = 3; step >= 1; --step) {
+						AIFloat3 to = here + away * (250.f * float(step));
+						if (OnMap(to)) {
+							unit.CmdMoveTo(to);
+							if (ai.frame >= gNextRetreatLog) {
+								gNextRetreatLog = ai.frame + 20 * SECOND;
+								AiLog(Factory::T()
+									+ "apex: commander CRITICAL -- steered flight");
+							}
+							return null;
+						}
+					}
+				}
+			}
 			IUnitTask@ flee = Retreat(unit);
 			if (flee !is null) {
 				++gCommRetreatHp;

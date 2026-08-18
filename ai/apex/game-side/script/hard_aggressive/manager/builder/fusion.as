@@ -83,6 +83,8 @@ int ReactorNeighbors(const AIFloat3& in spot, AIFloat3& out centroid)
 	int n = 0;
 	centroid = AIFloat3(0.f, 0.f, 0.f);
 	for (uint i = 0; i < gFusions.length(); ++i) {
+		if (gFusions[i] is null)
+			continue;
 		const AIFloat3 at = gFusions[i].GetPos(ai.frame);
 		if (at.distance2D(spot) < gap) {
 			centroid += at;

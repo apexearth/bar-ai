@@ -400,6 +400,30 @@ void CEnemyManager::DyingEnemy(CEnemyUnit* enemy, int frame)
 // keeps it that long and no longer). An entry whose ground we NEVER
 // re-viewed is a genuine unknown -- the pessimism the massing sizing relies
 // on -- and keeps the long fuse.
+// apex: enemy AIR value near a point, on the same guarded walk the purge uses
+// -- the circuit-level enemyInfos map holds wrappers whose data dies before the
+// deferred per-circuit erase, and iterating THAT from script crashed at every
+// commander blast (2026-08-18, seeds 120/121/123).
+float CEnemyManager::GetEnemyAirCostNear(const springai::AIFloat3& pos, float radius) const
+{
+	float sum = 0.f;
+	const float sq = radius * radius;
+	for (CEnemyUnit* e : enemyUpdates) {
+		if ((e == nullptr) || e->IsDying()) {
+			continue;
+		}
+		CCircuitDef* cdef = e->GetCircuitDef();
+		if ((cdef == nullptr) || !cdef->IsAbleToFly()) {
+			continue;
+		}
+		if (pos.SqDistance2D(e->GetPos()) > sq) {
+			continue;
+		}
+		sum += e->GetCost();
+	}
+	return sum;
+}
+
 void CEnemyManager::PurgeStaleGhosts(int frame, int confirmedAgeFrames, int unknownAgeFrames)
 {
 	for (CEnemyUnit* e : enemyUpdates) {

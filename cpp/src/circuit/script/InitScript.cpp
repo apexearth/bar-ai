@@ -356,23 +356,7 @@ static void CCircuitUnit_CmdPatrolTo(CCircuitUnit* unit, const AIFloat3& pos)
 // Registry walk, called ~once per second per player.
 static float CCircuitAI_GetEnemyAirCostNear(CCircuitAI* circuit, const springai::AIFloat3& pos, float radius)
 {
-	float sum = 0.f;
-	const float sq = radius * radius;
-	for (const auto& kv : circuit->GetEnemyInfos()) {
-		CEnemyInfo* e = kv.second;
-		if (e == nullptr) {
-			continue;
-		}
-		CCircuitDef* cdef = e->GetCircuitDef();
-		if ((cdef == nullptr) || !cdef->IsAbleToFly()) {
-			continue;
-		}
-		if (pos.SqDistance2D(e->GetPos()) > sq) {
-			continue;
-		}
-		sum += e->GetCost();
-	}
-	return sum;
+	return circuit->GetEnemyManager()->GetEnemyAirCostNear(pos, radius);
 }
 
 static int CCircuitUnit_GetStockpile(CCircuitUnit* unit)

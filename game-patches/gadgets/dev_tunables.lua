@@ -102,6 +102,7 @@ local NAMES = {
 	"apex_intercept_r",      -- air/update.as: radius of the home air-raid sensor (1400)
 	"apex_intercept_min",    -- air/update.as: enemy air value that summons the pool (500)
 	"apex_intercept_min_fighters", -- air/update.as: fighters held before we answer an ally (4)
+	"apex_comm_flee_hp",     -- rules_commander.as: health below which the commander is hand-steered away (0.55)
 	"apex_guard_per_income",  -- assist.as: income per extra shadow on one lead (60)
 	"apex_guard_reelect",    -- maketask.as: seconds between a guard's full re-elections (10)
 	"apex_idle_patrol_period", -- maketask.as: seconds between idle-builder patrol re-issues (45)

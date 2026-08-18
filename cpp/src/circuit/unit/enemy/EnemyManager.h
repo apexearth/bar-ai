@@ -73,6 +73,7 @@ public:
 	void UnregisterEnemyUnit(CEnemyUnit* data);
 	void DyingEnemy(CEnemyUnit* enemy, int frame);
 	void PurgeStaleGhosts(int frame, int confirmedAgeFrames, int unknownAgeFrames);
+	float GetEnemyAirCostNear(const springai::AIFloat3& pos, float radius) const;
 private:
 	void DyingEnemy(CEnemyUnit* enemy);
 	void DeleteEnemyUnit(CEnemyUnit* data);
