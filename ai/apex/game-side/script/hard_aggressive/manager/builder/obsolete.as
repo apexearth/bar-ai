@@ -449,6 +449,30 @@ int gNextJunkLog = 0;
 // armnanotc builddistance is 400; the margin keeps a victim's own footprint
 // inside reach.
 const float NANO_TIDY_REACH  = 380.f;
+
+// Tidy attempts per victim id; three failed assignments blacklist it for the
+// turret sweep (the mobile obsolete path still may take it). Bounded ring.
+array<int> gTidyVictimId;
+array<int> gTidyVictimTries;
+
+bool TidyStruckOut(int id)
+{
+	for (uint i = 0; i < gTidyVictimId.length(); ++i) {
+		if (gTidyVictimId[i] == id) {
+			if (gTidyVictimTries[i] >= 3)
+				return true;
+			++gTidyVictimTries[i];
+			return false;
+		}
+	}
+	gTidyVictimId.insertLast(id);
+	gTidyVictimTries.insertLast(1);
+	if (gTidyVictimId.length() > 64) {
+		gTidyVictimId.removeAt(0);
+		gTidyVictimTries.removeAt(0);
+	}
+	return false;
+}
 // Every second, not every 20: a turret's lathe is free and junk is ground
 // (apexearth: "nano tidy sweep should run once every second unless it is very
 // heavy"). The batch bound is what keeps the 1s period affordable: at most
@@ -519,6 +543,14 @@ void NanoTidy()
 			continue;
 		if (u.GetPos(ai.frame).distance2D(victim.GetPos(ai.frame)) > NANO_TIDY_REACH)
 			continue;                     // a turret cannot walk to it
+		// GIVE UP ON A BOUNCER. The engine aborts some of these right after
+		// assignment (its own reach geometry or refusal), and re-picking the
+		// same victim every sweep was the visible "turret trying to reclaim
+		// something out of its range" -- measured 16-26 repeat assignments
+		// per pair, 914 in one game. Three strikes and the victim is left to
+		// the mobile reclaim path.
+		if (TidyStruckOut(victim.id))
+			continue;
 		IUnitTask@ eat = ReclaimOwnDef(victim, dn, v);
 		if (eat !is null) {
 			aiBuilderMgr.AssignTask(u, eat);
