@@ -355,7 +355,18 @@ void CBombTask::FindTarget()
 			// reactor beats an extractor and a near target beats a far one of
 			// equal worth. The floor stops a bomber committing to anything under
 			// apex_bomb_min_value metal while something better exists.
-			const float value = (edef != nullptr) ? edef->GetCostM() : 0.f;
+			float value = (edef != nullptr) ? edef->GetCostM() : 0.f;
+			// A NANOFRAME IS NOT THE BUILDING. GetCostM prices the finished
+			// def, and a frame's low health then made it the best-looking
+			// target on the map -- apexearth, watching a raid: "we bombed the
+			// one being built which doesn't explode when killed!" Worth only
+			// the invested share: approximate by health fraction of the def's
+			// full health, which also kills the low-health score inflation
+			// (value and health shrink together). The finished AFUS beside it
+			// keeps its full price and its death blast.
+			if ((edef != nullptr) && enemy->IsBeingBuilt()) {
+				value *= health / std::max(edef->GetHealth(), 1.f);
+			}
 			const float sqDist = pos.SqDistance2D(ePos);
 			const float minValue = circuit->GetTunable("apex_bomb_min_value", 200.f);
 			const float distScale = circuit->GetTunable("apex_bomb_dist_scale", 4000.f);
