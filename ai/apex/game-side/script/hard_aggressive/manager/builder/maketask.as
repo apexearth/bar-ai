@@ -157,6 +157,20 @@ IUnitTask@ GuardBuildCapability(CCircuitUnit@ unit, IUnitTask@ task)
 		return task;
 	if (task.GetType() != Task::Type::BUILDER)
 		return task;
+	// A STATIC worker can only work what its lathe reaches -- construction,
+	// repair and reclaim alike. Checked BEFORE the repair/reclaim early
+	// return below, because reach applies to those too (apexearth, live:
+	// "nano turrets trying to reclaim obsolete buildings which are out of
+	// their range" -- a permanent silent no-op). Small slack: build distance
+	// is to the target's edge, GetBuildPos is its centre.
+	if (!unit.circuitDef.IsMobile()) {
+		const AIFloat3 site = task.GetBuildPos();
+		if (OnMap(site) && (unit.GetPos(ai.frame).distance2D(site)
+			> unit.circuitDef.GetBuildDistance() + 64.f))
+		{
+			return null;
+		}
+	}
 	// Only CONSTRUCTION types carry a def the worker must be able to BUILD.
 	// REPAIR/RECLAIM/RESURRECT/RECRUIT tasks put the TARGET's def in buildDef
 	// (a repair of an armck reads buildDef=armck), so checking those against

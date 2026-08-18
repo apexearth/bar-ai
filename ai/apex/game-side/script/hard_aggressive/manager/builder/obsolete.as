@@ -497,7 +497,20 @@ void NanoTidy()
 		IUnitTask@ held = u.task;
 		if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
 			&& (held.GetBuildType() == Task::BuildType::RECLAIM))
-			continue;                     // already tidying
+		{
+			// Self-heal, whatever path assigned it: a static turret holding a
+			// reclaim beyond its lathe reach works nothing and reads "busy"
+			// forever (apexearth, live 2026-08-17).
+			const AIFloat3 at = held.GetBuildPos();
+			if (OnMap(at) && (u.GetPos(ai.frame).distance2D(at)
+				> u.circuitDef.GetBuildDistance() + 64.f))
+			{
+				held.Abort();
+				AiLog(Factory::T() + "apex: nano-tidy #" + u.id
+					+ " dropped an out-of-reach reclaim");
+			}
+			continue;                     // already tidying (or just freed)
+		}
 		string dn;
 		int v;
 		AIFloat3 none;
