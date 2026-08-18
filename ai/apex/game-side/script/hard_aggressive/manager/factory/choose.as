@@ -161,6 +161,26 @@ void SweepPlantAsks()
 	}
 }
 
+// An approval whose Requests::Take then FAILED must give the ask back at
+// once: registered-but-never-built, it wedged the ledger for its whole 90s
+// TTL and blocked every other path from placing the lab -- watched live (MP
+// 2026-08-17), the opening approval at 1 m/s income was refused by the
+// request cap and three players walked mexes for 90 seconds with a phantom
+// ask holding the gate shut.
+void PlantAskAbort(const CCircuitDef@ def)
+{
+	for (int i = int(gAskDef.length()) - 1; i >= 0; --i) {
+		if (gAskDef[i] is def) {
+			gAskDef.removeAt(i);
+			gAskFrame.removeAt(i);
+			gAskCount.removeAt(i);
+			AiLog(T() + "apex: plant ask returned -- " + def.GetName()
+				+ " request was refused");
+			return;
+		}
+	}
+}
+
 int InFlightOf(const CCircuitDef@ def)
 {
 	int n = 0;

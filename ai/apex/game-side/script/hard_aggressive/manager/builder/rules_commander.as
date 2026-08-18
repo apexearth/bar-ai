@@ -353,6 +353,9 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 						AiLog(Factory::T() + "apex: commander rebuilding a factory -- we have none");
 						return rebuild;
 					}
+					// A refused request must not leave a phantom ask wedging
+					// the gate for its 90s TTL (the mex-walking opening).
+					Factory::PlantAskAbort(lab);
 				}
 
 				// No factory buildable right now (def unavailable, or the
