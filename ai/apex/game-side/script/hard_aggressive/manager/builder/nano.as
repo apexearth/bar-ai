@@ -150,6 +150,49 @@ array<CCircuitUnit@> FactoriesByNeed()
 	return ranked;
 }
 
+// One turret site at a factory, packed: FindBuildSiteNear from the factory
+// centre spirals to any free ground inside 400, which scattered the turrets
+// across the whole neighbourhood. Searching tight from the centroid of the
+// block the factory already has packs them shoulder to shoulder; the
+// assist-range check keeps the block from creeping away from the factory.
+bool NanoSiteAt(CCircuitUnit@ unit, CCircuitDef@ want, CCircuitUnit@ fac,
+		AIFloat3& out here)
+{
+	const AIFloat3 fpos = fac.GetPos(ai.frame);
+	array<CCircuitUnit@>@ block = ai.GetOwnUnitsOfDef(want, fpos, NANO_ASSIST_R);
+	if ((block !is null) && (block.length() > 0)) {
+		float x = 0.f, z = 0.f, n = 0.f;
+		for (uint i = 0; i < block.length(); ++i) {
+			if (block[i] is null)
+				continue;
+			const AIFloat3 at = block[i].GetPos(ai.frame);
+			x += at.x; z += at.z; n += 1.f;
+		}
+		if (n >= 1.f) {
+			AIFloat3 c;
+			c.x = x / n;
+			c.z = z / n;
+			const AIFloat3 site = ai.FindBuildSiteNear(want, c,
+					ai.GetTunable("apex_nano_pack_r", 180.f));
+			if (OnMap(site) && (site.distance2D(fpos) <= NANO_ASSIST_R)
+					&& !Base::SiteTaken(Base::NANO, site)
+					&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
+				Base::ReserveSite(site);
+				here = site;
+				return true;
+			}
+		}
+	}
+	const AIFloat3 site = ai.FindBuildSiteNear(want, fpos, NANO_ASSIST_R);
+	if (OnMap(site) && !Base::SiteTaken(Base::NANO, site)
+			&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
+		Base::ReserveSite(site);
+		here = site;
+		return true;
+	}
+	return false;
+}
+
 // Turrets we hold. aiBuilderMgr.GetWorkerCount() counts these as workers, so any
 // cap meant for MOBILE constructors has to subtract them.
 int NanoCount()
@@ -388,19 +431,11 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	AIFloat3 here;
 	bool sited = false;
 	array<CCircuitUnit@> facs = FactoriesByNeed();
-	for (uint i = 0; (i < facs.length()) && !sited; ++i) {
-		const AIFloat3 site = ai.FindBuildSiteNear(want, facs[i].GetPos(ai.frame),
-				NANO_ASSIST_R);
-		// GetOwnUnitsOfDef skips nanoframes, so a turret already on the way is
-		// invisible to FactoriesByNeed; the site reservation is what stops the
-		// same factory being picked for the same ground every period.
-		if (OnMap(site) && !Base::SiteTaken(Base::NANO, site)
-				&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
-			Base::ReserveSite(site);
-			here = site;
-			sited = true;
-		}
-	}
+	// GetOwnUnitsOfDef skips nanoframes, so a turret already on the way is
+	// invisible to FactoriesByNeed; the site reservation is what stops the
+	// same factory being picked for the same ground every period.
+	for (uint i = 0; (i < facs.length()) && !sited; ++i)
+		sited = NanoSiteAt(unit, want, facs[i], here);
 	// With the factories covered and metal healthy, the next-best lathe spot
 	// is the biggest build IN PROGRESS: a reactor going up alone takes
 	// minutes a nano beside it halves -- apexearth: "boost priority on
@@ -479,16 +514,8 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		AIFloat3 more;
 		bool ok = false;
 		array<CCircuitUnit@> facs2 = FactoriesByNeed();
-		for (uint i = 0; (i < facs2.length()) && !ok; ++i) {
-			const AIFloat3 s2 = ai.FindBuildSiteNear(want,
-					facs2[i].GetPos(ai.frame), NANO_ASSIST_R);
-			if (OnMap(s2) && !Base::SiteTaken(Base::NANO, s2)
-					&& (ThreatFor(unit, s2) <= CON_THREAT_VETO)) {
-				Base::ReserveSite(s2);
-				more = s2;
-				ok = true;
-			}
-		}
+		for (uint i = 0; (i < facs2.length()) && !ok; ++i)
+			ok = NanoSiteAt(unit, want, facs2[i], more);
 		if (!ok && !BandSpot(unit, want, true, more))
 			break;
 		bool made2 = false;

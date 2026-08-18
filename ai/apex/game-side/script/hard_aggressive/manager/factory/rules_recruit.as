@@ -48,8 +48,10 @@ void FactoryDiag(CCircuitUnit@ unit)
 	}
 }
 
-int gNanoElectFrame = -1;
-int gNanoElectN = 0;
+// Turret id -> next frame its patrol may be re-issued. Orders persist on a
+// static unit, so the re-issue is only self-healing after a retreat/damage
+// interruption, not the mechanism itself.
+dictionary gNanoPatrolNext;
 // True when AssistantWork handled a nano turret (elected OR deferred): the
 // caller must stop either way -- a deferred turret falling through the
 // recruit ladder was 124s of a 60m sim walking rules that cannot produce
@@ -74,20 +76,24 @@ IUnitTask@ AssistantWork(CCircuitUnit@ unit)
 	CCircuitDef@ nano = Builder::NanoDef();
 	if ((nano !is null) && (unit.circuitDef.id == nano.id)) {
 		gAssistHandled = true;
-		if (gNanoElectFrame != ai.frame) {
-			gNanoElectFrame = ai.frame;
-			gNanoElectN = 0;
+		// A STANDING PATROL, not an assist election: idle turrets do NOT work
+		// on their own (watched live 2026-08-18 -- rows of them sat idle beside
+		// building factories once the election budget throttled DefaultMakeTask),
+		// and per-turret elections were mt.factory's 203s. Patrol hands the job
+		// to the engine's own builder AI -- assist/repair/reclaim in range,
+		// forever, no script cost. The order persists, so the periodic re-issue
+		// below only heals an interrupted turret.
+		const string key = "" + int(unit.id);
+		int next = 0;
+		gNanoPatrolNext.get(key, next);
+		if (ai.frame >= next) {
+			gNanoPatrolNext.set(key, ai.frame + 120 * SECOND);
+			AIFloat3 p = unit.GetPos(ai.frame);
+			p.x += 64.f;
+			if (OnMap(p))
+				unit.CmdPatrolTo(p);
 		}
-		// Turrets auto-assist whatever stands in range with no orders at all
-		// (apexearth: "they don't have to be told to do anything") -- the
-		// election only relocates attention, so one per frame, always
-		// staggered, costs nothing.
-		if (((ai.frame + ai.teamId) & 1) == 1)
-			return null;
-		if (gNanoElectN >= 1)
-			return null;
-		++gNanoElectN;
-		return aiFactoryMgr.DefaultMakeTask(unit);
+		return null;
 	}
 	return null;
 }

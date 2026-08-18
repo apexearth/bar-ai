@@ -125,8 +125,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// thread and thousands of units already paying the engine's own cost,
 		// so the budget halves exactly when each election is least urgent (a
 		// metal-full base loses nothing to a 10-frame decision).
-		const bool rich = aiEconomyMgr.metal.income
-				>= ai.GetTunable("apex_elect_rich_income", 150.f);
+		// A FULL BANK EXEMPTS the halving and the stagger: the whole point of
+		// deferring elections cheaply is that "a metal-full base loses nothing
+		// to a 10-frame decision" -- but a metal-full base is losing income
+		// every frame it is not spending, so it is exactly the base that must
+		// elect at full rate (watched live 2026-08-18: everyone at the cap).
+		const bool rich = !aiEconomyMgr.isMetalFull
+				&& (aiEconomyMgr.metal.income
+					>= ai.GetTunable("apex_elect_rich_income", 150.f));
 		// Rich instances also STAGGER across alternate frames, offset by team
 		// id: 16 instances all electing on the same sim-thread frame is the
 		// cost floor, so half of them use even frames and half odd -- one
