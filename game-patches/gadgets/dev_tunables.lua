@@ -91,6 +91,8 @@ local NAMES = {
 	"apex_pulsar_nano_fwd",   -- statics.as: nano-cluster fwd fraction to site the gun there (0.15)
 	"apex_nano_site_min",     -- nano.as: min build cost that attracts a nano beside it (1500)
 	"apex_nano_pack_r",      -- nano.as: tight search radius packing turrets against the block (180)
+	"apex_guard_per_income",  -- assist.as: income per extra shadow on one lead (60)
+	"apex_guard_reelect",    -- maketask.as: seconds between a guard's full re-elections (10)
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",

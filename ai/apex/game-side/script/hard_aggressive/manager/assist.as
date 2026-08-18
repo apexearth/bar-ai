@@ -58,8 +58,14 @@ const float ASSIST_RANGE = 2000.f;
 // position and a queue of bodies around it stops helping.
 const uint SITE_STACK = 3;
 
-// Assist bots shadowing one constructor.
-const uint GUARD_STACK = 2;
+// Shadows one lead may hold. Scales with the economy, never a flat cap:
+// end-game construction with one builder is far too slow, so the richer the
+// game the more of the pool stacks behind each lead.
+uint GuardStack()
+{
+	return uint(1.f + aiEconomyMgr.metal.income
+			/ ai.GetTunable("apex_guard_per_income", 60.f));
+}
 
 // Mirrors the timeout stock CircuitAI uses for its own builder guards
 // (CBuilderManager::MakeBuilderTask). CBGuardTask with isInterrupt=true leaves
@@ -189,7 +195,7 @@ CCircuitUnit@ BestVip(CCircuitUnit@ unit, float range = ASSIST_RANGE)
 				&& IsBuildWork(t.GetBuildType());
 		if (!isFront && !isWorking)
 			continue;
-		if (GuardsOn(int(c.id)) >= GUARD_STACK)
+		if (GuardsOn(int(c.id)) >= GuardStack())
 			continue;
 		const AIFloat3 where = c.GetPos(ai.frame);
 		if (!OnMap(where))
@@ -374,7 +380,7 @@ IUnitTask@ Fallback(CCircuitUnit@ unit, bool isComm, bool allowDefence = true)
 		const AIFloat3 at = f.GetPos(ai.frame);
 		if (!OnMap(at))
 			continue;
-		if (GuardsOn(int(f.id)) >= GUARD_STACK)
+		if (GuardsOn(int(f.id)) >= GuardStack())
 			continue;
 		const float d = me.distance2D(at);
 		if (d < facDist) {

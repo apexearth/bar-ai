@@ -102,6 +102,10 @@ void NoteIdleElection(CCircuitUnit@ unit, IUnitTask@ result)
 
 int gElectFrame = -1;
 int gElectCount = 0;
+// Builder id -> next frame its guard may be fully re-elected. GUARD is the one
+// build type Reevaluate re-elects every update even in range, so without this
+// hold every shadowing builder walked the whole ladder every update.
+dictionary gGuardHold;
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
@@ -109,6 +113,24 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	if (!isCommander && (unit !is null) && IdleBackoffHolds(unit))
 		return null;
+	// SQUAD HOLD: a builder shadowing a lead keeps its guard between periodic
+	// full re-elections instead of re-running the ladder every update. The
+	// re-election period is what lets it still leave for real work.
+	if (!isCommander && (unit !is null)) {
+		IUnitTask@ held = unit.task;
+		if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
+			&& (held.GetBuildType() == Task::BuildType::GUARD)) {
+			const string k = "" + int(unit.id);
+			int next = 0;
+			gGuardHold.get(k, next);
+			if (ai.frame < next) {
+				Perf::Note("mt.guardhold");
+				return held;
+			}
+			gGuardHold.set(k, ai.frame
+					+ int(ai.GetTunable("apex_guard_reelect", 10.f) * float(SECOND)));
+		}
+	}
 	Brain::gDecideDeferred = false;
 	// THE WHOLE LADDER IS BUDGETED PER FRAME, not just the Brain: at 8v8
 	// minute 55+ the engine sim alone eats ~24 of the 33ms frame budget, so
@@ -295,11 +317,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		@t = aiBuilderMgr.DefaultMakeTask(unit);
 		if (t !is null)
 			return GuardBuildCapability(unit, t);
-		// An idle rez bot clears obsolete buildings before eating trees --
-		// same directive as the con idle floor and NanoTidy.
-		@t = ObsoleteReclaim(unit, false, true, VALUE_NONE);
-		if (t !is null)
-			return t;
+		// Obsolete-building reclaims are enqueued centrally by ObsoleteSweep
+		// and reach an idle rez bot through DefaultMakeTask above.
 		return IdleFeatureReclaim(unit, false);
 	}
 

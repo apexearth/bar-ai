@@ -149,15 +149,8 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 
 			if ((Factory::gLastPhase >= 4)
 				&& ((crewRole == Crew::ECO) || (crewRole == Crew::HOME))) {
-				// Clearing an obsolete base outranks ADDING to it. ObsoleteReclaim
-				// also sits at the end of the pipeline, which is why it fired
-				// twice in thirty minutes: a constructor was always offered
-				// something else first. Promoted only above the ECO offers -- the
-				// cheapest constructor time here -- and only once the junk is
-				// thick enough to be the thing in the way.
-				IUnitTask@ clear = ObsoleteUrgent(unit);
-				if (clear !is null)
-					return clear;
+				// Obsolete-building reclaims are enqueued centrally by
+				// ObsoleteSweep and arrive via DefaultMakeTask.
 				// A full bank outranks everything else here: the most expensive
 				// thing we can start is the one that drains it fastest. Mex upgrades
 				// still outrank a gantry, silo or Pulsar below (MexUpgradesOutstanding).

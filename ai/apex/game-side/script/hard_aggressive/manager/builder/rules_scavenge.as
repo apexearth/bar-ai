@@ -98,24 +98,9 @@ IUnitTask@ MetalFullFallback(CCircuitUnit@ unit, bool isComm)
 
 IUnitTask@ TidyObsolete(CCircuitUnit@ unit, bool isComm)
 {
-	// Clearing our own obsolete buildings. Both cases are the same act -- pick
-	// one of OUR structures and reclaim it -- so they share ObsoleteReclaim();
-	// what differs is only which defs and where. See its comment for the gates.
-	//
-	// THIS is the position that lets an advanced constructor take the job: `task`
-	// is null here, so the engine declined, and every rule above it declined
-	// too -- there is nothing this constructor could be buying with the metal
-	// instead.
-	//
-	// The rank floor is VALUE_NONE and only here: this constructor is provably
-	// idle, so the periphery is worth clearing when nothing better is standing.
-	// How OFTEN that happens is ObsoletePeriod's job -- a low-ranked target earns
-	// a long cooldown, so a corner turbine costs one walk and not a habit.
-	if (!isComm) {
-		IUnitTask@ tidy = ObsoleteReclaim(unit, aiEconomyMgr.isMetalFull, true, VALUE_NONE);
-		if (tidy !is null)
-			return tidy;
-	}
+	// Obsolete-building reclaims are enqueued centrally by ObsoleteSweep; an
+	// idle constructor receives one through DefaultMakeTask, so nothing is
+	// left for this rule to scan.
 	return null;
 }
 

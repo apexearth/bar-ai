@@ -346,8 +346,9 @@ string ValueWhy(int value)
 // constructor has to walk -- per-def lists that each return on their first hit
 // let whichever ran first take nearly everything. Ranking across the whole set
 // is the only way to express "prefer the target whose ground someone wants".
-CCircuitUnit@ ObsoletePick(CCircuitUnit@ unit, int floorValue, bool haveBlocked,
-		const AIFloat3& in blocked, string& out defName, int& out value)
+CCircuitUnit@ ObsoletePick(const AIFloat3& in from, int skipId, int floorValue,
+		bool haveBlocked, const AIFloat3& in blocked,
+		string& out defName, int& out value)
 {
 	defName = "";
 	value = floorValue - 1;
@@ -361,7 +362,7 @@ CCircuitUnit@ ObsoletePick(CCircuitUnit@ unit, int floorValue, bool haveBlocked,
 	}
 
 	const bool sited = Base::Ready();
-	const AIFloat3 me = unit.GetPos(ai.frame);
+	const AIFloat3 me = from;
 	CCircuitUnit@ pick = null;
 	float bestDist = 0.f;
 	for (uint i = 0; i < names.length(); ++i) {
@@ -374,7 +375,8 @@ CCircuitUnit@ ObsoletePick(CCircuitUnit@ unit, int floorValue, bool haveBlocked,
 			continue;
 		for (uint k = 0; k < owned.length(); ++k) {
 			CCircuitUnit@ victim = owned[k];
-			if ((victim is null) || (victim is unit) || AskedFor(victim.id))
+			if ((victim is null) || (int(victim.id) == skipId)
+				|| AskedFor(victim.id))
 				continue;
 			const AIFloat3 at = victim.GetPos(ai.frame);
 			const int v = GroundValue(at, isDefence, sited, haveBlocked, blocked);
@@ -569,7 +571,8 @@ void NanoTidy()
 		string dn;
 		int v;
 		AIFloat3 none;
-		CCircuitUnit@ victim = ObsoletePick(u, 0, false, none, dn, v);
+		CCircuitUnit@ victim = ObsoletePick(u.GetPos(ai.frame), int(u.id),
+				0, false, none, dn, v);
 		if (victim is null)
 			continue;
 		if (u.GetPos(ai.frame).distance2D(victim.GetPos(ai.frame)) > NANO_TIDY_REACH)
@@ -594,68 +597,48 @@ void NanoTidy()
 	}
 }
 
-IUnitTask@ ObsoleteUrgent(CCircuitUnit@ unit)
+// THE INVERTED PIPELINE: the obsolete building asks to be removed, instead of
+// every builder election scanning for one. One central scan per period
+// enqueues an ownerless reclaim task; DefaultMakeTask hands it to the nearest
+// free constructor. AskedFor is what stops the sweep re-enqueueing the same
+// victim every pass -- the documented orphan-task failure mode.
+void ObsoleteSweep()
 {
-	if (!PastT1Tier())
-		return null;
-	const int junk = ObsoleteJunkCount();
-	if (ai.frame >= gNextJunkLog) {
-		gNextJunkLog = ai.frame + 60 * SECOND;
-		AiLog(Factory::T() + "apex: obsolete junk standing=" + junk
-			+ " income=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
-			+ " t2=" + (Factory::gHaveT2 ? "1" : "0")
-			+ " t3=" + (Factory::gHaveT3 ? "1" : "0"));
-	}
-	return ObsoleteReclaim(unit, false, false, OBSOLETE_URGENT_VALUE);
-}
-
-IUnitTask@ ObsoleteReclaim(CCircuitUnit@ unit, bool allowAdv = false,
-		bool idle = false, int minValue = VALUE_NONE)
-{
-	// NOT THE ADVANCED CONSTRUCTORS: an advanced con is the only unit that can
-	// build a moho, a reactor or a heavy turret, and there are never many, so
-	// tidying is work anything else can do. allowAdv is the one exception, set
-	// only by the last-resort path -- it runs after the engine's own offer came
-	// back null and every rule above declined, so there is no moho left to be
-	// taken off. The promoted path above the economy offers never passes it.
-	if (IsAdvConDef(unit) && !allowAdv)
-		return null;
-	// Two rate limits, because the permit depends on what the scan finds. The
-	// scan itself is bounded here at the shortest period any target could earn --
-	// AiMakeTask is a re-election and runs per builder per update, and each scan
-	// walks teamUnits once per candidate def.
 	if (ai.frame < gNextObsolete)
-		return null;
-
+		return;
 	AIFloat3 blocked;
 	const bool haveBlocked = ai.GetBlockedBuildPos(blocked);
 	// A tower on ground a gantry has just failed to take is clutter whatever the
 	// tech state says; everything else waits until we are past the tier these
 	// buildings were worth their ground for.
-	int floorValue = minValue;
+	int floorValue = VALUE_NONE;
 	if (!PastT1Tier()) {
 		if (!haveBlocked)
-			return null;
-		if (floorValue < VALUE_BLOCKED)
-			floorValue = VALUE_BLOCKED;
+			return;
+		floorValue = VALUE_BLOCKED;
+	} else if (ai.frame >= gNextJunkLog) {
+		gNextJunkLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: obsolete junk standing=" + ObsoleteJunkCount()
+			+ " income=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+			+ " t2=" + (Factory::gHaveT2 ? "1" : "0")
+			+ " t3=" + (Factory::gHaveT3 ? "1" : "0"));
 	}
-
+	gNextObsolete = ai.frame + OBSOLETE_MIN_PERIOD;
+	// Rank from the blocked cell when there is one -- that is the ground
+	// someone is waiting for; otherwise from home. The walk-distance tiebreak
+	// happens naturally when the engine assigns the nearest constructor.
+	const AIFloat3 from = haveBlocked ? blocked : gHomePos;
 	string defName;
 	int value = 0;
-	gNextObsolete = ai.frame + OBSOLETE_MIN_PERIOD;
-	CCircuitUnit@ pick = ObsoletePick(unit, floorValue, haveBlocked, blocked,
-			defName, value);
+	CCircuitUnit@ pick = ObsoletePick(from, -1, floorValue, haveBlocked,
+			blocked, defName, value);
 	if (pick is null)
-		return null;
+		return;
 	// The permit is computed for the rank actually found, so a cell a gantry
 	// wants is not made to wait behind the cooldown a corner turbine earned.
-	// A PROVABLY IDLE unit skips the pacing outright: the cooldown prices the
-	// work this walk displaces, and an idle walk displaces nothing --
-	// apexearth: "rezbots and cons, if they're idling, have them reclaim
-	// obsolete buildings instead."
-	if (!idle && (ai.frame < gObsoleteTook + ObsoletePeriod(value)))
-		return null;
-	return ReclaimOwnDef(pick, defName, value);
+	if (ai.frame < gObsoleteTook + ObsoletePeriod(value))
+		return;
+	ReclaimOwnDef(pick, defName, value);
 }
 
 // T1 economy and AA that a T2/T3 base has outgrown. Per-faction, since a name

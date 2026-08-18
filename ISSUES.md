@@ -1,5 +1,15 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN: three dead unit names in behaviour_leg.json — requests silently dropped (2026-08-18)
+
+`tools/check.py`: `legamsub` (line 74), `leggantuw` (line 109), `legplat`
+(line 94) are not unit defs in the pinned tree, so whatever those entries
+were meant to buy never fires and nothing says so. Pre-existing (not from
+the 2026-08-18 batch). Water-flavored names, so low impact on the land maps
+we test — but each is a role/response slot Legion silently lacks. Fix by
+looking up the intended units with `tools/unitdef.py` (never a filename
+guess) and either correcting the names or deleting the entries.
+
 ## OPEN: late-game slowdown is now ENGINE world-state buildup, not AI code (2026-08-18)
 
 After the 12-sim perf campaign (two clean 60m 8v8 mirrors, every minute
