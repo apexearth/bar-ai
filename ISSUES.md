@@ -1,5 +1,25 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN: late-game slowdown is now ENGINE world-state buildup, not AI code (2026-08-18)
+
+After the 12-sim perf campaign (two clean 60m 8v8 mirrors, every minute
+above 1x headless), apexearth still sees 0.7x on his rendered client and
+"continuously getting slower... like a memory leak." Measured in his live
+90m watch game (frametime per-minute, min 34->55): total frame 24.7->40.6ms
+while the AI SHARE FELL 38%->~30% -- engine sim grew ~15->28ms/frame, ~80%
+growth on +45% units. Superlinear: the accumulating term is world state --
+90 minutes of 16-player wreckage/debris features that never leave (each in
+collision/LOS/path queries forever), unit population drift, and the enemy
+ghost registry (the AI-C++ 6->9 s/min creep). Levers, all behavior-positive:
+(1) rez fleet scaled to the observed wreck field, systematic sweeps -- his
+standing rezbot complaint is now also the top perf fix (eaten wreck =
+deleted engine object + our metal); (2) fewer-bigger-units late-game
+composition (T3 shift) cuts live units and corpse rate; (3) C++ ghost purge
+for hidden enemies unseen >10min (careful: GetEnemyCost pessimism relies on
+remembered units -- purge must not decay the role-cost counters, or must
+only purge past timescales where the pessimism no longer helps). Validate
+with the existing 60m 8v8 mirror harness.
+
 ## OPEN: T1 plants appear WITHOUT a plant-approved line — a sixth gate entrance, C++-side (2026-08-17)
 
 Live MP infolog (22:55 game): second corlab on field t13 4.4m / t11 7.0m,
