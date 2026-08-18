@@ -64,6 +64,7 @@ local NAMES = {
 	"apex_pulsar_conc_full",  -- statics.as: concurrent pulsars while metal-full (4)
 	"apex_pulsar_full_mult",  -- brain.as: pulsar want value mult while metal-full (2)
 	"apex_t1_late_share",     -- facqueue.as: post-T2 share of the T1 core count (0.34)
+	"apex_brain_roulette",    -- brain.as: 1 = score-proportional draw, 0 = argmax
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",

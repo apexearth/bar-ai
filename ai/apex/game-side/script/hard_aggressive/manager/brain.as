@@ -1134,6 +1134,44 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		AiLog(Factory::T() + line);
 	}
 
+	// NOT winner-takes-all. apexearth: "Are you doing your build list by
+	// winner takes all? Maybe you can do it more like random number inside
+	// bracket chance to win." The argmax starved everything that never
+	// reached #1 -- a want holding 20% of the total score got 0% of the
+	// picks, which is "at a certain point we just stop making some things".
+	// Re-draw the order by score-proportional roulette instead: expected
+	// spend share converges to the score ratio, which is what the value
+	// numbers were always meant to state. Every precedence gate below
+	// (mexup, coverage gaps, adv-con) is unchanged -- only the tie between
+	// eligible options moved from argmax to a weighted draw.
+	if (ai.GetTunable("apex_brain_roulette", 1.f) > 0.f) {
+		for (uint i = 0; i < order.length(); ++i) {
+			float total = 0.f;
+			for (uint j = i; j < order.length(); ++j) {
+				const float s = order[j].Score();
+				if (s > 0.f)
+					total += s;
+			}
+			if (total <= 0.f)
+				break;      // the rest score zero; leave them in ranked order
+			float r = float(AiRandom(0, 999999)) / 1000000.f * total;
+			uint pick = i;
+			for (uint j = i; j < order.length(); ++j) {
+				const float s = order[j].Score();
+				if (s <= 0.f)
+					continue;
+				r -= s;
+				if (r <= 0.f) {
+					pick = j;
+					break;
+				}
+			}
+			Want@ tmp = order[i];
+			@order[i] = order[pick];
+			@order[pick] = tmp;
+		}
+	}
+
 	// UPGRADES ARE NOT OPTIONAL SPENDING. If an upgrade is in reach, this
 	// constructor's job is the upgrade -- if the enqueue fails (spot taken,
 	// already upgrading), it goes back to the engine's own work rather than
