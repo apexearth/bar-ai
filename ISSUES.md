@@ -1,5 +1,20 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN: T1 plants appear WITHOUT a plant-approved line — a sixth gate entrance, C++-side (2026-08-17)
+
+Live MP infolog (22:55 game): second corlab on field t13 4.4m / t11 7.0m,
+second T1 vehicle plants t9 6.3m / t8 7.1m / t10 7.3m / t14 7.7m — none has
+a `plant approved` line, and `fusCount=0` on every fusion-gate diag, so the
+until-fusion rule (landed same day) should have refused them all. The gate
+works where consulted (it logged refusals at 0.2-0.4m in the same game); the
+approvals list for that window shows only T2/naval/air plants. So one of the
+THREE C++ enqueue paths (the gate's own comment, choose.as ~231) places
+factories without routing through AiGetFactoryToBuild — candidates: the
+factory-switch path and CFactoryManager's recovery enqueue with a cached
+def. Attribute by reading FactoryManager.cpp's Enqueue(FACTORY) call sites
+before patching. Also unverified: whether t13's 4.4m corlab was a rebuild
+after losing the first (no death telemetry in MP).
+
 ## OPEN: fighting groups stay 1-2 units at minutes 3-10 even with the quota raised (2026-08-17)
 
 The early-bleed session (6x20m 1v1 tournaments, Comet Catcher) raised the
