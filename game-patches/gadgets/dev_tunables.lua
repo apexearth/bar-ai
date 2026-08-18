@@ -77,6 +77,7 @@ local NAMES = {
 	"apex_front_from_min",    -- brain.as: game-minutes before proactive front-line spend starts (5)
 	"apex_conv_drain",        -- mexguard.as: energy/s one converter eats (70)
 	"apex_conv_reserve",      -- mexguard.as: spare energy income kept above converter drain (100)
+	"apex_assist_debounce",   -- assist.as: seconds between fallback offers per bot (5)
 	"apex_pulsar_per_income", -- statics.as: metal/s per pulsar allowed (40)
 	"apex_pulsar_nano_fwd",   -- statics.as: nano-cluster fwd fraction to site the gun there (0.15)
 	"apex_nano_site_min",     -- nano.as: min build cost that attracts a nano beside it (1500)

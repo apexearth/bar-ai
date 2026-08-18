@@ -202,6 +202,8 @@ int gSurplusGantries = 0;
 // the base beats no gantry.
 const float GANTRY_SEARCH_WIDE = 2600.f;
 int gNextGantryFailLog = 0;
+int gGantrySiteFails = 0;
+int gGantrySiteBackoffUntil = 0;
 
 IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 {
@@ -215,6 +217,13 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 
 	// A gantry is a 16x16 footprint -- the largest thing we ever place -- and on
 	// a hilly map there may be no flat square that big anywhere near the nanos.
+	// DEBOUNCE a failing site search: 94 asks against the same packed base in
+	// one game (watched live MP 2026-08-18) -- the ground does not un-fill in
+	// five seconds, and each retry walks three FindBuildSiteNear searches.
+	// The backoff doubles per consecutive failure (30s -> 4min cap) and
+	// resets the moment a site is found.
+	if (ai.frame < gGantrySiteBackoffUntil)
+		return null;
 	// Widen instead of giving up: assisting nanos are a preference, not a
 	// requirement, and a gantry built across the base beats one never placed.
 	AIFloat3 near;
@@ -227,15 +236,20 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 	if (!OnMap(site))                                // anywhere we can reach
 		site = ai.FindBuildSiteNear(gant, gHomePos, GANTRY_SEARCH_WIDE);
 	if (!OnMap(site)) {
+		gGantrySiteFails = (gGantrySiteFails < 4) ? gGantrySiteFails + 1 : 4;
+		gGantrySiteBackoffUntil = ai.frame
+				+ (30 * SECOND) * (1 << (gGantrySiteFails - 1));
 		if (ai.frame >= gNextGantryFailLog) {
 			gNextGantryFailLog = ai.frame + 60 * SECOND;
 			AiLog(Factory::T() + "apex: gantry NO SITE for " + gant.GetName()
 				+ " nano=" + (haveNano ? "1" : "0")
 				+ " tried=" + formatFloat(GANTRY_NEAR_NANO, "", 0, 0)
-				+ "/" + formatFloat(GANTRY_SEARCH_WIDE, "", 0, 0));
+				+ "/" + formatFloat(GANTRY_SEARCH_WIDE, "", 0, 0)
+				+ " backoff=" + (30 * (1 << (gGantrySiteFails - 1))) + "s");
 		}
 		return null;
 	}
+	gGantrySiteFails = 0;
 	if (ThreatFor(unit, site) > CON_THREAT_VETO)
 		return null;
 

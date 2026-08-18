@@ -282,6 +282,32 @@ IUnitTask@ Work(CCircuitUnit@ unit)
 // leaves the moment one is worth taking.
 int gFallbacks = 0;
 
+// DEBOUNCE: a bot whose fallback assignment did not stick re-entered this
+// rung SEVERAL TIMES A SECOND (n=1105->1108 inside 1.5s, one player, live MP
+// 2026-08-18), and every re-entry runs the whole election ladder -- churn
+// that both signals and feeds the lag. One offer per bot per
+// apex_assist_debounce seconds; between offers the bot simply waits.
+array<int> gFbBotId;
+array<int> gFbBotUntil;
+
+bool FallbackDebounced(CCircuitUnit@ unit)
+{
+	const int hold = int(ai.GetTunable("apex_assist_debounce", 5.f)) * SECOND;
+	for (uint i = 0; i < gFbBotId.length(); ) {
+		if (ai.frame >= gFbBotUntil[i]) {
+			gFbBotId.removeAt(i);
+			gFbBotUntil.removeAt(i);
+			continue;
+		}
+		if (gFbBotId[i] == int(unit.id))
+			return true;
+		++i;
+	}
+	gFbBotId.insertLast(int(unit.id));
+	gFbBotUntil.insertLast(ai.frame + hold);
+	return false;
+}
+
 IUnitTask@ Fallback(CCircuitUnit@ unit, bool isComm, bool allowDefence = true)
 {
 	// The commander has CommanderIdleWork immediately above this, and
@@ -289,6 +315,8 @@ IUnitTask@ Fallback(CCircuitUnit@ unit, bool isComm, bool allowDefence = true)
 	if ((unit is null) || isComm)
 		return null;
 	if (ai.GetTunable("apex_idle_assist", 1.f) <= 0.f)
+		return null;
+	if (FallbackDebounced(unit))
 		return null;
 	if (!OnMap(unit.GetPos(ai.frame)))
 		return null;
