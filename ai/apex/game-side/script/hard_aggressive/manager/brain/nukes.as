@@ -25,6 +25,13 @@ int  gNukeNextLog = 0;
 // the same for scouted ground.
 AIFloat3 gForgetAt;
 int gForgetFrame = -1;
+float gForgetR = 960.f;
+
+// The volley's aim points: a line through the target, perpendicular to our
+// approach, stepped at apex_nuke_spread so the blasts tile the base instead
+// of stacking in one crater. Silos rotate across it between launches.
+array<AIFloat3> gVolleySpots;
+uint gVolleyTick = 0;
 
 bool IsSiloDef(const CCircuitDef@ d)
 {
@@ -82,15 +89,26 @@ void UpdateNukes()
 	// The scheduled post-impact forget, volley in progress or not.
 	if ((gForgetFrame >= 0) && (ai.frame >= gForgetFrame)) {
 		gForgetFrame = -1;
-		const int n = ai.ForgetEnemiesNear(gForgetAt, 960.f);
+		const int n = ai.ForgetEnemiesNear(gForgetAt, gForgetR);
 		AiLog(Factory::T() + "apex: nuke ground confirmed -- forgot "
 			+ n + " remembered enemies at the impact");
 	}
 
-	// A volley in progress holds its orders; re-evaluate once it is spent or
-	// stale (targets die, the ground gets nuked -- 90s is plenty).
-	if ((ai.frame < gVolleyUntil) && (stock > 0))
+	// A volley in progress WALKS its aim across the spread line each tick: a
+	// silo's standing order sends every missile to one point, so scatter has
+	// to come from re-aiming between launches -- apexearth: "if we're
+	// launching 5 give them a little bit of area or line/curve so they don't
+	// land all in exactly the same spot."
+	if ((ai.frame < gVolleyUntil) && (stock > 0)) {
+		if (gVolleySpots.length() > 1) {
+			for (uint i = 0; i < silos.length(); ++i) {
+				const uint s = (i + gVolleyTick) % gVolleySpots.length();
+				silos[i].CmdAttackGround(gVolleySpots[s]);
+			}
+			++gVolleyTick;
+		}
 		return;
+	}
 
 	// Pick the target: richest enemy cluster per antinuke covering it. The
 	// forward gate keeps this off our own ground -- home defense is the
@@ -146,12 +164,36 @@ void UpdateNukes()
 	// THE VOLLEY: every silo, one location, until it is gone. A standing
 	// attack-ground order drains the whole stockpile as fast as launches
 	// reload; the 90s window then lets the next evaluation retarget.
+	// Aim points: center first (the scored cluster), then steps outward along
+	// the line perpendicular to silo->target, sized to how many missiles are
+	// flying. Every point is clamped on-map.
+	gVolleySpots.resize(0);
+	gVolleyTick = 0;
+	gVolleySpots.insertLast(bestPos);
+	{
+		AIFloat3 dir = bestPos - silos[0].GetPos(ai.frame);
+		if (dir.SqLength2D() > 1.f) {
+			dir.SafeNormalize2D();
+			const AIFloat3 perp(-dir.z, 0.f, dir.x);
+			const float step = ai.GetTunable("apex_nuke_spread", 450.f);
+			const int arms = (stock >= 5) ? 2 : 1;
+			for (int a = 1; a <= arms; ++a) {
+				AIFloat3 p1 = bestPos + perp * (step * float(a));
+				AIFloat3 p2 = bestPos - perp * (step * float(a));
+				if (OnMap(p1)) gVolleySpots.insertLast(p1);
+				if (OnMap(p2)) gVolleySpots.insertLast(p2);
+			}
+		}
+	}
 	for (uint i = 0; i < silos.length(); ++i)
-		silos[i].CmdAttackGround(bestPos);
+		silos[i].CmdAttackGround(gVolleySpots[i % gVolleySpots.length()]);
 	gVolleyAt = bestPos;
 	gVolleyUntil = ai.frame + 90 * SECOND;
 	gForgetAt = bestPos;
 	gForgetFrame = ai.frame + 30 * SECOND;   // flight time, then the ground is fact
+	// The forget covers the whole spread line, not just the center blast.
+	gForgetR = 960.f + ai.GetTunable("apex_nuke_spread", 450.f)
+			* float(gVolleySpots.length() / 2);
 	AiLog(Factory::T() + "apex: NUKE VOLLEY " + stock + " missiles ("
 		+ needed + " needed) at " + int(bestPos.x) + "," + int(bestPos.z)
 		+ " worth " + formatFloat(bestCost, "", 0, 0)
