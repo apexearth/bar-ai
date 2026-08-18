@@ -142,6 +142,11 @@ class Want
 	// unit count (fence coverage, mexup, ...).
 	float investedM = -1.f;
 
+	// Score() walks a dozen tunable lookups; the sort and roulette used to call
+	// it inside every comparison -- O(n^2) full evaluations per election, ~half
+	// of mt.brain's unattributed time. Computed once per election instead.
+	float cachedScore = 0.f;
+
 	// VALUE AS A SPENDING RATIO (invested path) or value-per-metal with
 	// per-copy halving (legacy path). The legacy /cost division is skipped on
 	// the invested path: cost-normalisation is inherent when the denominator
@@ -277,10 +282,19 @@ void Propose(Want@ w)
 // Any builder, not just an advanced one: taking ground is T1 work.
 const float MEX_INCOME_GAIN = 1.8f;   // armmex extraction, read from the defs
 
+// FindOpenMexSpot walks every metal spot in C++, and the LATE game -- where
+// the frame budget dies -- is exactly when the map is full and the walk
+// returns nothing: br.mex was 518us of every election, 47.6s over one 8v8
+// sim. A "nothing open" answer holds for a few seconds; a claimed map does
+// not un-claim between elections. Positive answers stay live.
+int gMexNoneUntil = 0;
+
 Want@ MexWant(CCircuitUnit@ unit)
 {
 	CCircuitDef@ mex = SideDef3("armmex", "cormex", "legmex");
 	if ((mex is null) || !mex.IsAvailable(ai.frame))
+		return null;
+	if (ai.frame < gMexNoneUntil)
 		return null;
 	// BOUNDED BY BUILD POWER. Every open spot is worth the same, so this want
 	// re-proposes for every builder on every call unless capped. One outstanding
@@ -289,8 +303,11 @@ Want@ MexWant(CCircuitUnit@ unit)
 	if (Builder::OutstandingMexTasks() >= aiBuilderMgr.GetWorkerCount())
 		return null;
 	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
-	if (spot < 0)
+	if (spot < 0) {
+		gMexNoneUntil = ai.frame
+				+ int(ai.GetTunable("apex_mex_none_ttl", 5.f)) * SECOND;
 		return null;
+	}
 	Want@ w = Want();
 	w.kind = "mex";
 	w.value = MEX_INCOME_GAIN;
@@ -1146,9 +1163,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// nothing while destabilising the order. Coverage scaling in the want's own
 	// value is the lever that works instead.
 	array<Want@> order = gWants;
+	for (uint i = 0; i < order.length(); ++i)
+		order[i].cachedScore = order[i].Score();
 	for (uint i = 0; i < order.length(); ++i) {
 		for (uint j = i + 1; j < order.length(); ++j) {
-			if (order[j].Score() > order[i].Score()) {
+			if (order[j].cachedScore > order[i].cachedScore) {
 				Want@ tmp = order[i];
 				@order[i] = order[j];
 				@order[j] = tmp;
@@ -1160,7 +1179,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		gNextBrainLog = ai.frame + 30 * SECOND;
 		string line = "apex: brain wants=" + order.length();
 		for (uint i = 0; i < order.length(); ++i)
-			line += " | " + order[i].kind + "=" + formatFloat(order[i].Score(), "", 0, 4);
+			line += " | " + order[i].kind + "=" + formatFloat(order[i].cachedScore, "", 0, 4);
 		AiLog(Factory::T() + line);
 	}
 
@@ -1178,7 +1197,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		for (uint i = 0; i < order.length(); ++i) {
 			float total = 0.f;
 			for (uint j = i; j < order.length(); ++j) {
-				const float s = order[j].Score();
+				const float s = order[j].cachedScore;
 				if (s > 0.f)
 					total += s;
 			}
@@ -1187,7 +1206,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			float r = float(AiRandom(0, 999999)) / 1000000.f * total;
 			uint pick = i;
 			for (uint j = i; j < order.length(); ++j) {
-				const float s = order[j].Score();
+				const float s = order[j].cachedScore;
 				if (s <= 0.f)
 					continue;
 				r -= s;
@@ -1339,7 +1358,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			if (ai.frame >= gNextPickLog) {
 				gNextPickLog = ai.frame + 60 * SECOND;
 				AiLog(Factory::T() + "apex: brain picks " + w.kind
-					+ " score=" + formatFloat(w.Score(), "", 0, 4));
+					+ " score=" + formatFloat(w.cachedScore, "", 0, 4));
 			}
 			return t;
 		}
