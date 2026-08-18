@@ -325,6 +325,65 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 	unit->CmdMoveTo(pos);
 }
 
+// apex: the Brain's nuke director. Attack-ground is a netted order (safe);
+// stockpile is an engine read on the host's own unit (safe).
+static void CCircuitUnit_CmdAttackGround(CCircuitUnit* unit, const AIFloat3& pos)
+{
+	unit->CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY);
+}
+
+static int CCircuitUnit_GetStockpile(CCircuitUnit* unit)
+{
+	// Same inline guard as CCircuitUnit_CmdPriorityBuild above: TRY_UNIT wants
+	// a CCircuitAI and this wrapper has no clean path to one.
+	try {
+		return unit->GetUnit()->GetStockpile();
+	} catch (const std::exception& e) {
+	}
+	return 0;
+}
+
+// apex: how many of a given enemy def stand within radius of pos -- the
+// "count the antinukes covering this spot" primitive, generic on purpose.
+static int CCircuitAI_CountEnemyDefNear(CCircuitAI* circuit, int defId,
+		const AIFloat3& pos, float radius)
+{
+	int n = 0;
+	const float sqR = radius * radius;
+	for (const auto& kv : circuit->GetEnemyInfos()) {
+		CEnemyInfo* e = kv.second;
+		if ((e == nullptr) || e->IsHidden()) {
+			continue;
+		}
+		CCircuitDef* edef = e->GetCircuitDef();
+		if ((edef != nullptr) && (edef->GetId() == defId)
+			&& (e->GetPos().SqDistance2D(pos) < sqR))
+		{
+			++n;
+		}
+	}
+	return n;
+}
+
+// apex: the enemy cluster model, read-only. Index bounds-checked because the
+// group vector changes between updates.
+static int CEnemyManager_GetEnemyGroupCount(CEnemyManager* mgr)
+{
+	return (int)mgr->GetEnemyGroups().size();
+}
+
+static AIFloat3 CEnemyManager_GetEnemyGroupPos(CEnemyManager* mgr, int i)
+{
+	const auto& groups = mgr->GetEnemyGroups();
+	return ((i >= 0) && (i < (int)groups.size())) ? groups[i].pos : AIFloat3(-RgtVector);
+}
+
+static float CEnemyManager_GetEnemyGroupCost(CEnemyManager* mgr, int i)
+{
+	const auto& groups = mgr->GetEnemyGroups();
+	return ((i >= 0) && (i < (int)groups.size())) ? groups[i].cost : 0.f;
+}
+
 // apex: for a script-driven D-gun raid (commander cloaks in and D-guns a
 // target when energy allows -- apexearth's request). CmdCloak already exists
 // on CCircuitUnit (used natively by RetreatTask's own cloak-on-retreat
@@ -906,6 +965,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 SnapBuildPos(CCircuitDef@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_SnapBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetEnemyTeamSize() const", asMETHOD(CCircuitAI, GetEnemyTeamSize), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int CountEnemyDefNear(int, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CountEnemyDefNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetLeadTeamId() const", asFUNCTION(CCircuitAI_GetLeadTeamId), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1066,6 +1126,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// retreat task substitutes for everything it would otherwise build. A raw
 	// command moves the unit without consuming its task slot.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdAttackGround(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdAttackGround), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetStockpile()", asFUNCTION(CCircuitUnit_GetStockpile), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// apex: for the commander D-gun raid want -- see CCircuitUnit_PushDGun's
 	// own comment for why script only needs to get close and push once.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdCloak(bool)", asFUNCTION(CCircuitUnit_CmdCloak), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1230,6 +1292,9 @@ void CInitScript::RegisterMgr()
 	// Centroid of the enemy groups we can see. Noisy by nature -- raiders in our
 	// own base pull it backwards -- so it suits a rally point, not a facing.
 	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyPos() const", asFUNCTION(CEnemyManager_GetEnemyPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyGroupCount() const", asFUNCTION(CEnemyManager_GetEnemyGroupCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyGroupPos(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyGroupCost(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupCost), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
 
 	CThreatMap* thrMap = circuit->GetThreatMap();

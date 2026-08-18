@@ -142,6 +142,14 @@ void CSuperTask::Update()
 	}
 
 	CCircuitDef* cdef = unit->GetCircuitDef();
+	// apex: STOCKPILE supers (nuke silos) belong to the Brain's nuke director
+	// (script, brain/nukes.as): it saves volleys and sizes them against the
+	// antinukes covering a target, which this per-group scorer cannot see.
+	// Stockpiling itself continues (MilitaryManager's finished-handler orders
+	// it); only the targeting is ceded. Non-stock supers (LRPC) stay here.
+	if (cdef->IsAttrStock() && (circuit->GetTunable("apex_brain_nuke", 1.f) > 0.f)) {
+		return;
+	}
 	if (cdef->IsHoldFire()) {
 		if (targetFrame + (cdef->GetReloadTime() + TARGET_DELAY) > frame) {
 			if ((State::ENGAGE == state) && (targetFrame + TARGET_DELAY <= frame)) {

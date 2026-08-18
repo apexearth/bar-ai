@@ -9,6 +9,7 @@
 #include "manager/builder.as"
 #include "manager/factory.as"
 #include "manager/persona.as"     // per-instance identity: biases, never gates
+#include "manager/brain/nukes.as" // the nuke director: saved volleys vs antinukes
 #include "manager/brain/facqueue.as"  // ...and drives a factory itself, as a standing queue
 #include "manager/economy.as"
 #include "manager/air.as"
@@ -79,6 +80,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	t = Perf::T0();
 	Military::UpdateLanePos();
 	Military::UpdateDeathLedger();
+	Brain::UpdateNukes();
 	Military::UpdateSpamPosture();
 	Military::UpdatePosture();
 	Perf::Add("upd.Military", t);
@@ -154,6 +156,7 @@ void AiUnitFinished(CCircuitUnit@ unit)
 	CCircuitDef@ nanoDef = Builder::NanoDef();
 	if ((nanoDef !is null) && (unit.circuitDef.id == nanoDef.id))
 		Builder::NanoNoteBuilt(unit.id);
+	Brain::NoteSiloFinished(unit);
 }
 
 // CInitScript::UnitDestroyed (InitScript.cpp:1224) looks this exact signature

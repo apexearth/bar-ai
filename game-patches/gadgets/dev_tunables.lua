@@ -69,6 +69,10 @@ local NAMES = {
 	"apex_bomb_defend_aa",    -- air: enemy AA metal below which home defense may bomb armies (1000)
 	"apex_counter_t3_norm",   -- brain/statics: enemy heavy+super metal per doubling of pulsar/gantry wants (20000)
 	"apex_bomb_fat_mobile",   -- BombTask: heavy-role mobile above this metal is always bombable (4000)
+	"apex_brain_nuke",        -- 1 = script nuke director owns silo targeting, 0 = C++ auto-fire
+	"apex_anti_cover",        -- nukes.as: antinuke coverage radius counted at a target (2500)
+	"apex_nuke_per_anti",     -- nukes.as: extra missiles saved per covering antinuke (8)
+	"apex_nuke_min_value",    -- nukes.as: cluster metal below which no warhead is spent (4000)
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",
