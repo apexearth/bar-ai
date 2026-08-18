@@ -341,21 +341,33 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				// engine's recovery path read zero T1 plants and got a SECOND
 				// lab approved (apexearth: "we're also still making 2 T1
 				// labs"). PlantApproved both checks and registers the ask.
+				// AN OUTSTANDING FACTORY REQUEST IS THE COMMANDER'S JOB, not a
+				// reason to mex: the engine's own ask (approved through the
+				// gate) sat unbuilt while this branch -- gated on "no factory
+				// task exists" -- walked mexes for 90 seconds until the ask
+				// expired (watched live MP + reproduced in the 4v4 smoke:
+				// approved 0.4m, on field 2.3m). Joining needs no approval
+				// (it creates no new plant); only a genuinely NEW request
+				// passes PlantApproved, and a refused new request returns
+				// its ask at once.
 				if ((lab !is null) && lab.IsAvailable(ai.frame)
-					&& (lab.count <= 0)
-					&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) <= 0)
-					&& Factory::PlantApproved(lab))
+					&& (lab.count <= 0))
 				{
-					IUnitTask@ rebuild = Requests::Take(unit, lab,
-							Task::BuildType::FACTORY, Task::Priority::HIGH,
-							unit.GetPos(ai.frame), 0.f, 0.f);
-					if (rebuild !is null) {
-						AiLog(Factory::T() + "apex: commander rebuilding a factory -- we have none");
-						return rebuild;
+					const bool outstanding = aiBuilderMgr.GetTaskCountOf(
+							int(Task::BuildType::FACTORY)) > 0;
+					if (outstanding || Factory::PlantApproved(lab)) {
+						IUnitTask@ rebuild = Requests::Take(unit, lab,
+								Task::BuildType::FACTORY, Task::Priority::HIGH,
+								unit.GetPos(ai.frame), 0.f, 0.f);
+						if (rebuild !is null) {
+							AiLog(Factory::T() + "apex: commander "
+								+ (outstanding ? "joining the standing factory request"
+								               : "rebuilding a factory -- we have none"));
+							return rebuild;
+						}
+						if (!outstanding)
+							Factory::PlantAskAbort(lab);
 					}
-					// A refused request must not leave a phantom ask wedging
-					// the gate for its 90s TTL (the mex-walking opening).
-					Factory::PlantAskAbort(lab);
 				}
 
 				// No factory buildable right now (def unavailable, or the

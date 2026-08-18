@@ -148,11 +148,21 @@ void SweepPlantAsks()
 		}
 	}
 	const bool poolShort = alive < gAskDef.length();
+	// A PHANTOM DIES FAST. The engine QUERIES GetFactoryToBuild without
+	// always enqueuing (probes, recovery checks), and every approved query
+	// registers here -- so an ask no task ever backed blocked the whole
+	// opening for the full 90s TTL (approved 0.4m, first lab 2.3-4.0m, both
+	// live MP and the 4v4 smoke). With the pool short, an ask still young
+	// enough that a real enqueue would already show gets a short fuse; the
+	// long TTL remains for asks that were once backed (walk-and-build gaps).
+	const int fuse = int(ai.GetTunable("apex_plant_ask_fuse", 10.f)) * SECOND;
 	for (uint i = gAskDef.length(); i > 0; --i) {
 		const uint k = i - 1;
+		const int age = ai.frame - gAskFrame[k];
 		if ((gAskDef[k] is null)
 			|| (int(gAskDef[k].count) > gAskCount[k])
-			|| (poolShort && (ai.frame - gAskFrame[k] > ttl)))
+			|| (poolShort && (age > ttl))
+			|| (poolShort && (alive == 0) && (age > fuse)))
 		{
 			gAskDef.removeAt(k);
 			gAskFrame.removeAt(k);
