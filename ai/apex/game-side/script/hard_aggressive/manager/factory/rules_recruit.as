@@ -78,11 +78,13 @@ IUnitTask@ AssistantWork(CCircuitUnit@ unit)
 			gNanoElectFrame = ai.frame;
 			gNanoElectN = 0;
 		}
-		const bool rich = aiEconomyMgr.metal.income
-				>= ai.GetTunable("apex_elect_rich_income", 150.f);
-		if (rich && (((ai.frame + ai.teamId) & 1) == 1))
+		// Turrets auto-assist whatever stands in range with no orders at all
+		// (apexearth: "they don't have to be told to do anything") -- the
+		// election only relocates attention, so one per frame, always
+		// staggered, costs nothing.
+		if (((ai.frame + ai.teamId) & 1) == 1)
 			return null;
-		if (gNanoElectN >= 2)
+		if (gNanoElectN >= 1)
 			return null;
 		++gNanoElectN;
 		return aiFactoryMgr.DefaultMakeTask(unit);

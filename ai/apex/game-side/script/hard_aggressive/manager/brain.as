@@ -766,7 +766,9 @@ int gFenceMemoAt = -999;
 
 Want@ FrontDefenceWant(CCircuitUnit@ unit)
 {
-	if (ai.frame - gFenceMemoAt < 30)
+	const int fencePeriod = (aiEconomyMgr.metal.income
+			>= ai.GetTunable("apex_elect_rich_income", 150.f)) ? 150 : 30;
+	if (ai.frame - gFenceMemoAt < fencePeriod)
 		return gFenceMemo;
 	gFenceMemoAt = ai.frame;
 	@gFenceMemo = FrontDefenceWantFresh(unit);

@@ -355,7 +355,11 @@ bool gFrontValid = false;
 
 void RebuildFront()
 {
-	if ((gFrontStamp >= 0) && (ai.frame - gFrontStamp < 30))
+	// Economy-scaled cadence: the later the game, the more slowly the front
+	// moves -- apexearth: "5-10s no big deal". Rich = 5s, else 1s.
+	const int frontPeriod = (aiEconomyMgr.metal.income
+			>= ai.GetTunable("apex_elect_rich_income", 150.f)) ? 150 : 30;
+	if ((gFrontStamp >= 0) && (ai.frame - gFrontStamp < frontPeriod))
 		return;
 	gFrontStamp = ai.frame;
 	gFrontValid = false;
