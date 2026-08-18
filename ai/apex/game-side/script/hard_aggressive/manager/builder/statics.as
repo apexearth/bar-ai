@@ -492,7 +492,13 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	// end up with): each is 3,000-4,200 metal, so several simultaneous nanoframes
 	// freeze most of a mid-game bank in towers that defend nothing until they
 	// finish. Same asked-minus-standing idiom NukeSilo uses.
-	if (gPulsarsAsked - gun.count >= PULSAR_CONCURRENT)
+	// A full metal bank lifts the build-rate throttle: the freeze-the-bank
+	// risk the base cap guards against is exactly the state we are in.
+	// apexearth: "we're full on metal so we ought to be able to afford that."
+	int conc = PULSAR_CONCURRENT;
+	if (aiEconomyMgr.isMetalFull)
+		conc = int(ai.GetTunable("apex_pulsar_conc_full", 4.f));
+	if (gPulsarsAsked - gun.count >= conc)
 		return null;
 	// THE LINE THE BRAIN DRAWS, not the site ring. BorderPos picks among OUR
 	// OWN sites on the territory ring, which in practice is the base edge --

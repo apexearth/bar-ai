@@ -1093,7 +1093,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// allowed." Until this want existed, land maps had NO antinuke rule at all
 	// -- the only chain carrying one hangs off the FLOATING radar hub.
 	Propose(Simple("antinuke", ANTINUKE_VALUE, SideDef3("armamd", "corfmd", "legabm")));
-	Propose(Simple("pulsar", PULSAR_VALUE, SideDef3("armanni", "cordoom", "legstarfall")));
+	// legbastion, not legstarfall: the def here is what the want's have/decay
+	// counts, and Builder::Pulsar builds bastions -- a mismatch never decays.
+	// A full metal bank doubles the value: the line of guns is what the
+	// surplus is FOR (apexearth: "we literally need a line of them across the
+	// front of our bases... we're full on metal").
+	{
+		float pv = PULSAR_VALUE;
+		if (aiEconomyMgr.isMetalFull)
+			pv *= ai.GetTunable("apex_pulsar_full_mult", 2.f);
+		Propose(Simple("pulsar", pv, SideDef3("armanni", "cordoom", "legbastion")));
+	}
 	Propose(Simple("pinpoint", PINPOINT_VALUE, SideDef3("armtarg", "cortarg", "legtarg")));
 	}
 

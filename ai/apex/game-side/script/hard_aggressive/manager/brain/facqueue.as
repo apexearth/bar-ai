@@ -452,14 +452,15 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			if ((d is null) || !d.IsAvailable(ai.frame))
 				continue;
 			int n = T1CoreWanted();
-			// Raiders die fastest, so an equal-count floor spends the T2
-			// transition refilling pawns. apexearth, watching: "we only seem
-			// to make T1 raiders once we have T2... pawns need to be parts of
-			// our army squads and help be the fodder/chaff" -- post-T2 the
-			// raider ration drops to a chaff share while riot/skirm (the
-			// ranged, tanky line-holders) keep the full count.
-			if ((core[c] == RT::RAIDER) && Factory::gHaveT2)
-				n = (n + 2) / 3;
+			// Post-T2 the WHOLE T1 core drops to a chaff share, not raiders
+			// alone. apexearth: Thug/Centurion-class units late are "very
+			// expensive and probably not worthwhile. Rezbots, ticks, those
+			// are usually what we want... light units to waste enemy fire"
+			// -- the trimmed metal flows to T2 army, defence and rezbots
+			// through the normal budget instead.
+			if (Factory::gHaveT2)
+				n = RoundUp(float(n)
+						* ai.GetTunable("apex_t1_late_share", 0.34f));
 			// Cost-normalized like the main fill loop: metal shares, not
 			// count shares.
 			n = RoundUp(float(n) * DefQuotaMod(d)

@@ -10,6 +10,29 @@ work is cheaper than being told the same thing a fourth time.
 
 ---
 
+## Late game: chaff and rezbots, not T1 assault; a pulsar line on full metal
+
+2026-08-17, watching live: Thug/Centurion-class units late game are "very
+expensive and probably not worthwhile. Rezbots, ticks, those are usually what
+we want... light units to waste enemy fire." And on defence: "if we're arm we
+really need to make lots more pulsars... Same with Legion Bastions... We
+literally need a line of them across the front of our bases... We're full on
+metal so we ought to be able to afford that." Landed same day: post-T2 T1
+core trimmed to a chaff share (`apex_t1_late_share`), pulsar want value and
+concurrent-build throttle both lift while metal-full. Watch whether the gun
+line actually forms; the placement still comes from the front-line siting.
+
+## One player builds no eco — fusion pipeline wedge (FIXED 2026-08-17, verify)
+
+2026-08-17, watching live, second game in a row: "blue is not making any
+fusions. I think there is a bug that makes 1 of our guys make no good eco."
+Real, reproduced in the same day's 4v4 telemetry (t3: 46-55 m/s income,
+asked=1, fusCount=0 for the last 10+ minutes). Mechanism: a reactor ask whose
+task died without ever producing a nanoframe never returned its
+`gFusionsAsked` count, wedging `ReactorPipelineOpen()` closed for the rest of
+the game. Fixed in `events.as` (`apex: reactor ask returned` log line).
+**UNRESOLVED until a watched game shows every player reaching fusions.**
+
 ## The Brain owns (nearly) all building — standing architecture goal
 
 2026-08-15, watching: "We should have almost all our building going through
