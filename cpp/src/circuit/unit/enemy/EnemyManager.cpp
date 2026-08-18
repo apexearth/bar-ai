@@ -412,7 +412,15 @@ void CEnemyManager::PurgeStaleGhosts(int frame, int confirmedAgeFrames, int unkn
 		}
 		const int age = frame - seen;
 		if (e->IsHidden()) {
-			if (age > confirmedAgeFrames) {
+			// A STATIC cannot slip into fog: hidden means we saw its tile and
+			// the building was gone -- it is dead, delete now (apexearth:
+			// "why not have the ghosts die immediately?"). MOBILES keep the
+			// short fuse: hidden often just means it walked behind a hill,
+			// and its cost is the sizing pessimism -- plus battle vision
+			// flickers, and instant deletion would thrash delete/re-register.
+			CCircuitDef* ecdef = e->GetCircuitDef();
+			const bool isStatic = (ecdef != nullptr) && !ecdef->IsMobile();
+			if (isStatic || (age > confirmedAgeFrames)) {
 				DyingEnemy(e, frame);
 			}
 		} else if (e->NotInRadarAndLOS() && (age > unknownAgeFrames)) {
