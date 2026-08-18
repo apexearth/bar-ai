@@ -17,28 +17,14 @@ int  gVolleyUntil = 0;          // frames: standing orders are left alone
 AIFloat3 gVolleyAt;
 int  gNukeNextLog = 0;
 
-// Where we already fired, so the director never re-nukes the same crater
-// while richer ground stands -- apexearth: "us keep nuking a spot which we'd
-// already nuked a bunch... we know it isn't important." Bounded ring.
-array<AIFloat3> gNukedPos;
-array<int>      gNukedFrame;
-
-bool RecentlyNuked(const AIFloat3 &in p)
-{
-	const int keep = int(ai.GetTunable("apex_nuke_repeat_secs", 300.f)) * SECOND;
-	const float sqR = 900.f * 900.f;
-	for (uint i = 0; i < gNukedPos.length(); ) {
-		if (ai.frame - gNukedFrame[i] > keep) {
-			gNukedPos.removeAt(i);
-			gNukedFrame.removeAt(i);
-			continue;
-		}
-		if (gNukedPos[i].SqDistance2D(p) < sqR)
-			return true;
-		++i;
-	}
-	return false;
-}
+// The blast is knowledge: 30s after a volley lands, anything the enemy model
+// still REMEMBERS (unsensed) inside the blast ground is forgotten -- the
+// missile either killed it or it fled. Fixes the model, not the targeting:
+// apexearth rejected a fired-here ledger for exactly that reason ("should
+// fix the memory to be updated"). The LOS purge (HostileInLOS) keeps doing
+// the same for scouted ground.
+AIFloat3 gForgetAt;
+int gForgetFrame = -1;
 
 bool IsSiloDef(const CCircuitDef@ d)
 {
@@ -93,6 +79,14 @@ void UpdateNukes()
 	if (silos.length() == 0)
 		return;
 
+	// The scheduled post-impact forget, volley in progress or not.
+	if ((gForgetFrame >= 0) && (ai.frame >= gForgetFrame)) {
+		gForgetFrame = -1;
+		const int n = ai.ForgetEnemiesNear(gForgetAt, 960.f);
+		AiLog(Factory::T() + "apex: nuke ground confirmed -- forgot "
+			+ n + " remembered enemies at the impact");
+	}
+
 	// A volley in progress holds its orders; re-evaluate once it is spent or
 	// stale (targets die, the ground gets nuked -- 90s is plenty).
 	if ((ai.frame < gVolleyUntil) && (stock > 0))
@@ -114,8 +108,6 @@ void UpdateNukes()
 		const AIFloat3 p = aiEnemyMgr.GetEnemyGroupPos(i);
 		if (!OnMap(p) || (Military::ForwardFraction(p) < 0.35f))
 			continue;
-		if (RecentlyNuked(p))
-			continue;      // the crater is not a target
 		const float cost = aiEnemyMgr.GetEnemyGroupCost(i);
 		if (cost < minValue)
 			continue;
@@ -158,12 +150,8 @@ void UpdateNukes()
 		silos[i].CmdAttackGround(bestPos);
 	gVolleyAt = bestPos;
 	gVolleyUntil = ai.frame + 90 * SECOND;
-	gNukedPos.insertLast(bestPos);
-	gNukedFrame.insertLast(ai.frame);
-	if (gNukedPos.length() > 32) {
-		gNukedPos.removeAt(0);
-		gNukedFrame.removeAt(0);
-	}
+	gForgetAt = bestPos;
+	gForgetFrame = ai.frame + 30 * SECOND;   // flight time, then the ground is fact
 	AiLog(Factory::T() + "apex: NUKE VOLLEY " + stock + " missiles ("
 		+ needed + " needed) at " + int(bestPos.x) + "," + int(bestPos.z)
 		+ " worth " + formatFloat(bestCost, "", 0, 0)

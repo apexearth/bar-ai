@@ -10,6 +10,7 @@
 #include "script/ScriptManager.h"
 #include "script/RefCounter.h"
 #include "map/ThreatMap.h"
+#include "map/MapManager.h"
 #include "scheduler/Scheduler.h"
 #include "setup/SetupManager.h"
 #include "terrain/TerrainManager.h"
@@ -341,6 +342,31 @@ static int CCircuitUnit_GetStockpile(CCircuitUnit* unit)
 	} catch (const std::exception& e) {
 	}
 	return 0;
+}
+
+// apex: what we witnessed makes knowledge. Marks every REMEMBERED (currently
+// unsensed) enemy within radius as hidden -- the same flag the LOS purge
+// (CMapManager::HostileInLOS) sets when scouted ground shows nothing there.
+// Used by the nuke director at a confirmed impact; a unit actually in radar
+// or LOS is untouched. Host-local bookkeeping only.
+static int CCircuitAI_ForgetEnemiesNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
+{
+	int n = 0;
+	const float sqR = radius * radius;
+	CMapManager* mapMgr = circuit->GetMapManager();
+	for (const auto& units : {mapMgr->GetHostileUnits(), mapMgr->GetPeaceUnits()}) {
+		for (const auto& kv : units) {
+			CEnemyUnit* e = kv.second;
+			if ((e == nullptr) || e->IsHidden() || !e->NotInRadarAndLOS()) {
+				continue;
+			}
+			if (e->GetPos().SqDistance2D(pos) < sqR) {
+				e->SetHidden();
+				++n;
+			}
+		}
+	}
+	return n;
 }
 
 // apex: how many of a given enemy def stand within radius of pos -- the
@@ -966,6 +992,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 SnapBuildPos(CCircuitDef@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_SnapBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetEnemyTeamSize() const", asMETHOD(CCircuitAI, GetEnemyTeamSize), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int CountEnemyDefNear(int, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CountEnemyDefNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int ForgetEnemiesNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_ForgetEnemiesNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetLeadTeamId() const", asFUNCTION(CCircuitAI_GetLeadTeamId), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
