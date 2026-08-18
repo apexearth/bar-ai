@@ -1015,7 +1015,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// that unlocks T2 itself.
 	const bool preT2 = !Factory::gHaveT2;
 
+	// Sub-attribution for the 1.6ms/call measured live: which propose term
+	// owns it. Same Perf harness as the maketask wraps.
+	double perfT = Perf::T0();
 	Propose(MexWant(unit));
+	Perf::Add("br.mex", perfT);
+	perfT = Perf::T0();
 	// Before any factory exists there is exactly one builder in the game -- the
 	// commander -- so this gate stops the opening builder walking to a front
 	// site instead of requesting the first lab.
@@ -1033,6 +1038,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		// other still able to win the commander's turn pre-lab.
 		Propose(MexCoverWant(unit));
 	}
+	Perf::Add("br.fence", perfT);
+	perfT = Perf::T0();
 	Propose(AirCoverWant(unit));
 	Propose(MexUpgradeWant(unit));
 	// The optional class. Costs are read from the defs so a score means
@@ -1126,6 +1133,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	}
 	Propose(Simple("pinpoint", PINPOINT_VALUE, SideDef3("armtarg", "cortarg", "legtarg")));
 	}
+
+	Perf::Add("br.opt", perfT);
+	perfT = Perf::T0();
 
 	if (gWants.length() == 0)
 		return null;

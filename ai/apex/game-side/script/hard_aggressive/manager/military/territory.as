@@ -854,12 +854,29 @@ float EdgeExposure(const AIFloat3& in at, float reach)
 	return (s > 0.f) ? (1.f / s) : 1.f;
 }
 
+// Memo: the spot list for one (spacing, reach) pair on the same 30-frame
+// stamp RebuildFront already uses. Decide re-asks this several times a
+// second per player and the fill loop was a top term in the 44-66% AI frame
+// share measured live (frametime.py, MP 2026-08-18); the front does not
+// move inside a stamp.
+array<AIFloat3> gSpotsMemo;
+bool  gSpotsMemoOk = false;
+int   gSpotsMemoStamp = -1;
+float gSpotsMemoSpacing = -1.f;
+float gSpotsMemoReach = -1.f;
+
 bool FrontLineSpots(array<AIFloat3>& out pts, float spacing, float reach = 0.f)
 {
 	RebuildFront();
 	pts.resize(0);
 	if (!gFrontValid || (spacing < 1.f))
 		return false;
+	if ((gSpotsMemoStamp == gFrontStamp) && (gSpotsMemoSpacing == spacing)
+		&& (gSpotsMemoReach == reach))
+	{
+		pts = gSpotsMemo;
+		return gSpotsMemoOk;
+	}
 	const float back = ai.GetTunable("apex_front_setback", FRONT_SETBACK);
 	const bool useSafe = ai.GetTunable("apex_front_safe_edge", 1.f) > 0.f;
 	const float minReach = ai.GetTunable("apex_front_min_reach", 0.5f);
@@ -908,7 +925,12 @@ bool FrontLineSpots(array<AIFloat3>& out pts, float spacing, float reach = 0.f)
 				pts.insertLast(p);
 		}
 	}
-	return pts.length() > 0;
+	gSpotsMemo = pts;
+	gSpotsMemoOk = pts.length() > 0;
+	gSpotsMemoStamp = gFrontStamp;
+	gSpotsMemoSpacing = spacing;
+	gSpotsMemoReach = reach;
+	return gSpotsMemoOk;
 }
 
 // WHERE A TOWER COVERING THAT LINE CAN ACTUALLY GO.
