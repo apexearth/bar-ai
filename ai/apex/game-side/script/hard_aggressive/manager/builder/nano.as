@@ -177,7 +177,7 @@ bool NanoSiteAt(CCircuitUnit@ unit, CCircuitDef@ want, CCircuitUnit@ fac,
 			if (OnMap(site) && (site.distance2D(fpos) <= NANO_ASSIST_R)
 					&& !Base::SiteTaken(Base::NANO, site)
 					&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
-				SnapToNanoGrid(unit, want, site);
+				{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, site, sn)) site = sn; }
 				Base::ReserveSite(site);
 				here = site;
 				return true;
@@ -187,7 +187,7 @@ bool NanoSiteAt(CCircuitUnit@ unit, CCircuitDef@ want, CCircuitUnit@ fac,
 	AIFloat3 site = ai.FindBuildSiteNear(want, fpos, NANO_ASSIST_R);
 	if (OnMap(site) && !Base::SiteTaken(Base::NANO, site)
 			&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
-		SnapToNanoGrid(unit, want, site);
+		{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, site, sn)) site = sn; }
 		Base::ReserveSite(site);
 		here = site;
 		return true;
@@ -331,10 +331,11 @@ IUnitTask@ SurplusGantry(CCircuitUnit@ unit)
 // bottom/left/right at footprint pitch, so blocks form as a perfect grid
 // (apexearth 2026-08-18). Falls back to the free-search site when all four
 // cardinal slots are taken.
-bool SnapToNanoGrid(CCircuitUnit@ unit, CCircuitDef@ want, AIFloat3& inout here)
+bool SnapToNanoGrid(CCircuitUnit@ unit, CCircuitDef@ want,
+		const AIFloat3& in from, AIFloat3& out snapped)
 {
 	const float snapR = ai.GetTunable("apex_nano_snap_r", 200.f);
-	array<CCircuitUnit@>@ near = ai.GetOwnUnitsOfDef(want, here, snapR);
+	array<CCircuitUnit@>@ near = ai.GetOwnUnitsOfDef(want, from, snapR);
 	if ((near is null) || (near.length() == 0))
 		return false;
 	CCircuitUnit@ anchor = null;
@@ -342,7 +343,7 @@ bool SnapToNanoGrid(CCircuitUnit@ unit, CCircuitDef@ want, AIFloat3& inout here)
 	for (uint i = 0; i < near.length(); ++i) {
 		if (near[i] is null)
 			continue;
-		const float d = here.distance2D(near[i].GetPos(ai.frame));
+		const float d = from.distance2D(near[i].GetPos(ai.frame));
 		if (d < bestD) {
 			bestD = d;
 			@anchor = near[i];
@@ -368,7 +369,7 @@ bool SnapToNanoGrid(CCircuitUnit@ unit, CCircuitDef@ want, AIFloat3& inout here)
 			continue;
 		if (ThreatFor(unit, site) > CON_THREAT_VETO)
 			continue;
-		here = site;
+		snapped = site;
 		return true;
 	}
 	return false;
@@ -466,7 +467,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 					bigBuild.GetPos(ai.frame), NANO_ASSIST_R);
 			if (OnMap(site) && !Base::SiteTaken(Base::NANO, site)
 					&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
-				SnapToNanoGrid(unit, want, site);
+				{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, site, sn)) site = sn; }
 				Base::ReserveSite(site);
 				here = site;
 				sited = true;
@@ -478,7 +479,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	if (!sited && !BandSpot(unit, want, true, here))
 		return null;
 	if (!sited)
-		SnapToNanoGrid(unit, want, here);
+		{ AIFloat3 sn; if (SnapToNanoGrid(unit, want, here, sn)) here = sn; }
 
 	// Nanos go TIGHT, right next to each other, on a grid pitch that leaves the
 	// walkways clear -- spreading them out was the wrong trade against a naval
