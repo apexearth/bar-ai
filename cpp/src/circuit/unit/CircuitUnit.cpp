@@ -610,10 +610,21 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
 		if (!prefer) {
 			if (isGround) {  // los-cheat related
 				CmdAttackGround(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+				CmdFightTo(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // los-cheat related
 			} else {
+				// NO queued CmdFightTo here: a fight order re-acquires the
+				// closest enemy and stops all movement the moment a weapon
+				// bears (CMobileCAI::ExecuteFight), which cancelled the
+				// spacing move for every unit whose weapon out-ranges its
+				// sight -- a Hound (650 range, ~400 sight) reads !IsInLOS on
+				// nearly every properly-held standoff target, so its kite
+				// point died to this constantly (apexearth, watching: "when
+				// our hound style unit wants to run away or get spacing it
+				// uses a fight command"). The queued ATTACK already closes
+				// distance if the blip is genuinely out of reach, which was
+				// the fight order's whole job.
 				unit->Attack(enemy->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 			}
-			CmdFightTo(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // los-cheat related
 		}
 		CmdWantedSpeed(NO_SPEED_LIMIT);
 		CmdSetTarget(target);
