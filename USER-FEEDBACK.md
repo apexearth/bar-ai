@@ -19,8 +19,11 @@ really need to make lots more pulsars... Same with Legion Bastions... We
 literally need a line of them across the front of our bases... We're full on
 metal so we ought to be able to afford that." Landed same day: post-T2 T1
 core trimmed to a chaff share (`apex_t1_late_share`), pulsar want value and
-concurrent-build throttle both lift while metal-full. Watch whether the gun
-line actually forms; the placement still comes from the front-line siting.
+concurrent-build throttle both lift while metal-full. The missing half was
+the Brain's winner-takes-all pick (his own diagnosis) — fixed same day with
+the score-proportional roulette. CONFIRMED live 2026-08-17, watching: "its a
+huge improvement in terms of seeing what we want to have happen. We're
+building an actual frontline now whereas before we hardly had any."
 
 ## One player builds no eco — fusion pipeline wedge (FIXED 2026-08-17, verify)
 
