@@ -967,17 +967,28 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		if ((kiteFrac > 0.f) && (kv.first >= kiteMin)
 			&& !IsChargeDef(rowDef) && !squadOverwhelms)
 		{
-			float bestSq = SQUARE(kv.first * kiteFrac);
-			for (const CEnemyManager::SEnemyGroup& g
-				: manager->GetCircuit()->GetEnemyManager()->GetEnemyGroups())
-			{
-				if (g.influence <= 0.f) {
+			// Individual armed enemies, NOT group centroids: a Behemoth beside
+			// this row whose cluster centres hundreds of elmos away read as
+			// "no one near" and the row never kited -- apexearth: "snipers
+			// walking right up next to behemoths... It isn't keeping us safe
+			// from other enemies which may be nearby. We need to be thinking
+			// about all threats, not just our target." Search out to the full
+			// row range around the ring; the per-unit step below still only
+			// moves units the foe has actually closed on.
+			float bestSq = SQUARE(kv.first);
+			for (const auto& ekv : manager->GetCircuit()->GetEnemyInfos()) {
+				CEnemyInfo* e = ekv.second;
+				if ((e == nullptr) || e->IsHidden()) {
 					continue;
 				}
-				const float sq = g.pos.SqDistance2D(testPos);
+				CCircuitDef* ed = e->GetCircuitDef();
+				if ((ed == nullptr) || !ed->IsAttacker() || ed->IsAbleToFly()) {
+					continue;
+				}
+				const float sq = e->GetPos().SqDistance2D(testPos);
 				if (sq < bestSq) {
 					bestSq = sq;
-					kiteFoe = g.pos;
+					kiteFoe = e->GetPos();
 				}
 			}
 		}
