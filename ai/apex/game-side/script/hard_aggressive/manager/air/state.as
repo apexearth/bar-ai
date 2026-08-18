@@ -93,6 +93,15 @@ const float GROUND_LOST_RATIO = 1.5f;
 // instance publishes its own income, and only the elector publishes the answer.
 const string TV_AIRINC  = "airinc";
 const string TV_AIRLEAD = "airlead";
+// The team interceptor pool (apexearth 2026-08-18): every player publishes
+// enemy AIR value over its own home plus its home coords; players holding
+// fighters fly them to the worst-hit ally and re-issue while the raid lasts.
+const string TV_AIRRAID = "airraid";
+const string TV_HOMEX   = "homex";
+const string TV_HOMEZ   = "homez";
+int gNextRaidPub = 0;
+int gNextInterceptCmd = 0;
+int gInterceptTarget = -1;
 
 int  gAirLead      = -1;
 int  gLeadCheckedAt = -1000;

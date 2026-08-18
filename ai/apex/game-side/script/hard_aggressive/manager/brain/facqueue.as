@@ -582,12 +582,23 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 				isFloor.insertLast(true);
 			}
 		}
+		// AT T2 AIR, THE T1 PLANT RETIRES FROM ARMY (apexearth 2026-08-18:
+		// "when we're at T2 let's stop making T1 air army... 1200 total
+		// fighters, 1000 of which are T1"). Cons and scouts keep coming --
+		// the T2 plant's floors take over fighters and bombers with the T2
+		// defs GetRoleDef resolves there.
+		bool t1AirRetired = false;
+		{
+			CCircuitDef@ t2ap = SideDef3("armaap", "coraap", "legaap");
+			t1AirRetired = (t2ap !is null) && (t2ap.count > 0)
+					&& (fac.circuitDef.id != t2ap.id);
+		}
 		// FIGHTER COVER, income-scaled like the scouts. The mandatory late
 		// plants exist partly for this -- apexearth: "plenty of fighter
 		// coverage" -- and the mix's ratio path alone leaves the sky to
 		// whatever slots survive the ground lines.
 		CCircuitDef@ wing = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::AA.type);
-		if ((wing !is null) && wing.IsAvailable(ai.frame)) {
+		if (!t1AirRetired && (wing !is null) && wing.IsAvailable(ai.frame)) {
 			// ESCORT RATIO, not an independent income curve: fighters loiter
 			// and live while bombers die striking, so an income-only floor
 			// built "a whole ton of fighters" beside an empty bomber pool
@@ -611,7 +622,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		// fighter floor above it; fighters fill first (floors are top-down), so
 		// the escort exists before the strike.
 		CCircuitDef@ bomb = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::BOMBER);
-		if ((bomb !is null) && bomb.IsAvailable(ai.frame)) {
+		if (!t1AirRetired && (bomb !is null) && bomb.IsAvailable(ai.frame)) {
 			defs.insertLast(bomb);
 			want.insertLast(1 + int(aiEconomyMgr.metal.income
 					/ ai.GetTunable("apex_bomber_per", 40.f)));

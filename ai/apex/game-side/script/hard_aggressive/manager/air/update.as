@@ -31,6 +31,77 @@ bool HoldsUnit(CCircuitUnit@ unit)
 	return ai.GetTunable("apex_air_home_wave", 1.f) > 0.f;
 }
 
+// THE TEAM INTERCEPTOR POOL. Each player publishes the enemy AIR value over
+// its own home; any player holding fighters (and not mid-strike) flies them to
+// the worst-hit ally, re-issuing the move every few seconds so the stock task
+// cannot recall them while the raid lasts. Fighters auto-engage whatever air
+// they find there; when the ally's published value clears, the re-issue stops
+// and stock tasks drift them home. No cap: response scales with what we hold.
+void Intercept()
+{
+	if (Builder::gHomeSet && (ai.frame >= gNextRaidPub)) {
+		gNextRaidPub = ai.frame + 2 * SECOND;
+		ai.PublishTeamValue(TV_AIRRAID, ai.GetEnemyAirCostNear(Builder::gHomePos,
+				ai.GetTunable("apex_intercept_r", 1400.f)));
+		ai.PublishTeamValue(TV_HOMEX, Builder::gHomePos.x);
+		ai.PublishTeamValue(TV_HOMEZ, Builder::gHomePos.z);
+	}
+	if (gStrike || (ai.frame < gNextInterceptCmd))
+		return;
+	if (Fighters() < int(ai.GetTunable("apex_intercept_min_fighters", 4.f)))
+		return;
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return;
+	const float bar = ai.GetTunable("apex_intercept_min", 500.f);
+	int worst = -1;
+	float worstRaid = bar;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		if (t == ai.teamId)
+			continue;   // our own base already releases via defendHome
+		const float raid = ai.ReadTeamValue(t, TV_AIRRAID, 0.f);
+		if (raid > worstRaid) {
+			worstRaid = raid;
+			worst = t;
+		}
+	}
+	if (worst < 0) {
+		if (gInterceptTarget >= 0) {
+			gInterceptTarget = -1;
+			AiLog(Factory::T() + "apex: interceptors stand down");
+		}
+		return;
+	}
+	AIFloat3 to;
+	to.x = ai.ReadTeamValue(worst, TV_HOMEX, -1.f);
+	to.z = ai.ReadTeamValue(worst, TV_HOMEZ, -1.f);
+	if ((to.x < 0.f) || !OnMap(to))
+		return;
+	gNextInterceptCmd = ai.frame + 4 * SECOND;
+	int sent = 0;
+	for (int pass = 0; pass < 2; ++pass) {
+		CCircuitDef@ fd = (pass == 0) ? gFighter : gFighter1;
+		if (fd is null)
+			continue;
+		array<CCircuitUnit@>@ wings = ai.GetOwnUnitsOfDef(fd, to, 0.f);
+		if (wings is null)
+			continue;
+		for (uint i = 0; i < wings.length(); ++i) {
+			if (wings[i] !is null) {
+				wings[i].CmdMoveTo(to);
+				++sent;
+			}
+		}
+	}
+	if ((sent > 0) && (gInterceptTarget != worst)) {
+		gInterceptTarget = worst;
+		AiLog(Factory::T() + "apex: intercepting for ally t" + worst
+			+ " raid=" + formatFloat(worstRaid, "", 0, 0)
+			+ " fighters=" + sent);
+	}
+}
+
 void Release(const string& in why)
 {
 	gStrike = true;
@@ -101,6 +172,7 @@ void Update()
 	ai.PublishTeamValue(TV_AIRINC, aiEconomyMgr.metal.income);
 	if (Factory::ElectorTeamId() == ai.teamId)
 		RunElection();
+	Intercept();
 
 	// BOMBER DOCTRINE, every player, every tick: bombers never hunt armies.
 	// ANTI_STAT keeps static economy, builders and commanders as targets; the
