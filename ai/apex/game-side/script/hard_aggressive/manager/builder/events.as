@@ -214,6 +214,18 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 			+ " workers=" + ((had !is null) ? had.length() : 0)
 			+ " unit=" + (hasWorker ? int(had[0].id) : -1)
 			+ " at=" + int(at.x) + "," + int(at.z));
+		// The ask dies with the TASK too: a reactor ask that never produced a
+		// nanoframe leaves no unit whose death could give it back (NoteEcoGone
+		// runs from AiUnitDestroyed), so asked > count wedged
+		// ReactorPipelineOpen() closed for the rest of the game -- the
+		// no-fusion player. A removal WITH a nanoframe keeps its ask: the
+		// frame is a unit and its death routes through NoteEcoGone.
+		if (!done && (task.target is null) && IsReactorDef(task.buildDef.GetName())
+			&& (gFusionsAsked > 0))
+		{
+			--gFusionsAsked;
+			AiLog(Factory::T() + "apex: reactor ask returned -- task died unstarted");
+		}
 	}
 	// Paired with convert-task-added above; only the >=2000-metal reactor tier
 	// was previously logged, leaving converters (the def actually implicated in
