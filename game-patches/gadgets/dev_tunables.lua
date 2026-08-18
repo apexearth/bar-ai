@@ -65,6 +65,8 @@ local NAMES = {
 	"apex_pulsar_full_mult",  -- brain.as: pulsar want value mult while metal-full (2)
 	"apex_t1_late_share",     -- facqueue.as: post-T2 share of the T1 core count (0.34)
 	"apex_brain_roulette",    -- brain.as: 1 = score-proportional draw, 0 = argmax
+	"apex_air_home_wave",     -- air: non-lead aircraft mass at home, strike as a wave (1)
+	"apex_bomb_defend_aa",    -- air: enemy AA metal below which home defense may bomb armies (1000)
 	"apex_attack_threat_mod",
 	"apex_edge_band",
 	"apex_edge_bonus",

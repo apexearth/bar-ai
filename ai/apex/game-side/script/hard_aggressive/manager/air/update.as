@@ -9,14 +9,26 @@ namespace Air {
 // scouts our base -- but it does keep them off the map until the strike.
 bool HoldsUnit(CCircuitUnit@ unit)
 {
-	if (gStrike || !Armed())
+	if (gStrike)
 		return false;
 	ResolveDefs();
 	const int id = unit.circuitDef.id;
-	return ((gBomber !is null) && (id == gBomber.id))
+	const bool strikeDef = ((gBomber !is null) && (id == gBomber.id))
 		|| ((gFighter !is null) && (id == gFighter.id))
 		|| ((gBomber1 !is null) && (id == gBomber1.id))
 		|| ((gFighter1 !is null) && (id == gFighter1.id));
+	if (!strikeDef)
+		return false;
+	// The air lead follows the assassin's own discipline (Armed covers the
+	// abort and timing gates). EVERYONE ELSE holds too: a released fighter or
+	// bomber lands in stock tasks that wander it to the front line, where it
+	// dies for nothing -- apexearth: "they primarily only fly overhead of our
+	// bases... A bomber is not supposed to attack armies... they should mass
+	// up and then bomb enemies behind the lines." Held aircraft hover at the
+	// plant, which is home; the wave release lives in Update().
+	if (IsAirLead())
+		return Armed();
+	return ai.GetTunable("apex_air_home_wave", 1.f) > 0.f;
 }
 
 void Release(const string& in why)
@@ -88,6 +100,39 @@ void Update()
 	ai.PublishTeamValue(TV_AIRINC, aiEconomyMgr.metal.income);
 	if (Factory::ElectorTeamId() == ai.teamId)
 		RunElection();
+
+	// BOMBER DOCTRINE, every player, every tick: bombers never hunt armies.
+	// ANTI_STAT keeps static economy, builders and commanders as targets; the
+	// one exception is the enemy INSIDE our base (BaseContested, not merely
+	// near) while their AA is thin -- apexearth: "a bomber's priority is
+	// *only* an army during home base defense... its only if the enemy is
+	// getting really close and danger is high. We will certainly lose a lot
+	// of air if the enemy has flak trucks."
+	{
+		const bool defendHome = Military::BaseContested()
+			&& (EnemyAACost() < ai.GetTunable("apex_bomb_defend_aa", 1000.f));
+		if (gBomber !is null) {
+			if (defendHome) gBomber.DelAttribute(Unit::Attr::ANTI_STAT.type);
+			else            gBomber.AddAttribute(Unit::Attr::ANTI_STAT.type);
+		}
+		if (gBomber1 !is null) {
+			if (defendHome) gBomber1.DelAttribute(Unit::Attr::ANTI_STAT.type);
+			else            gBomber1.AddAttribute(Unit::Attr::ANTI_STAT.type);
+		}
+		// A held force does not hover through a base invasion: the same tight
+		// condition that permits army targets also releases whatever is massed.
+		if (defendHome && !gStrike && (Bombers() + Fighters() > 0))
+			Release("defending home");
+	}
+
+	// A NON-LEAD player's wave: mass at home, then strike together. Half the
+	// lead's scaled force is a real raid without hoarding a second air army.
+	if (!IsAirLead() && !gStrike
+		&& (ai.GetTunable("apex_air_home_wave", 1.f) > 0.f)
+		&& (Bombers() * 2 >= ScaledBombers()))
+	{
+		Release("home wave massed");
+	}
 
 	if (!IsAirLead() || gStrike || gAbort)
 		return;

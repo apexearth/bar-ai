@@ -263,15 +263,19 @@
 
 		"income_tier": [70],
 
+		// armpnix was 0.00 at every tier, so the draw could only produce Liche
+		// (2200 metal) -- apexearth: "mostly just nuclear bombers on arm late
+		// game, but we should consider making the normal bombers too which
+		// only are 1/10th the cost."
 		"unit":      ["armaca", "armhawk", "armawac", "armpnix", "armbrawl", "armblade", "armstil", "armliche"],
 
 		"land": {
-			"tier0": [ 0.90,     0.10,       0.10,      0.00,       0.60,      0.00,      0.10,      0.10],
-			"tier1": [ 0.50,     0.10,       0.10,      0.00,       0.00,      0.50,      0.20,      0.20]
+			"tier0": [ 0.90,     0.10,       0.10,      0.25,       0.60,      0.00,      0.10,      0.10],
+			"tier1": [ 0.50,     0.10,       0.10,      0.30,       0.00,      0.50,      0.20,      0.20]
 		},
 		"air": {
-			"tier0": [ 0.90,     0.30,       0.05,      0.00,       0.10,      0.00,      0.00,      0.00],
-			"tier1": [ 0.50,     0.30,       0.05,      0.00,       0.00,      0.50,      0.20,      0.20]
+			"tier0": [ 0.90,     0.30,       0.05,      0.25,       0.10,      0.00,      0.00,      0.00],
+			"tier1": [ 0.50,     0.30,       0.05,      0.30,       0.00,      0.50,      0.20,      0.20]
 		},
 
 		"caretaker": 3
