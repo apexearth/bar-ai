@@ -271,6 +271,14 @@ bool PlantApproved(CCircuitDef@ want)
 		return false;
 	SweepPlantAsks();
 	const int have = int(want.count) + InFlightOf(want);
+	// ONE basic air plant, full stop (apexearth, twice: "stop us from making
+	// 2 t1 air labs"). Backstopped HERE so no entrance -- ours or the
+	// unattributed C++ one ISSUES.md tracks -- can duplicate it.
+	if (IsAirFactory(want) && ((userData[want.id].attr & (Attr::T2 | Attr::T3)) == 0)
+		&& (have >= 1))
+	{
+		return false;
+	}
 	const int allowed = PlantsWanted(want);
 	if (have >= allowed) {
 		if (ai.frame >= gNextPlantCapLog) {

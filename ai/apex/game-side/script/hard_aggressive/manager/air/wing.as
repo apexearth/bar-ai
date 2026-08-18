@@ -58,17 +58,10 @@ bool HaveAirCon()
 CCircuitDef@ FactoryToBuild()
 {
 	ResolveDefs();
-	// A SECOND basic plant once committed and short of a force -- twice the
-	// aircraft per minute, and the strike is bounded by minutes, not by metal.
-	// Gated on ECONOMY as well as commitment: a second plant mid-T1 competes
-	// with the expansion that pays for the aircraft, so it waits for
-	// AIR_SECOND_PLANT_INCOME rather than firing on commitment alone.
-	if (Committed() && !Massed()
-		&& (aiEconomyMgr.metal.income >= AIR_SECOND_PLANT_INCOME)
-		&& (gPlant1 !is null) && gPlant1.IsAvailable(ai.frame) && (Have(gPlant1) == 1))
-	{
-		return gPlant1;
-	}
+	// NO SECOND BASIC PLANT, ever -- apexearth 2026-08-18: "stop us from
+	// making 2 t1 air labs. We do it all the time", and the 80-income bar
+	// here was "too low". Throughput comes from the T2 plant, which also
+	// retires the T1 line's army floors the moment it stands.
 	if ((gPlant2 is null) || !gPlant2.IsAvailable(ai.frame) || (Have(gPlant2) > 0))
 		return null;
 	if (Have(gPlant1) <= 0) {

@@ -20,11 +20,6 @@ const int   AIR_FROM       = 11 * MINUTE;
 // the strategy's whole premise of surprise.
 const float AIR_MIN_INCOME = 40.f;
 
-// Income before a SECOND basic air plant is worth owning. Twice the bar for
-// arming at all: the first plant is the strategy, the second is throughput, and
-// throughput is only real if the metal exists to keep both busy.
-const float AIR_SECOND_PLANT_INCOME = 80.f;
-
 // Enemy anti-air already on the field, in metal, above which we do not start.
 // GetEnemyCost sums what we have SEEN, so it is a floor on their AA rather than a
 // measurement of it -- which biases this gate towards committing.
