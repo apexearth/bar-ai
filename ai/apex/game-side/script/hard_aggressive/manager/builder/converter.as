@@ -452,7 +452,8 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	gNextConvert = ai.frame + CONVERT_PERIOD;
 	++gConverts;
 	AiLog(Factory::T() + "apex: converter " + want.GetName()
-		+ " spare=" + formatFloat(spare, "", 0, 0)
+		+ " spare=" + formatFloat(EnergySpare(), "", 0, 0)
+		+ " eFull=" + (aiEconomyMgr.isEnergyFull ? "1" : "0")
 		+ " workers=" + aiBuilderMgr.GetWorkerCount()
 		+ " asked=" + gConverts + " standing=" + want.count);
 	return post;
