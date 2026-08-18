@@ -1019,7 +1019,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// Before any factory exists there is exactly one builder in the game -- the
 	// commander -- so this gate stops the opening builder walking to a front
 	// site instead of requesting the first lab.
-	if (Factory::HaveAnyFactory()) {
+	// THE OPENING IS EXPANSION, NOT FORTIFICATION. apexearth: "prior to 5m
+	// into the game we should not have any frontline logic... should focus
+	// just on expansion." His number, tunable. Mex cover waits with it: a
+	// guard tower pre-5m is a mex not claimed. Reactive defence (the engine
+	// answering an actual raid at home) is untouched -- this gates the
+	// proactive line, not survival.
+	const bool frontPhase = (ai.frame >= int(ai.GetTunable("apex_front_from_min", 5.f)
+			* 60.f) * SECOND);
+	if (Factory::HaveAnyFactory() && frontPhase) {
 		Propose(FrontDefenceWant(unit));
 		// Same "fence" kind as FrontDefenceWant above; gating only one left the
 		// other still able to win the commander's turn pre-lab.

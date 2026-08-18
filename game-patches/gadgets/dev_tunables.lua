@@ -74,6 +74,7 @@ local NAMES = {
 	"apex_nuke_per_anti",     -- nukes.as: extra missiles saved per covering antinuke (8)
 	"apex_nuke_min_value",    -- nukes.as: cluster metal below which no warhead is spent (10000)
 	"apex_nuke_spread",       -- nukes.as: step between volley aim points on the spread line (450)
+	"apex_front_from_min",    -- brain.as: game-minutes before proactive front-line spend starts (5)
 	"apex_pulsar_per_income", -- statics.as: metal/s per pulsar allowed (40)
 	"apex_pulsar_nano_fwd",   -- statics.as: nano-cluster fwd fraction to site the gun there (0.15)
 	"apex_nano_site_min",     -- nano.as: min build cost that attracts a nano beside it (1500)
