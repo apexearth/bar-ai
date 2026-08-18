@@ -20,9 +20,12 @@ IUnitTask@ FacMakeInner(CCircuitUnit@ unit)
 {
 	FactoryDiag(unit);
 
+	double fT = Perf::T0();
 	IUnitTask@ t = AssistantWork(unit);
+	Perf::Add("fac.assist", fT);
 	if (t !is null)
 		return FacWon("assist", t);
+	fT = Perf::T0();
 
 	// A LINE THE BRAIN DRIVES IS ANSWERED HERE AND NOWHERE ELSE.
 	//
@@ -33,8 +36,13 @@ IUnitTask@ FacMakeInner(CCircuitUnit@ unit)
 	// above the queue-full branch is deliberate for the same reason: that branch
 	// hands the line to DefaultMakeTask, which is exactly what must not reach it.
 	// The Wait keeps the factory manager treating the line as busy.
-	if (Brain::DrivenFactory(unit))
-		return FacWon("facqueue", Brain::FactoryQueueTask(unit));
+	if (Brain::DrivenFactory(unit)) {
+		IUnitTask@ dq = Brain::FactoryQueueTask(unit);
+		Perf::Add("fac.driven", fT);
+		return FacWon("facqueue", dq);
+	}
+	Perf::Add("fac.free", fT);
+	fT = Perf::T0();
 
 	// Safe to sit first: this answers only for the advanced air plant, so the
 	// ground line's branches below are untouched.
