@@ -755,7 +755,25 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 	return w;
 }
 
+// One fence computation per second per player, shared across elections: the
+// per-point coverage scan (br.fence, 283us/election) re-derived an answer
+// whose inputs (front stamp, fence ledger) change on a seconds cadence. All
+// builders inside the window are offered the same stretch; Requests::Take
+// dedupes, so the second builder JOINS the tower instead of opening a
+// second stretch -- cohesion, not a compromise.
+Want@ gFenceMemo;
+int gFenceMemoAt = -999;
+
 Want@ FrontDefenceWant(CCircuitUnit@ unit)
+{
+	if (ai.frame - gFenceMemoAt < 30)
+		return gFenceMemo;
+	gFenceMemoAt = ai.frame;
+	@gFenceMemo = FrontDefenceWantFresh(unit);
+	return gFenceMemo;
+}
+
+Want@ FrontDefenceWantFresh(CCircuitUnit@ unit)
 {
 	FenceSweep();
 	// THE LINE IS SPACED BY THE TURRET'S OWN RANGE. The def is chosen FIRST -- it

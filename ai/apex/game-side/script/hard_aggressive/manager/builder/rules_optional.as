@@ -22,19 +22,26 @@ bool MexUpMonopoly()
 IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 {
 	if (!isComm) {
+		// Sub-attribution: mt.optional spikes to 26ms single calls -- name the
+		// rule. Same harness as the br.* timers.
+		double opT = Perf::T0();
 		// A damaged structure nearby (e.g. an HLT under fire) outranks the same
 		// stand-down RepairNear does for a wounded ally -- see RepairStructureNearby's
 		// own comment for why nothing else in the pipeline ever claims it.
 		IUnitTask@ structRepair = RepairStructureNearby(unit);
+		Perf::Add("op.structrep", opT);
 		if (structRepair !is null)
 			return structRepair;
+		opT = Perf::T0();
 		// con-heal (RepairNear) stays reflexive and ungated -- it answers
 		// something happening now (a nearby wounded unit) rather than
 		// claiming a slice of surplus, per docs/12-build-phases.md's own
 		// split of phase-gated (investment) vs never-phase-gated (reflexive)
 		// rules. RepairNear returns true when it has already handled (or is
 		// standing down for) a nearby repair.
-		if (RepairNear(unit)) {
+		const bool repaired = RepairNear(unit);
+		Perf::Add("op.repairnear", opT);
+		if (repaired) {
 			++gRepairHeld;
 			if (ai.frame >= gNextRepairLog) {
 				gNextRepairLog = ai.frame + 30 * SECOND;
@@ -80,7 +87,9 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			// 60-metal tower, one uncovered anchor at a time, and blindness is
 			// what it answers -- the engine's own sensor pass never covers held
 			// ground at all (see RadarNet's comment).
+			opT = Perf::T0();
 			IUnitTask@ eyes = RadarNet(unit);
+			Perf::Add("op.radarnet", opT);
 			if (eyes !is null)
 				return eyes;
 			// BUILD_PHASE gate on the remaining optional economy cluster: before an
@@ -131,7 +140,9 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 			// builder through Brain::Execute("energy"), ranked against the mex
 			// upgrade instead of ahead of it.
 			if (crewRole == Crew::HOME) {
-				IUnitTask@ juice = HomeEnergy(unit);
+				opT = Perf::T0();
+			IUnitTask@ juice = HomeEnergy(unit);
+			Perf::Add("op.energy", opT);
 				if (juice !is null)
 					return juice;
 			}
@@ -173,7 +184,9 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 				// construction crowding the metal pool -- under pressure,
 				// finishing beats expanding build power.
 				if (!BaseUnderAttack() && !Military::BaseContested()) {
-					IUnitTask@ nanoFirst = EcoNano(unit);
+					opT = Perf::T0();
+			IUnitTask@ nanoFirst = EcoNano(unit);
+			Perf::Add("op.econano", opT);
 					if (nanoFirst !is null)
 						return nanoFirst;
 				}
@@ -184,7 +197,9 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 					return help;
 				if (!Factory::EcoLeadActive()) {
 					if (!MexUpMonopoly()) {
+						opT = Perf::T0();
 						IUnitTask@ gun = Pulsar(unit);
+						Perf::Add("op.pulsar", opT);
 						if (gun !is null)
 							return gun;
 					}
