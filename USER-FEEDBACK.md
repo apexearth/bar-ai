@@ -10,6 +10,35 @@ work is cheaper than being told the same thing a fourth time.
 
 ---
 
+## UNRESOLVED — The army-brain campaign: three detectors and a merge fix (2026-08-19)
+
+Four directives from one hosted-play night, all one campaign:
+
+1. **Exploit enemy complacency.** "If enemy is not attacking us but just being
+   defensive, we should form our own defense a bit more and take the time to
+   scale our army." Needs a passivity detector (near-zero recent losses + base
+   uncontested + static front); in that state, greed eco AND scale army on our
+   own timeline — today ArmyDeficitMult damps the economy against a passive
+   hoarder, the opposite of taking advantage.
+2. **Push back when pushed.** "If the front line is moving back into us then we
+   need to make more army and push it back." Needs front-position memory: the
+   front centroid's distance-to-home, smoothed; sustained shrink raises the
+   army budget share and attack quota until the line recovers.
+3. **Defend the flank the front is wrapping around.** "One big vulnerability we
+   have is enemies attacking through the side. If we know the frontline is
+   shifting like that we should work hard to make defense in our base." Same
+   detector, second axis: track front BEARING as well as distance — a bearing
+   swing means a flank attack forming; base/flank defence goes up before the
+   damage, not after.
+4. **Squad merging is the root of the suicides.** "We should compare our power
+   in the area of the attack zone and only go in if our power is strong enough
+   IN THAT AREA" — investigated 2026-08-19: that comparison EXISTS and is live
+   (fixed twice in past sessions); what remains is the known ISSUES item that
+   fighting groups stay 1-2 units. Bad trades from tiny squads are also what
+   latches turtle ("we are probably often going into turtle mode because we
+   trade so poorly"). Fix the C++ squad merge first; the odds check is only as
+   good as the squad it is computed for. Measure on fight1v1.py trade ratios.
+
 ## Late game: chaff and rezbots, not T1 assault; a pulsar line on full metal
 
 2026-08-17, watching live: Thug/Centurion-class units late game are "very
