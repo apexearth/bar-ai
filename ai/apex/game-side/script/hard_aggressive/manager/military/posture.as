@@ -241,6 +241,7 @@ AIFloat3 gLaneAt;
 // shift of the line.
 const float LANE_STICKY = 900.f;
 bool gTradeHold = false;    // the anchor is pulled back while the trade is bad
+int gNextLaneLostLog = 0;
 
 // THE LIGHT T1 STOPS BEING A RAIDER AND BECOMES EYES, BUT ONLY IN T2 PHASE.
 //
@@ -362,7 +363,29 @@ void UpdateLanePos()
 	// defences instead of feeding into the same front. The budget tilt
 	// (LossArmyMult) is buying the army; this is where it stands. Releases by
 	// itself as the ledger drains or the trade recovers.
-	if (TradeBad() && Builder::gHomeSet) {
+	// MUSTER BEFORE STANDING FORWARD. With the pool anchored at the front, its
+	// fill stream walked out one unit at a time -- each solo crossing a death
+	// the trade ledger barely sees. The anchor stands forward only while our
+	// fielded army is a real fraction of the ENEMY's per-player mobile threat;
+	// below that the pool gathers at the defensive line and walks out as a
+	// group once it is. (Comparing against our own promote quota was
+	// self-referential -- both sides scaled with our own army and the bar
+	// could never be crossed.) Grunt-class power-per-metal ~0.017.
+	bool mustering = false;
+	if (Builder::gHomeSet && (aiEnemyMgr.mobileThreat > 1.f)) {
+		float allies = 1.f;
+		array<Id>@ roster = ai.GetTeamIds();
+		if ((roster !is null) && (roster.length() > 0))
+			allies = float(roster.length());
+		// Hysteresis: advance only at the full bar, fall back to mustering
+		// only below 80% of it -- a squad trading at the line must not flap
+		// the whole anchor every few seconds.
+		mustering = (aiMilitaryMgr.armyCost * 0.017f)
+			< (aiEnemyMgr.mobileThreat / allies)
+				* ai.GetTunable("apex_lane_muster", 0.5f)
+				* (gTradeHold ? 1.f : 0.8f);
+	}
+	if ((mustering || TradeBad()) && Builder::gHomeSet) {
 		const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 		if (OnMap(e)) {
 			const float f = ai.GetTunable("apex_lane_defensive", 0.15f);
@@ -375,12 +398,43 @@ void UpdateLanePos()
 		}
 		if (!gTradeHold) {
 			gTradeHold = true;
-			AiLog(Factory::T() + "apex: trade " + formatFloat(TradeRatio(), "", 0, 2)
-				+ " -- army stands defensively while it rebuilds");
+			AiLog(Factory::T() + (TradeBad()
+				? ("apex: trade " + formatFloat(TradeRatio(), "", 0, 2)
+					+ " -- army stands defensively while it rebuilds")
+				: "apex: mustering -- anchor waits at the line until a group stands"));
 		}
 	} else if (gTradeHold) {
 		gTradeHold = false;
-		AiLog(Factory::T() + "apex: trade recovered -- army returns to the front");
+		AiLog(Factory::T() + "apex: group formed -- anchor advances to the front");
+	}
+	// A LOST LANE MUST BE PERCEIVED AS LOST. The anchor used to stand at the
+	// front edge regardless of who now holds that ground, so the pool's fill
+	// stream walked one-by-one into enemy territory -- apexearth 2026-08-19:
+	// "that defend streaming in the game looks like an attack. We aren't
+	// perceiving how the forward lane is lost and we entirely need to be
+	// pulling back." Sample net influence at the anchor and walk it toward
+	// home until it stands on ground that is actually ours; it advances again
+	// the same way as our influence retakes the lane.
+	if (Builder::gHomeSet && OnMap(lane)) {
+		AIFloat3 toHome = Builder::gHomePos - lane;
+		const float len = sqrt(toHome.SqLength2D());
+		if (len > 1.f) {
+			toHome *= (1.f / len);
+			const float step = ai.GetTunable("apex_lane_back_step", 300.f);
+			int steps = 0;
+			while ((steps < 10) && OnMap(lane)
+				&& (float(steps) * step < len)
+				&& (ai.GetNetInflAt(lane) < -0.01f))
+			{
+				lane += toHome * step;
+				++steps;
+			}
+			if ((steps > 0) && (ai.frame >= gNextLaneLostLog)) {
+				gNextLaneLostLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: forward lane is lost -- anchor pulled back "
+					+ int(float(steps) * step) + " toward home");
+			}
+		}
 	}
 	if (!OnMap(lane))
 		return;
