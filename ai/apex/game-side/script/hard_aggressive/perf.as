@@ -100,7 +100,7 @@ float SimSpeed()
 
 bool GameLagging()
 {
-	return gSimSpeed < ai.GetTunable("apex_lag_speed", 0.85f);
+	return gSimSpeed < ai.GetTunable("apex_lag_speed", 0.98f);
 }
 
 void Flush()

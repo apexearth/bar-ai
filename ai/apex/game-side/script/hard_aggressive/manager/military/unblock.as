@@ -245,6 +245,27 @@ CCircuitUnit@ WallToEat(const AIFloat3& in at, const AIFloat3& in dir, int& out 
 	return pick;
 }
 
+// Stuck units already asked for, with a TTL: a reclaim that aborted (no
+// builder in reach) may be re-asked later rather than never.
+array<int> gStuckAsked;
+array<int> gStuckAskedFrame;
+
+bool StuckAskedFor(Id id)
+{
+	const int ttl = int(ai.GetTunable("apex_stuck_retry", 120.f)) * SECOND;
+	for (uint i = 0; i < gStuckAsked.length(); ) {
+		if (ai.frame - gStuckAskedFrame[i] > ttl) {
+			gStuckAsked.removeAt(i);
+			gStuckAskedFrame.removeAt(i);
+			continue;
+		}
+		if (gStuckAsked[i] == int(id))
+			return true;
+		++i;
+	}
+	return false;
+}
+
 // Returns true when a clearing order went out, so the caller can hold this unit
 // off for UNBLOCK_RECHECK rather than immediately asking for a second building.
 bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in dir)
@@ -252,8 +273,26 @@ bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in di
 	++gPennedSeen;
 	int wall = 0;
 	CCircuitUnit@ eat = WallToEat(at, dir, wall);
-	if (wall < UNBLOCK_MIN_WALL)
-		return false;   // held by terrain, not by us
+	if (wall < UNBLOCK_MIN_WALL) {
+		// Held by TERRAIN: nothing of ours to eat and the unit will never
+		// walk anywhere -- apexearth: "if we have units that are stuck and
+		// can't go anywhere then we should reclaim them." The metal comes
+		// home, the unit count drops, and a builder's lathe reaches over the
+		// terrain lip the unit cannot walk. Never the commander.
+		if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+			&& !StuckAskedFor(unit.id))
+		{
+			IUnitTask@ eatUnit = aiBuilderMgr.Enqueue(TaskB::Reclaim(
+					Task::Priority::NORMAL, unit));
+			if (eatUnit !is null) {
+				gStuckAsked.insertLast(int(unit.id));
+				gStuckAskedFrame.insertLast(ai.frame);
+				AiLog(Factory::T() + "apex: stuck " + unit.circuitDef.GetName()
+					+ " #" + unit.id + " terrain-penned -> reclaiming the unit");
+			}
+		}
+		return false;
+	}
 	if (eat is null)
 		return false;
 
