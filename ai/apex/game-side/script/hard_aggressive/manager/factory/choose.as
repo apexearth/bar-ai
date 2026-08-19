@@ -217,6 +217,8 @@ int InFlightTier(int tierMask)
 int gNextOpenGateLog = 0;
 int gNextT1TotalLog = 0;
 int gNextT2TotalLog = 0;
+// Frame the pre-T2 gate first found itself blocked; -1 while not blocked.
+int gT2StuckSince = -1;
 
 // The plant curve is applied ONCE, here, rather than at each of the dozen
 // returns inside ChooseFactory. Only the opening is exempt -- see below for why
@@ -378,6 +380,32 @@ bool PlantApproved(CCircuitDef@ want)
 	// keep their own earlier timing.
 	if (((userData[want.id].attr & Attr::T2) != 0)
 		&& (T2PlantCount() + InFlightTier(Attr::T2) >= 1)) {
+		// THE FIRST T2 PLANT CAN NEVER BE "EXTRA". The count above includes
+		// nanoframes and orphaned orders, so a first plant whose builders
+		// keep dying wedged a player below T2 forever -- measured live
+		// 2026-08-19: t0 refused coravp for minutes at 74-79 m/s with
+		// haveT2=0, inflight=2, t2=1 (matches/_engine 27m). Until a T2 plant
+		// actually STANDS, a blocked transition re-opens after
+		// apex_t2_stuck_secs; the afus+pulsar discipline below governs only
+		// genuinely EXTRA plants (a finished T2 exists).
+		if (!gHaveT2) {
+			if (gT2StuckSince < 0)
+				gT2StuckSince = ai.frame;
+			if (ai.frame - gT2StuckSince
+				>= int(ai.GetTunable("apex_t2_stuck_secs", 240.f)) * SECOND)
+			{
+				gT2StuckSince = ai.frame;   // re-arm: one re-order per window
+				AiLog(T() + "apex: first T2 plant is stuck unfinished -- "
+					+ "re-opening the order for " + want.GetName());
+				return true;
+			}
+			if (ai.frame >= gNextT2TotalLog) {
+				gNextT2TotalLog = ai.frame + 60 * SECOND;
+				AiLog(T() + "apex: " + want.GetName()
+					+ " waits -- first T2 plant still under way");
+			}
+			return false;
+		}
 		CCircuitDef@ afus = SideDef3(armafus, corafus, legafus);
 		CCircuitDef@ gun = SideDef3(armpulsarS, corpulsarS, legpulsarS);
 		const bool safeEnough = (afus !is null) && (afus.count > 0)
