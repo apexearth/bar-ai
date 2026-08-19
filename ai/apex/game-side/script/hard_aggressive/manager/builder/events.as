@@ -718,6 +718,39 @@ void CommIdleAttribute()
 			+ " hp=" + formatFloat(u.GetHealthPercent() * 100.f, "", 0, 0)
 			+ " infl=" + formatFloat(ai.GetEnemyInflAt(cp), "", 0, 2));
 	}
+	// THE DEAD-MAN FLEE runs from the SAMPLER, not from AiMakeTask: the flee
+	// rules only execute on re-election, and a commander in build range HOLDS
+	// its task -- it stood at its nanoframe being shot until it died
+	// (apexearth 2026-08-19: "sometimes our commander just stands still and
+	// lets himself get killed"). Hurt + enemy influence at its own tile =
+	// steered move away NOW, whatever it is holding; the task machinery
+	// resumes when the influence clears. Influence read, not GetEnemyCostAt
+	// (the crasher suspected in the disabled UpdateCommanderSafety).
+	{
+		const float hpNow = u.GetHealthPercent();
+		if ((hpNow < ai.GetTunable("apex_comm_flee_hp", 0.55f))
+			&& (ai.frame >= gNextCommDeadman))
+		{
+			const AIFloat3 cp2 = u.GetPos(ai.frame);
+			if (ai.GetEnemyInflAt(cp2) > 0.01f) {
+				gNextCommDeadman = ai.frame + 3 * SECOND;
+				AIFloat3 away = cp2 - aiEnemyMgr.GetEnemyPos();
+				if (away.SqLength2D() > 1.f) {
+					away.SafeNormalize2D();
+					for (int step = 3; step >= 1; --step) {
+						AIFloat3 to = cp2 + away * (250.f * float(step));
+						if (OnMap(to)) {
+							u.CmdMoveTo(to);
+							AiLog(Factory::T() + "apex: commander DEAD-MAN flee -- hp="
+								+ formatFloat(hpNow * 100.f, "", 0, 0)
+								+ "% under influence, moving regardless of task");
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
 	if ((t is null) || (t.GetType() == Task::Type::IDLE)
 		|| (t.GetType() == Task::Type::NIL))
 	{

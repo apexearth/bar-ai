@@ -44,6 +44,7 @@ const int COMM_RETREAT_TICKS = 30;
 int gCommRetreatStreak = 0;
 int gCommRetreatCut = 0;
 int gNextCommDiag = 0;
+int gNextCommDeadman = 0;   // events.as: task-independent flee throttle
 IUnitTask@ gCommLastLogged = null;  // see maketask.as's catch-all accept log
 
 // The dev gadget's commIdle counts an EMPTY ENGINE COMMAND QUEUE, which is a
