@@ -68,6 +68,7 @@ array<AIFloat3> gVolleySpots;
 uint gVolleyTick = 0;
 int gVolleyStock0 = 0;   // pooled stock when the volley launched
 int gVolleyNeed = 0;     // missiles this volley is sized to spend
+bool gVolleyDef = false; // defensive strike: the target is an army, and it moves
 
 bool IsSiloDef(const CCircuitDef@ d)
 {
@@ -136,6 +137,44 @@ void UpdateNukes()
 	// launching 5 give them a little bit of area or line/curve so they don't
 	// land all in exactly the same spot."
 	if ((ai.frame < gVolleyUntil) && (stock > 0)) {
+		// A DEFENSIVE VOLLEY TRACKS ITS ARMY. The aim points were laid where the
+		// group stood at launch; an attacking army keeps walking, so each tick
+		// the whole spread shifts to the group's current position. If our own
+		// army has since closed to that ground, the strike is called off --
+		// missiles already flying are spent, but no more follow into our line.
+		if (gVolleyDef) {
+			if (ai.GetAllyInflAt(gVolleyAt) > ai.GetTunable("apex_nuke_ally_max", 0.f)) {
+				for (uint i = 0; i < silos.length(); ++i)
+					silos[i].CmdStop();
+				gVolleyUntil = ai.frame;
+				AiLog(Factory::T() + "apex: defensive volley aborted -- our army holds the target ground");
+				return;
+			}
+			const int nG = aiEnemyMgr.GetEnemyGroupCount();
+			float bestD = 1500.f * 1500.f;
+			AIFloat3 now = gVolleyAt;
+			bool found = false;
+			for (int i = 0; i < nG; ++i) {
+				const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(i);
+				if (!OnMap(gp))
+					continue;
+				const float d = gp.SqDistance2D(gVolleyAt);
+				if (d < bestD) {
+					bestD = d;
+					now = gp;
+					found = true;
+				}
+			}
+			if (found && (now.SqDistance2D(gVolleyAt) > 100.f * 100.f)) {
+				const AIFloat3 delta = now - gVolleyAt;
+				for (uint i = 0; i < gVolleySpots.length(); ++i) {
+					AIFloat3 moved = gVolleySpots[i] + delta;
+					if (OnMap(moved))
+						gVolleySpots[i] = moved;
+				}
+				gVolleyAt = now;
+			}
+		}
 		// THE VOLLEY SPENDS ITS SIZE, NOT THE WHOLE POOL: a 20-deep stockpile
 		// against a 1-missile target drained entirely into one window
 		// (apexearth: "we sent like 20 nukes there"). Fired = stock delta;
@@ -149,7 +188,9 @@ void UpdateNukes()
 				+ " fired, " + stock + " saved");
 			return;
 		}
-		if (gVolleySpots.length() > 1) {
+		// Defensive volleys re-issue even a single spot: the shift above only
+		// lands if the standing order is refreshed.
+		if ((gVolleySpots.length() > 1) || (gVolleyDef && gVolleySpots.length() > 0)) {
 			for (uint i = 0; i < silos.length(); ++i) {
 				const uint s = (i + gVolleyTick) % gVolleySpots.length();
 				silos[i].CmdAttackGround(gVolleySpots[s]);
@@ -159,39 +200,66 @@ void UpdateNukes()
 		return;
 	}
 
-	// Pick the target: richest enemy cluster per antinuke covering it. The
-	// forward gate keeps this off our own ground -- home defense is the
-	// army's job, not a warhead's.
+	// Pick the target: richest enemy cluster per antinuke covering it. Two
+	// classes of target, one ranking:
+	//  - BASE targets, deep on their ground (fwd >= 0.35): the original case.
+	//  - DEFENSIVE targets, an army on OUR side of the midfield (apexearth
+	//    2026-08-19: "prioritize nuking armies which are attacking us"). These
+	//    outrank base targets by apex_nuke_def_bias, qualify at a lower value
+	//    floor (a few missiles' worth, since the alternative is that army
+	//    reaching our base), and are refused wherever our own army already
+	//    stands -- a warhead must never land on our own fight. The
+	//    apex_nuke_def_minfwd floor keeps it off the base itself: inside that
+	//    the blast costs us more than the army does.
 	const int nGroups = aiEnemyMgr.GetEnemyGroupCount();
 	float bestScore = 0.f;
 	AIFloat3 bestPos;
 	int bestAntis = 0;
 	float bestCost = 0.f;
+	bool bestDef = false;
 	// 10k floor (apexearth: "filter the metal to target areas of 10k metal
 	// or more if possible") -- with no qualifying target the missiles KEEP
 	// SAVING, which is the point; the stockpile only grows.
 	const float minValue = ai.GetTunable("apex_nuke_min_value", 10000.f);
+	// A defensive strike pays once the army is worth several missiles.
+	const float missileM = ai.GetTunable("apex_nuke_missile_cost", 1500.f);
+	const float defMin = missileM * ai.GetTunable("apex_nuke_payoff", 3.f);
+	const float allyMax = ai.GetTunable("apex_nuke_ally_max", 0.f);
 	for (int i = 0; i < nGroups; ++i) {
 		const AIFloat3 p = aiEnemyMgr.GetEnemyGroupPos(i);
-		if (!OnMap(p) || (Military::ForwardFraction(p) < 0.35f))
+		if (!OnMap(p))
+			continue;
+		const float fwd = Military::ForwardFraction(p);
+		const bool defensive = (fwd < 0.35f);
+		if (defensive && (fwd < ai.GetTunable("apex_nuke_def_minfwd", 0.12f)))
 			continue;
 		const float cost = aiEnemyMgr.GetEnemyGroupCost(i);
-		if (cost < minValue)
+		if (cost < (defensive ? defMin : minValue))
+			continue;
+		if (defensive && (ai.GetAllyInflAt(p) > allyMax))
 			continue;
 		const int antis = AntisCovering(p);
 		float score = cost / float(1 + antis);
-		// The repeat-strike dampener: halved per prior volley on this ground.
-		const float decay = ai.GetTunable("apex_nuke_repeat_decay", 0.5f);
-		int hits = StrikesOn(p);
-		if (hits > 6)
-			hits = 6;
-		for (int h = 0; h < hits; ++h)
-			score *= decay;
+		if (defensive) {
+			score *= ai.GetTunable("apex_nuke_def_bias", 2.f);
+		} else {
+			// The repeat-strike dampener: halved per prior volley on this
+			// ground. Base ground only -- each attacking wave through the same
+			// lane is a new army, and the intel-spend already stops re-fires
+			// until the ground is re-sighted.
+			const float decay = ai.GetTunable("apex_nuke_repeat_decay", 0.5f);
+			int hits = StrikesOn(p);
+			if (hits > 6)
+				hits = 6;
+			for (int h = 0; h < hits; ++h)
+				score *= decay;
+		}
 		if (score > bestScore) {
 			bestScore = score;
 			bestPos = p;
 			bestAntis = antis;
 			bestCost = cost;
+			bestDef = defensive;
 		}
 	}
 	if (bestScore <= 0.f) {
@@ -206,7 +274,17 @@ void UpdateNukes()
 	// Volley size scales with the shield, not a flat number: an undefended
 	// base eats the first missile; each antinuke costs apex_nuke_per_anti
 	// extra missiles to saturate. Fire only when the pool covers it.
-	const int needed = 1 + bestAntis * int(ai.GetTunable("apex_nuke_per_anti", 8.f));
+	// A defensive volley is additionally sized to the ARMY's worth: one blast
+	// covers a clump, and each further missile pays only if there is another
+	// apex_nuke_value_per of army spread beyond it -- "an optimum # of nukes",
+	// derived from value per missile rather than a flat count.
+	int needed = 1 + bestAntis * int(ai.GetTunable("apex_nuke_per_anti", 8.f));
+	if (bestDef) {
+		int extra = int(bestCost / ai.GetTunable("apex_nuke_value_per", 12000.f));
+		if (extra > 3)
+			extra = 3;
+		needed += extra;
+	}
 	if (stock < needed) {
 		if (ai.frame >= gNukeNextLog) {
 			gNukeNextLog = ai.frame + 60 * SECOND;
@@ -244,10 +322,19 @@ void UpdateNukes()
 	for (uint i = 0; i < silos.length(); ++i)
 		silos[i].CmdAttackGround(gVolleySpots[i % gVolleySpots.length()]);
 	gVolleyAt = bestPos;
-	gVolleyUntil = ai.frame + 90 * SECOND;
+	// A defensive window is short: the army either dies to the volley or walks
+	// out of the picture, and the next evaluation should be free to re-decide.
+	gVolleyUntil = ai.frame + (bestDef
+		? int(ai.GetTunable("apex_nuke_def_window", 25.f)) * SECOND
+		: 90 * SECOND);
 	gVolleyStock0 = stock;
 	gVolleyNeed = needed;
-	NoteStrikeOn(bestPos);
+	gVolleyDef = bestDef;
+	// The permanent repeat dampener is for ground that gets rebuilt; each
+	// attacking wave through the same lane is a new army and must stay
+	// targetable, so defensive strikes leave no mark on it.
+	if (!bestDef)
+		NoteStrikeOn(bestPos);
 	// COMMITTING THE VOLLEY SPENDS THE INTEL. Everything remembered in the
 	// whole target area is marked unseen NOW, not 30s later: the missiles are
 	// paid for, and until a scout or radar actually sights enemies there
@@ -268,7 +355,7 @@ void UpdateNukes()
 	AiLog(Factory::T() + "apex: NUKE VOLLEY " + stock + " missiles ("
 		+ needed + " needed) at " + int(bestPos.x) + "," + int(bestPos.z)
 		+ " worth " + formatFloat(bestCost, "", 0, 0)
-		+ " antis=" + bestAntis);
+		+ " antis=" + bestAntis + (bestDef ? " DEFENSIVE" : ""));
 }
 
 }  // namespace Brain
