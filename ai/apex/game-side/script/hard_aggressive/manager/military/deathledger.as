@@ -20,6 +20,8 @@ const float FWD_HOME  = 0.35f;   // below this it died defending home
 float gBleedFwd  = 0.f;          // decayed metal: deep-forward combat deaths
 float gBleedHome = 0.f;          // decayed metal: home-ground combat deaths
 float gKillFwd   = 0.f;          // decayed metal: enemy things WE killed deep forward
+float gLossAll   = 0.f;          // decayed metal: ALL combat deaths, any ground
+float gKillAll   = 0.f;          // decayed metal: ALL kills by our own units
 // What killed our army, by attacker class -- observability first; consumers
 // get their own measured pass.
 float gDeadToStatic = 0.f;
@@ -30,6 +32,7 @@ int   gNextBleedLog = 0;
 
 void NoteCombatLoss(float costM, float fwd)
 {
+	gLossAll += costM;
 	if (fwd >= FWD_DEEP)
 		gBleedFwd += costM;
 	else if (fwd <= FWD_HOME)
@@ -40,7 +43,10 @@ void NoteCombatLoss(float costM, float fwd)
 // their ground is the payoff that justifies being there -- eco and army alike.
 void NoteEnemyKill(float costM, float fwd, bool byUs)
 {
-	if (byUs && (fwd >= FWD_DEEP))
+	if (!byUs)
+		return;
+	gKillAll += costM;
+	if (fwd >= FWD_DEEP)
 		gKillFwd += costM;
 }
 
@@ -81,6 +87,59 @@ float BleedCaution()
 	return m;
 }
 
+//------------------------------------------------------------------------------
+// THE TRADE, EVERYWHERE -- not just deep forward. apexearth 2026-08-19: "if our
+// army keeps getting killed then we need to focus on making more army, and
+// using that army in defense." Metal killed over metal lost, decayed over the
+// same window; only meaningful once real metal has died, so the opening (no
+// losses) and a quiet game both read as a neutral trade.
+//------------------------------------------------------------------------------
+
+// Enough recent combat to judge by: losses worth this many seconds of income.
+bool TradeMeaningful()
+{
+	const float inc = aiEconomyMgr.metal.income;
+	return gLossAll > inc * ai.GetTunable("apex_trade_vol", 20.f);
+}
+
+float TradeRatio()
+{
+	if (!TradeMeaningful() || (gLossAll <= 1.f))
+		return 1.f;
+	return gKillAll / gLossAll;
+}
+
+// Trading badly enough to change posture: we die and they mostly don't.
+bool TradeBad()
+{
+	return TradeRatio() < ai.GetTunable("apex_trade_bad", 0.6f);
+}
+
+// NET combat burn as a fraction of income, all grounds -- the "army keeps
+// getting killed" pressure. Same construction as ForwardBleedFrac but total.
+float LossPressureFrac()
+{
+	const float inc = aiEconomyMgr.metal.income;
+	if (inc <= 0.5f)
+		return 0.f;
+	const float net = gLossAll - gKillAll;
+	if (net <= 0.f)
+		return 0.f;
+	return (net / BLEED_TAU) / inc;
+}
+
+// >1 tilts the budget split toward ARMY while the army is being eaten faster
+// than it eats back. Scaled by the pressure, bounded so a massacre cannot
+// starve the economy that has to pay for the rebuild.
+float LossArmyMult()
+{
+	float m = 1.f + LossPressureFrac() * ai.GetTunable("apex_loss_army", 2.f);
+	const float cap = ai.GetTunable("apex_loss_army_cap", 1.7f);
+	if (m > cap)
+		m = cap;
+	return m;
+}
+
 void UpdateDeathLedger()
 {
 	const int step = ai.frame - gBleedLast;
@@ -93,6 +152,8 @@ void UpdateDeathLedger()
 	gBleedFwd *= k;
 	gBleedHome *= k;
 	gKillFwd *= k;
+	gLossAll *= k;
+	gKillAll *= k;
 	gDeadToStatic *= k;
 	gDeadToAir *= k;
 	gDeadToMobile *= k;
@@ -103,6 +164,9 @@ void UpdateDeathLedger()
 			+ " home=" + formatFloat(gBleedHome, "", 0, 0)
 			+ " frac=" + formatFloat(ForwardBleedFrac(), "", 0, 2)
 			+ " caution=" + formatFloat(BleedCaution(), "", 0, 2)
+			+ " trade=" + formatFloat(TradeRatio(), "", 0, 2)
+			+ (TradeBad() ? " BAD" : "")
+			+ " armyMult=" + formatFloat(LossArmyMult(), "", 0, 2)
 			+ " by[stat/air/mob]=" + formatFloat(gDeadToStatic, "", 0, 0)
 			+ "/" + formatFloat(gDeadToAir, "", 0, 0)
 			+ "/" + formatFloat(gDeadToMobile, "", 0, 0));

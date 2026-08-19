@@ -34,7 +34,13 @@ int gNextBudgetLog = 0;
 // contract the ROLE_ rows already had.
 float RawTarget(Cat c)
 {
-	return RawBase(c) * Persona::ShareMult(int(c));
+	float w = RawBase(c) * Persona::ShareMult(int(c));
+	// Losing the army faster than it kills raises the ARMY row itself; the
+	// normalisation below then pays for it out of every other category. See
+	// Military::LossArmyMult -- pressure-scaled and bounded, never a switch.
+	if (c == ARMY)
+		w *= Military::LossArmyMult();
+	return w;
 }
 
 float RawBase(Cat c)

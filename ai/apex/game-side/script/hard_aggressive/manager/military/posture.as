@@ -240,6 +240,7 @@ AIFloat3 gLaneAt;
 // it. Roughly two turret ranges: below this it is jitter, above it is a real
 // shift of the line.
 const float LANE_STICKY = 900.f;
+bool gTradeHold = false;    // the anchor is pulled back while the trade is bad
 
 // THE LIGHT T1 STOPS BEING A RAIDER AND BECOMES EYES, BUT ONLY IN T2 PHASE.
 //
@@ -354,6 +355,32 @@ void UpdateLanePos()
 			return;
 		const float f = ai.GetTunable("apex_lane_forward", LANE_FORWARD);
 		lane = Builder::gHomePos + (foe - Builder::gHomePos) * f;
+	}
+	// TRADING BADLY -> STAND DEFENSIVELY. When recent combat is a clearly losing
+	// exchange (TradeRatio below the bar on real volume), the regroup anchor
+	// pulls back over our own ground so the rebuilt army masses behind the
+	// defences instead of feeding into the same front. The budget tilt
+	// (LossArmyMult) is buying the army; this is where it stands. Releases by
+	// itself as the ledger drains or the trade recovers.
+	if (TradeBad() && Builder::gHomeSet) {
+		const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
+		if (OnMap(e)) {
+			const float f = ai.GetTunable("apex_lane_defensive", 0.15f);
+			AIFloat3 back = Builder::gHomePos + (e - Builder::gHomePos) * f;
+			if (OnMap(back)
+				&& (back.SqDistance2D(Builder::gHomePos) < lane.SqDistance2D(Builder::gHomePos)))
+			{
+				lane = back;
+			}
+		}
+		if (!gTradeHold) {
+			gTradeHold = true;
+			AiLog(Factory::T() + "apex: trade " + formatFloat(TradeRatio(), "", 0, 2)
+				+ " -- army stands defensively while it rebuilds");
+		}
+	} else if (gTradeHold) {
+		gTradeHold = false;
+		AiLog(Factory::T() + "apex: trade recovered -- army returns to the front");
 	}
 	if (!OnMap(lane))
 		return;
