@@ -222,4 +222,21 @@ IUnitTask@ FallbackMex(CCircuitUnit@ unit)
 	return best;
 }
 
+// Un-upgraded T1 extractors still standing in the home patch. While any
+// remain, upgrading them IS the advanced-constructor job -- apexearth
+// 2026-08-19: "we should dedicate ourselves to upgrading those 3 mexes before
+// we care about a fusion or anything else... the quickest path to getting more
+// metal is upgrading those mexes."
+uint HomeMexOutstanding()
+{
+	if (!gHomeSet)
+		return 0;
+	CCircuitDef@ mex = SideDef3(armmex, cormex, legmex);
+	if ((mex is null) || (mex.count <= 0))
+		return 0;
+	array<CCircuitUnit@>@ mine = ai.GetOwnUnitsOfDef(mex, gHomePos,
+			ai.GetTunable("apex_mexup_home_r", 1200.f));
+	return (mine is null) ? 0 : mine.length();
+}
+
 }  // namespace Builder

@@ -492,22 +492,38 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// the other makes the fusion stuff... an upgraded mex gives 4 times the
 	// metal." One upgrade under way at all times, read from the live MEXUP
 	// task count -- no ledger to drift, nothing to resync.
-	if (isAdvCon
-		&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::MEXUP)) == 0))
-	{
-		Brain::Want@ up = Brain::MexUpgradeWant(unit);
-		if ((up !is null) && (up.def !is null)
-			&& unit.circuitDef.CanBuild(up.def))
+	// HOME MEXES FIRST, WITH EVERY ADVANCED CON. While un-upgraded extractors
+	// stand in the home patch, one-at-a-time is the wrong bound: a second adv
+	// con used to fall through to the fusion lane here. Until the home patch is
+	// fully upgraded (or metal is full and the upgrade buys nothing), each adv
+	// con takes its own upgrade -- concurrent MEXUP tasks up to the number of
+	// mexes left, and the reactor lane below waits its turn.
+	const uint homeLeft = Builder::HomeMexOutstanding();
+	const bool homeRush = isAdvCon && (homeLeft > 0) && !aiEconomyMgr.isMetalFull;
+	if (isAdvCon) {
+		const int upTasks = aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::MEXUP));
+		// The orphan guard: never re-enqueue for a builder already on an
+		// upgrade -- Reevaluate calls this every update, and each extra enqueue
+		// after the first is a task nobody will ever work.
+		const bool onUpgrade = (SiteBuildName(unit.task) == "mexup");
+		if (!onUpgrade
+			&& ((upTasks == 0) || (homeRush && (upTasks < int(homeLeft)))))
 		{
-			IUnitTask@ upt = aiBuilderMgr.EnqueueMexUp(up.pos, up.def);
-			if (upt !is null) {
-				AiLog(Factory::T() + "apex: mexup pipeline by "
-					+ unit.circuitDef.GetName());
-				return upt;
+			Brain::Want@ up = Brain::MexUpgradeWant(unit);
+			if ((up !is null) && (up.def !is null)
+				&& unit.circuitDef.CanBuild(up.def))
+			{
+				IUnitTask@ upt = aiBuilderMgr.EnqueueMexUp(up.pos, up.def);
+				if (upt !is null) {
+					AiLog(Factory::T() + "apex: mexup pipeline by "
+						+ unit.circuitDef.GetName()
+						+ (homeRush ? (" (home rush, " + homeLeft + " left)") : ""));
+					return upt;
+				}
 			}
 		}
 	}
-	if (isAdvCon && ReactorPipelineOpen()) {
+	if (isAdvCon && !homeRush && ReactorPipelineOpen()) {
 		@t = EcoFusion(unit);
 		if (t !is null)
 			return t;
