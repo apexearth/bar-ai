@@ -87,6 +87,8 @@ local NAMES = {
 	"apex_loss_army_cap",     -- deathledger.as: ceiling on the loss-driven army budget tilt (1.7)
 	"apex_lane_defensive",    -- posture.as: home->enemy fraction the army holds at while trading badly (0.15)
 	"apex_mexup_home_r",      -- mexwork.as: radius around home whose T1 mexes gate the fusion lane (1200)
+	"apex_impact_ref",        -- brain.as: income at which eco-want relative-impact scaling is neutral (30)
+	"apex_conv_dry_mult",     -- brain.as: convert-want discount while energy is not overflowing (0.25)
 	"apex_front_from_min",    -- brain.as: game-minutes before proactive front-line spend starts (5)
 	"apex_conv_drain",        -- mexguard.as: energy/s one converter eats (70)
 	"apex_conv_reserve",      -- mexguard.as: spare energy flow kept above the new converter drain (50)

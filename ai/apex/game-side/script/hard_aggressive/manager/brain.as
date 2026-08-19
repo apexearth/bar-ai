@@ -166,6 +166,25 @@ class Want
 		scaled *= BudgetMult(BudgetCatOf(kind));
 		scaled *= Persona::WantMult(kind);
 		if (IsEcoKind(kind)) {
+			// RELATIVE IMPACT (apexearth 2026-08-19): "do the math" -- a mex
+			// worth 2.5/s against 10/s of income is a 25% raise and should
+			// dominate; against 100/s it is noise. Values are metal/s, so
+			// dividing by income prices each eco want by the FRACTION it grows
+			// the economy. Neutral at apex_impact_ref income (where the flat
+			// values were calibrated); floored so a dead economy cannot divide
+			// by nothing.
+			{
+				const float inc = aiEconomyMgr.metal.income;
+				const float ref = ai.GetTunable("apex_impact_ref", 30.f);
+				float denom = inc;
+				if (denom < ref * 0.2f)
+					denom = ref * 0.2f;
+				scaled *= ref / denom;
+			}
+			// A converter that has no spare energy to eat produces nothing:
+			// its worth is discounted until the grid actually overflows.
+			if ((kind == "convert") && !Builder::EnergyWasting())
+				scaled *= ai.GetTunable("apex_conv_dry_mult", 0.25f);
 			if (EcoSated())
 				scaled *= ECO_SATED_MULT;
 			// Expansion is exempt: taking ground is how we out-produce them back
