@@ -66,4 +66,90 @@ const float JAMMER_COVER = 900.f;
 const float RAID_MIN_EARLY = 45.f;   // hold them home
 float gRaidMinStock = -1.f;
 
+//------------------------------------------------------------------------------
+// THE APPROACH SENSOR. apexearth 2026-08-19, watching a heavy park outside his
+// base: "It is visible long before they even get to our base that they're
+// pushing towards our base. Why aren't we preparing for it?" The enemy model
+// already tracks the group; nothing converted "closing on home" into a signal.
+// Each pass matches known groups to their last sighting and declares a push
+// incoming when a group worth real metal has CLOSED distance on our home
+// inside the notice radius. Consumed by Builder::PushAnswer, which sites
+// defence on the approach line while the walk is still in progress.
+//------------------------------------------------------------------------------
+array<AIFloat3> gAppPos;
+array<float>    gAppDist;
+array<int>      gAppSeen;
+AIFloat3 gIncomingPos;
+float    gIncomingCost = 0.f;
+int      gIncomingAt = -999999;
+int      gNextApproach = 0;
+int      gNextApproachLog = 0;
+
+void UpdateApproach()
+{
+	if ((ai.frame < gNextApproach) || !Builder::gHomeSet)
+		return;
+	gNextApproach = ai.frame + 5 * SECOND;
+	const float notice = ai.GetTunable("apex_push_notice_r", 4500.f);
+	const float minCost = ai.GetTunable("apex_push_cost", 2500.f);
+	const float closingBar = ai.GetTunable("apex_push_closing", 150.f);
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int i = 0; i < nG; ++i) {
+		const AIFloat3 p = aiEnemyMgr.GetEnemyGroupPos(i);
+		if (!OnMap(p))
+			continue;
+		const float cost = aiEnemyMgr.GetEnemyGroupCost(i);
+		if (cost < minCost)
+			continue;
+		const float d = p.distance2D(Builder::gHomePos);
+		if (d > notice)
+			continue;
+		// Match against the tracked sightings; the group is the same one if it
+		// stands within a step of where one stood last pass.
+		int hit = -1;
+		for (uint j = 0; j < gAppPos.length(); ++j) {
+			if (gAppPos[j].SqDistance2D(p) < 900.f * 900.f) {
+				hit = int(j);
+				break;
+			}
+		}
+		if (hit < 0) {
+			gAppPos.insertLast(p);
+			gAppDist.insertLast(d);
+			gAppSeen.insertLast(ai.frame);
+			continue;
+		}
+		const float closed = gAppDist[hit] - d;
+		gAppPos[hit] = p;
+		gAppDist[hit] = d;
+		gAppSeen[hit] = ai.frame;
+		if (closed > closingBar) {
+			gIncomingPos = p;
+			gIncomingCost = cost;
+			gIncomingAt = ai.frame;
+			if (ai.frame >= gNextApproachLog) {
+				gNextApproachLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: PUSH INCOMING -- "
+					+ formatFloat(cost, "", 0, 0) + " metal at "
+					+ formatFloat(d, "", 0, 0) + " from home, closing");
+			}
+		}
+	}
+	for (int j = int(gAppSeen.length()) - 1; j >= 0; --j) {
+		if (ai.frame - gAppSeen[j] > 60 * SECOND) {
+			gAppPos.removeAt(j);
+			gAppDist.removeAt(j);
+			gAppSeen.removeAt(j);
+		}
+	}
+}
+
+bool PushIncoming()
+{
+	return (ai.frame - gIncomingAt) < 45 * SECOND;
+}
+
+AIFloat3 IncomingPos() { return gIncomingPos; }
+float IncomingCost()   { return gIncomingCost; }
+
 }  // namespace Military

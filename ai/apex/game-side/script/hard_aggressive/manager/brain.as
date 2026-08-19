@@ -1217,7 +1217,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		if (lrpc > 0) {
 			Propose(Simple("shield", ai.GetTunable("apex_shield_value", 8.f)
 					* float(lrpc + Builder::ShieldsLostRecent()),
-					SideDef3("armgate", "corgate", "leggatet3")));
+					SideDef3("armgate", "corgate", "legdeflector")));
 		}
 	}
 	Propose(Simple("pinpoint", PINPOINT_VALUE, SideDef3("armtarg", "cortarg", "legtarg")));

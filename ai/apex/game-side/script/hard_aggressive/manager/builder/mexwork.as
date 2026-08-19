@@ -78,6 +78,29 @@ uint DefenceOrdersNear(const AIFloat3& in pos, float radius, float& out topCost)
 	return n;
 }
 
+// Surface-gun metal already ORDERED near here, manned or not -- committed
+// answer that FenceGunMetalNear (finished only) cannot see.
+float DefenceOrderMetalNear(const AIFloat3& in pos, float radius)
+{
+	float m = 0.f;
+	const float sq = radius * radius;
+	for (uint i = 0; i < gDefTasks.length(); ++i) {
+		if (gDefTasks[i] is null)
+			continue;
+		const AIFloat3 at = gDefTasks[i].GetBuildPos();
+		if (!OnMap(at))
+			continue;
+		const float dx = at.x - pos.x;
+		const float dz = at.z - pos.z;
+		if ((dx * dx + dz * dz) >= sq)
+			continue;
+		CCircuitDef@ d = gDefTasks[i].buildDef;
+		if ((d !is null) && (d.GetSurfThreat() > 0.f))
+			m += d.costM;
+	}
+	return m;
+}
+
 // Is this task still on the books? A count of standing towers can't tell
 // queued-but-unbuilt from aborted; gDefTasks membership can (removal always
 // funnels through DequeueTask -> AiTaskRemoved).

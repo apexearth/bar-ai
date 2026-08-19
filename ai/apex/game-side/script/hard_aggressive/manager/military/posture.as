@@ -465,6 +465,7 @@ void UpdatePosture()
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
+	UpdateApproach();   // is a visible enemy group closing on our home?
 	PublishDefence();   // our front-tower count and income, for the team budget
 	LogAidState();      // read-only: what an ally-aid response would do
 	Brain::BudgetLog();

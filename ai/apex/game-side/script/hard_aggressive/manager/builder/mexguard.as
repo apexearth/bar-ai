@@ -267,6 +267,13 @@ void CloakWithWalls(CCircuitUnit@ unit, CCircuitDef@ towerDef,
 	}
 }
 
+// Function, not a global read: statics.as compiles before this file, and a
+// function is visible module-wide where the string globals are not.
+CCircuitDef@ PopupTowerDef()
+{
+	return SideDef3(armpb, corvipe, legapopupdef);
+}
+
 CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 {
 	CCircuitDef@ heavy = HeavyDefenceFor(unit);

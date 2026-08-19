@@ -492,6 +492,14 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// the other makes the fusion stuff... an upgraded mex gives 4 times the
 	// metal." One upgrade under way at all times, read from the live MEXUP
 	// task count -- no ledger to drift, nothing to resync.
+	// A VISIBLE PUSH OUTRANKS THE ECONOMY LANES: the tower only beats the walk
+	// if it starts now. Gated on Military::PushIncoming, so it is idle in
+	// every quiet game.
+	if (Military::PushIncoming()) {
+		@t = PushAnswer(unit);
+		if (t !is null)
+			return t;
+	}
 	// HOME MEXES FIRST, WITH EVERY ADVANCED CON. While un-upgraded extractors
 	// stand in the home patch, one-at-a-time is the wrong bound: a second adv
 	// con used to fall through to the fusion lane here. Until the home patch is

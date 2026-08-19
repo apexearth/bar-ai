@@ -899,7 +899,7 @@ IUnitTask@ AntiNuke(CCircuitUnit@ unit)
 // memory is the escalation. leggatet3 has no builder in the pinned tree, so
 // the CanBuild guard makes this a no-op for Legion until a game ships one.
 //------------------------------------------------------------------------------
-string armgateS("armgate"); string corgateS("corgate"); string leggateS("leggatet3");
+string armgateS("armgate"); string corgateS("corgate"); string leggateS("legdeflector");
 
 int gLrpcN = 0;
 int gLrpcNext = 0;
@@ -988,6 +988,89 @@ IUnitTask@ ShieldCover(CCircuitUnit@ unit)
 	AiLog(Factory::T() + "apex: shield " + sh.GetName()
 		+ " vs " + lrpc + " LRPC, lost=" + ShieldsLostRecent()
 		+ " standing=" + standing + " want=" + want);
+	return post;
+}
+
+//------------------------------------------------------------------------------
+// ANSWER THE PUSH WHILE IT IS STILL WALKING. Military::UpdateApproach declares
+// a visible enemy group closing on our home; this sites heavy defence on the
+// LINE it is walking, sized to what is coming -- one tower per
+// apex_push_answer_per of incoming metal. HIGH priority: the whole point is
+// beating the walk. apexearth 2026-08-19: "It is visible long before they even
+// get to our base... Why aren't we preparing for it?"
+//------------------------------------------------------------------------------
+int gPushAnsLog = 0;
+
+IUnitTask@ PushAnswer(CCircuitUnit@ unit)
+{
+	if (!Military::PushIncoming() || aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (!gHomeSet)
+		return null;
+	// The best tower this builder can put down: adv cons place the heavy
+	// popup, everyone else the mid tier; capability-guarded either way.
+	CCircuitDef@ tower = null;
+	if (IsAdvConDef(unit))
+		@tower = PopupTowerDef();
+	if ((tower is null) || !tower.IsAvailable(ai.frame)
+		|| !unit.circuitDef.CanBuild(tower))
+	{
+		@tower = MidTowerDef();
+	}
+	// Pre-T2 both tiers above are unbuildable by a T1 con -- measured, the
+	// responder sat mute through four detections. A basic tower NOW still
+	// beats a heavy tower never.
+	if ((tower is null) || !tower.IsAvailable(ai.frame)
+		|| !unit.circuitDef.CanBuild(tower))
+	{
+		@tower = SideDef3(armllt, corllt, leglht);
+	}
+	if ((tower is null) || !tower.IsAvailable(ai.frame)
+		|| !unit.circuitDef.CanBuild(tower))
+	{
+		return null;
+	}
+	// Stand on the approach line, at the base-side end of the walk.
+	const AIFloat3 inc = Military::IncomingPos();
+	AIFloat3 dir = inc - gHomePos;
+	const float dist = sqrt(dir.SqLength2D());
+	if (dist < 1.f)
+		return null;
+	dir *= (1.f / dist);
+	float reach = dist * 0.5f;
+	const float standMax = ai.GetTunable("apex_push_stand", 1100.f);
+	if (reach > standMax)
+		reach = standMax;
+	AIFloat3 stand = gHomePos + dir * reach;
+	if (!OnMap(stand))
+		return null;
+	// Sized to the threat IN METAL: one standing LLT must not read as cover
+	// against a 3k heavy. Standing guns plus orders in flight, against a
+	// fraction of what is walking in (defences trade up, so a fraction is
+	// parity).
+	const float needM = Military::IncomingCost()
+			* ai.GetTunable("apex_push_answer_frac", 0.4f);
+	const float haveM = Military::FenceGunMetalNear(stand, 800.f)
+			+ DefenceOrderMetalNear(stand, 800.f);
+	if (haveM >= needM)
+		return null;
+	if (ThreatFor(unit, stand) > CON_THREAT_VETO)
+		return null;
+	AIFloat3 site = ai.FindBuildSiteNear(tower, stand, 700.f);
+	if (!OnMap(site))
+		return null;
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, tower, Task::BuildType::DEFENCE,
+			Task::Priority::HIGH, site, 0.f, 0.f, created);
+	if (post is null)
+		return null;
+	if (created && (ai.frame >= gPushAnsLog)) {
+		gPushAnsLog = ai.frame + 15 * SECOND;
+		AiLog(Factory::T() + "apex: push answer " + tower.GetName()
+			+ " on the approach, " + formatFloat(haveM, "", 0, 0) + "/"
+			+ formatFloat(needM, "", 0, 0) + " metal vs "
+			+ formatFloat(Military::IncomingCost(), "", 0, 0) + " incoming");
+	}
 	return post;
 }
 

@@ -265,6 +265,23 @@ uint FenceGunsNear(const AIFloat3& in pos, float radius, float& out topCost)
 	return n;
 }
 
+// The METAL of surface guns covering this ground. A count reads one LLT as
+// cover against a heavy push; metal does not.
+float FenceGunMetalNear(const AIFloat3& in pos, float radius)
+{
+	float m = 0.f;
+	for (uint i = 0; i < gFencePos.length(); ++i) {
+		if (gFencePos[i].distance2D(pos) > radius)
+			continue;
+		if (i >= gFenceDef.length())
+			continue;
+		const CCircuitDef@ d = gFenceDef[i];
+		if ((d !is null) && (d.GetSurfThreat() > 0.f))
+			m += d.costM;
+	}
+	return m;
+}
+
 // How recently, and how repeatedly, we have lost a tower near here. Zero is
 // "never"; each loss contributes its remaining freshness, so a position that has
 // eaten several towers scores above one that has eaten one. Expired entries are

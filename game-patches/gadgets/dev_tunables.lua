@@ -88,6 +88,11 @@ local NAMES = {
 	"apex_lane_defensive",    -- posture.as: home->enemy fraction the army holds at while trading badly (0.15)
 	"apex_lane_back_step",    -- posture.as: elmos per step the anchor retreats off enemy-held ground (300)
 	"apex_lane_muster",       -- posture.as: army power as multiple of promote quota before the anchor goes forward, vs enemy per-player threat (0.5)
+	"apex_push_notice_r",     -- basedefence.as: distance from home inside which an approach is tracked (4500)
+	"apex_push_cost",         -- basedefence.as: enemy group metal below which an approach is ignored (2500)
+	"apex_push_closing",      -- basedefence.as: elmos closed per 5s sample that reads as pushing (150)
+	"apex_push_answer_frac",  -- statics.as: defence metal wanted as fraction of incoming push metal (0.4)
+	"apex_push_stand",        -- statics.as: how far out the answering towers stand (1100)
 	"apex_mexup_home_r",      -- mexwork.as: radius around home whose T1 mexes gate the fusion lane (1200)
 	"apex_impact_ref",        -- brain.as: income at which eco-want relative-impact scaling is neutral (30)
 	"apex_charger_strike",    -- hooks.as: 1 = T3 chargers take solo base-strike tasks, 0 = massing pool
