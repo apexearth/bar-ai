@@ -974,6 +974,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// keep closing -- kiting is a long-gun move -- and a squad committed to
 		// overwhelming a static does not back off mid-dive.
 		AIFloat3 kiteFoe = -RgtVector;
+		float kiteFoeRange = 0.f;
 		// 250, was 400: the 400 floor excluded every mid-range riot/skirm row
 		// (~300 range) from kiting entirely -- apexearth 2026-08-19: "us walk
 		// up close with units like thugs and maces, and they just get
@@ -1018,6 +1019,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					if (sq < bestSq) {
 						bestSq = sq;
 						kiteFoe = e->GetPos();
+						kiteFoeRange = ed->GetMaxRange();
 					}
 				}
 			}
@@ -1083,11 +1085,23 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				if (utils::is_valid(kiteFoe)) {
 					const AIFloat3& kcur = unit->GetPos(frame);
 					const float sqFoe = kcur.SqDistance2D(kiteFoe);
-					if (sqFoe < SQUARE(kv.first * kiteFrac)) {
+					// apex: THE TRIGGER IS THEIR RANGE, NOT A FRACTION OF OURS.
+					// "they need to be smart enough to back up when enemies are
+					// close to getting in range to fire back" (apexearth,
+					// 2026-08-19, on siege). A row backs off when the closing
+					// enemy is within its own weapon range plus a pad -- and
+					// re-opens to outside that reach, never closer than its own
+					// standoff. The old our-range-fraction stays as the floor
+					// for short-armed chasers.
+					const float foeReach = kiteFoeRange
+							+ manager->GetCircuit()->GetTunable("apex_kite_foe_pad", 120.f);
+					const float trigger = std::max(kv.first * kiteFrac, foeReach);
+					if ((sqFoe < SQUARE(trigger)) && (trigger < kv.first * rangeMod)) {
 						AIFloat3 away = kcur - kiteFoe;
 						if (away.SqLength2D() > 1.f) {
 							away.SafeNormalize2D();
-							newPos = kcur + away * (kv.first * rangeMod - sqrtf(sqFoe));
+							const float open = std::max(kv.first * rangeMod, foeReach);
+							newPos = kcur + away * (open - sqrtf(sqFoe));
 							CTerrainManager::CorrectPosition(newPos);
 						}
 					}
