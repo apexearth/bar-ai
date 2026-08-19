@@ -974,7 +974,11 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// keep closing -- kiting is a long-gun move -- and a squad committed to
 		// overwhelming a static does not back off mid-dive.
 		AIFloat3 kiteFoe = -RgtVector;
-		const float kiteMin = manager->GetCircuit()->GetTunable("apex_kite_min_range", 400.f);
+		// 250, was 400: the 400 floor excluded every mid-range riot/skirm row
+		// (~300 range) from kiting entirely -- apexearth 2026-08-19: "us walk
+		// up close with units like thugs and maces, and they just get
+		// absolutely creamed." Melee/charge rows are already excluded by role.
+		const float kiteMin = manager->GetCircuit()->GetTunable("apex_kite_min_range", 250.f);
 		const float kiteFrac = manager->GetCircuit()->GetTunable("apex_kite_frac", 0.7f);
 		if ((kiteFrac > 0.f) && (kv.first >= kiteMin)
 			&& !IsChargeDef(rowDef) && !squadOverwhelms)
