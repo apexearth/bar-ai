@@ -696,10 +696,18 @@ void ObsoleteSweep()
 	// clutter outlived the economy that obsoleted it. Concurrency scales with
 	// income; AskedFor dedups repeats.
 	int picks = 1;
-	if (CleanupMode())
+	if (CleanupMode()) {
 		picks = int((1.f + aiEconomyMgr.metal.income
 				/ ai.GetTunable("apex_cleanup_per", 150.f))
 				* (1.f + Perf::LagSeverity()));
+		// A perf bound, not policy: each pick walks full unit lists, and an
+		// unbounded sweep burned 277-475ms single frames (seed 200, min
+		// 54-56) -- a lag reducer must not be a lag spike. The same total
+		// work spreads across consecutive sweeps instead.
+		const int most = int(ai.GetTunable("apex_cleanup_max_picks", 5.f));
+		if (picks > most)
+			picks = most;
+	}
 	if (Perf::LagSeverity() >= 1.f)
 		TrimSurplusBuilders();
 	for (int n = 0; n < picks; ++n) {
