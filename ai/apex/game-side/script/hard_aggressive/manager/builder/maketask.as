@@ -106,6 +106,7 @@ double gElectUs = 0.0;
 // build type Reevaluate re-elects every update even in range, so without this
 // hold every shadowing builder walked the whole ladder every update.
 dictionary gGuardHold;
+int gNextEnergyAheadLog = 0;
 
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
@@ -546,6 +547,41 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		@t = FrontFortress(unit);
 		if (t !is null)
 			return t;
+	}
+
+	// ALWAYS BE BUILDING ENERGY -- ahead of need, not behind it. The energy
+	// want only RANKED against everything else, so generators were bought
+	// reactively and the T2 transition's sudden drain (adv cons, mohos, the
+	// lab itself) hit an economy sized to yesterday -- apexearth 2026-08-19:
+	// "we aren't building energy which we're going to need, we only satisfy
+	// current needs." One ENERGY build stays permanently under way while
+	// income is below the FORECAST: current pull with headroom, and before
+	// T2 a floor for the cliff that is coming. Bounded to one task in
+	// flight, so it claims one builder, not the economy.
+	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) == 0) {
+		float needE = aiEconomyMgr.energy.pull
+				* ai.GetTunable("apex_energy_headroom", 1.35f);
+		if (!Factory::gHaveT2
+			&& (aiEconomyMgr.metal.income
+				>= ai.GetTunable("apex_t2_energy_from", 12.f)))
+		{
+			const float floorE = ai.GetTunable("apex_t2_energy_floor", 700.f);
+			if (needE < floorE)
+				needE = floorE;
+		}
+		if (aiEconomyMgr.energy.income < needE) {
+			IUnitTask@ et = HomeEnergy(unit);
+			if (et !is null) {
+				if (ai.frame >= gNextEnergyAheadLog) {
+					gNextEnergyAheadLog = ai.frame + 30 * SECOND;
+					AiLog(Factory::T() + "apex: energy pipeline -- eInc "
+						+ formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
+						+ " below forecast "
+						+ formatFloat(needE, "", 0, 0));
+				}
+				return et;
+			}
+		}
 	}
 
 	// THE MACRO VIEW GETS ITS SAY BEFORE ANY OPTIONAL SPENDING.
