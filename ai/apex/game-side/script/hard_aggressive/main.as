@@ -151,38 +151,28 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 // without this a base assault's nanoframe kills read as full-cost "taskless"
 // deaths and drowned the real combat attribution (44-47% of "lost metal" in
 // the first audited games). Bounded ring, oldest dropped.
-array<int> gFinishedIds;
-const uint FINISHED_RING = 4096;
+// Per-id flag, NOT a sorted ring: the engine hands unit ids out of a free
+// list, so they are not monotonic and a binary-searched append-order ring
+// missed nearly every lookup -- measured 2026-08-19, built=0 on 165/173
+// mobile combat deaths, which silently starved the whole loss-feedback stack
+// (bleed caution, trade ratio, loss-driven army budget). Spring ids are hard-
+// capped at 32k, so a flat flag array is exact and O(1). The flag is cleared
+// one death-event late (gFinishedClearPending) because AiUnitDestroyedBy
+// fires right after AiUnitDestroyed and reads it too.
+array<bool> gFinished(32001, false);
+int gFinishedClearPending = -1;
 
 bool WasFinished(int id)
 {
-	// Binary search: unit ids are handed out monotonically and the ring
-	// appends in finish order, so it stays sorted (engine id REUSE after
-	// 32k units could break ordering; the ring's own 4096 bound makes that
-	// window negligible). The linear walk here ran twice per death and
-	// death-heavy battle frames at 12k units were the late-game spikes.
-	int lo = 0;
-	int hi = int(gFinishedIds.length()) - 1;
-	while (lo <= hi) {
-		const int mid = (lo + hi) / 2;
-		const int v = gFinishedIds[mid];
-		if (v == id)
-			return true;
-		if (v < id)
-			lo = mid + 1;
-		else
-			hi = mid - 1;
-	}
-	return false;
+	return (id >= 0) && (id < int(gFinished.length())) && gFinished[id];
 }
 
 void AiUnitFinished(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
-	gFinishedIds.insertLast(int(unit.id));
-	if (gFinishedIds.length() > FINISHED_RING)
-		gFinishedIds.removeAt(0);
+	if ((int(unit.id) >= 0) && (int(unit.id) < int(gFinished.length())))
+		gFinished[int(unit.id)] = true;
 	// The reactor/converter pipelines need COMPLETIONS, not creations --
 	// def.count moves on the nanoframe.
 	if (unit.circuitDef !is null)
@@ -207,6 +197,15 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
+	// The PREVIOUS death's flag is cleared now, so this id can be reused
+	// cleanly, while AiUnitDestroyedBy (which follows this call) still read it.
+	if ((gFinishedClearPending >= 0)
+		&& (gFinishedClearPending < int(gFinished.length()))
+		&& (gFinishedClearPending != int(unit.id)))
+	{
+		gFinished[gFinishedClearPending] = false;
+	}
+	gFinishedClearPending = int(unit.id);
 	double hkT = Perf::T0();
 	const CCircuitDef@ cdef = unit.circuitDef;
 	const AIFloat3 at = unit.GetPos(ai.frame);
