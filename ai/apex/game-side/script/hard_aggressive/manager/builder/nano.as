@@ -410,6 +410,13 @@ bool SnapToNanoGrid(CCircuitUnit@ unit, CCircuitDef@ want,
 
 IUnitTask@ EcoNano(CCircuitUnit@ unit)
 {
+	// INSIDE the function, not at one call site: the Brain's metal-full nano
+	// want and the second ladder call both reached this without the guard --
+	// apexearth 2026-08-19: "making more build power when we're dying is not
+	// more important than the army (eg we're full on metal)." While the base
+	// is being hit, constructor time belongs to what fights back.
+	if (BaseUnderAttack() || Military::BaseContested())
+		return null;
 	// BUILD POWER SHOULD TRACK INCOME, NOT ONLY A FULL BANK: a full bank is a
 	// rare instant, not a state, so gating solely on "eco lead, or metal full"
 	// starved turret count on a compounding economy. Above NANO_INCOME_GATE,
