@@ -308,14 +308,42 @@ array<string> ObsoleteDefenceNames()
 	if (side == "cortex") {
 		names.insertLast(corllt);
 		names.insertLast(corhllt);
+		names.insertLast("cormaw");
 	} else if (side == "legion") {
 		names.insertLast(leglht);
 		names.insertLast(legmg);
+		names.insertLast("legdtr");
 	} else {
 		names.insertLast(armllt);
 		names.insertLast(armbeamer);
+		names.insertLast("armclaw");
 	}
 	return names;
+}
+
+// THE LINE HAS MOVED PAST THIS TOWER. apexearth 2026-08-19, at 600 m/s: "as we
+// build these defenses further out, we reclaim the defenses that are further
+// in." True when a meaningfully dearer gun of ours stands meaningfully further
+// forward -- the small tower is then interior clutter blocking gantry ground,
+// not line defence.
+bool DefenceOutgrown(const AIFloat3& in at, float costM)
+{
+	const float myFwd = Military::ForwardFraction(at);
+	for (uint i = 0; i < Military::gFencePos.length(); ++i) {
+		if (i >= Military::gFenceDef.length())
+			continue;
+		const CCircuitDef@ d = Military::gFenceDef[i];
+		if ((d is null) || (d.GetSurfThreat() <= 0.f))
+			continue;
+		if (d.costM < costM * ai.GetTunable("apex_outgrown_mult", 3.f))
+			continue;
+		if (Military::ForwardFraction(Military::gFencePos[i])
+			>= myFwd + ai.GetTunable("apex_outgrown_fwd", 0.08f))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 // WHICH of our copies to eat is a space question: a walkway structure blocks
@@ -336,7 +364,7 @@ int GroundValue(const AIFloat3& in at, bool isDefence, bool sited,
 	if (sited && Base::Inside(at))
 		return Base::InLaneAt(at) ? VALUE_LANE : VALUE_INSIDE;
 	if (isDefence && sited)
-		return (Perf::LagSeverity() >= 1.f) ? VALUE_NONE : -1;
+		return ((Perf::LagSeverity() >= 1.f) || CleanupMode()) ? VALUE_NONE : -1;
 	return VALUE_NONE;
 }
 
@@ -363,7 +391,7 @@ CCircuitUnit@ ObsoletePick(const AIFloat3& in origin, int skipId, int floorValue
 	// Deep lag cuts: past severity 1 the tower list joins unconditionally and
 	// the sparing below relaxes -- a lagging host needs the objects gone more
 	// than it needs a T1 tower holding a line.
-	if ((Perf::LagSeverity() >= 1.f) || HaveHeavyDefence()) {
+	if ((Perf::LagSeverity() >= 1.f) || CleanupMode() || HaveHeavyDefence()) {
 		array<string> towers = ObsoleteDefenceNames();
 		for (uint i = 0; i < towers.length(); ++i)
 			names.insertLast(towers[i]);
@@ -394,9 +422,11 @@ CCircuitUnit@ ObsoletePick(const AIFloat3& in origin, int skipId, int floorValue
 			// A tower goes only where its heir already reaches. The exception is
 			// ground a large building has just failed to take: there the tower is
 			// the reason we cannot tech up, and a heavier turret is standing
-			// somewhere or the def would not be in this list.
+			// somewhere or the def would not be in this list. At big eco a third
+			// door opens: the line has visibly moved past it (DefenceOutgrown).
 			if (isDefence && (v != VALUE_BLOCKED) && !HeavyCoverAt(at)
-				&& (Perf::LagSeverity() < 1.f))
+				&& (Perf::LagSeverity() < 1.f)
+				&& !(CleanupMode() && DefenceOutgrown(at, def.costM)))
 				continue;
 			const float d = me.distance2D(at);
 			if ((v > value) || ((v == value) && (d < bestDist))) {

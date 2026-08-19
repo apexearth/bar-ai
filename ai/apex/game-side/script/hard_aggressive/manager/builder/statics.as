@@ -1007,24 +1007,34 @@ IUnitTask@ PushAnswer(CCircuitUnit@ unit)
 		return null;
 	if (!gHomeSet)
 		return null;
-	// The best tower this builder can put down: adv cons place the heavy
-	// popup, everyone else the mid tier; capability-guarded either way.
+	// THE TIER FOLLOWS THE ECONOMY, NOT THE BUILDER. At 600 m/s the answer to
+	// a push was still beamers and claws -- "largely not worth having at this
+	// point... a two by two square of pulsars all tightly packed would be a
+	// more advantageous setup taking less overall room" (apexearth, watching
+	// at 40m). Dearest tower this builder can place whose cost is inside
+	// apex_def_afford_secs of metal income; the basic tower stays as the
+	// unconditional floor (something NOW beats the right tower never -- the
+	// pre-T2 mute, measured).
+	const float afford = aiEconomyMgr.metal.income
+			* ai.GetTunable("apex_def_afford_secs", 20.f);
+	array<CCircuitDef@> ladder = {
+		SideDef3(armanni, cordoom, legbastion),   // the pulsar line
+		PopupTowerDef(),
+		MidTowerDef()
+	};
 	CCircuitDef@ tower = null;
-	if (IsAdvConDef(unit))
-		@tower = PopupTowerDef();
-	if ((tower is null) || !tower.IsAvailable(ai.frame)
-		|| !unit.circuitDef.CanBuild(tower))
-	{
-		@tower = MidTowerDef();
+	for (uint li = 0; li < ladder.length(); ++li) {
+		CCircuitDef@ cand = ladder[li];
+		if ((cand is null) || !cand.IsAvailable(ai.frame)
+			|| !unit.circuitDef.CanBuild(cand) || (cand.costM > afford))
+		{
+			continue;
+		}
+		@tower = cand;
+		break;
 	}
-	// Pre-T2 both tiers above are unbuildable by a T1 con -- measured, the
-	// responder sat mute through four detections. A basic tower NOW still
-	// beats a heavy tower never.
-	if ((tower is null) || !tower.IsAvailable(ai.frame)
-		|| !unit.circuitDef.CanBuild(tower))
-	{
+	if (tower is null)
 		@tower = SideDef3(armllt, corllt, leglht);
-	}
 	if ((tower is null) || !tower.IsAvailable(ai.frame)
 		|| !unit.circuitDef.CanBuild(tower))
 	{

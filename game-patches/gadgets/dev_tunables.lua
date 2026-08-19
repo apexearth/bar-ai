@@ -95,6 +95,9 @@ local NAMES = {
 	"apex_push_stand",        -- statics.as: how far out the answering towers stand (1100)
 	"apex_push_danger_pad",   -- basedefence.as: margin added to a group's weapon range for the reach alarm (500)
 	"apex_push_danger_cost",  -- basedefence.as: group metal below which the reach alarm ignores it (800)
+	"apex_def_afford_secs",   -- statics.as: seconds of income a push-answer tower may cost (20)
+	"apex_outgrown_mult",     -- obsolete.as: heir cost multiple that outgrows a small tower (3)
+	"apex_outgrown_fwd",      -- obsolete.as: forward-fraction lead the heir needs to outgrow it (0.08)
 	"apex_mexup_home_r",      -- mexwork.as: radius around home whose T1 mexes gate the fusion lane (1200)
 	"apex_impact_ref",        -- brain.as: income at which eco-want relative-impact scaling is neutral (30)
 	"apex_charger_strike",    -- hooks.as: 1 = T3 chargers take solo base-strike tasks, 0 = massing pool
