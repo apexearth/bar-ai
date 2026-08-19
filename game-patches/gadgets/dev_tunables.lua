@@ -97,6 +97,8 @@ local NAMES = {
 	"apex_pulsar_answer",     -- brain.as: pulsar want multiplier while enemy fields T3 and we own no gantry (3)
 	"apex_merge_threat",      -- SquadTask.cpp: merge-line threat ceiling as fraction of combined squad power (0.5)
 	"apex_merge_every",       -- SquadTask.cpp: task updates between merge attempts (8, was 32)
+	"apex_attack_break",      -- AttackTask.cpp: power fraction of task peak below which the attack aborts (0.4)
+	"apex_mass_vs_enemy",     -- massing.as: outmatched hold bar as share of ENEMY army power (0.5)
 	"apex_conv_dry_mult",     -- brain.as: convert-want discount while energy is not overflowing (0.25)
 	"apex_front_from_min",    -- brain.as: game-minutes before proactive front-line spend starts (5)
 	"apex_conv_drain",        -- mexguard.as: energy/s one converter eats (70)

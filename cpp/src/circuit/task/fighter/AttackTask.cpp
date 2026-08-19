@@ -415,6 +415,30 @@ void CAttackTask::Update()
 	}
 
 	/*
+	 * apex: THE ATTACK CLOSES WHEN IT FAILS. Health-based withdrawal cannot
+	 * see a lost fight -- the survivors of a wiped squad are often at full HP,
+	 * read "healthy", and keep pressing. When the task holds a fraction of the
+	 * power it ever held, the fight is over: abort, so the survivors re-pool
+	 * at home and leave with the next real group (the massing bar holds them
+	 * there while the enemy out-masses us). Chargers deliver by arriving, and
+	 * a declared team push is committed; both keep pressing.
+	 */
+	{
+		CCircuitAI* circuit = manager->GetCircuit();
+		peakPower = std::max(peakPower, attackPower);
+		const CCircuitDef* ldef = (leader != nullptr) ? leader->GetCircuitDef() : nullptr;
+		const bool isCharger = (ldef != nullptr) && ldef->IsRoleHeavy() && ldef->IsAttrMelee();
+		if (!isCharger && !circuit->IsCommitted() && (peakPower > 1.f)
+			&& (attackPower < peakPower * circuit->GetTunable("apex_attack_break", 0.4f)))
+		{
+			circuit->LOG("apex: attack broken -- power %.0f of peak %.0f, survivors re-pool",
+					attackPower, peakPower);
+			manager->AbortTask(this);
+			return;
+		}
+	}
+
+	/*
 	 * Regroup if required
 	 */
 	bool wasRegroup = (State::REGROUP == state);

@@ -116,6 +116,29 @@ float MassWant()
 	if (capNow < MASS_CAP)
 		capNow = MASS_CAP;
 	const float ratio = theirs / ours;
+	// OUTMATCHED IS ABOUT THEM, NOT US. Floor and cap both scale with OUR
+	// army, so losing a big fight collapsed the hold bar exactly when it
+	// should be highest, and the survivors trickled out into the army that
+	// had just won -- apexearth 2026-08-19: "why even bother leaving the base
+	// AT ALL if we just lost a big fight and have very few units?" While they
+	// out-mass us the bar is a share of THEIR army (Grunt-class
+	// power-per-metal ~0.017), which holds the pool home until it is rebuilt
+	// toward parity -- and releases by itself as it does.
+	// Real units, not metal conversions: aiEnemyMgr.mobileThreat is the
+	// engine's own aggregated threat of known mobile enemies, and the bar is
+	// per PLAYER -- the whole enemy side's threat divided by our roster, or an
+	// 8v8 sets a bar no single player's pool could ever fill (the measured
+	// Fatboy-loiter trap).
+	{
+		float allies = 1.f;
+		array<Id>@ roster = ai.GetTeamIds();
+		if ((roster !is null) && (roster.length() > 0))
+			allies = float(roster.length());
+		const float foeBar = (aiEnemyMgr.mobileThreat / allies)
+				* ai.GetTunable("apex_mass_vs_enemy", 0.5f);
+		if ((ratio > 1.f) && (foeBar > capNow))
+			capNow = foeBar;
+	}
 	// Bleeding on their ground also grows the group: the same caution signal
 	// the engage margin uses, applied to how much leaves at once.
 	const float bleed = BleedCaution();
