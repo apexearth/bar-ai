@@ -841,16 +841,25 @@ IUnitTask@ AntiNuke(CCircuitUnit@ unit)
 		return null;
 	if (unit.circuitDef.costM < ADV_CON_COST)
 		return null;
-	if (aiEconomyMgr.metal.income < ai.GetTunable("apex_antinuke_income", 20.f))
+	// The income bar is readiness, not permission: a SEEN enemy launcher
+	// overrides it -- being poor does not make the incoming nuke cheaper.
+	if ((aiEconomyMgr.metal.income < ai.GetTunable("apex_antinuke_income", 20.f))
+		&& (Brain::EnemyNukeSilos() == 0))
+	{
 		return null;
+	}
 	CCircuitDef@ anti = SideDef3(armamd, corfmd, legabm);
 	if ((anti is null) || !anti.IsAvailable(ai.frame))
 		return null;
 	const int standing = int(anti.count);
 	if (standing > gAntiPeak)
 		gAntiPeak = standing;
-	const int want = 1 + int(aiEconomyMgr.metal.income
-			/ ai.GetTunable("apex_antinuke_per", 150.f));
+	// Matched to the THREAT, not the income: one anti per enemy launcher we
+	// have seen, floored at one for the launcher we have not.
+	int want = 1;
+	const int foeSilos = Brain::EnemyNukeSilos();
+	if (foeSilos > want)
+		want = foeSilos;
 	// Outstanding as well as standing, same reason as the silo: Enqueue does
 	// not dedup and this builds slowly.
 	if ((standing >= want) || (gAntiAsked - gAntiPeak >= 1))

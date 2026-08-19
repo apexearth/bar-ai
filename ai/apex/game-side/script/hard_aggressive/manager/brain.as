@@ -1170,7 +1170,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// apexearth: "Antinuke should be standard for all games where nukes are
 	// allowed." Until this want existed, land maps had NO antinuke rule at all
 	// -- the only chain carrying one hangs off the FLOATING radar hub.
-	Propose(Simple("antinuke", ANTINUKE_VALUE, SideDef3("armamd", "corfmd", "legabm")));
+	// Value matches the SEEN threat: one launcher's worth by default (the one
+	// we assume), scaling with every enemy silo actually sighted, so the
+	// invested-ratio decay stops at parity instead of halving the second anti
+	// the enemy's second launcher requires.
+	{
+		int foeSilos = Brain::EnemyNukeSilos();
+		if (foeSilos < 1)
+			foeSilos = 1;
+		Propose(Simple("antinuke", ANTINUKE_VALUE * float(foeSilos),
+				SideDef3("armamd", "corfmd", "legabm")));
+	}
 	// legbastion, not legstarfall: the def here is what the want's have/decay
 	// counts, and Builder::Pulsar builds bastions -- a mismatch never decays.
 	// A full metal bank doubles the value: the line of guns is what the

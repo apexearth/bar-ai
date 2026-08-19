@@ -99,6 +99,33 @@ int AntisCovering(const AIFloat3 &in pos)
 	return n;
 }
 
+// ENEMY NUKE LAUNCHERS WE HAVE SEEN, whole map, cached. The antinuke want
+// matches this count (apexearth 2026-08-19: "match needs based on how many
+// nuke launchers the enemy has. Always assume 1 is needed") -- a hidden silo
+// is covered by the floor of one, a second seen silo asks for a second anti.
+int gFoeSiloN = 0;
+int gFoeSiloNext = 0;
+
+int EnemyNukeSilos()
+{
+	if (ai.frame < gFoeSiloNext)
+		return gFoeSiloN;
+	gFoeSiloNext = ai.frame + 10 * SECOND;
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	AIFloat3 mid(w * 0.5f, 0.f, h * 0.5f);
+	const float r = sqrt(w * w + h * h) * 0.5f + 1.f;
+	int n = 0;
+	CCircuitDef@ a = ai.GetCircuitDef("armsilo");
+	CCircuitDef@ c = ai.GetCircuitDef("corsilo");
+	CCircuitDef@ l = ai.GetCircuitDef("legsilo");
+	if (a !is null) n += ai.CountEnemyDefNear(a.id, mid, r);
+	if (c !is null) n += ai.CountEnemyDefNear(c.id, mid, r);
+	if (l !is null) n += ai.CountEnemyDefNear(l.id, mid, r);
+	gFoeSiloN = n;
+	return n;
+}
+
 void UpdateNukes()
 {
 	if (ai.GetTunable("apex_brain_nuke", 1.f) <= 0.f)
