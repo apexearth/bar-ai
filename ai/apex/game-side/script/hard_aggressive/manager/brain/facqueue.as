@@ -690,8 +690,15 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		&& ((Factory::userData[fac.circuitDef.id].attr
 			& (Factory::Attr::T2 | Factory::Attr::T3)) == 0)
 		&& !Factory::IsAirFactory(fac.circuitDef);
+	// The deepest lag cut: with a gantry running and the host still behind,
+	// even T2 army stops -- T3 metal is the same army value in far fewer
+	// objects (apexearth: "T2 is mostly unimportant at 500 metal per second").
+	const bool t2MixRetired = (Perf::LagSeverity() >= 2.f)
+		&& Factory::gHaveT3
+		&& ((Factory::userData[fac.circuitDef.id].attr & Factory::Attr::T2) != 0)
+		&& !Factory::IsAirFactory(fac.circuitDef);
 	for (uint i = 0; i < gMix.length(); ++i) {
-		if (t1MixRetired)
+		if (t1MixRetired || t2MixRetired)
 			break;
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
 		if (d is null) {

@@ -335,7 +335,9 @@ int GroundValue(const AIFloat3& in at, bool isDefence, bool sited,
 		return VALUE_BLOCKED;
 	if (sited && Base::Inside(at))
 		return Base::InLaneAt(at) ? VALUE_LANE : VALUE_INSIDE;
-	return (isDefence && sited) ? -1 : VALUE_NONE;
+	if (isDefence && sited)
+		return (Perf::LagSeverity() >= 1.f) ? VALUE_NONE : -1;
+	return VALUE_NONE;
 }
 
 string ValueWhy(int value)
@@ -358,7 +360,10 @@ CCircuitUnit@ ObsoletePick(const AIFloat3& in origin, int skipId, int floorValue
 	value = floorValue - 1;
 	array<string> names = ObsoleteEcoNames();
 	const uint ecoEnd = names.length();
-	if (HaveHeavyDefence()) {
+	// Deep lag cuts: past severity 1 the tower list joins unconditionally and
+	// the sparing below relaxes -- a lagging host needs the objects gone more
+	// than it needs a T1 tower holding a line.
+	if ((Perf::LagSeverity() >= 1.f) || HaveHeavyDefence()) {
 		array<string> towers = ObsoleteDefenceNames();
 		for (uint i = 0; i < towers.length(); ++i)
 			names.insertLast(towers[i]);
@@ -390,7 +395,8 @@ CCircuitUnit@ ObsoletePick(const AIFloat3& in origin, int skipId, int floorValue
 			// ground a large building has just failed to take: there the tower is
 			// the reason we cannot tech up, and a heavier turret is standing
 			// somewhere or the def would not be in this list.
-			if (isDefence && (v != VALUE_BLOCKED) && !HeavyCoverAt(at))
+			if (isDefence && (v != VALUE_BLOCKED) && !HeavyCoverAt(at)
+				&& (Perf::LagSeverity() < 1.f))
 				continue;
 			const float d = me.distance2D(at);
 			if ((v > value) || ((v == value) && (d < bestDist))) {
@@ -619,6 +625,45 @@ void NanoTidy()
 // enqueues an ownerless reclaim task; DefaultMakeTask hands it to the nearest
 // free constructor. AskedFor is what stops the sweep re-enqueueing the same
 // victim every pass -- the documented orphan-task failure mode.
+// Deep lag cut: standing assist bots beyond the economy-derived cap are
+// walking sim cost -- reclaim the surplus, newest first, one per sweep per
+// severity point. The cap itself already scales with income, so this is the
+// standing pool catching down to it (apexearth: "keep cutting back").
+int gNextBotTrim = 0;
+
+void TrimSurplusBuilders()
+{
+	if (ai.frame < gNextBotTrim)
+		return;
+	gNextBotTrim = ai.frame + 5 * SECOND;
+	CCircuitDef@ bot = AssistBotDef();
+	if (bot is null)
+		return;
+	const int cap = 2 + int(aiEconomyMgr.metal.income
+			/ ai.GetTunable("apex_assist_per_income", 10.f));
+	int excess = int(bot.count) - cap;
+	if (excess <= 0)
+		return;
+	int quota = int(Perf::LagSeverity());
+	array<CCircuitUnit@>@ bots = ai.GetOwnUnitsOfDef(bot, gHomePos, 0.f);
+	if (bots is null)
+		return;
+	for (int i = int(bots.length()) - 1; (i >= 0) && (excess > 0) && (quota > 0); --i) {
+		CCircuitUnit@ b = bots[i];
+		if ((b is null) || AskedFor(b.id))
+			continue;
+		IUnitTask@ gone = aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, b));
+		if (gone !is null) {
+			gReclaimAsked.insertLast(int(b.id));
+			gReclaimAskedFrame.insertLast(ai.frame);
+			--excess;
+			--quota;
+			AiLog(Factory::T() + "apex: lag trim -- reclaiming surplus "
+				+ bot.GetName() + " (" + bot.count + " held, cap " + cap + ")");
+		}
+	}
+}
+
 void ObsoleteSweep()
 {
 	if (ai.frame < gNextObsolete)
@@ -652,8 +697,11 @@ void ObsoleteSweep()
 	// income; AskedFor dedups repeats.
 	int picks = 1;
 	if (CleanupMode())
-		picks = 1 + int(aiEconomyMgr.metal.income
-				/ ai.GetTunable("apex_cleanup_per", 150.f));
+		picks = int((1.f + aiEconomyMgr.metal.income
+				/ ai.GetTunable("apex_cleanup_per", 150.f))
+				* (1.f + Perf::LagSeverity()));
+	if (Perf::LagSeverity() >= 1.f)
+		TrimSurplusBuilders();
 	for (int n = 0; n < picks; ++n) {
 		CCircuitUnit@ pick = ObsoletePick(origin, -1, floorValue, haveBlocked,
 				blocked, defName, value);

@@ -107,6 +107,7 @@ local NAMES = {
 	"apex_lag_speed",        -- perf.as: measured sim speed below which the host counts as lagging (0.98)
 	"apex_cleanup_per",      -- obsolete.as: income per concurrent cleanup reclaim in cleanup mode (150)
 	"apex_stuck_retry",      -- unblock.as: seconds before a terrain-penned unit may be re-asked for reclaim (120)
+	"apex_lag_step",         -- perf.as: severity gained per still-lagging 3s window (0.34)
 	"apex_guard_per_income",  -- assist.as: income per extra shadow on one lead (60)
 	"apex_guard_reelect",    -- maketask.as: seconds between a guard's full re-elections (10)
 	"apex_idle_patrol_period", -- maketask.as: seconds between idle-builder patrol re-issues (45)

@@ -69,6 +69,8 @@ void Note(const string &in name)
 // to clean up after ourselves"). Sampled over 3-second windows of game time
 // against ai.ClockUs wall time; EMA so one hitch does not flip the state.
 // Headless benchmark runs read far above 1x and never trigger it.
+float gLagSev = 0.f;
+int gNextLagLog = 0;
 double gSpeedWall = 0.0;
 int gSpeedFrame = -1;
 float gSimSpeed = 1.f;
@@ -91,6 +93,31 @@ void TickSpeed()
 	}
 	gSpeedFrame = ai.frame;
 	gSpeedWall = now;
+	// THE SEVERITY LADDER (apexearth: "keep cutting back until we've caught
+	// up"): every window still under the bar climbs it, every recovered
+	// window walks it back down. 0 = fine; past 1 the deeper cuts unlock
+	// (towers anywhere, surplus builders); past 2 the deepest (T2 army stops
+	// when T3 runs). Recovery is measured, not assumed.
+	if (gSimSpeed < ai.GetTunable("apex_lag_speed", 0.98f)) {
+		gLagSev += ai.GetTunable("apex_lag_step", 0.34f);
+		if (gLagSev > 3.f)
+			gLagSev = 3.f;
+	} else if (gSimSpeed >= 0.995f) {
+		gLagSev -= 0.2f;
+		if (gLagSev < 0.f)
+			gLagSev = 0.f;
+	}
+	if ((gLagSev > 0.f) && (ai.frame >= gNextLagLog)) {
+		gNextLagLog = ai.frame + 30 * SECOND;
+		AiLog("apex: LAG speed=" + formatFloat(gSimSpeed, "", 0, 2)
+			+ " severity=" + formatFloat(gLagSev, "", 0, 1));
+	}
+}
+
+
+float LagSeverity()
+{
+	return gLagSev;
 }
 
 float SimSpeed()
