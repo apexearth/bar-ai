@@ -1183,7 +1183,22 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	}
 	Propose(Simple("gantry", gantryV,
 			SideDef3("armshltx", "corgant", "leggant")));
-	Propose(Simple("silo", SILO_VALUE, SideDef3("armsilo", "corsilo", "legsilo")));
+	// The silo is a FINISHER, priced by whether the army is fed: bought at
+	// full value only once army spend reaches its budget target, scaled down
+	// proportionally below it -- a 1v1 was lost with <10% relative army, a
+	// silo and two air labs (apexearth: spending "not aligned with our
+	// military needs"). Same lever as the extra-plant gate.
+	{
+		float siloMult = 1.f;
+		const float armyTgt = TargetShare(ARMY);
+		if (armyTgt > 0.001f) {
+			siloMult = ShareOf(ARMY) / armyTgt;
+			if (siloMult > 1.f)
+				siloMult = 1.f;
+		}
+		Propose(Simple("silo", SILO_VALUE * siloMult,
+				SideDef3("armsilo", "corsilo", "legsilo")));
+	}
 	// apexearth: "Antinuke should be standard for all games where nukes are
 	// allowed." Until this want existed, land maps had NO antinuke rule at all
 	// -- the only chain carrying one hangs off the FLOATING radar hub.

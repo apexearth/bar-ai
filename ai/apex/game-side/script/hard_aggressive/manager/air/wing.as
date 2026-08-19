@@ -120,17 +120,19 @@ CCircuitDef@ IntelPlantToBuild()
 	// PlantApproved's per-def curve still bounds it.
 	if ((gPlant2 !is null) && gPlant2.IsAvailable(ai.frame) && HaveAirCon()) {
 		int wantN = int(inc / ai.GetTunable("apex_adv_air_income", 150.f));
-		// EXTRAS FOLLOW MILITARY NEED. The income curve alone bought a second
-		// T2 air lab while the land army sat at 24% spent against a 37%
-		// target -- apexearth 2026-08-19: "we have like no land army yet we
-		// have two t2 air labs... what we put into buildings isn't aligned
-		// with our military needs." One advanced air plant is infrastructure;
-		// more are a luxury the budget must have paid for army FIRST.
-		if ((wantN > 1)
-			&& (Brain::ShareOf(Brain::ARMY) < Brain::TargetShare(Brain::ARMY)))
-		{
+		// AIR PLANTS FOLLOW MILITARY NEED -- the first included. apexearth
+		// 2026-08-19, a 1v1 lost with <10% relative army, a silo and two T2
+		// air labs: "I wouldn't even want to see a first T2 air lab." While
+		// army spend is under its budget target the advanced air plant is a
+		// luxury and waits -- UNLESS the enemy actually flies, in which case
+		// the fighters that live here are themselves the military need.
+		const bool armyFedA = Brain::ShareOf(Brain::ARMY)
+				>= Brain::TargetShare(Brain::ARMY)
+					* ai.GetTunable("apex_extra_plant_army", 0.85f);
+		if (!armyFedA && (Military::AirThreatNow() <= 0.f))
+			return null;
+		if ((wantN > 1) && !armyFedA)
 			wantN = 1;
-		}
 		// At least one, once air is mandatory at all or the enemy is afloat:
 		// torpedo bombers, fighters and the advanced air constructors all live
 		// here, and a long game repeatedly ended with none (the income curve
