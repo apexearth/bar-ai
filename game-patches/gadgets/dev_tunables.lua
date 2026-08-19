@@ -95,6 +95,8 @@ local NAMES = {
 	"apex_shield_loss_memory",-- statics.as: seconds a broken shield keeps escalating the want (240)
 	"apex_gantry_answer",     -- brain.as: gantry want multiplier while enemy fields T3 and we own no gantry (3)
 	"apex_pulsar_answer",     -- brain.as: pulsar want multiplier while enemy fields T3 and we own no gantry (3)
+	"apex_merge_threat",      -- SquadTask.cpp: merge-line threat ceiling as fraction of combined squad power (0.5)
+	"apex_merge_every",       -- SquadTask.cpp: task updates between merge attempts (8, was 32)
 	"apex_conv_dry_mult",     -- brain.as: convert-want discount while energy is not overflowing (0.25)
 	"apex_front_from_min",    -- brain.as: game-minutes before proactive front-line spend starts (5)
 	"apex_conv_drain",        -- mexguard.as: energy/s one converter eats (70)

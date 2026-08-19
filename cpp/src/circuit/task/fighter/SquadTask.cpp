@@ -312,7 +312,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
 			continue;
 		}
 
-		if (!query->IsSafeLine(pos, taskPos)) {  // ensure safe passage
+		// apex: passage tolerance scales with the COMBINED squad -- the whole
+		// point of merging is that together they can walk ground neither dares
+		// alone. THREAT_MIN (any-threat-refuses) kept 1-2 unit squads separate
+		// on every contested map; see QueryLineMap::IsSafeLine.
+		const float mergeThreat = std::max(THREAT_MIN,
+				(attackPower + candidate->GetAttackPower())
+						* circuit->GetTunable("apex_merge_threat", 0.5f));
+		if (!query->IsSafeLine(pos, taskPos, mergeThreat)) {  // ensure safe passage
 			continue;
 		}
 
@@ -334,7 +341,12 @@ ISquadTask* ISquadTask::GetMergeTask()
 	// half-minute -- the near-miss fix picked by the bestRef distribution.
 	const bool nearMiss = (lastRefused >= manager->GetCircuit()
 			->GetTunable("apex_nearmiss_merge", 0.7f)) && (updCount % 8 == 5);
-	if ((updCount % 32 == 1) || nearMiss) {
+	// apex: every 8th update, not every 32nd -- at 32 a small squad crossed
+	// half the map between merge attempts, and stayed small for the fight
+	// that killed it. Tunable so the cadence can be measured, not argued.
+	const int every = std::max(2, (int)manager->GetCircuit()
+			->GetTunable("apex_merge_every", 8.f));
+	if ((updCount % every == 1) || nearMiss) {
 		return IsMergeSafe() ? CheckMergeTask() : nullptr;
 	}
 	return nullptr;
