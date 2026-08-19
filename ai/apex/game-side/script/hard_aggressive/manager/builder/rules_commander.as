@@ -146,9 +146,10 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 						away.SafeNormalize2D();
 						const AIFloat3 spread = unit.GetPos(ai.frame)
 								+ away * ai.GetTunable("apex_comm_spacing", 500.f);
-						CCircuitDef@ safeDef = SideDef3(armsolar, corsolar, legsolar);
+						CCircuitDef@ safeDef = SolarDef();   // never a panel late-game
 						if (OnMap(spread) && (safeDef !is null)
-							&& safeDef.IsAvailable(ai.frame))
+							&& safeDef.IsAvailable(ai.frame)
+							&& unit.circuitDef.CanBuild(safeDef))
 						{
 							IUnitTask@ apart = Requests::Take(unit, safeDef,
 									Task::BuildType::ENERGY, Task::Priority::NORMAL,
@@ -264,8 +265,9 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 			}
 			AIFloat3 back;
 			if (RearPos(unit, back)) {
-				CCircuitDef@ safe = SideDef3(armsolar, corsolar, legsolar);
-				if ((safe !is null) && safe.IsAvailable(ai.frame)) {
+				CCircuitDef@ safe = SolarDef();   // never a panel late-game
+				if ((safe !is null) && safe.IsAvailable(ai.frame)
+					&& unit.circuitDef.CanBuild(safe)) {
 					IUnitTask@ hide = Requests::Take(unit, safe,
 							Task::BuildType::ENERGY, Task::Priority::NORMAL,
 							back, 0.f, SQUARE_SIZE * 8);

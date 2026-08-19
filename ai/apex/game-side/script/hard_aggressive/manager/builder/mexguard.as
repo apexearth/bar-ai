@@ -479,8 +479,12 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 	// below the income floor, waiting on the per-metal ranking (which can
 	// pick fusion or advanced solar, both slow to help a stall) is the wrong
 	// answer, so skip it and place the cheapest, fastest fix instead.
+	// ... but only for an economy too small to buy a reactor: at fusion-level
+	// income a stall is answered by the ladder's fusion, and a panel is build
+	// power spent on almost nothing (apexearth 2026-08-19, watching the panic).
 	const bool energyPanic = aiEconomyMgr.isEnergyStalling
-			&& (aiEconomyMgr.energy.income < ai.GetTunable("apex_energy_panic_income", 500.f));
+			&& (aiEconomyMgr.energy.income < ai.GetTunable("apex_energy_panic_income", 500.f))
+			&& !ReactorAffordable();
 	if (energyPanic) {
 		@gen = SideDef3(armsolar, corsolar, legsolar);
 	} else if (EnergyWasting()) {

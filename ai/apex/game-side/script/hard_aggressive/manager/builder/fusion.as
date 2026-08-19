@@ -27,8 +27,25 @@ const float AFFORD_SECONDS = 90.f;
 // `Factory::gHaveT2`, which is a tech question, not an energy one. So a base
 // making 400 energy/second kept putting down 20-energy panels from three
 // different rules. This is the single answer they all use now.
+// A reactor the metal income can pay for inside AFFORD_SECONDS -- the same
+// tiering rule the HomeEnergy ladder steps up on.
+bool ReactorAffordable()
+{
+	CCircuitDef@ fus = SideDef3(armfus, corfus, legfus);
+	return (fus !is null) && fus.IsAvailable(ai.frame)
+		&& (aiEconomyMgr.metal.income * AFFORD_SECONDS >= fus.costM);
+}
+
 CCircuitDef@ SolarDef()
 {
+	// A PANEL IS NEVER THE ANSWER WHILE A FUSION IS AFFORDABLE. The reclaim
+	// cliff below is an INCOME test, so a late-game energy crash (reactors
+	// die, income falls under the cliff) re-opened the plain-panel branch and
+	// every fallback spammed 20-energy panels -- apexearth 2026-08-19, watching
+	// it: "we made a bunch of solars in panic... we should have been making
+	// fusions." Affordability, not income level, is what retires the panel.
+	if (ReactorAffordable())
+		return null;
 	CCircuitDef@ adv = AdvSolDef();
 	if (adv !is null)
 		return adv;
