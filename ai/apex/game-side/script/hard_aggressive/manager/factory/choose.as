@@ -265,6 +265,9 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 // ("we're still making a second T2 lab... whatever you do to fix it is not
 // working"); every one was a second entrance. Do not add another: route it
 // here.
+string armafus("armafus");   string corafus("corafus");   string legafus("legafus");
+string armpulsarS("armanni"); string corpulsarS("cordoom"); string legpulsarS("legbastion");
+
 bool PlantApproved(CCircuitDef@ want)
 {
 	if (want is null)
@@ -364,6 +367,33 @@ bool PlantApproved(CCircuitDef@ want)
 	// income-scaled count, and holding it behind the LAND T2 budget is how long
 	// games ended with no advanced air plant at all -- at 100-200 m/s the land
 	// labs fill `allowed` and armaap was refused forever.
+	// A SECOND advanced plant of ANY kind -- 2nd T2 lab, T2 air lab, intel
+	// plant included -- waits until the base can survive being weak while it
+	// pays for itself: an ADVANCED FUSION standing and PULSAR defense at home.
+	// apexearth 2026-08-18: "we make a T2 air lab while we should still be
+	// making our eco... super dangerous, we should instead make a pulsar in
+	// our base... before we even have an afus yet. We make 2nd T2 lab, T2
+	// air lab, all these things before we even have any pulsar defense."
+	// The first T2 plant (the tech transition) is untouched; T3 gantries
+	// keep their own earlier timing.
+	if (((userData[want.id].attr & Attr::T2) != 0)
+		&& (T2PlantCount() + InFlightTier(Attr::T2) >= 1)) {
+		CCircuitDef@ afus = SideDef3(armafus, corafus, legafus);
+		CCircuitDef@ gun = SideDef3(armpulsarS, corpulsarS, legpulsarS);
+		const bool safeEnough = (afus !is null) && (afus.count > 0)
+				&& (gun !is null) && (gun.count > 0);
+		if (!safeEnough) {
+			if (ai.frame >= gNextT2TotalLog) {
+				gNextT2TotalLog = ai.frame + 60 * SECOND;
+				AiLog(T() + "apex: " + want.GetName() + " refused -- extra "
+					+ "advanced plant waits for afus+pulsar (afus="
+					+ (((afus !is null) && (afus.count > 0)) ? "1" : "0")
+					+ " pulsar=" + (((gun !is null) && (gun.count > 0)) ? "1" : "0")
+					+ ") at " + formatFloat(SteadyIncome(), "", 0, 0) + " m/s");
+			}
+			return false;
+		}
+	}
 	if (((userData[want.id].attr & Attr::T2) != 0)
 		&& !(IsAirFactory(want) && Air::WantsIntelPlant(want))) {
 		CCircuitDef@ advCon2 = aiFactoryMgr.GetRoleDef(want, RT::BUILDER2);

@@ -1,5 +1,26 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN: T3-counter wants stay tiny while an enemy titan is winning (2026-08-18)
+
+Lost 1v1 vs BARb:stable on Comet Catcher (seed 150): stock built a
+Behemoth and walked it in. Our side reached 285 income and T3 itself, but
+the final brain ranking read pulsar=0.097 — LAST — with the titan on the
+field, when the seen-T3 multiplier (t3Mult from GetEnemyCost SUPER+HEAVY,
+apex_counter_t3_norm 20000) should have made pulsar/gantry dominant.
+Either the Behemoth never classified as HEAVY/SUPER in the enemy registry
+(check behaviour.json role for it), or t3Mult is diluted by the want's own
+have/decay before the roulette. Attribute from the brain-wants log lines
+of that match (matches/20260818-234418) before touching any value.
+
+## OPEN: the hosted-MP desync netmatch is still unrun (2026-08-18)
+
+Four DLL changes landed 2026-08-18, ending in the asPrepareMultithread fix
+for host-process heap corruption — the one AI bug class that CAN desync a
+host. Single-process harness games cannot test sync. Before hosting for
+real: a lobby with any second client connected for 20-30 min through a
+commander death. Harness has no host+join mode yet; building one is the
+automation option.
+
 ## OPEN: Cortex builds far more fighters than Armada (2026-08-18)
 
 apexearth, watching the Carrot Mountains 8v8: "Cortex always makes way more
