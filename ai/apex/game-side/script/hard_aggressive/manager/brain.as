@@ -1215,8 +1215,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	{
 		const int lrpc = Builder::EnemyLRPCs();
 		if (lrpc > 0) {
-			Propose(Simple("shield", ai.GetTunable("apex_shield_value", 8.f)
-					* float(lrpc + Builder::ShieldsLostRecent()),
+			// Same divided sizing as ShieldCover -- the per-gun multiplier
+			// overpriced this ~3x (one dome answers every gun in reach).
+			const int per = int(ai.GetTunable("apex_shield_per", 3.f));
+			const float scale = 1.f
+					+ float((lrpc - 1) + Builder::ShieldsLostRecent())
+						/ float((per > 0) ? per : 3);
+			Propose(Simple("shield", ai.GetTunable("apex_shield_value", 8.f) * scale,
 					SideDef3("armgate", "corgate", "legdeflector")));
 		}
 	}

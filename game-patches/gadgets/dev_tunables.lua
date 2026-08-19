@@ -105,6 +105,7 @@ local NAMES = {
 	"apex_charge_threat_mod", -- AttackTask.cpp: charge-path threat weight; bends the route around Behemoths only (0.1)
 	"apex_shield_value",      -- brain.as: shield want value per LRPC firing + shield lost (8)
 	"apex_shield_loss_memory",-- statics.as: seconds a broken shield keeps escalating the want (240)
+	"apex_shield_per",        -- statics/brain: extra guns-or-broken-shields per additional dome (3)
 	"apex_gantry_answer",     -- brain.as: gantry want multiplier while enemy fields T3 and we own no gantry (3)
 	"apex_pulsar_answer",     -- brain.as: pulsar want multiplier while enemy fields T3 and we own no gantry (3)
 	"apex_merge_threat",      -- SquadTask.cpp: merge-line threat ceiling as fraction of combined squad power (0.5)

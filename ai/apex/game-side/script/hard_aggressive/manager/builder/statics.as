@@ -966,7 +966,12 @@ IUnitTask@ ShieldCover(CCircuitUnit@ unit)
 	const int standing = int(sh.count);
 	if (standing > gShieldPeak)
 		gShieldPeak = standing;
-	const int want = lrpc + ShieldsLostRecent();
+	// One dome shields the whole core from every gun in reach, so per-gun
+	// sizing overbuilt ~3x (apexearth 2026-08-19: "we are now making too many
+	// shields... probably three times stronger than it needs to be"). One
+	// dome, plus one per apex_shield_per additional guns-or-broken-shields.
+	const int per = int(ai.GetTunable("apex_shield_per", 3.f));
+	const int want = 1 + ((lrpc - 1) + ShieldsLostRecent()) / ((per > 0) ? per : 3);
 	if ((standing >= want) || (gShieldAsked - gShieldPeak >= 2))
 		return null;
 	AIFloat3 near;
