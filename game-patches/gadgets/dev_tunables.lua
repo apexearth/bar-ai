@@ -109,6 +109,7 @@ local NAMES = {
 	"apex_retreat_threat_mod",-- RetreatTask.cpp: threat weight on a wounded unit's path home (4; attack squads use 2)
 	"apex_kite_foe_pad",      -- SquadTask.cpp: margin over the closing enemy's range that triggers the backstep (120)
 	"apex_t2_stuck_secs",     -- choose.as: seconds a blocked pre-T2 transition waits before re-opening the plant order (240)
+	"apex_extra_plant_army",  -- choose.as: fraction of the army budget target extras must see fed (0.85)
 	"apex_gantry_answer",     -- brain.as: gantry want multiplier while enemy fields T3 and we own no gantry (3)
 	"apex_pulsar_answer",     -- brain.as: pulsar want multiplier while enemy fields T3 and we own no gantry (3)
 	"apex_merge_threat",      -- SquadTask.cpp: merge-line threat ceiling as fraction of combined squad power (0.5)

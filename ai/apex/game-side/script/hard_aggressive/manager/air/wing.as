@@ -120,6 +120,17 @@ CCircuitDef@ IntelPlantToBuild()
 	// PlantApproved's per-def curve still bounds it.
 	if ((gPlant2 !is null) && gPlant2.IsAvailable(ai.frame) && HaveAirCon()) {
 		int wantN = int(inc / ai.GetTunable("apex_adv_air_income", 150.f));
+		// EXTRAS FOLLOW MILITARY NEED. The income curve alone bought a second
+		// T2 air lab while the land army sat at 24% spent against a 37%
+		// target -- apexearth 2026-08-19: "we have like no land army yet we
+		// have two t2 air labs... what we put into buildings isn't aligned
+		// with our military needs." One advanced air plant is infrastructure;
+		// more are a luxury the budget must have paid for army FIRST.
+		if ((wantN > 1)
+			&& (Brain::ShareOf(Brain::ARMY) < Brain::TargetShare(Brain::ARMY)))
+		{
+			wantN = 1;
+		}
 		// At least one, once air is mandatory at all or the enemy is afloat:
 		// torpedo bombers, fighters and the advanced air constructors all live
 		// here, and a long game repeatedly ended with none (the income curve

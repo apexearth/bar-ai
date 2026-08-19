@@ -410,13 +410,22 @@ bool PlantApproved(CCircuitDef@ want)
 		CCircuitDef@ gun = SideDef3(armpulsarS, corpulsarS, legpulsarS);
 		const bool safeEnough = (afus !is null) && (afus.count > 0)
 				&& (gun !is null) && (gun.count > 0);
-		if (!safeEnough) {
+		// ...and the ARMY MUST BE FED: an extra plant is metal that is not
+		// units, and a second T2 air lab was bought while army spend sat at
+		// 24% of a 37% target (apexearth 2026-08-19: "the buildings we make
+		// aren't aligned with our military needs"). Extras wait until army
+		// spend is near its budget target.
+		const bool armyFed = Brain::ShareOf(Brain::ARMY)
+				>= Brain::TargetShare(Brain::ARMY)
+					* ai.GetTunable("apex_extra_plant_army", 0.85f);
+		if (!safeEnough || !armyFed) {
 			if (ai.frame >= gNextT2TotalLog) {
 				gNextT2TotalLog = ai.frame + 60 * SECOND;
 				AiLog(T() + "apex: " + want.GetName() + " refused -- extra "
-					+ "advanced plant waits for afus+pulsar (afus="
+					+ "advanced plant waits for afus+pulsar+army (afus="
 					+ (((afus !is null) && (afus.count > 0)) ? "1" : "0")
 					+ " pulsar=" + (((gun !is null) && (gun.count > 0)) ? "1" : "0")
+					+ " armyFed=" + (armyFed ? "1" : "0")
 					+ ") at " + formatFloat(SteadyIncome(), "", 0, 0) + " m/s");
 			}
 			return false;
