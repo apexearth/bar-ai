@@ -85,6 +85,24 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// UpdateRaidCaution raises the promotion floor further while still on T1.
 		return aiMilitaryMgr.DefaultMakeTask(unit);
 	}
+	// T3 CHARGERS GO FOR THE BASE. In the massing pool they inherited the
+	// group's target logic and spent the game trading with army -- apexearth
+	// 2026-08-19: stock "walks their T3s straight into the center of our base.
+	// We don't... we get distracted and just fight army." A solo ATTACK task is
+	// stock's own shape for a mobile super, and the C++ charge pair (no engage
+	// margin, straight-line path -- see IsChargerDef) makes it the beeline.
+	// While home is being hit they defend it instead, same gate as the pool.
+	if (IsChargerDef(cdef) && (ai.GetTunable("apex_charger_strike", 1.f) > 0.f)) {
+		NotePostureDef(cdef, false);
+		if ((ai.GetTunable("apex_defend_home", 1.f) > 0.f)
+			&& (Builder::BaseUnderAttack() || BaseContested()))
+		{
+			return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+					Task::FightType::MELEE, aiMilitaryMgr.quota.attack));
+		}
+		AiLog(Factory::T() + "apex: " + cdef.GetName() + " charges the enemy base");
+		return aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::ATTACK));
+	}
 	// Before the massing pool: a super that reaches WantsMassing is excluded
 	// there by role and falls through to DefaultMakeTask, which sends it out
 	// alone. See superguard.as.

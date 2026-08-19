@@ -54,6 +54,29 @@ void AiMain()
 		if (cdef !is null)
 			Factory::userData[cdef.id].attr |= Factory::Attr::T3;
 	}
+
+	// THE BEHEMOTH GETS A WIDE BERTH. Its D-gun one-shots whatever walks into
+	// range, which flat DPS-derived threat underprices. Scaling the threat
+	// kernel makes the threat map hot around every enemy corjugg: squads demand
+	// better odds near one and threat-aware paths detour around it. Calibrated
+	// by probe (SetThreatKernel(1), read, rescale) because the kernel itself is
+	// write-only. Side effect, accepted: def power scales too, so our OWN
+	// Behemoths read stronger -- they are chargers and ignore the margin anyway.
+	{
+		const float mult = ai.GetTunable("apex_behemoth_threat", 2.f);
+		CCircuitDef@ jugg = ai.GetCircuitDef("corjugg");
+		if ((jugg !is null) && (mult > 1.f)) {
+			const float t0 = jugg.threat;
+			jugg.SetThreatKernel(1.f);
+			const float unitK = jugg.threat;
+			if ((t0 > 0.f) && (unitK > 0.0001f)) {
+				jugg.SetThreatKernel(mult * t0 / unitK);
+				AiLog("apex: behemoth berth -- corjugg threat "
+					+ formatFloat(t0, "", 0, 0) + " -> "
+					+ formatFloat(jugg.threat, "", 0, 0));
+			}
+		}
+	}
 }
 
 void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishAIId
