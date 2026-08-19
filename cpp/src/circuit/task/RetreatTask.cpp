@@ -23,6 +23,7 @@
 #include "unit/action/MoveAction.h"
 #include "unit/action/FightAction.h"
 #include "CircuitAI.h"
+#include <limits>
 #include "util/Utils.h"
 
 #include "AISCommands.h"
@@ -228,9 +229,17 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 	}
 
 //	const float minThreat = circuit->GetThreatMap()->GetUnitThreat(unit) * 0.125f;
+	// apex: a WOUNDED unit weighted threat at the neutral 1.0 -- LESS than a
+	// healthy attacking squad's 2.0 -- so retreats beelined home through the
+	// enemy: measured live 2026-08-19, RETREAT tasks were the largest mobile
+	// combat death bucket, 39.4k metal / 371 units in one 20m game ("solo
+	// dudes walking into enemy groups"). High mod, no ceiling: the path bends
+	// hard around danger but can never fail to exist.
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			unit, circuit->GetThreatMap(),
-			startPos, endPos, range/*, nullptr, minThreat*/);
+			startPos, endPos, range, nullptr,
+			std::numeric_limits<float>::max(), false,
+			circuit->GetTunable("apex_retreat_threat_mod", 4.f));
 	pathQueries[unit] = query;
 
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
