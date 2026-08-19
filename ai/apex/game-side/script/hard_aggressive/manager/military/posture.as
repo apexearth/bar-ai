@@ -363,29 +363,14 @@ void UpdateLanePos()
 	// defences instead of feeding into the same front. The budget tilt
 	// (LossArmyMult) is buying the army; this is where it stands. Releases by
 	// itself as the ledger drains or the trade recovers.
-	// MUSTER BEFORE STANDING FORWARD. With the pool anchored at the front, its
-	// fill stream walked out one unit at a time -- each solo crossing a death
-	// the trade ledger barely sees. The anchor stands forward only while our
-	// fielded army is a real fraction of the ENEMY's per-player mobile threat;
-	// below that the pool gathers at the defensive line and walks out as a
-	// group once it is. (Comparing against our own promote quota was
-	// self-referential -- both sides scaled with our own army and the bar
-	// could never be crossed.) Grunt-class power-per-metal ~0.017.
-	bool mustering = false;
-	if (Builder::gHomeSet && (aiEnemyMgr.mobileThreat > 1.f)) {
-		float allies = 1.f;
-		array<Id>@ roster = ai.GetTeamIds();
-		if ((roster !is null) && (roster.length() > 0))
-			allies = float(roster.length());
-		// Hysteresis: advance only at the full bar, fall back to mustering
-		// only below 80% of it -- a squad trading at the line must not flap
-		// the whole anchor every few seconds.
-		mustering = (aiMilitaryMgr.armyCost * 0.017f)
-			< (aiEnemyMgr.mobileThreat / allies)
-				* ai.GetTunable("apex_lane_muster", 0.5f)
-				* (gTradeHold ? 1.f : 0.8f);
-	}
-	if ((mustering || TradeBad()) && Builder::gHomeSet) {
+	// A muster state was tried here (anchor waits at the line until the army
+	// is half the enemy's per-player threat) and REVERTED same day: measured
+	// over 6 games it collapsed production 1.8x -> 1.08x and went 0-3 -- the
+	// hold ceded the map, the ceded map shrank the army, and the bar became a
+	// ratchet. Standing forward is what protects the income that pays for the
+	// army; only ground the enemy actually holds (the net-influence walk
+	// below) and a measured bad trade may pull the anchor back.
+	if (TradeBad() && Builder::gHomeSet) {
 		const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 		if (OnMap(e)) {
 			const float f = ai.GetTunable("apex_lane_defensive", 0.15f);
@@ -398,14 +383,12 @@ void UpdateLanePos()
 		}
 		if (!gTradeHold) {
 			gTradeHold = true;
-			AiLog(Factory::T() + (TradeBad()
-				? ("apex: trade " + formatFloat(TradeRatio(), "", 0, 2)
-					+ " -- army stands defensively while it rebuilds")
-				: "apex: mustering -- anchor waits at the line until a group stands"));
+			AiLog(Factory::T() + "apex: trade " + formatFloat(TradeRatio(), "", 0, 2)
+				+ " -- army stands defensively while it rebuilds");
 		}
 	} else if (gTradeHold) {
 		gTradeHold = false;
-		AiLog(Factory::T() + "apex: group formed -- anchor advances to the front");
+		AiLog(Factory::T() + "apex: trade recovered -- army returns to the front");
 	}
 	// A LOST LANE MUST BE PERCEIVED AS LOST. The anchor used to stand at the
 	// front edge regardless of who now holds that ground, so the pool's fill
