@@ -99,10 +99,37 @@ void UpdateApproach()
 		if (!OnMap(p))
 			continue;
 		const float cost = aiEnemyMgr.GetEnemyGroupCost(i);
-		if (cost < minCost)
-			continue;
 		const float d = p.distance2D(Builder::gHomePos);
 		if (d > notice)
+			continue;
+		// DANGER BY REACH, NOT ONLY BY MOTION. A group standing still is
+		// dangerous the moment our base edge is inside ITS longest weapon
+		// range plus a margin -- apexearth: "some artillery has close to 1500
+		// range... it depends on their range." Edge = the nearest of our own
+		// defences (the fence ring is the base's measured extent).
+		{
+			const float edgeD = Military::NearestFenceDist(p);
+			const float dEdge = (edgeD < d) ? edgeD : d;
+			const float reach = aiEnemyMgr.GetEnemyGroupRange(i)
+					+ ai.GetTunable("apex_push_danger_pad", 500.f);
+			if ((dEdge < reach)
+				&& (cost >= ai.GetTunable("apex_push_danger_cost", 800.f)))
+			{
+				gIncomingPos = p;
+				gIncomingCost = cost;
+				gIncomingAt = ai.frame;
+				if (ai.frame >= gNextApproachLog) {
+					gNextApproachLog = ai.frame + 30 * SECOND;
+					AiLog(Factory::T() + "apex: DANGER IN REACH -- "
+						+ formatFloat(cost, "", 0, 0) + " metal, range "
+						+ formatFloat(reach, "", 0, 0) + ", "
+						+ formatFloat(dEdge, "", 0, 0) + " from our edge");
+				}
+			}
+		}
+		// Below here is the CLOSING tracker, which is about pushes of real
+		// size; the reach clause above has its own smaller bar.
+		if (cost < minCost)
 			continue;
 		// Match against the tracked sightings; the group is the same one if it
 		// stands within a step of where one stood last pass.

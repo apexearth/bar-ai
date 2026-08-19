@@ -93,6 +93,8 @@ local NAMES = {
 	"apex_push_closing",      -- basedefence.as: elmos closed per 5s sample that reads as pushing (150)
 	"apex_push_answer_frac",  -- statics.as: defence metal wanted as fraction of incoming push metal (0.4)
 	"apex_push_stand",        -- statics.as: how far out the answering towers stand (1100)
+	"apex_push_danger_pad",   -- basedefence.as: margin added to a group's weapon range for the reach alarm (500)
+	"apex_push_danger_cost",  -- basedefence.as: group metal below which the reach alarm ignores it (800)
 	"apex_mexup_home_r",      -- mexwork.as: radius around home whose T1 mexes gate the fusion lane (1200)
 	"apex_impact_ref",        -- brain.as: income at which eco-want relative-impact scaling is neutral (30)
 	"apex_charger_strike",    -- hooks.as: 1 = T3 chargers take solo base-strike tasks, 0 = massing pool

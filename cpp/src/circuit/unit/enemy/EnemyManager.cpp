@@ -424,6 +424,28 @@ float CEnemyManager::GetEnemyAirCostNear(const springai::AIFloat3& pos, float ra
 	return sum;
 }
 
+// apex: the longest weapon range among a group's known members. The danger a
+// standing group poses depends on what it can SHELL, not where it walks --
+// artillery reaches ~1500 and must read dangerous from that far out.
+float CEnemyManager::GetEnemyGroupRange(int idx) const
+{
+	if ((idx < 0) || (idx >= (int)enemyGroups.size())) {
+		return 0.f;
+	}
+	float range = 0.f;
+	for (const ICoreUnit::Id eId : enemyGroups[idx].units) {
+		CEnemyUnit* enemy = GetEnemyUnit(eId);
+		if (enemy == nullptr) {
+			continue;
+		}
+		CCircuitDef* cdef = enemy->GetCircuitDef();
+		if (cdef != nullptr) {
+			range = std::max(range, cdef->GetMaxRange());
+		}
+	}
+	return range;
+}
+
 void CEnemyManager::PurgeStaleGhosts(int frame, int confirmedAgeFrames, int unknownAgeFrames)
 {
 	for (CEnemyUnit* e : enemyUpdates) {

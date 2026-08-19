@@ -282,6 +282,20 @@ float FenceGunMetalNear(const AIFloat3& in pos, float radius)
 	return m;
 }
 
+// Distance to the nearest of our own defences: the fence ring is the measured
+// extent of the base, so this is "how far from our edge". Function rather than
+// a gFencePos read because basedefence.as compiles before this file.
+float NearestFenceDist(const AIFloat3& in pos)
+{
+	float best = 1.0e9f;
+	for (uint i = 0; i < gFencePos.length(); ++i) {
+		const float d = gFencePos[i].distance2D(pos);
+		if (d < best)
+			best = d;
+	}
+	return best;
+}
+
 // How recently, and how repeatedly, we have lost a tower near here. Zero is
 // "never"; each loss contributes its remaining freshness, so a position that has
 // eaten several towers scores above one that has eaten one. Expired entries are

@@ -475,6 +475,11 @@ static float CEnemyManager_GetEnemyGroupCost(CEnemyManager* mgr, int i)
 	return ((i >= 0) && (i < (int)groups.size())) ? groups[i].cost : 0.f;
 }
 
+static float CEnemyManager_GetEnemyGroupRange(CEnemyManager* mgr, int i)
+{
+	return mgr->GetEnemyGroupRange(i);
+}
+
 // apex: for a script-driven D-gun raid (commander cloaks in and D-guns a
 // target when energy allows -- apexearth's request). CmdCloak already exists
 // on CCircuitUnit (used natively by RetreatTask's own cloak-on-retreat
@@ -1390,6 +1395,7 @@ void CInitScript::RegisterMgr()
 	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyGroupCount() const", asFUNCTION(CEnemyManager_GetEnemyGroupCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyGroupPos(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyGroupCost(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupCost), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyGroupRange(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupRange), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
 
 	CThreatMap* thrMap = circuit->GetThreatMap();

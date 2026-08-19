@@ -74,6 +74,8 @@ public:
 	void DyingEnemy(CEnemyUnit* enemy, int frame);
 	void PurgeStaleGhosts(int frame, int confirmedAgeFrames, int unknownAgeFrames);
 	float GetEnemyAirCostNear(const springai::AIFloat3& pos, float radius) const;
+	// apex: longest weapon range in a group -- danger radius depends on it.
+	float GetEnemyGroupRange(int idx) const;
 private:
 	void DyingEnemy(CEnemyUnit* enemy);
 	void DeleteEnemyUnit(CEnemyUnit* data);
