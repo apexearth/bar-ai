@@ -102,7 +102,7 @@ Cat BudgetCatOf(const string& in kind)
 	if (kind == "aa")
 		return AIRDEF;
 	if ((kind == "fence") || (kind == "pulsar") || (kind == "silo")
-		|| (kind == "pinpoint") || (kind == "antinuke"))
+		|| (kind == "pinpoint") || (kind == "antinuke") || (kind == "shield"))
 		return DEFENCE;
 	return ECONOMY;
 }
@@ -969,6 +969,8 @@ IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
 		return Builder::NukeSilo(unit);
 	if (kind == "antinuke")
 		return Builder::AntiNuke(unit);
+	if (kind == "shield")
+		return Builder::ShieldCover(unit);
 	if (kind == "pulsar")
 		return Builder::Pulsar(unit);
 	if (kind == "pinpoint")
@@ -1164,7 +1166,22 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			+ aiEnemyMgr.GetEnemyCost(RT::HEAVY);
 	const float t3Mult = 1.f + enemyT3
 			/ ai.GetTunable("apex_counter_t3_norm", 20000.f);
-	Propose(Simple("gantry", GANTRY_VALUE * t3Mult,
+	// ENEMY T3 WITH NO ANSWER OF OURS IS AN EMERGENCY, not a ratio. apexearth
+	// 2026-08-19: "as soon as enemy has T3 walking into our base it's often GG.
+	// If we aren't making T3 then we damn well should be making a lot of T3
+	// defense." While they field T3 and we own no gantry, BOTH answers surge --
+	// the gantry (make our own) and the pulsar line (defend without it) -- and
+	// the ranking picks whichever the economy can actually execute. The boost
+	// drops by itself the moment a gantry stands.
+	CCircuitDef@ gantryDef = SideDef3("armshltx", "corgant", "leggant");
+	const bool noT3Prod = (gantryDef is null) || (gantryDef.count == 0);
+	float gantryV = GANTRY_VALUE * t3Mult;
+	float pulsarAnswer = 1.f;
+	if ((enemyT3 > 0.f) && noT3Prod) {
+		gantryV *= ai.GetTunable("apex_gantry_answer", 3.f);
+		pulsarAnswer = ai.GetTunable("apex_pulsar_answer", 3.f);
+	}
+	Propose(Simple("gantry", gantryV,
 			SideDef3("armshltx", "corgant", "leggant")));
 	Propose(Simple("silo", SILO_VALUE, SideDef3("armsilo", "corsilo", "legsilo")));
 	// apexearth: "Antinuke should be standard for all games where nukes are
@@ -1187,10 +1204,21 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// surplus is FOR (apexearth: "we literally need a line of them across the
 	// front of our bases... we're full on metal").
 	{
-		float pv = PULSAR_VALUE * t3Mult;
+		float pv = PULSAR_VALUE * t3Mult * pulsarAnswer;
 		if (aiEconomyMgr.isMetalFull)
 			pv *= ai.GetTunable("apex_pulsar_full_mult", 2.f);
 		Propose(Simple("pulsar", pv, SideDef3("armanni", "cordoom", "legbastion")));
+	}
+	// LRPC siege -> shields, scaled by the guns firing and the shields already
+	// broken. The rule (Builder::ShieldCover) carries the census and the
+	// CanBuild guard; this only prices it.
+	{
+		const int lrpc = Builder::EnemyLRPCs();
+		if (lrpc > 0) {
+			Propose(Simple("shield", ai.GetTunable("apex_shield_value", 8.f)
+					* float(lrpc + Builder::ShieldsLostRecent()),
+					SideDef3("armgate", "corgate", "leggatet3")));
+		}
 	}
 	Propose(Simple("pinpoint", PINPOINT_VALUE, SideDef3("armtarg", "cortarg", "legtarg")));
 	}

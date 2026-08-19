@@ -891,6 +891,106 @@ IUnitTask@ AntiNuke(CCircuitUnit@ unit)
 	return post;
 }
 
+//------------------------------------------------------------------------------
+// LRPC SIEGE -> SHIELDS. apexearth 2026-08-19: "If we are being attacked by
+// LRPC we need to make shields. If our shields are failing we need to make
+// more shields." One deflector per bombarding gun, plus one for every shield
+// of ours the guns have already broken -- the census is the trigger, the loss
+// memory is the escalation. leggatet3 has no builder in the pinned tree, so
+// the CanBuild guard makes this a no-op for Legion until a game ships one.
+//------------------------------------------------------------------------------
+string armgateS("armgate"); string corgateS("corgate"); string leggateS("leggatet3");
+
+int gLrpcN = 0;
+int gLrpcNext = 0;
+
+int EnemyLRPCs()
+{
+	if (ai.frame < gLrpcNext)
+		return gLrpcN;
+	gLrpcNext = ai.frame + 10 * SECOND;
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	AIFloat3 mid(w * 0.5f, 0.f, h * 0.5f);
+	const float r = sqrt(w * w + h * h) * 0.5f + 1.f;
+	array<string> guns = {"armbrtha", "corint", "leglrpc",
+			"armvulc", "corbuzz", "legstarfall"};
+	int n = 0;
+	for (uint i = 0; i < guns.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(guns[i]);
+		if (d !is null)
+			n += ai.CountEnemyDefNear(d.id, mid, r);
+	}
+	gLrpcN = n;
+	return n;
+}
+
+// Our shields that have died, remembered for apex_shield_loss_memory seconds.
+array<int> gShieldLostAt;
+
+void NoteShieldLost(const CCircuitDef@ d)
+{
+	if (d is null)
+		return;
+	CCircuitDef@ sh = SideDef3(armgateS, corgateS, leggateS);
+	if ((sh !is null) && (d.id == sh.id))
+		gShieldLostAt.insertLast(ai.frame);
+}
+
+int ShieldsLostRecent()
+{
+	const int life = int(ai.GetTunable("apex_shield_loss_memory", 240.f)) * SECOND;
+	for (int i = int(gShieldLostAt.length()) - 1; i >= 0; --i) {
+		if (ai.frame - gShieldLostAt[i] > life)
+			gShieldLostAt.removeAt(i);
+	}
+	return int(gShieldLostAt.length());
+}
+
+int gShieldAsked = 0;
+int gShieldPeak = 0;
+
+IUnitTask@ ShieldCover(CCircuitUnit@ unit)
+{
+	if (aiEconomyMgr.isEnergyStalling)
+		return null;
+	CCircuitDef@ sh = SideDef3(armgateS, corgateS, leggateS);
+	if ((sh is null) || !sh.IsAvailable(ai.frame)
+		|| !unit.circuitDef.CanBuild(sh))
+	{
+		return null;
+	}
+	const int lrpc = EnemyLRPCs();
+	if (lrpc <= 0)
+		return null;
+	const int standing = int(sh.count);
+	if (standing > gShieldPeak)
+		gShieldPeak = standing;
+	const int want = lrpc + ShieldsLostRecent();
+	if ((standing >= want) || (gShieldAsked - gShieldPeak >= 2))
+		return null;
+	AIFloat3 near;
+	if (!NanoCluster(near))
+		near = gHomePos;
+	AIFloat3 site = ai.FindBuildSiteNear(sh, near, GANTRY_NEAR_NANO);
+	if (!OnMap(site))
+		site = ai.FindBuildSiteNear(sh, gHomePos, GANTRY_SEARCH_WIDE);
+	if (!OnMap(site) || (ThreatFor(unit, site) > CON_THREAT_VETO))
+		return null;
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, sh, Task::BuildType::DEFENCE,
+			Task::Priority::HIGH, site, 0.f, 0.f, created);
+	if (post is null)
+		return null;
+	if (!created)
+		return post;
+	++gShieldAsked;
+	AiLog(Factory::T() + "apex: shield " + sh.GetName()
+		+ " vs " + lrpc + " LRPC, lost=" + ShieldsLostRecent()
+		+ " standing=" + standing + " want=" + want);
+	return post;
+}
+
 // Pinpointers (armtarg/cortarg/legtarg), capped at three for the WHOLE TEAM --
 // the cap has to be a team cap rather than a per-player one, or every player
 // builds "just" three and the side pays many times over for an effect that

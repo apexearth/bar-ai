@@ -91,6 +91,10 @@ local NAMES = {
 	"apex_charger_strike",    -- hooks.as: 1 = T3 chargers take solo base-strike tasks, 0 = massing pool
 	"apex_behemoth_threat",   -- main.as: threat multiplier on corjugg so everything keeps its distance (2)
 	"apex_charge_threat_mod", -- AttackTask.cpp: charge-path threat weight; bends the route around Behemoths only (0.1)
+	"apex_shield_value",      -- brain.as: shield want value per LRPC firing + shield lost (8)
+	"apex_shield_loss_memory",-- statics.as: seconds a broken shield keeps escalating the want (240)
+	"apex_gantry_answer",     -- brain.as: gantry want multiplier while enemy fields T3 and we own no gantry (3)
+	"apex_pulsar_answer",     -- brain.as: pulsar want multiplier while enemy fields T3 and we own no gantry (3)
 	"apex_conv_dry_mult",     -- brain.as: convert-want discount while energy is not overflowing (0.25)
 	"apex_front_from_min",    -- brain.as: game-minutes before proactive front-line spend starts (5)
 	"apex_conv_drain",        -- mexguard.as: energy/s one converter eats (70)
