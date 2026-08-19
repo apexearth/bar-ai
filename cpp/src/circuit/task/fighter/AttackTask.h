@@ -50,6 +50,10 @@ private:
 	// -1 until rolled, then 0 = threat-aware route, 1 = straight in. Rolled once
 	// per task so a squad does not change its mind about the route mid-walk.
 	int chargeRoll = -1;
+	// apex: flanking. Rolled once per task; a flanking squad walks via a
+	// lateral waypoint before turning onto its target.
+	int flankRoll = -1;
+	springai::AIFloat3 flankVia = springai::AIFloat3(-1.f, 0.f, 0.f);
 	// Risk escalation, not a charge flip: each time the threat-aware route
 	// comes back past apex_max_detour times the straight line, this steps up
 	// one -- halving the per-tile threat cost and doubling the ceiling on the

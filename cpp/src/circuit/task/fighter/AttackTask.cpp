@@ -529,7 +529,43 @@ void CAttackTask::Update()
 		return;
 	}
 
-	const AIFloat3& endPos = position;
+	// apex: A SHARE OF ATTACKS GO AROUND THE SIDE. Every squad pathed the
+	// cheapest line to its target, which at equal threat is the middle --
+	// apexearth 2026-08-19: "I don't see us trying to attack the enemy from
+	// around the side... always straight up the middle. 0 strategy in that."
+	// Rolled once per task like the charge: a flanking squad first walks a
+	// waypoint offset perpendicular from the midpoint of its approach, then
+	// turns onto the real target. Chargers never flank (distance is their
+	// whole budget), and the via is dropped once reached or once engaged.
+	if (flankRoll < 0) {
+		const int pct = (int)circuit->GetTunable("apex_flank_pct", 35.f);
+		flankRoll = (rand() % 100 < pct) ? ((rand() % 2 == 0) ? 1 : 2) : 0;
+	}
+	AIFloat3 endPos = position;
+	if (flankRoll > 0) {
+		if (!utils::is_valid(flankVia)) {
+			AIFloat3 dir = position - startPos;
+			const float dist = sqrtf(dir.SqLength2D());
+			if (dist > circuit->GetTunable("apex_flank_min_dist", 1200.f)) {
+				dir.SafeNormalize2D();
+				const AIFloat3 perp = (flankRoll == 1)
+						? AIFloat3(-dir.z, 0.f, dir.x)
+						: AIFloat3(dir.z, 0.f, -dir.x);
+				AIFloat3 via = (startPos + position) * 0.5f
+						+ perp * (dist * circuit->GetTunable("apex_flank_frac", 0.45f));
+				CTerrainManager::CorrectPosition(via);
+				flankVia = via;
+			}
+		}
+		if (utils::is_valid(flankVia)) {
+			if (startPos.SqDistance2D(flankVia) < SQUARE(500.f)) {
+				flankVia = AIFloat3(-RgtVector);  // via reached: turn onto the target
+				flankRoll = 0;
+			} else {
+				endPos = flankVia;
+			}
+		}
+	}
 	CPathFinder* pathfinder = circuit->GetPathfinder();
 	const float eps = pathfinder->GetSquareSize();
 	const float pathRange = std::max(highestRange - eps, eps);

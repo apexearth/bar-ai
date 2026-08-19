@@ -13,7 +13,12 @@ string armafus("armafus"); string corafus("corafus"); string legafus("legafus");
 string armuwfus("armuwfus"); string coruwfus("coruwfus");
 string armadvsol("armadvsol"); string coradvsol("coradvsol"); string legadvsol("legadvsol");
 // Energy income before the advanced collector is worth its 5,000-energy build.
-const float ADVSOL_MIN_ENERGY = 250.f;
+// 100, was 250: the old bar was above the income the advsol itself provides
+// the path to, so early game hovered stalling on winds while stock built five
+// advsols to our two -- apexearth 2026-08-19: "the biggest problem early game
+// is we are routinely e-stalling... they make ~5 advanced solars and we maybe
+// get 2. If we get past that we do much better."
+const float ADVSOL_MIN_ENERGY = 100.f;
 // A generator is affordable when income covers its BUILD cost -- both resources --
 // inside this many seconds. This is the whole tiering rule: nothing else decides
 // when the ladder steps up.
