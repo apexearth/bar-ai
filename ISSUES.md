@@ -1,5 +1,21 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN: DEFEND pools march and hold on raw CmdFightTo — the last fight-order holdout (2026-08-19)
+
+The agreed move+SetTarget doctrine is fully live in ISquadTask::Attack
+(standoff ring, orbit, kite, threat-compared steps), but CDefendTask still
+issues engine fight orders at three call sites (DefendTask.cpp:114,256,484)
+and uses CFightAction as its travel action — so pool members wade toward the
+nearest enemy while marching or holding, no standoff, no kite. Most fighting
+deaths concentrate in DEFEND tasks (f2: 9.6k metal in the 40m baseline, 7.3k
+in the 2026-08-19 live game), so this is where the "walk up close and get
+creamed" losses live now that retreat pathing is fixed (a8851c6) and the kite
+floor covers mid-range rows (a659a3e). Fix needs care: a plain move-march
+would walk past enemies without firing (most units cannot shoot on the move),
+so the march likely needs the same ring/target treatment as Attack rather
+than a blind order swap. Own measured pass; check fight1v1 K/D and per-task
+death buckets (tools shown in the 2026-08-19 session) before/after.
+
 ## OPEN: T3-counter wants stay tiny while an enemy titan is winning (2026-08-18)
 
 Lost 1v1 vs BARb:stable on Comet Catcher (seed 150): stock built a
