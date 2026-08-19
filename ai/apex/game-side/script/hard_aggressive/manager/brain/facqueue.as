@@ -306,6 +306,11 @@ bool T1ArmyShort(CCircuitUnit@ fac)
 	if (Factory::AloneOnIsland() && !Factory::IsAirFactory(fac.circuitDef)
 		&& !Factory::IsNavalFactory(fac.circuitDef))
 		return false;
+	// At a huge economy (or a lagging host) T1 army is clutter -- apexearth:
+	// "we should stop making so much T1... the game gets too crazy." The T2+
+	// lines carry the army; this line keeps cons and rezbots only.
+	if (Builder::CleanupMode() && (Factory::gHaveT2 || Factory::gHaveT3))
+		return false;
 	const int attr = Factory::userData[fac.circuitDef.id].attr;
 	if ((attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
 		return false;      // T2ArmyShort covers a line that has already teched
@@ -678,7 +683,16 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	// late-game T1 labs lost every combat entry and three theories in a row
 	// were wrong -- this prints the actual reason per role.
 	string mixDiag = "";
+	// Cleanup mode: a T1 line contributes no ARMY ratios once T2+ exists --
+	// same rule as its floor above.
+	const bool t1MixRetired = Builder::CleanupMode()
+		&& (Factory::gHaveT2 || Factory::gHaveT3)
+		&& ((Factory::userData[fac.circuitDef.id].attr
+			& (Factory::Attr::T2 | Factory::Attr::T3)) == 0)
+		&& !Factory::IsAirFactory(fac.circuitDef);
 	for (uint i = 0; i < gMix.length(); ++i) {
+		if (t1MixRetired)
+			break;
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
 		if (d is null) {
 			mixDiag += " r" + int(gMix[i].role) + ":null";

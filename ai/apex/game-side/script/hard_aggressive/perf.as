@@ -64,6 +64,45 @@ void Note(const string &in name)
 	Add(name, t0);
 }
 
+// MEASURED SIM SPEED vs realtime, smoothed -- the AI's own lag detector
+// (apexearth 2026-08-18: "if the host can't handle what we're doing we need
+// to clean up after ourselves"). Sampled over 3-second windows of game time
+// against ai.ClockUs wall time; EMA so one hitch does not flip the state.
+// Headless benchmark runs read far above 1x and never trigger it.
+double gSpeedWall = 0.0;
+int gSpeedFrame = -1;
+float gSimSpeed = 1.f;
+
+void TickSpeed()
+{
+	if (gSpeedFrame < 0) {
+		gSpeedFrame = ai.frame;
+		gSpeedWall = ai.ClockUs();
+		return;
+	}
+	const int df = ai.frame - gSpeedFrame;
+	if (df < 90)
+		return;
+	const double now = ai.ClockUs();
+	const double wallS = (now - gSpeedWall) / 1.0e6;
+	if (wallS > 0.001) {
+		const float inst = float((double(df) / 30.0) / wallS);
+		gSimSpeed = gSimSpeed * 0.7f + inst * 0.3f;
+	}
+	gSpeedFrame = ai.frame;
+	gSpeedWall = now;
+}
+
+float SimSpeed()
+{
+	return gSimSpeed;
+}
+
+bool GameLagging()
+{
+	return gSimSpeed < ai.GetTunable("apex_lag_speed", 0.85f);
+}
+
 void Flush()
 {
 	if (!On() || ai.frame < gNextLog)

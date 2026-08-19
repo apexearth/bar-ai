@@ -647,15 +647,26 @@ void ObsoleteSweep()
 	const AIFloat3 origin = haveBlocked ? blocked : gHomePos;
 	string defName;
 	int value = 0;
-	CCircuitUnit@ pick = ObsoletePick(origin, -1, floorValue, haveBlocked,
-			blocked, defName, value);
-	if (pick is null)
-		return;
-	// The permit is computed for the rank actually found, so a cell a gantry
-	// wants is not made to wait behind the cooldown a corner turbine earned.
-	if (ai.frame < gObsoleteTook + ObsoletePeriod(value))
-		return;
-	ReclaimOwnDef(pick, defName, value);
+	// In cleanup mode the sweep goes PARALLEL: one target at a time was why
+	// clutter outlived the economy that obsoleted it. Concurrency scales with
+	// income; AskedFor dedups repeats.
+	int picks = 1;
+	if (CleanupMode())
+		picks = 1 + int(aiEconomyMgr.metal.income
+				/ ai.GetTunable("apex_cleanup_per", 150.f));
+	for (int n = 0; n < picks; ++n) {
+		CCircuitUnit@ pick = ObsoletePick(origin, -1, floorValue, haveBlocked,
+				blocked, defName, value);
+		if (pick is null)
+			return;
+		// The permit is computed for the rank actually found, so a cell a
+		// gantry wants is not made to wait behind the cooldown a corner
+		// turbine earned. Cleanup mode skips the pacing: the whole point is
+		// speed, and the ground-value ranking still orders the eating.
+		if (!CleanupMode() && (ai.frame < gObsoleteTook + ObsoletePeriod(value)))
+			return;
+		ReclaimOwnDef(pick, defName, value);
+	}
 }
 
 // T1 economy and AA that a T2/T3 base has outgrown. Per-faction, since a name
@@ -736,6 +747,16 @@ bool EnergyReclaimable(const string& in name)
 	return aiEconomyMgr.energy.income >= EnergyReclaimCliff(name);
 }
 
+// CLEANUP MODE: a huge economy no longer needs its small things, and a
+// LAGGING HOST needs them gone whatever the income -- apexearth: "if the
+// host can't handle what we're doing we need to clean up after ourselves
+// and get rid of all unimportant things."
+bool CleanupMode()
+{
+	return (aiEconomyMgr.metal.income >= ai.GetTunable("apex_bigeco_income", 500.f))
+		|| Perf::GameLagging();
+}
+
 array<string> ObsoleteEcoNames()
 {
 	array<string> names;
@@ -776,6 +797,19 @@ array<string> ObsoleteEcoNames()
 		names.insertLast(armrl);
 		if (WallsObsolete())
 			names.insertLast("armdrag");
+	}
+	// THE BIG-ECONOMY PURGE (apexearth 2026-08-18: "clean up after itself...
+	// all our little buildings, storage... none of them are important when
+	// we're at 500 metal a second"): past the bar, T1 storage of both kinds
+	// joins the list. The bank a storage holds is minutes of income now.
+	if (CleanupMode()) {
+		array<string> smalls = (side == "cortex")
+			? array<string> = {"cormstor", "corestor"}
+			: (side == "legion")
+				? array<string> = {"legmstor", "legestor"}
+				: array<string> = {"armmstor", "armestor"};
+		for (uint i = 0; i < smalls.length(); ++i)
+			names.insertLast(smalls[i]);
 	}
 	return names;
 }

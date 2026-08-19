@@ -117,6 +117,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Builder::ObsoleteSweep();
 	Builder::ConCensus();
 	Perf::Add("upd.BuilderMisc", t);
+	Perf::TickSpeed();
 	Perf::Flush();
 }
 
