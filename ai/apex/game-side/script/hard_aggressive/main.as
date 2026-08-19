@@ -183,8 +183,20 @@ void AiUnitFinished(CCircuitUnit@ unit)
 	if ((radDef !is null) && (unit.circuitDef.id == radDef.id))
 		Builder::RadarStandAdd(unit.GetPos(ai.frame));
 	CCircuitDef@ nanoDef = Builder::NanoDef();
-	if ((nanoDef !is null) && (unit.circuitDef.id == nanoDef.id))
+	if ((nanoDef !is null) && (unit.circuitDef.id == nanoDef.id)) {
 		Builder::NanoNoteBuilt(unit.id);
+		// PATROL THE INSTANT IT EXISTS. The standing patrol used to be issued
+		// only from the factory task election, so a turret the election budget
+		// never reached sat idle with no order at all (apexearth, watching:
+		// "it was never given a patrol order. It should at least get 1 the
+		// instant it is created"). Patrol hands it to the engine's builder AI
+		// -- assist/repair/reclaim in range -- and the election's periodic
+		// re-issue remains as self-healing.
+		AIFloat3 pp = unit.GetPos(ai.frame);
+		pp.x += 64.f;
+		if (OnMap(pp))
+			unit.CmdPatrolTo(pp);
+	}
 	Brain::NoteSiloFinished(unit);
 }
 
