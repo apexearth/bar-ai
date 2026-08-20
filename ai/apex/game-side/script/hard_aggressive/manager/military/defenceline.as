@@ -391,11 +391,29 @@ CCircuitDef@ LadderDef()
 	const float inc = (aiEconomyMgr.metal.income < aiEconomyMgr.energy.income)
 			? aiEconomyMgr.metal.income : aiEconomyMgr.energy.income;
 	const float maxCost = LADDER_AMOUNT * inc;
+	// MIRROR THE RETIREMENT TOO. DefaultMakeDefence skips rungs far cheaper
+	// than a top rung it can now afford, so without the same test here this
+	// function names a Beamer while C++ places a Pulsar -- and the crowd cap
+	// then judges the tier exemption against 190 metal instead of 3500 and
+	// refuses ground the real def was entitled to.
+	CCircuitDef@ top = null;
+	for (uint i = 0; i < rungs.length(); ++i) {
+		CCircuitDef@ d = rungs[i];
+		if ((d is null) || !d.IsAvailable(ai.frame))
+			continue;
+		if ((top is null) || (d.costM > top.costM))
+			@top = d;
+	}
+	const bool retireCheap = (top !is null)
+			&& (top.costM < inc * ai.GetTunable("apex_porc_obsolete_secs", 20.f));
+	const float obsRatio = ai.GetTunable("apex_porc_obsolete_ratio", 7.f);
 	CCircuitDef@ best = null;
 	float total = 0.f;
 	for (uint i = 0; i < rungs.length(); ++i) {
 		CCircuitDef@ d = rungs[i];
 		if ((d is null) || !d.IsAvailable(ai.frame))
+			continue;
+		if (retireCheap && (d.costM * obsRatio < top.costM))
 			continue;
 		total += d.costM;
 		if (total >= maxCost)

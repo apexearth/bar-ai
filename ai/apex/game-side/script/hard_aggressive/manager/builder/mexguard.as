@@ -203,6 +203,24 @@ CCircuitDef@ MidTowerDef()
 		if ((best is null) || (d.count < best.count))
 			@best = d;
 	}
+	// THE SAME RETIREMENT THE PORC LADDER USES. This function had no income
+	// term at all, so every T1 constructor guarding a mex kept building
+	// Beamers and Dragon's Claws at any economy -- and this, not the porc
+	// ladder, is where most of them came from. Null rather than a cheaper
+	// tower is the established answer here (see FrontTower): it stops the
+	// work instead of redirecting it, and the heavies an advanced con places
+	// are what cover the ground instead.
+	if (best !is null) {
+		CCircuitDef@ top = SideDef3("armanni", "cordoom", "legbastion");
+		if ((top !is null) && top.IsAvailable(ai.frame)
+			&& (top.costM < aiEconomyMgr.metal.income
+				* ai.GetTunable("apex_porc_obsolete_secs", 20.f))
+			&& (best.costM * ai.GetTunable("apex_porc_obsolete_ratio", 7.f)
+				< top.costM))
+		{
+			return null;
+		}
+	}
 	return best;
 }
 
