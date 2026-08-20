@@ -170,7 +170,7 @@ void UpdateNukes()
 		// army has since closed to that ground, the strike is called off --
 		// missiles already flying are spent, but no more follow into our line.
 		if (gVolleyDef) {
-			if (ai.GetAllyInflAt(gVolleyAt) > ai.GetTunable("apex_nuke_ally_max", 0.f)) {
+			if (ai.GetNetInflAt(gVolleyAt) >= ai.GetTunable("apex_nuke_ally_max", 0.f)) {
 				for (uint i = 0; i < silos.length(); ++i)
 					silos[i].CmdStop();
 				gVolleyUntil = ai.frame;
@@ -258,14 +258,39 @@ void UpdateNukes()
 			continue;
 		const float fwd = Military::ForwardFraction(p);
 		const bool defensive = (fwd < 0.35f);
-		if (defensive && (fwd < ai.GetTunable("apex_nuke_def_minfwd", 0.12f)))
+		if (defensive && (fwd < ai.GetTunable("apex_nuke_def_minfwd", 0.05f)))
 			continue;
 		const float cost = aiEnemyMgr.GetEnemyGroupCost(i);
 		if (cost < (defensive ? defMin : minValue))
 			continue;
-		if (defensive && (ai.GetAllyInflAt(p) > allyMax))
+		// WHO OWNS THIS GROUND, not "is any of ours near". GetAllyInflAt is
+		// positive across our whole territory, so an absolute bar of 0 vetoed
+		// every army attacking us -- exactly the case worth nuking. The net
+		// crossing (ally minus enemy, the same question BaseContested asks) says
+		// the enemy holds it: our units are not standing there, theirs are.
+		if (defensive && (ai.GetNetInflAt(p) >= allyMax))
 			continue;
-		const int antis = AntisCovering(p);
+		// UNSEEN IS NOT ZERO. AntisCovering counts antinukes we have SIGHTED, and
+		// their base is the ground we scout least, so a shielded base read as bare
+		// and got a single missile. Past apex_nuke_assume_from minutes a base is
+		// assumed covered (apexearth's number: by then any enemy has had time to
+		// build one), so a base strike saves for a salvo instead.
+		//
+		// NOT YET the second half of the rule -- "believe otherwise once you have
+		// scouted and seen the lack thereof". Nothing here can say whether we ever
+		// LOOKED at that ground; the C++ wrapper exposes no LOS query. Until it
+		// does, an unscouted base and a scouted-empty one read the same.
+		//
+		// Field targets keep the sighted count: an army in the open is usually
+		// outside any interceptor's radius.
+		int antis = AntisCovering(p);
+		const int assumeFrom = int(ai.GetTunable("apex_nuke_assume_from", 30.f)
+				* 60.f) * SECOND;
+		if (!defensive && (ai.frame >= assumeFrom)) {
+			const int assume = int(ai.GetTunable("apex_nuke_assume_antis", 1.f));
+			if (antis < assume)
+				antis = assume;
+		}
 		float score = cost / float(1 + antis);
 		if (defensive) {
 			score *= ai.GetTunable("apex_nuke_def_bias", 2.f);

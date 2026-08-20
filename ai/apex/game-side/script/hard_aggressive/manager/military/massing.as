@@ -63,6 +63,31 @@ float EnemyMassingThreat()
 	return raw;
 }
 
+// THE ARMY WE HAVE ALIVE, AGAINST THE ONE WALKING AT US. 0..1, 1 at parity or
+// better. Every "can we afford this luxury" gate here used to ask Brain::ShareOf
+// (cumulative metal SPENT on army), which stays high after the army it paid for
+// is dead -- so the silo, the extra air lab and the escort floors all opened at
+// the moment we were weakest. This asks what is standing instead.
+//
+// An unscouted enemy reads small, so a small estimate returns 1 and never damps
+// anything -- ignorance is not safety, but it is also not evidence of danger.
+float ArmyStandingRatio()
+{
+	const float theirs = EnemyMassingThreat();
+	if (theirs <= 1.f)
+		return 1.f;
+	const float ours = TeamArmyCost();
+	const float ratio = ours / theirs;
+	return (ratio > 1.f) ? 1.f : ratio;
+}
+
+// Their field power outweighs our standing army. The bar is the one already
+// calibrated for the constructor cap below it in facqueue.
+bool Outmassed()
+{
+	return ArmyStandingRatio() < 1.f / ai.GetTunable("apex_con_outmassed", 1.f);
+}
+
 // The size a group commits at, from the armies on the field.
 //
 // CDefendTask is created with maxPower = minAttackers and stops accepting units

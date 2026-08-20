@@ -406,11 +406,32 @@ IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 	// base grows forward it ends up behind everything worth hiding. TerritoryCentre
 	// is the centroid of the metal clusters we hold instead, falling back to
 	// gHomePos before we hold any. Later ones move out to the approaches.
+	// EVEN COVERAGE, NOT A HEAP AT THE MIDDLE. Indexing the border ring by our
+	// own jammer count walks the ring in whatever order BorderPos returns it,
+	// which is not the order that covers the base -- apexearth: "they should be
+	// spread out evenly so we have jammer coverage over all of our base". The
+	// pick is the candidate FURTHEST from any jamming we already have, the same
+	// least-covered-first idea the front fence uses.
 	AIFloat3 anchor = Military::TerritoryCentre();
 	if (jam.count > 0) {
-		AIFloat3 border;
-		if (Military::BorderPos(border, uint(jam.count) - 1))
-			anchor = border;
+		float bestGap = Builder::NearestJammerDist(anchor);
+		const int ring = int(ai.GetTunable("apex_jammer_ring", 12.f));
+		for (int k = 0; k < ring; ++k) {
+			AIFloat3 cand;
+			if (!Military::BorderPos(cand, uint(k)))
+				continue;
+			if (!OnMap(cand))
+				continue;
+			const float gap = Builder::NearestJammerDist(cand);
+			if (gap < 0.f) {          // nothing jams this ground at all
+				anchor = cand;
+				break;
+			}
+			if (gap > bestGap) {
+				bestGap = gap;
+				anchor = cand;
+			}
+		}
 	}
 	if (!OnMap(anchor))
 		return null;
@@ -520,6 +541,48 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	string where = "line";
 	bool sited = false;
 	const float span = Brain::TowerReach(gun);
+	// A BLOCK OF FOUR, NOT A LINE OF ONES. apexearth, twice: heavy guns should
+	// stand right next to each other -- four in one compact square is four times
+	// the damage over the same ground, and every siting rule below deliberately
+	// spreads instead (each refuses ground already covered, and the front-line
+	// branch picks the LEAST covered point). This runs first and is exempt from
+	// that spacing by design; once a block reaches its size the rules below pick
+	// where the next block starts.
+	{
+		const int per = int(ai.GetTunable("apex_pulsar_block", 4.f));
+		const float blockR = ai.GetTunable("apex_pulsar_block_r", 320.f);
+		array<CCircuitUnit@>@ have = (gun.count > 0)
+				? ai.GetOwnUnitsOfDef(gun, gHomePos, 0.f) : null;
+		CCircuitUnit@ seed = null;
+		if (have !is null) {
+			for (uint i = 0; i < have.length(); ++i) {
+				if (have[i] is null)
+					continue;
+				const AIFloat3 at = have[i].GetPos(ai.frame);
+				if (!OnMap(at))
+					continue;
+				int n = 0;
+				for (uint j = 0; j < have.length(); ++j) {
+					if ((have[j] !is null)
+						&& (have[j].GetPos(ai.frame).distance2D(at) <= blockR))
+						++n;
+				}
+				if (n < per) {
+					@seed = have[i];
+					break;
+				}
+			}
+		}
+		if (seed !is null) {
+			const AIFloat3 s = ai.FindBuildSiteNear(gun,
+					seed.GetPos(ai.frame), blockR);
+			if (OnMap(s) && (ThreatFor(unit, s) <= CON_THREAT_VETO)) {
+				spot = s;
+				where = "block";
+				sited = true;
+			}
+		}
+	}
 	// THE NANO CLUSTER FIRST, when it sits toward the front: the turrets
 	// build the gun at lathe speed and repair it under fire -- apexearth:
 	// "we should make more pulsars near where our groupings of nano turrets

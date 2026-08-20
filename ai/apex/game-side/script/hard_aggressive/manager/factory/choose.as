@@ -417,7 +417,12 @@ bool PlantApproved(CCircuitDef@ want)
 		// spend is near its budget target.
 		const bool armyFed = Brain::ShareOf(Brain::ARMY)
 				>= Brain::TargetShare(Brain::ARMY)
-					* ai.GetTunable("apex_extra_plant_army", 0.85f);
+					* ai.GetTunable("apex_extra_plant_army", 0.85f)
+				// ...AND THE ARMY MUST STILL BE ALIVE. ShareOf(ARMY) counts metal
+				// already spent, which survives the army being wiped -- so the
+				// gate opened widest just after a lost fight. Standing army
+				// against what the enemy fields closes it again.
+				&& !Military::Outmassed();
 		if (!safeEnough || !armyFed) {
 			if (ai.frame >= gNextT2TotalLog) {
 				gNextT2TotalLog = ai.frame + 60 * SECOND;

@@ -128,7 +128,12 @@ CCircuitDef@ IntelPlantToBuild()
 		// the fighters that live here are themselves the military need.
 		const bool armyFedA = Brain::ShareOf(Brain::ARMY)
 				>= Brain::TargetShare(Brain::ARMY)
-					* ai.GetTunable("apex_extra_plant_army", 0.85f);
+					* ai.GetTunable("apex_extra_plant_army", 0.85f)
+				// ...AND THE ARMY MUST STILL BE ALIVE. ShareOf(ARMY) counts metal
+				// already spent, which survives the army being wiped -- so the
+				// gate opened widest just after a lost fight. Standing army
+				// against what the enemy fields closes it again.
+				&& !Military::Outmassed();
 		if (!armyFedA && (Military::AirThreatNow() <= 0.f))
 			return null;
 		if ((wantN > 1) && !armyFedA)

@@ -62,16 +62,14 @@ static constexpr float ATTACK_CEILING_MOD = 3.f;
 // a T1 bot) becomes the binding limit instead of this. The air tasks were raised
 // from the same 1000 for the same reason.
 #define ASSIGN_RADIUS	3000.f
-// Was 2.5, tuned from a single Cortex pair (Banisher 54 / Mammoth 22.5 = 2.4).
-// That is faction-specific by construction: Legion's comparably-common T2 pair
-// (legstr 84 / leginc 24 = 3.5) fails the 2.5 gate outright, so leginc -- a
-// unit factory.json weights up to 0.38 at some income tiers -- can never merge
-// into a squad with its faction's own fast T2 escort and is forced to fight
-// alone every game. Raised to 3.5 to admit that pair while still excluding the
-// genuine outliers (Cortex's corjugg/T3 superheavies at ~16.5 need ratio 3.3+
-// against corban and are borderline either way; scouts like legscout at 160
-// need ~6.7 and stay excluded regardless).
-#define SQUAD_SPEED_RATIO	3.5f
+// A squad moves at its SLOWEST member's speed, so this decides how far apart
+// two units may be in speed before they are made to fight separately.
+//
+// 1.5 by apexearth's call, 2026-08-19, watching a squad stalled in the backline
+// keeping pace with a Behemoth. The previous 3.5 was set to let Legion's
+// legstr 84 / leginc 24 pair squad together; at 1.5 that pair splits again and
+// leginc fights alone. The slow-heavy stall was judged the worse of the two.
+#define SQUAD_SPEED_RATIO	1.5f
 
 // Target-preference multipliers. The selection metric is a squared distance, so
 // 4.0 means an artillery piece is preferred over a closer ordinary unit until it
@@ -427,7 +425,7 @@ void CAttackTask::Update()
 		CCircuitAI* circuit = manager->GetCircuit();
 		peakPower = std::max(peakPower, attackPower);
 		const CCircuitDef* ldef = (leader != nullptr) ? leader->GetCircuitDef() : nullptr;
-		const bool isCharger = (ldef != nullptr) && ldef->IsRoleHeavy() && ldef->IsAttrMelee();
+		const bool isCharger = (ldef != nullptr) && ldef->IsCharger();
 		if (!isCharger && !circuit->IsCommitted() && (peakPower > 1.f)
 			&& (attackPower < peakPower * circuit->GetTunable("apex_attack_break", 0.4f)))
 		{
@@ -741,7 +739,7 @@ void CAttackTask::FindTarget()
 	// bombs but assault-role T1/T2 chaff whose behaviour is not in question here.
 	// CCircuitUnit::Attack already walks a melee unit onto its target rather
 	// than firing from range, so only the DECISION needed changing.
-	const bool isJuggernaut = (cdef != nullptr) && cdef->IsRoleHeavy() && cdef->IsAttrMelee();
+	const bool isJuggernaut = (cdef != nullptr) && cdef->IsCharger();
 	// apex: see DIVE_ECO_PRIORITY. Enemy influence at the SQUAD's own position
 	// is "we are standing on their ground" -- the same field isHome reads from
 	// the other side.

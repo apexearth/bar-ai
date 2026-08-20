@@ -96,17 +96,46 @@ bool IsJammerDef(const CCircuitDef@ def)
 // JAMMER_AREA of pos -- i.e. a new one here would cluster, not cover new
 // ground. Ages out its own tracked orders past JAMMER_ORDER_TTL the same
 // way gDigOrderPos does.
-bool AreaHasJammer(const AIFloat3& in pos)
+// STANDING JAMMERS COUNT, NOT ONLY RECENT ORDERS. The order ledger ages out
+// after JAMMER_ORDER_TTL, so a finished jammer stopped blocking its own ground
+// three minutes later and the next one could stack on it -- which is how they
+// end up in a heap instead of covering the base.
+float NearestJammerDist(const AIFloat3& in pos)
 {
+	float best = -1.f;
 	for (int i = int(gJammerAt.length()) - 1; i >= 0; --i) {
 		if (ai.frame - gJammerAt[i] > JAMMER_ORDER_TTL) {
 			gJammerAt.removeAt(i);
 			gJammerPos.removeAt(i);
-		} else if (gJammerPos[i].distance2D(pos) <= JAMMER_AREA) {
-			return true;
+			continue;
+		}
+		const float d = gJammerPos[i].distance2D(pos);
+		if ((best < 0.f) || (d < best))
+			best = d;
+	}
+	array<string> names = {armjamt, corjamt, legjam2, legajam, armveil, corshroud};
+	for (uint k = 0; k < names.length(); ++k) {
+		CCircuitDef@ d = ai.GetCircuitDef(names[k]);
+		if ((d is null) || (d.count == 0))
+			continue;
+		array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(d, pos, 0.f);
+		if (have is null)
+			continue;
+		for (uint u = 0; u < have.length(); ++u) {
+			if (have[u] is null)
+				continue;
+			const float dd = have[u].GetPos(ai.frame).distance2D(pos);
+			if ((best < 0.f) || (dd < best))
+				best = dd;
 		}
 	}
-	return false;
+	return best;
+}
+
+bool AreaHasJammer(const AIFloat3& in pos)
+{
+	const float d = NearestJammerDist(pos);
+	return (d >= 0.f) && (d <= JAMMER_AREA);
 }
 
 // How much defence an area needs, given how dangerous it has proven to be.

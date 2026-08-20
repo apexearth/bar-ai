@@ -239,6 +239,28 @@ float Target(uint i, const array<float>& in base, const array<float>& in counter
 	return base[i] * (1.f - weight) + counter[i] * weight;
 }
 
+// THE LINE, AND WHAT ONLY WORKS BEHIND IT.
+//
+// Artillery and the anti-heavy pair outrange everything and die to anything
+// that reaches them, so their worth is conditional on a line standing in
+// front -- apexearth, watching: Ambassadors "are only worth anything so long
+// as we have a frontline army... without your basics those other units are
+// helpless". Nothing in the share table said so: ARTY counters STATIC, so an
+// enemy with defences pulled artillery toward the counter cap whether or not
+// we still had anything to escort it.
+//
+// AA is deliberately NOT here: it answers aircraft, which do not care what
+// our ground line looks like.
+bool IsLineRole(Type r)
+{
+	return (r == RT::ASSAULT) || (r == RT::HEAVY) || (r == RT::SKIRM);
+}
+
+bool NeedsLine(Type r)
+{
+	return (r == RT::ARTY) || (r == RT::AH) || (r == RT::AHA);
+}
+
 // What we currently HOLD of a role, in metal. CCircuitDef::count is our own
 // count, which is what NanoCap and the rez-bot floor already rely on.
 float HeldOfRole(CCircuitUnit@ fac, Type role)
@@ -268,6 +290,27 @@ CCircuitDef@ NextForMix(CCircuitUnit@ fac)
 	array<float> counter = CounterShares(fac, weight);
 	array<float> base = BaseShares();
 
+	// How much of the line we asked for is actually standing, as a fraction of
+	// its own target. A proportion, not a gate: at half a line the escorted
+	// roles are worth half their share, and the term releases itself as the
+	// line rebuilds. Roles this factory cannot build are excluded from both
+	// sides, so a line-less factory is not damped for a line it could never
+	// have made.
+	float lineHave = 0.f;
+	float lineWant = 0.f;
+	for (uint i = 0; i < gMix.length(); ++i) {
+		if ((held[i] < 0.f) || !IsLineRole(gMix[i].role))
+			continue;
+		lineHave += held[i] / total;
+		lineWant += Target(i, base, counter, weight);
+	}
+	float lineMult = 1.f;
+	if (lineWant > 0.001f) {
+		lineMult = lineHave / lineWant;
+		if (lineMult > 1.f)
+			lineMult = 1.f;
+	}
+
 	// A RATIO BEING MET IS NOT A REASON TO STOP BUILDING. worstGap starting
 	// at 0 meant once no role was below target this returned null, an owned
 	// line does not fall through to the engine's own rules, and the factory
@@ -283,7 +326,10 @@ CCircuitDef@ NextForMix(CCircuitUnit@ fac)
 		if (held[i] < 0.f)
 			continue;            // not buildable here
 		const float have = held[i] / total;
-		const float gap = Target(i, base, counter, weight) - have;
+		float tgt = Target(i, base, counter, weight);
+		if (NeedsLine(gMix[i].role))
+			tgt *= lineMult;
+		const float gap = tgt - have;
 		if (gap <= worstGap)
 			continue;
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);

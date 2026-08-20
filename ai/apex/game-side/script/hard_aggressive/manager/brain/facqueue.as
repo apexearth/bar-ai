@@ -401,7 +401,12 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	// EyeDefFor returns null for every T1 line, because no faction has a T1
 	// mobile radar or jammer -- no escorts before T2, by construction.
 	{
-		const uint squads = Military::EscortSquadCount();
+		// NOT WHILE THEY OUT-MASS US. These are floors, so they are bought
+		// BEFORE any combat unit -- a T2 lab answered a push with two mobile
+		// jammers (apexearth 2026-08-19). Eyes are worth having for an army
+		// that exists; rebuilding one comes first. Releases at parity.
+		const uint squads = Military::Outmassed()
+				? 0 : Military::EscortSquadCount();
 		if (squads > 0) {
 			const int per = int(ai.GetTunable("apex_escort_per_squad",
 					float(ESCORT_PER_SQUAD)));
@@ -495,8 +500,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		if (aiEconomyMgr.isMetalFull) {
 			cap = int(float(cap) * ai.GetTunable("apex_con_full_mult", 1.5f)) + 1;
 		} else if ((con.costM < Builder::ADV_CON_COST)
-			&& (Military::EnemyMassingThreat() > Military::TeamArmyCost()
-				* ai.GetTunable("apex_con_outmassed", 1.f)))
+			&& Military::Outmassed())
 		{
 			// apexearth: a floor of 3 T1 cons; beyond that, more only on surplus
 			// metal, and never while the enemy army outweighs ours -- an unfed

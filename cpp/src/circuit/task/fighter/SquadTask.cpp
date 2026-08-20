@@ -49,7 +49,7 @@ ISquadTask::~ISquadTask()
 
 bool ISquadTask::IsChargeDef(const CCircuitDef* cdef)
 {
-	return (cdef != nullptr) && cdef->IsRoleHeavy() && cdef->IsAttrMelee();
+	return (cdef != nullptr) && cdef->IsCharger();
 }
 
 void ISquadTask::AssignTo(CCircuitUnit* unit)

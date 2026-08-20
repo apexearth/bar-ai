@@ -973,9 +973,38 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
 	std::pair<AIFloat3*, int> poses[3] = {std::make_pair(frontPoses, 0), std::make_pair(middlePoses, 0), std::make_pair(backPoses, 0)};
 
 	CEnemyManager* enemyMgr = circuit->GetEnemyManager();
+	// apex: RETIRE THE BOTTOM OF THE LADDER WHEN THE TOP IS POCKET CHANGE.
+	// Every defence point starts at defenders[0] and climbs, so a fresh point
+	// bought a Sentry, a Beamer and a Dragon's Claw at any income -- maxCost
+	// bounds the TOP of the ladder and never the bottom (apexearth, at 700
+	// metal/s: "they are a waste of space... OBSOLETE at this point").
+	// Obsolete is his own definition, both halves: the best rung is trivially
+	// affordable, AND this rung is far cheaper than it. Neither a clock nor a
+	// tech test -- at low income the top rung is not affordable and the whole
+	// ladder still gets built.
+	CCircuitDef* topDef = nullptr;
+	for (unsigned i = 0; i < num; ++i) {
+		if (defenders[i]->IsAvailable(frame) && !defenders[i]->IsRoleAA()) {
+			if ((topDef == nullptr) || (defenders[i]->GetCostM() > topDef->GetCostM())) {
+				topDef = defenders[i];
+			}
+		}
+	}
+	const float obsSecs = circuit->GetTunable("apex_porc_obsolete_secs", 20.f);
+	const float obsRatio = circuit->GetTunable("apex_porc_obsolete_ratio", 7.f);
+	// Armada's ladder is 85/190/340/440/680/3500: at ratio 7 the Pulsar retires
+	// everything up to Overwatch and keeps the Pit Bull, which is the set
+	// apexearth named as obsolete against the T2+ guns he wants instead.
+	const bool retireCheap = (topDef != nullptr)
+			&& (topDef->GetCostM() < metalIncome * obsSecs);
 	for (unsigned i = 0; i < num; ++i) {
 		CCircuitDef* defDef = defenders[i];
 		if (!defDef->IsAvailable(frame) || (defDef->IsRoleAA() && (enemyMgr->GetEnemyCost(ROLE_TYPE(AIR)) < 1.f))) {
+			continue;
+		}
+		if (retireCheap && !defDef->IsRoleAA()
+			&& (defDef->GetCostM() * obsRatio < topDef->GetCostM()))
+		{
 			continue;
 		}
 		totalCost += defDef->GetCostM();
@@ -2131,7 +2160,7 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
 }
 
 // Share of energy income the commander's cloak may consume.
-#define COMM_CLOAK_SHARE	0.1f
+#define COMM_CLOAK_SHARE_DEF	0.5f
 
 // The moving cost is what bites: corcom is 100 e/s standing and 1000 e/s moving,
 // and CCircuitDef takes the max of the two, so cloak is affordable only above
@@ -2149,8 +2178,17 @@ bool CMilitaryManager::IsCommCloakWanted(CCircuitUnit* unit) const
 		return false;
 	}
 	CEconomyManager* economyMgr = circuit->GetEconomyManager();
+	// apex: the share is the whole rule, and 0.1 against the MOVING cost put
+	// the bar at 10,000 e/s -- an income most games never reach, so "always
+	// cloaked when rich" never happened and commanders stayed visible.
+	// Half our energy income is the bar instead: at 2,000 e/s a corcom's
+	// 1,000 e/s moving cloak is affordable, which is the state apexearth means
+	// by late game. The stall guard above is what stops a poor commander
+	// walking around cloaked on an empty bank -- that half still holds.
+	const float share = circuit->GetTunable("apex_comm_cloak_share",
+			COMM_CLOAK_SHARE_DEF);
 	return !economyMgr->IsEnergyStalling()
-			&& (cdef->GetCloakCost() < economyMgr->GetAvgEnergyIncome() * COMM_CLOAK_SHARE);
+			&& (cdef->GetCloakCost() < economyMgr->GetAvgEnergyIncome() * share);
 }
 
 // Cloak is switched on once when a unit finishes and nothing outside a retreat

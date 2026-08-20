@@ -43,20 +43,23 @@ const float SUPER_COST = 7000.f;
 
 int gSuperHeld = 0;
 
-// The exception, and the reason this file has a second predicate: role heavy +
-// attribute melee is corjugg (Behemoth), corkorg (Juggernaut) and armbanth
-// (Titan) -- the ones that detonate on death. Their value is delivered by
-// ARRIVING at something of the enemy's, so parking one on our own defence line
-// is the one place it can never pay for itself.
+// The exception, and the reason this file has a second predicate: the units
+// that detonate on death -- corjugg (Behemoth), corkorg (Juggernaut), armbanth
+// (Titan). Their value is delivered by ARRIVING at something of the enemy's,
+// so parking one on our own defence line is the one place it can never pay for
+// itself.
 //
-// The same pair keys CAttackTask's charge in C++: it ignores the engage margin
-// (FindTarget) and paths straight at the target rather than round the map edge
-// (Update). Keeping the two definitions identical is what makes "charger" one
-// behaviour rather than two that disagree.
+// ROLE SUPER COUNTS, NOT ONLY HEAVY. All three carry role super in
+// behaviour.json, so a heavy-only test named them and matched none of them:
+// they fell through to the guard below and stood on our own line all game.
+// C++ CCircuitDef::IsCharger is the same test, and keys CAttackTask's charge
+// (ignore the engage margin, path straight at the target instead of round the
+// map edge). Keeping the two identical is what makes "charger" one behaviour
+// rather than two that disagree.
 bool IsChargerDef(const CCircuitDef@ cdef)
 {
 	return (cdef !is null)
-		&& cdef.IsRoleAny(Unit::Role::HEAVY.mask)
+		&& cdef.IsRoleAny(Unit::Role::HEAVY.mask | Unit::Role::SUPER.mask)
 		&& cdef.IsAttrAny(Unit::Attr::MELEE.mask);
 }
 

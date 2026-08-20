@@ -45,12 +45,31 @@ const int   ADV_CON_FULL_BONUS  = 6;
 // const declared here is not visible there -- functions are module-wide but
 // globals are not. Reading the tier off the def happens on this side of that
 // line for exactly that reason.
+// WHAT A FACTORY LINE SHOULD BUILD, which is not the same question as what the
+// income curve could support. Every caller of this is a factory constructor
+// quota, so both bounds AdvConsWanted already argues for belong here too:
+// queued work, and whether metal is the thing we are short of.
 int ConsWantedFor(CCircuitDef@ con)
 {
 	if (con is null)
 		return 1;
-	return ConsWantedTier(con.costM >= ADV_CON_COST,
+	int want = ConsWantedTier(con.costM >= ADV_CON_COST,
 			con.IsRoleAny(Unit::Role::AIR.mask));
+	// The curve answers "how many could we support", not "how many have work".
+	// Same ceiling as AdvConsWanted: a builder per apex_con_tasks_each queued
+	// jobs is a builder with a real queue rather than one standing idle.
+	const float per = ai.GetTunable("apex_con_tasks_each", 4.f);
+	if (per > 0.f) {
+		const int demand = int(float(aiBuilderMgr.GetBuildTaskCount()) / per) + 1;
+		if (demand < want)
+			want = demand;
+	}
+	// AN EMPTY BANK IS NOT A BUILD-POWER SHORTAGE. More constructors add build
+	// power we cannot feed, and cost the metal we do not have -- the mirror of
+	// the full-bank bonus the facqueue applies on the other side.
+	if (aiEconomyMgr.isMetalEmpty)
+		want = int(float(want) * ai.GetTunable("apex_con_empty_mult", 0.5f));
+	return (want < 1) ? 1 : want;
 }
 
 int ConsWantedTier(bool advanced, bool air)

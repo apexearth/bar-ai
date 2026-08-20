@@ -320,7 +320,14 @@ Want@ MexWant(CCircuitUnit@ unit)
 	// held for 300 seconds against the engine's economy budget.
 	if (Builder::OutstandingMexTasks() >= aiBuilderMgr.GetWorkerCount())
 		return null;
-	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
+	// CONTESTED GROUND IS STILL GROUND. The ceiling used to default to
+	// THREAT_MIN (1.0), so a spot carrying any enemy threat was invisible and
+	// this want went silent exactly when metal was shortest. The bar is the one
+	// a constructor is already allowed to walk to work at (Builder::
+	// CON_THREAT_VETO; spelled as a literal because brain.as is included
+	// ahead of builder.as, so that global is not visible here).
+	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame),
+			ai.GetTunable("apex_mex_threat", 4.f));
 	if (spot < 0) {
 		gMexNoneUntil = ai.frame
 				+ int(ai.GetTunable("apex_mex_none_ttl", 5.f)) * SECOND;
@@ -328,7 +335,26 @@ Want@ MexWant(CCircuitUnit@ unit)
 	}
 	Want@ w = Want();
 	w.kind = "mex";
-	w.value = MEX_INCOME_GAIN;
+	// WHAT A SPOT ON THIS MAP ACTUALLY ADDS. GetMetalMake is the metal
+	// manager's own spot average times the def's extraction, so a poor map
+	// prices its mexes below a rich one instead of both reading 1.8. Score()
+	// then divides every eco want by current income, which is what makes this
+	// the FRACTION of the economy it grows rather than a flat gain.
+	const float make = aiEconomyMgr.GetMetalMake(mex);
+	w.value = (make > 0.f) ? make : MEX_INCOME_GAIN;
+	// A DRAINED BANK IS THE STRONGEST CASE FOR MORE INCOME. Two steps off one
+	// measure so it is not a cliff: the engine's empty flag leans it, a bank
+	// under 5% (reclaim.as's RESOURCE_CRISIS_FRAC, a literal because that
+	// global is declared after this file) pays the full multiplier.
+	const float store = aiEconomyMgr.metal.storage;
+	if (store > 0.f) {
+		const float frac = aiEconomyMgr.metal.current / store;
+		const float full = ai.GetTunable("apex_mex_starved_mult", 3.f);
+		if (frac < 0.05f)
+			w.value *= full;
+		else if (aiEconomyMgr.isMetalEmpty)
+			w.value *= 1.f + (full - 1.f) * 0.5f;
+	}
 	w.cost = mex.costM;
 	@w.def = mex;
 	w.needsAdvCon = false;
@@ -1196,6 +1222,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			if (siloMult > 1.f)
 				siloMult = 1.f;
 		}
+		// ...and by the army STANDING, not only the metal already spent on one.
+		// Share stays high through a wipe, so the budget term alone let the silo
+		// be bought with nothing left alive to hold the ground it stands on.
+		siloMult *= Military::ArmyStandingRatio();
 		Propose(Simple("silo", SILO_VALUE * siloMult,
 				SideDef3("armsilo", "corsilo", "legsilo")));
 	}
@@ -1240,7 +1270,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 					SideDef3("armgate", "corgate", "legdeflector")));
 		}
 	}
-	Propose(Simple("pinpoint", PINPOINT_VALUE, SideDef3("armtarg", "cortarg", "legtarg")));
+	// A targeting facility sharpens guns we still own; with the army dead it
+	// buys nothing this minute, so it is priced by what is standing.
+	Propose(Simple("pinpoint", PINPOINT_VALUE * Military::ArmyStandingRatio(),
+			SideDef3("armtarg", "cortarg", "legtarg")));
 	}
 
 	Perf::Add("br.opt", perfT);
@@ -1410,7 +1443,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			CCircuitDef@ mexDef = SideDef3("armmex", "cormex", "legmex");
 			if ((mexDef !is null) && !unit.circuitDef.CanBuild(mexDef))
 				continue;
-			const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame));
+			const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame),
+					ai.GetTunable("apex_mex_threat", 4.f));
 			if (spot < 0)
 				continue;
 			IUnitTask@ t = aiEconomyMgr.EnqueueMexAt(unit, spot);

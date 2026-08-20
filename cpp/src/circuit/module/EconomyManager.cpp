@@ -968,7 +968,7 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
 // apex: the spot queries a script can reach. Script had no way to name a metal
 // spot, so a reroute could only trade between MEX tasks the engine had already
 // created.
-int CEconomyManager::FindOpenMexSpot(CCircuitUnit* unit, const AIFloat3& pos)
+int CEconomyManager::FindOpenMexSpot(CCircuitUnit* unit, const AIFloat3& pos, float maxThreat)
 {
 	CMetalManager* metalMgr = circuit->GetMetalManager();
 	if ((unit == nullptr) || !metalMgr->HasMetalSpots()
@@ -995,10 +995,13 @@ int CEconomyManager::FindOpenMexSpot(CCircuitUnit* unit, const AIFloat3& pos)
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	const CMetalData::Metals& spots = metalMgr->GetSpots();
 	CMap* map = circuit->GetMap();
-	CMetalData::PointPredicate predicate = [this, &spots, map, &mexDefs, terrainMgr, unit](int index) {
+	// apex: the threat ceiling is the CALLER's. CanReachAtSafe defaults to
+	// THREAT_MIN (1.0), which hides every contested spot -- so the mex want
+	// went silent exactly when the enemy was on the map and metal shortest.
+	CMetalData::PointPredicate predicate = [this, &spots, map, &mexDefs, terrainMgr, unit, maxThreat](int index) {
 		const AIFloat3& p = spots[index].position;
 		if (IsAllyOpenMexSpot(index) && !terrainMgr->IsZoneAlly(p)
-			&& terrainMgr->CanReachAtSafe(unit, p, unit->GetCircuitDef()->GetBuildDistance()))
+			&& terrainMgr->CanReachAtSafe(unit, p, unit->GetCircuitDef()->GetBuildDistance(), maxThreat))
 		{
 			for (CCircuitDef* mDef : mexDefs) {
 				if (terrainMgr->CanBeBuiltAt(mDef, p)

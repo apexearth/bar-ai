@@ -128,11 +128,49 @@ bool ReactorBatchOK(const AIFloat3& in spot)
 // A spot inside a FULL batch is pushed out past the batch boundary to seed
 // the next one; a veto alone would stall reactors, since the band placement
 // re-proposes the same crowded spot forever.
+// SHOULDER TO SHOULDER INSIDE THE BATCH. The batch rule bounds how far apart
+// reactors may be (700) and how many share a blast, but nothing pulled them
+// TOGETHER, so they landed wherever the band had room -- apexearth: "too often
+// not completely next to each other. They should try to tighten up." Re-sites
+// onto the nearest standing reactor and lets the engine find the closest legal
+// cell to it; the batch cap still decides when to start a new group elsewhere.
+bool TightenToBatch(CCircuitDef@ want, const AIFloat3& in cur, AIFloat3& out spot)
+{
+	spot = cur;
+	CCircuitUnit@ near = null;
+	float best = ai.GetTunable("apex_reactor_spacing", REACTOR_SECTION);
+	for (uint i = 0; i < gFusions.length(); ++i) {
+		if (gFusions[i] is null)
+			continue;
+		const float d = gFusions[i].GetPos(ai.frame).distance2D(cur);
+		if (d < best) {
+			best = d;
+			@near = gFusions[i];
+		}
+	}
+	if (near is null)
+		return false;
+	const AIFloat3 at = near.GetPos(ai.frame);
+	const AIFloat3 site = ai.FindBuildSiteNear(want, at,
+			ai.GetTunable("apex_reactor_tight", 200.f));
+	if (!OnMap(site) || !ReactorBatchOK(site))
+		return false;
+	// Only accept it if it actually tightened things up.
+	if (site.distance2D(at) >= best)
+		return false;
+	spot = site;
+	return true;
+}
+
 bool SectionSafeSpot(CCircuitDef@ want, const AIFloat3& in cur, AIFloat3& out spot)
 {
 	spot = cur;
-	if (ReactorBatchOK(cur))
+	if (ReactorBatchOK(cur)) {
+		AIFloat3 tight;
+		if (TightenToBatch(want, cur, tight))
+			spot = tight;
 		return true;
+	}
 	const float gap = ai.GetTunable("apex_reactor_spacing", REACTOR_SECTION);
 	AIFloat3 centroid;
 	ReactorNeighbors(cur, centroid);

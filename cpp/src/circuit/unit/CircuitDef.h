@@ -165,6 +165,13 @@ public:
 	bool IsRoleSuper()    const { return role & RoleMask::SUPER; }
 	bool IsRoleComm()     const { return role & RoleMask::COMM; }
 
+	// apex: THE ONE DEFINITION OF A CHARGER. Titan, Behemoth and Juggernaut
+	// carry role SUPER, not HEAVY, so the four copies of
+	// `IsRoleHeavy() && IsAttrMelee()` that named those three units matched
+	// none of them and every charge path was dead.
+	bool IsCharger()      const { return (role & (RoleMask::HEAVY | RoleMask::SUPER))
+			&& (attr & AttrMask::MELEE); }
+
 	bool IsAttrMelee()    const { return attr & AttrMask::MELEE; }
 	bool IsAttrBoost()    const { return attr & AttrMask::BOOST; }
 	bool IsAttrNoJump()   const { return attr & AttrMask::NO_JUMP; }

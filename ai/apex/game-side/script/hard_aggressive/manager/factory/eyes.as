@@ -83,6 +83,11 @@ IUnitTask@ EyesForTheGuns(CCircuitUnit@ unit)
 
 	// Gated on guns already in the field, so this cannot displace the opening
 	// or the tech rush: the units it serves are T2 and it needs five of them.
+	// Not while the enemy out-masses us: an eye is not a gun, and this rule
+	// sits ahead of the combat recruits below it.
+	if (Military::Outmassed())
+		return null;
+
 	const int guns = BlindGunCount();
 	if (guns < EYES_PER_RADAR)
 		return null;

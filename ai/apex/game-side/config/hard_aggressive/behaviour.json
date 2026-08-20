@@ -1145,8 +1145,12 @@
 				"vs":{"artillery":2.0, "anti_air": 2.0}	
 			}
 		},
+		// A 230-metal stealth TANK, not the line's eyes. As "scout" it was the
+		// only def GetRoleDef(SCOUT) could return on armavp, so the per-mex
+		// scout quota -- which sits outside the mix shares -- bought Gremlins
+		// forever. Raider is where a cheap fast harasser belongs, next to Jaguar.
 		"armgremlin": {
-				"role": ["scout"]
+				"role": ["raider"]
 		},
 		"armbull": {
 			"role": ["skirmish"],
@@ -1462,8 +1466,12 @@
 			"limit": 2,
 			"build_speed": 6.0
 		},
+		// A crawling BOMB, like Tumbleweed and Skuttle either side of it -- not
+		// the line's eyes. As "scout" it shared coralab's scout slot, which is
+		// sized per-mex outside the mix shares, so the T2 bot lab bought bombs
+		// by the dozen. corspy still covers that slot on this line.
 		"corroach": {
-			"role": ["scout"],
+			"role": ["raider"],
 			"attribute": ["melee"],
 			"retreat": 0
 		},

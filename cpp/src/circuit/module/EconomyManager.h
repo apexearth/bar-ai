@@ -124,7 +124,7 @@ public:
 	// apex: spot queries a script can call safely. FindOpenMexSpot applies the
 	// same guards UpdateMetalTasks does; EnqueueMexAt is the only way to create
 	// a MEX task from script that carries a real spotId.
-	int FindOpenMexSpot(CCircuitUnit* unit, const springai::AIFloat3& pos);
+	int FindOpenMexSpot(CCircuitUnit* unit, const springai::AIFloat3& pos, float maxThreat = THREAT_MIN);
 	springai::AIFloat3 GetMexSpotPos(int spotId) const;
 	IBuilderTask* EnqueueMexAt(CCircuitUnit* unit, int spotId);
 	// apex: same pattern as the mex trio above, for geo vents -- HomeEnergy had
