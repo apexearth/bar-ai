@@ -558,7 +558,20 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// income is below the FORECAST: current pull with headroom, and before
 	// T2 a floor for the cliff that is coming. Bounded to one task in
 	// flight, so it claims one builder, not the economy.
-	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) == 0) {
+	// ONE AT A TIME COULD NOT CLIMB FAST ENOUGH. A single generator in flight
+	// walks a ~100 e/s economy toward the pre-T2 forecast slower than the T2
+	// transition arrives, so the buffer was never there when the drain hit
+	// (apexearth: "we still aren't buffering enough energy for T2", after an
+	// e-stall). Concurrency is the reactor rule reused -- how many times income
+	// plus the bank covers this generator inside the same affordability window
+	// -- so a poor economy still serialises and a rich one does not.
+	int eTasks = 1;
+	{
+		CCircuitDef@ gen = SolarDef();
+		if (gen !is null)
+			eTasks = ReactorsInFlight(gen.costM);
+	}
+	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) < eTasks) {
 		float needE = aiEconomyMgr.energy.pull
 				* ai.GetTunable("apex_energy_headroom", 1.35f);
 		if (!Factory::gHaveT2

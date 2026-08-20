@@ -1870,6 +1870,25 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
 	}
 
 	const bool isStart = (factoryMgr->GetFactoryCount() == 0);
+	// apex: RE-ASK THE GATE FOR A HELD PICK. PickNextFactory consults the
+	// script's plant gate ONCE, then parks the choice in factoryTask as an
+	// inactive task. Activation below is gated on income, not on the gate, so a
+	// def approved while we owned no lab was still built minutes later once
+	// income crossed miRequire -- which is why a second T1 lab appeared at a
+	// consistent ~30 metal/s no matter how often the gate itself was fixed
+	// (apexearth, a few dozen reports; ISSUES.md "a sixth gate entrance").
+	// The pick is re-validated here so a stale approval cannot outlive the
+	// conditions that granted it.
+	if (factoryTask != nullptr) {
+		CCircuitDef* heldDef = factoryTask->GetBuildDef();
+		if ((heldDef != nullptr)
+			&& (factoryMgr->GetFactoryToBuild(position, isStart) != heldDef))
+		{
+			builderMgr->AbortTask(factoryTask);
+			factoryTask->ClearRelease();
+			factoryTask = nullptr;
+		}
+	}
 	if ((factoryTask == nullptr) && (PickNextFactory(position, isStart) == nullptr)) {
 		return nullptr;
 	}
