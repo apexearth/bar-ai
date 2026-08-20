@@ -85,7 +85,14 @@ float ArmyStandingRatio()
 // calibrated for the constructor cap below it in facqueue.
 bool Outmassed()
 {
-	return ArmyStandingRatio() < 1.f / ai.GetTunable("apex_con_outmassed", 1.f);
+	// Stated as the comparison, not as 1/ratio: a tunable of 0 -- the obvious
+	// way to switch this off -- divided to infinity and read as permanently
+	// outmassed, and the ratio's clamp at 1 also swallowed multipliers below 1.
+	const float theirs = EnemyMassingThreat();
+	if (theirs <= 1.f)
+		return false;
+	return theirs > TeamArmyCost()
+			* ai.GetTunable("apex_con_outmassed", 1.f);
 }
 
 // The size a group commits at, from the armies on the field.

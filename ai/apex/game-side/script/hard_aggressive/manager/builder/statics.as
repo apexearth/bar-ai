@@ -652,8 +652,13 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 		}
 	}
 	bool created = false;
+	// NO SHAKE ON A BLOCK SITE. IBuilderTask applies get_near_pos(position,
+	// shake) when shake > 0, so DEF_SHAKE's 256 elmos of jitter would scatter
+	// the very adjacency the block branch just computed. Spread siting still
+	// wants the jitter, so it keeps it.
 	IUnitTask@ post = Requests::Take(unit, gun, Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, spot, 0.f, DEF_SHAKE, created);
+			Task::Priority::NORMAL, spot, 0.f,
+			(where == "block") ? 0.f : DEF_SHAKE, created);
 	if (post is null)
 		return null;
 	if (!created)

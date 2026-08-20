@@ -53,13 +53,19 @@ int ConsWantedFor(CCircuitDef@ con)
 {
 	if (con is null)
 		return 1;
-	int want = ConsWantedTier(con.costM >= ADV_CON_COST,
-			con.IsRoleAny(Unit::Role::AIR.mask));
+	const bool advanced = (con.costM >= ADV_CON_COST);
+	int want = ConsWantedTier(advanced, con.IsRoleAny(Unit::Role::AIR.mask));
 	// The curve answers "how many could we support", not "how many have work".
 	// Same ceiling as AdvConsWanted: a builder per apex_con_tasks_each queued
 	// jobs is a builder with a real queue rather than one standing idle.
+	//
+	// ADVANCED ONLY. Task count is itself a product of how many constructors we
+	// have, so clamping the T1 curve by it is a loop that settles low -- which
+	// is the measured starvation the T2ArmyShort caller warns about (armack=7/3,
+	// conT2 stuck at 4 against stock's 16). The overshoot being fixed here is a
+	// late-game one, and late game is where the advanced curve runs away.
 	const float per = ai.GetTunable("apex_con_tasks_each", 4.f);
-	if (per > 0.f) {
+	if (advanced && (per > 0.f)) {
 		const int demand = int(float(aiBuilderMgr.GetBuildTaskCount()) / per) + 1;
 		if (demand < want)
 			want = demand;
