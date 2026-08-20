@@ -214,7 +214,9 @@ def summarise(run: Path, ally: int):
     pos = parse_positions(text)
     stats = parse_stats(text)
 
-    err = len(re.findall(r"\.as \(\d+, \d+\) : ERR", text))
+    # Filename-less form included: "warnings are treated as errors" reports
+    # at (0, 0), and a variant that never compiled otherwise reads as clean.
+    err = len(re.findall(r"\(\d+, \d+\) : ERR|Fix compilation errors", text))
     frames = sorted(pos.keys())
 
     org_rows = []

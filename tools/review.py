@@ -32,7 +32,11 @@ from pathlib import Path
 
 from bar_env import REPO
 
-AS_ERR = re.compile(r"[a-z_]+\.as \(\d+, \d+\) : ERR")
+# A compile failure does not always name a file: "warnings are treated as
+# errors" reports at (0, 0) with no filename, and a filename-anchored pattern
+# reads a variant that never compiled as a clean run. Match the failure the
+# engine actually prints as well.
+AS_ERR = re.compile(r"(?:[a-z_]+\.as )?\(\d+, \d+\) : ERR|Fix compilation errors")
 # Rough guide only: BAR map-units are elmos/512. A side wants roughly 4x4
 # map-units of room, so this flags the case that actually bit us -- a 4v4 map
 # run at 8v8 -- rather than pretending to be authoritative.

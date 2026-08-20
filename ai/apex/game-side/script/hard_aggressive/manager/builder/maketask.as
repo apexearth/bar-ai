@@ -571,7 +571,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (gen !is null)
 			eTasks = ReactorsInFlight(gen.costM);
 	}
-	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) < eTasks) {
+	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) < uint(eTasks)) {
 		float needE = aiEconomyMgr.energy.pull
 				* ai.GetTunable("apex_energy_headroom", 1.35f);
 		if (!Factory::gHaveT2

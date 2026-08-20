@@ -264,7 +264,12 @@ share a shape: the thing didn't work, and nothing said so.
   runs.** It plays as near-stock and reports a normal result. A 12-minute "the
   rush never fires" investigation was really a one-line syntax error. **Always**
   grep the infolog after a run:
-  `grep -oiE "[a-z_]+\.as \([0-9]+, [0-9]+\) : ERR .{0,80}" infolog.txt`
+  `grep -oiE "\(?[0-9]+, [0-9]+\) : ERR|Fix compilation errors" infolog.txt`
+  **Do NOT anchor the pattern on a filename.** AngelScript treats WARNINGS as
+  errors, and that failure prints as ` (0, 0) : ERR : Warnings are treated as
+  errors by the application` with no file — a filename-anchored grep reads a
+  variant that never compiled as a clean run. Cost a full round of false
+  "validated" reports 2026-08-20 (a `uint`/`int` compare in maketask.as).
 - **AngelScript has no forward declarations.** `CCircuitDef@ Foo();` parses as a
   *global property* and yields `Name conflict`. The module sees all its own
   functions regardless of order — just call it. (Globals and types *do* need to
