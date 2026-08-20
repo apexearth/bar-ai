@@ -1232,16 +1232,32 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// apexearth: "Antinuke should be standard for all games where nukes are
 	// allowed." Until this want existed, land maps had NO antinuke rule at all
 	// -- the only chain carrying one hangs off the FLOATING radar hub.
-	// Value matches the SEEN threat: one launcher's worth by default (the one
-	// we assume), scaling with every enemy silo actually sighted, so the
-	// invested-ratio decay stops at parity instead of halving the second anti
-	// the enemy's second launcher requires.
+	//
+	// HOW MANY, FROM THE INTERCEPTOR'S OWN RELOAD -- not a value that climbs
+	// with every enemy silo forever. Scaling the VALUE by silo count made this
+	// want rank ~4x above everything else in every late election and never come
+	// down. The threat is a SALVO, so the question is how many warheads we can
+	// shoot down in the seconds one arrives over, and that is a COUNT.
+	//
+	// armamd/corfmd/legabm are identical in the pinned tree: reloadtime 2s,
+	// coverage 2000, stockpiletime 90, stockpilelimit 20. So one launcher stops
+	// one warhead per 2 seconds of the arrival window, and the rest is padding.
+	// (Reload is not bound to script, hence a tunable carrying the def's value.)
 	{
 		int foeSilos = Brain::EnemyNukeSilos();
 		if (foeSilos < 1)
-			foeSilos = 1;
-		Propose(Simple("antinuke", ANTINUKE_VALUE * float(foeSilos),
-				SideDef3("armamd", "corfmd", "legabm")));
+			foeSilos = 1;   // one is always assumed; a hidden silo is still a silo
+		const float reload = ai.GetTunable("apex_anti_reload", 2.f);
+		const float burst = ai.GetTunable("apex_anti_burst_secs", 6.f);
+		int per = (reload > 0.f) ? int(burst / reload) : 1;
+		if (per < 1)
+			per = 1;
+		// Round up: a remainder is a warhead that lands.
+		const int need = (foeSilos + per - 1) / per
+				+ int(ai.GetTunable("apex_anti_pad", 2.f));
+		CCircuitDef@ anti = SideDef3("armamd", "corfmd", "legabm");
+		if ((anti !is null) && (int(anti.count) < need))
+			Propose(Simple("antinuke", ANTINUKE_VALUE, anti));
 	}
 	// legbastion, not legstarfall: the def here is what the want's have/decay
 	// counts, and Builder::Pulsar builds bastions -- a mismatch never decays.
