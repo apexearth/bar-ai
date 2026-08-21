@@ -591,6 +591,30 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		}
 	}
 
+	// THE SPAM STREAM. apexearth 2026-08-21: humans keep T1 labs pouring
+	// Ticks/Rascals/Rovers all game -- "instead of a sniper getting shot at,
+	// it is a unit that costs just ~20 metal, which also provides vision.
+	// These are invaluable late game" -- and the raider share fades with
+	// income, so the quota stopped buying them exactly when they matter.
+	// A RATIO entry, not a floor, for the same conveyor reason as the rez
+	// bots above: spam dies constantly, an unmet floor would own the line.
+	// Post-T2 only (SpamPhase routes them as no-squad fog scouts); the def
+	// must pass IsFodder, which keeps T2 lines' expensive scouts out.
+	if (Military::SpamPhase() && !Factory::IsAirFactory(fac.circuitDef)) {
+		CCircuitDef@ sd = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::SCOUT.type);
+		if (!((sd !is null) && Military::IsFodder(sd))) {
+			@sd = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::RAIDER);
+			if (!((sd !is null) && Military::IsFodder(sd)))
+				@sd = null;
+		}
+		if ((sd !is null) && sd.IsAvailable(ai.frame)) {
+			defs.insertLast(sd);
+			want.insertLast(2 + int(aiEconomyMgr.metal.income
+					/ ai.GetTunable("apex_spam_per_income", TUNE_SPAM_PER_INCOME)));
+			isFloor.insertLast(false);
+		}
+	}
+
 	// One air constructor, so the advanced air plant is reachable at all. The T1
 	// air plant's own ratios give constructors ~5%, so a player can hold the air
 	// slot all game and never produce one -- and with no advanced plant there are

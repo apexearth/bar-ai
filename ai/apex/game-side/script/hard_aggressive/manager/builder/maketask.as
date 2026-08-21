@@ -338,6 +338,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// walking builder ever reaching DefaultMakeTask/MexOffer again -- see
 	// PassingMex's own comment for why that turned "walked past an unclaimed
 	// mex" into a standing gap rather than a one-off.
+	// A THREATENED bare mex outranks the next claim: the guard's ordinary
+	// slot is below expansion, which walked the commander away from radar
+	// contacts standing over his fresh extractor. Urgent pass fires only
+	// with an enemy visible near the bare mex.
+	@t = CommanderMexGuard(unit, isComm, true);
+	if (t !is null)
+		return t;
 	@t = PassingMex(unit, isComm);
 	if (t !is null)
 		return t;

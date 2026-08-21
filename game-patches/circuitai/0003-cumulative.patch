@@ -1563,7 +1563,7 @@ index 4222197..dc8cd13 100644
  	bool IsBuilderInArea(CCircuitDef* buildDef, const springai::AIFloat3& position) const;  // Check if build-area has proper builder
  	bool HasFreeAssists(CCircuitUnit* builder) const;
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e90..ed717d0 100644
+index 2b84e90..6afcf9d 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
 @@ -9,6 +9,7 @@
@@ -2079,7 +2079,7 @@ index 2b84e90..ed717d0 100644
  			builderMgr->SetCanUpMex(unit->GetCircuitDef(), index != -1);
  			if (index != -1) {
  				const AIFloat3& pos = spots[index].position;
-@@ -1214,7 +1622,34 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
+@@ -1214,7 +1622,44 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
  			}
  		}
  		float reclaimValue = featDef->GetContainedResource(metalRes)/* * feature->GetReclaimLeft()*/;
@@ -2092,6 +2092,16 @@ index 2b84e90..ed717d0 100644
 +		const float eStore = GetEnergyStore();
 +		const float eFrac = (eStore > 0.f) ? (GetEnergyCur() / eStore) : 0.f;
 +		const bool isEnergyFeat = (energyFeat > reclaimValue);
++		// apex: constructors are OUT of the energy-reclaim business entirely --
++		// the bank-fraction gate still let them chew trees on every dip, and a
++		// lathe-second on a tree is a lathe-second not spent on a mex
++		// (apexearth 2026-08-21: "cut the importance of energy reclaim on con
++		// bots. (rezbots can still do it)"). Resurrect-capable units keep the
++		// whole feature set; apex_con_energy_reclaim=1 restores the old gate.
++		if (isEnergyFeat && !isResurrect
++			&& (circuit->GetTunable("apex_con_energy_reclaim", 0.f) <= 0.f)) {
++			continue;
++		}
 +		if (isEnergyFeat && (eFrac > RECLAIM_ENERGY_MAX)) {
 +			continue;
 +		}
@@ -2114,7 +2124,7 @@ index 2b84e90..ed717d0 100644
  		if (reclaimValue < 1.0f) {
  			continue;
  		}
-@@ -1254,6 +1689,11 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1254,6 +1699,11 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  {
  	ZoneScoped;
  
@@ -2126,7 +2136,7 @@ index 2b84e90..ed717d0 100644
  	CBuilderManager* builderMgr = circuit->GetBuilderManager();
  	if (!builderMgr->CanEnqueueTask(32)) {
  		return nullptr;
-@@ -1278,6 +1718,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1278,6 +1728,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  	const int frame = circuit->GetLastFrame();
  	float bestResDist = std::numeric_limits<float>::max();
  
@@ -2156,7 +2166,7 @@ index 2b84e90..ed717d0 100644
  	const auto& infos = energyDefs.GetInfos();
  	const float curWind = circuit->GetMap()->GetCurWind();
  	auto checkWind = [curWind, terrainMgr, position, metalIncome, energyIncome, &infos](unsigned i) {
-@@ -1308,12 +1771,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1308,12 +1781,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  				if (engy.cdef->IsWind() && !checkWind(i)) {
  					continue;
  				}
@@ -2171,7 +2181,7 @@ index 2b84e90..ed717d0 100644
  					if (bestResDist > resDist) {
  						bestResDist = resDist;
  						bestDef = engy.cdef;
-@@ -1393,14 +1856,14 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
+@@ -1393,14 +1866,14 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	CMap* map = circuit->GetMap();
  	CCircuitDef* geoDef = geoDefs.GetFirstDef();
@@ -2190,7 +2200,7 @@ index 2b84e90..ed717d0 100644
  		{
  			minDistSq = distSq;
  			index = i;
-@@ -1416,7 +1879,7 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
+@@ -1416,7 +1889,7 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
  	const float maxCostM = metalIncome * builderMgr->GetGoalExecTime();
  	const float maxCostE = energyIncome * builderMgr->GetGoalExecTime();
  
@@ -2199,7 +2209,7 @@ index 2b84e90..ed717d0 100644
  	const int frame = circuit->GetLastFrame();
  	geoDef = geoDefs.GetBestDef([frame, terrainMgr, &pos, maxCostM, maxCostE](CCircuitDef* cdef, const SGeoExt& data) {
  		return cdef->IsAvailable(frame) && (cdef->GetCostM() < maxCostM) && (cdef->GetCostE() < maxCostE)
-@@ -1468,6 +1931,25 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1468,6 +1941,25 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  	}
  
  	const bool isStart = (factoryMgr->GetFactoryCount() == 0);
@@ -2225,7 +2235,7 @@ index 2b84e90..ed717d0 100644
  	if ((factoryTask == nullptr) && (PickNextFactory(position, isStart) == nullptr)) {
  		return nullptr;
  	}
-@@ -1571,6 +2053,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1571,6 +2063,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		}
  	}
  
@@ -2245,7 +2255,7 @@ index 2b84e90..ed717d0 100644
  	factoryTask->SetPosition(buildPos);
  
  	if (factoryTask->IsPlop()
-@@ -1589,7 +2084,16 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1589,7 +2094,16 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		factoryTask = nullptr;
  		return task;
  	} else {
@@ -7696,7 +7706,7 @@ index 9e6bfd8..bd6450c 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
 diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
-index bfc3caf..28a14a1 100644
+index bfc3caf..ec1c9be 100644
 --- a/src/circuit/task/fighter/DefendTask.cpp
 +++ b/src/circuit/task/fighter/DefendTask.cpp
 @@ -18,6 +18,7 @@
@@ -7890,7 +7900,7 @@ index bfc3caf..28a14a1 100644
  	const float weaponRange = cdef->GetMaxRange() * 0.9f;
  	const int canTargetCat = cdef->GetTargetCategory();
  	const int noChaseCat = cdef->GetNoChaseCategory();
-@@ -248,7 +353,22 @@ bool CDefendTask::FindTarget()
+@@ -248,20 +353,114 @@ bool CDefendTask::FindTarget()
  		}
  
  		const AIFloat3& ePos = enemy->GetPos();
@@ -7901,28 +7911,54 @@ index bfc3caf..28a14a1 100644
 +		// squad held away from the base is blind to whatever is shooting it.
 +		// `atUs` is the same reach Update() uses to decide ENGAGE.
 +		const bool atUs = (pos.SqDistance2D(ePos) < SQUARE(highestRange + 500.f));
-+		// apex: DEFENCE IS A POST, NOT A PURSUIT. Candidates are measured from
-+		// the task's assigned position, not from wherever the squad has crept
-+		// to -- atUs alone let a pool that drifted forward legitimize the next
-+		// target from its new ground, chase by chase, and "defense" became an
-+		// unbounded attack (apexearth: "if the enemy has fled or left, why are
-+		// we still attacking them as if it is defense?"). Something shooting
-+		// the squad NOW is still always fought, wherever it stands.
-+		const bool atPost = (circuit->GetTunable("apex_defend_post", 1.f) <= 0.f)
-+			|| (position.SqDistance2D(ePos) < SQUARE(highestRange + 500.f));
-+		if (((!atUs && !atPost) && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
++		// apex: DEFENCE IS A POST, NOT A PURSUIT. Election is measured from
++		// the ASSIGNED position only -- the first cut of this kept atUs
++		// (proximity to the squad) as a self-defense clause, and it was the
++		// remaining creep vector: a won fight advances the squad, the next
++		// enemy falls inside its bubble, gets elected as "self-defense", and
++		// the chain marched a victorious pool deeper until it died (watched
++		// 2026-08-21). Units still auto-fire at whatever enters weapon range;
++		// the TASK never re-targets off its own advanced ground.
++		const bool postMode = circuit->GetTunable("apex_defend_post", 1.f) > 0.f;
++		const bool electable = postMode
++			? (position.SqDistance2D(ePos) < SQUARE(highestRange + 500.f))
++			: atUs;
++		if ((!electable && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
  			|| !terrainMgr->CanMoveToPos(area, ePos))
  		{
  			continue;
-@@ -258,10 +378,67 @@ bool CDefendTask::FindTarget()
+ 		}
+ 
+ 		const float sqEBDist = basePos.SqDistance2D(ePos);
++		// apex: the home-fight allowance was 4x, PER FRAGMENT -- every fresh
++		// unit off the factory took its own 4:1 fight against the intruder and
++		// died, so under attack the army trickled into the grinder and never
++		// rebuilt (apexearth: "we just continuously let them die... we need
++		// time to build up our army to match what's up there. 1.2x"). At 1.2
++		// a pool engages only near parity; refusals fall back to the front
++		// posts, which is where the pool accumulates until it matches.
  		float checkPower = maxPower;
- 		if (sqEBDist < sqBaseRange) {
- 			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
-+		} else if (atUs) {
-+			checkPower *= 4.0f;   // already in contact: same allowance as at home
+-		if (sqEBDist < sqBaseRange) {
+-			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
++		if ((sqEBDist < sqBaseRange) || atUs) {
++			checkPower *= circuit->GetTunable("apex_defend_home_odds", 1.2f);
++		}
++		// The threat map reads ~0 almost everywhere, so the old
++		// `checkPower <= GetThreatAt` test never refused anything and the
++		// multiplier was decorative. Enemy GROUP influence is the live layer.
++		float eThreat = threatMap->GetThreatAt(ePos);
++		{
++			float localInfl = .0f;
++			const std::vector<CEnemyManager::SEnemyGroup>& groups =
++					circuit->GetEnemyManager()->GetEnemyGroups();
++			for (const CEnemyManager::SEnemyGroup& g : groups) {
++				if (g.pos.SqDistance2D(ePos) < SQUARE(800.f)) {
++					localInfl += g.influence;
++				}
++			}
++			eThreat = std::max(eThreat, localInfl);
  		}
 -		if (checkPower <= threatMap->GetThreatAt(ePos)) {
-+		const float eThreat = threatMap->GetThreatAt(ePos);
 +		if (checkPower <= eThreat) {
  			continue;
  		}
@@ -7983,7 +8019,7 @@ index bfc3caf..28a14a1 100644
  
  		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
  		const bool IsInWater = cdef->IsPredictInWater(elevation);
-@@ -305,7 +482,15 @@ bool CDefendTask::FindTarget()
+@@ -305,7 +504,15 @@ bool CDefendTask::FindTarget()
  
  	if (bestTarget != nullptr) {
  		SetTarget(bestTarget);
@@ -8000,7 +8036,7 @@ index bfc3caf..28a14a1 100644
  	}
  	if (enemyPositions.empty()) {
  		return false;
-@@ -320,6 +505,15 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
+@@ -320,6 +527,15 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -8016,7 +8052,7 @@ index bfc3caf..28a14a1 100644
  		ActivePath(lowestSpeed);
  	} else {
  		Fallback();
-@@ -355,7 +549,18 @@ void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
+@@ -355,7 +571,18 @@ void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
  
  	if (!pPath->path.empty()) {
  		if (pPath->path.size() > 2) {
@@ -8036,7 +8072,7 @@ index bfc3caf..28a14a1 100644
  		}
  	} else {
  		FallbackBasePos();
-@@ -401,9 +606,11 @@ void CDefendTask::Fallback()
+@@ -401,9 +628,11 @@ void CDefendTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -8930,7 +8966,7 @@ index b4b43c1..d2e258e 100644
  		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..69324dc 100644
+index 0d59b65..7da4024 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,22 @@
@@ -9408,7 +9444,7 @@ index 0d59b65..69324dc 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -418,50 +725,459 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -418,50 +725,468 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -9561,9 +9597,18 @@ index 0d59b65..69324dc 100644
 +		// maintain.
 +		const bool glassCannon = (edef != nullptr) && (rowDef != nullptr)
 +				&& (edef->GetHealth() < rowDef->GetHealth());
++		// apex: a weaponless escort (radar/jammer) keys row 0 -- "stand at
++		// your own range" told it to stand ON the target, which is why the
++		// sensors died first. It has no reach to hold; it holds BEHIND the
++		// squad's longest row on the same enemy-away axis (apexearth:
++		// "Jammer/Radar units should always angle themselves behind their
++		// squad relative to the direction of the enemy").
++		const float rowRange = (kv.first <= (float)SQUARE_SIZE)
++				? (highestRange + manager->GetCircuit()->GetTunable("apex_escort_standoff", 240.f))
++				: kv.first;
 +		const bool outranged = !isArty && !powerDominant && !glassCannon && !squadOverwhelms
-+				&& (edef != nullptr) && (edef->GetMaxRange() > kv.first);
-+		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
++				&& (edef != nullptr) && (edef->GetMaxRange() > rowRange);
++		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : rowRange;
 +		// A fragile row (below the squad's own average health) stands further
 +		// out on top of the normal 90% margin -- e.g. fragility==2 (half the
 +		// squad's average HP) at the default scale adds 25% more standoff.
@@ -9582,7 +9627,7 @@ index 0d59b65..69324dc 100644
 +		// kv.first for the opposite reason -- closing on purpose) are
 +		// unaffected because none of those leave `weOutrange` true without also
 +		// being a real range edge.
-+		const bool weOutrange = !outranged && (edef != nullptr) && (edef->GetMaxRange() <= kv.first)
++		const bool weOutrange = !outranged && (edef != nullptr) && (edef->GetMaxRange() <= rowRange)
 +				&& !isArty && !powerDominant && !glassCannon;
 +		if (weOutrange) {
 +			range = std::max(range, edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN);
@@ -9877,7 +9922,7 @@ index 0d59b65..69324dc 100644
  				unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60);
  			}
  
-@@ -478,7 +1194,9 @@ void ISquadTask::Log()
+@@ -478,7 +1203,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,

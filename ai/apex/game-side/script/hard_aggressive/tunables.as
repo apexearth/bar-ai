@@ -56,6 +56,10 @@ const float TUNE_ADVSOL_STOP = 1500.f;
 //   underway: with none in flight, claim a builder for the next generator. 0
 //   disables the rule.
 const float TUNE_ALWAYS_ECO = 1.f;
+// manager/builder/mexguard.as [metal/s] -- One parallel always-eco build per
+//   this much metal income (minimum one): the floor under energy scaling,
+//   above which the deficit forecast opens more.
+const float TUNE_ALWAYS_ECO_PER = 30.f;
 // manager/builder/obsolete.as [metal/s] -- Metal income at which the economy
 //   counts as big for the cleanup rules (reclaiming obsolete buildings); also
 //   treated as big whenever the game is lagging.
@@ -767,6 +771,10 @@ const float TUNE_ATTACK_EDGE = 0.95f;
 //   fodder: exempt from massing, always sent forward (their job is vision and
 //   pulled fire). Cost AND role, so cheap AA/bombers are not swept in.
 const float TUNE_FODDER_COST = 100.f;
+// manager/brain/facqueue.as [metal/s] -- One standing spam unit (tick/scout
+//   car class) wanted per this much metal income, post-T2: the constant
+//   cheap-eyes stream that takes fire instead of the army.
+const float TUNE_SPAM_PER_INCOME = 5.f;
 // manager/military/massing.as [ratio] -- killing blow: once OUR TEAM's army
 //   value is this multiple of theirs, attack continuously and release any
 //   turtle -- even a partial commitment outnumbers everything they field.
@@ -1072,6 +1080,10 @@ const float TUNE_ONESHOT_BOMBER_SCALE = 0.4f;
 // Nukes and superweapons
 // ---------------------------------------------------------------------------
 // manager/brain/nukes.as [toggle 0/1] -- The nuke director runs (multi-volley
+// manager/brain/sentinel.as [toggle 0/1] -- The sentinel: the brain checks
+//   its own concepts every 45s and logs a verdict per check ("apex: thought
+//   <name> CONCERN ..."); observer-first, each enforcement earned separately.
+const float TUNE_BRAIN_THOUGHTS = 1.f;
 //   logistics, target ranking); 0 leaves silos to stock behaviour.
 const float TUNE_BRAIN_NUKE = 1.f;
 // manager/brain/nukes.as [influence] -- A defensive volley is called off once

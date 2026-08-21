@@ -11,6 +11,7 @@
 #include "manager/builder.as"
 #include "manager/factory.as"
 #include "manager/persona.as"     // per-instance identity: biases, never gates
+#include "manager/brain/sentinel.as" // the brain checking its own concepts, out loud
 #include "manager/brain/nukes.as" // the nuke director: saved volleys vs antinukes
 #include "manager/brain/facqueue.as"  // ...and drives a factory itself, as a standing queue
 #include "manager/economy.as"
@@ -122,6 +123,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Perf::Add("upd.Air", t);
 	t = Perf::T0();
 	Front::Update();
+	Brain::Think();
 	Perf::Add("upd.Front", t);
 	t = Perf::T0();
 	Base::Update();

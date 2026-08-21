@@ -46,6 +46,8 @@ int gCommRetreatCut = 0;
 int gNextCommDiag = 0;
 int gNextCommDeadman = 0;   // events.as: task-independent flee throttle
 int gCommHotSince = 0;      // events.as: anti-stall clock on hot ground
+int gNextCommStallFix = 0;  // events.as: panic-solar-mid-build throttle
+int gCommStallSince = -1;   // events.as: persistent-stall clock
 AIFloat3 gCommHotAnchor;    // events.as: where the clock was last reset
 IUnitTask@ gCommLastLogged = null;  // see maketask.as's catch-all accept log
 
@@ -639,7 +641,7 @@ IUnitTask@ HomeTower(CCircuitUnit@ unit, bool isComm)
 	return post;
 }
 
-IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)
+IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm, bool urgentOnly = false)
 {
 	// The commander plants most of the early mexes; MexGuard (inside the
 	// !isComm block below) does not cover it, so this handles ANY builder, ANY
@@ -679,6 +681,15 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)
 			continue;                       // already shot over
 		if (DefenceTaskNear(at, MEX_IN_RANGE))
 			continue;                       // someone is already on it
+		// URGENT pass: only a bare mex with an enemy actually visible near it
+		// qualifies -- this is the call hoisted ABOVE the next-mex claim, so
+		// the commander guards the thing the radar says is about to die
+		// instead of walking away from it (apexearth: "an enemy in his radar
+		// range after making a mex and a solar. He walks away... as soon as
+		// he is gone the two things he just dedicated 30 seconds on are
+		// destroyed"). The ordinary no-enemy pass keeps its old, lower slot.
+		if (urgentOnly && (RingInflMax(at, 500.f) <= 0.01f))
+			continue;
 		const float d = me.distance2D(at);
 		if (!have || (d < bestD)) {
 			bestD = d;

@@ -170,8 +170,18 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority,
 	// sending a constructor to it.
 	if (ThreatFor(unit, wreck) > CON_THREAT_VETO)
 		return null;
+	// THE SWEEP EATS TREES. The area command vacuums every feature in the
+	// circle, and on a tree-heavy map a con sent for one metal rock then
+	// chews energy features while the bank is capped -- apexearth, watching
+	// Altored Divide: "We're full on energy and reclaiming trees". The wreck
+	// was PICKED by metal value (GetBestWreckPos); with the energy bank full
+	// the circle tightens to roughly the wreck's own footprint so the metal
+	// still comes home and the trees stay standing. The wide sweep returns
+	// the moment energy has somewhere to go.
+	const float sweep = aiEconomyMgr.isEnergyFull
+		? (SQUARE_SIZE * 12) : WRECK_RADIUS;
 	return aiBuilderMgr.Enqueue(TaskB::Reclaim(priority, wreck,
-			1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+			1000.f, WRECK_TIMEOUT, sweep, true));
 }
 
 // The genuinely-idle floor: nothing above this call in AiMakeTask found

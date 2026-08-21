@@ -359,29 +359,51 @@ bool CDefendTask::FindTarget()
 		// squad held away from the base is blind to whatever is shooting it.
 		// `atUs` is the same reach Update() uses to decide ENGAGE.
 		const bool atUs = (pos.SqDistance2D(ePos) < SQUARE(highestRange + 500.f));
-		// apex: DEFENCE IS A POST, NOT A PURSUIT. Candidates are measured from
-		// the task's assigned position, not from wherever the squad has crept
-		// to -- atUs alone let a pool that drifted forward legitimize the next
-		// target from its new ground, chase by chase, and "defense" became an
-		// unbounded attack (apexearth: "if the enemy has fled or left, why are
-		// we still attacking them as if it is defense?"). Something shooting
-		// the squad NOW is still always fought, wherever it stands.
-		const bool atPost = (circuit->GetTunable("apex_defend_post", 1.f) <= 0.f)
-			|| (position.SqDistance2D(ePos) < SQUARE(highestRange + 500.f));
-		if (((!atUs && !atPost) && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
+		// apex: DEFENCE IS A POST, NOT A PURSUIT. Election is measured from
+		// the ASSIGNED position only -- the first cut of this kept atUs
+		// (proximity to the squad) as a self-defense clause, and it was the
+		// remaining creep vector: a won fight advances the squad, the next
+		// enemy falls inside its bubble, gets elected as "self-defense", and
+		// the chain marched a victorious pool deeper until it died (watched
+		// 2026-08-21). Units still auto-fire at whatever enters weapon range;
+		// the TASK never re-targets off its own advanced ground.
+		const bool postMode = circuit->GetTunable("apex_defend_post", 1.f) > 0.f;
+		const bool electable = postMode
+			? (position.SqDistance2D(ePos) < SQUARE(highestRange + 500.f))
+			: atUs;
+		if ((!electable && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
 			|| !terrainMgr->CanMoveToPos(area, ePos))
 		{
 			continue;
 		}
 
 		const float sqEBDist = basePos.SqDistance2D(ePos);
+		// apex: the home-fight allowance was 4x, PER FRAGMENT -- every fresh
+		// unit off the factory took its own 4:1 fight against the intruder and
+		// died, so under attack the army trickled into the grinder and never
+		// rebuilt (apexearth: "we just continuously let them die... we need
+		// time to build up our army to match what's up there. 1.2x"). At 1.2
+		// a pool engages only near parity; refusals fall back to the front
+		// posts, which is where the pool accumulates until it matches.
 		float checkPower = maxPower;
-		if (sqEBDist < sqBaseRange) {
-			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
-		} else if (atUs) {
-			checkPower *= 4.0f;   // already in contact: same allowance as at home
+		if ((sqEBDist < sqBaseRange) || atUs) {
+			checkPower *= circuit->GetTunable("apex_defend_home_odds", 1.2f);
 		}
-		const float eThreat = threatMap->GetThreatAt(ePos);
+		// The threat map reads ~0 almost everywhere, so the old
+		// `checkPower <= GetThreatAt` test never refused anything and the
+		// multiplier was decorative. Enemy GROUP influence is the live layer.
+		float eThreat = threatMap->GetThreatAt(ePos);
+		{
+			float localInfl = .0f;
+			const std::vector<CEnemyManager::SEnemyGroup>& groups =
+					circuit->GetEnemyManager()->GetEnemyGroups();
+			for (const CEnemyManager::SEnemyGroup& g : groups) {
+				if (g.pos.SqDistance2D(ePos) < SQUARE(800.f)) {
+					localInfl += g.influence;
+				}
+			}
+			eThreat = std::max(eThreat, localInfl);
+		}
 		if (checkPower <= eThreat) {
 			continue;
 		}

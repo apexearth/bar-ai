@@ -243,6 +243,7 @@ class Want
 array<Want@> gWants;
 int gNextBrainLog = 0;
 int gMexUpOrders = 0;
+int gNextMexupCapLog = 0;
 int gMexOrders = 0;
 int gFenceOrders = 0;
 // Where the orders were AIMED, against where the towers ended up standing. The
@@ -1565,6 +1566,35 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			// one audited game -- a hot loop spending elections on nothing.
 			if ((w.def !is null) && !unit.circuitDef.CanBuild(w.def))
 				continue;
+			// HALF THE FLEET, NOT ALL OF IT. apexearth 2026-08-21: "we might
+			// have 4 of our T2 cons all walking around upgrading mexes (all
+			// working together)... too much dedication of T2 cons on one
+			// concern (metal)" -- while the fusion request sat unbuilt for ten
+			// minutes. While a reactor is asked and none stands, mexup holds
+			// at most half the advanced-con fleet; the con refused here falls
+			// through the ladder to the standing fusion request.
+			if (isAdvCon && !Builder::HaveReactor()) {
+				CCircuitDef@ fusD = SideDef3("armfus", "corfus", "legfus");
+				if ((fusD !is null) && (Requests::InFlight(fusD) > 0)) {
+					const int onUp = int(aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::MEXUP)));
+					int fleet = 0;
+					array<string> acs = {"armack", "corack", "legack",
+					                     "armacv", "coracv", "legacv"};
+					for (uint a2 = 0; a2 < acs.length(); ++a2) {
+						CCircuitDef@ d2 = ai.GetCircuitDef(acs[a2]);
+						if (d2 !is null)
+							fleet += int(d2.count);
+					}
+					if ((fleet > 1) && (onUp * 2 >= fleet)) {
+						if (ai.frame >= gNextMexupCapLog) {
+							gNextMexupCapLog = ai.frame + 60 * SECOND;
+							AiLog(Factory::T() + "apex: mexup capped at half the adv cons"
+								+ " (" + onUp + "/" + fleet + ") -- the fusion is waiting");
+						}
+						continue;
+					}
+				}
+			}
 			// The binding added 2026-08-10. A MEXUP task carries a metal-spot
 			// index as well as a position, so the generic Enqueue could not
 			// express it -- which is why no rule of ours could order an upgrade.

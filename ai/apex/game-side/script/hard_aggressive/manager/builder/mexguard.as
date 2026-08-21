@@ -495,9 +495,16 @@ IUnitTask@ AlwaysEco(CCircuitUnit@ unit)
 {
 	if (ai.GetTunable("apex_always_eco", TUNE_ALWAYS_ECO) <= 0.f)
 		return null;
-	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) > 0)
-		return null;
-	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::CONVERT)) > 0)
+	// "Always eco" was implemented as AT MOST ONE eco build at a time: a
+	// single wind going up anywhere silenced the rule (apexearth 2026-08-21:
+	// "Our 'AlwaysEco' is not always making eco. We are scaling our economy
+	// too slowly"). The floor now scales with income -- one parallel eco
+	// build per apex_always_eco_per of metal income, minimum one.
+	const int ecoInFlight = int(aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)))
+		+ int(aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::CONVERT)));
+	const int ecoAllowed = 1 + int(aiEconomyMgr.metal.income
+		/ ai.GetTunable("apex_always_eco_per", TUNE_ALWAYS_ECO_PER));
+	if (ecoInFlight >= ecoAllowed)
 		return null;
 	// Converters first: EnergyConverter self-gates on EnergyWasting(), so it
 	// answers exactly when more generation would spill.

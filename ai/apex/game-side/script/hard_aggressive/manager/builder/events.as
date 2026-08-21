@@ -789,6 +789,51 @@ void CommIdleAttribute()
 			}
 		}
 	}
+	// STALLED MID-BUILD, ENERGY FIRST. apexearth 2026-08-21: "he just pauses
+	// what he was doing... why not just build some energy and then continue?"
+	// The panic-solar answer exists in the LADDER (HomeEnergyFresh), but a
+	// commander in build range HOLDS its task and never re-enters AiMakeTask,
+	// and a fully stalled builder gets parked on WAIT -- so the answer was
+	// unreachable exactly when it applied. Same sampler-side pattern as the
+	// DEAD-MAN: place the cheapest fix directly, the held build's nanoframe
+	// comes back through the normal re-offer once the lathe has power.
+	{
+		IUnitTask@ ct = u.task;
+		const int ctt = (ct is null) ? -1 : ct.GetType();
+		// Never off a FACTORY (the opening lab is the one build that must not
+		// slip), and only for a stall that PERSISTS ~8s -- the instant trigger
+		// fired 8 times a game on the opening's routine blips and churned the
+		// commander (measured arm: 6-11, worst of the day).
+		const bool stalledHold = aiEconomyMgr.isEnergyStalling
+			&& ((ctt == Task::Type::WAIT)
+				|| ((ctt == Task::Type::BUILDER)
+					&& (ct.GetBuildType() != Task::BuildType::ENERGY)
+					&& (ct.GetBuildType() != Task::BuildType::FACTORY)));
+		if (!stalledHold)
+			gCommStallSince = -1;
+		else if (gCommStallSince < 0)
+			gCommStallSince = ai.frame;
+		if (stalledHold && (ai.frame - gCommStallSince >= 8 * SECOND)
+			&& (aiEconomyMgr.energy.income
+				< ai.GetTunable("apex_energy_panic_income", TUNE_ENERGY_PANIC_INCOME))
+			&& (ai.frame >= gNextCommStallFix))
+		{
+			gNextCommStallFix = ai.frame + 20 * SECOND;
+			CCircuitDef@ sol = SideDef3(armsolar, corsolar, legsolar);
+			if ((sol !is null) && sol.IsAvailable(ai.frame)
+				&& u.circuitDef.CanBuild(sol))
+			{
+				const AIFloat3 cp4 = u.GetPos(ai.frame);
+				IUnitTask@ fix = Requests::Take(u, sol, Task::BuildType::ENERGY,
+						Task::Priority::HIGH, cp4, 0.f, SQUARE_SIZE * 10);
+				if (fix !is null) {
+					aiBuilderMgr.AssignTask(u, fix);
+					AiLog(Factory::T() + "apex: commander stalled mid-build -- "
+						+ "panic solar first, then back to work");
+				}
+			}
+		}
+	}
 	if ((t is null) || (t.GetType() == Task::Type::IDLE)
 		|| (t.GetType() == Task::Type::NIL))
 	{

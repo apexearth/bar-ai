@@ -1631,6 +1631,16 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
 		const float eStore = GetEnergyStore();
 		const float eFrac = (eStore > 0.f) ? (GetEnergyCur() / eStore) : 0.f;
 		const bool isEnergyFeat = (energyFeat > reclaimValue);
+		// apex: constructors are OUT of the energy-reclaim business entirely --
+		// the bank-fraction gate still let them chew trees on every dip, and a
+		// lathe-second on a tree is a lathe-second not spent on a mex
+		// (apexearth 2026-08-21: "cut the importance of energy reclaim on con
+		// bots. (rezbots can still do it)"). Resurrect-capable units keep the
+		// whole feature set; apex_con_energy_reclaim=1 restores the old gate.
+		if (isEnergyFeat && !isResurrect
+			&& (circuit->GetTunable("apex_con_energy_reclaim", 0.f) <= 0.f)) {
+			continue;
+		}
 		if (isEnergyFeat && (eFrac > RECLAIM_ENERGY_MAX)) {
 			continue;
 		}

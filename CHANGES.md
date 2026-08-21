@@ -19,6 +19,93 @@ on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
 
+## 2026-08-21: watched-game batch -- trees, the abandoned mex, the frozen commander
+
+Three live reports, one session:
+- TREES AT FULL ENERGY, twice reported: first the area-sweep fix (a con sent
+  for one metal rock vacuumed every tree in the 320-elmo circle; the circle
+  tightens to the wreck's footprint while energy is full), then his
+  categorical rule when trees persisted: constructors are OUT of the
+  energy-reclaim business entirely (C++ UpdateReclaimTasks; the 20%-bank
+  gate still let them graze on every dip). Rezbots keep the full feature
+  set. apex_con_energy_reclaim=1 restores the old gate.
+- THE ABANDONED FRESH MEX: the guard rule existed but PassingMex outranked
+  it -- the commander claimed the next mex and walked away from a radar
+  contact standing over the one he just built. A THREATENED bare mex now
+  jumps the queue: CommanderMexGuard's urgent pass (enemy visible within
+  the 500-elmo ring) sits above the next-mex claim; peaceful ground keeps
+  the old order.
+- THE FROZEN COMMANDER: the ladder's panic-solar was unreachable mid-build
+  (a commander in build range holds its task; a stalled builder parks on
+  WAIT). The watchdog sampler now places the solar directly and the held
+  nanoframe returns via the normal re-offer. FIRST CUT TOO TWITCHY: 8
+  fires/game on opening blips, arm 6-11 (day's worst) -- now it never
+  interrupts a FACTORY build and requires an 8s persistent stall.
+
+Also: the comm-panic arm extended the soft-arm run to three since the
+eco/spam/mexup batch (6-8, 6-9, 6-11) -- if the calmed batch stays soft,
+the eco batch is the isolation target. The SENTINEL entry above carries
+the observer whose thoughts now watch all of this.
+
+## 2026-08-21: THE SENTINEL -- the brain checks its own concepts, out loud (his design)
+
+apexearth: "Our brain needs to be smart enough to know all these concepts
+and prioritize them... report in the log our brain thoughts and assertions
+... the guard that helps us tweak/tune the proper behavior in all our 'leaf
+logic'." Built as manager/brain/sentinel.as: every 45s, seven named checks
+each log a verdict with the numbers that produced it --
+  energy (income vs the 12:1 lead) / metal (GROWTH over a 3m window) /
+  army (spend share vs budget target; standing vs enemy seen-peak) /
+  spam (standing fodder vs the stream want) / labs (T1 count vs the
+  one-until-reactor policy) / fusion (age of an unbuilt ask) /
+  recall (losses at home or enemy influence ON home, with the lane forward)
+plus one "thoughts ok:" line so silence is never ambiguous. OBSERVER-FIRST
+by design: each concern line names the leaf logic responsible; enforcement
+is earned per-check (the 2026-08-01 twelve-silent-rules lesson). Tunable
+apex_brain_thoughts. First live sessions already earned their keep by
+flagging TWO false positives in the sentinel itself, both fixed same hour:
+the energy check judged the opening by an established-economy ratio, and
+recall trusted BaseContested, which reads negative on a 90-second-old base
+(now: real losses at home, or enemy influence physically on it).
+grep "apex: thought" is now the AI's own self-assessment.
+
+Also this block: the eco/spam/mexup batch replicate read 6-9-9, agreeing
+with 6-8-10 -- the batch is draw-leaning on the BENCHMARK (thin economies
+feel the moho slowdown; the fusion speed it buys is what hosted games
+need). Isolation levers per member are in place if a measurement is wanted.
+
+## 2026-08-21: home odds 1.2x, escort standoff, spam stream, eco scaling, mexup cap
+
+HOME ODDS (his number): the defend home-fight allowance 4x -> 1.2x
+(apex_defend_home_odds), and the odds test now reads live group influence
+(the old threat-map read was ~0, so NOTHING was ever refused -- the
+trickle-into-the-grinder was ungated, not mistuned). Refusals fall back to
+the defence posts where pools merge and re-elect at 1.2x. Measured:
+11W-6L-7D, 64.7% decided -- best arm of the project; Comet 7-0-1 and
+Avalanche 3-0-5 UNDEFEATED.
+
+ESCORT STANDOFF: weaponless radar/jammer keyed squad row 0 ("stand at your
+own range" = stand ON the target), which is why sensors died first. They now
+hold behind the squad's longest row on the enemy-away axis
+(apex_escort_standoff, 240 past highestRange). Measured on top: 10W-5L-9D,
+66.7% decided -- second consecutive best-ever.
+
+SPAM STREAM (his spec, "attack the fog of war"): the no-squad fog-scout
+routing existed (IsFodder + SpamPhase per-unit SCOUT tasks); production did
+not -- the raider share fades with income so the quota stopped buying ticks
+late. A RATIO entry (not a floor: the rez-conveyor lesson) keeps one
+standing spam unit per apex_spam_per_income (5 m/s), post-T2, ground lines.
+Verified live: armfav quota 4/4 -> 11/11 met.
+
+ALWAYS-ECO actually always: was "at most one eco build at a time"; now one
+parallel build per apex_always_eco_per (30 m/s) income, minimum one.
+
+MEXUP CAP (his diagnosis): while the fusion is asked and no reactor stands,
+mex upgrades hold at most HALF the adv-con fleet; the refused con falls to
+the fusion request. Measured: fusion asked->standing median 2.0 MINUTES
+(was ~11 in the documented starvation); cap fired 14 times in 24 games.
+The combined arm read 6W-8L-10D (draws up -- watch this; replicate running).
+
 ## 2026-08-21: the T2 gate is one pair -- apex_t2_metal (30) + apex_t2_energy; strict post kept; ring -20%
 
 T2 KNOBS: apex_rush_min_metal (14, "Tunable for A/B testing") renamed to

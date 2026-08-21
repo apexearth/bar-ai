@@ -873,9 +873,18 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// maintain.
 		const bool glassCannon = (edef != nullptr) && (rowDef != nullptr)
 				&& (edef->GetHealth() < rowDef->GetHealth());
+		// apex: a weaponless escort (radar/jammer) keys row 0 -- "stand at
+		// your own range" told it to stand ON the target, which is why the
+		// sensors died first. It has no reach to hold; it holds BEHIND the
+		// squad's longest row on the same enemy-away axis (apexearth:
+		// "Jammer/Radar units should always angle themselves behind their
+		// squad relative to the direction of the enemy").
+		const float rowRange = (kv.first <= (float)SQUARE_SIZE)
+				? (highestRange + manager->GetCircuit()->GetTunable("apex_escort_standoff", 240.f))
+				: kv.first;
 		const bool outranged = !isArty && !powerDominant && !glassCannon && !squadOverwhelms
-				&& (edef != nullptr) && (edef->GetMaxRange() > kv.first);
-		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : kv.first;
+				&& (edef != nullptr) && (edef->GetMaxRange() > rowRange);
+		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : rowRange;
 		// A fragile row (below the squad's own average health) stands further
 		// out on top of the normal 90% margin -- e.g. fragility==2 (half the
 		// squad's average HP) at the default scale adds 25% more standoff.
@@ -894,7 +903,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// kv.first for the opposite reason -- closing on purpose) are
 		// unaffected because none of those leave `weOutrange` true without also
 		// being a real range edge.
-		const bool weOutrange = !outranged && (edef != nullptr) && (edef->GetMaxRange() <= kv.first)
+		const bool weOutrange = !outranged && (edef != nullptr) && (edef->GetMaxRange() <= rowRange)
 				&& !isArty && !powerDominant && !glassCannon;
 		if (weOutrange) {
 			range = std::max(range, edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN);
