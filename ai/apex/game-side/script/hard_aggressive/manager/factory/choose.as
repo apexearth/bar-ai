@@ -98,6 +98,45 @@ int T1PlantCount()
 // fills from AiUnitAdded, i.e. on COMPLETION, and an advanced lab is a
 // nanoframe for minutes -- reading it here let three T2 labs through before
 // the first one registered (seen live 2026-08-15).
+// The same defs T1PlantCount sums -- for the hooks-side cap enforcement,
+// which must not touch shipyards or anything else outside this list.
+bool IsLandT1Plant(const CCircuitDef@ d)
+{
+	if (d is null)
+		return false;
+	const string n = d.GetName();
+	array<string> plants = {"armlab", "armvp", "armap", "armhp",
+	                        "corlab", "corvp", "corap", "corhp",
+	                        "leglab", "legvp", "legap", "leghp"};
+	for (uint i = 0; i < plants.length(); ++i) {
+		if (n == plants[i])
+			return true;
+	}
+	return false;
+}
+
+// The T1 gate's stillCompeting, answerable without an asking def: the cap of
+// one T1 line holds until an advanced constructor, a T2 mex and the reactor
+// all exist -- the same milestones the gate reads.
+bool T1CapHolds()
+{
+	if (!gHaveT2)
+		return true;
+	array<string> advCons = {"armack", "corack", "legack",
+	                         "armacv", "coracv", "legacv"};
+	bool haveAdvCon = false;
+	for (uint i = 0; i < advCons.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(advCons[i]);
+		if ((d !is null) && (d.count > 0)) {
+			haveAdvCon = true;
+			break;
+		}
+	}
+	CCircuitDef@ t2mex = SideDef3(armmoho, cormoho, legmoho);
+	const bool haveT2Mex = (t2mex !is null) && (t2mex.count > 0);
+	return !haveAdvCon || !haveT2Mex || !Builder::HaveReactor();
+}
+
 int T2PlantCount()
 {
 	array<string> plants = {"armalab", "armavp", "armaap",
@@ -219,6 +258,23 @@ int gNextT1TotalLog = 0;
 int gNextT2TotalLog = 0;
 // Frame the pre-T2 gate first found itself blocked; -1 while not blocked.
 int gT2StuckSince = -1;
+// WHICH def the tech transition chose, remembered past the ask ledger's
+// flicker (phantom fuse, walk-and-place gaps): a second T2 def querying in a
+// flicker gap read the tier as empty and was approved as a second "first" --
+// two transitions, both built pre-fusion (watched 2026-08-21: armalab 8.1m,
+// armavp 8.7m). The chosen def itself passes freely -- a died ask, a killed
+// builder, the stuck-reopen all rebuild THE SAME transition -- only a
+// DIFFERENT T2 def is treated as an extra. (A plain boolean latch here
+// wedged tech outright: 83 stuck-reopens and 9 no-T2 games in one 24-game
+// arm, against 8 and 6 without it.)
+CCircuitDef@ gT2Def;
+// Same pin for the FIRST T1 lab, same flicker (watched 2026-08-21, "two t1
+// labs one right after the other": armlab approved 0.4m, armvp approved 0.6m,
+// each reading t1=1 in its own gap). While stillCompeting holds the cap at
+// one, a DIFFERENT T1 def is refused outright; the pinned def re-approves
+// freely, so a died ask or a wiped base rebuilds the same line.
+CCircuitDef@ gT1Def;
+int gT1DefFrame = -1;
 
 // The plant curve is applied ONCE, here, rather than at each of the dozen
 // returns inside ChooseFactory. Only the opening is exempt -- see below for why
@@ -340,12 +396,14 @@ bool PlantApproved(CCircuitDef@ want)
 	// every post-T2 air plant let corap through with three T1-tier plants
 	// standing (audit flag plant-gate, every audited game). Air::WantsFactory
 	// is true exactly when the committed air lead is asking for this plant.
+	bool t1Disciplined = false;
 	if (((userData[want.id].attr & (Attr::T2 | Attr::T3)) == 0)
 		&& (!IsAirFactory(want)
 			|| (!Air::WantsFactory(want) && !Air::WantsIntelPlant(want))))
 	{
 		CCircuitDef@ navy = NavalOpening();
 		if (!((navy !is null) && (want is navy))) {
+			t1Disciplined = true;
 			bool stillCompeting = !gHaveT2;
 			if (!stillCompeting) {
 				CCircuitDef@ advCon = aiFactoryMgr.GetRoleDef(want, RT::BUILDER2);
@@ -359,6 +417,29 @@ bool PlantApproved(CCircuitDef@ want)
 				// stretch where a duplicate T1 line steals from tech.
 				stillCompeting = !haveAdvCon || !haveT2Mex
 						|| !Builder::HaveReactor();
+			}
+			if (stillCompeting && (gT1Def !is null) && (want.id != gT1Def.id)) {
+				// A pin nothing backs must not wedge the opening: probes
+				// approve without enqueuing, and the first smoke of the plain
+				// pin sat 12 minutes with zero factories -- armvp pinned by a
+				// probe, armlab refused forever. No plant standing, no factory
+				// task, and the pin stale: whatever is asking NOW is the line.
+				if ((T1PlantCount() == 0)
+					&& (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) == 0)
+					&& (ai.frame - gT1DefFrame > 20 * SECOND))
+				{
+					@gT1Def = want;
+					gT1DefFrame = ai.frame;
+					AiLog(T() + "apex: the T1 line re-pins to " + want.GetName()
+						+ " -- nothing backed the old pin");
+				} else {
+					if (ai.frame >= gNextT1TotalLog) {
+						gNextT1TotalLog = ai.frame + 60 * SECOND;
+						AiLog(T() + "apex: " + want.GetName() + " refused -- the T1 line is "
+							+ gT1Def.GetName() + " and the cap is one until the reactor");
+					}
+					return false;
+				}
 			}
 			const int t1have = T1PlantCount() + InFlightTier(0);
 			if (stillCompeting ? (t1have >= 1) : (t1have >= allowed)) {
@@ -395,7 +476,8 @@ bool PlantApproved(CCircuitDef@ want)
 	// The first T2 plant (the tech transition) is untouched; T3 gantries
 	// keep their own earlier timing.
 	if (((userData[want.id].attr & Attr::T2) != 0)
-		&& (T2PlantCount() + InFlightTier(Attr::T2) >= 1)) {
+		&& (((gT2Def !is null) && (want.id != gT2Def.id))
+			|| (T2PlantCount() + InFlightTier(Attr::T2) >= 1))) {
 		// THE FIRST T2 PLANT CAN NEVER BE "EXTRA". The count above includes
 		// nanoframes and orphaned orders, so a first plant whose builders
 		// keep dying wedged a player below T2 forever -- measured live
@@ -411,6 +493,7 @@ bool PlantApproved(CCircuitDef@ want)
 				>= int(ai.GetTunable("apex_t2_stuck_secs", TUNE_T2_STUCK_SECS)) * SECOND)
 			{
 				gT2StuckSince = ai.frame;   // re-arm: one re-order per window
+				@gT2Def = want;             // the reopen may switch the pick
 				AiLog(T() + "apex: first T2 plant is stuck unfinished -- "
 					+ "re-opening the order for " + want.GetName());
 				return true;
@@ -499,6 +582,12 @@ bool PlantApproved(CCircuitDef@ want)
 	gAskDef.insertLast(want);
 	gAskFrame.insertLast(ai.frame);
 	gAskCount.insertLast(int(want.count));
+	if (((userData[want.id].attr & Attr::T2) != 0) && (gT2Def is null))
+		@gT2Def = want;
+	if (t1Disciplined && (gT1Def is null)) {
+		@gT1Def = want;
+		gT1DefFrame = ai.frame;
+	}
 	AiLog(T() + "apex: plant approved " + want.GetName()
 		+ " have=" + have + "/" + allowed
 		+ " t1=" + (T1PlantCount() + InFlightTier(0))

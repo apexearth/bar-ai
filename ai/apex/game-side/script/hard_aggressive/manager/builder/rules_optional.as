@@ -314,7 +314,9 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 		return null;
 	if (ai.GetTunable("apex_t2_rear", TUNE_T2_REAR) <= 0.f)
 		return null;
-	if (Factory::SteadyIncome() < ai.GetTunable("apex_t2_income", TUNE_T2_INCOME))
+	// Policy::T2Metal, the SAME knob as the tech commit (RushReady): two
+	// income gates on one decision drift apart the first time one is tuned.
+	if (Factory::SteadyIncome() < Policy::T2Metal())
 		return null;
 	// NextT2Counterpart, not AdvCounterpart: the latter only ever answers for
 	// the single remembered OPENING factory, which silently misses a T2 built

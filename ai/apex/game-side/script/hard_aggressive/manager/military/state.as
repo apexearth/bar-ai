@@ -21,6 +21,10 @@ namespace Military {
 // trusted it held forever; this is the count of units we can actually walk.
 // Declared here because massing.as loads before withdraw.as in the shim.
 float gTrackedCost = 0.f;
+// Farthest FINISHED rear structure from home, in elmos -- the built base's
+// real extent, fed to the C++ base-defence ring (main.as AiUnitFinished
+// grows it; frontline.as applies it through SetBaseDefRange).
+float gBaseExtent = 0.f;
 
 // The lane the army masses on (posture.as maintains it; massing.as reads it
 // for the local-odds override, and include order forces the declaration here).

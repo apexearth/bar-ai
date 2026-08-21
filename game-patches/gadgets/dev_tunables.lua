@@ -32,6 +32,9 @@ local NAMES = {
 	"apex_siege_fight",
 	"apex_fight_travel",
 	"apex_defend_engage_margin",
+	"apex_defend_muster",
+	"apex_defend_solo_deep",
+	"apex_defend_post",
 	"apex_medic_share",
 	"apex_medic_r",
 	"apex_engage_margin",
@@ -41,7 +44,7 @@ local NAMES = {
 	"apex_encircle_penalty",
 	"apex_comm_flee_influence",
 	"apex_static_no_continue",
-	"apex_rush_min_metal",
+	"apex_t2_metal",
 	"apex_reclaim_energy_dist",
 	"apex_air_threat_mod",
 	"apex_scout_threat",
@@ -173,7 +176,10 @@ local NAMES = {
 	"apex_comm_hot_secs",
 	"apex_comm_hot_infl",
 	"apex_air_dominance_aa",
-	"apex_air_dominance_army",     -- rules_commander.as: health below which the commander is hand-steered away (0.55)
+	"apex_air_dominance_army",
+	"apex_draw_defzone",
+	"apex_defzone_dynamic",
+	"apex_defzone_pad",     -- rules_commander.as: health below which the commander is hand-steered away (0.55)
 	"apex_bigeco_income",    -- obsolete.as: metal income where cleanup mode engages (500)
 	"apex_lag_speed",        -- perf.as: measured sim speed below which the host counts as lagging (0.98)
 	"apex_cleanup_per",      -- obsolete.as: income per concurrent cleanup reclaim in cleanup mode (150)

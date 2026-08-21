@@ -1563,7 +1563,7 @@ index 4222197..dc8cd13 100644
  	bool IsBuilderInArea(CCircuitDef* buildDef, const springai::AIFloat3& position) const;  // Check if build-area has proper builder
  	bool HasFreeAssists(CCircuitUnit* builder) const;
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e90..584f87e 100644
+index 2b84e90..ed717d0 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
 @@ -9,6 +9,7 @@
@@ -1636,7 +1636,7 @@ index 2b84e90..584f87e 100644
  	if (mexSpots[spotId].isOpen == value) {
  		return;
  	}
-@@ -934,6 +965,177 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
+@@ -934,6 +965,238 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
  	value ? --mexCount : ++mexCount;
  }
  
@@ -1727,6 +1727,67 @@ index 2b84e90..584f87e 100644
 +			IBuilderTask::Priority::HIGH, mexDef, pos, spotId));
 +}
 +
++// apex: the position of a geo spot by id, across the init-parsed shared list
++// and this instance's late discoveries.
++const AIFloat3& CEconomyManager::GeoSpotPos(int spotId) const
++{
++	const CEnergyData::Geos& geos = circuit->GetEnergyManager()->GetSpots();
++	return ((size_t)spotId < geos.size()) ? geos[spotId]
++			: lateGeoSpots[spotId - geos.size()];
++}
++
++// apex: re-scan for vents the init parse could not see. GetFeatures() is
++// LOS-limited, and ParseGeoSpots runs once at AI birth -- before scouting --
++// so vents outside the start area never existed as spots. Appends only; the
++// shared CEnergyData stays untouched (other instances read it concurrently).
++void CEconomyManager::RescanGeoSpots()
++{
++	const int frame = circuit->GetLastFrame();
++	if (frame < nextGeoRescan) {
++		return;
++	}
++	nextGeoRescan = frame + FRAMES_PER_SEC * 120;
++	CCircuitDef* geoDef = GetSideInfo().geoDef;
++	if (geoDef == nullptr) {
++		return;
++	}
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	const unsigned width = circuit->GetMap()->GetWidth();
++	const unsigned height = circuit->GetMap()->GetHeight();
++	const int xsize = geoDef->GetDef()->GetXSize();
++	const int zsize = geoDef->GetDef()->GetZSize();
++	std::vector<Feature*> features = circuit->GetCallback()->GetFeatures();
++	for (Feature* feature : features) {
++		FeatureDef* featDef = feature->GetDef();
++		const bool isGeo = featDef->IsGeoThermal();
++		delete featDef;
++		if (!isGeo) {
++			continue;
++		}
++		AIFloat3 pos = feature->GetPosition();
++		const unsigned x1 = int(pos.x) / SQUARE_SIZE - (xsize / 2), x2 = x1 + xsize;
++		const unsigned z1 = int(pos.z) / SQUARE_SIZE - (zsize / 2), z2 = z1 + zsize;
++		if (!((x1 < x2) && (x2 < width) && (z1 < z2) && (z2 < height))
++			|| !terrainMgr->CanBeBuiltAt(geoDef, pos))
++		{
++			continue;
++		}
++		bool known = false;
++		const CEnergyData::Geos& geos = circuit->GetEnergyManager()->GetSpots();
++		for (const AIFloat3& p : geos) {
++			if (utils::is_equal_pos(p, pos)) { known = true; break; }
++		}
++		for (size_t i = 0; !known && (i < lateGeoSpots.size()); ++i) {
++			if (utils::is_equal_pos(lateGeoSpots[i], pos)) { known = true; }
++		}
++		if (!known) {
++			lateGeoSpots.push_back(pos);
++			geoSpots.push_back({true, false});
++		}
++	}
++	utils::free_clear(features);
++}
++
 +// apex: geo spot queries a script can call safely, mirroring the mex trio
 +// above. Deliberately no IsZoneAlly exclusion -- a geo vent at home is a
 +// normal HomeEnergy candidate, not a frontier-only reroute.
@@ -1735,6 +1796,7 @@ index 2b84e90..584f87e 100644
 +	if (unit == nullptr) {
 +		return -1;
 +	}
++	RescanGeoSpots();
 +	const int frame = circuit->GetLastFrame();
 +	std::vector<CCircuitDef*> geoCands;
 +	for (CCircuitDef* gDef : geoDefs.GetBuildDefs(unit->GetCircuitDef())) {
@@ -1752,14 +1814,13 @@ index 2b84e90..584f87e 100644
 +
 +	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 +	CMap* map = circuit->GetMap();
-+	const CEnergyData::Geos& geos = circuit->GetEnergyManager()->GetSpots();
 +	float minDistSq = std::numeric_limits<float>::max();
 +	int index = -1;
 +	for (unsigned i = 0; i < geoSpots.size(); ++i) {
 +		if (!IsOpenGeoSpot(i)) {
 +			continue;
 +		}
-+		const AIFloat3& p = geos[i];
++		const AIFloat3& p = GeoSpotPos(i);
 +		const float distSq = p.SqDistance2D(pos);
 +		if (minDistSq <= distSq) {
 +			continue;
@@ -1791,7 +1852,7 @@ index 2b84e90..584f87e 100644
 +	if ((unit == nullptr) || !IsValidGeoSpot(spotId) || !IsOpenGeoSpot(spotId)) {
 +		return nullptr;
 +	}
-+	const AIFloat3& pos = circuit->GetEnergyManager()->GetSpots()[spotId];
++	const AIFloat3& pos = GeoSpotPos(spotId);
 +	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 +	CMap* map = circuit->GetMap();
 +	const int frame = circuit->GetLastFrame();
@@ -1814,7 +1875,7 @@ index 2b84e90..584f87e 100644
  bool CEconomyManager::IsIgnorePull(const IBuilderTask* task) const
  {
  	if (mexMax != std::numeric_limits<decltype(mexMax)>::max()) {
-@@ -1026,6 +1228,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1026,6 +1289,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  		return nullptr;
  	}
  
@@ -1828,7 +1889,7 @@ index 2b84e90..584f87e 100644
  	if (IsEnergyStalling()) {
  		return UpdateEnergyTasks(position, unit);
  	}
-@@ -1034,7 +1243,51 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1034,7 +1304,51 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  	const int frame = circuit->GetLastFrame();
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  
@@ -1881,7 +1942,7 @@ index 2b84e90..584f87e 100644
  		const std::vector<CCircuitDef*>& mexDefOptions = metalDefs.GetBuildDefs(unit->GetCircuitDef());
  		std::vector<std::pair<CCircuitDef*, float>> mexDefs;
  		float maxRange = 0.f;
-@@ -1052,16 +1305,38 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1052,16 +1366,38 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  			CMetalManager* metalMgr = circuit->GetMetalManager();
  			const CMetalData::Metals& spots = metalMgr->GetSpots();
  			CCircuitDef* mexDef = nullptr;
@@ -1925,7 +1986,7 @@ index 2b84e90..584f87e 100644
  						if (curMex == nullptr) {
  							continue;
  						}
-@@ -1071,19 +1346,91 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1071,19 +1407,91 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  						}
  					}
  					if (curExtract <= 0.f) {
@@ -2018,7 +2079,7 @@ index 2b84e90..584f87e 100644
  			builderMgr->SetCanUpMex(unit->GetCircuitDef(), index != -1);
  			if (index != -1) {
  				const AIFloat3& pos = spots[index].position;
-@@ -1214,7 +1561,34 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
+@@ -1214,7 +1622,34 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
  			}
  		}
  		float reclaimValue = featDef->GetContainedResource(metalRes)/* * feature->GetReclaimLeft()*/;
@@ -2053,7 +2114,7 @@ index 2b84e90..584f87e 100644
  		if (reclaimValue < 1.0f) {
  			continue;
  		}
-@@ -1254,6 +1628,11 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1254,6 +1689,11 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  {
  	ZoneScoped;
  
@@ -2065,7 +2126,7 @@ index 2b84e90..584f87e 100644
  	CBuilderManager* builderMgr = circuit->GetBuilderManager();
  	if (!builderMgr->CanEnqueueTask(32)) {
  		return nullptr;
-@@ -1278,6 +1657,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1278,6 +1718,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  	const int frame = circuit->GetLastFrame();
  	float bestResDist = std::numeric_limits<float>::max();
  
@@ -2095,7 +2156,7 @@ index 2b84e90..584f87e 100644
  	const auto& infos = energyDefs.GetInfos();
  	const float curWind = circuit->GetMap()->GetCurWind();
  	auto checkWind = [curWind, terrainMgr, position, metalIncome, energyIncome, &infos](unsigned i) {
-@@ -1308,12 +1710,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1308,12 +1771,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  				if (engy.cdef->IsWind() && !checkWind(i)) {
  					continue;
  				}
@@ -2110,7 +2171,35 @@ index 2b84e90..584f87e 100644
  					if (bestResDist > resDist) {
  						bestResDist = resDist;
  						bestDef = engy.cdef;
-@@ -1468,6 +1870,25 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1393,14 +1856,14 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+ 	CMap* map = circuit->GetMap();
+ 	CCircuitDef* geoDef = geoDefs.GetFirstDef();
+-	const CEnergyData::Geos& geos = circuit->GetEnergyManager()->GetSpots();
+ 	float minDistSq = std::numeric_limits<float>::max();
+ 	int index = -1;
+ 	for (unsigned i = 0; i < geoSpots.size(); ++i) {
+-		const float distSq = geos[i].SqDistance2D(position);
++		const AIFloat3& gp = GeoSpotPos(i);
++		const float distSq = gp.SqDistance2D(position);
+ 		if (IsOpenGeoSpot(i) && (minDistSq > distSq)
+-			&& !terrainMgr->IsZoneAlly(geos[i]) && terrainMgr->CanBeBuiltAtSafe(geoDef, geos[i])
+-			&& map->IsPossibleToBuildAt(geoDef->GetDef(), geos[i], UNIT_NO_FACING))  // lazy check for allies
++			&& !terrainMgr->IsZoneAlly(gp) && terrainMgr->CanBeBuiltAtSafe(geoDef, gp)
++			&& map->IsPossibleToBuildAt(geoDef->GetDef(), gp, UNIT_NO_FACING))  // lazy check for allies
+ 		{
+ 			minDistSq = distSq;
+ 			index = i;
+@@ -1416,7 +1879,7 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
+ 	const float maxCostM = metalIncome * builderMgr->GetGoalExecTime();
+ 	const float maxCostE = energyIncome * builderMgr->GetGoalExecTime();
+ 
+-	const AIFloat3& pos = geos[index];
++	const AIFloat3& pos = GeoSpotPos(index);
+ 	const int frame = circuit->GetLastFrame();
+ 	geoDef = geoDefs.GetBestDef([frame, terrainMgr, &pos, maxCostM, maxCostE](CCircuitDef* cdef, const SGeoExt& data) {
+ 		return cdef->IsAvailable(frame) && (cdef->GetCostM() < maxCostM) && (cdef->GetCostE() < maxCostE)
+@@ -1468,6 +1931,25 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  	}
  
  	const bool isStart = (factoryMgr->GetFactoryCount() == 0);
@@ -2136,7 +2225,7 @@ index 2b84e90..584f87e 100644
  	if ((factoryTask == nullptr) && (PickNextFactory(position, isStart) == nullptr)) {
  		return nullptr;
  	}
-@@ -1571,6 +1992,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1571,6 +2053,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		}
  	}
  
@@ -2156,7 +2245,7 @@ index 2b84e90..584f87e 100644
  	factoryTask->SetPosition(buildPos);
  
  	if (factoryTask->IsPlop()
-@@ -1589,7 +2023,16 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1589,7 +2084,16 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		factoryTask = nullptr;
  		return task;
  	} else {
@@ -2175,7 +2264,7 @@ index 2b84e90..584f87e 100644
  	}
  
 diff --git a/src/circuit/module/EconomyManager.h b/src/circuit/module/EconomyManager.h
-index 2925da7..d267f64 100644
+index 2925da7..e4c5501 100644
 --- a/src/circuit/module/EconomyManager.h
 +++ b/src/circuit/module/EconomyManager.h
 @@ -107,15 +107,35 @@ public:
@@ -2220,7 +2309,22 @@ index 2925da7..d267f64 100644
  	bool IsIgnorePull(const IBuilderTask* task) const;
  	bool IsIgnoreStallingPull(const IBuilderTask* task) const;
  	void CorrectResourcePull(float metal, float energy);
-@@ -202,6 +222,7 @@ private:
+@@ -197,11 +217,22 @@ private:
+ 	std::vector<SResSpot> mexSpots;  // AI-local metal info
+ 	int mexCount;
+ 	std::vector<SResSpot> geoSpots;
++	// apex: geo vents scouted after init. ParseGeoSpots reads GetFeatures()
++	// once at AI birth, and that callback is LOS-limited -- most maps register
++	// ZERO vents forever (measured: spot=-1 for a whole 30m game with open
++	// vents on the map). Late discoveries append here per-instance -- the
++	// shared CEnergyData is never mutated, other AI threads read it
++	// concurrently -- and geoSpots grows with them, so spot ids stay stable.
++	std::vector<springai::AIFloat3> lateGeoSpots;
++	int nextGeoRescan = 0;
++	const springai::AIFloat3& GeoSpotPos(int spotId) const;
++	void RescanGeoSpots();
+ 
+ 	struct SMetalExt {
  		float speed;
  	};
  	CAvailList<SMetalExt> metalDefs;
@@ -4385,17 +4489,22 @@ index fe8097b..7b201a4 100644
  		asIScriptFunction* luaMessage = nullptr;
  		asIScriptFunction* receiveMessage = nullptr;
 diff --git a/src/circuit/script/MilitaryScript.cpp b/src/circuit/script/MilitaryScript.cpp
-index d4ebead..9ee2916 100644
+index d4ebead..e5a9aee 100644
 --- a/src/circuit/script/MilitaryScript.cpp
 +++ b/src/circuit/script/MilitaryScript.cpp
-@@ -36,6 +36,7 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
+@@ -36,7 +36,12 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
  	r = engine->RegisterObjectMethod("CMilitaryManager", "IUnitTask@+ Enqueue(const SFightTask& in)", asMETHODPR(CMilitaryManager, Enqueue, (const TaskF::SFightTask&), IFighterTask*), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CMilitaryManager", "IUnitTask@+ EnqueueRetreat()", asMETHOD(CMilitaryManager, EnqueueRetreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CMilitaryManager", "void DefaultMakeDefence(int, const AIFloat3& in)", asMETHOD(CMilitaryManager, DefaultMakeDefence), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CMilitaryManager", "void DefaultMakeSensors(int, const AIFloat3& in)", asMETHOD(CMilitaryManager, DefaultMakeSensors), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CMilitaryManager", "uint GetGuardTaskNum() const", asMETHOD(CMilitaryManager, GetGuardTaskNum), asCALL_THISCALL); ASSERT(r >= 0);
++	// apex: the base-defence ring DefendTask's fight-at-any-odds boost and the
++	// defence builder both honor -- bound so the script can DRAW the zone.
++	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetBaseDefRange() const", asMETHOD(CMilitaryManager, GetBaseDefRange), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetBaseDefRange(float)", asMETHOD(CMilitaryManager, SetBaseDefRange), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CMilitaryManager", "const float armyCost", asOFFSET(CMilitaryManager, armyCost)); ASSERT(r >= 0);
  
+ 	// NOTE: Config's "quota" scattered across CMilitaryManager, CEnemyManager, CThreatMap, CFactoryManager, CSetupManager
 diff --git a/src/circuit/script/RefCounter.cpp b/src/circuit/script/RefCounter.cpp
 index 71d5486..d194cc7 100644
 --- a/src/circuit/script/RefCounter.cpp
@@ -7587,7 +7696,7 @@ index 9e6bfd8..bd6450c 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
 diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
-index bfc3caf..b36d06b 100644
+index bfc3caf..28a14a1 100644
 --- a/src/circuit/task/fighter/DefendTask.cpp
 +++ b/src/circuit/task/fighter/DefendTask.cpp
 @@ -18,6 +18,7 @@
@@ -7652,7 +7761,30 @@ index bfc3caf..b36d06b 100644
  		travelAction = new CFightAction(unit, squareSize);
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
-@@ -91,8 +120,13 @@ void CDefendTask::Start(CCircuitUnit* unit)
+@@ -85,14 +114,35 @@ void CDefendTask::Start(CCircuitUnit* unit)
+ {
+ 	CCircuitAI* circuit = manager->GetCircuit();
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+-	AIFloat3 pos = utils::get_radial_pos(position, SQUARE_SIZE * 32);
++	// apex: same solo-walk clamp as Merge -- a chase rewrites this task's
++	// anchor to the target, and a fresh unit starting alone toward a deep
++	// anchor is the single-unit attack stream. Deep anchors are approached
++	// from the lane muster instead.
++	AIFloat3 anchor = position;
++	if (circuit->GetTunable("apex_defend_muster", 1.f) > 0.f) {
++		const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
++		const float deepR = circuit->GetMilitaryManager()->GetBaseDefRange() * 1.25f;
++		const AIFloat3& front = circuit->GetFrontPos();
++		if (utils::is_valid(front)
++			&& (basePos.SqDistance2D(anchor) > SQUARE(deepR))
++			&& (basePos.SqDistance2D(front) < basePos.SqDistance2D(anchor)))
++		{
++			anchor = front;
++		}
++	}
++	AIFloat3 pos = utils::get_radial_pos(anchor, SQUARE_SIZE * 32);
+ 	CTerrainManager::CorrectPosition(pos);
+ 	AIFloat3 freePos = terrainMgr->FindBuildSite(unit->GetCircuitDef(), pos, 300.0f, UNIT_NO_FACING, true);
  //	AIFloat3 freePos = terrainMgr->FindSpringBuildSite(unit->GetCircuitDef(), pos, 300.0f, UNIT_NO_FACING);
  	pos = utils::is_valid(freePos) ? freePos : pos;
  
@@ -7667,7 +7799,7 @@ index bfc3caf..b36d06b 100644
  		unit->CmdWantedSpeed(NO_SPEED_LIMIT);
  	)
  }
-@@ -106,11 +140,45 @@ void CDefendTask::Update()
+@@ -106,11 +156,45 @@ void CDefendTask::Update()
  	 */
  	if (updCount % 32 == 1) {
  		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
@@ -7714,7 +7846,30 @@ index bfc3caf..b36d06b 100644
  			}
  //			manager->DoneTask(this);  // NOTE: RemoveAssignee() will abort task
  			return;
-@@ -199,8 +267,10 @@ void CDefendTask::Merge(ISquadTask* task)
+@@ -195,12 +279,33 @@ void CDefendTask::Merge(ISquadTask* task)
+ 	const AIFloat3& leadPos = leader->GetPos(frame);
+ 	frame += FRAMES_PER_SEC * 60;
+ 
++	// apex: a rookie must not walk SOLO to a leader already deep in enemy
++	// ground -- that stream of single-unit arrivals was the top death bucket
++	// of a watched game (73% of combat metal on DEFEND at fwd ~0.7, each dead
++	// ~1s after disengaging at 9-15% hp). A deep pool takes reinforcements at
++	// the army's lane anchor instead; the pool collects them when it moves as
++	// a body.
++	AIFloat3 musterPos = leadPos;
++	if (circuit->GetTunable("apex_defend_muster", 1.f) > 0.f) {
++		const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
++		const float deepR = circuit->GetMilitaryManager()->GetBaseDefRange() * 1.25f;
++		const AIFloat3& front = circuit->GetFrontPos();
++		if (utils::is_valid(front)
++			&& (basePos.SqDistance2D(leadPos) > SQUARE(deepR))
++			&& (basePos.SqDistance2D(front) < basePos.SqDistance2D(leadPos)))
++		{
++			musterPos = front;
++		}
++	}
++
+ 	const std::set<CCircuitUnit*>& rookies = task->GetAssignees();
  	for (CCircuitUnit* unit : rookies) {
  		unit->SetTask(this);
  
@@ -7722,11 +7877,11 @@ index bfc3caf..b36d06b 100644
 +		// fight order made every merge a stream of solo engagements en route.
  		TRY_UNIT(circuit, unit,
 -			unit->CmdFightTo(leadPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
-+			unit->CmdMoveTo(leadPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
++			unit->CmdMoveTo(musterPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
  		)
  	}
  	units.insert(rookies.begin(), rookies.end());
-@@ -225,7 +295,7 @@ bool CDefendTask::FindTarget()
+@@ -225,7 +330,7 @@ bool CDefendTask::FindTarget()
  	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
  	SArea* area = leader->GetArea();
  	CCircuitDef* cdef = leader->GetCircuitDef();
@@ -7735,7 +7890,7 @@ index bfc3caf..b36d06b 100644
  	const float weaponRange = cdef->GetMaxRange() * 0.9f;
  	const int canTargetCat = cdef->GetTargetCategory();
  	const int noChaseCat = cdef->GetNoChaseCategory();
-@@ -248,7 +318,13 @@ bool CDefendTask::FindTarget()
+@@ -248,7 +353,22 @@ bool CDefendTask::FindTarget()
  		}
  
  		const AIFloat3& ePos = enemy->GetPos();
@@ -7746,22 +7901,31 @@ index bfc3caf..b36d06b 100644
 +		// squad held away from the base is blind to whatever is shooting it.
 +		// `atUs` is the same reach Update() uses to decide ENGAGE.
 +		const bool atUs = (pos.SqDistance2D(ePos) < SQUARE(highestRange + 500.f));
-+		if ((!atUs && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
++		// apex: DEFENCE IS A POST, NOT A PURSUIT. Candidates are measured from
++		// the task's assigned position, not from wherever the squad has crept
++		// to -- atUs alone let a pool that drifted forward legitimize the next
++		// target from its new ground, chase by chase, and "defense" became an
++		// unbounded attack (apexearth: "if the enemy has fled or left, why are
++		// we still attacking them as if it is defense?"). Something shooting
++		// the squad NOW is still always fought, wherever it stands.
++		const bool atPost = (circuit->GetTunable("apex_defend_post", 1.f) <= 0.f)
++			|| (position.SqDistance2D(ePos) < SQUARE(highestRange + 500.f));
++		if (((!atUs && !atPost) && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
  			|| !terrainMgr->CanMoveToPos(area, ePos))
  		{
  			continue;
-@@ -258,10 +334,50 @@ bool CDefendTask::FindTarget()
+@@ -258,10 +378,67 @@ bool CDefendTask::FindTarget()
  		float checkPower = maxPower;
  		if (sqEBDist < sqBaseRange) {
  			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
 +		} else if (atUs) {
 +			checkPower *= 4.0f;   // already in contact: same allowance as at home
-+		}
-+		const float eThreat = threatMap->GetThreatAt(ePos);
-+		if (checkPower <= eThreat) {
-+			continue;
  		}
 -		if (checkPower <= threatMap->GetThreatAt(ePos)) {
++		const float eThreat = threatMap->GetThreatAt(ePos);
++		if (checkPower <= eThreat) {
+ 			continue;
+ 		}
 +		// PROPORTIONAL RESPONSE. Line 355 below rewrites this task's anchor to
 +		// the chosen target, so chasing is the WHOLE pool walking there -- and
 +		// the nearest-first choice is value-blind, so a two-raider ping in the
@@ -7774,8 +7938,25 @@ index bfc3caf..b36d06b 100644
 +		if (!atUs && (eThreat < attackPower
 +				* circuit->GetTunable("apex_chase_min_ratio", 0.15f)))
 +		{
- 			continue;
- 		}
++			continue;
++		}
++		// A SOLO POOL DOES NOT CHASE DEEP. The manager spawns fresh 1-unit
++		// defend tasks, and after the muster clamp brings one to the lane it
++		// is its own leader -- a lone unit electing a target past the deep
++		// ring IS the single-unit attack stream (watched 2026-08-21: 73% of
++		// combat metal, defend at fwd ~0.7, dead 1s after disengage). It
++		// still fights whatever is on top of it (atUs) or inside the ring;
++		// travelling deep needs company. apex_defend_solo_deep=1 restores
++		// the old behavior.
++		if (!atUs && (units.size() <= 1)
++			&& (circuit->GetTunable("apex_defend_solo_deep", 0.f) <= 0.f))
++		{
++			const AIFloat3& basePos2 = circuit->GetSetupManager()->GetBasePos();
++			const float deepR = circuit->GetMilitaryManager()->GetBaseDefRange() * 1.25f;
++			if (basePos2.SqDistance2D(ePos) > SQUARE(deepR)) {
++				continue;
++			}
++		}
 +		// The eThreat gate above reads the surf threat map, which measures ~0
 +		// almost everywhere -- a Punisher line rates as empty ground and the
 +		// pool walks into it. Enemy GROUP influence is the live layer (the same
@@ -7802,7 +7983,24 @@ index bfc3caf..b36d06b 100644
  
  		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
  		const bool IsInWater = cdef->IsPredictInWater(elevation);
-@@ -320,6 +436,15 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
+@@ -305,7 +482,15 @@ bool CDefendTask::FindTarget()
+ 
+ 	if (bestTarget != nullptr) {
+ 		SetTarget(bestTarget);
+-		position = GetTarget()->GetPos();
++		// apex: the anchor does NOT follow the target. This rewrite advanced
++		// the post to every elected enemy, so each chase re-based the pool on
++		// its new ground and the next election reached further -- the creep
++		// that turned defense into pursuit. The post stays where it was
++		// assigned; when the enemy flees past reach, the no-target fallback
++		// walks the pool back to a front post instead of following.
++		if (circuit->GetTunable("apex_defend_post", 1.f) <= 0.f) {
++			position = GetTarget()->GetPos();
++		}
+ 	}
+ 	if (enemyPositions.empty()) {
+ 		return false;
+@@ -320,6 +505,15 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -7818,7 +8016,7 @@ index bfc3caf..b36d06b 100644
  		ActivePath(lowestSpeed);
  	} else {
  		Fallback();
-@@ -355,7 +480,18 @@ void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
+@@ -355,7 +549,18 @@ void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
  
  	if (!pPath->path.empty()) {
  		if (pPath->path.size() > 2) {
@@ -7838,7 +8036,7 @@ index bfc3caf..b36d06b 100644
  		}
  	} else {
  		FallbackBasePos();
-@@ -401,9 +537,11 @@ void CDefendTask::Fallback()
+@@ -401,9 +606,11 @@ void CDefendTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {

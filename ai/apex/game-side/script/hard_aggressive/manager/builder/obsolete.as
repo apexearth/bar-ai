@@ -821,6 +821,14 @@ float EnergyReclaimCliff(const string& in name)
 
 bool EnergyReclaimable(const string& in name)
 {
+	// A geothermal never obsoletes: the vent is the resource, there is no
+	// successor, and it is the best energy-per-metal in the game. The
+	// "no successor to wait for" fallthrough below classed it reclaimable,
+	// which priced it -1 in EnergyValuePerMetal -- geo was unbuildable
+	// through the ranking EVERYWHERE (measured on Geyser Plains 2026-08-21:
+	// vent found, value=-1, advsols picked instead).
+	if ((name == armgeo) || (name == corgeo) || (name == leggeo))
+		return false;
 	bool standing;
 	if ((name == armwin) || (name == corwin) || (name == legwin)) {
 		CCircuitDef@ adv = SideDef3(armadvsol, coradvsol, legadvsol);

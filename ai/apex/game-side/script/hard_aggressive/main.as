@@ -182,6 +182,21 @@ void AiUnitFinished(CCircuitUnit@ unit)
 	// def.count moves on the nanoframe.
 	if (unit.circuitDef !is null)
 		Builder::NoteEcoFinished(unit.circuitDef.GetName());
+	// The defense zone follows the BUILT base: every finished rear structure
+	// can stretch the ring, forward fences and mex guards never do (a front
+	// tower at fwd 0.6 must not turn half the map into fight-at-any-odds
+	// ground -- that oversized ring is the streaming-deaths mechanism
+	// apexearth identified watching the overlay).
+	if ((unit.circuitDef !is null) && !unit.circuitDef.IsMobile()
+		&& Builder::gHomeSet)
+	{
+		const AIFloat3 sp = unit.GetPos(ai.frame);
+		if (Military::ForwardFraction(sp) < 0.35f) {
+			const float dEx = sp.distance2D(Builder::gHomePos);
+			if (dEx > Military::gBaseExtent)
+				Military::gBaseExtent = dEx;
+		}
+	}
 	// RadarNet's standing ledger: positions, because coverage is a place, and
 	// a dead radar must re-open its border rank (a count cannot say where).
 	CCircuitDef@ radDef = Builder::RadarTowerDef();

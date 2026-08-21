@@ -19,6 +19,178 @@ on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
 
+## 2026-08-21: the T2 gate is one pair -- apex_t2_metal (30) + apex_t2_energy; strict post kept; ring -20%
+
+T2 KNOBS: apex_rush_min_metal (14, "Tunable for A/B testing") renamed to
+apex_t2_metal at 30 (his number) as the metal half of the T2 permission;
+apex_t2_income RETIRED -- it was a second private 30 m/s gate on the same
+decision inside the rear plant-siting rule, which now reads Policy::T2Metal()
+(two knobs on one decision drift the first time one is tuned).
+apex_t2_energy_from's doc now states it is NOT a permission knob (it starts
+the pre-T2 energy-floor lane). A/B of the 14->30 bar: 7W-9L-8D, T2 median
+18.7m (no later than before -- the 800 e/s energy bar binds first at
+benchmark income), no-T2 games 6/24 (normal). Benchmark-neutral; the bar
+will bind in richer hosted games, which is the stated intent.
+
+STRICT POST (same arm series): election is post-relative ONLY -- the first
+post cut kept proximity-to-squad as self-defense and a won fight advanced
+the squad into the next election ("victorious march to death", watched).
+Units still auto-fire in weapon range; the task never re-targets off its own
+advanced ground. Very-deep defend deaths (>3000): 20% -> 5% across the
+campaign; Comet went 5-0-3 then 5-1-2 in the last two arms. Ring shrunk 20%
+on his call: base_rad [800,1400] -> [640,1120], defzone pad 500 -> 400.
+Altair is 0-5/0-6 in EVERY arm today -- its failure is not these mechanisms.
+
+## 2026-08-21: defence is a post, not a pursuit -- kept (apexearth's design ruling)
+
+apexearth, on the measured 71%-outside-the-ring defend deaths: "How are we
+defending outside of our defense zone? That seems like totally inappropriate
+logic. if the enemy has fled or left, why are we still attacking them as if
+it is defense?" Mechanism found in source: CDefendTask::FindTarget rewrote
+`position` (the pool's post) to every elected target, so each chase re-based
+the pool on newly-taken ground and the next election reached further --
+candidates were accepted relative to the CREPT squad (atUs), never the
+assigned post. Defence creep, one fled enemy at a time.
+
+Fix (apex_defend_post, default 1): the anchor never follows the target;
+candidates must be within weapon reach of the ASSIGNED post (or on our
+defended ground); a unit actively shooting the squad is still fought
+wherever it stands; with nothing electable the existing fallback walks the
+pool back to a front post.
+
+Validation, fourth arm of the day's series (same benchmark): defend deaths
+outside the ring 79% -> 71% -> 65% across the campaign, very-deep share
+20% -> 9%, median depth 0.65 -> 0.56 -- monotone improvement on every
+mechanism metric. W/L 7-10 (noise band; Altair 0-6 again -- Altair's
+problem is not this mechanism). The ~65% still outside is substantially
+the LANE force: defend pools posted at front points, legitimately beyond
+the base ring. Getting that to zero is the defend/lane split design
+question, recorded as open. The muster clamp and solo-deep gate remain as
+defense-in-depth beneath this.
+
+## 2026-08-21: the single-unit attack stream -- two-iteration fix, kept (watched-game verdict pending)
+
+apexearth, watching Geyser Plains: "suddenly we just started doing single
+unit attacks into the enemy... well outside our base defense range." His
+game's transitions table agreed exactly: 73% of combat metal died on DEFEND
+at fwd ~0.7, disengaging at 9-15% hp, dead ~1s later.
+
+Iteration 1 (muster clamp, DefendTask Merge/Start): rookies and fresh units
+no longer walk solo to an anchor/leader beyond 1.25x the base-defence ring
+-- they muster at the lane instead. Validated INSUFFICIENT alone: pooled
+defend->retreat share flat (33->35%), median depth 0.65->0.60, W/L 6-10.
+Root cause deeper: the manager spawns 1-unit defend pools that chase deep
+targets as their own leader.
+
+Iteration 2 (solo-deep gate, DefendTask FindTarget): a pool of ONE may not
+elect a target beyond 1.25x the ring -- it fights whatever is on top of it
+or inside the ring; travelling deep needs company. Narrow by design (solo
+TRAVEL only), unlike the shelved broad engage gate that traded losses for
+timeout draws. apex_defend_muster=0 / apex_defend_solo_deep=1 restore old
+behavior.
+
+Validation across the three same-day arms: median defend->retreat depth
+0.65 -> 0.60 -> 0.57, deep (fwd>0.85) share 20% -> 17% -> 17%, W/L
+6-10 -> 9-7 (best recent arm) with NO draw inflation. Direction consistent,
+power modest (n=24/arm) -- the acceptance test is whether apexearth still
+SEES single-unit streams in a watched game. STILL OPEN, next in queue: the
+middle-lane bias (threat-blind approach paths take the direct lane into the
+best-defended ground; flanks never considered).
+
+## 2026-08-21: geothermals exist now -- three stacked defects, all fixed and verified
+
+apexearth: "we don't build geo... maybe you can check?" The value ranking was
+innocent; three independent defects stacked so geo could NEVER be built:
+1. C++: ParseGeoSpots runs ONCE at AI birth and GetFeatures() is LOS-limited
+   -- vents outside the start area never became spots, on any map, forever
+   (geo-diag: spot=-1 for a whole 30m game on Death Valley with the income
+   gate floored). Fix: RescanGeoSpots -- a 120s-throttled per-instance
+   feature rescan appends newly-seen vents (lateGeoSpots) without mutating
+   the shared CEnergyData other AI threads read; all geo paths (script query,
+   EnqueueGeoAt, stock's own geo task) read through GeoSpotPos.
+2. Script: EnergyReclaimable's "no successor to wait for" fallthrough classed
+   geo reclaimable (cliff fallthrough 0), so EnergyValuePerMetal priced it -1
+   ALWAYS -- vent found, value=-1, advsol picked (measured on Geyser Plains).
+   Fix: geothermals never obsolete, stated explicitly at the predicate top.
+3. Gate: apex_geo_min_income 300 -> 250 e/s (his call, same session), and
+   the tunable's doc said metal/s while the code reads ENERGY income.
+Verified end-to-end on Geyser Plains BAR v1.2.1 (his suggested vent-rich
+map): three "home energy armgeo geo spot=N" picks at 16.5-18.5m as energy
+income crossed 250-336, geo standing in the final tally, late diag reading
+spot=-1 only once every vent was claimed. The geo-diag line (60s throttle)
+stays for future attribution. Geo economics: 300 e/s for 560 metal = 0.54
+e/s per metal, 2.5x the advanced solar -- the ranking now sees it.
+
+## 2026-08-21: escorts ungated, the T1 cap enforced at the nanoframe, advsols behind the base
+
+Three watched-game reports, each attributed and fixed the same day:
+
+ESCORTS (radar+jammer): the want was wired twice -- a maketask rule that has
+NEVER fired (sits below the driven-line early-return; left as dead code, note
+here) and the real quota floor, whose blanket Outmassed gate suppressed it in
+301/616 diag samples. apexearth overrode the 2026-08-19 jammer caution
+outright: "We need 1 jammer and 1 radar on all the expensive squads... It
+allows us to shoot at enemies before they can see us." Gate removed for BOTH
+defs. Measured: in every benchmark game where a squad cleared the 2000-metal
+bar, exactly 1+1 were built -- the chain works. The live bottleneck is the
+bar vs real squad sizes (fragmented squads ~1500 metal; peak qualifying
+squads 0 in most 40m benchmark games). apex_escort_squad_value is the knob;
+the once-a-minute "apex: escort-diag" line prints squads/outmassed/counts
+for attribution in hosted games.
+
+T1 CAP: the gate held but the C++ unattributed entrance built labs without
+asking it. Def-pin added in choose.as (gT1Def, with a 20s nothing-backs-it
+re-point after the plain pin wedged a smoke opening outright -- zero
+factories for 12 minutes; do not re-propose a pin without the escape), plus
+nanoframe enforcement in hooks.as (same pattern as the T1-commit reclaim):
+a surplus land T1 plant appearing while adv-con/T2-mex/reactor are missing
+is reclaimed before metal sinks in. Measured: 2nd ground T1 pre-fusion
+2/24 games (metric note: count GROUND labs only -- the air intel plant is
+exempt by design and polluted the first read as "21/24").
+
+ADVSOLS: "behind the base" was a radius, not a direction -- a forward panel
+within apex_advsol_home_r seeded the pack toward the enemy, and the FIRST
+panel skipped the block entirely (count>0 gate). Both fixed: founders route
+through the rear band, and a seed forward of the base anchor (Base::Coords
+depth < 0) is refused. Benchmark-ambiguous (noise band); acceptance is
+watched placement.
+
+All arms in today's noise band (7W-7L to 8W-10L on the 24-game benchmark);
+compile gates clean throughout.
+
+## 2026-08-21: lab discipline -- the join bug and the double-T2 transition, fixed (kept)
+
+apexearth, watching (Death Valley, 76 m/s): "3 t1 labs, and 2 t2 labs...
+started making the second T2 like 15 minutes in... we wasted too much metal
+on labs and still don't have our first fusion." Attributed to two defects
+in his game's log:
+1. JOIN BUG: the commander's "joining the standing factory request" branch
+   passed its OWN preferred lab def to Requests::Take -- the standing request
+   was armlab, the "join" created an armvp beside it (same frame in the log:
+   join line + "request new armvp"). Fixed: Requests::LiveFactoryDef() looks
+   up the def actually asked; joining now joins.
+2. DOUBLE-T2: the "first fusion before a second T2 line" rule exists, but
+   the plant-ask ledger's phantom fuse cleared armalab's ask during its
+   walk-and-place gap, and armavp's query 36s later was approved as another
+   "first" T2. Fixed with a def pin (choose.as gT2Def): the transition's
+   chosen def rebuilds freely through every recovery path; a DIFFERENT T2
+   def is an extra and meets the afus+pulsar+army discipline. A plain
+   boolean latch was tried first and MEASURABLY WEDGED TECH (83 stuck-
+   reopens, 9 no-T2 games, 5W-13L-6D) -- do not re-propose the boolean form.
+
+Measured (24-game 3-map benchmark): v2 is 7W-7L-10D vs the 11W-8L-5D
+control -- within noise, tech health equal (stuck 6 vs 8, T2 median 23.8 vs
+20.7). The TARGET failures are rare at benchmark income (double-advanced
+1/24 games in BOTH arms; the join bug fires in low-income openings), so the
+benchmark can only show no harm -- the benefit case is his watched game
+class. Confirm by watching: the opening should build ONE T1 lab, and no
+second T2 def before a fusion stands.
+
+STILL OPEN (next single change): the fusion itself -- asked on time at
+13.7m, starved on execution for 10+ minutes with advCon=1 while mohos
+monopolized the only T2 con (ISSUES.md, candidate: floor the adv-con want
+at 2 while a fusion request is standing).
+
 ## 2026-08-21: air assassin dominance waiver -- landed, NOT yet exercised (watch for "BACK ON")
 
 The drawn 40m games' finisher analysis (two adversarial agents, cross-

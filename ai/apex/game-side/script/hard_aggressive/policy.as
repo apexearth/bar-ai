@@ -31,6 +31,7 @@ float T2EnergyFrom()   { return ai.GetTunable("apex_t2_energy_from", TUNE_T2_ENE
 // Energy income required before starting T2 (techlead.as RushReady), and the
 // lower bar once a reactor already stands.
 float T2Energy()        { return ai.GetTunable("apex_t2_energy", TUNE_T2_ENERGY); }
+float T2Metal()         { return ai.GetTunable("apex_t2_metal", TUNE_T2_METAL); }
 float T2EnergyReactor() { return ai.GetTunable("apex_t2_energy_reactor", TUNE_T2_ENERGY_REACTOR); }
 
 // A fusion costs ~21,000 ENERGY to construct: starting one on a small grid

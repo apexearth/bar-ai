@@ -30,6 +30,7 @@ namespace Military {
 // to walk the army.
 array<int> gCombatId;
 array<int> gCombatSent;      // frame we last ordered this unit back
+array<int> gCombatBucket;    // last observed task bucket, for transition tags
 int gNextWithdraw = 0;
 int gWithdrawn = 0;
 int gNextWithdrawLog = 0;
@@ -44,6 +45,7 @@ void NoteCombatUnit(int id)
 	}
 	gCombatId.insertLast(id);
 	gCombatSent.insertLast(0);
+	gCombatBucket.insertLast(-1);
 }
 
 // The nearest gun of ours, stepped back toward home so the unit stands BEHIND
@@ -162,6 +164,7 @@ void UpdateWithdraw()
 		if (u is null) {
 			gCombatId.removeAt(i);
 			gCombatSent.removeAt(i);
+			gCombatBucket.removeAt(i);
 			continue;
 		}
 		const AIFloat3 p = u.GetPos(ai.frame);
@@ -191,6 +194,19 @@ void UpdateWithdraw()
 			++cenField[bucket];
 		else
 			++cenHome[bucket];
+		// TRANSITIONS INTO STATES ELECTIONS NEVER SEE. NoteFightElection tags
+		// every fight assignment, but the C++ RetreatTask and idle states are
+		// assigned outside our hooks -- the moment a unit STOPS fighting was
+		// invisible, and every death read as bare "retreat" with no story.
+		// R = entered retreat, O = entered other/idle; hp and depth at the
+		// moment of the transition ride along (2s sampling resolution).
+		if (bucket != gCombatBucket[i]) {
+			if (bucket == 13)
+				AppendFightHist(gCombatId[i], "R", FightCtx(u));
+			else if (bucket == 14)
+				AppendFightHist(gCombatId[i], "O", FightCtx(u));
+			gCombatBucket[i] = bucket;
+		}
 	}
 	gTrackedCost = trackedCost;
 	if (ai.frame >= gNextCensusLog) {
@@ -266,7 +282,7 @@ void UpdateWithdraw()
 		u.CmdMoveTo(back);
 		gCombatSent[i] = ai.frame;
 		++gWithdrawn;
-		AppendFightHist(int(u.id), "W");
+		AppendFightHist(int(u.id), "W", FightCtx(u));
 		if (ai.frame >= gNextWithdrawLog) {
 			gNextWithdrawLog = ai.frame + 15 * SECOND;
 			AiLog(Factory::T() + "apex: withdraw "

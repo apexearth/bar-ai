@@ -90,6 +90,26 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 		aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, unit));
 		return;
 	}
+	// THE T1 CAP, enforced at the same only-place-every-plant-passes. The gate
+	// in AiGetFactoryToBuild holds duplicates to one until the reactor, but the
+	// C++ side's unattributed entrance builds labs without asking it -- 21/24
+	// benchmark games still stood a second T1 lab pre-fusion with the gate
+	// refusing every ask (2026-08-21). Same cure as the T1-commit block above:
+	// catch the surplus nanoframe and reclaim it before real metal sinks in.
+	// Air plants are exempt (the air strategy carries its own income-scaled
+	// counts); shipyards are not in the land-plant list and pass untouched.
+	if ((usage == Unit::UseAs::FACTORY)
+		&& IsLandT1Plant(unit.circuitDef)
+		&& !IsAirFactory(unit.circuitDef)
+		&& (T1PlantCount() >= 2)
+		&& T1CapHolds())
+	{
+		AiLog(T() + "apex: T1 cap reclaims surplus "
+			+ unit.circuitDef.GetName() + " (" + T1PlantCount()
+			+" standing, cap one until the reactor)");
+		aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, unit));
+		return;
+	}
 	Brain::NoteSpend(unit, usage);
 	if (usage == Unit::UseAs::FACTORY) {
 		++gFactoryCount;

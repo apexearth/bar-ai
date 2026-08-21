@@ -169,6 +169,7 @@ void FQForget(Id id)
 // normalises over the roles that line can actually build -- and they fill
 // toward one shared target instead of double-counting it.
 int gNextMixDiag = 0;
+int gNextEscortDiag = 0;
 
 int SlotsForArmy()
 {
@@ -405,8 +406,16 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		// BEFORE any combat unit -- a T2 lab answered a push with two mobile
 		// jammers (apexearth 2026-08-19). Eyes are worth having for an army
 		// that exists; rebuilding one comes first. Releases at parity.
-		const uint squads = Military::Outmassed()
-				? 0 : Military::EscortSquadCount();
+		// NO outmassed gate on either escort. apexearth 2026-08-21, overriding
+		// the 2026-08-19 caution outright: "We need 1 jammer and 1 radar on
+		// all the expensive squads. Once we get to T2 this is very important.
+		// It allows us to shoot at enemies before they can see us. And it
+		// prevents them from shooting at us while we're in radar range but
+		// they can't see us." The pair is core kit for a fighting army, and
+		// being outmassed is when the fighting happens -- the old blanket
+		// gate read outmassed in 301/616 diag samples. The floor stays
+		// bounded at one of each per qualifying squad.
+		const uint squads = Military::EscortSquadCount();
 		if (squads > 0) {
 			const int per = int(ai.GetTunable("apex_escort_per_squad",
 					float(ESCORT_PER_SQUAD)));
@@ -418,6 +427,19 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 				want.insertLast(per * int(squads));
 				isFloor.insertLast(true);
 			}
+		}
+		// Which gate is starving the escorts is unanswerable from the quota
+		// line alone -- it only prints defs already IN the quota. apexearth
+		// 2026-08-21: "I'm still not seeing those sensor escorts being built."
+		if (ai.frame >= gNextEscortDiag) {
+			gNextEscortDiag = ai.frame + 60 * SECOND;
+			CCircuitDef@ r = Factory::EyeDefFor(fac.circuitDef, false);
+			CCircuitDef@ j = Factory::EyeDefFor(fac.circuitDef, true);
+			AiLog(Factory::T() + "apex: escort-diag " + fac.circuitDef.GetName()
+				+ " squads=" + Military::EscortSquadCount()
+				+ " outmassed=" + (Military::Outmassed() ? "1" : "0")
+				+ " radar=" + ((r is null) ? "none" : (r.GetName() + ":" + r.count))
+				+ " jam=" + ((j is null) ? "none" : (j.GetName() + ":" + j.count)));
 		}
 	}
 

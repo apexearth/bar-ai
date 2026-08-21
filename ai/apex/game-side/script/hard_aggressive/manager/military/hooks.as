@@ -176,7 +176,20 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 // last election is still the answer to "doing what".
 array<int>    gFHistId;
 array<string> gFHistBuf;
-const uint FIGHT_HIST_MAX = 4;
+const uint FIGHT_HIST_MAX = 6;
+
+// The state a unit carried INTO a transition -- hp and map depth -- appended
+// to every fight-hist entry so a death reads as a story instead of a terminal
+// task. apexearth 2026-08-21: "no 'retreat' is not a valid answer. You need
+// to be recording something like 'attack-retreat'... I still see units doing
+// stupid things and we need to answer why."
+string FightCtx(CCircuitUnit@ u)
+{
+	if (u is null)
+		return "";
+	return ":h" + int(u.GetHealthPercent() * 100.f)
+		+ ":w" + formatFloat(Military::ForwardFraction(u.GetPos(ai.frame)), "", 0, 2);
+}
 
 int FightHistSlot(int id)
 {
@@ -196,12 +209,12 @@ void NoteFightElection(CCircuitUnit@ unit, IUnitTask@ task)
 	// The same election is the only place our own combat units can be
 	// registered -- nothing enumerates them. See withdraw.as.
 	NoteCombatUnit(int(unit.id));
-	AppendFightHist(int(unit.id), "f" + task.GetFightType());
+	AppendFightHist(int(unit.id), "f" + task.GetFightType(), FightCtx(unit));
 }
 
 // Shared with withdraw.as, which marks a pull-back order as "W" so the
 // unit-destroyed line shows whether we ever told the dead unit to leave.
-void AppendFightHist(int id, const string tag)
+void AppendFightHist(int id, const string tag, const string ctx = "")
 {
 	int s = FightHistSlot(id);
 	if (s < 0) {
@@ -221,7 +234,7 @@ void AppendFightHist(int id, const string tag)
 	// Transitions only, or one long attack fills the ring with itself.
 	if ((parts.length() > 0) && (parts[parts.length() - 1].findFirst(tag) == 0))
 		return;
-	parts.insertLast(tag + "@" + ai.frame);
+	parts.insertLast(tag + "@" + ai.frame + ctx);
 	while (parts.length() > FIGHT_HIST_MAX)
 		parts.removeAt(0);
 	string joined = "";

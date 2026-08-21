@@ -148,9 +148,10 @@ const float TUNE_FUSION_PREFER_INCOME = 50.f;
 //   much energy income. A building gantry draws 460-620 energy/s on its own,
 //   and the metal-income rungs above say nothing about that...
 const float TUNE_GANTRY_PER_ENERGY = 3000.f;
-// manager/builder/mexguard.as [metal/s] -- Metal income before geothermal
-//   counts as affordable (commanders never take the geo job).
-const float TUNE_GEO_MIN_INCOME = 300.f;
+// manager/builder/mexguard.as [energy/s] -- Energy income before geothermal
+//   counts as affordable: the 13,000-energy build price drains a small
+//   economy (commanders never take the geo job -- level-1/2 cannot build it).
+const float TUNE_GEO_MIN_INCOME = 250.f;
 // manager/builder/statics.as [ratio] -- Share of energy income that may go to
 //   jammer upkeep; sets how many jammers the grid supports.
 const float TUNE_JAMMER_ENERGY_SHARE = 0.10f;
@@ -181,12 +182,18 @@ const float TUNE_RECLAIM_SOLAR_E = 500.f;
 const float TUNE_T1_CORE_PER_INCOME = 6.f;
 // manager/brain/facqueue.as [metal/s] -- One T2 core combat unit wanted per
 //   this much metal income (scaled up under army pressure).
-const float TUNE_T2_CORE_PER_INCOME = 6.f;
-// policy.as [metal or metal/s] -- Energy income required before starting T2
+const float TUNE_T2_CORE_PER_INCOME = 4.f;
+// policy.as [metal/s] -- Metal income required before committing to T2
+//   (techlead.as RushReady, and the rear plant-siting rule reads the same
+//   knob). apexearth 2026-08-21: "30 m/s is a good number". The T2 decision
+//   is this pair: apex_t2_metal AND apex_t2_energy.
+const float TUNE_T2_METAL = 30.f;
+// policy.as [energy/s] -- Energy income required before starting T2
 //   (techlead.as RushReady), and the lower bar once a reactor already stands.
-const float TUNE_T2_ENERGY = 800.f;
-// policy.as [metal/s] -- Metal income from which the pre-T2 energy forecast
-//   lane starts applying its floor.
+const float TUNE_T2_ENERGY = 1200.f;
+// policy.as [metal/s] -- NOT a T2 permission knob: the metal income from
+//   which the energy-buildup lane starts enforcing its pre-T2 energy floor
+//   (building the grid FOR T2, ahead of the decision itself).
 const float TUNE_T2_ENERGY_FROM = 12.f;
 // policy.as [energy/s] -- The lower T2 energy bar once a reactor already
 //   stands (apex_t2_energy is the bar without one).
@@ -474,8 +481,6 @@ const float TUNE_QUOTA_T1_AFTER_T3 = 0.15f;
 // manager/brain/facqueue.as [ratio] -- Weight every T2 combat want keeps once
 //   a gantry stands.
 const float TUNE_QUOTA_T2_AFTER_T3 = 0.4f;
-// manager/factory/techlead.as [metal or metal/s] -- Tunable for A/B testing.
-const float TUNE_RUSH_MIN_METAL = 14.f;
 // manager/factory/techlead.as [toggle 0/1] -- Default ON since 2026-08-20:
 //   paired same-seed A/Bs on Altair (trade 0.31->0.52) and Comet Catcher
 //   (0.43->0.76, produced...
@@ -527,9 +532,6 @@ const float TUNE_T2_ARMY_PER_INCOME = 100.f;
 // manager/brain/facqueue.as [count] -- Floor on T2 core combat units counted
 //   as protected, whatever the income.
 const float TUNE_T2_CORE_MIN = 4.f;
-// manager/builder/rules_optional.as [metal/s] -- Steady income before the
-//   rear-sited advanced plant rule fires.
-const float TUNE_T2_INCOME = 30.f;
 // manager/builder/rules_optional.as [toggle 0/1] -- Site the first advanced
 //   plant at the protected rear of the base; 0 leaves siting to the ordinary
 //   search.
@@ -1240,6 +1242,18 @@ const float TUNE_CLEANUP_MAX_PICKS = 5.f;
 const float TUNE_CLEANUP_PER = 150.f;
 // manager/frontline.as [toggle 0/1] -- OFF BY DEFAULT because this ships.
 const float TUNE_DRAW_FRONT = 0.f;
+// manager/frontline.as [toggle 0/1] -- Draw the defense zone on the map: the
+//   inner ring is the C++ base-defence range (the army fights at any odds
+//   inside it), the outer ring the incoming-push alarm radius. Off by
+//   default because it ships; the harness opts in with apex_draw_defzone=1.
+const float TUNE_DRAW_DEFZONE = 0.f;
+// manager/frontline.as [toggle 0/1] -- The base-defence ring follows the
+//   BUILT base (farthest finished rear structure plus the pad) instead of
+//   the frozen map-diagonal formula; 0 keeps the static C++ ring.
+const float TUNE_DEFZONE_DYNAMIC = 1.f;
+// manager/frontline.as [elmos] -- Padding added to the built extent when the
+//   dynamic ring is applied (roughly two T1 tower ranges of approach ground).
+const float TUNE_DEFZONE_PAD = 400.f;
 // manager/builder/maketask.as [milliseconds] -- Election-time budget per
 //   frame; past it further builder elections defer to the next frame (lag
 //   guard).

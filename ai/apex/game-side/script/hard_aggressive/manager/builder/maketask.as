@@ -419,6 +419,40 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// A MEX SOMEONE IS ALREADY BUILDING IS NEVER WORTH A WALK. The engine's
+	// MakeBuilderTask hands its queue to any re-electing builder, and a con
+	// out claiming distant mexes gets pulled all the way home to help finish
+	// a 50-metal extractor already under a lathe (apexearth 2026-08-21:
+	// "cons which are out trying to find mexes far away from home will choose
+	// to walk all the way home"). If this con has an open spot of its own no
+	// farther than the offered walk, it claims that instead; the offered task
+	// stays in the pool for whoever is actually near it.
+	if (!isComm && (task !is null) && (task.GetType() == Task::Type::BUILDER)
+		&& (task.GetBuildType() == Task::BuildType::MEX)
+		&& (Requests::Workers(task) > 0))
+	{
+		const AIFloat3 offerAt = task.GetBuildPos();
+		const AIFloat3 me = unit.GetPos(ai.frame);
+		if (OnMap(offerAt)) {
+			const int nearSpot = aiEconomyMgr.FindOpenMexSpot(unit, me);
+			if (nearSpot >= 0) {
+				const AIFloat3 mine = aiEconomyMgr.GetMexSpotPos(nearSpot);
+				if (OnMap(mine) && (me.distance2D(mine) < me.distance2D(offerAt))) {
+					float heat = ThreatFor(unit, mine);
+					heat = MexHeat(mine, heat);
+					if (heat <= CON_THREAT_VETO) {
+						IUnitTask@ digNear = aiEconomyMgr.EnqueueMexAt(unit, nearSpot);
+						if (digNear !is null) {
+							AiLog(Factory::T() + "apex: manned-mex join refused -- "
+								+ "own open spot is closer than the walk");
+							return digNear;
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// A FACTORY OFFER IS NEVER OPTIONAL. Every eco rule below (EcoFusion,
 	// converters, Brain wants) early-returns before the engine offer is
 	// accepted, so an approved plant's task sat in the pool while the adv cons

@@ -114,7 +114,23 @@ void CDefendTask::Start(CCircuitUnit* unit)
 {
 	CCircuitAI* circuit = manager->GetCircuit();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-	AIFloat3 pos = utils::get_radial_pos(position, SQUARE_SIZE * 32);
+	// apex: same solo-walk clamp as Merge -- a chase rewrites this task's
+	// anchor to the target, and a fresh unit starting alone toward a deep
+	// anchor is the single-unit attack stream. Deep anchors are approached
+	// from the lane muster instead.
+	AIFloat3 anchor = position;
+	if (circuit->GetTunable("apex_defend_muster", 1.f) > 0.f) {
+		const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
+		const float deepR = circuit->GetMilitaryManager()->GetBaseDefRange() * 1.25f;
+		const AIFloat3& front = circuit->GetFrontPos();
+		if (utils::is_valid(front)
+			&& (basePos.SqDistance2D(anchor) > SQUARE(deepR))
+			&& (basePos.SqDistance2D(front) < basePos.SqDistance2D(anchor)))
+		{
+			anchor = front;
+		}
+	}
+	AIFloat3 pos = utils::get_radial_pos(anchor, SQUARE_SIZE * 32);
 	CTerrainManager::CorrectPosition(pos);
 	AIFloat3 freePos = terrainMgr->FindBuildSite(unit->GetCircuitDef(), pos, 300.0f, UNIT_NO_FACING, true);
 //	AIFloat3 freePos = terrainMgr->FindSpringBuildSite(unit->GetCircuitDef(), pos, 300.0f, UNIT_NO_FACING);
@@ -263,6 +279,25 @@ void CDefendTask::Merge(ISquadTask* task)
 	const AIFloat3& leadPos = leader->GetPos(frame);
 	frame += FRAMES_PER_SEC * 60;
 
+	// apex: a rookie must not walk SOLO to a leader already deep in enemy
+	// ground -- that stream of single-unit arrivals was the top death bucket
+	// of a watched game (73% of combat metal on DEFEND at fwd ~0.7, each dead
+	// ~1s after disengaging at 9-15% hp). A deep pool takes reinforcements at
+	// the army's lane anchor instead; the pool collects them when it moves as
+	// a body.
+	AIFloat3 musterPos = leadPos;
+	if (circuit->GetTunable("apex_defend_muster", 1.f) > 0.f) {
+		const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
+		const float deepR = circuit->GetMilitaryManager()->GetBaseDefRange() * 1.25f;
+		const AIFloat3& front = circuit->GetFrontPos();
+		if (utils::is_valid(front)
+			&& (basePos.SqDistance2D(leadPos) > SQUARE(deepR))
+			&& (basePos.SqDistance2D(front) < basePos.SqDistance2D(leadPos)))
+		{
+			musterPos = front;
+		}
+	}
+
 	const std::set<CCircuitUnit*>& rookies = task->GetAssignees();
 	for (CCircuitUnit* unit : rookies) {
 		unit->SetTask(this);
@@ -270,7 +305,7 @@ void CDefendTask::Merge(ISquadTask* task)
 		// apex: rookies RUN to the group instead of fight-walking -- the
 		// fight order made every merge a stream of solo engagements en route.
 		TRY_UNIT(circuit, unit,
-			unit->CmdMoveTo(leadPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
+			unit->CmdMoveTo(musterPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
 		)
 	}
 	units.insert(rookies.begin(), rookies.end());
@@ -324,7 +359,16 @@ bool CDefendTask::FindTarget()
 		// squad held away from the base is blind to whatever is shooting it.
 		// `atUs` is the same reach Update() uses to decide ENGAGE.
 		const bool atUs = (pos.SqDistance2D(ePos) < SQUARE(highestRange + 500.f));
-		if ((!atUs && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
+		// apex: DEFENCE IS A POST, NOT A PURSUIT. Candidates are measured from
+		// the task's assigned position, not from wherever the squad has crept
+		// to -- atUs alone let a pool that drifted forward legitimize the next
+		// target from its new ground, chase by chase, and "defense" became an
+		// unbounded attack (apexearth: "if the enemy has fled or left, why are
+		// we still attacking them as if it is defense?"). Something shooting
+		// the squad NOW is still always fought, wherever it stands.
+		const bool atPost = (circuit->GetTunable("apex_defend_post", 1.f) <= 0.f)
+			|| (position.SqDistance2D(ePos) < SQUARE(highestRange + 500.f));
+		if (((!atUs && !atPost) && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
 			|| !terrainMgr->CanMoveToPos(area, ePos))
 		{
 			continue;
@@ -354,6 +398,23 @@ bool CDefendTask::FindTarget()
 				* circuit->GetTunable("apex_chase_min_ratio", 0.15f)))
 		{
 			continue;
+		}
+		// A SOLO POOL DOES NOT CHASE DEEP. The manager spawns fresh 1-unit
+		// defend tasks, and after the muster clamp brings one to the lane it
+		// is its own leader -- a lone unit electing a target past the deep
+		// ring IS the single-unit attack stream (watched 2026-08-21: 73% of
+		// combat metal, defend at fwd ~0.7, dead 1s after disengage). It
+		// still fights whatever is on top of it (atUs) or inside the ring;
+		// travelling deep needs company. apex_defend_solo_deep=1 restores
+		// the old behavior.
+		if (!atUs && (units.size() <= 1)
+			&& (circuit->GetTunable("apex_defend_solo_deep", 0.f) <= 0.f))
+		{
+			const AIFloat3& basePos2 = circuit->GetSetupManager()->GetBasePos();
+			const float deepR = circuit->GetMilitaryManager()->GetBaseDefRange() * 1.25f;
+			if (basePos2.SqDistance2D(ePos) > SQUARE(deepR)) {
+				continue;
+			}
 		}
 		// The eThreat gate above reads the surf threat map, which measures ~0
 		// almost everywhere -- a Punisher line rates as empty ground and the
@@ -421,7 +482,15 @@ bool CDefendTask::FindTarget()
 
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
-		position = GetTarget()->GetPos();
+		// apex: the anchor does NOT follow the target. This rewrite advanced
+		// the post to every elected enemy, so each chase re-based the pool on
+		// its new ground and the next election reached further -- the creep
+		// that turned defense into pursuit. The post stays where it was
+		// assigned; when the enemy flees past reach, the no-target fallback
+		// walks the pool back to a front post instead of following.
+		if (circuit->GetTunable("apex_defend_post", 1.f) <= 0.f) {
+			position = GetTarget()->GetPos();
+		}
 	}
 	if (enemyPositions.empty()) {
 		return false;

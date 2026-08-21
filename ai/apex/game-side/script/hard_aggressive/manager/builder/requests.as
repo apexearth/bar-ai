@@ -339,8 +339,13 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	AIFloat3 at = spot;
 	{
 		const string wn = want.GetName();
+		// No count gate: the FIRST panel used to skip this block entirely and
+		// land wherever its asker stood -- often the commander, forward,
+		// claiming mexes -- and then founded the whole pack on the enemy side.
+		// With count 0 the kin search finds nothing and the rear band places
+		// the founder.
 		if (((wn == "armadvsol") || (wn == "coradvsol") || (wn == "legadvsol"))
-			&& (want.count > 0) && (unit !is null))
+			&& (unit !is null))
 		{
 			array<CCircuitUnit@>@ kin = ai.GetOwnUnitsOfDef(want, spot, 4000.f);
 			CCircuitUnit@ seed = null;
@@ -370,6 +375,19 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 				&& (seed.GetPos(ai.frame).distance2D(Builder::gHomePos) > homeR))
 			{
 				@seed = null;
+			}
+			// ...AND BEHIND, NOT JUST NEAR. homeR is a radius: a panel the
+			// same distance TOWARD the enemy passed it and the pack grew on
+			// the enemy side game after game (apexearth 2026-08-21: "I keep
+			// seeing the advanced solars being made in the direction of the
+			// enemy base"). The base frame knows which way is back -- a seed
+			// forward of the anchor is refused and the rear band founds the
+			// next panel instead.
+			if ((seed !is null) && Base::Ready()) {
+				float sDepth, sLat;
+				Base::Coords(seed.GetPos(ai.frame), sDepth, sLat);
+				if (sDepth < 0.f)
+					@seed = null;
 			}
 			if (seed !is null) {
 				AIFloat3 site = ai.FindBuildSiteNear(want, seed.GetPos(ai.frame),
@@ -593,6 +611,27 @@ uint InFlight(CCircuitDef@ want)
 			++n;
 	}
 	return n;
+}
+
+// The def of a live FACTORY request, if any -- so a joiner helps build what
+// was actually ASKED. Joining with the joiner's own preferred def is not a
+// join: Take() finds no task for that def and creates a second plant.
+CCircuitDef@ LiveFactoryDef()
+{
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ cand = gLive[i];
+		if ((cand is null) || (cand.GetType() != Task::Type::BUILDER))
+			continue;
+		if (cand.GetBuildType() != Task::BuildType::FACTORY)
+			continue;
+		const CCircuitDef@ bd = cand.buildDef;
+		if (bd is null)
+			continue;
+		CCircuitDef@ has = ai.GetCircuitDef(bd.id);
+		if (has !is null)
+			return has;
+	}
+	return null;
 }
 
 IUnitTask@ Create(CCircuitDef@ want, Task::BuildType bt, Task::Priority prio,

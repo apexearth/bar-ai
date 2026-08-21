@@ -385,10 +385,73 @@ uint CountOf(int owner)
 	return n;
 }
 
+// The defense zone, as two rings around home. Inner: the C++ base-defence
+// range -- DefendTask's fight-at-any-odds boost and the defence builder both
+// honor it, so this is the ground the army actually treats as home. Outer:
+// the incoming-push alarm radius (apex_push_notice_r). Same queue, same
+// erase-and-repaint cadence as the front line, same 60s-eraser window.
+int gNextZoneDraw = 0;
+array<AIFloat3> gZoneDrawn;
+
+// Drive the C++ ring from the built base. The engine froze it at
+// clamp(mapDiagonal*0.3, base_rad) on config load -- a 1400-elmo circle on a
+// 1v1 map whatever stood there, and everything inside is fight-at-any-odds
+// ground for DefendTask. DefenceData still clamps to config base_rad, so
+// this can only move within [800, 1400].
+int gNextZoneSet = 0;
+
+void ApplyDefenseZone()
+{
+	if (ai.GetTunable("apex_defzone_dynamic", TUNE_DEFZONE_DYNAMIC) <= 0.f)
+		return;
+	if ((ai.frame < gNextZoneSet) || (Military::gBaseExtent <= 1.f))
+		return;
+	gNextZoneSet = ai.frame + 30 * SECOND;
+	aiMilitaryMgr.SetBaseDefRange(Military::gBaseExtent
+			+ ai.GetTunable("apex_defzone_pad", TUNE_DEFZONE_PAD));
+}
+
+void DrawDefenseZone()
+{
+	if (ai.GetTunable("apex_draw_defzone", TUNE_DRAW_DEFZONE) <= 0.f)
+		return;
+	if ((ai.frame < gNextZoneDraw) || !Builder::gHomeSet)
+		return;
+	gNextZoneDraw = ai.frame + 20 * SECOND;
+	for (uint i = 0; i < gZoneDrawn.length(); ++i)
+		Enqueue(gZoneDrawn[i], gZoneDrawn[i]);   // erase the last paint
+	gZoneDrawn.resize(0);
+	array<float> radii = {aiMilitaryMgr.GetBaseDefRange(),
+			ai.GetTunable("apex_incoming_notice_r", TUNE_INCOMING_NOTICE_R)};
+	const AIFloat3 home = Builder::gHomePos;
+	for (uint r = 0; r < radii.length(); ++r) {
+		if (radii[r] <= 1.f)
+			continue;
+		const int SEGS = 24;
+		AIFloat3 prev;
+		bool prevOk = false;
+		for (int s = 0; s <= SEGS; ++s) {
+			const float a = 6.2831853f * float(s) / float(SEGS);
+			AIFloat3 pt = home;
+			pt.x += cos(a) * radii[r];
+			pt.z += sin(a) * radii[r];
+			const bool ok = OnMap(pt);
+			if (ok && prevOk) {
+				Enqueue(prev, pt);
+				gZoneDrawn.insertLast(prev);
+			}
+			prev = pt;
+			prevOk = ok;
+		}
+	}
+}
+
 void Update()
 {
 	Gather();
+	ApplyDefenseZone();
 	DrawFrontLine();
+	DrawDefenseZone();
 	PumpDraw();   // every tick, not every rescan -- see DRAW_PER_TICK
 	if (ai.frame < gNextClassify)
 		return;

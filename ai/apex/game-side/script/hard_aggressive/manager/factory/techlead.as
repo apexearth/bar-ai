@@ -255,9 +255,9 @@ bool RushReady()
 {
 	if (T1Commit())
 		return false;
-	// Tunable for A/B testing. In a 1v1 the player IS the lead, so this branch
-	// is the only gate on committing to T2.
-	if (aiEconomyMgr.metal.income < ai.GetTunable("apex_rush_min_metal", TUNE_RUSH_MIN_METAL))
+	// In a 1v1 the player IS the lead, so this branch is the only gate on
+	// committing to T2. Metal side of the pair (apex_t2_energy is the other).
+	if (aiEconomyMgr.metal.income < Policy::T2Metal())
 		return false;
 	// RushBuildPower idles the factory's own army line and AiIsSwitchAllowed
 	// waives the normal army-value requirement for this branch, so committing

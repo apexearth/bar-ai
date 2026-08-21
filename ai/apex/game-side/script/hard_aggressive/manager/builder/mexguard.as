@@ -517,6 +517,8 @@ IUnitTask@ AlwaysEco(CCircuitUnit@ unit)
 	return t;
 }
 
+int gNextGeoDiag = 0;
+
 IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 {
 	// No metal-bank gate: the engine already refuses what it truly can't afford,
@@ -709,6 +711,17 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 				geoSpotId = aiEconomyMgr.FindOpenGeoSpot(unit, unit.GetPos(ai.frame));
 				if (geoSpotId >= 0)
 					geoValue = EnergyValuePerMetal(geo);
+			}
+			// Why geo did or did not enter this ranking -- apexearth keeps
+			// watching games with no geo and the pick's failures were silent.
+			if (ai.frame >= gNextGeoDiag) {
+				gNextGeoDiag = ai.frame + 60 * SECOND;
+				AiLog(Factory::T() + "apex: geo-diag afford=" + (geoAffordable ? "1" : "0")
+					+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
+					+ " comm=" + (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) ? "1" : "0")
+					+ " spot=" + geoSpotId
+					+ " value=" + formatFloat(geoValue, "", 0, 3)
+					+ " advValue=" + formatFloat(EnergyValuePerMetal(AdvSolDef()), "", 0, 3));
 			}
 			float best = -1.f;
 			float v = EnergyValuePerMetal(wind);

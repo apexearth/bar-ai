@@ -455,6 +455,15 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				{
 					const bool outstanding = aiBuilderMgr.GetTaskCountOf(
 							int(Task::BuildType::FACTORY)) > 0;
+					// Joining means building the def that was ASKED. Passing
+					// this unit's own pick to Take() when the standing request
+					// is a different def creates a second plant (watched
+					// 2026-08-21: "joining" armlab built an armvp beside it).
+					if (outstanding) {
+						CCircuitDef@ liveDef = Requests::LiveFactoryDef();
+						if (liveDef !is null)
+							@lab = liveDef;
+					}
 					if (outstanding || Factory::PlantApproved(lab)) {
 						IUnitTask@ rebuild = Requests::Take(unit, lab,
 								Task::BuildType::FACTORY, Task::Priority::HIGH,

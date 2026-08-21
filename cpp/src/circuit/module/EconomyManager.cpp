@@ -1052,6 +1052,67 @@ IBuilderTask* CEconomyManager::EnqueueMexAt(CCircuitUnit* unit, int spotId)
 			IBuilderTask::Priority::HIGH, mexDef, pos, spotId));
 }
 
+// apex: the position of a geo spot by id, across the init-parsed shared list
+// and this instance's late discoveries.
+const AIFloat3& CEconomyManager::GeoSpotPos(int spotId) const
+{
+	const CEnergyData::Geos& geos = circuit->GetEnergyManager()->GetSpots();
+	return ((size_t)spotId < geos.size()) ? geos[spotId]
+			: lateGeoSpots[spotId - geos.size()];
+}
+
+// apex: re-scan for vents the init parse could not see. GetFeatures() is
+// LOS-limited, and ParseGeoSpots runs once at AI birth -- before scouting --
+// so vents outside the start area never existed as spots. Appends only; the
+// shared CEnergyData stays untouched (other instances read it concurrently).
+void CEconomyManager::RescanGeoSpots()
+{
+	const int frame = circuit->GetLastFrame();
+	if (frame < nextGeoRescan) {
+		return;
+	}
+	nextGeoRescan = frame + FRAMES_PER_SEC * 120;
+	CCircuitDef* geoDef = GetSideInfo().geoDef;
+	if (geoDef == nullptr) {
+		return;
+	}
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	const unsigned width = circuit->GetMap()->GetWidth();
+	const unsigned height = circuit->GetMap()->GetHeight();
+	const int xsize = geoDef->GetDef()->GetXSize();
+	const int zsize = geoDef->GetDef()->GetZSize();
+	std::vector<Feature*> features = circuit->GetCallback()->GetFeatures();
+	for (Feature* feature : features) {
+		FeatureDef* featDef = feature->GetDef();
+		const bool isGeo = featDef->IsGeoThermal();
+		delete featDef;
+		if (!isGeo) {
+			continue;
+		}
+		AIFloat3 pos = feature->GetPosition();
+		const unsigned x1 = int(pos.x) / SQUARE_SIZE - (xsize / 2), x2 = x1 + xsize;
+		const unsigned z1 = int(pos.z) / SQUARE_SIZE - (zsize / 2), z2 = z1 + zsize;
+		if (!((x1 < x2) && (x2 < width) && (z1 < z2) && (z2 < height))
+			|| !terrainMgr->CanBeBuiltAt(geoDef, pos))
+		{
+			continue;
+		}
+		bool known = false;
+		const CEnergyData::Geos& geos = circuit->GetEnergyManager()->GetSpots();
+		for (const AIFloat3& p : geos) {
+			if (utils::is_equal_pos(p, pos)) { known = true; break; }
+		}
+		for (size_t i = 0; !known && (i < lateGeoSpots.size()); ++i) {
+			if (utils::is_equal_pos(lateGeoSpots[i], pos)) { known = true; }
+		}
+		if (!known) {
+			lateGeoSpots.push_back(pos);
+			geoSpots.push_back({true, false});
+		}
+	}
+	utils::free_clear(features);
+}
+
 // apex: geo spot queries a script can call safely, mirroring the mex trio
 // above. Deliberately no IsZoneAlly exclusion -- a geo vent at home is a
 // normal HomeEnergy candidate, not a frontier-only reroute.
@@ -1060,6 +1121,7 @@ int CEconomyManager::FindOpenGeoSpot(CCircuitUnit* unit, const AIFloat3& pos)
 	if (unit == nullptr) {
 		return -1;
 	}
+	RescanGeoSpots();
 	const int frame = circuit->GetLastFrame();
 	std::vector<CCircuitDef*> geoCands;
 	for (CCircuitDef* gDef : geoDefs.GetBuildDefs(unit->GetCircuitDef())) {
@@ -1077,14 +1139,13 @@ int CEconomyManager::FindOpenGeoSpot(CCircuitUnit* unit, const AIFloat3& pos)
 
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CMap* map = circuit->GetMap();
-	const CEnergyData::Geos& geos = circuit->GetEnergyManager()->GetSpots();
 	float minDistSq = std::numeric_limits<float>::max();
 	int index = -1;
 	for (unsigned i = 0; i < geoSpots.size(); ++i) {
 		if (!IsOpenGeoSpot(i)) {
 			continue;
 		}
-		const AIFloat3& p = geos[i];
+		const AIFloat3& p = GeoSpotPos(i);
 		const float distSq = p.SqDistance2D(pos);
 		if (minDistSq <= distSq) {
 			continue;
@@ -1116,7 +1177,7 @@ IBuilderTask* CEconomyManager::EnqueueGeoAt(CCircuitUnit* unit, int spotId)
 	if ((unit == nullptr) || !IsValidGeoSpot(spotId) || !IsOpenGeoSpot(spotId)) {
 		return nullptr;
 	}
-	const AIFloat3& pos = circuit->GetEnergyManager()->GetSpots()[spotId];
+	const AIFloat3& pos = GeoSpotPos(spotId);
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CMap* map = circuit->GetMap();
 	const int frame = circuit->GetLastFrame();
@@ -1795,14 +1856,14 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CMap* map = circuit->GetMap();
 	CCircuitDef* geoDef = geoDefs.GetFirstDef();
-	const CEnergyData::Geos& geos = circuit->GetEnergyManager()->GetSpots();
 	float minDistSq = std::numeric_limits<float>::max();
 	int index = -1;
 	for (unsigned i = 0; i < geoSpots.size(); ++i) {
-		const float distSq = geos[i].SqDistance2D(position);
+		const AIFloat3& gp = GeoSpotPos(i);
+		const float distSq = gp.SqDistance2D(position);
 		if (IsOpenGeoSpot(i) && (minDistSq > distSq)
-			&& !terrainMgr->IsZoneAlly(geos[i]) && terrainMgr->CanBeBuiltAtSafe(geoDef, geos[i])
-			&& map->IsPossibleToBuildAt(geoDef->GetDef(), geos[i], UNIT_NO_FACING))  // lazy check for allies
+			&& !terrainMgr->IsZoneAlly(gp) && terrainMgr->CanBeBuiltAtSafe(geoDef, gp)
+			&& map->IsPossibleToBuildAt(geoDef->GetDef(), gp, UNIT_NO_FACING))  // lazy check for allies
 		{
 			minDistSq = distSq;
 			index = i;
@@ -1818,7 +1879,7 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
 	const float maxCostM = metalIncome * builderMgr->GetGoalExecTime();
 	const float maxCostE = energyIncome * builderMgr->GetGoalExecTime();
 
-	const AIFloat3& pos = geos[index];
+	const AIFloat3& pos = GeoSpotPos(index);
 	const int frame = circuit->GetLastFrame();
 	geoDef = geoDefs.GetBestDef([frame, terrainMgr, &pos, maxCostM, maxCostE](CCircuitDef* cdef, const SGeoExt& data) {
 		return cdef->IsAvailable(frame) && (cdef->GetCostM() < maxCostM) && (cdef->GetCostE() < maxCostE)
