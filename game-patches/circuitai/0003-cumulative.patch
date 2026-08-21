@@ -6388,7 +6388,7 @@ index c3f5e98..e02338a 100644
  		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..29ce97f 100644
+index cd063e4..aeea8de 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -7204,7 +7204,7 @@ index cd063e4..29ce97f 100644
  			continue;
  		}
  
-@@ -319,18 +944,172 @@ void CAttackTask::FindTarget()
+@@ -319,18 +944,198 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -7320,8 +7320,34 @@ index cd063e4..29ce97f 100644
 +			}
 +
 +			const float nearMargin = (enemy == prevTarget) ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
++			// apex: count the allies beside us in the strongest refusal too --
++			// the fragment-vs-everything test is the structural trickle (see
++			// the squadOverwhelms note in SquadTask.cpp). Sum our other
++			// ATTACK/DEFEND squads standing near the TARGET, the mirror of the
++			// enemy-side localInfl loop above.
++			float allyPower = maxPower;
++			if (circuit->GetTunable("apex_ally_aggregate", 1.f) > 0.f) {
++				CMilitaryManager* mmA = static_cast<CMilitaryManager*>(manager);
++				for (IFighterTask::FightType ftA : {IFighterTask::FightType::ATTACK,
++				                                    IFighterTask::FightType::DEFEND}) {
++					for (IFighterTask* otherA : mmA->GetTasks(ftA)) {
++						if (otherA == static_cast<IFighterTask*>(this)) {
++							continue;
++						}
++						ISquadTask* stA = static_cast<ISquadTask*>(otherA);
++						CCircuitUnit* olA = stA->GetLeader();
++						if ((olA == nullptr)
++							|| (olA->GetPos(circuit->GetLastFrame())
++								.SqDistance2D(ePos) > SQUARE(NEARBY_ENEMY_DIST)))
++						{
++							continue;
++						}
++						allyPower += otherA->GetAttackPower();
++					}
++				}
++			}
 +			if (!isJuggernaut && !isDive
-+				&& (localInfl > .0f) && (maxPower < localInfl * nearMargin) && !isHome) {
++				&& (localInfl > .0f) && (allyPower < localInfl * nearMargin) && !isHome) {
 +				++skippedWeak;
 +				// The strongest refusal: near 1.0 means one merge or a small
 +				// margin change would have taken it; near 0.2 means hopeless.
@@ -7378,7 +7404,7 @@ index cd063e4..29ce97f 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -340,6 +1119,40 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +1145,40 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -7419,7 +7445,7 @@ index cd063e4..29ce97f 100644
  		ActivePath(lowestSpeed);
  	} else {
  		FallbackFrontPos();
-@@ -349,7 +1162,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -349,7 +1188,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -7454,7 +7480,7 @@ index cd063e4..29ce97f 100644
  	if (urgentPositions.empty()) {
  		FallbackBasePos();
  		return;
-@@ -387,8 +1226,26 @@ void CAttackTask::FallbackBasePos()
+@@ -387,8 +1252,26 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -7482,7 +7508,7 @@ index cd063e4..29ce97f 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -421,7 +1278,9 @@ void CAttackTask::Fallback()
+@@ -421,7 +1304,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -8966,7 +8992,7 @@ index b4b43c1..d2e258e 100644
  		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..7da4024 100644
+index 0d59b65..326c6c2 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,22 @@
@@ -9329,7 +9355,7 @@ index 0d59b65..7da4024 100644
  	for (CCircuitUnit* unit : validUnits) {
  		const float sqDist = groupPos.SqDistance2D(unit->GetLastPos());
  		if (sqDist > sqMaxDist) {
-@@ -332,11 +557,78 @@ bool ISquadTask::IsMustRegroup()
+@@ -332,9 +557,76 @@ bool ISquadTask::IsMustRegroup()
  
  void ISquadTask::ActivePath(float speed)
  {
@@ -9374,8 +9400,7 @@ index 0d59b65..7da4024 100644
 +	const float scale = (span > cap) ? (cap / span) : 1.f;
 +	const float half = span * scale * 0.5f;
 +	int i = 0;
- 	for (CCircuitUnit* unit : units) {
--		unit->GetTravelAct()->SetPath(pPath, speed);
++	for (CCircuitUnit* unit : units) {
 +		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
 +			unit->GetTravelAct()->SetPath(pPath, speed);
 +		}
@@ -9383,14 +9408,15 @@ index 0d59b65..7da4024 100644
 +			unit->GetTravelAct()->SetLateral((n > 1) ? (offset[i] * scale - half) : 0.f);
 +		}
 +		++i;
- 	}
- }
- 
++	}
++}
++
 +float ISquadTask::GetHealthScale() const
 +{
 +	float total = .0f;
 +	float alive = .0f;
-+	for (CCircuitUnit* unit : units) {
+ 	for (CCircuitUnit* unit : units) {
+-		unit->GetTravelAct()->SetPath(pPath, speed);
 +		const float power = unit->GetCircuitDef()->GetPower();
 +		total += power;
 +		// apexearth: "A retreating unit should have 0 power. It is no longer
@@ -9402,13 +9428,11 @@ index 0d59b65..7da4024 100644
 +		float hp = unit->GetHealthPercent();
 +		hp = std::max(.0f, std::min(1.f, hp));  // capture progress drives it negative
 +		alive += power * hp;
-+	}
+ 	}
 +	return (total > .0f) ? (alive / total) : 1.f;
-+}
-+
+ }
+ 
  NSMicroPather::HitFunc ISquadTask::GetHitTest() const
- {
- 	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
 @@ -390,9 +682,22 @@ void ISquadTask::Attack(const int frame)
  void ISquadTask::Attack(const int frame, const bool isGround)
  {
@@ -9444,7 +9468,7 @@ index 0d59b65..7da4024 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -418,50 +725,468 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -418,50 +725,498 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -9487,7 +9511,37 @@ index 0d59b65..7da4024 100644
 +	if ((atkDef != nullptr) && !atkDef->IsMobile() && (leader != nullptr)) {
 +		const float localThreat = manager->GetCircuit()->GetThreatMap()
 +				->GetThreatAt(leader, GetTarget()->GetPos());
-+		squadOverwhelms = squadPowerSum > std::max(localThreat, atkDef->GetPower())
++		// apex: the squad counts the ALLIES STANDING BESIDE IT, not just
++		// itself. Squads average ~3 units, and each fragment testing its own
++		// power against everything at the target is the structural trickle --
++		// on choke maps every fight funnels through one seam, so the
++		// fragmentation penalty is maximal there (Altair: kill/loss 0.31 vs
++		// 0.79 open-map, the campaign's terminal cause). Same aggregation
++		// pattern as the enemy-side group influence: our own ATTACK/DEFEND
++		// squads near this squad's leader fight as the force they jointly are.
++		float allyNear = squadPowerSum;
++		if (manager->GetCircuit()->GetTunable("apex_ally_aggregate", 1.f) > 0.f) {
++			const AIFloat3& lp = leader->GetPos(manager->GetCircuit()->GetLastFrame());
++			CMilitaryManager* mm = static_cast<CMilitaryManager*>(manager);
++			for (IFighterTask::FightType ft : {IFighterTask::FightType::ATTACK,
++			                                   IFighterTask::FightType::DEFEND}) {
++				for (IFighterTask* other : mm->GetTasks(ft)) {
++					if (other == static_cast<IFighterTask*>(this)) {
++						continue;
++					}
++					ISquadTask* st = static_cast<ISquadTask*>(other);
++					CCircuitUnit* ol = st->GetLeader();
++					if ((ol == nullptr)
++						|| (ol->GetPos(manager->GetCircuit()->GetLastFrame())
++							.SqDistance2D(lp) > SQUARE(800.f)))
++					{
++						continue;
++					}
++					allyNear += other->GetAttackPower();
++				}
++			}
++		}
++		squadOverwhelms = allyNear > std::max(localThreat, atkDef->GetPower())
 +				* manager->GetCircuit()->GetTunable("apex_static_commit", POWER_DOMINANCE_RATIO);
 +	}
 +	const float avgSquadHealth = (squadUnitCount > 0) ? (squadHealthSum / squadUnitCount) : 1.f;
@@ -9922,7 +9976,7 @@ index 0d59b65..7da4024 100644
  				unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60);
  			}
  
-@@ -478,7 +1203,9 @@ void ISquadTask::Log()
+@@ -478,7 +1233,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,

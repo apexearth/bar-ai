@@ -19,6 +19,100 @@ on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
 
+## 2026-08-21: ALTAIR chapter 4 -- campaign conclusions after 13 hypotheses
+
+- 2v2 shares the signature exactly (0-12, trades 0.36): the weakness is the
+  map's combat regime, not scale. Solving 1v1 solves the ladder.
+- H13 arty retest (justified by new evidence: the wall named, hot-lane +
+  aggregation infrastructure in place): NULL AGAIN -- the 0.06/0.08 weights
+  field ONE Wolverine (170 metal); a counter-siege is a behavior, not a
+  ratio. Weights reverted; do not re-propose as a ratio nudge.
+CONCLUSIONS. Kept from the campaign: fence DEPTH, HOT-LANE fencing, ally
+AGGREGATION (all mechanism-true generally). Confirmed load-bearing by
+removal: the T2 safety veto, the coverage caution. The two REQUIRED BUILDS
+the evidence names: (1) TERRAIN-AWARE STANDOFF -- overlays-off was the best
+trade arm (0.45 vs 0.26-0.42), our flat-geometry standoff holds ground
+where the target is unhittable on ramp/ridge maps; (2) COUNTER-SIEGE -- the
+enemy creep wall advances monotonically and is never treated as a target
+class (needs massed arty behind our line, or committed wall-breaking).
+Neither is a knob. The watched-game request to apexearth stands.
+
+## 2026-08-21: ALTAIR chapter 3 -- the geometry named, the micro implicated, the wall stands
+
+SPATIAL RECONSTRUCTION (BARAI_POS, 3 losses, coordinates in the agent
+report): stock porc-creeps ONE lane at 150-250 elmos/min behind an
+LLT->Punisher/HLT/Maw wall (24 towers, fusions behind), reaching our base
+by ~26m; our deaths scatter across ALL THREE crossings; our 3-9 towers
+cluster in the NORTH CORNER (base-band axis artifact); 75% of our mobile
+metal died at home. The one near-draw had forward, spread towers.
+- H11 HOT-LANE FENCING (kept, brain.as): stretch selection ranks enemy
+  presence above least-covered -- towers mass on the pressed lane.
+  Geometry moved decisively (home-death share 75% -> 23%) -- W/L 0-11.
+  Containment broken, fights lost forward instead.
+- H12 combat overlays OFF (los_standoff, range_mod, fragility, withdraw):
+  kill/loss 0.45, BEST of any Altair arm (from 0.26-0.42) -- our micro
+  costs real trades on this terrain map -- but still under half, 2-8.
+INVARIANT after 12 hypotheses: the trade deficit vs stock's creep-wall
+composition survives every posture, budget, tech timing, geometry and
+micro configuration. The remaining axis is COMPOSITION vs the wall
+(their corgol+porc; our thud-mix has no answer that outranges it) and
+TERRAIN-AWARE standoff (stand only where the target is hittable) -- both
+are builds, not knobs. 2v2 baseline running (the team machinery may not
+share the 1v1 weakness). NEXT per house rule: a watched game -- twelve
+remote hypotheses is the point where his eyes beat the thirteenth.
+
+## 2026-08-21: ALTAIR CAMPAIGN chapter 2 -- knob-space exhausted, the failure is structural
+
+- H6 ally aggregation (C++, SquadTask squadOverwhelms + AttackTask
+  nearMargin): co-located ATTACK/DEFEND squads count as their joint force
+  (apex_ally_aggregate, default on). Trades climbed 0.26->0.38->0.42 across
+  the stack. KEPT (mechanism-true everywhere, not just Altair).
+- H7 tech-race posture (army share 1): REFUTED and revealing -- fusion metal
+  ZERO; the fusion pipeline is income-gated, not budget-driven, so freed
+  metal had nowhere to go.
+- H8 scarcity thresholds (fusion bar 12): STILL blocked -- the cascade roots
+  at the T2 ENERGY bar (400-800 e/s), unreachable at Altair's ~200-300;
+  measured income 14-17 m/s at minute 15 with `asked=0` and energy WASTING.
+- H9 energy gate off (+metal 10, fusion 10): the one strong arm -- 4 wins,
+  kill/loss 0.61, fusions exist. REPLICATE: 1-12, 0.26, fusions 0 -- the win
+  signal was noise; pooled H9-config 5-19/32.
+- H10 tech-safety veto off: REFUTED HARD (2-12, 0.28) -- the LosingGround/
+  BaseContested veto on the T2 commit is load-bearing; teching through
+  pressure collapses. apex_t2_safety stays default 1.
+Ten hypotheses: every mechanism metric improved (defence 0.38->0.62, trades
+0.26->0.42, depth exists, fusions possible), W/L never left the noise band.
+Conclusion: the Altair failure is STRUCTURAL/SPATIAL -- a geometry
+reconstruction from BARAI_POS snapshots is running (do we split lanes while
+stock masses one; does stock porc-creep the choke unanswered; are we
+contained). The threat-blind middle-lane pathing remains the standing
+unaddressed suspect.
+
+## 2026-08-21: THE ALTAIR CAMPAIGN (goal: 60%+), and 248 dead modoption knobs found
+
+Goal-driven hypothesis chain on the one map every fix bounced off (15%
+pooled, n=48). Map-paired discriminants (Altair vs Comet, same arms):
+conT1 6 vs 16.5, defence spend 0.35x stock, kill/loss 0.31 vs 0.79,
+commander idle 40%, tech 19m -- a constructor/defence famine loop.
+- H1 allowance gate 3x: REFUTED, 0-10, spend frozen 0.38 -- gate not binding.
+- H2 budget share 3x: REFUTED, 0-12, spend frozen again -- because...
+- H3 the model cannot buy DEPTH: found in source -- the fence want's value
+  is `uncovered * ...`, zero at full coverage, so both knobs were
+  structurally inert. Fix: coverage saturation converts the want to
+  THICKENING at the least-covered stretch (picker already prefers
+  chokepoints) valued by the UNSPENT defence share (apex_fence_depth 0.5)
+  -- the budget knob finally governs depth. First arm: first 2 Altair wins
+  of the campaign, +1000 defence metal, but orders still ~4/game -- capped
+  by the con famine itself (6 cons cannot issue more builds).
+- H5 (running): break the famine circle at the constructor floor
+  (apex_t1_core_min=10 + share 6 + depth).
+
+INFRASTRUCTURE: H5's first arm was INVALID -- apex_t1_core_min was not in
+dev_tunables.lua's NAMES list, the third silent-dead-modoption incident.
+Swept the whole class: 248 OF 462 GetTunable names were unpublished (every
+A/B that used one tested nothing). The gadget now carries all 462, synced
+mechanically from the actual GetTunable calls in script+cpp. Any past arm
+whose modoption is on the missing list is suspect.
+
 ## 2026-08-21: watched-game batch -- trees, the abandoned mex, the frozen commander
 
 Three live reports, one session:

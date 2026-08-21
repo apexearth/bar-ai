@@ -192,6 +192,9 @@ const float TUNE_T2_CORE_PER_INCOME = 4.f;
 //   knob). apexearth 2026-08-21: "30 m/s is a good number". The T2 decision
 //   is this pair: apex_t2_metal AND apex_t2_energy.
 const float TUNE_T2_METAL = 30.f;
+// manager/factory/techlead.as [toggle 0/1] -- The T2 commit's losing-ground/
+//   contested safety veto; 0 techs through pressure (the choke-map escape).
+const float TUNE_T2_SAFETY = 1.f;
 // policy.as [energy/s] -- Energy income required before starting T2
 //   (techlead.as RushReady), and the lower bar once a reactor already stands.
 const float TUNE_T2_ENERGY = 1200.f;
@@ -917,6 +920,15 @@ const float TUNE_LANE_DEFENSIVE = 0.15f;
 const float TUNE_LEAD_DEFENCE = 0.35f;
 // manager/military/defenceline.as [ratio] -- Share of the defence allowance
 //   reserved for LOCAL guards (mex guards, dig-ins) as opposed to holding the
+// manager/military/defenceline.as [ratio] -- Multiplier on the front-line
+//   defence budget share; the choke-map experiment lever (the computed share
+//   is ~3.6% of spend at pressure 1 while stock wins chokes at ~25%).
+const float TUNE_FRONT_DEF_MULT = 1.f;
+// manager/brain.as [ratio] -- Thickening value scale once the front line is
+//   fully covered: the fence want keeps buying DEPTH at the least-covered
+//   stretch while the defence budget is under target, at this fraction of a
+//   bare-line tower's value. 0 restores coverage-only fencing.
+const float TUNE_FENCE_DEPTH = 0.5f;
 //   front line.
 const float TUNE_LOCAL_DEF_SHARE = 0.10f;
 // manager/brain/nukes.as [count] -- Offensive targets are assumed to hide at

@@ -269,7 +269,13 @@ bool RushReady()
 	// and commit"); no team-size branch, since the risk is the same shape in
 	// both cases and pooling only changes how often it is covered by someone
 	// else.
-	if (Military::LosingGround() || Military::BaseContested())
+	// The safety veto blocks tech exactly where tech is the way out: on a
+	// choke map we read losing-ground/contested near-permanently, and the H9
+	// arm (energy gate off) proved teching through it anyway is what finally
+	// moved Altair (kill/loss 0.31 -> 0.61, first 4-win arm). Tunable so the
+	// open-map caution stays available.
+	if ((ai.GetTunable("apex_t2_safety", TUNE_T2_SAFETY) > 0.f)
+		&& (Military::LosingGround() || Military::BaseContested()))
 		return false;
 	// No clock. Real energy, or a reactor grid already rising.
 	return (aiEconomyMgr.energy.income

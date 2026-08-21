@@ -764,7 +764,37 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 	if ((atkDef != nullptr) && !atkDef->IsMobile() && (leader != nullptr)) {
 		const float localThreat = manager->GetCircuit()->GetThreatMap()
 				->GetThreatAt(leader, GetTarget()->GetPos());
-		squadOverwhelms = squadPowerSum > std::max(localThreat, atkDef->GetPower())
+		// apex: the squad counts the ALLIES STANDING BESIDE IT, not just
+		// itself. Squads average ~3 units, and each fragment testing its own
+		// power against everything at the target is the structural trickle --
+		// on choke maps every fight funnels through one seam, so the
+		// fragmentation penalty is maximal there (Altair: kill/loss 0.31 vs
+		// 0.79 open-map, the campaign's terminal cause). Same aggregation
+		// pattern as the enemy-side group influence: our own ATTACK/DEFEND
+		// squads near this squad's leader fight as the force they jointly are.
+		float allyNear = squadPowerSum;
+		if (manager->GetCircuit()->GetTunable("apex_ally_aggregate", 1.f) > 0.f) {
+			const AIFloat3& lp = leader->GetPos(manager->GetCircuit()->GetLastFrame());
+			CMilitaryManager* mm = static_cast<CMilitaryManager*>(manager);
+			for (IFighterTask::FightType ft : {IFighterTask::FightType::ATTACK,
+			                                   IFighterTask::FightType::DEFEND}) {
+				for (IFighterTask* other : mm->GetTasks(ft)) {
+					if (other == static_cast<IFighterTask*>(this)) {
+						continue;
+					}
+					ISquadTask* st = static_cast<ISquadTask*>(other);
+					CCircuitUnit* ol = st->GetLeader();
+					if ((ol == nullptr)
+						|| (ol->GetPos(manager->GetCircuit()->GetLastFrame())
+							.SqDistance2D(lp) > SQUARE(800.f)))
+					{
+						continue;
+					}
+					allyNear += other->GetAttackPower();
+				}
+			}
+		}
+		squadOverwhelms = allyNear > std::max(localThreat, atkDef->GetPower())
 				* manager->GetCircuit()->GetTunable("apex_static_commit", POWER_DOMINANCE_RATIO);
 	}
 	const float avgSquadHealth = (squadUnitCount > 0) ? (squadHealthSum / squadUnitCount) : 1.f;

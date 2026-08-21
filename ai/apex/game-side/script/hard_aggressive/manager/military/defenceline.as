@@ -577,8 +577,13 @@ bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 		const float teamSpend = TeamSum(TV_MSPEND, Brain::gSpentTotal);
 		if (teamSpend <= 1.f)
 			return true;   // nothing built yet: the share is undefined, not exceeded
+		// The whole front budget computes to ~3.6% of team spend at normal
+		// pressure -- stock WINS choke maps spending ~25% on defence while
+		// this gate refused 18/game there. The multiplier is the experiment
+		// lever for that hypothesis (Altair campaign 2026-08-21).
 		const float want = Brain::TargetShare(Brain::DEFENCE)
-				* pressureAllow * (fShare / total);
+				* pressureAllow * (fShare / total)
+				* ai.GetTunable("apex_front_def_mult", TUNE_FRONT_DEF_MULT);
 		return (teamFrontM / teamSpend) < want;
 	}
 	// Local work stays local: a mex guard defends OUR extractor with OUR metal.

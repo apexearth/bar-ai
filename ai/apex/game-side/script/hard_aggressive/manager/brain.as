@@ -904,6 +904,7 @@ Want@ FrontDefenceWantFresh(CCircuitUnit@ unit)
 	uint fewest = 0;
 	float bestDist = 0.f;
 	bool bestChoke = false;
+	AIFloat3 bestLinePos;
 	for (uint i = 0; i < line.length(); ++i) {
 		if (!OnMap(line[i]))
 			continue;
@@ -939,16 +940,25 @@ Want@ FrontDefenceWantFresh(CCircuitUnit@ unit)
 				choke = true;
 			}
 		}
-		// Least-covered stretch first -- cover spreads along the line before it
-		// thickens anywhere on it -- and the nearer of two equally bare stretches,
-		// so the walk is not the cost.
-		if (!have || (choke && !bestChoke)
-			|| ((choke == bestChoke)
-				&& ((cover < fewest) || ((cover == fewest) && (d < bestDist)))))
+		// THE ACTIVE LANE OUTRANKS EVERYTHING. "Least-covered first" spreads
+		// towers thinly across every crossing -- the exact splitting the
+		// Altair reconstruction measured (deaths in 4-8 lanes, 3 towers in
+		// the wrong corner, while stock creeps ONE lane with 24). A stretch
+		// the enemy is actually pressing (their influence on it) is where
+		// the wall goes; quiet stretches get covered only when no lane is
+		// hot. Chokes keep their edge within each class.
+		const bool hot = ai.GetEnemyInflAt(line[i]) > 0.5f;
+		const bool bestHot = have && (ai.GetEnemyInflAt(bestLinePos) > 0.5f);
+		if (!have || (hot && !bestHot)
+			|| ((hot == bestHot)
+				&& ((choke && !bestChoke)
+					|| ((choke == bestChoke)
+						&& ((cover < fewest) || ((cover == fewest) && (d < bestDist)))))))
 		{
 			fewest = cover;
 			bestDist = d;
 			best = spot;
+			bestLinePos = line[i];
 			bestChoke = choke;
 			have = true;
 		}
@@ -981,9 +991,30 @@ Want@ FrontDefenceWantFresh(CCircuitUnit@ unit)
 	const float uncovered = (line.length() > 0)
 			? (float(bare) / float(line.length())) : 0.f;
 
+	// DEPTH AT THE SEAM. A fully covered line zeroed this want by
+	// construction, so no budget could ever buy a second ring -- measured on
+	// the Altair campaign (2026-08-21): defence spend froze at 0.35x stock
+	// under a 3x allowance AND a 3x budget share, two nulls with the same
+	// signature, while stock wins the choke at ~25% defence spend BY depth.
+	// When coverage saturates and the DEFENCE budget is under its target,
+	// the want converts to THICKENING at the least-covered stretch (the
+	// picker above already prefers chokepoints), valued by the unspent
+	// share -- so apex_share_defence finally governs depth.
+	float density = uncovered;
+	if (density <= 0.01f) {
+		const float tgt = Brain::TargetShare(Brain::DEFENCE);
+		const float haveShare = Brain::ShareOf(Brain::DEFENCE);
+		if ((tgt > 0.01f) && (haveShare < tgt)) {
+			density = ((tgt - haveShare) / tgt)
+					* ai.GetTunable("apex_fence_depth", TUNE_FENCE_DEPTH);
+		}
+	}
+	if (density <= 0.001f)
+		return null;
+
 	Want@ w = Want();
 	w.kind = "fence";
-	w.value = FRONT_FENCE_VALUE * uncovered * DefenceValue(tower, best, span);
+	w.value = FRONT_FENCE_VALUE * density * DefenceValue(tower, best, span);
 	w.cost = tower.costM;
 	w.pos = best;
 	@w.def = tower;

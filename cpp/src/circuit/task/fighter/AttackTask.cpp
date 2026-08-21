@@ -1055,8 +1055,34 @@ void CAttackTask::FindTarget()
 			}
 
 			const float nearMargin = (enemy == prevTarget) ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
+			// apex: count the allies beside us in the strongest refusal too --
+			// the fragment-vs-everything test is the structural trickle (see
+			// the squadOverwhelms note in SquadTask.cpp). Sum our other
+			// ATTACK/DEFEND squads standing near the TARGET, the mirror of the
+			// enemy-side localInfl loop above.
+			float allyPower = maxPower;
+			if (circuit->GetTunable("apex_ally_aggregate", 1.f) > 0.f) {
+				CMilitaryManager* mmA = static_cast<CMilitaryManager*>(manager);
+				for (IFighterTask::FightType ftA : {IFighterTask::FightType::ATTACK,
+				                                    IFighterTask::FightType::DEFEND}) {
+					for (IFighterTask* otherA : mmA->GetTasks(ftA)) {
+						if (otherA == static_cast<IFighterTask*>(this)) {
+							continue;
+						}
+						ISquadTask* stA = static_cast<ISquadTask*>(otherA);
+						CCircuitUnit* olA = stA->GetLeader();
+						if ((olA == nullptr)
+							|| (olA->GetPos(circuit->GetLastFrame())
+								.SqDistance2D(ePos) > SQUARE(NEARBY_ENEMY_DIST)))
+						{
+							continue;
+						}
+						allyPower += otherA->GetAttackPower();
+					}
+				}
+			}
 			if (!isJuggernaut && !isDive
-				&& (localInfl > .0f) && (maxPower < localInfl * nearMargin) && !isHome) {
+				&& (localInfl > .0f) && (allyPower < localInfl * nearMargin) && !isHome) {
 				++skippedWeak;
 				// The strongest refusal: near 1.0 means one merge or a small
 				// margin change would have taken it; near 0.2 means hopeless.
