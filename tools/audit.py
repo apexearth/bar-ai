@@ -39,7 +39,7 @@ class Report:
 
     def show(self):
         flags = 0
-        for section in ("HEALTH", "ECONOMY", "MILITARY", "EFFICIENCY"):
+        for section in ("HEALTH", "ECONOMY", "MILITARY", "EFFICIENCY", "VS-ENEMY"):
             rows = [r for r in self.rows if r[0] == section]
             if not rows:
                 continue
@@ -298,7 +298,96 @@ def check_efficiency(text, rep):
                 f"{aimed[-1]} total orders")
 
 
-CHECKS = [check_health, check_economy, check_military, check_efficiency]
+def check_vs_enemy(text, rep):
+    """Structural asymmetries vs the enemy, from the both-team telemetry.
+
+    apexearth 2026-08-20: "This should be in some sort of audit check...
+    looking for generic issues in any of our game matches... Enemy T2 lab had
+    12 nanos supporting it. I don't think we had any." These checks compare
+    the two sides on the same footing, which no single-side check can."""
+    import math
+    # Which team is apex: BARAI lines carry team ids; apex's own log lines
+    # carry "t<local>" but the BARAI_* gadget lines are global. The apex team
+    # is the one whose infolog carries "Skirmish AI <Apex" lines -- take its
+    # id from the first "[<m>m t<N>]" apex line paired with BARAI_START order.
+    m = re.search(r"Skirmish AI <Apex[^>]*>: \[[\d.]+m t(\d+)\]", text)
+    my = int(m.group(1)) if m else 0
+    foe = 1 - my
+
+    # NANOS PER FACTORY, both sides, from the last BARAI_POS building snapshot
+    # per team (name:x:z:xsize:zsize). Factories and nanos by def-name pattern.
+    pos = {}
+    for tm, n, data in re.findall(r"\[BARAI_POS\] team=(\d+) ally=\d+ frame=\d+ n=(\d+) (\S+)", text):
+        pos[int(tm)] = data  # keep last
+    FACS = ("alab", "avp", "aap", "lab", "vp", "ap", "hp", "sy", "gant", "shltx")
+    def nano_density(team):
+        if team not in pos:
+            return None
+        facs, nanos = [], []
+        for tok in pos[team].split(","):
+            parts = tok.split(":")
+            if len(parts) < 3:
+                continue
+            name, x, z = parts[0], float(parts[1]), float(parts[2])
+            if "nanotc" in name:
+                nanos.append((x, z))
+            elif any(name.endswith(f) for f in FACS) and not name.endswith("solar"):
+                facs.append((x, z))
+        if not facs:
+            return None
+        best = 0
+        for fx, fz in facs:
+            n = sum(1 for nx, nz in nanos if (nx-fx)**2 + (nz-fz)**2 <= 400**2)
+            best = max(best, n)
+        return best, len(nanos), len(facs)
+    mine, theirs = nano_density(my), nano_density(foe)
+    if mine and theirs:
+        ok = mine[0] * 2 >= theirs[0]  # within 2x of their best-supported lab
+        rep.add("VS-ENEMY", ok, "nanos-at-best-factory",
+                f"ours {mine[0]} (of {mine[1]} total) vs theirs {theirs[0]} (of {theirs[1]})")
+
+    # RAIDS EXIST: census f4 field entries ever nonzero
+    census = len(re.findall(r"army-census", text))
+    f4 = re.findall(r"army-census.*?f4=(\d+)h/(\d+)f", text)
+    raided = any(int(x)+int(y) > 0 for x, y in f4)
+    # The census omits zero buckets, so NO f4 field across a real game IS the
+    # zero-raids case, not missing data.
+    rep.add("VS-ENEMY", raided or census < 10, "raids-exist",
+            "f4 tasks seen" if raided else "zero raid tasks all game")
+
+    # CON ATTRITION, both sides, from BARAI_DEATH (mobile builders ~ c[kav]/ca)
+    def con_deaths(team):
+        return len(re.findall(r"\[BARAI_DEATH\] frame=\d+ team=%d unit=(?:arm|cor|leg)(?:ck|cv|ca|ack|acv|aca) " % team, text))
+    cd_my, cd_foe = con_deaths(my), con_deaths(foe)
+    rep.add("VS-ENEMY", cd_my <= cd_foe + 5, "constructor-attrition",
+            f"ours {cd_my} vs theirs {cd_foe}")
+
+    # ENERGY RACE at ~10 minutes -- apexearth, watching Prismatic 2026-08-20:
+    # "By 10m in on prismatic we have less than half the energy the other
+    # team has." Flag when our cumulative energyProduced is under 60% of
+    # theirs at the sample nearest 10m.
+    eras = {}
+    for tm, fr, ep in re.findall(
+            r"\[BARAI_STATS\] team=(\d+).*?frame=(\d+).*?energyProduced=([\d.]+)", text):
+        t, f, e = int(tm), int(fr), float(ep)
+        if abs(f - 18000) < 1800:
+            eras[t] = e
+    if my in eras and foe in eras and eras[foe] > 0:
+        frac = eras[my] / eras[foe]
+        rep.add("VS-ENEMY", frac >= 0.6, "energy-race-10m",
+                f"ours {eras[my]:.0f} vs theirs {eras[foe]:.0f} ({frac:.0%})")
+
+    # MEX RACE at last paired sample
+    mex = re.findall(r"\[BARAI_STATS\] team=(\d+).*? mex=(\d+)", text)
+    last = {}
+    for tm, v in mex:
+        last[int(tm)] = int(v)
+    if my in last and foe in last:
+        rep.add("VS-ENEMY", last[my] * 1.5 >= last[foe], "mex-race",
+                f"ours {last[my]} vs theirs {last[foe]}")
+
+
+CHECKS = [check_health, check_economy, check_military, check_efficiency, check_vs_enemy]
 
 
 def main():

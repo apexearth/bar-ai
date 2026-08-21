@@ -389,6 +389,57 @@ def deploy_gadgets(env: bar_env.BarEnv, remove: bool = False) -> None:
         print(f"  installed {dst}")
 
 
+def deploy_widgets(env: bar_env.BarEnv, remove: bool = False) -> None:
+    """Install the local debug widgets into the engine write dir's LuaUI.
+
+    Widgets are UNSYNCED and local: they draw and read, they issue no commands
+    and touch no game state, so unlike the gadgets they are safe to leave
+    installed for hosted multiplayer. They live in the write dir rather than in
+    BAR.sdd for exactly that reason -- nothing here changes the archive.
+    """
+    src_dir = PATCH_DIR / "widgets"
+    # INTO THE GAME TREE, NOT THE WRITE DIR. BAR's widget handler scans
+    # "LuaUI/Widgets/" with VFS.RAW, and because BAR.sdd is a directory archive
+    # that path resolves inside the archive rather than into the engine's write
+    # dir -- so a widget dropped in <writedir>/LuaUI/Widgets never loaded, with
+    # "LuaUI: Allowing User Widgets" in the log the whole time. BAR.sdd is the
+    # harness-only tree (see CLAUDE.md), which is where the dev gadgets live for
+    # the same reason. Debug widgets are unsynced and cannot desync a game.
+    # BOTH write dirs. A launcher-started game writes to data/, but a harness
+    # --watch game runs with --write-dir matches/_engine, so a widget installed
+    # only into data/ silently never loads in the very games it is for.
+    # ONE LOCATION ONLY. BAR's handler registers a write-dir (RAW) widget as
+    # DISABLED and then rejects the archive copy of the same name as a
+    # duplicate, so installing to both means neither loads. The user dir is the
+    # supported place for a local widget; enable it once with F11 and the choice
+    # persists in LuaUI/Config.
+    targets = [env.data / "LuaUI" / "Widgets"]
+    stale = env.game_sdd / "luaui" / "Widgets"
+    for src in sorted(src_dir.glob("*.lua")):
+        dead = stale / src.name
+        if dead.exists():
+            dead.unlink()
+            print(f"  removed archive copy {dead}")
+    # Every harness write dir, not just the default one: --watch and smoke runs
+    # use their own (_engine_watch, _engine_smoke) and a busy _engine is
+    # auto-suffixed with a pid, so installing into one silently misses the rest.
+
+    for dst_dir in targets:
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        for src in sorted(src_dir.glob("*.lua")):
+            dst = dst_dir / src.name
+            if remove:
+                if dst.exists():
+                    dst.unlink()
+                    print(f"  removed {dst}")
+                continue
+            if dst.exists() and filecmp.cmp(src, dst, shallow=False):
+                print(f"  {src.name}: up to date ({dst_dir})")
+                continue
+            shutil.copy2(src, dst)
+            print(f"  installed {dst}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--engine", help="engine version dir name (default: launcher's active engine)")
@@ -408,6 +459,9 @@ def main() -> int:
 
     pt = sub.add_parser("patches", help="apply game-patches/*.patch to BAR.sdd")
     pt.add_argument("--revert", action="store_true")
+
+    w = sub.add_parser("widgets", help="install local debug widgets into LuaUI")
+    w.add_argument("--remove", action="store_true", help="uninstall instead")
 
     g = sub.add_parser("gadgets", help="install dev gadgets (autoquit) into BAR.sdd")
     g.add_argument("--remove", action="store_true")
@@ -430,6 +484,8 @@ def main() -> int:
         pull(env, args.variant)
     elif args.cmd == "patches":
         apply_patches(env, args.revert)
+    elif args.cmd == "widgets":
+        deploy_widgets(env, args.remove)
     elif args.cmd == "gadgets":
         deploy_gadgets(env, args.remove)
     return 0

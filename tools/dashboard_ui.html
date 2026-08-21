@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bar-ai dashboard</title>
+<style>
+  :root {
+    --bg:#101418; --panel:#181e25; --panel2:#1f2731; --line:#2c3642;
+    --text:#d8dee6; --dim:#8a96a3; --accent:#4fa3e3; --good:#5fbf77;
+    --bad:#e06c6c; --warn:#d9a441; --mono:Consolas,'Cascadia Mono',monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:14px/1.45 'Segoe UI',system-ui,sans-serif; }
+  header { display:flex; align-items:center; gap:16px; padding:10px 18px;
+           background:var(--panel); border-bottom:1px solid var(--line);
+           position:sticky; top:0; z-index:5; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  header h1 span { color:var(--accent); }
+  nav { display:flex; gap:4px; }
+  nav button { background:none; border:none; color:var(--dim); padding:8px 14px;
+               font:inherit; cursor:pointer; border-radius:6px; }
+  nav button.on { background:var(--panel2); color:var(--text); }
+  #procwarn { margin-left:auto; font-size:12px; color:var(--warn); }
+  main { padding:16px 18px; max-width:1250px; margin:0 auto; }
+  .tab { display:none; } .tab.on { display:block; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; }
+  .card { background:var(--panel); border:1px solid var(--line);
+          border-radius:8px; padding:14px; margin-bottom:14px; }
+  .card h2 { margin:0 0 10px; font-size:14px; color:var(--dim);
+             text-transform:uppercase; letter-spacing:.05em; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:5px 10px;
+       border-bottom:1px solid var(--line); white-space:nowrap; }
+  td { padding:5px 10px; border-bottom:1px solid #232b35; vertical-align:top; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:var(--panel2); }
+  .win  { color:var(--good); font-weight:600; }
+  .loss { color:var(--bad); }
+  .dim  { color:var(--dim); }
+  .mono { font-family:var(--mono); font-size:12px; }
+  pre { background:#0c1014; border:1px solid var(--line); border-radius:6px;
+        padding:10px; overflow:auto; font:12px/1.4 var(--mono);
+        white-space:pre-wrap; max-height:480px; }
+  button.act { background:var(--panel2); border:1px solid var(--line);
+               color:var(--text); padding:6px 14px; border-radius:6px;
+               font:inherit; cursor:pointer; }
+  button.act:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent);
+                   color:#0b1016; font-weight:600; }
+  button.danger { color:var(--bad); }
+  input, select, textarea {
+    background:#0c1014; border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:6px 9px; font:inherit; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); }
+  label.f { display:flex; flex-direction:column; gap:3px; font-size:12px;
+            color:var(--dim); }
+  .badge { display:inline-block; padding:1px 8px; border-radius:10px;
+           font-size:11px; background:var(--panel2); color:var(--dim); }
+  .badge.bad { color:var(--bad); } .badge.good { color:var(--good); }
+  .badge.warn { color:var(--warn); }
+  #toast { position:fixed; bottom:18px; right:18px; background:var(--panel2);
+           border:1px solid var(--line); border-radius:8px; padding:10px 16px;
+           display:none; max-width:420px; z-index:20; }
+  canvas { background:#0c1014; border:1px solid var(--line); border-radius:6px; }
+  .legend { display:flex; gap:16px; font-size:12px; margin:6px 0; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px;
+              margin-right:5px; }
+  #gameback { margin-bottom:10px; }
+  .tunerow td input { width:140px; }
+  #constfilter { width:280px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>bar-ai <span>dashboard</span></h1>
+  <nav id="nav">
+    <button data-tab="games" class="on">Games</button>
+    <button data-tab="launch">Launch</button>
+    <button data-tab="deploy">Deploy</button>
+    <button data-tab="tunables">Tunables</button>
+  </nav>
+  <div id="procwarn"></div>
+</header>
+<main>
+
+<!-- ================= GAMES ================= -->
+<section id="tab-games" class="tab on">
+  <div id="gamelist">
+    <div class="card">
+      <nav id="gamesnav" style="display:inline-flex">
+        <button data-kind="matches" class="on">Matches</button>
+        <button data-kind="tournaments">Tournaments</button>
+      </nav>
+      <button class="act" style="float:right" onclick="loadGames()">Refresh</button>
+      <div id="pane-matches" style="margin-top:10px">
+        <table id="matchtable"><thead><tr>
+          <th>When</th><th>Map</th><th>Matchup</th><th>Winner</th><th>Len</th><th></th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+      <div id="pane-tournaments" style="margin-top:10px;display:none">
+        <table id="tourntable"><thead><tr>
+          <th>When</th><th>Name</th><th>Map</th><th>Games</th><th>Score</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+  <div id="gamedetail" style="display:none">
+    <button class="act" id="gameback" onclick="showList()">&larr; back to list</button>
+    <div id="gamedetailbody"></div>
+  </div>
+</section>
+
+<!-- ================= LAUNCH ================= -->
+<section id="tab-launch" class="tab">
+  <div class="card">
+    <h2>Launch a game</h2>
+    <div class="row" style="align-items:flex-end">
+      <label class="f">Mode
+        <select id="l-mode">
+          <option value="watch">Watch (windowed, real time)</option>
+          <option value="headless">Headless (fast, telemetry)</option>
+          <option value="tournament">Tournament (batch)</option>
+        </select></label>
+      <label class="f">Side A <input id="l-a" list="speclist" size="28" value="Apex:apex:hard_aggressive"></label>
+      <label class="f">Side B <input id="l-b" list="speclist" size="22" value="BARb:stable:hard"></label>
+      <label class="f">Map <input id="l-map" list="maplist" size="26" placeholder="display name or substring"></label>
+      <label class="f">Per side <select id="l-perside"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>8</option></select></label>
+      <label class="f">Minutes <input id="l-min" type="number" value="40" style="width:70px"></label>
+      <label class="f">Speed (watch) <input id="l-speed" type="number" value="5" style="width:60px"></label>
+      <label class="f">Seed <input id="l-seed" type="number" placeholder="random" style="width:80px"></label>
+      <label class="f" id="l-gameswrap" style="display:none">Games <input id="l-games" type="number" value="6" style="width:60px"></label>
+      <label class="f">Modoptions <input id="l-modopt" size="24" placeholder="apex_x=1 apex_y=0.5" title="space-separated k=v"></label>
+      <button class="act primary" onclick="launch()">Launch</button>
+    </div>
+    <datalist id="maplist"></datalist>
+    <datalist id="speclist"></datalist>
+    <div class="dim" style="margin-top:8px;font-size:12px">
+      Watch opens a real game window at the chosen speed. Headless runs as fast as
+      the machine allows and lands in <span class="mono">matches/</span>.
+      Tournaments land in <span class="mono">tournaments/</span> and side-swap automatically.
+    </div>
+  </div>
+  <div class="card">
+    <h2>Jobs <button class="act" style="float:right" onclick="loadJobs()">Refresh</button></h2>
+    <div id="jobs" class="dim">no jobs yet</div>
+  </div>
+</section>
+
+<!-- ================= DEPLOY ================= -->
+<section id="tab-deploy" class="tab">
+  <div class="card">
+    <h2>Deploy pipeline</h2>
+    <div class="row">
+      <button class="act" onclick="action('status')">Status (what is live?)</button>
+      <button class="act" onclick="action('check')">Pre-flight check</button>
+      <button class="act primary" onclick="action('deploy')">Deploy apex &rarr; game</button>
+      <button class="act" onclick="action('pull')">Pull (live &rarr; repo)</button>
+      <button class="act" onclick="action('gadgets')">Install dev gadgets</button>
+    </div>
+    <div class="dim" style="margin-top:8px;font-size:12px">
+      Deploy is blocked while BAR or spring is running — a live game holds the DLL
+      and a deploy then leaves the AI folder half-written.</div>
+    <pre id="deployout" style="margin-top:12px">ready</pre>
+  </div>
+</section>
+
+<!-- ================= TUNABLES ================= -->
+<section id="tab-tunables" class="tab">
+  <div class="dim" style="font-size:12px;margin-bottom:10px">
+    Every default the AI ships with, straight from
+    <span class="mono">tunables.as</span> and <span class="mono">targets.as</span>.
+    Edits write into those files; hit <b>Deploy</b> when done — the game runs the
+    deployed copy, not this repo.
+  </div>
+  <div style="display:flex;gap:16px;align-items:flex-start">
+    <div class="card" style="min-width:230px;position:sticky;top:64px">
+      <input id="tunesearch" placeholder="search all knobs…"
+             style="width:100%;margin-bottom:10px" oninput="renderTunables()">
+      <div id="tunecats"></div>
+    </div>
+    <div id="tunebody" style="flex:1;min-width:0"></div>
+  </div>
+</section>
+</main>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const api = async (path, body) => {
+  const r = await fetch(path, body ? {method:"POST", body:JSON.stringify(body),
+    headers:{"Content-Type":"application/json"}} : undefined);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+};
+function toast(msg, bad) {
+  const t = $("#toast");
+  t.textContent = msg; t.style.display = "block";
+  t.style.borderColor = bad ? "var(--bad)" : "var(--good)";
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 4000);
+}
+const fmtWhen = name => {
+  const m = name.match(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})/);
+  return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : name.slice(0, 13);
+};
+
+/* ---------- tabs ---------- */
+$("#nav").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".tab").forEach(x =>
+    x.classList.toggle("on", x.id === "tab-" + b.dataset.tab));
+  if (b.dataset.tab === "games") loadGames();
+  if (b.dataset.tab === "launch") { loadLaunchMeta(); loadJobs(); }
+  if (b.dataset.tab === "tunables") loadTunables();
+});
+
+/* ---------- games ---------- */
+$("#gamesnav").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll("#gamesnav button").forEach(x =>
+    x.classList.toggle("on", x === b));
+  $("#pane-matches").style.display = b.dataset.kind === "matches" ? "" : "none";
+  $("#pane-tournaments").style.display = b.dataset.kind === "tournaments" ? "" : "none";
+});
+function showList() {
+  $("#gamelist").style.display = ""; $("#gamedetail").style.display = "none";
+  clearTimeout(openTimer); openDir = null;
+}
+async function loadGames() {
+  const [ms, ts] = await Promise.all([api("/api/games?kind=matches"),
+                                      api("/api/games?kind=tournaments")]);
+  $("#tourntable tbody").innerHTML = ts.map(t => {
+    const score = Object.entries(t.wins || {})
+      .map(([k, v]) => `${esc(k.split(":")[0].split("-")[0])} ${v}`).join(" — ") || "—";
+    return `<tr class="click" data-dir="${esc(t.dir)}">
+      <td class="dim">${fmtWhen(t.name)}</td>
+      <td>${esc(t.name.replace(/^\d{8}-\d{6}-/, ""))}</td>
+      <td class="dim">${esc((t.maps || []).join(", "))}</td>
+      <td>${t.done}/${t.planned || t.games}</td><td>${score}</td></tr>`;
+  }).join("") || `<tr><td class="dim" colspan="5">none</td></tr>`;
+  $("#matchtable tbody").innerHTML = ms.map(m => {
+    if (m.running) return `<tr class="click" data-dir="${esc(m.dir)}">
+      <td class="dim">${fmtWhen(m.name)}</td>
+      <td colspan="4"><span class="badge warn">in progress / no result yet</span></td><td></td></tr>`;
+    const winner = (m.winner_specs || [])[0];
+    const apexWon = winner && /^Apex/.test(winner);
+    const flags = (m.crashed ? ' <span class="badge bad">crashed</span>' : "")
+      + (m.valid === false ? ' <span class="badge bad">invalid</span>' : "");
+    return `<tr class="click" data-dir="${esc(m.dir)}">
+      <td class="dim">${fmtWhen(m.name)}</td>
+      <td>${esc(m.map || "?")}</td>
+      <td class="dim">${esc((m.specs || []).join(" vs "))}</td>
+      <td class="${apexWon ? "win" : winner ? "loss" : "dim"}">${esc(winner || m.reason || "—")}${flags}</td>
+      <td class="dim">${m.minutes ? m.minutes.toFixed(0) + "m" : ""}</td><td></td></tr>`;
+  }).join("") || `<tr><td class="dim" colspan="6">none</td></tr>`;
+}
+document.addEventListener("click", e => {
+  const tr = e.target.closest("tr.click[data-dir]");
+  if (tr) openGame(tr.dataset.dir);
+});
+let openDir = null, openTimer = null;
+async function openGame(dir) {
+  openDir = dir; clearTimeout(openTimer);
+  $("#gamelist").style.display = "none"; $("#gamedetail").style.display = "";
+  $("#gamedetailbody").innerHTML = `<div class="card">loading ${esc(dir)}…</div>`;
+  try {
+    const d = await api("/api/game?dir=" + encodeURIComponent(dir));
+    if (openDir !== dir) return;
+    $("#gamedetailbody").innerHTML = d.matches ? renderTournament(d) : renderMatch(d);
+    if (!d.matches && d.chart) drawCharts(d);
+    // still running (single match) or partially done (tournament): keep refreshing
+    const unfinished = d.running || (d.matches && d.done < (d.planned || d.games));
+    if (unfinished) openTimer = setTimeout(() => {
+      if (openDir === dir && $("#gamedetail").style.display !== "none") openGame(dir);
+    }, 5000);
+  } catch (err) {
+    $("#gamedetailbody").innerHTML = `<div class="card">${esc(err.message)}</div>`;
+  }
+}
+const TOOL_BTNS = (dir, isTourn) => {
+  const tools = isTourn ? ["review", "composition", "tl", "scaling"]
+                        : ["review", "fight1v1", "tl", "trace_flow", "deaths"];
+  return tools.map(t =>
+    `<button class="act" onclick="runTool('${esc(dir)}','${t}')">${t}</button>`).join(" ");
+};
+function renderTournament(d) {
+  const score = Object.entries(d.wins || {}).map(([k, v]) =>
+    `<b>${esc(k)}</b>: ${v}`).join(" &nbsp; ");
+  return `<div class="card"><h2>${esc(d.name)}</h2>
+    <div>${esc((d.ais || []).join(" vs "))} on ${esc((d.maps || []).join(", "))}
+      &nbsp; <span class="dim">${d.done}/${d.planned || d.games} done, per-side ${d.per_side || 1}</span></div>
+    <div style="margin:8px 0">${score || "no results yet"}</div>
+    <div class="row">${TOOL_BTNS(d.dir, true)}</div>
+    <pre id="toolout" style="display:none"></pre></div>
+    <div class="card"><h2>Games</h2>
+    <table><thead><tr><th>Game</th><th>Map</th><th>Winner</th><th>Len</th></tr></thead><tbody>
+    ${(d.matches || []).map(m => `<tr class="click" data-dir="${esc(m.dir)}">
+      <td>${esc(m.name.split("-")[0])}</td><td class="dim">${esc(m.map || "")}</td>
+      <td class="${/^Apex/.test((m.winner_specs||[])[0]||"") ? "win" : "loss"}">${esc((m.winner_specs||[])[0] || m.reason || "…")}</td>
+      <td class="dim">${m.minutes ? m.minutes.toFixed(0) + "m" : ""}</td></tr>`).join("")}
+    </tbody></table></div>`;
+}
+function renderMatch(d) {
+  if (d.running) return `<div class="card"><h2>${esc(d.dir)}</h2>
+    <span class="badge warn">match in progress — result and telemetry land at game end</span>
+    <div class="dim" style="margin-top:8px;font-size:12px">This page refreshes
+    itself every 5s. (Mid-game the infolog lives in the engine dir, not here —
+    there is nothing valid to read until the game ends.)</div></div>`;
+  const r = d.result, res = r.result || {};
+  const h = d.health || {};
+  const healthBits = [];
+  if (h.compile_error_count) healthBits.push(`<span class="badge bad">${h.compile_error_count} AngelScript compile errors — variant DISABLED, ran near-stock</span>`);
+  if (h.already_registered) healthBits.push(`<span class="badge bad">asALREADY_REGISTERED — AI never initialised</span>`);
+  if (h.apex_log_lines !== undefined) healthBits.push(
+    h.apex_log_lines > 0 ? `<span class="badge good">apex logic ran (${h.apex_log_lines} apex: lines)</span>`
+                         : `<span class="badge bad">ZERO apex: log lines — apex logic did not run</span>`);
+  const finals = (d.finals || []).map(f => `<tr>
+    <td>${f.team} <span class="dim">(side ${f.ally})</span></td>
+    <td>${Math.round(f.metalProduced || 0).toLocaleString()}</td>
+    <td>${Math.round(f.armyReal || 0).toLocaleString()}</td>
+    <td>${f.mex}/${f.t2Mex}</td>
+    <td>${Math.round(f.mT2 || 0)}/${Math.round(f.mT3 || 0)}</td>
+    <td>${Math.round(f.mKillReal || 0)}/${Math.round(f.mLostReal || 0)}</td>
+    <td>${f.techStart > 0 ? (f.techStart / 30 / 60).toFixed(1) + "m" : "—"}</td>
+    <td class="mono dim">${esc((f.top || "").split(",").slice(0, 3).join(", "))}</td></tr>`).join("");
+  return `<div class="card">
+    <h2>${esc(r.map)} — ${esc((r.teams || []).map(t => t.spec).join(" vs "))}</h2>
+    <div>Winner: <b class="${/^Apex/.test((res.winner_specs||[])[0]||"") ? "win" : "loss"}">${esc((res.winner_specs || []).join(", ") || res.reason)}</b>
+      &nbsp;<span class="dim">${res.reason}, ${res.game_minutes?.toFixed(1)} game-min in ${res.wall_seconds?.toFixed(0)}s wall${r.seed != null ? ", seed " + r.seed : ""}</span></div>
+    <div style="margin:6px 0">${healthBits.join(" ")}</div>
+    <div class="row" style="margin-top:6px">${TOOL_BTNS(d.dir, false)}</div>
+    <pre id="toolout" style="display:none"></pre></div>
+  <div class="card"><h2>Economy over time (per side)</h2>
+    <div class="legend" id="chartlegend"></div>
+    <div class="row">
+      <div><div class="dim">metal produced (cumulative)</div><canvas id="c-metal" width="560" height="220"></canvas></div>
+      <div><div class="dim">standing army (metal value)</div><canvas id="c-army" width="560" height="220"></canvas></div>
+    </div></div>
+  <div class="card"><h2>Final snapshot per player</h2>
+    <table><thead><tr><th>team</th><th>metal prod</th><th>army</th><th>mex/T2</th>
+    <th>mT2/mT3</th><th>kill/loss</th><th>tech@</th><th>top spend</th></tr></thead>
+    <tbody>${finals}</tbody></table></div>`;
+}
+const SIDE_COLORS = ["#4fa3e3", "#e0876c", "#5fbf77", "#c78ce0"];
+function drawCharts(d) {
+  const sides = Object.keys(d.chart).sort();
+  const specs = (d.result.teams || []).map(t => t.spec);
+  $("#chartlegend").innerHTML = sides.map((s, i) =>
+    `<span><i style="background:${SIDE_COLORS[i % 4]}"></i>side ${s} ${esc(specs[s] || "")}</span>`).join("");
+  for (const [cid, key] of [["c-metal", "metal"], ["c-army", "army"]]) {
+    const cv = $("#" + cid); if (!cv) continue;
+    const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 34;
+    ctx.clearRect(0, 0, W, H);
+    let mx = 1, mt = 1;
+    sides.forEach(s => { const c = d.chart[s];
+      mx = Math.max(mx, ...c[key]); mt = Math.max(mt, ...c.min); });
+    ctx.strokeStyle = "#2c3642"; ctx.fillStyle = "#8a96a3"; ctx.font = "10px Consolas";
+    for (let g = 0; g <= 4; g++) {
+      const y = H - P + (P - H + 10) * g / 4;
+      ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - 6, y); ctx.stroke();
+      ctx.fillText(Math.round(mx * g / 4).toLocaleString(), 2, y + 3);
+    }
+    for (let g = 0; g <= 5; g++) {
+      const x = P + (W - P - 10) * g / 5;
+      ctx.fillText(Math.round(mt * g / 5) + "m", x - 6, H - 4);
+    }
+    sides.forEach((s, i) => {
+      const c = d.chart[s];
+      ctx.strokeStyle = SIDE_COLORS[i % 4]; ctx.lineWidth = 1.8; ctx.beginPath();
+      c.min.forEach((m, k) => {
+        const x = P + (W - P - 10) * (m / mt);
+        const y = (H - P) - (H - P - 10) * (c[key][k] / mx);
+        k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+      ctx.stroke();
+    });
+  }
+}
+async function runTool(dir, tool) {
+  const out = $("#toolout");
+  out.style.display = ""; out.textContent = `running ${tool}…`;
+  try {
+    const r = await api("/api/tool", {tool, target: dir});
+    out.textContent = "$ " + r.cmd + "\n\n" + r.output;
+  } catch (e) { out.textContent = "error: " + e.message; }
+}
+
+/* ---------- launch ---------- */
+$("#l-mode").addEventListener("change", () => {
+  $("#l-gameswrap").style.display =
+    $("#l-mode").value === "tournament" ? "" : "none";
+});
+async function loadLaunchMeta() {
+  try {
+    const m = await api("/api/launchmeta");
+    $("#maplist").innerHTML = m.maps.map(x => `<option value="${esc(x)}">`).join("");
+    $("#speclist").innerHTML = m.specs.map(x => `<option value="${esc(x)}">`).join("");
+  } catch (e) {}
+}
+async function launch() {
+  const mode = $("#l-mode").value;
+  const body = {
+    kind: mode === "tournament" ? "tournament" : "match",
+    mode, a: $("#l-a").value, b: $("#l-b").value, map: $("#l-map").value,
+    per_side: $("#l-perside").value, minutes: $("#l-min").value,
+    speed: $("#l-speed").value, seed: $("#l-seed").value,
+    games: $("#l-games").value,
+    modoptions: $("#l-modopt").value.trim().split(/\s+/).filter(Boolean),
+  };
+  if (!body.map) return toast("pick a map", true);
+  try {
+    const r = await api("/api/launch", body);
+    toast("launched job " + r.id);
+    loadJobs();
+  } catch (e) { toast(e.message, true); }
+}
+let jobTimer = null, aliveJobs = new Set();
+function viewRun(dir) {
+  document.querySelector('#nav button[data-tab="games"]').click();
+  openGame(dir);
+}
+async function loadJobs() {
+  try {
+    const js = await api("/api/jobs");
+    // a job that just finished means a new run landed — refresh the games list
+    if ([...aliveJobs].some(id => !js.find(j => j.id === id && j.alive))
+        && aliveJobs.size) loadGames();
+    aliveJobs = new Set(js.filter(j => j.alive).map(j => j.id));
+    $("#jobs").innerHTML = js.length ? js.map(j => `
+      <div class="card" style="margin-bottom:10px">
+        <div><span class="badge ${j.alive ? "warn" : j.exit === 0 ? "good" : "bad"}">
+          ${j.alive ? "running" : "exit " + j.exit}</span>
+          &nbsp;<b>${esc(j.desc)}</b>
+          <span style="float:right">
+          ${j.out_dir ? `<button class="act" onclick="viewRun('${esc(j.out_dir)}')">
+            ${j.result_ready || j.out_dir.startsWith("tournaments/")
+              ? "View results" : "View run dir"}</button>` : ""}
+          ${j.alive ? `<button class="act danger"
+            onclick="killJob('${j.id}')">Kill (whole tree)</button>` : ""}
+          </span></div>
+        <pre style="max-height:180px;margin:8px 0 0">${esc(j.tail.split("\n").slice(-14).join("\n"))}</pre>
+      </div>`).join("") : `<span class="dim">no jobs yet</span>`;
+    clearTimeout(jobTimer);
+    if (js.some(j => j.alive)) jobTimer = setTimeout(loadJobs, 3000);
+  } catch (e) {}
+}
+async function killJob(id) {
+  await api("/api/kill", {id}); toast("killed " + id); setTimeout(loadJobs, 800);
+}
+
+/* ---------- deploy ---------- */
+async function action(a, force) {
+  const out = $("#deployout");
+  out.textContent = "running " + a + "…";
+  try {
+    const r = await api("/api/action", {action: a, force});
+    out.textContent = "$ " + (r.cmd || a) + "\n\n" + (r.output || "");
+    if (r.blocked) {
+      out.textContent = r.output + "\n\nClose the game, or use Force if you know the run is dead.";
+      if (confirm(r.output + "\n\nForce anyway?")) return action(a, true);
+    } else toast(a + (r.ok ? " done" : " FAILED"), !r.ok);
+  } catch (e) { out.textContent = "error: " + e.message; }
+}
+
+/* ---------- tunables ---------- */
+let TUNE = null, tuneCat = 0;   // tuneCat: -1 = ratios, else section index
+const WORDS = {ADVSOL:"advanced solar", CONV:"converter", INC:"income",
+  ECO:"economy", DEF:"defence", AA:"anti-air", BP:"build power", CON:"constructor",
+  CONS:"constructors", FAC:"factory", MEX:"mex", T1:"T1", T2:"T2", T3:"T3",
+  MIN:"min", MAX:"max", PER:"per", R:"radius", DIST:"distance", SECS:"seconds",
+  FRAC:"fraction", PCT:"percent", MULT:"multiplier", THR:"threshold",
+  COMM:"commander", NANO:"nano turret", AFUS:"adv fusion", GEO:"geothermal",
+  ARTY:"artillery", AH:"anti-heavy", AHA:"anti-heavy arty", SKIRM:"skirmisher",
+  MOHO:"moho", ANTINUKE:"antinuke", MS:"metal/s", E:"energy", M:"metal"};
+const humanize = n => n.replace(/^(TUNE_|SPEND_|ROLE_|DEF_|SCOUT_)/, "")
+  .split("_").map(w => WORDS[w] || w.toLowerCase()).join(" ")
+  .replace(/^./, c => c.toUpperCase());
+async function loadTunables() {
+  TUNE = await api("/api/tunables");
+  renderTunables();
+}
+// Log-curve pairs get a human editor: two anchor points instead of raw
+// coefficients. form "a_ln_b": n = A*ln(inc)+B.  "b_ln_a": n = A + B*ln(inc).
+const CURVES = [
+ {label: "T1 constructors wanted", a: "TUNE_CON_LOG_T1_A", b: "TUNE_CON_LOG_T1_B",
+  form: "a_ln_b", what: "T1 constructors"},
+ {label: "T2 constructors wanted", a: "TUNE_CON_LOG_T2_A", b: "TUNE_CON_LOG_T2_B",
+  form: "a_ln_b", what: "T2 constructors"},
+ {label: "T1 factory lines wanted", a: "TUNE_PLANTS_T1_A", b: "TUNE_PLANTS_T1_B",
+  form: "b_ln_a", what: "T1 plants"},
+ {label: "T2 factory lines wanted", a: "TUNE_PLANTS_T2_A", b: "TUNE_PLANTS_T2_B",
+  form: "b_ln_a", what: "T2 plants"},
+];
+const CURVE_NAMES = new Set(CURVES.flatMap(c => [c.a, c.b]));
+const fval = v => parseFloat(String(v).replace(/f$/, ""));
+function curveEval(c, slope, icpt, inc) {
+  return Math.max(1, Math.floor(slope * Math.log(inc) + icpt));
+}
+function curveCoeffs(c, entries) {
+  const A = fval(entries[c.a].value), B = fval(entries[c.b].value);
+  return c.form === "a_ln_b" ? {slope: A, icpt: B} : {slope: B, icpt: A};
+}
+const ANCHORS = [20, 150];
+function renderCurveWidget(c, si, entries) {
+  const {slope, icpt} = curveCoeffs(c, entries);
+  const previews = [10, 20, 50, 100, 200, 300].map(i =>
+    `<td>${curveEval(c, slope, icpt, i)}</td>`).join("");
+  const id = c.a;
+  return `<div style="padding:10px 0;border-bottom:1px solid #232b35">
+    <b>${esc(c.label)}</b>
+    <span class="mono dim" style="font-size:11px">&nbsp;${esc(entries[c.a].tunable)} / ${esc(entries[c.b].tunable)}</span>
+    <div class="dim" style="font-size:12px;margin:3px 0">A smooth curve over metal
+      income. Set how many ${esc(c.what)} you want at two incomes; the
+      coefficients are derived for you.</div>
+    <div class="row" style="align-items:center;margin:6px 0">
+      ${ANCHORS.map((inc, k) => `<label class="f">${esc(c.what)} @ ${inc} m/s
+        <input class="mono" style="width:70px" id="cw-${id}-${k}"
+          value="${curveEval(c, slope, icpt, inc)}"
+          oninput="curvePreview('${id}', ${si})"></label>`).join("")}
+      <button class="act" onclick="saveCurve('${id}', ${si})">Save curve</button>
+    </div>
+    <table style="width:auto"><thead><tr><th>at income</th>
+      <th>10</th><th>20</th><th>50</th><th>100</th><th>200</th><th>300</th></tr></thead>
+      <tbody><tr id="cwp-${id}"><td class="dim">count</td>${previews}</tr></tbody></table>
+  </div>`;
+}
+function curveSolve(id) {
+  const c = CURVES.find(x => x.a === id);
+  const n1 = parseFloat($("#cw-" + id + "-0").value);
+  const n2 = parseFloat($("#cw-" + id + "-1").value);
+  if (!isFinite(n1) || !isFinite(n2)) return null;
+  const slope = (n2 - n1) / Math.log(ANCHORS[1] / ANCHORS[0]);
+  const icpt = n1 - slope * Math.log(ANCHORS[0]);
+  return {c, slope, icpt};
+}
+function curvePreview(id, si) {
+  const s = curveSolve(id);
+  if (!s) return;
+  const row = $("#cwp-" + id);
+  const cells = [10, 20, 50, 100, 200, 300].map(i =>
+    `<td>${curveEval(s.c, s.slope, s.icpt, i)}</td>`).join("");
+  row.innerHTML = `<td class="dim">count</td>` + cells;
+}
+async function saveCurve(id, si) {
+  const s = curveSolve(id);
+  if (!s) return toast("bad anchor values", true);
+  const entries = Object.fromEntries(
+    TUNE.sections[si].entries.map(e => [e.name, e]));
+  const aVal = s.c.form === "a_ln_b" ? s.slope : s.icpt;
+  const bVal = s.c.form === "a_ln_b" ? s.icpt : s.slope;
+  try {
+    for (const [name, v] of [[s.c.a, aVal], [s.c.b, bVal]]) {
+      const e = entries[name];
+      const nv = v.toFixed(3) + "f";
+      if (nv === e.value) continue;
+      await api("/api/const", {file: e.file, line: e.line, name: e.name,
+                               old: e.value, new: nv});
+    }
+    await loadTunables();
+    toast(s.c.label + " saved — remember to Deploy");
+  } catch (err) { toast(err.message + " — reloading", true); loadTunables(); }
+}
+function renderTunables() {
+  if (!TUNE) return;
+  const q = $("#tunesearch").value.trim().toLowerCase();
+  const hits = s => s.entries.filter(e => !q ||
+    (e.name + " " + e.tunable + " " + e.desc + " " + humanize(e.name))
+      .toLowerCase().includes(q));
+  // sidebar
+  const cats = [{label: "Build ratios (targets.as)", idx: -1,
+                 n: TUNE.targets.groups.reduce((a, g) => a + g.rows.length, 0)}]
+    .concat(TUNE.sections.map((s, i) => ({label: s.title, idx: i,
+                                          n: q ? hits(s).length : s.entries.length})));
+  $("#tunecats").innerHTML = cats.map(c => `
+    <button data-cat="${c.idx}" style="display:block;width:100%;text-align:left;
+      background:${c.idx === tuneCat ? "var(--panel2)" : "none"};border:none;
+      color:${c.n ? "var(--text)" : "var(--dim)"};padding:7px 10px;font:inherit;
+      font-size:13px;cursor:pointer;border-radius:6px">
+      ${esc(c.label)} <span class="dim">${c.n}</span></button>`).join("");
+  // body
+  if (tuneCat === -1) { renderTargets(); return; }
+  const s = TUNE.sections[tuneCat];
+  let rows = q ? hits(s) : s.entries;
+  // curve pairs whose A lives in this section render as a widget instead
+  const entryMap = Object.fromEntries(s.entries.map(e => [e.name, e]));
+  const widgets = CURVES.filter(c => entryMap[c.a] && entryMap[c.b]
+    && (!q || (c.label + " " + entryMap[c.a].tunable).toLowerCase().includes(q)))
+    .map(c => renderCurveWidget(c, tuneCat, entryMap)).join("");
+  rows = rows.filter(e => !CURVE_NAMES.has(e.name));
+  $("#tunebody").innerHTML = `<div class="card"><h2>${esc(s.title)}</h2>
+    ${widgets}
+    ${rows.map(e => {
+      const i = s.entries.indexOf(e);
+      return `<div style="display:flex;gap:12px;align-items:flex-start;
+        padding:9px 0;border-bottom:1px solid #232b35">
+        <div style="flex:1;min-width:0">
+          <b>${esc(humanize(e.name))}</b>
+          ${e.unit ? `<span class="badge">${esc(e.unit)}</span>` : ""}
+          <span class="mono dim" style="font-size:11px">&nbsp;${esc(e.tunable || e.name)}</span>
+          <div class="dim" style="font-size:12px;margin-top:2px">${esc(e.desc)}
+            ${e.reads ? `<span class="mono" style="font-size:11px"> — ${esc(e.reads)}</span>` : ""}</div>
+        </div>
+        <input class="mono" style="width:110px" id="tv-${tuneCat}-${i}" value="${esc(e.value)}"
+          onkeydown="if(event.key==='Enter')saveTune(${tuneCat},${i})">
+        <button class="act" onclick="saveTune(${tuneCat},${i})">Save</button>
+      </div>`; }).join("") || (widgets ? "" : `<span class="dim">no matches in this category</span>`)}
+    </div>`;
+}
+function renderTargets() {
+  const t = TUNE.targets;
+  const q = $("#tunesearch").value.trim().toLowerCase();
+  $("#tunebody").innerHTML = t.groups.map((g, gi) => {
+    const rows = g.rows.filter(r => !q ||
+      (r.name + " " + r.desc + " " + humanize(r.name)).toLowerCase().includes(q));
+    if (!rows.length) return "";
+    return `<div class="card"><h2>${esc(g.title)}</h2>
+      ${rows[0] && rows.some(r => !r.scalar) ? `
+      <div class="dim" style="font-size:12px;margin-bottom:6px">One column per
+        income bracket (metal/s). Values are relative weights interpolated
+        against income — raise one and its neighbours yield by themselves.</div>
+      <table><thead><tr><th>Curve</th>
+        ${t.income.map(x => `<th>@${parseFloat(x)} m/s</th>`).join("")}<th></th></tr></thead>
+      <tbody>` : ""}
+      ${rows.map(r => {
+        const ri = g.rows.indexOf(r);
+        if (r.scalar) return `</tbody></table>
+          <div style="display:flex;gap:12px;align-items:center;padding:8px 0">
+            <div style="flex:1"><b>${esc(humanize(r.name))}</b>
+              <div class="dim" style="font-size:12px">${esc(r.desc)}</div></div>
+            <input class="mono" style="width:90px" id="ts-${gi}-${ri}" value="${esc(r.value)}">
+            <button class="act" onclick="saveTargetScalar(${gi},${ri})">Save</button></div>`;
+        return `<tr><td><b>${esc(humanize(r.name))}</b>
+          <div class="dim" style="font-size:11px;max-width:260px">${esc(r.desc.slice(0, 160))}</div></td>
+          ${r.values.map((v, vi) => `<td><input class="mono" style="width:62px"
+            id="tg-${gi}-${ri}-${vi}" value="${esc(parseFloat(v))}"></td>`).join("")}
+          <td><button class="act" onclick="saveTargetRow(${gi},${ri})">Save</button></td></tr>`;
+      }).join("")}
+      ${rows.some(r => !r.scalar) ? "</tbody></table>" : ""}</div>`;
+  }).join("") || `<span class="dim">no matches</span>`;
+}
+$("#tunecats") && document.addEventListener("click", e => {
+  const b = e.target.closest("#tunecats button[data-cat]");
+  if (b) { tuneCat = +b.dataset.cat; renderTunables(); }
+});
+async function saveTune(si, i) {
+  const e = TUNE.sections[si].entries[i];
+  const v = $("#tv-" + si + "-" + i).value.trim();
+  if (v === e.value) return toast("unchanged");
+  try {
+    await api("/api/const", {file: e.file, line: e.line, name: e.name,
+                             old: e.value, new: v});
+    e.value = v;
+    toast(humanize(e.name) + " saved — remember to Deploy");
+  } catch (err) { toast(err.message, true); }
+}
+async function saveTargetRow(gi, ri) {
+  const r = TUNE.targets.groups[gi].rows[ri];
+  const nv = r.values.map((_, vi) => $("#tg-" + gi + "-" + ri + "-" + vi).value.trim());
+  if (nv.every((v, k) => parseFloat(v) === parseFloat(r.values[k])))
+    return toast("unchanged");
+  try {
+    await api("/api/target", {line: r.line, name: r.name, old: r.values, new: nv});
+    await loadTunables();
+    toast(humanize(r.name) + " saved — remember to Deploy");
+  } catch (err) { toast(err.message, true); }
+}
+async function saveTargetScalar(gi, ri) {
+  const r = TUNE.targets.groups[gi].rows[ri];
+  const v = $("#ts-" + gi + "-" + ri).value.trim();
+  if (v === r.value) return toast("unchanged");
+  try {
+    await api("/api/const", {file: TUNE.targets.file, line: r.line,
+                             name: r.name, old: r.value, new: v});
+    r.value = v;
+    toast(humanize(r.name) + " saved — remember to Deploy");
+  } catch (err) { toast(err.message, true); }
+}
+
+/* ---------- header proc warn ---------- */
+async function pollOverview() {
+  try {
+    const o = await api("/api/overview");
+    $("#procwarn").textContent = o.processes.length
+      ? "⚠ running: " + o.processes.join(", ") : "";
+  } catch (e) {}
+  setTimeout(pollOverview, 8000);
+}
+
+loadGames(); loadLaunchMeta(); pollOverview();
+</script>
+</body>
+</html>

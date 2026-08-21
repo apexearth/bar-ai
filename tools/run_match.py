@@ -301,6 +301,9 @@ def build_script(
         # Collected by game-patches/gadgets/dev_stats_export.lua: per-team
         # metal/damage/unit counters. Continuous signal beats a win/loss bit.
         "dev_stats": 1,
+        # Collected by game-patches/gadgets/dev_combat_log.lua: per-unit death
+        # events and army snapshots, for tools/battles.py fight reconstruction.
+        "dev_combatlog": 1,
         "dev_maxgameminutes": minutes,
         # THE PER-PLAYER UNIT LIMIT, AND WE HAVE TO STATE IT.
         #
@@ -496,6 +499,7 @@ def run(args) -> int:
     # and the camera falls back to watch.cfg's CamMode on every single game.
     if not watching:
         shutil.rmtree(write_dir / "LuaUI" / "Config", ignore_errors=True)
+
 
     cmd = [str(exe), "--write-dir", str(write_dir)]
     # headless.cfg forces an 8x8 window, which is right for a batch and useless
