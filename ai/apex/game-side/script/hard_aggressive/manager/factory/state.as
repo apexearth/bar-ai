@@ -7,9 +7,13 @@ bool gHaveT2 = false;   // set once we own an advanced factory
 // The real trigger is energy, not metal: take the nearby mexes, reach roughly
 // 500 energy/sec, then commit to T2. The rusher is the one player the whole
 // team is funding, so it is the last one that should be teching on thin energy.
-const float RUSH_ENERGY_TARGET = 400.f;
-const float RUSH_ENERGY_FLOOR  = 240.f;      // same 0.6 ratio to target as before
-const int   RUSH_LATEST        = 5 * MINUTE; // T2 should exist before 10 min
+// 800, was 400 with a CLOCKED fallback to 240 after minute 5 -- the exact
+// pattern apexearth has banned twice, and the generator of his "super
+// frustrated every time i see us go T2 with only around 500 energy income"
+// (2026-08-20). The T2 program is an energy program: the lab's builds, moho
+// upkeep, and the fusion the T2 con must immediately raise (~600 E/s draw
+// while building). A reactor already on the grid halves the bar, because
+// the ramp is coming -- see RushReady.
 
 // The whole team pools metal behind the rusher, so it must not be the poorest
 // player on it -- feeding a starved economy just moves the starvation around.

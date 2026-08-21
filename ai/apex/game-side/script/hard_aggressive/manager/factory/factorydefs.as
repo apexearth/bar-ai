@@ -317,7 +317,7 @@ CCircuitDef@ NextT2Counterpart()
 // Lowered 100->60 and tunable: apexearth 2026-08-18, "push up the timeline
 // on when we'll build a Gantry" -- also the performance lever, since T3 metal
 // is fewer, bigger units for the same army value.
-float T3_METAL_INCOME() { return ai.GetTunable("apex_t3_income", 60.f); }
+float T3_METAL_INCOME() { return ai.GetTunable("apex_t3_income", TUNE_T3_INCOME); }
 
 // Income alone is the wrong gate: a gantry is only worth starting from a
 // position that is not collapsing.
@@ -332,7 +332,7 @@ const float T3_ARMY_RATIO = 1.0f;
 // a gantry gets placed even while we are losing -- at high income a gantry is
 // a small fraction of one tick of income, so refusing to spend it on the
 // counter to what's killing us is wrong at any army ratio. See T3Worthwhile().
-float T3_INCOME_URGENT() { return ai.GetTunable("apex_t3_urgent", 110.f); }
+float T3_INCOME_URGENT() { return ai.GetTunable("apex_t3_urgent", TUNE_T3_URGENT); }
 
 // One gantry per this much metal income, floor 1. No hard cap: the energy
 // bound below and the income term are the ceiling, and both scale.
@@ -350,7 +350,7 @@ const int   GANTRY_SURPLUS_BONUS = 4;
 // too: factories, nanos and converters are all on the same grid.
 // 5000 held the FIRST gantry hostage to a multi-fusion grid; a building
 // gantry draws ~600, so 3000 leaves the base 2400 while it works.
-float GANTRY_PER_ENERGY() { return ai.GetTunable("apex_gantry_per_energy", 3000.f); }
+float GANTRY_PER_ENERGY() { return ai.GetTunable("apex_gantry_per_energy", TUNE_GANTRY_PER_ENERGY); }
 
 // A T1 bot lab is wanted for the whole game, not just the opening: it is the
 // cheap assault spam and the only source of rez bots.

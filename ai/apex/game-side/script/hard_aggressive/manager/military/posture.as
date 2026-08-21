@@ -1,10 +1,53 @@
 namespace Military {
 
+// Set while the army is deliberately standing on our own defence line rather
+// than at the front -- see the buildup hold in the lane selection below.
+bool gBuildupHeld = false;
+bool gBehindGuns = false;
+
+// Still short of the T1 army the advanced plant is gated on. Factory::T2ArmyReady
+// returns true once T2 exists, so this closes by itself.
+bool ArmyBuildupHold()
+{
+	if (ai.GetTunable("apex_t2_army_hold", TUNE_T2_ARMY_HOLD) <= 0.f)
+		return false;
+	return !Factory::T2ArmyReady();
+}
+
+// The tower of ours that stands closest to the enemy: "the borders where all
+// our turrets are placed", read from the defence ledger rather than guessed at.
+bool ForwardMostFence(AIFloat3& out at)
+{
+	float best = 0.f;
+	bool have = false;
+	for (uint i = 0; i < gFencePos.length(); ++i) {
+		if (!OnMap(gFencePos[i]))
+			continue;
+		const float f = ForwardFraction(gFencePos[i]);
+		if (!have || (f > best)) {
+			best = f;
+			at = gFencePos[i];
+			have = true;
+		}
+	}
+	return have;
+}
+
+
 void UpdateRaidCaution()
 {
 	if (gRaidMinStock < 0.f)
 		gRaidMinStock = aiMilitaryMgr.quota.raid.min;   // capture before overwriting
-	const float want = Factory::gHaveT2 ? gRaidMinStock : RAID_MIN_EARLY;
+	// RAID_MIN_EARLY=45 was "hold them home" made permanent: ~2,600 metal of
+	// raiders had to pool before ONE raid could leave pre-T2, so raiding was
+	// effectively abolished -- census f4 near-zero all day while the enemy
+	// raided us freely. apexearth 2026-08-20: "We can't let OUR constructors
+	// be harassed and killed if we aren't going to harass and kill theirs...
+	// tit for tat." A raid PACK is 4-6 raiders: base 8 power plus a fifth of
+	// income, so packs grow with the economy instead of never forming.
+	const float pack = ai.GetTunable("apex_raid_pack", TUNE_RAID_PACK)
+			+ aiEconomyMgr.metal.income * ai.GetTunable("apex_raid_per_income", TUNE_RAID_PER_INCOME);
+	const float want = Factory::gHaveT2 ? gRaidMinStock : pack;
 	if (aiMilitaryMgr.quota.raid.min != want)
 		aiMilitaryMgr.quota.raid.min = want;
 }
@@ -33,7 +76,7 @@ const string TV_PUSH = "push";     // elector's answer: frame the window ends
 // How far ahead the TEAM must be before committing everything. Deliberately
 // higher than the per-squad engage margin: this spends the whole army at once,
 // and being wrong costs the game rather than a squad.
-const float PUSH_TEAM_RATIO = 1.6f;
+float PUSH_TEAM_RATIO() { return ai.GetTunable("apex_push_team_ratio", TUNE_PUSH_TEAM_RATIO); }
 // A STATE, NOT A CLOCK -- apexearth: "why even bother with a time based
 // cooldown here? If we are ready we just push more." The push holds exactly
 // while the team outweighs the enemy: entered at PUSH_TEAM_RATIO, kept while
@@ -44,7 +87,7 @@ const int   PUSH_RENEW = 5 * SECOND;
 // Odds multiplier while pushing. 0.55 roughly halves the surplus the engage
 // test demands -- squads still refuse a genuinely hopeless fight, but stop
 // refusing the ones the rest of the team is about to join.
-const float PUSH_BOOST   = 0.55f;
+float PUSH_BOOST() { return ai.GetTunable("apex_push_boost", TUNE_PUSH_BOOST); }
 // Engage bias while an advanced plant is going up: a T2 lab is bought with
 // metal that is NOT going into army, so the moment we commit to it is exactly
 // the moment we can least afford to trade the army we already have.
@@ -54,11 +97,11 @@ const float PUSH_BOOST   = 0.55f;
 // already joined, and defence runs through CDefendTask, which does not
 // consult this at all -- we still hold ground and finish what we are in, we
 // just stop starting new fights while the lab is unfinished.
-const float T2_HOLD_BOOST = 1.60f;
-const float PUSH_QUOTA   = 200.f;
+float T2_HOLD_BOOST() { return ai.GetTunable("apex_t2_hold_boost", TUNE_T2_HOLD_BOOST); }
+float PUSH_QUOTA() { return ai.GetTunable("apex_push_quota", TUNE_PUSH_QUOTA); }
 // Nothing to push with. Below this the "ratio" is noise -- two scouts against
 // one is 2.0 and means nothing.
-const float PUSH_MIN_ARMY = 2500.f;
+float PUSH_MIN_ARMY() { return ai.GetTunable("apex_push_min_army", TUNE_PUSH_MIN_ARMY); }
 
 // Personality moved to manager/persona.as -- one identity per instance, more
 // axes than the engage margin, and mid-game adaptation. The engage-margin
@@ -92,9 +135,9 @@ void UpdateTeamPush()
 		const float foe = (seen > floorFoe) ? seen : teamArmy;
 		float until = ai.ReadTeamValue(ai.teamId, TV_PUSH, 0.f);
 		const bool wasPushing = ai.frame < int(until);
-		const float bar = wasPushing ? ai.GetTunable("apex_push_keep", 1.25f)
-		                             : PUSH_TEAM_RATIO;
-		const bool worth = (teamArmy >= PUSH_MIN_ARMY)
+		const float bar = wasPushing ? ai.GetTunable("apex_push_keep", TUNE_PUSH_KEEP)
+		                             : PUSH_TEAM_RATIO();
+		const bool worth = (teamArmy >= PUSH_MIN_ARMY())
 				&& (teamArmy > foe * bar);
 		if (worth) {
 			until = float(ai.frame + PUSH_RENEW);
@@ -114,12 +157,12 @@ void UpdateTeamPush()
 	const int until = int(ai.ReadTeamValue(Factory::ElectorTeamId(), TV_PUSH, 0.f));
 	const bool pushing = (ai.frame < until) && !Factory::EcoLeadActive();
 	if (pushing) {
-		ai.SetEngageBoost(PUSH_BOOST);
+		ai.SetEngageBoost(PUSH_BOOST());
 		// Units in a declared push stop retreating to heal; see
 		// CCircuitAI::IsCommitted.
 		ai.SetCommitted(true);
-		if (aiMilitaryMgr.quota.attack < PUSH_QUOTA)
-			aiMilitaryMgr.quota.attack = PUSH_QUOTA;
+		if (aiMilitaryMgr.quota.attack < PUSH_QUOTA())
+			aiMilitaryMgr.quota.attack = PUSH_QUOTA();
 		if (gTurtle) {
 			gTurtle = false;
 			gPostureUntil = ai.frame;
@@ -138,8 +181,8 @@ void UpdateTeamPush()
 		// Caution learned from where our metal is currently dying: bleeding
 		// on their ground raises the odds we demand before crossing again.
 		float boost = Persona::EngageBias() * BleedCaution();
-		if (teching && (T2_HOLD_BOOST > boost))
-			boost = T2_HOLD_BOOST;
+		if (teching && (T2_HOLD_BOOST() > boost))
+			boost = T2_HOLD_BOOST();
 		ai.SetEngageBoost(boost);
 		// IsCommitted stops a unit leaving a fight at its 60% health threshold,
 		// and is wired only to the team push (rare) -- so in ordinary fighting a
@@ -232,14 +275,14 @@ void UpdateCorridorProbe()
 // Not a CmdMoveTo: issuing those outside a task context is what drove engine
 // aborts from 0-2 to 14-17 per 20-game run (see the disabled block below). This
 // moves the engine's own anchor and lets it do the moving.
-const float LANE_FORWARD = 0.35f;   // fraction of the way from base to enemy
+float LANE_FORWARD() { return ai.GetTunable("apex_lane_forward", TUNE_LANE_FORWARD); }
 int gNextLane = 0;
 AIFloat3 gLanePinged;
-AIFloat3 gLaneAt;
+// gLaneAt is declared in state.as: massing.as reads it and is included first.
 // How far the front must actually move before the army is asked to move with
 // it. Roughly two turret ranges: below this it is jitter, above it is a real
 // shift of the line.
-const float LANE_STICKY = 900.f;
+float LANE_STICKY() { return ai.GetTunable("apex_lane_sticky", TUNE_LANE_STICKY); }
 bool gTradeHold = false;    // the anchor is pulled back while the trade is bad
 int gNextLaneLostLog = 0;
 
@@ -266,7 +309,7 @@ uint gRetreatZeroed = 999;            // last no-retreat count, so the log fires
 // whether these units are spam right now, so both ask this.
 bool SpamPhase()
 {
-	return Factory::gHaveT2 && (ai.GetTunable("apex_spam_suicidal", 1.f) > 0.f);
+	return Factory::gHaveT2 && (ai.GetTunable("apex_spam_suicidal", TUNE_SPAM_SUICIDAL) > 0.f);
 }
 
 void NotePostureDef(const CCircuitDef@ cdef, bool fodder)
@@ -296,7 +339,7 @@ void NoteFodderDef(const CCircuitDef@ cdef)
 // the tunable remains for experiments.
 void ApplyRetreatPosture()
 {
-	const float secs = ai.GetTunable("apex_retreat_cost_secs", 0.f);
+	const float secs = ai.GetTunable("apex_retreat_cost_secs", TUNE_RETREAT_COST_SECS);
 	const float bar = (secs > 0.f) ? (aiEconomyMgr.metal.income * secs) : 0.f;
 	uint zeroed = 0;
 	for (uint i = 0; i < gPostureDef.length(); ++i) {
@@ -326,6 +369,9 @@ void UpdateSpamPosture()
 	ApplyRetreatPosture();
 }
 
+// Where the army stages right now; ZERO vector until the lane is first set.
+AIFloat3 LanePos() { return gLaneAt; }
+
 void UpdateLanePos()
 {
 	if (ai.frame < gNextLane)
@@ -354,7 +400,7 @@ void UpdateLanePos()
 		const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
 		if (!OnMap(foe))
 			return;
-		const float f = ai.GetTunable("apex_lane_forward", LANE_FORWARD);
+		const float f = ai.GetTunable("apex_lane_forward", TUNE_LANE_FORWARD);
 		lane = Builder::gHomePos + (foe - Builder::gHomePos) * f;
 	}
 	// TRADING BADLY -> STAND DEFENSIVELY. When recent combat is a clearly losing
@@ -373,7 +419,7 @@ void UpdateLanePos()
 	if (TradeBad() && Builder::gHomeSet) {
 		const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 		if (OnMap(e)) {
-			const float f = ai.GetTunable("apex_lane_defensive", 0.15f);
+			const float f = ai.GetTunable("apex_lane_defensive", TUNE_LANE_DEFENSIVE);
 			AIFloat3 back = Builder::gHomePos + (e - Builder::gHomePos) * f;
 			if (OnMap(back)
 				&& (back.SqDistance2D(Builder::gHomePos) < lane.SqDistance2D(Builder::gHomePos)))
@@ -390,6 +436,67 @@ void UpdateLanePos()
 		gTradeHold = false;
 		AiLog(Factory::T() + "apex: trade recovered -- army returns to the front");
 	}
+	// EARN THE PLANT AT HOME. apexearth 2026-08-19, on the T1-army floor never
+	// being reached: "that's because our army kept getting itself killed. Try
+	// keeping them in the base to defend, stop going outside the base... just
+	// defend the borders where all our turrets are placed." While we are still
+	// accumulating the T1 army that Factory::T2ArmyReady is waiting on, the
+	// anchor stands on our own defence line, so the army rebuilds behind the
+	// guns instead of trickling out to trade badly. Ends the moment the floor
+	// is met or T2 exists; it does not touch what builders buy.
+	if (ArmyBuildupHold() && Builder::gHomeSet) {
+		AIFloat3 fence;
+		if (ForwardMostFence(fence) && OnMap(fence)) {
+			lane = fence;
+		} else {
+			const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
+			if (OnMap(e)) {
+				const float f = ai.GetTunable("apex_lane_defensive", TUNE_LANE_DEFENSIVE);
+				AIFloat3 back = Builder::gHomePos + (e - Builder::gHomePos) * f;
+				if (OnMap(back))
+					lane = back;
+			}
+		}
+		if (!gBuildupHeld) {
+			gBuildupHeld = true;
+			AiLog(Factory::T() + "apex: army holds the defence line while it"
+				+ " builds toward the T2 floor");
+		}
+	} else if (gBuildupHeld) {
+		gBuildupHeld = false;
+		AiLog(Factory::T() + "apex: T2 army floor met -- the army moves out");
+	}
+	// THE ANCHOR MUST NOT STAND FORWARD OF OUR OWN GUNS.
+	//
+	// Measured 2026-08-19 (32m 4v4, matches/20260820-0343...): of 452 units that
+	// died while RETREATING, 186 had last been elected to the DEFEND pool and
+	// NONE to an attack -- and they died at a median forward fraction of 0.51,
+	// midfield. The pool was massing in the open past our own defence line, so
+	// units took damage with no cover, peeled off one at a time to retreat, and
+	// were run down crossing ground we do not hold. That also dismantles the
+	// group mid-fight, which is how a defence loses an engagement it should win.
+	//
+	// apexearth: "we don't create a front line, we don't hold our army at around
+	// the front line... hunker down and make them bleed, control where that metal
+	// falls on the playing field, so we can resurrect or reclaim." Behind the
+	// guns, the enemy that follows a damaged unit walks into the turrets and the
+	// wreckage falls on our ground. A committed push (gKilling) is exempt: that
+	// is the one time being forward is the decision.
+	if (!gKilling && (ai.GetTunable("apex_lane_behind_guns", TUNE_LANE_BEHIND_GUNS) > 0.f)) {
+		AIFloat3 guns;
+		if (ForwardMostFence(guns) && OnMap(guns)
+			&& (ForwardFraction(lane) > ForwardFraction(guns)))
+		{
+			lane = guns;
+			if (!gBehindGuns) {
+				gBehindGuns = true;
+				AiLog(Factory::T() + "apex: army anchor pulled back behind our"
+					+ " own guns");
+			}
+		} else if (gBehindGuns) {
+			gBehindGuns = false;
+		}
+	}
 	// A LOST LANE MUST BE PERCEIVED AS LOST. The anchor used to stand at the
 	// front edge regardless of who now holds that ground, so the pool's fill
 	// stream walked one-by-one into enemy territory -- apexearth 2026-08-19:
@@ -403,7 +510,7 @@ void UpdateLanePos()
 		const float len = sqrt(toHome.SqLength2D());
 		if (len > 1.f) {
 			toHome *= (1.f / len);
-			const float step = ai.GetTunable("apex_lane_back_step", 300.f);
+			const float step = ai.GetTunable("apex_lane_back_step", TUNE_LANE_BACK_STEP);
 			int steps = 0;
 			while ((steps < 10) && OnMap(lane)
 				&& (float(steps) * step < len)
@@ -428,7 +535,7 @@ void UpdateLanePos()
 	// the one already in use before it is adopted -- small drift is ignored, a
 	// genuine shift of the front is not.
 	if (OnMap(gLaneAt)
-		&& (lane.distance2D(gLaneAt) < ai.GetTunable("apex_lane_sticky", LANE_STICKY)))
+		&& (lane.distance2D(gLaneAt) < ai.GetTunable("apex_lane_sticky", TUNE_LANE_STICKY)))
 	{
 		aiSetupMgr.SetLanePos(gLaneAt);   // keep standing where we already stand
 		ai.SetFrontPos(gLaneAt);
@@ -447,7 +554,7 @@ void UpdateLanePos()
 	// the regroup cluster from, so it is the single most useful thing to see.
 	// OFF BY DEFAULT: this is a map marker human allies see. The harness turns it
 	// back on with --modoption apex_ping=1; see apex_draw_front in frontline.as.
-	if (ai.GetTunable("apex_ping", 0.f) > 0.f) {
+	if (ai.GetTunable("apex_ping", TUNE_PING) > 0.f) {
 		if (OnMap(gLanePinged))
 			AiDelPoint(gLanePinged);
 		gLanePinged = gLaneAt;
@@ -465,6 +572,8 @@ void UpdatePosture()
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
+	UpdateStance();     // enemy stance: budget lean + scout demand
+	ReleaseHeldSupers();   // held titans re-join the army when the wait ends
 	UpdateApproach();   // is a visible enemy group closing on our home?
 	PublishDefence();   // our front-tower count and income, for the team budget
 	LogAidState();      // read-only: what an ally-aid response would do
@@ -483,7 +592,7 @@ void UpdatePosture()
 	// Not for the eco lead: it holds almost no army by design, and sending that
 	// at a base is throwing it away rather than ending anything.
 	if (gKilling && !Factory::EcoLeadActive()) {
-		aiMilitaryMgr.quota.attack = ai.GetTunable("apex_kill_quota", KILL_QUOTA);
+		aiMilitaryMgr.quota.attack = ai.GetTunable("apex_kill_quota", TUNE_KILL_QUOTA);
 		if (gTurtle) {
 			gTurtle = false;
 			gPostureUntil = ai.frame;
@@ -500,12 +609,21 @@ void UpdatePosture()
 	// Enemies in ours is the opposite -- short supply lines, our defences
 	// shooting, their army out of position -- and the one moment the trade is in
 	// our favour. Released the same way the killing blow releases it.
-	if (gTurtle && (ai.GetTunable("apex_hold_release", 1.f) > 0.f)
+	if (gTurtle && (ai.GetTunable("apex_hold_release", TUNE_HOLD_RELEASE) > 0.f)
 		&& (BaseContested() || Builder::BaseUnderAttack())) {
 		gTurtle = false;
 		gPostureUntil = ai.frame;
 		aiMilitaryMgr.quota.attack = gAttackBase;
 		AiLog(Factory::T() + "apex: base under attack -- releasing the hold to defend");
+	}
+	// NO GROUP LEAVES WHILE WE ARE STILL EARNING THE PLANT. Same commit size the
+	// hold posture uses, applied after UpdateMassing (which overwrites it) and
+	// left off entirely once the base is actually being fought over -- defending
+	// our own ground is the trade we want, and the release below says so.
+	if (ArmyBuildupHold() && !gKilling && !BaseContested() && !BaseRaided()
+		&& (aiMilitaryMgr.quota.attack < TURTLE_ATTACK))
+	{
+		aiMilitaryMgr.quota.attack = TURTLE_ATTACK;
 	}
 	UpdateFrontGun();
 	UpdateAirThreat();
@@ -536,7 +654,7 @@ void UpdatePosture()
 		// reason: losses taken defending are not evidence that defending is a
 		// losing trade.
 		if ((army < prev * LOSING_RATIO) && (aiEnemyMgr.mobileThreat > 0.f)
-			&& ((ai.GetTunable("apex_hold_release", 1.f) <= 0.f)
+			&& ((ai.GetTunable("apex_hold_release", TUNE_HOLD_RELEASE) <= 0.f)
 				|| (!BaseContested() && !Builder::BaseUnderAttack())))
 		{
 			gTurtle = true;
@@ -586,6 +704,6 @@ void UpdatePosture()
 // Fodder is exempt from massing: holding a 21-metal Tick back to build a mass
 // buys nothing, since its job is vision and pulled fire, both forward-only.
 // Cost AND role, so a cheap AA or bomber is not swept in.
-const float FODDER_COST = 100.f;
+float FODDER_COST() { return ai.GetTunable("apex_fodder_cost", TUNE_FODDER_COST); }
 
 }  // namespace Military

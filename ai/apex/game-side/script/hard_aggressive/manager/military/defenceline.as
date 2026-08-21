@@ -204,10 +204,10 @@ bool AllyAidPos(const AIFloat3& in from, AIFloat3& out at, float& out weight, in
 	// whatever the separation was the first time this ran -- 0, before the home
 	// position is set. Sentinel instead: unset follows the measurement live.
 	const float sep = BaseSeparation();
-	const float tuned = ai.GetTunable("apex_aid_reach", -1.f);
+	const float tuned = ai.GetTunable("apex_aid_reach", TUNE_AID_REACH);
 	const float reach = (tuned > 0.f) ? tuned : ((sep > 0.f) ? sep : 6000.f);
-	const float least = ai.GetTunable("apex_aid_min_loss", 300.f);
-	const float fresh = ai.GetTunable("apex_aid_fresh", 60.f) * float(SECOND);
+	const float least = ai.GetTunable("apex_aid_min_loss", TUNE_AID_MIN_LOSS);
+	const float fresh = ai.GetTunable("apex_aid_fresh", TUNE_AID_FRESH) * float(SECOND);
 	bool have = false;
 	float best = 0.f;
 	for (uint i = 0; i < mates.length(); ++i) {
@@ -331,7 +331,7 @@ float TeamAA()
 bool CrowdAllows(const AIFloat3& in pos, CCircuitDef@ def)
 {
 	// apexearth's number, not a derived one.
-	const float most = ai.GetTunable("apex_fence_crowd", 6.f);
+	const float most = ai.GetTunable("apex_fence_crowd", TUNE_FENCE_CROWD);
 	if (most <= 0.f)
 		return true;
 	// A def with no surface gun -- anti-air, a jammer -- is bounded by its own
@@ -405,8 +405,8 @@ CCircuitDef@ LadderDef()
 			@top = d;
 	}
 	const bool retireCheap = (top !is null)
-			&& (top.costM < inc * ai.GetTunable("apex_porc_obsolete_secs", 20.f));
-	const float obsRatio = ai.GetTunable("apex_porc_obsolete_ratio", 7.f);
+			&& (top.costM < inc * ai.GetTunable("apex_porc_obsolete_secs", TUNE_PORC_OBSOLETE_SECS));
+	const float obsRatio = ai.GetTunable("apex_porc_obsolete_ratio", TUNE_PORC_OBSOLETE_RATIO);
 	CCircuitDef@ best = null;
 	float total = 0.f;
 	for (uint i = 0; i < rungs.length(); ++i) {
@@ -441,11 +441,11 @@ float AggressionMult()
 	if ((ours <= 1.f) || (theirs <= 0.f))
 		return 1.f;
 	const float ratio = theirs / ours;
-	const float fromRatio = ai.GetTunable("apex_aggr_from", 0.5f);
+	const float fromRatio = ai.GetTunable("apex_aggr_from", TUNE_AGGR_FROM);
 	if (ratio <= fromRatio)
 		return 1.f;
-	float m = 1.f + ai.GetTunable("apex_aggr_defence", 1.f) * (ratio - fromRatio);
-	const float capM = ai.GetTunable("apex_aggr_max", 3.f);
+	float m = 1.f + ai.GetTunable("apex_aggr_defence", TUNE_AGGR_DEFENCE) * (ratio - fromRatio);
+	const float capM = ai.GetTunable("apex_aggr_max", TUNE_AGGR_MAX);
 	if (m > capM)
 		m = capM;
 	if (ai.frame >= gNextAggrLog) {
@@ -457,10 +457,49 @@ float AggressionMult()
 	return m;
 }
 
+// WHAT THE BASE IS WORTH, IN METAL. apexearth 2026-08-19: "DefenceAllowedAt
+// should be based on the amount of resource the base is worth."
+//
+// Every standing structure we own, at cost. The local branch below used to
+// bound itself on a MEX COUNT, which says nothing about what is standing behind
+// the towers: the same allowance covered a base of four solars and a base with
+// three fusions, a gantry and an advanced lab in it. Defence is insurance, and
+// what it is insuring is this number.
+//
+// Cached: the def walk is the whole unit table, and the answer moves on the
+// timescale buildings finish on, not per election.
+float gBaseWorth = 0.f;
+int   gNextBaseWorth = 0;
+
+float BaseWorth()
+{
+	if (ai.frame < gNextBaseWorth)
+		return gBaseWorth;
+	gNextBaseWorth = ai.frame + 10 * SECOND;
+	float m = 0.f;
+	for (Id defId = 1, n = ai.GetDefCount(); defId <= n; ++defId) {
+		CCircuitDef@ cdef = ai.GetCircuitDef(defId);
+		if ((cdef is null) || cdef.IsMobile() || (cdef.count == 0))
+			continue;
+		m += cdef.costM * float(cdef.count);
+	}
+	gBaseWorth = m;
+	return gBaseWorth;
+}
+
 bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 {
 	if (!CrowdAllows(pos, def))
 		return false;
+
+	// STATIC AA IS NOT A GROUND TOWER. Air ignores the front line, so the
+	// behind-base veto below refuses AA exactly where it belongs (measured
+	// 2026-08-20: zero cheap-AA orders across every game -- AAOrder places at
+	// the constructor's feet, which is the rear), and it spends from AIRDEF,
+	// not the DEF_FRONT/DEF_LOCAL ground shares this gate polices. Crowding
+	// still applies; sizing lives with the callers (AAWantedNow/HeavyAAWant).
+	if ((def !is null) && !def.IsMobile() && def.IsRoleAny(Unit::Role::AA.mask))
+		return true;
 
 	// Being attacked raises the budget; it does not remove it -- returning true
 	// outright while contested switched the gate off almost the whole game
@@ -471,18 +510,39 @@ bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 	// is circular against a share test: the further below target we are, the
 	// more we are allowed to build, cancelling the bound. Dropped; BudgetMult
 	// still ranks defence against other categories in Brain.
+	// BaseContested reads net influence at our START POSITION, which our own
+	// buildings dominate -- measured 0% of samples in three of four runs, so
+	// the step below almost never fired. RaidPressure is what we are actually
+	// losing there, and it is graduated rather than a step.
+	// THE ENEMY ON TOP OF THE BASE SUSPENDS THE BUDGET. apexearth
+	// 2026-08-21: "not seeing enough defenses being built in our base when
+	// the enemy is almost on top of us." Pressure below only MULTIPLIES the
+	// allowance; with raid damage actually landing at home the share
+	// argument is moot -- metal saved for the budget is worth nothing if the
+	// base falls. BaseRaided is the narrow trigger (real damage at home, not
+	// the influence read that sits true for whole games); crowding above
+	// still applies, so towers spread instead of stacking.
+	if (BaseRaided() && (ai.GetTunable("apex_def_panic", TUNE_DEF_PANIC) > 0.f))
+		return true;
 	float pressureAllow = (gTurtle || BaseContested()) ? 2.f : 1.f;
+	const float raidP = RaidPressure();
+	if (raidP > pressureAllow)
+		pressureAllow = raidP;
 	// Aggression-proportional, multiplicative with the binary pressure step:
 	// an enemy fielding twice our line strength doubles-plus the allowance
 	// even before anything of ours is actually being shot.
 	pressureAllow *= AggressionMult();
 	// A lead buys less defence, never none -- its metal is wanted for the plant
-	// and T2 mexes, but a role changes how much, never whether.
-	if (Factory::IsDesignatedLead() && !gPorcArmed && !gTurtle && !LosingGround())
-		pressureAllow *= ai.GetTunable("apex_lead_defence", 0.35f);
-	const float per = ai.GetTunable("apex_fence_per_income", 0.8f) * pressureAllow;
-	const float budget = 1.f + aiEconomyMgr.metal.income * per;
-
+	// and T2 mexes, but a role changes how much, never whether. TEAM ONLY:
+	// the discount exists because teammates cover the lead while it techs;
+	// solo routes through IsDesignatedLead too (techlead.as) and was buying
+	// 35% defence with nobody covering anything. apexearth 2026-08-20: "Tech
+	// leads shouldn't be a thing in one versus one games."
+	if (Factory::TeamPlay() && Factory::IsDesignatedLead()
+		&& !gPorcArmed && !gTurtle && !LosingGround())
+	{
+		pressureAllow *= ai.GetTunable("apex_lead_defence", TUNE_LEAD_DEFENCE);
+	}
 	// Two jobs, two allowances: holding the line and guarding an extractor used
 	// to share one budget, so numerous nearby mex guards spent it and the front
 	// request was refused for being over it -- the front line's size depended on
@@ -494,7 +554,7 @@ bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 	// rear-mex tower in with one behind our own start position. Ground the
 	// enemy can only reach by walking through everything else we own does not
 	// need a turret -- except when they are actually standing on it.
-	if ((ForwardFraction(pos) < 0.f) && !gTurtle && !BaseContested())
+	if ((ForwardFraction(pos) < 0.f) && !gTurtle && !BaseContested() && !BaseRaided())
 		return false;
 
 	const float fShare = Targets::At(Targets::DEF_FRONT);
@@ -502,11 +562,6 @@ bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 	const float total = (fShare + lShare > 0.f) ? (fShare + lShare) : 1.f;
 	const bool forward = OnBorder(pos) || NearFront(pos);
 
-	uint local = 0;
-	for (uint i = 0; i < gFencePos.length(); ++i) {
-		if (!OnBorder(gFencePos[i]) && !NearFront(gFencePos[i]))
-			++local;
-	}
 	if (forward) {
 		// THE FRONT LINE'S BUDGET IS A SHARE OF THE TEAM'S METAL, NOT A NUMBER OF
 		// TOWERS. Counting towers against income made every tower cost the same:
@@ -528,22 +583,31 @@ bool DefenceAllowedAt(const AIFloat3& in pos, CCircuitDef@ def = null)
 	}
 	// Local work stays local: a mex guard defends OUR extractor with OUR metal.
 	//
+	// LOCAL DEFENCE IS A SHARE OF WHAT IT PROTECTS, IN METAL.
+	//
 	// apexearth: "we need coverage early game, but once we've got it we don't
 	// need much extra... too many T1 defenses at home which we don't really
-	// need." `budget` above is pure income*per with no ceiling, so it keeps
-	// growing the local allowance forever as income rises, long after every
-	// extractor worth guarding already has a tower. Cap it against what
-	// local defence actually protects -- our own mex count -- so the
-	// allowance plateaus once coverage is real instead of continuing to draw
-	// budget off income alone. A flat per-mex multiplier, not
-	// MexGuardWanted's own frontality-scaled count -- this is a team-wide
-	// ceiling on ALL local towers, not one mex's own guard count.
-	CCircuitDef@ ownMex = SideDef3(Builder::armmex, Builder::cormex, Builder::legmex);
-	const int mexCoverCeil = (ownMex is null) ? 0
-			: int(float(ownMex.count) * ai.GetTunable("apex_local_def_per_mex", 1.5f));
-	const float mexBudget = float(mexCoverCeil) + 1.f;
-	const float localBudget = (budget < mexBudget) ? budget : mexBudget;
-	return float(local) < localBudget * (lShare / total);
+	// need" -- and then, on the mex-count ceiling that answered it: it "should
+	// be based on the amount of resource the base is worth." Both sides are now
+	// metal: what our rear towers cost against what the base they stand in is
+	// worth, so the allowance grows when the base grows, and pressure lifts it
+	// the same way it lifts the front's.
+	const float worth = BaseWorth();
+	if (worth <= 1.f)
+		return true;   // nothing standing yet: the share is undefined, not spent
+	float localM = 0.f;
+	for (uint i = 0; i < gFencePos.length(); ++i) {
+		if (OnBorder(gFencePos[i]) || NearFront(gFencePos[i]))
+			continue;
+		if (i >= gFenceDef.length())
+			continue;
+		const CCircuitDef@ d = gFenceDef[i];
+		if (d !is null)
+			localM += d.costM;
+	}
+	const float lWant = ai.GetTunable("apex_local_def_share", TUNE_LOCAL_DEF_SHARE)
+			* pressureAllow * (lShare / total);
+	return (localM / worth) < lWant;
 }
 
 void AiMakeDefence(int cluster, const AIFloat3& in pos)

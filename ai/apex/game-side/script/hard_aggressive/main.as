@@ -1,7 +1,9 @@
+#include "tunables.as"       // EVERY default, in one file -- edit here
 #include "../side.as"
 #include "../world.as"
 #include "perf.as"
 #include "targets.as"          // EVERY build ratio, in one file
+#include "policy.as"           // ...and every eco THRESHOLD, in this one
 #include "manager/brain/budget.as"  // the one place the build split is stated
 #include "manager/brain.as"       // macro view: rules propose Wants, this ranks them
 #include "manager/brain/mix.as"   // ...and the target army composition
@@ -63,7 +65,7 @@ void AiMain()
 	// write-only. Side effect, accepted: def power scales too, so our OWN
 	// Behemoths read stronger -- they are chargers and ignore the margin anyway.
 	{
-		const float mult = ai.GetTunable("apex_behemoth_threat", 2.f);
+		const float mult = ai.GetTunable("apex_behemoth_threat", TUNE_BEHEMOTH_THREAT);
 		CCircuitDef@ jugg = ai.GetCircuitDef("corjugg");
 		if ((jugg !is null) && (mult > 1.f)) {
 			const float t0 = jugg.threat;
@@ -103,6 +105,9 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	t = Perf::T0();
 	Military::UpdateLanePos();
 	Military::UpdateDeathLedger();
+	Military::UpdateWithdraw();
+	Air::UpdateFighterStations();
+	Air::RecycleOldFighters();
 	Brain::UpdateNukes();
 	Military::UpdateSpamPosture();
 	Military::UpdatePosture();
@@ -244,6 +249,11 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	{
 		Military::NoteCombatLoss(cdef.costM, Military::ForwardFraction(at));
 	}
+	// A BUILDING OF OURS DYING ON OUR OWN GROUND IS THE INVASION SIGNAL.
+	// Filtered out of the combat ledger above (mobile only) and read by nothing
+	// else, so an enemy could level the base without any defence rule noticing.
+	if ((cdef !is null) && !cdef.IsMobile() && WasFinished(int(unit.id)))
+		Military::NoteStructureLoss(at, cdef.costM);
 	const string hist = Builder::TakeHistFor(int(unit.id));
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")
 		+ " id=" + unit.id + " frame=" + ai.frame
@@ -253,7 +263,8 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		+ " fwd=" + formatFloat(Military::ForwardFraction(at), "", 0, 2)
 		+ " built=" + (WasFinished(int(unit.id)) ? 1 : 0)
 		+ " mob=" + (((cdef !is null) && cdef.IsMobile()) ? 1 : 0)
-		+ " hist=[" + hist + "]");
+		+ " hist=[" + hist + "]"
+		+ " fhist=[" + Military::TakeFightHistFor(int(unit.id)) + "]");
 	Perf::Add("hk.destroyed", hkT);
 }
 
@@ -265,6 +276,12 @@ void AiUnitDestroyedBy(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 {
 	if ((unit is null) || (attackerDef is null))
 		return;
+	// BEING attacked by T2 is the fast, common sighting -- killing their T2
+	// (the only other def-level channel) can lag by many minutes, and did:
+	// apexearth watched a committed game stay T1 against an enemy that had
+	// teched. His own wording of the release: "if the enemy starts to attack
+	// you with tier two, you have to upgrade."
+	Factory::NoteEnemyDefSeen(attackerDef);
 	const CCircuitDef@ cdef = unit.circuitDef;
 	if ((cdef is null) || !cdef.IsMobile() || !WasFinished(int(unit.id)))
 		return;
@@ -281,6 +298,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 		return;
 	double hkT = Perf::T0();
 	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs);
+	Factory::NoteEnemyDefSeen(edef);
 	Perf::Add("hk.enemydead", hkT);
 }
 

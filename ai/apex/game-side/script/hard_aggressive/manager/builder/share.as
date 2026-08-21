@@ -64,17 +64,53 @@ int ConsWantedFor(CCircuitDef@ con)
 	// is the measured starvation the T2ArmyShort caller warns about (armack=7/3,
 	// conT2 stuck at 4 against stock's 16). The overshoot being fixed here is a
 	// late-game one, and late game is where the advanced curve runs away.
-	const float per = ai.GetTunable("apex_con_tasks_each", 4.f);
+	const float per = ai.GetTunable("apex_con_tasks_each", TUNE_CON_TASKS_EACH);
 	if (advanced && (per > 0.f)) {
 		const int demand = int(float(aiBuilderMgr.GetBuildTaskCount()) / per) + 1;
 		if (demand < want)
 			want = demand;
 	}
+	// A STANDING REACTOR REQUEST IS TWO LANES OF WORK. With one T2 con the
+	// fusion waits behind the moho queue (measured 2026-08-21: asked at
+	// 12.8m, stood ~24m, nine mohos built in between). The economy that
+	// justified the reactor buys the second pair of hands.
+	if (advanced && (want < 2) && !HaveReactor() && (gFusionsAsked > 0)
+		&& (Factory::SteadyIncome()
+			>= ai.GetTunable("apex_fusion_prefer_income", TUNE_FUSION_PREFER_INCOME)))
+	{
+		want = 2;
+	}
+	// GREED BUYS BUILDERS. Stock's team eco players hold 2.5-4x our
+	// constructor fleet by 10m (8v8 measured: con-metal 2130 vs 790 best)
+	// and the mex race follows the con race. A PASSIVE stance is the
+	// license: while the enemy visibly is not coming, the con curve rises.
+	if (Military::Stance() == int(Military::S_PASSIVE)) {
+		want = int(float(want)
+				* Policy::GreedCons());
+	}
 	// AN EMPTY BANK IS NOT A BUILD-POWER SHORTAGE. More constructors add build
 	// power we cannot feed, and cost the metal we do not have -- the mirror of
 	// the full-bank bonus the facqueue applies on the other side.
 	if (aiEconomyMgr.isMetalEmpty)
-		want = int(float(want) * ai.GetTunable("apex_con_empty_mult", 0.5f));
+		want = int(float(want) * ai.GetTunable("apex_con_empty_mult", TUNE_CON_EMPTY_MULT));
+	// THE BUDGET BINDS ITS BIGGEST SPENDER. Cons and labs are the BUILDPOWER
+	// category, and this curve answered only "how many could we support" --
+	// measured 2026-08-20 (t009 Altored): bp share 0.62 against target 0.16
+	// while army sat at 0.10 of a 0.48 target, and the game was lost with the
+	// commander alone at home. While build power is over its share and the
+	// army is under its own, the want scales down by the overage ratio -- a
+	// deferral that reopens by itself as the shares move, not a cap.
+	const float bpShare = Brain::ShareOf(Brain::BUILDPOWER);
+	const float bpTarget = Brain::TargetShare(Brain::BUILDPOWER);
+	if ((bpShare > bpTarget)
+		&& (Brain::ShareOf(Brain::ARMY) < Brain::TargetShare(Brain::ARMY)))
+	{
+		float mult = bpTarget / bpShare;
+		const float lo = ai.GetTunable("apex_con_budget_floor", TUNE_CON_BUDGET_FLOOR);
+		if (mult < lo)
+			mult = lo;
+		want = int(float(want) * mult);
+	}
 	return (want < 1) ? 1 : want;
 }
 
@@ -83,19 +119,45 @@ int ConsWantedTier(bool advanced, bool air)
 	const float inc = aiEconomyMgr.metal.income;
 	if (inc < 2.f)
 		return 1;
-	const float a = advanced ? ai.GetTunable("apex_con_log_t2_a", 6.0f)
-	                         : ai.GetTunable("apex_con_log_t1_a", 4.6f);
-	const float b = advanced ? ai.GetTunable("apex_con_log_t2_b", -16.0f)
-	                         : ai.GetTunable("apex_con_log_t1_b", -6.55f);
+	const float a = advanced ? Policy::ConLogT2A() : Policy::ConLogT1A();
+	const float b = advanced ? Policy::ConLogT2B() : Policy::ConLogT1B();
 	const int want = int(a * log(inc) + b);
 	return (want < 1) ? 1 : want;
+}
+
+// A FULL METAL BANK MEANS "WE CANNOT SPEND", WHICH IS NOT ALWAYS "WE ARE RICH".
+//
+// apexearth 2026-08-19: "sometimes it's really bad because we also don't have
+// any energy... it happens right after we got attacked. So our build power got
+// interrupted, but they didn't hit enough of our economy. So we're full of
+// metal. Maybe they killed our fusion. So we're kinda trying to rebuild, but we
+// just make 6 advanced cons while we also slowly rebuild our energy."
+//
+// Constructors CONSUME energy to build, so answering an energy-caused metal
+// surplus with more constructors makes the thing that caused it worse. The bank
+// only argues for more builders when the reason it is full is that we have more
+// metal than hands -- not when it is full because the grid is down.
+//
+// Reuses the energy lane's own forecast (apex_energy_headroom) rather than a new
+// number, and refuses outright while a generator is being rebuilt: that IS the
+// "we are recovering" case, and it is exactly when the surge was landing.
+bool MetalSurplusIsReal()
+{
+	if (!aiEconomyMgr.isMetalFull)
+		return false;
+	if (aiEconomyMgr.isEnergyStalling)
+		return false;
+	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) > 0)
+		return false;
+	const float need = aiEconomyMgr.energy.pull * Policy::EnergyHeadroom();
+	return aiEconomyMgr.energy.income >= need;
 }
 
 // A full bank overrides the curve, added on top rather than folded into it.
 int AdvConsWanted()
 {
 	int want = ConsWantedTier(true, false);
-	if (aiEconomyMgr.isMetalFull)
+	if (MetalSurplusIsReal())
 		want += ADV_CON_FULL_BONUS;
 
 	// What the economy can afford is a ceiling, not a target: the curve above
@@ -103,7 +165,7 @@ int AdvConsWanted()
 	// building straight to it puts metal into idle builders instead of army.
 	// CEconomyManager::MakeEconomyTasks saturates at buildTasksCount ==
 	// workers * 8, so wanting one at half that is a builder with a real queue.
-	const float per = ai.GetTunable("apex_con_tasks_each", 4.f);
+	const float per = ai.GetTunable("apex_con_tasks_each", TUNE_CON_TASKS_EACH);
 	const int demand = (per > 0.f)
 			? int(float(aiBuilderMgr.GetBuildTaskCount()) / per) + 1 : want;
 	return (demand < want) ? demand : want;
@@ -141,8 +203,16 @@ bool ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
 
 	// Military::UpdateSling reads gGotAdvCon to stop donating metal to the
 	// lead once a follower has its own advanced constructor.
+	//
+	// NOT in a duel: with no allies there are no gifts, but this branch set
+	// the flag on our OWN first adv con, and the choose.as "gifted adv con
+	// builds the first fusion before the first T2 plant" hold then treated
+	// our only builder as a spare -- measured 2026-08-20 (46m seed-27 loss),
+	// it held the T2 lab REBUILD from 32.7m to game end, haveT2=0 for the
+	// last 13 minutes.
 	if (ai.teamId != Factory::RushLeadTeamId()) {
-		gGotAdvCon = true;   // we have ours; stop paying for the lead's
+		if (!Persona::Duel())
+			gGotAdvCon = true;   // we have ours; stop paying for the lead's
 		return false;
 	}
 

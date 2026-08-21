@@ -351,10 +351,7 @@ void CArtilleryTask::Fallback(CCircuitUnit* unit, bool proceed)
 	const int frame = circuit->GetLastFrame();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 
-	float x = rand() % terrainMgr->GetTerrainWidth();
-	float z = rand() % terrainMgr->GetTerrainHeight();
-	position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
-	position = terrainMgr->GetMovePosition(unit->GetArea(), position);
+	position = RoamPos(unit);
 	if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
 		unit->GetTravelAct()->StateWait();
 	}

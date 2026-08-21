@@ -101,7 +101,7 @@ const int   REACTOR_BATCH   = 10;
 // How many standing reactors sit within chain reach of this spot.
 int ReactorNeighbors(const AIFloat3& in spot, AIFloat3& out centroid)
 {
-	const float gap = ai.GetTunable("apex_reactor_spacing", REACTOR_SECTION);
+	const float gap = ai.GetTunable("apex_reactor_spacing", TUNE_REACTOR_SPACING);
 	int n = 0;
 	centroid = AIFloat3(0.f, 0.f, 0.f);
 	for (uint i = 0; i < gFusions.length(); ++i) {
@@ -138,7 +138,7 @@ bool TightenToBatch(CCircuitDef@ want, const AIFloat3& in cur, AIFloat3& out spo
 {
 	spot = cur;
 	CCircuitUnit@ near = null;
-	float best = ai.GetTunable("apex_reactor_spacing", REACTOR_SECTION);
+	float best = ai.GetTunable("apex_reactor_spacing", TUNE_REACTOR_SPACING);
 	for (uint i = 0; i < gFusions.length(); ++i) {
 		if (gFusions[i] is null)
 			continue;
@@ -152,7 +152,7 @@ bool TightenToBatch(CCircuitDef@ want, const AIFloat3& in cur, AIFloat3& out spo
 		return false;
 	const AIFloat3 at = near.GetPos(ai.frame);
 	const AIFloat3 site = ai.FindBuildSiteNear(want, at,
-			ai.GetTunable("apex_reactor_tight", 200.f));
+			ai.GetTunable("apex_reactor_tight", TUNE_REACTOR_TIGHT));
 	if (!OnMap(site) || !ReactorBatchOK(site))
 		return false;
 	// Only accept it if it actually tightened things up.
@@ -171,7 +171,7 @@ bool SectionSafeSpot(CCircuitDef@ want, const AIFloat3& in cur, AIFloat3& out sp
 			spot = tight;
 		return true;
 	}
-	const float gap = ai.GetTunable("apex_reactor_spacing", REACTOR_SECTION);
+	const float gap = ai.GetTunable("apex_reactor_spacing", TUNE_REACTOR_SPACING);
 	AIFloat3 centroid;
 	ReactorNeighbors(cur, centroid);
 	AIFloat3 dir = cur - centroid;
@@ -224,7 +224,7 @@ int ReactorsInFlight(float cost)
 bool AdvsolPastItsPoint()
 {
 	return (aiEconomyMgr.energy.income
-			>= ai.GetTunable("apex_advsol_stop", 1000.f))
+			>= ai.GetTunable("apex_advsol_stop", TUNE_ADVSOL_STOP))
 		&& Factory::gHaveT2;
 }
 
@@ -241,7 +241,7 @@ CCircuitDef@ AdvSolDef()
 	if ((adv is null) || EnergyReclaimable(adv.GetName()) || AdvsolPastItsPoint())
 		return null;
 	if (aiEconomyMgr.energy.income
-			< ai.GetTunable("apex_advsol_energy", ADVSOL_MIN_ENERGY))
+			< ai.GetTunable("apex_advsol_energy", TUNE_ADVSOL_ENERGY))
 		return null;
 	return adv.IsAvailable(ai.frame) ? adv : null;
 }
@@ -445,14 +445,14 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	if (!HaveReactor()) {
 		CCircuitDef@ moho = SideDef3("armmoho", "cormoho", "legmoho");
 		firstFusionDue = (moho !is null) && (float(moho.count)
-				>= ai.GetTunable("apex_first_fusion_mohos", 2.f));
+				>= ai.GetTunable("apex_first_fusion_mohos", TUNE_FIRST_FUSION_MOHOS));
 	}
 	// The income bar applies only BEFORE the first reactor: after it the
 	// pipeline is continuous -- apexearth: "we are always making a fusion or
 	// afus once we get to that stage."
 	if (!HaveReactor() && !investedEnough && !firstFusionDue
 		&& (Factory::SteadyIncome()
-			< ai.GetTunable("apex_fusion_income", FUSION_SOLO_INCOME)))
+			< ai.GetTunable("apex_fusion_income", TUNE_FUSION_INCOME)))
 	{
 		return null;
 	}
@@ -461,6 +461,13 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// different form. apexearth: 'Change this to: "We must have a T2 con."'
 	if (!gHaveAdvCon)
 		return null;
+	// The grid must afford BUILDING it -- see Policy::FusionMinEnergy. The
+	// advsol ladder keeps running below the bar and is what raises it.
+	if (!HaveReactor()
+		&& (aiEconomyMgr.energy.income < Policy::FusionMinEnergy()))
+	{
+		return null;
+	}
 	// apexearth 2026-08-15: this used to refuse while EnergyWasting() (bank
 	// nearly full or spare energy over CONVERT_MIN_SPARE), on the theory that
 	// converters would clear the spill first and a reactor could wait. In
@@ -482,7 +489,7 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 	// SERIAL: one reactor under construction at a time, fusion or AFUS, never
 	// both. The gap-free half lives in the pipeline hook (maketask.as), which
 	// re-asks the moment ReactorPipelineOpen() reads true again.
-	if ((ai.GetTunable("apex_reactor_serial", 1.f) > 0.f) && !ReactorPipelineOpen())
+	if ((ai.GetTunable("apex_reactor_serial", TUNE_REACTOR_SERIAL) > 0.f) && !ReactorPipelineOpen())
 		return null;
 	if (want !is null) {
 		const int allowed = ReactorsInFlight(want.costM);
@@ -500,14 +507,44 @@ IUnitTask@ EcoFusion(CCircuitUnit@ unit)
 			return null;
 	}
 
-	// Only an asker that can actually BUILD the reactor may request one --
+	// Only an asker that can actually BUILD the reactor may take the task --
 	// measured (8v8 Glitters, 20260815-064126): 208 fusion tasks handed to
-	// T1 constructors, every one a guaranteed capability-guard null, zero
-	// fusions built all game while stock built nine on the same income. The
-	// early return leaves the want standing for the next advanced constructor
-	// that reaches this rule instead of burning it on a unit that cannot act.
-	if ((want !is null) && !unit.circuitDef.CanBuild(want))
+	// T1 constructors, every one a guaranteed capability-guard null. But
+	// "leave the want standing for the next advanced constructor" assumed one
+	// ever ARRIVES here: measured 2026-08-20 (46m 1v1, seed 27), the single
+	// adv con lived on the moho pipeline and never idled through this rule --
+	// asked=0, canBuild=0 on every diag, zero fusions at 103-169 m/s while
+	// stock built three and rode them to gantry. So an incapable asker now
+	// POSTS the task into the pool instead of dropping it; the elector hands
+	// it to whoever can build it, same shape as the factory build-power ask.
+	if ((want !is null) && !unit.circuitDef.CanBuild(want)) {
+		if (!gHaveAdvCon)
+			return null;
+		AIFloat3 pooledAt(-1.f, 0.f, -1.f);   // invalid until a picker fills it
+		// NANO GRAVITY (apexearth 2026-08-21: "Nano turrets should be like
+		// gravity -- we want to build near them"): the pool-post is the
+		// busiest fusion path (a T1 con or the commander proposes, an adv con
+		// executes), and it was the one place the reactor site ignored the
+		// assist field it would otherwise finish inside.
+		AIFloat3 nn;
+		if (NanoCluster(nn)) {
+			const AIFloat3 s = ai.FindBuildSiteNear(want, nn, 450.f);
+			if (OnMap(s))
+				pooledAt = s;
+		}
+		if (!OnMap(pooledAt) && !BandSpot(unit, want, false, pooledAt))
+			pooledAt = gHomePos;
+		if (!OnMap(pooledAt))
+			return null;
+		IUnitTask@ posted = Requests::Create(want, Task::BuildType::ENERGY,
+				Task::Priority::HIGH, pooledAt, SQUARE_SIZE * 32);
+		if (posted !is null) {
+			++gFusionsAsked;
+			AiLog(Factory::T() + "apex: fusion posted to the pool -- asker "
+				+ unit.circuitDef.GetName() + " cannot build it");
+		}
 		return null;
+	}
 
 	AIFloat3 spot;
 	const bool okDef = (want !is null) && want.IsAvailable(ai.frame);

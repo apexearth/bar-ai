@@ -101,14 +101,14 @@ CCircuitDef@ IntelPlantToBuild()
 		&& (Have(gPlant1) == 0))
 	{
 		if (IsAirLead()
-			&& (inc >= ai.GetTunable("apex_intel_air_income", 25.f)))
+			&& (inc >= ai.GetTunable("apex_intel_air_income", TUNE_INTEL_AIR_INCOME)))
 			return gPlant1;
-		if (inc >= ai.GetTunable("apex_air_mandatory_income", 100.f))
+		if (inc >= ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME))
 			return gPlant1;
 		// An enemy living on the water makes air the reachability answer, not a
 		// luxury -- the lead's income bar applies to everyone then.
 		if (Military::EnemyAfloat()
-			&& (inc >= ai.GetTunable("apex_intel_air_income", 25.f)))
+			&& (inc >= ai.GetTunable("apex_intel_air_income", TUNE_INTEL_AIR_INCOME)))
 			return gPlant1;
 		return null;
 	}
@@ -119,7 +119,7 @@ CCircuitDef@ IntelPlantToBuild()
 	// apex_adv_air_income of metal -- a rich economy wants several, and
 	// PlantApproved's per-def curve still bounds it.
 	if ((gPlant2 !is null) && gPlant2.IsAvailable(ai.frame) && HaveAirCon()) {
-		int wantN = int(inc / ai.GetTunable("apex_adv_air_income", 150.f));
+		int wantN = int(inc / ai.GetTunable("apex_adv_air_income", TUNE_ADV_AIR_INCOME));
 		// AIR PLANTS FOLLOW MILITARY NEED -- the first included. apexearth
 		// 2026-08-19, a 1v1 lost with <10% relative army, a silo and two T2
 		// air labs: "I wouldn't even want to see a first T2 air lab." While
@@ -128,7 +128,7 @@ CCircuitDef@ IntelPlantToBuild()
 		// the fighters that live here are themselves the military need.
 		const bool armyFedA = Brain::ShareOf(Brain::ARMY)
 				>= Brain::TargetShare(Brain::ARMY)
-					* ai.GetTunable("apex_extra_plant_army", 0.85f)
+					* ai.GetTunable("apex_extra_plant_army", TUNE_EXTRA_PLANT_ARMY)
 				// ...AND THE ARMY MUST STILL BE ALIVE. ShareOf(ARMY) counts metal
 				// already spent, which survives the army being wiped -- so the
 				// gate opened widest just after a lost fight. Standing army
@@ -144,7 +144,7 @@ CCircuitDef@ IntelPlantToBuild()
 		// alone reads 0 below 150 m/s, so the plant was never asked for).
 		if ((wantN < 1)
 			&& (Military::EnemyAfloat()
-				|| (inc >= ai.GetTunable("apex_air_mandatory_income", 100.f))))
+				|| (inc >= ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME))))
 			wantN = 1;
 		if (Have(gPlant2) < wantN)
 			return gPlant2;

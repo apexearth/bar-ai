@@ -258,7 +258,7 @@ uint HomeMexOutstanding()
 	if ((mex is null) || (mex.count <= 0))
 		return 0;
 	array<CCircuitUnit@>@ mine = ai.GetOwnUnitsOfDef(mex, gHomePos,
-			ai.GetTunable("apex_mexup_home_r", 1200.f));
+			ai.GetTunable("apex_mexup_home_r", TUNE_MEXUP_HOME_R));
 	return (mine is null) ? 0 : mine.length();
 }
 

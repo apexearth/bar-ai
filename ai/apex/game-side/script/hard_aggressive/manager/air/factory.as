@@ -4,6 +4,17 @@ CCircuitDef@ NextAirDef(bool advanced)
 {
 	CCircuitDef@ bomber  = advanced ? gBomber  : gBomber1;
 	CCircuitDef@ fighter = advanced ? gFighter : gFighter1;
+	// ONCE THE ADVANCED FIGHTER EXISTS, THE BASIC PLANT STOPS BUILDING THE OLD
+	// ONE. Fighters are counted across both tiers, so a T1 plant kept topping the
+	// escort up with 73-metal Falcons and the wing never became a T2 wing --
+	// apexearth: "late game it needs to be T2 fighters, not T1." The plant still
+	// builds its bomber and its constructor; only the obsolete fighter stops.
+	// IsAvailable is true as soon as the def is unlocked, which can be well
+	// before an advanced plant exists -- gating on it stopped T1 fighters while
+	// nothing could yet build T2, i.e. no fighters at all. The honest test is
+	// that replacements are actually ARRIVING.
+	if (!advanced && (gFighter !is null) && (gFighter.count > 0))
+		@fighter = null;
 	// Progress is counted across BOTH tiers, so a basic plant stops producing
 	// once the advanced one has finished the job and vice versa.
 	const int nb = Bombers();
@@ -79,6 +90,29 @@ IUnitTask@ MakeFactoryTask(CCircuitUnit@ fac)
 
 	if ((gPlant2 is null) || (fac.circuitDef.id != gPlant2.id))
 		return null;
+
+	// T2 AIR CONSTRUCTORS BEFORE THE WING. apexearth 2026-08-21: "an air
+	// plant making T2 constructors... very useful late game and help us
+	// build and expand really fast. By ~200 metal you should definitely be
+	// having one." The advanced plant only ever recruited wing units; the
+	// count scales with income (one per apex_aca_per_income), never a cap --
+	// air cons have no ground hitbox, so the base-crowding argument that
+	// bounds ground builders does not apply.
+	if ((gCon2 !is null) && gCon2.IsAvailable(ai.frame)) {
+		const int acaWant = int(aiEconomyMgr.metal.income
+				/ ai.GetTunable("apex_aca_per_income", TUNE_ACA_PER_INCOME));
+		if (gCon2.count < acaWant) {
+			IUnitTask@ aca = aiFactoryMgr.Enqueue(TaskS::Recruit(
+					Task::RecruitType::BUILDPOWER, Task::Priority::HIGH,
+					gCon2, fac.GetPos(ai.frame), 0.f));
+			if (aca !is null) {
+				gNextAirOrder = ai.frame + AIR_ORDER_SPACING;
+				AiLog(Factory::T() + "apex: advanced plant recruits "
+					+ gCon2.GetName() + " (" + gCon2.count + "/" + acaWant + ")");
+				return aca;
+			}
+		}
+	}
 
 	CCircuitDef@ want = NextAirDef(true);
 	if (want is null)

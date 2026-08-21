@@ -55,18 +55,18 @@ int PlantsWanted(const CCircuitDef@ fac)
 		// always won a corgant landed on a 34 m/s economy and bankrupted it
 		// (watched 2026-08-16, 59k produced vs stock's 119k). The first
 		// gantry now waits for the same per-income bar as every later one.
-		return int(inc / ai.GetTunable("apex_plants_t3_per", 100.f));
+		return int(inc / ai.GetTunable("apex_plants_t3_per", TUNE_PLANTS_T3_PER));
 	else if ((userData[fac.id].attr & Attr::T2) != 0)
 		// -5.8, was -7.0: the old intercept put the SECOND T2 line at 178 m/s
 		// income -- one lab cannot spend a 160-income economy (audited 42% of
 		// samples at the metal cap), and the second-line discipline gates
 		// (own adv con, T2 mex, reactor first) still hold below this curve.
 		// Second line now clears at ~90 m/s, third at ~160.
-		want = int(ai.GetTunable("apex_plants_t2_a", -5.8f)
-				+ ai.GetTunable("apex_plants_t2_b", 1.737f) * log(inc));
+		want = int(ai.GetTunable("apex_plants_t2_a", TUNE_PLANTS_T2_A)
+				+ ai.GetTunable("apex_plants_t2_b", TUNE_PLANTS_T2_B) * log(inc));
 	else
-		want = int(ai.GetTunable("apex_plants_t1_a", -5.892f)
-				+ ai.GetTunable("apex_plants_t1_b", 2.301f) * log(inc));
+		want = int(ai.GetTunable("apex_plants_t1_a", TUNE_PLANTS_T1_A)
+				+ ai.GetTunable("apex_plants_t1_b", TUNE_PLANTS_T1_B) * log(inc));
 	return (want < 1) ? 1 : want;
 }
 
@@ -124,7 +124,7 @@ array<int> gAskCount;
 
 void SweepPlantAsks()
 {
-	const int ttl = int(ai.GetTunable("apex_plant_ask_ttl", 90.f)) * SECOND;
+	const int ttl = int(ai.GetTunable("apex_plant_ask_ttl", TUNE_PLANT_ASK_TTL)) * SECOND;
 	// The TTL alone is not enough to expire an ask: a T2 lab at 20 m/s income
 	// is not STARTED inside 90s, so the ask aged out, the gate read have=0
 	// again, and a second armalab was approved and built (watched 2026-08-16).
@@ -155,7 +155,7 @@ void SweepPlantAsks()
 	// live MP and the 4v4 smoke). With the pool short, an ask still young
 	// enough that a real enqueue would already show gets a short fuse; the
 	// long TTL remains for asks that were once backed (walk-and-build gaps).
-	const int fuse = int(ai.GetTunable("apex_plant_ask_fuse", 10.f)) * SECOND;
+	const int fuse = int(ai.GetTunable("apex_plant_ask_fuse", TUNE_PLANT_ASK_FUSE)) * SECOND;
 	for (uint i = gAskDef.length(); i > 0; --i) {
 		const uint k = i - 1;
 		const int age = ai.frame - gAskFrame[k];
@@ -275,6 +275,22 @@ bool PlantApproved(CCircuitDef@ want)
 	if (want is null)
 		return false;
 	SweepPlantAsks();
+	// THE T1-COMMIT HOLDS HERE, at the backstop no entrance can bypass:
+	// gating only MayPursueT2/RushReady let six T2 plants through in the
+	// first armed game (f1v1-t1c-on-41, "plant approved armalab" at 15 m/s).
+	if (T1Commit()) {
+		if ((userData[want.id].attr & (Attr::T2 | Attr::T3)) != 0)
+			return false;
+		// THE COMMIT IS ARMY, NOT INFRASTRUCTURE. With the T2 sink closed the
+		// plant logic spent the freed metal on MORE PLANTS -- apexearth,
+		// watching: "we had a T1 bot lab, T1 vehicle lab, and T1 air lab...
+		// really bad performance." An air lab is never part of a T1 land
+		// commit, and past two land plants the metal belongs to units.
+		if (IsAirFactory(want))
+			return false;
+		if (gFactoryCount >= int(ai.GetTunable("apex_t1_commit_plants", TUNE_T1_COMMIT_PLANTS)))
+			return false;
+	}
 	const int have = int(want.count) + InFlightOf(want);
 	// ONE basic air plant, full stop (apexearth, twice: "stop us from making
 	// 2 t1 air labs"). Backstopped HERE so no entrance -- ours or the
@@ -392,7 +408,7 @@ bool PlantApproved(CCircuitDef@ want)
 			if (gT2StuckSince < 0)
 				gT2StuckSince = ai.frame;
 			if (ai.frame - gT2StuckSince
-				>= int(ai.GetTunable("apex_t2_stuck_secs", 240.f)) * SECOND)
+				>= int(ai.GetTunable("apex_t2_stuck_secs", TUNE_T2_STUCK_SECS)) * SECOND)
 			{
 				gT2StuckSince = ai.frame;   // re-arm: one re-order per window
 				AiLog(T() + "apex: first T2 plant is stuck unfinished -- "
@@ -417,7 +433,7 @@ bool PlantApproved(CCircuitDef@ want)
 		// spend is near its budget target.
 		const bool armyFed = Brain::ShareOf(Brain::ARMY)
 				>= Brain::TargetShare(Brain::ARMY)
-					* ai.GetTunable("apex_extra_plant_army", 0.85f)
+					* ai.GetTunable("apex_extra_plant_army", TUNE_EXTRA_PLANT_ARMY)
 				// ...AND THE ARMY MUST STILL BE ALIVE. ShareOf(ARMY) counts metal
 				// already spent, which survives the army being wiped -- so the
 				// gate opened widest just after a lost fight. Standing army
@@ -452,7 +468,7 @@ bool PlantApproved(CCircuitDef@ want)
 		// releases the plant, so this cannot deadlock the tech path.
 		if ((t2have == 0) && Builder::gGotAdvCon && haveAdvCon2
 			&& !Builder::HaveReactor()
-			&& (SteadyIncome() >= ai.GetTunable("apex_fusion_income", 30.f)))
+			&& (SteadyIncome() >= ai.GetTunable("apex_fusion_income", TUNE_FUSION_INCOME)))
 		{
 			if (ai.frame >= gNextT2TotalLog) {
 				gNextT2TotalLog = ai.frame + 60 * SECOND;

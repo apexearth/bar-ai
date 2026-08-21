@@ -26,6 +26,7 @@
 
 #include "OOAICallback.h"
 #include "AISCommands.h"
+#include "Drawer.h"
 
 namespace circuit {
 
@@ -82,7 +83,15 @@ void CDefendTask::AssignTo(CCircuitUnit* unit)
 
 	int squareSize = manager->GetCircuit()->GetPathfinder()->GetSquareSize();
 	ITravelAction* travelAction;
-	if (cdef->IsAttrSiege() && (manager->GetCircuit()->GetTunable("apex_siege_fight", 1.f) > 0.f)) {
+	// Formation travel (apexearth 2026-08-21): the whole ground squad marches on
+	// synchronized-speed FIGHT orders, not per-unit moves -- engage together en
+	// route, hold the line together. Wounded still leave: RetreatTask swaps the
+	// travel act out (dropping the fight order), and the engagement standoff
+	// ring still owns distance-keeping once fighting starts. Flyers keep MOVE.
+	if ((cdef->IsAttrSiege() && (manager->GetCircuit()->GetTunable("apex_siege_fight", 1.f) > 0.f))
+		|| (!cdef->IsAbleToFly()
+			&& (manager->GetCircuit()->GetTunable("apex_fight_travel", 1.f) > 0.f)))
+	{
 		travelAction = new CFightAction(unit, squareSize);
 	} else {
 		travelAction = new CMoveAction(unit, squareSize);
@@ -285,7 +294,7 @@ bool CDefendTask::FindTarget()
 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
 	SArea* area = leader->GetArea();
 	CCircuitDef* cdef = leader->GetCircuitDef();
-	const float maxPower = attackPower * powerMod;
+	const float maxPower = attackPower * powerMod * GetHealthScale();
 	const float weaponRange = cdef->GetMaxRange() * 0.9f;
 	const int canTargetCat = cdef->GetTargetCategory();
 	const int noChaseCat = cdef->GetNoChaseCategory();
@@ -403,6 +412,15 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
 	pPath = query->GetPathInfo();
 
 	if (!pPath->posPath.empty()) {
+		// apex: intent pings for the watching player (apexearth: "Can we have
+		// our squads ping on the map so that I can understand what they're
+		// thinking when they're moving?"). apex_ping=1 only; throttled by the
+		// path grant, which fires on decision, not per tick.
+		CCircuitAI* circuit = manager->GetCircuit();
+		if (circuit->GetTunable("apex_ping", 0.f) > 0.f) {
+			circuit->GetDrawer()->AddPoint(leader->GetLastPos(),
+					utils::string_format("DEF chase n=%d", (int)units.size()).c_str());
+		}
 		ActivePath(lowestSpeed);
 	} else {
 		Fallback();
@@ -438,7 +456,18 @@ void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
 
 	if (!pPath->path.empty()) {
 		if (pPath->path.size() > 2) {
-			ActivePath();
+			// apex: the pool marches TOGETHER. Uncapped, the fast units reach
+			// the front first and fight alone -- apexearth: "we often have our
+			// faster units running in and engaging the enemy army first, they
+			// die, then the slower units in the back either fight and die, or
+			// are already running away... move at the speed of the slowest
+			// unit in the group. This helps them to all stay together."
+			CCircuitAI* circuit = manager->GetCircuit();
+			if (circuit->GetTunable("apex_ping", 0.f) > 0.f) {
+				circuit->GetDrawer()->AddPoint(leader->GetLastPos(),
+						utils::string_format("DEF march n=%d", (int)units.size()).c_str());
+			}
+			ActivePath(lowestSpeed);
 		}
 	} else {
 		FallbackBasePos();

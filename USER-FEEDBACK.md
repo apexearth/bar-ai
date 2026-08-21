@@ -10,6 +10,44 @@ work is cheaper than being told the same thing a fourth time.
 
 ---
 
+**Archive policy (apexearth, 2026-08-20): this file must not grow forever.**
+When an entry is completed (landed + he has seen it work, or confirmed live),
+MOVE it to `feedback/<date>.md` — date of the original request. This file
+holds only unresolved asks and standing preferences.
+
+## STANDING RULE — Always be expanding the economy (restored 2026-08-21)
+
+His words, 2026-08-21: "Are we generally making sure that we are always
+making some economy like energy or converters? This is usually the best
+choice." And on being shown it was lost: "That's an old rule I made early
+on, always be expanding the economy. We lost it at some point."
+
+It had drifted out: every eco lane became demand-gated (energy on a
+forecast shortfall, converters on measurable spare), and at income ~ pull
+neither fires — measured 8v8 players going 5-13 minutes with zero eco
+completions while stock never passed ~4. Restored as the AlwaysEco ladder
+rule (builder/mexguard.as, apex_always_eco): when nothing energy-side is in
+flight, build converters if energy spills, else the next generator rung.
+Treat any future gate that can silence ALL eco lanes at once as a violation
+of this rule.
+
+## UNRESOLVED — Enter fights together: pre-contact assembly, "crossing the T" (2026-08-20)
+
+"When you're about to get into a fight, you need to organize your units so
+that all of them enter the fight at about the same time. This means
+spreading your units out, crossing the t." The travel wall from his earlier
+"wall of fire" feedback exists in the custom C++; the missing pieces are the
+pre-contact assembly wait, approach speed-matching, and DEFEND pools
+bypassing squad shape entirely. Full spec in ISSUES.md (C++ SPEC entry,
+2026-08-20).
+
+## UNRESOLVED remnants of the late-game air doctrine (2026-08-20)
+
+Landed halves archived (feedback/2026-08-20.md). Still open: flak PLACEMENT
+is not yet "spread out around your base" (it clusters at the nano block /
+front), and scouting COVERAGE has never been measured against the threat
+readings it feeds.
+
 ## UNRESOLVED — The army-brain campaign: three detectors and a merge fix (2026-08-19)
 
 Four directives from one hosted-play night, all one campaign:
@@ -39,21 +77,6 @@ Four directives from one hosted-play night, all one campaign:
    trade so poorly"). Fix the C++ squad merge first; the odds check is only as
    good as the squad it is computed for. Measure on fight1v1.py trade ratios.
 
-## Late game: chaff and rezbots, not T1 assault; a pulsar line on full metal
-
-2026-08-17, watching live: Thug/Centurion-class units late game are "very
-expensive and probably not worthwhile. Rezbots, ticks, those are usually what
-we want... light units to waste enemy fire." And on defence: "if we're arm we
-really need to make lots more pulsars... Same with Legion Bastions... We
-literally need a line of them across the front of our bases... We're full on
-metal so we ought to be able to afford that." Landed same day: post-T2 T1
-core trimmed to a chaff share (`apex_t1_late_share`), pulsar want value and
-concurrent-build throttle both lift while metal-full. The missing half was
-the Brain's winner-takes-all pick (his own diagnosis) — fixed same day with
-the score-proportional roulette. CONFIRMED live 2026-08-17, watching: "its a
-huge improvement in terms of seeing what we want to have happen. We're
-building an actual frontline now whereas before we hardly had any."
-
 ## One player builds no eco — fusion pipeline wedge (FIXED 2026-08-17, verify)
 
 2026-08-17, watching live, second game in a row: "blue is not making any
@@ -64,13 +87,6 @@ task died without ever producing a nanoframe never returned its
 `gFusionsAsked` count, wedging `ReactorPipelineOpen()` closed for the rest of
 the game. Fixed in `events.as` (`apex: reactor ask returned` log line).
 **UNRESOLVED until a watched game shows every player reaching fusions.**
-
-## Nuke director — CONFIRMED live 2026-08-17
-
-Same-day request and confirmation: "If we save up ~30 nuclear missiles we
-can just spam them all at one enemy location until we hit" → brain/nukes.as
-(volley sized against covering antinukes, C++ auto-fire ceded). Watching,
-hours later: "just saw us drop like 4 or 5 all at once.. and that was epic."
 
 ## The Brain owns (nearly) all building — standing architecture goal
 

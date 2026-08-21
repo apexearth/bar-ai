@@ -336,7 +336,7 @@ bool AllyCommNear(AIFloat3& out other)
 	CCircuitUnit@ u = gComm;
 	if (u is null)
 		return false;
-	const float gap = ai.GetTunable("apex_comm_spacing", COMM_SPACING);
+	const float gap = ai.GetTunable("apex_comm_spacing", TUNE_COMM_SPACING);
 	const AIFloat3 cp = u.GetPos(ai.frame);
 	const array<int>@ teams = ai.GetTeamIds();
 	float best = 1.0e18f;
@@ -728,7 +728,7 @@ void CommIdleAttribute()
 	// (the crasher suspected in the disabled UpdateCommanderSafety).
 	{
 		const float hpNow = u.GetHealthPercent();
-		if ((hpNow < ai.GetTunable("apex_comm_flee_hp", 0.55f))
+		if ((hpNow < ai.GetTunable("apex_comm_flee_hp", TUNE_COMM_FLEE_HP))
 			&& (ai.frame >= gNextCommDeadman))
 		{
 			const AIFloat3 cp2 = u.GetPos(ai.frame);
@@ -768,7 +768,7 @@ void CommIdleAttribute()
 		// commander getting force-parked into Retreat pre-T2 off any nearby
 		// influence even after CommanderTask() itself was gated, since this
 		// watchdog fires independently whenever the commander samples noTask.
-		const float fleeInfl = Factory::gHaveT2 ? ai.GetTunable("apex_comm_flee_influence", 0.01f) : 0.f;
+		const float fleeInfl = Factory::gHaveT2 ? ai.GetTunable("apex_comm_flee_influence", TUNE_COMM_FLEE_INFLUENCE) : 0.f;
 		if ((fleeInfl > 0.f) && (ai.GetEnemyInflAt(u.GetPos(ai.frame)) > fleeInfl)) {
 			if (++gCommNoTaskStreak >= COMM_NOTASK_TICKS) {
 				gCommNoTaskStreak = 0;
@@ -828,7 +828,7 @@ void CommIdleAttribute()
 		// path query; sustained, the task is one the commander will never start,
 		// and it will hold it forever because HoldWorkInProgress keeps returning
 		// it. Dropping it puts the commander back through the pipeline.
-		if (++gCommStuck >= int(ai.GetTunable("apex_comm_stuck", COMM_STUCK_TICKS))) {
+		if (++gCommStuck >= int(ai.GetTunable("apex_comm_stuck", TUNE_COMM_STUCK))) {
 			gCommStuck = 0;
 			++gCommUnstuck;
 			const AIFloat3 cp = u.GetPos(ai.frame);

@@ -143,7 +143,7 @@ CCircuitDef@ HeavyDefenceFor(CCircuitUnit@ unit)
 	// one big mass and we have nothing." A mass wants shot density spread
 	// over several guns, not one big alpha target.
 	CCircuitDef@ pop = SideDef3(armpb, corvipe, legapopupdef);
-	if (inc >= ai.GetTunable("apex_def_t2_income", DEF_TIER_T2_INCOME)) {
+	if (inc >= ai.GetTunable("apex_def_t2_income", TUNE_DEF_T2_INCOME)) {
 		const float wp = HeavyWorth(pop);
 		if (wp > bestWorth) {
 			@best = pop;
@@ -156,12 +156,12 @@ CCircuitDef@ HeavyDefenceFor(CCircuitUnit@ unit)
 			bestWorth = w;
 		}
 	}
-	if (inc >= ai.GetTunable("apex_def_t3_income", DEF_TIER_T3_INCOME)) {
+	if (inc >= ai.GetTunable("apex_def_t3_income", TUNE_DEF_T3_INCOME)) {
 		// The big gun waits its turn: each one requires apex_big_per_popup
 		// popups standing first. A ratio between the tiers, scaling with how
 		// many big guns already stand -- not a cap on either.
 		CCircuitDef@ big = SideDef3(armpulsar, corpulsar, legpulsar);
-		const float per = ai.GetTunable("apex_big_per_popup", 2.f);
+		const float per = ai.GetTunable("apex_big_per_popup", TUNE_BIG_PER_POPUP);
 		const bool bigTurn = (pop is null)
 				|| (float(pop.count) >= (float((big is null) ? 0 : big.count) + 1.f) * per);
 		if (bigTurn) {
@@ -214,8 +214,8 @@ CCircuitDef@ MidTowerDef()
 		CCircuitDef@ top = SideDef3("armanni", "cordoom", "legbastion");
 		if ((top !is null) && top.IsAvailable(ai.frame)
 			&& (top.costM < aiEconomyMgr.metal.income
-				* ai.GetTunable("apex_porc_obsolete_secs", 20.f))
-			&& (best.costM * ai.GetTunable("apex_porc_obsolete_ratio", 7.f)
+				* ai.GetTunable("apex_porc_obsolete_secs", TUNE_PORC_OBSOLETE_SECS))
+			&& (best.costM * ai.GetTunable("apex_porc_obsolete_ratio", TUNE_PORC_OBSOLETE_RATIO)
 				< top.costM))
 		{
 			return null;
@@ -245,7 +245,7 @@ bool IsMawClass(const CCircuitDef@ d)
 bool WallsObsolete()
 {
 	return aiEconomyMgr.metal.income
-		>= ai.GetTunable("apex_walls_obsolete_income", 100.f);
+		>= ai.GetTunable("apex_walls_obsolete_income", TUNE_WALLS_OBSOLETE_INCOME);
 }
 
 void CloakWithWalls(CCircuitUnit@ unit, CCircuitDef@ towerDef,
@@ -256,7 +256,7 @@ void CloakWithWalls(CCircuitUnit@ unit, CCircuitDef@ towerDef,
 	CCircuitDef@ wall = SideDef3("armdrag", "cordrag", "legdrag");
 	if ((wall is null) || !wall.IsAvailable(ai.frame))
 		return;
-	const int n = int(ai.GetTunable("apex_maw_cloak_walls", 4.f));
+	const int n = int(ai.GetTunable("apex_maw_cloak_walls", TUNE_MAW_CLOAK_WALLS));
 	const float step = float(SQUARE_SIZE) * 5.f;
 	array<float> dx = {step, -step, 0.f, 0.f, step, -step};
 	array<float> dz = {0.f, 0.f, step, -step, step, -step};
@@ -327,7 +327,7 @@ CCircuitDef@ FrontTower(CCircuitUnit@ unit, const AIFloat3& in at)
 	// defense turrets... They can still be useful for protecting us from
 	// raiders and we should have some. They make the T1.5 obsolete." The
 	// build-time concern stays answerable by the tunable.
-	if (ai.GetTunable("apex_front_pb", 1.f) > 0.f)
+	if (ai.GetTunable("apex_front_pb", TUNE_FRONT_PB) > 0.f)
 		return MexGuardTower(unit, at);
 	CCircuitDef@ mid = MidTowerDef();
 	if ((mid !is null) && mid.IsAvailable(ai.frame))
@@ -399,7 +399,7 @@ bool NearestCover(CCircuitDef@ def, const AIFloat3& in from,
 // capping. Declining always falls through to the ordinary layout.
 bool CoveredSpot(CCircuitUnit@ unit, CCircuitDef@ gen, AIFloat3& out spot)
 {
-	if ((gen is null) || (ai.GetTunable("apex_energy_cover", 1.f) <= 0.f))
+	if ((gen is null) || (ai.GetTunable("apex_energy_cover", TUNE_ENERGY_COVER) <= 0.f))
 		return false;
 	const AIFloat3 me = unit.GetPos(ai.frame);
 	if (!OnMap(me))
@@ -422,7 +422,7 @@ bool CoveredSpot(CCircuitUnit@ unit, CCircuitDef@ gen, AIFloat3& out spot)
 	if (best is null)
 		return false;
 	const float cover = best.GetMaxRange()
-			* ai.GetTunable("apex_energy_cover_frac", COVER_FRAC);
+			* ai.GetTunable("apex_energy_cover_frac", TUNE_ENERGY_COVER_FRAC);
 	if (cover <= 0.f)
 		return false;
 	const AIFloat3 site = ai.FindBuildSiteNear(gen, bestAt, cover);
@@ -453,7 +453,7 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 	// gets here before the Brain ranks anything); apex_energy_any=0 restores the
 	// old refusal for everyone outside the HOME crew.
 	if ((Crew::RoleOf(unit) != Crew::HOME)
-		&& (ai.GetTunable("apex_energy_any", 1.f) <= 0.f))
+		&& (ai.GetTunable("apex_energy_any", TUNE_ENERGY_ANY) <= 0.f))
 	{
 		return null;
 	}
@@ -473,6 +473,48 @@ IUnitTask@ HomeEnergy(CCircuitUnit@ unit)
 		gHomeEnergyAtT1 = ai.frame;
 	}
 	return fresh;
+}
+
+// ALWAYS BE EXPANDING THE ECONOMY. apexearth's founding rule, restored
+// 2026-08-21 after being measured lost: in 8v8s our players went 5-13
+// minutes without completing a single eco building while stock never went
+// past ~4 -- the demand-forecast gates reach an equilibrium (income ~ pull,
+// no spare) where no lane fires. When nothing energy-side is in flight the
+// forecast loses its veto: surplus energy becomes metal through converters,
+// so the next rung is never wasted. Self-limiting by construction -- it
+// claims at most one builder at a time.
+//
+// The OTHER half lives in Brain::Decide's "energy"/"convert" wants (the old
+// always-expand rule as an auction score): that half sizes eco spend against
+// army when eco is flowing; this half is the floor that keeps it above zero.
+// Both funnel through HomeEnergy/EnergyConverter, whose Requests::Take dedup
+// makes a second asker join the standing task -- that dedup, plus the
+// zero-in-flight gate here, is what stops the two halves double-building.
+int gNextAlwaysEcoLog = 0;
+IUnitTask@ AlwaysEco(CCircuitUnit@ unit)
+{
+	if (ai.GetTunable("apex_always_eco", TUNE_ALWAYS_ECO) <= 0.f)
+		return null;
+	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) > 0)
+		return null;
+	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::CONVERT)) > 0)
+		return null;
+	// Converters first: EnergyConverter self-gates on EnergyWasting(), so it
+	// answers exactly when more generation would spill.
+	IUnitTask@ conv = EnergyConverter(unit);
+	if (conv !is null)
+		return conv;
+	// Spilling but the converter rule declined (worker floor, no def): more
+	// generation is pure waste, and this rule never buys waste.
+	// if (aiEconomyMgr.isEnergyFull)
+	// 	return null;
+	IUnitTask@ t = HomeEnergy(unit);
+	if ((t !is null) && (ai.frame >= gNextAlwaysEcoLog)) {
+		gNextAlwaysEcoLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: always-eco -- nothing eco in flight, eInc "
+			+ formatFloat(aiEconomyMgr.energy.income, "", 0, 0));
+	}
+	return t;
 }
 
 IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
@@ -508,7 +550,7 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 	// income a stall is answered by the ladder's fusion, and a panel is build
 	// power spent on almost nothing (apexearth 2026-08-19, watching the panic).
 	const bool energyPanic = aiEconomyMgr.isEnergyStalling
-			&& (aiEconomyMgr.energy.income < ai.GetTunable("apex_energy_panic_income", 500.f))
+			&& (aiEconomyMgr.energy.income < ai.GetTunable("apex_energy_panic_income", TUNE_ENERGY_PANIC_INCOME))
 			&& !ReactorAffordable();
 	if (energyPanic) {
 		@gen = SideDef3(armsolar, corsolar, legsolar);
@@ -532,7 +574,7 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 				? FusionDef(unit) : null;
 		if ((fusWaste !is null) && fusWaste.IsAvailable(ai.frame)
 			&& (aiEconomyMgr.metal.income
-				>= ai.GetTunable("apex_fusion_prefer_income", FUSION_PREFER_INCOME)))
+				>= ai.GetTunable("apex_fusion_prefer_income", TUNE_FUSION_PREFER_INCOME)))
 		{
 			@gen = fusWaste;
 			pickedReactor = true;
@@ -569,10 +611,10 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 			// converters drain 600, not 70.
 			const bool bigConv = gen.costM > 100.f;
 			const float drain = bigConv ? Brain::CONVERT_DRAW_BIG
-					: ai.GetTunable("apex_conv_drain", 70.f);
+					: ai.GetTunable("apex_conv_drain", TUNE_CONV_DRAIN);
 			if (!aiEconomyMgr.isEnergyFull
 				&& (Builder::EnergySpare()
-					< drain + ai.GetTunable("apex_conv_reserve", 50.f)))
+					< drain + ai.GetTunable("apex_conv_reserve", TUNE_CONV_RESERVE)))
 				@gen = null;
 		}
 		}
@@ -633,9 +675,13 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 		const bool fusionAvailable = (fus !is null) && fus.IsAvailable(ai.frame);
 		// PREFER: rich enough that a reactor is simply the better spend, no
 		// need to wait for the per-metal ranking to notice.
+		// SUSTAINED income, not the instant read: a battle-reclaim spike (a
+		// measured 209 m/s on a 10-mex base) and an adv-con energy election
+		// almost never coincide, so the instant bar effectively never fired.
 		const bool preferFusion = fusionAvailable
-				&& (aiEconomyMgr.metal.income
-					>= ai.GetTunable("apex_fusion_prefer_income", FUSION_PREFER_INCOME));
+				&& (aiEconomyMgr.energy.income >= Policy::FusionMinEnergy())
+				&& (Factory::SteadyIncome()
+					>= ai.GetTunable("apex_fusion_prefer_income", TUNE_FUSION_PREFER_INCOME));
 		// IN-FLIGHT: one is already requested and not yet standing -- send
 		// this builder to it instead of starting something else, so build
 		// power concentrates on the one expensive building instead of
@@ -655,7 +701,7 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 			// GuardBuildCapability to silently decline (measured: exactly this
 			// happened once in a 10-minute smoke test).
 			const bool geoAffordable = aiEconomyMgr.energy.income
-					>= ai.GetTunable("apex_geo_min_income", GEO_MIN_INCOME);
+					>= ai.GetTunable("apex_geo_min_income", TUNE_GEO_MIN_INCOME);
 			CCircuitDef@ geo = (geoAffordable && !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 					? GeoDef() : null;
 			float geoValue = -1.f;
@@ -713,6 +759,46 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 	else if (rear == 2)
 		via = "rear";
 	bool placed = (rear != 0);
+	// ADVANCED SOLARS STAND TOGETHER. apexearth 2026-08-20: "Let's please
+	// make our advanced solars next to each other." Same shoulder-to-shoulder
+	// move the nano block and the pulsar block use: seed on the nearest
+	// standing one of the SAME def and pack tight, before the band scatter.
+	// Applies to advsolar-class generators (cost bar keeps winds/solars on
+	// the band, where their spacing is fine).
+	if (!placed && !isConv && !pickedReactor
+		&& (gen.costM >= ai.GetTunable("apex_advsol_pack_cost", TUNE_ADVSOL_PACK_COST))
+		&& (gen.count > 0))
+	{
+		const AIFloat3 at = unit.GetPos(ai.frame);
+		array<CCircuitUnit@>@ kin = ai.GetOwnUnitsOfDef(gen, at, 4000.f);
+		if ((kin !is null) && (kin.length() > 0)) {
+			CCircuitUnit@ seed = null;
+			float bestSq = 1.0e18f;
+			for (uint i = 0; i < kin.length(); ++i) {
+				if (kin[i] is null)
+					continue;
+				const AIFloat3 kp = kin[i].GetPos(ai.frame);
+				if (!OnMap(kp))
+					continue;
+				const float sq = kp.SqDistance2D(at);
+				if (sq < bestSq) {
+					bestSq = sq;
+					@seed = kin[i];
+				}
+			}
+			if (seed !is null) {
+				AIFloat3 site = ai.FindBuildSiteNear(gen, seed.GetPos(ai.frame),
+						ai.GetTunable("apex_advsol_pack_r", TUNE_ADVSOL_PACK_R));
+				if (OnMap(site) && (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
+					spot = site;
+					via = "pack";
+					gEcoLast = spot;
+					gEcoPacked = true;
+					placed = true;
+				}
+			}
+		}
+	}
 	// A generator under a turret DOES become the packing anchor, where a reactor
 	// deliberately does not: cover is ground we want the eco block to grow on.
 	if (!placed && !isConv && !pickedReactor && CoveredSpot(unit, gen, spot)) {

@@ -82,12 +82,20 @@ const float ARMY_DEFICIT_FLOOR = 0.35f;   // most the economy is ever damped
 
 float ArmyDeficitMult()
 {
-	const float ours = Military::TeamArmyCost();
-	const float theirs = Military::EnemyArmyCost();
+	// HONEST INPUTS (2026-08-20). This damp throttles every eco want --
+	// energy included -- and it read the never-decaying enemy ledger against
+	// the undercounting armyCost, so the "always expand eco" wants were
+	// taxed hardest exactly when we were killing the most (each ghost
+	// inflates theirs) -- apexearth: "Whatever happened to our 'always
+	// expand eco' rules? We aren't building enough energy..." Same corrected
+	// pair the aggression gate uses: seen-peak-capped mobile threat against
+	// the live tracked-army cost.
+	const float ours = Military::OurArmyNow();
+	const float theirs = Military::FoeMobileMassing();
 	if ((theirs <= 1.f) || (ours >= theirs))
 		return 1.f;
 	const float ratio = ours / theirs;          // 0..1, smaller is worse
-	const float floorV = ai.GetTunable("apex_army_deficit_floor", ARMY_DEFICIT_FLOOR);
+	const float floorV = ai.GetTunable("apex_army_deficit_floor", TUNE_ARMY_DEFICIT_FLOOR);
 	return (ratio < floorV) ? floorV : ratio;
 }
 
@@ -155,7 +163,7 @@ class Want
 		float scaled;
 		if (investedM >= 0.f) {
 			scaled = value / (1.f + investedM
-					/ ai.GetTunable("apex_value_norm", 1000.f));
+					/ ai.GetTunable("apex_value_norm", TUNE_VALUE_NORM));
 		} else {
 			scaled = value / (1.f + float(have));
 		}
@@ -175,7 +183,7 @@ class Want
 			// by nothing.
 			{
 				const float inc = aiEconomyMgr.metal.income;
-				const float ref = ai.GetTunable("apex_impact_ref", 30.f);
+				const float ref = ai.GetTunable("apex_impact_ref", TUNE_IMPACT_REF);
 				float denom = inc;
 				if (denom < ref * 0.2f)
 					denom = ref * 0.2f;
@@ -184,7 +192,7 @@ class Want
 			// A converter that has no spare energy to eat produces nothing:
 			// its worth is discounted until the grid actually overflows.
 			if ((kind == "convert") && !Builder::EnergyWasting())
-				scaled *= ai.GetTunable("apex_conv_dry_mult", 0.25f);
+				scaled *= ai.GetTunable("apex_conv_dry_mult", TUNE_CONV_DRY_MULT);
 			if (EcoSated())
 				scaled *= ECO_SATED_MULT;
 			// Expansion is exempt: taking ground is how we out-produce them back
@@ -192,6 +200,39 @@ class Want
 			// economy -- reactors, converters, upgrades.
 			if (kind != "mex")
 				scaled *= ArmyDeficitMult();
+			// THE BUDGET BINDS THE ECONOMY TOO -- same deferral the con curve
+			// got (share.as): while eco runs over its own share and the army
+			// is under its own, expensive eco scales down by the overage
+			// ratio. apexearth 2026-08-20 on the eco-vs-army fork: the weight
+			// "is allowed to change throughout the game" -- the income-indexed
+			// targets are that change; this makes the spend actually follow
+			// them (measured eco share 0.36-0.46 against a 0.24-0.30 target
+			// while army sat at 0.29 of 0.37-0.46).
+			// MEX AND MEXUP BOTH EXEMPT. The upgrade is the income multiplier
+			// that pays for every future army; deferring it to buy units now
+			// is backwards at almost any margin -- apexearth 2026-08-20,
+			// watching the deferral era: "Economically, we play very poorly
+			// now." What defers is reactors and converters, which convert an
+			// economy, not the thing that grows it.
+			// ...and neither does the CHEAP half of the ladder: a wind or a
+			// solar is the opening economy itself, and deferring it read as
+			// "less than half the enemy's energy by 10m" (apexearth,
+			// watching Prismatic). Only reactor-class spends defer.
+			if ((kind != "mex") && (kind != "mexup")
+				&& (cost >= ai.GetTunable("apex_eco_defer_min_cost", TUNE_ECO_DEFER_MIN_COST)))
+			{
+				const float eShare = ShareOf(ECONOMY);
+				const float eTarget = TargetShare(ECONOMY);
+				if ((eShare > eTarget)
+					&& (ShareOf(ARMY) < TargetShare(ARMY)))
+				{
+					float m = eTarget / eShare;
+					const float lo = ai.GetTunable("apex_eco_budget_floor", TUNE_ECO_BUDGET_FLOOR);
+					if (m < lo)
+						m = lo;
+					scaled *= m;
+				}
+			}
 		}
 		if (investedM >= 0.f)
 			return scaled;
@@ -327,10 +368,10 @@ Want@ MexWant(CCircuitUnit@ unit)
 	// CON_THREAT_VETO; spelled as a literal because brain.as is included
 	// ahead of builder.as, so that global is not visible here).
 	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame),
-			ai.GetTunable("apex_mex_threat", 4.f));
+			ai.GetTunable("apex_mex_threat", TUNE_MEX_THREAT));
 	if (spot < 0) {
 		gMexNoneUntil = ai.frame
-				+ int(ai.GetTunable("apex_mex_none_ttl", 5.f)) * SECOND;
+				+ int(ai.GetTunable("apex_mex_none_ttl", TUNE_MEX_NONE_TTL)) * SECOND;
 		return null;
 	}
 	Want@ w = Want();
@@ -349,7 +390,7 @@ Want@ MexWant(CCircuitUnit@ unit)
 	const float store = aiEconomyMgr.metal.storage;
 	if (store > 0.f) {
 		const float frac = aiEconomyMgr.metal.current / store;
-		const float full = ai.GetTunable("apex_mex_starved_mult", 3.f);
+		const float full = ai.GetTunable("apex_mex_starved_mult", TUNE_MEX_STARVED_MULT);
 		if (frac < 0.05f)
 			w.value *= full;
 		else if (aiEconomyMgr.isMetalEmpty)
@@ -381,6 +422,8 @@ const float FRONT_FENCE_VALUE = 1.2f;
 const float FRONT_FENCE_SPREAD = 700.f;   // how far apart cover counts as spread
 // HOW FAR TO LOOK FOR GROUND THE TOWER FITS ON. The samples searched around are
 // raw geometry, so they land on slopes, in water and inside buildings, and
+int gNextChokeLog = 0;
+
 // FrontLineSpots is deterministic -- a spot that fails once fails on every call
 // for the rest of the game, and failure means the want is silently never
 // proposed. Scaled off the tower's own range so the search can reach the
@@ -413,14 +456,14 @@ float TowerReach(const CCircuitDef@ tower)
 	if (r <= 0.f)
 		return 0.f;
 	const float cap = LightTowerRange()
-			* ai.GetTunable("apex_def_reach_cap", DEF_REACH_CAP);
+			* ai.GetTunable("apex_def_reach_cap", TUNE_DEF_REACH_CAP);
 	return (r > cap) ? cap : r;
 }
 
 float FrontSiteSearch(const CCircuitDef@ tower)
 {
 	const float r = TowerReach(tower);
-	const float s = r * ai.GetTunable("apex_front_site_frac", FRONT_SITE_FRAC);
+	const float s = r * ai.GetTunable("apex_front_site_frac", TUNE_FRONT_SITE_FRAC);
 	return (s < 400.f) ? 400.f : s;
 }
 
@@ -521,7 +564,7 @@ float SiegeFactor(float reach)
 	float q = reach / far;
 	if (q > 1.f)
 		q = 1.f;
-	return (1.f - s) + s * pow(q, ai.GetTunable("apex_siege_soft", SIEGE_SOFT));
+	return (1.f - s) + s * pow(q, ai.GetTunable("apex_siege_soft", TUNE_SIEGE_SOFT));
 }
 
 float TowerDenial(CCircuitDef@ tower)
@@ -571,8 +614,8 @@ float DefenceValue(CCircuitDef@ tower, const AIFloat3& in at, float span)
 	float v = TowerDenial(tower);
 	v *= Military::EdgeExposure(at, span);
 	v *= 1.f + AssetsBehind(at, span)
-			/ ai.GetTunable("apex_def_asset_ref", DEF_ASSET_REF);
-	v += ai.GetTunable("apex_def_loss_weight", DEF_LOSS_WEIGHT)
+			/ ai.GetTunable("apex_def_asset_ref", TUNE_DEF_ASSET_REF);
+	v += ai.GetTunable("apex_def_loss_weight", TUNE_DEF_LOSS_WEIGHT)
 			* Military::FenceLostNear(at, span);
 	return v;
 }
@@ -600,7 +643,7 @@ Want@ MexCoverWant(CCircuitUnit@ unit)
 		return null;
 
 	const AIFloat3 me = unit.GetPos(ai.frame);
-	const float reach = ai.GetTunable("apex_front_reach", 2200.f);
+	const float reach = ai.GetTunable("apex_front_reach", TUNE_FRONT_REACH);
 	AIFloat3 best;
 	bool have = false;
 	float bestD = 0.f;
@@ -731,7 +774,7 @@ Want@ AirCoverWant(CCircuitUnit@ unit)
 	if ((mex is null) || (mex.count <= 0))
 		return null;
 	array<CCircuitUnit@>@ mine = ai.GetOwnUnitsOfDef(mex, unit.GetPos(ai.frame),
-			ai.GetTunable("apex_front_reach", 2200.f));
+			ai.GetTunable("apex_front_reach", TUNE_FRONT_REACH));
 	if ((mine is null) || (mine.length() == 0))
 		return null;
 	// The turret's own reach is both the cover radius and the value's span, so a
@@ -811,7 +854,7 @@ int gFenceMemoAt = -999;
 Want@ FrontDefenceWant(CCircuitUnit@ unit)
 {
 	const int fencePeriod = (aiEconomyMgr.metal.income
-			>= ai.GetTunable("apex_elect_rich_income", 150.f)) ? 150 : 30;
+			>= ai.GetTunable("apex_elect_rich_income", TUNE_ELECT_RICH_INCOME)) ? 150 : 30;
 	if (ai.frame - gFenceMemoAt < fencePeriod)
 		return gFenceMemo;
 	gFenceMemoAt = ai.frame;
@@ -837,7 +880,7 @@ Want@ FrontDefenceWantFresh(CCircuitUnit@ unit)
 	// the edge of the circle, so anything walking the seam is engaged by one
 	// turret at its worst range only. Pulling spacing in by a fifth covers every
 	// point on the line by two turrets.
-	const float overlap = ai.GetTunable("apex_front_overlap", 0.2f);
+	const float overlap = ai.GetTunable("apex_front_overlap", TUNE_FRONT_OVERLAP);
 	const float spacing = span * (1.f - overlap);
 
 	array<AIFloat3> line;
@@ -854,11 +897,12 @@ Want@ FrontDefenceWantFresh(CCircuitUnit@ unit)
 	// the stretch of line in front of IT, rather than the best point on the whole
 	// curve.
 	const AIFloat3 me = unit.GetPos(ai.frame);
-	const float reach = ai.GetTunable("apex_front_reach", 2200.f);
+	const float reach = ai.GetTunable("apex_front_reach", TUNE_FRONT_REACH);
 	AIFloat3 best;
 	bool have = false;
 	uint fewest = 0;
 	float bestDist = 0.f;
+	bool bestChoke = false;
 	for (uint i = 0; i < line.length(); ++i) {
 		if (!OnMap(line[i]))
 			continue;
@@ -875,15 +919,43 @@ Want@ FrontDefenceWantFresh(CCircuitUnit@ unit)
 			continue;
 		// A gap is a stretch of line with nothing in range of it.
 		const uint cover = Military::FenceCountNear(line[i], span);
+		// A DOORWAY OUTRANKS A BARE STRETCH. Everything that comes at us through
+		// a corridor has to come through the corridor; a tower there is worth
+		// several on open ground. Ranked above cover so the line thickens at the
+		// gaps first, and the gun is placed a step BEHIND the choke so it shoots
+		// into it instead of standing in it.
+		AIFloat3 cp;
+		AIFloat3 spot = line[i];
+		bool choke = false;
+		if ((ai.GetTunable("apex_choke_defence", TUNE_CHOKE_DEFENCE) > 0.f)
+			&& Front::ChokeAt(line[i], cp))
+		{
+			AIFloat3 behind;
+			if (Front::BehindChoke(cp, ai.GetTunable("apex_choke_back", TUNE_CHOKE_BACK), behind)
+				&& (Builder::ThreatFor(unit, behind) <= Builder::CON_THREAT_VETO))
+			{
+				spot = behind;
+				choke = true;
+			}
+		}
 		// Least-covered stretch first -- cover spreads along the line before it
 		// thickens anywhere on it -- and the nearer of two equally bare stretches,
 		// so the walk is not the cost.
-		if (!have || (cover < fewest) || ((cover == fewest) && (d < bestDist))) {
+		if (!have || (choke && !bestChoke)
+			|| ((choke == bestChoke)
+				&& ((cover < fewest) || ((cover == fewest) && (d < bestDist)))))
+		{
 			fewest = cover;
 			bestDist = d;
-			best = line[i];
+			best = spot;
+			bestChoke = choke;
 			have = true;
 		}
+	}
+	if (have && bestChoke && (ai.frame >= gNextChokeLog)) {
+		gNextChokeLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: front tower goes behind a chokepoint at "
+			+ int(best.x) + "," + int(best.z));
 	}
 	if (!have)
 		return null;
@@ -1080,7 +1152,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	}
 	// The election TIME budget in maketask.as is the governor now; this count
 	// is only a runaway backstop, set far above normal bursts.
-	if (gDecideCount >= int(ai.GetTunable("apex_decide_per_frame", 12.f))) {
+	if (gDecideCount >= int(ai.GetTunable("apex_decide_per_frame", TUNE_DECIDE_PER_FRAME))) {
 		gDecideDeferred = true;
 		Perf::Note("mt.brain.defer");
 		return null;
@@ -1113,7 +1185,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// guard tower pre-5m is a mex not claimed. Reactive defence (the engine
 	// answering an actual raid at home) is untouched -- this gates the
 	// proactive line, not survival.
-	const bool frontPhase = (ai.frame >= int(ai.GetTunable("apex_front_from_min", 5.f)
+	const bool frontPhase = (ai.frame >= int(ai.GetTunable("apex_front_from_min", TUNE_FRONT_FROM_MIN)
 			* 60.f) * SECOND);
 	if (Factory::HaveAnyFactory() && frontPhase) {
 		Propose(FrontDefenceWant(unit));
@@ -1129,6 +1201,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// something; where a def is missing the want is simply not proposed.
 	//
 	// ALWAYS MAKE ENERGY, CONVERT WHEN IT SPILLS -- as scores rather than gates,
+	// which guarantees pressure, not a floor: a score can lose the auction every
+	// tick. The FLOOR half of the rule is Builder::AlwaysEco in the ladder --
+	// this want sizes eco against everything else, AlwaysEco keeps it above zero.
 	// so the two compete instead of the energy want only firing once the grid
 	// has already run dry. A stall is urgency, so it stays a multiplier rather
 	// than the gate, and the energy want is skipped entirely while spilling --
@@ -1191,7 +1266,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	const float enemyT3 = aiEnemyMgr.GetEnemyCost(RT::SUPER)
 			+ aiEnemyMgr.GetEnemyCost(RT::HEAVY);
 	const float t3Mult = 1.f + enemyT3
-			/ ai.GetTunable("apex_counter_t3_norm", 20000.f);
+			/ ai.GetTunable("apex_counter_t3_norm", TUNE_COUNTER_T3_NORM);
 	// ENEMY T3 WITH NO ANSWER OF OURS IS AN EMERGENCY, not a ratio. apexearth
 	// 2026-08-19: "as soon as enemy has T3 walking into our base it's often GG.
 	// If we aren't making T3 then we damn well should be making a lot of T3
@@ -1204,8 +1279,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	float gantryV = GANTRY_VALUE * t3Mult;
 	float pulsarAnswer = 1.f;
 	if ((enemyT3 > 0.f) && noT3Prod) {
-		gantryV *= ai.GetTunable("apex_gantry_answer", 3.f);
-		pulsarAnswer = ai.GetTunable("apex_pulsar_answer", 3.f);
+		gantryV *= ai.GetTunable("apex_gantry_answer", TUNE_GANTRY_ANSWER);
+		pulsarAnswer = ai.GetTunable("apex_pulsar_answer", TUNE_PULSAR_ANSWER);
 	}
 	Propose(Simple("gantry", gantryV,
 			SideDef3("armshltx", "corgant", "leggant")));
@@ -1244,19 +1319,28 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// one warhead per 2 seconds of the arrival window, and the rest is padding.
 	// (Reload is not bound to script, hence a tunable carrying the def's value.)
 	{
-		int foeSilos = Brain::EnemyNukeSilos();
+		const int seenSilos = Brain::EnemyNukeSilos();
+		int foeSilos = seenSilos;
 		if (foeSilos < 1)
 			foeSilos = 1;   // one is always assumed; a hidden silo is still a silo
-		const float reload = ai.GetTunable("apex_anti_reload", 2.f);
-		const float burst = ai.GetTunable("apex_anti_burst_secs", 6.f);
+		const float reload = ai.GetTunable("apex_anti_reload", TUNE_ANTI_RELOAD);
+		const float burst = ai.GetTunable("apex_anti_burst_secs", TUNE_ANTI_BURST_SECS);
 		int per = (reload > 0.f) ? int(burst / reload) : 1;
 		if (per < 1)
 			per = 1;
-		// Round up: a remainder is a warhead that lands.
+		// Round up: a remainder is a warhead that lands. The PAD applies only
+		// against SEEN silos -- padding the assumed one wanted 3 antinukes on
+		// zero evidence (apexearth: two too early, scale the economy instead).
+		// And the assumed silo needs the enemy to HAVE the tech, plus an
+		// economy that can carry insurance (a seen silo overrides both).
+		const bool insurable = (seenSilos > 0)
+			|| (Factory::gEnemyT2Seen
+				&& (aiEconomyMgr.metal.income >= Policy::AntinukeIncome()));
 		const int need = (foeSilos + per - 1) / per
-				+ int(ai.GetTunable("apex_anti_pad", 2.f));
+				+ ((seenSilos > 0)
+					? int(ai.GetTunable("apex_anti_pad", TUNE_ANTI_PAD)) : 0);
 		CCircuitDef@ anti = SideDef3("armamd", "corfmd", "legabm");
-		if ((anti !is null) && (int(anti.count) < need))
+		if (insurable && (anti !is null) && (int(anti.count) < need))
 			Propose(Simple("antinuke", ANTINUKE_VALUE, anti));
 	}
 	// legbastion, not legstarfall: the def here is what the want's have/decay
@@ -1267,7 +1351,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	{
 		float pv = PULSAR_VALUE * t3Mult * pulsarAnswer;
 		if (aiEconomyMgr.isMetalFull)
-			pv *= ai.GetTunable("apex_pulsar_full_mult", 2.f);
+			pv *= ai.GetTunable("apex_pulsar_full_mult", TUNE_PULSAR_FULL_MULT);
 		Propose(Simple("pulsar", pv, SideDef3("armanni", "cordoom", "legbastion")));
 	}
 	// LRPC siege -> shields, scaled by the guns firing and the shields already
@@ -1278,11 +1362,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		if (lrpc > 0) {
 			// Same divided sizing as ShieldCover -- the per-gun multiplier
 			// overpriced this ~3x (one dome answers every gun in reach).
-			const int per = int(ai.GetTunable("apex_shield_per", 3.f));
+			const int per = int(ai.GetTunable("apex_shield_per", TUNE_SHIELD_PER));
 			const float scale = 1.f
 					+ float((lrpc - 1) + Builder::ShieldsLostRecent())
 						/ float((per > 0) ? per : 3);
-			Propose(Simple("shield", ai.GetTunable("apex_shield_value", 8.f) * scale,
+			Propose(Simple("shield", ai.GetTunable("apex_shield_value", TUNE_SHIELD_VALUE) * scale,
 					SideDef3("armgate", "corgate", "legdeflector")));
 		}
 	}
@@ -1334,7 +1418,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// numbers were always meant to state. Every precedence gate below
 	// (mexup, coverage gaps, adv-con) is unchanged -- only the tie between
 	// eligible options moved from argmax to a weighted draw.
-	if (ai.GetTunable("apex_brain_roulette", 1.f) > 0.f) {
+	if (ai.GetTunable("apex_brain_roulette", TUNE_BRAIN_ROULETTE) > 0.f) {
 		for (uint i = 0; i < order.length(); ++i) {
 			float total = 0.f;
 			for (uint j = i; j < order.length(); ++j) {
@@ -1406,7 +1490,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		// mexup lane in the pipeline still keeps one upgrade always running.
 		if ((w.kind != "mexup") && (w.kind != "mex") && haveMexUp && !gap
 			&& (aiEconomyMgr.metal.income
-				< ai.GetTunable("apex_mexup_monopoly_income", 100.f)))
+				< ai.GetTunable("apex_mexup_monopoly_income", TUNE_MEXUP_MONOPOLY_INCOME)))
 			continue;
 		// "aa" is placed exactly like a fence -- a DEFENCE build task at a chosen
 		// site. Only the budget row it is scored against differs.
@@ -1417,7 +1501,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			// reads "Disregard safety". A front site is threatened and
 			// enemy-influenced by definition, so at NORMAL these orders sit on
 			// the books forever, unelectable.
-			const Task::Priority prio = (ai.GetTunable("apex_front_now", 0.f) > 0.f)
+			const Task::Priority prio = (ai.GetTunable("apex_front_now", TUNE_FRONT_NOW) > 0.f)
 					? Task::Priority::NOW : Task::Priority::NORMAL;
 			// A defence request owns its patch of ground, not the whole def:
 			// two towers at two places on the line are both wanted. Requests
@@ -1460,7 +1544,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			if ((mexDef !is null) && !unit.circuitDef.CanBuild(mexDef))
 				continue;
 			const int spot = aiEconomyMgr.FindOpenMexSpot(unit, unit.GetPos(ai.frame),
-					ai.GetTunable("apex_mex_threat", 4.f));
+					ai.GetTunable("apex_mex_threat", TUNE_MEX_THREAT));
 			if (spot < 0)
 				continue;
 			IUnitTask@ t = aiEconomyMgr.EnqueueMexAt(unit, spot);

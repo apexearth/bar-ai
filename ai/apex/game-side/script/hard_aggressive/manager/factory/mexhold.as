@@ -77,6 +77,15 @@ bool IsEcoLead()
 {
 	if (IsSmallTeam() && !ECO_ON_SMALL_TEAMS)
 		return false;
+	// FARMING IS AN OPENING JOB. Eco-lead election was coupled to the
+	// tech-lead DESIGNATION, which waits on the tech bars -- measured on
+	// Glitters 8v8s, the farmer activated at 13.5m and 23.1m while stock's
+	// farmers greed from minute one, and the raised T2 energy bar pushed it
+	// later still. Before any designation exists, the fallback lead id
+	// (lowest team) holds the eco slot from frame one; the grace period
+	// covers the handover when a real designation lands.
+	if (!LeadIsDesignated())
+		return ai.teamId == RushLeadTeamId();
 	return IsDesignatedLead() && (ai.teamId == RushLeadTeamId());
 }
 
@@ -98,7 +107,16 @@ void UpdateEcoLead()
 	// economy, so with no team it just means no army.
 	array<Id>@ roster = ai.GetTeamIds();
 	const bool haveTeam = (roster !is null) && (roster.length() > 1);
-	gEcoActive = haveTeam && mine && !gHurt && !allies;
+	// THE FARMER FARMS THROUGH THE WAR. "An ally is dying" stood the role
+	// down at 29m of the measured 8v8 -- in a big team an ally is ALWAYS
+	// dying late, so the team's only compounding engine converted itself to
+	// one more mediocre army player exactly when stock's farmer (183 mexes)
+	// compounded hardest. A dying ally is answered with EcoAid metal (already
+	// live), not with role abdication; only losing OUR OWN mexes stands the
+	// role down. Tunable to restore the old behaviour.
+	const bool allyStop = allies
+			&& (ai.GetTunable("apex_eco_lead_holds", TUNE_ECO_LEAD_HOLDS) <= 0.f);
+	gEcoActive = haveTeam && mine && !gHurt && !allyStop;
 
 	// Which gate is holding it off, sampled while we hold the slot. The first
 	// version of this role was elected and then never activated for a whole

@@ -14,8 +14,9 @@ bool HaveGantry()
 
 // Income that stands in for "four mexes" and "one mex" of economic power. A T1
 // mex yields roughly 2-3 metal/s, so four is about 10.
-const float PHASE_BUILDUP_INCOME = 10.f;
-const float PHASE_EXPAND_INCOME  = 3.f;
+// The three income bars that move a phase live in tunables.as with every
+// other default (TUNE_PHASE_*), so the whole progression is tunable from one
+// file rather than from a constant buried here.
 
 int ComputePhase()
 {
@@ -26,7 +27,8 @@ int ComputePhase()
 
 	if (hasT3 || (fusions >= 3))
 		return (hasT3 && (fusions >= 3)) ? 7 : 6;          // T3 / late
-	if (gHaveT2 && (fusions >= 1 || mInc >= 40.f))
+	if (gHaveT2 && (fusions >= 1
+		|| mInc >= ai.GetTunable("apex_phase_pret3_income", TUNE_PHASE_PRET3_INCOME)))
 		return 5;                                          // pre-T3
 	if (gHaveT2)
 		return 4;                                          // T2
@@ -35,9 +37,9 @@ int ComputePhase()
 	// Gated on income, never mex count: a count ignores where metal actually
 	// comes from and can trap a player that cannot expand -- a low mex count in
 	// a strong economy must not cap the phase.
-	if (mInc >= PHASE_BUILDUP_INCOME)
+	if (mInc >= ai.GetTunable("apex_phase_buildup_income", TUNE_PHASE_BUILDUP_INCOME))
 		return 2;                                          // build up
-	if (mInc >= PHASE_EXPAND_INCOME)
+	if (mInc >= ai.GetTunable("apex_phase_expand_income", TUNE_PHASE_EXPAND_INCOME))
 		return 1;                                          // expand
 	return 0;                                              // opening
 }

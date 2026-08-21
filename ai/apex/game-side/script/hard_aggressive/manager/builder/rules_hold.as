@@ -21,7 +21,7 @@ const float PASS_MEX_DETOUR_FRAC = 0.35f;
 
 IUnitTask@ PassingMex(CCircuitUnit@ unit, bool isComm)
 {
-	if (ai.GetTunable("apex_take_passing_mex", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_take_passing_mex", TUNE_TAKE_PASSING_MEX) <= 0.f)
 		return null;
 	if (isComm)
 		return null;
@@ -85,7 +85,7 @@ IUnitTask@ HoldDefenceInProgress(CCircuitUnit@ unit, bool isComm)
 			const AIFloat3 at = busy.GetBuildPos();
 			if (ThreatFor(unit, at) <= CON_THREAT_VETO)
 				return busy;
-			if ((ai.GetTunable("apex_hold_front", 0.f) > 0.f) && OnMap(at)
+			if ((ai.GetTunable("apex_hold_front", TUNE_HOLD_FRONT) > 0.f) && OnMap(at)
 				&& (Military::OnBorder(at) || Military::NearFront(at)))
 			{
 				return busy;

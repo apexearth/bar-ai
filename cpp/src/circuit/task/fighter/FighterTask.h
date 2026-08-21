@@ -49,6 +49,13 @@ protected:
 public:
 	virtual ~IFighterTask();
 
+	// Where an idle squad roams. A uniform random map point's EXPECTED value
+	// is the map centre, so the old per-task roam was a centre-seeking drift
+	// for every idle combat squad. Anchors on the front position the script
+	// publishes (SetFrontPos), bounded scatter; uniform stays as the
+	// no-front fallback.
+	springai::AIFloat3 RoamPos(CCircuitUnit* unit) const;
+
 	virtual void AssignTo(CCircuitUnit* unit) override;
 	virtual void RemoveAssignee(CCircuitUnit* unit) override;
 

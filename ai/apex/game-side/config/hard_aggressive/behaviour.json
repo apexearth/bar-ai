@@ -909,7 +909,6 @@
 		},
 		"armrock": {
 			"role": ["assault"],
-			"attribute": ["siege"],
 			"retreat": 0.6,
 			"limit": 10,
 			"threat": {"air": 0.0, "water": 0.0, "surf": 0.8,
@@ -1050,6 +1049,10 @@
 		},
 		"armlun": {
 			"role": ["skirmish", "heavy"], 
+			// siege: enrolls it in the siege-row standoff (wall up, shoot,
+			// back away from anything closing) -- watched walking into
+			// behemoth one-shot range without it.
+			"attribute": ["siege"],
 			"threat": {"air": 0.0, "water": 1.0} 
 		},
 		"armraz": {
@@ -1061,7 +1064,9 @@
 		},
 		"armvang": {
 			"role": ["artillery"],
-			//"attribute": ["siege", "support"],
+			// siege restored (support stays off): 1450 range, 33 speed -- the
+			// definition of shoot-from-the-wall; watched closing on behemoths.
+			"attribute": ["siege"],
 			"threat": {"air": 0.0, "water": 0.0} 
 		},
 		"armbanth": {
@@ -1226,7 +1231,6 @@
 		},
 		"armhawk": {
 			"role": ["anti_air", "air"],
-            "power": 0.5,
 			"retreat": 0.6
 		},
 		"armpnix": {
@@ -1384,8 +1388,7 @@
 			"retreat": 0.6
 		},
 		"corstorm": {
-			"role": ["artillery"],  //assault
-			"attribute": ["siege"],
+			"role": ["assault"],
             "limit": 10
 		},
 		"corthud": {
@@ -1591,6 +1594,7 @@
 		},
 		"cormart": {
 			"role": ["artillery"],
+			"attribute": ["siege"],
 			"threat": {"surf": 0.5, "vs":{"static":2.0, "artillery":2.0}},
 			"retreat": 0.6
 		},
@@ -1600,6 +1604,7 @@
 		},
 		"corvroc": {
 			"role": ["artillery"],
+			"attribute": ["siege"],
 			"threat": {"surf": 0.2, "vs":{"static":5.0, "artillery":5.0}},
 			"retreat": 0.6
 		},

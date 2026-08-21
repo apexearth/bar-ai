@@ -116,7 +116,7 @@ bool BaseUnderAttack()
 	// base even during a raid) -- the same local signal the commander's flee
 	// rule already trusts.
 	if (ai.GetEnemyInflAt(gHomePos)
-		> ai.GetTunable("apex_base_attack_infl", 0.f))
+		> ai.GetTunable("apex_base_attack_infl", TUNE_BASE_ATTACK_INFL))
 	{
 		return true;
 	}
@@ -214,11 +214,11 @@ bool ConvSeed(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 
 bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 {
-	const float pack = ai.GetTunable("apex_conv_pack", 180.f);
+	const float pack = ai.GetTunable("apex_conv_pack", TUNE_CONV_PACK);
 	// apexearth: "5% chance to place one in a new spot... 95% chance to place
 	// one adjacent to the latest placement." The roll is what makes multiple
 	// masses form organically instead of only when a pack is physically full.
-	if (AiRandom(0, 99) < int(ai.GetTunable("apex_conv_new_pct", 5.f)))
+	if (AiRandom(0, 99) < int(ai.GetTunable("apex_conv_new_pct", TUNE_CONV_NEW_PCT)))
 		return ConvSeed(unit, def, spot);
 	array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(def, gHomePos, 0.f);
 	if ((have !is null) && (have.length() > 0)) {
@@ -233,7 +233,7 @@ bool ConvSpot(CCircuitUnit@ unit, CCircuitDef@ def, AIFloat3& out spot)
 			// (apexearth's screenshot). Cardinal slots at a grid-true pitch
 			// first; the spiral is only the fallback, snapped onto the
 			// lattice so the pack cannot drift off it.
-			const float pitch = ai.GetTunable("apex_conv_grid_pitch", 32.f);
+			const float pitch = ai.GetTunable("apex_conv_grid_pitch", TUNE_CONV_GRID_PITCH);
 			array<float> dx = {pitch, -pitch, 0.f, 0.f};
 			array<float> dz = {0.f, 0.f, pitch, -pitch};
 			for (uint k = 0; k < 4; ++k) {
@@ -293,7 +293,7 @@ IUnitTask@ ConverterPipeline(CCircuitUnit@ unit)
 	const float spare = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
 	int allowed = 1;
 	if (spare > 0.f)
-		allowed += int(spare / ai.GetTunable("apex_conv_per_spare", 1200.f));
+		allowed += int(spare / ai.GetTunable("apex_conv_per_spare", TUNE_CONV_PER_SPARE));
 	if (underway + outstanding >= allowed)
 		return null;
 	AIFloat3 spot;

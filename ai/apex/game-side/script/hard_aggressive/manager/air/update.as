@@ -28,7 +28,7 @@ bool HoldsUnit(CCircuitUnit@ unit)
 	// plant, which is home; the wave release lives in Update().
 	if (IsAirLead())
 		return Armed();
-	return ai.GetTunable("apex_air_home_wave", 1.f) > 0.f;
+	return ai.GetTunable("apex_air_home_wave", TUNE_AIR_HOME_WAVE) > 0.f;
 }
 
 // THE TEAM INTERCEPTOR POOL. Each player publishes the enemy AIR value over
@@ -42,13 +42,13 @@ void Intercept()
 	if (Builder::gHomeSet && (ai.frame >= gNextRaidPub)) {
 		gNextRaidPub = ai.frame + 2 * SECOND;
 		ai.PublishTeamValue(TV_AIRRAID, ai.GetEnemyAirCostNear(Builder::gHomePos,
-				ai.GetTunable("apex_intercept_r", 1400.f)));
+				ai.GetTunable("apex_intercept_r", TUNE_INTERCEPT_R)));
 		ai.PublishTeamValue(TV_HOMEX, Builder::gHomePos.x);
 		ai.PublishTeamValue(TV_HOMEZ, Builder::gHomePos.z);
 	}
 	if (gStrike || (ai.frame < gNextInterceptCmd))
 		return;
-	if (Fighters() < int(ai.GetTunable("apex_intercept_min_fighters", 4.f)))
+	if (Fighters() < int(ai.GetTunable("apex_intercept_min_fighters", TUNE_INTERCEPT_MIN_FIGHTERS)))
 		return;
 	// Cached: team composition never changes mid-game, and calling
 	// GetTeamIds thirty times a second is what exposed the binding's
@@ -58,7 +58,7 @@ void Intercept()
 	array<Id>@ mates = gMatesCache;
 	if (mates is null)
 		return;
-	const float bar = ai.GetTunable("apex_intercept_min", 500.f);
+	const float bar = ai.GetTunable("apex_intercept_min", TUNE_INTERCEPT_MIN);
 	int worst = -1;
 	float worstRaid = bar;
 	for (uint i = 0; i < mates.length(); ++i) {
@@ -188,7 +188,7 @@ void Update()
 	// of air if the enemy has flak trucks."
 	{
 		const bool defendHome = Military::BaseContested()
-			&& (EnemyAACost() < ai.GetTunable("apex_bomb_defend_aa", 1000.f));
+			&& (EnemyAACost() < ai.GetTunable("apex_bomb_defend_aa", TUNE_BOMB_DEFEND_AA));
 		if (gBomber !is null) {
 			if (defendHome) gBomber.DelAttribute(Unit::Attr::ANTI_STAT.type);
 			else            gBomber.AddAttribute(Unit::Attr::ANTI_STAT.type);
@@ -213,7 +213,7 @@ void Update()
 	// A NON-LEAD player's wave: mass at home, then strike together. Half the
 	// lead's scaled force is a real raid without hoarding a second air army.
 	if (!IsAirLead() && !gStrike
-		&& (ai.GetTunable("apex_air_home_wave", 1.f) > 0.f)
+		&& (ai.GetTunable("apex_air_home_wave", TUNE_AIR_HOME_WAVE) > 0.f)
 		&& (Bombers() * 2 >= ScaledBombers()))
 	{
 		Release("home wave massed");

@@ -38,6 +38,70 @@ IUnitTask@ RezzerFlee(CCircuitUnit@ unit)
 	return null;
 }
 
+// BATTLEFIELD MEDICS (apexearth 2026-08-21): a share of the rez fleet stays
+// with the army instead of working the corpse geometry -- repair the wounded
+// where the fight is, eat the aftermath where it fell. Deterministic by unit
+// id so the split is stable across elections; the flee rule above still wins,
+// so a medic under fire leaves like any other rez bot.
+bool MedicBot(CCircuitUnit@ unit)
+{
+	const float share = ai.GetTunable("apex_medic_share", TUNE_MEDIC_SHARE);
+	if (share <= 0.f)
+		return false;
+	return float(int(unit.id) % 100) < share * 100.f;
+}
+
+int gNextMedicLog = 0;
+
+IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
+{
+	if (!IsRezzer(unit) || !MedicBot(unit))
+		return null;
+	const AIFloat3 lane = Military::LanePos();
+	if (!OnMap(lane) || (lane.SqLength2D() < 1.f))
+		return null;
+	const int slot = ConSlot(unit);
+	if (ai.frame < gConNextRepair[slot])
+		return null;
+	// The staging anchor is meant to be OUR ground; if it currently is not,
+	// the medic waits rather than walking into what the army retreated from.
+	if (ThreatFor(unit, lane) > CON_THREAT_VETO)
+		return null;
+	gConNextRepair[slot] = ai.frame + REZ_WRECK_PERIOD;
+	const float reach = ai.GetTunable("apex_medic_r", TUNE_MEDIC_R);
+	// The wounded near the fight come first, wherever the medic stands now.
+	array<CCircuitUnit@>@ hurt = ai.GetOwnDamagedNear(lane, reach);
+	if (hurt !is null) {
+		CCircuitUnit@ best = null;
+		float bestDist = 1.0e18f;
+		const AIFloat3 here = unit.GetPos(ai.frame);
+		for (uint i = 0; i < hurt.length(); ++i) {
+			CCircuitUnit@ u = hurt[i];
+			if ((u is null) || (u is unit) || !u.circuitDef.IsMobile())
+				continue;
+			const float d = here.distance2D(u.GetPos(ai.frame));
+			if (d < bestDist) {
+				bestDist = d;
+				@best = u;
+			}
+		}
+		if (best !is null) {
+			if (ai.frame >= gNextMedicLog) {
+				gNextMedicLog = ai.frame + 60 * SECOND;
+				AiLog(Factory::T() + "apex: medic moving to repair at the line");
+			}
+			return aiBuilderMgr.Enqueue(TaskB::Repair(Task::Priority::NORMAL, best));
+		}
+	}
+	// Nobody hurt: hold station at the lane, eating whatever the last fight
+	// left there. The area reclaim is also the move order.
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (here.distance2D(lane) > reach)
+		return aiBuilderMgr.Enqueue(TaskB::Reclaim(
+				Task::Priority::NORMAL, lane, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+	return null;
+}
+
 uint gRezSweepIdx = 0;
 int gNextRezSweepLog = 0;
 

@@ -29,7 +29,6 @@ public:
 	virtual bool IsDiveCommit() const override { return diveCommit; }
 
 private:
-	float GetHealthScale();
 	void FindTarget();
 	void ApplyTargetPath(const CQueryPathSingle* query);
 	void FallbackFrontPos();
@@ -53,6 +52,10 @@ private:
 	// apex: flanking. Rolled once per task; a flanking squad walks via a
 	// lateral waypoint before turning onto its target.
 	int flankRoll = -1;
+
+	// apex: pre-contact assembly budget. -1 = not assembling; otherwise the
+	// frame past which the squad engages regardless of stragglers.
+	int assembleUntil = -1;
 	springai::AIFloat3 flankVia = springai::AIFloat3(-1.f, 0.f, 0.f);
 	// Risk escalation, not a charge flip: each time the threat-aware route
 	// comes back past apex_max_detour times the straight line, this steps up

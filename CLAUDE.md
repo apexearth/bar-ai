@@ -7,6 +7,8 @@ live game install is a deploy target.
 Everything below was verified on this machine on 2026-08-09 unless marked
 otherwise. Re-verify paths before relying on them — engine versions change.
 
+Refer to `BAR-GUIDE.md` to learn about game mechanics.
+
 ## Local layout
 
 | What | Path |
@@ -150,6 +152,14 @@ Files are kept under ~600 lines deliberately: above that, work degenerates into
 grep-an-anchor-and-blind-replace, and a `str.replace` anchor that does not match
 fails silently. That has eaten edits here at least five times.
 
+**Component ownership lives in the `ai-*` skills** (apexearth 2026-08-21:
+"make skills for our ai components so we understand whats in charge of
+what"): `ai-economy`, `ai-build-arbitration`, `ai-factory-brain`,
+`ai-military`, `ai-placement`, `ai-nukes`, `ai-commander`, `ai-air`. Each
+answers: what owns which decision, the decision chain, the log lines that
+expose it, and its tunables. Load the matching one BEFORE diagnosing a
+domain — it is cheaper than rediscovering the chain from the code.
+
 See **`CHANGES.md`** for everything this AI does differently from stock BARb,
 which layer each change lives in, and how well each is actually measured.
 
@@ -168,6 +178,7 @@ told the same thing again costs his session. `CHANGES.md` says what was done,
 ## Commands
 
 ```bash
+python tools/dashboard.py                    # local web UI: browse runs, launch, deploy, tunables
 python tools/bar_env.py                      # show resolved paths
 python tools/deploy_ai.py status             # what is deployed, and is it in sync
 python tools/deploy_ai.py deploy apex        # repo -> live install
@@ -349,6 +360,23 @@ share a shape: the thing didn't work, and nothing said so.
   every enqueue after the first is an orphan nobody will ever work. Measured:
   15 front-defence tasks in 3 minutes, `picked=0/15`. Return an existing task, or
   remember the one already placed for that builder.
+
+- **A watch game's infolog reaches the match dir only at game END; mid-game
+  reads of `matches/_engine*/infolog.txt` can be DAYS stale.** Analyzing a
+  live game via the engine dir produced a full false diagnosis 2026-08-21 (a
+  "dead facqueue" CRITICAL retracted hours later -- the log was from Aug 10).
+  Check the file's mtime against the game being discussed before reading ONE
+  line of it.
+
+- **`result.json`'s `teams[].team` is the SPEC index ('a'=0, 'b'=1), not a game
+  team.** In a per-side game spec b's players are teams N..2N-1, so anchoring a
+  side split on `ally_of[teams[apex].team]` reads the ENEMY's side whenever Apex
+  is spec b -- every side-swapped tournament game. This inverted a full 6-game
+  tournament read 2026-08-21 into a false "we out-scale stock 2x" (the reported
+  dominance was stock's own scaling); the corrected medians said the opposite.
+  Each spec's players share the allyteam equal to its spec index -- anchor on
+  that. `tools/scaling.py` does it right now; check any new tool against a
+  side-swapped game before believing it.
 
 - **Aggregate over the right unit.** The T2 rush was reported as "not firing"
   from a median first-T2 of 14.9 min. That was the median across ALL FOUR

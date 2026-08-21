@@ -13,16 +13,53 @@ float TeamArmyCost()
 
 bool KillingBlow()
 {
+	// THE T1 COMMIT IS ALL OR NOTHING. apexearth 2026-08-20, watching it
+	// fail: "we aren't aggressive enough to win in that 'T1-commit' tactic.
+	// Spend too much time being distracted running all over the map and we
+	// don't truly attack the enemy base. 'all or nothing' style." A tempo
+	// strategy's army has one job -- the enemy base -- so while committed the
+	// blow arms with no clock floor and at a tempo edge instead of the
+	// late-game 1.8x: believe you are stronger, go end it. Every loss in the
+	// 2026-08-20 set was the tempo never cashing while the army ran map
+	// errands and raiders ate the builders at home.
+	if (Factory::T1Commit()) {
+		const float oursT1 = OurArmyNow();
+		float theirsT1 = FoeMobileMassing();
+		if (gSeenPeak > theirsT1)
+			theirsT1 = gSeenPeak;
+		const float edge = ai.GetTunable("apex_t1_push_edge", TUNE_T1_PUSH_EDGE);
+		// WIDE hysteresis, or it is not "all or nothing". At on=1.2x/off=0.72x
+		// the fog-driven enemy estimate wobbled the blow ON and off 15 times
+		// in one 35-minute draw (zero pushes actually broken -- every one was
+		// CALLED OFF), while we led economy and army throughout. Armed, the
+		// commit holds until a genuine reversal: their read at twice ours.
+		const float offEdge = ai.GetTunable("apex_t1_push_off", TUNE_T1_PUSH_OFF);
+		if ((oursT1 >= MassFloor() / 0.017f)
+			&& (oursT1 > theirsT1 * (gKilling ? offEdge : edge)))
+		{
+			return true;
+		}
+		// fall through: the normal gates below may still arm it
+	}
 	if (ai.frame < KILL_FROM)
 		return false;
-	const float ours = TeamArmyCost();
-	const float theirs = EnemyFieldCost();
-	if (ours < KILL_FLOOR)
+	// OurArmyNow, not TeamArmyCost: armyCost read ~40% of the field telemetry
+	// (see massing.as). And KILL_FLOOR=20000 was an absolute no benchmark-scale
+	// economy ever reaches -- the blow could not fire at all below ~100 m/s
+	// income (zero firings across every 2026-08-20 game). Both guards it stood
+	// for are kept, economy-derived: the fog guard commits only past the most
+	// army they have ever shown at once, and the size guard is one real attack
+	// group at the massing system's own floor, in metal.
+	const float ours = OurArmyNow();
+	float theirs = EnemyFieldCost();
+	if (gSeenPeak > theirs)
+		theirs = gSeenPeak;
+	if (ours < MassFloor() / 0.017f)
 		return false;
 	// Hysteresis, so a single lost engagement does not flip us back to massing
 	// half way through the push that is winning the game.
-	return gKilling ? (ours > theirs * (KILL_EDGE * 0.6f))
-	                : (ours > theirs * KILL_EDGE);
+	return gKilling ? (ours > theirs * (KILL_EDGE() * 0.6f))
+	                : (ours > theirs * KILL_EDGE());
 }
 
 void UpdateKillingBlow()

@@ -125,13 +125,45 @@ const uint  MIN_INFLIGHT = 2;
 
 uint InFlightCap()
 {
-	const float drain = ai.GetTunable("apex_request_drain", DRAIN);
+	const float drain = ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN);
 	if (drain <= 0.f)
 		return MIN_INFLIGHT;
 	const float want = aiEconomyMgr.metal.income / drain;
 	if (want <= float(MIN_INFLIGHT))
 		return MIN_INFLIGHT;
 	return uint(want);
+}
+
+// A DUPLICATE COSTS THE WHOLE BUILDING AGAIN. InFlightCap answers how many
+// requests the INCOME can feed across a def -- it knows nothing about what one
+// of them costs, so the same income licensed several parallel advanced solars
+// and duplicate T3 defence on an empty bank (apexearth 2026-08-21: "We are
+// still making duplicate buildings at the same time when we are not wealthy
+// enough to do so"; earlier, on Pulsars: "Do we want 1 T3 defense in 1/3rd the
+// time, or 3 T3 defense in 3/3rds that time..?"). The extra site is allowed
+// only while the BANK already holds the duplicate's cost -- banked metal is
+// the one honest signal of "wealthy enough to pay twice at once". The first
+// site is never blocked; this only serializes duplicates.
+uint EffectiveCap(const CCircuitDef@ want)
+{
+	// ADVANCED SOLARS ARE STRICTLY SERIAL, whatever the bank. apexearth
+	// 2026-08-21: "A new advanced solar order should not be wanted while we
+	// already have one being fulfilled." The pack rule keeps them adjacent;
+	// the ORDER is one at a time -- a second asker folds onto the live one
+	// through JoinFor and helps finish it instead of opening another.
+	if (ai.GetTunable("apex_advsol_serial", TUNE_ADVSOL_SERIAL) > 0.f) {
+		const string n = want.GetName();
+		if ((n == "armadvsol") || (n == "coradvsol") || (n == "legadvsol"))
+			return 1;
+	}
+	uint cap = InFlightCap();
+	const float per = want.costM * ai.GetTunable("apex_dup_bank", TUNE_DUP_BANK);
+	if (per > 0.f) {
+		const uint wealth = 1 + uint(aiEconomyMgr.metal.current / per);
+		if (wealth < cap)
+			cap = wealth;
+	}
+	return cap;
 }
 
 // HOW MANY WORKERS ONE SITE IS WORTH, from the building's own cost. Piling the
@@ -147,7 +179,7 @@ uint SiteWorkerCap(const CCircuitDef@ want)
 {
 	if (want is null)
 		return MIN_INFLIGHT;
-	const float per = ai.GetTunable("apex_site_cost_per_worker", 300.f);
+	const float per = ai.GetTunable("apex_site_cost_per_worker", TUNE_SITE_COST_PER_WORKER);
 	uint n = (per > 0.f) ? uint(1.f + want.costM / per) : MIN_INFLIGHT;
 	if (n < MIN_INFLIGHT)
 		n = MIN_INFLIGHT;
@@ -297,16 +329,74 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	if ((unit !is null) && !unit.circuitDef.CanBuild(want))
 		return null;
 
+	// ADVANCED SOLARS STAND TOGETHER (apexearth 2026-08-20) -- enforced at
+	// THE chokepoint because four different rules place them (HomeEnergy,
+	// the commander opening, the Brain fallback, scavenge), each with its
+	// own spot. Re-seed onto the nearest standing sibling, same
+	// shoulder-to-shoulder move as the nano and pulsar blocks; the threat
+	// veto keeps a pack from chaining into fire. Names, not a cost band, so
+	// fusions and winds are untouched.
+	AIFloat3 at = spot;
+	{
+		const string wn = want.GetName();
+		if (((wn == "armadvsol") || (wn == "coradvsol") || (wn == "legadvsol"))
+			&& (want.count > 0) && (unit !is null))
+		{
+			array<CCircuitUnit@>@ kin = ai.GetOwnUnitsOfDef(want, spot, 4000.f);
+			CCircuitUnit@ seed = null;
+			float bestSq = 1.0e18f;
+			if (kin !is null) {
+				for (uint i = 0; i < kin.length(); ++i) {
+					if (kin[i] is null)
+						continue;
+					const AIFloat3 kp = kin[i].GetPos(ai.frame);
+					if (!OnMap(kp))
+						continue;
+					const float sq = kp.SqDistance2D(spot);
+					if (sq < bestSq) {
+						bestSq = sq;
+						@seed = kin[i];
+					}
+				}
+			}
+			// BEHIND THE BASE, NOT WHEREVER THE ASKER STOOD. apexearth
+			// 2026-08-21: "advanced solars unusually far from the core of
+			// our base. They typically should be behind our base." A stray
+			// far panel must not found a colony: kin only seeds the pack
+			// while it stands near home, and with no near-home seed the deep
+			// band (the BACK of the base) places the founder.
+			const float homeR = ai.GetTunable("apex_advsol_home_r", TUNE_ADVSOL_HOME_R);
+			if ((seed !is null)
+				&& (seed.GetPos(ai.frame).distance2D(Builder::gHomePos) > homeR))
+			{
+				@seed = null;
+			}
+			if (seed !is null) {
+				AIFloat3 site = ai.FindBuildSiteNear(want, seed.GetPos(ai.frame),
+						ai.GetTunable("apex_advsol_pack_r", TUNE_ADVSOL_PACK_R));
+				if (OnMap(site) && (Builder::ThreatFor(unit, site) <= Builder::CON_THREAT_VETO))
+					at = site;
+			} else {
+				AIFloat3 rear;
+				if (Builder::BandSpot(unit, want, false, rear) && OnMap(rear)
+					&& (Builder::ThreatFor(unit, rear) <= Builder::CON_THREAT_VETO))
+				{
+					at = rear;
+				}
+			}
+		}
+	}
+
 	const int type = int(bt);
 	if (!Governed(type)) {
-		IUnitTask@ any = Create(want, bt, prio, spot, shake);
+		IUnitTask@ any = Create(want, bt, prio, at, shake);
 		created = (any !is null);
 		return any;
 	}
 
 	// This ground is already requested. Help with it if there is room and it is
 	// worth walking to; otherwise back off. Never a second building here.
-	IUnitTask@ cover = CoverFor(want, spot, radius);
+	IUnitTask@ cover = CoverFor(want, at, radius);
 	if (cover !is null) {
 		if ((want.costM >= JOIN_MIN_COST) && (Workers(cover) < SiteWorkerCap(want))) {
 			++gJoined;
@@ -323,14 +413,14 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 		// starts flowing sooner. A `parallel` caller has already decided the
 		// economy wants ANOTHER site, so only the caps below apply to it.
 		if (!parallel) {
-			IUnitTask@ near = JoinFor(unit, want, spot);
+			IUnitTask@ near = JoinFor(unit, want, at);
 			if (near !is null) {
 				++gJoined;
 				Log(want, "join-near");
 				return near;
 			}
 		}
-		if (InFlight(want) >= InFlightCap()) {
+		if (InFlight(want) >= EffectiveCap(want)) {
 			// FULL MEANS TAKE ONE OFF THE QUEUE, NOT STAND STILL. A request
 			// nobody is working is available by definition -- that is the whole
 			// of "if the building is cancelled by whoever took the order then it
@@ -369,7 +459,7 @@ bool Allowed(CCircuitDef@ want, Task::BuildType bt, const AIFloat3& in spot,
 		return true;
 	if (JoinFor(null, want, spot) !is null)
 		return false;
-	return InFlight(want) < InFlightCap();
+	return InFlight(want) < EffectiveCap(want);
 }
 
 // The live request covering this ground, if there is one. `radius` 0 is an

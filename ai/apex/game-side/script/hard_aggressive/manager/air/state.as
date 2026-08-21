@@ -33,7 +33,7 @@ const int   AIR_FIGHTERS   = 8;
 // Scale the strike size with our own economy: AIR_BOMBERS/AIR_FIGHTERS above
 // are the floor; a stronger economy affords, and profits more from, a bigger
 // strike.
-const float AIR_SCALE_INCOME = 80.f;   // extra metal/s per extra bomber above the floor
+const float AIR_SCALE_INCOME = 30.f;   // extra metal/s per extra bomber above the floor
 const int   AIR_BOMBERS_MAX  = 30;
 
 int ScaledBombers()
@@ -49,7 +49,7 @@ int ScaledBombers()
 	if ((gBomber1 !is null) && (gBomber1.GetName() == "legkam")
 		&& (Have(gBomber) == 0))
 	{
-		const float s = ai.GetTunable("apex_oneshot_bomber_scale", 0.4f);
+		const float s = ai.GetTunable("apex_oneshot_bomber_scale", TUNE_ONESHOT_BOMBER_SCALE);
 		const int scaled = int(float(capped) * s + 0.99f);
 		return (scaled < 1) ? 1 : scaled;
 	}

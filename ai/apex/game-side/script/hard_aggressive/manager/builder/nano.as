@@ -27,7 +27,7 @@ const float NANO_INCOME_GATE_DEF = 60.f;
 
 float NanoIncomeGate()
 {
-	return ai.GetTunable("apex_nano_income_gate", NANO_INCOME_GATE_DEF);
+	return ai.GetTunable("apex_nano_income_gate", TUNE_NANO_INCOME_GATE);
 }
 // Raised with the shift away from ground engineers: a turret is 210 metal and
 // never walks anywhere, which is why it is the build power this player should
@@ -173,7 +173,7 @@ bool NanoSiteAt(CCircuitUnit@ unit, CCircuitDef@ want, CCircuitUnit@ fac,
 			c.x = x / n;
 			c.z = z / n;
 			AIFloat3 site = ai.FindBuildSiteNear(want, c,
-					ai.GetTunable("apex_nano_pack_r", 180.f));
+					ai.GetTunable("apex_nano_pack_r", TUNE_NANO_PACK_R));
 			if (OnMap(site) && (site.distance2D(fpos) <= NANO_ASSIST_R)
 					&& !Base::SiteTaken(Base::NANO, site)
 					&& (ThreatFor(unit, site) <= CON_THREAT_VETO)) {
@@ -341,7 +341,7 @@ bool NanoCanReachWork(CCircuitDef@ want, const AIFloat3& in site)
 	// 210-metal turret beside it (screenshot, 2026-08-18). The reachable
 	// non-turret structure value must be worth the turret itself.
 	float worth = 0.f;
-	const float need = ai.GetTunable("apex_nano_work_min", 400.f);
+	const float need = ai.GetTunable("apex_nano_work_min", TUNE_NANO_WORK_MIN);
 	for (uint k = 0; k < near.length(); ++k) {
 		CCircuitUnit@ o = near[k];
 		if ((o is null) || (o.circuitDef is null))
@@ -363,7 +363,7 @@ bool NanoCanReachWork(CCircuitDef@ want, const AIFloat3& in site)
 bool SnapToNanoGrid(CCircuitUnit@ unit, CCircuitDef@ want,
 		const AIFloat3& in from, AIFloat3& out snapped)
 {
-	const float snapR = ai.GetTunable("apex_nano_snap_r", 200.f);
+	const float snapR = ai.GetTunable("apex_nano_snap_r", TUNE_NANO_SNAP_R);
 	array<CCircuitUnit@>@ near = ai.GetOwnUnitsOfDef(want, from, snapR);
 	if ((near is null) || (near.length() == 0))
 		return false;
@@ -385,7 +385,7 @@ bool SnapToNanoGrid(CCircuitUnit@ unit, CCircuitDef@ want,
 	// odd-footprint centre sit every 16 elmos, so a 24 pitch is impossible and
 	// the engine shoved every second turret 8 elmos -- the "off by half" in
 	// apexearth's screenshot. 32 is the tightest grid-true pitch.
-	const float pitch = ai.GetTunable("apex_nano_grid_pitch", 32.f);
+	const float pitch = ai.GetTunable("apex_nano_grid_pitch", TUNE_NANO_GRID_PITCH);
 	array<float> dx = {pitch, -pitch, 0.f, 0.f};
 	array<float> dz = {0.f, 0.f, pitch, -pitch};
 	for (uint k = 0; k < 4; ++k) {
@@ -408,6 +408,69 @@ bool SnapToNanoGrid(CCircuitUnit@ unit, CCircuitDef@ want,
 	return false;
 }
 
+// Which gate turned the nano down while the bank was FULL -- the state where
+// refusing build power is the decision that costs the game (measured
+// 2026-08-20: 61,816 metal excess, zero nanos, one factory line).
+int gNextNanoVetoLog = 0;
+
+IUnitTask@ NanoVeto(const string& in why)
+{
+	if (aiEconomyMgr.isMetalFull && (ai.frame >= gNextNanoVetoLog)) {
+		gNextNanoVetoLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: nano vetoed while metal FULL -- " + why);
+	}
+	return null;
+}
+
+// A NANO INSTEAD OF A PAIR OF HANDS. apexearth 2026-08-21: "If the factory
+// is requesting assistance from builders -- have those builders make a nano
+// turret next to the factory INSTEAD of assisting it." The same build power
+// made permanent: a guard walks away when its timeout ends, the turret stays,
+// and the constructor is free afterward. Called from Assist::AssistFactory
+// with the factory it just chose; every refusal here falls back to the plain
+// assist there, so the line is never left unhelped. No eco-lead or bank gate
+// on purpose -- the factory actively asking for hands IS the demand those
+// gates exist to establish.
+IUnitTask@ NanoInsteadOfHands(CCircuitUnit@ unit, CCircuitUnit@ fac)
+{
+	if (ai.GetTunable("apex_assist_nano", TUNE_ASSIST_NANO) <= 0.f)
+		return null;
+	if ((unit is null) || (fac is null))
+		return null;
+	// A turret costs 3200 energy to put up; buying build power on a grid that
+	// cannot pay for it stalls both.
+	if (aiEconomyMgr.isEnergyStalling)
+		return NanoVeto("assist-nano: energy stalling");
+	CCircuitDef@ want = SideDef3(armnanotc, cornanotc, legnanotc);
+	if ((want is null) || !want.IsAvailable(ai.frame)
+		|| !unit.circuitDef.CanBuild(want))
+	{
+		return null;
+	}
+	if (want.count >= NanoCap())
+		return NanoVeto("assist-nano: at cap " + want.count + "/" + NanoCap());
+	int outstanding = gNanosAsked - want.count;
+	if (outstanding > NANO_STALE) {
+		gNanosAsked = want.count;
+		outstanding = 0;
+	}
+	if (outstanding >= NanoInFlight())
+		return NanoVeto("assist-nano: in-flight " + outstanding + "/" + NanoInFlight());
+	AIFloat3 here;
+	if (!NanoSiteAt(unit, want, fac, here))
+		return null;
+	// Requests::Take dedups by site: the second constructor sent this way
+	// JOINS the turret going up, which is the assist anyway.
+	bool created = false;
+	IUnitTask@ post = Requests::Take(unit, want, Task::BuildType::NANO,
+			Task::Priority::HIGH, here, 0.f, 0.f, created);
+	if (post is null)
+		return null;
+	if (created)
+		++gNanosAsked;
+	return post;
+}
+
 IUnitTask@ EcoNano(CCircuitUnit@ unit)
 {
 	// INSIDE the function, not at one call site: the Brain's metal-full nano
@@ -416,7 +479,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	// more important than the army (eg we're full on metal)." While the base
 	// is being hit, constructor time belongs to what fights back.
 	if (BaseUnderAttack() || Military::BaseContested())
-		return null;
+		return NanoVeto("base under attack");
 	// BUILD POWER SHOULD TRACK INCOME, NOT ONLY A FULL BANK: a full bank is a
 	// rare instant, not a state, so gating solely on "eco lead, or metal full"
 	// starved turret count on a compounding economy. Above NANO_INCOME_GATE,
@@ -435,11 +498,11 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	// A turret costs 3200 energy to put up; buying build power on a grid that
 	// cannot pay for it stalls both.
 	if (aiEconomyMgr.isEnergyStalling)
-		return null;
+		return NanoVeto("energy stalling");
 
 	CCircuitDef@ want = SideDef3(armnanotc, cornanotc, legnanotc);
 	if ((want is null) || !want.IsAvailable(ai.frame) || (want.count >= NanoCap()))
-		return null;
+		return NanoVeto("no def or at cap " + ((want !is null) ? (want.count + "/" + NanoCap()) : "null"));
 
 	// Bound what is OUTSTANDING, not just what stands. want.count sees finished
 	// turrets only and Enqueue does not dedup, so the cap alone let this run to
@@ -456,7 +519,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		outstanding = 0;
 	}
 	if (outstanding >= NanoInFlight())
-		return null;
+		return NanoVeto("in-flight " + outstanding + "/" + NanoInFlight());
 
 	// A caretaker has to reach something: the band is tried only once no factory
 	// has room left.
@@ -486,7 +549,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 			gBigBuildId = -1;
 			array<CCircuitUnit@>@ around = ai.GetOwnStructsNear(
 					unit.GetPos(ai.frame), 3000.f);
-			float bigCost = ai.GetTunable("apex_nano_site_min", 1500.f);
+			float bigCost = ai.GetTunable("apex_nano_site_min", TUNE_NANO_SITE_MIN);
 			if (around !is null) {
 				for (uint i = 0; i < around.length(); ++i) {
 					CCircuitUnit@ s = around[i];
@@ -543,7 +606,7 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	// nano-costs of banked metal, bounded by the in-flight headroom, each at
 	// its own reserved site; stops at the first refused request.
 	int batch = int(aiEconomyMgr.metal.current
-			/ (want.costM * ai.GetTunable("apex_burst_bank_frac", 4.f)));
+			/ (want.costM * ai.GetTunable("apex_burst_bank_frac", TUNE_BURST_BANK_FRAC)));
 	const int head = NanoInFlight() - (gNanosAsked - int(want.count));
 	if (batch > head)
 		batch = head;

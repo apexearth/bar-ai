@@ -15,6 +15,17 @@ namespace Military {
 // the army has rebuilt. The aim is to stop donating metal and make the enemy
 // feed us instead.
 //------------------------------------------------------------------------------
+// Metal standing in our own tracked combat units, refreshed each withdraw.as
+// pass. aiMilitaryMgr.armyCost read ~40% of what the field telemetry showed
+// (2026-08-20: 2054 against armyReal 5500), and every aggression gate that
+// trusted it held forever; this is the count of units we can actually walk.
+// Declared here because massing.as loads before withdraw.as in the shim.
+float gTrackedCost = 0.f;
+
+// The lane the army masses on (posture.as maintains it; massing.as reads it
+// for the local-odds override, and include order forces the declaration here).
+AIFloat3 gLaneAt;
+
 const int   POSTURE_SAMPLE  = 20 * SECOND;   // how far back we compare army value
 const float LOSING_RATIO    = 0.82f;         // army fell to this share -> turtle
 // Resume when the army is back to most of what it had BEFORE the collapse, not

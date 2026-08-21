@@ -63,7 +63,7 @@ void PlaceLineJammer(const AIFloat3& in spot)
 // is registered in the current C++ source but absent from the deployed
 // SkirmishAI.dll, which predates it.
 const float JAMMER_COVER = 900.f;
-const float RAID_MIN_EARLY = 45.f;   // hold them home
+float RAID_MIN_EARLY() { return ai.GetTunable("apex_raid_min_early", TUNE_RAID_MIN_EARLY); }
 float gRaidMinStock = -1.f;
 
 //------------------------------------------------------------------------------
@@ -90,9 +90,9 @@ void UpdateApproach()
 	if ((ai.frame < gNextApproach) || !Builder::gHomeSet)
 		return;
 	gNextApproach = ai.frame + 5 * SECOND;
-	const float notice = ai.GetTunable("apex_push_notice_r", 4500.f);
-	const float minCost = ai.GetTunable("apex_push_cost", 2500.f);
-	const float closingBar = ai.GetTunable("apex_push_closing", 150.f);
+	const float notice = ai.GetTunable("apex_incoming_notice_r", TUNE_INCOMING_NOTICE_R);
+	const float minCost = ai.GetTunable("apex_incoming_cost", TUNE_INCOMING_COST);
+	const float closingBar = ai.GetTunable("apex_incoming_closing", TUNE_INCOMING_CLOSING);
 	const int nG = aiEnemyMgr.GetEnemyGroupCount();
 	for (int i = 0; i < nG; ++i) {
 		const AIFloat3 p = aiEnemyMgr.GetEnemyGroupPos(i);
@@ -111,9 +111,9 @@ void UpdateApproach()
 			const float edgeD = Military::NearestFenceDist(p);
 			const float dEdge = (edgeD < d) ? edgeD : d;
 			const float reach = aiEnemyMgr.GetEnemyGroupRange(i)
-					+ ai.GetTunable("apex_push_danger_pad", 500.f);
+					+ ai.GetTunable("apex_incoming_danger_pad", TUNE_INCOMING_DANGER_PAD);
 			if ((dEdge < reach)
-				&& (cost >= ai.GetTunable("apex_push_danger_cost", 800.f)))
+				&& (cost >= ai.GetTunable("apex_incoming_danger_cost", TUNE_INCOMING_DANGER_COST)))
 			{
 				gIncomingPos = p;
 				gIncomingCost = cost;
@@ -174,6 +174,91 @@ void UpdateApproach()
 bool PushIncoming()
 {
 	return (ai.frame - gIncomingAt) < 45 * SECOND;
+}
+
+//------------------------------------------------------------------------------
+// THE RAID SENSOR: our own buildings dying on our own ground.
+//
+// Every escalation that was supposed to answer an invasion -- the defence-share
+// panic clause, the doubled front budget, the exemption that lets a tower go
+// behind the territory centre -- hung on Military::BaseContested(), which asks
+// whether the enemy holds NET INFLUENCE over our start position. Measured over
+// four runs it reads 0% of samples in three of them and never above 9%: an
+// enemy can walk in, kill a T2 lab and leave without it ever being true, because
+// our own buildings dominate the influence there. Structure deaths are not
+// inferred; AiUnitDestroyed already carries the position and the cost of every
+// one, and nothing consumed them.
+//
+// Deliberately NOT a new spend rule. It sets the same incoming signal the
+// approach sensor sets, so Builder::PushAnswer answers it with the tier, the
+// siting and the metal sizing it already had -- an answer worth a fraction of
+// what is being lost, which stops on its own once the ground is covered.
+float RAID_TAU() { return ai.GetTunable("apex_raid_tau", TUNE_RAID_TAU); }
+float    gRaidM = 0.f;
+AIFloat3 gRaidPos;
+int      gRaidAt = -999999;
+int      gRaidLast = 0;
+int      gNextRaidLog = 0;
+
+void DecayRaid()
+{
+	const int step = ai.frame - gRaidLast;
+	if (step <= 0)
+		return;
+	gRaidLast = ai.frame;
+	float k = 1.f - (float(step) / 30.f) / RAID_TAU();
+	if (k < 0.f)
+		k = 0.f;
+	gRaidM *= k;
+}
+
+// A finished structure of ours, killed on home ground. FWD_HOME is the death
+// ledger's own line for "died defending home", reused rather than re-invented.
+void NoteStructureLoss(const AIFloat3& in at, float costM)
+{
+	if ((costM <= 0.f) || !OnMap(at) || !Builder::gHomeSet)
+		return;
+	if (ForwardFraction(at) > FWD_HOME)
+		return;
+	DecayRaid();
+	gRaidM += costM;
+	gRaidPos = at;
+	gRaidAt = ai.frame;
+	// Never weaken a live approach reading: a bigger fight keeps the signal.
+	if (!PushIncoming() || (gRaidM > gIncomingCost)) {
+		gIncomingPos = gRaidPos;
+		gIncomingCost = gRaidM;
+		gIncomingAt = ai.frame;
+	}
+	if (ai.frame >= gNextRaidLog) {
+		gNextRaidLog = ai.frame + 20 * SECOND;
+		AiLog(Factory::T() + "apex: RAIDED -- lost "
+			+ formatFloat(gRaidM, "", 0, 0) + " metal of buildings at "
+			+ int(at.x) + "," + int(at.z) + " on our own ground");
+	}
+}
+
+// Are they in our base killing our things RIGHT NOW. The trigger BaseContested
+// was meant to be, read from what we are actually losing.
+bool BaseRaided()
+{
+	if ((ai.frame - gRaidAt) >= 45 * SECOND)
+		return false;
+	DecayRaid();
+	return gRaidM > 0.f;
+}
+
+// How badly, as a multiplier, so the escalation is graduated rather than a step:
+// structure metal lost on home ground against what our economy makes in the
+// same window. Losing a minute of income to a raid doubles the allowance.
+float RaidPressure()
+{
+	if (!BaseRaided())
+		return 1.f;
+	const float inc = aiEconomyMgr.metal.income;
+	if (inc <= 0.5f)
+		return 1.f;
+	return 1.f + gRaidM / (inc * RAID_TAU());
 }
 
 AIFloat3 IncomingPos() { return gIncomingPos; }

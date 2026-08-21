@@ -53,7 +53,7 @@ CCircuitDef@ RezBotDef()
 int RezBotsWanted()
 {
 	const int byIncome = int(SteadyIncome()
-			* ai.GetTunable("apex_rez_per_income", REZ_PER_INCOME));
+			* ai.GetTunable("apex_rez_per_income", TUNE_REZ_PER_INCOME));
 	const int byReclaim = int(Builder::WreckSeenValue() / REZ_METAL_PER_BOT);
 	return (byIncome > byReclaim) ? byIncome : byReclaim;
 }

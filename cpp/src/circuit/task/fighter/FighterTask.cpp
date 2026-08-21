@@ -9,6 +9,7 @@
 #include "task/fighter/SquadTask.h"  // OUTRANGED_SAFETY_MARGIN
 #include "task/RetreatTask.h"
 #include "map/InfluenceMap.h"
+#include "spring/SpringMap.h"
 #include "map/ThreatMap.h"
 #include "module/BuilderManager.h"
 #include "setup/SetupManager.h"
@@ -92,6 +93,27 @@ IFighterTask::~IFighterTask()
 	if (target != nullptr) {
 		target->UnbindTask(this);
 	}
+}
+
+AIFloat3 IFighterTask::RoamPos(CCircuitUnit* unit) const
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	AIFloat3 pos;
+	if ((circuit->GetTunable("apex_roam_front", 1.f) > 0.f) && circuit->HasFrontPos()) {
+		const int r = (int)circuit->GetTunable("apex_roam_r", 1200.f);
+		const AIFloat3& fp = circuit->GetFrontPos();
+		float x = fp.x + (float)(rand() % (2 * r)) - (float)r;
+		float z = fp.z + (float)(rand() % (2 * r)) - (float)r;
+		x = utils::clamp(x, 0.f, (float)terrainMgr->GetTerrainWidth() - 1.f);
+		z = utils::clamp(z, 0.f, (float)terrainMgr->GetTerrainHeight() - 1.f);
+		pos = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
+	} else {
+		float x = rand() % terrainMgr->GetTerrainWidth();
+		float z = rand() % terrainMgr->GetTerrainHeight();
+		pos = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
+	}
+	return terrainMgr->GetMovePosition(unit->GetArea(), pos);
 }
 
 void IFighterTask::AssignTo(CCircuitUnit* unit)

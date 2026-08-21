@@ -9,3 +9,4 @@
 #include "air/wing.as"      // wing strength, whether we are armed and massed
 #include "air/factory.as"   // what the air plant builds next
 #include "air/update.as"    // holding units back, releasing them, re-arming
+#include "air/station.as"     // spread the wing, spend obsolete fighters

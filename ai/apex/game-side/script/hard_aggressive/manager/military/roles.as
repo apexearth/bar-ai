@@ -16,7 +16,7 @@ float RushAttackQuota()
 // Deliberately not the full turtle value (400 = never attack). Sitting entirely
 // passive hands the enemy the map, and the map is where the reclaim is. This is
 // "defend and stall", not "do nothing".
-const float RUSH_TEAM_DEFEND = 60.f;
+float RUSH_TEAM_DEFEND() { return ai.GetTunable("apex_rush_team_defend", TUNE_RUSH_TEAM_DEFEND); }
 
 // The attack quota to hold for the REST of the game, once the rush window and
 // any turtle hold are over. Not gAttackBase: that is stock BARb's config value
@@ -24,7 +24,7 @@ const float RUSH_TEAM_DEFEND = 60.f;
 // attacking and fills first-come, so a T3 unit finished later never gets a
 // slot. Set well above any realistic standing army so the quota stops deciding
 // and the engage test (which looks at the odds) decides instead.
-const float LATE_ATTACK_QUOTA = 200.f;
+float LATE_ATTACK_QUOTA() { return ai.GetTunable("apex_late_attack_quota", TUNE_LATE_ATTACK_QUOTA); }
 
 bool gRushDefenceHeld = false;
 
@@ -37,9 +37,9 @@ void UpdateRushDefence()
 		// this and must not be clobbered.
 		if (gRushDefenceHeld) {
 			gRushDefenceHeld = false;
-			if (aiMilitaryMgr.quota.attack == RUSH_TEAM_DEFEND) {
-				aiMilitaryMgr.quota.attack = LATE_ATTACK_QUOTA;
-				AiLog(Factory::T() + "apex: rush over, attack quota -> " + LATE_ATTACK_QUOTA);
+			if (aiMilitaryMgr.quota.attack == RUSH_TEAM_DEFEND()) {
+				aiMilitaryMgr.quota.attack = LATE_ATTACK_QUOTA();
+				AiLog(Factory::T() + "apex: rush over, attack quota -> " + LATE_ATTACK_QUOTA());
 			}
 		}
 		return;
@@ -50,8 +50,8 @@ void UpdateRushDefence()
 		return;          // the lead is handled by UpdateRushRole
 	if (gTurtle)
 		return;          // an active turtle hold is stricter; do not loosen it
-	if (aiMilitaryMgr.quota.attack < RUSH_TEAM_DEFEND) {
-		aiMilitaryMgr.quota.attack = RUSH_TEAM_DEFEND;
+	if (aiMilitaryMgr.quota.attack < RUSH_TEAM_DEFEND()) {
+		aiMilitaryMgr.quota.attack = RUSH_TEAM_DEFEND();
 		gRushDefenceHeld = true;
 	}
 }
@@ -79,7 +79,7 @@ void UpdateRushRole()
 			gRushQuotaHeld = false;
 			// LATE_ATTACK_QUOTA, not the stock value: see its comment -- stock
 			// is 15 here and that cap, not the odds, was deciding who fought.
-			aiMilitaryMgr.quota.attack = LATE_ATTACK_QUOTA;
+			aiMilitaryMgr.quota.attack = LATE_ATTACK_QUOTA();
 			AiLog(Factory::T() + "apex: rusher role released, attack quota -> "
 				+ aiMilitaryMgr.quota.attack);
 		}
@@ -160,7 +160,7 @@ void UpdateEcoRole()
 			// Not while turtling: the hold set 400 for its own reasons and
 			// restoring the baseline here would quietly cancel it.
 			if (!gTurtle) {
-				aiMilitaryMgr.quota.attack = LATE_ATTACK_QUOTA;
+				aiMilitaryMgr.quota.attack = LATE_ATTACK_QUOTA();
 				AiLog(Factory::T() + "apex: eco lead released, attack quota -> "
 					+ aiMilitaryMgr.quota.attack);
 			}
@@ -245,14 +245,13 @@ void UpdateSling()
 // ratio theirs/ours bridges the two; the output stays in quota units. A Grunt
 // is ~0.9 power, so MASS_FLOOR of 12 is roughly 13 Grunts or 8 Thugs: a real
 // group, not a trickle.
-const float MASS_FLOOR  = 12.f;   // even when ahead, never trickle 2-3 units
 // Ratio at or above which we stop attacking and let them come to the defences.
-const float MASS_HOLD_RATIO = 1.5f;
-const float MASS_CAP    = 48.f;
+float MASS_HOLD_RATIO() { return ai.GetTunable("apex_mass_hold_ratio", TUNE_MASS_HOLD_RATIO); }
+float MASS_CAP() { return ai.GetTunable("apex_mass_cap", TUNE_MASS_CAP); }
 // A metal-vs-metal ratio, so 1.0 is a real parity point. EnemyArmyCost() sums
 // GetEnemyCost over the fighting roles, the same unit as armyCost -- not
 // aiEnemyMgr.mobileThreat, which is a different scale and never approaches 1.
-const float ATTACK_EDGE = 0.95f;
+float ATTACK_EDGE() { return ai.GetTunable("apex_attack_edge", TUNE_ATTACK_EDGE); }
 int gNextMassLog = 0;
 
 // EnemyArmyCost() sums only the mobile fighting roles, so a defended
@@ -266,6 +265,6 @@ int gNextMassLog = 0;
 // this is scoped to MassWant()/UpdateMassing() only -- KillingBlow() and
 // T3Worthwhile(), which read EnemyArmyCost() directly, are unaffected, and the
 // killing-blow override still bypasses this once we are dominant.
-const float STATIC_DEFENSE_WEIGHT = 0.5f;
+float STATIC_DEFENSE_WEIGHT() { return ai.GetTunable("apex_static_defense_weight", TUNE_STATIC_DEFENSE_WEIGHT); }
 
 }  // namespace Military

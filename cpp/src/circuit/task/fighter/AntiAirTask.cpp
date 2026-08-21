@@ -248,10 +248,7 @@ void CAntiAirTask::OnUnitIdle(CCircuitUnit* unit)
 		&& (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)))
 	{
 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-		float x = rand() % terrainMgr->GetTerrainWidth();
-		float z = rand() % terrainMgr->GetTerrainHeight();
-		position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
-		position = terrainMgr->GetMovePosition(leader->GetArea(), position);
+		position = RoamPos(leader);
 	}
 
 	if (units.find(unit) != units.end()) {
@@ -323,7 +320,7 @@ void CAntiAirTask::FindTarget()
 	CCircuitDef* cdef = leader->GetCircuitDef();
 	const int canTargetCat = cdef->GetTargetCategory();
 	const int noChaseCat = cdef->GetNoChaseCategory();
-	const float maxPower = attackPower * powerMod;
+	const float maxPower = attackPower * powerMod * GetHealthScale();
 //	const CCircuitDef::RoleT role = cdef->GetMainRole();
 
 	// Do not go hunting one at a time. Our own cost, not attackPower, because

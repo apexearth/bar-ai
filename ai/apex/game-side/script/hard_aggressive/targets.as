@@ -62,16 +62,27 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 // ELSE is being built concurrently, not by this number. Kept because the
 // budget log reads it; treat any claimed effect from editing it as false
 // until Cat::ARMY is wired into the metal-allocation level.
-array<float> SPEND_ARMY       = {3.5f,   5.f,  6.5f,   8.f,   12.f};
+// RAISED 2026-08-19. apexearth, 24 minutes into a game we were winning on
+// economy and map control: "we only have 55k army vs 140k army on the other
+// side... it feels a bit like we never rotate hard into making a nice strong
+// army... the bottom line is we need stronger weight on army." Measured beside
+// it, every composition table that session: army 12-15% of our metal against
+// BARb's 22-34%, while we out-produced them on metal.
+// RETUNED 2026-08-20, apexearth: "tune army down to something like .3 and
+// add more to eco." Each column set so army/total ~= 0.30 with the removed
+// weight moved into SPEND_ECONOMY below (def/airdef/buildpower untouched).
+// The 2026-08-19 raise this replaces was measured against the OLD spend
+// machinery; with the budget deferrals live, the target now actually binds.
+array<float> SPEND_ARMY       = { 0.0f,  4.0f,  3.0f,  4.0f,   5.0f };
 // LOW until T3-scale income, then RISING HARD -- apexearth: pre-T3 "defenses
 // are really only good versus raiders", but "at late game we should be
 // aggressive with flak on our front lines, T3 defense too. Right now we are
 // *not* aggressive with this at all." The ramp starts at the 100 column and
 // peaks steep at 300: ~8-9% early/mid, ~12% at 100, ~19% at 300.
-array<float> SPEND_DEFENCE    = { 1.0f,  1.0f,  0.9f,  1.4f,  3.2f};
-array<float> SPEND_AIRDEF     = {  1.f,   2.f,  1.5f,  1.5f,  0.5f};
-array<float> SPEND_ECONOMY    = {3.5f,  2.7f,   2.f,  1.5f,   1.f};
-array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
+array<float> SPEND_DEFENCE    = { 1.0f,  1.0f,  2.0f,  2.0f,  3.0f };
+array<float> SPEND_AIRDEF     = { 1.0f,  2.0f,  1.5f,  1.5f,  0.5f };
+array<float> SPEND_ECONOMY    = { 5.0f,  5.0f,  5.0f,  5.0f,  5.0f };   // absorbs the army cut, see SPEND_ARMY
+array<float> SPEND_BUILDPOWER = { 5.0f,  2.0f,  2.0f,  2.0f,  2.0f };
 
 //------------------------------------------------------------------------------
 // 2. WHAT THE ARMY IS MADE OF.
@@ -107,15 +118,24 @@ array<float> SPEND_BUILDPOWER = {2.5f,  1.8f,  1.8f,  1.7f,  1.7f};
 // once both sides hold a line a raider is metal walking into a turret. Never
 // zero past T1, though -- a small standing share of 42-metal Grunts is eyes,
 // which matters exactly when enemy jammers make seeing them the problem.
-array<float> ROLE_RAIDER  = {0.35f, 0.10f, 0.05f, 0.04f, 0.03f};
-array<float> ROLE_ASSAULT = {0.35f, 0.2f, 0.24f, 0.18f, 0.08f};
+// RAISED IN THE EARLY BRACKETS 2026-08-19. apexearth: "we don't seem to make as
+// many of the lighter units. The light tanks, grunts, pawns... these have good
+// dps they just lack range. They can easily overwhelm the enemy and the AI uses
+// a lot more of them than we do in the early game."
+//
+// The 0.35 -> 0.10 collapse by 20 m/s was tuned for the LATE argument (a raider
+// walking into a held line is wasted metal) but 20 m/s is still the opening, so
+// it emptied the mix of cheap DPS exactly where mass wins fights. The late
+// decline is unchanged -- this only sustains them through the early brackets.
+array<float> ROLE_RAIDER  = {0.35f, 0.25f, 0.10f, 0.05f, 0.03f};
+array<float> ROLE_ASSAULT = {0.35f, 0.20f, 0.40f, 0.18f, 0.08f};
 // Rises with the economy, never falls: apexearth 2026-08-15, watching --
 // "in the first few minutes we want mostly raiders, but as time goes on we
 // want much more thugs, units that are tough and can hold the line."
 // Thug/Hammer (corthud/armham) carry this role.
-array<float> ROLE_SKIRM   = {0.12f, 0.26f, 0.28f, 0.28f, 0.28f};
+array<float> ROLE_SKIRM   = {0.12f, 0.26f, 0.20f, 0.28f, 0.28f};
 array<float> ROLE_RIOT    = {0.10f, 0.10f, 0.10f, 0.09f, 0.08f};
-array<float> ROLE_ARTY    = {0.03f, 0.05f, 0.08f, 0.10f, 0.12f};
+array<float> ROLE_ARTY    = {0.03f, 0.05f, 0.15f, 0.10f, 0.12f};
 array<float> ROLE_AA      = {0.05f, 0.06f, 0.07f, 0.07f, 0.07f};
 // Fatboys, and the anti-heavy pair that is Snipers and tank-killers. These are
 // what the raider share becomes: units that hold ground and outrange what walks
@@ -149,8 +169,8 @@ array<float> ROLE_AHA     = {0.00f, 0.00f, 0.07f, 0.10f, 0.11f};
 // guards are the anti-raider work that is defence's actual job pre-T3
 // (apexearth). Front still leads, but no longer 3:1 -- and it recovers its
 // lead only at the T3 column where the big towers hold ground for real.
-array<float> DEF_FRONT = {2.f,  2.f,  2.f,  2.f,  3.f};   // the Brain's line
-array<float> DEF_LOCAL = {1.f,  1.5f, 1.5f, 1.5f, 1.5f};  // mex guards, dig-ins
+array<float> DEF_FRONT = {1.0f,  1.0f,  1.0f,  1.0f,  1.0f};   // the Brain's line
+array<float> DEF_LOCAL = {2.0f,  2.0f, 2.0f, 2.0f, 2.0f};  // mex guards, dig-ins
 
 //------------------------------------------------------------------------------
 // 3. HOW FAR THE OBSERVED ENEMY MOVES THE MIX.
@@ -159,7 +179,7 @@ array<float> DEF_LOCAL = {1.f,  1.5f, 1.5f, 1.5f, 1.5f};  // mex guards, dig-ins
 // answers riots and assaults. This is the most their composition may pull the
 // table above: 0 keeps it fixed, 1 would let one sighting rewrite it.
 //------------------------------------------------------------------------------
-const float COUNTER_MAX = 0.6f;
+const float COUNTER_MAX = 0.2f;
 
 //------------------------------------------------------------------------------
 // 4. SCOUTS.
@@ -170,7 +190,7 @@ const float COUNTER_MAX = 0.6f;
 // spend a slot on.
 //                       8     20     50    100    300
 //------------------------------------------------------------------------------
-array<float> SCOUT_PER_MEX = {1.f,  1.f,  2.f, 4.f, 8.f};
+array<float> SCOUT_PER_MEX = {1.0f,  4.0f,  10.0f, 20.0f, 40.0f};
 
 //------------------------------------------------------------------------------
 // Piecewise-linear read of any row above, against metal income. Below the first

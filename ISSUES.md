@@ -1,5 +1,375 @@
 # Open issues — what is wrong with this AI right now
 
+## STATE 2026-08-20 (end of the balance campaign): stance layer live and measured; commit keeps its default with the plateau valve
+
+The eco/army balance loop closed with measurements on each leg:
+1. BALANCE: army targets 0.30 (his call), eco absorbing; mexup and cheap
+   generators never defer; energy race 86-113% at 10m in every audited game
+   (was <50%); first-ever Prismatic wins (48m, 58m, one with mex 122v59 and
+   con attrition 15v74 in our favour).
+2. T1-COMMIT: keeps default-on WITH the income-plateau release (tempo while
+   T1 income grows, tech the moment it flattens, latched). Paired A/B:
+   commit+valve 2W-0L-4D vs always-scale 0W-0L-6D, and the commit's winners
+   held MORE T2 at 20m. The trap eras (commander-release bug, unreachable
+   income-80/45 expiry) are documented above and fixed.
+3. STANCE (stance.as): AGGRESSIVE/PASSIVE/UNKNOWN with split thresholds +
+   300-metal seen-floor (a lone scout no longer toggles the budget), 30s
+   dwell, opening guard. Isolation A/B pooled over two rounds, same seeds:
+   ON 3W-0L-3D vs OFF 1W-0L-5D. Blind (UNKNOWN) dwell measured at 0-2.8m
+   per 35m game; the scout demand now lands on GROUND scouts (the air eyes
+   floor is unreachable in duels).
+Open frontiers carried forward: finishing (draws still dominate at caps),
+engineer escorts (entry above), flak SPREAD placement, the T-cross C++ items
+2-3, and the stance A/B is n=6/arm -- direction consistent, power modest.
+
+## LANDED 2026-08-21, awaiting live confirmation: nuke director never hit the main base
+
+apexearth, watching live: massive army + catapults closing, "We nuke the
+other side of the map (mex positions) instead... Enemy main base in fact
+has NO ANTI NUKE. We've launched more than 6 nukes and none at the enemy's
+main base." His game's log (matches/20260821-022019): 17 minutes of
+"saving 7/9 for a target worth ~14k behind 1 antinukes". Three mechanisms,
+all in brain/nukes.as:
+1. Targeting is LOS-SLAVED: enemy groups cluster hostileDatas, which keeps
+   only units currently in LOS (EnemyManager.cpp PrepareUpdate) -- the main
+   base is the ground we scout least, so it can never be a candidate, and
+   warheads chase whatever mex field our raiders can see.
+2. The salvo bar used the ASSUMED antinuke (past 30m): 1+8 missiles vs an
+   anti nobody ever sighted, against a ~1.7/min stockpile -- never fires.
+3. The defensive strike's own-ground veto (NetInfl >= 0) blocks exactly
+   the army-about-to-kill-us case, since our army stands on that ground.
+Fixes: mirrored-start base is a standing candidate (apex_nuke_base_value
+30000, same assume/decay rules); salvo sized on SIGHTED antis only; armies
+worth apex_nuke_emergency (18000)+ override the own-ground veto.
+
+## OPEN, REGRESSION: the roam-fix batch went 0-6 and lost the energy lead (2026-08-21)
+
+Tournament 20260820-200742 (6x Glitters 8v8, build dffffd89+DLL 20:06): SIX
+losses by elimination at 28-38m (prior batches drew most games), 20m energy
+median 0.89 against 1.17 the batch before, end mex 0.40. Too many changes
+rode in together (violated one-change-at-a-time under live-directive
+pressure): front-anchored idle roam (C++, every fighter task), serial
+advsolar, estor veto, duplicate governor, nano-instead-of-assist, mex walk
+cap, commander caution. Prime suspects: the ROAM (idle squads now stand on
+the front where the enemy line grinds them -- 466 con deaths vs 170, games
+end early by elimination) and SERIAL ADVSOL (throttles mid-game energy
+exactly when the lead vanished). Isolation running via modoption arms on
+the SAME deploy: apex_roam_front=0 and apex_advsol_serial=0, 4 games each.
+Judge each arm on W/D/L + 20m energy + end mex vs the 0-6 batch.
+
+## RETRACTED 2026-08-21: "facqueue dead in watch games" -- stale-log artifact
+
+The zero-facqueue reading came from matches/_engine_watch/infolog.txt, which
+was TEN DAYS OLD (mtime 2026-08-10): run_match copies the infolog into the
+match dir only at game end, so a mid-game read fell back to a stale engine
+dir. The real game (matches/20260821-030903, read post-game) shows facqueue
+alive (265 lines), no errors, fusions asked on time. LESSON, now standing:
+before analyzing any engine-dir infolog, check its mtime against the game
+being discussed.
+
+## OPEN: fusions arrive ~11 minutes after they are justified -- one adv con per player (2026-08-21)
+
+Real watch game 20260821-030903: t1 crossed steady 50 m/s at 12.8m and the
+fusion was ASKED the same minute; it did not stand until ~24m. In between
+the player's single advanced constructor built NINE mohos (mexup outranks
+optional work by design). Every team held advCon=1 all game -- the adv-con
+want is clamped by queued-task demand (ConsWantedFor: GetBuildTaskCount/4+1)
+so the T2 fleet never grows to work mohos AND the reactor in parallel.
+Candidate fix: floor the adv-con want at 2 while a fusion request is
+standing and SteadyIncome clears apex_fusion_prefer_income; also verify the
+"nano sited at the reactor build" rule fires on fusion frames.
+
+## OPEN, REGRESSION: the roam-fix batch went 0-6 and lost the energy lead (2026-08-21)
+
+Tournament 20260820-200742 (6x Glitters 8v8, build dffffd89+DLL 20:06): SIX
+losses by elimination at 28-38m (prior batches drew most games), 20m energy
+median 0.89 against 1.17 the batch before, end mex 0.40. Too many changes
+rode in together (violated one-change-at-a-time under live-directive
+pressure): front-anchored idle roam (C++, every fighter task), serial
+advsolar, estor veto, duplicate governor, nano-instead-of-assist, mex walk
+cap, commander caution. Prime suspects: the ROAM (idle squads now stand on
+the front where the enemy line grinds them -- 466 con deaths vs 170, games
+end early by elimination) and SERIAL ADVSOL (throttles mid-game energy
+exactly when the lead vanished). Isolation running via modoption arms on
+the SAME deploy: apex_roam_front=0 and apex_advsol_serial=0, 4 games each.
+Judge each arm on W/D/L + 20m energy + end mex vs the 0-6 batch.
+
+## OPEN, CRITICAL: facqueue completely dead in WATCH games (2026-08-21)
+
+apexearth's watched 4-player game (matches/_engine_watch infolog, ~20:09):
+ZERO "facqueue" lines over 29 game-minutes -- gFQFac never took a single
+line, so every factory ran stock recruit logic all game. Same deploy's
+HEADLESS smokes are fine (54/56/248 facqueue lines). Variant loaded
+correctly (Load script: ...Apexpex..., 5235 apex log lines, apexphase
+alive). No script exceptions logged. FactoryQueueTask only runs when a
+factory reaches Factory::AiMakeTask; hypothesis: in the watch path stock
+CRecruitTask keeps lines busy so the hook never fires (sim-speed-dependent
+callback ordering -- compare the GiveOrder lag trap in CLAUDE.md). Every
+conclusion drawn from a watched game's composition is suspect until fixed.
+REPRO: any --watch game, grep facqueue. Do NOT diagnose beside a running
+tournament (engine-dir hazard).
+
+Consequence chain observed in that game: T2 player at 67-89 m/s sustained
+built 18 advanced solars and no fusion -- fusion rungs require an ADV CON
+asker (IsAdvConDef / gHaveAdvCon) and the stock-driven line barely made
+any; T1 cons stack advsol forever. Fusion fixes staged: forced-fusion now
+needs SteadyIncome (not an instant reclaim spike) -- pending; solar
+reclaim now waits for a reactor unless eco/tech lead (landed).
+
+## OPEN: 8v8 mex race lost in minutes 2-4 -- con COUNT ruled out, claim EFFICIENCY is the lever (2026-08-21)
+
+Scaling goal status: 1v1/2v2 won, 8v8 still behind (6-game batches: 10m mex
+0.67 then 0.71, end 0.41 then 0.46; energy is WON, 1.03-1.17 through 20m --
+always-eco landed). The race is lost 2m->4m precisely: we LEAD ~30/23 at 2m,
+stock doubles to ~46 by 4m while we add ~4.
+
+Con-count was the wrong lever, measured twice: an opening con floor of 4 in
+ConsWantedFor never survived to the quota (the bp-budget deferral scales it
+x0.3, and the facqueue's Outmassed clamp -- apexearth's own "floor of 3 T1
+cons, never more while outmassed" -- caps at 3; quota lines read corck=3/1
+throughout). Cons already sit at 3 per policy; the floor was removed as dead
+code. What remains is claim efficiency: cons walking cross-map for far spots
+(the corner-to-corner report; apex_mex_walk_cap landed, unvalidated),
+commander claim rate, and threat-vetoed spots. Next attribution: time from
+con idle to mex-claim-start in stock vs ours, minutes 2-6.
+
+## OPEN, HIGH: engineers harassed and unprotected — the enemy limits expansion with cheap raiders (2026-08-20)
+
+apexearth, watching Prismatic: "I see our engineers get harassed by enemies
+a lot, and I also see our engineers are often unprotected. So the enemy
+limits our expansion a lot." Telemetry agrees: 14-22 constructor deaths per
+lost game (2026-08-20 batches), the majority at fwd < 0.15 -- killed at or
+behind home, not on daring frontier claims. The loss chain measured earlier:
+con deaths -> expansion stalls -> mex race lost -> outscaled. Candidate
+mechanisms, in rough order of leverage (attribute per-game before picking):
+1. Escort: a couple of raiders/riots assigned to shadow expansion cons (no
+   such concept exists anywhere today -- combat units never guard builders).
+2. Mex-guard towers arriving EARLIER at claimed mexes (MexGuard exists but
+   towers trail the claim; the con dies in the gap).
+3. The home-area kills specifically: raid response tempo -- HomeDeter caps
+   at 3 towers and the army's home-defence reaction is the DEFEND pool that
+   today chases everywhere BUT escorts nothing.
+Note the tension: escorts SPEND army on guard duty -- measure by con-death
+counts and mex growth-rate, not win bit.
+
+UPDATE 2026-08-21 (Glitters 8v8 pair, seeds 84/85): attribution done. Our
+side loses 136-160 cons vs stock's 60-84; 85-90% die STATIONARY at the
+build site, killed by ground raiders/assault (corak/corlevlr/corthud) from
+10m on. Tit-for-tat works (we razed 194-272 of their mexes vs 130 of ours
+lost) yet they out-mex us 2.3x by end -- the difference is that their cons
+survive behind ~2x our light-tower count. Our mex-guard elections route
+through DefenceAllowedAt, whose local-defence budget was
+apex_local_def_share=0.10 x (lShare/total ~0.5) = ~5% of base worth;
+"defence refused here -- N standing, rear" logged 175x/game (rate-limited,
+so true count is higher). Raised default to 0.18 -- retest showed towers built barely moved
+(133-173 vs 135-154) and con deaths did not improve; the local share was
+NOT the binding constraint. REVERTED to 0.10. Corrected tower recount also
+shows stock's tower count is comparable to ours (172-222 vs 133-173), so
+towers were never the differentiator either.
+
+Item 1 (escorts) turned out to already exist in stock CircuitAI and to be
+broken in ours: behaviour.json defence.escort [tasks, defenders, secs]
+creates a fighter CFGuardTask per new worker (BuilderManager.cpp:130), and
+DefaultMakeTask assigns RAID/DEFEND-role units to them first
+(MilitaryManager.cpp:1668). With our [3,1,540]: (a) riots ALWAYS skip our
+massing pool (WantsMassing returns GetGuardTaskNum()==0, i.e. false) and
+fall to DefaultMakeTask, but CFGuardTask::CanAssignTo halves guardsNum for
+riots -- 1/2==0 in integer math -- so riots can never join a guard and land
+in stock's leftover Defend pool instead, neither massing nor escorting;
+(b) raiders reach guard tasks only pre-T2 (WantsMassing masses them once
+gHaveT2), so escort coverage is zero exactly when the deaths concentrate
+(post-10m). Changed escort to [6,2,540] (riots eligible at 2/2==1, six
+escorted builders).
+
+RETEST 2026-08-21: n=2 pairs CANNOT resolve any of this. Across four
+same-two-seed pairs (opening farmer / +def share / escort raise), our con
+deaths ranged 136-289 and end mex ratio 0.35-0.50 with no change moving
+either outside the band; results drifted D/D -> L/L. Running a paired-seed
+A/B, 8 seeds x [3,1,540] vs [6,2,540], to decide the escort change above
+the noise floor (matches/ab_escort_log.txt maps arm->match dir).
+
+## PARTIALLY LANDED 2026-08-20 (items 1 of 3): pre-contact assembly — units enter fights piecemeal; "cross the T"
+
+STATUS: the assembly gate (item 1 below) is BUILT, DEPLOYED and crash-clean
+(4 smoke games, 2W-2D, no 0xc0000005, no dup bindings) but fired ZERO times
+— the cohesion bound max(SQUARE_SIZE*8*n, highestRange) appears looser than
+real approach stretch, and most piecemeal arrivals are DEFEND-pool units
+(item 3) which never enter attack squads at all. Next C++ session: log the
+stretch distribution at every ENGAGE (one throttled line) to size the bound
+from data, then the DefendTask half. Items 2 (approach speed clamp at the
+default-arg ActivePath callers) and 3 remain. Code: AttackTask.cpp/h
+(assembleUntil, apex_assemble/apex_assemble_secs tunables), captured in
+cpp/ and 0003-cumulative.patch.
+
+
+apexearth: "When you're about to get into a fight, you need to organize your
+units so that all of them enter the fight at about the same time. This means
+spreading your units out, crossing the t." What exists (cpp/src
+SquadTask.cpp): the travel WALL (ActivePath spreads line-abreast,
+per-neighbour spacing, charger D-gun gaps) and REGROUP — but regroup is
+forbidden near threat (GetThreatAt >= THREAT_MIN -> ROAM), runs every 16th
+update only, and never in ENGAGE, so mixed speeds shear the wall apart on
+approach and the fast units arrive first. Spec, all C++:
+1. ASSEMBLY GATE: when the squad target enters an approach band (~1.5x the
+   squad's highest range), fast movers hold on a standoff line perpendicular
+   to the enemy bearing until the slowest member reaches formation (bounded
+   wait), then all commit together.
+2. SPEED MATCH: clamp per-unit speed to squad-slowest inside ActivePath so
+   the wall survives the approach.
+3. DEFEND POOLS BYPASS EVERYTHING (existing #1 issue): CDefendTask travels
+   on raw fight orders with no squad shape; most real fights are defend-pool
+   fights, so most fights never see the wall at all. Needs the same
+   ring/wall treatment as Attack — a plain order swap breaks can't-fire-
+   on-the-move units.
+Measure by arrival spread: per battle, the time between a squad's first and
+last member's first contact (battles.py has deaths+snapshots; a contact
+event needs either the 10s snapshot approximation or a dev-gadget damage
+event). Tightness timeline (battles.py) is the standing before/after.
+
+## OPEN: zero AA all game while stock masses air — aa spend 0.00 of a 0.06 target, armjeth zeroed out of the land tiers (2026-08-20)
+
+At the 60-minute horizon stock switches to mass air and wins games with it:
+matches/20260820 seed-33, foeAir 10,565→12,120 (census line) while our
+budget row read aa=0.00/0.06 every sample of the game; army census fell
+n=2→0 under the bombers and the commander died at 44.4m. Contributing
+mechanism already on file: armlab's LAND tier rows carry armjeth 0.00 at
+every tier (the 2026-08-15 "AA overbuilt with zero air" fix zeroed it), so
+once the enemy actually flies, the bot lab cannot produce its AA unit at
+all — response.json's enemy_air_metal scaling has nothing to buy. armvp has
+armsam at 0.06-0.30, but nothing routed metal there either. The fix needs
+the air-warfare + factory-composition domains together: AA weights must be
+RESPONSE-driven (zero with no enemy air, real when foeAir is real), not
+statically zeroed; the census foeAir vs budget aa row is the measurement.
+
+## SESSION VERDICT 2026-08-20: three identical 12-game tournaments — 0W-7L-5D → 1W-6L-5D → 1W-4L-7D
+
+Same maps (Comet Catcher / Red Comet / Altored Divide), 40m cap, 6 workers;
+the last run also pinned apex_persona=0. Across the day's six kept changes
+(withdraw odds trigger, armlab tier1 core, DEFEND leash, aggression-gate
+mobile-vs-mobile + fog peak, con budget deferral, killing-blow floor
+economy-derived) the loss count halved and draws doubled: the AI no longer
+gets ground down, and on pinned-persona 35m Comet Catcher batches it
+out-trades stock 3.6:1 in army metal (1W-0L-3D) — but at the 40m tournament
+cap it converts almost nothing. The two levers left are policy calls
+recorded above: the eco-vs-army share fork, and persona weighting in 1v1s.
+`.claude/skills/fight-analysis` holds the full measurement workflow.
+
+## OPEN, DECISION FOR APEXEARTH: personas dominate 1v1 variance — AIRBOSS/SILOIST roll into games they cannot win (2026-08-20)
+
+Across the day's Comet Catcher batches, 3 of 8 games opened AIRBOSS (the
+"advanced air plant at 16-21m of a losing ground war" games are these) and 5
+of 8 adapted into SILOIST (6k+ metal of nuke silo that never fires inside a
+35m benchmark cap). With `--modoption apex_persona=0` (STANDARD) on the same
+4 seeds/build: 1 win, 3 draws, ZERO losses, army K/D 1.46 vs stock's 0.41 —
+the mechanics out-trade stock 3.6:1 once the dice are removed. Questions for
+apexearth: (a) should some personas be excluded or re-weighted in 1v1s (the
+persona charter says biases-never-gates, so maybe their multipliers need a
+game-size term)? (b) the eco-vs-army share fork: at benchmark scale we hold
+0.36-0.46 eco share vs a 0.24-0.30 target while army sits under — cutting
+eco to feed army would convert draws but trades away the compounding that
+wins hosted games. Both are policy, not mechanism; the diagnostics to
+measure either decision are in place (budget log, army-census, battles.py).
+
+## OPEN: own commander destroys its own half-built solars — nine in eight minutes (2026-08-20)
+
+matches/20260820-083604 (Comet Catcher, seed 27 batch): [BARAI_DEATH] shows
+team=0 armsolar built=0 killed with atkteam=0 atk=armcom, nine times between
+frames 46835-54403, at different base positions ~500 frames apart. Either
+D-gun friendly fire during base defence, or the commander is reclaiming its
+own unfinished solars in a start-abandon-reclaim churn (reclaim destruction
+attributes the reclaimer as attacker). ~1,400 metal of build time thrown
+away plus the commander's attention. Attribute via a watched game or by
+correlating with commander task logs before fixing; the death lines carry
+exact frames and positions.
+
+## PATCHED 2026-08-20, NOT YET MEASURED: the aggression gate held while we outfielded the enemy — three stacked reading biases
+
+The army never attacked (army-census: zero f5 tasks across whole games) even
+at a standing-army and economy lead, so every lead ended as a timeout. Three
+mechanisms, each confirmed by the census diag before patching:
+1. `EnemyMassingThreat()` counts 0.5x their STATIC defence — by mid-game more
+   than half the "enemy army" was towers (foeMass 3032, foeStatic 3493).
+   Patched: `FoeMobileMassing()` strips the static term (tunable
+   `apex_feed_static_w`, default 0) in ConservativeStance and the feeding
+   test only; MassWant still counts static for group sizing.
+2. `TeamArmyCost()`/armyCost read ~40% of the field telemetry (2054 vs
+   armyReal 5500). Patched: `OurArmyNow()` floors it with `gTrackedCost`,
+   the live cost of the withdraw register's units.
+3. With 1+2 fixed, the fog clause (`theirs < ours*0.5 -> hold`) took over:
+   being 2x ahead is indistinguishable from being blind ("outmatched 2198 vs
+   4567"). Patched: fog-hold requires `gSeenPeak > floorSeen` — a low reading
+   is fog only if they ever showed an army that size.
+Measure on: f5 tasks appearing in army-census, timeouts converting to
+decisions, and battle-summary exchange — not win rate alone.
+
+## OPEN: T1+T2 air plants (3,910m) built at 16-21m of a LOSING ground 1v1, produced 5 aircraft (2026-08-20)
+
+matches/20260820-074854 (seed 22, 25m cap): armap placed 16.7m, armaap 21.4m
+— together 3,910 metal plus whatever fed their queues — while armyReal sat at
+3,240 vs stock's 8,385 and Punishers shelled the base. Total air output: 1
+armfig, 3 armkam, 1 armthund. In a 1v1 the AI is always its own "air lead",
+so whatever gates the air ladder in team games opens unconditionally here.
+Air-warfare domain; judge any fix on where the 3.9k would otherwise go
+(composition), not on win rate.
+
+## OPEN: T1 tier rows at benchmark income are raider-only in several tables; armlab land tier1 fixed 2026-08-20, siblings not yet (2026-08-20)
+
+Mechanism, verified in `FactoryManager.cpp:1744` (GetFacTierProbs) and by the
+army-census diag (matches/20260820 seed 22: incM 8.9→20.4, foeAir=0, mix-diag
+`armlab ... r2:ok` rest null all game): the tier row is picked by
+min(metal,energy)·ecoFactor against `income_tier` ([2,25,35,50,100]), so
+income 2-25 — minutes ~2-13 of every benchmark and real 1v1 — lives in tier1;
+GetRoleDef returns null for any role whose weight is 0 in the CURRENT row, and
+the Brain's mix then cannot draw that role at all. armlab land tier1 was
+pw=0.70/flea=0.30 only → 100% Pawn army for the whole early game (armyReal
+pinned at 2700 = commander), while stock's corlab tier1 fields Storm 0.40 +
+Thud 0.30 in the same window. armlab land tier1 got a Cortex-parity core
+2026-08-20 (pw .45, rock .20, ham .30, war .15) — measure before trusting.
+NOT yet fixed, same shape: `corvp` land tier1 (gator .64/levlr .06 in the air
+variant, gator .50/levlr .10 land — riot resolves but thin), `armvp` AIR
+tier0 (flash .64/sam .30, no skirm/assault), and the whole **air-table flip**:
+`isAir = enemyAirCost > ourAACost×aliveSize` switches the ENTIRE composition
+table the moment the enemy owns one plane while we own no AA — seed-11's armvp
+game matched the air-tier0 row exactly. The census line logs incM/incE/foeAir
+every 60s; read it before attributing any composition problem.
+
+## OPEN: a 2x economy ends the game 23% unspent — 18.2k metalExcess, 2 factory lines, milreq climbing unmet (2026-08-20)
+
+matches/20260820-071354 (1v1 Comet Catcher, 30m cap): metalProduced 77,287 vs
+stock's 39,890, mex 44 vs 41, and the game still timed out with OUR standing
+army smaller (armyReal 6,395 vs 8,865) and the hold posture correctly reading
+"outmatched, not the aggressor" all late game. The lead went to
+`metalExcess=18,230` (stock: 1,864). At 28-30m the facqueue log shows
+`lines=2` with depth+pend of 1-2 orders per line while `milreq` climbs
+2652→3319 unmet — the Brain wants army, the two lines cannot drink 600+
+metal/s, and nothing scales factory count/assist to income. Related to the
+2026-08-19 observations "factory build power requests firing but not being
+fulfilled" and the reverted demand-system regression. This is the mechanism
+under the standing "cannot finish a 2x lead inside 30 minutes" entry: the
+lead exists and never becomes pressure. Judge any fix on metalExcess and
+armyReal vs a control, not on win rate.
+
+## OPEN: GetUnitLimit reads 15750 in a 1v1 — BAR's dynamic-maxunits gadget hands Gaia's leftover pool back uncapped (2026-08-20)
+
+`maxunits=2000` is in the start script's MODOPTIONS and run_match.py has set it
+since the "twenty thousand raiders" fix, yet the facqueue log in
+matches/20260820-070319 shows `slots=15745 limit=15750` — exactly
+(32000−500)/2. Mechanism, read in BAR.sdd
+`luarules/gadgets/game_dynamic_maxunits.lua`: Initialize() collects every
+team's maxunits into Gaia, deals each team its capped share (min(share,
+modoption maxunits) = 2000), then hits the `gaiaCurrentMax > gaiaExpected`
+branch and distributes Gaia's ~27.5k excess "fairly to all alive regular
+teams" — with no cap in that branch. Small games inflate hugely (1v1 →
+15750/team); a full 8v8 has no excess so stays ~2000. This is upstream BAR
+behaviour, so REAL hosted small games run inflated too. Consequence for us:
+`SlotsForArmy()` (facqueue.as:173) sizes every combat want off it —
+armflash want 3979 — so quota "wants" are unreachable and the mix is decided
+purely by deficit ratio. In the observed game the relative mix was still
+share-shaped, so this is a latent distortion, not the cause of the loss; but
+any logic that treats want-vs-have fill fraction as meaningful (floors,
+line-quiet checks) is reading a fiction in small games. Fix candidates:
+derive slots from economy instead, or clamp by the modoption read directly.
+
 ## OPEN: DEFEND pools march and hold on raw CmdFightTo — the last fight-order holdout (2026-08-19)
 
 The agreed move+SetTarget doctrine is fully live in ISquadTask::Attack
@@ -248,97 +618,6 @@ TARGET's def, not a construction (was silently killing commander assists,
 
 What is broken or missing, with the evidence for it. `CHANGES.md` says what was
 done; `USER-FEEDBACK.md` is the standing brief; this file is the live list.
-
----
-
-## MEASURED-CONFIRMED at tournament scale, 2026-08-15 -- entry kept one cycle for the record, then delete: T2 line builds only Hound -- facqueue core "floors" fill first-listed-first, and factory.json was never in the loop (2026-08-15)
-
-**CONFIRMED FIXED, 24 tournament games (2x12, `tournaments/20260814-214257`
-and `-215028`, Geyser Plains, Apex vs stock BARb: 12-0 in decided games).**
-Every T2-reaching game (8 of 24 + both smoke matches) shows 2-4 combat
-types drawing orders instead of one: e.g. armfido 570 alongside armwar
-810/armrock 600/armham 520/armfast 513; Cortex games corsumo/cormort/
-corpyro/corhrk mixes with top share 54-80% BY METAL (heavies cost more per
-count -- count-balanced quotas, not the old 100%-of-orders monoculture).
-T1 lines likewise mixed (armpw/armwar/armham all drawing). Residual
-question, deliberately NOT tuned now: quotas balance by COUNT, so a heavy
-role takes a larger metal share -- if a future watched game shows heavy
-crowding out the rest, the lever is metal-weighting the core wants, a
-policy question for apexearth per CLAUDE.md.
-
-ROOT CAUSE FOUND for the whole Hound/Sniper/Welder complex (supersedes the
-factory.json weight-tuning passes below -- those tables were largely
-irrelevant). The Brain drives every factory line (`apex_fac_queue_brain`
-default 1, `brain/facqueue.as`), which bypasses `CFactoryManager`'s
-roulette entirely: **while a line is driven, `factory.json` tier tables and
-`response.json` decide nothing** except through `GetRoleDef`'s per-role
-draw. Composition is decided in `QuotaFor`.
-
-Inside `QuotaFor`, the `T2ArmyShort` block inserted ASSAULT/HEAVY/AH/AHA as
-FLOOR entries, and `FillQuota`'s floor loop takes the FIRST short floor
-(`break`). ASSAULT is listed first, ASSAULT on `armalab` resolves only to
-`armfido`, and the floor counts ALIVE units -- so while Hounds die at the
-front, the assault floor is short forever and HEAVY/AHA (armfboy, armsnipe)
-never receive one order. Verbatim from
-`matches/20260815-040355-.../infolog.txt`:
-`facqueue armalab #6890 +1 armfido ... quota: armfido=5/21 armfboy=0/21
-armsnipe=0/21` -- repeatedly, all game. The T1 block has the same shape
-(`armpw=8/16 armwar=2/16 armham=3/16`, always armpw). armzeus (skirmish)
-and armmav (riot) live only in the gMix ratio section, which the early
-return never reaches while the core is short -- hence literally zero of
-each.
-
-**Patch (facqueue.as):** the two core blocks now insert their roles as
-ratio entries (`isFloor=false`), so `FillQuota` balances by have/want
-across the core instead of first-listed-first. Confirm on the next match:
-`quota:` log lines should show armfboy/armsnipe counts rising alongside
-armfido, and `allBuilt=` should stop being ~90% armfido within armalab
-combat. Delete the two factory.json-tuning entries below along with this
-one once measured.
-
----
-
-## MEASURED-CONFIRMED at tournament scale, 2026-08-15 -- entry kept one cycle for the record, then delete: commander pinned in CRetreatTask for 13 minutes -- retreat is an absorbing state (2026-08-15)
-
-**CONFIRMED FIXED, same 24 tournament games + 2 instrumented smokes.** Zero
-commander deaths in 24 games (control match: died on the pin). `retreatCut`
-fired 3-19 times in every contested game and the commander returned to work
-each time; the new once-a-minute `comm-now` line (prints from the sampler,
-not AiMakeTask, so it cannot go silent when the commander wedges) shows
-commanders holding BUILDER tasks with live orders while under influence
-5-17 -- working through heat instead of standing, exactly the
-safer-ground-gate intent -- and retreating only on real damage (hp 69 ->
-retreat -> repaired -> back to work within 2 minutes, instrumented match
-`20260815-044903`). Overall `commIdle` fell from 56%+wedge-cases to 39-62%
-(mean ~52) vs stock BARb's own 27-65% in the same games; the remaining gap
-is the `waiting` bucket -- see the separate OPEN entry below.
-
-THE stuck-commander mechanism for "he just stands around doing nothing",
-found in `matches/20260815-040355-...`: at 10.8m the any-influence flee
-(`apex_comm_flee_influence`, post-T2) put the commander into a
-`CRetreatTask`; from that frame to its death at 25.7m the commander was
-~100% idle (gadget `commIdle` 89 -> 1615 of 2881 samples), `comm-why` and
-`comm threat=` logging stopped cold (both print from the commander's
-AiMakeTask path, which a unit HOLDING a task never re-enters), and the
-flee log printed exactly once. `CRetreatTask::Update`
-(`RetreatTask.cpp:165-190`) ends the retreat only at >98% health, or for a
-commander at zero enemy influence at its OWN tile -- with enemies loitering
-near home neither ever arrived, `Retreat()`'s dedup kept returning the held
-task, and the noTask watchdog never fires because a held retreat samples as
-"other", not noTask. Absorbing state; the commander stood at the haven
-while the base was ground down.
-
-**Patch, two halves (both needed -- the watchdog alone just re-enters the
-loop through CommanderTask's flee):** (1) `events.as CommIdleAttribute` now
-counts consecutive retreat-held samples and aborts the task after
-`apex_comm_retreat_ticks` (default 30 ≈ 30s), forcing a full re-election;
-(2) `rules_commander.as`'s influence-flee only fires when home ground is
-actually safer (`GetEnemyInflAt(gHomePos) < hereInfl * 0.5`) -- when home
-is just as hot, retreating defends nothing, so the commander keeps working
-and the per-rule site-safety vetoes steer the work. Confirm on the next
-match: `comm-why` keeps printing past a flee, `retreatCut=` > 0 when a
-retreat gets pinned, and gadget `commIdle/commSamp` stays well under the
-56% measured here. Delete once measured.
 
 ---
 
@@ -618,7 +897,116 @@ then delete this entry.
 
 ---
 
-## OPEN, LOW CONFIDENCE: defence's under-attack escalation is a boolean, not graduated by severity (2026-08-14)
+## FIXED 2026-08-19, BATCH PENDING: the army fed itself to a superior enemy
+
+apexearth, watching a 4v4: "we're so often leaving the base with smaller numbers
+of units than the enemy, and our guys just die, and the enemy keeps building up
+a stronger and stronger army... we act like we're all tough and take on enemy
+armies twice our size."
+
+Measured end-state of that game (`matches/20260820-024449-...`):
+
+```
+apex: mass want=299  floor=5  army=570  enemyArmy=104580  ratio=183.47
+apex: squadsize own n=0 avg=0.0 max=0 | enemy n=11 avg=8.4 max=26
+apex: budget army=0.13/0.29 bp=0.37/0.20 ... raw army=38049
+```
+
+38,049 metal of army BUILT, 570 standing. Production was never the failure --
+we fed it in. Three mechanisms, all self-reinforcing:
+
+1. `MassFloor()` is a share of OUR OWN standing army, so as the army dies the
+   floor falls (it read **5**, one or two units), smaller groups leave, they die
+   faster, the floor falls further. Nothing pushed back.
+2. The `apex_mass_hold_secs` deadline force-commits a group after 120s of
+   holding "so the ratio can change". At 183:1 the ratio cannot change. It
+   **fired 55 times in one game**, each firing a group handed over.
+3. Nothing asked whether we were the aggressor. We were below our own army
+   spend target (0.13 against 0.29) while they out-fielded us 183:1, and still
+   attacked.
+
+Fixes (`military/massing.as`, `military/hooks.as`):
+
+- `EnemyGroupPower()` -- the biggest enemy group we can see, as power. `MassFloor`
+  is now bounded BELOW by it (`apex_mass_meet_frac`), so the floor cannot follow
+  our army down. If we cannot reach it we do not go, which is the point.
+- The deadline is suppressed while outmatched (`apex_mass_no_commit_ratio`) or
+  while `ConservativeStance()` holds. Holding forever beats feeding; the
+  outmatched branch releases by itself as the pool rebuilds.
+- `ConservativeStance()` -- apexearth's doctrine: below our own army spend target
+  while they out-field us means we chose economy and they chose offence, so the
+  army we bought is for holding. It routes new units into the MELEE-promoting
+  pool that never leaves, the same mechanism the defend-home branch already used.
+
+Measured, same map/seed/settings, 4v4 32min:
+
+| | before | after |
+|---|---|---|
+| our standing army | 570 | **16,212** |
+| enemy standing army | 104,580 | **27,685** |
+| army:enemy ratio | 183.5 | **1.71** |
+| our squads | n=0 | n=2, avg 3.5-4.5 |
+| mass floor | 5 | 225 |
+| army spend share | 0.13/0.29 | 0.32/0.30 |
+| build power share | 0.37/0.20 | 0.18/0.20 |
+| players reaching T2 | 0 | 4 |
+
+Both sides of the army ratio moved, which is the tell: we stopped feeding, so we
+accumulated AND they stopped growing on our losses. Single seed at this point --
+6-game batch running. Re-check before deleting this entry.
+
+## FIXED 2026-08-19: the chokepoint logic was computed and never called
+
+apexearth: "I think we have some 'chokepoint' logic somewhere. We should identify
+where the chokepoint is and make defenses right behind it."
+
+`Front::FrontChoke` (`frontline.as:462`) existed, was fully implemented, and had
+**zero call sites** -- the engine's chokepoint bindings were gathered every game
+(`frontline gathered 8/8 usable chokepoints`) and consumed by nothing.
+
+Wired as a RANKING TERM in the Brain's existing front-defence want, not as a new
+spend rule: the same towers, sited better. `Front::ChokeAt` marks a front spot as
+a doorway and `Front::BehindChoke` steps the position back toward home by
+`apex_choke_back` so the gun shoots INTO the gap rather than standing in it. A
+choke spot outranks a barer stretch of open line. 12 placements in the first
+4v4; no measured displacement (defence share 0.09-0.12 against a 0.08 target).
+
+## FIXED 2026-08-19, NOT YET COMPOSITION-MEASURED: the under-attack trigger never fired
+
+`BaseContested()` (`territory.as:1132`) is `GetNetInflAt(gHomePos) < 0` -- net
+influence at our START POSITION, which our own buildings dominate. Measured from
+the `defcap` log line across five runs: `contested=0%` of samples in four of
+them, never above 9%. Every escalation meant to answer an invasion hung on it --
+`PanicBuild()` (defcap.as), `pressureAllow` and the `ForwardFraction < 0` rear
+exemption (defenceline.as), plus the army's own responses. An enemy could walk
+in, kill a T2 lab and leave without it ever reading true (apexearth, watching:
+"they killed our T2 lab and then we did not build any defenses").
+
+Separately, `AiUnitDestroyed` already carried the position and cost of every
+structure we lose and nothing consumed them -- the combat ledger filters to
+`IsMobile()`.
+
+Fix: `Military::NoteStructureLoss` / `BaseRaided` / `RaidPressure`
+(`military/basedefence.as`) -- finished immobile losses at `ForwardFraction <=
+FWD_HOME`, decayed over 60s, feeding the SAME incoming signal the approach
+sensor sets, so `Builder::PushAnswer` answers with the tier, siting and metal
+sizing it already had. `RaidPressure` is graduated (lost metal against a minute
+of income), which also closes the "boolean, not graduated" complaint below.
+
+Confirmed firing, `matches/20260820-023454-...`: six raid windows out of a
+possible 54, ~11% duty cycle (defcap's own bar for "is this an exception" is
+20%), escalating 60 -> 1508 metal, one `push answer armclaw` at 615/1136 metal
+vs 2840 incoming -- in a game where `contested` read 0-4% throughout. NOT yet
+judged on composition: run `tools/composition.py` against a control before
+calling it good.
+
+Still open underneath it: the local/rear branch of `DefenceAllowedAt` clamps to
+`min(income budget, mexCount * 1.5 + 1)`, so base-interior defence is bounded by
+a MEX COUNT that pressure cannot lift -- `pressureAllow` is multiplied into
+`budget` and then thrown away by the `min`. Suspected second cause of the same
+complaint; not touched in this pass.
+
+## SUPERSEDED by the above: defence's under-attack escalation is a boolean, not graduated by severity (2026-08-14)
 
 apexearth wanted excess con power redirected into defence during a sustained
 attack. That mechanism already exists and was firing correctly in the match

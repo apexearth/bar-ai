@@ -41,7 +41,7 @@ bool QueueHasRoom()
 	const int fac = aiFactoryMgr.GetFactoryCount();
 	if (fac <= 0)
 		return true;
-	const float per = ai.GetTunable("apex_fac_queue", 2.f);
+	const float per = ai.GetTunable("apex_fac_queue", TUNE_FAC_QUEUE);
 	return float(gQTask.length()) < float(fac) * per;
 }
 
@@ -74,6 +74,22 @@ array<CCircuitUnit@> gFacUnits;
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	// T1-COMMIT ENFORCEMENT, at the only place every plant passes. The C++
+	// side enqueues factories without consulting AiGetFactoryToBuild (the
+	// unattributed entrance ISSUES.md tracks -- measured under the commit:
+	// three T2 plants with zero "plant approved" lines), so the hold must
+	// catch the nanoframe: reclaim it before real metal sinks in, and skip
+	// the gHaveT2 latch or the frame would retire the T1 lines it exists to
+	// protect.
+	if ((usage == Unit::UseAs::FACTORY)
+		&& ((userData[unit.circuitDef.id].attr & (Attr::T2 | Attr::T3)) != 0)
+		&& T1Commit())
+	{
+		AiLog(T() + "apex: T1 commit reclaims unapproved "
+			+ unit.circuitDef.GetName());
+		aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, unit));
+		return;
+	}
 	Brain::NoteSpend(unit, usage);
 	if (usage == Unit::UseAs::FACTORY) {
 		++gFactoryCount;
@@ -201,6 +217,12 @@ const float RECLAIM_LAB_BANK = 1500.f;
 
 void UpdateRushReclaim()
 {
+	// TEAM ONLY: the rusher may eat its T1 lab because allies cover the gap;
+	// solo, the T1 lab is the only army source during the most dangerous
+	// window (IsTechLead is true for a solo player by fallback, so this fired
+	// in duels). apexearth 2026-08-20: no tech-lead behaviour in a 1v1.
+	if (!TeamPlay())
+		return;
 	if (gT1Reclaimed || gHaveT2 || !IsTechLead() || !RushWindowOpen())
 		return;
 	if (gT1FacUnit is null)
@@ -244,7 +266,7 @@ void LogRushState()
 	AiLog(T() + "rush team=" + ai.teamId + (lead ? " LEAD" : " follower")
 		+ " haveT2=" + (gHaveT2 ? "1" : "0")
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
-		+ "/" + formatFloat(RUSH_ENERGY_TARGET, "", 0, 0)
+		+ "/" + formatFloat(Policy::T2Energy(), "", 0, 0)
 		+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
 		+ " mCur=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0)
 		+ "/" + formatFloat(advCost * 0.5f, "", 0, 0)

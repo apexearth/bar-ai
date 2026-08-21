@@ -149,7 +149,12 @@ void UpdateSiege()
 // incumbent sensor for the narrower new one once its duty cycle is known.
 bool PanicBuild()
 {
-	if (ai.GetTunable("apex_siege", 0.f) > 0.f)
+	// Both incumbent sensors ask about influence at our own start position and
+	// measured a 0% duty cycle in three of four runs; buildings of ours dying
+	// on our own ground is the same question asked of what actually happened.
+	if (Military::BaseRaided())
+		return true;
+	if (ai.GetTunable("apex_siege", TUNE_SIEGE) > 0.f)
 		return gSiegeOn;
 	return Military::BaseContested();
 }
@@ -174,7 +179,7 @@ IUnitTask@ DefenceShareScreen(CCircuitUnit@ unit, bool isComm, IUnitTask@ ans)
 	// reach into that run.
 	if ((unit is null) || !ApexActive() || !IsDefenceBuild(ans) || isComm)
 		return ans;
-	if (ai.GetTunable("apex_def_share", DEF_SHARE_CAP) >= 1.f)
+	if (ai.GetTunable("apex_def_share", TUNE_DEF_SHARE) >= 1.f)
 		return ans;
 	// Already on defence: this is a re-election onto work in progress, not a new
 	// claim, and IsDefenceBuild is exactly what the share counted it as.
@@ -191,7 +196,7 @@ IUnitTask@ DefenceShareScreen(CCircuitUnit@ unit, bool isComm, IUnitTask@ ans)
 	// A pool too small to have a half is not a pool with a majority on defence.
 	// With one constructor any share test is a coin flip on a single unit, and
 	// refusing it is how a rule takes the LAST constructor away from the job.
-	if ((pool < 2) || (share < ai.GetTunable("apex_def_share", DEF_SHARE_CAP))) {
+	if ((pool < 2) || (share < ai.GetTunable("apex_def_share", TUNE_DEF_SHARE))) {
 		++gDefCapPassed;
 		return ans;
 	}

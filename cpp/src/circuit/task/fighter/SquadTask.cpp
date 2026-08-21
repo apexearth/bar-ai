@@ -609,6 +609,26 @@ void ISquadTask::ActivePath(float speed)
 	}
 }
 
+float ISquadTask::GetHealthScale() const
+{
+	float total = .0f;
+	float alive = .0f;
+	for (CCircuitUnit* unit : units) {
+		const float power = unit->GetCircuitDef()->GetPower();
+		total += power;
+		// apexearth: "A retreating unit should have 0 power. It is no longer
+		// fighting." A coward stands rear by design; whatever HP it keeps, it
+		// contributes nothing to the fight being sized.
+		if (cowards.find(unit) != cowards.end()) {
+			continue;
+		}
+		float hp = unit->GetHealthPercent();
+		hp = std::max(.0f, std::min(1.f, hp));  // capture progress drives it negative
+		alive += power * hp;
+	}
+	return (total > .0f) ? (alive / total) : 1.f;
+}
+
 NSMicroPather::HitFunc ISquadTask::GetHitTest() const
 {
 	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -1095,12 +1115,28 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					// for short-armed chasers.
 					const float foeReach = kiteFoeRange
 							+ manager->GetCircuit()->GetTunable("apex_kite_foe_pad", 120.f);
-					const float trigger = std::max(kv.first * kiteFrac, foeReach);
-					if ((sqFoe < SQUARE(trigger)) && (trigger < kv.first * rangeMod)) {
+					// apex: SIEGE FEARS PROXIMITY. apexearth 2026-08-20: "In
+					// general siege should be afraid of enemy units getting
+					// too close to it." A siege row's fear radius is nearly
+					// its whole weapon range (not the 70% default), it
+					// reopens to FULL range, and the anti-yo-yo guard relaxes
+					// to its own reach -- backing off inside one's own range
+					// is always the right move for a unit that wins at arm's
+					// length and dies in anyone else's.
+					const bool siegeRow = (rowDef != nullptr) && rowDef->IsAttrSiege();
+					const float rowFrac = siegeRow
+							? manager->GetCircuit()->GetTunable("apex_siege_fear_frac", 0.9f)
+							: kiteFrac;
+					const float openTo = siegeRow ? kv.first : (kv.first * rangeMod);
+					const float trigger = std::max(kv.first * rowFrac, foeReach);
+					const bool mayKite = siegeRow
+							? (foeReach < kv.first)
+							: (trigger < kv.first * rangeMod);
+					if ((sqFoe < SQUARE(trigger)) && mayKite) {
 						AIFloat3 away = kcur - kiteFoe;
 						if (away.SqLength2D() > 1.f) {
 							away.SafeNormalize2D();
-							const float open = std::max(kv.first * rangeMod, foeReach);
+							const float open = std::max(openTo, foeReach);
 							newPos = kcur + away * (open - sqrtf(sqFoe));
 							CTerrainManager::CorrectPosition(newPos);
 						}

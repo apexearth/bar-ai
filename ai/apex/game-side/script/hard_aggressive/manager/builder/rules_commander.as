@@ -95,13 +95,74 @@ void CommDiag()
 // time from the engine's for an A/B.
 bool CommRules()
 {
-	return ai.GetTunable("apex_comm_rules", 1.f) > 0.f;
+	return ai.GetTunable("apex_comm_rules", TUNE_COMM_RULES) > 0.f;
 }
+
+// HOW BRAVE THE COMMANDER MAY BE, read off what is fielded against him.
+// apexearth 2026-08-21: "Our commander is too brave when lots of T2 and T3
+// are on the field. He should run but he doesn't." The stake is his own
+// cost, so the bars scale with the game rather than a fixed number: fielded
+// HEAVY/SUPER mass at half his value can already snipe him from full
+// health, and once enemy T2 is out, an enemy mobile mass at twice his value
+// means the map is no place for him regardless of tech mix.
+bool CommCaution(CCircuitUnit@ unit)
+{
+	const float mine = unit.circuitDef.costM;
+	if (mine <= 0.f)
+		return false;
+	const float heavies = aiEnemyMgr.GetEnemyCost(RT::HEAVY)
+			+ aiEnemyMgr.GetEnemyCost(RT::SUPER);
+	if (heavies >= mine * ai.GetTunable("apex_comm_heavy_frac", TUNE_COMM_HEAVY_FRAC))
+		return true;
+	return Factory::gEnemyT2Seen
+		&& (Military::FoeMobileMassing()
+			>= mine * ai.GetTunable("apex_comm_mass_mult", TUNE_COMM_MASS_MULT));
+}
+
+// Influence at the position and at four compass points around it: a cautious
+// commander reacts to danger APPROACHING, not danger already on his tile --
+// the tile sample is exactly the clean-until-dead trap, one ring out.
+float RingInflMax(const AIFloat3& in pos, float r)
+{
+	float best = ai.GetEnemyInflAt(pos);
+	for (int i = 0; i < 4; ++i) {
+		AIFloat3 p = pos;
+		if (i == 0)      p.x += r;
+		else if (i == 1) p.x -= r;
+		else if (i == 2) p.z += r;
+		else             p.z -= r;
+		if (!OnMap(p))
+			continue;
+		const float v = ai.GetEnemyInflAt(p);
+		if (v > best)
+			best = v;
+	}
+	return best;
+}
+
+int gNextCommCautionLog = 0;
 
 IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 {
 	if (isComm && CommRules()) {
 		LogCommanderThreat(unit);
+		// A CAUTIOUS COMMANDER DOES NOT WORK FORWARD AT ALL. Zero influence
+		// needed: standing on forward ground while heavies roam is the
+		// mistake, not the contact that follows it. Home ground stays
+		// workable; the flee below covers danger that comes to him there.
+		if (CommCaution(unit)
+			&& (Military::ForwardFraction(unit.GetPos(ai.frame))
+				> ai.GetTunable("apex_comm_fwd_cap", TUNE_COMM_FWD_CAP)))
+		{
+			if (ai.frame >= gNextCommCautionLog) {
+				gNextCommCautionLog = ai.frame + 15 * SECOND;
+				AiLog(Factory::T() + "apex: commander running -- heavies fielded, "
+					+ "fwd=" + formatFloat(Military::ForwardFraction(unit.GetPos(ai.frame)), "", 0, 2));
+			}
+			IUnitTask@ run = Retreat(unit);
+			if (run !is null)
+				return run;
+		}
 		// A health trigger fires once, after damage already lands, and an army
 		// that arrives in force kills a commander from full health before that
 		// ever fires. Uses the INFLUENCE map, not ai.GetBuilderThreatAt: threat
@@ -122,9 +183,17 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 		// any-influence instant flee to post-T2 -- it still catches the
 		// clean-until-dead late-game snipe this was added for, without
 		// yanking the commander off a lone early scout.
-		const float fleeInfl = Factory::gHaveT2 ? ai.GetTunable("apex_comm_flee_influence", 0.01f) : 0.f;
+		// Caution also arms the flee pre-T2 and widens its senses: the ring
+		// sample sees an approach one step out instead of waiting for the
+		// commander's own tile to go hot.
+		const bool caution = CommCaution(unit);
+		const float fleeInfl = (Factory::gHaveT2 || caution)
+				? ai.GetTunable("apex_comm_flee_influence", TUNE_COMM_FLEE_INFLUENCE) : 0.f;
 		if (fleeInfl > 0.f) {
-			const float hereInfl = ai.GetEnemyInflAt(unit.GetPos(ai.frame));
+			const float hereInfl = caution
+					? RingInflMax(unit.GetPos(ai.frame),
+						ai.GetTunable("apex_comm_flee_ring", TUNE_COMM_FLEE_RING))
+					: ai.GetEnemyInflAt(unit.GetPos(ai.frame));
 			// A retreat only helps when the ground fled TO is safer than the
 			// ground fled FROM. When home is just as hot, standing at the haven
 			// "retreating" defends nothing -- fall through and keep working;
@@ -146,7 +215,7 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 					if (away.SqLength2D() >= 1.f) {
 						away.SafeNormalize2D();
 						const AIFloat3 spread = unit.GetPos(ai.frame)
-								+ away * ai.GetTunable("apex_comm_spacing", 500.f);
+								+ away * ai.GetTunable("apex_comm_spacing", TUNE_COMM_SPACING);
 						CCircuitDef@ safeDef = SolarDef();   // never a panel late-game
 						if (OnMap(spread) && (safeDef !is null)
 							&& safeDef.IsAvailable(ai.frame)
@@ -217,7 +286,7 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 			// directly away from the enemy centroid, re-issued every election
 			// (commanders are exempt from idle backoff), and null so no task
 			// walks it back into the blast.
-			if (hp < ai.GetTunable("apex_comm_flee_hp", 0.55f)) {
+			if (hp < ai.GetTunable("apex_comm_flee_hp", TUNE_COMM_FLEE_HP)) {
 				AIFloat3 here = unit.GetPos(ai.frame);
 				AIFloat3 away = here - aiEnemyMgr.GetEnemyPos();
 				if (away.SqLength2D() > NEAR_ZERO) {
@@ -569,7 +638,7 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm)
 	// only for an extractor with no cover and no pending cover, so each mex
 	// draws one turret and then stops asking. apex_mex_sentry turns it down for
 	// games against humans, who raid far less than the AI does.
-	if (ai.GetTunable("apex_mex_sentry", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_mex_sentry", TUNE_MEX_SENTRY) <= 0.f)
 		return null;
 	if (isComm && !CommRules())
 		return null;

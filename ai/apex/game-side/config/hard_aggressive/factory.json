@@ -61,7 +61,11 @@
 		// legitimate early raider window) left at 0.70.
 		"land": {
 			"tier0": [ 0.25,    0.70,    0.05,       0.00,      0.20,     0.00,      0.00,     0.30],
-			"tier1": [ 0.25,    0.70,    0.05,       0.00,      0.00,     0.00,      0.00,     0.30],
+			// Income 2-25 is minutes ~2-13 of a real 1v1, and this row held
+			// ONLY a raider (measured 2026-08-20: mix-diag r2-ok-rest-null all
+			// game, army 100% Pawn while corlab's same row fields Storm+Thud).
+			// Cortex-parity core: Rocko/Hammer/Warrior at corlab-t1-like shares.
+			"tier1": [ 0.25,    0.45,    0.05,       0.20,      0.30,     0.00,      0.15,     0.30],
 			"tier2": [ 0.35,    0.10,    0.05,       0.15,      0.45,     0.00,      0.10,     0.10],
 			"tier3": [ 0.35,    0.05,    0.05,       0.10,      0.40,     0.00,      0.15,     0.10],
 			"tier4": [ 0.15,    0.02,    0.05,       0.00,      0.40,     0.00,      0.10,     0.10],

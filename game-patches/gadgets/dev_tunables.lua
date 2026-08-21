@@ -30,6 +30,9 @@ local NAMES = {
 	"apex_los_standoff",
 	"apex_prefer_target",
 	"apex_siege_fight",
+	"apex_fight_travel",
+	"apex_medic_share",
+	"apex_medic_r",
 	"apex_engage_margin",
 	"apex_trade_margin_max",
 	"apex_continue_margin",
@@ -58,6 +61,19 @@ local NAMES = {
 	"apex_unseen_parity",     -- massing.as: pre-T2 enemy-army parity floor (1.2)
 	"apex_press_health",      -- AttackTask: squad HP fraction below which it stops pressing (0.6)
 	"apex_persona",           -- persona.as: -1 roll freely, 0..5 force a Kind
+	"apex_fac_demand",        -- buildpower.as: factories request lathes (default off)
+	"apex_withdraw_odds",     -- withdraw.as: enemy-threat/our-power ratio that pulls a unit back (1.5)
+	"apex_withdraw",          -- withdraw.as: master switch (1)
+	"apex_defend_leash",      -- withdraw.as: forward fraction past which a DEFEND unit on enemy ground is recalled (0.55)
+	"apex_t1_commit",         -- techlead.as: duel small-map T1-commit experiment (0)
+	"apex_t1_release_cost",   -- techlead.as: enemy mobile cost that confirms T2 and releases the commit (450)
+	"apex_t1_commit_income",  -- techlead.as: own income that expires the commit (80)
+	"apex_assemble",          -- AttackTask.cpp: pre-contact assembly gate master switch (1)
+	"apex_assemble_secs",     -- AttackTask.cpp: max seconds to wait for stragglers (8)
+	"apex_siege_fear_frac",   -- SquadTask.cpp: siege row's fear radius as a share of its own range (0.9)
+	"apex_raid_pack",         -- posture.as: base raid-pack promotion power pre-T2 (8)
+	"apex_raid_per_income",   -- posture.as: raid pack grows by this per metal income (0.2)
+	"apex_stance",            -- stance.as: master switch for stance budget/scout effects (1)
 	"apex_retreat_cost_secs", -- posture.as: cost-vs-income no-retreat bar, 0 = off
 	"apex_bleed_engage",      -- deathledger.as: caution gain per forward-bleed fraction (2)
 	"apex_bleed_cap",         -- deathledger.as: caution ceiling (1.6)
@@ -187,6 +203,36 @@ local NAMES = {
 	"apex_chaff_mult",
 	"apex_advsol_energy",
 	"apex_energy_any",
+	"apex_always_eco",
+	"apex_comm_heavy_frac",
+	"apex_comm_mass_mult",
+	"apex_comm_fwd_cap",
+	"apex_comm_flee_ring",
+	"apex_con_mex_floor",
+	"apex_reclaim_pad",
+	"apex_mex_walk_cap",
+	"apex_nuke_emergency",
+	"apex_nuke_base_value",
+	"apex_assist_nano",
+	"apex_dup_bank",
+	"apex_advsol_serial",
+	"apex_raid_mexline",
+	"apex_estor",
+	"apex_roam_front",
+	"apex_roam_r",
+	"apex_e_per_metal",
+	"apex_fusion_min_energy",
+	"apex_super_self_frac",
+	"apex_aca_per_income",
+	"apex_advsol_home_r",
+	"apex_def_panic",
+	"apex_shield_income",
+	"apex_local_edge",
+	"apex_local_edge_on",
+	"apex_local_edge_r",
+	"apex_phase_expand_income",
+	"apex_phase_buildup_income",
+	"apex_phase_pret3_income",
 	"apex_fence_per_income",
 	"apex_fence_rear_share",
 	"apex_front_fraction",

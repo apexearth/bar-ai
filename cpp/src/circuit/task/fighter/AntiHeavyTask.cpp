@@ -264,10 +264,7 @@ void CAntiHeavyTask::OnUnitIdle(CCircuitUnit* unit)
 		&& (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)))
 	{
 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-		float x = rand() % terrainMgr->GetTerrainWidth();
-		float z = rand() % terrainMgr->GetTerrainHeight();
-		position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
-		position = terrainMgr->GetMovePosition(leader->GetArea(), position);
+		position = RoamPos(leader);
 	}
 
 	if (units.find(unit) != units.end()) {
@@ -303,7 +300,7 @@ bool CAntiHeavyTask::FindTarget()
 	const bool isAntiStatic = cdef->IsAttrAntiStat();
 	const bool notAA = !cdef->HasSurfToAir();
 	const int canTargetCat = cdef->GetTargetCategory();
-	const float maxPower = attackPower * powerMod;
+	const float maxPower = attackPower * powerMod * GetHealthScale();
 	const float weaponRange = cdef->GetMaxRange();
 	const float range = std::max(highestRange, threatMap->GetSquareSize() * 2.0f);
 	const float losSqDist = SQUARE(range);

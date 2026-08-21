@@ -59,8 +59,170 @@ bool LeadIsDesignated()
 // continues, so the team pools behind one player instead of four. Follower
 // release is economy-gated (FollowerEconomyReady) rather than frame-gated, so
 // it cannot open for every non-lead at once the way a shared clock did.
+// EARN THE PLANT BEHIND AN ARMY. apexearth 2026-08-19: "let's not go to T2
+// unless we have a reasonably sized T1 army for our income -- so if we have ~30
+// metal per second, let's have an army of ~3000." His figure, expressed as the
+// ratio it is: 100 metal of army per metal/second of income, so the bar rises
+// with the economy rather than sitting at a number that stops meaning anything.
+// Per-instance through Persona::T2ArmyBias, so identical players do not all
+// tech at the same moment.
+const float T2_ARMY_PER_INCOME = 100.f;
+
+float T2ArmyFloor()
+{
+	return aiEconomyMgr.metal.income
+		* ai.GetTunable("apex_t2_army_per_income", TUNE_T2_ARMY_PER_INCOME)
+		* Persona::T2ArmyBias();
+}
+
+int gNextT2ArmyLog = 0;
+
+// Committing to T2 idles the army line (RushBuildPower) and waives the switch's
+// own army-value requirement, so it is exactly the moment we must not be
+// fielding nothing. Once T2 is up this stops asking -- the floor is about the
+// transition, not a standing tax on the whole game.
+bool T2ArmyReady()
+{
+	if (gHaveT2)
+		return true;
+	const float floorM = T2ArmyFloor();
+	if (floorM <= 0.f)
+		return true;
+	const float have = aiMilitaryMgr.armyCost;
+	if (have >= floorM)
+		return true;
+	// A RATIO TO INCOME IS A MOVING TARGET. Measured over a 40-minute run the
+	// bar reached 5400 while the army stalled at 1856 -- income outgrew army
+	// production and T2 never came at all. "Reasonably sized" is also answerable
+	// against what we actually face, so matching the enemy's fielded army passes
+	// too, and the gate cannot lock forever.
+	const float theirs = Military::EnemyArmyCost();
+	if ((theirs > 0.f) && (have >= theirs))
+		return true;
+	// THE TEAM'S ARMY COUNTS. In an 8v8 a pressured player's own army reads
+	// ~0 forever (it dies as fast as it pools) and this gate blocked 178-306
+	// times across 39 minutes per stuck player -- half the team finished
+	// with 0-2 T2 cons and the side was out-scaled end-game in every team
+	// format (mex end ratio 0.85 -> 0.51 monotone in team size). Defence is
+	// collective: a player whose SIDE fields the floor's worth may tech.
+	if (TeamPlay() && (Military::TeamArmyCost() >= floorM))
+		return true;
+	// DEFENCE COUNTS AS BEING ABLE TO HOLD. The floor asks whether committing to
+	// the plant leaves us defenceless; a base behind guns is not. apexearth's own
+	// doctrine for this game -- "hunker down and make them bleed" -- means the
+	// turtling player must still be allowed to tech, or hunkering down becomes a
+	// permanent T1 sentence. Measured without this: 0 of 6 games reached T2 at
+	// all, 91 blocks in one game, and the metal went into advanced solars instead.
+	if (have + Military::OwnDefenceMetal() >= floorM)
+		return true;
+	if (ai.frame >= gNextT2ArmyLog) {
+		gNextT2ArmyLog = ai.frame + 60 * SECOND;
+		AiLog(T() + "T2GATE blocked T2ArmyReady army="
+			+ formatFloat(have, "", 0, 0) + "/" + formatFloat(floorM, "", 0, 0)
+			+ " enemy=" + formatFloat(Military::EnemyArmyCost(), "", 0, 0)
+			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+			+ " persona=" + Persona::Name());
+	}
+	return false;
+}
+
+// May THIS instance pursue the advanced plant?
+// THE T1-COMMIT EXPERIMENT. apexearth 2026-08-20: "When players do one versus
+// one games, they often don't even reach the tier two stage. I think you
+// should do some experiments where you dedicate yourself to a very strong
+// land army and just try to finish the game in tier one. Obviously, if the
+// enemy starts to attack you with tier two, you have to upgrade" -- and it is
+// "a bit different on really large maps, which are normally not played as a
+// one v one", so the mode holds only in a duel on a 1v1-sized map. Off by
+// default; arm an A/B with --modoption apex_t1_commit=1.
+bool gEnemyT2Seen = false;
+float gT1IncPeak = 0.f;
+int gT1IncPeakAt = 0;
+bool gT1Plateaued = false;
+
+void NoteEnemyDefSeen(CCircuitDef@ edef)
+{
+	if (gEnemyT2Seen || (edef is null))
+		return;
+	// A mobile combat unit above T1 cost is the release: enemy defs only
+	// reach script on their death, so this is late but certain. 450 sits
+	// above every T1 land unit (Zeus 320, Warrior 300, Janus 290) and below
+	// the T2 assault class. NOT the commander: it is 2700 metal, mobile, and
+	// present from frame zero -- with the being-hit trigger it released the
+	// commit at first commander skirmish in every game (measured 9.2m,
+	// "confirmed (corcom)"), which is exactly the aggression fade apexearth
+	// watched.
+	if (edef.IsMobile() && !edef.IsRoleAny(Unit::Role::COMM.mask)
+		&& (edef.costM >= ai.GetTunable("apex_t1_release_cost", TUNE_T1_RELEASE_COST)))
+	{
+		gEnemyT2Seen = true;
+		AiLog(T() + "apex: enemy T2-class unit confirmed ("
+			+ edef.GetName() + ") -- T1 commit released");
+	}
+}
+
+bool T1Commit()
+{
+	// Default ON since 2026-08-20: paired same-seed A/Bs on Altair (trade
+	// 0.31->0.52) and Comet Catcher (0.43->0.76, produced 1.01->1.92,
+	// 1W2L3D -> 3W1L2D) both favoured the commit. Duel+small-map+no-enemy-T2
+	// scoping below is what makes the default safe.
+	if (ai.GetTunable("apex_t1_commit", TUNE_T1_COMMIT) <= 0.f)
+		return false;
+	if (gEnemyT2Seen || gT1Plateaued || !Persona::Duel())
+		return false;   // all three latch: a converted commit never re-arms
+	// Map area in map units (elmos/512 per side). Comet Catcher is 192,
+	// Red Comet 96; Prismatic (256) and up are not 1v1-shaped maps.
+	const float area = (float(AiTerrainWidth()) / 512.f)
+			* (float(AiTerrainHeight()) / 512.f);
+	if (area > ai.GetTunable("apex_t1_commit_area", TUNE_T1_COMMIT_AREA))
+		return false;
+	// An economy this size did not end the game at T1; the premise expired.
+	if (aiEconomyMgr.metal.income
+		>= ai.GetTunable("apex_t1_commit_income", TUNE_T1_COMMIT_INCOME))
+	{
+		return false;
+	}
+	// THE PLATEAU RELEASE. The income bar above is unreachable from inside
+	// the commit on most maps (T1-only economies top out at ~25-40), so an
+	// unfinished all-in sat at T1 forever -- apexearth 2026-08-20: "We used
+	// to always be scaling our economy. Now we stop and thats really what
+	// kills us." When T1 income stops GROWING, T1 scaling is exhausted and
+	// the commit converts: tempo while the curve climbs, tech the moment it
+	// flattens. No clock -- the trigger is the economy's own derivative.
+	{
+		const float inc = aiEconomyMgr.metal.income;
+		if (inc > gT1IncPeak) {
+			gT1IncPeak = inc;
+			gT1IncPeakAt = ai.frame;
+		}
+		const int flat = int(ai.GetTunable("apex_t1_plateau_secs", TUNE_T1_PLATEAU_SECS)) * SECOND;
+		if ((gT1IncPeakAt > 0) && (ai.frame - gT1IncPeakAt > flat)
+			&& (inc < gT1IncPeak * ai.GetTunable("apex_t1_plateau_grow", TUNE_T1_PLATEAU_GROW)))
+		{
+			if (!gT1Plateaued) {
+				gT1Plateaued = true;
+				AiLog(T() + "apex: T1 income plateaued at "
+					+ formatFloat(gT1IncPeak, "", 0, 1)
+					+ " -- commit converts to tech");
+			}
+			return false;
+		}
+	}
+	return true;
+}
+
 bool MayPursueT2()
 {
+	if (T1Commit())
+		return false;
+	if (!T2ArmyReady())
+		return false;
+	// SOLO IS ITS OWN DECISION, NOT A ROLE: a duel techs when its army and
+	// economy are ready, full stop -- the lead/follower split below is team
+	// coordination and IsDesignatedLead is now false solo by design.
+	if (!TeamPlay())
+		return true;
 	return IsDesignatedLead() || FollowerEconomyReady();
 }
 
@@ -72,16 +234,15 @@ bool MayPursueT2()
 bool IsDesignatedLead()
 {
 	// Solo, LeadIsDesignated() is unreachable (it early-returns false without
-	// allies), so this used to be false for the whole game -- MayPursueT2()
-	// then fell through to FollowerEconomyReady(), the UNGATED no-bank branch
-	// meant for a teammate who isn't the lead and so isn't leaving anyone
-	// undefended. Solo, that same branch commits to T2 on income alone, with
-	// none of RushReady()'s LosingGround()/BaseContested() safety check --
-	// apexearth, 2026-08-14: "we're helpless" while it built. Solo IS trivially
-	// the lead (see IsTechLead()'s own comment), so route it through the same
-	// path and get the safety check that path is supposed to have.
+	// THE ROLE IS TEAM-ONLY. This returned true solo (2026-08-14, to route a
+	// duel through the rush path's safety checks) and every behavioural
+	// consumer then treated a solo player as a rush lead: 0.35x defence,
+	// eating its own T1 lab, the mex hold. apexearth 2026-08-20: "There
+	// should be no technical lead in a one versus one game." Solo tech
+	// timing now has its own branch in MayPursueT2, and the safety checks
+	// live where they always did (RushReady).
 	if (!TeamPlay())
-		return true;
+		return false;
 	return LeadIsDesignated() && IsTechLead();
 }
 
@@ -92,9 +253,11 @@ const float RUSH_MIN_METAL = 14.f;
 
 bool RushReady()
 {
+	if (T1Commit())
+		return false;
 	// Tunable for A/B testing. In a 1v1 the player IS the lead, so this branch
 	// is the only gate on committing to T2.
-	if (aiEconomyMgr.metal.income < ai.GetTunable("apex_rush_min_metal", RUSH_MIN_METAL))
+	if (aiEconomyMgr.metal.income < ai.GetTunable("apex_rush_min_metal", TUNE_RUSH_MIN_METAL))
 		return false;
 	// RushBuildPower idles the factory's own army line and AiIsSwitchAllowed
 	// waives the normal army-value requirement for this branch, so committing
@@ -108,8 +271,12 @@ bool RushReady()
 	// else.
 	if (Military::LosingGround() || Military::BaseContested())
 		return false;
-	return (aiEconomyMgr.energy.income > RUSH_ENERGY_TARGET)
-		|| ((ai.frame > RUSH_LATEST) && (aiEconomyMgr.energy.income > RUSH_ENERGY_FLOOR));
+	// No clock. Real energy, or a reactor grid already rising.
+	return (aiEconomyMgr.energy.income
+			> Policy::T2Energy())
+		|| (Builder::HaveReactor()
+			&& (aiEconomyMgr.energy.income
+				> Policy::T2EnergyReactor()));
 }
 
 // Metal a non-lead must be earning before it may take T2.

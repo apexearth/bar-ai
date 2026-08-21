@@ -13,12 +13,12 @@ namespace Builder {
 // (EconomyManager.cpp:1752/1816-1820) that only UpdateEnergyTasks clears. With
 // that disabled the latch never clears on its own, so this gate replaces it
 // explicitly.
-float OpeningEnergyGate() { return ai.GetTunable("apex_opening_energy_gate", 80.f); }
-float OpeningMetalGate()  { return ai.GetTunable("apex_opening_metal_gate", 5.f); }
+float OpeningEnergyGate() { return ai.GetTunable("apex_opening_energy_gate", TUNE_OPENING_ENERGY_GATE); }
+float OpeningMetalGate()  { return ai.GetTunable("apex_opening_metal_gate", TUNE_OPENING_METAL_GATE); }
 
 // Bounds the post-opening factory-rebuild mex fallback in rules_commander.as
 // (a mex must be genuinely close to be worth taking over rebuilding the lab).
-float OpeningMexReach() { return ai.GetTunable("apex_opening_mex_reach", 700.f); }
+float OpeningMexReach() { return ai.GetTunable("apex_opening_mex_reach", TUNE_OPENING_MEX_REACH); }
 
 // NO CLOCK, ON PURPOSE: a team wiped to one constructor must re-derive this
 // gate from its CURRENT economy, not from elapsed game time.
@@ -51,7 +51,7 @@ float gOpenPeakEnergyIncome = 0.f;
 // mex with it.
 bool OpeningNeedsEconomy()
 {
-	if (ai.GetTunable("apex_opening_gate", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_opening_gate", TUNE_OPENING_GATE) <= 0.f)
 		return false;
 	if (Factory::HaveAnyFactory())
 		return false;
@@ -108,7 +108,7 @@ bool OpeningNeedsEconomy()
 	// metal income stands at several times what the gate protects, the hold
 	// is costing more than the lab it guards -- release, whatever the energy
 	// ledger claims. State-derived, no clock.
-	if (mInc >= OpeningMetalGate() * ai.GetTunable("apex_opening_failsafe", 3.f)) {
+	if (mInc >= OpeningMetalGate() * ai.GetTunable("apex_opening_failsafe", TUNE_OPENING_FAILSAFE)) {
 		AiLog(Factory::T() + "apex: OPENING FAILSAFE released the factory --"
 			+ " e=" + formatFloat(eInc, "", 0, 0)
 			+ " m=" + formatFloat(mInc, "", 0, 1)

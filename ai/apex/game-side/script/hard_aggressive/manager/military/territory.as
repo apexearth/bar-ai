@@ -358,7 +358,7 @@ void RebuildFront()
 	// Economy-scaled cadence: the later the game, the more slowly the front
 	// moves -- apexearth: "5-10s no big deal". Rich = 5s, else 1s.
 	const int frontPeriod = (aiEconomyMgr.metal.income
-			>= ai.GetTunable("apex_elect_rich_income", 150.f)) ? 150 : 30;
+			>= ai.GetTunable("apex_elect_rich_income", TUNE_ELECT_RICH_INCOME)) ? 150 : 30;
 	if ((gFrontStamp >= 0) && (ai.frame - gFrontStamp < frontPeriod))
 		return;
 	gFrontStamp = ai.frame;
@@ -402,7 +402,7 @@ void RebuildFront()
 			// `GetBuilderThreatAt(pos) > THREAT_MIN` (1.0, util/Defines.h), and
 			// the accessor has already subtracted THREAT_BASE, so testing `> 0`
 			// instead put the safe edge one step from the base in every lane.
-			if (ai.GetBuilderThreatAt(p) <= ai.GetTunable("apex_build_threat_bar", 1.f))
+			if (ai.GetBuilderThreatAt(p) <= ai.GetTunable("apex_build_threat_bar", TUNE_BUILD_THREAT_BAR))
 				safe = t;
 			// EMPTY GROUND IS NOBODY'S, NOT THEIRS. GetNetInflAt is ally minus
 			// enemy, so ground neither side has been near reads exactly 0, and
@@ -457,7 +457,7 @@ void RebuildRing(const AIFloat3& in home)
 	const float h = float(AiTerrainHeight());
 	const float reach = sqrt(w * w + h * h) * 0.5f;   // half the map diagonal
 	const float step = reach / float(RING_SAMPLES);
-	const float bar = ai.GetTunable("apex_build_threat_bar", 1.f);
+	const float bar = ai.GetTunable("apex_build_threat_bar", TUNE_BUILD_THREAT_BAR);
 
 	// NOTHING BEHIND US IS FRONT.
 	//
@@ -469,7 +469,7 @@ void RebuildRing(const AIFloat3& in home)
 	//
 	// apex_front_rear_arc=1 restores the full ring for a genuinely surrounded
 	// base.
-	const bool rearToo = ai.GetTunable("apex_front_rear_arc", 0.f) > 0.f;
+	const bool rearToo = ai.GetTunable("apex_front_rear_arc", TUNE_FRONT_REAR_ARC) > 0.f;
 	AIFloat3 toEnemy = aiEnemyMgr.GetEnemyPos() - home;
 	const bool haveBearing = toEnemy.SqLength2D() > NEAR_ZERO;
 	const float sep = haveBearing ? sqrt(toEnemy.SqLength2D()) : 0.f;
@@ -752,7 +752,7 @@ void GhostDiag()
 	AiLog(Factory::T() + "apexfoe: raw=" + int(raw)
 		+ " fresh=" + int(fresh)
 		+ " ghost%=" + int((raw > 1.f) ? (raw - fresh) * 100.f / raw : 0.f)
-		+ " w=" + formatFloat(ai.GetTunable("apex_ghost_weight", 1.f), "", 0, 2));
+		+ " w=" + formatFloat(ai.GetTunable("apex_ghost_weight", TUNE_GHOST_WEIGHT), "", 0, 2));
 }
 
 // Which lane a position falls in, and how far along the axis it sits.
@@ -881,9 +881,9 @@ bool FrontLineSpots(array<AIFloat3>& out pts, float spacing, float reach = 0.f)
 		pts = gSpotsMemo;
 		return gSpotsMemoOk;
 	}
-	const float back = ai.GetTunable("apex_front_setback", FRONT_SETBACK);
-	const bool useSafe = ai.GetTunable("apex_front_safe_edge", 1.f) > 0.f;
-	const float minReach = ai.GetTunable("apex_front_min_reach", 0.5f);
+	const float back = ai.GetTunable("apex_front_setback", TUNE_FRONT_SETBACK);
+	const bool useSafe = ai.GetTunable("apex_front_safe_edge", TUNE_FRONT_SAFE_EDGE) > 0.f;
+	const float minReach = ai.GetTunable("apex_front_min_reach", TUNE_FRONT_MIN_REACH);
 	const float step = 6.2831853f / float(FRONT_RAYS);
 
 	for (uint i = 0; i < gRayR.length(); ++i) {
@@ -952,9 +952,9 @@ bool FrontBuildSpots(array<AIFloat3>& out pts)
 	pts.resize(0);
 	if (!gFrontValid)
 		return false;
-	const float back = ai.GetTunable("apex_front_setback", FRONT_SETBACK);
-	const bool useSafe = ai.GetTunable("apex_front_safe_edge", 1.f) > 0.f;
-	const float minReach = ai.GetTunable("apex_front_min_reach", 0.5f);
+	const float back = ai.GetTunable("apex_front_setback", TUNE_FRONT_SETBACK);
+	const bool useSafe = ai.GetTunable("apex_front_safe_edge", TUNE_FRONT_SAFE_EDGE) > 0.f;
+	const float minReach = ai.GetTunable("apex_front_min_reach", TUNE_FRONT_MIN_REACH);
 	for (uint i = 0; i < gRayR.length(); ++i) {
 		if ((i < gRayHot.length()) && !gRayHot[i])
 			continue;
@@ -994,7 +994,7 @@ bool OnBorder(const AIFloat3& in pos)
 	// Against the ring's radius on THIS position's bearing. The band is a share
 	// of that radius rather than a fixed distance, so it means the same thing on
 	// a small map and a large one.
-	const float band = ai.GetTunable("apex_front_band", FRONT_BAND);
+	const float band = ai.GetTunable("apex_front_band", TUNE_FRONT_BAND);
 	const int r = RayOf(pos);
 	const float here = pos.distance2D(gFrontHome);
 	return here >= (gRayR[r] * (1.f - band));
@@ -1025,7 +1025,7 @@ float EnemyCostOf(int role)
 	// defensive off units that mostly no longer existed. A mobile unit unseen
 	// for the whole freshness window is more likely dead or elsewhere than
 	// waiting where we saw it.
-	return fresh + (raw - fresh) * ai.GetTunable("apex_ghost_weight", 0.3f);
+	return fresh + (raw - fresh) * ai.GetTunable("apex_ghost_weight", TUNE_GHOST_WEIGHT);
 }
 
 float EnemyArmyCost()
@@ -1059,14 +1059,14 @@ bool EnemyAfloat()
 		return gAfloat;
 	gNextAfloatCheck = ai.frame + 10 * SECOND;
 	bool now = EnemyCostOf(Unit::Role::SUB.type)
-			>= ai.GetTunable("apex_afloat_sub_cost", 400.f);
+			>= ai.GetTunable("apex_afloat_sub_cost", TUNE_AFLOAT_SUB_COST);
 	if (!now && (aiTerrainMgr.GetLandPercent()
-			<= ai.GetTunable("apex_afloat_land_pct", 85.f))
+			<= ai.GetTunable("apex_afloat_land_pct", TUNE_AFLOAT_LAND_PCT))
 		// A centroid means nothing before an enemy is actually SEEN --
 		// GetEnemyPos returns a default with no groups registered, which read
 		// as afloat at frame 18 of a land game (measured, Glacial Gap).
 		&& (EnemyArmyCost() + EnemyCostOf(Unit::Role::STATIC.type)
-			>= ai.GetTunable("apex_afloat_seen", 500.f)))
+			>= ai.GetTunable("apex_afloat_seen", TUNE_AFLOAT_SEEN)))
 	{
 		const AIFloat3 at = aiEnemyMgr.GetEnemyPos();
 		if (OnMap(at)) {
@@ -1075,7 +1075,7 @@ bool EnemyAfloat()
 				// Tight: the enemy's mass must sit ON the water's edge, not a
 				// screen from a lake -- 900 bought shipyards against a land
 				// army camped by frozen lakes.
-				const float near = ai.GetTunable("apex_afloat_near", 350.f);
+				const float near = ai.GetTunable("apex_afloat_near", TUNE_AFLOAT_NEAR);
 				const AIFloat3 wet = ai.FindBuildSiteNear(sy, at, near);
 				now = OnMap(wet) && (wet.distance2D(at) <= near);
 			}
@@ -1085,7 +1085,7 @@ bool EnemyAfloat()
 	// and a flapping answer buys and abandons the reaction repeatedly.
 	gAfloatStreak = now ? (gAfloatStreak + 1) : 0;
 	const bool latched = gAfloatStreak
-			>= int(ai.GetTunable("apex_afloat_streak", 3.f));
+			>= int(ai.GetTunable("apex_afloat_streak", TUNE_AFLOAT_STREAK));
 	if (latched != gAfloat || (latched && (ai.frame >= gNextAfloatLog))) {
 		gNextAfloatLog = ai.frame + 120 * SECOND;
 		AiLog(Factory::T() + "apex: enemy afloat=" + (latched ? "1" : "0")

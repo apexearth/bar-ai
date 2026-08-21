@@ -204,7 +204,7 @@ array<float> CounterShares(CCircuitUnit@ fac, float &out weight)
 	// Seen against held: a glimpse of one squad while we hold an army barely
 	// moves the target; a well-scouted enemy army moves it most of the way.
 	const float frac = seen / (seen + ((ours > 1.f) ? ours : 1.f));
-	weight = MIX_COUNTER_MAX * frac * ai.GetTunable("apex_mix_counter", 1.f);
+	weight = MIX_COUNTER_MAX * frac * ai.GetTunable("apex_mix_counter", TUNE_MIX_COUNTER);
 	if (weight > MIX_COUNTER_MAX)
 		weight = MIX_COUNTER_MAX;
 	return out_;
@@ -368,7 +368,7 @@ IUnitTask@ BuildPowerFirst(CCircuitUnit@ fac)
 	// headroom on the curve rather than a blank cheque.
 	int cap = want;
 	if (aiEconomyMgr.isMetalFull)
-		cap = int(float(want) * ai.GetTunable("apex_con_full_mult", 1.5f)) + 1;
+		cap = int(float(want) * ai.GetTunable("apex_con_full_mult", TUNE_CON_FULL_MULT)) + 1;
 	if (con.count >= cap)
 		return null;
 	return aiFactoryMgr.Enqueue(TaskS::Recruit(
@@ -421,7 +421,7 @@ int gMixFin = 0;    float gMixFim = 0.f;
 
 IUnitTask@ MixTask(CCircuitUnit@ fac)
 {
-	if (ai.GetTunable("apex_mix", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_mix", TUNE_MIX) <= 0.f)
 		return null;
 	// DO NOT APPEND TO A QUEUE THAT ALREADY HAS WORK. Our Enqueue is blind --
 	// see Factory::gQTask -- so without this every call adds another order on
@@ -440,7 +440,7 @@ IUnitTask@ MixTask(CCircuitUnit@ fac)
 			gMixBPm += bpd.costM;
 		return bp;
 	}
-	if (ai.GetTunable("apex_mix_scout", 1.f) > 0.f) {
+	if (ai.GetTunable("apex_mix_scout", TUNE_MIX_SCOUT) > 0.f) {
 		IUnitTask@ sc = ScoutFloor(fac);
 		if (sc !is null) {
 			ClaimFactory(fac);

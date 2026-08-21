@@ -26,6 +26,7 @@
 #include "spring/SpringMap.h"
 
 #include "AISCommands.h"
+#include "Drawer.h"
 #include "Log.h"
 
 namespace circuit {
@@ -321,7 +322,15 @@ void CAttackTask::AssignTo(CCircuitUnit* unit)
 
 	int squareSize = manager->GetCircuit()->GetPathfinder()->GetSquareSize();
 	ITravelAction* travelAction;
-	if (cdef->IsAttrSiege() && (manager->GetCircuit()->GetTunable("apex_siege_fight", 1.f) > 0.f)) {
+	// Formation travel (apexearth 2026-08-21): the whole ground squad marches on
+	// synchronized-speed FIGHT orders, not per-unit moves -- engage together en
+	// route, hold the line together. Wounded still leave: RetreatTask swaps the
+	// travel act out (dropping the fight order), and the engagement standoff
+	// ring still owns distance-keeping once fighting starts. Flyers keep MOVE.
+	if ((cdef->IsAttrSiege() && (manager->GetCircuit()->GetTunable("apex_siege_fight", 1.f) > 0.f))
+		|| (!cdef->IsAbleToFly()
+			&& (manager->GetCircuit()->GetTunable("apex_fight_travel", 1.f) > 0.f)))
+	{
 		travelAction = new CFightAction(unit, squareSize);
 	} else {
 		travelAction = new CMoveAction(unit, squareSize);
@@ -431,6 +440,9 @@ void CAttackTask::Update()
 		{
 			circuit->LOG("apex: attack broken -- power %.0f of peak %.0f, survivors re-pool",
 					attackPower, peakPower);
+			if ((leader != nullptr) && (circuit->GetTunable("apex_ping", 0.f) > 0.f)) {
+				circuit->GetDrawer()->AddPoint(leader->GetLastPos(), "ATK broken");
+			}
 			manager->AbortTask(this);
 			return;
 		}
@@ -506,6 +518,80 @@ void CAttackTask::Update()
 			circuit->GetPathfinder()->Pos2PathXY(startPos, &xs, &ys);
 			circuit->GetPathfinder()->Pos2PathXY(position, &xe, &ye);
 			if (GetHitTest()(int2(xs, ys), int2(xe, ye))) {
+				// apex: ASSEMBLE BEFORE THE FIGHT STARTS. DEPLOY_SLACK unfolds
+				// the column into a line, but ENGAGE keys on the LEADER's
+				// distance -- units strung back along the path get their arc
+				// slots and trickle into a fight already lost by the front.
+				// apexearth: "you need to organize your units so that all of
+				// them enter the fight at about the same time." Hold the
+				// units already in formation (StateWait) while stragglers
+				// close to the same cohesion bound IsMustRegroup uses; a
+				// bounded budget and an under-fire test keep this from
+				// dithering: standing in enemy threat means the fight has
+				// already started, and waiting in it is worse than engaging.
+				const CCircuitDef* ldef = leader->GetCircuitDef();
+				const bool skipAssemble = (units.size() < 3)
+						|| ldef->IsPlane() || ldef->IsCharger()
+						|| (circuit->GetTunable("apex_assemble", 1.f) <= 0.f);
+				if (!skipAssemble) {
+					CThreatMap* threatMap = circuit->GetThreatMap();
+					threatMap->SetThreatType(leader);
+					const bool underFire = threatMap->GetThreatAt(startPos) >= THREAT_MIN;
+					const float bound = std::max<float>(
+							SQUARE_SIZE * 8 * units.size(), highestRange);
+					float worstSq = 0.f;
+					for (CCircuitUnit* unit : units) {
+						worstSq = std::max(worstSq,
+								startPos.SqDistance2D(unit->GetPos(frame)));
+					}
+					// apex: size the cohesion bound from DATA. The gate fired
+					// zero times in four smoke games, and this line says
+					// whether that is because squads genuinely arrive tight
+					// or because the bound above is looser than real stretch.
+					if (frame >= lastEngageLog + FRAMES_PER_SEC * 20) {
+						lastEngageLog = frame;
+						circuit->LOG("apex: engage-stretch n=%d stretch=%.0f "
+								"bound=%.0f underfire=%d",
+								(int)units.size(), std::sqrt(worstSq), bound,
+								underFire ? 1 : 0);
+					}
+					const bool stretched = worstSq > SQUARE(bound);
+					if (stretched && !underFire) {
+						if (assembleUntil < 0) {
+							assembleUntil = frame + FRAMES_PER_SEC
+									* (int)circuit->GetTunable("apex_assemble_secs", 8.f);
+							circuit->LOG("apex: assembling before contact -- "
+									"stretch %.0f over bound %.0f, %d units",
+									std::sqrt(worstSq), bound, (int)units.size());
+							if (circuit->GetTunable("apex_ping", 0.f) > 0.f) {
+								circuit->GetDrawer()->AddPoint(startPos,
+										utils::string_format("ASSEMBLE n=%d", (int)units.size()).c_str());
+							}
+						}
+						if (frame < assembleUntil) {
+							const float sqBound = SQUARE(bound);
+							for (CCircuitUnit* unit : units) {
+								if (unit->Blocker() != nullptr) {
+									continue;
+								}
+								// In formation: stand. Stragglers: keep coming.
+								if ((startPos.SqDistance2D(unit->GetPos(frame)) <= sqBound)
+									&& (unit->GetTravelAct() != nullptr))
+								{
+									unit->GetTravelAct()->StateWait();
+								}
+							}
+							return;
+						}
+					} else {
+						assembleUntil = -1;
+					}
+				}
+				assembleUntil = -1;
+				if (circuit->GetTunable("apex_ping", 0.f) > 0.f) {
+					circuit->GetDrawer()->AddPoint(startPos,
+							utils::string_format("ATK engage n=%d", (int)units.size()).c_str());
+				}
 				state = State::ENGAGE;
 				Attack(frame);
 				return;
@@ -651,10 +737,7 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
 		&& (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)))
 	{
 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-		float x = rand() % terrainMgr->GetTerrainWidth();
-		float z = rand() % terrainMgr->GetTerrainHeight();
-		position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
-		position = terrainMgr->GetMovePosition(leader->GetArea(), position);
+		position = RoamPos(leader);
 	}
 
 	if (units.find(unit) != units.end()) {
@@ -667,20 +750,6 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
 // exactly as high as a fresh one. The enemy side of the same comparison is not
 // paper: CThreatMap weights by current health. Weighting our own power by health
 // makes the two sides symmetric.
-float CAttackTask::GetHealthScale()
-{
-	float total = .0f;
-	float alive = .0f;
-	for (CCircuitUnit* unit : units) {
-		const float power = unit->GetCircuitDef()->GetPower();
-		float hp = unit->GetHealthPercent();
-		hp = std::max(.0f, std::min(1.f, hp));  // capture progress drives it negative
-		total += power;
-		alive += power * hp;
-	}
-	return (total > .0f) ? (alive / total) : 1.f;
-}
-
 void CAttackTask::FindTarget()
 {
 	CCircuitAI* circuit = manager->GetCircuit();

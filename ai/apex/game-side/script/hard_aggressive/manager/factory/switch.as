@@ -1,5 +1,7 @@
 namespace Factory {
 
+int gNextLineLog = 0;
+
 bool AiIsSwitchTime(int lastSwitchFrame)
 {
 	if (!ApexActive()) {
@@ -140,15 +142,45 @@ bool AiIsSwitchAllowed(CCircuitDef@ facDef)
 	// follower that already owned one kept being granted a no-bank switch to
 	// build another. Reaching here at all means the guard at the top of this
 	// function passed, i.e. FollowerEconomyReady().
-	if (!IsDesignatedLead() && !gHaveT2
+	// TEAM ONLY: "follower" is a team role. With IsDesignatedLead now false
+	// solo, this no-bank branch would otherwise re-open the unguarded solo
+	// T2 commit the 2026-08-14 fix closed (FollowerEconomyReady is pure
+	// income; solo goes through RushReady's safety instead).
+	if (TeamPlay() && !IsDesignatedLead() && !gHaveT2
 		&& ((Factory::userData[facDef.id].attr & Factory::Attr::T2) != 0)
 		&& FollowerEconomyReady())
 	{
 		aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = true;
 		return true;
 	}
+	// A SECOND LINE IS EARNED BY SPARE INCOME, NOT BY THE ARMY IT WOULD BUILD.
+	//
+	// Stock's test below is armyCost > 1.2 x cost x factoryCount, which is a
+	// feedback trap of the same shape as the mass floor: few lines make a small
+	// army, a small army forbids another line. Measured 32m 4v4 2026-08-19 --
+	// facs=1 for 49 of 74 samples, facs=2 for 16, facs=3 for 9, while the log
+	// reported up to 41 m/s of income we were not spending and army sat at 12-15%
+	// of our metal against BARb's 22-34% (apexearth: "the issue is just we don't
+	// make army").
+	//
+	// Income we cannot spend IS the case for another line: a factory is the thing
+	// that converts metal into units, and unspent metal converts into nothing.
+	// Scales with the economy and needs no ceiling -- the branch stops granting
+	// the moment the lines we own consume what we earn.
+	const float spare = aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull;
+	const bool feedsAnother = (ai.GetTunable("apex_line_on_spare", TUNE_LINE_ON_SPARE) > 0.f)
+			&& (spare > aiEconomyMgr.metal.income
+				* ai.GetTunable("apex_line_spare_frac", TUNE_LINE_SPARE_FRAC))
+			&& !aiEconomyMgr.isEnergyStalling;
 	const bool isOK = (aiMilitaryMgr.armyCost > 1.2f * facDef.costM * aiFactoryMgr.GetFactoryCount())
-		|| (aiEconomyMgr.metal.current > facDef.costM);
+		|| (aiEconomyMgr.metal.current > facDef.costM)
+		|| feedsAnother;
+	if (feedsAnother && (ai.frame >= gNextLineLog)) {
+		gNextLineLog = ai.frame + 60 * SECOND;
+		AiLog(T() + "apex: another line -- spare " + formatFloat(spare, "", 0, 1)
+			+ " m/s of " + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+			+ ", facs=" + aiFactoryMgr.GetFactoryCount());
+	}
 	aiFactoryMgr.isAssistRequired = Economy::isSwitchAssist = !isOK;
 	return isOK;
 }

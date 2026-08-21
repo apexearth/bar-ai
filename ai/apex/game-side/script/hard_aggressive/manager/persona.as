@@ -51,13 +51,25 @@ void Become(int k, const string &in why)
 	AiLog(Factory::T() + "apex: persona -> " + NameOf(k) + " (" + why + ")");
 }
 
+// A duel: one enemy, no allies. AIRBOSS and SILOIST are team identities --
+// measured 2026-08-20, airboss opened 3 of 8 benchmark 1v1s and lost the
+// ground war under its air plants, and siloist sank 6k+ into silos that never
+// fire inside a short game. apexearth: "We don't want to pick personas which
+// are very bad for a 1v1."
+bool Duel()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	return ((mates is null) || (mates.length() <= 1))
+		&& (ai.GetEnemyTeamSize() <= 1);
+}
+
 // apex_persona: -1 rolls freely (default); 0..5 forces that Kind and disables
 // adaptation, which is what an A/B needs.
 void Roll()
 {
 	if (gKind >= 0)
 		return;
-	const int forced = int(ai.GetTunable("apex_persona", -1.f));
+	const int forced = int(ai.GetTunable("apex_persona", TUNE_PERSONA));
 	if (forced >= 0 && forced < int(KINDS)) {
 		Become(forced, "forced");
 		return;
@@ -70,6 +82,8 @@ void Roll()
 	else if (r < 45) k = GREEDY;      // 15
 	else if (r < 57) k = AIRBOSS;     // 12
 	else if (r < 70) k = SILOIST;     // 13
+	if (Duel() && ((k == AIRBOSS) || (k == SILOIST)))
+		k = STANDARD;
 	Become(k, "rolled");
 }
 
@@ -113,6 +127,22 @@ float EngageBias()
 	return 1.f;
 }
 
+// HOW MUCH T1 ARMY THIS INSTANCE WANTS STANDING BEFORE IT TECHS.
+// Multiplies Factory::T2ArmyFloor's per-income figure, so a berserker earns its
+// plant behind a bigger T1 mass and a greedy one reaches for tech sooner. A
+// multiplier on a floor that already scales with income -- it changes how much,
+// never whether, and every other T2 gate still applies.
+float T2ArmyBias()
+{
+	if (gKind == BERSERKER) return 1.4f;
+	if (gKind == TURTLE)    return 1.3f;
+	if (gKind == REARM)     return 1.5f;   // out-fielded: field something first
+	if (gKind == GREEDY)    return 0.7f;
+	if (gKind == SILOIST)   return 0.8f;
+	if (gKind == AIRBOSS)   return 0.8f;   // its army is in the air, not on armyCost
+	return 1.f;
+}
+
 // >1 commits to air earlier and bigger: divides the income gates and scales
 // the wing size where air/state.as reads them.
 float AirEagerness()
@@ -129,7 +159,7 @@ void Update()
 	if (ai.frame < 10 * SECOND)
 		return;
 	Roll();
-	if (int(ai.GetTunable("apex_persona", -1.f)) >= 0)
+	if (int(ai.GetTunable("apex_persona", TUNE_PERSONA)) >= 0)
 		return;                   // forced persona never adapts
 	if (ai.frame < gNextEval || ai.frame < gSince + DWELL)
 		return;
@@ -157,8 +187,12 @@ void Update()
 	// Comfortably ahead on the ground with the income to spend: reach for the
 	// finisher -- nukes if the game has gone long, otherwise press the lead.
 	if (ours > theirs * 1.5f && Factory::gHaveT2) {
-		if (gKind != SILOIST && gKind != BERSERKER)
-			Become((AiRandom(0, 1) == 0) ? SILOIST : BERSERKER, "ahead and funded");
+		if (gKind != SILOIST && gKind != BERSERKER) {
+			// In a duel the finisher is always pressure: a silo takes longer
+			// than the lead lasts (see Duel()).
+			Become((!Duel() && (AiRandom(0, 1) == 0)) ? SILOIST : BERSERKER,
+				"ahead and funded");
+		}
 		return;
 	}
 }

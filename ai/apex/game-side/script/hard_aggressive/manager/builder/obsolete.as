@@ -91,7 +91,7 @@ array<int> gReclaimAskedFrame;
 
 bool AskedFor(int id)
 {
-	const int ttl = int(ai.GetTunable("apex_obsolete_retry", 45.f)) * SECOND;
+	const int ttl = int(ai.GetTunable("apex_obsolete_retry", TUNE_OBSOLETE_RETRY)) * SECOND;
 	for (uint i = 0; i < gReclaimAsked.length(); ) {
 		if (ai.frame - gReclaimAskedFrame[i] > ttl) {
 			gReclaimAsked.removeAt(i);
@@ -188,7 +188,7 @@ void UpdateEconomicCaps()
 	// already takes the full-bank bonus, so the bots stay a small mobile
 	// complement that scales gently.
 	int want = 2 + int(aiEconomyMgr.metal.income
-			/ ai.GetTunable("apex_assist_per_income", 10.f));
+			/ ai.GetTunable("apex_assist_per_income", TUNE_ASSIST_PER_INCOME));
 	const int ceiling = CapShare(ASSIST_CAP_SHARE);
 	if (want > ceiling)
 		want = ceiling;
@@ -335,10 +335,10 @@ bool DefenceOutgrown(const AIFloat3& in at, float costM)
 		const CCircuitDef@ d = Military::gFenceDef[i];
 		if ((d is null) || (d.GetSurfThreat() <= 0.f))
 			continue;
-		if (d.costM < costM * ai.GetTunable("apex_outgrown_mult", 3.f))
+		if (d.costM < costM * ai.GetTunable("apex_outgrown_mult", TUNE_OUTGROWN_MULT))
 			continue;
 		if (Military::ForwardFraction(Military::gFencePos[i])
-			>= myFwd + ai.GetTunable("apex_outgrown_fwd", 0.08f))
+			>= myFwd + ai.GetTunable("apex_outgrown_fwd", TUNE_OUTGROWN_FWD))
 		{
 			return true;
 		}
@@ -571,7 +571,7 @@ void NanoTidy()
 		// grace is what keeps this off a cluster still being seeded: a fresh
 		// turret beside a big build is useful now and judged later.
 		{
-			const int grace = int(ai.GetTunable("apex_nano_form_grace", 120.f)
+			const int grace = int(ai.GetTunable("apex_nano_form_grace", TUNE_NANO_FORM_GRACE)
 					* float(SECOND));
 			if (ai.frame - gNanoBorn[i] >= grace) {
 				const AIFloat3 up = u.GetPos(ai.frame);
@@ -670,7 +670,7 @@ void TrimSurplusBuilders()
 	if (bot is null)
 		return;
 	const int cap = 2 + int(aiEconomyMgr.metal.income
-			/ ai.GetTunable("apex_assist_per_income", 10.f));
+			/ ai.GetTunable("apex_assist_per_income", TUNE_ASSIST_PER_INCOME));
 	int excess = int(bot.count) - cap;
 	if (excess <= 0)
 		return;
@@ -728,13 +728,13 @@ void ObsoleteSweep()
 	int picks = 1;
 	if (CleanupMode()) {
 		picks = int((1.f + aiEconomyMgr.metal.income
-				/ ai.GetTunable("apex_cleanup_per", 150.f))
+				/ ai.GetTunable("apex_cleanup_per", TUNE_CLEANUP_PER))
 				* (1.f + Perf::LagSeverity()));
 		// A perf bound, not policy: each pick walks full unit lists, and an
 		// unbounded sweep burned 277-475ms single frames (seed 200, min
 		// 54-56) -- a lag reducer must not be a lag spike. The same total
 		// work spreads across consecutive sweeps instead.
-		const int most = int(ai.GetTunable("apex_cleanup_max_picks", 5.f));
+		const int most = int(ai.GetTunable("apex_cleanup_max_picks", TUNE_CLEANUP_MAX_PICKS));
 		if (picks > most)
 			picks = most;
 	}
@@ -795,11 +795,11 @@ bool HaveReplacementFor(const string& in name)
 float EnergyReclaimCliff(const string& in name)
 {
 	if ((name == armsolar) || (name == corsolar) || (name == legsolar))
-		return ai.GetTunable("apex_reclaim_solar_e", 500.f);
+		return Policy::ReclaimSolarE();
 	if ((name == armadvsol) || (name == coradvsol) || (name == legadvsol))
-		return ai.GetTunable("apex_reclaim_advsol_e", 2000.f);
+		return Policy::ReclaimGenE();
 	if ((name == armwin) || (name == corwin) || (name == legwin)) {
-		const float base = ai.GetTunable("apex_reclaim_wind_e", 2000.f);
+		const float base = Policy::ReclaimGenE();
 		CCircuitDef@ wind = SideDef3(armwin, corwin, legwin);
 		CCircuitDef@ sol = SideDef3(armadvsol, coradvsol, legadvsol);
 		if ((wind !is null) && (sol !is null)
@@ -830,7 +830,38 @@ bool EnergyReclaimable(const string& in name)
 	}
 	if (!standing)
 		return false;
-	return aiEconomyMgr.energy.income >= EnergyReclaimCliff(name);
+	// SOLARS WAIT FOR THE FUSION. apexearth 2026-08-21: "we ought to not
+	// reclaim those old solars until we have a fusion (because we keep
+	// e-stalling). Unless you're like the tech guy or an eco guy who doesn't
+	// make much army, you can't be doing this stuff at <1000 energy." The
+	// advsol-standing test said the TIER was superseded; a reactor standing
+	// says the GRID no longer needs the panels.
+	if ((name == armsolar) || (name == corsolar) || (name == legsolar)) {
+		if (!HaveReactor()
+			&& !(Factory::EcoLeadActive() || Factory::IsDesignatedLead()))
+		{
+			return false;
+		}
+	}
+	if (aiEconomyMgr.energy.income < EnergyReclaimCliff(name))
+		return false;
+	// PADDING (Policy::ReclaimPad): the cliff reads income NOW; the grid after
+	// eating the victim must still clear pull with margin, or the reclaim dips
+	// the grid and the base rebuilds the same panels it just ate.
+	CCircuitDef@ vic = null;
+	if ((name == armsolar) || (name == corsolar) || (name == legsolar))
+		@vic = SideDef3(armsolar, corsolar, legsolar);
+	else if ((name == armadvsol) || (name == coradvsol) || (name == legadvsol))
+		@vic = SideDef3(armadvsol, coradvsol, legadvsol);
+	else if ((name == armwin) || (name == corwin) || (name == legwin))
+		@vic = SideDef3(armwin, corwin, legwin);
+	if (vic !is null) {
+		const float after = aiEconomyMgr.energy.income
+				- aiEconomyMgr.GetEnergyMake(vic);
+		if (after < aiEconomyMgr.energy.pull * Policy::ReclaimPad())
+			return false;
+	}
+	return true;
 }
 
 // CLEANUP MODE: a huge economy no longer needs its small things, and a
@@ -839,7 +870,7 @@ bool EnergyReclaimable(const string& in name)
 // and get rid of all unimportant things."
 bool CleanupMode()
 {
-	return (aiEconomyMgr.metal.income >= ai.GetTunable("apex_bigeco_income", 500.f))
+	return (aiEconomyMgr.metal.income >= ai.GetTunable("apex_bigeco_income", TUNE_BIGECO_INCOME))
 		|| Perf::GameLagging();
 }
 

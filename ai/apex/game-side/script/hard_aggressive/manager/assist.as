@@ -64,7 +64,7 @@ const uint SITE_STACK = 3;
 uint GuardStack()
 {
 	return uint(1.f + aiEconomyMgr.metal.income
-			/ ai.GetTunable("apex_guard_per_income", 60.f));
+			/ ai.GetTunable("apex_guard_per_income", TUNE_GUARD_PER_INCOME));
 }
 
 // Mirrors the timeout stock CircuitAI uses for its own builder guards
@@ -87,6 +87,167 @@ int gGuards = 0;
 // is needed in builder.as.
 array<int> gGuardBot;
 array<int> gGuardVip;
+
+// ASSIST THE LINE, DON'T OPEN ANOTHER ONE.
+//
+// apexearth 2026-08-19: "in this game, it is smarter to assist a single factory
+// in the early game. What needs to happen is the commander, some cons, or some
+// nano turrets, they choose to assist the factory so that the factory will build
+// 3 or 4 times faster, possibly even more."
+//
+// This is the BAR practice, and it is the opposite of what the metal said on its
+// own: with 41 m/s of income unspent and army at 12-15% of our metal against
+// BARb's 22-34%, the obvious-looking fix was another factory -- but stock's own
+// new-line gate (armyCost > 1.2 x cost x facCount) is a trap, and more lines is
+// the wrong answer to a throughput problem anyway. Build power on ONE line is.
+//
+// Deliberately NOT the idle fallback: that leg is reached only by a constructor
+// with nothing else to do, and ours are never idle because the economy lanes
+// claim them first. This rule sits ABOVE those lanes and competes with them.
+//
+// Registered in gGuardBot/gGuardVip like every other assist here, so GuardsOn
+// can actually see it -- an earlier attempt counted through a ledger it never
+// wrote to, read 0 helpers forever and re-posted requests endlessly.
+int gFacAssists = 0;
+int gNextFacAssistLog = 0;
+
+// Spare income is the case for more build power: metal we are not spending is
+// metal a faster line would turn into units.
+bool LineWantsHelp()
+{
+	if (ai.GetTunable("apex_assist_line", TUNE_ASSIST_LINE) <= 0.f)
+		return false;
+	if (aiEconomyMgr.isEnergyStalling)
+		return false;
+	// BEING UNDER THE ARMY TARGET IS ITSELF THE CASE FOR BUILD POWER.
+	// apexearth 2026-08-19: "the simple solution is to just apply more build
+	// power to the army." Gating only on spare metal made this fire 3 times in
+	// a 20-minute game, because a line that is already consuming everything we
+	// earn still is not producing enough army -- the shortfall is the signal,
+	// not the surplus.
+	if (Brain::gSpentTotal > 1.f) {
+		const float have = Brain::ShareOf(Brain::ARMY);
+		const float want = Brain::TargetShare(Brain::ARMY);
+		if (have < want * ai.GetTunable("apex_assist_army_frac", TUNE_ASSIST_ARMY_FRAC))
+			return true;
+	}
+	const float spare = aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull;
+	return spare > aiEconomyMgr.metal.income
+			* ai.GetTunable("apex_assist_spare_frac", TUNE_ASSIST_SPARE_FRAC);
+}
+
+// How many lathes may stack on a line. The economy-scaled stack every other
+// lead gets, multiplied because a factory is the one lead whose speed is
+// directly army production -- and the whole point is 3-4x, not +1.
+uint LineHelpWanted()
+{
+	return GuardStack() * uint(ai.GetTunable("apex_assist_line_mult", TUNE_ASSIST_LINE_MULT));
+}
+
+// How many of our constructors are currently pointed at a factory, and how big
+// the pool is. Counted from this file's own guard ledger against the crew, the
+// same shape Builder::DefenceShare uses for the defence cap.
+uint FactoryHelpers()
+{
+	uint n = 0;
+	for (uint i = 0; i < gGuardVip.length(); ++i) {
+		for (uint f = 0; f < Factory::gFacUnits.length(); ++f) {
+			CCircuitUnit@ fac = Factory::gFacUnits[f];
+			if ((fac !is null) && (int(fac.id) == gGuardVip[i])) {
+				++n;
+				break;
+			}
+		}
+	}
+	return n;
+}
+
+IUnitTask@ AssistFactory(CCircuitUnit@ unit, bool isComm, bool isAdvCon)
+{
+	if ((unit is null) || !ApexActive() || !LineWantsHelp())
+		return null;
+	// ADVANCED CONSTRUCTORS ARE NOT FOR THIS. They are the only builders that can
+	// place mohos, reactors and converters, and those lanes sit below this rule
+	// -- taking an adv con here stops the economy that pays for the army.
+	// apexearth 2026-08-19: "don't interfere with the advanced cons."
+	if (isAdvCon)
+		return null;
+	// AT MOST HALF THE POOL. The first version claimed every constructor we
+	// owned: it sits above the economy lanes, so a builder it refuses is a
+	// builder those lanes get, and with no bound it simply took all of them
+	// (apexearth: "the issue is that it takes all of our constructors").
+	// A SHARE, not a count, so it still scales with the economy.
+	{
+		uint pool = 0;
+		for (uint i = 0; i < Crew::gId.length(); ++i) {
+			if (ai.GetTeamUnit(Id(Crew::gId[i])) !is null)
+				++pool;
+		}
+		const float share = ai.GetTunable("apex_assist_line_share", TUNE_ASSIST_LINE_SHARE);
+		if ((pool > 1) && (float(FactoryHelpers()) >= float(pool) * share))
+			return null;
+	}
+	// Already assisting something: a new GUARD shares the build type of the one
+	// it holds, so Reevaluate would not swap it anyway.
+	if (Builder::SiteBuildName(unit.task) == "guard")
+		return null;
+
+	CCircuitUnit@ best = null;
+	uint fewest = 0;
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	float bestDist = 0.f;
+	for (uint i = 0; i < Factory::gFacUnits.length(); ++i) {
+		CCircuitUnit@ f = Factory::gFacUnits[i];
+		if (f is null)
+			continue;
+		const AIFloat3 at = f.GetPos(ai.frame);
+		if (!OnMap(at))
+			continue;
+		const uint on = GuardsOn(int(f.id));
+		if (on >= LineHelpWanted())
+			continue;
+		const float d = me.distance2D(at);
+		if ((best is null) || (on < fewest) || ((on == fewest) && (d < bestDist))) {
+			fewest = on;
+			bestDist = d;
+			@best = f;
+		}
+	}
+	if (best is null)
+		return null;
+
+	// A NANO INSTEAD OF A PAIR OF HANDS -- the factory asked for help, so the
+	// help becomes permanent build power beside it (Builder::NanoInsteadOfHands
+	// carries the why and the guards). The plain guard below is the fallback.
+	IUnitTask@ turret = Builder::NanoInsteadOfHands(unit, best);
+	if (turret !is null) {
+		if (ai.frame >= gNextFacAssistLog) {
+			gNextFacAssistLog = ai.frame + 30 * SECOND;
+			AiLog(Factory::T() + "apex: assist the line -- "
+				+ unit.circuitDef.GetName() + (isComm ? " (commander)" : "")
+				+ " builds a nano at " + best.circuitDef.GetName()
+				+ " instead of lending hands");
+		}
+		return turret;
+	}
+
+	IUnitTask@ help = aiBuilderMgr.Enqueue(TaskB::Guard(
+			Task::Priority::HIGH, best, true, GUARD_TIMEOUT));
+	if (help is null)
+		return null;
+	gGuardBot.insertLast(int(unit.id));
+	gGuardVip.insertLast(int(best.id));
+	++gFacAssists;
+	if (ai.frame >= gNextFacAssistLog) {
+		gNextFacAssistLog = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: assist the line -- "
+			+ unit.circuitDef.GetName() + (isComm ? " (commander)" : "")
+			+ " -> " + best.circuitDef.GetName()
+			+ " now " + (fewest + 1) + "/" + LineHelpWanted()
+			+ ", n=" + gFacAssists);
+	}
+	return help;
+}
 
 uint GuardsOn(int vipId)
 {
@@ -298,7 +459,7 @@ array<int> gFbBotUntil;
 
 bool FallbackDebounced(CCircuitUnit@ unit)
 {
-	const int hold = int(ai.GetTunable("apex_assist_debounce", 5.f)) * SECOND;
+	const int hold = int(ai.GetTunable("apex_assist_debounce", TUNE_ASSIST_DEBOUNCE)) * SECOND;
 	for (uint i = 0; i < gFbBotId.length(); ) {
 		if (ai.frame >= gFbBotUntil[i]) {
 			gFbBotId.removeAt(i);
@@ -320,7 +481,7 @@ IUnitTask@ Fallback(CCircuitUnit@ unit, bool isComm, bool allowDefence = true)
 	// CBRepairTask::CanAssignTo refuses it outright.
 	if ((unit is null) || isComm)
 		return null;
-	if (ai.GetTunable("apex_idle_assist", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_idle_assist", TUNE_IDLE_ASSIST) <= 0.f)
 		return null;
 	if (FallbackDebounced(unit))
 		return null;
@@ -330,7 +491,7 @@ IUnitTask@ Fallback(CCircuitUnit@ unit, bool isComm, bool allowDefence = true)
 	// THE TERMINAL RUNG SEARCHES WIDE: a walk beats standing idle for the rest
 	// of the game, which is what 2,434 idle-still samples in minutes 30-50 of
 	// one hosted session actually were.
-	const float range = ai.GetTunable("apex_idle_assist_range", 3500.f);
+	const float range = ai.GetTunable("apex_idle_assist_range", TUNE_IDLE_ASSIST_RANGE);
 
 	// An advanced constructor takes the SITE leg only at a full bank. Below
 	// that the old reasoning holds -- joining a site locks it out of the

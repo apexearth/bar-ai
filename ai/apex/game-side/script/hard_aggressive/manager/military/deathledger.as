@@ -80,8 +80,8 @@ float ForwardBleedFrac()
 // the same engage-margin lever personality uses, and the massing want.
 float BleedCaution()
 {
-	float m = 1.f + ForwardBleedFrac() * ai.GetTunable("apex_bleed_engage", 2.f);
-	const float cap = ai.GetTunable("apex_bleed_cap", 1.6f);
+	float m = 1.f + ForwardBleedFrac() * ai.GetTunable("apex_bleed_engage", TUNE_BLEED_ENGAGE);
+	const float cap = ai.GetTunable("apex_bleed_cap", TUNE_BLEED_CAP);
 	if (m > cap)
 		m = cap;
 	return m;
@@ -99,7 +99,7 @@ float BleedCaution()
 bool TradeMeaningful()
 {
 	const float inc = aiEconomyMgr.metal.income;
-	return gLossAll > inc * ai.GetTunable("apex_trade_vol", 20.f);
+	return gLossAll > inc * ai.GetTunable("apex_trade_vol", TUNE_TRADE_VOL);
 }
 
 float TradeRatio()
@@ -112,7 +112,7 @@ float TradeRatio()
 // Trading badly enough to change posture: we die and they mostly don't.
 bool TradeBad()
 {
-	return TradeRatio() < ai.GetTunable("apex_trade_bad", 0.6f);
+	return TradeRatio() < ai.GetTunable("apex_trade_bad", TUNE_TRADE_BAD);
 }
 
 // NET combat burn as a fraction of income, all grounds -- the "army keeps
@@ -133,8 +133,8 @@ float LossPressureFrac()
 // starve the economy that has to pay for the rebuild.
 float LossArmyMult()
 {
-	float m = 1.f + LossPressureFrac() * ai.GetTunable("apex_loss_army", 2.f);
-	const float cap = ai.GetTunable("apex_loss_army_cap", 1.7f);
+	float m = 1.f + LossPressureFrac() * ai.GetTunable("apex_loss_army", TUNE_LOSS_ARMY);
+	const float cap = ai.GetTunable("apex_loss_army_cap", TUNE_LOSS_ARMY_CAP);
 	if (m > cap)
 		m = cap;
 	return m;

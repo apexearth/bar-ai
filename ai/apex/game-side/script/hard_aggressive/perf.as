@@ -20,7 +20,7 @@ bool On()
 {
 	if (!gInit) {
 		gInit = true;
-		gOn = ai.GetTunable("apex_perf", 1.f) > 0.5f;
+		gOn = ai.GetTunable("apex_perf", TUNE_PERF) > 0.5f;
 	}
 	return gOn;
 }
@@ -98,8 +98,8 @@ void TickSpeed()
 	// window walks it back down. 0 = fine; past 1 the deeper cuts unlock
 	// (towers anywhere, surplus builders); past 2 the deepest (T2 army stops
 	// when T3 runs). Recovery is measured, not assumed.
-	if (gSimSpeed < ai.GetTunable("apex_lag_speed", 0.98f)) {
-		gLagSev += ai.GetTunable("apex_lag_step", 0.34f);
+	if (gSimSpeed < ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED)) {
+		gLagSev += ai.GetTunable("apex_lag_step", TUNE_LAG_STEP);
 		if (gLagSev > 3.f)
 			gLagSev = 3.f;
 	} else if (gSimSpeed >= 0.995f) {
@@ -127,7 +127,7 @@ float SimSpeed()
 
 bool GameLagging()
 {
-	return gSimSpeed < ai.GetTunable("apex_lag_speed", 0.98f);
+	return gSimSpeed < ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED);
 }
 
 void Flush()

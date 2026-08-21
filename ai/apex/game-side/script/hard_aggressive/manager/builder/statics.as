@@ -15,7 +15,12 @@ const float PULSAR_PER_INCOME = 60.f;
 // paid for out of metal we are otherwise wasting.
 const int   PULSAR_FULL_BONUS = 5;
 // How many may be under construction simultaneously.
-const int   PULSAR_CONCURRENT = 2;
+// SERIAL BY DOCTRINE. apexearth 2026-08-20: "Do we want 1 T3 defense in
+// 1/3rd the time, or 3 T3 defense in 3/3rds that time..? :)" -- build power,
+// not metal, is the constraint, so one gun FIGHTING beats three frames
+// defending nothing. A full bank lifts this to 2, never more: money was
+// never what the second frame was waiting on.
+const int PULSAR_CONCURRENT = 1;
 int gPulsarsAsked = 0;
 
 // NO HARD CAP: count is bounded by economy (PulsarCap) and by the Brain's
@@ -25,7 +30,7 @@ int PulsarCap()
 	// "A lot more" (apexearth, third pulsar request today): one per 40 m/s,
 	// was one per 60 -- income-derived, not a flat number.
 	int cap = 1 + int(aiEconomyMgr.metal.income
-			/ ai.GetTunable("apex_pulsar_per_income", 40.f));
+			/ ai.GetTunable("apex_pulsar_per_income", TUNE_PULSAR_PER_INCOME));
 	if (aiEconomyMgr.isMetalFull)
 		cap += PULSAR_FULL_BONUS;
 	// One more gun per enemy Behemoth-class unit seen: the pulsar is its
@@ -33,7 +38,7 @@ int PulsarCap()
 	// to thicken the line.
 	cap += int((aiEnemyMgr.GetEnemyCost(RT::SUPER)
 			+ aiEnemyMgr.GetEnemyCost(RT::HEAVY))
-			/ ai.GetTunable("apex_counter_t3_norm", 20000.f));
+			/ ai.GetTunable("apex_counter_t3_norm", TUNE_COUNTER_T3_NORM));
 	return cap;
 }
 // TWO TERMS: a flat per-player floor (basic cover, regardless of economy) plus
@@ -50,7 +55,7 @@ int AATopUp(float enemyAir, float costM)
 {
 	if ((enemyAir <= 0.f) || (costM <= 1.f))
 		return 0;
-	const float k = ai.GetTunable("apex_aa_vs_air", AA_VS_AIR);
+	const float k = ai.GetTunable("apex_aa_vs_air", TUNE_AA_VS_AIR);
 	return int((enemyAir * k) / costM + 0.5f);
 }
 
@@ -155,7 +160,7 @@ int ShieldsAfforded(CCircuitDef@ dome)
 {
 	if ((dome is null) || (dome.costM <= 0.f))
 		return 0;
-	const float secs = ai.GetTunable("apex_shield_income_secs", SHIELD_INCOME_SECS);
+	const float secs = ai.GetTunable("apex_shield_income_secs", TUNE_SHIELD_INCOME_SECS);
 	return 1 + int(aiEconomyMgr.metal.income * secs / dome.costM);
 }
 
@@ -171,7 +176,7 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	if (ai.frame < gNextShield)
 		return null;
 	if (aiEconomyMgr.energy.income < SHIELD_REGEN_DRAW
-			* ai.GetTunable("apex_shield_draw_margin", SHIELD_DRAW_MARGIN))
+			* ai.GetTunable("apex_shield_draw_margin", TUNE_SHIELD_DRAW_MARGIN))
 		return null;
 	// Not before the first reactor: a dome's value is what stands under it,
 	// and pre-fusion nothing under it is worth the dome. Economy-staged, not
@@ -190,7 +195,7 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	// was the bottleneck (afforded ~17, ordered 1/minute).
 	if (gShieldsAsked - dome.count
 			>= 1 + int(aiEconomyMgr.metal.income
-				/ ai.GetTunable("apex_shield_flight_per", 250.f)))
+				/ ai.GetTunable("apex_shield_flight_per", TUNE_SHIELD_FLIGHT_PER)))
 		return null;
 	AIFloat3 spot;
 	if (!Military::BorderPos(spot, uint(dome.count)) && !Military::FrontLinePos(spot))
@@ -206,7 +211,7 @@ IUnitTask@ Shield(CCircuitUnit@ unit)
 	// The spacing shortens as income grows, same reasoning as the allowance.
 	gNextShield = ai.frame + SHIELD_PERIOD
 			/ (1 + int(aiEconomyMgr.metal.income
-				/ ai.GetTunable("apex_shield_flight_per", 250.f)));
+				/ ai.GetTunable("apex_shield_flight_per", TUNE_SHIELD_FLIGHT_PER)));
 	AiLog(Factory::T() + "apex: shield " + dome.GetName() + " standing=" + dome.count
 		+ "/" + ShieldsAfforded(dome)
 		+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
@@ -256,8 +261,8 @@ int JammersAfforded(float upkeep)
 {
 	if (upkeep <= 0.f)
 		return 0;
-	const float share = ai.GetTunable("apex_jammer_energy_share", JAMMER_ENERGY_SHARE);
-	return 1 + int(aiEconomyMgr.energy.income * share / upkeep);
+	const float share = ai.GetTunable("apex_jammer_energy_share", TUNE_JAMMER_ENERGY_SHARE);
+	return int(aiEconomyMgr.energy.income * share / upkeep);
 }
 
 // EYES OVER THE GROUND WE HOLD. CMilitaryManager::DefaultMakeSensors refuses
@@ -391,9 +396,6 @@ IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 		return null;
 	const float upkeep = isLong ? JAMMER_UPKEEP_LONG : JAMMER_UPKEEP_SHORT;
 	const float cover  = isLong ? JAMMER_COVER_LONG  : JAMMER_COVER_SHORT;
-	if (aiEconomyMgr.energy.income
-		< upkeep * ai.GetTunable("apex_jammer_upkeep_margin", JAMMER_UPKEEP_MARGIN))
-		return null;
 	if (int(jam.count) >= JammersAfforded(upkeep))
 		return null;
 	// Asked-minus-standing, the same idiom NukeSilo and Shield use: Enqueue does
@@ -415,7 +417,7 @@ IUnitTask@ BaseJammer(CCircuitUnit@ unit)
 	AIFloat3 anchor = Military::TerritoryCentre();
 	if (jam.count > 0) {
 		float bestGap = Builder::NearestJammerDist(anchor);
-		const int ring = int(ai.GetTunable("apex_jammer_ring", 12.f));
+		const int ring = int(ai.GetTunable("apex_jammer_ring", TUNE_JAMMER_RING));
 		for (int k = 0; k < ring; ++k) {
 			AIFloat3 cand;
 			if (!Military::BorderPos(cand, uint(k)))
@@ -515,6 +517,13 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	// 26.0. One fusion is 1000-1200 E/s, so this is "not before a fusion is paying".
 	if (aiEconomyMgr.energy.income < PULSAR_MIN_ENERGY)
 		return null;
+	// A REACTOR MUST STAND FIRST, whatever the income reads: an advsolar farm
+	// passes the income bar, and three T3 guns went up before any fusion --
+	// apexearth, watching: "3 t3 defense before we even had a fusion
+	// *facepalm*". The gun is 37,000-74,000 energy to fire; a farm that
+	// merely reaches the income bar is spent the moment it shoots.
+	if (!HaveReactor())
+		return null;
 	CCircuitDef@ gun = SideDef3(armanni, cordoom, legbastion);
 	if ((gun is null) || !gun.IsAvailable(ai.frame) || (gun.count >= PulsarCap()))
 		return null;
@@ -527,7 +536,7 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	// apexearth: "we're full on metal so we ought to be able to afford that."
 	int conc = PULSAR_CONCURRENT;
 	if (aiEconomyMgr.isMetalFull)
-		conc = int(ai.GetTunable("apex_pulsar_conc_full", 4.f));
+		conc = int(ai.GetTunable("apex_pulsar_conc_full", TUNE_PULSAR_CONC_FULL));
 	if (gPulsarsAsked - gun.count >= conc)
 		return null;
 	// THE LINE THE BRAIN DRAWS, not the site ring. BorderPos picks among OUR
@@ -549,8 +558,8 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	// that spacing by design; once a block reaches its size the rules below pick
 	// where the next block starts.
 	{
-		const int per = int(ai.GetTunable("apex_pulsar_block", 4.f));
-		const float blockR = ai.GetTunable("apex_pulsar_block_r", 320.f);
+		const int per = int(ai.GetTunable("apex_pulsar_block", TUNE_PULSAR_BLOCK));
+		const float blockR = ai.GetTunable("apex_pulsar_block_r", TUNE_PULSAR_BLOCK_R);
 		array<CCircuitUnit@>@ have = (gun.count > 0)
 				? ai.GetOwnUnitsOfDef(gun, gHomePos, 0.f) : null;
 		CCircuitUnit@ seed = null;
@@ -561,6 +570,18 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 				const AIFloat3 at = have[i].GetPos(ai.frame);
 				if (!OnMap(at))
 					continue;
+				// A REAR GUN DOES NOT SEED A BLOCK. The block rule runs first
+				// and was position-blind, so one badly-placed early gun bred
+				// a whole square of T3 defence in the back of the base --
+				// apexearth, watching: "we make T3 defenses BEHIND our
+				// factories which is stupid." A rearward gun is left alone;
+				// the next gun falls through to the nano-cluster/front-line
+				// siting, which is front-biased by construction.
+				if (Military::ForwardFraction(at)
+					< ai.GetTunable("apex_pulsar_block_fwd", TUNE_PULSAR_BLOCK_FWD))
+				{
+					continue;
+				}
 				int n = 0;
 				for (uint j = 0; j < have.length(); ++j) {
 					if ((have[j] !is null)
@@ -592,7 +613,7 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 		AIFloat3 nn;
 		if (NanoCluster(nn)
 			&& (Military::ForwardFraction(nn)
-				>= ai.GetTunable("apex_pulsar_nano_fwd", 0.15f)))
+				>= ai.GetTunable("apex_pulsar_nano_fwd", TUNE_PULSAR_NANO_FWD)))
 		{
 			const AIFloat3 s = ai.FindBuildSiteNear(gun, nn, 450.f);
 			if (OnMap(s) && (ThreatFor(unit, s) <= CON_THREAT_VETO)
@@ -799,6 +820,7 @@ int gAntiPeak = 0;
 // Same request shape as AntiNuke below, sited over the nano cluster.
 int gFlakAsked = 0;
 int gFlakPeak = 0;
+int gFlakPostAt = 0;
 int gNextFlak = 0;
 
 IUnitTask@ HeavyFlak(CCircuitUnit@ unit)
@@ -807,12 +829,44 @@ IUnitTask@ HeavyFlak(CCircuitUnit@ unit)
 		return null;
 	Military::ResolveHeavyAA();
 	CCircuitDef@ flak = Military::gFlak;
-	if ((flak is null) || !flak.IsAvailable(ai.frame)
-		|| !unit.circuitDef.CanBuild(flak))
+	if ((flak is null) || !flak.IsAvailable(ai.frame))
 		return null;
 	const int want = Military::HeavyAAWant();
 	if (want <= 0)
 		return null;
+	// Flak is T2-buildable only, and the adv cons rarely fall through to this
+	// rule -- the same capability starvation that kept fusions at zero (see
+	// EcoFusion). An incapable asker posts the task to the pool instead of
+	// dropping the want (seed 33: heavy want 6, standing 0, for 12 minutes).
+	if (!unit.circuitDef.CanBuild(flak)) {
+		const int standingNow = int(flak.count) + Military::LiveCount(Military::gHeavy);
+		// A posted task an adv con never took wedged this at asked=peak+2
+		// forever (measured: want=1 from 24m to game end, zero flak). Same
+		// resync the nano counter uses: if nothing has finished for a while,
+		// the outstanding orders are orphans -- forget them and re-post.
+		if ((gFlakAsked > gFlakPeak)
+			&& (ai.frame - gFlakPostAt > 3 * MINUTE))
+		{
+			gFlakAsked = gFlakPeak;
+		}
+		if ((standingNow < want) && (gFlakAsked - gFlakPeak < 2)) {
+			AIFloat3 poolAt;
+			if (!NanoCluster(poolAt))
+				poolAt = gHomePos;
+			if (OnMap(poolAt)) {
+				IUnitTask@ posted = Requests::Create(flak,
+						Task::BuildType::DEFENCE, Task::Priority::HIGH,
+						poolAt, SQUARE_SIZE * 32);
+				if (posted !is null) {
+					++gFlakAsked;
+					gFlakPostAt = ai.frame;
+					AiLog(Factory::T() + "apex: flak posted to the pool -- "
+						+ standingNow + "/" + want + " standing");
+				}
+			}
+		}
+		return null;
+	}
 	const int standing = int(flak.count) + Military::LiveCount(Military::gHeavy);
 	if (standing > gFlakPeak)
 		gFlakPeak = standing;
@@ -828,7 +882,7 @@ IUnitTask@ HeavyFlak(CCircuitUnit@ unit)
 	AIFloat3 near;
 	bool sited = false;
 	if (aiEconomyMgr.metal.income
-			>= ai.GetTunable("apex_front_flak_income", 120.f)) {
+			>= ai.GetTunable("apex_front_flak_income", TUNE_FRONT_FLAK_INCOME)) {
 		sited = Military::BorderPos(near, uint(flak.count))
 			|| Military::FrontLinePos(near);
 	}
@@ -869,7 +923,7 @@ IUnitTask@ FrontFortress(CCircuitUnit@ unit)
 	if (aiEconomyMgr.isEnergyStalling)
 		return null;
 	if (aiEconomyMgr.metal.income
-			< ai.GetTunable("apex_front_t3_income", 100.f))
+			< ai.GetTunable("apex_front_t3_income", TUNE_FRONT_T3_INCOME))
 		return null;
 	CCircuitDef@ big = SideDef3(armpulsar, corpulsar, legpulsar);
 	if ((big is null) || !big.IsAvailable(ai.frame)
@@ -879,7 +933,7 @@ IUnitTask@ FrontFortress(CCircuitUnit@ unit)
 	if (standing > gFortPeak)
 		gFortPeak = standing;
 	const int want = 1 + int(aiEconomyMgr.metal.income
-			/ ai.GetTunable("apex_front_t3_per", 80.f));
+			/ ai.GetTunable("apex_front_t3_per", TUNE_FRONT_T3_PER));
 	if ((standing >= want) || (gFortAsked - gFortPeak >= 1))
 		return null;
 	AIFloat3 spot;
@@ -911,11 +965,15 @@ IUnitTask@ AntiNuke(CCircuitUnit@ unit)
 		return null;
 	// The income bar is readiness, not permission: a SEEN enemy launcher
 	// overrides it -- being poor does not make the incoming nuke cheaper.
-	if ((aiEconomyMgr.metal.income < ai.GetTunable("apex_antinuke_income", 20.f))
+	if ((aiEconomyMgr.metal.income < Policy::AntinukeIncome())
 		&& (Brain::EnemyNukeSilos() == 0))
 	{
 		return null;
 	}
+	// The ASSUMED silo only exists once the enemy has the tech for one: no
+	// enemy T2 on the field means no nuke is possible, whatever our income.
+	if ((Brain::EnemyNukeSilos() == 0) && !Factory::gEnemyT2Seen)
+		return null;
 	CCircuitDef@ anti = SideDef3(armamd, corfmd, legabm);
 	if ((anti is null) || !anti.IsAvailable(ai.frame))
 		return null;
@@ -1007,7 +1065,7 @@ void NoteShieldLost(const CCircuitDef@ d)
 
 int ShieldsLostRecent()
 {
-	const int life = int(ai.GetTunable("apex_shield_loss_memory", 240.f)) * SECOND;
+	const int life = int(ai.GetTunable("apex_shield_loss_memory", TUNE_SHIELD_LOSS_MEMORY)) * SECOND;
 	for (int i = int(gShieldLostAt.length()) - 1; i >= 0; --i) {
 		if (ai.frame - gShieldLostAt[i] > life)
 			gShieldLostAt.removeAt(i);
@@ -1031,6 +1089,10 @@ IUnitTask@ ShieldCover(CCircuitUnit@ unit)
 	const int lrpc = EnemyLRPCs();
 	if (lrpc <= 0)
 		return null;
+	// A dome the economy cannot carry is not insurance -- below the bar the
+	// spread/dodge behaviors answer the gun (Policy::ShieldIncome).
+	if (aiEconomyMgr.metal.income < Policy::ShieldIncome())
+		return null;
 	const int standing = int(sh.count);
 	if (standing > gShieldPeak)
 		gShieldPeak = standing;
@@ -1038,7 +1100,7 @@ IUnitTask@ ShieldCover(CCircuitUnit@ unit)
 	// sizing overbuilt ~3x (apexearth 2026-08-19: "we are now making too many
 	// shields... probably three times stronger than it needs to be"). One
 	// dome, plus one per apex_shield_per additional guns-or-broken-shields.
-	const int per = int(ai.GetTunable("apex_shield_per", 3.f));
+	const int per = int(ai.GetTunable("apex_shield_per", TUNE_SHIELD_PER));
 	const int want = 1 + ((lrpc - 1) + ShieldsLostRecent()) / ((per > 0) ? per : 3);
 	if ((standing >= want) || (gShieldAsked - gShieldPeak >= 2))
 		return null;
@@ -1089,7 +1151,7 @@ IUnitTask@ PushAnswer(CCircuitUnit@ unit)
 	// unconditional floor (something NOW beats the right tower never -- the
 	// pre-T2 mute, measured).
 	const float afford = aiEconomyMgr.metal.income
-			* ai.GetTunable("apex_def_afford_secs", 20.f);
+			* ai.GetTunable("apex_def_afford_secs", TUNE_DEF_AFFORD_SECS);
 	array<CCircuitDef@> ladder = {
 		SideDef3(armanni, cordoom, legbastion),   // the pulsar line
 		PopupTowerDef(),
@@ -1121,7 +1183,7 @@ IUnitTask@ PushAnswer(CCircuitUnit@ unit)
 		return null;
 	dir *= (1.f / dist);
 	float reach = dist * 0.5f;
-	const float standMax = ai.GetTunable("apex_push_stand", 1100.f);
+	const float standMax = ai.GetTunable("apex_incoming_stand", TUNE_INCOMING_STAND);
 	if (reach > standMax)
 		reach = standMax;
 	AIFloat3 stand = gHomePos + dir * reach;
@@ -1132,7 +1194,7 @@ IUnitTask@ PushAnswer(CCircuitUnit@ unit)
 	// fraction of what is walking in (defences trade up, so a fraction is
 	// parity).
 	const float needM = Military::IncomingCost()
-			* ai.GetTunable("apex_push_answer_frac", 0.4f);
+			* ai.GetTunable("apex_incoming_answer_frac", TUNE_INCOMING_ANSWER_FRAC);
 	const float haveM = Military::FenceGunMetalNear(stand, 800.f)
 			+ DefenceOrderMetalNear(stand, 800.f);
 	if (haveM >= needM)
@@ -1307,6 +1369,35 @@ CCircuitDef@ AADefFor(CCircuitUnit@ unit)
 	if (LandIsPrecious() && (heavy !is null) && heavy.IsAvailable(ai.frame))
 		return heavy;
 	return SideDef3(armrl, corrl, legrl);
+}
+
+// THE RULE THAT CONSUMES THE SIZING BELOW. It had no caller at all -- the
+// ladder's own comments described "CheapAA" while nothing invoked it, and the
+// measured result was ZERO AA towers in a game the enemy won with 12k of
+// bombers (2026-08-20 seed 33: aa spend 0.00 of an 0.06 target all game,
+// three Samsons total). apexearth: "I do agree that we need some anti air
+// even if we haven't seen any air yet" -- the no-scout floor in AAWantedNow
+// is exactly that, and it only needed to be reachable again.
+IUnitTask@ CheapAA(CCircuitUnit@ unit)
+{
+	if ((ai.frame < gNextAA) || aiEconomyMgr.isEnergyStalling)
+		return null;
+	if (aiEconomyMgr.metal.income < DETER_MIN_INCOME)
+		return null;
+	CCircuitDef@ aa = AADefFor(unit);
+	if ((aa is null) || !aa.IsAvailable(ai.frame)
+		|| !unit.circuitDef.CanBuild(aa))
+	{
+		return null;
+	}
+	const float enemyAir = Military::AirThreatSeen();
+	const int want = AAWantedNow(unit, enemyAir);
+	// This def's own standing count, not TeamAA() metal: the mix's couple of
+	// Samsons satisfied a metal comparison and the TOWER floor never fired --
+	// the floor is about static cover that cannot be lured away.
+	if (int(aa.count) >= want)
+		return null;
+	return AAOrder(unit, aa, want, enemyAir);
 }
 
 // Team-wide want: Military::TeamAA() sums the side, so the floor is multiplied

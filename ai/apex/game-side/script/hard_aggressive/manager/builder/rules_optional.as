@@ -12,11 +12,39 @@ namespace Builder {
 // turrets to support them?"). Same shape as apex_mexup_monopoly_income in
 // Brain::Decide: below the bar upgrades outrank the big spends, above it
 // the economy affords both.
+// See the ChainNearbyMex call in OptionalWork. Same spot/threat primitives
+// the mex crew uses; fires only for a builder far from home with a genuinely
+// NEARBY open spot, so it cannot become a licence to wander.
+IUnitTask@ ChainNearbyMex(CCircuitUnit@ unit)
+{
+	if (!gHomeSet)
+		return null;
+	const AIFloat3 at = unit.GetPos(ai.frame);
+	if (!OnMap(at))
+		return null;
+	if (at.distance2D(gHomePos) < ai.GetTunable("apex_mex_chain_home", TUNE_MEX_CHAIN_HOME))
+		return null;   // near home the normal ladder is fine
+	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, at);
+	if (spot < 0)
+		return null;
+	const AIFloat3 where = aiEconomyMgr.GetMexSpotPos(spot);
+	if (!OnMap(where)
+		|| (where.distance2D(at) > ai.GetTunable("apex_mex_chain_r", TUNE_MEX_CHAIN_R)))
+	{
+		return null;   // "nearby" or nothing -- a far spot is a new decision
+	}
+	float heat = ThreatFor(unit, where);
+	heat = MexHeat(where, heat);
+	if (heat > CON_THREAT_VETO)
+		return null;
+	return aiEconomyMgr.EnqueueMexAt(unit, spot);
+}
+
 bool MexUpMonopoly()
 {
 	return MexUpgradesOutstanding()
 		&& (aiEconomyMgr.metal.income
-			< ai.GetTunable("apex_mexup_monopoly_income", 100.f));
+			< ai.GetTunable("apex_mexup_monopoly_income", TUNE_MEXUP_MONOPOLY_INCOME));
 }
 
 IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
@@ -74,9 +102,28 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 				if (firstFus !is null)
 					return firstFus;
 			}
+			// FINISH THE NEIGHBOURHOOD BEFORE WALKING HOME. apexearth
+			// 2026-08-20, watching: "a con walk out to build a mex. There
+			// will be 2 other mexes near the mex it just built. The con will
+			// then walk home after making only 1 mex. It is very
+			// inefficient." The mex crew already chains from its own
+			// position; this is the same move for ANY builder already
+			// deployed in the field -- the walk out is paid for, spend it.
+			{
+				IUnitTask@ chained = ChainNearbyMex(unit);
+				if (chained !is null)
+					return chained;
+			}
 			IUnitTask@ deter = HomeDeter(unit);
 			if (deter !is null)
 				return deter;
+			// The deterrence-floor AA the block comment above always
+			// described: self-gated (no-scout floor is AA_MIN/2, top-up only
+			// from observed air), throttled by AA_PERIOD. It had silently
+			// lost its call site -- see CheapAA's own comment.
+			IUnitTask@ cheapAA = CheapAA(unit);
+			if (cheapAA !is null)
+				return cheapAA;
 			// Beside HomeDeter, outside the phase gate, for the same reason:
 			// heavy flak answers OBSERVED enemy air (HeavyAAWant is 0 with
 			// none seen) and cannot fire early by construction.
@@ -265,9 +312,9 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 {
 	if (Factory::gHaveT2 || !gHomeSet)
 		return null;
-	if (ai.GetTunable("apex_t2_rear", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_t2_rear", TUNE_T2_REAR) <= 0.f)
 		return null;
-	if (Factory::SteadyIncome() < ai.GetTunable("apex_t2_income", 30.f))
+	if (Factory::SteadyIncome() < ai.GetTunable("apex_t2_income", TUNE_T2_INCOME))
 		return null;
 	// NextT2Counterpart, not AdvCounterpart: the latter only ever answers for
 	// the single remembered OPENING factory, which silently misses a T2 built
@@ -297,7 +344,7 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 	if (ai.GetDefBuildProgress(adv) >= 0.f)
 		return null;
 
-	const AIFloat3 rear = RearOfBase(ai.GetTunable("apex_t2_rear_dist", T2_REAR_DIST));
+	const AIFloat3 rear = RearOfBase(ai.GetTunable("apex_t2_rear_dist", TUNE_T2_REAR_DIST));
 	if (!OnMap(rear))
 		return null;
 
@@ -386,7 +433,7 @@ IUnitTask@ WantedAirPlant(CCircuitUnit@ unit)
 	if (((Factory::userData[plant.id].attr & Factory::Attr::T2) == 0)
 		&& !Military::EnemyAfloat()
 		&& (aiEconomyMgr.metal.income
-			< ai.GetTunable("apex_air_mandatory_income", 100.f)))
+			< ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME)))
 	{
 		return null;
 	}
@@ -418,7 +465,7 @@ int ReactorSpot(CCircuitUnit@ unit, CCircuitDef@ gen, AIFloat3& out spot)
 {
 	if (!gHomeSet || (gen is null))
 		return 0;
-	if (ai.GetTunable("apex_reactor_rear", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_reactor_rear", TUNE_REACTOR_REAR) <= 0.f)
 		return 0;
 	AIFloat3 site;
 	if (Base::AxisIsRearward() && Base::Spot(unit, gen, Base::HEAVY, site)
@@ -426,7 +473,7 @@ int ReactorSpot(CCircuitUnit@ unit, CCircuitDef@ gen, AIFloat3& out spot)
 		spot = site;
 		return 1;
 	}
-	const AIFloat3 rear = RearOfBase(ai.GetTunable("apex_reactor_rear_dist", T2_REAR_DIST));
+	const AIFloat3 rear = RearOfBase(ai.GetTunable("apex_reactor_rear_dist", TUNE_REACTOR_REAR_DIST));
 	if (!OnMap(rear))
 		return 0;
 	site = ai.FindBuildSiteNear(gen, rear, T2_REAR_SEARCH);

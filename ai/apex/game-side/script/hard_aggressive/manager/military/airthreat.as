@@ -79,13 +79,25 @@ float AirScale(float share)
 // UpdateAirThreat logs -- the two must never disagree.
 int HeavyAAWant()
 {
+	// THE LATE-GAME FLOOR DOES NOT WAIT FOR A SIGHTING. apexearth 2026-08-20:
+	// "It is not unusual for air to show up out of nowhere when it was never
+	// there before. So when you are in the later part of the game you
+	// absolutely need to have flak spread out around your base." Later part
+	// of the game means economy, never clock: one flak above the income bar,
+	// another per flak-per of income beyond it.
+	int floorN = 0;
+	const float inc = aiEconomyMgr.metal.income;
+	const float bar = ai.GetTunable("apex_flak_floor_income", TUNE_FLAK_FLOOR_INCOME);
+	if (inc >= bar)
+		floorN = 1 + int((inc - bar) / ai.GetTunable("apex_flak_per", TUNE_FLAK_PER));
 	const bool worth = (gAirAvg >= AA_IGNORE) || (gAirRaw >= AA_IGNORE);
 	if (!worth)
-		return 0;
+		return floorN;
 	const float total = gAirAvg + gGroundAvg;
 	const float share = (total > 0.f) ? gAirAvg / total : 0.f;
 	const float heavyBasis = (gAirRaw > gAirAvg) ? gAirRaw : gAirAvg;
-	return int(heavyBasis * AirScale(share) / AA_HEAVY_PER);
+	const int seen = int(heavyBasis * AirScale(share) / AA_HEAVY_PER);
+	return (seen > floorN) ? seen : floorN;
 }
 
 void UpdateAirThreat()

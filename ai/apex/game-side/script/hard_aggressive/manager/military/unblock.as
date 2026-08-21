@@ -63,7 +63,7 @@ array<Id> gUnblockAsked;
 
 bool UnblockOn()
 {
-	return ai.GetTunable("apex_unblock", 1.f) > 0.f;
+	return ai.GetTunable("apex_unblock", TUNE_UNBLOCK) > 0.f;
 }
 
 // Ground units only: a flyer is never walled in by buildings.
@@ -252,7 +252,7 @@ array<int> gStuckAskedFrame;
 
 bool StuckAskedFor(Id id)
 {
-	const int ttl = int(ai.GetTunable("apex_stuck_retry", 120.f)) * SECOND;
+	const int ttl = int(ai.GetTunable("apex_stuck_retry", TUNE_STUCK_RETRY)) * SECOND;
 	for (uint i = 0; i < gStuckAsked.length(); ) {
 		if (ai.frame - gStuckAskedFrame[i] > ttl) {
 			gStuckAsked.removeAt(i);

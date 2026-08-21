@@ -627,7 +627,11 @@ local function dumpPositions()
 			for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
 				local udid = Spring.GetUnitDefID(uid)
 				local ud = udid and UnitDefs[udid]
-				if ud and ud.isBuilding and not ud.canMove then
+				-- isBuilding alone excluded nano turrets (immobile UNITS, not
+			-- buildings, in Spring def terms) -- and the nanos-per-factory
+			-- audit needs them (apexearth: "Enemy T2 lab had 12 nanos
+			-- supporting it. I don't think we had any.")
+			if ud and (ud.isBuilding or (ud.speed or 0) == 0) and not ud.canMove then
 					local x, _, z = Spring.GetUnitPosition(uid)
 					if x then
 						out[#out + 1] = string.format("%s:%d:%d:%d:%d",

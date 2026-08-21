@@ -36,7 +36,7 @@ namespace Builder {
 // gets a turn.
 IUnitTask@ MexOffer(IUnitTask@ task, CCircuitUnit@ unit)
 {
-	if (ai.GetTunable("apex_take_mex_offer", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_take_mex_offer", TUNE_TAKE_MEX_OFFER) <= 0.f)
 		return null;
 	if ((task is null) || (task.GetType() != Task::Type::BUILDER))
 		return null;
@@ -53,7 +53,7 @@ IUnitTask@ FrontDefenceOffer(IUnitTask@ task)
 	// Default OFF: the refusal this addresses is not the binding one -- see
 	// IBuilderTask::FindBuildSite. Kept off until the site search allows a
 	// threatened cell at all; on its own it only shuffles which offer is declined.
-	if (ai.GetTunable("apex_take_front_offer", 0.f) <= 0.f)
+	if (ai.GetTunable("apex_take_front_offer", TUNE_TAKE_FRONT_OFFER) <= 0.f)
 		return null;
 	if ((task is null) || (task.GetType() != Task::Type::BUILDER))
 		return null;

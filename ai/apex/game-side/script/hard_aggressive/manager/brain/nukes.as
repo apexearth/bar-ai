@@ -13,8 +13,6 @@ namespace Brain {
 
 array<int> gSiloIds;
 int  gNukeNextEval = 0;
-int  gVolleyUntil = 0;          // frames: standing orders are left alone
-AIFloat3 gVolleyAt;
 int  gNukeNextLog = 0;
 
 // The blast is knowledge: 30s after a volley lands, anything the enemy model
@@ -23,9 +21,6 @@ int  gNukeNextLog = 0;
 // apexearth rejected a fired-here ledger for exactly that reason ("should
 // fix the memory to be updated"). The LOS purge (HostileInLOS) keeps doing
 // the same for scouted ground.
-AIFloat3 gForgetAt;
-int gForgetFrame = -1;
-float gForgetR = 960.f;
 
 // EVERY REPEAT STRIKE HALVES THE GROUND'S WORTH. apexearth, after an
 // (amazing) volley turned into ~100 missiles at one spot: "each send should
@@ -64,11 +59,30 @@ void NoteStrikeOn(const AIFloat3 &in p)
 // The volley's aim points: a line through the target, perpendicular to our
 // approach, stepped at apex_nuke_spread so the blasts tile the base instead
 // of stacking in one crater. Silos rotate across it between launches.
-array<AIFloat3> gVolleySpots;
-uint gVolleyTick = 0;
-int gVolleyStock0 = 0;   // pooled stock when the volley launched
-int gVolleyNeed = 0;     // missiles this volley is sized to spend
-bool gVolleyDef = false; // defensive strike: the target is an army, and it moves
+// SEVERAL LAUNCHES AT ONCE. apexearth 2026-08-21: "Make sure the AI can
+// logistic several separate nuke launches simultaneously. If it can only
+// ever think 'I'll nuke here' and then that's the only place that gets it
+// -- that is bad." Each volley OWNS the silos assigned to it: targets are
+// ranked and funded in priority order, a volley spends only its own size,
+// tracks and aborts on its own, and a silo that frees up mid-window can
+// immediately fund the next target instead of idling behind one thought.
+class Volley {
+	array<AIFloat3> spots;
+	array<int> siloIds;   // exclusive: a silo serves one volley at a time
+	AIFloat3 at;
+	int until = 0;
+	bool def = false;
+	int need = 0;
+	int stock0 = 0;       // summed stockpile of the assigned silos at launch
+	uint tick = 0;
+}
+array<Volley@> gVolleys;
+
+// Post-impact forgets, one entry per launched volley (stragglers seen
+// mid-flight get forgotten 30s after launch, volley finished or not).
+array<AIFloat3> gForgetAtQ;
+array<int> gForgetFrameQ;
+array<float> gForgetRQ;
 
 bool IsSiloDef(const CCircuitDef@ d)
 {
@@ -88,7 +102,7 @@ void NoteSiloFinished(CCircuitUnit@ unit)
 // coverage radius in this game tree, close enough for "is this spot shielded".
 int AntisCovering(const AIFloat3 &in pos)
 {
-	const float r = ai.GetTunable("apex_anti_cover", 2500.f);
+	const float r = ai.GetTunable("apex_anti_cover", TUNE_ANTI_COVER);
 	int n = 0;
 	CCircuitDef@ a = ai.GetCircuitDef("armamd");
 	CCircuitDef@ c = ai.GetCircuitDef("corfmd");
@@ -126,9 +140,19 @@ int EnemyNukeSilos()
 	return n;
 }
 
+bool VolleyServes(const AIFloat3 &in p)
+{
+	const float r = ai.GetTunable("apex_nuke_resight_r", TUNE_NUKE_RESIGHT_R);
+	for (uint v = 0; v < gVolleys.length(); ++v) {
+		if (gVolleys[v].at.distance2D(p) <= r)
+			return true;
+	}
+	return false;
+}
+
 void UpdateNukes()
 {
-	if (ai.GetTunable("apex_brain_nuke", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_brain_nuke", TUNE_BRAIN_NUKE) <= 0.f)
 		return;
 	if ((gSiloIds.length() == 0) || (ai.frame < gNukeNextEval))
 		return;
@@ -150,82 +174,121 @@ void UpdateNukes()
 	if (silos.length() == 0)
 		return;
 
-	// The scheduled post-impact forget, volley in progress or not.
-	if ((gForgetFrame >= 0) && (ai.frame >= gForgetFrame)) {
-		gForgetFrame = -1;
-		const int n = ai.ForgetEnemiesNear(gForgetAt, gForgetR);
+	// The scheduled post-impact forgets, volleys in progress or not.
+	for (uint i = 0; i < gForgetFrameQ.length(); ) {
+		if (ai.frame < gForgetFrameQ[i]) {
+			++i;
+			continue;
+		}
+		const int n = ai.ForgetEnemiesNear(gForgetAtQ[i], gForgetRQ[i]);
 		AiLog(Factory::T() + "apex: nuke ground confirmed -- forgot "
 			+ n + " remembered enemies at the impact");
+		gForgetAtQ.removeAt(i);
+		gForgetFrameQ.removeAt(i);
+		gForgetRQ.removeAt(i);
 	}
 
-	// A volley in progress WALKS its aim across the spread line each tick: a
-	// silo's standing order sends every missile to one point, so scatter has
+	// Each volley in progress WALKS its aim across its spread line each tick:
+	// a silo's standing order sends every missile to one point, so scatter has
 	// to come from re-aiming between launches -- apexearth: "if we're
 	// launching 5 give them a little bit of area or line/curve so they don't
 	// land all in exactly the same spot."
-	if ((ai.frame < gVolleyUntil) && (stock > 0)) {
-		// A DEFENSIVE VOLLEY TRACKS ITS ARMY. The aim points were laid where the
-		// group stood at launch; an attacking army keeps walking, so each tick
-		// the whole spread shifts to the group's current position. If our own
-		// army has since closed to that ground, the strike is called off --
-		// missiles already flying are spent, but no more follow into our line.
-		if (gVolleyDef) {
-			if (ai.GetNetInflAt(gVolleyAt) >= ai.GetTunable("apex_nuke_ally_max", 0.f)) {
-				for (uint i = 0; i < silos.length(); ++i)
-					silos[i].CmdStop();
-				gVolleyUntil = ai.frame;
+	for (uint v = 0; v < gVolleys.length(); ) {
+		Volley@ vol = gVolleys[v];
+		// Resolve this volley's silos; drop the dead.
+		array<CCircuitUnit@> mine;
+		int vStock = 0;
+		for (uint i = 0; i < vol.siloIds.length(); ) {
+			CCircuitUnit@ u = ai.GetTeamUnit(Id(vol.siloIds[i]));
+			if (u is null) {
+				vol.siloIds.removeAt(i);
+				continue;
+			}
+			mine.insertLast(u);
+			vStock += u.GetStockpile();
+			++i;
+		}
+		bool done = (ai.frame >= vol.until) || (mine.length() == 0);
+		// A DEFENSIVE VOLLEY TRACKS ITS ARMY, and is called off if our own
+		// army has since closed to the ground -- missiles already flying are
+		// spent, but no more follow into our line.
+		if (!done && vol.def) {
+			if (ai.GetNetInflAt(vol.at) >= ai.GetTunable("apex_nuke_ally_max", TUNE_NUKE_ALLY_MAX)) {
+				for (uint i = 0; i < mine.length(); ++i)
+					mine[i].CmdStop();
 				AiLog(Factory::T() + "apex: defensive volley aborted -- our army holds the target ground");
-				return;
-			}
-			const int nG = aiEnemyMgr.GetEnemyGroupCount();
-			float bestD = 1500.f * 1500.f;
-			AIFloat3 now = gVolleyAt;
-			bool found = false;
-			for (int i = 0; i < nG; ++i) {
-				const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(i);
-				if (!OnMap(gp))
-					continue;
-				const float d = gp.SqDistance2D(gVolleyAt);
-				if (d < bestD) {
-					bestD = d;
-					now = gp;
-					found = true;
+				done = true;
+			} else {
+				const int nG = aiEnemyMgr.GetEnemyGroupCount();
+				float bestD = 1500.f * 1500.f;
+				AIFloat3 now = vol.at;
+				bool found = false;
+				for (int i = 0; i < nG; ++i) {
+					const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(i);
+					if (!OnMap(gp))
+						continue;
+					const float d = gp.SqDistance2D(vol.at);
+					if (d < bestD) {
+						bestD = d;
+						now = gp;
+						found = true;
+					}
+				}
+				if (found && (now.SqDistance2D(vol.at) > 100.f * 100.f)) {
+					const AIFloat3 delta = now - vol.at;
+					for (uint i = 0; i < vol.spots.length(); ++i) {
+						AIFloat3 moved = vol.spots[i] + delta;
+						if (OnMap(moved))
+							vol.spots[i] = moved;
+					}
+					vol.at = now;
 				}
 			}
-			if (found && (now.SqDistance2D(gVolleyAt) > 100.f * 100.f)) {
-				const AIFloat3 delta = now - gVolleyAt;
-				for (uint i = 0; i < gVolleySpots.length(); ++i) {
-					AIFloat3 moved = gVolleySpots[i] + delta;
-					if (OnMap(moved))
-						gVolleySpots[i] = moved;
-				}
-				gVolleyAt = now;
+		}
+		// THE VOLLEY SPENDS ITS SIZE, NOT ITS SILOS' WHOLE STOCK: fired =
+		// this volley's own stock delta; at the sized count its silos stand
+		// down and go back in the pool for the next target.
+		if (!done && (vol.stock0 - vStock >= vol.need)) {
+			for (uint i = 0; i < mine.length(); ++i)
+				mine[i].CmdStop();
+			AiLog(Factory::T() + "apex: volley complete -- " + (vol.stock0 - vStock)
+				+ " fired, " + vStock + " left in its silos");
+			done = true;
+		}
+		if (done) {
+			gVolleys.removeAt(v);
+			continue;
+		}
+		// Defensive volleys re-issue even a single spot: the tracking shift
+		// only lands if the standing order is refreshed.
+		if ((vol.spots.length() > 1) || (vol.def && vol.spots.length() > 0)) {
+			for (uint i = 0; i < mine.length(); ++i) {
+				const uint sp = (i + vol.tick) % vol.spots.length();
+				mine[i].CmdAttackGround(vol.spots[sp]);
 			}
+			++vol.tick;
 		}
-		// THE VOLLEY SPENDS ITS SIZE, NOT THE WHOLE POOL: a 20-deep stockpile
-		// against a 1-missile target drained entirely into one window
-		// (apexearth: "we sent like 20 nukes there"). Fired = stock delta;
-		// at the sized count every silo stands down and the rest keeps
-		// saving for the next target.
-		if (gVolleyStock0 - stock >= gVolleyNeed) {
-			for (uint i = 0; i < silos.length(); ++i)
-				silos[i].CmdStop();
-			gVolleyUntil = ai.frame;
-			AiLog(Factory::T() + "apex: volley complete -- " + (gVolleyStock0 - stock)
-				+ " fired, " + stock + " saved");
-			return;
-		}
-		// Defensive volleys re-issue even a single spot: the shift above only
-		// lands if the standing order is refreshed.
-		if ((gVolleySpots.length() > 1) || (gVolleyDef && gVolleySpots.length() > 0)) {
-			for (uint i = 0; i < silos.length(); ++i) {
-				const uint s = (i + gVolleyTick) % gVolleySpots.length();
-				silos[i].CmdAttackGround(gVolleySpots[s]);
-			}
-			++gVolleyTick;
-		}
-		return;
+		++v;
 	}
+
+	// Silos not serving a volley are free to fund the next target.
+	array<CCircuitUnit@> freeSilos;
+	int freeStock = 0;
+	for (uint i = 0; i < silos.length(); ++i) {
+		bool busy = false;
+		for (uint v = 0; v < gVolleys.length() && !busy; ++v) {
+			if (gVolleys[v].siloIds.find(int(silos[i].id)) >= 0)
+				busy = true;
+		}
+		if (!busy) {
+			freeSilos.insertLast(silos[i]);
+			freeStock += silos[i].GetStockpile();
+		}
+	}
+	if (freeSilos.length() == 0)
+		return;
+	silos = freeSilos;
+	stock = freeStock;
 
 	// Pick the target: richest enemy cluster per antinuke covering it. Two
 	// classes of target, one ranking:
@@ -247,18 +310,20 @@ void UpdateNukes()
 	// 10k floor (apexearth: "filter the metal to target areas of 10k metal
 	// or more if possible") -- with no qualifying target the missiles KEEP
 	// SAVING, which is the point; the stockpile only grows.
-	const float minValue = ai.GetTunable("apex_nuke_min_value", 10000.f);
+	const float minValue = ai.GetTunable("apex_nuke_min_value", TUNE_NUKE_MIN_VALUE);
 	// A defensive strike pays once the army is worth several missiles.
-	const float missileM = ai.GetTunable("apex_nuke_missile_cost", 1500.f);
-	const float defMin = missileM * ai.GetTunable("apex_nuke_payoff", 3.f);
-	const float allyMax = ai.GetTunable("apex_nuke_ally_max", 0.f);
+	const float missileM = ai.GetTunable("apex_nuke_missile_cost", TUNE_NUKE_MISSILE_COST);
+	const float defMin = missileM * ai.GetTunable("apex_nuke_payoff", TUNE_NUKE_PAYOFF);
+	const float allyMax = ai.GetTunable("apex_nuke_ally_max", TUNE_NUKE_ALLY_MAX);
 	for (int i = 0; i < nGroups; ++i) {
 		const AIFloat3 p = aiEnemyMgr.GetEnemyGroupPos(i);
 		if (!OnMap(p))
 			continue;
+		if (VolleyServes(p))
+			continue;   // a volley already owns this ground
 		const float fwd = Military::ForwardFraction(p);
 		const bool defensive = (fwd < 0.35f);
-		if (defensive && (fwd < ai.GetTunable("apex_nuke_def_minfwd", 0.05f)))
+		if (defensive && (fwd < ai.GetTunable("apex_nuke_def_minfwd", TUNE_NUKE_DEF_MINFWD)))
 			continue;
 		const float cost = aiEnemyMgr.GetEnemyGroupCost(i);
 		if (cost < (defensive ? defMin : minValue))
@@ -268,8 +333,16 @@ void UpdateNukes()
 		// every army attacking us -- exactly the case worth nuking. The net
 		// crossing (ally minus enemy, the same question BaseContested asks) says
 		// the enemy holds it: our units are not standing there, theirs are.
-		if (defensive && (ai.GetNetInflAt(p) >= allyMax))
+		// ...except an army big enough to end the game: apexearth 2026-08-21,
+		// watching catapults close on the base while six warheads hit mex
+		// fields: "We nuke the other side of the map instead of the army that
+		// is about to kill us." Past this worth, losing some of our own units
+		// to the blast beats losing the base.
+		if (defensive && (ai.GetNetInflAt(p) >= allyMax)
+			&& (cost < ai.GetTunable("apex_nuke_emergency", TUNE_NUKE_EMERGENCY)))
+		{
 			continue;
+		}
 		// UNSEEN IS NOT ZERO. AntisCovering counts antinukes we have SIGHTED, and
 		// their base is the ground we scout least, so a shielded base read as bare
 		// and got a single missile. Past apex_nuke_assume_from minutes a base is
@@ -284,22 +357,22 @@ void UpdateNukes()
 		// Field targets keep the sighted count: an army in the open is usually
 		// outside any interceptor's radius.
 		int antis = AntisCovering(p);
-		const int assumeFrom = int(ai.GetTunable("apex_nuke_assume_from", 30.f)
+		const int assumeFrom = int(ai.GetTunable("apex_nuke_assume_from", TUNE_NUKE_ASSUME_FROM)
 				* 60.f) * SECOND;
 		if (!defensive && (ai.frame >= assumeFrom)) {
-			const int assume = int(ai.GetTunable("apex_nuke_assume_antis", 1.f));
+			const int assume = int(ai.GetTunable("apex_nuke_assume_antis", TUNE_NUKE_ASSUME_ANTIS));
 			if (antis < assume)
 				antis = assume;
 		}
 		float score = cost / float(1 + antis);
 		if (defensive) {
-			score *= ai.GetTunable("apex_nuke_def_bias", 2.f);
+			score *= ai.GetTunable("apex_nuke_def_bias", TUNE_NUKE_DEF_BIAS);
 		} else {
 			// The repeat-strike dampener: halved per prior volley on this
 			// ground. Base ground only -- each attacking wave through the same
 			// lane is a new army, and the intel-spend already stops re-fires
 			// until the ground is re-sighted.
-			const float decay = ai.GetTunable("apex_nuke_repeat_decay", 0.5f);
+			const float decay = ai.GetTunable("apex_nuke_repeat_decay", TUNE_NUKE_REPEAT_DECAY);
 			int hits = StrikesOn(p);
 			if (hits > 6)
 				hits = 6;
@@ -314,6 +387,44 @@ void UpdateNukes()
 			bestDef = defensive;
 		}
 	}
+	// THE MIRRORED BASE, always a candidate. Group targeting is LOS-slaved
+	// (hostileDatas keeps only units currently in LOS), so the enemy MAIN BASE
+	// -- the ground we scout least -- can never win the ranking, and every
+	// warhead chases whatever mex field our raiders happen to be looking at.
+	// Measured live 2026-08-21: 6+ nukes at 14k field clusters, none at a
+	// main base with no antinuke. In a boxed game the enemy production base
+	// sits at our own start mirrored across the map; it enters the ranking at
+	// a standing value and the same assume/decay rules as any base ground.
+	{
+		AIFloat3 mirror(AiTerrainWidth() - Builder::gHomePos.x, 0.f,
+				AiTerrainHeight() - Builder::gHomePos.z);
+		if (OnMap(mirror) && !VolleyServes(mirror)) {
+			const float cost = ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE);
+			int antis = AntisCovering(mirror);
+			const int assumeFrom2 = int(ai.GetTunable("apex_nuke_assume_from", TUNE_NUKE_ASSUME_FROM)
+					* 60.f) * SECOND;
+			if (ai.frame >= assumeFrom2) {
+				const int assume = int(ai.GetTunable("apex_nuke_assume_antis", TUNE_NUKE_ASSUME_ANTIS));
+				if (antis < assume)
+					antis = assume;
+			}
+			float score = cost / float(1 + antis);
+			const float decay = ai.GetTunable("apex_nuke_repeat_decay", TUNE_NUKE_REPEAT_DECAY);
+			int hits = StrikesOn(mirror);
+			if (hits > 6)
+				hits = 6;
+			for (int h = 0; h < hits; ++h)
+				score *= decay;
+			if (score > bestScore) {
+				bestScore = score;
+				bestPos = mirror;
+				bestAntis = antis;
+				bestCost = cost;
+				bestDef = false;
+			}
+		}
+	}
+
 	if (bestScore <= 0.f) {
 		if (ai.frame >= gNukeNextLog) {
 			gNukeNextLog = ai.frame + 60 * SECOND;
@@ -330,9 +441,15 @@ void UpdateNukes()
 	// covers a clump, and each further missile pays only if there is another
 	// apex_nuke_value_per of army spread beyond it -- "an optimum # of nukes",
 	// derived from value per missile rather than a flat count.
-	int needed = 1 + bestAntis * int(ai.GetTunable("apex_nuke_per_anti", 8.f));
+	// Sized against SIGHTED interceptors only. The assumed anti keeps shaping
+	// the RANKING above, but a salvo bar of 1+8 against an anti nobody has
+	// ever seen held 7 missiles in their silos for 17 minutes while catapults
+	// closed (his game, 2026-08-21). If an unseen anti eats part of a lean
+	// volley, the re-sight rules price the ground correctly next time.
+	int needed = 1 + AntisCovering(bestPos)
+			* int(ai.GetTunable("apex_nuke_per_anti", TUNE_NUKE_PER_ANTI));
 	if (bestDef) {
-		int extra = int(bestCost / ai.GetTunable("apex_nuke_value_per", 12000.f));
+		int extra = int(bestCost / ai.GetTunable("apex_nuke_value_per", TUNE_NUKE_VALUE_PER));
 		if (extra > 3)
 			extra = 3;
 		needed += extra;
@@ -347,41 +464,45 @@ void UpdateNukes()
 		return;
 	}
 
-	// THE VOLLEY: every silo, one location, until it is gone. A standing
-	// attack-ground order drains the whole stockpile as fast as launches
-	// reload; the 90s window then lets the next evaluation retarget.
-	// Aim points: center first (the scored cluster), then steps outward along
-	// the line perpendicular to silo->target, sized to how many missiles are
-	// flying. Every point is clamped on-map.
-	gVolleySpots.resize(0);
-	gVolleyTick = 0;
-	gVolleySpots.insertLast(bestPos);
+	// THE VOLLEY: a subset of the free silos, one location, sized to the
+	// target. Silos join until their pooled stockpile covers the need; the
+	// rest stay free, so a second target can be funded on the next tick --
+	// several separate launches in flight at once.
+	Volley vol;
+	vol.at = bestPos;
+	vol.def = bestDef;
+	vol.need = needed;
+	vol.until = ai.frame + (bestDef
+		? int(ai.GetTunable("apex_nuke_def_window", TUNE_NUKE_DEF_WINDOW)) * SECOND
+		: 90 * SECOND);
+	int assigned = 0;
+	for (uint i = 0; (i < silos.length()) && (assigned < needed); ++i) {
+		vol.siloIds.insertLast(int(silos[i].id));
+		assigned += silos[i].GetStockpile();
+	}
+	vol.stock0 = assigned;
+	vol.spots.insertLast(bestPos);
 	{
 		AIFloat3 dir = bestPos - silos[0].GetPos(ai.frame);
 		if (dir.SqLength2D() > 1.f) {
 			dir.SafeNormalize2D();
 			const AIFloat3 perp(-dir.z, 0.f, dir.x);
-			const float step = ai.GetTunable("apex_nuke_spread", 450.f);
-			const int arms = (stock >= 5) ? 2 : 1;
+			const float step = ai.GetTunable("apex_nuke_spread", TUNE_NUKE_SPREAD);
+			const int arms = (assigned >= 5) ? 2 : 1;
 			for (int a = 1; a <= arms; ++a) {
 				AIFloat3 p1 = bestPos + perp * (step * float(a));
 				AIFloat3 p2 = bestPos - perp * (step * float(a));
-				if (OnMap(p1)) gVolleySpots.insertLast(p1);
-				if (OnMap(p2)) gVolleySpots.insertLast(p2);
+				if (OnMap(p1)) vol.spots.insertLast(p1);
+				if (OnMap(p2)) vol.spots.insertLast(p2);
 			}
 		}
 	}
-	for (uint i = 0; i < silos.length(); ++i)
-		silos[i].CmdAttackGround(gVolleySpots[i % gVolleySpots.length()]);
-	gVolleyAt = bestPos;
-	// A defensive window is short: the army either dies to the volley or walks
-	// out of the picture, and the next evaluation should be free to re-decide.
-	gVolleyUntil = ai.frame + (bestDef
-		? int(ai.GetTunable("apex_nuke_def_window", 25.f)) * SECOND
-		: 90 * SECOND);
-	gVolleyStock0 = stock;
-	gVolleyNeed = needed;
-	gVolleyDef = bestDef;
+	for (uint i = 0; i < vol.siloIds.length(); ++i) {
+		CCircuitUnit@ u = ai.GetTeamUnit(Id(vol.siloIds[i]));
+		if (u !is null)
+			u.CmdAttackGround(vol.spots[i % vol.spots.length()]);
+	}
+	gVolleys.insertLast(vol);
 	// The permanent repeat dampener is for ground that gets rebuilt; each
 	// attacking wave through the same lane is a new army and must stay
 	// targetable, so defensive strikes leave no mark on it.
@@ -396,16 +517,18 @@ void UpdateNukes()
 	// enemies there again." Lag-proof by construction: no timer, only
 	// sighting revives a target.
 	const int spent = ai.ForgetEnemiesNear(bestPos,
-			ai.GetTunable("apex_nuke_resight_r", 1600.f));
+			ai.GetTunable("apex_nuke_resight_r", TUNE_NUKE_RESIGHT_R));
 	AiLog(Factory::T() + "apex: nuke intel spent -- " + spent
 		+ " remembered enemies need re-sighting before this ground qualifies again");
-	gForgetAt = bestPos;
-	gForgetFrame = ai.frame + 30 * SECOND;   // stragglers seen mid-flight
+	gForgetAtQ.insertLast(bestPos);
+	gForgetFrameQ.insertLast(ai.frame + 30 * SECOND);   // stragglers seen mid-flight
 	// The forget covers the whole spread line, not just the center blast.
-	gForgetR = 960.f + ai.GetTunable("apex_nuke_spread", 450.f)
-			* float(gVolleySpots.length() / 2);
-	AiLog(Factory::T() + "apex: NUKE VOLLEY " + stock + " missiles ("
-		+ needed + " needed) at " + int(bestPos.x) + "," + int(bestPos.z)
+	gForgetRQ.insertLast(960.f + ai.GetTunable("apex_nuke_spread", TUNE_NUKE_SPREAD)
+			* float(vol.spots.length() / 2));
+	AiLog(Factory::T() + "apex: NUKE VOLLEY " + assigned + " missiles in "
+		+ vol.siloIds.length() + " silo(s) (" + needed + " needed, "
+		+ gVolleys.length() + " volleys live) at "
+		+ int(bestPos.x) + "," + int(bestPos.z)
 		+ " worth " + formatFloat(bestCost, "", 0, 0)
 		+ " antis=" + bestAntis + (bestDef ? " DEFENSIVE" : ""));
 }

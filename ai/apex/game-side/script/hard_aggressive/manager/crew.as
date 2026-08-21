@@ -175,7 +175,7 @@ void Retire(CCircuitUnit@ unit, int slot)
 	if (Builder::gHomeSet && Front::FrontNear(at, line)
 			&& (at.distance2D(line)
 				< at.distance2D(Builder::gHomePos)
-					* ai.GetTunable("apex_front_crew_bias", FRONT_CREW_BIAS)))
+					* ai.GetTunable("apex_front_crew_bias", TUNE_FRONT_CREW_BIAS)))
 	{
 		role = FRONT;
 	}

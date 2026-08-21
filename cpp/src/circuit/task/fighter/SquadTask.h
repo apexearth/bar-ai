@@ -146,6 +146,12 @@ protected:
 	float GetCohesionScale() const;
 	bool IsMustRegroup();
 	void ActivePath(float speed = NO_SPEED_LIMIT);
+	// apex: live power fraction -- attackPower is DEF power and never sees
+	// damage, so a mauled squad evaluated fights as if fresh (apexearth: "I
+	// still see us take on fights where we're outgunned"). Power-weighted
+	// health, 1.0 for a fresh squad. Promoted from CAttackTask so DEFEND and
+	// RAID odds use the same truth.
+	float GetHealthScale() const;
 	NSMicroPather::HitFunc GetHitTest() const;
 	void Attack(const int frame);
 	void Attack(const int frame, const bool isGround);

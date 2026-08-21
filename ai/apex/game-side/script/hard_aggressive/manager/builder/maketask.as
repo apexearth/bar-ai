@@ -19,6 +19,8 @@ namespace Builder {
 // then just turns around."). One line per BUILD-TYPE change -- returning a
 // different handle of the SAME type does not reassign (IBuilderTask::
 // Reevaluate), so only type flips are real mind-changes.
+int gNextEcoYieldLog = 0;
+
 IUnitTask@ gCommChurnPrev;
 int gCommChurnBt = -99;
 int gCommChurnFrame = 0;
@@ -92,12 +94,12 @@ void NoteIdleElection(CCircuitUnit@ unit, IUnitTask@ result)
 		s = int(gIdleBackId.length()) - 1;
 	}
 	int strikes = gIdleBackStrikes[s] + 1;
-	const int capN = int(ai.GetTunable("apex_idle_backoff_maxmult", 4.f));
+	const int capN = int(ai.GetTunable("apex_idle_backoff_maxmult", TUNE_IDLE_BACKOFF_MAXMULT));
 	if (strikes > capN)
 		strikes = capN;
 	gIdleBackStrikes[s] = strikes;
 	gIdleBackUntil[s] = ai.frame
-			+ strikes * int(ai.GetTunable("apex_idle_backoff", 2.f) * float(SECOND));
+			+ strikes * int(ai.GetTunable("apex_idle_backoff", TUNE_IDLE_BACKOFF) * float(SECOND));
 }
 
 int gElectFrame = -1;
@@ -129,7 +131,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				return held;
 			}
 			gGuardHold.set(k, ai.frame
-					+ int(ai.GetTunable("apex_guard_reelect", 10.f) * float(SECOND)));
+					+ int(ai.GetTunable("apex_guard_reelect", TUNE_GUARD_REELECT) * float(SECOND)));
 		}
 	}
 	Brain::gDecideDeferred = false;
@@ -147,7 +149,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 			gElectFrame = ai.frame;
 			gElectUs = 0.0;
 		}
-		if (gElectUs > ai.GetTunable("apex_elect_ms", 6.f) * 1000.f) {
+		if (gElectUs > ai.GetTunable("apex_elect_ms", TUNE_ELECT_MS) * 1000.f) {
 			Brain::gDecideDeferred = true;   // reuse: skips NoteIdleElection
 			Perf::Note("mt.elect.defer");
 			return null;
@@ -279,6 +281,9 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	NoteWreckSighting(unit);
 
 	IUnitTask@ t = RezzerFlee(unit);
+	if (t !is null)
+		return t;
+	@t = RezzerMedic(unit);
 	if (t !is null)
 		return t;
 	@t = RezzerFrontSalvage(unit);
@@ -493,6 +498,19 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// the other makes the fusion stuff... an upgraded mex gives 4 times the
 	// metal." One upgrade under way at all times, read from the live MEXUP
 	// task count -- no ledger to drift, nothing to resync.
+	// BUILD POWER ON THE LINE OUTRANKS THE ECONOMY LANES.
+	//
+	// Above mexup/reactor/converter/energy on purpose: those lanes claim every
+	// constructor we own, which is why the idle-assist fallback below almost
+	// never fires and why 41 m/s of income sat unspent while army ran at 12-15%
+	// of our metal against BARb's 22-34%. Bounded by Assist::LineWantsHelp
+	// (spare income only) and an economy-scaled stack, so a line that is already
+	// fast enough, or an economy with nothing spare, releases the builder back
+	// to the lanes below.
+	@t = Assist::AssistFactory(unit, isComm, isAdvCon);
+	if (t !is null)
+		return t;
+
 	// A VISIBLE PUSH OUTRANKS THE ECONOMY LANES: the tower only beats the walk
 	// if it starts now. Gated on Military::PushIncoming, so it is idle in
 	// every quiet game.
@@ -501,6 +519,31 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (t !is null)
 			return t;
 	}
+	// THE ECONOMY LANES YIELD ONCE ECONOMY IS OVER ITS SHARE.
+	//
+	// Every lane below returns before Brain::Decide, so the budget RANKED
+	// spending it never BOUNDED -- which is why a 0.49 army target coexisted
+	// with 0.24 actual army spend and eco ran at 0.46 against 0.22 (measured
+	// 32m 4v4, 2026-08-19). Raising the army weight alone cannot fix that; the
+	// weight has to be able to bind.
+	//
+	// A builder released here is not idle: it falls through to the factory
+	// assist and the engine's own offer, which is where army production and
+	// expansion live. The lanes resume the moment eco drops back under target.
+	const bool ecoOverrun = (Brain::gSpentTotal > 1.f)
+			&& (Brain::ShareOf(Brain::ECONOMY)
+				> Brain::TargetShare(Brain::ECONOMY)
+					* ai.GetTunable("apex_eco_overrun", TUNE_ECO_OVERRUN));
+	if (ecoOverrun && (ai.frame >= gNextEcoYieldLog)) {
+		gNextEcoYieldLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: eco lanes yield -- share "
+			+ formatFloat(Brain::ShareOf(Brain::ECONOMY), "", 0, 2)
+			+ " over target "
+			+ formatFloat(Brain::TargetShare(Brain::ECONOMY), "", 0, 2)
+			+ ", army at " + formatFloat(Brain::ShareOf(Brain::ARMY), "", 0, 2)
+			+ "/" + formatFloat(Brain::TargetShare(Brain::ARMY), "", 0, 2));
+	}
+
 	// HOME MEXES FIRST, WITH EVERY ADVANCED CON. While un-upgraded extractors
 	// stand in the home patch, one-at-a-time is the wrong bound: a second adv
 	// con used to fall through to the fusion lane here. Until the home patch is
@@ -532,12 +575,12 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			}
 		}
 	}
-	if (isAdvCon && !homeRush && ReactorPipelineOpen()) {
+	if (isAdvCon && !ecoOverrun && !homeRush && ReactorPipelineOpen()) {
 		@t = EcoFusion(unit);
 		if (t !is null)
 			return t;
 	}
-	if (isAdvCon) {
+	if (isAdvCon && !ecoOverrun) {
 		@t = ConverterPipeline(unit);
 		if (t !is null)
 			return t;
@@ -565,24 +608,83 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// e-stall). Concurrency is the reactor rule reused -- how many times income
 	// plus the bank covers this generator inside the same affordability window
 	// -- so a poor economy still serialises and a rich one does not.
-	int eTasks = 1;
+	// THE ECO LANES BYPASS THE ARBITER, AND THAT IS WHY THE ARMY IS SMALL.
+	//
+	// Every rule above returns before Brain::Decide, so the budget only ever
+	// RANKED spending it never actually bounded. Measured 2026-08-19, 32m 4v4:
+	// eco took 0.46 of spend against a 0.22 target while ARMY took 0.24 against
+	// a 0.49 target, and army was 14.7% of our metal against BARb's 34.2%. The
+	// metal was there -- 64,223 produced, 48,993 built -- we simply never chose
+	// units with it. apexearth: "what use is twice their economy if we have 1/5th
+	// the army?"
+	//
+	// A constructor refused here falls through to the assist fallback, which
+	// guards a factory -- so the freed build power becomes production speed
+	// rather than another generator.
+	if (Brain::ShareOf(Brain::ECONOMY)
+		> Brain::TargetShare(Brain::ECONOMY)
+			* ai.GetTunable("apex_eco_overrun", TUNE_ECO_OVERRUN))
+	{
+		if (ai.frame >= gNextEnergyAheadLog) {
+			gNextEnergyAheadLog = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: energy lane yields -- eco share "
+				+ formatFloat(Brain::ShareOf(Brain::ECONOMY), "", 0, 2)
+				+ " over target "
+				+ formatFloat(Brain::TargetShare(Brain::ECONOMY), "", 0, 2));
+		}
+	} else {
+	// THE TARGET SCALES WITH THE METAL ECONOMY, NOT WITH CURRENT DEMAND.
+	// energy.pull measures THROTTLED demand: factories and lathes slow down
+	// on a short grid, which lowers pull, which told this lane the grid was
+	// fine exactly while it starved -- the circular read behind every "we
+	// still SUCK with energy" session (apexearth 2026-08-21: "Prioritize it
+	// more. This whole fallback makes energy the last resort... It's not
+	// enough"). Metal income is the un-throttled measure of what the base
+	// wants to spend, and converters make surplus fungible, so the grid
+	// target follows it (Policy::EPerMetal).
+	float needE = aiEconomyMgr.energy.pull * Policy::EnergyHeadroom();
+	{
+		const float fromMetal = aiEconomyMgr.metal.income * Policy::EPerMetal();
+		if (needE < fromMetal)
+			needE = fromMetal;
+	}
+	if (!Factory::gHaveT2
+		&& (aiEconomyMgr.metal.income >= Policy::T2EnergyFrom()))
+	{
+		const float floorE = Policy::T2Energy();
+		if (needE < floorE)
+			needE = floorE;
+	}
+	// THE DEFICIT SIZES THE PIPELINE. One-energy-task-at-a-time was the real
+	// throttle: while one solar built, every other asker skipped this lane. A
+	// deep hole now opens one standing task per missing rung of the cheapest
+	// generator (the duplicate governor still bank-bounds parallel sites of
+	// one def, and serial advsolars stay serial).
+	int eTasks = ecoOverrun ? 0 : 1;
 	{
 		CCircuitDef@ gen = SolarDef();
-		if (gen !is null)
+		if (gen !is null) {
 			eTasks = ReactorsInFlight(gen.costM);
+			const float make = aiEconomyMgr.GetEnergyMake(gen);
+			const float hole = needE - aiEconomyMgr.energy.income;
+			if ((make > 0.f) && (hole > 0.f)) {
+				const int rungs = 1 + int(hole / make);
+				if (rungs > eTasks)
+					eTasks = rungs;
+			}
+		}
 	}
 	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::ENERGY)) < uint(eTasks)) {
-		float needE = aiEconomyMgr.energy.pull
-				* ai.GetTunable("apex_energy_headroom", 1.35f);
-		if (!Factory::gHaveT2
-			&& (aiEconomyMgr.metal.income
-				>= ai.GetTunable("apex_t2_energy_from", 12.f)))
-		{
-			const float floorE = ai.GetTunable("apex_t2_energy_floor", 700.f);
-			if (needE < floorE)
-				needE = floorE;
-		}
-		if (aiEconomyMgr.energy.income < needE) {
+		// A FULL STORE FALSIFIES THE FORECAST. `energy.pull` includes what our
+		// own builders are drawing to build the generators, so the rule fed
+		// itself: more energy under construction raised the pull, which raised
+		// the forecast, which justified more. Measured over 6x 4v4
+		// (tournaments/20260819-201232): forecasts of 2481 and 3442 e/s at 1834
+		// income, coradvsol 35% of ALL metal spent, and 18,484 energy WASTED
+		// against BARb's 4,086 -- while mex upgrades ran 1 against their 4.
+		// Waste is the falsifier: if the store is full we do not need more,
+		// whatever the pull says.
+		if (aiEconomyMgr.energy.income < needE && !aiEconomyMgr.isEnergyFull) {
 			IUnitTask@ et = HomeEnergy(unit);
 			if (et !is null) {
 				if (ai.frame >= gNextEnergyAheadLog) {
@@ -595,6 +697,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 				return et;
 			}
 		}
+	}
 	}
 
 	// THE MACRO VIEW GETS ITS SAY BEFORE ANY OPTIONAL SPENDING.
@@ -613,6 +716,15 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// optional work it would never have taken had Decide run this frame.
 	if (Brain::gDecideDeferred)
 		return null;
+
+	// Below the Brain so a ranked mex upgrade still wins; above everything
+	// optional and the engine offer, because when nothing eco is in flight
+	// eco IS the best choice (apexearth's always-expand rule; see AlwaysEco).
+	tp = Perf::T0();
+	@t = AlwaysEco(unit);
+	Perf::Add("mt.alwayseco", tp);
+	if (t !is null)
+		return t;
 
 	tp = Perf::T0();
 	@t = OptionalWork(unit, isComm);
@@ -634,6 +746,48 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	Perf::Add("mt.scavenge", tp);
 	if (t !is null)
 		return t;
+
+	// ENERGY STORAGE IS ALMOST NEVER THE RIGHT BUY. apexearth 2026-08-21:
+	// "We keep making energy storage too... we really really don't need those
+	// unless we're trying to shoot something like a starfall. Deprioritize a
+	// lot." The engine's own economy logic offers storage whenever capacity
+	// trails income; refuse the ENERGY-storage offers outright (metal storage
+	// untouched) unless the tunable re-opens them for a superweapon game.
+	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)
+		&& (task.GetBuildType() == int(Task::BuildType::STORE))
+		&& (ai.GetTunable("apex_estor", TUNE_ESTOR) <= 0.f)
+		&& (task.buildDef !is null))
+	{
+		const string sn = task.buildDef.GetName();
+		if ((sn.findFirst("estor") >= 0) || (sn.findFirst("adves") >= 0))
+			@task = null;
+	}
+
+	// A MEX ACROSS THE MAP IS THE WRONG MEX. apexearth, watching Prismatic
+	// 2026-08-21: "Just watched a con walk from one corner of the map to the
+	// next corner, passing by 6 mexes as they walked, not building any" -- and
+	// the walk cannot self-correct: Reevaluate only reassigns on a DIFFERENT
+	// build type, so ChainNearbyMex proposing a nearer mex mid-walk is ignored
+	// for the whole trip. The only working moment is election, here: when the
+	// offer is a mex far away and an open spot sits much nearer, take the near
+	// one. The far spot goes back in the pool for whoever is actually close.
+	if ((task !is null) && (task.GetType() == Task::Type::BUILDER)
+		&& (task.GetBuildType() == int(Task::BuildType::MEX)))
+	{
+		const AIFloat3 mine = unit.GetPos(ai.frame);
+		const float offerD = task.GetBuildPos().distance2D(mine);
+		if (offerD > ai.GetTunable("apex_mex_walk_cap", TUNE_MEX_WALK_CAP)) {
+			const int near = aiEconomyMgr.FindOpenMexSpot(unit, mine);
+			if (near >= 0) {
+				const AIFloat3 np = aiEconomyMgr.GetMexSpotPos(near);
+				if (OnMap(np) && (np.distance2D(mine) < offerD * 0.5f)) {
+					IUnitTask@ nt = aiEconomyMgr.EnqueueMexAt(unit, near);
+					if (nt !is null)
+						return nt;
+				}
+			}
+		}
+	}
 
 	if (task !is null) {
 		// Rate-limited on the task handle changing, not a timer, so this logs
@@ -767,7 +921,7 @@ void IdlePatrol(CCircuitUnit@ unit, bool isComm)
 	if (ai.frame < next)
 		return;
 	gIdlePatrolNext.set(k, ai.frame
-			+ int(ai.GetTunable("apex_idle_patrol_period", 45.f) * float(SECOND)));
+			+ int(ai.GetTunable("apex_idle_patrol_period", TUNE_IDLE_PATROL_PERIOD) * float(SECOND)));
 	// Toward home, so the patrol leg crosses the base's work rather than empty
 	// ground; a unit already at home gets a short local leg.
 	AIFloat3 to = gHomePos;

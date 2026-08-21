@@ -69,11 +69,11 @@ bool WantsSuperGuard(const CCircuitDef@ cdef)
 		return false;
 	if (IsChargerDef(cdef))
 		return false;
-	if (ai.GetTunable("apex_super_guard", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_super_guard", TUNE_SUPER_GUARD) <= 0.f)
 		return false;   // control arm: stock routing, one solo attack task each
 	if (ai.GetBindedRole(cdef.GetMainRole()) == RT::SUPER)
 		return true;
-	return cdef.costM >= ai.GetTunable("apex_super_cost", SUPER_COST);
+	return cdef.costM >= ai.GetTunable("apex_super_cost", TUNE_SUPER_COST);
 }
 
 // The hold is not absolute. When the whole team commits -- a declared push or
@@ -84,20 +84,81 @@ bool WantsSuperGuard(const CCircuitDef@ cdef)
 // holding: nothing in the ~405 bindings can move a unit out of a task it has
 // been assigned to, so a release has to be read at assignment time or come from
 // C++.
+// Our SUPER-role mobile mass, memoized: the release test below runs from
+// unit-add hooks and a def sweep per call would be a per-frame ring walk.
+float gSuperMass = 0.f;
+int gNextSuperMass = 0;
+
+float SuperMassOwned()
+{
+	if (ai.frame < gNextSuperMass)
+		return gSuperMass;
+	gNextSuperMass = ai.frame + 5 * SECOND;
+	float m = 0.f;
+	for (Id defId = 1, n = ai.GetDefCount(); defId <= n; ++defId) {
+		CCircuitDef@ d = ai.GetCircuitDef(defId);
+		if ((d is null) || (d.count == 0) || !d.IsMobile())
+			continue;
+		if (ai.GetBindedRole(d.GetMainRole()) != RT::SUPER)
+			continue;
+		m += d.costM * float(d.count);
+	}
+	gSuperMass = m;
+	return m;
+}
+
 bool SuperReleased()
 {
 	if (gKilling)
 		return true;
-	return ai.frame < int(ai.ReadTeamValue(Factory::ElectorTeamId(), TV_PUSH, 0.f));
+	if (ai.frame < int(ai.ReadTeamValue(Factory::ElectorTeamId(), TV_PUSH, 0.f)))
+		return true;
+	// TWO TITANS BY A HILL ARE THE ARMY. Holding supers back is right while
+	// they are the spearhead of something bigger; once the held supers are
+	// this share of our whole army value, the wait is the army waiting for
+	// itself (apexearth 2026-08-21, watching two idle titans: "so sad").
+	const float supers = SuperMassOwned();
+	return (supers > 1.f)
+		&& (supers > OurArmyNow() * ai.GetTunable("apex_super_self_frac", TUNE_SUPER_SELF_FRAC));
 }
+
+// The hold tasks, so the release can END them: a MELEE-promote task never
+// converts on its own, so a super already holding when the release flips
+// would stand by its hill forever regardless (the two watched titans).
+array<IUnitTask@> gSuperHolds;
 
 IUnitTask@ SuperGuardTask(CCircuitUnit@ unit)
 {
 	++gSuperHeld;
 	AiLog(Factory::T() + "apex: " + unit.circuitDef.GetName()
 		+ " holds the defence line (#" + gSuperHeld + ")");
-	return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+	IUnitTask@ hold = aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
 			Task::FightType::RALLY, SUPER_HOLD_POWER));
+	if (hold !is null)
+		gSuperHolds.insertLast(hold);
+	return hold;
+}
+
+// Called from the military update: when the release flips, the standing
+// holds are aborted so their supers re-elect into the army.
+void ReleaseHeldSupers()
+{
+	if (gSuperHolds.length() == 0)
+		return;
+	for (uint i = 0; i < gSuperHolds.length(); ) {
+		if ((gSuperHolds[i] is null) || gSuperHolds[i].IsDead()) {
+			gSuperHolds.removeAt(i);
+			continue;
+		}
+		++i;
+	}
+	if ((gSuperHolds.length() == 0) || !SuperReleased())
+		return;
+	AiLog(Factory::T() + "apex: releasing " + gSuperHolds.length()
+		+ " held super task(s) -- the wait is over");
+	for (uint i = 0; i < gSuperHolds.length(); ++i)
+		gSuperHolds[i].Abort();
+	gSuperHolds.resize(0);
 }
 
 }  // namespace Military

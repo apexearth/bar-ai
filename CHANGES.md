@@ -176,3 +176,56 @@ Full detail: `changes/2026-08-03.md`
 
 Full detail: `changes/2026-08-06.md`
 
+
+### 2026-08-21
+
+Tunables audit (git-history-verified per item), all compile-gated clean:
+
+- `factory/buildpower.as` REMOVED — factory build-power requests, apexearth's
+  own 2026-08-19 idea, but measured hurting (K/D 0.86 -> 0.48 paired seed),
+  default-off since, and its problem statement is now solved by the assist
+  path's army-shortfall gate (`apex_assist_army_frac`). Four knobs went with
+  it (`fac_demand`, `fac_ask_hold`, `fac_help_mult`, `fac_spare_frac`).
+- Jammer gate merged: `apex_jammer_upkeep_margin` deleted;
+  `JammersAfforded` no longer grants a free first jammer (`1 + int(...)` ->
+  `int(...)`), so the count formula is also the gate. First jammer now needs
+  income >= upkeep/share (10x upkeep at the 0.10 default) vs 4x before —
+  slightly later on small grids, unchanged at scale.
+- `apex_t2_energy_floor` (700) deleted — the pre-T2 energy forecast now
+  builds to `apex_t2_energy` (800) itself, so the grid the forecast builds is
+  the grid the rush bar demands.
+- `apex_reclaim_advsol_e` + `apex_reclaim_wind_e` (both 2000) merged into
+  `apex_reclaim_gen_e` — one number in apexearth's own statement
+  (">2000 reclaim wind and advanced solar"); wind's map-wind scaling kept.
+- Incoming-push DETECTION renamed `apex_push_*` -> `apex_incoming_*`
+  (notice_r, cost, closing, danger_pad, danger_cost, answer_frac, stand) —
+  the prefix had collided with the team-push family.
+
+KEPT, verified against history (do not re-propose):
+
+- `ArmyPressureMod` is NOT redundant with the budget's `LossArmyMult`/stance
+  multipliers: the budget never reaches facqueue army production (targets.as
+  2026-08-16 warning), so it is the only adaptive army-count response.
+- The three outnumbered predicates (`Outmassed`, `ConservativeStance`,
+  `mass_no_commit_ratio`) differ deliberately in ratio, fog policy and
+  consumer; fog-flooring `Outmassed` would suppress constructor growth while
+  blind, which is the wrong direction for the economy.
+
+### 2026-08-21 (later)
+
+- `apex_rez_per_income` 0.1 -> 0.2 — double the rez fleet, still income-scaled.
+- BATTLEFIELD MEDICS (`rules_rezzer.as` RezzerMedic, apexearth request): a
+  tunable share of rez bots (`apex_medic_share` 0.4) stays with the army's
+  staging anchor — repairs wounded mobiles near it (`apex_medic_r` 1200),
+  holds station by area-reclaiming the aftermath there. Flee rule still wins;
+  threat at the anchor holds the medic home. Compile-gated clean.
+- FORMATION TRAVEL (C++, AttackTask+DefendTask, apexearth: enemy "uses the
+  synchronized move speed fight orders... we give spread out move orders"):
+  ground squads now travel on CFightAction (CmdFightTo waypoints +
+  CmdWantedSpeed at the squad's lowestSpeed) instead of per-unit CMoveAction.
+  Previously only SIEGE-attr units (32 defs) fought-travelled. Flyers keep
+  MOVE; RaidTask untouched (raiders bypass fights). Wounded pull-back is
+  unchanged: RetreatTask swaps the travel act out, which IS dropping the
+  fight order; the standoff/kite ring still owns distance in the engagement
+  phase. Tunable `apex_fight_travel` (default 1, in dev_tunables.lua) for the
+  A/B. NOT yet judged on a watched game.

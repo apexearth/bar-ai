@@ -46,14 +46,14 @@ const float FQ_CLAIM_RANGE = 400.f;
 const int FQ_LOST = 90 * SECOND;
 
 // HOW MANY ESCORTS OF ONE KIND EACH SQUAD IS BOUGHT. Bounds a SQUAD's escort,
-// not the army's: what gets built is this times the number of squads on the
-// field, which rises with the army the economy can pay for -- no ceiling on
-// the total.
+// not the army's: what gets built is this times the number of qualifying
+// squads on the field (EscortSquadCount's value bar), which rises with the
+// army the economy can pay for -- no ceiling on the total.
 //
-// ESCORT_PER_SQUAD in task/fighter/SupportTask.cpp is the matching attachment
-// cap. Move one and the other must move too, or we buy escorts no squad will
-// take.
-const int ESCORT_PER_SQUAD = 2;
+// One radar and one jammer per squad. ESCORT_PER_SQUAD in
+// task/fighter/SupportTask.cpp is the attachment MAXIMUM (2 of a kind); buying
+// under it is safe, buying over it buys escorts no squad will take.
+const int ESCORT_PER_SQUAD = 1;
 
 array<Id> gFQId;                 // factories we drive, by id
 array<CCircuitUnit@> gFQFac;     // ...and their handles, parallel to gFQId
@@ -120,7 +120,7 @@ void PendReindex(int gone)
 
 bool FacQueueOn()
 {
-	return ai.GetTunable("apex_fac_queue_brain", 1.f) > 0.f;
+	return ai.GetTunable("apex_fac_queue_brain", TUNE_FAC_QUEUE_BRAIN) > 0.f;
 }
 
 int FQIndex(Id id)
@@ -195,14 +195,14 @@ float TierShare(CCircuitUnit@ fac)
 		return 1.f;
 	if ((attr & Factory::Attr::T2) != 0)
 		return Factory::gHaveT3
-			? ai.GetTunable("apex_quota_t2_after_t3", 0.4f) : 1.f;
+			? ai.GetTunable("apex_quota_t2_after_t3", TUNE_QUOTA_T2_AFTER_T3) : 1.f;
 	// 0.15, was 0.0: a hard zero is an off-switch, not a ratio -- the moment
 	// a gantry stood, every T1 combat want multiplied to nothing and the lab
 	// fell to cons and rezbots (audited iter2: 103 rezbots, 4 Thugs, corthud
 	// entries absent from the quota entirely). T1 chaff still screens the
 	// slow T3 era, and the enemy fields T1 masses to the end.
 	if (Factory::gHaveT3)
-		return ai.GetTunable("apex_quota_t1_after_t3", 0.15f);
+		return ai.GetTunable("apex_quota_t1_after_t3", TUNE_QUOTA_T1_AFTER_T3);
 	if (!Factory::gHaveT2)
 		return 1.f;
 	// The cut PHASES IN with the T2 army actually fielded, not the plant
@@ -210,7 +210,7 @@ float TierShare(CCircuitUnit@ fac)
 	// count of T2 versus a lot of enemy T1... we lack enough ranged damage
 	// and tankiness as we're transitioning." While the T2 core is thin the T1
 	// line keeps near-full weight; at a covered core it bottoms at the tunable.
-	const float base = ai.GetTunable("apex_quota_t1_after_t2", 0.25f);
+	const float base = ai.GetTunable("apex_quota_t1_after_t2", TUNE_QUOTA_T1_AFTER_T2);
 	float frac = 1.f;
 	for (uint i = 0; i < gFQFac.length(); ++i) {
 		if ((Factory::userData[gFQFac[i].circuitDef.id].attr & Factory::Attr::T2) == 0)
@@ -246,15 +246,15 @@ float TierShare(CCircuitUnit@ fac)
 float ArmyPressureMod()
 {
 	return (Military::LosingGround() || Military::BaseContested())
-			? ai.GetTunable("apex_army_pressure_mod", 2.f) : 1.f;
+			? ai.GetTunable("apex_army_pressure_mod", TUNE_ARMY_PRESSURE_MOD) : 1.f;
 }
 
 int T2CoreWanted()
 {
 	const float inc = Factory::SteadyIncome();
-	const float per = ai.GetTunable("apex_t2_core_per_income", 6.f);
+	const float per = ai.GetTunable("apex_t2_core_per_income", TUNE_T2_CORE_PER_INCOME);
 	int n = int(inc / per * ArmyPressureMod());
-	const int floorN = int(ai.GetTunable("apex_t2_core_min", 4.f));
+	const int floorN = int(ai.GetTunable("apex_t2_core_min", TUNE_T2_CORE_MIN));
 	return (n < floorN) ? floorN : n;
 }
 
@@ -287,9 +287,9 @@ bool T2ArmyShort(CCircuitUnit@ fac)
 int T1CoreWanted()
 {
 	const float inc = Factory::SteadyIncome();
-	const float per = ai.GetTunable("apex_t1_core_per_income", 6.f);
+	const float per = ai.GetTunable("apex_t1_core_per_income", TUNE_T1_CORE_PER_INCOME);
 	int n = int(inc / per * ArmyPressureMod());
-	const int floorN = int(ai.GetTunable("apex_t1_core_min", 4.f));
+	const int floorN = int(ai.GetTunable("apex_t1_core_min", TUNE_T1_CORE_MIN));
 	return (n < floorN) ? floorN : n;
 }
 
@@ -364,9 +364,9 @@ float DefQuotaMod(const CCircuitDef@ d)
 		return 1.f;
 	const string n = d.GetName();
 	if (n == "leggob")
-		return ai.GetTunable("apex_quota_leggob", 0.4f);
+		return ai.GetTunable("apex_quota_leggob", TUNE_QUOTA_LEGGOB);
 	if (n == "leglob")
-		return ai.GetTunable("apex_quota_leglob", 1.5f);
+		return ai.GetTunable("apex_quota_leglob", TUNE_QUOTA_LEGLOB);
 	return 1.f;
 }
 
@@ -439,7 +439,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			// Cost-normalized: equal COUNTS of assault and heavy made heavy
 			// metal dominate -- see the metal-ratio comment in the fill loop.
 			want.insertLast(RoundUp(float(T2CoreWanted())
-					* ai.GetTunable("apex_quota_ref_cost", 100.f) / d.costM));
+					* ai.GetTunable("apex_quota_ref_cost", TUNE_QUOTA_REF_COST) / d.costM));
 			isFloor.insertLast(false);
 		}
 		// BUILD POWER IS NOT LOCKED OUT BY THE ARMY. T2CoreWanted scales with
@@ -480,11 +480,11 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			// through the normal budget instead.
 			if (Factory::gHaveT2)
 				n = RoundUp(float(n)
-						* ai.GetTunable("apex_t1_late_share", 0.34f));
+						* ai.GetTunable("apex_t1_late_share", TUNE_T1_LATE_SHARE));
 			// Cost-normalized like the main fill loop: metal shares, not
 			// count shares.
 			n = RoundUp(float(n) * DefQuotaMod(d)
-					* ai.GetTunable("apex_quota_ref_cost", 100.f)
+					* ai.GetTunable("apex_quota_ref_cost", TUNE_QUOTA_REF_COST)
 					/ ((d.costM > 0.f) ? d.costM : 100.f));
 			defs.insertLast(d);
 			want.insertLast(n);
@@ -497,15 +497,17 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	CCircuitDef@ con = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
 	if ((con !is null) && con.IsAvailable(ai.frame)) {
 		int cap = Builder::ConsWantedFor(con);
-		if (aiEconomyMgr.isMetalFull) {
-			cap = int(float(cap) * ai.GetTunable("apex_con_full_mult", 1.5f)) + 1;
+		// Not isMetalFull: a bank that is full because the grid is down is a
+		// reason to fix the grid, not to buy lathes. See MetalSurplusIsReal.
+		if (Builder::MetalSurplusIsReal()) {
+			cap = int(float(cap) * ai.GetTunable("apex_con_full_mult", TUNE_CON_FULL_MULT)) + 1;
 		} else if ((con.costM < Builder::ADV_CON_COST)
 			&& Military::Outmassed())
 		{
 			// apexearth: a floor of 3 T1 cons; beyond that, more only on surplus
 			// metal, and never while the enemy army outweighs ours -- an unfed
 			// constructor is army the line did not build.
-			const int floorN = int(ai.GetTunable("apex_con_min", 3.f));
+			const int floorN = int(ai.GetTunable("apex_con_min", TUNE_CON_MIN));
 			if (cap > floorN)
 				cap = floorN;
 		}
@@ -514,7 +516,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		isFloor.insertLast(true);
 	}
 
-	if (ai.GetTunable("apex_mix_scout", 1.f) > 0.f) {
+	if (ai.GetTunable("apex_mix_scout", TUNE_MIX_SCOUT) > 0.f) {
 		CCircuitDef@ scout = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::SCOUT);
 		if ((scout !is null) && scout.IsAvailable(ai.frame) && ScoutWorthIt(scout)) {
 			const float per = ai.GetTunable("apex_mix_scout_per_mex",
@@ -525,6 +527,11 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 				if (mex !is null)
 					n = 1 + int(float(mex.count) / per);
 			}
+			// Blind-stance demand lands HERE, on the GROUND scouts a duel
+			// actually builds -- the air eyes floor it first multiplied is
+			// unreachable in duels (no air lab under the commit; measured
+			// airscouts=0 in every A/B game while blind minutes accrued).
+			n = int(float(n) * Military::ScoutMult());
 			defs.insertLast(scout);
 			want.insertLast(n);
 			isFloor.insertLast(true);
@@ -587,7 +594,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			if ((torp !is null) && torp.IsAvailable(ai.frame)) {
 				defs.insertLast(torp);
 				want.insertLast(1 + int(subSeen
-						/ ai.GetTunable("apex_antisub_per", 1500.f)));
+						/ ai.GetTunable("apex_antisub_per", TUNE_ANTISUB_PER)));
 				isFloor.insertLast(true);
 			}
 		}
@@ -614,9 +621,9 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			// (apexearth, watching). The income term still applies, capped
 			// at twice the standing bombers plus a base air-cover four.
 			int fWant = 1 + int(aiEconomyMgr.metal.income
-					/ ai.GetTunable("apex_fighter_per", 40.f));
+					/ ai.GetTunable("apex_fighter_per", TUNE_FIGHTER_PER));
 			const int fCap = 4 + Air::Bombers()
-					* int(ai.GetTunable("apex_fighter_per_bomber", 2.f));
+					* int(ai.GetTunable("apex_fighter_per_bomber", TUNE_FIGHTER_PER_BOMBER));
 			if (fWant > fCap)
 				fWant = fCap;
 			defs.insertLast(wing);
@@ -634,7 +641,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		if (!t1AirRetired && (bomb !is null) && bomb.IsAvailable(ai.frame)) {
 			defs.insertLast(bomb);
 			want.insertLast(1 + int(aiEconomyMgr.metal.income
-					/ ai.GetTunable("apex_bomber_per", 40.f)));
+					/ ai.GetTunable("apex_bomber_per", TUNE_BOMBER_PER)));
 			isFloor.insertLast(true);
 		}
 		// AIR SCOUTS LAST: floors fill top-down, so eyes only draw once the
@@ -646,10 +653,14 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		CCircuitDef@ eye = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::SCOUT.type);
 		if ((eye !is null) && eye.IsAvailable(ai.frame)) {
 			int eyesN = 1 + int(aiEconomyMgr.metal.income
-					/ ai.GetTunable("apex_airscout_per", 120.f));
+					/ ai.GetTunable("apex_airscout_per", TUNE_AIRSCOUT_PER));
+			// Silence is a scouting demand, not safety: while the stance
+			// reads UNKNOWN (nothing fresh seen), the eyes floor doubles --
+			// apexearth: "too much silence/unknowns demand proper scouting."
+			eyesN = int(float(eyesN) * Military::ScoutMult());
 			const int eyesCap = 2 + int(sqrt(float(AiTerrainWidth())
 					* float(AiTerrainHeight()))
-					/ ai.GetTunable("apex_airscout_map_per", 3000.f));
+					/ ai.GetTunable("apex_airscout_map_per", TUNE_AIRSCOUT_MAP_PER));
 			if (eyesN > eyesCap)
 				eyesN = eyesCap;
 			defs.insertLast(eye);
@@ -728,7 +739,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		// enemy has lots of T1 still but we are refusing to make any").
 		// Normalizing the count by cost lands each role's METAL at its share:
 		// a 140-metal Sheldon gets ~7x the bodies of a 1000-metal heavy.
-		const float ref = ai.GetTunable("apex_quota_ref_cost", 100.f);
+		const float ref = ai.GetTunable("apex_quota_ref_cost", TUNE_QUOTA_REF_COST);
 		want.insertLast(RoundUp(s * slots * tier * DefQuotaMod(d)
 				* (ref / d.costM)));
 		isFloor.insertLast(false);
@@ -852,7 +863,7 @@ void FillQuota(int line)
 	CCircuitUnit@ fac = gFQFac[line];
 	if (SurplusT1Line(line))
 		return;
-	const int ahead = int(ai.GetTunable("apex_fac_ahead", FQ_AHEAD_DEFAULT));
+	const int ahead = int(ai.GetTunable("apex_fac_ahead", TUNE_FAC_AHEAD));
 	const int depth = fac.CountQueued(null);
 
 	// RECONCILE WHAT WE SENT WITH WHAT THE ENGINE HAS APPLIED. An AI order is not
@@ -930,7 +941,7 @@ void FillQuota(int line)
 		// WHAT, it no longer decides WHETHER.
 		if (aiEconomyMgr.metal.current
 				< aiEconomyMgr.metal.storage
-					* ai.GetTunable("apex_overflow_build_frac", 0.5f))
+					* ai.GetTunable("apex_overflow_build_frac", TUNE_OVERFLOW_BUILD_FRAC))
 			return;
 		// COMBAT ONLY: with the army entries missing (the air-table hole)
 		// this fallback filled the line with rezbots -- 88 alive in one

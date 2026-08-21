@@ -35,6 +35,9 @@ int gNextBudgetLog = 0;
 float RawTarget(Cat c)
 {
 	float w = RawBase(c) * Persona::ShareMult(int(c));
+	// Enemy-stance lean: greed against a passive enemy, army/defence against
+	// an aggressive one, neutral while blind. See Military::UpdateStance.
+	w *= Military::StanceShareMult(int(c));
 	// Losing the army faster than it kills raises the ARMY row itself; the
 	// normalisation below then pays for it out of every other category. See
 	// Military::LossArmyMult -- pressure-scaled and bounded, never a switch.
@@ -125,7 +128,7 @@ const float BUDGET_MAX = 2.0f;
 
 float BudgetMult(Cat c)
 {
-	if (ai.GetTunable("apex_budget", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_budget", TUNE_BUDGET) <= 0.f)
 		return 1.f;
 	const float target = TargetShare(c);
 	if (target <= 0.f)

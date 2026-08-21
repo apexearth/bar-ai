@@ -2,7 +2,7 @@ namespace Military {
 
 bool IsFodder(const CCircuitDef@ cdef)
 {
-	return (cdef !is null) && (cdef.costM < FODDER_COST)
+	return (cdef !is null) && (cdef.costM < FODDER_COST())
 		&& cdef.IsRoleAny(Unit::Role::SCOUT.mask | Unit::Role::RAIDER.mask);
 }
 
@@ -47,6 +47,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 	if (!ApexActive())
 		return aiMilitaryMgr.DefaultMakeTask(unit);
+	// One wrapper so every return below is recorded -- see NoteFightElection.
+	IUnitTask@ elected = MakeTaskInner(unit);
+	NoteFightElection(unit, elected);
+	return elected;
+}
+
+IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
+{
 
 	// A unit built off a standing queue finishes with no owning task and lands in
 	// CIdleTask, so this hook is the only thing that can give it a role. An idle
@@ -92,9 +100,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// stock's own shape for a mobile super, and the C++ charge pair (no engage
 	// margin, straight-line path -- see IsChargerDef) makes it the beeline.
 	// While home is being hit they defend it instead, same gate as the pool.
-	if (IsChargerDef(cdef) && (ai.GetTunable("apex_charger_strike", 1.f) > 0.f)) {
+	if (IsChargerDef(cdef) && (ai.GetTunable("apex_charger_strike", TUNE_CHARGER_STRIKE) > 0.f)) {
 		NotePostureDef(cdef, false);
-		if ((ai.GetTunable("apex_defend_home", 1.f) > 0.f)
+		if ((ai.GetTunable("apex_defend_home", TUNE_DEFEND_HOME) > 0.f)
 			&& (Builder::BaseUnderAttack() || BaseContested()))
 		{
 			return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
@@ -134,8 +142,16 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		// gating the pool on it kept the army permanently defensive and ground
 		// down in place instead of attacking. Publishing stays; the response
 		// needs a per-task position this layer does not have -- see CHANGES.md.
-		if ((ai.GetTunable("apex_defend_home", 1.f) > 0.f)
-			&& (Builder::BaseUnderAttack() || BaseContested()))
+		// A MELEE-promoting pool never leaves (see above). Three reasons to be
+		// in one: our own base is being hit, buildings of ours are dying on our
+		// own ground, or we are not the aggressor in this game and they are --
+		// ConservativeStance, apexearth's own doctrine: if we chose economy and
+		// they chose offence, the army we bought is for holding, not for
+		// trading. Every one of these reverts by itself; it only decides the
+		// task a unit joins now.
+		if ((ai.GetTunable("apex_defend_home", TUNE_DEFEND_HOME) > 0.f)
+			&& (Builder::BaseUnderAttack() || BaseContested() || BaseRaided()
+				|| ConservativeStance()))
 		{
 			return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
 					Task::FightType::MELEE, aiMilitaryMgr.quota.attack));
@@ -144,6 +160,88 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 				Task::FightType::ATTACK, aiMilitaryMgr.quota.attack));
 	}
 	return aiMilitaryMgr.DefaultMakeTask(unit);
+}
+
+// WHAT A COMBAT UNIT WAS DOING BEFORE IT RETREATED.
+//
+// apexearth 2026-08-19, on a death report where 35% of lost metal read simply
+// "retreat": "you should be looking at what the last action was just before
+// retreat." A retreat is never the decision that killed the unit -- it is the
+// consequence of one, and the death log could not name it.
+//
+// Builder::SampleTaskHist cannot serve: it walks Crew::gId, which combat units
+// never join, and nothing enumerates our own units. AiMakeTask is where a
+// fighter is ELECTED, so it is the one place unit and new task are both known;
+// a retreat enqueued in C++ never passes through here, which is exactly why the
+// last election is still the answer to "doing what".
+array<int>    gFHistId;
+array<string> gFHistBuf;
+const uint FIGHT_HIST_MAX = 4;
+
+int FightHistSlot(int id)
+{
+	for (uint i = 0; i < gFHistId.length(); ++i) {
+		if (gFHistId[i] == id)
+			return int(i);
+	}
+	return -1;
+}
+
+void NoteFightElection(CCircuitUnit@ unit, IUnitTask@ task)
+{
+	if ((unit is null) || (task is null))
+		return;
+	if (task.GetType() != Task::Type::FIGHTER)
+		return;
+	// The same election is the only place our own combat units can be
+	// registered -- nothing enumerates them. See withdraw.as.
+	NoteCombatUnit(int(unit.id));
+	AppendFightHist(int(unit.id), "f" + task.GetFightType());
+}
+
+// Shared with withdraw.as, which marks a pull-back order as "W" so the
+// unit-destroyed line shows whether we ever told the dead unit to leave.
+void AppendFightHist(int id, const string tag)
+{
+	int s = FightHistSlot(id);
+	if (s < 0) {
+		// Bounded: drop the oldest slot rather than growing for every unit
+		// built across a whole match.
+		if (gFHistId.length() >= 512) {
+			gFHistId.removeAt(0);
+			gFHistBuf.removeAt(0);
+		}
+		gFHistId.insertLast(id);
+		gFHistBuf.insertLast("");
+		s = int(gFHistId.length()) - 1;
+	}
+	array<string>@ parts = gFHistBuf[s].split(";");
+	if ((parts.length() == 1) && (parts[0] == ""))
+		parts.removeLast();
+	// Transitions only, or one long attack fills the ring with itself.
+	if ((parts.length() > 0) && (parts[parts.length() - 1].findFirst(tag) == 0))
+		return;
+	parts.insertLast(tag + "@" + ai.frame);
+	while (parts.length() > FIGHT_HIST_MAX)
+		parts.removeAt(0);
+	string joined = "";
+	for (uint j = 0; j < parts.length(); ++j) {
+		if (j > 0)
+			joined += ";";
+		joined += parts[j];
+	}
+	gFHistBuf[s] = joined;
+}
+
+string TakeFightHistFor(int id)
+{
+	const int s = FightHistSlot(id);
+	if (s < 0)
+		return "";
+	const string h = gFHistBuf[s];
+	gFHistId.removeAt(uint(s));
+	gFHistBuf.removeAt(uint(s));
+	return h;
 }
 
 // OUR SQUADS, mirrored from the task hooks. Nothing in the bound surface
@@ -190,11 +288,20 @@ uint SquadCount()
 // those two are the only ones that can take a radar or a jammer.
 uint EscortSquadCount()
 {
+	// Only squads worth a real army's metal are owed sensors. Attack-else-
+	// defend mirrors CSupportTask's own candidate list: counting squads the
+	// attacher will never pick buys escorts that stand at home waiting.
+	const float bar = ai.GetTunable("apex_escort_squad_value", TUNE_ESCORT_SQUAD_VALUE);
 	uint attack = 0;
 	uint defend = 0;
 	for (uint i = 0; i < gSquads.length(); ++i) {
 		array<CCircuitUnit@>@ on = gSquads[i].GetUnits();
 		if ((on is null) || (on.length() == 0))
+			continue;
+		float value = 0.f;
+		for (uint j = 0; j < on.length(); ++j)
+			value += on[j].circuitDef.costM;
+		if (value <= bar)
 			continue;
 		const int ft = gSquads[i].GetFightType();
 		if (ft == int(Task::FightType::ATTACK))
@@ -285,6 +392,19 @@ float FenceGunMetalNear(const AIFloat3& in pos, float radius)
 // Distance to the nearest of our own defences: the fence ring is the measured
 // extent of the base, so this is "how far from our edge". Function rather than
 // a gFencePos read because basedefence.as compiles before this file.
+// Every defence we hold, at cost. What the base can hold with when the army is
+// away or still being built -- read by the T2 army floor.
+float OwnDefenceMetal()
+{
+	float m = 0.f;
+	for (uint i = 0; i < gFenceDef.length(); ++i) {
+		const CCircuitDef@ d = gFenceDef[i];
+		if (d !is null)
+			m += d.costM;
+	}
+	return m;
+}
+
 float NearestFenceDist(const AIFloat3& in pos)
 {
 	float best = 1.0e9f;
@@ -302,7 +422,7 @@ float NearestFenceDist(const AIFloat3& in pos)
 // dropped as they are walked, which is the only place this list shrinks.
 float FenceLostNear(const AIFloat3& in pos, float radius)
 {
-	const float life = ai.GetTunable("apex_fence_loss_memory", 180.f) * float(SECOND);
+	const float life = ai.GetTunable("apex_fence_loss_memory", TUNE_FENCE_LOSS_MEMORY) * float(SECOND);
 	if (life <= 0.f)
 		return 0.f;
 	float w = 0.f;

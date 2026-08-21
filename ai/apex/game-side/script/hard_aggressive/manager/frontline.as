@@ -172,7 +172,7 @@ float TerritoryRadius()
 float FrontBand()
 {
 	float b = TerritoryRadius()
-			* ai.GetTunable("apex_front_band_frac", FRONT_BAND_FRAC);
+			* ai.GetTunable("apex_front_band_frac", TUNE_FRONT_BAND_FRAC);
 	// A band under the grid's own resolution cannot mean anything: the perimeter
 	// is quantised at one cell, so one cell diagonal is the floor.
 	const float cw = float(AiTerrainWidth()) / float(SEAM_N);
@@ -479,6 +479,44 @@ bool FrontChoke(const AIFloat3& in from, AIFloat3& out spot)
 	return best >= 0.f;
 }
 
+// IS THIS SPOT A DOORWAY, and where does the ground behind it lie? apexearth
+// 2026-08-19: "identify where the chokepoint is and make defenses right behind
+// it... kill the enemies in a chokepoint." A tower covering a corridor is worth
+// several covering open ground, because everything that comes through has to
+// come through there.
+//
+// FrontChoke above computed exactly this and was never called by anything.
+bool ChokeAt(const AIFloat3& in pos, AIFloat3& out cp)
+{
+	float best = -1.f;
+	for (uint c = 0; c < gIdx.length(); ++c) {
+		const AIFloat3 p = ai.GetChokePointPos(gIdx[c]);
+		if (!OnMap(p))
+			continue;
+		const float d = p.distance2D(pos);
+		if ((d <= CHOKE_NEAR) && ((best < 0.f) || (d < best))) {
+			best = d;
+			cp = p;
+		}
+	}
+	return best >= 0.f;
+}
+
+// A step back from the doorway, toward our own ground: the gun sits behind the
+// gap and shoots into it, rather than standing in it and being walked over.
+bool BehindChoke(const AIFloat3& in cp, float back, AIFloat3& out at)
+{
+	if (!Builder::gHomeSet)
+		return false;
+	AIFloat3 toHome = Builder::gHomePos - cp;
+	const float len = sqrt(toHome.SqLength2D());
+	if (len < 1.f)
+		return false;
+	toHome *= (1.f / len);
+	at = cp + toHome * back;
+	return OnMap(at);
+}
+
 uint MineEdge(int kind)
 {
 	uint n = 0;
@@ -544,7 +582,7 @@ void DrawFrontLine()
 	// multiplayer plays the rapid packages -- so a default of 1 meant every
 	// hosted game drew on the map for human allies who never asked for it.
 	// The harness opts in: --modoption apex_draw_front=1.
-	if (ai.GetTunable("apex_draw_front", 0.f) <= 0.f)
+	if (ai.GetTunable("apex_draw_front", TUNE_DRAW_FRONT) <= 0.f)
 		return;
 	if (ai.frame < gNextFrontDraw)
 		return;

@@ -366,10 +366,35 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
 	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
 	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-		float x = rand() % terrainMgr->GetTerrainWidth();
-		float z = rand() % terrainMgr->GetTerrainHeight();
-		position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
-		position = terrainMgr->GetMovePosition(leader->GetArea(), position);
+		// Roam mex line to mex line, not to a random map point: after a kill
+		// the nearest metal spot on enemy-influenced ground is the next stop.
+		// The random point remains the fallback when no such spot is known.
+		int best = -1;
+		if (circuit->GetTunable("apex_raid_mexline", 1.f) > 0.f) {
+			CMetalManager* metalMgr = circuit->GetMetalManager();
+			CInfluenceMap* inflMap = circuit->GetInflMap();
+			const AIFloat3& lp = leader->GetPos(circuit->GetLastFrame());
+			const CMetalData::Metals& spots = metalMgr->GetSpots();
+			float bestSq = std::numeric_limits<float>::max();
+			for (unsigned i = 0; i < spots.size(); ++i) {
+				const AIFloat3& sp = spots[i].position;
+				const float sq = sp.SqDistance2D(lp);
+				if (sq < SQUARE(maxDist)) {
+					continue;  // the ground we just cleared
+				}
+				if ((sq >= bestSq) || (inflMap->GetEnemyInflAt(sp) <= 0.f)) {
+					continue;
+				}
+				best = (int)i;
+				bestSq = sq;
+			}
+			if (best >= 0) {
+				position = terrainMgr->GetMovePosition(leader->GetArea(), spots[best].position);
+			}
+		}
+		if (best < 0) {
+			position = RoamPos(leader);
+		}
 	}
 
 	if (units.find(unit) != units.end()) {
@@ -390,7 +415,7 @@ bool CRaidTask::FindTarget()
 	const bool isAntiStatic = cdef->IsAttrAntiStat();
 	const bool hadTarget = GetTarget() != nullptr;
 	const float maxSpeed = SQUARE(highestSpeed * 0.8f / FRAMES_PER_SEC);
-	const float maxPower = attackPower * powerMod * (hadTarget ? 1.f / 0.75f : 1.f);
+	const float maxPower = attackPower * powerMod * GetHealthScale() * (hadTarget ? 1.f / 0.75f : 1.f);
 	const float weaponRange = cdef->GetMaxRange() * 0.9f;
 	const int canTargetCat = cdef->GetTargetCategory();
 	const int noChaseCat = cdef->GetNoChaseCategory();
@@ -565,7 +590,7 @@ void CRaidTask::FallbackRaid()
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
 	const AIFloat3& threatPos = leader->GetTravelAct()->IsActive() ? position : pos;
-	if (attackPower * powerMod <= threatMap->GetThreatAt(leader, threatPos)) {
+	if (attackPower * powerMod * GetHealthScale() <= threatMap->GetThreatAt(leader, threatPos)) {
 		AIFloat3 nextPos = circuit->GetMilitaryManager()->GetScoutPosition(leader);
 		if (utils::is_equal_pos(nextPos, pos)) {
 			return;
@@ -589,10 +614,7 @@ void CRaidTask::FallbackRaid()
 	}
 
 	if (!utils::is_valid(position)) {
-		float x = rand() % terrainMgr->GetTerrainWidth();
-		float z = rand() % terrainMgr->GetTerrainHeight();
-		position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
-		position = terrainMgr->GetMovePosition(leader->GetArea(), position);
+		position = RoamPos(leader);
 	}
 
 	CPathFinder* pathfinder = circuit->GetPathfinder();
@@ -634,7 +656,7 @@ springai::AIFloat3 CRaidTask::FindOnwardSpot() const
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	threatMap->SetThreatType(leader);
-	const float power = attackPower * powerMod;
+	const float power = attackPower * powerMod * GetHealthScale();
 	SArea* area = leader->GetArea();
 
 	const CMetalData::Metals& spots = circuit->GetMetalManager()->GetSpots();
