@@ -19,6 +19,122 @@ on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
 
+## 2026-08-21: air assassin dominance waiver -- landed, NOT yet exercised (watch for "BACK ON")
+
+The drawn 40m games' finisher analysis (two adversarial agents, cross-
+examined): the bombers are the ONLY weapon in the stack that targets the
+enemy commander -- the win condition -- and t007 stood them down permanently
+at the ABSOLUTE AIR_AA_CEILING (2500) against a beaten enemy we out-armied
+12:1. Ground AttackTask has no commander case at all; a freed army shoots
+the wall, not the win condition. Fix (wing.as AADominated + update.as
+un-latch): the ceiling waives and a latched gAbort clears when the enemy
+field army is under apex_air_dominance_army (0.2) of ours AND their AA under
+apex_air_dominance_aa (0.15) of ours. A/B ran 8W-8L-8D (within noise of the
+10-6-8 control) with ZERO aborts latched in 24 games -- the state is rare;
+the change is dormant until it recurs. Verify in any future long draw:
+grep "STANDING DOWN" then "BACK ON".
+
+Sibling finding left OPEN (ISSUES.md): late-game squads average 3.2 units
+and BOTH C++ engage gates (AttackTask groupWeak/nearMargin, SquadTask
+squadOverwhelms) test the lone fragment against the whole porc cluster --
+40k mobile metal died killing 3.8k of statics in one draw. Proposed fix
+(unbuilt): a nearby-ALLY power sum, symmetric to the enemy-side localInfl
+aggregation. Also unbuilt: a corsilo request sat inFlight for 10 minutes
+with no builder (silo execution, t007).
+
+## 2026-08-21: commander anti-stall -- tried, measured, DEFAULT OFF (apex_comm_hot_secs)
+
+The t003 stall (commander "leaving" 10+ times over 7 minutes, zero
+displacement, retreat destination = the hot base it stood in) got a direct
+countermeasure: sustained influence at the commander's own tile with no
+displacement forces the steered CmdMoveTo, hp-independent, post-T2
+(events.as anti-stall block). A/B vs the flee-85 control (10W-6L-8D):
+8W-9L-7D, 77 marches fired, commander-death losses 4/6 -> 7/9 -- the march
+fires and the commander dies anyway (or the yanking off tasks hurts).
+Default 0; the code and tunable stay for experiments. The stall's ROOT --
+RetreatTask's destination being the already-hot base -- remains open in
+ISSUES.md.
+
+## 2026-08-21: commander DEAD-MAN arms at 0.85 (was 0.55) -- measured direction-positive, kept
+
+Forensics over 8 com-death 1v1 losses: SLOW EXPOSURE dominates -- the
+commander holds a build task at ~100% hp on influence-hot ground for 5-9
+minutes, then one volley crosses the soft retreat (0.85) and the DEAD-MAN
+(0.55) in 2-10s, faster than either produces movement. Fix: arm the
+guaranteed CmdMoveTo at the same 0.85 where the soft retreat already logs.
+A/B (modoption, 24-game 3-map benchmark vs the 11W-8L-5D control):
+10W-6L-8D, DEAD-MAN fires 51 -> 215, losses ending in commander death
+7/8 -> 4/6. Power is modest (n=24, W/L within noise) but the mechanism
+metric and the loss count both moved the intended way at near-zero cost
+(the trigger still requires influence at the commander's own tile).
+STILL OPEN from the same forensics (ISSUES.md): a commander that logs
+"leaving" 10+ times over 7 minutes with zero net displacement -- the soft
+Retreat() path produces no movement while a RETREAT task is held.
+
+## 2026-08-21: T1 arty reweight -- tried, measured, REVERTED (do not re-propose without new evidence)
+
+Hypothesis (adversarial panel round 4): choke maps are lost for want of
+artillery -- corwolv is weighted 0.00 below 25 m/s income in factory.json's
+corvp block and legbar 0.00 at every tier, so duel-income games cannot answer
+a Punisher wall. Tried corwolv tier0/1 at 0.06/0.08 and a legbar floor.
+Measured, same 24-game 3-map benchmark: 7W-10L-7D against 11W-8L-5D without
+it, with Altair -- the map it was aimed at -- going 2-5-1 -> 1-5-2. Wolverines
+were built (composition confirmed the path fired) and the economy stayed
+ahead of stock's; the results still went the wrong way. Reverted whole.
+The cross-examination had already weakened the evidence: the zero-arty games
+were the SHORT losses, i.e. low income explained by early defeat, not defeat
+by missing arty. The Altair discriminator that survives is mT2=0 in 4/5
+losses, and the economy tracer cleared expansion (mex parity in 4/5 losses;
+ownBuilders collapse and structure deaths say the fights reach the base) --
+Altair is a fight-quality problem with no room to absorb it, not a
+composition or mex problem.
+
+## 2026-08-21: DefendTask engage gate -- built, measured, DEFAULT OFF (do not re-propose as-is)
+
+Mechanism (real, verified in source): a defend pool's only strength gate is
+checkPower*4 <= ThreatMap::GetThreatAt(ePos), and that layer reads ~0 almost
+everywhere -- a Punisher wall rates as empty ground; the approach path's
+threat cost collapses to distance; one-shot units never trigger the squad
+retreat vote (needs WOUNDED voters); Merge/Start send reinforcements solo
+CmdMoveTo to the dying leader. The localInfl safety massing.as promises
+exists only in CAttackTask.
+
+Fix tried: port the group-influence refusal into CDefendTask::FindTarget
+(apex_defend_engage_margin), scoped off atUs/base-ring. Measured on the
+24-game 3-map 1v1 benchmark, both margins vs the no-gate arm (11W-8L-5D):
+margin 1.0 -> 6W-7L-11D, margin 0.6 -> 8W-7L-9D. The gate converts losses
+into timeout draws (draws 5 -> 9-11) without adding wins; finishing is
+already the weak axis, so refusal-shaped safety is the wrong currency here.
+Kept in the DLL behind the tunable, default 0. The UNTRIED half of the
+diagnosis remains open in ISSUES.md: threat-aware approach PATHS and gating
+the solo reinforcement trickle, which stop the bleed without forbidding the
+fight.
+
+## 2026-08-21: retreat config was rolling a per-game army timidity dice -- fixed, 1v1 benchmark 3W -> 11W
+
+behaviour.json still carried the pre-migration 2-element retreat form
+("fighter": [0.50, 1.0], comment "[<default>, <modifier>]"). The current DLL
+parses index 0/1 as MIN/MAX (MilitaryManager.cpp:314-317) and rolls ONE
+uniform threshold per game: our whole army's retreat point was drawn from
+50-100% hp (builders 85-100%), so about half of all games were played by an
+army that fled at three-quarters health, back turned, released only at 98%.
+Stock's shipped hard profile has the same stale lines, so the roll was
+symmetric -- what it explains is not the old losses but this benchmark's
+NOISE (unchanged-AI swings): each side flips its own timidity coin per game.
+Fix: the 3-element form upstream's hard_aggressive already uses
+([0.50, 0.55, 1.0] / [0.80, 0.89, 1.0]).
+
+Measured, 24-game 3-map 1v1 vs BARb:stable:hard, same maps/seeds as the
+baseline (tournaments/20260821-012258-1v1-baseline-3maps vs
+20260821-*-1v1-retreatfmt-fix): 3W-15L-6D -> 11W-8L-5D. Comet 2-6 -> 6-2,
+Avalanche 0-3-5 -> 3-1-4, Altair 2-5-1 (choke map, still losing -- the
+DefendTask porc story). Death profile moved the intended way: fight:defend
+deaths went from ~0 to a leading bucket (units die fighting, not fleeing).
+
+Found by the adversarial 1v1 panel (retreat-mechanics agent), cross-examined
+against the battle-reconstruction agent whose "engagement, not retreat"
+verdict also stands: both shared this root cause.
+
 ## Change log
 
 Full detail moved to `changes/<date>.md`, one file per day, newest first. This index lists each day's entry titles; open the day file for the mechanism, evidence, and measurement.

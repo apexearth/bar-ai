@@ -979,7 +979,16 @@ const float TUNE_UNBLOCK = 1.f;
 // manager/builder/events.as [fraction 0-1] -- Commander health fraction below
 //   which he immediately moves away from enemy influence, whatever he is
 //   holding.
-const float TUNE_COMM_FLEE_HP = 0.55f;
+const float TUNE_COMM_FLEE_HP = 0.85f;
+// manager/builder/events.as [seconds] -- A commander that sits on ground with
+//   real enemy influence this long without actually moving is force-marched
+//   away regardless of hp; 0 disables the anti-stall. Default 0: measured
+//   2026-08-21 (24-game 1v1 A/B), 77 marches fired and commander-death losses
+//   did not fall.
+const float TUNE_COMM_HOT_SECS = 0.f;
+// manager/builder/events.as [influence] -- Tile influence that counts as hot
+//   ground for the anti-stall clock.
+const float TUNE_COMM_HOT_INFL = 5.f;
 // manager/builder/events.as -- CRetreatTask is not an IBuilderTask, so
 //   nothing re-evaluates it every ~1s the way a builder task is -- a
 //   commander that goes...
@@ -1015,6 +1024,14 @@ const float TUNE_AIRSCOUT_PER = 120.f;
 //   at the plant until the wave releases them together; 0 sends them out as
 //   built.
 const float TUNE_AIR_HOME_WAVE = 1.f;
+// manager/air/wing.as [ratio] -- Enemy AA under this fraction of our own team
+//   army counts as DOMINATED: the assassin's absolute AA ceiling waives and a
+//   standing abort un-latches, so a beaten enemy's leftover flak cannot veto
+//   the one weapon that targets the win condition. 0 keeps the ceiling only.
+const float TUNE_AIR_DOMINANCE_AA = 0.15f;
+// manager/air/wing.as [ratio] -- Enemy field army under this fraction of ours
+//   counts as gone for the dominance waiver.
+const float TUNE_AIR_DOMINANCE_ARMY = 0.2f;
 // manager/air/wing.as [metal/s] -- Metal income at which the first air plant
 //   becomes mandatory for everyone (the air lead gets one earlier).
 const float TUNE_AIR_MANDATORY_INCOME = 60.f;

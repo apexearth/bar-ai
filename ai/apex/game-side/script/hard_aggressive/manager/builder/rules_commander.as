@@ -45,6 +45,8 @@ int gCommRetreatStreak = 0;
 int gCommRetreatCut = 0;
 int gNextCommDiag = 0;
 int gNextCommDeadman = 0;   // events.as: task-independent flee throttle
+int gCommHotSince = 0;      // events.as: anti-stall clock on hot ground
+AIFloat3 gCommHotAnchor;    // events.as: where the clock was last reset
 IUnitTask@ gCommLastLogged = null;  // see maketask.as's catch-all accept log
 
 // The dev gadget's commIdle counts an EMPTY ENGINE COMMAND QUEUE, which is a

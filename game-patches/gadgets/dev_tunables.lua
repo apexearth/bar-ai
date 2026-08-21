@@ -31,6 +31,7 @@ local NAMES = {
 	"apex_prefer_target",
 	"apex_siege_fight",
 	"apex_fight_travel",
+	"apex_defend_engage_margin",
 	"apex_medic_share",
 	"apex_medic_r",
 	"apex_engage_margin",
@@ -168,7 +169,11 @@ local NAMES = {
 	"apex_intercept_r",      -- air/update.as: radius of the home air-raid sensor (1400)
 	"apex_intercept_min",    -- air/update.as: enemy air value that summons the pool (500)
 	"apex_intercept_min_fighters", -- air/update.as: fighters held before we answer an ally (4)
-	"apex_comm_flee_hp",     -- rules_commander.as: health below which the commander is hand-steered away (0.55)
+	"apex_comm_flee_hp",
+	"apex_comm_hot_secs",
+	"apex_comm_hot_infl",
+	"apex_air_dominance_aa",
+	"apex_air_dominance_army",     -- rules_commander.as: health below which the commander is hand-steered away (0.55)
 	"apex_bigeco_income",    -- obsolete.as: metal income where cleanup mode engages (500)
 	"apex_lag_speed",        -- perf.as: measured sim speed below which the host counts as lagging (0.98)
 	"apex_cleanup_per",      -- obsolete.as: income per concurrent cleanup reclaim in cleanup mode (150)

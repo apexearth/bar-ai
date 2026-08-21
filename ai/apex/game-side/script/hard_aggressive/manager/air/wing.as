@@ -5,6 +5,24 @@ float EnemyAACost()
 	return aiEnemyMgr.GetEnemyCost(RT::AA);
 }
 
+// The AA ceiling is ABSOLUTE, and that shape lost finished games: a drawn 40m
+// game stood the assassin down against 2.5k of AA while our army out-valued a
+// bare-commander remnant 12:1 -- and the bombers are the only weapon in the
+// stack that targets the enemy commander, the win condition. Dominance makes
+// AA affordable: their field army gone AND their AA small next to our own army.
+bool AADominated()
+{
+	const float k = ai.GetTunable("apex_air_dominance_aa", TUNE_AIR_DOMINANCE_AA);
+	if (k <= 0.f)
+		return false;
+	const float ours = Military::TeamArmyCost();
+	if (ours <= 1.f)
+		return false;
+	const float armyGone = ai.GetTunable("apex_air_dominance_army", TUNE_AIR_DOMINANCE_ARMY);
+	return (Military::EnemyArmyCost() < ours * armyGone)
+		&& (EnemyAACost() < ours * k);
+}
+
 bool Committed()
 {
 	return gCommitFrame >= 0;
@@ -20,7 +38,7 @@ bool Armed()
 		return false;
 	if (ai.frame < AIR_FROM)
 		return false;
-	return Committed() || (EnemyAACost() <= AIR_AA_CEILING);
+	return Committed() || (EnemyAACost() <= AIR_AA_CEILING) || AADominated();
 }
 
 int Have(CCircuitDef@ def)

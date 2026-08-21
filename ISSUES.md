@@ -1,5 +1,74 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN 2026-08-21: 1v1 vs stock -- 3W-15L-6D fixed to 17W-14L-17D (n=48 confirm); draws are the frontier
+
+UPDATE: the dominant mechanism was the 2-element retreat config rolling a
+per-game army timidity die (see CHANGES.md 2026-08-21). Fixed and measured:
+11W-8L-5D on the same benchmark. REMAINING: Altair Crossing 2-5-1 (choke map)
+and the DefendTask blindness below -- a defend pool's engage gate reads the
+dead threat map (power*4 <= ~0 never refuses), its path cost collapses to
+distance (walks through Punisher walls), one-shot units never trigger the
+squad-retreat vote, and reinforcements CmdMoveTo solo to the dying leader.
+The engage-refusal half was tried and measured OFF (CHANGES.md 2026-08-21:
+it traded losses for timeout draws at margins 1.0 and 0.6). STILL OPEN: the
+approach PATH is threat-blind (walks through Punisher range en route to a
+valid target) and reinforcements CmdMoveTo solo to the dying leader
+(DefendTask.cpp Start/Merge) -- fixes that stop the bleed without forbidding
+the fight.
+
+Fresh 3-map 1v1 benchmark (tournaments/20260821-012258-1v1-baseline-3maps,
+8 games each, all infologs gate-clean): Comet 2-6, Altair 1-6-1, Avalanche
+0-3-5 (the draw map). Adversarial panel + telemetry sorted the hypotheses:
+
+CONFIRMED LIVE at HEAD:
+- Army trades 1:3 to 1:5 in most losses AT ECONOMY PARITY (composition:
+  metal produced 45.2k vs 46.3k per player; we now waste LESS energy than
+  stock and out-moho it -- the balance campaign closed the eco gap).
+- deaths.py on t005/t006/t009: 34-37% of lost metal dies in curTask=retreat
+  (59-78 units/game, avg fwd 0.5-0.75), 12-24% dies under-construction,
+  fight buckets near zero. Round-2 agents are attributing engagement-loss
+  vs retreat-mechanics.
+- 11/15 losses end with our commander in DEAD-MAN flee <30s before gameover;
+  mostly the terminal symptom of the lost map, but >=3 early ones (13.0m,
+  14.6m, 16.7m) were even games -- avoidable forward com deaths. DEAD-MAN
+  fires at hp 47->3% inside 4s, far too late to matter.
+- Stock's winning shape: 24.8% static defence (corpun 17.4% of ALL its
+  metal), bigger real army share (23.5% vs 17.9%), 36.5k on necro
+  battlefield harvest. Our sinks contain ZERO artillery: mix.as has
+  RT::ARTY countering STATIC but ROLE_ARTY base is 3-5% at duel income,
+  counter-demand is LOS-gated, and NeedsLine damping multiplies arty DOWN
+  exactly when our line is bleeding on their porc (self-reinforcing
+  starvation; quota showed corwolv=1 held at 13m then gone).
+
+REFUTED at HEAD (do not re-derive): "no air in 1v1" (we build corap/corshad,
+more than stock); "TEAM PUSH / KILLING BLOW never fire solo" (both fire in
+most baseline games); "energy waste sinks us" (flipped -- stock wastes 3x us).
+
+
+CONFIRMED at n=48 (tournaments/20260821-043321-1v1-confirm-48, all 48
+gate-clean): 17W-14L-17D, decided-game rate 54.8% (CI 38-71) vs the session
+start's 16.7% (CI 6-39) -- non-overlapping, the gain is real. Per map:
+Comet 8-6-2, Altair 5-7-4 (near-parity now), Avalanche 4-1-11. The frontier
+is DRAWS (17/48), mostly crushed-but-unconverted: late-game squads average
+3.2 units and both C++ engage gates test the lone fragment vs the whole
+remnant porc (AttackTask groupWeak/nearMargin, SquadTask squadOverwhelms) --
+proposed nearby-ALLY power sum, unbuilt; ground targeting has NO commander
+case (the win condition); corsilo request sat inFlight 10 min unbuilt.
+
+## OPEN 2026-08-21: commander stands on hot ground for minutes, then dies inside one volley
+
+Forensics over 8 com-death losses (both 1v1 arms): SLOW EXPOSURE dominates
+(4/8) -- the commander holds a build task at ~100% hp on ground reading
+enemy influence 10-100+ for 5-9 MINUTES, then one volley crosses
+COM_RETREAT_HEALTH (0.85) and apex_comm_flee_hp (0.55) both, dead in 2-10s.
+DISTINCT BUG found in t003 (retreatfmt arm): 10+ "apex: commander leaving"
+lines over 7 minutes with ZERO net displacement -- Retreat() fires but the
+commander never moves; the DEAD-MAN direct CmdMoveTo is never reached while
+the soft RETREAT task is held. A/B running: apex_comm_flee_hp=0.85 modoption
+(arm the guaranteed move where the soft retreat already triggers). If
+commLost is unchanged there, the trigger is not the bottleneck and the
+class-B fix must be influence-time-based instead (leave ground that stays
+hot, post-T2).
 ## STATE 2026-08-20 (end of the balance campaign): stance layer live and measured; commit keeps its default with the plateau valve
 
 The eco/army balance loop closed with measurements on each leg:

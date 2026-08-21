@@ -751,6 +751,44 @@ void CommIdleAttribute()
 			}
 		}
 	}
+	// THE ANTI-STALL. A commander sat at 100% hp for seven straight minutes on
+	// tile influence 2-157, holding a RETREAT whose destination was the base it
+	// was already standing in -- the hp trigger above never fires at full
+	// health, and the soft retreat produces no displacement when home itself is
+	// the hot ground. Sustained influence at the commander's own tile with no
+	// actual movement is that stall's signature; march it away directly, the
+	// same steered move as the hp path. Post-T2 like the influence flee:
+	// pre-T2 a commander D-gunning raiders legitimately stands its ground.
+	if (Factory::gHaveT2) {
+		const float hotSecs = ai.GetTunable("apex_comm_hot_secs", TUNE_COMM_HOT_SECS);
+		if (hotSecs > 0.f) {
+			const AIFloat3 cp3 = u.GetPos(ai.frame);
+			const bool hot = ai.GetEnemyInflAt(cp3)
+					> ai.GetTunable("apex_comm_hot_infl", TUNE_COMM_HOT_INFL);
+			if (!hot || (cp3.SqDistance2D(gCommHotAnchor) > 200.f * 200.f)) {
+				gCommHotSince = ai.frame;
+				gCommHotAnchor = cp3;
+			} else if ((ai.frame - gCommHotSince > int(hotSecs) * SECOND)
+				&& (ai.frame >= gNextCommDeadman))
+			{
+				gNextCommDeadman = ai.frame + 3 * SECOND;
+				gCommHotSince = ai.frame;
+				gCommHotAnchor = cp3;
+				AIFloat3 away = cp3 - aiEnemyMgr.GetEnemyPos();
+				if (away.SqLength2D() > 1.f) {
+					away.SafeNormalize2D();
+					for (int step = 3; step >= 1; --step) {
+						AIFloat3 to = cp3 + away * (250.f * float(step));
+						if (OnMap(to)) {
+							u.CmdMoveTo(to);
+							AiLog(Factory::T() + "apex: commander parked on hot ground -- forced march away");
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
 	if ((t is null) || (t.GetType() == Task::Type::IDLE)
 		|| (t.GetType() == Task::Type::NIL))
 	{

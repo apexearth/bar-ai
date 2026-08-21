@@ -219,6 +219,14 @@ void Update()
 		Release("home wave massed");
 	}
 
+	// A stand-down latched against an enemy that has since lost its field army
+	// un-latches: the leftover flak of a beaten enemy must not veto the game's
+	// only commander-killing weapon.
+	if (gAbort && IsAirLead() && !gStrike && AADominated()) {
+		gAbort = false;
+		AiLog(Factory::T() + "apex: air assassin BACK ON -- enemy field army gone, "
+			+ "their AA small next to ours");
+	}
 	if (!IsAirLead() || gStrike || gAbort)
 		return;
 
@@ -265,7 +273,7 @@ void Update()
 
 	if (Massed()) {
 		Release("massed");
-	} else if (Committed() && (EnemyAACost() > AIR_AA_CEILING)) {
+	} else if (Committed() && (EnemyAACost() > AIR_AA_CEILING) && !AADominated()) {
 		if (HalfMassed()) {
 			Release("enemy AA rising, going early");
 		} else {

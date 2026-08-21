@@ -7587,10 +7587,18 @@ index 9e6bfd8..bd6450c 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
 diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
-index bfc3caf..d82dfcc 100644
+index bfc3caf..b36d06b 100644
 --- a/src/circuit/task/fighter/DefendTask.cpp
 +++ b/src/circuit/task/fighter/DefendTask.cpp
-@@ -26,9 +26,27 @@
+@@ -18,6 +18,7 @@
+ #include "unit/action/MoveAction.h"
+ #include "unit/action/SupportAction.h"
+ #include "unit/enemy/EnemyUnit.h"
++#include "unit/enemy/EnemyManager.h"
+ #include "unit/CircuitUnit.h"
+ #include "CircuitAI.h"
+ #include "util/Utils.h"
+@@ -26,9 +27,27 @@
  
  #include "OOAICallback.h"
  #include "AISCommands.h"
@@ -7618,7 +7626,7 @@ index bfc3caf..d82dfcc 100644
  using namespace springai;
  using namespace terrain;
  
-@@ -57,13 +75,23 @@ void CDefendTask::AssignTo(CCircuitUnit* unit)
+@@ -57,13 +76,23 @@ void CDefendTask::AssignTo(CCircuitUnit* unit)
  	CCircuitDef* cdef = unit->GetCircuitDef();
  	highestRange = std::max(highestRange, cdef->GetLosRadius());
  
@@ -7644,7 +7652,7 @@ index bfc3caf..d82dfcc 100644
  		travelAction = new CFightAction(unit, squareSize);
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
-@@ -91,8 +119,13 @@ void CDefendTask::Start(CCircuitUnit* unit)
+@@ -91,8 +120,13 @@ void CDefendTask::Start(CCircuitUnit* unit)
  //	AIFloat3 freePos = terrainMgr->FindSpringBuildSite(unit->GetCircuitDef(), pos, 300.0f, UNIT_NO_FACING);
  	pos = utils::is_valid(freePos) ? freePos : pos;
  
@@ -7659,7 +7667,7 @@ index bfc3caf..d82dfcc 100644
  		unit->CmdWantedSpeed(NO_SPEED_LIMIT);
  	)
  }
-@@ -106,11 +139,45 @@ void CDefendTask::Update()
+@@ -106,11 +140,45 @@ void CDefendTask::Update()
  	 */
  	if (updCount % 32 == 1) {
  		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
@@ -7706,7 +7714,7 @@ index bfc3caf..d82dfcc 100644
  			}
  //			manager->DoneTask(this);  // NOTE: RemoveAssignee() will abort task
  			return;
-@@ -199,8 +266,10 @@ void CDefendTask::Merge(ISquadTask* task)
+@@ -199,8 +267,10 @@ void CDefendTask::Merge(ISquadTask* task)
  	for (CCircuitUnit* unit : rookies) {
  		unit->SetTask(this);
  
@@ -7718,7 +7726,7 @@ index bfc3caf..d82dfcc 100644
  		)
  	}
  	units.insert(rookies.begin(), rookies.end());
-@@ -225,7 +294,7 @@ bool CDefendTask::FindTarget()
+@@ -225,7 +295,7 @@ bool CDefendTask::FindTarget()
  	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
  	SArea* area = leader->GetArea();
  	CCircuitDef* cdef = leader->GetCircuitDef();
@@ -7727,7 +7735,7 @@ index bfc3caf..d82dfcc 100644
  	const float weaponRange = cdef->GetMaxRange() * 0.9f;
  	const int canTargetCat = cdef->GetTargetCategory();
  	const int noChaseCat = cdef->GetNoChaseCategory();
-@@ -248,7 +317,13 @@ bool CDefendTask::FindTarget()
+@@ -248,7 +318,13 @@ bool CDefendTask::FindTarget()
  		}
  
  		const AIFloat3& ePos = enemy->GetPos();
@@ -7742,7 +7750,7 @@ index bfc3caf..d82dfcc 100644
  			|| !terrainMgr->CanMoveToPos(area, ePos))
  		{
  			continue;
-@@ -258,8 +333,25 @@ bool CDefendTask::FindTarget()
+@@ -258,10 +334,50 @@ bool CDefendTask::FindTarget()
  		float checkPower = maxPower;
  		if (sqEBDist < sqBaseRange) {
  			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
@@ -7768,8 +7776,33 @@ index bfc3caf..d82dfcc 100644
 +		{
  			continue;
  		}
++		// The eThreat gate above reads the surf threat map, which measures ~0
++		// almost everywhere -- a Punisher line rates as empty ground and the
++		// pool walks into it. Enemy GROUP influence is the live layer (the same
++		// data AttackTask's strength test reads), so this can refuse walking
++		// the pool at ground whose standing groups outweigh it. Scoped away
++		// from home: what is on top of us (atUs) or inside the base ring is
++		// fought regardless. DEFAULT OFF: at margins 1.0 and 0.6 it traded
++		// losses for timeout draws without winning more (see CHANGES.md
++		// 2026-08-21); the lever stays for experiments.
++		const float engageMargin = circuit->GetTunable("apex_defend_engage_margin", 0.f);
++		if ((engageMargin > 0.f) && !atUs && (sqEBDist >= sqBaseRange)) {
++			float localInfl = .0f;
++			const std::vector<CEnemyManager::SEnemyGroup>& groups =
++					circuit->GetEnemyManager()->GetEnemyGroups();
++			for (const CEnemyManager::SEnemyGroup& g : groups) {
++				if (g.pos.SqDistance2D(ePos) < SQUARE(800.f)) {
++					localInfl += g.influence;
++				}
++			}
++			if ((localInfl > .0f) && (maxPower < localInfl * engageMargin)) {
++				continue;
++			}
++		}
  
-@@ -320,6 +412,15 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
+ 		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
+ 		const bool IsInWater = cdef->IsPredictInWater(elevation);
+@@ -320,6 +436,15 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -7785,7 +7818,7 @@ index bfc3caf..d82dfcc 100644
  		ActivePath(lowestSpeed);
  	} else {
  		Fallback();
-@@ -355,7 +456,18 @@ void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
+@@ -355,7 +480,18 @@ void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
  
  	if (!pPath->path.empty()) {
  		if (pPath->path.size() > 2) {
@@ -7805,7 +7838,7 @@ index bfc3caf..d82dfcc 100644
  		}
  	} else {
  		FallbackBasePos();
-@@ -401,9 +513,11 @@ void CDefendTask::Fallback()
+@@ -401,9 +537,11 @@ void CDefendTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
