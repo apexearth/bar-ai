@@ -130,6 +130,18 @@
       <label class="f">Speed (watch) <input id="l-speed" type="number" value="5" style="width:60px"></label>
       <label class="f">Seed <input id="l-seed" type="number" placeholder="random" style="width:80px"></label>
       <label class="f" id="l-gameswrap" style="display:none">Games <input id="l-games" type="number" value="6" style="width:60px"></label>
+      <label class="f">Start boxes
+        <select id="l-boxes" onchange="drawBoxPreview()">
+          <option value="lr">Left ↔ Right</option>
+          <option value="tb">Top ↔ Bottom</option>
+          <option value="trbl">Top-right ↔ Bottom-left</option>
+          <option value="tlbr">Top-left ↔ Bottom-right</option>
+        </select></label>
+      <label class="f">Box size <input id="l-boxsize" type="number" min="0.05" max="0.6" step="0.05"
+        placeholder="auto" style="width:70px" title="fraction of the map, blank = auto (0.38 small teams, 0.20 big)"
+        oninput="drawBoxPreview()"></label>
+      <label class="f">&nbsp;<canvas id="l-boxprev" width="72" height="72"
+        title="A = green, B = red"></canvas></label>
       <label class="f">Modoptions <input id="l-modopt" size="24" placeholder="apex_x=1 apex_y=0.5" title="space-separated k=v"></label>
       <button class="act primary" onclick="launch()">Launch</button>
     </div>
@@ -197,6 +209,17 @@ const api = async (path, body) => {
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;
 };
+// Repaint only when the content actually changed: the pollers used to replace
+// innerHTML wholesale every few seconds, which killed scroll position, focus
+// and in-flight clicks even when nothing was new.
+function setHTML(el, html) {
+  if (el._last === html) return false;
+  el._last = html;
+  const st = el.scrollTop;
+  el.innerHTML = html;
+  el.scrollTop = st;
+  return true;
+}
 function toast(msg, bad) {
   const t = $("#toast");
   t.textContent = msg; t.style.display = "block";
@@ -234,7 +257,7 @@ function showList() {
 async function loadGames() {
   const [ms, ts] = await Promise.all([api("/api/games?kind=matches"),
                                       api("/api/games?kind=tournaments")]);
-  $("#tourntable tbody").innerHTML = ts.map(t => {
+  setHTML($("#tourntable tbody"), ts.map(t => {
     const score = Object.entries(t.wins || {})
       .map(([k, v]) => `${esc(k.split(":")[0].split("-")[0])} ${v}`).join(" — ") || "—";
     return `<tr class="click" data-dir="${esc(t.dir)}">
@@ -242,8 +265,8 @@ async function loadGames() {
       <td>${esc(t.name.replace(/^\d{8}-\d{6}-/, ""))}</td>
       <td class="dim">${esc((t.maps || []).join(", "))}</td>
       <td>${t.done}/${t.planned || t.games}</td><td>${score}</td></tr>`;
-  }).join("") || `<tr><td class="dim" colspan="5">none</td></tr>`;
-  $("#matchtable tbody").innerHTML = ms.map(m => {
+  }).join("") || `<tr><td class="dim" colspan="5">none</td></tr>`);
+  setHTML($("#matchtable tbody"), ms.map(m => {
     if (m.running) return `<tr class="click" data-dir="${esc(m.dir)}">
       <td class="dim">${fmtWhen(m.name)}</td>
       <td colspan="4"><span class="badge warn">in progress / no result yet</span></td><td></td></tr>`;
@@ -257,29 +280,42 @@ async function loadGames() {
       <td class="dim">${esc((m.specs || []).join(" vs "))}</td>
       <td class="${apexWon ? "win" : winner ? "loss" : "dim"}">${esc(winner || m.reason || "—")}${flags}</td>
       <td class="dim">${m.minutes ? m.minutes.toFixed(0) + "m" : ""}</td><td></td></tr>`;
-  }).join("") || `<tr><td class="dim" colspan="6">none</td></tr>`;
+  }).join("") || `<tr><td class="dim" colspan="6">none</td></tr>`);
 }
 document.addEventListener("click", e => {
   const tr = e.target.closest("tr.click[data-dir]");
   if (tr) openGame(tr.dataset.dir);
 });
 let openDir = null, openTimer = null;
-async function openGame(dir) {
+async function openGame(dir, isRefresh) {
   openDir = dir; clearTimeout(openTimer);
   $("#gamelist").style.display = "none"; $("#gamedetail").style.display = "";
-  $("#gamedetailbody").innerHTML = `<div class="card">loading ${esc(dir)}…</div>`;
+  const body = $("#gamedetailbody");
+  // The loading flash belongs to a NEW open only. On the 5s auto-refresh it
+  // repainted the whole panel through a placeholder every cycle -- scroll,
+  // selection and the tool-output pane all died with it.
+  if (!isRefresh) { body._last = null; body.innerHTML = `<div class="card">loading ${esc(dir)}…</div>`; }
   try {
     const d = await api("/api/game?dir=" + encodeURIComponent(dir));
     if (openDir !== dir) return;
-    $("#gamedetailbody").innerHTML = d.matches ? renderTournament(d) : renderMatch(d);
-    if (!d.matches && d.chart) drawCharts(d);
+    // Preserve the tool-output pane across a repaint: it is user-requested
+    // content the server render knows nothing about.
+    const oldOut = $("#toolout");
+    const keep = oldOut && oldOut.style.display !== "none"
+      ? {html: oldOut.innerHTML, disp: oldOut.style.display} : null;
+    const changed = setHTML(body, d.matches ? renderTournament(d) : renderMatch(d));
+    if (changed && keep) {
+      const nowOut = $("#toolout");
+      if (nowOut) { nowOut.innerHTML = keep.html; nowOut.style.display = keep.disp; }
+    }
+    if ((changed || !isRefresh) && !d.matches && d.chart) drawCharts(d);
     // still running (single match) or partially done (tournament): keep refreshing
     const unfinished = d.running || (d.matches && d.done < (d.planned || d.games));
     if (unfinished) openTimer = setTimeout(() => {
-      if (openDir === dir && $("#gamedetail").style.display !== "none") openGame(dir);
+      if (openDir === dir && $("#gamedetail").style.display !== "none") openGame(dir, true);
     }, 5000);
   } catch (err) {
-    $("#gamedetailbody").innerHTML = `<div class="card">${esc(err.message)}</div>`;
+    if (!isRefresh) body.innerHTML = `<div class="card">${esc(err.message)}</div>`;
   }
 }
 const TOOL_BTNS = (dir, isTourn) => {
@@ -410,6 +446,7 @@ async function launch() {
     per_side: $("#l-perside").value, minutes: $("#l-min").value,
     speed: $("#l-speed").value, seed: $("#l-seed").value,
     games: $("#l-games").value,
+    boxes: $("#l-boxes").value, box_size: $("#l-boxsize").value,
     modoptions: $("#l-modopt").value.trim().split(/\s+/).filter(Boolean),
   };
   if (!body.map) return toast("pick a map", true);
@@ -419,6 +456,34 @@ async function launch() {
     loadJobs();
   } catch (e) { toast(e.message, true); }
 }
+// Mirror of run_match.py's box math, so the picker shows what the game gets.
+function drawBoxPreview() {
+  const cv = $("#l-boxprev"); if (!cv) return;
+  const g = cv.getContext("2d"), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H);
+  g.strokeStyle = "#2c3642"; g.strokeRect(0.5, 0.5, W - 1, H - 1);
+  const layout = $("#l-boxes").value;
+  const perSide = parseInt($("#l-perside").value || "1", 10);
+  const d = parseFloat($("#l-boxsize").value) || (perSide <= 4 ? 0.38 : 0.20);
+  const rects = [];   // [l, t, r, b] per ally, normalized
+  if (layout === "tb") {
+    rects.push([0, 0, 1, d], [0, 1 - d, 1, 1]);
+  } else if (layout === "trbl") {
+    rects.push([1 - d, 0, 1, d], [0, 1 - d, d, 1]);
+  } else if (layout === "tlbr") {
+    rects.push([0, 0, d, d], [1 - d, 1 - d, 1, 1]);
+  } else {
+    rects.push([0, 0, d, 1], [1 - d, 0, 1, 1]);
+  }
+  ["#5fbf77", "#e06c6c"].forEach((col, i) => {
+    const [l, t, r, b] = rects[i];
+    g.fillStyle = col + "55"; g.strokeStyle = col;
+    g.fillRect(l * W, t * H, (r - l) * W, (b - t) * H);
+    g.strokeRect(l * W + 0.5, t * H + 0.5, (r - l) * W - 1, (b - t) * H - 1);
+  });
+}
+$("#l-perside").addEventListener("change", drawBoxPreview);
+drawBoxPreview();
 let jobTimer = null, aliveJobs = new Set();
 function viewRun(dir) {
   document.querySelector('#nav button[data-tab="games"]').click();
@@ -431,7 +496,7 @@ async function loadJobs() {
     if ([...aliveJobs].some(id => !js.find(j => j.id === id && j.alive))
         && aliveJobs.size) loadGames();
     aliveJobs = new Set(js.filter(j => j.alive).map(j => j.id));
-    $("#jobs").innerHTML = js.length ? js.map(j => `
+    setHTML($("#jobs"), js.length ? js.map(j => `
       <div class="card" style="margin-bottom:10px">
         <div><span class="badge ${j.alive ? "warn" : j.exit === 0 ? "good" : "bad"}">
           ${j.alive ? "running" : "exit " + j.exit}</span>
@@ -444,7 +509,7 @@ async function loadJobs() {
             onclick="killJob('${j.id}')">Kill (whole tree)</button>` : ""}
           </span></div>
         <pre style="max-height:180px;margin:8px 0 0">${esc(j.tail.split("\n").slice(-14).join("\n"))}</pre>
-      </div>`).join("") : `<span class="dim">no jobs yet</span>`;
+      </div>`).join("") : `<span class="dim">no jobs yet</span>`);
     clearTimeout(jobTimer);
     if (js.some(j => j.alive)) jobTimer = setTimeout(loadJobs, 3000);
   } catch (e) {}

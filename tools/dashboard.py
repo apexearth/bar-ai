@@ -383,6 +383,11 @@ def build_launch_cmd(p):
         args += ["--sides", clean(p["sides"])]
     if p.get("boxes"):
         args += ["--boxes", clean(p["boxes"])]
+    if p.get("box_size") not in (None, "", 0, "0"):
+        bs = float(p["box_size"])
+        if not (0.02 <= bs <= 0.9):
+            raise ValueError("box_size out of range: %s" % bs)
+        args += ["--box-size", str(bs)]
     if mode == "watch":
         args += ["--watch"]
         if p.get("speed"):
