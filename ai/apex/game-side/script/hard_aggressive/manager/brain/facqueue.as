@@ -694,23 +694,29 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			t1AirRetired = (t2ap !is null) && (t2ap.count > 0)
 					&& (fac.circuitDef.id != t2ap.id);
 		}
-		// FIGHTER COVER, income-scaled like the scouts. The mandatory late
-		// plants exist partly for this -- apexearth: "plenty of fighter
-		// coverage" -- and the mix's ratio path alone leaves the sky to
-		// whatever slots survive the ground lines.
+		// Resolve bomber and scout defs FIRST so the fighter floor below can
+		// size itself off the actual standing fleet -- apexearth 2026-08-21:
+		// "at least 1 fighter for every other aircraft we have -- fighters
+		// must be >= 50% of the air fleet." Named "other" rather than
+		// "bomber" because the old cap (4 + 2*bombers) tracked bombers alone
+		// and had no idea scouts existed: bombers stalled low, so the fighter
+		// cap stalled at ~4-6 while the scout ratio below kept climbing on
+		// its own income term, unopposed by anything fighter-side.
+		CCircuitDef@ bomb = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::BOMBER);
+		CCircuitDef@ eye = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::SCOUT.type);
+		const int otherAircraft = int(bomb !is null ? bomb.count : 0)
+				+ int(eye !is null ? eye.count : 0);
+		// FIGHTER COVER, income-scaled like the scouts, floored again by the
+		// fleet ratio so fighters cannot be capped below parity by a thin
+		// bomber count while scouts keep multiplying beside them.
 		CCircuitDef@ wing = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::AA.type);
 		if (!t1AirRetired && (wing !is null) && wing.IsAvailable(ai.frame)) {
-			// ESCORT RATIO, not an independent income curve: fighters loiter
-			// and live while bombers die striking, so an income-only floor
-			// built "a whole ton of fighters" beside an empty bomber pool
-			// (apexearth, watching). The income term still applies, capped
-			// at twice the standing bombers plus a base air-cover four.
 			int fWant = 1 + int(aiEconomyMgr.metal.income
 					/ ai.GetTunable("apex_fighter_per", TUNE_FIGHTER_PER));
-			const int fCap = 4 + Air::Bombers()
-					* int(ai.GetTunable("apex_fighter_per_bomber", TUNE_FIGHTER_PER_BOMBER));
-			if (fWant > fCap)
-				fWant = fCap;
+			const int fWantRatio = int(float(otherAircraft)
+					* ai.GetTunable("apex_fighter_per_other", TUNE_FIGHTER_PER_OTHER));
+			if (fWantRatio > fWant)
+				fWant = fWantRatio;
 			defs.insertLast(wing);
 			want.insertLast(fWant);
 			isFloor.insertLast(true);
@@ -722,7 +728,6 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		// their converters or afus and bomb those." Income-scaled like the
 		// fighter floor above it; fighters fill first (floors are top-down), so
 		// the escort exists before the strike.
-		CCircuitDef@ bomb = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::BOMBER);
 		if (!t1AirRetired && (bomb !is null) && bomb.IsAvailable(ai.frame)) {
 			defs.insertLast(bomb);
 			want.insertLast(1 + int(aiEconomyMgr.metal.income
@@ -740,7 +745,6 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		// which is the other half of "air scouts more than any other
 		// aircraft, and the lab was often idle" (apexearth): idle while the
 		// scouts lived, scout-conveyor when they died, fighters never.
-		CCircuitDef@ eye = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::SCOUT.type);
 		if (!t1AirRetired && (eye !is null) && eye.IsAvailable(ai.frame)) {
 			int eyesN = 1 + int(aiEconomyMgr.metal.income
 					/ ai.GetTunable("apex_airscout_per", TUNE_AIRSCOUT_PER));

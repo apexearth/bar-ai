@@ -1096,12 +1096,21 @@ const float TUNE_AIR_STATION_NEAR = 400.f;
 //   income (plus one).
 const float TUNE_BOMBER_PER = 40.f;
 // manager/brain/facqueue.as [metal/s] -- One fighter wanted per this much
-//   metal income (plus one), capped by the per-bomber term.
+//   metal income (plus one); raised to the per-other-aircraft floor below
+//   whenever that is larger.
 const float TUNE_FIGHTER_PER = 40.f;
-// manager/brain/facqueue.as [ratio] -- Fighter cap: four base air-cover plus
-//   this many fighters per standing bomber -- fighters exist to escort, not to
-//   pile up beside an empty bomber pool.
+// manager/brain/facqueue.as [ratio] -- UNUSED as of 2026-08-21: superseded by
+//   TUNE_FIGHTER_PER_OTHER, which floors on the whole non-fighter fleet
+//   (bombers + scouts) instead of bombers alone. Left declared so a live
+//   tunable read of the old name does not error; no code path reads it.
 const float TUNE_FIGHTER_PER_BOMBER = 2.f;
+// manager/brain/facqueue.as [ratio] -- Fighter floor: this many fighters per
+//   standing non-fighter aircraft (bombers + scouts). apexearth 2026-08-21:
+//   "at least 1 fighter for every other aircraft we have -- fighters must be
+//   >= 50% of the air fleet." Takes over from the income term once the fleet
+//   is large enough to need it; 1.0 means fighters can reach parity with
+//   everything else combined.
+const float TUNE_FIGHTER_PER_OTHER = 1.f;
 // manager/air/wing.as [metal/s] -- The elected air lead builds its first air
 //   plant from this income -- earlier than everyone else, for the team's eyes.
 const float TUNE_INTEL_AIR_INCOME = 25.f;
