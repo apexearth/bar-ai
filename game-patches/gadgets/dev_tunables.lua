@@ -237,7 +237,6 @@ local NAMES = {
 	"apex_gantry_per_income",
 	"apex_pinpoint_n",
 	"apex_pinpoint_income",
-	"apex_pulsar_per_income",
 	"apex_path_infl_margin",
 	"apex_extra_plant_secs",
 	"apex_assist_per_cost",
