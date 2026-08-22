@@ -395,6 +395,14 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// One mex upgrade always in flight (advanced cons only; the enqueue and
+	// capability checks live in the rule).
+	if (isAdvCon) {
+		@t = MexUpLane(unit);
+		if (t !is null)
+			return t;
+	}
+
 	// The air plant the intel curve already wants -- mandatory-income lab, the
 	// advanced plant, the enemy-afloat reaction. Same slot and bounds as the
 	// rule above: PlantApproved's ledger is what keeps it one-at-a-time.

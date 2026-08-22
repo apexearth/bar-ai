@@ -411,6 +411,31 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 	return post;
 }
 
+// ONE MEX UPGRADE ALWAYS RUNNING. Brain.as:1601 promised this lane and it
+// never existed -- past apex_mexup_monopoly_income the mexup want competes
+// on a score the eco normalisation crushes (measured 0.0007 against
+// antinuke's 13 at 700 m/s, "brain orders mexup" ZERO all game), so a rich
+// economy stopped upgrading extractors entirely. This keeps exactly one
+// moho in flight whenever an advanced con is free and a target exists; the
+// auction still decides everything past the first.
+IUnitTask@ MexUpLane(CCircuitUnit@ unit)
+{
+	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::MEXUP)) > 0)
+		return null;
+	Want@ w = Brain::MexUpgradeWant(unit);
+	if ((w is null) || (w.def is null))
+		return null;
+	if (!unit.circuitDef.CanBuild(w.def))
+		return null;
+	if (ThreatFor(unit, w.pos) > CON_THREAT_VETO)
+		return null;
+	IUnitTask@ t = aiBuilderMgr.EnqueueMexUp(w.pos, w.def);
+	if (t !is null)
+		AiLog(Factory::T() + "apex: mexup lane -- one upgrade back in flight at "
+			+ formatFloat(Factory::SteadyIncome(), "", 0, 0) + " m/s");
+	return t;
+}
+
 // THE GANTRY GETS SITED BY US, WIDENING OUTWARD. The T3 pick returns a def
 // to the engine, and the engine's own siting fails silently on a footprint
 // that big in a full base core -- an armshltx approved at 19.8m was still

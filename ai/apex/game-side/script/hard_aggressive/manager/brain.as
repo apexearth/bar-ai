@@ -1328,8 +1328,20 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			// 8.4k used (apexearth, live) while converters trickled in at
 			// auction pace -- 265 m/s of free income outranks nearly
 			// anything, and the multiplier says so in the same units.
-			const float spillMult = 1.f
-					+ Builder::EnergySpare() / CONVERT_DRAW_BIG;
+			// FLOW OR BANK, whichever screams louder: EnergySpare (income
+			// minus pull) reads near zero while heavy building drains the
+			// flow -- yet the bank sat pinned at 100% with excess climbing
+			// (measured live: convert=3.7 vs antinuke=13 at full storage,
+			// "still crazy overflowing... not making converters"). A full
+			// bank means the flow has nowhere to go however busy it looks:
+			// price that state as a quarter of the whole income spilling.
+			float spare = Builder::EnergySpare();
+			if (aiEconomyMgr.isEnergyFull) {
+				const float f = aiEconomyMgr.energy.income * 0.25f;
+				if (f > spare)
+					spare = f;
+			}
+			const float spillMult = 1.f + spare / CONVERT_DRAW_BIG;
 			Want@ c = Simple("convert", CONVERT_VALUE * spillMult * (useBig ? BIG_CONV_VALUE : 1.f),
 					conv, false);
 			if (c !is null) {
