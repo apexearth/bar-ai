@@ -668,7 +668,13 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		CCircuitDef@ acon = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::BUILDER.type);
 		if ((acon !is null) && acon.IsAvailable(ai.frame)) {
 			defs.insertLast(acon);
-			want.insertLast(Factory::AIR_CON_MIN);
+			// Income-derived, not the flat minimum: 6 air cons at 400 m/s
+			// left the air arm's build power an afterthought -- apexearth:
+			// "I want to see that number be more like 20+. Having more of
+			// them should make it more likely that we end up with a T2 air
+			// lab at the appropriate time."
+			want.insertLast(1 + int(aiEconomyMgr.metal.income
+					/ ai.GetTunable("apex_aircon_per", TUNE_AIRCON_PER)));
 			isFloor.insertLast(true);
 		}
 		// TORPEDO BOMBERS ANSWER AN ENEMY IN THE WATER -- ABOVE the fighter and

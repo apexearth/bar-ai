@@ -193,10 +193,14 @@
 		// null and every consumer that asks by role -- the opener and the quota --
 		// skips it silently. armlun 0.00 on land was Armada's only skirmish-role T3;
 		// armraz 0.00 in water its only riot-role one.
+		// Weighted to the high-HP long-range pair on land (apexearth: "too
+		// many lunkheads, need more units like Titans and Vanguards... high
+		// HP and long range T3 -- unless we're on a water map"). armlun kept
+		// nonzero so its role survives; water block untouched.
 		"land": {
-			"tier0": [ 0.05,     0.35,     0.40,      0.00,     0.20,        0.00],
-			"tier1": [ 0.05,     0.25,     0.35,      0.15,     0.10,        0.10],
-            "tier2": [ 0.05,     0.25,     0.25,      0.20,     0.10,        0.15]
+			"tier0": [ 0.05,     0.30,     0.50,      0.10,     0.05,        0.00],
+			"tier1": [ 0.05,     0.20,     0.40,      0.25,     0.05,        0.15],
+            "tier2": [ 0.05,     0.15,     0.35,      0.30,     0.05,        0.20]
         },
 
         "water":{

@@ -6406,7 +6406,7 @@ index c3f5e98..e02338a 100644
  		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..8b353fe 100644
+index cd063e4..f99f320 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -6817,7 +6817,7 @@ index cd063e4..8b353fe 100644
  //	if (circuit->GetInflMap()->GetInfluenceAt(startPos) < -INFL_EPS) {
  //		SetTarget(nullptr);  // FIXME: back-forths group
  //	} else {
-@@ -178,12 +499,99 @@ void CAttackTask::Update()
+@@ -178,12 +499,104 @@ void CAttackTask::Update()
  
  	state = State::ROAM;
  	if (GetTarget() != nullptr) {
@@ -6840,7 +6840,13 @@ index cd063e4..8b353fe 100644
  			int xs, ys, xe, ye;
  			circuit->GetPathfinder()->Pos2PathXY(startPos, &xs, &ys);
  			circuit->GetPathfinder()->Pos2PathXY(position, &xe, &ye);
- 			if (GetHitTest()(int2(xs, ys), int2(xe, ye))) {
+-			if (GetHitTest()(int2(xs, ys), int2(xe, ye))) {
++			// apex: GetHitTest is a weapon-aim raycast (30-degree vertical
++			// veto). For a melee charger ARRIVING is the engagement -- on a
++			// ridge the aim test never passes and the charge never starts.
++			const bool losOk = (leader->GetCircuitDef()->IsCharger())
++					|| GetHitTest()(int2(xs, ys), int2(xe, ye));
++			if (losOk) {
 +				// apex: ASSEMBLE BEFORE THE FIGHT STARTS. DEPLOY_SLACK unfolds
 +				// the column into a line, but ENGAGE keys on the LEADER's
 +				// distance -- units strung back along the path get their arc
@@ -6918,7 +6924,7 @@ index cd063e4..8b353fe 100644
  				state = State::ENGAGE;
  				Attack(frame);
  				return;
-@@ -196,19 +604,115 @@ void CAttackTask::Update()
+@@ -196,19 +609,119 @@ void CAttackTask::Update()
  	}
  
  	if (GetTarget() == nullptr) {
@@ -7019,10 +7025,15 @@ index cd063e4..8b353fe 100644
 +			? CHARGE_THREAT_CEILING
 +			: (ATTACK_CEILING_MOD * riskDiv * attackPower
 +					/ circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
++	// apex: the aim raycast doubles as the path ENDPOINT filter, and unlike
++	// the fallback multi-query it has no goal-rescue when every radius node
++	// fails -- on steep ground a charger's path "solves" at its own feet.
++	// A charger needs to physically arrive; walkability is the only filter.
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
  			leader, circuit->GetThreatMap(),
- 			startPos, endPos, pathRange, GetHitTest(),
+-			startPos, endPos, pathRange, GetHitTest(),
 -			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
++			startPos, endPos, pathRange, isCharge ? nullptr : GetHitTest(),
 +			threatCeiling,
 +			false, isCharge
 +					// apex: NOT quite zero. A Behemoth's D-gun one-shots even a
@@ -7036,7 +7047,7 @@ index cd063e4..8b353fe 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -225,12 +729,15 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -225,12 +738,15 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
@@ -7057,7 +7068,7 @@ index cd063e4..8b353fe 100644
  	}
  
  	if (units.find(unit) != units.end()) {
-@@ -238,28 +745,113 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,28 +754,114 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -7142,6 +7153,7 @@ index cd063e4..8b353fe 100644
 +	// behaviour nobody can prove ever ran -- which is how this repo has shipped
 +	// dead code more than once. Rate limited per task, not per call.
 +	if (isJuggernaut && (frame >= lastEngageLog + FRAMES_PER_SEC * 10)) {
++		lastEngageLog = frame;
 +		circuit->LOG("apex: juggernaut charge %s -- ignoring engage margin",
 +				cdef->GetDef()->GetName());
 +	}
@@ -7174,7 +7186,7 @@ index cd063e4..8b353fe 100644
  	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
  	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
  	for (unsigned i = 0; i < groups.size(); ++i) {
-@@ -269,10 +861,43 @@ void CAttackTask::FindTarget()
+@@ -269,10 +871,43 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -7222,7 +7234,7 @@ index cd063e4..8b353fe 100644
  			continue;
  		}
  
-@@ -319,18 +944,198 @@ void CAttackTask::FindTarget()
+@@ -319,18 +954,198 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -7422,7 +7434,7 @@ index cd063e4..8b353fe 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -340,6 +1145,61 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +1155,61 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -7484,7 +7496,7 @@ index cd063e4..8b353fe 100644
  		ActivePath(lowestSpeed);
  	} else {
  		FallbackFrontPos();
-@@ -349,7 +1209,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -349,7 +1219,33 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -7519,7 +7531,7 @@ index cd063e4..8b353fe 100644
  	if (urgentPositions.empty()) {
  		FallbackBasePos();
  		return;
-@@ -387,8 +1273,26 @@ void CAttackTask::FallbackBasePos()
+@@ -387,8 +1283,26 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -7547,7 +7559,7 @@ index cd063e4..8b353fe 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -421,7 +1325,9 @@ void CAttackTask::Fallback()
+@@ -421,7 +1335,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {

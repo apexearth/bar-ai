@@ -24,13 +24,12 @@ IUnitTask@ EnergyCrewTask(CCircuitUnit@ unit)
 		@t = EnergyConverter(unit);
 		if (t !is null)
 			return t;
-		// NOT the reactor chain: while the grid overflows, more generation
-		// is the one thing the energy crew must not add (watched live: the
-		// converter rung refused and this ladder fell through to fusions,
-		// 7 -> 9, during 17 straight minutes of wasting=1). Fall through to
-		// the shared ladder instead and come back when the grid is tight.
-		return null;
 	}
+	// THE REACTOR CHAIN IS UNCONDITIONAL (apexearth 2026-08-21: "It doesn't
+	// matter if we're wasting. We should make more energy no matter what --
+	// always. The only time to consider slowing down on converters is if we
+	// aren't wasting energy."). Waste is converter fuel, not a reason to
+	// stop growing the grid.
 	@t = EcoFusion(unit);
 	if (t !is null)
 		return t;

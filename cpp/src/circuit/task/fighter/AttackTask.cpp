@@ -517,7 +517,12 @@ void CAttackTask::Update()
 			int xs, ys, xe, ye;
 			circuit->GetPathfinder()->Pos2PathXY(startPos, &xs, &ys);
 			circuit->GetPathfinder()->Pos2PathXY(position, &xe, &ye);
-			if (GetHitTest()(int2(xs, ys), int2(xe, ye))) {
+			// apex: GetHitTest is a weapon-aim raycast (30-degree vertical
+			// veto). For a melee charger ARRIVING is the engagement -- on a
+			// ridge the aim test never passes and the charge never starts.
+			const bool losOk = (leader->GetCircuitDef()->IsCharger())
+					|| GetHitTest()(int2(xs, ys), int2(xe, ye));
+			if (losOk) {
 				// apex: ASSEMBLE BEFORE THE FIGHT STARTS. DEPLOY_SLACK unfolds
 				// the column into a line, but ENGAGE keys on the LEADER's
 				// distance -- units strung back along the path get their arc
@@ -700,9 +705,13 @@ void CAttackTask::Update()
 			? CHARGE_THREAT_CEILING
 			: (ATTACK_CEILING_MOD * riskDiv * attackPower
 					/ circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
+	// apex: the aim raycast doubles as the path ENDPOINT filter, and unlike
+	// the fallback multi-query it has no goal-rescue when every radius node
+	// fails -- on steep ground a charger's path "solves" at its own feet.
+	// A charger needs to physically arrive; walkability is the only filter.
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			leader, circuit->GetThreatMap(),
-			startPos, endPos, pathRange, GetHitTest(),
+			startPos, endPos, pathRange, isCharge ? nullptr : GetHitTest(),
 			threatCeiling,
 			false, isCharge
 					// apex: NOT quite zero. A Behemoth's D-gun one-shots even a
@@ -823,6 +832,7 @@ void CAttackTask::FindTarget()
 	// behaviour nobody can prove ever ran -- which is how this repo has shipped
 	// dead code more than once. Rate limited per task, not per call.
 	if (isJuggernaut && (frame >= lastEngageLog + FRAMES_PER_SEC * 10)) {
+		lastEngageLog = frame;
 		circuit->LOG("apex: juggernaut charge %s -- ignoring engage margin",
 				cdef->GetDef()->GetName());
 	}

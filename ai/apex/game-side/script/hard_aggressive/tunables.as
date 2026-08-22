@@ -1472,6 +1472,9 @@ const float TUNE_ASSIST_RELEASE = 1.f;
 // ETA-derived crew before the peeler calls them over-staffed -- income
 // finishing fast outranks a perfectly even build-power spread.
 const float TUNE_PEEL_ECO_KEEP = 2.f;
+// manager/brain/facqueue.as [metal/s] -- One T1 air constructor wanted per
+// this much metal income (plus one), on the air line's floor.
+const float TUNE_AIRCON_PER = 20.f;
 // Roulette dominance cap: one want may score at most this multiple of all
 // other wants combined (1.5 => at most ~60% of the draw). 0 disables.
 const float TUNE_WANT_CAP = 1.5f;

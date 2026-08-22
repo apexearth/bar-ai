@@ -1751,7 +1751,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 						if (d2 !is null)
 							fleet += int(d2.count);
 					}
-					if ((fleet > 1) && (onUp * 2 >= fleet)) {
+					// No single-con exemption: with exactly ONE adv con the
+					// old (fleet > 1) guard let mexups monopolize it forever
+					// -- watched live, fusion asked 12.2m, progress 0.00 for
+					// 8+ minutes while moho went 3 -> 9 on the only adv con.
+					if (onUp * 2 >= fleet) {
 						if (ai.frame >= gNextMexupCapLog) {
 							gNextMexupCapLog = ai.frame + 60 * SECOND;
 							AiLog(Factory::T() + "apex: mexup capped at half the adv cons"
