@@ -17,6 +17,23 @@ in the same window. Shipped default measured 62% at 42.1min with mex 111 and
 | live curves + army funded from defence | rejected | 44% vs 62%, 2.4min slower, mex 98 vs 111 |
 | `apex_withdraw_odds=1.1` | rejected | 2.4min FASTER and trade 0.67 vs 0.63 on maps A, but 44% vs 56% and metal rate -37% on four FRESH maps; pooled 53% vs 59% |
 | `apex_withdraw=0` (never withdraw) | rejected | 50% vs 62%, slower, despite the best trade of any arm (0.76) |
+| `apex_gantry_per_income=75` (double the T3 commitment) | rejected | 47% vs 59% pooled over BOTH map sets; 3.1min faster on B, no change on A |
+
+THE RESULT IS A FRONTIER, NOT A MISSING SETTING. Pooled over 32 games each,
+across two independent four-map sets:
+
+| config | record | mean win time |
+|---|---|---|
+| shipped default | 19W-6L-7D (59%) | 43.2 min |
+| `apex_gantry_per_income=75` | 15W-7L-10D (47%) | 41.7 min |
+| `apex_withdraw_odds=1.1` | 17W-9L-6D (53%) | **40.9 min** |
+
+Every config that closes faster costs win rate, roughly 2 minutes per 6 points.
+Nothing found buys speed for free, so the default ships unchanged. If a faster
+finish is wanted at a known price, `apex_withdraw_odds=1.1` is the best point
+measured (-2.3min for -6 points) -- and note it is map-dependent: it held win
+rate on the richer map set (62%, -2.5min, economy -4.7%) and collapsed on the
+small/poor one (44% vs 56%, economy -37%).
 
 TWO METHOD TRAPS BURNED HERE, both worth not repeating:
 - A 30-minute cap gave 15 draws in 16 games and read as "the AI cannot finish".
