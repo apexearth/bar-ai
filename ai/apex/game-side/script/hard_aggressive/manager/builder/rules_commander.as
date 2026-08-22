@@ -657,7 +657,7 @@ IUnitTask@ HomeTower(CCircuitUnit@ unit, bool isComm)
 }
 
 IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm, bool urgentOnly = false,
-		bool nearOnly = false)
+		bool nearOnly = false, bool lightOnly = false)
 {
 	// The commander plants most of the early mexes; MexGuard (inside the
 	// !isComm block below) does not cover it, so this handles ANY builder, ANY
@@ -722,7 +722,11 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm, bool urgentOnly = 
 	if (!have)
 		return null;
 
-	CCircuitDef@ tower = MexGuardTower(unit, bare);
+	// lightOnly: the dedicated metal crew's underfoot sentry stays the cheap
+	// tier whatever the income -- MexGuardTower tiers up to T2 towers past
+	// 50 m/s, which is build power the crew owes to mexes, not fortresses.
+	CCircuitDef@ tower = lightOnly ? SideDef3(armllt, corllt, leglht)
+			: MexGuardTower(unit, bare);
 	if ((tower is null) || !tower.IsAvailable(ai.frame))
 		return null;
 	const AIFloat3 site = ai.FindBuildSiteNear(tower, bare, MEX_GUARD_RADIUS);

@@ -38,8 +38,8 @@ IUnitTask@ EnergyCrewTask(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 	// The allowed exceptions: a sentry on a bare extractor underfoot costs
-	// no walk and protects the ground the crew works on.
-	return CommanderMexGuard(unit, false, false, true);
+	// no walk and protects the ground the crew works on. Cheap tier only.
+	return CommanderMexGuard(unit, false, false, true, true);
 }
 
 IUnitTask@ MetalCrewTask(CCircuitUnit@ unit)
@@ -49,7 +49,7 @@ IUnitTask@ MetalCrewTask(CCircuitUnit@ unit)
 		return t;
 	// The near-guard exception first: the mex just finished gets its sentry
 	// before this con walks to the next spot.
-	@t = CommanderMexGuard(unit, false, false, true);
+	@t = CommanderMexGuard(unit, false, false, true, true);
 	if (t !is null)
 		return t;
 	const AIFloat3 me = unit.GetPos(ai.frame);
@@ -67,8 +67,14 @@ IUnitTask@ MetalCrewTask(CCircuitUnit@ unit)
 			}
 		}
 	}
-	// No open spot: guard a bare extractor anywhere in reach.
-	return CommanderMexGuard(unit, false);
+	// No open spot: fall through to the shared ladder, where Brain::Decide's
+	// mexup want gives an advanced metal con its moho work. The full-reach
+	// guard pass that stood here turned the crew into a defense conveyor --
+	// the guard tower tiers with income, so past 50 m/s "guarding" meant
+	// walking mex to mex building T2 towers (apexearth: "most of our 'metal'
+	// cons are walking to the mex sites and just building T2 defenses").
+	// The underfoot sentry above stays: one cheap tower on the mex just made.
+	return null;
 }
 
 }  // namespace Builder
