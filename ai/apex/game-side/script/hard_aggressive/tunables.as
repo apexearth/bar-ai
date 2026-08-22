@@ -1444,6 +1444,13 @@ const float TUNE_DEDICATE_PER = 3.f;
 // Advanced-con dedication ratio: one ENERGY dedicate per this many enlisted
 // advanced cons (apexearth: "If we [have] 2, we could assign 1 to energy").
 const float TUNE_DEDICATE_PER_ADV = 2.f;
+// Seconds of steady income that let an extra advanced plant bypass the
+// afus/pulsar/army milestones outright -- at 500 m/s a 900-metal lab is 2s.
+const float TUNE_EXTRA_PLANT_SECS = 5.f;
+// Workers a big eco build deserves: 1 + costM/this (BigBuildWorkersWanted).
+const float TUNE_ASSIST_PER_COST = 1500.f;
+// Cost floor for the big-build assist scan.
+const float TUNE_BIGBUILD_COST = 2000.f;
 // manager/builder/rules_rezzer.as [ratio] -- share of the rez fleet that
 //   serves as battlefield medics: they stay with the army's staging anchor,
 //   repair the wounded during fights and reclaim the aftermath there. The

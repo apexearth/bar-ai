@@ -547,7 +547,16 @@ bool PlantApproved(CCircuitDef@ want)
 				// gate opened widest just after a lost fight. Standing army
 				// against what the enemy fields closes it again.
 				&& !Military::Outmassed();
-		if (!safeEnough || !armyFed) {
+		// AN ECONOMY THAT DWARFS THE PLANT OVERRULES THE MILESTONES: the
+		// afus+pulsar+army discipline was written against ~50 m/s, and at
+		// 400-545 m/s it still vetoed a 900-metal air lab for 16+ minutes
+		// (watched live) because pulsar=0 -- a checklist claim, not an
+		// economic one. When income repays the plant inside a few seconds,
+		// the discipline has nothing left to protect.
+		const bool dwarfed = SteadyIncome()
+				* ai.GetTunable("apex_extra_plant_secs", TUNE_EXTRA_PLANT_SECS)
+				>= want.costM;
+		if ((!safeEnough || !armyFed) && !dwarfed) {
 			if (ai.frame >= gNextT2TotalLog) {
 				gNextT2TotalLog = ai.frame + 60 * SECOND;
 				AiLog(T() + "apex: " + want.GetName() + " refused -- extra "

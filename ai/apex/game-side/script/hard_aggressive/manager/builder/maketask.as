@@ -389,6 +389,12 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// The T3 gantry, sited by us with a widening search -- the engine's own
+	// siting fails silently on its footprint in a full base core.
+	@t = GantryAtRear(unit);
+	if (t !is null)
+		return t;
+
 	// The air plant the intel curve already wants -- mandatory-income lab, the
 	// advanced plant, the enemy-afloat reaction. Same slot and bounds as the
 	// rule above: PlantApproved's ledger is what keeps it one-at-a-time.
@@ -403,6 +409,14 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	@t = CommanderMexGuard(unit, isComm);
 	if (t !is null)
 		return t;
+	// A big frame short of its cost-scaled worker floor pulls this builder
+	// before expansion can -- a placed reactor or gantry is dead metal until
+	// it finishes. Not for the commander: its own rules keep the final say.
+	if (!isComm) {
+		@t = BigBuildAssist(unit);
+		if (t !is null)
+			return t;
+	}
 	tp = Perf::T0();
 	IUnitTask@ task = aiBuilderMgr.DefaultMakeTask(unit);
 	Perf::Add("mt.default", tp);

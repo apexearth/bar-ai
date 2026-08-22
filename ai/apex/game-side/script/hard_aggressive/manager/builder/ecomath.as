@@ -109,4 +109,66 @@ void EcoMathDiag()
 	AiLog(Factory::T() + line);
 }
 
+// A PLACED BIG BUILD IS DEAD METAL UNTIL IT FINISHES -- staff it like it
+// matters (apexearth 2026-08-21: "an afus placed in a bad location, it needs
+// more build power"). Nothing here checked an ETA at all: a 4,000-metal
+// reactor with one lathe was legal and silent. Workers wanted scales with
+// the def's own cost -- no flat crew size -- and the assist rule below pulls
+// builders onto the thinnest big frame before expansion claims them.
+int BigBuildWorkersWanted(const CCircuitDef@ d)
+{
+	if (d is null)
+		return 0;
+	return 1 + int(d.costM / ai.GetTunable("apex_assist_per_cost", TUNE_ASSIST_PER_COST));
+}
+
+int gNextEtaLog = 0;
+
+IUnitTask@ BigBuildAssist(CCircuitUnit@ unit)
+{
+	IUnitTask@ thin = null;
+	int thinShort = 0;
+	float thinProg = -1.f;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ cand = Requests::gLive[i];
+		if ((cand is null) || cand.IsDead() || (cand.buildDef is null))
+			continue;
+		const int bt = cand.GetBuildType();
+		if ((bt != int(Task::BuildType::ENERGY)) && (bt != int(Task::BuildType::FACTORY)))
+			continue;
+		if (cand.buildDef.costM < ai.GetTunable("apex_bigbuild_cost", TUNE_BIGBUILD_COST))
+			continue;
+		const uint busy = Requests::Workers(cand);
+		if (busy == 0)
+			continue;   // not started: joining an unmanned ask is the door's job
+		const int want = BigBuildWorkersWanted(cand.buildDef);
+		if (int(busy) >= want)
+			continue;
+		if (!unit.circuitDef.CanBuild(cand.buildDef))
+			continue;
+		const AIFloat3 at = cand.GetBuildPos();
+		if (!OnMap(at) || (ThreatFor(unit, at) > CON_THREAT_VETO))
+			continue;
+		// The frame closest to done first -- same focus rule the join logic
+		// already follows; short-staffing breaks the tie.
+		const float prog = Requests::Progress(cand);
+		const int short_ = want - int(busy);
+		if ((thin is null) || (prog > thinProg)
+			|| ((prog == thinProg) && (short_ > thinShort)))
+		{
+			@thin = cand;
+			thinShort = short_;
+			thinProg = prog;
+		}
+	}
+	if ((thin !is null) && (ai.frame >= gNextEtaLog)) {
+		gNextEtaLog = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: big-build assist " + thin.buildDef.GetName()
+			+ " workers=" + Requests::Workers(thin)
+			+ "/" + BigBuildWorkersWanted(thin.buildDef)
+			+ " progress=" + formatFloat(thinProg, "", 0, 2));
+	}
+	return thin;
+}
+
 }  // namespace Builder

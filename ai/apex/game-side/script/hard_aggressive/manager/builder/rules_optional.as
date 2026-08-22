@@ -411,6 +411,56 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 	return post;
 }
 
+// THE GANTRY GETS SITED BY US, WIDENING OUTWARD. The T3 pick returns a def
+// to the engine, and the engine's own siting fails silently on a footprint
+// that big in a full base core -- an armshltx approved at 19.8m was still
+// unplaced at 36m in a watched 400 m/s game. Same shape as
+// AdvancedPlantAtRear above, with the search radius doubling until ground is
+// found (apexearth: "maybe we need to be willing to make these further
+// away") -- at gantry income the walk is cheaper than the wait.
+IUnitTask@ GantryAtRear(CCircuitUnit@ unit)
+{
+	if (!gHomeSet || !Factory::gHaveT2)
+		return null;
+	if (!Factory::WantMoreGantries() || !Factory::T3Worthwhile())
+		return null;
+	CCircuitDef@ gant = Factory::T3Gantry();
+	if ((gant is null) || !gant.IsAvailable(ai.frame))
+		return null;
+	if (!unit.circuitDef.CanBuild(gant))
+		return null;
+	if (ai.GetDefBuildProgress(gant) >= 0.f)
+		return null;
+	if (!Factory::PlantApproved(gant))
+		return null;
+	const AIFloat3 rear = RearOfBase(ai.GetTunable("apex_t2_rear_dist", TUNE_T2_REAR_DIST));
+	if (!OnMap(rear))
+		return null;
+	AIFloat3 site;
+	bool have = false;
+	float search = T2_REAR_SEARCH;
+	for (int tries = 0; tries < 4 && !have; ++tries) {
+		AIFloat3 at = ai.FindBuildSiteNear(gant, rear, search);
+		if (OnMap(at) && (ThreatFor(unit, at) <= CON_THREAT_VETO)) {
+			site = at;
+			have = true;
+		}
+		search *= 2.f;
+	}
+	if (!have)
+		return null;
+	if (!Requests::Allowed(gant, Task::BuildType::FACTORY, site, 0.f))
+		return null;
+	IUnitTask@ post = aiBuilderMgr.Enqueue(TaskB::Factory(Task::Priority::HIGH,
+			gant, site, null, 0.f));
+	if (post is null)
+		return null;
+	AiLog(Factory::T() + "apex: T3 gantry " + gant.GetName() + " sited at r="
+		+ int(search * 0.5f) + " fwd="
+		+ formatFloat(Military::ForwardFraction(site), "", 0, 2));
+	return post;
+}
+
 // THE AIR PLANT THE INTEL CURVE WANTS, WITHOUT WAITING FOR THE SWITCH CLOCK.
 //
 // Air::IntelPlantToBuild is otherwise consulted only inside ChooseFactory,

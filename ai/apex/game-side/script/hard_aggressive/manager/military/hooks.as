@@ -2,7 +2,13 @@ namespace Military {
 
 bool IsFodder(const CCircuitDef@ cdef)
 {
+	// Never a flyer: an air scout (Peeper, 39 metal, SCOUT role) passed the
+	// cost+role test and the spam routing claimed it -- but spam is ground
+	// fodder (spread, take fire, attack the fog); an air scout on that
+	// pattern is just intel thrown away (apexearth: "air scouts -- those
+	// don't count as spam"). Air:: owns everything that flies.
 	return (cdef !is null) && (cdef.costM < FODDER_COST())
+		&& !cdef.IsAbleToFly()
 		&& cdef.IsRoleAny(Unit::Role::SCOUT.mask | Unit::Role::RAIDER.mask);
 }
 

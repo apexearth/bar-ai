@@ -598,7 +598,31 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		if (!OnMap(where))
 			continue;
 		const float dist = spot.distance2D(where);
-		if (dist >= REACH)
+		// A BUILD THAT TRANSFORMS THE ECONOMY IS WORTH A LONGER WALK
+		// (apexearth: "detect that this building will double our energy
+		// output and thus be very much worth joining"). Impact is the def's
+		// own yield against the matching CURRENT income, so a reactor equal
+		// to the standing grid doubles this site's join reach and a solar
+		// moves it nothing; capped so one late-game monolith cannot recruit
+		// the whole map. WorthJoining's travel-vs-remaining test keeps the
+		// final say.
+		float reach = REACH;
+		if (cand.buildDef !is null) {
+			const float eMake = aiEconomyMgr.GetEnergyMake(cand.buildDef);
+			const float mMake = aiEconomyMgr.GetMetalMake(cand.buildDef);
+			float impact = 0.f;
+			if (eMake > 0.f) {
+				const float eInc = aiEconomyMgr.energy.income;
+				impact = eMake / ((eInc < 1.f) ? 1.f : eInc);
+			} else if (mMake > 0.f) {
+				const float mInc = aiEconomyMgr.metal.income;
+				impact = mMake / ((mInc < 1.f) ? 1.f : mInc);
+			}
+			if (impact > 3.f)
+				impact = 3.f;
+			reach *= 1.f + impact;
+		}
+		if (dist >= reach)
 			continue;
 		if ((unit !is null) && (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO))
 			continue;
