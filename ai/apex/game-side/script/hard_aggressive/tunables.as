@@ -1468,6 +1468,10 @@ const float TUNE_DEDICATE_MAX_FRAC = 0.5f;
 // Assisters beyond a site's ETA-derived worker count fall back into the
 // auction instead of being held to completion. 0 restores the glue.
 const float TUNE_ASSIST_RELEASE = 1.f;
+// Eco builds (energy, converter, mex, moho) keep this multiple of the
+// ETA-derived crew before the peeler calls them over-staffed -- income
+// finishing fast outranks a perfectly even build-power spread.
+const float TUNE_PEEL_ECO_KEEP = 2.f;
 // Roulette dominance cap: one want may score at most this multiple of all
 // other wants combined (1.5 => at most ~60% of the draw). 0 disables.
 const float TUNE_WANT_CAP = 1.5f;

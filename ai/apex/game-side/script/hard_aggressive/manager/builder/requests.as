@@ -726,6 +726,18 @@ void PeelSurplus()
 		int wantN = Builder::BigBuildWorkersWanted(t.buildDef);
 		if (wantN < 1)
 			wantN = 1;
+		// ECO SITES KEEP A BIGGER CREW. Peeling every site to the bare ETA
+		// crew slowed exactly the buildings that pay for everything else --
+		// apexearth, after watching the first peeled game: "We a little bit
+		// do not focus enough on eco now." Income buildings finish fast on
+		// purpose; the multiplier is the eco-vs-rest balance knob.
+		const int bt2 = t.GetBuildType();
+		if ((bt2 == Task::BuildType::ENERGY) || (bt2 == Task::BuildType::CONVERT)
+			|| (bt2 == Task::BuildType::MEXUP) || (bt2 == Task::BuildType::MEX))
+		{
+			wantN = int(float(wantN)
+					* ai.GetTunable("apex_peel_eco_keep", TUNE_PEEL_ECO_KEEP));
+		}
 		int surplus = int(crew.length()) - wantN;
 		// A few at a time, largest ids first -- the same stampede guard the
 		// hold rung uses: everyone reads the same pre-order counts.

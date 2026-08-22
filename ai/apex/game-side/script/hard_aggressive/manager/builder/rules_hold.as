@@ -209,6 +209,17 @@ IUnitTask@ HoldWorkInProgress(CCircuitUnit@ unit, bool isComm)
 					int wantN = BigBuildWorkersWanted(busy.buildDef);
 					if (wantN < 1)
 						wantN = 1;
+					// Same eco-keep the peeler applies: income sites hold a
+					// bigger crew before anyone is surplus.
+					const int bt3 = busy.GetBuildType();
+					if ((bt3 == Task::BuildType::ENERGY)
+						|| (bt3 == Task::BuildType::CONVERT)
+						|| (bt3 == Task::BuildType::MEXUP)
+						|| (bt3 == Task::BuildType::MEX))
+					{
+						wantN = int(float(wantN)
+								* ai.GetTunable("apex_peel_eco_keep", TUNE_PEEL_ECO_KEEP));
+					}
 					const int surplus = int(crew2.length()) - wantN;
 					if (surplus > 0) {
 						int higher = 0;

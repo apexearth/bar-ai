@@ -439,6 +439,7 @@ local NAMES = {
 	"apex_fighter_per_other", -- facqueue.as: fighter floor per standing non-fighter aircraft (1.0, >=50% of fleet)
 	"apex_dedicate_max_frac", -- crew.as: max share of a tier's cons in ENERGY+METAL roles combined (0.5)
 	"apex_assist_release",    -- rules_hold.as: surplus assisters re-enter the auction (1=on)
+	"apex_peel_eco_keep",     -- requests.as: eco builds keep this multiple of the ETA crew before peeling (2.0)
 	"apex_ghost_purge_secs",  -- CircuitAI: seconds a VISION-CONFIRMED-absent ghost survives (90)
 	"apex_ghost_stale_min",   -- CircuitAI: minutes a never-re-viewed ghost survives (15)
 	"apex_seen_cap_mult",     -- massing.as: enemy estimate ceiling as multiple of peak-seen-at-once (2.5)
