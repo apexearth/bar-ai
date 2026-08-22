@@ -166,6 +166,21 @@ bool EnergyWasting()
 	return aiEconomyMgr.isEnergyFull || (EnergySpare() >= CONVERT_MIN_SPARE);
 }
 
+// Names the gate that refused a converter, with the numbers it read -- the
+// asks went silent for 17 minutes of a watched overflow and nothing said
+// which test was failing. Throttled; one line per 30s at most.
+int gNextConvDiag = 0;
+void ConvDiag(const string &in gate, int inflight, int cap)
+{
+	if (ai.frame < gNextConvDiag)
+		return;
+	gNextConvDiag = ai.frame + 30 * SECOND;
+	AiLog(Factory::T() + "apex: converter refused at " + gate
+		+ " inflight=" + inflight + " cap=" + cap
+		+ " spare=" + formatFloat(EnergySpare(), "", 0, 0)
+		+ " eFull=" + (aiEconomyMgr.isEnergyFull ? "1" : "0"));
+}
+
 // The eco lead's converter BLOCK -- a packed rectangle from Base::'s shared
 // grid, not the one-every-25s trickle the generic rule below places. A
 // converter eats 70 energy/s and returns 1 metal/s for 1 metal to build, so
@@ -362,12 +377,16 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 	const int bySpill = int(spareForConv / Brain::CONVERT_DRAW_BIG);
 	if (bySpill > inflightCap)
 		inflightCap = bySpill;
-	if (outstanding >= inflightCap)
+	if (outstanding >= inflightCap) {
+		ConvDiag("inflight", outstanding, inflightCap);
 		return null;
+	}
 
 	AIFloat3 spot;
-	if (!ConvSpot(unit, want, spot))
+	if (!ConvSpot(unit, want, spot)) {
+		ConvDiag("spot", outstanding, inflightCap);
 		return null;
+	}
 	// Shake ZERO. The site came back from the terrain manager, so it is already
 	// the buildable spot -- letting the engine slide it again is exactly the
 	// sprawl this grid exists to stop.
@@ -452,12 +471,16 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	const int bySpill = int(spareForConv / Brain::CONVERT_DRAW_BIG);
 	if (bySpill > inflightCap)
 		inflightCap = bySpill;
-	if (outstanding >= inflightCap)
+	if (outstanding >= inflightCap) {
+		ConvDiag("inflight", outstanding, inflightCap);
 		return null;
+	}
 
 	AIFloat3 spot;
-	if (!ConvSpot(unit, want, spot))
+	if (!ConvSpot(unit, want, spot)) {
+		ConvDiag("spot", outstanding, inflightCap);
 		return null;
+	}
 	bool created = false;
 	IUnitTask@ post = Requests::Take(unit, want, Task::BuildType::CONVERT,
 			Task::Priority::NORMAL, spot, 0.f, 0.f, created);

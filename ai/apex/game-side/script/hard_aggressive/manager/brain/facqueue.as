@@ -538,7 +538,12 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		isFloor.insertLast(true);
 	}
 
-	if (ai.GetTunable("apex_mix_scout", TUNE_MIX_SCOUT) > 0.f) {
+	// GROUND scouts only -- on an air plant this same role resolves to the
+	// air scout and this mex-scaled FLOOR became the 37-scout conveyor the
+	// share-capped air-eyes ratio below was written to prevent (his 1v1:
+	// 37 armpeep, 6 fighters). Same exclusion the spam stream carries.
+	if ((ai.GetTunable("apex_mix_scout", TUNE_MIX_SCOUT) > 0.f)
+		&& !Factory::IsAirFactory(fac.circuitDef)) {
 		CCircuitDef@ scout = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::SCOUT);
 		if ((scout !is null) && scout.IsAvailable(ai.frame) && ScoutWorthIt(scout)) {
 			const float per = ai.GetTunable("apex_mix_scout_per_mex",

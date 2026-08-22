@@ -33,6 +33,8 @@ void AiSave(OStream& ostream)
  *   const float income;
  * }
  */
+int gNextEnergyLog = 0;
+
 void AiUpdateEconomy()
 {
 	const SResourceInfo@ metal = aiEconomyMgr.metal;
@@ -49,6 +51,19 @@ void AiUpdateEconomy()
 	}
 	// NOTE: Default energy-to-metal conversion TeamRulesParam "mmLevel" = 0.75
 	aiEconomyMgr.isEnergyFull = energy.current > energy.storage * 0.88f;
+
+	// The energy ledger, verbatim from the engine. eFull read 0 for a whole
+	// game whose owner watched 27k e/s binned -- before believing any gate
+	// built on these four numbers, read what they actually said.
+	if (ai.frame >= gNextEnergyLog) {
+		gNextEnergyLog = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: energy cur=" + formatFloat(energy.current, "", 0, 0)
+			+ "/" + formatFloat(energy.storage, "", 0, 0)
+			+ " inc=" + formatFloat(energy.income, "", 0, 0)
+			+ " pull=" + formatFloat(energy.pull, "", 0, 0)
+			+ " eFull=" + (aiEconomyMgr.isEnergyFull ? "1" : "0")
+			+ " wasting=" + (Builder::EnergyWasting() ? "1" : "0"));
+	}
 
 	isSwitchAssist = isSwitchAssist && aiFactoryMgr.isAssistRequired;
 	aiFactoryMgr.isAssistRequired = isSwitchAssist

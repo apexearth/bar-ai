@@ -488,6 +488,7 @@ void Update()
 	AiLog(Factory::T() + "apex: crew home=" + CountOf(HOME)
 		+ " mex=" + CountOf(MEX)
 		+ " front=" + CountOf(FRONT) + " eco=" + CountOf(ECO)
+		+ " energy=" + CountOf(ENERGY) + " metal=" + CountOf(METAL)
 		+ " tracked=" + gId.length() + " posts=" + gFrontPlaced.length()
 		+ " mexesBuilt=" + gMexBuilt
 		+ " died mex/front/eco=" + gDiedMex + "/" + gDiedFront + "/" + gDiedEco);
