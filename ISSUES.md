@@ -1,5 +1,39 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN 2026-08-22: "win faster vs medium" is NOT reachable by tuning -- 7 hypotheses, ~300 games
+
+Brief was: more aggressive, win more quickly, without sacrificing economic
+scaling. Every arm below is 16 games against `BARb:stable:medium`, 2v2, +40%
+handicap, 50-minute cap, four maps, side-swapped, against a matched control run
+in the same window. Shipped default measured 62% at 42.1min with mex 111 and
+16.5k metal/min; NOTHING beat it on both axes.
+
+| hypothesis | verdict | evidence |
+|---|---|---|
+| `apex_kill_from=0` earlier killing blow | rejected | kill/loss 0.30 vs 0.44 |
+| `apex_seen_halflife=180` | rejected | lost win rate + trade in two separate pairs |
+| `apex_push_team_ratio=1.25` | rejected | 10W-2L-4D vs 12W-1L-3D, 2min slower, mex 89 vs 104 |
+| `apex_budget_live=1` (the cached-curve bug fix) | noise | 23W-8L-9D vs 20W-10L-10D, metal rate -21% |
+| live curves + army funded from defence | rejected | 44% vs 62%, 2.4min slower, mex 98 vs 111 |
+| `apex_withdraw_odds=1.1` | rejected | 2.4min FASTER and trade 0.67 vs 0.63 on maps A, but 44% vs 56% and metal rate -37% on four FRESH maps; pooled 53% vs 59% |
+| `apex_withdraw=0` (never withdraw) | rejected | 50% vs 62%, slower, despite the best trade of any arm (0.76) |
+
+TWO METHOD TRAPS BURNED HERE, both worth not repeating:
+- A 30-minute cap gave 15 draws in 16 games and read as "the AI cannot finish".
+  At 50 minutes the same build wins 56-62%. Never judge closing speed on a cap
+  the games do not clear.
+- `mex` and `metalProduced` are CUMULATIVE, so an arm whose games end sooner
+  looks economically worse for that reason alone. Compare metal/MINUTE.
+
+WHAT THE EVIDENCE POINTS AT: army trade efficiency, stuck at 0.6 in every arm.
+Not thresholds, not budget. `deaths.py` across these runs: 42-56% of lost metal
+dies with curTask=retreat, 1-2s after the order, at 9-16% HP, while the
+"died fighting" bucket is under 1%. Both naive readings of that were tested and
+both failed (retreat sooner = O; never retreat = P), which means the fix is not a
+threshold on the existing mechanism -- it is the engagement/approach machinery
+itself (the threat-blind approach path and solo reinforcement trickle already
+recorded above). That is a C++ build-and-measure project, not a tuning pass.
+
 ## OPEN 2026-08-22: every SPEND_* target curve has only ever been read at income 0
 
 `CCircuitAI::GetTunable` caches its default on first call (CircuitAI.cpp:1683).
