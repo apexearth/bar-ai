@@ -1475,6 +1475,10 @@ const float TUNE_PEEL_ECO_KEEP = 2.f;
 // manager/brain/facqueue.as [metal/s] -- One T1 air constructor wanted per
 // this much metal income (plus one), on the air line's floor.
 const float TUNE_AIRCON_PER = 20.f;
+// manager/factory/choose.as [metal/s] -- Steady income past which the
+// extra-plant discipline (afus+pulsar+army-fed) stops vetoing additional
+// T2 plants of any kind.
+const float TUNE_LABS_FREE_INCOME = 200.f;
 // Roulette dominance cap: one want may score at most this multiple of all
 // other wants combined (1.5 => at most ~60% of the draw). 0 disables.
 const float TUNE_WANT_CAP = 1.5f;

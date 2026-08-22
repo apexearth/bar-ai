@@ -447,9 +447,13 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 		ConvDiag("wantNull", 0, 0);
 		return null;
 	}
-	// No new T1 converters once the ground is worth more than they return:
-	// reclaiming one and immediately rebuilding it is worse than leaving it.
-	if (LandIsPrecious() && (want is SmallConvDef(unit))) {
+	// No new T1 converters once the ground is worth more than they return --
+	// UNLESS the store is pegged full: at a measured 31k e/s binned, the
+	// ground argument loses to any converter at all, and this veto was the
+	// named refusal while apexearth watched the shortfall live.
+	if (LandIsPrecious() && (want is SmallConvDef(unit))
+		&& !aiEconomyMgr.isEnergyFull)
+	{
 		ConvDiag("landPrecious", 0, 0);
 		return null;
 	}

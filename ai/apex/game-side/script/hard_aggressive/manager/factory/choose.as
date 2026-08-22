@@ -556,7 +556,14 @@ bool PlantApproved(CCircuitDef@ want)
 		const bool dwarfed = SteadyIncome()
 				* ai.GetTunable("apex_extra_plant_secs", TUNE_EXTRA_PLANT_SECS)
 				>= want.costM;
-		if ((!safeEnough || !armyFed) && !dwarfed) {
+		// PAST THIS INCOME THE DISCIPLINE ENDS OUTRIGHT (apexearth
+		// 2026-08-22: "once we have >200 metal per second our lab
+		// restrictions need to get lifted. We can have bot, air, and
+		// vehicle no problem") -- flat, not per-cost like `dwarfed`, so a
+		// second heavy lab opens at the same bar as the cheap air plant.
+		const bool labsFree = SteadyIncome()
+				>= ai.GetTunable("apex_labs_free_income", TUNE_LABS_FREE_INCOME);
+		if ((!safeEnough || !armyFed) && !dwarfed && !labsFree) {
 			if (ai.frame >= gNextT2TotalLog) {
 				gNextT2TotalLog = ai.frame + 60 * SECOND;
 				AiLog(T() + "apex: " + want.GetName() + " refused -- extra "
