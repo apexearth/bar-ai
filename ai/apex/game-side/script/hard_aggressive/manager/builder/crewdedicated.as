@@ -14,9 +14,17 @@ IUnitTask@ EnergyCrewTask(CCircuitUnit@ unit)
 	IUnitTask@ t = HoldWorkInProgress(unit, false);
 	if (t !is null)
 		return t;
-	// Reactor first: the fusion chain is the thing a dedicated energy con
-	// exists to keep moving (apexearth: "4 T2 cons all upgrading mexes...
-	// too much dedication on one concern").
+	// SPILLING ENERGY FLIPS THE LADDER: a dedicated energy con building yet
+	// another generator while the grid overflows is the inversion apexearth
+	// keeps watching ("crazy overflowing energy and not making nearly enough
+	// converters... everyone feels energy is so crazy important") -- while
+	// EnergyWasting(), converters ARE the energy crew's job, and only then
+	// the reactor chain. In balance-or-short states the reactor stays first.
+	if (EnergyWasting()) {
+		@t = EnergyConverter(unit);
+		if (t !is null)
+			return t;
+	}
 	@t = EcoFusion(unit);
 	if (t !is null)
 		return t;

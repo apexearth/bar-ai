@@ -242,6 +242,7 @@ class Want
 
 array<Want@> gWants;
 int gNextBrainLog = 0;
+int gNextBrainLogT1 = 0;
 int gMexUpOrders = 0;
 int gNextMexupCapLog = 0;
 int gMexOrders = 0;
@@ -1497,9 +1498,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	if (roulette)
 		CapWants(order);
 
-	if (ai.frame >= gNextBrainLog) {
-		gNextBrainLog = ai.frame + 30 * SECOND;
-		string line = "apex: brain wants=" + order.length();
+	// SEPARATE CADENCE PER ELECTOR CLASS. One timer meant the printed list
+	// was whatever election happened to coincide -- in practice the adv-con
+	// auction, so the T1-con eco weights (energy vs convert vs mex) were
+	// invisible exactly when apexearth asked "we need logs on our weights"
+	// about an eco imbalance.
+	if (ai.frame >= (isAdvCon ? gNextBrainLog : gNextBrainLogT1)) {
+		if (isAdvCon)
+			gNextBrainLog = ai.frame + 30 * SECOND;
+		else
+			gNextBrainLogT1 = ai.frame + 30 * SECOND;
+		string line = "apex: brain wants(" + (isAdvCon ? "adv" : "t1") + ")=" + order.length();
 		for (uint i = 0; i < order.length(); ++i) {
 			// kind/def, so a ladder kind names the building it is currently
 			// asking for -- "energy" is a solar at minute 3 and a fusion at 15.
