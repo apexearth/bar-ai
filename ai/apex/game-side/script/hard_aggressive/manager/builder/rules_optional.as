@@ -422,7 +422,7 @@ IUnitTask@ MexUpLane(CCircuitUnit@ unit)
 {
 	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::MEXUP)) > 0)
 		return null;
-	Want@ w = Brain::MexUpgradeWant(unit);
+	Brain::Want@ w = Brain::MexUpgradeWant(unit);
 	if ((w is null) || (w.def is null))
 		return null;
 	if (!unit.circuitDef.CanBuild(w.def))
