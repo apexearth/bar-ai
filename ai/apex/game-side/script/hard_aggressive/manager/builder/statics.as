@@ -530,14 +530,18 @@ IUnitTask@ Pulsar(CCircuitUnit@ unit)
 	// Caps how many are going up AT ONCE (a different question from how many we
 	// end up with): each is 3,000-4,200 metal, so several simultaneous nanoframes
 	// freeze most of a mid-game bank in towers that defend nothing until they
-	// finish. Same asked-minus-standing idiom NukeSilo uses.
+	// finish.
 	// A full metal bank lifts the build-rate throttle: the freeze-the-bank
 	// risk the base cap guards against is exactly the state we are in.
 	// apexearth: "we're full on metal so we ought to be able to afford that."
 	int conc = PULSAR_CONCURRENT;
 	if (aiEconomyMgr.isMetalFull)
 		conc = int(ai.GetTunable("apex_pulsar_conc_full", TUNE_PULSAR_CONC_FULL));
-	if (gPulsarsAsked - gun.count >= conc)
+	// In-flight from the task registry, not asked-minus-standing: a pulsar
+	// task that dies (front site lost, walker killed) never becomes standing,
+	// so the asked ledger only ever grows and wedged this rule shut after
+	// `conc` asks for the rest of the game.
+	if (int(Requests::InFlight(gun)) >= conc)
 		return null;
 	// THE LINE THE BRAIN DRAWS, not the site ring. BorderPos picks among OUR
 	// OWN sites on the territory ring, which in practice is the base edge --

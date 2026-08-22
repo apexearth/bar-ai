@@ -276,14 +276,7 @@ IUnitTask@ ConverterPipeline(CCircuitUnit@ unit)
 	if ((big is null) || !big.IsAvailable(ai.frame)
 		|| !unit.circuitDef.CanBuild(big))
 		return null;
-	const int done = gBigConvDone;
 	const int count = int(big.count);
-	const int underway = (count > done) ? (count - done) : 0;
-	int outstanding = gConvPipeAsked - count;
-	if (outstanding < 0) {
-		gConvPipeAsked = count;
-		outstanding = 0;
-	}
 	// Concurrency scales with the spare energy the converters exist to eat:
 	// serial-one was right for 4,300-metal reactors and wrong here -- measured
 	// live (8v8), a player at 13k energy income used 4.5k and the one-at-a-
@@ -294,7 +287,9 @@ IUnitTask@ ConverterPipeline(CCircuitUnit@ unit)
 	int allowed = 1;
 	if (spare > 0.f)
 		allowed += int(spare / ai.GetTunable("apex_conv_per_spare", TUNE_CONV_PER_SPARE));
-	if (underway + outstanding >= allowed)
+	// In-flight from the task registry (walk included, dead tasks gone), not
+	// asked-minus-standing: that ledger wedged shut when an asked task died.
+	if (int(Requests::InFlight(big)) >= allowed)
 		return null;
 	AIFloat3 spot;
 	if (!ConvSpot(unit, big, spot))
@@ -346,13 +341,11 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 	if (built >= CONV_MAX)
 		return null;
 
-	// Outstanding bound, for the same reason the turrets have one: count sees
-	// finished buildings only and Enqueue does not dedup.
-	int outstanding = gEcoConvAsked - built;
-	if (outstanding > CONV_STALE) {
-		gEcoConvAsked = built;
-		outstanding = 0;
-	}
+	// In-flight from the task registry, not asked-minus-standing: standing
+	// converters get reclaimed (ObsoleteReclaim clears the small tier), which
+	// inflated `asked - built` into the [cap, CONV_STALE] deadband and wedged
+	// this rule shut for the rest of the game.
+	const int outstanding = int(Requests::InFlight(want));
 	// THE CAP IS THE SPILL, NOT SIX. Each big converter eats CONVERT_DRAW_BIG
 	// of the overflow, so the honest parallel bound is how many the spill can
 	// feed -- a flat 6 was the 4-fold shortfall apexearth measured at 20k+
@@ -438,20 +431,11 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	if (LandIsPrecious() && (want is SmallConvDef(unit)))
 		return null;
 
-	// The outstanding bound EcoConverters already carries, for the reason its own
-	// comment gives: count sees FINISHED buildings only and Enqueue does not
-	// dedup, so without this the cooldown alone re-asks forever. An unassigned
-	// task also holds a slot in the shared build-task budget for 300s, which is
-	// the budget mex expansion draws from.
-	CCircuitDef@ smallConv = SmallConvDef(unit);
-	CCircuitDef@ bigConv = BigConvDef(unit);
-	const int built = ((smallConv is null) ? 0 : smallConv.count)
-			+ ((bigConv is null) ? 0 : bigConv.count);
-	int outstanding = gConverts - built;
-	if (outstanding > CONV_STALE) {
-		gConverts = built;
-		outstanding = 0;
-	}
+	// In-flight from the task registry, not asked-minus-standing: standing
+	// converters get reclaimed (ObsoleteReclaim clears the small tier), which
+	// inflated `asked - built` into the [cap, CONV_STALE] deadband and wedged
+	// this rule shut for the rest of the game.
+	const int outstanding = int(Requests::InFlight(want));
 	// THE CAP IS THE SPILL, NOT SIX. Each big converter eats CONVERT_DRAW_BIG
 	// of the overflow, so the honest parallel bound is how many the spill can
 	// feed -- a flat 6 was the 4-fold shortfall apexearth measured at 20k+

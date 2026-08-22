@@ -349,6 +349,18 @@ bool CrowdAllows(const AIFloat3& in pos, CCircuitDef@ def)
 	if (float(standing + ordered) < most)
 		return true;
 
+	// Density in METAL when the def is known, not in heads: a head count let
+	// one unfinished equal-cost order plus a handful of LLTs veto every
+	// further Pulsar inside its 1400-elmo span (strict `>` below can never
+	// pass against its own def). Ground is crowded FOR THIS DEF only once it
+	// holds `most` times the def's own cost in guns, standing and on order.
+	if (def !is null) {
+		const float gunM = FenceGunMetalNear(pos, span)
+				+ Builder::DefenceOrderMetalNear(pos, span);
+		if (gunM < most * def.costM)
+			return true;
+	}
+
 	const float top = (standTop > orderTop) ? standTop : orderTop;
 	const bool better = (def !is null) && (def.costM > top);
 	if (!better && (ai.frame >= gNextCrowdLog)) {

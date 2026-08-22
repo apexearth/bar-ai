@@ -2753,3 +2753,16 @@ starves the whole air arm of its T2 upgrade (and kept the bomber count at the
 level that froze the old fighter cap). Mechanism not yet traced past choose.as;
 next step is following one request through FactoryToBuild/Enqueue to see where
 it dies.
+
+## OPEN 2026-08-21: heavy defence tasks are created and never COMPLETE; con deaths nonbuild@home=108 in one 40-min game
+
+Audit of matches/_engine (40-min 1v1, mInc to 490): six armanni requests
+created from 29.9m onward, zero standing at game end. The two gate wedges
+that suppressed the ASK volume (asked-minus-standing deadband in
+converter.as/statics.as; head-count CrowdAllows vetoing equal-cost pulsars)
+are fixed, but completion is its own open problem: pulsar sites are placed
+at/beyond the front line, apex_hold_front defaults 0 so a threatened front
+site is not held, and the same log shows `con deaths by job
+nonbuild@home=108` -- constructors are dying at home holding no build task
+at all. Attribute where the six armanni tasks' workers went (reassigned,
+abandoned, killed) before touching hold/threat policy.
