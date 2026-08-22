@@ -200,9 +200,13 @@ bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
 	if (leader != nullptr) {
 		const AIFloat3& lp = leader->GetPos(circuit->GetLastFrame());
 		const float defInfl = circuit->GetInflMap()->GetAllyDefendInflAt(lp);
+		// Default 0 RESTORES the epsilon behavior: both tested ratios (1.0
+		// and 0.25) regressed W/L hard (1-13 and 1-9) -- disengaging near
+		// thin cover loses more ground than the late deaths cost. The knob
+		// stays for experiments; the shipped behavior is the measured one.
 		if ((defInfl > INFL_EPS)
 			&& (defInfl >= circuit->GetInflMap()->GetEnemyInflAt(lp)
-				* circuit->GetTunable("apex_home_stand_ratio", 1.f)))
+				* circuit->GetTunable("apex_home_stand_ratio", 0.f)))
 		{
 			cowards.insert(unit);
 			NoteHomeStand(circuit);

@@ -8992,7 +8992,7 @@ index b4b43c1..d2e258e 100644
  		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..7770b66 100644
+index 0d59b65..4c0b0c6 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,23 @@
@@ -9104,7 +9104,7 @@ index 0d59b65..7770b66 100644
  
  	const std::map<float, std::set<CCircuitUnit*>>& rangers = task->GetRangeUnits();
  	for (const auto& kv : rangers) {
-@@ -123,6 +165,76 @@ void ISquadTask::Merge(ISquadTask* task)
+@@ -123,6 +165,80 @@ void ISquadTask::Merge(ISquadTask* task)
  	FindLeader(rookies.begin(), rookies.end());
  }
  
@@ -9143,9 +9143,13 @@ index 0d59b65..7770b66 100644
 +	if (leader != nullptr) {
 +		const AIFloat3& lp = leader->GetPos(circuit->GetLastFrame());
 +		const float defInfl = circuit->GetInflMap()->GetAllyDefendInflAt(lp);
++		// Default 0 RESTORES the epsilon behavior: both tested ratios (1.0
++		// and 0.25) regressed W/L hard (1-13 and 1-9) -- disengaging near
++		// thin cover loses more ground than the late deaths cost. The knob
++		// stays for experiments; the shipped behavior is the measured one.
 +		if ((defInfl > INFL_EPS)
 +			&& (defInfl >= circuit->GetInflMap()->GetEnemyInflAt(lp)
-+				* circuit->GetTunable("apex_home_stand_ratio", 1.f)))
++				* circuit->GetTunable("apex_home_stand_ratio", 0.f)))
 +		{
 +			cowards.insert(unit);
 +			NoteHomeStand(circuit);
@@ -9181,7 +9185,7 @@ index 0d59b65..7770b66 100644
  const AIFloat3& ISquadTask::GetLeaderPos(int frame) const
  {
  	return (leader != nullptr) ? leader->GetPos(frame) : GetPosition();
-@@ -185,6 +297,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -185,6 +301,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
  	std::shared_ptr<CQueryLineMap> query = std::static_pointer_cast<CQueryLineMap>(
  			pathfinder->CreateLineMapQuery(leader, circuit->GetThreatMap(), pos));
  
@@ -9196,7 +9200,7 @@ index 0d59b65..7770b66 100644
  	const std::set<IFighterTask*>& tasks = static_cast<CMilitaryManager*>(manager)->GetTasks(fightType);
  	for (const IFighterTask* candidate : tasks) {
  		if ((candidate == this)
-@@ -193,6 +313,11 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -193,6 +317,11 @@ ISquadTask* ISquadTask::CheckMergeTask()
  		{
  			continue;
  		}
@@ -9208,7 +9212,7 @@ index 0d59b65..7770b66 100644
  		const ISquadTask* candy = static_cast<const ISquadTask*>(candidate);
  
  		const AIFloat3& tp = candy->GetLeaderPos(frame);
-@@ -202,7 +327,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -202,7 +331,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
  			continue;
  		}
  
@@ -9224,7 +9228,7 @@ index 0d59b65..7770b66 100644
  			continue;
  		}
  
-@@ -219,19 +351,118 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -219,19 +355,118 @@ ISquadTask* ISquadTask::CheckMergeTask()
  
  ISquadTask* ISquadTask::GetMergeTask()
  {
@@ -9345,7 +9349,7 @@ index 0d59b65..7770b66 100644
  		state = State::ROAM;
  		return false;
  	}
-@@ -296,6 +527,10 @@ bool ISquadTask::IsMustRegroup()
+@@ -296,6 +531,10 @@ bool ISquadTask::IsMustRegroup()
  		return false;
  	}
  
@@ -9356,7 +9360,7 @@ index 0d59b65..7770b66 100644
  	if (threatMap->GetThreatAt(groupPos) >= THREAT_MIN) {
  		validUnits.clear();
  		state = State::ROAM;
-@@ -305,7 +540,12 @@ bool ISquadTask::IsMustRegroup()
+@@ -305,7 +544,12 @@ bool ISquadTask::IsMustRegroup()
  	bool wasRegroup = (State::REGROUP == state);
  	state = State::ROAM;
  
@@ -9370,7 +9374,7 @@ index 0d59b65..7770b66 100644
  	for (CCircuitUnit* unit : validUnits) {
  		const float sqDist = groupPos.SqDistance2D(unit->GetLastPos());
  		if (sqDist > sqMaxDist) {
-@@ -332,11 +572,78 @@ bool ISquadTask::IsMustRegroup()
+@@ -332,11 +576,78 @@ bool ISquadTask::IsMustRegroup()
  
  void ISquadTask::ActivePath(float speed)
  {
@@ -9450,7 +9454,7 @@ index 0d59b65..7770b66 100644
  NSMicroPather::HitFunc ISquadTask::GetHitTest() const
  {
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
-@@ -390,9 +697,22 @@ void ISquadTask::Attack(const int frame)
+@@ -390,9 +701,22 @@ void ISquadTask::Attack(const int frame)
  void ISquadTask::Attack(const int frame, const bool isGround)
  {
  	const AIFloat3& tPos = GetTarget()->GetPos();
@@ -9474,7 +9478,7 @@ index 0d59b65..7770b66 100644
  	auto it = rangeUnits.begin()->second.begin();
  	std::advance(it, rangeUnits.begin()->second.size() / 2);  // TODO: Optimize
  	AIFloat3 dir = (*it)->GetPos(frame) - tPos;
-@@ -403,7 +723,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -403,7 +727,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				if (unit->Blocker() != nullptr) {
  					continue;  // Do not interrupt current action
  				}
@@ -9485,7 +9489,7 @@ index 0d59b65..7770b66 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -418,51 +740,543 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -418,51 +744,543 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -10039,7 +10043,7 @@ index 0d59b65..7770b66 100644
  			}
  
  			beta += delta;
-@@ -478,7 +1292,9 @@ void ISquadTask::Log()
+@@ -478,7 +1296,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
