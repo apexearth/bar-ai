@@ -238,6 +238,7 @@ local NAMES = {
 	"apex_site_cost_per_worker",
 	"apex_spam_suicidal",
 	"apex_squad_retreat",
+	"apex_home_stand_ratio",
 	"apex_stance_aggro_army",
 	"apex_stance_aggro_def",
 	"apex_stance_aggro_eco",

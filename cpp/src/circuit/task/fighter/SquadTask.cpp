@@ -11,6 +11,7 @@
 #include "map/ThreatMap.h"
 #include "module/BuilderManager.h"
 #include "module/MilitaryManager.h"
+#include "setup/SetupManager.h"
 #include "unit/enemy/EnemyManager.h"
 #include "terrain/TerrainManager.h"
 #include "terrain/path/PathFinder.h"
@@ -188,11 +189,25 @@ bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
 	// branch read "home" EVERYWHERE -- measured homeStand=3843 against
 	// squadVote=0 in one game; the vote below was unreachable. Defend
 	// influence is written only by our BUILDINGS, the real "at home".
-	if ((leader != nullptr) && (circuit->GetInflMap()->GetAllyDefendInflAt(
-			leader->GetPos(circuit->GetLastFrame())) > INFL_EPS)) {
-		cowards.insert(unit);
-		NoteHomeStand(circuit);
-		return true;
+	// apex: "AT HOME" MUST MEAN DEFENDED, NOT "ANY TOWER'S BLEED". The bare
+	// INFL_EPS test intercepted 346 of 348 retreat elections in one game
+	// (retreat-src homeStand=346 squadVote=2) and held wounded units on the
+	// firing line to 10-19% hp -- the dominant death in every deaths.py
+	// table (defend->retreat(ordered), dead 1s after the switch). Standing
+	// is the right trade only where our static cover at least matches the
+	// enemy influence actually present; anywhere thinner falls through to
+	// the wounded-power vote below.
+	if (leader != nullptr) {
+		const AIFloat3& lp = leader->GetPos(circuit->GetLastFrame());
+		const float defInfl = circuit->GetInflMap()->GetAllyDefendInflAt(lp);
+		if ((defInfl > INFL_EPS)
+			&& (defInfl >= circuit->GetInflMap()->GetEnemyInflAt(lp)
+				* circuit->GetTunable("apex_home_stand_ratio", 1.f)))
+		{
+			cowards.insert(unit);
+			NoteHomeStand(circuit);
+			return true;
+		}
 	}
 	float woundedPower = unit->GetCircuitDef()->GetPower();
 	for (CCircuitUnit* u : cowards) {
@@ -912,7 +927,25 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		const float rowRange = (kv.first <= (float)SQUARE_SIZE)
 				? (highestRange + manager->GetCircuit()->GetTunable("apex_escort_standoff", 240.f))
 				: kv.first;
+		// apex: AN ADVANCING WALL VOIDS THE STANDOFF. Against a static that
+		// outranges the row, the safety standoff parks us beyond ITS reach --
+		// where we deal zero damage -- and a porc-creep simply builds its next
+		// tower closer and walks the standoff backward forever: the Altair
+		// campaign's terminal mechanism (13 hypotheses; the wall advanced
+		// 150-250 elmos/min unfought to our base by minute 26). A static
+		// target standing on OUR side of the map is a wall at the door:
+		// commit and kill the frontier tower, the dominance/aggregation tests
+		// above still decide whether we jointly can.
+		bool wallAtDoor = false;
+		if (isStatic && (manager->GetCircuit()->GetTunable("apex_wall_commit", 1.f) > 0.f)) {
+			const AIFloat3& ourBase = manager->GetCircuit()->GetSetupManager()->GetBasePos();
+			const AIFloat3& foePos = manager->GetCircuit()->GetEnemyManager()->GetEnemyPos();
+			if (utils::is_valid(foePos)) {
+				wallAtDoor = tPos.SqDistance2D(ourBase) < tPos.SqDistance2D(foePos);
+			}
+		}
 		const bool outranged = !isArty && !powerDominant && !glassCannon && !squadOverwhelms
+				&& !wallAtDoor
 				&& (edef != nullptr) && (edef->GetMaxRange() > rowRange);
 		const float standoff = outranged ? (edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN) : rowRange;
 		// A fragile row (below the squad's own average health) stands further
@@ -1217,7 +1250,33 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					newPos = curPos;
 				}
 
-				unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60);
+				// apex: A STATIC THAT CANNOT REPLY IS SHOT, NOT ORBITED. The
+				// ring + orbit + set-target dance exists to dodge lead shots
+				// from things that fight back; against an unarmed building, or
+				// a tower whose reach ends short of this unit's slot, the
+				// churn only spreads the squad around the target and delays
+				// its death (apexearth, watching: "we use this 'move' logic
+				// instead of just attacking it... it doesn't work well"). A
+				// plain attack order lets the engine close to exact weapon
+				// range and hold fire on it -- StopMove on bearing is the
+				// desired outcome here, not the bug it is against mobiles.
+				// ...AND NOTHING ELSE COVERS THE SPOT. The target's own gun is
+				// not the only fire that lands there: a unit parked still at an
+				// unarmed solar inside a defended base eats every tower beside
+				// it (measured: 2-14 with the target-only test, 5-10 with the
+				// orbit restored -- standing still was the whole regression).
+				// GetThreatAt sums every armed enemy covering the spot, so the
+				// plain attack applies only where standing is actually free.
+				const bool staticCantReply = isStatic && (edef != nullptr)
+						&& (!edef->IsAttacker() || (edef->GetMaxRange() * 1.05f < r))
+						&& (threatMap->GetThreatAt(unit, newPos) <= THREAT_MIN);
+				if (staticCantReply
+					&& (manager->GetCircuit()->GetTunable("apex_static_plain_attack", 1.f) > 0.f))
+				{
+					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
+				} else {
+					unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60);
+				}
 			}
 
 			beta += delta;
