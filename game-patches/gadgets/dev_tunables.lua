@@ -48,6 +48,7 @@ local NAMES = {
 	"apex_air_station_near",
 	"apex_airscout_map_per",
 	"apex_airscout_per",
+	"apex_airscout_share",
 	"apex_anti_burst_secs",
 	"apex_anti_pad",
 	"apex_anti_reload",

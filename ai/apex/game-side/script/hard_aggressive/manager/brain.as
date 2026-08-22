@@ -1110,6 +1110,34 @@ Want@ Simple(string kind, float value, CCircuitDef@ def, bool advOnly = true)
 	return w;
 }
 
+// NO WANT MAY OWN THE ROULETTE. Emergency multipliers stack unbounded
+// (gantry=80 against silo=3.5 measured live -- the T3 answer boost held for the
+// whole game because the gantry never finished) and a score at 75%+ of the
+// total is winner-takes-all with extra steps: nukes and antinukes simply
+// stopped being drawn (apexearth). Clamp each score to a bounded multiple of
+// EVERYTHING ELSE combined, so the loudest want still leads -- hard -- but the
+// rest of the list keeps a real share of the picks.
+//
+// A clamp of >=1x cannot reorder the list: the clamped top becomes
+// (sum - s) * capMult, which is at least every other score times capMult.
+void CapWants(array<Want@>@ order)
+{
+	const float capMult = ai.GetTunable("apex_want_cap", TUNE_WANT_CAP);
+	if (capMult <= 0.f)
+		return;
+	float sum = 0.f;
+	for (uint i = 0; i < order.length(); ++i) {
+		if (order[i].cachedScore > 0.f)
+			sum += order[i].cachedScore;
+	}
+	for (uint i = 0; i < order.length(); ++i) {
+		const float s = order[i].cachedScore;
+		const float others = sum - ((s > 0.f) ? s : 0.f);
+		if ((s > 0.f) && (others > 0.f) && (s > others * capMult))
+			order[i].cachedScore = others * capMult;
+	}
+}
+
 // Run the rule behind a want. Returns null when its own preconditions refuse,
 // in which case Decide falls through to the next-ranked want.
 IUnitTask@ Execute(const string& in kind, CCircuitUnit@ unit)
@@ -1460,11 +1488,25 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		}
 	}
 
+	// CAPPED BEFORE THE LOG ON PURPOSE: these are the weights the draw below
+	// actually uses, so the printed score of each want is its draw chance
+	// times the total. Skipped when the roulette is off, where nothing is
+	// drawn and the raw score is what ranks.
+	const bool roulette =
+		ai.GetTunable("apex_brain_roulette", TUNE_BRAIN_ROULETTE) > 0.f;
+	if (roulette)
+		CapWants(order);
+
 	if (ai.frame >= gNextBrainLog) {
 		gNextBrainLog = ai.frame + 30 * SECOND;
 		string line = "apex: brain wants=" + order.length();
-		for (uint i = 0; i < order.length(); ++i)
-			line += " | " + order[i].kind + "=" + formatFloat(order[i].cachedScore, "", 0, 4);
+		for (uint i = 0; i < order.length(); ++i) {
+			// kind/def, so a ladder kind names the building it is currently
+			// asking for -- "energy" is a solar at minute 3 and a fusion at 15.
+			line += " | " + order[i].kind
+				+ ((order[i].def !is null) ? ("/" + order[i].def.GetName()) : "")
+				+ "=" + formatFloat(order[i].cachedScore, "", 0, 4);
+		}
 		AiLog(Factory::T() + line);
 	}
 
@@ -1478,31 +1520,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// numbers were always meant to state. Every precedence gate below
 	// (mexup, coverage gaps, adv-con) is unchanged -- only the tie between
 	// eligible options moved from argmax to a weighted draw.
-	if (ai.GetTunable("apex_brain_roulette", TUNE_BRAIN_ROULETTE) > 0.f) {
-		// NO WANT MAY OWN THE ROULETTE. Emergency multipliers stack
-		// unbounded (gantry=80 against silo=3.5 measured live -- the T3
-		// answer boost held for the whole game because the gantry never
-		// finished) and a score at 75%+ of the total is winner-takes-all
-		// with extra steps: nukes and antinukes simply stopped being drawn
-		// (apexearth). Clamp each score at draw time to a bounded multiple
-		// of EVERYTHING ELSE combined, so the loudest want still leads --
-		// hard -- but the rest of the list keeps a real share of the picks.
-		{
-			const float capMult = ai.GetTunable("apex_want_cap", TUNE_WANT_CAP);
-			if (capMult > 0.f) {
-				float sum = 0.f;
-				for (uint i = 0; i < order.length(); ++i) {
-					if (order[i].cachedScore > 0.f)
-						sum += order[i].cachedScore;
-				}
-				for (uint i = 0; i < order.length(); ++i) {
-					const float s = order[i].cachedScore;
-					const float others = sum - ((s > 0.f) ? s : 0.f);
-					if ((s > 0.f) && (others > 0.f) && (s > others * capMult))
-						order[i].cachedScore = others * capMult;
-				}
-			}
-		}
+	if (roulette) {
 		for (uint i = 0; i < order.length(); ++i) {
 			float total = 0.f;
 			for (uint j = i; j < order.length(); ++j) {
@@ -1697,6 +1715,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			if (ai.frame >= gNextPickLog) {
 				gNextPickLog = ai.frame + 60 * SECOND;
 				AiLog(Factory::T() + "apex: brain picks " + w.kind
+					+ ((w.def !is null) ? ("/" + w.def.GetName()) : "")
 					+ " score=" + formatFloat(w.cachedScore, "", 0, 4));
 			}
 			return t;

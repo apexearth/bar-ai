@@ -748,9 +748,24 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 					/ ai.GetTunable("apex_airscout_map_per", TUNE_AIRSCOUT_MAP_PER));
 			if (eyesN > eyesCap)
 				eyesN = eyesCap;
+			// SCOUTS ARE A SHARE OF THE AIR FLEET, NOT A FLOOR. Scouts die
+			// fastest (they fly over the AA to look), so a floor conveyed
+			// exactly like the rez floor did: fighters/bombers met their
+			// floors and lived, the scout floor never stayed met, and every
+			// spare slot became a replacement scout -- apexearth: "air
+			// scouts more than any other aircraft... I want to see scouts
+			// as 5% or less of our air." Bounded by the STANDING fleet and
+			// balanced as a ratio, so they can never out-produce the wings
+			// they scout for.
+			const int airFleet = int(wing !is null ? wing.count : 0)
+					+ int(bomb !is null ? bomb.count : 0);
+			int shareCap = 1 + int(float(airFleet)
+					* ai.GetTunable("apex_airscout_share", TUNE_AIRSCOUT_SHARE));
+			if (eyesN > shareCap)
+				eyesN = shareCap;
 			defs.insertLast(eye);
 			want.insertLast(eyesN);
-			isFloor.insertLast(true);
+			isFloor.insertLast(false);
 		}
 	}
 

@@ -1064,6 +1064,9 @@ const float TUNE_AIRSCOUT_MAP_PER = 3000.f;
 // manager/brain/facqueue.as [metal/s] -- One air scout wanted per this much
 //   metal income (plus one); doubled while nothing fresh is seen.
 const float TUNE_AIRSCOUT_PER = 120.f;
+// Scouts as a share of the standing fighter+bomber fleet (apexearth: "5% or
+// less of our air").
+const float TUNE_AIRSCOUT_SHARE = 0.05f;
 // manager/air/update.as [toggle 0/1] -- Non-lead players hold their aircraft
 //   at the plant until the wave releases them together; 0 sends them out as
 //   built.
