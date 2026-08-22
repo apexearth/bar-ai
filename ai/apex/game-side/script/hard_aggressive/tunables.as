@@ -1438,6 +1438,9 @@ const float TUNE_REZ_PER_INCOME = 0.2f;
 const float TUNE_REZ_FLOOR_FRAC = 0.25f;
 // Knee of the sublinear rez curve: want = slope*knee*ln(1+income/knee).
 const float TUNE_REZ_LOG_KNEE = 100.f;
+// One ENERGY and one METAL constructor dedicate per this many enlisted
+// T1/adv cons (apexearth: 3). 0 disables dedicated roles.
+const float TUNE_DEDICATE_PER = 3.f;
 // manager/builder/rules_rezzer.as [ratio] -- share of the rez fleet that
 //   serves as battlefield medics: they stay with the army's staging anchor,
 //   repair the wounded during fights and reclaim the aftermath there. The

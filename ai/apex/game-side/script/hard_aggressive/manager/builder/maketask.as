@@ -327,6 +327,23 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 
+	// DEDICATED CREWS work their own domain before the shared ladder can
+	// claim them; an empty domain falls through rather than idling. See
+	// crewdedicated.as for the ladders and crew.as for the ratio that
+	// opens the slots.
+	if (!isComm) {
+		const int crewRole = Crew::RoleOf(unit);
+		if (crewRole == int(Crew::ENERGY)) {
+			@t = EnergyCrewTask(unit);
+			if (t !is null)
+				return t;
+		} else if (crewRole == int(Crew::METAL)) {
+			@t = MetalCrewTask(unit);
+			if (t !is null)
+				return t;
+		}
+	}
+
 	// Above the holds: a held mex on an empty energy bank is exactly the walk
 	// they exist to protect, and protecting it freezes the builder at the site.
 	@t = EnergyBeforeMex(unit);

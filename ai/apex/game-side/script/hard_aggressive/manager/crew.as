@@ -8,7 +8,26 @@ namespace Crew {
 // taking mex spots until none is left, then falling through -- this
 // generalises it to a crew.
 
-enum Role { ECO = 0, MEX = 1, FRONT = 2, HOME = 3 };
+enum Role { ECO = 0, MEX = 1, FRONT = 2, HOME = 3, ENERGY = 4, METAL = 5 };
+
+// DEDICATED ROLES (apexearth 2026-08-21: "if a constructor has a role of
+// 'energy' then the only thing they build are energy related items... We
+// should only assign roles if we have enough cons"). Dedication is a floor,
+// never a fence: the role restricts what ITS HOLDER does -- ordinary cons
+// still build energy and metal freely -- so the past exclusivity failure
+// (a capability gated on a role nobody held) cannot recur. Slots are a
+// ratio of the fleet, not a step: one ENERGY and one METAL dedicate per
+// DEDICATE_PER enlisted T1 cons. Advanced cons dedicate in share.as terms
+// separately (the second adv con leans energy via the fusion chain).
+const int DEDICATE_PER = 3;
+
+int DedicatedSlots()
+{
+	const int per = int(ai.GetTunable("apex_dedicate_per", TUNE_DEDICATE_PER));
+	if (per <= 0)
+		return 0;
+	return int(gId.length()) / per;
+}
 
 // Constructors that NEVER leave the base. ECO is a catch-all default, not a
 // job -- an ECO constructor still walks the whole ladder and can be sent
@@ -134,6 +153,16 @@ void Enlist(CCircuitUnit@ unit)
 		role = HOME;
 	else if (!gMexPhaseOver && (CountOf(MEX) < MEX_CREW))
 		role = MEX;
+	else {
+		// Dedicated pairs fill after the standing crews, energy first
+		// (apexearth: "we simply expand our energy slowly, always") --
+		// each new slot the fleet ratio opens alternates the two.
+		const int slots = DedicatedSlots();
+		if (CountOf(ENERGY) < slots)
+			role = ENERGY;
+		else if (CountOf(METAL) < slots)
+			role = METAL;
+	}
 	gId.insertLast(int(unit.id));
 	gRole.insertLast(role);
 	gDry.insertLast(0);

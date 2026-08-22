@@ -227,6 +227,7 @@ local NAMES = {
 	"apex_rez_per_income",
 	"apex_rez_floor_frac",
 	"apex_rez_log_knee",
+	"apex_dedicate_per",
 	"apex_rush_team_defend",
 	"apex_scout_blind_mult",
 	"apex_share_airdef",
