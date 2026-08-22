@@ -420,7 +420,7 @@ IUnitTask@ AdvancedPlantAtRear(CCircuitUnit@ unit)
 // auction still decides everything past the first.
 IUnitTask@ MexUpLane(CCircuitUnit@ unit)
 {
-	if (aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::MEXUP))
+	if (int(aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::MEXUP)))
 		>= int(ai.GetTunable("apex_mexup_lane", TUNE_MEXUP_LANE)))
 		return null;
 	Brain::Want@ w = Brain::MexUpgradeWant(unit);
