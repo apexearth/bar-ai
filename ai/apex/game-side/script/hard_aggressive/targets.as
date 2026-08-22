@@ -79,7 +79,7 @@ array<float> SPEND_ARMY       = { 0.0f,  4.0f,  3.0f,  4.0f,   5.0f };
 // aggressive with flak on our front lines, T3 defense too. Right now we are
 // *not* aggressive with this at all." The ramp starts at the 100 column and
 // peaks steep at 300: ~8-9% early/mid, ~12% at 100, ~19% at 300.
-array<float> SPEND_DEFENCE    = { 1.0f,  1.0f,  2.0f,  2.0f,  3.0f };
+array<float> SPEND_DEFENCE    = { 4.0f,  4.0f,  4.0f,  4.0f,  4.0f };  // every validated Altair arm ran share_defence=4; online has no modoption, so the tested value IS the default
 array<float> SPEND_AIRDEF     = { 1.0f,  2.0f,  1.5f,  1.5f,  0.5f };
 array<float> SPEND_ECONOMY    = { 5.0f,  5.0f,  5.0f,  5.0f,  5.0f };   // absorbs the army cut, see SPEND_ARMY
 array<float> SPEND_BUILDPOWER = { 5.0f,  2.0f,  2.0f,  2.0f,  2.0f };

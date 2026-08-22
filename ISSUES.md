@@ -2724,3 +2724,20 @@ advsol stop (apex_advsol_stop, 1k energy with T2) removes the worst sprawl
 driver; what remains is baseplan-domain: whether Base::Spot's bands hold at
 8-player density and why eco placement escapes to FindBuildSiteNear fallbacks
 (the audited "obsolete-junk standing" numbers say the grid is not packing).
+
+## Widening-search siting should be the general placement pattern (2026-08-21)
+apexearth, after GantryAtRear's doubling radius: "We have to do this with most
+things, you can't predict what the map will be like." Most placement paths use
+one fixed FindBuildSiteNear radius and fail silently when it finds nothing.
+Related: reclaim-to-make-room -- "If you see something not useful could be
+reclaimed to make room for something useful then we should do the reclaim, or
+reposition things." Valid, not urgent.
+
+## Home-stand strength gate regresses at every tested ratio (2026-08-21)
+The measured 99% retreat interception (homeStand=346/348) looked like the
+trade-ratio mechanism, but requiring defInfl >= enemyInfl*ratio lost harder
+than the interception: 1-13 at ratio 1.0, 1-9/10 at 0.25, vs 4-12 baseline.
+Reading: on open ground the units die either way; standing at least costs the
+attacker something. Default reverted to 0 (epsilon behavior); the deaths at
+19% hp remain real and unfixed -- the answer is probably engagement selection
+(don't take the fight), not disengagement timing.
