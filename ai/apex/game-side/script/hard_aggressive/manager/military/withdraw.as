@@ -267,28 +267,51 @@ void UpdateWithdraw()
 					> ai.GetTunable("apex_defend_leash", TUNE_DEFEND_LEASH))
 				&& (ai.GetNetInflAt(p) < 0.f);
 		}
+		// THE COMMIT CHOICE. gKilling already returns before this whole pass
+		// runs (top of UpdateWithdraw), so an ATTACK/RAID squad reaching here
+		// means no killing blow is armed -- apexearth 2026-08-21, watching our
+		// base take hits for minutes while the army "roamed around ... without
+		// getting anything useful done": either commit to the enemy base (killing
+		// blow) or come home, never neither. BaseUnderAttack() is our own
+		// physical enemy presence at home, not a clock, so this only fires while
+		// the threat is actually standing there.
+		bool recallHome = false;
+		if (((ft == Task::FightType::ATTACK) || (ft == Task::FightType::RAID))
+			&& (ai.GetTunable("apex_recall_home", TUNE_RECALL_HOME) > 0.f)
+			&& Builder::gHomeSet && Builder::BaseUnderAttack())
+		{
+			recallHome = Military::ForwardFraction(p)
+				> ai.GetTunable("apex_recall_home_fwd", TUNE_RECALL_HOME_FWD);
+		}
 		float odds = 0.f;
 		const bool outgunned = OutgunnedHere(u, p, allyPos, allyPow, odds);
-		if (!leash && !outgunned && !LosingHere(p))
+		if (!leash && !recallHome && !outgunned && !LosingHere(p))
 			continue;
 		if (ai.frame - gCombatSent[i] < reissue)
 			continue;
 		AIFloat3 back;
-		if (!FallbackSpot(p, back))
+		// Recall targets HOME itself, not the nearest fence tower: the point is
+		// to mass over the ground actually under attack (and its wreck field),
+		// not to stop at whatever gun is closest to where the squad now stands.
+		if (recallHome) {
+			back = Builder::gHomePos;
+		} else if (!FallbackSpot(p, back)) {
 			continue;
+		}
 		// Already behind the guns: nothing to do but fight.
 		if (back.distance2D(p) < ai.GetTunable("apex_withdraw_near", TUNE_WITHDRAW_NEAR))
 			continue;
 		u.CmdMoveTo(back);
 		gCombatSent[i] = ai.frame;
 		++gWithdrawn;
-		AppendFightHist(int(u.id), "W", FightCtx(u));
+		AppendFightHist(int(u.id), recallHome ? "H" : "W", FightCtx(u));
 		if (ai.frame >= gNextWithdrawLog) {
 			gNextWithdrawLog = ai.frame + 15 * SECOND;
 			AiLog(Factory::T() + "apex: withdraw "
 				+ ((u.circuitDef !is null) ? u.circuitDef.GetName() : "?")
 				+ " at=" + int(p.x) + "," + int(p.z)
-				+ (leash ? " leash" : (outgunned ? (" odds=" + formatFloat(odds, "", 0, 2)) : " infl"))
+				+ (leash ? " leash" : (recallHome ? " recall-home"
+					: (outgunned ? (" odds=" + formatFloat(odds, "", 0, 2)) : " infl")))
 				+ " -- " + gWithdrawn + " orders so far, "
 				+ gCombatId.length() + " tracked");
 		}

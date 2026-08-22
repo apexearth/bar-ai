@@ -156,6 +156,11 @@ const float TUNE_GANTRY_PER_ENERGY = 3000.f;
 //   counts as affordable: the 13,000-energy build price drains a small
 //   economy (commanders never take the geo job -- level-1/2 cannot build it).
 const float TUNE_GEO_MIN_INCOME = 250.f;
+// Energy horizon for EcoAffordableE (ecomath.as): seconds of energy income a
+// build's costE may claim. 52 makes a 13,000-E geo clear at 250 e/s -- the
+// bar apexearth stated -- so the derived gate reproduces his number and then
+// scales with def cost and grid size instead of being pinned to either.
+const float TUNE_AFFORD_E_SECS = 52.f;
 // manager/builder/statics.as [ratio] -- Share of energy income that may go to
 //   jammer upkeep; sets how many jammers the grid supports.
 const float TUNE_JAMMER_ENERGY_SHARE = 0.10f;
@@ -741,6 +746,16 @@ const float TUNE_TRADE_BAD = 0.6f;
 // manager/military/deathledger.as [seconds] -- Recent losses must be worth
 //   this many seconds of income before the trade ratio is trusted at all.
 const float TUNE_TRADE_VOL = 20.f;
+// manager/military/withdraw.as [toggle 0/1] -- ATTACK/RAID squads come home
+//   while the base is under attack and no killing blow is committed, instead
+//   of continuing to roam; 0 disables the recall (they keep fighting wherever
+//   their task sends them).
+const float TUNE_RECALL_HOME = 1.f;
+// manager/military/withdraw.as [fraction 0-1] -- Only squads this far past
+//   our own territory (ForwardFraction) are recalled -- units already fighting
+//   near home need no order, they are already where they are needed. Matches
+//   the threshold sentinel.as already uses to call the same thing a CONCERN.
+const float TUNE_RECALL_HOME_FWD = 0.5f;
 // manager/military/withdraw.as [toggle 0/1] -- Units on clearly-lost ground
 //   pull back behind the nearest fence tower; 0 disables the withdraw system.
 const float TUNE_WITHDRAW = 1.f;
@@ -778,6 +793,13 @@ const float TUNE_FODDER_COST = 100.f;
 //   car class) wanted per this much metal income, post-T2: the constant
 //   cheap-eyes stream that takes fire instead of the army.
 const float TUNE_SPAM_PER_INCOME = 5.f;
+// manager/brain/facqueue.as [metal] -- One mobile artillery wanted per this
+//   much SEEN enemy static metal: the wall itself sizes the battery that
+//   answers it. 0 disables the wall-arty demand.
+const float TUNE_ARTY_PER_WALL = 1500.f;
+// Seen enemy static metal above which the front fence escalates to the
+// Punisher tier (armguard/corpun/legcluster). 0 disables the escalation.
+const float TUNE_PUN_WALL = 1000.f;
 // manager/military/massing.as [ratio] -- killing blow: once OUR TEAM's army
 //   value is this multiple of theirs, attack continuously and release any
 //   turtle -- even a partial commitment outnumbers everything they field.
@@ -1411,6 +1433,11 @@ const float TUNE_REQUEST_DRAIN = 7.0f;
 // manager/factory/airsupport.as [ratio] -- Rezbots wanted per unit of steady
 //   income (or per visible wreck value, whichever asks for more).
 const float TUNE_REZ_PER_INCOME = 0.2f;
+// Fraction of the rez want held as a FLOOR on the bot-lab line (the rest
+// stays a ratio entry). 0 restores pure-ratio; 1 is the old conveyor bug.
+const float TUNE_REZ_FLOOR_FRAC = 0.25f;
+// Knee of the sublinear rez curve: want = slope*knee*ln(1+income/knee).
+const float TUNE_REZ_LOG_KNEE = 100.f;
 // manager/builder/rules_rezzer.as [ratio] -- share of the rez fleet that
 //   serves as battlefield medics: they stay with the army's staging anchor,
 //   repair the wounded during fights and reclaim the aftermath there. The

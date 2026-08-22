@@ -131,6 +131,8 @@ local NAMES = {
 	"apex_fusion_income",
 	"apex_fusion_prefer_income",
 	"apex_geo_min_income",
+	"apex_afford_secs",
+	"apex_afford_e_secs",
 	"apex_greed_cons",
 	"apex_hold_front",
 	"apex_hot_radius",
@@ -223,6 +225,8 @@ local NAMES = {
 	"apex_reinforce_frac",
 	"apex_request_drain",
 	"apex_rez_per_income",
+	"apex_rez_floor_frac",
+	"apex_rez_log_knee",
 	"apex_rush_team_defend",
 	"apex_scout_blind_mult",
 	"apex_share_airdef",
@@ -292,6 +296,10 @@ local NAMES = {
 	"apex_front_def_mult",
 	"apex_fence_depth",
 	"apex_ally_aggregate",
+	"apex_wall_commit",
+	"apex_arty_per_wall",
+	"apex_pun_wall",
+	"apex_static_plain_attack",
 	"apex_t2_safety",
 	"apex_medic_share",
 	"apex_medic_r",
@@ -327,6 +335,8 @@ local NAMES = {
 	"apex_withdraw_odds",     -- withdraw.as: enemy-threat/our-power ratio that pulls a unit back (1.5)
 	"apex_withdraw",          -- withdraw.as: master switch (1)
 	"apex_defend_leash",      -- withdraw.as: forward fraction past which a DEFEND unit on enemy ground is recalled (0.55)
+	"apex_recall_home",       -- withdraw.as: master switch, ATTACK/RAID squads come home while base is under attack and no killing blow is armed (1)
+	"apex_recall_home_fwd",   -- withdraw.as: forward fraction past which an ATTACK/RAID squad is recalled home (0.5)
 	"apex_t1_commit",         -- techlead.as: duel small-map T1-commit experiment (0)
 	"apex_t1_release_cost",   -- techlead.as: enemy mobile cost that confirms T2 and releases the commit (450)
 	"apex_t1_commit_income",  -- techlead.as: own income that expires the commit (80)

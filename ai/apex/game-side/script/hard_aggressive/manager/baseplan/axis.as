@@ -81,11 +81,16 @@ bool Frame()
 		int best = front;
 		AIFloat3 bf = f;
 		AIFloat3 ba = a;
-		for (int t = 1; t < 4; ++t) {
+		// The 180 flip is never a candidate: bands are laid at gAnchor - fwd,
+		// so the flip lays every eco building TOWARD the enemy. A start close
+		// to a map edge scores the true rear at zero (the band probe walks off
+		// the map) and the flip then wins on any count at all -- watched on
+		// Altair Crossing, anchor 465 from the west wall, front=0 kept=44,
+		// solars marching at the enemy. If the rear is unbuildable the
+		// perpendiculars are the acceptable fallback, not the enemy's lap.
+		for (int t = 2; t < 4; ++t) {
 			AIFloat3 cf;
-			if (t == 1)
-				cf = AIFloat3(-f.x, 0.f, -f.z);
-			else if (t == 2)
+			if (t == 2)
 				cf = AIFloat3(-f.z, 0.f, f.x);
 			else
 				cf = AIFloat3(f.z, 0.f, -f.x);

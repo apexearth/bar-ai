@@ -577,16 +577,55 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		{
 			const int n = Factory::RezBotsWanted();
 			if (n > 0) {
+				// SPLIT: a small floor plus the ratio bulk. Pure-ratio starved
+				// them to near zero whenever any floor above stayed unmet
+				// (ratio draws only run once every floor is satisfied --
+				// apexearth, live 8v8: "573 metal income... only 4 rezbots");
+				// pure-floor was the earlier conveyor failure (cornecro 4/9
+				// unmet, corthud 0/212, "only T1 construction bots were
+				// made"). The floor buys the baseline fleet, the ratio buys
+				// the rest, and the fraction bounds how much line time dying
+				// rezbots can ever convey away.
+				const int nFloor = int(float(n)
+						* ai.GetTunable("apex_rez_floor_frac", TUNE_REZ_FLOOR_FRAC));
+				if (nFloor > 0) {
+					defs.insertLast(rez);
+					want.insertLast(nFloor);
+					isFloor.insertLast(true);
+				}
 				defs.insertLast(rez);
 				want.insertLast(n);
-				// A RATIO ENTRY, NOT A FLOOR: rezbots die constantly at the
-				// front, so a floor here never stays met and the first-unmet-
-				// floor rule turned the lab into a rezbot conveyor -- audited
-				// (iter1): cornecro 4/9 unmet floor, corthud 0/212 never
-				// picked, 34 idle-at-full-metal samples, apexearth: "only T1
-				// construction bots were made." Salvage is opportunity, not
-				// existential build power; it balances, it does not pre-empt.
 				isFloor.insertLast(false);
+			}
+		}
+	}
+
+	// THE WALL DEMANDS ARTY. Stock's porc-creep won 13 hypothesis arms on
+	// Altair because nothing we field outranges an advancing Punisher line:
+	// the role draw prices arty at ZERO below tier2 income, and committing
+	// T1 guns into the wall is physics that loses (wall-commit arm: 656
+	// static metal killed against their 20k walls). Named defs, the
+	// eyes-for-the-guns pattern; the floor is SIZED BY THE WALL -- one arty
+	// per apex_arty_per_wall of seen enemy static metal, so quiet games buy
+	// none and a creeping enemy buys the battery that answers it.
+	{
+		const float wallSeen = aiEnemyMgr.GetEnemyCost(RT::STATIC);
+		const float per = ai.GetTunable("apex_arty_per_wall", TUNE_ARTY_PER_WALL);
+		if ((per > 0.f) && (wallSeen > per)) {
+			const string fn = fac.circuitDef.GetName();
+			string an = "";
+			if      (fn == "armvp")  an = "armart";
+			else if (fn == "corvp")  an = "corwolv";
+			else if (fn == "legvp")  an = "legbar";
+			else if (fn == "armavp") an = "armmart";
+			else if (fn == "coravp") an = "cormart";
+			if (an != "") {
+				CCircuitDef@ ad = ai.GetCircuitDef(an);
+				if ((ad !is null) && ad.IsAvailable(ai.frame)) {
+					defs.insertLast(ad);
+					want.insertLast(int(wallSeen / per));
+					isFloor.insertLast(false);   // ratio: arty dies too; a floor conveys
+				}
 			}
 		}
 	}

@@ -698,3 +698,40 @@ KEPT, verified against history (do not re-propose):
   fight order; the standoff/kite ring still owns distance in the engagement
   phase. Tunable `apex_fight_travel` (default 1, in dev_tunables.lua) for the
   A/B. NOT yet judged on a watched game.
+
+### 2026-08-21 (watched-opening batch, Altair campaign)
+
+Five watched-game reports, each traced to a mechanism, fixed, and measured on
+Altair (16-game arms, apex_share_defence=4, vs BARb stable):
+
+- BASE AXIS 180-FLIP REMOVED (`baseplan/axis.as`): a start near a map edge
+  scored the true rear 0 (probe off-map) and the flip then won on any count,
+  laying the whole eco band TOWARD the enemy (watched: solars at fwd 0.36-0.39,
+  log `axis front=0 kept=44`). Perpendiculars remain the fallback; energy now
+  lands home-side (fwd ~0).
+- FIRST LAB PLANNED AT HOME (`rules_commander.as`): the factory request used to
+  carry the commander's wander position; now `FindBuildSiteNear(home)`. With the
+  home-anchored opening-mex bound in `brain.as` (per-jump bound could not stop a
+  chain of hops), the lab commit moved from ~1.8-2.3m to 0.7-0.8m and the
+  metal-full walk is gone.
+- NEAR-PASS MEX SENTRY (`rules_commander.as` nearOnly + maketask slot above
+  PassingMex): the mex a builder just finished gets its turret before the
+  builder walks away. Sentry #1 now ~2.2-2.5m (was ~6m or never). On Geyser the
+  pass correctly declines: the home LLT already covers the start mexes.
+- PANIC/WIND MATH + TIDAL (`mexguard.as`): the panic-stall branch hardcoded
+  solar and had put 5 panels down on a wind 12-27 map before the ranking ran;
+  it now compares EnergyValuePerMetal and takes wind when bank+5s of income
+  covers costE. Tidal (armtide/cortide/legtide) enters the T1 ranking on
+  water/mixed maps, gated on a placeable site near home.
+- RECALL HOME OR COMMIT (`military/withdraw.as`, apex_recall_home/_fwd): while
+  BaseUnderAttack() and no killing blow armed, ATTACK/RAID squads past fwd 0.5
+  are ordered to gHomePos (not the nearest tower) to mass over the contested
+  ground; gKilling still exempts a committed push. Smoke: recall fired 11.4m,
+  squads walked home.
+
+Altair 1v1 ladder: baseline 2/16 (12.5%) -> opening fixes 3/16 (18.8%) ->
++recall 5/16 (31.2%, CI includes 50%). H15 wall-arty was a null (2-11): a few
+Wolverines do not answer the porc-creep; entry stays until superseded.
+
+Harness note: a 6-worker tournament froze all engines at the same second once
+(cause unknown, not RAM); killed and relaunched clean. Watch for repeats.

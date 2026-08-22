@@ -345,6 +345,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	@t = CommanderMexGuard(unit, isComm, true);
 	if (t !is null)
 		return t;
+	// The mex just built gets its sentry before the builder leaves it: the
+	// near-only pass costs no walk at all, where the ordinary slot below
+	// expansion left the opening mexes bare until ~6 minutes (watched on
+	// Altair Crossing -- "no sentry to defend his initial 3 mexes").
+	@t = CommanderMexGuard(unit, isComm, false, true);
+	if (t !is null)
+		return t;
 	@t = PassingMex(unit, isComm);
 	if (t !is null)
 		return t;

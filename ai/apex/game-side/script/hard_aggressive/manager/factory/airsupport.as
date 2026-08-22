@@ -52,8 +52,13 @@ CCircuitDef@ RezBotDef()
 // income term is zero, which keeps "not important at t zero" true.
 int RezBotsWanted()
 {
-	const int byIncome = int(SteadyIncome()
-			* ai.GetTunable("apex_rez_per_income", TUNE_REZ_PER_INCOME));
+	// SUBLINEAR, apexearth's shape ("0.2 but somewhat logarithmic"): the
+	// linear slope wanted 130 bots at 650 m/s, which no lab line can keep
+	// alive. k*ln(1+income/c) keeps the old slope (k/c = 0.2) where income
+	// is small and bends over at scale: ~11 at 70 m/s, ~40 at 650.
+	const float slope = ai.GetTunable("apex_rez_per_income", TUNE_REZ_PER_INCOME);
+	const float knee = ai.GetTunable("apex_rez_log_knee", TUNE_REZ_LOG_KNEE);
+	const int byIncome = int(slope * knee * log(1.f + SteadyIncome() / knee));
 	const int byReclaim = int(Builder::WreckSeenValue() / REZ_METAL_PER_BOT);
 	return (byIncome > byReclaim) ? byIncome : byReclaim;
 }

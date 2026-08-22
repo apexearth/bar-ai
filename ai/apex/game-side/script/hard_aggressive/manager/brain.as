@@ -375,6 +375,27 @@ Want@ MexWant(CCircuitUnit@ unit)
 				+ int(ai.GetTunable("apex_mex_none_ttl", TUNE_MEX_NONE_TTL)) * SECOND;
 		return null;
 	}
+	// THE FIRST LAB IS NEVER WORTH A WALK. While no factory stands and the
+	// factory task is already approved, the asker is the opening's only real
+	// builder -- sending it to a far mex leaves the bank filling to the brim
+	// with nothing to spend on (watched on Altair Crossing: comm walked at a
+	// mex 985 away, sat metal-full, then dropped the lab wherever it stood).
+	// Near mexes still come first; the far ones wait the ~30s the lab takes.
+	if (!Factory::HaveAnyFactory()) {
+		const AIFloat3 sp = aiEconomyMgr.GetMexSpotPos(spot);
+		if (OnMap(sp)) {
+			if ((aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY)) > 0)
+				&& (unit.GetPos(ai.frame).distance2D(sp) > Builder::OpeningMexReach()))
+				return null;
+			// "Mexes already in reach" is measured from HOME: a per-step bound
+			// from the unit stops one jump but not a chain, and each chain step
+			// re-bases the search on wherever the last mex was -- which is how
+			// the commander ended up a map-quarter away before the lab existed.
+			if (Builder::gHomeSet
+				&& (Builder::gHomePos.distance2D(sp) > Builder::OpeningMexReach() * 2.f))
+				return null;
+		}
+	}
 	Want@ w = Want();
 	w.kind = "mex";
 	// WHAT A SPOT ON THIS MAP ACTUALLY ADDS. GetMetalMake is the metal

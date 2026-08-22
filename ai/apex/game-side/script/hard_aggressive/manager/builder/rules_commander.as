@@ -432,7 +432,17 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 				// "we *always* seem to start with botlabs. We never seem to
 				// care about vehicles." ChooseFactory keeps the water/air-map
 				// overrides and latches gT1Fac; the bot lab stays the fallback.
-				CCircuitDef@ lab = Factory::ChooseFactory(unit.GetPos(ai.frame), true, false);
+				// THE LAB IS PLANNED AT HOME, NOT WHERE THE COMMANDER STANDS.
+				// The request used to carry unit.GetPos() -- whatever spot the
+				// commander had wandered to when the income gate released, which
+				// is how the first lab ended up in the trees at a fourth mex
+				// (watched twice, two different maps). Home is where the start
+				// mexes are; building there is also what puts the commander
+				// next to them for the sentry pass afterwards.
+				AIFloat3 labAnchor = unit.GetPos(ai.frame);
+				if (gHomeSet)
+					labAnchor = gHomePos;
+				CCircuitDef@ lab = Factory::ChooseFactory(labAnchor, true, false);
 				if ((lab is null)
 					|| ((Factory::userData[lab.id].attr
 						& (Factory::Attr::T2 | Factory::Attr::T3)) != 0))
@@ -467,9 +477,14 @@ IUnitTask@ CommanderTask(CCircuitUnit@ unit, bool isComm)
 							@lab = liveDef;
 					}
 					if (outstanding || Factory::PlantApproved(lab)) {
+						AIFloat3 labAt = unit.GetPos(ai.frame);
+						const AIFloat3 labSite = ai.FindBuildSiteNear(lab, labAnchor,
+								OpeningMexReach());
+						if (OnMap(labSite))
+							labAt = labSite;
 						IUnitTask@ rebuild = Requests::Take(unit, lab,
 								Task::BuildType::FACTORY, Task::Priority::HIGH,
-								unit.GetPos(ai.frame), 0.f, 0.f);
+								labAt, 0.f, 0.f);
 						if (rebuild !is null) {
 							AiLog(Factory::T() + "apex: commander "
 								+ (outstanding ? "joining the standing factory request"
@@ -641,7 +656,8 @@ IUnitTask@ HomeTower(CCircuitUnit@ unit, bool isComm)
 	return post;
 }
 
-IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm, bool urgentOnly = false)
+IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm, bool urgentOnly = false,
+		bool nearOnly = false)
 {
 	// The commander plants most of the early mexes; MexGuard (inside the
 	// !isComm block below) does not cover it, so this handles ANY builder, ANY
@@ -691,6 +707,12 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm, bool urgentOnly = 
 		if (urgentOnly && (RingInflMax(at, 500.f) <= 0.01f))
 			continue;
 		const float d = me.distance2D(at);
+		// NEAR pass: only the mex underfoot -- typically the one this builder
+		// just finished. Sits above the next-mex claim so a fresh extractor
+		// gets its turret before the builder walks away from it; the far
+		// bare ones stay with the ordinary lower slot and its longer reach.
+		if (nearOnly && (d > MEX_GUARD_HERE))
+			continue;
 		if (!have || (d < bestD)) {
 			bestD = d;
 			bare = at;

@@ -51,17 +51,26 @@ CCircuitDef@ SolarDef()
 	// fusions." Affordability, not income level, is what retires the panel.
 	if (ReactorAffordable())
 		return null;
+	// WIND COMPETES ON THE SAME MATH AS EVERYWHERE ELSE. This helper used to
+	// step straight to the advanced solar, so its three callers (energy-stall
+	// want, metal-full fallback, commander last resort) bought advsols on maps
+	// where a 40-metal turbine makes double the energy per metal -- the one
+	// energy pick in the AI that skipped the per-metal ranking.
+	// EnergyValuePerMetal already prices wind at the map's own average and
+	// returns -1 for anything unavailable, reclaimable or past its point, so
+	// the null cases below fall out of the same comparison.
 	CCircuitDef@ adv = AdvSolDef();
-	if (adv !is null)
-		return adv;
-	// NOT unconditionally the plain panel: after a reactor stood, this branch
-	// handed back the most obsolete def in the game, and the commander built
-	// it while the nano turrets reclaimed it. Null here means "the answer is
-	// a reactor, not a panel" and every caller already handles null.
+	CCircuitDef@ wind = HaveReactor() ? null : SideDef3(armwin, corwin, legwin);
 	CCircuitDef@ plain = SideDef3(armsolar, corsolar, legsolar);
-	if ((plain !is null) && !EnergyReclaimable(plain.GetName()))
-		return plain;
-	return null;
+	CCircuitDef@ best = null;
+	float bv = 0.f;
+	float v = EnergyValuePerMetal(wind);
+	if (v > bv) { bv = v; @best = wind; }
+	v = EnergyValuePerMetal(adv);
+	if (v > bv) { bv = v; @best = adv; }
+	v = EnergyValuePerMetal(plain);
+	if (v > bv) { bv = v; @best = plain; }
+	return best;
 }
 
 // count is incremented on unit CREATION, nanoframe included

@@ -323,6 +323,21 @@ CCircuitDef@ FrontTower(CCircuitUnit@ unit, const AIFloat3& in at)
 	CCircuitDef@ heavy = HeavyDefenceFor(unit);
 	if (heavy !is null)
 		return heavy;
+	// A CREEP WALL IS ANSWERED IN KIND. An advancing LLT/Punisher wall beats a
+	// light-tower line by range physics -- the wall's own guns burst anything
+	// that closes, and nothing short-ranged on our line replies. The Punisher
+	// tier (armguard/corpun/legcluster, all T1-con buildable) outranges every
+	// wall piece, so once the enemy's SEEN static metal says a wall exists,
+	// the line escalates to it. Priced by the same signal the mobile-arty
+	// floor uses, not a clock or a tier: no wall seen, no escalation.
+	CCircuitDef@ pun = SideDef3("armguard", "corpun", "legcluster");
+	if ((pun !is null) && pun.IsAvailable(ai.frame)
+		&& unit.circuitDef.CanBuild(pun)
+		&& (aiEnemyMgr.GetEnemyCost(RT::STATIC)
+			>= ai.GetTunable("apex_pun_wall", TUNE_PUN_WALL)))
+	{
+		return pun;
+	}
 	// ON by default -- apexearth: "I never see us making the scorpion style
 	// defense turrets... They can still be useful for protecting us from
 	// raiders and we should have some. They make the T1.5 obsolete." The
@@ -563,6 +578,27 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 			&& !ReactorAffordable();
 	if (energyPanic) {
 		@gen = SideDef3(armsolar, corsolar, legsolar);
+		// The panic panel is not automatically solar: on a strong-wind map a
+		// turbine makes several times the energy per metal (GetEnergyMake
+		// already prices wind at the map's average), and the opening's
+		// stall-flag fires often enough that "always solar" put five panels
+		// down before the ranking below ever ran (watched on Altair, wind
+		// 12-27). Solar keeps the pick only when wind pays worse per metal
+		// or the bank cannot cover the turbine's energy cost -- the zero-E
+		// build is solar's one real edge in a stall.
+		CCircuitDef@ pwind = SideDef3(armwin, corwin, legwin);
+		if ((pwind !is null) && pwind.IsAvailable(ai.frame)
+			&& unit.circuitDef.CanBuild(pwind)
+			&& (EnergyValuePerMetal(pwind) > EnergyValuePerMetal(gen))
+			// Bank OR flow: a stall by definition runs the bank near empty,
+			// so a bank-only test hands the panic back to solar every time.
+			// The turbine's energy cost is paid over its build, so a few
+			// seconds of income covers it just as well as a full bank.
+			&& (aiEconomyMgr.energy.current + aiEconomyMgr.energy.income * 5.f
+				> pwind.costE))
+		{
+			@gen = pwind;
+		}
 	} else if (EnergyWasting()) {
 		// apexearth 2026-08-15, after 8 hours of "no fusions" reports: this
 		// branch used to route straight to a converter, meaning a capable
@@ -658,6 +694,21 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 			@sol = null;
 		if ((adv !is null) && !unit.circuitDef.CanBuild(adv))
 			@adv = null;
+		// Tidal competes on the same per-metal measure (GetEnergyMake prices
+		// it at the map's tidal strength) but only where a site actually
+		// exists: it can only stand in water, so on a dry base the probe
+		// nulls it before it can win the ranking and wedge the ladder on an
+		// unplaceable pick. Retires with the other T1 rungs once a reactor
+		// stands.
+		CCircuitDef@ tide = ((Factory::IsWaterMap() || Factory::IsMixedWaterMap()) && !HaveReactor())
+				? SideDef3("armtide", "cortide", "legtide") : null;
+		if ((tide !is null) && !unit.circuitDef.CanBuild(tide))
+			@tide = null;
+		if (tide !is null) {
+			const AIFloat3 tsite = ai.FindBuildSiteNear(tide, gHomePos, ECO_FALLBACK_RANGE);
+			if (!OnMap(tsite))
+				@tide = null;
+		}
 		// Reactors are always ranked (never nulled while the start cooldown
 		// holds); if one wins during cooldown the caller declines rather than
 		// falling back to a cheaper rung, so overbuilding wind/solar stays
@@ -709,8 +760,12 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 			// stays conservative rather than offering it and relying on
 			// GuardBuildCapability to silently decline (measured: exactly this
 			// happened once in a 10-minute smoke test).
-			const bool geoAffordable = aiEconomyMgr.energy.income
-					>= ai.GetTunable("apex_geo_min_income", TUNE_GEO_MIN_INCOME);
+			// Derived, not the old flat 250 e/s: the build drains costE from
+			// the grid, so the bar is the grid covering it inside the energy
+			// horizon. Same answer at the same numbers (13,000 E / 52s = 250
+			// e/s -- his number), but a cheaper geo def or a richer grid now
+			// move the bar on their own.
+			const bool geoAffordable = EcoAffordableE(GeoDef());
 			CCircuitDef@ geo = (geoAffordable && !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 					? GeoDef() : null;
 			float geoValue = -1.f;
@@ -735,6 +790,8 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 			if (v > best) { best = v; @gen = wind; }
 			v = EnergyValuePerMetal(sol);
 			if (v > best) { best = v; @gen = sol; }
+			v = EnergyValuePerMetal(tide);
+			if (v > best) { best = v; @gen = tide; }
 			v = EnergyValuePerMetal(adv);
 			if (v > best) { best = v; @gen = adv; }
 			v = EnergyValuePerMetal(fus);

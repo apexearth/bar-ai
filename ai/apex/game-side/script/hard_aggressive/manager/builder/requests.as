@@ -218,6 +218,32 @@ void Register(IUnitTask@ task)
 	gLive.insertLast(task);
 }
 
+// Live FACTORY tasks by the synchronous registry -- unlike the builder
+// manager's pool count (assignment empties it) or def counts (need a
+// nanoframe), this covers a task through its whole walk-and-build window,
+// whoever holds it and whoever created it (AiTaskAdded registers engine-made
+// tasks too). The plant-ask sweep keys on this so a factory ask can never
+// expire while its task is still alive in the commander's hands.
+// MANNED only, on purpose: CEconomyManager also keeps a HELD, INACTIVE
+// factory task while it waits for income (BuilderManager.cpp:734-740 keeps
+// it out of buildTasks for exactly this reason), and AiTaskAdded registers
+// that one too. Counting it read "a factory is in flight" from frame ~500 of
+// every game, the ask never expired, and no factory was EVER approved --
+// facCount=0 at 10 minutes, 2 of 3 smokes. A worker on the task is what
+// separates the commander's real walk-and-build from the engine's parked
+// placeholder; the unassigned-active ones are the pool count's job.
+uint FactoryManned()
+{
+	uint n = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if ((gLive[i] !is null) && !gLive[i].IsDead()
+			&& (gLive[i].GetBuildType() == Task::BuildType::FACTORY)
+			&& (Workers(gLive[i]) > 0))
+			++n;
+	}
+	return n;
+}
+
 void Forget(IUnitTask@ task)
 {
 	for (uint i = 0; i < gLive.length(); ++i) {
@@ -328,6 +354,41 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// game, all guard-nulled after the orphan already existed.
 	if ((unit !is null) && !unit.circuitDef.CanBuild(want))
 		return null;
+
+	// A FACTORY IS NEVER A FORK -- enforced at THE chokepoint, because the
+	// per-path guards kept losing: PlantApproved covers every rule that asks
+	// permission, but the commander's join branch infers permission from the
+	// task pool and takes this door directly -- and JoinFor's REACH and
+	// WorthJoining bounds made a distant asker MISS the standing request and
+	// open a second plant beside the first (the recurring two-T1-labs
+	// report). Any live factory request IS the answer, whatever the distance
+	// and whatever def the asker brought; and a new T1 land plant while one
+	// already stands under the T1 cap is refused outright, so no entrance --
+	// present or future -- can duplicate the line again.
+	if (bt == Task::BuildType::FACTORY) {
+		for (uint i = 0; i < gLive.length(); ++i) {
+			IUnitTask@ cand = gLive[i];
+			if ((cand is null) || cand.IsDead()
+				|| (cand.GetBuildType() != Task::BuildType::FACTORY))
+				continue;
+			// Manned only -- the engine's held placeholder task (see
+			// FactoryManned) also lives in this registry, and handing IT
+			// back wedged every asker on an unassignable task.
+			if (Workers(cand) == 0)
+				continue;
+			if ((unit !is null) && (cand.buildDef !is null)
+				&& !unit.circuitDef.CanBuild(cand.buildDef))
+				continue;
+			return cand;
+		}
+		if (Factory::IsLandT1Plant(want) && Factory::T1CapHolds()
+			&& (Factory::T1PlantCount() >= 1))
+		{
+			AiLog(Factory::T() + "apex: second T1 plant refused at the request door -- "
+				+ want.GetName() + " while " + Factory::T1PlantCount() + " stand(s)");
+			return null;
+		}
+	}
 
 	// ADVANCED SOLARS STAND TOGETHER (apexearth 2026-08-20) -- enforced at
 	// THE chokepoint because four different rules place them (HomeEnergy,

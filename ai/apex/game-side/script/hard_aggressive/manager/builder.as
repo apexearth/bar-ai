@@ -19,6 +19,7 @@
 #include "builder/fusion.as"      // reactors and the affordability test
 #include "builder/statics.as"     // AA, pulsar, shield, deterrent, nuke silo
 #include "builder/mexguard.as"    // mex turrets, home energy ladder, contest towers
+#include "builder/ecomath.as"     // the shared eco currency: gain, efficiency, payback
 #include "builder/opening.as"     // the first-factory gate: mexes, then income, then the lab
 #include "builder/obsolete.as"    // reclaiming our own outdated buildings
 #include "builder/fortify.as"     // per-constructor strike history and dig-in

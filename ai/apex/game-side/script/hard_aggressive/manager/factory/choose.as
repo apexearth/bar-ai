@@ -174,7 +174,17 @@ void SweepPlantAsks()
 	// during the walk-and-build phase the pool read empty and the TTL
 	// double-approved armalab again (3.5m + 5.8m, 20260816-223928) -- so
 	// builders currently holding FACTORY work count as live asks too.
-	uint alive = aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY));
+	// The registry, not the pool: assignment empties the pool, and the
+	// commander is not in the Crew list the loop below walks -- so a factory
+	// task held by the commander alone (the standard opening) read as dead
+	// after the TTL and re-approved a duplicate mid-walk. Requests::gLive is
+	// synchronous and holds the task until real removal.
+	// Pool (unassigned-active) PLUS manned (assigned, e.g. the commander mid
+	// walk -- he is not in the Crew list the loop below walks, so his held
+	// factory used to read as dead after the TTL and re-approve a duplicate).
+	// The engine's held INACTIVE placeholder is in neither term, on purpose.
+	uint alive = aiBuilderMgr.GetTaskCountOf(int(Task::BuildType::FACTORY))
+			+ Requests::FactoryManned();
 	for (uint i = 0; i < Crew::gId.length(); ++i) {
 		CCircuitUnit@ c = ai.GetTeamUnit(Id(Crew::gId[i]));
 		if (c is null)
@@ -312,6 +322,21 @@ CCircuitDef@ AiGetFactoryToBuild(const AIFloat3& in pos, bool isStart, bool isRe
 	// second request sees have=1 and is refused.
 	if ((want is null) || !ApexActive())
 		return want;
+	// REZ DEMAND MAY BUY THE BOT LAB (apexearth decision, post-reactor only):
+	// rezbots are bot-lab units, so a vehicle opening priced them impossible
+	// whatever the wreck field offered. Once the milestones lift the T1 cap,
+	// a rez deficit whose summed cost exceeds the lab's own redirects the
+	// next plant pick to the bot lab -- economics, not a quota, and
+	// PlantApproved below keeps the final say.
+	if (!HaveT1BotLab() && !T1CapHolds()) {
+		CCircuitDef@ botlab = T1BotLab();
+		CCircuitDef@ rez = RezBotDef();
+		if ((botlab !is null) && botlab.IsAvailable(ai.frame) && (rez !is null)) {
+			const int deficit = RezBotsWanted() - int(rez.count);
+			if (float(deficit) * rez.costM >= botlab.costM)
+				@want = botlab;
+		}
+	}
 	return PlantApproved(want) ? want : null;
 }
 
