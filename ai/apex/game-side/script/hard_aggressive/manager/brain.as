@@ -36,6 +36,9 @@ const float SILO_VALUE     = 4.0f;   // enemy metal removed, amortised
 const float ANTINUKE_VALUE = 8.0f;
 const float PULSAR_VALUE   = 1.5f;   // area denial near the base
 const float PINPOINT_VALUE = 0.5f;   // targeting support, cheap and bounded
+// The late-game pinpoint price: high enough to actually win draws once the
+// income bar opens the want (apexearth: "we need 3 late game").
+const float PINPOINT_LATE_VALUE = 4.0f;
 // The standing eco rules, as values rather than as "always".
 //
 // A converter eats 70 energy/s and returns 1 metal/s for ~1 metal to build
@@ -1385,8 +1388,18 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		gantryV *= ai.GetTunable("apex_gantry_answer", TUNE_GANTRY_ANSWER);
 		pulsarAnswer = ai.GetTunable("apex_pulsar_answer", TUNE_PULSAR_ANSWER);
 	}
-	Propose(Simple("gantry", gantryV,
-			SideDef3("armshltx", "corgant", "leggant")));
+	// apexearth: "1 gantry per 150 metal income" -- the want exists only
+	// while we hold fewer than the income norm says (the T3 emergency
+	// overrides the target: an unanswered enemy T3 always wants the first).
+	{
+		const int gTarget = int(Factory::SteadyIncome()
+				/ ai.GetTunable("apex_gantry_per_income", TUNE_GANTRY_PER_INCOME));
+		const int gHave = (gantryDef is null) ? 0 : int(gantryDef.count);
+		if ((gHave < gTarget) || ((enemyT3 > 0.f) && noT3Prod)) {
+			Propose(Simple("gantry", gantryV,
+					SideDef3("armshltx", "corgant", "leggant")));
+		}
+	}
 	// The silo is a FINISHER, priced by whether the army is fed: bought at
 	// full value only once army spend reaches its budget target, scaled down
 	// proportionally below it -- a 1v1 was lost with <10% relative army, a
@@ -1443,8 +1456,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 				+ ((seenSilos > 0)
 					? int(ai.GetTunable("apex_anti_pad", TUNE_ANTI_PAD)) : 0);
 		CCircuitDef@ anti = SideDef3("armamd", "corfmd", "legabm");
-		if (insurable && (anti !is null) && (int(anti.count) < need))
-			Propose(Simple("antinuke", ANTINUKE_VALUE, anti));
+		if (insurable && (anti !is null) && (int(anti.count) < need)) {
+			// apexearth pricing: the FIRST is the insurance and prices high;
+			// once one stands the rest are padding and price at a sliver --
+			// unless the enemy demonstrably fields multiple silos.
+			float av = ANTINUKE_VALUE;
+			if ((anti.count >= 1) && (seenSilos <= 1))
+				av *= 0.15f;
+			Propose(Simple("antinuke", av, anti));
+		}
 	}
 	// legbastion, not legstarfall: the def here is what the want's have/decay
 	// counts, and Builder::Pulsar builds bastions -- a mismatch never decays.
@@ -1453,6 +1473,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// front of our bases... we're full on metal").
 	{
 		float pv = PULSAR_VALUE * t3Mult * pulsarAnswer;
+		// apexearth: "lots of Pulsars when we are at late game and have lots
+		// of resources" -- the want grows with the income norm, and a full
+		// bank still multiplies on top (surplus is what the guns are FOR).
+		pv *= 1.f + Factory::SteadyIncome()
+				/ ai.GetTunable("apex_pulsar_per_income", TUNE_PULSAR_PER_INCOME);
 		if (aiEconomyMgr.isMetalFull)
 			pv *= ai.GetTunable("apex_pulsar_full_mult", TUNE_PULSAR_FULL_MULT);
 		Propose(Simple("pulsar", pv, SideDef3("armanni", "cordoom", "legbastion")));
@@ -1475,8 +1500,19 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	}
 	// A targeting facility sharpens guns we still own; with the army dead it
 	// buys nothing this minute, so it is priced by what is standing.
-	Propose(Simple("pinpoint", PINPOINT_VALUE * Military::ArmyStandingRatio(),
-			SideDef3("armtarg", "cortarg", "legtarg")));
+	// apexearth: "3 pinpointers late game for the whole team" -- accurate
+	// fire at radar blips. Late game is an economy state, never a clock.
+	{
+		CCircuitDef@ tg = SideDef3("armtarg", "cortarg", "legtarg");
+		const int tgWant = int(ai.GetTunable("apex_pinpoint_n", TUNE_PINPOINT_N));
+		if ((tg !is null) && (int(tg.count) < tgWant)
+			&& (Factory::SteadyIncome()
+				>= ai.GetTunable("apex_pinpoint_income", TUNE_PINPOINT_INCOME)))
+		{
+			Propose(Simple("pinpoint",
+					PINPOINT_LATE_VALUE * Military::ArmyStandingRatio(), tg));
+		}
+	}
 	}
 
 	Perf::Add("br.opt", perfT);

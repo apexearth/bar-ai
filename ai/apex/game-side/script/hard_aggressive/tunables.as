@@ -1456,6 +1456,13 @@ const float TUNE_WANT_CAP = 1.5f;
 const float TUNE_MEX_WEIGHT = 1.f;
 const float TUNE_MEXUP_WEIGHT = 1.f;
 const float TUNE_MEXUP_LANE = 1.f;
+// apexearth's normal numbers: one gantry per this much steady income; three
+// pinpointers once income clears the late-game bar; pulsar value grows by
+// income/norm.
+const float TUNE_GANTRY_PER_INCOME = 150.f;
+const float TUNE_PINPOINT_N = 3.f;
+const float TUNE_PINPOINT_INCOME = 150.f;
+const float TUNE_PULSAR_PER_INCOME = 150.f;
 // Seconds of steady income that let an extra advanced plant bypass the
 // afus/pulsar/army milestones outright -- at 500 m/s a 900-metal lab is 2s.
 const float TUNE_EXTRA_PLANT_SECS = 8.f;   // apexearth: "at ~150 m/s we absolutely must have a T2 air lab" -- 8s clears a ~990 lab at 125 m/s
