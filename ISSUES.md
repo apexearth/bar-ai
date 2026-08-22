@@ -2741,3 +2741,15 @@ Reading: on open ground the units die either way; standing at least costs the
 attacker something. Default reverted to 0 (epsilon behavior); the deaths at
 19% hp remain real and unfixed -- the answer is probably engagement selection
 (don't take the fight), not disengagement timing.
+
+## OPEN: T2 air plant re-election spam — 380 "building armaap" lines, plant never built (2026-08-21)
+
+Found by the air-warfare agent while tracing the 24-scouts/0-fighters game
+(matches/_engine-109780, team 0, 1v1): `manager/factory/choose.as:741` printed
+`apex: air assassin building armaap` 380 times and `armaap` never appears in
+`allBuilt=`. Classic AiMakeTask-is-a-re-election symptom — the request is
+re-issued every election and something downstream drops or orphans it. This
+starves the whole air arm of its T2 upgrade (and kept the bomber count at the
+level that froze the old fighter cap). Mechanism not yet traced past choose.as;
+next step is following one request through FactoryToBuild/Enqueue to see where
+it dies.
