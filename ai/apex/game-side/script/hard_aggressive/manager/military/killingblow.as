@@ -41,7 +41,7 @@ bool KillingBlow()
 		}
 		// fall through: the normal gates below may still arm it
 	}
-	if (ai.frame < KILL_FROM)
+	if (ai.frame < int(ai.GetTunable("apex_kill_from", TUNE_KILL_FROM)) * SECOND)
 		return false;
 	// OurArmyNow, not TeamArmyCost: armyCost read ~40% of the field telemetry
 	// (see massing.as). And KILL_FLOOR=20000 was an absolute no benchmark-scale
@@ -55,6 +55,14 @@ bool KillingBlow()
 	if (gSeenPeak > theirs)
 		theirs = gSeenPeak;
 	if (ours < MassFloor() / 0.017f)
+		return false;
+	// NEVER COMMIT AGAINST AN ENEMY WE HAVE NOT SEEN. Both terms of `theirs`
+	// accumulate on sighting, so an unscouted enemy reads 0 and the edge test
+	// passes for any army at all -- the blow would arm on ignorance, and
+	// IsCommitted then stops the whole army retreating. The clock beside this
+	// was standing in for exactly that; stating the intel requirement directly
+	// is what lets the clock come down.
+	if (theirs <= 0.f)
 		return false;
 	// Hysteresis, so a single lost engagement does not flip us back to massing
 	// half way through the push that is winning the game.

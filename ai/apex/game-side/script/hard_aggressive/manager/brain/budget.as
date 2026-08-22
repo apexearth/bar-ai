@@ -46,17 +46,56 @@ float RawTarget(Cat c)
 	return w;
 }
 
+// GetTunable CACHES the value it returns on the FIRST call (CircuitAI.cpp
+// GetTunable), so handing it a live curve as the "default" froze that curve at
+// its frame-0 reading for the whole game. Every share below is a function of
+// income, income is 0 at frame 0, and SPEND_ARMY's income-0 column is 0.0 --
+// so the ARMY row was zero in every game ever played, and the other four sat
+// on their opening columns. Read the override against a sentinel instead and
+// evaluate the curve fresh on every call.
+float ShareOverride(const string &in name)
+{
+	return ai.GetTunable(name, -1.f);
+}
+
+// The curve, read live -- or reproducing the cached frame-0 reading the bug
+// produced, which is what every measured game to date actually played.
+//
+// TURNING THIS ON IS AN UNTUNED CHANGE, NOT JUST A FIX. The numbers in
+// targets.as were authored against a system that never read them past column 0,
+// so they have never been exercised. Measured 2026-08-22 over three paired
+// 50-minute runs against medium (40 games per side): live curves went 23W-8L-9D
+// against 20W-10L-10D, inside the noise floor, with win times mixed and metal
+// rate 21% lower (12.2k/min against 15.6k). No win-speed benefit was shown, so
+// the default stays on the behaviour that was measured. Re-tuning SPEND_* with
+// the curves live is the campaign this needs.
+float CurveAt(const array<float>& in curve)
+{
+	if (ai.GetTunable("apex_budget_live", TUNE_BUDGET_LIVE) > 0.f)
+		return Targets::At(curve);
+	return Targets::At(curve, 0.f);
+}
+
 float RawBase(Cat c)
 {
-	if (c == ARMY)
-		return ai.GetTunable("apex_share_army", Targets::At(Targets::SPEND_ARMY));
-	if (c == DEFENCE)
-		return ai.GetTunable("apex_share_defence", Targets::At(Targets::SPEND_DEFENCE));
-	if (c == AIRDEF)
-		return ai.GetTunable("apex_share_airdef", Targets::At(Targets::SPEND_AIRDEF));
-	if (c == ECONOMY)
-		return ai.GetTunable("apex_share_economy", Targets::At(Targets::SPEND_ECONOMY));
-	return ai.GetTunable("apex_share_buildpower", Targets::At(Targets::SPEND_BUILDPOWER));
+	if (c == ARMY) {
+		const float ov = ShareOverride("apex_share_army");
+		return (ov >= 0.f) ? ov : CurveAt(Targets::SPEND_ARMY);
+	}
+	if (c == DEFENCE) {
+		const float ov = ShareOverride("apex_share_defence");
+		return (ov >= 0.f) ? ov : CurveAt(Targets::SPEND_DEFENCE);
+	}
+	if (c == AIRDEF) {
+		const float ov = ShareOverride("apex_share_airdef");
+		return (ov >= 0.f) ? ov : CurveAt(Targets::SPEND_AIRDEF);
+	}
+	if (c == ECONOMY) {
+		const float ov = ShareOverride("apex_share_economy");
+		return (ov >= 0.f) ? ov : CurveAt(Targets::SPEND_ECONOMY);
+	}
+	const float ov = ShareOverride("apex_share_buildpower");
+	return (ov >= 0.f) ? ov : CurveAt(Targets::SPEND_BUILDPOWER);
 }
 
 float TargetShare(Cat c)
@@ -160,6 +199,10 @@ void BudgetLog()
 		+ "/" + formatFloat(TargetShare(ECONOMY), "", 0, 2)
 		+ " bp=" + formatFloat(ShareOf(BUILDPOWER), "", 0, 2)
 		+ "/" + formatFloat(TargetShare(BUILDPOWER), "", 0, 2)
+		// The income the target CURVES are indexed by. Every row in targets.as
+		// is a function of this one number, so a wrong reading silently pins
+		// every curve to its opening column.
+		+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 2)
 		+ " total=" + formatFloat(gSpentTotal, "", 0, 0)
 		+ " raw=" + formatFloat(gSpent[ARMY], "", 0, 0)
 		+ "/" + formatFloat(gSpent[DEFENCE], "", 0, 0)

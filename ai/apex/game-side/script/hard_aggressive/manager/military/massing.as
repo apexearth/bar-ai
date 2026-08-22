@@ -26,9 +26,10 @@ int gNextFeedLog = 0;
 // at one time... the enemy army is probably sized around ~10." Distinct
 // ids cycling through fog never double-count (verified in the registry),
 // so the case this catches is distinct units DYING unseen while the raw
-// count remembers them. The peak decays slowly (~3min half-life) so a real
-// army briefly hidden does not evaporate.
+// count remembers them. The peak decays so a real army briefly hidden does not
+// evaporate, but a peak from a fight we already won stops being evidence.
 float gSeenPeak = 0.f;
+int gSeenPeakFrame = 0;
 
 float FreshMassingThreat()
 {
@@ -45,7 +46,22 @@ float FreshMassingThreat()
 float EnemyMassingThreat()
 {
 	const float fresh = FreshMassingThreat();
-	gSeenPeak = (fresh > gSeenPeak) ? fresh : (gSeenPeak * 0.9999f);
+	if (fresh > gSeenPeak) {
+		gSeenPeak = fresh;
+	} else {
+		// DECAY PER FRAME, NOT PER CALL. This is read from six places and
+		// several times per update, so the old per-call 0.9999 decayed at a
+		// rate set by how often other code happened to ask -- nowhere near the
+		// half-life the comment above claimed. The peak is the denominator of
+		// the killing blow, so a stale one is what keeps a won game from being
+		// finished: kill their army and the bar to commit is still the biggest
+		// force they ever showed.
+		const float hl = ai.GetTunable("apex_seen_halflife", TUNE_SEEN_HALFLIFE);
+		const int dt = ai.frame - gSeenPeakFrame;
+		if ((hl > 0.f) && (dt > 0))
+			gSeenPeak *= pow(0.5f, (float(dt) / float(SECOND)) / hl);
+	}
+	gSeenPeakFrame = ai.frame;
 	float raw = aiEnemyMgr.GetEnemyCost(RT::ASSAULT)
 	     + aiEnemyMgr.GetEnemyCost(RT::RAIDER)
 	     + aiEnemyMgr.GetEnemyCost(RT::RIOT)
@@ -456,7 +472,6 @@ void UpdateMassing()
 // holding KILL_EDGE times the enemy's army value, so even a partial commitment
 // outnumbers everything they can field. Lowering minAttackers globally is known
 // to be catastrophic; this only lowers it once we are already dominant.
-const int   KILL_FROM  = 15 * MINUTE;   // not before the T2 transition settles
 float KILL_EDGE() { return ai.GetTunable("apex_kill_edge", TUNE_KILL_EDGE); }
 float KILL_FLOOR() { return ai.GetTunable("apex_kill_floor", TUNE_KILL_FLOOR); }
 bool gKilling = false;

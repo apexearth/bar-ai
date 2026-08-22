@@ -804,6 +804,29 @@ const float TUNE_PUN_WALL = 1000.f;
 //   value is this multiple of theirs, attack continuously and release any
 //   turtle -- even a partial commitment outnumbers everything they field.
 const float TUNE_KILL_EDGE = 1.8f;
+// manager/military/killingblow.as [seconds] -- killing blow: earliest the
+//   normal (non-T1-commit) gate may arm. A clock, not an economy reading, and
+//   the only one left in the blow -- it exists so a fog-driven army estimate
+//   in the opening cannot commit the whole army. Tunable so the cost of
+//   holding it can be measured against a faster finish.
+const float TUNE_KILL_FROM = 900.f;
+// manager/military/massing.as [seconds] -- half-life of gSeenPeak, the largest
+//   enemy massing threat ever seen at once. It is the denominator of the
+//   killing blow and the massing floor, so how fast it forgets decides how long
+//   a destroyed enemy army keeps holding us back from committing.
+//   MEASURED 2026-08-22: 180s (the 3-minute figure the old comment claimed)
+//   was WORSE -- two paired 50-minute runs against medium, 16 and 8 games, both
+//   lost win rate and army trade against the effectively-frozen peak. Kept
+//   near-frozen as the default; the frame-based decay below is the correctness
+//   fix, not a behaviour change.
+const float TUNE_SEEN_HALFLIFE = 36000.f;
+// manager/brain/budget.as [toggle 0/1] -- evaluate the SPEND_* target curves
+//   against live income (1) or against the frame-0 column (0). GetTunable
+//   caches its default on first call, so passing a live curve as the default
+//   froze every share at income 0 -- and SPEND_ARMY's income-0 column is 0.0,
+//   which is why the ARMY budget row read zero in every game ever played.
+//   Default 0 reproduces that measured behaviour; see budget.as for the runs.
+const float TUNE_BUDGET_LIVE = 0.f;
 // manager/military/massing.as [metal] -- killing blow needs at least this much
 //   enemy army value on the books; ratios off a tiny sample are noise.
 const float TUNE_KILL_FLOOR = 20000.f;
