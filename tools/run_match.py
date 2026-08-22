@@ -594,6 +594,9 @@ def run(args) -> int:
         "game": game_name,
         "seed": args.seed,
         "minutes_cap": args.minutes,
+        # Which income the run actually had. Behaviours are income-gated, so a
+        # run is not comparable to one at a different bonus.
+        "handicap": args.handicap,
         "teams": [
             {"team": i, "spec": a.label(), "shortName": a.short_name,
              "version": a.version, "profile": a.profile, "lua": a.is_lua}

@@ -132,6 +132,7 @@ def match_summary(d):
         "winner_specs": res.get("winner_specs", []),
         "reason": res.get("reason"),
         "minutes": res.get("game_minutes"),
+        "handicap": r.get("handicap"),
         "crashed": res.get("crashed", False),
         "valid": res.get("valid"),
         "mtime": mt,
@@ -206,6 +207,136 @@ def infolog_health(d):
     apex_lines = len(re.findall(r"\bapex:", txt))
     return {"compile_errors": errs[:12], "compile_error_count": len(errs),
             "already_registered": dup, "apex_log_lines": apex_lines}
+
+
+# The class tag is optional: the log split into adv/t1 electors on 2026-08-21,
+# and runs from before that carry one untagged list.
+BRAIN_WANT_RE = re.compile(
+    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: brain wants(?:\((\w+)\))?=\d+ \| (.*)")
+BRAIN_PICK_RE = re.compile(
+    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: brain picks ([\w/]+) score=([-\d.]+)")
+
+_unit_names = {}
+
+
+def unit_display_names():
+    """internal def name -> in-game name, from the game we actually test against."""
+    if not _unit_names:
+        try:
+            import bar_env
+            f = bar_env.load().game_sdd / "language" / "en" / "units.json"
+            u = json.loads(f.read_text(encoding="utf-8")).get("units", {})
+            _unit_names.update(u.get("names", {}))
+        except Exception:
+            _unit_names["_"] = ""
+    return _unit_names
+
+
+def brain_wants(d):
+    """Per-team Brain want scores over time, from the 30s `brain wants=` dump.
+
+    A kind absent from a sample was not proposed that tick, and reads 0 --
+    which is the difference between "wanted nothing" and "wanted it least".
+    """
+    f = d / "infolog.txt"
+    if not f.is_file():
+        return {"error": "no infolog"}
+    teams = {}
+    team_picks = {}
+    kinds = {}
+    labels = {}
+    with f.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "apex: brain " not in line:
+                continue
+            m = BRAIN_WANT_RE.search(line)
+            if m:
+                # The adv-con and T1-con auctions rank different lists, so they
+                # are different series -- merging them averages two decisions.
+                key = m.group(2) + ("/" + m.group(3) if m.group(3) else "")
+                t = teams.setdefault(key, {"samples": [], "picks": []})
+                row = {}
+                for part in m.group(4).split("|"):
+                    k, _, v = part.strip().partition("=")
+                    if not k or not v:
+                        continue
+                    try:
+                        f_v = float(v)
+                    except ValueError:
+                        continue
+                    # "kind/def" since 2026-08-21; older logs are kind only, so
+                    # the def column is empty rather than the label being wrong.
+                    kind, _, defname = k.partition("/")
+                    row[k] = f_v
+                    labels[k] = {"kind": kind, "def": defname,
+                                 "name": unit_display_names().get(defname, "")}
+                    kinds[k] = kinds.get(k, 0.0) + f_v
+                t["samples"].append({"min": float(m.group(1)), "w": row})
+                continue
+            m = BRAIN_PICK_RE.search(line)
+            if m:
+                # A pick line names no elector class, so it belongs to the team
+                # rather than to one of its series.
+                team_picks.setdefault(m.group(2), []).append(
+                    {"min": float(m.group(1)), "kind": m.group(3),
+                     "score": float(m.group(4))})
+    # Series per kind, zero-filled, so share and stacking are well defined.
+    order = sorted(kinds, key=lambda k: -kinds[k])
+    out = {}
+    for tid, t in sorted(teams.items()):
+        t["picks"] = team_picks.get(tid.split("/")[0], [])
+        mins = [s["min"] for s in t["samples"]]
+        series = {k: [s["w"].get(k, 0.0) for s in t["samples"]] for k in order}
+        # Draw chance: the roulette is score-proportional over the positive
+        # capped scores, so a want's share of the total IS its chance of being
+        # the next thing a builder starts.
+        chance = {k: [] for k in order}
+        for i in range(len(mins)):
+            tot = sum(max(series[k][i], 0.0) for k in order)
+            for k in order:
+                chance[k].append(100.0 * max(series[k][i], 0.0) / tot if tot > 0 else 0.0)
+        picks = {}
+        for p in t["picks"]:
+            picks[p["kind"]] = picks.get(p["kind"], 0) + 1
+        out[tid] = {"min": mins, "series": series, "chance": chance,
+                    "picks": t["picks"], "pickCounts": picks}
+    return {"kinds": order, "labels": labels, "teams": out}
+
+
+CREW_RE = re.compile(
+    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: crew home=(\d+) mex=(\d+) front=(\d+) "
+    r"eco=(\d+) energy=(\d+) metal=(\d+) tracked=(\d+)"
+    r"(?:.*?died mex/front/eco=(\d+)/(\d+)/(\d+))?")
+CREW_ROLES = ["home", "mex", "front", "eco", "energy", "metal"]
+
+
+def crew_roles(d):
+    """Constructor headcount by role over time, from crew.as's 60s census.
+
+    `tracked` is every constructor the crew enrolled -- assist bots are
+    deliberately excluded (Crew::Enlist), so this is builders, not all units
+    with a build menu.
+    """
+    f = d / "infolog.txt"
+    if not f.is_file():
+        return {"error": "no infolog"}
+    teams = {}
+    with f.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "apex: crew home=" not in line:
+                continue
+            m = CREW_RE.search(line)
+            if not m:
+                continue
+            t = teams.setdefault(m.group(2), {"min": [], "tracked": [],
+                                              "died": [],
+                                              **{r: [] for r in CREW_ROLES}})
+            t["min"].append(float(m.group(1)))
+            for i, r in enumerate(CREW_ROLES):
+                t[r].append(int(m.group(3 + i)))
+            t["tracked"].append(int(m.group(9)))
+            t["died"].append(sum(int(m.group(i) or 0) for i in (10, 11, 12)))
+    return {"roles": CREW_ROLES, "teams": teams}
 
 
 def match_detail(d):
@@ -388,6 +519,13 @@ def build_launch_cmd(p):
         if not (0.02 <= bs <= 0.9):
             raise ValueError("box_size out of range: %s" % bs)
         args += ["--box-size", str(bs)]
+    # "" leaves run_match.py's own default in place: 50 under --watch because a
+    # hosted game is always bonused, 0 headless so benchmarks stay comparable.
+    if p.get("handicap") not in (None, "", "auto"):
+        hc = int(p["handicap"])
+        if not (0 <= hc <= 500):
+            raise ValueError("handicap out of range: %s" % hc)
+        args += ["--handicap", str(hc)]
     if mode == "watch":
         args += ["--watch"]
         if p.get("speed"):
@@ -415,6 +553,12 @@ def build_tournament_cmd(p):
         args += ["--minutes", str(int(p["minutes"]))]
     if p.get("per_side") and int(p["per_side"]) > 1:
         args += ["--per-side", str(int(p["per_side"]))]
+    # A tournament has no --watch, so "auto" is the tool's own 0.
+    if p.get("handicap") not in (None, "", "auto"):
+        hc = int(p["handicap"])
+        if not (0 <= hc <= 500):
+            raise ValueError("handicap out of range: %s" % hc)
+        args += ["--handicap", str(hc)]
     return args
 
 
@@ -674,6 +818,10 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(tournament_detail(d))
                 else:
                     self.send_json(match_detail(d))
+            elif u.path == "/api/brain":
+                self.send_json(brain_wants(safe_run_dir(q["dir"])))
+            elif u.path == "/api/crew":
+                self.send_json(crew_roles(safe_run_dir(q["dir"])))
             elif u.path == "/api/launchmeta":
                 self.send_json({"maps": known_maps(), "specs": known_ai_specs(),
                                 "tunables": tunable_names()})

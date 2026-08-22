@@ -95,7 +95,7 @@
       <button class="act" style="float:right" onclick="loadGames()">Refresh</button>
       <div id="pane-matches" style="margin-top:10px">
         <table id="matchtable"><thead><tr>
-          <th>When</th><th>Map</th><th>Matchup</th><th>Winner</th><th>Len</th><th></th>
+          <th>When</th><th>Map</th><th>Matchup</th><th>Winner</th><th>Len</th><th>Bonus</th>
         </tr></thead><tbody></tbody></table>
       </div>
       <div id="pane-tournaments" style="margin-top:10px;display:none">
@@ -129,6 +129,18 @@
       <label class="f">Minutes <input id="l-min" type="number" value="40" style="width:70px"></label>
       <label class="f">Speed (watch) <input id="l-speed" type="number" value="5" style="width:60px"></label>
       <label class="f">Seed <input id="l-seed" type="number" placeholder="random" style="width:80px"></label>
+      <label class="f" title="Engine Handicap: the +X% the BAR player list shows. Applies to EVERY AI. A hosted online game is normally +40%, and several behaviours are income-gated, so a benchmark at 0 exercises different code.">Bonus
+        <select id="l-handicap">
+          <option value="auto" selected>auto (watch +50, headless 0)</option>
+          <option value="0">0% — benchmark baseline</option>
+          <option value="20">+20%</option>
+          <option value="40">+40% — typical hosted game</option>
+          <option value="50">+50%</option>
+          <option value="75">+75%</option>
+          <option value="100">+100%</option>
+          <option value="150">+150%</option>
+          <option value="200">+200%</option>
+        </select></label>
       <label class="f" id="l-gameswrap" style="display:none">Games <input id="l-games" type="number" value="6" style="width:60px"></label>
       <label class="f">Start boxes
         <select id="l-boxes" onchange="drawBoxPreview()">
@@ -279,7 +291,8 @@ async function loadGames() {
       <td>${esc(m.map || "?")}</td>
       <td class="dim">${esc((m.specs || []).join(" vs "))}</td>
       <td class="${apexWon ? "win" : winner ? "loss" : "dim"}">${esc(winner || m.reason || "—")}${flags}</td>
-      <td class="dim">${m.minutes ? m.minutes.toFixed(0) + "m" : ""}</td><td></td></tr>`;
+      <td class="dim">${m.minutes ? m.minutes.toFixed(0) + "m" : ""}</td>
+      <td class="dim">${m.handicap == null ? "?" : "+" + m.handicap + "%"}</td></tr>`;
   }).join("") || `<tr><td class="dim" colspan="6">none</td></tr>`);
 }
 document.addEventListener("click", e => {
@@ -309,6 +322,8 @@ async function openGame(dir, isRefresh) {
       if (nowOut) { nowOut.innerHTML = keep.html; nowOut.style.display = keep.disp; }
     }
     if ((changed || !isRefresh) && !d.matches && d.chart) drawCharts(d);
+    if ((changed || !isRefresh) && !d.matches && d.chart) loadBrain(dir);
+    if ((changed || !isRefresh) && !d.matches && d.chart) loadCrew(dir);
     // still running (single match) or partially done (tournament): keep refreshing
     const unfinished = d.running || (d.matches && d.done < (d.planned || d.games));
     if (unfinished) openTimer = setTimeout(() => {
@@ -367,7 +382,8 @@ function renderMatch(d) {
   return `<div class="card">
     <h2>${esc(r.map)} — ${esc((r.teams || []).map(t => t.spec).join(" vs "))}</h2>
     <div>Winner: <b class="${/^Apex/.test((res.winner_specs||[])[0]||"") ? "win" : "loss"}">${esc((res.winner_specs || []).join(", ") || res.reason)}</b>
-      &nbsp;<span class="dim">${res.reason}, ${res.game_minutes?.toFixed(1)} game-min in ${res.wall_seconds?.toFixed(0)}s wall${r.seed != null ? ", seed " + r.seed : ""}</span></div>
+      &nbsp;<span class="dim">${res.reason}, ${res.game_minutes?.toFixed(1)} game-min in ${res.wall_seconds?.toFixed(0)}s wall${r.seed != null ? ", seed " + r.seed : ""}${
+        r.handicap != null ? ", bonus +" + r.handicap + "%" : ""}</span></div>
     <div style="margin:6px 0">${healthBits.join(" ")}</div>
     <div class="row" style="margin-top:6px">${TOOL_BTNS(d.dir, false)}</div>
     <pre id="toolout" style="display:none"></pre></div>
@@ -377,6 +393,42 @@ function renderMatch(d) {
       <div><div class="dim">metal produced (cumulative)</div><canvas id="c-metal" width="560" height="220"></canvas></div>
       <div><div class="dim">standing army (metal value)</div><canvas id="c-army" width="560" height="220"></canvas></div>
     </div></div>
+  <div class="card"><h2>Brain wants over time — what it wanted to build, and how badly</h2>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <label class="f">team / elector<select id="bw-team"></select></label>
+      <label class="f">view<select id="bw-mode">
+        <option value="chance">chance to be built next (%)</option>
+        <option value="share">chance, stacked to 100%</option>
+        <option value="raw">raw score (log)</option>
+      </select></label>
+      <label class="f">group<select id="bw-group">
+        <option value="def">building</option>
+        <option value="kind">category</option>
+      </select></label>
+      <label class="f">&nbsp;<span class="dim" id="bw-note"></span></label>
+    </div>
+    <div class="legend" id="bw-legend" style="flex-wrap:wrap"></div>
+    <canvas id="c-brain" width="1140" height="300"></canvas>
+    <div class="dim" style="font-size:12px;margin-top:4px">Ticks under the axis
+      are actual picks (a want that got a builder). The draw is
+      score-proportional over the capped scores, so a building's share of the
+      total IS its chance of being the next thing started — a chance of 0 means
+      it was not proposed at all that tick.</div>
+    <table style="margin-top:8px"><thead><tr><th>building</th><th>category</th>
+      <th>picks</th><th>mean chance</th><th>peak chance</th><th>mean score</th>
+      </tr></thead>
+      <tbody id="bw-table"></tbody></table></div>
+  <div class="card"><h2>Constructors over time — headcount by role</h2>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <label class="f">team<select id="cw-team"></select></label>
+      <label class="f">&nbsp;<span class="dim" id="cw-note"></span></label>
+    </div>
+    <div class="legend" id="cw-legend" style="flex-wrap:wrap"></div>
+    <canvas id="c-crew" width="1140" height="260"></canvas>
+    <div class="dim" style="font-size:12px;margin-top:4px">Stacked headcount per
+      role (Crew::Enlist; a role never changes once set). The white line is
+      cumulative constructor deaths. Assist bots are not enrolled, so this is
+      the working crew rather than every unit with a build menu.</div></div>
   <div class="card"><h2>Final snapshot per player</h2>
     <table><thead><tr><th>team</th><th>metal prod</th><th>army</th><th>mex/T2</th>
     <th>mT2/mT3</th><th>kill/loss</th><th>tech@</th><th>top spend</th></tr></thead>
@@ -417,6 +469,230 @@ function drawCharts(d) {
     });
   }
 }
+/* ---------- brain wants ---------- */
+const KIND_COLORS = ["#4fa3e3","#e0876c","#5fbf77","#c78ce0","#d9c25e","#5fc7c0",
+  "#e07b9a","#8f9ce0","#9fbf5f","#c96f5f","#7fa8bf","#bf7fd9","#94a3ae",
+  "#e6a15c","#6fd1a0","#a88ce0","#d96f6f","#7fbfe0"];
+let BRAIN = null;
+async function loadBrain(dir) {
+  const sel = $("#bw-team"); if (!sel) return;
+  try { BRAIN = await api("/api/brain?dir=" + encodeURIComponent(dir)); }
+  catch (e) { BRAIN = null; }
+  const teams = BRAIN && BRAIN.teams ? Object.keys(BRAIN.teams) : [];
+  if (!teams.length) {
+    $("#bw-note").textContent = "no `brain wants` lines in this infolog";
+    return;
+  }
+  // Key is team, or team/class since the adv-con and T1-con auctions split.
+  sel.innerHTML = teams.map(t => {
+    const [tm, cls] = t.split("/");
+    return `<option value="${esc(t)}">team ${esc(tm)}${
+      cls ? " · " + (cls === "adv" ? "advanced cons" : "T1 cons") : ""}</option>`;
+  }).join("");
+  sel.onchange = drawBrain;
+  $("#bw-mode").onchange = drawBrain;
+  $("#bw-group").onchange = drawBrain;
+  drawBrain();
+}
+// Label for one want key. Pre-2026-08-21 logs carry no def, so the key IS the
+// category and there is nothing finer to show.
+function bwLabel(key, group) {
+  const L = (BRAIN.labels || {})[key] || {};
+  if (group === "kind" || !L.def) return L.kind || key;
+  return L.name ? `${L.name} (${L.def})` : L.def;
+}
+// Collapse the raw kind/def series onto whatever the group setting asks for.
+function bwGrouped(t, group) {
+  const out = {}, order = [];
+  BRAIN.kinds.forEach(k => {
+    const lab = bwLabel(k, group);
+    if (!out[lab]) { out[lab] = {chance: [], score: []}; order.push(lab); }
+    const g = out[lab];
+    (t.min || []).forEach((_, i) => {
+      g.chance[i] = (g.chance[i] || 0) + (t.chance[k] ? t.chance[k][i] : 0);
+      g.score[i] = (g.score[i] || 0) + (t.series[k] ? t.series[k][i] : 0);
+    });
+  });
+  const live = order.filter(l => out[l].chance.some(v => v > 0));
+  live.sort((a, b) => sum(out[b].chance) - sum(out[a].chance));
+  return {labels: live, data: out};
+}
+const sum = a => a.reduce((x, y) => x + y, 0);
+function drawBrain() {
+  const cv = $("#c-brain"); if (!cv || !BRAIN) return;
+  const tid = $("#bw-team").value, mode = $("#bw-mode").value;
+  const group = $("#bw-group").value;
+  const t = BRAIN.teams[tid]; if (!t) return;
+  const G = bwGrouped(t, group), labels = G.labels, D = G.data;
+  const N = t.min.length, mt = Math.max(1, ...t.min);
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 44, B = 34;
+  ctx.clearRect(0, 0, W, H);
+  const X = m => P + (W - P - 10) * (m / mt);
+  const plotH = H - B - 10;
+  ctx.font = "10px Consolas"; ctx.lineWidth = 1;
+  const gridY = (fmt, hi) => {
+    ctx.strokeStyle = "#2c3642"; ctx.fillStyle = "#8a96a3";
+    for (let g = 0; g <= 4; g++) {
+      const y = H - B - plotH * g / 4;
+      ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - 10, y); ctx.stroke();
+      ctx.fillText(fmt(hi * g / 4), 4, y + 3);
+    }
+  };
+
+  if (mode === "chance") {
+    // One line per building: its probability of being the next thing started.
+    const hi = Math.max(5, ...labels.map(l => Math.max(...D[l].chance)));
+    gridY(v => v.toFixed(0) + "%", hi);
+    labels.forEach((l, li) => {
+      ctx.strokeStyle = KIND_COLORS[li % KIND_COLORS.length];
+      ctx.lineWidth = 1.7; ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const x = X(t.min[i]), y = H - B - plotH * (D[l].chance[i] / hi);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    });
+    ctx.lineWidth = 1;
+  } else if (mode === "share") {
+    let base = new Array(N).fill(0);
+    labels.forEach((l, li) => {
+      ctx.fillStyle = KIND_COLORS[li % KIND_COLORS.length] + "cc";
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const y = H - B - plotH * (base[i] / 100);
+        i ? ctx.lineTo(X(t.min[i]), y) : ctx.moveTo(X(t.min[i]), y);
+      }
+      for (let i = N - 1; i >= 0; i--) {
+        base[i] += D[l].chance[i];
+        ctx.lineTo(X(t.min[i]), H - B - plotH * (base[i] / 100));
+      }
+      ctx.closePath(); ctx.fill();
+    });
+    gridY(v => v.toFixed(0) + "%", 100);
+  } else {
+    // Log scale: scores span mexup 0.001 to pulsar 38 in one game.
+    const vals = labels.flatMap(l => D[l].score).filter(v => v > 0);
+    const hi = Math.max(1e-3, ...vals), lo = Math.max(1e-4, Math.min(...vals));
+    const L = v => Math.log10(Math.max(v, lo));
+    const Y = v => H - B - plotH * ((L(v) - L(lo)) / Math.max(0.001, L(hi) - L(lo)));
+    ctx.strokeStyle = "#2c3642"; ctx.fillStyle = "#8a96a3";
+    for (let g = 0; g <= 4; g++) {
+      const lv = L(lo) + (L(hi) - L(lo)) * g / 4, y = Y(Math.pow(10, lv));
+      ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - 10, y); ctx.stroke();
+      const n = Math.pow(10, lv);
+      ctx.fillText(n >= 10 ? n.toFixed(0) : n.toFixed(n >= 1 ? 1 : 3), 2, y + 3);
+    }
+    labels.forEach((l, li) => {
+      ctx.strokeStyle = KIND_COLORS[li % KIND_COLORS.length];
+      ctx.lineWidth = 1.6; ctx.beginPath();
+      let pen = false;
+      for (let i = 0; i < N; i++) {
+        const v = D[l].score[i] || 0;
+        if (v <= 0) { pen = false; continue; }   // not proposed: a gap, not a zero
+        const x = X(t.min[i]), y = Y(v);
+        pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true;
+      }
+      ctx.stroke();
+    });
+    ctx.lineWidth = 1;
+  }
+  ctx.fillStyle = "#8a96a3";
+  for (let g = 0; g <= 6; g++) {
+    const x = P + (W - P - 10) * g / 6;
+    ctx.fillText(Math.round(mt * g / 6) + "m", x - 8, H - 4);
+  }
+  const pickLabel = p => bwLabel(p.kind, group);
+  (t.picks || []).forEach(p => {
+    const li = labels.indexOf(pickLabel(p));
+    ctx.fillStyle = li < 0 ? "#8a96a3" : KIND_COLORS[li % KIND_COLORS.length];
+    ctx.fillRect(X(p.min) - 1, H - B + 3, 2, 9);
+  });
+  $("#bw-legend").innerHTML = labels.map((l, i) =>
+    `<span><i style="background:${KIND_COLORS[i % KIND_COLORS.length]}"></i>${esc(l)}</span>`).join("");
+  $("#bw-note").textContent =
+    `${N} samples, ${(t.picks || []).length} logged picks (team-wide)`;
+  const pickCount = {};
+  (t.picks || []).forEach(p => {
+    const l = pickLabel(p); pickCount[l] = (pickCount[l] || 0) + 1;
+  });
+  $("#bw-table").innerHTML = labels.map(l => {
+    const c = D[l].chance, sc = D[l].score.filter(x => x > 0);
+    const meanC = sum(c) / Math.max(1, N);
+    const meanS = sum(sc) / Math.max(1, sc.length);
+    const cat = (BRAIN.kinds.filter(k => bwLabel(k, group) === l)
+      .map(k => ((BRAIN.labels || {})[k] || {}).kind || k)
+      .filter((v, i, a) => a.indexOf(v) === i)).join(", ");
+    return `<tr><td>${esc(l)}</td><td class="dim">${esc(cat)}</td>
+      <td>${pickCount[l] || 0}</td><td>${meanC.toFixed(1)}%</td>
+      <td>${Math.max(0, ...c).toFixed(1)}%</td><td>${meanS.toFixed(3)}</td></tr>`;
+  }).join("");
+}
+
+/* ---------- constructor crew ---------- */
+const ROLE_COLORS = {home:"#4fa3e3", mex:"#d9c25e", front:"#e0876c",
+  eco:"#5fbf77", energy:"#c78ce0", metal:"#5fc7c0"};
+let CREW = null;
+async function loadCrew(dir) {
+  const sel = $("#cw-team"); if (!sel) return;
+  try { CREW = await api("/api/crew?dir=" + encodeURIComponent(dir)); }
+  catch (e) { CREW = null; }
+  const teams = CREW && CREW.teams ? Object.keys(CREW.teams) : [];
+  if (!teams.length) {
+    $("#cw-note").textContent = "no `crew home=` census lines in this infolog";
+    return;
+  }
+  sel.innerHTML = teams.map(t => `<option value="${t}">team ${t}</option>`).join("");
+  sel.onchange = drawCrew;
+  drawCrew();
+}
+function drawCrew() {
+  const cv = $("#c-crew"); if (!cv || !CREW) return;
+  const t = CREW.teams[$("#cw-team").value]; if (!t) return;
+  const roles = CREW.roles, N = t.min.length;
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 34, B = 22;
+  ctx.clearRect(0, 0, W, H);
+  const mt = Math.max(1, ...t.min);
+  const hi = Math.max(4, ...t.tracked, ...t.died);
+  const X = m => P + (W - P - 10) * (m / mt), plotH = H - B - 10;
+  const Y = v => H - B - plotH * (v / hi);
+  ctx.font = "10px Consolas";
+  let base = new Array(N).fill(0);
+  roles.forEach(r => {
+    ctx.fillStyle = ROLE_COLORS[r] + "cc";
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = X(t.min[i]); i ? ctx.lineTo(x, Y(base[i])) : ctx.moveTo(x, Y(base[i]));
+    }
+    for (let i = N - 1; i >= 0; i--) { base[i] += t[r][i]; ctx.lineTo(X(t.min[i]), Y(base[i])); }
+    ctx.closePath(); ctx.fill();
+  });
+  ctx.strokeStyle = "#2c3642"; ctx.fillStyle = "#8a96a3";
+  for (let g = 0; g <= 4; g++) {
+    const y = Y(hi * g / 4);
+    ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - 10, y); ctx.stroke();
+    ctx.fillText(Math.round(hi * g / 4), 6, y + 3);
+  }
+  // Cumulative deaths on the same axis: the crew holding flat while this
+  // climbs is replacement, not growth.
+  ctx.strokeStyle = "#e6ecf2"; ctx.lineWidth = 1.4; ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  t.min.forEach((m, i) => { const x = X(m), y = Y(t.died[i]);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+  ctx.fillStyle = "#8a96a3";
+  for (let g = 0; g <= 6; g++) {
+    const x = P + (W - P - 10) * g / 6;
+    ctx.fillText(Math.round(mt * g / 6) + "m", x - 8, H - 4);
+  }
+  $("#cw-legend").innerHTML = roles.map(r =>
+    `<span><i style="background:${ROLE_COLORS[r]}"></i>${r}</span>`).join("")
+    + `<span><i style="background:#e6ecf2"></i>deaths (cumulative)</span>`;
+  const last = N - 1;
+  $("#cw-note").textContent = `${N} samples; at ${t.min[last]}m: `
+    + roles.map(r => `${r} ${t[r][last]}`).join(", ")
+    + `, tracked ${t.tracked[last]}, ${t.died[last]} died`;
+}
+
 async function runTool(dir, tool) {
   const out = $("#toolout");
   out.style.display = ""; out.textContent = `running ${tool}…`;
@@ -447,6 +723,7 @@ async function launch() {
     speed: $("#l-speed").value, seed: $("#l-seed").value,
     games: $("#l-games").value,
     boxes: $("#l-boxes").value, box_size: $("#l-boxsize").value,
+    handicap: $("#l-handicap").value,
     modoptions: $("#l-modopt").value.trim().split(/\s+/).filter(Boolean),
   };
   if (!body.map) return toast("pick a map", true);
