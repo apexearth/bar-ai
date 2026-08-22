@@ -353,7 +353,23 @@ IUnitTask@ EcoConverters(CCircuitUnit@ unit)
 		gEcoConvAsked = built;
 		outstanding = 0;
 	}
-	if (outstanding >= CONV_INFLIGHT)
+	// THE CAP IS THE SPILL, NOT SIX. Each big converter eats CONVERT_DRAW_BIG
+	// of the overflow, so the honest parallel bound is how many the spill can
+	// feed -- a flat 6 was the 4-fold shortfall apexearth measured at 20k+
+	// spare ("we had a thing that would make multiple at a time... what's
+	// wrong?"). The floor keeps the old behaviour on a small spill; a full
+	// bank prices a quarter of income as spilling, same as the Brain's want.
+	float spareForConv = EnergySpare();
+	if (aiEconomyMgr.isEnergyFull) {
+		const float fb = aiEconomyMgr.energy.income * 0.25f;
+		if (fb > spareForConv)
+			spareForConv = fb;
+	}
+	int inflightCap = CONV_INFLIGHT;
+	const int bySpill = int(spareForConv / Brain::CONVERT_DRAW_BIG);
+	if (bySpill > inflightCap)
+		inflightCap = bySpill;
+	if (outstanding >= inflightCap)
 		return null;
 
 	AIFloat3 spot;
@@ -436,7 +452,23 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 		gConverts = built;
 		outstanding = 0;
 	}
-	if (outstanding >= CONV_INFLIGHT)
+	// THE CAP IS THE SPILL, NOT SIX. Each big converter eats CONVERT_DRAW_BIG
+	// of the overflow, so the honest parallel bound is how many the spill can
+	// feed -- a flat 6 was the 4-fold shortfall apexearth measured at 20k+
+	// spare ("we had a thing that would make multiple at a time... what's
+	// wrong?"). The floor keeps the old behaviour on a small spill; a full
+	// bank prices a quarter of income as spilling, same as the Brain's want.
+	float spareForConv = EnergySpare();
+	if (aiEconomyMgr.isEnergyFull) {
+		const float fb = aiEconomyMgr.energy.income * 0.25f;
+		if (fb > spareForConv)
+			spareForConv = fb;
+	}
+	int inflightCap = CONV_INFLIGHT;
+	const int bySpill = int(spareForConv / Brain::CONVERT_DRAW_BIG);
+	if (bySpill > inflightCap)
+		inflightCap = bySpill;
+	if (outstanding >= inflightCap)
 		return null;
 
 	AIFloat3 spot;
