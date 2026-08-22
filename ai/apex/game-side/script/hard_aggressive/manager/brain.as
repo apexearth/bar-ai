@@ -406,6 +406,7 @@ Want@ MexWant(CCircuitUnit@ unit)
 	// the FRACTION of the economy it grows rather than a flat gain.
 	const float make = aiEconomyMgr.GetMetalMake(mex);
 	w.value = (make > 0.f) ? make : MEX_INCOME_GAIN;
+	w.value *= ai.GetTunable("apex_mex_weight", TUNE_MEX_WEIGHT);
 	// A DRAINED BANK IS THE STRONGEST CASE FOR MORE INCOME. Two steps off one
 	// measure so it is not a cliff: the engine's empty flag leans it, a bank
 	// under 5% (reclaim.as's RESOURCE_CRISIS_FRAC, a literal because that
@@ -1085,7 +1086,8 @@ Want@ MexUpgradeWant(CCircuitUnit@ unit)
 	w.kind = "mexup";
 	// A moho roughly triples a mex's extraction. Expressed as metal/second so it
 	// is comparable with a reactor's, rather than as a unitless preference.
-	w.value = MEXUP_INCOME_GAIN;
+	w.value = MEXUP_INCOME_GAIN
+			* ai.GetTunable("apex_mexup_weight", TUNE_MEXUP_WEIGHT);
 	w.cost = moho.costM;
 	w.pos = best.GetPos(ai.frame);
 	@w.def = moho;
