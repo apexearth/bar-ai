@@ -527,11 +527,35 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
 	pPath = query->GetPathInfo();
 
 	if (!pPath->posPath.empty()) {
+		CCircuitAI* circuit = manager->GetCircuit();
+		// apex: THE ROUTE IS VALIDATED WITH A LIVE SENSOR, NOT THE DEAD ONE.
+		// Target selection already refuses bad fights on group influence, but
+		// the A* that walks there prices ground off CThreatMap -- measured ~0
+		// almost everywhere -- so a correctly-chosen target still got
+		// approached through a Punisher's kill zone. Any waypoint beyond
+		// engaged range carrying enemy influence past our own power refuses
+		// the walk and re-musters at the front instead of idling. OFF by
+		// default: the over-refusal risk is the exact engage-margin failure
+		// signature, so it ships as an experiment lever.
+		const float pathMargin = circuit->GetTunable("apex_path_infl_margin", 0.f);
+		if (pathMargin > 0.f) {
+			CInfluenceMap* inflMap = circuit->GetInflMap();
+			const AIFloat3& lp = leader->GetPos(circuit->GetLastFrame());
+			const float atUsSq = SQUARE(highestRange + 500.f);
+			for (const AIFloat3& wp : pPath->posPath) {
+				if (lp.SqDistance2D(wp) < atUsSq) {
+					continue;   // already at engaged range: fight what's on us
+				}
+				if (inflMap->GetEnemyInflAt(wp) > maxPower * pathMargin) {
+					FallbackFrontPos();
+					return;
+				}
+			}
+		}
 		// apex: intent pings for the watching player (apexearth: "Can we have
 		// our squads ping on the map so that I can understand what they're
 		// thinking when they're moving?"). apex_ping=1 only; throttled by the
 		// path grant, which fires on decision, not per tick.
-		CCircuitAI* circuit = manager->GetCircuit();
 		if (circuit->GetTunable("apex_ping", 0.f) > 0.f) {
 			circuit->GetDrawer()->AddPoint(leader->GetLastPos(),
 					utils::string_format("DEF chase n=%d", (int)units.size()).c_str());

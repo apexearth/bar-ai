@@ -230,6 +230,7 @@ local NAMES = {
 	"apex_dedicate_per",
 	"apex_dedicate_per_adv",
 	"apex_want_cap",
+	"apex_path_infl_margin",
 	"apex_extra_plant_secs",
 	"apex_assist_per_cost",
 	"apex_bigbuild_cost",

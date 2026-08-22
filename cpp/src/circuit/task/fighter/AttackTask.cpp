@@ -1149,6 +1149,27 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
 		// walked/direct near 1.0 is a charge up the middle, well above 1.0 is a
 		// flank. Rate limited because attack paths are re-queried constantly.
 		CCircuitAI* circuit = manager->GetCircuit();
+		// apex: same live-sensor route check as CDefendTask::ApplyTargetPath
+		// (see the comment there): the A* prices ground off the dead threat
+		// map, so an accepted target could be approached through a kill zone.
+		// On refusal the squad simply skips this walk -- FindTarget re-runs
+		// next cycle while massing accumulates -- never a bespoke retreat.
+		{
+			const float pathMargin = circuit->GetTunable("apex_path_infl_margin", 0.f);
+			if ((pathMargin > 0.f) && (leader != nullptr)) {
+				CInfluenceMap* inflMap = circuit->GetInflMap();
+				const AIFloat3& lp = leader->GetPos(circuit->GetLastFrame());
+				const float atUsSq = SQUARE(highestRange + 500.f);
+				for (const AIFloat3& wp : pPath->posPath) {
+					if (lp.SqDistance2D(wp) < atUsSq) {
+						continue;
+					}
+					if (inflMap->GetEnemyInflAt(wp) > attackPower * pathMargin) {
+						return;
+					}
+				}
+			}
+		}
 		// Detour computed EVERY pass, not just on log ticks: it drives the
 		// charge flag below. A walk this many times the straight line is not
 		// a flank, it is evasion -- the army is out of position the whole
