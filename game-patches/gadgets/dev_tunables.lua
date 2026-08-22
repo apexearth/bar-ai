@@ -229,6 +229,7 @@ local NAMES = {
 	"apex_rez_log_knee",
 	"apex_dedicate_per",
 	"apex_dedicate_per_adv",
+	"apex_want_cap",
 	"apex_extra_plant_secs",
 	"apex_assist_per_cost",
 	"apex_bigbuild_cost",

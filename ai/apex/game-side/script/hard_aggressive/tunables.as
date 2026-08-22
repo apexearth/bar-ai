@@ -1444,6 +1444,9 @@ const float TUNE_DEDICATE_PER = 3.f;
 // Advanced-con dedication ratio: one ENERGY dedicate per this many enlisted
 // advanced cons (apexearth: "If we [have] 2, we could assign 1 to energy").
 const float TUNE_DEDICATE_PER_ADV = 2.f;
+// Roulette dominance cap: one want may score at most this multiple of all
+// other wants combined (1.5 => at most ~60% of the draw). 0 disables.
+const float TUNE_WANT_CAP = 1.5f;
 // Seconds of steady income that let an extra advanced plant bypass the
 // afus/pulsar/army milestones outright -- at 500 m/s a 900-metal lab is 2s.
 const float TUNE_EXTRA_PLANT_SECS = 8.f;   // apexearth: "at ~150 m/s we absolutely must have a T2 air lab" -- 8s clears a ~990 lab at 125 m/s

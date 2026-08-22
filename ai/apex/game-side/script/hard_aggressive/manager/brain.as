@@ -1479,6 +1479,30 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// (mexup, coverage gaps, adv-con) is unchanged -- only the tie between
 	// eligible options moved from argmax to a weighted draw.
 	if (ai.GetTunable("apex_brain_roulette", TUNE_BRAIN_ROULETTE) > 0.f) {
+		// NO WANT MAY OWN THE ROULETTE. Emergency multipliers stack
+		// unbounded (gantry=80 against silo=3.5 measured live -- the T3
+		// answer boost held for the whole game because the gantry never
+		// finished) and a score at 75%+ of the total is winner-takes-all
+		// with extra steps: nukes and antinukes simply stopped being drawn
+		// (apexearth). Clamp each score at draw time to a bounded multiple
+		// of EVERYTHING ELSE combined, so the loudest want still leads --
+		// hard -- but the rest of the list keeps a real share of the picks.
+		{
+			const float capMult = ai.GetTunable("apex_want_cap", TUNE_WANT_CAP);
+			if (capMult > 0.f) {
+				float sum = 0.f;
+				for (uint i = 0; i < order.length(); ++i) {
+					if (order[i].cachedScore > 0.f)
+						sum += order[i].cachedScore;
+				}
+				for (uint i = 0; i < order.length(); ++i) {
+					const float s = order[i].cachedScore;
+					const float others = sum - ((s > 0.f) ? s : 0.f);
+					if ((s > 0.f) && (others > 0.f) && (s > others * capMult))
+						order[i].cachedScore = others * capMult;
+				}
+			}
+		}
 		for (uint i = 0; i < order.length(); ++i) {
 			float total = 0.f;
 			for (uint j = i; j < order.length(); ++j) {
