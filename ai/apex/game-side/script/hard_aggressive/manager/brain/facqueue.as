@@ -735,8 +735,13 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		// killed a lot... Fighters, gunships, and bombers should have more
 		// priority." Rate halved too (per 120 income, was 60); the map bound
 		// still caps the fleet.
+		// Same retirement gate as the fighter/bomber floors above: without it
+		// a retired T1 air line kept exactly one job -- scout replacement --
+		// which is the other half of "air scouts more than any other
+		// aircraft, and the lab was often idle" (apexearth): idle while the
+		// scouts lived, scout-conveyor when they died, fighters never.
 		CCircuitDef@ eye = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::SCOUT.type);
-		if ((eye !is null) && eye.IsAvailable(ai.frame)) {
+		if (!t1AirRetired && (eye !is null) && eye.IsAvailable(ai.frame)) {
 			int eyesN = 1 + int(aiEconomyMgr.metal.income
 					/ ai.GetTunable("apex_airscout_per", TUNE_AIRSCOUT_PER));
 			// Silence is a scouting demand, not safety: while the stance
