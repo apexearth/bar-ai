@@ -1441,6 +1441,9 @@ const float TUNE_REZ_LOG_KNEE = 100.f;
 // One ENERGY and one METAL constructor dedicate per this many enlisted
 // T1/adv cons (apexearth: 3). 0 disables dedicated roles.
 const float TUNE_DEDICATE_PER = 3.f;
+// Advanced-con dedication ratio: one ENERGY dedicate per this many enlisted
+// advanced cons (apexearth: "If we [have] 2, we could assign 1 to energy").
+const float TUNE_DEDICATE_PER_ADV = 2.f;
 // manager/builder/rules_rezzer.as [ratio] -- share of the rez fleet that
 //   serves as battlefield medics: they stay with the army's staging anchor,
 //   repair the wounded during fights and reclaim the aftermath there. The

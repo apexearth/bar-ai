@@ -21,12 +21,64 @@ enum Role { ECO = 0, MEX = 1, FRONT = 2, HOME = 3, ENERGY = 4, METAL = 5 };
 // separately (the second adv con leans energy via the fusion chain).
 const int DEDICATE_PER = 3;
 
+// Advanced constructors dedicate on their own ratio (apexearth: "If we
+// [have] 2 [T2] cons, we could assign 1 to dedicate to energy") -- and only
+// to ENERGY: the adv-con-on-metal problem is the one he reported ("4 T2
+// cons all upgrading mexes"), so their metal work stays with the shared
+// wants.
+array<bool> gAdv;   // parallel to gId: enlisted as an advanced con
+
+int TierCount(bool adv)
+{
+	int n = 0;
+	for (uint i = 0; i < gAdv.length(); ++i) {
+		if (gAdv[i] == adv)
+			++n;
+	}
+	return n;
+}
+
+int TierRoleCount(int role, bool adv)
+{
+	int n = 0;
+	for (uint i = 0; i < gRole.length(); ++i) {
+		if ((gRole[i] == role) && (gAdv[i] == adv))
+			++n;
+	}
+	return n;
+}
+
 int DedicatedSlots()
 {
 	const int per = int(ai.GetTunable("apex_dedicate_per", TUNE_DEDICATE_PER));
 	if (per <= 0)
 		return 0;
-	return int(gId.length()) / per;
+	return TierCount(false) / per;
+}
+
+int AdvDedicatedSlots()
+{
+	const int per = int(ai.GetTunable("apex_dedicate_per_adv", TUNE_DEDICATE_PER_ADV));
+	if (per <= 0)
+		return 0;
+	return TierCount(true) / per;
+}
+
+// Deaths shrink the fleet and Discharge shrinks the list, so the slot count
+// falls on its own -- but the HOLDERS outlive their slots without this.
+// Newest-first demotion keeps the longest-standing dedication stable.
+void Rebalance()
+{
+	const int t1Slots = DedicatedSlots();
+	const int advSlots = AdvDedicatedSlots();
+	for (int r = int(ENERGY); r <= int(METAL); ++r) {
+		for (int i = int(gRole.length()) - 1; i >= 0; --i) {
+			const bool adv = gAdv[i];
+			const int slots = adv ? advSlots : t1Slots;
+			if ((gRole[i] == r) && (TierRoleCount(r, adv) > slots))
+				gRole[i] = ECO;
+		}
+	}
 }
 
 // Constructors that NEVER leave the base. ECO is a catch-all default, not a
@@ -154,18 +206,25 @@ void Enlist(CCircuitUnit@ unit)
 	else if (!gMexPhaseOver && (CountOf(MEX) < MEX_CREW))
 		role = MEX;
 	else {
-		// Dedicated pairs fill after the standing crews, energy first
-		// (apexearth: "we simply expand our energy slowly, always") --
-		// each new slot the fleet ratio opens alternates the two.
-		const int slots = DedicatedSlots();
-		if (CountOf(ENERGY) < slots)
-			role = ENERGY;
-		else if (CountOf(METAL) < slots)
-			role = METAL;
+		// Dedicated slots fill after the standing crews, energy first
+		// (apexearth: "we simply expand our energy slowly, always").
+		// Advanced cons dedicate on their own ratio, ENERGY only.
+		const bool adv = Builder::IsAdvConDef(unit);
+		if (adv) {
+			if (TierRoleCount(int(ENERGY), true) < AdvDedicatedSlots())
+				role = ENERGY;
+		} else {
+			const int slots = DedicatedSlots();
+			if (TierRoleCount(int(ENERGY), false) < slots)
+				role = ENERGY;
+			else if (TierRoleCount(int(METAL), false) < slots)
+				role = METAL;
+		}
 	}
 	gId.insertLast(int(unit.id));
 	gRole.insertLast(role);
 	gDry.insertLast(0);
+	gAdv.insertLast(Builder::IsAdvConDef(unit));
 	if (role == MEX)
 		AiLog(Factory::T() + "apex: crew " + unit.circuitDef.GetName()
 			+ " -> mex (" + CountOf(MEX) + "/" + MEX_CREW + ")");
@@ -186,6 +245,9 @@ void Discharge(CCircuitUnit@ unit)
 	gId.removeAt(uint(s));
 	gRole.removeAt(uint(s));
 	gDry.removeAt(uint(s));
+	gAdv.removeAt(uint(s));
+	// The fleet just shrank: holders beyond the new slot counts step down.
+	Rebalance();
 }
 
 // A mex constructor whose job is finished picks its next one by where it is
