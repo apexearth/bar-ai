@@ -1560,6 +1560,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 			gNextBrainLogT1 = ai.frame + 30 * SECOND;
 		string line = "apex: brain wants(" + (isAdvCon ? "adv" : "t1") + ")=" + order.length();
 		for (uint i = 0; i < order.length(); ++i) {
+			// ONLY WHAT THIS CLASS CAN DRAW. The unfiltered list printed
+			// pulsar as the top t1 want, which the t1 loop skips on
+			// needsAdvCon -- the chart built on this line then read "greatest
+			// want, never built" for a want t1 was never offered.
+			if (order[i].needsAdvCon && !isAdvCon)
+				continue;
 			// kind/def, so a ladder kind names the building it is currently
 			// asking for -- "energy" is a solar at minute 3 and a fusion at 15.
 			line += " | " + order[i].kind

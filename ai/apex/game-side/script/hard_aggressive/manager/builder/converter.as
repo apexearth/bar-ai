@@ -443,12 +443,16 @@ IUnitTask@ EnergyConverter(CCircuitUnit@ unit)
 	CCircuitDef@ want = advBuilder ? BigConvDef(unit) : null;
 	if ((want is null) || !want.IsAvailable(ai.frame))
 		@want = SmallConvDef(unit);
-	if ((want is null) || !want.IsAvailable(ai.frame))
+	if ((want is null) || !want.IsAvailable(ai.frame)) {
+		ConvDiag("wantNull", 0, 0);
 		return null;
+	}
 	// No new T1 converters once the ground is worth more than they return:
 	// reclaiming one and immediately rebuilding it is worse than leaving it.
-	if (LandIsPrecious() && (want is SmallConvDef(unit)))
+	if (LandIsPrecious() && (want is SmallConvDef(unit))) {
+		ConvDiag("landPrecious", 0, 0);
 		return null;
+	}
 
 	// In-flight from the task registry, not asked-minus-standing: standing
 	// converters get reclaimed (ObsoleteReclaim clears the small tier), which
