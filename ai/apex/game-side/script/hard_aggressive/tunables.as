@@ -1446,7 +1446,7 @@ const float TUNE_DEDICATE_PER = 3.f;
 const float TUNE_DEDICATE_PER_ADV = 2.f;
 // Seconds of steady income that let an extra advanced plant bypass the
 // afus/pulsar/army milestones outright -- at 500 m/s a 900-metal lab is 2s.
-const float TUNE_EXTRA_PLANT_SECS = 5.f;
+const float TUNE_EXTRA_PLANT_SECS = 8.f;   // apexearth: "at ~150 m/s we absolutely must have a T2 air lab" -- 8s clears a ~990 lab at 125 m/s
 // Workers a big eco build deserves: 1 + costM/this (BigBuildWorkersWanted).
 const float TUNE_ASSIST_PER_COST = 1500.f;
 // Cost floor for the big-build assist scan.

@@ -1294,7 +1294,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 		const float draw = useBig ? CONVERT_DRAW_BIG : CONVERT_DRAW;
 		const int convRoom = int(aiEconomyMgr.energy.income / draw);
 		if ((conv !is null) && (conv.count < convRoom)) {
-			Want@ c = Simple("convert", CONVERT_VALUE * (useBig ? BIG_CONV_VALUE : 1.f),
+			// URGENCY IS THE SPILL ITSELF: spare/70 is metal per second being
+			// vaporised, and a flat value let a player sit at 27k produced /
+			// 8.4k used (apexearth, live) while converters trickled in at
+			// auction pace -- 265 m/s of free income outranks nearly
+			// anything, and the multiplier says so in the same units.
+			const float spillMult = 1.f
+					+ Builder::EnergySpare() / CONVERT_DRAW_BIG;
+			Want@ c = Simple("convert", CONVERT_VALUE * spillMult * (useBig ? BIG_CONV_VALUE : 1.f),
 					conv, false);
 			if (c !is null) {
 				c.have = 0;   // demand is the spill, not how many already stand
