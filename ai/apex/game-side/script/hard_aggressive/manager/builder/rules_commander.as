@@ -726,7 +726,7 @@ IUnitTask@ CommanderMexGuard(CCircuitUnit@ unit, bool isComm, bool urgentOnly = 
 	// tier whatever the income -- MexGuardTower tiers up to T2 towers past
 	// 50 m/s, which is build power the crew owes to mexes, not fortresses.
 	CCircuitDef@ tower = lightOnly ? SideDef3(armllt, corllt, leglht)
-			: MexGuardTower(unit, bare);
+			: MexSentryTower(bare);
 	if ((tower is null) || !tower.IsAvailable(ai.frame))
 		return null;
 	const AIFloat3 site = ai.FindBuildSiteNear(tower, bare, MEX_GUARD_RADIUS);

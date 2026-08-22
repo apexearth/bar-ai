@@ -292,6 +292,24 @@ CCircuitDef@ PopupTowerDef()
 	return SideDef3(armpb, corvipe, legapopupdef);
 }
 
+// A SENTRY IS NOT THE DEFENSE LINE. The tiered ladder (HeavyDefenceFor ->
+// Pit Bull -> Pulsar) is priced for holding ground; on a mex guard it put a
+// 3,500-metal armanni on a bare extractor as "sentry #60" of 70+ in one
+// game (apexearth: "T2 cons making T2 defenses near T1 mexes"). A sentry
+// only has to beat a raider: light in the rear, mid on the border, never
+// more, whoever the asker is.
+CCircuitDef@ MexSentryTower(const AIFloat3& in at)
+{
+	if (OnMap(at) && (Military::OnBorder(at) || Military::NearFront(at))) {
+		CCircuitDef@ mid = MidTowerDef();
+		if ((mid !is null) && mid.IsAvailable(ai.frame))
+			return mid;
+	}
+	if (PastT1Tier())
+		return MidTowerDef();
+	return SideDef3(armllt, corllt, leglht);
+}
+
 CCircuitDef@ MexGuardTower(CCircuitUnit@ unit, const AIFloat3& in at)
 {
 	CCircuitDef@ heavy = HeavyDefenceFor(unit);
