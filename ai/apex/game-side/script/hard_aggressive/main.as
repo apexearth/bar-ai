@@ -97,6 +97,9 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Builder::SampleWreckField();   // before the queue that reads WreckSeenValue
 	Perf::Add("upd.WreckField", t);
 	t = Perf::T0();
+	Requests::PeelSurplus();
+	Perf::Add("upd.Peel", t);
+	t = Perf::T0();
 	Brain::UpdateFacQueues();
 	Brain::LogFacQueues();
 	Perf::Add("upd.FacQueues", t);

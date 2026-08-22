@@ -189,8 +189,41 @@ IUnitTask@ HoldWorkInProgress(CCircuitUnit@ unit, bool isComm)
 	// so anything still held here is work the AI still considers safe.
 	if (!isComm) {
 		IUnitTask@ busy = unit.task;
-		if ((busy !is null) && (SiteBuildName(busy) != ""))
+		if ((busy !is null) && (SiteBuildName(busy) != "")) {
+			// SURPLUS ASSISTERS RE-ENTER THE AUCTION (apexearth: "if we're a
+			// con already assisting a building we should consider building
+			// the other thing we want"). The hold glued every joiner to the
+			// site until completion, so build power pooled on whatever
+			// started first and the want distribution never rebalanced.
+			// A site keeps its ETA-derived worker count; workers beyond it
+			// fall through to Decide. The release is deterministic -- the
+			// HIGHEST ids go first -- because every surplus worker evaluates
+			// this on the same stale count (orders are async), and without
+			// a tiebreak the whole pack would leave at once.
+			if ((ai.GetTunable("apex_assist_release", TUNE_ASSIST_RELEASE) > 0.f)
+				&& (busy.GetType() == Task::Type::BUILDER)
+				&& (busy.buildDef !is null))
+			{
+				array<CCircuitUnit@>@ crew2 = busy.GetUnits();
+				if (crew2 !is null) {
+					int wantN = BigBuildWorkersWanted(busy.buildDef);
+					if (wantN < 1)
+						wantN = 1;
+					const int surplus = int(crew2.length()) - wantN;
+					if (surplus > 0) {
+						int higher = 0;
+						for (uint c2 = 0; c2 < crew2.length(); ++c2) {
+							if ((crew2[c2] !is null)
+								&& (int(crew2[c2].id) > int(unit.id)))
+								++higher;
+						}
+						if (higher < surplus)
+							return null;
+					}
+				}
+			}
 			return busy;
+		}
 		// RECLAIM is deliberately excluded from SiteBuildName (see its comment),
 		// which left it unheld here: AbandonUnsafeSite already re-checks safety
 		// for a reclaim every tick and refuses it explicitly when it goes hot, so

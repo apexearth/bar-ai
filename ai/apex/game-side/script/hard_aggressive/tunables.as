@@ -1465,6 +1465,9 @@ const float TUNE_DEDICATE_PER_ADV = 3.f;
 // of a tier's cons, whatever the per-N ratios say (apexearth: "not more
 // than 50% of our total con count", split per tier).
 const float TUNE_DEDICATE_MAX_FRAC = 0.5f;
+// Assisters beyond a site's ETA-derived worker count fall back into the
+// auction instead of being held to completion. 0 restores the glue.
+const float TUNE_ASSIST_RELEASE = 1.f;
 // Roulette dominance cap: one want may score at most this multiple of all
 // other wants combined (1.5 => at most ~60% of the draw). 0 disables.
 const float TUNE_WANT_CAP = 1.5f;

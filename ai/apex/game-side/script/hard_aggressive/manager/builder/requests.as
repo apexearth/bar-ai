@@ -698,6 +698,64 @@ uint InFlight(CCircuitDef@ want)
 	return n;
 }
 
+// SURPLUS ASSISTERS ARE PEELED, NOT WAITED OUT. The engine only re-elects a
+// builder while it is AWAY from its build position (IBuilderTask::Reevaluate),
+// so a con parked at a big site assists until completion however many wants
+// starve -- apexearth, watching an afus: "~30+ cons all focus... soon as it
+// was done we spread out to make ~7 or 8 needed advanced converters. The
+// issue is elections just don't happen often enough." Every slow update this
+// detaches workers beyond the site's ETA-derived count (RemoveUnit hands
+// them to the idle task, which is a fresh election next frame). Only sites
+// with a standing nanoframe: walkers already re-elect on their own.
+int gPeeled = 0;
+int gNextPeelLog = 0;
+void PeelSurplus()
+{
+	if (ai.GetTunable("apex_assist_release", TUNE_ASSIST_RELEASE) <= 0.f)
+		return;
+	int peeledNow = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.GetType() != Task::Type::BUILDER))
+			continue;
+		if ((t.buildDef is null) || (t.target is null))
+			continue;
+		array<CCircuitUnit@>@ crew = t.GetUnits();
+		if (crew is null)
+			continue;
+		int wantN = Builder::BigBuildWorkersWanted(t.buildDef);
+		if (wantN < 1)
+			wantN = 1;
+		int surplus = int(crew.length()) - wantN;
+		// A few at a time, largest ids first -- the same stampede guard the
+		// hold rung uses: everyone reads the same pre-order counts.
+		const int PEEL_PER_TICK = 3;
+		for (int k = 0; (k < surplus) && (k < PEEL_PER_TICK); ++k) {
+			CCircuitUnit@ top = null;
+			for (uint c = 0; c < crew.length(); ++c) {
+				CCircuitUnit@ u2 = crew[c];
+				if (u2 is null)
+					continue;
+				if ((top is null) || (int(u2.id) > int(top.id)))
+					@top = u2;
+			}
+			if (top is null)
+				break;
+			t.RemoveUnit(top);
+			++gPeeled;
+			++peeledNow;
+			@crew = t.GetUnits();
+			if (crew is null)
+				break;
+		}
+	}
+	if ((peeledNow > 0) && (ai.frame >= gNextPeelLog)) {
+		gNextPeelLog = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: peeled " + peeledNow
+			+ " surplus assister(s) back to the auction (total " + gPeeled + ")");
+	}
+}
+
 // The def of a live FACTORY request, if any -- so a joiner helps build what
 // was actually ASKED. Joining with the joiner's own preferred def is not a
 // join: Take() finds no task for that def and creates a second plant.
