@@ -47,12 +47,24 @@ int TierRoleCount(int role, bool adv)
 	return n;
 }
 
+// The pair of dedicated roles may hold at most this share of a TIER's cons
+// (apexearth: "metal/energy/eco should likely not take more than 50% of our
+// total con count" -- and the split is per tier). Halved per role, so the
+// ceiling bounds ENERGY+METAL together whatever the per-N ratio is tuned to.
+int TierRoleCeiling(bool adv)
+{
+	const float frac = ai.GetTunable("apex_dedicate_max_frac", TUNE_DEDICATE_MAX_FRAC);
+	return int(float(TierCount(adv)) * frac * 0.5f);
+}
+
 int DedicatedSlots()
 {
 	const int per = int(ai.GetTunable("apex_dedicate_per", TUNE_DEDICATE_PER));
 	if (per <= 0)
 		return 0;
-	return TierCount(false) / per;
+	const int bySlots = TierCount(false) / per;
+	const int cap = TierRoleCeiling(false);
+	return (bySlots < cap) ? bySlots : cap;
 }
 
 int AdvDedicatedSlots()
@@ -60,7 +72,9 @@ int AdvDedicatedSlots()
 	const int per = int(ai.GetTunable("apex_dedicate_per_adv", TUNE_DEDICATE_PER_ADV));
 	if (per <= 0)
 		return 0;
-	return TierCount(true) / per;
+	const int bySlots = TierCount(true) / per;
+	const int cap = TierRoleCeiling(true);
+	return (bySlots < cap) ? bySlots : cap;
 }
 
 // Deaths shrink the fleet and Discharge shrinks the list, so the slot count
@@ -485,6 +499,12 @@ void Update()
 	if (ai.frame < gNextLog)
 		return;
 	gNextLog = ai.frame + 60 * SECOND;
+	// Roles are not for life any more (apexearth: "cons should be able to
+	// lose roles when we need them doing other things"): every census the
+	// holders re-fit the CURRENT slot counts, so a tunable change or fleet
+	// drift releases the newest holders back to the free pool immediately
+	// instead of waiting for a death.
+	Rebalance();
 	AiLog(Factory::T() + "apex: crew home=" + CountOf(HOME)
 		+ " mex=" + CountOf(MEX)
 		+ " front=" + CountOf(FRONT) + " eco=" + CountOf(ECO)

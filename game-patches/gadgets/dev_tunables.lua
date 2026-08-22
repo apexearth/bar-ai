@@ -437,6 +437,7 @@ local NAMES = {
 	"apex_elect_ms",         -- maketask.as: election time budget per frame in ms (6)
 	"apex_fighter_per_bomber",-- facqueue.as: fighter cap per standing bomber (2, +4 base)
 	"apex_fighter_per_other", -- facqueue.as: fighter floor per standing non-fighter aircraft (1.0, >=50% of fleet)
+	"apex_dedicate_max_frac", -- crew.as: max share of a tier's cons in ENERGY+METAL roles combined (0.5)
 	"apex_ghost_purge_secs",  -- CircuitAI: seconds a VISION-CONFIRMED-absent ghost survives (90)
 	"apex_ghost_stale_min",   -- CircuitAI: minutes a never-re-viewed ghost survives (15)
 	"apex_seen_cap_mult",     -- massing.as: enemy estimate ceiling as multiple of peak-seen-at-once (2.5)

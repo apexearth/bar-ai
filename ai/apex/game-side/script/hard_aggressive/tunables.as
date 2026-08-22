@@ -1451,11 +1451,20 @@ const float TUNE_REZ_FLOOR_FRAC = 0.25f;
 // Knee of the sublinear rez curve: want = slope*knee*ln(1+income/knee).
 const float TUNE_REZ_LOG_KNEE = 100.f;
 // One ENERGY and one METAL constructor dedicate per this many enlisted
-// T1/adv cons (apexearth: 3). 0 disables dedicated roles.
-const float TUNE_DEDICATE_PER = 3.f;
-// Advanced-con dedication ratio: one ENERGY dedicate per this many enlisted
-// advanced cons (apexearth: "If we [have] 2, we could assign 1 to energy").
-const float TUNE_DEDICATE_PER_ADV = 2.f;
+// T1/adv cons. 0 disables dedicated roles. Was 3, which locked 2/3 of the
+// fleet into the two eco roles -- measured live (85 cons: energy=33
+// metal=26, 24 free) while the brain's other wants starved for electors;
+// apexearth: "we need enough remaining cons to be able to choose the
+// various other buildings we want to make."
+const float TUNE_DEDICATE_PER = 6.f;
+// Advanced-con dedication ratio: one ENERGY and one METAL dedicate per this
+// many enlisted advanced cons. Was 2 (every adv con dedicated); 3 leaves a
+// third of them free for the adv-only wants (gantry, pulsar, silo).
+const float TUNE_DEDICATE_PER_ADV = 3.f;
+// Hard share ceiling: ENERGY+METAL together may hold at most this fraction
+// of a tier's cons, whatever the per-N ratios say (apexearth: "not more
+// than 50% of our total con count", split per tier).
+const float TUNE_DEDICATE_MAX_FRAC = 0.5f;
 // Roulette dominance cap: one want may score at most this multiple of all
 // other wants combined (1.5 => at most ~60% of the draw). 0 disables.
 const float TUNE_WANT_CAP = 1.5f;
