@@ -1,5 +1,35 @@
 # Open issues — what is wrong with this AI right now
 
+## OPEN 2026-08-22: every SPEND_* target curve has only ever been read at income 0
+
+`CCircuitAI::GetTunable` caches its default on first call (CircuitAI.cpp:1683).
+All five budget shares passed `Targets::At(SPEND_*)` -- a live income curve -- AS
+that default, so each was evaluated once at frame 0 (income 0) and cached for the
+game: army 0.0, defence 4, airdef 1, economy 5, buildpower 5. That is exactly the
+`army=x/0.00 def=x/0.27 aa=x/0.07 eco=x/0.33 bp=x/0.33` the budget log has always
+printed. **The ARMY budget row has been zero in every game this AI has played**,
+and SPEND_ARMY's 4->5 income ramp is dead code -- which is why raising those
+columns 2026-08-19 measured nothing.
+
+Mechanism fixed (sentinel override + per-call curve read) but gated OFF behind
+`apex_budget_live`, because switching it on is an UNTUNED change: the curves were
+authored against a system that never read them. Measured 2026-08-22, three paired
+50-minute runs vs BARb:stable:medium on 4 maps, 40 games per side:
+live 23W-8L-9D vs cached 20W-10L-10D (58% vs 50%, inside the noise floor), win
+times mixed (40.9/40.9/41.7 vs 43.0/42.1/39.1), metal rate 21% LOWER live
+(12.2k/min vs 15.6k). NEXT: re-tune SPEND_* with `apex_budget_live=1` and judge on
+median time-to-win, not win rate.
+
+Also measured and rejected the same session (all 16 games, paired, +40%, 50min):
+`apex_kill_from=0` (kill/loss 0.30 vs 0.44), `apex_seen_halflife=180` (lost win
+rate and trade against the frozen peak in two separate pairs),
+`apex_push_team_ratio=1.25` (10W-2L-4D vs 12W-1L-3D, 2 min slower, mex 89 vs 104).
+Aggression thresholds are NOT the constraint against medium.
+
+NOTE ON METHOD: a 30-minute cap produced 15 draws in 16 games and read as "cannot
+finish". At 50 minutes the same build wins 58-75%. Do not judge closing speed on a
+cap the games do not clear.
+
 ## OPEN 2026-08-21: 1v1 vs stock -- 3W-15L-6D fixed to 17W-14L-17D (n=48 confirm); draws are the frontier
 
 UPDATE: the dominant mechanism was the 2-element retreat config rolling a
