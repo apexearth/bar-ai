@@ -902,7 +902,14 @@ void CommIdleAttribute()
 		gCommRetreatStreak = 0;
 	} else if (q > 0) {
 		++gCDOrdered;
-		gCommStuck = 0;
+		// DECAY, NOT RESET: a wedged task can emit one stray micro-order a
+		// minute (measured live: waiting +58/min, ordered +1/min, unstuck=0
+		// while the commander stood 191s), and a hard reset let that single
+		// tick erase the whole streak forever. Real work orders continuously,
+		// so honest activity still drains the counter in seconds.
+		gCommStuck -= 10;
+		if (gCommStuck < 0)
+			gCommStuck = 0;
 		gCommRetreatStreak = 0;
 	} else {
 		++gCDWaiting;
