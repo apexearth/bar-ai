@@ -22,10 +22,9 @@ enum Role { ECO = 0, MEX = 1, FRONT = 2, HOME = 3, ENERGY = 4, METAL = 5 };
 const int DEDICATE_PER = 3;
 
 // Advanced constructors dedicate on their own ratio (apexearth: "If we
-// [have] 2 [T2] cons, we could assign 1 to dedicate to energy") -- and only
-// to ENERGY: the adv-con-on-metal problem is the one he reported ("4 T2
-// cons all upgrading mexes"), so their metal work stays with the shared
-// wants.
+// [have] 2 [T2] cons, we could assign 1 to dedicate to energy"), alternating
+// ENERGY then METAL -- the metal-role adv con is what upgrades mexes, and
+// the ratio itself is the bound on adv-con metal dedication.
 array<bool> gAdv;   // parallel to gId: enlisted as an advanced con
 
 int TierCount(bool adv)
@@ -208,11 +207,17 @@ void Enlist(CCircuitUnit@ unit)
 	else {
 		// Dedicated slots fill after the standing crews, energy first
 		// (apexearth: "we simply expand our energy slowly, always").
-		// Advanced cons dedicate on their own ratio, ENERGY only.
 		const bool adv = Builder::IsAdvConDef(unit);
 		if (adv) {
-			if (TierRoleCount(int(ENERGY), true) < AdvDedicatedSlots())
+			// ENERGY first, then METAL, alternating -- energy-only meant no
+			// adv con ever held the METAL role and the crew's moho branch was
+			// dead code (apexearth: "the metal roles are supposed to be doing
+			// these things").
+			const int advSlots = AdvDedicatedSlots();
+			if (TierRoleCount(int(ENERGY), true) < advSlots)
 				role = ENERGY;
+			else if (TierRoleCount(int(METAL), true) < advSlots)
+				role = METAL;
 		} else {
 			const int slots = DedicatedSlots();
 			if (TierRoleCount(int(ENERGY), false) < slots)

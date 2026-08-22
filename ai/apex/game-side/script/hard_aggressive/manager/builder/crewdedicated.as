@@ -37,19 +37,14 @@ IUnitTask@ EnergyCrewTask(CCircuitUnit@ unit)
 	@t = EnergyConverter(unit);
 	if (t !is null)
 		return t;
-	// The allowed exceptions: a sentry on a bare extractor underfoot costs
-	// no walk and protects the ground the crew works on. Cheap tier only.
-	return CommanderMexGuard(unit, false, false, true, true);
+	// No defence/radar exceptions -- apexearth rescinded them ("I think that
+	// was a mistake to ask for"): the crews do their domain, full stop.
+	return null;
 }
 
 IUnitTask@ MetalCrewTask(CCircuitUnit@ unit)
 {
 	IUnitTask@ t = HoldWorkInProgress(unit, false);
-	if (t !is null)
-		return t;
-	// The near-guard exception first: the mex just finished gets its sentry
-	// before this con walks to the next spot.
-	@t = CommanderMexGuard(unit, false, false, true, true);
 	if (t !is null)
 		return t;
 	// CONVERTERS ARE METAL WORK (apexearth: "some portion of that metal crew
@@ -77,13 +72,24 @@ IUnitTask@ MetalCrewTask(CCircuitUnit@ unit)
 			}
 		}
 	}
-	// No open spot: fall through to the shared ladder, where Brain::Decide's
-	// mexup want gives an advanced metal con its moho work. The full-reach
-	// guard pass that stood here turned the crew into a defense conveyor --
-	// the guard tower tiers with income, so past 50 m/s "guarding" meant
-	// walking mex to mex building T2 towers (apexearth: "most of our 'metal'
-	// cons are walking to the mex sites and just building T2 defenses").
-	// The underfoot sentry above stays: one cheap tower on the mex just made.
+	// UPGRADES ARE THE CREW'S OWN JOB, NOT THE AUCTION'S. Routed through
+	// the shared ladder they died in the draw (measured: mexup mean chance
+	// 0.0%, score 0.002 -- "only our core mexes get the upgrade"), and the
+	// one-slot MexUpLane cannot carry a map. A metal-crew adv con upgrades
+	// the nearest un-upgraded mex directly; the crew ratio (1 per
+	// apex_dedicate_per_adv) bounds total dedication -- the fleet share
+	// apexearth asked for, instead of the auction's starvation.
+	if (IsAdvConDef(unit)) {
+		Brain::Want@ up = Brain::MexUpgradeWant(unit);
+		if ((up !is null) && (up.def !is null)
+			&& unit.circuitDef.CanBuild(up.def)
+			&& (ThreatFor(unit, up.pos) <= CON_THREAT_VETO))
+		{
+			IUnitTask@ dig2 = aiBuilderMgr.EnqueueMexUp(up.pos, up.def);
+			if (dig2 !is null)
+				return dig2;
+		}
+	}
 	return null;
 }
 
