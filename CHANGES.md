@@ -735,3 +735,33 @@ Wolverines do not answer the porc-creep; entry stays until superseded.
 
 Harness note: a 6-worker tournament froze all engines at the same second once
 (cause unknown, not RAM); killed and relaunched clean. Watch for repeats.
+
+### 2026-08-21 (evening, live-game batch)
+
+Fixes traced from apexearth's watched/hosted games, each with the measured
+mechanism (details in the commit messages 8be6c90..ba85b52):
+
+- Second-T1-lab fork closed at Requests::Take; in-flight factories counted
+  as pool + MANNED registry (the engine's held placeholder wedged the
+  opening when counted -- facCount=0 at 10m until Workers()>0 separated it).
+- Commander: stuck-breaker decays instead of resetting (191s phantom-task
+  stands), cloak hysteresis (23 flips/2min at used==produced).
+- Economy: converter urgency = spare/600 (27k produced vs 8.4k used, live);
+  extra advanced plant bypasses milestones at 8s of income (his 150 m/s
+  bar); gantry sited by us with a doubling radius; big-build assist gives
+  frames a cost-scaled worker floor; JoinFor reach scales with the build's
+  income impact.
+- Brain: no want may exceed 1.5x all others in the roulette (gantry=80 vs
+  silo=3.5 starved nukes/antinuke); crew ENERGY/METAL roles with fleet-ratio
+  slots and demotion (roles-off A/B read them ~neutral); rez log curve +
+  floor split; rez may buy the bot lab post-reactor.
+- Escorts: native guard system uncapped [12,1,100000]; air scouts excluded
+  from fodder/spam.
+- Home-stand strength gate: NULL at both ratios, reverted (ISSUES.md).
+- tools/units.py: per-team built-units dump, counts + metal share.
+
+Arms (16-game Altair 1v1 unless noted): batch3 4-12, tonight (no
+modoptions) 3-13, cycle9 4-12 -- stable 19-31% band vs 12.5% session start.
+2v2 cycle9: 1-11, the campaign's first 2v2 win (prior 0-11, 0-12).
+share_defence=4 is the shipped default. The standing bottleneck is
+unchanged: trade 0.29-0.49, engagement selection (ISSUES.md).
