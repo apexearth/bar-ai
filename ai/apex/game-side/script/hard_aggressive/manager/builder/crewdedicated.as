@@ -52,6 +52,16 @@ IUnitTask@ MetalCrewTask(CCircuitUnit@ unit)
 	@t = CommanderMexGuard(unit, false, false, true, true);
 	if (t !is null)
 		return t;
+	// CONVERTERS ARE METAL WORK (apexearth: "some portion of that metal crew
+	// to stay home and make converters"). While energy spills, a converter
+	// pays 1 m/s per metal invested -- better than any walk to a far spot --
+	// so the crew converts at home before it travels. EnergyConverter
+	// self-gates on the spill, so this rung is silent on a tight grid.
+	if (EnergyWasting()) {
+		@t = EnergyConverter(unit);
+		if (t !is null)
+			return t;
+	}
 	const AIFloat3 me = unit.GetPos(ai.frame);
 	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, me,
 			ai.GetTunable("apex_mex_threat", TUNE_MEX_THREAT));
