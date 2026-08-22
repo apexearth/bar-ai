@@ -2411,7 +2411,7 @@ index dda9b5a..e7c8983 100644
  			if (metalIncome < facDef.incomes[facIt->first]) {
  				break;
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b..a359f86 100644
+index a44c20b..b256a0b 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -16,10 +16,12 @@
@@ -3062,7 +3062,7 @@ index a44c20b..a359f86 100644
  void CMilitaryManager::MakeBaseDefence(const AIFloat3& pos)
  {
  	if (circuit->IsLoadSave()) {
-@@ -1717,10 +2159,62 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1717,10 +2159,75 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  	return task;
  }
  
@@ -3094,8 +3094,19 @@ index a44c20b..a359f86 100644
 +	// walking around cloaked on an empty bank -- that half still holds.
 +	const float share = circuit->GetTunable("apex_comm_cloak_share",
 +			COMM_CLOAK_SHARE_DEF);
-+	return !economyMgr->IsEnergyStalling()
-+			&& (cdef->GetCloakCost() < economyMgr->GetAvgEnergyIncome() * share);
++	// apex: HYSTERESIS ON BOTH TERMS. An economy running used==produced sits
++	// exactly on the stall boundary and flapped this answer 23 times in two
++	// minutes (commCloakFlips 6->29, watched live) -- each flap re-issued by
++	// the watchdog and the retreat task in good faith. Dropping the cloak
++	// needs a SUSTAINED stall (ticks counted in UpdateCommCloak); the cost
++	// bar keeps a margin band keyed on the current state so the affordable
++	// edge cannot flicker either.
++	const bool cloaked = unit->GetUnit()->IsCloaked();
++	const float mult = cloaked ? 1.25f : 0.75f;
++	const bool stalled = cloaked ? (commCloakStallTicks >= 3)
++	                             : economyMgr->IsEnergyStalling();
++	return !stalled
++			&& (cdef->GetCloakCost() < economyMgr->GetAvgEnergyIncome() * share * mult);
 +}
 +
 +// Cloak is switched on once when a unit finishes and nothing outside a retreat
@@ -3108,6 +3119,8 @@ index a44c20b..a359f86 100644
 +	if ((comm == nullptr) || comm->IsDead() || !comm->GetCircuitDef()->IsAbleToCloak()) {
 +		return;
 +	}
++	commCloakStallTicks = circuit->GetEconomyManager()->IsEnergyStalling()
++			? (commCloakStallTicks + 1) : 0;
 +	const bool wantCloak = IsCommCloakWanted(comm);
 +	if (wantCloak != comm->GetUnit()->IsCloaked()) {
 +		TRY_UNIT(circuit, comm,
@@ -3126,7 +3139,7 @@ index a44c20b..a359f86 100644
  		if (unit->GetTask()->GetType() == IUnitTask::Type::PLAYER) {
  			continue;
 diff --git a/src/circuit/module/MilitaryManager.h b/src/circuit/module/MilitaryManager.h
-index c167603..be41aa3 100644
+index c167603..a03fee9 100644
 --- a/src/circuit/module/MilitaryManager.h
 +++ b/src/circuit/module/MilitaryManager.h
 @@ -122,6 +122,11 @@ public:
@@ -3158,7 +3171,7 @@ index c167603..be41aa3 100644
  	void FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions);
  	void FillStaticSafePos(CCircuitUnit* unit, F3Vec& outPositions);
  	void FillSafePos(CCircuitUnit* unit, F3Vec& outPositions);
-@@ -181,17 +195,40 @@ public:
+@@ -181,17 +195,44 @@ public:
  
  	float GetRangeUnitCountCompensatorScale();
  
@@ -3174,6 +3187,10 @@ index c167603..be41aa3 100644
 +
 +	// The one place that decides whether a commander should be cloaked.
 +	bool IsCommCloakWanted(CCircuitUnit* unit) const;
++	// Consecutive stalling reads, updated by UpdateCommCloak -- the cloak
++	// decision needs a SUSTAINED stall, not the boundary flicker of an
++	// economy running used==produced (measured 23 flips in 2 minutes).
++	int commCloakStallTicks = 0;
 +
  private:
  	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
@@ -3199,7 +3216,7 @@ index c167603..be41aa3 100644
  
  	Handlers2 createdHandler;
  	Handlers1 finishedHandler;
-@@ -205,6 +242,14 @@ private:
+@@ -205,6 +246,14 @@ private:
  	unsigned int defenceIdx;
  	std::map<CCircuitUnit*, int> porcToPoint;  // unit: defPointId
  

@@ -2187,8 +2187,19 @@ bool CMilitaryManager::IsCommCloakWanted(CCircuitUnit* unit) const
 	// walking around cloaked on an empty bank -- that half still holds.
 	const float share = circuit->GetTunable("apex_comm_cloak_share",
 			COMM_CLOAK_SHARE_DEF);
-	return !economyMgr->IsEnergyStalling()
-			&& (cdef->GetCloakCost() < economyMgr->GetAvgEnergyIncome() * share);
+	// apex: HYSTERESIS ON BOTH TERMS. An economy running used==produced sits
+	// exactly on the stall boundary and flapped this answer 23 times in two
+	// minutes (commCloakFlips 6->29, watched live) -- each flap re-issued by
+	// the watchdog and the retreat task in good faith. Dropping the cloak
+	// needs a SUSTAINED stall (ticks counted in UpdateCommCloak); the cost
+	// bar keeps a margin band keyed on the current state so the affordable
+	// edge cannot flicker either.
+	const bool cloaked = unit->GetUnit()->IsCloaked();
+	const float mult = cloaked ? 1.25f : 0.75f;
+	const bool stalled = cloaked ? (commCloakStallTicks >= 3)
+	                             : economyMgr->IsEnergyStalling();
+	return !stalled
+			&& (cdef->GetCloakCost() < economyMgr->GetAvgEnergyIncome() * share * mult);
 }
 
 // Cloak is switched on once when a unit finishes and nothing outside a retreat
@@ -2201,6 +2212,8 @@ void CMilitaryManager::UpdateCommCloak()
 	if ((comm == nullptr) || comm->IsDead() || !comm->GetCircuitDef()->IsAbleToCloak()) {
 		return;
 	}
+	commCloakStallTicks = circuit->GetEconomyManager()->IsEnergyStalling()
+			? (commCloakStallTicks + 1) : 0;
 	const bool wantCloak = IsCommCloakWanted(comm);
 	if (wantCloak != comm->GetUnit()->IsCloaked()) {
 		TRY_UNIT(circuit, comm,

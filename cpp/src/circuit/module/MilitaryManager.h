@@ -207,6 +207,10 @@ public:
 
 	// The one place that decides whether a commander should be cloaked.
 	bool IsCommCloakWanted(CCircuitUnit* unit) const;
+	// Consecutive stalling reads, updated by UpdateCommCloak -- the cloak
+	// decision needs a SUSTAINED stall, not the boundary flicker of an
+	// economy running used==produced (measured 23 flips in 2 minutes).
+	int commCloakStallTicks = 0;
 
 private:
 	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
