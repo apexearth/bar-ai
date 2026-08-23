@@ -1108,6 +1108,15 @@ const float TUNE_PING = 0.f;
 //   default: it is ~1000 lines of infolog that only a verification run reads.
 const float TUNE_CATALOG_DUMP = 0.f;
 
+// market.as MODEL terms (value-paradigm skill: one named quantity each).
+// SPOT_M: metal/s a T1 spot yields at extraction 0.001 -- the one number the
+// script cannot read per-spot yet; typical BAR land spots sit near 2.0.
+// Replace with a spot-income binding.
+const float TUNE_SPOT_M = 2.0f;
+// PLANT_PIPE: discount on a plant's constructor-pipeline return vs a spot's
+// direct stream (cons cost metal and time before they claim anything).
+const float TUNE_PLANT_PIPE = 0.5f;
+
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone
 //   deliberately turned it on.

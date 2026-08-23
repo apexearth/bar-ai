@@ -4,8 +4,8 @@ namespace Brain {
 // THE PRODUCTION EXECUTOR. KILL PHASE (docs/20-brain-overhaul.md): the quota
 // machinery is gone; what remains is the line MECHANICS -- adoption, the
 // Wait-hold, the recruit abort and sweep, and the sent-ledger. Every factory
-// line is taken and held silent. The rebuilt arbiter will hand this executor
-// its orders; nothing here computes what to build.
+// line is taken and held; Market::ConOrderFor hands this executor its orders.
+// Nothing here computes what to build.
 //
 // THE TWO SCHEMES CANNOT SHARE A FACTORY. CRecruitTask::Finish() calls
 // Cancel(), which CmdRemoves every build order still queued, so one recruit
@@ -171,6 +171,28 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		AiLog(Factory::T() + "apex: facqueue takes " + fac.circuitDef.GetName()
 			+ " #" + fac.id + " (CRecruitTask off for this line)");
 	}
+
+	// Orders that have become visible leave the ledger; orders invisible for
+	// a minute are presumed lost (the ledger keeps <=1 in flight per line, so
+	// this is exact, not heuristic).
+	if (fac.CountQueued(null) > 0) {
+		PendDrop(line, PendCount(line, null));
+	} else if ((PendCount(line, null) > 0)
+			&& (ai.frame - gFQAt[line] > 60 * SECOND)) {
+		PendDrop(line, PendCount(line, null));
+		++gFQLost;
+	}
+
+	// The production market's call: what should this line make, if anything.
+	CCircuitDef@ order = Market::ConOrderFor(fac, line);
+	if (order !is null) {
+		// replace=true: a SHIFT order into a factory queue is x5'd by the
+		// FactoryCAI (measured depth 5 from one order); plain replace is one.
+		fac.CmdBuildUnit(order, 1, true);
+		PendAdd(line, order);
+		gFQAt[line] = ai.frame;
+		++gFQOrders;
+	}
 	return aiFactoryMgr.Enqueue(TaskS::Wait(false, FQ_WAIT));
 }
 
@@ -229,6 +251,22 @@ void UpdateFacQueues()
 	if (!FacQueueOn())
 		return;
 	SweepDeadRecruits();
+}
+
+// The honest reconcile: the ordered unit APPEARED. CountQueued lags sends by
+// up to ~45s of game time at bench speed, so ledger-vs-queue comparisons
+// starve the line; the finished event does not lie.
+void NoteProduced(CCircuitUnit@ unit)
+{
+	if (unit is null)
+		return;
+	for (uint i = 0; i < gFQPendDef.length(); ++i) {
+		if ((gFQPendDef[i] !is null) && (gFQPendDef[i] is unit.circuitDef)) {
+			gFQPendLine.removeAt(i);
+			gFQPendDef.removeAt(i);
+			return;
+		}
+	}
 }
 
 void NoteMilRequest()

@@ -4,14 +4,14 @@ namespace Brain {
 // KILL PHASE (docs/20-brain-overhaul.md). The old rule-by-rule Want market is
 // gone; Decide() is the ONLY function allowed to turn a constructor's time
 // into a task, and its market is empty until the rebuild. The budget ledger
-// (brain/budget.as) stays as a sense; the facqueue (brain/facqueue.as) stays
-// as the production executor, holding every line silent.
+// (brain/budget.as) stays as a sense; the facqueue (brain/facqueue.as) is
+// the production executor. The market (brain/market.as) prices the Wants.
 //------------------------------------------------------------------------------
 
-// The arbiter. Empty market: every constructor idles.
+// The arbiter. The market prices the choices; this is the only spender.
 IUnitTask@ Decide(CCircuitUnit@ unit)
 {
-	return null;
+	return Market::Decide(unit);
 }
 
 // The periodic macro pass. Nothing to rank yet.

@@ -13,6 +13,7 @@
 #include "manager/role.as"        // the eco/tech role's POLICY, one place
 #include "manager/persona.as"     // per-instance identity: biases, never gates
 #include "manager/brain/facqueue.as"  // the production executor: every line held silent
+#include "manager/brain/market.as"    // the Want market: proposers + pricing (prototype 1)
 #include "manager/economy.as"
 #include "manager/air.as"
 #include "manager/frontline.as"
@@ -142,6 +143,7 @@ void AiUnitFinished(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
+	Brain::NoteProduced(unit);
 	if ((int(unit.id) >= 0) && (int(unit.id) < int(gFinished.length())))
 		gFinished[int(unit.id)] = true;
 	// The defense zone follows the BUILT base: every finished rear structure

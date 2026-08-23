@@ -405,6 +405,8 @@ _SPEND_ALLOWED = {
     "manager/builder/reclaim.as": {"Enqueue(TaskB::"},
     # the arbiter itself (empty market during the kill; the rebuild's executor)
     "manager/brain.as": {"Enqueue(TaskB::", "Requests::Take("},
+    # the market: the arbiter's pricing + its two executor call sites
+    "manager/brain/market.as": {"Enqueue(TaskB::", "Requests::Take("},
 }
 
 

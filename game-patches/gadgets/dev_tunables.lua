@@ -44,6 +44,8 @@ local NAMES = {
 	"apex_bomb_min_value",
 	"apex_build_threat_bar",
 	"apex_catalog_dump",
+	"apex_spot_m",
+	"apex_plant_pipe",
 	"apex_chase_min_ratio",
 	"apex_comm_cloak_share",
 	"apex_con_outmassed",

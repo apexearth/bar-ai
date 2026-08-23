@@ -1136,3 +1136,21 @@ modoptions) 3-13, cycle9 4-12 -- stable 19-31% band vs 12.5% session start.
 2v2 cycle9: 1-11, the campaign's first 2v2 win (prior 0-11, 0-12).
 share_defence=4 is the shipped default. The standing bottleneck is
 unchanged: trade 0.29-0.49, engagement selection (ISSUES.md).
+
+## 2026-08-23 -- Prototype 1: the opening, un-scripted (the first market)
+
+`manager/brain/market.as`: mex / energy / geo / plant Wants priced in one
+currency (value = gain / (metal + builder-time at the wage)); Brain::Decide
+runs the auction with executor fall-through; the facqueue takes its first
+production orders (cons, one in flight, ledger reconciled by AiUnitFinished).
+DLL: IsNeedGeo + GetMexSpotIncome bindings (spot yield is now real data, not
+a model term). Measured vs NullAI on Comet Catcher (12m, seed 1): the
+mex-solar-mex-solar-lab-cons opening EMERGED from prices with no opening
+script; 6.9k metal produced vs 1.4k base; decision log carries the full
+arithmetic. Known gap, deliberate: ~55% metal excess late -- storage,
+converters, moho, and assist Wants do not exist yet (rebuild order steps
+5+). Fixed along the way: TaskB::Spot for mex (Common's spotId=-1 freezes
+CBMexTask), CanDefReach product-feasibility for plants (armsy on a land
+map), value-based mex def choice (armamex nomination), FactoryCAI's x5
+SHIFT multiplier (replace=true), pend reconcile via the finished event
+(CountQueued lags ~45s at bench speed).
