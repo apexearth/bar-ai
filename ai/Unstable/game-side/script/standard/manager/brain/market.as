@@ -3151,6 +3151,18 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				SQUARE_SIZE * 16.f);
 	}
 	if (w.kind == WK_PROTECT) {
+		// THE chokepoint, not the proposers: three separate PROT_DEF gain
+		// branches each carried their own ValueOf-and-continue, and gating
+		// two of them still let claws through (measured three times).
+		// Whatever proposes, nothing EXECUTES ground defence on the quiet
+		// rear.
+		if ((w.spotId == PROT_DEF) && EcoQuiet())
+			return null;
+		if (w.spotId == PROT_DEF)
+			AiLog("apex: prot-exec t=" + ai.teamId + " def=" + w.def.GetName()
+					+ " role=" + (gEcoRole ? 1 : 0)
+					+ " danger=" + (EcoDangerNear() ? 1 : 0)
+					+ " streak=" + gEcoDangerStreak);
 		const int bt = (w.spotId == PROT_RADAR) ? int(Task::BuildType::RADAR)
 				: ((w.spotId == PROT_DEF) || (w.spotId == PROT_SHIELD))
 					? int(Task::BuildType::DEFENCE)
@@ -3207,6 +3219,46 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			if (u > worst) {
 				worst = u;
 				slot = fp;
+			}
+		}
+		// NEAR THE METAL SINKS (apexearth: "if we are not empty on metal...
+		// build nano turrets near the things that are currently spending
+		// metal"): a live build site's pull is its assigned crew's drain;
+		// the biggest uncovered sink competes under the same bar as the
+		// lines. Bank-gated -- at an empty bank the lathe already outruns
+		// income and pre-positioning BP at a sink serves nothing.
+		const float mSt = aiEconomyMgr.metal.storage;
+		if ((mSt > 1.f) && (aiEconomyMgr.metal.current > mSt
+				* ai.GetTunable("apex_nano_sink_bank", TUNE_NANO_SINK_BANK))) {
+			for (uint li = 0; li < Requests::gLive.length(); ++li) {
+				IUnitTask@ lt = Requests::gLive[li];
+				if ((lt is null) || (lt.buildDef is null))
+					continue;
+				array<CCircuitUnit@>@ crew = lt.GetUnits();
+				if ((crew is null) || (crew.length() == 0))
+					continue;
+				const AIFloat3 sp = lt.GetBuildPos();
+				if (!OnMap(sp))
+					continue;
+				float drain = 0.f;
+				for (uint ci = 0; ci < crew.length(); ++ci) {
+					if (crew[ci] !is null)
+						drain += Catalog::gBuildPower[int(crew[ci].circuitDef.id)]
+								* (7.f / 80.f);
+				}
+				int nanosAt = 0;
+				for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
+					if (sp.distance2D(gOwnNanoPos[ni]) < 350.f)
+						++nanosAt;
+				}
+				const float u2 = drain - float(nanosAt) * 17.5f;
+				if (u2 > worst) {
+					worst = u2;
+					slot = sp;
+					AiLog("apex: nano-to-sink t=" + ai.teamId + " at "
+							+ lt.buildDef.GetName()
+							+ " drain=" + formatFloat(u2, "", 0, 1));
+				}
 			}
 		}
 		// PARALLEL on purpose: the default Take folds every nano ask onto

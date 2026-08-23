@@ -1180,7 +1180,7 @@ const float TUNE_ESCORT_MAX_COST = 120.f;
 const float TUNE_MEX_GROWTH = 3.f;
 // RANGE_WORTH: standing weight of weapon reach in unit selection (reach =
 // free damage before the answer), on top of the reactive outranging term.
-const float TUNE_RANGE_WORTH = 0.6f;
+const float TUNE_RANGE_WORTH = 2.f;
 // MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per
 // minute (apexearth: "3 times more rezbots" -- was 0.04). Named _FRAC:
 // a legacy TUNE_MEDIC_SHARE with other semantics survives at the bottom.
@@ -1202,6 +1202,9 @@ const float TUNE_RECLAIM_AGE_S = 180.f;
 // LINE_PULL: unserved line spend (m/s) a factory needs before it pulls a
 // nano away from the farm block -- two turrets' worth of hunger.
 const float TUNE_LINE_PULL = 35.f;
+// NANO_SINK_BANK: bank fraction of storage above which "not empty on metal"
+// holds and live build sites compete for nano placement by their crew drain.
+const float TUNE_NANO_SINK_BANK = 0.1f;
 // GIFT_ARMY: master switch for back-to-front army gifting.
 const float TUNE_GIFT_ARMY = 1.f;
 // FRONT_N: how many closest-to-enemy allies count as the front line and
