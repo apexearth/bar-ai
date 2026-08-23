@@ -1201,3 +1201,18 @@ still 0.43 vs 1.9 K/D and they out-grind our statics 38k:7k (easy's arty
 outranges the LLT line); massing meet/hold dials nudged (1.3/240s) without
 a clear signal at small samples. A 10-game baseline is recorded in
 tournaments/ for the next session's comparisons.
+
+## 2026-08-23 -- Solo session wrap: the market is healthy; the war is not
+
+Final ladder state (45m, Comet): vs easy hovering at the noise floor
+(3-5, then 0-3 with 5 draws across one-feature-apart builds -- 8-game
+batches cannot separate them); vs medium 0-6. Shields landed in the
+protection market (IsShieldDef binding; worth the arty mass they blank).
+Range-answers-arty landed in defense picking. The measured verdict stands:
+eco 2.5:1 at 30m, army K/D 0.22 -- every long game is lost in trades, in
+the kept legacy military-use layer. Next session needs (1) the military
+design conversation (squad formation, engage odds, group travel -- his
+domain by declared boundary), and (2) tournament batches of 20+ for any
+military tuning claim. Tags: pre-overhaul -> market-first-win ->
+ladder-easy-parity. The market rebuild itself -- catalog, one currency,
+six pricing laws, ~15 want families -- is DONE and measuring clean.
