@@ -1690,9 +1690,17 @@ float RoleTarget(int role, float armyTarget)
 {
 	// AA is a PURE COUNTER: it has no value without enemy air, so it gets
 	// no baseline share (watched: AA against a ground-only 1v1 enemy).
-	if (role == int(Unit::Role::AA.type))
-		return aiEnemyMgr.GetEnemyCost(RT::AIR)
-				* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH);
+	if (role == int(Unit::Role::AA.type)) {
+		// FRESH air only (GetEnemyCost never forgets a plane once seen --
+		// 25k of AA vs an enemy that quit flying, watched 8v8), and OUR
+		// SHARE of the team's counter: the census sums all enemies while
+		// every ally instance would otherwise build the full answer.
+		const float team = Military::TeamArmyCost();
+		const float mine = aiMilitaryMgr.armyCost;
+		const float share = (team > mine && team > 1.f) ? (mine / team) : 1.f;
+		return aiEnemyMgr.GetEnemyCostFresh(RT::AIR)
+				* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH) * share;
+	}
 	const float base = armyTarget / 6.f;   // maximum-entropy prior over combat roles
 	float counter = 0.f;
 	if (role == int(Unit::Role::RAIDER.type))
