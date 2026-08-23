@@ -55,6 +55,8 @@ local NAMES = {
 	"apex_assist_share",
 	"apex_e_stall_boost",
 	"apex_bp_lookahead",
+	"apex_fly_short",
+	"apex_farm_back",
 	"apex_chase_min_ratio",
 	"apex_comm_cloak_share",
 	"apex_con_outmassed",

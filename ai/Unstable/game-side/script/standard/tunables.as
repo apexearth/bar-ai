@@ -1151,6 +1151,12 @@ const float TUNE_E_STALL_BOOST = 2.0f;
 // BP_LOOKAHEAD: seconds of income GROWTH folded into the BP target -- the
 // compounding term; a flat economy adds nothing.
 const float TUNE_BP_LOOKAHEAD = 60.f;
+// FLY_SHORT: an air con's effective travel fraction vs the ground path --
+// straight line, no blockage, no pathfinding.
+const float TUNE_FLY_SHORT = 0.6f;
+// FARM_BACK: how far behind the base anchor the eco farm is planned, elmos
+// (the axis points at the front, so behind = away from threat/influence).
+const float TUNE_FARM_BACK = 500.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone
