@@ -1554,3 +1554,25 @@ Related: reclaim-to-make-room -- "If you see something not useful could be
 reclaimed to make room for something useful then we should do the reclaim, or
 reposition things." Valid, not urgent.
 
+
+## Market runaway at high income (2026-08-23, open)
+
+45m vs NullAI seed 1 (matches/20260823-06*): 41 driven factory lines (23 T1
+labs + 15 air plants) against a 1 + income/50 support rule that should cap
+~5-9 -- either Factory::gFactoryCount lags the request pipeline (many plant
+requests licensed before any factory STANDS) or the gate reads stale income.
+Same run: 58,203 mex decides (21/sec churn -- tasks created and dying
+instantly at 40+ workers; suspect CBMexTask spot-close/reopen cycling), 3,519
+moho decides for 3 standing. Both only appear at 100+ m/s income; the 30m
+runs at ~60 m/s are clean. Diagnose with apex_auction_diag=1 plus a decide
+-> task-outcome trace before touching prices; the in-flight-plant window
+(requests not yet standing don't count toward gFactoryCount) is the first
+suspect for the labs.
+
+## AFUS decided, never completed (2026-08-23, open)
+
+armacks correctly pick energy:armafus (v=15) the moment moho ground runs out
+(~25m), but a 16.6k-metal build started that late never lands inside the
+window even fleet-assisted. Either fine (longer games) or the fleet should
+converge on the mega-build (priority/assist focus). Check completion in a
+60m run before designing anything.

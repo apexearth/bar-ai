@@ -1103,6 +1103,7 @@ void StallWatch()
 //------------------------------------------------------------------------------
 
 int gNextIdleLog = 0;
+int gNextAuctionDiag = 0;
 
 IUnitTask@ Decide(CCircuitUnit@ unit)
 {
@@ -1130,6 +1131,30 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
+	// Auction dump for T2-capable builders, one per 30s, tunable-gated.
+	if ((ai.GetTunable("apex_auction_diag", 0.f) > 0.f) && (ai.frame >= gNextAuctionDiag)) {
+		bool t2able = false;
+		const array<int>@ mm = Catalog::BuildsOf(int(unit.circuitDef.id));
+		for (uint z = 0; z < mm.length(); ++z) {
+			if (Catalog::gCostM[mm[z]] > 3000.f) {
+				t2able = true;
+				break;
+			}
+		}
+		if (t2able) {
+			gNextAuctionDiag = ai.frame + 30 * SECOND;
+			string ln = "apex: auction " + unit.circuitDef.GetName() + " #" + unit.id + " |";
+			for (uint z = 0; z < ranked.length(); ++z) {
+				ln += " " + KindName(ranked[z].kind) + ":"
+					+ ((ranked[z].def is null) ? "?" : ranked[z].def.GetName())
+					+ " v=" + formatFloat(ranked[z].value * 1000.f, "", 0, 2)
+					+ " (g=" + formatFloat(ranked[z].gain, "", 0, 1)
+					+ " m=" + formatFloat(ranked[z].mCost, "", 0, 0)
+					+ " t=" + formatFloat(ranked[z].tCost, "", 0, 0) + ")";
+			}
+			AiLog(ln);
+		}
+	}
 	if (top is null) {
 		// The floor want: an idle builder's time is free, so it patrols the
 		// farm and auto-assists whatever is building there. Short timeout:
