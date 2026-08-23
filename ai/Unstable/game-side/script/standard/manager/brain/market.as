@@ -2082,8 +2082,23 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	}
 	if (myCeil >= BestExtract())
 		return w;
-	// A serving con actively building, else a producing factory line.
-	CCircuitUnit@ boss = NextServingCon();
+	// A worker BUILDING BUILD POWER is the best boss there is: BP
+	// compounds, and the first nano crawling up under one lathe delays
+	// everything behind it (apexearth). Then serving cons, then factories.
+	CCircuitUnit@ boss = null;
+	for (uint bi = 0; bi < gWorkers.length(); ++bi) {
+		CCircuitUnit@ wb = gWorkers[bi];
+		if ((wb is null) || (wb.task is null) || (wb.id == unit.id))
+			continue;
+		if (wb.task.GetType() != Task::Type::BUILDER)
+			continue;
+		if (int(wb.task.GetBuildType()) == int(Task::BuildType::NANO)) {
+			@boss = wb;
+			break;
+		}
+	}
+	if (boss is null)
+		@boss = NextServingCon();
 	if ((boss !is null) && ((boss.task is null)
 			|| (boss.task.GetType() != Task::Type::BUILDER)))
 		@boss = null;
