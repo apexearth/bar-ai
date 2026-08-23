@@ -64,6 +64,33 @@ appear in decision logic.
 Every modeled term must be ONE visible, named quantity — never a scatter of
 gates that jointly imply a value.
 
+## Pricing laws proven by measurement (2026-08-23, prototype 1)
+
+- **Temporal consistency**: value a gain at DELIVERY-time conditions, not at
+  decision-time conditions. A scarcity premium decays at the market's own
+  supply-response speed; a long build priced at today's spike is wrong twice
+  (the 7,000s AFUS that froze the only T2 con; energy perpetually outbidding
+  mohos). Premiums apply for the response window; equilibrium rates apply
+  for the lifetime.
+- **Exchange rates come from the game**: energy's metal price is anchored on
+  the best available converter's ratio (the game's own arbitrage floor), a
+  stall multiplying it only while pull exceeds income.
+- **Cost is what is actually forgone**: resources in overflow are free to
+  spend (E-cost forgiven at a full bank); a builder's time is priced at its
+  runner-up want; asymmetric gain/cost pricing is legitimate when the two
+  sides genuinely forgo different things.
+- **Capability is a fleet property**: builds run at fleet-assisted speed
+  (Requests folds joiners), so big builds get cheaper as the fleet grows --
+  price them that way or they never win. Same for tier-unique demand:
+  diminishing returns per serving unit, never a binary "one exists".
+- **Feedback must read the honest signal**: idle builders do not pull, so
+  "overflow" lies about BP need -- close loops on CAPACITY vs income, not on
+  observed flow. Storage buys TIME: worthless while headroom already covers
+  the horizon.
+- **Feasibility is part of the price**: a def must be able to EXIST at the
+  site (terrain area of a plant's products, floaters/submerged on land, geo
+  vents, spot ids) -- an infeasible want churns forever at any value.
+
 ## What this frame forbids
 
 - Hard caps, clocks, exclusivity, hardcoded sequences (long-standing rules —
