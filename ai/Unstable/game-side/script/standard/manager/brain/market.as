@@ -2000,7 +2000,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 {
 	if (fac is null)
 		return null;
-	if (!gMexOpen && (UpDemand() <= 0.5f) && (BPGap() <= 0.5f))
+	// Production pays the E-flow discipline too: a factory pumping pawns
+	// through a stall both causes it and starves the opening (watched:
+	// hard e-stall, a minute without a mex).
+	if (HardEStall())
+		return null;
+	if (!gMexOpen && (UpDemand() <= 0.5f) && (BPGap() <= 0.5f)
+		&& (ArmyTarget() - ArmyValue() <= 0.5f))
 		return null;
 	// One in flight per line: pipeline discipline, not a cap.
 	if ((fac.CountQueued(null) + Brain::PendCount(line, null)) > 0)
@@ -2048,8 +2054,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			// The gap is a STREAM the line fills; clamping the gain to one
 			// unit's cost made a Pawn bid 0.6 against any gap size and army
 			// never outbid a constructor (two straight BARb losses).
+			float eFeedA = 1.f;
+			{
+				const float eI = aiEconomyMgr.energy.income;
+				const float eP = aiEconomyMgr.energy.pull;
+				if ((eP > 1.f) && (eI < eP))
+					eFeedA = eI / eP;
+			}
 			const float gainA = (armyGap / ((fillS > 1.f) ? fillS : 60.f))
-					* (ppc / linePPC) / (1.f + have * 0.05f);
+					* (ppc / linePPC) / (1.f + have * 0.05f) * eFeedA;
 			if (gainA <= 0.01f)
 				continue;
 			const float vA = gainA / Catalog::gCostM[d];

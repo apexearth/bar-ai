@@ -1184,7 +1184,9 @@ const float TUNE_OBSOLETE_RATIO = 4.f;
 const float TUNE_EXPOSE_R = 1200.f;
 // EXPOSED_LOSS_S: seconds over which a fully exposed, unguarded asset is
 // expected to be lost against a real opponent -- his "almost guaranteed".
-const float TUNE_EXPOSED_LOSS_S = 300.f;
+// 300 priced sentries below the NEXT mex claim, so every spot was claimed
+// naked and died to BARb inside the window; 120 flips to claim-then-guard.
+const float TUNE_EXPOSED_LOSS_S = 120.f;
 // GUARD_RATE: standing army value as a fraction of structure assets -- the
 // insurance floor that also covers census blindness.
 const float TUNE_GUARD_RATE = 0.15f;
