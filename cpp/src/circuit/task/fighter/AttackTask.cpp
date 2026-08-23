@@ -57,7 +57,12 @@ static constexpr float ATTACK_THREAT_MOD = 2.f;
 // Multiplier on the path's threat CEILING (see the query in Update()). The
 // ceiling decides which tiles exist for the pathfinder at all, so it, not the
 // cost above, is what produces map-edge detours when it is tight.
-static constexpr float ATTACK_CEILING_MOD = 3.f;
+// 3 -> tunable default 1.2, 2026-08-23: at 3 a squad PATHED through tower
+// fields holding triple its own power -- apexearth watched "reasonably
+// sized" armies walk into kill zones until completely dead. At 1.2 a squad
+// never paths through ground that outguns it; when no path exists it waits,
+// which beats dying. apex_attack_ceiling / apex_attack_threat_mod.
+static constexpr float ATTACK_CEILING_MOD = 3.f;  // superseded by apex_attack_ceiling
 
 // Chosen so CheckMergeTask's own MAX_TRAVEL_SEC * speed budget (~2700 elmos for
 // a T1 bot) becomes the binding limit instead of this. The air tasks were raised
@@ -700,7 +705,7 @@ void CAttackTask::Update()
 	const float riskDiv = float(1 << riskLevel);
 	const float threatCeiling = isCharge
 			? CHARGE_THREAT_CEILING
-			: (ATTACK_CEILING_MOD * riskDiv * attackPower
+			: (manager->GetCircuit()->GetTunable("apex_attack_ceiling", 1.2f) * riskDiv * attackPower
 					/ circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 	// apex: the aim raycast doubles as the path ENDPOINT filter, and unlike
 	// the fallback multi-query it has no goal-rescue when every radius node
@@ -718,7 +723,7 @@ void CAttackTask::Update()
 					// so at a small mod an enemy Behemoth bends the route a few
 					// hundred elmos while ordinary porc leaves it straight.
 					? circuit->GetTunable("apex_charge_threat_mod", 0.1f)
-					: (ATTACK_THREAT_MOD / riskDiv));
+					: (manager->GetCircuit()->GetTunable("apex_attack_threat_mod", 2.f) / riskDiv));
 	pathQueries[leader] = query;
 
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {

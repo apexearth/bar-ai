@@ -7202,7 +7202,7 @@ index c3f5e98..e02338a 100644
  		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..2243a9b 100644
+index cd063e4..e185f88 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -7213,7 +7213,7 @@ index cd063e4..2243a9b 100644
  #include "map/ThreatMap.h"
  #include "module/MilitaryManager.h"
  #include "setup/SetupManager.h"
-@@ -25,12 +26,221 @@
+@@ -25,12 +26,226 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -7248,7 +7248,12 @@ index cd063e4..2243a9b 100644
 +// Multiplier on the path's threat CEILING (see the query in Update()). The
 +// ceiling decides which tiles exist for the pathfinder at all, so it, not the
 +// cost above, is what produces map-edge detours when it is tight.
-+static constexpr float ATTACK_CEILING_MOD = 3.f;
++// 3 -> tunable default 1.2, 2026-08-23: at 3 a squad PATHED through tower
++// fields holding triple its own power -- apexearth watched "reasonably
++// sized" armies walk into kill zones until completely dead. At 1.2 a squad
++// never paths through ground that outguns it; when no path exists it waits,
++// which beats dying. apex_attack_ceiling / apex_attack_threat_mod.
++static constexpr float ATTACK_CEILING_MOD = 3.f;  // superseded by apex_attack_ceiling
 +
 +// Chosen so CheckMergeTask's own MAX_TRAVEL_SEC * speed budget (~2700 elmos for
 +// a T1 bot) becomes the binding limit instead of this. The air tasks were raised
@@ -7435,7 +7440,7 @@ index cd063e4..2243a9b 100644
  CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
  		: ISquadTask(mgr, FightType::ATTACK, powerMod)
  		, minPower(minPower)
-@@ -54,12 +264,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
+@@ -54,12 +269,22 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
  	if (speedLeader > speedUnit) {
  		std::swap(speedLeader, speedUnit);
  	}
@@ -7460,7 +7465,7 @@ index cd063e4..2243a9b 100644
  		return false;
  	}
  	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
-@@ -80,13 +300,37 @@ void CAttackTask::AssignTo(CCircuitUnit* unit)
+@@ -80,13 +305,37 @@ void CAttackTask::AssignTo(CCircuitUnit* unit)
  	CCircuitDef* cdef = unit->GetCircuitDef();
  	highestRange = std::max(highestRange, cdef->GetLosRadius());
  
@@ -7500,7 +7505,7 @@ index cd063e4..2243a9b 100644
  		travelAction = new CFightAction(unit, squareSize);
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
-@@ -108,11 +352,56 @@ void CAttackTask::RemoveAssignee(CCircuitUnit* unit)
+@@ -108,11 +357,56 @@ void CAttackTask::RemoveAssignee(CCircuitUnit* unit)
  
  void CAttackTask::Start(CCircuitUnit* unit)
  {
@@ -7558,7 +7563,7 @@ index cd063e4..2243a9b 100644
  	}
  }
  
-@@ -132,6 +421,34 @@ void CAttackTask::Update()
+@@ -132,6 +426,34 @@ void CAttackTask::Update()
  		return;
  	}
  
@@ -7593,7 +7598,7 @@ index cd063e4..2243a9b 100644
  	/*
  	 * Regroup if required
  	 */
-@@ -142,7 +459,9 @@ void CAttackTask::Update()
+@@ -142,7 +464,9 @@ void CAttackTask::Update()
  			CCircuitAI* circuit = manager->GetCircuit();
  			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
  			for (CCircuitUnit* unit : units) {
@@ -7604,7 +7609,7 @@ index cd063e4..2243a9b 100644
  				unit->Gather(groupPos, frame);
  			}
  		}
-@@ -170,6 +489,9 @@ void CAttackTask::Update()
+@@ -170,6 +494,9 @@ void CAttackTask::Update()
  	}
  
  	const AIFloat3& startPos = leader->GetPos(frame);
@@ -7614,7 +7619,7 @@ index cd063e4..2243a9b 100644
  //	if (circuit->GetInflMap()->GetInfluenceAt(startPos) < -INFL_EPS) {
  //		SetTarget(nullptr);  // FIXME: back-forths group
  //	} else {
-@@ -178,12 +500,100 @@ void CAttackTask::Update()
+@@ -178,12 +505,100 @@ void CAttackTask::Update()
  
  	state = State::ROAM;
  	if (GetTarget() != nullptr) {
@@ -7717,7 +7722,7 @@ index cd063e4..2243a9b 100644
  				state = State::ENGAGE;
  				Attack(frame);
  				return;
-@@ -196,19 +606,119 @@ void CAttackTask::Update()
+@@ -196,19 +611,119 @@ void CAttackTask::Update()
  	}
  
  	if (GetTarget() == nullptr) {
@@ -7816,7 +7821,7 @@ index cd063e4..2243a9b 100644
 +	const float riskDiv = float(1 << riskLevel);
 +	const float threatCeiling = isCharge
 +			? CHARGE_THREAT_CEILING
-+			: (ATTACK_CEILING_MOD * riskDiv * attackPower
++			: (manager->GetCircuit()->GetTunable("apex_attack_ceiling", 1.2f) * riskDiv * attackPower
 +					/ circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 +	// apex: the aim raycast doubles as the path ENDPOINT filter, and unlike
 +	// the fallback multi-query it has no goal-rescue when every radius node
@@ -7836,11 +7841,11 @@ index cd063e4..2243a9b 100644
 +					// so at a small mod an enemy Behemoth bends the route a few
 +					// hundred elmos while ordinary porc leaves it straight.
 +					? circuit->GetTunable("apex_charge_threat_mod", 0.1f)
-+					: (ATTACK_THREAT_MOD / riskDiv));
++					: (manager->GetCircuit()->GetTunable("apex_attack_threat_mod", 2.f) / riskDiv));
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -225,12 +735,15 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -225,12 +740,15 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
@@ -7861,7 +7866,7 @@ index cd063e4..2243a9b 100644
  	}
  
  	if (units.find(unit) != units.end()) {
-@@ -238,29 +751,155 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,29 +756,155 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -8020,7 +8025,7 @@ index cd063e4..2243a9b 100644
  	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
  	for (unsigned i = 0; i < groups.size(); ++i) {
  		const CEnemyManager::SEnemyGroup& group = groups[i];
-@@ -269,10 +908,55 @@ void CAttackTask::FindTarget()
+@@ -269,10 +913,55 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -8080,7 +8085,7 @@ index cd063e4..2243a9b 100644
  			continue;
  		}
  
-@@ -319,18 +1003,196 @@ void CAttackTask::FindTarget()
+@@ -319,18 +1008,196 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -8278,7 +8283,7 @@ index cd063e4..2243a9b 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -340,6 +1202,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +1207,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -8349,7 +8354,7 @@ index cd063e4..2243a9b 100644
  		ActivePath(lowestSpeed);
  	} else {
  		FallbackFrontPos();
-@@ -349,11 +1275,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -349,11 +1280,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -8392,7 +8397,7 @@ index cd063e4..2243a9b 100644
  
  	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
  	const float pathRange = DEFAULT_SLACK * 4;
-@@ -387,8 +1343,28 @@ void CAttackTask::FallbackBasePos()
+@@ -387,8 +1348,28 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -8422,7 +8427,7 @@ index cd063e4..2243a9b 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -421,7 +1397,9 @@ void CAttackTask::Fallback()
+@@ -421,7 +1402,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {

@@ -95,6 +95,8 @@ local NAMES = {
 	"apex_counter_sprint",
 	"apex_standoff",
 	"apex_standoff_frac",
+	"apex_attack_ceiling",
+	"apex_attack_threat_mod",
 	"apex_dodge_sec",
 	"apex_elect_rich_income",
 	"apex_escort_squad_value",
