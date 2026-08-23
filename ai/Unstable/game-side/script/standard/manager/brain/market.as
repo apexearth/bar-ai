@@ -1802,11 +1802,48 @@ float Utilization()
 	return float(busy) / float(gWorkers.length());
 }
 
+// Retreat pays only if the survivor gets HEALED: thresholds rise with the
+// rez/repair fleet (apexearth: "we stay in the fight until death" + "rez
+// bots heal our troops -- they make a big difference" -- the two are one
+// design). Refreshed here as the fleet changes.
+int gNextRetreatRefresh = 0;
+void RetreatRefresh()
+{
+	if (ai.frame < gNextRetreatRefresh)
+		return;
+	gNextRetreatRefresh = ai.frame + 15 * SECOND;
+	int rezzers = 0;
+	for (uint d2 = 1; d2 < gOwnCount.length(); ++d2) {
+		if ((gOwnCount[d2] > 0) && Catalog::gRezzer[int(d2)])
+			rezzers += gOwnCount[d2];
+	}
+	float healBonus = 0.05f * float(rezzers);
+	if (healBonus > 0.25f)
+		healBonus = 0.25f;
+	const float scale = ai.GetTunable("apex_retreat_cost_scale", TUNE_RETREAT_COST_SCALE);
+	for (Id rd = 1; rd <= Id(Catalog::gDefCount); ++rd) {
+		const int ri = int(rd);
+		if (!Catalog::gMobile[ri] || Catalog::gBuilder[ri]
+			|| (Catalog::gPower[ri] <= 1.f) || Catalog::gKamikaze[ri]
+			|| Catalog::gRezzer[ri])
+			continue;
+		CCircuitDef@ rdef = ai.GetCircuitDef(rd);
+		if (rdef is null)
+			continue;
+		float rt = 0.08f + Catalog::gCostM[ri] / ((scale > 1.f) ? scale : 3000.f)
+				+ healBonus;
+		if (rt > 0.55f)
+			rt = 0.55f;
+		rdef.SetRetreat(rt);
+	}
+}
+
 void StallWatch()
 {
 	if (ai.frame < gNextStallSweep)
 		return;
 	gNextStallSweep = ai.frame + 5 * SECOND;
+	RetreatRefresh();
 	GuardSweep();
 	if (!HardEStall())
 		return;
@@ -2694,6 +2731,26 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			// it honestly later if ever wanted.
 			if (Catalog::gKamikaze[d])
 				continue;
+			// REZ BOTS classify as non-builders (empty build list), so they
+			// land HERE, not the builder branch -- which is why none were
+			// ever made (watched, twice). Their gain: the recoverable loss
+			// pool plus a standing medic share of the army.
+			if (Catalog::gRezzer[d]) {
+				const int haveRz = (int(d) < int(gOwnCount.length()))
+						? gOwnCount[d] : 0;
+				const float medic = ArmyValue() * 0.04f / 60.f;
+				const float gainRz = (gLossPool
+						/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)
+						+ medic) / float(1 + haveRz);
+				if (gainRz > 0.05f) {
+					const float vRz = gainRz / Catalog::gCostM[d];
+					candDef.insertLast(d);
+					candV.insertLast(vRz);
+					candGain.insertLast(gainRz);
+					sumV += vRz;
+				}
+				continue;
+			}
 			const float sinkGap = OverflowM() * ((fillS > 1.f) ? fillS : 60.f);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
