@@ -1,5 +1,19 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: the line floor is a scarcity question
+
+The opportunity floor (an order must beat 0.25x the executed-want EMA)
+structurally idled expensive T2 lines: per-metal value comparison buries
+units whose gain does not scale with cost, and its OverflowM escape (bank
+at 80%% of storage) opened far too late (A/B: 1 produce decide in 5.5
+minutes at floor 0.25 vs a real stream at 0). Now gated on
+FreeMetalFlow() <= 0.5: in true scarcity the per-metal compare is right
+(metal IS the constraint, the 22-armacks-vs-fusion lesson); with unspent
+flow standing, an idle line is pure waste and the floor stands aside.
+First default-floor verification: T2 at 11.7m. Division-only baseline
+(6 games): mex ~26, prod ~30.7k, T2 ~12m median, with a no-tech tail
+(seed 7: never teched, 10.5k waste -- unsunk late income IS the waste).
+
 ## 2026-08-23: the veto dies -- same-tier labs lose on price (apexearth's correction)
 
 "The math should be correct. We shouldn't need vetos... perhaps what

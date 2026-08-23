@@ -4014,9 +4014,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	// OPPORTUNITY FLOOR: the draw compares a line's candidates only against
 	// each other, so a saturated line kept producing v=1.2 cons while
 	// fusion money earned v=30+ outside (measured: 22 armacks, 1 fusion).
-	// With metal NOT overflowing, an order must beat a fraction of what
-	// executed wants actually earn; overflow keeps idle time free.
-	if ((OverflowM() <= 0.5f) && (gWantEmaV > 0.f)
+	// The floor is a SCARCITY question, gated on FreeMetalFlow: with
+	// unspent flow standing, an idle line is pure waste whatever the EMA
+	// says. The old OverflowM gate (bank at 80% storage) opened far too
+	// late, and the per-metal EMA compare structurally idled every
+	// expensive T2 line meanwhile (A/B, seed 5: 1 produce decide in 5.5
+	// minutes at floor 0.25 vs a real stream at 0). In true scarcity the
+	// per-metal compare is right -- metal IS the constraint there.
+	if ((FreeMetalFlow() <= 0.5f) && (gWantEmaV > 0.f)
 		&& (bestV < gWantEmaV
 			* ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR)))
 		return null;
