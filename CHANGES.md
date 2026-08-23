@@ -1,5 +1,21 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: the rear specialist -- the farthest teammate scales instead of fighting
+
+apexearth's design: in a big team game one player starts obviously farther
+from the enemy than everyone else; walking T1/T2 there is waste, compounding
+eco there is exponential. Implemented in the market (`EcoRoleActive`,
+market.as): homes off the team blackboard, enemy reference = ally centroid
+mirrored through map center, rear-most self-elects only with a clear margin
+(`apex_eco_rear_margin` 1.15) and 4+ allies. Effects: ArmyTarget x
+`apex_eco_army_mul` (0.1, stake shrinks with it) and a cost-weighted quality
+bias (x0.1..x5) in the army draw so its late military is gantry/heavy-air,
+never spam. Protection untouched. Unit-gifting shelved per apexearth: at +100
+"everyone is already faster than those gifted units could even walk"
+(`GiveUnits` binding confirmed available if ever wanted). Smoke 4v4 Supreme
+Isthmus: election computed on all 4 instances (`apex: rear-elect homes=4`),
+rear-most at 1.077x the #2 distance correctly declined the margin.
+
 ## 2026-08-23: Grid alignment (Part B) -- the anchor now sits on the engine's build lattice
 
 C++ (vendor d019a05): `SetBaseGrid` rounds the published anchor to 16 elmos;

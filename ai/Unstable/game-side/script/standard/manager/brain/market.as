@@ -1749,6 +1749,72 @@ float ArmyValue()
 	return v;
 }
 
+// THE REAR SPECIALIST (apexearth 2026-08-23): in a big team game one
+// player starts obviously farther from the enemy than everyone else.
+// Fighting from there wastes walk time; scaling from there compounds.
+// That player suppresses the army market -- the freed spend rides the
+// existing eco ladder to fusions/AFUS/gantry -- and its late army budget
+// carries a QUALITY bias so it buys the biggest units its labs offer
+// (T3, heavy air) instead of T1/T2 it would never deliver in time.
+// Election: allies' homes off the team blackboard; the enemy reference is
+// the ally centroid mirrored through map center (symmetric starts, no
+// sighting needed). Rear-most wins only with a clear margin over #2.
+bool gEcoRole = false;
+bool gEcoDiagDone = false;
+int gEcoRoleAt = -999999;
+bool EcoRoleActive()
+{
+	if (ai.frame < gEcoRoleAt + 10 * SECOND)
+		return gEcoRole;
+	gEcoRoleAt = ai.frame;
+	const bool was = gEcoRole;
+	gEcoRole = false;
+	if (!Builder::gHomeSet)
+		return false;
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() < 4))
+		return false;
+	array<float> hx, hz;
+	float cx = 0.f, cz = 0.f;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const float x = ai.ReadTeamValue(int(mates[i]), "homex", -1.f);
+		const float z = ai.ReadTeamValue(int(mates[i]), "homez", -1.f);
+		if ((x < 0.f) || (z < 0.f))
+			continue;
+		hx.insertLast(x);
+		hz.insertLast(z);
+		cx += x;
+		cz += z;
+	}
+	if (hx.length() < 4)
+		return false;
+	cx /= float(hx.length());
+	cz /= float(hx.length());
+	const float ex = float(AiTerrainWidth()) - cx;
+	const float ez = float(AiTerrainHeight()) - cz;
+	float d1 = 0.f, d2 = 0.f;   // farthest, second-farthest
+	for (uint i = 0; i < hx.length(); ++i) {
+		const float dx = hx[i] - ex;
+		const float dz = hz[i] - ez;
+		const float dd = dx * dx + dz * dz;
+		if (dd > d1) { d2 = d1; d1 = dd; } else if (dd > d2) { d2 = dd; }
+	}
+	const float mx = Builder::gHomePos.x - ex;
+	const float mz = Builder::gHomePos.z - ez;
+	const float mine = mx * mx + mz * mz;
+	const float margin = ai.GetTunable("apex_eco_rear_margin", TUNE_ECO_REAR_MARGIN);
+	gEcoRole = (mine >= d1) && (d2 > 1.f) && (mine >= d2 * margin * margin);
+	if (!gEcoDiagDone) {
+		gEcoDiagDone = true;
+		AiLog("apex: rear-elect homes=" + hx.length() + " mine=" + sqrt(mine)
+				+ " far=" + sqrt(d1) + " next=" + sqrt(d2));
+	}
+	if (gEcoRole != was)
+		AiLog("apex: rear-specialist " + (gEcoRole ? "ON" : "off")
+				+ " mine=" + sqrt(mine) + " next=" + sqrt(d2));
+	return gEcoRole;
+}
+
 float ArmyTarget()
 {
 	// The SYMMETRIC PRIOR: pre-contact the census is blind, and blind read
@@ -1760,8 +1826,10 @@ float ArmyTarget()
 	const float prior = ourTotal * ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
 	const float seen = Military::EnemyArmyCost();
 	const float expectedEnemy = (seen > prior) ? seen : prior;
-	return gAssetsM * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
+	const float t = gAssetsM * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
 		+ expectedEnemy * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
+	return EcoRoleActive()
+			? (t * ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL)) : t;
 }
 
 // Own combat losses, decaying -- wrecks on the field are rez-bot demand.
@@ -2856,6 +2924,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
 				continue;
 			float ppc = Catalog::gPower[d] / Catalog::gCostM[d];
+			// The rear specialist buys quality: weight by unit size so the
+			// draw lands on the biggest thing the lab offers, not spam that
+			// arrives late or never.
+			if (EcoRoleActive()) {
+				float qual = Catalog::gCostM[d] / 1000.f;
+				if (qual < 0.1f)
+					qual = 0.1f;
+				if (qual > 5.f)
+					qual = 5.f;
+				ppc *= qual;
+			}
 			// RANGE IS INTRINSIC VALUE (apexearth: "more strongly value
 			// range"): reach means free damage before the enemy answers, in
 			// every fight, not only against skirm pressure. A standing

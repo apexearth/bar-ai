@@ -1183,6 +1183,12 @@ const float TUNE_RANGE_WORTH = 0.6f;
 // minute (apexearth: "3 times more rezbots" -- was 0.04). Named _FRAC:
 // a legacy TUNE_MEDIC_SHARE with other semantics survives at the bottom.
 const float TUNE_MEDIC_FRAC = 0.12f;
+// ECO_REAR_MARGIN: how much farther from the enemy than the #2 ally the
+// rear-most home must be to count as "obviously" rear (distance ratio).
+const float TUNE_ECO_REAR_MARGIN = 1.15f;
+// ECO_ARMY_MUL: the rear specialist's army target as a fraction of normal;
+// the freed spend compounds through the eco ladder toward T3/heavy air.
+const float TUNE_ECO_ARMY_MUL = 0.1f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
 // competes with perpetual streams (the market's typical payback scale).
 const float TUNE_RECLAIM_AMORT = 300.f;
