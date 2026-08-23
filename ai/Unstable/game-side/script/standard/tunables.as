@@ -1145,6 +1145,12 @@ const float TUNE_BP_HEADROOM = 1.15f;
 // ASSIST_SHARE: fraction of the standing lathe fleet expected to fold onto
 // a priced build (Requests::Take joins same-def askers).
 const float TUNE_ASSIST_SHARE = 0.5f;
+// E_STALL_BOOST: multiplier on the conversion-floor E price per unit of
+// pull-above-income (a stall doubles-to-triples what new E is worth).
+const float TUNE_E_STALL_BOOST = 2.0f;
+// BP_LOOKAHEAD: seconds of income GROWTH folded into the BP target -- the
+// compounding term; a flat economy adds nothing.
+const float TUNE_BP_LOOKAHEAD = 60.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone

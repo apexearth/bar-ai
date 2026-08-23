@@ -145,6 +145,7 @@ void AiUnitFinished(CCircuitUnit@ unit)
 		return;
 	Brain::NoteProduced(unit);
 	Market::NoteFinished(unit);
+	Market::NoteFarm(unit);
 	if ((int(unit.id) >= 0) && (int(unit.id) < int(gFinished.length())))
 		gFinished[int(unit.id)] = true;
 	// The defense zone follows the BUILT base: every finished rear structure

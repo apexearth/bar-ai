@@ -84,25 +84,25 @@ float EPriceFloor()
 // only the conversion floor.
 float EPrice()
 {
-	// GAIN side: anticipatory. New supply is worth the demand the fleet is
-	// about to place, so the premium scales with pressure INCLUDING at
-	// balance -- pricing gain at the floor until a stall already existed
-	// collapsed production 93k -> 24k (every nanoframe crawled E-starved).
+	// GAIN side, anchored on the game's own exchange rate (apexearth
+	// 2026-08-23: "you have the metal conversion rates from the buildings
+	// currently available, that should be how energy income is priced").
+	// A stall multiplies the floor -- but only pull ABOVE income is a
+	// stall; the perpetuity premium that let energy outbid mohos forever
+	// is gone.
 	const float eInc = aiEconomyMgr.energy.income;
 	const float ePull = aiEconomyMgr.energy.pull;
-	float pressure = (eInc > 0.01f) ? (ePull / eInc) : 3.f;
-	if (pressure > 3.f)
-		pressure = 3.f;
-	if (pressure < 0.f)
-		pressure = 0.f;
+	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
+	if (excess > 2.f)
+		excess = 2.f;
+	if (excess < 0.f)
+		excess = 0.f;
 	const float eCur = aiEconomyMgr.energy.current;
 	const float eStore = aiEconomyMgr.energy.storage;
-	if ((eStore > 1.f) && (eCur < 0.25f * eStore) && (pressure < 1.f))
-		pressure = 1.f;
-	const float unlock = (eInc > 0.01f)
-			? (pressure * aiEconomyMgr.metal.income / eInc) : 1.f;
+	if ((eStore > 1.f) && (eCur < 0.25f * eStore) && (excess < 1.f))
+		excess = 1.f;
 	const float fl = EPriceFloor();
-	return (unlock > fl) ? unlock : fl;
+	return fl * (1.f + excess * ai.GetTunable("apex_e_stall_boost", TUNE_E_STALL_BOOST));
 }
 
 // COST side: the premium on SPENDING E exists only above balance -- at
@@ -351,6 +351,21 @@ void NoteFinished(CCircuitUnit@ unit)
 	if (i >= 0)
 		gLExtract[i] = Catalog::gExtractsM[defId];
 }
+void NoteFarm(CCircuitUnit@ unit)
+{
+	if (gFarmSet || (unit is null))
+		return;
+	const int d = int(unit.circuitDef.id);
+	if (Catalog::gMobile[d] || (Catalog::gBuildPower[d] <= 0.f)
+		|| (Catalog::gBuildsList[d].length() > 0))
+	{
+		return;
+	}
+	gFarmPos = unit.GetPos(ai.frame);
+	gFarmSet = true;
+	AiLog("apex: nano farm anchored at "
+		+ formatFloat(gFarmPos.x, "", 0, 0) + "," + formatFloat(gFarmPos.z, "", 0, 0));
+}
 void NoteDead(CCircuitUnit@ unit)
 {
 	if (unit is null)
@@ -454,7 +469,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			w = c;
 			w.kind = WK_ENERGY;
 			@w.def = Catalog::Def(d);
-			w.pos = unit.GetPos(ai.frame);
+			w.pos = EcoSiteFor(unit);
 		}
 	}
 	return w;
@@ -480,12 +495,36 @@ float BPCapacity()
 	return cap;
 }
 
-// Lathe capacity still worth buying: income x headroom minus the fleet.
+// Smoothed income growth rate, m/s per second -- the compounding signal.
+float gIncPrev = -1.f;
+int gIncPrevAt = 0;
+float gIncGrowth = 0.f;
+void TrackIncome()
+{
+	if (ai.frame < gIncPrevAt + 10 * SECOND)
+		return;
+	const float inc = aiEconomyMgr.metal.income;
+	if (gIncPrev >= 0.f) {
+		const float dt = float(ai.frame - gIncPrevAt) / float(SECOND);
+		const float g = (inc - gIncPrev) / ((dt > 1.f) ? dt : 1.f);
+		gIncGrowth = 0.7f * gIncGrowth + 0.3f * g;
+	}
+	gIncPrev = inc;
+	gIncPrevAt = ai.frame;
+}
+
+// Lathe capacity still worth buying: income x headroom minus the fleet --
+// plus the income the compounding economy will have within the lookahead
+// (apexearth 2026-08-23: idle cons were "not valuing the forward-looking
+// compounding effect" of standing build power).
 float BPGap()
 {
+	TrackIncome();
 	const float head = ai.GetTunable("apex_bp_headroom", TUNE_BP_HEADROOM);
-	const float gap = aiEconomyMgr.metal.income * ((head > 0.f) ? head : 1.15f)
-			- BPCapacity();
+	const float ahead = ai.GetTunable("apex_bp_lookahead", TUNE_BP_LOOKAHEAD);
+	const float futureInc = aiEconomyMgr.metal.income
+			+ ((gIncGrowth > 0.f) ? gIncGrowth * ahead : 0.f);
+	const float gap = futureInc * ((head > 0.f) ? head : 1.15f) - BPCapacity();
 	return (gap > 0.f) ? gap : 0.f;
 }
 
@@ -528,7 +567,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			w = c;
 			w.kind = WK_CONVERT;
 			@w.def = Catalog::Def(d);
-			w.pos = unit.GetPos(ai.frame);
+			w.pos = EcoSiteFor(unit);
 		}
 	}
 	return w;
@@ -569,7 +608,7 @@ Want@ ProposeStore(CCircuitUnit@ unit)
 			w = c;
 			w.kind = WK_STORE;
 			@w.def = Catalog::Def(d);
-			w.pos = unit.GetPos(ai.frame);
+			w.pos = EcoSiteFor(unit);
 		}
 	}
 	return w;
@@ -659,7 +698,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			w = c;
 			w.kind = WK_PLANT;
 			@w.def = Catalog::Def(d);
-			w.pos = unit.GetPos(ai.frame);
+			w.pos = EcoSiteFor(unit);
 		}
 	}
 	return w;
@@ -751,10 +790,21 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 	return w;
 }
 
-// Nano turrets: standing build power, priced by the overflow it captures. A
-// nano is an immobile lathe with no build options; its drain is its
-// workertime at the game's metal-per-workertime rate (7 m/s per 80 WT, the
-// T1 con's measured pull).
+// The nano FARM: the first finished nano anchors it; every later nano and
+// every eco static sites there, so builds land inside farm lathe range and
+// the economy compounds (apexearth 2026-08-23: "pack many of them in
+// rectangles... the eco will build exponentially faster").
+AIFloat3 gFarmPos;
+bool gFarmSet = false;
+AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
+{
+	return gFarmSet ? gFarmPos : unit.GetPos(ai.frame);
+}
+
+// Nano turrets: standing build power, priced by the BP gap it fills. A nano
+// is an immobile lathe with no build options; its drain is its workertime
+// at the game's metal-per-workertime rate (7 m/s per 80 WT, the T1 con's
+// measured pull).
 Want@ ProposeNano(CCircuitUnit@ unit)
 {
 	Want w;
@@ -776,7 +826,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			w = c;
 			w.kind = WK_NANO;
 			@w.def = Catalog::Def(d);
-			w.pos = unit.GetPos(ai.frame);
+			w.pos = EcoSiteFor(unit);
 		}
 	}
 	return w;
