@@ -1474,6 +1474,28 @@ float RoleValue(int role)
 	return v;
 }
 
+// Role TARGETS from what the enemy fields (apexearth 2026-08-23: "balance
+// the army based on our needs" -- siege wants range, soak wants HP, air
+// wants AA). BAR's counter mechanics, priced: AA tracks enemy air, riot
+// tracks enemy raiders, skirm/arty track enemy static, assault carries the
+// general line. A uniform baseline keeps a portfolio before contact.
+float RoleTarget(int role, float armyTarget)
+{
+	const float base = armyTarget / 6.f;   // maximum-entropy prior over combat roles
+	float counter = 0.f;
+	if (role == int(Unit::Role::AA.type))
+		counter = aiEnemyMgr.GetEnemyCost(RT::AIR)
+				* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH);
+	else if (role == int(Unit::Role::RIOT.type))
+		counter = Military::EnemyCostOf(Unit::Role::RAIDER.type);
+	else if ((role == int(Unit::Role::SKIRM.type))
+			|| (role == int(Unit::Role::ARTY.type)))
+		counter = aiEnemyMgr.GetEnemyCost(RT::STATIC) * 0.5f;
+	else if (role == int(Unit::Role::ASSAULT.type))
+		counter = Military::EnemyCostOf(Unit::Role::ASSAULT.type);
+	return base + counter;
+}
+
 float ArmyValue()
 {
 	float v = 0.f;
@@ -2236,11 +2258,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 					eFeedA *= mI / mP;
 				}
 			}
-			const float av = ArmyValue();
-			const float roleShare = (av > 1.f)
-					? (RoleValue(Catalog::gRole[d]) / av) : 0.f;
+			// This unit's role fills its own NEED gap; a saturated role's
+			// units price to the floor whatever their power-per-cost.
+			const float rTarget = RoleTarget(Catalog::gRole[d], ArmyTarget());
+			const float rGap = rTarget - RoleValue(Catalog::gRole[d]);
+			float roleW = (rTarget > 1.f) ? (rGap / rTarget) : 0.f;
+			if (roleW < 0.05f)
+				roleW = 0.05f;   // never exactly zero: portfolio floor
 			const float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
-					* (ppc / linePPC) * (1.f - roleShare)
+					* (ppc / linePPC) * roleW
 					/ (1.f + have * 0.05f) * eFeedA;
 			if (gainA <= 0.01f)
 				continue;

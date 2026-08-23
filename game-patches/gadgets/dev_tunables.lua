@@ -75,6 +75,7 @@ local NAMES = {
 	"apex_match_ratio",
 	"apex_army_fill_s",
 	"apex_rez_horizon",
+	"apex_aa_match",
 	"apex_chase_min_ratio",
 	"apex_comm_cloak_share",
 	"apex_con_outmassed",
