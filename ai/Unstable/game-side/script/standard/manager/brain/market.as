@@ -547,6 +547,15 @@ void NoteFarm(CCircuitUnit@ unit)
 	if (unit is null)
 		return;
 	const int d = int(unit.circuitDef.id);
+	// A finished FACTORY reserves its apron: three posts of open ground in
+	// front so units can get out (apexearth -- the walled-in vehicle lab).
+	if (!Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0)
+		&& Base::gAxisSet)
+	{
+		const AIFloat3 fp0 = unit.GetPos(ai.frame);
+		for (int ap = 1; ap <= 3; ++ap)
+			Base::ReserveSite(fp0 + Base::gFwd * (80.f * float(ap)));
+	}
 	if (Catalog::gMobile[d] || (Catalog::gBuildPower[d] <= 0.f)
 		|| (Catalog::gBuildsList[d].length() > 0))
 	{
@@ -1120,6 +1129,15 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		float techGain = 0.f;
 		if (prodCeil > ownCeil)
 			techGain = demand * pipe;
+		// A lab without follow-through is a statue: its price carries its
+		// first constructor, and its VALUE scales with how funded the army
+		// is -- an outgunned base defers tech exactly as much as it is
+		// outgunned (apexearth: "we starve our army production by starting
+		// a T2 lab too early... calculate the cost of making a lab's units
+		// prior to making it"). No timer anywhere.
+		const float aT = ArmyTarget();
+		const float funded = (aT > 1.f) ? (ArmyValue() / aT) : 1.f;
+		const float fundedMul = (funded > 1.f) ? 1.f : funded;
 		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f))
 			techGain = demand * pipe * (prodMob / ownMob - 1.f);
 		// Channel 3, the GANTRY case: a plant whose products dwarf anything
@@ -1141,8 +1159,23 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		if (techGain <= 0.f)
 			continue;
 		Want c;
-		ValueOf(d, techGain * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
+		ValueOf(d, techGain * fundedMul
+					* PipeLatencyMult(d, Catalog::gBuildPower[uid]),
 				0.f, Catalog::gBuildPower[uid], c);
+		// the follow-through bill: cheapest constructor this lab produces
+		{
+			float conBill = 0.f;
+			const array<int>@ pf = Catalog::gBuildsList[d];
+			for (uint pi2 = 0; pi2 < pf.length(); ++pi2) {
+				if (Catalog::gMobile[pf[pi2]] && Catalog::gBuilder[pf[pi2]]
+					&& ((conBill <= 0.f) || (Catalog::gCostM[pf[pi2]] < conBill)))
+					conBill = Catalog::gCostM[pf[pi2]];
+			}
+			if (conBill > 0.f) {
+				c.mCost += conBill;
+				c.value = c.gain / (c.mCost + c.tCost);
+			}
+		}
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_TECH;
