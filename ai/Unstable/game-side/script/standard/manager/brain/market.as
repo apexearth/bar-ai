@@ -1809,9 +1809,27 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 			if (Base::gAnchorSet && Base::gAxisSet) {
 				const AIFloat3 front = Base::gAnchor + Base::gFwd * 150.f;
 				const AIFloat3 rear = gFarmPos - Base::gFwd * (gFarmDepth + 150.f);
-				if (!ProtCovered(PROT_DEF, front, 450.f) && OnMap(front)) {
+				// The front line scales with the OBSERVED wave: reinforcing a
+				// doorstep fight one unit at a time lost 19k of army at 0.008
+				// K/D (ladder autopsy) -- standing power must meet the wave
+				// BEFORE it lands. Gap = seen massing minus turret power here.
+				float standing = 0.f;
+				for (uint sd = 0; sd < gProtUnit[PROT_DEF].length(); ++sd) {
+					if ((gProtUnit[PROT_DEF][sd] !is null)
+						&& (gProtPos[PROT_DEF][sd].distance2D(front) < 600.f))
+						standing += Catalog::gPower[gProtDefId[PROT_DEF][sd]];
+				}
+				const float wave = Military::FoeMobileMassing();
+				const float wavePower = wave / 12.f;   // metal->power, rough T1 rate
+				const float waveGap = wavePower - standing;
+				if (OnMap(front)
+					&& ((waveGap > 0.f) || !ProtCovered(PROT_DEF, front, 450.f)))
+				{
 					at = front;
-					gain = gAssetsM * rate * 2.f;
+					const float insure = gAssetsM * rate * 2.f;
+					const float meet = (waveGap > 0.f)
+							? (waveGap * 12.f / 300.f) : 0.f;   // amortized over a wave cycle
+					gain = (meet > insure) ? meet : insure;
 				} else if (!ProtCovered(PROT_DEF, rear, 450.f) && OnMap(rear)) {
 					at = rear;
 					gain = gAssetsM * rate;
