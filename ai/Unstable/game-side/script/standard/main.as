@@ -144,6 +144,7 @@ void AiUnitFinished(CCircuitUnit@ unit)
 	if (unit is null)
 		return;
 	Brain::NoteProduced(unit);
+	Market::NoteFinished(unit);
 	if ((int(unit.id) >= 0) && (int(unit.id) < int(gFinished.length())))
 		gFinished[int(unit.id)] = true;
 	// The defense zone follows the BUILT base: every finished rear structure
@@ -170,6 +171,7 @@ void AiUnitFinished(CCircuitUnit@ unit)
 // see Builder::SampleTaskHist/TakeHistFor in manager/builder/events.as.
 void AiUnitDestroyed(CCircuitUnit@ unit)
 {
+	Market::NoteDead(unit);
 	if (unit is null)
 		return;
 	// The PREVIOUS death's flag is cleared now, so this id can be reused

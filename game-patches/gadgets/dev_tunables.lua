@@ -48,6 +48,8 @@ local NAMES = {
 	"apex_plant_pipe",
 	"apex_plant_income_per",
 	"apex_store_horizon",
+	"apex_tech_pipe",
+	"apex_e_response",
 	"apex_chase_min_ratio",
 	"apex_comm_cloak_share",
 	"apex_con_outmassed",

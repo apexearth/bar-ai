@@ -1127,6 +1127,13 @@ const float TUNE_PLANT_INCOME_PER = 50.f;
 // STORE_HORIZON: seconds over which a storage's volume counts as captured
 // overflow (its gain = min(overflow, storeM/horizon)).
 const float TUNE_STORE_HORIZON = 60.f;
+// TECH_PIPE: discount on a tech plant's unlock demand (the adv-con pipeline
+// costs metal and time before any moho stands).
+const float TUNE_TECH_PIPE = 0.5f;
+// E_RESPONSE: seconds for the market's own energy supply to answer a
+// scarcity spike (~one solar build); long builds earn the floor, not the
+// spike.
+const float TUNE_E_RESPONSE = 45.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone
