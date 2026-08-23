@@ -90,6 +90,8 @@ local NAMES = {
 	"apex_gift_army",
 	"apex_line_pull",
 	"apex_nano_sink_bank",
+	"apex_squad_m",
+	"apex_intel_rate",
 	"apex_reclaim_age_s",
 	"apex_front_n",
 	"apex_eco_reach_frac",

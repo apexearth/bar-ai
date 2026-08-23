@@ -1,5 +1,32 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: the temporal-consistency law gets shared primitives; assists can no longer feed a starved site
+
+apexearth's 10 m/s arithmetic (com + 3 cons on a 5-minute T2 lab while 2
+safe mexes sat open) exposed two pricing bugs, fixed and A/B'd on seed 5:
+
+- **ProposeAssist ignored the metal feed**: gain was the assister's full
+  drain at mCost=1 (value in the hundreds) regardless of whether the
+  economy had any unspent flow. Now capped by `FreeMetalFlow()` (unspent
+  income + bank trickle) -- the metal twin of its existing eFeed. Result:
+  assist pile-on gone, mexes 11 -> 36 on the same seed, production 2.3x.
+- **Displacement charges feed-competitors only**: an intermediate version
+  also charged open T1 claims (via an OpenSpotStream) and priced T2 out of
+  a whole 25-minute game -- double-counting, since 50m claims proceed in
+  parallel on the hands FreeMetalFlow frees. Final form: `UpDemand x
+  feedSec` (620m mohos genuinely compete for feed; free claims do not).
+  Seed 5 final: mex 36, prod 38.1k, techStart 15.4m, mT2 14,640 (vs
+  baseline 11 / 16.3k / 12.1m / 4,040).
+
+The law and its review checklist are now written into the value-paradigm
+skill: hands conflicts are priced where hands are priced (FreeMetalFlow),
+feed conflicts where feed is priced (displacement); charging one conflict
+in both places produces the opposite failure. Also this session: user
+worth-mod table (UnitWorthMod: armsnipe 1.6, armsptk 0.6), amphib 0.5x on
+IsWaterAVoid maps (gAmphib), mobile radar/jammer repriced per apex_squad_m
+(2000) at apex_intel_rate (0.1/min) -- support units still unverified in a
+game (their T2 line was idle; see the line-floor ISSUES entry).
+
 ## 2026-08-23: builder wants draw proportionally; the eco defence gate classifies by def; death walks refused
 
 Three linked changes, each audit- or log-verified same day:

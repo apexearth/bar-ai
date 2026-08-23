@@ -270,6 +270,13 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 				// its own slowness narrowed the race (10.06 vs 12.99,
 				// measured); pricing what it displaces ends it. A moho's
 				// own displacement is trivial, a fusion's is decisive.
+				// Charged for FEED COMPETITORS only: streams whose own
+				// builds need this income (mohos, 620m each). Open T1
+				// claims are ~50m and happen in parallel on freed hands --
+				// charging them here double-counted the same income and
+				// priced T2 out of a whole 25-minute game (A/B, seed 5:
+				// mex 30 and techStart=-1). The pile-on itself is what
+				// FreeMetalFlow kills, on the assist side.
 				displacedM = UpDemand() * feedSec
 						* ((Catalog::gExtractsM[defId] > 0.f) ? 0.f : 1.f);
 			}
@@ -1515,6 +1522,25 @@ bool NearSpot(const AIFloat3& in p)
 	return NearSpotR(p, 100.f);
 }
 
+//------------------------------------------------------------------------------
+// THE TEMPORAL-CONSISTENCY LAW's shared primitives (apexearth's 10 m/s
+// arithmetic: com + 3 cons feeding a T2 lab while 2 safe mexes sat open).
+// Every proposer that claims "my BP converts to progress" buys from
+// FreeMetalFlow; every feed-bound build is charged what it postpones via
+// OpenSpotStream + UpDemand. New pricing goes through these, not around.
+//------------------------------------------------------------------------------
+
+// Metal flow the economy has genuinely unspent: income above pull, plus a
+// bank trickle. This is ALL the throughput another pair of hands can add
+// anywhere -- marginal BP at a fed site is worth zero.
+float FreeMetalFlow()
+{
+	const float free = (aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull)
+			+ aiEconomyMgr.metal.current / 60.f;
+	return (free > 0.f) ? free : 0.f;
+}
+
+
 // Metal spots are sacred ground: an UNCLAIMED spot is legal terrain to the
 // engine's site search, so a factory landed smack on one (watched). Intent
 // positions step backward (then sideways) until the footprint clears.
@@ -2722,6 +2748,19 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 			eFeed = eInc / ePull;
 	}
 	float myDrain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
+	// THE METAL TWIN of eFeed above, and the missing half of the temporal
+	// law: an assist delivers at most the flow the economy has unspent.
+	// gain=myDrain at mCost=1 bid in the hundreds at a fed site, which is
+	// how com + 3 cons all fed a 5-minute T2 lab while 2 safe mexes sat
+	// open (apexearth's 10 m/s arithmetic). At zero free flow the want
+	// dies and the mex claims win the room.
+	{
+		const float mFree = FreeMetalFlow();
+		if (mFree < myDrain)
+			myDrain = mFree;
+	}
+	if (myDrain <= 0.05f)
+		return w;
 	// Against a factory boss the bid is bounded by what the line actually
 	// leaves unserved -- and floored at a trickle so SOME help arrives.
 	if ((boss !is null) && !boss.circuitDef.IsMobile()) {
@@ -3509,9 +3548,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			&& (Catalog::gRadar[d] || Catalog::gJammer[d]))
 		{
 			const int haveS = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
-			const float squads = ArmyValue() / 3000.f;
+			// One radar + one jammer per squad's worth of army (apexearth:
+			// "those should have boosted priority... support squads which
+			// are ~2k metal value or higher"). A pair's worth is a fraction
+			// of the squad value it serves per minute -- which prices them
+			// just behind constructors, scaling with the army, no caps.
+			const float squadM = ai.GetTunable("apex_squad_m", TUNE_SQUAD_M);
+			const float squads = ArmyValue() / ((squadM > 1.f) ? squadM : 2000.f);
 			if (float(haveS) < squads) {
-				const float gainS = (squads - float(haveS)) * 30.f / 60.f * roleMul;
+				const float gainS = (squads - float(haveS)) * squadM
+						* ai.GetTunable("apex_intel_rate", TUNE_INTEL_RATE)
+						/ 60.f * roleMul;
 				const float vS = gainS / Catalog::gCostM[d];
 				candDef.insertLast(d);
 				candV.insertLast(vS);
@@ -3567,6 +3614,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
 				continue;
 			float ppc = Catalog::gPower[d] / Catalog::gCostM[d];
+			// FIELD REPORTS OVERRIDE STATS where the stats cannot see the
+			// mechanism (projectile speed, accuracy): the user table in
+			// tunables.as. And amphibious capability is dead weight on a
+			// dry map -- the price paid for swimming buys nothing here.
+			ppc *= UnitWorthMod(Catalog::Def(d).GetName());
+			if (Catalog::gAmphib[d] && aiTerrainMgr.IsWaterAVoid())
+				ppc *= 0.5f;
 			// The rear specialist buys quality: weight by unit size so the
 			// draw lands on the biggest thing the lab offers, not spam that
 			// arrives late or never.

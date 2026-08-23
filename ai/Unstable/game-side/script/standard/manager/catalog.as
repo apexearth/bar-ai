@@ -32,6 +32,7 @@ array<bool> gBuilder;
 array<bool> gWind;
 array<bool> gNeedGeo;   // must stand on a geo vent (engine UnitDef flag)
 array<bool> gFloater;   // stands on water
+array<bool> gAmphib;    // moves through water and land both
 array<bool> gSub;       // submerged (underwater structures dodge the floater test)
 array<int> gAreaCells;  // footprint in 16-elmo build cells
 array<float> gBuildDist; // build/assist reach, elmos
@@ -69,7 +70,7 @@ void Init()
 	gUpkeepM.resize(n); gUpkeepE.resize(n); gMakeM.resize(n); gMakeE.resize(n);
 	gStoreM.resize(n); gStoreE.resize(n); gConvCapacity.resize(n); gConvRatio.resize(n);
 	gMobile.resize(n); gFlyer.resize(n); gBuilder.resize(n); gWind.resize(n);
-	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gAreaCells.resize(n);
+	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gAreaCells.resize(n); gAmphib.resize(n);
 	gBuildDist.resize(n);
 	gRadar.resize(n); gJammer.resize(n); gRadarR.resize(n); gJamR.resize(n);
 	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n); gPower.resize(n);
@@ -104,6 +105,7 @@ void Init()
 		gWind[i]         = cdef.IsWind();
 		gNeedGeo[i]      = cdef.IsNeedGeo();
 		gFloater[i]      = cdef.IsFloater();
+		gAmphib[i]       = cdef.IsAmphibious();
 		gSub[i]          = cdef.IsSubmarine();
 		gAreaCells[i]    = cdef.GetAreaCells();
 		gBuildDist[i]    = cdef.GetBuildDistance();

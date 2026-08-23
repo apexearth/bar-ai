@@ -116,3 +116,33 @@ gates that jointly imply a value.
 Design record: docs/20-brain-overhaul.md and the session design page
 ("The Brain Rebuild" artifact). Related memories: economy-over-static-numbers,
 build-power-closed-loop, brain-overhaul-mandate.
+
+## The temporal-consistency law (MANDATORY on every pricing change)
+
+Metal feeds the lathe. When income is the binding constraint, marginal build
+power at a fed site is worth ZERO and marginal income is worth everything --
+including to the very build it delays. apexearth's canonical arithmetic
+(2026-08-23): at 10 m/s, com + 3 cons feeding a T2 lab take 5 minutes;
+claiming 2 open safe mexes first makes it 3; growing to 35 m/s makes it 75
+seconds AND funds army, defence, and the T2 units after.
+
+The law has shared primitives in market.as -- new pricing goes THROUGH
+them, never around:
+
+- `FreeMetalFlow()` — unspent income + bank trickle. Any want whose gain is
+  "my BP moves metal" (assist, nano, guard-shaped things) caps its gain here.
+- `UpDemand()` — the FEED-COMPETING streams a feed-bound build postpones
+  (builds that need the same income, e.g. 620m mohos). Charge is
+  `UpDemand × feedSec`. Do NOT charge near-free claims (50m mexes) here --
+  they proceed in parallel on freed hands, and charging them double-counts
+  the income FreeMetalFlow already frees (measured: T2 priced out of an
+  entire 25-minute game).
+- The build's own duration is floored by `(costM − bank/2)/income` in
+  `ValueOf`.
+
+Review checklist for ANY new/changed gain: (1) does it claim throughput the
+economy hasn't got? cap by FreeMetalFlow. (2) does it occupy income for a
+long build? charge displacement. (3) is it a one-shot? amortize over the
+horizon, never price as a stream. Violations of this law have each cost a
+measured failure: nano-at-face-value, fusion-before-mohos, converter spikes,
+and the assist pile-on.

@@ -1,5 +1,28 @@
 # Open issues — what is wrong with this AI right now
 
+## The line floor structurally blocks expensive factory units
+
+A/B measured (seed 5, Comet): with apex_line_floor=0.25 the fresh T2 lab
+produced 1 unit in 5.5 minutes; same seed with the floor off it produced a
+real stream (6 armack, 6 fido, 3 snipe...). Mechanism: the floor compares
+per-metal value (gain/cost) against the economy-wide executed EMA, and a
+big unit whose gain does not scale with its cost always loses per-metal
+races -- the floor meant to stop saturated con spam silently idles every
+expensive line. Fix direction: floor on the line's value RATE against its
+own alternatives, or exempt units above the EMA's cost scale. Likely the
+same mechanism behind the standing "T2 cons barely exist" entry.
+
+## ValueOf has no risk term -- danger is refusal gates, not price
+
+Danger enters the market only as binary refusals on specific proposers
+(DeathWalk/PastFront on mex+mexup, EcoQuiet reach, commander exposure).
+Energy sites, nano slots, assist walks, reclaim targets are not checked at
+all, and no want anywhere is PRICED by expected loss -- a 90%-safe and a
+60%-safe site bid identically if both pass the gates. The honest fix is an
+insurance term in ValueOf (gain x survival odds along the walk) so risk
+degrades value continuously. Raised while explaining the algorithm to
+apexearth 2026-08-23 ("does that algorithm include danger/threat?").
+
 ## The protect market never buys T1.5 defence -- LLT churn only
 
 apexearth, watching (2026-08-23): "we also aren't making any of the T1.5

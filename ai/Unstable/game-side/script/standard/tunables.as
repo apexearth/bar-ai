@@ -1205,6 +1205,24 @@ const float TUNE_LINE_PULL = 35.f;
 // NANO_SINK_BANK: bank fraction of storage above which "not empty on metal"
 // holds and live build sites compete for nano placement by their crew drain.
 const float TUNE_NANO_SINK_BANK = 0.1f;
+// SQUAD_M: metal value of fielded army that deserves one mobile radar and
+// one mobile jammer in support (apexearth: "support squads which are ~2k
+// metal value or higher").
+const float TUNE_SQUAD_M = 2000.f;
+// INTEL_RATE: fraction of a squad's value per minute that its radar/jammer
+// pair is worth -- what prices support "just behind T2 cons".
+const float TUNE_INTEL_RATE = 0.1f;
+
+// USER FIELD-REPORT MULTIPLIERS on computed unit worth (apexearth: the
+// stats cannot see projectile speed or accuracy -- "in terms of unit vs
+// unit damage, snipers are much better than recluse spiders"). Applied to
+// power-per-cost in the army market. Edit freely; 1.0 = trust the stats.
+float UnitWorthMod(const string &in name)
+{
+	if (name == "armsnipe") return 1.6f;   // Sharpshooter: hitscan-grade accuracy
+	if (name == "armsptk") return 0.6f;    // Recluse: slow arcing rockets miss
+	return 1.f;
+}
 // GIFT_ARMY: master switch for back-to-front army gifting.
 const float TUNE_GIFT_ARMY = 1.f;
 // FRONT_N: how many closest-to-enemy allies count as the front line and
