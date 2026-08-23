@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..dce0b56 100644
+index aeea933..8e01b4e 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,18 @@
@@ -121,7 +121,7 @@ index aeea933..dce0b56 100644
  	lastFrame = frame;
  	if (isResigned) {
  		Release(RELEASE_RESIGN);
-@@ -850,11 +897,107 @@ int CCircuitAI::Update(int frame)
+@@ -850,11 +897,110 @@ int CCircuitAI::Update(int frame)
  	}
  #endif
  
@@ -180,6 +180,9 @@ index aeea933..dce0b56 100644
 +			std::chrono::steady_clock::now() - perfT0).count();
 +	perfFrameUs += perfUs;
 +	perfFrameMaxUs = std::max(perfFrameMaxUs, perfUs);
++	if (perfUs > 30000) {  // name any spike instantly: aligns (or not) with watched hitches
++		LOG("apex: perf SPIKE frame=%d ms=%.1f", frame, perfUs / 1000.f);
++	}
 +	++perfFrameCalls;
 +	if (frame >= perfFrameNextLog) {
 +		perfFrameNextLog = frame + 1800;   // one game-minute at 30 fps
@@ -229,7 +232,7 @@ index aeea933..dce0b56 100644
  #ifdef DEBUG_VIS
  	const char cmdBreak[]   = "~break";
  	const char cmdReload[]  = "~reload";
-@@ -1147,6 +1290,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1147,6 +1293,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int weaponId, AIFloat3 dir)
  {
  	unit->SetDamagedFrame(lastFrame);
@@ -237,7 +240,7 @@ index aeea933..dce0b56 100644
  	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
  
  	if (IsValidWeaponDefId(weaponId)) {
-@@ -1166,14 +1310,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+@@ -1166,14 +1313,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
  
  int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -277,7 +280,7 @@ index aeea933..dce0b56 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1288,6 +1453,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+@@ -1288,6 +1456,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
  
  int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
  {
@@ -285,7 +288,7 @@ index aeea933..dce0b56 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1485,7 +1651,811 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1654,811 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);

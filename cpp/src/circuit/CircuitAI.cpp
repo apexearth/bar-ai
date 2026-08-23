@@ -952,6 +952,9 @@ int CCircuitAI::Update(int frame)
 			std::chrono::steady_clock::now() - perfT0).count();
 	perfFrameUs += perfUs;
 	perfFrameMaxUs = std::max(perfFrameMaxUs, perfUs);
+	if (perfUs > 30000) {  // name any spike instantly: aligns (or not) with watched hitches
+		LOG("apex: perf SPIKE frame=%d ms=%.1f", frame, perfUs / 1000.f);
+	}
 	++perfFrameCalls;
 	if (frame >= perfFrameNextLog) {
 		perfFrameNextLog = frame + 1800;   // one game-minute at 30 fps

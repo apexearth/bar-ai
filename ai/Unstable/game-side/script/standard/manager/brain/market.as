@@ -1173,9 +1173,16 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 					prodMax = Catalog::gCostM[prods[p3]];
 			}
 			if (prodMax > 2.f * OwnedProdCostCeil()) {
+				// The gantry's value is PENETRATION: where 100 T1 units fail
+				// against fortification, one T3 succeeds (apexearth). Its
+				// gain scales with the enemy's standing static mass, plus
+				// the overflow sink.
+				const float porc = aiEnemyMgr.GetEnemyCost(RT::STATIC);
+				const float pen = (porc / 300.f) * pipe;
 				const float sink = OverflowM() * pipe;
-				if (sink > techGain)
-					techGain = sink;
+				const float g3 = (pen > sink) ? pen : sink;
+				if (g3 > techGain)
+					techGain = g3;
 			}
 		}
 		if (techGain <= 0.f)
