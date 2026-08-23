@@ -256,13 +256,23 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 	// build's real duration is floored by what income + the bank can pay:
 	// this is what re-orders fusion AFTER the mexups, with no sequencing
 	// rule anywhere -- the upgrades finish fast AND raise the feed.
+	float displacedM = 0.f;
 	{
 		const float mInc = aiEconomyMgr.metal.income;
 		const float mBank = aiEconomyMgr.metal.current;
 		if (mInc > 0.1f) {
 			const float feedSec = (Catalog::gCostM[defId] - mBank * 0.5f) / mInc;
-			if (feedSec > buildSec)
+			if (feedSec > buildSec) {
 				buildSec = feedSec;
+				// A feed-bound build eats the whole income for its duration
+				// -- so it CHARGES the upgrade stream it postpones. This is
+				// the second half of the fusion-before-mohos math: pricing
+				// its own slowness narrowed the race (10.06 vs 12.99,
+				// measured); pricing what it displaces ends it. A moho's
+				// own displacement is trivial, a fusion's is decisive.
+				displacedM = UpDemand() * feedSec
+						* ((Catalog::gExtractsM[defId] > 0.f) ? 0.f : 1.f);
+			}
 		}
 	}
 	w.gain = gain;
@@ -277,7 +287,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 			+ Catalog::gCostE[defId] * EPriceCostAt(buildSec)
 			+ float(Catalog::gAreaCells[defId])
 				* ai.GetTunable("apex_space_m", TUNE_SPACE_M);
-	w.tCost = (walkSec + buildSec) * Wage();
+	w.tCost = (walkSec + buildSec) * Wage() + displacedM;
 	// The FLOW bill (apexearth 2026-08-23): this build's E drain is a rate,
 	// costE/buildSec, and any part of it that income + the bank cannot fund
 	// across the build throttles EVERY lathe (pull 300 on income 50 = 1/6th
@@ -1462,14 +1472,42 @@ void CacheSpots()
 		gAllSpots.insertLast(sp);
 	}
 }
-bool NearSpot(const AIFloat3& in p)
+bool NearSpotR(const AIFloat3& in p, float r)
 {
 	CacheSpots();
 	for (uint i = 0; i < gAllSpots.length(); ++i) {
-		if (p.distance2D(gAllSpots[i]) < 100.f)
+		if (p.distance2D(gAllSpots[i]) < r)
 			return true;
 	}
 	return false;
+}
+
+bool NearSpot(const AIFloat3& in p)
+{
+	return NearSpotR(p, 100.f);
+}
+
+// Metal spots are sacred ground: an UNCLAIMED spot is legal terrain to the
+// engine's site search, so a factory landed smack on one (watched). Intent
+// positions step backward (then sideways) until the footprint clears.
+AIFloat3 ClearOfSpots(const AIFloat3& in pos, float clear)
+{
+	if (!NearSpotR(pos, clear))
+		return pos;
+	for (int step = 1; step <= 8; ++step) {
+		if (Base::gAxisSet) {
+			AIFloat3 b = pos - Base::gFwd * (96.f * float(step));
+			if (OnMap(b) && !NearSpotR(b, clear))
+				return b;
+			AIFloat3 l = pos + Base::gAcross * (96.f * float(step));
+			if (OnMap(l) && !NearSpotR(l, clear))
+				return l;
+			AIFloat3 rr = pos - Base::gAcross * (96.f * float(step));
+			if (OnMap(rr) && !NearSpotR(rr, clear))
+				return rr;
+		}
+	}
+	return pos;
 }
 
 AIFloat3 FarmSlot(int defId)
@@ -2861,6 +2899,27 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			if (fFlies)
 				continue;   // air labs are the successors, never the retired
 			bool succeeded = false;
+			// A strictly deeper-reaching plant, standing OR under
+			// construction, retires this one (apexearth: "reclaiming the
+			// T1 lab while building the T2 lab").
+			for (uint gi2 = 0; gi2 < Factory::gFacUnits.length() && !succeeded; ++gi2) {
+				CCircuitUnit@ g3 = Factory::gFacUnits[gi2];
+				if ((g3 is null) || (g3 is f))
+					continue;
+				float g3Reach = 0.f;
+				const array<int>@ g3p = Catalog::gBuildsList[int(g3.circuitDef.id)];
+				for (uint q3 = 0; q3 < g3p.length(); ++q3) {
+					if (!Catalog::gMobile[g3p[q3]] || !Catalog::gBuilder[g3p[q3]])
+						continue;
+					const array<int>@ g3b = Catalog::gBuildsList[g3p[q3]];
+					for (uint r3 = 0; r3 < g3b.length(); ++r3) {
+						if (Catalog::gExtractsM[g3b[r3]] > g3Reach)
+							g3Reach = Catalog::gExtractsM[g3b[r3]];
+					}
+				}
+				if (g3Reach > fReach)
+					succeeded = true;
+			}
 			for (uint gi = 0; gi < Factory::gFacUnits.length() && !succeeded; ++gi) {
 				CCircuitUnit@ g2 = Factory::gFacUnits[gi];
 				if ((g2 is null) || (g2 is f))
@@ -3088,7 +3147,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if (jt !is null)
 			return jt;
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, ClearOfSpots(w.pos, 180.f), 256.f,
+				SQUARE_SIZE * 16.f);
 	}
 	if (w.kind == WK_PROTECT) {
 		const int bt = (w.spotId == PROT_RADAR) ? int(Task::BuildType::RADAR)
@@ -3186,6 +3246,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			if (jt !is null)
 				return jt;
 		}
+		if (Catalog::gCostM[int(w.def.id)] > 500.f)
+			w.pos = ClearOfSpots(w.pos, 150.f);
 		return Requests::Take(unit, w.def, Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f,
 				crtd, par);
@@ -3206,7 +3268,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if (jt !is null)
 			return jt;
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, ClearOfSpots(w.pos, 180.f), 256.f,
+				SQUARE_SIZE * 16.f);
 	}
 	return null;
 }
