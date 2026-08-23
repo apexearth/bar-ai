@@ -1181,3 +1181,23 @@ CBMexTask), CanDefReach product-feasibility for plants (armsy on a land
 map), value-based mex def choice (armamex nomination), FactoryCAI's x5
 SHIFT multiplier (replace=true), pend reconcile via the finished event
 (CountQueued lags ~45s at bench speed).
+
+## 2026-08-23 -- The ladder campaign (solo session): easy BARb, from 0-4 to first win
+
+Baseline after the day's watch-driven fixes: 0-4 vs BARb:stable:easy with
+two 12-minute deaths. Three measured root causes, each fixed and re-run:
+(1) con claim gain lacked its closed loop -- 37 cons chasing 13 spots, 3
+army units, dead by 12m; claim gain now divides by claimers per open spot.
+(2) argmax production turned a 10% con edge into 29 cons/0 army (the
+vehicle DOA) -- production is now a value-weighted proportional draw, the
+old Brain's roulette lesson reapplied; corroach-class crawling bombs
+(selfd countdown 0) joined the kamikaze exclusion via a new def binding.
+(3) reinforcing the doorstep one unit at a time lost 19k of army at 0.008
+K/D -- the front perimeter now scales with OBSERVED enemy massing (standing
+turret power meets the wave before it lands). Result: 1-1 with 4 draws --
+the market's first win against any BARb -- tagged `market-first-win`; eco
+now out-produces easy 2.5:1 (fight1v1 across the set). Open: army trades
+still 0.43 vs 1.9 K/D and they out-grind our statics 38k:7k (easy's arty
+outranges the LLT line); massing meet/hold dials nudged (1.3/240s) without
+a clear signal at small samples. A 10-game baseline is recorded in
+tournaments/ for the next session's comparisons.

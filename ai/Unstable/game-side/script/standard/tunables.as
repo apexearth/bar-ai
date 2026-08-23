@@ -539,11 +539,11 @@ const float TUNE_MASS_COMMIT_FRAC = 0.5f;
 //   of standing army.
 const float TUNE_MASS_FLOOR = 5.f;
 // manager/military/massing.as [seconds] -- Bound the hold.
-const float TUNE_MASS_HOLD_SECS = 120.f;
+const float TUNE_MASS_HOLD_SECS = 240.f;  // 120 expired into under-strength commits ('committing at 29'); patient pools trade better
 // manager/military/massing.as [ratio] -- The massing floor is also bounded
 //   below by the biggest enemy group we can see, times this -- a pool that
 //   cannot meet it does not go.
-const float TUNE_MASS_MEET_FRAC = 1.f;
+const float TUNE_MASS_MEET_FRAC = 1.3f;   // meet the biggest seen group with EDGE: 1.0 sent even fights that lost (K/D 0.43, easy ladder)
 // manager/military/massing.as [ratio] -- Feeding guard: while enemy mobile
 //   mass exceeds ours by this factor (and no local edge), the pool holds
 //   instead of trickling into them.
