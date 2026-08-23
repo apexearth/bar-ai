@@ -1225,3 +1225,12 @@ Profile: eco 1.56:1 in our favor, static-grind war EVEN at 82k:74k (the
 shields + range-vs-arty fixes measurably landed), mobile army K/D 0.315
 carrying every loss. The next session's military work is judged against
 exactly this anchor: tournaments/ 20-game set, tag market-v1-complete.
+
+## 2026-08-23 -- Escort-fix re-anchor: 5-11, K/D 0.36; the band is robust
+
+20 more games with the 45s-walk escort gate: 5-11 (+4 draws) vs 4-12,
+K/D 0.315 -> 0.362 -- mild positive drift, CIs overlap. Across 40 anchored
+games the army-trade signature is stable at K/D ~0.32-0.36; escorts were a
+contributor, not the core. All solo-safe levers are now exhausted; per the
+harness discipline (tournaments confirm identified mechanisms, they do not
+go fishing), further military changes wait for the design session.
