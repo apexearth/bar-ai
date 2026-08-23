@@ -26,16 +26,16 @@ const int ANCHOR_DEADLINE = 3 * MINUTE;
 // different pitches still leave their gaps in the same places and line up into
 // an actual corridor. The lane at lateral 0 is the axis itself.
 //
-// BUILD_CELL is the invariant every band pitch must satisfy: CorrectPosition
-// truncates a build position to a multiple of SQUARE_SIZE * 2, and
-// FindBuildSiteByMask derives its search corner the same way, so a pitch that
-// is not a whole multiple of it truncates alternately down and up and
-// neighbours meant to touch end up a build square apart.
+// BUILD_CELL is the invariant every band pitch must satisfy: the engine places
+// building centers on a 16-elmo lattice (Pos2BuildPos), so a pitch that is not
+// a whole multiple of it rounds alternately down and up and neighbours meant to
+// touch end up a build square apart. (CorrectPosition is only a map-bounds
+// clamp; it never snaps.)
 const float BUILD_CELL = 16.f;    // SQUARE_SIZE * 2; the engine's build square
 // The site-search reach and band slack below, and nothing else. Band pitches are
 // per band and live in EnsureCols.
 const float CELL       = 72.f;
-const float GRID_CELL  = 8.f;     // SQUARE_SIZE; the pitch published to C++
+const float GRID_CELL  = 16.f;    // the engine's build square; the pitch published to C++
 const float LANE_PITCH = 720.f;   // spacing between walkways, in world offset
 const float LANE_HALF  = 72.f;    // half-width of a walkway
 // Lateral slack on Inside(). Kept separate from LANE_PITCH, which used to also

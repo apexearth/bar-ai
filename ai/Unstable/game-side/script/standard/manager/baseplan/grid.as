@@ -71,7 +71,7 @@ void EnsureCols()
 	// the only pitch on which two of them touch. HEAVY is deliberately looser
 	// than the reactor's own footprint; the site search closes any gap smaller
 	// than the pitch by taking the nearest position the blocking map allows.
-	BAND_BACK = {216.f, 576.f, 1440.f};
+	BAND_BACK = {224.f, 576.f, 1440.f};
 	BAND_ROW  = { 48.f,  64.f,  144.f};
 	BAND_COL  = { 48.f,  64.f,  144.f};
 	BAND_HALF = { 32.f,  40.f,   64.f};

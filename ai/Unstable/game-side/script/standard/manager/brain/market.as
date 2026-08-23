@@ -373,6 +373,7 @@ void NoteFinished(CCircuitUnit@ unit)
 	if (i >= 0)
 		gLExtract[i] = Catalog::gExtractsM[defId];
 }
+// Fallback anchor: the first finished nano, only if no plan latched first.
 void NoteFarm(CCircuitUnit@ unit)
 {
 	if (gFarmSet || (unit is null))
@@ -817,14 +818,48 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 	return w;
 }
 
-// The nano FARM: the first finished nano anchors it; every later nano and
-// every eco static sites there, so builds land inside farm lathe range and
-// the economy compounds (apexearth 2026-08-23: "pack many of them in
-// rectangles... the eco will build exponentially faster").
+// The nano FARM -- a PLANNED spot, not wherever the first nano landed
+// (apexearth 2026-08-23: "we should ahead of time know generally some
+// really good spots to build the economy... as far away from any active
+// threat as we can"). The base frame's axis points at the front, so the
+// farm sits BEHIND the anchor; the frame follows the frontline senses, so
+// "behind" is already "away from influence".
 AIFloat3 gFarmPos;
 bool gFarmSet = false;
+
+// The best available nano's reach -- the coverage circle everything in the
+// farm must fit inside.
+float gNanoRange = -1.f;
+float NanoRange()
+{
+	if (gNanoRange > 0.f)
+		return gNanoRange;
+	float best = 0.f;
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		if (!Catalog::gAvailable[i] || Catalog::gMobile[i])
+			continue;
+		if ((Catalog::gBuildPower[i] <= 0.f) || (Catalog::gBuildsList[i].length() > 0))
+			continue;
+		if (Catalog::gBuildDist[i] > best)
+			best = Catalog::gBuildDist[i];
+	}
+	gNanoRange = (best > 64.f) ? best : 400.f;
+	return gNanoRange;
+}
+
 AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 {
+	if (!gFarmSet && Base::gAnchorSet && Base::gAxisSet) {
+		AIFloat3 spot = Base::gAnchor
+				- Base::gFwd * ai.GetTunable("apex_farm_back", TUNE_FARM_BACK);
+		if (OnMap(spot)) {
+			gFarmPos = spot;
+			gFarmSet = true;
+			AiLog("apex: nano farm planned at "
+				+ formatFloat(spot.x, "", 0, 0) + "," + formatFloat(spot.z, "", 0, 0)
+				+ " (rear of base axis, r=" + formatFloat(NanoRange(), "", 0, 0) + ")");
+		}
+	}
 	return gFarmSet ? gFarmPos : unit.GetPos(ai.frame);
 }
 
@@ -938,8 +973,10 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
 	}
 	if (w.kind == WK_NANO) {
+		// Tighter than the coverage circle so the reach circles overlap and
+		// the farm tiles instead of scattering.
 		return Requests::Take(unit, w.def, Task::BuildType::NANO,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, w.pos, NanoRange() * 0.6f, SQUARE_SIZE * 16.f);
 	}
 	if (w.kind == WK_GEO) {
 		return aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::GEO,
@@ -947,15 +984,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	}
 	if (w.kind == WK_ENERGY) {
 		return Requests::Take(unit, w.def, Task::BuildType::ENERGY,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, w.pos, NanoRange(), SQUARE_SIZE * 32.f);
 	}
 	if (w.kind == WK_CONVERT) {
 		return Requests::Take(unit, w.def, Task::BuildType::CONVERT,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, w.pos, NanoRange(), SQUARE_SIZE * 32.f);
 	}
 	if (w.kind == WK_STORE) {
 		return Requests::Take(unit, w.def, Task::BuildType::STORE,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, w.pos, NanoRange(), SQUARE_SIZE * 32.f);
 	}
 	if (w.kind == WK_PLANT) {
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
