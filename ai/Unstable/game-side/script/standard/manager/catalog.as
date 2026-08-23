@@ -145,6 +145,25 @@ void Init()
 		}
 	}
 
+	// RETREAT SCALES WITH VALUE (deaths.py over the 40-game anchor: 93% of
+	// mobile-combat metal died RETREATING -- the stock 0.6 threshold makes
+	// every unit flee at 60% hp and die shot in the back). A cheap unit's
+	// last half-life is worth more spent shooting than fleeing; an expensive
+	// unit preserves. One derived curve, commander and builders untouched.
+	for (Id rd = 1; rd <= gDefCount; ++rd) {
+		const int ri = int(rd);
+		if (!gMobile[ri] || gBuilder[ri] || (gPower[ri] <= 1.f) || gKamikaze[ri])
+			continue;
+		CCircuitDef@ rdef = ai.GetCircuitDef(rd);
+		if (rdef is null)
+			continue;
+		float rt = 0.08f + gCostM[ri]
+				/ ai.GetTunable("apex_retreat_cost_scale", TUNE_RETREAT_COST_SCALE);
+		if (rt > 0.5f)
+			rt = 0.5f;
+		rdef.SetRetreat(rt);
+	}
+
 	int nAvail = 0;
 	for (int i = 1; i <= gDefCount; ++i) {
 		if (gAvailable[i])

@@ -1212,6 +1212,10 @@ const float TUNE_ARMY_FILL_S = 180.f;   // the 120 compensation was fighting the
 const float TUNE_REZ_HORIZON = 120.f;
 // AA_MATCH: our AA value per metal of enemy air seen.
 const float TUNE_AA_MATCH = 0.7f;
+// RETREAT_COST_SCALE: metal at which a unit's retreat threshold reaches
+// ~+0.33 over the 0.08 floor (retreat = 0.08 + cost/this, cap 0.5) -- cheap
+// units fight to the end, expensive ones preserve.
+const float TUNE_RETREAT_COST_SCALE = 3000.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone
