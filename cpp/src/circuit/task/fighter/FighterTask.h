@@ -69,6 +69,7 @@ protected:
 	// Sidestep incoming fire; called from OnUnitDamaged, per-unit cooldown.
 	void DodgeFire(CCircuitUnit* unit, CEnemyInfo* attacker);
 	void CounterBattery(CCircuitUnit* unit, CEnemyInfo* attacker);
+	bool KeepRange(CCircuitUnit* unit, CEnemyInfo* attacker);
 
 public:
 

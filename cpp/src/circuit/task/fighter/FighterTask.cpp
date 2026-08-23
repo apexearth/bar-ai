@@ -224,7 +224,9 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 
 	// Before any retreat question: a unit that stays in the fight should not
 	// stand in the stream of fire that is hitting it.
-	DodgeFire(unit, attacker);
+	if (!KeepRange(unit, attacker)) {
+		DodgeFire(unit, attacker);
+	}
 	CounterBattery(unit, attacker);
 
 	// Committed push: do not peel off. apexearth: "Need to ensure the units
@@ -360,6 +362,59 @@ void IFighterTask::DodgeFire(CCircuitUnit* unit, CEnemyInfo* attacker)
 	IntentPing(dst, "DODGE");
 }
 
+// Range is money: a longer-ranged unit lets a shorter one close at its
+// peril only if it BACKS UP. Hold ~95% of our own reach (apexearth's
+// standing doctrine) whenever we outrange the shooter and it is inside
+// that line -- a radial back-step with the dodge's lateral half folded in.
+// Returns true when it moved (the dodge then skips this event).
+bool IFighterTask::KeepRange(CCircuitUnit* unit, CEnemyInfo* attacker)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	if (circuit->GetTunable("apex_standoff", 1.f) <= 0.f) {
+		return false;
+	}
+	if ((attacker == nullptr) || (attacker->GetCircuitDef() == nullptr)) {
+		return false;
+	}
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	if (!cdef->IsMobile() || cdef->IsAbleToFly()) {
+		return false;
+	}
+	const float myRange = cdef->GetMaxRange();
+	if (myRange <= attacker->GetCircuitDef()->GetMaxRange() * 1.15f) {
+		return false;  // no range advantage: dodge or charge instead
+	}
+	const int frame = circuit->GetLastFrame();
+	if (frame < unit->GetDodgeFrame()) {
+		return false;
+	}
+	const AIFloat3& ePos = attacker->GetPos();
+	const AIFloat3& pos = unit->GetPos(frame);
+	if (!utils::is_valid(ePos)) {
+		return false;
+	}
+	const float hold = myRange * circuit->GetTunable("apex_standoff_frac", 0.95f);
+	const float dist = pos.distance2D(ePos);
+	if (dist >= hold) {
+		return false;  // already at the line
+	}
+	AIFloat3 dir = pos - ePos;
+	dir.y = 0.f;
+	if (dir.SqLength2D() < 1.f) {
+		return false;
+	}
+	dir.SafeNormalize2D();
+	const float side = (unit->GetId() % 2 == 0) ? 1.f : -1.f;
+	const AIFloat3 perp(-dir.z * side, 0.f, dir.x * side);
+	AIFloat3 dst = ePos + dir * hold + perp * (cdef->GetSpeed() * 0.3f);
+	CTerrainManager::CorrectPosition(dst);
+	unit->CmdMoveTo(dst, 0, frame + FRAMES_PER_SEC * 2);
+	unit->SetDodgeFrame(frame + (int)(FRAMES_PER_SEC
+			* circuit->GetTunable("apex_dodge_cd", 1.f)));
+	IntentPing(dst, "STANDOFF");
+	return true;
+}
+
 // Standing in bombardment from a shooter we cannot answer from here is the
 // worst state in the game: taking damage, dealing none (apexearth watched a
 // held group absorb an artillery park). If the attacker OUTRANGES us and is
@@ -372,6 +427,13 @@ void IFighterTask::CounterBattery(CCircuitUnit* unit, CEnemyInfo* attacker)
 		return;
 	}
 	if ((attacker == nullptr) || (attacker->GetCircuitDef() == nullptr)) {
+		return;
+	}
+	// MOBILE shooters only: charging a static emplacement is marching into
+	// its kill zone (watched: the line walked face-first into Punishers it
+	// could have shelled from outside). Statics are siege targets, not
+	// charge targets.
+	if (!attacker->GetCircuitDef()->IsMobile()) {
 		return;
 	}
 	if (GetType() != Type::FIGHTER) {
