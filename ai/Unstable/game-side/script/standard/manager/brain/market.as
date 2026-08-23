@@ -702,22 +702,25 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// and the builder must be able to EXIST here: a shipyard's ship-cons
 		// have no connected area at a land base (measured: armsy chosen on
 		// Comet Catcher, a game-long placement failure).
+		// The plant inherits its best product's MOBILITY: an air lab's cons
+		// fly, which is what lets it compete once the base packs.
 		const AIFloat3 here = unit.GetPos(ai.frame);
-		bool makesCon = false;
+		float bestMob = 0.f;
 		const array<int>@ prods = Catalog::gBuildsList[d];
 		for (uint p = 0; p < prods.length(); ++p) {
 			const int pd = prods[p];
 			if (Catalog::gMobile[pd] && Catalog::gBuilder[pd]
 				&& ai.CanDefReach(Catalog::Def(pd), here, here))
 			{
-				makesCon = true;
-				break;
+				const float m = MobilityMult(pd);
+				if (m > bestMob)
+					bestMob = m;
 			}
 		}
-		if (!makesCon)
+		if (bestMob <= 0.f)
 			continue;
 		Want c;
-		ValueOf(d, gain, 0.f, Catalog::gBuildPower[uid], c);
+		ValueOf(d, gain * bestMob, 0.f, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_PLANT;
