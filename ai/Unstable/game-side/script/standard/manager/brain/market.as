@@ -2232,7 +2232,18 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			: (" over " + KindName(next.kind)
 				+ " v=" + formatFloat(next.value * 1000.f, "", 0, 2))));
 
+	// THE COMMANDER NEVER TAKES EXPOSED WORK: his death is the game, so a
+	// want's exposure is a cost HE pays at game-loss scale (measured: com
+	// died at 15:00 building an LLT at a naked forward mex, medium anchor
+	// t000 -- the insurance priced the mex's risk and forgot the asker's).
+	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	for (uint i = 0; i < ranked.length(); ++i) {
+		if (isComm && gFarmSet) {
+			const float expoR2 = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
+			if (ranked[i].pos.distance2D(gFarmPos)
+					/ ((expoR2 > 1.f) ? expoR2 : 1200.f) > 0.5f)
+				continue;
+		}
 		IUnitTask@ t = ExecuteWant(unit, ranked[i]);
 		if (t !is null)
 			return t;
