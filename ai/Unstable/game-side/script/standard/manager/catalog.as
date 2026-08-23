@@ -43,6 +43,7 @@ array<bool> gAntiNuke;   // carries a nuke interceptor
 array<bool> gTargFac;    // targeting facility (pinpointer)
 array<float> gMaxRange;  // longest weapon reach (0 = unarmed)
 array<float> gPower;     // CircuitAI threat value -- combat worth
+array<int> gRole;        // CircuitAI main role (raider/riot/assault/...)
 array<float> gSurfT;     // threat vs surface targets
 array<float> gAirT;      // threat vs air
 array<bool> gAvailable;
@@ -69,7 +70,7 @@ void Init()
 	gBuildDist.resize(n);
 	gRadar.resize(n); gJammer.resize(n); gRadarR.resize(n); gJamR.resize(n);
 	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n); gPower.resize(n);
-	gSurfT.resize(n); gAirT.resize(n);
+	gSurfT.resize(n); gAirT.resize(n); gRole.resize(n);
 	gAvailable.resize(n);
 	gBuildsList.resize(n); gBuiltBy.resize(n);
 
@@ -110,6 +111,7 @@ void Init()
 		gTargFac[i]      = cdef.IsTargFac();
 		gMaxRange[i]     = cdef.GetMaxRange();
 		gPower[i]        = cdef.power;
+		gRole[i]         = int(cdef.GetMainRole());
 		gSurfT[i]        = cdef.GetSurfThreat();
 		gAirT[i]         = cdef.GetAirThreat();
 		// NOT IsAvailable(frame): that folds in behaviour.json "since" clocks

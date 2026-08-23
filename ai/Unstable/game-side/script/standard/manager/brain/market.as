@@ -1456,6 +1456,24 @@ void WorkerGone(Id id)
 // floor that covers blindness).
 //------------------------------------------------------------------------------
 
+// Army value held in one role -- the portfolio sense. An army is role
+// COVERAGE (apexearth: only ticks, pawns, rovers -- "where's the rest?");
+// each next unit's gain diminishes by its role's share, so raiders
+// saturate and the empty roles win the auction.
+float RoleValue(int role)
+{
+	float v = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
+			continue;
+		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f))
+			continue;
+		if (Catalog::gRole[int(d)] == role)
+			v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
+	}
+	return v;
+}
+
 float ArmyValue()
 {
 	float v = 0.f;
@@ -2218,8 +2236,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 					eFeedA *= mI / mP;
 				}
 			}
+			const float av = ArmyValue();
+			const float roleShare = (av > 1.f)
+					? (RoleValue(Catalog::gRole[d]) / av) : 0.f;
 			const float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
-					* (ppc / linePPC) / (1.f + have * 0.05f) * eFeedA;
+					* (ppc / linePPC) * (1.f - roleShare)
+					/ (1.f + have * 0.05f) * eFeedA;
 			if (gainA <= 0.01f)
 				continue;
 			const float vA = gainA / Catalog::gCostM[d];
