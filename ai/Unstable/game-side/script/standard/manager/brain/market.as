@@ -25,6 +25,7 @@ const int WK_MEXUP = 7;
 const int WK_TECH = 8;
 const int WK_NANO = 9;
 const int WK_RECLAIM = 10;
+const int WK_ASSIST = 11;
 
 class Want {
 	int kind = WK_NONE;
@@ -49,6 +50,7 @@ string KindName(int k)
 	if (k == WK_TECH) return "tech";
 	if (k == WK_NANO) return "nano";
 	if (k == WK_RECLAIM) return "reclaim";
+	if (k == WK_ASSIST) return "assist";
 	return "none";
 }
 
@@ -613,11 +615,17 @@ float BPCapacity()
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		if (gOwnCount[d] <= 0)
 			continue;
-		if (!Catalog::gBuilder[int(d)] && (Catalog::gBuildPower[int(d)] <= 0.f))
-			continue;
 		if (Catalog::gBuildPower[int(d)] <= 0.f)
 			continue;
-		cap += float(gOwnCount[d]) * Catalog::gBuildPower[int(d)] * (7.f / 80.f);
+		float unitCap = float(gOwnCount[d]) * Catalog::gBuildPower[int(d)] * (7.f / 80.f);
+		// A walking con is not a lathe: mobile BP spends much of its life in
+		// transit, so it counts at a discount -- full-weight counting read
+		// 40 road-bound cons as 280 m/s of build power and starved the nano
+		// farm while metal overflowed (apexearth: "the solution is nano
+		// turrets").
+		if (Catalog::gMobile[int(d)])
+			unitCap *= ai.GetTunable("apex_mobile_bp_eff", TUNE_MOBILE_BP_EFF);
+		cap += unitCap;
 	}
 	return cap;
 }
@@ -1003,6 +1011,59 @@ float NanoRange()
 	return gNanoRange;
 }
 
+// The farm's SLOT PLAN. Random shake around one anchor scattered eco in
+// staggered diagonals (apexearth's screenshot, 2026-08-23: "some of the
+// buildings are just slightly off"). Each def gets rows of flush slots:
+// pitch = footprint rounded up to the 16-elmo lattice (odd-celled defs get
+// their unavoidable half-cell gap), rows stack rearward, columns run along
+// the base's across axis. The cursor never reuses a slot; a failed build
+// leaves a hole, never an overlap.
+const float FARM_ROW_W = 640.f;   // elmos of columns per row
+array<int> gFRowDef;      // row -> def id
+array<int> gFRowNext;     // row -> next column index
+array<float> gFRowPitch;  // row -> slot pitch (elmos)
+array<float> gFRowZ;      // row -> rearward offset of the row's center line
+float gFarmDepth = 0.f;   // next free rearward offset
+
+float PitchOf(int defId)
+{
+	int side = 1;
+	while (side * side < Catalog::gAreaCells[defId])
+		++side;
+	// Odd-celled footprints cannot sit flush on the 16-lattice; round up.
+	if ((side & 1) == 1)
+		++side;
+	return float(side) * 16.f;
+}
+
+AIFloat3 FarmSlot(int defId)
+{
+	const float pitch = PitchOf(defId);
+	int row = -1;
+	for (uint i = 0; i < gFRowDef.length(); ++i) {
+		if ((gFRowDef[i] == defId)
+			&& (float(gFRowNext[i]) * pitch < FARM_ROW_W))
+		{
+			row = int(i);
+			break;
+		}
+	}
+	if (row < 0) {
+		gFRowDef.insertLast(defId);
+		gFRowNext.insertLast(0);
+		gFRowPitch.insertLast(pitch);
+		gFRowZ.insertLast(gFarmDepth + pitch * 0.5f);
+		row = int(gFRowDef.length()) - 1;
+		gFarmDepth += pitch;
+	}
+	const int col = gFRowNext[row];
+	gFRowNext[row] = col + 1;
+	// Columns alternate outward from the axis so the block grows centered.
+	const float lat = (float((col + 1) / 2) * ((col % 2 == 0) ? 1.f : -1.f)) * pitch;
+	AIFloat3 p = gFarmPos + Base::gAcross * lat - Base::gFwd * gFRowZ[row];
+	return p;
+}
+
 AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 {
 	if (!gFarmSet && Base::gAnchorSet && Base::gAxisSet) {
@@ -1026,7 +1087,12 @@ AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 Want@ ProposeNano(CCircuitUnit@ unit)
 {
 	Want w;
-	const float over = BPGap();
+	// Overflow is nano demand in its own right: a nano never walks, so it
+	// absorbs overflow at face value even when the mobile fleet's paper
+	// capacity looks sufficient.
+	const float gap = BPGap();
+	const float ovf = OverflowM();
+	const float over = (gap > ovf) ? gap : ovf;
 	if (over <= 0.5f)
 		return w;
 	const int uid = int(unit.circuitDef.id);
@@ -1186,6 +1252,58 @@ void StallWatch()
 // and the bank has room for the burst, a weak generator's banked metal
 // beats its trickle. Weakest first (lowest makeE per metal).
 CCircuitUnit@ gReclaimTarget = null;
+CCircuitUnit@ gAssistTarget = null;
+
+// Assisting T2+ work is a PRICED want, not an idleness fallback (apexearth
+// 2026-08-23: "T1 cons are still not assisting T2 cons, helping build T2+
+// buildings, or assisting factories"). A joiner transfers its whole drain
+// into a build the market already values at clearing rates; the bill is
+// the walk and the occupied time. That beats a marginal solar and loses to
+// a fresh mex -- the right ordering by construction.
+Want@ ProposeAssist(CCircuitUnit@ unit)
+{
+	Want w;
+	const int uid = int(unit.circuitDef.id);
+	// Only lesser cons assist upward; ceiling cons do the T2 work itself.
+	float myCeil = 0.f;
+	const array<int>@ mine = Catalog::BuildsOf(uid);
+	for (uint i = 0; i < mine.length(); ++i) {
+		if (Catalog::gExtractsM[mine[i]] > myCeil)
+			myCeil = Catalog::gExtractsM[mine[i]];
+	}
+	if (myCeil >= BestExtract())
+		return w;
+	// A serving con actively building, else a producing factory line.
+	CCircuitUnit@ boss = NextServingCon();
+	if ((boss !is null) && ((boss.task is null)
+			|| (boss.task.GetType() != Task::Type::BUILDER)))
+		@boss = null;
+	if (boss is null) {
+		for (uint i = 0; i < Brain::gFQFac.length(); ++i) {
+			CCircuitUnit@ f = Brain::gFQFac[i];
+			if ((f !is null) && (f.CountQueued(null) > 0)) {
+				@boss = f;
+				break;
+			}
+		}
+	}
+	if (boss is null)
+		return w;
+	const float myDrain = Catalog::gBuildPower[uid] * (7.f / 80.f);
+	const AIFloat3 bp = boss.GetPos(ai.frame);
+	const float speed = Catalog::gSpeed[uid];
+	const float walkSec = (speed > 1.f)
+			? (unit.GetPos(ai.frame).distance2D(bp) / speed) : 60.f;
+	w.kind = WK_ASSIST;
+	w.pos = bp;
+	w.spotId = int(boss.id);
+	w.gain = myDrain;
+	w.mCost = 1.f;
+	w.tCost = (walkSec + 60.f) * Wage();   // one guard stint
+	w.value = w.gain / (w.mCost + w.tCost);
+	@gAssistTarget = boss;
+	return w;
+}
 
 Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 {
@@ -1279,7 +1397,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		ProposeMex(unit), ProposeEnergy(unit), ProposeGeo(unit),
 		ProposePlant(unit), ProposeConvert(unit), ProposeStore(unit),
 		ProposeMexUp(unit), ProposeTech(unit), ProposeNano(unit),
-		ProposeReclaimObsolete(unit)
+		ProposeReclaimObsolete(unit), ProposeAssist(unit)
 	};
 	// Highest value first; a want the executor refuses (ground taken, request
 	// standing, join out of reach) falls out and the runner-up is tried --
@@ -1365,7 +1483,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 
 	AiLog("apex: decide " + unit.circuitDef.GetName() + " #" + unit.id
-		+ " -> " + KindName(top.kind) + ":" + top.def.GetName()
+		+ " -> " + KindName(top.kind) + ":" + ((top.def is null) ? "-" : top.def.GetName())
 		+ " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
 		+ " (gain=" + formatFloat(top.gain, "", 0, 2)
 		+ " m=" + formatFloat(top.mCost, "", 0, 0)
@@ -1402,6 +1520,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
 	}
+	if (w.kind == WK_ASSIST) {
+		if ((gAssistTarget is null) || (int(gAssistTarget.id) != w.spotId))
+			return null;
+		return aiBuilderMgr.Enqueue(TaskB::Guard(Task::Priority::LOW,
+				gAssistTarget, false, 60 * SECOND));
+	}
 	if (w.kind == WK_RECLAIM) {
 		if ((gReclaimTarget is null) || (int(gReclaimTarget.id) != w.spotId))
 			return null;
@@ -1409,10 +1533,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				gReclaimTarget));
 	}
 	if (w.kind == WK_NANO) {
-		// Tighter than the coverage circle so the reach circles overlap and
-		// the farm tiles instead of scattering.
+		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
 		return Requests::Take(unit, w.def, Task::BuildType::NANO,
-				Task::Priority::NORMAL, w.pos, 256.f, SQUARE_SIZE * 16.f);
+				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f);
 	}
 	if (w.kind == WK_GEO) {
 		return aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::GEO,
@@ -1425,18 +1548,21 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	bool par = (MCostScale() < 1.f);
 	bool crtd = false;
 	if (w.kind == WK_ENERGY) {
+		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
 		return Requests::Take(unit, w.def, Task::BuildType::ENERGY,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f,
+				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f,
 				crtd, par);
 	}
 	if (w.kind == WK_CONVERT) {
+		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
 		return Requests::Take(unit, w.def, Task::BuildType::CONVERT,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f,
+				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f,
 				crtd, par);
 	}
 	if (w.kind == WK_STORE) {
+		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
 		return Requests::Take(unit, w.def, Task::BuildType::STORE,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f);
 	}
 	if (w.kind == WK_PLANT) {
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,

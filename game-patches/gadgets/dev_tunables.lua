@@ -60,6 +60,7 @@ local NAMES = {
 	"apex_e_lookahead",
 	"apex_auction_diag",
 	"apex_reclaim_amort",
+	"apex_mobile_bp_eff",
 	"apex_chase_min_ratio",
 	"apex_comm_cloak_share",
 	"apex_con_outmassed",
