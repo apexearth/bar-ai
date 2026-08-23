@@ -389,7 +389,7 @@ void CAttackTask::Start(CCircuitUnit* unit)
 		}
 		if (here.SqDistance2D(leaderPos) > SQUARE(JOIN_RALLY_DIST)) {
 			TRY_UNIT(circuit, unit,
-				unit->CmdMoveTo(leaderPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY,
+				unit->CmdFightTo(leaderPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY,
 						frame + FRAMES_PER_SEC * 60);
 			)
 			return;

@@ -7202,7 +7202,7 @@ index c3f5e98..e02338a 100644
  		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..5fa8a0a 100644
+index cd063e4..2243a9b 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -7541,7 +7541,7 @@ index cd063e4..5fa8a0a 100644
 +		}
 +		if (here.SqDistance2D(leaderPos) > SQUARE(JOIN_RALLY_DIST)) {
 +			TRY_UNIT(circuit, unit,
-+				unit->CmdMoveTo(leaderPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY,
++				unit->CmdFightTo(leaderPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY,
 +						frame + FRAMES_PER_SEC * 60);
 +			)
 +			return;
@@ -8646,7 +8646,7 @@ index 9e6bfd8..bd6450c 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
 diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
-index bfc3caf..0372e90 100644
+index bfc3caf..be2960c 100644
 --- a/src/circuit/task/fighter/DefendTask.cpp
 +++ b/src/circuit/task/fighter/DefendTask.cpp
 @@ -18,6 +18,7 @@
@@ -8711,7 +8711,7 @@ index bfc3caf..0372e90 100644
  		travelAction = new CFightAction(unit, squareSize);
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
-@@ -85,14 +114,35 @@ void CDefendTask::Start(CCircuitUnit* unit)
+@@ -85,12 +114,33 @@ void CDefendTask::Start(CCircuitUnit* unit)
  {
  	CCircuitAI* circuit = manager->GetCircuit();
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
@@ -8744,11 +8744,8 @@ index bfc3caf..0372e90 100644
 +	// not wade (apexearth: "using a fight order was incorrect. We need to be
 +	// using move commands along with set target").
  	TRY_UNIT(circuit, unit,
--		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
-+		unit->CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
+ 		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
  		unit->CmdWantedSpeed(NO_SPEED_LIMIT);
- 	)
- }
 @@ -106,11 +156,51 @@ void CDefendTask::Update()
  	 */
  	if (updCount % 32 == 1) {
@@ -8845,7 +8842,7 @@ index bfc3caf..0372e90 100644
 +		// fight order made every merge a stream of solo engagements en route.
  		TRY_UNIT(circuit, unit,
 -			unit->CmdFightTo(leadPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
-+			unit->CmdMoveTo(musterPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
++			unit->CmdFightTo(musterPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
  		)
  	}
  	units.insert(rookies.begin(), rookies.end());
@@ -9153,7 +9150,7 @@ index bfc3caf..0372e90 100644
  	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
  	const AIFloat3& endPos = setupMgr->GetBasePos();
  	const float pathRange = DEFAULT_SLACK * 4;
-@@ -401,9 +730,11 @@ void CDefendTask::Fallback()
+@@ -401,7 +730,9 @@ void CDefendTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -9162,11 +9159,8 @@ index bfc3caf..0372e90 100644
 +			unit->GetTravelAct()->StateWait();
 +		}
  		TRY_UNIT(circuit, unit,
--			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
-+			unit->CmdMoveTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+ 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
- 		)
- 	}
 diff --git a/src/circuit/task/fighter/DefendTask.h b/src/circuit/task/fighter/DefendTask.h
 index 90c3b71..61aec1c 100644
 --- a/src/circuit/task/fighter/DefendTask.h
