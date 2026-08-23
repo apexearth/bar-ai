@@ -1173,6 +1173,9 @@ const float TUNE_CON_ESCORT = 1.f;
 // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
 // guarding a con is a Bull missing from the line.
 const float TUNE_ESCORT_MAX_COST = 120.f;
+// MEX_GROWTH: weight of a spot's RELATIVE income boost (gain/income) on
+// top of its absolute stream -- growth is worth more to the poor.
+const float TUNE_MEX_GROWTH = 3.f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
 // competes with perpetual streams (the market's typical payback scale).
 const float TUNE_RECLAIM_AMORT = 300.f;

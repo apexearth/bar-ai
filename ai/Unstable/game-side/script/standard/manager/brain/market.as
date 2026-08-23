@@ -699,7 +699,16 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= 0.f))
 			continue;
 		Want c;
-		const float gain = spotIncome * Catalog::gExtractsM[d];
+		// RELATIVE growth: a spot worth 3.4 at 16 m/s income is a 21% raise
+		// to everything downstream (apexearth's arithmetic); the same spot
+		// at 200 m/s is noise. The multiplier decays with wealth, so
+		// expansion prioritizes itself exactly while we are behind.
+		float gain = spotIncome * Catalog::gExtractsM[d];
+		{
+			const float inc0 = aiEconomyMgr.metal.income;
+			gain *= 1.f + ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH)
+					* gain / ((inc0 > gain) ? inc0 : gain);
+		}
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
@@ -1053,7 +1062,12 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			const int d = builds[i];
 			if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= gLExtract[li]))
 				continue;
-			const float delta = gLIncome[li] * (Catalog::gExtractsM[d] - gLExtract[li]);
+			float delta = gLIncome[li] * (Catalog::gExtractsM[d] - gLExtract[li]);
+			{
+				const float inc1 = aiEconomyMgr.metal.income;
+				delta *= 1.f + ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH)
+						* delta / ((inc1 > delta) ? inc1 : delta);
+			}
 			const float walkSec = (speed > 1.f)
 					? (here.distance2D(gLPos[li]) / speed) : 60.f;
 			Want c;
