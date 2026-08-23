@@ -1952,9 +1952,28 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 			// "build radars so our units have intelligence").
 			gain = (gAssetsM + ArmyValue()) * rate;
 		} else if (cls == PROT_JAM) {
-			if (ProtCovered(PROT_JAM, core, Catalog::gJamR[d] * 0.8f))
+			// Tower concentrations want jamming first (apexearth): find a
+			// cluster of >=3 defenses with no jammer in reach.
+			AIFloat3 jat = core;
+			bool found = false;
+			for (uint jd = 0; jd < gProtPos[PROT_DEF].length() && !found; ++jd) {
+				int nearDef = 0;
+				for (uint jk = 0; jk < gProtPos[PROT_DEF].length(); ++jk) {
+					if (gProtPos[PROT_DEF][jd].distance2D(gProtPos[PROT_DEF][jk]) < 300.f)
+						++nearDef;
+				}
+				if ((nearDef >= 3)
+					&& !ProtCovered(PROT_JAM, gProtPos[PROT_DEF][jd],
+							Catalog::gJamR[d] * 0.8f))
+				{
+					jat = gProtPos[PROT_DEF][jd];
+					found = true;
+				}
+			}
+			if (!found && ProtCovered(PROT_JAM, core, Catalog::gJamR[d] * 0.8f))
 				continue;
-			gain = gAssetsM * rate * 0.5f;
+			at = found ? jat : core;
+			gain = gAssetsM * rate * (found ? 0.8f : 0.5f);
 		} else if (cls == PROT_ANTINUKE) {
 			if (ProtCovered(PROT_ANTINUKE, core, 2000.f))
 				continue;
@@ -2115,24 +2134,25 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 		}
 		if (gain <= 0.f)
 			continue;
-		// Range answers arty: easy's artillery ground our LLT wall 38k:7k
-		// (fight1v1) -- when their ARTY mass is seen, a turret's reach
-		// multiplies its worth, so beamers/HLTs price above cheap sentries
-		// exactly when short walls are food.
+		// TURRET QUALITY: "range is the difference between whether or not
+		// you can get sieged" (apexearth) -- a static cannot reposition, so
+		// reach IS survival. Quality = power x (1 + (reach/500)^2 * 0.5),
+		// reach capped at the 900 band (the Ragnarok lesson); the flat
+		// insurance gain scales by quality-per-best, so beamers and HLTs
+		// outbid massed LLTs on the raw numbers.
 		if (cls == PROT_DEF) {
+			const float rr = (Catalog::gMaxRange[d] < 900.f)
+					? Catalog::gMaxRange[d] : 900.f;
+			const float rn = rr / 500.f;
+			float qual = Catalog::gPower[d] * (1.f + rn * rn * 0.5f);
 			const float artySeen = Military::EnemyCostOf(Unit::Role::ARTY.type)
 					+ Military::EnemyCostOf(Unit::Role::SKIRM.type);
 			if (artySeen > 100.f) {
-				// Range counts only up to the arty-answer band (~900):
-				// uncapped, a Ragnarok's 2600 reach made the 46k gun the
-				// "best sentry" at 200 m/s (watched). Superweapons must win
-				// on their own terms, not as turrets.
-				const float rr = (Catalog::gMaxRange[d] < 900.f)
-						? Catalog::gMaxRange[d] : 900.f;
-				float rangeMul = 1.f + (rr / 500.f)
+				qual *= 1.f + (rr / 500.f)
 						* ((artySeen < 3000.f) ? (artySeen / 3000.f) : 1.f);
-				gain *= rangeMul;
 			}
+			gain *= qual / ((Catalog::gCostM[d] > 1.f) ? Catalog::gCostM[d] : 1.f)
+					* 12.f;   // normalize: T1-turret power/cost ~ 1/12
 		}
 		Want c;
 		const float speed = Catalog::gSpeed[uid];
@@ -2752,10 +2772,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			if (Catalog::gRezzer[d]) {
 				const int haveRz = (int(d) < int(gOwnCount.length()))
 						? gOwnCount[d] : 0;
-				const float medic = ArmyValue() * 0.04f / 60.f;
+				const float medic = ArmyValue()
+						* ai.GetTunable("apex_medic_share", TUNE_MEDIC_SHARE) / 60.f;
 				const float gainRz = (gLossPool
 						/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)
-						+ medic) / float(1 + haveRz);
+						+ medic) / (1.f + float(haveRz) * 0.33f);
 				if (gainRz > 0.05f) {
 					const float vRz = gainRz / Catalog::gCostM[d];
 					candDef.insertLast(d);

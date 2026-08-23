@@ -64,6 +64,7 @@ local NAMES = {
 	"apex_escort_max_cost",
 	"apex_mex_growth",
 	"apex_range_worth",
+	"apex_medic_share",
 	"apex_auction_diag",
 	"apex_reclaim_amort",
 	"apex_mobile_bp_eff",

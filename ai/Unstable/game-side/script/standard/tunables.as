@@ -1179,6 +1179,9 @@ const float TUNE_MEX_GROWTH = 3.f;
 // RANGE_WORTH: standing weight of weapon reach in unit selection (reach =
 // free damage before the answer), on top of the reactive outranging term.
 const float TUNE_RANGE_WORTH = 0.6f;
+// MEDIC_SHARE: standing rez/repair fleet as a fraction of army value per
+// minute (apexearth: "3 times more rezbots" -- was 0.04).
+const float TUNE_MEDIC_SHARE = 0.12f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
 // competes with perpetual streams (the market's typical payback scale).
 const float TUNE_RECLAIM_AMORT = 300.f;
