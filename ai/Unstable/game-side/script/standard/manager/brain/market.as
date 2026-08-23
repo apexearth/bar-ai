@@ -212,6 +212,22 @@ float EffBP(float builderBP)
 	return builderBP + (fleet - builderBP) * share;
 }
 
+// The metal mirror of the E forgiveness: a full, still-filling bank means
+// the metal bill forgoes almost nothing (measured: 104k excess while
+// fusion #3 lost auctions priced in a currency being wasted). A floor
+// keeps relative ordering by cost.
+float MCostScale()
+{
+	const float st = aiEconomyMgr.metal.storage;
+	if ((st <= 1.f) || (aiEconomyMgr.metal.income <= aiEconomyMgr.metal.pull))
+		return 1.f;
+	const float frac = aiEconomyMgr.metal.current / st;
+	if (frac <= 0.8f)
+		return 1.f;
+	const float f = (frac - 0.8f) / 0.2f;
+	return 1.f - 0.8f * ((f > 1.f) ? 1.f : f);
+}
+
 float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 {
 	const float buildSec = Catalog::BuildSecondsAt(defId, EffBP(builderBP));
@@ -223,7 +239,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 	// a flat metal-per-cell price (apex_space_m) until base-crowding senses
 	// price it dynamically. This is what makes dense energy (advsol) beat a
 	// field of solars at equal payback.
-	w.mCost = Catalog::gCostM[defId]
+	w.mCost = Catalog::gCostM[defId] * MCostScale()
 			+ Catalog::gCostE[defId] * EPriceCostAt(buildSec)
 			+ float(Catalog::gAreaCells[defId])
 				* ai.GetTunable("apex_space_m", TUNE_SPACE_M);
@@ -642,9 +658,13 @@ Want@ ProposeStore(CCircuitUnit@ unit)
 	if (over <= 0.5f)
 		return w;
 	const float horizon = ai.GetTunable("apex_store_horizon", TUNE_STORE_HORIZON);
-	// Storage buys TIME, not flow: once the bank already holds a horizon's
-	// worth of empty headroom, another store captures nothing (measured: 75
-	// storages bought against overflow none of them changed).
+	// Storage buys TIME, and time has a STOCK target: one horizon of income
+	// banked. At a chronically full bank the empty-headroom test re-licensed
+	// a store every auction (the plateau apexearth watched: storage winning
+	// while fusion never came) -- structural overflow is spending's problem,
+	// never storage's.
+	if (aiEconomyMgr.metal.storage >= aiEconomyMgr.metal.income * horizon)
+		return w;
 	const float emptySec = (aiEconomyMgr.metal.storage - aiEconomyMgr.metal.current)
 			/ over;
 	if (emptySec >= horizon)
@@ -724,7 +744,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const float gain = (SpotM() + BPGap())
-			* ai.GetTunable("apex_plant_pipe", TUNE_PLANT_PIPE);
+			* ai.GetTunable("apex_plant_pipe", TUNE_PLANT_PIPE)
+			* Utilization();
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
@@ -809,8 +830,25 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const float ownCeil = OwnedCeil();
-	if (ownCeil >= BestExtract())
-		return w;   // standing capability already reaches the ceiling
+	// Best mobility among owned ceiling-reaching cons: a plant whose con
+	// flies (T2 air) is an upgrade even when extraction reach ties.
+	float ownMob = 0.f;
+	{
+		const float ceilX = BestExtract();
+		for (uint dd = 1; dd < gOwnCount.length(); ++dd) {
+			if ((gOwnCount[dd] <= 0) || !Catalog::gMobile[int(dd)] || !Catalog::gBuilder[int(dd)])
+				continue;
+			const array<int>@ bb = Catalog::gBuildsList[int(dd)];
+			for (uint q = 0; q < bb.length(); ++q) {
+				if (Catalog::gExtractsM[bb[q]] >= ceilX) {
+					const float m0 = MobilityMult(int(dd));
+					if (m0 > ownMob)
+						ownMob = m0;
+					break;
+				}
+			}
+		}
+	}
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	const float pipe = ai.GetTunable("apex_tech_pipe", TUNE_TECH_PIPE);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
@@ -836,10 +874,32 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 					prodCeil = Catalog::gExtractsM[pb[q]];
 			}
 		}
-		if (prodCeil <= ownCeil)
+		// Two ways a plant unlocks: reach beyond what we own, or the same
+		// reach carried by a decisively more MOBILE con (the T2 air lab).
+		float prodMob = 0.f;
+		for (uint p2 = 0; p2 < prods.length(); ++p2) {
+			const int pd2 = prods[p2];
+			if (!Catalog::gMobile[pd2] || !Catalog::gBuilder[pd2])
+				continue;
+			const array<int>@ pb2 = Catalog::gBuildsList[pd2];
+			for (uint q2 = 0; q2 < pb2.length(); ++q2) {
+				if (Catalog::gExtractsM[pb2[q2]] >= BestExtract()) {
+					const float m2 = MobilityMult(pd2);
+					if (m2 > prodMob)
+						prodMob = m2;
+					break;
+				}
+			}
+		}
+		float techGain = 0.f;
+		if (prodCeil > ownCeil)
+			techGain = demand * pipe;
+		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f))
+			techGain = demand * pipe * (prodMob / ownMob - 1.f);
+		if (techGain <= 0.f)
 			continue;
 		Want c;
-		ValueOf(d, demand * pipe, 0.f, Catalog::gBuildPower[uid], c);
+		ValueOf(d, techGain, 0.f, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_TECH;
@@ -973,6 +1033,23 @@ void WorkerGone(Id id)
 	}
 }
 
+// Fraction of known workers actually holding work. Idle cons mean labs and
+// more cons are OVER-valued -- capability nobody uses is not capability
+// (apexearth 2026-08-23: "we have cons we aren't even using so the value of
+// making labs is over-estimated").
+float Utilization()
+{
+	if (gWorkers.length() == 0)
+		return 1.f;
+	int busy = 0;
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ u = gWorkers[i];
+		if ((u !is null) && (u.task !is null))
+			++busy;
+	}
+	return float(busy) / float(gWorkers.length());
+}
+
 void StallWatch()
 {
 	if (ai.frame < gNextStallSweep)
@@ -1054,6 +1131,18 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
 	if (top is null) {
+		// The floor want: an idle builder's time is free, so it patrols the
+		// farm and auto-assists whatever is building there. Short timeout:
+		// it re-enters the market every cycle.
+		if (gFarmSet) {
+			if (ai.frame >= gNextIdleLog) {
+				gNextIdleLog = ai.frame + 30 * SECOND;
+				AiLog("apex: decide " + unit.circuitDef.GetName() + " #" + unit.id
+					+ " -> assist (farm patrol; no positive want)");
+			}
+			return aiBuilderMgr.Enqueue(TaskB::Patrol(Task::Priority::LOW,
+					gFarmPos, 20 * SECOND));
+		}
 		if (ai.frame >= gNextIdleLog) {
 			gNextIdleLog = ai.frame + 30 * SECOND;
 			AiLog("apex: decide " + unit.circuitDef.GetName() + " #" + unit.id
@@ -1110,13 +1199,21 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::GEO,
 				Task::Priority::NORMAL, w.def, w.pos, w.spotId));
 	}
+	// An overflowing bank opens PARALLEL sites: the serialized default folds
+	// every asker onto one standing request, and one fusion at a time was
+	// the 45%-excess bottleneck. parallel skips the fold; the wealth cap
+	// (EffectiveCap) still bounds it.
+	bool par = (MCostScale() < 1.f);
+	bool crtd = false;
 	if (w.kind == WK_ENERGY) {
 		return Requests::Take(unit, w.def, Task::BuildType::ENERGY,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f,
+				crtd, par);
 	}
 	if (w.kind == WK_CONVERT) {
 		return Requests::Take(unit, w.def, Task::BuildType::CONVERT,
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f,
+				crtd, par);
 	}
 	if (w.kind == WK_STORE) {
 		return Requests::Take(unit, w.def, Task::BuildType::STORE,
@@ -1150,7 +1247,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	// already serving (the binary version stopped at exactly one T2 con);
 	// plus its worth as mobile build power (overflow capture at its drain);
 	// plus the open-spot stream if ground remains to claim.
-	const float over = BPGap();
+	const float util = Utilization();
+	const float over = BPGap() * util;
 	const float upD = UpDemand();
 	const float mobileCeil = OwnedMobileCeil();
 	int best = -1;
@@ -1176,7 +1274,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
 		gain += mob * ((over < drain) ? over : drain);
 		if (gMexOpen && (reach > 0.f))
-			gain += mob * SpotM();   // it can claim while spots stay open
+			gain += mob * util * SpotM();   // claims only count if cons work
 		if (gain <= 0.5f)
 			continue;
 		const float v = gain / Catalog::gCostM[d];
