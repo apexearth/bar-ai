@@ -2453,11 +2453,24 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
 		gain += mob * ((over < drain) ? over : drain);
 		if (gMexOpen && (reach > 0.f)) {
-			// A con claims spot after spot -- a stream of STREAMS. Priced as
-			// one claim it lost every opening auction to army and a vehicle
-			// start was DOA (watched); over the fill horizon it claims
-			// fillS/cycle of them.
-			gain += mob * util * SpotM() * (((fillS > 1.f) ? fillS : 180.f) / 60.f);
+			// A con claims spot after spot -- a stream of STREAMS -- but the
+			// STREAMS ARE FINITE: 37 cons once chased 13 spots and easy BARb
+			// walked over an armyless base (measured, ladder game 1). The
+			// claim gain divides by claimers per open spot -- the unserved-
+			// demand law, fourth application.
+			CacheSpots();
+			const float open = float(int(gAllSpots.length()) - int(gLSpot.length()));
+			float claimers = 0.f;
+			for (uint cd2 = 1; cd2 < gOwnCount.length(); ++cd2) {
+				if ((gOwnCount[cd2] > 0) && Catalog::gMobile[int(cd2)]
+					&& Catalog::gBuilder[int(cd2)])
+					claimers += float(gOwnCount[cd2]);
+			}
+			float share = (open > 0.f) ? (open / (claimers + 1.f)) : 0.f;
+			if (share > 1.f)
+				share = 1.f;
+			gain += mob * util * SpotM() * (((fillS > 1.f) ? fillS : 180.f) / 60.f)
+					* share;
 		}
 		if (gain <= 0.5f)
 			continue;
