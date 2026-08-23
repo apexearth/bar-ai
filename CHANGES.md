@@ -1256,3 +1256,12 @@ commander guard stays (right on its own evidence). Ladder file complete:
 easy AT PARITY (8-9/20), medium 0-20, both at 20-game confidence. The
 solo campaign ends here; the military design session is the key to the
 next rung.
+
+## 2026-08-23 -- RETRACTION: the 0-20 medium re-anchor measured a regression
+
+The commander exposure guard's farm-radius test also banned the rear-flank
+plant site; the commander (early game's only builder) never made a factory
+(apexearth watched it live). The 0-20 "the wall is genuine" conclusion is
+therefore contaminated and withdrawn. Guard reformulated on the base axis:
+forward of the anchor (+150) is banned for the commander, behind is safe by
+construction. Medium re-anchors on the fixed build.

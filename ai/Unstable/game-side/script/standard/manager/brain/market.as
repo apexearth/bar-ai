@@ -2238,10 +2238,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// t000 -- the insurance priced the mex's risk and forgot the asker's).
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	for (uint i = 0; i < ranked.length(); ++i) {
-		if (isComm && gFarmSet) {
-			const float expoR2 = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
-			if (ranked[i].pos.distance2D(gFarmPos)
-					/ ((expoR2 > 1.f) ? expoR2 : 1200.f) > 0.5f)
+		// FORWARD of the anchor is what kills commanders; the farm-distance
+		// radius also banned the rear-flank PLANT site and the commander --
+		// early game's only builder -- never made a factory (watched, and it
+		// poisoned a 20-game medium anchor). Behind the anchor is safe by
+		// the grid's own construction.
+		if (isComm && Base::gAnchorSet && Base::gAxisSet) {
+			const AIFloat3 rel = ranked[i].pos - Base::gAnchor;
+			const float fwdDist = rel.x * Base::gFwd.x + rel.z * Base::gFwd.z;
+			if (fwdDist > 150.f)
 				continue;
 		}
 		IUnitTask@ t = ExecuteWant(unit, ranked[i]);
