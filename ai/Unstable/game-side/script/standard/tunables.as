@@ -1219,6 +1219,9 @@ const float TUNE_RETREAT_COST_SCALE = 3000.f;
 // STAKE_WEIGHT: how strongly an army DEFICIT borrows urgency from the
 // total value at risk (expected loss = everything x defeat probability).
 const float TUNE_STAKE_WEIGHT = 1.f;
+// STATIC_GUARD: how much a metal of CORE static defense counts toward the
+// army when computing the stake -- under 1 because towers cannot chase.
+const float TUNE_STATIC_GUARD = 0.7f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone

@@ -2476,7 +2476,25 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	{
 		const float aT0 = ArmyTarget();
 		if ((aT0 > 1.f) && (armyGap > 0.f)) {
-			const float deficit = armyGap / aT0;
+			// Towers lighten the stake, but only LOCALLY (apexearth): static
+			// defense standing in the core counts toward the army at an
+			// immobility discount; a remote mex sentry defends its patch,
+			// not the base.
+			float coreStaticM = 0.f;
+			if (gFarmSet) {
+				for (uint sd2 = 0; sd2 < gProtUnit[PROT_DEF].length(); ++sd2) {
+					if (gProtUnit[PROT_DEF][sd2] is null)
+						continue;
+					const AIFloat3 sp2 = gProtPos[PROT_DEF][sd2];
+					if ((sp2.distance2D(gFarmPos) < 1200.f)
+						|| (Base::gAnchorSet && (sp2.distance2D(Base::gAnchor) < 1200.f)))
+						coreStaticM += Catalog::gCostM[gProtDefId[PROT_DEF][sd2]];
+				}
+			}
+			const float lightened = armyGap - coreStaticM
+					* ai.GetTunable("apex_static_guard", TUNE_STATIC_GUARD);
+			const float effGapS = (lightened > 0.f) ? lightened : 0.f;
+			const float deficit = effGapS / aT0;
 			stakeMul = 1.f + deficit
 					* ((gAssetsM + ArmyValue()) / aT0)
 					* ai.GetTunable("apex_stake_weight", TUNE_STAKE_WEIGHT);
