@@ -1,5 +1,35 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-22: THE OVERHAUL KILL -- all leaf build/production logic removed
+
+Steps 3-4 of docs/20-brain-overhaul.md. Every AngelScript spending path is
+gone: the builder ladder is now holds -> `Brain::Decide` -> idle with the
+`DefaultMakeTask` fall-through severed (`Decide` returns null -- an empty
+market awaiting the rebuild); the facqueue keeps only its line MECHANICS
+(adoption, Wait-hold, recruit abort, driven-line sweep, sent-ledger) and lays
+no orders; factory choice/switch are stubbed at the engine hooks (a MISSING
+`AiGetFactoryToBuild` would fall back to the DLL's native chooser, so the
+stubs must exist); `AiMakeDefence` is a NoteSite-only stub for the same
+reason. 37 rule files deleted (~13,600 lines: statics, mexguard, fusion,
+converter, nano, crews, obsolete/lab-eaters, digin/fortify, openers, quota/
+mix/choose/switch, rush/eco-lead roles, nukes director, assist/parking);
+build_chain hubs and response.json emptied; factory.json left structural
+(the factory manager's identity/tier tables -- weights inert). Kept per par.2:
+senses (frontline, stance, territory, budget ledger, BP measurement,
+fusion/home/commander latches), Requests plumbing (`Take` now has ZERO
+callers), placement helpers, rez-bot unit thoughts, and the whole military
+USE layer. Census enforced: `tools/check.py` now fails on any
+`Enqueue(TaskB::`/`Requests::Take(`/`DefaultMakeTask`/`DefaultMakeDefence`
+call site outside the allowlisted executor files.
+
+Silence verified twice (8-minute 8v8 vs BARb hard, Supreme Isthmus, +100):
+zero compile errors by the unanchored ERR grep, apex alive (1,55x `apex:`
+lines of pure sense/military logging), and every apex team ended with
+`allBuilt = armcom:2700` only -- facCount 0, mex 0, commBuild 0, commIdle
+957 samples, all income overflowed. The commander and cons idle visibly;
+nothing is produced. Rebuild proceeds Want-by-Want per par.7 after the
+architecture session.
+
 ## 2026-08-22: Role policy layer + the build-power controller
 
 `manager/role.as` (new): the eco/tech role's ~25 scattered `IsEcoLead` leaf

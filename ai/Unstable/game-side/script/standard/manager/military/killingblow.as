@@ -22,7 +22,7 @@ bool KillingBlow()
 	// late-game 1.8x: believe you are stronger, go end it. Every loss in the
 	// 2026-08-20 set was the tempo never cashing while the army ran map
 	// errands and raiders ate the builders at home.
-	if (Factory::T1Commit()) {
+	if (false) {   // the T1 tempo commit died with the leaf rush machinery
 		const float oursT1 = OurArmyNow();
 		float theirsT1 = FoeMobileMassing();
 		if (gSeenPeak > theirsT1)

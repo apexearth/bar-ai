@@ -13,43 +13,8 @@ CCircuitDef@ JammerDef()
 	return SideDef3(armjamt, corjamt, legjam);
 }
 
-// One jammer per tower placed on the line, so the cover grows with the line
-// instead of being a single point the enemy can shoot out.
-void PlaceLineJammer(const AIFloat3& in spot)
-{
-	CCircuitDef@ jam = JammerDef();
-	if ((jam is null) || !jam.IsAvailable(ai.frame))
-		return;
-	// One per tower on the line. This counted against gPorcAdded, which belonged
-	// to the deleted base-defence rule and is now permanently zero -- which would
-	// have capped us at a single jammer for the whole game. The line's own tower
-	// count is the honest bound.
-	if (int(jam.count) >= int(FenceCountNear(spot, JAMMER_COVER)) )
-		return;
-	// Behind the tower it covers: the jammer is the thing being protected.
-	AIFloat3 back = spot;
-	if (Builder::gHomeSet) {
-		const float dx = Builder::gHomePos.x - spot.x;
-		const float dz = Builder::gHomePos.z - spot.z;
-		const float len = sqrt(dx * dx + dz * dz);
-		if (len > 1.f) {
-			back.x += dx / len * JAMMER_BACK;
-			back.z += dz / len * JAMMER_BACK;
-		}
-	}
-	if (!OnMap(back))
-		return;
-	// No builder in hand: this places the order for whoever the engine elects,
-	// and gets the same one-order-per-patch-of-ground protection.
-	bool created = false;
-	Requests::Take(null, jam, Task::BuildType::DEFENCE,
-			Task::Priority::NORMAL, back, 0.f, SQUARE_SIZE * 16, created);
-	if (created) {
-		AiLog(Factory::T() + "apex: line-jammer " + jam.GetName()
-			+ " standing=" + jam.count);
-	}
-}
-
+// (The line-jammer placement rule died in the overhaul kill; JammerDef stays
+// as a def lookup.)
 
 // No suicide raids while the army IS the defence: before the advanced plant, a
 // lost raid group is a large share of our whole defence, and losses only

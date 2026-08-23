@@ -3,6 +3,38 @@ namespace Builder {
 // Rez bots: the three places their needs differ from an ordinary constructor,
 // plus the reclaim pre-empt that runs after everything else has declined.
 
+// Per-bot ledger: last seen health and a trouble window (something shot us,
+// HERE), plus the repair-scan throttle. Replaces the dead fortify machinery.
+const int REZ_TROUBLE_WINDOW = 90 * SECOND;
+array<int>   gConSlotId;
+array<float> gConHp;
+array<int>   gConHitUntil;
+array<int>   gConNextRepair;
+
+int ConSlot(CCircuitUnit@ unit)
+{
+	const int id = int(unit.id);
+	for (uint i = 0; i < gConSlotId.length(); ++i) {
+		if (gConSlotId[i] == id)
+			return int(i);
+	}
+	gConSlotId.insertLast(id);
+	gConHp.insertLast(unit.GetHealthPercent());
+	gConHitUntil.insertLast(0);
+	gConNextRepair.insertLast(0);
+	return int(gConSlotId.length()) - 1;
+}
+
+// Refresh the bot's hit window from its health delta.
+void ConDugIn(CCircuitUnit@ unit)
+{
+	const int s = ConSlot(unit);
+	const float hp = unit.GetHealthPercent();
+	if (hp < gConHp[s] - 0.001f)
+		gConHitUntil[s] = ai.frame + REZ_TROUBLE_WINDOW;
+	gConHp[s] = hp;
+}
+
 IUnitTask@ RezzerFlee(CCircuitUnit@ unit)
 {
 	// Rez bots have no buildoptions and cannot dig in like an ordinary
@@ -18,8 +50,8 @@ IUnitTask@ RezzerFlee(CCircuitUnit@ unit)
 	// positional signal instead: something shot us, HERE. One hit is enough --
 	// unlike an armed constructor, a rez bot cannot dig in, only leave.
 	if (IsRezzer(unit)) {
-		ConDugIn(unit);   // side effect: refreshes gConHits/gConHp for this bot
-		if (gConHits[ConSlot(unit)] > 0) {
+		ConDugIn(unit);   // refreshes the hit window from the health delta
+		if (ai.frame < gConHitUntil[ConSlot(unit)]) {
 			IUnitTask@ flee = Retreat(unit);
 			if (flee !is null) {
 				// TROUBLE_WINDOW holds this true for up to 90s per hit, so without a
@@ -281,10 +313,10 @@ IUnitTask@ RezzerPreemptReclaim(CCircuitUnit@ unit, bool isComm, IUnitTask@ task
 	// ...and only where the bot can afford the time: a resurrect that is
 	// interrupted returns nothing at all, where a reclaim banks metal
 	// continuously as it goes, so under threat the slow option is a total loss.
-	if (!IsNavalBuilder(unit)
+	if (!(unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine())
 		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
 	{
-		CCircuitDef@ afus = SideDef3(armafus, corafus, legafus);
+		CCircuitDef@ afus = SideDef3("armafus", "corafus", "legafus");
 		if ((afus !is null) && (afus.count > 0))
 			return task;
 	}

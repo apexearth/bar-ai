@@ -61,8 +61,7 @@ void AiUpdateEconomy()
 			+ "/" + formatFloat(energy.storage, "", 0, 0)
 			+ " inc=" + formatFloat(energy.income, "", 0, 0)
 			+ " pull=" + formatFloat(energy.pull, "", 0, 0)
-			+ " eFull=" + (aiEconomyMgr.isEnergyFull ? "1" : "0")
-			+ " wasting=" + (Builder::EnergyWasting() ? "1" : "0"));
+			+ " eFull=" + (aiEconomyMgr.isEnergyFull ? "1" : "0"));
 	}
 
 	isSwitchAssist = isSwitchAssist && aiFactoryMgr.isAssistRequired;

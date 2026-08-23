@@ -49,7 +49,7 @@ bool StationFor(uint idx, AIFloat3& out at)
 	}
 	// A ring around home: evenly spaced by index so consecutive fighters do not
 	// stack, at a radius that grows with what we hold rather than a constant.
-	const float r = Crew::HOME_RADIUS;
+	const float r = 1600.f;   // the old crew home radius
 	const float ang = 6.2831853f * float(idx % 8) / 8.f;
 	at = Builder::gHomePos;
 	at.x += cos(ang) * r;

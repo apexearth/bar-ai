@@ -394,107 +394,9 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 				continue;
 			return cand;
 		}
-		// Same bar as PlantApproved: the eco role rebuilds no T1 plant
-		// before its second fusion.
-		if (Factory::IsEcoLead() && Factory::gHaveT2
-			&& Factory::IsLandT1Plant(want)
-			&& (Builder::gFusions.length()
-				< uint(ai.GetTunable("apex_role_t1_refac", TUNE_ROLE_T1_REFAC))))
-		{
-			return null;
-		}
-		// And NEVER a second T1 land plant for the role at all -- one stood
-		// beside a full bank with no T2 in the watched game ("2 T1 labs
-		// existing (both bot labs)... we don't need these labs anymore").
-		if (Factory::IsEcoLead() && Factory::IsLandT1Plant(want)
-			&& (Factory::T1PlantCount() >= 1))
-		{
-			return null;
-		}
-		if (Factory::IsLandT1Plant(want) && Factory::T1CapHolds()
-			&& (Factory::T1PlantCount() >= 1))
-		{
-			AiLog(Factory::T() + "apex: second T1 plant refused at the request door -- "
-				+ want.GetName() + " while " + Factory::T1PlantCount() + " stand(s)");
-			return null;
-		}
 	}
 
-	// ADVANCED SOLARS STAND TOGETHER (apexearth 2026-08-20) -- enforced at
-	// THE chokepoint because four different rules place them (HomeEnergy,
-	// the commander opening, the Brain fallback, scavenge), each with its
-	// own spot. Re-seed onto the nearest standing sibling, same
-	// shoulder-to-shoulder move as the nano and pulsar blocks; the threat
-	// veto keeps a pack from chaining into fire. Names, not a cost band, so
-	// fusions and winds are untouched.
-	AIFloat3 at = spot;
-	{
-		const string wn = want.GetName();
-		// No count gate: the FIRST panel used to skip this block entirely and
-		// land wherever its asker stood -- often the commander, forward,
-		// claiming mexes -- and then founded the whole pack on the enemy side.
-		// With count 0 the kin search finds nothing and the rear band places
-		// the founder.
-		if (((wn == "armadvsol") || (wn == "coradvsol") || (wn == "legadvsol"))
-			&& (unit !is null))
-		{
-			array<CCircuitUnit@>@ kin = ai.GetOwnUnitsOfDef(want, spot, 4000.f);
-			CCircuitUnit@ seed = null;
-			float bestSq = 1.0e18f;
-			if (kin !is null) {
-				for (uint i = 0; i < kin.length(); ++i) {
-					if (kin[i] is null)
-						continue;
-					const AIFloat3 kp = kin[i].GetPos(ai.frame);
-					if (!OnMap(kp))
-						continue;
-					const float sq = kp.SqDistance2D(spot);
-					if (sq < bestSq) {
-						bestSq = sq;
-						@seed = kin[i];
-					}
-				}
-			}
-			// BEHIND THE BASE, NOT WHEREVER THE ASKER STOOD. apexearth
-			// 2026-08-21: "advanced solars unusually far from the core of
-			// our base. They typically should be behind our base." A stray
-			// far panel must not found a colony: kin only seeds the pack
-			// while it stands near home, and with no near-home seed the deep
-			// band (the BACK of the base) places the founder.
-			const float homeR = ai.GetTunable("apex_advsol_home_r", TUNE_ADVSOL_HOME_R);
-			if ((seed !is null)
-				&& (seed.GetPos(ai.frame).distance2D(Builder::gHomePos) > homeR))
-			{
-				@seed = null;
-			}
-			// ...AND BEHIND, NOT JUST NEAR. homeR is a radius: a panel the
-			// same distance TOWARD the enemy passed it and the pack grew on
-			// the enemy side game after game (apexearth 2026-08-21: "I keep
-			// seeing the advanced solars being made in the direction of the
-			// enemy base"). The base frame knows which way is back -- a seed
-			// forward of the anchor is refused and the rear band founds the
-			// next panel instead.
-			if ((seed !is null) && Base::Ready()) {
-				float sDepth, sLat;
-				Base::Coords(seed.GetPos(ai.frame), sDepth, sLat);
-				if (sDepth < 0.f)
-					@seed = null;
-			}
-			if (seed !is null) {
-				AIFloat3 site = ai.FindBuildSiteNear(want, seed.GetPos(ai.frame),
-						ai.GetTunable("apex_advsol_pack_r", TUNE_ADVSOL_PACK_R));
-				if (OnMap(site) && (Builder::ThreatFor(unit, site) <= Builder::CON_THREAT_VETO))
-					at = site;
-			} else {
-				AIFloat3 rear;
-				if (Builder::BandSpot(unit, want, false, rear) && OnMap(rear)
-					&& (Builder::ThreatFor(unit, rear) <= Builder::CON_THREAT_VETO))
-				{
-					at = rear;
-				}
-			}
-		}
-	}
+	const AIFloat3 at = spot;
 
 	const int type = int(bt);
 	if (!Governed(type)) {
@@ -763,9 +665,10 @@ void PeelSurplus()
 		array<CCircuitUnit@>@ crew = t.GetUnits();
 		if (crew is null)
 			continue;
-		int wantN = Builder::BigBuildWorkersWanted(t.buildDef);
-		if (wantN < 1)
-			wantN = 1;
+		// The cost-scaled crew floor died with the fusion rules; a flat floor
+		// of one worker per 1000 metal of building stands in until the
+		// rebuilt arbiter prices crews again.
+		int wantN = 1 + int(t.buildDef.costM / 1000.f);
 		// ECO SITES KEEP A BIGGER CREW. Peeling every site to the bare ETA
 		// crew slowed exactly the buildings that pay for everything else --
 		// apexearth, after watching the first peeled game: "We a little bit

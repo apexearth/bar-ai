@@ -4,6 +4,7 @@ namespace Factory {
 // Team tech coordination: humans designate one player to tech and share
 // advanced constructors out; everyone else follows once eco supports it.
 bool gHaveT2 = false;   // set once we own an advanced factory
+bool gHaveT3 = false;   // ...and a T3 gantry
 // The real trigger is energy, not metal: take the nearby mexes, reach roughly
 // 500 energy/sec, then commit to T2. The rusher is the one player the whole
 // team is funding, so it is the last one that should be teching on thin energy.
@@ -62,36 +63,26 @@ const string TV_FILL = "fill";
 // through the whole window where they matter.
 const float SLING_STOP_FILL = 0.92f;
 
-// The elector publishes one team id per lead slot. Slot 0 keeps the bare "lead"
-// key so every existing reader -- slinging, the air lead, the army suppression --
-// still finds the primary lead where it always was.
-string LeadKey(uint slot)
-{
-	return (slot == 0) ? TV_LEAD : (TV_LEAD + slot);
-}
-
-// How many players may rush T2 at once: about 1 per 6 team-mates, ceiling so a
-// small team still gets one.
-uint TechLeadQuota()
+// Lowest team id in the ally roster. Every instance computes the same answer
+// from the same roster with no signalling, so all of them know whose blackboard
+// slot carries a shared value (the team-push window, for one).
+int ElectorTeamId()
 {
 	array<Id>@ mates = ai.GetTeamIds();
-	const uint n = ((mates is null) || (mates.length() == 0)) ? 1 : mates.length();
-	return (n + 5) / 6;
+	if ((mates is null) || (mates.length() == 0))
+		return ai.teamId;
+	int low = int(mates[0]);
+	for (uint i = 1; i < mates.length(); ++i) {
+		if (int(mates[i]) < low)
+			low = int(mates[i]);
+	}
+	return low;
 }
 
-// Total builders the tech lead may hold while rushing. Enough to finish an
-// advanced plant fast; beyond that each constructor is metal that buys nothing
-// while the whole team is funding this one player.
-const uint  RUSH_CON_CAP = 6;
-
-// Minimum gap between two constructor orders during the rush.
-//
-// RUSH_CON_CAP reads GetWorkerCount(), which counts FINISHED builders only, and
-// Enqueue does not dedup -- so without spacing the cap can be overshot by
-// however many orders fit in one constructor's build time. An interval is used
-// rather than an in-flight counter because an aborted recruit would leak a
-// counter permanently and silently stop constructor production.
-const int   RUSH_CON_SPACING = 12 * SECOND;
-int gNextConOrder = 0;
+bool TeamPlay()
+{
+	array<Id>@ roster = ai.GetTeamIds();
+	return (roster !is null) && (roster.length() > 1);
+}
 
 }  // namespace Factory

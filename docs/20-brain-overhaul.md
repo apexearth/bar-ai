@@ -205,7 +205,13 @@ carries no unexamined assumptions.
    is exactly where silent unknown-AI failures live).
 3. Kill: remove §1 wholesale; wire the ladder to holds→Decide→idle; stub
    facqueue to execute-only. Docs/comment cleanup rides along.
+   **DONE 2026-08-22** — ~13,600 lines of leaf logic deleted (37 rule files,
+   brain/facqueue/role/events/hooks rewritten to senses+executors), build_chain
+   hubs and response.json emptied.
 4. Validate the silence (§4.2) and the grep census (§4.1).
+   **DONE 2026-08-22** — census enforced as a check.py rule (clean); 8-minute
+   8v8 silence run: zero compile errors, apex alive (1,555 log lines), every
+   apex team's allBuilt = armcom only, facCount 0, mex 0, commBuild 0.
 5. **Architecture session before any rebuild code**: diagrams of the target
    — module responsibilities, the two markets, data flow from senses to
    Wants to executors — discussed with apexearth ("going through some

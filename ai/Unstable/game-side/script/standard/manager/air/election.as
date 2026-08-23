@@ -41,8 +41,10 @@ void RunElection()
 	array<Id>@ mates = ai.GetTeamIds();
 	if ((mates is null) || (mates.length() == 0))
 		return;
-	const int tech = Factory::RushLeadTeamId();
-	const bool skipTech = (mates.length() > 1);
+	// The tech-lead election died with the leaf rush machinery; nobody is
+	// skipped for teching until the rebuild restores a lead concept.
+	const int tech = -1;
+	const bool skipTech = false;
 
 	int best = -1;
 	// An airboss persona lowers its own bar; the election shape is unchanged.

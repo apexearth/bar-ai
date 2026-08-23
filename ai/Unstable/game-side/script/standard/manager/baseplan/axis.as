@@ -2,7 +2,7 @@ namespace Base {
 
 CCircuitDef@ AxisProbeDef()
 {
-	return SideDef3(Builder::armsolar, Builder::corsolar, Builder::legsolar);
+	return SideDef3("armsolar", "corsolar", "legsolar");
 }
 
 int AxisScore(const AIFloat3& in fwd, const AIFloat3& in across, CCircuitDef@ probe)

@@ -22,46 +22,7 @@ void EnqueueCross(const AIFloat3& in at, float r)
 	if (OnMap(c) && OnMap(d)) Enqueue(c, d);
 }
 
-int gNextMexDraw = 0;
-array<AIFloat3> gMexDrawn;
-
-// WHICH MEX EACH CONSTRUCTOR IS WALKING TO. apexearth 2026-08-22: cons
-// "sometimes choose to go to far away mexes instead of the mexes that are
-// closest to where they are" -- one line per claimed task, con to spot, makes
-// that visible directly instead of inferring it from a log.
-void DrawMexClaims()
-{
-	if (ai.GetTunable("apex_draw_mex", TUNE_DRAW_MEX) <= 0.f)
-		return;
-	if (ai.frame < gNextMexDraw)
-		return;
-	gNextMexDraw = ai.frame + 10 * SECOND;
-	for (uint i = 0; i < gMexDrawn.length(); ++i)
-		Enqueue(gMexDrawn[i], gMexDrawn[i]);
-	gMexDrawn.resize(0);
-
-	for (uint i = 0; i < Builder::gMexTasks.length(); ++i) {
-		IUnitTask@ t = Builder::gMexTasks[i];
-		if (t is null)
-			continue;
-		const AIFloat3 spot = t.GetBuildPos();
-		if (!OnMap(spot))
-			continue;
-		array<CCircuitUnit@>@ crew = t.GetUnits();
-		if ((crew is null) || (crew.length() == 0))
-			continue;
-		for (uint k = 0; k < crew.length(); ++k) {
-			CCircuitUnit@ u = crew[k];
-			if (u is null)
-				continue;
-			const AIFloat3 conAt = u.GetPos(ai.frame);
-			if (!OnMap(conAt))
-				continue;
-			Enqueue(conAt, spot);
-			gMexDrawn.insertLast(conAt);
-		}
-	}
-}
+// (DrawMexClaims died with the mex task ledger in the overhaul kill.)
 
 int gNextLaneDraw = 0;
 array<AIFloat3> gLaneDrawn;
@@ -102,51 +63,7 @@ void DrawLane()
 	}
 }
 
-int gNextGuardDraw = 0;
-array<AIFloat3> gGuardDrawn;
-
-// WHICH EXTRACTORS COUNT AS EXPOSED. MexGuardWanted scales the guard count by
-// FrontT and apex_mex_fwd_heavy scales the TIER by the same measure, so this
-// draws the classification the two of them share: a cross on every mex past the
-// forward fraction. apexearth 2026-08-22: "they should be making stronger
-// defenses when a mex is closer to the enemy" -- this shows which ones qualify.
-void DrawMexExposure()
-{
-	if (ai.GetTunable("apex_draw_guard", TUNE_DRAW_GUARD) <= 0.f)
-		return;
-	if (ai.frame < gNextGuardDraw)
-		return;
-	gNextGuardDraw = ai.frame + 20 * SECOND;
-	for (uint i = 0; i < gGuardDrawn.length(); ++i)
-		Enqueue(gGuardDrawn[i], gGuardDrawn[i]);
-	gGuardDrawn.resize(0);
-
-	CCircuitDef@ mex = Builder::MexDef();
-	if (mex is null)
-		return;
-	if (!Builder::gHomeSet)
-		return;
-	// The only enumeration binding is radial, so sweep from home at map scale.
-	const float far = float(AiTerrainWidth() + AiTerrainHeight());
-	array<CCircuitUnit@>@ mine = ai.GetOwnUnitsOfDef(mex, Builder::gHomePos, far);
-	if (mine is null)
-		return;
-	for (uint i = 0; i < mine.length(); ++i) {
-		CCircuitUnit@ u = mine[i];
-		if (u is null)
-			continue;
-		const AIFloat3 at = u.GetPos(ai.frame);
-		if (!OnMap(at))
-			continue;
-		const float t = Builder::FrontT(at);
-		if (t < Builder::MEX_GUARD_MID_FRAC)
-			continue;   // rear extractors are not the question
-		// Bigger cross the further forward it sits, so the gradient reads at a
-		// glance rather than needing two colours we do not have.
-		EnqueueCross(at, (t >= Builder::MEX_GUARD_FWD_FRAC) ? 240.f : 130.f);
-		gGuardDrawn.insertLast(at);
-	}
-}
+// (DrawMexExposure died with the mex-guard rules in the overhaul kill.)
 
 int gNextHealDraw = 0;
 
@@ -179,9 +96,7 @@ void DrawHealPost()
 
 void DrawDiagnostics()
 {
-	DrawMexClaims();
 	DrawLane();
-	DrawMexExposure();
 	DrawHealPost();
 }
 

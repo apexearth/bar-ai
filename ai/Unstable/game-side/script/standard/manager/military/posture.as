@@ -11,7 +11,7 @@ bool ArmyBuildupHold()
 {
 	if (ai.GetTunable("apex_t2_army_hold", TUNE_T2_ARMY_HOLD) <= 0.f)
 		return false;
-	return !Factory::T2ArmyReady();
+	return false;   // the T2 army-buildup gate died with the leaf rush machinery
 }
 
 // The tower of ours that stands closest to the enemy: "the borders where all
@@ -155,7 +155,7 @@ void UpdateTeamPush()
 	}
 
 	const int until = int(ai.ReadTeamValue(Factory::ElectorTeamId(), TV_PUSH, 0.f));
-	const bool pushing = (ai.frame < until) && !Factory::EcoLeadActive();
+	const bool pushing = (ai.frame < until);
 	if (pushing) {
 		ai.SetEngageBoost(PUSH_BOOST());
 		// Units in a declared push stop retreating to heal; see
@@ -176,8 +176,7 @@ void UpdateTeamPush()
 		// Teching overrides personality in the cautious direction only -- a
 		// berserker at 0.82 still holds while its lab is unfinished, and a
 		// cautious 1.18 is not made less careful by this.
-		const float adv = Factory::OwnAdvProgress();
-		const bool teching = (adv >= 0.f) && (adv < 1.f);
+		const bool teching = false;   // no advanced-plant program in the kill phase
 		// Caution learned from where our metal is currently dying: bleeding
 		// on their ground raises the odds we demand before crossing again.
 		float boost = Persona::EngageBias() * BleedCaution();
@@ -580,18 +579,13 @@ void UpdatePosture()
 	Brain::BudgetLog();
 	UpdateKillingBlow();
 	UpdateRaidCaution();
-	UpdateSling();
-	UpdateRushDefence();
 	UpdateMassing();
-	UpdateRushRole();
-	UpdateEcoRole();
-	UpdateEcoAid();
 	// Last, so it is the final word on the quota and the posture.
 	UpdateTeamPush();
 	// After massing and both role rules, so it is the last word on the quota.
 	// Not for the eco lead: it holds almost no army by design, and sending that
 	// at a base is throwing it away rather than ending anything.
-	if (gKilling && !Factory::EcoLeadActive()) {
+	if (gKilling) {
 		aiMilitaryMgr.quota.attack = ai.GetTunable("apex_kill_quota", TUNE_KILL_QUOTA);
 		if (gTurtle) {
 			gTurtle = false;
@@ -625,7 +619,6 @@ void UpdatePosture()
 	{
 		aiMilitaryMgr.quota.attack = TURTLE_ATTACK;
 	}
-	UpdateFrontGun();
 	UpdateAirThreat();
 	UpdateCorridorProbe();
 	Commander::UpdateCaution();

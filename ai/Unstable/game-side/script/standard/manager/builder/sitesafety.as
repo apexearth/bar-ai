@@ -298,4 +298,23 @@ void LogConVeto(CCircuitUnit@ unit, const string& in what,
 		+ " rerouted=" + gConRerouted + " defended=" + gConDefended);
 }
 
+
+// THE INVASION SENSE. Enemy influence AT our own position, not distance to
+// GetEnemyPos() (the centroid of all known enemies, which in a team game
+// rarely comes near our base even during a raid). Read by the military stance,
+// posture and withdraw layers.
+const float BASE_DANGER_DIST = 2200.f;
+
+bool BaseUnderAttack()
+{
+	if (!gHomeSet)
+		return false;
+	if (ai.GetEnemyInflAt(gHomePos)
+		> ai.GetTunable("apex_base_attack_infl", TUNE_BASE_ATTACK_INFL))
+	{
+		return true;
+	}
+	return gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) < BASE_DANGER_DIST;
+}
+
 }  // namespace Builder

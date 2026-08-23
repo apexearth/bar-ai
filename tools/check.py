@@ -382,6 +382,50 @@ def check_angelscript(script_root: Path, rep: Report) -> None:
                           f"compile error disables the whole variant silently")
 
 
+# -- the overhaul-kill census (docs/20-brain-overhaul.md par.4.1) -------------
+#
+# No leaf rule may spend on its own: every path that turns constructor time or
+# a factory line into work must go through the arbiter's executors. The
+# allowlist names the only files that may hold such a call site; anything else
+# is leaf logic growing back, which is exactly the failure the kill removed.
+_SPEND_PATTERNS = (
+    "Enqueue(TaskB::",              # builder-task creation
+    "Requests::Take(",              # the request chokepoint (callers, not impl)
+    "aiBuilderMgr.DefaultMakeTask", # the DLL's native economy
+    "aiFactoryMgr.DefaultMakeTask", # the DLL's native recruiting
+    "DefaultMakeDefence",           # the DLL's native porc ladder
+    "DefaultMakeSensors",           # sensors are structures too
+)
+# path suffix (POSIX, relative to script/) -> patterns it may contain
+_SPEND_ALLOWED = {
+    # the request plumbing's own enqueue
+    "manager/builder/requests.as": {"Enqueue(TaskB::"},
+    # kept rez-bot unit thoughts (docs/20 par.2): repair/reclaim of what exists
+    "manager/builder/rules_rezzer.as": {"Enqueue(TaskB::"},
+    "manager/builder/reclaim.as": {"Enqueue(TaskB::"},
+    # the arbiter itself (empty market during the kill; the rebuild's executor)
+    "manager/brain.as": {"Enqueue(TaskB::", "Requests::Take("},
+}
+
+
+def check_spend_census(script_root: Path, rep: Report) -> None:
+    if not script_root.is_dir():
+        return
+    for path in sorted(script_root.rglob("*.as")):
+        rel = path.relative_to(script_root.parent).as_posix()
+        key = next((k for k in _SPEND_ALLOWED
+                    if rel.replace("script/", "", 1).endswith(k)), None)
+        allowed = _SPEND_ALLOWED.get(key, set())
+        for n, raw in enumerate(path.read_text(encoding="utf8",
+                                               errors="replace").splitlines(), 1):
+            line = raw.split("//", 1)[0]
+            for pat in _SPEND_PATTERNS:
+                if pat in line and pat not in allowed:
+                    rep.error(f"{rel}:{n}: leaf spend call '{pat}' outside the "
+                              f"arbiter's executors -- the overhaul kill census "
+                              f"(docs/20-brain-overhaul.md par.4.1) forbids this")
+
+
 def check_variant(variant: str, units: set[str]) -> Report:
     rep = Report()
     vdir = AI_DIR / variant
@@ -394,6 +438,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
     if cfg_root.is_dir():
         check_parity(cfg_root, rep)
     check_angelscript(script_root, rep)
+    check_spend_census(script_root, rep)
 
     on_disk = sorted(d.name for d in cfg_root.iterdir() if d.is_dir()) if cfg_root.is_dir() else []
     if declared:

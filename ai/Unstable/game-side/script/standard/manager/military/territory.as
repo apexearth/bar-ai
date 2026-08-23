@@ -1070,7 +1070,7 @@ bool EnemyAfloat()
 	{
 		const AIFloat3 at = aiEnemyMgr.GetEnemyPos();
 		if (OnMap(at)) {
-			CCircuitDef@ sy = Factory::NavalOpening();
+			CCircuitDef@ sy = SideDef3(Factory::armsy, Factory::corsy, Factory::legsy);
 			if (sy !is null) {
 				// Tight: the enemy's mass must sit ON the water's edge, not a
 				// screen from a lake -- 900 bought shipyards against a land

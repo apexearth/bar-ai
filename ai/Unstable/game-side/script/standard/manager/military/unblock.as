@@ -282,21 +282,21 @@ bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in di
 		if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
 			&& !StuckAskedFor(unit.id))
 		{
-			IUnitTask@ eatUnit = aiBuilderMgr.Enqueue(TaskB::Reclaim(
-					Task::Priority::NORMAL, unit));
-			if (eatUnit !is null) {
-				gStuckAsked.insertLast(int(unit.id));
-				gStuckAskedFrame.insertLast(ai.frame);
-				AiLog(Factory::T() + "apex: stuck " + unit.circuitDef.GetName()
-					+ " #" + unit.id + " terrain-penned -> reclaiming the unit");
-			}
+			// KILL PHASE: reclaiming our own stuck unit is a build choice
+			// and goes through the Brain in the rebuild. Log the pen only.
+			gStuckAsked.insertLast(int(unit.id));
+			gStuckAskedFrame.insertLast(ai.frame);
+			AiLog(Factory::T() + "apex: stuck " + unit.circuitDef.GetName()
+				+ " #" + unit.id + " terrain-penned (no reclaim in the kill phase)");
 		}
 		return false;
 	}
 	if (eat is null)
 		return false;
 
-	IUnitTask@ task = aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, eat));
+	// KILL PHASE: eating our own blocking building is a build choice and goes
+	// through the Brain in the rebuild. Note it and stand down.
+	IUnitTask@ task = null;
 	if (task is null)
 		return false;
 

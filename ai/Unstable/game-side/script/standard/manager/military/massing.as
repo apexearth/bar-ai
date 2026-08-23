@@ -341,9 +341,6 @@ void UpdateMassing()
 		return;
 	if (gTurtle)
 		return;   // an active hold is stricter; do not loosen it
-	if (Factory::TeamPlay()
-		&& (ai.teamId == Factory::RushLeadTeamId()) && !Factory::gHaveT2)
-		return;   // the rusher has its own quota while teching -- team role only
 
 	// TEAM against team: aiMilitaryMgr.armyCost is THIS player's army while
 	// EnemyArmyCost() sums every enemy, so comparing them directly on a 4v4 is

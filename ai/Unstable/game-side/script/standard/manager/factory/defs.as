@@ -32,9 +32,36 @@ string leggant ("leggant");
 string armshltxuw("armshltxuw");
 string corgantuw ("corgantuw");
 
-int switchInterval = MakeSwitchInterval();
-// The `hard` profile's own switch clock, used when apex stands aside.
-float switchLimit = MakeSwitchLimit();
+// Tier tags per def, assigned in Main::AiMain -- read by the T2/T3 latches.
+enum Attr {
+	T1 = 0x0001, T2 = 0x0002, T3 = 0x0004, T4 = 0x0008
+}
+
+class SUserData {
+	SUserData(int a) {
+		attr = a;
+	}
+	SUserData() {}
+	int attr = 0;
+}
+
+array<SUserData> userData(ai.GetDefCount() + 1);
+
+const uint BIG_TEAM = 6;
+
+bool IsSmallTeam()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	return (mates is null) || (mates.length() < BIG_TEAM);
+}
+
+// Late game is economy, not only time: any fusion standing counts.
+const int LATE_GAME_FRAME = 25 * MINUTE;
+
+bool LateGame()
+{
+	return (ai.frame >= LATE_GAME_FRAME) || (Builder::gFusions.length() > 0);
+}
 
 // The cheapest body THIS factory can actually make. Scout first, then raider:
 // armlab answers armflea, corlab has no scout unit and falls through to corak,

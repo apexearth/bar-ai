@@ -4,23 +4,18 @@
 #include "perf.as"
 #include "targets.as"          // EVERY build ratio, in one file
 #include "policy.as"           // ...and every eco THRESHOLD, in this one
-#include "manager/brain/budget.as"  // the one place the build split is stated
-#include "manager/brain.as"       // macro view: rules propose Wants, this ranks them
-#include "manager/brain/mix.as"   // ...and the target army composition
+#include "manager/brain/budget.as"  // the spend ledger and target split (a sense)
+#include "manager/brain.as"       // the arbiter: Decide is the only spender (empty market)
 #include "manager/military.as"
 #include "manager/builder.as"
 #include "manager/factory.as"
 #include "manager/role.as"        // the eco/tech role's POLICY, one place
 #include "manager/persona.as"     // per-instance identity: biases, never gates
-#include "manager/brain/sentinel.as" // the brain checking its own concepts, out loud
-#include "manager/brain/nukes.as" // the nuke director: saved volleys vs antinukes
-#include "manager/brain/facqueue.as"  // ...and drives a factory itself, as a standing queue
+#include "manager/brain/facqueue.as"  // the production executor: every line held silent
 #include "manager/economy.as"
 #include "manager/air.as"
 #include "manager/frontline.as"
 #include "manager/baseplan.as"
-#include "manager/crew.as"
-#include "manager/assist.as"
 // Watch-game overlays. LAST on purpose: it reads globals from builder, military
 // and frontline, and a global must be declared before the line that reads it.
 #include "manager/frontline/draw_diag.as"
@@ -97,70 +92,22 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (!ApexActive())
 		return;
 
-	double t = Perf::T0();
-	Builder::SampleWreckField();   // before the queue that reads WreckSeenValue
-	Perf::Add("upd.WreckField", t);
-	t = Perf::T0();
+	Builder::SampleWreckField();
 	Requests::PeelSurplus();
-	Perf::Add("upd.Peel", t);
-	t = Perf::T0();
-	// The role plan resolves before the facqueue so both the production side
-	// and the builder ladder consume the same answer within one tick.
 	Role::Resolve();
 	Brain::UpdateFacQueues();
 	Brain::LogFacQueues();
-	Perf::Add("upd.FacQueues", t);
-	t = Perf::T0();
-	Factory::UpdateTeamCoord();
-	Perf::Add("upd.TeamCoord", t);
-	t = Perf::T0();
 	Military::UpdateLanePos();
 	Military::UpdateDeathLedger();
 	Military::UpdateWithdraw();
 	Air::UpdateFighterStations();
 	Air::RecycleOldFighters();
-	Brain::UpdateNukes();
 	Military::UpdateSpamPosture();
 	Military::UpdatePosture();
-	Perf::Add("upd.Military", t);
-	t = Perf::T0();
-	Factory::SampleIncome();
-	Factory::UpdateRushReclaim();
-	Factory::EcoRoleEatT1Labs();
-	Factory::EcoRoleEatT2Lab();
-	Factory::EcoRoleConsPayForLab();
-	Factory::LogRushState();
-	Perf::Add("upd.FactoryMisc", t);
-	t = Perf::T0();
 	Air::Update();
-	Perf::Add("upd.Air", t);
-	t = Perf::T0();
 	Front::Update();
 	Brain::Think();
-	Perf::Add("upd.Front", t);
-	t = Perf::T0();
 	Base::Update();
-	Perf::Add("upd.Base", t);
-	t = Perf::T0();
-	Crew::Update();
-	Perf::Add("upd.Crew", t);
-	t = Perf::T0();
-	Assist::Update();
-	Perf::Add("upd.Assist", t);
-	t = Perf::T0();
-	Builder::CommIdleAttribute();
-	Builder::SampleTaskHist();
-	Builder::PromoteAssistBots();
-	Builder::UpdateEconomicCaps();
-	Builder::AdvConDiag();
-	Builder::ExpandDiag();
-	Builder::EcoMathDiag();
-	Builder::CancelDoomedRepairs();
-	Builder::UpdateSiege();
-	Builder::NanoTidy();
-	Builder::ObsoleteSweep();
-	Builder::ConCensus();
-	Perf::Add("upd.BuilderMisc", t);
 	Perf::TickSpeed();
 	Perf::Flush();
 }
@@ -194,10 +141,6 @@ void AiUnitFinished(CCircuitUnit@ unit)
 		return;
 	if ((int(unit.id) >= 0) && (int(unit.id) < int(gFinished.length())))
 		gFinished[int(unit.id)] = true;
-	// The reactor/converter pipelines need COMPLETIONS, not creations --
-	// def.count moves on the nanoframe.
-	if (unit.circuitDef !is null)
-		Builder::NoteEcoFinished(unit.circuitDef.GetName());
 	// The defense zone follows the BUILT base: every finished rear structure
 	// can stretch the ring, forward fences and mex guards never do (a front
 	// tower at fwd 0.6 must not turn half the map into fight-at-any-odds
@@ -213,27 +156,6 @@ void AiUnitFinished(CCircuitUnit@ unit)
 				Military::gBaseExtent = dEx;
 		}
 	}
-	// RadarNet's standing ledger: positions, because coverage is a place, and
-	// a dead radar must re-open its border rank (a count cannot say where).
-	CCircuitDef@ radDef = Builder::RadarTowerDef();
-	if ((radDef !is null) && (unit.circuitDef.id == radDef.id))
-		Builder::RadarStandAdd(unit.GetPos(ai.frame));
-	CCircuitDef@ nanoDef = Builder::NanoDef();
-	if ((nanoDef !is null) && (unit.circuitDef.id == nanoDef.id)) {
-		Builder::NanoNoteBuilt(unit.id);
-		// PATROL THE INSTANT IT EXISTS. The standing patrol used to be issued
-		// only from the factory task election, so a turret the election budget
-		// never reached sat idle with no order at all (apexearth, watching:
-		// "it was never given a patrol order. It should at least get 1 the
-		// instant it is created"). Patrol hands it to the engine's builder AI
-		// -- assist/repair/reclaim in range -- and the election's periodic
-		// re-issue remains as self-healing.
-		AIFloat3 pp = unit.GetPos(ai.frame);
-		pp.x += 64.f;
-		if (OnMap(pp))
-			unit.CmdPatrolTo(pp);
-	}
-	Brain::NoteSiloFinished(unit);
 }
 
 // CInitScript::UnitDestroyed (InitScript.cpp:1224) looks this exact signature
@@ -260,19 +182,11 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	IUnitTask@ t = unit.task;
 	const int tt = (t is null) ? -1 : t.GetType();
 	const int bt = ((t !is null) && (tt == Task::Type::BUILDER)) ? t.GetBuildType() : -1;
-	CCircuitDef@ radDefGone = Builder::RadarTowerDef();
-	if ((cdef !is null) && (radDefGone !is null) && (cdef.id == radDefGone.id))
-		Builder::RadarStandRemoveNear(at);
-	CCircuitDef@ nanoGone = Builder::NanoDef();
-	if ((cdef !is null) && (nanoGone !is null) && (cdef.id == nanoGone.id))
-		Builder::NanoNoteGone(unit.id);
 	// The fight type IS "the last major action" for a combat unit -- attack,
 	// defend, raid, retreat all leave a distinct value here -- and the forward
 	// fraction says WHERE it died (0 home, 1 at the enemy). tools/deaths.py
 	// aggregates these lines into metal-lost-by-last-action.
 	const int ft = ((t !is null) && (tt == Task::Type::FIGHTER)) ? t.GetFightType() : -1;
-	if (cdef !is null)
-		Builder::NoteEcoGone(cdef.GetName(), WasFinished(int(unit.id)));
 	// Finished mobile combat only: nanoframes and builders are not evidence
 	// about whether FIGHTING forward is paying.
 	if ((cdef !is null) && cdef.IsMobile() && WasFinished(int(unit.id))
@@ -307,12 +221,6 @@ void AiUnitDestroyedBy(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 {
 	if ((unit is null) || (attackerDef is null))
 		return;
-	// BEING attacked by T2 is the fast, common sighting -- killing their T2
-	// (the only other def-level channel) can lag by many minutes, and did:
-	// apexearth watched a committed game stay T1 against an enemy that had
-	// teched. His own wording of the release: "if the enemy starts to attack
-	// you with tier two, you have to upgrade."
-	Factory::NoteEnemyDefSeen(attackerDef);
 	const CCircuitDef@ cdef = unit.circuitDef;
 	if ((cdef is null) || !cdef.IsMobile() || !WasFinished(int(unit.id)))
 		return;
@@ -329,7 +237,6 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 		return;
 	double hkT = Perf::T0();
 	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs);
-	Factory::NoteEnemyDefSeen(edef);
 	Perf::Add("hk.enemydead", hkT);
 }
 

@@ -478,7 +478,6 @@ void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 		ForgetPenned(unit.id);
 	if (usage != Unit::UseAs::FENCE)
 		return;
-	Builder::NoteShieldLost(unit.circuitDef);   // feeds the LRPC shield want
 	const int id = unit.id;
 	for (uint i = 0; i < gFenceId.length(); ++i) {
 		if (gFenceId[i] == id) {
