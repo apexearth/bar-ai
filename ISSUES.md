@@ -1588,3 +1588,16 @@ signal). Stock has NO nuke offense (0 files) -- a potential advantage for
 us later, our anti-nuke defense already exists. Priority order when the
 ladder baseline is in: shields (defends the tech core), LRPC (late-game
 siege sink), then naval as its own project.
+
+## THE blocker: army trades at 0.22 K/D (2026-08-23, the ladder's verdict)
+
+Across 8 games at 45m vs easy: 311,470 metal of army lost to kill 68,715
+(K/D 0.22); the 2.5:1 eco lead at 30m decays to 1.05 by 45m paying for the
+bleed. Our squads average 2 units against their 4.8-6.0 (max 11-15) --
+units still reach fights in dribs despite pool floors (meet 1.3x, hold
+240s: no measurable change at these samples). Wins come EARLY off the eco
+lead (20-34m); every long game is lost to trades. Medium: 0-6. This is the
+kept legacy military-use layer's domain (engage odds, squad merge, group
+travel) -- apexearth's design input wanted before surgery, per the unit-
+thoughts boundary. The market side is NOT the constraint anymore: eco,
+composition, protection, and production all measure healthy.
