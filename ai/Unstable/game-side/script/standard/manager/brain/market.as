@@ -918,8 +918,6 @@ float PipeLatencyMult(int plantId, float askerBP)
 Want@ ProposePlant(CCircuitUnit@ unit)
 {
 	Want w;
-	if (!gMexOpen)
-		return w;
 	// The MARGINAL plant: worth anything only if income supports another
 	// line (~50 m/s each, apexearth's number). Not a cap -- a price of zero
 	// past what the economy can feed, of any lab type.
@@ -930,9 +928,20 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
-	const float gain = (SpotM() + BPGap())
+	// Expansion stream while ground remains, PLUS the production appetite a
+	// new line would serve -- a lost lab re-prices itself from the army gap
+	// even when every spot is claimed.
+	const float fillS0 = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	const float aGap = ArmyTarget() - ArmyValue();
+	const float prodTerm = (aGap > 0.f)
+			? (aGap / ((fillS0 > 1.f) ? fillS0 : 180.f))
+				/ float(1 + Factory::gFactoryCount)
+			: 0.f;
+	const float gain = ((gMexOpen ? SpotM() : 0.f) + BPGap() + prodTerm)
 			* ai.GetTunable("apex_plant_pipe", TUNE_PLANT_PIPE)
 			* Utilization();
+	if (gain <= 0.05f)
+		return w;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
@@ -1261,24 +1270,27 @@ AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 // is an immobile lathe with no build options; its drain is its workertime
 // at the game's metal-per-workertime rate (7 m/s per 80 WT, the T1 con's
 // measured pull).
-bool AnyUncoveredWorkingFactory()
+// Unabsorbed line spend across working factories: each nano near a line
+// absorbs ~17.5 m/s; a hot line justifies a RING, not one turret.
+float UnservedLineSpend()
 {
+	float unserved = 0.f;
+	const float per = LineSpend();
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
 		if ((f is null) || (f.CountQueued(null) == 0))
 			continue;
+		int nanosNear = 0;
 		const AIFloat3 fp = f.GetPos(ai.frame);
-		bool covered = false;
 		for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
-			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f) {
-				covered = true;
-				break;
-			}
+			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
+				++nanosNear;
 		}
-		if (!covered)
-			return true;
+		const float u = per - float(nanosNear) * 17.5f;
+		if (u > 0.f)
+			unserved += u;
 	}
-	return false;
+	return unserved;
 }
 
 Want@ ProposeNano(CCircuitUnit@ unit)
@@ -1292,8 +1304,9 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	const float gap = BPGap();
 	const float ovf = OverflowM();
 	float over = (gap > ovf) ? gap : ovf;
-	if (AnyUncoveredWorkingFactory() && (over < 15.f))
-		over = 15.f;   // ~ one nano's own drain: makes the first nano near-automatic
+	const float lineNeed = UnservedLineSpend();
+	if (lineNeed > over)
+		over = lineNeed;   // hot lines size their own nano ring
 	if (over <= 0.5f)
 		return w;
 	const int uid = int(unit.circuitDef.id);
@@ -1479,10 +1492,42 @@ float RoleValue(int role)
 // wants AA). BAR's counter mechanics, priced: AA tracks enemy air, riot
 // tracks enemy raiders, skirm/arty track enemy static, assault carries the
 // general line. A uniform baseline keeps a portfolio before contact.
+// Exposed workers without an escort -- each is standing demand for one
+// cheap raider (apexearth: "a *need* is cheap escorts for cons").
+int EscortShortfall()
+{
+	if (!gFarmSet)
+		return 0;
+	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
+	int n = 0;
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ wkr = gWorkers[i];
+		if ((wkr is null) || (wkr.task is null))
+			continue;
+		if (Catalog::gFlyer[int(wkr.circuitDef.id)])
+			continue;
+		if (wkr.GetPos(ai.frame).distance2D(gFarmPos)
+				/ ((expoR > 1.f) ? expoR : 1200.f) < 0.5f)
+			continue;
+		bool has = false;
+		for (uint e = 0; e < gEscWorker.length(); ++e) {
+			if (gEscWorker[e] == wkr.id) {
+				has = true;
+				break;
+			}
+		}
+		if (!has)
+			++n;
+	}
+	return n;
+}
+
 float RoleTarget(int role, float armyTarget)
 {
 	const float base = armyTarget / 6.f;   // maximum-entropy prior over combat roles
 	float counter = 0.f;
+	if (role == int(Unit::Role::RAIDER.type))
+		counter = float(EscortShortfall()) * 60.f;   // ~ one cheap escort each
 	if (role == int(Unit::Role::AA.type))
 		counter = aiEnemyMgr.GetEnemyCost(RT::AIR)
 				* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH);
@@ -1494,6 +1539,23 @@ float RoleTarget(int role, float armyTarget)
 	else if (role == int(Unit::Role::ASSAULT.type))
 		counter = Military::EnemyCostOf(Unit::Role::ASSAULT.type);
 	return base + counter;
+}
+
+// The production appetite one standing line carries, metal/s -- what a
+// factory's existence is WORTH beyond expansion, what its nano ring must
+// absorb, and what an assist bid against it can earn. (Watched: a lab
+// killed by artillery never rebuilt -- the plant want only priced open
+// spots; and hot lines ran on one nano with no help.)
+float LineSpend()
+{
+	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	const float gap = ArmyTarget() - ArmyValue();
+	float s = (gap > 0.f) ? (gap / ((fillS > 1.f) ? fillS : 180.f)) : 0.f;
+	const float ovf = OverflowM();
+	if (ovf > s)
+		s = ovf;
+	const int lines = (Factory::gFactoryCount > 0) ? Factory::gFactoryCount : 1;
+	return s / float(lines);
 }
 
 float ArmyValue()
@@ -1795,7 +1857,14 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 		if ((ePull > 1.f) && (eInc < ePull))
 			eFeed = eInc / ePull;
 	}
-	const float myDrain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
+	float myDrain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
+	// Against a factory boss the bid is bounded by what the line actually
+	// leaves unserved -- and floored at a trickle so SOME help arrives.
+	if ((boss !is null) && !boss.circuitDef.IsMobile()) {
+		const float u = UnservedLineSpend();
+		if (u < myDrain)
+			myDrain = (u > 1.f) ? u : 1.f;
+	}
 	const AIFloat3 bp = boss.GetPos(ai.frame);
 	const float speed = Catalog::gSpeed[uid];
 	const float walkSec = (speed > 1.f)
