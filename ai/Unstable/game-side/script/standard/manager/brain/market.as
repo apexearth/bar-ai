@@ -2111,8 +2111,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			continue;
 		// ARMY: fill the gap, best power-per-cost first, diminishing per
 		// copy owned so the mix diversifies by arithmetic, not by table.
+		// Overflowing metal keeps the line running past the target: idle
+		// factory time is free, and army beats waste (watched: "way too
+		// much idle time on our T1 lab").
 		if (!Catalog::gBuilder[d]) {
-			if ((armyGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
+			const float sinkGap = OverflowM() * ((fillS > 1.f) ? fillS : 60.f);
+			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
+			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
 				continue;
 			const float ppc = Catalog::gPower[d] / Catalog::gCostM[d];
 			const float have = float((int(d) < int(gOwnCount.length()))
@@ -2127,7 +2132,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 				if ((eP > 1.f) && (eI < eP))
 					eFeedA = eI / eP;
 			}
-			const float gainA = (armyGap / ((fillS > 1.f) ? fillS : 60.f))
+			const float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
 					* (ppc / linePPC) / (1.f + have * 0.03f) * eFeedA;
 			if (gainA <= 0.01f)
 				continue;
