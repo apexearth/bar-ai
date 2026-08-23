@@ -886,6 +886,30 @@ Want@ ProposeGeo(CCircuitUnit@ unit)
 	return w;
 }
 
+// A plant's future output discounts by its own LATENCY (temporal
+// consistency, same law as EPriceAt): the pipeline delivers its first con
+// at lab-build + con-build seconds, and value that far out is worth
+// horizon/(horizon+latency) of value now. This is what makes the natural
+// opening (mex, mex, solar, THEN lab) emerge without a scripted order --
+// at frame zero the lab's 70s latency halves it below the immediate mex.
+float PipeLatencyMult(int plantId, float askerBP)
+{
+	const float labSec = Catalog::BuildSecondsAt(plantId, EffBP(askerBP));
+	float conSec = 45.f;
+	const array<int>@ prods = Catalog::gBuildsList[plantId];
+	for (uint p = 0; p < prods.length(); ++p) {
+		if (Catalog::gMobile[prods[p]] && Catalog::gBuilder[prods[p]]) {
+			const float cs = Catalog::BuildSecondsAt(prods[p],
+					Catalog::gBuildPower[plantId]);
+			if (cs < conSec)
+				conSec = cs;
+		}
+	}
+	const float H = ai.GetTunable("apex_pipe_latency_h", TUNE_PIPE_LATENCY_H);
+	const float h = (H > 1.f) ? H : 60.f;
+	return h / (h + labSec + conSec);
+}
+
 // MODEL: a plant's return is its constructor pipeline -- each con carries
 // roughly one open spot's stream while expansion ground remains, plus the
 // overflow the pipeline would capture (arithmetic, see OverflowM). One named
@@ -937,7 +961,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if (bestMob <= 0.f)
 			continue;
 		Want c;
-		ValueOf(d, gain * bestMob, 0.f, Catalog::gBuildPower[uid], c);
+		ValueOf(d, gain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
+				0.f, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_PLANT;
@@ -1083,7 +1108,8 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		if (techGain <= 0.f)
 			continue;
 		Want c;
-		ValueOf(d, techGain, 0.f, Catalog::gBuildPower[uid], c);
+		ValueOf(d, techGain * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
+				0.f, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_TECH;

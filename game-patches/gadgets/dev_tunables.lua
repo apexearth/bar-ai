@@ -47,6 +47,7 @@ local NAMES = {
 	"apex_spot_m",
 	"apex_plant_pipe",
 	"apex_plant_income_per",
+	"apex_pipe_latency_h",
 	"apex_store_horizon",
 	"apex_tech_pipe",
 	"apex_e_response",

@@ -1124,6 +1124,10 @@ const float TUNE_PLANT_PIPE = 2.0f;
 // marginal plant's gain is zero beyond 1 + income/this -- income-derived,
 // never a count.
 const float TUNE_PLANT_INCOME_PER = 50.f;
+// PIPE_LATENCY_H: the horizon against which a production pipeline's
+// delivery latency discounts (h/(h+latency)) -- the temporal-consistency
+// law applied to plants; what makes mex-solar-lab the emergent opening.
+const float TUNE_PIPE_LATENCY_H = 60.f;
 // STORE_HORIZON: seconds over which a storage's volume counts as captured
 // overflow (its gain = min(overflow, storeM/horizon)).
 const float TUNE_STORE_HORIZON = 60.f;
