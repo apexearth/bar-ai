@@ -942,7 +942,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			w = c;
 			w.kind = WK_PLANT;
 			@w.def = Catalog::Def(d);
-			w.pos = EcoSiteFor(unit);
+			// Plants stand at the base anchor -- the middle of what we own.
+			w.pos = Base::gAnchorSet ? Base::gAnchor : EcoSiteFor(unit);
 		}
 	}
 	return w;
@@ -1087,7 +1088,9 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			w = c;
 			w.kind = WK_TECH;
 			@w.def = Catalog::Def(d);
-			w.pos = here;
+			// The tech lab is the most protection-hungry building we own:
+			// at the base anchor, never at a forward asker (watched).
+			w.pos = Base::gAnchorSet ? Base::gAnchor : here;
 		}
 	}
 	return w;
