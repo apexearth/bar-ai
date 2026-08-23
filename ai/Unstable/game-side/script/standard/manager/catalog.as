@@ -42,6 +42,7 @@ array<float> gJamR;
 array<bool> gAntiNuke;   // carries a nuke interceptor
 array<bool> gTargFac;    // targeting facility (pinpointer)
 array<float> gMaxRange;  // longest weapon reach (0 = unarmed)
+array<float> gPower;     // CircuitAI threat value -- combat worth
 array<bool> gAvailable;
 
 array<array<int>> gBuildsList;  // builder def id -> def ids it can build
@@ -65,7 +66,7 @@ void Init()
 	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gAreaCells.resize(n);
 	gBuildDist.resize(n);
 	gRadar.resize(n); gJammer.resize(n); gRadarR.resize(n); gJamR.resize(n);
-	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n);
+	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n); gPower.resize(n);
 	gAvailable.resize(n);
 	gBuildsList.resize(n); gBuiltBy.resize(n);
 
@@ -105,6 +106,7 @@ void Init()
 		gAntiNuke[i]     = cdef.IsAntiNukeW();
 		gTargFac[i]      = cdef.IsTargFac();
 		gMaxRange[i]     = cdef.GetMaxRange();
+		gPower[i]        = cdef.power;
 		// NOT IsAvailable(frame): that folds in behaviour.json "since" clocks
 		// (leaf-era policy the market must not inherit) and ai.frame is -2 at
 		// AiMain anyway. Available = the game ships it and no zero limit.

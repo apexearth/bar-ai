@@ -557,6 +557,7 @@ void NoteDead(CCircuitUnit@ unit)
 	if (unit is null)
 		return;
 	WorkerGone(unit.id);
+	LossNote(int(unit.circuitDef.id));
 	for (uint gi = 0; gi < gOwnGenIds.length(); ++gi) {
 		if (gOwnGenIds[gi] == unit.id) {
 			gOwnGen.removeAt(gi);
@@ -1331,6 +1332,60 @@ void WorkerGone(Id id)
 	}
 }
 
+//------------------------------------------------------------------------------
+// THE ARMY MODEL -- one modeled quantity (value-paradigm): the army value
+// worth standing. Insurance on what we own, plus matching what the enemy
+// has been SEEN to field (a blind census reads low; the guard term is the
+// floor that covers blindness).
+//------------------------------------------------------------------------------
+
+float ArmyValue()
+{
+	float v = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
+			continue;
+		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f))
+			continue;
+		v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
+	}
+	return v;
+}
+
+float ArmyTarget()
+{
+	// The SYMMETRIC PRIOR: pre-contact the census is blind, and blind read
+	// as safe lost the first BARb game with three army units built. The
+	// enemy's economy mirrors ours from the same start, so expect their
+	// army to be a share of OUR total value until seen otherwise; the
+	// observed census takes over as it grows past the prior.
+	const float ourTotal = gAssetsM + ArmyValue();
+	const float prior = ourTotal * ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
+	const float seen = Military::EnemyArmyCost();
+	const float expectedEnemy = (seen > prior) ? seen : prior;
+	return gAssetsM * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
+		+ expectedEnemy * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
+}
+
+// Own combat losses, decaying -- wrecks on the field are rez-bot demand.
+float gLossPool = 0.f;
+int gLossDecayAt = 0;
+void LossNote(int defId)
+{
+	if (Catalog::gMobile[defId] && !Catalog::gBuilder[defId]
+		&& (Catalog::gPower[defId] > 1.f))
+	{
+		gLossPool += Catalog::gCostM[defId];
+	}
+}
+void LossDecay()
+{
+	if (ai.frame < gLossDecayAt + 10 * SECOND)
+		return;
+	gLossDecayAt = ai.frame;
+	gLossPool *= 0.95f;   // wrecks get reclaimed, rezzed, or destroyed
+}
+
 // Round-robin over owned ceiling-reaching cons, for the guard floor-want.
 uint gServeIdx = 0;
 CCircuitUnit@ NextServingCon()
@@ -1961,13 +2016,50 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	const float over = BPGap() * util;
 	const float upD = UpDemand();
 	const float mobileCeil = OwnedMobileCeil();
+	LossDecay();
+	const float armyGap = ArmyTarget() - ArmyValue();
+	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	// Best power-per-cost this line can produce, for normalizing army bids.
+	float linePPC = 0.f;
+	for (uint i = 0; i < prods.length(); ++i) {
+		const int d = prods[i];
+		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d]
+			|| Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f))
+			continue;
+		const float ppc = Catalog::gPower[d] / Catalog::gCostM[d];
+		if (ppc > linePPC)
+			linePPC = ppc;
+	}
 	int best = -1;
 	float bestV = 0.f;
 	float bestGain = 0.f;
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
-		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || !Catalog::gBuilder[d])
+		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
 			continue;
+		// ARMY: fill the gap, best power-per-cost first, diminishing per
+		// copy owned so the mix diversifies by arithmetic, not by table.
+		if (!Catalog::gBuilder[d]) {
+			if ((armyGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
+				continue;
+			const float ppc = Catalog::gPower[d] / Catalog::gCostM[d];
+			const float have = float((int(d) < int(gOwnCount.length()))
+					? gOwnCount[d] : 0);
+			// The gap is a STREAM the line fills; clamping the gain to one
+			// unit's cost made a Pawn bid 0.6 against any gap size and army
+			// never outbid a constructor (two straight BARb losses).
+			const float gainA = (armyGap / ((fillS > 1.f) ? fillS : 60.f))
+					* (ppc / linePPC) / (1.f + have * 0.05f);
+			if (gainA <= 0.01f)
+				continue;
+			const float vA = gainA / Catalog::gCostM[d];
+			if (vA > bestV) {
+				bestV = vA;
+				best = d;
+				bestGain = gainA;
+			}
+			continue;
+		}
 		float gain = 0.f;
 		float reach = 0.f;
 		const array<int>@ pb = Catalog::gBuildsList[d];
@@ -1979,6 +2071,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		// EXCEED what the first one reaches made a second armack impossible
 		// (measured: one T2 con per game, forever).
 		const float mob = MobilityMult(d);
+		// Rez bots: the loss pool is recoverable value on the field; a rez
+		// bot's stream is its share of it, diminishing per bot fielded.
+		if (Builder::gRezzerDefs[d]) {
+			const int haveRez = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
+			gain += gLossPool
+					/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)
+					/ float(1 + haveRez);
+		}
 		if ((upD > 0.5f) && (reach >= BestExtract()))
 			gain += mob * upD / float(1 + ServingCons());
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);

@@ -1185,6 +1185,19 @@ const float TUNE_EXPOSE_R = 1200.f;
 // EXPOSED_LOSS_S: seconds over which a fully exposed, unguarded asset is
 // expected to be lost against a real opponent -- his "almost guaranteed".
 const float TUNE_EXPOSED_LOSS_S = 300.f;
+// GUARD_RATE: standing army value as a fraction of structure assets -- the
+// insurance floor that also covers census blindness.
+const float TUNE_GUARD_RATE = 0.15f;
+// ENEMY_PRIOR: pre-contact estimate of enemy army as a share of OUR total
+// value (symmetric start); the observed census replaces it once larger.
+const float TUNE_ENEMY_PRIOR = 0.35f;
+// MATCH_RATIO: army fielded per metal of enemy army SEEN.
+const float TUNE_MATCH_RATIO = 1.2f;
+// ARMY_FILL_S: seconds over which an army-value gap counts as a stream.
+const float TUNE_ARMY_FILL_S = 180.f;   // 60 let army outbid every con (1 con/game); the gap fills over ~3min so the line shares
+// REZ_HORIZON: seconds to recover the field's wreck pool; rez production
+// scales with losses and diminishes per bot.
+const float TUNE_REZ_HORIZON = 120.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone
