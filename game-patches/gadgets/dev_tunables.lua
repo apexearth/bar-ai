@@ -46,6 +46,7 @@ local NAMES = {
 	"apex_catalog_dump",
 	"apex_spot_m",
 	"apex_plant_pipe",
+	"apex_plant_income_per",
 	"apex_chase_min_ratio",
 	"apex_comm_cloak_share",
 	"apex_con_outmassed",

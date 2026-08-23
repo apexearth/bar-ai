@@ -1116,6 +1116,11 @@ const float TUNE_SPOT_M = 2.0f;
 // PLANT_PIPE: discount on a plant's constructor-pipeline return vs a spot's
 // direct stream (cons cost metal and time before they claim anything).
 const float TUNE_PLANT_PIPE = 0.5f;
+// Income one production line is worth: apexearth 2026-08-23, "below 50 metal
+// per second you don't want multiple T1 labs even of varying types." The
+// marginal plant's gain is zero beyond 1 + income/this -- income-derived,
+// never a count.
+const float TUNE_PLANT_INCOME_PER = 50.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone

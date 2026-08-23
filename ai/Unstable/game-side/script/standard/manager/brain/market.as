@@ -248,6 +248,13 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	Want w;
 	if (!gMexOpen)
 		return w;
+	// The MARGINAL plant: worth anything only if income supports another
+	// line (~50 m/s each, apexearth's number). Not a cap -- a price of zero
+	// past what the economy can feed, of any lab type.
+	const float per = ai.GetTunable("apex_plant_income_per", TUNE_PLANT_INCOME_PER);
+	const int supported = 1 + int(aiEconomyMgr.metal.income / ((per > 1.f) ? per : 50.f));
+	if (Factory::gFactoryCount >= supported)
+		return w;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const float gain = (SpotM() + OverflowM())
