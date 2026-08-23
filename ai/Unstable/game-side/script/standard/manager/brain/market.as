@@ -75,6 +75,7 @@ float gEPriceFloor = -1.f;
 float gEPullPrev = -1.f;
 int gEPullPrevAt = 0;
 float gEPullGrowth = 0.f;
+float gESurplusEma = 0.f;
 void TrackEPull()
 {
 	if (ai.frame < gEPullPrevAt + 5 * SECOND)
@@ -87,6 +88,11 @@ void TrackEPull()
 	}
 	gEPullPrev = pull;
 	gEPullPrevAt = ai.frame;
+	// Slow EMA of the E surplus: converters must price the DURABLE surplus,
+	// not a spike (a T1 converter outbidding a mex walk, watched -- the
+	// third appearance of the temporal-consistency law).
+	const float sur = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	gESurplusEma = 0.9f * gESurplusEma + 0.1f * ((sur > 0.f) ? sur : 0.f);
 }
 
 float EPriceFloor()
@@ -783,7 +789,8 @@ float OverflowM()
 Want@ ProposeConvert(CCircuitUnit@ unit)
 {
 	Want w;
-	const float eSurplus = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	TrackEPull();
+	const float eSurplus = gESurplusEma;
 	if (eSurplus <= 1.f)
 		return w;
 	const int uid = int(unit.circuitDef.id);
