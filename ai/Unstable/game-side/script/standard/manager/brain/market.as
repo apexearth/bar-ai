@@ -2180,9 +2180,20 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 				const float eP = aiEconomyMgr.energy.pull;
 				if ((eP > 1.f) && (eI < eP))
 					eFeedA = eI / eP;
+				// The metal mirror: a starving bank throttles army the same
+				// way a stall does -- structural, so no dial can starve the
+				// eco again (watched: out of metal, army still pumping).
+				const float mI = aiEconomyMgr.metal.income;
+				const float mP = aiEconomyMgr.metal.pull;
+				const float mSt = aiEconomyMgr.metal.storage;
+				if ((mP > 1.f) && (mI < mP) && (mSt > 1.f)
+					&& (aiEconomyMgr.metal.current < 0.25f * mSt))
+				{
+					eFeedA *= mI / mP;
+				}
 			}
 			const float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
-					* (ppc / linePPC) / (1.f + have * 0.03f) * eFeedA;
+					* (ppc / linePPC) / (1.f + have * 0.05f) * eFeedA;
 			if (gainA <= 0.01f)
 				continue;
 			const float vA = gainA / Catalog::gCostM[d];

@@ -1198,11 +1198,11 @@ const float TUNE_EXPOSED_LOSS_S = 120.f;
 const float TUNE_GUARD_RATE = 0.15f;
 // ENEMY_PRIOR: pre-contact estimate of enemy army as a share of OUR total
 // value (symmetric start); the observed census replaces it once larger.
-const float TUNE_ENEMY_PRIOR = 0.35f;
+const float TUNE_ENEMY_PRIOR = 0.25f;   // 0.35 + a continuous line drained the bank into army (watched: out of metal)
 // MATCH_RATIO: army fielded per metal of enemy army SEEN.
 const float TUNE_MATCH_RATIO = 1.2f;
 // ARMY_FILL_S: seconds over which an army-value gap counts as a stream.
-const float TUNE_ARMY_FILL_S = 120.f;   // 60 starved cons, 180 starved the army (watched: 'hardly any'); the line shares at ~2min
+const float TUNE_ARMY_FILL_S = 180.f;   // the 120 compensation was fighting the Wait throttle, not the price; with the line continuous, 180 shares honestly
 // REZ_HORIZON: seconds to recover the field's wreck pool; rez production
 // scales with losses and diminishes per bot.
 const float TUNE_REZ_HORIZON = 120.f;
