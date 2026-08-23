@@ -1617,3 +1617,12 @@ FindTarget + the massing pool); do not implement without his input.
 while the T2 lab died. Target/stand reselection oscillates the group's
 path around terrain. C++ travel/target logic (DefendTask stand + AttackTask
 FindTarget rethink cadence); session item, alongside proportional response.
+
+## Military dossier additions (apexearth 2026-08-23, watched)
+
+- Attack from multiple ANGLES: "our army feeds in from only one direction";
+  approach-vector diversity is squad-level design (session item).
+- ~10s periodic lag spike: script exonerated (perf max 13ms/frame); the
+  spike is C++/engine-side periodic work (threat map, path graph, enemy
+  clustering are the suspects). Needs a C++ profiling pass; consider
+  chunking the guilty job across frames.

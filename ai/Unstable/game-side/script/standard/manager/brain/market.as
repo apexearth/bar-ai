@@ -1380,21 +1380,44 @@ AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 // measured pull).
 // Unabsorbed line spend across working factories: each nano near a line
 // absorbs ~17.5 m/s; a hot line justifies a RING, not one turret.
+// A line's fair share of the production appetite scales with what it can
+// BUILD: the T2 lab making 700-metal units earns a bigger nano ring than a
+// pawn line (apexearth: "need more nano turrets near our T2 lab").
+float LineCostCeil(CCircuitUnit@ f)
+{
+	float ceil = 100.f;
+	const array<int>@ pr = Catalog::BuildsOf(int(f.circuitDef.id));
+	for (uint q = 0; q < pr.length(); ++q) {
+		if (Catalog::gMobile[pr[q]] && (Catalog::gCostM[pr[q]] > ceil))
+			ceil = Catalog::gCostM[pr[q]];
+	}
+	return ceil;
+}
+
 float UnservedLineSpend()
 {
 	float unserved = 0.f;
 	const float per = LineSpend();
+	float sumCeil = 0.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		if ((Factory::gFacUnits[fi] !is null)
+			&& (Factory::gFacUnits[fi].CountQueued(null) > 0))
+			sumCeil += LineCostCeil(Factory::gFacUnits[fi]);
+	}
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
 		if ((f is null) || (f.CountQueued(null) == 0))
 			continue;
+		const float share = (sumCeil > 1.f)
+				? (per * float(Factory::gFactoryCount) * LineCostCeil(f) / sumCeil)
+				: per;
 		int nanosNear = 0;
 		const AIFloat3 fp = f.GetPos(ai.frame);
 		for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
 			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
 				++nanosNear;
 		}
-		const float u = per - float(nanosNear) * 17.5f;
+		const float u = share - float(nanosNear) * 17.5f;
 		if (u > 0.f)
 			unserved += u;
 	}
@@ -2042,7 +2065,13 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 			const float artySeen = Military::EnemyCostOf(Unit::Role::ARTY.type)
 					+ Military::EnemyCostOf(Unit::Role::SKIRM.type);
 			if (artySeen > 100.f) {
-				float rangeMul = 1.f + (Catalog::gMaxRange[d] / 500.f)
+				// Range counts only up to the arty-answer band (~900):
+				// uncapped, a Ragnarok's 2600 reach made the 46k gun the
+				// "best sentry" at 200 m/s (watched). Superweapons must win
+				// on their own terms, not as turrets.
+				const float rr = (Catalog::gMaxRange[d] < 900.f)
+						? Catalog::gMaxRange[d] : 900.f;
+				float rangeMul = 1.f + (rr / 500.f)
 						* ((artySeen < 3000.f) ? (artySeen / 3000.f) : 1.f);
 				gain *= rangeMul;
 			}
@@ -2627,6 +2656,25 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
 			continue;
+		// SUPPORT: mobile eyes and static-cover. One radar and one jammer
+		// per ~squad's worth of fielded army (apexearth: "ideally we attach
+		// 1 of each to each squad"); attachment is the military layer's,
+		// production is ours.
+		if (Catalog::gMobile[d] && !Catalog::gBuilder[d]
+			&& (Catalog::gRadar[d] || Catalog::gJammer[d]))
+		{
+			const int haveS = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
+			const float squads = ArmyValue() / 3000.f;
+			if (float(haveS) < squads) {
+				const float gainS = (squads - float(haveS)) * 30.f / 60.f;
+				const float vS = gainS / Catalog::gCostM[d];
+				candDef.insertLast(d);
+				candV.insertLast(vS);
+				candGain.insertLast(gainS);
+				sumV += vS;
+			}
+			continue;
+		}
 		// ARMY: fill the gap, best power-per-cost first, diminishing per
 		// copy owned so the mix diversifies by arithmetic, not by table.
 		// Overflowing metal keeps the line running past the target: idle
@@ -2643,7 +2691,27 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
 				continue;
-			const float ppc = Catalog::gPower[d] / Catalog::gCostM[d];
+			float ppc = Catalog::gPower[d] / Catalog::gCostM[d];
+			// RANGE ANSWERS RANGE (apexearth: banishers outranged and killed
+			// our T1 too easily; snipers/fatboys came too late). Enemy skirm
+			// and arty mass is outranging pressure: reach above 500 gains by
+			// it, reach below fades toward the raider-spam share the role
+			// portfolio already grants. T1 obsolescence emerges from the
+			// same term.
+			{
+				const float outP = (Military::EnemyCostOf(Unit::Role::SKIRM.type)
+						+ Military::EnemyCostOf(Unit::Role::ARTY.type)) / 3000.f;
+				const float oP = (outP > 1.f) ? 1.f : outP;
+				if (oP > 0.05f) {
+					const float rNorm = (Catalog::gMaxRange[d] - 500.f) / 500.f;
+					float rMul = 1.f + rNorm * oP * 0.8f;
+					if (rMul < 0.3f)
+						rMul = 0.3f;
+					if (rMul > 2.5f)
+						rMul = 2.5f;
+					ppc *= rMul;
+				}
+			}
 			const float have = float((int(d) < int(gOwnCount.length()))
 					? gOwnCount[d] : 0);
 			// The gap is a STREAM the line fills; clamping the gain to one
