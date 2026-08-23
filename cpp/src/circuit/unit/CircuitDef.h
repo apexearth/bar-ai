@@ -377,6 +377,7 @@ public:
 	float GetConvertCapacity() const { return convCapacityE; }  // energyconv_capacity, E/s consumed
 	float GetConvertRatio()    const { return convRatioM; }     // energyconv_efficiency, M per E
 	bool IsNeedGeo()        const { return needsGeo; }  // must stand on a geo vent
+	int GetAreaCells()      const { return areaCells; }  // footprint in 16-elmo build cells
 	float GetCaptureSpeed() const { return captureSpeed; }
 //	float GetAltitude()     const { return altitude; }
 	float GetJumpRange()    const { return jumpRange; }
@@ -529,6 +530,7 @@ private:
 	float makeM;
 	float makeE;
 	bool needsGeo = false;
+	int areaCells = 0;
 	float storeM;
 	float storeE;
 	float convCapacityE;

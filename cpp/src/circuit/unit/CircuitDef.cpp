@@ -251,6 +251,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	// tidal. Computed BEFORE upkeepE is inflated by converter capacity below.
 	makeM = def->GetResourceMake(resM) - upkeepM;
 	needsGeo = def->IsNeedGeo();
+	areaCells = (def->GetXSize() / 2) * (def->GetZSize() / 2);
 	storeM = def->GetStorage(resM);
 	storeE = def->GetStorage(resE);
 	convCapacityE = .0f;

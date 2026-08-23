@@ -84,6 +84,10 @@ float EPriceFloor()
 // only the conversion floor.
 float EPrice()
 {
+	// GAIN side: anticipatory. New supply is worth the demand the fleet is
+	// about to place, so the premium scales with pressure INCLUDING at
+	// balance -- pricing gain at the floor until a stall already existed
+	// collapsed production 93k -> 24k (every nanoframe crawled E-starved).
 	const float eInc = aiEconomyMgr.energy.income;
 	const float ePull = aiEconomyMgr.energy.pull;
 	float pressure = (eInc > 0.01f) ? (ePull / eInc) : 3.f;
@@ -91,13 +95,35 @@ float EPrice()
 		pressure = 3.f;
 	if (pressure < 0.f)
 		pressure = 0.f;
-	// A drained bank is a stall already happening, whatever the flow says.
 	const float eCur = aiEconomyMgr.energy.current;
 	const float eStore = aiEconomyMgr.energy.storage;
-	if ((eStore > 1.f) && (eCur < 0.25f * eStore))
-		pressure = (pressure < 1.f) ? 1.f : pressure;
+	if ((eStore > 1.f) && (eCur < 0.25f * eStore) && (pressure < 1.f))
+		pressure = 1.f;
 	const float unlock = (eInc > 0.01f)
 			? (pressure * aiEconomyMgr.metal.income / eInc) : 1.f;
+	const float fl = EPriceFloor();
+	return (unlock > fl) ? unlock : fl;
+}
+
+// COST side: the premium on SPENDING E exists only above balance -- at
+// income == pull nothing is starving, and the E bill is the floor. This is
+// the asymmetry that lets advsol/fusion be bought while solar-fed: the same
+// balance that makes new E supply valuable makes spending E cheap.
+float ECostSpot()
+{
+	const float eInc = aiEconomyMgr.energy.income;
+	const float ePull = aiEconomyMgr.energy.pull;
+	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
+	if (excess > 2.f)
+		excess = 2.f;
+	if (excess < 0.f)
+		excess = 0.f;
+	const float eCur = aiEconomyMgr.energy.current;
+	const float eStore = aiEconomyMgr.energy.storage;
+	if ((eStore > 1.f) && (eCur < 0.25f * eStore) && (excess < 1.f))
+		excess = 1.f;
+	const float unlock = (eInc > 0.01f)
+			? (excess * aiEconomyMgr.metal.income / eInc) : 1.f;
 	const float fl = EPriceFloor();
 	return (unlock > fl) ? unlock : fl;
 }
@@ -106,6 +132,26 @@ float EPrice()
 // premium decays toward the floor over the market's own supply-response time
 // (about one solar's build). A 7,000-second AFUS priced at today's stall
 // premium froze our only T2 con for a whole game (measured, 2026-08-23).
+// What spending E during this build actually FORGOES. While the E bank is
+// full and income exceeds pull, the spent energy was being wasted -- its
+// cost is forgiven outright (apexearth 2026-08-23: "you can forgive cost
+// when we have extra of something like energy").
+float EPriceCostAt(float buildSec)
+{
+	if (aiEconomyMgr.isEnergyFull
+		&& (aiEconomyMgr.energy.income > aiEconomyMgr.energy.pull))
+	{
+		return 0.f;
+	}
+	const float fl = EPriceFloor();
+	const float spot = ECostSpot();
+	const float resp = ai.GetTunable("apex_e_response", TUNE_E_RESPONSE);
+	float k = ((resp > 1.f) ? resp : 45.f) / ((buildSec > 1.f) ? buildSec : 1.f);
+	if (k > 1.f)
+		k = 1.f;
+	return fl + (spot - fl) * k;
+}
+
 float EPriceAt(float buildSec)
 {
 	const float fl = EPriceFloor();
@@ -121,13 +167,35 @@ float EPriceAt(float buildSec)
 // Pricing.
 //------------------------------------------------------------------------------
 
+// Builds run at fleet-assisted speed, not the asker's solo lathe:
+// Requests::Take folds same-def askers onto a site, so a share of the
+// standing fleet shows up. Solo pricing made a 99s advsol lose to fast
+// solars for every T1 con forever -- the capability multiplier is real
+// (apexearth 2026-08-23). MODEL: the share that assists.
+float EffBP(float builderBP)
+{
+	const float fleet = BPCapacity() * (80.f / 7.f);   // back to workertime units
+	const float share = ai.GetTunable("apex_assist_share", TUNE_ASSIST_SHARE);
+	if (fleet <= builderBP)
+		return builderBP;
+	return builderBP + (fleet - builderBP) * share;
+}
+
 float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 {
-	const float buildSec = Catalog::BuildSecondsAt(defId, builderBP);
+	const float buildSec = Catalog::BuildSecondsAt(defId, EffBP(builderBP));
 	w.gain = gain;
-	// The E bill is paid at TODAY's scarcity: an E-hungry build during a
-	// stall costs what that energy would have unlocked, not the floor.
-	w.mCost = Catalog::gCostM[defId] + Catalog::gCostE[defId] * EPrice();
+	// The E bill at what it actually forgoes (duration-priced, forgiven in
+	// overflow) -- pricing it at the spot spike structurally banned every
+	// big-E build (advsol, fusion) exactly when they were wanted.
+	// The SPACE bill: ground is finite; footprint is paid per cell. MODEL:
+	// a flat metal-per-cell price (apex_space_m) until base-crowding senses
+	// price it dynamically. This is what makes dense energy (advsol) beat a
+	// field of solars at equal payback.
+	w.mCost = Catalog::gCostM[defId]
+			+ Catalog::gCostE[defId] * EPriceCostAt(buildSec)
+			+ float(Catalog::gAreaCells[defId])
+				* ai.GetTunable("apex_space_m", TUNE_SPACE_M);
 	w.tCost = (walkSec + buildSec) * Wage();
 	w.value = gain / (w.mCost + w.tCost);
 	return w.value;
@@ -234,6 +302,26 @@ float OwnedCeil()
 		}
 	}
 	return ceil;
+}
+
+// Mobile builders we own whose reach hits the game's extraction ceiling --
+// the fleet already serving upgrade demand.
+int ServingCons()
+{
+	int nServing = 0;
+	const float ceilX = BestExtract();
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)] || !Catalog::gBuilder[int(d)])
+			continue;
+		const array<int>@ builds = Catalog::gBuildsList[int(d)];
+		for (uint i = 0; i < builds.length(); ++i) {
+			if (Catalog::gExtractsM[builds[i]] >= ceilX) {
+				nServing += gOwnCount[d];
+				break;
+			}
+		}
+	}
+	return nServing;
 }
 
 float OwnedMobileCeil()
@@ -359,7 +447,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		if (Catalog::gNeedGeo[d])
 			continue;   // vents are the geo want's ground, not free placement
 		Want c;
-		const float bSec = Catalog::BuildSecondsAt(d, Catalog::gBuildPower[uid]);
+		const float bSec = Catalog::BuildSecondsAt(d, EffBP(Catalog::gBuildPower[uid]));
 		const float gain = Catalog::gMakeE[d] * EPriceAt(bSec);
 		ValueOf(d, gain, 0.f, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
@@ -370,6 +458,35 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		}
 	}
 	return w;
+}
+
+// The BP closed loop: the fleet's standing lathe capacity vs what income
+// can feed. Idle builders do not PULL, so "overflow" reads high exactly
+// when parked BP is the problem -- capacity is the honest measure
+// (measured: 18 assist bots bought against overflow their own idleness
+// sustained).
+float BPCapacity()
+{
+	float cap = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if (gOwnCount[d] <= 0)
+			continue;
+		if (!Catalog::gBuilder[int(d)] && (Catalog::gBuildPower[int(d)] <= 0.f))
+			continue;
+		if (Catalog::gBuildPower[int(d)] <= 0.f)
+			continue;
+		cap += float(gOwnCount[d]) * Catalog::gBuildPower[int(d)] * (7.f / 80.f);
+	}
+	return cap;
+}
+
+// Lathe capacity still worth buying: income x headroom minus the fleet.
+float BPGap()
+{
+	const float head = ai.GetTunable("apex_bp_headroom", TUNE_BP_HEADROOM);
+	const float gap = aiEconomyMgr.metal.income * ((head > 0.f) ? head : 1.15f)
+			- BPCapacity();
+	return (gap > 0.f) ? gap : 0.f;
 }
 
 // Metal income nothing is spending: the arithmetic case for more build
@@ -474,7 +591,7 @@ Want@ ProposeGeo(CCircuitUnit@ unit)
 	const float speed = Catalog::gSpeed[uid];
 	const float walkSec = (speed > 1.f) ? (here.distance2D(pos) / speed) : 60.f;
 	const float gain = Catalog::gMakeE[geoId]
-			* EPriceAt(Catalog::BuildSecondsAt(geoId, Catalog::gBuildPower[uid]));
+			* EPriceAt(Catalog::BuildSecondsAt(geoId, EffBP(Catalog::gBuildPower[uid])));
 	w.kind = WK_GEO;
 	@w.def = Catalog::Def(geoId);
 	w.pos = pos;
@@ -502,7 +619,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
-	const float gain = (SpotM() + OverflowM())
+	const float gain = (SpotM() + BPGap())
 			* ai.GetTunable("apex_plant_pipe", TUNE_PLANT_PIPE);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
@@ -633,7 +750,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 Want@ ProposeNano(CCircuitUnit@ unit)
 {
 	Want w;
-	const float over = OverflowM();
+	const float over = BPGap();
 	if (over <= 0.5f)
 		return w;
 	const int uid = int(unit.circuitDef.id);
@@ -771,57 +888,59 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 {
 	if (fac is null)
 		return null;
-	if (!gMexOpen && (UpDemand() <= 0.5f) && (OverflowM() <= 0.5f))
+	if (!gMexOpen && (UpDemand() <= 0.5f) && (BPGap() <= 0.5f))
 		return null;
 	// One in flight per line: pipeline discipline, not a cap.
 	if ((fac.CountQueued(null) + Brain::PendCount(line, null)) > 0)
 		return null;
 	const int fid = int(fac.circuitDef.id);
 	const array<int>@ prods = Catalog::BuildsOf(fid);
-	// When upgrade demand stands, the con that matters is one whose builds
-	// can SERVE it (measured: the T2 lab pumped cheap assist bots that
-	// cannot build a moho while every spot sat un-upgraded). Otherwise the
-	// cheapest claimer.
-	const bool wantUp = (UpDemand() > 0.5f) && (OwnedMobileCeil() < BestExtract());
+	// Each product priced, best value ordered. A constructor's gain: the
+	// tier-unique upgrade demand it unlocks, at DIMINISHING returns per con
+	// already serving (the binary version stopped at exactly one T2 con);
+	// plus its worth as mobile build power (overflow capture at its drain);
+	// plus the open-spot stream if ground remains to claim.
+	const float over = BPGap();
+	const float upD = UpDemand();
+	const float mobileCeil = OwnedMobileCeil();
 	int best = -1;
+	float bestV = 0.f;
+	float bestGain = 0.f;
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || !Catalog::gBuilder[d])
 			continue;
-		if (wantUp) {
-			float reach = 0.f;
-			const array<int>@ pb = Catalog::gBuildsList[d];
-			for (uint q = 0; q < pb.length(); ++q) {
-				if (Catalog::gExtractsM[pb[q]] > reach)
-					reach = Catalog::gExtractsM[pb[q]];
-			}
-			if (reach <= OwnedMobileCeil())
-				continue;
+		float gain = 0.f;
+		float reach = 0.f;
+		const array<int>@ pb = Catalog::gBuildsList[d];
+		for (uint q = 0; q < pb.length(); ++q) {
+			if (Catalog::gExtractsM[pb[q]] > reach)
+				reach = Catalog::gExtractsM[pb[q]];
 		}
-		if ((best < 0) || (Catalog::gCostM[d] < Catalog::gCostM[best]))
+		if ((upD > 0.5f) && (reach > mobileCeil))
+			gain += upD / float(1 + ServingCons());
+		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
+		gain += (over < drain) ? over : drain;
+		if (gMexOpen && (reach > 0.f))
+			gain += SpotM();   // it can claim while spots stay open
+		if (gain <= 0.5f)
+			continue;
+		const float v = gain / Catalog::gCostM[d];
+		if (v > bestV) {
+			bestV = v;
 			best = d;
-	}
-	if ((best < 0) && wantUp) {
-		// No demand-serving product on this line; fall back to the claimer.
-		for (uint i = 0; i < prods.length(); ++i) {
-			const int d = prods[i];
-			if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || !Catalog::gBuilder[d])
-				continue;
-			if (!gMexOpen && (OverflowM() <= 0.5f))
-				continue;
-			if ((best < 0) || (Catalog::gCostM[d] < Catalog::gCostM[best]))
-				best = d;
+			bestGain = gain;
 		}
 	}
 	if (best < 0)
 		return null;
 	// Priced in the same currency; factory time is free while the line idles.
-	const float v = SpotM() / Catalog::gCostM[best];
 	AiLog("apex: decide " + fac.circuitDef.GetName() + " #" + fac.id
 		+ " -> produce:" + Catalog::Def(best).GetName()
-		+ " v=" + formatFloat(v * 1000.f, "", 0, 2)
-		+ " (gain=" + formatFloat(SpotM(), "", 0, 2)
-		+ " m=" + formatFloat(Catalog::gCostM[best], "", 0, 0) + ")");
+		+ " v=" + formatFloat(bestV * 1000.f, "", 0, 2)
+		+ " (gain=" + formatFloat(bestGain, "", 0, 2)
+		+ " m=" + formatFloat(Catalog::gCostM[best], "", 0, 0)
+		+ " serving=" + ServingCons() + ")");
 	return Catalog::Def(best);
 }
 

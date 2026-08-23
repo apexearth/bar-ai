@@ -1134,6 +1134,17 @@ const float TUNE_TECH_PIPE = 0.5f;
 // scarcity spike (~one solar build); long builds earn the floor, not the
 // spike.
 const float TUNE_E_RESPONSE = 45.f;
+// SPACE_M: metal-equivalent price of one 16-elmo build cell of ground.
+// MODEL (flat until base-crowding senses drive it): what makes dense energy
+// beat a field of solars at equal payback.
+const float TUNE_SPACE_M = 1.0f;
+// BP_HEADROOM: lathe capacity target as a fraction of income (slightly
+// above 1 so the bank drains instead of pooling) -- the closed loop's one
+// constant, a headroom fraction, never a count.
+const float TUNE_BP_HEADROOM = 1.15f;
+// ASSIST_SHARE: fraction of the standing lathe fleet expected to fold onto
+// a priced build (Requests::Take joins same-def askers).
+const float TUNE_ASSIST_SHARE = 0.5f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone

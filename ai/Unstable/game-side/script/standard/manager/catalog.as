@@ -33,6 +33,7 @@ array<bool> gWind;
 array<bool> gNeedGeo;   // must stand on a geo vent (engine UnitDef flag)
 array<bool> gFloater;   // stands on water
 array<bool> gSub;       // submerged (underwater structures dodge the floater test)
+array<int> gAreaCells;  // footprint in 16-elmo build cells
 array<bool> gAvailable;
 
 array<array<int>> gBuildsList;  // builder def id -> def ids it can build
@@ -53,7 +54,7 @@ void Init()
 	gUpkeepM.resize(n); gUpkeepE.resize(n); gMakeM.resize(n); gMakeE.resize(n);
 	gStoreM.resize(n); gStoreE.resize(n); gConvCapacity.resize(n); gConvRatio.resize(n);
 	gMobile.resize(n); gFlyer.resize(n); gBuilder.resize(n); gWind.resize(n);
-	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n);
+	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gAreaCells.resize(n);
 	gAvailable.resize(n);
 	gBuildsList.resize(n); gBuiltBy.resize(n);
 
@@ -84,6 +85,7 @@ void Init()
 		gNeedGeo[i]      = cdef.IsNeedGeo();
 		gFloater[i]      = cdef.IsFloater();
 		gSub[i]          = cdef.IsSubmarine();
+		gAreaCells[i]    = cdef.GetAreaCells();
 		// NOT IsAvailable(frame): that folds in behaviour.json "since" clocks
 		// (leaf-era policy the market must not inherit) and ai.frame is -2 at
 		// AiMain anyway. Available = the game ships it and no zero limit.
