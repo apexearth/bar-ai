@@ -1163,6 +1163,8 @@ const float TUNE_E_LOOKAHEAD = 30.f;
 // E_HEADROOM: energy income target as a multiple of trending pull -- the
 // standing reserve that keeps the bank from ever being raced to zero.
 const float TUNE_E_HEADROOM = 1.25f;
+// CON_ESCORT: exposed constructors claim one army guard each (master).
+const float TUNE_CON_ESCORT = 1.f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
 // competes with perpetual streams (the market's typical payback scale).
 const float TUNE_RECLAIM_AMORT = 300.f;
@@ -1199,7 +1201,7 @@ const float TUNE_ENEMY_PRIOR = 0.35f;
 // MATCH_RATIO: army fielded per metal of enemy army SEEN.
 const float TUNE_MATCH_RATIO = 1.2f;
 // ARMY_FILL_S: seconds over which an army-value gap counts as a stream.
-const float TUNE_ARMY_FILL_S = 180.f;   // 60 let army outbid every con (1 con/game); the gap fills over ~3min so the line shares
+const float TUNE_ARMY_FILL_S = 120.f;   // 60 starved cons, 180 starved the army (watched: 'hardly any'); the line shares at ~2min
 // REZ_HORIZON: seconds to recover the field's wreck pool; rez production
 // scales with losses and diminishes per bot.
 const float TUNE_REZ_HORIZON = 120.f;

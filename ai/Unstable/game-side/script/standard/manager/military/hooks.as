@@ -77,6 +77,17 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return null;
 	if (Factory::HoldsLateFighter(unit))
 		return null;
+	// ESCORT DUTY outranks the pools for cheap ground army: an exposed
+	// constructor without an escort claims one guard (Market keeps the
+	// one-per-worker registry).
+	if (!cdef.IsAbleToFly() && (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) > 0.f)) {
+		CCircuitUnit@ vip = Market::EscortNeeded(unit);
+		if (vip !is null) {
+			AiLog(Factory::T() + "apex: " + cdef.GetName() + " #" + unit.id
+				+ " escorts " + vip.circuitDef.GetName() + " #" + vip.id);
+			return aiMilitaryMgr.Enqueue(TaskF::Guard(vip));
+		}
+	}
 	if (IsFodder(cdef)) {
 		// The set of defs the spam posture applies to, discovered rather than
 		// listed. See NoteFodderDef.
