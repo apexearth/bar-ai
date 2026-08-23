@@ -1196,6 +1196,17 @@ const float TUNE_ECO_ARMY_MUL = 0.03f;
 // ECO_SAFE_R: front distance beyond which the rear specialist skips ground
 // defense entirely -- past any raid's reach, insurance is dead money.
 const float TUNE_ECO_SAFE_R = 2500.f;
+// RECLAIM_AGE_S: a con must be at least this old before the surplus
+// reclaimer may eat it -- younger is churn against our own buildtime.
+const float TUNE_RECLAIM_AGE_S = 180.f;
+// LINE_PULL: unserved line spend (m/s) a factory needs before it pulls a
+// nano away from the farm block -- two turrets' worth of hunger.
+const float TUNE_LINE_PULL = 35.f;
+// GIFT_ARMY: master switch for back-to-front army gifting.
+const float TUNE_GIFT_ARMY = 1.f;
+// FRONT_N: how many closest-to-enemy allies count as the front line and
+// receive the team's ground army (his read of this map: 2).
+const float TUNE_FRONT_N = 2.f;
 // JOIN_MIN_M: def cost above which a second builder JOINS the standing
 // build instead of opening a parallel copy (fusion-and-up territory).
 const float TUNE_JOIN_MIN_M = 500.f;

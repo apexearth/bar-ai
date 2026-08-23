@@ -250,7 +250,21 @@ float MCostScale()
 
 float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 {
-	const float buildSec = Catalog::BuildSecondsAt(defId, EffBP(builderBP));
+	float buildSec = Catalog::BuildSecondsAt(defId, EffBP(builderBP));
+	// METAL FEEDS THE LATHE (apexearth: a fusion started before the mohos
+	// runs at quarter feed and takes 4x longer -- "the math is bad"). A
+	// build's real duration is floored by what income + the bank can pay:
+	// this is what re-orders fusion AFTER the mexups, with no sequencing
+	// rule anywhere -- the upgrades finish fast AND raise the feed.
+	{
+		const float mInc = aiEconomyMgr.metal.income;
+		const float mBank = aiEconomyMgr.metal.current;
+		if (mInc > 0.1f) {
+			const float feedSec = (Catalog::gCostM[defId] - mBank * 0.5f) / mInc;
+			if (feedSec > buildSec)
+				buildSec = feedSec;
+		}
+	}
 	w.gain = gain;
 	// The E bill at what it actually forgoes (duration-priced, forgiven in
 	// overflow) -- pricing it at the spot spike structurally banned every
@@ -1087,6 +1101,26 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		}
 		if (bestMob <= 0.f)
 			continue;
+		// A DUPLICATE line is only parallel capacity: value divides per
+		// copy owned (watched: T1 air labs multiplying). And a plant whose
+		// cons reach the extraction ceiling outranks a T1 copy -- "we want
+		// multiple T2 air labs, not T1 air labs."
+		float dupGain = gain / float(1 + Catalog::Def(d).count);
+		{
+			float prodReach = 0.f;
+			for (uint pr = 0; pr < prods.length(); ++pr) {
+				if (!Catalog::gMobile[prods[pr]] || !Catalog::gBuilder[prods[pr]])
+					continue;
+				const array<int>@ prb = Catalog::gBuildsList[prods[pr]];
+				for (uint rr = 0; rr < prb.length(); ++rr) {
+					if (Catalog::gExtractsM[prb[rr]] > prodReach)
+						prodReach = Catalog::gExtractsM[prb[rr]];
+				}
+			}
+			const float ceilX = BestExtract();
+			if (ceilX > 0.f)
+				dupGain *= 1.f + prodReach / ceilX;
+		}
 		// The quiet rear's expansion is AIR (apexearth: "the goal should be
 		// air cons... stop making ground labs"): flying cons don't jam the
 		// packed farm, and its army era is gantry-only. Ground plants stop
@@ -1104,7 +1138,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				continue;
 		}
 		Want c;
-		ValueOf(d, gain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
+		ValueOf(d, dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
 				0.f, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
@@ -1504,8 +1538,13 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback)
 AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 {
 	if (!gFarmSet && Base::gAnchorSet && Base::gAxisSet) {
-		AIFloat3 spot = Base::gAnchor
-				- Base::gFwd * ai.GetTunable("apex_farm_back", TUNE_FARM_BACK);
+		// Within nano reach of the anchor: the block must serve the lab AND
+		// the eco builds beside it (apexearth: nanos "not even within range
+		// of the T1 lab they would support").
+		float back = ai.GetTunable("apex_farm_back", TUNE_FARM_BACK);
+		if (back > NanoRange() * 0.8f)
+			back = NanoRange() * 0.8f;
+		AIFloat3 spot = Base::gAnchor - Base::gFwd * back;
 		if (OnMap(spot)) {
 			gFarmPos = spot;
 			gFarmSet = true;
@@ -1729,6 +1768,7 @@ bool HardEStall()
 // handle here MUST be removed by NoteDead or it dangles on freed memory.
 array<CCircuitUnit@> gWorkers;
 array<Id> gWorkerIds;
+array<int> gWorkerBorn;   // first-seen frame: the age gate for reclaim
 void WorkerSeen(CCircuitUnit@ u)
 {
 	for (uint i = 0; i < gWorkerIds.length(); ++i) {
@@ -1737,11 +1777,13 @@ void WorkerSeen(CCircuitUnit@ u)
 	}
 	gWorkers.insertLast(u);
 	gWorkerIds.insertLast(u.id);
+	gWorkerBorn.insertLast(ai.frame);
 }
 void WorkerGone(Id id)
 {
 	for (uint i = 0; i < gWorkerIds.length(); ++i) {
 		if (gWorkerIds[i] == id) {
+			gWorkerBorn.removeAt(i);
 			gWorkers.removeAt(i);
 			gWorkerIds.removeAt(i);
 			return;
@@ -1964,15 +2006,28 @@ bool EcoRoleActive()
 // overflight flipped quiet mode for one refresh and bought dragon-claw
 // towers at 13m (audited flicker -- danger=0 at every 2-min sample).
 int gEcoDangerStreak = 0;
+int gEcoDangerTickAt = 0;
+bool gEcoDangerArmed = false;
 bool EcoDangerNear()
 {
 	if (!Builder::gHomeSet)
 		return false;
-	const bool hot = ai.GetEnemyCostAt(Builder::gHomePos,
-				ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R))
-			> ai.GetTunable("apex_eco_danger_m", TUNE_ECO_DANGER_M);
-	gEcoDangerStreak = hot ? (gEcoDangerStreak + 1) : 0;
-	return gEcoDangerStreak >= 3;   // ~30s at the 10s election cadence
+	// The streak ticks on a CLOCK, not per call -- EcoQuiet runs many
+	// times per decide sweep, so a per-call streak armed in one frame off
+	// a single overflight (claw at 4.8m with danger=0 at every sample).
+	if (ai.frame >= gEcoDangerTickAt) {
+		gEcoDangerTickAt = ai.frame + 10 * SECOND;
+		const bool hot = ai.GetEnemyCostAt(Builder::gHomePos,
+					ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R))
+				> ai.GetTunable("apex_eco_danger_m", TUNE_ECO_DANGER_M);
+		gEcoDangerStreak = hot ? (gEcoDangerStreak + 1) : 0;
+		const bool armed = gEcoDangerStreak >= 3;   // 30s sustained
+		if (armed != gEcoDangerArmed)
+			AiLog("apex: eco-danger " + (armed ? "ARMED" : "cleared")
+					+ " team=" + ai.teamId + " f=" + ai.frame);
+		gEcoDangerArmed = armed;
+	}
+	return gEcoDangerArmed;
 }
 
 bool EcoQuiet()
@@ -2486,6 +2541,11 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 		// insurance gain scales by quality-per-best, so beamers and HLTs
 		// outbid massed LLTs on the raw numbers.
 		if (cls == PROT_DEF) {
+			// The SECOND pass ran unguarded: exposed-mex insurance kept
+			// buying claws on the quiet rear after every first-pass gate
+			// (the recurring 340-680 audit fail, finally attributed).
+			if (EcoQuiet())
+				continue;
 			const float rr = (Catalog::gMaxRange[d] < 900.f)
 					? Catalog::gMaxRange[d] : 900.f;
 			const float rn = rr / 500.f;
@@ -2655,8 +2715,12 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			const int wd = int(wu.circuitDef.id);
 			// Air cons are exempt: no pathing cost, no placement blocking
 			// (apexearth) -- and land cons below the keep-floor stay for
-			// nano work.
+			// nano work. A JUST-BUILT con is never eaten: reclaiming what
+			// we paid buildtime for minutes ago is churn, not tidying.
 			if (Catalog::gFlyer[wd])
+				continue;
+			if ((wi < gWorkerBorn.length()) && (ai.frame - gWorkerBorn[wi]
+					< int(ai.GetTunable("apex_reclaim_age_s", TUNE_RECLAIM_AGE_S)) * SECOND))
 				continue;
 			bool remake = false;
 			for (uint fi = 0; fi < Factory::gFacUnits.length() && !remake; ++fi) {
@@ -2965,7 +3029,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 
 	gWantEmaV = (gWantEmaV <= 0.f) ? top.value
 			: (0.9f * gWantEmaV + 0.1f * top.value);
-	AiLog("apex: decide " + unit.circuitDef.GetName() + " #" + unit.id
+	AiLog("apex: decide t=" + ai.teamId + " " + unit.circuitDef.GetName() + " #" + unit.id
 		+ " -> " + KindName(top.kind) + ":" + ((top.def is null) ? "-" : top.def.GetName())
 		+ " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
 		+ " (gain=" + formatFloat(top.gain, "", 0, 2)
@@ -3059,9 +3123,16 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// unserved spend gets the next turret (the binary has-one check
 		// capped the army lab at a single nano while metal overflowed --
 		// watched twice).
+		// The FARM BLOCK is the default home (apexearth: "nanos go in
+		// zones of future construction, not just where they're needed
+		// presently" -- eco builds already site at the farm, so coverage
+		// there is coverage of everything about to exist). A factory line
+		// pulls a nano away only when its unserved spend clears a real
+		// bar, not merely being the hungriest.
 		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
 		const float per = LineSpend();
-		float worst = 0.f;
+		const float pull = ai.GetTunable("apex_line_pull", TUNE_LINE_PULL);
+		float worst = pull;
 		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 			CCircuitUnit@ f = Factory::gFacUnits[fi];
 			if ((f is null) || (f.CountQueued(null) == 0))
@@ -3078,8 +3149,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				slot = fp;
 			}
 		}
+		// PARALLEL on purpose: the default Take folds every nano ask onto
+		// the one standing request -- "burst=1 forever" (requests.as's own
+		// measurement) -- the root of every "not enough nanos" report. Each
+		// decider opens its OWN slot; FarmSlot's rows make the block
+		// rectangular; the income-derived InFlight cap still bounds it.
+		bool made = false;
 		return Requests::Take(unit, w.def, Task::BuildType::NANO,
-				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 200.f, 0.f);
+				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 64.f, 0.f,
+				made, true);
 	}
 	if (w.kind == WK_GEO) {
 		return aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::GEO,
@@ -3405,6 +3483,31 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			if (Catalog::gExtractsM[pb[q]] > reach)
 				reach = Catalog::gExtractsM[pb[q]];
 		}
+		// The quiet rear caps LAND con production at its keep-fleet (+2 for
+		// attrition): the bank-driven BP gap must buy nanos and air cons,
+		// not a walking crowd the reclaimer eats back (watched churn; conT1
+		// hit 24 at 15m on the bank term).
+		if (EcoQuiet() && !Catalog::gFlyer[d]
+			&& (reach < BestExtract())) {
+			int landT1 = 0;
+			for (uint lc = 1; lc < gOwnCount.length(); ++lc) {
+				if ((gOwnCount[lc] > 0) && Catalog::gMobile[int(lc)]
+					&& Catalog::gBuilder[int(lc)] && !Catalog::gFlyer[int(lc)]) {
+					const array<int>@ lb = Catalog::gBuildsList[int(lc)];
+					bool ceil2 = false;
+					for (uint lq = 0; lq < lb.length(); ++lq) {
+						if (Catalog::gExtractsM[lb[lq]] >= BestExtract()) {
+							ceil2 = true;
+							break;
+						}
+					}
+					if (!ceil2)
+						landT1 += gOwnCount[lc];
+				}
+			}
+			if (float(landT1) >= ai.GetTunable("apex_eco_con_keep", TUNE_ECO_CON_KEEP) + 2.f)
+				continue;
+		}
 		// >= the game ceiling, not > our own: requiring the next con to
 		// EXCEED what the first one reaches made a second armack impossible
 		// (measured: one T2 con per game, forever).
@@ -3479,7 +3582,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		&& (bestV < gWantEmaV
 			* ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR)))
 		return null;
-	AiLog("apex: decide " + fac.circuitDef.GetName() + " #" + fac.id
+	AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName() + " #" + fac.id
 		+ " -> produce:" + Catalog::Def(best).GetName()
 		+ " v=" + formatFloat(bestV * 1000.f, "", 0, 2)
 		+ " (gain=" + formatFloat(bestGain, "", 0, 2)

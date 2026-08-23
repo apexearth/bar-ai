@@ -20,7 +20,11 @@
 	// our base early game before we have *ever* seen any enemy air." AA is
 	// demand-driven through Brain::AirCoverWant, which is gated on air actually
 	// being seen; this list is what answers ground.
-	"land":  [0, 3, 5, 4, 8, 12],
+	// EMPTY on purpose: this ladder is walked by the DLL on cluster events,
+	// BYPASSING every script gate -- 28 dragon claws on the eco specialist
+	// with the market's defence wants all refusing (measured 2026-08-23).
+	// Defence is the market's job (WK_PROTECT); nothing spends from here.
+	"land":  [],
 	"water": [1, 1, 4, 9, 10, 9, 10],
 	// DefaultMakeDefence walks `num = isPorc ? defenders.size() : preventCount`,
 	// so this is literally how many entries of the "land" order below an ORDINARY

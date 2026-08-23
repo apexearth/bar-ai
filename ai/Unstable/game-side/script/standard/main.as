@@ -104,6 +104,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Military::UpdateLanePos();
 	Military::UpdateDeathLedger();
 	Military::UpdateWithdraw();
+	Military::UpdateGifts();
 	Air::UpdateFighterStations();
 	Air::RecycleOldFighters();
 	Military::UpdateSpamPosture();
