@@ -1452,6 +1452,8 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 			continue;
 		if (Catalog::gFlyer[int(wkr.circuitDef.id)])
 			continue;   // air cons outrun ground escorts
+		if (wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+			continue;   // the commander is his own escort (apexearth)
 		const float expo = wkr.GetPos(ai.frame).distance2D(gFarmPos)
 				/ ((expoR > 1.f) ? expoR : 1200.f);
 		if (expo < 0.5f)
@@ -1600,6 +1602,8 @@ int EscortShortfall()
 			continue;
 		if (Catalog::gFlyer[int(wkr.circuitDef.id)])
 			continue;
+		if (wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+			continue;   // the commander is his own escort
 		if (wkr.GetPos(ai.frame).distance2D(gFarmPos)
 				/ ((expoR > 1.f) ? expoR : 1200.f) < 0.5f)
 			continue;
