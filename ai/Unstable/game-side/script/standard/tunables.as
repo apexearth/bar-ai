@@ -1222,6 +1222,9 @@ const float TUNE_STAKE_WEIGHT = 1.f;
 // STATIC_GUARD: how much a metal of CORE static defense counts toward the
 // army when computing the stake -- under 1 because towers cannot chase.
 const float TUNE_STATIC_GUARD = 0.7f;
+// WAVE_MEET: metal of standing front turrets per metal of observed enemy
+// massing (both sides in metal -- the power conversion bought dozens).
+const float TUNE_WAVE_MEET = 0.4f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone

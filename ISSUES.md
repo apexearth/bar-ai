@@ -1601,3 +1601,12 @@ kept legacy military-use layer's domain (engage odds, squad merge, group
 travel) -- apexearth's design input wanted before surgery, per the unit-
 thoughts boundary. The market side is NOT the constraint anymore: eco,
 composition, protection, and production all measure healthy.
+
+## Military design session, opening doctrine (apexearth 2026-08-23, watched)
+
+"Our army ran off to chase some enemy raiders and while it was away the
+enemy destroyed much of our base with their main army." Rule for the
+session: respond PROPORTIONALLY -- break off a detachment sized to the
+raid (~raider mass x margin), the main force holds against the main
+threat. Lives in the attack/defend task target selection (C++ AttackTask
+FindTarget + the massing pool); do not implement without his input.

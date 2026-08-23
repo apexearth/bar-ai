@@ -754,11 +754,15 @@ float BPCapacity()
 float gIncPrev = -1.f;
 int gIncPrevAt = 0;
 float gIncGrowth = 0.f;
+float gIncEma = -1.f;
 void TrackIncome()
 {
 	if (ai.frame < gIncPrevAt + 10 * SECOND)
 		return;
 	const float inc = aiEconomyMgr.metal.income;
+	// Structural income: a reclaim burst is a spike, not a standard of
+	// living -- labs must not be licensed off it (apexearth).
+	gIncEma = (gIncEma < 0.f) ? inc : (0.85f * gIncEma + 0.15f * inc);
 	if (gIncPrev >= 0.f) {
 		const float dt = float(ai.frame - gIncPrevAt) / float(SECOND);
 		const float g = (inc - gIncPrev) / ((dt > 1.f) ? dt : 1.f);
@@ -953,8 +957,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// The MARGINAL plant: worth anything only if income supports another
 	// line (~50 m/s each, apexearth's number). Not a cap -- a price of zero
 	// past what the economy can feed, of any lab type.
+	TrackIncome();
 	const float per = ai.GetTunable("apex_plant_income_per", TUNE_PLANT_INCOME_PER);
-	const int supported = 1 + int(aiEconomyMgr.metal.income / ((per > 1.f) ? per : 50.f));
+	const float structInc = (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
+	const int supported = 1 + int(structInc / ((per > 1.f) ? per : 50.f));
 	if (Factory::gFactoryCount
 			+ Requests::LiveCountOf(int(Task::BuildType::FACTORY)) >= supported)
 		return w;
@@ -1845,7 +1851,9 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 		if (cls == PROT_RADAR) {
 			if (ProtCovered(PROT_RADAR, core, Catalog::gRadarR[d] * 0.8f))
 				continue;
-			gain = gAssetsM * rate;
+			// Eyes for the army too: blind units chase shadows (apexearth:
+			// "build radars so our units have intelligence").
+			gain = (gAssetsM + ArmyValue()) * rate;
 		} else if (cls == PROT_JAM) {
 			if (ProtCovered(PROT_JAM, core, Catalog::gJamR[d] * 0.8f))
 				continue;
@@ -1873,32 +1881,48 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 				continue;
 			gain = gAssetsM * rate * float(want3 - have) / float(want3);
 		} else if (cls == PROT_DEF) {
-			// The base perimeter first: the FRONT (the anchor -- in front of
-			// the T1 lab) and the REAR (behind the farm) each want standing
-			// ground defense (watched: no turrets at either).
-			if (Base::gAnchorSet && Base::gAxisSet) {
+			// EXPOSED NAKED MEXES FIRST: they die on a 120s clock while the
+			// home cluster grew DOZENS of turrets (watched) -- the old
+			// metal->power conversion never closed the wave gap. Everything
+			// below is in METAL on both sides.
+			int nakedFirst = -1;
+			float worstExpoF = 0.f;
+			for (uint lf = 0; lf < gLSpot.length(); ++lf) {
+				if (gLExtract[lf] <= 0.f)
+					continue;
+				if (ProtCovered(PROT_DEF, gLPos[lf], 400.f))
+					continue;
+				const float exR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
+				float ex = gLPos[lf].distance2D(core) / ((exR > 1.f) ? exR : 1200.f);
+				if (ex > 1.f)
+					ex = 1.f;
+				if ((ex > 0.5f) && (ex > worstExpoF)) {
+					worstExpoF = ex;
+					nakedFirst = int(lf);
+				}
+			}
+			if (nakedFirst >= 0) {
+				at = gLPos[nakedFirst];
+				const float lossH2 = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
+				gain = (620.f + Catalog::gCostM[d]) * worstExpoF
+						/ ((lossH2 > 1.f) ? lossH2 : 120.f);
+			} else if (Base::gAnchorSet && Base::gAxisSet) {
 				const AIFloat3 front = Base::gAnchor + Base::gFwd * 150.f;
 				const AIFloat3 rear = gFarmPos - Base::gFwd * (gFarmDepth + 150.f);
-				// The front line scales with the OBSERVED wave: reinforcing a
-				// doorstep fight one unit at a time lost 19k of army at 0.008
-				// K/D (ladder autopsy) -- standing power must meet the wave
-				// BEFORE it lands. Gap = seen massing minus turret power here.
-				float standing = 0.f;
+				float standingM = 0.f;
 				for (uint sd = 0; sd < gProtUnit[PROT_DEF].length(); ++sd) {
 					if ((gProtUnit[PROT_DEF][sd] !is null)
 						&& (gProtPos[PROT_DEF][sd].distance2D(front) < 600.f))
-						standing += Catalog::gPower[gProtDefId[PROT_DEF][sd]];
+						standingM += Catalog::gCostM[gProtDefId[PROT_DEF][sd]];
 				}
-				const float wave = Military::FoeMobileMassing();
-				const float wavePower = wave / 12.f;   // metal->power, rough T1 rate
-				const float waveGap = wavePower - standing;
+				const float waveGapM = Military::FoeMobileMassing()
+						* ai.GetTunable("apex_wave_meet", TUNE_WAVE_MEET) - standingM;
 				if (OnMap(front)
-					&& ((waveGap > 0.f) || !ProtCovered(PROT_DEF, front, 450.f)))
+					&& ((waveGapM > 0.f) || !ProtCovered(PROT_DEF, front, 450.f)))
 				{
 					at = front;
 					const float insure = gAssetsM * rate * 2.f;
-					const float meet = (waveGap > 0.f)
-							? (waveGap * 12.f / 300.f) : 0.f;   // amortized over a wave cycle
+					const float meet = (waveGapM > 0.f) ? (waveGapM / 300.f) : 0.f;
 					gain = (meet > insure) ? meet : insure;
 				} else if (!ProtCovered(PROT_DEF, rear, 450.f) && OnMap(rear)) {
 					at = rear;
