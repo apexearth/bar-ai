@@ -290,6 +290,10 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 // this as its demand signal for more claiming capacity.
 bool gMexOpen = false;
 float gAvgWalkDist = 600.f;   // smoothed claim walk, seeds at a near spot
+// The rear-specialist election's enemy reference (ally centroid mirrored
+// through map center), kept for the quiet rear's reach filter.
+float gEcoRefX = -1.f;
+float gEcoRefZ = -1.f;
 
 // A constructor's mobility, as cycle speed on the CURRENT map's walks. Air
 // cons fly the straight line and ignore blockage/pathing -- in a packed
@@ -685,6 +689,26 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	if (LedgerFind(spot) >= 0)
 		return w;
 	const AIFloat3 pos = aiEconomyMgr.GetMexSpotPos(spot);
+	// SUPER RISKY GROUND IS NOT A BUILD OPTION (apexearth): a spot past the
+	// front is a con's death walk whatever it pays -- and refusing it also
+	// stops the market hiring more cons for ground nobody can hold.
+	if (Front::FoeKnown() && Builder::PastFront(pos)) {
+		gMexOpen = false;
+		return w;
+	}
+	// The quiet rear stays home: no claim meaningfully closer to the enemy
+	// than its own base depth (the mirror reference works pre-contact too).
+	if (EcoQuiet() && (gEcoRefX >= 0.f)) {
+		const float sdx = pos.x - gEcoRefX;
+		const float sdz = pos.z - gEcoRefZ;
+		const float hdx = Builder::gHomePos.x - gEcoRefX;
+		const float hdz = Builder::gHomePos.z - gEcoRefZ;
+		const float f = ai.GetTunable("apex_eco_reach_frac", TUNE_ECO_REACH_FRAC);
+		if (sdx * sdx + sdz * sdz < (hdx * hdx + hdz * hdz) * f * f) {
+			gMexOpen = false;
+			return w;
+		}
+	}
 	const float spotIncome = aiEconomyMgr.GetMexSpotIncome(spot);
 	const float speed = Catalog::gSpeed[uid];
 	const float dist = here.distance2D(pos);
@@ -1792,6 +1816,8 @@ bool EcoRoleActive()
 	cz /= float(hx.length());
 	const float ex = float(AiTerrainWidth()) - cx;
 	const float ez = float(AiTerrainHeight()) - cz;
+	gEcoRefX = ex;
+	gEcoRefZ = ez;
 	array<float> ds;
 	float d1 = 0.f;
 	for (uint i = 0; i < hx.length(); ++i) {
@@ -1818,6 +1844,24 @@ bool EcoRoleActive()
 		AiLog("apex: rear-specialist " + (gEcoRole ? "ON" : "off")
 				+ " mine=" + sqrt(mine) + " median=" + sqrt(dmed));
 	return gEcoRole;
+}
+
+// The specialist's exemption ends when the war reaches it: a KNOWN front
+// inside the safe radius restores every normal response.
+bool EcoDangerNear()
+{
+	if (!Builder::gHomeSet || !Front::FoeKnown())
+		return false;
+	AIFloat3 fs;
+	if (!Front::FrontNear(Builder::gHomePos, fs))
+		return false;
+	return fs.distance2D(Builder::gHomePos)
+			<= ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R);
+}
+
+bool EcoQuiet()
+{
+	return EcoRoleActive() && !EcoDangerNear();
 }
 
 float ArmyTarget()
@@ -2091,13 +2135,10 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 				continue;
 			gain = gAssetsM * rate * float(want3 - have) / float(want3);
 		} else if (cls == PROT_DEF) {
-			if (EcoRoleActive() && Builder::gHomeSet) {
-				AIFloat3 fs;
-				if (Front::FrontNear(Builder::gHomePos, fs)
-					&& (fs.distance2D(Builder::gHomePos)
-						> ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R)))
-					continue;
-			}
+			// The quiet rear needs none of this (apexearth: "loads of
+			// defence buildings -- none of which we needed").
+			if (EcoQuiet())
+				continue;
 			// AN UNCOVERED HIGH-VALUE STRUCTURE FIRST: its whole investment
 			// is the stake, wherever it stands.
 			{
@@ -2404,6 +2445,53 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 {
 	Want w;
+	// SURPLUS CONS (apexearth: "made too many t1 cons... we should reclaim
+	// them"): the quiet rear with no claimable safe ground and no BP
+	// deficit turns constructor metal back into ladder money. Only a con a
+	// standing factory could re-make (never the commander), cheapest
+	// first; BPGap turning positive stops the next one -- self-balancing.
+	if (EcoQuiet() && !gMexOpen && (BPGap() <= 0.f)) {
+		CCircuitUnit@ rc = null;
+		int rcDef = -1;
+		for (uint wi = 0; wi < gWorkers.length(); ++wi) {
+			CCircuitUnit@ wu = gWorkers[wi];
+			if ((wu is null) || (wu is unit))
+				continue;
+			const int wd = int(wu.circuitDef.id);
+			bool remake = false;
+			for (uint fi = 0; fi < Factory::gFacUnits.length() && !remake; ++fi) {
+				if (Factory::gFacUnits[fi] is null)
+					continue;
+				const array<int>@ fb = Catalog::BuildsOf(
+						int(Factory::gFacUnits[fi].circuitDef.id));
+				for (uint q = 0; q < fb.length(); ++q) {
+					if (fb[q] == wd) {
+						remake = true;
+						break;
+					}
+				}
+			}
+			if (!remake)
+				continue;
+			if ((rcDef < 0) || (Catalog::gCostM[wd] < Catalog::gCostM[rcDef])) {
+				@rc = wu;
+				rcDef = wd;
+			}
+		}
+		if (rc !is null) {
+			const float hz0 = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+			w.kind = WK_RECLAIM;
+			@w.def = Catalog::Def(rcDef);
+			w.pos = rc.GetPos(ai.frame);
+			w.spotId = int(rc.id);
+			w.gain = Catalog::gCostM[rcDef] / ((hz0 > 1.f) ? hz0 : 300.f);
+			w.mCost = 1.f;
+			w.tCost = (Catalog::gCostM[rcDef] / 90.f) * Wage();
+			w.value = w.gain / (w.mCost + w.tCost);
+			@gReclaimTarget = rc;
+			return w;
+		}
+	}
 	// PADDING (apexearth 2026-08-23): reclaim when both banks have cushion
 	// -- rich enough that the trickle is noise, with room for the refund
 	// burst. Obsolescence is RELATIVE efficiency: for generators the metric
@@ -2818,8 +2906,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	LossDecay();
 	const float armyGap = ArmyTarget() - ArmyValue();
 	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
-	const float roleMul = EcoRoleActive()
+	float roleMul = EcoRoleActive()
 			? ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL) : 1.f;
+	if ((roleMul < 1.f) && EcoDangerNear())
+		roleMul = 1.f;
 	// THE STAKE (apexearth 2026-08-23): "all the value we have built up will
 	// be lost if we have insufficient army." Under-matched, a unit's worth
 	// scales with EVERYTHING we own -- expected loss = total value x defeat
@@ -2933,6 +3023,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 				}
 				continue;
 			}
+		// Until T3-grade units, the quiet rear builds NO army (apexearth);
+			// the bar is the cheapest gantry-tier assault (corshiva 1550,
+			// read from the defs 2026-07-30).
+			if ((roleMul < 1.f) && (Catalog::gCostM[d]
+					< ai.GetTunable("apex_eco_army_min_m", TUNE_ECO_ARMY_MIN_M)))
+				continue;
 			const float sinkGap = OverflowM() * ((fillS > 1.f) ? fillS : 60.f) * roleMul;
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))

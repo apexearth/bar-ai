@@ -1194,6 +1194,12 @@ const float TUNE_ECO_ARMY_MUL = 0.03f;
 // ECO_SAFE_R: front distance beyond which the rear specialist skips ground
 // defense entirely -- past any raid's reach, insurance is dead money.
 const float TUNE_ECO_SAFE_R = 2500.f;
+// ECO_REACH_FRAC: the quiet rear claims no spot whose enemy distance is
+// under this fraction of its own -- it expands sideways/back, never forward.
+const float TUNE_ECO_REACH_FRAC = 0.7f;
+// ECO_ARMY_MIN_M: quiet-rear army floor -- the cheapest gantry-tier assault
+// (corshiva 1550, defs 2026-07-30); below it, army money is ladder money.
+const float TUNE_ECO_ARMY_MIN_M = 1500.f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
 // competes with perpetual streams (the market's typical payback scale).
 const float TUNE_RECLAIM_AMORT = 300.f;

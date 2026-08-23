@@ -142,6 +142,11 @@ void ReadMates()
 	gSectored = Builder::gHomeSet && (gMateX.length() > 0);
 }
 
+bool FoeKnown()
+{
+	return gFoeKnown;
+}
+
 bool Mine(const AIFloat3& in p)
 {
 	if (!gSectored)

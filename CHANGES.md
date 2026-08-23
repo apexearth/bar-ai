@@ -1,5 +1,27 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: rear specialist v3 -- quiet mode redirects, not just suppresses
+
+apexearth's second watch (role confirmed ON in the log): still too many T1
+cons, one T2 con walking to frontline mexes, army trickling, "loads of
+defence buildings -- none of which we needed." v3, all in the market:
+(1) GENERAL rule, his words "super risky places are out of the question":
+any claim past the front is refused for every instance, and the refusal also
+clears `gMexOpen` so the market stops hiring cons for ground nobody holds.
+(2) The quiet rear (elected + no known front within `apex_eco_safe_r`)
+claims nothing meaningfully closer to the enemy than its own base depth
+(`apex_eco_reach_frac` 0.7, mirror-reference so it works pre-contact) --
+this is what was hiring the T1 con flood and walking the T2 con forward.
+(3) Quiet rear skips ALL ground defense (v2's home-distance check was
+defeated by per-site exposed-mex wants). (4) No army below the cheapest
+gantry-tier assault (`apex_eco_army_min_m` 1550-derived) until T3-grade
+units exist; a known front inside the safe radius restores every normal
+response including full stake. (5) Surplus-con reclaim: quiet rear with no
+claimable safe ground and no BP deficit reclaims its cheapest
+factory-remakable con (never the commander), self-balancing on BPGap.
+T2-con/mexup scarcity (his "teams have T2 but no mexups") measured team-wide
+and filed in ISSUES.md -- separate mechanism, not tuned blind here.
+
 ## 2026-08-23: rear specialist v2 -- median election, and the multiplier reaches everything
 
 apexearth watched the 8v8: the presumed eco player still built army and "too

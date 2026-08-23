@@ -1,5 +1,17 @@
 # Open issues — what is wrong with this AI right now
 
+## T2 constructors and mex upgrades barely exist at benchmark scale
+
+apexearth, watching the 8v8 (2026-08-23): "our other teams have T2 but they
+didn't have the mexup'd mexes." The archived 8v8 vs stock-hard agrees and is
+starker: composition.py read Apex cons T2 = 0 and mex upgrades = 0 across all
+eight players, against stock's 9 T2 cons and 5 upgrades -- while T2 spend was
+3,750 vs stock's 33,829. The upgrade WANT exists (`ProposeMexUp`) and prices
+correctly once an adv con exists; the gap is upstream: adv-con production in
+the builder branch (`gain += mob * upD / (1 + ServingCons())`) loses the
+draw. Mechanism unattributed -- measure the actual candV weights on a T2 line
+before tuning anything.
+
 ## NOTE 2026-08-22: the overhaul KILL landed -- leaf-era entries deleted
 
 All AngelScript leaf build/production logic was removed (docs/20-brain-overhaul.md
