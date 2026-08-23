@@ -39,11 +39,12 @@ void Resolve()
 	gBP = StandingBP();
 }
 
-// No role holds defence back during the kill phase; the request chokepoint
-// and the AiMakeDefence stub spend nothing anyway.
+// The quiet rear specialist builds no ground defence; every request rule
+// funnels through this gate (Requests::Take), so paths the market does not
+// own are covered too. AA does not pass through DEFENCE build-type.
 bool DefenceAllowed()
 {
-	return true;
+	return !Market::EcoQuiet();
 }
 
 }  // namespace Role

@@ -1196,6 +1196,12 @@ const float TUNE_ECO_ARMY_MUL = 0.03f;
 // ECO_SAFE_R: front distance beyond which the rear specialist skips ground
 // defense entirely -- past any raid's reach, insurance is dead money.
 const float TUNE_ECO_SAFE_R = 2500.f;
+// JOIN_MIN_M: def cost above which a second builder JOINS the standing
+// build instead of opening a parallel copy (fusion-and-up territory).
+const float TUNE_JOIN_MIN_M = 500.f;
+// ECO_LEASH: work radius of the quiet rear's builders from home -- the
+// safe radius it prices everything else against.
+const float TUNE_ECO_LEASH = 2500.f;
 // ECO_CON_KEEP: land T1 cons the quiet rear always keeps -- nano turrets
 // and small works still need hands (his floor-of-3 number).
 const float TUNE_ECO_CON_KEEP = 3.f;

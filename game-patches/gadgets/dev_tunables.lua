@@ -85,6 +85,8 @@ local NAMES = {
 	"apex_eco_danger_m",
 	"apex_line_floor",
 	"apex_eco_con_keep",
+	"apex_eco_leash",
+	"apex_join_min_m",
 	"apex_eco_reach_frac",
 	"apex_eco_army_min_m",
 	"apex_aa_match",

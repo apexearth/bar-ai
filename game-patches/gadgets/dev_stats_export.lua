@@ -111,6 +111,7 @@ local cheapBuilt = {}     -- team -> {unitName -> metal built}, BELOW SPAM_COST
 -- side effect is wasteful defense and then we have less army and are losing the
 -- overall fight" -- that trade cannot be judged without measuring both halves.
 local defSpend = {}       -- team -> cumulative metal on finished static defence
+local defAASpend = {}     -- team -> cumulative metal on finished static ANTI-AIR
 -- Orders issued, i.e. APM. A player whose decision logic has wedged keeps its
 -- units and its income and simply stops ACTING, which every counter above
 -- reads as "fine, just slow". Counted here for BOTH AIs because a synced
@@ -324,8 +325,21 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 		end
 	end
 	-- Immobile and armed = static defence. Excludes mexes, solars and nanos.
+	-- Anti-air (every weapon vtol-only) is counted separately: the eco role
+	-- may buy AA but no ground defence, and the audit needs to tell them apart.
 	if (ud.speed or 0) == 0 and #ud.weapons > 0 and not ud.isFactory then
-		bump(defSpend, unitTeam, ud.metalCost or 0)
+		local aaOnly = true
+		for _, w in ipairs(ud.weapons) do
+			if not (w.onlyTargets and w.onlyTargets.vtol) then
+				aaOnly = false
+				break
+			end
+		end
+		if aaOnly then
+			bump(defAASpend, unitTeam, ud.metalCost or 0)
+		else
+			bump(defSpend, unitTeam, ud.metalCost or 0)
+		end
 	end
 	if ud.isFactory then
 		bump(facSpend, unitTeam, ud.metalCost or 0)
@@ -492,6 +506,7 @@ local function dump(reason)
 				string.format("mBuiltReal=%.0f", builtReal[teamID] or 0),
 				string.format("mFactories=%.0f", facSpend[teamID] or 0),
 				string.format("mDefence=%.0f", defSpend[teamID] or 0),
+				string.format("mDefAA=%.0f", defAASpend[teamID] or 0),
 				string.format("mReclaim=%.0f", mReclaim[teamID] or 0),
 				string.format("mRezSpend=%.0f", mRezSpend[teamID] or 0),
 				string.format("techFrame=%d", techFrame[teamID] or -1),

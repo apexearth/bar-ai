@@ -75,6 +75,19 @@ IUnitTask@ OrphanOf(CCircuitDef@ def)
 	return null;
 }
 
+// The live task itself, for joining an in-progress build of this def.
+IUnitTask@ LiveTaskOf(CCircuitDef@ def)
+{
+	if (def is null)
+		return null;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if ((gLive[i] !is null) && !gLive[i].IsDead()
+			&& (gLive[i].buildDef !is null) && (gLive[i].buildDef is def))
+			return gLive[i];
+	}
+	return null;
+}
+
 // Any live request (manned or not) for exactly this def.
 bool LiveOfDef(CCircuitDef@ def)
 {

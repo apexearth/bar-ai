@@ -1,5 +1,47 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: rear specialist PROVEN -- audit passes on both seeds
+
+apexearth: "run it on your own until these features are working and an audit
+proves it." tools/audit_role.py rewritten for the market era: seven checks
+(elected wire-to-wire, no-army-until-T3, no ground defence with AA exempt,
+tech-first, waste <5%, out-eco by RATE, mexups) with void-gates for compile
+errors and missing telemetry. The gadget now splits static AA out of
+mDefence (vtol-only weapons), and armyReal excludes builders (a decoy
+commander read as 770 of army).
+
+The iteration chain, each step measured on 8v8 Supreme Isthmus +100:
+danger by GetEnemyCostAt not front geometry (packed-box FrontNear read
+structurally true: 8.6k army, 510 defence, teched last) -> nano demand
+from BPGap/UnservedLineSpend only, never raw overflow (full-metal stall
+bought nanos forever while the T2 lab priced at nothing) -> TECH_PIPE
+0.5->1.0 (double-counted the latency discount PipeLatencyMult already
+prices) -> overflow escalates a justified tech want (40-metal winds beat
+the 3.3k lab bill at argmax for 5 min of full storage; T2 10.9m -> ~3m)
+-> line floor: factory orders must beat 25% of the rolling executed-want
+value unless overflowing (22 armacks / 1 fusion inversion) -> successor-
+first con reclaim (reclaiming the claim fleet pre-T2 starved the ladder)
+-> reclaim etiquette (only lesser cons reclaim, air cons exempt, keep 3,
+condemned walks to reclaimer) -> factory-assist priority + join-don't-
+duplicate >=500m (a joiner doubles speed on the standing frame) -> gantry
+want carries the FULL army gap only its products fill (250 m/s, no gantry:
+porc+overflow were its only terms) -> quiet rear expands by AIR only,
+ground labs retire when an air successor of equal reach stands, first
+flying-builder unlock prices at full demand -> danger dwell ~30s (one
+plane overflight flipped quiet off and bought dragon claws at 13m) ->
+bank past half storage is unserved BP backlog (9.4k banked at 234 m/s
+with 30 nanos read "satisfied") -> fighters exempt from the no-army gate,
+priced off the unsuppressed air census (his call: "we *do* want fighters").
+Shields need enemy within 1800 of the covered core (wealth alone bought
+shield stacks). Decoy commanders excluded (armed producible builders).
+Eco leash 2500 from home; mex claims past the front refused for everyone.
+
+Final audits: seed 11 PASS (T2 2.7m, 276.7 m/s, waste 0.5%, mT3 7900,
+air lab built, zero ground defence), seed 23 PASS (T2 3.0m, 228.4 m/s,
+waste 0.3%, mT3 7900, air lab built, zero ground defence). Both with 4
+mohos by 15m and the con fleet retiring on schedule (7->1 T1 cons as T2
+fleet grows).
+
 ## 2026-08-23: rear specialist v3 -- quiet mode redirects, not just suppresses
 
 apexearth's second watch (role confirmed ON in the log): still too many T1

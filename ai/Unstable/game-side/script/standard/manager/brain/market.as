@@ -677,6 +677,19 @@ float UpDemand()
 	return (d > 0.f) ? d : 0.f;
 }
 
+// TWO HALF-BUILT FUSIONS ARE WORSE THAN ONE FINISHED: an expensive def
+// already in progress takes the next asker as a JOINER -- doubling build
+// speed on the standing frame -- instead of opening a parallel copy
+// (apexearth: "not too many of the same building in parallel; assist
+// should count the time saved").
+IUnitTask@ JoinBig(CCircuitDef@ def)
+{
+	if ((def is null)
+		|| (def.costM < ai.GetTunable("apex_join_min_m", TUNE_JOIN_MIN_M)))
+		return null;
+	return Requests::LiveTaskOf(def);
+}
+
 Want@ ProposeMex(CCircuitUnit@ unit)
 {
 	Want w;
@@ -702,6 +715,10 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	}
 	// The quiet rear stays home: no claim meaningfully closer to the enemy
 	// than its own base depth (the mirror reference works pre-contact too).
+	if (EcoFar(pos)) {
+		gMexOpen = false;
+		return w;
+	}
 	if (EcoQuiet() && (gEcoRefX >= 0.f)) {
 		const float sdx = pos.x - gEcoRefX;
 		const float sdz = pos.z - gEcoRefZ;
@@ -836,7 +853,15 @@ float BPGap()
 	const float ahead = ai.GetTunable("apex_bp_lookahead", TUNE_BP_LOOKAHEAD);
 	const float futureInc = aiEconomyMgr.metal.income
 			+ ((gIncGrowth > 0.f) ? gIncGrowth * ahead : 0.f);
-	const float gap = futureInc * ((head > 0.f) ? head : 1.15f) - BPCapacity();
+	float gap = futureInc * ((head > 0.f) ? head : 1.15f) - BPCapacity();
+	// A bank climbing past half storage is deferred spend the standing
+	// lathe already failed to serve (measured: 9.4k banked at 234 m/s
+	// income with ~30 nanos - the income target alone reads "satisfied"
+	// exactly when the backlog is worst).
+	const float bank = aiEconomyMgr.metal.current;
+	const float st2 = aiEconomyMgr.metal.storage;
+	if ((st2 > 1.f) && (bank > 0.5f * st2))
+		gap += (bank - 0.5f * st2) / 60.f;
 	return (gap > 0.f) ? gap : 0.f;
 }
 
@@ -963,6 +988,8 @@ Want@ ProposeGeo(CCircuitUnit@ unit)
 	if (spot < 0)
 		return w;
 	const AIFloat3 pos = aiEconomyMgr.GetGeoSpotPos(spot);
+	if (EcoFar(pos) || (Front::FoeKnown() && Builder::PastFront(pos)))
+		return w;
 	const float speed = Catalog::gSpeed[uid];
 	const float walkSec = (speed > 1.f) ? (here.distance2D(pos) / speed) : 60.f;
 	const float gain = Catalog::gMakeE[geoId]
@@ -1060,6 +1087,22 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		}
 		if (bestMob <= 0.f)
 			continue;
+		// The quiet rear's expansion is AIR (apexearth: "the goal should be
+		// air cons... stop making ground labs"): flying cons don't jam the
+		// packed farm, and its army era is gantry-only. Ground plants stop
+		// pricing once one stands; air keeps its full value.
+		if (EcoQuiet() && (Factory::gFactoryCount >= 1)) {
+			bool airLab = false;
+			for (uint p4 = 0; p4 < prods.length(); ++p4) {
+				if (Catalog::gMobile[prods[p4]] && Catalog::gBuilder[prods[p4]]
+					&& Catalog::gFlyer[prods[p4]]) {
+					airLab = true;
+					break;
+				}
+			}
+			if (!airLab)
+				continue;
+		}
 		Want c;
 		ValueOf(d, gain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
 				0.f, Catalog::gBuildPower[uid], c);
@@ -1216,8 +1259,33 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		float techGain = 0.f;
 		if (prodCeil > ownCeil)
 			techGain = demand * pipe;
-		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f))
+		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f)) {
 			techGain = demand * pipe * (prodMob / ownMob - 1.f);
+			// The quiet rear NEEDS wings: flying cons are its whole
+			// expansion plan (ground plants stop pricing), so the first
+			// flying-builder unlock is a full-demand want, not a
+			// mobility-delta sliver (seed 23: no air lab in 15 min).
+			if (EcoQuiet()) {
+				bool ownFlyingBuilder = false;
+				for (uint fb = 1; fb < gOwnCount.length(); ++fb) {
+					if ((gOwnCount[fb] > 0) && Catalog::gFlyer[int(fb)]
+						&& Catalog::gBuilder[int(fb)] && Catalog::gMobile[int(fb)]) {
+						ownFlyingBuilder = true;
+						break;
+					}
+				}
+				bool unlocksFlyer = false;
+				for (uint pf = 0; pf < prods.length(); ++pf) {
+					if (Catalog::gMobile[prods[pf]] && Catalog::gBuilder[prods[pf]]
+						&& Catalog::gFlyer[prods[pf]]) {
+						unlocksFlyer = true;
+						break;
+					}
+				}
+				if (!ownFlyingBuilder && unlocksFlyer)
+					techGain = demand * pipe;
+			}
+		}
 		// Channel 3, the GANTRY case: a plant whose products dwarf anything
 		// we can currently produce is the overflow SINK -- its value is the
 		// wasted income its production line would absorb.
@@ -1229,20 +1297,32 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 					prodMax = Catalog::gCostM[prods[p3]];
 			}
 			if (prodMax > 2.f * OwnedProdCostCeil()) {
-				// The gantry's value is PENETRATION: where 100 T1 units fail
-				// against fortification, one T3 succeeds (apexearth). Its
-				// gain scales with the enemy's standing static mass, plus
-				// the overflow sink.
+				// The gantry's value is PENETRATION plus the army gap that
+				// ONLY its products can fill: at 250 m/s nobody built one
+				// because porc-and-overflow were its only terms (watched).
+				// The gap reads the FULL target -- T3 is what the eco role
+				// suppressed everything else for.
 				const float porc = aiEnemyMgr.GetEnemyCost(RT::STATIC);
 				const float pen = (porc / 300.f) * pipe;
 				const float sink = OverflowM() * pipe;
-				const float g3 = (pen > sink) ? pen : sink;
+				const float fillS3 = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+				const float gapF = ArmyTargetFull() - ArmyValue();
+				const float gapStream = (gapF > 0.f)
+						? (gapF / ((fillS3 > 1.f) ? fillS3 : 60.f)) * pipe : 0.f;
+				float g3 = (pen > sink) ? pen : sink;
+				g3 += gapStream;
 				if (g3 > techGain)
 					techGain = g3;
 			}
 		}
 		if (techGain <= 0.f)
 			continue;
+		// Overflowing metal escalates a justified tech want: the lab's
+		// pipeline (mohos, fusion-building cons) is the spender the current
+		// fleet lacks. Without this, 40-metal winds out-valued the 3300
+		// tech bill at argmax for five straight minutes of full storage
+		// (seed 23: T2 at 10.9m; seed 11's 3.3m was E-saturation luck).
+		techGain += OverflowM() * pipe;
 		Want c;
 		ValueOf(d, techGain * fundedMul
 					* PipeLatencyMult(d, Catalog::gBuildPower[uid]),
@@ -1880,18 +1960,34 @@ bool EcoRoleActive()
 // Danger is ENEMY AT THE DOOR, not geometry: front-line distance read
 // structurally true in a packed team box (audited: the exempted specialist
 // built 8.6k army, 510 defence, teched LAST -- quiet mode never engaged).
+// Sustained presence arms danger; one clear read disarms. A single plane
+// overflight flipped quiet mode for one refresh and bought dragon-claw
+// towers at 13m (audited flicker -- danger=0 at every 2-min sample).
+int gEcoDangerStreak = 0;
 bool EcoDangerNear()
 {
 	if (!Builder::gHomeSet)
 		return false;
-	return ai.GetEnemyCostAt(Builder::gHomePos,
+	const bool hot = ai.GetEnemyCostAt(Builder::gHomePos,
 				ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R))
 			> ai.GetTunable("apex_eco_danger_m", TUNE_ECO_DANGER_M);
+	gEcoDangerStreak = hot ? (gEcoDangerStreak + 1) : 0;
+	return gEcoDangerStreak >= 3;   // ~30s at the 10s election cadence
 }
 
 bool EcoQuiet()
 {
 	return EcoRoleActive() && !EcoDangerNear();
+}
+
+// The specialist works from home: any job farther than the leash is
+// someone else's (apexearth: "keep our eco cons at home... not walking
+// across the map").
+bool EcoFar(const AIFloat3& in p)
+{
+	return EcoQuiet() && Builder::gHomeSet
+		&& (p.distance2D(Builder::gHomePos)
+			> ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH));
 }
 
 int gEcoStatusAt = 0;
@@ -1923,6 +2019,18 @@ float ArmyTarget()
 		+ expectedEnemy * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
 	return EcoRoleActive()
 			? (t * ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL)) : t;
+}
+
+// The target with NO role suppression: what the war actually asks for.
+// The gantry want reads this one -- T3 is exactly what the eco role is FOR.
+float ArmyTargetFull()
+{
+	const float ourTotal = gAssetsM + ArmyValue();
+	const float prior = ourTotal * ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
+	const float seen = Military::EnemyArmyCost();
+	const float expectedEnemy = (seen > prior) ? seen : prior;
+	return gAssetsM * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
+		+ expectedEnemy * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
 }
 
 // Own combat losses, decaying -- wrecks on the field are rez-bot demand.
@@ -2167,6 +2275,13 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 			const float artyS = Military::EnemyCostOf(Unit::Role::ARTY.type)
 					+ Military::EnemyCostOf(Unit::Role::SKIRM.type) * 0.5f;
 			if (artyS < 200.f)
+				continue;
+			// ...and only when a threat is actually NEAR: a global arty
+			// census bought shield stacks in a base nothing could reach
+			// (apexearth: "too many shields while theres still no threat
+			// very close"). The bombardier must be within twice its reach
+			// of what the shield would cover.
+			if (ai.GetEnemyCostAt(core, 1800.f) < 200.f)
 				continue;
 			if (ProtCovered(PROT_SHIELD, core, 400.f))
 				continue;
@@ -2430,6 +2545,8 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 		CCircuitUnit@ wf = gWorkers[bf];
 		if ((wf is null) || (wf.task is null) || (wf.id == unit.id))
 			continue;
+		if (EcoFar(wf.GetPos(ai.frame)))
+			continue;
 		if ((wf.task.GetType() == Task::Type::BUILDER)
 			&& (int(wf.task.GetBuildType()) == int(Task::BuildType::FACTORY))) {
 			@boss = wf;
@@ -2439,6 +2556,8 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	for (uint bi = 0; (boss is null) && (bi < gWorkers.length()); ++bi) {
 		CCircuitUnit@ wb = gWorkers[bi];
 		if ((wb is null) || (wb.task is null) || (wb.id == unit.id))
+			continue;
+		if (EcoFar(wb.GetPos(ai.frame)))
 			continue;
 		if (wb.task.GetType() != Task::Type::BUILDER)
 			continue;
@@ -2507,7 +2626,12 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	// deficit turns constructor metal back into ladder money. Only a con a
 	// standing factory could re-make (never the commander), cheapest
 	// first; BPGap turning positive stops the next one -- self-balancing.
-	if (EcoQuiet() && !gMexOpen && (BPGap() <= 0.f)) {
+	// ...and only once the SUCCESSOR fleet exists: reclaiming the claim
+	// fleet before any ceiling con stands starved the ladder that was
+	// supposed to replace it (seed 23: cons cut to the floor by 10m, T2
+	// lab at 12.3m). Same law as generator reclaim -- obsolescence is
+	// RELATIVE efficiency, and nothing is obsolete before its better.
+	if (EcoQuiet() && !gMexOpen && (BPGap() <= 0.f) && (ServingCons() > 0)) {
 		// Only a LESSER con spends its time on this: a ceiling con
 		// reclaiming T1s traded scaling time for tidying (watched --
 		// "T2 cons immediately try reclaiming T1 cons").
@@ -2643,6 +2767,62 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			bestScore = ec;
 			@best = g;
 			bestDef = d;
+		}
+	}
+	// GROUND LABS RETIRE FOR THE QUIET REAR once an owned AIR lab fields
+	// flying cons of equal reach (apexearth: "reclaim the T1 and T2 labs,
+	// go for T1 and T2 air labs... then make the huge T3"). Successor-first,
+	// same law as everything else here: nothing is obsolete before its
+	// better is standing.
+	if (EcoQuiet()) {
+		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+			CCircuitUnit@ f = Factory::gFacUnits[fi];
+			if (f is null)
+				continue;
+			const int fd = int(f.circuitDef.id);
+			float fReach = 0.f;
+			bool fFlies = false;
+			const array<int>@ fp = Catalog::gBuildsList[fd];
+			for (uint q = 0; q < fp.length(); ++q) {
+				if (!Catalog::gMobile[fp[q]] || !Catalog::gBuilder[fp[q]])
+					continue;
+				if (Catalog::gFlyer[fp[q]])
+					fFlies = true;
+				const array<int>@ fpb = Catalog::gBuildsList[fp[q]];
+				for (uint r = 0; r < fpb.length(); ++r) {
+					if (Catalog::gExtractsM[fpb[r]] > fReach)
+						fReach = Catalog::gExtractsM[fpb[r]];
+				}
+			}
+			if (fFlies)
+				continue;   // air labs are the successors, never the retired
+			bool succeeded = false;
+			for (uint gi = 0; gi < Factory::gFacUnits.length() && !succeeded; ++gi) {
+				CCircuitUnit@ g2 = Factory::gFacUnits[gi];
+				if ((g2 is null) || (g2 is f))
+					continue;
+				const array<int>@ gp = Catalog::gBuildsList[int(g2.circuitDef.id)];
+				for (uint q2 = 0; q2 < gp.length(); ++q2) {
+					if (!Catalog::gMobile[gp[q2]] || !Catalog::gBuilder[gp[q2]]
+						|| !Catalog::gFlyer[gp[q2]])
+						continue;
+					float gReach = 0.f;
+					const array<int>@ gpb = Catalog::gBuildsList[gp[q2]];
+					for (uint r2 = 0; r2 < gpb.length(); ++r2) {
+						if (Catalog::gExtractsM[gpb[r2]] > gReach)
+							gReach = Catalog::gExtractsM[gpb[r2]];
+					}
+					if (gReach >= fReach) {
+						succeeded = true;
+						break;
+					}
+				}
+			}
+			if (succeeded && (Catalog::gCostM[fd] * 0.001f < bestScore)) {
+				bestScore = Catalog::gCostM[fd] * 0.001f;
+				@best = f;
+				bestDef = fd;
+			}
 		}
 	}
 	if (best is null)
@@ -2840,6 +3020,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				Task::Priority::NORMAL, w.def, w.pos, w.spotId));
 	}
 	if (w.kind == WK_TECH) {
+		IUnitTask@ jt = JoinBig(w.def);
+		if (jt !is null)
+			return jt;
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
 	}
@@ -2864,6 +3047,10 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	if (w.kind == WK_RECLAIM) {
 		if ((gReclaimTarget is null) || (int(gReclaimTarget.id) != w.spotId))
 			return null;
+		// A condemned unit stands for it -- walking away made the reclaimer
+		// chase it across the base (apexearth).
+		if (gReclaimTarget.circuitDef.IsMobile())
+			gReclaimTarget.CmdMoveTo(unit.GetPos(ai.frame));
 		return aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL,
 				gReclaimTarget));
 	}
@@ -2916,6 +3103,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	}
 	if (w.kind == WK_ENERGY) {
 		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
+		{
+			IUnitTask@ jt = JoinBig(w.def);
+			if (jt !is null)
+				return jt;
+		}
 		return Requests::Take(unit, w.def, Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f,
 				crtd, par);
@@ -2932,6 +3124,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f);
 	}
 	if (w.kind == WK_PLANT) {
+		IUnitTask@ jt = JoinBig(w.def);
+		if (jt !is null)
+			return jt;
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
 	}
@@ -3105,8 +3300,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			}
 		// Until T3-grade units, the quiet rear builds NO army (apexearth);
 			// the bar is the cheapest gantry-tier assault (corshiva 1550,
-			// read from the defs 2026-07-30).
-			if ((roleMul < 1.f) && (Catalog::gCostM[d]
+			// read from the defs 2026-07-30). FIGHTERS are the exception
+			// once an air lab stands ("we *do* want fighters"): they guard
+			// the air-con fleet, sized by the AA target below.
+			const bool airGuard = Catalog::gFlyer[d] && (Catalog::gAirT[d] > 0.f);
+			if ((roleMul < 1.f) && !airGuard && (Catalog::gCostM[d]
 					< ai.GetTunable("apex_eco_army_min_m", TUNE_ECO_ARMY_MIN_M)))
 				continue;
 			const float sinkGap = OverflowM() * ((fillS > 1.f) ? fillS : 60.f) * roleMul;
@@ -3175,9 +3373,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			float roleW = (rTarget > 1.f) ? (rGap / rTarget) : 0.f;
 			if (roleW < 0.05f)
 				roleW = 0.05f;   // never exactly zero: portfolio floor
-			const float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
+			float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
 					* (ppc / linePPC) * roleW * stakeMul
 					/ (1.f + have * 0.05f) * eFeedA;
+			// The quiet rear's fighters ignore the suppressed army gap and
+			// price straight off their own AA gap -- the air census is not
+			// role-suppressed, so the guard fleet tracks REAL enemy air.
+			if ((roleMul < 1.f) && airGuard) {
+				gainA = ((rGap > 0.f) ? rGap : 0.f)
+						/ ((fillS > 1.f) ? fillS : 60.f)
+						* (ppc / linePPC) / (1.f + have * 0.05f) * eFeedA;
+			}
 			if (gainA <= 0.01f)
 				continue;
 			const float vA = gainA / Catalog::gCostM[d];
@@ -3187,6 +3393,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			sumV += vA;
 			continue;
 		}
+		// An ARMED producible builder is a decoy-class unit: it pays for a
+		// gun and a disguise nobody asked for (apexearth: "do not want
+		// them; maybe useful for later logic").
+		if (Catalog::gSurfT[d] + Catalog::gAirT[d] > 0.01f)
+			continue;
 		float gain = 0.f;
 		float reach = 0.f;
 		const array<int>@ pb = Catalog::gBuildsList[d];

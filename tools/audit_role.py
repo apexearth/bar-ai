@@ -109,9 +109,12 @@ def main() -> int:
                    f"peak standing {peak_army:.0f} vs slack {ARMY_SLACK:.0f}"
                    + (f" (mT3={t3:.0f}, exempt)" if t3 > 0 else "")))
 
-    # no-defence
+    # no-defence: ground defence only; static AA is allowed (air ignores
+    # distance-from-front, so the safe rear still answers it)
     mdef = f(last, "mDefence")
-    checks.append(("no-defence", mdef <= 0, f"mDefence={mdef:.0f}"))
+    maa = f(last, "mDefAA")
+    checks.append(("no-defence", mdef <= 0,
+                   f"ground mDefence={mdef:.0f} (AA {maa:.0f}, allowed)"))
 
     # tech-first: holder techStart minimal among allies that have one
     starts = {t: f(s[-1], "techStart") for t, s in samples.items() if f(s[-1], "techStart") > 0}
