@@ -1423,6 +1423,14 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 		}
 		if (has)
 			continue;
+		// Only a NEARBY unit takes the duty: a cross-map death march
+		// delivered 16 of 63 army losses as lone escorts (ladder autopsy).
+		// A far worker's escort comes from the next unit produced closer,
+		// or from its own raider demand (EscortShortfall).
+		const float ms = Catalog::gSpeed[int(mil.circuitDef.id)];
+		if ((ms > 1.f)
+			&& (mil.GetPos(ai.frame).distance2D(wkr.GetPos(ai.frame)) / ms > 45.f))
+			continue;
 		gEscWorker.insertLast(wkr.id);
 		gEscUnit.insertLast(mil.id);
 		return wkr;
