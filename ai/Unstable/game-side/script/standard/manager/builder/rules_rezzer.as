@@ -317,8 +317,16 @@ IUnitTask@ RezzerPreemptReclaim(CCircuitUnit@ unit, bool isComm, IUnitTask@ task
 		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
 	{
 		CCircuitDef@ afus = SideDef3("armafus", "corafus", "legafus");
-		if ((afus !is null) && (afus.count > 0))
-			return task;
+		if ((afus !is null) && (afus.count > 0)) {
+			// The old fall-through here reached DefaultMakeTask's engine
+			// resurrect -- severed in the overhaul, so bots stood AFK next
+			// to wrecks (watched). Resurrect explicitly: safe + the reactor
+			// standing = the corpse is worth more on its feet (apexearth:
+			// "if they feel safe they should prefer to resurrect").
+			gNextWreck = ai.frame + 3 * SECOND;
+			return aiBuilderMgr.Enqueue(TaskB::Resurrect(Task::Priority::NORMAL,
+					unit.GetPos(ai.frame), 100.f, 60 * SECOND, 500.f));
+		}
 	}
 	gNextWreck = ai.frame + 3 * SECOND;   // corpses decay; do not dawdle
 
