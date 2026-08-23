@@ -1911,6 +1911,19 @@ void StallWatch()
 CCircuitUnit@ gReclaimTarget = null;
 CCircuitUnit@ gAssistTarget = null;
 
+// Standing defense metal near a point -- the crowding divisor that makes
+// a 247-LLT carpet impossible (apexearth's screenshot: the whole eco lost
+// to in-base turret sprawl).
+float DefCrowdM(const AIFloat3& in pos, float r)
+{
+	float m = 0.f;
+	for (uint i = 0; i < gProtPos[PROT_DEF].length(); ++i) {
+		if (gProtPos[PROT_DEF][i].distance2D(pos) < r)
+			m += Catalog::gCostM[gProtDefId[PROT_DEF][i]];
+	}
+	return m;
+}
+
 bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 {
 	for (uint i = 0; i < gProtPos[cls].length(); ++i) {
@@ -2036,6 +2049,52 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 				}
 				continue;
 			}
+			// THE FRONTLINE CHOKE is the primary defense destination
+			// (apexearth: "defend the enemy pathway to us, not so much
+			// within our base" -- 247 in-base LLTs lost the eco war). The
+			// wave-meet target lives just BEHIND the choke lip; crowding
+			// divides so the line matures instead of carpeting.
+			if (Base::gAnchorSet) {
+				AIFloat3 cp;
+				if (Front::FrontChoke(Base::gAnchor, cp)) {
+					AIFloat3 site;
+					if (!Front::BehindChoke(cp, 180.f, site))
+						site = cp;
+					if (OnMap(site)) {
+						const float standingM = DefCrowdM(site, 500.f);
+						const float meetM = Military::FoeMobileMassing()
+								* ai.GetTunable("apex_wave_meet", TUNE_WAVE_MEET)
+								+ gAssetsM * rate * 300.f;
+						const float gapM = meetM - standingM;
+						if (gapM > 0.f) {
+							gain = (gapM / 300.f)
+									/ (1.f + DefCrowdM(site, 350.f) / 500.f);
+							at = site;
+						}
+					}
+				}
+			}
+			if (gain > 0.f) {
+				const float rr2 = (Catalog::gMaxRange[d] < 900.f)
+						? Catalog::gMaxRange[d] : 900.f;
+				const float rn2 = rr2 / 500.f;
+				gain *= Catalog::gPower[d] * (1.f + rn2 * rn2 * 0.5f)
+						/ ((Catalog::gCostM[d] > 1.f) ? Catalog::gCostM[d] : 1.f)
+						* 12.f;
+				Want cf;
+				const float spf = Catalog::gSpeed[uid];
+				const float wkf = (spf > 1.f)
+						? (unit.GetPos(ai.frame).distance2D(at) / spf) : 60.f;
+				ValueOf(d, gain, wkf, Catalog::gBuildPower[uid], cf);
+				if (cf.value > w.value) {
+					w = cf;
+					w.kind = WK_PROTECT;
+					@w.def = Catalog::Def(d);
+					w.pos = at;
+					w.spotId = cls;
+				}
+				continue;
+			}
 			// EXPOSED NAKED MEXES FIRST: they die on a 120s clock while the
 			// home cluster grew DOZENS of turrets (watched) -- the old
 			// metal->power conversion never closed the wave gap. Everything
@@ -2072,16 +2131,14 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 				}
 				const float waveGapM = Military::FoeMobileMassing()
 						* ai.GetTunable("apex_wave_meet", TUNE_WAVE_MEET) - standingM;
-				if (OnMap(front)
-					&& ((waveGapM > 0.f) || !ProtCovered(PROT_DEF, front, 450.f)))
-				{
+				if (OnMap(front) && !ProtCovered(PROT_DEF, front, 450.f)) {
 					at = front;
-					const float insure = gAssetsM * rate * 2.f;
-					const float meet = (waveGapM > 0.f) ? (waveGapM / 300.f) : 0.f;
-					gain = (meet > insure) ? meet : insure;
+					gain = gAssetsM * rate
+							/ (1.f + DefCrowdM(front, 350.f) / 500.f);
 				} else if (!ProtCovered(PROT_DEF, rear, 450.f) && OnMap(rear)) {
 					at = rear;
-					gain = gAssetsM * rate;
+					gain = gAssetsM * rate * 0.7f
+							/ (1.f + DefCrowdM(rear, 350.f) / 500.f);
 				}
 			}
 			if (gain > 0.f) {
