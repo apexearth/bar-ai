@@ -1260,18 +1260,25 @@ AIFloat3 FarmSlot(int defId)
 	return gFarmPos - Base::gFwd * gFarmDepth;
 }
 
-// The protected interior: the anchor is the FRONT of the base (the grid
-// grows backward from the first factory), so siting a plant "at the
-// anchor" put the T2 lab in front of an attacking army (watched,
-// facepalmed). Midway to the farm is inside everything we own.
+// Factory ground: the REAR FLANK of the farm block (apexearth: T2 labs
+// "further in the back of our base area", and the vehicle lab needs room
+// in front of it -- packed interior blocked its exit). Beside the farm,
+// behind the base, lateral ground open for roll-out; flanks alternate.
+int gPlantFlank = 0;
 AIFloat3 InteriorSite(const AIFloat3& in fallback)
 {
-	if (Base::gAnchorSet && gFarmSet) {
-		AIFloat3 p;
-		p.x = (Base::gAnchor.x + gFarmPos.x) * 0.5f;
-		p.z = (Base::gAnchor.z + gFarmPos.z) * 0.5f;
-		p.y = 0.f;
-		return p;
+	if (gFarmSet && Base::gAxisSet) {
+		gPlantFlank = 1 - gPlantFlank;
+		const float side = (gPlantFlank == 0) ? 1.f : -1.f;
+		AIFloat3 p = gFarmPos
+				+ Base::gAcross * (side * (FARM_ROW_W * 0.5f + 300.f))
+				- Base::gFwd * (gFarmDepth * 0.5f);
+		if (OnMap(p))
+			return p;
+		p = gFarmPos - Base::gAcross * (side * (FARM_ROW_W * 0.5f + 300.f))
+				- Base::gFwd * (gFarmDepth * 0.5f);
+		if (OnMap(p))
+			return p;
 	}
 	if (gFarmSet)
 		return gFarmPos;
@@ -1788,6 +1795,35 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 				continue;
 			gain = gAssetsM * rate * float(want3 - have) / float(want3);
 		} else if (cls == PROT_DEF) {
+			// The base perimeter first: the FRONT (the anchor -- in front of
+			// the T1 lab) and the REAR (behind the farm) each want standing
+			// ground defense (watched: no turrets at either).
+			if (Base::gAnchorSet && Base::gAxisSet) {
+				const AIFloat3 front = Base::gAnchor + Base::gFwd * 150.f;
+				const AIFloat3 rear = gFarmPos - Base::gFwd * (gFarmDepth + 150.f);
+				if (!ProtCovered(PROT_DEF, front, 450.f) && OnMap(front)) {
+					at = front;
+					gain = gAssetsM * rate * 2.f;
+				} else if (!ProtCovered(PROT_DEF, rear, 450.f) && OnMap(rear)) {
+					at = rear;
+					gain = gAssetsM * rate;
+				}
+			}
+			if (gain > 0.f) {
+				Want c0;
+				const float sp0 = Catalog::gSpeed[uid];
+				const float wk0 = (sp0 > 1.f)
+						? (unit.GetPos(ai.frame).distance2D(at) / sp0) : 60.f;
+				ValueOf(d, gain, wk0, Catalog::gBuildPower[uid], c0);
+				if (c0.value > w.value) {
+					w = c0;
+					w.kind = WK_PROTECT;
+					@w.def = Catalog::Def(d);
+					w.pos = at;
+					w.spotId = cls;
+				}
+				continue;
+			}
 			// A standing mex without a turret in reach: insure the ground,
 			// priced by EXPOSURE (apexearth 2026-08-23: against a real
 			// opponent an unguarded outlying mex "is almost guaranteed to
@@ -2188,26 +2224,27 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				gReclaimTarget));
 	}
 	if (w.kind == WK_NANO) {
-		// A working factory with no nano in lathe reach outranks the farm --
-		// production lines (Gantries above all) must never build unassisted
-		// (apexearth 2026-08-23).
+		// Nano placement follows the demand math: the line with the LARGEST
+		// unserved spend gets the next turret (the binary has-one check
+		// capped the army lab at a single nano while metal overflowed --
+		// watched twice).
 		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
-		const float nr = Catalog::gBuildDist[int(w.def.id)];
+		const float per = LineSpend();
+		float worst = 0.f;
 		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 			CCircuitUnit@ f = Factory::gFacUnits[fi];
 			if ((f is null) || (f.CountQueued(null) == 0))
 				continue;
 			const AIFloat3 fp = f.GetPos(ai.frame);
-			bool covered = false;
+			int nanosNear = 0;
 			for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
-				if (fp.distance2D(gOwnNanoPos[ni]) < nr * 0.9f) {
-					covered = true;
-					break;
-				}
+				if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
+					++nanosNear;
 			}
-			if (!covered) {
+			const float u = per - float(nanosNear) * 17.5f;
+			if (u > worst) {
+				worst = u;
 				slot = fp;
-				break;
 			}
 		}
 		return Requests::Take(unit, w.def, Task::BuildType::NANO,
