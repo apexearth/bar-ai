@@ -1162,7 +1162,8 @@ const float TUNE_FARM_BACK = 500.f;
 const float TUNE_E_LOOKAHEAD = 30.f;
 // E_HEADROOM: energy income target as a multiple of trending pull -- the
 // standing reserve that keeps the bank from ever being raced to zero.
-const float TUNE_E_HEADROOM = 1.25f;
+// 1.25 still under-supplied in watched games ("definite pattern now").
+const float TUNE_E_HEADROOM = 1.5f;
 // CON_ESCORT: exposed constructors claim one army guard each (master).
 const float TUNE_CON_ESCORT = 1.f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
