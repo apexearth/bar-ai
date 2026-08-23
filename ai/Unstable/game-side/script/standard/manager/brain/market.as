@@ -122,6 +122,11 @@ float EPrice()
 	float ePull = aiEconomyMgr.energy.pull;
 	if (gEPullGrowth > 0.f)
 		ePull += gEPullGrowth * ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+	// Supply LEADS demand (apexearth 2026-08-23: "we shouldn't even let
+	// ourselves get to the point where we've run out of E"): the target is
+	// income at headroom over trending pull, so a standing premium exists
+	// while income merely MATCHES pull, and the bank never gets raced.
+	ePull *= ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);
 	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
 	if (excess > 2.f)
 		excess = 2.f;
@@ -489,8 +494,9 @@ int ProtClassOf(int defId)
 	if (Catalog::gRadar[defId]) return PROT_RADAR;
 	if (Catalog::gJammer[defId]) return PROT_JAM;
 	if ((Catalog::gMaxRange[defId] > 1.f) && !Catalog::gMobile[defId]
-		&& !Catalog::gBuilder[defId] && (Catalog::gBuildsList[defId].length() == 0))
-		return PROT_DEF;
+		&& !Catalog::gBuilder[defId] && (Catalog::gBuildsList[defId].length() == 0)
+		&& (Catalog::gSurfT[defId] > 0.5f * Catalog::gAirT[defId]))
+		return PROT_DEF;   // AA never counts as ground coverage (watched: AA at mexes)
 	return -1;
 }
 

@@ -1160,6 +1160,9 @@ const float TUNE_FARM_BACK = 500.f;
 // E_LOOKAHEAD: seconds of energy-pull GROWTH folded into the scarcity
 // price -- anticipation, so the solar starts before the bank empties.
 const float TUNE_E_LOOKAHEAD = 30.f;
+// E_HEADROOM: energy income target as a multiple of trending pull -- the
+// standing reserve that keeps the bank from ever being raced to zero.
+const float TUNE_E_HEADROOM = 1.25f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
 // competes with perpetual streams (the market's typical payback scale).
 const float TUNE_RECLAIM_AMORT = 300.f;
