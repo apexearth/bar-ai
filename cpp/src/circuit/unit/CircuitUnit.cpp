@@ -329,6 +329,7 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
 
 void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout)
 {
+	NoteAct("mov", timeout);
 	assert(utils::is_in_map(pos));
 	unit->MoveTo(pos, options, timeout);
 //	unit->ExecuteCustomCommand(CMD_RAW_MOVE, {pos.x, pos.y, pos.z}, options, timeout);
@@ -349,6 +350,7 @@ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
 
 void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout)
 {
+	NoteAct("fgt", timeout);
 	assert(utils::is_in_map(pos));
 	unit->Fight(pos, options, timeout);
 }
@@ -539,6 +541,7 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
 
 void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 {
+	NoteAct("atk", timeout);
 	target = enemy;
 	TRY_UNIT(manager->GetCircuit(), this,
 		const AIFloat3& pos = enemy->GetPos();
@@ -573,6 +576,7 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 
 void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
 {
+	NoteAct("atkp", timeout);
 	// `pos` is a standoff point on a ring of this unit's own weapon range, and
 	// the orders that used to follow it threw it away. CMD_FIGHT re-acquires the
 	// CLOSEST enemy within maxRange + 100*moveState^2 and pushes its own

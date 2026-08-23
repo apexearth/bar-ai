@@ -357,6 +357,7 @@ void IFighterTask::DodgeFire(CCircuitUnit* unit, CEnemyInfo* attacker)
 	}
 	AIFloat3 dst = pos + perp * dist;
 	CTerrainManager::CorrectPosition(dst);
+	unit->NoteAct("DODGE", frame);
 	unit->CmdMoveTo(dst, 0, frame + FRAMES_PER_SEC * 2);
 	unit->SetDodgeFrame(frame + (int)(FRAMES_PER_SEC * circuit->GetTunable("apex_dodge_cd", 1.f)));
 	IntentPing(dst, "DODGE");
@@ -408,6 +409,7 @@ bool IFighterTask::KeepRange(CCircuitUnit* unit, CEnemyInfo* attacker)
 	const AIFloat3 perp(-dir.z * side, 0.f, dir.x * side);
 	AIFloat3 dst = ePos + dir * hold + perp * (cdef->GetSpeed() * 0.3f);
 	CTerrainManager::CorrectPosition(dst);
+	unit->NoteAct("STAND", frame);
 	unit->CmdMoveTo(dst, 0, frame + FRAMES_PER_SEC * 2);
 	unit->SetDodgeFrame(frame + (int)(FRAMES_PER_SEC
 			* circuit->GetTunable("apex_dodge_cd", 1.f)));
@@ -467,6 +469,7 @@ void IFighterTask::CounterBattery(CCircuitUnit* unit, CEnemyInfo* attacker)
 		|| (dist > cdef->GetSpeed() * circuit->GetTunable("apex_counter_sprint", 20.f))) {
 		return;
 	}
+	unit->NoteAct("CHARGE", frame);
 	unit->Attack(attacker, false, frame + FRAMES_PER_SEC * 30);
 	unit->SetDamagedFrame(frame);
 }

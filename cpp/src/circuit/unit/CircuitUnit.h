@@ -113,6 +113,21 @@ public:
 	void SetIsDead() { isDead = true; }
 	bool IsDead() const { return isDead; }
 
+	// The BLACK BOX: last actions before death, for the deaths.py forensics
+	// (apexearth: "need to see the last ~N actions before a unit's death").
+	void NoteAct(const char* tag, int frame) {
+		actRing[actHead % 10] = std::to_string(frame / 30) + tag;
+		++actHead;
+	}
+	std::string GetActTrace() const {
+		std::string out;
+		const int n = (actHead < 10) ? actHead : 10;
+		for (int i = actHead - n; i < actHead; ++i) {
+			if (!out.empty()) out += ">";
+			out += actRing[i % 10];
+		}
+		return out;
+	}
 	void SetDamagedFrame(int frame) { damagedFrame = frame; }
 	int GetDamagedFrame() const { return damagedFrame; }
 	void SetDamagedDir(const springai::AIFloat3& dir) { damagedDir = dir; }
@@ -218,6 +233,8 @@ private:
 
 	int moveFails;
 	int failFrame;
+	std::string actRing[10];
+	int actHead = 0;
 	int damagedFrame;
 	springai::AIFloat3 damagedDir;
 	int dodgeFrame;
