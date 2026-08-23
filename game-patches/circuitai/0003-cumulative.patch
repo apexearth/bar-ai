@@ -4155,7 +4155,7 @@ index 193efa9..91d88ba 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..1ad8feb 100644
+index 2839b72..da1e478 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,11 +10,14 @@
@@ -4888,7 +4888,7 @@ index 2839b72..1ad8feb 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -556,6 +1198,44 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +1198,45 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4921,6 +4921,7 @@ index 2839b72..1ad8feb 100644
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsKamikazeDef() const", asMETHOD(CCircuitDef, IsKamikazeDef), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsShieldDef() const", asMETHOD(CCircuitDef, IsShieldDef), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "string GetActTrace() const", asMETHOD(CCircuitUnit, GetActTrace), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsRezAble() const", asMETHOD(CCircuitDef, IsRezAble), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreM() const", asMETHOD(CCircuitDef, GetStoreM), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreE() const", asMETHOD(CCircuitDef, GetStoreE), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetConvertCapacity() const", asMETHOD(CCircuitDef, GetConvertCapacity), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4933,7 +4934,7 @@ index 2839b72..1ad8feb 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +1244,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +1245,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4957,7 +4958,7 @@ index 2839b72..1ad8feb 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +1270,41 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +1271,41 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4999,7 +5000,7 @@ index 2839b72..1ad8feb 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +1317,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +1318,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -5009,7 +5010,7 @@ index 2839b72..1ad8feb 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +1438,18 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +1439,18 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5028,7 +5029,7 @@ index 2839b72..1ad8feb 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -724,6 +1471,8 @@ bool CInitScript::Init()
+@@ -724,6 +1472,8 @@ bool CInitScript::Init()
  	mainInfo.receiveMessage = script->GetFunc(mod, "void AiMessage(const string& in, int)");
  	mainInfo.unitFinished = script->GetFunc(mod, "void AiUnitFinished(CCircuitUnit@)");
  	mainInfo.unitDestroyed = script->GetFunc(mod, "void AiUnitDestroyed(CCircuitUnit@)");
@@ -5037,7 +5038,7 @@ index 2839b72..1ad8feb 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +1489,28 @@ void CInitScript::Update()
+@@ -740,9 +1490,28 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -5066,7 +5067,7 @@ index 2839b72..1ad8feb 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -779,6 +1547,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +1548,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -7202,7 +7203,7 @@ index c3f5e98..e02338a 100644
  		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..e185f88 100644
+index cd063e4..f14a107 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -8085,7 +8086,7 @@ index cd063e4..e185f88 100644
  			continue;
  		}
  
-@@ -319,18 +1008,196 @@ void CAttackTask::FindTarget()
+@@ -319,18 +1008,202 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -8217,8 +8218,14 @@ index cd063e4..e185f88 100644
 +			// enemy-side localInfl loop above.
 +			float allyPower = maxPower;
 +			for (const SAllySquad& ally : allySquads) {
++				// COMMITTED support only: at the enemy, targeting the enemy,
++				// or at our shoulder. Counting anyone within supportR (3000)
++				// of US let a squad engage on the strength of friends
++				// walking the other way -- phantom support, died alone
++				// (apexearth: "only a small portion attacks, the rest walk
++				// away").
 +				if ((ally.pos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST))
-+					|| (ally.pos.SqDistance2D(pos) < SQUARE(supportR))
++					|| (ally.pos.SqDistance2D(pos) < SQUARE(NEARBY_ENEMY_DIST))
 +					|| (ally.hasTarget && (ally.tpos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST))))
 +				{
 +					allyPower += ally.power;
@@ -8283,7 +8290,7 @@ index cd063e4..e185f88 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -340,6 +1207,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +1213,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -8354,7 +8361,7 @@ index cd063e4..e185f88 100644
  		ActivePath(lowestSpeed);
  	} else {
  		FallbackFrontPos();
-@@ -349,11 +1280,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -349,11 +1286,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -8397,7 +8404,7 @@ index cd063e4..e185f88 100644
  
  	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
  	const float pathRange = DEFAULT_SLACK * 4;
-@@ -387,8 +1348,28 @@ void CAttackTask::FallbackBasePos()
+@@ -387,8 +1354,28 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -8427,7 +8434,7 @@ index cd063e4..e185f88 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -421,7 +1402,9 @@ void CAttackTask::Fallback()
+@@ -421,7 +1408,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -12159,7 +12166,7 @@ index 5eebb71..d41d22b 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882..42b1891 100644
+index a1ac882..39da463 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -12187,7 +12194,7 @@ index a1ac882..42b1891 100644
  	costM        = def->GetCost(resM);
  	costE        = def->GetCost(resE);
  	upkeepM      = def->GetUpkeep(resM);
-@@ -240,9 +244,46 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -240,9 +244,47 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	isCapturable      = def->IsCapturable();
  
  	const std::map<std::string, std::string>& customParams = def->GetCustomParams();
@@ -12200,6 +12207,7 @@ index a1ac882..42b1891 100644
 +	makeM = def->GetResourceMake(resM) - upkeepM;
 +	needsGeo = def->IsNeedGeo();
 +	isTargFac = def->IsTargetingFacility();
++	isRezAble = def->IsAbleToResurrect();
 +	isKamikazeD = def->IsAbleToKamikaze()
 +		|| ((def->GetSelfDCountdown() == 0) && !def->IsBuilder());   // crawling bombs: countdown-0 selfd, no kamikaze flag (corroach)
 +	areaCells = (def->GetXSize() / 2) * (def->GetZSize() / 2);
@@ -12236,7 +12244,7 @@ index a1ac882..42b1891 100644
  	}
  
  	it = customParams.find("canjump");
-@@ -252,8 +293,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -252,8 +294,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		jumpRange = (it != customParams.end()) ? utils::string_to_float(it->second) : 400.0f;
  	}
  
@@ -12260,7 +12268,7 @@ index a1ac882..42b1891 100644
  		category |= circuit->GetBadCategory();
  		costM *= 0.1f;  // avoid threat metal
  	}
-@@ -303,6 +359,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -303,6 +360,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		delete stockDef;
  	}
  
@@ -12281,7 +12289,7 @@ index a1ac882..42b1891 100644
  		if (isShield) {
  			auto mounts = def->GetWeaponMounts();
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a..5665902 100644
+index cd0b54a..1734143 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
 @@ -165,6 +165,13 @@ public:
@@ -12325,7 +12333,7 @@ index cd0b54a..5665902 100644
  	float GetCostM()        const { return costM; }
  	float GetCostE()        const { return costE; }
  	float GetUpkeepM()      const { return upkeepM; }
-@@ -347,6 +367,21 @@ public:
+@@ -347,6 +367,22 @@ public:
  	float GetExtrRangeM()   const { return extrRangeM; }
  	float GetCloakCost()    const { return cloakCost; }
  	float GetBuildTime()    const { return buildTime; }
@@ -12344,10 +12352,11 @@ index cd0b54a..5665902 100644
 +	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
 +	bool IsKamikazeDef()    const { return isKamikazeD; }   // suicide unit: ammunition, not army
 +	bool IsShieldDef()      const { return shieldMount != nullptr; }
++	bool IsRezAble()        const { return isRezAble; }
  	float GetCaptureSpeed() const { return captureSpeed; }
  //	float GetAltitude()     const { return altitude; }
  	float GetJumpRange()    const { return jumpRange; }
-@@ -478,6 +513,7 @@ private:
+@@ -478,6 +514,7 @@ private:
  	bool isPylon : 1;
  	bool isAssist : 1;
  	bool isRadar : 1;
@@ -12355,7 +12364,7 @@ index cd0b54a..5665902 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
-@@ -488,11 +524,24 @@ private:
+@@ -488,11 +525,25 @@ private:
  	float speed;
  	float losRadius;
  	float sonarRadius;
@@ -12373,6 +12382,7 @@ index cd0b54a..5665902 100644
 +	bool isAntiNukeW = false;
 +	bool isTargFac = false;
 +	bool isKamikazeD = false;
++	bool isRezAble = false;
 +	float storeM;
 +	float storeE;
 +	float convCapacityE;

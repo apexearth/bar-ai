@@ -1135,8 +1135,14 @@ void CAttackTask::FindTarget()
 			// enemy-side localInfl loop above.
 			float allyPower = maxPower;
 			for (const SAllySquad& ally : allySquads) {
+				// COMMITTED support only: at the enemy, targeting the enemy,
+				// or at our shoulder. Counting anyone within supportR (3000)
+				// of US let a squad engage on the strength of friends
+				// walking the other way -- phantom support, died alone
+				// (apexearth: "only a small portion attacks, the rest walk
+				// away").
 				if ((ally.pos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST))
-					|| (ally.pos.SqDistance2D(pos) < SQUARE(supportR))
+					|| (ally.pos.SqDistance2D(pos) < SQUARE(NEARBY_ENEMY_DIST))
 					|| (ally.hasTarget && (ally.tpos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST))))
 				{
 					allyPower += ally.power;

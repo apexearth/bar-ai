@@ -252,6 +252,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	makeM = def->GetResourceMake(resM) - upkeepM;
 	needsGeo = def->IsNeedGeo();
 	isTargFac = def->IsTargetingFacility();
+	isRezAble = def->IsAbleToResurrect();
 	isKamikazeD = def->IsAbleToKamikaze()
 		|| ((def->GetSelfDCountdown() == 0) && !def->IsBuilder());   // crawling bombs: countdown-0 selfd, no kamikaze flag (corroach)
 	areaCells = (def->GetXSize() / 2) * (def->GetZSize() / 2);

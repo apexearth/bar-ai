@@ -46,6 +46,7 @@ array<float> gPower;     // CircuitAI threat value -- combat worth
 array<int> gRole;        // CircuitAI main role (raider/riot/assault/...)
 array<bool> gKamikaze;   // suicide unit: ammunition, not army
 array<bool> gShield;     // projectile shield structure
+array<bool> gRezzer;     // can resurrect wrecks
 array<float> gSurfT;     // threat vs surface targets
 array<float> gAirT;      // threat vs air
 array<bool> gAvailable;
@@ -73,7 +74,7 @@ void Init()
 	gRadar.resize(n); gJammer.resize(n); gRadarR.resize(n); gJamR.resize(n);
 	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n); gPower.resize(n);
 	gSurfT.resize(n); gAirT.resize(n); gRole.resize(n); gKamikaze.resize(n);
-	gShield.resize(n);
+	gShield.resize(n); gRezzer.resize(n);
 	gAvailable.resize(n);
 	gBuildsList.resize(n); gBuiltBy.resize(n);
 
@@ -117,6 +118,7 @@ void Init()
 		gRole[i]         = int(cdef.GetMainRole());
 		gKamikaze[i]     = cdef.IsKamikazeDef();
 		gShield[i]       = cdef.IsShieldDef();
+		gRezzer[i]       = cdef.IsRezAble();
 		gSurfT[i]        = cdef.GetSurfThreat();
 		gAirT[i]         = cdef.GetAirThreat();
 		// NOT IsAvailable(frame): that folds in behaviour.json "since" clocks

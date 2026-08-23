@@ -2693,7 +2693,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		const float mob = MobilityMult(d);
 		// Rez bots: the loss pool is recoverable value on the field; a rez
 		// bot's stream is its share of it, diminishing per bot fielded.
-		if (Builder::gRezzerDefs[d]) {
+		// From def DATA, not ownership: the owned-rezzer flag was a
+		// bootstrap deadlock (production waited for a rezzer we could
+		// never have ordered).
+		if (Catalog::gRezzer[d]) {
 			const int haveRez = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
 			gain += gLossPool
 					/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)

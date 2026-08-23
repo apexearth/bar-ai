@@ -382,6 +382,7 @@ public:
 	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
 	bool IsKamikazeDef()    const { return isKamikazeD; }   // suicide unit: ammunition, not army
 	bool IsShieldDef()      const { return shieldMount != nullptr; }
+	bool IsRezAble()        const { return isRezAble; }
 	float GetCaptureSpeed() const { return captureSpeed; }
 //	float GetAltitude()     const { return altitude; }
 	float GetJumpRange()    const { return jumpRange; }
@@ -538,6 +539,7 @@ private:
 	bool isAntiNukeW = false;
 	bool isTargFac = false;
 	bool isKamikazeD = false;
+	bool isRezAble = false;
 	float storeM;
 	float storeE;
 	float convCapacityE;
