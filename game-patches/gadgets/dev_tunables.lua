@@ -61,6 +61,7 @@ local NAMES = {
 	"apex_e_lookahead",
 	"apex_e_headroom",
 	"apex_con_escort",
+	"apex_escort_max_cost",
 	"apex_auction_diag",
 	"apex_reclaim_amort",
 	"apex_mobile_bp_eff",

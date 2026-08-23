@@ -1170,6 +1170,9 @@ const float TUNE_E_LOOKAHEAD = 30.f;
 const float TUNE_E_HEADROOM = 1.75f;   // 1.5 still read 'not that great' in a watched war game
 // CON_ESCORT: exposed constructors claim one army guard each (master).
 const float TUNE_CON_ESCORT = 1.f;
+// ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
+// guarding a con is a Bull missing from the line.
+const float TUNE_ESCORT_MAX_COST = 120.f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
 // competes with perpetual streams (the market's typical payback scale).
 const float TUNE_RECLAIM_AMORT = 300.f;

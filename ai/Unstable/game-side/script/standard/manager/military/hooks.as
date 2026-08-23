@@ -80,7 +80,9 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// ESCORT DUTY outranks the pools for cheap ground army: an exposed
 	// constructor without an escort claims one guard (Market keeps the
 	// one-per-worker registry).
-	if (!cdef.IsAbleToFly() && (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) > 0.f)) {
+	if (!cdef.IsAbleToFly()
+		&& (cdef.costM <= ai.GetTunable("apex_escort_max_cost", TUNE_ESCORT_MAX_COST))
+		&& (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) > 0.f)) {
 		CCircuitUnit@ vip = Market::EscortNeeded(unit);
 		if (vip !is null) {
 			AiLog(Factory::T() + "apex: " + cdef.GetName() + " #" + unit.id
