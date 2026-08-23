@@ -73,10 +73,61 @@ bool AlliesHurting()
 // quarter of the team that stops fighting.
 const bool ECO_ON_SMALL_TEAMS = false;
 
+// THE ECO ANCHOR: the back-most teammate by published home->enemy distance,
+// latched for the whole game (apexearth 2026-08-22: the tech/eco player is
+// "located safely in the back" and plays the role wire-to-wire -- the
+// mid-game hat transfer left the first holder's army standing and the
+// second holder's payments unpaid). Every instance computes the same answer
+// from the same blackboard; latched only once the full roster has published
+// real distances, so a late publisher cannot move the role afterwards.
+int gEcoAnchor = -1;
+
+int EcoAnchorTeamId()
+{
+	if (gEcoAnchor >= 0)
+		return gEcoAnchor;
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return -1;
+	int best = -1;
+	float bestDist = 0.f;
+	uint published = 0;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		const float d = ai.ReadTeamValue(t, TV_DIST, 0.f);
+		if (d > 0.f)
+			++published;
+		if ((d > bestDist) || ((d == bestDist) && (d > 0.f) && (t < best))) {
+			bestDist = d;
+			best = t;
+		}
+	}
+	if ((published == mates.length()) && (best >= 0)) {
+		gEcoAnchor = best;
+		AiLog(T() + "apex: eco anchor LATCHED team " + best
+			+ " dist=" + formatFloat(bestDist, "", 0, 0)
+			+ " roster=" + mates.length());
+		// Say it IN CHAT, once, from the holder itself: apexearth watched
+		// three games unable to tell which color held the role.
+		// "/say " is what routes the text into CHAT -- without it the engine
+		// treats the string as a console command (see SetupManager's welcome).
+		if (best == ai.teamId) {
+			ai.SendChat("/say apex: I am the eco/tech player this game (team "
+				+ ai.teamId + ") -- no army from me, watch my teammates for that.");
+		}
+	}
+	return best;
+}
+
 bool IsEcoLead()
 {
 	if (IsSmallTeam() && !ECO_ON_SMALL_TEAMS)
 		return false;
+	// The anchor holds the role wire-to-wire; RunElection seeds slot 0 with
+	// it so the sling target and the eco role stay one player.
+	const int anchor = EcoAnchorTeamId();
+	if (anchor >= 0)
+		return ai.teamId == anchor;
 	// FARMING IS AN OPENING JOB. Eco-lead election was coupled to the
 	// tech-lead DESIGNATION, which waits on the tech bars -- measured on
 	// Glitters 8v8s, the farmer activated at 13.5m and 23.1m while stock's

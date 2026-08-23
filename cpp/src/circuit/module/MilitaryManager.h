@@ -244,6 +244,7 @@ private:
 
 	CDefenceData* defence;
 	unsigned int defenceIdx;
+	int splitFrame = 0;                  // cooldown for the breach split; see UpdateDefenceTasks
 	std::map<CCircuitUnit*, int> porcToPoint;  // unit: defPointId
 
 	// Every FINISHED static defence we own, whoever placed it: the FENCE

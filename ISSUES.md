@@ -1,6 +1,130 @@
 # Open issues — what is wrong with this AI right now
 
-## OPEN 2026-08-22: "win faster vs medium" is NOT reachable by tuning -- 7 hypotheses, ~300 games
+## OPEN 2026-08-22: constructors park assisting an IDLE factory
+
+apexearth, watching the eco role on Supreme Isthmus +100: "We have
+constructors standing around trying to assist the bot lab which is doing
+nothing." Under the facqueue the line is held on a Wait between orders, so
+an assist task on it buys nothing while it idles — and assisters at a site
+are invisible to the auction (the parked-builders memory). PeelSurplus +
+apex_peel_eco_keep exist for exactly this; not yet established whether the
+peel skips factory-assist tasks, keeps too many, or runs too rarely.
+Attribute (count parked assisters and their task types in one game) before
+touching the knob. Related report, same session: "we don't build fast
+enough... still delays between our buildings" — the shift-queue chain
+experiment (apex_chain_builds) tried to fix the delays and measurably made
+eco WORSE (see CHANGES); the parked assisters are the remaining suspect.
+
+## OPEN 2026-08-22: engine recruit tasks slip the facqueue abort — the last army leak
+
+A driven line still produces occasional combat units the quota never
+ordered: ~6-14 Pawns and 0-3 Tumbleweeds per game on the eco-role holder,
+whose every facqueue army channel is verified off (role-diag prints all
+gates clean while the units appear; zero matching `+1` order lines). The
+remaining source is CircuitAI's own recruit re-enqueues (raid response)
+landing in the GiveOrder lag window before the facqueue's abort sees them —
+the same async-orders trap as the mex-guard duplicates. Fix direction:
+harden the facqueue's recruit abort (sweep every pass, not only on take),
+or track sent aborts the way the mex crew tracks sent orders. ~1k
+metal/game — cosmetic for most players, a purity violation for the eco
+role. Also pending attribution: a 1-2k defence trickle on the role holder
+that survives both defence gates (suspect: build_chain hubs or the C++
+engine path outside AiMakeDefence).
+
+## OPEN 2026-08-22: half the army attacks, half walks away — no army-level engage decision exists
+
+apexearth: "we'll have an army that is like... 2000 metal in size next to the
+enemy base. 1000 of that metal worth of army will attack and the other half
+will go walk somewhere else."
+
+Mechanism, read in `cpp/src/circuit/task/fighter/AttackTask.cpp`:
+
+1. A mixed force is permanently 2+ squads: `CanAssignTo` refuses speed gaps
+   over `SQUAD_SPEED_RATIO` (1.5, his 2026-08-19 call) and the same test
+   bounds merging via `CheckMergeTask` — co-located squads of different speed
+   classes can never combine.
+2. Each squad's `FindTarget` prices every fight with ONLY its own members:
+   `maxPower = attackPower * powerMod * healthScale * cohesion`. No allied
+   term; the friendly squad on the same tile contributes zero.
+3. So squad A passes the per-group margin and commits while squad B fails it
+   on the same group (`skippedWeak`), elects a different group elsewhere or
+   roams (`RoamPos`) — the observed walk-off. The combined force might clear
+   the margin each half fails; the check punishes the split the squad rules
+   impose.
+4. Only the killing blow counts the whole army (`OurArmyNow` vs
+   `FoeMobileMassing`), and it waives the weakness test globally while on.
+
+Same family as the DEF-chase entry above: per-squad, value-blind election
+with no shared intent. Candidate fixes (C++): (a) allied-power term in the
+`groupWeak` test — count other attack squads within support range / on the
+same group; (b) target gravity — a group a friendly squad already targets is
+biased for nearby squads; (c) shared target across speed-split squads.
+Direction not yet chosen by apexearth.
+
+## OPEN 2026-08-22: commander D-gun chase — distracted by any enemy in LOS, wipes his queue
+
+apexearth, watching: "commanders sometimes get distracted by enemy units, chase
+after them a moment, then forget what they were originally doing afterwards."
+
+Mechanism, read in code (stock CircuitAI, present in our DLL):
+
+- `IBuilderTask::AssignTo` (`cpp/src/circuit/task/builder/BuilderTask.cpp:143`)
+  arms `CDGunAction` with range `max(dgunRange, LOS radius)` — commander LOS
+  (~700) dwarfs D-gun reach (~225), so ANY enemy the commander can see
+  qualifies.
+- `CDGunAction::Update` (vendor `unit/action/DGunAction.cpp`) then calls
+  `ManualFire` → `unit->DGun(target, ALT|CTRL, 5s timeout)`. A unit-target
+  D-gun order with no SHIFT REPLACES the commander's command queue and walks
+  him toward the target until in D-gun range — that is the chase — and
+  re-triggers every 4 action updates while anything stays in LOS. The build
+  he was on is wiped; after the timeout he depends on the travel action / a
+  re-election to resume, and the commander is excluded from
+  `HoldDefenceInProgress`, so a half-built sentry is where the walk-away is
+  most visible (see CHANGES 2026-08-22 mex sentries — adopt-orphan recovers
+  the frame but not the commander's time).
+
+FIX LANDED 2026-08-22 (see CHANGES same date), awaiting confirmation from a
+watched game: builder-task and builder-patrol D-gun actions now arm at
+`GetDGunRange()` instead of the LOS max — his direction ("Ignore those minor
+threats"). Built, deployed, smoke-gated. Delete this entry once a watched
+game confirms the commander stays on task with enemies in sight.
+
+
+## OPEN 2026-08-22: whole army leaves the base to DEF-chase one unimportant unit; base dies
+
+apexearth, watching live: "our entire base die[s] because our army was doing DEF
+chase on a single enemy unit. Our entire army walks off to chase a very
+unimportant enemy." Repeated report — see also 2026-08-21 "petty raiders" in
+`DefendTask.cpp` (that fix added `apex_chase_min_ratio=0.15`, and this still
+happens, so the gate has holes).
+
+Candidate mechanisms, all in `CDefendTask::FindTarget` (cpp mirror
+`cpp/src/circuit/task/fighter/DefendTask.cpp`), none yet attributed:
+
+1. **`atUs` bypasses the ratio gate entirely.** Anything within
+   `highestRange + 500` of the pool (highestRange is LOS radius, so ~1000+
+   elmos) is elected regardless of worth, and the whole pool paths to it.
+   A scout brushing the bubble drags the army.
+2. **The threat of a lone unit is priced as its NEIGHBOURHOOD**: `eThreat`
+   takes the max of the (dead) threat map and ALL enemy group influence
+   within 800 of the target. A worthless unit standing near any real enemy
+   group passes the 15% ratio easily — and the pool then walks at the group.
+3. **Election is nearest-first and value-blind** (stated in the code), so
+   among electable enemies a scout wins over the actual army.
+4. Defend influence from our own buildings makes any enemy inside our base
+   electable by every pool on the map (`GetAllyDefendInflAt` clause) — right
+   response, but combined with (3) a fast raider circling the base can steer
+   the whole army.
+
+Instrumented 2026-08-22 rather than guessed at: the chase ping now reads
+`DEF n=<size> > <unitname> <atUs|post> e=<threat>`, so one watched game
+attributes which clause fired. Attribute before changing any gate.
+
+Same day, apexearth set the rule and the ratio was raised 0.15 -> 0.5 with
+the home ring exempt ("ignore enemies less than half their strength unless
+we need to defend the home base"). Holes (1) atUs bypass and (2)
+neighbourhood threat pricing remain by design/unattributed -- the ping's
+`atUs`/`e=` fields are the attribution if it recurs.
 
 Brief was: more aggressive, win more quickly, without sacrificing economic
 scaling. Every arm below is 16 games against `BARb:stable:medium`, 2v2, +40%

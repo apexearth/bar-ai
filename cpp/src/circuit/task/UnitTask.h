@@ -26,6 +26,7 @@
 #include <set>
 #include <map>
 #include <memory>
+#include <string>
 
 namespace springai {
 	class Unit;
@@ -112,6 +113,12 @@ public:
 protected:
 	bool IsQueryReady(CCircuitUnit* unit) const;
 
+	// Intent ping for a watching player (apex_ping=1): marks the map when this
+	// task's intent CHANGES. The same message near the last mark is silent, so
+	// a decision point that re-fires every update cycle draws once per actual
+	// change of mind, and the previous mark is erased to keep the map legible.
+	void IntentPing(const springai::AIFloat3& pos, const std::string& msg);
+
 public:
 	friend bool operator>>(std::istream& is, IUnitTask& data);
 	friend std::ostream& operator<<(std::ostream& os, const IUnitTask& data);
@@ -131,6 +138,9 @@ protected:
 
 	unsigned int updCount;
 	bool isDead;
+
+	std::string pingMsg;                 // see IntentPing
+	springai::AIFloat3 pingPos;
 
 #ifdef DEBUG_VIS
 public:

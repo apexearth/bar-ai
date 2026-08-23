@@ -1013,7 +1013,34 @@ int CEconomyManager::FindOpenMexSpot(CCircuitUnit* unit, const AIFloat3& pos, fl
 		}
 		return false;
 	};
-	return metalMgr->GetSpotToBuild(pos, predicate);
+	int idx = metalMgr->GetSpotToBuild(pos, predicate);
+
+	// apexearth 2026-08-22: "our cons that go out and get mexes sometimes choose
+	// to go to far away mexes instead of the mexes that are closest to where
+	// they are." GetSpotToBuild walks the CLUSTER graph, commits to one cluster,
+	// and then takes the nearest spot INSIDE it -- so an open spot in a
+	// neighbouring cluster that is physically nearer is never a candidate. The
+	// predicate is the same reachability/threat/buildability test, so a spot it
+	// accepts is equally valid; sweep for one that is genuinely closer.
+	// Spot counts are in the tens and a mex is ordered a few times a minute, so
+	// the extra predicate calls are not on any hot path.
+	if (circuit->GetTunable("apex_mex_nearest", 0.f) > 0.f) {
+		float bestSq = (idx >= 0)
+				? spots[idx].position.SqDistance2D(pos)
+				: std::numeric_limits<float>::max();
+		for (unsigned i = 0; i < spots.size(); ++i) {
+			const float sqd = spots[i].position.SqDistance2D(pos);
+			if (sqd >= bestSq) {
+				continue;
+			}
+			if (!predicate(i)) {
+				continue;
+			}
+			bestSq = sqd;
+			idx = (int)i;
+		}
+	}
+	return idx;
 }
 
 AIFloat3 CEconomyManager::GetMexSpotPos(int spotId) const

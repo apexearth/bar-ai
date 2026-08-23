@@ -222,6 +222,10 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		return;
 	}
 
+	// Before any retreat question: a unit that stays in the fight should not
+	// stand in the stream of fire that is hitting it.
+	DodgeFire(unit, attacker);
+
 	// Committed push: do not peel off. apexearth: "Need to ensure the units
 	// don't suddenly say 'oh lets regroup somewhere safe!' because their purpose
 	// is to kill bases, and they probably can't get away on larger maps."
@@ -229,8 +233,20 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 	// around is killed anyway on the walk home AND gives up the gap it opened.
 	// Commanders still retreat: losing one loses the game, which is a different
 	// trade entirely.
+	// apex: THE COMMIT MUST NOT KEEP FEEDING CORPSES INTO THE PUSH. A declared
+	// push/killing blow waives retreat so the attack cannot dissolve mid-swing,
+	// but a unit already near death adds almost no damage and is a free kill the
+	// moment the commit lifts -- measured 2026-08-22 across 16 games: retreat
+	// switches happen at a median 14% hp and the unit is dead 1s later, 228k
+	// metal of it. Below a fraction of its OWN threshold a unit peels out while
+	// it can still make the walk; everything healthier still holds the line.
+	// Default 0 keeps the waiver absolute (the behaviour every arm was measured
+	// against); apex_commit_bail turns it on.
 	if (circuit->IsCommitted() && !cdef->IsRoleComm()) {
-		return;
+		const float bail = circuit->GetTunable("apex_commit_bail", 0.f);
+		if ((bail <= 0.f) || (unit->GetHealthPercent() > cdef->GetRetreat() * bail)) {
+			return;
+		}
 	}
 
 	// Dive commit: the task's chosen target is fat economy on their ground
@@ -295,6 +311,52 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		return;
 	}
 	cowards.insert(unit);
+}
+
+// Standing still under fire eats every shot; a short sidestep perpendicular
+// to the incoming fire makes slow projectiles (rockets, plasma) miss. The
+// side alternates by unit id so a squad splits apart instead of piling onto
+// one tile, and the distance scales with the unit's own speed -- a unit too
+// slow to dodge barely moves. The move carries a timeout and the task's next
+// update re-issues the attack, so the jink cannot strand anyone.
+void IFighterTask::DodgeFire(CCircuitUnit* unit, CEnemyInfo* attacker)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	if (circuit->GetTunable("apex_dodge", 1.f) <= 0.f) {
+		return;
+	}
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	if (!cdef->IsMobile() || cdef->IsAbleToFly()) {
+		return;
+	}
+	const int frame = circuit->GetLastFrame();
+	if (frame < unit->GetDodgeFrame()) {
+		return;
+	}
+	const AIFloat3& pos = unit->GetPos(frame);
+	AIFloat3 dir = unit->GetDamagedDir();  // toward the shooter
+	if (attacker != nullptr) {
+		const AIFloat3& ePos = attacker->GetPos();
+		if (utils::is_valid(ePos)) {
+			dir = ePos - pos;
+		}
+	}
+	dir.y = 0.f;
+	if (dir.SqLength2D() < 1.f) {
+		return;  // no idea where the fire came from
+	}
+	dir.SafeNormalize2D();
+	const float side = (unit->GetId() % 2 == 0) ? 1.f : -1.f;
+	const AIFloat3 perp(-dir.z * side, 0.f, dir.x * side);
+	const float dist = cdef->GetSpeed() * circuit->GetTunable("apex_dodge_sec", 0.75f);
+	if (dist < 20.f) {
+		return;
+	}
+	AIFloat3 dst = pos + perp * dist;
+	CTerrainManager::CorrectPosition(dst);
+	unit->CmdMoveTo(dst, 0, frame + FRAMES_PER_SEC * 2);
+	unit->SetDodgeFrame(frame + (int)(FRAMES_PER_SEC * circuit->GetTunable("apex_dodge_cd", 2.f)));
+	IntentPing(dst, "DODGE");
 }
 
 void IFighterTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)

@@ -344,6 +344,19 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	created = false;
 	if ((want is null) || !OnMap(spot))
 		return null;
+	// THE ECO ROLE BUILDS NO DEFENCE (apexearth 2026-08-22: "This tech/eco
+	// doesn't need to make any defenses. They're located safely in the
+	// back."). Measured 9,785 metal of turrets on the role holder in one
+	// game, placed by rules that did not know the role existed -- refused at
+	// THE chokepoint rather than flagged in each rule. Radar/sonar stay:
+	// eyes are not porc. AiMakeDefence carries the same gate for the
+	// engine-driven path.
+	if (((bt == Task::BuildType::DEFENCE) || (bt == Task::BuildType::BUNKER)
+			|| (bt == Task::BuildType::BIG_GUN))
+		&& !Role::DefenceAllowed())
+	{
+		return null;
+	}
 	SweepDead();
 	// THE one chokepoint every request rule passes through: an asker that
 	// cannot build the def gets null BEFORE any task is enqueued, so the rule
@@ -380,6 +393,23 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 				&& !unit.circuitDef.CanBuild(cand.buildDef))
 				continue;
 			return cand;
+		}
+		// Same bar as PlantApproved: the eco role rebuilds no T1 plant
+		// before its second fusion.
+		if (Factory::IsEcoLead() && Factory::gHaveT2
+			&& Factory::IsLandT1Plant(want)
+			&& (Builder::gFusions.length()
+				< uint(ai.GetTunable("apex_role_t1_refac", TUNE_ROLE_T1_REFAC))))
+		{
+			return null;
+		}
+		// And NEVER a second T1 land plant for the role at all -- one stood
+		// beside a full bank with no T2 in the watched game ("2 T1 labs
+		// existing (both bot labs)... we don't need these labs anymore").
+		if (Factory::IsEcoLead() && Factory::IsLandT1Plant(want)
+			&& (Factory::T1PlantCount() >= 1))
+		{
+			return null;
 		}
 		if (Factory::IsLandT1Plant(want) && Factory::T1CapHolds()
 			&& (Factory::T1PlantCount() >= 1))
@@ -477,6 +507,16 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// worth walking to; otherwise back off. Never a second building here.
 	IUnitTask@ cover = CoverFor(want, at, radius);
 	if (cover !is null) {
+		// An unmanned request here is an ORPHAN, not cover: hand it to the
+		// asker whatever it costs. JOIN_MIN_COST bounds walking to HELP a
+		// manned site; below it this branch refused everything, so a cheap
+		// tower whose builder was pulled away blocked its own ground forever
+		// -- re-asked and refused as "covered" every election, never built.
+		if (Workers(cover) == 0) {
+			++gJoined;
+			Log(want, "adopt-orphan");
+			return cover;
+		}
 		if ((want.costM >= JOIN_MIN_COST) && (Workers(cover) < SiteWorkerCap(want))) {
 			++gJoined;
 			Log(want, "join-site");

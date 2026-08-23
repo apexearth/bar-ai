@@ -73,14 +73,14 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 // weight moved into SPEND_ECONOMY below (def/airdef/buildpower untouched).
 // The 2026-08-19 raise this replaces was measured against the OLD spend
 // machinery; with the budget deferrals live, the target now actually binds.
-array<float> SPEND_ARMY       = { 0.0f,  4.0f,  3.0f,  4.0f,   5.0f };
+array<float> SPEND_ARMY       = { 2.0f,  4.0f,  3.0f,  4.0f,   5.0f };
 // LOW until T3-scale income, then RISING HARD -- apexearth: pre-T3 "defenses
 // are really only good versus raiders", but "at late game we should be
 // aggressive with flak on our front lines, T3 defense too. Right now we are
 // *not* aggressive with this at all." The ramp starts at the 100 column and
 // peaks steep at 300: ~8-9% early/mid, ~12% at 100, ~19% at 300.
 array<float> SPEND_DEFENCE    = { 4.0f,  4.0f,  4.0f,  4.0f,  4.0f };  // every validated Altair arm ran share_defence=4; online has no modoption, so the tested value IS the default
-array<float> SPEND_AIRDEF     = { 1.0f,  2.0f,  1.5f,  1.5f,  0.5f };
+array<float> SPEND_AIRDEF     = { 1.0f,  2.0f,  1.5f,  1.5f,  2.0f };
 array<float> SPEND_ECONOMY    = { 5.0f,  5.0f,  5.0f,  5.0f,  5.0f };   // absorbs the army cut, see SPEND_ARMY
 array<float> SPEND_BUILDPOWER = { 5.0f,  2.0f,  2.0f,  2.0f,  2.0f };
 
@@ -169,8 +169,8 @@ array<float> ROLE_AHA     = {0.00f, 0.00f, 0.07f, 0.10f, 0.11f};
 // guards are the anti-raider work that is defence's actual job pre-T3
 // (apexearth). Front still leads, but no longer 3:1 -- and it recovers its
 // lead only at the T3 column where the big towers hold ground for real.
-array<float> DEF_FRONT = {1.0f,  1.0f,  1.0f,  1.0f,  1.0f};   // the Brain's line
-array<float> DEF_LOCAL = {2.0f,  2.0f, 2.0f, 2.0f, 2.0f};  // mex guards, dig-ins
+array<float> DEF_FRONT = {0.0f,  3.0f,  3.0f,  3.0f,  3.0f};   // the Brain's line
+array<float> DEF_LOCAL = {3.0f,  2.0f, 1.0f, 2.0f, 3.0f};  // mex guards, dig-ins
 
 //------------------------------------------------------------------------------
 // 3. HOW FAR THE OBSERVED ENEMY MOVES THE MIX.

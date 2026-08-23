@@ -307,6 +307,12 @@ void UpdateWithdraw()
 		AppendFightHist(int(u.id), recallHome ? "H" : "W", FightCtx(u));
 		if (ai.frame >= gNextWithdrawLog) {
 			gNextWithdrawLog = ai.frame + 15 * SECOND;
+			// Intent ping, on the same throttle as the log: withdrawals are
+			// per-unit orders no C++ task pings, so without this they are the
+			// largest unexplained movement on the map.
+			if (ai.GetTunable("apex_ping", TUNE_PING) > 0.f)
+				AiAddPoint(p, "WDRAW " + (leash ? "leash" : (recallHome ? "recall"
+					: (outgunned ? ("odds " + formatFloat(odds, "", 0, 1)) : "infl"))));
 			AiLog(Factory::T() + "apex: withdraw "
 				+ ((u.circuitDef !is null) ? u.circuitDef.GetName() : "?")
 				+ " at=" + int(p.x) + "," + int(p.z)

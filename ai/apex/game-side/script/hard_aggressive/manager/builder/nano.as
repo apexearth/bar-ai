@@ -492,7 +492,11 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 	if (!Factory::EcoLeadActive() && !MetalFull() && !richEnough)
 		return null;
 	// Half the bank while poor, a fifth once the income itself justifies it.
-	const float bankNeed = richEnough ? NANO_RICH_BANK : NANO_MIN_BANK;
+	// A controller deficit means income is outrunning spend capacity -- the
+	// rich fraction applies, not the poor one (the 50% bar slow-walked the
+	// exact turret the deficit exists to buy).
+	const float bankNeed = (richEnough || (Role::NanoWant() > 0))
+			? NANO_RICH_BANK : NANO_MIN_BANK;
 	if (aiEconomyMgr.metal.current < aiEconomyMgr.metal.storage * bankNeed)
 		return null;
 	// A turret costs 3200 energy to put up; buying build power on a grid that
@@ -501,8 +505,18 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		return NanoVeto("energy stalling");
 
 	CCircuitDef@ want = SideDef3(armnanotc, cornanotc, legnanotc);
-	if ((want is null) || !want.IsAvailable(ai.frame) || (want.count >= NanoCap()))
-		return NanoVeto("no def or at cap " + ((want !is null) ? (want.count + "/" + NanoCap()) : "null"));
+	if (want is null || !want.IsAvailable(ai.frame))
+		return NanoVeto("no def");
+	// The eco role at a REAL surplus is never capped: banked metal doing
+	// nothing is the one state it must not be in (apexearth 2026-08-22:
+	// "eco needs a LOT of build power eventually. if we are full on metal,
+	// build more nanos"). The outstanding-orders bound below still holds,
+	// so this widens appetite, not order spam.
+	// The controller's deficit also lifts the cap: NanoWant() recomputes
+	// each Resolve from standing BP, so this self-stops at balance.
+	const bool roleFull = Factory::EcoLeadActive() && MetalSurplusIsReal();
+	if (!roleFull && (Role::NanoWant() <= 0) && (want.count >= NanoCap()))
+		return NanoVeto("at cap " + want.count + "/" + NanoCap());
 
 	// Bound what is OUTSTANDING, not just what stands. want.count sees finished
 	// turrets only and Enqueue does not dedup, so the cap alone let this run to
@@ -597,7 +611,14 @@ IUnitTask@ EcoNano(CCircuitUnit@ unit)
 		return null;
 	if (!created)
 		return post;
-	gNextNano = ai.frame + NANO_PERIOD;
+	// The fast pace was DECLARED and never wired (NANO_FULL_PERIOD sat dead
+	// since it was written): while the controller still wants build power or
+	// the bank is at cap, the next order waits 1s, not 8 -- apexearth,
+	// watching: "We are making them, but it doesn't happen frequently
+	// enough."
+	gNextNano = ai.frame
+			+ (((Role::NanoWant() > 0) || MetalFull())
+				? NANO_FULL_PERIOD : NANO_PERIOD);
 	++gNanosAsked;
 	// BURST on a deep bank -- apexearth: "if a building we want to make is
 	// cheap and we have tons of resources we should queue up more than just 1

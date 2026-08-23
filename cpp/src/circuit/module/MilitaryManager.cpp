@@ -48,6 +48,7 @@
 #include "spring/SpringMap.h"
 
 #include "AISCommands.h"
+#include "Drawer.h"
 #include "Log.h"
 
 namespace circuit {
@@ -1801,6 +1802,110 @@ void CMilitaryManager::UpdateDefenceTasks()
 //			dt->SetMaxPower(std::max(minAttackers, enemyGroups[groupIdx].threat));
 //		}
 		dt->SetMaxPower(std::max(minAttackers, circuit->GetEnemyManager()->GetPreMaxGroupThreat()));
+	}
+
+	/*
+	 * Split: a breach no defend pool can answer peels a matched slice out of
+	 * the biggest attack squad. apexearth 2026-08-22: "There'll be an army
+	 * killing our base and our army is off fighting some other army, winning
+	 * that fight, but our base is dead." Demand is measured on live enemy
+	 * GROUP influence (the threat map reads ~0 almost everywhere), answered
+	 * at a margin, taken fastest-first so the response can arrive in time;
+	 * the rest of the squad keeps its fight.
+	 */
+	if (circuit->GetTunable("apex_army_split", 1.f) > 0.f) {
+		const int frame = circuit->GetLastFrame();
+		if (frame >= splitFrame) {
+			const std::vector<CCircuitAI::SHotSpot>& spots = circuit->GetHotSpots();
+			CInfluenceMap* inflMap = circuit->GetInflMap();
+			const std::vector<CEnemyManager::SEnemyGroup>& groups =
+					circuit->GetEnemyManager()->GetEnemyGroups();
+			int bestSpot = -1;
+			float bestDemand = .0f;
+			for (unsigned i = 0; i < spots.size(); ++i) {
+				if ((spots[i].weight < HOT_MIN_WEIGHT) || !circuit->IsPosOnMap(spots[i].pos)) {
+					continue;
+				}
+				// A spot on ground we do not hold is a fight lost elsewhere,
+				// not a breach -- same gate as GetGuardAnchor.
+				if (inflMap->GetInfluenceAt(spots[i].pos) <= -INFL_EPS) {
+					continue;
+				}
+				float live = .0f;
+				for (const CEnemyManager::SEnemyGroup& g : groups) {
+					if (g.pos.SqDistance2D(spots[i].pos) < SQUARE(800.f)) {
+						live += g.influence;
+					}
+				}
+				// apexearth 2026-08-22: "If the base has enough defenses to
+				// handle what's attacking it then we don't need to send our
+				// army to it." The guns already standing at the breach count
+				// against the demand, same radius as the enemy measure.
+				float standing = .0f;
+				for (CCircuitUnit* s : circuit->GetOwnStructsNear(spots[i].pos, 800.f)) {
+					CCircuitDef* sdef = s->GetCircuitDef();
+					if (sdef->IsAttacker() && !sdef->IsRoleAA()) {
+						standing += sdef->GetPower();
+					}
+				}
+				const float already = (i < assigned.size()) ? assigned[i] : .0f;
+				const float demand = live - already - standing;
+				if (demand > bestDemand) {
+					bestDemand = demand;
+					bestSpot = (int)i;
+				}
+			}
+			CAttackTask* src = nullptr;
+			if (bestSpot >= 0) {
+				for (IFighterTask* t : GetTasks(IFighterTask::FightType::ATTACK)) {
+					CAttackTask* at = static_cast<CAttackTask*>(t);
+					if ((at->GetLeader() == nullptr) || at->GetAssignees().empty()) {
+						continue;
+					}
+					if ((src == nullptr) || (at->GetAttackPower() > src->GetAttackPower())) {
+						src = at;
+					}
+				}
+			}
+			const AIFloat3& spotPos = (bestSpot >= 0) ? spots[bestSpot].pos : ZeroVector;
+			// Only when the squad is too far to answer by itself -- nearby it
+			// already elects the breach as a target.
+			if ((src != nullptr)
+				&& (src->GetLeaderPos(frame).SqDistance2D(spotPos)
+					> SQUARE(circuit->GetTunable("apex_split_min_dist", 1600.f))))
+			{
+				const float want = bestDemand * circuit->GetTunable("apex_split_margin", 1.3f);
+				std::vector<CCircuitUnit*> order(src->GetAssignees().begin(), src->GetAssignees().end());
+				std::sort(order.begin(), order.end(), [](CCircuitUnit* a, CCircuitUnit* b) {
+					return a->GetCircuitDef()->GetSpeed() > b->GetCircuitDef()->GetSpeed();
+				});
+				float got = .0f;
+				unsigned take = 0;
+				while ((take < order.size()) && (got < want)) {
+					got += order[take]->GetCircuitDef()->GetPower();
+					++take;
+				}
+				if ((take > 0) && (got >= want * 0.5f)) {  // enough to matter, even if it is the whole squad
+					CDefendTask* dt2 = static_cast<CDefendTask*>(Enqueue(TaskF::Defend(
+							IFighterTask::FightType::ATTACK, IFighterTask::FightType::ATTACK, got)));
+					dt2->SetPosition(spotPos);
+					dt2->HoldPromote(frame + FRAMES_PER_SEC
+							* (int)circuit->GetTunable("apex_split_hold", 40.f));
+					for (unsigned i = 0; i < take; ++i) {
+						AssignTask(order[i], dt2);
+					}
+					splitFrame = frame + FRAMES_PER_SEC
+							* (int)circuit->GetTunable("apex_split_cd", 30.f);
+					circuit->LOG("apex: SPLIT %d units (%.0f power) answer breach (%.0f,%.0f) demand=%.0f (net of pools+guns), %d stay",
+							(int)take, got, spotPos.x, spotPos.z, bestDemand,
+							(int)(order.size() - take));
+					if (circuit->GetTunable("apex_ping", 0.f) > 0.f) {
+						circuit->GetDrawer()->AddPoint(spotPos, utils::string_format(
+								"SPLIT n=%d demand=%d", (int)take, (int)bestDemand).c_str());
+					}
+				}
+			}
+		}
 	}
 
 	/*

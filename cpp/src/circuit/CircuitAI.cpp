@@ -969,6 +969,35 @@ int CCircuitAI::Update(int frame)
 
 int CCircuitAI::Message(int playerId, const char* message)
 {
+	// apex: EVERYTHING below is #ifdef DEBUG_VIS, which only CIRCUIT_DEBUG
+	// defines -- so in every shipped build the AI parsed no chat command at all
+	// and `~widraw`/`~wtdraw` silently did nothing. The widget overlays are
+	// wanted in ordinary watched games (they stream to a LuaRules gadget and
+	// need no SDL), so those two are handled here, unconditionally.
+	{
+		const char wiDraw[] = "~widraw";
+		const char wtDraw[] = "~wtdraw";
+		const size_t len = strlen(message);
+		if ((len >= 9) && (strncmp(message, wiDraw, 7) == 0)) {
+			if (teamId == atoi(&message[8])) {
+				mapManager->GetInflMap()->ToggleWidgetDraw();
+			}
+			return 0;
+		}
+#ifdef DEBUG_VIS
+		// The threat map's widget half is still inside its own DEBUG_VIS block;
+		// split it the same way as InfluenceMap when this proves out.
+		if ((len >= 9) && (strncmp(message, wtDraw, 7) == 0)) {
+			if (teamId == atoi(&message[8])) {
+				mapManager->GetThreatMap()->ToggleWidgetDraw();
+			}
+			return 0;
+		}
+#else
+		(void)wtDraw;
+#endif
+	}
+
 #ifdef DEBUG_VIS
 	const char cmdBreak[]   = "~break";
 	const char cmdReload[]  = "~reload";
@@ -1261,6 +1290,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
 int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int weaponId, AIFloat3 dir)
 {
 	unit->SetDamagedFrame(lastFrame);
+	unit->SetDamagedDir(dir);  // points toward the shooter (see CreateFakeEnemy)
 	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
 
 	if (IsValidWeaponDefId(weaponId)) {

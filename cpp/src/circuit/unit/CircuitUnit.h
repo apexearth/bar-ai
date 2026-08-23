@@ -115,6 +115,10 @@ public:
 
 	void SetDamagedFrame(int frame) { damagedFrame = frame; }
 	int GetDamagedFrame() const { return damagedFrame; }
+	void SetDamagedDir(const springai::AIFloat3& dir) { damagedDir = dir; }
+	const springai::AIFloat3& GetDamagedDir() const { return damagedDir; }
+	void SetDodgeFrame(int frame) { dodgeFrame = frame; }
+	int GetDodgeFrame() const { return dodgeFrame; }
 
 	bool HasDGun() const { return dgun != nullptr; }
 	bool HasWeapon() const { return weapon != nullptr; }
@@ -215,6 +219,8 @@ private:
 	int moveFails;
 	int failFrame;
 	int damagedFrame;
+	springai::AIFloat3 damagedDir;
+	int dodgeFrame;
 	int execFrame;  // TODO: Replace by CExecuteAction?
 	int disarmFrame;
 	int ammoFrame;

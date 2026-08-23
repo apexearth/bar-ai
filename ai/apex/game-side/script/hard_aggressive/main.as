@@ -10,6 +10,7 @@
 #include "manager/military.as"
 #include "manager/builder.as"
 #include "manager/factory.as"
+#include "manager/role.as"        // the eco/tech role's POLICY, one place
 #include "manager/persona.as"     // per-instance identity: biases, never gates
 #include "manager/brain/sentinel.as" // the brain checking its own concepts, out loud
 #include "manager/brain/nukes.as" // the nuke director: saved volleys vs antinukes
@@ -20,6 +21,9 @@
 #include "manager/baseplan.as"
 #include "manager/crew.as"
 #include "manager/assist.as"
+// Watch-game overlays. LAST on purpose: it reads globals from builder, military
+// and frontline, and a global must be declared before the line that reads it.
+#include "manager/frontline/draw_diag.as"
 
 
 namespace Main {
@@ -100,6 +104,9 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Requests::PeelSurplus();
 	Perf::Add("upd.Peel", t);
 	t = Perf::T0();
+	// The role plan resolves before the facqueue so both the production side
+	// and the builder ladder consume the same answer within one tick.
+	Role::Resolve();
 	Brain::UpdateFacQueues();
 	Brain::LogFacQueues();
 	Perf::Add("upd.FacQueues", t);
@@ -119,6 +126,9 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	t = Perf::T0();
 	Factory::SampleIncome();
 	Factory::UpdateRushReclaim();
+	Factory::EcoRoleEatT1Labs();
+	Factory::EcoRoleEatT2Lab();
+	Factory::EcoRoleConsPayForLab();
 	Factory::LogRushState();
 	Perf::Add("upd.FactoryMisc", t);
 	t = Perf::T0();

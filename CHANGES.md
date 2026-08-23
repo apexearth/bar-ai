@@ -1,5 +1,48 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-22: Role policy layer + the build-power controller
+
+`manager/role.as` (new): the eco/tech role's ~25 scattered `IsEcoLead` leaf
+gates collapse into one policy object -- `Role::ArmyMult(fac)` (mix, core
+floors and spam stream all read it, so new army channels inherit the role by
+construction), `DefenceAllowed()`, `ConCap()`, `T2EnergyBar()`, `FusionBar()`,
+`GiftsCons()`, `NanoWant()`/`BPExcess()` -- resolved once per AiUpdate ahead
+of the facqueue. Mechanical migration measured behavior-identical on the
+seed-47 +100 audit before any behavior change.
+
+THE BUILD-POWER CONTROLLER (apexearth's design: "enough build power to use
+the metal and not overflow, but not so much that you far exceed income...
+The code should find that balance. It is not the sort of thing you can
+hard-code"): standing lathe measured in metal/s (per-class physics weights
+off the DRAIN=7 convention; swap to GetBuildSpeed reads at the next DLL
+rebuild), target = income x `apex_bp_headroom` (1.15). Deficit buys nanos
+(pre-T2 unlock: the phase>=4 lock on EcoNano was WHY the role overflowed
+early) and licenses con growth post-T2; excess arms the land-con trim.
+Two calibration lessons, both measured on seed-47 +100 and now enforced in
+code: (1) the COMMANDER is not counted -- its 23 m/s of lathe exceeds
+income x headroom for the opening and froze all con growth (holder #7 eco);
+(2) the nano lane must never outrank the ENERGY ladder pre-T2 -- ungated it
+bought 7 nanos while eInc never reached the T2 bar (tech never started).
+Cons are unbounded pre-T2 (his call: "bots are the most cost efficient" --
+they are income producers there, not parked lathes).
+
+Also: `apex_role_fus_frac` (0.6 x the fusion-prefer bar for the role),
+`apex_role_t2_energy` 450 tried and measured worse (tech 8.4 vs 6.8/7.0 --
+a lab on a thin grid E-stalls its mohos; 600 stands), and the T2-LAB EAT:
+once the adv-con fleet is complete, gifts settled, both fusions stand AND
+free storage covers the burst (his overflow rule), the ground adv plants are
+reclaimed (~2,900 metal) with a latch so the tech logic cannot re-buy them
+unless the con fleet halves. Audit: `early-waste` (<=2% cumulative at 16m)
+and `build-power-8m` (>=2 nanos) added to tools/audit_role.py; both hold
+green across every run since the controller landed.
+
+CAVEAT recorded the hard way: seed-47 tech times read 6.8, 7.0, 8.4, never,
+14.0 across five near-identical builds -- single-run cycles are inside the
+noise floor, and the last three tuning decisions above were re-validated on
+a 5-seed batch rather than one game. `two-fusions-10m` remains the open
+rule: fusions land ~10.9-13.7 on good runs; the tech-earlier lever is
+measured dead, the lab->adv-con->fusion compression is the live one.
+
 One AI, built on BARb (CircuitAI). Everything here is a deliberate difference
 from `BARb/stable`; anything not listed behaves as stock.
 
@@ -18,6 +61,243 @@ The 8v8 numbers that used to sit here (16-0 vs medium, 8-0 vs hard) were taken
 on the `hard_aggressive` config base, which is no longer what apex ships. They
 are not withdrawn, they are simply no longer about this build.
 
+
+## 2026-08-22: dashboard tunable overrides actually reach the game
+
+The Tunables tab was only a browser of tunables.as defaults; apexearth set
+apex_chain_builds=1 there and launched, and the value never reached the
+game. Each tunable row now has a persisted override input; every launch AND
+tournament from the dashboard appends each non-blank override as
+--modoption (build_tournament_cmd previously dropped modoptions ENTIRELY --
+no dashboard tournament has ever carried a tunable). Free-text Modoptions
+wins on collisions; the Launch tab shows the active overrides before
+launching; names dev_tunables.lua will not republish are flagged red.
+UI-only change.
+
+## 2026-08-22: shift-queue chain builds -- built, measured, defaulted OFF
+
+apexearth: "queue up our next build item while we're already building."
+Built as a DLL binding (`CmdBuildQueuedAt`, SHIFT-appended mobile build) +
+a first-position ladder rule that chains 2 extra cheap ENERGY/CONVERT
+builds behind a started one and holds the builder while the engine walks
+the queue. First cut wedged builders on stuck orders (side economy HALVED,
+seed-37) -- the hold is now time-bounded (15s window + 90s hard ceiling).
+Fixed version paired-measured on seed 37: chains-off control out-ecoed all
+three chains-on runs (46.1k vs 32.4-40.3k holder metal; tech 6.5m vs
+7.6-15.5m) -- ring-picked sites and election holds cost more than the
+think-gaps saved. apex_chain_builds default 0; binding and rule kept for a
+placement-aware retry. The felt "delays between buildings" remain real;
+the parked-assist ISSUES entry is the open suspect.
+
+## 2026-08-22: the eco/tech role announces itself, techs through ground
+
+DLL binding `ai.SendChat` (Game::SendTextMessage, same call as BARb's
+welcome line): the role holder says "I am the eco/tech player this game
+(team N)" in chat at the anchor latch -- apexearth watched three games
+unable to tell which color held the role (he was watching dark green;
+the holder was cyan, and behaving). And the role techs through a GROUND
+advanced plant even when its remembered T1 lab is air: an air T2 cannot
+build the T2 constructors the sling payments bought (watched: T2 via air
+lab at 14m, gift chain starved).
+
+## 2026-08-22: the eco/tech role -- one player plays tech like a human
+
+apexearth's spec, built and audit-verified over ~10 validation runs on
+Supreme Isthmus +100: in big team games ONE player (the back-most, latched
+at frame ~0 via published home->enemy distances -- `EcoAnchorTeamId`,
+`mexhold.as`) plays TECH: no army of any tier, no static defence, all metal
+into economy, T2 lab rushed, both T1 labs eaten at the T2 plant, T1 rebuilt
+only after the second fusion, T2 constructors gifted to every teammate (who
+pay ~450 via the sling), heavy build power at surplus.
+
+Mechanisms, each with a tunable: army mix + T1/T2 core floors + spam stream
+all behind one predicate (`EcoRoleArmyOff`, facqueue -- three channels each
+leaked a different unit before it existed: six Pawns from the core floor,
+twenty Tumbleweeds/pass from the spam stream resolving armvader as the T2
+lab's fodder); defence refused at Requests::Take AND AiMakeDefence (sensors
+exempt); election seeds slot 0 with the anchor unconditionally (qualifying
+on readiness let a faster teammate take the designation and block the
+anchor's own T2 -- measured 14.2m vs 6.7m); T2ArmyReady waived and a
+role-specific 600 e/s energy bar (`apex_role_t2_energy`; the 1200 lead bar
+cost 9 minutes); gift keep-floor drops to 1 while teammates lack cons
+(income-scaled floor delivered the first gift at minute 18); pre-T2 con
+want bounded at one per 7 m/s steady income; NanoCap waived at real
+surplus. Tunables: apex_role_tech_t1/t2/t3/air, apex_role_tech_def,
+apex_role_gift_keep, apex_role_t1_refac, apex_role_con_per,
+apex_role_t2_energy. `tools/audit_role.py <match>` audits the role against
+the spec (holder, stickiness, gift timing, purity, eco rank, health).
+
+Best audited run: role active 0.6m, sticky, teched first at 6.7m, advanced
+fusion, all 7 paid + all 7 gifted, holder #1 in metal at 1.58x teammate
+mean. Residual leaks (~1k metal/game): engine raid-response recruits
+slipping the facqueue abort (ISSUES), and a small defence trickle pending
+attribution. Benchmark income cannot validate the gift-before-10m bar; the
++100 handicap runs can and nearly do (first gift ~10.5m; bound by T2 lab
+timing + con build rate).
+
+## 2026-08-22: squads coordinate -- the engage decision counts allies
+
+C++ (DLL), `CAttackTask::FindTarget`. The engage question was answered per
+squad with only its own power: a mixed force the SQUAD_SPEED_RATIO split
+keeps in 2+ tasks answered it 2+ times, so half a 2000-metal army parked at
+the enemy base dived while the other half failed the same odds test and
+walked off (apexearth: "1000 of that metal worth of army will attack and the
+other half will go walk somewhere else"). lastRefused had already measured
+the shape: median refusal at 0.82 of needed power -- fights one partner
+would win.
+
+Now each pass collects the other ATTACK/DEFEND squads once, and (1) the
+group-level weakness gate tests `maxPower + groupAlly`, where an ally counts
+if it is within `apex_support_radius` (default ASSIGN_RADIUS 3000, the same
+distance the merge budget treats as joinable) of us, standing on the group,
+or already attacking it; (2) the near-target army test uses the same ally
+set (it previously counted only allies already within 800 of the target, so
+squads massed BESIDE us counted for nothing); (3) a group an ally already
+attacks gets `apex_ally_converge` (2x) preference in the distance metric, so
+co-located squads elect the same fight and converge instead of scattering.
+No forced merging -- the 1.5 speed split stands; squads move separately and
+decide together. Master gate stays `apex_ally_aggregate`; the engage log
+gained `ally=`. Built, deployed (local build), smoke-gated clean; mirror
+synced, cumulative patch regenerated. Not yet measured against a control.
+
+Second pass same day: a 30-min 4v4 watch game held ZERO `apex: engage`
+lines -- the army spends these games in DEFEND-promote pools
+(base-contested/conservative-stance hold them at MELEE), so the fights run
+through `CDefendTask::FindTarget`, not CAttackTask. The same ally term went
+into the defend odds test (`checkPower + allyPower <= eThreat` refuses):
+there an ally counts ONLY when standing within `apex_support_radius` of the
+ENEMY -- support that can actually reach that fight -- so a lone fresh unit
+at home cannot borrow the strength of an army on the far side of the base
+(the 1.2x home-odds fragment fix stays intact).
+
+## 2026-08-22: T1 army keeps producing until the T2 army actually exists
+
+`facqueue.as`: `t1MixRetired` -- the switch that zeroes a T1 line's army mix
+once T2 stands -- fired on `CleanupMode()`, which is income >= 200 m/s. On a
+bonused economy that lands exactly at the T2 transition: the T2 lab is still
+making cons, the T1 line goes silent, and nobody makes army at the most
+sensitive moment of the game (apexearth: "If we don't have any substantial
+T2 army yet then let's keep making T1"). Income is no longer a reason:
+t1MixRetired now fires only on `Perf::GameLagging()` (sim health, not
+policy), and the handoff belongs entirely to `TierShare`, which phases T1
+down as the FIELDED T2 core (income / apex_t2_core_per_income, min
+apex_t2_core_min) fills, bottoming at `apex_quota_t1_after_t2` (0.25).
+Deployed, compile-gated clean. Not yet measured.
+
+## 2026-08-22: working commander no longer chases everything he can see
+
+C++ (DLL). `IBuilderTask::AssignTo` and builder `CPatrolTask` armed the
+commander's `CDGunAction` at `max(dgunRange, LOS radius)` -- LOS (~700) dwarfs
+D-gun reach, so any enemy in sight drew a queue-replacing DGun order that
+walked him after it and dropped what he was building (apexearth: "commanders
+sometimes get distracted by enemy units, chase after them a moment, then
+forget what they were originally doing"). Both sites now arm at plain
+`GetDGunRange()`, the same shape RetreatTask already used (0.9x): the D-gun
+answers only what is on top of him, his regular gun handles close raiders, and
+minor threats are ignored -- his direction. Fighter tasks keep the wide
+radius; a commander sent to FIGHT should still hunt. Built, deployed
+(local build), smoke-gated clean; mirror synced and 0003-cumulative.patch
+regenerated. Not yet measured against a control.
+
+## 2026-08-22: mex sentries -- crew rung wired, orphaned cheap towers adoptable
+
+Two wiring bugs behind "apex_mex_sentry is not always working" (apexearth:
+satellite expansions -- a couple of mexes and solars -- left with zero defence
+and lost to one or two raiders).
+
+1. **The metal crew never asked for the underfoot sentry.** `MetalCrewTask`
+   sits above the shared ladder's three `CommanderMexGuard` passes and its own
+   mini-ladder went hold -> converter -> next mex, so every crew-built
+   extractor was walked away from bare. The `lightOnly` pass was written for
+   exactly this crew (its comment names it) and had zero callers. Wired in as
+   a rung after the crew's hold, before the next-mex claim: light tower only,
+   self-limiting (one per bare mex, covered mexes skipped).
+2. **A cheap defence order, once abandoned, blocked its own ground forever.**
+   `Requests::Take`'s cover branch only handed back an existing task when
+   `want.costM >= JOIN_MIN_COST` (200), so an llt (85) or beamer (190) whose
+   builder was pulled away could never be re-manned -- every re-ask was
+   refused as "covered" (measured 20260822-190301: 24 defence requests
+   created, 3 finished, live=14 orphans, covered=37). Now an UNMANNED cover
+   task is handed to the asker at any cost ("adopt-orphan" in the request
+   log); JOIN_MIN_COST still bounds joining a manned site.
+
+Smoke-gated clean (no compile errors, adopt-orphan observed firing). NOT yet
+measured against a control -- single 12-min seeds are inside the noise floor,
+and the residual late-sentry trace points at the commander D-gun chase
+(ISSUES entry of the same date) abandoning the frames this fix now recovers.
+
+## 2026-08-22: dashboard launch panel picks factions per side
+
+`tools/dashboard.py` / `dashboard_ui.html`: per-side faction pickers
+(Random/Armada/Cortex/Legion, default Random) for both match and tournament
+launches, riding the existing `--sides` flag. `run_match.py` now accepts
+`random` as an individual `--sides` entry (per-player draw from the run seed,
+so the same seed replays the same factions); a side that can draw Legion still
+enables `experimentallegionfaction`. Both pickers at Random omits `--sides`
+entirely, byte-identical to the previous default launch. `--per-side N`
+applies the picked faction to all N players of that side. Verified by
+exercising the script/command builders directly; no matches run.
+
+## 2026-08-22: dodge fire -- units sidestep incoming shots
+
+C++ (DLL). `IFighterTask::DodgeFire`, called from `OnUnitDamaged` before any
+retreat question: a unit that takes a hit and stays in the fight moves one
+short step perpendicular to the incoming fire (the engine's `UnitDamaged`
+`dir`, or the attacker's actual position when known), so slow projectiles --
+the rocket volleys apexearth watched kill stationary rocket bots -- land on
+where it was. Side alternates by unit id (a squad splits, not shuffles);
+distance = own speed x `apex_dodge_sec` (0.75s), so slow units barely move;
+per-unit cooldown `apex_dodge_cd` (2s); gate `apex_dodge` (default on); the
+move carries a 2s timeout and the forced task update re-engages. Fires on
+damage taken, not on projectiles in flight -- the AI callback cannot see
+projectiles. Dodges mark as `DODGE` pings. Smoke-gated clean; not yet
+measured for cost (a jink trades a moment of stationary DPS for the misses).
+
+## 2026-08-22: brain roulette is no longer optional
+
+`apex_brain_roulette` removed at apexearth's direction ("that should just be
+a standard feature"): the score-proportional draw in `brain.as` is now
+unconditional, `TUNE_BRAIN_ROULETTE` and the gadget entry deleted. The
+argmax path is gone.
+
+## 2026-08-22: intent pings rewritten (dedupe + reasons), and the breach SPLIT
+
+Both C++ (DLL), landed together; the pings shipped and smoke-gated first.
+
+**Intent pings** (`apex_ping=1` only, off in MP). `IUnitTask::IntentPing`
+draws one mark per CHANGE of intent -- same message near the last mark is
+silent, the previous mark is erased -- replacing the per-re-path "DEF march
+n=1" spam apexearth reported as "the pings often seem useless". Every mover
+now explains itself: DEF chase carries the target name plus which clause
+elected it (`atUs`/`post`) and the threat it was priced at (attribution for
+the army-chases-one-unit issue, see ISSUES.md); the DEF U-turn carries why
+the election emptied (`tgt hid`/`small fry`/`outgunned`/`no enemy`); ATK
+names targets, flanks, press/re-front/home; RET says heal vs home; RAID says
+target/press/outgunned/roam; script-side withdraw pings leash/recall/odds.
+
+**SPLIT** (`apex_army_split`, default 1): in `UpdateDefenceTasks`, a loss
+hot-spot on our own ground whose live enemy-group influence exceeds what the
+defend pools already assigned can answer peels a slice out of the biggest
+ATTACK squad -- fastest units first, sized demand x `apex_split_margin`
+(1.3) -- into a fresh CDefendTask anchored on the breach, promote held
+`apex_split_hold` (40s) so it cannot dissolve back into ATTACK before
+arriving. Only fires when the squad is over `apex_split_min_dist` (1600)
+away; cooldown `apex_split_cd` (30s). apexearth: "There'll be an army
+killing our base and our army is off fighting some other army, winning that
+fight, but our base is dead." Not yet measured beyond the smoke gate; judge
+on watched games + composition, and grep `apex: SPLIT` for firings.
+
+Two same-day refinements, both apexearth's rules verbatim:
+- **Chase gate 0.15 -> 0.5, home ring exempt** ("armies generally ignore
+  enemies that are less than half their strength unless we need to defend
+  the home base"): `apex_chase_min_ratio` default raised in
+  `CDefendTask::FindTarget`; enemies inside `GetBaseDefRange` of home and
+  anything in contact (atUs) are still always electable.
+- **Standing guns count against the split demand** ("if the base has enough
+  defenses to handle what's attacking it then we don't need to send our
+  army"): finished, non-AA armed statics within 800 of the breach subtract
+  their power before the peel is sized -- a porc'd base absorbs a raid
+  without pulling the army at all.
 
 ## 2026-08-21: ALTAIR chapter 4 -- campaign conclusions after 13 hypotheses
 

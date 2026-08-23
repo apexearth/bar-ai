@@ -72,6 +72,14 @@ bool IsSmallTeam()
 	return (mates is null) || (mates.length() < BIG_TEAM);
 }
 
+// Our own income multiplier (+100 handicap -> 2.0), published by
+// dev_team_income.lua -- the engine offers the AI no direct path to it.
+// 1.0 when the gadget is absent, so behaviour keyed on it stays stock.
+float OwnHandicap()
+{
+	return ai.GetGameRulesParam("ai_handicap_" + ai.teamId, 1.f);
+}
+
 // const handle: CCircuitUnit::circuitDef is a const CCircuitDef@, and a
 // non-const parameter refuses it outright. The other two callers pass mutable
 // handles, which a const parameter still accepts.

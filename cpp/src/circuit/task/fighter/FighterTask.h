@@ -65,6 +65,12 @@ public:
 	virtual void OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker) override;
 	virtual void OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker) override;
 
+protected:
+	// Sidestep incoming fire; called from OnUnitDamaged, per-unit cooldown.
+	void DodgeFire(CCircuitUnit* unit, CEnemyInfo* attacker);
+
+public:
+
 	FightType GetFightType() const { return fightType; }
 	// Name for a FightType ordinal. Bounds-checked, so it is safe to call on
 	// a value recovered from the task registry rather than from an object.

@@ -68,6 +68,13 @@
               margin-right:5px; }
   #gameback { margin-bottom:10px; }
   .tunerow td input { width:140px; }
+  .tgl { width:42px; height:22px; border-radius:11px; border:1px solid var(--line);
+         background:var(--panel2); position:relative; cursor:pointer; padding:0;
+         flex:0 0 auto; transition:background .12s; }
+  .tgl i { position:absolute; top:2px; left:2px; width:16px; height:16px;
+           border-radius:50%; background:var(--dim); transition:left .12s, background .12s; }
+  .tgl.on { background:#1e4b2e; border-color:#2f7d49; }
+  .tgl.on i { left:22px; background:var(--good); }
   #constfilter { width:280px; }
 </style>
 </head>
@@ -124,6 +131,20 @@
         </select></label>
       <label class="f">Side A <input id="l-a" list="speclist" size="28" value="Apex:apex:hard_aggressive"></label>
       <label class="f">Side B <input id="l-b" list="speclist" size="22" value="BARb:stable:hard"></label>
+      <label class="f" title="Faction for every player on side A. Both at Random keeps the tool default (match: A=Armada B=Cortex, tournament: Cortex vs Cortex); otherwise Random draws per player from the seed.">Faction A
+        <select id="l-sidea">
+          <option value="random" selected>Random</option>
+          <option value="Armada">Armada</option>
+          <option value="Cortex">Cortex</option>
+          <option value="Legion">Legion</option>
+        </select></label>
+      <label class="f" title="Faction for every player on side B.">Faction B
+        <select id="l-sideb">
+          <option value="random" selected>Random</option>
+          <option value="Armada">Armada</option>
+          <option value="Cortex">Cortex</option>
+          <option value="Legion">Legion</option>
+        </select></label>
       <label class="f">Map <input id="l-map" list="maplist" size="26" placeholder="display name or substring"></label>
       <label class="f">Per side <select id="l-perside"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>8</option></select></label>
       <label class="f">Minutes <input id="l-min" type="number" value="40" style="width:70px"></label>
@@ -154,11 +175,12 @@
         oninput="drawBoxPreview()"></label>
       <label class="f">&nbsp;<canvas id="l-boxprev" width="72" height="72"
         title="A = green, B = red"></canvas></label>
-      <label class="f">Modoptions <input id="l-modopt" size="24" placeholder="apex_x=1 apex_y=0.5" title="space-separated k=v"></label>
+      <label class="f">Modoptions <input id="l-modopt" size="24" placeholder="apex_x=1 apex_y=0.5" title="space-separated k=v; a name typed here wins over the same name's Tunables-tab override"></label>
       <button class="act primary" onclick="launch()">Launch</button>
     </div>
     <datalist id="maplist"></datalist>
     <datalist id="speclist"></datalist>
+    <div id="l-ovsum" style="margin-top:8px;font-size:12px"></div>
     <div class="dim" style="margin-top:8px;font-size:12px">
       Watch opens a real game window at the chosen speed. Headless runs as fast as
       the machine allows and lands in <span class="mono">matches/</span>.
@@ -196,6 +218,9 @@
     <span class="mono">tunables.as</span> and <span class="mono">targets.as</span>.
     Edits write into those files; hit <b>Deploy</b> when done — the game runs the
     deployed copy, not this repo.
+    The <b>override</b> box next to a knob does NOT edit the file: a non-blank
+    value is passed as a <span class="mono">--modoption</span> on every launch
+    and tournament started here, no deploy needed. Blank = ship default.
   </div>
   <div style="display:flex;gap:16px;align-items:flex-start">
     <div class="card" style="min-width:230px;position:sticky;top:64px">
@@ -243,12 +268,70 @@ const fmtWhen = name => {
   return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : name.slice(0, 13);
 };
 
+/* ---------- persisted UI state ----------
+   Everything the launch form and the tunables browser remember between visits.
+   localStorage is per-origin and per-browser, and it throws outright in some
+   contexts (private windows, site data blocked), so every read and write is
+   wrapped -- a failure just means the defaults come back, never a broken page. */
+const UI_KEY = "barai.ui.v1";
+let UI = {};
+try { UI = JSON.parse(localStorage.getItem(UI_KEY) || "{}") || {}; } catch (e) { UI = {}; }
+let uiSaveTimer = null;
+function uiSave() {
+  clearTimeout(uiSaveTimer);
+  uiSaveTimer = setTimeout(() => {
+    try { localStorage.setItem(UI_KEY, JSON.stringify(UI)); } catch (e) {}
+  }, 200);   // typing in a text field would otherwise write on every keystroke
+}
+function uiSet(k, v) { UI[k] = v; uiSave(); }
+// Bind an <input>/<select> to a remembered value. Applied only when something
+// was stored, so the page's own default stays the default on a first visit.
+function uiBind(id, key) {
+  const el = $("#" + id); if (!el) return;
+  const k = key || id;
+  if (UI[k] !== undefined && UI[k] !== null) el.value = UI[k];
+  const ev = (el.tagName === "SELECT") ? "change" : "input";
+  el.addEventListener(ev, () => uiSet(k, el.value));
+}
+
+/* ---------- tunable overrides ----------
+   Values set in the Tunables tab's override column. Persisted like the launch
+   form, and appended to EVERY launch/tournament as --modoption name=value; a
+   same-name token typed in the Modoptions field wins over the override. */
+const MODOPT_RE = /^[a-z0-9_]+=[-\w.]+$/;      // mirror of dashboard.py's check
+const MODOPT_VAL_RE = /^[-\w.]+$/;
+const OV_IGNORED = "not in dev_tunables.lua — silently ignored in game";
+let GADGET = null;   // Set of names dev_tunables.lua republishes, once fetched
+function tuneOv() { return UI.tuneOv || {}; }
+function setTuneOv(name, value) {
+  const ov = tuneOv();
+  if (value === "") delete ov[name]; else ov[name] = value;
+  UI.tuneOv = ov; uiSave();
+  renderOvSummary();
+}
+function ovGoTunables() {
+  document.querySelector('#nav button[data-tab="tunables"]').click();
+}
+function renderOvSummary() {
+  const el = $("#l-ovsum"); if (!el) return;
+  const ov = tuneOv(), names = Object.keys(ov).sort();
+  if (!names.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `${names.length} tunable override${names.length > 1 ? "s" : ""} active: `
+    + names.map(n => {
+        const bad = GADGET && !GADGET.has(n);
+        return `<span class="mono"${bad
+          ? ` style="color:var(--bad)" title="${OV_IGNORED}"` : ""}>${esc(n)}=${esc(ov[n])}</span>`;
+      }).join(", ")
+    + ` — <a href="javascript:ovGoTunables()">edit in Tunables</a>`;
+}
+
 /* ---------- tabs ---------- */
 $("#nav").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll(".tab").forEach(x =>
     x.classList.toggle("on", x.id === "tab-" + b.dataset.tab));
+  uiSet("tab", b.dataset.tab);
   if (b.dataset.tab === "games") loadGames();
   if (b.dataset.tab === "launch") { loadLaunchMeta(); loadJobs(); }
   if (b.dataset.tab === "tunables") loadTunables();
@@ -712,6 +795,8 @@ async function loadLaunchMeta() {
     const m = await api("/api/launchmeta");
     $("#maplist").innerHTML = m.maps.map(x => `<option value="${esc(x)}">`).join("");
     $("#speclist").innerHTML = m.specs.map(x => `<option value="${esc(x)}">`).join("");
+    GADGET = new Set(m.gadget_tunables || []);
+    renderOvSummary();
   } catch (e) {}
 }
 async function launch() {
@@ -719,13 +804,26 @@ async function launch() {
   const body = {
     kind: mode === "tournament" ? "tournament" : "match",
     mode, a: $("#l-a").value, b: $("#l-b").value, map: $("#l-map").value,
+    side_a: $("#l-sidea").value, side_b: $("#l-sideb").value,
     per_side: $("#l-perside").value, minutes: $("#l-min").value,
     speed: $("#l-speed").value, seed: $("#l-seed").value,
     games: $("#l-games").value,
     boxes: $("#l-boxes").value, box_size: $("#l-boxsize").value,
     handicap: $("#l-handicap").value,
-    modoptions: $("#l-modopt").value.trim().split(/\s+/).filter(Boolean),
   };
+  // Tunable overrides first, then the free-text field on top: a same-name
+  // token typed there wins over the Tunables tab.
+  const merged = Object.assign({}, tuneOv());
+  for (const t of $("#l-modopt").value.trim().split(/\s+/).filter(Boolean)) {
+    if (!MODOPT_RE.test(t))
+      return toast("bad modoption: " + t + " (need name=value, lowercase name)", true);
+    const i = t.indexOf("=");
+    merged[t.slice(0, i)] = t.slice(i + 1);
+  }
+  body.modoptions = Object.keys(merged).sort().map(n => n + "=" + merged[n]);
+  for (const mo of body.modoptions)
+    if (!MODOPT_RE.test(mo))
+      return toast("bad tunable override: " + mo + " — fix it in the Tunables tab", true);
   if (!body.map) return toast("pick a map", true);
   try {
     const r = await api("/api/launch", body);
@@ -760,7 +858,17 @@ function drawBoxPreview() {
   });
 }
 $("#l-perside").addEventListener("change", drawBoxPreview);
+
+// Remember the launch form. Seed is deliberately NOT persisted: a stale seed
+// silently repeats a previous run, and "random" is the honest default.
+["l-mode", "l-a", "l-b", "l-sidea", "l-sideb", "l-map", "l-perside", "l-min", "l-speed", "l-games",
+ "l-boxes", "l-boxsize", "l-handicap", "l-modopt"].forEach(id => uiBind(id));
+// Restoring per-side or the box layout changes the preview; restoring the mode
+// changes which fields are shown.
+$("#l-gameswrap").style.display =
+  $("#l-mode").value === "tournament" ? "" : "none";
 drawBoxPreview();
+renderOvSummary();
 let jobTimer = null, aliveJobs = new Set();
 function viewRun(dir) {
   document.querySelector('#nav button[data-tab="games"]').click();
@@ -810,7 +918,10 @@ async function action(a, force) {
 }
 
 /* ---------- tunables ---------- */
-let TUNE = null, tuneCat = 0;   // tuneCat: -1 = ratios, else section index
+let TUNE = null;
+// tuneCat: -1 = ratios, else section index. Restored from the last visit; the
+// section list can shrink between versions, so renderTunables clamps it.
+let tuneCat = (UI.tuneCat !== undefined) ? UI.tuneCat : 0;
 const WORDS = {ADVSOL:"advanced solar", CONV:"converter", INC:"income",
   ECO:"economy", DEF:"defence", AA:"anti-air", BP:"build power", CON:"constructor",
   CONS:"constructors", FAC:"factory", MEX:"mex", T1:"T1", T2:"T2", T3:"T3",
@@ -824,7 +935,33 @@ const humanize = n => n.replace(/^(TUNE_|SPEND_|ROLE_|DEF_|SCOUT_)/, "")
   .replace(/^./, c => c.toUpperCase());
 async function loadTunables() {
   TUNE = await api("/api/tunables");
+  GADGET = new Set(TUNE.gadget_tunables || []);
+  if (UI.tuneSearch && !$("#tunesearch").value) $("#tunesearch").value = UI.tuneSearch;
   renderTunables();
+}
+// The per-row override box. Not a file edit: a non-blank value rides along as
+// --modoption on every dashboard launch. Red = dev_tunables.lua won't republish
+// it, so the game reads its compiled/scripted default and says nothing.
+function ovInput(name) {
+  const v = tuneOv()[name] || "";
+  const bad = GADGET && !GADGET.has(name);
+  const style = v ? (bad ? "border-color:var(--bad);color:var(--bad)"
+                         : "border-color:var(--good)") : "";
+  return `<input class="mono" style="width:74px;${style}" value="${esc(v)}"
+    placeholder="override" title="${bad ? OV_IGNORED
+      : "passed as --modoption " + esc(name) + "=… on every launch; blank = default"}"
+    onchange="ovChange('${esc(name)}', this)">`;
+}
+function ovChange(name, el) {
+  const v = el.value.trim();
+  if (v && !MODOPT_VAL_RE.test(v)) {
+    el.style.borderColor = "var(--bad)";
+    return toast("bad override value: " + v + " (letters, digits, _ - . only)", true);
+  }
+  setTuneOv(name, v);
+  renderTunables();
+  toast(v ? name + "=" + v + " overrides every launch from here"
+          : name + " override cleared");
 }
 // Log-curve pairs get a human editor: two anchor points instead of raw
 // coefficients. form "a_ln_b": n = A*ln(inc)+B.  "b_ln_a": n = A + B*ln(inc).
@@ -910,6 +1047,7 @@ async function saveCurve(id, si) {
 function renderTunables() {
   if (!TUNE) return;
   const q = $("#tunesearch").value.trim().toLowerCase();
+  uiSet("tuneSearch", $("#tunesearch").value);
   const hits = s => s.entries.filter(e => !q ||
     (e.name + " " + e.tunable + " " + e.desc + " " + humanize(e.name))
       .toLowerCase().includes(q));
@@ -926,6 +1064,7 @@ function renderTunables() {
       ${esc(c.label)} <span class="dim">${c.n}</span></button>`).join("");
   // body
   if (tuneCat === -1) { renderTargets(); return; }
+  if (!TUNE.sections[tuneCat]) tuneCat = 0;   // a remembered index may be stale
   const s = TUNE.sections[tuneCat];
   let rows = q ? hits(s) : s.entries;
   // curve pairs whose A lives in this section render as a widget instead
@@ -944,14 +1083,32 @@ function renderTunables() {
           <b>${esc(humanize(e.name))}</b>
           ${e.unit ? `<span class="badge">${esc(e.unit)}</span>` : ""}
           <span class="mono dim" style="font-size:11px">&nbsp;${esc(e.tunable || e.name)}</span>
+          ${/NOT in dev_tunables/.test(e.desc || "")
+             ? `<span class="badge bad">modoption ignored — not in dev_tunables.lua</span>` : ""}
           <div class="dim" style="font-size:12px;margin-top:2px">${esc(e.desc)}
             ${e.reads ? `<span class="mono" style="font-size:11px"> — ${esc(e.reads)}</span>` : ""}</div>
         </div>
-        <input class="mono" style="width:110px" id="tv-${tuneCat}-${i}" value="${esc(e.value)}"
-          onkeydown="if(event.key==='Enter')saveTune(${tuneCat},${i})">
-        <button class="act" onclick="saveTune(${tuneCat},${i})">Save</button>
+        ${e.readonly
+          ? `<span class="mono dim" style="width:110px;text-align:right"
+               title="compiled into SkirmishAI.dll — override with a modoption">${esc(e.value)}</span>
+             <button class="act" onclick="copyModopt('${esc(e.tunable)}')">Copy modoption</button>`
+          : isToggle(e)
+          ? `<button class="tgl${toggleOn(e) ? " on" : ""}" title="saves immediately"
+               onclick="setToggle(${tuneCat},${i})"><i></i></button>
+             <span class="dim mono" style="width:34px;font-size:11px">${toggleOn(e) ? "on" : "off"}</span>`
+          : `<input class="mono" style="width:110px" id="tv-${tuneCat}-${i}" value="${esc(e.value)}"
+               onkeydown="if(event.key==='Enter')saveTune(${tuneCat},${i})">
+             <button class="act" onclick="saveTune(${tuneCat},${i})">Save</button>`}
+        ${e.tunable ? ovInput(e.tunable) : ""}
       </div>`; }).join("") || (widgets ? "" : `<span class="dim">no matches in this category</span>`)}
     </div>`;
+}
+function copyModopt(name) {
+  const txt = name + "=";
+  navigator.clipboard ? navigator.clipboard.writeText(txt).then(
+      () => toast("copied " + txt + " — paste into Modoptions and add a value"),
+      () => toast(txt, true))
+    : toast(txt);
 }
 function renderTargets() {
   const t = TUNE.targets;
@@ -987,8 +1144,30 @@ function renderTargets() {
 }
 $("#tunecats") && document.addEventListener("click", e => {
   const b = e.target.closest("#tunecats button[data-cat]");
-  if (b) { tuneCat = +b.dataset.cat; renderTunables(); }
+  if (b) { tuneCat = +b.dataset.cat; uiSet("tuneCat", tuneCat); renderTunables(); }
 });
+// A tunable whose unit is declared "[toggle 0/1]" in tunables.as is a boolean,
+// and a text box for it is a needless round trip. Rendered as a switch that
+// writes immediately -- apexearth 2026-08-22: "if options are supposed to be a
+// boolean we should have a toggle button (autosave)".
+const isToggle = e => /toggle/i.test(e.unit || "");
+const toggleOn = e => parseFloat(e.value) > 0;
+// Preserve the file's own literal style: these are AngelScript floats, written
+// as 1.f / 0.f, and writing a bare 1 would read oddly next to its neighbours.
+const toggleLiteral = on => (on ? "1.f" : "0.f");
+
+async function setToggle(si, i) {
+  const e = TUNE.sections[si].entries[i];
+  const next = toggleLiteral(!toggleOn(e));
+  try {
+    await api("/api/const", {file: e.file, line: e.line, name: e.name,
+                             old: e.value, new: next});
+    e.value = next;
+    renderTunables();
+    toast(humanize(e.name) + " " + (toggleOn(e) ? "ON" : "OFF") + " — remember to Deploy");
+  } catch (err) { toast(err.message, true); }
+}
+
 async function saveTune(si, i) {
   const e = TUNE.sections[si].entries[i];
   const v = $("#tv-" + si + "-" + i).value.trim();
@@ -1033,7 +1212,14 @@ async function pollOverview() {
   setTimeout(pollOverview, 8000);
 }
 
-loadGames(); loadLaunchMeta(); pollOverview();
+// Open on the tab that was last used, not always Games.
+(function restoreTab() {
+  const want = UI.tab;
+  const b = want && document.querySelector('#nav button[data-tab="' + want + '"]');
+  if (b && want !== "games") { b.click(); return; }
+  loadGames();
+})();
+loadLaunchMeta(); pollOverview();
 </script>
 </body>
 </html>

@@ -227,18 +227,18 @@ def build_script(
     # faction matchup is confounded with the variant under test, and any
     # faction-specific unit (Cortex Dragons, Armada Liche) only appears in
     # half the games.
-    # 'random' is per PLAYER, not per side: the point of an all-random game is a
+    # 'random' is per PLAYER, not per side: the point of a random side is a
     # mixed team, which is what a hosted game looks like. Drawn from the run's
-    # seed so the same command replays the same factions.
-    is_random = bool(sides) and (len(sides) == 1) and (sides[0].lower() == "random")
-    if is_random:
-        rng = random.Random(seed if seed is not None else 0)
-        side_of = [[rng.choice(FACTIONS) for _ in range(per_side)] for _ in ais]
-    else:
-        side_for = list(sides) if sides else [SIDES[i % len(SIDES)] for i in range(len(ais))]
-        while len(side_for) < len(ais):
-            side_for.append(side_for[-1])
-        side_of = [[side_for[a]] * per_side for a in range(len(ais))]
+    # seed so the same command replays the same factions. Any entry may be
+    # 'random' independently, e.g. 'Cortex,random'; a single 'random' pads to
+    # every side as before.
+    side_for = list(sides) if sides else [SIDES[i % len(SIDES)] for i in range(len(ais))]
+    while len(side_for) < len(ais):
+        side_for.append(side_for[-1])
+    rng = random.Random(seed if seed is not None else 0)
+    side_of = [[rng.choice(FACTIONS) for _ in range(per_side)]
+               if side_for[a].lower() == "random" else [side_for[a]] * per_side
+               for a in range(len(ais))]
     side_for = [s for team in side_of for s in team]   # flat, for the Legion gate below
 
     team_id = 0
@@ -736,7 +736,8 @@ def main() -> int:
                     help="start-box axis: left/right or top/bottom. Glitters is tb, "
                          "Comet Catcher is lr")
     ap.add_argument("--sides",
-                    help="comma-separated faction per side, e.g. 'Cortex,Cortex'. "
+                    help="comma-separated faction per side, e.g. 'Cortex,Cortex' or "
+                         "'random,Legion' ('random' draws per player from the seed). "
                          "Default alternates Armada/Cortex; same-faction is preferred "
                          "for A/B tests")
     ap.add_argument("--per-side", dest="per_side", type=int, default=1,

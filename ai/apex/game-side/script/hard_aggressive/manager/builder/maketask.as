@@ -311,6 +311,17 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	}
 
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	// FIRST: a builder running a shift-queued chain must not be re-elected --
+	// any fresh order would wipe its engine queue. holdIdle covers the gap
+	// after the task completes while the queue still drives the unit.
+	{
+		bool chainIdle = false;
+		@t = ChainBuildRule(unit, isComm, chainIdle);
+		if (t !is null)
+			return t;
+		if (chainIdle)
+			return null;
+	}
 	// Only an advanced constructor can build a moho. The wreck rules below sit
 	// ahead of the "never displace real work" line and hand it an AREA reclaim
 	// (CmdReclaimInArea with CONTROL_KEY, which ignores the autoreclaimable
@@ -594,9 +605,35 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// (spare income only) and an economy-scaled stack, so a line that is already
 	// fast enough, or an economy with nothing spare, releases the builder back
 	// to the lanes below.
-	@t = Assist::AssistFactory(unit, isComm, isAdvCon);
-	if (t !is null)
-		return t;
+	// The controller's nano deficit outranks parking on a factory: a guarded
+	// idle lab is build power the controller cannot see doing anything.
+	// EcoNano self-gates (bank, in-flight, pacing), so a refusal falls
+	// through to the assist exactly as NanoInsteadOfHands documents.
+	// ...but NEVER above the income machine: pre-T2 this slot outbid the
+	// energy ladder and the holder built 7 nanos while eInc never reached
+	// the T2 bar (seed-47: tech NEVER started). Until the tech grid exists,
+	// the deficit buys nanos only through the ordinary lower lanes.
+	if (!isComm && (Role::NanoWant() > 0)
+		&& (Factory::gHaveT2
+			|| (aiEconomyMgr.energy.income >= Role::T2EnergyBar()))
+		&& !BaseUnderAttack() && !Military::BaseContested())
+	{
+		@t = EcoNano(unit);
+		if (t !is null)
+			return t;
+	}
+	// THE ROLE'S CONS DO NOT PARK ON FACTORIES while an objective is unmet
+	// (apexearth, watching: "3 cons assisting the T1 lab (mostly afk)...
+	// full metal bank. not making a T2 lab. Not much energy built."). A
+	// guarded line is spend capacity doing nothing; skipping the guard drops
+	// these cons into the eco lanes below, which is where the bank becomes
+	// windmills and the T2 lab. Construction help still arrives through
+	// join-site and BigBuildAssist, which target BUILDS, not lines.
+	if (!(Role::Active() && (Role::Objective() < Role::Obj::AIRSCALE))) {
+		@t = Assist::AssistFactory(unit, isComm, isAdvCon);
+		if (t !is null)
+			return t;
+	}
 
 	// A VISIBLE PUSH OUTRANKS THE ECONOMY LANES: the tower only beats the walk
 	// if it starts now. Gated on Military::PushIncoming, so it is idle in

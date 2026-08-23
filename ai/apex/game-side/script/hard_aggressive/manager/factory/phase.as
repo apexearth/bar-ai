@@ -74,15 +74,24 @@ void UpdateTeamCoord()
 		gHaveT2 = false;
 	ai.PublishTeamValue(TV_ADV, OwnAdvProgress());
 	ai.PublishTeamValue(TV_READY, RushReady() ? aiEconomyMgr.metal.income : 0.f);
+	// With zero known enemy groups CEnemyManager's group update publishes
+	// ZeroVector -- the NW corner -- so pre-contact this measured distance
+	// to a corner and the eco anchor picked accordingly. Until a real
+	// contact exists, the map center (the same value enemyPos initializes
+	// with) is the honest stand-in.
+	AIFloat3 foeAt = aiEnemyMgr.GetEnemyPos();
+	if ((foeAt.x <= 1.f) && (foeAt.z <= 1.f))
+		foeAt = AIFloat3(AiTerrainWidth() * 0.5f, 0.f, AiTerrainHeight() * 0.5f);
 	ai.PublishTeamValue(TV_DIST, Builder::gHomeSet
-			? Builder::gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) : 0.f);
+			? Builder::gHomePos.distance2D(foeAt) : 0.f);
 	ai.PublishTeamValue(TV_MEX, UpdateMexHold());
 	ai.PublishTeamValue(TV_FILL, (aiEconomyMgr.metal.storage > 0.f)
 			? aiEconomyMgr.metal.current / aiEconomyMgr.metal.storage : 0.f);
 	ai.PublishTeamValue(Builder::TV_TARG, float(Builder::OwnPinpoints()));
 	if (ElectorTeamId() == ai.teamId)
 		RunElection();
-	UpdateEcoLead();
+	// UpdateEcoLead moved to Role::Resolve() at the top of AiUpdate -- one
+	// resolution per tick, ahead of every consumer.
 }
 
 // Extractors held, counting one under construction as still held: an upgrade

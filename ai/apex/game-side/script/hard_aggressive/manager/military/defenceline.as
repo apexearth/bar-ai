@@ -643,6 +643,14 @@ void AiMakeDefence(int cluster, const AIFloat3& in pos)
 	// maxCost.
 	aiMilitaryMgr.DefaultMakeSensors(cluster, pos);
 
+	// THE ECO ROLE BUILDS NO DEFENCE: sensors above stay -- eyes are not
+	// porc -- but every wall/tower path below is skipped while this instance
+	// holds the role. Requests::Take refuses the same build types for the
+	// script rules that do not come through here.
+	if (!Role::DefenceAllowed()) {
+		return;
+	}
+
 	if (gTurtle) {
 		aiMilitaryMgr.DefaultMakeDefence(cluster, pos);  // porc hard while holding
 		return;

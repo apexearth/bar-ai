@@ -356,6 +356,26 @@ bool PlantApproved(CCircuitDef@ want)
 	if (want is null)
 		return false;
 	SweepPlantAsks();
+	// AND NO T2 LAND PLANT REBUILD after eating it, while the adv-con fleet
+	// it paid for still stands at half strength or better -- otherwise the
+	// tech logic re-buys the 2,900 it just reclaimed. Fleet collapse
+	// re-opens the rebuild.
+	if (IsEcoLead() && gT2LabEaten && !IsAirFactory(want)
+		&& ((userData[want.id].attr & Attr::T2) != 0)
+		&& (Builder::AdvConCount() * 2 >= Builder::AdvConsWanted()))
+	{
+		return false;
+	}
+	// THE ECO ROLE REBUILDS NO T1 PLANT BEFORE ITS SECOND FUSION (apexearth
+	// 2026-08-22): once its T2 plant stands the T1 labs are eaten
+	// (EcoRoleEatT1Labs) and everything goes to economy; a fresh T1 plant
+	// before that bar would just be eaten again.
+	if (IsEcoLead() && gHaveT2 && IsLandT1Plant(want)
+		&& (Builder::gFusions.length()
+			< uint(ai.GetTunable("apex_role_t1_refac", TUNE_ROLE_T1_REFAC))))
+	{
+		return false;
+	}
 	// THE T1-COMMIT HOLDS HERE, at the backstop no entrance can bypass:
 	// gating only MayPursueT2/RushReady let six T2 plants through in the
 	// first armed game (f1v1-t1c-on-41, "plant approved armalab" at 15 m/s).
@@ -828,6 +848,24 @@ CCircuitDef@ ChooseFactory(const AIFloat3& in pos, bool isStart, bool isReset)
 	// it; RushReady() checks we can actually power the plant.
 	if (MayPursueT2() && !gHaveT2 && RushReady()) {
 		CCircuitDef@ adv = AdvCounterpart();
+		// The eco role techs through a GROUND adv plant, whatever its opening
+		// lab was: its T2 lab exists to produce the T2 constructors the
+		// teammates' sling payments bought, and an air plant cannot build
+		// them (watched 2026-08-22: the role went T2 via the air lab at 14m
+		// and the gift chain starved).
+		if (IsEcoLead() && (adv !is null) && IsAirFactory(adv)) {
+			for (uint i = 0; i < T1_FAC.length(); ++i) {
+				CCircuitDef@ t1d = ai.GetCircuitDef(T1_FAC[i]);
+				CCircuitDef@ t2d = ai.GetCircuitDef(T2_FAC[i]);
+				if ((t1d is null) || (t2d is null) || (t1d.count <= 0)
+					|| IsAirFactory(t2d))
+					continue;
+				@adv = t2d;
+				AiLog(T() + "apex: eco role redirects tech to ground plant "
+					+ adv.GetName());
+				break;
+			}
+		}
 		if (adv !is null) {
 			AiLog(T() + "apex: building advanced plant " + adv.GetName()
 				+ " (from " + gT1Fac.GetName() + ")");

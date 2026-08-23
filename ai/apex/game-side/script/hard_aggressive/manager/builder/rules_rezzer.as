@@ -57,9 +57,24 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 {
 	if (!IsRezzer(unit) || !MedicBot(unit))
 		return null;
-	const AIFloat3 lane = Military::LanePos();
+	AIFloat3 lane = Military::LanePos();
 	if (!OnMap(lane) || (lane.SqLength2D() < 1.f))
 		return null;
+	// apexearth 2026-08-22: "medic bots also need to stay safe and not die."
+	// The lane is the army's staging anchor -- i.e. where the shooting is. Hold
+	// station this far BEHIND it, toward home, so the wounded step back to the
+	// medic instead of the medic standing in the fight. Still inside apex_medic_r
+	// of the line, so the repair reach is unchanged.
+	const float setback = ai.GetTunable("apex_medic_setback", TUNE_MEDIC_SETBACK);
+	if ((setback > 0.f) && Builder::gHomeSet) {
+		AIFloat3 toHome = Builder::gHomePos - lane;
+		const float len = sqrt(toHome.SqLength2D());
+		if (len > 1.f) {
+			const AIFloat3 back = lane + toHome * (setback / len);
+			if (OnMap(back))
+				lane = back;
+		}
+	}
 	const int slot = ConSlot(unit);
 	if (ai.frame < gConNextRepair[slot])
 		return null;

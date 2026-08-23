@@ -493,6 +493,61 @@ const float TUNE_QUOTA_T1_AFTER_T3 = 0.15f;
 // manager/brain/facqueue.as [ratio] -- Weight every T2 combat want keeps once
 //   a gantry stands.
 const float TUNE_QUOTA_T2_AFTER_T3 = 0.4f;
+// manager/brain/facqueue.as [ratio 0..1] -- Army mix the designated tech/eco
+//   lead's lines keep, per tier. 0 = the lead plays TECH like a human: no
+//   army, its own and the slung metal all go to economy (apexearth
+//   2026-08-22). Team games only; air lines exempt.
+const float TUNE_ROLE_TECH_T1 = 0.f;
+const float TUNE_ROLE_TECH_T2 = 0.f;
+const float TUNE_ROLE_TECH_T3 = 0.f;
+const float TUNE_ROLE_TECH_AIR = 0.f;
+// manager/military/defenceline.as + builder/requests.as [toggle] -- May the
+//   eco/tech role holder build defence? 0 = none (his call: it sits safely
+//   in the back); sensors are exempt.
+const float TUNE_ROLE_TECH_DEF = 0.f;
+// manager/builder/share.as [count] -- Adv cons the lead keeps for itself
+//   while teammates still lack theirs. 1 = deliver the paid-for cons first.
+const float TUNE_ROLE_GIFT_KEEP = 1.f;
+// manager/builder/share.as [income multiplier] -- At or above this handicap
+//   multiplier (1.5 = +50) the lead gifts NO cons: bonused teammates afford
+//   their own, and the lead's build power is its scaling.
+const float TUNE_ROLE_GIFT_OFF_MULT = 1.5f;
+// manager/factory/choose.as + builder/requests.as [count] -- Fusions the eco
+//   role must own before it may rebuild a T1 plant (his call: eat both T1
+//   labs at the T2 plant, recreate one only after the second fusion).
+const float TUNE_ROLE_T1_REFAC = 2.f;
+// manager/brain/facqueue.as [metal/s per con] -- Pre-T2 the eco role's con
+//   want is one per this much steady income (7 = one lathe's pull), so con
+//   bodies never outrun the metal that feeds them.
+const float TUNE_ROLE_CON_PER = 7.f;
+// manager/factory/techlead.as [e/s] -- Energy bar for the eco role's T2
+//   commit. Below the follower bar (600): the critical path to 2-fusions-by-10
+//   is lab-done -> adv con -> 4300-metal build (~3.1m measured). 450 was
+//   tried and measured WORSE (tech 8.4m vs 6.8/7.0 at 600, seed-47): a lab
+//   started on a thinner grid E-stalls the mohos that follow it. 600 stands.
+const float TUNE_ROLE_T2_ENERGY = 600.f;
+// manager/role.as [fraction] -- The build-power controller's target:
+//   standing lathe (metal/s) tracks income x this. Slightly above 1 so the
+//   bank drains instead of pooling. The controller's ONLY policy numbers
+//   are this and the trim slack -- everything else is unit physics.
+const float TUNE_BP_HEADROOM = 1.15f;
+// manager/role.as [fraction] -- BP above target x this is excess; the
+//   land-con retirement sweep keys on it (post-fusion-2 stage).
+const float TUNE_BP_TRIM_SLACK = 1.4f;
+// manager/role.as [fraction] -- The role's fusion bar as a fraction of
+//   apex_fusion_prefer_income. 0.6 x 50 = 30 m/s steady: the reactor starts
+//   while a fighting player would still be buying army.
+const float TUNE_ROLE_FUS_FRAC = 0.6f;
+// manager/builder/rules_hold.as [count] -- Extra same-def builds SHIFT-queued
+//   behind a started cheap ENERGY/CONVERT build. DEFAULT OFF: measured
+//   2026-08-22 (seed-37 paired, 3 on-runs vs 1 off-control), the off-control
+//   out-ecoed every on-run (46.1k vs 32.4-40.3k) -- ring-picked sites and
+//   election holds cost more than the think-gaps saved. The binding and rule
+//   stay for a placement-aware retry.
+const float TUNE_CHAIN_BUILDS = 0.f;
+// manager/builder/rules_hold.as [metal] -- Only defs at or under this cost
+//   chain (wind 43, solar 155, advsol 350, converter 380).
+const float TUNE_CHAIN_MAX_COST = 400.f;
 // manager/factory/techlead.as [toggle 0/1] -- Default ON since 2026-08-20:
 //   paired same-seed A/Bs on Altair (trade 0.31->0.52) and Comet Catcher
 //   (0.43->0.76, produced...
@@ -819,7 +874,7 @@ const float TUNE_KILL_FROM = 900.f;
 //   lost win rate and army trade against the effectively-frozen peak. Kept
 //   near-frozen as the default; the frame-based decay below is the correctness
 //   fix, not a behaviour change.
-const float TUNE_SEEN_HALFLIFE = 36000.f;
+const float TUNE_SEEN_HALFLIFE = 300.f;
 // manager/brain/budget.as [toggle 0/1] -- evaluate the SPEND_* target curves
 //   against live income (1) or against the frame-0 column (0). GetTunable
 //   caches its default on first call, so passing a live curve as the default
@@ -1251,8 +1306,6 @@ const float TUNE_LANE_STICKY = 900.f;
 // ---------------------------------------------------------------------------
 // Diagnostics and switches
 // ---------------------------------------------------------------------------
-// manager/brain.as [toggle 0/1] -- NOT winner-takes-all.
-const float TUNE_BRAIN_ROULETTE = 1.f;
 // perf.as [toggle 0/1] -- The perf governor (lag-severity measures and its
 //   production cuts) is active; read once at startup.
 const float TUNE_PERF = 1.f;
@@ -1260,6 +1313,33 @@ const float TUNE_PERF = 1.f;
 //   MAP: this is the anchor FillFrontPos picks the regroup cluster from, so
 //   it is the single most...
 const float TUNE_PING = 0.f;
+
+// manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
+//   spectators see every map overlay below, so each ships off unless someone
+//   deliberately turned it on.
+const float TUNE_DRAW_FRONT = 1.f;
+// manager/frontline.as [toggle 0/1] -- Draw the defense zone on the map: the
+//   inner ring is the C++ base-defence range (the army fights at any odds
+//   inside it), the outer ring the incoming-push alarm radius. Off by
+//   default because it ships; the harness opts in with apex_draw_defzone=1.
+const float TUNE_DRAW_DEFZONE = 0.f;
+// manager/frontline/draw_diag.as [toggle 0/1] -- Draw one line per claimed mex
+//   task, constructor to spot: shows a con walking past a near extractor to a
+//   far one. Off by default because this ships.
+const float TUNE_DRAW_MEX = 0.f;
+// manager/frontline/draw_diag.as [toggle 0/1] -- Draw the army's staging anchor
+//   and, when apex_medic_setback is set, the medic station behind it plus the
+//   step between them. Off by default because this ships.
+const float TUNE_DRAW_LANE = 0.f;
+// manager/frontline/draw_diag.as [toggle 0/1] -- Cross every extractor past the
+//   mid fraction toward the enemy, larger past the forward fraction: the same
+//   FrontT classification the guard count and guard tier both read. Off by
+//   default because this ships.
+const float TUNE_DRAW_GUARD = 0.f;
+// manager/frontline/draw_diag.as [toggle 0/1] -- Ping the heal post: the exact
+//   point CRetreatTask sends wounded units to (front + apex_retreat_behind
+//   toward home). A ping rather than a line because there is only one of them.
+const float TUNE_DRAW_HEAL = 0.f;
 
 // ---------------------------------------------------------------------------
 // Everything else
@@ -1321,13 +1401,6 @@ const float TUNE_CLEANUP_MAX_PICKS = 5.f;
 //   one plus income divided by this (a perf bound -- each pick walks full unit
 //   lists).
 const float TUNE_CLEANUP_PER = 150.f;
-// manager/frontline.as [toggle 0/1] -- OFF BY DEFAULT because this ships.
-const float TUNE_DRAW_FRONT = 0.f;
-// manager/frontline.as [toggle 0/1] -- Draw the defense zone on the map: the
-//   inner ring is the C++ base-defence range (the army fights at any odds
-//   inside it), the outer ring the incoming-push alarm radius. Off by
-//   default because it ships; the harness opts in with apex_draw_defzone=1.
-const float TUNE_DRAW_DEFZONE = 0.f;
 // manager/frontline.as [toggle 0/1] -- The base-defence ring follows the
 //   BUILT base (farthest finished rear structure plus the pad) instead of
 //   the frozen map-diagonal formula; 0 keeps the static C++ ring.
@@ -1532,6 +1605,15 @@ const float TUNE_MEDIC_SHARE = 0.4f;
 // manager/builder/rules_rezzer.as [elmos] -- how far around the staging
 //   anchor a medic looks for wounded units, and how close it holds station.
 const float TUNE_MEDIC_R = 1200.f;
+// manager/builder/rules_rezzer.as [elmos] -- how far BEHIND the lane a medic
+//   holds station. The lane is where the army is fighting; a medic parked on it
+//   is in the fight. 0 keeps the old on-the-lane behaviour.
+const float TUNE_MEDIC_SETBACK = 0.f;
+// manager/builder/mexguard.as [toggle 0/1] -- a mex past MEX_GUARD_FWD_FRAC of
+//   the way to the enemy gets a heavy gun rather than the light/mid sentry.
+//   The tier then scales with exposure the same way the guard COUNT already
+//   does. 0 keeps the light/mid-only cap.
+const float TUNE_MEX_FWD_HEAVY = 0.f;
 // manager/military/posture.as [toggle 0/1] -- Once T2 exists, cheap suicidal
 //   spam (ticks etc.) routes as spam -- forward always; 0 treats them as
 //   normal army.

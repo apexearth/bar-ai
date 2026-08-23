@@ -194,7 +194,10 @@ IUnitTask@ OptionalWork(CCircuitUnit@ unit, bool isComm)
 					return juice;
 			}
 
-			if ((Factory::gLastPhase >= 4)
+			// Role::NanoWant opens this lane pre-T2 for the role holder: the
+			// controller measured a build-power deficit, and locking nanos
+			// behind phase 4 was WHY the role overflowed metal early.
+			if (((Factory::gLastPhase >= 4) || (Role::NanoWant() > 0))
 				&& ((crewRole == Crew::ECO) || (crewRole == Crew::HOME))) {
 				// Obsolete-building reclaims are enqueued centrally by
 				// ObsoleteSweep and arrive via DefaultMakeTask.
@@ -501,6 +504,34 @@ IUnitTask@ WantedAirPlant(CCircuitUnit@ unit)
 {
 	if (!gHomeSet)
 		return null;
+	// THE ECO LEAD'S AIR-CON PLANT, same no-switch-clock treatment: its
+	// branch in ChooseFactory only speaks on the engine's 550-900s switch
+	// cadence, so the role sat fusions-done with no air lab (apexearth:
+	// "we're just way past that, we still don't have any air"). The
+	// fusion-2 bar arrives through PlantApproved's T1-refac gate; every
+	// other gate is the same one the intel path below uses.
+	if (Factory::EcoWantsAirPlant()) {
+		CCircuitDef@ ap = SideDef3("armap", "corap", "legap");
+		if ((ap !is null) && unit.circuitDef.CanBuild(ap)
+			&& (ai.GetDefBuildProgress(ap) < 0.f)
+			&& Factory::PlantApproved(ap))
+		{
+			AIFloat3 apSite = ai.FindBuildSiteNear(ap, gHomePos, T2_REAR_SEARCH);
+			if (OnMap(apSite) && (ThreatFor(unit, apSite) <= CON_THREAT_VETO)
+				&& Requests::Allowed(ap, Task::BuildType::FACTORY, apSite, 0.f))
+			{
+				IUnitTask@ apPost = aiBuilderMgr.Enqueue(TaskB::Factory(
+						Task::Priority::HIGH, ap, apSite, null, 0.f));
+				if (apPost !is null) {
+					AiLog(Factory::T() + "apex: eco role air plant "
+						+ ap.GetName() + " at "
+						+ formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+						+ " m/s -- air cons next");
+					return apPost;
+				}
+			}
+		}
+	}
 	CCircuitDef@ plant = Air::IntelPlantToBuild();
 	if ((plant is null) || !unit.circuitDef.CanBuild(plant))
 		return null;

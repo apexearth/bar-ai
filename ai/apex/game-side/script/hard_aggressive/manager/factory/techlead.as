@@ -85,6 +85,11 @@ bool T2ArmyReady()
 {
 	if (gHaveT2)
 		return true;
+	// The eco role's army is zero BY DESIGN -- asking it to field an army
+	// before teching contradicts the role. Its cover is the team, which is
+	// the deal the role is.
+	if (IsEcoLead())
+		return true;
 	const float floorM = T2ArmyFloor();
 	if (floorM <= 0.f)
 		return true;
@@ -274,10 +279,21 @@ bool RushReady()
 	// arm (energy gate off) proved teching through it anyway is what finally
 	// moved Altair (kill/loss 0.31 -> 0.61, first 4-win arm). Tunable so the
 	// open-map caution stays available.
+	// ...except for the eco role: it sits in the back with the team covering
+	// it, and the veto reads near-permanently on a choke map -- measured
+	// +100 seed-33, the designated anchor teched at 17.7m while an unvetoed
+	// follower managed 6.7m. Teching through pressure is the role's job.
 	if ((ai.GetTunable("apex_t2_safety", TUNE_T2_SAFETY) > 0.f)
+		&& !IsEcoLead()
 		&& (Military::LosingGround() || Military::BaseContested()))
 		return false;
 	// No clock. Real energy, or a reactor grid already rising.
+	// The eco role runs its own bar (default 600, the same energy a
+	// follower techs at): the T2 lab IS its economy engine, and the lead
+	// bar held it at T1 until minute 15 (+100 seed-33, eInc=60/1200 in the
+	// rush log) while an unvetoed follower teched at 6.
+	if (IsEcoLead())
+		return aiEconomyMgr.energy.income > Role::T2EnergyBar();
 	return (aiEconomyMgr.energy.income
 			> Policy::T2Energy())
 		|| (Builder::HaveReactor()

@@ -440,8 +440,9 @@ void CAttackTask::Update()
 		{
 			circuit->LOG("apex: attack broken -- power %.0f of peak %.0f, survivors re-pool",
 					attackPower, peakPower);
-			if ((leader != nullptr) && (circuit->GetTunable("apex_ping", 0.f) > 0.f)) {
-				circuit->GetDrawer()->AddPoint(leader->GetLastPos(), "ATK broken");
+			if (leader != nullptr) {
+				IntentPing(leader->GetLastPos(),
+						utils::string_format("ATK n=%d broken", (int)units.size()));
 			}
 			manager->AbortTask(this);
 			return;
@@ -568,10 +569,8 @@ void CAttackTask::Update()
 							circuit->LOG("apex: assembling before contact -- "
 									"stretch %.0f over bound %.0f, %d units",
 									std::sqrt(worstSq), bound, (int)units.size());
-							if (circuit->GetTunable("apex_ping", 0.f) > 0.f) {
-								circuit->GetDrawer()->AddPoint(startPos,
-										utils::string_format("ASSEMBLE n=%d", (int)units.size()).c_str());
-							}
+							IntentPing(startPos,
+									utils::string_format("ATK n=%d assemble", (int)units.size()));
 						}
 						if (frame < assembleUntil) {
 							const float sqBound = SQUARE(bound);
@@ -593,10 +592,8 @@ void CAttackTask::Update()
 					}
 				}
 				assembleUntil = -1;
-				if (circuit->GetTunable("apex_ping", 0.f) > 0.f) {
-					circuit->GetDrawer()->AddPoint(startPos,
-							utils::string_format("ATK engage n=%d", (int)units.size()).c_str());
-				}
+				IntentPing(startPos,
+						utils::string_format("ATK n=%d engage", (int)units.size()));
 				state = State::ENGAGE;
 				Attack(frame);
 				return;
@@ -800,6 +797,7 @@ void CAttackTask::FindTarget()
 	float bestInfl = .0f;
 	float bestNear = .0f;
 	float bestScale = .0f;
+	float bestAlly = .0f;
 	int bestSeen = 0;  // was the chosen target's ground in current LOS, or only remembered
 	bool bestHome = false;  // chosen target stands on our own ground (odds waived)
 	float bestRefused = .0f;  // strongest strength-test refusal, as power/need
@@ -863,6 +861,45 @@ void CAttackTask::FindTarget()
 	CEnemyInfo* prevTarget = GetTarget();  // compared only, never dereferenced
 	const bool wasEngaged = (State::ENGAGE == state);
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
+	// apex: SQUADS COORDINATE. The engage question was answered per squad with
+	// only its own power, so a mixed force the squad-speed split keeps in two
+	// tasks answered it twice: the half that passed dived, the half that
+	// failed walked off. Collect the other forward squads once per pass; an
+	// ally in support range of us, standing on a group, or already attacking
+	// it counts toward the odds, and a co-targeted group is preferred so
+	// co-located squads converge on ONE fight.
+	struct SAllySquad {
+		springai::AIFloat3 pos;
+		springai::AIFloat3 tpos;
+		float power;
+		bool hasTarget;
+	};
+	std::vector<SAllySquad> allySquads;
+	const float supportR = circuit->GetTunable("apex_support_radius", ASSIGN_RADIUS);
+	const float allyConverge = circuit->GetTunable("apex_ally_converge", 2.f);
+	if (circuit->GetTunable("apex_ally_aggregate", 1.f) > 0.f) {
+		CMilitaryManager* mmS = static_cast<CMilitaryManager*>(manager);
+		for (IFighterTask::FightType ftS : {IFighterTask::FightType::ATTACK,
+		                                    IFighterTask::FightType::DEFEND}) {
+			for (IFighterTask* otherS : mmS->GetTasks(ftS)) {
+				if (otherS == static_cast<IFighterTask*>(this)) {
+					continue;
+				}
+				ISquadTask* stS = static_cast<ISquadTask*>(otherS);
+				CCircuitUnit* olS = stS->GetLeader();
+				if (olS == nullptr) {
+					continue;
+				}
+				SAllySquad ally;
+				ally.pos = olS->GetPos(frame);
+				ally.power = otherS->GetAttackPower();
+				CEnemyInfo* otS = otherS->GetTarget();
+				ally.hasTarget = (otS != nullptr);
+				ally.tpos = ally.hasTarget ? otS->GetPos() : ally.pos;
+				allySquads.push_back(ally);
+			}
+		}
+	}
 	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
 	for (unsigned i = 0; i < groups.size(); ++i) {
 		const CEnemyManager::SEnemyGroup& group = groups[i];
@@ -901,8 +938,20 @@ void CAttackTask::FindTarget()
 		// survivor included -- engage towers and armies at hopeless odds the
 		// moment it stood on enemy influence. A weak group inside their base is
 		// still scanned, but only its unarmed fat-eco targets qualify (isDive).
+		// apex: the odds count the squads that will fight WITH us -- in support
+		// range of us, standing on the group, or already attacking it. Each
+		// ally counts once, whichever clause admits it.
+		float groupAlly = .0f;
+		for (const SAllySquad& ally : allySquads) {
+			if ((ally.pos.SqDistance2D(pos) < SQUARE(supportR))
+				|| (ally.pos.SqDistance2D(group.pos) < SQUARE(NEARBY_ENEMY_DIST))
+				|| (ally.hasTarget && (ally.tpos.SqDistance2D(group.pos) < SQUARE(NEARBY_ENEMY_DIST))))
+			{
+				groupAlly += ally.power;
+			}
+		}
 		const bool groupWeak = !isJuggernaut
-				&& (maxPower <= group.influence * scale * groupMargin) && !isHome;
+				&& (maxPower + groupAlly <= group.influence * scale * groupMargin) && !isHome;
 		if (groupWeak && !inTheirBase) {
 			++skippedWeak;
 			continue;
@@ -1063,6 +1112,15 @@ void CAttackTask::FindTarget()
 			if (enemy == prevTarget) {
 				prio *= TARGET_STICKY;
 			}
+			// apex: converge on the fight an ally already took -- prio divides a
+			// distance metric, so a co-targeted group wins ties without
+			// overriding a much closer target.
+			for (const SAllySquad& ally : allySquads) {
+				if (ally.hasTarget && (ally.tpos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST))) {
+					prio *= allyConverge;
+					break;
+				}
+			}
 
 			const float nearMargin = (enemy == prevTarget) ? CONTINUE_MARGIN : TradeScaledMargin(circuit);
 			// apex: count the allies beside us in the strongest refusal too --
@@ -1071,24 +1129,12 @@ void CAttackTask::FindTarget()
 			// ATTACK/DEFEND squads standing near the TARGET, the mirror of the
 			// enemy-side localInfl loop above.
 			float allyPower = maxPower;
-			if (circuit->GetTunable("apex_ally_aggregate", 1.f) > 0.f) {
-				CMilitaryManager* mmA = static_cast<CMilitaryManager*>(manager);
-				for (IFighterTask::FightType ftA : {IFighterTask::FightType::ATTACK,
-				                                    IFighterTask::FightType::DEFEND}) {
-					for (IFighterTask* otherA : mmA->GetTasks(ftA)) {
-						if (otherA == static_cast<IFighterTask*>(this)) {
-							continue;
-						}
-						ISquadTask* stA = static_cast<ISquadTask*>(otherA);
-						CCircuitUnit* olA = stA->GetLeader();
-						if ((olA == nullptr)
-							|| (olA->GetPos(circuit->GetLastFrame())
-								.SqDistance2D(ePos) > SQUARE(NEARBY_ENEMY_DIST)))
-						{
-							continue;
-						}
-						allyPower += otherA->GetAttackPower();
-					}
+			for (const SAllySquad& ally : allySquads) {
+				if ((ally.pos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST))
+					|| (ally.pos.SqDistance2D(pos) < SQUARE(supportR))
+					|| (ally.hasTarget && (ally.tpos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST))))
+				{
+					allyPower += ally.power;
 				}
 			}
 			if (!isJuggernaut && !isDive
@@ -1110,6 +1156,7 @@ void CAttackTask::FindTarget()
 				bestInfl = group.influence;
 				bestNear = localInfl;
 				bestScale = scale;
+				bestAlly = allyPower - maxPower;
 				bestSeen = mapMgr->IsInLOS(ePos) ? 1 : 0;
 				bestHome = isHome;
 				hasGoodTarget |= !isOverpowered;
@@ -1140,10 +1187,10 @@ void CAttackTask::FindTarget()
 		// purpose) from a bad attack -- without it a losing game's audit reads
 		// every base-defence fight as a "hopeless engagement".
 		circuit->LOG("apex: engage %s units=%d spread=%.0f hp=%.2f coh=%.2f "
-				"power=%.0f need=%.0f edge=%.2f skipped=%d bestRef=%.2f near=%.0f seen=%d home=%d",
+				"power=%.0f ally=%.0f need=%.0f edge=%.2f skipped=%d bestRef=%.2f near=%.0f seen=%d home=%d",
 				(bestTarget != nullptr) ? "TAKE" : "SKIP",
 				int(units.size()), spread, healthScale,
-				cohesion, maxPower, need,
+				cohesion, maxPower, bestAlly, need,
 				(need > 1.f) ? (maxPower / need) : 0.f, skippedWeak, bestRefused,
 				bestNear, bestSeen, bestHome ? 1 : 0);
 	}
@@ -1210,6 +1257,15 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
 				}
 			}
 		}
+		if (leader != nullptr) {
+			CEnemyInfo* tgt = GetTarget();
+			const char* tname = ((tgt != nullptr) && (tgt->GetCircuitDef() != nullptr))
+					? tgt->GetCircuitDef()->GetDef()->GetName() : "enemy";
+			const bool flanking = (flankRoll > 0) && utils::is_valid(flankVia);
+			IntentPing(leader->GetLastPos(),
+					utils::string_format("ATK n=%d %s %s", (int)units.size(),
+							flanking ? "flank>" : ">", tname));
+		}
 		ActivePath(lowestSpeed);
 	} else {
 		FallbackFrontPos();
@@ -1243,6 +1299,7 @@ void CAttackTask::FallbackFrontPos()
 			}
 		}
 	}
+	const bool pressing = healthy && !urgentPositions.empty();
 	if (urgentPositions.empty() || !healthy) {
 		circuit->GetMilitaryManager()->FillFrontPos(leader, urgentPositions);
 	}
@@ -1250,6 +1307,9 @@ void CAttackTask::FallbackFrontPos()
 		FallbackBasePos();
 		return;
 	}
+	IntentPing(leader->GetPos(circuit->GetLastFrame()),
+			utils::string_format("ATK n=%d %s", (int)units.size(),
+					pressing ? "press" : "re-front"));
 
 	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
 	const float pathRange = DEFAULT_SLACK * 4;
@@ -1303,6 +1363,8 @@ void CAttackTask::FallbackBasePos()
 
 	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
 	const AIFloat3& endPos = press ? foePos : setupMgr->GetBasePos();
+	IntentPing(startPos, utils::string_format("ATK n=%d %s", (int)units.size(),
+			press ? "press foe" : "home"));
 	const float pathRange = DEFAULT_SLACK * 4;
 
 	CPathFinder* pathfinder = circuit->GetPathfinder();

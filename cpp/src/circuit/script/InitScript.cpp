@@ -583,6 +583,30 @@ static void CCircuitUnit_CmdBuildUnit(CCircuitUnit* unit, CCircuitDef* buildDef,
 	}
 }
 
+// apex: a SHIFT-appended build order for a MOBILE builder -- the primitive a
+// human's shift-queue is made of. FactoryCAI's x5 SHIFT multiplier does not
+// apply to mobile CommandAI, so one call is one queued building. The caller
+// owns the consequences: a non-shift order from any task Execute() wipes the
+// queue, so append only after the current build has started and hold the
+// unit from re-election while the queue runs (script/builder chain rule).
+static void CCircuitUnit_CmdBuildQueuedAt(CCircuitUnit* unit, CCircuitDef* buildDef,
+		const AIFloat3& pos)
+{
+	if (buildDef == nullptr) {
+		return;
+	}
+	unit->CmdBuild(buildDef, pos, UNIT_NO_FACING, UNIT_COMMAND_OPTION_SHIFT_KEY);
+}
+
+// apex: in-game chat from script -- the same call SetupManager's welcome
+// message uses. For role announcements a spectator can actually see
+// (apexearth could not tell which player held the eco/tech role from
+// watching; the infolog line is invisible in-game).
+static void CCircuitAI_SendChat(CCircuitAI* circuit, const std::string& msg)
+{
+	circuit->GetGame()->SendTextMessage(msg.c_str(), 0);
+}
+
 static AIFloat3 CEnemyManager_GetEnemyPos(CEnemyManager* mgr)
 {
 	return mgr->GetEnemyPos();
@@ -1077,6 +1101,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<Id>@ GetTeamIds() const", asFUNCTION(CCircuitAI_GetTeamIds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SendResources(float, float, int)", asFUNCTION(CCircuitAI_SendResources), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void SendChat(const string& in)", asFUNCTION(CCircuitAI_SendChat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamMetalFill(int) const", asFUNCTION(CCircuitAI_GetTeamMetalFill), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamMetalIncome(int) const", asFUNCTION(CCircuitAI_GetTeamMetalIncome), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// In-process team coordination, replacing the synced-gadget rules params.
@@ -1241,6 +1266,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// which CmdRemoves every build order still queued, so the first completion
 	// under the task scheme wipes a standing queue.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdBuildUnit(CCircuitDef@, int, bool)", asFUNCTION(CCircuitUnit_CmdBuildUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdBuildQueuedAt(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdBuildQueuedAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// Reading the factory's own queue. Pass null to count every build order on it.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int CmdQueueSize()", asFUNCTION(CCircuitUnit_CmdQueueSize), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int CountQueued(CCircuitDef@)", asFUNCTION(CCircuitUnit_CountQueued), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

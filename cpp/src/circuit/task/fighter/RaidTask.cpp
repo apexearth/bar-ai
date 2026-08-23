@@ -576,6 +576,13 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
 						walked, direct, walked / direct);
 			}
 		}
+		if (leader != nullptr) {
+			CEnemyInfo* tgt = GetTarget();
+			const char* tname = ((tgt != nullptr) && (tgt->GetCircuitDef() != nullptr))
+					? tgt->GetCircuitDef()->GetDef()->GetName() : "spot";
+			IntentPing(leader->GetLastPos(),
+					utils::string_format("RAID n=%d > %s", (int)units.size(), tname));
+		}
 		position = pPath->posPath.back();
 		ActivePath();
 	} else {
@@ -590,12 +597,14 @@ void CRaidTask::FallbackRaid()
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
 	const AIFloat3& threatPos = leader->GetTravelAct()->IsActive() ? position : pos;
+	const char* why = "roam";
 	if (attackPower * powerMod * GetHealthScale() <= threatMap->GetThreatAt(leader, threatPos)) {
 		AIFloat3 nextPos = circuit->GetMilitaryManager()->GetScoutPosition(leader);
 		if (utils::is_equal_pos(nextPos, pos)) {
 			return;
 		} else {
 			position = nextPos;
+			why = "outgunned";
 		}
 	} else {
 		// Nothing in front of us is beating us, so there is no reason to be
@@ -610,12 +619,14 @@ void CRaidTask::FallbackRaid()
 						onward.x, onward.z, pos.distance2D(onward));
 			}
 			position = onward;
+			why = "press on";
 		}
 	}
 
 	if (!utils::is_valid(position)) {
 		position = RoamPos(leader);
 	}
+	IntentPing(pos, utils::string_format("RAID n=%d %s", (int)units.size(), why));
 
 	CPathFinder* pathfinder = circuit->GetPathfinder();
 	// RAID THE EDGES. This is the ROAMING query -- how a raid party moves when it

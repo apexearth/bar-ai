@@ -493,6 +493,23 @@ def kill_job(jid):
     return {"ok": True}
 
 
+FACTION_CHOICES = {"random", "armada", "cortex", "legion"}
+
+
+def faction_sides(p):
+    """Compose a --sides value from the per-side faction pickers. Both left at
+    'random' (the UI default) returns None so the tool's own default holds --
+    run_match alternates Armada/Cortex, run_tournament plays Cortex,Cortex --
+    exactly what launches did before the pickers existed."""
+    a = str(p.get("side_a") or "random").strip().lower()
+    b = str(p.get("side_b") or "random").strip().lower()
+    if a not in FACTION_CHOICES or b not in FACTION_CHOICES:
+        raise ValueError("bad faction: %s,%s" % (a, b))
+    if a == b == "random":
+        return None
+    return ",".join(s if s == "random" else s.capitalize() for s in (a, b))
+
+
 def build_launch_cmd(p):
     def clean(v):
         v = str(v).strip()
@@ -510,8 +527,9 @@ def build_launch_cmd(p):
         args += ["--per-side", str(int(p["per_side"]))]
     if p.get("seed") not in (None, ""):
         args += ["--seed", str(int(p["seed"]))]
-    if p.get("sides"):
-        args += ["--sides", clean(p["sides"])]
+    sides = p.get("sides") or faction_sides(p)
+    if sides:
+        args += ["--sides", clean(sides)]
     if p.get("boxes"):
         args += ["--boxes", clean(p["boxes"])]
     if p.get("box_size") not in (None, "", 0, "0"):
@@ -553,12 +571,20 @@ def build_tournament_cmd(p):
         args += ["--minutes", str(int(p["minutes"]))]
     if p.get("per_side") and int(p["per_side"]) > 1:
         args += ["--per-side", str(int(p["per_side"]))]
+    sides = p.get("sides") or faction_sides(p)
+    if sides:
+        args += ["--sides", clean(sides)]
     # A tournament has no --watch, so "auto" is the tool's own 0.
     if p.get("handicap") not in (None, "", "auto"):
         hc = int(p["handicap"])
         if not (0 <= hc <= 500):
             raise ValueError("handicap out of range: %s" % hc)
         args += ["--handicap", str(hc)]
+    for mo in p.get("modoptions", []) or []:
+        mo = clean(mo)
+        if not re.fullmatch(r"[a-z0-9_]+=[-\w.]+", mo):
+            raise ValueError("bad modoption: %s" % mo)
+        args += ["--modoption", mo]
     return args
 
 
@@ -570,6 +596,58 @@ DIVIDER_RE = re.compile(r"^// ?[-=]{20,}$")
 ENTRY_HEAD_RE = re.compile(
     r"^// ((?:[\w/]+\.as)(?:, [\w/]+\.as)*)?\s*(\[[^\]]+\])?\s*(?:--\s*)?(.*)$")
 ARRAY_RE = re.compile(r"^(array<float>\s+([A-Z_0-9]+)\s*=\s*\{)([^}]*)(\}.*)$")
+
+
+CPP_TUNE_RE = re.compile(
+    r'GetTunable\(\s*"(apex_[a-z0-9_]+)"\s*,\s*([^);]+)\)')
+
+
+def gadget_tunable_names():
+    """Names dev_tunables.lua will actually republish. A name missing from that
+    list is silently ignored, so the modoption reads as a no-op."""
+    f = REPO / "game-patches" / "gadgets" / "dev_tunables.lua"
+    try:
+        return set(re.findall(r'^\s*"(apex_[a-z0-9_]+)"', f.read_text(encoding="utf-8"),
+                              re.M))
+    except Exception:
+        return set()
+
+
+def cpp_tunables():
+    """Tunables read by the DLL, which have no TUNE_ const in tunables.as and so
+    are invisible to the parser above. Values are compiled in -- they can only be
+    changed by a modoption (or a rebuild), so these entries are read-only."""
+    # The build tree is what actually compiled; cpp/ is its mirror.
+    roots = [REPO / "vendor" / "engine" / "AI" / "Skirmish" / "BARb" / "src" / "circuit",
+             REPO / "cpp" / "src" / "circuit"]
+    root = next((r for r in roots if r.is_dir()), None)
+    if root is None:
+        return None
+    registered = gadget_tunable_names()
+    found = {}
+    for f in sorted(root.rglob("*.cpp")):
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        for m in CPP_TUNE_RE.finditer(text):
+            name, default = m.group(1), m.group(2).strip()
+            if name in found:
+                continue
+            line = text.count(chr(10), 0, m.start()) + 1
+            found[name] = {
+                "name": name, "tunable": name, "value": default,
+                "unit": "", "readonly": True,
+                "reads": str(f.relative_to(REPO)).replace(os.sep, "/") + ":" + str(line),
+                "desc": ("" if name in registered else
+                         "NOT in dev_tunables.lua -- the modoption is silently ignored. "),
+                "file": str(f.relative_to(REPO)).replace(os.sep, "/"),
+                "line": line,
+            }
+    if not found:
+        return None
+    return {"title": "C++ / SkirmishAI.dll (modoption only)",
+            "entries": [found[k] for k in sorted(found)]}
 
 
 def parse_tunables():
@@ -824,7 +902,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(crew_roles(safe_run_dir(q["dir"])))
             elif u.path == "/api/launchmeta":
                 self.send_json({"maps": known_maps(), "specs": known_ai_specs(),
-                                "tunables": tunable_names()})
+                                "tunables": tunable_names(),
+                                "gadget_tunables": sorted(gadget_tunable_names())})
             elif u.path == "/api/jobs":
                 with JOBS_LOCK:
                     items = list(JOBS.items())
@@ -836,8 +915,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(job_state(q["id"], j) if j
                                else {"error": "unknown job"}, 200 if j else 404)
             elif u.path == "/api/tunables":
-                self.send_json({"sections": parse_tunables(),
-                                "targets": parse_targets()})
+                secs = parse_tunables()
+                cpp = cpp_tunables()
+                if cpp:
+                    secs.append(cpp)
+                self.send_json({"sections": secs, "targets": parse_targets(),
+                                "gadget_tunables": sorted(gadget_tunable_names())})
             elif u.path == "/api/config":
                 p = config_path(q["name"])
                 self.send_json({"name": q["name"],

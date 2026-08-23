@@ -268,6 +268,134 @@ void UpdateRushReclaim()
 	aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, gT1FacUnit));
 }
 
+// THE ECO ROLE EATS EVERY T1 PLANT once its advanced plant stands
+// (apexearth 2026-08-22, watching the +100 validation: "at 11m in we only
+// have a t1 bot and air lab... we should be making the T2 lab, and
+// reclaiming both the T1 labs. For this role we only really want to
+// recreate the T1 lab once we have our second fusion"). The sweep runs only
+// below two fusions: past that a rebuilt T1 lab is legitimate (the plant
+// gate in PlantApproved/Take opens at the same bar) and must not be eaten.
+array<int> gEcoAteIds;
+
+// THE T2 LAB IS EATEN TOO, once its job is done (apexearth 2026-08-22: "That
+// T2 lab has a lot of metal - hope we're reclaiming it once we have made
+// enough t2 cons"). Its job: the adv-con fleet (plus gifts where owed).
+// Gates, each his: fleet at AdvConsWanted and no gifts owed; both fusions
+// standing (the same bar every role transition keys on); and STORAGE
+// HEADROOM for the reclaim burst ("You need to ensure you have enough
+// storage to store that much metal and not overflow/waste it"). The latch
+// stops the tech logic re-buying the lab it just ate; the fleet collapsing
+// below half the want re-opens the rebuild (PlantApproved reads the latch).
+bool gT2LabEaten = false;
+
+void EcoRoleEatT2Lab()
+{
+	if (gT2LabEaten || !TeamPlay() || !IsEcoLead() || !gHaveT2)
+		return;
+	if (Builder::gFusions.length() < 2)
+		return;
+	if (Builder::OwesAdvCons() || Builder::NeedsAdvCon())
+		return;
+	// Literal list, not T2_FAC: factorydefs.as is included AFTER this file,
+	// and a global read before its declaration kills the whole variant.
+	// Ground adv plants only -- the air plant is the role's late con source.
+	array<string> advPlants = {"armalab", "armavp",
+	                           "coralab", "coravp",
+	                           "legalab", "legavp"};
+	for (uint i = 0; i < advPlants.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(advPlants[i]);
+		if ((d is null) || (d.count <= 0))
+			continue;
+		if (aiEconomyMgr.metal.storage - aiEconomyMgr.metal.current < d.costM)
+			return;   // the burst would overflow; wait for headroom
+		array<CCircuitUnit@>@ own = ai.GetOwnUnitsOfDef(d, Builder::gHomePos,
+				AiTerrainWidth() + AiTerrainHeight());
+		if ((own is null) || (own.length() == 0))
+			continue;
+		for (uint u = 0; u < own.length(); ++u) {
+			if (own[u] is null)
+				continue;
+			AiLog(T() + "apex: eco role eats " + advPlants[i]
+				+ " -- adv-con fleet complete, " + Builder::AdvConCount()
+				+ " cons standing");
+			aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, own[u]));
+		}
+		gT2LabEaten = true;
+	}
+}
+
+// TOO MANY CONS? THEY PAY FOR THE LAB (apexearth: "Have too many cons?
+// reclaim them to pay for the T2 lab"). While the objective is T2LAB and
+// the bank cannot cover the plant, surplus T1 cons above the demand bound
+// are reclaimed, newest first would churn the workforce -- one per sweep,
+// so the reclaim keeps pace with the shortfall without gutting the hands
+// that still have queued work.
+int gNextConPay = 0;
+
+void EcoRoleConsPayForLab()
+{
+	if (!TeamPlay() || (Role::Objective() != Role::Obj::T2LAB))
+		return;
+	if (ai.frame < gNextConPay)
+		return;
+	gNextConPay = ai.frame + 5 * SECOND;
+	CCircuitDef@ lab = AdvCounterpart();
+	if ((lab is null)
+		|| (aiEconomyMgr.metal.current >= lab.costM))
+		return;   // the bank covers it; no need to eat hands
+	CCircuitDef@ con = SideDef3("armck", "corck", "legck");
+	if (con is null)
+		return;
+	const float per = ai.GetTunable("apex_con_tasks_each", TUNE_CON_TASKS_EACH);
+	const int demand = (per > 0.f)
+			? int(float(aiBuilderMgr.GetBuildTaskCount()) / per) + 1 : 6;
+	if (int(con.count) <= demand)
+		return;
+	array<CCircuitUnit@>@ own = ai.GetOwnUnitsOfDef(con, Builder::gHomePos,
+			AiTerrainWidth() + AiTerrainHeight());
+	if ((own is null) || (own.length() == 0))
+		return;
+	CCircuitUnit@ pick = own[own.length() - 1];
+	if (pick is null)
+		return;
+	AiLog(T() + "apex: role reclaims a surplus con toward the T2 lab ("
+		+ con.count + " standing, demand ~" + demand + ")");
+	aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, pick));
+}
+
+void EcoRoleEatT1Labs()
+{
+	if (!TeamPlay() || !IsEcoLead() || !gHaveT2)
+		return;
+	if (Builder::gFusions.length() >= 2)
+		return;
+	array<string> plants = {"armlab", "armvp", "armap", "armhp",
+	                        "corlab", "corvp", "corap", "corhp",
+	                        "leglab", "legvp", "legap", "leghp"};
+	for (uint i = 0; i < plants.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(plants[i]);
+		if ((d is null) || (d.count <= 0))
+			continue;
+		// Explicit map-spanning radius: radius 0 missed a lab standing away
+		// from home (armlab still driven at 16.5m while "eats" fired once).
+		array<CCircuitUnit@>@ own = ai.GetOwnUnitsOfDef(d, Builder::gHomePos,
+				AiTerrainWidth() + AiTerrainHeight());
+		if (own is null)
+			continue;
+		for (uint u = 0; u < own.length(); ++u) {
+			if (own[u] is null)
+				continue;
+			const int id = int(own[u].id);
+			if (gEcoAteIds.find(id) >= 0)
+				continue;
+			gEcoAteIds.insertLast(id);
+			AiLog(T() + "apex: eco role eats " + plants[i]
+				+ " -- the T2 line carries everything now");
+			aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, own[u]));
+		}
+	}
+}
+
 int gNextRushLog = 0;
 void LogRushState()
 {

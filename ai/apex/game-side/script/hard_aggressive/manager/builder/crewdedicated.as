@@ -52,6 +52,13 @@ IUnitTask@ MetalCrewTask(CCircuitUnit@ unit)
 	IUnitTask@ t = HoldWorkInProgress(unit, false);
 	if (t !is null)
 		return t;
+	// The mex just planted gets its sentry before the crew walks to the next
+	// spot. The crew ladder sits ABOVE the shared ladder's guard passes, so
+	// without this rung every crew-built extractor left home bare -- the
+	// near-only/light-only pass was designed for this crew and had no caller.
+	@t = CommanderMexGuard(unit, false, false, true, true);
+	if (t !is null)
+		return t;
 	// CONVERTERS ARE METAL WORK (apexearth: "some portion of that metal crew
 	// to stay home and make converters"). While energy spills, a converter
 	// pays 1 m/s per metal invested -- better than any walk to a far spot --

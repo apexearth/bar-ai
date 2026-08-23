@@ -452,6 +452,7 @@ void Update()
 	ApplyDefenseZone();
 	DrawFrontLine();
 	DrawDefenseZone();
+	DrawDiagnostics();
 	PumpDraw();   // every tick, not every rescan -- see DRAW_PER_TICK
 	if (ai.frame < gNextClassify)
 		return;

@@ -169,6 +169,8 @@ void FQForget(Id id)
 // normalises over the roles that line can actually build -- and they fill
 // toward one shared target instead of double-counting it.
 int gNextMixDiag = 0;
+int gNextRoleLog = 0;
+int gNextRoleDiag = 0;
 int gNextEscortDiag = 0;
 
 int SlotsForArmy()
@@ -270,6 +272,9 @@ bool T2ArmyShort(CCircuitUnit@ fac)
 		return false;
 	if ((Factory::userData[fac.circuitDef.id].attr & Factory::Attr::T2) == 0)
 		return false;
+	// Same role gate as T1ArmyShort: the eco role's floors are off too.
+	if (EcoRoleArmyOff(fac))
+		return false;
 	CCircuitDef@ acon = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::BUILDER2);
 	if ((acon is null) || (acon.count <= 0))
 		return false;
@@ -294,6 +299,15 @@ int T1CoreWanted()
 	return (n < floorN) ? floorN : n;
 }
 
+// Is this line's ARMY output switched off by the eco role? One predicate for
+// every army channel -- mix, core floors, spam stream -- because each new
+// channel that forgot the role leaked a different unit (six Pawns from the
+// T1 core floor, twenty Tumbleweeds from the spam stream on the T2 lab).
+bool EcoRoleArmyOff(CCircuitUnit@ fac)
+{
+	return Role::ArmyMult(fac) <= 0.f;
+}
+
 // A LINE THAT HAS NEVER TECHED: no T2/T3 attr, so T2ArmyShort never fires for
 // it and the con floor below is the first floor checked -- a line that never
 // techs can spend its whole queue on constructors with nothing to stop it.
@@ -315,6 +329,11 @@ bool T1ArmyShort(CCircuitUnit@ fac)
 	const int attr = Factory::userData[fac.circuitDef.id].attr;
 	if ((attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
 		return false;      // T2ArmyShort covers a line that has already teched
+	// The eco role fields no army: this floor is checked before the mix, so
+	// without this gate it built exactly T1CoreWanted units on the role
+	// holder (six Pawns, measured) while the mix was off.
+	if (EcoRoleArmyOff(fac))
+		return false;
 	array<Type> core = {RT::RAIDER, RT::RIOT, RT::SKIRM};
 	int have = 0;
 	for (uint i = 0; i < core.length(); ++i) {
@@ -533,6 +552,11 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 			if (cap > floorN)
 				cap = floorN;
 		}
+		// LAST WORD for the role: cons grow only into the measured BP
+		// deficit, surplus included -- a full bank is a deficit the
+		// controller already sees, so the multiplier above must not re-raise
+		// past it (its doing so was the original undo-the-clamp bug).
+		cap = Role::ConCap(con, cap);
 		defs.insertLast(con);
 		want.insertLast(cap);
 		isFloor.insertLast(true);
@@ -644,7 +668,8 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	// bots above: spam dies constantly, an unmet floor would own the line.
 	// Post-T2 only (SpamPhase routes them as no-squad fog scouts); the def
 	// must pass IsFodder, which keeps T2 lines' expensive scouts out.
-	if (Military::SpamPhase() && !Factory::IsAirFactory(fac.circuitDef)) {
+	if (Military::SpamPhase() && !Factory::IsAirFactory(fac.circuitDef)
+		&& !EcoRoleArmyOff(fac)) {
 		CCircuitDef@ sd = aiFactoryMgr.GetRoleDef(fac.circuitDef, Unit::Role::SCOUT.type);
 		if (!((sd !is null) && Military::IsFodder(sd))) {
 			@sd = aiFactoryMgr.GetRoleDef(fac.circuitDef, RT::RAIDER);
@@ -813,14 +838,55 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 	// taking it straight makes the budget divide across lines instead of being
 	// claimed once per line.
 	const float slots = float(SlotsForArmy());
-	const float tier = TierShare(fac);
+	// THE TECH ROLE PLAYS TECH (apexearth 2026-08-22): the designated
+	// tech/eco lead fields no army and turns its own plus the slung metal
+	// into economy, the way a human tech player does. Per-tier tunables
+	// (0 = no army from that tier's lines, 1 = full mix, fractions scale)
+	// so the role can be re-armed from the dashboard. Keyed on IsEcoLead,
+	// not IsDesignatedLead: the designation waits on the tech bars, which
+	// benchmark income never reaches, while the eco slot is held from frame
+	// one (lowest team until a real election) -- a human tech player
+	// dedicates from the opening, not from the first Moho. Big teams only
+	// by IsEcoLead's own gate, so a 1v1 or small team is untouched, and the
+	// mix re-arms the moment the slot moves. Cons/scout/rezzer FLOORS are
+	// checked before the mix and stay -- constructors ARE the tech role.
+	// The share itself comes from ONE place, Role::ArmyMult -- the mix, the
+	// core floors and the spam stream all read the same answer.
+	const float leadMult = Role::ArmyMult(fac);
+	const bool leadMixRetired = (leadMult <= 0.f);
+	if (leadMixRetired && (ai.frame >= gNextRoleLog)) {
+		gNextRoleLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: TECH ROLE team=" + ai.teamId
+			+ " -- army mix OFF for " + fac.circuitDef.GetName()
+			+ " (apex_role_tech_t1/t2/t3)");
+	}
+	// TEMP DIAG (Tumbleweed hunt): what every role gate reads on this line's
+	// pass -- armvader kept appearing in the armalab quota with all known
+	// channels gated, so print the gates themselves.
+	if (ai.frame >= gNextRoleDiag) {
+		gNextRoleDiag = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: role-diag " + fac.circuitDef.GetName()
+			+ " ecoLead=" + (Factory::IsEcoLead() ? 1 : 0)
+			+ " leadMult=" + formatFloat(leadMult, "", 0, 2)
+			+ " armyOff=" + (EcoRoleArmyOff(fac) ? 1 : 0)
+			+ " t1Short=" + (T1ArmyShort(fac) ? 1 : 0)
+			+ " t2Short=" + (T2ArmyShort(fac) ? 1 : 0)
+			+ " spam=" + (Military::SpamPhase() ? 1 : 0));
+	}
+	const float tier = TierShare(fac) * leadMult;
 	// TEMP DIAG: which leg drops each role for this line. Rate-limited; the
 	// late-game T1 labs lost every combat entry and three theories in a row
 	// were wrong -- this prints the actual reason per role.
 	string mixDiag = "";
-	// Cleanup mode: a T1 line contributes no ARMY ratios once T2+ exists --
-	// same rule as its floor above.
-	const bool t1MixRetired = Builder::CleanupMode()
+	// LAG ONLY, NOT WEALTH: this used to fire on CleanupMode's income gate
+	// (200 m/s), which on a bonused economy lands right at the T2 switch --
+	// the T2 lab is still making cons, the T1 line goes silent, and no one
+	// makes army at the most sensitive moment of the game (apexearth: "If we
+	// don't have any substantial T2 army yet then let's keep making T1").
+	// The handoff itself belongs to TierShare, which phases T1 down as the
+	// FIELDED T2 core fills; a hard zero stays only for sim lag, which is a
+	// health emergency and not an economy policy.
+	const bool t1MixRetired = Perf::GameLagging()
 		&& (Factory::gHaveT2 || Factory::gHaveT3)
 		&& ((Factory::userData[fac.circuitDef.id].attr
 			& (Factory::Attr::T2 | Factory::Attr::T3)) == 0)
@@ -833,7 +899,7 @@ void QuotaFor(CCircuitUnit@ fac, array<CCircuitDef@>@ defs, array<int>@ want,
 		&& ((Factory::userData[fac.circuitDef.id].attr & Factory::Attr::T2) != 0)
 		&& !Factory::IsAirFactory(fac.circuitDef);
 	for (uint i = 0; i < gMix.length(); ++i) {
-		if (t1MixRetired || t2MixRetired)
+		if (t1MixRetired || t2MixRetired || leadMixRetired)
 			break;
 		CCircuitDef@ d = aiFactoryMgr.GetRoleDef(fac.circuitDef, gMix[i].role);
 		if (d is null) {
@@ -1208,9 +1274,10 @@ void SweepDeadRecruits()
 	if (ai.frame < gNextSweep)
 		return;
 	gNextSweep = ai.frame + 5 * SECOND;
-	if ((gFQFac.length() == 0)
-		|| (int(gFQFac.length()) < aiFactoryMgr.GetFactoryCount()))
+	if (gFQFac.length() == 0)
 		return;
+	const bool allDriven =
+			int(gFQFac.length()) >= aiFactoryMgr.GetFactoryCount();
 
 	array<IUnitTask@> doomed;
 	for (uint i = 0; i < Factory::gQTask.length(); ++i) {
@@ -1218,7 +1285,31 @@ void SweepDeadRecruits()
 		if (t is null)
 			continue;
 		array<CCircuitUnit@>@ on = t.GetUnits();
-		if ((on is null) || (on.length() == 0))
+		if ((on is null) || (on.length() == 0)) {
+			// Unstarted backlog: only safe to kill when every line is
+			// driven -- an undriven factory can still legitimately take it.
+			if (allDriven)
+				doomed.insertLast(t);
+			continue;
+		}
+		// ASSIGNED TO A LINE WE DRIVE: the slip channel. The response
+		// system's re-enqueue lands on a driven factory inside the
+		// GiveOrder lag window and builds units the quota never ordered --
+		// Pawns and Tumbleweeds at T1, Bulls at T2 prices (apexearth, three
+		// sightings, ~1,600 metal in one game). A driven line's production
+		// is the quota's alone, whatever the rest of the fleet looks like.
+		bool onDriven = false;
+		for (uint u = 0; u < on.length() && !onDriven; ++u) {
+			if (on[u] is null)
+				continue;
+			for (uint g = 0; g < gFQFac.length(); ++g) {
+				if ((gFQFac[g] !is null) && (on[u].id == gFQFac[g].id)) {
+					onDriven = true;
+					break;
+				}
+			}
+		}
+		if (onDriven)
 			doomed.insertLast(t);
 	}
 	for (uint i = 0; i < doomed.length(); ++i)

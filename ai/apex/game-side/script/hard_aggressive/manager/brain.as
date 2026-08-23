@@ -1358,7 +1358,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	}
 
 	// Spend the surplus rather than growing it further.
-	if (!preT2 && (EcoSated() || aiEconomyMgr.isMetalFull))
+	if ((!preT2 || (Role::NanoWant() > 0))
+		&& (EcoSated() || aiEconomyMgr.isMetalFull || (Role::NanoWant() > 0)))
 		Propose(Simple("nano", NANO_VALUE, SideDef3("armnanotc", "cornanotc", "legnanotc"), false));
 
 	if (!preT2) {
@@ -1541,12 +1542,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 
 	// CAPPED BEFORE THE LOG ON PURPOSE: these are the weights the draw below
 	// actually uses, so the printed score of each want is its draw chance
-	// times the total. Skipped when the roulette is off, where nothing is
-	// drawn and the raw score is what ranks.
-	const bool roulette =
-		ai.GetTunable("apex_brain_roulette", TUNE_BRAIN_ROULETTE) > 0.f;
-	if (roulette)
-		CapWants(order);
+	// times the total.
+	CapWants(order);
 
 	// SEPARATE CADENCE PER ELECTOR CLASS. One timer meant the printed list
 	// was whatever election happened to coincide -- in practice the adv-con
@@ -1585,32 +1582,30 @@ IUnitTask@ Decide(CCircuitUnit@ unit, bool isAdvCon)
 	// numbers were always meant to state. Every precedence gate below
 	// (mexup, coverage gaps, adv-con) is unchanged -- only the tie between
 	// eligible options moved from argmax to a weighted draw.
-	if (roulette) {
-		for (uint i = 0; i < order.length(); ++i) {
-			float total = 0.f;
-			for (uint j = i; j < order.length(); ++j) {
-				const float s = order[j].cachedScore;
-				if (s > 0.f)
-					total += s;
-			}
-			if (total <= 0.f)
-				break;      // the rest score zero; leave them in ranked order
-			float r = float(AiRandom(0, 999999)) / 1000000.f * total;
-			uint pick = i;
-			for (uint j = i; j < order.length(); ++j) {
-				const float s = order[j].cachedScore;
-				if (s <= 0.f)
-					continue;
-				r -= s;
-				if (r <= 0.f) {
-					pick = j;
-					break;
-				}
-			}
-			Want@ tmp = order[i];
-			@order[i] = order[pick];
-			@order[pick] = tmp;
+	for (uint i = 0; i < order.length(); ++i) {
+		float total = 0.f;
+		for (uint j = i; j < order.length(); ++j) {
+			const float s = order[j].cachedScore;
+			if (s > 0.f)
+				total += s;
 		}
+		if (total <= 0.f)
+			break;      // the rest score zero; leave them in ranked order
+		float r = float(AiRandom(0, 999999)) / 1000000.f * total;
+		uint pick = i;
+		for (uint j = i; j < order.length(); ++j) {
+			const float s = order[j].cachedScore;
+			if (s <= 0.f)
+				continue;
+			r -= s;
+			if (r <= 0.f) {
+				pick = j;
+				break;
+			}
+		}
+		Want@ tmp = order[i];
+		@order[i] = order[pick];
+		@order[pick] = tmp;
 	}
 
 	// UPGRADES ARE NOT OPTIONAL SPENDING. If an upgrade is in reach, this

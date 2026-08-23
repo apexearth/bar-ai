@@ -176,6 +176,11 @@ bool NeedsAdvCon()
 	return gAdvConCount < AdvConsWanted();
 }
 
+int AdvConCount()
+{
+	return gAdvConCount;
+}
+
 bool OwesAdvCons()
 {
 	array<Id>@ mates = ai.GetTeamIds();
@@ -216,6 +221,16 @@ bool ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
 		return false;
 	}
 
+	// AT A REAL RESOURCE BONUS THE TRANSACTION IS OFF (apexearth 2026-08-22:
+	// "When we are +100 handicap we do not need to give T2 constructors to
+	// teammembers. I think at +50 and above we don't need to share these.")
+	// -- a bonused teammate affords its own; the lead keeps every con for
+	// its own scaling. The sling still runs: it funds the lead's plant and
+	// eco, which is what the team is buying at any handicap.
+	if (!Role::GiftsCons()) {
+		return false;
+	}
+
 	++gAdvConsMade;
 	// The keep-floor scales with the lead's OWN economy, not a flat one: at
 	// 8v8 the flat floor gifted seven in a row while the lead ran a 13k-energy
@@ -225,6 +240,15 @@ bool ShareAdvCon(CCircuitUnit@ unit, Unit::UseAs usage)
 	// unchanged (wanted 2 -> keep 1) and retains the moho/reactor/converter
 	// lanes' workers once the income is real.
 	int keep = AdvConsWanted() / 2;
+	// While ANY teammate still lacks its constructor, the keep-floor drops to
+	// the tunable (default 1): the teammates PAID for these cons via the
+	// sling, so delivery outranks the lead's own fleet. The income-scaled
+	// floor above delivered the first gift at minute 18 of a 23-minute game
+	// (apexearth: "Gifts should be coming out earlier than 10m - all of
+	// them"); once everyone has one it governs again as before.
+	array<Id>@ roster = ai.GetTeamIds();
+	if ((roster !is null) && (gGifted.length() + 1 < roster.length()))
+		keep = int(ai.GetTunable("apex_role_gift_keep", TUNE_ROLE_GIFT_KEEP));
 	if (keep < 1)
 		keep = 1;
 	if ((gAdvConsMade - gAdvConsGifted) <= keep)

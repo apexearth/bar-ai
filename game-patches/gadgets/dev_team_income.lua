@@ -177,11 +177,26 @@ end
 -- minus enemy influence. That is engine-side, present in every game, and it
 -- follows the fighting.
 
+local handicapPublished = false
+
 function gadget:GameFrame(frame)
 	if frame < next_at then
 		return
 	end
 	next_at = frame + INTERVAL
+
+	-- Each team's income multiplier (Handicap=100 -> 2.0), once: the AI has
+	-- no engine path to its own handicap, and role behaviour keys on it
+	-- (gifting off at >= +50). Read via Game_getRulesParamFloat, ungated.
+	if not handicapPublished then
+		handicapPublished = true
+		for _, teamID in ipairs(Spring.GetTeamList()) do
+			local mult = select(7, Spring.GetTeamInfo(teamID, false))
+			if type(mult) == "number" and mult > 0 then
+				Spring.SetGameRulesParam("ai_handicap_" .. teamID, mult)
+			end
+		end
+	end
 
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		-- GetTeamResources returns: current, storage, pull, income, expense,

@@ -27,6 +27,7 @@
 #include "util/Utils.h"
 
 #include "AISCommands.h"
+#include "Log.h"   // circuit->LOG in the heal-post diagnostic below
 
 namespace circuit {
 
@@ -192,6 +193,56 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 			}
 			endPos = fallback;
 		}
+
+		// apexearth 2026-08-22: "our retreats are often ALL THE WAY BACK TO THE
+		// BASE, but if we have rezbots we can just step behind the main army's
+		// attack a little bit and get healed." Havens are only registered where
+		// assistants park next to factories, so a retreat without an assigned
+		// repairer is a walk across the map -- and the walk is what kills:
+		// measured 2026-08-22, 1062 units and 228k metal died a median 1s after
+		// switching to retreat. The medics hold station behind the lane, so a
+		// short step to the rear of the front lands the wounded in repair reach.
+		//
+		// Placed AFTER the threat re-check above on purpose: that check rewrites
+		// endPos to the base whenever it sees ANY enemy influence, so a heal post
+		// chosen before it was simply overwritten. And the test here is NET
+		// influence, not INFL_EPS -- ground 900 behind our own front nearly
+		// always carries some enemy influence, and demanding essentially zero
+		// rejected every candidate.
+		bool healPost = false;
+		const float behind = circuit->GetTunable("apex_retreat_behind", 0.f);
+		if (behind > 0.f) {
+			const AIFloat3& front = circuit->GetFrontPos();
+			const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
+			if (utils::is_valid(front)) {
+				AIFloat3 dir = home - front;
+				dir.y = 0.f;
+				const float len = dir.Length2D();
+				if (len > 1.f) {
+					dir /= len;
+					AIFloat3 spot = front + dir * behind;
+					CTerrainManager::CorrectPosition(spot);
+					const AIFloat3& here = unit->GetPos(frame);
+					const float ours = circuit->GetInflMap()->GetInfluenceAt(spot);
+					const float foe = circuit->GetInflMap()->GetEnemyInflAt(spot);
+					const bool ourGround = (ours > foe);
+					const bool nearer =
+							here.SqDistance2D(spot) < here.SqDistance2D(endPos);
+					if (ourGround && nearer
+						&& circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spot))
+					{
+						endPos = spot;
+						healPost = true;
+					} else if (circuit->GetTunable("apex_retreat_log", 0.f) > 0.f) {
+						circuit->LOG("apex: heal-post refused ourInfl=%.2f foeInfl=%.2f nearer=%d",
+								ours, foe, (int)nearer);
+					}
+				}
+			}
+		}
+		// Retreats were the biggest source of unexplained movement on the map:
+		// every other mover pings its intent, so the wounded walk must too.
+		IntentPing(unit->GetPos(frame), healPost ? "RET heal" : "RET home");
 
 		// apexearth: "when we're retreating to safe havens, it seems we
 		// clump up into a tight ball, which makes us even more likely to
@@ -363,9 +414,16 @@ void CRetreatTask::Update()
 	auto assignees = units;
 	for (CCircuitUnit* unit : assignees) {
 		const float healthPerc = unit->GetHealthPercent();
+		// apexearth 2026-08-22: "units just keep walking home until they're
+		// finally fully repaired". RETREAT_HEALED is 0.98 and NOTHING else
+		// releases the unit, so one that pulled out at half health is out of
+		// the fight until it is essentially new -- the walk home, the wait,
+		// and the walk back. A unit is combat-worthy well before 98%; the
+		// tunable lets it rejoin at a stated fraction instead.
+		const float healed = circuit->GetTunable("apex_retreat_healed", RETREAT_HEALED);
 		bool isRepaired = unit->HasShield()
-				? (healthPerc > RETREAT_HEALED) && unit->IsShieldCharged(circuit->GetSetupManager()->GetFullShield())
-				: healthPerc > RETREAT_HEALED;
+				? (healthPerc > healed) && unit->IsShieldCharged(circuit->GetSetupManager()->GetFullShield())
+				: healthPerc > healed;
 
 		CCircuitDef* cdef = unit->GetCircuitDef();
 		// apex: excluded the commander. isRepaired is a pure HP-percentage
@@ -459,6 +517,18 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
 				unit->CmdCloak(wantCloak);
 			)
 		}
+	}
+
+	// apexearth: "sometimes it is hard to repair while they're moving." A unit
+	// that keeps walking drags the repair out -- the repairer chases instead of
+	// working. Once a repairer is assigned and in reach, stand still and let it
+	// finish; the release check above puts the unit back in the fight.
+	if ((repairer != nullptr)
+		&& (circuit->GetTunable("apex_retreat_stand", 0.f) > 0.f)
+		&& (unitPos.SqDistance2D(repairer->GetPos(frame))
+			< SQUARE(circuit->GetTunable("apex_retreat_stand", 0.f))))
+	{
+		return;
 	}
 
 	if (unitPos.SqDistance2D(haven) > SQUARE(maxDist)) {

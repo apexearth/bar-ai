@@ -16,6 +16,8 @@
 #include "CircuitAI.h"
 #include "util/Utils.h"
 
+#include "Drawer.h"
+
 #if CIRCUIT_TASK_REGISTRY
 #include <cstdlib>
 #include <mutex>
@@ -188,6 +190,7 @@ IUnitTask::IUnitTask(ITaskModule* mgr, Priority priority, Type type, int timeout
 		, timeout(timeout)
 		, updCount(0)
 		, isDead(false)
+		, pingPos(-RgtVector)
 {
 	lastTouched = manager->GetCircuit()->GetLastFrame();
 #if CIRCUIT_TASK_REGISTRY
@@ -204,6 +207,7 @@ IUnitTask::IUnitTask(ITaskModule* mgr, Type type)
 		, timeout(-1)
 		, updCount(0)
 		, isDead(false)
+		, pingPos(-RgtVector)
 {
 #if CIRCUIT_TASK_REGISTRY
 	RegisterLive(this, type);
@@ -325,6 +329,27 @@ bool IUnitTask::IsQueryReady(CCircuitUnit* unit) const
 	const auto it = pathQueries.find(unit);
 	std::shared_ptr<IPathQuery> query = (it == pathQueries.end()) ? nullptr : it->second;
 	return (query == nullptr) || (IPathQuery::State::READY == query->GetState());
+}
+
+void IUnitTask::IntentPing(const AIFloat3& pos, const std::string& msg)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	if (circuit->GetTunable("apex_ping", 0.f) <= 0.f) {
+		return;
+	}
+	// The unchanged-intent window: re-ping only once the squad has moved far
+	// enough that the old mark no longer says where it is.
+	if ((msg == pingMsg) && utils::is_valid(pingPos)
+		&& (pos.SqDistance2D(pingPos) < SQUARE(600.f)))
+	{
+		return;
+	}
+	if (utils::is_valid(pingPos)) {
+		circuit->GetDrawer()->DeletePointsAndLines(pingPos);
+	}
+	circuit->GetDrawer()->AddPoint(pos, msg.c_str());
+	pingMsg = msg;
+	pingPos = pos;
 }
 
 #define SERIALIZE(stream, func)	\

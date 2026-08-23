@@ -253,4 +253,93 @@ IUnitTask@ HoldWorkInProgress(CCircuitUnit@ unit, bool isComm)
 	return null;
 }
 
+// -- the shift-queue chain: a real engine build queue for a builder ----------
+//
+// apexearth 2026-08-22: "queue up our next build item while we're already
+// building something. That would speed up our building." The task layer is
+// one order per builder, re-elected only after completion, so every building
+// pays idle-think-walk overhead a human's shift-queue never does. Once a
+// builder's cheap ENERGY/CONVERT build has a nanoframe standing (its own
+// order is already applied -- appending earlier would be wiped by it), K more
+// sites of the same def are SHIFT-appended, and the unit is held from
+// re-election while the engine walks the chain with zero think-gaps.
+//
+// The hold has two shapes: task alive -> return it (same build type, no
+// swap); task done -> holdIdle, and AiMakeTask returns null outright so no
+// later rule issues the queue-wiping fresh order. CountQueued reads APPLIED
+// commands only (the GiveOrder lag), so a sent-window frame bound covers the
+// gap; at extreme headless sim speeds the window can expire early and cut a
+// chain short -- that degrades to today's behaviour, never worse.
+array<int> gChainIds;
+array<int> gChainUntil;
+int gChainQueuedTotal = 0;
+// Hard ceiling on a chain hold past the sent window: two cheap builds plus
+// walks. Past this the builder re-elects no matter what the queue reads.
+const int CHAIN_HARD_FRAMES = 90 * SECOND;
+
+IUnitTask@ ChainBuildRule(CCircuitUnit@ unit, bool isComm, bool &out holdIdle)
+{
+	holdIdle = false;
+	const int id = int(unit.id);
+	const int slot = gChainIds.find(id);
+	IUnitTask@ busy = unit.task;
+	if (slot >= 0) {
+		// TIME-BOUNDED, ALWAYS: holding on the queue alone wedged builders
+		// forever when an order stuck (measured seed-37: side-wide economy
+		// HALVED, 18 cons parked). The sent window covers the order lag; a
+		// live queue may extend the hold only to the hard ceiling, and past
+		// it the unit re-elects whatever the queue says.
+		const bool inWindow = ai.frame < gChainUntil[slot];
+		const bool queueAlive = (unit.CountQueued(null) > 0)
+				&& (ai.frame < gChainUntil[slot] + CHAIN_HARD_FRAMES);
+		if (inWindow || queueAlive) {
+			if (busy !is null)
+				return busy;
+			holdIdle = true;    // engine queue drives the idle unit
+			return null;
+		}
+		gChainIds.removeAt(slot);
+		gChainUntil.removeAt(slot);
+		return null;
+	}
+	const int extras = int(ai.GetTunable("apex_chain_builds", TUNE_CHAIN_BUILDS));
+	if ((extras <= 0) || isComm)
+		return null;
+	if ((busy is null) || (busy.GetType() != Task::Type::BUILDER))
+		return null;
+	const int bt = busy.GetBuildType();
+	if ((bt != Task::BuildType::ENERGY) && (bt != Task::BuildType::CONVERT)
+		&& (bt != Task::BuildType::NANO))
+		return null;
+	if (busy.target is null)
+		return null;            // nanoframe first; see the header comment
+	CCircuitDef@ d = busy.buildDef;
+	if ((d is null)
+		|| (d.costM > ai.GetTunable("apex_chain_max_cost", TUNE_CHAIN_MAX_COST)))
+		return null;
+	const AIFloat3 at0 = busy.GetBuildPos();
+	if (!OnMap(at0))
+		return null;
+	int queued = 0;
+	AIFloat3 seed = at0;
+	for (int i = 0; i < extras; ++i) {
+		const AIFloat3 s = ai.FindBuildSiteNear(d, seed, 350.f);
+		if (!OnMap(s))
+			break;
+		unit.CmdBuildQueuedAt(d, s);
+		seed = s;
+		++queued;
+	}
+	if (queued == 0)
+		return null;
+	gChainIds.insertLast(id);
+	gChainUntil.insertLast(ai.frame + 15 * SECOND);
+	if (gChainQueuedTotal < 3 || (gChainQueuedTotal % 20 == 0)) {
+		AiLog(Factory::T() + "apex: chain-queued " + queued + "x "
+			+ d.GetName() + " behind the one being built");
+	}
+	gChainQueuedTotal += queued;
+	return busy;
+}
+
 }  // namespace Builder

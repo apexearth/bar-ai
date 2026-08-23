@@ -300,6 +300,20 @@ CCircuitDef@ PopupTowerDef()
 // more, whoever the asker is.
 CCircuitDef@ MexSentryTower(const AIFloat3& in at)
 {
+	// apexearth 2026-08-22: "they also should be making stronger defenses when
+	// a mex is closer to the enemy." MexGuardWanted already scales the COUNT by
+	// FrontT; this scales the TIER by the same measure, so a mex out past the
+	// forward fraction gets a real gun instead of four light lasers. Held behind
+	// a tunable because the cap above was put there after T2 towers were being
+	// planted on rear extractors -- this lifts it only for the exposed ones.
+	if (OnMap(at)
+		&& (ai.GetTunable("apex_mex_fwd_heavy", TUNE_MEX_FWD_HEAVY) > 0.f)
+		&& (FrontT(at) >= MEX_GUARD_FWD_FRAC))
+	{
+		CCircuitDef@ heavy = SideDef3(armpb, corvipe, legapopupdef);
+		if ((heavy !is null) && heavy.IsAvailable(ai.frame))
+			return heavy;
+	}
 	if (OnMap(at) && (Military::OnBorder(at) || Military::NearFront(at))) {
 		CCircuitDef@ mid = MidTowerDef();
 		if ((mid !is null) && mid.IsAvailable(ai.frame))
@@ -636,8 +650,8 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 		CCircuitDef@ fusWaste = (Factory::HaveAnyFactory() && IsAdvConDef(unit))
 				? FusionDef(unit) : null;
 		if ((fusWaste !is null) && fusWaste.IsAvailable(ai.frame)
-			&& (aiEconomyMgr.metal.income
-				>= ai.GetTunable("apex_fusion_prefer_income", TUNE_FUSION_PREFER_INCOME)))
+			&& Role::FusionAllowed()
+			&& (aiEconomyMgr.metal.income >= Role::FusionBar()))
 		{
 			@gen = fusWaste;
 			pickedReactor = true;
@@ -757,9 +771,9 @@ IUnitTask@ HomeEnergyFresh(CCircuitUnit@ unit)
 		// measured 209 m/s on a 10-mex base) and an adv-con energy election
 		// almost never coincide, so the instant bar effectively never fired.
 		const bool preferFusion = fusionAvailable
+				&& Role::FusionAllowed()
 				&& (aiEconomyMgr.energy.income >= Policy::FusionMinEnergy())
-				&& (Factory::SteadyIncome()
-					>= ai.GetTunable("apex_fusion_prefer_income", TUNE_FUSION_PREFER_INCOME));
+				&& (Factory::SteadyIncome() >= Role::FusionBar());
 		// IN-FLIGHT: one is already requested and not yet standing -- send
 		// this builder to it instead of starting something else, so build
 		// power concentrates on the one expensive building instead of

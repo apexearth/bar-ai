@@ -175,7 +175,8 @@ void CDefendTask::Update()
 		// were individually weaker than the bar could never combine to reach it
 		// and stood in base for the rest of the game, while anything already over
 		// the bar promoted and left alone.
-		const bool held = onFront && (attackPower < maxPower * FRONT_HOLD_POWER);
+		const bool held = (onFront && (attackPower < maxPower * FRONT_HOLD_POWER))
+				|| (circuitAI->GetLastFrame() < noPromoteUntil);
 		// The any-attack-exists shortcut fed solos: each promotion CREATES an
 		// attack task, so after the first real squad -- alive or already dead --
 		// every fresh 1-unit pool saw "an attack exists" and left alone, a
@@ -186,6 +187,11 @@ void CDefendTask::Update()
 		const bool mayReinforce = !militaryMgr->GetTasks(check).empty()
 				&& (attackPower >= maxPower * reinforceFrac);
 		if (!held && ((attackPower >= maxPower) || mayReinforce)) {
+			if (leader != nullptr) {
+				IntentPing(leader->GetPos(circuitAI->GetLastFrame()),
+						utils::string_format("DEF>ATK n=%d %s", (int)units.size(),
+								(attackPower >= maxPower) ? "full" : "reinforce"));
+			}
 			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
 			decltype(units) tmpUnits = units;
 			for (CCircuitUnit* unit : tmpUnits) {
@@ -242,6 +248,7 @@ void CDefendTask::Update()
 	if ((GetTarget() != nullptr) || isTargetsFound) {
 		const float slack = (circuit->GetInflMap()->GetAllyDefendInflAt(position) > INFL_EPS) ? 500.f : 300.f;
 		if (position.SqDistance2D(startPos) < SQUARE(highestRange + slack)) {
+			IntentPing(startPos, utils::string_format("DEF fight n=%d", (int)units.size()));
 			state = State::ENGAGE;
 			Attack(frame);
 			return;
@@ -299,6 +306,10 @@ void CDefendTask::Merge(ISquadTask* task)
 	}
 
 	const std::set<CCircuitUnit*>& rookies = task->GetAssignees();
+	if (!rookies.empty()) {
+		IntentPing(musterPos, utils::string_format("DEF join n=%d+%d",
+				(int)units.size(), (int)rookies.size()));
+	}
 	for (CCircuitUnit* unit : rookies) {
 		unit->SetTask(this);
 
@@ -342,9 +353,49 @@ bool CDefendTask::FindTarget()
 	CEnemyInfo* bestTarget = nullptr;
 	float minSqDist = std::numeric_limits<float>::max();
 
+	// Intent bookkeeping for the pings: did the target we were walking on just
+	// drop out of sight, and what did this pass refuse. LOS flicker is the
+	// classic "walk at them, then turn around for no reason" -- the elected
+	// enemy goes hidden, the election comes up empty, and the fallback walks
+	// the pool back to the front.
+	const bool prevHidden = (GetTarget() != nullptr) && GetTarget()->IsHidden();
+	int refusedOdds = 0, refusedSmall = 0, refusedSolo = 0;
+
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
 	enemyPositions.clear();
 	threatMap->SetThreatType(leader);
+	// apex: SQUADS COORDINATE (the DEFEND half -- see CAttackTask::FindTarget
+	// for the attack half and the rationale). The odds test below refused
+	// fights the pools TOGETHER would win: two pools massed at the same front
+	// each answered with only their own power, so half the army committed and
+	// the other half refused the same fight and walked back to its post. An
+	// ally counts only when it stands within support range of the ENEMY --
+	// support that can actually reach that fight -- so a lone fresh unit at
+	// home cannot borrow the strength of an army on the far side of the base.
+	struct SAllySquad {
+		springai::AIFloat3 pos;
+		float power;
+	};
+	std::vector<SAllySquad> allySquads;
+	const float supportR = circuit->GetTunable("apex_support_radius", 3000.f);
+	if (circuit->GetTunable("apex_ally_aggregate", 1.f) > 0.f) {
+		CMilitaryManager* mmS = circuit->GetMilitaryManager();
+		for (IFighterTask::FightType ftS : {IFighterTask::FightType::ATTACK,
+		                                    IFighterTask::FightType::DEFEND}) {
+			for (IFighterTask* otherS : mmS->GetTasks(ftS)) {
+				if (otherS == static_cast<IFighterTask*>(this)) {
+					continue;
+				}
+				ISquadTask* stS = static_cast<ISquadTask*>(otherS);
+				CCircuitUnit* olS = stS->GetLeader();
+				if (olS == nullptr) {
+					continue;
+				}
+				allySquads.push_back({olS->GetPos(circuit->GetLastFrame()),
+						otherS->GetAttackPower()});
+			}
+		}
+	}
 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;
@@ -404,7 +455,14 @@ bool CDefendTask::FindTarget()
 			}
 			eThreat = std::max(eThreat, localInfl);
 		}
-		if (checkPower <= eThreat) {
+		float allyPower = .0f;
+		for (const SAllySquad& ally : allySquads) {
+			if (ally.pos.SqDistance2D(ePos) < SQUARE(supportR)) {
+				allyPower += ally.power;
+			}
+		}
+		if (checkPower + allyPower <= eThreat) {
+			++refusedOdds;
 			continue;
 		}
 		// PROPORTIONAL RESPONSE. Line 355 below rewrites this task's anchor to
@@ -412,13 +470,16 @@ bool CDefendTask::FindTarget()
 		// the nearest-first choice is value-blind, so a two-raider ping in the
 		// rear pulled every massed pool off the line (apexearth: "I see us move
 		// our entire army way in the back to chase down some petty raiders...
-		// then the enemy just walks into our base and crushes us"). A pool only
-		// walks for a threat worth a real fraction of its own strength; fresh
-		// small pools still pass this gate and peel off to handle intruders,
-		// and anything already in contact (atUs) is always fought.
-		if (!atUs && (eThreat < attackPower
-				* circuit->GetTunable("apex_chase_min_ratio", 0.15f)))
+		// then the enemy just walks into our base and crushes us"). apexearth
+		// 2026-08-22 set the bar: "our armies generally ignore enemies that
+		// are less than half their strength unless we need to defend the home
+		// base" -- so the ratio is 0.5, the home ring is exempt, and anything
+		// already in contact (atUs) is always fought.
+		const bool atHome = sqEBDist < sqBaseRange;
+		if (!atUs && !atHome && (eThreat < attackPower
+				* circuit->GetTunable("apex_chase_min_ratio", 0.5f)))
 		{
+			++refusedSmall;
 			continue;
 		}
 		// A SOLO POOL DOES NOT CHASE DEEP. The manager spawns fresh 1-unit
@@ -435,6 +496,7 @@ bool CDefendTask::FindTarget()
 			const AIFloat3& basePos2 = circuit->GetSetupManager()->GetBasePos();
 			const float deepR = circuit->GetMilitaryManager()->GetBaseDefRange() * 1.25f;
 			if (basePos2.SqDistance2D(ePos) > SQUARE(deepR)) {
+				++refusedSolo;
 				continue;
 			}
 		}
@@ -498,6 +560,10 @@ bool CDefendTask::FindTarget()
 		if (minSqDist > sqDist) {
 			minSqDist = sqDist;
 			bestTarget = enemy;
+			// eThreat bucketed to hundreds: a raw float in the message would
+			// defeat IntentPing's dedupe on every jitter of the influence map.
+			tgtWhy = utils::string_format("%s e=%d", atUs ? "atUs" : "post",
+					((int)eThreat / 100) * 100);
 		}
 		enemyPositions.push_back(ePos);
 	}
@@ -515,6 +581,13 @@ bool CDefendTask::FindTarget()
 		}
 	}
 	if (enemyPositions.empty()) {
+		// Ranked by how misleading the silent version was when watched: a
+		// vanished target beats "we refused a fight" beats "nothing there".
+		noTgtWhy = prevHidden ? "tgt hid"
+				: (refusedOdds > 0) ? "outgunned"
+				: (refusedSmall > 0) ? "small fry"
+				: (refusedSolo > 0) ? "solo"
+				: "no enemy";
 		return false;
 	}
 
@@ -547,18 +620,22 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
 					continue;   // already at engaged range: fight what's on us
 				}
 				if (inflMap->GetEnemyInflAt(wp) > maxPower * pathMargin) {
+					noTgtWhy = "hot path";
 					FallbackFrontPos();
 					return;
 				}
 			}
 		}
-		// apex: intent pings for the watching player (apexearth: "Can we have
-		// our squads ping on the map so that I can understand what they're
-		// thinking when they're moving?"). apex_ping=1 only; throttled by the
-		// path grant, which fires on decision, not per tick.
-		if (circuit->GetTunable("apex_ping", 0.f) > 0.f) {
-			circuit->GetDrawer()->AddPoint(leader->GetLastPos(),
-					utils::string_format("DEF chase n=%d", (int)units.size()).c_str());
+		// apex: intent ping (apexearth: "Can we have our squads ping on the map
+		// so that I can understand what they're thinking?"). Named target, and
+		// IntentPing dedupes -- one mark per change of mind, not per re-path.
+		{
+			CEnemyInfo* tgt = GetTarget();
+			const char* tname = ((tgt != nullptr) && (tgt->GetCircuitDef() != nullptr))
+					? tgt->GetCircuitDef()->GetDef()->GetName() : "enemy";
+			IntentPing(leader->GetLastPos(),
+					utils::string_format("DEF n=%d > %s %s", (int)units.size(), tname,
+							tgtWhy.c_str()));
 		}
 		ActivePath(lowestSpeed);
 	} else {
@@ -569,6 +646,10 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
 void CDefendTask::FallbackFrontPos()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
+	// The U-turn, explained: this is the decision that walks a pool back to a
+	// front post, and noTgtWhy is what emptied the election this pass.
+	IntentPing(leader->GetPos(circuit->GetLastFrame()),
+			utils::string_format("DEF n=%d back: %s", (int)units.size(), noTgtWhy.c_str()));
 	circuit->GetMilitaryManager()->FillFrontPos(leader, urgentPositions);
 	if (urgentPositions.empty()) {
 		FallbackBasePos();
@@ -601,11 +682,6 @@ void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
 			// die, then the slower units in the back either fight and die, or
 			// are already running away... move at the speed of the slowest
 			// unit in the group. This helps them to all stay together."
-			CCircuitAI* circuit = manager->GetCircuit();
-			if (circuit->GetTunable("apex_ping", 0.f) > 0.f) {
-				circuit->GetDrawer()->AddPoint(leader->GetLastPos(),
-						utils::string_format("DEF march n=%d", (int)units.size()).c_str());
-			}
 			ActivePath(lowestSpeed);
 		}
 	} else {
@@ -618,6 +694,8 @@ void CDefendTask::FallbackBasePos()
 	CCircuitAI* circuit = manager->GetCircuit();
 	CSetupManager* setupMgr = circuit->GetSetupManager();
 
+	IntentPing(leader->GetPos(circuit->GetLastFrame()),
+			utils::string_format("DEF n=%d home", (int)units.size()));
 	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
 	const AIFloat3& endPos = setupMgr->GetBasePos();
 	const float pathRange = DEFAULT_SLACK * 4;
