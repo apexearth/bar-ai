@@ -11,6 +11,7 @@
 #include "util/Utils.h"
 
 #include "spring/SpringCallback.h"
+#include "spring/SpringMap.h"
 
 #include "WeaponMount.h"
 #include "WeaponDef.h"
@@ -243,9 +244,41 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	isCapturable      = def->IsCapturable();
 
 	const std::map<std::string, std::string>& customParams = def->GetCustomParams();
-	auto it = customParams.find("energyconv_capacity");
+
+	// Catalog economics, precomputed once while the raw UnitDef is in hand.
+	// makeE follows the (pre-strip) CEconomyManager recipe: income_energy
+	// custom param, else net resource make, else wind (map-averaged), else
+	// tidal. Computed BEFORE upkeepE is inflated by converter capacity below.
+	makeM = def->GetResourceMake(resM) - upkeepM;
+	storeM = def->GetStorage(resM);
+	storeE = def->GetStorage(resE);
+	convCapacityE = .0f;
+	convRatioM = .0f;
+	auto it = customParams.find("income_energy");
+	makeE = (it != customParams.end())
+			? utils::string_to_float(it->second)
+			: def->GetResourceMake(resE) - upkeepE;
+	if (makeE < 1.f) {
+		const float windGen = def->GetWindResourceGenerator(resE);
+		if (windGen >= 1.f) {
+			const float avgWind = (circuit->GetMap()->GetMaxWind() + circuit->GetMap()->GetMinWind()) * 0.5f;
+			makeE = std::min(avgWind, windGen);
+		} else {
+			const float tidalGen = def->GetTidalResourceGenerator(resE);
+			if (tidalGen > 0.f) {
+				makeE = tidalGen * circuit->GetMap()->GetTidalStrength();
+			}
+		}
+	}
+
+	it = customParams.find("energyconv_capacity");
 	if (it != customParams.end()) {
-		upkeepE += utils::string_to_float(it->second);
+		convCapacityE = utils::string_to_float(it->second);
+		upkeepE += convCapacityE;
+	}
+	it = customParams.find("energyconv_efficiency");
+	if (it != customParams.end()) {
+		convRatioM = utils::string_to_float(it->second);
 	}
 
 	it = customParams.find("canjump");

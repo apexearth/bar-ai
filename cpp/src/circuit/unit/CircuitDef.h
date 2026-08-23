@@ -367,6 +367,15 @@ public:
 	float GetExtrRangeM()   const { return extrRangeM; }
 	float GetCloakCost()    const { return cloakCost; }
 	float GetBuildTime()    const { return buildTime; }
+	// Net resource generation at full activity, precomputed at def load;
+	// wind is averaged against the map's (min+max)/2, tidal against map tidal.
+	// Conversion is excluded -- it lives in GetConvertCapacity/GetConvertRatio.
+	float GetMakeM()        const { return makeM; }
+	float GetMakeE()        const { return makeE; }
+	float GetStoreM()       const { return storeM; }
+	float GetStoreE()       const { return storeE; }
+	float GetConvertCapacity() const { return convCapacityE; }  // energyconv_capacity, E/s consumed
+	float GetConvertRatio()    const { return convRatioM; }     // energyconv_efficiency, M per E
 	float GetCaptureSpeed() const { return captureSpeed; }
 //	float GetAltitude()     const { return altitude; }
 	float GetJumpRange()    const { return jumpRange; }
@@ -516,6 +525,12 @@ private:
 	float upkeepM;
 	float upkeepE;
 	float extractsM;
+	float makeM;
+	float makeE;
+	float storeM;
+	float storeE;
+	float convCapacityE;
+	float convRatioM;
 	float extrRangeM;
 	float cloakCost;
 	float buildTime;

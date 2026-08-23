@@ -4126,7 +4126,7 @@ index 193efa9..1c9e241 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..9802b8c 100644
+index 2839b72..4bf4b75 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,11 +10,14 @@
@@ -4859,7 +4859,7 @@ index 2839b72..9802b8c 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -556,6 +1198,17 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +1198,33 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4869,6 +4869,22 @@ index 2839b72..9802b8c 100644
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBuildDistance() const", asMETHOD(CCircuitDef, GetBuildDistance), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMex() const", asMETHOD(CCircuitDef, IsMex), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsBuilder() const", asMETHOD(CCircuitDef, IsBuilder), asCALL_THISCALL); ASSERT(r >= 0);
++	// Def-property senses for the Catalog (docs/20-brain-overhaul.md step 0).
++	// costM/costE/health/speed/power are already object properties above.
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBuildTime() const", asMETHOD(CCircuitDef, GetBuildTime), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBuildSpeed() const", asMETHOD(CCircuitDef, GetBuildSpeed), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWorkerTime() const", asMETHOD(CCircuitDef, GetWorkerTime), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetExtractsM() const", asMETHOD(CCircuitDef, GetExtractsM), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetUpkeepM() const", asMETHOD(CCircuitDef, GetUpkeepM), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetUpkeepE() const", asMETHOD(CCircuitDef, GetUpkeepE), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "int GetReloadTime() const", asMETHOD(CCircuitDef, GetReloadTime), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsWind() const", asMETHOD(CCircuitDef, IsWind), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMakeM() const", asMETHOD(CCircuitDef, GetMakeM), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMakeE() const", asMETHOD(CCircuitDef, GetMakeE), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreM() const", asMETHOD(CCircuitDef, GetStoreM), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreE() const", asMETHOD(CCircuitDef, GetStoreE), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetConvertCapacity() const", asMETHOD(CCircuitDef, GetConvertCapacity), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetConvertRatio() const", asMETHOD(CCircuitDef, GetConvertRatio), asCALL_THISCALL); ASSERT(r >= 0);
 +	// Native buildOptions lookup (an unordered_set::find), already computed for
 +	// CircuitAI's own task assignment -- exposing it lets script guard a task
 +	// against the "no constructor of ours can build this" silent no-op instead
@@ -4877,7 +4893,7 @@ index 2839b72..9802b8c 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +1217,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +1233,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4901,7 +4917,7 @@ index 2839b72..9802b8c 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +1243,41 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +1259,41 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4943,7 +4959,7 @@ index 2839b72..9802b8c 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +1290,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +1306,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -4953,7 +4969,7 @@ index 2839b72..9802b8c 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +1411,18 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +1427,18 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4972,7 +4988,7 @@ index 2839b72..9802b8c 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -724,6 +1444,8 @@ bool CInitScript::Init()
+@@ -724,6 +1460,8 @@ bool CInitScript::Init()
  	mainInfo.receiveMessage = script->GetFunc(mod, "void AiMessage(const string& in, int)");
  	mainInfo.unitFinished = script->GetFunc(mod, "void AiUnitFinished(CCircuitUnit@)");
  	mainInfo.unitDestroyed = script->GetFunc(mod, "void AiUnitDestroyed(CCircuitUnit@)");
@@ -4981,7 +4997,7 @@ index 2839b72..9802b8c 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +1462,28 @@ void CInitScript::Update()
+@@ -740,9 +1478,28 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -5010,7 +5026,7 @@ index 2839b72..9802b8c 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -779,6 +1520,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +1536,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -11984,10 +12000,18 @@ index 5eebb71..d41d22b 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882..e21c285 100644
+index a1ac882..dfee624 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
-@@ -164,6 +164,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -11,6 +11,7 @@
+ #include "util/Utils.h"
+ 
+ #include "spring/SpringCallback.h"
++#include "spring/SpringMap.h"
+ 
+ #include "WeaponMount.h"
+ #include "WeaponDef.h"
+@@ -164,6 +165,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		, isPylon(false)
  		, isAssist(false)
  		, isRadar(false)
@@ -11995,7 +12019,7 @@ index a1ac882..e21c285 100644
  		, isSonar(false)
  		, isDecoy(false)
  		, isOnSlow(false)
-@@ -201,6 +202,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -201,6 +203,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	speed        = def->GetSpeed();  // elmos per second
  	losRadius    = def->GetLosRadius();
  	sonarRadius  = def->GetSonarRadius();
@@ -12004,7 +12028,51 @@ index a1ac882..e21c285 100644
  	costM        = def->GetCost(resM);
  	costE        = def->GetCost(resE);
  	upkeepM      = def->GetUpkeep(resM);
-@@ -252,8 +255,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -240,9 +244,41 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 	isCapturable      = def->IsCapturable();
+ 
+ 	const std::map<std::string, std::string>& customParams = def->GetCustomParams();
+-	auto it = customParams.find("energyconv_capacity");
++
++	// Catalog economics, precomputed once while the raw UnitDef is in hand.
++	// makeE follows the (pre-strip) CEconomyManager recipe: income_energy
++	// custom param, else net resource make, else wind (map-averaged), else
++	// tidal. Computed BEFORE upkeepE is inflated by converter capacity below.
++	makeM = def->GetResourceMake(resM) - upkeepM;
++	storeM = def->GetStorage(resM);
++	storeE = def->GetStorage(resE);
++	convCapacityE = .0f;
++	convRatioM = .0f;
++	auto it = customParams.find("income_energy");
++	makeE = (it != customParams.end())
++			? utils::string_to_float(it->second)
++			: def->GetResourceMake(resE) - upkeepE;
++	if (makeE < 1.f) {
++		const float windGen = def->GetWindResourceGenerator(resE);
++		if (windGen >= 1.f) {
++			const float avgWind = (circuit->GetMap()->GetMaxWind() + circuit->GetMap()->GetMinWind()) * 0.5f;
++			makeE = std::min(avgWind, windGen);
++		} else {
++			const float tidalGen = def->GetTidalResourceGenerator(resE);
++			if (tidalGen > 0.f) {
++				makeE = tidalGen * circuit->GetMap()->GetTidalStrength();
++			}
++		}
++	}
++
++	it = customParams.find("energyconv_capacity");
++	if (it != customParams.end()) {
++		convCapacityE = utils::string_to_float(it->second);
++		upkeepE += convCapacityE;
++	}
++	it = customParams.find("energyconv_efficiency");
+ 	if (it != customParams.end()) {
+-		upkeepE += utils::string_to_float(it->second);
++		convRatioM = utils::string_to_float(it->second);
+ 	}
+ 
+ 	it = customParams.find("canjump");
+@@ -252,8 +288,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		jumpRange = (it != customParams.end()) ? utils::string_to_float(it->second) : 400.0f;
  	}
  
@@ -12029,7 +12097,7 @@ index a1ac882..e21c285 100644
  		costM *= 0.1f;  // avoid threat metal
  	}
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a..08fc6a3 100644
+index cd0b54a..ee26a99 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
 @@ -165,6 +165,13 @@ public:
@@ -12073,7 +12141,23 @@ index cd0b54a..08fc6a3 100644
  	float GetCostM()        const { return costM; }
  	float GetCostE()        const { return costE; }
  	float GetUpkeepM()      const { return upkeepM; }
-@@ -478,6 +498,7 @@ private:
+@@ -347,6 +367,15 @@ public:
+ 	float GetExtrRangeM()   const { return extrRangeM; }
+ 	float GetCloakCost()    const { return cloakCost; }
+ 	float GetBuildTime()    const { return buildTime; }
++	// Net resource generation at full activity, precomputed at def load;
++	// wind is averaged against the map's (min+max)/2, tidal against map tidal.
++	// Conversion is excluded -- it lives in GetConvertCapacity/GetConvertRatio.
++	float GetMakeM()        const { return makeM; }
++	float GetMakeE()        const { return makeE; }
++	float GetStoreM()       const { return storeM; }
++	float GetStoreE()       const { return storeE; }
++	float GetConvertCapacity() const { return convCapacityE; }  // energyconv_capacity, E/s consumed
++	float GetConvertRatio()    const { return convRatioM; }     // energyconv_efficiency, M per E
+ 	float GetCaptureSpeed() const { return captureSpeed; }
+ //	float GetAltitude()     const { return altitude; }
+ 	float GetJumpRange()    const { return jumpRange; }
+@@ -478,6 +507,7 @@ private:
  	bool isPylon : 1;
  	bool isAssist : 1;
  	bool isRadar : 1;
@@ -12081,7 +12165,7 @@ index cd0b54a..08fc6a3 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
-@@ -488,6 +509,8 @@ private:
+@@ -488,11 +518,19 @@ private:
  	float speed;
  	float losRadius;
  	float sonarRadius;
@@ -12090,6 +12174,17 @@ index cd0b54a..08fc6a3 100644
  	float costM;
  	float costE;
  	float upkeepM;
+ 	float upkeepE;
+ 	float extractsM;
++	float makeM;
++	float makeE;
++	float storeM;
++	float storeE;
++	float convCapacityE;
++	float convRatioM;
+ 	float extrRangeM;
+ 	float cloakCost;
+ 	float buildTime;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
 index 2f597be..74e212d 100644
 --- a/src/circuit/unit/CircuitUnit.cpp

@@ -1103,6 +1103,10 @@ const float TUNE_PERF = 1.f;
 //   MAP: this is the anchor FillFrontPos picks the regroup cluster from, so
 //   it is the single most...
 const float TUNE_PING = 0.f;
+// manager/catalog.as [toggle 0/1] -- Dump every available def's catalog row at
+//   init (one log line per def, parsed by tools/check_catalog.py). Off by
+//   default: it is ~1000 lines of infolog that only a verification run reads.
+const float TUNE_CATALOG_DUMP = 0.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone

@@ -231,4 +231,11 @@ carries no unexamined assumptions.
    choice) → cons/production → nanos/BP → fusion ladder → defence → the
    role's full arc — one Want per cycle, tournament-audited, with
    questions to apexearth at each design fork.
+   **Step 0 DONE 2026-08-23 — the Catalog (senses only, no Wants yet)**:
+   def-property bindings on script CCircuitDef (buildTime/buildSpeed/
+   workerTime/extractsM/upkeep/reloadTime/IsWind + precomputed makeM/makeE/
+   storeM/storeE/convertCapacity/convertRatio, wind map-averaged at def
+   load), and `manager/catalog.as` — per-def economics + the who-builds-what
+   graph (580 defs, 2981 edges), verified against the pinned tree by
+   `tools/check_catalog.py` (15/15 PASS). Silence re-verified after.
 7. Then the grid work (Part B) on the clean base.

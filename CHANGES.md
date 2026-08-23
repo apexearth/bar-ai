@@ -1,5 +1,31 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: Catalog senses -- step 0 of the Brain rebuild (senses only, silence holds)
+
+New def-property bindings on the script `CCircuitDef` (InitScript.cpp):
+GetBuildTime/GetBuildSpeed/GetWorkerTime/GetExtractsM/GetUpkeepM/GetUpkeepE/
+GetReloadTime/IsWind, plus six values precomputed at def load in
+CircuitDef.cpp because the raw UnitDef holds them and CCircuitDef did not:
+GetMakeM/GetMakeE (NET generation, make minus upkeep; wind averaged against
+the map's (minWind+maxWind)/2 per the pre-strip CEconomyManager recipe, tidal
+scaled by map tidal; the engine's own energyconv upkeepE inflation happens
+AFTER makeE so converters read their true idle net), GetStoreM/GetStoreE,
+and GetConvertCapacity/GetConvertRatio (energyconv_capacity /
+energyconv_efficiency custom params, verified in the pinned tree on armmakr:
+70 / 0.01429). Script side: `manager/catalog.as` (namespace Catalog) reads
+the whole def table once at AiMain -- per-def economics arrays, availability
+(maxThisUnit>0, deliberately NOT IsAvailable(frame): that folds in
+behaviour.json "since" clocks, and ai.frame is -2 at AiMain), and the
+who-builds-what graph both directions (builders x defs CanBuild; 580 defs,
+2981 edges on Supreme Isthmus). Pure data + accessors (CheapestBuilderOf,
+BuildSecondsAt, ConvertMakeM); nothing decides or enqueues. Dump behind
+`apex_catalog_dump` (default 0), one line per available def;
+`tools/check_catalog.py` diffs the dump against the pinned tree for 15
+well-known defs -- PASS on all 15 (armlwall was tried and correctly absent:
+it is Scavengers-only, engine-restricted to maxThisUnit 0). Silence
+re-verified on the same smoke: apex allBuilt = armcom only, facCount 0, no
+compile ERR, no asALREADY_REGISTERED; check.py spend census clean.
+
 ## 2026-08-23: THE C++ STRIP -- the DLL originates no economy/build decisions
 
 The engine-side half of the overhaul kill (docs/20-brain-overhaul.md par.1,

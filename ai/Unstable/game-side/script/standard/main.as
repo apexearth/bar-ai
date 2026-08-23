@@ -2,6 +2,7 @@
 #include "../side.as"
 #include "../world.as"
 #include "perf.as"
+#include "manager/catalog.as"  // def economics + who-builds-what, read once at init
 #include "targets.as"          // EVERY build ratio, in one file
 #include "policy.as"           // ...and every eco THRESHOLD, in this one
 #include "manager/brain/budget.as"  // the spend ledger and target split (a sense)
@@ -25,6 +26,8 @@ namespace Main {
 
 void AiMain()
 {
+	Catalog::Init();
+
 	// NOTE: Initialize config params
 // 	aiTerrainMgr.SetAllyZoneRange(600);  // returns 576: (multiples of 128) div 2
 // 	aiEconomyMgr.reclConvertEff = 2.f;
