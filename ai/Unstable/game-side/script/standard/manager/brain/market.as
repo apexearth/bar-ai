@@ -1192,15 +1192,39 @@ AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 // is an immobile lathe with no build options; its drain is its workertime
 // at the game's metal-per-workertime rate (7 m/s per 80 WT, the T1 con's
 // measured pull).
+bool AnyUncoveredWorkingFactory()
+{
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.CountQueued(null) == 0))
+			continue;
+		const AIFloat3 fp = f.GetPos(ai.frame);
+		bool covered = false;
+		for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
+			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f) {
+				covered = true;
+				break;
+			}
+		}
+		if (!covered)
+			return true;
+	}
+	return false;
+}
+
 Want@ ProposeNano(CCircuitUnit@ unit)
 {
 	Want w;
 	// Overflow is nano demand in its own right: a nano never walks, so it
 	// absorbs overflow at face value even when the mobile fleet's paper
-	// capacity looks sufficient.
+	// capacity looks sufficient. And a WORKING factory with no nano in
+	// reach is full demand by itself -- the first lab must not build cons
+	// unassisted while metal overflows (apexearth 2026-08-23, twice).
 	const float gap = BPGap();
 	const float ovf = OverflowM();
-	const float over = (gap > ovf) ? gap : ovf;
+	float over = (gap > ovf) ? gap : ovf;
+	if (AnyUncoveredWorkingFactory() && (over < 15.f))
+		over = 15.f;   // ~ one nano's own drain: makes the first nano near-automatic
 	if (over <= 0.5f)
 		return w;
 	const int uid = int(unit.circuitDef.id);
