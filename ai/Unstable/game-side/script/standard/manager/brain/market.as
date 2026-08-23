@@ -208,6 +208,28 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 // Whether the last mex probe found open ground; the production market reads
 // this as its demand signal for more claiming capacity.
 bool gMexOpen = false;
+float gAvgWalkDist = 600.f;   // smoothed claim walk, seeds at a near spot
+
+// A constructor's mobility, as cycle speed on the CURRENT map's walks. Air
+// cons fly the straight line and ignore blockage/pathing -- in a packed
+// nano farm they are often the only realistic builder (apexearth
+// 2026-08-23). MODEL: the flyer shortcut fraction.
+float MobilityMult(int defId)
+{
+	const float speed = Catalog::gSpeed[defId];
+	if (speed <= 1.f)
+		return 1.f;
+	float dist = gAvgWalkDist;
+	if (Catalog::gFlyer[defId])
+		dist *= ai.GetTunable("apex_fly_short", TUNE_FLY_SHORT);
+	const float cycle = dist / speed + 12.f;   // walk + a claim's build
+	float mob = 60.f / ((cycle > 1.f) ? cycle : 1.f);
+	if (mob < 0.5f)
+		mob = 0.5f;
+	if (mob > 2.5f)
+		mob = 2.5f;
+	return mob;
+}
 
 // The last probed open spot's real yield (income x extraction); the tunable
 // is only the pre-probe fallback. This was a MODEL term until the
@@ -424,7 +446,9 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	const AIFloat3 pos = aiEconomyMgr.GetMexSpotPos(spot);
 	const float spotIncome = aiEconomyMgr.GetMexSpotIncome(spot);
 	const float speed = Catalog::gSpeed[uid];
-	const float walkSec = (speed > 1.f) ? (here.distance2D(pos) / speed) : 60.f;
+	const float dist = here.distance2D(pos);
+	gAvgWalkDist = 0.8f * gAvgWalkDist + 0.2f * dist;
+	const float walkSec = (speed > 1.f) ? (dist / speed) : 60.f;
 	// Every extractor this builder can place, priced; the VALUE picks the
 	// def (a same-yield mex at 4.7x the cost lost the nomination it used to
 	// win on raw extraction -- measured: armamex over armmex).
@@ -978,12 +1002,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		// >= the game ceiling, not > our own: requiring the next con to
 		// EXCEED what the first one reaches made a second armack impossible
 		// (measured: one T2 con per game, forever).
+		const float mob = MobilityMult(d);
 		if ((upD > 0.5f) && (reach >= BestExtract()))
-			gain += upD / float(1 + ServingCons());
+			gain += mob * upD / float(1 + ServingCons());
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
-		gain += (over < drain) ? over : drain;
+		gain += mob * ((over < drain) ? over : drain);
 		if (gMexOpen && (reach > 0.f))
-			gain += SpotM();   // it can claim while spots stay open
+			gain += mob * SpotM();   // it can claim while spots stay open
 		if (gain <= 0.5f)
 			continue;
 		const float v = gain / Catalog::gCostM[d];
