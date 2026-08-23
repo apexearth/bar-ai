@@ -238,10 +238,13 @@ float MCostScale()
 	const float st = aiEconomyMgr.metal.storage;
 	if ((st <= 1.f) || (aiEconomyMgr.metal.income <= aiEconomyMgr.metal.pull))
 		return 1.f;
+	// A high bank is the integral of underpricing: forgiveness ramps in
+	// from HALF-full (watched: 3,700 banked while outnumbered -- "we
+	// certainly could afford it").
 	const float frac = aiEconomyMgr.metal.current / st;
-	if (frac <= 0.8f)
+	if (frac <= 0.5f)
 		return 1.f;
-	const float f = (frac - 0.8f) / 0.2f;
+	const float f = (frac - 0.5f) / 0.4f;
 	return 1.f - 0.8f * ((f > 1.f) ? 1.f : f);
 }
 
@@ -984,7 +987,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			w.kind = WK_PLANT;
 			@w.def = Catalog::Def(d);
 			// Plants stand at the base anchor -- the middle of what we own.
-			w.pos = Base::gAnchorSet ? Base::gAnchor : EcoSiteFor(unit);
+			w.pos = InteriorSite(EcoSiteFor(unit));
 		}
 	}
 	return w;
@@ -1132,7 +1135,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			@w.def = Catalog::Def(d);
 			// The tech lab is the most protection-hungry building we own:
 			// at the base anchor, never at a forward asker (watched).
-			w.pos = Base::gAnchorSet ? Base::gAnchor : here;
+			w.pos = InteriorSite(here);
 		}
 	}
 	return w;
@@ -1255,6 +1258,24 @@ AIFloat3 FarmSlot(int defId)
 			return p;
 	}
 	return gFarmPos - Base::gFwd * gFarmDepth;
+}
+
+// The protected interior: the anchor is the FRONT of the base (the grid
+// grows backward from the first factory), so siting a plant "at the
+// anchor" put the T2 lab in front of an attacking army (watched,
+// facepalmed). Midway to the farm is inside everything we own.
+AIFloat3 InteriorSite(const AIFloat3& in fallback)
+{
+	if (Base::gAnchorSet && gFarmSet) {
+		AIFloat3 p;
+		p.x = (Base::gAnchor.x + gFarmPos.x) * 0.5f;
+		p.z = (Base::gAnchor.z + gFarmPos.z) * 0.5f;
+		p.y = 0.f;
+		return p;
+	}
+	if (gFarmSet)
+		return gFarmPos;
+	return fallback;
 }
 
 AIFloat3 EcoSiteFor(CCircuitUnit@ unit)

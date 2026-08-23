@@ -1167,7 +1167,7 @@ const float TUNE_E_LOOKAHEAD = 30.f;
 // E_HEADROOM: energy income target as a multiple of trending pull -- the
 // standing reserve that keeps the bank from ever being raced to zero.
 // 1.25 still under-supplied in watched games ("definite pattern now").
-const float TUNE_E_HEADROOM = 1.5f;
+const float TUNE_E_HEADROOM = 1.75f;   // 1.5 still read 'not that great' in a watched war game
 // CON_ESCORT: exposed constructors claim one army guard each (master).
 const float TUNE_CON_ESCORT = 1.f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
