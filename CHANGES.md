@@ -1216,3 +1216,12 @@ domain by declared boundary), and (2) tournament batches of 20+ for any
 military tuning claim. Tags: pre-overhaul -> market-first-win ->
 ladder-easy-parity. The market rebuild itself -- catalog, one currency,
 six pricing laws, ~15 want families -- is DONE and measuring clean.
+
+## 2026-08-23 -- The 20-game anchor (final build, vs easy, 45m, Comet)
+
+4-12 with 4 draws: easy wins 75% of decided (CI 51-90 -- the first
+statistically real ladder number; the 8-game batches were coin-flips).
+Profile: eco 1.56:1 in our favor, static-grind war EVEN at 82k:74k (the
+shields + range-vs-arty fixes measurably landed), mobile army K/D 0.315
+carrying every loss. The next session's military work is judged against
+exactly this anchor: tournaments/ 20-game set, tag market-v1-complete.
