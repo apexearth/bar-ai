@@ -376,6 +376,7 @@ public:
 	float GetStoreE()       const { return storeE; }
 	float GetConvertCapacity() const { return convCapacityE; }  // energyconv_capacity, E/s consumed
 	float GetConvertRatio()    const { return convRatioM; }     // energyconv_efficiency, M per E
+	bool IsNeedGeo()        const { return needsGeo; }  // must stand on a geo vent
 	float GetCaptureSpeed() const { return captureSpeed; }
 //	float GetAltitude()     const { return altitude; }
 	float GetJumpRange()    const { return jumpRange; }
@@ -527,6 +528,7 @@ private:
 	float extractsM;
 	float makeM;
 	float makeE;
+	bool needsGeo = false;
 	float storeM;
 	float storeE;
 	float convCapacityE;

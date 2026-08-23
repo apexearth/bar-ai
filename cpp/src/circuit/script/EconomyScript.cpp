@@ -22,6 +22,11 @@ static int CEconomyManager_FindOpenMexSpot(CEconomyManager* mgr, CCircuitUnit* u
 	return mgr->FindOpenMexSpot(unit, pos, maxThreat);
 }
 
+static float CEconomyManager_GetMexSpotIncome(CEconomyManager* mgr, int spotId)
+{
+	return mgr->GetMexSpotIncome(spotId);
+}
+
 static AIFloat3 CEconomyManager_GetMexSpotPos(CEconomyManager* mgr, int spotId)
 {
 	return mgr->GetMexSpotPos(spotId);
@@ -77,6 +82,7 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
 	// and zero-inits, so a forgotten spotId silently means spot 0.
 	r = engine->RegisterObjectMethod("CEconomyManager", "int FindOpenMexSpot(CCircuitUnit@, const AIFloat3& in, float maxThreat = 1.f)", asFUNCTION(CEconomyManager_FindOpenMexSpot), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEconomyManager", "AIFloat3 GetMexSpotPos(int) const", asFUNCTION(CEconomyManager_GetMexSpotPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEconomyManager", "float GetMexSpotIncome(int)", asFUNCTION(CEconomyManager_GetMexSpotIncome), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEconomyManager", "IUnitTask@+ EnqueueMexAt(CCircuitUnit@, int)", asFUNCTION(CEconomyManager_EnqueueMexAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// apex: same trio for geo vents -- see EconomyManager.h's comment on
 	// FindOpenGeoSpot for why HomeEnergy needed this.

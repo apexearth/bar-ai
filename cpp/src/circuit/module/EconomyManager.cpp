@@ -1052,6 +1052,15 @@ AIFloat3 CEconomyManager::GetMexSpotPos(int spotId) const
 	return metalMgr->GetSpots()[spotId].position;
 }
 
+float CEconomyManager::GetMexSpotIncome(int spotId) const
+{
+	CMetalManager* metalMgr = circuit->GetMetalManager();
+	if (!metalMgr->IsValidSpot(spotId)) {
+		return 0.f;
+	}
+	return metalMgr->GetSpots()[spotId].income;
+}
+
 IBuilderTask* CEconomyManager::EnqueueMexAt(CCircuitUnit* unit, int spotId)
 {
 	CMetalManager* metalMgr = circuit->GetMetalManager();

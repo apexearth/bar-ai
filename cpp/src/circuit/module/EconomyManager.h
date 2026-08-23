@@ -126,6 +126,7 @@ public:
 	// a MEX task from script that carries a real spotId.
 	int FindOpenMexSpot(CCircuitUnit* unit, const springai::AIFloat3& pos, float maxThreat = THREAT_MIN);
 	springai::AIFloat3 GetMexSpotPos(int spotId) const;
+	float GetMexSpotIncome(int spotId) const;
 	IBuilderTask* EnqueueMexAt(CCircuitUnit* unit, int spotId);
 	// apex: same pattern as the mex trio above, for geo vents -- HomeEnergy had
 	// no way to see a geo spot at all, so geothermal (very high energy/metal,

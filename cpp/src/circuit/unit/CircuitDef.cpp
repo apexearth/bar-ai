@@ -250,6 +250,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	// custom param, else net resource make, else wind (map-averaged), else
 	// tidal. Computed BEFORE upkeepE is inflated by converter capacity below.
 	makeM = def->GetResourceMake(resM) - upkeepM;
+	needsGeo = def->IsNeedGeo();
 	storeM = def->GetStorage(resM);
 	storeE = def->GetStorage(resE);
 	convCapacityE = .0f;
