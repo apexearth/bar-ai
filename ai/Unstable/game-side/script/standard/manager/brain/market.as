@@ -1216,6 +1216,8 @@ void StallWatch()
 			continue;
 		if (int(t.GetBuildType()) == int(Task::BuildType::ENERGY))
 			continue;
+		// (guard/patrol holders pass straight through: their work is worth
+		// ~nothing mid-stall, so the dry-run below decides.)
 		// Only interrupt a unit that could actually answer with energy.
 		bool canE = false;
 		const array<int>@ mine = Catalog::BuildsOf(int(u.circuitDef.id));
@@ -1289,7 +1291,20 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	}
 	if (boss is null)
 		return w;
-	const float myDrain = Catalog::gBuildPower[uid] * (7.f / 80.f);
+	// A lathe cannot draw without energy: assist delivers its drain TIMES
+	// what the E economy can feed it (measured stall: lab -> mex -> assist
+	// while solar lost the auction at a drained bank; the assist was
+	// worthless and blocking the fix).
+	float eFeed = 1.f;
+	if (HardEStall()) {
+		eFeed = 0.1f;
+	} else {
+		const float eInc = aiEconomyMgr.energy.income;
+		const float ePull = aiEconomyMgr.energy.pull;
+		if ((ePull > 1.f) && (eInc < ePull))
+			eFeed = eInc / ePull;
+	}
+	const float myDrain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
 	const AIFloat3 bp = boss.GetPos(ai.frame);
 	const float speed = Catalog::gSpeed[uid];
 	const float walkSec = (speed > 1.f)
