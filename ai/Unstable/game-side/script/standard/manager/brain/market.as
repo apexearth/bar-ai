@@ -1531,13 +1531,15 @@ int EscortShortfall()
 
 float RoleTarget(int role, float armyTarget)
 {
+	// AA is a PURE COUNTER: it has no value without enemy air, so it gets
+	// no baseline share (watched: AA against a ground-only 1v1 enemy).
+	if (role == int(Unit::Role::AA.type))
+		return aiEnemyMgr.GetEnemyCost(RT::AIR)
+				* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH);
 	const float base = armyTarget / 6.f;   // maximum-entropy prior over combat roles
 	float counter = 0.f;
 	if (role == int(Unit::Role::RAIDER.type))
 		counter = float(EscortShortfall()) * 60.f;   // ~ one cheap escort each
-	if (role == int(Unit::Role::AA.type))
-		counter = aiEnemyMgr.GetEnemyCost(RT::AIR)
-				* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH);
 	else if (role == int(Unit::Role::RIOT.type))
 		counter = Military::EnemyCostOf(Unit::Role::RAIDER.type);
 	else if ((role == int(Unit::Role::SKIRM.type))
