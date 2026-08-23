@@ -1,5 +1,25 @@
 # Open issues — what is wrong with this AI right now
 
+## The protect market never buys T1.5 defence -- LLT churn only
+
+apexearth, watching (2026-08-23): "we also aren't making any of the T1.5
+defenses" (beamers/HLTs). Two mechanisms, both measured in the 2026-08-23
+1v1s and seed-11 8v8:
+
+1. WHICH def: when a protect want does execute, the def choice lands on the
+   cheapest -- 45 protect:armllt decides in the Comet Catcher 1v1, zero
+   armbeamer/armhlt, mDefence 595 at game end. The porcupine ladder that
+   used to carry the tier progression is deliberately empty ("land": []),
+   so the market's own protect def-selection is now the only chooser and
+   it has no income-scaled quality step.
+2. WHETHER at all: builder wants were argmax until the 2026-08-23 roulette
+   change; protect lost every tie to eco wants (team 3: nanos at v=20-275
+   for 8 minutes, tech bid once at 16.7). Re-measure after the roulette
+   lands -- fix 1 may be the only remaining half.
+
+Also standing: decide-vs-built gap on protect (45 decides, ~7 built) --
+re-election churn worth attributing while in there.
+
 ## Buildings sometimes slightly overlap mex spots
 
 apexearth, watching (2026-08-23): "our logic to prevent things from being

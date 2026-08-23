@@ -129,7 +129,7 @@
           <option value="headless">Headless (fast, telemetry)</option>
           <option value="tournament">Tournament (batch)</option>
         </select></label>
-      <label class="f">Side A <input id="l-a" list="speclist" size="28" value="Apex:apex:hard_aggressive"></label>
+      <label class="f">Side A <input id="l-a" list="speclist" size="28" value="Apex:Unstable:standard"></label>
       <label class="f">Side B <input id="l-b" list="speclist" size="22" value="BARb:stable:hard"></label>
       <label class="f" title="Faction for every player on side A. Both at Random keeps the tool default (match: A=Armada B=Cortex, tournament: Cortex vs Cortex); otherwise Random draws per player from the seed.">Faction A
         <select id="l-sidea">
@@ -200,7 +200,7 @@
     <div class="row">
       <button class="act" onclick="action('status')">Status (what is live?)</button>
       <button class="act" onclick="action('check')">Pre-flight check</button>
-      <button class="act primary" onclick="action('deploy')">Deploy apex &rarr; game</button>
+      <button class="act primary" onclick="action('deploy')" id="btn-deploy">Deploy &rarr; game</button>
       <button class="act" onclick="action('pull')">Pull (live &rarr; repo)</button>
       <button class="act" onclick="action('gadgets')">Install dev gadgets</button>
     </div>
@@ -795,6 +795,11 @@ async function loadLaunchMeta() {
     const m = await api("/api/launchmeta");
     $("#maplist").innerHTML = m.maps.map(x => `<option value="${esc(x)}">`).join("");
     $("#speclist").innerHTML = m.specs.map(x => `<option value="${esc(x)}">`).join("");
+    // The launch form is restored from localStorage, so a spec for a variant
+    // that has since been renamed survives here long after ai/<name> is gone.
+    const av = ($("#l-a").value.split(":")[1] || "");
+    if (m.default_a && m.variants && !m.variants.includes(av)) $("#l-a").value = m.default_a;
+    if (m.variant) $("#btn-deploy").textContent = `Deploy ${m.variant} → game`;
     GADGET = new Set(m.gadget_tunables || []);
     renderOvSummary();
   } catch (e) {}
@@ -1085,6 +1090,8 @@ function renderTunables() {
           <span class="mono dim" style="font-size:11px">&nbsp;${esc(e.tunable || e.name)}</span>
           ${/NOT in dev_tunables/.test(e.desc || "")
              ? `<span class="badge bad">modoption ignored — not in dev_tunables.lua</span>` : ""}
+          ${e.unread
+             ? `<span class="badge bad" title="no GetTunable call reads it — editing this number changes nothing">dead — nothing reads it</span>` : ""}
           <div class="dim" style="font-size:12px;margin-top:2px">${esc(e.desc)}
             ${e.reads ? `<span class="mono" style="font-size:11px"> — ${esc(e.reads)}</span>` : ""}</div>
         </div>

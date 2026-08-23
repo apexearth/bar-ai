@@ -1,0 +1,14 @@
+Failed rotating the log file
+write-dir busy (engine pid 149552); using C:\Users\apexe\WebstormProjects\bar-ai\matches\_engine-137280
+map      Frozen_Ford_V2
+game     Beyond All Reason $VERSION
+engine   recoil_2026.07.04
+team 0   Apex-Unstable-standard
+team 1   BARb-stable-hard
+out      C:\Users\apexe\WebstormProjects\bar-ai\matches\20260823-213619-Apex-Unstable-standard_vs_BARb-stable-hard
+
+out      C:\Users\apexe\WebstormProjects\bar-ai\matches\20260823-213619-Apex-Unstable-standard_vs_BARb-stable-hard
+reason   gameover
+winners  ['BARb-stable-hard']
+game     19.27 min (34685 frames)
+wall     42.0s

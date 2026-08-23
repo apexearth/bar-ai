@@ -1,0 +1,30 @@
+Failed rotating the log file
+write-dir busy (engine pid 151492); using C:\Users\apexe\WebstormProjects\bar-ai\matches\_engine-123496
+map      Supreme Isthmus v2.1
+game     Beyond All Reason $VERSION
+engine   recoil_2026.07.04
+team 0   Apex-Unstable-standard
+team 1   BARb-stable-hard
+  team 0 (Apex-Unstable-standard)   blue
+  team 1 (Apex-Unstable-standard)   red
+  team 2 (Apex-Unstable-standard)   green
+  team 3 (Apex-Unstable-standard)   yellow
+  team 4 (Apex-Unstable-standard)   purple
+  team 5 (Apex-Unstable-standard)   cyan
+  team 6 (Apex-Unstable-standard)   orange
+  team 7 (Apex-Unstable-standard)   pink
+  team 8 (BARb-stable-hard)   blue
+  team 9 (BARb-stable-hard)   red
+  team 10 (BARb-stable-hard)   green
+  team 11 (BARb-stable-hard)   yellow
+  team 12 (BARb-stable-hard)   purple
+  team 13 (BARb-stable-hard)   cyan
+  team 14 (BARb-stable-hard)   orange
+  team 15 (BARb-stable-hard)   pink
+out      C:\Users\apexe\WebstormProjects\bar-ai\matches\20260823-215422-Apex-Unstable-standard_vs_BARb-stable-hard
+
+out      C:\Users\apexe\WebstormProjects\bar-ai\matches\20260823-215422-Apex-Unstable-standard_vs_BARb-stable-hard
+reason   timelimit
+winners  (none)
+game     15.0 min (27000 frames)
+wall     182.2s

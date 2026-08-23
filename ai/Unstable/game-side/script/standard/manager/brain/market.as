@@ -714,6 +714,28 @@ IUnitTask@ JoinBig(CCircuitDef@ def)
 	return Requests::LiveTaskOf(def);
 }
 
+// THE WALK IS THE RISK, not just the destination (apexearth, after a fresh
+// T2 con marched into the enemy army while 4 home mexes sat unupgraded):
+// known enemy mass along the corridor above the walker's own metal cost is
+// a death walk whatever the spot pays. The walker's value is the bar -- a
+// 100m con risks more than a 500m one, no fixed threshold anywhere.
+bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
+{
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	const float bar = Catalog::gCostM[int(unit.circuitDef.id)];
+	for (int s = 1; s <= 2; ++s) {
+		AIFloat3 p = here;
+		const float f = float(s) / 2.f;
+		p.x += (dest.x - here.x) * f;
+		p.z += (dest.z - here.z) * f;
+		if (!OnMap(p))
+			continue;
+		if (ai.GetEnemyCostAt(p, 900.f) > bar)
+			return true;
+	}
+	return false;
+}
+
 Want@ ProposeMex(CCircuitUnit@ unit)
 {
 	Want w;
@@ -737,6 +759,10 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		gMexOpen = false;
 		return w;
 	}
+	// Deadly for THIS walker; the spot itself stays open for a safer angle,
+	// so gMexOpen is not cleared.
+	if (DeathWalk(unit, pos))
+		return w;
 	// The quiet rear stays home: no claim meaningfully closer to the enemy
 	// than its own base depth (the mirror reference works pre-contact too).
 	if (EcoFar(pos)) {
@@ -1173,6 +1199,8 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 	for (uint li = 0; li < gLSpot.length(); ++li) {
 		if (gLExtract[li] <= 0.f)
 			continue;   // not finished (or already being replaced)
+		if (DeathWalk(unit, gLPos[li]))
+			continue;   // a forward mex we hold can still be a lethal walk
 		for (uint i = 0; i < builds.length(); ++i) {
 			const int d = builds[i];
 			if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= gLExtract[li]))
@@ -3013,6 +3041,32 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			++at;
 		ranked.insertAt(at, c);
 	}
+	// PROPORTIONAL DRAW here too, not argmax (apexearth, watching: "a ton
+	// of nanos and no T2 lab... is it just winner takes all?"). It was:
+	// team 3 bought nanos at v=20-275 for 8 straight minutes while the T2
+	// lab bid 16.7 once and never won -- the same starvation the old
+	// Brain's roulette fix carved into project memory, re-grown between
+	// want KINDS. Weight by value, seeded like the produce draw; the
+	// ranked order still serves as the executor-refusal fallback.
+	if (ranked.length() > 1) {
+		float sumV2 = 0.f;
+		for (uint ri = 0; ri < ranked.length(); ++ri)
+			sumV2 += ranked[ri].value;
+		uint h2 = uint(ai.frame) * 2654435761 + uint(unit.id) * 40503;
+		h2 ^= (h2 >> 13);
+		float roll2 = float(h2 % 10000) / 10000.f * sumV2;
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			roll2 -= ranked[ri].value;
+			if (roll2 <= 0.f) {
+				if (ri > 0) {
+					Want@ drawn = ranked[ri];
+					ranked.removeAt(ri);
+					ranked.insertAt(0, drawn);
+				}
+				break;
+			}
+		}
+	}
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
 	// Auction dump for T2-capable builders, one per 30s, tunable-gated.
@@ -3156,9 +3210,17 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// two of them still let claws through (measured three times).
 		// Whatever proposes, nothing EXECUTES ground defence on the quiet
 		// rear.
-		if ((w.spotId == PROT_DEF) && EcoQuiet())
+		// Classify by the DEF, not spotId: the defence branches store the
+		// CLUSTER id in spotId, so a PROT_DEF compare only caught cluster 4
+		// -- claws sailed past this gate on every other cluster (three
+		// "airtight" runs, measured 2026-08-23). A ground-shooting weapon
+		// is ground defence wherever it points; AA (air-only threat) stays
+		// allowed, matching the audit's mDefAA split.
+		const bool groundDef = (w.def !is null)
+				&& (Catalog::gSurfT[int(w.def.id)] > 0.01f);
+		if (groundDef && EcoQuiet())
 			return null;
-		if (w.spotId == PROT_DEF)
+		if (groundDef)
 			AiLog("apex: prot-exec t=" + ai.teamId + " def=" + w.def.GetName()
 					+ " role=" + (gEcoRole ? 1 : 0)
 					+ " danger=" + (EcoDangerNear() ? 1 : 0)

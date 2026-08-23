@@ -25,8 +25,10 @@ REPO = Path(__file__).resolve().parent.parent
 TOOLS = REPO / "tools"
 MATCHES = REPO / "matches"
 TOURNAMENTS = REPO / "tournaments"
-SCRIPT_DIR = REPO / "ai" / "Unstable" / "game-side" / "script" / "standard"
-CONFIG_DIR = REPO / "ai" / "Unstable" / "game-side" / "config" / "standard"
+VARIANT = "Unstable"          # ai/<VARIANT>/ -- also the AI version
+PROFILE = "standard"          # config/<PROFILE>/, script/<PROFILE>/
+SCRIPT_DIR = REPO / "ai" / VARIANT / "game-side" / "script" / PROFILE
+CONFIG_DIR = REPO / "ai" / VARIANT / "game-side" / "config" / PROFILE
 UI_FILE = TOOLS / "dashboard_ui.html"
 LOG_DIR = MATCHES / "_dashboard_logs"
 PY = sys.executable
@@ -46,8 +48,8 @@ ANALYSIS_TOOLS = {
 DEPLOY_ACTIONS = {
     "status": ["deploy_ai.py", "status"],
     "check": ["check.py"],
-    "deploy": ["deploy_ai.py", "deploy", "apex"],
-    "pull": ["deploy_ai.py", "pull", "apex"],
+    "deploy": ["deploy_ai.py", "deploy", VARIANT],
+    "pull": ["deploy_ai.py", "pull", VARIANT],
     "gadgets": ["deploy_ai.py", "gadgets"],
 }
 
@@ -412,11 +414,51 @@ def known_maps():
     return sorted(maps)
 
 
+def short_name():
+    """The deployed variant's shortName, from its own AIInfo.lua -- the deploy
+    paths and the harness spec are keyed on it, not on the version."""
+    info = REPO / "ai" / VARIANT / "engine-side" / "AIInfo.lua"
+    try:
+        m = re.search(r"key\s*=\s*'shortName'\s*,\s*\n\s*value\s*=\s*'([^']*)'",
+                      info.read_text("utf-8", errors="replace"))
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return "Apex"
+
+
+def default_spec():
+    return "%s:%s:%s" % (short_name(), VARIANT, PROFILE)
+
+
 def known_ai_specs():
-    specs = {"Apex:Unstable:standard", "BARb:stable:hard"}
+    specs = {default_spec(), "BARb:stable:hard"}
     for s in list_matches(200):
-        specs.update(x for x in s.get("specs", []) if x)
-    return sorted(sp.replace("-", ":") if ":" not in sp else sp for sp in specs)
+        # Run dirs store the spec dash-joined; normalize before deduping or the
+        # same AI shows up twice in the list.
+        specs.update(x.replace("-", ":") if ":" not in x else x
+                     for x in s.get("specs", []) if x)
+    return sorted(specs)
+
+
+def tunable_callsites():
+    """apex_<name> -> ["path/file.as:line", ...], read from the script tree.
+    tunables.as's own file annotations rot on every refactor; this does not."""
+    base = REPO / "ai" / "Unstable" / "game-side" / "script"
+    out = {}
+    for f in sorted(base.rglob("*.as")):
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        # tunables.as annotates paths relative to its own profile dir.
+        anchor = SCRIPT_DIR if SCRIPT_DIR in f.parents else base
+        rel = str(f.relative_to(anchor)).replace(os.sep, "/")
+        for mo in re.finditer(r'GetTunable\(\s*"([a-z_0-9]+)"', text):
+            out.setdefault(mo.group(1), []).append(
+                "%s:%d" % (rel, text.count("\n", 0, mo.start()) + 1))
+    return out
 
 
 def tunable_names():
@@ -595,6 +637,24 @@ TARGETS_AS = SCRIPT_DIR / "targets.as"
 DIVIDER_RE = re.compile(r"^// ?[-=]{20,}$")
 ENTRY_HEAD_RE = re.compile(
     r"^// ((?:[\w/]+\.as)(?:, [\w/]+\.as)*)?\s*(\[[^\]]+\])?\s*(?:--\s*)?(.*)$")
+# A doc block STARTS at one of these lines; the rest are its continuation.
+# tunables.as keeps blocks for tunables that were later deleted, so only the
+# LAST block above a const describes that const.
+BLOCK_START_RE = re.compile(
+    r"^// (?:[\w/]+\.as(?:, [\w/]+\.as)*[\s\[]|[A-Z][A-Z_0-9]{2,}:)")
+# Old-style continuation lines are indented under their header.
+CONT_RE = re.compile(r"^//\s{2,}\S")
+
+
+def starts_block(line, prev):
+    """Does this comment line open a new doc block, or continue the last one?
+    The newer entries carry no file/name header, so a fresh sentence after a
+    finished one is the only separator they have."""
+    if BLOCK_START_RE.match(line):
+        return True
+    if CONT_RE.match(line):
+        return False
+    return prev.endswith(".") and bool(re.match(r"^// [A-Z]", line))
 ARRAY_RE = re.compile(r"^(array<float>\s+([A-Z_0-9]+)\s*=\s*\{)([^}]*)(\}.*)$")
 
 
@@ -653,8 +713,9 @@ def cpp_tunables():
 def parse_tunables():
     """tunables.as -> [{title, entries:[{name,tunable,value,unit,reads,desc,line}]}]"""
     lines = TUNABLES_AS.read_text(encoding="utf-8").split("\n")
+    callsites = tunable_callsites()
     sections, cur = [], None
-    pending = []
+    pending = []   # list of comment BLOCKS; only the last one is this const's
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -675,7 +736,7 @@ def parse_tunables():
         m = CONST_RE.match(line)
         if m and cur is not None:
             unit, reads, desc = "", "", []
-            for k, c in enumerate(pending):
+            for k, c in enumerate(pending[-1] if pending else []):
                 h = ENTRY_HEAD_RE.match(c)
                 if k == 0 and h:
                     reads = h.group(1) or ""
@@ -685,19 +746,29 @@ def parse_tunables():
                 else:
                     desc.append(re.sub(r"^//\s*", "", c))
             name = m.group(2)
+            tunable = ("apex_" + name.replace("TUNE_", "").lower()
+                       if name.startswith("TUNE_") else "")
+            sites = callsites.get(tunable, [])
+            annotated = sorted(x.strip() for x in reads.split(",") if x.strip())
+            actual = sorted({x.rsplit(":", 1)[0] for x in sites})
             cur["entries"].append({
                 "name": name,
-                "tunable": "apex_" + name.replace("TUNE_", "").lower()
-                           if name.startswith("TUNE_") else "",
+                "tunable": tunable,
                 "value": m.group(3).strip(),
-                "unit": unit, "reads": reads,
+                "unit": unit,
+                "reads": ", ".join(sites) or reads,
+                "reads_stale": bool(sites) and bool(annotated)
+                               and annotated != actual,
+                "unread": bool(tunable) and not sites,
                 "desc": " ".join(desc).strip(),
                 "file": str(TUNABLES_AS.relative_to(REPO)).replace(os.sep, "/"),
                 "line": i + 1,
             })
             pending = []
         elif line.strip().startswith("//") and not DIVIDER_RE.match(line):
-            pending.append(line.strip())
+            if not pending or starts_block(line.strip(), pending[-1][-1]):
+                pending.append([])
+            pending[-1].append(line.strip())
         elif line.strip() == "":
             pending = []
         i += 1
@@ -903,6 +974,10 @@ class Handler(BaseHTTPRequestHandler):
             elif u.path == "/api/launchmeta":
                 self.send_json({"maps": known_maps(), "specs": known_ai_specs(),
                                 "tunables": tunable_names(),
+                                "variant": VARIANT, "default_a": default_spec(),
+                                "variants": sorted(
+                                    p.name for p in (REPO / "ai").iterdir()
+                                    if p.is_dir()),
                                 "gadget_tunables": sorted(gadget_tunable_names())})
             elif u.path == "/api/jobs":
                 with JOBS_LOCK:

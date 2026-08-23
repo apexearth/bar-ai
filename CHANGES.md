@@ -1,5 +1,36 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: builder wants draw proportionally; the eco defence gate classifies by def; death walks refused
+
+Three linked changes, each audit- or log-verified same day:
+
+- **Builder-side roulette** (market.as Decide): builder wants were argmax
+  while only factory lines drew proportionally -- measured starvation: team 3
+  bought nanos at v=20-275 for 8 straight minutes while its T2 lab bid 16.7
+  once and never won (apexearth, watching: "a ton of nanos and no T2 lab").
+  The same seeded value-weighted draw as the produce side now picks; ranked
+  order remains the executor-refusal fallback. After: tech wins draws against
+  nano bids 10x its value; team 3's kind mix diversified (18 nano / 2 tech /
+  31 protect / 38 produce decides).
+- **Eco defence gate fixed -- it never worked**: the ExecuteWant gate compared
+  `w.spotId == PROT_DEF` (constant 4), but defence branches store the CLUSTER
+  id in spotId -- only cluster #4's claws were ever caught, which is why three
+  "airtight" runs still grew claws with zero prot-exec lines. Now classified
+  by the def (any ground-shooting weapon; AA exempt, matching the audit's
+  mDefAA split). Seed-11 after: mDefence=0, 190 intercepts on non-eco teams,
+  full audit PASS (waste 0.9%, 210 m/s).
+- **DeathWalk** (ProposeMex + ProposeMexUp): corridor samples (mid, dest,
+  r=900) with known enemy cost above the walker's own metal cost refuse the
+  want outright -- apexearth's standing "super risky places are out of the
+  question", triggered by a fresh T2 con marching into the enemy army while 4
+  home mexes sat unupgraded. Bar is the walker's value; no fixed threshold.
+  The roulette made this urgent: risky wants that argmax never picked now get
+  drawn, so they must not exist.
+
+Also: nano placement follows metal sinks (live build sites with crews compete
+for turrets when the bank is above apex_nano_sink_bank of storage; 5 sink
+placements in the seed-11 run), committed separately as e17aef7.
+
 ## 2026-08-23: rear specialist PROVEN -- audit passes on both seeds
 
 apexearth: "run it on your own until these features are working and an audit
