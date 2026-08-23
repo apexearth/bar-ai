@@ -1160,6 +1160,9 @@ const float TUNE_FARM_BACK = 500.f;
 // E_LOOKAHEAD: seconds of energy-pull GROWTH folded into the scarcity
 // price -- anticipation, so the solar starts before the bank empties.
 const float TUNE_E_LOOKAHEAD = 30.f;
+// RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
+// competes with perpetual streams (the market's typical payback scale).
+const float TUNE_RECLAIM_AMORT = 300.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone

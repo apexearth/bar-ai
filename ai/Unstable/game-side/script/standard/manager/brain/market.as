@@ -24,6 +24,7 @@ const int WK_STORE = 6;
 const int WK_MEXUP = 7;
 const int WK_TECH = 8;
 const int WK_NANO = 9;
+const int WK_RECLAIM = 10;
 
 class Want {
 	int kind = WK_NONE;
@@ -47,6 +48,7 @@ string KindName(int k)
 	if (k == WK_MEXUP) return "mexup";
 	if (k == WK_TECH) return "tech";
 	if (k == WK_NANO) return "nano";
+	if (k == WK_RECLAIM) return "reclaim";
 	return "none";
 }
 
@@ -427,12 +429,23 @@ float OwnedMobileCeil()
 	return ceil;
 }
 
+// Own standing generators, for the obsolete-reclaim want. NOCOUNT handles:
+// every entry MUST leave via NoteDead.
+array<CCircuitUnit@> gOwnGen;
+array<Id> gOwnGenIds;
+
 void NoteFinished(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
 	const int defId = int(unit.circuitDef.id);
 	OwnAdd(defId, 1);
+	if (!Catalog::gMobile[defId] && (Catalog::gMakeE[defId] > 1.f)
+		&& !Catalog::gNeedGeo[defId])
+	{
+		gOwnGen.insertLast(unit);
+		gOwnGenIds.insertLast(unit.id);
+	}
 	if (Catalog::gExtractsM[defId] <= 0.f)
 		return;
 	const int i = LedgerNearest(unit.GetPos(ai.frame));
@@ -442,7 +455,7 @@ void NoteFinished(CCircuitUnit@ unit)
 // Fallback anchor: the first finished nano, only if no plan latched first.
 void NoteFarm(CCircuitUnit@ unit)
 {
-	if (gFarmSet || (unit is null))
+	if (unit is null)
 		return;
 	const int d = int(unit.circuitDef.id);
 	if (Catalog::gMobile[d] || (Catalog::gBuildPower[d] <= 0.f)
@@ -450,6 +463,16 @@ void NoteFarm(CCircuitUnit@ unit)
 	{
 		return;
 	}
+	// A nano without a patrol order does NOTHING (apexearth 2026-08-23:
+	// "give them a patrol order after they are created. Then they will do
+	// work" -- the player's 'stop' shortcut). Patrol to a nearby point;
+	// auto-assist/repair/reclaim in range follows.
+	AIFloat3 p = unit.GetPos(ai.frame);
+	p.x += 48.f;
+	p.z += 48.f;
+	unit.CmdPatrolTo(p);
+	if (gFarmSet)
+		return;
 	gFarmPos = unit.GetPos(ai.frame);
 	gFarmSet = true;
 	AiLog("apex: nano farm anchored at "
@@ -460,6 +483,13 @@ void NoteDead(CCircuitUnit@ unit)
 	if (unit is null)
 		return;
 	WorkerGone(unit.id);
+	for (uint gi = 0; gi < gOwnGenIds.length(); ++gi) {
+		if (gOwnGenIds[gi] == unit.id) {
+			gOwnGen.removeAt(gi);
+			gOwnGenIds.removeAt(gi);
+			break;
+		}
+	}
 	OwnAdd(int(unit.circuitDef.id), -1);
 	if (Catalog::gExtractsM[int(unit.circuitDef.id)] <= 0.f)
 		return;
@@ -1062,6 +1092,30 @@ void WorkerGone(Id id)
 	}
 }
 
+// Round-robin over owned ceiling-reaching cons, for the guard floor-want.
+uint gServeIdx = 0;
+CCircuitUnit@ NextServingCon()
+{
+	const float ceilX = BestExtract();
+	array<CCircuitUnit@> serving;
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ u = gWorkers[i];
+		if (u is null)
+			continue;
+		const array<int>@ b = Catalog::BuildsOf(int(u.circuitDef.id));
+		for (uint q = 0; q < b.length(); ++q) {
+			if (Catalog::gExtractsM[b[q]] >= ceilX) {
+				serving.insertLast(u);
+				break;
+			}
+		}
+	}
+	if (serving.length() == 0)
+		return null;
+	gServeIdx = (gServeIdx + 1) % serving.length();
+	return serving[gServeIdx];
+}
+
 // Fraction of known workers actually holding work. Idle cons mean labs and
 // more cons are OVER-valued -- capability nobody uses is not capability
 // (apexearth 2026-08-23: "we have cons we aren't even using so the value of
@@ -1127,6 +1181,77 @@ void StallWatch()
 	pick.task.Abort();
 }
 
+// Obsolete generators price their own metal back into the market: when the
+// E economy is structurally in surplus (removing the candidate keeps it so)
+// and the bank has room for the burst, a weak generator's banked metal
+// beats its trickle. Weakest first (lowest makeE per metal).
+CCircuitUnit@ gReclaimTarget = null;
+
+Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
+{
+	Want w;
+	// Room for the burst (the storage-headroom rule): a full bank wastes
+	// the reclaim outright.
+	const float st = aiEconomyMgr.metal.storage;
+	if ((st <= 1.f) || (aiEconomyMgr.metal.current > 0.7f * st))
+		return w;
+	const float eFree = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	CCircuitUnit@ best = null;
+	float bestScore = 1e9f;
+	int bestDef = -1;
+	for (uint i = 0; i < gOwnGen.length(); ++i) {
+		CCircuitUnit@ g = gOwnGen[i];
+		if (g is null)
+			continue;
+		const int d = int(g.circuitDef.id);
+		// Removing it must LEAVE a surplus -- reclaim never causes a stall.
+		if (eFree - Catalog::gMakeE[d] <= 0.1f * aiEconomyMgr.energy.income)
+			continue;
+		const float score = Catalog::gMakeE[d] / ((Catalog::gCostM[d] > 1.f)
+				? Catalog::gCostM[d] : 1.f);
+		if (score < bestScore) {
+			bestScore = score;
+			@best = g;
+			bestDef = d;
+		}
+	}
+	if (best is null)
+		return w;
+	// Obsolete means a TIER ABOVE STANDS: a solar next to a fusion is scrap,
+	// a solar in a solar economy is not (measured: v=143 reclaim ate young
+	// solars in a build-reclaim churn).
+	bool tierAbove = false;
+	for (uint gi = 0; gi < gOwnGen.length(); ++gi) {
+		if ((gOwnGen[gi] !is null)
+			&& (Catalog::gMakeE[int(gOwnGen[gi].circuitDef.id)]
+				>= 5.f * Catalog::gMakeE[bestDef]))
+		{
+			tierAbove = true;
+			break;
+		}
+	}
+	if (!tierAbove)
+		return w;
+	// One-shot metal amortized at the market's payback scale -- 60s priced a
+	// single refund like a perpetual stream and it outbid every mex.
+	const float horizon = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	const float gain = Catalog::gCostM[bestDef] / ((horizon > 1.f) ? horizon : 300.f);
+	const AIFloat3 gp = best.GetPos(ai.frame);
+	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+	const float walkSec = (speed > 1.f)
+			? (unit.GetPos(ai.frame).distance2D(gp) / speed) : 60.f;
+	w.kind = WK_RECLAIM;
+	@w.def = Catalog::Def(bestDef);
+	w.pos = gp;
+	w.spotId = int(best.id);
+	w.gain = gain - Catalog::gMakeE[bestDef] * EPriceFloor();
+	w.mCost = 1.f;
+	w.tCost = (walkSec + Catalog::gCostM[bestDef] / 90.f) * Wage();
+	w.value = (w.gain > 0.f) ? (w.gain / (w.mCost + w.tCost)) : 0.f;
+	@gReclaimTarget = best;
+	return w;
+}
+
 //------------------------------------------------------------------------------
 // The arbiter's builder side. Called only from Brain::Decide.
 //------------------------------------------------------------------------------
@@ -1153,7 +1278,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	array<Want@> wants = {
 		ProposeMex(unit), ProposeEnergy(unit), ProposeGeo(unit),
 		ProposePlant(unit), ProposeConvert(unit), ProposeStore(unit),
-		ProposeMexUp(unit), ProposeTech(unit), ProposeNano(unit)
+		ProposeMexUp(unit), ProposeTech(unit), ProposeNano(unit),
+		ProposeReclaimObsolete(unit)
 	};
 	// Highest value first; a want the executor refuses (ground taken, request
 	// standing, join out of reach) falls out and the runner-up is tried --
@@ -1195,9 +1321,32 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 	}
 	if (top is null) {
-		// The floor want: an idle builder's time is free, so it patrols the
-		// farm and auto-assists whatever is building there. Short timeout:
-		// it re-enters the market every cycle.
+		// Floor want 1: a lesser con GUARDS a ceiling-reaching con -- guard
+		// auto-assists whatever its target does, so 50 idle T1s (air cons
+		// included) become T2 build power (apexearth 2026-08-23). Round-
+		// robin spreads the guards.
+		if (BestExtract() > 0.f) {
+			float myCeil = 0.f;
+			const array<int>@ mine = Catalog::BuildsOf(int(unit.circuitDef.id));
+			for (uint i = 0; i < mine.length(); ++i) {
+				if (Catalog::gExtractsM[mine[i]] > myCeil)
+					myCeil = Catalog::gExtractsM[mine[i]];
+			}
+			if (myCeil < BestExtract()) {
+				CCircuitUnit@ boss = NextServingCon();
+				if (boss !is null) {
+					if (ai.frame >= gNextIdleLog) {
+						gNextIdleLog = ai.frame + 30 * SECOND;
+						AiLog("apex: decide " + unit.circuitDef.GetName() + " #" + unit.id
+							+ " -> guard:" + boss.circuitDef.GetName() + " #" + boss.id
+							+ " (assist its work)");
+					}
+					return aiBuilderMgr.Enqueue(TaskB::Guard(Task::Priority::LOW,
+							boss, false, 60 * SECOND));
+				}
+			}
+		}
+		// Floor want 2: patrol the farm and auto-assist whatever builds there.
 		if (gFarmSet) {
 			if (ai.frame >= gNextIdleLog) {
 				gNextIdleLog = ai.frame + 30 * SECOND;
@@ -1252,6 +1401,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	if (w.kind == WK_TECH) {
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+	}
+	if (w.kind == WK_RECLAIM) {
+		if ((gReclaimTarget is null) || (int(gReclaimTarget.id) != w.spotId))
+			return null;
+		return aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL,
+				gReclaimTarget));
 	}
 	if (w.kind == WK_NANO) {
 		// Tighter than the coverage circle so the reach circles overlap and
