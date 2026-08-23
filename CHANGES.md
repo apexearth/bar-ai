@@ -1,5 +1,23 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: one tier purchase at a time -- reach-kinship for labs
+
+apexearth, watching: "we made a T2 bot lab and then a T2 vehicle lab...
+we couldn't at all afford two, barely could afford one." Mechanism: tech
+gain fires on prodCeil > OwnedCeil, and OwnedCeil counts STANDING
+factories but not ones under construction -- a window minutes long
+exactly when feed-bound -- while the per-def dedup (deliberately narrow
+so a T1 rebuild cannot zero tech) is blind to same-tier-different-def.
+
+- ProposeTech: a live plant whose products reach the same extraction tier
+  vetoes any other lab claiming that unlock (kinship by REACH, in flight).
+- ProposePlant: a "duplicate" is any standing plant of equal reach and the
+  same air/ground class, not the same def -- parallel capacity of one tier
+  splits the gain like copies always did.
+
+Verified seed-5 Comet: exactly one armalab, no armavp, techStart 11.8m,
+mex 34, prod 37.7k (profile held).
+
 ## 2026-08-23: nano farms ditched; fusions pack the deep rear; amphibs x0 on dry maps; mobile radar/jammer unblocked
 
 All four from apexearth watching, each verified on seed-5 Comet (floor off):

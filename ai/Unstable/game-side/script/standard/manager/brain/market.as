@@ -1149,7 +1149,49 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// copy owned (watched: T1 air labs multiplying). And a plant whose
 		// cons reach the extraction ceiling outranks a T1 copy -- "we want
 		// multiple T2 air labs, not T1 air labs."
-		float dupGain = gain / float(1 + Catalog::Def(d).count);
+		// ...and a "copy" is any plant of the SAME REACH from the same
+		// ground/air class, not the same def -- a T2 bot lab and a T2
+		// vehicle lab are parallel capacity of one tier (watched: both
+		// bought when one was barely affordable).
+		int reachKin = Catalog::Def(d).count;
+		{
+			float myReach = 0.f;
+			bool myAir = false;
+			for (uint pr0 = 0; pr0 < prods.length(); ++pr0) {
+				if (!Catalog::gMobile[prods[pr0]] || !Catalog::gBuilder[prods[pr0]])
+					continue;
+				if (Catalog::gFlyer[prods[pr0]])
+					myAir = true;
+				const array<int>@ pr0b = Catalog::gBuildsList[prods[pr0]];
+				for (uint rz = 0; rz < pr0b.length(); ++rz) {
+					if (Catalog::gExtractsM[pr0b[rz]] > myReach)
+						myReach = Catalog::gExtractsM[pr0b[rz]];
+				}
+			}
+			for (uint kd2 = 1; kd2 < gOwnCount.length(); ++kd2) {
+				if ((gOwnCount[kd2] <= 0) || (int(kd2) == d)
+					|| Catalog::gMobile[int(kd2)]
+					|| (Catalog::gBuildsList[int(kd2)].length() == 0))
+					continue;
+				const array<int>@ kb2 = Catalog::gBuildsList[int(kd2)];
+				float kReach = 0.f;
+				bool kAir = false;
+				for (uint kq2 = 0; kq2 < kb2.length(); ++kq2) {
+					if (!Catalog::gMobile[kb2[kq2]] || !Catalog::gBuilder[kb2[kq2]])
+						continue;
+					if (Catalog::gFlyer[kb2[kq2]])
+						kAir = true;
+					const array<int>@ kpb2 = Catalog::gBuildsList[kb2[kq2]];
+					for (uint kz2 = 0; kz2 < kpb2.length(); ++kz2) {
+						if (Catalog::gExtractsM[kpb2[kz2]] > kReach)
+							kReach = Catalog::gExtractsM[kpb2[kz2]];
+					}
+				}
+				if ((kReach >= myReach) && (kAir == myAir))
+					reachKin += gOwnCount[kd2];
+			}
+		}
+		float dupGain = gain / float(1 + reachKin);
 		{
 			float prodReach = 0.f;
 			for (uint pr = 0; pr < prods.length(); ++pr) {
@@ -1320,6 +1362,41 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 					break;
 				}
 			}
+		}
+		// SAME-TIER KIN IN FLIGHT: a live plant whose products reach this
+		// far is the SAME unlock, already being paid for -- a T2 bot lab
+		// under construction must veto the T2 vehicle lab (watched: both
+		// bought at an income that barely afforded one; the build window
+		// is minutes long exactly when feed-bound). The per-def dedup
+		// above deliberately does not cover this (a T1 rebuild in flight
+		// must not zero tech), so kinship here is by REACH.
+		if (prodCeil > ownCeil) {
+			bool kinInFlight = false;
+			for (uint kl = 0; kl < Requests::gLive.length(); ++kl) {
+				IUnitTask@ kt = Requests::gLive[kl];
+				if ((kt is null) || (kt.buildDef is null))
+					continue;
+				const int kd = int(kt.buildDef.id);
+				if (Catalog::gMobile[kd] || (Catalog::gBuildsList[kd].length() == 0))
+					continue;
+				const array<int>@ kb = Catalog::gBuildsList[kd];
+				for (uint kq = 0; kq < kb.length() && !kinInFlight; ++kq) {
+					const int kpd = kb[kq];
+					if (!Catalog::gMobile[kpd] || !Catalog::gBuilder[kpd])
+						continue;
+					const array<int>@ kpb = Catalog::gBuildsList[kpd];
+					for (uint kz = 0; kz < kpb.length(); ++kz) {
+						if (Catalog::gExtractsM[kpb[kz]] >= prodCeil) {
+							kinInFlight = true;
+							break;
+						}
+					}
+				}
+				if (kinInFlight)
+					break;
+			}
+			if (kinInFlight)
+				continue;
 		}
 		// A lab without follow-through is a statue: its price carries its
 		// first constructor, and its VALUE scales with how funded the army
