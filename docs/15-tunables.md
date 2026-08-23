@@ -1,3 +1,5 @@
+> **Stale since the 2026-08-23 overhaul kill + tunables trim** — 308 dead names were removed from dev_tunables.lua and tunables.as; the live list is those two files, not this doc.
+
 # Runtime tunables — the registry
 
 Constants can be overridden per match without a rebuild and without touching the
