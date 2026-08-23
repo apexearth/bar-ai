@@ -1145,7 +1145,7 @@ const float TUNE_SPACE_M = 1.0f;
 // BP_HEADROOM: lathe capacity target as a fraction of income (slightly
 // above 1 so the bank drains instead of pooling) -- the closed loop's one
 // constant, a headroom fraction, never a count.
-const float TUNE_BP_HEADROOM = 1.15f;
+const float TUNE_BP_HEADROOM = 1.5f;   // 1.15 read "lacked build power" in watch after watch; supply leads demand, the E lesson again
 // ASSIST_SHARE: fraction of the standing lathe fleet expected to fold onto
 // a priced build (Requests::Take joins same-def askers).
 const float TUNE_ASSIST_SHARE = 0.5f;

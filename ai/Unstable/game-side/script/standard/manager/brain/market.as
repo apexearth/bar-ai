@@ -242,9 +242,9 @@ float MCostScale()
 	// from HALF-full (watched: 3,700 banked while outnumbered -- "we
 	// certainly could afford it").
 	const float frac = aiEconomyMgr.metal.current / st;
-	if (frac <= 0.5f)
+	if (frac <= 0.35f)
 		return 1.f;
-	const float f = (frac - 0.5f) / 0.4f;
+	const float f = (frac - 0.35f) / 0.45f;
 	return 1.f - 0.8f * ((f > 1.f) ? 1.f : f);
 }
 
@@ -2640,17 +2640,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 				const float eP = aiEconomyMgr.energy.pull;
 				if ((eP > 1.f) && (eI < eP))
 					eFeedA = eI / eP;
-				// The metal mirror: a starving bank throttles army the same
-				// way a stall does -- structural, so no dial can starve the
-				// eco again (watched: out of metal, army still pumping).
-				const float mI = aiEconomyMgr.metal.income;
-				const float mP = aiEconomyMgr.metal.pull;
-				const float mSt = aiEconomyMgr.metal.storage;
-				if ((mP > 1.f) && (mI < mP) && (mSt > 1.f)
-					&& (aiEconomyMgr.metal.current < 0.25f * mSt))
-				{
-					eFeedA *= mI / mP;
-				}
+				// (the metal-feed throttle is gone: a zero bank spending its
+				// whole income is PERFECT efficiency, not danger -- apexearth:
+				// "'out of metal' is simply failing to spend... we need to
+				// spend more." Builds at an empty bank slow to income speed
+				// by the engine's own physics, which is the correct state.)
 			}
 			// This unit's role fills its own NEED gap; a saturated role's
 			// units price to the floor whatever their power-per-cost.

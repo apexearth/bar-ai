@@ -209,6 +209,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		Military::NoteStructureLoss(at, cdef.costM);
 	const string hist = Builder::TakeHistFor(int(unit.id));
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")
+		+ " acts=" + unit.GetActTrace()
 		+ " id=" + unit.id + " frame=" + ai.frame
 		+ " at=" + int(at.x) + "," + int(at.z)
 		+ " curTask=t" + tt + "b" + bt + "f" + ft
