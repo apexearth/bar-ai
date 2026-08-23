@@ -432,6 +432,12 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 			if ((cand is null) || cand.IsDead()
 				|| (cand.GetBuildType() != Task::BuildType::FACTORY))
 				continue;
+			// SAME DEF only: a T2 lab ask during a T1 rebuild is tech, not a
+			// fork -- the blanket fold made a T1 request absorb every T2
+			// decision (watched, 8v8: overflowing, no T2 lab).
+			if ((want !is null) && (cand.buildDef !is null)
+				&& (cand.buildDef !is want))
+				continue;
 			// Manned only -- the engine's held placeholder task (see
 			// FactoryManned) also lives in this registry, and handing IT
 			// back wedged every asker on an unassignable task.

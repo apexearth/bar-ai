@@ -1075,6 +1075,8 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			continue;
 		if (Catalog::gBuildsList[d].length() == 0)
 			continue;
+		if (Requests::LiveOfDef(Catalog::Def(d)))
+			continue;   // this def is already requested: help it, not double it
 		// The plant's best feasible mobile builder, and the extraction IT
 		// reaches; the plant unlocks only what exceeds our own ceiling.
 		float prodCeil = 0.f;
