@@ -9200,7 +9200,7 @@ index 90c3b71..61aec1c 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
-index 0400f8d..83adb99 100644
+index 0400f8d..b475c87 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp
 +++ b/src/circuit/task/fighter/FighterTask.cpp
 @@ -6,8 +6,10 @@
@@ -9368,13 +9368,14 @@ index 0400f8d..83adb99 100644
  void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
  	CCircuitAI* circuit = manager->GetCircuit();
-@@ -112,18 +222,53 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -112,18 +222,54 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		return;
  	}
  
 +	// Before any retreat question: a unit that stays in the fight should not
 +	// stand in the stream of fire that is hitting it.
 +	DodgeFire(unit, attacker);
++	CounterBattery(unit, attacker);
 +
 +	// Committed push: do not peel off. apexearth: "Need to ensure the units
 +	// don't suddenly say 'oh lets regroup somewhere safe!' because their purpose
@@ -9424,7 +9425,7 @@ index 0400f8d..83adb99 100644
  			circuit->GetBuilderManager()->Enqueue(TaskB::Repair(IBuilderTask::Priority::NOW, unit));
  		}
  		if (healthPerc < cdef->GetSelfDHP()) {
-@@ -131,14 +276,26 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -131,14 +277,26 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		}
  		return;
  	} else if (healthPerc < 0.2f) {  // stuck units workaround: they don't shoot and don't see distant threat
@@ -9451,7 +9452,7 @@ index 0400f8d..83adb99 100644
  		CRetreatTask* task = manager->EnqueueRetreat();
  		manager->AssignTask(unit, task);
  		return;
-@@ -147,6 +304,8 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -147,6 +305,8 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  	if ((target->GetPos().SqDistance2D(pos) > SQUARE(range)) ||
  		(threatMap->GetThreatAt(unit, pos) * 2 > threatMap->GetUnitPower(unit)))
  	{
@@ -9460,7 +9461,7 @@ index 0400f8d..83adb99 100644
  		CRetreatTask* task = manager->EnqueueRetreat();
  		manager->AssignTask(unit, task);
  		return;
-@@ -154,6 +313,52 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -154,6 +314,101 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  	cowards.insert(unit);
  }
  
@@ -9510,10 +9511,59 @@ index 0400f8d..83adb99 100644
 +	IntentPing(dst, "DODGE");
 +}
 +
++// Standing in bombardment from a shooter we cannot answer from here is the
++// worst state in the game: taking damage, dealing none (apexearth watched a
++// held group absorb an artillery park). If the attacker OUTRANGES us and is
++// reachable ground, charge it -- a unit-thought, throttled by the dodge
++// cooldown's bigger sibling; ATTACK-type tasks keep their own targeting.
++void IFighterTask::CounterBattery(CCircuitUnit* unit, CEnemyInfo* attacker)
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	if (circuit->GetTunable("apex_counter_battery", 1.f) <= 0.f) {
++		return;
++	}
++	if ((attacker == nullptr) || (attacker->GetCircuitDef() == nullptr)) {
++		return;
++	}
++	if (GetType() != Type::FIGHTER) {
++		return;
++	}
++	// Only holding postures counter-charge; an attacking task is already busy.
++	const FightType ft = GetFightType();
++	if ((ft != FightType::DEFEND) && (ft != FightType::GUARD)
++		&& (ft != FightType::RALLY))
++	{
++		return;
++	}
++	CCircuitDef* cdef = unit->GetCircuitDef();
++	if (!cdef->IsMobile() || cdef->IsAbleToFly()) {
++		return;
++	}
++	const int frame = circuit->GetLastFrame();
++	if (frame < unit->GetDamagedFrame() + FRAMES_PER_SEC
++			* (int)circuit->GetTunable("apex_counter_cd", 5.f)) {
++		return;
++	}
++	const AIFloat3& ePos = attacker->GetPos();
++	if (!utils::is_valid(ePos)) {
++		return;
++	}
++	const AIFloat3& pos = unit->GetPos(frame);
++	const float dist = pos.distance2D(ePos);
++	// Charge only what OUTRANGES us (else our own attack handles it) and is
++	// within a sprint (do not cross the map for one shell).
++	if ((dist <= cdef->GetMaxRange() * 1.1f)
++		|| (dist > cdef->GetSpeed() * circuit->GetTunable("apex_counter_sprint", 20.f))) {
++		return;
++	}
++	unit->Attack(attacker, false, frame + FRAMES_PER_SEC * 30);
++	unit->SetDamagedFrame(frame);
++}
++
  void IFighterTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
  	RemoveAssignee(unit);
-@@ -177,7 +382,9 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
+@@ -177,7 +432,9 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
  	if (unit->Blocker() != nullptr) {
  		return;  // Do not interrupt current action
  	}
@@ -9524,7 +9574,7 @@ index 0400f8d..83adb99 100644
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const AIFloat3& tPos = GetTarget()->GetPos();
-@@ -203,7 +410,31 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
+@@ -203,7 +460,31 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
  	CCircuitDef* edef = GetTarget()->GetCircuitDef();
  	const bool isStatic = (edef != nullptr) && !edef->IsMobile();
  
@@ -9558,7 +9608,7 @@ index 0400f8d..83adb99 100644
  	CTerrainManager::CorrectPosition(newPos);
  	unit->Attack(newPos, GetTarget(), targetTile, GetTarget()->GetUnit()->IsCloaked(), isStatic, frame + FRAMES_PER_SEC * 60);
 diff --git a/src/circuit/task/fighter/FighterTask.h b/src/circuit/task/fighter/FighterTask.h
-index e1d90c4..36fe147 100644
+index e1d90c4..b903805 100644
 --- a/src/circuit/task/fighter/FighterTask.h
 +++ b/src/circuit/task/fighter/FighterTask.h
 @@ -13,7 +13,29 @@
@@ -9606,13 +9656,14 @@ index e1d90c4..36fe147 100644
  	virtual void AssignTo(CCircuitUnit* unit) override;
  	virtual void RemoveAssignee(CCircuitUnit* unit) override;
  
-@@ -36,7 +65,16 @@ public:
+@@ -36,7 +65,17 @@ public:
  	virtual void OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker) override;
  	virtual void OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker) override;
  
 +protected:
 +	// Sidestep incoming fire; called from OnUnitDamaged, per-unit cooldown.
 +	void DodgeFire(CCircuitUnit* unit, CEnemyInfo* attacker);
++	void CounterBattery(CCircuitUnit* unit, CEnemyInfo* attacker);
 +
 +public:
 +
@@ -9623,7 +9674,7 @@ index e1d90c4..36fe147 100644
  	const springai::AIFloat3& GetPosition() const { return position; }
  
  	float GetAttackPower() const { return attackPower; }
-@@ -44,6 +82,26 @@ public:
+@@ -44,6 +83,26 @@ public:
  	void ClearTarget() { target = nullptr; }  // Only for ~CEnemyUnit
  
  	const std::set<CCircuitUnit*>& GetShields() const { return shields; }

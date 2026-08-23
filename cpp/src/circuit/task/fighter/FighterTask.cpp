@@ -225,6 +225,7 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 	// Before any retreat question: a unit that stays in the fight should not
 	// stand in the stream of fire that is hitting it.
 	DodgeFire(unit, attacker);
+	CounterBattery(unit, attacker);
 
 	// Committed push: do not peel off. apexearth: "Need to ensure the units
 	// don't suddenly say 'oh lets regroup somewhere safe!' because their purpose
@@ -357,6 +358,55 @@ void IFighterTask::DodgeFire(CCircuitUnit* unit, CEnemyInfo* attacker)
 	unit->CmdMoveTo(dst, 0, frame + FRAMES_PER_SEC * 2);
 	unit->SetDodgeFrame(frame + (int)(FRAMES_PER_SEC * circuit->GetTunable("apex_dodge_cd", 1.f)));
 	IntentPing(dst, "DODGE");
+}
+
+// Standing in bombardment from a shooter we cannot answer from here is the
+// worst state in the game: taking damage, dealing none (apexearth watched a
+// held group absorb an artillery park). If the attacker OUTRANGES us and is
+// reachable ground, charge it -- a unit-thought, throttled by the dodge
+// cooldown's bigger sibling; ATTACK-type tasks keep their own targeting.
+void IFighterTask::CounterBattery(CCircuitUnit* unit, CEnemyInfo* attacker)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	if (circuit->GetTunable("apex_counter_battery", 1.f) <= 0.f) {
+		return;
+	}
+	if ((attacker == nullptr) || (attacker->GetCircuitDef() == nullptr)) {
+		return;
+	}
+	if (GetType() != Type::FIGHTER) {
+		return;
+	}
+	// Only holding postures counter-charge; an attacking task is already busy.
+	const FightType ft = GetFightType();
+	if ((ft != FightType::DEFEND) && (ft != FightType::GUARD)
+		&& (ft != FightType::RALLY))
+	{
+		return;
+	}
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	if (!cdef->IsMobile() || cdef->IsAbleToFly()) {
+		return;
+	}
+	const int frame = circuit->GetLastFrame();
+	if (frame < unit->GetDamagedFrame() + FRAMES_PER_SEC
+			* (int)circuit->GetTunable("apex_counter_cd", 5.f)) {
+		return;
+	}
+	const AIFloat3& ePos = attacker->GetPos();
+	if (!utils::is_valid(ePos)) {
+		return;
+	}
+	const AIFloat3& pos = unit->GetPos(frame);
+	const float dist = pos.distance2D(ePos);
+	// Charge only what OUTRANGES us (else our own attack handles it) and is
+	// within a sprint (do not cross the map for one shell).
+	if ((dist <= cdef->GetMaxRange() * 1.1f)
+		|| (dist > cdef->GetSpeed() * circuit->GetTunable("apex_counter_sprint", 20.f))) {
+		return;
+	}
+	unit->Attack(attacker, false, frame + FRAMES_PER_SEC * 30);
+	unit->SetDamagedFrame(frame);
 }
 
 void IFighterTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
