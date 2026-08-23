@@ -19,6 +19,8 @@ const int WK_MEX = 1;
 const int WK_ENERGY = 2;
 const int WK_PLANT = 3;
 const int WK_GEO = 4;
+const int WK_CONVERT = 5;
+const int WK_STORE = 6;
 
 class Want {
 	int kind = WK_NONE;
@@ -37,6 +39,8 @@ string KindName(int k)
 	if (k == WK_ENERGY) return "energy";
 	if (k == WK_PLANT) return "plant";
 	if (k == WK_GEO) return "geo";
+	if (k == WK_CONVERT) return "convert";
+	if (k == WK_STORE) return "store";
 	return "none";
 }
 
@@ -172,8 +176,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
-		if (!Catalog::gAvailable[d] || Catalog::gMobile[d])
-			continue;
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d])
+			continue;   // floaters need water; land-base v1 (see armfmkr churn)
 		if (Catalog::gMakeE[d] <= 1.f)
 			continue;
 		if (Catalog::gNeedGeo[d])
@@ -204,6 +208,69 @@ float OverflowM()
 	if ((st > 1.f) && (aiEconomyMgr.metal.current < 0.8f * st))
 		return 0.f;
 	return over;
+}
+
+// Converters: worth exactly the energy surplus they would chew, at their own
+// ratio. Pure catalog arithmetic, no model.
+Want@ ProposeConvert(CCircuitUnit@ unit)
+{
+	Want w;
+	const float eSurplus = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	if (eSurplus <= 1.f)
+		return w;
+	const int uid = int(unit.circuitDef.id);
+	const array<int>@ builds = Catalog::BuildsOf(uid);
+	for (uint i = 0; i < builds.length(); ++i) {
+		const int d = builds[i];
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d])
+			continue;   // floaters need water; land-base v1 (see armfmkr churn)
+		if (Catalog::gConvCapacity[d] <= 0.f)
+			continue;
+		const float chew = (eSurplus < Catalog::gConvCapacity[d])
+				? eSurplus : Catalog::gConvCapacity[d];
+		Want c;
+		ValueOf(d, chew * Catalog::gConvRatio[d], 0.f, Catalog::gBuildPower[uid], c);
+		if (c.value > w.value) {
+			w = c;
+			w.kind = WK_CONVERT;
+			@w.def = Catalog::Def(d);
+			w.pos = unit.GetPos(ai.frame);
+		}
+	}
+	return w;
+}
+
+// Storage. MODEL: a store captures overflow up to its volume spread over a
+// horizon (apex_store_horizon seconds) -- overflow beyond a full bank is
+// lost forever, so the store's return is the loss it absorbs while spending
+// catches up. Only defs whose storage dominates their cost propose here;
+// incidental storage on other defs is not double-counted.
+Want@ ProposeStore(CCircuitUnit@ unit)
+{
+	Want w;
+	const float over = OverflowM();
+	if (over <= 0.5f)
+		return w;
+	const float horizon = ai.GetTunable("apex_store_horizon", TUNE_STORE_HORIZON);
+	const int uid = int(unit.circuitDef.id);
+	const array<int>@ builds = Catalog::BuildsOf(uid);
+	for (uint i = 0; i < builds.length(); ++i) {
+		const int d = builds[i];
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d])
+			continue;   // floaters need water; land-base v1 (see armfmkr churn)
+		if (Catalog::gStoreM[d] <= Catalog::gCostM[d])
+			continue;
+		const float capture = Catalog::gStoreM[d] / ((horizon > 1.f) ? horizon : 60.f);
+		Want c;
+		ValueOf(d, (over < capture) ? over : capture, 0.f, Catalog::gBuildPower[uid], c);
+		if (c.value > w.value) {
+			w = c;
+			w.kind = WK_STORE;
+			@w.def = Catalog::Def(d);
+			w.pos = unit.GetPos(ai.frame);
+		}
+	}
+	return w;
 }
 
 // Geothermal: same shape as mex -- a def that must stand on its own spot.
@@ -261,8 +328,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			* ai.GetTunable("apex_plant_pipe", TUNE_PLANT_PIPE);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
-		if (!Catalog::gAvailable[d] || Catalog::gMobile[d])
-			continue;
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d])
+			continue;   // floaters need water; land-base v1 (see armfmkr churn)
 		if (Catalog::gBuildsList[d].length() == 0)
 			continue;   // not a factory
 		// A plant that cannot produce a mobile builder buys no expansion --
@@ -307,7 +374,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		return null;
 
 	array<Want@> wants = {
-		ProposeMex(unit), ProposeEnergy(unit), ProposeGeo(unit), ProposePlant(unit)
+		ProposeMex(unit), ProposeEnergy(unit), ProposeGeo(unit),
+		ProposePlant(unit), ProposeConvert(unit), ProposeStore(unit)
 	};
 	// Highest value first; a want the executor refuses (ground taken, request
 	// standing, join out of reach) falls out and the runner-up is tried --
@@ -366,6 +434,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	}
 	if (w.kind == WK_ENERGY) {
 		return Requests::Take(unit, w.def, Task::BuildType::ENERGY,
+				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+	}
+	if (w.kind == WK_CONVERT) {
+		return Requests::Take(unit, w.def, Task::BuildType::CONVERT,
+				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
+	}
+	if (w.kind == WK_STORE) {
+		return Requests::Take(unit, w.def, Task::BuildType::STORE,
 				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
 	}
 	if (w.kind == WK_PLANT) {

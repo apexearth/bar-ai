@@ -1124,6 +1124,9 @@ const float TUNE_PLANT_PIPE = 2.0f;
 // marginal plant's gain is zero beyond 1 + income/this -- income-derived,
 // never a count.
 const float TUNE_PLANT_INCOME_PER = 50.f;
+// STORE_HORIZON: seconds over which a storage's volume counts as captured
+// overflow (its gain = min(overflow, storeM/horizon)).
+const float TUNE_STORE_HORIZON = 60.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone

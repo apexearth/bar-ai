@@ -31,6 +31,7 @@ array<bool> gFlyer;
 array<bool> gBuilder;
 array<bool> gWind;
 array<bool> gNeedGeo;   // must stand on a geo vent (engine UnitDef flag)
+array<bool> gFloater;   // stands on water
 array<bool> gAvailable;
 
 array<array<int>> gBuildsList;  // builder def id -> def ids it can build
@@ -51,7 +52,7 @@ void Init()
 	gUpkeepM.resize(n); gUpkeepE.resize(n); gMakeM.resize(n); gMakeE.resize(n);
 	gStoreM.resize(n); gStoreE.resize(n); gConvCapacity.resize(n); gConvRatio.resize(n);
 	gMobile.resize(n); gFlyer.resize(n); gBuilder.resize(n); gWind.resize(n);
-	gNeedGeo.resize(n);
+	gNeedGeo.resize(n); gFloater.resize(n);
 	gAvailable.resize(n);
 	gBuildsList.resize(n); gBuiltBy.resize(n);
 
@@ -80,6 +81,7 @@ void Init()
 		gBuilder[i]      = cdef.IsBuilder();
 		gWind[i]         = cdef.IsWind();
 		gNeedGeo[i]      = cdef.IsNeedGeo();
+		gFloater[i]      = cdef.IsFloater();
 		// NOT IsAvailable(frame): that folds in behaviour.json "since" clocks
 		// (leaf-era policy the market must not inherit) and ai.frame is -2 at
 		// AiMain anyway. Available = the game ships it and no zero limit.
