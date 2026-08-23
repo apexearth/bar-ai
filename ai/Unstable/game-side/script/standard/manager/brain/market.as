@@ -1042,10 +1042,9 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 	const float demand = UpDemand();
 	if (demand <= 0.5f)
 		return w;
-	// One tech-plant request in flight: the identical request re-proposed
-	// while the first builds is a duplicate, not a want.
-	if (Requests::LiveCountOf(int(Task::BuildType::FACTORY)) > 0)
-		return w;
+	// Dedup is PER DEF: a T1 rebuild in flight must not zero the T2 lab's
+	// price (watched, 8v8: a team overflowing with no T2 -- any live plant
+	// request blanket-blocked tech).
 	const int uid = int(unit.circuitDef.id);
 	const float ownCeil = OwnedCeil();
 	// Best mobility among owned ceiling-reaching cons: a plant whose con

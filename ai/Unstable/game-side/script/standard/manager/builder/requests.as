@@ -75,6 +75,19 @@ IUnitTask@ OrphanOf(CCircuitDef@ def)
 	return null;
 }
 
+// Any live request (manned or not) for exactly this def.
+bool LiveOfDef(CCircuitDef@ def)
+{
+	if (def is null)
+		return false;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if ((gLive[i] !is null) && !gLive[i].IsDead()
+			&& (gLive[i].buildDef !is null) && (gLive[i].buildDef is def))
+			return true;
+	}
+	return false;
+}
+
 bool Governed(int bt)
 {
 	return (bt == int(Task::BuildType::FACTORY))
