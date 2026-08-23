@@ -1626,3 +1626,14 @@ FindTarget rethink cadence); session item, alongside proportional response.
   spike is C++/engine-side periodic work (threat map, path graph, enemy
   clustering are the suspects). Needs a C++ profiling pass; consider
   chunking the guilty job across frames.
+
+## Naval: the next feature block (apexearth 2026-08-23)
+
+"We should try to gain control of the water regions -- a big metric for
+success." The market currently EXCLUDES floaters/submerged everywhere (the
+armsy/armfmkr lessons). Minimal viable navy needs: (1) water senses the
+script lacks (map water fraction, is-water-at, water mex spots) -- likely
+one small DLL binding round; (2) shipyard plants allowed when water value
+justifies, sited at the shore; (3) ship production through the existing
+army market (roles/power already generic); (4) water spot claiming by ship
+cons (engine reachability already per-unit). Scoped, not started.
