@@ -26,6 +26,7 @@ const int WK_TECH = 8;
 const int WK_NANO = 9;
 const int WK_RECLAIM = 10;
 const int WK_ASSIST = 11;
+const int WK_PROTECT = 12;
 
 class Want {
 	int kind = WK_NONE;
@@ -51,6 +52,7 @@ string KindName(int k)
 	if (k == WK_NANO) return "nano";
 	if (k == WK_RECLAIM) return "reclaim";
 	if (k == WK_ASSIST) return "assist";
+	if (k == WK_PROTECT) return "protect";
 	return "none";
 }
 
@@ -430,6 +432,22 @@ int ServingCons()
 	return nServing;
 }
 
+// The costliest mobile unit our standing factories can produce.
+float OwnedProdCostCeil()
+{
+	float ceil = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || Catalog::gMobile[int(d)])
+			continue;
+		const array<int>@ pb = Catalog::gBuildsList[int(d)];
+		for (uint q = 0; q < pb.length(); ++q) {
+			if (Catalog::gMobile[pb[q]] && (Catalog::gCostM[pb[q]] > ceil))
+				ceil = Catalog::gCostM[pb[q]];
+		}
+	}
+	return (ceil > 1.f) ? ceil : 1.f;
+}
+
 float OwnedMobileCeil()
 {
 	float ceil = 0.f;
@@ -450,6 +468,30 @@ float OwnedMobileCeil()
 array<CCircuitUnit@> gOwnGen;
 array<Id> gOwnGenIds;
 
+// The protection ledger: what stands where, per coverage class, plus the
+// total structure value at risk. PROT_* index the class arrays.
+const int PROT_RADAR = 0;
+const int PROT_JAM = 1;
+const int PROT_ANTINUKE = 2;
+const int PROT_TARGFAC = 3;
+const int PROT_DEF = 4;
+const int PROT_N = 5;
+array<array<AIFloat3>> gProtPos(PROT_N);
+array<array<Id>> gProtIds(PROT_N);
+float gAssetsM = 0.f;   // summed costM of standing structures
+
+int ProtClassOf(int defId)
+{
+	if (Catalog::gAntiNuke[defId]) return PROT_ANTINUKE;
+	if (Catalog::gTargFac[defId]) return PROT_TARGFAC;
+	if (Catalog::gRadar[defId]) return PROT_RADAR;
+	if (Catalog::gJammer[defId]) return PROT_JAM;
+	if ((Catalog::gMaxRange[defId] > 1.f) && !Catalog::gMobile[defId]
+		&& !Catalog::gBuilder[defId] && (Catalog::gBuildsList[defId].length() == 0))
+		return PROT_DEF;
+	return -1;
+}
+
 void NoteFinished(CCircuitUnit@ unit)
 {
 	if (unit is null)
@@ -462,6 +504,13 @@ void NoteFinished(CCircuitUnit@ unit)
 		gOwnGen.insertLast(unit);
 		gOwnGenIds.insertLast(unit.id);
 	}
+	if (!Catalog::gMobile[defId])
+		gAssetsM += Catalog::gCostM[defId];
+	const int pc = ProtClassOf(defId);
+	if (pc >= 0) {
+		gProtPos[pc].insertLast(unit.GetPos(ai.frame));
+		gProtIds[pc].insertLast(unit.id);
+	}
 	if (Catalog::gExtractsM[defId] <= 0.f)
 		return;
 	const int i = LedgerNearest(unit.GetPos(ai.frame));
@@ -469,6 +518,9 @@ void NoteFinished(CCircuitUnit@ unit)
 		gLExtract[i] = Catalog::gExtractsM[defId];
 }
 // Fallback anchor: the first finished nano, only if no plan latched first.
+array<AIFloat3> gOwnNanoPos;
+array<Id> gOwnNanoIds;
+
 void NoteFarm(CCircuitUnit@ unit)
 {
 	if (unit is null)
@@ -487,6 +539,8 @@ void NoteFarm(CCircuitUnit@ unit)
 	p.x += 48.f;
 	p.z += 48.f;
 	unit.CmdPatrolTo(p);
+	gOwnNanoPos.insertLast(unit.GetPos(ai.frame));
+	gOwnNanoIds.insertLast(unit.id);
 	if (gFarmSet)
 		return;
 	gFarmPos = unit.GetPos(ai.frame);
@@ -504,6 +558,24 @@ void NoteDead(CCircuitUnit@ unit)
 			gOwnGen.removeAt(gi);
 			gOwnGenIds.removeAt(gi);
 			break;
+		}
+	}
+	if (!Catalog::gMobile[int(unit.circuitDef.id)])
+		gAssetsM -= Catalog::gCostM[int(unit.circuitDef.id)];
+	for (uint nn = 0; nn < gOwnNanoIds.length(); ++nn) {
+		if (gOwnNanoIds[nn] == unit.id) {
+			gOwnNanoPos.removeAt(nn);
+			gOwnNanoIds.removeAt(nn);
+			break;
+		}
+	}
+	for (int pcl = 0; pcl < PROT_N; ++pcl) {
+		for (uint pi = 0; pi < gProtIds[pcl].length(); ++pi) {
+			if (gProtIds[pcl][pi] == unit.id) {
+				gProtPos[pcl].removeAt(pi);
+				gProtIds[pcl].removeAt(pi);
+				break;
+			}
 		}
 	}
 	OwnAdd(int(unit.circuitDef.id), -1);
@@ -977,6 +1049,22 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			techGain = demand * pipe;
 		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f))
 			techGain = demand * pipe * (prodMob / ownMob - 1.f);
+		// Channel 3, the GANTRY case: a plant whose products dwarf anything
+		// we can currently produce is the overflow SINK -- its value is the
+		// wasted income its production line would absorb.
+		{
+			float prodMax = 0.f;
+			for (uint p3 = 0; p3 < prods.length(); ++p3) {
+				if (Catalog::gMobile[prods[p3]]
+					&& (Catalog::gCostM[prods[p3]] > prodMax))
+					prodMax = Catalog::gCostM[prods[p3]];
+			}
+			if (prodMax > 2.f * OwnedProdCostCeil()) {
+				const float sink = OverflowM() * pipe;
+				if (sink > techGain)
+					techGain = sink;
+			}
+		}
 		if (techGain <= 0.f)
 			continue;
 		Want c;
@@ -1312,6 +1400,93 @@ void StallWatch()
 CCircuitUnit@ gReclaimTarget = null;
 CCircuitUnit@ gAssistTarget = null;
 
+bool ProtCovered(int cls, const AIFloat3& in pos, float r)
+{
+	for (uint i = 0; i < gProtPos[cls].length(); ++i) {
+		if (pos.distance2D(gProtPos[cls][i]) < r)
+			return true;
+	}
+	return false;
+}
+
+// Insurance pricing: protection is worth a fraction of the assets it
+// covers, per second of exposure. ONE modeled rate for eyes and turrets,
+// one for the nuke risk (value-paradigm: a single named quantity each).
+// Timing EMERGES: at 5k assets an anti-nuke prices at ~0.4 and loses; at
+// 100k it prices at ~8 and wins.
+Want@ ProposeProtect(CCircuitUnit@ unit)
+{
+	Want w;
+	if (!gFarmSet || (gAssetsM < 1.f))
+		return w;
+	const int uid = int(unit.circuitDef.id);
+	const array<int>@ builds = Catalog::BuildsOf(uid);
+	const float rate = ai.GetTunable("apex_insure_rate", TUNE_INSURE_RATE);
+	const float nukeRate = ai.GetTunable("apex_nuke_risk", TUNE_NUKE_RISK);
+	const AIFloat3 core = gFarmPos;
+	for (uint i = 0; i < builds.length(); ++i) {
+		const int d = builds[i];
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+			|| Catalog::gFloater[d] || Catalog::gSub[d])
+			continue;
+		const int cls = ProtClassOf(d);
+		if (cls < 0)
+			continue;
+		float gain = 0.f;
+		AIFloat3 at = core;
+		if (cls == PROT_RADAR) {
+			if (ProtCovered(PROT_RADAR, core, Catalog::gRadarR[d] * 0.8f))
+				continue;
+			gain = gAssetsM * rate;
+		} else if (cls == PROT_JAM) {
+			if (ProtCovered(PROT_JAM, core, Catalog::gJamR[d] * 0.8f))
+				continue;
+			gain = gAssetsM * rate * 0.5f;
+		} else if (cls == PROT_ANTINUKE) {
+			if (ProtCovered(PROT_ANTINUKE, core, 2000.f))
+				continue;
+			gain = gAssetsM * nukeRate;
+		} else if (cls == PROT_TARGFAC) {
+			// apexearth's spec: three wanted, diminishing.
+			const int have = int(gProtPos[PROT_TARGFAC].length());
+			const int want3 = int(ai.GetTunable("apex_targfac_want", TUNE_TARGFAC_WANT));
+			if (have >= want3)
+				continue;
+			gain = gAssetsM * rate * float(want3 - have) / float(want3);
+		} else if (cls == PROT_DEF) {
+			// A standing mex without a turret in reach: insure the ground.
+			int naked = -1;
+			for (uint li = 0; li < gLSpot.length(); ++li) {
+				if (gLExtract[li] <= 0.f)
+					continue;
+				if (!ProtCovered(PROT_DEF, gLPos[li], 400.f)) {
+					naked = int(li);
+					break;
+				}
+			}
+			if (naked < 0)
+				continue;
+			at = gLPos[naked];
+			gain = (Catalog::gCostM[d] + 620.f) * rate * 20.f;
+		}
+		if (gain <= 0.f)
+			continue;
+		Want c;
+		const float speed = Catalog::gSpeed[uid];
+		const float walkSec = (speed > 1.f)
+				? (unit.GetPos(ai.frame).distance2D(at) / speed) : 60.f;
+		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
+		if (c.value > w.value) {
+			w = c;
+			w.kind = WK_PROTECT;
+			@w.def = Catalog::Def(d);
+			w.pos = at;
+			w.spotId = cls;
+		}
+	}
+	return w;
+}
+
 // Assisting T2+ work is a PRICED want, not an idleness fallback (apexearth
 // 2026-08-23: "T1 cons are still not assisting T2 cons, helping build T2+
 // buildings, or assisting factories"). A joiner transfers its whole drain
@@ -1468,7 +1643,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		ProposeMex(unit), ProposeEnergy(unit), ProposeGeo(unit),
 		ProposePlant(unit), ProposeConvert(unit), ProposeStore(unit),
 		ProposeMexUp(unit), ProposeTech(unit), ProposeNano(unit),
-		ProposeReclaimObsolete(unit), ProposeAssist(unit)
+		ProposeReclaimObsolete(unit), ProposeAssist(unit),
+		ProposeProtect(unit)
 	};
 	// Highest value first; a want the executor refuses (ground taken, request
 	// standing, join out of reach) falls out and the runner-up is tried --
@@ -1594,6 +1770,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
 	}
+	if (w.kind == WK_PROTECT) {
+		const int bt = (w.spotId == PROT_RADAR) ? int(Task::BuildType::RADAR)
+				: (w.spotId == PROT_DEF) ? int(Task::BuildType::DEFENCE)
+				: (w.spotId == PROT_ANTINUKE) ? int(Task::BuildType::BIG_GUN)
+				: int(Task::BuildType::ENERGY);
+		return Requests::Take(unit, w.def, Task::BuildType(bt),
+				Task::Priority::NORMAL, w.pos, 300.f, SQUARE_SIZE * 16.f);
+	}
 	if (w.kind == WK_ASSIST) {
 		if ((gAssistTarget is null) || (int(gAssistTarget.id) != w.spotId))
 			return null;
@@ -1610,9 +1794,30 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				gReclaimTarget));
 	}
 	if (w.kind == WK_NANO) {
-		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
+		// A working factory with no nano in lathe reach outranks the farm --
+		// production lines (Gantries above all) must never build unassisted
+		// (apexearth 2026-08-23).
+		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
+		const float nr = Catalog::gBuildDist[int(w.def.id)];
+		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+			CCircuitUnit@ f = Factory::gFacUnits[fi];
+			if ((f is null) || (f.CountQueued(null) == 0))
+				continue;
+			const AIFloat3 fp = f.GetPos(ai.frame);
+			bool covered = false;
+			for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
+				if (fp.distance2D(gOwnNanoPos[ni]) < nr * 0.9f) {
+					covered = true;
+					break;
+				}
+			}
+			if (!covered) {
+				slot = fp;
+				break;
+			}
+		}
 		return Requests::Take(unit, w.def, Task::BuildType::NANO,
-				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f);
+				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 200.f, 0.f);
 	}
 	if (w.kind == WK_GEO) {
 		return aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::GEO,

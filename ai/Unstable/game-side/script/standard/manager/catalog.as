@@ -35,6 +35,13 @@ array<bool> gFloater;   // stands on water
 array<bool> gSub;       // submerged (underwater structures dodge the floater test)
 array<int> gAreaCells;  // footprint in 16-elmo build cells
 array<float> gBuildDist; // build/assist reach, elmos
+array<bool> gRadar;
+array<bool> gJammer;
+array<float> gRadarR;
+array<float> gJamR;
+array<bool> gAntiNuke;   // carries a nuke interceptor
+array<bool> gTargFac;    // targeting facility (pinpointer)
+array<float> gMaxRange;  // longest weapon reach (0 = unarmed)
 array<bool> gAvailable;
 
 array<array<int>> gBuildsList;  // builder def id -> def ids it can build
@@ -57,6 +64,8 @@ void Init()
 	gMobile.resize(n); gFlyer.resize(n); gBuilder.resize(n); gWind.resize(n);
 	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gAreaCells.resize(n);
 	gBuildDist.resize(n);
+	gRadar.resize(n); gJammer.resize(n); gRadarR.resize(n); gJamR.resize(n);
+	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n);
 	gAvailable.resize(n);
 	gBuildsList.resize(n); gBuiltBy.resize(n);
 
@@ -89,6 +98,13 @@ void Init()
 		gSub[i]          = cdef.IsSubmarine();
 		gAreaCells[i]    = cdef.GetAreaCells();
 		gBuildDist[i]    = cdef.GetBuildDistance();
+		gRadar[i]        = cdef.IsRadarDef();
+		gJammer[i]       = cdef.IsJammerDef();
+		gRadarR[i]       = cdef.GetRadarRadius();
+		gJamR[i]         = cdef.GetJammerRadius();
+		gAntiNuke[i]     = cdef.IsAntiNukeW();
+		gTargFac[i]      = cdef.IsTargFac();
+		gMaxRange[i]     = cdef.GetMaxRange();
 		// NOT IsAvailable(frame): that folds in behaviour.json "since" clocks
 		// (leaf-era policy the market must not inherit) and ai.frame is -2 at
 		// AiMain anyway. Available = the game ships it and no zero limit.

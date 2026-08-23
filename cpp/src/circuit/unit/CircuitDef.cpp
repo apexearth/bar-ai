@@ -251,6 +251,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	// tidal. Computed BEFORE upkeepE is inflated by converter capacity below.
 	makeM = def->GetResourceMake(resM) - upkeepM;
 	needsGeo = def->IsNeedGeo();
+	isTargFac = def->IsTargetingFacility();
 	areaCells = (def->GetXSize() / 2) * (def->GetZSize() / 2);
 	storeM = def->GetStorage(resM);
 	storeE = def->GetStorage(resE);
@@ -356,6 +357,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		delete stockDef;
 	}
 
+	{
+		// Nuke interceptors hide behind the !IsAbleToAttack early return below;
+		// scan the mounts for them first (init-only cost).
+		auto anMounts = def->GetWeaponMounts();
+		for (springai::WeaponMount* anMount : anMounts) {
+			springai::WeaponDef* anWd = anMount->GetWeaponDef();
+			if ((anWd != nullptr) && (anWd->GetInterceptor() & 1)) {
+				isAntiNukeW = true;
+			}
+			delete anWd;
+			delete anMount;
+		}
+	}
 	if (!def->IsAbleToAttack()) {
 		if (isShield) {
 			auto mounts = def->GetWeaponMounts();

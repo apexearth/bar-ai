@@ -378,6 +378,8 @@ public:
 	float GetConvertRatio()    const { return convRatioM; }     // energyconv_efficiency, M per E
 	bool IsNeedGeo()        const { return needsGeo; }  // must stand on a geo vent
 	int GetAreaCells()      const { return areaCells; }  // footprint in 16-elmo build cells
+	bool IsAntiNukeW()      const { return isAntiNukeW; }  // carries a nuke interceptor
+	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
 	float GetCaptureSpeed() const { return captureSpeed; }
 //	float GetAltitude()     const { return altitude; }
 	float GetJumpRange()    const { return jumpRange; }
@@ -531,6 +533,8 @@ private:
 	float makeE;
 	bool needsGeo = false;
 	int areaCells = 0;
+	bool isAntiNukeW = false;
+	bool isTargFac = false;
 	float storeM;
 	float storeE;
 	float convCapacityE;
