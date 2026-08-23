@@ -1138,6 +1138,47 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 // make a basic solar").
 int gNextStallSweep = 0;
 
+// Who the market sent to assist what. A guard on an IDLE factory is a
+// locked builder doing nothing while mexes sit open (apexearth 2026-08-23);
+// the sweep releases them the moment the boss has no work.
+array<CCircuitUnit@> gGuardUnit;
+array<CCircuitUnit@> gGuardBoss;
+void GuardNote(CCircuitUnit@ u, CCircuitUnit@ boss)
+{
+	gGuardUnit.insertLast(u);
+	gGuardBoss.insertLast(boss);
+}
+void GuardSweep()
+{
+	for (uint i = 0; i < gGuardUnit.length(); ) {
+		CCircuitUnit@ u = gGuardUnit[i];
+		CCircuitUnit@ b = gGuardBoss[i];
+		bool drop = (u is null) || (b is null) || (u.task is null)
+			|| (int(u.task.GetBuildType()) != int(Task::BuildType::GUARD));
+		if (!drop) {
+			// A factory boss with nothing queued (and nothing in flight) is
+			// idle: release the guard into the market.
+			const bool bossIsFac = !b.circuitDef.IsMobile();
+			if (bossIsFac && (b.CountQueued(null) == 0)) {
+				u.task.Abort();
+				drop = true;
+			}
+			// A mobile boss that stopped building releases its guards too.
+			if (!bossIsFac && ((b.task is null)
+					|| (b.task.GetType() != Task::Type::BUILDER))) {
+				u.task.Abort();
+				drop = true;
+			}
+		}
+		if (drop) {
+			gGuardUnit.removeAt(i);
+			gGuardBoss.removeAt(i);
+			continue;
+		}
+		++i;
+	}
+}
+
 bool HardEStall()
 {
 	const float eInc = aiEconomyMgr.energy.income;
@@ -1218,6 +1259,7 @@ void StallWatch()
 	if (ai.frame < gNextStallSweep)
 		return;
 	gNextStallSweep = ai.frame + 5 * SECOND;
+	GuardSweep();
 	if (!HardEStall())
 		return;
 	CCircuitUnit@ pick = null;
@@ -1488,8 +1530,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 							+ " -> guard:" + boss.circuitDef.GetName() + " #" + boss.id
 							+ " (assist its work)");
 					}
-					return aiBuilderMgr.Enqueue(TaskB::Guard(Task::Priority::LOW,
-							boss, false, 60 * SECOND));
+					IUnitTask@ gt2 = aiBuilderMgr.Enqueue(TaskB::Guard(
+							Task::Priority::LOW, boss, false, 60 * SECOND));
+					if (gt2 !is null)
+						GuardNote(unit, boss);
+					return gt2;
 				}
 			}
 		}
@@ -1552,8 +1597,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	if (w.kind == WK_ASSIST) {
 		if ((gAssistTarget is null) || (int(gAssistTarget.id) != w.spotId))
 			return null;
-		return aiBuilderMgr.Enqueue(TaskB::Guard(Task::Priority::LOW,
+		IUnitTask@ gt = aiBuilderMgr.Enqueue(TaskB::Guard(Task::Priority::LOW,
 				gAssistTarget, false, 60 * SECOND));
+		if (gt !is null)
+			GuardNote(unit, gAssistTarget);
+		return gt;
 	}
 	if (w.kind == WK_RECLAIM) {
 		if ((gReclaimTarget is null) || (int(gReclaimTarget.id) != w.spotId))
