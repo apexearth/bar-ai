@@ -1234,3 +1234,13 @@ games the army-trade signature is stable at K/D ~0.32-0.36; escorts were a
 contributor, not the core. All solo-safe levers are now exhausted; per the
 harness discipline (tournaments confirm identified mechanisms, they do not
 go fishing), further military changes wait for the design session.
+
+## 2026-08-23 -- Easy parity at 20-game scale: 8-9 (+3 draws)
+
+The retreat fix's verdict: wins 4 -> 5 -> 8 across three 20-game anchors
+(one named fix each: base anchor, escort proximity, value-scaled retreat).
+K/D unmoved at 0.346 -- the fix pays in ground held, not kills: eco
+leverage rose 1.43 -> 1.9:1 as fights stopped collapsing, and more games
+close before their arty grind matures. Easy is now a coin flip at scale
+(CI 31-74%). deaths.py remains the sharpest instrument in the toolbox:
+"93% died retreating" found in one table what 60 games of win rates hid.
