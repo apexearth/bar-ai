@@ -1155,6 +1155,32 @@ float PitchOf(int defId)
 	return float(side) * 16.f;
 }
 
+// Every metal spot on the map, cached on first use -- planned placements
+// must never stand on one (watched: buildings over mexes).
+array<AIFloat3> gAllSpots;
+bool gSpotsCached = false;
+void CacheSpots()
+{
+	if (gSpotsCached)
+		return;
+	gSpotsCached = true;
+	for (int i = 0; i < 1024; ++i) {
+		const AIFloat3 sp = aiEconomyMgr.GetMexSpotPos(i);
+		if (sp.x < 0.f)
+			break;
+		gAllSpots.insertLast(sp);
+	}
+}
+bool NearSpot(const AIFloat3& in p)
+{
+	CacheSpots();
+	for (uint i = 0; i < gAllSpots.length(); ++i) {
+		if (p.distance2D(gAllSpots[i]) < 100.f)
+			return true;
+	}
+	return false;
+}
+
 AIFloat3 FarmSlot(int defId)
 {
 	const float pitch = PitchOf(defId);
@@ -1175,12 +1201,18 @@ AIFloat3 FarmSlot(int defId)
 		row = int(gFRowDef.length()) - 1;
 		gFarmDepth += pitch;
 	}
-	const int col = gFRowNext[row];
-	gFRowNext[row] = col + 1;
-	// Columns alternate outward from the axis so the block grows centered.
-	const float lat = (float((col + 1) / 2) * ((col % 2 == 0) ? 1.f : -1.f)) * pitch;
-	AIFloat3 p = gFarmPos + Base::gAcross * lat - Base::gFwd * gFRowZ[row];
-	return p;
+	// Skip slots that would stand on a metal spot (cursor advances; the
+	// hole stays a hole).
+	for (int tries = 0; tries < 8; ++tries) {
+		const int col = gFRowNext[row];
+		gFRowNext[row] = col + 1;
+		// Columns alternate outward from the axis so the block grows centered.
+		const float lat = (float((col + 1) / 2) * ((col % 2 == 0) ? 1.f : -1.f)) * pitch;
+		AIFloat3 p = gFarmPos + Base::gAcross * lat - Base::gFwd * gFRowZ[row];
+		if (!NearSpot(p))
+			return p;
+	}
+	return gFarmPos - Base::gFwd * gFarmDepth;
 }
 
 AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
@@ -2065,6 +2097,19 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 // expansion ground remains. Serialized by the sent-ledger, never by a count.
 //------------------------------------------------------------------------------
 
+// Deep demand check for the facqueue's lookahead batch: six more of this
+// def must still be justified by the gap (or the overflow sink).
+bool BatchWorthy(CCircuitDef@ d)
+{
+	if ((d is null) || d.IsBuilder())
+		return false;   // builders stay single: their demand saturates fast
+	const int di = int(d.id);
+	const float need = ArmyTarget() - ArmyValue();
+	const float sink = OverflowM() * 60.f;
+	const float deep = (need > sink) ? need : sink;
+	return deep > 6.f * Catalog::gCostM[di];
+}
+
 CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 {
 	if (fac is null)
@@ -2077,8 +2122,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	if (!gMexOpen && (UpDemand() <= 0.5f) && (BPGap() <= 0.5f)
 		&& (ArmyTarget() - ArmyValue() <= 0.5f))
 		return null;
-	// One in flight per line: pipeline discipline, not a cap.
-	if ((fac.CountQueued(null) + Brain::PendCount(line, null)) > 0)
+	// Two in flight per line: one building, one queued, so production is
+	// continuous (one-at-a-time left the line idle between orders).
+	if ((fac.CountQueued(null) + Brain::PendCount(line, null)) > 1)
 		return null;
 	const int fid = int(fac.circuitDef.id);
 	const array<int>@ prods = Catalog::BuildsOf(fid);

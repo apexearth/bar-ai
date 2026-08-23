@@ -15,7 +15,7 @@ namespace Brain {
 
 // The Wait task's timeout, in frames. When it expires the factory goes idle and
 // AiMakeTask is called for it again, which is our re-entry point.
-const int FQ_WAIT = 30 * SECOND;
+const int FQ_WAIT = 10 * SECOND;   // 30 made one unit per ~25s: the line idled on its own hold
 
 array<Id> gFQId;                 // factories we drive, by id
 array<CCircuitUnit@> gFQFac;     // ...and their handles, parallel to gFQId
@@ -186,10 +186,20 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	// The production market's call: what should this line make, if anything.
 	CCircuitDef@ order = Market::ConOrderFor(fac, line);
 	if (order !is null) {
-		// replace=true: a SHIFT order into a factory queue is x5'd by the
-		// FactoryCAI (measured depth 5 from one order); plain replace is one.
-		fac.CmdBuildUnit(order, 1, true);
-		PendAdd(line, order);
+		const bool empty = (fac.CountQueued(null) + PendCount(line, null)) == 0;
+		if (empty) {
+			// replace=true: plain order, exactly one.
+			fac.CmdBuildUnit(order, 1, true);
+			PendAdd(line, order);
+		}
+		// LOOKAHEAD (apexearth: "queue more, look ahead"): a batch behind
+		// the head when the market says the demand is deep. One SHIFT order
+		// is x5'd by the FactoryCAI -- five more in one command.
+		if (Market::BatchWorthy(order)) {
+			fac.CmdBuildUnit(order, 1, false);
+			for (int b = 0; b < 5; ++b)
+				PendAdd(line, order);
+		}
 		gFQAt[line] = ai.frame;
 		++gFQOrders;
 	}
