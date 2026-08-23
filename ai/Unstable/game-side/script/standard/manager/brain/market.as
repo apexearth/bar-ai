@@ -795,10 +795,15 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 {
 	Want w;
 	TrackEPull();
-	// The marginal converter prices the UNSERVED surplus: standing
-	// converters already chew theirs (600 E/s supports ~9 T1 converters and
-	// not one more -- apexearth's arithmetic; the same closed-loop law as
-	// build power).
+	// Converters recycle OVERFLOW only: the conversion ratio IS the energy
+	// floor price, so converting non-overflowing E is value-neutral by our
+	// own definitions -- a converter never outbids a slightly-longer mex
+	// walk again (apexearth's call, twice). Overflow = surplus the E bank
+	// cannot absorb; minus what standing converters already chew.
+	const float eStore2 = aiEconomyMgr.energy.storage;
+	if ((eStore2 > 1.f)
+		&& (aiEconomyMgr.energy.current < 0.85f * eStore2))
+		return w;
 	float standingCap = 0.f;
 	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
 		if (gOwnCount[cd] > 0)
@@ -1276,6 +1281,10 @@ AIFloat3 FarmSlot(int defId)
 int gPlantFlank = 0;
 AIFloat3 InteriorSite(const AIFloat3& in fallback)
 {
+	// The first factory rises where the builder stands -- the flank plan is
+	// for a base that exists (watched: a long opening walk to lab #1).
+	if (Factory::gFactoryCount == 0)
+		return fallback;
 	if (gFarmSet && Base::gAxisSet) {
 		gPlantFlank = 1 - gPlantFlank;
 		const float side = (gPlantFlank == 0) ? 1.f : -1.f;
@@ -1584,7 +1593,10 @@ float RoleTarget(int role, float armyTarget)
 	const float base = armyTarget / 6.f;   // maximum-entropy prior over combat roles
 	float counter = 0.f;
 	if (role == int(Unit::Role::RAIDER.type))
-		counter = float(EscortShortfall()) * 60.f;   // ~ one cheap escort each
+		counter = float(EscortShortfall()) * 60.f   // ~ one cheap escort each
+			+ (Military::EnemyCostOf(Unit::Role::SKIRM.type)
+				+ Military::EnemyCostOf(Unit::Role::ARTY.type)) * 0.6f;
+			// rocket bots die to what closes fast (apexearth's counter-chain)
 	else if (role == int(Unit::Role::RIOT.type))
 		counter = Military::EnemyCostOf(Unit::Role::RAIDER.type);
 	else if ((role == int(Unit::Role::SKIRM.type))
@@ -2246,7 +2258,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		if (isComm && Base::gAnchorSet && Base::gAxisSet) {
 			const AIFloat3 rel = ranked[i].pos - Base::gAnchor;
 			const float fwdDist = rel.x * Base::gFwd.x + rel.z * Base::gFwd.z;
-			if (fwdDist > 150.f)
+			// 400: the base-front turret post sits at anchor+150 and the old
+			// 150 cutoff banned the commander from it -- mDefence read 0.0
+			// for a whole game (apexearth: "in early game he can provide a
+			// good defense"). Beyond 400 is the con-and-escort frontier.
+			if (fwdDist > 400.f)
 				continue;
 		}
 		IUnitTask@ t = ExecuteWant(unit, ranked[i]);
