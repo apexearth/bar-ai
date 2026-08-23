@@ -101,8 +101,15 @@ float EPrice()
 	const float eStore = aiEconomyMgr.energy.storage;
 	if ((eStore > 1.f) && (eCur < 0.25f * eStore) && (excess < 1.f))
 		excess = 1.f;
+	// A genuine stall throttles the fleet's whole SPENDING flow -- the
+	// at-risk quantity is metal.pull, not the converter trickle (measured:
+	// floor-anchored stall pricing left an E-stalled game frozen at 635
+	// metal produced in 40 minutes; "we e-stalled and should have made a
+	// basic solar").
 	const float fl = EPriceFloor();
-	return fl * (1.f + excess * ai.GetTunable("apex_e_stall_boost", TUNE_E_STALL_BOOST));
+	const float atRisk = (eInc > 0.01f)
+			? (excess * aiEconomyMgr.metal.pull / eInc) : 1.f;
+	return (atRisk > fl) ? atRisk : fl;
 }
 
 // COST side: the premium on SPENDING E exists only above balance -- at
@@ -843,6 +850,11 @@ float NanoRange()
 		if (Catalog::gBuildDist[i] > best)
 			best = Catalog::gBuildDist[i];
 	}
+	// Sanity-capped: an exotic long-reach def must not widen the farm
+	// (a 1000-elmo reach def once did, and the Take radius it fed collapsed
+	// every eco want into one standing request -- a fleet-wide freeze).
+	if (best > 500.f)
+		best = 500.f;
 	gNanoRange = (best > 64.f) ? best : 400.f;
 	return gNanoRange;
 }
@@ -976,7 +988,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// Tighter than the coverage circle so the reach circles overlap and
 		// the farm tiles instead of scattering.
 		return Requests::Take(unit, w.def, Task::BuildType::NANO,
-				Task::Priority::NORMAL, w.pos, NanoRange() * 0.6f, SQUARE_SIZE * 16.f);
+				Task::Priority::NORMAL, w.pos, 256.f, SQUARE_SIZE * 16.f);
 	}
 	if (w.kind == WK_GEO) {
 		return aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::GEO,
@@ -984,15 +996,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	}
 	if (w.kind == WK_ENERGY) {
 		return Requests::Take(unit, w.def, Task::BuildType::ENERGY,
-				Task::Priority::NORMAL, w.pos, NanoRange(), SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
 	}
 	if (w.kind == WK_CONVERT) {
 		return Requests::Take(unit, w.def, Task::BuildType::CONVERT,
-				Task::Priority::NORMAL, w.pos, NanoRange(), SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
 	}
 	if (w.kind == WK_STORE) {
 		return Requests::Take(unit, w.def, Task::BuildType::STORE,
-				Task::Priority::NORMAL, w.pos, NanoRange(), SQUARE_SIZE * 32.f);
+				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 32.f);
 	}
 	if (w.kind == WK_PLANT) {
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
