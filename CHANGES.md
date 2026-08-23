@@ -1,5 +1,30 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: nano farms ditched; fusions pack the deep rear; amphibs x0 on dry maps; mobile radar/jammer unblocked
+
+All four from apexearth watching, each verified on seed-5 Comet (floor off):
+
+- **Nano farm removed entirely** ("these nano farms are just not working
+  out"). Nano demand is now working lines short of hands OR a fusion-tier /
+  >=1000m frame without its ring of ~3 (his read of stock's caretaker
+  logic); BPGap buys constructors, never turrets. Placement: hungriest
+  line or big frame, bare fusion frames count, last resort beside a
+  working factory -- never a freestanding farm. Nano decides 97 -> 11,
+  4 pulled to live sinks, techStart improved to 11.3m.
+- **BigEnergySite**: fusion-tier generators (apex_big_e 500 E/s) pack
+  beside standing/building kin, else apex_fus_back (700) behind the base
+  anchor -- "fusions belong in the back of the map".
+- **Amphib x0 under apex_water_pct (15%) real water** -- Frozen Ford's
+  pond flipped IsWaterAVoid; the bar is GetLandPercent (already bound,
+  no C++ needed; verified percent-scale, 100.00 on Comet).
+- **Mobile radar/jammer were structurally impossible**: the DLL sets
+  isRadar/isJammer only in the IMMOBILE branch of its def loop (a past
+  session documented it in CircuitDef.h:355 and nobody wired around it),
+  so the support branch was unreachable -- pricing changes could never
+  matter. Catalog now classifies from the sensor radii (radar >900,
+  jam >100) with the DLL flags as static fallback. First armmark and
+  armaser ever produced, one pair at ~1 squad, per apex_squad_m.
+
 ## 2026-08-23: the temporal-consistency law gets shared primitives; assists can no longer feed a starved site
 
 apexearth's 10 m/s arithmetic (com + 3 cons on a 5-minute T2 lab while 2

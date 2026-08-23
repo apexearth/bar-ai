@@ -1212,6 +1212,16 @@ const float TUNE_SQUAD_M = 2000.f;
 // INTEL_RATE: fraction of a squad's value per minute that its radar/jammer
 // pair is worth -- what prices support "just behind T2 cons".
 const float TUNE_INTEL_RATE = 0.1f;
+// WATER_PCT: minimum real water share of the map before amphib capability
+// is worth anything -- a tiny pond must not price Platypuses (his ~15%).
+const float TUNE_WATER_PCT = 15.f;
+// BIG_E: E/s of generation that makes a def "fusion-tier" -- packs in the
+// deep rear, earns a nano ring (fusion ~1000, afus ~3000; advsol ~75 not).
+const float TUNE_BIG_E = 500.f;
+// NANO_SINK_M: build cost that makes a live frame a nano-worthy site.
+const float TUNE_NANO_SINK_M = 1000.f;
+// FUS_BACK: how deep behind the base anchor the first fusion founds.
+const float TUNE_FUS_BACK = 700.f;
 
 // USER FIELD-REPORT MULTIPLIERS on computed unit worth (apexearth: the
 // stats cannot see projectile speed or accuracy -- "in terms of unit vs

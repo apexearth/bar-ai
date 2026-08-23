@@ -109,10 +109,15 @@ void Init()
 		gSub[i]          = cdef.IsSubmarine();
 		gAreaCells[i]    = cdef.GetAreaCells();
 		gBuildDist[i]    = cdef.GetBuildDistance();
-		gRadar[i]        = cdef.IsRadarDef();
-		gJammer[i]       = cdef.IsJammerDef();
 		gRadarR[i]       = cdef.GetRadarRadius();
 		gJamR[i]         = cdef.GetJammerRadius();
+		// From the RADII, not IsRadarDef/IsJammerDef: the DLL sets those
+		// flags only in the immobile branch of its def loop, so every
+		// mobile radar and jammer reads false there forever (the reason
+		// no Compass was ever produced). A real radar's radius dwarfs any
+		// unit's incidental sensor suite.
+		gRadar[i]        = cdef.IsRadarDef() || (gRadarR[i] > 900.f);
+		gJammer[i]       = cdef.IsJammerDef() || (gJamR[i] > 100.f);
 		gAntiNuke[i]     = cdef.IsAntiNukeW();
 		gTargFac[i]      = cdef.IsTargFac();
 		gMaxRange[i]     = cdef.GetMaxRange();

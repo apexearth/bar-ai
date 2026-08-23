@@ -324,6 +324,7 @@ float gAvgWalkDist = 600.f;   // smoothed claim walk, seeds at a near spot
 // Rolling value of EXECUTED builder wants -- what a unit of spend is
 // actually earning right now; the factory lines' opportunity floor.
 float gWantEmaV = 0.f;
+int gSupportDiagAt = 0;
 
 // The rear-specialist election's enemy reference (ally centroid mirrored
 // through map center), kept for the quiet rear's reach filter.
@@ -1540,6 +1541,38 @@ float FreeMetalFlow()
 	return (free > 0.f) ? free : 0.f;
 }
 
+// Where a fusion-tier generator belongs: beside standing or building kin,
+// else the deep rear of the base axis, furthest from the enemy.
+AIFloat3 BigEnergySite()
+{
+	const float bar = ai.GetTunable("apex_big_e", TUNE_BIG_E);
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || (Catalog::gMakeE[int(d)] < bar))
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(int(d)),
+				Builder::gHomePos, 8000.f);
+		if ((us !is null) && (us.length() > 0) && (us[us.length() - 1] !is null))
+			return us[us.length() - 1].GetPos(ai.frame);
+	}
+	for (uint li = 0; li < Requests::gLive.length(); ++li) {
+		IUnitTask@ lt = Requests::gLive[li];
+		if ((lt is null) || (lt.buildDef is null))
+			continue;
+		if (Catalog::gMakeE[int(lt.buildDef.id)] >= bar) {
+			const AIFloat3 kp = lt.GetBuildPos();
+			if (OnMap(kp))
+				return kp;
+		}
+	}
+	if (Base::gAnchorSet && Base::gAxisSet) {
+		AIFloat3 back = Base::gAnchor
+				- Base::gFwd * ai.GetTunable("apex_fus_back", TUNE_FUS_BACK);
+		if (OnMap(back))
+			return back;
+	}
+	return Builder::gHomePos;
+}
+
 
 // Metal spots are sacred ground: an UNCLAIMED spot is legal terrain to the
 // engine's site search, so a factory landed smack on one (watched). Intent
@@ -1712,9 +1745,39 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// nothing -- watched). BP demand sizes against income (BPGap) and
 	// against lines with real work (UnservedLineSpend) -- the honest-
 	// feedback law; overflow's buyers are converters, storage and tech.
-	const float gap = BPGap();
+	// NANOS SERVE FACTORIES AND BIG BUILDS ONLY (apexearth: "these nano
+	// farms are just not working out... ditch that idea entirely. The
+	// nanos are just for factories and expensive buildings like fusions
+	// and afus"). Demand: working lines short of hands, or a fusion-tier
+	// frame standing without its ring of ~3 (his read of stock's
+	// caretaker logic). The income-headroom gap (BPGap) buys constructors
+	// now, never farm turrets.
 	const float lineNeed = UnservedLineSpend();
-	float over = (gap > lineNeed) ? gap : lineNeed;
+	float sinkNeed = 0.f;
+	for (uint si = 0; si < Requests::gLive.length(); ++si) {
+		IUnitTask@ st = Requests::gLive[si];
+		if ((st is null) || (st.buildDef is null))
+			continue;
+		const int bd = int(st.buildDef.id);
+		if ((Catalog::gCostM[bd] < ai.GetTunable("apex_nano_sink_m", TUNE_NANO_SINK_M))
+			&& (Catalog::gMakeE[bd] < ai.GetTunable("apex_big_e", TUNE_BIG_E)))
+			continue;
+		const AIFloat3 sp3 = st.GetBuildPos();
+		if (!OnMap(sp3))
+			continue;
+		int nAt = 0;
+		for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
+			if (sp3.distance2D(gOwnNanoPos[ni]) < 350.f)
+				++nAt;
+		}
+		if (nAt < 3) {
+			const float free3 = FreeMetalFlow();
+			const float need = (free3 < 35.f) ? free3 : 35.f;
+			if (need > sinkNeed)
+				sinkNeed = need;
+		}
+	}
+	float over = (sinkNeed > lineNeed) ? sinkNeed : lineNeed;
 	if (over <= 0.5f)
 		return w;
 	const int uid = int(unit.circuitDef.id);
@@ -3302,10 +3365,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// there is coverage of everything about to exist). A factory line
 		// pulls a nano away only when its unserved spend clears a real
 		// bar, not merely being the hungriest.
-		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
+		// The FARM BLOCK IS DEAD (apexearth: nanos only beside factories
+		// and expensive builds): the hungriest line or big frame takes the
+		// turret; failing either, it parks beside any working factory.
+		AIFloat3 slot = w.pos;
+		bool sited = false;
 		const float per = LineSpend();
-		const float pull = ai.GetTunable("apex_line_pull", TUNE_LINE_PULL);
-		float worst = pull;
+		float worst = 0.f;
 		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 			CCircuitUnit@ f = Factory::gFacUnits[fi];
 			if ((f is null) || (f.CountQueued(null) == 0))
@@ -3320,6 +3386,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			if (u > worst) {
 				worst = u;
 				slot = fp;
+				sited = true;
 			}
 		}
 		// NEAR THE METAL SINKS (apexearth: "if we are not empty on metal...
@@ -3356,12 +3423,45 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				if (u2 > worst) {
 					worst = u2;
 					slot = sp;
+					sited = true;
 					AiLog("apex: nano-to-sink t=" + ai.teamId + " at "
 							+ lt.buildDef.GetName()
 							+ " drain=" + formatFloat(u2, "", 0, 1));
 				}
 			}
 		}
+		// Bare big frames (no crew yet) are sites too: "if you're making
+		// these fusions or afus somewhere, just go ahead and make nanos
+		// beside them."
+		if (!sited) {
+			for (uint li = 0; li < Requests::gLive.length(); ++li) {
+				IUnitTask@ lt2 = Requests::gLive[li];
+				if ((lt2 is null) || (lt2.buildDef is null))
+					continue;
+				const int bd2 = int(lt2.buildDef.id);
+				if ((Catalog::gCostM[bd2] < ai.GetTunable("apex_nano_sink_m", TUNE_NANO_SINK_M))
+					&& (Catalog::gMakeE[bd2] < ai.GetTunable("apex_big_e", TUNE_BIG_E)))
+					continue;
+				const AIFloat3 sp4 = lt2.GetBuildPos();
+				if (OnMap(sp4)) {
+					slot = sp4;
+					sited = true;
+					break;
+				}
+			}
+		}
+		if (!sited) {
+			for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+				CCircuitUnit@ f2 = Factory::gFacUnits[fi];
+				if (f2 !is null) {
+					slot = f2.GetPos(ai.frame);
+					sited = true;
+					break;
+				}
+			}
+		}
+		if (!sited)
+			return null;
 		// PARALLEL on purpose: the default Take folds every nano ask onto
 		// the one standing request -- "burst=1 forever" (requests.as's own
 		// measurement) -- the root of every "not enough nanos" report. Each
@@ -3393,7 +3493,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			return orph;
 	}
 	if (w.kind == WK_ENERGY) {
-		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
+		// Fusion-tier generators pack together in the DEEP REAR
+		// (apexearth: "place those next to each other... fusions belong
+		// in the back of the map, furthest from the enemy").
+		const bool bigE = Catalog::gMakeE[int(w.def.id)]
+				>= ai.GetTunable("apex_big_e", TUNE_BIG_E);
+		if (bigE)
+			w.pos = BigEnergySite();
+		const AIFloat3 slot = bigE ? w.pos
+				: (gFarmSet ? FarmSlot(int(w.def.id)) : w.pos);
 		{
 			IUnitTask@ jt = JoinBig(w.def);
 			if (jt !is null)
@@ -3548,6 +3656,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			&& (Catalog::gRadar[d] || Catalog::gJammer[d]))
 		{
 			const int haveS = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
+			if (ai.frame >= gSupportDiagAt) {
+				gSupportDiagAt = ai.frame + 120 * SECOND;
+				AiLog("apex: support-diag t=" + ai.teamId + " def="
+					+ Catalog::Def(d).GetName() + " have=" + haveS
+					+ " army=" + formatFloat(ArmyValue(), "", 0, 0)
+					+ " land=" + formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 2));
+			}
 			// One radar + one jammer per squad's worth of army (apexearth:
 			// "those should have boosted priority... support squads which
 			// are ~2k metal value or higher"). A pair's worth is a fraction
@@ -3619,8 +3734,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			// tunables.as. And amphibious capability is dead weight on a
 			// dry map -- the price paid for swimming buys nothing here.
 			ppc *= UnitWorthMod(Catalog::Def(d).GetName());
-			if (Catalog::gAmphib[d] && aiTerrainMgr.IsWaterAVoid())
-				ppc *= 0.5f;
+			// x0 ON DRY MAPS (apexearth: "amphib should be x0" -- and a
+			// tiny pond flips the engine's water flag, so the bar is real
+			// water share of the map, ~15%).
+			if (Catalog::gAmphib[d]) {
+				float lp = aiTerrainMgr.GetLandPercent();
+				if (lp <= 1.5f)
+					lp *= 100.f;   // scale-proof: fraction or percent
+				if (aiTerrainMgr.IsWaterAVoid()
+					|| (lp > 100.f - ai.GetTunable("apex_water_pct", TUNE_WATER_PCT)))
+					continue;
+			}
 			// The rear specialist buys quality: weight by unit size so the
 			// draw lands on the biggest thing the lab offers, not spam that
 			// arrives late or never.
