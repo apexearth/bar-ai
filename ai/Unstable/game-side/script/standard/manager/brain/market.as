@@ -1126,9 +1126,6 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				}
 			}
 		}
-		float techGain = 0.f;
-		if (prodCeil > ownCeil)
-			techGain = demand * pipe;
 		// A lab without follow-through is a statue: its price carries its
 		// first constructor, and its VALUE scales with how funded the army
 		// is -- an outgunned base defers tech exactly as much as it is
@@ -1138,6 +1135,9 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		const float aT = ArmyTarget();
 		const float funded = (aT > 1.f) ? (ArmyValue() / aT) : 1.f;
 		const float fundedMul = (funded > 1.f) ? 1.f : funded;
+		float techGain = 0.f;
+		if (prodCeil > ownCeil)
+			techGain = demand * pipe;
 		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f))
 			techGain = demand * pipe * (prodMob / ownMob - 1.f);
 		// Channel 3, the GANTRY case: a plant whose products dwarf anything
