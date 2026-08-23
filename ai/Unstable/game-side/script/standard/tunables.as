@@ -26,7 +26,7 @@
 // WHAT IS NOT HERE: build RATIOS. The army/economy/defence split lives in
 // targets.as (SPEND_ARMY, SPEND_ECONOMY, ... -- five columns, one per build
 // phase, normalized against each other), and unit mixes per factory live in
-// config/hard_aggressive/factory.json. "Build less army" is targets.as; "when
+// config/standard/factory.json. "Build less army" is targets.as; "when
 // is a fusion allowed" is here.
 
 // ---------------------------------------------------------------------------

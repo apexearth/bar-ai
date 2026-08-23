@@ -28,7 +28,7 @@ REPO = Path(__file__).resolve().parent.parent
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ai", default="Apex:apex:hard_aggressive")
+    ap.add_argument("--ai", default="Apex:Unstable:standard")
     ap.add_argument("--map", dest="map_name", default="Ancient Vault v1.4")
     ap.add_argument("--minutes", type=int, default=2)
     args = ap.parse_args()

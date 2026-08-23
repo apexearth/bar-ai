@@ -43,7 +43,7 @@ KNOBS = [
     ("economy.json",   ["economy", "cluster_range"],   "num",  [600.0, 800.0, 1100.0, 1500.0]),
 ]
 
-PROFILE = "hard_aggressive"
+PROFILE = "standard"
 
 
 def cfg_path(variant: str, fname: str) -> Path:

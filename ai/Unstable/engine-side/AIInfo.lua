@@ -28,11 +28,11 @@ local infos = {
 	},
 	{
 		key    = 'version',
-		value  = 'apex', -- AI version - !This comment is used for parsing!
+		value  = 'Unstable', -- AI version - !This comment is used for parsing!
 	},
 	{
 		key    = 'name',
-		value  = 'Apex',
+		value  = 'ApexUnstable',
 		desc   = 'human readable name.',
 	},
 	{

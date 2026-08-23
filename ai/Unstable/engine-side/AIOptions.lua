@@ -77,10 +77,10 @@ local options = {
 		name    = 'Difficulty profile',
 		desc    = 'Difficulty or play-style of AI (see init.as).\nkey: profile',
 		type    = 'list',
-		def     = 'hard_aggressive',
+		def     = 'standard',
 		items   = {
 			{
-				key  = 'hard_aggressive',
+				key  = 'standard',
 				name = 'Hard | Aggressive',
 				desc = 'Difficulty: Hard |Playstyle: Aggressive',
 			},

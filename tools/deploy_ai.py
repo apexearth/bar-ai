@@ -20,8 +20,8 @@ hand-copying a folder broke on every BAR update.
 
 Usage
   python tools/deploy_ai.py status
-  python tools/deploy_ai.py deploy apex
-  python tools/deploy_ai.py deploy apex --engine recoil_2026.06.11
+  python tools/deploy_ai.py deploy Unstable
+  python tools/deploy_ai.py deploy Unstable --engine recoil_2026.06.11
   python tools/deploy_ai.py pull apex          # live game-side -> this repo
   python tools/deploy_ai.py patches            # apply game-patches/*.patch
 """

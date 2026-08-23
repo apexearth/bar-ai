@@ -256,7 +256,7 @@ def matches_any_baseline(p: Path, rel: str, baseline: Path) -> bool:
     """True if this file is stock, at its own path or at any other profile's.
 
     A new profile is normally started by copying an existing one, so rush/ is
-    full of files that are byte-identical to stock hard_aggressive/ but have no
+    full of files that are byte-identical to stock standard/ but have no
     counterpart at rush/. Without the second lookup every inherited quirk gets
     attributed to us the moment we add a profile.
     """

@@ -1,6 +1,6 @@
 """Run many AI-vs-AI matches and report win rates.
 
-    python tools/run_tournament.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+    python tools/run_tournament.py --a Apex:Unstable:standard --b BARb:stable:hard \
         --maps "Comet Catcher,Supreme Isthmus" --games 12 --workers 4
 
     python tools/run_tournament.py --report              # summarise the latest run

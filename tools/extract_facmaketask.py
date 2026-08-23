@@ -7,7 +7,7 @@ the file as it stood, so the only hand-written text is signatures, trailing
 """
 import os
 
-SRC = 'ai/apex/game-side/script/hard_aggressive/manager/factory/maketask.as'
+SRC = 'ai/Unstable/game-side/script/standard/manager/factory/maketask.as'
 DIR = os.path.dirname(SRC)
 
 with open(SRC, encoding='utf-8', newline='') as fh:

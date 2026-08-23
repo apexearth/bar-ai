@@ -43,7 +43,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-CONFIG_DIR = REPO / "ai" / "apex" / "game-side" / "config" / "hard_aggressive"
+CONFIG_DIR = REPO / "ai" / "apex" / "game-side" / "config" / "standard"
 
 FACTION_FILES = {
     "armada": ["factory.json"],

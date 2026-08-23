@@ -1,10 +1,10 @@
 """Run a headless AI-vs-AI match and record the result.
 
-    python tools/run_match.py --a Apex:apex --b BARb:stable --map "Comet Catcher"
-    python tools/run_match.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+    python tools/run_match.py --a Apex:Unstable --b BARb:stable --map "Comet Catcher"
+    python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard \
         --map "Red Comet Remake 1.8" --minutes 30 --seed 7
 
-AI spec format:  ShortName[:Version[:profile]]      e.g. Apex:apex:hard_aggressive
+AI spec format:  ShortName[:Version[:profile]]      e.g. Apex:Unstable:standard
 LuaAI spec:      lua:Name                           e.g. lua:SimpleAI
 
 Each run produces matches/<stamp>-<slug>/ containing script.txt, infolog.txt,

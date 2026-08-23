@@ -128,6 +128,12 @@ So this section is split. Behavioral conclusions measured inside the old
 chaos are DISCARDED as truths — the rebuild re-derives behavior from live
 dynamics, and if the old numbers were right they will re-emerge.
 
+**The same distrust applies to docs/.** Many of the numbered docs (and the
+long comment-histories in code) were written during the leaf era and may be
+stale or wrong — none are gospel. Part of the teardown is a docs/comment
+cleanup: delete or clearly mark leaf-era material so the rebuilt base
+carries no unexamined assumptions.
+
 ### 5a. Verifiable facts (engine source / unit defs / our own tooling)
 
 - Reclaimed metal goes to the bank and overflows past storage — any planned
@@ -173,13 +179,40 @@ dynamics, and if the old numbers were right they will re-emerge.
 - Cheap unmanned requests blocking their own ground in the Requests dedup.
 - Team-value (TV_*) blackboard timing at game start.
 
-## 6. Sequence
+## 6. Identity and config-layer decisions (apexearth, 2026-08-22)
 
-1. apexearth reviews THIS document (the design review he asked for).
-2. Kill: remove §1 wholesale; wire the ladder to holds→Decide→idle; stub
-   facqueue to execute-only.
-3. Validate the silence (§4.2) and the grep census (§4.1).
-4. Rebuild Wants in dependency order: energy → mex/moho → plants(+factory
+- **Renames**: profile `hard_aggressive` → `standard`; AI version `apex` →
+  `Unstable` with human name `ApexUnstable` (the in-game player list
+  concatenates shortName+version: Apex + Unstable). shortName stays `Apex`
+  (our own shortName, so the MP version-resolution trap does not apply —
+  one version ships). Harness spec becomes `Apex:Unstable:standard`.
+- **No JSON build proportions.** factory.json / response.json-style unit and
+  factory proportion tables are dead — production choices are priced Wants,
+  not config weights. More broadly: reuse as little of the inherited
+  CircuitAI codebase as possible — "I prefer for us to start fresh here."
+  Engine-interface plumbing stays only where unavoidable.
+- **The grid logic is KEPT and built** (his explicit instruction): the Part
+  B alignment work (parity-aware snap at the C++ chokepoint, snapped anchor,
+  search-respects-intent, defence on-lattice) lands on the clean base.
+
+## 7. Sequence
+
+1. apexearth reviews THIS document (done in part; open items go to him as
+   QUESTIONS — his instruction: "I would like to be asked questions during
+   the rebuild phase to make sure we make the right decisions." Decision
+   points get an explicit ask, not a silent choice.)
+2. Renames (§6) land first, verified by a deploy + smoke (the rename zone
+   is exactly where silent unknown-AI failures live).
+3. Kill: remove §1 wholesale; wire the ladder to holds→Decide→idle; stub
+   facqueue to execute-only. Docs/comment cleanup rides along.
+4. Validate the silence (§4.2) and the grep census (§4.1).
+5. **Architecture session before any rebuild code**: diagrams of the target
+   — module responsibilities, the two markets, data flow from senses to
+   Wants to executors — discussed with apexearth ("going through some
+   architectural diagrams may be useful. We can discuss code responsibility
+   and organization").
+6. Rebuild Wants in dependency order — energy → mex/moho → plants(+factory
    choice) → cons/production → nanos/BP → fusion ladder → defence → the
-   role's full arc — one Want per cycle, tournament-audited.
-5. Then the grid work (Part B) on the clean base.
+   role's full arc — one Want per cycle, tournament-audited, with
+   questions to apexearth at each design fork.
+7. Then the grid work (Part B) on the clean base.

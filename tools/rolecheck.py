@@ -11,7 +11,7 @@ choice rather than a discovery three bugs later.
 import re, pathlib
 
 ROLE = re.compile(r"(EcoLeadActive|IsDesignatedLead|IsTechLead|RushLeadTeamId|LeadIsDesignated)\(\)")
-root = pathlib.Path("ai/apex/game-side/script/hard_aggressive/manager")
+root = pathlib.Path("ai/Unstable/game-side/script/standard/manager")
 rows = []
 for f in sorted(root.rglob("*.as")):
     for i, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines(), 1):

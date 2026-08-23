@@ -25,8 +25,8 @@ REPO = Path(__file__).resolve().parent.parent
 TOOLS = REPO / "tools"
 MATCHES = REPO / "matches"
 TOURNAMENTS = REPO / "tournaments"
-SCRIPT_DIR = REPO / "ai" / "apex" / "game-side" / "script" / "hard_aggressive"
-CONFIG_DIR = REPO / "ai" / "apex" / "game-side" / "config" / "hard_aggressive"
+SCRIPT_DIR = REPO / "ai" / "Unstable" / "game-side" / "script" / "standard"
+CONFIG_DIR = REPO / "ai" / "Unstable" / "game-side" / "config" / "standard"
 UI_FILE = TOOLS / "dashboard_ui.html"
 LOG_DIR = MATCHES / "_dashboard_logs"
 PY = sys.executable
@@ -413,7 +413,7 @@ def known_maps():
 
 
 def known_ai_specs():
-    specs = {"Apex:apex:hard_aggressive", "BARb:stable:hard"}
+    specs = {"Apex:Unstable:standard", "BARb:stable:hard"}
     for s in list_matches(200):
         specs.update(x for x in s.get("specs", []) if x)
     return sorted(sp.replace("-", ":") if ":" not in sp else sp for sp in specs)
@@ -421,7 +421,7 @@ def known_ai_specs():
 
 def tunable_names():
     names = set()
-    base = REPO / "ai" / "apex" / "game-side" / "script"
+    base = REPO / "ai" / "Unstable" / "game-side" / "script"
     for f in base.rglob("*.as"):
         try:
             names.update(re.findall(r'GetTunable\("([a-z_0-9]+)"',
@@ -518,7 +518,7 @@ def build_launch_cmd(p):
         return v
     mode = p.get("mode", "headless")
     args = ["tools/run_match.py",
-            "--a", clean(p.get("a", "Apex:apex:hard_aggressive")),
+            "--a", clean(p.get("a", "Apex:Unstable:standard")),
             "--b", clean(p.get("b", "BARb:stable:hard")),
             "--map", clean(p.get("map", ""))]
     if p.get("minutes"):
@@ -563,7 +563,7 @@ def build_tournament_cmd(p):
             raise ValueError("bad value")
         return v
     args = ["tools/run_tournament.py",
-            "--a", clean(p.get("a", "Apex:apex:hard_aggressive")),
+            "--a", clean(p.get("a", "Apex:Unstable:standard")),
             "--b", clean(p.get("b", "BARb:stable:hard")),
             "--maps", clean(p.get("map", "")),
             "--games", str(int(p.get("games", 6)))]

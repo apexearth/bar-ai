@@ -23,7 +23,7 @@
 // saying so. Check any edit with:
 //
 //     python tools/deploy_ai.py deploy apex && python tools/run_match.py \
-//         --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+//         --a Apex:apex:standard --b BARb:stable:hard \
 //         --map "Comet Catcher" --minutes 5 --out matches/_check
 //     grep -c " : ERR " matches/_check/infolog.txt      # must be 0
 //==============================================================================

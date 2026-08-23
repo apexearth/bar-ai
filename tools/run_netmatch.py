@@ -12,7 +12,7 @@ peer only receives its commands. Anything the AI does that touches engine state
 directly, rather than by issuing a netted order, diverges on the host alone --
 and the host is where "Sync error for <name>" is logged.
 
-    python tools/run_netmatch.py --a Apex:apex:hard_aggressive \
+    python tools/run_netmatch.py --a Apex:Unstable:standard \
         --b BARb:stable:hard --map "Flats and Forests v2.2" --per-side 4 \
         --minutes 20 --seed 1
 
@@ -165,7 +165,7 @@ def _report(out: Path) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--a", dest="a", default="Apex:apex:hard_aggressive")
+    ap.add_argument("--a", dest="a", default="Apex:Unstable:standard")
     ap.add_argument("--b", dest="b", default="BARb:stable:hard")
     ap.add_argument("--map", required=True)
     ap.add_argument("--game", default=None)
