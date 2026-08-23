@@ -546,6 +546,14 @@ Want@ ProposeStore(CCircuitUnit@ unit)
 	if (over <= 0.5f)
 		return w;
 	const float horizon = ai.GetTunable("apex_store_horizon", TUNE_STORE_HORIZON);
+	// Storage buys TIME, not flow: once the bank already holds a horizon's
+	// worth of empty headroom, another store captures nothing (measured: 75
+	// storages bought against overflow none of them changed).
+	const float emptySec = (aiEconomyMgr.metal.storage - aiEconomyMgr.metal.current)
+			/ over;
+	if (emptySec >= horizon)
+		return w;
+	const float fill = 1.f - emptySec / ((horizon > 1.f) ? horizon : 60.f);
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	for (uint i = 0; i < builds.length(); ++i) {
@@ -554,7 +562,7 @@ Want@ ProposeStore(CCircuitUnit@ unit)
 			continue;   // floaters need water; land-base v1 (see armfmkr churn)
 		if (Catalog::gStoreM[d] <= Catalog::gCostM[d])
 			continue;
-		const float capture = Catalog::gStoreM[d] / ((horizon > 1.f) ? horizon : 60.f);
+		const float capture = fill * Catalog::gStoreM[d] / ((horizon > 1.f) ? horizon : 60.f);
 		Want c;
 		ValueOf(d, (over < capture) ? over : capture, 0.f, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
@@ -917,7 +925,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			if (Catalog::gExtractsM[pb[q]] > reach)
 				reach = Catalog::gExtractsM[pb[q]];
 		}
-		if ((upD > 0.5f) && (reach > mobileCeil))
+		// >= the game ceiling, not > our own: requiring the next con to
+		// EXCEED what the first one reaches made a second armack impossible
+		// (measured: one T2 con per game, forever).
+		if ((upD > 0.5f) && (reach >= BestExtract()))
 			gain += upD / float(1 + ServingCons());
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
 		gain += (over < drain) ? over : drain;
