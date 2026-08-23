@@ -478,6 +478,8 @@ const int PROT_DEF = 4;
 const int PROT_N = 5;
 array<array<AIFloat3>> gProtPos(PROT_N);
 array<array<Id>> gProtIds(PROT_N);
+array<array<CCircuitUnit@>> gProtUnit(PROT_N);
+array<array<int>> gProtDefId(PROT_N);
 float gAssetsM = 0.f;   // summed costM of standing structures
 
 int ProtClassOf(int defId)
@@ -510,6 +512,8 @@ void NoteFinished(CCircuitUnit@ unit)
 	if (pc >= 0) {
 		gProtPos[pc].insertLast(unit.GetPos(ai.frame));
 		gProtIds[pc].insertLast(unit.id);
+		gProtUnit[pc].insertLast(unit);
+		gProtDefId[pc].insertLast(defId);
 	}
 	if (Catalog::gExtractsM[defId] <= 0.f)
 		return;
@@ -574,6 +578,8 @@ void NoteDead(CCircuitUnit@ unit)
 			if (gProtIds[pcl][pi] == unit.id) {
 				gProtPos[pcl].removeAt(pi);
 				gProtIds[pcl].removeAt(pi);
+				gProtUnit[pcl].removeAt(pi);
+				gProtDefId[pcl].removeAt(pi);
 				break;
 			}
 		}
@@ -1554,15 +1560,34 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 {
 	Want w;
-	// Room for the burst (the storage-headroom rule): a full bank wastes
-	// the reclaim outright.
+	// PADDING (apexearth 2026-08-23): reclaim when both banks have cushion
+	// -- rich enough that the trickle is noise, with room for the refund
+	// burst. Obsolescence is RELATIVE efficiency: for generators the metric
+	// is E per CELL of ground (his ladder: solar 1.25, advsol 3, fusion
+	// ~20, AFUS ~37 -- "eventually we need physical space"); for defences
+	// it is the def's power under a far stronger neighbor's umbrella.
 	const float st = aiEconomyMgr.metal.storage;
-	if ((st <= 1.f) || (aiEconomyMgr.metal.current > 0.7f * st))
+	if (st <= 1.f)
 		return w;
+	const float bankFrac = aiEconomyMgr.metal.current / st;
+	if ((bankFrac < 0.3f) || (bankFrac > 0.85f))
+		return w;
+	const float ratio = ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO);
 	const float eFree = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
 	CCircuitUnit@ best = null;
-	float bestScore = 1e9f;
 	int bestDef = -1;
+	float bestScore = 1e9f;
+	// Generators, worst E-per-cell first, only when dwarfed by the best.
+	float ownBestEcell = 0.f;
+	for (uint i = 0; i < gOwnGen.length(); ++i) {
+		if (gOwnGen[i] is null)
+			continue;
+		const int d = int(gOwnGen[i].circuitDef.id);
+		const float ec = Catalog::gMakeE[d]
+				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+		if (ec > ownBestEcell)
+			ownBestEcell = ec;
+	}
 	for (uint i = 0; i < gOwnGen.length(); ++i) {
 		CCircuitUnit@ g = gOwnGen[i];
 		if (g is null)
@@ -1571,30 +1596,46 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		// Removing it must LEAVE a surplus -- reclaim never causes a stall.
 		if (eFree - Catalog::gMakeE[d] <= 0.1f * aiEconomyMgr.energy.income)
 			continue;
-		const float score = Catalog::gMakeE[d] / ((Catalog::gCostM[d] > 1.f)
-				? Catalog::gCostM[d] : 1.f);
-		if (score < bestScore) {
-			bestScore = score;
+		const float ec = Catalog::gMakeE[d]
+				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+		if (ownBestEcell < ratio * ec)
+			continue;   // not dwarfed: still pulling its weight per cell
+		if (ec < bestScore) {
+			bestScore = ec;
+			@best = g;
+			bestDef = d;
+		}
+	}
+	// Defences: dominated by a much stronger one covering the same ground.
+	for (uint i = 0; i < gProtUnit[PROT_DEF].length(); ++i) {
+		CCircuitUnit@ g = gProtUnit[PROT_DEF][i];
+		if (g is null)
+			continue;
+		const int d = gProtDefId[PROT_DEF][i];
+		bool dominated = false;
+		for (uint j = 0; j < gProtUnit[PROT_DEF].length(); ++j) {
+			if (i == j)
+				continue;
+			const int d2 = gProtDefId[PROT_DEF][j];
+			if ((Catalog::Def(d2) !is null)
+				&& (Catalog::Def(d2).power >= ratio * Catalog::Def(d).power)
+				&& (gProtPos[PROT_DEF][i].distance2D(gProtPos[PROT_DEF][j]) < 400.f))
+			{
+				dominated = true;
+				break;
+			}
+		}
+		if (!dominated)
+			continue;
+		// Dominated defence outranks a weak generator at equal ground value.
+		const float ec = Catalog::gCostM[d] * 0.001f;
+		if (ec < bestScore) {
+			bestScore = ec;
 			@best = g;
 			bestDef = d;
 		}
 	}
 	if (best is null)
-		return w;
-	// Obsolete means a TIER ABOVE STANDS: a solar next to a fusion is scrap,
-	// a solar in a solar economy is not (measured: v=143 reclaim ate young
-	// solars in a build-reclaim churn).
-	bool tierAbove = false;
-	for (uint gi = 0; gi < gOwnGen.length(); ++gi) {
-		if ((gOwnGen[gi] !is null)
-			&& (Catalog::gMakeE[int(gOwnGen[gi].circuitDef.id)]
-				>= 5.f * Catalog::gMakeE[bestDef]))
-		{
-			tierAbove = true;
-			break;
-		}
-	}
-	if (!tierAbove)
 		return w;
 	// One-shot metal amortized at the market's payback scale -- 60s priced a
 	// single refund like a perpetual stream and it outbid every mex.

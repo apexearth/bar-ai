@@ -64,6 +64,7 @@ local NAMES = {
 	"apex_insure_rate",
 	"apex_nuke_risk",
 	"apex_targfac_want",
+	"apex_obsolete_ratio",
 	"apex_chase_min_ratio",
 	"apex_comm_cloak_share",
 	"apex_con_outmassed",

@@ -1169,12 +1169,16 @@ const float TUNE_MOBILE_BP_EFF = 0.6f;
 // INSURE_RATE: protection value per metal of covered assets, per second --
 // the one modeled risk quantity for eyes and turrets. 0.00005 prices a
 // radar at ~v5 on a 100k base.
-const float TUNE_INSURE_RATE = 0.00005f;
+const float TUNE_INSURE_RATE = 0.0003f;   // was 5e-5: radar lost to marginal solars until assets were huge (watched)
 // NUKE_RISK: the anti-nuke's own rate; higher, because an uncovered nuke
 // is total loss. Timing emerges from assets x rate.
-const float TUNE_NUKE_RISK = 0.0001f;
+const float TUNE_NUKE_RISK = 0.0005f;
 // TARGFAC_WANT: pinpointers wanted (apexearth 2026-08-23: "3 wanted max").
 const float TUNE_TARGFAC_WANT = 3.f;
+// OBSOLETE_RATIO: how many times better the best standing alternative must
+// be (per cell for generators, in power for defences) before a building is
+// scrap -- his "much better".
+const float TUNE_OBSOLETE_RATIO = 4.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone
