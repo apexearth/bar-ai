@@ -55,6 +55,26 @@ int LiveCountOf(int bt)
 	return n;
 }
 
+// An unmanned live request for this def, wherever it stands -- the market
+// adopts these before founding a new site (a stall interrupt pulls a con
+// off a nano; the re-decided nano must FINISH that frame, not start a
+// fresh slot -- watched: nanoframes abandoned beside new starts).
+IUnitTask@ OrphanOf(CCircuitDef@ def)
+{
+	if (def is null)
+		return null;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead())
+			continue;
+		if ((t.buildDef is null) || (t.buildDef !is def))
+			continue;
+		if (Workers(t) == 0)
+			return t;
+	}
+	return null;
+}
+
 bool Governed(int bt)
 {
 	return (bt == int(Task::BuildType::FACTORY))

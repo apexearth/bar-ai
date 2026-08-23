@@ -2023,6 +2023,16 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	// (EffectiveCap) still bounds it.
 	bool par = (MCostScale() < 1.f);
 	bool crtd = false;
+	// Finish before founding: any unmanned unfinished site of this def is
+	// THE want, wherever it stands (slot cursors never reuse ground, so an
+	// abandoned frame would otherwise be orphaned forever).
+	if ((w.kind == WK_ENERGY) || (w.kind == WK_CONVERT)
+		|| (w.kind == WK_STORE) || (w.kind == WK_NANO))
+	{
+		IUnitTask@ orph = Requests::OrphanOf(w.def);
+		if (orph !is null)
+			return orph;
+	}
 	if (w.kind == WK_ENERGY) {
 		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
 		return Requests::Take(unit, w.def, Task::BuildType::ENERGY,
