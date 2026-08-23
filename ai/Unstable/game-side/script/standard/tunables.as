@@ -1176,6 +1176,9 @@ const float TUNE_ESCORT_MAX_COST = 120.f;
 // MEX_GROWTH: weight of a spot's RELATIVE income boost (gain/income) on
 // top of its absolute stream -- growth is worth more to the poor.
 const float TUNE_MEX_GROWTH = 3.f;
+// RANGE_WORTH: standing weight of weapon reach in unit selection (reach =
+// free damage before the answer), on top of the reactive outranging term.
+const float TUNE_RANGE_WORTH = 0.6f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
 // competes with perpetual streams (the market's typical payback scale).
 const float TUNE_RECLAIM_AMORT = 300.f;

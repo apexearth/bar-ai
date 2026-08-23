@@ -2770,6 +2770,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
 				continue;
 			float ppc = Catalog::gPower[d] / Catalog::gCostM[d];
+			// RANGE IS INTRINSIC VALUE (apexearth: "more strongly value
+			// range"): reach means free damage before the enemy answers, in
+			// every fight, not only against skirm pressure. A standing
+			// preference on top of the reactive term below.
+			ppc *= 1.f + (Catalog::gMaxRange[d] / 1000.f)
+					* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH);
 			// RANGE ANSWERS RANGE (apexearth: banishers outranged and killed
 			// our T1 too easily; snipers/fatboys came too late). Enemy skirm
 			// and arty mass is outranging pressure: reach above 500 gains by
@@ -2782,7 +2788,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 				const float oP = (outP > 1.f) ? 1.f : outP;
 				if (oP > 0.05f) {
 					const float rNorm = (Catalog::gMaxRange[d] - 500.f) / 500.f;
-					float rMul = 1.f + rNorm * oP * 0.8f;
+					float rMul = 1.f + rNorm * oP * 1.2f;
 					if (rMul < 0.3f)
 						rMul = 0.3f;
 					if (rMul > 2.5f)
