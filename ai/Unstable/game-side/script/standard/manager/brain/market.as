@@ -1460,20 +1460,38 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 				continue;
 			gain = gAssetsM * rate * float(want3 - have) / float(want3);
 		} else if (cls == PROT_DEF) {
-			// A standing mex without a turret in reach: insure the ground.
+			// A standing mex without a turret in reach: insure the ground,
+			// priced by EXPOSURE (apexearth 2026-08-23: against a real
+			// opponent an unguarded outlying mex "is almost guaranteed to
+			// die"; the core sits under implicit army cover). The most
+			// exposed naked spot is the want.
 			int naked = -1;
+			float worstExpo = 0.f;
 			for (uint li = 0; li < gLSpot.length(); ++li) {
 				if (gLExtract[li] <= 0.f)
 					continue;
-				if (!ProtCovered(PROT_DEF, gLPos[li], 400.f)) {
+				if (ProtCovered(PROT_DEF, gLPos[li], 400.f))
+					continue;
+				const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
+				float expo = gLPos[li].distance2D(core)
+						/ ((expoR > 1.f) ? expoR : 1200.f);
+				if (expo > 1.f)
+					expo = 1.f;
+				if (expo < 0.2f)
+					expo = 0.2f;   // even the core is not free
+				if (expo > worstExpo) {
+					worstExpo = expo;
 					naked = int(li);
-					break;
 				}
 			}
 			if (naked < 0)
 				continue;
 			at = gLPos[naked];
-			gain = (Catalog::gCostM[d] + 620.f) * rate * 20.f;
+			// Expected loss stream: the asset's value over the loss horizon,
+			// scaled by exposure. One modeled horizon.
+			const float lossH = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
+			gain = (620.f + Catalog::gCostM[d]) * worstExpo
+					/ ((lossH > 1.f) ? lossH : 300.f);
 		}
 		if (gain <= 0.f)
 			continue;

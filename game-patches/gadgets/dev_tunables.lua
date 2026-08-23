@@ -65,6 +65,8 @@ local NAMES = {
 	"apex_nuke_risk",
 	"apex_targfac_want",
 	"apex_obsolete_ratio",
+	"apex_expose_r",
+	"apex_exposed_loss_s",
 	"apex_chase_min_ratio",
 	"apex_comm_cloak_share",
 	"apex_con_outmassed",

@@ -1179,6 +1179,12 @@ const float TUNE_TARGFAC_WANT = 3.f;
 // be (per cell for generators, in power for defences) before a building is
 // scrap -- his "much better".
 const float TUNE_OBSOLETE_RATIO = 4.f;
+// EXPOSE_R: elmos from the core at which a structure counts fully exposed
+// (a walk away from where the army lives).
+const float TUNE_EXPOSE_R = 1200.f;
+// EXPOSED_LOSS_S: seconds over which a fully exposed, unguarded asset is
+// expected to be lost against a real opponent -- his "almost guaranteed".
+const float TUNE_EXPOSED_LOSS_S = 300.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone
