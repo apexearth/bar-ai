@@ -305,7 +305,10 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 			|| (buildType == BuildType::DEFENCE) || (buildType == BuildType::BUNKER)
 			|| (buildType == BuildType::BIG_GUN) || (buildType == BuildType::PYLON)
 			|| (buildType == BuildType::FACTORY) || (buildType == BuildType::TERRAFORM);
-	if (isFixed || !circuit->SnapToBaseGrid(position, pos)) {
+	// Facing first (FindBuildSite recomputes it identically): the parity snap
+	// needs it because the engine swaps xsize/zsize for east/west.
+	FindFacing(position);
+	if (isFixed || !circuit->SnapToBaseGrid(position, pos, buildDef, facing)) {
 		pos = (shake > .0f) ? utils::get_near_pos(position, shake) : position;
 	}
 	CTerrainManager::CorrectPosition(pos);

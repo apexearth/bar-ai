@@ -1,5 +1,32 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: Grid alignment (Part B) -- the anchor now sits on the engine's build lattice
+
+C++ (vendor d019a05): `SetBaseGrid` rounds the published anchor to 16 elmos;
+`SnapToBaseGrid` takes `(def, facing)` and maps its output through the
+engine's own center-parity law (`CTerrainManager::Pos2BuildPos`: center at
+16k, +8 per axis whose half-footprint is odd, facing swaps xsize/zsize);
+`IBuilderTask::Execute` hoists `FindFacing` above the snap and passes both.
+Script: `GRID_CELL` 8 -> 16 (state.as), `BAND_BACK[NANO]` 216 -> 224
+(grid.as) so the nano band is born on the same lattice as the other bands;
+the false CorrectPosition-snaps comment in state.as corrected (it is a
+map-bounds clamp).
+
+Measured with the BARAI_POS audit: final built positions ALWAYS satisfy the
+engine parity law (0 violations before and after -- the engine enforces it
+at ExecuteBuildCmd), so the defect was intent drift, not final-position
+parity. Before: anchor 2777,2922 (residue 9,10 mod 16) -- all 956 audited
+eco statics in the reference run sat off the anchor's own lattice, i.e. the
+engine floor-shifted 100% of grid placements 1-15 elmos relative to the
+plan. After: anchor snaps to 2784,2928, published cell=16, intended
+positions coincide with the engine lattice by construction (drift 0); smoke
+run clean (no compile ERR, no asALREADY_REGISTERED, no crash, mBuiltReal
+8140 / 21 mexes / T2 at 8.8 min vs NullAI in 15 min), storages in the farm
+landing flush (dz exactly 64 for 8x8 pairs). B2 (tight-then-wide search)
+and B3 (defence lattice) not taken up: no measurement demanded them yet --
+intent drift from whole-cell occupancy is not observable offline without
+extra logging.
+
 ## 2026-08-23: Catalog senses -- step 0 of the Brain rebuild (senses only, silence holds)
 
 New def-property bindings on the script `CCircuitDef` (InitScript.cpp):

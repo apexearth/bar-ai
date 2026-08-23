@@ -1846,7 +1846,11 @@ float CCircuitAI::GetRecentTradeRatio()
 void CCircuitAI::SetBaseGrid(const AIFloat3& anchor, const AIFloat3& fwd,
 		float cell, float lanePitch, float laneHalf, float range)
 {
-	gridAnchor = anchor;
+	// The anchor itself must sit on the engine's 16-elmo build lattice, or every
+	// frame-snapped position inherits its residue and the parity snap below can
+	// move a building half a cell off the intended column.
+	gridAnchor = AIFloat3(std::round(anchor.x / 16.f) * 16.f, anchor.y,
+			std::round(anchor.z / 16.f) * 16.f);
 	gridFwd = fwd;
 	gridCell = cell;
 	gridLanePitch = lanePitch;
@@ -1889,7 +1893,8 @@ int CCircuitAI::GetBaseGridFacing(const AIFloat3& pos) const
 // the position is outside the base entirely. Everything that must sit on a
 // specific piece of ground (a metal spot, a geo vent, a tower on the front) is
 // excluded by the CALLER on build type; this only knows about geometry.
-bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos) const
+bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos,
+		CCircuitDef* def, int facing) const
 {
 	if ((gridCell <= .0f) || !utils::is_valid(gridAnchor) || !utils::is_valid(pos)) {
 		return false;
@@ -1922,6 +1927,13 @@ bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos) const
 	outPos = AIFloat3(gridAnchor.x - gridFwd.x * sDepth + -gridFwd.z * sLat,
 					  pos.y,
 					  gridAnchor.z - gridFwd.z * sDepth + gridFwd.x * sLat);
+	// Onto the engine's build lattice: Pos2BuildPos is the engine's own
+	// center-parity mapping (16k, +8 per odd half-footprint axis, facing swaps
+	// the sizes). Without it neighbouring footprints of mixed parity end up 8
+	// apart and rows never pack flush.
+	if ((def != nullptr) && (facing != UNIT_NO_FACING)) {
+		outPos = CTerrainManager::Pos2BuildPos(def, outPos, facing);
+	}
 	CTerrainManager::CorrectPosition(outPos);
 	return true;
 }

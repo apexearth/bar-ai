@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..b904e2b 100644
+index aeea933..dce0b56 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,18 @@
@@ -285,7 +285,7 @@ index aeea933..b904e2b 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1485,7 +1651,799 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1651,811 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -485,7 +485,11 @@ index aeea933..b904e2b 100644
 +void CCircuitAI::SetBaseGrid(const AIFloat3& anchor, const AIFloat3& fwd,
 +		float cell, float lanePitch, float laneHalf, float range)
 +{
-+	gridAnchor = anchor;
++	// The anchor itself must sit on the engine's 16-elmo build lattice, or every
++	// frame-snapped position inherits its residue and the parity snap below can
++	// move a building half a cell off the intended column.
++	gridAnchor = AIFloat3(std::round(anchor.x / 16.f) * 16.f, anchor.y,
++			std::round(anchor.z / 16.f) * 16.f);
 +	gridFwd = fwd;
 +	gridCell = cell;
 +	gridLanePitch = lanePitch;
@@ -528,7 +532,8 @@ index aeea933..b904e2b 100644
 +// the position is outside the base entirely. Everything that must sit on a
 +// specific piece of ground (a metal spot, a geo vent, a tower on the front) is
 +// excluded by the CALLER on build type; this only knows about geometry.
-+bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos) const
++bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos,
++		CCircuitDef* def, int facing) const
 +{
 +	if ((gridCell <= .0f) || !utils::is_valid(gridAnchor) || !utils::is_valid(pos)) {
 +		return false;
@@ -561,6 +566,13 @@ index aeea933..b904e2b 100644
 +	outPos = AIFloat3(gridAnchor.x - gridFwd.x * sDepth + -gridFwd.z * sLat,
 +					  pos.y,
 +					  gridAnchor.z - gridFwd.z * sDepth + gridFwd.x * sLat);
++	// Onto the engine's build lattice: Pos2BuildPos is the engine's own
++	// center-parity mapping (16k, +8 per odd half-footprint axis, facing swaps
++	// the sizes). Without it neighbouring footprints of mixed parity end up 8
++	// apart and rows never pack flush.
++	if ((def != nullptr) && (facing != UNIT_NO_FACING)) {
++		outPos = CTerrainManager::Pos2BuildPos(def, outPos, facing);
++	}
 +	CTerrainManager::CorrectPosition(outPos);
 +	return true;
 +}
@@ -1087,7 +1099,7 @@ index aeea933..b904e2b 100644
  
  void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..4dcb3d5 100644
+index b4f4f40..417261a 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
 @@ -16,6 +16,7 @@
@@ -1106,7 +1118,7 @@ index b4f4f40..4dcb3d5 100644
  class COOAICallback;
  class CEngine;
  class CMap;
-@@ -149,6 +151,157 @@ private:
+@@ -149,6 +151,158 @@ private:
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
  	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
@@ -1203,7 +1215,8 @@ index b4f4f40..4dcb3d5 100644
 +	// sprawl against self-walling. Script owns the frame; this snaps to it.
 +	void SetBaseGrid(const springai::AIFloat3& anchor, const springai::AIFloat3& fwd,
 +			float cell, float lanePitch, float laneHalf, float range);
-+	bool SnapToBaseGrid(const springai::AIFloat3& pos, springai::AIFloat3& outPos) const;
++	bool SnapToBaseGrid(const springai::AIFloat3& pos, springai::AIFloat3& outPos,
++			CCircuitDef* def = nullptr, int facing = UNIT_NO_FACING) const;
 +	// Cardinal facing along the published axis for a position inside the base,
 +	// or UNIT_NO_FACING when the grid does not apply. Factories use it so their
 +	// exit apron opens onto the road to the front instead of the map centre.
@@ -1264,7 +1277,7 @@ index b4f4f40..4dcb3d5 100644
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
-@@ -161,6 +314,8 @@ public:
+@@ -161,6 +315,8 @@ public:
  
  	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
  private:
@@ -1273,7 +1286,7 @@ index b4f4f40..4dcb3d5 100644
  	std::pair<CEnemyInfo*, bool> RegisterEnemyInfo(ICoreUnit::Id unitId, bool isInLOS = false);
  	CEnemyInfo* RegisterEnemyInfo(springai::Unit* e);
  	void UnregisterEnemyInfo(CEnemyInfo* enemy);
-@@ -175,7 +330,14 @@ public:
+@@ -175,7 +331,14 @@ public:
  	bool UnitControl(CCircuitUnit* unit, bool isEnable);
  	bool UnitControl(ICoreUnit::Id unitId, bool isEnable) { return UnitControl(GetTeamUnit(unitId), isEnable); }
  
@@ -1289,7 +1302,7 @@ index b4f4f40..4dcb3d5 100644
  
  private:
  	void UpdateActions();
-@@ -189,6 +351,24 @@ private:
+@@ -189,6 +352,24 @@ private:
  	unsigned int actionIterator;
  
  	std::set<CCircuitUnit*> garbage;
@@ -1314,7 +1327,7 @@ index b4f4f40..4dcb3d5 100644
  // <<< Units ---- END
  
  // >>> AIOptions.lua ---- BEGIN
-@@ -205,6 +385,41 @@ private:
+@@ -205,6 +386,41 @@ private:
  	bool isAllyBaseAvoid;
  // <<< AIOptions.lua ---- END
  
@@ -1356,7 +1369,7 @@ index b4f4f40..4dcb3d5 100644
  // >>> UnitDefs ---- BEGIN
  public:
  	using CircuitDefs = std::vector<CCircuitDef>;  // UnitDefId=0 is not valid, @see rts/Sim/Units/UnitDefHandler.h
-@@ -317,6 +532,14 @@ private:
+@@ -317,6 +533,14 @@ private:
  	bool isResigned : 1;
  	bool isSlave : 1;
  	int lastFrame;
@@ -6356,7 +6369,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..cc6cb6b 100644
+index bc8ff11..83fa4cb 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -69,7 +69,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
@@ -6414,7 +6427,7 @@ index bc8ff11..cc6cb6b 100644
  	if (initiator == unit) {
  		initiator = nullptr;
  	}
-@@ -285,8 +291,23 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -285,8 +291,26 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -6434,13 +6447,16 @@ index bc8ff11..cc6cb6b 100644
 +			|| (buildType == BuildType::DEFENCE) || (buildType == BuildType::BUNKER)
 +			|| (buildType == BuildType::BIG_GUN) || (buildType == BuildType::PYLON)
 +			|| (buildType == BuildType::FACTORY) || (buildType == BuildType::TERRAFORM);
-+	if (isFixed || !circuit->SnapToBaseGrid(position, pos)) {
++	// Facing first (FindBuildSite recomputes it identically): the parity snap
++	// needs it because the engine swaps xsize/zsize for east/west.
++	FindFacing(position);
++	if (isFixed || !circuit->SnapToBaseGrid(position, pos, buildDef, facing)) {
 +		pos = (shake > .0f) ? utils::get_near_pos(position, shake) : position;
 +	}
  	CTerrainManager::CorrectPosition(pos);
  
  	const float searchRadius = 200 * SQUARE_SIZE;
-@@ -427,18 +448,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -427,18 +451,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -6473,7 +6489,7 @@ index bc8ff11..cc6cb6b 100644
  	}
  }
  
-@@ -542,7 +570,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -542,7 +573,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6484,7 +6500,7 @@ index bc8ff11..cc6cb6b 100644
  		return;
  	}
  
-@@ -565,11 +595,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +598,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6508,7 +6524,7 @@ index bc8ff11..cc6cb6b 100644
  	}
  }
  
-@@ -637,14 +677,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +680,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6565,7 +6581,7 @@ index bc8ff11..cc6cb6b 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +740,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +743,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
