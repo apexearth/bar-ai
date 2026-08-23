@@ -481,6 +481,11 @@ float OwnedMobileCeil()
 // every entry MUST leave via NoteDead.
 array<CCircuitUnit@> gOwnGen;
 array<Id> gOwnGenIds;
+// High-value structures (labs, fusions, gantries...): each deserves its
+// own turret ring (apexearth: "so shit at protecting important buildings
+// like T2 -- 2700 metal investment dying").
+array<CCircuitUnit@> gOwnBig;
+array<Id> gOwnBigIds;
 
 // The protection ledger: what stands where, per coverage class, plus the
 // total structure value at risk. PROT_* index the class arrays.
@@ -525,6 +530,10 @@ void NoteFinished(CCircuitUnit@ unit)
 	}
 	if (!Catalog::gMobile[defId])
 		gAssetsM += Catalog::gCostM[defId];
+	if (!Catalog::gMobile[defId] && (Catalog::gCostM[defId] >= 1200.f)) {
+		gOwnBig.insertLast(unit);
+		gOwnBigIds.insertLast(unit.id);
+	}
 	const int pc = ProtClassOf(defId);
 	if (pc >= 0) {
 		gProtPos[pc].insertLast(unit.GetPos(ai.frame));
@@ -594,6 +603,13 @@ void NoteDead(CCircuitUnit@ unit)
 	}
 	if (!Catalog::gMobile[int(unit.circuitDef.id)])
 		gAssetsM -= Catalog::gCostM[int(unit.circuitDef.id)];
+	for (uint bb = 0; bb < gOwnBigIds.length(); ++bb) {
+		if (gOwnBigIds[bb] == unit.id) {
+			gOwnBig.removeAt(bb);
+			gOwnBigIds.removeAt(bb);
+			break;
+		}
+	}
 	for (uint nn = 0; nn < gOwnNanoIds.length(); ++nn) {
 		if (gOwnNanoIds[nn] == unit.id) {
 			gOwnNanoPos.removeAt(nn);
@@ -1881,6 +1897,45 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 				continue;
 			gain = gAssetsM * rate * float(want3 - have) / float(want3);
 		} else if (cls == PROT_DEF) {
+			// AN UNCOVERED HIGH-VALUE STRUCTURE FIRST: its whole investment
+			// is the stake, wherever it stands.
+			{
+				CCircuitUnit@ big = null;
+				float bigV = 0.f;
+				for (uint bg = 0; bg < gOwnBig.length(); ++bg) {
+					CCircuitUnit@ b2 = gOwnBig[bg];
+					if (b2 is null)
+						continue;
+					const float bv = Catalog::gCostM[int(b2.circuitDef.id)];
+					if ((bv > bigV)
+						&& !ProtCovered(PROT_DEF, b2.GetPos(ai.frame), 420.f))
+					{
+						bigV = bv;
+						@big = b2;
+					}
+				}
+				if (big !is null) {
+					at = big.GetPos(ai.frame);
+					const float lossH3 = ai.GetTunable("apex_exposed_loss_s",
+							TUNE_EXPOSED_LOSS_S);
+					gain = bigV * 0.6f / ((lossH3 > 1.f) ? lossH3 : 120.f);
+				}
+			}
+			if (gain > 0.f) {
+				Want cb;
+				const float spb = Catalog::gSpeed[uid];
+				const float wkb = (spb > 1.f)
+						? (unit.GetPos(ai.frame).distance2D(at) / spb) : 60.f;
+				ValueOf(d, gain, wkb, Catalog::gBuildPower[uid], cb);
+				if (cb.value > w.value) {
+					w = cb;
+					w.kind = WK_PROTECT;
+					@w.def = Catalog::Def(d);
+					w.pos = at;
+					w.spotId = cls;
+				}
+				continue;
+			}
 			// EXPOSED NAKED MEXES FIRST: they die on a 120s clock while the
 			// home cluster grew DOZENS of turrets (watched) -- the old
 			// metal->power conversion never closed the wave gap. Everything

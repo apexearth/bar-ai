@@ -1610,3 +1610,10 @@ session: respond PROPORTIONALLY -- break off a detachment sized to the
 raid (~raider mass x margin), the main force holds against the main
 threat. Lives in the attack/defend task target selection (C++ AttackTask
 FindTarget + the massing pool); do not implement without his input.
+
+## Military dossier: travel thrash (apexearth 2026-08-23, watched)
+
+"Our army runs back and forth not sure which way to get around a hill"
+while the T2 lab died. Target/stand reselection oscillates the group's
+path around terrain. C++ travel/target logic (DefendTask stand + AttackTask
+FindTarget rethink cadence); session item, alongside proportional response.
