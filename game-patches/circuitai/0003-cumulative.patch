@@ -12041,7 +12041,7 @@ index 5eebb71..d41d22b 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882..558d3e9 100644
+index a1ac882..42b1891 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -12069,7 +12069,7 @@ index a1ac882..558d3e9 100644
  	costM        = def->GetCost(resM);
  	costE        = def->GetCost(resE);
  	upkeepM      = def->GetUpkeep(resM);
-@@ -240,9 +244,45 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -240,9 +244,46 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	isCapturable      = def->IsCapturable();
  
  	const std::map<std::string, std::string>& customParams = def->GetCustomParams();
@@ -12082,7 +12082,8 @@ index a1ac882..558d3e9 100644
 +	makeM = def->GetResourceMake(resM) - upkeepM;
 +	needsGeo = def->IsNeedGeo();
 +	isTargFac = def->IsTargetingFacility();
-+	isKamikazeD = def->IsAbleToKamikaze();
++	isKamikazeD = def->IsAbleToKamikaze()
++		|| ((def->GetSelfDCountdown() == 0) && !def->IsBuilder());   // crawling bombs: countdown-0 selfd, no kamikaze flag (corroach)
 +	areaCells = (def->GetXSize() / 2) * (def->GetZSize() / 2);
 +	storeM = def->GetStorage(resM);
 +	storeE = def->GetStorage(resE);
@@ -12117,7 +12118,7 @@ index a1ac882..558d3e9 100644
  	}
  
  	it = customParams.find("canjump");
-@@ -252,8 +292,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -252,8 +293,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		jumpRange = (it != customParams.end()) ? utils::string_to_float(it->second) : 400.0f;
  	}
  
@@ -12141,7 +12142,7 @@ index a1ac882..558d3e9 100644
  		category |= circuit->GetBadCategory();
  		costM *= 0.1f;  // avoid threat metal
  	}
-@@ -303,6 +358,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -303,6 +359,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		delete stockDef;
  	}
  

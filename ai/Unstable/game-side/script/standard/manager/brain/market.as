@@ -2362,6 +2362,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		if (ppc > linePPC)
 			linePPC = ppc;
 	}
+	// PROPORTIONAL DRAW, not argmax: a persistent 10% price edge under
+	// winner-take-all became 29 cons and zero army from a vehicle lab
+	// (measured, ladder t001) -- the same lesson the old Brain's roulette
+	// carved into project memory. Candidates weight by value.
+	array<int> candDef;
+	array<float> candV;
+	array<float> candGain;
+	float sumV = 0.f;
 	int best = -1;
 	float bestV = 0.f;
 	float bestGain = 0.f;
@@ -2422,11 +2430,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			if (gainA <= 0.01f)
 				continue;
 			const float vA = gainA / Catalog::gCostM[d];
-			if (vA > bestV) {
-				bestV = vA;
-				best = d;
-				bestGain = gainA;
-			}
+			candDef.insertLast(d);
+			candV.insertLast(vA);
+			candGain.insertLast(gainA);
+			sumV += vA;
 			continue;
 		}
 		float gain = 0.f;
@@ -2475,14 +2482,28 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		if (gain <= 0.5f)
 			continue;
 		const float v = gain / Catalog::gCostM[d];
-		if (v > bestV) {
-			bestV = v;
-			best = d;
-			bestGain = gain;
+		candDef.insertLast(d);
+		candV.insertLast(v);
+		candGain.insertLast(gain);
+		sumV += v;
+	}
+	if ((candDef.length() == 0) || (sumV <= 0.f))
+		return null;
+	// Deterministic weighted pick: seeded from frame+line so replays hold.
+	uint h = uint(ai.frame) * 2654435761 + uint(fac.id) * 40503;
+	h ^= (h >> 13);
+	float roll = float(h % 10000) / 10000.f * sumV;
+	uint pick = 0;
+	for (uint ci = 0; ci < candV.length(); ++ci) {
+		roll -= candV[ci];
+		if (roll <= 0.f) {
+			pick = ci;
+			break;
 		}
 	}
-	if (best < 0)
-		return null;
+	best = candDef[pick];
+	bestV = candV[pick];
+	bestGain = candGain[pick];
 	// Priced in the same currency; factory time is free while the line idles.
 	AiLog("apex: decide " + fac.circuitDef.GetName() + " #" + fac.id
 		+ " -> produce:" + Catalog::Def(best).GetName()
