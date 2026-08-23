@@ -248,6 +248,7 @@ float MCostScale()
 	return 1.f - 0.8f * ((f > 1.f) ? 1.f : f);
 }
 
+
 float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 {
 	float buildSec = Catalog::BuildSecondsAt(defId, EffBP(builderBP));
@@ -261,6 +262,13 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 		const float mInc = aiEconomyMgr.metal.income;
 		const float mBank = aiEconomyMgr.metal.current;
 		if (mInc > 0.1f) {
+			// (An affordability multiplier of (cost+committedDebt)/cost was
+			// tried here and REVERTED same day: a debt ledger is not a
+			// flow commitment -- three seeds wasted 3.5-8.7k and pushed T2
+			// past 20m while metal overflowed, which is proof the income
+			// was never actually spoken for. The affordability that works
+			// is on the GAIN side: unserved demand divides among the pipes
+			// in flight.)
 			const float feedSec = (Catalog::gCostM[defId] - mBank * 0.5f) / mInc;
 			if (feedSec > buildSec) {
 				buildSec = feedSec;
@@ -1363,40 +1371,38 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				}
 			}
 		}
-		// SAME-TIER KIN IN FLIGHT: a live plant whose products reach this
-		// far is the SAME unlock, already being paid for -- a T2 bot lab
-		// under construction must veto the T2 vehicle lab (watched: both
-		// bought at an income that barely afforded one; the build window
-		// is minutes long exactly when feed-bound). The per-def dedup
-		// above deliberately does not cover this (a T1 rebuild in flight
-		// must not zero tech), so kinship here is by REACH.
-		if (prodCeil > ownCeil) {
-			bool kinInFlight = false;
-			for (uint kl = 0; kl < Requests::gLive.length(); ++kl) {
-				IUnitTask@ kt = Requests::gLive[kl];
-				if ((kt is null) || (kt.buildDef is null))
+		// KIN PIPES IN FLIGHT: no veto -- the MATH says it (apexearth:
+		// "the math should be correct... we shouldn't need vetos"). A live
+		// plant whose products reach this far is already delivering this
+		// unlock, so the demand stream DIVIDES among the pipes being built
+		// to serve it -- the unserved-demand law, applied to tech. A rich
+		// economy can still buy parallel tier capacity when the divided
+		// gain wins; a poor one finds the second pipe worth half at twice
+		// the real duration (the affordability term in ValueOf).
+		int liveKin = 0;
+		for (uint kl = 0; kl < Requests::gLive.length(); ++kl) {
+			IUnitTask@ kt = Requests::gLive[kl];
+			if ((kt is null) || (kt.buildDef is null))
+				continue;
+			const int kd = int(kt.buildDef.id);
+			if (Catalog::gMobile[kd] || (Catalog::gBuildsList[kd].length() == 0))
+				continue;
+			bool kin = false;
+			const array<int>@ kb = Catalog::gBuildsList[kd];
+			for (uint kq = 0; kq < kb.length() && !kin; ++kq) {
+				const int kpd = kb[kq];
+				if (!Catalog::gMobile[kpd] || !Catalog::gBuilder[kpd])
 					continue;
-				const int kd = int(kt.buildDef.id);
-				if (Catalog::gMobile[kd] || (Catalog::gBuildsList[kd].length() == 0))
-					continue;
-				const array<int>@ kb = Catalog::gBuildsList[kd];
-				for (uint kq = 0; kq < kb.length() && !kinInFlight; ++kq) {
-					const int kpd = kb[kq];
-					if (!Catalog::gMobile[kpd] || !Catalog::gBuilder[kpd])
-						continue;
-					const array<int>@ kpb = Catalog::gBuildsList[kpd];
-					for (uint kz = 0; kz < kpb.length(); ++kz) {
-						if (Catalog::gExtractsM[kpb[kz]] >= prodCeil) {
-							kinInFlight = true;
-							break;
-						}
+				const array<int>@ kpb = Catalog::gBuildsList[kpd];
+				for (uint kz = 0; kz < kpb.length(); ++kz) {
+					if (Catalog::gExtractsM[kpb[kz]] >= prodCeil) {
+						kin = true;
+						break;
 					}
 				}
-				if (kinInFlight)
-					break;
 			}
-			if (kinInFlight)
-				continue;
+			if (kin)
+				++liveKin;
 		}
 		// A lab without follow-through is a statue: its price carries its
 		// first constructor, and its VALUE scales with how funded the army
@@ -1415,7 +1421,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			fundedMul = 1.f;
 		float techGain = 0.f;
 		if (prodCeil > ownCeil)
-			techGain = demand * pipe;
+			techGain = demand * pipe / float(1 + liveKin);
 		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f)) {
 			techGain = demand * pipe * (prodMob / ownMob - 1.f);
 			// The quiet rear NEEDS wings: flying cons are its whole

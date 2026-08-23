@@ -1,5 +1,25 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: the veto dies -- same-tier labs lose on price (apexearth's correction)
+
+"The math should be correct. We shouldn't need vetos... perhaps what
+we're missing is an affordability element." Three states tried same day,
+each measured:
+
+1. Reach-kinship VETO (0add861) -- worked but violated the paradigm.
+2. Veto replaced by MATH on both sides: tech gain divides among same-tier
+   pipes in flight (unserved-demand law), and a cost-side affordability
+   multiplier (cost+committedDebt)/cost on the feed floor.
+3. The cost-side multiplier REVERTED: a debt ledger is not a flow
+   commitment. Three seeds wasted 3.5-8.7k with T2 past 20m WHILE METAL
+   OVERFLOWED -- overflow is proof the income was never spoken for.
+
+Final state: gain-side division only (tech demand/(1+liveKin); plant
+dedup counts equal-reach same-class kin). Verified: one T2 ground lab on
+both check seeds, mohos still lead fusion. Economy medians pending a
+batch -- single-run variance on this benchmark is too high to read
+(known: 60%->10% on an unchanged AI).
+
 ## 2026-08-23: one tier purchase at a time -- reach-kinship for labs
 
 apexearth, watching: "we made a T2 bot lab and then a T2 vehicle lab...

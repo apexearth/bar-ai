@@ -138,7 +138,13 @@ them, never around:
   the income FreeMetalFlow already frees (measured: T2 priced out of an
   entire 25-minute game).
 - The build's own duration is floored by `(costM − bank/2)/income` in
-  `ValueOf`.
+  `ValueOf`. Do NOT scale it by committed-debt "fair share" -- tried and
+  reverted 2026-08-23: a debt ledger is not a flow commitment, and three
+  seeds wasted 3.5-8.7k while metal overflowed (overflow is PROOF income
+  was not spoken for). Affordability lives on the GAIN side: unserved
+  demand divides among the pipes in flight (tech demand / (1+liveKin)).
+  apexearth's standard: a same-tier second lab must lose on PRICE, never
+  by rule.
 
 Review checklist for ANY new/changed gain: (1) does it claim throughput the
 economy hasn't got? cap by FreeMetalFlow. (2) does it occupy income for a
