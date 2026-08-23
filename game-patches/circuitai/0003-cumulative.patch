@@ -9200,7 +9200,7 @@ index 90c3b71..61aec1c 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
-index 0400f8d..b1bd546 100644
+index 0400f8d..83adb99 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp
 +++ b/src/circuit/task/fighter/FighterTask.cpp
 @@ -6,8 +6,10 @@
@@ -9506,7 +9506,7 @@ index 0400f8d..b1bd546 100644
 +	AIFloat3 dst = pos + perp * dist;
 +	CTerrainManager::CorrectPosition(dst);
 +	unit->CmdMoveTo(dst, 0, frame + FRAMES_PER_SEC * 2);
-+	unit->SetDodgeFrame(frame + (int)(FRAMES_PER_SEC * circuit->GetTunable("apex_dodge_cd", 2.f)));
++	unit->SetDodgeFrame(frame + (int)(FRAMES_PER_SEC * circuit->GetTunable("apex_dodge_cd", 1.f)));
 +	IntentPing(dst, "DODGE");
 +}
 +
