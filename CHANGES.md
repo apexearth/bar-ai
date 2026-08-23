@@ -1244,3 +1244,15 @@ leverage rose 1.43 -> 1.9:1 as fights stopped collapsing, and more games
 close before their arty grind matures. Easy is now a coin flip at scale
 (CI 31-74%). deaths.py remains the sharpest instrument in the toolbox:
 "93% died retreating" found in one table what 60 games of win rates hid.
+
+## 2026-08-23 -- Medium re-anchor 0-20; the wall is genuine
+
+The commander exposure guard (found via the 15:00 COMMANDER LOST forensic:
+he died building an LLT at a naked forward mex) did not crack medium:
+0-19 -> 0-20. Config diff shows medium is not boosted -- it differs from
+easy only in behavioral weights (attack 30->40, static value 0.8->1.2);
+the wall is skill, and its name is the same K/D ~0.35 trade deficit. The
+commander guard stays (right on its own evidence). Ladder file complete:
+easy AT PARITY (8-9/20), medium 0-20, both at 20-game confidence. The
+solo campaign ends here; the military design session is the key to the
+next rung.
