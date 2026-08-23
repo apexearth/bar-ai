@@ -391,7 +391,8 @@ local function armyValue(teamID)
 	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
 		local udid = Spring.GetUnitDefID(uid)
 		local ud = udid and UnitDefs[udid]
-		if ud ~= nil and ud.speed and ud.speed > 0 and #ud.weapons > 0 then
+		if ud ~= nil and ud.speed and ud.speed > 0 and #ud.weapons > 0
+			and not ud.isBuilder then  -- commanders/decoys are builders, not army
 			local c = ud.metalCost or 0
 			if c >= SPAM_COST then total = total + c else cheap = cheap + c end
 		end

@@ -1,354 +1,181 @@
-"""Audit the eco/tech role in a single match.
+"""Audit the REAR SPECIALIST (eco role) in a single match.
 
-Usage: python tools/audit_role.py <match-dir>
+Usage: python tools/audit_role.py <match-dir> [--allies N]
 
-Checks the role against apexearth's spec (2026-08-22):
-  - the role is held from the opening, by ONE player, wire-to-wire
-  - every teammate's paid-for T2 constructor is delivered EARLY (all < 10m)
-  - the holder builds ZERO army and ZERO static defence (sensors exempt)
-  - the holder out-ecos every teammate (that is the point of the role)
+Checks apexearth's spec (2026-08-23) against the market-era telemetry:
+  elected        exactly one ally holds `rear-specialist ON`, and holds it
+                 wire-to-wire (no flapping off)
+  no-army        the holder's standing army stays at commander level while
+                 it owns no T3-grade production (mT3 == 0)
+  no-defence     the holder puts zero metal into static defence
+  tech-first     the holder starts T2 no later than any teammate
+  no-waste       the holder's cumulative metal excess stays under 5% of
+                 what it produced ("full on metal for minutes" = fail)
+  out-eco        the holder out-produces every teammate (that is the point)
+  mexups (soft)  the holder has upgraded mexes by game end (warn only under
+                 20 game-min; the ladder may honestly still be mid-climb)
 
 Telemetry sources (all from the match dir's infolog.txt):
-  BARAI_STATS   per-team periodic key=value samples (dev_stats_export.lua)
-  BARAI_BUILD   per-unit builds >= SPAM_COST
-  "apex: TECH ROLE team=N"    the facqueue's army-mix-off announcement
-  "apex: tech lead = / CHANGED"  the election
-  "apex: gave adv con to team N" the constructor gift
-  "apex: sent X to lead N"       the sling payment (every 40th is logged)
+  BARAI_STATS  per-team periodic key=value samples (dev_stats_export.lua):
+               armyReal armyCheap conT1 conT2 mDefence metalProduced
+               metalExcess techStart t2Mex mT1 mT2 mT3 top=...
+  "apex: rear-specialist ON team=N"   the election (market.as)
 
-armyReal/armyCheap are STANDING army value and include the commander;
-mDefence is cumulative metal into static defence (gadget-classified, exact).
-Army-unit detection from build lists is name-based and therefore heuristic:
-the audit prints the names it counted so a human can veto a misclass.
+armyReal INCLUDES the commander (~2700). Standing counters go to zero when
+a team dies -- the audit reads PEAK for standing values and final for
+cumulative ones, per the judge-the-timeline rule.
 """
 import re
 import sys
 from pathlib import Path
 
-COMM_COST = 2700.0        # armcom/corcom/legcom metal cost
-GIFT_DEADLINE_MIN = 10.0  # "Gifts should be coming out earlier than 10m - all of them"
-ARMY_SLACK = 350.0        # standing-army slack above the commander (a stray scout)
-
-# Name fragments that are NOT army. Constructors, scouts and rezzers are the
-# role's floors; economy is its job; sensors are exempt by his call.
-ECO_UTIL = ("mex", "moho", "solar", "adv", "win", "tide", "fus", "geo", "makr", "mmkr",
-            "stor", "nano", "rad", "jam", "sonar", "eye", "targ", "silo",
-            "gate", "amd", "scab", "lab", "vp", "ap", "hp", "sy", "plat",
-            "gant", "shltx", "juno")
-CONS = ("ck", "cv", "ca", "ack", "acv", "aca", "cs", "acsub", "com", "rectr",
-        "necro", "farm", "consul", "mlv", "muskrat", "beaver")
-SCOUTS = ("flea", "fav", "peep", "fink", "spy")
-DEFENCE = ("llt", "rl", "ferret", "beamer", "hllt", "hlt", "fhlt", "frt",
-           "pb", "vipe", "claw", "maw", "dtr", "toast", "amb", "anni",
-           "doom", "bastion", "mg", "cluster", "hive", "guard", "pun",
-           "agm", "flak", "mercury", "screamer", "drag", "fort", "dl",
-           "tl", "popup")
-
-
-def classify(name: str) -> str:
-    n = name.lower()
-    # order matters: check the specific lists before the broad eco list
-    stripped = n[3:] if n[:3] in ("arm", "cor", "leg") else n
-    for frag in SCOUTS:
-        if frag in stripped:
-            return "scout"
-    for frag in CONS:
-        if stripped == frag or stripped.startswith(frag) or stripped.endswith(frag):
-            return "con"
-    for frag in DEFENCE:
-        if stripped == frag or stripped.startswith(frag):
-            return "defence"
-    for frag in ECO_UTIL:
-        if frag in stripped:
-            return "eco"
-    return "army"
+ARMY_SLACK = 400.0     # a stray scout/escort (armyReal excludes builders now)
+WASTE_FRAC = 0.05
+MEXUP_SOFT_MIN = 20.0  # under this many game-minutes, missing mohos is a warn
 
 
 def parse_kv(line: str) -> dict:
-    return dict(m.group(1, 2) for m in re.finditer(r"(\w+)=([^ ]+)", line))
-
-
-def gmin(frame: int) -> float:
-    return frame / 30.0 / 60.0
+    out = {}
+    for m in re.finditer(r"(\w+)=([^\s]+)", line):
+        out[m.group(1)] = m.group(2)
+    return out
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         print(__doc__)
         return 2
     d = Path(sys.argv[1])
     log = d / "infolog.txt"
     if not log.exists():
-        print(f"no infolog.txt in {d}")
+        print(f"FAIL: no infolog.txt in {d}")
         return 2
-    text = log.read_text(errors="replace")
-    # The handicap changes the ruleset (apexearth 2026-08-22): at >= +50 the
-    # lead gifts no cons; at >= +100 two fusions by 10 minutes is required.
-    handicap = 0
-    script = d / "script.txt"
-    if script.exists():
-        hs = re.findall(r"Handicap=(\d+)", script.read_text(errors="replace"))
-        handicap = max((int(h) for h in hs), default=0)
 
-    flags = []
-    oks = []
+    text = log.read_text(encoding="utf-8", errors="replace")
 
-    def ok(name, msg):
-        oks.append((name, msg))
+    # -- gate: a compile error disables the variant and the audit is void --
+    if re.search(r"\(\d+, \d+\) : ERR|Fix compilation errors", text):
+        print("VOID: AngelScript compile error in this run -- nothing below is evidence")
+        return 2
 
-    def flag(name, msg):
-        flags.append((name, msg))
+    # -- election lines --
+    ons = re.findall(r"rear-specialist ON team=(\d+)", text)
+    offs = re.findall(r"rear-specialist off team=(\d+)", text)
+    holders = sorted(set(ons))
 
-    # -- role timeline ------------------------------------------------------
-    role_lines = re.findall(
-        r"\[([0-9.]+)m t(\d+)\] apex: TECH ROLE team=(\d+)", text)
-    holders = []           # (minute, team) in order, deduped by team-run
-    for minute, _tag, team in role_lines:
-        team = int(team)
-        if not holders or holders[-1][1] != team:
-            holders.append((float(minute), team))
-    # Dedupe: every instance logs the same transition once, so eight identical
-    # pairs are ONE change. A single early correction (fallback -> anchor)
-    # inside the first 2.5 minutes is the anchor latching, not a handover.
-    lead_changes = []
-    for m in re.finditer(r"\[([0-9.]+)m t\d+\] apex: tech lead CHANGED "
-                         r"team (\d+) -> (\d+)", text):
-        minute, a, b = float(m.group(1)), m.group(2), m.group(3)
-        if (a, b) not in [(x, y) for _, x, y in lead_changes]:
-            lead_changes.append((minute, a, b))
-    lead_changes = [(a, b) for minute, a, b in lead_changes if minute > 2.5]
-
-    if not role_lines:
-        flag("role-active", "NO 'TECH ROLE' lines at all -- the role never "
-                            "engaged (team game? apex_role_tech_* zeroed?)")
-        holder = None
-    else:
-        holder = holders[-1][1]
-        first_min = holders[0][0]
-        if first_min <= 2.5:
-            ok("role-starts-early", f"army mix off by {first_min:.1f}m (team {holders[0][1]})")
-        else:
-            flag("role-starts-early", f"first army-mix-off at {first_min:.1f}m -- "
-                                      "the opening window built army")
-        if len(holders) == 1 and not lead_changes:
-            ok("role-sticky", f"one holder wire-to-wire (team {holder})")
-        else:
-            path = " -> ".join(f"t{t}@{m:.1f}m" for m, t in holders)
-            flag("role-sticky", f"{len(holders) - 1} handover(s): {path}"
-                 + (f"; lead CHANGED {lead_changes}" if lead_changes else ""))
-
-    # -- stats samples ------------------------------------------------------
-    samples = {}   # team -> list of dict
-    ally = {}      # team -> ally
+    # -- per-team sample streams (our side = ally 0, spec 'a') --
+    samples: dict[int, list[dict]] = {}
     for line in text.splitlines():
         if "[BARAI_STATS]" not in line:
             continue
         kv = parse_kv(line)
-        t = int(kv.get("team", -1))
-        samples.setdefault(t, []).append(kv)
-        ally[t] = int(kv.get("ally", -1))
+        if kv.get("ally") != "0":
+            continue
+        samples.setdefault(int(kv["team"]), []).append(kv)
+
+    if not samples:
+        print("VOID: no ally-0 BARAI_STATS samples -- gadget missing or wrong side anchor")
+        return 2
+
+    game_min = max(float(s[-1].get("frame", 0)) / 30 / 60 for s in samples.values())
+    checks: list[tuple[str, bool | None, str]] = []  # (name, ok|None=warn, detail)
+
+    # elected
+    if len(holders) == 1 and not offs:
+        checks.append(("elected", True, f"team {holders[0]}, wire-to-wire"))
+        holder = int(holders[0])
+    elif len(holders) == 1:
+        checks.append(("elected", False, f"team {holders[0]} but flapped off {len(offs)}x"))
+        holder = int(holders[0])
+    else:
+        checks.append(("elected", False,
+                       f"{len(holders)} holders ({holders}); need exactly 1 ON, 0 off"))
+        holder = None
 
     if holder is None or holder not in samples:
-        print_report(oks, flags)
-        return 1
-    side = ally[holder]
-    mates = [t for t, a in ally.items() if a == side and t != holder]
-    hl = samples[holder][-1]
+        for name in ("no-army", "no-defence", "tech-first", "no-waste", "out-eco", "mexups"):
+            checks.append((name, False, "no holder to audit"))
+        return report(checks, game_min, None, samples)
 
-    # -- the transaction: gifts out, payments in ---------------------------
-    gifts = [(float(m.group(1)), int(m.group(2))) for m in re.finditer(
-        r"\[([0-9.]+)m t\d+\] apex: gave adv con to team (\d+)", text)]
-    n_mates = len(mates)
-    if handicap >= 50:
-        # His rule: at +50 and above, no sharing -- teammates afford their own.
-        if not gifts:
-            ok("gifts-delivered", f"none, correctly (handicap +{handicap})")
-        else:
-            flag("gifts-delivered", f"{len(gifts)} con(s) gifted at handicap "
-                 f"+{handicap} -- gifting should be OFF at >= +50")
-    elif not gifts:
-        flag("gifts-delivered", f"ZERO constructors gifted (owe {n_mates})")
+    hs = samples[holder]
+    last = hs[-1]
+    f = lambda s, k: float(s.get(k, 0) or 0)
+
+    # no-army: peak standing army <= slack, unless T3 era began
+    peak_army = max(f(s, "armyReal") + f(s, "armyCheap") for s in hs)
+    t3 = f(last, "mT3")
+    ok = peak_army <= ARMY_SLACK or t3 > 0
+    checks.append(("no-army", ok,
+                   f"peak standing {peak_army:.0f} vs slack {ARMY_SLACK:.0f}"
+                   + (f" (mT3={t3:.0f}, exempt)" if t3 > 0 else "")))
+
+    # no-defence
+    mdef = f(last, "mDefence")
+    checks.append(("no-defence", mdef <= 0, f"mDefence={mdef:.0f}"))
+
+    # tech-first: holder techStart minimal among allies that have one
+    starts = {t: f(s[-1], "techStart") for t, s in samples.items() if f(s[-1], "techStart") > 0}
+    hstart = starts.get(holder, -1)
+    if hstart > 0:
+        first = min(starts.values())
+        ok = hstart <= first + 1  # frames; ties count
+        checks.append(("tech-first", ok,
+                       f"holder {hstart / 30 / 60:.1f}m vs team first {first / 30 / 60:.1f}m"))
     else:
-        late = [g for g in gifts if g[0] > GIFT_DEADLINE_MIN]
-        missing = sorted(set(mates) - {t for _, t in gifts})
-        if len(gifts) >= n_mates and not late:
-            ok("gifts-delivered", f"{len(gifts)}/{n_mates} gifted, last at "
-                                  f"{max(g[0] for g in gifts):.1f}m")
-        else:
-            flag("gifts-delivered",
-                 f"{len(gifts)}/{n_mates} gifted; "
-                 f"{len(late)} after {GIFT_DEADLINE_MIN:.0f}m "
-                 f"(times {[f'{m:.1f}' for m, _ in gifts]}); "
-                 f"never gifted: {missing}")
+        others = f", teammates: {len(starts)} teched" if starts else ""
+        checks.append(("tech-first", False, f"holder never started T2{others}"))
 
-    # His rule: at +100, two fusions by 10 minutes.
-    FUSIONS = ("armfus", "corfus", "legfus", "armafus", "corafus", "legafus",
-               "armckfus", "armuwfus", "coruwfus", "legdfus")
-    fus_times = [float(m.group(1)) for m in re.finditer(
-        r"\[BARAI_BUILD\] team=%d .*min=([0-9.]+) unit=(%s) " % (
-            holder, "|".join(FUSIONS)), text)]
-    if handicap >= 100:
-        early = [t for t in fus_times if t <= 10.0]
-        if len(early) >= 2:
-            ok("two-fusions-10m", f"{len(early)} fusions by 10m "
-               f"(times {[f'{t:.1f}' for t in sorted(fus_times)[:4]]})")
-        else:
-            flag("two-fusions-10m", f"{len(early)} fusion(s) by 10m at "
-                 f"+{handicap} (all: {[f'{t:.1f}' for t in sorted(fus_times)]}) "
-                 "-- rule: 2 by 10:00")
-    pays = re.findall(r"\[[0-9.]+m t(\d+)\] apex: sent (\d+) to lead (\d+)", text)
-    if pays:
-        wrong = {int(l) for _, _, l in pays} - {holder}
-        payers = {int(t) for t, _, _ in pays}
-        if wrong:
-            flag("payments-target", f"payments went to team(s) {sorted(wrong)} "
-                                    f"but the role holder is team {holder}")
-        else:
-            ok("payments-target", f"{len(payers)}/{n_mates} teammates paid the holder "
-                                  "(every 40th send is logged; totals are partial)")
+    # no-waste: cumulative excess fraction at the last sample
+    prod = f(last, "metalProduced")
+    exc = f(last, "metalExcess")
+    frac = exc / prod if prod > 0 else 0.0
+    checks.append(("no-waste", frac < WASTE_FRAC,
+                   f"excess {exc:.0f} / produced {prod:.0f} = {frac:.1%}"))
+
+    # out-eco: the RATE over the last window (exponential advantage shows in
+    # slope long before cumulative catches up; a front player's early mexes
+    # win the total at 15m without meaning anything about scaling)
+    def rate(ss):
+        if len(ss) < 2:
+            return 0.0
+        (f0, p0), (f1, p1) = ((float(x.get("frame", 0)), float(x.get("metalProduced", 0)))
+                              for x in ss[-2:])
+        return (p1 - p0) / ((f1 - f0) / 30) if f1 > f0 else 0.0
+    rates = {t: rate(s) for t, s in samples.items()}
+    best = max(rates, key=rates.get)
+    ok = rates[holder] >= 0.9 * rates[best]
+    checks.append(("out-eco", ok,
+                   f"holder rate {rates[holder]:.1f} m/s vs best team {best} {rates[best]:.1f}"))
+
+    # mexups (soft under MEXUP_SOFT_MIN)
+    t2mex = f(last, "t2Mex")
+    if t2mex > 0:
+        checks.append(("mexups", True, f"t2Mex={t2mex:.0f}"))
+    elif game_min < MEXUP_SOFT_MIN:
+        checks.append(("mexups", None, f"none yet at {game_min:.0f}m (soft under {MEXUP_SOFT_MIN:.0f}m)"))
     else:
-        flag("payments-target", "no sling payments logged at all")
+        checks.append(("mexups", False, f"none by {game_min:.0f}m"))
 
-    # -- purity: zero defence, zero army -----------------------------------
-    mdef = float(hl.get("mDefence", 0))
-    if mdef <= 0:
-        ok("zero-defence", "0 metal of static defence (exact, gadget-classified)")
-    else:
-        flag("zero-defence", f"{mdef:.0f} metal of static defence built by the holder")
-
-    peak_army = max(float(s.get("armyReal", 0)) + float(s.get("armyCheap", 0))
-                    for s in samples[holder])
-    above = peak_army - COMM_COST
-    if above <= ARMY_SLACK:
-        ok("zero-army-standing", f"peak standing army {above:.0f} above the commander")
-    else:
-        flag("zero-army-standing", f"peak standing army {above:.0f} metal above "
-                                   "the commander")
-
-    army_names = {}
-    cheap = hl.get("cheapBuilt", "")
-    for part in cheap.split(","):
-        if ":" not in part:
-            continue
-        name, cost = part.rsplit(":", 1)
-        if classify(name) == "army":
-            army_names[name] = army_names.get(name, 0) + float(cost)
-    for m in re.finditer(r"\[BARAI_BUILD\] team=%d .*unit=(\w+) cost=(\d+)" % holder, text):
-        if classify(m.group(1)) == "army":
-            army_names[m.group(1)] = army_names.get(m.group(1), 0) + float(m.group(2))
-    if not army_names:
-        ok("zero-army-built", "no army-classified units in the holder's build lists")
-    else:
-        total = sum(army_names.values())
-        flag("zero-army-built", f"{total:.0f} metal of army-classified builds: "
-             + ", ".join(f"{k}:{v:.0f}" for k, v in sorted(army_names.items()))
-             + "  (name-heuristic -- verify)")
-
-    # -- economy: the holder must out-eco its teammates --------------------
-    def last(t, key, default=0.0):
-        return float(samples[t][-1].get(key, default)) if t in samples else default
-
-    prod = {t: last(t, "metalProduced") for t in [holder] + mates}
-    rank = sorted(prod, key=prod.get, reverse=True)
-    mate_mean = (sum(prod[t] for t in mates) / len(mates)) if mates else 0.0
-    ratio = prod[holder] / mate_mean if mate_mean > 0 else 0.0
-    if rank[0] == holder:
-        ok("eco-rank", f"holder #1 in metal produced ({prod[holder]:.0f}, "
-                       f"{ratio:.2f}x teammate mean)")
-    else:
-        flag("eco-rank", f"holder #{rank.index(holder) + 1} of {len(rank)} in metal "
-             f"produced: {prod[holder]:.0f} vs best teammate t{rank[0]} "
-             f"{prod[rank[0]]:.0f} ({ratio:.2f}x teammate mean)")
-
-    t2mex = {t: last(t, "t2Mex") for t in [holder] + mates}
-    best_t2 = max(t2mex, key=t2mex.get)
-    if best_t2 == holder:
-        ok("moho-rank", f"holder leads mohos ({t2mex[holder]:.0f})")
-    else:
-        flag("moho-rank", f"holder has {t2mex[holder]:.0f} mohos vs "
-             f"t{best_t2}'s {t2mex[best_t2]:.0f}")
-
-    techs = {t: last(t, "techStart", -1) for t in [holder] + mates}
-    real = {t: v for t, v in techs.items() if v > 0}
-    if real:
-        first_tech = min(real, key=real.get)
-        if first_tech == holder:
-            ok("tech-first", f"holder teched first ({gmin(real[holder]):.1f}m)")
-        elif holder in real:
-            flag("tech-first", f"holder teched at {gmin(real[holder]):.1f}m; "
-                 f"t{first_tech} beat it ({gmin(real[first_tech]):.1f}m)")
-        else:
-            flag("tech-first", "holder NEVER started T2")
-    fus = re.search(r"(armfus|corfus|legfus|armafus|corafus|legafus|"
-                    r"armckfus|legdfus)",
-                    samples[holder][-1].get("allBuilt", ""))
-    if fus:
-        ok("fusion", f"holder built {fus.group(1)}")
-    else:
-        flag("fusion", "holder never built a fusion "
-                       "(benchmark income may make this unreachable)")
-
-    # -- health -------------------------------------------------------------
-    if float(hl.get("commLost", -1)) < 0:
-        ok("commander", "holder's commander alive at last sample")
-    else:
-        flag("commander", f"holder's commander DIED at "
-             f"{gmin(float(hl['commLost'])):.1f}m")
-    mex_excess = float(hl.get("metalExcess", 0))
-    mp = float(hl.get("metalProduced", 1)) or 1
-    if mex_excess / mp <= 0.05:
-        ok("metal-waste", f"{mex_excess:.0f} of {mp:.0f} overflowed "
-                          f"({100 * mex_excess / mp:.0f}%)")
-    else:
-        flag("metal-waste", f"{mex_excess:.0f} of {mp:.0f} overflowed "
-                            f"({100 * mex_excess / mp:.0f}%)")
-
-    # His rule: no metal waste in the first ~15 minutes (waste == not enough
-    # build power). metalExcess is cumulative and sampled every 2 game-min:
-    # read the sample nearest 16m.
-    def nearest(mins):
-        return min(samples[holder],
-                   key=lambda s: abs(float(s.get("frame", 0)) / 1800.0 - mins))
-    s16 = nearest(16)
-    ew = float(s16.get("metalExcess", 0))
-    ep = float(s16.get("metalProduced", 1)) or 1
-    if ew / ep <= 0.02:
-        ok("early-waste", f"{ew:.0f} of {ep:.0f} overflowed by "
-           f"{float(s16.get('frame', 0)) / 1800.0:.0f}m ({100 * ew / ep:.1f}%)")
-    else:
-        flag("early-waste", f"{ew:.0f} of {ep:.0f} overflowed by "
-             f"{float(s16.get('frame', 0)) / 1800.0:.0f}m ({100 * ew / ep:.1f}%) "
-             "-- rule: no waste in 0-15m; means not enough build power")
-
-    # Build power: nanos standing by the early marks (from cheapBuilt/allBuilt
-    # counts is unreliable; use the def-count in cheapBuilt names).
-    def nano_count(sample):
-        blob = sample.get("cheapBuilt", "") + "," + sample.get("allBuilt", "")
-        n = 0.0
-        for part in blob.split(","):
-            if "nanotc" in part and ":" in part:
-                n += float(part.rsplit(":", 1)[1]) / 210.0  # 210 = nano cost
-        return n
-    n8 = nano_count(nearest(8))
-    if n8 >= 2:
-        ok("build-power-8m", f"~{n8:.0f} nano turrets by 8m")
-    else:
-        flag("build-power-8m", f"~{n8:.0f} nano turrets by 8m (rule: >=2 -- "
-                               "the controller should be buying build power)")
-
-    print_report(oks, flags, holder=holder, mates=mates)
-    return 0 if not flags else 1
+    return report(checks, game_min, holder, samples)
 
 
-def print_report(oks, flags, holder=None, mates=None):
-    if holder is not None:
-        print(f"== ECO/TECH ROLE AUDIT ==  holder: team {holder}"
-              f"   teammates: {sorted(mates)}\n")
-    for name, msg in oks:
-        print(f"  ok    {name:<22} {msg}")
-    for name, msg in flags:
-        print(f"  FLAG  {name:<22} {msg}")
-    print(f"\n{len(flags)} flag(s).")
+def report(checks, game_min, holder, samples) -> int:
+    print(f"rear-specialist audit -- {game_min:.1f} game-min, "
+          f"{len(samples)} ally teams, holder={'team ' + str(holder) if holder is not None else 'NONE'}")
+    hard_fail = 0
+    for name, ok, detail in checks:
+        tag = "ok  " if ok else ("warn" if ok is None else "FAIL")
+        if ok is False:
+            hard_fail += 1
+        print(f"  {tag}  {name:<11} {detail}")
+    # informational: holder con trajectory (his "too many T1 cons" watch)
+    if holder is not None and holder in samples:
+        hs = samples[holder]
+        pts = [(float(s.get("frame", 0)) / 1800, s.get("conT1", "?"), s.get("conT2", "?"))
+               for s in hs[:: max(1, len(hs) // 6)]]
+        print("  info  conT1/T2    " + "  ".join(f"{m:.0f}m:{a}/{b}" for m, a, b in pts))
+    print("VERDICT: " + ("PASS" if hard_fail == 0 else f"FAIL ({hard_fail} hard)"))
+    return 0 if hard_fail == 0 else 1
 
 
 if __name__ == "__main__":

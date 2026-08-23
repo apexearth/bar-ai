@@ -1131,9 +1131,11 @@ const float TUNE_PIPE_LATENCY_H = 60.f;
 // STORE_HORIZON: seconds over which a storage's volume counts as captured
 // overflow (its gain = min(overflow, storeM/horizon)).
 const float TUNE_STORE_HORIZON = 60.f;
-// TECH_PIPE: discount on a tech plant's unlock demand (the adv-con pipeline
-// costs metal and time before any moho stands).
-const float TUNE_TECH_PIPE = 0.5f;
+// TECH_PIPE: discount on a tech plant's unlock demand. The pipeline DELAY
+// is priced by PipeLatencyMult -- a second 0.5 here double-counted it and,
+// stacked with the funded discount, priced the T2 lab ~100x under a nano
+// (measured 8v8: zero tech decides in 12 min, all eight players).
+const float TUNE_TECH_PIPE = 1.0f;
 // E_RESPONSE: seconds for the market's own energy supply to answer a
 // scarcity spike (~one solar build); long builds earn the floor, not the
 // spike.
@@ -1194,6 +1196,15 @@ const float TUNE_ECO_ARMY_MUL = 0.03f;
 // ECO_SAFE_R: front distance beyond which the rear specialist skips ground
 // defense entirely -- past any raid's reach, insurance is dead money.
 const float TUNE_ECO_SAFE_R = 2500.f;
+// ECO_CON_KEEP: land T1 cons the quiet rear always keeps -- nano turrets
+// and small works still need hands (his floor-of-3 number).
+const float TUNE_ECO_CON_KEEP = 3.f;
+// LINE_FLOOR: a factory order must be worth at least this fraction of the
+// rolling executed-want value, unless metal is overflowing (idle is free).
+const float TUNE_LINE_FLOOR = 0.25f;
+// ECO_DANGER_M: enemy cost inside the safe radius that counts as "base
+// close to being under attack" -- two T1 raiders' worth (2 x ~110).
+const float TUNE_ECO_DANGER_M = 250.f;
 // ECO_REACH_FRAC: the quiet rear claims no spot whose enemy distance is
 // under this fraction of its own -- it expands sideways/back, never forward.
 const float TUNE_ECO_REACH_FRAC = 0.7f;

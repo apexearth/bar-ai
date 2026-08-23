@@ -290,6 +290,10 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 // this as its demand signal for more claiming capacity.
 bool gMexOpen = false;
 float gAvgWalkDist = 600.f;   // smoothed claim walk, seeds at a near spot
+// Rolling value of EXECUTED builder wants -- what a unit of spend is
+// actually earning right now; the factory lines' opportunity floor.
+float gWantEmaV = 0.f;
+
 // The rear-specialist election's enemy reference (ally centroid mirrored
 // through map center), kept for the quiet rear's reach filter.
 float gEcoRefX = -1.f;
@@ -1112,10 +1116,18 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 // products could serve that no builder we own can reach. Deliberately not
 // gated by the lines-per-income rule (its return is better economics, not
 // more parallel production). MODEL: the pipeline discount.
+int gTechDiagAt = 0;
 Want@ ProposeTech(CCircuitUnit@ unit)
 {
 	Want w;
 	const float demand = UpDemand();
+	if (ai.frame >= gTechDiagAt) {
+		gTechDiagAt = ai.frame + 120 * SECOND;
+		AiLog("apex: tech-diag team=" + ai.teamId + " upD=" + demand
+				+ " ceil=" + BestExtract() + " ownCeil=" + OwnedCeil()
+				+ " spots=" + gLSpot.length() + " funded="
+				+ (ArmyValue() / ((ArmyTarget() > 1.f) ? ArmyTarget() : 1.f)));
+	}
 	if (demand <= 0.5f)
 		return w;
 	// Dedup is PER DEF: a T1 rebuild in flight must not zero the T2 lab's
@@ -1194,7 +1206,13 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// prior to making it"). No timer anywhere.
 		const float aT = ArmyTarget();
 		const float funded = (aT > 1.f) ? (ArmyValue() / aT) : 1.f;
-		const float fundedMul = (funded > 1.f) ? 1.f : funded;
+		// The quiet rear is EXEMPT: its follow-through is mohos and
+		// fusions, not an army -- gating its lab on the army it was told
+		// not to build starved its whole mandate (measured: funded=0.024,
+		// a 40x tech discount on the one player built to tech).
+		float fundedMul = (funded > 1.f) ? 1.f : funded;
+		if (EcoQuiet())
+			fundedMul = 1.f;
 		float techGain = 0.f;
 		if (prodCeil > ownCeil)
 			techGain = demand * pipe;
@@ -1477,12 +1495,15 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// capacity looks sufficient. And a WORKING factory with no nano in
 	// reach is full demand by itself -- the first lab must not build cons
 	// unassisted while metal overflows (apexearth 2026-08-23, twice).
+	// Raw overflow is NOT nano demand: overflow that persists after the
+	// last nano proves nanos are not absorbing it (a full-metal stall
+	// bought nanos at face value forever while the T2 lab priced at
+	// nothing -- watched). BP demand sizes against income (BPGap) and
+	// against lines with real work (UnservedLineSpend) -- the honest-
+	// feedback law; overflow's buyers are converters, storage and tech.
 	const float gap = BPGap();
-	const float ovf = OverflowM();
-	float over = (gap > ovf) ? gap : ovf;
 	const float lineNeed = UnservedLineSpend();
-	if (lineNeed > over)
-		over = lineNeed;   // hot lines size their own nano ring
+	float over = (gap > lineNeed) ? gap : lineNeed;
 	if (over <= 0.5f)
 		return w;
 	const int uid = int(unit.circuitDef.id);
@@ -1791,6 +1812,7 @@ bool EcoRoleActive()
 	if (ai.frame < gEcoRoleAt + 10 * SECOND)
 		return gEcoRole;
 	gEcoRoleAt = ai.frame;
+	EcoStatusLog();
 	const bool was = gEcoRole;
 	gEcoRole = false;
 	if (!Builder::gHomeSet)
@@ -1840,28 +1862,50 @@ bool EcoRoleActive()
 		AiLog("apex: rear-elect homes=" + hx.length() + " mine=" + sqrt(mine)
 				+ " far=" + sqrt(d1) + " median=" + sqrt(dmed));
 	}
-	if (gEcoRole != was)
+	if (gEcoRole != was) {
 		AiLog("apex: rear-specialist " + (gEcoRole ? "ON" : "off")
+				+ " team=" + ai.teamId
 				+ " mine=" + sqrt(mine) + " median=" + sqrt(dmed));
+		// A chat line survives on screen; log lines scroll away (apexearth).
+		ai.SendChat(gEcoRole
+				? ("I am the eco specialist (team " + ai.teamId
+					+ ", rear position): scaling economy, no army until T3.")
+				: ("Eco specialist role off (team " + ai.teamId + ")."));
+	}
 	return gEcoRole;
 }
 
 // The specialist's exemption ends when the war reaches it: a KNOWN front
 // inside the safe radius restores every normal response.
+// Danger is ENEMY AT THE DOOR, not geometry: front-line distance read
+// structurally true in a packed team box (audited: the exempted specialist
+// built 8.6k army, 510 defence, teched LAST -- quiet mode never engaged).
 bool EcoDangerNear()
 {
-	if (!Builder::gHomeSet || !Front::FoeKnown())
+	if (!Builder::gHomeSet)
 		return false;
-	AIFloat3 fs;
-	if (!Front::FrontNear(Builder::gHomePos, fs))
-		return false;
-	return fs.distance2D(Builder::gHomePos)
-			<= ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R);
+	return ai.GetEnemyCostAt(Builder::gHomePos,
+				ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R))
+			> ai.GetTunable("apex_eco_danger_m", TUNE_ECO_DANGER_M);
 }
 
 bool EcoQuiet()
 {
 	return EcoRoleActive() && !EcoDangerNear();
+}
+
+int gEcoStatusAt = 0;
+void EcoStatusLog()
+{
+	if (!gEcoRole || (ai.frame < gEcoStatusAt))
+		return;
+	gEcoStatusAt = ai.frame + 120 * SECOND;
+	AiLog("apex: eco-status team=" + ai.teamId
+			+ " danger=" + (EcoDangerNear() ? 1 : 0)
+			+ " foeNear=" + ai.GetEnemyCostAt(Builder::gHomePos,
+					ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R))
+			+ " bank=" + aiEconomyMgr.metal.current
+			+ " inc=" + aiEconomyMgr.metal.income);
 }
 
 float ArmyTarget()
@@ -2379,7 +2423,20 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	// compounds, and the first nano crawling up under one lathe delays
 	// everything behind it (apexearth). Then serving cons, then factories.
 	CCircuitUnit@ boss = null;
-	for (uint bi = 0; bi < gWorkers.length(); ++bi) {
+	// A worker raising a FACTORY outranks everything -- one con on the T2
+	// plant was the measured bottleneck (apexearth: "we are more efficient
+	// when we assist building some things").
+	for (uint bf = 0; bf < gWorkers.length(); ++bf) {
+		CCircuitUnit@ wf = gWorkers[bf];
+		if ((wf is null) || (wf.task is null) || (wf.id == unit.id))
+			continue;
+		if ((wf.task.GetType() == Task::Type::BUILDER)
+			&& (int(wf.task.GetBuildType()) == int(Task::BuildType::FACTORY))) {
+			@boss = wf;
+			break;
+		}
+	}
+	for (uint bi = 0; (boss is null) && (bi < gWorkers.length()); ++bi) {
 		CCircuitUnit@ wb = gWorkers[bi];
 		if ((wb is null) || (wb.task is null) || (wb.id == unit.id))
 			continue;
@@ -2451,13 +2508,32 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	// standing factory could re-make (never the commander), cheapest
 	// first; BPGap turning positive stops the next one -- self-balancing.
 	if (EcoQuiet() && !gMexOpen && (BPGap() <= 0.f)) {
+		// Only a LESSER con spends its time on this: a ceiling con
+		// reclaiming T1s traded scaling time for tidying (watched --
+		// "T2 cons immediately try reclaiming T1 cons").
+		bool lesser = true;
+		{
+			const array<int>@ mine0 = Catalog::BuildsOf(int(unit.circuitDef.id));
+			for (uint mi = 0; mi < mine0.length(); ++mi) {
+				if (Catalog::gExtractsM[mine0[mi]] >= BestExtract()) {
+					lesser = false;
+					break;
+				}
+			}
+		}
 		CCircuitUnit@ rc = null;
 		int rcDef = -1;
-		for (uint wi = 0; wi < gWorkers.length(); ++wi) {
+		int landCons = 0;
+		for (uint wi = 0; lesser && (wi < gWorkers.length()); ++wi) {
 			CCircuitUnit@ wu = gWorkers[wi];
 			if ((wu is null) || (wu is unit))
 				continue;
 			const int wd = int(wu.circuitDef.id);
+			// Air cons are exempt: no pathing cost, no placement blocking
+			// (apexearth) -- and land cons below the keep-floor stay for
+			// nano work.
+			if (Catalog::gFlyer[wd])
+				continue;
 			bool remake = false;
 			for (uint fi = 0; fi < Factory::gFacUnits.length() && !remake; ++fi) {
 				if (Factory::gFacUnits[fi] is null)
@@ -2473,12 +2549,14 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			}
 			if (!remake)
 				continue;
+			++landCons;
 			if ((rcDef < 0) || (Catalog::gCostM[wd] < Catalog::gCostM[rcDef])) {
 				@rc = wu;
 				rcDef = wd;
 			}
 		}
-		if (rc !is null) {
+		if ((rc !is null)
+			&& (float(landCons) > ai.GetTunable("apex_eco_con_keep", TUNE_ECO_CON_KEEP))) {
 			const float hz0 = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
 			w.kind = WK_RECLAIM;
 			@w.def = Catalog::Def(rcDef);
@@ -2705,6 +2783,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		return null;
 	}
 
+	gWantEmaV = (gWantEmaV <= 0.f) ? top.value
+			: (0.9f * gWantEmaV + 0.1f * top.value);
 	AiLog("apex: decide " + unit.circuitDef.GetName() + " #" + unit.id
 		+ " -> " + KindName(top.kind) + ":" + ((top.def is null) ? "-" : top.def.GetName())
 		+ " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
@@ -3179,6 +3259,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	bestV = candV[pick];
 	bestGain = candGain[pick];
 	// Priced in the same currency; factory time is free while the line idles.
+	// OPPORTUNITY FLOOR: the draw compares a line's candidates only against
+	// each other, so a saturated line kept producing v=1.2 cons while
+	// fusion money earned v=30+ outside (measured: 22 armacks, 1 fusion).
+	// With metal NOT overflowing, an order must beat a fraction of what
+	// executed wants actually earn; overflow keeps idle time free.
+	if ((OverflowM() <= 0.5f) && (gWantEmaV > 0.f)
+		&& (bestV < gWantEmaV
+			* ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR)))
+		return null;
 	AiLog("apex: decide " + fac.circuitDef.GetName() + " #" + fac.id
 		+ " -> produce:" + Catalog::Def(best).GetName()
 		+ " v=" + formatFloat(bestV * 1000.f, "", 0, 2)

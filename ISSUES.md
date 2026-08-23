@@ -1,5 +1,17 @@
 # Open issues — what is wrong with this AI right now
 
+## Buildings sometimes slightly overlap mex spots
+
+apexearth, watching (2026-08-23): "our logic to prevent things from being
+built on a mex does not always work, sometimes we still cover them
+slightly." Unattributed. Candidates to check first: (1) the mex-spot
+reservation radius vs the placed def's FOOTPRINT half-extent -- a reserve
+checked center-to-center misses a wide building whose edge reaches the
+spot; (2) `FindBuildSiteNear` results are trusted raw at some call sites
+(the placement skill's standing warning); (3) odd-footprint parity offsets
+shifting the final site 8-16 elmos after the check. Count which rule
+placed the offender before touching anything (attribute-before-fixing).
+
 ## T2 constructors and mex upgrades barely exist at benchmark scale
 
 apexearth, watching the 8v8 (2026-08-23): "our other teams have T2 but they
