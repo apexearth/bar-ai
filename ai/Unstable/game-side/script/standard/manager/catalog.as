@@ -14,7 +14,7 @@ int gEdges = 0;          // who-builds-what edges (builder -> buildable def)
 array<float> gCostM;
 array<float> gCostE;
 array<float> gBuildTime;     // engine build-effort units; seconds = this / buildpower
-array<float> gBuildSpeed;    // the def's own buildpower contribution
+array<float> gBuildPower;    // engine workertime -- real BP; GetBuildSpeed is overridden by behaviour.json build_speed
 array<float> gSpeed;         // elmos/s
 array<float> gHealth;
 array<float> gExtractsM;     // mex extraction fraction
@@ -45,7 +45,7 @@ void Init()
 
 	gDefCount = ai.GetDefCount();
 	const int n = gDefCount + 1;
-	gCostM.resize(n); gCostE.resize(n); gBuildTime.resize(n); gBuildSpeed.resize(n);
+	gCostM.resize(n); gCostE.resize(n); gBuildTime.resize(n); gBuildPower.resize(n);
 	gSpeed.resize(n); gHealth.resize(n); gExtractsM.resize(n);
 	gUpkeepM.resize(n); gUpkeepE.resize(n); gMakeM.resize(n); gMakeE.resize(n);
 	gStoreM.resize(n); gStoreE.resize(n); gConvCapacity.resize(n); gConvRatio.resize(n);
@@ -61,7 +61,7 @@ void Init()
 		gCostM[i]        = cdef.costM;
 		gCostE[i]        = cdef.costE;
 		gBuildTime[i]    = cdef.GetBuildTime();
-		gBuildSpeed[i]   = cdef.GetBuildSpeed();
+		gBuildPower[i]   = cdef.GetWorkerTime();
 		gSpeed[i]        = cdef.speed;
 		gHealth[i]       = cdef.health;
 		gExtractsM[i]    = cdef.GetExtractsM();
@@ -198,7 +198,7 @@ void Dump()
 			+ " mCost=" + formatFloat(gCostM[i], "", 0, 1)
 			+ " eCost=" + formatFloat(gCostE[i], "", 0, 1)
 			+ " bt=" + formatFloat(gBuildTime[i], "", 0, 1)
-			+ " bs=" + formatFloat(gBuildSpeed[i], "", 0, 1)
+			+ " bp=" + formatFloat(gBuildPower[i], "", 0, 1)
 			+ " makeM=" + formatFloat(gMakeM[i], "", 0, 2)
 			+ " makeE=" + formatFloat(gMakeE[i], "", 0, 2)
 			+ " upkeepE=" + formatFloat(gUpkeepE[i], "", 0, 2)

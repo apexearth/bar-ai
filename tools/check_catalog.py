@@ -36,7 +36,7 @@ KV_RE = re.compile(r"(\w+)=(-?[\d.]+)")
 # Raw lua fields the catalog values derive from.
 RAW_FIELDS = ("metalcost", "energycost", "buildtime", "energymake",
               "energyupkeep", "metalmake", "metalupkeep", "energystorage",
-              "metalstorage", "extractsmetal", "windgenerator")
+              "metalstorage", "extractsmetal", "windgenerator", "workertime")
 RAW_RE = {k: re.compile(rf"\b{k}\s*=\s*(-?[\d.]+)", re.I) for k in RAW_FIELDS}
 CONV_RE = {k: re.compile(rf"\b{k}\s*=\s*(-?[\d.]+)", re.I)
            for k in ("energyconv_capacity", "energyconv_efficiency")}
@@ -115,6 +115,8 @@ def main() -> int:
         check(name, "mCost", row["mCost"], raw["metalcost"])
         check(name, "eCost", row["eCost"], raw["energycost"])
         check(name, "bt", row["bt"], raw["buildtime"])
+        if raw["workertime"] > 0:
+            check(name, "bp", row.get("bp", -1.0), raw["workertime"])
         check(name, "storeM", row["storeM"], raw["metalstorage"])
         check(name, "storeE", row["storeE"], raw["energystorage"])
         check(name, "makeM", row["makeM"], raw["metalmake"] - raw["metalupkeep"])
