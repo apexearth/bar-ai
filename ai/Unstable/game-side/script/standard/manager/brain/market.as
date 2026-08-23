@@ -298,6 +298,7 @@ array<int> gLSpot;
 array<AIFloat3> gLPos;
 array<float> gLIncome;    // the spot's raw income (extraction 1.0)
 array<float> gLExtract;   // standing extraction; 0 until a mex FINISHES here
+array<int> gLClaimAt;     // frame of the claim; unfinished claims expire
 int LedgerFind(int spotId)
 {
 	for (uint i = 0; i < gLSpot.length(); ++i) {
@@ -314,6 +315,24 @@ void LedgerClaim(int spotId, const AIFloat3& in pos, float income)
 	gLPos.insertLast(pos);
 	gLIncome.insertLast(income);
 	gLExtract.insertLast(0.f);
+	gLClaimAt.insertLast(ai.frame);
+}
+// A claim that never finished releases its spot for re-proposal; without
+// this, an aborted mex task left its ledger entry blocking the spot (and
+// with it, the 21-decides-per-second churn cycling the same ground).
+void LedgerSweep()
+{
+	for (uint i = 0; i < gLSpot.length(); ) {
+		if ((gLExtract[i] <= 0.f) && (ai.frame - gLClaimAt[i] > 120 * SECOND)) {
+			gLSpot.removeAt(i);
+			gLPos.removeAt(i);
+			gLIncome.removeAt(i);
+			gLExtract.removeAt(i);
+			gLClaimAt.removeAt(i);
+			continue;
+		}
+		++i;
+	}
 }
 int LedgerNearest(const AIFloat3& in pos)
 {
@@ -451,6 +470,7 @@ void NoteDead(CCircuitUnit@ unit)
 	gLPos.removeAt(i);
 	gLIncome.removeAt(i);
 	gLExtract.removeAt(i);
+	gLClaimAt.removeAt(i);
 }
 
 // The best extraction any AVAILABLE def in the game reaches -- the ceiling
@@ -491,6 +511,10 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, here, 99.f);
 	gMexOpen = (spot >= 0);
 	if (spot < 0)
+		return w;
+	// Already committed: someone decided this spot and its task is live (or
+	// recently was) -- proposing it again is the churn, not a want.
+	if (LedgerFind(spot) >= 0)
 		return w;
 	const AIFloat3 pos = aiEconomyMgr.GetMexSpotPos(spot);
 	const float spotIncome = aiEconomyMgr.GetMexSpotIncome(spot);
@@ -739,7 +763,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// past what the economy can feed, of any lab type.
 	const float per = ai.GetTunable("apex_plant_income_per", TUNE_PLANT_INCOME_PER);
 	const int supported = 1 + int(aiEconomyMgr.metal.income / ((per > 1.f) ? per : 50.f));
-	if (Factory::gFactoryCount >= supported)
+	if (Factory::gFactoryCount
+			+ Requests::LiveCountOf(int(Task::BuildType::FACTORY)) >= supported)
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
@@ -827,6 +852,10 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 	Want w;
 	const float demand = UpDemand();
 	if (demand <= 0.5f)
+		return w;
+	// One tech-plant request in flight: the identical request re-proposed
+	// while the first builds is a duplicate, not a want.
+	if (Requests::LiveCountOf(int(Task::BuildType::FACTORY)) > 0)
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const float ownCeil = OwnedCeil();
@@ -1104,12 +1133,22 @@ void StallWatch()
 
 int gNextIdleLog = 0;
 int gNextAuctionDiag = 0;
+array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 
 IUnitTask@ Decide(CCircuitUnit@ unit)
 {
 	if ((unit is null) || !unit.circuitDef.IsBuilder() || !unit.circuitDef.IsMobile())
 		return null;
+	// A unit whose task keeps dying young re-enters every frame; 2s per
+	// unit caps the global decide rate without touching legit elections
+	// (a successful decide holds its task far longer than this).
+	if ((int(unit.id) >= 0) && (int(unit.id) < int(gLastDecideAt.length()))) {
+		if (ai.frame - gLastDecideAt[int(unit.id)] < 2 * SECOND)
+			return null;
+		gLastDecideAt[int(unit.id)] = ai.frame;
+	}
 	WorkerSeen(unit);
+	LedgerSweep();
 
 	array<Want@> wants = {
 		ProposeMex(unit), ProposeEnergy(unit), ProposeGeo(unit),

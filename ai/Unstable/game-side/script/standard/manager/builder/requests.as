@@ -40,6 +40,21 @@ namespace Requests {
 //             ground. How much defence we may hold at all is Builder's
 //             DefenceShareScreen and Military::DefenceAllowedAt, which already
 //             exist; a second ceiling here would be the same bound twice.
+// Live requests of one build type, dead excluded -- the market's plant
+// gates count these against the income-support rule, because a factory
+// REQUESTED is a factory the count does not see yet (measured: 41 lines
+// licensed while gFactoryCount lagged the pipeline).
+int LiveCountOf(int bt)
+{
+	int n = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if ((gLive[i] !is null) && !gLive[i].IsDead()
+			&& (gLive[i].GetBuildType() == Task::BuildType(bt)))
+			++n;
+	}
+	return n;
+}
+
 bool Governed(int bt)
 {
 	return (bt == int(Task::BuildType::FACTORY))

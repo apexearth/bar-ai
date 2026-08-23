@@ -43,7 +43,7 @@
 //   pack for the next advanced solar's site.
 // manager/builder/requests.as [toggle 0/1] -- ADVANCED SOLARS ARE STRICTLY
 //   SERIAL, whatever the bank.
-const float TUNE_ADVSOL_SERIAL = 1.f;
+const float TUNE_ADVSOL_SERIAL = 0.f;   // leaf-era decree off: the wealth cap (dup_bank) bounds parallels; serial refusals churned 8.6k decides at 500 m/s
 // manager/builder/fusion.as [energy/s] -- Advanced solars stop once energy
 //   income reaches this and T2 stands; past that point the next buy is the
 //   fusion, not another panel.
