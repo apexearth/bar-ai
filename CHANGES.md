@@ -1,5 +1,40 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: THE C++ STRIP -- the DLL originates no economy/build decisions
+
+The engine-side half of the overhaul kill (docs/20-brain-overhaul.md par.1,
+"Engine-side leaf logic to sever"): the inherited CircuitAI DLL's own
+spenders are cut at their decision entry points, so the silence no longer
+depends on script stubs returning null. Neutered (early-return, bookkeeping
+and bindings kept): `CBuilderManager::DefaultMakeTask` (a builder the Brain
+has no task for idles visibly); `CEconomyManager`'s whole native economy --
+`MakeEconomyTasks`, `UpdateMetalTasks`, `UpdateEnergyTasks` (was already
+dead), `UpdateGeoTasks`, `UpdateReclaimTasks`, `UpdateFactoryTasks`,
+`UpdateStorageTasks`, `CheckAssistRequired`, `CheckAirpadRequired`,
+`CheckMobileAssistRequired`, `StartFactoryJob` (unschedules itself and never
+starts the recurring native factory job), `ReclaimOldConvert`/
+`ReclaimOldEnergy` (auto-melt of own eco buildings is a Brain decision);
+`CFactoryManager::DefaultGetFactoryToBuild` (returns null),
+`CreateFactoryTask`'s native recruit (response.json BUILDPOWER/FIREPOWER --
+the last army leak's source; the factory now Waits), and the Watchdog's
+factory-recovery enqueue; `CMilitaryManager::DefaultMakeDefence`,
+`DefaultMakeSensors`, and `MakeBaseDefence` (the behaviour-config base-
+defence drip that `UpdateDefence` fed to builders outside `AiMakeDefence` --
+the previously unattributed defence trickle); `IBuilderTask::ExecuteChain`
+(build_chain hubs). Kept as execution plumbing: `EnqueueMexAt`/`EnqueueGeoAt`
+and every TaskB/TaskS binding (script executors), nano `CreateAssistTask`
+(assist/repair of ordered work), repair-on-damage handlers, the facqueue
+line mechanics, and all military task logic. All AngelScript bindings remain
+registered; `DefaultMakeTask`/`DefaultGetFactoryToBuild`/`DefaultMakeDefence`/
+`DefaultMakeSensors` are now registered no-ops.
+
+Smoke (8-minute 8v8 vs BARb stable hard, Supreme Isthmus, +100, seed 3):
+no crash, no asALREADY_REGISTERED, zero compile ERR, apex alive (1,548
+`apex:` lines); every apex team `allBuilt=armcom:2700` only, facCount 0,
+mex 0; every BARb team built normally (4.9-6.4k metal, labs, mexes, units)
+-- the engine's own DLL untouched. NOTE: the DLL is host-side in multiplayer;
+the desync-check applies before hosted play.
+
 ## 2026-08-22: THE OVERHAUL KILL -- all leaf build/production logic removed
 
 Steps 3-4 of docs/20-brain-overhaul.md. Every AngelScript spending path is

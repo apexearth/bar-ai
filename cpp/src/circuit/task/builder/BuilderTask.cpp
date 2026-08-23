@@ -740,6 +740,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
 void IBuilderTask::ExecuteChain(SBuildChain* chain)
 {
 	assert(chain != nullptr);
+	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
+	// build_chain.json hubs are dead for apex.
+	return;
 	CCircuitAI* circuit = manager->GetCircuit();
 
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();

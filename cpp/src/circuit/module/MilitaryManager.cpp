@@ -824,6 +824,8 @@ void CMilitaryManager::MakeDefence(int cluster, const AIFloat3& pos)
 
 void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
 {
+	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
+	return;
 	// TODO: Rework, depends on mex cluster
 	assert(cluster >= 0);
 
@@ -1082,6 +1084,8 @@ void CMilitaryManager::MakeSensors(const AIFloat3& backPos, float maxCost, float
 
 void CMilitaryManager::DefaultMakeSensors(int cluster, const AIFloat3& pos)
 {
+	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
+	return;
 	assert(cluster >= 0);
 	if (!radarDefs.HasAvail() && !sonarDefs.HasAvail()) {
 		return;
@@ -1995,6 +1999,9 @@ AIFloat3 CMilitaryManager::GetFrontierPos(const AIFloat3& basePos)
 
 void CMilitaryManager::MakeBaseDefence(const AIFloat3& pos)
 {
+	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
+	// buildDefence stays empty, so UpdateDefence() enqueues nothing.
+	return;
 	if (circuit->IsLoadSave()) {
 		return;
 	}

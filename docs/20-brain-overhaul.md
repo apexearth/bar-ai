@@ -67,6 +67,16 @@ leaf gate are deleted with their host rules.
   driven-line abort already kills them; verify no un-driven line remains.
 - build_chain.json hubs (engine-side auto-defence/jammers) — off for apex.
 
+**DONE 2026-08-23, at the C++ source** (no longer dependent on script stubs):
+DefaultMakeTask (builder) returns null; the CEconomyManager task creators,
+StartFactoryJob and the scheduled factory/storage jobs, ReclaimOld*,
+CheckAssist/Airpad/MobileAssist are inert; DefaultGetFactoryToBuild returns
+null; the native factory recruit (response.json) and the Watchdog factory
+recovery are cut; DefaultMakeDefence/DefaultMakeSensors/MakeBaseDefence are
+inert; ExecuteChain (build_chain hubs) is inert. Bindings stay registered.
+Executors kept: EnqueueMexAt/EnqueueGeoAt, TaskB/TaskS enqueues, nano
+assist, repair-on-damage, facqueue line mechanics. See CHANGES.md 2026-08-23.
+
 ## 2. KEEP — senses, execution plumbing, unit thoughts
 
 - **Senses**: frontline/influence, enemy census, stance, telemetry gadgets,

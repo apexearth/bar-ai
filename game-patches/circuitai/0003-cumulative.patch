@@ -1533,7 +1533,7 @@ index 54e3ac7..f3aac15 100644
  #endif
  };
 diff --git a/src/circuit/module/BuilderManager.cpp b/src/circuit/module/BuilderManager.cpp
-index a62be4f..3fcdb7c 100644
+index a62be4f..23d025e 100644
 --- a/src/circuit/module/BuilderManager.cpp
 +++ b/src/circuit/module/BuilderManager.cpp
 @@ -621,10 +621,16 @@ const std::set<IBuilderTask*>& CBuilderManager::GetTasks(IBuilderTask::BuildType
@@ -1697,7 +1697,28 @@ index a62be4f..3fcdb7c 100644
  SBuildChain* CBuilderManager::GetBuildChain(IBuilderTask::BuildType buildType, CCircuitDef* cdef) const
  {
  	auto it1 = buildChains.find(static_cast<IBuilderTask::BT>(buildType));
-@@ -1745,8 +1811,9 @@ void CBuilderManager::Load(std::istream& is)
+@@ -934,6 +1000,9 @@ bool CBuilderManager::CanUpGeo(CCircuitDef* cdef) const
+ 
+ IUnitTask* CBuilderManager::DefaultMakeTask(CCircuitUnit* unit)
+ {
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	// A builder the Brain has no task for idles visibly.
++	return nullptr;
+ 	const int frame = circuit->GetLastFrame();
+ 	const AIFloat3& pos = unit->GetPos(frame);
+ 
+@@ -1624,9 +1693,8 @@ void CBuilderManager::Watchdog()
+ 				CCircuitDef* cdef = unit->GetCircuitDef();
+ 				if ((cdef->GetBuildTime() * buildPercent < maxCost) || cdef->IsMex() || (*cdef == *terraDef)) {
+ 					Enqueue(TaskB::Repair(IBuilderTask::Priority::NORMAL, unit));
+-				} else {
+-					Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
+ 				}
++				// Brain overhaul 2026-08-22: reclaim of own buildings is a Brain decision; no auto-melt of orphans.
+ //			} else if (u->GetHealth() < u->GetMaxHealth()) {
+ //				Enqueue(TaskB::Repair(IBuilderTask::Priority::NORMAL, unit));
+ 			}
+@@ -1745,8 +1813,9 @@ void CBuilderManager::Load(std::istream& is)
  			if (task != nullptr) {
  				const bool isValid = is >> *task;
  				buildTasks[i].insert(task);
@@ -1766,7 +1787,7 @@ index 4222197..dc8cd13 100644
  	bool IsBuilderInArea(CCircuitDef* buildDef, const springai::AIFloat3& position) const;  // Check if build-area has proper builder
  	bool HasFreeAssists(CCircuitUnit* builder) const;
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e90..6923e89 100644
+index 2b84e90..a2ac322 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
 @@ -9,6 +9,7 @@
@@ -2105,7 +2126,24 @@ index 2b84e90..6923e89 100644
  bool CEconomyManager::IsIgnorePull(const IBuilderTask* task) const
  {
  	if (mexMax != std::numeric_limits<decltype(mexMax)>::max()) {
-@@ -1026,6 +1316,13 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -994,6 +1284,8 @@ bool CEconomyManager::IsEnoughEnergy(IBuilderTask const* task, CCircuitDef const
+ IBuilderTask* CEconomyManager::MakeEconomyTasks(const AIFloat3& position, CCircuitUnit* unit)
+ {
+ 	ZoneScoped;
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return nullptr;
+ 
+ 	CBuilderManager* builderMgr = circuit->GetBuilderManager();
+ 	if (!builderMgr->CanEnqueueTask()) {
+@@ -1020,12 +1312,21 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+ {
+ 	assert(unit != nullptr);
+ 	ZoneScoped;
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return nullptr;
+ 
+ 	CBuilderManager* builderMgr = circuit->GetBuilderManager();
+ 	if (!builderMgr->CanEnqueueTask(16)) {
  		return nullptr;
  	}
  
@@ -2119,7 +2157,7 @@ index 2b84e90..6923e89 100644
  	if (IsEnergyStalling()) {
  		return UpdateEnergyTasks(position, unit);
  	}
-@@ -1034,7 +1331,51 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1034,7 +1335,51 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  	const int frame = circuit->GetLastFrame();
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  
@@ -2172,7 +2210,7 @@ index 2b84e90..6923e89 100644
  		const std::vector<CCircuitDef*>& mexDefOptions = metalDefs.GetBuildDefs(unit->GetCircuitDef());
  		std::vector<std::pair<CCircuitDef*, float>> mexDefs;
  		float maxRange = 0.f;
-@@ -1052,16 +1393,38 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1052,16 +1397,38 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  			CMetalManager* metalMgr = circuit->GetMetalManager();
  			const CMetalData::Metals& spots = metalMgr->GetSpots();
  			CCircuitDef* mexDef = nullptr;
@@ -2216,7 +2254,7 @@ index 2b84e90..6923e89 100644
  						if (curMex == nullptr) {
  							continue;
  						}
-@@ -1071,19 +1434,91 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+@@ -1071,19 +1438,91 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
  						}
  					}
  					if (curExtract <= 0.f) {
@@ -2309,7 +2347,16 @@ index 2b84e90..6923e89 100644
  			builderMgr->SetCanUpMex(unit->GetCircuitDef(), index != -1);
  			if (index != -1) {
  				const AIFloat3& pos = spots[index].position;
-@@ -1214,7 +1649,44 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
+@@ -1164,6 +1603,8 @@ IBuilderTask* CEconomyManager::UpdateMetalTasks(const AIFloat3& position, CCircu
+ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCircuitUnit* unit, bool isNear)
+ {
+ 	ZoneScoped;
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return nullptr;
+ 
+ 	CBuilderManager* builderMgr = circuit->GetBuilderManager();
+ 	if (/*!builderManager->CanEnqueueTask() || */(unit == nullptr) || !unit->GetCircuitDef()->IsAbleToReclaim()) {
+@@ -1214,7 +1655,44 @@ IBuilderTask* CEconomyManager::UpdateReclaimTasks(const AIFloat3& position, CCir
  			}
  		}
  		float reclaimValue = featDef->GetContainedResource(metalRes)/* * feature->GetReclaimLeft()*/;
@@ -2354,7 +2401,7 @@ index 2b84e90..6923e89 100644
  		if (reclaimValue < 1.0f) {
  			continue;
  		}
-@@ -1254,6 +1726,11 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1254,6 +1732,11 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  {
  	ZoneScoped;
  
@@ -2366,7 +2413,7 @@ index 2b84e90..6923e89 100644
  	CBuilderManager* builderMgr = circuit->GetBuilderManager();
  	if (!builderMgr->CanEnqueueTask(32)) {
  		return nullptr;
-@@ -1278,6 +1755,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1278,6 +1761,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  	const int frame = circuit->GetLastFrame();
  	float bestResDist = std::numeric_limits<float>::max();
  
@@ -2396,7 +2443,7 @@ index 2b84e90..6923e89 100644
  	const auto& infos = energyDefs.GetInfos();
  	const float curWind = circuit->GetMap()->GetCurWind();
  	auto checkWind = [curWind, terrainMgr, position, metalIncome, energyIncome, &infos](unsigned i) {
-@@ -1308,12 +1808,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1308,12 +1814,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  				if (engy.cdef->IsWind() && !checkWind(i)) {
  					continue;
  				}
@@ -2411,7 +2458,16 @@ index 2b84e90..6923e89 100644
  					if (bestResDist > resDist) {
  						bestResDist = resDist;
  						bestDef = engy.cdef;
-@@ -1393,14 +1893,14 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
+@@ -1384,6 +1890,8 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuitUnit* unit)
+ {
+ 	ZoneScoped;
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return nullptr;
+ 
+ 	CBuilderManager* builderMgr = circuit->GetBuilderManager();
+ 	if (!builderMgr->CanEnqueueTask(32) || !builderMgr->GetTasks(IBuilderTask::BuildType::GEO).empty() || !geoDefs.HasAvail()) {
+@@ -1393,14 +1901,14 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	CMap* map = circuit->GetMap();
  	CCircuitDef* geoDef = geoDefs.GetFirstDef();
@@ -2430,7 +2486,7 @@ index 2b84e90..6923e89 100644
  		{
  			minDistSq = distSq;
  			index = i;
-@@ -1416,7 +1916,7 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
+@@ -1416,7 +1924,7 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
  	const float maxCostM = metalIncome * builderMgr->GetGoalExecTime();
  	const float maxCostE = energyIncome * builderMgr->GetGoalExecTime();
  
@@ -2439,7 +2495,16 @@ index 2b84e90..6923e89 100644
  	const int frame = circuit->GetLastFrame();
  	geoDef = geoDefs.GetBestDef([frame, terrainMgr, &pos, maxCostM, maxCostE](CCircuitDef* cdef, const SGeoExt& data) {
  		return cdef->IsAvailable(frame) && (cdef->GetCostM() < maxCostM) && (cdef->GetCostE() < maxCostE)
-@@ -1468,6 +1968,25 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1432,6 +1940,8 @@ IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuit
+ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCircuitUnit* unit)
+ {
+ 	ZoneScoped;
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return nullptr;
+ 
+ 	CBuilderManager* builderMgr = circuit->GetBuilderManager();
+ 	if (!builderMgr->CanEnqueueTask(64) || isEnergyRequired) {
+@@ -1468,6 +1978,25 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  	}
  
  	const bool isStart = (factoryMgr->GetFactoryCount() == 0);
@@ -2465,7 +2530,7 @@ index 2b84e90..6923e89 100644
  	if ((factoryTask == nullptr) && (PickNextFactory(position, isStart) == nullptr)) {
  		return nullptr;
  	}
-@@ -1571,6 +2090,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1571,6 +2100,19 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		}
  	}
  
@@ -2485,7 +2550,7 @@ index 2b84e90..6923e89 100644
  	factoryTask->SetPosition(buildPos);
  
  	if (factoryTask->IsPlop()
-@@ -1589,7 +2121,16 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
+@@ -1589,7 +2131,16 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks(const AIFloat3& position, CCir
  		factoryTask = nullptr;
  		return task;
  	} else {
@@ -2503,6 +2568,73 @@ index 2b84e90..6923e89 100644
  		factoryTask = nullptr;
  	}
  
+@@ -1604,6 +2155,8 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks()
+ IBuilderTask* CEconomyManager::UpdateStorageTasks()
+ {
+ 	ZoneScoped;
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return nullptr;
+ 
+ 	CBuilderManager* builderMgr = circuit->GetBuilderManager();
+ 	if (!builderMgr->CanEnqueueTask(32)) {
+@@ -1696,6 +2249,8 @@ IBuilderTask* CEconomyManager::UpdatePylonTasks()
+ 
+ IBuilderTask* CEconomyManager::CheckMobileAssistRequired(const AIFloat3& position, CCircuitUnit* unit)
+ {
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return nullptr;
+ 	CFactoryManager* factoryMgr = circuit->GetFactoryManager();
+ 	CBuilderManager* builderMgr = circuit->GetBuilderManager();
+ 	if (!factoryMgr->IsAssistRequired() || !builderMgr->HasFreeAssists(unit)
+@@ -1723,6 +2278,12 @@ IBuilderTask* CEconomyManager::CheckMobileAssistRequired(const AIFloat3& positio
+ 
+ void CEconomyManager::StartFactoryJob(const float seconds)
+ {
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	// Unschedule self; also never schedules the recurring UpdateFactoryTasks job.
++	circuit->GetScheduler()->RemoveJob(startFactory);
++	startFactory = nullptr;
++	return;
++
+ 	CFactoryManager* factoryMgr = circuit->GetFactoryManager();
+ 	if ((factoryMgr->GetFactoryCount() == 0) && circuit->GetBuilderManager()->GetTasks(IBuilderTask::BuildType::FACTORY).empty()) {
+ 		CCircuitUnit* comm = circuit->GetSetupManager()->GetCommander();
+@@ -1859,6 +2420,8 @@ void CEconomyManager::DelFactoryInfo(CCircuitUnit* unit)
+ bool CEconomyManager::CheckAirpadRequired(const AIFloat3& position, CCircuitUnit* unit, IBuilderTask*& outTask)
+ {
+ 	outTask = nullptr;
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return false;
+ 
+ 	CBuilderManager* builderMgr = circuit->GetBuilderManager();
+ 	CMilitaryManager* militaryMgr = circuit->GetMilitaryManager();
+@@ -1915,6 +2478,8 @@ bool CEconomyManager::CheckAirpadRequired(const AIFloat3& position, CCircuitUnit
+ bool CEconomyManager::CheckAssistRequired(const AIFloat3& position, CCircuitUnit* unit, IBuilderTask*& outTask)
+ {
+ 	outTask = nullptr;
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return false;
+ 
+ 	CBuilderManager* builderMgr = circuit->GetBuilderManager();
+ 	const int nanoQueued = builderMgr->GetTasks(IBuilderTask::BuildType::NANO).size();
+@@ -2099,6 +2664,8 @@ bool CEconomyManager::HasNoPurpose(const CCircuitDef::Id defId) const
+ 
+ void CEconomyManager::ReclaimOldConvert(const SConvertExt* convertExt)
+ {
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return;
+ 	if (circuit->IsLoadSave() || (reclConvertEff <= 0.f) || (IsEnergyFull() && !IsEnergyStalling())) {
+ 		return;
+ 	}
+@@ -2137,6 +2704,8 @@ void CEconomyManager::ReclaimOldConvert(const SConvertExt* convertExt)
+ 
+ void CEconomyManager::ReclaimOldEnergy(const SEnergyExt* energyExt)
+ {
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return;
+ 	float energyIncome = GetAvgEnergyIncome();
+ 	if (circuit->IsLoadSave() || (reclEnergyEff <= 0.f) || (energyIncome < energyExt->cond.energyIncome)) {
+ 		return;
 diff --git a/src/circuit/module/EconomyManager.h b/src/circuit/module/EconomyManager.h
 index 2925da7..e4c5501 100644
 --- a/src/circuit/module/EconomyManager.h
@@ -2573,7 +2705,7 @@ index 2925da7..e4c5501 100644
  	struct SConvertExt {
  		float energyUse;
 diff --git a/src/circuit/module/FactoryManager.cpp b/src/circuit/module/FactoryManager.cpp
-index dda9b5a..e7c8983 100644
+index dda9b5a..ca2a1d6 100644
 --- a/src/circuit/module/FactoryManager.cpp
 +++ b/src/circuit/module/FactoryManager.cpp
 @@ -816,7 +816,7 @@ CRecruitTask* CFactoryManager::Enqueue(const TaskS::SRecruitTask& ti)
@@ -2594,6 +2726,41 @@ index dda9b5a..e7c8983 100644
  	TaskAdded(task);
  	return task;
  }
+@@ -1178,6 +1178,8 @@ CCircuitDef* CFactoryManager::GetLargestDef(const CCircuitDef* facDef) const
+ 
+ CCircuitDef* CFactoryManager::DefaultGetFactoryToBuild(const AIFloat3& position, bool isStart, bool isReset)
+ {
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return nullptr;
+ 	CCircuitDef* facDef = factoryData->GetFactoryToBuild(circuit, position, isStart, isReset);
+ 	if ((facDef == nullptr) && utils::is_valid(position)) {
+ 		facDef = factoryData->GetFactoryToBuild(circuit, -RgtVector, isStart, isReset);
+@@ -1317,13 +1319,7 @@ void CFactoryManager::DisableFactory(CCircuitUnit* unit)
+ 					}
+ 				}
+ 			}
+-			if (!hasBuilder) {
+-				// queue new factory with builder
+-				CCircuitDef* facDef = GetFactoryToBuild(-RgtVector, true, true);
+-				if (facDef != nullptr) {
+-					builderMgr->Enqueue(TaskB::Factory(IBuilderTask::Priority::NOW, facDef, -RgtVector, GetRepresenter(facDef)));
+-				}
+-			}
++			// Brain overhaul 2026-08-22: no native factory-recovery enqueue; the script Brain owns plant choice.
+ 		}
+ 	};
+ 
+@@ -1431,6 +1427,10 @@ IUnitTask* CFactoryManager::CreateFactoryTask(CCircuitUnit* unit)
+ 		}
+ 	}
+ 
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	// No native recruit (response.json BUILDPOWER/FIREPOWER); the facqueue executor drives lines.
++	return Enqueue(TaskS::Wait(false, FRAMES_PER_SEC * 10));
++
+ 	const bool isActive = (noT1FacCount <= 0) || !IsT1Factory(unit->GetCircuitDef());
+ 
+ 	IUnitTask* task = UpdateBuildPower(unit, isActive);
 @@ -1706,7 +1706,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
  const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& facDef) const
  {
@@ -2641,7 +2808,7 @@ index dda9b5a..e7c8983 100644
  			if (metalIncome < facDef.incomes[facIt->first]) {
  				break;
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b..53362f0 100644
+index a44c20b..67c29d6 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -16,10 +16,12 @@
@@ -2876,7 +3043,16 @@ index a44c20b..53362f0 100644
  			}
  		} break;
  		default: break;
-@@ -854,11 +974,40 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
+@@ -704,6 +824,8 @@ void CMilitaryManager::MakeDefence(int cluster, const AIFloat3& pos)
+ 
+ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
+ {
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return;
+ 	// TODO: Rework, depends on mex cluster
+ 	assert(cluster >= 0);
+ 
+@@ -854,11 +976,40 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
  	std::pair<AIFloat3*, int> poses[3] = {std::make_pair(frontPoses, 0), std::make_pair(middlePoses, 0), std::make_pair(backPoses, 0)};
  
  	CEnemyManager* enemyMgr = circuit->GetEnemyManager();
@@ -2917,7 +3093,7 @@ index a44c20b..53362f0 100644
  		totalCost += defDef->GetCostM();
  		if (skip(defDef)) {
  			continue;
-@@ -883,7 +1032,15 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
+@@ -883,7 +1034,15 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
  		}
  	}
  
@@ -2934,7 +3110,7 @@ index a44c20b..53362f0 100644
  	auto checkSensor = [this, frame, maxCost, &backPos, builderMgr, terrainMgr](IBuilderTask::BuildType type,
  			CCircuitDef* cdef, float range, std::function<bool (CCircuitDef*)> isSensor)
  	{
-@@ -909,7 +1066,6 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
+@@ -909,7 +1068,6 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
  	};
  	// radar
  	if (radarDefs.HasAvail()) {
@@ -2942,12 +3118,14 @@ index a44c20b..53362f0 100644
  		radarDefs.GetBestDef([&checkSensor, radiusMod](CCircuitDef* cdef, const SSensorExt& data) {
  			return checkSensor(IBuilderTask::BuildType::RADAR, cdef, data.radius * radiusMod,
  					[](CCircuitDef* cdef) { return cdef->IsRadar(); });
-@@ -924,6 +1080,31 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
+@@ -924,6 +1082,33 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
  	}
  }
  
 +void CMilitaryManager::DefaultMakeSensors(int cluster, const AIFloat3& pos)
 +{
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	return;
 +	assert(cluster >= 0);
 +	if (!radarDefs.HasAvail() && !sonarDefs.HasAvail()) {
 +		return;
@@ -2974,7 +3152,7 @@ index a44c20b..53362f0 100644
  void CMilitaryManager::MarkPorc(CCircuitUnit* unit, int defPointId)
  {
  	porcToPoint[unit] = defPointId;
-@@ -1063,14 +1244,175 @@ void CMilitaryManager::ClearScoutPosition(IUnitTask* task)
+@@ -1063,14 +1248,175 @@ void CMilitaryManager::ClearScoutPosition(IUnitTask* task)
  	scoutTasks.erase(it);
  }
  
@@ -3152,7 +3330,7 @@ index a44c20b..53362f0 100644
  	const CMetalData::Clusters& clusters = metalMgr->GetClusters();
  
  	CMetalData::PointPredicate predicate = [inflMap, metalMgr, terrainMgr, area, clusters](const int index) {
-@@ -1095,6 +1437,16 @@ void CMilitaryManager::FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions
+@@ -1095,6 +1441,16 @@ void CMilitaryManager::FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions
  {
  	outPositions.clear();
  
@@ -3169,7 +3347,7 @@ index a44c20b..53362f0 100644
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const int frame = circuit->GetLastFrame();
  
-@@ -1149,6 +1501,16 @@ void CMilitaryManager::FillSafePos(CCircuitUnit* unit, F3Vec& outPositions)
+@@ -1149,6 +1505,16 @@ void CMilitaryManager::FillSafePos(CCircuitUnit* unit, F3Vec& outPositions)
  {
  	outPositions.clear();
  
@@ -3186,7 +3364,7 @@ index a44c20b..53362f0 100644
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const int frame = circuit->GetLastFrame();
  
-@@ -1356,11 +1718,56 @@ void CMilitaryManager::UpdateDefenceTasks()
+@@ -1356,11 +1722,56 @@ void CMilitaryManager::UpdateDefenceTasks()
  //	const CMetalData::Metals& spots = mm->GetSpots();
  	const CMetalData::Clusters& clusters = mm->GetClusters();
  //	const std::vector<CEnemyManager::SEnemyGroup>& enemyGroups = circuit->GetEnemyManager()->GetEnemyGroups();
@@ -3247,7 +3425,7 @@ index a44c20b..53362f0 100644
  //		STerrainMapArea* area = dt->GetLeader()->GetArea();
  //		CMetalData::PointPredicate predicate = [em, tm, area, &spots, &clusters](const int index) {
  //			const CMetalData::MetalIndices& idcs = clusters[index].idxSpots;
-@@ -1397,6 +1804,110 @@ void CMilitaryManager::UpdateDefenceTasks()
+@@ -1397,6 +1808,110 @@ void CMilitaryManager::UpdateDefenceTasks()
  		dt->SetMaxPower(std::max(minAttackers, circuit->GetEnemyManager()->GetPreMaxGroupThreat()));
  	}
  
@@ -3358,7 +3536,7 @@ index a44c20b..53362f0 100644
  	/*
  	 * Porc update
  	 */
-@@ -1429,8 +1940,13 @@ void CMilitaryManager::UpdateDefence()
+@@ -1429,8 +1944,13 @@ void CMilitaryManager::UpdateDefence()
  		if (frame >= defElem.second) {
  			CCircuitDef* buildDef = defElem.first;
  			if (buildDef->IsAvailable(frame)) {
@@ -3373,7 +3551,7 @@ index a44c20b..53362f0 100644
  			}
  			ibd->second.pop_back();
  		}
-@@ -1446,6 +1962,37 @@ void CMilitaryManager::UpdateDefence()
+@@ -1446,8 +1966,42 @@ void CMilitaryManager::UpdateDefence()
  	}
  }
  
@@ -3410,8 +3588,13 @@ index a44c20b..53362f0 100644
 +
  void CMilitaryManager::MakeBaseDefence(const AIFloat3& pos)
  {
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	// buildDefence stays empty, so UpdateDefence() enqueues nothing.
++	return;
  	if (circuit->IsLoadSave()) {
-@@ -1717,10 +2264,75 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+ 		return;
+ 	}
+@@ -1717,10 +2271,75 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  	return task;
  }
  
@@ -6139,7 +6322,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..cffaffa 100644
+index bc8ff11..cc6cb6b 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -69,7 +69,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
@@ -6348,6 +6531,16 @@ index bc8ff11..cffaffa 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
+@@ -660,6 +740,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+ void IBuilderTask::ExecuteChain(SBuildChain* chain)
+ {
+ 	assert(chain != nullptr);
++	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
++	// build_chain.json hubs are dead for apex.
++	return;
+ 	CCircuitAI* circuit = manager->GetCircuit();
+ 
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 diff --git a/src/circuit/task/builder/BuilderTask.h b/src/circuit/task/builder/BuilderTask.h
 index 13ced8d..7e9d23e 100644
 --- a/src/circuit/task/builder/BuilderTask.h

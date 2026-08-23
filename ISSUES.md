@@ -10,21 +10,18 @@ commander build behaviour) were deleted per the ISSUES lifecycle -- the code the
 described no longer exists. Entries about army USE, senses, the engine, the
 harness, and the DLL's own native spenders (the C++ strip's census) remain.
 
-## OPEN 2026-08-22: engine recruit tasks slip the facqueue abort — the last army leak
+## RESOLVED 2026-08-23 (delete after a long game confirms): the engine recruit slip and the defence trickle were the DLL's own spenders, now cut at source
 
-A driven line still produces occasional combat units the quota never
-ordered: ~6-14 Pawns and 0-3 Tumbleweeds per game on the eco-role holder,
-whose every facqueue army channel is verified off (role-diag prints all
-gates clean while the units appear; zero matching `+1` order lines). The
-remaining source is CircuitAI's own recruit re-enqueues (raid response)
-landing in the GiveOrder lag window before the facqueue's abort sees them —
-the same async-orders trap as the mex-guard duplicates. Fix direction:
-harden the facqueue's recruit abort (sweep every pass, not only on take),
-or track sent aborts the way the mex crew tracks sent orders. ~1k
-metal/game — cosmetic for most players, a purity violation for the eco
-role. Also pending attribution: a 1-2k defence trickle on the role holder
-that survives both defence gates (suspect: build_chain hubs or the C++
-engine path outside AiMakeDefence).
+Both unattributed leaks are attributed and severed in C++ (see CHANGES.md
+2026-08-23). The recruit slip was `CFactoryManager::CreateFactoryTask` ->
+`UpdateFirePower`/`UpdateBuildPower` (response.json recruits reachable via
+the DefaultMakeTask fallback); the defence trickle was
+`CMilitaryManager::MakeBaseDefence` filling `buildDefence` on first-factory
+finished (FactoryManager.cpp:1261) and `UpdateDefence` enqueuing it on a
+timer -- a path that never consults `AiMakeDefence`. Both now early-return.
+Smoke-confirmed: 8-minute 8v8, every apex team allBuilt=armcom only, zero
+recruit or defence spend. Delete this entry once a full-length game shows
+the same.
 
 ## OPEN 2026-08-22: half the army attacks, half walks away — no army-level engage decision exists
 

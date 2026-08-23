@@ -1178,6 +1178,8 @@ CCircuitDef* CFactoryManager::GetLargestDef(const CCircuitDef* facDef) const
 
 CCircuitDef* CFactoryManager::DefaultGetFactoryToBuild(const AIFloat3& position, bool isStart, bool isReset)
 {
+	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
+	return nullptr;
 	CCircuitDef* facDef = factoryData->GetFactoryToBuild(circuit, position, isStart, isReset);
 	if ((facDef == nullptr) && utils::is_valid(position)) {
 		facDef = factoryData->GetFactoryToBuild(circuit, -RgtVector, isStart, isReset);
@@ -1317,13 +1319,7 @@ void CFactoryManager::DisableFactory(CCircuitUnit* unit)
 					}
 				}
 			}
-			if (!hasBuilder) {
-				// queue new factory with builder
-				CCircuitDef* facDef = GetFactoryToBuild(-RgtVector, true, true);
-				if (facDef != nullptr) {
-					builderMgr->Enqueue(TaskB::Factory(IBuilderTask::Priority::NOW, facDef, -RgtVector, GetRepresenter(facDef)));
-				}
-			}
+			// Brain overhaul 2026-08-22: no native factory-recovery enqueue; the script Brain owns plant choice.
 		}
 	};
 
@@ -1430,6 +1426,10 @@ IUnitTask* CFactoryManager::CreateFactoryTask(CCircuitUnit* unit)
 			return Enqueue(TaskS::Wait(false, FRAMES_PER_SEC * 10));
 		}
 	}
+
+	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
+	// No native recruit (response.json BUILDPOWER/FIREPOWER); the facqueue executor drives lines.
+	return Enqueue(TaskS::Wait(false, FRAMES_PER_SEC * 10));
 
 	const bool isActive = (noT1FacCount <= 0) || !IsT1Factory(unit->GetCircuitDef());
 

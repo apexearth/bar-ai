@@ -1000,6 +1000,9 @@ bool CBuilderManager::CanUpGeo(CCircuitDef* cdef) const
 
 IUnitTask* CBuilderManager::DefaultMakeTask(CCircuitUnit* unit)
 {
+	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
+	// A builder the Brain has no task for idles visibly.
+	return nullptr;
 	const int frame = circuit->GetLastFrame();
 	const AIFloat3& pos = unit->GetPos(frame);
 
@@ -1690,9 +1693,8 @@ void CBuilderManager::Watchdog()
 				CCircuitDef* cdef = unit->GetCircuitDef();
 				if ((cdef->GetBuildTime() * buildPercent < maxCost) || cdef->IsMex() || (*cdef == *terraDef)) {
 					Enqueue(TaskB::Repair(IBuilderTask::Priority::NORMAL, unit));
-				} else {
-					Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
 				}
+				// Brain overhaul 2026-08-22: reclaim of own buildings is a Brain decision; no auto-melt of orphans.
 //			} else if (u->GetHealth() < u->GetMaxHealth()) {
 //				Enqueue(TaskB::Repair(IBuilderTask::Priority::NORMAL, unit));
 			}
