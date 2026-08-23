@@ -77,6 +77,7 @@ local NAMES = {
 	"apex_rez_horizon",
 	"apex_aa_match",
 	"apex_retreat_cost_scale",
+	"apex_stake_weight",
 	"apex_chase_min_ratio",
 	"apex_comm_cloak_share",
 	"apex_con_outmassed",

@@ -1216,6 +1216,9 @@ const float TUNE_AA_MATCH = 0.7f;
 // ~+0.33 over the 0.08 floor (retreat = 0.08 + cost/this, cap 0.5) -- cheap
 // units fight to the end, expensive ones preserve.
 const float TUNE_RETREAT_COST_SCALE = 3000.f;
+// STAKE_WEIGHT: how strongly an army DEFICIT borrows urgency from the
+// total value at risk (expected loss = everything x defeat probability).
+const float TUNE_STAKE_WEIGHT = 1.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone

@@ -2468,6 +2468,22 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	LossDecay();
 	const float armyGap = ArmyTarget() - ArmyValue();
 	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	// THE STAKE (apexearth 2026-08-23): "all the value we have built up will
+	// be lost if we have insufficient army." Under-matched, a unit's worth
+	// scales with EVERYTHING we own -- expected loss = total value x defeat
+	// probability -- tapering to normal at parity. One modeled weight.
+	float stakeMul = 1.f;
+	{
+		const float aT0 = ArmyTarget();
+		if ((aT0 > 1.f) && (armyGap > 0.f)) {
+			const float deficit = armyGap / aT0;
+			stakeMul = 1.f + deficit
+					* ((gAssetsM + ArmyValue()) / aT0)
+					* ai.GetTunable("apex_stake_weight", TUNE_STAKE_WEIGHT);
+			if (stakeMul > 8.f)
+				stakeMul = 8.f;
+		}
+	}
 	// Best power-per-cost this line can produce, for normalizing army bids.
 	float linePPC = 0.f;
 	for (uint i = 0; i < prods.length(); ++i) {
@@ -2543,7 +2559,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			if (roleW < 0.05f)
 				roleW = 0.05f;   // never exactly zero: portfolio floor
 			const float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
-					* (ppc / linePPC) * roleW
+					* (ppc / linePPC) * roleW * stakeMul
 					/ (1.f + have * 0.05f) * eFeedA;
 			if (gainA <= 0.01f)
 				continue;
