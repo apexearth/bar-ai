@@ -489,7 +489,8 @@ const int PROT_JAM = 1;
 const int PROT_ANTINUKE = 2;
 const int PROT_TARGFAC = 3;
 const int PROT_DEF = 4;
-const int PROT_N = 5;
+const int PROT_SHIELD = 5;
+const int PROT_N = 6;
 array<array<AIFloat3>> gProtPos(PROT_N);
 array<array<Id>> gProtIds(PROT_N);
 array<array<CCircuitUnit@>> gProtUnit(PROT_N);
@@ -498,6 +499,7 @@ float gAssetsM = 0.f;   // summed costM of standing structures
 
 int ProtClassOf(int defId)
 {
+	if (Catalog::gShield[defId] && !Catalog::gMobile[defId]) return PROT_SHIELD;
 	if (Catalog::gAntiNuke[defId]) return PROT_ANTINUKE;
 	if (Catalog::gTargFac[defId]) return PROT_TARGFAC;
 	if (Catalog::gRadar[defId]) return PROT_RADAR;
@@ -1795,6 +1797,17 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 			if (ProtCovered(PROT_ANTINUKE, core, 2000.f))
 				continue;
 			gain = gAssetsM * nukeRate;
+		} else if (cls == PROT_SHIELD) {
+			// Shields answer bombardment: worth the arty mass they blank,
+			// covering the interior (the stock feature our gap survey ranked
+			// first; their arty ground our statics 38k:7k).
+			const float artyS = Military::EnemyCostOf(Unit::Role::ARTY.type)
+					+ Military::EnemyCostOf(Unit::Role::SKIRM.type) * 0.5f;
+			if (artyS < 200.f)
+				continue;
+			if (ProtCovered(PROT_SHIELD, core, 400.f))
+				continue;
+			gain = ((artyS < gAssetsM) ? artyS : gAssetsM) * rate * 4.f;
 		} else if (cls == PROT_TARGFAC) {
 			// apexearth's spec: three wanted, diminishing.
 			const int have = int(gProtPos[PROT_TARGFAC].length());
@@ -2241,7 +2254,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	}
 	if (w.kind == WK_PROTECT) {
 		const int bt = (w.spotId == PROT_RADAR) ? int(Task::BuildType::RADAR)
-				: (w.spotId == PROT_DEF) ? int(Task::BuildType::DEFENCE)
+				: ((w.spotId == PROT_DEF) || (w.spotId == PROT_SHIELD))
+					? int(Task::BuildType::DEFENCE)
 				: (w.spotId == PROT_ANTINUKE) ? int(Task::BuildType::BIG_GUN)
 				: int(Task::BuildType::ENERGY);
 		return Requests::Take(unit, w.def, Task::BuildType(bt),

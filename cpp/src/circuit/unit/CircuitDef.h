@@ -381,6 +381,7 @@ public:
 	bool IsAntiNukeW()      const { return isAntiNukeW; }  // carries a nuke interceptor
 	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
 	bool IsKamikazeDef()    const { return isKamikazeD; }   // suicide unit: ammunition, not army
+	bool IsShieldDef()      const { return shieldMount != nullptr; }
 	float GetCaptureSpeed() const { return captureSpeed; }
 //	float GetAltitude()     const { return altitude; }
 	float GetJumpRange()    const { return jumpRange; }
