@@ -252,6 +252,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	makeM = def->GetResourceMake(resM) - upkeepM;
 	needsGeo = def->IsNeedGeo();
 	isTargFac = def->IsTargetingFacility();
+	isKamikazeD = def->IsAbleToKamikaze();
 	areaCells = (def->GetXSize() / 2) * (def->GetZSize() / 2);
 	storeM = def->GetStorage(resM);
 	storeE = def->GetStorage(resE);

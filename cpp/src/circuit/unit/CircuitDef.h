@@ -380,6 +380,7 @@ public:
 	int GetAreaCells()      const { return areaCells; }  // footprint in 16-elmo build cells
 	bool IsAntiNukeW()      const { return isAntiNukeW; }  // carries a nuke interceptor
 	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
+	bool IsKamikazeDef()    const { return isKamikazeD; }   // suicide unit: ammunition, not army
 	float GetCaptureSpeed() const { return captureSpeed; }
 //	float GetAltitude()     const { return altitude; }
 	float GetJumpRange()    const { return jumpRange; }
@@ -535,6 +536,7 @@ private:
 	int areaCells = 0;
 	bool isAntiNukeW = false;
 	bool isTargFac = false;
+	bool isKamikazeD = false;
 	float storeM;
 	float storeE;
 	float convCapacityE;

@@ -1608,7 +1608,8 @@ float ArmyValue()
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
 			continue;
-		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f))
+		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f)
+			|| Catalog::gKamikaze[int(d)])
 			continue;
 		v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
 	}
@@ -2354,7 +2355,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d]
-			|| Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f))
+			|| Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f)
+			|| Catalog::gKamikaze[d])
 			continue;
 		const float ppc = Catalog::gPower[d] / Catalog::gCostM[d];
 		if (ppc > linePPC)
@@ -2373,6 +2375,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		// factory time is free, and army beats waste (watched: "way too
 		// much idle time on our T1 lab").
 		if (!Catalog::gBuilder[d]) {
+			// A suicide unit's power is one detonation -- ammunition, not
+			// standing army ("we're just making tumbleweeds", watched 8v8).
+			// It never enters the army market; a munitions want can price
+			// it honestly later if ever wanted.
+			if (Catalog::gKamikaze[d])
+				continue;
 			const float sinkGap = OverflowM() * ((fillS > 1.f) ? fillS : 60.f);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
