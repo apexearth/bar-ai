@@ -826,22 +826,19 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 Want@ ProposeStore(CCircuitUnit@ unit)
 {
 	Want w;
-	const float over = OverflowM();
-	if (over <= 0.5f)
+	// Storage exists ONLY to enable a planned expensive reclaim that will
+	// not fit in current headroom (apexearth 2026-08-23, final form: "not
+	// important unless we're about to reclaim something expensive"). No
+	// overflow purchases, no stock target.
+	if ((gReclaimTarget is null) || (gReclaimTarget.circuitDef is null))
+		return w;
+	const float refund = Catalog::gCostM[int(gReclaimTarget.circuitDef.id)];
+	const float headroom = aiEconomyMgr.metal.storage - aiEconomyMgr.metal.current;
+	if (refund <= headroom)
 		return w;
 	const float horizon = ai.GetTunable("apex_store_horizon", TUNE_STORE_HORIZON);
-	// Storage buys TIME, and time has a STOCK target: one horizon of income
-	// banked. At a chronically full bank the empty-headroom test re-licensed
-	// a store every auction (the plateau apexearth watched: storage winning
-	// while fusion never came) -- structural overflow is spending's problem,
-	// never storage's.
-	if (aiEconomyMgr.metal.storage >= aiEconomyMgr.metal.income * horizon)
-		return w;
-	const float emptySec = (aiEconomyMgr.metal.storage - aiEconomyMgr.metal.current)
-			/ over;
-	if (emptySec >= horizon)
-		return w;
-	const float fill = 1.f - emptySec / ((horizon > 1.f) ? horizon : 60.f);
+	const float fill = 1.f;
+	const float over = (refund - headroom) / ((horizon > 1.f) ? horizon : 60.f);
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	for (uint i = 0; i < builds.length(); ++i) {
@@ -2437,8 +2434,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			gain += mob * upD / float(1 + ServingCons());
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
 		gain += mob * ((over < drain) ? over : drain);
-		if (gMexOpen && (reach > 0.f))
-			gain += mob * util * SpotM();   // claims only count if cons work
+		if (gMexOpen && (reach > 0.f)) {
+			// A con claims spot after spot -- a stream of STREAMS. Priced as
+			// one claim it lost every opening auction to army and a vehicle
+			// start was DOA (watched); over the fill horizon it claims
+			// fillS/cycle of them.
+			gain += mob * util * SpotM() * (((fillS > 1.f) ? fillS : 180.f) / 60.f);
+		}
 		if (gain <= 0.5f)
 			continue;
 		const float v = gain / Catalog::gCostM[d];
