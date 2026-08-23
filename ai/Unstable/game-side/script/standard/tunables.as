@@ -1113,9 +1113,12 @@ const float TUNE_CATALOG_DUMP = 0.f;
 // script cannot read per-spot yet; typical BAR land spots sit near 2.0.
 // Replace with a spot-income binding.
 const float TUNE_SPOT_M = 2.0f;
-// PLANT_PIPE: discount on a plant's constructor-pipeline return vs a spot's
-// direct stream (cons cost metal and time before they claim anything).
-const float TUNE_PLANT_PIPE = 0.5f;
+// PLANT_PIPE: the constructor pipeline's return in spot-streams. Early cons
+// each carry a full open-spot stream and compound; 0.5 measured lab 1 at
+// 5.1m (too late, apexearth 2026-08-23: "try building the first lab a bit
+// sooner"); 2.0 targets the ~2m human timing. Labs 2+ are gated by
+// PLANT_INCOME_PER, not this.
+const float TUNE_PLANT_PIPE = 2.0f;
 // Income one production line is worth: apexearth 2026-08-23, "below 50 metal
 // per second you don't want multiple T1 labs even of varying types." The
 // marginal plant's gain is zero beyond 1 + income/this -- income-derived,
