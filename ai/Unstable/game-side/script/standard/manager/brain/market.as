@@ -248,6 +248,20 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 			+ float(Catalog::gAreaCells[defId])
 				* ai.GetTunable("apex_space_m", TUNE_SPACE_M);
 	w.tCost = (walkSec + buildSec) * Wage();
+	// The FLOW bill (apexearth 2026-08-23): this build's E drain is a rate,
+	// costE/buildSec, and any part of it that income + the bank cannot fund
+	// across the build throttles EVERY lathe (pull 300 on income 50 = 1/6th
+	// build speed fleet-wide). The inflicted slowdown is charged here as
+	// lost fleet throughput -- arithmetic, not a model.
+	if ((Catalog::gCostE[defId] > 1.f) && (buildSec > 1.f)) {
+		const float wantDrain = Catalog::gCostE[defId] / buildSec;
+		const float projPull = aiEconomyMgr.energy.pull + wantDrain;
+		const float bankRate = aiEconomyMgr.energy.current / buildSec;
+		const float unfunded = projPull - aiEconomyMgr.energy.income - bankRate;
+		if ((unfunded > 0.f) && (projPull > 1.f)) {
+			w.tCost += buildSec * aiEconomyMgr.metal.pull * (unfunded / projPull);
+		}
+	}
 	w.value = gain / (w.mCost + w.tCost);
 	return w.value;
 }
