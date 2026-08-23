@@ -51,7 +51,7 @@ bombers, spam stream, air cons), TierShare, CounterShares/mix, DefQuotaMod,
 EcoLeadLine, rules_recruit.as, armypush. Factory CHOICE too: choose.as's
 AiGetFactoryToBuild branch forest, switch.as timers. The facqueue's
 MECHANISM (line adoption, Wait-hold, recruit abort incl. today's
-driven-line sweep, PendAdd ledger, GiveOrder-lag discipline) is KEPT as the
+driven-line sweep, PendAdd sent-ledger) is KEPT as the
 production EXECUTOR — it just takes orders from the arbiter instead of
 computing its own.
 
@@ -95,10 +95,14 @@ One arbiter, two markets, one budget:
 - **Production market**: factory Wants (a con, a tier-core unit, a scout...)
   scored by the same budget + objective; the facqueue executes the top
   orders. Factory/plant CHOICE is itself a Want (a plant is a building).
-- **Values from state, not gates**: the Role objective (OPENING→GROW→T2LAB→
-  MOHO→FUSION→AIRSCALE), the BP controller, Persona, and stance all express
-  as VALUE multipliers (Persona's proven pattern). "No army for the role" =
-  army Wants valued 0, not thirteen early returns.
+- **Values from LIVE DYNAMICS, not gates or static bars**: each Want prices
+  itself from current state — payback time computed from the def's real
+  cost/yield against measured income, opportunity cost against the
+  runner-up, demand from queued work, build power as a closed loop. The
+  role, Persona, and stance express as value multipliers (Persona's proven
+  pattern). "No army for the role" = army Wants valued 0, not thirteen
+  early returns. Sequencing (energy vs mex vs tech vs reactor) EMERGES from
+  the prices; nothing encodes an order.
 - **One log line per decision**: `apex: decide <unit> -> <want> v=... over
   <runner-up> v=...` — the debuggability the leaf system never had.
 
@@ -113,44 +117,61 @@ One arbiter, two markets, one budget:
 3. Then rebuild Want-by-Want, one per benchmark cycle, audit_role green
    gates at each step.
 
-## 5. KNOWLEDGE THAT MUST NOT BE LOST (measured, 2026-08-22 unless noted)
+## 5. WHAT CARRIES FORWARD — and what deliberately does not
 
-- **GiveOrder lag**: orders apply when the net message lands; ~45 sim-s at
-  max headless speed. Count SENT, never trust reads (CLAUDE.md; the
-  recruit-slip channel was this).
-- **Recruit-slip**: engine response re-enqueues land on driven lines inside
-  the lag window; the driven-line abort in SweepDeadRecruits is the fix.
-- **Requests**: DEFENCE is Governed+Positional (never capped/joined);
-  JOIN_MIN_COST bounds JOINING only — unmanned orphans must be adoptable at
-  any cost or cheap towers block their ground forever (measured 24 created/
-  3 built).
-- **BP controller lessons**: don't count the commander (its 23 m/s lathe >
-  opening income; froze con growth); BP must never outrank the ENERGY ladder
-  pre-T2 (7 nanos, no tech); pre-T2 cons are income producers — bound them
-  by DEMAND (queued tasks per con) + deficit, never by income curve alone
-  (23 cons) and never by a flat cap (his explicit veto).
-- **Role economics**: mohos before fusion (payback ~1m vs ~3m); T2 bar 600
-  measured right, 450 measured worse (thin grid E-stalls mohos), 1200 cost
-  9 minutes; fusion-2 is the boundary for air cons + T1 rebuild + T2-lab
-  eat; reclaim bursts need storage headroom; gifting off at handicap ≥ +50;
-  the anchor = back-most by TV_DIST (enemyPos reads ZeroVector pre-contact —
-  substitute map center), latched at frame ~0, seeded into election slot 0
-  unconditionally (qualifying let a faster teammate steal the designation).
-- **Eco air plant**: ChooseFactory's switch clock is 550-900s — anything
-  time-sensitive needs a ladder-side (now: Want-side) path.
-- **Chain builds**: measured net-negative as implemented (ring-picked sites
-  + holds beat think-gap savings; 46.1k control vs 32-40k). Binding
-  CmdBuildQueuedAt + time-bounded hold kept for a placement-aware retry.
-- **Squad coordination + commander no-chase + grid findings** (Part B of the
-  approved plan, untouched by this overhaul): SnapToBaseGrid gridCell=8 no
-  parity, unsnapped anchor, first-fit 1600-elmo search, BAND_BACK[NANO]=216,
-  isFixed jitter — see the plan file and CHANGES.
-- **Noise floor**: seed-47 tech read 6.8/7.0/8.4/never/14.0 on
-  near-identical builds. Judge on ≥6-game tournaments (6 workers, 15m cap),
-  never single runs.
-- **Deploy discipline**: deploy exits nonzero on refusal but a pipe eats the
-  code; check `deploy-exit` explicitly and grep a content marker in the
-  live tree. Kill only spring-headless — windowed spring is apexearth's.
+apexearth: weeks of leaf-fighting produced "very confusing side-effects.
+Given the lack of control during our work I do not trust our assertions...
+approach this with an open mind. Only bake in gameplay mechanics and logic
+which is useful. Focus on dynamics, static #s are often not good."
+
+So this section is split. Behavioral conclusions measured inside the old
+chaos are DISCARDED as truths — the rebuild re-derives behavior from live
+dynamics, and if the old numbers were right they will re-emerge.
+
+### 5a. Verifiable facts (engine source / unit defs / our own tooling)
+
+- Reclaimed metal goes to the bank and overflows past storage — any planned
+  reclaim needs headroom (game mechanic).
+- Only advanced constructors build T2+ structures; build options are
+  per-unit-def; asking an incapable builder is a silent no-op (unit defs).
+- `aiEnemyMgr.GetEnemyPos()` returns ZeroVector while no enemy group is
+  known (EnemyManager.cpp) — never use it as a bearing pre-contact.
+- ChooseFactory is consulted on a 550-900s engine switch clock — nothing
+  time-sensitive may depend on it.
+- The engine applies AI orders when the net message is consumed, not when
+  sent — reads lag sends, scaled by sim speed (AICallback.cpp). Treat every
+  read-back as stale; keep sent-ledgers in the executor plumbing.
+- Grid findings for Part B (all from engine/our source, unchanged by this
+  overhaul): Pos2BuildPos parity law, SnapToBaseGrid's 8-cell no-parity
+  snap, unsnapped anchor, first-fit 1600-elmo search, isFixed jitter.
+- Harness discipline (about our tools, not the game): identical seeds do
+  not reproduce runs — judge on ≥6-game tournaments (6 workers, 15m cap);
+  deploy exit codes get eaten by pipes — verify `deploy-exit` and a content
+  marker in the live tree; kill only spring-headless, windowed spring is
+  apexearth's.
+
+### 5b. Design principles for the rebuild (his, standing)
+
+- **Dynamics over static numbers.** A Want's value is computed from live
+  state: payback time from the def's actual cost and yield against current
+  income; build power as a closed loop on measured income; demand from
+  queued work. Orderings (moho vs fusion, when to tech, when air cons)
+  EMERGE from the value function — they are never hardcoded sequences.
+  Static numbers are allowed only as physics read from defs, or as a
+  last-resort tunable with a written derivation.
+- **No caps, no clocks, no exclusivity** (long-standing): scale with the
+  economy; a role changes how much, never whether.
+- **Open mind on old conclusions.** Yesterday's bars, orderings and
+  verdicts (T2 energy bars, mohos-first, chain-build harm, controller
+  calibrations, gift economics) are HYPOTHESES the new value functions can
+  confirm or refute — none are requirements.
+
+### 5c. Suspected engine interactions to RE-VERIFY when relevant
+(observed once, in the old chaos — check before relying on them)
+
+- Response-table recruit re-enqueues appearing on driven factory lines.
+- Cheap unmanned requests blocking their own ground in the Requests dedup.
+- Team-value (TV_*) blackboard timing at game start.
 
 ## 6. Sequence
 
