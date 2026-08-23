@@ -1885,6 +1885,19 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 		}
 		if (gain <= 0.f)
 			continue;
+		// Range answers arty: easy's artillery ground our LLT wall 38k:7k
+		// (fight1v1) -- when their ARTY mass is seen, a turret's reach
+		// multiplies its worth, so beamers/HLTs price above cheap sentries
+		// exactly when short walls are food.
+		if (cls == PROT_DEF) {
+			const float artySeen = Military::EnemyCostOf(Unit::Role::ARTY.type)
+					+ Military::EnemyCostOf(Unit::Role::SKIRM.type);
+			if (artySeen > 100.f) {
+				float rangeMul = 1.f + (Catalog::gMaxRange[d] / 500.f)
+						* ((artySeen < 3000.f) ? (artySeen / 3000.f) : 1.f);
+				gain *= rangeMul;
+			}
+		}
 		Want c;
 		const float speed = Catalog::gSpeed[uid];
 		const float walkSec = (speed > 1.f)
