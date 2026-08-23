@@ -793,7 +793,16 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 {
 	Want w;
 	TrackEPull();
-	const float eSurplus = gESurplusEma;
+	// The marginal converter prices the UNSERVED surplus: standing
+	// converters already chew theirs (600 E/s supports ~9 T1 converters and
+	// not one more -- apexearth's arithmetic; the same closed-loop law as
+	// build power).
+	float standingCap = 0.f;
+	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
+		if (gOwnCount[cd] > 0)
+			standingCap += float(gOwnCount[cd]) * Catalog::gConvCapacity[int(cd)];
+	}
+	const float eSurplus = gESurplusEma - standingCap;
 	if (eSurplus <= 1.f)
 		return w;
 	const int uid = int(unit.circuitDef.id);
