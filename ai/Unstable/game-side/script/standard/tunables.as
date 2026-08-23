@@ -1157,6 +1157,9 @@ const float TUNE_FLY_SHORT = 0.6f;
 // FARM_BACK: how far behind the base anchor the eco farm is planned, elmos
 // (the axis points at the front, so behind = away from threat/influence).
 const float TUNE_FARM_BACK = 500.f;
+// E_LOOKAHEAD: seconds of energy-pull GROWTH folded into the scarcity
+// price -- anticipation, so the solar starts before the bank empties.
+const float TUNE_E_LOOKAHEAD = 30.f;
 
 // manager/frontline.as [toggle 0/1] -- Draw the computed front line. Allies and
 //   spectators see every map overlay below, so each ships off unless someone

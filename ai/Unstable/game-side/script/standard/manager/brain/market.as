@@ -65,6 +65,24 @@ float Wage()
 // The floor exchange rate for energy: the game's own converters set what a
 // standing E/s is worth in metal at worst (best conv ratio in the catalog).
 float gEPriceFloor = -1.f;
+// Smoothed energy-pull growth, E/s per second.
+float gEPullPrev = -1.f;
+int gEPullPrevAt = 0;
+float gEPullGrowth = 0.f;
+void TrackEPull()
+{
+	if (ai.frame < gEPullPrevAt + 5 * SECOND)
+		return;
+	const float pull = aiEconomyMgr.energy.pull;
+	if (gEPullPrev >= 0.f) {
+		const float dt = float(ai.frame - gEPullPrevAt) / float(SECOND);
+		const float g = (pull - gEPullPrev) / ((dt > 1.f) ? dt : 1.f);
+		gEPullGrowth = 0.7f * gEPullGrowth + 0.3f * g;
+	}
+	gEPullPrev = pull;
+	gEPullPrevAt = ai.frame;
+}
+
 float EPriceFloor()
 {
 	if (gEPriceFloor >= 0.f)
@@ -91,7 +109,13 @@ float EPrice()
 	// stall; the perpetuity premium that let energy outbid mohos forever
 	// is gone.
 	const float eInc = aiEconomyMgr.energy.income;
-	const float ePull = aiEconomyMgr.energy.pull;
+	// Anticipation (apexearth 2026-08-23: "we need to anticipate our coming
+	// lack of energy a little better"): price against where pull is HEADED
+	// within the lookahead, not where it is.
+	TrackEPull();
+	float ePull = aiEconomyMgr.energy.pull;
+	if (gEPullGrowth > 0.f)
+		ePull += gEPullGrowth * ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
 	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
 	if (excess > 2.f)
 		excess = 2.f;
@@ -400,6 +424,7 @@ void NoteDead(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
+	WorkerGone(unit.id);
 	OwnAdd(int(unit.circuitDef.id), -1);
 	if (Catalog::gExtractsM[int(unit.circuitDef.id)] <= 0.f)
 		return;
@@ -906,6 +931,96 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	return w;
 }
 
+// A hard stall re-opens held decisions: abort ONE non-energy build per
+// sweep (the commander first) so its holder falls back into the market,
+// where the stall-priced solar now wins. Held tasks are otherwise never
+// re-asked -- the engine stops re-electing once a builder is in range
+// (apexearth 2026-08-23: "interrupt that commander's action and switch to
+// make a basic solar").
+int gNextStallSweep = 0;
+
+bool HardEStall()
+{
+	const float eInc = aiEconomyMgr.energy.income;
+	const float eCur = aiEconomyMgr.energy.current;
+	const float eStore = aiEconomyMgr.energy.storage;
+	return (aiEconomyMgr.energy.pull > eInc)
+		&& (eStore > 1.f) && (eCur < 0.25f * eStore);
+}
+
+// Builders known to the market: upserted as they pass through Decide (the
+// commander included), dropped on death. CCircuitUnit is NOCOUNT -- every
+// handle here MUST be removed by NoteDead or it dangles on freed memory.
+array<CCircuitUnit@> gWorkers;
+array<Id> gWorkerIds;
+void WorkerSeen(CCircuitUnit@ u)
+{
+	for (uint i = 0; i < gWorkerIds.length(); ++i) {
+		if (gWorkerIds[i] == u.id)
+			return;
+	}
+	gWorkers.insertLast(u);
+	gWorkerIds.insertLast(u.id);
+}
+void WorkerGone(Id id)
+{
+	for (uint i = 0; i < gWorkerIds.length(); ++i) {
+		if (gWorkerIds[i] == id) {
+			gWorkers.removeAt(i);
+			gWorkerIds.removeAt(i);
+			return;
+		}
+	}
+}
+
+void StallWatch()
+{
+	if (ai.frame < gNextStallSweep)
+		return;
+	gNextStallSweep = ai.frame + 5 * SECOND;
+	if (!HardEStall())
+		return;
+	CCircuitUnit@ pick = null;
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ u = gWorkers[i];
+		if (u is null)
+			continue;
+		IUnitTask@ t = u.task;
+		if ((t is null) || (t.GetType() != Task::Type::BUILDER))
+			continue;
+		if (int(t.GetBuildType()) == int(Task::BuildType::ENERGY))
+			continue;
+		// Only interrupt a unit that could actually answer with energy.
+		bool canE = false;
+		const array<int>@ mine = Catalog::BuildsOf(int(u.circuitDef.id));
+		for (uint b = 0; b < mine.length(); ++b) {
+			if (Catalog::gMakeE[mine[b]] > 1.f) {
+				canE = true;
+				break;
+			}
+		}
+		if (!canE)
+			continue;
+		// Dry-run the market (proposers are pure): interrupt only a unit
+		// whose TOP want right now is energy -- a blind abort thrashed 73
+		// times in one game, re-deciding the same mex it left.
+		Want@ e = ProposeEnergy(u);
+		if ((e is null) || (e.value <= 0.f))
+			continue;
+		Want@ mx = ProposeMex(u);
+		if ((mx !is null) && (mx.value > e.value))
+			continue;
+		@pick = u;
+		if (u.circuitDef.GetName() == "armcom" || u.circuitDef.GetName() == "corcom")
+			break;   // the commander first when present
+	}
+	if (pick is null)
+		return;
+	AiLog("apex: STALL interrupt -- " + pick.circuitDef.GetName() + " #" + pick.id
+		+ " leaves its build to answer the energy stall");
+	pick.task.Abort();
+}
+
 //------------------------------------------------------------------------------
 // The arbiter's builder side. Called only from Brain::Decide.
 //------------------------------------------------------------------------------
@@ -916,6 +1031,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 {
 	if ((unit is null) || !unit.circuitDef.IsBuilder() || !unit.circuitDef.IsMobile())
 		return null;
+	WorkerSeen(unit);
 
 	array<Want@> wants = {
 		ProposeMex(unit), ProposeEnergy(unit), ProposeGeo(unit),

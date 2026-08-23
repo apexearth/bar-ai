@@ -14,9 +14,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	return Market::Decide(unit);
 }
 
-// The periodic macro pass. Nothing to rank yet.
+// The periodic macro pass.
 void Think()
 {
+	Market::StallWatch();
 }
 
 // The def's usable weapon reach, clamped -- GetMaxRange is the def's longest
