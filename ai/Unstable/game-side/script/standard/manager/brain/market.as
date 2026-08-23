@@ -2773,7 +2773,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 				const int haveRz = (int(d) < int(gOwnCount.length()))
 						? gOwnCount[d] : 0;
 				const float medic = ArmyValue()
-						* ai.GetTunable("apex_medic_share", TUNE_MEDIC_SHARE) / 60.f;
+						* ai.GetTunable("apex_medic_frac", TUNE_MEDIC_FRAC) / 60.f;
 				const float gainRz = (gLossPool
 						/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)
 						+ medic) / (1.f + float(haveRz) * 0.33f);
