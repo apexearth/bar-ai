@@ -1792,26 +1792,31 @@ bool EcoRoleActive()
 	cz /= float(hx.length());
 	const float ex = float(AiTerrainWidth()) - cx;
 	const float ez = float(AiTerrainHeight()) - cz;
-	float d1 = 0.f, d2 = 0.f;   // farthest, second-farthest
+	array<float> ds;
+	float d1 = 0.f;
 	for (uint i = 0; i < hx.length(); ++i) {
 		const float dx = hx[i] - ex;
 		const float dz = hz[i] - ez;
 		const float dd = dx * dx + dz * dz;
-		if (dd > d1) { d2 = d1; d1 = dd; } else if (dd > d2) { d2 = dd; }
+		ds.insertLast(dd);
+		if (dd > d1)
+			d1 = dd;
 	}
+	ds.sortAsc();
+	const float dmed = ds[ds.length() / 2];
 	const float mx = Builder::gHomePos.x - ex;
 	const float mz = Builder::gHomePos.z - ez;
 	const float mine = mx * mx + mz * mz;
 	const float margin = ai.GetTunable("apex_eco_rear_margin", TUNE_ECO_REAR_MARGIN);
-	gEcoRole = (mine >= d1) && (d2 > 1.f) && (mine >= d2 * margin * margin);
+	gEcoRole = (mine >= d1) && (dmed > 1.f) && (mine >= dmed * margin * margin);
 	if (!gEcoDiagDone) {
 		gEcoDiagDone = true;
 		AiLog("apex: rear-elect homes=" + hx.length() + " mine=" + sqrt(mine)
-				+ " far=" + sqrt(d1) + " next=" + sqrt(d2));
+				+ " far=" + sqrt(d1) + " median=" + sqrt(dmed));
 	}
 	if (gEcoRole != was)
 		AiLog("apex: rear-specialist " + (gEcoRole ? "ON" : "off")
-				+ " mine=" + sqrt(mine) + " next=" + sqrt(d2));
+				+ " mine=" + sqrt(mine) + " median=" + sqrt(dmed));
 	return gEcoRole;
 }
 
@@ -2086,6 +2091,13 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 				continue;
 			gain = gAssetsM * rate * float(want3 - have) / float(want3);
 		} else if (cls == PROT_DEF) {
+			if (EcoRoleActive() && Builder::gHomeSet) {
+				AIFloat3 fs;
+				if (Front::FrontNear(Builder::gHomePos, fs)
+					&& (fs.distance2D(Builder::gHomePos)
+						> ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R)))
+					continue;
+			}
 			// AN UNCOVERED HIGH-VALUE STRUCTURE FIRST: its whole investment
 			// is the stake, wherever it stands.
 			{
@@ -2806,6 +2818,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	LossDecay();
 	const float armyGap = ArmyTarget() - ArmyValue();
 	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	const float roleMul = EcoRoleActive()
+			? ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL) : 1.f;
 	// THE STAKE (apexearth 2026-08-23): "all the value we have built up will
 	// be lost if we have insufficient army." Under-matched, a unit's worth
 	// scales with EVERYTHING we own -- expected loss = total value x defeat
@@ -2877,7 +2891,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			const int haveS = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
 			const float squads = ArmyValue() / 3000.f;
 			if (float(haveS) < squads) {
-				const float gainS = (squads - float(haveS)) * 30.f / 60.f;
+				const float gainS = (squads - float(haveS)) * 30.f / 60.f * roleMul;
 				const float vS = gainS / Catalog::gCostM[d];
 				candDef.insertLast(d);
 				candV.insertLast(vS);
@@ -2909,7 +2923,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 						* ai.GetTunable("apex_medic_frac", TUNE_MEDIC_FRAC) / 60.f;
 				const float gainRz = (gLossPool
 						/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)
-						+ medic) / (1.f + float(haveRz) * 0.33f);
+						+ medic) / (1.f + float(haveRz) * 0.33f) * roleMul;
 				if (gainRz > 0.05f) {
 					const float vRz = gainRz / Catalog::gCostM[d];
 					candDef.insertLast(d);
@@ -2919,7 +2933,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 				}
 				continue;
 			}
-			const float sinkGap = OverflowM() * ((fillS > 1.f) ? fillS : 60.f);
+			const float sinkGap = OverflowM() * ((fillS > 1.f) ? fillS : 60.f) * roleMul;
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
 				continue;

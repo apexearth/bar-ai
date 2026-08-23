@@ -81,6 +81,7 @@ local NAMES = {
 	"apex_rez_horizon",
 	"apex_eco_rear_margin",
 	"apex_eco_army_mul",
+	"apex_eco_safe_r",
 	"apex_aa_match",
 	"apex_retreat_cost_scale",
 	"apex_stake_weight",

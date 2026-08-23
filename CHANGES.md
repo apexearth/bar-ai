@@ -1,5 +1,21 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-23: rear specialist v2 -- median election, and the multiplier reaches everything
+
+apexearth watched the 8v8: the presumed eco player still built army and "too
+much rezbots", and needed no defense at all. The log showed WHY: nobody had
+elected -- the two back corners were 11055 vs 11007 from the enemy reference
+(0.4% apart) and the vs-#2 margin can never pass on a two-back-corner map.
+Election is now farthest vs the TEAM MEDIAN (his game: 11055 vs ~8973 =
+1.23x, clears the 1.15 margin). Three production branches had bypassed the
+role multiplier entirely -- the overflow sink (an overflowing eco player
+kept army lines running on the sink term), rez bots, and squad support --
+all now scaled by it; `apex_eco_army_mul` dropped 0.1 -> 0.03 ("they don't
+need to create any army at all"; 3% of a monster late economy is still a
+gantry stream). And the safe rear skips ground defense outright when the
+front is beyond `apex_eco_safe_r` (2500) of home. Smoke: compile clean,
+median logged, no false election on a tight 4v4 box (1.077x < margin).
+
 ## 2026-08-23: the rear specialist -- the farthest teammate scales instead of fighting
 
 apexearth's design: in a big team game one player starts obviously farther

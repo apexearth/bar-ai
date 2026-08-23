@@ -1186,9 +1186,14 @@ const float TUNE_MEDIC_FRAC = 0.12f;
 // ECO_REAR_MARGIN: how much farther from the enemy than the #2 ally the
 // rear-most home must be to count as "obviously" rear (distance ratio).
 const float TUNE_ECO_REAR_MARGIN = 1.15f;
-// ECO_ARMY_MUL: the rear specialist's army target as a fraction of normal;
-// the freed spend compounds through the eco ladder toward T3/heavy air.
-const float TUNE_ECO_ARMY_MUL = 0.1f;
+// ECO_ARMY_MUL: the rear specialist's military production as a fraction of
+// normal -- applied to the army target AND the overflow sink, rez and
+// support branches. Near-zero: the freed spend compounds through the eco
+// ladder; 3% of a monster late economy is still a gantry stream.
+const float TUNE_ECO_ARMY_MUL = 0.03f;
+// ECO_SAFE_R: front distance beyond which the rear specialist skips ground
+// defense entirely -- past any raid's reach, insurance is dead money.
+const float TUNE_ECO_SAFE_R = 2500.f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
 // competes with perpetual streams (the market's typical payback scale).
 const float TUNE_RECLAIM_AMORT = 300.f;
