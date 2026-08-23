@@ -1576,3 +1576,15 @@ armacks correctly pick energy:armafus (v=15) the moment moho ground runs out
 window even fleet-assisted. Either fine (longer games) or the fleet should
 converge on the mega-build (priority/assist focus). Check completion in a
 60m run before designing anything.
+
+## Feature gaps vs stock BARb (2026-08-23 survey, for the market rebuild)
+
+Stock configs cover, and our market does not yet price: LRPC/offensive
+statics (12 config files -- Pulsar-class siege is a stock staple), shields
+(5 files; counters the arty that keeps killing our labs), transports (11
+files; logistics, low priority), naval/sonar (whole domain, deferred --
+benchmark maps are land), Juno (parked by apexearth until an identity
+signal). Stock has NO nuke offense (0 files) -- a potential advantage for
+us later, our anti-nuke defense already exists. Priority order when the
+ladder baseline is in: shields (defends the tech core), LRPC (late-game
+siege sink), then naval as its own project.
