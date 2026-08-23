@@ -32,3 +32,4 @@ desktop.ini
 
 # agent/session worktrees
 .claude/worktrees/
+scratch_*.log
