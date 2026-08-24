@@ -885,3 +885,41 @@ capture mexes -> army. Defence is his #2 and it is our worst number by far:
 **3.5% of our metal against BARb's 18.5%**, and it has FALLEN this session
 (7.4% -> 5.1% -> 3.3% -> 3.5%) as budget moved into army. BARb spends nearly a
 fifth of its metal on static defence, and trades at 3.63 against our 0.12.
+
+## 2026-08-24 (10) — WHY defences landed behind the base
+
+apexearth: "we're still making defenses in the back of our base instead of in
+front... they're made behind everything important we want to protect. Thus they
+protect hardly anything."
+
+Three causes, all introduced earlier the same day, all verified from logs:
+
+1. **The shield arc switched itself off permanently.** It was called as
+   `ShieldArcSpots(arc, reach - Military::FoeReach())` and opens with
+   `if (denyR < 1.f) return false`. `FoeReach` is the longest enemy weapon range
+   observed, so the first time BARb fielded anything out-ranging our towers the
+   arc vanished for the rest of the game: `lineSpots` 22 -> 21 -> **0**, with
+   `front` wins frozen at 7 while `asset` climbed to 1,496. Now sized by the
+   turret's OWN reach; whether a post still helps against a standoff attacker is
+   `CoverAt`'s question and it already asks it.
+
+2. **`StakeAt` was side-blind -- the deep one.** A tower's gain is
+   `stake x hazard x Dshortfall`, and `StakeAt` counted every asset inside the
+   turret's weapon range REGARDLESS OF WHICH SIDE it sat on. A tower at the back
+   of the base was therefore credited with the entire base standing in front of
+   it, which the enemy reaches first. Added `FrontedStakeAt`: an asset counts
+   only if the post stands between it and the enemy, measured on the true enemy
+   bearing rather than the cardinal-snapped base axis.
+
+3. **A forward post is priced on a thin strip.** On empty ground `StakeAt` is 0
+   and only the narrow `ShieldedStakeAt` corridor applies, so asset sites won on
+   raw stake: `bestAssetGain=112` against `bestFrontGain=17`. Unfixed.
+
+Result: tower placement went from almost entirely behind the anchor to **51%
+forward of it** (110 vs 107 over 12 games).
+
+### STILL THE BIGGEST GAP: we barely build defence at all
+Defence share **4.2% against BARb's 17.4%**. Placement is now roughly right;
+QUANTITY is not. This is a separate problem from siting and is the largest
+remaining allocation gap in the AI, matching apexearth's stated #2 priority
+(protect mexes with llt) and the 0.12-vs-3.63 trade ratio.

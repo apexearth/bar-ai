@@ -128,6 +128,53 @@ float ShieldedStakeAt(const AIFloat3& in pos, float reach)
 	return m;
 }
 
+// STAKE A POST ACTUALLY STANDS IN FRONT OF.
+//
+// StakeAt counts every asset inside the turret's weapon range whichever SIDE of
+// it they sit on, so a tower at the back of the base is credited with the whole
+// base in front of it -- which the enemy reaches first (apexearth: "they're made
+// behind everything important we want to protect. Thus they protect hardly
+// anything"). Here an asset counts only if the post stands between it and the
+// enemy. Measured on the true enemy bearing, not the cardinal-snapped axis.
+float FrontedStakeAt(const AIFloat3& in pos, float reach)
+{
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(foe))
+		return StakeAt(pos, reach);   // no bearing known: no side to be on
+	AIFloat3 dir = foe - pos;
+	if (dir.SqLength2D() < NEAR_ZERO)
+		return StakeAt(pos, reach);
+	dir.SafeNormalize2D();
+	const float horiz = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
+	const float h = (horiz > 1.f) ? horiz : 300.f;
+	float m = 0.f;
+	for (uint i = 0; i < gLPos.length(); ++i) {
+		if ((gLExtract[i] <= 0.f) || (gLPos[i].distance2D(pos) >= reach))
+			continue;
+		const AIFloat3 rel = gLPos[i] - pos;
+		if ((rel.x * dir.x + rel.z * dir.z) > 0.f)
+			continue;   // the enemy meets this one before the turret
+		m += gLIncome[i] * gLExtract[i] * h;
+	}
+	for (uint i = 0; i < gOwnBig.length(); ++i) {
+		if (gOwnBig[i] is null) continue;
+		const AIFloat3 bp = gOwnBig[i].GetPos(ai.frame);
+		if (bp.distance2D(pos) >= reach) continue;
+		const AIFloat3 rel = bp - pos;
+		if ((rel.x * dir.x + rel.z * dir.z) > 0.f) continue;
+		m += Catalog::gCostM[int(gOwnBig[i].circuitDef.id)];
+	}
+	for (uint i = 0; i < gOwnGen.length(); ++i) {
+		if (gOwnGen[i] is null) continue;
+		const AIFloat3 gp = gOwnGen[i].GetPos(ai.frame);
+		if (gp.distance2D(pos) >= reach) continue;
+		const AIFloat3 rel = gp - pos;
+		if ((rel.x * dir.x + rel.z * dir.z) > 0.f) continue;
+		m += Catalog::gCostM[int(gOwnGen[i].circuitDef.id)];
+	}
+	return m;
+}
+
 // Is this mex defended -- the question the boolean radius test could not
 // answer. Fraction of the local threat our standing coverage fails to stop.
 float ShortfallAt(const AIFloat3& in pos)

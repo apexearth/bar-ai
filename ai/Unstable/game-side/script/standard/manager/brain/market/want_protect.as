@@ -343,7 +343,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			const uint nAsset = sites.length();
 			{
 				array<AIFloat3> arc;
-				if (ShieldArcSpots(arc, reach - Military::FoeReach())) {
+				// Sized by the turret's OWN reach, not by reach minus their
+				// reach: the latter went to zero the moment they fielded
+				// anything out-ranging our towers and the arc then vanished
+				// for the rest of the game (measured: lineSpots 22 -> 0,
+				// permanently). Whether a post still helps against a standoff
+				// attacker is CoverAt's question, and it already asks it.
+				if (ShieldArcSpots(arc, reach)) {
 					for (uint ai3 = 0; ai3 < arc.length(); ++ai3)
 						sites.insertLast(arc[ai3]);
 				}
@@ -378,7 +384,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				// What it can shoot over, plus what it stands between the
 				// enemy and. The second term is why a post on empty forward
 				// ground is worth anything at all.
-				const float stake = StakeAt(s, reach) + ShieldedStakeAt(s, reach);
+				const float stake = FrontedStakeAt(s, reach) + ShieldedStakeAt(s, reach);
 				if (stake <= 1.f)
 					continue;
 				const float cover0 = CoverAt(s);
