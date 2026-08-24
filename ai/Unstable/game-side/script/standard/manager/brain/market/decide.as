@@ -5,6 +5,8 @@ namespace Market {
 
 int gNextIdleLog = 0;
 int gNextAuctionDiag = 0;
+int gNextAaPanicLog = 0;
+int gNextDefPanicLog = 0;
 array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 // Per-unit approach tracking: how far its site was at the last election, so
 // "still closing" can be distinguished from "stalled".
@@ -122,6 +124,64 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			++at;
 		ranked.insertAt(at, c);
 	}
+	// BOMBED WITH NOTHING THAT SHOOTS UP IS AN EMERGENCY, NOT A BID.
+	// apexearth: "when enemy starts bombing us and we have 0 AA I expect the
+	// very next thing we build to be AA." Both halves of that are measured --
+	// metal is actually being lost to aircraft right now, and we own zero anti
+	// air -- so this cannot fire on a hunch, and it stops the instant either
+	// stops being true. While it holds, the airdef want skips the lottery
+	// rather than taking a proportional share of it.
+	bool aaPanic = false;
+	if ((gProtPos[PROT_AA].length() == 0) && (Military::AirLossRate() > 0.f)) {
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if (ranked[ri].kind != WK_AIRDEF)
+				continue;
+			if (ri > 0) {
+				Want@ aa = ranked[ri];
+				ranked.removeAt(ri);
+				ranked.insertAt(0, aa);
+			}
+			aaPanic = true;
+			if (ai.frame >= gNextAaPanicLog) {
+				gNextAaPanicLog = ai.frame + 15 * SECOND;
+				AiLog("apex: AA PANIC -- losing "
+					+ formatFloat(Military::AirLossRate(), "", 0, 2)
+					+ " m/s to air with zero AA standing; "
+					+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
+					+ " jumps the queue");
+			}
+			break;
+		}
+	}
+	// A HOME WITH NOTHING DEFENDING IT IS ALSO AN EMERGENCY (apexearth: "I'd
+	// also argue a home base with 0 defense on a small 1v1 map vs barb ai is an
+	// emergency"). Same shape as the AA panic: both halves measured -- we own
+	// zero ground defence AND something is actually killing our structures --
+	// so it cannot fire on a hunch and it ends the moment the first tower
+	// stands. Ranked ahead of the lottery rather than given a share of it.
+	if (!aaPanic && (gProtPos[PROT_DEF].length() == 0)
+		&& (LossRateAt(Builder::gHomePos) > 0.f))
+	{
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if (ranked[ri].kind != WK_PROTECT)
+				continue;
+			if (ri > 0) {
+				Want@ dw = ranked[ri];
+				ranked.removeAt(ri);
+				ranked.insertAt(0, dw);
+			}
+			aaPanic = true;   // reuse the skip-the-lottery flag
+			if (ai.frame >= gNextDefPanicLog) {
+				gNextDefPanicLog = ai.frame + 15 * SECOND;
+				AiLog("apex: DEF PANIC -- losing "
+					+ formatFloat(LossRateAt(Builder::gHomePos), "", 0, 2)
+					+ " m/s at home with zero defence standing; "
+					+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
+					+ " jumps the queue");
+			}
+			break;
+		}
+	}
 	// PROPORTIONAL DRAW OVER CATEGORIES, argmax inside one (apexearth:
 	// "think about eco related things by category... then we pick the
 	// highest value energy"). The draw still exists -- winner-takes-all
@@ -131,7 +191,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// draw four times per election against extraction's two, which is how
 	// 672 wind turbines were bought against 1 moho upgrade (measured). One
 	// question, one ticket, weighted by that question's best answer.
-	if (ranked.length() > 1) {
+	if ((ranked.length() > 1) && !aaPanic) {
 		array<int> catBest(CAT_N, -1);   // index into ranked, or -1
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			const int c = CategoryOf(ranked[ri].kind);

@@ -974,3 +974,41 @@ invented anywhere.
 
 Measured, 12 games: engagements occur in 10 of 12 games against real raids (235,
 455, 355 metal against his 2,700) rather than tours. Win/loss unchanged.
+
+## 2026-08-24 (13) — emergencies, and a stake shape that finally works
+
+Three shapes were tried for what a defence post's STAKE is:
+
+1. **Side test** ("is the post between this asset and the enemy") -- right for a
+   distant intercepting post, wrong for a tower inside the base, because half
+   the base is in front of any home tower. Home priced to nothing and raiders
+   walked in (apexearth: "we leave the home base completely undefended so the
+   tiny enemy raiders totally kill it easily").
+2. **Standoff-subtracted distance** (`reach - FoeReach`) -- demanded a post deny
+   EVERY firing position: 450 reach against 300 standoff leaves 150 elmos, so
+   almost nothing qualified. **Defence collapsed to 1.9% of our metal and we
+   lost 12/12.** Standoff is CoverAt's question; charging it in the stake too is
+   double counting.
+3. **Plain distance within reach**, plus `ShieldedStakeAt` for what a forward
+   post intercepts beyond its own range. Distance alone does the work the side
+   test was reaching for -- a tower at the back of the base simply cannot reach
+   a mex 800 elmos forward.
+
+Plus two EMERGENCIES, both with measured two-part triggers, both skipping the
+category lottery rather than taking a share of it:
+- **AA panic**: zero AA standing AND metal actually being lost to aircraft now.
+  UNTESTED -- BARb built no air in any of 24 games on this map, so it has never
+  fired. Do not claim it works.
+- **DEF panic**: zero ground defence standing AND structures dying at home.
+  Fires in 5 of 12 games.
+
+Measured, 12 games paired (shape 2 -> shape 3 + emergencies):
+
+| | shape 2 | shape 3 |
+|---|---|---|
+| defence share | 1.9% | **9.1%** (theirs 17.4%) |
+| mex | 12 | **19** (level with theirs) |
+| army | 6,433 | 9,138 |
+| metal produced | 11,596 | 19,206 |
+| games surviving | 0/12 | **3/12** |
+| home shortfall 0.00 | ~never | 104 of 216 samples |

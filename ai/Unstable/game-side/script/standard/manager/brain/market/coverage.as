@@ -152,51 +152,25 @@ float ShieldedStakeAt(const AIFloat3& in pos, float reach)
 	return m;
 }
 
-// STAKE A POST ACTUALLY STANDS IN FRONT OF.
+// STAKE A POST ACTUALLY DEFENDS.
 //
-// StakeAt counts every asset inside the turret's weapon range whichever SIDE of
-// it they sit on, so a tower at the back of the base is credited with the whole
-// base in front of it -- which the enemy reaches first (apexearth: "they're made
-// behind everything important we want to protect. Thus they protect hardly
-// anything"). Here an asset counts only if the post stands between it and the
-// enemy. Measured on the true enemy bearing, not the cardinal-snapped axis.
+// Plain distance: everything of ours inside this post's weapon range. Two
+// earlier shapes were both wrong. A SIDE test ("is the post between this asset
+// and the enemy") reads correctly for a distant intercepting post but zeroes a
+// tower standing inside the base -- half the base is in front of any home
+// tower, so home defence priced to nothing and raiders walked in. Subtracting
+// the attacker's standoff here was worse still: it demanded a post deny EVERY
+// firing position, which at 450 reach against 300 standoff means 150 elmos, so
+// almost nothing qualified and defence fell to 1.9% of our metal. Standoff is
+// CoverAt's question -- charging it twice is double counting.
+//
+// Distance alone is honest and does the work the side test was reaching for: a
+// tower at the back of the base simply cannot reach a mex 800 elmos forward.
+// ShieldedStakeAt then adds what a FORWARD post intercepts beyond its own
+// range, which is what makes the line worth building at all.
 float FrontedStakeAt(const AIFloat3& in pos, float reach)
 {
-	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
-	if (!OnMap(foe))
-		return StakeAt(pos, reach);   // no bearing known: no side to be on
-	AIFloat3 dir = foe - pos;
-	if (dir.SqLength2D() < NEAR_ZERO)
-		return StakeAt(pos, reach);
-	dir.SafeNormalize2D();
-	const float horiz = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
-	const float h = (horiz > 1.f) ? horiz : 300.f;
-	float m = 0.f;
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if ((gLExtract[i] <= 0.f) || (gLPos[i].distance2D(pos) >= reach))
-			continue;
-		const AIFloat3 rel = gLPos[i] - pos;
-		if ((rel.x * dir.x + rel.z * dir.z) > 0.f)
-			continue;   // the enemy meets this one before the turret
-		m += gLIncome[i] * gLExtract[i] * h;
-	}
-	for (uint i = 0; i < gOwnBig.length(); ++i) {
-		if (gOwnBig[i] is null) continue;
-		const AIFloat3 bp = gOwnBig[i].GetPos(ai.frame);
-		if (bp.distance2D(pos) >= reach) continue;
-		const AIFloat3 rel = bp - pos;
-		if ((rel.x * dir.x + rel.z * dir.z) > 0.f) continue;
-		m += Catalog::gCostM[int(gOwnBig[i].circuitDef.id)];
-	}
-	for (uint i = 0; i < gOwnGen.length(); ++i) {
-		if (gOwnGen[i] is null) continue;
-		const AIFloat3 gp = gOwnGen[i].GetPos(ai.frame);
-		if (gp.distance2D(pos) >= reach) continue;
-		const AIFloat3 rel = gp - pos;
-		if ((rel.x * dir.x + rel.z * dir.z) > 0.f) continue;
-		m += Catalog::gCostM[int(gOwnGen[i].circuitDef.id)];
-	}
-	return m;
+	return StakeAt(pos, reach);
 }
 
 // Is this mex defended -- the question the boolean radius test could not
