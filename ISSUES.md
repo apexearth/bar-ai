@@ -775,3 +775,42 @@ An earlier version of this analysis globbed `tournaments/*1v1-*` and pulled in
 confident and completely wrong conclusion (that we out-produce them 1.16x and
 overspend 5.9x on factories). Always restrict the glob to the dated runs of the
 build under test.
+
+## 2026-08-24 (7) — where the metal actually goes, paired
+
+apexearth's new destination telemetry (mEco/mBP/mArmy/mOther, commit 1b5f033),
+12 games, 1v1 Altair, both sides measured in the same games.
+
+At 10 minutes:
+
+| bucket | us | them |
+|---|---|---|
+| BP | **18.5%** | 9.9% |
+| defence | **0.8%** | 5.1% |
+| eco | 14.3% | 11.1% |
+| army | 65.3% | 73.9% |
+
+At game end:
+
+| bucket | us | share | them | share |
+|---|---|---|---|---|
+| eco | 2,416 | 16.3% | 2,969 | 14.1% |
+| BP | 4,378 | **29.5%** | 3,750 | 17.8% |
+| army | 6,605 | 44.5% | 9,852 | 46.8% |
+| defence | 1,095 | **7.4%** | 4,068 | **19.3%** |
+| mex count | 14 | | 17 | |
+
+- **BP over-budgeted**, confirming his read: 1.7x their share, ~2x early.
+- **Eco SHARE is already ahead of theirs** (16.3 vs 14.1) -- what is short inside
+  it is mexes, 14 vs 17. "More eco" is not supported; "more mex within eco" is.
+- **Defence is the largest gap and neither of us named it first**: they spend a
+  fifth of their metal on defence, we spend a fourteenth.
+- `mBP` is CUMULATIVE spend: 4,378 bought against 1,365 standing, so a large
+  part of it is replacing constructors that died.
+
+`apex_bp_headroom` 1.5 -> 1.0 moved mex 14 -> 17 and BP share 29.5% -> 27.2%
+(12 games each). NOTE this reverses an earlier watched call recorded in the
+tunable's own comment ("1.15 read 'lacked build power' in watch after watch").
+The BP share barely moved for a 33% headroom cut, so BPGap's headroom term is
+NOT the main driver of BP demand -- the rest is elsewhere (nano demand,
+constructor production, and loss replacement).
