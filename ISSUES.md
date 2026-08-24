@@ -1012,3 +1012,33 @@ Measured, 12 games paired (shape 2 -> shape 3 + emergencies):
 | metal produced | 11,596 | 19,206 |
 | games surviving | 0/12 | **3/12** |
 | home shortfall 0.00 | ~never | 104 of 216 samples |
+
+## 2026-08-24 (14) — energy had NO compounding premium at all
+
+apexearth: "we are not properly multiplying the benefits of a strong eco because
+we stagnated that game. The more we boost eco the more all of our other metrics
+get boosted."
+
+He was right and the asymmetry was stark: the relative-growth compounding term
+existed ONLY in `want_mex.as` and the mex-upgrade path. `ProposeEnergy` was a
+flat `gain = makeE * EPriceAt(buildSec)` with no growth premium whatsoever. So a
+doubling mex was worth x9 while a generator that doubled our energy income was
+worth x1 -- half the economy priced with no compounding.
+
+Now the same shape, measured against ENERGY income (what an energy build
+actually raises), `apex_energy_growth = 8` to match `apex_mex_growth`.
+
+Measured, 12 games paired:
+
+| | before | after |
+|---|---|---|
+| **games surviving to time limit** | 3/12 | **6/12** |
+| metal produced | 19,206 | **24,064** |
+| army | 9,138 | **12,706** (theirs 12,804 -- level) |
+| defence | 1,740 (9.1%) | **2,400 (10.0%)** |
+| mex | 19 | 20 |
+| BP share | 28.4% | 23.0% |
+
+Half the games are no longer losses, from 0/12 surviving three iterations ago.
+Still 0 wins. Our eco SHARE reads lower (12.2% vs their 26.7%) only because our
+total grew into army; theirs also grew because the games now run long.

@@ -1266,6 +1266,9 @@ const float TUNE_ESCORT_MAX_COST = 120.f;
 // income only 1% then its not too important"). At 8: doubling x9, +10% x1.8,
 // +1% x1.08 -- 3 gave x4 / x1.3 / x1.03, too flat to express that ordering.
 const float TUNE_MEX_GROWTH = 8.f;
+// The same compounding premium for ENERGY, measured against energy income.
+// It had none at all, which is why eco stagnated while mex was boosted.
+const float TUNE_ENERGY_GROWTH = 8.f;
 // RANGE_WORTH: standing weight of weapon reach in unit selection (reach =
 // free damage before the answer), on top of the reactive outranging term.
 const float TUNE_RANGE_WORTH = 2.f;

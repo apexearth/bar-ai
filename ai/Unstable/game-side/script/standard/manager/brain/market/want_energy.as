@@ -14,7 +14,22 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			continue;   // vents are the geo want's ground, not free placement
 		Want c;
 		const float bSec = Catalog::BuildSecondsAt(d, EffBP(Catalog::gBuildPower[uid]));
-		const float gain = Catalog::gMakeE[d] * EPriceAt(bSec);
+		float gain = Catalog::gMakeE[d] * EPriceAt(bSec);
+		// ECO COMPOUNDS, AND ENERGY IS ECO (apexearth: "we are not properly
+		// multiplying the benefits of a strong eco... the more we boost eco the
+		// more all of our other metrics get boosted"). The relative-growth
+		// premium existed only on mex and mex upgrades, so half the economy was
+		// priced with no compounding at all while a doubling mex got x9. Same
+		// shape, measured against ENERGY income because that is what an energy
+		// build actually raises: doubling it is transformative, adding 1% is
+		// noise. Decays with wealth on its own, so it stops mattering once we
+		// are rich.
+		{
+			const float eInc = aiEconomyMgr.energy.income;
+			const float mk = Catalog::gMakeE[d];
+			gain *= 1.f + ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH)
+					* mk / ((eInc > mk) ? eInc : mk);
+		}
 		ValueOf(d, gain, 0.f, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
