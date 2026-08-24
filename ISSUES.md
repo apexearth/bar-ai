@@ -954,3 +954,23 @@ Measured, 12 games paired:
 
 Defence quantity is still short of theirs and remains the largest gap; their mex
 count also pulled ahead (24 vs our 15) in this batch.
+
+## 2026-08-24 (12) — the commander went on tour
+
+apexearth: "we won that game because our commander rushed the other base for
+some reason and gained enough experience to 1v1 the enemy commander. we left our
+base completely undefended though which was pretty bad."
+
+The commander-fight rule added earlier today gated targets on
+`ForwardFraction(gp) < 0.5` -- "our half of the map". That is not a leash: he
+walked to the midpoint, chained the next target from there, and ended up
+duelling their commander in their base with ours empty. Winning that game is not
+evidence the rule was right.
+
+The bar is now our own property: `StakeAt(gp, apex_threat_r) > 0`, so something
+of ours must be standing within the raider's reach. There is nothing of ours at
+their base, so there is nothing to chase toward -- and no map fraction is
+invented anywhere.
+
+Measured, 12 games: engagements occur in 10 of 12 games against real raids (235,
+455, 355 metal against his 2,700) rather than tours. Win/loss unchanged.

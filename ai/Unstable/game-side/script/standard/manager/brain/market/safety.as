@@ -106,6 +106,16 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(gi);
 			if (!OnMap(gp) || (Military::ForwardFraction(gp) >= 0.5f))
 				continue;
+			// HE DEFENDS WHAT WE OWN, he does not go on tour. "Our half of the
+			// map" was too loose a leash: he chased to the midpoint, chained
+			// the next target from there and ended up duelling the enemy
+			// commander in their base while ours stood empty (apexearth,
+			// watched -- we won that game, which is not evidence it was right).
+			// The bar is now our own property: something of ours must be
+			// standing within the raider's reach, so there is nothing to
+			// defend at their base and nothing to chase toward.
+			if (StakeAt(gp, r) <= 0.f)
+				continue;
 			if (aiEnemyMgr.GetEnemyGroupCost(gi) > mine)
 				continue;
 			const float dd = here.distance2D(gp);
