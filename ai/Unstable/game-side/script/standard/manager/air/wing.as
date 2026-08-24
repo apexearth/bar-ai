@@ -38,7 +38,11 @@ bool Armed()
 		return false;
 	if (ai.frame < AIR_FROM)
 		return false;
-	return Committed() || (EnemyAACost() <= AIR_AA_CEILING) || AADominated();
+	// The absolute AA ceiling is GONE (it stood the assassin down against 2.5k
+	// of AA in a game we had already won). AA is priced instead: it raises the
+	// mass ScaledBombers asks for, and only a raid that cannot pay for itself
+	// even at that mass is declined.
+	return Committed() || StrikeWorth() || AADominated();
 }
 
 int Have(CCircuitDef@ def)
@@ -48,7 +52,10 @@ int Have(CCircuitDef@ def)
 
 // The force is both tiers together: a basic bomber and an advanced one are both
 // a bomber for the purpose of deciding whether we have enough to strike.
-int Bombers()  { return Have(gBomber) + Have(gBomber1); }
+// EVERY tier counts: a heavy or an atomic bomber standing on the pad is part of
+// the strike. Counting only the two original tiers left the wing permanently
+// short of ScaledBombers(), so it would never read as massed.
+int Bombers()  { return Have(gBomber) + Have(gBomber1) + Have(gBomberH) + Have(gBomberN); }
 int Fighters() { return Have(gFighter) + Have(gFighter1); }
 
 bool Massed()

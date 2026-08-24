@@ -946,6 +946,77 @@ bool FrontLineSpots(array<AIFloat3>& out pts, float spacing, float reach = 0.f)
 // where that workable ground does not reach a decent share of the way out --
 // otherwise every bearing collapses to the same short radius and the ring
 // degenerates into a heap of turrets outside the base.
+// A NET AROUND THE BASE, WITH FALLBACKS DEEPER IN.
+//
+// gRayR already describes our perimeter on 24 bearings, but FrontBuildSpots
+// offers only the HOT ones -- a picket facing wherever we last saw someone,
+// not a ring (apexearth: "a 'net' of defenses *around* our base rather than
+// just in the center of it... with some fallbacks deeper in").
+//
+// Two differences. Every bearing is offered, so the net closes all the way
+// round. And each bearing is offered at LAYERS stepping inward, so a leak
+// through the outer ring meets another behind it.
+//
+// denyR is the radius a turret actually DENIES: its own weapon range minus the
+// standoff an attacker shoots from (see Market::CoverAt). Everything else falls
+// out of it -- posts sit 2*denyR apart so their denied discs just touch, and
+// layers sit 2*denyR deep for the same reason. So the spacing, the layer count
+// and the depth of the net are all consequences of one measured quantity; no
+// ring count is chosen anywhere. A turret that cannot out-reach the attacker
+// has denyR <= 0 and earns no net at all, which is the correct answer.
+array<AIFloat3> gNetMemo;
+bool  gNetMemoOk = false;
+int   gNetMemoStamp = -1;
+float gNetMemoDeny = -1.f;
+
+bool NetSpots(array<AIFloat3>& out pts, float denyR)
+{
+	RebuildFront();
+	pts.resize(0);
+	if (!gFrontValid || (denyR < 1.f))
+		return false;
+	if ((gNetMemoStamp == gFrontStamp) && (gNetMemoDeny == denyR)) {
+		pts = gNetMemo;
+		return gNetMemoOk;
+	}
+	const float back = ai.GetTunable("apex_front_setback", TUNE_FRONT_SETBACK);
+	const bool useSafe = ai.GetTunable("apex_front_safe_edge", TUNE_FRONT_SAFE_EDGE) > 0.f;
+	const float step = 6.2831853f / float(FRONT_RAYS);
+	const float pitch = 2.f * denyR;
+	for (uint i = 0; i < gRayR.length(); ++i) {
+		float d0 = gRayR[i] * (1.f - back);
+		if (useSafe && (i < gRaySafe.length()) && (gRaySafe[i] < d0))
+			d0 = gRaySafe[i];
+		if (d0 <= 0.f)
+			continue;
+		// Outward ring first, then fall back toward home a full denied
+		// diameter at a time until the layers meet the core.
+		for (float r = d0; r > denyR; r -= pitch) {
+			const float midAng = 6.2831853f * (float(i) + 0.5f) / float(FRONT_RAYS);
+			const AIFloat3 mid = gFrontHome
+					+ AIFloat3(cos(midAng), 0.f, sin(midAng)) * r;
+			const float sp = EdgeSpacing(mid, pitch, denyR);
+			const float arc = step * r;
+			int n = int(arc / ((sp > 1.f) ? sp : pitch));
+			if (n < 1)
+				n = 1;
+			for (int k = 0; k < n; ++k) {
+				const float t = float(k) / float(n);
+				const float ang = 6.2831853f * (float(i) + t) / float(FRONT_RAYS);
+				const AIFloat3 p = gFrontHome
+						+ AIFloat3(cos(ang), 0.f, sin(ang)) * r;
+				if (OnMap(p))
+					pts.insertLast(p);
+			}
+		}
+	}
+	gNetMemo = pts;
+	gNetMemoOk = pts.length() > 0;
+	gNetMemoStamp = gFrontStamp;
+	gNetMemoDeny = denyR;
+	return gNetMemoOk;
+}
+
 bool FrontBuildSpots(array<AIFloat3>& out pts)
 {
 	RebuildFront();

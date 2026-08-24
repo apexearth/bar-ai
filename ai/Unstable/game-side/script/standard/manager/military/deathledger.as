@@ -62,6 +62,16 @@ void NoteDeathSource(float costM, const CCircuitDef@ attackerDef)
 		gDeadToMobile += costM;
 }
 
+// Metal per second we are CURRENTLY losing to aircraft. The ledger decays over
+// BLEED_TAU, so ledger/TAU is a rate -- the same currency a turret's prevented
+// loss is priced in, which is what lets AA compete on measured evidence rather
+// than on an insurance rate (apexearth, watched: "I see the enemy bombing us
+// for minutes and we haven't built any T1 anti air").
+float AirLossRate()
+{
+	return gDeadToAir / BLEED_TAU;
+}
+
 // NET deep-forward burn as a fraction of metal income: losses minus what we
 // killed out there. A bloody push that pays for itself must not read as a
 // bleed. Ledger holds roughly BLEED_TAU seconds, so ledger/TAU is metal/s.

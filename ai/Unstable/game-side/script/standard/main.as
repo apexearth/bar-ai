@@ -6,6 +6,7 @@
 #include "targets.as"          // EVERY build ratio, in one file
 #include "policy.as"           // ...and every eco THRESHOLD, in this one
 #include "manager/brain/budget.as"  // the spend ledger and target split (a sense)
+#include "manager/brain/nukes.as"   // the nuke director: volleys, targets, antinuke accounting
 #include "manager/brain.as"       // the arbiter: Decide is the only spender (empty market)
 #include "manager/military.as"
 #include "manager/builder.as"
@@ -107,6 +108,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Military::UpdateGifts();
 	Air::UpdateFighterStations();
 	Air::RecycleOldFighters();
+	Brain::UpdateNukes();
 	Military::UpdateSpamPosture();
 	Military::UpdatePosture();
 	Air::Update();
@@ -147,6 +149,7 @@ void AiUnitFinished(CCircuitUnit@ unit)
 	Brain::NoteProduced(unit);
 	Market::NoteFinished(unit);
 	Market::NoteFarm(unit);
+	Brain::NoteSiloFinished(unit);
 	if ((int(unit.id) >= 0) && (int(unit.id) < int(gFinished.length())))
 		gFinished[int(unit.id)] = true;
 	// The defense zone follows the BUILT base: every finished rear structure
@@ -206,8 +209,13 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	// A BUILDING OF OURS DYING ON OUR OWN GROUND IS THE INVASION SIGNAL.
 	// Filtered out of the combat ledger above (mobile only) and read by nothing
 	// else, so an enemy could level the base without any defence rule noticing.
-	if ((cdef !is null) && !cdef.IsMobile() && WasFinished(int(unit.id)))
+	if ((cdef !is null) && !cdef.IsMobile() && WasFinished(int(unit.id))) {
 		Military::NoteStructureLoss(at, cdef.costM);
+		// The same death, kept by PLACE and with no home-ground filter: the
+		// ledger above drops everything past FWD_HOME, which is where the
+		// outlying mexes die.
+		Market::NoteEcoLoss(at, cdef.costM);
+	}
 	const string hist = Builder::TakeHistFor(int(unit.id));
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")
 		+ " acts=" + unit.GetActTrace()

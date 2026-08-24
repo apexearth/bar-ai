@@ -342,7 +342,7 @@ const float TUNE_EXTRA_PLANT_ARMY = 0.85f;
 // manager/factory/hooks.as [count] -- Recruit tasks allowed in flight per
 //   factory before the queue counts as full (CircuitAI's own number, exposed
 //   for A/B).
-const float TUNE_FAC_QUEUE = 2.f;
+const float TUNE_FAC_QUEUE = 0.5f;
 // manager/brain/facqueue.as [toggle 0/1] -- The Brain drives every factory
 //   line (quota-based orders, factory.json bypassed); 0 returns the lines to
 //   stock CircuitAI.
@@ -915,31 +915,79 @@ const float TUNE_SHIELD_INCOME = 50.f;
 const float TUNE_UNBLOCK = 1.f;
 
 // ---------------------------------------------------------------------------
+// Nukes (manager/brain/nukes.as) -- restored 2026-08-24 with the pre-kill
+// defaults from fcbabf2^. Per-entry meaning is documented at each call site.
+// ---------------------------------------------------------------------------
+const float TUNE_NUKE_DEF_WINDOW = 25.f;
+const float TUNE_NUKE_PER_ANTI = 8.f;
+const float TUNE_NUKE_VALUE_PER = 12000.f;
+const float TUNE_ANTI_COVER = 2500.f;
+const float TUNE_NUKE_ASSUME_ANTIS = 1.f;
+const float TUNE_NUKE_DEF_BIAS = 2.f;
+const float TUNE_NUKE_DEF_MINFWD = 0.05f;
+const float TUNE_NUKE_ALLY_MAX = 0.f;
+const float TUNE_NUKE_ASSUME_FROM = 30.f;
+const float TUNE_NUKE_BASE_VALUE = 30000.f;
+const float TUNE_NUKE_EMERGENCY = 5000.f;
+const float TUNE_NUKE_MIN_VALUE = 10000.f;
+const float TUNE_NUKE_MISSILE_COST = 1500.f;
+const float TUNE_NUKE_PAYOFF = 3.f;
+const float TUNE_NUKE_REPEAT_DECAY = 0.5f;
+const float TUNE_NUKE_RESIGHT_R = 1600.f;
+const float TUNE_NUKE_SPREAD = 450.f;
+
+// ---------------------------------------------------------------------------
+// Air eco-assassination (manager/air/state.as)
+// ---------------------------------------------------------------------------
+// [elmos] -- Radius around the enemy centroid sampled for how packed their
+// base is. One cluster, the reach of a single bombing run.
+const float TUNE_AIR_CLUSTER_R = 900.f;
+// [AA metal soaked per point of bomber health] -- Wing HEALTH is what absorbs
+// AA, so a 16,700 hp Dragon soaks 25x what a 670 hp Thunder does. Sets both the
+// throughput curve and how fast the required strike grows with their AA; it is
+// what makes "50 or 100 from different angles" the answer to a wall instead of
+// standing down. At 0.05, ~20 Dragons clear 8k of AA at ~0.7 throughput while
+// light bombers need ~67 to reach half through 2.5k -- and the payoff test then
+// declines that as the suicide it is.
+const float TUNE_AIR_AA_SOAK = 0.05f;
+// [multiple] -- Expected damage a raid must return against its own metal
+// before it is worth mounting.
+const float TUNE_AIR_PAYOFF = 1.5f;
+// [seconds] -- How long after a strike launches before it is scored. Long
+// enough for the wing to reach, bomb and be shot at.
+const float TUNE_AIR_SETTLE_S = 90.f;
+// [weight 0-1] -- How much one scored run moves the running estimate of a
+// bomber type's survival and delivered damage.
+const float TUNE_AIR_OBS_W = 0.5f;
+
+// ---------------------------------------------------------------------------
 // Commander
 // ---------------------------------------------------------------------------
-// manager/builder/events.as [fraction 0-1] -- Commander health fraction below
-//   which he immediately moves away from enemy influence, whatever he is
-//   holding.
-// manager/builder/events.as [seconds] -- A commander that sits on ground with
-//   real enemy influence this long without actually moving is force-marched
-//   away regardless of hp; 0 disables the anti-stall. Default 0: measured
-//   2026-08-21 (24-game 1v1 A/B), 77 marches fired and commander-death losses
-//   did not fall.
-// manager/builder/events.as [influence] -- Tile influence that counts as hot
-//   ground for the anti-stall clock.
-// manager/builder/events.as -- CRetreatTask is not an IBuilderTask, so
-//   nothing re-evaluates it every ~1s the way a builder task is -- a
-//   commander that goes...
-// manager/builder/rules_commander.as [elmos] -- While cautious, the commander
-//   reads the WORST enemy influence on a ring this size around him, not just
-//   at his feet.
-// manager/builder/rules_commander.as [fraction 0-1] -- A cautious commander
-//   abandons work farther forward than this fraction of the way to the enemy
-//   -- standing there is the mistake, not the contact after it.
-// manager/builder/rules_commander.as [toggle 0/1] -- All commander-specific
-//   rules apply; 0 hands the commander to stock CBuilderManager for an idle-
-//   time A/B.
-// manager/builder/events.as -- Holding a build task with NO engine order.
+// manager/brain/market/safety.as [toggle 0/1] -- All commander-specific
+// safety rules apply; 0 hands the commander to stock CBuilderManager.
+const float TUNE_COMM_RULES = 1.f;
+// manager/brain/market/safety.as [fraction of his own cost] -- Fielded enemy
+// HEAVY+SUPER mass at this fraction of the commander's value makes him
+// cautious. Scaled to his cost so it tracks the game, not a number.
+const float TUNE_COMM_HEAVY_FRAC = 0.5f;
+// manager/brain/market/safety.as [multiple of his own cost] -- Post-T2, enemy
+// mobile massing at this multiple of his value makes him cautious.
+const float TUNE_COMM_MASS_MULT = 2.f;
+// manager/brain/market/safety.as [fraction 0-1] -- A cautious commander
+// abandons work farther forward than this fraction of the way to the enemy;
+// standing there is the mistake, not the contact after it.
+const float TUNE_COMM_FWD_CAP = 0.25f;
+// manager/brain/market/safety.as [influence] -- Enemy influence at his tile
+// (or on the ring, while cautious) above which he leaves. Uses the influence
+// map, never ai.GetBuilderThreatAt, which reads clean until he is dead.
+const float TUNE_COMM_FLEE_INFLUENCE = 0.01f;
+// manager/brain/market/safety.as [elmos] -- While cautious he reads the WORST
+// influence on a ring this size around him, not just at his feet.
+const float TUNE_COMM_FLEE_RING = 600.f;
+// manager/brain/market/safety.as [fraction 0-1] -- Below this health he is
+// steered directly away from the enemy centroid instead of given a retreat
+// task, because the retreat haven can be the ground being overrun.
+const float TUNE_COMM_FLEE_HP = 0.85f;
 
 // ---------------------------------------------------------------------------
 // Air
@@ -1128,6 +1176,30 @@ const float TUNE_PLANT_INCOME_PER = 50.f;
 // delivery latency discounts (h/(h+latency)) -- the temporal-consistency
 // law applied to plants; what makes mex-solar-lab the emergent opening.
 const float TUNE_PIPE_LATENCY_H = 60.f;
+// Discount a tech want's deferred gain by the risk borne over its pipeline.
+// 0 disables it, which is how the A/B control is run.
+const float TUNE_TECH_SURVIVAL = 1.f;
+// Seconds over which committed-but-unbuilt work counts as build-power demand.
+// Matches the bank clause's horizon in BPGap; 0 disables the term.
+const float TUNE_BP_BACKLOG_S = 60.f;
+// Offer the spaced front posts (Military::FrontBuildSpots) to the defence
+// auction alongside mexes and big structures. 0 disables, for the A/B.
+const float TUNE_FRONT_LINE = 1.f;
+// Measure turret coverage on the ring the enemy can SHOOT FROM (their
+// observed weapon range), taking the weakest bearing, instead of asking
+// only whether a turret reaches the target itself. 0 restores the old test.
+const float TUNE_STANDOFF_COVER = 1.f;
+// A layered NET of defence posts around the whole perimeter. OFF by default:
+// it floods the auction with perimeter candidates, and with the commitment
+// rule holding walks, builders lock onto long treks to the map edge -- metal
+// 27,444 -> 14,910 and cons 14 -> 3 over 6 games. The generator is kept; it
+// needs the site list bounded to what a builder can reach before it earns
+// its place.
+const float TUNE_DEF_NET = 0.f;
+// Let the commander fight while he still outclasses the field. CommCaution is
+// the "heavies are out" sense, so this only ever fires before that. 0 = the
+// old flee-only commander.
+const float TUNE_COMM_FIGHT = 1.f;
 // STORE_HORIZON: seconds over which a storage's volume counts as captured
 // overflow (its gain = min(overflow, storeM/horizon)).
 const float TUNE_STORE_HORIZON = 60.f;
@@ -1135,11 +1207,18 @@ const float TUNE_STORE_HORIZON = 60.f;
 // is priced by PipeLatencyMult -- a second 0.5 here double-counted it and,
 // stacked with the funded discount, priced the T2 lab ~100x under a nano
 // (measured 8v8: zero tech decides in 12 min, all eight players).
-const float TUNE_TECH_PIPE = 1.0f;
+const float TUNE_TECH_PIPE = 2.0f;
 // E_RESPONSE: seconds for the market's own energy supply to answer a
 // scarcity spike (~one solar build); long builds earn the floor, not the
 // spike.
 const float TUNE_E_RESPONSE = 45.f;
+// CONV_HORIZON: seconds of operation a converter is assumed to amortize its
+// own metal, energy and build time over, when netting the energy floor price.
+// CHOSEN, not derived. Short on purpose (apexearth: "it pays off eventually
+// and that's fine -- by the time this stuff matters less we're on to fusions
+// and afus"): a long window credits the converter with a payback the economy
+// has already outgrown, which reads back as energy being worth more than it is.
+const float TUNE_CONV_HORIZON = 300.f;
 // SPACE_M: metal-equivalent price of one 16-elmo build cell of ground.
 // MODEL (flat until base-crowding senses drive it): what makes dense energy
 // beat a field of solars at equal payback.
@@ -1233,8 +1312,17 @@ float UnitWorthMod(const string &in name)
 	if (name == "armsptk") return 0.6f;    // Recluse: slow arcing rockets miss
 	return 1.f;
 }
-// GIFT_ARMY: master switch for back-to-front army gifting.
-const float TUNE_GIFT_ARMY = 1.f;
+// AA_URGENCY: multiplier on the insurance rate for anti-air. CHOSEN, matching
+// the shield branch's x4 -- air arrives faster than ground and a bombing run
+// is over before a reactive build finishes, so it is priced above ordinary
+// insurance. Divided by the towers already standing, so it self-limits.
+const float TUNE_AA_URGENCY = 4.f;
+// GIFT_ARMY: master switch for back-to-front army gifting. DEFAULT OFF
+// (apexearth 2026-08-24: "we are doing the share logic to send units to
+// teammates. We should disable that by default. It only is appropriate on
+// certain maps"). Handing an army away is only right where the map makes one
+// player's front the whole team's front; everywhere else it disarms us.
+const float TUNE_GIFT_ARMY = 0.f;
 // FRONT_N: how many closest-to-enemy allies count as the front line and
 // receive the team's ground army (his read of this map: 2).
 const float TUNE_FRONT_N = 2.f;
@@ -1247,6 +1335,14 @@ const float TUNE_ECO_LEASH = 2500.f;
 // ECO_CON_KEEP: land T1 cons the quiet rear always keeps -- nano turrets
 // and small works still need hands (his floor-of-3 number).
 const float TUNE_ECO_CON_KEEP = 3.f;
+// T2_CON_BASE / T2_CON_PER_M: how many cons able to build the game's best
+// extractor we always want standing -- BASE plus one per PER_M of metal
+// income (apexearth 2026-08-23: "1 T2 con + 1 per 25 metal ... at 100 metal
+// per second we should have at least 5"). Under that count a factory line
+// orders one outright instead of pricing it against the army draw, which it
+// loses whenever the army gap is open -- which is nearly always.
+const float TUNE_T2_CON_BASE = 1.f;
+const float TUNE_T2_CON_PER_M = 25.f;
 // LINE_FLOOR: a factory order must be worth at least this fraction of the
 // rolling executed-want value, unless metal is overflowing (idle is free).
 const float TUNE_LINE_FLOOR = 0.25f;
@@ -1286,6 +1382,23 @@ const float TUNE_EXPOSE_R = 1200.f;
 // 300 priced sentries below the NEXT mex claim, so every spot was claimed
 // naked and died to BARb inside the window; 120 flips to claim-then-guard.
 const float TUNE_EXPOSED_LOSS_S = 120.f;
+// DEF_TRADE: metal of enemy wave a standing turret is expected to stop, per
+// metal of its own cost. The exchange rate that puts coverage and threat in
+// one currency so a shortfall can be subtracted.
+const float TUNE_DEF_TRADE = 2.f;
+// ECO_RAID_TAU: seconds of memory in the structure-loss field. Matches the
+// death ledger's BLEED_TAU so both risk senses forget at the same speed.
+const float TUNE_ECO_RAID_TAU = 180.f;
+// THREAT_R: radius the enemy-mass prior is sampled over. DeathWalk's own
+// corridor sample, reused rather than re-invented.
+const float TUNE_THREAT_R = 900.f;
+// STAKE_HORIZON_S: seconds of a mex's stream that count as the stake standing
+// on it. What makes a producing mex worth more to lose than its build cost.
+const float TUNE_STAKE_HORIZON_S = 300.f;
+// RISK_FLOOR: pressure a never-attacked asset still carries, so cold start
+// insures something before the first loss teaches us. His "combination of
+// enemy aggression and how well defended we are" -- this is the floor half.
+const float TUNE_RISK_FLOOR = 0.15f;
 // GUARD_RATE: standing army value as a fraction of structure assets -- the
 // insurance floor that also covers census blindness.
 const float TUNE_GUARD_RATE = 0.15f;

@@ -191,6 +191,15 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 			// replace=true: plain order, exactly one.
 			fac.CmdBuildUnit(order, 1, true);
 			PendAdd(line, order);
+		} else if ((Market::CeilingConsNeed() > 0)
+			&& Market::ReachesCeiling(int(order.id)))
+		{
+			// THE T2 CON FLOOR does not wait for the line to drain -- it
+			// queues BEHIND the head. Waiting delivered 2 cons against a
+			// floor of 6 at 129 m/s (measured, 4v4 seed 3): the line was
+			// never empty, so every floor order was discarded here.
+			fac.CmdBuildUnit(order, 1, false);
+			PendAdd(line, order);
 		}
 		// LOOKAHEAD (apexearth: "queue more, look ahead"): a batch behind
 		// the head when the market says the demand is deep. One SHIFT order

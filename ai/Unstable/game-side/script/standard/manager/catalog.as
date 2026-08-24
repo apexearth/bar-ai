@@ -44,6 +44,19 @@ array<bool> gAntiNuke;   // carries a nuke interceptor
 array<bool> gTargFac;    // targeting facility (pinpointer)
 array<float> gMaxRange;  // longest weapon reach (0 = unarmed)
 array<float> gPower;     // CircuitAI threat value -- combat worth
+// COMBAT WORTH AS dps * (hp + shield) (apexearth 2026-08-23: "idk why we
+// did that sqrt on the HP but it was a terrible idea ... it should be
+// dps * (hp + shield) / some_divisor"). The DLL builds
+//   power = sqrt(dps) * dmg^0.25 * sqrt(hp + shield * SHIELD_MOD) / 128
+// so power SQUARED is dps * (hp + shield * SHIELD_MOD) * sqrt(dmg) / 128^2
+// -- his formula, exactly, apart from a sqrt of per-shot damage. dps and
+// dmg are not bound separately, so shedding that last root needs a DLL
+// binding; squaring needs nothing and recovers the shield term too.
+// The scale is arbitrary: every consumer divides by cost and normalizes
+// against the best on the line.
+// gPower itself is left alone -- it is also the threat-map number, and the
+// defence-turret quality terms are calibrated against its scale.
+array<float> gCombat;    // dps * (hp + shield) * sqrt(dmg), i.e. power^2
 array<int> gRole;        // CircuitAI main role (raider/riot/assault/...)
 array<bool> gKamikaze;   // suicide unit: ammunition, not army
 array<bool> gShield;     // projectile shield structure
@@ -74,6 +87,7 @@ void Init()
 	gBuildDist.resize(n);
 	gRadar.resize(n); gJammer.resize(n); gRadarR.resize(n); gJamR.resize(n);
 	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n); gPower.resize(n);
+	gCombat.resize(n);
 	gSurfT.resize(n); gAirT.resize(n); gRole.resize(n); gKamikaze.resize(n);
 	gShield.resize(n); gRezzer.resize(n);
 	gAvailable.resize(n);
@@ -122,6 +136,7 @@ void Init()
 		gTargFac[i]      = cdef.IsTargFac();
 		gMaxRange[i]     = cdef.GetMaxRange();
 		gPower[i]        = cdef.power;
+		gCombat[i]       = cdef.power * cdef.power;
 		gRole[i]         = int(cdef.GetMainRole());
 		gKamikaze[i]     = cdef.IsKamikazeDef();
 		gShield[i]       = cdef.IsShieldDef();
@@ -131,7 +146,7 @@ void Init()
 		// NOT IsAvailable(frame): that folds in behaviour.json "since" clocks
 		// (leaf-era policy the market must not inherit) and ai.frame is -2 at
 		// AiMain anyway. Available = the game ships it and no zero limit.
-		gAvailable[i]    = cdef.maxThisUnit > 0;
+		gAvailable[i]    = (cdef.maxThisUnit > 0) && !BlockedDef(cdef.GetName());
 	}
 
 	// Who-builds-what, both directions. Outer loop is builders only, so this
@@ -237,6 +252,21 @@ int CheapestBuilderOf(int defId)
 	return best;
 }
 
+// UNITS WE DO NOT KNOW HOW TO USE, blocked at the one chokepoint every want
+// already checks -- so no proposer needs to learn about them. A Juno is a
+// one-shot area weapon against radar, jammers and minefields; it carries a
+// weapon and has no build options, so ProtClassOf files it as ground defence
+// and the protect want buys it as a turret it will never fire usefully.
+// apexearth 2026-08-24: "we build Juno buildings but I don't think we know how
+// to use them. Let's block ourselves from making those for now." Set
+// apex_allow_juno=1 to lift it.
+bool BlockedDef(const string& in name)
+{
+	if (ai.GetTunable("apex_allow_juno", 0.f) > 0.f)
+		return false;
+	return (name == "armjuno") || (name == "corjuno") || (name == "legjuno");
+}
+
 // Seconds to build the def at the given total buildpower (workertime sum).
 float BuildSecondsAt(int defId, float buildPower)
 {
@@ -280,6 +310,13 @@ void Dump()
 			+ " mob=" + (gMobile[i] ? 1 : 0)
 			+ " fly=" + (gFlyer[i] ? 1 : 0)
 			+ " wind=" + (gWind[i] ? 1 : 0)
+			+ " amph=" + (gAmphib[i] ? 1 : 0)
+			+ " sub=" + (gSub[i] ? 1 : 0)
+			+ " float=" + (gFloater[i] ? 1 : 0)
+			+ " power=" + formatFloat(gPower[i], "", 0, 1)
+			+ " combat=" + formatFloat(gCombat[i], "", 0, 1)
+			+ " hp=" + formatFloat(gHealth[i], "", 0, 0)
+			+ " role=" + gRole[i]
 			+ " builds=" + gBuildsList[i].length());
 	}
 }

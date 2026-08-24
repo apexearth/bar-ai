@@ -110,6 +110,7 @@ void Intercept()
 void Release(const string& in why)
 {
 	gStrike = true;
+	NoteStrikeLaunched();
 	Economy::isSwitchAssist = false;   // stop holding build power on the plant
 	// ANTI_STAT makes CBombTask::FindTarget skip enemy army but keep static eco,
 	// builders and commanders. CCircuitDef is owned per CCircuitAI instance, so
@@ -121,6 +122,14 @@ void Release(const string& in why)
 	if (gBomber1 !is null) {
 		gBomber1.AddAttribute(Unit::Attr::ANTI_STAT.type);
 		gBomber1.SetRetreat(0.f);
+	}
+	if (gBomberH !is null) {
+		gBomberH.AddAttribute(Unit::Attr::ANTI_STAT.type);
+		gBomberH.SetRetreat(0.f);
+	}
+	if (gBomberN !is null) {
+		gBomberN.AddAttribute(Unit::Attr::ANTI_STAT.type);
+		gBomberN.SetRetreat(0.f);
 	}
 	if (gFighter !is null)
 		gFighter.SetRetreat(0.f);
@@ -172,6 +181,7 @@ void ReArm()
 
 void Update()
 {
+	SettleStrike();
 	ResolveDefs();
 	ReArm();
 	ai.PublishTeamValue(TV_AIRINC, aiEconomyMgr.metal.income);
@@ -273,7 +283,7 @@ void Update()
 
 	if (Massed()) {
 		Release("massed");
-	} else if (Committed() && (EnemyAACost() > AIR_AA_CEILING) && !AADominated()) {
+	} else if (Committed() && !StrikeWorth() && !AADominated()) {
 		if (HalfMassed()) {
 			Release("enemy AA rising, going early");
 		} else {

@@ -49,12 +49,53 @@ float    gIncomingCost = 0.f;
 int      gIncomingAt = -999999;
 int      gNextApproach = 0;
 int      gNextApproachLog = 0;
+// THE STANDOFF AN ATTACKER SHOOTS FROM.
+//
+// The longest weapon range we have OBSERVED on their side, held with a decaying
+// memory so it does not vanish the moment we lose sight of them (a raider we
+// cannot see still has the range it had a minute ago). This is what a turret
+// must out-reach to actually deny a mex, not the distance to the mex itself --
+// apexearth: "an enemy can just stand right next to that mex and still shoot
+// it, while staying outside the range of the turret."
+float gFoeReach = 0.f;
+int gFoeReachAt = -1;
+
+void FoeReachSample()
+{
+	float best = 0.f;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int i = 0; i < nG; ++i) {
+		const float r = aiEnemyMgr.GetEnemyGroupRange(i);
+		if (r > best)
+			best = r;
+	}
+	// Decay what we remember toward what we can currently see, over the same
+	// horizon the loss field uses, then take the higher of the two.
+	if (gFoeReachAt >= 0) {
+		const float tau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
+		const float secs = float(ai.frame - gFoeReachAt) / 30.f;
+		float k = 1.f - secs / ((tau > 1.f) ? tau : 180.f);
+		if (k < 0.f)
+			k = 0.f;
+		gFoeReach *= k;
+	}
+	gFoeReachAt = ai.frame;
+	if (best > gFoeReach)
+		gFoeReach = best;
+}
+
+float FoeReach()
+{
+	return gFoeReach;
+}
+
 
 void UpdateApproach()
 {
 	if ((ai.frame < gNextApproach) || !Builder::gHomeSet)
 		return;
 	gNextApproach = ai.frame + 5 * SECOND;
+	FoeReachSample();
 	const float notice = ai.GetTunable("apex_incoming_notice_r", TUNE_INCOMING_NOTICE_R);
 	const float minCost = ai.GetTunable("apex_incoming_cost", TUNE_INCOMING_COST);
 	const float closingBar = ai.GetTunable("apex_incoming_closing", TUNE_INCOMING_CLOSING);

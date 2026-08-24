@@ -11,6 +11,7 @@ void ResolveDefs()
 		@gCon1   = ai.GetCircuitDef("corca");   @gCon2   = ai.GetCircuitDef("coraca");
 		@gBomber = ai.GetCircuitDef("corhurc"); @gFighter = ai.GetCircuitDef("corvamp");
 		@gBomber1 = ai.GetCircuitDef("corshad"); @gFighter1 = ai.GetCircuitDef("corveng");
+		@gBomberH = ai.GetCircuitDef("corcrwh");  // Dragon, 16,700 hp (corcrw is built by NOBODY)
 	} else if (side == "legion") {
 		@gPlant1 = ai.GetCircuitDef("legap");   @gPlant2 = ai.GetCircuitDef("legaap");
 		@gCon1   = ai.GetCircuitDef("legca");   @gCon2   = ai.GetCircuitDef("legaca");
@@ -20,11 +21,14 @@ void ResolveDefs()
 		// kamikaze) stands in; a stockpile-weapon unit does not work here because
 		// Release()'s hold-then-send logic has no stockpile-order step.
 		@gBomber1 = ai.GetCircuitDef("legkam"); @gFighter1 = ai.GetCircuitDef("legfig");
+		@gBomberH = ai.GetCircuitDef("legfort");  // Tyrannus, 16,700 hp
 	} else {
 		@gPlant1 = ai.GetCircuitDef("armap");   @gPlant2 = ai.GetCircuitDef("armaap");
 		@gCon1   = ai.GetCircuitDef("armca");   @gCon2   = ai.GetCircuitDef("armaca");
 		@gBomber = ai.GetCircuitDef("armpnix"); @gFighter = ai.GetCircuitDef("armhawk");
 		@gBomber1 = ai.GetCircuitDef("armthund"); @gFighter1 = ai.GetCircuitDef("armfig");
+		@gBomberH = ai.GetCircuitDef("armblade"); // Hornet, 3,000 hp -- Armada has no true heavy
+		@gBomberN = ai.GetCircuitDef("armliche"); // Liche, the Atomic Bomber
 	}
 }
 
