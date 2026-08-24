@@ -80,7 +80,14 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// ESCORT DUTY outranks the pools for cheap ground army: an exposed
 	// constructor without an escort claims one guard (Market keeps the
 	// one-per-worker registry).
-	if (!cdef.IsAbleToFly()
+	// ESCORTS FIGHT CLOSE. A rocket bot guarding a constructor cannot answer
+	// what actually kills cons -- something fast in its face (apexearth: "we
+	// make rocket bots and use those as protection (they're not good for
+	// that) We should be making grunts/pawns or incisors"). Indirect-fire
+	// roles stay in the line where their range is worth something.
+	const bool escortClass = !cdef.IsRoleAny(Unit::Role::SKIRM.mask)
+			&& !cdef.IsRoleAny(Unit::Role::ARTY.mask);
+	if (!cdef.IsAbleToFly() && escortClass
 		&& (cdef.costM <= ai.GetTunable("apex_escort_max_cost", TUNE_ESCORT_MAX_COST))
 		&& (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) > 0.f)) {
 		CCircuitUnit@ vip = Market::EscortNeeded(unit);

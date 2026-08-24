@@ -16,6 +16,7 @@ array<float> gCostE;
 array<float> gBuildTime;     // engine build-effort units; seconds = this / buildpower
 array<float> gBuildPower;    // engine workertime -- real BP; GetBuildSpeed is overridden by behaviour.json build_speed
 array<float> gSpeed;         // elmos/s
+array<float> gLosR;          // sight radius, elmos
 array<float> gHealth;
 array<float> gExtractsM;     // mex extraction fraction
 array<float> gUpkeepM;
@@ -80,6 +81,7 @@ void Init()
 	const int n = gDefCount + 1;
 	gCostM.resize(n); gCostE.resize(n); gBuildTime.resize(n); gBuildPower.resize(n);
 	gSpeed.resize(n); gHealth.resize(n); gExtractsM.resize(n);
+	gLosR.resize(n);
 	gUpkeepM.resize(n); gUpkeepE.resize(n); gMakeM.resize(n); gMakeE.resize(n);
 	gStoreM.resize(n); gStoreE.resize(n); gConvCapacity.resize(n); gConvRatio.resize(n);
 	gMobile.resize(n); gFlyer.resize(n); gBuilder.resize(n); gWind.resize(n);
@@ -103,6 +105,7 @@ void Init()
 		gBuildTime[i]    = cdef.GetBuildTime();
 		gBuildPower[i]   = cdef.GetWorkerTime();
 		gSpeed[i]        = cdef.speed;
+		gLosR[i]         = cdef.losRadius;
 		gHealth[i]       = cdef.health;
 		gExtractsM[i]    = cdef.GetExtractsM();
 		gUpkeepM[i]      = cdef.GetUpkeepM();

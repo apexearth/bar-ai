@@ -76,6 +76,8 @@ local NAMES = {
 	"apex_standoff_cover",
 	"apex_def_net",
 	"apex_comm_fight",
+	"apex_speed_worth",
+	"apex_los_worth",
 	"apex_reclaim_amort",
 	"apex_mobile_bp_eff",
 	"apex_insure_rate",

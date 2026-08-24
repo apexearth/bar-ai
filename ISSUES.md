@@ -814,3 +814,40 @@ tunable's own comment ("1.15 read 'lacked build power' in watch after watch").
 The BP share barely moved for a 33% headroom cut, so BPGap's headroom term is
 NOT the main driver of BP demand -- the rest is elsewhere (nano demand,
 constructor production, and loss replacement).
+
+## 2026-08-24 (8) — unprotected build power priced as the write-off it is
+
+apexearth's value math: "a con outside of our home safe territory immediately
+has 0 value and making the cheap pawn would add the pawns value + the
+constructor value back."
+
+- `EscortMetalAtRisk()` -- the metal of exposed, unescorted workers. Escort
+  demand in `RoleTarget(RAIDER)` was a flat `count * 60`; it is now this, so an
+  escort is worth the CONSTRUCTOR IT RESTORES.
+- `BPProtectedFrac()` multiplies what a new constructor is worth, so buying
+  more hands to walk out alone buys less than it costs. It lifts by itself once
+  escorts exist, and both sides of the trade read the same metal.
+- Escort ASSIGNMENT now excludes SKIRM and ARTY roles ("we make rocket bots and
+  use those as protection (they're not good for that)").
+- Unit value gained SPEED and LOS terms, plus an affordability term
+  (`fillS / (fillS + costM/income)`) so cheap-now beats strong-later while we
+  are poor -- "pawns are good early game when we cannot afford much stronger
+  things". The affordability term is an economy ratio, not a clock: as income
+  grows the same unit costs fewer seconds and the discount fades.
+
+Measured, 12 games each, paired against BARb:
+
+| bucket | before | after | BARb |
+|---|---|---|---|
+| BP | 29.5% | **22.9%** | 18.2% |
+| army | 44.5% | **55.4%** | 51.1% |
+| defence | 7.4% | 5.1% | 13.5% |
+| constructors built | 1,290 | **940** | |
+
+Grunts (`corak`, 42 metal -- the unit he named) now get ordered; they were
+absent before. 2 of 12 games survived to the time limit.
+
+### STILL OPEN
+Defence share fell to 5.1% against their 13.5% -- the largest remaining
+allocation gap, and it moved the wrong way. Constructors and rez bots still
+take 65 of ~94 production decisions.

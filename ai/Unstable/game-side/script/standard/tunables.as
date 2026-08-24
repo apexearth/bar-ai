@@ -1265,6 +1265,11 @@ const float TUNE_MEX_GROWTH = 3.f;
 // RANGE_WORTH: standing weight of weapon reach in unit selection (reach =
 // free damage before the answer), on top of the reactive outranging term.
 const float TUNE_RANGE_WORTH = 2.f;
+// Speed and sight as intrinsic unit value, same shape as range above.
+// LOS matters beyond the unit: every danger sense we have reads zero while
+// blind, and EnemyArmyCost logged 0 for entire games (2026-08-24).
+const float TUNE_SPEED_WORTH = 0.5f;
+const float TUNE_LOS_WORTH = 1.f;
 // MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per
 // minute (apexearth: "3 times more rezbots" -- was 0.04). Named _FRAC:
 // a legacy TUNE_MEDIC_SHARE with other semantics survives at the bottom.

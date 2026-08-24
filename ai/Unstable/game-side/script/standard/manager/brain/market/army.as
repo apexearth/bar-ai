@@ -61,6 +61,64 @@ int EscortShortfall()
 	return n;
 }
 
+// THE METAL STANDING UNESCORTED OUTSIDE SAFE GROUND, and the share of our
+// build power that is actually protected.
+//
+// apexearth's value math: "a con outside of our home safe territory
+// immediately has 0 value and making the cheap pawn would add the pawns value
+// + the constructor value back." So an escort is not worth ~one cheap unit --
+// it is worth the CONSTRUCTOR IT RESTORES, and build power we walk out alone
+// should be priced as the write-off it is.
+float EscortMetalAtRisk()
+{
+	if (!gFarmSet)
+		return 0.f;
+	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
+	float m = 0.f;
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ wkr = gWorkers[i];
+		if ((wkr is null) || (wkr.task is null))
+			continue;
+		const int wd = int(wkr.circuitDef.id);
+		if (Catalog::gFlyer[wd])
+			continue;
+		if (wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		if (wkr.GetPos(ai.frame).distance2D(gFarmPos)
+				/ ((expoR > 1.f) ? expoR : 1200.f) < 0.5f)
+			continue;
+		bool has = false;
+		for (uint e = 0; e < gEscWorker.length(); ++e) {
+			if (gEscWorker[e] == wkr.id) { has = true; break; }
+		}
+		if (!has)
+			m += Catalog::gCostM[wd];
+	}
+	return m;
+}
+
+// 1.0 when every worker is home or escorted, falling toward 0 as more of our
+// build power walks out alone. Multiplies what a NEW constructor is worth:
+// buying more of something that dies unattended is buying less than it costs.
+float BPProtectedFrac()
+{
+	float safe = 0.f;
+	float risk = EscortMetalAtRisk();
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ wkr = gWorkers[i];
+		if (wkr is null)
+			continue;
+		safe += Catalog::gCostM[int(wkr.circuitDef.id)];
+	}
+	safe -= risk;
+	if (safe < 0.f)
+		safe = 0.f;
+	const float tot = safe + risk;
+	if (tot <= 1.f)
+		return 1.f;
+	return safe / tot;
+}
+
 float RoleTarget(int role, float armyTarget)
 {
 	// AA is a PURE COUNTER: it has no value without enemy air, so it gets
@@ -79,7 +137,10 @@ float RoleTarget(int role, float armyTarget)
 	const float base = armyTarget / 6.f;   // maximum-entropy prior over combat roles
 	float counter = 0.f;
 	if (role == int(Unit::Role::RAIDER.type))
-		counter = float(EscortShortfall()) * 60.f   // ~ one cheap escort each
+		// Escort demand is the CONSTRUCTOR METAL it brings back, not a flat
+		// 60 per head: a pawn beside a 200-metal con is worth the pawn plus
+		// the con it stops us writing off.
+		counter = EscortMetalAtRisk()
 			+ (Military::EnemyCostOf(Unit::Role::SKIRM.type)
 				+ Military::EnemyCostOf(Unit::Role::ARTY.type)) * 0.6f;
 			// rocket bots die to what closes fast (apexearth's counter-chain)

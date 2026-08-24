@@ -312,6 +312,34 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			// preference on top of the reactive term below.
 			ppc *= 1.f + (Catalog::gMaxRange[d] / 1000.f)
 					* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH);
+			// SPEED IS VALUE (apexearth: "they're fast, we need to properly
+			// value speed"). A fast unit reaches the fight, catches raiders,
+			// and disengages -- none of which shows up in combat-per-metal.
+			// Normalised on 100 elmos/s, roughly a T1 bot.
+			ppc *= 1.f + (Catalog::gSpeed[d] / 100.f)
+					* ai.GetTunable("apex_speed_worth", TUNE_SPEED_WORTH);
+			// EYES (apexearth: "we tend to lack scouts... need some kind of
+			// value requirement on raider style units and scouts"). Sight is
+			// what every other sense in this AI is built on -- the danger
+			// model, the army target and the commander's engage test all read
+			// zero while we are blind (EnemyArmyCost logged 0 for entire
+			// games). A unit's LOS is therefore worth something on its own.
+			ppc *= 1.f + (Catalog::gLosR[d] / 1000.f)
+					* ai.GetTunable("apex_los_worth", TUNE_LOS_WORTH);
+			// AFFORDABLE NOW BEATS STRONG LATER WHILE WE ARE POOR (apexearth:
+			// "pawns are good early game when we cannot afford much stronger
+			// things"). Seconds of income the unit costs, against the window
+			// we are trying to fill the army gap in. Self-cancelling: as
+			// income grows the same unit costs fewer seconds and the discount
+			// fades, so this is an economy term, never a clock.
+			{
+				const float incA = aiEconomyMgr.metal.income;
+				if (incA > 0.1f) {
+					const float fieldSec = Catalog::gCostM[d] / incA;
+					const float hA = (fillS > 1.f) ? fillS : 60.f;
+					ppc *= hA / (hA + fieldSec);
+				}
+			}
 			// RANGE ANSWERS RANGE (apexearth: banishers outranged and killed
 			// our T1 too easily; snipers/fatboys came too late). Enemy skirm
 			// and arty mass is outranging pressure: reach above 500 gains by
@@ -467,6 +495,16 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			gain += mob * util * SpotM() * (((fillS > 1.f) ? fillS : 180.f) / 60.f)
 					* share;
 		}
+		// UNPROTECTED BUILD POWER IS DISCOUNTED BUILD POWER (apexearth: "we
+		// are currently walking our constructors out alone and they die...
+		// a con outside of our home safe territory immediately has 0 value").
+		// Buying another pair of hands to send out unescorted buys less than
+		// it costs, so what a new con is worth scales with the share of the
+		// build power we already have that is actually protected. It lifts by
+		// itself the moment escorts exist -- and the escort want is priced on
+		// the same metal (EscortMetalAtRisk), so the two trade against each
+		// other honestly instead of both being flat.
+		gain *= BPProtectedFrac();
 		if (gain <= 0.5f)
 			continue;
 		const float v = gain / Catalog::gCostM[d];
