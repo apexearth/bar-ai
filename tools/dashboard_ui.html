@@ -498,7 +498,9 @@ function renderMatch(d) {
     <div class="dim" style="font-size:12px;margin-top:4px">Rates are differenced
       between neighbouring 2-minute samples, so each point is that window's mean.
       A stall is the engine's own arithmetic — pull exceeded what it granted —
-      sampled twice a second, not a guess at a percentage of storage.</div>
+      sampled twice a second, not a guess at a percentage of storage. A build
+      step pays metal and energy together, so a metal stall beside a full metal
+      bank is an energy stall clamping both: read the two columns as a pair.</div>
     <table style="margin-top:8px"><thead><tr><th>minute</th>
       <th>metal/s</th><th>energy/s</th><th>metal wasted/s</th><th>energy wasted/s</th>
       <th>metal bank</th><th>energy bank</th><th>M stalled</th><th>E stalled</th>

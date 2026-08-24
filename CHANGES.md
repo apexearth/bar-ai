@@ -1,5 +1,22 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-24: the economy is legible over time
+
+dev_stats_export samples GetTeamResources twice a second and dumps the
+bank, storage, income, pull and spend for both resources, plus cumulative
+stall counts. A stall is the engine's own arithmetic -- pull exceeded
+what it granted -- not a threshold on storage. The dashboard differences
+neighbouring samples into per-second production, per-second waste, bank
+fill and the stalled share of each window.
+
+First reading (12m Comet Catcher vs stock hard, seed 3, apex side):
+44.5% of all metal produced was thrown away, with the bank pinned at
+100% of storage from 6m to 12m while income climbed 14 -> 23 m/s.
+Metal and energy stall counts move together on this side (identical to
+the sample), which is what a build step paying both resources looks like
+when energy is the binding one -- team 1 in the same game diverges
+(122 vs 150), so the two counters are independent.
+
 ## 2026-08-24: the dashboard can see what the AI was thinking
 
 Four telemetry gaps closed, all read through tools/dashboard.py:
