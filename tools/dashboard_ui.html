@@ -406,6 +406,7 @@ async function openGame(dir, isRefresh) {
     }
     if ((changed || !isRefresh) && !d.matches && d.chart) drawCharts(d);
     if ((changed || !isRefresh) && !d.matches && d.chart) drawSpend(d);
+    if ((changed || !isRefresh) && !d.matches && d.chart) loadEcon(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadBrain(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadCrew(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadUnits(dir);
@@ -480,6 +481,28 @@ function renderMatch(d) {
       <div><div class="dim">metal produced (cumulative)</div><canvas id="c-metal" width="560" height="220"></canvas></div>
       <div><div class="dim">standing army (metal value)</div><canvas id="c-army" width="560" height="220"></canvas></div>
     </div></div>
+  <div class="card"><h2>Economy over time — income, bank, waste and stalls</h2>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <label class="f">team<select id="ec-team"></select></label>
+      <label class="f">view<select id="ec-mode">
+        <option value="rate">production per second</option>
+        <option value="waste">waste per second</option>
+        <option value="cum">cumulative produced</option>
+        <option value="bank">bank (% of storage)</option>
+        <option value="stall">stalled share of window (%)</option>
+      </select></label>
+      <label class="f">&nbsp;<span class="dim" id="ec-note"></span></label>
+    </div>
+    <div class="legend" id="ec-legend"></div>
+    <canvas id="c-econ" width="1140" height="280"></canvas>
+    <div class="dim" style="font-size:12px;margin-top:4px">Rates are differenced
+      between neighbouring 2-minute samples, so each point is that window's mean.
+      A stall is the engine's own arithmetic — pull exceeded what it granted —
+      sampled twice a second, not a guess at a percentage of storage.</div>
+    <table style="margin-top:8px"><thead><tr><th>minute</th>
+      <th>metal/s</th><th>energy/s</th><th>metal wasted/s</th><th>energy wasted/s</th>
+      <th>metal bank</th><th>energy bank</th><th>M stalled</th><th>E stalled</th>
+      </tr></thead><tbody id="ec-table"></tbody></table></div>
   <div class="card"><h2>Where the metal went — cumulative, by destination</h2>
     <div class="row" style="gap:12px;align-items:flex-end">
       <label class="f">side<select id="sp-side"></select></label>
@@ -678,6 +701,55 @@ function legendHTML(el, items) {
   $(el).innerHTML = items.map(([lab, col, dashed]) =>
     `<span><i style="background:${col};${dashed ? "opacity:.55" : ""}"></i>${esc(lab)}${
       dashed ? " (target)" : ""}</span>`).join("");
+}
+
+/* ---------- economy ---------- */
+const ECON_VIEWS = {
+  rate:  [["mRate", "metal/s", "#5fbf77"], ["eRate", "energy/s", "#d9c25e"]],
+  waste: [["mWasteRate", "metal wasted/s", "#5fbf77"],
+          ["eWasteRate", "energy wasted/s", "#d9c25e"]],
+  cum:   [["mProd", "metal produced", "#5fbf77"], ["eProd", "energy produced", "#d9c25e"]],
+  bank:  [["mFill", "metal bank %", "#5fbf77"], ["eFill", "energy bank %", "#d9c25e"]],
+  stall: [["mStallPct", "metal stalled %", "#5fbf77"],
+          ["eStallPct", "energy stalled %", "#d9c25e"]],
+};
+let ECON = null;
+async function loadEcon(dir) {
+  const sel = $("#ec-team"); if (!sel) return;
+  try { ECON = await api("/api/economy?dir=" + encodeURIComponent(dir)); }
+  catch (e) { ECON = null; }
+  const teams = ECON && ECON.teams ? Object.keys(ECON.teams) : [];
+  if (!teams.length) { $("#ec-note").textContent = "no economy telemetry in this run"; return; }
+  sel.innerHTML = teams.map(t =>
+    `<option value="${t}">team ${t} (side ${ECON.teams[t].ally})</option>`).join("");
+  sel.onchange = drawEcon;
+  $("#ec-mode").onchange = drawEcon;
+  drawEcon();
+}
+function drawEcon() {
+  const cv = $("#c-econ"); if (!cv || !ECON) return;
+  const t = ECON.teams[$("#ec-team").value]; if (!t) return;
+  const view = ECON_VIEWS[$("#ec-mode").value], mins = t.min, N = mins.length;
+  const pct = /bank|stall/.test($("#ec-mode").value);
+  const hi = pct ? 100 : Math.max(1, ...view.flatMap(v => t[v[0]] || [0]));
+  const f = frame(cv, Math.max(1, ...mins), hi,
+    pct ? {fmt: v => v.toFixed(0) + "%"} : {});
+  view.forEach(v => line(f, mins, t[v[0]] || [], v[2], null, 1.8));
+  legendHTML("#ec-legend", view.map(v => [v[1], v[2]]));
+  const l = N - 1;
+  $("#ec-note").textContent = `${N} samples; by ${mins[l]}m produced `
+    + `${Math.round(t.mProd[l]).toLocaleString()} metal / `
+    + `${Math.round(t.eProd[l]).toLocaleString()} energy, wasted `
+    + `${t.mWastePct[l]}% / ${t.eWastePct[l]}%`;
+  $("#ec-table").innerHTML = mins.map((m, i) => `<tr><td>${m}m</td>
+    <td>${t.mRate[i].toFixed(1)}</td><td>${t.eRate[i].toFixed(1)}</td>
+    <td>${t.mWasteRate[i].toFixed(1)}</td><td>${t.eWasteRate[i].toFixed(1)}</td>
+    <td>${Math.round(t.mNow[i]).toLocaleString()}<span class="dim">/${
+      Math.round(t.mStore[i]).toLocaleString()}</span></td>
+    <td>${Math.round(t.eNow[i]).toLocaleString()}<span class="dim">/${
+      Math.round(t.eStore[i]).toLocaleString()}</span></td>
+    <td class="${t.mStallPct[i] > 20 ? "loss" : ""}">${t.mStallPct[i]}%</td>
+    <td class="${t.eStallPct[i] > 20 ? "loss" : ""}">${t.eStallPct[i]}%</td></tr>`).join("");
 }
 
 /* ---------- metal by destination ---------- */

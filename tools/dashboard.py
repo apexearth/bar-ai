@@ -355,6 +355,76 @@ SPEND_BUCKETS = {
 }
 
 
+def economy(d):
+    """The full economic picture per team, sample by sample.
+
+    The engine's own counters are cumulative, so rates here are differenced
+    between neighbouring samples rather than sampled instantaneously -- a
+    2-minute mean, which is what a production figure should be. The bank,
+    the pull and the stall counters come from GetTeamResources and have no
+    cumulative equivalent.
+    """
+    r = load_result(d) or {}
+    teams = {}
+    for e in r.get("stats", []) or []:
+        if not isinstance(e, dict) or e.get("reason") != "periodic":
+            continue
+        tid = str(int(e.get("team", -1)))
+        t = teams.setdefault(tid, {"ally": int(e.get("ally", -1)), "min": [],
+                                   **{k: [] for k in ECON_FIELDS}})
+        t["min"].append(round((e.get("frame", 0) or 0) / 30 / 60, 2))
+        for k, field in ECON_FIELDS.items():
+            t[k].append(round(float(e.get(field, 0) or 0), 2))
+    for t in teams.values():
+        mins, n = t["min"], len(t["min"])
+        # Rates over each window. The first sample's window starts at 0:00,
+        # which is true -- the game began there.
+        for key, src in (("mRate", "mProd"), ("eRate", "eProd"),
+                         ("mWasteRate", "mWaste"), ("eWasteRate", "eWaste")):
+            out = []
+            for i in range(n):
+                dt = (mins[i] - (mins[i - 1] if i else 0.0)) * 60.0
+                dv = t[src][i] - (t[src][i - 1] if i else 0.0)
+                out.append(round(dv / dt, 2) if dt > 0 else 0.0)
+            t[key] = out
+        # Stall counters are cumulative sample counts; the useful number is
+        # the share of THIS window spent unable to pay.
+        for key, src in (("mStallPct", "mStall"), ("eStallPct", "eStall")):
+            out = []
+            for i in range(n):
+                ds = t["resSamp"][i] - (t["resSamp"][i - 1] if i else 0.0)
+                dv = t[src][i] - (t[src][i - 1] if i else 0.0)
+                out.append(round(100.0 * dv / ds, 1) if ds > 0 else 0.0)
+            t[key] = out
+        for key, src in (("mFill", "mFillSum"), ("eFill", "eFillSum")):
+            out = []
+            for i in range(n):
+                ds = t["resSamp"][i] - (t["resSamp"][i - 1] if i else 0.0)
+                dv = t[src][i] - (t[src][i - 1] if i else 0.0)
+                out.append(round(100.0 * dv / ds, 1) if ds > 0 else 0.0)
+            t[key] = out
+        # Waste as a share of what was made is the number that says whether an
+        # overflow is a rounding error or half the economy.
+        t["mWastePct"] = [round(100.0 * w / p, 1) if p > 0 else 0.0
+                          for w, p in zip(t["mWaste"], t["mProd"])]
+        t["eWastePct"] = [round(100.0 * w / p, 1) if p > 0 else 0.0
+                          for w, p in zip(t["eWaste"], t["eProd"])]
+    return {"teams": teams, "fields": list(ECON_FIELDS)}
+
+
+# Sample fields this panel reads, mapped to their names in the gadget's dump.
+# mNow/eNow and the stall counters are newer than the rest; a run without them
+# reads zero, which is what an absent counter should look like.
+ECON_FIELDS = {
+    "mProd": "metalProduced", "mUsed": "metalUsed", "mWaste": "metalExcess",
+    "eProd": "energyProduced", "eUsed": "energyUsed", "eWaste": "energyExcess",
+    "mNow": "mNow", "mStore": "mStore", "mInc": "mInc", "mPull": "mPull",
+    "eNow": "eNow", "eStore": "eStore", "eInc": "eInc", "ePull": "ePull",
+    "resSamp": "resSamp", "mStall": "mStall", "eStall": "eStall",
+    "mFillSum": "mFillSum", "eFillSum": "eFillSum",
+}
+
+
 def unit_counts(d):
     """Units finished per def, per team, over time -- from `unitCount=`.
 
@@ -1149,6 +1219,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(match_detail(d))
             elif u.path == "/api/brain":
                 self.send_json(brain_wants(safe_run_dir(q["dir"])))
+            elif u.path == "/api/economy":
+                self.send_json(economy(safe_run_dir(q["dir"])))
             elif u.path == "/api/units":
                 self.send_json(unit_counts(safe_run_dir(q["dir"])))
             elif u.path == "/api/intel":

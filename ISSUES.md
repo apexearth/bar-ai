@@ -851,3 +851,37 @@ absent before. 2 of 12 games survived to the time limit.
 Defence share fell to 5.1% against their 13.5% -- the largest remaining
 allocation gap, and it moved the wrong way. Constructors and rez bots still
 take 65 of ~94 production decisions.
+
+## 2026-08-24 (9) — mex capture: the probe bug and the value shape
+
+apexearth: "our largest problem is still that we are not making enough mexes.
+If we aren't capturing half the map worth of mexes in a 1v1 then we're losing."
+
+Instrumented every refusal gate in `ProposeMex` (`apex: mexdiag`). Altair
+Crossing has **30 spots**; we held **3-5**. The gates were NOT the reason --
+`pastFront=0 deathWalk=0 ecoFar=0 ecoQuiet=0` throughout.
+
+Two real causes:
+
+1. **The probe gave up after one answer.** `FindOpenMexSpot` returns a single
+   spot from one reference position; when that spot was already in our ledger
+   the proposer returned NO WANT AT ALL -- 48 such refusals in one 60s window
+   while ~25 spots stood open. Now it re-probes from home, both flanks, the
+   rear and the map centre before giving up. Held 3-5 -> 8-10.
+2. **Value shape was too flat.** `apex_mex_growth` 3 -> 8, so relative income
+   boost dominates as he described: doubling x9, +10% x1.8, +1% x1.08 (was
+   x4 / x1.3 / x1.03). "When a mex would double our income it is very
+   important... if it boosts our income only 1% then its not too important."
+
+Measured, 12 games paired: mex **13 -> 16, level with BARb's 16** (was 13 vs
+20), and 4 of 12 games now survive to the time limit (was 2).
+
+`held` also oscillates DOWNWARD during a game (5 -> 4 -> 5 -> 3), so we are
+capturing spots and losing them, which is the defence problem below.
+
+### THE OUTSTANDING GAP: static defence
+apexearth's early-game priority order: energy income -> protect mexes (llt) ->
+capture mexes -> army. Defence is his #2 and it is our worst number by far:
+**3.5% of our metal against BARb's 18.5%**, and it has FALLEN this session
+(7.4% -> 5.1% -> 3.3% -> 3.5%) as budget moved into army. BARb spends nearly a
+fifth of its metal on static defence, and trades at 3.63 against our 0.12.

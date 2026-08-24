@@ -473,6 +473,41 @@ local function factoryQueueDepth(teamID)
 	return facs, orders
 end
 
+-- STALLING, which the cumulative counters cannot show. metalExcess says metal
+-- was thrown away; nothing said the opposite -- that the team asked for more
+-- than it could pay and every builder on the field slowed down. Read from the
+-- engine's own arithmetic rather than a threshold: `pull` is what was asked
+-- for this frame and `expense` is what was actually granted, so a shortfall
+-- between them IS the stall, with no invented percentage of storage in it.
+--
+-- Sampled twice a second and counted, so the dashboard can difference two
+-- samples into "what fraction of these two minutes was spent stalled".
+local eStall, mStall, resSamp = {}, {}, {}
+local mFillSum, eFillSum = {}, {}   -- summed bank/storage, for a mean fill
+
+local function sampleResources()
+	for _, teamID in ipairs(Spring.GetTeamList()) do
+		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
+		if isAI then
+			bump(resSamp, teamID, 1)
+			local mc, ms, mp, _, me = Spring.GetTeamResources(teamID, "metal")
+			local ec, es, ep, _, ee = Spring.GetTeamResources(teamID, "energy")
+			if mp ~= nil and me ~= nil and mp > me * 1.001 + 0.01 then
+				bump(mStall, teamID, 1)
+			end
+			if ep ~= nil and ee ~= nil and ep > ee * 1.001 + 0.01 then
+				bump(eStall, teamID, 1)
+			end
+			if mc ~= nil and (ms or 0) > 0 then
+				bump(mFillSum, teamID, mc / ms)
+			end
+			if ec ~= nil and (es or 0) > 0 then
+				bump(eFillSum, teamID, ec / es)
+			end
+		end
+	end
+end
+
 -- `io` is nil in the gadget sandbox, so emit through Spring.Echo and let the
 -- harness parse the infolog it already collects. Last line per team wins.
 local function sampleCommIdle()
@@ -632,6 +667,30 @@ local function dump(reason)
 			parts[#parts + 1] = string.format("facCount=%d", nf)
 			parts[#parts + 1] = string.format("facQueued=%d", nq)
 
+			-- The bank, and what is being asked of it. GetTeamStatsHistory is
+			-- cumulative only: it can say 40k energy was wasted and never that
+			-- the team is sitting full at this instant, which is the reading
+			-- that says whether the next converter pays for itself.
+			local mc, ms, mp, mi, mx = Spring.GetTeamResources(teamID, "metal")
+			local ec, es, ep, ei, ex = Spring.GetTeamResources(teamID, "energy")
+			parts[#parts + 1] = string.format("mNow=%.0f", mc or 0)
+			parts[#parts + 1] = string.format("mStore=%.0f", ms or 0)
+			parts[#parts + 1] = string.format("mInc=%.2f", mi or 0)
+			parts[#parts + 1] = string.format("mPull=%.2f", mp or 0)
+			parts[#parts + 1] = string.format("mSpend=%.2f", mx or 0)
+			parts[#parts + 1] = string.format("eNow=%.0f", ec or 0)
+			parts[#parts + 1] = string.format("eStore=%.0f", es or 0)
+			parts[#parts + 1] = string.format("eInc=%.2f", ei or 0)
+			parts[#parts + 1] = string.format("ePull=%.2f", ep or 0)
+			parts[#parts + 1] = string.format("eSpend=%.2f", ex or 0)
+			-- Cumulative stall samples against the sample count, so any two
+			-- rows difference into the stalled fraction of that window.
+			parts[#parts + 1] = string.format("resSamp=%d", resSamp[teamID] or 0)
+			parts[#parts + 1] = string.format("mStall=%d", mStall[teamID] or 0)
+			parts[#parts + 1] = string.format("eStall=%d", eStall[teamID] or 0)
+			parts[#parts + 1] = string.format("mFillSum=%.2f", mFillSum[teamID] or 0)
+			parts[#parts + 1] = string.format("eFillSum=%.2f", eFillSum[teamID] or 0)
+
 			-- Does CmdSetTarget actually land for an AI-owned unit? The AI has
 			-- issued it for a long time and nothing has ever confirmed it took.
 			-- unit_target_on_the_move.lua (BAR's own) writes this rules param on
@@ -722,6 +781,7 @@ function gadget:GameFrame(frame)
 	if frame >= nextCommSample then
 		nextCommSample = frame + COMM_SAMPLE
 		sampleCommIdle()
+		sampleResources()
 	end
 	if frame >= nextDump then
 		nextDump = frame + DUMP_INTERVAL

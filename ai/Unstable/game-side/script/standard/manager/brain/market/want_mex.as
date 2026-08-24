@@ -62,36 +62,92 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 	return false;
 }
 
+// WHY A MEX WANT DID NOT HAPPEN. apexearth: "our largest problem is still that
+// we are not making enough mexes. If we aren't capturing half the map worth of
+// mexes in a 1v1 then we're losing the game." Each refusal is counted at its
+// own gate so the answer is read, not guessed.
+int gMexNoOpen = 0, gMexPastFront = 0, gMexDeathWalk = 0, gMexEcoFar = 0;
+int gMexEcoQuiet = 0, gMexClaimed = 0, gMexPriced = 0, gNextMexDiag = 0;
+void MexDiag()
+{
+	if (ai.frame < gNextMexDiag)
+		return;
+	gNextMexDiag = ai.frame + 60 * SECOND;
+	CacheSpots();
+	AiLog("apex: mexdiag t=" + ai.teamId + " mapSpots=" + gAllSpots.length()
+		+ " held=" + gLSpot.length()
+		+ " | noOpen=" + gMexNoOpen + " claimed=" + gMexClaimed
+		+ " pastFront=" + gMexPastFront + " deathWalk=" + gMexDeathWalk
+		+ " ecoFar=" + gMexEcoFar + " ecoQuiet=" + gMexEcoQuiet
+		+ " priced=" + gMexPriced);
+	gMexNoOpen = 0; gMexPastFront = 0; gMexDeathWalk = 0; gMexEcoFar = 0;
+	gMexEcoQuiet = 0; gMexClaimed = 0; gMexPriced = 0;
+}
+
 Want@ ProposeMex(CCircuitUnit@ unit)
 {
 	Want w;
+	MexDiag();
 	const int uid = int(unit.circuitDef.id);
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	// Threat ceiling is generous on purpose: a contested spot is priced, not
 	// hidden (the leaf era's FindOpenMexSpot went silent exactly under attack).
-	const int spot = aiEconomyMgr.FindOpenMexSpot(unit, here, 99.f);
+	// FindOpenMexSpot answers with ONE spot, the best from the reference
+	// position given. When that spot is already in our ledger the old code
+	// returned NO WANT AT ALL -- on a 30-spot map where we held five, that
+	// threw away the election rather than asking about any of the other
+	// twenty-five (measured: 48 such refusals in a single 60s window).
+	// Probing from a few reference points walks the engine's own occupancy
+	// logic outward instead of reimplementing it here.
+	int spot = aiEconomyMgr.FindOpenMexSpot(unit, here, 99.f);
 	gMexOpen = (spot >= 0);
-	if (spot < 0)
+	if ((spot >= 0) && (LedgerFind(spot) >= 0)) {
+		++gMexClaimed;
+		array<AIFloat3> probes;
+		if (Builder::gHomeSet)
+			probes.insertLast(Builder::gHomePos);
+		if (Base::gAnchorSet && Base::gAxisSet) {
+			probes.insertLast(Base::gAnchor + Base::gAcross * 900.f);
+			probes.insertLast(Base::gAnchor - Base::gAcross * 900.f);
+			probes.insertLast(Base::gAnchor - Base::gFwd * 900.f);
+		}
+		probes.insertLast(AITerrainCenter());
+		for (uint pi = 0; pi < probes.length(); ++pi) {
+			if (!OnMap(probes[pi]))
+				continue;
+			const int alt = aiEconomyMgr.FindOpenMexSpot(unit, probes[pi], 99.f);
+			if ((alt >= 0) && (LedgerFind(alt) < 0)) {
+				spot = alt;
+				break;
+			}
+		}
+		if (LedgerFind(spot) >= 0)
+			return w;
+		gMexOpen = true;
+	}
+	if (spot < 0) {
+		++gMexNoOpen;
 		return w;
-	// Already committed: someone decided this spot and its task is live (or
-	// recently was) -- proposing it again is the churn, not a want.
-	if (LedgerFind(spot) >= 0)
-		return w;
+	}
 	const AIFloat3 pos = aiEconomyMgr.GetMexSpotPos(spot);
 	// SUPER RISKY GROUND IS NOT A BUILD OPTION (apexearth): a spot past the
 	// front is a con's death walk whatever it pays -- and refusing it also
 	// stops the market hiring more cons for ground nobody can hold.
 	if (Front::FoeKnown() && Builder::PastFront(pos)) {
+		++gMexPastFront;
 		gMexOpen = false;
 		return w;
 	}
 	// Deadly for THIS walker; the spot itself stays open for a safer angle,
 	// so gMexOpen is not cleared.
-	if (DeathWalk(unit, pos))
+	if (DeathWalk(unit, pos)) {
+		++gMexDeathWalk;
 		return w;
+	}
 	// The quiet rear stays home: no claim meaningfully closer to the enemy
 	// than its own base depth (the mirror reference works pre-contact too).
 	if (EcoFar(pos)) {
+		++gMexEcoFar;
 		gMexOpen = false;
 		return w;
 	}
@@ -102,10 +158,12 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		const float hdz = Builder::gHomePos.z - gEcoRefZ;
 		const float f = ai.GetTunable("apex_eco_reach_frac", TUNE_ECO_REACH_FRAC);
 		if (sdx * sdx + sdz * sdz < (hdx * hdx + hdz * hdz) * f * f) {
+			++gMexEcoQuiet;
 			gMexOpen = false;
 			return w;
 		}
 	}
+	++gMexPriced;
 	const float spotIncome = aiEconomyMgr.GetMexSpotIncome(spot);
 	const float speed = Catalog::gSpeed[uid];
 	const float dist = here.distance2D(pos);
