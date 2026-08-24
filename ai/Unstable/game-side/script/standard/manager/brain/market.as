@@ -1656,6 +1656,47 @@ AIFloat3 BigEnergySite()
 	return Builder::gHomePos;
 }
 
+// The richest UNGUARDED building cluster (apexearth: "we still don't
+// defend the buildings we make with simple sentry defenses -- a 50 metal
+// enemy unit destroys 100s of our value"). Anchors are where structures
+// actually gather: factories, the fusion pack, the farm. Clock-gated;
+// coverage within 450 zeroes a site.
+AIFloat3 gInsPos;
+float gInsM = 0.f;
+int gInsAt = 0;
+void RefreshInsureCluster()
+{
+	if (ai.frame < gInsAt)
+		return;
+	gInsAt = ai.frame + 10 * SECOND;
+	gInsM = 0.f;
+	array<AIFloat3> sites;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		if (Factory::gFacUnits[fi] !is null)
+			sites.insertLast(Factory::gFacUnits[fi].GetPos(ai.frame));
+	}
+	sites.insertLast(BigEnergySite());
+	if (gFarmSet)
+		sites.insertLast(gFarmPos);
+	for (uint si = 0; si < sites.length(); ++si) {
+		if (!OnMap(sites[si]) || ProtCovered(PROT_DEF, sites[si], 450.f))
+			continue;
+		float m = 0.f;
+		for (uint dd = 1; dd < gOwnCount.length(); ++dd) {
+			if ((gOwnCount[dd] <= 0) || Catalog::gMobile[int(dd)])
+				continue;
+			array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(
+					Catalog::Def(int(dd)), sites[si], 500.f);
+			if (us !is null)
+				m += float(us.length()) * Catalog::gCostM[int(dd)];
+		}
+		if (m > gInsM) {
+			gInsM = m;
+			gInsPos = sites[si];
+		}
+	}
+}
+
 
 // Metal spots are sacred ground: an UNCLAIMED spot is legal terrain to the
 // engine's site search, so a factory landed smack on one (watched). Intent
@@ -2737,6 +2778,36 @@ Want@ ProposeProtect(CCircuitUnit@ unit)
 				}
 				continue;
 			}
+			// UNGUARDED BUILDING CLUSTERS: everything standing is insured
+			// like the mexes below -- the cluster's own value times the
+			// raid loss rate, zeroed by one tower in reach. Before the mex
+			// branch because a fusion pack is worth a mex line.
+			RefreshInsureCluster();
+			if (gInsM > 300.f) {
+				// The tower guards the APPROACH: cluster edge toward the
+				// enemy, never the middle of an occupied footprint.
+				at = gInsPos;
+				if (Base::gAxisSet)
+					at += Base::gFwd * 150.f;
+				if (!OnMap(at))
+					at = gInsPos;
+				gain = gInsM * rate;
+			}
+			if (gain > 0.f) {
+				Want ci;
+				const float spi = Catalog::gSpeed[uid];
+				const float wki = (spi > 1.f)
+						? (unit.GetPos(ai.frame).distance2D(at) / spi) : 60.f;
+				ValueOf(d, gain, wki, Catalog::gBuildPower[uid], ci);
+				if (ci.value > w.value) {
+					w = ci;
+					w.kind = WK_PROTECT;
+					@w.def = Catalog::Def(d);
+					w.pos = at;
+					w.spotId = cls;
+				}
+				continue;
+			}
 			// A standing mex without a turret in reach: insure the ground,
 			// priced by EXPOSURE (apexearth 2026-08-23: against a real
 			// opponent an unguarded outlying mex "is almost guaranteed to
@@ -3205,6 +3276,25 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	WorkerSeen(unit);
 	LedgerSweep();
+	// FINISH WHAT'S STARTED (his rule: "focus as much build power as we
+	// can on just the one building"): a builder whose current frame has
+	// real progress holds it -- the roulette explores at the next FREE
+	// election, never by abandoning work. Without this, re-election
+	// re-rolled every ~2s and the engine reassigns on build-type change:
+	// 61 sentry requests, 850 metal into nanoframes, zero finished
+	// (measured, 25-minute game). The stall sweep still aborts held tasks
+	// explicitly when the economy demands it.
+	if ((unit.task !is null) && (unit.task.GetType() == Task::Type::BUILDER)) {
+		if (Requests::Progress(unit.task) > 0.01f)
+			return null;
+		// ...and the FINAL APPROACH counts as started: a walker near its
+		// site finishes the trip (walk-phase re-rolls left sentry sites
+		// nobody ever arrived at). Far walkers may still reconsider --
+		// a long walk is a real opportunity cost worth re-asking about.
+		const AIFloat3 tp0 = unit.task.GetBuildPos();
+		if (OnMap(tp0) && (unit.GetPos(ai.frame).distance2D(tp0) < 600.f))
+			return null;
+	}
 
 	array<Want@> wants = {
 		ProposeMex(unit), ProposeEnergy(unit), ProposeGeo(unit),
@@ -3961,8 +4051,28 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 					/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)
 					/ float(1 + haveRez);
 		}
-		if ((upD > 0.5f) && (reach >= BestExtract()))
-			gain += mob * upD / float(1 + ServingCons());
+		if ((upD > 0.5f) && (reach >= BestExtract())) {
+			// The upgrade stream divides among cons who can REACH it -- a
+			// T1 fleet cannot moho anything, so the first T2 con serves
+			// the whole 4x stream alone and prices like it (apexearth,
+			// watching: "we make a T2 lab but don't even make a T2 con to
+			// start off"). Dividing by ServingCons counted busy T1 hands
+			// against demand only a T2 con can touch.
+			int ceilCons = 0;
+			for (uint cc = 1; cc < gOwnCount.length(); ++cc) {
+				if ((gOwnCount[cc] <= 0) || !Catalog::gMobile[int(cc)]
+					|| !Catalog::gBuilder[int(cc)])
+					continue;
+				const array<int>@ cb = Catalog::gBuildsList[int(cc)];
+				for (uint cq = 0; cq < cb.length(); ++cq) {
+					if (Catalog::gExtractsM[cb[cq]] >= BestExtract()) {
+						ceilCons += gOwnCount[cc];
+						break;
+					}
+				}
+			}
+			gain += mob * upD / float(1 + ceilCons);
+		}
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
 		gain += mob * ((over < drain) ? over : drain);
 		if (gMexOpen && (reach > 0.f)) {

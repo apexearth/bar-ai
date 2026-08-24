@@ -12,6 +12,18 @@ expensive line. Fix direction: floor on the line's value RATE against its
 own alternatives, or exempt units above the EMA's cost scale. Likely the
 same mechanism behind the standing "T2 cons barely exist" entry.
 
+## Insurance defence frames still die more often than they finish
+
+The chain works to the frame (want -> gate -> request -> spend: 680-1380m
+of mDefence) and completion is now possible (first armbeamer standing,
+seed 9) but unreliable (seed 5: 0 standing at 25m). Ruled out: the
+reclaimer (2 solar reclaims only). Suspects, in order: enemy raiders
+killing the frames themselves (the exact window the tower exists to
+close -- may need the frame's builder to also be its guard), walk-phase
+re-rolls beyond the 600 approach-hold, Priority::NORMAL losing workers
+to the engine's own assignment. Attribute with a watched frame before
+touching priorities.
+
 ## ValueOf has no risk term -- danger is refusal gates, not price
 
 Danger enters the market only as binary refusals on specific proposers

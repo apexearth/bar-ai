@@ -1,5 +1,28 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-24: cluster insurance, the first T2 con, and commitment discipline
+
+Three from apexearth's watches, one session:
+
+- **Building clusters are insured** ("a 50 metal enemy unit destroys 100s
+  of our value"): factories, the fusion pack, and the farm each price a
+  tower want at cluster value x apex_insure_rate when nothing covers them
+  within 450; identical gain across tower defs means ValueOf picks the
+  cheapest (the Sentry) by arithmetic. Sited at the cluster edge toward
+  the enemy.
+- **The first T2 con prices like the monopoly it is** ("we make a T2 lab
+  but don't even make a T2 con"): the upgrade stream now divides among
+  cons that can REACH it, not all busy hands -- a T1 fleet cannot moho.
+  First armack v=7 -> 173; techStart 7.8-8.1m on check seeds; first
+  decided KILL WIN vs stock hard (14.1m) same build.
+- **Commitment discipline**: started frames are held, and the final
+  approach (<600) counts as started; the roulette explores only at free
+  elections. Before: 61 sentry requests, 850m of abandoned nanoframes,
+  zero finished. After: first insurance defence standing (armbeamer,
+  seed 9); completion still unreliable on seed 5 -- residual filed in
+  ISSUES (suspects: frames killed by the raids they exist to stop, walk
+  churn beyond 600, NORMAL priority).
+
 ## 2026-08-23: the line floor is a scarcity question
 
 The opportunity floor (an order must beat 0.25x the executed-want EMA)
