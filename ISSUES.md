@@ -923,3 +923,34 @@ Defence share **4.2% against BARb's 17.4%**. Placement is now roughly right;
 QUANTITY is not. This is a separate problem from siting and is the largest
 remaining allocation gap in the AI, matching apexearth's stated #2 priority
 (protect mexes with llt) and the 0.12-vs-3.63 trade ratio.
+
+## 2026-08-24 (11) — enemy reach as a power-weighted mean
+
+apexearth: "we can perhaps average out all the enemy ranges we see. If they only
+have a few things outranging those defenses then we can still make them...
+per_unit(power * range) / totalPower"
+
+`Military::FoeReach()` took the MAXIMUM observed enemy group weapon range, which
+is an outlier statistic: one artillery piece spoke for their whole army. Now the
+cost-weighted mean over enemy groups (group cost is the power proxy the enemy
+model exposes). Measured in game: foeReach reads **294-413** instead of the
+artillery maximum, and the shield arc stops collapsing (`lineSpots` holds at 5-6
+rather than falling to 0).
+
+Alongside it, `ShieldedStakeAt` was still testing "is this asset behind me"
+against `Base::gFwd`, which is SNAPPED TO A CARDINAL -- so on a map where the
+enemy sits diagonally it was wrong by up to 45 degrees and rejected the entire
+base. Forward posts priced at exactly **0.00 gain** and could never win. Now on
+the true enemy bearing, like `FrontedStakeAt`.
+
+Measured, 12 games paired:
+
+| | before | after |
+|---|---|---|
+| tower placement forward of anchor | 51% | **96%** (216 vs 10) |
+| median bestFrontGain vs bestAssetGain | 0.0 vs 112 | **10.5 vs 19.5** |
+| defence share | 4.2% | **6.4%** (theirs 14.6%) |
+| games surviving to time limit | 2/12 | 3/12 |
+
+Defence quantity is still short of theirs and remains the largest gap; their mex
+count also pulled ahead (24 vs our 15) in this batch.

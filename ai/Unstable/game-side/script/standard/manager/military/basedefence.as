@@ -62,13 +62,24 @@ int gFoeReachAt = -1;
 
 void FoeReachSample()
 {
-	float best = 0.f;
+	// POWER-WEIGHTED MEAN, not the maximum (apexearth: "we can perhaps average
+	// out all the enemy ranges we see. If they only have a few things
+	// outranging those defenses then we can still make them... per_unit(power *
+	// range) / totalPower"). The max is an outlier statistic: one artillery
+	// piece spoke for their entire army and made every tower we own read as
+	// out-ranged. Group cost is the power proxy the enemy model exposes.
+	float wsum = 0.f;
+	float rsum = 0.f;
 	const int nG = aiEnemyMgr.GetEnemyGroupCount();
 	for (int i = 0; i < nG; ++i) {
 		const float r = aiEnemyMgr.GetEnemyGroupRange(i);
-		if (r > best)
-			best = r;
+		const float w = aiEnemyMgr.GetEnemyGroupCost(i);
+		if ((r > 0.f) && (w > 0.f)) {
+			rsum += w * r;
+			wsum += w;
+		}
 	}
+	const float best = (wsum > 0.f) ? (rsum / wsum) : 0.f;
 	// Decay what we remember toward what we can currently see, over the same
 	// horizon the loss field uses, then take the higher of the two.
 	if (gFoeReachAt >= 0) {

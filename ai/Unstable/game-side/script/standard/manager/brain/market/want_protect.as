@@ -23,6 +23,7 @@ void NoteDefSite(bool isFront)
 	gNextDefSiteLog = ai.frame + 60 * SECOND;
 	AiLog("apex: defsite front=" + gDefSiteFront + " asset=" + gDefSiteAsset
 		+ " lineSpots=" + gDbgLineN
+		+ " foeReach=" + formatFloat(Military::FoeReach(), "", 0, 0)
 		+ " bestFrontGain=" + formatFloat(gDbgFrontBest, "", 0, 2)
 		+ " bestAssetGain=" + formatFloat(gDbgAssetBest, "", 0, 2));
 	gDbgFrontBest = 0.f;

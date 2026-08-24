@@ -97,8 +97,20 @@ float StakeAt(const AIFloat3& in pos, float r)
 // counted by StakeAt, and adding both would count it twice.
 float ShieldedStakeAt(const AIFloat3& in pos, float reach)
 {
-	if (!Base::gAxisSet || (reach < 1.f))
+	if (reach < 1.f)
 		return 0.f;
+	// The TRUE enemy bearing, not Base::gFwd. gFwd is snapped to a cardinal, so
+	// on a map where the enemy sits diagonally the "is it behind me" test was
+	// wrong by up to 45 degrees and rejected the entire base -- forward posts
+	// priced at exactly 0.00 gain and never won an auction.
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(foe))
+		return 0.f;
+	AIFloat3 dir = foe - pos;
+	if (dir.SqLength2D() < NEAR_ZERO)
+		return 0.f;
+	dir.SafeNormalize2D();
+	const AIFloat3 across(-dir.z, 0.f, dir.x);
 	const float horiz = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
 	const float h = (horiz > 1.f) ? horiz : 300.f;
 	float m = 0.f;
@@ -106,11 +118,11 @@ float ShieldedStakeAt(const AIFloat3& in pos, float reach)
 		if (gLExtract[i] <= 0.f)
 			continue;
 		const AIFloat3 rel = gLPos[i] - pos;
-		if (rel.x * Base::gFwd.x + rel.z * Base::gFwd.z >= 0.f)
+		if ((rel.x * dir.x + rel.z * dir.z) > 0.f)
 			continue;   // in front of the post: it shields nothing there
-		const float lat = abs(rel.x * Base::gAcross.x + rel.z * Base::gAcross.z);
-		if ((lat > reach) || (gLPos[i].distance2D(pos) <= reach))
-			continue;
+		const float lat = abs(rel.x * across.x + rel.z * across.z);
+		if ((lat > reach) || (gLPos[i].distance2D(pos) < reach))
+			continue;   // nearer than reach is FrontedStakeAt's to count
 		m += gLIncome[i] * gLExtract[i] * h;
 	}
 	for (uint i = 0; i < gOwnBig.length(); ++i) {
@@ -118,12 +130,24 @@ float ShieldedStakeAt(const AIFloat3& in pos, float reach)
 			continue;
 		const AIFloat3 bp = gOwnBig[i].GetPos(ai.frame);
 		const AIFloat3 rel = bp - pos;
-		if (rel.x * Base::gFwd.x + rel.z * Base::gFwd.z >= 0.f)
+		if ((rel.x * dir.x + rel.z * dir.z) > 0.f)
 			continue;
-		const float lat = abs(rel.x * Base::gAcross.x + rel.z * Base::gAcross.z);
-		if ((lat > reach) || (bp.distance2D(pos) <= reach))
+		const float lat = abs(rel.x * across.x + rel.z * across.z);
+		if ((lat > reach) || (bp.distance2D(pos) < reach))
 			continue;
 		m += Catalog::gCostM[int(gOwnBig[i].circuitDef.id)];
+	}
+	for (uint i = 0; i < gOwnGen.length(); ++i) {
+		if (gOwnGen[i] is null)
+			continue;
+		const AIFloat3 gp = gOwnGen[i].GetPos(ai.frame);
+		const AIFloat3 rel = gp - pos;
+		if ((rel.x * dir.x + rel.z * dir.z) > 0.f)
+			continue;
+		const float lat = abs(rel.x * across.x + rel.z * across.z);
+		if ((lat > reach) || (gp.distance2D(pos) < reach))
+			continue;
+		m += Catalog::gCostM[int(gOwnGen[i].circuitDef.id)];
 	}
 	return m;
 }
