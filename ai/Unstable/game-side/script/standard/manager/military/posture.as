@@ -577,6 +577,7 @@ void UpdatePosture()
 	PublishDefence();   // our front-tower count and income, for the team budget
 	LogAidState();      // read-only: what an ally-aid response would do
 	Brain::BudgetLog();
+	IntelDiag();       // read-only: the enemy reading every gate above consumed
 	UpdateKillingBlow();
 	UpdateRaidCaution();
 	UpdateMassing();

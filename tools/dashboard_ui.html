@@ -405,8 +405,12 @@ async function openGame(dir, isRefresh) {
       if (nowOut) { nowOut.innerHTML = keep.html; nowOut.style.display = keep.disp; }
     }
     if ((changed || !isRefresh) && !d.matches && d.chart) drawCharts(d);
+    if ((changed || !isRefresh) && !d.matches && d.chart) drawSpend(d);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadBrain(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadCrew(dir);
+    if ((changed || !isRefresh) && !d.matches && d.chart) loadUnits(dir);
+    if ((changed || !isRefresh) && !d.matches && d.chart) loadIntel(dir);
+    if ((changed || !isRefresh) && !d.matches && d.chart) loadBudget(dir);
     // still running (single match) or partially done (tournament): keep refreshing
     const unfinished = d.running || (d.matches && d.done < (d.planned || d.games));
     if (unfinished) openTimer = setTimeout(() => {
@@ -476,6 +480,69 @@ function renderMatch(d) {
       <div><div class="dim">metal produced (cumulative)</div><canvas id="c-metal" width="560" height="220"></canvas></div>
       <div><div class="dim">standing army (metal value)</div><canvas id="c-army" width="560" height="220"></canvas></div>
     </div></div>
+  <div class="card"><h2>Where the metal went — cumulative, by destination</h2>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <label class="f">side<select id="sp-side"></select></label>
+      <label class="f">view<select id="sp-mode">
+        <option value="metal">metal (cumulative)</option>
+        <option value="share">share of spend (%)</option>
+      </select></label>
+      <label class="f">&nbsp;<span class="dim" id="sp-note"></span></label>
+    </div>
+    <div class="legend" id="sp-legend"></div>
+    <canvas id="c-spend" width="1140" height="280"></canvas>
+    <div class="dim" style="font-size:12px;margin-top:4px">Exclusive buckets from
+      dev_stats_export: every finished unit lands in exactly one, so the areas
+      sum to the whole spend. Constructors and nano turrets are build power, not
+      economy.</div></div>
+  <div class="card"><h2>Units built over time</h2>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <label class="f">team<select id="uc-team"></select></label>
+      <label class="f">view<select id="uc-mode">
+        <option value="counts">units finished (count)</option>
+        <option value="metal">metal invested</option>
+      </select></label>
+      <label class="f">&nbsp;<span class="dim" id="uc-note"></span></label>
+    </div>
+    <div class="legend" id="uc-legend" style="flex-wrap:wrap"></div>
+    <canvas id="c-units" width="1140" height="300"></canvas>
+    <table style="margin-top:8px"><thead><tr><th>unit</th><th>def</th>
+      <th>built</th><th>metal</th><th>first seen</th></tr></thead>
+      <tbody id="uc-table"></tbody></table></div>
+  <div class="card"><h2>The enemy as we believe it to be</h2>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <label class="f">team<select id="in-team"></select></label>
+      <label class="f">source<select id="in-mode">
+        <option value="fresh">fresh only (seen recently)</option>
+        <option value="raw">raw (includes ghosts)</option>
+      </select></label>
+      <label class="f">&nbsp;<span class="dim" id="in-note"></span></label>
+    </div>
+    <div class="legend" id="in-legend" style="flex-wrap:wrap"></div>
+    <canvas id="c-intel" width="1140" height="300"></canvas>
+    <div class="dim" style="font-size:12px;margin-top:4px">Stacked perceived
+      enemy metal by role. The white line is our own army (OurArmyNow), the
+      dashed line the massing threat the posture gates actually compare against.
+      raw minus fresh is the ghost share — units seen once and assumed still
+      there — and apex_ghost_weight decides how much of it counts.</div></div>
+  <div class="card"><h2>Brain budget over time — what it was trying to buy</h2>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <label class="f">team<select id="bm-team"></select></label>
+      <label class="f">&nbsp;<span class="dim" id="bm-note"></span></label>
+    </div>
+    <div class="legend" id="bm-legend" style="flex-wrap:wrap"></div>
+    <canvas id="c-budget" width="1140" height="280"></canvas>
+    <div class="dim" style="font-size:12px;margin-top:4px">Solid is the share of
+      metal a category HAS, dashed is the share its target curve asks for at the
+      current income. The ratio between them is the multiplier every want in
+      that category is priced by, so a category held under its dashed line is
+      the AI bidding for something it never won.</div>
+    <div class="legend" id="rk-legend" style="flex-wrap:wrap"></div>
+    <canvas id="c-risk" width="1140" height="180"></canvas>
+    <div class="dim" style="font-size:12px;margin-top:4px">Below: the risk field
+      it prices deferred wants against — standing mexes and how many a turret
+      covers, mean shortfall (the fraction of incoming damage our guns fail to
+      stop), and metal lost so far.</div></div>
   <div class="card"><h2>Brain wants over time — what it wanted to build, and how badly</h2>
     <div class="row" style="gap:12px;align-items:flex-end">
       <label class="f">team / elector<select id="bw-team"></select></label>
@@ -552,6 +619,251 @@ function drawCharts(d) {
     });
   }
 }
+/* ---------- shared chart plumbing ----------
+   Every chart below is time on x and one linear axis on y, so the frame, the
+   grid and the stacking are written once. */
+function frame(cv, mt, hi, opts) {
+  const o = opts || {};
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
+  const P = o.pad || 46, B = o.bottom || 22;
+  ctx.clearRect(0, 0, W, H);
+  ctx.font = "10px Consolas";
+  const plotH = H - B - 10;
+  const X = m => P + (W - P - 10) * (mt > 0 ? m / mt : 0);
+  const Y = v => H - B - plotH * (hi > 0 ? v / hi : 0);
+  ctx.strokeStyle = "#2c3642"; ctx.fillStyle = "#8a96a3";
+  const fmt = o.fmt || (v => Math.round(v).toLocaleString());
+  for (let g = 0; g <= 4; g++) {
+    const y = Y(hi * g / 4);
+    ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - 10, y); ctx.stroke();
+    ctx.fillText(fmt(hi * g / 4), 3, y + 3);
+  }
+  ctx.fillStyle = "#8a96a3";
+  for (let g = 0; g <= 6; g++) {
+    const x = P + (W - P - 10) * g / 6;
+    ctx.fillText(Math.round(mt * g / 6) + "m", x - 8, H - 4);
+  }
+  return {ctx, X, Y, W, H, P, B};
+}
+// Stacked areas, bottom band first. Returns the running top so a line can be
+// drawn over it.
+function stackAreas(f, mins, rows, colors) {
+  const N = mins.length, base = new Array(N).fill(0);
+  rows.forEach((row, ri) => {
+    f.ctx.fillStyle = colors[ri % colors.length] + "cc";
+    f.ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = f.X(mins[i]), y = f.Y(base[i]);
+      i ? f.ctx.lineTo(x, y) : f.ctx.moveTo(x, y);
+    }
+    for (let i = N - 1; i >= 0; i--) {
+      base[i] += row[i] || 0;
+      f.ctx.lineTo(f.X(mins[i]), f.Y(base[i]));
+    }
+    f.ctx.closePath(); f.ctx.fill();
+  });
+  return base;
+}
+function line(f, mins, vals, color, dash, width) {
+  f.ctx.strokeStyle = color; f.ctx.lineWidth = width || 1.6;
+  if (dash) f.ctx.setLineDash(dash);
+  f.ctx.beginPath();
+  mins.forEach((m, i) => {
+    const x = f.X(m), y = f.Y(vals[i] || 0);
+    i ? f.ctx.lineTo(x, y) : f.ctx.moveTo(x, y);
+  });
+  f.ctx.stroke(); f.ctx.setLineDash([]); f.ctx.lineWidth = 1;
+}
+function legendHTML(el, items) {
+  $(el).innerHTML = items.map(([lab, col, dashed]) =>
+    `<span><i style="background:${col};${dashed ? "opacity:.55" : ""}"></i>${esc(lab)}${
+      dashed ? " (target)" : ""}</span>`).join("");
+}
+
+/* ---------- metal by destination ---------- */
+const SPEND_KEYS = [["eco", "economy", "#5fbf77"], ["sArmy", "army", "#e0876c"],
+  ["def", "defence", "#d9c25e"], ["defAA", "anti-air", "#c78ce0"],
+  ["bp", "build power", "#4fa3e3"], ["fac", "factories", "#5fc7c0"],
+  ["other", "other", "#94a3ae"]];
+let SPEND = null;
+function drawSpend(d) {
+  SPEND = d;
+  const sel = $("#sp-side"); if (!sel) return;
+  const sides = Object.keys(d.chart).sort();
+  const specs = (d.result.teams || []).map(t => t.spec);
+  if (sel.options.length !== sides.length) {
+    sel.innerHTML = sides.map(s =>
+      `<option value="${s}">side ${s} — ${esc(specs[s] || "")}</option>`).join("");
+  }
+  sel.onchange = renderSpend;
+  $("#sp-mode").onchange = renderSpend;
+  renderSpend();
+}
+function renderSpend() {
+  const cv = $("#c-spend"); if (!cv || !SPEND) return;
+  const c = SPEND.chart[$("#sp-side").value]; if (!c) return;
+  const share = $("#sp-mode").value === "share";
+  const mins = c.min, N = mins.length;
+  const totals = mins.map((_, i) => SPEND_KEYS.reduce((s, k) => s + (c[k[0]] ? c[k[0]][i] : 0), 0));
+  if (!totals.some(v => v > 0)) {
+    $("#sp-note").textContent = "no per-destination counters in this run — "
+      + "it predates them; re-run after deploying the gadgets";
+    frame(cv, Math.max(1, ...mins), 1);
+    return;
+  }
+  const rows = SPEND_KEYS.map(k => mins.map((_, i) => {
+    const v = c[k[0]] ? c[k[0]][i] : 0;
+    return share ? (totals[i] > 0 ? 100 * v / totals[i] : 0) : v;
+  }));
+  const hi = share ? 100 : Math.max(1, ...totals);
+  const f = frame(cv, Math.max(1, ...mins), hi,
+    share ? {fmt: v => v.toFixed(0) + "%"} : {});
+  stackAreas(f, mins, rows, SPEND_KEYS.map(k => k[2]));
+  legendHTML("#sp-legend", SPEND_KEYS.map(k => [k[1], k[2]]));
+  const last = N - 1, tot = totals[last] || 1;
+  $("#sp-note").textContent = `${Math.round(tot).toLocaleString()} metal finished by `
+    + `${mins[last]}m: ` + SPEND_KEYS.map(k =>
+        `${k[1]} ${Math.round(100 * (c[k[0]] ? c[k[0]][last] : 0) / tot)}%`).join(", ");
+}
+
+/* ---------- units built ---------- */
+let UNITS = null;
+async function loadUnits(dir) {
+  const sel = $("#uc-team"); if (!sel) return;
+  try { UNITS = await api("/api/units?dir=" + encodeURIComponent(dir)); }
+  catch (e) { UNITS = null; }
+  const teams = UNITS && UNITS.teams ? Object.keys(UNITS.teams) : [];
+  if (!teams.length) { $("#uc-note").textContent = "no unit telemetry in this run"; return; }
+  sel.innerHTML = teams.map(t =>
+    `<option value="${t}">team ${t} (side ${UNITS.teams[t].ally})</option>`).join("");
+  sel.onchange = drawUnits;
+  $("#uc-mode").onchange = drawUnits;
+  drawUnits();
+}
+function drawUnits() {
+  const cv = $("#c-units"); if (!cv || !UNITS) return;
+  const t = UNITS.teams[$("#uc-team").value]; if (!t) return;
+  const metalMode = $("#uc-mode").value === "metal";
+  const table = metalMode ? t.metal : t.counts;
+  const mins = t.min, N = mins.length;
+  const defs = Object.keys(table);
+  if (!defs.length) {
+    $("#uc-note").textContent = metalMode ? "no metal-per-def data"
+      : "no unitCount= data — this run predates the per-def counters";
+    frame(cv, Math.max(1, ...mins), 1);
+    return;
+  }
+  const finalOf = n => (table[n] || [])[N - 1] || 0;
+  defs.sort((a, b) => finalOf(b) - finalOf(a));
+  // The tail is dozens of one-offs; stacking them all makes 14 bands of noise.
+  const shown = defs.slice(0, 14);
+  const rows = shown.map(n => table[n]);
+  const totals = mins.map((_, i) => rows.reduce((s, r) => s + (r[i] || 0), 0));
+  const f = frame(cv, Math.max(1, ...mins), Math.max(1, ...totals));
+  stackAreas(f, mins, rows, KIND_COLORS);
+  const lab = n => (UNITS.labels[n] ? UNITS.labels[n] + " (" + n + ")" : n);
+  legendHTML("#uc-legend", shown.map((n, i) => [lab(n), KIND_COLORS[i % KIND_COLORS.length]]));
+  $("#uc-note").textContent = `${defs.length} unit types, `
+    + `${Math.round(totals[N - 1]).toLocaleString()} ${metalMode ? "metal" : "units"} by ${mins[N - 1]}m`;
+  $("#uc-table").innerHTML = defs.map(n => {
+    const cRow = t.counts[n] || [], mRow = t.metal[n] || [];
+    const first = (t.counts[n] || t.metal[n] || []).findIndex(v => v > 0);
+    return `<tr><td>${esc(UNITS.labels[n] || "")}</td><td class="mono dim">${esc(n)}</td>
+      <td>${cRow[N - 1] || "—"}</td><td>${Math.round(mRow[N - 1] || 0).toLocaleString()}</td>
+      <td class="dim">${first >= 0 ? mins[first] + "m" : "—"}</td></tr>`;
+  }).join("");
+}
+
+/* ---------- perceived enemy ---------- */
+let INTEL = null;
+async function loadIntel(dir) {
+  const sel = $("#in-team"); if (!sel) return;
+  try { INTEL = await api("/api/intel?dir=" + encodeURIComponent(dir)); }
+  catch (e) { INTEL = null; }
+  const teams = INTEL && INTEL.teams ? Object.keys(INTEL.teams) : [];
+  if (!teams.length) {
+    $("#in-note").textContent = "no `apex: intel` lines — this run predates them";
+    return;
+  }
+  sel.innerHTML = teams.map(t => `<option value="${t}">team ${t}</option>`).join("");
+  sel.onchange = drawIntel;
+  $("#in-mode").onchange = drawIntel;
+  drawIntel();
+}
+function drawIntel() {
+  const cv = $("#c-intel"); if (!cv || !INTEL) return;
+  const t = INTEL.teams[$("#in-team").value]; if (!t) return;
+  const src = $("#in-mode").value;
+  const table = (src === "raw" ? t.byRoleRaw : t.byRoleFresh) || {};
+  const mins = t.min, N = mins.length;
+  const roles = INTEL.roles.filter(r => (table[r] || []).some(v => v > 0));
+  const totals = mins.map((_, i) => roles.reduce((s, r) => s + (table[r][i] || 0), 0));
+  const hi = Math.max(1, ...totals, ...t.ours, ...t.massing);
+  const f = frame(cv, Math.max(1, ...mins), hi);
+  stackAreas(f, mins, roles.map(r => table[r]), KIND_COLORS);
+  line(f, mins, t.ours, "#e6ecf2", null, 1.8);
+  line(f, mins, t.massing, "#e6ecf2", [4, 3], 1.4);
+  legendHTML("#in-legend", roles.map((r, i) => [r, KIND_COLORS[i % KIND_COLORS.length]])
+    .concat([["our army", "#e6ecf2"], ["massing threat (dashed)", "#e6ecf2"]]));
+  const l = N - 1;
+  $("#in-note").textContent = `${N} samples; at ${mins[l]}m ours `
+    + `${Math.round(t.ours[l]).toLocaleString()} vs ${Math.round(t.fresh[l]).toLocaleString()} seen`
+    + ` (+${Math.round(t.raw[l] - t.fresh[l]).toLocaleString()} ghosts)`
+    + `, ${t.groups[l]} enemy groups, peak ${Math.round(t.peak[l]).toLocaleString()}`;
+}
+
+/* ---------- brain budget ---------- */
+const CAT_COLORS = {army: "#e0876c", def: "#d9c25e", aa: "#c78ce0",
+  eco: "#5fbf77", bp: "#4fa3e3"};
+let BUDGET = null;
+async function loadBudget(dir) {
+  const sel = $("#bm-team"); if (!sel) return;
+  try { BUDGET = await api("/api/brainmetrics?dir=" + encodeURIComponent(dir)); }
+  catch (e) { BUDGET = null; }
+  const teams = BUDGET && BUDGET.teams ? Object.keys(BUDGET.teams) : [];
+  if (!teams.length) {
+    $("#bm-note").textContent = "no `apex: budget` lines in this infolog";
+    return;
+  }
+  sel.innerHTML = teams.map(t => `<option value="${t}">team ${t}</option>`).join("");
+  sel.onchange = drawBudget;
+  drawBudget();
+}
+function drawBudget() {
+  const cv = $("#c-budget"); if (!cv || !BUDGET) return;
+  const t = BUDGET.teams[$("#bm-team").value]; if (!t || !t.min.length) return;
+  const cats = BUDGET.cats, mins = t.min, N = mins.length;
+  const hi = Math.max(0.1, ...cats.flatMap(c => t.have[c].concat(t.target[c])));
+  const f = frame(cv, Math.max(1, ...mins), hi, {fmt: v => (100 * v).toFixed(0) + "%"});
+  cats.forEach(c => {
+    line(f, mins, t.have[c], CAT_COLORS[c], null, 1.8);
+    line(f, mins, t.target[c], CAT_COLORS[c], [4, 3], 1.2);
+  });
+  legendHTML("#bm-legend", cats.map(c => [c, CAT_COLORS[c]])
+    .concat(cats.map(c => [c, CAT_COLORS[c], true])));
+  const l = N - 1;
+  $("#bm-note").textContent = `${N} samples; at ${mins[l]}m income `
+    + `${t.income[l].toFixed(1)} m/s, ${Math.round(t.spent[l]).toLocaleString()} metal committed`;
+  drawRisk(t.risk);
+}
+function drawRisk(r) {
+  const cv = $("#c-risk"); if (!cv) return;
+  if (!r || !r.min.length) { frame(cv, 1, 1); return; }
+  const hi = Math.max(1, ...r.mex);
+  const f = frame(cv, Math.max(1, ...r.min), hi);
+  line(f, r.min, r.mex, "#5fbf77", null, 1.8);
+  line(f, r.min, r.covered, "#4fa3e3", null, 1.8);
+  // Shortfall is a 0-1 fraction, drawn against the mex axis so the shape is
+  // readable beside it. The number, not the height, is what to read.
+  line(f, r.min, r.shortfall.map(v => v * hi), "#e0876c", [4, 3], 1.4);
+  const l = r.min.length - 1;
+  $("#rk-legend").innerHTML = `<span><i style="background:#5fbf77"></i>standing mexes</span>`
+    + `<span><i style="background:#4fa3e3"></i>mexes a turret covers</span>`
+    + `<span><i style="background:#e0876c;opacity:.55"></i>mean shortfall `
+    + `${r.shortfall[l].toFixed(2)} (scaled to the mex axis)</span>`
+    + `<span class="dim">lost ${Math.round(r.lostM[l]).toLocaleString()} metal</span>`;
+}
+
 /* ---------- brain wants ---------- */
 const KIND_COLORS = ["#4fa3e3","#e0876c","#5fbf77","#c78ce0","#d9c25e","#5fc7c0",
   "#e07b9a","#8f9ce0","#9fbf5f","#c96f5f","#7fa8bf","#bf7fd9","#94a3ae",

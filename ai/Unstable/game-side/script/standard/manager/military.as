@@ -18,4 +18,5 @@
 #include "military/territory.as"    // what we hold, where the border and front are
 #include "military/defenceline.as"  // the front gun and AiMakeDefence
 #include "military/airthreat.as"    // enemy air scaling and heavy AA caps
+#include "military/intel.as"        // what we believe the enemy has, on a clock
 #include "military/gift.as"          // back players ship ground army to the front

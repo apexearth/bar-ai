@@ -1,5 +1,30 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-24: the dashboard can see what the AI was thinking
+
+Four telemetry gaps closed, all read through tools/dashboard.py:
+
+- **Metal by destination.** dev_stats_export now assigns every finished
+  unit to exactly one bucket -- mEco, mArmy, mDefence, mDefAA, mBP,
+  mFactories, mOther -- so army production has a counter for the first
+  time and cheap units are inside one. BAR states a solar's output as
+  negative energyupkeep and a converter only via
+  customparams.energyconv_capacity; testing energyMake alone filed every
+  solar under "other" (caught on the first verification run, seed 3).
+- **Unit counts.** `unitCount=name:n` per sample, for every finished def
+  at any cost. Counts were previously derived by dividing a metal sum by
+  a cost read from the other game tree.
+- **Perceived enemy.** Military::IntelDiag logs `apex: intel` every 30s:
+  our army, massing threat, seen peak, group count, and per role the
+  fresh/raw pair whose gap IS the ghost share the posture gates discount.
+- **Brain metrics over time.** The dashboard now parses the existing
+  `apex: budget` and `apex: risk` lines into share-against-target curves
+  per category, plus income, committed metal, and the risk field.
+
+Verified on a 10-minute Comet Catcher run: zero compile errors, buckets
+reconcile against unitCount (5 mex = 350 eco, radar = 60 other), all four
+panels render with no console errors.
+
 ## 2026-08-24: cluster insurance, the first T2 con, and commitment discipline
 
 Three from apexearth's watches, one session:

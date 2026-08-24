@@ -105,6 +105,19 @@ local mexAt = {}          -- team -> {n -> frame the nth finished}
 local commLost = {}       -- team -> frame its commander died (-1 if alive)
 local builtTop = {}       -- team -> {unitName -> metal built}
 local cheapBuilt = {}     -- team -> {unitName -> metal built}, BELOW SPAM_COST
+-- WHERE THE METAL WENT, as exclusive buckets summing to everything finished.
+-- mBuiltReal/defSpend/facSpend each answer one question and overlap or omit:
+-- army production had no counter at all, and cheap units were outside every
+-- one of them. Assigned once per unit, in a fixed order, so eco+army+def+
+-- defAA+bp+fac+other is the whole spend.
+local ecoSpend = {}       -- team -> mex, energy, converters, storage
+local armySpend = {}      -- team -> mobile armed non-builders
+local bpSpend = {}        -- team -> constructors and nano turrets (no commander)
+local otherSpend = {}     -- team -> everything else (unarmed static, transports)
+-- Unit COUNTS, not metal. "how many Pawns did we build" was only answerable by
+-- dividing a metal sum by a cost read from another tree, and every count in a
+-- report so far was derived that way.
+local builtCount = {}     -- team -> {unitName -> units finished}
 -- Metal sunk into STATIC defence. It was invisible: armyValue() counts only
 -- units with speed > 0, and the composition buckets are factories, constructors
 -- and army, so towers landed in mBuiltReal and nowhere else. apexearth: "the
@@ -292,6 +305,35 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	end
 	if isJammerTower(ud) then
 		jamTowers[unitTeam] = (jamTowers[unitTeam] or 0) + 1
+	end
+	do
+		builtCount[unitTeam] = builtCount[unitTeam] or {}
+		builtCount[unitTeam][ud.name] = (builtCount[unitTeam][ud.name] or 0) + 1
+		local cost = ud.metalCost or 0
+		local static = (ud.speed or 0) == 0
+		local armed = #ud.weapons > 0
+		local isComm = (ud.customParams or {}).iscommander
+		if ud.isFactory then
+			-- counted in facSpend below; kept out of the other buckets
+		elseif ud.isBuilder and not isComm then
+			bump(bpSpend, unitTeam, cost)
+		elseif static and armed then
+			-- def/defAA below
+		elseif not static and armed then
+			bump(armySpend, unitTeam, cost)
+		-- BAR states a solar's output as NEGATIVE energyupkeep, not energyMake,
+		-- and a converter only by customparams.energyconv_capacity -- testing
+		-- the obvious fields alone filed every solar under "other".
+		elseif (ud.extractsMetal or 0) > 0 or (ud.energyMake or 0) > 0
+			or (ud.windGenerator or 0) > 0 or (ud.tidalGenerator or 0) > 0
+			or (ud.energyUpkeep or 0) < 0
+			or (ud.customParams or {}).energyconv_capacity ~= nil
+			or (ud.energyStorage or 0) > 100 or (ud.metalStorage or 0) > 100
+		then
+			bump(ecoSpend, unitTeam, cost)
+		elseif not isComm then
+			bump(otherSpend, unitTeam, cost)
+		end
 	end
 	-- CHEAP UNITS WERE INVISIBLE IN EVERY COUNTER. A Pawn is 54 metal against
 	-- SPAM_COST 120, so armyReal, mBuiltReal, allBuilt and top= all excluded it --
@@ -506,6 +548,10 @@ local function dump(reason)
 				string.format("mBuiltReal=%.0f", builtReal[teamID] or 0),
 				string.format("mFactories=%.0f", facSpend[teamID] or 0),
 				string.format("mDefence=%.0f", defSpend[teamID] or 0),
+				string.format("mEco=%.0f", ecoSpend[teamID] or 0),
+				string.format("mArmy=%.0f", armySpend[teamID] or 0),
+				string.format("mBP=%.0f", bpSpend[teamID] or 0),
+				string.format("mOther=%.0f", otherSpend[teamID] or 0),
 				string.format("mDefAA=%.0f", defAASpend[teamID] or 0),
 				string.format("mReclaim=%.0f", mReclaim[teamID] or 0),
 				string.format("mRezSpend=%.0f", mRezSpend[teamID] or 0),
@@ -546,6 +592,14 @@ local function dump(reason)
 			end
 			if #all > 0 then
 				parts[#parts + 1] = "allBuilt=" .. table.concat(all, ",")
+			end
+			local counts = {}
+			for name, n in pairs(builtCount[teamID] or {}) do
+				counts[#counts + 1] = string.format("%s:%d", name, n)
+			end
+			table.sort(counts)
+			if #counts > 0 then
+				parts[#parts + 1] = "unitCount=" .. table.concat(counts, ",")
 			end
 
 			local av, ac = armyValue(teamID)

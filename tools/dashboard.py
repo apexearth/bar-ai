@@ -341,6 +341,182 @@ def crew_roles(d):
     return {"roles": CREW_ROLES, "teams": teams}
 
 
+# Cumulative metal by destination, straight from dev_stats_export's exclusive
+# buckets. Runs from before those fields existed simply read zero everywhere,
+# which is what an absent counter should look like.
+SPEND_BUCKETS = {
+    "eco": "mEco",
+    "sArmy": "mArmy",
+    "def": "mDefence",
+    "defAA": "mDefAA",
+    "bp": "mBP",
+    "fac": "mFactories",
+    "other": "mOther",
+}
+
+
+def unit_counts(d):
+    """Units finished per def, per team, over time -- from `unitCount=`.
+
+    Counts, not metal: a metal sum divides out to a count only if you already
+    know the cost, and the two game trees disagree on costs.
+    """
+    r = load_result(d) or {}
+    teams = {}
+    for e in r.get("stats", []) or []:
+        if not isinstance(e, dict) or e.get("reason") != "periodic":
+            continue
+        # unitCount is newer than the metal fields, so a run from before it
+        # still charts metal rather than charting nothing.
+        raw = e.get("unitCount")
+        raw = raw if isinstance(raw, str) else ""
+        tid = str(int(e.get("team", -1)))
+        t = teams.setdefault(tid, {"ally": int(e.get("ally", -1)),
+                                   "min": [], "counts": {}, "metal": {}})
+        t["min"].append(round((e.get("frame", 0) or 0) / 30 / 60, 1))
+        n = len(t["min"])
+        for tok in raw.split(","):
+            name, _, v = tok.partition(":")
+            if not name or not v.isdigit():
+                continue
+            row = t["counts"].setdefault(name, [])
+            row.extend([row[-1] if row else 0] * (n - 1 - len(row)))
+            row.append(int(v))
+        for tok in (e.get("allBuilt") or "").split(",") + \
+                   (e.get("cheapBuilt") or "").split(","):
+            name, _, v = tok.partition(":")
+            if not name or not v:
+                continue
+            try:
+                mv = float(v)
+            except ValueError:
+                continue
+            row = t["metal"].setdefault(name, [])
+            row.extend([row[-1] if row else 0.0] * (n - 1 - len(row)))
+            row.append(mv)
+    # A def first seen at sample k has no history before it, and a def that
+    # stops appearing kept whatever it had: pad both ends so every series is
+    # the same length as the time axis.
+    for t in teams.values():
+        n = len(t["min"])
+        for tbl in (t["counts"], t["metal"]):
+            for row in tbl.values():
+                row.extend([row[-1] if row else 0] * (n - len(row)))
+    names = unit_display_names()
+    labels = {n: names.get(n, "")
+              for t in teams.values() for n in list(t["counts"]) + list(t["metal"])}
+    return {"teams": teams, "labels": labels}
+
+
+INTEL_RE = re.compile(
+    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: intel ours=([-\d.]+) army=([-\d.]+) "
+    r"massing=([-\d.]+) mobile=([-\d.]+) peak=([-\d.]+) groups=(\d+) "
+    r"fresh=([-\d.]+) raw=([-\d.]+) \|(.*)")
+INTEL_SCALARS = ["ours", "army", "massing", "mobile", "peak", "groups",
+                 "fresh", "raw"]
+
+
+def enemy_intel(d):
+    """The enemy as the AI believes it to be, over time (Military::IntelDiag).
+
+    Per role the pair is fresh/raw: raw includes everything ever seen, fresh
+    only what was seen inside the manager's window. The gap is the ghost share,
+    and apex_ghost_weight decides how much of it the posture gates consume.
+    """
+    f = d / "infolog.txt"
+    if not f.is_file():
+        return {"error": "no infolog"}
+    teams, roles = {}, {}
+    with f.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "apex: intel " not in line:
+                continue
+            m = INTEL_RE.search(line)
+            if not m:
+                continue
+            t = teams.setdefault(m.group(2), {"min": [], "byRoleFresh": {},
+                                              "byRoleRaw": {},
+                                              **{k: [] for k in INTEL_SCALARS}})
+            t["min"].append(float(m.group(1)))
+            for i, k in enumerate(INTEL_SCALARS):
+                t[k].append(float(m.group(3 + i)))
+            n = len(t["min"])
+            for tok in m.group(11).split():
+                role, _, pair = tok.partition("=")
+                fr, _, rw = pair.partition("/")
+                if not role or not rw:
+                    continue
+                roles[role] = roles.get(role, 0.0) + float(rw)
+                for key, val in (("byRoleFresh", fr), ("byRoleRaw", rw)):
+                    row = t[key].setdefault(role, [])
+                    row.extend([0.0] * (n - 1 - len(row)))
+                    row.append(float(val))
+            for key in ("byRoleFresh", "byRoleRaw"):
+                for row in t[key].values():
+                    row.extend([0.0] * (n - len(row)))
+    return {"teams": teams, "roles": sorted(roles, key=lambda k: -roles[k]),
+            "scalars": INTEL_SCALARS}
+
+
+BUDGET_RE = re.compile(
+    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: budget army=([-\d.]+)/([-\d.]+) "
+    r"def=([-\d.]+)/([-\d.]+) aa=([-\d.]+)/([-\d.]+) eco=([-\d.]+)/([-\d.]+) "
+    r"bp=([-\d.]+)/([-\d.]+) inc=([-\d.]+) total=([-\d.]+)")
+BUDGET_CATS = ["army", "def", "aa", "eco", "bp"]
+RISK_RE = re.compile(
+    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: risk mex=(\d+) covered=(\d+) "
+    r"meanShort=([-\d.]+) lostM=([-\d.]+)"
+    r"(?:.*?home\[hazard=([-\d.]+)/ks short=([-\d.]+)\])?")
+
+
+def brain_metrics(d):
+    """The arbiter's own state over time: what share of metal each category has
+    against the share its target curve asks for, plus the risk field.
+
+    Share against target IS the multiplier every want is priced by
+    (Brain::BudgetMult), so a category pinned under its target for ten minutes
+    is the AI saying it wanted to buy something it never got to buy.
+    """
+    f = d / "infolog.txt"
+    if not f.is_file():
+        return {"error": "no infolog"}
+    teams = {}
+    with f.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "apex: budget " in line:
+                m = BUDGET_RE.search(line)
+                if not m:
+                    continue
+                t = teams.setdefault(m.group(2), _brain_team())
+                t["min"].append(float(m.group(1)))
+                for i, c in enumerate(BUDGET_CATS):
+                    t["have"][c].append(float(m.group(3 + i * 2)))
+                    t["target"][c].append(float(m.group(4 + i * 2)))
+                t["income"].append(float(m.group(13)))
+                t["spent"].append(float(m.group(14)))
+            elif "apex: risk " in line:
+                m = RISK_RE.search(line)
+                if not m:
+                    continue
+                t = teams.setdefault(m.group(2), _brain_team())
+                t["risk"]["min"].append(float(m.group(1)))
+                t["risk"]["mex"].append(int(m.group(3)))
+                t["risk"]["covered"].append(int(m.group(4)))
+                t["risk"]["shortfall"].append(float(m.group(5)))
+                t["risk"]["lostM"].append(float(m.group(6)))
+                t["risk"]["homeHazard"].append(float(m.group(7) or 0))
+                t["risk"]["homeShort"].append(float(m.group(8) or 0))
+    return {"cats": BUDGET_CATS, "teams": teams}
+
+
+def _brain_team():
+    return {"min": [], "income": [], "spent": [],
+            "have": {c: [] for c in BUDGET_CATS},
+            "target": {c: [] for c in BUDGET_CATS},
+            "risk": {k: [] for k in ("min", "mex", "covered", "shortfall",
+                                     "lostM", "homeHazard", "homeShort")}}
+
+
 def match_detail(d):
     r = load_result(d)
     if r is None:
@@ -359,11 +535,14 @@ def match_detail(d):
         if e.get("reason") == "periodic":
             bucket = series.setdefault(ally, {})
             b = bucket.setdefault(fr, {"metal": 0.0, "army": 0.0,
-                                       "mex": 0.0, "t2mex": 0.0, "n": 0})
+                                       "mex": 0.0, "t2mex": 0.0, "n": 0,
+                                       **{k: 0.0 for k in SPEND_BUCKETS}})
             b["metal"] += e.get("metalProduced", 0) or 0
             b["army"] += e.get("armyReal", 0) or 0
             b["mex"] += max(e.get("mex", 0) or 0, 0)
             b["t2mex"] += max(e.get("t2Mex", 0) or 0, 0)
+            for k, field in SPEND_BUCKETS.items():
+                b[k] += e.get(field, 0) or 0
             b["n"] += 1
         # keep the last entry seen per game team as its final snapshot
         finals[e.get("team")] = e
@@ -376,6 +555,7 @@ def match_detail(d):
             "army": [round(v["army"], 1) for _, v in rows],
             "mex": [v["mex"] for _, v in rows],
             "t2mex": [v["t2mex"] for _, v in rows],
+            **{k: [round(v[k]) for _, v in rows] for k in SPEND_BUCKETS},
         }
     keep = ["team", "ally", "frame", "metalProduced", "armyReal", "mex", "t2Mex",
             "mT1", "mT2", "mT3", "mDefence", "mFactories", "mLostReal",
@@ -969,6 +1149,12 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(match_detail(d))
             elif u.path == "/api/brain":
                 self.send_json(brain_wants(safe_run_dir(q["dir"])))
+            elif u.path == "/api/units":
+                self.send_json(unit_counts(safe_run_dir(q["dir"])))
+            elif u.path == "/api/intel":
+                self.send_json(enemy_intel(safe_run_dir(q["dir"])))
+            elif u.path == "/api/brainmetrics":
+                self.send_json(brain_metrics(safe_run_dir(q["dir"])))
             elif u.path == "/api/crew":
                 self.send_json(crew_roles(safe_run_dir(q["dir"])))
             elif u.path == "/api/launchmeta":
