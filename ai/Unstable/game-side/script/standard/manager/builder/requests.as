@@ -245,12 +245,56 @@ uint SiteWorkerCap(const CCircuitDef@ want)
 	if (n < MIN_INFLIGHT)
 		n = MIN_INFLIGHT;
 	const uint pool = InFlightCap();
-	return (n > pool) ? pool : n;
+	if (n > pool)
+		n = pool;
+	const uint fed = FeedableCrew(want);
+	return (n > fed) ? fed : n;
 }
 
 // -- the register ------------------------------------------------------------
 
 array<IUnitTask@> gLive;
+
+// HOW MANY HANDS ONE SITE CAN ACTUALLY BE FED. A lathe pulls a roughly constant
+// DRAIN whatever it is building, so the hands an economy can keep working at
+// once is income/DRAIN -- that is InFlightCap. Split across the sites actually
+// standing, it is the crew past which another pair of hands adds no progress
+// here and only absence somewhere else. Cost decides how LONG a site drains,
+// never how many may drain it at once; keying crew size on cost is what let a
+// ~10k afus authorise 22 workers while defences and open spots went unbuilt.
+// Scales with income and with how much else is in flight -- no flat number.
+uint LiveSiteCount()
+{
+	uint n = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.GetType() != Task::Type::BUILDER))
+			continue;
+		++n;
+	}
+	return (n > 0) ? n : 1;
+}
+
+// Income buildings keep a bigger crew: they finish fast on purpose and pay for
+// everything downstream (apexearth, after the first peeled game: "we a little
+// bit do not focus enough on eco now"). The multiplier is the eco-vs-rest
+// balance knob, now applied to a rate rather than to a cost.
+bool IsEcoDef(const CCircuitDef@ want)
+{
+	if (want is null)
+		return false;
+	const int d = int(want.id);
+	return (Catalog::gMakeE[d] > 1.f) || (Catalog::gExtractsM[d] > 0.f)
+			|| (Catalog::gConvCapacity[d] > 0.f);
+}
+
+uint FeedableCrew(const CCircuitDef@ want)
+{
+	float n = float(InFlightCap()) / float(LiveSiteCount());
+	if (IsEcoDef(want))
+		n *= ai.GetTunable("apex_peel_eco_keep", TUNE_PEEL_ECO_KEEP);
+	return (n < 1.f) ? 1 : uint(n);
+}
 
 int gCreated = 0;
 int gJoined = 0;
@@ -732,22 +776,10 @@ void PeelSurplus()
 		array<CCircuitUnit@>@ crew = t.GetUnits();
 		if (crew is null)
 			continue;
-		// The cost-scaled crew floor died with the fusion rules; a flat floor
-		// of one worker per 1000 metal of building stands in until the
-		// rebuilt arbiter prices crews again.
-		int wantN = 1 + int(t.buildDef.costM / 1000.f);
-		// ECO SITES KEEP A BIGGER CREW. Peeling every site to the bare ETA
-		// crew slowed exactly the buildings that pay for everything else --
-		// apexearth, after watching the first peeled game: "We a little bit
-		// do not focus enough on eco now." Income buildings finish fast on
-		// purpose; the multiplier is the eco-vs-rest balance knob.
-		const int bt2 = t.GetBuildType();
-		if ((bt2 == Task::BuildType::ENERGY) || (bt2 == Task::BuildType::CONVERT)
-			|| (bt2 == Task::BuildType::MEXUP) || (bt2 == Task::BuildType::MEX))
-		{
-			wantN = int(float(wantN)
-					* ai.GetTunable("apex_peel_eco_keep", TUNE_PEEL_ECO_KEEP));
-		}
+		// The same feed-derived crew the join rung authorises, so a peeled
+		// worker cannot walk straight back on: peeling against one number
+		// while SiteWorkerCap admitted against another only cycled them.
+		const int wantN = int(FeedableCrew(t.buildDef));
 		int surplus = int(crew.length()) - wantN;
 		// A few at a time, largest ids first -- the same stampede guard the
 		// hold rung uses: everyone reads the same pre-order counts.
