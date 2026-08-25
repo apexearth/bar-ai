@@ -189,6 +189,34 @@ int HalfOfClass(int cls)
 	return HALF_GROUND;
 }
 
+// Mobile AA standing over the base answers the same bombers a tower does, so it
+// counts against the same cover target -- but ONLY while it is here. Beyond
+// apex_intercept_r (the radius that already defines "raiding us" for the
+// interceptors) it has left with the army, and the towers its credit displaced
+// would have been what stayed. Cached per frame: this walks the team's units.
+int gAAMobAt = -1;
+float gAAMobM = 0.f;
+float MobileAACoverM()
+{
+	if (gAAMobAt == ai.frame)
+		return gAAMobM;
+	gAAMobAt = ai.frame;
+	gAAMobM = 0.f;
+	if (!Builder::gHomeSet)
+		return 0.f;
+	const float r = ai.GetTunable("apex_intercept_r", TUNE_INTERCEPT_R);
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
+			continue;
+		CCircuitDef@ cd = ai.GetCircuitDef(Id(d));
+		if ((cd is null) || !cd.IsRoleAny(Unit::Role::AA.mask))
+			continue;
+		array<CCircuitUnit@>@ have = ai.GetOwnUnitsOfDef(cd, Builder::gHomePos, r);
+		gAAMobM += float(have.length()) * Catalog::gCostM[int(d)];
+	}
+	return gAAMobM;
+}
+
 // Three questions, three tickets: shooting the ground, seeing, and shooting
 // the sky. `half` picks which set of protection classes this call bids for;
 // everything else about the auction is shared. See CAT_SENSE / CAT_AIRDEF.
@@ -301,7 +329,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// AirSeenEver, which has no AA_IGNORE floor and no freshness
 			// window: a bomber that has flown home is still a bomber, and
 			// AirThreatNow read zero for exactly the moments between raids.
-			const float air = Military::AirSeenEver();
+			// OUR SHARE OF A SIDE-WIDE READING: the enemy census sums what the
+			// whole team can see, and each of us covers our own base, so charging
+			// one player the team's answer builds it once per ally. RoleTarget
+			// already divides the same census on the mobile side.
+			const float allies = Military::AllyCount();
+			const float air = Military::AirSeenEver()
+					/ ((allies > 1.f) ? allies : 1.f);
 			if (air <= 0.f)
 				continue;
 			// WHAT THE BOMBS ARE ACTUALLY COSTING US, priced like a turret:
@@ -314,13 +348,15 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// of around 250-300 would have saved us more than that").
 			// AA metal counted against air metal at the cover ratio, so cover
 			// reaches the target -- and the want prices itself out -- at
-			// exactly apex_aa_cover_frac of the air we have seen. No count,
-			// no cap: 100k of their air asks for 50k of ours.
+			// exactly apex_aa_cover_frac of our share of the air we have seen.
+			// No count, no cap. Mobile AA over the base counts here too, so the
+			// two AA budgets saturate against each other instead of both
+			// answering the same bombers.
 			float aaFrac = ai.GetTunable("apex_aa_cover_frac", TUNE_AA_COVER_FRAC);
 			if (aaFrac < 0.01f)
 				aaFrac = 0.01f;
 			const float aaTrade = 1.f / aaFrac;
-			float aaCover = 0.f;
+			float aaCover = MobileAACoverM() * aaTrade;
 			for (uint ai2 = 0; ai2 < gProtDefId[PROT_AA].length(); ++ai2)
 				aaCover += Catalog::gCostM[gProtDefId[PROT_AA][ai2]] * aaTrade;
 			const float aaAdds = Catalog::gCostM[d] * aaTrade;
