@@ -84,18 +84,20 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			return w;
 		}
 	}
-	// PADDING (apexearth 2026-08-23): reclaim when both banks have cushion
-	// -- rich enough that the trickle is noise, with room for the refund
-	// burst. Obsolescence is RELATIVE efficiency: for generators the metric
-	// is E per CELL of ground (his ladder: solar 1.25, advsol 3, fusion
-	// ~20, AFUS ~37 -- "eventually we need physical space"); for defences
-	// it is the def's power under a far stronger neighbor's umbrella.
-	const float st = aiEconomyMgr.metal.storage;
-	if (st <= 1.f)
-		return w;
-	const float bankFrac = aiEconomyMgr.metal.current / st;
-	if ((bankFrac < 0.3f) || (bankFrac > 0.85f))
-		return w;
+	// Obsolescence is RELATIVE efficiency: for generators the metric is E per
+	// CELL of ground (measured from the defs -- solar 0.80, advsol 4.69,
+	// fusion 33.3, AFUS 83.3, so the rungs are 5.9x, 7.1x and 2.5x;
+	// apexearth: "eventually we need physical space"). For defences it is the
+	// def's power under a far stronger neighbor's umbrella.
+	//
+	// The bank band that used to stand here (0.3-0.85 of storage, for "room
+	// for the refund burst") gated on a FRACTION, and storage differs per
+	// player -- measured 1300 against 4425 between two teams of one game, so
+	// the same absolute headroom read "full" for one and "broke" for the
+	// other. Both sat outside the band permanently, at 0.15 and 0.98, so this
+	// want never evaluated once and mReclaim was 0. The refund's own worth is
+	// already priced below (gain minus the generation given up), and the
+	// energy-surplus test guards the stall the floor was reaching for.
 	const float ratio = ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO);
 	const float eFree = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
 	CCircuitUnit@ best = null;
