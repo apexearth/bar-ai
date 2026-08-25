@@ -48,6 +48,20 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// hazard, so it lifts by itself once the base is actually covered.
 		if (ai.GetTunable("apex_eco_survival", TUNE_ECO_SURVIVAL) > 0.f)
 			gain *= TechSurvival(d, Catalog::gBuildPower[uid]);
+		// INFERIOR WORK IS WORTH LESS, IT IS NOT FORBIDDEN. The same build
+		// power spent through a constructor that CAN build the better
+		// generator returns more energy per metal, so this one's gain carries
+		// the ratio. A preference, not a veto: with nobody able to do better
+		// the ratio is 1, so the opening is untouched, and a worker whose only
+		// option is the inferior one still takes it when nothing else competes
+		// -- it just loses to assisting the better build first.
+		if (ai.GetTunable("apex_inferior_discount", TUNE_INFERIOR_DISCOUNT) > 0.f) {
+			const float best = OwnedBestEPerM();
+			const float mine = (Catalog::gCostM[d] > 0.f)
+					? (Catalog::gMakeE[d] / Catalog::gCostM[d]) : 0.f;
+			if ((best > mine) && (mine > 0.f))
+				gain *= mine / best;
+		}
 		if (gain <= 0.f)
 			continue;
 		ValueOf(d, gain, 0.f, Catalog::gBuildPower[uid], c);

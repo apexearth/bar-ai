@@ -1333,6 +1333,11 @@ const float TUNE_ESCORT_MAX_COST = 120.f;
 const float TUNE_MEX_GROWTH = 8.f;
 // The same compounding premium for ENERGY, measured against energy income.
 // It had none at all, which is why eco stagnated while mex was boosted.
+// manager/brain/market/want_energy.as [toggle 0/1] -- Discount a generator by
+//   how much better a one any constructor we own could build instead, so a
+//   worker restricted to the inferior option prefers to spend its build power
+//   on the better one. 0 restores flat per-def pricing.
+const float TUNE_INFERIOR_DISCOUNT = 1.f;
 const float TUNE_ENERGY_GROWTH = 8.f;
 // Spatial threat prior: 0 at our start box, 1 at theirs. 0 disables it and
 // threat goes spatially flat, which is the control arm.

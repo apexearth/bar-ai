@@ -15,6 +15,45 @@ void OwnAdd(int defId, int delta)
 // builder directly, or any owned factory through the builders it can make.
 // This is what the tech want measures unlock against -- the ASKER's own
 // reach read a T1 con as needing a T2 lab we already had three of.
+// THE BEST ENERGY PER METAL ANY CONSTRUCTOR WE ACTUALLY OWN COULD PUT DOWN.
+//
+// ProposeEnergy only ever sees the ASKER's own build options, so a commander --
+// which builds armsolar and cannot build armadvsol at all (that is lvl3+, or any
+// armck/armcv/armca) -- prices a basic solar against nothing and wins with it.
+// apexearth: "workers should not build inferior work. They're smarter to apply
+// their build power to better buildings."
+//
+// Standing MOBILE builders only, deliberately: a factory that could one day
+// produce a con that could build advanced solars is not somebody who can do
+// this better right now, and counting it would discount the opening's energy to
+// nothing. With only the commander alive the best IS a solar, the ratio is 1,
+// and nothing changes.
+int gBestEPMAt = -1;
+float gBestEPM = 0.f;
+float OwnedBestEPerM()
+{
+	if (gBestEPMAt == ai.frame)
+		return gBestEPM;
+	gBestEPMAt = ai.frame;
+	gBestEPM = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
+			continue;
+		const array<int>@ builds = Catalog::gBuildsList[int(d)];
+		for (uint i = 0; i < builds.length(); ++i) {
+			const int b = builds[i];
+			if (!Catalog::gAvailable[b] || Catalog::gMobile[b]
+				|| Catalog::gNeedGeo[b] || (Catalog::gMakeE[b] <= 1.f)
+				|| (Catalog::gCostM[b] <= 0.f))
+				continue;
+			const float epm = Catalog::gMakeE[b] / Catalog::gCostM[b];
+			if (epm > gBestEPM)
+				gBestEPM = epm;
+		}
+	}
+	return gBestEPM;
+}
+
 float OwnedCeil()
 {
 	float ceil = 0.f;
