@@ -117,6 +117,17 @@ bool Outmassed()
 // CDefendTask is created with maxPower = minAttackers and stops accepting units
 // once it reaches it, then promotes to an attack and leaves. So this number IS
 // the size each group leaves at -- not a threshold it grows past.
+// How many of us share the answer to a side-wide reading. quota.attack governs
+// THIS player's pools, so any bar derived from the whole enemy side has to be
+// divided by the roster before it is charged to one pool.
+float AllyCount()
+{
+	array<Id>@ roster = ai.GetTeamIds();
+	if ((roster is null) || (roster.length() == 0))
+		return 1.f;
+	return float(roster.length());
+}
+
 // The biggest enemy group we can currently see, as POWER. Their groups are what
 // our group actually walks into, so this is the honest size to match -- unlike
 // their whole army, which answers "can we beat all of them" and is not the
@@ -220,7 +231,13 @@ float MassWant()
 		return MassFloor();
 
 	const float ours = TeamArmyCost();
-	float theirs = EnemyMassingThreat();
+	// MOBILE against MOBILE. EnemyMassingThreat carries 0.5x their STATIC, and
+	// by mid-game that is most of the figure (census 2026-08-24: foeMass 9795
+	// with foeStatic 8210) -- so their porcupine raised OUR bar to leave home,
+	// which is backwards. Whether to walk out is a question about what can walk
+	// at us; static still counts in full where the question is what we are
+	// walking INTO, which is target selection, not this.
+	float theirs = FoeMobileMassing();
 	// Pre-T2 the enemy model is mostly unscouted ground, and GetEnemyCost only
 	// counts what has entered LOS -- "ahead" in the opening is usually
 	// ignorance. Unknown must not read as zero: until T2 (when the radar net
@@ -257,11 +274,7 @@ float MassWant()
 	// 8v8 sets a bar no single player's pool could ever fill (the measured
 	// Fatboy-loiter trap).
 	{
-		float allies = 1.f;
-		array<Id>@ roster = ai.GetTeamIds();
-		if ((roster !is null) && (roster.length() > 0))
-			allies = float(roster.length());
-		const float foeBar = (aiEnemyMgr.mobileThreat / allies)
+		const float foeBar = (aiEnemyMgr.mobileThreat / AllyCount())
 				* ai.GetTunable("apex_mass_vs_enemy", TUNE_MASS_VS_ENEMY);
 		if ((ratio > 1.f) && (foeBar > capNow))
 			capNow = foeBar;
@@ -325,8 +338,13 @@ float MassFloor()
 	// biggest enemy group we can see, at the same power-per-metal the rest of
 	// this file uses. If we cannot reach that, the answer is to not go, which
 	// is what the pool does on its own.
+	//
+	// Divided by the roster for the same reason foeBar is in MassWant: the
+	// biggest group on the map is the whole enemy SIDE's, while this bar is
+	// charged to one player's pool.
 	const float meet = EnemyGroupPower()
-			* ai.GetTunable("apex_mass_meet_frac", TUNE_MASS_MEET_FRAC);
+			* ai.GetTunable("apex_mass_meet_frac", TUNE_MASS_MEET_FRAC)
+			/ AllyCount();
 	if (meet > want)
 		want = meet;
 	return want;
@@ -347,7 +365,9 @@ void UpdateMassing()
 	// one player against four and reads far too pessimistic. TeamArmyCost()
 	// sums the ally side over TV_ARMY, the same figure the killing blow uses.
 	const float ours = TeamArmyCost();
-	const float theirs = EnemyMassingThreat();
+	// The same reading MassWant decides on, so `enemyArmy`/`ratio` in the log
+	// explain the want rather than a different comparison.
+	const float theirs = FoeMobileMassing();
 	float want = MassWant();
 
 	// Bound the hold. MassWant returns MASS_CAP only in the outmatched case, so

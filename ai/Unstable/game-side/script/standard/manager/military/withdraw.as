@@ -48,6 +48,29 @@ void NoteCombatUnit(int id)
 	gCombatBucket.insertLast(-1);
 }
 
+// WHERE A PULLED-BACK UNIT REFORMS. apexearth 2026-08-24: "we should prefer to
+// defend at the chokepoints/frontline areas, not at our home base. It is a long
+// walk all the way back home on some maps and that splits our army too much."
+// Behind our own doorway first -- everything coming at us has to come through
+// it, and it is a short walk from the fighting -- then the nearest point on the
+// front, and home only when we have no idea where the front is.
+bool RallySpot(const AIFloat3& in from, AIFloat3& out at)
+{
+	AIFloat3 cp;
+	if (Front::FrontChoke(from, cp)
+		&& Front::BehindChoke(cp, ai.GetTunable("apex_withdraw_behind", TUNE_WITHDRAW_BEHIND), at)
+		&& OnMap(at))
+	{
+		return true;
+	}
+	if (Front::FrontNear(from, at) && OnMap(at))
+		return true;
+	if (!Builder::gHomeSet)
+		return false;
+	at = Builder::gHomePos;
+	return OnMap(at);
+}
+
 // The nearest gun of ours, stepped back toward home so the unit stands BEHIND
 // it: the tower is between the unit and whatever is chasing it, which is the
 // whole point -- it soaks while we keep shooting.
@@ -71,11 +94,8 @@ bool FallbackSpot(const AIFloat3& in from, AIFloat3& out at)
 		}
 	}
 	if (best < 0.f) {
-		// No guns anywhere: home is still better than dying in the open.
-		if (!Builder::gHomeSet)
-			return false;
-		at = Builder::gHomePos;
-		return OnMap(at);
+		// No guns anywhere: reform on the line rather than dying in the open.
+		return RallySpot(from, at);
 	}
 	if (!Builder::gHomeSet) {
 		at = tower;
@@ -290,11 +310,13 @@ void UpdateWithdraw()
 		if (ai.frame - gCombatSent[i] < reissue)
 			continue;
 		AIFloat3 back;
-		// Recall targets HOME itself, not the nearest fence tower: the point is
-		// to mass over the ground actually under attack (and its wreck field),
-		// not to stop at whatever gun is closest to where the squad now stands.
+		// Recall reforms the whole army on ONE point rather than at whatever gun
+		// each unit happens to stand near, so it does not arrive piecemeal. That
+		// point is the doorway we hold, not the base: home is a long walk on a
+		// big map and the walk is what splits the army.
 		if (recallHome) {
-			back = Builder::gHomePos;
+			if (!RallySpot(p, back))
+				continue;
 		} else if (!FallbackSpot(p, back)) {
 			continue;
 		}

@@ -659,16 +659,24 @@ const float TUNE_TRADE_BAD = 0.6f;
 // manager/military/deathledger.as [seconds] -- Recent losses must be worth
 //   this many seconds of income before the trade ratio is trusted at all.
 const float TUNE_TRADE_VOL = 20.f;
-// manager/military/withdraw.as [toggle 0/1] -- ATTACK/RAID squads come home
-//   while the base is under attack and no killing blow is committed, instead
-//   of continuing to roam; 0 disables the recall (they keep fighting wherever
-//   their task sends them).
+// manager/military/withdraw.as [toggle 0/1] -- ATTACK/RAID squads reform on the
+//   chokepoint behind our front while the base is under attack and no killing
+//   blow is committed, instead of continuing to roam; 0 disables the recall
+//   (they keep fighting wherever their task sends them).
 const float TUNE_RECALL_HOME = 1.f;
 // manager/military/withdraw.as [fraction 0-1] -- Only squads this far past
 //   our own territory (ForwardFraction) are recalled -- units already fighting
 //   near home need no order, they are already where they are needed. Matches
 //   the threshold sentinel.as already uses to call the same thing a CONCERN.
 const float TUNE_RECALL_HOME_FWD = 0.5f;
+// manager/military/territory.as [toggle 0/1] -- ForwardFraction takes its
+//   bearing from the REMEMBERED enemy centre and its scale from the deepest
+//   separation seen, so enemies inside our base cannot move the axis they are
+//   measured on; 0 restores the live-centroid reading.
+const float TUNE_FWD_STABLE = 1.f;
+// manager/military/territory.as [seconds] -- Half-life of that high-water
+//   separation, so a front that genuinely moves is eventually re-normalised.
+const float TUNE_FWD_SPAN_HALFLIFE = 300.f;
 // manager/military/withdraw.as [toggle 0/1] -- Units on clearly-lost ground
 //   pull back behind the nearest fence tower; 0 disables the withdraw system.
 const float TUNE_WITHDRAW = 1.f;

@@ -216,20 +216,58 @@ AIFloat3 TerritoryCentre()
 	return OnMap(c) ? c : Builder::gHomePos;
 }
 
+// The high-water home->enemy separation, decayed on a long half-life. See
+// ForwardFraction: this is the denominator, and it must not shrink just because
+// the enemy walked in.
+float gFwdSpan = 0.f;
+int gFwdSpanAt = 0;
+
+// WHERE A POINT SITS ON THE HOME->ENEMY AXIS, 0 at us and 1 at them.
+//
+// Read as a stable map coordinate by recall, the defend leash, site safety and
+// the build-site ordering, so it has to mean the same thing from minute 5 to
+// minute 40. Taken from aiEnemyMgr.GetEnemyPos() -- the LIVE centroid of every
+// enemy we can see -- it did not: enemies standing in our base drag that
+// centroid most of the way home, which both turns the axis around and collapses
+// the denominator, so a unit a quarter of the way out reads as deep in their
+// territory exactly when they are pushing into us. Recall and the leash then
+// fire on the whole army at once, and the further in they get the further back
+// our own recall line moves.
+//
+// Direction comes from the REMEMBERED enemy centre instead, and the denominator
+// from the deepest separation we have seen, so an incursion cannot move either.
 float ForwardFraction(const AIFloat3& in pos)
 {
 	if (!Builder::gHomeSet)
 		return 0.f;
+	const bool stable = ai.GetTunable("apex_fwd_stable", TUNE_FWD_STABLE) > 0.f;
 	const AIFloat3 home = TerritoryCentre();
-	const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
+	AIFloat3 e;
+	if (!stable || !Front::FoeMid(e))
+		e = aiEnemyMgr.GetEnemyPos();
 	if (!OnMap(e))
 		return 0.f;
 	const float dx = e.x - home.x;
 	const float dz = e.z - home.z;
-	const float span = dx * dx + dz * dz;
-	if (span < NEAR_ZERO)
+	const float sq = dx * dx + dz * dz;
+	if (sq < NEAR_ZERO)
 		return 0.f;
-	return ((pos.x - home.x) * dx + (pos.z - home.z) * dz) / span;
+	const float span = sqrt(sq);
+	float ref = span;
+	if (stable) {
+		// Decayed by frame, not by call: this is read from a dozen places and
+		// several times an update, so a per-call decay would run at a rate set
+		// by how often other code happened to ask.
+		const float hl = ai.GetTunable("apex_fwd_span_halflife", TUNE_FWD_SPAN_HALFLIFE);
+		const int dt = ai.frame - gFwdSpanAt;
+		if ((hl > 0.f) && (dt > 0))
+			gFwdSpan *= pow(0.5f, (float(dt) / float(SECOND)) / hl);
+		gFwdSpanAt = ai.frame;
+		if (span > gFwdSpan)
+			gFwdSpan = span;
+		ref = gFwdSpan;
+	}
+	return ((pos.x - home.x) * dx + (pos.z - home.z) * dz) / (span * ref);
 }
 
 // THE FRONT LINE, AS A CURVE ACROSS THE MAP, COMPUTED FROM THE BATTLEFIELD.

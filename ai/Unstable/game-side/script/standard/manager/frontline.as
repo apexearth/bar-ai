@@ -147,6 +147,18 @@ bool FoeKnown()
 	return gFoeKnown;
 }
 
+// The REMEMBERED enemy centre. gFoeSeen accumulates sightings and decays at
+// 0.995 a scan, so this is a far steadier bearing than aiEnemyMgr.GetEnemyPos():
+// a raid standing in our base swings the live centroid most of the way home and
+// moves this barely at all.
+bool FoeMid(AIFloat3& out at)
+{
+	if (!gFoeKnown)
+		return false;
+	at = gFoeMid;
+	return OnMap(at);
+}
+
 bool Mine(const AIFloat3& in p)
 {
 	if (!gSectored)
