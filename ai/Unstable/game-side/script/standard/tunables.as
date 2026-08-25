@@ -1324,6 +1324,12 @@ const float TUNE_CON_ESCORT = 1.f;
 // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
 // guarding a con is a Bull missing from the line.
 const float TUNE_ESCORT_MAX_COST = 120.f;
+// ESCORT_SPEED: an escort must CATCH a raider or be a riot unit (apexearth:
+// "we want fast or tough units on escort, rocket bots die in a 1v1 vs a
+// pawn/grunt"). A multiple of the ground field's own mean speed, so 1.0 means
+// "above average", and no number here is about a particular unit. Lower it to
+// let slower units guard.
+const float TUNE_ESCORT_SPEED = 1.f;
 // MEX_GROWTH: weight of a spot's RELATIVE income boost (gain/income) on
 // top of its absolute stream -- growth is worth more to the poor.
 // A spot is worth what it RAISES us by, not what it yields (apexearth: "when

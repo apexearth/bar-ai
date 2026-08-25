@@ -24,6 +24,9 @@ void GuardNote(CCircuitUnit@ u, CCircuitUnit@ boss)
 // escort's task ends.
 array<Id> gEscWorker;
 array<Id> gEscUnit;
+int gEscDiagAt = 0;
+int gEscOrderAt = 0;         // frame of the last escort order, all lines
+bool gEscortFloor = false;   // the order ConOrderFor just returned is an escort
 CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 {
 	if ((mil is null) || !gFarmSet)
@@ -64,6 +67,130 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 	}
 	return null;
 }
+// Escorts ORDERED but not yet standing beside anyone. An escort queued behind
+// a busy line took 77 seconds to arrive (measured, smoke seed 1), so a
+// time-decayed order ledger expires and the floor re-orders; the factory
+// queue plus the sent-ledger is the exact answer for the whole of that wait.
+int EscortInFlight(CCircuitDef@ d)
+{
+	if (d is null)
+		return 0;
+	int n = 0;
+	for (uint i = 0; i < Brain::gFQFac.length(); ++i) {
+		CCircuitUnit@ f = Brain::gFQFac[i];
+		if (f is null)
+			continue;
+		n += f.CountQueued(d) + Brain::PendCount(int(i), d);
+	}
+	return n;
+}
+
+// WHAT MAY ESCORT AT ALL (apexearth 2026-08-25: "we want fast or tough units
+// on escort, rocket bots die in a 1v1 vs a pawn/grunt so not good protection
+// vs raiders"). What kills a constructor is something fast in its face, so an
+// escort has to either CATCH it or SURVIVE it -- above the ground field's own
+// average on one axis or the other. A Rocketeer is neither, and its role tag
+// is `assault`, which is why a SKIRM/ARTY filter never caught it.
+float gEscMeanSpd = -1.f;
+void EscortMeans()
+{
+	if (gEscMeanSpd > 0.f)
+		return;   // frame-dependent availability: never cache a mean over nothing
+	float sp = 0.f;
+	int n = 0;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !LineCombat(d) || Catalog::gFlyer[d])
+			continue;
+		sp += Catalog::gSpeed[d];
+		++n;
+	}
+	gEscMeanSpd = (n > 0) ? (sp / float(n)) : -1.f;
+}
+
+bool EscortWorthy(int di)
+{
+	if (!Catalog::gAvailable[di] || !Catalog::gMobile[di] || Catalog::gBuilder[di]
+		|| Catalog::gKamikaze[di] || Catalog::gFlyer[di]
+		|| (Catalog::gPower[di] <= 1.f) || (Catalog::gCostM[di] <= 0.f))
+		return false;
+	if (Catalog::gCostM[di]
+			> ai.GetTunable("apex_escort_max_cost", TUNE_ESCORT_MAX_COST))
+		return false;
+	CCircuitDef@ cd = Catalog::Def(di);
+	if (cd.IsRoleAny(Unit::Role::SKIRM.mask)
+		|| cd.IsRoleAny(Unit::Role::ARTY.mask))
+		return false;   // indirect fire cannot answer what kills cons
+	EscortMeans();
+	if (gEscMeanSpd <= 0.f)
+		return false;
+	// FAST: above the ground field's own mean speed, so it can stay with a
+	// worker and catch what comes for it.
+	if (Catalog::gSpeed[di] >= gEscMeanSpd
+			* ai.GetTunable("apex_escort_speed", TUNE_ESCORT_SPEED))
+		return true;
+	// TOUGH: a RIOT unit, which is the game's own name for the answer to
+	// raiders -- a health bar cannot express this, because the tanky cheap
+	// bot at T1 IS the rocket bot (Rocketeer 720hp against a Pawn's 370).
+	return cd.IsRoleAny(Unit::Role::RIOT.mask);
+}
+
+// A CONSTRUCTOR STANDING WITHOUT A GUARD IS DEMAND FOR ONE, NOT A BID
+// (apexearth 2026-08-25: "make producing guards a high priority when we have
+// a constructor with no guard"). The raider role target already carries the
+// metal at risk, but a role weight is a share of a draw -- it can lose for
+// minutes while the con it would have saved dies. This is the floor: the line
+// orders one cheap escort now, ahead of the proportional draw.
+CCircuitDef@ EscortOrderFor(CCircuitUnit@ fac)
+{
+	if ((fac is null) || (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) <= 0.f))
+		return null;
+	const int need = EscortShortfall();
+	EscortMeans();
+	if (ai.frame >= gEscDiagAt) {
+		gEscDiagAt = ai.frame + 60 * SECOND;
+		AiLog("apex: escort-diag t=" + ai.teamId
+			+ " workers=" + gWorkers.length()
+			+ " short=" + need
+			+ " paired=" + gEscWorker.length()
+			+ " risk=" + formatFloat(EscortMetalAtRisk(), "", 0, 0)
+			+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 0));
+	}
+	if (need <= 0)
+		return null;
+	// Eligibility is the military hook's, exactly: anything else we order
+	// here would be produced and then refuse the duty.
+	const array<int>@ prods = Catalog::BuildsOf(int(fac.circuitDef.id));
+	int best = -1;
+	float bestS = 0.f;
+	for (uint i = 0; i < prods.length(); ++i) {
+		const int d = prods[i];
+		if (!EscortWorthy(d))
+			continue;
+		// Combat per metal x speed: the escort has to both fight off a raid
+		// and keep up with a worker that walks. That is the Pawn/Grunt shape.
+		const float s = (Catalog::gCombat[d] / Catalog::gCostM[d])
+				* Catalog::gSpeed[d];
+		if (s > bestS) {
+			bestS = s;
+			best = d;
+		}
+	}
+	if (best < 0)
+		return null;
+	CCircuitDef@ pick = Catalog::Def(best);
+	// One order per unescorted worker: what is already coming counts. An order
+	// is invisible to BOTH counts for one message round-trip -- the sent-ledger
+	// is dropped for the whole line as soon as any order becomes visible, and
+	// an escort is queued behind exactly that -- so a fresh order also holds
+	// the floor for one sweep.
+	if (ai.frame - gEscOrderAt < Brain::FQ_WAIT)
+		return null;
+	if (need - EscortInFlight(pick) <= 0)
+		return null;
+	gEscOrderAt = ai.frame;
+	return pick;
+}
+
 void EscortGone(Id id)
 {
 	for (uint e = 0; e < gEscWorker.length(); ) {

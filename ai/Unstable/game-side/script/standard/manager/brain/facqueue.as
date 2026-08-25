@@ -191,6 +191,11 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 			// replace=true: plain order, exactly one.
 			fac.CmdBuildUnit(order, 1, true);
 			PendAdd(line, order);
+		} else if (Market::gEscortFloor) {
+			// The escort floor does not wait for the line to drain either:
+			// the con it guards is exposed now, not when the queue empties.
+			fac.CmdBuildUnit(order, 1, false);
+			PendAdd(line, order);
 		} else if ((Market::CeilingConsNeed() > 0)
 			&& Market::ReachesCeiling(int(order.id)))
 		{
@@ -204,7 +209,7 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		// LOOKAHEAD (apexearth: "queue more, look ahead"): a batch behind
 		// the head when the market says the demand is deep. One SHIFT order
 		// is x5'd by the FactoryCAI -- five more in one command.
-		if (Market::BatchWorthy(order)) {
+		if (!Market::gEscortFloor && Market::BatchWorthy(order)) {
 			fac.CmdBuildUnit(order, 1, false);
 			for (int b = 0; b < 5; ++b)
 				PendAdd(line, order);

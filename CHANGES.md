@@ -1561,3 +1561,50 @@ plant site; the commander (early game's only builder) never made a factory
 therefore contaminated and withdrawn. Guard reformulated on the base axis:
 forward of the anchor (+150) is banned for the commander, behind is safe by
 construction. Medium re-anchors on the fixed build.
+
+## 2026-08-25 -- The escort floor: an unguarded constructor orders a Pawn now
+
+apexearth: "make producing guards a high priority when we have a constructor
+with no guard. Typically this is just a Pawn or Grunt." The escort machinery
+already existed -- `EscortNeeded` pairs a produced cheap unit with an exposed
+worker, and `RoleTarget(RAIDER)` carries `EscortMetalAtRisk()` -- but nothing
+ever ORDERED one: `EscortShortfall()` was written and never called, so escorts
+only happened when the proportional draw happened to produce a fast cheap unit
+near an exposed con. Measured before the change: 0 pairings in a 12-minute
+smoke run.
+
+`Market::EscortOrderFor` is now a floor in `ConOrderFor`, ahead of the con
+floor, the all-quiet gate and the draw, and the facqueue queues it behind a
+busy head like the T2-con floor. It picks by combat-per-metal x speed over
+the military hook's own eligibility (ground, not SKIRM/ARTY, under
+`apex_escort_max_cost`) -- which lands on `armpw`, and cannot land on
+something that would then refuse the duty. Demand is one order per
+unescorted exposed worker; in-flight is the factory queue plus the
+sent-ledger, not a time-decayed ledger (an escort queued behind a busy line
+took 77 s to arrive, so a 60 s TTL expired and the floor double-ordered).
+
+20-minute smoke: 5 floor orders, 8 pairings, shortfall returns to 0 within a
+sweep of each order, no compile errors. NOT yet measured for displacement --
+the paired single run at seed 1 differed 2x in metal built, which is the DLL's
+own thread noise, so a tournament is still owed.
+
+**Eligibility, same day.** apexearth: "we want fast or tough units on escort,
+rocket bots die in a 1v1 vs a pawn/grunt so not good protection vs raiders."
+The Rocketeer slipped the old SKIRM/ARTY filter because its role tag is
+`assault` -- which in this AI's own counter chain means "answers statics"
+(docs/18-brain.md), and BAR's own description of it is "Rocket Bot - good vs.
+static defenses". `behaviour.json` even prices it at `vs raiders: 0.5`.
+`Market::EscortWorthy` is now the single test, shared by the production floor
+and the military election: ground, under `apex_escort_max_cost`, not SKIRM or
+ARTY, and either FAST (speed at or above the ground field's own mean, 63 in
+the pinned tree -- Pawn 87 passes, Rocketeer 50.7 fails) or a RIOT unit, the
+role the game itself defines as the answer to raiders. A health bar cannot
+express "tough" here: the tanky cheap bot at T1 IS the rocket bot (720 hp
+against a Pawn's 370), and the field mean health is 9447.
+
+NOTE: every riot unit in the pinned tree costs 220-3800 (Pounder 220,
+Centurion 270, Gunslinger 650, Razorback 3800), all above the 120-metal
+escort cap, so the riot clause cannot fire today -- escorts are fast units
+until `apex_escort_max_cost` is raised. 20-min smoke after the change: 4 floor
+orders, 3 pairings, all fast units (armpw from a bot lab, armflash from a
+vehicle plant), zero rocket bots.

@@ -158,6 +158,24 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	// hard e-stall, a minute without a mex).
 	if (HardEStall())
 		return null;
+	gEscortFloor = false;
+	// THE ESCORT FLOOR, ahead of everything: a constructor working without a
+	// guard is a write-off waiting to happen, and the cheapest answer costs a
+	// few seconds of one line. It outranks the all-quiet gate and the
+	// in-flight gate below -- like the con floor, this is a rule, not a bid,
+	// and it self-limits to the number of unescorted workers.
+	{
+		CCircuitDef@ esc = EscortOrderFor(fac);
+		if (esc !is null) {
+			gEscortFloor = true;
+			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
+				+ " #" + fac.id + " -> produce:" + esc.GetName()
+				+ " (escort floor short=" + EscortShortfall()
+				+ " inflight=" + EscortInFlight(esc)
+				+ " risk=" + formatFloat(EscortMetalAtRisk(), "", 0, 0) + ")");
+			return esc;
+		}
+	}
 	// The T2-con floor outranks the all-quiet gate: "at least 2" is not
 	// contingent on there being other demand.
 	const int ceilNeed = CeilingConsNeed();
