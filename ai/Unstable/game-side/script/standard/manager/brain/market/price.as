@@ -265,6 +265,26 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 			// is on the GAIN side: unserved demand divides among the pipes
 			// in flight.)
 			const float feedSec = (Catalog::gCostM[defId] - mBank * 0.5f) / mInc;
+			// WHAT IT POSTPONES, WHETHER OR NOT IT IS FEED-BOUND. This charge
+			// used to live entirely inside the feed-bound branch, so a def with
+			// a huge BUILDTIME -- an afus above all -- had a buildSec long
+			// enough that income always kept up, the gate never fired, and it
+			// paid nothing at all for the upgrade stream it delays (apexearth:
+			// "AFUS value should have been heavily diminished because of how
+			// long it would have taken us to create it"; measured, the same
+			// afus priced at t=15319 and t=904 in one game, a 17x swing from an
+			// all-or-nothing charge). What actually matters is the share of our
+			// income the build consumes across its own duration: at share 1 it
+			// eats everything and the old feed-bound formula is recovered
+			// exactly, and a cheap quick build charges near nothing.
+			{
+				const float dur = (buildSec > 1.f) ? buildSec : 1.f;
+				float share = Catalog::gCostM[defId] / (mInc * dur);
+				if (share > 1.f)
+					share = 1.f;
+				if ((share > 0.f) && (Catalog::gExtractsM[defId] <= 0.f))
+					displacedM = UpDemand() * dur * share;
+			}
 			if (feedSec > buildSec) {
 				buildSec = feedSec;
 				// A feed-bound build eats the whole income for its duration

@@ -190,6 +190,17 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// economy can still buy parallel tier capacity when the divided
 		// gain wins; a poor one finds the second pipe worth half at twice
 		// the real duration (the affordability term in ValueOf).
+		// Does this plant reach a better CONVERTER than anything we own?
+		float prodConv = 0.f;
+		for (uint pc = 0; pc < prods.length(); ++pc) {
+			const int pd3 = prods[pc];
+			if (!Catalog::gMobile[pd3] || !Catalog::gBuilder[pd3])
+				continue;
+			const float r3 = ConvRatioReach(Catalog::gBuildsList[pd3]);
+			if (r3 > prodConv)
+				prodConv = r3;
+		}
+		const float ownConv = OwnConvCeil();
 		int liveKin = 0;
 		for (uint kl = 0; kl < Requests::gLive.length(); ++kl) {
 			IUnitTask@ kt = Requests::gLive[kl];
@@ -211,6 +222,15 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 						break;
 					}
 				}
+				// KIN ON THE CONVERTER AXIS TOO. The unlock test now fires on
+				// reaching a better converter as well as a better extractor,
+				// but this divisor only ever looked at extraction -- so two
+				// different T2 plants in flight each priced at the FULL
+				// conversion unlock and neither counted the other (apexearth,
+				// watched: "that game we did 2 t2 labs at the same time").
+				if (!kin && (ConvRatioReach(Catalog::gBuildsList[kpd]) >= prodConv)
+					&& (prodConv > 0.f))
+					kin = true;
 			}
 			if (kin)
 				++liveKin;
@@ -230,17 +250,6 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		float fundedMul = (funded > 1.f) ? 1.f : funded;
 		if (EcoQuiet())
 			fundedMul = 1.f;
-		// Does this plant reach a better CONVERTER than anything we own?
-		float prodConv = 0.f;
-		for (uint pc = 0; pc < prods.length(); ++pc) {
-			const int pd3 = prods[pc];
-			if (!Catalog::gMobile[pd3] || !Catalog::gBuilder[pd3])
-				continue;
-			const float r3 = ConvRatioReach(Catalog::gBuildsList[pd3]);
-			if (r3 > prodConv)
-				prodConv = r3;
-		}
-		const float ownConv = OwnConvCeil();
 		float techGain = 0.f;
 		if ((prodCeil > ownCeil) || (prodConv > ownConv))
 			techGain = demand * pipe / float(1 + liveKin);
