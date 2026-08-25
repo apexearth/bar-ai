@@ -1087,3 +1087,40 @@ so a first attempt at that test never fired once (`deep=0`). `ArmyValue()`
 excludes builders and is the fieldable-army number.
 
 **The goal remains unmet.** Early constructors still reach depth 1.00 sometimes.
+
+## 2026-08-24 (16) — "beamers in the back": an armed MEX was 75% of our defence
+
+apexearth: "I see us making beamers in the back of our base again. Why are we
+doing that?"
+
+Dominant cause, and it is a misclassification, not a placement fault:
+**`corexp` is the "Exploiter", an Armed Metal Extractor.** It has a weapon, no
+build options and does not move, so `ProtClassOf` filed it as ground defence and
+the protect market bought it as a turret -- **299 of 397 defence placements** in
+a 12-game batch, sited by defence value instead of on a metal spot. Same family
+as the Juno bug. `ProtClassOf` now returns -1 for anything that extracts metal:
+an extractor is the mex want's business.
+
+Measured, 12 games paired, before -> after:
+
+| | before | after |
+|---|---|---|
+| games surviving | 5/12 | **6/12** |
+| metal produced | 20,716 | **27,828** |
+| army | 9,730 | **13,402** |
+| eco | 3,628 | **4,725** |
+| defence | 1,928 (9.3%) | **2,805 (10.1%)** |
+| defs chosen | corexp 299, corllt 92 | corhllt 280, corllt 86 |
+
+### The remaining rear placements are CORRECT, and the cause is elsewhere
+73% of towers now sit forward of the anchor. The 27% that do not are only
+marginally behind it (median fwd -0.36 against anchor -0.30) and they are
+defending real value: we deliberately put the expensive economy in the deep rear
+-- `apex_farm_back = 500`, `apex_fus_back = 700`, so the nano farm sits 500
+elmos behind the anchor and the fusion pack 700. `FrontedStakeAt` is plain
+distance (the side test was reverted because it zeroed home defence), so a tower
+by the fusion pack correctly reads high stake.
+
+So the tower is not misplaced relative to its stake; **the STAKE is in the back
+because we put it there.** If rear towers are unwanted, the lever is where the
+economy is built, not where defence is sited.

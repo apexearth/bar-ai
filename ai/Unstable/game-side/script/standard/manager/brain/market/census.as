@@ -158,6 +158,14 @@ int ProtClassOf(int defId)
 	if (Catalog::gTargFac[defId]) return PROT_TARGFAC;
 	if (Catalog::gRadar[defId]) return PROT_RADAR;
 	if (Catalog::gJammer[defId]) return PROT_JAM;
+	// AN ARMED EXTRACTOR IS ECONOMY, NOT DEFENCE. corexp ("Exploiter", an
+	// Armed Metal Extractor) has a weapon, no build options and does not move,
+	// so it filed as ground defence and the protect market bought it as a
+	// turret -- 299 of 397 defence placements in one 12-game batch, sited by
+	// defence value rather than on a metal spot. Same shape as the Juno bug.
+	// Extraction makes it the mex want's business.
+	if (Catalog::gExtractsM[defId] > 0.f)
+		return -1;
 	if ((Catalog::gMaxRange[defId] > 1.f) && !Catalog::gMobile[defId]
 		&& !Catalog::gBuilder[defId] && (Catalog::gBuildsList[defId].length() == 0))
 	{
