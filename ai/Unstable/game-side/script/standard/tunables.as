@@ -1202,6 +1202,15 @@ const float TUNE_LINE_EDGE = 1.15f;
 // How hard a class below its target share is favoured. Proportional to the
 // shortfall; 0 disables the composition target entirely.
 const float TUNE_LINE_BITE = 1.5f;
+// How much ground-covered-per-metal is worth while the fleet is short of the
+// sites it must watch. Buys cheap fast bodies early and fades as they arrive;
+// 0 disables the coverage term.
+const float TUNE_COVER_WORTH = 1.5f;
+// Discount a mex/upgrade's income stream by the share of it we expect to still
+// be collecting over the stake horizon. A tower within reach of the spot raises
+// it directly, so cover makes the next claim beside it worth more. 0 disables,
+// which is how the A/B control is run.
+const float TUNE_STREAM_SURVIVAL = 1.f;
 // manager/brain/market/sites.as -- elmos one farm row runs before the next
 // stacks behind it. Halved from 640 on apexearth's watched report that the
 // winds sat too far out on both sides: the same slots in a narrower row form

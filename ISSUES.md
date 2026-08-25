@@ -1,5 +1,59 @@
 # Open issues — what is wrong with this AI right now
 
+## STATUS 2026-08-25 -- read this first
+
+A sweep of everything below, because entries were accumulating faster than they
+were being closed (apexearth: "sometimes I don't notice when you defer things or
+add to ISSUES.md - we should take some time to see what is unsettled").
+
+**Closed by measurement today; the entries below them are stale:**
+
+- *"every T2 lab is bought by a want the arbiter priced 6-17x too low"* -- this
+  was the category draw weighting tickets by raw value. Measured at 34% of all
+  elections taking a lower-valued want, worst case a mex at 594 losing to a wind
+  generator at 99. The draw now goes as `(value/leader)^apex_draw_sharp`.
+- *"we barely build defence at all"* / *"the outstanding gap: static defence"* --
+  was 3.5-5.1% against BARb's 17-18%. After SiegeRisk was wired into the protect
+  gain: defence at minute 10 **360 vs their 135**, at minute 15 **1050 vs 818**,
+  ahead of stock early for the first time. Still behind at minute 25 (3232 vs
+  4150), so this narrows rather than closes.
+- *"threat magnitude is still too low at home"* -- SiegeRisk gives home a threat
+  that does not depend on seeing anything.
+- *"unscouted still reads as safe outside the tech price"* -- the siege prior now
+  reaches energy and defence, not tech alone. Fixed as PRICING; scouting itself
+  is still untouched, see below.
+
+**Still open, in the order they now matter:**
+
+1. **`conT2` is 0.** Median peak T2 constructors across 24 paired games is zero,
+   which is why `t2Mex` is also always zero, and why apexearth's report that "all
+   our T2 cons are going for a fusion" cannot be reproduced on this benchmark at
+   all -- there are no T2 cons to misdirect. Everything downstream of T2 (mex
+   upgrades, the quadrupled yield the math was just changed to respect) is
+   unreachable here. This is now the top blocker.
+2. **We never scout.** `Military::EnemyArmyCost()` reads 0 for entire games while
+   the enemy fields thousands of metal. SiegeRisk routes PRICING around it, but
+   `ArmyTarget`, the commander's engage test and AA still read a zero, and
+   nothing raises scout production when intel is stale.
+3. **Late army collapses.** Early army is now near parity (ratio 0.72 at minute
+   10, 0.59 at 15, after the coverage term) and falls to **0.21 by minute 25**.
+   Economy is at parity throughout, so this is production and trade, not income.
+4. **A cheap want that needs a walk can never complete** -- 38 radar decides, a
+   live request, zero radars built; re-election abandons the approach.
+5. **Duplicate plants** -- `ProposePlant` dedups on FINISHED plants only, and the
+   tech want's mobility channel buys a second same-tier plant on speed alone.
+6. **The displacement charge exempts the builds that displace most** -- it fires
+   only inside `if (feedSec > buildSec)`, so a def with a huge buildtime never
+   pays it. The eco survival discount narrows this without closing it; it is the
+   remaining half of apexearth's AFUS build-power point.
+7. **Air work is unmeasurable here** (`AIR_MIN_INCOME` 40 m/s vs ~22 on bench).
+
+**Unresolved judgement call:** `EcoPowerM` reads as a mild drag on Altair across
+two independent 12-game batches, and is kept anyway because without it there is a
+total bootstrap deadlock on maps with no metal spots (1 builder, 0 factories, 0
+army for a whole game). Not a measured win -- a chosen trade.
+
+
 Restarted 2026-08-24. The previous file (1,767 lines) was written almost
 entirely before the Brain overhaul of 2026-08-22/23 and described leaf-era
 mechanisms that no longer exist. Recover it with `git show HEAD:ISSUES.md` if

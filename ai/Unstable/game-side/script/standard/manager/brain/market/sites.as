@@ -454,6 +454,70 @@ float LineCostCeil(CCircuitUnit@ f)
 	return ceil;
 }
 
+// THE WORST-SERVED WORKING LINE, and how short of hands it is. Same
+// arithmetic as UnservedLineSpend, but it keeps the position: a nano bought to
+// serve a factory has to STAND at that factory. It was sited at the eco farm,
+// which is behind the anchor and outside assist reach, so line-demand nanos
+// could never touch the line that priced them.
+float NeediestLine(AIFloat3& out at)
+{
+	float worst = 0.f;
+	const float per = LineSpend();
+	float sumCeil = 0.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		if ((Factory::gFacUnits[fi] !is null)
+			&& (Factory::gFacUnits[fi].CountQueued(null) > 0))
+			sumCeil += LineCostCeil(Factory::gFacUnits[fi]);
+	}
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.CountQueued(null) == 0))
+			continue;
+		const float share = (sumCeil > 1.f)
+				? (per * float(Factory::gFactoryCount) * LineCostCeil(f) / sumCeil)
+				: per;
+		const AIFloat3 fp = f.GetPos(ai.frame);
+		if (!OnMap(fp))
+			continue;
+		int nanosNear = 0;
+		for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
+			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
+				++nanosNear;
+		}
+		const float u = share - float(nanosNear) * 17.5f;
+		if (u > worst) {
+			worst = u;
+			at = fp;
+		}
+	}
+	return worst;
+}
+
+// A working line at all, worst-served first -- the site an ARMY shortfall
+// wants a lathe at even when the line's own spend is already served.
+bool AnyLineSite(AIFloat3& out at)
+{
+	float fewest = -1.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if (f is null)
+			continue;
+		const AIFloat3 fp = f.GetPos(ai.frame);
+		if (!OnMap(fp))
+			continue;
+		float nanosNear = 0.f;
+		for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
+			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
+				nanosNear += 1.f;
+		}
+		if ((fewest < 0.f) || (nanosNear < fewest)) {
+			fewest = nanosNear;
+			at = fp;
+		}
+	}
+	return fewest >= 0.f;
+}
+
 float UnservedLineSpend()
 {
 	float unserved = 0.f;

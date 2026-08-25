@@ -331,8 +331,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			// value speed"). A fast unit reaches the fight, catches raiders,
 			// and disengages -- none of which shows up in combat-per-metal.
 			// Normalised on 100 elmos/s, roughly a T1 bot.
-			ppc *= 1.f + (Catalog::gSpeed[d] / 100.f)
+			// Measured against the fastest ground unit the GAME offers, not a
+			// flat 100 elmos/s: the bar is what may be raiding us, and we
+			// assume they built the fastest thing they could (apexearth).
+			ppc *= 1.f + (Catalog::gSpeed[d] / FoeSpeedCap())
 					* ai.GetTunable("apex_speed_worth", TUNE_SPEED_WORTH);
+			// AND COVERAGE: ground patrolled per metal, worth something only
+			// while the fleet is short of the sites it has to watch. This is
+			// what buys pawns early -- cheap and fast is the most coverage per
+			// metal there is -- and it fades as the fleet fills.
+			ppc *= 1.f + ai.GetTunable("apex_cover_worth", TUNE_COVER_WORTH)
+					* CoverPerMetal(d) * PatrolShort();
 			// EYES (apexearth: "we tend to lack scouts... need some kind of
 			// value requirement on raider style units and scouts"). Sight is
 			// what every other sense in this AI is built on -- the danger

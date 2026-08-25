@@ -212,12 +212,12 @@ bool LineCombat(int di)
 		&& (Catalog::gHealth[di] > 0.f) && !Catalog::gKamikaze[di];
 }
 
-float gLMeanHpm = -1.f, gLMeanDpm = 0.f, gLMeanR = 0.f;
+float gLMeanHpm = -1.f, gLMeanDpm = 0.f, gLMeanR = 0.f, gLMeanSpc = 0.f;
 void LineMeans()
 {
 	if (gLMeanHpm >= 0.f)
 		return;
-	float hp = 0.f, dp = 0.f, rr = 0.f;
+	float hp = 0.f, dp = 0.f, rr = 0.f, sp = 0.f;
 	int n = 0;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAvailable[d] || !LineCombat(d))
@@ -226,6 +226,7 @@ void LineMeans()
 		dp += (Catalog::gPower[d] * Catalog::gPower[d] / Catalog::gHealth[d])
 				/ Catalog::gCostM[d];
 		rr += Catalog::gMaxRange[d];
+		sp += Catalog::gSpeed[d] / Catalog::gCostM[d];
 		++n;
 	}
 	if (n <= 0) {
@@ -235,6 +236,7 @@ void LineMeans()
 	gLMeanHpm = hp / float(n);
 	gLMeanDpm = dp / float(n);
 	gLMeanR = rr / float(n);
+	gLMeanSpc = sp / float(n);
 }
 
 // Which of the four a unit IS: whichever axis it stands out on most. Nothing
@@ -303,6 +305,73 @@ float LineShortfall(int cls)
 		return 0.f;
 	const float miss = (want - share) / want;
 	return (miss > 0.f) ? ((miss > 1.f) ? 1.f : miss) : 0.f;
+}
+
+// ASSUME THEY BUILT THE FASTEST THING THEY COULD (apexearth: "in the early
+// game enemy units will be FAST. assume they'll make the fastest units").
+// The fastest ground combat unit the GAME offers is the bar, not a mean over
+// what we happen to have seen -- the whole point is that the assumption has to
+// hold while we are blind, which is exactly when raiders arrive. A unit slower
+// than this cannot catch what is eating our mexes, whatever else it is good
+// at. Air is excluded: it is a different answer to a different problem.
+float gFoeSpeedCap = -1.f;
+float FoeSpeedCap()
+{
+	if (gFoeSpeedCap >= 0.f)
+		return gFoeSpeedCap;
+	gFoeSpeedCap = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !LineCombat(d) || Catalog::gFlyer[d])
+			continue;
+		if (Catalog::gSpeed[d] > gFoeSpeedCap)
+			gFoeSpeedCap = Catalog::gSpeed[d];
+	}
+	if (gFoeSpeedCap < 1.f)
+		gFoeSpeedCap = 100.f;
+	return gFoeSpeedCap;
+}
+
+// COVERAGE IS QUANTITY TIMES SPEED (apexearth: "security coverage requires
+// quantity and speed"). One expensive unit cannot be in two places, and a
+// spread base is many places. To shadow raiders across the ground we hold
+// takes roughly one body as fast as they are per thing worth hitting, so the
+// need is our standing sites times the speed we must match, and what we have
+// is the ground speed we field. Falls to zero as the fleet fills, so it buys
+// bodies while we are thin and stops on its own -- and it is a want, never a
+// cap on anything bigger.
+float PatrolShort()
+{
+	float sites = float(gLSpot.length());
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || Catalog::gMobile[di])
+			continue;
+		if ((Catalog::gMakeE[di] > 1.f) || (Catalog::gBuildsList[di].length() > 0))
+			sites += float(gOwnCount[d]);
+	}
+	if (sites < 1.f)
+		return 0.f;
+	float have = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || !LineCombat(di) || Catalog::gFlyer[di])
+			continue;
+		have += float(gOwnCount[d]) * Catalog::gSpeed[di];
+	}
+	const float need = sites * FoeSpeedCap();
+	if (need <= 0.f)
+		return 0.f;
+	const float miss = 1.f - have / need;
+	return (miss > 0.f) ? ((miss > 1.f) ? 1.f : miss) : 0.f;
+}
+
+// Ground a unit can cover per metal spent, against the field's own mean.
+float CoverPerMetal(int di)
+{
+	LineMeans();
+	if ((gLMeanSpc <= 0.f) || (Catalog::gCostM[di] <= 0.f))
+		return 1.f;
+	return (Catalog::gSpeed[di] / Catalog::gCostM[di]) / gLMeanSpc;
 }
 
 // Share of the line that can absorb for the rest -- what makes a fragile

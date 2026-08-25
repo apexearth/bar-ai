@@ -75,6 +75,9 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 				delta *= 1.f + ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH)
 						* delta / ((inc1 > delta) ? inc1 : delta);
 			}
+			// Quadrupling the yield of a spot we cannot hold quadruples
+			// nothing -- the same discount the claim itself takes.
+			delta *= StreamSurvival(gLPos[li]);
 			const float walkSec = (speed > 1.f)
 					? (here.distance2D(gLPos[li]) / speed) : 60.f;
 			Want c;

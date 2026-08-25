@@ -454,6 +454,39 @@ float SiegeRisk(const AIFloat3& in pos)
 			/ ((tau > 1.f) ? tau : 180.f);
 }
 
+// AN UNGUARDED STREAM IS NOT A STREAM. apexearth, twice: "I'm upset every time
+// I see we make stuff and walk away from it without guarding it at all... a mex
+// should have almost NO VALUE! until it is protected by a tower."
+//
+// The mex wants price the income a spot yields as though we keep it. The only
+// risk charge anywhere was ExpectedLossAt in decide.as, and that bills the
+// BUILDING's 620 metal -- never the income we stop collecting when it dies,
+// which over any real horizon is the larger number by far. So an unheld
+// forward spot and a towered one behind our own line priced within a few
+// percent of each other.
+//
+// The share of a stream we expect to actually collect, over the horizon the
+// stake is already counted across. ShortfallAt is what our guns fail to stop,
+// so a tower within reach of the spot RAISES this directly -- which is the
+// coupling he is asking for: cover makes the next claim beside it worth more,
+// and expansion clusters behind the line instead of scattering.
+float StreamSurvival(const AIFloat3& in pos)
+{
+	if (ai.GetTunable("apex_stream_survival", TUNE_STREAM_SURVIVAL) <= 0.f)
+		return 1.f;
+	if (!OnMap(pos))
+		return 1.f;
+	const float shortP = ShortfallAt(pos);
+	float risk = HazardAt(pos) * shortP;
+	const float siege = SiegeRisk(pos) * shortP;
+	if (siege > risk)
+		risk = siege;
+	if (risk <= 0.f)
+		return 1.f;
+	const float T = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
+	return 1.f / (1.f + risk * ((T > 1.f) ? T : 300.f));
+}
+
 // The expected-loss stream on value standing at pos, in metal/s -- the one
 // quantity both the protect gain and the exposure premium are built from.
 float ExpectedLossAt(const AIFloat3& in pos, float valueM)

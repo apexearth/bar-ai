@@ -242,6 +242,9 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 			gain *= 1.f + ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH)
 					* gain / ((inc0 > gain) ? inc0 : gain);
 		}
+		// Only what we expect to still be collecting: an unguarded spot keeps
+		// its income for as long as it lives, and no longer.
+		gain *= StreamSurvival(pos);
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;

@@ -20,7 +20,10 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// frame standing without its ring of ~3 (his read of stock's
 	// caretaker logic). The income-headroom gap (BPGap) buys constructors
 	// now, never farm turrets.
-	const float lineNeed = UnservedLineSpend();
+	AIFloat3 linePos;
+	const float lineNeed = NeediestLine(linePos);
+	bool haveLine = (lineNeed > 0.f) && OnMap(linePos);
+	AIFloat3 sinkPos;
 	float sinkNeed = 0.f;
 	for (uint si = 0; si < Requests::gLive.length(); ++si) {
 		IUnitTask@ st = Requests::gLive[si];
@@ -41,13 +44,47 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		if (nAt < 3) {
 			const float free3 = FreeMetalFlow();
 			const float need = (free3 < 35.f) ? free3 : 35.f;
-			if (need > sinkNeed)
+			if (need > sinkNeed) {
 				sinkNeed = need;
+				sinkPos = sp3;
+			}
+		}
+	}
+	// AN ARMY SHORTFALL IS NANO DEMAND (apexearth: "if we have need for more
+	// army, one solution is adding a nano turret near the factory"). A line's
+	// own spend can be fully served while the army we need is still short --
+	// the answer then is not another line, it is more lathe on the one we have.
+	// Bounded by what the economy can actually feed, so it never buys hands
+	// that would stand idle.
+	float armyNeed = 0.f;
+	AIFloat3 armyPos;
+	{
+		const float gap = ArmyTarget() - ArmyValue();
+		if (gap > 0.f) {
+			const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+			float wantRate = gap / ((fillS > 1.f) ? fillS : 180.f);
+			const float free4 = FreeMetalFlow();
+			if (wantRate > free4)
+				wantRate = free4;
+			if ((wantRate > 0.f) && AnyLineSite(armyPos))
+				armyNeed = wantRate;
 		}
 	}
 	float over = (sinkNeed > lineNeed) ? sinkNeed : lineNeed;
+	if (armyNeed > over)
+		over = armyNeed;
 	if (over <= 0.5f)
 		return w;
+	// The turret STANDS where the demand is. A nano bought to serve a line was
+	// sited at the eco farm, which is behind the anchor and outside assist
+	// reach -- so it could never touch the line that priced it.
+	AIFloat3 site = EcoSiteFor(unit);
+	if ((armyNeed >= over) && OnMap(armyPos))
+		site = armyPos;
+	else if ((sinkNeed >= lineNeed) && OnMap(sinkPos))
+		site = sinkPos;
+	else if (haveLine)
+		site = linePos;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	for (uint i = 0; i < builds.length(); ++i) {
@@ -63,7 +100,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			w = c;
 			w.kind = WK_NANO;
 			@w.def = Catalog::Def(d);
-			w.pos = EcoSiteFor(unit);
+			w.pos = site;
 		}
 	}
 	return w;
