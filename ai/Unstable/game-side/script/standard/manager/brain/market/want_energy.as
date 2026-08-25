@@ -86,7 +86,12 @@ float StandingConvCap()
 float gBestConvRatio = -1.f;
 float BestConvRatio()
 {
-	if (gBestConvRatio >= 0.f)
+	// NEVER CACHE A ZERO. Catalog::gAvailable is frame-dependent (the DLL's
+	// IsAvailable(frame)), so a first call before converters unlock would latch
+	// 0 forever -- and with it EcoPowerM collapses to metal income and the whole
+	// no-mex-map fix goes inert. It did exactly that once the growth premium
+	// started calling this from the first election onward.
+	if (gBestConvRatio > 0.f)
 		return gBestConvRatio;
 	gBestConvRatio = 0.f;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
@@ -100,10 +105,20 @@ float BestConvRatio()
 float EcoPowerM()
 {
 	TrackEPull();
+	// ALL the energy we make, not just the part we are wasting (apexearth:
+	// "it's not just the converter from T2 that matters, it's the units, the
+	// energy, many things"). Every unit and every building costs energy as
+	// well as metal, so energy the economy is usefully SPENDING is economic
+	// power too -- counting only the surplus said an economy running hot on
+	// energy had no energy value at all, which is backwards. What standing
+	// converters chew is subtracted because their metal output is already
+	// inside metal.income; the rest is carried at the conversion anchor, the
+	// game's own exchange rate and the floor price of energy everywhere else
+	// in this market.
 	float p = aiEconomyMgr.metal.income;
-	const float spare = gESurplusEma - StandingConvCap();
-	if (spare > 0.f)
-		p += spare * BestConvRatio();
+	const float eNet = aiEconomyMgr.energy.income - StandingConvCap();
+	if (eNet > 0.f)
+		p += eNet * BestConvRatio();
 	return p;
 }
 

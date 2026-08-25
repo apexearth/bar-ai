@@ -215,7 +215,9 @@ bool LineCombat(int di)
 float gLMeanHpm = -1.f, gLMeanDpm = 0.f, gLMeanR = 0.f, gLMeanSpc = 0.f;
 void LineMeans()
 {
-	if (gLMeanHpm >= 0.f)
+	// Availability is frame-dependent; recompute until the field is non-empty
+	// rather than latching a mean taken over nothing (see BestConvRatio).
+	if (gLMeanHpm > 0.f)
 		return;
 	float hp = 0.f, dp = 0.f, rr = 0.f, sp = 0.f;
 	int n = 0;
@@ -230,7 +232,7 @@ void LineMeans()
 		++n;
 	}
 	if (n <= 0) {
-		gLMeanHpm = 0.f;
+		gLMeanHpm = -1.f;   // not yet knowable; ask again next call
 		return;
 	}
 	gLMeanHpm = hp / float(n);
@@ -317,7 +319,9 @@ float LineShortfall(int cls)
 float gFoeSpeedCap = -1.f;
 float FoeSpeedCap()
 {
-	if (gFoeSpeedCap >= 0.f)
+	// Availability is frame-dependent; a zero must never be cached (see
+	// BestConvRatio).
+	if (gFoeSpeedCap > 0.f)
 		return gFoeSpeedCap;
 	gFoeSpeedCap = 0.f;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {

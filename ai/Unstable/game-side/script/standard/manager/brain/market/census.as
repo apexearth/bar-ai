@@ -150,6 +150,12 @@ array<array<Id>> gProtIds(PROT_N);
 array<array<CCircuitUnit@>> gProtUnit(PROT_N);
 array<array<int>> gProtDefId(PROT_N);
 float gAssetsM = 0.f;   // summed costM of standing structures
+// ...of which this much is PROTECTION. Defence must never be its own reason:
+// the siege prior mirrors our economy into their army, so counting turrets in
+// that basis made every turret raise the threat that justified the next one
+// (apexearth: "our entire defence lineup is probably also going into that? So
+// defences required even more defences to protect the defences").
+float gProtM = 0.f;
 
 int ProtClassOf(int defId)
 {
@@ -193,8 +199,11 @@ void NoteFinished(CCircuitUnit@ unit)
 		gOwnGen.insertLast(unit);
 		gOwnGenIds.insertLast(unit.id);
 	}
-	if (!Catalog::gMobile[defId])
+	if (!Catalog::gMobile[defId]) {
 		gAssetsM += Catalog::gCostM[defId];
+		if (ProtClassOf(defId) >= 0)
+			gProtM += Catalog::gCostM[defId];
+	}
 	if (!Catalog::gMobile[defId] && (Catalog::gCostM[defId] >= 1200.f)) {
 		gOwnBig.insertLast(unit);
 		gOwnBigIds.insertLast(unit.id);
@@ -268,6 +277,8 @@ void NoteDead(CCircuitUnit@ unit)
 	}
 	if (!Catalog::gMobile[int(unit.circuitDef.id)])
 		gAssetsM -= Catalog::gCostM[int(unit.circuitDef.id)];
+		if (ProtClassOf(int(unit.circuitDef.id)) >= 0)
+			gProtM -= Catalog::gCostM[int(unit.circuitDef.id)];
 	for (uint bb = 0; bb < gOwnBigIds.length(); ++bb) {
 		if (gOwnBigIds[bb] == unit.id) {
 			gOwnBig.removeAt(bb);

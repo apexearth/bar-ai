@@ -432,7 +432,16 @@ float HazardAt(const AIFloat3& in pos)
 // falls the moment army or turrets exist -- and it is SCOPED to the survival
 // discount: the same prior inside HazardAt itself repriced every want in the
 // game and cost 87% of our standing army (measured, 6 games).
-float SiegeRisk(const AIFloat3& in pos)
+// TWO DIFFERENT QUESTIONS, TWO DIFFERENT PRIORS. Whether a long bet has time
+// to pay is a worst-case question -- assume they spent everything on army. How
+// much defence to BUY is an expectation, and buying against the worst case is
+// a feedback loop: bigger economy -> more assumed enemy army -> more turrets
+// -> economy stalls, settling only once cover roughly equals our whole
+// economy (apexearth, watching: "we make far too many turrets around our base.
+// We stopped eco at around ~15-19m/s... our want for defense is outweighing
+// our interest in more eco, and we aren't making any T2"). The expectation is
+// apex_enemy_prior, the same share ArmyTarget sizes production against.
+float SiegeRiskAt(const AIFloat3& in pos, float priorFrac)
 {
 	// WHAT COULD WE AFFORD RIGHT NOW IF WE HAD BOUGHT ONLY ARMY -- they had the
 	// same start and the same minutes, so that is what may be walking at us
@@ -441,9 +450,13 @@ float SiegeRisk(const AIFloat3& in pos)
 	// nothing that can match it"). Our whole economy, not a share of it: the
 	// share belongs in ArmyTarget, which decides what to BUILD; this decides
 	// whether a long bet has time to pay.
-	const float ourTotal = gAssetsM + ArmyValue();
-	const float prior = ourTotal
-			* ai.GetTunable("apex_siege_prior", TUNE_SIEGE_PRIOR);
+	// ECONOMY, not everything we own: our own turrets are excluded, or defence
+	// becomes its own justification and the loop runs away.
+	float econM = gAssetsM - gProtM;
+	if (econM < 0.f)
+		econM = 0.f;
+	const float ourTotal = econM + ArmyValue();
+	const float prior = ourTotal * priorFrac;
 	const float seen = Military::EnemyArmyCost();
 	const float foe = (seen > prior) ? seen : prior;
 	if (foe <= 0.f)
@@ -452,6 +465,18 @@ float SiegeRisk(const AIFloat3& in pos)
 	const float tau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
 	return (foe / (foe + ((defended > 0.f) ? defended : 0.f)))
 			/ ((tau > 1.f) ? tau : 180.f);
+}
+
+// The worst case: what a deferred bet is measured against.
+float SiegeRisk(const AIFloat3& in pos)
+{
+	return SiegeRiskAt(pos, ai.GetTunable("apex_siege_prior", TUNE_SIEGE_PRIOR));
+}
+
+// The expectation: what defence is SIZED against.
+float SiegeExpect(const AIFloat3& in pos)
+{
+	return SiegeRiskAt(pos, ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR));
 }
 
 // AN UNGUARDED STREAM IS NOT A STREAM. apexearth, twice: "I'm upset every time

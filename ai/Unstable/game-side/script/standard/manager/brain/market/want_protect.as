@@ -409,7 +409,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				// it. Self-limiting: SiegeRisk falls as CoverAt rises, so each
 				// turret lowers the price of the next.
 				float hz = HazardAt(s);
-				const float sg = SiegeRisk(s);
+				const float sg = SiegeExpect(s);
 				if (sg > hz)
 					hz = sg;
 				float prevented = stake * hz * (short0 - short1);
