@@ -30,6 +30,23 @@ float UpDemand()
 	return (d > 0.f) ? d : 0.f;
 }
 
+// THE ARMY A LONG BUILD CANNOT AFFORD. apexearth: "during that entire time
+// you're making an AFUS you can afford military better and protect yourself.
+// You're giving yourself options." Two of the three costs he names are already
+// priced -- the build may die (the survival discount) and it delays extraction
+// (the streams below). The third was not: income and lathes committed to a
+// frame for eighteen minutes are income and lathes the army and defence wanted,
+// and a build that delivers in forty seconds surrenders almost none of that.
+// Same currency and the same unserved-demand shape as the extraction streams.
+float ArmyGapStream()
+{
+	const float gap = ArmyTarget() - ArmyValue();
+	if (gap <= 0.f)
+		return 0.f;
+	const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	return gap / ((fill > 1.f) ? fill : 180.f);
+}
+
 // UpDemand BOUNDED BY HANDS THAT CAN SERVE IT. Catalog::gAvailable is not
 // tier-gated, so BestExtract() names the moho from frame zero and UpDemand
 // reports the full upgrade stream while we own no constructor able to place

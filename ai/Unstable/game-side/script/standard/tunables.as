@@ -1222,6 +1222,10 @@ const float TUNE_SPACE_RENT = 1.f;
 // build power: more lathes shorten buildSec and restore the big build's
 // value. 0 disables, which is how the A/B control is run.
 const float TUNE_PAYBACK_H = 900.f;
+// manager/brain/market/price.as -- the option cost of tying capital up in an
+// unfinished frame, as a multiple of (cost x duration / payback horizon).
+// apexearth's "little bit extra of a penalty on top of time". 0 disables.
+const float TUNE_LOCKUP = 0.5f;
 // manager/brain/market/sites.as -- elmos one farm row runs before the next
 // stacks behind it. Halved from 640 on apexearth's watched report that the
 // winds sat too far out on both sides: the same slots in a narrower row form

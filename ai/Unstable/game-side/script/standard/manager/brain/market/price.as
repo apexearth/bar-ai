@@ -343,6 +343,24 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 			+ float(Catalog::gAreaCells[defId])
 				* ai.GetTunable("apex_space_m", TUNE_SPACE_M);
 	w.tCost = (walkSec + buildSec) * Wage() + displacedM;
+	// THE OPTIONS A LONG BUILD COSTS YOU. apexearth: "during that entire time
+	// you're making an AFUS you can afford military better and protect
+	// yourself. You're giving yourself options... you can put a little bit
+	// extra of a penalty on top of 'time' in these things - that works as the
+	// 'lack of options' doing that causes."
+	//
+	// Metal committed to a frame is metal that cannot answer anything for as
+	// long as the frame stands, so the cost is the CAPITAL times the fraction
+	// of the horizon it is locked for -- superlinear in duration, because both
+	// the amount and the wait grow together. A moho at 640 metal and 47 seconds
+	// pays ~17; an afus at 9700 and 1097 pays thousands. Nothing is forbidden:
+	// the same afus at high build power is short and pays little.
+	{
+		const float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+		const float k = ai.GetTunable("apex_lockup", TUNE_LOCKUP);
+		if ((H > 1.f) && (k > 0.f))
+			w.tCost += Catalog::gCostM[defId] * (buildSec / H) * k;
+	}
 	// The FLOW bill (apexearth 2026-08-23): this build's E drain is a rate,
 	// costE/buildSec, and any part of it that income + the bank cannot fund
 	// across the build throttles EVERY lathe (pull 300 on income 50 = 1/6th
