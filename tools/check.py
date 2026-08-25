@@ -421,8 +421,7 @@ def check_lazy_caches(script_root: Path, rep: Report) -> None:
             # table can latch a false zero. A previous-sample tracker or a frame
             # stamp uses -1 for "never" and 0 is legitimate for it, so look at
             # the body this guard opens rather than the whole file.
-            body = "
-".join(lines[n - 1:n + 24])
+            body = "\n".join(lines[n - 1:n + 24])
             if "gAvailable[" in body:
                 rep.error(f"{rel}:{n}: lazy cache '{m.group('name')}' guards on "
                           f">= 0, so a zero computed before defs are available "
