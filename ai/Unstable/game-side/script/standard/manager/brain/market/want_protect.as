@@ -107,6 +107,50 @@ bool RadarGap(const AIFloat3& in from, AIFloat3& out at, float& out unseenFrac)
 	return found;
 }
 
+// A POST SHIELDS WHAT IS BEHIND IT ONLY IF THE ENEMY CANNOT WALK AROUND IT.
+// apexearth: "ShieldedStakeAt is technically correct as long as we've closed
+// the loop - created a net with no holes in it. Otherwise it's moreso a
+// 'partial' truth."
+//
+// Closure is the share of approach bearings some standing post actually
+// covers. The shielded credit a candidate earns is the closure it would ADD,
+// so plugging the last hole is worth the whole base behind it and a redundant
+// post beside an existing one is worth nothing. That is what makes defence
+// saturate: without it every candidate site claimed the entire base, measured
+// at stake 13,606 against an economy of 8,751, and the price never fell however
+// many turrets stood.
+//
+// A bearing that runs off the map counts as closed -- the edge is the wall.
+const int CLOSE_RAYS = 16;
+float LineClosure(const AIFloat3& in extraAt, float extraReach)
+{
+	AIFloat3 c;
+	float extent = 0.f;
+	if (!BaseCentroid(c, extent))
+		return 0.f;
+	const float ring = extent + Military::FoeReach();
+	if (ring <= 1.f)
+		return 0.f;
+	int closed = 0;
+	for (int b = 0; b < CLOSE_RAYS; ++b) {
+		const float ang = 6.2831853f * float(b) / float(CLOSE_RAYS);
+		const AIFloat3 p = c + AIFloat3(cos(ang), 0.f, sin(ang)) * ring;
+		if (!OnMap(p)) {
+			++closed;
+			continue;
+		}
+		bool ok = (extraReach > 0.f) && (extraAt.distance2D(p) <= extraReach);
+		for (uint i = 0; !ok && (i < gProtPos[PROT_DEF].length()); ++i) {
+			const int d = gProtDefId[PROT_DEF][i];
+			if (gProtPos[PROT_DEF][i].distance2D(p) <= Catalog::gMaxRange[d])
+				ok = true;
+		}
+		if (ok)
+			++closed;
+	}
+	return float(closed) / float(CLOSE_RAYS);
+}
+
 bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 {
 	for (uint i = 0; i < gProtPos[cls].length(); ++i) {
@@ -381,6 +425,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			AIFloat3 bestAt = at;
 			float bestGain = 0.f;
 			bool bestIsFront = false;
+			// Closure as it stands, computed once: it does not depend on which
+			// candidate site we are pricing.
+			const float gClose0 = LineClosure(at, 0.f);
 			for (uint si = 0; si < sites.length(); ++si) {
 				const AIFloat3 s = sites[si];
 				if (!OnMap(s))
@@ -391,7 +438,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				// What it can shoot over, plus what it stands between the
 				// enemy and. The second term is why a post on empty forward
 				// ground is worth anything at all.
-				const float stake = FrontedStakeAt(s, reach) + ShieldedStakeAt(s, reach);
+				// What this post directly covers, plus what it shields --
+				// the latter only to the extent this post CLOSES the net.
+				float dClose = LineClosure(s, reach) - gClose0;
+				if (dClose < 0.f)
+					dClose = 0.f;
+				const float stake = FrontedStakeAt(s, reach)
+						+ ShieldedStakeAt(s, reach) * dClose;
 				if (stake <= 1.f)
 					continue;
 				const float cover0 = CoverAt(s);
