@@ -1215,6 +1215,13 @@ const float TUNE_STREAM_SURVIVAL = 1.f;
 // metal spread over the area they cover, per cell of footprint. Makes dense
 // beat sprawling inside the perimeter and costs nothing outside it. 0 disables.
 const float TUNE_SPACE_RENT = 1.f;
+// manager/brain/market/price.as -- seconds over which a purchase must earn.
+// A gain is credited only for the share of this horizon it will actually be
+// collecting, so a build that delivers nothing for most of it is discounted
+// against the small compounding steps that deliver now. Scales itself with
+// build power: more lathes shorten buildSec and restore the big build's
+// value. 0 disables, which is how the A/B control is run.
+const float TUNE_PAYBACK_H = 900.f;
 // manager/brain/market/sites.as -- elmos one farm row runs before the next
 // stacks behind it. Halved from 640 on apexearth's watched report that the
 // winds sat too far out on both sides: the same slots in a narrower row form
