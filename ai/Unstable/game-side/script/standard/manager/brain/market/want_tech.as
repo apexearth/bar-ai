@@ -201,7 +201,39 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				prodConv = r3;
 		}
 		const float ownConv = OwnConvCeil();
+		// KIN INCLUDES WHAT ALREADY STANDS, not only what is in flight. This
+		// divisor counted live REQUESTS only, so the moment the first plant
+		// FINISHED it stopped counting and the next one priced at full demand
+		// again -- which is how a second lab kept arriving (apexearth: "why do
+		// we make 2 T1 labs often and the second one is usually a hover?").
+		// A standing plant whose constructors already reach this far is serving
+		// the demand just as much as one being built.
 		int liveKin = 0;
+		for (uint sk = 1; sk < gOwnCount.length(); ++sk) {
+			const int sd = int(sk);
+			if ((gOwnCount[sk] <= 0) || Catalog::gMobile[sd]
+				|| (Catalog::gBuildsList[sd].length() == 0))
+				continue;
+			const array<int>@ sb = Catalog::gBuildsList[sd];
+			bool skin = false;
+			for (uint sq = 0; sq < sb.length() && !skin; ++sq) {
+				const int spd = sb[sq];
+				if (!Catalog::gMobile[spd] || !Catalog::gBuilder[spd])
+					continue;
+				const array<int>@ spb = Catalog::gBuildsList[spd];
+				for (uint sz = 0; sz < spb.length(); ++sz) {
+					if (Catalog::gExtractsM[spb[sz]] >= prodCeil) {
+						skin = true;
+						break;
+					}
+				}
+				if (!skin && (prodConv > 0.f)
+					&& (ConvRatioReach(Catalog::gBuildsList[spd]) >= prodConv))
+					skin = true;
+			}
+			if (skin)
+				liveKin += gOwnCount[sk];
+		}
 		for (uint kl = 0; kl < Requests::gLive.length(); ++kl) {
 			IUnitTask@ kt = Requests::gLive[kl];
 			if ((kt is null) || (kt.buildDef is null))
@@ -254,7 +286,13 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		if ((prodCeil > ownCeil) || (prodConv > ownConv))
 			techGain = demand * pipe / float(1 + liveKin);
 		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f)) {
-			techGain = demand * pipe * (prodMob / ownMob - 1.f);
+			// Mobility is a REFINEMENT of demand already being served, so it
+			// divides among the plants serving it exactly as the unlock does.
+			// Without this a 750-metal hover platform was bought for a 23%
+			// walk-speed edge while a lab that already served the same demand
+			// stood beside it.
+			techGain = demand * pipe * (prodMob / ownMob - 1.f)
+					/ float(1 + liveKin);
 			// The quiet rear NEEDS wings: flying cons are its whole
 			// expansion plan (ground plants stop pricing), so the first
 			// flying-builder unlock is a full-demand want, not a
