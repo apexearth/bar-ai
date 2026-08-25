@@ -102,7 +102,9 @@ int gTechDiagAt = 0;
 Want@ ProposeTech(CCircuitUnit@ unit)
 {
 	Want w;
-	const float demand = UpDemand();
+	// Extraction upgrades AND conversion upgrades: both are "the same economy,
+	// better", and on a map with no spots only the second one exists.
+	const float demand = UpDemand() + ConvUpDemand();
 	if (ai.frame >= gTechDiagAt) {
 		gTechDiagAt = ai.frame + 120 * SECOND;
 		AiLog("apex: tech-diag team=" + ai.teamId + " upD=" + demand
@@ -228,8 +230,19 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		float fundedMul = (funded > 1.f) ? 1.f : funded;
 		if (EcoQuiet())
 			fundedMul = 1.f;
+		// Does this plant reach a better CONVERTER than anything we own?
+		float prodConv = 0.f;
+		for (uint pc = 0; pc < prods.length(); ++pc) {
+			const int pd3 = prods[pc];
+			if (!Catalog::gMobile[pd3] || !Catalog::gBuilder[pd3])
+				continue;
+			const float r3 = ConvRatioReach(Catalog::gBuildsList[pd3]);
+			if (r3 > prodConv)
+				prodConv = r3;
+		}
+		const float ownConv = OwnConvCeil();
 		float techGain = 0.f;
-		if (prodCeil > ownCeil)
+		if ((prodCeil > ownCeil) || (prodConv > ownConv))
 			techGain = demand * pipe / float(1 + liveKin);
 		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f)) {
 			techGain = demand * pipe * (prodMob / ownMob - 1.f);

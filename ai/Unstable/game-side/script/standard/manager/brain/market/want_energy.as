@@ -122,6 +122,62 @@ float EcoPowerM()
 	return p;
 }
 
+// WHAT TIER UNLOCKS ON THE ENERGY SIDE. The tech want's whole demand is
+// UpDemand -- the mex-upgrade stream -- so on a map with no metal spots it is
+// identically zero and ProposeTech returns before pricing anything. No T2 lab
+// is ever proposed, which means no advanced converter and no AFUS, and the
+// economy has no way to grow at all (apexearth: "T1 lab -> t1 con -> t2 lab ->
+// fusion/afus + advanced converter, absolutely good right???" -- yes, and we
+// could not express it).
+//
+// Same shape as UpDemand, in the same currency: the extra metal per second a
+// better conversion ratio would make from the energy we already have. Zero
+// once we own the best converter in the game, exactly like the upgrade stream
+// goes to zero once every spot is mohoed.
+float ConvRatioReach(const array<int>@ builds)
+{
+	float best = 0.f;
+	if (builds is null)
+		return best;
+	for (uint i = 0; i < builds.length(); ++i) {
+		const int d = builds[i];
+		if (Catalog::gAvailable[d] && (Catalog::gConvCapacity[d] > 0.f)
+			&& (Catalog::gConvRatio[d] > best))
+			best = Catalog::gConvRatio[d];
+	}
+	return best;
+}
+
+// The best ratio anything we already own can place.
+float OwnConvCeil()
+{
+	float best = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
+			continue;
+		const float r = ConvRatioReach(Catalog::gBuildsList[di]);
+		if (r > best)
+			best = r;
+	}
+	return best;
+}
+
+// Energy nothing is already converting -- what a better ratio would act on.
+float ConvertibleE()
+{
+	const float e = aiEconomyMgr.energy.income - StandingConvCap();
+	return (e > 0.f) ? e : 0.f;
+}
+
+float ConvUpDemand()
+{
+	const float gapR = BestConvRatio() - OwnConvCeil();
+	if (gapR <= 0.f)
+		return 0.f;
+	return ConvertibleE() * gapR;
+}
+
 // The BP closed loop: the fleet's standing lathe capacity vs what income
 // can feed. Idle builders do not PULL, so "overflow" reads high exactly
 // when parked BP is the problem -- capacity is the honest measure
