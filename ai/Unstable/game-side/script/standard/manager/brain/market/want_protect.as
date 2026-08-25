@@ -9,6 +9,12 @@ int gDefSiteFront = 0;
 int gDefSiteAsset = 0;
 int gNextDefSiteLog = 0;
 int gNextDefFwdLog = 0;
+// EVERY TERM OF THE DEFENCE PRICE, so "why so many turrets" is read rather than
+// guessed (apexearth: "what is the connection causing this? We need to not
+// guess here").
+float gDbgStake = 0.f, gDbgHz = 0.f, gDbgSiege = 0.f, gDbgHazard = 0.f;
+float gDbgShort0 = 0.f, gDbgShort1 = 0.f, gDbgThreat = 0.f, gDbgCover0 = 0.f;
+int gNextDefPriceLog = 0;
 float gDbgFrontBest = 0.f;
 float gDbgAssetBest = 0.f;
 int gDbgLineN = 0;
@@ -423,6 +429,14 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					bestGain = prevented;
 					bestAt = s;
 					bestIsFront = (si >= nAsset);
+					gDbgStake = stake;
+					gDbgHz = hz;
+					gDbgSiege = sg;
+					gDbgHazard = HazardAt(s);
+					gDbgShort0 = short0;
+					gDbgShort1 = short1;
+					gDbgThreat = threat;
+					gDbgCover0 = cover0;
 				}
 			}
 			gDbgLineN = int(sites.length() - nAsset);
@@ -430,6 +444,23 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				continue;
 			gain = bestGain;
 			at = bestAt;
+			if (ai.frame >= gNextDefPriceLog) {
+				gNextDefPriceLog = ai.frame + 30 * SECOND;
+				AiLog("apex: defprice t=" + ai.teamId
+					+ " gain=" + formatFloat(gain, "", 0, 2)
+					+ " stake=" + formatFloat(gDbgStake, "", 0, 0)
+					+ " threat=" + formatFloat(gDbgThreat, "", 0, 0)
+					+ " cover=" + formatFloat(gDbgCover0, "", 0, 0)
+					+ " short=" + formatFloat(gDbgShort0, "", 0, 2)
+					+ "->" + formatFloat(gDbgShort1, "", 0, 2)
+					+ " hz=" + formatFloat(gDbgHz, "", 0, 5)
+					+ " (hazard=" + formatFloat(gDbgHazard, "", 0, 5)
+					+ " siege=" + formatFloat(gDbgSiege, "", 0, 5) + ")"
+					+ " | econM=" + formatFloat(gAssetsM - gProtM, "", 0, 0)
+					+ " protM=" + formatFloat(gProtM, "", 0, 0)
+					+ " army=" + formatFloat(ArmyValue(), "", 0, 0)
+					+ " foeSeen=" + formatFloat(Military::EnemyArmyCost(), "", 0, 0));
+			}
 			NoteDefSite(bestIsFront);
 			// Is the chosen post in FRONT of the base or behind it? He reports
 			// towers landing behind, which the site list alone cannot show.
