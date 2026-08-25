@@ -285,7 +285,15 @@ void NoteDead(CCircuitUnit@ unit)
 	// (any radarR > 900 or jamR > 100), so every radar or jammer bot lost in a
 	// fight drained gProtM below zero -- and econM = gAssetsM - gProtM then
 	// reads MORE than we own, inflating the siege basis that sizes defence.
-	if (!Catalog::gMobile[int(unit.circuitDef.id)]) {
+	// ONLY WHAT WAS ADDED MAY BE SUBTRACTED. NoteFinished credits a structure
+	// when it FINISHES; this fires for every death, so a building killed on the
+	// pad debited a cost it never carried. gProtM ran to -5840 against an
+	// 8k economy, and econM = gAssetsM - gProtM then reported assets we do not
+	// own -- inflating the very siege basis that sizes defence, so each dead
+	// half-built turret bought the next one.
+	if (Main::WasFinished(int(unit.id))
+		&& !Catalog::gMobile[int(unit.circuitDef.id)])
+	{
 		gAssetsM -= Catalog::gCostM[int(unit.circuitDef.id)];
 		if (ProtClassOf(int(unit.circuitDef.id)) >= 0)
 			gProtM -= Catalog::gCostM[int(unit.circuitDef.id)];

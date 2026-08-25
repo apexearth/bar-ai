@@ -24,9 +24,18 @@ namespace Market {
 // value is the WEAKEST bearing on it -- they pick where to stand, not us. With
 // no observed enemy reach yet the ring collapses to the point itself, which is
 // the old behaviour.
+// A CANDIDATE MUST BE PRICED THE WAY THE STANDING FIELD IS MEASURED. The
+// marginal term below is a DIFFERENCE of this function against itself, so the
+// proposed turret enters as a hypothetical member of gProtPos -- same ring,
+// same weakest-bearing rule, same trade. Adding its cost to a ring reading
+// instead compared a metal figure against a coverage figure: the candidate was
+// credited in full at the site while the towers already standing were judged
+// on a ring almost nothing reaches, so the field never saturated and the Nth
+// turret priced exactly like the first (measured: cover=0 at protM=3450).
 const int COVER_RAYS = 6;
 
-float CoverPointM(const AIFloat3& in at, float trade)
+float CoverPointM(const AIFloat3& in at, float trade,
+		const AIFloat3& in extraAt, float extraReach, float extraM)
 {
 	float m = 0.f;
 	for (uint i = 0; i < gProtPos[PROT_DEF].length(); ++i) {
@@ -34,29 +43,38 @@ float CoverPointM(const AIFloat3& in at, float trade)
 		if (gProtPos[PROT_DEF][i].distance2D(at) <= Catalog::gMaxRange[d])
 			m += Catalog::gCostM[d] * trade;
 	}
+	if ((extraReach > 0.f) && (extraAt.distance2D(at) <= extraReach))
+		m += extraM;
 	return m;
 }
 
-float CoverAt(const AIFloat3& in pos)
+float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
+		float extraReach, float extraM)
 {
-	if (gProtPos[PROT_DEF].length() == 0)
+	if ((gProtPos[PROT_DEF].length() == 0) && (extraReach <= 0.f))
 		return 0.f;
 	const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
 	const float standoff = (ai.GetTunable("apex_standoff_cover", TUNE_STANDOFF_COVER) > 0.f)
 			? Military::FoeReach() : 0.f;
 	if (standoff <= 1.f)
-		return CoverPointM(pos, trade);
+		return CoverPointM(pos, trade, extraAt, extraReach, extraM);
 	float worst = -1.f;
 	for (int b = 0; b < COVER_RAYS; ++b) {
 		const float ang = 6.2831853f * float(b) / float(COVER_RAYS);
 		const AIFloat3 fp = pos + AIFloat3(cos(ang), 0.f, sin(ang)) * standoff;
 		if (!OnMap(fp))
 			continue;   // they cannot stand off the map to shoot from there
-		const float m = CoverPointM(fp, trade);
+		const float m = CoverPointM(fp, trade, extraAt, extraReach, extraM);
 		if ((worst < 0.f) || (m < worst))
 			worst = m;
 	}
-	return (worst < 0.f) ? CoverPointM(pos, trade) : worst;
+	return (worst < 0.f)
+			? CoverPointM(pos, trade, extraAt, extraReach, extraM) : worst;
+}
+
+float CoverAt(const AIFloat3& in pos)
+{
+	return CoverWith(pos, pos, -1.f, 0.f);
 }
 
 // THE STAKE AT A PLACE: our own metal standing within r, mexes counted at
@@ -578,7 +596,7 @@ void RiskDiag()
 		// threat -- conflating the two reported a naked base as safe.
 		if (CoverAt(gLPos[i]) > 0.f)
 			coveredM += 1.f;
-			shortSum += ShortfallAt(gLPos[i]);
+		shortSum += ShortfallAt(gLPos[i]);
 		const float el = ExpectedLossAt(gLPos[i], 620.f);
 		if (el > worstEL) {
 			worstEL = el;

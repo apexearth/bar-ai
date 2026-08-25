@@ -57,14 +57,24 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	if (usage == Unit::UseAs::FACTORY) {
-		--gFactoryCount;
+		// ONLY WHAT WAS COUNTED MAY BE UNCOUNTED. gFacUnits is the record of
+		// what AiUnitAdded actually took, and removal fires for units it never
+		// saw, so the bare decrement ran the count to -1. ProposePlant divides
+		// by 1 + this, and AngelScript raises on a float divide by zero too --
+		// the exception aborts the whole AiMakeTask call, so EVERY proposer
+		// after it is skipped and the Brain buys nothing for the rest of the
+		// game. Measured: 289 throws, 0 defence placements, match reported
+		// normally.
 		// NOCOUNT: remove or later reads touch freed memory.
 		for (uint i = 0; i < gFacUnits.length(); ++i) {
 			if (gFacUnits[i] is unit) {
 				gFacUnits.removeAt(i);
+				--gFactoryCount;
 				break;
 			}
 		}
+		if (gFactoryCount < 0)
+			gFactoryCount = 0;
 	}
 	if (gT1FacUnit is unit)
 		@gT1FacUnit = null;

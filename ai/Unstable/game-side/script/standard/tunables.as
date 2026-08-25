@@ -1623,7 +1623,11 @@ const float TUNE_FRONT_MIN_REACH = 0.5f;
 // manager/brain.as [elmos] -- How far from the builder the front-defence want
 //   will look for fence work.
 // manager/military/territory.as [toggle 0/1] -- NOTHING BEHIND US IS FRONT.
-const float TUNE_FRONT_REAR_ARC = 1.f;
+//   1 is the ESCAPE HATCH -- the full ring, for a genuinely surrounded base.
+//   It shipped as the default, so the rear exclusion the ring scan was written
+//   around had never once run: measured rays=24/24 with the enemy on one
+//   bearing, which is the ring closing on itself that its own comment warns of.
+const float TUNE_FRONT_REAR_ARC = 0.f;
 // manager/military/territory.as [toggle 0/1] -- Front spots are pulled back to
 //   the safe side of the influence edge; 0 uses the raw edge.
 const float TUNE_FRONT_SAFE_EDGE = 1.f;

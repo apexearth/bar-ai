@@ -14,6 +14,7 @@ int gNextDefFwdLog = 0;
 // guess here").
 float gDbgStake = 0.f, gDbgHz = 0.f, gDbgSiege = 0.f, gDbgHazard = 0.f;
 float gDbgShort0 = 0.f, gDbgShort1 = 0.f, gDbgThreat = 0.f, gDbgCover0 = 0.f;
+float gDbgCover1 = 0.f;
 int gNextDefPriceLog = 0;
 float gDbgFrontBest = 0.f;
 float gDbgAssetBest = 0.f;
@@ -39,6 +40,16 @@ void NoteDefSite(bool isFront)
 // Standing defense metal near a point -- the crowding divisor that makes
 // a 247-LLT carpet impossible (apexearth's screenshot: the whole eco lost
 // to in-base turret sprawl).
+// Distance to the nearest map wall -- diagnostics only.
+float EdgeDist(const AIFloat3& in p)
+{
+	float d = p.x;
+	if (p.z < d) d = p.z;
+	if (float(AiTerrainWidth()) - p.x < d) d = float(AiTerrainWidth()) - p.x;
+	if (float(AiTerrainHeight()) - p.z < d) d = float(AiTerrainHeight()) - p.z;
+	return (d < 0.f) ? 0.f : d;
+}
+
 float DefCrowdM(const AIFloat3& in pos, float r)
 {
 	float m = 0.f;
@@ -452,17 +463,23 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						+ ShieldedStakeAt(s, reach) * dClose;
 				if (stake <= 1.f)
 					continue;
+				// BOTH READINGS THROUGH ONE FUNCTION. short1 asks CoverWith
+				// what the field would measure with this turret standing at s,
+				// so a post that cannot raise the weakest bearing prevents
+				// nothing -- which is what makes an in-base carpet price itself
+				// out while a forward post or an out-ranging turret does not.
 				const float cover0 = CoverAt(s);
+				const float cover1 = CoverWith(s, s, reach, adds);
 				float short0 = (threat - cover0) / threat;
 				if (short0 < 0.f)
 					short0 = 0.f;
-				float short1 = (threat - (cover0 + adds)) / threat;
+				float short1 = (threat - cover1) / threat;
 				if (short1 < 0.f)
 					short1 = 0.f;
-				// A post against the map edge cannot be walked around, so the
-				// same coverage deficit EdgeSpacing corrects for by tightening
-				// spacing is worth paying for here (EdgeExposure, written for
-				// exactly this and never wired).
+				// A post against the map edge faces FEWER approaches, so the
+				// wave it must beat is smaller in proportion. This used to
+				// multiply by EdgeExposure, which is the same geometry with the
+				// opposite sign and paid DOUBLE at the wall.
 				// The siege prior BUYS THE ANSWER, it does not only forbid the
 				// bet. Discounting tech and energy for a threat we cannot see
 				// while defence still priced off HazardAt's floor left the
@@ -477,7 +494,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				if (sg > hz)
 					hz = sg;
 				float prevented = stake * hz * (short0 - short1);
-				prevented *= Military::EdgeExposure(s, reach);
+				prevented *= Military::OpenFraction(s, reach);
 				if (si >= nAsset) {
 					if (prevented > gDbgFrontBest) gDbgFrontBest = prevented;
 				} else if (prevented > gDbgAssetBest) {
@@ -495,6 +512,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					gDbgShort1 = short1;
 					gDbgThreat = threat;
 					gDbgCover0 = cover0;
+					gDbgCover1 = cover1;
 				}
 			}
 			gDbgLineN = int(sites.length() - nAsset);
@@ -509,6 +527,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " stake=" + formatFloat(gDbgStake, "", 0, 0)
 					+ " threat=" + formatFloat(gDbgThreat, "", 0, 0)
 					+ " cover=" + formatFloat(gDbgCover0, "", 0, 0)
+					+ "->" + formatFloat(gDbgCover1, "", 0, 0)
 					+ " short=" + formatFloat(gDbgShort0, "", 0, 2)
 					+ "->" + formatFloat(gDbgShort1, "", 0, 2)
 					+ " hz=" + formatFloat(gDbgHz, "", 0, 5)
@@ -529,6 +548,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " anchorFwd=" + formatFloat(Base::gAnchorSet
 						? Military::ForwardFraction(Base::gAnchor) : -9.f, "", 0, 2)
 					+ " front=" + (bestIsFront ? 1 : 0)
+					// Distance to the nearest map wall, and the share of the
+					// approach that is real map there. The wall used to PAY.
+					+ " edgeD=" + int(EdgeDist(bestAt))
+					+ " open=" + formatFloat(Military::OpenFraction(bestAt, 500.f), "", 0, 2)
 					+ " gain=" + formatFloat(bestGain, "", 0, 2));
 			}
 		}

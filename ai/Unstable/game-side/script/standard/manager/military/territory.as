@@ -338,6 +338,18 @@ array<bool> gRayHot;
 // FrontLineSpots and FrontBuildSpots skip it -- the two failures are
 // indistinguishable in gRayHot alone, and they need opposite answers.
 array<bool> gRayWall;
+// DID THIS BEARING MEET THE ENEMY. gRayHot answers "we hold ground out to here",
+// which is true on every forward bearing around a base whether or not anybody is
+// out there -- the ray simply runs to `march` and records its own edge. The two
+// break out of the sample loop at the same place and were indistinguishable
+// afterwards, so the DRAWN line traced our own territory boundary: a ring around
+// the base, running off the map wherever the base sits near an edge (apexearth,
+// watched at ourMid 575,5427 with R=651). Contested is the stricter question and
+// the one the front is.
+array<bool> gRayMet;
+// Was ANY bearing contested this rebuild. Nothing contested means we cannot
+// see them, not that they are absent, so placement must not tighten on it.
+bool gAnyMet = false;
 
 // THE RING'S OWN SAMPLE COUNT. The march below stops at the edge of our own
 // territory instead of running to the map edge, so most rays break after a
@@ -491,6 +503,7 @@ void RebuildRing(const AIFloat3& in home)
 	gRaySafe.resize(0);
 	gRayHot.resize(0);
 	gRayWall.resize(0);
+	gRayMet.resize(0);
 	const float w = float(AiTerrainWidth());
 	const float h = float(AiTerrainHeight());
 	const float reach = sqrt(w * w + h * h) * 0.5f;   // half the map diagonal
@@ -574,10 +587,12 @@ void RebuildRing(const AIFloat3& in home)
 			gRaySafe.insertLast(0.f);
 			gRayHot.insertLast(false);
 			gRayWall.insertLast(false);
+			gRayMet.insertLast(false);
 			continue;
 		}
 		float edge = 0.f;        // last sample that was still ours
 		float safe = 0.f;
+		bool met = false;        // did the ray break on THEM, or just run out
 		bool wall = false;       // did it run out of map
 		for (int i = 1; i <= RING_SAMPLES; ++i) {
 			const float d = step * float(i);
@@ -592,8 +607,10 @@ void RebuildRing(const AIFloat3& in home)
 			// is also what keeps the line out of the battle itself: where both
 			// fields are up, the last ground a builder can be sent to is the cell
 			// BEFORE the one they are standing in.
-			if (ai.GetEnemyInflAt(p) >= gRingFoeBar)
-				break;
+			if (ai.GetEnemyInflAt(p) >= gRingFoeBar) {
+				met = true;
+				break;   // THIS is a front: somebody is standing there
+			}
 			if (ai.GetAllyInflAt(p) < gRingAllyBar)
 				break;   // our territory ended at the previous sample
 			edge = d;
@@ -610,6 +627,7 @@ void RebuildRing(const AIFloat3& in home)
 		gRaySafe.insertLast(safe);
 		gRayHot.insertLast(edge > 0.f);
 		gRayWall.insertLast(wall);
+		gRayMet.insertLast(met);
 	}
 
 	// THE WALL IS PART OF THE LINE, NOT THE END OF IT. A bearing that ran out of
@@ -636,6 +654,7 @@ void RebuildRing(const AIFloat3& in home)
 	array<bool> seed = gRayHot;
 	array<float> seedR = gRayR;
 	array<float> seedS = gRaySafe;
+	array<bool> seedMet = gRayMet;
 	for (uint i = 0; i < gRayHot.length(); ++i) {
 		if (seed[i] || !gRayWall[i])
 			continue;
@@ -656,6 +675,11 @@ void RebuildRing(const AIFloat3& in home)
 		if (!haveSrc)
 			continue;
 		gRayHot[i] = true;
+		// A front that ends AT the wall is still a front; a wall bearing whose
+		// neighbour met nobody is just the edge of the world, and stays cold so
+		// nothing draws a line along it.
+		if (seedMet[src])
+			gRayMet[i] = true;
 		if (gRayR[i] > seedR[src])
 			gRayR[i] = seedR[src];
 		if (gRaySafe[i] <= 0.f)
@@ -663,6 +687,36 @@ void RebuildRing(const AIFloat3& in home)
 		if (gRaySafe[i] > gRayR[i])
 			gRaySafe[i] = gRayR[i];
 	}
+
+	gAnyMet = false;
+	for (uint i = 0; i < gRayMet.length(); ++i) {
+		if (gRayMet[i]) {
+			gAnyMet = true;
+			break;
+		}
+	}
+}
+
+// DOES THIS BEARING FACE THE FIGHT -- the question every front placement meant
+// to ask. gRayHot only says we hold ground out that way, which is true all the
+// way round a base, so the net layered turrets inward on all 24 bearings and
+// most of them faced our own rear (apexearth: "so many turrets behind our
+// base"). The front has WIDTH, so a bearing beside a contested one faces the
+// same approach and counts.
+//
+// With nothing contested anywhere we are blind, not safe -- fall back to the
+// held arc rather than emitting no line, which is the trap of keying a gate on
+// visible enemies.
+bool RayFacesFront(uint i)
+{
+	if ((i >= gRayHot.length()) || !gRayHot[i])
+		return false;
+	const uint n = gRayMet.length();
+	if (!gAnyMet || (n == 0))
+		return true;
+	if ((i < n) && gRayMet[i])
+		return true;
+	return gRayMet[(i + n - 1) % n] || gRayMet[(i + 1) % n];
 }
 
 // Which ray a position falls on.
@@ -745,7 +799,10 @@ void FrontDiag()
 	float rMax = 0.f;
 	float sSum = 0.f;
 	int hotN = 0;
+	int metN = 0;
 	for (uint i = 0; i < gRayR.length(); ++i) {
+		if ((i < gRayMet.length()) && gRayMet[i])
+			++metN;
 		if ((i >= gRayHot.length()) || !gRayHot[i])
 			continue;
 		++hotN;
@@ -762,6 +819,7 @@ void FrontDiag()
 		axis = 1.f;
 	const float hn = float((hotN > 0) ? hotN : 1);
 	AiLog(Factory::T() + "apex: ring-diag rays=" + hotN + "/" + gRayR.length()
+		+ " contested=" + metN
 		+ " sep=" + int(axis)
 		+ " r/sep mean=" + formatFloat(rSum / hn / axis, "", 0, 2)
 		+ " min=" + formatFloat(((rMin < 0.f) ? 0.f : rMin) / axis, "", 0, 2)
@@ -829,8 +887,11 @@ bool FrontCurve(array<AIFloat3>& out pts)
 	if (!gFrontValid)
 		return false;
 	for (uint i = 0; i < gRayR.length(); ++i) {
-		if ((i < gRayHot.length()) && !gRayHot[i])
-			continue;   // no enemy on this bearing; see gRayHot
+		// CONTESTED, not merely held. gRayHot is true wherever we own ground,
+		// which is every forward bearing around our own base -- drawing that
+		// traced our territory boundary as a ring, off the map edge included.
+		if ((i < gRayMet.length()) && !gRayMet[i])
+			continue;   // nobody is out on this bearing: it is not a front
 		const float ang = 6.2831853f * float(i) / float(FRONT_RAYS);
 		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
 		const AIFloat3 p = gFrontHome + dir * gRayR[i];
@@ -884,16 +945,41 @@ float EdgeSpacing(const AIFloat3& in at, float spacing, float reach)
 	return spacing * (reach + d) / (2.f * reach);
 }
 
-// The same coverage deficit EdgeSpacing corrects for, expressed as a multiplier
-// on how much a turret at this point is WORTH: 1.0 inland, 2.0 hard against the
-// wall, linear between. Spacing and value are the two ways to spend the deficit
-// and they read it from one place.
-float EdgeExposure(const AIFloat3& in at, float reach)
+// HOW MUCH OF THE APPROACH IS EVEN REACHABLE -- the share of the bearings an
+// attacker could stand on that are actually map.
+//
+// EdgeSpacing's deficit does NOT invert into a value. Spacing answers "this
+// point is on a line we have already decided to hold, and fewer turrets can
+// reach it", which is true at a wall. Value answers "should we hold this ground
+// at all", and at a wall the answer is that half the attacks cannot come:
+// EdgeExposure returned 1/EdgeSpacing, i.e. up to 2.0 hard against the map
+// edge, so a turret was worth DOUBLE exactly where nothing can attack from.
+// With a base 575 elmos off the west wall and turrets reaching 450-700, that
+// premium covered the whole rear of the base and none of the enemy side
+// (apexearth, watched: "defenses in the back of our base... the opposite of
+// where they should be").
+//
+// LineClosure already states the rule this uses -- a bearing that runs off the
+// map is closed, the edge is the wall. Same geometry, read with the sign that
+// matches the question.
+const int OPEN_RAYS = 8;
+float OpenFraction(const AIFloat3& in at, float reach)
 {
-	if (reach < 1.f)
+	// The attacker's own standoff is the radius it can stand at, the same
+	// radius CoverAt asks its ring on; before we have seen them, the turret's
+	// reach is the honest stand-in.
+	float standoff = FoeReach();
+	if (standoff < 1.f)
+		standoff = reach;
+	if (standoff < 1.f)
 		return 1.f;
-	const float s = EdgeSpacing(at, 1.f, reach);
-	return (s > 0.f) ? (1.f / s) : 1.f;
+	int open = 0;
+	for (int b = 0; b < OPEN_RAYS; ++b) {
+		const float ang = 6.2831853f * float(b) / float(OPEN_RAYS);
+		if (OnMap(at + AIFloat3(cos(ang), 0.f, sin(ang)) * standoff))
+			++open;
+	}
+	return float(open) / float(OPEN_RAYS);
 }
 
 // Memo: the spot list for one (spacing, reach) pair on the same 30-frame
@@ -925,10 +1011,10 @@ bool FrontLineSpots(array<AIFloat3>& out pts, float spacing, float reach = 0.f)
 	const float step = 6.2831853f / float(FRONT_RAYS);
 
 	for (uint i = 0; i < gRayR.length(); ++i) {
-		if ((i < gRayHot.length()) && !gRayHot[i])
+		if (!RayFacesFront(i))
 			continue;
 		const uint j = (i + 1) % gRayR.length();
-		const bool pairHot = (j >= gRayHot.length()) || gRayHot[j];
+		const bool pairHot = RayFacesFront(j);
 
 		// This bearing's buildable radius, and the next one's, so the segment
 		// between them can be filled at the requested spacing.
@@ -1022,6 +1108,12 @@ bool NetSpots(array<AIFloat3>& out pts, float denyR)
 	const float step = 6.2831853f / float(FRONT_RAYS);
 	const float pitch = 2.f * denyR;
 	for (uint i = 0; i < gRayR.length(); ++i) {
+		// The net never asked which way the bearing faced, so it layered rings
+		// inward on all 24 and filled our own rear with posts. Only the rear
+		// ray's safe edge of 0 kept them off the map's far side, and only while
+		// apex_front_safe_edge stays on.
+		if (!RayFacesFront(i))
+			continue;
 		float d0 = gRayR[i] * (1.f - back);
 		if (useSafe && (i < gRaySafe.length()) && (gRaySafe[i] < d0))
 			d0 = gRaySafe[i];
@@ -1065,7 +1157,7 @@ bool FrontBuildSpots(array<AIFloat3>& out pts)
 	const bool useSafe = ai.GetTunable("apex_front_safe_edge", TUNE_FRONT_SAFE_EDGE) > 0.f;
 	const float minReach = ai.GetTunable("apex_front_min_reach", TUNE_FRONT_MIN_REACH);
 	for (uint i = 0; i < gRayR.length(); ++i) {
-		if ((i < gRayHot.length()) && !gRayHot[i])
+		if (!RayFacesFront(i))
 			continue;
 		const float ang = 6.2831853f * float(i) / float(FRONT_RAYS);
 		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));

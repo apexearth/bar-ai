@@ -91,9 +91,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// even when every spot is claimed.
 	const float fillS0 = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
 	const float aGap = ArmyTarget() - ArmyValue();
+	const int lines0 = (Factory::gFactoryCount > 0) ? Factory::gFactoryCount : 0;
 	const float prodTerm = (aGap > 0.f)
 			? (aGap / ((fillS0 > 1.f) ? fillS0 : 180.f))
-				/ float(1 + Factory::gFactoryCount)
+				/ float(1 + lines0)
 			: 0.f;
 	const float gain = ((gMexOpen ? SpotM() : 0.f) + BPGap() + prodTerm)
 			* ai.GetTunable("apex_plant_pipe", TUNE_PLANT_PIPE)
