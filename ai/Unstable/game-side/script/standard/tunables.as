@@ -1211,6 +1211,10 @@ const float TUNE_COVER_WORTH = 1.5f;
 // it directly, so cover makes the next claim beside it worth more. 0 disables,
 // which is how the A/B control is run.
 const float TUNE_STREAM_SURVIVAL = 1.f;
+// Rent a building pays for standing on DEFENDED ground: covering turrets'
+// metal spread over the area they cover, per cell of footprint. Makes dense
+// beat sprawling inside the perimeter and costs nothing outside it. 0 disables.
+const float TUNE_SPACE_RENT = 1.f;
 // manager/brain/market/sites.as -- elmos one farm row runs before the next
 // stacks behind it. Halved from 640 on apexearth's watched report that the
 // winds sat too far out on both sides: the same slots in a narrower row form

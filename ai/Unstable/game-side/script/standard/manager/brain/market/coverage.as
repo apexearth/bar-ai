@@ -512,6 +512,41 @@ float StreamSurvival(const AIFloat3& in pos)
 	return 1.f / (1.f + risk * ((T > 1.f) ? T : 300.f));
 }
 
+// DEFENDED GROUND IS A SCARCE RESOURCE. A turret protects an AREA, and the same
+// ring of guns can cover a field of one-metal converters or a pack of advanced
+// ones worth ten times as much (apexearth: "if you are in a well protected area
+// - you should want to reclaim the T1 converter in favor of a T2 - all that
+// defence can defend a unit that has ~9 or 10x the value... value going up over
+// time - static metal cost, perpetual income").
+//
+// So a building pays RENT on the defence covering the ground it takes: each
+// covering turret's metal spread over the area its own weapon reaches, charged
+// per cell of footprint. Outside our cover the rent is zero and sprawl is free,
+// which is the right answer on an open map with room to spare -- and it rises
+// on its own as the perimeter fills, which is when space starts to matter.
+// Nothing here names a unit or a tier: dense wins inside the wall because dense
+// is what the wall is cheap to protect.
+float SpaceRentM(const AIFloat3& in pos, int areaCells)
+{
+	if (areaCells <= 0)
+		return 0.f;
+	const float k = ai.GetTunable("apex_space_rent", TUNE_SPACE_RENT);
+	if ((k <= 0.f) || !OnMap(pos))
+		return 0.f;
+	float perCell = 0.f;
+	for (uint i = 0; i < gProtPos[PROT_DEF].length(); ++i) {
+		const int d = gProtDefId[PROT_DEF][i];
+		const float r = Catalog::gMaxRange[d];
+		if ((r <= 1.f) || (gProtPos[PROT_DEF][i].distance2D(pos) > r))
+			continue;
+		// Cells of 16 elmos inside that turret's own coverage circle.
+		const float cells = 3.14159f * r * r / 256.f;
+		if (cells > 1.f)
+			perCell += Catalog::gCostM[d] / cells;
+	}
+	return perCell * float(areaCells) * k;
+}
+
 // The expected-loss stream on value standing at pos, in metal/s -- the one
 // quantity both the protect gain and the exposure premium are built from.
 float ExpectedLossAt(const AIFloat3& in pos, float valueM)

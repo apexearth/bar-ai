@@ -3,6 +3,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 {
 	Want w;
 	const int uid = int(unit.circuitDef.id);
+	const AIFloat3 eSite = EcoSiteFor(unit);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
@@ -50,11 +51,19 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		if (gain <= 0.f)
 			continue;
 		ValueOf(d, gain, 0.f, Catalog::gBuildPower[uid], c);
+		// Rent on the defended ground this footprint would occupy.
+		{
+			const float rent = SpaceRentM(eSite, Catalog::gAreaCells[d]);
+			if (rent > 0.f) {
+				c.mCost += rent;
+				c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
+			}
+		}
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_ENERGY;
 			@w.def = Catalog::Def(d);
-			w.pos = EcoSiteFor(unit);
+			w.pos = eSite;
 		}
 	}
 	return w;
@@ -312,6 +321,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	if (eSurplus <= 1.f)
 		return w;
 	const int uid = int(unit.circuitDef.id);
+	const AIFloat3 cSite = EcoSiteFor(unit);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
@@ -323,11 +333,23 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 				? eSurplus : Catalog::gConvCapacity[d];
 		Want c;
 		ValueOf(d, chew * Catalog::gConvRatio[d], 0.f, Catalog::gBuildPower[uid], c);
+		// SPACE IS WHAT THE ADVANCED CONVERTER BUYS. Ratio alone says T1 is
+		// nearly as good and far cheaper; what T2 actually buys is ten times
+		// the throughput behind the same guns, and a body that does not die to
+		// one hit (apexearth). The rent prices the first; the second is the
+		// stream's own survival, which cover already raises.
+		{
+			const float rent = SpaceRentM(cSite, Catalog::gAreaCells[d]);
+			if (rent > 0.f) {
+				c.mCost += rent;
+				c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
+			}
+		}
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_CONVERT;
 			@w.def = Catalog::Def(d);
-			w.pos = EcoSiteFor(unit);
+			w.pos = cSite;
 		}
 	}
 	return w;
