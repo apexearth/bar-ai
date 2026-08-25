@@ -4,7 +4,10 @@ namespace Market {
 float gBestExtract = -1.f;
 float BestExtract()
 {
-	if (gBestExtract >= 0.f)
+	// NEVER CACHE A ZERO: Catalog::gAvailable is frame-dependent, so a first
+	// call before extractors unlock would latch 0 forever -- and UpDemand, and
+	// with it the entire tech want, would read 0 for the rest of the game.
+	if (gBestExtract > 0.f)
 		return gBestExtract;
 	gBestExtract = 0.f;
 	for (int i = 1; i <= Catalog::gDefCount; ++i) {

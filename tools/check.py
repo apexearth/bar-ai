@@ -382,6 +382,54 @@ def check_angelscript(script_root: Path, rep: Report) -> None:
                           f"compile error disables the whole variant silently")
 
 
+# -- lazy caches that can latch a non-positive value -------------------------
+#
+# `Catalog::gAvailable` is FRAME-DEPENDENT (the DLL's IsAvailable(frame)), so a
+# lazy cache filled on first call can be filled before the defs it scans exist.
+# A cache that accepts its own zero then serves that zero for the whole game and
+# silently disables everything downstream -- measured 2026-08-25: BestConvRatio
+# latched 0, EcoPowerM collapsed to metal income, and a map with no metal spots
+# went back to one builder and no factory with nothing logging a problem.
+#
+# The safe shape is `if (g > 0.f) return g;` -- recompute until the answer is
+# real. `>= 0.f` accepts the sentinel and is the bug.
+_LAZY_CACHE_INIT = re.compile(
+    r"^\s*(?:float|int)\s+(?P<name>g[A-Za-z0-9_]*)\s*=\s*-1(?:\.f)?\s*;")
+_LAZY_CACHE_GUARD = re.compile(
+    r"^\s*if\s*\(\s*(?P<name>g[A-Za-z0-9_]*)\s*>=\s*0(?:\.f)?\s*\)")
+
+
+def check_lazy_caches(script_root: Path, rep: Report) -> None:
+    """A -1-sentinel cache whose guard accepts 0 will serve 0 forever."""
+    if not script_root.is_dir():
+        return
+    for path in sorted(script_root.rglob("*.as")):
+        rel = path.relative_to(script_root.parent).as_posix()
+        text = path.read_text(encoding="utf8", errors="replace")
+        sentinels = {m.group("name")
+                     for m in map(_LAZY_CACHE_INIT.match, text.splitlines())
+                     if m}
+        if not sentinels:
+            continue
+        lines = text.splitlines()
+        for n, raw in enumerate(lines, 1):
+            line = raw.split("//", 1)[0]
+            m = _LAZY_CACHE_GUARD.match(line)
+            if not (m and m.group("name") in sentinels):
+                continue
+            # Only a cache that actually scans the frame-dependent availability
+            # table can latch a false zero. A previous-sample tracker or a frame
+            # stamp uses -1 for "never" and 0 is legitimate for it, so look at
+            # the body this guard opens rather than the whole file.
+            body = "
+".join(lines[n - 1:n + 24])
+            if "gAvailable[" in body:
+                rep.error(f"{rel}:{n}: lazy cache '{m.group('name')}' guards on "
+                          f">= 0, so a zero computed before defs are available "
+                          f"is cached forever and silently disables everything "
+                          f"downstream -- use '> 0.f'")
+
+
 # -- the overhaul-kill census (docs/20-brain-overhaul.md par.4.1) -------------
 #
 # No leaf rule may spend on its own: every path that turns constructor time or
@@ -441,6 +489,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
     if cfg_root.is_dir():
         check_parity(cfg_root, rep)
     check_angelscript(script_root, rep)
+    check_lazy_caches(script_root, rep)
     check_spend_census(script_root, rep)
 
     on_disk = sorted(d.name for d in cfg_root.iterdir() if d.is_dir()) if cfg_root.is_dir() else []

@@ -282,6 +282,9 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		float fundedMul = (funded > 1.f) ? 1.f : funded;
 		if (EcoQuiet())
 			fundedMul = 1.f;
+		// Two plants can unlock the same thing; the one whose line trades
+		// worse per metal is worth less for it. See PlantLineWorth.
+		const float lineW = PlantLineWorth(d);
 		float techGain = 0.f;
 		if ((prodCeil > ownCeil) || (prodConv > ownConv))
 			techGain = demand * pipe / float(1 + liveKin);
@@ -335,6 +338,19 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 					&& (Catalog::gCostM[prods[p3]] > prodMax))
 					prodMax = Catalog::gCostM[prods[p3]];
 			}
+			// A PLANT THAT UNLOCKS NOTHING IS NOT A SINK. "Dwarfs anything we
+			// can produce" is 2x the cost ceiling we own, which a 50-metal
+			// pawn baseline clears trivially -- so an ordinary T1 plant took
+			// the gantry's whole army-gap stream and a hovercraft platform
+			// that reached NO better extractor and NO better converter was
+			// bought every game on it (measured: corhp prodCeil==ownCeil,
+			// prodConv==ownConv, gain 1.02, apexearth: "I don't want to see us
+			// making hovers on a land only map"). This channel's own comment
+			// says the gap it may claim is the one ONLY its products can fill;
+			// the code claimed the full army gap regardless. A plant our
+			// existing lines can substitute for gets neither the gap nor the
+			// penetration term, and is left with real overflow only.
+			const bool unlocksTier = (prodCeil > ownCeil) || (prodConv > ownConv);
 			if (prodMax > 2.f * OwnedProdCostCeil()) {
 				// The gantry's value is PENETRATION plus the army gap that
 				// ONLY its products can fill: at 250 m/s nobody built one
@@ -348,6 +364,13 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				const float gapF = ArmyTargetFull() - ArmyValue();
 				const float gapStream = (gapF > 0.f)
 						? (gapF / ((fillS3 > 1.f) ? fillS3 : 60.f)) * pipe : 0.f;
+				// Unlock-only. Overflow is a poor reason to buy a production
+				// LINE -- nanos, converters and storage are already wants for
+				// exactly that, and they do not commit us to a unit mix. A
+				// plant that reaches no better extractor and no better
+				// converter has no tech value at all.
+				if (!unlocksTier)
+					continue;
 				float g3 = (pen > sink) ? pen : sink;
 				g3 += gapStream;
 				if (g3 > techGain)
@@ -365,6 +388,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// starting T2 while our danger is very high"). Defence wants are not
 		// discounted -- their return is loss prevented NOW, the same exemption
 		// decide.as makes for the exposure charge.
+		techGain *= lineW;
 		techGain *= TechSurvival(d, Catalog::gBuildPower[uid]);
 		if (techGain <= 0.f)
 			continue;
@@ -374,6 +398,17 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// tech bill at argmax for five straight minutes of full storage
 		// (seed 23: T2 at 10.9m; seed 11's 3.3m was E-saturation luck).
 		techGain += OverflowM() * pipe;
+		if (ai.GetTunable("apex_techcand_diag", 0.f) > 0.f) {
+			AiLog("apex: techcand " + Catalog::Def(d).GetName()
+				+ " prodCeil=" + formatFloat(prodCeil, "", 0, 4)
+				+ " ownCeil=" + formatFloat(ownCeil, "", 0, 4)
+				+ " prodConv=" + formatFloat(prodConv, "", 0, 5)
+				+ " ownConv=" + formatFloat(ownConv, "", 0, 5)
+				+ " lineW=" + formatFloat(lineW, "", 0, 2)
+				+ " kin=" + liveKin
+				+ " gain=" + formatFloat(techGain, "", 0, 2)
+				+ " costM=" + formatFloat(Catalog::gCostM[d], "", 0, 0));
+		}
 		Want c;
 		ValueOf(d, techGain * fundedMul
 					* PipeLatencyMult(d, Catalog::gBuildPower[uid]),

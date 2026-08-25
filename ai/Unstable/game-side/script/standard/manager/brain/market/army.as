@@ -378,6 +378,57 @@ float CoverPerMetal(int di)
 	return (Catalog::gSpeed[di] / Catalog::gCostM[di]) / gLMeanSpc;
 }
 
+// WHAT A PLANT'S LINE IS WORTH, against the field. A plant is bought for what
+// its CONSTRUCTOR unlocks, and two plants can unlock exactly the same thing --
+// a hovercraft platform's con reaches mohos just as a T2 bot lab's does -- at
+// which point the cheaper one wins on price alone and we buy a line of units
+// that are not tough for their metal (apexearth: "yes it has mobility but the
+// units are generally not as tough for their price... I don't want to see us
+// making hovers on a land only map like the one I'm on").
+//
+// Combat worth per metal across the plant's mobile combat products, against
+// the game-wide mean of the same. No unit is named and no map type is tested:
+// a line that trades badly is worth less wherever it is built, and a line that
+// trades well is unaffected.
+float gCpmMean = -1.f;
+float CombatPerMetalMean()
+{
+	if (gCpmMean > 0.f)
+		return gCpmMean;
+	float sum = 0.f;
+	int n = 0;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !LineCombat(d))
+			continue;
+		sum += Catalog::gPower[d] / Catalog::gCostM[d];
+		++n;
+	}
+	if (n <= 0)
+		return 1.f;   // not yet knowable; do not cache
+	gCpmMean = sum / float(n);
+	return gCpmMean;
+}
+
+float PlantLineWorth(int d)
+{
+	const float ref = CombatPerMetalMean();
+	if (ref <= 0.f)
+		return 1.f;
+	const array<int>@ prods = Catalog::gBuildsList[d];
+	float sum = 0.f;
+	int n = 0;
+	for (uint i = 0; i < prods.length(); ++i) {
+		const int pd = prods[i];
+		if (!Catalog::gAvailable[pd] || !LineCombat(pd))
+			continue;
+		sum += Catalog::gPower[pd] / Catalog::gCostM[pd];
+		++n;
+	}
+	if (n <= 0)
+		return 1.f;   // a pure constructor plant is judged on its unlock alone
+	return (sum / float(n)) / ref;
+}
+
 // Share of the line that can absorb for the rest -- what makes a fragile
 // long-range unit worth its range at all.
 float ShieldShare()
