@@ -328,13 +328,31 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			const float stopped = aShort0 - aShort1;
 			if (stopped <= 0.f)
 				continue;
-			// Measured losses lead; before they have hurt us the presence of
-			// their air is the floor, so the first tower does not wait for
-			// the first dead mex ("soon as we see the enemy has air").
-			const float measured = Military::AirLossRate();
-			const float presence = ((air < gAssetsM) ? air : gAssetsM) * rate
+			// THE SAME THREE TERMS AS A GROUND TURRET: what is at risk, how
+			// often it gets hit, and the share this tower newly stops. AA used
+			// an insurance rate on min(their air, our base), which capped the
+			// value at risk by the SIZE of their air force -- and `stopped`
+			// already measures our cover against exactly that force. That is
+			// the double count ThreatM records and rejects on the ground side,
+			// and it is why AA priced at gain=0.09 against energy's 4.75 and we
+			// fielded exactly one Nettle per game however many bombers came.
+			//
+			// Turrets are excluded from the stake for the same reason
+			// SiegeRiskAt excludes them: defence must not be its own reason.
+			// Saturation is arithmetic -- every tower raises aaCover, which
+			// lowers both the arrival rate and the next tower's share.
+			float econA = gAssetsM - gProtM;
+			if (econA < 0.f)
+				econA = 0.f;
+			const float horizA = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
+			const float anchorA = 1.f / ((horizA > 1.f) ? horizA : 120.f);
+			const float airHz = anchorA * (air / (air + aaCover))
 					* ai.GetTunable("apex_aa_urgency", TUNE_AA_URGENCY);
-			gain = ((measured > presence) ? measured : presence) * stopped;
+			float gainA = econA * airHz * stopped;
+			// Measured losses are a FLOOR, not the whole price: they are what
+			// air has already cost us, which arrives after the mex is dead.
+			const float measured = Military::AirLossRate() * stopped;
+			gain = (measured > gainA) ? measured : gainA;
 		} else if (cls == PROT_TARGFAC) {
 			// apexearth's spec: three wanted, diminishing.
 			const int have = int(gProtPos[PROT_TARGFAC].length());

@@ -830,11 +830,10 @@ void FrontDiag()
 	GhostDiag();
 }
 
-// HOW MUCH OF THE ENEMY ARMY WE ARE COUNTING IS A MEMORY. GetEnemyCost never
-// forgets a unit once registered, so the gap between it and the fresh sum is
-// everything we saw once and have not seen since. Nothing acts on this yet --
-// apex_ghost_weight defaults to 1.0, i.e. count ghosts in full, exactly as
-// before -- but the fraction has to be measurable before it can be tuned.
+// HOW MUCH OF THE ENEMY ARMY WE ARE COUNTING IS A MEMORY. The gap between the
+// raw sum and the fresh one is everything we saw once and have not seen since.
+// EnemyCostOf consumes it at apex_ghost_weight, so this is the input to every
+// posture, threat and tech gate rather than a spectator.
 void GhostDiag()
 {
 	const float raw = aiEnemyMgr.GetEnemyCost(Unit::Role::ASSAULT.type)
@@ -1219,7 +1218,7 @@ float EnemyCostOf(int role)
 	float fresh = aiEnemyMgr.GetEnemyCostFresh(role);
 	if (fresh > raw)
 		fresh = raw;
-	// 0.3, was 1.0: measured live (Greenhaven rematch, 2026-08-15) the raw sum
+	// Half-weighted: measured live (Greenhaven rematch, 2026-08-15) the raw sum
 	// read the enemy army at 3x OURS while apexearth watched us dominate --
 	// the ghost share was ~2/3 of the total and only ever ratchets up, so
 	// every posture gate (massing, attack odds, the killing blow) leaned

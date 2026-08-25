@@ -1401,7 +1401,10 @@ float UnitWorthMod(const string &in name)
 // the shield branch's x4 -- air arrives faster than ground and a bombing run
 // is over before a reactive build finishes, so it is priced above ordinary
 // insurance. Divided by the towers already standing, so it self-limits.
-const float TUNE_AA_URGENCY = 4.f;
+// 4 was compensating for a value that came out ~50x too small (an insurance
+// rate on min(their air, our base)); with AA priced like a ground turret the
+// multiplier is 1 and the knob still scales it.
+const float TUNE_AA_URGENCY = 1.f;
 // GIFT_ARMY: master switch for back-to-front army gifting. DEFAULT OFF
 // (apexearth 2026-08-24: "we are doing the share logic to send units to
 // teammates. We should disable that by default. It only is appropriate on
