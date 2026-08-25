@@ -1660,6 +1660,11 @@ const float TUNE_ASSIST_RELEASE = 1.f;
 // ETA-derived crew before the peeler calls them over-staffed -- income
 // finishing fast outranks a perfectly even build-power spread.
 const float TUNE_PEEL_ECO_KEEP = 2.f;
+// manager/brain/market/decide.as -- how sharply the category draw follows
+// value. Odds go as (value/leader)^this: 1 is the old straight-proportional
+// draw, 2 makes a six-fold value gap one election in thirty-six, large
+// approaches argmax. Never a threshold, so nothing starves outright.
+const float TUNE_DRAW_SHARP = 2.f;
 // manager/brain/facqueue.as [metal/s] -- One T1 air constructor wanted per
 // this much metal income (plus one), on the air line's floor.
 // manager/factory/choose.as [metal/s] -- Steady income past which the

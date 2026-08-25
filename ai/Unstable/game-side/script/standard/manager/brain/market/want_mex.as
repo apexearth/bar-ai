@@ -101,47 +101,82 @@ void MexDiag()
 	gMexDeep = 0;
 }
 
+// THE REFERENCE POINT IS THE DECISION. FindOpenMexSpot answers with ONE spot
+// near whatever position it is handed, so asking only from the builder's feet
+// made the search stop at the nearest cluster -- and when that one answer was
+// already ours, the want returned empty and expansion left the auction
+// entirely for that election (apexearth: "we easily get into funks where we
+// don't even try to capture additional mex locations"). The map's own spot
+// list is already cached, so rank every spot we do not hold by what it pays
+// against the walk, and let the engine confirm what is actually open near the
+// best of them. The engine keeps sole authority over occupancy, reachability
+// and buildability; the ranking only chooses where to ask.
+const int MEX_TRIES = 3;
+int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
+{
+	CacheSpots();
+	array<int> cand;
+	array<float> score;
+	for (uint si = 0; si < gAllSpots.length(); ++si) {
+		if (LedgerFind(int(si)) >= 0)
+			continue;
+		const AIFloat3 sp = gAllSpots[si];
+		if (!OnMap(sp))
+			continue;
+		const float inc = aiEconomyMgr.GetMexSpotIncome(int(si));
+		if (inc <= 0.f)
+			continue;
+		// Geometry-only vetoes are applied here so a refused spot does not
+		// consume one of the engine probes below; DeathWalk stays on the
+		// chosen spot, where its enemy-cost samples are paid for once.
+		if (Front::FoeKnown() && Builder::PastFront(sp)) {
+			++gMexPastFront;
+			continue;
+		}
+		if (EcoFar(sp)) {
+			++gMexEcoFar;
+			continue;
+		}
+		const float walk = (speed > 1.f) ? (here.distance2D(sp) / speed) : 60.f;
+		cand.insertLast(int(si));
+		score.insertLast(inc / (walk + 1.f));
+	}
+	for (int k = 0; k < MEX_TRIES; ++k) {
+		int bi = -1;
+		float bs = 0.f;
+		for (uint i = 0; i < score.length(); ++i) {
+			if (score[i] > bs) {
+				bs = score[i];
+				bi = int(i);
+			}
+		}
+		if (bi < 0)
+			break;
+		const int sid = cand[bi];
+		score[bi] = -1.f;
+		// Threat ceiling is generous on purpose: a contested spot is priced,
+		// not hidden (the leaf era's FindOpenMexSpot went silent exactly under
+		// attack).
+		const int open = aiEconomyMgr.FindOpenMexSpot(unit, gAllSpots[sid], 99.f);
+		if (open < 0)
+			continue;
+		if (LedgerFind(open) >= 0) {
+			++gMexClaimed;
+			continue;
+		}
+		return open;
+	}
+	return -1;
+}
+
 Want@ ProposeMex(CCircuitUnit@ unit)
 {
 	Want w;
 	MexDiag();
 	const int uid = int(unit.circuitDef.id);
 	const AIFloat3 here = unit.GetPos(ai.frame);
-	// Threat ceiling is generous on purpose: a contested spot is priced, not
-	// hidden (the leaf era's FindOpenMexSpot went silent exactly under attack).
-	// FindOpenMexSpot answers with ONE spot, the best from the reference
-	// position given. When that spot is already in our ledger the old code
-	// returned NO WANT AT ALL -- on a 30-spot map where we held five, that
-	// threw away the election rather than asking about any of the other
-	// twenty-five (measured: 48 such refusals in a single 60s window).
-	// Probing from a few reference points walks the engine's own occupancy
-	// logic outward instead of reimplementing it here.
-	int spot = aiEconomyMgr.FindOpenMexSpot(unit, here, 99.f);
+	int spot = PickSpot(unit, here, Catalog::gSpeed[uid]);
 	gMexOpen = (spot >= 0);
-	if ((spot >= 0) && (LedgerFind(spot) >= 0)) {
-		++gMexClaimed;
-		array<AIFloat3> probes;
-		if (Builder::gHomeSet)
-			probes.insertLast(Builder::gHomePos);
-		if (Base::gAnchorSet && Base::gAxisSet) {
-			probes.insertLast(Base::gAnchor + Base::gAcross * 900.f);
-			probes.insertLast(Base::gAnchor - Base::gAcross * 900.f);
-			probes.insertLast(Base::gAnchor - Base::gFwd * 900.f);
-		}
-		probes.insertLast(AITerrainCenter());
-		for (uint pi = 0; pi < probes.length(); ++pi) {
-			if (!OnMap(probes[pi]))
-				continue;
-			const int alt = aiEconomyMgr.FindOpenMexSpot(unit, probes[pi], 99.f);
-			if ((alt >= 0) && (LedgerFind(alt) < 0)) {
-				spot = alt;
-				break;
-			}
-		}
-		if (LedgerFind(spot) >= 0)
-			return w;
-		gMexOpen = true;
-	}
 	if (spot < 0) {
 		++gMexNoOpen;
 		return w;

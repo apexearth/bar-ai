@@ -203,10 +203,29 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if (catBest[c] < 0)
 				catBest[c] = int(ri);
 		}
+		// HOW SHARP THE DRAW IS. Weighting each ticket by its raw value means a
+		// want the market itself rates six times worse still wins one election
+		// in six -- measured: 34% of elections took a lower-valued want, and a
+		// mex valued 594 lost to a wind generator valued 99 (apexearth: "is it
+		// a random 'luck of the draw' sort of event in that moment?"). Odds are
+		// taken on the value RATIO to the leader raised to a power, so the
+		// exponent alone moves between proportional (1, the old behaviour) and
+		// argmax (large) without a threshold anywhere: at 2 a six-fold gap is
+		// one election in thirty-six, which keeps a never-first category from
+		// starving without letting it outbid arithmetic.
+		const float lead = ranked[0].value;
+		const float sharp = ai.GetTunable("apex_draw_sharp", TUNE_DRAW_SHARP);
+		array<float> wt(CAT_N, 0.f);
 		float sumV2 = 0.f;
 		for (int c = 0; c < CAT_N; ++c) {
-			if (catBest[c] >= 0)
-				sumV2 += ranked[catBest[c]].value;
+			if (catBest[c] < 0)
+				continue;
+			const float v = ranked[catBest[c]].value;
+			float t = v;
+			if ((lead > 0.f) && (sharp > 0.f) && (sharp != 1.f))
+				t = lead * pow(v / lead, sharp);
+			wt[c] = t;
+			sumV2 += t;
 		}
 		if (sumV2 > 0.f) {
 			uint h2 = uint(ai.frame) * 2654435761 + uint(unit.id) * 40503;
@@ -215,7 +234,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			for (int c = 0; c < CAT_N; ++c) {
 				if (catBest[c] < 0)
 					continue;
-				roll2 -= ranked[catBest[c]].value;
+				roll2 -= wt[c];
 				if (roll2 <= 0.f) {
 					const int ri = catBest[c];
 					if (ri > 0) {
