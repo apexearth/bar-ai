@@ -334,8 +334,15 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// one player the team's answer builds it once per ally. RoleTarget
 			// already divides the same census on the mobile side.
 			const float allies = Military::AllyCount();
-			const float air = Military::AirSeenEver()
+			float air = Military::AirSeenEver()
 					/ ((allies > 1.f) ? allies : 1.f);
+			// The rear specialist is a FATTER TARGET than its share suggests:
+			// it holds the team's economy, builds no ground defence, and keeps
+			// no army over its base, so bombers that get past the front go
+			// there. It carries a larger share of the same census, which the
+			// saturation point below then turns into proportionally more AA.
+			if (EcoRoleActive())
+				air *= ai.GetTunable("apex_eco_aa_mult", TUNE_ECO_AA_MULT);
 			if (air <= 0.f)
 				continue;
 			// WHAT THE BOMBS ARE ACTUALLY COSTING US, priced like a turret:

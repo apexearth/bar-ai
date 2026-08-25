@@ -1422,6 +1422,12 @@ const float TUNE_AA_URGENCY = 1.f;
 // itself out: once cover reaches the target the next tower stops nothing.
 // 0.5 reproduces the old apex_def_trade=2 saturation point, now named.
 const float TUNE_AA_COVER_FRAC = 0.5f;
+// ECO_AA_MULT: the share of the air census the rear eco specialist answers,
+// relative to an even split. It holds the team's economy, builds no ground
+// defence and keeps no army at home, so it draws more of the air that gets
+// through than its headcount share (apexearth: "~50% more anti air than your
+// average player").
+const float TUNE_ECO_AA_MULT = 1.5f;
 // GIFT_ARMY: master switch for back-to-front army gifting. DEFAULT OFF
 // (apexearth 2026-08-24: "we are doing the share logic to send units to
 // teammates. We should disable that by default. It only is appropriate on

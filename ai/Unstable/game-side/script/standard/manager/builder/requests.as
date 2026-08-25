@@ -438,6 +438,18 @@ void SweepDead()
 	}
 }
 
+// Does this def shoot things on the ground? Read from the catalog, which is
+// empty until Catalog::Resolve runs, so the length is checked rather than
+// assumed -- an out-of-range index here is a script exception that would take
+// the whole variant down.
+bool ShootsGround(CCircuitDef@ d)
+{
+	const int id = int(d.id);
+	if ((id < 0) || (uint(id) >= Catalog::gSurfT.length()))
+		return true;
+	return Catalog::gSurfT[id] > 0.01f;
+}
+
 // `parallel` is a caller's explicit "open ANOTHER site": it skips the fold onto
 // a nearby same-def request (JoinFor), which otherwise collapses a deliberate
 // burst of distinct sites into one -- the nano burst measured burst=1 forever.
@@ -454,11 +466,14 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// back."). Measured 9,785 metal of turrets on the role holder in one
 	// game, placed by rules that did not know the role existed -- refused at
 	// THE chokepoint rather than flagged in each rule. Radar/sonar stay:
-	// eyes are not porc. AiMakeDefence carries the same gate for the
-	// engine-driven path.
+	// eyes are not porc, and neither is AA: static AA rides BuildType::DEFENCE
+	// (Market::ExecuteWant maps PROT_AA there), so a blanket DEFENCE refusal
+	// left the rear specialist with no answer to aircraft at all. Ground-
+	// shooting is the test, matching ExecuteWant's own split.
 	if (((bt == Task::BuildType::DEFENCE) || (bt == Task::BuildType::BUNKER)
 			|| (bt == Task::BuildType::BIG_GUN))
-		&& !Role::DefenceAllowed())
+		&& !Role::DefenceAllowed()
+		&& ShootsGround(want))
 	{
 		return null;
 	}

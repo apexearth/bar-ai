@@ -96,6 +96,7 @@ local NAMES = {
 	"apex_eco_rear_margin",
 	"apex_eco_army_mul",
 	"apex_eco_safe_r",
+	"apex_eco_aa_mult",
 	"apex_eco_danger_m",
 	"apex_line_floor",
 	"apex_eco_con_keep",
