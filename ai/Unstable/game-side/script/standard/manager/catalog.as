@@ -256,18 +256,20 @@ int CheapestBuilderOf(int defId)
 }
 
 // UNITS WE DO NOT KNOW HOW TO USE, blocked at the one chokepoint every want
-// already checks -- so no proposer needs to learn about them. A Juno is a
-// one-shot area weapon against radar, jammers and minefields; it carries a
-// weapon and has no build options, so ProtClassOf files it as ground defence
-// and the protect want buys it as a turret it will never fire usefully.
-// apexearth 2026-08-24: "we build Juno buildings but I don't think we know how
-// to use them. Let's block ourselves from making those for now." Set
-// apex_allow_juno=1 to lift it.
+// already checks -- so no proposer needs to learn about them. Each of these
+// carries a weapon and has no build options, so ProtClassOf files it as ground
+// defence and the protect want buys it as a turret: a Juno is a one-shot area
+// weapon against radar, jammers and minefields, and cortron/armemp are
+// operator-aimed tactical missile silos with a manual target order. Neither
+// fires usefully without logic that picks and commits a target.
+// Lift with apex_allow_juno=1 / apex_allow_tacmissile=1.
 bool BlockedDef(const string& in name)
 {
-	if (ai.GetTunable("apex_allow_juno", 0.f) > 0.f)
-		return false;
-	return (name == "armjuno") || (name == "corjuno") || (name == "legjuno");
+	if ((name == "armjuno") || (name == "corjuno") || (name == "legjuno"))
+		return ai.GetTunable("apex_allow_juno", 0.f) <= 0.f;
+	if ((name == "cortron") || (name == "armemp"))
+		return ai.GetTunable("apex_allow_tacmissile", 0.f) <= 0.f;
+	return false;
 }
 
 // Seconds to build the def at the given total buildpower (workertime sum).

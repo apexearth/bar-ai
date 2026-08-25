@@ -581,6 +581,17 @@ measured 4v4. Blocked in `Catalog::BlockedDef` -- the single `gAvailable`
 chokepoint every want already checks, so no proposer needed changing. Lift with
 `apex_allow_juno=1`. Verified 0 metal into Juno after.
 
+**Tactical missile silos blocked (2026-08-25).** apexearth: "I need to ask for
+the tactical missile launcher too. We need special logic before we should be
+making buildings like that." `cortron` (Catalyst, 1200m/14000e) and `armemp`
+(Paralyzer, 1600m/29000e) reach the protect want by the same route as the Juno --
+weapon, no build options, so `ProtClassOf` files them as ground defence -- but
+they are operator-aimed: a silo that is never given a target order is pure
+displaced constructor time. Same chokepoint, lift with `apex_allow_tacmissile=1`.
+Legion ships no equivalent. OPEN: the real fix is a director that picks and
+commits targets (the nuke director is the shape to copy), after which the block
+comes off; until then no proposer should buy any weapon it cannot aim.
+
 ## 2026-08-24 — danger pricing, forward defence, sensors
 
 ### OPEN: a cheap want that needs a walk can never complete

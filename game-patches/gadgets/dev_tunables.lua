@@ -69,6 +69,7 @@ local NAMES = {
 	"apex_efloor_diag",
 	"apex_comm_rules",
 	"apex_allow_juno",
+	"apex_allow_tacmissile",
 	"apex_conv_horizon",
 	"apex_tech_survival",
 	"apex_bp_backlog_s",
