@@ -92,8 +92,8 @@ public:
 		return freshInfos[type].cost;
 	}
 	void SetFreshSeconds(float seconds);
-	void AddEnemyCost(const CEnemyUnit* e);
-	void DelEnemyCost(const CEnemyUnit* e);
+	void AddEnemyCost(CEnemyUnit* e);
+	void DelEnemyCost(CEnemyUnit* e);
 	float GetMobileThreat() const { return mobileThreat; }
 	float GetStaticThreat() const { return staticThreat; }
 	float GetEnemyThreat() const { return mobileThreat + staticThreat; }

@@ -118,6 +118,19 @@ public:
 	void SetSeenFrame(int frame) { seenFrame = frame; }
 	int GetSeenFrame() const { return seenFrame; }
 
+	// apex: IS THIS UNIT'S COST CURRENTLY IN THE ENEMY TOTALS. Add/Del were
+	// unguarded, so the pair was neither idempotent nor balanced: the ghost
+	// purge deletes an entry without refunding, and re-sighting the same LIVE
+	// unit builds a fresh CEnemyUnit whose knownFrame is -1, so EnemyEnterLOS
+	// returns !wasKnown and adds the whole cost a second time. On the 90s
+	// hidden fuse a skirmishing unit re-registers repeatedly and GetEnemyCost
+	// ratchets -- measured ghost share climbing 0 -> 22 -> 47 -> 60% over one
+	// 20-minute game (apexearth: "if a unit appears, then disappears, then
+	// appears again, it counts as 2 ghosts").
+	void SetCounted()   { counted = true; }
+	void ClearCounted() { counted = false; }
+	bool IsCounted() const { return counted; }
+
 	void SetCost(float value) { data.cost = value; }
 	float GetCost() const { return data.cost; }
 
@@ -157,6 +170,7 @@ private:
 	int knownFrame;
 	int lastSeen;
 	int seenFrame = -1;
+	bool counted = false;
 
 	springai::Weapon* shield;
 

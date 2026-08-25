@@ -477,6 +477,7 @@ void CEnemyManager::PurgeStaleGhosts(int frame, int confirmedAgeFrames, int unkn
 
 void CEnemyManager::DyingEnemy(CEnemyUnit* enemy)
 {
+	DelEnemyCost(enemy);   // a purged ghost must stop counting
 	enemyDying.insert(enemy);
 	UnregisterEnemyUnit(enemy);
 }
@@ -542,30 +543,50 @@ void CEnemyManager::ModFresh(const CEnemyUnit* e, int sign)
 	ModCost(e, sign, freshInfos.data(), freshMobileCost, freshMobileThreat);
 }
 
-void CEnemyManager::AddEnemyCost(const CEnemyUnit* e)
+// apex: BALANCED AND IDEMPOTENT. These were free-running: the ghost purge
+// deletes an entry without ever refunding its cost, and re-sighting the same
+// LIVE unit re-registers it (the new CEnemyUnit's knownFrame is -1), so
+// EnemyEnterLOS returns !wasKnown and adds the full cost again. With the
+// hidden fuse at 90s a skirmishing unit does that repeatedly and GetEnemyCost
+// only ratchets up -- it comes down solely for deaths inside allied LOS or
+// radar. Everything downstream reads it: ArmyTarget (and so the T2 discount),
+// SiegeExpect, ThreatM, HazardAt -- all biased toward a bigger enemy the
+// longer a game runs (measured ghost share 0 -> 22 -> 47 -> 60% in one game).
+//
+// The counted flag makes the pair exact -- what Add put in is what Del takes
+// out, once -- so DyingEnemy can refund a purged ghost without the double
+// subtract a second refund would cause on the real-death path.
+//
+// It keys off `counted` rather than IsIgnore(): a unit that became ignored
+// after registration used to return early here and leak its cost.
+//
+// Fresh totals are NOT touched here any more. The FRESH flag is their single
+// owner via ModFresh, and adding on IsFresh() double counted whenever the
+// freshness pass had already set the flag before this event arrived.
+void CEnemyManager::AddEnemyCost(CEnemyUnit* e)
 {
-	if (e->IsIgnore()) {
+	if (e->IsIgnore() || e->IsCounted()) {
 		return;
 	}
 
 	ModCost(e, +1, enemyInfos.data(), enemyMobileCost, mobileThreat);
 	ModStatic(e, +1);
-	if (e->IsFresh()) {
-		ModCost(e, +1, freshInfos.data(), freshMobileCost, freshMobileThreat);
-	}
+	e->SetCounted();
 }
 
-void CEnemyManager::DelEnemyCost(const CEnemyUnit* e)
+void CEnemyManager::DelEnemyCost(CEnemyUnit* e)
 {
-	if (e->IsIgnore()) {
+	if (!e->IsCounted()) {
 		return;
 	}
 
 	ModCost(e, -1, enemyInfos.data(), enemyMobileCost, mobileThreat);
 	ModStatic(e, -1);
 	if (e->IsFresh()) {
-		ModCost(e, -1, freshInfos.data(), freshMobileCost, freshMobileThreat);
+		ModFresh(e, -1);
+		e->ClearFresh();
 	}
+	e->ClearCounted();
 }
 
 void CEnemyManager::SetFreshSeconds(float seconds)
