@@ -2,6 +2,9 @@ namespace Military {
 
 int  gNextAirLog   = 0;
 bool gAAResolved   = false;
+// The most enemy air seen at once, ever. Discounted for scouts/builders like
+// every other reading here, but never forgotten and never floored.
+float gAirSeen     = 0.f;
 CCircuitDef@ gFlak = null;   // the faction's flak turret
 CCircuitDef@ gHeavy = null;  // its other heavy static AA
 
@@ -63,6 +66,16 @@ float AirThreatNow()
 	return gAirRaw;
 }
 
+// THE AIR WE HAVE SEEN, whatever it is doing now (apexearth: "just make the AA
+// if we've seen enemy air... our AA amount should be proportional to the amount
+// of enemy air we've seen"). No AA_IGNORE floor -- a little air still buys a
+// little AA -- and no freshness window: aircraft leave, and having left is not
+// evidence they are gone. This is what static AA is sized against.
+float AirSeenEver()
+{
+	return gAirSeen;
+}
+
 // How seriously to take their air, 0..1. One number, used by both levers.
 float AirScale(float share)
 {
@@ -90,12 +103,14 @@ int HeavyAAWant()
 	const float bar = ai.GetTunable("apex_flak_floor_income", TUNE_FLAK_FLOOR_INCOME);
 	if (inc >= bar)
 		floorN = 1 + int((inc - bar) / ai.GetTunable("apex_flak_per", TUNE_FLAK_PER));
-	const bool worth = (gAirAvg >= AA_IGNORE) || (gAirRaw >= AA_IGNORE);
-	if (!worth)
+	// Sized off what we have SEEN, not what is on screen: heavy AA is a
+	// standing answer to an air force, and the force does not stop existing
+	// while it is rearming.
+	if (gAirSeen < AA_IGNORE)
 		return floorN;
 	const float total = gAirAvg + gGroundAvg;
 	const float share = (total > 0.f) ? gAirAvg / total : 0.f;
-	const float heavyBasis = (gAirRaw > gAirAvg) ? gAirRaw : gAirAvg;
+	const float heavyBasis = gAirSeen;
 	const int seen = int(heavyBasis * AirScale(share) / AA_HEAVY_PER);
 	return (seen > floorN) ? seen : floorN;
 }
@@ -123,6 +138,8 @@ void UpdateAirThreat()
 		air = 0.f;
 	const float ground = EnemyGroundCost() * GROUND_UNSEEN;
 	gAirRaw = air;
+	if (air > gAirSeen)
+		gAirSeen = air;
 
 	if (gAirAvg < 0.f) {
 		gAirAvg = air;
@@ -135,22 +152,15 @@ void UpdateAirThreat()
 
 	const float total = gAirAvg + gGroundAvg;
 	const float share = (total > 0.f) ? gAirAvg / total : 0.f;
-	// Also worth it off the raw reading: gating purely on the smoothed average
-	// left scale at 0 (and so heavyWant at 0) for however long the 240s EMA
-	// took to catch up to an already-large airRaw.
-	const bool worth = (gAirAvg >= AA_IGNORE) || (gAirRaw >= AA_IGNORE);
-	const float scale = worth ? AirScale(share) : 0.f;
+	const float scale = (gAirSeen >= AA_IGNORE) ? AirScale(share) : 0.f;
 
 	// The mobile-AA lever does not exist: GetResponseInfo/SResponseInfo are not
 	// registered on CMilitaryManager, so response.json's anti_air weighting is
 	// unreachable from script. Static AA below is the only lever this can pull.
 
-	// Sized off the larger of the smoothed and this-tick reading: gAirAvg alone
-	// left heavyWant at 0 while airRaw climbed 150->4924 over ~10 minutes (see
-	// gAirRaw comment, defenceline.as) because the 240s average had not caught
-	// up. share/scale stay off the smoothed value so a single spike does not
-	// swing the RATIO, only how much of the already-scaled demand counts.
-	// count includes nanoframes, so a turret still building holds its own slot.
+	// share/scale stay off the smoothed value so a single spike does not swing
+	// the RATIO, only how much of the already-scaled demand counts. count
+	// includes nanoframes, so a turret still building holds its own slot.
 	int heavyWant = HeavyAAWant();
 	const int heavyHave = LiveCount(gFlak) + LiveCount(gHeavy);
 	const int spare = (heavyWant > heavyHave) ? (heavyWant - heavyHave) : 0;
@@ -160,6 +170,7 @@ void UpdateAirThreat()
 	if (ai.frame >= gNextAirLog) {
 		gNextAirLog = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apexaa: airRaw=" + formatFloat(airRaw, "", 0, 0)
+			+ " seen=" + formatFloat(gAirSeen, "", 0, 0)
 			+ " air=" + formatFloat(gAirAvg, "", 0, 0)
 			+ " ground=" + formatFloat(gGroundAvg, "", 0, 0)
 			+ " share=" + formatFloat(share, "", 0, 3)

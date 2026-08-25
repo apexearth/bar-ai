@@ -1416,6 +1416,12 @@ float UnitWorthMod(const string &in name)
 // rate on min(their air, our base)); with AA priced like a ground turret the
 // multiplier is 1 and the knob still scales it.
 const float TUNE_AA_URGENCY = 1.f;
+// AA metal we are aiming to have standing per metal of enemy air we have seen
+// (apexearth: "if the enemy rolls up with 100k metal worth of air... then I'd
+// hope we add at least 50k of AA"). This is what makes the AA want price
+// itself out: once cover reaches the target the next tower stops nothing.
+// 0.5 reproduces the old apex_def_trade=2 saturation point, now named.
+const float TUNE_AA_COVER_FRAC = 0.5f;
 // GIFT_ARMY: master switch for back-to-front army gifting. DEFAULT OFF
 // (apexearth 2026-08-24: "we are doing the share logic to send units to
 // teammates. We should disable that by default. It only is appropriate on

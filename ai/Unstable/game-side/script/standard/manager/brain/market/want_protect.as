@@ -296,14 +296,12 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				continue;
 			gain = ((artyS < gAssetsM) ? artyS : gAssetsM) * rate * 4.f;
 		} else if (cls == PROT_AA) {
-			// AS SOON AS THEY HAVE AIR (apexearth: "soon as we see the enemy
-			// has air we should be making some AA to counter it"). AirThreatNow
-			// is this tick's reading, not the 240s EMA, so a raid is answered
-			// as it develops. What is at risk is the base, capped by the air
-			// they actually field; each tower already standing halves the next
-			// one's worth, so coverage scales with their air and stops on its
-			// own -- no count, no cap.
-			const float air = Military::AirThreatNow();
+			// AS SOON AS WE HAVE SEEN ANY (apexearth: "just make the AA if
+			// we've seen enemy air... it doesn't have to be a ton"). Sized off
+			// AirSeenEver, which has no AA_IGNORE floor and no freshness
+			// window: a bomber that has flown home is still a bomber, and
+			// AirThreatNow read zero for exactly the moments between raids.
+			const float air = Military::AirSeenEver();
 			if (air <= 0.f)
 				continue;
 			// WHAT THE BOMBS ARE ACTUALLY COSTING US, priced like a turret:
@@ -314,7 +312,14 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// lost every auction (apexearth, watched: "T1 anti air is very
 			// cheap yet we still have not made it... I estimate a team cost
 			// of around 250-300 would have saved us more than that").
-			const float aaTrade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
+			// AA metal counted against air metal at the cover ratio, so cover
+			// reaches the target -- and the want prices itself out -- at
+			// exactly apex_aa_cover_frac of the air we have seen. No count,
+			// no cap: 100k of their air asks for 50k of ours.
+			float aaFrac = ai.GetTunable("apex_aa_cover_frac", TUNE_AA_COVER_FRAC);
+			if (aaFrac < 0.01f)
+				aaFrac = 0.01f;
+			const float aaTrade = 1.f / aaFrac;
 			float aaCover = 0.f;
 			for (uint ai2 = 0; ai2 < gProtDefId[PROT_AA].length(); ++ai2)
 				aaCover += Catalog::gCostM[gProtDefId[PROT_AA][ai2]] * aaTrade;

@@ -12,6 +12,11 @@ array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 // "still closing" can be distinguished from "stalled".
 array<float> gApproachD(32001, -1.f);
 array<int> gApproachAt(32001, -30000);
+// Which builder may drop its work for the first AA tower, and when it claimed
+// that. One at a time: the tower is 80 metal, abandoning every frame in the
+// base is not.
+int gAaClaim   = -1;
+int gAaClaimAt = -30000;
 
 IUnitTask@ Decide(CCircuitUnit@ unit)
 {
@@ -38,6 +43,24 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		if (safe !is null)
 			return safe;
 	}
+	// SEEN THEIR AIR WITH NOTHING THAT SHOOTS UP INTERRUPTS THE JOB
+	// (apexearth: "it should interrupt what we are currently doing as a
+	// builder. AA coverage is cheap and easy"). The panic below only reorders
+	// an election, and a builder with progress on a frame returns under this
+	// and never has one. Ends the moment the first tower stands.
+	bool aaEmerg = (gProtPos[PROT_AA].length() == 0)
+			&& (Military::AirSeenEver() > 0.f);
+	if (aaEmerg) {
+		const bool stale = (ai.frame - gAaClaimAt) > 20 * SECOND;
+		if ((gAaClaim == int(unit.id)) || (gAaClaim < 0) || stale) {
+			gAaClaim = int(unit.id);
+			gAaClaimAt = ai.frame;
+		} else {
+			aaEmerg = false;   // someone else is already on it
+		}
+	} else {
+		gAaClaim = -1;
+	}
 	// FINISH WHAT'S STARTED (his rule: "focus as much build power as we
 	// can on just the one building"): a builder whose current frame has
 	// real progress holds it -- the roulette explores at the next FREE
@@ -46,7 +69,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// 61 sentry requests, 850 metal into nanoframes, zero finished
 	// (measured, 25-minute game). The stall sweep still aborts held tasks
 	// explicitly when the economy demands it.
-	if ((unit.task !is null) && (unit.task.GetType() == Task::Type::BUILDER)) {
+	if (!aaEmerg && (unit.task !is null) && (unit.task.GetType() == Task::Type::BUILDER)) {
 		if (Requests::Progress(unit.task) > 0.01f)
 			return null;
 		// ...and the FINAL APPROACH counts as started: a walker near its
@@ -124,15 +147,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			++at;
 		ranked.insertAt(at, c);
 	}
-	// BOMBED WITH NOTHING THAT SHOOTS UP IS AN EMERGENCY, NOT A BID.
+	// THEIR AIR WITH NOTHING THAT SHOOTS UP IS AN EMERGENCY, NOT A BID.
 	// apexearth: "when enemy starts bombing us and we have 0 AA I expect the
-	// very next thing we build to be AA." Both halves of that are measured --
-	// metal is actually being lost to aircraft right now, and we own zero anti
-	// air -- so this cannot fire on a hunch, and it stops the instant either
-	// stops being true. While it holds, the airdef want skips the lottery
-	// rather than taking a proportional share of it.
+	// very next thing we build to be AA" -- and, later, not to wait for the
+	// bombing: seeing their air is the trigger. While it holds, the airdef
+	// want skips the lottery rather than taking a proportional share of it.
+	// It stops the instant the first tower stands.
 	bool aaPanic = false;
-	if ((gProtPos[PROT_AA].length() == 0) && (Military::AirLossRate() > 0.f)) {
+	if (aaEmerg) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ranked[ri].kind != WK_AIRDEF)
 				continue;
@@ -144,9 +166,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			aaPanic = true;
 			if (ai.frame >= gNextAaPanicLog) {
 				gNextAaPanicLog = ai.frame + 15 * SECOND;
-				AiLog("apex: AA PANIC -- losing "
-					+ formatFloat(Military::AirLossRate(), "", 0, 2)
-					+ " m/s to air with zero AA standing; "
+				AiLog("apex: AA PANIC -- seen "
+					+ formatFloat(Military::AirSeenEver(), "", 0, 0)
+					+ " metal of enemy air with zero AA standing; "
 					+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
 					+ " jumps the queue");
 			}
