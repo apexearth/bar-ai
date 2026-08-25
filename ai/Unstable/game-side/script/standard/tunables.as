@@ -1434,13 +1434,17 @@ const float TUNE_ECO_CON_KEEP = 3.f;
 // per second we should have at least 5"). Under that count a factory line
 // orders one outright instead of pricing it against the army draw, which it
 // loses whenever the army gap is open -- which is nearly always.
-// 2, was 1: with the commander no longer counted as one of the crew the
-// base is what we open with, and apexearth's two data points -- "2 or 3
-// constructors within the first 5 minutes" and "at 100 metal per second we
-// should have at least 5" -- fix base and divisor together: 2 + inc/33 is
-// 2 at opening income, 3 by 33 m/s, and 5.0 at 100.
-const float TUNE_T2_CON_BASE = 2.f;
-const float TUNE_T2_CON_PER_M = 33.f;
+const float TUNE_T2_CON_BASE = 1.f;
+const float TUNE_T2_CON_PER_M = 25.f;
+// manager/brain/market/production.as [count] -- constructors of ANY TIER the
+//   line orders before the draw, the plain "how many hands" floor. The block
+//   above is narrower than its name suggests: it counts only cons that reach
+//   BestExtract(), which scans every available def and so means the MOHO, so
+//   no T1 con and no commander ever satisfied it. 2.7 + inc/44 is apexearth's
+//   own two points: 3 at 12 metal/s, 5 at 100. A floor, not a cap.
+const float TUNE_CON_BASE = 2.7f;
+// manager/brain/market/production.as [metal/s per extra constructor]
+const float TUNE_CON_PER_M = 44.f;
 // LINE_FLOOR: a factory order must be worth at least this fraction of the
 // rolling executed-want value, unless metal is overflowing (idle is free).
 const float TUNE_LINE_FLOOR = 0.25f;

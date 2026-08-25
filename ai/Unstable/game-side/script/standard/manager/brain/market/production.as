@@ -67,6 +67,62 @@ int CeilingConsInFlight()
 	return n;
 }
 
+// EVERY CONSTRUCTOR WE OWN, ANY TIER, EXCLUDING THE COMMANDER.
+//
+// CeilingConsOwned above answers a narrower question -- cons that reach
+// BestExtract(), which scans every available def and so means the MOHO. No T1
+// con qualifies, and neither does the commander, so that floor is a T2-con
+// floor exactly as its name says: measured firing at 9.5 minutes ordering an
+// armack, never in the opening. Nothing anywhere asked for constructors as
+// such, which is why the opening had none and whether a player got any early
+// came down to the proportional draw (measured 3v3: two teams ordered armck at
+// factory picks 1-2, the third at picks 5-6, and looked from outside like it
+// never built them at all).
+//
+// The commander is excluded because it is not one of the crew -- it has the
+// opening to run and cannot be replaced if it dies working.
+int ConsOwnedAny()
+{
+	int n = 0;
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[int(c)]
+			|| !Catalog::gBuilder[int(c)]
+			|| Catalog::Def(int(c)).IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		n += gOwnCount[c];
+	}
+	return n;
+}
+
+// Ordered but not standing. gOwnCount counts FINISHED units, and an order is
+// not applied on the frame it is issued, so without this the floor re-orders
+// for the whole build and lands a crowd.
+int ConsInFlightAny()
+{
+	int n = 0;
+	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
+		CCircuitDef@ pd = Brain::gFQPendDef[i];
+		if ((pd !is null) && pd.IsMobile() && pd.IsBuilder()
+			&& !pd.IsRoleAny(Unit::Role::COMM.mask))
+			++n;
+	}
+	return n;
+}
+
+// THE CONSTRUCTOR FLOOR, from apexearth's own two readings: "at like 12 income
+// we still want 2 or 3 cons... often I want 3 even at just 12 income" and "at
+// 100 metal per second we should have at least 5". Those two points fix the
+// line: 2.7 + inc/44 gives 3.0 at 12 m/s and 5.0 at 100. Not a cap -- nothing
+// stops the auction buying more when they are worth more.
+int ConsNeedAny()
+{
+	const float per = ai.GetTunable("apex_con_per_m", TUNE_CON_PER_M);
+	const float want = ai.GetTunable("apex_con_base", TUNE_CON_BASE)
+			+ aiEconomyMgr.metal.income / ((per > 1.f) ? per : 44.f);
+	const int have = ConsOwnedAny() + ConsInFlightAny();
+	return (float(have) < want) ? (int(want) - have) : 0;
+}
+
 // How far under the floor we are. The floor SCALES WITH INCOME -- one con
 // plus one per 25 metal/s (apexearth 2026-08-23: "at 100 metal per second we
 // should have at least 5"). Any lab qualifies: air, bot or vehicle cons all
@@ -456,6 +512,19 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		// loses whenever the army gap is open, and the stake multiplier
 		// keeps it open -- so the floor is a rule, not a bid. The
 		// hard-e-stall and in-flight gates above still hold.
+		// THE PLAIN CONSTRUCTOR FLOOR, ahead of the proportional draw for the
+		// same reason the T2 one is: a con priced against army loses whenever
+		// the army gap is open, and the symmetric prior keeps it open by
+		// construction. Any tier counts -- this asks for hands, not reach.
+		if (ConsNeedAny() > 0) {
+			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
+				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
+				+ " (con floor need=" + ConsNeedAny()
+				+ " have=" + ConsOwnedAny()
+				+ " inflight=" + ConsInFlightAny()
+				+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1) + ")");
+			return Catalog::Def(d);
+		}
 		if ((ceilNeed > 0) && ReachesCeiling(d)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
