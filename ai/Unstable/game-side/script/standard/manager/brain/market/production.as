@@ -20,12 +20,22 @@ bool ReachesCeiling(int defId)
 	return false;
 }
 
+// THE COMMANDER IS NOT A CONSTRUCTOR FOR THIS PURPOSE. It is mobile, it is a
+// builder, and it reaches the ceiling (it builds the T1 extractor), so it
+// satisfied the floor on its own from frame zero: want = 1 + inc/25 is 1.4 at
+// 10 metal/s, have = 1, so need came out 0 and the line ordered NOTHING until
+// income passed 25 (apexearth, watched: "we aren't making early game
+// constructors. We should have 2 or 3 constructors within the first 5
+// minutes"). It also has its own job -- the opening, and it cannot be replaced
+// if it dies working -- so counting it as one of the crew both hides the
+// shortfall and puts it in the crowd.
 int CeilingConsOwned()
 {
 	int n = 0;
 	for (uint c = 1; c < gOwnCount.length(); ++c) {
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[int(c)]
-			|| !Catalog::gBuilder[int(c)])
+			|| !Catalog::gBuilder[int(c)]
+			|| Catalog::Def(int(c)).IsRoleAny(Unit::Role::COMM.mask))
 			continue;
 		if (ReachesCeiling(int(c)))
 			n += gOwnCount[c];
