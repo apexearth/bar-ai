@@ -360,6 +360,11 @@ static void CCircuitUnit_CmdPatrolTo(CCircuitUnit* unit, const AIFloat3& pos)
 // apex: enemy AIR value near a point, for the team interceptor pool -- each
 // player publishes this at home and fighters fly to the worst-hit ally.
 // Registry walk, called ~once per second per player.
+static float CCircuitAI_GetEnemyMaxMobileCostM(CCircuitAI* circuit)
+{
+	return circuit->GetEnemyManager()->GetEnemyMaxMobileCostM();
+}
+
 static float CCircuitAI_GetEnemyAirCostNear(CCircuitAI* circuit, const springai::AIFloat3& pos, float radius)
 {
 	return circuit->GetEnemyManager()->GetEnemyAirCostNear(pos, radius);
@@ -1282,6 +1287,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdStop()", asFUNCTION(CCircuitUnit_CmdStop), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdPatrolTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdPatrolTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyAirCostNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetEnemyAirCostNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyMaxMobileCostM() const", asFUNCTION(CCircuitAI_GetEnemyMaxMobileCostM), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// apex: for the commander D-gun raid want -- see CCircuitUnit_PushDGun's
 	// own comment for why script only needs to get close and push once.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdCloak(bool)", asFUNCTION(CCircuitUnit_CmdCloak), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

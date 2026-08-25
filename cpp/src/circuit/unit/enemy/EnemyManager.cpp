@@ -404,6 +404,41 @@ void CEnemyManager::DyingEnemy(CEnemyUnit* enemy, int frame)
 // -- the circuit-level enemyInfos map holds wrappers whose data dies before the
 // deferred per-circuit erase, and iterating THAT from script crashed at every
 // commander blast (2026-08-18, seeds 120/121/123).
+// apex: THE COSTLIEST MOBILE THEY HAVE SHOWN US -- a tier reading the script
+// cannot otherwise take. CEnemyManager exposes only per-ROLE aggregates, and
+// role does not separate a T1 assault bot from a T2 one, so the old
+// Factory::gEnemyT2Seen sense had no replacement when it died with the leaf
+// rules. Unit cost is what actually scales across tiers, so the script can ask
+// whether their best outclasses ours without naming a tier or a number.
+//
+// Same guarded walk the air survey uses: the circuit-level map holds wrappers
+// whose data dies before the deferred erase, and iterating it from script
+// crashed at every commander blast.
+float CEnemyManager::GetEnemyMaxMobileCostM() const
+{
+	float best = 0.f;
+	for (CEnemyUnit* e : enemyUpdates) {
+		if ((e == nullptr) || e->IsDying()) {
+			continue;
+		}
+		CCircuitDef* cdef = e->GetCircuitDef();
+		// BUILDERS EXCLUDED, COMMANDER ABOVE ALL. It is mobile and costs 2700,
+		// so it outranks every T1 combat unit and made this read 2700 from
+		// frame one -- a permanent 'they are ahead' that says nothing about
+		// tier. The caller's own side excludes builders too; comparing the
+		// two on different bases is the mismatch this whole reading exists
+		// to avoid.
+		if ((cdef == nullptr) || !cdef->IsMobile() || cdef->IsBuilder()) {
+			continue;
+		}
+		const float c = cdef->GetCostM();
+		if (c > best) {
+			best = c;
+		}
+	}
+	return best;
+}
+
 float CEnemyManager::GetEnemyAirCostNear(const springai::AIFloat3& pos, float radius) const
 {
 	float sum = 0.f;

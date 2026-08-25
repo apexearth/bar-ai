@@ -104,10 +104,34 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 	Want w;
 	// Extraction upgrades AND conversion upgrades: both are "the same economy,
 	// better", and on a map with no spots only the second one exists.
-	const float demand = UpDemand() + ConvUpDemand();
+	//
+	// ...AND BEING OUTCLASSED, which is demand for tech that has nothing to do
+	// with the economy. Priced on economy alone this want returned at the gate
+	// below with upD 0.02-0.11 against a bar of 0.5, while the enemy fielded
+	// 14,070 metal of T2 and our best buildable unit was a 270-metal T1
+	// (apexearth: "if we see the enemy has T2 then we should boost building our
+	// own T2. We will 100% lose if we don't up to T2 to match them").
+	//
+	// How far ahead they are, as a ratio, so it is the same shape as the
+	// extraction demand beside it: their best mobile over ours, less one. Dead
+	// level contributes nothing and it fades as we catch up. Both readings
+	// exclude builders -- a commander is mobile and costs 2700, and counting it
+	// made this read "outclassed" from frame one.
+	//
+	// Only while we can still build something: with no factory at all the
+	// answer is a plant, which is ProposePlant's business, not a tech upgrade.
+	float outclass = 0.f;
+	{
+		const float theirs = ai.GetEnemyMaxMobileCostM();
+		const float ours = OwnedBestMobileCostM();
+		if ((ours > 0.f) && (theirs > ours))
+			outclass = (theirs / ours) - 1.f;
+	}
+	const float demand = UpDemand() + ConvUpDemand() + outclass;
 	if (ai.frame >= gTechDiagAt) {
 		gTechDiagAt = ai.frame + 120 * SECOND;
 		AiLog("apex: tech-diag team=" + ai.teamId + " upD=" + demand
+				+ " outclass=" + formatFloat(outclass, "", 0, 2)
 				+ " ceil=" + BestExtract() + " ownCeil=" + OwnedCeil()
 				+ " spots=" + gLSpot.length() + " funded="
 				+ (ArmyValue() / ((ArmyTarget() > 1.f) ? ArmyTarget() : 1.f)));
@@ -282,6 +306,27 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		float fundedMul = (funded > 1.f) ? 1.f : funded;
 		if (EcoQuiet())
 			fundedMul = 1.f;
+		// BEING OUT-TECHED LIFTS THE FLOOR UNDER THAT DISCOUNT. apexearth: "if we
+		// see the enemy has T2 then we should boost building our own T2. We will
+		// 100% lose if we don't up to T2 to match them."
+		//
+		// The discount above is exactly backwards in this case: an army that
+		// cannot match their units is UNDER-funded by construction, so the worse
+		// they outclass us the harder it forbids the one thing that would let us
+		// match -- measured funded=0.04, techStart=-1 in every game of a batch.
+		// The floor is how far ahead they are, read from unit cost rather than a
+		// tier table: dead level leaves the discount untouched, twice our best
+		// halves it, ten times all but removes it. Never a boost above normal,
+		// and it falls back to nothing the moment we can build their equal.
+		{
+			const float theirs = ai.GetEnemyMaxMobileCostM();
+			const float ours = OwnedBestMobileCostM();
+			if ((theirs > ours) && (theirs > 0.f)) {
+				const float floorMul = 1.f - (ours / theirs);
+				if (floorMul > fundedMul)
+					fundedMul = floorMul;
+			}
+		}
 		// Two plants can unlock the same thing; the one whose line trades
 		// worse per metal is worth less for it. See PlantLineWorth.
 		const float lineW = PlantLineWorth(d);
@@ -450,7 +495,9 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				+ " axisRearward=" + (Base::AxisIsRearward() ? 1 : 0)
 				+ " armyOurs=" + formatFloat(ArmyValue(), "", 0, 0)
 				+ " armyFoe=" + formatFloat(Military::EnemyArmyCost(), "", 0, 0)
-				+ " funded=" + formatFloat(fundedMul, "", 0, 2));
+				+ " funded=" + formatFloat(fundedMul, "", 0, 2)
+				+ " theirBest=" + formatFloat(ai.GetEnemyMaxMobileCostM(), "", 0, 0)
+				+ " ourBest=" + formatFloat(OwnedBestMobileCostM(), "", 0, 0));
 		}
 	}
 	return w;

@@ -54,6 +54,34 @@ float OwnedBestEPerM()
 	return gBestEPM;
 }
 
+// THE COSTLIEST MOBILE UNIT ANYTHING WE OWN CAN PRODUCE. Paired with
+// ai.GetEnemyMaxMobileCostM(), this says whether their best outclasses ours --
+// a tier comparison drawn from cost rather than from a named tier, so it needs
+// no table and works for any faction or unit the game adds.
+int gBestMobAt = -1;
+float gBestMob = 0.f;
+float OwnedBestMobileCostM()
+{
+	if (gBestMobAt == ai.frame)
+		return gBestMob;
+	gBestMobAt = ai.frame;
+	gBestMob = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if (gOwnCount[d] <= 0)
+			continue;
+		const array<int>@ builds = Catalog::gBuildsList[int(d)];
+		for (uint i = 0; i < builds.length(); ++i) {
+			const int b = builds[i];
+			if (!Catalog::gAvailable[b] || !Catalog::gMobile[b]
+				|| Catalog::gBuilder[b])
+				continue;
+			if (Catalog::gCostM[b] > gBestMob)
+				gBestMob = Catalog::gCostM[b];
+		}
+	}
+	return gBestMob;
+}
+
 float OwnedCeil()
 {
 	float ceil = 0.f;
