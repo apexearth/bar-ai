@@ -282,8 +282,10 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 				float share = Catalog::gCostM[defId] / (mInc * dur);
 				if (share > 1.f)
 					share = 1.f;
+				// Upgrades AND claims: both are extraction this build defers.
+				// See OpenSpotStream in want_mex.as.
 				if ((share > 0.f) && (Catalog::gExtractsM[defId] <= 0.f))
-					displacedM = UpDemand() * dur * share;
+					displacedM = (UpDemand() + OpenSpotStream()) * dur * share;
 			}
 			if (feedSec > buildSec) {
 				buildSec = feedSec;

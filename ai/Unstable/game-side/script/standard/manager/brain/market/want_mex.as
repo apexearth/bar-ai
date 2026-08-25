@@ -30,6 +30,31 @@ float UpDemand()
 	return (d > 0.f) ? d : 0.f;
 }
 
+// THE EXPANSION STREAM A LONG BUILD POSTPONES. UpDemand is the metal/s waiting
+// on mex UPGRADES; this is the metal/s waiting on mex CLAIMS. Charging only the
+// first meant a build that eats the economy for minutes was billed nothing on a
+// map where we hold almost nothing to upgrade -- measured on Supreme Isthmus,
+// held=4 of mapSpots=90 with upD=16, so an afus postponed "nothing" while what
+// it actually postponed was eighty-four spots (apexearth, watching it happen
+// again). Bounded by the hands that could actually claim them, the same
+// unserved-demand shape used everywhere else.
+float OpenSpotStream()
+{
+	CacheSpots();
+	const int open = int(gAllSpots.length()) - int(gLSpot.length());
+	if (open <= 0)
+		return 0.f;
+	float claimers = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] > 0) && Catalog::gMobile[int(d)] && Catalog::gBuilder[int(d)])
+			claimers += float(gOwnCount[d]);
+	}
+	if (claimers < 1.f)
+		claimers = 1.f;
+	const float reach = (float(open) < claimers) ? float(open) : claimers;
+	return reach * SpotM();
+}
+
 // TWO HALF-BUILT FUSIONS ARE WORSE THAN ONE FINISHED: an expensive def
 // already in progress takes the next asker as a JOINER -- doubling build
 // speed on the standing frame -- instead of opening a parallel copy
@@ -132,7 +157,15 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// Geometry-only vetoes are applied here so a refused spot does not
 		// consume one of the engine probes below; DeathWalk stays on the
 		// chosen spot, where its enemy-cost samples are paid for once.
-		if (Front::FoeKnown() && Builder::PastFront(sp)) {
+		// A MEX IS WORTH CONTESTING FURTHER OUT THAN A BUILDING IS. PastFront
+		// applies the CONSTRUCTOR bar (CON_FAR_FRAC 0.72) while sitesafety.as
+		// already carries MEX_FAR_FRAC (0.92) written for exactly this and used
+		// only by MexHeat. On a 90-spot map the strict bar refused 1,976 spot
+		// evaluations in one 60s window and we held FOUR of ninety
+		// (apexearth's Supreme Isthmus game). The spot is still priced for
+		// risk after this -- StreamSurvival and the exposure charge both bite.
+		if (Front::FoeKnown()
+			&& Builder::PastFrontFrac(sp, Builder::MEX_FAR_FRAC)) {
 			++gMexPastFront;
 			continue;
 		}
@@ -188,7 +221,8 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	// SUPER RISKY GROUND IS NOT A BUILD OPTION (apexearth): a spot past the
 	// front is a con's death walk whatever it pays -- and refusing it also
 	// stops the market hiring more cons for ground nobody can hold.
-	if (Front::FoeKnown() && Builder::PastFront(pos)) {
+	if (Front::FoeKnown()
+		&& Builder::PastFrontFrac(pos, Builder::MEX_FAR_FRAC)) {
 		++gMexPastFront;
 		gMexOpen = false;
 		return w;
