@@ -1236,7 +1236,7 @@ const float TUNE_STANDOFF_COVER = 1.f;
 // 27,444 -> 14,910 and cons 14 -> 3 over 6 games. The generator is kept; it
 // needs the site list bounded to what a builder can reach before it earns
 // its place.
-const float TUNE_DEF_NET = 0.f;
+const float TUNE_DEF_NET = 1.f;
 // Let the commander fight while he still outclasses the field. CommCaution is
 // the "heavies are out" sense, so this only ever fires before that. 0 = the
 // old flee-only commander.
@@ -1599,7 +1599,7 @@ const float TUNE_FRONT_MIN_REACH = 0.5f;
 // manager/brain.as [elmos] -- How far from the builder the front-defence want
 //   will look for fence work.
 // manager/military/territory.as [toggle 0/1] -- NOTHING BEHIND US IS FRONT.
-const float TUNE_FRONT_REAR_ARC = 0.f;
+const float TUNE_FRONT_REAR_ARC = 1.f;
 // manager/military/territory.as [toggle 0/1] -- Front spots are pulled back to
 //   the safe side of the influence edge; 0 uses the raw edge.
 const float TUNE_FRONT_SAFE_EDGE = 1.f;

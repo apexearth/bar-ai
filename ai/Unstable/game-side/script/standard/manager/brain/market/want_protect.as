@@ -407,11 +407,16 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			}
 			if (ai.GetTunable("apex_front_line", TUNE_FRONT_LINE) > 0.f) {
 				array<AIFloat3> line;
-				// A NET AROUND THE BASE, layered inward, sized by what THIS
-				// turret can actually deny (its reach beyond the attacker's
-				// standoff). Falls back to the hot-bearing picket when it
-				// cannot out-reach them at all.
-				const float denyR = reach - Military::FoeReach();
+				// A NET AROUND THE BASE, layered inward, spaced by the turret's
+				// OWN reach -- the same radius ShieldArcSpots uses. Spacing it
+				// by reach-minus-standoff made denyR negative whenever the
+				// enemy out-ranged the turret (measured: FoeReach 616-943
+				// against a 450-700 turret), so NetSpots bailed and lineSpots
+				// collapsed to 0-5 with bestFrontGain 0.00. That is the same
+				// double-count FrontedStakeAt already records as having dropped
+				// defence to 1.9%: standoff is CoverAt's question, not the
+				// spacing's.
+				const float denyR = reach;
 				if ((ai.GetTunable("apex_def_net", TUNE_DEF_NET) > 0.f)
 					&& Military::NetSpots(line, denyR))
 				{

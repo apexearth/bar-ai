@@ -286,36 +286,43 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		if ((prodCeil > ownCeil) || (prodConv > ownConv))
 			techGain = demand * pipe / float(1 + liveKin);
 		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f)) {
-			// Mobility is a REFINEMENT of demand already being served, so it
-			// divides among the plants serving it exactly as the unlock does.
-			// Without this a 750-metal hover platform was bought for a 23%
-			// walk-speed edge while a lab that already served the same demand
-			// stood beside it.
-			techGain = demand * pipe * (prodMob / ownMob - 1.f)
-					/ float(1 + liveKin);
-			// The quiet rear NEEDS wings: flying cons are its whole
-			// expansion plan (ground plants stop pricing), so the first
-			// flying-builder unlock is a full-demand want, not a
-			// mobility-delta sliver (seed 23: no air lab in 15 min).
-			if (EcoQuiet()) {
-				bool ownFlyingBuilder = false;
-				for (uint fb = 1; fb < gOwnCount.length(); ++fb) {
-					if ((gOwnCount[fb] > 0) && Catalog::gFlyer[int(fb)]
-						&& Catalog::gBuilder[int(fb)] && Catalog::gMobile[int(fb)]) {
-						ownFlyingBuilder = true;
-						break;
-					}
+			// MOBILITY BUYS A PLANT ONLY WHEN IT BUYS WINGS. This channel was
+			// written for one case -- the air lab, whose flying constructors are
+			// the quiet rear's whole expansion plan because ground plants stop
+			// pricing for it. Hovercraft clear the same 1.2x bar as collateral,
+			// and a 750-metal platform arrived every game for a 23% walk-speed
+			// edge, carrying a line of units that are not tough for their price
+			// (apexearth: "yes it has mobility but the units are generally not
+			// as tough for their price. So we shouldn't be making it. We can
+			// work on logic like 'we NEED hovers' later on in the game").
+			//
+			// So the channel is scoped to what it was for: a flying builder we
+			// do not own. Ground-to-ground mobility deltas buy nothing here --
+			// they are a refinement of demand another plant already serves.
+			// Needing hovers for ground we cannot otherwise reach is a real
+			// want and a different one; it is not this.
+			bool ownFlyingBuilder = false;
+			for (uint fb = 1; fb < gOwnCount.length(); ++fb) {
+				if ((gOwnCount[fb] > 0) && Catalog::gFlyer[int(fb)]
+					&& Catalog::gBuilder[int(fb)] && Catalog::gMobile[int(fb)]) {
+					ownFlyingBuilder = true;
+					break;
 				}
-				bool unlocksFlyer = false;
-				for (uint pf = 0; pf < prods.length(); ++pf) {
-					if (Catalog::gMobile[prods[pf]] && Catalog::gBuilder[prods[pf]]
-						&& Catalog::gFlyer[prods[pf]]) {
-						unlocksFlyer = true;
-						break;
-					}
+			}
+			bool unlocksFlyer = false;
+			for (uint pf = 0; pf < prods.length(); ++pf) {
+				if (Catalog::gMobile[prods[pf]] && Catalog::gBuilder[prods[pf]]
+					&& Catalog::gFlyer[prods[pf]]) {
+					unlocksFlyer = true;
+					break;
 				}
-				if (!ownFlyingBuilder && unlocksFlyer)
-					techGain = demand * pipe;
+			}
+			if (!ownFlyingBuilder && unlocksFlyer) {
+				// The quiet rear's wings are a full-demand want, not a
+				// mobility-delta sliver (seed 23: no air lab in 15 min).
+				techGain = EcoQuiet() ? (demand * pipe)
+						: (demand * pipe * (prodMob / ownMob - 1.f)
+							/ float(1 + liveKin));
 			}
 		}
 		// Channel 3, the GANTRY case: a plant whose products dwarf anything
