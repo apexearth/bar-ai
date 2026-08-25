@@ -1042,3 +1042,48 @@ Measured, 12 games paired:
 Half the games are no longer losses, from 0/12 surviving three iterations ago.
 Still 0 wins. Our eco SHARE reads lower (12.2% vs their 26.7%) only because our
 total grew into army; theirs also grew because the games now run long.
+
+## 2026-08-24 (15) — the start-box threat gradient
+
+apexearth: "preload some measure of threat at a gradient towards the enemy's
+side of the map. Our start box centerpoint compared to their starbox centerpoint
+and a gradient of safe to unsafe."
+
+Needed more than it looked: after `ExposureAt` was removed from the danger model
+that morning, there was NO spatial gradient left at all -- a tile in our base and
+a tile outside their factory read identical threat, with position entering only
+through our own turret coverage.
+
+`ThreatGradient(pos)`: 0 at our start, 1 at theirs, on the home->enemy
+projection, falling back to the MIRRORED start before contact because the enemy
+centroid is noise then. It feeds two places:
+- `ThreatM`'s prior now interpolates between two MEASURED magnitudes -- a raid
+  at our end, their whole mobile army at theirs -- floored by the symmetric
+  prior so an unscouted enemy is not assumed absent.
+- `HazardAt`'s arrival term scales with it: their strength says how badly it
+  goes, the gradient says how often it happens at all.
+
+A/B, 12 games each, `apex_threat_gradient`:
+
+| | ON | OFF |
+|---|---|---|
+| games surviving to limit | **5/12** | 3/12 |
+| defence share | **9.3%** | 5.3% |
+| mex | 20 | 20 |
+| metal | 20,716 | 20,906 |
+
+### REVERTED: the holdability veto
+His actual goal was "stop our initial constructors from taking... mexes or geos
+in the center of the map - highly contested areas". Pricing cannot do it: the
+risk charge on a deep spot is ~4 m/s against a mex gain of ~17 (mex gain carries
+the x9 relative-growth premium). A holdability test -- refuse spots past the
+midpoint unless our fieldable army outweighs the local threat -- DID clean up
+the opening (depthMax held at 0.07 for five minutes instead of jumping to 1.00)
+but cost far more than it saved: **1 of 12 games surviving against 5-6**, metal
+15,092 against 19,878-24,064, defence back to 5.8%. Reverted.
+
+Note for whoever tries again: `OurArmyNow()` counts the commander's 2,700 metal,
+so a first attempt at that test never fired once (`deep=0`). `ArmyValue()`
+excludes builders and is the fieldable-army number.
+
+**The goal remains unmet.** Early constructors still reach depth 1.00 sometimes.

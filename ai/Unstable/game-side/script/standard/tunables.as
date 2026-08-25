@@ -1269,6 +1269,9 @@ const float TUNE_MEX_GROWTH = 8.f;
 // The same compounding premium for ENERGY, measured against energy income.
 // It had none at all, which is why eco stagnated while mex was boosted.
 const float TUNE_ENERGY_GROWTH = 8.f;
+// Spatial threat prior: 0 at our start box, 1 at theirs. 0 disables it and
+// threat goes spatially flat, which is the control arm.
+const float TUNE_THREAT_GRADIENT = 1.f;
 // RANGE_WORTH: standing weight of weapon reach in unit selection (reach =
 // free damage before the answer), on top of the reactive outranging term.
 const float TUNE_RANGE_WORTH = 2.f;

@@ -271,6 +271,40 @@ float ExposureAt(const AIFloat3& in pos)
 	return e;
 }
 
+// HOW FAR TOWARD THEM THIS GROUND IS: 0 at our start, 1 at theirs.
+//
+// apexearth: "preload some measure of threat at a gradient towards the enemy's
+// side of the map. Our start box centerpoint compared to their starbox
+// centerpoint and a gradient of safe to unsafe." This exists from frame 0 and
+// needs no scouting, which matters because EnemyArmyCost reads 0 for entire
+// games. ForwardFraction is the projection when the enemy centroid is known;
+// before contact the MIRRORED start is the stable answer, where the centroid is
+// noise.
+float ThreatGradient(const AIFloat3& in pos)
+{
+	// 0 disables the gradient: threat becomes spatially flat again, which is
+	// what shipped before it and is the control arm for measuring it.
+	if (ai.GetTunable("apex_threat_gradient", TUNE_THREAT_GRADIENT) <= 0.f)
+		return 1.f;
+	if (!Builder::gHomeSet)
+		return 0.f;
+	const AIFloat3 home = Builder::gHomePos;
+	AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(foe)) {
+		foe = AIFloat3(float(AiTerrainWidth()) - home.x, 0.f,
+				float(AiTerrainHeight()) - home.z);
+	}
+	const float dx = foe.x - home.x;
+	const float dz = foe.z - home.z;
+	const float span = dx * dx + dz * dz;
+	if (span < NEAR_ZERO)
+		return 0.f;
+	float t = ((pos.x - home.x) * dx + (pos.z - home.z) * dz) / span;
+	if (t < 0.f) t = 0.f;
+	if (t > 1.f) t = 1.f;
+	return t;
+}
+
 // Enemy metal that actually ARRIVES here -- the size of the wave a turret on
 // this spot would have to beat. Local sightings, floored by what has recently
 // been killing us here, because a raider we cannot currently see is still
@@ -304,7 +338,21 @@ float ThreatM(const AIFloat3& in pos)
 	// REALLY EARLY... all this tells me the threat/danger sense is tuned low".
 	// Wave SIZE is the same wherever it goes; how OFTEN it arrives is
 	// HazardAt's job, which is what this file's own header says.
-	const float baseline = Military::EnemyCostOf(Unit::Role::RAIDER.type);
+	// THE PRIOR IS A GRADIENT, not one number for the whole map. At our own
+	// start the credible wave is a RAID that leaked through; at theirs it is
+	// their whole mobile army, because that is what stands there. Both ends are
+	// measured, and the enemy end is floored by the symmetric prior so an
+	// unscouted enemy is not assumed absent -- "if we don't know the enemy
+	// strength then we shouldn't be making a T2 lab".
+	const float raid = Military::EnemyCostOf(Unit::Role::RAIDER.type);
+	float host = Military::EnemyArmyCost();
+	const float prior = Military::OurArmyNow()
+			* ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
+	if (host < prior)
+		host = prior;
+	if (host < raid)
+		host = raid;
+	const float baseline = raid + (host - raid) * ThreatGradient(pos);
 	return (baseline > t) ? baseline : t;
 }
 
@@ -331,7 +379,14 @@ float HazardAt(const AIFloat3& in pos)
 	// Their army against everything that defends this ground -- our own
 	// mobile army plus the turrets that reach, scaled by how far out it is.
 	const float defended = Military::OurArmyNow() + CoverAt(pos);
-	const float foe = Military::FoeMobileMassing();
+	float foe = Military::FoeMobileMassing();
+	{
+		// Unscouted is not absent: the same symmetric prior the gradient uses.
+		const float pr = Military::OurArmyNow()
+				* ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
+		if (pr > foe)
+			foe = pr;
+	}
 	if (foe > 0.f) {
 		// Their mobile mass against everything that defends THIS ground. The
 		// ExposureAt factor that used to multiply this is gone for the same
@@ -339,7 +394,20 @@ float HazardAt(const AIFloat3& in pos)
 		// everything to lose reported the floor hazard all game. Position
 		// still matters here -- through CoverAt, which is what actually
 		// differs between a guarded core and an outlying mex.
-		const float pres = foe / (foe + ((defended > 0.f) ? defended : 0.f));
+		// ARRIVAL RATE RISES TOWARD THEM. Their strength against what defends
+		// this ground says how badly it goes; the gradient says how OFTEN it
+		// happens at all. Without this the charge on a mex at their doorstep
+		// matched one in our own base, and the opening constructors walked to
+		// depth 1.00 inside six minutes (measured) -- apexearth: "stop our
+		// initial constructors from taking... mexes or geos in the center of
+		// the map - highly contested areas."
+		//
+		// Safe at home for the right reason, not by accident: this term goes to
+		// zero at our start, but the loss-field term above and apex_risk_floor
+		// still stand there, and the DEF-panic emergency covers a naked base.
+		// That is what made this unsafe to do this morning and safe now.
+		const float pres = ThreatGradient(pos)
+				* foe / (foe + ((defended > 0.f) ? defended : 0.f));
 		if (pres > p)
 			p = pres;
 	}

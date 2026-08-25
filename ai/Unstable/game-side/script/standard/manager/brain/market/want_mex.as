@@ -68,20 +68,37 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 // own gate so the answer is read, not guessed.
 int gMexNoOpen = 0, gMexPastFront = 0, gMexDeathWalk = 0, gMexEcoFar = 0;
 int gMexEcoQuiet = 0, gMexClaimed = 0, gMexPriced = 0, gNextMexDiag = 0;
+int gMexDeep = 0;
 void MexDiag()
 {
 	if (ai.frame < gNextMexDiag)
 		return;
 	gNextMexDiag = ai.frame + 60 * SECOND;
 	CacheSpots();
+	// How DEEP the ground we hold is: 0 = our own start, 1 = theirs. The whole
+	// point of the gradient is to keep the opening constructors off contested
+	// centre spots (apexearth: "stop our initial constructors from taking what
+	// are often thought of as more valuable mexes or geos in the center of the
+	// map - highly contested areas"), so it is the number to watch.
+	float gMax = 0.f, gSum = 0.f;
+	for (uint gi = 0; gi < gLPos.length(); ++gi) {
+		const float gg = ThreatGradient(gLPos[gi]);
+		gSum += gg;
+		if (gg > gMax) gMax = gg;
+	}
+	const float gAvg = (gLPos.length() > 0) ? (gSum / float(gLPos.length())) : 0.f;
 	AiLog("apex: mexdiag t=" + ai.teamId + " mapSpots=" + gAllSpots.length()
 		+ " held=" + gLSpot.length()
+		+ " depthAvg=" + formatFloat(gAvg, "", 0, 2)
+		+ " depthMax=" + formatFloat(gMax, "", 0, 2)
 		+ " | noOpen=" + gMexNoOpen + " claimed=" + gMexClaimed
 		+ " pastFront=" + gMexPastFront + " deathWalk=" + gMexDeathWalk
 		+ " ecoFar=" + gMexEcoFar + " ecoQuiet=" + gMexEcoQuiet
+		+ " deep=" + gMexDeep
 		+ " priced=" + gMexPriced);
 	gMexNoOpen = 0; gMexPastFront = 0; gMexDeathWalk = 0; gMexEcoFar = 0;
 	gMexEcoQuiet = 0; gMexClaimed = 0; gMexPriced = 0;
+	gMexDeep = 0;
 }
 
 Want@ ProposeMex(CCircuitUnit@ unit)
