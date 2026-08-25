@@ -284,8 +284,15 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 					share = 1.f;
 				// Upgrades AND claims: both are extraction this build defers.
 				// See OpenSpotStream in want_mex.as.
+				// Bounded by the hands that could actually SERVE the stream:
+				// gAvailable is not tier-gated, so BestExtract names the moho
+				// from frame zero and UpDemand counted a stream no builder we
+				// own can perform -- taxing every T1 solar and tower for
+				// upgrades nobody could have done. OpenSpotStream already
+				// bounds itself this way.
 				if ((share > 0.f) && (Catalog::gExtractsM[defId] <= 0.f))
-					displacedM = (UpDemand() + OpenSpotStream()) * dur * share;
+					displacedM = (ServableUpDemand() + OpenSpotStream())
+							* dur * share;
 			}
 			if (feedSec > buildSec) {
 				buildSec = feedSec;
@@ -302,36 +309,27 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 				// priced T2 out of a whole 25-minute game (A/B, seed 5:
 				// mex 30 and techStart=-1). The pile-on itself is what
 				// FreeMetalFlow kills, on the assist side.
-				displacedM = UpDemand() * feedSec
-						* ((Catalog::gExtractsM[defId] > 0.f) ? 0.f : 1.f);
+				// Do NOT overwrite the charge computed above. Recomputing it
+				// here from UpDemand alone dropped the open-spot term at the
+				// feed boundary, so a marginally slower build paid LESS
+				// displacement than one just under the line -- a step down
+				// exactly where the charge should be rising.
 			}
 		}
 	}
-	// A RATE THAT HAS NOT STARTED IS NOT INCOME. gain is metal/s, and nothing
-	// above asks WHEN that rate begins -- so a build delivering nothing for
+	// A RATE THAT HAS NOT STARTED IS NOT INCOME. gain is metal/s and nothing
+	// above asks WHEN that rate begins, so a build delivering nothing for
 	// eighteen minutes priced almost like one delivering in thirty-six seconds.
 	// tCost charges the builder's seconds at Wage, which for an afus is ~3300
-	// against a 9700 metal bill: nowhere near enough.
+	// against a 9700 metal bill: real, but far too small to separate them.
 	//
-	// apexearth's arithmetic, and it is right. At 300 build power corafus is
-	// 9700 metal and 1097 seconds for ~43 m/s once converted; coradvsol plus a
-	// cormakr is 371 metal and 36 seconds for +1 m/s. Per metal the afus wins
-	// (43 vs 26 for the same spend) which is exactly why we kept buying it --
-	// but the increments COMPOUND: each finishes, raises income, and shortens
-	// the next, so income runs e^(t/371). Over the afus's own build time that
-	// is 19.3x income against the afus's 3.1x.
-	//
-	// So a gain is credited only for the share of the horizon it will actually
-	// be earning. Self-correcting on build power: the same afus at 3000 BP
-	// lands in 110 seconds and keeps nearly all of its gain, which is why a
-	// rich economy should build one and a poor one should not.
-	{
-		const float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
-		if (H > 1.f) {
-			const float earn = H - buildSec;
-			gain *= (earn > 0.f) ? (earn / H) : 0.f;
-		}
-	}
+	// A gain is therefore credited only for the share of apex_payback_h it will
+	// actually be collecting. Self-correcting on build power and on income --
+	// the same afus lands in 110 seconds at 3000 BP and keeps nearly all its
+	// value -- so a rich economy buys one and a poor one does not, with no rule
+	// saying so. (The size of that gap is NOT settled: see CHANGES.md; a
+	// compounding argument for it was checked and does not hold at fixed build
+	// power, where the small-step route is lathe-bound and grows linearly.)
 	w.gain = gain;
 	// The E bill at what it actually forgoes (duration-priced, forgiven in
 	// overflow) -- pricing it at the spot spike structurally banned every

@@ -2,6 +2,30 @@
 
 ## STATUS 2026-08-25 -- read this first
 
+### CORRECTION: the compounding argument for apex_payback_h does NOT hold
+
+Claimed to apexearth and written into a commit message: at 300 build power the
+advsol+converter route compounds as I(t)=I0*e^(t/371), giving 19.3x income over
+the 1097 s an afus takes, against the afus's 3.1x. A Fable review checked it and
+the raw numbers are right (corafus 9700/329200/3000E; coradvsol 370/8150/75E;
+cormakr 1/2680/70->1; BuildSecondsAt = buildtime/BP) but the model is wrong:
+
+- The exponential ignores BUILD POWER, which the increments saturate at once.
+  One increment is 10,830 buildtime units, so 300 BP adds at most 0.028 m/s per
+  second. dI/dt = I/371 exceeds that above I = 10.3 m/s, and the 3.1x figure
+  implies I0 = 20.5 -- above the cap from t=0. The increment route is therefore
+  LATHE-bound and LINEAR: +30 m/s over 1097 s, about 2.5x, which LOSES to the
+  afus's 3.1x.
+- The 371 s constant omits the increment's energy bill (5250 E ~ 75 metal at the
+  70:1 floor); with it the constant is ~446. Per unit of rate the afus is
+  actually cheaper in energy, widening its per-metal advantage.
+
+apex_payback_h is KEPT: "a rate that has not started is not income" is sound on
+its own, and the term self-corrects on build power and income. But the SIZE of
+the discount was never derived and the arithmetic offered for it was wrong. It
+is an unmeasured tunable, not a proven number.
+
+
 A sweep of everything below, because entries were accumulating faster than they
 were being closed (apexearth: "sometimes I don't notice when you defer things or
 add to ISSUES.md - we should take some time to see what is unsettled").

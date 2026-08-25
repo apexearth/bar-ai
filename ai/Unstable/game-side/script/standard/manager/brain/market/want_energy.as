@@ -125,9 +125,22 @@ float EcoPowerM()
 	// game's own exchange rate and the floor price of energy everywhere else
 	// in this market.
 	float p = aiEconomyMgr.metal.income;
-	const float eNet = aiEconomyMgr.energy.income - StandingConvCap();
+	// Subtract what converters ACTUALLY chew, not their nameplate capacity.
+	// Converters run on surplus and idle when energy is tight, so subtracting
+	// full capacity erased real energy income -- with capacity above income it
+	// valued all of our energy at zero, which is the opposite of the intent.
+	const float surplus = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	const float cap = StandingConvCap();
+	float chewed = (surplus > 0.f) ? surplus : 0.f;
+	if (chewed > cap)
+		chewed = cap;
+	// And at a rate we can actually REALIZE: the game's best converter is no
+	// use if nothing we own can place it.
+	const float own = OwnConvCeil();
+	const float rate = (own > 0.f) ? own : BestConvRatio();
+	const float eNet = aiEconomyMgr.energy.income - chewed;
 	if (eNet > 0.f)
-		p += eNet * BestConvRatio();
+		p += eNet * rate;
 	return p;
 }
 

@@ -30,6 +30,27 @@ float UpDemand()
 	return (d > 0.f) ? d : 0.f;
 }
 
+// UpDemand BOUNDED BY HANDS THAT CAN SERVE IT. Catalog::gAvailable is not
+// tier-gated, so BestExtract() names the moho from frame zero and UpDemand
+// reports the full upgrade stream while we own no constructor able to place
+// one. Charging that against every build taxes a T1 solar for work nobody
+// could do. Zero until some owned mobile builder reaches the ceiling.
+float ServableUpDemand()
+{
+	const float ceil = BestExtract();
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
+			continue;
+		const array<int>@ bb = Catalog::gBuildsList[di];
+		for (uint q = 0; q < bb.length(); ++q) {
+			if (Catalog::gExtractsM[bb[q]] >= ceil)
+				return UpDemand();
+		}
+	}
+	return 0.f;
+}
+
 // THE EXPANSION STREAM A LONG BUILD POSTPONES. UpDemand is the metal/s waiting
 // on mex UPGRADES; this is the metal/s waiting on mex CLAIMS. Charging only the
 // first meant a build that eats the economy for minutes was billed nothing on a
@@ -289,7 +310,10 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 			@w.def = Catalog::Def(d);
 			w.pos = pos;
 			w.spotId = spot;
-			gLastSpotM = gain;
+			// The RAW yield. Storing the premium- and survival-scaled gain
+			// here made SpotM -- and through it OpenSpotStream and every
+			// build's displacement charge -- a number that is not a yield.
+			gLastSpotM = spotIncome * Catalog::gExtractsM[d];
 		}
 	}
 	return w;

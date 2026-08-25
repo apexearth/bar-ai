@@ -208,7 +208,12 @@ void NoteFinished(CCircuitUnit@ unit)
 		gOwnBig.insertLast(unit);
 		gOwnBigIds.insertLast(unit.id);
 	}
-	const int pc = ProtClassOf(defId);
+	// STATIC PROTECTION ONLY. gProtPos records a FIXED position, and
+	// ProtClassOf answers PROT_RADAR/PROT_JAM for radar and jammer BOTS too --
+	// so a mobile radar was recorded at the spot it rolled off the line and
+	// RadarSees treated that factory apron as permanent coverage for the rest
+	// of the game, suppressing every real radar tower near it.
+	const int pc = Catalog::gMobile[defId] ? -1 : ProtClassOf(defId);
 	if (pc >= 0) {
 		gProtPos[pc].insertLast(unit.GetPos(ai.frame));
 		gProtIds[pc].insertLast(unit.id);
@@ -275,10 +280,16 @@ void NoteDead(CCircuitUnit@ unit)
 			break;
 		}
 	}
-	if (!Catalog::gMobile[int(unit.circuitDef.id)])
+	// BRACES, NOT INDENTATION. Without them the gProtM decrement ran for EVERY
+	// dead unit, and ProtClassOf answers PROT_RADAR/PROT_JAM for MOBILE defs
+	// (any radarR > 900 or jamR > 100), so every radar or jammer bot lost in a
+	// fight drained gProtM below zero -- and econM = gAssetsM - gProtM then
+	// reads MORE than we own, inflating the siege basis that sizes defence.
+	if (!Catalog::gMobile[int(unit.circuitDef.id)]) {
 		gAssetsM -= Catalog::gCostM[int(unit.circuitDef.id)];
 		if (ProtClassOf(int(unit.circuitDef.id)) >= 0)
 			gProtM -= Catalog::gCostM[int(unit.circuitDef.id)];
+	}
 	for (uint bb = 0; bb < gOwnBigIds.length(); ++bb) {
 		if (gOwnBigIds[bb] == unit.id) {
 			gOwnBig.removeAt(bb);
