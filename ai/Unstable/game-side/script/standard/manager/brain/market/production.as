@@ -136,19 +136,6 @@ int CeilingConsNeed()
 	return (float(have) < want) ? (int(want) - have) : 0;
 }
 
-// Deep demand check for the facqueue's lookahead batch: six more of this
-// def must still be justified by the gap (or the overflow sink).
-bool BatchWorthy(CCircuitDef@ d)
-{
-	if ((d is null) || d.IsBuilder())
-		return false;   // builders stay single: their demand saturates fast
-	const int di = int(d.id);
-	const float need = ArmyTarget() - ArmyValue();
-	const float sink = OverflowM() * 60.f;
-	const float deep = (need > sink) ? need : sink;
-	return deep > 6.f * Catalog::gCostM[di];
-}
-
 CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 {
 	if (fac is null)
@@ -278,15 +265,18 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 				AiLog("apex: support-diag t=" + ai.teamId + " def="
 					+ Catalog::Def(d).GetName() + " have=" + haveS
 					+ " army=" + formatFloat(ArmyValue(), "", 0, 0)
+					+ " adv=" + formatFloat(AdvArmyValue(), "", 0, 0)
 					+ " land=" + formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 2));
 			}
 			// One radar + one jammer per squad's worth of army (apexearth:
 			// "those should have boosted priority... support squads which
-			// are ~2k metal value or higher"). A pair's worth is a fraction
-			// of the squad value it serves per minute -- which prices them
-			// just behind constructors, scaling with the army, no caps.
+			// are ~2k metal value or higher"). Counted over the T2+ army
+			// only: a squad of T1 units gets no support attached, so
+			// producing for it buys nothing. A pair's worth is a fraction of
+			// the squad value it serves per minute -- which prices them just
+			// behind constructors, scaling with the army, no caps.
 			const float squadM = ai.GetTunable("apex_squad_m", TUNE_SQUAD_M);
-			const float squads = ArmyValue() / ((squadM > 1.f) ? squadM : 2000.f);
+			const float squads = AdvArmyValue() / ((squadM > 1.f) ? squadM : 2000.f);
 			if (float(haveS) < squads) {
 				const float gainS = (squads - float(haveS)) * squadM
 						* ai.GetTunable("apex_intel_rate", TUNE_INTEL_RATE)

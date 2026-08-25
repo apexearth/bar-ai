@@ -185,6 +185,50 @@ float ArmyValue()
 	return v;
 }
 
+// Is this def advanced -- T2 or better? Read off the build graph: anything a
+// plant carrying the T2/T3 attribute produces. Nothing here names a unit.
+array<int> gAdvKnown;
+
+bool IsAdvancedDef(int d)
+{
+	if (!Catalog::ValidId(d))
+		return false;
+	if (int(gAdvKnown.length()) <= Catalog::gDefCount)
+		gAdvKnown.resize(Catalog::gDefCount + 1);
+	if (gAdvKnown[d] != 0)
+		return gAdvKnown[d] > 0;
+	int adv = -1;
+	const array<int>@ by = Catalog::gBuiltBy[d];
+	for (uint i = 0; i < by.length(); ++i) {
+		if ((Factory::userData[by[i]].attr
+			& (Factory::Attr::T2 | Factory::Attr::T3)) != 0) {
+			adv = 1;
+			break;
+		}
+	}
+	gAdvKnown[d] = adv;
+	return adv > 0;
+}
+
+// The share of the fielded army that is T2 or better -- what mobile support
+// is bought against (apexearth: support units only for squads that hold T2
+// or greater).
+float AdvArmyValue()
+{
+	float v = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
+			continue;
+		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f)
+			|| Catalog::gKamikaze[int(d)])
+			continue;
+		if (!IsAdvancedDef(int(d)))
+			continue;
+		v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
+	}
+	return v;
+}
+
 // ARMY COMPOSITION AS A STANDING TARGET. apexearth, across one session:
 // "we keep making spiders (Recluse), they're mostly only good against
 // buildings... we need multiple fatboys with snipers behind them. Please

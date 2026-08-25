@@ -184,6 +184,10 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	}
 
 	// The production market's call: what should this line make, if anything.
+	// Every order below is exactly ONE unit: a SHIFT append is multiplied by
+	// five inside CFactoryCAI, so CmdInsertBuild is the only append that
+	// queues what the market actually asked for. Depth is held at two by
+	// ConOrderFor's in-flight test, which is what keeps the line busy.
 	CCircuitDef@ order = Market::ConOrderFor(fac, line);
 	if (order !is null) {
 		const bool empty = (fac.CountQueued(null) + PendCount(line, null)) == 0;
@@ -194,7 +198,7 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		} else if (Market::gEscortFloor) {
 			// The escort floor does not wait for the line to drain either:
 			// the con it guards is exposed now, not when the queue empties.
-			fac.CmdBuildUnit(order, 1, false);
+			fac.CmdInsertBuild(order, false);
 			PendAdd(line, order);
 		} else if ((Market::CeilingConsNeed() > 0)
 			&& Market::ReachesCeiling(int(order.id)))
@@ -203,16 +207,8 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 			// queues BEHIND the head. Waiting delivered 2 cons against a
 			// floor of 6 at 129 m/s (measured, 4v4 seed 3): the line was
 			// never empty, so every floor order was discarded here.
-			fac.CmdBuildUnit(order, 1, false);
+			fac.CmdInsertBuild(order, false);
 			PendAdd(line, order);
-		}
-		// LOOKAHEAD (apexearth: "queue more, look ahead"): a batch behind
-		// the head when the market says the demand is deep. One SHIFT order
-		// is x5'd by the FactoryCAI -- five more in one command.
-		if (!Market::gEscortFloor && Market::BatchWorthy(order)) {
-			fac.CmdBuildUnit(order, 1, false);
-			for (int b = 0; b < 5; ++b)
-				PendAdd(line, order);
 		}
 		gFQAt[line] = ai.frame;
 		++gFQOrders;
