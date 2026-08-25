@@ -221,9 +221,36 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if (catBest[c] < 0)
 				continue;
 			const float v = ranked[catBest[c]].value;
+			// A COMMITMENT IS NOT SAMPLED. The cost of drawing a worse option
+			// scales with what that option costs: a wrong 40-metal wind is
+			// noise, a wrong 9700-metal afus is the game (apexearth: "for these
+			// things that are so impactful I feel like we need to go with
+			// winner takes all. There is only one right choice here"). Measured
+			// the same session: EVERY afus bought was a draw override, priced
+			// BELOW the runner-up each time -- 6.30 against 11.58, 8.53 against
+			// 13.29 -- so the pricing was right and the lottery bought it
+			// anyway at ~30% weight.
+			//
+			// So the exponent rises with how big a bite this candidate takes
+			// out of what the economy can produce over the payback horizon.
+			// Continuous and threshold-free: cheap wants keep their sampling,
+			// and a want that would consume the whole horizon's output is
+			// effectively argmax.
+			float sh = sharp;
+			{
+				const float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+				const float cap = EcoPowerM() * ((H > 1.f) ? H : 900.f);
+				if ((cap > 1.f) && (ranked[catBest[c]].def !is null)) {
+					float bite = ranked[catBest[c]].def.costM / cap;
+					if (bite > 1.f)
+						bite = 1.f;
+					sh += bite * ai.GetTunable("apex_commit_sharp",
+							TUNE_COMMIT_SHARP);
+				}
+			}
 			float t = v;
-			if ((lead > 0.f) && (sharp > 0.f) && (sharp != 1.f))
-				t = lead * pow(v / lead, sharp);
+			if ((lead > 0.f) && (sh > 0.f) && (sh != 1.f))
+				t = lead * pow(v / lead, sh);
 			wt[c] = t;
 			sumV2 += t;
 		}

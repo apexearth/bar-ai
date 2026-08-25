@@ -1226,6 +1226,11 @@ const float TUNE_PAYBACK_H = 900.f;
 // unfinished frame, as a multiple of (cost x duration / payback horizon).
 // apexearth's "little bit extra of a penalty on top of time". 0 disables.
 const float TUNE_LOCKUP = 0.5f;
+// How much sharper the category draw gets for a COMMITMENT -- added to
+// apex_draw_sharp in proportion to the candidate's cost as a share of what the
+// economy can produce over the payback horizon. Large values make an expensive
+// want effectively winner-takes-all while cheap wants keep their sampling.
+const float TUNE_COMMIT_SHARP = 12.f;
 // manager/brain/market/sites.as -- elmos one farm row runs before the next
 // stacks behind it. Halved from 640 on apexearth's watched report that the
 // winds sat too far out on both sides: the same slots in a narrower row form
