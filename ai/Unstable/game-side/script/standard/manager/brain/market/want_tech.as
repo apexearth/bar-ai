@@ -28,7 +28,12 @@ float TechSurvival(int defId, float askerBP)
 	// applied inside HazardAt repriced every want in the game and cost 87% of
 	// our standing army (measured, 6 games).
 	const float shortH = Front::FoeKnown() ? ShortfallAt(home) : 1.f;
-	const float risk = HazardAt(home) * shortH;
+	float risk = HazardAt(home) * shortH;
+	// The siege prior stands whether or not anything has been seen; it is the
+	// term that says a big economy with no army is a target.
+	const float siege = SiegeRisk(home) * shortH;
+	if (siege > risk)
+		risk = siege;
 	if (risk <= 0.f)
 		return 1.f;
 	float T = PipeLatencySec(defId, askerBP);
@@ -64,7 +69,9 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 				continue;
 			float delta = gLIncome[li] * (Catalog::gExtractsM[d] - gLExtract[li]);
 			{
-				const float inc1 = aiEconomyMgr.metal.income;
+				// Share of TOTAL economic power, the same denominator the
+				// energy premium uses -- see want_energy.as.
+				const float inc1 = EcoPowerM();
 				delta *= 1.f + ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH)
 						* delta / ((inc1 > delta) ? inc1 : delta);
 			}

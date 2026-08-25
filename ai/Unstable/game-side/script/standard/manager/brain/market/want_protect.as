@@ -399,7 +399,20 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				// same coverage deficit EdgeSpacing corrects for by tightening
 				// spacing is worth paying for here (EdgeExposure, written for
 				// exactly this and never wired).
-				float prevented = stake * HazardAt(s) * (short0 - short1);
+				// The siege prior BUYS THE ANSWER, it does not only forbid the
+				// bet. Discounting tech and energy for a threat we cannot see
+				// while defence still priced off HazardAt's floor left the
+				// worst of both: no T2 and no turrets either (measured, 12
+				// games -- first T2 13.3 -> 14.6 min while defence at minute
+				// 25 fell 3240 -> 1698). The same expectation that says a big
+				// economy with no army is a target has to raise what answers
+				// it. Self-limiting: SiegeRisk falls as CoverAt rises, so each
+				// turret lowers the price of the next.
+				float hz = HazardAt(s);
+				const float sg = SiegeRisk(s);
+				if (sg > hz)
+					hz = sg;
+				float prevented = stake * hz * (short0 - short1);
 				prevented *= Military::EdgeExposure(s, reach);
 				if (si >= nAsset) {
 					if (prevented > gDbgFrontBest) gDbgFrontBest = prevented;

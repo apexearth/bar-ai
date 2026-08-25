@@ -1179,6 +1179,34 @@ const float TUNE_PIPE_LATENCY_H = 60.f;
 // Discount a tech want's deferred gain by the risk borne over its pipeline.
 // 0 disables it, which is how the A/B control is run.
 const float TUNE_TECH_SURVIVAL = 1.f;
+// The same survival discount on the ENERGY want, so a long-payback generator
+// (afus, fusion) is priced on the base it needs to still be standing. Cheap
+// fast generators are untouched by construction. 0 disables it.
+const float TUNE_ECO_SURVIVAL = 1.f;
+// The siege prior: what share of our OWN total economy we assume the enemy
+// has converted into army and may be walking at us right now, seen or not.
+// 1.0 = they had our start and our minutes and spent it all on units. Used
+// only by the survival discount on long builds, never to size production.
+const float TUNE_SIEGE_PRIOR = 1.f;
+// ARMY COMPOSITION TARGET, shares of army metal (apexearth 2026-08-24, asked
+// and answered: 30/25/25/20). tank = health per metal, reach = weapon range,
+// dps = damage per metal, mid = nothing clearly dominant. Classes are read off
+// unit data against the game's own mobile combat units; see army.as.
+const float TUNE_LINE_TANK = 0.30f;
+const float TUNE_LINE_MID = 0.25f;
+const float TUNE_LINE_REACH = 0.25f;
+const float TUNE_LINE_DPS = 0.20f;
+// How far above the field's mean an axis must stand for a unit to count as
+// that class rather than as middle.
+const float TUNE_LINE_EDGE = 1.15f;
+// How hard a class below its target share is favoured. Proportional to the
+// shortfall; 0 disables the composition target entirely.
+const float TUNE_LINE_BITE = 1.5f;
+// manager/brain/market/sites.as -- elmos one farm row runs before the next
+// stacks behind it. Halved from 640 on apexearth's watched report that the
+// winds sat too far out on both sides: the same slots in a narrower row form
+// a block instead of a line, so the next slot is adjacent to the last.
+const float TUNE_FARM_ROW_W = 320.f;
 // Seconds over which committed-but-unbuilt work counts as build-power demand.
 // Matches the bank clause's horizon in BPGap; 0 disables the term.
 const float TUNE_BP_BACKLOG_S = 60.f;

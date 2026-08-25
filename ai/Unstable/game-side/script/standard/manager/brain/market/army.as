@@ -185,6 +185,139 @@ float ArmyValue()
 	return v;
 }
 
+// ARMY COMPOSITION AS A STANDING TARGET. apexearth, across one session:
+// "we keep making spiders (Recluse), they're mostly only good against
+// buildings... we need multiple fatboys with snipers behind them. Please
+// think 'I need tanks, and I need damage behind the tanks'"; "we make a lot
+// of T1 rocket bots. Low HP units with more range... on their own they're
+// garbage"; and then the shape itself -- "how many tanky units do I have?
+// How many higher range units? how much in the middle? and how much high dps
+// unit?"
+//
+// Four classes, read off unit DATA so nothing here names a unit. DPS is not
+// bound to script, but the DLL builds power = sqrt(dps)*dmg^0.25*sqrt(hp+
+// shield)/128, so power*power/hp recovers dps up to constants -- and every
+// consumer below normalizes, so the constants do not matter.
+//
+// Classification is against the GAME's own mobile combat units, not against
+// what we happen to own: our own army is empty at the start and a mean taken
+// over nothing classifies everything as middling. Shares are measured against
+// our army; the class each candidate belongs to is a fact about the unit.
+const int LC_TANK = 0, LC_MID = 1, LC_REACH = 2, LC_DPS = 3, LC_N = 4;
+
+bool LineCombat(int di)
+{
+	return Catalog::gMobile[di] && !Catalog::gBuilder[di]
+		&& (Catalog::gPower[di] > 1.f) && (Catalog::gCostM[di] > 0.f)
+		&& (Catalog::gHealth[di] > 0.f) && !Catalog::gKamikaze[di];
+}
+
+float gLMeanHpm = -1.f, gLMeanDpm = 0.f, gLMeanR = 0.f;
+void LineMeans()
+{
+	if (gLMeanHpm >= 0.f)
+		return;
+	float hp = 0.f, dp = 0.f, rr = 0.f;
+	int n = 0;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !LineCombat(d))
+			continue;
+		hp += Catalog::gHealth[d] / Catalog::gCostM[d];
+		dp += (Catalog::gPower[d] * Catalog::gPower[d] / Catalog::gHealth[d])
+				/ Catalog::gCostM[d];
+		rr += Catalog::gMaxRange[d];
+		++n;
+	}
+	if (n <= 0) {
+		gLMeanHpm = 0.f;
+		return;
+	}
+	gLMeanHpm = hp / float(n);
+	gLMeanDpm = dp / float(n);
+	gLMeanR = rr / float(n);
+}
+
+// Which of the four a unit IS: whichever axis it stands out on most. Nothing
+// clearly above the field is the middle, which is a real role and not a
+// leftover -- it is what holds a line together when the shields are gone.
+int LineClassOf(int di)
+{
+	LineMeans();
+	if ((gLMeanHpm <= 0.f) || !LineCombat(di))
+		return LC_MID;
+	const float hpR = (Catalog::gHealth[di] / Catalog::gCostM[di]) / gLMeanHpm;
+	const float dpR = (gLMeanDpm > 0.f)
+			? ((Catalog::gPower[di] * Catalog::gPower[di] / Catalog::gHealth[di])
+				/ Catalog::gCostM[di]) / gLMeanDpm : 0.f;
+	const float rR = (gLMeanR > 0.f) ? (Catalog::gMaxRange[di] / gLMeanR) : 0.f;
+	float best = hpR;
+	int cls = LC_TANK;
+	if (rR > best) { best = rR; cls = LC_REACH; }
+	if (dpR > best) { best = dpR; cls = LC_DPS; }
+	const float edge = ai.GetTunable("apex_line_edge", TUNE_LINE_EDGE);
+	return (best >= edge) ? cls : LC_MID;
+}
+
+// What we actually field, by class, as shares of army metal.
+array<float> gLineM(LC_N, 0.f);
+int gLineAt = 0;
+void TrackLine()
+{
+	if (ai.frame < gLineAt)
+		return;
+	gLineAt = ai.frame + 5 * SECOND;
+	for (int c = 0; c < LC_N; ++c)
+		gLineM[c] = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || !LineCombat(di))
+			continue;
+		gLineM[LineClassOf(di)] += float(gOwnCount[d]) * Catalog::gCostM[di];
+	}
+}
+
+float LineTarget(int cls)
+{
+	if (cls == LC_TANK)  return ai.GetTunable("apex_line_tank", TUNE_LINE_TANK);
+	if (cls == LC_MID)   return ai.GetTunable("apex_line_mid", TUNE_LINE_MID);
+	if (cls == LC_REACH) return ai.GetTunable("apex_line_reach", TUNE_LINE_REACH);
+	return ai.GetTunable("apex_line_dps", TUNE_LINE_DPS);
+}
+
+// How far below its target a class is, 0..1. Proportional, never a veto
+// (apexearth's call): a class at half its share is worth about twice as much
+// per metal, a class at target is worth no extra, and one over target simply
+// stops being favoured. Tanks die first, so their share falls and this pulls
+// straight back to them -- which is also what stops reach units piling up.
+float LineShortfall(int cls)
+{
+	TrackLine();
+	float tot = 0.f;
+	for (int c = 0; c < LC_N; ++c)
+		tot += gLineM[c];
+	if (tot <= 1.f)
+		return 1.f;   // nothing fielded: every class is wanted
+	const float share = gLineM[cls] / tot;
+	const float want = LineTarget(cls);
+	if (want <= 0.f)
+		return 0.f;
+	const float miss = (want - share) / want;
+	return (miss > 0.f) ? ((miss > 1.f) ? 1.f : miss) : 0.f;
+}
+
+// Share of the line that can absorb for the rest -- what makes a fragile
+// long-range unit worth its range at all.
+float ShieldShare()
+{
+	TrackLine();
+	float tot = 0.f;
+	for (int c = 0; c < LC_N; ++c)
+		tot += gLineM[c];
+	if (tot <= 1.f)
+		return 0.f;
+	return (gLineM[LC_TANK] + gLineM[LC_MID]) / tot;
+}
+
 // THE REAR SPECIALIST (apexearth 2026-08-23): in a big team game one
 // player starts obviously farther from the enemy than everyone else.
 // Fighting from there wastes walk time; scaling from there compounds.

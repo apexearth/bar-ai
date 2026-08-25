@@ -310,8 +310,23 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			// range"): reach means free damage before the enemy answers, in
 			// every fight, not only against skirm pressure. A standing
 			// preference on top of the reactive term below.
+			// REACH IS ONLY WORTH WHAT SOMETHING ELSE IS ABSORBING (apexearth:
+			// "low HP units with more range... they are only valuable if we
+			// have tanky units in front of them tanking the damage... on their
+			// own they're garbage"). The bonus is scaled by the share of our
+			// line that can stand in front, so reach pays exactly as much as
+			// we have shield to buy it with, and nothing at all when we have
+			// none. The base combat-per-metal is untouched, so this can never
+			// stop a long-range unit being built -- only stop it being
+			// preferred while it would fight alone.
 			ppc *= 1.f + (Catalog::gMaxRange[d] / 1000.f)
-					* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH);
+					* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH)
+					* ShieldShare();
+			// AND THE STANDING COMPOSITION TARGET: tank / middle / reach / dps
+			// as shares of army metal, each class worth more per metal the
+			// further below its share it is. Proportional, never a veto.
+			ppc *= 1.f + ai.GetTunable("apex_line_bite", TUNE_LINE_BITE)
+					* LineShortfall(LineClassOf(d));
 			// SPEED IS VALUE (apexearth: "they're fast, we need to properly
 			// value speed"). A fast unit reaches the fight, catches raiders,
 			// and disengages -- none of which shows up in combat-per-metal.

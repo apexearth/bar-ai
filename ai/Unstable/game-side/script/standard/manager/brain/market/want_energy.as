@@ -17,19 +17,38 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		float gain = Catalog::gMakeE[d] * EPriceAt(bSec);
 		// ECO COMPOUNDS, AND ENERGY IS ECO (apexearth: "we are not properly
 		// multiplying the benefits of a strong eco... the more we boost eco the
-		// more all of our other metrics get boosted"). The relative-growth
-		// premium existed only on mex and mex upgrades, so half the economy was
-		// priced with no compounding at all while a doubling mex got x9. Same
-		// shape, measured against ENERGY income because that is what an energy
-		// build actually raises: doubling it is transformative, adding 1% is
-		// noise. Decays with wealth on its own, so it stops mattering once we
-		// are rich.
+		// more all of our other metrics get boosted"). Decays with wealth on
+		// its own, so it stops mattering once we are rich.
+		// ONE CURRENCY, ONE DENOMINATOR. Measured against ENERGY income alone
+		// this premium saturated: a fusion roughly doubles energy income and
+		// so took the full 9x, while a moho adding 5 m/s onto 40 m/s of metal
+		// took 1.6x out of the identical formula. That gap was an artefact of
+		// the two economies' granularity, not a fact about the game
+		// (apexearth: "all our T2 cons are going for a fusion before making
+		// any T2 mexes... T2 mex is much faster, and quadruples the mex value.
+		// The math MUST reflect this"). Both sides now ask one question --
+		// what share of TOTAL economic power does this add -- with energy
+		// carried at what a converter would actually pay for it.
 		{
-			const float eInc = aiEconomyMgr.energy.income;
-			const float mk = Catalog::gMakeE[d];
+			const float mkM = Catalog::gMakeE[d] * BestConvRatio();
+			const float base = EcoPowerM();
 			gain *= 1.f + ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH)
-					* mk / ((eInc > mk) ? eInc : mk);
+					* mkM / ((base > mkM) ? base : ((mkM > 0.f) ? mkM : 1.f));
 		}
+		// A DEFERRED PURCHASE IS WORTH ONLY WHAT SURVIVES TO PAY IT BACK. An
+		// afus is minutes of building and more of payback, and if the base
+		// falls first its gain was zero -- the energy price said nothing about
+		// that, which is the same hole the tech want already closed
+		// (apexearth: "we keep making AFUS and its so insanely stupid. Enemy
+		// walks up to us with a tzar and just completely annihilates us. one
+		// damn unit and we have nothing to defend ourselves against it").
+		// Scales with the build's own latency, so cheap fast generators are
+		// untouched and only the long bets are discounted; and with measured
+		// hazard, so it lifts by itself once the base is actually covered.
+		if (ai.GetTunable("apex_eco_survival", TUNE_ECO_SURVIVAL) > 0.f)
+			gain *= TechSurvival(d, Catalog::gBuildPower[uid]);
+		if (gain <= 0.f)
+			continue;
 		ValueOf(d, gain, 0.f, Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
@@ -39,6 +58,53 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		}
 	}
 	return w;
+}
+
+// TOTAL ECONOMIC POWER, in metal/s. Metal income alone is not how big the
+// economy is: what pays for buildings is metal AND the energy a converter
+// would turn into metal, and reading only the metal side made every
+// "how big are we" question answer near zero whenever energy ran ahead.
+// Measured on a map with no metal spots at all: 183 e/s of income, 46k
+// energy wasted, 3 m/s of metal, BPGap pinned at zero, and so the factory
+// want never cleared its own floor -- one builder, no factory and nothing
+// built for a whole game, with the enemy AI stuck the same way. Only the
+// surplus nothing already converts is counted; standing converters' output
+// is inside metal.income already (apexearth: "if math is not prioritizing
+// what would double or triple our total economic power, then the math is
+// wrong").
+float StandingConvCap()
+{
+	float cap = 0.f;
+	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
+		if (gOwnCount[cd] > 0)
+			cap += float(gOwnCount[cd]) * Catalog::gConvCapacity[int(cd)];
+	}
+	return cap;
+}
+
+// Best metal-per-energy any converter we could actually build reaches.
+float gBestConvRatio = -1.f;
+float BestConvRatio()
+{
+	if (gBestConvRatio >= 0.f)
+		return gBestConvRatio;
+	gBestConvRatio = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (Catalog::gAvailable[d] && (Catalog::gConvCapacity[d] > 0.f)
+			&& (Catalog::gConvRatio[d] > gBestConvRatio))
+			gBestConvRatio = Catalog::gConvRatio[d];
+	}
+	return gBestConvRatio;
+}
+
+float EcoPowerM()
+{
+	TrackEPull();
+	float p = aiEconomyMgr.metal.income;
+	const float spare = gESurplusEma - StandingConvCap();
+	if (spare > 0.f)
+		p += spare * BestConvRatio();
+	return p;
 }
 
 // The BP closed loop: the fleet's standing lathe capacity vs what income
@@ -116,7 +182,7 @@ float BPGap()
 	TrackIncome();
 	const float head = ai.GetTunable("apex_bp_headroom", TUNE_BP_HEADROOM);
 	const float ahead = ai.GetTunable("apex_bp_lookahead", TUNE_BP_LOOKAHEAD);
-	const float futureInc = aiEconomyMgr.metal.income
+	const float futureInc = EcoPowerM()
 			+ ((gIncGrowth > 0.f) ? gIncGrowth * ahead : 0.f);
 	float gap = futureInc * ((head > 0.f) ? head : 1.15f) - BPCapacity();
 	// A bank climbing past half storage is deferred spend the standing
@@ -171,12 +237,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	if ((eStore2 > 1.f)
 		&& (aiEconomyMgr.energy.current < 0.85f * eStore2))
 		return w;
-	float standingCap = 0.f;
-	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
-		if (gOwnCount[cd] > 0)
-			standingCap += float(gOwnCount[cd]) * Catalog::gConvCapacity[int(cd)];
-	}
-	const float eSurplus = gESurplusEma - standingCap;
+	const float eSurplus = gESurplusEma - StandingConvCap();
 	if (eSurplus <= 1.f)
 		return w;
 	const int uid = int(unit.circuitDef.id);

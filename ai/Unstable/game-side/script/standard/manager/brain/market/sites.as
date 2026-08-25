@@ -40,7 +40,16 @@ float NanoRange()
 // their unavoidable half-cell gap), rows stack rearward, columns run along
 // the base's across axis. The cursor never reuses a slot; a failed build
 // leaves a hole, never an overlap.
-const float FARM_ROW_W = 640.f;   // elmos of columns per row
+// How wide one row of the farm runs before the next stacks behind it. A wide
+// row is a LINE, and a line is walked end to end; the same slots in a narrower
+// row make a block, where the next slot is always adjacent to the last
+// (apexearth: "those winds are a little bit too far on both sides, so we have
+// to walk - should make tighter, less walking").
+float FarmRowW()
+{
+	const float w = ai.GetTunable("apex_farm_row_w", TUNE_FARM_ROW_W);
+	return (w > 64.f) ? w : 64.f;
+}
 array<int> gFRowDef;      // row -> def id
 array<int> gFRowNext;     // row -> next column index
 array<float> gFRowPitch;  // row -> slot pitch (elmos)
@@ -210,7 +219,7 @@ AIFloat3 FarmSlot(int defId)
 	int row = -1;
 	for (uint i = 0; i < gFRowDef.length(); ++i) {
 		if ((gFRowDef[i] == defId)
-			&& (float(gFRowNext[i]) * pitch < FARM_ROW_W))
+			&& (float(gFRowNext[i]) * pitch < FarmRowW()))
 		{
 			row = int(i);
 			break;
@@ -229,8 +238,15 @@ AIFloat3 FarmSlot(int defId)
 	for (int tries = 0; tries < 8; ++tries) {
 		const int col = gFRowNext[row];
 		gFRowNext[row] = col + 1;
-		// Columns alternate outward from the axis so the block grows centered.
-		const float lat = (float((col + 1) / 2) * ((col % 2 == 0) ? 1.f : -1.f)) * pitch;
+		// Columns fill ACROSS the row, offset so the finished row is still
+		// centered on the axis. Alternating outward (0, -p, +p, -2p, +2p...)
+		// centered it just as well but put every consecutive slot on the far
+		// side of the block from the last one, so the builder crossed the
+		// whole farm for every turbine (apexearth, watching: "our commander
+		// keeps flip flopping to opposite sides to build these winds").
+		const int cols = (pitch > 0.f) ? int(FarmRowW() / pitch) : 1;
+		const float lat = (float(col) - float((cols > 1) ? (cols - 1) : 0) * 0.5f)
+				* pitch;
 		AIFloat3 p = gFarmPos + Base::gAcross * lat - Base::gFwd * gFRowZ[row];
 		if (!NearSpot(p))
 			return p;
@@ -357,7 +373,7 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback)
 		gPlantFlank = 1 - gPlantFlank;
 		const float side = (gPlantFlank == 0) ? 1.f : -1.f;
 		const AIFloat3 back = Base::gFwd * (gFarmDepth * 0.5f);
-		const AIFloat3 lat = Base::gAcross * (FARM_ROW_W * 0.5f + 300.f);
+		const AIFloat3 lat = Base::gAcross * (FarmRowW() * 0.5f + 300.f);
 		AIFloat3 pA = gFarmPos + lat * side - back;
 		AIFloat3 pB = gFarmPos - lat * side - back;
 		const bool okA = OnMap(pA);
@@ -383,11 +399,11 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback)
 		gPlantFlank = 1 - gPlantFlank;
 		const float side2 = (gPlantFlank == 0) ? 1.f : -1.f;
 		AIFloat3 a = Base::gAnchor
-				+ Base::gAcross * (side2 * (FARM_ROW_W * 0.5f + 300.f))
+				+ Base::gAcross * (side2 * (FarmRowW() * 0.5f + 300.f))
 				- Base::gFwd * 300.f;
 		if (OnMap(a))
 			return a;
-		a = Base::gAnchor - Base::gAcross * (side2 * (FARM_ROW_W * 0.5f + 300.f))
+		a = Base::gAnchor - Base::gAcross * (side2 * (FarmRowW() * 0.5f + 300.f))
 				- Base::gFwd * 300.f;
 		if (OnMap(a))
 			return a;

@@ -236,7 +236,9 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		// expansion prioritizes itself exactly while we are behind.
 		float gain = spotIncome * Catalog::gExtractsM[d];
 		{
-			const float inc0 = aiEconomyMgr.metal.income;
+			// Share of TOTAL economic power, the same denominator the energy
+			// premium uses -- see want_energy.as.
+			const float inc0 = EcoPowerM();
 			gain *= 1.f + ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH)
 					* gain / ((inc0 > gain) ? inc0 : gain);
 		}

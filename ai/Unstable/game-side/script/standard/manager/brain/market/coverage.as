@@ -419,6 +419,41 @@ float HazardAt(const AIFloat3& in pos)
 	return anchor * p;
 }
 
+// THEY ARE COMING WHETHER WE HAVE SEEN THEM OR NOT. HazardAt is deliberately
+// zero at our own start -- its pressure term is scaled by ThreatGradient, and
+// its unscouted prior is a share of OUR ARMY, which is near zero exactly when
+// we are teching instead of arming. So a base with a large economy and no
+// units priced a long build as almost risk-free (apexearth: "the issue is you
+// think we have the time to build an AFUS. we don't. They've gone T2 - and
+// they're coming. We didn't see it yet, but we should know - they are
+// coming"). The honest mirror is their ECONOMY, which started equal to ours
+// and is what ArmyTarget already expects to fight, measured against what
+// actually defends this ground. Rises as we build economy without an army and
+// falls the moment army or turrets exist -- and it is SCOPED to the survival
+// discount: the same prior inside HazardAt itself repriced every want in the
+// game and cost 87% of our standing army (measured, 6 games).
+float SiegeRisk(const AIFloat3& in pos)
+{
+	// WHAT COULD WE AFFORD RIGHT NOW IF WE HAD BOUGHT ONLY ARMY -- they had the
+	// same start and the same minutes, so that is what may be walking at us
+	// (apexearth: "if they didn't go for an afus, and came at us with 4k+ worth
+	// of T2 vehicles... thats a tzar and multiple banishers and we'll have
+	// nothing that can match it"). Our whole economy, not a share of it: the
+	// share belongs in ArmyTarget, which decides what to BUILD; this decides
+	// whether a long bet has time to pay.
+	const float ourTotal = gAssetsM + ArmyValue();
+	const float prior = ourTotal
+			* ai.GetTunable("apex_siege_prior", TUNE_SIEGE_PRIOR);
+	const float seen = Military::EnemyArmyCost();
+	const float foe = (seen > prior) ? seen : prior;
+	if (foe <= 0.f)
+		return 0.f;
+	const float defended = Military::OurArmyNow() + CoverAt(pos);
+	const float tau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
+	return (foe / (foe + ((defended > 0.f) ? defended : 0.f)))
+			/ ((tau > 1.f) ? tau : 180.f);
+}
+
 // The expected-loss stream on value standing at pos, in metal/s -- the one
 // quantity both the protect gain and the exposure premium are built from.
 float ExpectedLossAt(const AIFloat3& in pos, float valueM)
