@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..8e01b4e 100644
+index aeea933..4d340ad 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,18 @@
@@ -288,7 +288,7 @@ index aeea933..8e01b4e 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1485,7 +1654,811 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1654,828 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -551,8 +551,25 @@ index aeea933..8e01b4e 100644
 +	const float depth = -(dx * gridFwd.x + dz * gridFwd.z);
 +	const float lat = dx * -gridFwd.z + dz * gridFwd.x;
 +
-+	float sLat = std::round(lat / gridCell) * gridCell;
-+	const float sDepth = std::round(depth / gridCell) * gridCell;
++	// THE LATTICE IS PER DEF, NOT ONE CELL. gridCell is the engine build square,
++	// so rounding to it snaps nothing -- every legal position already satisfies
++	// it, and the "base grid" was a no-op. A def tiles on its own footprint (the
++	// only pitch on which two of them touch), widened by script where the death
++	// explosion makes a flush pack a single-bomb loss. Strides stay whole
++	// multiples of the footprint, so widened lattices interleave exactly.
++	float cellLat = gridCell;
++	float cellDepth = gridCell;
++	if (def != nullptr) {
++		// The frame is snapped to a cardinal, and an east/west facing swaps the
++		// footprint axes, so the across-axis stride is X or Z depending on facing.
++		const bool swap = ((facing != UNIT_NO_FACING) && ((facing & 1) == 1));
++		cellLat = swap ? def->GetLatticeStrideZ() : def->GetLatticeStrideX();
++		cellDepth = swap ? def->GetLatticeStrideX() : def->GetLatticeStrideZ();
++		if (cellLat < gridCell) cellLat = gridCell;
++		if (cellDepth < gridCell) cellDepth = gridCell;
++	}
++	float sLat = std::round(lat / cellLat) * cellLat;
++	const float sDepth = std::round(depth / cellDepth) * cellDepth;
 +
 +	// Walkways are defined on the lateral axis, so a snapped column that lands in
 +	// one is pushed sideways to the first cell clear of it. Without this the grid
@@ -561,7 +578,7 @@ index aeea933..8e01b4e 100644
 +		const float laneCentre = std::round(sLat / gridLanePitch) * gridLanePitch;
 +		const float gap = std::fabs(sLat - laneCentre);
 +		if (gap < gridLaneHalf) {
-+			const float push = std::ceil((gridLaneHalf - gap) / gridCell) * gridCell;
++			const float push = std::ceil((gridLaneHalf - gap) / cellLat) * cellLat;
 +			sLat += (sLat >= laneCentre) ? push : -push;
 +		}
 +	}
@@ -4158,7 +4175,7 @@ index 193efa9..91d88ba 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..da1e478 100644
+index 2839b72..b47f403 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,11 +10,14 @@
@@ -4337,7 +4354,7 @@ index 2839b72..da1e478 100644
  	asUINT i = 0;
  	for (CAllyTeam::Id teamId : allyTeam->GetTeamIds()) {
  		*(CAllyTeam::Id*)arr->At(i++) = teamId;
-@@ -195,6 +327,450 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +327,455 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
@@ -4374,6 +4391,11 @@ index 2839b72..da1e478 100644
 +// apex: enemy AIR value near a point, for the team interceptor pool -- each
 +// player publishes this at home and fighters fly to the worst-hit ally.
 +// Registry walk, called ~once per second per player.
++static float CCircuitAI_GetEnemyMaxMobileCostM(CCircuitAI* circuit)
++{
++	return circuit->GetEnemyManager()->GetEnemyMaxMobileCostM();
++}
++
 +static float CCircuitAI_GetEnemyAirCostNear(CCircuitAI* circuit, const springai::AIFloat3& pos, float radius)
 +{
 +	return circuit->GetEnemyManager()->GetEnemyAirCostNear(pos, radius);
@@ -4788,7 +4810,7 @@ index 2839b72..da1e478 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -240,6 +816,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -240,6 +821,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -4807,7 +4829,7 @@ index 2839b72..da1e478 100644
  static CScriptArray* IUnitTask_GetUnits(IUnitTask* task)
  {
  	// Without caching arrayType can be extracted by:
-@@ -472,12 +1060,18 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -472,12 +1065,18 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectBehaviour("IUnitTask", asBEHAVE_RELEASE, "void f()", asMETHODPR(IRefCounter, Release, (), int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "int GetRefCount() const", asMETHODPR(IRefCounter, GetRefCount, () const, int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "Type GetType() const", asMETHODPR(IUnitTask, GetType, () const, IUnitTask::Type), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4826,7 +4848,7 @@ index 2839b72..da1e478 100644
  	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
  
-@@ -490,15 +1084,63 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -490,15 +1089,63 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -4891,7 +4913,7 @@ index 2839b72..da1e478 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -556,6 +1198,45 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +1203,52 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4915,6 +4937,13 @@ index 2839b72..da1e478 100644
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMakeE() const", asMETHOD(CCircuitDef, GetMakeE), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsNeedGeo() const", asMETHOD(CCircuitDef, IsNeedGeo), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "int GetAreaCells() const", asMETHOD(CCircuitDef, GetAreaCells), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFootX() const", asMETHOD(CCircuitDef, GetFootX), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFootZ() const", asMETHOD(CCircuitDef, GetFootZ), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetHealth() const", asMETHOD(CCircuitDef, GetHealth), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBlastRadius() const", asMETHOD(CCircuitDef, GetBlastRadius), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBlastDamage() const", asMETHOD(CCircuitDef, GetBlastDamage), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBlastEdge() const", asMETHOD(CCircuitDef, GetBlastEdge), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "void SetLatticeStride(float, float)", asMETHOD(CCircuitDef, SetLatticeStride), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsRadarDef() const", asMETHOD(CCircuitDef, IsRadar), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsJammerDef() const", asMETHOD(CCircuitDef, IsJammer), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRadarRadius() const", asMETHOD(CCircuitDef, GetRadarRadius), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4937,7 +4966,7 @@ index 2839b72..da1e478 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +1245,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +1257,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4961,7 +4990,7 @@ index 2839b72..da1e478 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +1271,41 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +1283,42 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4976,6 +5005,7 @@ index 2839b72..da1e478 100644
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdStop()", asFUNCTION(CCircuitUnit_CmdStop), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdPatrolTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdPatrolTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyAirCostNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetEnemyAirCostNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyMaxMobileCostM() const", asFUNCTION(CCircuitAI_GetEnemyMaxMobileCostM), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	// apex: for the commander D-gun raid want -- see CCircuitUnit_PushDGun's
 +	// own comment for why script only needs to get close and push once.
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdCloak(bool)", asFUNCTION(CCircuitUnit_CmdCloak), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -5003,7 +5033,7 @@ index 2839b72..da1e478 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +1318,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +1331,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -5013,7 +5043,7 @@ index 2839b72..da1e478 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +1439,18 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +1452,18 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5032,7 +5062,7 @@ index 2839b72..da1e478 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -724,6 +1472,8 @@ bool CInitScript::Init()
+@@ -724,6 +1485,8 @@ bool CInitScript::Init()
  	mainInfo.receiveMessage = script->GetFunc(mod, "void AiMessage(const string& in, int)");
  	mainInfo.unitFinished = script->GetFunc(mod, "void AiUnitFinished(CCircuitUnit@)");
  	mainInfo.unitDestroyed = script->GetFunc(mod, "void AiUnitDestroyed(CCircuitUnit@)");
@@ -5041,7 +5071,7 @@ index 2839b72..da1e478 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +1490,28 @@ void CInitScript::Update()
+@@ -740,9 +1503,28 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -5070,7 +5100,7 @@ index 2839b72..da1e478 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -779,6 +1548,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +1561,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -6382,7 +6412,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..83fa4cb 100644
+index bc8ff11..3bcaf18 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -69,7 +69,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
@@ -6440,7 +6470,7 @@ index bc8ff11..83fa4cb 100644
  	if (initiator == unit) {
  		initiator = nullptr;
  	}
-@@ -285,8 +291,26 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -285,11 +291,55 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -6463,13 +6493,43 @@ index bc8ff11..83fa4cb 100644
 +	// Facing first (FindBuildSite recomputes it identically): the parity snap
 +	// needs it because the engine swaps xsize/zsize for east/west.
 +	FindFacing(position);
-+	if (isFixed || !circuit->SnapToBaseGrid(position, pos, buildDef, facing)) {
++	const bool onGrid = !isFixed && circuit->SnapToBaseGrid(position, pos, buildDef, facing);
++	if (!onGrid) {
 +		pos = (shake > .0f) ? utils::get_near_pos(position, shake) : position;
 +	}
  	CTerrainManager::CorrectPosition(pos);
  
- 	const float searchRadius = 200 * SQUARE_SIZE;
-@@ -427,18 +451,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+-	const float searchRadius = 200 * SQUARE_SIZE;
++	// A LATTICE SLOT IS A DECISION, NOT A HINT.
++	//
++	// The search below reaches 1600 elmos, so a slot blocked by one building
++	// becomes a building up to 1600 elmos away. That is the sprawl, and it is
++	// also why rows never tiled: the spiral steps by ONE build square, so a
++	// nudged placement leaves the lattice phase, overlaps the neighbouring slot,
++	// and the neighbour is nudged in turn. On the grid, try the slot alone first
++	// and take the wide search only when the slot genuinely cannot be had --
++	// recording it, so script can decide whether to reclaim what stands there.
++	// Never worse than the wide search; exact whenever the slot is free.
++	// The slot is PROBED read-only first. FindBuildSite commits through
++	// SetBuildPos, which registers a blocker at whatever it settles on, so
++	// calling it twice makes the second search step around the first call's own
++	// reservation.
++	float searchRadius = 200 * SQUARE_SIZE;
++	if (onGrid) {
++		const float slot = std::max(buildDef->GetFootX(), buildDef->GetFootZ())
++				* SQUARE_SIZE * 2;
++		CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
++		const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, pos, slot, facing);
++		if (utils::is_valid(probe) && (probe.SqDistance2D(pos) <= SQUARE(SQUARE_SIZE))) {
++			searchRadius = slot;   // the slot is free: hold the task to it
++		} else {
++			circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
++		}
++	}
+ 	FindBuildSite(unit, pos, searchRadius);
+ 
+ 	if (utils::is_valid(buildPos)) {
+@@ -427,18 +477,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -6502,7 +6562,7 @@ index bc8ff11..83fa4cb 100644
  	}
  }
  
-@@ -542,7 +573,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -542,7 +599,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6513,7 +6573,7 @@ index bc8ff11..83fa4cb 100644
  		return;
  	}
  
-@@ -565,11 +598,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +624,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6537,7 +6597,7 @@ index bc8ff11..83fa4cb 100644
  	}
  }
  
-@@ -637,14 +680,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +706,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6594,7 +6654,7 @@ index bc8ff11..83fa4cb 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +743,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +769,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
@@ -12169,7 +12229,7 @@ index 5eebb71..d41d22b 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882..39da463 100644
+index a1ac882..7264638 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -12197,7 +12257,7 @@ index a1ac882..39da463 100644
  	costM        = def->GetCost(resM);
  	costE        = def->GetCost(resE);
  	upkeepM      = def->GetUpkeep(resM);
-@@ -240,9 +244,47 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -240,9 +244,65 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	isCapturable      = def->IsCapturable();
  
  	const std::map<std::string, std::string>& customParams = def->GetCustomParams();
@@ -12214,6 +12274,24 @@ index a1ac882..39da463 100644
 +	isKamikazeD = def->IsAbleToKamikaze()
 +		|| ((def->GetSelfDCountdown() == 0) && !def->IsBuilder());   // crawling bombs: countdown-0 selfd, no kamikaze flag (corroach)
 +	areaCells = (def->GetXSize() / 2) * (def->GetZSize() / 2);
++	footX = def->GetXSize() / 2;
++	footZ = def->GetZSize() / 2;
++	// What this def does to its neighbours when it dies. Read here because the
++	// raw UnitDef is in hand; the placement lattice prices chain risk from it.
++	springai::WeaponDef* deathWD = def->GetDeathExplosion();
++	if (deathWD != nullptr) {
++		blastRadius = deathWD->GetAreaOfEffect();
++		blastEdge = deathWD->GetEdgeEffectiveness();
++		springai::Damage* deathDmg = deathWD->GetDamage();
++		if (deathDmg != nullptr) {
++			const std::vector<float> dmgTypes = deathDmg->GetTypes();
++			if (!dmgTypes.empty()) {
++				blastDamage = dmgTypes[0];  // armour index 0 is "default"
++			}
++			delete deathDmg;
++		}
++		delete deathWD;
++	}
 +	storeM = def->GetStorage(resM);
 +	storeE = def->GetStorage(resE);
 +	convCapacityE = .0f;
@@ -12236,18 +12314,18 @@ index a1ac882..39da463 100644
 +	}
 +
 +	it = customParams.find("energyconv_capacity");
- 	if (it != customParams.end()) {
--		upkeepE += utils::string_to_float(it->second);
++	if (it != customParams.end()) {
 +		convCapacityE = utils::string_to_float(it->second);
 +		upkeepE += convCapacityE;
 +	}
 +	it = customParams.find("energyconv_efficiency");
-+	if (it != customParams.end()) {
+ 	if (it != customParams.end()) {
+-		upkeepE += utils::string_to_float(it->second);
 +		convRatioM = utils::string_to_float(it->second);
  	}
  
  	it = customParams.find("canjump");
-@@ -252,8 +294,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -252,8 +312,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		jumpRange = (it != customParams.end()) ? utils::string_to_float(it->second) : 400.0f;
  	}
  
@@ -12271,7 +12349,7 @@ index a1ac882..39da463 100644
  		category |= circuit->GetBadCategory();
  		costM *= 0.1f;  // avoid threat metal
  	}
-@@ -303,6 +360,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -303,6 +378,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		delete stockDef;
  	}
  
@@ -12292,7 +12370,7 @@ index a1ac882..39da463 100644
  		if (isShield) {
  			auto mounts = def->GetWeaponMounts();
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a..1734143 100644
+index cd0b54a..a34380c 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
 @@ -165,6 +165,13 @@ public:
@@ -12336,7 +12414,7 @@ index cd0b54a..1734143 100644
  	float GetCostM()        const { return costM; }
  	float GetCostE()        const { return costE; }
  	float GetUpkeepM()      const { return upkeepM; }
-@@ -347,6 +367,22 @@ public:
+@@ -347,6 +367,39 @@ public:
  	float GetExtrRangeM()   const { return extrRangeM; }
  	float GetCloakCost()    const { return cloakCost; }
  	float GetBuildTime()    const { return buildTime; }
@@ -12351,6 +12429,23 @@ index cd0b54a..1734143 100644
 +	float GetConvertRatio()    const { return convRatioM; }     // energyconv_efficiency, M per E
 +	bool IsNeedGeo()        const { return needsGeo; }  // must stand on a geo vent
 +	int GetAreaCells()      const { return areaCells; }  // footprint in 16-elmo build cells
++	int GetFootX()          const { return footX; }  // footprint per axis, in 16-elmo build cells
++	int GetFootZ()          const { return footZ; }
++	// The death explosion, read once at def load. Damage is the "default" armour
++	// entry (index 0), which is what every structure takes -- BAR's explosion
++	// tables only ever override "commanders". Radius 0 means this def does not
++	// explode on death.
++	float GetBlastRadius()  const { return blastRadius; }
++	float GetBlastDamage()  const { return blastDamage; }
++	float GetBlastEdge()    const { return blastEdge; }
++	// The base lattice this def tiles on, in elmos per axis. Set from script,
++	// which owns the chain-risk policy that widens a stride past the footprint;
++	// 0 means "use the footprint", which is the only pitch on which two of these
++	// touch. Always a whole multiple of the footprint pitch, so a widened stride
++	// leaves gaps that other defs tile into exactly.
++	void SetLatticeStride(float x, float z) { latStrideX = x; latStrideZ = z; }
++	float GetLatticeStrideX() const { return (latStrideX > .0f) ? latStrideX : (footX * SQUARE_SIZE * 2); }
++	float GetLatticeStrideZ() const { return (latStrideZ > .0f) ? latStrideZ : (footZ * SQUARE_SIZE * 2); }
 +	bool IsAntiNukeW()      const { return isAntiNukeW; }  // carries a nuke interceptor
 +	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
 +	bool IsKamikazeDef()    const { return isKamikazeD; }   // suicide unit: ammunition, not army
@@ -12359,7 +12454,7 @@ index cd0b54a..1734143 100644
  	float GetCaptureSpeed() const { return captureSpeed; }
  //	float GetAltitude()     const { return altitude; }
  	float GetJumpRange()    const { return jumpRange; }
-@@ -478,6 +514,7 @@ private:
+@@ -478,6 +531,7 @@ private:
  	bool isPylon : 1;
  	bool isAssist : 1;
  	bool isRadar : 1;
@@ -12367,7 +12462,7 @@ index cd0b54a..1734143 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
-@@ -488,11 +525,25 @@ private:
+@@ -488,11 +542,32 @@ private:
  	float speed;
  	float losRadius;
  	float sonarRadius;
@@ -12382,6 +12477,13 @@ index cd0b54a..1734143 100644
 +	float makeE;
 +	bool needsGeo = false;
 +	int areaCells = 0;
++	int footX = 0;
++	int footZ = 0;
++	float blastRadius = .0f;
++	float blastDamage = .0f;
++	float blastEdge = .0f;
++	float latStrideX = .0f;
++	float latStrideZ = .0f;
 +	bool isAntiNukeW = false;
 +	bool isTargFac = false;
 +	bool isKamikazeD = false;
@@ -12990,7 +13092,7 @@ index 63cd924..f6230d1 100644
  	int pathIterator;
  	int increment;
 diff --git a/src/circuit/unit/enemy/EnemyManager.cpp b/src/circuit/unit/enemy/EnemyManager.cpp
-index 091a710..b45e740 100644
+index 091a710..27eaf8d 100644
 --- a/src/circuit/unit/enemy/EnemyManager.cpp
 +++ b/src/circuit/unit/enemy/EnemyManager.cpp
 @@ -48,6 +48,8 @@ CEnemyManager::CEnemyManager(CCircuitAI* circuit)
@@ -13027,7 +13129,7 @@ index 091a710..b45e740 100644
  		if (enemy->IsInRadarOrLOS()) {
  			const AIFloat3& pos = enemy->GetUnit()->GetPos();
  			if (CTerrainData::IsNotInBounds(pos)) {  // NOTE: Unit id validation. No EnemyDestroyed sometimes apparently
-@@ -359,6 +379,102 @@ void CEnemyManager::DyingEnemy(CEnemyUnit* enemy, int frame)
+@@ -359,8 +379,140 @@ void CEnemyManager::DyingEnemy(CEnemyUnit* enemy, int frame)
  	DyingEnemy(enemy);
  }
  
@@ -13056,6 +13158,41 @@ index 091a710..b45e740 100644
 +// -- the circuit-level enemyInfos map holds wrappers whose data dies before the
 +// deferred per-circuit erase, and iterating THAT from script crashed at every
 +// commander blast (2026-08-18, seeds 120/121/123).
++// apex: THE COSTLIEST MOBILE THEY HAVE SHOWN US -- a tier reading the script
++// cannot otherwise take. CEnemyManager exposes only per-ROLE aggregates, and
++// role does not separate a T1 assault bot from a T2 one, so the old
++// Factory::gEnemyT2Seen sense had no replacement when it died with the leaf
++// rules. Unit cost is what actually scales across tiers, so the script can ask
++// whether their best outclasses ours without naming a tier or a number.
++//
++// Same guarded walk the air survey uses: the circuit-level map holds wrappers
++// whose data dies before the deferred erase, and iterating it from script
++// crashed at every commander blast.
++float CEnemyManager::GetEnemyMaxMobileCostM() const
++{
++	float best = 0.f;
++	for (CEnemyUnit* e : enemyUpdates) {
++		if ((e == nullptr) || e->IsDying()) {
++			continue;
++		}
++		CCircuitDef* cdef = e->GetCircuitDef();
++		// BUILDERS EXCLUDED, COMMANDER ABOVE ALL. It is mobile and costs 2700,
++		// so it outranks every T1 combat unit and made this read 2700 from
++		// frame one -- a permanent 'they are ahead' that says nothing about
++		// tier. The caller's own side excludes builders too; comparing the
++		// two on different bases is the mismatch this whole reading exists
++		// to avoid.
++		if ((cdef == nullptr) || !cdef->IsMobile() || cdef->IsBuilder()) {
++			continue;
++		}
++		const float c = cdef->GetCostM();
++		if (c > best) {
++			best = c;
++		}
++	}
++	return best;
++}
++
 +float CEnemyManager::GetEnemyAirCostNear(const springai::AIFloat3& pos, float radius) const
 +{
 +	float sum = 0.f;
@@ -13129,8 +13266,11 @@ index 091a710..b45e740 100644
 +
  void CEnemyManager::DyingEnemy(CEnemyUnit* enemy)
  {
++	DelEnemyCost(enemy);   // a purged ghost must stop counting
  	enemyDying.insert(enemy);
-@@ -373,54 +489,88 @@ void CEnemyManager::DeleteEnemyUnit(CEnemyUnit* data)
+ 	UnregisterEnemyUnit(enemy);
+ }
+@@ -373,54 +525,108 @@ void CEnemyManager::DeleteEnemyUnit(CEnemyUnit* data)
  	delete data;
  }
  
@@ -13162,36 +13302,36 @@ index 091a710..b45e740 100644
 +				info.cost   = std::max(info.cost   - cost,   0.f);
 +				info.threat = std::max(info.threat - threat, 0.f);
 +			}
- 		}
- 	}
- 	if (cdef->IsMobile()) {
--		mobileThreat += cdef->GetDefThreat() * initThrMod.inMobile;
--		enemyMobileCost += e->GetCost();
--	} else {
--		staticThreat += cdef->GetDefThreat() * initThrMod.inStatic;
++		}
++	}
++	if (cdef->IsMobile()) {
 +		if (sign > 0) {
 +			mobThr  += threat * initThrMod.inMobile;
 +			mobCost += cost;
 +		} else {
 +			mobThr  = std::max(mobThr  - threat * initThrMod.inMobile, 0.f);
 +			mobCost = std::max(mobCost - cost, 0.f);
-+		}
+ 		}
  	}
- }
- 
--void CEnemyManager::DelEnemyCost(const CEnemyUnit* e)
++}
++
 +// staticThreat has no fresh counterpart -- a turret we saw once is still there.
 +void CEnemyManager::ModStatic(const CEnemyUnit* e, int sign)
 +{
 +	CCircuitDef* cdef = e->GetCircuitDef();
 +	assert(cdef != nullptr);
-+	if (cdef->IsMobile()) {
+ 	if (cdef->IsMobile()) {
+-		mobileThreat += cdef->GetDefThreat() * initThrMod.inMobile;
+-		enemyMobileCost += e->GetCost();
+-	} else {
+-		staticThreat += cdef->GetDefThreat() * initThrMod.inStatic;
 +		return;
-+	}
+ 	}
 +	const float d = cdef->GetDefThreat() * initThrMod.inStatic;
 +	staticThreat = (sign > 0) ? (staticThreat + d) : std::max(staticThreat - d, 0.f);
-+}
-+
+ }
+ 
+-void CEnemyManager::DelEnemyCost(const CEnemyUnit* e)
 +void CEnemyManager::ModFresh(const CEnemyUnit* e, int sign)
  {
  	if (e->IsIgnore()) {
@@ -13202,9 +13342,29 @@ index 091a710..b45e740 100644
  
 -	CCircuitDef* cdef = e->GetCircuitDef();
 -	assert(cdef != nullptr);
-+void CEnemyManager::AddEnemyCost(const CEnemyUnit* e)
++// apex: BALANCED AND IDEMPOTENT. These were free-running: the ghost purge
++// deletes an entry without ever refunding its cost, and re-sighting the same
++// LIVE unit re-registers it (the new CEnemyUnit's knownFrame is -1), so
++// EnemyEnterLOS returns !wasKnown and adds the full cost again. With the
++// hidden fuse at 90s a skirmishing unit does that repeatedly and GetEnemyCost
++// only ratchets up -- it comes down solely for deaths inside allied LOS or
++// radar. Everything downstream reads it: ArmyTarget (and so the T2 discount),
++// SiegeExpect, ThreatM, HazardAt -- all biased toward a bigger enemy the
++// longer a game runs (measured ghost share 0 -> 22 -> 47 -> 60% in one game).
++//
++// The counted flag makes the pair exact -- what Add put in is what Del takes
++// out, once -- so DyingEnemy can refund a purged ghost without the double
++// subtract a second refund would cause on the real-death path.
++//
++// It keys off `counted` rather than IsIgnore(): a unit that became ignored
++// after registration used to return early here and leak its cost.
++//
++// Fresh totals are NOT touched here any more. The FRESH flag is their single
++// owner via ModFresh, and adding on IsFresh() double counted whenever the
++// freshness pass had already set the flag before this event arrived.
++void CEnemyManager::AddEnemyCost(CEnemyUnit* e)
 +{
-+	if (e->IsIgnore()) {
++	if (e->IsIgnore() || e->IsCounted()) {
 +		return;
 +	}
  
@@ -13217,27 +13377,27 @@ index 091a710..b45e740 100644
 -		}
 +	ModCost(e, +1, enemyInfos.data(), enemyMobileCost, mobileThreat);
 +	ModStatic(e, +1);
-+	if (e->IsFresh()) {
-+		ModCost(e, +1, freshInfos.data(), freshMobileCost, freshMobileThreat);
++	e->SetCounted();
++}
++
++void CEnemyManager::DelEnemyCost(CEnemyUnit* e)
++{
++	if (!e->IsCounted()) {
++		return;
  	}
 -	if (cdef->IsMobile()) {
 -		mobileThreat = std::max(mobileThreat - cdef->GetDefThreat() * initThrMod.inMobile, 0.f);
 -		enemyMobileCost = std::max(enemyMobileCost - e->GetCost(), 0.f);
 -	} else {
 -		staticThreat = std::max(staticThreat - cdef->GetDefThreat() * initThrMod.inStatic, 0.f);
-+}
-+
-+void CEnemyManager::DelEnemyCost(const CEnemyUnit* e)
-+{
-+	if (e->IsIgnore()) {
-+		return;
- 	}
 +
 +	ModCost(e, -1, enemyInfos.data(), enemyMobileCost, mobileThreat);
 +	ModStatic(e, -1);
 +	if (e->IsFresh()) {
-+		ModCost(e, -1, freshInfos.data(), freshMobileCost, freshMobileThreat);
-+	}
++		ModFresh(e, -1);
++		e->ClearFresh();
+ 	}
++	e->ClearCounted();
 +}
 +
 +void CEnemyManager::SetFreshSeconds(float seconds)
@@ -13247,33 +13407,38 @@ index 091a710..b45e740 100644
  
  void CEnemyManager::UpdateAreaUsers(CCircuitAI* ai)
 diff --git a/src/circuit/unit/enemy/EnemyManager.h b/src/circuit/unit/enemy/EnemyManager.h
-index 5ccf63a..7be601d 100644
+index 5ccf63a..c7fd4eb 100644
 --- a/src/circuit/unit/enemy/EnemyManager.h
 +++ b/src/circuit/unit/enemy/EnemyManager.h
-@@ -72,6 +72,10 @@ public:
+@@ -72,6 +72,11 @@ public:
  
  	void UnregisterEnemyUnit(CEnemyUnit* data);
  	void DyingEnemy(CEnemyUnit* enemy, int frame);
 +	void PurgeStaleGhosts(int frame, int confirmedAgeFrames, int unknownAgeFrames);
 +	float GetEnemyAirCostNear(const springai::AIFloat3& pos, float radius) const;
++	float GetEnemyMaxMobileCostM() const;
 +	// apex: longest weapon range in a group -- danger radius depends on it.
 +	float GetEnemyGroupRange(int idx) const;
  private:
  	void DyingEnemy(CEnemyUnit* enemy);
  	void DeleteEnemyUnit(CEnemyUnit* data);
-@@ -83,6 +87,11 @@ public:
+@@ -83,8 +88,13 @@ public:
  	float GetEnemyThreat(CCircuitDef::RoleT type) const {
  		return enemyInfos[type].threat;
  	}
+-	void AddEnemyCost(const CEnemyUnit* e);
+-	void DelEnemyCost(const CEnemyUnit* e);
 +	// Only enemies seen within freshFrames. GetEnemyCost never forgets anything.
 +	float GetEnemyCostFresh(CCircuitDef::RoleT type) const {
 +		return freshInfos[type].cost;
 +	}
 +	void SetFreshSeconds(float seconds);
- 	void AddEnemyCost(const CEnemyUnit* e);
- 	void DelEnemyCost(const CEnemyUnit* e);
++	void AddEnemyCost(CEnemyUnit* e);
++	void DelEnemyCost(CEnemyUnit* e);
  	float GetMobileThreat() const { return mobileThreat; }
-@@ -103,6 +112,14 @@ public:
+ 	float GetStaticThreat() const { return staticThreat; }
+ 	float GetEnemyThreat() const { return mobileThreat + staticThreat; }
+@@ -103,6 +113,14 @@ public:
  
  	void ReadConfig();
  private:
@@ -13288,7 +13453,7 @@ index 5ccf63a..7be601d 100644
  	void KMeansIteration();
  
  	struct SGroupData {
-@@ -152,12 +169,15 @@ private:
+@@ -152,12 +170,15 @@ private:
  		float inStatic;
  	} initThrMod;
  	float maxAAThreat = 0.f;
@@ -13360,7 +13525,7 @@ index 037c7d1..e9c2eab 100644
  {
  	if (cdef == nullptr) {  // unknown enemy is a threat
 diff --git a/src/circuit/unit/enemy/EnemyUnit.h b/src/circuit/unit/enemy/EnemyUnit.h
-index 913b5c0..ef0c004 100644
+index 913b5c0..d158f93 100644
 --- a/src/circuit/unit/enemy/EnemyUnit.h
 +++ b/src/circuit/unit/enemy/EnemyUnit.h
 @@ -30,7 +30,7 @@ struct SEnemyData {
@@ -13396,7 +13561,7 @@ index 913b5c0..ef0c004 100644
  	bool IsDying()          const { return losStatus & LosMask::DYING; }
  	bool IsDead()           const { return losStatus & LosMask::DEAD; }
  };
-@@ -111,6 +114,10 @@ public:
+@@ -111,6 +114,23 @@ public:
  	void SetLastSeen(int frame) { lastSeen = frame; }
  	int GetLastSeen() const { return lastSeen; }
  
@@ -13404,18 +13569,32 @@ index 913b5c0..ef0c004 100644
 +	void SetSeenFrame(int frame) { seenFrame = frame; }
 +	int GetSeenFrame() const { return seenFrame; }
 +
++	// apex: IS THIS UNIT'S COST CURRENTLY IN THE ENEMY TOTALS. Add/Del were
++	// unguarded, so the pair was neither idempotent nor balanced: the ghost
++	// purge deletes an entry without refunding, and re-sighting the same LIVE
++	// unit builds a fresh CEnemyUnit whose knownFrame is -1, so EnemyEnterLOS
++	// returns !wasKnown and adds the whole cost a second time. On the 90s
++	// hidden fuse a skirmishing unit re-registers repeatedly and GetEnemyCost
++	// ratchets -- measured ghost share climbing 0 -> 22 -> 47 -> 60% over one
++	// 20-minute game (apexearth: "if a unit appears, then disappears, then
++	// appears again, it counts as 2 ghosts").
++	void SetCounted()   { counted = true; }
++	void ClearCounted() { counted = false; }
++	bool IsCounted() const { return counted; }
++
  	void SetCost(float value) { data.cost = value; }
  	float GetCost() const { return data.cost; }
  
-@@ -149,6 +156,7 @@ private:
+@@ -149,6 +169,8 @@ private:
  
  	int knownFrame;
  	int lastSeen;
 +	int seenFrame = -1;
++	bool counted = false;
  
  	springai::Weapon* shield;
  
-@@ -167,6 +175,8 @@ public:
+@@ -167,6 +189,8 @@ public:
  	void ClearHidden()  { data.ClearHidden(); }
  	void ClearNeutral() { data.ClearNeutral(); }
  	void ClearIgnore()  { data.ClearIgnore(); }  // on decoy identification
@@ -13424,7 +13603,7 @@ index 913b5c0..ef0c004 100644
  
  	bool IsInLOS()          const { return data.IsInLOS(); }
  	bool IsInRadar()        const { return data.IsInRadar(); }
-@@ -175,6 +185,7 @@ public:
+@@ -175,6 +199,7 @@ public:
  	bool IsHidden()         const { return data.IsHidden(); }
  	bool IsNeutral()        const { return data.IsNeutral(); }
  	bool IsIgnore()         const { return data.IsIgnore(); }
@@ -13432,7 +13611,7 @@ index 913b5c0..ef0c004 100644
  	bool IsDying()          const { return data.IsDying(); }
  	bool IsDead()           const { return data.IsDead(); }
  
-@@ -191,6 +202,12 @@ public:
+@@ -191,6 +216,12 @@ public:
  	CEnemyInfo(CEnemyUnit* data);
  	virtual ~CEnemyInfo();
  

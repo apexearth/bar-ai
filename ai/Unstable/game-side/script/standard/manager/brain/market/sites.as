@@ -33,13 +33,6 @@ float NanoRange()
 	return gNanoRange;
 }
 
-// The farm's SLOT PLAN. Random shake around one anchor scattered eco in
-// staggered diagonals (apexearth's screenshot, 2026-08-23: "some of the
-// buildings are just slightly off"). Each def gets rows of flush slots:
-// pitch = footprint rounded up to the 16-elmo lattice (odd-celled defs get
-// their unavoidable half-cell gap), rows stack rearward, columns run along
-// the base's across axis. The cursor never reuses a slot; a failed build
-// leaves a hole, never an overlap.
 // How wide one row of the farm runs before the next stacks behind it. A wide
 // row is a LINE, and a line is walked end to end; the same slots in a narrower
 // row make a block, where the next slot is always adjacent to the last
@@ -50,22 +43,9 @@ float FarmRowW()
 	const float w = ai.GetTunable("apex_farm_row_w", TUNE_FARM_ROW_W);
 	return (w > 64.f) ? w : 64.f;
 }
-array<int> gFRowDef;      // row -> def id
-array<int> gFRowNext;     // row -> next column index
-array<float> gFRowPitch;  // row -> slot pitch (elmos)
-array<float> gFRowZ;      // row -> rearward offset of the row's center line
-float gFarmDepth = 0.f;   // next free rearward offset
-
-float PitchOf(int defId)
-{
-	int side = 1;
-	while (side * side < Catalog::gAreaCells[defId])
-		++side;
-	// Odd-celled footprints cannot sit flush on the 16-lattice; round up.
-	if ((side & 1) == 1)
-		++side;
-	return float(side) * 16.f;
-}
+// How far back the farm has actually been used. Read by InteriorSite to keep
+// factories clear of the block.
+float gFarmDepth = 0.f;
 
 // Every metal spot on the map, cached on first use -- planned placements
 // must never stand on one (watched: buildings over mexes).
@@ -213,43 +193,123 @@ AIFloat3 ClearOfSpots(const AIFloat3& in pos, float clear)
 	return pos;
 }
 
-AIFloat3 FarmSlot(int defId)
+// How many same-def structures may stand inside one blast radius of each
+// other. Below the chain-safe bar one loss takes the whole pack, so the answer
+// is one and the next of that def starts past the firebreak. Above it a single
+// loss cannot cascade, and the island is bounded by what the economy can
+// replace rather than by a number: seconds of metal income, divided by cost.
+int IslandCap(int defId)
 {
-	const float pitch = PitchOf(defId);
-	int row = -1;
-	for (uint i = 0; i < gFRowDef.length(); ++i) {
-		if ((gFRowDef[i] == defId)
-			&& (float(gFRowNext[i]) * pitch < FarmRowW()))
-		{
-			row = int(i);
-			break;
+	const int safeK = int(ai.GetTunable("apex_chain_safe_k", TUNE_CHAIN_SAFE_K));
+	if (Lattice::KOf(defId) < safeK)
+		return 1;
+	const float cost = Catalog::gCostM[defId];
+	if (cost <= 1.f)
+		return 0;   // 0 = unbounded
+	const float secs = ai.GetTunable("apex_island_secs", TUNE_ISLAND_SECS);
+	int n = int((aiEconomyMgr.metal.income * secs) / cost);
+	// NEVER BELOW k+1. A pack smaller than the number of neighbour deaths this
+	// def survives cannot cascade at all, so a cap under it buys no safety and
+	// costs real ground -- advanced solars (k=20) were being pushed two pitches
+	// apart by the opening's income to prevent a chain that needs 20 losses to
+	// start. Above that floor the island is what the economy can replace.
+	const int floorN = Lattice::KOf(defId) + 1;
+	if (n < floorN)
+		n = floorN;
+	return n;
+}
+
+// Where this def already stands or is already going, near the farm. Gathered
+// ONCE per placement: the island test runs per candidate slot, and
+// GetOwnUnitsOfDef walks every unit we own.
+void KinNear(CCircuitDef@ def, array<AIFloat3>& out kin)
+{
+	kin.resize(0);
+	if (def is null)
+		return;
+	array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(def, gFarmPos, 6000.f);
+	if (us !is null) {
+		for (uint i = 0; i < us.length(); ++i) {
+			if (us[i] !is null)
+				kin.insertLast(us[i].GetPos(ai.frame));
 		}
 	}
-	if (row < 0) {
-		gFRowDef.insertLast(defId);
-		gFRowNext.insertLast(0);
-		gFRowPitch.insertLast(pitch);
-		gFRowZ.insertLast(gFarmDepth + pitch * 0.5f);
-		row = int(gFRowDef.length()) - 1;
-		gFarmDepth += pitch;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || (t.buildDef !is def))
+			continue;
+		const AIFloat3 bp = t.GetBuildPos();
+		if (OnMap(bp))
+			kin.insertLast(bp);
 	}
-	// Skip slots that would stand on a metal spot (cursor advances; the
-	// hole stays a hole).
-	for (int tries = 0; tries < 8; ++tries) {
-		const int col = gFRowNext[row];
-		gFRowNext[row] = col + 1;
-		// Columns fill ACROSS the row, offset so the finished row is still
-		// centered on the axis. Alternating outward (0, -p, +p, -2p, +2p...)
-		// centered it just as well but put every consecutive slot on the far
-		// side of the block from the last one, so the builder crossed the
-		// whole farm for every turbine (apexearth, watching: "our commander
-		// keeps flip flopping to opposite sides to build these winds").
-		const int cols = (pitch > 0.f) ? int(FarmRowW() / pitch) : 1;
-		const float lat = (float(col) - float((cols > 1) ? (cols - 1) : 0) * 0.5f)
-				* pitch;
-		AIFloat3 p = gFarmPos + Base::gAcross * lat - Base::gFwd * gFRowZ[row];
-		if (!NearSpot(p))
-			return p;
+}
+
+int KinWithin(const array<AIFloat3>& in kin, const AIFloat3& in p, float r)
+{
+	int n = 0;
+	for (uint i = 0; i < kin.length(); ++i) {
+		if (kin[i].distance2D(p) < r)
+			++n;
+	}
+	return n;
+}
+
+// THE FARM LATTICE. One shared grid anchored on the farm centre; each def
+// walks it on its OWN footprint pitch, which is the only pitch on which two of
+// them touch. Rows fill across then stack rearward, so the next slot is always
+// beside the last (apexearth: "should make tighter, less walking") and a hole
+// left by a loss is refilled by the next build rather than orphaned.
+//
+// A slot is taken only if the engine agrees it is buildable AT THAT POINT. The
+// old code handed out a row/column intent and let the task's own 1600-elmo
+// search settle it, which is what turned a blocked slot into a building across
+// the base and lost the lattice phase for everything after it.
+AIFloat3 FarmSlot(int defId)
+{
+	CCircuitDef@ def = Catalog::Def(defId);
+	if (def is null)
+		return gFarmPos;
+	// THE LATTICE ORIGIN IS THE BASE ANCHOR, NOT THE FARM CENTRE. C++ snaps
+	// every placement onto the anchor's grid (CCircuitAI::SnapToBaseGrid), so a
+	// scan run from any other origin has each answer moved off the phase the
+	// scan itself is walking -- which is a lattice that never closes, however
+	// carefully the intents were spaced. The farm only decides WHERE ON the
+	// lattice to start looking.
+	//
+	// The step is the def's STRIDE, which C++ uses too: its footprint, widened
+	// past its own firebreak where one loss would take the whole pack.
+	const float pitch = Lattice::StrideOf(defId);
+	const float fb = Lattice::Firebreak(defId);
+	const int cap = IslandCap(defId);
+	array<AIFloat3> kin;
+	if ((cap > 0) && (fb > 0.f))
+		KinNear(def, kin);
+	float depth0 = 0.f, lat0 = 0.f;
+	Base::Coords(gFarmPos, depth0, lat0);
+	depth0 = Lattice::Snap(depth0, pitch);
+	lat0 = Lattice::Snap(lat0, pitch);
+	const int lat = int((FarmRowW() * .5f) / pitch);
+	const int rows = int(ai.GetTunable("apex_farm_rows", TUNE_FARM_ROWS));
+	for (int j = 0; j <= rows; ++j) {
+		for (int i = -lat; i <= lat; ++i) {
+			const AIFloat3 p = Base::gAnchor
+					+ Base::gAcross * (lat0 + float(i) * pitch)
+					- Base::gFwd * (depth0 + float(j) * pitch);
+			if (!OnMap(p) || NearSpot(p))
+				continue;
+			if ((cap > 0) && (fb > 0.f) && (KinWithin(kin, p, fb) >= cap))
+				continue;
+			// Onto this def's own build parity before asking, or the search
+			// starts half a cell off and answers with a neighbouring slot.
+			const AIFloat3 want = ai.SnapBuildPos(def, p);
+			const AIFloat3 site = ai.FindBuildSiteNear(def, want, Lattice::CELL);
+			if (!OnMap(site) || (site.distance2D(want) > Lattice::CELL * .5f))
+				continue;   // occupied, or the terrain will not take it
+			const float depth = float(j) * pitch;
+			if (depth > gFarmDepth)
+				gFarmDepth = depth;
+			return site;
+		}
 	}
 	return gFarmPos - Base::gFwd * gFarmDepth;
 }

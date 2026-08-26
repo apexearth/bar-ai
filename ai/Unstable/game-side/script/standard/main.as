@@ -3,6 +3,7 @@
 #include "../world.as"
 #include "perf.as"
 #include "manager/catalog.as"  // def economics + who-builds-what, read once at init
+#include "manager/lattice.as"  // the base lattice + its chain-explosion model
 #include "targets.as"          // EVERY build ratio, in one file
 #include "policy.as"           // ...and every eco THRESHOLD, in this one
 #include "manager/brain/budget.as"  // the spend ledger and target split (a sense)
@@ -29,6 +30,7 @@ namespace Main {
 void AiMain()
 {
 	Catalog::Init();
+	Lattice::Init();
 
 	// NOTE: Initialize config params
 // 	aiTerrainMgr.SetAllyZoneRange(600);  // returns 576: (multiples of 128) div 2
@@ -115,6 +117,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	Front::Update();
 	Brain::Think();
 	Base::Update();
+	Lattice::Update();
 	Perf::TickSpeed();
 	Perf::Flush();
 }

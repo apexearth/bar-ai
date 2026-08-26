@@ -104,7 +104,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		ProposeMex(unit), ProposeEnergy(unit), ProposeGeo(unit),
 		ProposePlant(unit), ProposeConvert(unit), ProposeStore(unit),
 		ProposeMexUp(unit), ProposeTech(unit), ProposeNano(unit),
-		ProposeReclaimObsolete(unit), ProposeAssist(unit),
+		ProposeReclaimObsolete(unit), ProposeReclaimBlocker(unit), ProposeAssist(unit),
 		ProposeProtect(unit), ProposeSense(unit), ProposeAirDef(unit)
 	};
 	// EXPOSURE IS A COST THE ASSET ITSELF PAYS. A want's return is reduced by

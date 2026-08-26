@@ -21,6 +21,11 @@ class Want {
 	CCircuitDef@ def;
 	AIFloat3 pos;
 	int spotId = -1;
+	// The unit this want acts ON, where it acts on one. Reclaim used to pass it
+	// through a namespace global, so a second reclaim proposer running in the
+	// same election overwrote the first's target and the executor -- which
+	// checks the global against spotId -- silently dropped whichever won.
+	CCircuitUnit@ target;
 	float gain = 0.f;
 	float mCost = 0.f;
 	float tCost = 0.f;

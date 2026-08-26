@@ -1912,8 +1912,25 @@ bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos,
 	const float depth = -(dx * gridFwd.x + dz * gridFwd.z);
 	const float lat = dx * -gridFwd.z + dz * gridFwd.x;
 
-	float sLat = std::round(lat / gridCell) * gridCell;
-	const float sDepth = std::round(depth / gridCell) * gridCell;
+	// THE LATTICE IS PER DEF, NOT ONE CELL. gridCell is the engine build square,
+	// so rounding to it snaps nothing -- every legal position already satisfies
+	// it, and the "base grid" was a no-op. A def tiles on its own footprint (the
+	// only pitch on which two of them touch), widened by script where the death
+	// explosion makes a flush pack a single-bomb loss. Strides stay whole
+	// multiples of the footprint, so widened lattices interleave exactly.
+	float cellLat = gridCell;
+	float cellDepth = gridCell;
+	if (def != nullptr) {
+		// The frame is snapped to a cardinal, and an east/west facing swaps the
+		// footprint axes, so the across-axis stride is X or Z depending on facing.
+		const bool swap = ((facing != UNIT_NO_FACING) && ((facing & 1) == 1));
+		cellLat = swap ? def->GetLatticeStrideZ() : def->GetLatticeStrideX();
+		cellDepth = swap ? def->GetLatticeStrideX() : def->GetLatticeStrideZ();
+		if (cellLat < gridCell) cellLat = gridCell;
+		if (cellDepth < gridCell) cellDepth = gridCell;
+	}
+	float sLat = std::round(lat / cellLat) * cellLat;
+	const float sDepth = std::round(depth / cellDepth) * cellDepth;
 
 	// Walkways are defined on the lateral axis, so a snapped column that lands in
 	// one is pushed sideways to the first cell clear of it. Without this the grid
@@ -1922,7 +1939,7 @@ bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos,
 		const float laneCentre = std::round(sLat / gridLanePitch) * gridLanePitch;
 		const float gap = std::fabs(sLat - laneCentre);
 		if (gap < gridLaneHalf) {
-			const float push = std::ceil((gridLaneHalf - gap) / gridCell) * gridCell;
+			const float push = std::ceil((gridLaneHalf - gap) / cellLat) * cellLat;
 			sLat += (sLat >= laneCentre) ? push : -push;
 		}
 	}

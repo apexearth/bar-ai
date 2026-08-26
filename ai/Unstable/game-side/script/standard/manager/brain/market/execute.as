@@ -64,14 +64,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return gt;
 	}
 	if (w.kind == WK_RECLAIM) {
-		if ((gReclaimTarget is null) || (int(gReclaimTarget.id) != w.spotId))
+		CCircuitUnit@ tgt = w.target;
+		if ((tgt is null) || (int(tgt.id) != w.spotId))
 			return null;
 		// A condemned unit stands for it -- walking away made the reclaimer
 		// chase it across the base (apexearth).
-		if (gReclaimTarget.circuitDef.IsMobile())
-			gReclaimTarget.CmdMoveTo(unit.GetPos(ai.frame));
-		return aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL,
-				gReclaimTarget));
+		if (tgt.circuitDef.IsMobile())
+			tgt.CmdMoveTo(unit.GetPos(ai.frame));
+		return aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, tgt));
 	}
 	if (w.kind == WK_NANO) {
 		// Nano placement follows the demand math: the line with the LARGEST

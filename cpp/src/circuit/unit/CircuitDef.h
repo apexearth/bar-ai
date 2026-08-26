@@ -378,6 +378,23 @@ public:
 	float GetConvertRatio()    const { return convRatioM; }     // energyconv_efficiency, M per E
 	bool IsNeedGeo()        const { return needsGeo; }  // must stand on a geo vent
 	int GetAreaCells()      const { return areaCells; }  // footprint in 16-elmo build cells
+	int GetFootX()          const { return footX; }  // footprint per axis, in 16-elmo build cells
+	int GetFootZ()          const { return footZ; }
+	// The death explosion, read once at def load. Damage is the "default" armour
+	// entry (index 0), which is what every structure takes -- BAR's explosion
+	// tables only ever override "commanders". Radius 0 means this def does not
+	// explode on death.
+	float GetBlastRadius()  const { return blastRadius; }
+	float GetBlastDamage()  const { return blastDamage; }
+	float GetBlastEdge()    const { return blastEdge; }
+	// The base lattice this def tiles on, in elmos per axis. Set from script,
+	// which owns the chain-risk policy that widens a stride past the footprint;
+	// 0 means "use the footprint", which is the only pitch on which two of these
+	// touch. Always a whole multiple of the footprint pitch, so a widened stride
+	// leaves gaps that other defs tile into exactly.
+	void SetLatticeStride(float x, float z) { latStrideX = x; latStrideZ = z; }
+	float GetLatticeStrideX() const { return (latStrideX > .0f) ? latStrideX : (footX * SQUARE_SIZE * 2); }
+	float GetLatticeStrideZ() const { return (latStrideZ > .0f) ? latStrideZ : (footZ * SQUARE_SIZE * 2); }
 	bool IsAntiNukeW()      const { return isAntiNukeW; }  // carries a nuke interceptor
 	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
 	bool IsKamikazeDef()    const { return isKamikazeD; }   // suicide unit: ammunition, not army
@@ -536,6 +553,13 @@ private:
 	float makeE;
 	bool needsGeo = false;
 	int areaCells = 0;
+	int footX = 0;
+	int footZ = 0;
+	float blastRadius = .0f;
+	float blastDamage = .0f;
+	float blastEdge = .0f;
+	float latStrideX = .0f;
+	float latStrideZ = .0f;
 	bool isAntiNukeW = false;
 	bool isTargFac = false;
 	bool isKamikazeD = false;

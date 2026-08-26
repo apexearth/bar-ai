@@ -1,5 +1,10 @@
 namespace Market {
 
+// How far from a blocked lattice slot one of our own structures counts as the
+// thing standing in it. A footprint's reach, not a search radius: further away
+// and it is not what refused the slot.
+const float BLOCKER_REACH = 160.f;
+
 // Obsolete generators price their own metal back into the market: when the
 // E economy is structurally in surplus (removing the candidate keeps it so)
 // and the bank has room for the burst, a weak generator's banked metal
@@ -80,6 +85,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			w.mCost = 1.f;
 			w.tCost = (Catalog::gCostM[rcDef] / 90.f) * Wage();
 			w.value = w.gain / (w.mCost + w.tCost);
+			@w.target = rc;
 			@gReclaimTarget = rc;
 			return w;
 		}
@@ -256,7 +262,95 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	w.mCost = 1.f;
 	w.tCost = (walkSec + Catalog::gCostM[bestDef] / 90.f) * Wage();
 	w.value = (w.gain > 0.f) ? (w.gain / (w.mCost + w.tCost)) : 0.f;
+	@w.target = best;
 	@gReclaimTarget = best;
+	return w;
+}
+
+// RECLAIM WHAT IS STANDING IN THE SLOT. C++ records a lattice slot it could
+// not place on (CCircuitAI::NoteBuildBlocked); this is the only thing that
+// reads it. apexearth: "if we want to complete/extend a grid we should reclaim
+// whatever building(s) are in the way so long as they are not much more
+// valuable in comparison to the building we want to place."
+//
+// "Much more valuable" is not a ratio here -- it is the arithmetic. The ground
+// is worth what the BEST generator we own would make on it instead of what is
+// standing there, and clearing it costs that building's own output plus the
+// time. A fusion blocking a wind slot prices itself out on the first term; a
+// stray T1 solar does not.
+Want@ ProposeReclaimBlocker(CCircuitUnit@ unit)
+{
+	Want w;
+	if (ai.GetTunable("apex_reclaim_blocker", TUNE_RECLAIM_BLOCKER) < 0.5f)
+		return w;
+	AIFloat3 bp;
+	if (!ai.GetBlockedBuildPos(bp) || !OnMap(bp))
+		return w;
+	// Best energy per cell we can actually build, and the eco structure of ours
+	// nearest the blocked slot. Only ECONOMY is a candidate: extractors and
+	// geothermals stand on ground they had to have, plants are the room the
+	// lattice exists to protect, and towers and sensors were sited to cover
+	// something rather than to sit in a row.
+	float bestEcell = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gNeedGeo[d])
+			continue;
+		const int cells = (Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1;
+		const float ec = Catalog::gMakeE[d] / float(cells);
+		if (ec > bestEcell)
+			bestEcell = ec;
+	}
+	CCircuitUnit@ blk = null;
+	int blkDef = -1;
+	float nearest = 1e9f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || Catalog::gMobile[di] || Catalog::gNeedGeo[di])
+			continue;
+		if ((Catalog::gExtractsM[di] > 0.f)
+			|| (Catalog::gBuildsList[di].length() > 0))
+			continue;
+		if ((Catalog::gMakeE[di] < 1.f) && (Catalog::gConvCapacity[di] < 1.f)
+			&& (Catalog::gStoreE[di] < 1.f) && (Catalog::gStoreM[di] < 1.f))
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(di), bp,
+				BLOCKER_REACH);
+		if (us is null)
+			continue;
+		for (uint i = 0; i < us.length(); ++i) {
+			if (us[i] is null)
+				continue;
+			const float dd = us[i].GetPos(ai.frame).distance2D(bp);
+			if (dd < nearest) {
+				nearest = dd;
+				@blk = us[i];
+				blkDef = di;
+			}
+		}
+	}
+	if (blk is null)
+		return w;
+	const int cells = (Catalog::gAreaCells[blkDef] > 0)
+			? Catalog::gAreaCells[blkDef] : 1;
+	const float ecell = Catalog::gMakeE[blkDef] / float(cells);
+	const float horizon = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	const AIFloat3 gp = blk.GetPos(ai.frame);
+	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+	const float walkSec = (speed > 1.f)
+			? (unit.GetPos(ai.frame).distance2D(gp) / speed) : 60.f;
+	w.kind = WK_RECLAIM;
+	@w.def = Catalog::Def(blkDef);
+	w.pos = gp;
+	w.spotId = int(blk.id);
+	// The metal back, plus the energy the ground would make once cleared minus
+	// what it makes now. Both terms are zero or negative for anything already
+	// pulling its weight, so this want simply never wins for those.
+	w.gain = Catalog::gCostM[blkDef] / ((horizon > 1.f) ? horizon : 300.f)
+			+ (bestEcell - ecell) * float(cells) * EPriceFloor();
+	w.mCost = 1.f;
+	w.tCost = (walkSec + Catalog::gCostM[blkDef] / 90.f) * Wage();
+	w.value = (w.gain > 0.f) ? (w.gain / (w.mCost + w.tCost)) : 0.f;
+	@w.target = blk;
 	return w;
 }
 

@@ -308,12 +308,38 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 	// Facing first (FindBuildSite recomputes it identically): the parity snap
 	// needs it because the engine swaps xsize/zsize for east/west.
 	FindFacing(position);
-	if (isFixed || !circuit->SnapToBaseGrid(position, pos, buildDef, facing)) {
+	const bool onGrid = !isFixed && circuit->SnapToBaseGrid(position, pos, buildDef, facing);
+	if (!onGrid) {
 		pos = (shake > .0f) ? utils::get_near_pos(position, shake) : position;
 	}
 	CTerrainManager::CorrectPosition(pos);
 
-	const float searchRadius = 200 * SQUARE_SIZE;
+	// A LATTICE SLOT IS A DECISION, NOT A HINT.
+	//
+	// The search below reaches 1600 elmos, so a slot blocked by one building
+	// becomes a building up to 1600 elmos away. That is the sprawl, and it is
+	// also why rows never tiled: the spiral steps by ONE build square, so a
+	// nudged placement leaves the lattice phase, overlaps the neighbouring slot,
+	// and the neighbour is nudged in turn. On the grid, try the slot alone first
+	// and take the wide search only when the slot genuinely cannot be had --
+	// recording it, so script can decide whether to reclaim what stands there.
+	// Never worse than the wide search; exact whenever the slot is free.
+	// The slot is PROBED read-only first. FindBuildSite commits through
+	// SetBuildPos, which registers a blocker at whatever it settles on, so
+	// calling it twice makes the second search step around the first call's own
+	// reservation.
+	float searchRadius = 200 * SQUARE_SIZE;
+	if (onGrid) {
+		const float slot = std::max(buildDef->GetFootX(), buildDef->GetFootZ())
+				* SQUARE_SIZE * 2;
+		CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
+		const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, pos, slot, facing);
+		if (utils::is_valid(probe) && (probe.SqDistance2D(pos) <= SQUARE(SQUARE_SIZE))) {
+			searchRadius = slot;   // the slot is free: hold the task to it
+		} else {
+			circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
+		}
+	}
 	FindBuildSite(unit, pos, searchRadius);
 
 	if (utils::is_valid(buildPos)) {

@@ -36,6 +36,13 @@ array<bool> gFloater;   // stands on water
 array<bool> gAmphib;    // moves through water and land both
 array<bool> gSub;       // submerged (underwater structures dodge the floater test)
 array<int> gAreaCells;  // footprint in 16-elmo build cells
+array<int> gFootX;      // footprint per axis, in 16-elmo build cells
+array<int> gFootZ;
+// The death explosion, straight off the def. gBlastD is the "default" armour
+// entry, which is what a structure of ours standing nearby takes.
+array<float> gBlastR;   // area of effect, elmos (0 = does not explode)
+array<float> gBlastD;   // damage at the centre
+array<float> gBlastE;   // edgeEffectiveness, as the engine's falloff uses it
 array<float> gBuildDist; // build/assist reach, elmos
 array<bool> gRadar;
 array<bool> gJammer;
@@ -86,6 +93,8 @@ void Init()
 	gStoreM.resize(n); gStoreE.resize(n); gConvCapacity.resize(n); gConvRatio.resize(n);
 	gMobile.resize(n); gFlyer.resize(n); gBuilder.resize(n); gWind.resize(n);
 	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gAreaCells.resize(n); gAmphib.resize(n);
+	gFootX.resize(n); gFootZ.resize(n);
+	gBlastR.resize(n); gBlastD.resize(n); gBlastE.resize(n);
 	gBuildDist.resize(n);
 	gRadar.resize(n); gJammer.resize(n); gRadarR.resize(n); gJamR.resize(n);
 	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n); gPower.resize(n);
@@ -125,6 +134,11 @@ void Init()
 		gAmphib[i]       = cdef.IsAmphibious();
 		gSub[i]          = cdef.IsSubmarine();
 		gAreaCells[i]    = cdef.GetAreaCells();
+		gFootX[i]        = cdef.GetFootX();
+		gFootZ[i]        = cdef.GetFootZ();
+		gBlastR[i]       = cdef.GetBlastRadius();
+		gBlastD[i]       = cdef.GetBlastDamage();
+		gBlastE[i]       = cdef.GetBlastEdge();
 		gBuildDist[i]    = cdef.GetBuildDistance();
 		gRadarR[i]       = cdef.GetRadarRadius();
 		gJamR[i]         = cdef.GetJammerRadius();

@@ -260,6 +260,7 @@ void NoteFinished(CCircuitUnit@ unit)
 		return;
 	const int defId = int(unit.circuitDef.id);
 	OwnAdd(defId, 1);
+	Lattice::NotePlaced(defId, unit.GetPos(ai.frame));
 	if (!Catalog::gMobile[defId] && (Catalog::gMakeE[defId] > 1.f)
 		&& !Catalog::gNeedGeo[defId])
 	{

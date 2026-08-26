@@ -1816,3 +1816,25 @@ const float TUNE_STUCK_RETRY = 120.f;
 //   same.
 // manager/builder/mexguard.as [metal/s] -- From this income dragon's-teeth
 //   walls are obsolete: stop building them and start reclaiming them.
+// manager/lattice.as [count] -- A structure that survives this many blast-
+//   neighbour deaths packs FLUSH; below it the lattice stride widens past the
+//   def's own firebreak. 3 is the point where a single loss can no longer
+//   start a cascade, since two neighbour deaths leave the third standing.
+const float TUNE_CHAIN_SAFE_K = 3.f;
+// manager/brain/market/sites.as [seconds of metal income] -- How much of the
+//   economy one blast-radius island of a chain-safe def may be worth. The
+//   island cap is that metal divided by the def's cost, so a 10 m/s opening
+//   builds small packs and a 400 m/s base builds ones it can afford to lose.
+const float TUNE_ISLAND_SECS = 25.f;
+// manager/brain/market/sites.as [count] -- Rows of lattice the farm scan walks
+//   rearward before giving up. A bound on WORK per placement, not on the base.
+const float TUNE_FARM_ROWS = 28.f;
+// manager/brain/market/want_reclaim.as [toggle 0/1] -- Reclaim one of our own
+//   economy buildings that is standing in a lattice slot C++ could not place
+//   on. DEFAULT OFF: measured 2026-08-25, 8 paired seeds, it cost more
+//   constructor time than the ground was worth -- metal built median 17,978
+//   with it off against 12,417 with it on, eco 5,436 against 3,869, and even
+//   the tiling it exists to improve fell (47% touching to 39%). The pricing
+//   and the C++ blocked-slot signal stay for a cheaper retry: the want has to
+//   compete against a mex, and clearing ground is not worth a mex.
+const float TUNE_RECLAIM_BLOCKER = 0.f;

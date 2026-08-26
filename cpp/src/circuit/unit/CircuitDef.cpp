@@ -256,6 +256,24 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	isKamikazeD = def->IsAbleToKamikaze()
 		|| ((def->GetSelfDCountdown() == 0) && !def->IsBuilder());   // crawling bombs: countdown-0 selfd, no kamikaze flag (corroach)
 	areaCells = (def->GetXSize() / 2) * (def->GetZSize() / 2);
+	footX = def->GetXSize() / 2;
+	footZ = def->GetZSize() / 2;
+	// What this def does to its neighbours when it dies. Read here because the
+	// raw UnitDef is in hand; the placement lattice prices chain risk from it.
+	springai::WeaponDef* deathWD = def->GetDeathExplosion();
+	if (deathWD != nullptr) {
+		blastRadius = deathWD->GetAreaOfEffect();
+		blastEdge = deathWD->GetEdgeEffectiveness();
+		springai::Damage* deathDmg = deathWD->GetDamage();
+		if (deathDmg != nullptr) {
+			const std::vector<float> dmgTypes = deathDmg->GetTypes();
+			if (!dmgTypes.empty()) {
+				blastDamage = dmgTypes[0];  // armour index 0 is "default"
+			}
+			delete deathDmg;
+		}
+		delete deathWD;
+	}
 	storeM = def->GetStorage(resM);
 	storeE = def->GetStorage(resE);
 	convCapacityE = .0f;

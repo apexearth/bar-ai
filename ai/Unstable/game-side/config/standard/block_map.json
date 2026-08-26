@@ -49,24 +49,31 @@
 			"yard": [6, 24],
 			"ignore":["none"]
 		},
+		// ECO YARDS ARE ZERO ON PURPOSE. Spacing between economy structures is
+		// the base lattice's job now (manager/lattice.as): a def's stride is its
+		// own footprint, widened past its own death-explosion firebreak only when
+		// a single loss would take the pack. A yard here is a flat spacer that
+		// knows nothing about either, and these were inverted -- converter and
+		// fusion, the two that chain totally, were the ones allowed to pack flush.
+		// The engine still refuses overlapping footprints, and the walkway lanes
+		// still keep the base crossable.
 		"solar": {
 			"type": ["rectangle", "engy_mid"],
-			"ignore": ["engy_mid", "def_low", "mex", "def_low"],
-			"yard": [6, 6]
-			
+			"ignore": ["engy_low", "engy_mid", "engy_high", "convert", "nano", "def_low", "mex"],
+			"yard": [0, 0]
 		},
 		"advsolar":{
 			"type": ["rectangle", "engy_mid"],
-			"yard": [5, 5],
-			"ignore": ["mex", "engy_mid", "def_low", "nano"]
+			"yard": [0, 0],
+			"ignore": ["engy_low", "engy_mid", "engy_high", "convert", "nano", "def_low", "mex"]
 		},
 		"wind": {
 			"type": ["rectangle", "engy_low"],
 // 			Integer radius of a blocker or description string.
 // 			Available string values: explosion, expl_ally
 //			"radius": "explosion",  // default: "explosion"
-			"yard": [10,10],  // "default": "explosion"
-			"ignore": ["engy_low"]
+			"yard": [0, 0],  // "default": "explosion"
+			"ignore": ["engy_low", "engy_mid", "engy_high", "convert", "nano"]
 		},
 		"geo": {
 			"type": ["rectangle", "geo"],
@@ -80,8 +87,8 @@
 		},
 		"fusion": {
 			"type": ["rectangle", "engy_high"],
-			"yard": [5, 5],
-			"ignore": ["mex", "engy_high"]
+			"yard": [0, 0],
+			"ignore": ["engy_low", "engy_mid", "engy_high", "convert", "nano", "mex"]
 		},
 //		"singu": {
 //			"type": ["circle", "engy_high"],
@@ -90,7 +97,7 @@
 //		},
 		"store": {
 			"type": ["rectangle", "mex"],
-			"yard": [4, 4],
+			"yard": [0, 0],
 			"not_ignore": ["factory", "terra"]
 		},
 		"mex": {
@@ -105,8 +112,8 @@
 		},
 		"converter": {
 			"type": ["rectangle", "convert"],
-			"yard": [7, 7],
-			"ignore": ["convert"]
+			"yard": [0, 0],
+			"ignore": ["engy_low", "engy_mid", "engy_high", "convert", "nano"]
 		},
 		"def_low": {
 			"type": ["circle", "def_low"],
