@@ -640,26 +640,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	return w;
 }
 
-// A WANT NOBODY MAY EXECUTE MUST NOT ENTER THE AUCTION.
-//
-// Role::DefenceAllowed() is enforced at Requests::Take -- downstream of the
-// arbiter -- so for the rear specialist the market kept electing ground
-// defence and Take kept handing back null: no task, builder idles, re-elects,
-// elects it again. Measured on Supreme Isthmus 8v8: 2,491 of the eco player's
-// 2,933 decisions (85%) went to defence/protect and produced NOTHING, one of
-// them picking a turret at v=1.65 over the tech want at v=103.60 sitting
-// beside it. It finished the game on 1,180 eco against a 21,108 teammate.
-//
-// The gate stays exactly where the policy says it is; it just has to be
-// visible to the thing doing the choosing. Sense and air defence are other
-// halves and stay legal -- eyes are not porc, and the rear still answers
-// bombers.
+// NO ROLE VETO HERE, DELIBERATELY. What the rear specialist should build is
+// decided by what the want is WORTH to it -- covered ground behind teammates
+// prices near nothing, so it loses the auction on arithmetic. apexearth:
+// "if want for defence or army is 0 then we should have none. It should
+// really be that simple."
 Want@ ProposeProtect(CCircuitUnit@ unit)
 {
-	if (!Role::DefenceAllowed()) {
-		Want none;
-		return none;
-	}
 	return ProposeProtectHalf(unit, HALF_GROUND);
 }
 

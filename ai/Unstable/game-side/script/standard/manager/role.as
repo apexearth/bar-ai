@@ -39,13 +39,5 @@ void Resolve()
 	gBP = StandingBP();
 }
 
-// The quiet rear specialist builds no GROUND defence; every request rule
-// funnels through this gate (Requests::Take), so paths the market does not
-// own are covered too. Take exempts air-only defence: static AA shares the
-// DEFENCE build-type, and the rear specialist still has to answer bombers.
-bool DefenceAllowed()
-{
-	return !Market::EcoQuiet();
-}
 
 }  // namespace Role

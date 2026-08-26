@@ -461,22 +461,6 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	created = false;
 	if ((want is null) || !OnMap(spot))
 		return null;
-	// THE ECO ROLE BUILDS NO DEFENCE (apexearth 2026-08-22: "This tech/eco
-	// doesn't need to make any defenses. They're located safely in the
-	// back."). Measured 9,785 metal of turrets on the role holder in one
-	// game, placed by rules that did not know the role existed -- refused at
-	// THE chokepoint rather than flagged in each rule. Radar/sonar stay:
-	// eyes are not porc, and neither is AA: static AA rides BuildType::DEFENCE
-	// (Market::ExecuteWant maps PROT_AA there), so a blanket DEFENCE refusal
-	// left the rear specialist with no answer to aircraft at all. Ground-
-	// shooting is the test, matching ExecuteWant's own split.
-	if (((bt == Task::BuildType::DEFENCE) || (bt == Task::BuildType::BUNKER)
-			|| (bt == Task::BuildType::BIG_GUN))
-		&& !Role::DefenceAllowed()
-		&& ShootsGround(want))
-	{
-		return null;
-	}
 	SweepDead();
 	// THE one chokepoint every request rule passes through: an asker that
 	// cannot build the def gets null BEFORE any task is enqueued, so the rule

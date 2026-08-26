@@ -18,6 +18,12 @@ array<int> gApproachAt(32001, -30000);
 int gAaClaim   = -1;
 int gAaClaimAt = -30000;
 
+// Why a builder ends an election holding nothing: per-kind count of wants
+// that ranked but could not be turned into a task.
+array<int> gExecFail(32, 0);
+int gExecNone = 0;
+int gNextExecLog = 0;
+
 IUnitTask@ Decide(CCircuitUnit@ unit)
 {
 	if ((unit is null) || !unit.circuitDef.IsBuilder() || !unit.circuitDef.IsMobile())
@@ -406,6 +412,23 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		IUnitTask@ t = ExecuteWant(unit, ranked[i]);
 		if (t !is null)
 			return t;
+		if (uint(ranked[i].kind) < gExecFail.length())
+			++gExecFail[ranked[i].kind];
+	}
+	// EVERY RANKED WANT REFUSED. The decide line above names what ranked
+	// first, NOT what got built -- so a builder can log a decision every
+	// update and hold no task at all, which is what sitting on a full bank
+	// looks like from the inside. Nothing else reports the fall-through.
+	++gExecNone;
+	if (ai.frame >= gNextExecLog) {
+		gNextExecLog = ai.frame + 30 * SECOND;
+		string ln = "apex: exec-refused t=" + ai.teamId
+				+ " allNull=" + gExecNone + " |";
+		for (uint k = 0; k < gExecFail.length(); ++k) {
+			if (gExecFail[k] > 0)
+				ln += " " + KindName(int(k)) + "=" + gExecFail[k];
+		}
+		AiLog(ln);
 	}
 	return null;
 }

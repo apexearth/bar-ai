@@ -38,8 +38,6 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// allowed, matching the audit's mDefAA split.
 		const bool groundDef = (w.def !is null)
 				&& (Catalog::gSurfT[int(w.def.id)] > 0.01f);
-		if (groundDef && EcoQuiet())
-			return null;
 		if (groundDef)
 			AiLog("apex: prot-exec t=" + ai.teamId + " def=" + w.def.GetName()
 					+ " role=" + (gEcoRole ? 1 : 0)
