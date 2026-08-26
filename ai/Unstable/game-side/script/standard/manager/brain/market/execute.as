@@ -217,16 +217,20 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if (orph !is null)
 			return orph;
 	}
+	// A LATTICE SLOT IS COVERED ONLY BY ITS OWN CELL. Requests::Take joins any
+	// live request for the same def inside the cover radius, and at 96 elmos
+	// that swallowed every NEIGHBOUR: a converter tiles on 48, so the slot next
+	// door was read as "already being built" and the ask became a second worker
+	// on the standing site instead of the building beside it. Same-def
+	// structures could not be requested closer than 96 apart while a sibling
+	// request was live, which is the spacing, not any blast radius.
+	const float cell = Lattice::StrideOf(int(w.def.id));
 	if (w.kind == WK_ENERGY) {
-		// Fusion-tier generators pack together in the DEEP REAR
+		// Generators pack beside their own kind, fusion tier included
 		// (apexearth: "place those next to each other... fusions belong
-		// in the back of the map, furthest from the enemy").
-		const bool bigE = Catalog::gMakeE[int(w.def.id)]
-				>= ai.GetTunable("apex_big_e", TUNE_BIG_E);
-		if (bigE)
-			w.pos = BigEnergySite();
-		const AIFloat3 slot = bigE ? w.pos
-				: (gFarmSet ? FarmSlot(int(w.def.id)) : w.pos);
+		// in the back of the map, furthest from the enemy"). The farm sits in
+		// the rear of the base axis, which is that ground.
+		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : BigEnergySite();
 		{
 			IUnitTask@ jt = JoinBig(w.def);
 			if (jt !is null)
@@ -235,19 +239,19 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if (Catalog::gCostM[int(w.def.id)] > 500.f)
 			w.pos = ClearOfSpots(w.pos, 150.f);
 		return Requests::Take(unit, w.def, Task::BuildType::ENERGY,
-				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f,
+				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f,
 				crtd, par);
 	}
 	if (w.kind == WK_CONVERT) {
 		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
 		return Requests::Take(unit, w.def, Task::BuildType::CONVERT,
-				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f,
+				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f,
 				crtd, par);
 	}
 	if (w.kind == WK_STORE) {
 		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
 		return Requests::Take(unit, w.def, Task::BuildType::STORE,
-				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 96.f, 0.f);
+				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f);
 	}
 	if (w.kind == WK_PLANT) {
 		IUnitTask@ jt = JoinBig(w.def);

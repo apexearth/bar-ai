@@ -225,30 +225,54 @@ void KinNear(CCircuitDef@ def, array<AIFloat3>& out kin)
 	}
 }
 
-// Lattice index into its pocket: which cell of the repeating pocket+gutter
-// period this one is. Written out because AngelScript's % keeps the sign of
-// the dividend, and lateral indices run negative.
-int PocketCell(int i, int per)
+// Sizes of the connected clusters `kin` forms, one entry per kin. Two of a def
+// belong to the same cluster when they touch on the lattice, so a cluster is
+// exactly the block a builder works without walking -- and its size is what
+// says whether the next one starts here or somewhere else.
+void ClusterSizes(const array<AIFloat3>& in kin, float link, array<int>& out size)
 {
-	int m = i % per;
-	return (m < 0) ? (m + per) : m;
-}
-
-int KinWithin(const array<AIFloat3>& in kin, const AIFloat3& in p, float r)
-{
-	int n = 0;
-	for (uint i = 0; i < kin.length(); ++i) {
-		if (kin[i].distance2D(p) < r)
-			++n;
+	const uint n = kin.length();
+	array<int> grp(n, -1);
+	array<int> count;
+	int groups = 0;
+	for (uint i = 0; i < n; ++i) {
+		if (grp[i] >= 0)
+			continue;
+		// Flood from i: anything touching the growing set joins it.
+		grp[i] = groups;
+		count.insertLast(1);
+		bool grew = true;
+		while (grew) {
+			grew = false;
+			for (uint a = 0; a < n; ++a) {
+				if (grp[a] != groups)
+					continue;
+				for (uint b = 0; b < n; ++b) {
+					if ((grp[b] >= 0) || (kin[a].distance2D(kin[b]) > link))
+						continue;
+					grp[b] = groups;
+					++count[groups];
+					grew = true;
+				}
+			}
+		}
+		++groups;
 	}
-	return n;
+	size.resize(n);
+	for (uint i = 0; i < n; ++i)
+		size[i] = count[grp[i]];
 }
 
-// THE FARM LATTICE. One shared grid anchored on the farm centre; each def
-// walks it on its OWN footprint pitch, which is the only pitch on which two of
-// them touch. Rows fill across then stack rearward, so the next slot is always
-// beside the last (apexearth: "should make tighter, less walking") and a hole
-// left by a loss is refilled by the next build rather than orphaned.
+// THE BASE LAYOUT, one slot at a time (apexearth 2026-08-25). A building goes
+// beside kin of its own def -- top, bottom, left or right -- until that cluster
+// is big enough, and then the next one starts a fresh cluster an aisle away.
+// Nothing is spaced by what its death does; see manager/lattice.as.
+//
+// Slots come off the shared lattice anchored on the BASE ANCHOR, not the farm
+// centre: C++ snaps every placement onto the anchor's grid
+// (CCircuitAI::SnapToBaseGrid), so a scan run from any other origin has each
+// answer moved off the phase the scan itself is walking. The farm only decides
+// where on the lattice to start looking.
 //
 // A slot is taken only if the engine agrees it is buildable AT THAT POINT. The
 // old code handed out a row/column intent and let the task's own 1600-elmo
@@ -259,28 +283,17 @@ AIFloat3 FarmSlot(int defId)
 	CCircuitDef@ def = Catalog::Def(defId);
 	if (def is null)
 		return gFarmPos;
-	// THE LATTICE ORIGIN IS THE BASE ANCHOR, NOT THE FARM CENTRE. C++ snaps
-	// every placement onto the anchor's grid (CCircuitAI::SnapToBaseGrid), so a
-	// scan run from any other origin has each answer moved off the phase the
-	// scan itself is walking -- which is a lattice that never closes, however
-	// carefully the intents were spaced. The farm only decides WHERE ON the
-	// lattice to start looking.
-	//
-	// The step is the def's STRIDE, which C++ uses too: its footprint, widened
-	// past its own firebreak where one loss would take the whole pack.
 	const float pitch = Lattice::StrideOf(defId);
-	const float fb = Lattice::Firebreak(defId);
-	// THE POCKET. A def that can chain packs flush in blocks of `side` cells
-	// with a firebreak gutter between blocks, so one blast costs a pocket and
-	// never the economy. side 0 means no pocket: the def either cannot cascade
-	// (tile it all) or is expensive enough that it stands alone, and there the
-	// stride is already the firebreak.
-	const int cap = Lattice::PocketN(defId);
-	const int side = Lattice::PocketSide(defId);
-	const int period = side + Lattice::GutterCells(defId);
+	const float touch = pitch * 1.05f;   // an orthogonal neighbour, and only that
+	const float link = pitch * 1.45f;    // same cluster: orthogonal or diagonal
+	const float aisle = Lattice::AisleW();
+	const int cluN = Lattice::ClusterN();
+
 	array<AIFloat3> kin;
-	if ((cap > 0) && (fb > 0.f))
-		KinNear(def, kin);
+	KinNear(def, kin);
+	array<int> csize;
+	ClusterSizes(kin, link, csize);
+
 	// GROUND ALREADY ASKED FOR IS NOT FREE GROUND. A request that exists but
 	// has not started its nanoframe does not block the engine's map, so the
 	// scan below reads its slot as empty and hands it to the next asker too --
@@ -288,32 +301,47 @@ AIFloat3 FarmSlot(int defId)
 	// nothing. Measured: energy was the most-refused want of all, 229 refusals
 	// against 201 elections that ended in no task at all.
 	array<AIFloat3> claimed;
+	array<int> claimedDef;
 	for (uint qi = 0; qi < Requests::gLive.length(); ++qi) {
 		IUnitTask@ qt = Requests::gLive[qi];
 		if ((qt is null) || qt.IsDead())
 			continue;
 		const AIFloat3 qp = qt.GetBuildPos();
-		if (OnMap(qp))
-			claimed.insertLast(qp);
+		if (!OnMap(qp))
+			continue;
+		claimed.insertLast(qp);
+		claimedDef.insertLast((qt.buildDef is null) ? 0 : int(qt.buildDef.id));
 	}
+
 	float depth0 = 0.f, lat0 = 0.f;
 	Base::Coords(gFarmPos, depth0, lat0);
 	depth0 = Lattice::Snap(depth0, pitch);
 	lat0 = Lattice::Snap(lat0, pitch);
 	const int lat = int((FarmRowW() * .5f) / pitch);
 	const int rows = int(ai.GetTunable("apex_farm_rows", TUNE_FARM_ROWS));
+
+	// GROW slots (beside kin, cluster not yet full) and the best SEED slot
+	// (clear ground for a new cluster), collected in one pass and resolved
+	// after: growth always wins, so a cluster fills before another opens.
+	//
+	// A LIST, not a single best. The engine has the last word on whether a slot
+	// is buildable, and when only the top candidate was offered to it a single
+	// blocked cell -- a wreck, a slope, a unit standing there -- fell straight
+	// through to the seed and started a new cluster an aisle away for no
+	// reason. Every grow slot is tried in score order before that happens.
+	array<AIFloat3> growAt;
+	array<int> growScore;
+	array<int> growRow;
+	AIFloat3 seedAt;
+	float seedScore = -1.f;
+	int seedJ = 0;
+
 	for (int j = 0; j <= rows; ++j) {
 		for (int i = -lat; i <= lat; ++i) {
 			const AIFloat3 p = Base::gAnchor
 					+ Base::gAcross * (lat0 + float(i) * pitch)
 					- Base::gFwd * (depth0 + float(j) * pitch);
 			if (!OnMap(p) || NearSpot(p))
-				continue;
-			// The gutter is left empty for THIS def; another def whose own
-			// pocket lands there tiles into it, so the firebreak costs company
-			// rather than ground.
-			if ((side > 0) && ((PocketCell(i, period) >= side)
-					|| (PocketCell(j, period) >= side)))
 				continue;
 			// LEAVE THE WALKWAYS EMPTY. The old band grid dropped every column
 			// overlapping a lane; this scan did not, and the eco yards that used to
@@ -329,24 +357,104 @@ AIFloat3 FarmSlot(int defId)
 				if (Base::LaneGap(pl) < (Base::LANE_HALF + pitch * 0.5f))
 					continue;
 			}
-			if ((cap > 0) && (fb > 0.f) && (KinWithin(kin, p, fb) >= cap))
-				continue;
-			bool taken = false;
-			for (uint qj = 0; qj < claimed.length(); ++qj) {
-				if (claimed[qj].distance2D(p) < pitch) {
-					taken = true;
-					break;
+			// Rule 1/2: how many kin this slot would touch, how many it would
+			// join, and whether that cluster still has room.
+			//
+			// NEAR, not just TOUCHING. Kin that were placed off the lattice --
+			// the opening builds before the farm exists, anything the engine's
+			// own site search settled -- sit at no exact multiple of the pitch,
+			// so an adjacency-only test finds no slot beside them and starts a
+			// fresh cluster instead. Growing from `link` re-anchors the block
+			// onto the lattice around them.
+			int adj = 0;
+			int near = 0;
+			bool full = false;
+			float kinGap = -1.f;
+			for (uint k = 0; k < kin.length(); ++k) {
+				const float d = kin[k].distance2D(p);
+				if ((kinGap < 0.f) || (d < kinGap))
+					kinGap = d;
+				if (d < touch)
+					++adj;
+				if (d < link) {
+					++near;
+					if (csize[k] >= cluN)
+						full = true;
 				}
 			}
-			if (taken)
+			// Rule 4: a slot touching a different def is not this def's ground,
+			// however well it suits the cluster.
+			const float foreignGap = Lattice::ForeignGap(defId, p);
+			bool blocked = (foreignGap >= 0.f) && (foreignGap < touch);
+			for (uint qj = 0; (qj < claimed.length()) && !blocked; ++qj) {
+				const float d = claimed[qj].distance2D(p);
+				if (d < pitch)
+					blocked = true;   // already asked for, whoever asked
+				else if (d < touch) {
+					if (claimedDef[qj] != defId)
+						blocked = true;
+					else
+						++adj;   // an in-flight neighbour still grows a cluster
+				}
+			}
+			if (blocked)
 				continue;
-			// Onto this def's own build parity before asking, or the search
-			// starts half a cell off and answers with a neighbouring slot.
-			const AIFloat3 want = ai.SnapBuildPos(def, p);
-			const AIFloat3 site = ai.FindBuildSiteNear(def, want, Lattice::CELL);
-			if (!OnMap(site) || (site.distance2D(want) > Lattice::CELL * .5f))
-				continue;   // occupied, or the terrain will not take it
-			const float depth = float(j) * pitch;
+			if (near > 0) {
+				if (full)
+					continue;
+				// Prefer the slot with the MOST kin around it: that fills the
+				// concave corner of a block rather than extending a line, which
+				// is what keeps a cluster square and the walking short. Touching
+				// outranks merely near, so a flush slot always beats a re-anchor.
+				growAt.insertLast(p);
+				growScore.insertLast(adj * 16 + near);
+				growRow.insertLast(j);
+				continue;
+			}
+			// Rule 3: a new cluster starts on ground an aisle clear of
+			// everything, so big units keep a street between the blocks.
+			if ((kinGap >= 0.f) && (kinGap < aisle))
+				continue;
+			if ((foreignGap >= 0.f) && (foreignGap < aisle))
+				continue;
+			// Nearest such ground to the farm centre, so a new cluster opens
+			// beside the base rather than out in the map.
+			const float d0 = p.distance2D(gFarmPos);
+			if ((seedScore < 0.f) || (d0 < seedScore)) {
+				seedScore = d0;
+				seedAt = p;
+				seedJ = j;
+			}
+		}
+	}
+
+	// Onto this def's own build parity before asking, or the search starts half
+	// a cell off and answers with a neighbouring slot.
+	const int tries = int(ai.GetTunable("apex_slot_tries", TUNE_SLOT_TRIES));
+	for (int t = 0; t < tries; ++t) {
+		int best = -1;
+		for (uint g = 0; g < growAt.length(); ++g) {
+			if ((growScore[g] >= 0)
+				&& ((best < 0) || (growScore[g] > growScore[best])))
+				best = int(g);
+		}
+		if (best < 0)
+			break;
+		growScore[best] = -1;   // spent, whatever the engine says
+		const AIFloat3 want = ai.SnapBuildPos(def, growAt[best]);
+		const AIFloat3 site = ai.FindBuildSiteNear(def, want, Lattice::CELL);
+		if (OnMap(site) && (site.distance2D(want) <= Lattice::CELL * .5f)) {
+			const float depth = float(growRow[best]) * pitch;
+			if (depth > gFarmDepth)
+				gFarmDepth = depth;
+			return site;
+		}
+	}
+	if (seedScore >= 0.f) {
+		const AIFloat3 want = ai.SnapBuildPos(def, seedAt);
+		const AIFloat3 site = ai.FindBuildSiteNear(def, want, Lattice::CELL);
+		if (OnMap(site) && (site.distance2D(want) <= Lattice::CELL * .5f)) {
+			const float depth = float(seedJ) * pitch;
 			if (depth > gFarmDepth)
 				gFarmDepth = depth;
 			return site;

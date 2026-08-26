@@ -275,7 +275,7 @@ void NoteFinished(CCircuitUnit@ unit)
 		return;
 	const int defId = int(unit.circuitDef.id);
 	OwnAdd(defId, 1);
-	Lattice::NotePlaced(defId, unit.GetPos(ai.frame));
+	Lattice::NotePlaced(defId, unit.GetPos(ai.frame), unit.id);
 	if (!Catalog::gMobile[defId] && (Catalog::gMakeE[defId] > 1.f)
 		&& !Catalog::gNeedGeo[defId])
 	{
@@ -357,6 +357,7 @@ void NoteDead(CCircuitUnit@ unit)
 		return;
 	WorkerGone(unit.id);
 	EscortGone(unit.id);
+	Lattice::NoteDead(unit.id);
 	LossNote(int(unit.circuitDef.id));
 	for (uint gi = 0; gi < gOwnGenIds.length(); ++gi) {
 		if (gOwnGenIds[gi] == unit.id) {

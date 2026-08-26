@@ -1816,18 +1816,15 @@ const float TUNE_STUCK_RETRY = 120.f;
 //   same.
 // manager/builder/mexguard.as [metal/s] -- From this income dragon's-teeth
 //   walls are obsolete: stop building them and start reclaiming them.
-// manager/lattice.as [count] -- A structure that survives this many blast-
-//   neighbour deaths packs FLUSH; below it the lattice stride widens past the
-//   def's own firebreak. 3 is the point where a single loss can no longer
-//   start a cascade, since two neighbour deaths leave the third standing.
-const float TUNE_CHAIN_SAFE_K = 3.f;
-// manager/lattice.as [seconds of metal income] -- The CATASTROPHE BUDGET: how
-//   much of the economy one blast may take. A pocket holds that many seconds
-//   of income divided by the def's true cost (metal plus energy at
-//   apex_e_per_metal), so a 10 m/s opening packs small pockets and a 400 m/s
-//   base packs ones it can afford to lose. The firebreak sits between pockets,
-//   never between neighbours.
-const float TUNE_POCKET_SECS = 60.f;
+// manager/brain/market/sites.as [count] -- Lattice slots offered to the engine
+//   before a placement gives up on growing a cluster and seeds a new one. A
+//   bound on WORK per placement: each try is one FindBuildSiteNear.
+const float TUNE_SLOT_TRIES = 12.f;
+// manager/lattice.as [count] -- How many of one def stand together before the
+//   next starts a fresh cluster elsewhere, so the whole economy is not in one
+//   spot. 16 is a 4x4 block; the aisle between clusters is derived from the
+//   widest unit we field, not tuned here.
+const float TUNE_CLUSTER_N = 16.f;
 // manager/brain/market/sites.as [count] -- Rows of lattice the farm scan walks
 //   rearward before giving up. A bound on WORK per placement, not on the base.
 const float TUNE_FARM_ROWS = 28.f;
