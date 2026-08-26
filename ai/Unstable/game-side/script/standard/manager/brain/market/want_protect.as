@@ -168,6 +168,28 @@ bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 		if (pos.distance2D(gProtPos[cls][i]) < r)
 			return true;
 	}
+	// ONE ALREADY COMING COVERS THIS GROUND. gProtPos is written at
+	// AiUnitFinished, so ground a half-built anti-nuke already answers read as
+	// answered by nothing and the market sited a second one beside it.
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		if (ProtClassOf(int(t.buildDef.id)) != cls)
+			continue;
+		const AIFloat3 where = t.GetBuildPos();
+		if (OnMap(where) && (pos.distance2D(where) < r))
+			return true;
+	}
+	// ...and so does one nobody is working: the frame is standing whether or
+	// not a request still remembers it.
+	Requests::PendSweep();
+	for (uint i = 0; i < Requests::gPendId.length(); ++i) {
+		if (ProtClassOf(Requests::gPendDef[i]) != cls)
+			continue;
+		if (pos.distance2D(Requests::gPendPos[i]) < r)
+			return true;
+	}
 	return false;
 }
 

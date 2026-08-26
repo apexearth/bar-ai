@@ -151,6 +151,7 @@ void AiUnitFinished(CCircuitUnit@ unit)
 		return;
 	Brain::NoteProduced(unit);
 	Market::NoteFinished(unit);
+	Requests::PendDrop(unit.id);
 	Market::NoteFarm(unit);
 	Brain::NoteSiloFinished(unit);
 	if ((int(unit.id) >= 0) && (int(unit.id) < int(gFinished.length())))
@@ -182,6 +183,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	Market::NoteDead(unit);
 	if (unit is null)
 		return;
+	Requests::PendDrop(unit.id);
 	// The PREVIOUS death's flag is cleared now, so this id can be reused
 	// cleanly, while AiUnitDestroyedBy (which follows this call) still read it.
 	if ((gFinishedClearPending >= 0)

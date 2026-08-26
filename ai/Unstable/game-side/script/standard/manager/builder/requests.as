@@ -393,6 +393,124 @@ float Progress(IUnitTask@ t)
 	return (nano is null) ? 0.f : nano.GetHealthPercent();
 }
 
+// -- buildings of ours already standing half-finished -------------------------
+//
+// A NANOFRAME OUTLIVES ITS REQUEST. IBuilderTask::OnUnitDestroyed aborts on
+// `(target == nullptr) || units.empty()`, so losing the one builder mid-build
+// removes the task while the frame stays up; nothing else remembers it, because
+// the census credits a structure at AiUnitFinished. Between the two the market
+// reads "none standing, none coming", sites another, and a nano turret in range
+// quietly finishes the first -- two anti-nukes for one decision.
+//
+// Ids, not handles: every entry is re-read through ai.GetTeamUnit, so a frame
+// that dies between events cannot leave a dangling pointer behind.
+array<Id>       gPendId;
+array<int>      gPendDef;
+array<AIFloat3> gPendPos;
+int gPendSweptAt = -1;
+
+void PendDrop(Id id)
+{
+	for (uint i = 0; i < gPendId.length(); ++i) {
+		if (gPendId[i] == id) {
+			gPendId.removeAt(i);
+			gPendDef.removeAt(i);
+			gPendPos.removeAt(i);
+			return;
+		}
+	}
+}
+
+// A request is leaving unfinished with its nanoframe already up: remember the
+// frame, which is the thing that is actually in progress.
+void PendNote(IUnitTask@ task)
+{
+	if (task is null)
+		return;
+	CCircuitUnit@ frame = task.target;
+	if ((frame is null) || (frame.circuitDef is null))
+		return;
+	if (frame.circuitDef.IsMobile())
+		return;
+	for (uint i = 0; i < gPendId.length(); ++i) {
+		if (gPendId[i] == frame.id)
+			return;
+	}
+	gPendId.insertLast(frame.id);
+	gPendDef.insertLast(int(frame.circuitDef.id));
+	gPendPos.insertLast(frame.GetPos(ai.frame));
+	AiLog(Factory::T() + "apex: frame-orphan " + frame.circuitDef.GetName()
+		+ " at=" + int(gPendPos[gPendPos.length() - 1].x)
+		+ "," + int(gPendPos[gPendPos.length() - 1].z)
+		+ " done=" + formatFloat(frame.GetHealthPercent(), "", 0, 2)
+		+ " standing=" + gPendId.length());
+}
+
+// Entries leave on AiUnitFinished/AiUnitDestroyed; this is the backstop for an
+// event we never saw. GetTeamUnit answers null for an id the AI no longer
+// holds, and a frame some live request has since bound as its target is that
+// request's business again rather than an orphan.
+void PendSweep()
+{
+	if (gPendSweptAt == ai.frame)
+		return;
+	gPendSweptAt = ai.frame;
+	for (uint i = 0; i < gPendId.length(); ) {
+		CCircuitUnit@ u = ai.GetTeamUnit(gPendId[i]);
+		bool gone = (u is null) || (u.circuitDef is null);
+		for (uint k = 0; !gone && (k < gLive.length()); ++k) {
+			IUnitTask@ t = gLive[k];
+			if ((t !is null) && !t.IsDead() && (t.target !is null)
+				&& (t.target.id == gPendId[i]))
+				gone = true;
+		}
+		if (gone) {
+			gPendId.removeAt(i);
+			gPendDef.removeAt(i);
+			gPendPos.removeAt(i);
+		} else {
+			++i;
+		}
+	}
+}
+
+// How many of this def stand unfinished with no request of their own.
+uint PendCount(const CCircuitDef@ want)
+{
+	if (want is null)
+		return 0;
+	PendSweep();
+	uint n = 0;
+	for (uint i = 0; i < gPendId.length(); ++i) {
+		if (gPendDef[i] == int(want.id))
+			++n;
+	}
+	return n;
+}
+
+// The abandoned frame of this def nearest `spot`, within `reach`.
+CCircuitUnit@ PendNear(const CCircuitDef@ want, const AIFloat3& in spot, float reach)
+{
+	if ((want is null) || !OnMap(spot))
+		return null;
+	PendSweep();
+	CCircuitUnit@ best = null;
+	float bestDist = reach;
+	for (uint i = 0; i < gPendId.length(); ++i) {
+		if (gPendDef[i] != int(want.id))
+			continue;
+		const float d = spot.distance2D(gPendPos[i]);
+		if (d > bestDist)
+			continue;
+		CCircuitUnit@ u = ai.GetTeamUnit(gPendId[i]);
+		if (u is null)
+			continue;
+		@best = u;
+		bestDist = d;
+	}
+	return best;
+}
+
 // The same job, for matching purposes. Same def always; and one reactor rung
 // counts as another, because HomeEnergy re-ranks fusion against advanced fusion
 // every call and each rung was otherwise blind to the other rung's work. Only a
@@ -519,6 +637,10 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	const AIFloat3 at = spot;
 
 	const int type = int(bt);
+	// Extractor work is never a duplicate: two spots are two different things
+	// wanted for their own sake (see Governed above).
+	const bool spotWork = (type == int(Task::BuildType::MEX))
+			|| (type == int(Task::BuildType::MEXUP));
 	// WHY A SECOND TASK FOR A DEF THAT ALREADY HAS ONE. ~500 tasks were created
 	// for one advanced lab while only 1-2 were ever live, and each new one
 	// re-targets the builder mid-walk -- which is why it oscillates instead of
@@ -568,6 +690,52 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 		Log(want, "covered");
 		return null;
 	}
+	// A FRAME OF OURS IS ALREADY UP HERE -- FINISH IT, NEVER START A SECOND.
+	// The metal in it is spent, and the alternative is what turns into two of
+	// the same building: nothing is working the frame, so a passing nano turret
+	// completes it while this decision raises another somewhere else. Guard,
+	// not a fresh build task -- a build order needs a free square and the frame
+	// is standing on the only one that matters. Not extractor work: two spots
+	// are two different things wanted for their own sake, which is the same
+	// reason mex and mexup are exempt from the dedup above.
+	if (!spotWork) {
+		const float pendReach = Positional(type)
+				? ((radius > 0.f) ? radius : SAME_SITE) : REACH;
+		CCircuitUnit@ frame = PendNear(want, at, pendReach);
+		if ((frame !is null) && (unit !is null)
+			&& (Builder::ThreatFor(unit, frame.GetPos(ai.frame))
+				> Builder::CON_THREAT_VETO))
+			@frame = null;   // abandoned because the ground is hot; still is
+		if (frame !is null) {
+			if (unit is null) {
+				++gCovered;
+				Log(want, "frame-standing");
+				return null;
+			}
+			// Committed for as long as the frame has left to run at one pair
+			// of hands, so the guard does not outlive the job it was taken
+			// for; if it is still up after that the market re-decides and
+			// lands back here.
+			// Clamped: GetHealthPercent subtracts capture progress and reads
+			// negative on a fresh frame, which would price the hold above the
+			// building's whole cost.
+			float done = frame.GetHealthPercent();
+			if (done < 0.f)
+				done = 0.f;
+			else if (done > 1.f)
+				done = 1.f;
+			const float left = want.costM * (1.f - done);
+			const int hold = int(left / DRAIN) + 10;
+			IUnitTask@ res = aiBuilderMgr.Enqueue(
+					TaskB::Guard(prio, frame, false, hold * SECOND));
+			if (res !is null) {
+				++gJoined;
+				Log(want, "resume-frame");
+				return res;
+			}
+		}
+	}
+
 	if (!Positional(type)) {
 		// Somewhere else in reach, one of these is already going up.
 		// Serializing onto it is the point for an unsaturated site: the metal

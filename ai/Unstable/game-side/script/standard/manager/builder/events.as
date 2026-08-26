@@ -99,6 +99,10 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 		}
 		AiLog(ln);
 	}
+	// The frame this task raised is still standing and is about to have no
+	// record anywhere: hand it to the ledger before the task goes.
+	if (!done)
+		Requests::PendNote(task);
 	Requests::Forget(task);
 }
 

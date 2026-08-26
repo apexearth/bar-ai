@@ -208,6 +208,17 @@ void SuperCensus()
 		++gSuperHave[sc];
 		++gSuperFlight;
 	}
+	// A frame nobody is working still counts as one we are getting: its
+	// request is gone but the building is half up, and a nano turret in range
+	// will finish it.
+	Requests::PendSweep();
+	for (uint i = 0; i < Requests::gPendId.length(); ++i) {
+		const int sc = SuperClassOf(Requests::gPendDef[i]);
+		if (sc < 0)
+			continue;
+		++gSuperHave[sc];
+		++gSuperFlight;
+	}
 }
 
 int SuperHave(int sc)

@@ -1,5 +1,48 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-26: a nanoframe outlives its request, so we built the same thing twice
+
+apexearth: "Sometimes we decide that we want to build something like an anti
+nuke but it happens that we were already in progress to do that but got
+distracted for a moment. We then choose to make a new one, and sometimes a nano
+turret will finish the first one, so then we have 2 of those buildings."
+
+Everything that answered "is one of these already coming" read
+`Requests::gLive`, a registry of TASKS. `IBuilderTask::OnUnitDestroyed` aborts
+on `(target == nullptr) || units.empty()`, so losing the one builder mid-build
+removes the task while the frame stays standing — and the census credits a
+structure only at `AiUnitFinished`. Between the two the AI owns a half-built
+anti-nuke that nothing in it knows about: `ProtCovered` reads the ground as
+uncovered, `SuperCensus` reads have=0, a second is sited, and a nano turret in
+range quietly finishes the first.
+
+**Measured: 66-89 abandoned nanoframes per 30-minute 1v1** (armmex 44, armmakr
+9, armadvsol 9, armsolar 8, armrad 6, armllt 5, armnanotc 3 in one game). Not a
+rare race — the normal outcome of losing a constructor.
+
+- **`Requests` keeps a ledger of orphaned frames** (`gPendId`/`gPendDef`/
+  `gPendPos`): entered from `AiTaskRemoved` when a task leaves unfinished with
+  its `target` up, left at `AiUnitFinished`/`AiUnitDestroyed`, with a sweep
+  through `ai.GetTeamUnit` as the backstop for an event never seen. Ids, not
+  handles, so a frame that dies between events cannot dangle. Bounded at 7-11
+  entries across a game.
+- **`Take` finishes the frame instead of starting a second.** A pending frame of
+  the wanted def within the site radius (positional) or `REACH` (everything
+  else) is adopted with a `TaskB::Guard` on it — a build order needs a free
+  square and the frame is standing on the only one that matters; guarding a
+  nanoframe pushes `CMD_REPAIR` in `CBuilderCAI::ExecuteGuard`. The hold is the
+  frame's remaining cost at one pair of hands, so the guard does not outlive the
+  job. Vetoed by the same `CON_THREAT_VETO` as `JoinFor`: a frame abandoned
+  because the ground was hot is not walked back to. Mex/mexup exempt, for the
+  reason they are exempt from the rest of the dedup.
+- **`ProtCovered` and `SuperCensus` count what is coming**, both the live-task
+  kind and the orphaned kind. `ProtCovered` previously consulted neither, which
+  is why the anti-nuke case reached the auction at all.
+
+New log lines: `apex: frame-orphan <def> at=x,z done= standing=`, and
+`apex: request resume-frame` / `frame-standing` alongside the existing request
+outcomes.
+
 ## 2026-08-26: energy nothing converts is worth nothing
 
 apexearth: "When we are overflowing energy that energy provides no value in the
