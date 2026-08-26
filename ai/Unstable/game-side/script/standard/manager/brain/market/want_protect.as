@@ -266,6 +266,43 @@ float MobileAACoverM()
 // rise again on their own if something does.
 //------------------------------------------------------------------------------
 
+// MINIMUM PROTECTION PER MEX, in turret metal.
+//
+// The rest of this file prices defence against what it can SEE arriving. That
+// is right for a contested lane and useless for the opening: a fresh mex has
+// never been shot at, so its wave reads zero, so it is not a candidate at all.
+// This is the other half -- what a mex is worth covering before anything has
+// happened to it -- expressed in the faction's own light tower so it means the
+// same thing on every faction and at every tier.
+float MexCoverFloorM()
+{
+	return ai.GetTunable("apex_mex_cover_floor", TUNE_MEX_COVER_FLOOR)
+			* LightTowerCostM();
+}
+
+// How many mexes of ours are standing. A claim that has not finished has no
+// extraction and is not one.
+int OwnMexCount()
+{
+	int n = 0;
+	for (uint i = 0; i < gLExtract.length(); ++i) {
+		if (gLExtract[i] > 0.f)
+			++n;
+	}
+	return n;
+}
+
+// Is this position one of our standing mexes? Diagnostics only: it is how
+// "did it cover the spot it was standing on" is read off a log.
+bool SiteIsMex(const AIFloat3& in pos)
+{
+	for (uint i = 0; i < gLPos.length(); ++i) {
+		if ((gLExtract[i] > 0.f) && (gLPos[i].distance2D(pos) < 200.f))
+			return true;
+	}
+	return false;
+}
+
 // Static ground defence we own, in metal.
 float DefenceValue()
 {
@@ -301,8 +338,12 @@ float DefenceTarget()
 		if (floorM > threat)
 			threat = floorM;
 	}
+	// The per-mex floor is a target too. The site loop below will not buy a
+	// turret the global target says we already have enough of, so the two must
+	// agree about the floor or it never gets built.
+	const float mexFloor = MexCoverFloorM() * float(OwnMexCount());
 	if (threat <= 1.f)
-		return 0.f;
+		return mexFloor;
 	const float share = ai.GetTunable("apex_def_army_share", TUNE_DEF_ARMY_SHARE);
 	// ...and what the TEAM already holds here. Same reason ShortfallAt counts
 	// ally influence: the rear player's ground is answered by four teammates,
@@ -313,11 +354,17 @@ float DefenceTarget()
 	// ourArmy 11003, target 0 on all eight).
 	float unanswered = threat - ArmyValue() * share;
 	if (unanswered <= 0.f)
-		return 0.f;
+		return mexFloor;
 	const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
 	float t = unanswered / ((trade > 0.f) ? trade : 2.f);
 	if (EcoRoleActive())
 		t *= ai.GetTunable("apex_eco_def_mul", TUNE_ECO_DEF_MUL);
+	// ...and the floor applies to the rear specialist as well. apex_eco_def_mul
+	// defaults to 0 on the argument that four teammates stand in front of it --
+	// which is true of the wave and not of a raider that walked around them,
+	// and the rear is where the economy lives.
+	if (mexFloor > t)
+		t = mexFloor;
 	return (t > 0.f) ? t : 0.f;
 }
 
@@ -556,6 +603,11 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				if (gLExtract[li] > 0.f)
 					sites.insertLast(gLPos[li]);
 			}
+			// Sites below this index are standing mexes, and only they carry
+			// the floor: it is protection PER MEX, not a blanket raise on
+			// every piece of ground we happen to own.
+			const uint nMex = sites.length();
+			const float mexFloorWave = MexCoverFloorM() * trade;
 			for (uint bg = 0; bg < gOwnBig.length(); ++bg) {
 				if (gOwnBig[bg] !is null)
 					sites.insertLast(gOwnBig[bg].GetPos(ai.frame));
@@ -631,8 +683,33 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						sites.insertLast(line[fi]);
 				}
 			}
+			// WHAT THE PRICE WILL CHARGE FOR GETTING THERE.
+			//
+			// The loop below used to rank sites on the raw loss a turret
+			// prevents and hand the winner to ValueOf, which only then charged
+			// the walk. So the builder standing on the mex it had just finished
+			// was sent across the base to whichever site scored marginally
+			// higher, and the tower it should have put down where it stood was
+			// never proposed at all -- apexearth: "units making mex and then
+			// not immediately making the light tower to cover it".
+			//
+			// mCost and buildSec are the same at every site (one def), so
+			// ranking on the price's own shape costs nothing but the walk. That
+			// is the whole of "cover what you just built": no sequencing rule,
+			// no bonus for the last thing finished -- the builder is simply
+			// already standing there, and the asset's late start is what an
+			// away site actually costs.
+			const float wage = Wage();
+			const float walkW = ai.GetTunable("apex_def_site_walk",
+					TUNE_DEF_SITE_WALK);
+			const float uSpeed = Catalog::gSpeed[uid];
+			const AIFloat3 uPos = unit.GetPos(ai.frame);
+			const float kCost = Catalog::gCostM[d]
+					+ Catalog::BuildSecondsAt(d,
+							EffBP(Catalog::gBuildPower[uid])) * wage;
 			AIFloat3 bestAt = at;
 			float bestGain = 0.f;
+			float bestScore = 0.f;
 			bool bestIsFront = false;
 			// Closure as it stands, computed once: it does not depend on which
 			// candidate site we are pricing.
@@ -641,7 +718,12 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				const AIFloat3 s = sites[si];
 				if (!OnMap(s))
 					continue;
-				const float threat = ThreatM(s);
+				float threat = ThreatM(s);
+				// A mex nothing has attacked yet still has to be able to meet
+				// the floor.
+				const bool floored = (si < nMex) && (mexFloorWave > threat);
+				if (floored)
+					threat = mexFloorWave;
 				if (threat <= 1.f)
 					continue;
 				// What it can shoot over, plus what it stands between the
@@ -669,6 +751,29 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				float short1 = (threat - cover1) / threat;
 				if (short1 < 0.f)
 					short1 = 0.f;
+				float stopped = short0 - short1;
+				// A FLOOR IS FILLED IN STEPS, NOT MET IN ONE JUMP. Against a
+				// wave we can see, the share a turret newly stops is the right
+				// price and it falls as cover rises. Against the floor -- a
+				// wave nobody has seen -- that same arithmetic made each turret
+				// worth LESS the higher the floor was set, because one tower is
+				// a smaller fraction of a bigger assumed wave: measured on one
+				// seed, floor 1 built a turret from minute 1.9 and floor 3
+				// built none at all in ten minutes. A floor's height has to
+				// decide how MANY are wanted, not how little each is worth, so
+				// an under-floor turret is priced on the step of the floor it
+				// actually fills. Still zero for a post that cannot raise the
+				// weakest bearing, which is the discrimination short1 exists
+				// for.
+				if (floored) {
+					const float gained = cover1 - cover0;
+					float step = mexFloorWave - cover0;
+					if (step > gained)
+						step = gained;
+					stopped = (gained > 0.f) ? (step / gained) : 0.f;
+				}
+				if (stopped <= 0.f)
+					continue;
 				// A post against the map edge faces FEWER approaches, so the
 				// wave it must beat is smaller in proportion. This used to
 				// multiply by EdgeExposure, which is the same geometry with the
@@ -686,14 +791,21 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				const float sg = SiegeExpect(s);
 				if (sg > hz)
 					hz = sg;
-				float prevented = stake * hz * (short0 - short1);
+				float prevented = stake * hz * stopped;
 				prevented *= Military::OpenFraction(s, reach);
 				if (si >= nAsset) {
 					if (prevented > gDbgFrontBest) gDbgFrontBest = prevented;
 				} else if (prevented > gDbgAssetBest) {
 					gDbgAssetBest = prevented;
 				}
-				if (prevented > bestGain) {
+				// The same denominator ValueOf builds: the builder's idle
+				// seconds, plus the income the asset forgoes by starting late.
+				const float wSec = ((uSpeed > 1.f)
+						? (uPos.distance2D(s) / uSpeed) : 60.f) * walkW;
+				const float score = prevented
+						/ (kCost + wSec * wage + prevented * wSec);
+				if (score > bestScore) {
+					bestScore = score;
 					bestGain = prevented;
 					bestAt = s;
 					bestIsFront = (si >= nAsset);
@@ -738,7 +850,11 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " | econM=" + formatFloat(gAssetsM - gProtM, "", 0, 0)
 					+ " protM=" + formatFloat(gProtM, "", 0, 0)
 					+ " army=" + formatFloat(ArmyValue(), "", 0, 0)
-					+ " foeSeen=" + formatFloat(Military::EnemyArmyCost(), "", 0, 0));
+					+ " foeSeen=" + formatFloat(Military::EnemyArmyCost(), "", 0, 0)
+					+ " | mex=" + OwnMexCount()
+					+ " mexFloor=" + int(MexCoverFloorM() * float(OwnMexCount()))
+					+ " defHave=" + int(DefenceValue())
+					+ " defTarget=" + int(DefenceTarget()));
 			}
 			NoteDefSite(bestIsFront);
 			// Is the chosen post in FRONT of the base or behind it? He reports
@@ -746,6 +862,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			if (ai.frame >= gNextDefFwdLog) {
 				gNextDefFwdLog = ai.frame + 30 * SECOND;
 				AiLog("apex: defplace " + Catalog::Def(d).GetName()
+					+ " walk=" + int(unit.GetPos(ai.frame).distance2D(bestAt))
+					+ " mexSite=" + ((SiteIsMex(bestAt)) ? 1 : 0)
 					+ " fwd=" + formatFloat(Military::ForwardFraction(bestAt), "", 0, 2)
 					+ " anchorFwd=" + formatFloat(Base::gAnchorSet
 						? Military::ForwardFraction(Base::gAnchor) : -9.f, "", 0, 2)

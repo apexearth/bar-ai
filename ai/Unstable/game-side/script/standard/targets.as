@@ -1,5 +1,5 @@
 //==============================================================================
-// TARGETS -- every build ratio this AI aims at, as curves over economic power.
+// TARGETS -- how the metal is split by what it is FOR, as curves over income.
 //
 // Every row below is a CURVE, read against metal income. One shared income
 // axis, one row per thing, interpolated between the columns -- below the first
@@ -35,7 +35,7 @@ namespace Targets {
 array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 
 //------------------------------------------------------------------------------
-// 1. HOW THE METAL IS SPLIT, by what it is FOR.
+// HOW THE METAL IS SPLIT, by what it is FOR.
 //
 // Early the economy and build power matter most; once there is an economy to
 // spend, the army takes the largest share. Nothing else here claims metal for
@@ -73,7 +73,7 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 // weight moved into SPEND_ECONOMY below (def/airdef/buildpower untouched).
 // The 2026-08-19 raise this replaces was measured against the OLD spend
 // machinery; with the budget deferrals live, the target now actually binds.
-array<float> SPEND_ARMY       = { 2.0f,  4.0f,  3.0f,  4.0f,   5.0f };
+array<float> SPEND_ARMY       = { 4.0f,  4.0f,  5.0f,  5.0f,   5.0f };
 // LOW until T3-scale income, then RISING HARD -- apexearth: pre-T3 "defenses
 // are really only good versus raiders", but "at late game we should be
 // aggressive with flak on our front lines, T3 defense too. Right now we are
@@ -82,115 +82,7 @@ array<float> SPEND_ARMY       = { 2.0f,  4.0f,  3.0f,  4.0f,   5.0f };
 array<float> SPEND_DEFENCE    = { 4.0f,  4.0f,  4.0f,  4.0f,  4.0f };  // every validated Altair arm ran share_defence=4; online has no modoption, so the tested value IS the default
 array<float> SPEND_AIRDEF     = { 1.0f,  2.0f,  1.5f,  1.5f,  2.0f };
 array<float> SPEND_ECONOMY    = { 5.0f,  5.0f,  5.0f,  5.0f,  5.0f };   // absorbs the army cut, see SPEND_ARMY
-array<float> SPEND_BUILDPOWER = { 5.0f,  2.0f,  2.0f,  2.0f,  2.0f };
-
-//------------------------------------------------------------------------------
-// 2. WHAT THE ARMY IS MADE OF.
-//
-// The role decides how CircuitAI uses the unit, so these are tactical choices:
-//     RAIDER  -> raid parties, roam for weak spots        (Pawn, Grunt)
-//     ASSAULT -> the main attack group                    (Hound, Welder)
-//     SKIRM   -> outranges riots and assaults             (Gunslinger)
-//     RIOT    -> DEFEND tasks; the anti-raider answer     (Marauder)
-//     ARTY    -> siege, outranges static defence
-//     AA      -> anti-air, further scaled by observed enemy air
-//     HEAVY   -> the T2 push units                        (Fatboy)
-//     AH/AHA  -> anti-heavy; snipers and tank-killers     (Sharpshooter)
-//
-// Chaff fades as the economy grows -- a 54-metal Pawn dies to one shot from
-// anything a real economy fields. The heavy and anti-heavy rows climb to meet
-// it, because that is what the metal buys instead.
-//
-// THESE ROWS ARE READ IN TWO DIFFERENT UNITS. Brain::NextForMix weighs them against
-// held METAL (mix.as: `held = count * costM`), while Brain::QuotaFor turns them into
-// a target COUNT (`want = share * slots`) that FillQuota compares against
-// `defs[i].count`. On a line whose units all cost 40-100 metal the two agree. On a
-// gantry, whose defs run 950 to 29000, they do not.
-//
-// A row also only reaches a factory holding a def whose MAIN role is that role and
-// whose factory.json probability is above zero -- CFactoryManager::GetFacRoleDef
-// filters on both -- and QuotaFor renormalises over what the line can build. No
-// gantry in any faction has an AA, anti-heavy or builder def, so at gantry income
-// much of this table is spent by the T2 lines rather than by the gantry.
-//                            8     20     50    100    300
-//------------------------------------------------------------------------------
-// RAIDERS ARE A T1 UNIT: their job is reaching undefended ground early, and
-// once both sides hold a line a raider is metal walking into a turret. Never
-// zero past T1, though -- a small standing share of 42-metal Grunts is eyes,
-// which matters exactly when enemy jammers make seeing them the problem.
-// RAISED IN THE EARLY BRACKETS 2026-08-19. apexearth: "we don't seem to make as
-// many of the lighter units. The light tanks, grunts, pawns... these have good
-// dps they just lack range. They can easily overwhelm the enemy and the AI uses
-// a lot more of them than we do in the early game."
-//
-// The 0.35 -> 0.10 collapse by 20 m/s was tuned for the LATE argument (a raider
-// walking into a held line is wasted metal) but 20 m/s is still the opening, so
-// it emptied the mix of cheap DPS exactly where mass wins fights. The late
-// decline is unchanged -- this only sustains them through the early brackets.
-array<float> ROLE_RAIDER  = {0.35f, 0.25f, 0.10f, 0.05f, 0.03f};
-array<float> ROLE_ASSAULT = {0.35f, 0.20f, 0.40f, 0.18f, 0.08f};
-// Rises with the economy, never falls: apexearth 2026-08-15, watching --
-// "in the first few minutes we want mostly raiders, but as time goes on we
-// want much more thugs, units that are tough and can hold the line."
-// Thug/Hammer (corthud/armham) carry this role.
-array<float> ROLE_SKIRM   = {0.12f, 0.26f, 0.20f, 0.28f, 0.28f};
-array<float> ROLE_RIOT    = {0.10f, 0.10f, 0.10f, 0.09f, 0.08f};
-array<float> ROLE_ARTY    = {0.03f, 0.05f, 0.15f, 0.10f, 0.12f};
-array<float> ROLE_AA      = {0.05f, 0.06f, 0.07f, 0.07f, 0.07f};
-// Fatboys, and the anti-heavy pair that is Snipers and tank-killers. These are
-// what the raider share becomes: units that hold ground and outrange what walks
-// into them, which is the composition for being pushed back rather than pushing.
-array<float> ROLE_HEAVY   = {0.00f, 0.02f, 0.20f, 0.26f, 0.28f};
-array<float> ROLE_AH      = {0.00f, 0.00f, 0.07f, 0.10f, 0.12f};
-array<float> ROLE_AHA     = {0.00f, 0.00f, 0.07f, 0.10f, 0.11f};
-
-//------------------------------------------------------------------------------
-// 2b. HOW DEFENCE ITSELF IS SPLIT.
-//
-// Two different jobs share the SPEND_DEFENCE share, and they must not compete
-// for it: holding the front line is the Brain's macro decision, while guarding
-// an extractor or answering a constructor that keeps being shot is local work
-// that belongs to the rule that noticed. On one shared allowance the local work
-// wins by sheer number -- there are far more mexes than lanes -- and the front
-// line ends up depending on how many extractors we happen to own.
-//
-// Relative weights, like everything else here.
-//                       8     20     50    100    300
-//------------------------------------------------------------------------------
-// The opening columns used to give LOCAL a bigger or equal share than FRONT
-// (1:2, then 2:2) -- exactly the risk this section's own comment warns about,
-// and exactly backwards for the opening, when the enemy is closest and a
-// raider is cheapest: measured 2026-08-14 (matches/20260815-003604-...),
-// rear/local towers reached 21 standing by minute 10.6 while the Brain's
-// front-line want placed 3 orders total and stalled, and the engine-driven
-// front path spent the whole window refused by its own per-spot crowd cap
-// instead of opening a new spot. Front now leads local at every column.
-// The front LINE is what a concentrated army breaks through; the local
-// guards are the anti-raider work that is defence's actual job pre-T3
-// (apexearth). Front still leads, but no longer 3:1 -- and it recovers its
-// lead only at the T3 column where the big towers hold ground for real.
-array<float> DEF_FRONT = {0.0f,  3.0f,  3.0f,  3.0f,  3.0f};   // the Brain's line
-array<float> DEF_LOCAL = {3.0f,  2.0f, 1.0f, 2.0f, 3.0f};  // mex guards, dig-ins
-
-//------------------------------------------------------------------------------
-// 3. HOW FAR THE OBSERVED ENEMY MOVES THE MIX.
-//
-// Each role answers particular enemy roles -- riot answers raiders, skirmish
-// answers riots and assaults. This is the most their composition may pull the
-// table above: 0 keeps it fixed, 1 would let one sighting rewrite it.
-//------------------------------------------------------------------------------
-const float COUNTER_MAX = 0.2f;
-
-//------------------------------------------------------------------------------
-// 4. SCOUTS.
-//
-// Eyes are a floor rather than a share -- they are too cheap for a metal share
-// to yield a useful count. This is how many extractors we hold per scout wanted,
-// and it rises with income because a rich base has radar and better things to
-// spend a slot on.
-//                       8     20     50    100    300
-//------------------------------------------------------------------------------
-array<float> SCOUT_PER_MEX = {1.0f,  4.0f,  10.0f, 20.0f, 40.0f};
+array<float> SPEND_BUILDPOWER = { 3.0f,  2.0f,  2.0f,  2.0f,  2.0f };
 
 //------------------------------------------------------------------------------
 // Piecewise-linear read of any row above, against metal income. Below the first

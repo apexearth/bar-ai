@@ -611,13 +611,13 @@ const float TUNE_SIEGE = 0.f;
 const float TUNE_STANCE = 1.f;
 // manager/military/stance.as [ratio] -- ARMY share multiplier while the stance
 //   is AGGRESSIVE (base being hit or pressured).
-const float TUNE_STANCE_AGGRO_ARMY = 1.25f;
+const float TUNE_STANCE_AGGRO_ARMY = 0.75f;
 // manager/military/stance.as [ratio] -- DEFENCE share multiplier while
 //   AGGRESSIVE.
 const float TUNE_STANCE_AGGRO_DEF = 1.3f;
 // manager/military/stance.as [ratio] -- ECONOMY share multiplier while
 //   AGGRESSIVE (below 1: guns before growth while under attack).
-const float TUNE_STANCE_AGGRO_ECO = 0.85f;
+const float TUNE_STANCE_AGGRO_ECO = 1.0f;
 // manager/military/stance.as [ratio] -- ARMY share multiplier while PASSIVE
 //   (enemy visibly quiet): greed trims army to grow faster.
 const float TUNE_STANCE_GREED_ARMY = 0.85f;
@@ -801,6 +801,41 @@ const float TUNE_T2_HOLD_BOOST = 1.60f;
 //   real once the threat class exists, premature at eco-opening scale
 //   (apexearth...
 const float TUNE_ANTINUKE_INCOME = 60.f;
+// manager/brain/market/want_protect.as [light towers] -- MINIMUM PROTECTION
+//   PER MEX. Every site the defence auction considers is priced against the
+//   wave that has actually arrived there, and a mex nothing has attacked yet
+//   reads a wave of zero -- so it was skipped outright, and the economy stayed
+//   naked until something came for it. This is the wave a standing mex is
+//   assumed to have to meet whatever we have seen, measured in the faction's
+//   own light towers so it scales across factions and tiers rather than being
+//   a metal number. It is a FLOOR and nothing more: once a mex has this much
+//   cover the shortfall is zero and the next turret there prices itself out,
+//   and a mex under real threat is still sized by the threat. 0 restores the
+//   observed-threat-only behaviour, which is how the A/B is run.
+const float TUNE_MEX_COVER_FLOOR = 1.f;
+// manager/brain/market/want_protect.as [ratio] -- HOW HARD A BUILDER PREFERS
+//   THE GROUND IT IS ALREADY STANDING ON. The defence auction picks a site,
+//   then ValueOf charges the walk to it -- so the choice never saw the cost of
+//   getting there, and a constructor that had just finished a mex was sent
+//   across the base to a site worth marginally more (apexearth: "units making
+//   mex and then not immediately making the light tower to cover it"). This
+//   weights the walk inside the site ranking, in the same two terms the price
+//   uses: the builder's idle seconds and the income the tower forgoes by
+//   starting late. 1 ranks sites exactly as they will be priced; 0 restores the
+//   old distance-blind choice, which is how the A/B is run; above 1 makes
+//   defence more local still.
+const float TUNE_DEF_SITE_WALK = 1.f;
+// manager/brain/market/decide.as [toggle 0/1] -- COVER WHAT YOU JUST BUILT.
+//   The category draw is proportional, not argmax, so a tower worth twice the
+//   mex beside it still loses the roll about half the time -- which is what
+//   "we don't immediately make the light tower" looks like from the outside
+//   (apexearth, twice). This lets ONE want skip the lottery: a ground-defence
+//   want standing on a mex of ours that is still under apex_mex_cover_floor,
+//   proposed by a builder already inside the tower's own reach of it. The same
+//   queue-jump apex_super_push and the defence-panic path already use.
+//   Deliberately narrow: it cannot fire away from a mex, cannot fire once the
+//   mex has its floor, and cannot fire for a builder that would have to walk.
+const float TUNE_COVER_PUSH = 1.f;
 // manager/brain/facqueue.as [metal] -- One torpedo unit wanted per this much
 //   seen enemy submarine value (plus one).
 // manager/brain/nukes.as [elmos] -- Radius an antinuke counts as covering
@@ -1257,7 +1292,7 @@ const float TUNE_STREAM_SURVIVAL = 1.f;
 // Rent a building pays for standing on DEFENDED ground: covering turrets'
 // metal spread over the area they cover, per cell of footprint. Makes dense
 // beat sprawling inside the perimeter and costs nothing outside it. 0 disables.
-const float TUNE_SPACE_RENT = 1.f;
+const float TUNE_SPACE_RENT = 2.f;
 // manager/brain/market/price.as -- seconds over which a purchase must earn.
 // A gain is credited only for the share of this horizon it will actually be
 // collecting, so a build that delivers nothing for most of it is discounted
@@ -1600,7 +1635,7 @@ const float TUNE_EXPOSED_LOSS_S = 120.f;
 // DEF_TRADE: metal of enemy wave a standing turret is expected to stop, per
 // metal of its own cost. The exchange rate that puts coverage and threat in
 // one currency so a shortfall can be subtracted.
-const float TUNE_DEF_TRADE = 2.f;
+const float TUNE_DEF_TRADE = 3.f;
 // ECO_RAID_TAU: seconds of memory in the structure-loss field. Matches the
 // death ledger's BLEED_TAU so both risk senses forget at the same speed.
 const float TUNE_ECO_RAID_TAU = 180.f;
@@ -1616,7 +1651,7 @@ const float TUNE_STAKE_HORIZON_S = 300.f;
 const float TUNE_RISK_FLOOR = 0.15f;
 // GUARD_RATE: standing army value as a fraction of structure assets -- the
 // insurance floor that also covers census blindness.
-const float TUNE_GUARD_RATE = 0.15f;
+const float TUNE_GUARD_RATE = 0.2f;
 // ENEMY_PRIOR: pre-contact estimate of enemy army as a share of OUR total
 // value (symmetric start); the observed census replaces it once larger.
 const float TUNE_ENEMY_PRIOR = 0.25f;   // 0.35 + a continuous line drained the bank into army (watched: out of metal)
@@ -1936,7 +1971,7 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 //   our MOBILE army is assumed to answer, leaving the rest for static
 //   defence. The defence target is what is left over, converted to turret
 //   metal at apex_def_trade.
-const float TUNE_DEF_ARMY_SHARE = 0.6f;
+const float TUNE_DEF_ARMY_SHARE = 0.2f;
 // manager/brain/market/want_protect.as [ratio] -- The rear eco specialist's
 //   defence and army targets, as a share of a normal player's. Its threat is
 //   already near zero by position, so this only holds the tail down; it is a

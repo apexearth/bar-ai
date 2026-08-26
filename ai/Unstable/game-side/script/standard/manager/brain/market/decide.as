@@ -237,6 +237,44 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;
 		}
 	}
+	// COVER WHAT YOU JUST BUILT. A constructor that has just finished a mex is
+	// standing on the one piece of ground whose tower costs no walk at all, and
+	// the draw below would still send it somewhere else half the time. Every
+	// condition here has to hold: the want is ground defence, its site is a mex
+	// of ours, that mex is still under the cover floor, and the builder is
+	// already within the tower's own reach of it. So this cannot pull defence
+	// forward in general -- it closes exactly the gap between building a thing
+	// and protecting it.
+	bool coverPush = false;
+	if (!aaPanic && !superPush
+		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f))
+	{
+		const float floorWave = MexCoverFloorM()
+				* ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
+		const float near = Brain::LightTowerRange();
+		const AIFloat3 uAt = unit.GetPos(ai.frame);
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			Want@ cw = ranked[ri];
+			if ((cw.kind != WK_PROTECT) || (cw.spotId != PROT_DEF))
+				continue;
+			if (!SiteIsMex(cw.pos) || (uAt.distance2D(cw.pos) > near))
+				continue;
+			if (CoverAt(cw.pos) >= floorWave)
+				continue;
+			if (ri > 0) {
+				ranked.removeAt(ri);
+				ranked.insertAt(0, cw);
+			}
+			coverPush = true;
+			AiLog("apex: cover-push t=" + ai.teamId + " "
+				+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
+				+ " by " + unit.circuitDef.GetName() + " #" + unit.id
+				+ " walk=" + int(uAt.distance2D(ranked[0].pos))
+				+ " cover=" + int(CoverAt(ranked[0].pos))
+				+ "/" + int(floorWave));
+			break;
+		}
+	}
 	// PROPORTIONAL DRAW OVER CATEGORIES, argmax inside one (apexearth:
 	// "think about eco related things by category... then we pick the
 	// highest value energy"). The draw still exists -- winner-takes-all
@@ -246,7 +284,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// draw four times per election against extraction's two, which is how
 	// 672 wind turbines were bought against 1 moho upgrade (measured). One
 	// question, one ticket, weighted by that question's best answer.
-	if ((ranked.length() > 1) && !aaPanic && !superPush) {
+	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush) {
 		array<int> catBest(CAT_N, -1);   // index into ranked, or -1
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			const int c = CategoryOf(ranked[ri].kind);

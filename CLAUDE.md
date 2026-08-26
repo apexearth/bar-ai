@@ -250,8 +250,9 @@ Measured on this machine: a 27 game-minute match completes in ~44 s wall
 
 **Correction 2026-08-26: `QuotaFor` and `NextForMix` no longer exist.**
 `Market::ConOrderFor` (`brain/market/production.as`) is the only path to what
-a factory builds, and `targets.as`'s `ROLE_*` income-bracket tables are dead --
-nothing outside `targets.as` reads them. The section below is kept for its
+a factory builds. `targets.as`'s `ROLE_*`, `DEF_*`, `COUNTER_MAX` and
+`SCOUT_PER_MEX` tables were read by nothing and were deleted 2026-08-26; the
+file now holds only the five `SPEND_*` curves. The section below is kept for its
 lesson (composition is decided by the Brain, not `factory.json`), but read
 `apex: decide ... -> produce:`, `apex: worth` and `apex: lineclass` rather than
 the quota lines it names.
