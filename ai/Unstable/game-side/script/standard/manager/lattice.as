@@ -4,11 +4,21 @@ namespace Lattice {
 // THE BASE LATTICE, and the chain-explosion model that sets its strides.
 //
 // Every structure tiles on a lattice anchored to the base frame. A def's stride
-// is its FOOTPRINT -- the only pitch on which two of them touch -- unless its
-// own death explosion makes a flush pack a single-bomb loss, in which case the
-// stride widens past the blast. Widened strides stay whole multiples of the
-// footprint, so the gap they open is an exact number of footprint cells that
-// other defs tile into: separation costs no ground, only company.
+// is its FOOTPRINT -- the only pitch on which two of them touch.
+//
+// A def whose death explosion makes a flush pack a single-bomb loss is not
+// spread out one by one; it is packed into POCKETS (apexearth 2026-08-25:
+// "create 'pockets' of chainable areas so that if one pocket blows, it doesn't
+// take everything else out with it... we limit our catastrophes"). Inside a
+// pocket neighbours touch; the firebreak is the gutter BETWEEN pockets. Spread
+// buildings cost base ground, walkways and constructor travel on every one of
+// them, and that bill is the real one: an army that cannot move through the
+// base, and no room left to tech.
+//
+// A pocket holds only as many as the economy can afford to lose at once, so a
+// def expensive enough that ONE loss is already the catastrophe still stands
+// alone -- there the stride itself widens past the blast, in whole multiples
+// of the footprint so the gap is exact cells other defs tile into.
 //
 // C++ (CCircuitAI::SnapToBaseGrid) snaps every non-fixed placement onto these,
 // so the model reaches stock task selection too, not just our own rules.
@@ -91,11 +101,97 @@ float Firebreak(int defId)
 	return r + half;
 }
 
+// What one of these is really worth to us. A converter costs 1 metal and 1250
+// energy: priced in metal alone a whole pack of them looks free to lose, which
+// is the opposite of true.
+float TrueCostM(int defId)
+{
+	return Catalog::gCostM[defId] + Catalog::gCostE[defId]
+			/ ai.GetTunable("apex_e_per_metal", TUNE_E_PER_METAL);
+}
+
 array<int> gK;
 array<float> gStride;
 
 int KOf(int defId) { return (uint(defId) < gK.length()) ? gK[defId] : CHAIN_IMMUNE; }
 float StrideOf(int defId) { return (uint(defId) < gStride.length()) ? gStride[defId] : CELL; }
+
+// HOW MANY OF THIS DEF MAY STAND FLUSH TOGETHER -- the pocket. 0 means the def
+// cannot cascade at all and needs no pocket at any size; 1 means one loss IS
+// the catastrophe, so it stands alone and its stride widens instead.
+int PocketN(int defId)
+{
+	const int safeK = int(ai.GetTunable("apex_chain_safe_k", TUNE_CHAIN_SAFE_K));
+	if (KOf(defId) >= safeK)
+		return 0;
+	const float cost = TrueCostM(defId);
+	if (cost <= 1.f)
+		return 0;
+	const float secs = ai.GetTunable("apex_pocket_secs", TUNE_POCKET_SECS);
+	const int n = int((aiEconomyMgr.metal.income * secs) / cost);
+	return (n < 1) ? 1 : n;
+}
+
+// Cells of gutter between two pockets: the firebreak, in whole footprint cells
+// so the gap is exact ground another def tiles into.
+int GutterCells(int defId)
+{
+	const float pitch = FootPitch(defId);
+	const float fb = Firebreak(defId);
+	if ((fb <= 0.f) || (pitch <= 0.f))
+		return 0;
+	int g = int(fb / pitch);
+	if (float(g) * pitch < fb)
+		++g;
+	return (g < 1) ? 1 : g;
+}
+
+// Cells along one side of a pocket. Square, so a pocket is a block the crew
+// works from one place rather than a line it walks end to end.
+int PocketSide(int defId)
+{
+	const int n = PocketN(defId);
+	if (n <= 1)
+		return 0;   // chain-immune (tile it all), or stands alone
+	int b = int(sqrt(float(n)));
+	return (b < 1) ? 1 : b;
+}
+
+// The stride table, recomputed as the economy grows: a def whose loss the
+// economy has outgrown stops needing a firebreak around each member and starts
+// tiling flush inside pockets. C++ (CCircuitAI::SnapToBaseGrid) reads this too,
+// so stock task placement follows the same model.
+int gAlone = 0;
+void Refresh()
+{
+	int alone = 0;
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		CCircuitDef@ cdef = Catalog::Def(i);
+		if ((cdef is null) || Catalog::gMobile[i])
+			continue;
+		const float pitch = FootPitch(i);
+		float stride = pitch;
+		// Only a pocket of ONE earns a firebreak around each building.
+		if (PocketN(i) == 1) {
+			const float fb = Firebreak(i);
+			int whole = int(fb / pitch);
+			if (float(whole) * pitch < fb)
+				++whole;
+			if (whole < 1)
+				whole = 1;
+			stride = float(whole) * pitch;
+			if (whole > 1)
+				++alone;
+		}
+		if (stride != gStride[i]) {
+			gStride[i] = stride;
+			cdef.SetLatticeStride(stride, stride);
+			AiLog("apex: lattice " + cdef.GetName() + " stride " + int(stride)
+				+ " pocket=" + PocketN(i) + " side=" + PocketSide(i));
+		}
+	}
+	gAlone = alone;
+}
 
 void Init()
 {
@@ -103,34 +199,21 @@ void Init()
 	gK.resize(n);
 	gStride.resize(n);
 	const int safeK = int(ai.GetTunable("apex_chain_safe_k", TUNE_CHAIN_SAFE_K));
-	int widened = 0;
 	for (int i = 1; i <= Catalog::gDefCount; ++i) {
 		gK[i] = CHAIN_IMMUNE;
 		gStride[i] = CELL;
 		CCircuitDef@ cdef = Catalog::Def(i);
 		if ((cdef is null) || Catalog::gMobile[i])
 			continue;
-		const float pitch = FootPitch(i);
-		gStride[i] = pitch;
-		gK[i] = ChainK(i);
 		// A def that survives enough neighbour deaths cannot start a cascade
 		// from a single loss, so it packs flush whatever its blast radius:
 		// an attacker has to kill k of them before the k+1th dies for free.
-		if (gK[i] < safeK) {
-			const float fb = Firebreak(i);
-			float steps = fb / pitch;
-			int whole = int(steps);
-			if (float(whole) * pitch < fb)
-				++whole;
-			if (whole < 1)
-				whole = 1;
-			gStride[i] = float(whole) * pitch;
-			if (whole > 1)
-				++widened;
-		}
+		gK[i] = ChainK(i);
+		gStride[i] = FootPitch(i);
 		cdef.SetLatticeStride(gStride[i], gStride[i]);
 	}
-	AiLog("apex: lattice built, safeK=" + safeK + " widened=" + widened);
+	Refresh();
+	AiLog("apex: lattice built, safeK=" + safeK + " alone=" + gAlone);
 	Report();
 }
 
@@ -168,15 +251,17 @@ void NotePlaced(int defId, const AIFloat3& in p)
 			best = d;
 	}
 	if (best >= 0.f) {
-		// Only a def whose stride was WIDENED is allowed to read as an island.
-		// Where the stride is the footprint, anything past touching is a gap.
+		// A GUTTER IS NOT A GAP. Ground at least a firebreak wide is the
+		// boundary between two pockets and is meant to be there; anything
+		// short of it is ground nothing will ever use.
 		const float stride = StrideOf(defId);
+		const float fb = Firebreak(defId);
 		// A DIAGONAL NEIGHBOUR IS STILL TOUCHING. On a square lattice the
 		// nearest kin of a corner-packed block sits at pitch * sqrt(2), so an
 		// orthogonal-only bar scores a perfectly tiled 2x2 as four failures.
 		if (best <= pitch * 1.4143f + CELL)
 			++gFlush;
-		else if ((stride > pitch + CELL) && (best >= stride - CELL))
+		else if ((fb > 0.f) && (best >= fb - CELL))
 			++gIsle;
 		else {
 			++gApart;
@@ -197,6 +282,9 @@ void Update()
 	if (ai.frame < gNextLog)
 		return;
 	gNextLog = ai.frame + 60 * SECOND;
+	// Pockets grow with the economy: what one blast may take is a share of
+	// income, so a def outgrows its firebreak rather than keeping it forever.
+	Refresh();
 	const int n = gFlush + gApart + gIsle;
 	if (n <= 0)
 		return;
@@ -221,7 +309,9 @@ void Report()
 			+ " blast=" + int(Catalog::gBlastD[i]) + "@" + int(Catalog::gBlastR[i])
 			+ " k=" + gK[i]
 			+ " pitch=" + int(FootPitch(i))
-			+ " stride=" + int(gStride[i]));
+			+ " stride=" + int(gStride[i])
+			+ " pocket=" + PocketN(i) + " side=" + PocketSide(i)
+			+ " gutter=" + GutterCells(i));
 	}
 }
 

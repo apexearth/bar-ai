@@ -478,7 +478,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			@w.def = Catalog::Def(d);
 			// The tech lab is the most protection-hungry building we own:
 			// at the base anchor, never at a forward asker (watched).
-			w.pos = InteriorSite(here);
+			w.pos = InteriorSite(here, Catalog::Def(int(unit.circuitDef.id)));
 			// WHERE THE LAB ACTUALLY LANDS, and how deep that is toward the
 			// enemy. Reported twice as wrong from a watched game, so it is
 			// measured rather than reasoned about.

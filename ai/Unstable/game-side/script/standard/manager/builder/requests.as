@@ -296,6 +296,7 @@ uint FeedableCrew(const CCircuitDef@ want)
 	return (n < 1.f) ? 1 : uint(n);
 }
 
+int gDupLog = 0;
 int gCreated = 0;
 int gJoined = 0;
 int gCovered = 0;    // refused: this ground is already requested
@@ -509,6 +510,26 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	const AIFloat3 at = spot;
 
 	const int type = int(bt);
+	// WHY A SECOND TASK FOR A DEF THAT ALREADY HAS ONE. ~500 tasks were created
+	// for one advanced lab while only 1-2 were ever live, and each new one
+	// re-targets the builder mid-walk -- which is why it oscillates instead of
+	// arriving. Log the state dedup saw when it let another through.
+	if (gDupLog < 25) {
+		const uint already = InFlight(want);
+		if (already > 0) {
+			++gDupLog;
+			uint manned = 0;
+			for (uint z = 0; z < gLive.length(); ++z) {
+				if ((gLive[z] !is null) && !gLive[z].IsDead()
+					&& (gLive[z].buildDef !is null) && (gLive[z].buildDef is want)
+					&& (Workers(gLive[z]) > 0))
+					++manned;
+			}
+			AiLog("apex: dup t=" + ai.teamId + " " + want.GetName()
+				+ " bt=" + type + " live=" + already + " manned=" + manned
+				+ " governed=" + (Governed(type) ? 1 : 0));
+		}
+	}
 	if (!Governed(type)) {
 		IUnitTask@ any = Create(want, bt, prio, at, shake);
 		created = (any !is null);

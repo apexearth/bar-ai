@@ -1821,11 +1821,13 @@ const float TUNE_STUCK_RETRY = 120.f;
 //   def's own firebreak. 3 is the point where a single loss can no longer
 //   start a cascade, since two neighbour deaths leave the third standing.
 const float TUNE_CHAIN_SAFE_K = 3.f;
-// manager/brain/market/sites.as [seconds of metal income] -- How much of the
-//   economy one blast-radius island of a chain-safe def may be worth. The
-//   island cap is that metal divided by the def's cost, so a 10 m/s opening
-//   builds small packs and a 400 m/s base builds ones it can afford to lose.
-const float TUNE_ISLAND_SECS = 25.f;
+// manager/lattice.as [seconds of metal income] -- The CATASTROPHE BUDGET: how
+//   much of the economy one blast may take. A pocket holds that many seconds
+//   of income divided by the def's true cost (metal plus energy at
+//   apex_e_per_metal), so a 10 m/s opening packs small pockets and a 400 m/s
+//   base packs ones it can afford to lose. The firebreak sits between pockets,
+//   never between neighbours.
+const float TUNE_POCKET_SECS = 60.f;
 // manager/brain/market/sites.as [count] -- Rows of lattice the farm scan walks
 //   rearward before giving up. A bound on WORK per placement, not on the base.
 const float TUNE_FARM_ROWS = 28.f;

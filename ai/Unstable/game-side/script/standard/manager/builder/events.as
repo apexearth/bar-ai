@@ -35,10 +35,70 @@ void AiTaskAdded(IUnitTask@ task)
 	Requests::Register(task);
 }
 
+// WHY A TASK DIES. Requests counts what is CREATED; nothing counted what left,
+// or whether it left finished. A player on 26 metal/second opened 1,967
+// requests, started 12 wind turbines and banked the rest -- with no site-fail
+// and no exec-refused, so the task was built, sited, and then removed unfinished
+// with nothing recording it.
+array<int> gGoneOk(0);
+array<int> gGoneBad(0);
+array<int> gGoneBadNoPos(0);
+int gNextGoneLog = 0;
+int gAbortLog = 0;
+
 void AiTaskRemoved(IUnitTask@ task, bool done)
 {
 	if (task.GetType() != Task::Type::BUILDER)
 		return;
+	if (gGoneOk.length() == 0) {
+		gGoneOk.resize(Catalog::gDefCount + 1);
+		gGoneBad.resize(Catalog::gDefCount + 1);
+		gGoneBadNoPos.resize(Catalog::gDefCount + 1);
+	}
+	const int d = (task.buildDef !is null) ? int(task.buildDef.id) : 0;
+	if ((d >= 0) && (d < int(gGoneOk.length()))) {
+		if (done) {
+			++gGoneOk[d];
+		} else {
+			++gGoneBad[d];
+			if (!OnMap(task.GetBuildPos()))
+				++gGoneBadNoPos[d];
+			// DID ANYONE ACTUALLY GO? apexearth: "can you tell me that team five
+			// really did try to make one... I just see team five sitting there
+			// doing nothing at all". A valid buildPos only proves Execute ran once.
+			// How far the site was, and whether a builder was still on the task
+			// when it died, is what says whether anybody set out.
+			array<CCircuitUnit@>@ ws = task.GetUnits();
+			const int nw = (ws is null) ? 0 : int(ws.length());
+			float dHome = -1.f, dMan = -1.f;
+			if (OnMap(task.GetBuildPos())) {
+				if (Builder::gHomeSet)
+					dHome = Builder::gHomePos.distance2D(task.GetBuildPos());
+				if ((nw > 0) && (ws[0] !is null))
+					dMan = ws[0].GetPos(ai.frame).distance2D(task.GetBuildPos());
+			}
+			if (gAbortLog < 30) {
+				++gAbortLog;
+				AiLog("apex: abort t=" + ai.teamId + " "
+					+ Catalog::Def(d).GetName() + " workers=" + nw
+					+ " siteFromHome=" + int(dHome)
+					+ " builderToSite=" + int(dMan));
+			}
+
+		}
+	}
+	if (ai.frame >= gNextGoneLog) {
+		gNextGoneLog = ai.frame + 60 * SECOND;
+		string ln = "apex: task-gone t=" + ai.teamId + " |";
+		for (uint k = 1; k < gGoneBad.length(); ++k) {
+			if ((gGoneBad[k] + gGoneOk[k]) < 10)
+				continue;
+			ln += " " + Catalog::Def(int(k)).GetName()
+				+ " done=" + gGoneOk[k] + " abort=" + gGoneBad[k]
+				+ "(nopos " + gGoneBadNoPos[k] + ")";
+		}
+		AiLog(ln);
+	}
 	Requests::Forget(task);
 }
 

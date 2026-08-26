@@ -200,32 +200,6 @@ AIFloat3 ClearOfSpots(const AIFloat3& in pos, float clear)
 	return pos;
 }
 
-// How many same-def structures may stand inside one blast radius of each
-// other. Below the chain-safe bar one loss takes the whole pack, so the answer
-// is one and the next of that def starts past the firebreak. Above it a single
-// loss cannot cascade, and the island is bounded by what the economy can
-// replace rather than by a number: seconds of metal income, divided by cost.
-int IslandCap(int defId)
-{
-	const int safeK = int(ai.GetTunable("apex_chain_safe_k", TUNE_CHAIN_SAFE_K));
-	if (Lattice::KOf(defId) < safeK)
-		return 1;
-	const float cost = Catalog::gCostM[defId];
-	if (cost <= 1.f)
-		return 0;   // 0 = unbounded
-	const float secs = ai.GetTunable("apex_island_secs", TUNE_ISLAND_SECS);
-	int n = int((aiEconomyMgr.metal.income * secs) / cost);
-	// NEVER BELOW k+1. A pack smaller than the number of neighbour deaths this
-	// def survives cannot cascade at all, so a cap under it buys no safety and
-	// costs real ground -- advanced solars (k=20) were being pushed two pitches
-	// apart by the opening's income to prevent a chain that needs 20 losses to
-	// start. Above that floor the island is what the economy can replace.
-	const int floorN = Lattice::KOf(defId) + 1;
-	if (n < floorN)
-		n = floorN;
-	return n;
-}
-
 // Where this def already stands or is already going, near the farm. Gathered
 // ONCE per placement: the island test runs per candidate slot, and
 // GetOwnUnitsOfDef walks every unit we own.
@@ -249,6 +223,15 @@ void KinNear(CCircuitDef@ def, array<AIFloat3>& out kin)
 		if (OnMap(bp))
 			kin.insertLast(bp);
 	}
+}
+
+// Lattice index into its pocket: which cell of the repeating pocket+gutter
+// period this one is. Written out because AngelScript's % keeps the sign of
+// the dividend, and lateral indices run negative.
+int PocketCell(int i, int per)
+{
+	int m = i % per;
+	return (m < 0) ? (m + per) : m;
 }
 
 int KinWithin(const array<AIFloat3>& in kin, const AIFloat3& in p, float r)
@@ -287,7 +270,14 @@ AIFloat3 FarmSlot(int defId)
 	// past its own firebreak where one loss would take the whole pack.
 	const float pitch = Lattice::StrideOf(defId);
 	const float fb = Lattice::Firebreak(defId);
-	const int cap = IslandCap(defId);
+	// THE POCKET. A def that can chain packs flush in blocks of `side` cells
+	// with a firebreak gutter between blocks, so one blast costs a pocket and
+	// never the economy. side 0 means no pocket: the def either cannot cascade
+	// (tile it all) or is expensive enough that it stands alone, and there the
+	// stride is already the firebreak.
+	const int cap = Lattice::PocketN(defId);
+	const int side = Lattice::PocketSide(defId);
+	const int period = side + Lattice::GutterCells(defId);
 	array<AIFloat3> kin;
 	if ((cap > 0) && (fb > 0.f))
 		KinNear(def, kin);
@@ -319,6 +309,26 @@ AIFloat3 FarmSlot(int defId)
 					- Base::gFwd * (depth0 + float(j) * pitch);
 			if (!OnMap(p) || NearSpot(p))
 				continue;
+			// The gutter is left empty for THIS def; another def whose own
+			// pocket lands there tiles into it, so the firebreak costs company
+			// rather than ground.
+			if ((side > 0) && ((PocketCell(i, period) >= side)
+					|| (PocketCell(j, period) >= side)))
+				continue;
+			// LEAVE THE WALKWAYS EMPTY. The old band grid dropped every column
+			// overlapping a lane; this scan did not, and the eco yards that used to
+			// space the block incidentally were zeroed at the same time -- so the
+			// farm became a solid slab across the base's central corridor (a lane
+			// sits at lateral 0 by construction) and walled the commander in. It
+			// held a task, could not move, and burned every retry until the task
+			// aborted, over and over. The FOOTPRINT has to clear the lane, not just
+			// the centre point.
+			{
+				float pd = 0.f, pl = 0.f;
+				Base::Coords(p, pd, pl);
+				if (Base::LaneGap(pl) < (Base::LANE_HALF + pitch * 0.5f))
+					continue;
+			}
 			if ((cap > 0) && (fb > 0.f) && (KinWithin(kin, p, fb) >= cap))
 				continue;
 			bool taken = false;
@@ -349,7 +359,6 @@ AIFloat3 FarmSlot(int defId)
 // "further in the back of our base area", and the vehicle lab needs room
 // in front of it -- packed interior blocked its exit). Beside the farm,
 // behind the base, lateral ground open for roll-out; flanks alternate.
-int gPlantFlank = 0;
 // THE MASS CENTRE OF WHAT WE OWN, and how far our stuff reaches from it.
 //
 // apexearth: "Figure out what the mass center of our base is - compute that
@@ -446,7 +455,29 @@ bool ShieldArcSpots(array<AIFloat3>& out pts, float denyR)
 	return pts.length() > 0;
 }
 
-AIFloat3 InteriorSite(const AIFloat3& in fallback)
+// CAN A BUILDER ACTUALLY GET THERE?
+//
+// The plant site was chosen on geometry alone -- a lateral offset off the base
+// axis -- and nothing asked whether a constructor could reach it. On a map cut
+// by terrain that offset lands across a cliff or a channel, and the engine
+// then rejects the build order the instant it is issued: the con stands still,
+// goes idle, is re-Executed, and idles again about FOURTEEN TIMES A SECOND
+// until the task burns its retries and aborts. Measured: 584 aborted advanced
+// labs in 14 minutes with the con parked 537 elmos away and the site never
+// moving, while cheap builds at the farm went up fine.
+//
+// ai.CanDefReach is the engine's own answer, so ask it before handing a site
+// out rather than discovering it one rejected order at a time.
+bool ReachableBy(CCircuitDef@ mover, const AIFloat3& in to)
+{
+	if (!OnMap(to))
+		return false;
+	if ((mover is null) || !Builder::gHomeSet)
+		return true;
+	return ai.CanDefReach(mover, Builder::gHomePos, to);
+}
+
+AIFloat3 InteriorSite(const AIFloat3& in fallback, CCircuitDef@ mover)
 {
 	// The first factory rises where the builder stands -- the flank plan is
 	// for a base that exists (watched: a long opening walk to lab #1).
@@ -461,14 +492,24 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback)
 		// again at -0.07 against an anchor at -0.25). Both flanks are scored on
 		// the true enemy bearing and the more rearward one wins; ties still
 		// alternate, so a second lab does not stack on the first.
-		gPlantFlank = 1 - gPlantFlank;
-		const float side = (gPlantFlank == 0) ? 1.f : -1.f;
+		// A PROPOSER MUST BE PURE. This flipped the flank on every READ, so each
+		// time the tech want was priced it asked for the opposite side of the
+		// base -- different ground, so CoverFor missed, JoinFor was out of reach
+		// (the flanks are ~700 apart) and Take created ANOTHER task. Measured on
+		// one player: new=1967 join=6, 517 aborted advanced-lab tasks and zero
+		// built, with the assigned constructor turned around every few seconds
+		// (builderToSite 502 -> 356 -> 512 -> 325, never converging). The stable
+		// FarmSlot positions built fine throughout.
+		//
+		// The flank still alternates per PLANT -- it just reads the count we
+		// already own instead of mutating on every price check.
+		const float side = ((Factory::gFactoryCount % 2) == 0) ? 1.f : -1.f;
 		const AIFloat3 back = Base::gFwd * (gFarmDepth * 0.5f);
 		const AIFloat3 lat = Base::gAcross * (FarmRowW() * 0.5f + 300.f);
 		AIFloat3 pA = gFarmPos + lat * side - back;
 		AIFloat3 pB = gFarmPos - lat * side - back;
-		const bool okA = OnMap(pA);
-		const bool okB = OnMap(pB);
+		const bool okA = OnMap(pA) && ReachableBy(mover, pA);
+		const bool okB = OnMap(pB) && ReachableBy(mover, pB);
 		if (okA && okB) {
 			return (Military::ForwardFraction(pB) < Military::ForwardFraction(pA))
 					? pB : pA;
@@ -487,16 +528,15 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback)
 	// would take to attack us"). Behind the anchor and off the attack axis is
 	// that location, and it is the same rear-flank shape the farm branch uses.
 	if (Base::gAnchorSet && Base::gAxisSet) {
-		gPlantFlank = 1 - gPlantFlank;
-		const float side2 = (gPlantFlank == 0) ? 1.f : -1.f;
+		const float side2 = ((Factory::gFactoryCount % 2) == 0) ? 1.f : -1.f;
 		AIFloat3 a = Base::gAnchor
 				+ Base::gAcross * (side2 * (FarmRowW() * 0.5f + 300.f))
 				- Base::gFwd * 300.f;
-		if (OnMap(a))
+		if (OnMap(a) && ReachableBy(mover, a))
 			return a;
 		a = Base::gAnchor - Base::gAcross * (side2 * (FarmRowW() * 0.5f + 300.f))
 				- Base::gFwd * 300.f;
-		if (OnMap(a))
+		if (OnMap(a) && ReachableBy(mover, a))
 			return a;
 	}
 	if (Base::gAnchorSet && OnMap(Base::gAnchor))

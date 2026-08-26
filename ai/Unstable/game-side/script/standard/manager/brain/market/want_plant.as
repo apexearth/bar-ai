@@ -214,7 +214,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			w.kind = WK_PLANT;
 			@w.def = Catalog::Def(d);
 			// Plants stand at the base anchor -- the middle of what we own.
-			w.pos = InteriorSite(EcoSiteFor(unit));
+			w.pos = InteriorSite(EcoSiteFor(unit), Catalog::Def(int(unit.circuitDef.id)));
 		}
 	}
 	return w;

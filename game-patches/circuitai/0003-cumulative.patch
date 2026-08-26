@@ -6412,7 +6412,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..b17ab05 100644
+index bc8ff11..2ed7988 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -31,6 +31,7 @@
@@ -6478,7 +6478,7 @@ index bc8ff11..b17ab05 100644
  	if (initiator == unit) {
  		initiator = nullptr;
  	}
-@@ -285,13 +292,69 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -285,13 +292,94 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -6501,9 +6501,34 @@ index bc8ff11..b17ab05 100644
 +	// Facing first (FindBuildSite recomputes it identically): the parity snap
 +	// needs it because the engine swaps xsize/zsize for east/west.
 +	FindFacing(position);
-+	const bool onGrid = !isFixed && circuit->SnapToBaseGrid(position, pos, buildDef, facing);
++	// A RETRY MUST PICK A NEW SPOT.
++	//
++	// FindBuildSite is deterministic from `position`, so a site the builder
++	// cannot actually reach was handed back identically on every retry: the con
++	// took the order, never moved, went idle, and did it again until the task
++	// aborted -- measured with the builder parked at the SAME distance across
++	// consecutive aborts (685, 685, 685) while its site stayed put (659 from
++	// home), 362 aborted advanced labs and none built. Walk the search origin
++	// out on each failure so a later attempt looks at different ground.
++	//
++	// RANDOM, not a fixed walk. The same task is handed back to the same
++	// constructor after each failure (OnUnitIdle re-Executes, then the orphan
++	// is re-adopted by whoever asks -- usually the same con, since it is the
++	// one electing), so a deterministic offset means every retry repeats the
++	// previous attempt's behaviour. apexearth: "we keep retrying with the same
++	// cons that fail... add more variation". A random bearing at a radius that
++	// widens with each failure explores instead of repeating, and two cons
++	// failing the same task diverge instead of colliding.
++	AIFloat3 origin = position;
++	if (buildFails > 0) {
++		const float foot = std::max(buildDef->GetFootX(), buildDef->GetFootZ())
++				* SQUARE_SIZE * 2;
++		origin = utils::get_radial_pos(position, foot * float(buildFails));
++		CTerrainManager::CorrectPosition(origin);
++	}
++	const bool onGrid = !isFixed && circuit->SnapToBaseGrid(origin, pos, buildDef, facing);
 +	if (!onGrid) {
-+		pos = (shake > .0f) ? utils::get_near_pos(position, shake) : position;
++		pos = (shake > .0f) ? utils::get_near_pos(origin, shake) : origin;
 +	}
  	CTerrainManager::CorrectPosition(pos);
  
@@ -6551,7 +6576,30 @@ index bc8ff11..b17ab05 100644
  	if (utils::is_valid(buildPos)) {
  		TRY_UNIT(circuit, unit,
  			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
-@@ -427,18 +490,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -315,8 +403,21 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
+ 	} else if (buildFails <= TASK_RETRIES) {
+ 		RemoveAssignee(unit);
+ 	} else if (target == nullptr) {
++		// ABORTING NO LONGER POISONS THE GROUND.
++		//
++		// Upstream stamped a permanent blocker at buildPos here, with its own
++		// FIXME asking for a timer. Nothing ever removed it, so ONE failure made
++		// that spot unbuildable for the rest of the game -- and since the next
++		// attempt sites further out, fails, and blocks that too, the buildable
++		// area shrinks without bound. Measured on Supreme Isthmus 8v8: a player
++		// aborted 635 advanced-lab tasks and built none, its chosen site walking
++		// steadily away from home (642 -> 768) as the ground was consumed, while
++		// its cheap farm builds went up fine throughout.
++		//
++		// A genuinely unbuildable spot is already refused by FindBuildSite (which
++		// logs apex: site-fail), so the blocker was insuring against a case the
++		// site search answers on its own.
+ 		manager->AbortTask(this);
+-		manager->GetCircuit()->GetTerrainManager()->AddBlocker(buildDef, buildPos, facing);  // FIXME: Remove blocker on timer? Or when air con appears
+ 	}
+ }
+ 
+@@ -427,18 +528,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -6584,7 +6632,7 @@ index bc8ff11..b17ab05 100644
  	}
  }
  
-@@ -542,7 +612,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -542,7 +650,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6595,7 +6643,7 @@ index bc8ff11..b17ab05 100644
  		return;
  	}
  
-@@ -565,11 +637,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +675,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6619,7 +6667,7 @@ index bc8ff11..b17ab05 100644
  	}
  }
  
-@@ -637,14 +719,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +757,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6676,7 +6724,7 @@ index bc8ff11..b17ab05 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +782,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +820,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
