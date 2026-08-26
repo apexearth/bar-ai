@@ -95,6 +95,22 @@ Comparing `hard_aggressive` against `hard` compares two profiles, not two
 variants — to isolate your change, benchmark against **the same profile** in
 stock BARb.
 
+## Telemetry fields that under-count
+
+`dev_stats_export.lua` has `SPAM_COST = 120`, and **anything cheaper is excluded
+from `mBuiltReal`, `top=` and `allBuilt`**. That is not a rounding detail:
+
+- **a mex is 26 metal**, so extractors appear in NONE of those three fields.
+  `allBuilt` with no `armmex` in it is normal, not evidence of a broken economy;
+  read `mex=` (extractors finished) instead.
+- cheap army (a Pawn is 54) is likewise absent — `cheapBuilt`/`counts=` carry it.
+
+So `mBuiltReal` is biased AGAINST a mex-heavy or chaff-heavy strategy, and two
+arms that differ in how much they expand cannot be compared on it. **Prefer
+`mEco`** — the eco/army/bp/def classification runs on every finished unit with
+no cost gate, so it does include extractors — and quote `mex=`, `t2Mex=` and
+`techStart=` alongside anything headline.
+
 ## Confounds to rule out before trusting a result
 
 Don't assume you know the numbers ahead of time — measure them on the run in

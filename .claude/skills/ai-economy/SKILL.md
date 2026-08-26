@@ -5,32 +5,54 @@ description: Who decides energy, fusion, converters, reclaim, and mex upgrades �
 
 # The economy pipeline — what owns what
 
-All paths live under `ai/apex/game-side/script/hard_aggressive/`. Thresholds
-live in `policy.as` (Policy::) — never restate a default at a call site.
+All economy decisions are Wants in the Brain market: `manager/brain/market/`.
+Proposers are pure, `decide.as` ranks, `execute.as` is the only spender.
+
+> **The kill phase (docs/20-brain-overhaul.md) DELETED the whole leaf layer.**
+> `manager/builder/{mexguard,fusion,converter,obsolete,share,statics,nano,
+> rules_hold,rules_optional,defcap}.as` and `manager/factory/{techlead,
+> airsupport}.as` no longer exist, and neither does `AlwaysEco`. Many tunable
+> comments in `tunables.as` still name those files — the comment is the stale
+> part, not the tunable. Check a path exists before believing any doc that
+> names one, this file included.
 
 ## Ownership
 
 | Decision | Owner | File |
 |---|---|---|
-| "Is energy short?" | the energy lane (target = max(pull×headroom, mIncome×Policy::EPerMetal)) | `manager/builder/maketask.as` energy lane |
-| Which generator rung | `HomeEnergy`/`HomeEnergyFresh` per-metal ranking + forced fusion | `manager/builder/mexguard.as` |
-| Fusion yes/no | `EcoFusion` gates + forced-fusion (SteadyIncome ≥ 50, energy ≥ Policy::FusionMinEnergy 1000) | `manager/builder/fusion.as`, `mexguard.as` |
-| "Never zero eco in flight" floor | `AlwaysEco` (fires only when no ENERGY and no CONVERT task exists) | `manager/builder/mexguard.as` |
-| Converters | `EnergyConverter`/`EcoConverters`, self-gated on `EnergyWasting()` | `manager/builder/converter.as` |
-| Reclaiming own generators | `EnergyReclaimable`: replacement standing + income cliff + pull padding + solars wait for a REACTOR (eco/tech lead excepted) | `manager/builder/obsolete.as` |
-| Mex upgrades | Brain "mexup" want (exempt from eco damps) | `manager/brain.as` |
-| Metal-full sink | `MetalSurplusIsReal` distinguishes rich from grid-down | `manager/builder/share.as` |
+| Energy: which rung, how much | `ProposeEnergy` | `market/want_energy.as` |
+| Converters | `ProposeConvert` | `market/want_energy.as:334` |
+| Storage | `ProposeStore` | `market/want_energy.as:390` |
+| Build-power demand | `BPGap()` — income headroom + bank backlog + ordered backlog, minus `BPCapacity()` | `market/want_energy.as:287` |
+| Overflow sense | `OverflowM()` | `market/want_energy.as:320` |
+| Mex claiming, walk safety | `ProposeMex` | `market/want_mex.as:246` |
+| Mex upgrades (moho) | `ProposeMexUp` | `market/want_tech.as:54` |
+| Tech plants | `ProposeTech` (`funded` discount — see the coupling section) | `market/want_tech.as:102` |
+| Factory plants, geothermal | `ProposePlant` / `ProposeGeo` | `market/want_plant.as` |
+| Nano turrets | `ProposeNano` | `market/want_nano.as` |
+| Reclaiming our own | `ProposeReclaimObsolete`; blocked-slot variant default OFF | `market/want_reclaim.as` |
+| Where an eco build stands | `FarmSlot` on the base lattice; `BigEnergySite` for fusion-tier | `market/sites.as` |
+| Pricing (the one currency) | `ValueOf`, `EPriceFloor`, `Wage` | `market/price.as` |
+| What we own | `gAssetsM`, `gProtM`, `gBPM`, `gOwnGen` | `market/census.as` |
 
 ## The architecture in one paragraph
 
-Energy demand is measured two ways because `energy.pull` is THROTTLED demand
-(factories slow on a short grid, pull falls, the grid self-reports "fine"
-while starving — the root cause of every "we suck with energy" era). The
-metal-income-scaled target breaks that circularity; the deficit sizes how
-many parallel generator sites may open; the Brain's "energy" want handles
-allocation pressure; `AlwaysEco` is the floor that guarantees never-zero.
-Both halves funnel through `HomeEnergy`/`Requests::Take`, whose dedup makes a
-second asker JOIN the standing build.
+Energy demand is NOT read off `energy.pull` alone — pull is THROTTLED demand
+(factories slow on a short grid, pull falls, the grid self-reports "fine" while
+starving). Demand is priced against metal income and the conversion floor
+instead. Generation never pauses; converters are what modulate on waste.
+Everything competes in one currency, `value = gain / (mCost + tCost)`, and the
+category roulette (see `ai-auction`) draws proportionally rather than argmax.
+
+## THERE IS NO FLOOR ANY MORE
+
+`Builder::AiMakeTask` is holds → `Brain::Decide` → **idle**. There is
+deliberately no fall-through to `aiBuilderMgr.DefaultMakeTask`, and the old
+`AlwaysEco` never-zero floor was deleted with the leaf layer. A constructor the
+market has no answer for does nothing at all. This bites the rear eco
+specialist hardest: `Role::DefenceAllowed()` forbids it ground defence and
+`apex_eco_army_mul` (0.03) cuts its army target to 3%, so it has the fewest
+want sources of any player and the least to fall back on.
 
 ## The economy is coupled to the ARMY TARGET — in both directions
 
