@@ -2,6 +2,11 @@ namespace Market {
 IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 {
 	if (w.kind == WK_MEX) {
+		// Help the one already going before opening another, exactly as every
+		// other build type does -- the metal path used to skip this rung.
+		IUnitTask@ jm = Requests::JoinSpot(unit, w.def, w.pos);
+		if (jm !is null)
+			return jm;
 		// TaskB::Spot, not Common: CBMexTask::Execute refuses to issue the
 		// build order unless IsOpenSpot(spotId) holds, and Common leaves
 		// spotId at -1 (measured: one decide, then a game-long freeze).
@@ -12,6 +17,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return t;
 	}
 	if (w.kind == WK_MEXUP) {
+		IUnitTask@ ju = Requests::JoinSpot(unit, w.def, w.pos);
+		if (ju !is null)
+			return ju;
 		return aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::MEXUP,
 				Task::Priority::NORMAL, w.def, w.pos, w.spotId));
 	}

@@ -101,9 +101,18 @@ bool LiveOfDef(CCircuitDef@ def)
 	return false;
 }
 
+// METAL WORK IS GOVERNED TOO. MEX and MEXUP were absent here, so an extractor
+// or an upgrade never entered the register at all: it could not be joined (the
+// join rung only sees registered tasks), and it did not count in
+// LiveSiteCount, so every other site's crew was sized as though no metal work
+// were happening -- while those hands were drawing metal the whole time
+// (apexearth 2026-08-25: "if a want is still in progress (like a mexup) we
+// should be willing to put more guys on it to build it faster").
 bool Governed(int bt)
 {
-	return (bt == int(Task::BuildType::FACTORY))
+	return (bt == int(Task::BuildType::MEX))
+		|| (bt == int(Task::BuildType::MEXUP))
+		|| (bt == int(Task::BuildType::FACTORY))
 		|| (bt == int(Task::BuildType::NANO))
 		|| (bt == int(Task::BuildType::STORE))
 		|| (bt == int(Task::BuildType::ENERGY))
@@ -648,6 +657,36 @@ IUnitTask@ CoverFor(CCircuitDef@ want, const AIFloat3& in spot, float radius)
 // within reach of THEMSELVES and each then computed its own spot, landing the
 // five spots within ~200 elmos of each other. Duplicate-ness is a property of
 // the site, not of which builder happened to notice it.
+// A SECOND PAIR OF HANDS ON THE SAME METAL SITE. Mex and mex-upgrade wants are
+// enqueued straight onto the builder manager and never pass through Take, so
+// they never reach JoinFor either -- there was no path by which a second
+// constructor could help one, whatever the crew rung would have allowed. This
+// is that path: same def, same ground, room under the site's crew.
+//
+// JOIN_MIN_COST still applies, so a ~50 metal T1 extractor is not worth a walk
+// to assist -- for those the second asker takes ANOTHER SPOT, which is the
+// same answer arrived at by not joining.
+IUnitTask@ JoinSpot(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spot)
+{
+	if ((want is null) || (want.costM < JOIN_MIN_COST) || !OnMap(spot))
+		return null;
+	const uint cap = SiteWorkerCap(want);
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ cand = gLive[i];
+		if ((cand is null) || cand.IsDead() || (cand.buildDef !is want))
+			continue;
+		if (Workers(cand) >= cap)
+			continue;
+		if ((unit !is null) && !unit.circuitDef.CanBuild(want))
+			continue;
+		const AIFloat3 where = cand.GetBuildPos();
+		if (!OnMap(where) || (spot.distance2D(where) > SAME_SITE))
+			continue;
+		return cand;
+	}
+	return null;
+}
+
 IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spot)
 {
 	if (want.costM < JOIN_MIN_COST)
