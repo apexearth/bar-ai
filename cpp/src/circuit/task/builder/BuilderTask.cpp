@@ -31,6 +31,7 @@
 #include "spring/SpringMap.h"
 
 #include "AISCommands.h"
+#include "Log.h"
 
 namespace circuit {
 
@@ -341,6 +342,18 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 		}
 	}
 	FindBuildSite(unit, pos, searchRadius);
+
+	// WHY A TASK NEVER BECOMES A BUILDING. Everything upstream is logged --
+	// the want, the price, the request -- and this step, where the site search
+	// fails and the builder is handed back to FallbackTask, was silent. A team
+	// opened 145 advanced-lab requests and started zero nanoframes with no line
+	// anywhere saying so.
+	if (!utils::is_valid(buildPos)) {
+		circuit->LOG("apex: site-fail t=%i %s bt=%i want=%.0f,%.0f snapped=%.0f,%.0f r=%.0f",
+				circuit->GetTeamId(),
+				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
+				int(buildType), position.x, position.z, pos.x, pos.z, searchRadius);
+	}
 
 	if (utils::is_valid(buildPos)) {
 		TRY_UNIT(circuit, unit,

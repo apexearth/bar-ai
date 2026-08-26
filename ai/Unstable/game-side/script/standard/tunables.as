@@ -1838,3 +1838,24 @@ const float TUNE_FARM_ROWS = 28.f;
 //   and the C++ blocked-slot signal stay for a cheaper retry: the want has to
 //   compete against a mex, and clearing ground is not worth a mex.
 const float TUNE_RECLAIM_BLOCKER = 0.f;
+// manager/brain/market/want_protect.as [ratio] -- Share of the local threat
+//   our MOBILE army is assumed to answer, leaving the rest for static
+//   defence. The defence target is what is left over, converted to turret
+//   metal at apex_def_trade.
+const float TUNE_DEF_ARMY_SHARE = 0.6f;
+// manager/brain/market/want_protect.as [ratio] -- The rear eco specialist's
+//   defence and army targets, as a share of a normal player's. Its threat is
+//   already near zero by position, so this only holds the tail down; it is a
+//   how-much, never a whether -- if something starts killing it, ThreatM at
+//   its home rises and the target rises with it.
+const float TUNE_ECO_DEF_MUL = 0.f;
+// manager/brain/market/coverage.as [metal per unit of ally influence] -- What a
+//   teammate holding this ground is worth as cover, in the same currency as
+//   our own towers. 0 restores the own-towers-only reading, in which a rear
+//   player behind four allies prices as the most dangerous ground on the map.
+const float TUNE_ALLY_COVER = 400.f;
+// manager/brain/market/want_protect.as [ratio] -- Share of the SYMMETRIC
+//   enemy expectation that the defence target assumes could arrive at our own
+//   base before anything has been seen. Without it the target is zero until
+//   something actually arrives, which is a strategy of having no defence.
+const float TUNE_DEF_PRIOR_SHARE = 0.25f;

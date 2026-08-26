@@ -44,6 +44,15 @@ instead. Generation never pauses; converters are what modulate on waste.
 Everything competes in one currency, `value = gain / (mCost + tCost)`, and the
 category roulette (see `ai-auction`) draws proportionally rather than argmax.
 
+## Eco is discounted by how UNDEFENDED we are
+
+`StreamSurvival` multiplies every eco want by a survival share built from
+`ShortfallAt(pos)` -- the share of a wave our own towers fail to stop -- and
+`SiegeRisk` at prior 1.0. So thin defence discounts economy, and the same
+number simultaneously discounts tech (`TechSurvival`) and RAISES the defence
+want. One reading, three consumers, pulling in opposite directions: see the
+**`ai-couplings`** skill before touching it.
+
 ## THERE IS NO FLOOR ANY MORE
 
 `Builder::AiMakeTask` is holds → `Brain::Decide` → **idle**. There is

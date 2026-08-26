@@ -6412,10 +6412,18 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..3bcaf18 100644
+index bc8ff11..b17ab05 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
-@@ -69,7 +69,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
+@@ -31,6 +31,7 @@
+ #include "spring/SpringMap.h"
+ 
+ #include "AISCommands.h"
++#include "Log.h"
+ 
+ namespace circuit {
+ 
+@@ -69,7 +70,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
  		, nextTask(nullptr)
  		, initiator(nullptr)
  		, buildFails(0)
@@ -6424,7 +6432,7 @@ index bc8ff11..3bcaf18 100644
  {
  	CEconomyManager* economyMgr = manager->GetCircuit()->GetEconomyManager();
  	savedIncome.metal = economyMgr->GetAvgMetalIncome();
-@@ -91,13 +91,19 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
+@@ -91,13 +92,19 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
  		, initiator(nullptr)
  		, savedIncome({0.f, 0.f})
  		, buildFails(0)
@@ -6446,7 +6454,7 @@ index bc8ff11..3bcaf18 100644
  }
  
  bool IBuilderTask::CanAssignTo(CCircuitUnit* unit) const
-@@ -134,8 +140,11 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -134,8 +141,11 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  	}
  
  	if (unit->HasDGun()) {
@@ -6460,7 +6468,7 @@ index bc8ff11..3bcaf18 100644
  	}
  	if (unit->GetCircuitDef()->IsAbleToCapture()) {
  		unit->PushBack(new CCaptureAction(unit, 500.f));
-@@ -157,9 +166,6 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -157,9 +167,6 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  
  void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
  {
@@ -6470,7 +6478,7 @@ index bc8ff11..3bcaf18 100644
  	if (initiator == unit) {
  		initiator = nullptr;
  	}
-@@ -285,11 +291,55 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -285,13 +292,69 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -6528,8 +6536,22 @@ index bc8ff11..3bcaf18 100644
 +	}
  	FindBuildSite(unit, pos, searchRadius);
  
++	// WHY A TASK NEVER BECOMES A BUILDING. Everything upstream is logged --
++	// the want, the price, the request -- and this step, where the site search
++	// fails and the builder is handed back to FallbackTask, was silent. A team
++	// opened 145 advanced-lab requests and started zero nanoframes with no line
++	// anywhere saying so.
++	if (!utils::is_valid(buildPos)) {
++		circuit->LOG("apex: site-fail t=%i %s bt=%i want=%.0f,%.0f snapped=%.0f,%.0f r=%.0f",
++				circuit->GetTeamId(),
++				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
++				int(buildType), position.x, position.z, pos.x, pos.z, searchRadius);
++	}
++
  	if (utils::is_valid(buildPos)) {
-@@ -427,18 +477,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+ 		TRY_UNIT(circuit, unit,
+ 			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
+@@ -427,18 +490,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -6562,7 +6584,7 @@ index bc8ff11..3bcaf18 100644
  	}
  }
  
-@@ -542,7 +599,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -542,7 +612,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6573,7 +6595,7 @@ index bc8ff11..3bcaf18 100644
  		return;
  	}
  
-@@ -565,11 +624,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +637,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6597,7 +6619,7 @@ index bc8ff11..3bcaf18 100644
  	}
  }
  
-@@ -637,14 +706,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +719,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6654,7 +6676,7 @@ index bc8ff11..3bcaf18 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +769,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +782,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);

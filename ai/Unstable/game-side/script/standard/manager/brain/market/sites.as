@@ -291,6 +291,21 @@ AIFloat3 FarmSlot(int defId)
 	array<AIFloat3> kin;
 	if ((cap > 0) && (fb > 0.f))
 		KinNear(def, kin);
+	// GROUND ALREADY ASKED FOR IS NOT FREE GROUND. A request that exists but
+	// has not started its nanoframe does not block the engine's map, so the
+	// scan below reads its slot as empty and hands it to the next asker too --
+	// who is then refused by Requests::Take as "covered" and walks away with
+	// nothing. Measured: energy was the most-refused want of all, 229 refusals
+	// against 201 elections that ended in no task at all.
+	array<AIFloat3> claimed;
+	for (uint qi = 0; qi < Requests::gLive.length(); ++qi) {
+		IUnitTask@ qt = Requests::gLive[qi];
+		if ((qt is null) || qt.IsDead())
+			continue;
+		const AIFloat3 qp = qt.GetBuildPos();
+		if (OnMap(qp))
+			claimed.insertLast(qp);
+	}
 	float depth0 = 0.f, lat0 = 0.f;
 	Base::Coords(gFarmPos, depth0, lat0);
 	depth0 = Lattice::Snap(depth0, pitch);
@@ -305,6 +320,15 @@ AIFloat3 FarmSlot(int defId)
 			if (!OnMap(p) || NearSpot(p))
 				continue;
 			if ((cap > 0) && (fb > 0.f) && (KinWithin(kin, p, fb) >= cap))
+				continue;
+			bool taken = false;
+			for (uint qj = 0; qj < claimed.length(); ++qj) {
+				if (claimed[qj].distance2D(p) < pitch) {
+					taken = true;
+					break;
+				}
+			}
+			if (taken)
 				continue;
 			// Onto this def's own build parity before asking, or the search
 			// starts half a cell off and answers with a neighbouring slot.

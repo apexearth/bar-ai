@@ -44,6 +44,10 @@ structure class that answers demand must be subtracted here too.
 Growing the ECONOMY raising the target is the intended coupling — a richer base
 needs a bigger army. Growing the ANSWER raising it is the bug.
 
+> The four laws behind this section, and the couplings it shares with the
+> economy and tech, are in the **`ai-couplings`** skill. Load that before
+> adding any gate, target, prior or role rule.
+
 ## The army gap has three suppliers, not one
 
 `gap = ArmyTarget - ArmyValue`. Three things close it, and they are amplifiers
@@ -52,6 +56,7 @@ of each other, not alternatives:
 | Supplier | What it raises | Where the gap is read |
 |---|---|---|
 | build power (nano, cons) | rate metal converts to units | `ProposeNano` army branch |
+| static defence | `DefenceTarget` (`want_protect.as`) — added 2026-08-26; before that defence had NO target and ran to 175% of eco | the defence gain |
 | tech (T2/T3) | combat value per metal | `want_tech` `funded` |
 | economy (mex, energy) | metal/s there is to convert | `ArmyGapStream` (want_mex), as a COST |
 

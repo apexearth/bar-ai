@@ -193,12 +193,94 @@ float FrontedStakeAt(const AIFloat3& in pos, float reach)
 
 // Is this mex defended -- the question the boolean radius test could not
 // answer. Fraction of the local threat our standing coverage fails to stop.
+// WHAT PROTECTS THIS GROUND IS NOT ONLY OURS.
+//
+// CoverAt sums OUR OWN towers and nothing else, so a rear player standing
+// behind four teammates reads as completely unprotected -- the safest ground
+// on the map, priced as the most dangerous. That number is a multiplier in
+// three places at once (StreamSurvival discounts every eco build by it,
+// TechSurvival discounts the T2 lab by it, and the defence want sizes itself
+// off it), so one wrong reading suppresses economy, tech and sensible
+// defence together -- and the answer it drives us to, more turrets of our
+// own, is the one thing the rear player should not be buying.
+//
+// apexearth: "we don't want to build this eco on unprotected ground. Sounds
+// like the same eco role armytarget/defensetarget stuff needs to be
+// considered in our protection desires too."
+//
+// Ally influence is the engine's own answer to who holds a piece of ground,
+// and the frontline senses already read it. Counted at the same exchange
+// rate as our own towers so the two are one currency.
+// MEASURED, AND IT IS NOT WHAT IT SOUNDS LIKE: ai.GetAllyInflAt counts the
+// whole ALLIANCE, ourselves included. In a 1v1 with no teammates at all it
+// read 3.71 at our own base -- entirely our own units. It cannot answer "am I
+// standing behind my team", which is the question, so nothing here may use it
+// for that. The team-relative exposure below is the honest form: a rank among
+// the team's own homes, which excludes us by construction.
+float AllyCoverAt(const AIFloat3& in pos)
+{
+	return 0.f;
+}
+
+// HOW EXPOSED THIS PLAYER IS, relative to its own team: 0 if it sits furthest
+// from the enemy of anyone on the team, 1 if it is the most forward -- or if
+// it is alone, which is the whole wave arriving at one base. The enemy
+// reference is the team centroid mirrored through map centre, the same one the
+// rear-specialist election already uses, so no sighting is needed.
+float gExpAt = -999999;
+float gExposure = 1.f;
+float TeamExposure()
+{
+	if (ai.frame < gExpAt + 10 * SECOND)
+		return gExposure;
+	gExpAt = ai.frame;
+	gExposure = 1.f;
+	if (!Builder::gHomeSet)
+		return gExposure;
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() < 2))
+		return gExposure;
+	array<float> hx, hz;
+	float cx = 0.f, cz = 0.f;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const float x = ai.ReadTeamValue(int(mates[i]), "homex", -1.f);
+		const float z = ai.ReadTeamValue(int(mates[i]), "homez", -1.f);
+		if ((x < 0.f) || (z < 0.f))
+			continue;
+		hx.insertLast(x); hz.insertLast(z); cx += x; cz += z;
+	}
+	if (hx.length() < 2)
+		return gExposure;
+	cx /= float(hx.length());
+	cz /= float(hx.length());
+	const float ex = float(AiTerrainWidth()) - cx;
+	const float ez = float(AiTerrainHeight()) - cz;
+	float near = -1.f, far = -1.f, mine = -1.f;
+	for (uint i = 0; i < hx.length(); ++i) {
+		const float dx = hx[i] - ex, dz = hz[i] - ez;
+		const float d = sqrt(dx * dx + dz * dz);
+		if ((near < 0.f) || (d < near)) near = d;
+		if ((far < 0.f) || (d > far)) far = d;
+	}
+	{
+		const float dx = Builder::gHomePos.x - ex, dz = Builder::gHomePos.z - ez;
+		mine = sqrt(dx * dx + dz * dz);
+	}
+	if ((far - near) < 1.f)
+		return gExposure;
+	float f = (far - mine) / (far - near);
+	if (f < 0.f) f = 0.f;
+	if (f > 1.f) f = 1.f;
+	gExposure = f;
+	return gExposure;
+}
+
 float ShortfallAt(const AIFloat3& in pos)
 {
 	const float threat = ThreatM(pos);
 	if (threat <= 1.f)
 		return 0.f;
-	const float gap = threat - CoverAt(pos);
+	const float gap = threat - (CoverAt(pos) + AllyCoverAt(pos));
 	if (gap <= 0.f)
 		return 0.f;
 	return gap / threat;

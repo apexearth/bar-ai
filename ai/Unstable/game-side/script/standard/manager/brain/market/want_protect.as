@@ -220,6 +220,110 @@ float MobileAACoverM()
 // Three questions, three tickets: shooting the ground, seeing, and shooting
 // the sky. `half` picks which set of protection classes this call bids for;
 // everything else about the auction is shared. See CAT_SENSE / CAT_AIRDEF.
+//------------------------------------------------------------------------------
+// TARGETS, not appetites.
+//
+// Army has had a target since the beginning and so it SATURATES: build until
+// ArmyValue reaches ArmyTarget and the gap closes. Static defence never had
+// one. It was bought marginally, turret by turret, priced as "expected loss
+// prevented" with no notion of enough -- and its marginal value never decayed,
+// because the hazard it multiplies is floored by a prior that scales with our
+// OWN economy. So defence tracked the economy at a fixed ratio forever:
+// measured 175% of eco against stock BARb's 52%, on a quarter of their income.
+//
+// A target is also how a role says what it is FOR without anyone being
+// forbidden anything (apexearth: "why not just have eco players with
+// ArmyTarget and DefenseTarget at 0? Make AATarget too?"). The rear
+// specialist's numbers fall out near zero because nothing reaches it -- and
+// rise again on their own if something does.
+//------------------------------------------------------------------------------
+
+// Static ground defence we own, in metal.
+float DefenceValue()
+{
+	float m = 0.f;
+	for (uint i = 0; i < gProtDefId[PROT_DEF].length(); ++i)
+		m += Catalog::gCostM[gProtDefId[PROT_DEF][i]];
+	return m;
+}
+
+// What the wave arriving at OUR ground is worth, less the share our own mobile
+// army answers, converted to turret metal at the same exchange rate coverage
+// uses. Everything here is measured at home: a player nothing reaches wants no
+// turrets, which is the whole of the rear specialist's case.
+float DefenceTarget()
+{
+	if (!Builder::gHomeSet)
+		return 0.f;
+	// A CREDIBLE WAVE BEFORE ANYTHING IS SEEN. ThreatM at our own base is what
+	// has actually arrived there, which is nothing until it is -- and a target
+	// of zero until the first raider lands is a strategy of owning no defence.
+	// The floor is the same symmetric expectation ArmyTarget already uses (they
+	// had our start and our minutes), taking the share of it that could reach
+	// this base. Defence is excluded from that basis, so it cannot buy itself.
+	float threat = ThreatM(Builder::gHomePos);
+	{
+		const float expected = ArmyTargetFull();
+		// ...scaled by how exposed WE are of the team. The wave reaches the
+		// front players first; the rear player is answered by the four in
+		// front of it, not by turrets it has not built.
+		const float floorM = expected
+				* ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE)
+				* TeamExposure();
+		if (floorM > threat)
+			threat = floorM;
+	}
+	if (threat <= 1.f)
+		return 0.f;
+	const float share = ai.GetTunable("apex_def_army_share", TUNE_DEF_ARMY_SHARE);
+	// ...and what the TEAM already holds here. Same reason ShortfallAt counts
+	// ally influence: the rear player's ground is answered by four teammates,
+	// not by turrets it has not built.
+	// OUR OWN ARMY, not the team's. Military::OurArmyNow() sums the whole
+	// alliance, so every player subtracted all eight players' army from its own
+	// local wave and every defence target came out zero (measured: threat 2550,
+	// ourArmy 11003, target 0 on all eight).
+	float unanswered = threat - ArmyValue() * share;
+	if (unanswered <= 0.f)
+		return 0.f;
+	const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
+	float t = unanswered / ((trade > 0.f) ? trade : 2.f);
+	if (EcoRoleActive())
+		t *= ai.GetTunable("apex_eco_def_mul", TUNE_ECO_DEF_MUL);
+	return (t > 0.f) ? t : 0.f;
+}
+
+// How much of each target is still unmet, as a fraction. The want's gain is
+// scaled by this, so the last turret before the target prices at nearly
+// nothing and the first one after it prices at zero -- the same shape as the
+// army gap, and the reason neither runs away.
+float TargetFill(float have, float target)
+{
+	if (target <= 0.f)
+		return 0.f;
+	const float gap = target - have;
+	if (gap <= 0.f)
+		return 0.f;
+	return (gap > target) ? 1.f : (gap / target);
+}
+
+int gNextTargetLog = 0;
+void TargetLog()
+{
+	if (ai.frame < gNextTargetLog)
+		return;
+	gNextTargetLog = ai.frame + 60 * SECOND;
+	AiLog("apex: targets t=" + ai.teamId
+		+ " def=" + int(DefenceValue()) + "/" + int(DefenceTarget())
+		+ " aa=" + int(gProtDefId[PROT_AA].length())
+		+ " army=" + int(ArmyValue()) + "/" + int(ArmyTarget())
+		+ " threatHome=" + int(Builder::gHomeSet ? ThreatM(Builder::gHomePos) : 0.f)
+		+ " floor=" + int(ArmyTargetFull() * ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE))
+		+ " expo=" + formatFloat(TeamExposure(), "", 0, 2)
+		+ " ourArmy=" + int(ArmyValue())
+		+ " eco=" + (EcoRoleActive() ? 1 : 0));
+}
+
 Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 {
 	Want w;
@@ -584,7 +688,16 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			gDbgLineN = int(sites.length() - nAsset);
 			if (bestGain <= 0.f)
 				continue;
-			gain = bestGain;
+			// SATURATE. Every other major want has a target it reaches and then
+			// stops asking; ground defence never had one, so it was bought
+			// marginally forever at a value that never decayed -- the hazard it
+			// multiplies is floored by a prior scaling with our OWN economy, so
+			// turrets simply tracked the economy: 175% of it, against stock's 52%.
+			// This is the same shape the AA branch above already uses against
+			// AirSeenEver, and the same shape ArmyTarget has always had.
+			gain = bestGain * TargetFill(DefenceValue(), DefenceTarget());
+			if (gain <= 0.f)
+				continue;
 			at = bestAt;
 			if (ai.frame >= gNextDefPriceLog) {
 				gNextDefPriceLog = ai.frame + 30 * SECOND;
@@ -647,6 +760,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 // really be that simple."
 Want@ ProposeProtect(CCircuitUnit@ unit)
 {
+	TargetLog();
 	return ProposeProtectHalf(unit, HALF_GROUND);
 }
 
