@@ -239,6 +239,14 @@ Measured on this machine: a 27 game-minute match completes in ~44 s wall
 
 ## The Brain drives the factories — factory.json is mostly NOT in the loop
 
+**Correction 2026-08-26: `QuotaFor` and `NextForMix` no longer exist.**
+`Market::ConOrderFor` (`brain/market/production.as`) is the only path to what
+a factory builds, and `targets.as`'s `ROLE_*` income-bracket tables are dead --
+nothing outside `targets.as` reads them. The section below is kept for its
+lesson (composition is decided by the Brain, not `factory.json`), but read
+`apex: decide ... -> produce:`, `apex: worth` and `apex: lineclass` rather than
+the quota lines it names.
+
 With `apex_fac_queue_brain` on (the default), `brain/facqueue.as` takes every
 factory line: it aborts recruit tasks, holds the line on a Wait task, and
 issues build orders itself from `QuotaFor`. **While a line is driven,

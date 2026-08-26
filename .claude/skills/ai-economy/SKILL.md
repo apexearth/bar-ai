@@ -25,6 +25,8 @@ Proposers are pure, `decide.as` ranks, `execute.as` is the only spender.
 | Storage | `ProposeStore` | `market/want_energy.as:390` |
 | Build-power demand | `BPGap()` — income headroom + bank backlog + ordered backlog, minus `BPCapacity()` | `market/want_energy.as:287` |
 | Overflow sense | `OverflowM()` | `market/want_energy.as:320` |
+| Is new energy worth anything | `ERealizeShare` | `market/price.as` |
+| What the converters really chew | `ConvUseE` / `ConvCapE` (BAR's `mmUse`/`mmCapacity` team rules params) | `market/want_energy.as` |
 | Mex claiming, walk safety | `ProposeMex` | `market/want_mex.as:246` |
 | Mex upgrades (moho) | `ProposeMexUp` | `market/want_tech.as:54` |
 | Tech plants | `ProposeTech` (`funded` discount — see the coupling section) | `market/want_tech.as:102` |
@@ -43,6 +45,28 @@ starving). Demand is priced against metal income and the conversion floor
 instead. Generation never pauses; converters are what modulate on waste.
 Everything competes in one currency, `value = gain / (mCost + tCost)`, and the
 category roulette (see `ai-auction`) draws proportionally rather than argmax.
+
+## Energy nobody can convert is worth nothing
+
+Generation never pauses, but its PRICE is bounded by what would actually use
+it. `ERealizeShare` (`market/price.as`) scales a generator's gain by the share
+of its output that real demand at `apex_e_headroom`, the converter fleet's
+capacity, and the room left in the E bank would absorb; above that line the
+gain decays to the `apex_e_waste_worth` floor (0.25) and the converter that
+realizes the overflow outbids the next generator. It lifts by itself as
+capacity or demand rises -- there is no gate and no cap, and the floor means an
+overflow never makes a generator unbuildable, only outranked (apexearth's
+standing ruling that the ladder never pauses on waste). `apex_e_realize=0` is the control arm. `ai-eco-pricing` has
+the formula and the three mistakes it encodes.
+
+**`energy.pull` ALREADY CONTAINS the converters' draw** (BAR's
+`game_energy_conversion.lua` charges each maker as unit energy use, which lands
+in `CTeam::resPull`), so a surplus built from `income - pull` is net of them
+already. `ProposeConvert` subtracted `StandingConvCap()` from it a second time
+and so read a saturated fleet with 50 e/s still spilling as -50 -- proposing
+nothing. That was the mechanism behind "we never build enough converters".
+Ground truth for the fleet is the gadget's own `mmUse`/`mmCapacity` team rules
+params (`ConvUseE` / `ConvCapE`).
 
 ## Eco is discounted by how UNDEFENDED we are
 
@@ -94,7 +118,7 @@ The full statement and its three laws are in the `ai-military` skill
 
 ## Key tunables
 
-`apex_e_per_metal` (20) · `apex_energy_headroom` (1.35) ·
+`apex_e_realize` (1, the overflow-aware energy price) · `apex_e_per_metal` (20) · `apex_energy_headroom` (1.35) ·
 `apex_fusion_min_energy` (1000, apexearth's number) ·
 `apex_fusion_prefer_income` (50, his number) · `apex_reclaim_pad` (1.5) ·
 `apex_reclaim_solar_e/advsol_e/wind_e` (500/2000/2000, his numbers) ·

@@ -693,28 +693,47 @@ float LineCostCeil(CCircuitUnit@ f)
 	return ceil;
 }
 
-// THE WORST-SERVED WORKING LINE, and how short of hands it is. Same
-// arithmetic as UnservedLineSpend, but it keeps the position: a nano bought to
-// serve a factory has to STAND at that factory. It was sited at the eco farm,
-// which is behind the anchor and outside assist reach, so line-demand nanos
-// could never touch the line that priced them.
+// IS THIS LINE WORKING? CountQueued lags sends by a whole order window and
+// reads zero for work that is really on the line (facqueue.as), so the sent
+// ledger answers too.
+bool LineWorking(CCircuitUnit@ f)
+{
+	if (f is null)
+		return false;
+	if (f.CountQueued(null) > 0)
+		return true;
+	const int line = Brain::FQIndex(f.id);
+	return (line >= 0) && (Brain::PendCount(line, null) > 0);
+}
+
+// THE WORST-SERVED WORKING LINE, and how short of hands it is. A nano bought
+// to serve a factory has to STAND at that factory, so the position comes back
+// with the number.
+//
+// A LINE IS PRICED IN THE SAME CURRENCY AS A BUILD SITE: what the economy can
+// feed it, less the lathe already standing on it. It used to be priced on the
+// ARMY SHORTFALL rate alone, which sits near zero whenever the army is near
+// target -- measured 0.6-2.5 m/s against a build site's 26 m/s, so six of nine
+// turrets in a game walked past a queued, nano-less lab to a fusion frame
+// (apexearth: "we rarely make them around factories that are building units").
+// The queue is the demand signal -- the market already decided those units are
+// worth buying; free flow is the ceiling, so lathe is never bought idle.
 float NeediestLine(AIFloat3& out at)
 {
 	float worst = 0.f;
-	const float per = LineSpend();
+	const float feed = FreeMetalFlow();
 	float sumCeil = 0.f;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
-		if ((Factory::gFacUnits[fi] !is null)
-			&& (Factory::gFacUnits[fi].CountQueued(null) > 0))
+		if ((Factory::gFacUnits[fi] !is null) && LineWorking(Factory::gFacUnits[fi]))
 			sumCeil += LineCostCeil(Factory::gFacUnits[fi]);
 	}
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
-		if ((f is null) || (f.CountQueued(null) == 0))
+		if ((f is null) || !LineWorking(f))
 			continue;
 		const float share = (sumCeil > 1.f)
-				? (per * float(Factory::gFactoryCount) * LineCostCeil(f) / sumCeil)
-				: per;
+				? (feed * LineCostCeil(f) / sumCeil)
+				: feed;
 		const AIFloat3 fp = f.GetPos(ai.frame);
 		if (!OnMap(fp))
 			continue;
@@ -723,7 +742,9 @@ float NeediestLine(AIFloat3& out at)
 			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
 				++nanosNear;
 		}
-		const float u = share - float(nanosNear) * NANO_ABSORB;
+		// The plant's own lathe counts: it is already eating part of the share.
+		const float own = Catalog::gBuildPower[int(f.circuitDef.id)] * (7.f / 80.f);
+		const float u = share - own - float(nanosNear) * NANO_ABSORB;
 		if (u > worst) {
 			worst = u;
 			at = fp;
@@ -769,12 +790,12 @@ float UnservedLineSpend()
 	float sumCeil = 0.f;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		if ((Factory::gFacUnits[fi] !is null)
-			&& (Factory::gFacUnits[fi].CountQueued(null) > 0))
+			&& LineWorking(Factory::gFacUnits[fi]))
 			sumCeil += LineCostCeil(Factory::gFacUnits[fi]);
 	}
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
-		if ((f is null) || (f.CountQueued(null) == 0))
+		if ((f is null) || !LineWorking(f))
 			continue;
 		const float share = (sumCeil > 1.f)
 				? (per * float(Factory::gFactoryCount) * LineCostCeil(f) / sumCeil)

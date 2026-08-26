@@ -60,6 +60,8 @@ local NAMES = {
 	"apex_farm_back",
 	"apex_e_lookahead",
 	"apex_e_headroom",
+	"apex_e_realize",
+	"apex_e_waste_worth",
 	"apex_con_escort",
 	"apex_escort_max_cost",
 	"apex_mex_growth",
@@ -79,6 +81,7 @@ local NAMES = {
 	"apex_comm_fight",
 	"apex_speed_worth",
 	"apex_los_worth",
+	"apex_screen_worth",
 	"apex_threat_gradient",
 	"apex_reclaim_amort",
 	"apex_mobile_bp_eff",
@@ -378,10 +381,39 @@ local NAMES = {
 	-- How much a never-re-seen enemy unit still counts for. 1.0 = the old
 	-- behaviour, where our picture of the enemy never expires.
 	"apex_ghost_weight",
+	-- The golden-metric exponents (manager/brain/market/worth.as).
+	"apex_worth_dps",
+	"apex_worth_alpha",
+	"apex_worth_hp",
+	"apex_worth_range",
+	"apex_worth_aoe",
+	"apex_worth_cost",
+	"apex_worth_diag",
+	"apex_line_abs",
+	"apex_line_range_exp",
+	"apex_line_median",
+	"apex_aim_miss",
 }
 
 local pending = {}
 for _, k in ipairs(NAMES) do
+	local raw = modOptions[k]
+	if raw ~= nil and raw ~= "" then
+		local n = tonumber(raw)
+		if n then
+			pending[k] = n
+		else
+			Spring.Echo("[BARAI_TUNABLE] ignoring non-numeric " .. k .. "=" .. tostring(raw))
+		end
+	end
+end
+
+-- apex_worth_<unitname>: a per-def worth multiplier, one name per unit in the
+-- game, so NAMES cannot enumerate them. It does not have to -- only pairs() over
+-- the modoptions table is broken here (see the note above NAMES); direct key
+-- access works, and UnitDefs gives us every key worth asking for.
+for _, ud in pairs(UnitDefs) do
+	local k = "apex_worth_" .. ud.name
 	local raw = modOptions[k]
 	if raw ~= nil and raw ~= "" then
 		local n = tonumber(raw)

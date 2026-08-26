@@ -7,6 +7,10 @@ namespace Brain {
 // line is taken and held; Market::ConOrderFor hands this executor its orders.
 // Nothing here computes what to build.
 //
+// A line is kept fed a WINDOW of work rather than a single order: the Wait
+// task ignores OnUnitIdle, so a line that finishes its last unit sits idle
+// until the timeout re-elects it.
+//
 // THE TWO SCHEMES CANNOT SHARE A FACTORY. CRecruitTask::Finish() calls
 // Cancel(), which CmdRemoves every build order still queued, so one recruit
 // task on a driven line wipes whatever the executor ordered. A driven line is
@@ -21,11 +25,13 @@ array<Id> gFQId;                 // factories we drive, by id
 array<CCircuitUnit@> gFQFac;     // ...and their handles, parallel to gFQId
 array<int> gFQSeen;              // ...and the queue depth we last observed
 array<int> gFQAt;                // ...and the frame we last sent one an order
+array<int> gFQEvt;               // ...and the frame the line last did ANYTHING
 
-// ORDERS SENT BUT NOT YET VISIBLE, as a flat FIFO of (line, def) pairs.
-// Reads lag sends (AICallback.cpp), so `count + CountQueued(def)` both read
-// stale for a whole lag window; this ledger is the ground truth for in-flight
-// orders.
+// EVERY ORDER STILL OUTSTANDING, as a flat FIFO of (line, def) pairs, retired
+// only when the unit is FINISHED. Reads lag sends by a whole order window
+// (AICallback.cpp), so CountQueued cannot retire an entry -- it reads zero for
+// work that is really on the line, and retiring on it made the ledger
+// undercount and the line over-order.
 array<int> gFQPendLine;
 array<CCircuitDef@> gFQPendDef;
 
@@ -33,6 +39,7 @@ int gFQOrders = 0;               // build orders issued, all lines
 int gFQMilReq = 0;               // military task requests, see NoteMilRequest
 int gFQLost = 0;                 // orders presumed lost
 int gNextFQLog = 0;
+int gFQIdleLog = 0;
 
 void PendAdd(int line, CCircuitDef@ d)
 {
@@ -78,6 +85,54 @@ void PendReindex(int gone)
 	}
 }
 
+// What actually builds on this line: the plant's own workertime plus the share
+// of the assist turrets standing over the base. Which turret serves which line
+// is not tracked; an even share is enough to size a queue with.
+float LineBuildPower(CCircuitUnit@ fac)
+{
+	if ((fac is null) || (fac.circuitDef is null))
+		return 0.f;
+	const float own = Catalog::gBuildPower[int(fac.circuitDef.id)];
+	return (own > 0.f) ? own * (1.f + Market::AssistBPShare()) : 0.f;
+}
+
+// Work outstanding on a line, in seconds of that line's own build time.
+// `skipHead` drops the oldest entry -- the one the plant is building now.
+//
+// THE BUFFER IS WHAT MATTERS, NOT THE TOTAL. Measuring total work let a single
+// long unit satisfy the target on its own: every unit an armlab makes takes 11
+// to 28 seconds, so one order cleared a 15-second bar, and the line went empty
+// the moment it finished and stayed empty until the next election (apexearth,
+// watched: "we are idle until we queue the next unit"). What must never run
+// out is the work standing BEHIND the head.
+float LineSeconds(int line, CCircuitUnit@ fac, bool skipHead)
+{
+	const float bp = LineBuildPower(fac);
+	if (bp <= 0.f)
+		return 1e9f;
+	float sec = 0.f;
+	bool head = skipHead;
+	for (uint i = 0; i < gFQPendLine.length(); ++i) {
+		if ((gFQPendLine[i] != line) || (gFQPendDef[i] is null))
+			continue;
+		if (head) {          // the ledger is FIFO: the oldest is in progress
+			head = false;
+			continue;
+		}
+		sec += Catalog::BuildSecondsAt(int(gFQPendDef[i].id), bp);
+	}
+	return sec;
+}
+
+// How deep a line is kept, in seconds of work. Anything under the re-election
+// gap is idle time by construction; the margin over it covers the order lag,
+// which is a whole window of its own at benchmark speed.
+float LineWindow()
+{
+	const float m = ai.GetTunable("apex_fac_queue", TUNE_FAC_QUEUE);
+	return float(FQ_WAIT) / float(SECOND) * ((m > 1.f) ? m : 1.f);
+}
+
 bool FacQueueOn()
 {
 	return ai.GetTunable("apex_fac_queue_brain", TUNE_FAC_QUEUE_BRAIN) > 0.f;
@@ -110,6 +165,7 @@ void FQForget(Id id)
 	gFQFac.removeAt(i);
 	gFQSeen.removeAt(i);
 	gFQAt.removeAt(i);
+	gFQEvt.removeAt(i);
 	PendReindex(i);
 }
 
@@ -165,6 +221,7 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		gFQFac.insertLast(fac);
 		gFQSeen.insertLast(0);
 		gFQAt.insertLast(ai.frame);
+		gFQEvt.insertLast(ai.frame);
 		line = int(gFQId.length()) - 1;
 		AbortRecruitsOn(fac);
 		fac.CmdRepeat(false);
@@ -172,46 +229,71 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 			+ " #" + fac.id + " (CRecruitTask off for this line)");
 	}
 
-	// Orders that have become visible leave the ledger; orders invisible for
-	// a minute are presumed lost (the ledger keeps <=1 in flight per line, so
-	// this is exact, not heuristic).
-	if (fac.CountQueued(null) > 0) {
+	// A DROUGHT, not a stale read, is what retires an order the engine never
+	// took: nothing visible on the line, nothing finished off it, and nothing
+	// sent to it for a minute. NoteProduced is the honest retirement.
+	if ((PendCount(line, null) > 0) && (fac.CountQueued(null) == 0)
+		&& (ai.frame - gFQEvt[line] > 60 * SECOND))
+	{
+		gFQLost += PendCount(line, null);
 		PendDrop(line, PendCount(line, null));
-	} else if ((PendCount(line, null) > 0)
-			&& (ai.frame - gFQAt[line] > 60 * SECOND)) {
-		PendDrop(line, PendCount(line, null));
-		++gFQLost;
 	}
 
-	// The production market's call: what should this line make, if anything.
-	// Every order below is exactly ONE unit: a SHIFT append is multiplied by
-	// five inside CFactoryCAI, so CmdInsertBuild is the only append that
-	// queues what the market actually asked for. Depth is held at two by
-	// ConOrderFor's in-flight test, which is what keeps the line busy.
-	CCircuitDef@ order = Market::ConOrderFor(fac, line);
-	if (order !is null) {
-		const bool empty = (fac.CountQueued(null) + PendCount(line, null)) == 0;
-		if (empty) {
-			// replace=true: plain order, exactly one.
-			fac.CmdBuildUnit(order, 1, true);
-			PendAdd(line, order);
-		} else if (Market::gEscortFloor) {
-			// The escort floor does not wait for the line to drain either:
-			// the con it guards is exposed now, not when the queue empties.
-			fac.CmdInsertBuild(order, false);
-			PendAdd(line, order);
-		} else if ((Market::CeilingConsNeed() > 0)
-			&& Market::ReachesCeiling(int(order.id)))
-		{
-			// THE T2 CON FLOOR does not wait for the line to drain -- it
-			// queues BEHIND the head. Waiting delivered 2 cons against a
-			// floor of 6 at 129 m/s (measured, 4v4 seed 3): the line was
-			// never empty, so every floor order was discarded here.
-			fac.CmdInsertBuild(order, false);
-			PendAdd(line, order);
+	// KEEP THE LINE FED. One order per election idled the plant for the whole
+	// re-election gap after every unit: IWaitTask ignores OnUnitIdle, so
+	// nothing looks at a finished line until the Wait times out. The batch is
+	// measured as the build SECONDS standing BEHIND the unit in progress, so
+	// the plant always has the next order in hand when one completes. Each slot is priced by the market separately, against a ledger
+	// that already holds the slots before it -- so a floor satisfied by slot 0
+	// does not repeat, and the mix is the market's, not a ratio table's.
+	array<CCircuitDef@> batch;
+	const int outstanding = PendCount(line, null);
+	const float window = LineWindow();
+	// The bound is a non-termination guard (a def with no build time), not a
+	// cap on production: LineSeconds grows with every slot and ends the loop.
+	for (int slot = 0; slot < 16; ++slot) {
+		if (LineSeconds(line, fac, true) >= window)
+			break;
+		CCircuitDef@ o = Market::ConOrderFor(fac, line, slot);
+		if (o is null)
+			break;
+		batch.insertLast(o);
+		PendAdd(line, o);
+	}
+	// AN ELECTION THAT ORDERS NOTHING IS IDLE FACTORY TIME. Logged with the
+	// market's own reason, rate-limited per line, because the gap between
+	// orders is otherwise invisible -- measured 2026-08-25 at 1 to 9 silent
+	// elections between orders on a single lab.
+	if ((batch.length() == 0) && (fac.CountQueued(null) == 0)
+		&& (ai.frame >= gFQIdleLog))
+	{
+		gFQIdleLog = ai.frame + 10 * SECOND;
+		AiLog(Factory::T() + "apex: facqueue idle " + fac.circuitDef.GetName()
+			+ " #" + fac.id + " nothing ordered: "
+			+ (Market::gNoOrder.length() > 0 ? Market::gNoOrder : "priced-out"));
+	}
+	if (batch.length() > 0) {
+		// EXACTLY ONE UNIT PER ORDER: a SHIFT append is multiplied by five
+		// inside CFactoryCAI, so CmdInsertBuild is the only append that queues
+		// what the market asked for. It lands at position 1 -- behind whatever
+		// is being built, AHEAD of everything else -- so the batch is issued
+		// back to front to come out in the order it was decided, and lands in
+		// front of work queued on an earlier pass. That is what puts an escort
+		// or a constructor floor in front of the army: those are priced first,
+		// so they sit at the head of the batch.
+		uint first = 0;
+		// A replace order WIPES the queue it lands on, so it is only safe on a
+		// line with nothing outstanding at all -- an order still in flight has
+		// not landed yet and would be erased by it.
+		if ((outstanding == 0) && (fac.CountQueued(null) == 0)) {
+			fac.CmdBuildUnit(batch[0], 1, true);
+			first = 1;
 		}
+		for (int i = int(batch.length()) - 1; i >= int(first); --i)
+			fac.CmdInsertBuild(batch[i], false);
 		gFQAt[line] = ai.frame;
-		++gFQOrders;
+		gFQEvt[line] = ai.frame;
+		gFQOrders += int(batch.length());
 	}
 	return aiFactoryMgr.Enqueue(TaskS::Wait(false, FQ_WAIT));
 }
@@ -282,6 +364,9 @@ void NoteProduced(CCircuitUnit@ unit)
 		return;
 	for (uint i = 0; i < gFQPendDef.length(); ++i) {
 		if ((gFQPendDef[i] !is null) && (gFQPendDef[i] is unit.circuitDef)) {
+			const int line = gFQPendLine[i];
+			if ((line >= 0) && (line < int(gFQEvt.length())))
+				gFQEvt[line] = ai.frame;
 			gFQPendLine.removeAt(i);
 			gFQPendDef.removeAt(i);
 			return;
@@ -304,7 +389,9 @@ void LogFacQueues()
 	string d = "";
 	for (uint i = 0; i < gFQFac.length(); ++i) {
 		d += " #" + gFQFac[i].id + ":" + gFQFac[i].CountQueued(null)
-			+ "+" + PendCount(int(i), null);
+			+ "+" + PendCount(int(i), null)
+			+ "/" + formatFloat(LineSeconds(int(i), gFQFac[i], false), "", 0, 0)
+			+ "s buf" + formatFloat(LineSeconds(int(i), gFQFac[i], true), "", 0, 0) + "s";
 	}
 	AiLog(Factory::T() + "apex: facqueue lines=" + gFQFac.length()
 		+ " orders=" + gFQOrders + " lost=" + gFQLost

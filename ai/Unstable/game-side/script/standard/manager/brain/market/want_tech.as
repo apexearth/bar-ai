@@ -454,10 +454,13 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				+ " gain=" + formatFloat(techGain, "", 0, 2)
 				+ " costM=" + formatFloat(Catalog::gCostM[d], "", 0, 0));
 		}
+		// The lab lands at the interior anchor, so that -- not the asker's own
+		// feet -- is the walk this want is priced against.
+		const AIFloat3 lands = InteriorSite(here, Catalog::Def(int(unit.circuitDef.id)));
 		Want c;
 		ValueOf(d, techGain * fundedMul
 					* PipeLatencyMult(d, Catalog::gBuildPower[uid]),
-				0.f, Catalog::gBuildPower[uid], c);
+				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);
 		// the follow-through bill: cheapest constructor this lab produces
 		{
 			float conBill = 0.f;
@@ -478,7 +481,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			@w.def = Catalog::Def(d);
 			// The tech lab is the most protection-hungry building we own:
 			// at the base anchor, never at a forward asker (watched).
-			w.pos = InteriorSite(here, Catalog::Def(int(unit.circuitDef.id)));
+			w.pos = lands;
 			// WHERE THE LAB ACTUALLY LANDS, and how deep that is toward the
 			// enemy. Reported twice as wrong from a watched game, so it is
 			// measured rather than reasoned about.

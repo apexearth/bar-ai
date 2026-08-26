@@ -9,16 +9,27 @@ namespace Air {
 // scouts our base -- but it does keep them off the map until the strike.
 bool HoldsUnit(CCircuitUnit@ unit)
 {
-	if (gStrike)
-		return false;
 	ResolveDefs();
 	const int id = unit.circuitDef.id;
-	const bool strikeDef = ((gBomber !is null) && (id == gBomber.id))
-		|| ((gFighter !is null) && (id == gFighter.id))
-		|| ((gBomber1 !is null) && (id == gBomber1.id))
-		|| ((gFighter1 !is null) && (id == gFighter1.id));
+	bool strikeDef = false;
+	for (int i = 0; i < 6; ++i) {
+		CCircuitDef@ d = StrikeDef(i);
+		if ((d !is null) && (id == int(d.id))) {
+			strikeDef = true;
+			break;
+		}
+	}
 	if (!strikeDef)
 		return false;
+	// The base itself is under attack: everything flies, and nothing about the
+	// strike plan applies.
+	if (gDefendHome)
+		return false;
+	// A STRIKE OWNS ONLY WHAT IT LAUNCHED WITH. A plane finished while the wave
+	// is out keeps holding: joining a run already in progress arrives alone,
+	// after the surprise, into the AA the wave woke up.
+	if (gStrike)
+		return !InWave(unit.id);
 	// The air lead follows the assassin's own discipline (Armed covers the
 	// abort and timing gates). EVERYONE ELSE holds too: a released fighter or
 	// bomber lands in stock tasks that wander it to the front line, where it
@@ -46,9 +57,11 @@ void Intercept()
 		ai.PublishTeamValue(TV_HOMEX, Builder::gHomePos.x);
 		ai.PublishTeamValue(TV_HOMEZ, Builder::gHomePos.z);
 	}
-	if (gStrike || (ai.frame < gNextInterceptCmd))
+	if (ai.frame < gNextInterceptCmd)
 		return;
-	if (Fighters() < int(ai.GetTunable("apex_intercept_min_fighters", TUNE_INTERCEPT_MIN_FIGHTERS)))
+	// The fighters HELD at home are the pool an ally can call on; the ones out
+	// with a strike are not, and a raid on an ally must not recall them.
+	if (HeldFighters() < int(ai.GetTunable("apex_intercept_min_fighters", TUNE_INTERCEPT_MIN_FIGHTERS)))
 		return;
 	// Cached: team composition never changes mid-game, and calling
 	// GetTeamIds thirty times a second is what exposed the binding's
@@ -93,10 +106,10 @@ void Intercept()
 		if (wings is null)
 			continue;
 		for (uint i = 0; i < wings.length(); ++i) {
-			if (wings[i] !is null) {
-				wings[i].CmdMoveTo(to);
-				++sent;
-			}
+			if ((wings[i] is null) || InWave(wings[i].id))
+				continue;
+			wings[i].CmdMoveTo(to);
+			++sent;
 		}
 	}
 	if ((sent > 0) && (gInterceptTarget != worst)) {
@@ -110,6 +123,7 @@ void Intercept()
 void Release(const string& in why)
 {
 	gStrike = true;
+	BuildWave();
 	NoteStrikeLaunched();
 	Economy::isSwitchAssist = false;   // stop holding build power on the plant
 	// ANTI_STAT makes CBombTask::FindTarget skip enemy army but keep static eco,
@@ -159,24 +173,35 @@ bool ReleaseForPush()
 // How many aircraft still flying counts as "the strike force still exists".
 const int STRIKE_SPENT_BELOW = 3;
 
-// Re-arm once the wave is spent. HoldsUnit returns false while gStrike is set,
-// so without this every plane built after the first strike is released alone
-// into the same defended airspace instead of massing again.
+// Re-arm once the run is over. Two ways it ends, and neither is a clock:
+//
+//  - the wave is spent, or
+//  - what has been built while it was away is already the bigger force, so
+//    there is nothing left for the remnant to add by staying out.
+//
+// Either way the survivors come home and mass with the pool, and the next
+// Release throws the whole thing at once.
 void ReArm()
 {
 	if (!gStrike)
 		return;
-	// BOMBERS ONLY: the strike force IS the bombers; fighters loiter at home
-	// and rarely die, so counting them kept `have` above the bar forever --
-	// gStrike never re-armed and every bomber built after the first strike
-	// released SOLO into defended airspace (apexearth, watching: "the few
-	// bombers that I do see are just solo attacking").
-	const int have = Bombers();
-	if (have >= STRIKE_SPENT_BELOW)
+	ScanWave();
+	// BOMBERS ONLY: the strike force IS the bombers; fighters loiter and rarely
+	// die, so counting them kept `have` above the bar forever (apexearth,
+	// watching: "the few bombers that I do see are just solo attacking").
+	const int have = gWaveBombers;
+	const int held = HeldBombers();
+	if ((have >= STRIKE_SPENT_BELOW)
+		&& ((held < have) || (held < STRIKE_SPENT_BELOW)))
 		return;
+	RecallWave();
 	gStrike = false;
-	AiLog(Factory::T() + "apex: air strike spent (" + have
-		+ " left) -- holding and rebuilding instead of trickling");
+	gWave.resize(0);
+	gWaveBombers = 0;
+	gWaveFighters = 0;
+	AiLog(Factory::T() + "apex: air strike over -- " + have
+		+ " of the wave home, " + held + " built since; massing them together"
+		+ " for the next run");
 }
 
 void Update()
@@ -199,6 +224,7 @@ void Update()
 	{
 		const bool defendHome = Military::BaseContested()
 			&& (EnemyAACost() < ai.GetTunable("apex_bomb_defend_aa", TUNE_BOMB_DEFEND_AA));
+		gDefendHome = defendHome;
 		if (gBomber !is null) {
 			if (defendHome) gBomber.DelAttribute(Unit::Attr::ANTI_STAT.type);
 			else            gBomber.AddAttribute(Unit::Attr::ANTI_STAT.type);
@@ -214,10 +240,8 @@ void Update()
 		// that took hits inbound still peeled home with bombs unspent.
 		if (gBomber !is null)  gBomber.SetRetreat(0.f);
 		if (gBomber1 !is null) gBomber1.SetRetreat(0.f);
-		// A held force does not hover through a base invasion: the same tight
-		// condition that permits army targets also releases whatever is massed.
-		if (defendHome && !gStrike && (Bombers() + Fighters() > 0))
-			Release("defending home");
+		// A held force does not hover through a base invasion -- gDefendHome
+		// opens HoldsUnit directly, without pretending a strike is under way.
 	}
 
 	// A NON-LEAD player's wave: mass at home, then strike together. Half the

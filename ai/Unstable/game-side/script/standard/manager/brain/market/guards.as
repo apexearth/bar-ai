@@ -24,6 +24,9 @@ void GuardNote(CCircuitUnit@ u, CCircuitUnit@ boss)
 // escort's task ends.
 array<Id> gEscWorker;
 array<Id> gEscUnit;
+// The escort's def, kept beside the pairing so the army model can tell what is
+// standing from what is committed -- there is no unit-by-id lookup bound.
+array<int> gEscDef;
 int gEscDiagAt = 0;
 int gEscOrderAt = 0;         // frame of the last escort order, all lines
 bool gEscortFloor = false;   // the order ConOrderFor just returned is an escort
@@ -63,14 +66,16 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 			continue;
 		gEscWorker.insertLast(wkr.id);
 		gEscUnit.insertLast(mil.id);
+		gEscDef.insertLast(int(mil.circuitDef.id));
 		return wkr;
 	}
 	return null;
 }
 // Escorts ORDERED but not yet standing beside anyone. An escort queued behind
 // a busy line took 77 seconds to arrive (measured, smoke seed 1), so a
-// time-decayed order ledger expires and the floor re-orders; the factory
-// queue plus the sent-ledger is the exact answer for the whole of that wait.
+// time-decayed order ledger expires and the floor re-orders. The sent-ledger
+// alone is the answer: it holds every order until the unit is finished, so
+// adding CountQueued to it would count the same escort twice.
 int EscortInFlight(CCircuitDef@ d)
 {
 	if (d is null)
@@ -80,7 +85,7 @@ int EscortInFlight(CCircuitDef@ d)
 		CCircuitUnit@ f = Brain::gFQFac[i];
 		if (f is null)
 			continue;
-		n += f.CountQueued(d) + Brain::PendCount(int(i), d);
+		n += Brain::PendCount(int(i), d);
 	}
 	return n;
 }
@@ -153,6 +158,11 @@ CCircuitDef@ EscortOrderFor(CCircuitUnit@ fac)
 			+ " short=" + need
 			+ " paired=" + gEscWorker.length()
 			+ " risk=" + formatFloat(EscortMetalAtRisk(), "", 0, 0)
+			// What escort duty has taken out of the free army, and what is
+			// left standing for everything else -- the pair that used to be
+			// indistinguishable in this line.
+			+ " committed=" + formatFloat(RoleCommitted(int(Unit::Role::RAIDER.type)), "", 0, 0)
+			+ " freeRaid=" + formatFloat(RoleValue(int(Unit::Role::RAIDER.type)), "", 0, 0)
 			+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 0));
 	}
 	if (need <= 0)
@@ -197,6 +207,7 @@ void EscortGone(Id id)
 		if ((gEscWorker[e] == id) || (gEscUnit[e] == id)) {
 			gEscWorker.removeAt(e);
 			gEscUnit.removeAt(e);
+			gEscDef.removeAt(e);
 			continue;
 		}
 		++e;

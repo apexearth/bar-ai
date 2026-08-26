@@ -111,7 +111,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		ProposePlant(unit), ProposeConvert(unit), ProposeStore(unit),
 		ProposeMexUp(unit), ProposeTech(unit), ProposeNano(unit),
 		ProposeReclaimObsolete(unit), ProposeReclaimBlocker(unit), ProposeAssist(unit),
-		ProposeProtect(unit), ProposeSense(unit), ProposeAirDef(unit)
+		ProposeProtect(unit), ProposeSense(unit), ProposeAirDef(unit),
+		ProposeSuper(unit)
 	};
 	// EXPOSURE IS A COST THE ASSET ITSELF PAYS. A want's return is reduced by
 	// the rate at which the thing is expected to be destroyed where it would
@@ -210,6 +211,32 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;
 		}
 	}
+	// AFFORDABILITY IS THE WHOLE TEST FOR A STRATEGIC BUILD. apexearth: "it is
+	// more of a 'if I can afford this, I'll insert it as a want so we make
+	// one'." A gantry or a silo returns destruction rather than metal/s, so it
+	// can never out-price a mex per metal and a proportional ticket would draw
+	// it once a game at best -- which is the state he is reporting. Its own
+	// proposer already refuses unless the economy makes the whole bill inside
+	// apex_super_afford_s, only one strategic frame stands at a time, and the
+	// counts rise with income, so what this skips is the lottery, not a budget.
+	bool superPush = false;
+	if (!aaPanic && (ai.GetTunable("apex_super_push", TUNE_SUPER_PUSH) > 0.f)) {
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if (ranked[ri].kind != WK_SUPER)
+				continue;
+			if (ri > 0) {
+				Want@ sw = ranked[ri];
+				ranked.removeAt(ri);
+				ranked.insertAt(0, sw);
+			}
+			superPush = true;
+			AiLog("apex: super-push t=" + ai.teamId + " "
+				+ SuperName(ranked[0].spotId) + ":"
+				+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
+				+ " by " + unit.circuitDef.GetName() + " #" + unit.id);
+			break;
+		}
+	}
 	// PROPORTIONAL DRAW OVER CATEGORIES, argmax inside one (apexearth:
 	// "think about eco related things by category... then we pick the
 	// highest value energy"). The draw still exists -- winner-takes-all
@@ -219,7 +246,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// draw four times per election against extraction's two, which is how
 	// 672 wind turbines were bought against 1 moho upgrade (measured). One
 	// question, one ticket, weighted by that question's best answer.
-	if ((ranked.length() > 1) && !aaPanic) {
+	if ((ranked.length() > 1) && !aaPanic && !superPush) {
 		array<int> catBest(CAT_N, -1);   // index into ranked, or -1
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			const int c = CategoryOf(ranked[ri].kind);
@@ -329,50 +356,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 	}
 	if (top is null) {
-		// Floor want 1: a lesser con GUARDS a ceiling-reaching con -- guard
-		// auto-assists whatever its target does, so 50 idle T1s (air cons
-		// included) become T2 build power (apexearth 2026-08-23). Round-
-		// robin spreads the guards.
-		if (BestExtract() > 0.f) {
-			float myCeil = 0.f;
-			const array<int>@ mine = Catalog::BuildsOf(int(unit.circuitDef.id));
-			for (uint i = 0; i < mine.length(); ++i) {
-				if (Catalog::gExtractsM[mine[i]] > myCeil)
-					myCeil = Catalog::gExtractsM[mine[i]];
-			}
-			if (myCeil < BestExtract()) {
-				CCircuitUnit@ boss = NextServingCon();
-				if (boss !is null) {
-					if (ai.frame >= gNextIdleLog) {
-						gNextIdleLog = ai.frame + 30 * SECOND;
-						AiLog("apex: decide " + unit.circuitDef.GetName() + " #" + unit.id
-							+ " -> guard:" + boss.circuitDef.GetName() + " #" + boss.id
-							+ " (assist its work)");
-					}
-					IUnitTask@ gt2 = aiBuilderMgr.Enqueue(TaskB::Guard(
-							Task::Priority::LOW, boss, false, 60 * SECOND));
-					if (gt2 !is null)
-						GuardNote(unit, boss);
-					return gt2;
-				}
-			}
-		}
-		// Floor want 2: patrol the farm and auto-assist whatever builds there.
-		if (gFarmSet) {
-			if (ai.frame >= gNextIdleLog) {
-				gNextIdleLog = ai.frame + 30 * SECOND;
-				AiLog("apex: decide " + unit.circuitDef.GetName() + " #" + unit.id
-					+ " -> assist (farm patrol; no positive want)");
-			}
-			return aiBuilderMgr.Enqueue(TaskB::Patrol(Task::Priority::LOW,
-					gFarmPos, 20 * SECOND));
-		}
 		if (ai.frame >= gNextIdleLog) {
 			gNextIdleLog = ai.frame + 30 * SECOND;
 			AiLog("apex: decide " + unit.circuitDef.GetName() + " #" + unit.id
-				+ " -> idle (no positive want)");
+				+ " -> floor (no positive want)");
 		}
-		return null;
+		return IdleFloor(unit, "no positive want");
 	}
 
 	gWantEmaV = (gWantEmaV <= 0.f) ? top.value
@@ -410,8 +399,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				continue;
 		}
 		IUnitTask@ t = ExecuteWant(unit, ranked[i]);
-		if (t !is null)
+		if (t !is null) {
+			// Price tag on the job, so idle hands can later rank what is in
+			// flight by what the market paid for it (floor.as).
+			NoteJob(t, ranked[i]);
 			return t;
+		}
 		if (uint(ranked[i].kind) < gExecFail.length())
 			++gExecFail[ranked[i].kind];
 	}
@@ -430,7 +423,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 		AiLog(ln);
 	}
-	return null;
+	// ...and a refused election is still an idle constructor, which is the
+	// exit that actually fires (measured: 472 all-refused elections in one
+	// game against zero of the no-want exit above).
+	return IdleFloor(unit, "all wants refused");
 }
 
 

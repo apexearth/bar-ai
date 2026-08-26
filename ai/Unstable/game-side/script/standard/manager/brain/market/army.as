@@ -10,6 +10,20 @@ namespace Market {
 // COVERAGE (apexearth: only ticks, pawns, rovers -- "where's the rest?");
 // each next unit's gain diminishes by its role's share, so raiders
 // saturate and the empty roles win the auction.
+// Metal of this role standing beside a constructor rather than with the army.
+// An escort is SPENT: it is somewhere out on the map minding one worker and
+// cannot answer anything else.
+float RoleCommitted(int role)
+{
+	float v = 0.f;
+	for (uint e = 0; e < gEscDef.length(); ++e) {
+		const int d = gEscDef[e];
+		if ((d > 0) && (d <= Catalog::gDefCount) && (Catalog::gRole[d] == role))
+			v += Catalog::gCostM[d];
+	}
+	return v;
+}
+
 float RoleValue(int role)
 {
 	float v = 0.f;
@@ -21,7 +35,15 @@ float RoleValue(int role)
 		if (Catalog::gRole[int(d)] == role)
 			v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
 	}
-	return v;
+	// ESCORTS ARE NOT COVERAGE. Pairing a raider to a worker zeroed the escort
+	// term in RoleTarget while leaving that same raider counted here, so the
+	// role gap closed at exactly the moment the free army emptied -- measured
+	// `paired=5 risk=0` eight minutes in, with nothing left at home. Counting
+	// only what is uncommitted is what makes escort duty ADD demand instead of
+	// cancelling it (apexearth: "we assign a scout/raider to every con... we
+	// need to create even more so we can also protect our structures").
+	v -= RoleCommitted(role);
+	return (v > 0.f) ? v : 0.f;
 }
 
 // Role TARGETS from what the enemy fields (apexearth 2026-08-23: "balance
@@ -256,6 +278,62 @@ bool LineCombat(int di)
 		&& (Catalog::gHealth[di] > 0.f) && !Catalog::gKamikaze[di];
 }
 
+// PER BODY OR PER METAL. Range has always been read absolute while hp and dps
+// were read per metal, so the argmax below compared three axes in two different
+// units -- and per-metal hp made the Thud (7.9 hp/m) a tankier unit than the
+// Tzar (4.7). What survives focus fire and splash is the body, not the ratio,
+// which is what the four classes are describing (apexearth: "HP and a little
+// bit of range"). Both halves read this, so they cannot disagree.
+bool LineAbs()
+{
+	return ai.GetTunable("apex_line_abs", TUNE_LINE_ABS) > 0.f;
+}
+
+float LineHpAxis(int d)
+{
+	return LineAbs() ? Catalog::gHealth[d]
+			: (Catalog::gHealth[d] / Catalog::gCostM[d]);
+}
+
+float LineDpsAxis(int d)
+{
+	// Absolute mode reads the bound dps directly; the per-metal mode keeps
+	// recovering it from power, which carries a sqrt of per-shot damage with it.
+	if (LineAbs())
+		return Catalog::gDps[d];
+	return (Catalog::gPower[d] * Catalog::gPower[d] / Catalog::gHealth[d])
+			/ Catalog::gCostM[d];
+}
+
+// THE FIELD REFERENCE EACH AXIS IS JUDGED AGAINST. A mean is an outlier
+// statistic here in the same way a max was for FoeReach: a Korgoth at 149,000
+// hp and a Behemoth at 335,000 drag mean hp to 7,741, so a Tzar at 7,800 reads
+// as 1.008x the field and misses the 1.15 edge -- and with every axis pulled
+// the same way, 92% of the field classified as MID, leaving the composition
+// target with almost nothing to select. The median describes the field the
+// units actually live in.
+float LineRef(array<float>@ v)
+{
+	if (v.length() == 0)
+		return 0.f;
+	if (ai.GetTunable("apex_line_median", TUNE_LINE_MEDIAN) <= 0.f) {
+		float s = 0.f;
+		for (uint i = 0; i < v.length(); ++i)
+			s += v[i];
+		return s / float(v.length());
+	}
+	v.sortAsc();
+	return v[v.length() / 2];
+}
+
+// Set when the refs are (re)computed; LineClassDiag runs once behind it. A
+// class split that is 92% MID cannot express any composition target, and the
+// only way to see that is to count it. Declared here because LineMeans below
+// writes it -- a global read before its declaration is a No matching symbol
+// that disables the whole variant.
+bool gLineDiagWant = false;
+bool gLineDiagDone = false;
+
 float gLMeanHpm = -1.f, gLMeanDpm = 0.f, gLMeanR = 0.f, gLMeanSpc = 0.f;
 void LineMeans()
 {
@@ -263,26 +341,45 @@ void LineMeans()
 	// rather than latching a mean taken over nothing (see BestConvRatio).
 	if (gLMeanHpm > 0.f)
 		return;
-	float hp = 0.f, dp = 0.f, rr = 0.f, sp = 0.f;
-	int n = 0;
+	array<float> hpV, dpV, rrV, spV;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAvailable[d] || !LineCombat(d))
 			continue;
-		hp += Catalog::gHealth[d] / Catalog::gCostM[d];
-		dp += (Catalog::gPower[d] * Catalog::gPower[d] / Catalog::gHealth[d])
-				/ Catalog::gCostM[d];
-		rr += Catalog::gMaxRange[d];
-		sp += Catalog::gSpeed[d] / Catalog::gCostM[d];
-		++n;
+		hpV.insertLast(LineHpAxis(d));
+		dpV.insertLast(LineDpsAxis(d));
+		rrV.insertLast(ClassRange(d));
+		spV.insertLast(Catalog::gSpeed[d] / Catalog::gCostM[d]);
 	}
-	if (n <= 0) {
+	if (hpV.length() == 0) {
 		gLMeanHpm = -1.f;   // not yet knowable; ask again next call
 		return;
 	}
-	gLMeanHpm = hp / float(n);
-	gLMeanDpm = dp / float(n);
-	gLMeanR = rr / float(n);
-	gLMeanSpc = sp / float(n);
+	gLMeanHpm = LineRef(hpV);
+	gLMeanDpm = LineRef(dpV);
+	gLMeanR = LineRef(rrV);
+	gLMeanSpc = LineRef(spV);
+	gLineDiagWant = true;
+}
+
+void LineClassDiag()
+{
+	if (!gLineDiagWant || gLineDiagDone || (gLMeanHpm <= 0.f))
+		return;
+	gLineDiagDone = true;
+	array<int> cnt(LC_N, 0);
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !LineCombat(d))
+			continue;
+		++cnt[LineClassOf(d)];
+	}
+	AiLog("apex: lineclass t=" + ai.teamId
+		+ " abs=" + (LineAbs() ? 1 : 0)
+		+ " median=" + formatFloat(ai.GetTunable("apex_line_median", TUNE_LINE_MEDIAN), "", 0, 0)
+		+ " ref hp=" + formatFloat(gLMeanHpm, "", 0, 1)
+		+ " dps=" + formatFloat(gLMeanDpm, "", 0, 2)
+		+ " rng=" + formatFloat(gLMeanR, "", 0, 0)
+		+ " | tank=" + cnt[LC_TANK] + " mid=" + cnt[LC_MID]
+		+ " reach=" + cnt[LC_REACH] + " dps=" + cnt[LC_DPS]);
 }
 
 // Which of the four a unit IS: whichever axis it stands out on most. Nothing
@@ -293,11 +390,15 @@ int LineClassOf(int di)
 	LineMeans();
 	if ((gLMeanHpm <= 0.f) || !LineCombat(di))
 		return LC_MID;
-	const float hpR = (Catalog::gHealth[di] / Catalog::gCostM[di]) / gLMeanHpm;
-	const float dpR = (gLMeanDpm > 0.f)
-			? ((Catalog::gPower[di] * Catalog::gPower[di] / Catalog::gHealth[di])
-				/ Catalog::gCostM[di]) / gLMeanDpm : 0.f;
-	const float rR = (gLMeanR > 0.f) ? (Catalog::gMaxRange[di] / gLMeanR) : 0.f;
+	const float hpR = LineHpAxis(di) / gLMeanHpm;
+	const float dpR = (gLMeanDpm > 0.f) ? (LineDpsAxis(di) / gLMeanDpm) : 0.f;
+	// Range damped by an exponent so "a little bit of range" is expressible:
+	// at 1 this is the axis as it always was, below 1 a long gun must stand
+	// well clear of the field reference before it out-argmaxes a big body.
+	float rR = (gLMeanR > 0.f) ? (ClassRange(di) / gLMeanR) : 0.f;
+	const float rExp = ai.GetTunable("apex_line_range_exp", TUNE_LINE_RANGE_EXP);
+	if ((rExp != 1.f) && (rR > 0.f))
+		rR = pow(rR, rExp);
 	float best = hpR;
 	int cls = LC_TANK;
 	if (rR > best) { best = rR; cls = LC_REACH; }

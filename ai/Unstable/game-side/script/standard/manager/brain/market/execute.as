@@ -60,6 +60,24 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return Requests::Take(unit, w.def, Task::BuildType(bt),
 				Task::Priority::NORMAL, w.pos, 300.f, SQUARE_SIZE * 16.f);
 	}
+	if (w.kind == WK_SUPER) {
+		// A gantry is a factory and goes through the plant's own siting and
+		// join; everything else here is a static weapon. BIG_GUN is the
+		// engine's own build type for one, which the anti-nuke already used.
+		if (w.spotId == SC_GANTRY) {
+			IUnitTask@ jg = JoinBig(w.def);
+			if (jg !is null)
+				return jg;
+			return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
+					Task::Priority::NORMAL, ClearOfSpots(w.pos, 180.f), 256.f,
+					SQUARE_SIZE * 16.f);
+		}
+		const int sbt = (w.spotId == SC_HEAVY) ? int(Task::BuildType::DEFENCE)
+				: int(Task::BuildType::BIG_GUN);
+		return Requests::Take(unit, w.def, Task::BuildType(sbt),
+				Task::Priority::NORMAL, ClearOfSpots(w.pos, 120.f), 300.f,
+				SQUARE_SIZE * 16.f);
+	}
 	if (w.kind == WK_ASSIST) {
 		if ((gAssistTarget is null) || (int(gAssistTarget.id) != w.spotId))
 			return null;
@@ -80,45 +98,27 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, tgt));
 	}
 	if (w.kind == WK_NANO) {
-		// Nano placement follows the demand math: the line with the LARGEST
-		// unserved spend gets the next turret (the binary has-one check
-		// capped the army lab at a single nano while metal overflowed --
-		// watched twice).
-		// The FARM BLOCK is the default home (apexearth: "nanos go in
-		// zones of future construction, not just where they're needed
-		// presently" -- eco builds already site at the farm, so coverage
-		// there is coverage of everything about to exist). A factory line
-		// pulls a nano away only when its unserved spend clears a real
-		// bar, not merely being the hungriest.
-		// The FARM BLOCK IS DEAD (apexearth: nanos only beside factories
-		// and expensive builds): the hungriest line or big frame takes the
-		// turret; failing either, it parks beside any working factory.
+		// Nanos serve factories and big frames only (apexearth): the
+		// hungriest working line or the biggest uncovered build site takes
+		// the turret; failing either, it parks beside any factory.
 		AIFloat3 slot = w.pos;
 		bool sited = false;
-		const float per = LineSpend();
+		// The line's pull is priced ONCE, in NeediestLine, so the turret is
+		// sited by the same arithmetic that bought it.
 		float worst = 0.f;
-		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
-			CCircuitUnit@ f = Factory::gFacUnits[fi];
-			if ((f is null) || (f.CountQueued(null) == 0))
-				continue;
-			const AIFloat3 fp = f.GetPos(ai.frame);
-			int nanosNear = 0;
-			for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
-				if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
-					++nanosNear;
-			}
-			const float u = per - float(nanosNear) * NANO_ABSORB;
-			if (u > worst) {
-				worst = u;
-				slot = fp;
+		{
+			AIFloat3 lp;
+			const float ln = NeediestLine(lp);
+			if ((ln > 0.f) && OnMap(lp)) {
+				worst = ln;
+				slot = lp;
 				sited = true;
 			}
 		}
 		// NEAR THE METAL SINKS (apexearth: "if we are not empty on metal...
 		// build nano turrets near the things that are currently spending
-		// metal"): a live build site's pull is its assigned crew's drain;
-		// the biggest uncovered sink competes under the same bar as the
-		// lines. Bank-gated -- at an empty bank the lathe already outruns
+		// metal"): a live build site competes under the same bar as the
+		// lines -- free flow less the lathe already on it. Bank-gated -- at an empty bank the lathe already outruns
 		// income and pre-positioning BP at a sink serves nothing.
 		const float mSt = aiEconomyMgr.metal.storage;
 		if ((mSt > 1.f) && (aiEconomyMgr.metal.current > mSt
@@ -126,6 +126,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			for (uint li = 0; li < Requests::gLive.length(); ++li) {
 				IUnitTask@ lt = Requests::gLive[li];
 				if ((lt is null) || (lt.buildDef is null))
+					continue;
+				// BIG SITES ONLY, as the want side prices them: unfiltered,
+				// this loop parked turrets at 50-metal MEXES and stole every
+				// one a queued lab had asked for (measured: 13 of 14 sinks
+				// were armmex/armmakr).
+				const int bd3 = int(lt.buildDef.id);
+				if ((Catalog::gCostM[bd3] < ai.GetTunable("apex_nano_sink_m", TUNE_NANO_SINK_M))
+					&& (Catalog::gMakeE[bd3] < ai.GetTunable("apex_big_e", TUNE_BIG_E)))
 					continue;
 				array<CCircuitUnit@>@ crew = lt.GetUnits();
 				if ((crew is null) || (crew.length() == 0))
@@ -144,7 +152,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					if (sp.distance2D(gOwnNanoPos[ni]) < 350.f)
 						++nanosAt;
 				}
-				const float u2 = drain - float(nanosAt) * NANO_ABSORB;
+				// The crew is SUPPLY, not demand: a frame whose cons already
+				// eat the free flow earns nothing from another turret.
+				const float feed2 = FreeMetalFlow();
+				const float u2 = ((feed2 < 35.f) ? feed2 : 35.f)
+						- drain - float(nanosAt) * NANO_ABSORB;
 				if (u2 > worst) {
 					worst = u2;
 					slot = sp;
@@ -257,9 +269,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		IUnitTask@ jt = JoinBig(w.def);
 		if (jt !is null)
 			return jt;
+		// A floating plant keeps the water it was priced against -- the
+		// spot-clearance nudge walks the base axis and puts a shipyard inland.
+		const AIFloat3 at = Catalog::gFloater[int(w.def.id)]
+				? w.pos : ClearOfSpots(w.pos, 180.f);
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
-				Task::Priority::NORMAL, ClearOfSpots(w.pos, 180.f), 256.f,
-				SQUARE_SIZE * 16.f);
+				Task::Priority::NORMAL, at, 256.f, SQUARE_SIZE * 16.f);
 	}
 	return null;
 }

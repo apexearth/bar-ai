@@ -194,6 +194,18 @@ int gNextInterceptCmd = 0;
 int gInterceptTarget = -1;
 array<Id>@ gMatesCache = null;
 
+// The aircraft one strike owns: filled at Release, pruned as they die, empty
+// while nothing is out. Anything not in it is held at home, whatever gStrike
+// says -- see wave.as.
+array<Id> gWave;
+array<Id> gRunWave;      // the bombers of the run being SCORED, for SettleStrike
+// The base is being invaded: every aircraft flies, wave or not. NOT a strike --
+// routing it through gStrike released a single bomber as a "wave", ReArm called
+// that wave spent on the same tick, and the pair flapped every update.
+bool gDefendHome   = false;
+int  gWaveBombers  = 0;
+int  gWaveFighters = 0;
+
 int  gAirLead      = -1;
 int  gLeadCheckedAt = -1000;
 int  gCommitFrame  = -1;
@@ -254,12 +266,16 @@ bool IsBomberDef(int d)
 // elected air player, the raid is on, and the wing is still short.
 float StrikeGainFor(int d, float fillSec)
 {
-	if (!IsAirLead() || gStrike || gAbort || !IsBomberDef(d))
+	if (!IsAirLead() || gAbort || !IsBomberDef(d))
 		return 0.f;
 	if (ai.frame < AIR_FROM)
 		return 0.f;
+	// Priced against the force AT HOME, so a wave already out neither counts
+	// towards the next one nor stops it being built. Production used to stop
+	// dead for the length of a strike, which is what made every run smaller
+	// than the one before it.
 	const int need = ScaledBombers();
-	if ((need <= 0) || (Bombers() >= need))
+	if ((need <= 0) || (HeldBombers() >= need))
 		return 0.f;
 	// Priced on the WHOLE raid this type would mount, then shared over its
 	// bombers: a type that needs a hundred to punch through carries the cost of
@@ -299,7 +315,7 @@ void NoteStrikeLaunched()
 {
 	ObsInit();
 	gRunDef = DominantBomberDef();
-	gRunSent = Bombers();
+	gRunSent = gWaveBombers;
 	gRunEcoBefore = EcoDensity();
 	gRunSettleAt = ai.frame
 			+ int(ai.GetTunable("apex_air_settle_s", TUNE_AIR_SETTLE_S)) * SECOND;
@@ -318,7 +334,7 @@ void SettleStrike()
 	gRunDef = -1;
 	if (sent <= 0)
 		return;
-	const int left = Bombers();
+	const int left = RunSurvivors();
 	float surv = float(left) / float(sent);
 	if (surv < 0.f) surv = 0.f;
 	if (surv > 1.f) surv = 1.f;

@@ -17,6 +17,7 @@
 // Want proposers, then the two spenders (Decide, ExecuteWant), then the
 // production side.
 #include "market/kinds.as"          // the Want record, the kind ids, their names
+#include "market/worth.as"          // what a combat unit is worth: the golden metrics
 #include "market/price.as"          // the two live prices, and ValueOf
 #include "market/ledger.as"         // spot-value senses; the claimed-spot ledger
 #include "market/census.as"         // what we own: counts, protection classes, unit events
@@ -29,7 +30,9 @@
 #include "market/want_nano.as"      // the nano Want
 #include "market/guards.as"         // stall sweep, guard/escort ledger, worker ledger
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
+#include "market/floor.as"          // the job ledger, the value ranking, the never-idle floor
 #include "market/want_protect.as"   // insurance pricing and the protect Want
+#include "market/want_super.as"     // the strategic Want: gantry, silo, anti-nuke, big guns
 #include "market/want_assist.as"    // the assist Want
 #include "market/want_reclaim.as"   // the obsolete-reclaim Want
 #include "market/safety.as"        // commander self-preservation, ahead of the auction

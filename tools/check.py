@@ -455,6 +455,13 @@ _SPEND_ALLOWED = {
     # the market's two executor files -- pricing and the proposers may not spend
     "manager/brain/market/decide.as": {"Enqueue(TaskB::", "Requests::Take("},
     "manager/brain/market/execute.as": {"Enqueue(TaskB::", "Requests::Take("},
+    # the never-idle floor, reachable only from Decide's two idle exits: it
+    # commits no metal, it lends an idle lathe to work already commissioned
+    "manager/brain/market/floor.as": {"Enqueue(TaskB::"},
+    # an assist turret commits no metal: it applies build power to work the
+    # arbiter already commissioned, and CreateAssistTask (its only route to a
+    # target) is reachable from script through DefaultMakeTask alone.
+    "manager/factory/maketask.as": {"aiFactoryMgr.DefaultMakeTask"},
 }
 
 

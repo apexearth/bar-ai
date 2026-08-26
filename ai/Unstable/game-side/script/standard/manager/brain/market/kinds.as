@@ -15,6 +15,7 @@ const int WK_ASSIST = 11;
 const int WK_PROTECT = 12;
 const int WK_SENSE = 13;
 const int WK_AIRDEF = 14;
+const int WK_SUPER = 15;
 
 class Want {
 	int kind = WK_NONE;
@@ -57,7 +58,14 @@ const int CAT_SENSE = 6;
 // gain is loss prevented outright, and lost every election. Watched: minutes
 // of bombing with no T1 AA bought, on a unit that costs ~60 metal.
 const int CAT_AIRDEF = 7;
-const int CAT_N = 8;
+// THE STRATEGIC QUESTION IS NOT THE TURRET QUESTION. A gantry, a silo, an
+// anti-nuke and a long-range gun are bought because the economy can carry
+// them, not because they out-earn a mex per metal -- priced against ground
+// defence they lose every election, and the AI has never built one
+// (apexearth: "if I can afford this, I'll insert it as a want so we make
+// one"). Own category, own ticket, argmax inside it.
+const int CAT_SUPER = 8;
+const int CAT_N = 9;
 
 // A new mex and a moho are the SAME purchase, so they argmax against each
 // other: new spots outbid upgrades while ground remains (25.4 vs 9.05,
@@ -73,6 +81,7 @@ int CategoryOf(int k)
 	if (k == WK_PROTECT) return CAT_DEFENCE;
 	if (k == WK_SENSE) return CAT_SENSE;
 	if (k == WK_AIRDEF) return CAT_AIRDEF;
+	if (k == WK_SUPER) return CAT_SUPER;
 	if (k == WK_RECLAIM) return CAT_RECLAIM;
 	return CAT_NONE;
 }
@@ -86,6 +95,7 @@ string CatName(int c)
 	if (c == CAT_DEFENCE) return "defence";
 	if (c == CAT_SENSE) return "sense";
 	if (c == CAT_AIRDEF) return "airdef";
+	if (c == CAT_SUPER) return "super";
 	if (c == CAT_RECLAIM) return "reclaim";
 	return "none";
 }
@@ -106,6 +116,7 @@ string KindName(int k)
 	if (k == WK_PROTECT) return "protect";
 	if (k == WK_SENSE) return "sense";
 	if (k == WK_AIRDEF) return "airdef";
+	if (k == WK_SUPER) return "super";
 	return "none";
 }
 

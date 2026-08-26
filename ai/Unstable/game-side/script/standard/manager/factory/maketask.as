@@ -5,8 +5,17 @@ namespace Factory {
 // DefaultMakeTask -- the engine must not produce units on its own. The
 // facqueue's line mechanics (adoption, Wait-hold, recruit abort, sweep) are
 // the production EXECUTOR the rebuilt arbiter will feed.
+//
+// ASSIST TURRETS ARE NOT LINES. CFactoryManager hands us its nano turrets
+// through the same hook, and a turret has no build options -- held on the
+// facqueue's Wait it puts its build power on nothing at all. Its assist task
+// is the DLL's own (CreateAssistTask, reached only through DefaultMakeTask).
 IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
+	if ((unit is null) || (unit.circuitDef is null))
+		return null;
+	if (Catalog::BuildsOf(int(unit.circuitDef.id)).length() == 0)
+		return aiFactoryMgr.DefaultMakeTask(unit);
 	return Brain::FactoryQueueTask(unit);
 }
 

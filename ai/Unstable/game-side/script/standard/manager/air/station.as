@@ -64,9 +64,11 @@ void UpdateFighterStations()
 	gNextStation = ai.frame + 10 * SECOND;
 	if (ai.GetTunable("apex_air_spread", TUNE_AIR_SPREAD) <= 0.f)
 		return;
-	// While a strike is out or an intercept is running, those orders own the
-	// wing -- standing them back down would fight the code that sent them.
-	if (gStrike || (gInterceptTarget >= 0) || !Builder::gHomeSet)
+	// An intercept owns the wing while it runs -- standing them back down would
+	// fight the code that sent them. A strike does NOT: it owns only its own
+	// roster, and the fighters held back for the next wave still have a base to
+	// cover in the meantime.
+	if ((gInterceptTarget >= 0) || !Builder::gHomeSet)
 		return;
 
 	RebuildStations();
@@ -81,8 +83,8 @@ void UpdateFighterStations()
 			continue;
 		for (uint i = 0; i < wings.length(); ++i) {
 			CCircuitUnit@ w = wings[i];
-			if (w is null)
-				continue;
+			if ((w is null) || InWave(w.id))
+				continue;   // out on a strike; those orders are not ours
 			AIFloat3 at;
 			if (!StationFor(idx, at)) {
 				++idx;

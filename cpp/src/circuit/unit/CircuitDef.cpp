@@ -128,6 +128,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		, surfThrDmg(.0f), surfThrMod(1.f)
 		, waterThrDmg(.0f), waterThrMod(1.f)
 		, aoe(.0f)
+		, rawDps(.0f), rawDmg(.0f)
 		, power(.0f)
 		, defThreat(.0f)
 		, minRange(.0f)
@@ -142,6 +143,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		, isIgnore(false)
 		, isAttacker(false)
 		, isAlwaysHit(false)
+		, isDumbFire(false)
 		, hasSurfToAir(false)
 		, hasSurfToLand(false)
 		, hasSurfToWater(false)
@@ -422,6 +424,11 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	float surfDmg = .0f;
 	float waterDps = .0f;
 	float waterDmg = .0f;
+	// apex: the LONGEST land weapon decides whether this unit's reach is real.
+	// isAlwaysHit answers a different question -- it gates air targeting, so its
+	// bar is "can hit an aircraft", which condemns a Tzar and blesses a Luger.
+	float longestLandRange = .0f;
+	bool longestLandDumb = false;
 	CWeaponDef* bestDGunDef = nullptr;
 	CWeaponDef* bestWpDef = nullptr;
 	WeaponMount* bestDGunMnt = nullptr;
@@ -573,6 +580,15 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 				maxRangeType = RangeType::AIR;
 			}
 		}
+		if ((weaponCat & circuit->GetLandCategory()) && isLandWeapon && (range > longestLandRange)) {
+			longestLandRange = range;
+			// An unguided rocket flies where it was pointed; a cannon shell is
+			// aimed with lead and a tracking missile steers. Only the first
+			// misses a mover as a matter of course, which is why its reach is
+			// reach against buildings.
+			longestLandDumb = ((wt == "MissileLauncher") || (wt == "StarburstLauncher")
+					|| (wt == "TorpedoLauncher")) && !wd->IsTracks();
+		}
 		if ((weaponCat & circuit->GetLandCategory()) && isLandWeapon) {
 			float& mr = maxRange[static_cast<RangeT>(RangeType::LAND)];
 			mr = std::max(mr, (isAbleToFly && (wt == "Cannon")) ? range * 1.25f : range);  // 1.25 - gunship height hax
@@ -654,6 +670,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		weaponMount = bestWpMnt;
 	}
 
+	isDumbFire = longestLandDumb;
+
 	isAttacker = (airDps > .1f) || (surfDps > .1f) || (waterDps > .1f);
 	if (IsMobile() && !IsAttacker()) {  // mobile bomb?
 		WeaponDef* wd = def->GetDeathExplosion();
@@ -706,6 +724,11 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	//       health /= def->GetArmoredMultiple();
 	const float dmg = std::max(std::max(waterDmg, surfDmg), airDmg);
 	const float dps = std::max(std::max(waterDps, surfDps), airDps);
+	// Captured here, after the mobile-bomb substitution above, so the identity
+	// power == sqrt(rawDps)*rawDmg^0.25*THREAT_MOD*sqrt(hp+shield) holds by
+	// construction for any def whose power is not later modded.
+	rawDps = dps;
+	rawDmg = dmg;
 	defThrDmg = pwrDmg = sqrtf(dps) * std::pow(dmg, 0.25f) * THREAT_MOD;
 	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
 	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;

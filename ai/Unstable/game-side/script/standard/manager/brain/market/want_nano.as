@@ -41,13 +41,28 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			if (sp3.distance2D(gOwnNanoPos[ni]) < 350.f)
 				++nAt;
 		}
-		if (nAt < 3) {
-			const float free3 = FreeMetalFlow();
-			const float need = (free3 < 35.f) ? free3 : 35.f;
-			if (need > sinkNeed) {
-				sinkNeed = need;
-				sinkPos = sp3;
+		// ONE LAW FOR EVERY SITE: demand is what the economy can feed the
+		// site, less the lathe already standing on it. A binary "fewer than
+		// three" priced a frame at full free flow and counted its crew as
+		// demand rather than as supply, in a currency no factory could
+		// match -- so build sites took the turrets a queued, nano-less lab
+		// was asking for (apexearth: "we rarely make them around factories
+		// that are building units").
+		float crew3 = 0.f;
+		array<CCircuitUnit@>@ cu3 = st.GetUnits();
+		if (cu3 !is null) {
+			for (uint ci = 0; ci < cu3.length(); ++ci) {
+				if ((cu3[ci] !is null) && (cu3[ci].circuitDef !is null))
+					crew3 += Catalog::gBuildPower[int(cu3[ci].circuitDef.id)]
+							* (7.f / 80.f);
 			}
+		}
+		const float free3 = FreeMetalFlow();
+		const float need = ((free3 < 35.f) ? free3 : 35.f)
+				- crew3 - float(nAt) * NANO_ABSORB;
+		if (need > sinkNeed) {
+			sinkNeed = need;
+			sinkPos = sp3;
 		}
 	}
 	// AN ARMY SHORTFALL IS NANO DEMAND (apexearth: "if we have need for more
@@ -105,7 +120,8 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			continue;
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
 		Want c;
-		ValueOf(d, (over < drain) ? over : drain, 0.f, Catalog::gBuildPower[uid], c);
+		ValueOf(d, (over < drain) ? over : drain, WalkSecTo(unit, site),
+				Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_NANO;

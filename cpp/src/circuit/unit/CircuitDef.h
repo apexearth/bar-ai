@@ -246,6 +246,11 @@ public:
 	float GetSurfDmg(RoleT type) const { return surfThrDmg * thrDmgMod[type]; }  // enemy
 	float GetWaterDmg(RoleT type) const { return waterThrDmg * thrDmgMod[type]; }  // enemy
 	float GetAoe() const { return aoe; }
+	// The un-fused inputs to `power`, which folds them into
+	// sqrt(dps)*dmg^0.25*sqrt(hp) -- script can otherwise only recover the
+	// product by squaring, never the terms.
+	float GetRawDps() const { return rawDps; }
+	float GetRawDmg() const { return rawDmg; }
 	float GetPower() const { return power; }
 	float GetDefThreat() const { return defThreat; }
 	void SetRange(float range);
@@ -284,6 +289,9 @@ public:
 
 	bool IsAttacker()  const { return isAttacker; }
 	bool IsAlwaysHit() const { return isAlwaysHit; }
+	// Its longest land weapon is an unguided rocket: reach it cannot land on
+	// anything that moves.
+	bool IsDumbFire() const { return isDumbFire; }
 	bool HasSurfToAir()   const { return hasSurfToAir; }
 	bool HasSurfToLand()  const { return hasSurfToLand; }
 	bool HasSurfToWater() const { return hasSurfToWater; }
@@ -464,6 +472,8 @@ private:
 	float waterThrDmg, waterThrMod;  // underwater enemy damage
 	ThrDmgArray thrDmgMod;  // mod by role
 	float aoe;  // radius
+	float rawDps;  // sustained damage/s, before power fuses it
+	float rawDmg;  // per-shot alpha, likewise
 	float power;  // ally max threat
 	float defThreat;  // enemy max threat
 	float minRange;
@@ -488,6 +498,7 @@ private:
 
 	bool isAttacker : 1;
 	bool isAlwaysHit : 1;  // FIXME: calc per weapon
+	bool isDumbFire : 1;
 	bool hasDGun : 1;
 
 	// TODO: std::bitset<2>

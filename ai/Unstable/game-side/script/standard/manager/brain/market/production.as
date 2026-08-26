@@ -54,16 +54,6 @@ int CeilingConsInFlight()
 		if ((pd !is null) && ReachesCeiling(int(pd.id)))
 			++n;
 	}
-	for (uint f = 0; f < Factory::gFacUnits.length(); ++f) {
-		CCircuitUnit@ fu = Factory::gFacUnits[f];
-		if ((fu is null) || (fu.circuitDef is null))
-			continue;
-		const array<int>@ ps = Catalog::BuildsOf(int(fu.circuitDef.id));
-		for (uint q = 0; q < ps.length(); ++q) {
-			if (Catalog::gBuilder[ps[q]] && ReachesCeiling(ps[q]))
-				n += fu.CountQueued(Catalog::Def(ps[q]));
-		}
-	}
 	return n;
 }
 
@@ -136,15 +126,48 @@ int CeilingConsNeed()
 	return (float(have) < want) ? (int(want) - have) : 0;
 }
 
-CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
+// Army metal ORDERED but not yet standing. gOwnCount counts FINISHED units and
+// an order takes a whole lag window to become visible, so without this every
+// slot of a batch -- and every election inside the lag window -- prices against
+// the same gap and buys it over again.
+float ArmyInFlightM()
+{
+	float m = 0.f;
+	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
+		CCircuitDef@ pd = Brain::gFQPendDef[i];
+		if (pd is null)
+			continue;
+		const int d = int(pd.id);
+		if (!Catalog::gMobile[d] || Catalog::gBuilder[d]
+			|| (Catalog::gPower[d] <= 1.f) || Catalog::gKamikaze[d])
+			continue;
+		m += Catalog::gCostM[d];
+	}
+	return m;
+}
+
+// Why the last ConOrderFor call declined. The facqueue logs it when a line
+// comes back with nothing: an election that orders nothing is idle factory
+// time, and until this existed the reason was invisible.
+string gNoOrder = "";
+
+// `slot` is the position in the line's batch: the facqueue asks repeatedly
+// until the queue is deep enough, and every ask is priced against a ledger
+// that already carries the slots before it.
+CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 {
 	if (fac is null)
 		return null;
+	WorthDiag();      // self-gated, once, and only when asked for
+	LineClassDiag();  // likewise: the class split, once the field is known
+	gNoOrder = "";
 	// Production pays the E-flow discipline too: a factory pumping pawns
 	// through a stall both causes it and starves the opening (watched:
 	// hard e-stall, a minute without a mex).
-	if (HardEStall())
+	if (HardEStall()) {
+		gNoOrder = "e-stall";
 		return null;
+	}
 	gEscortFloor = false;
 	// THE ESCORT FLOOR, ahead of everything: a constructor working without a
 	// guard is a write-off waiting to happen, and the cheapest answer costs a
@@ -167,12 +190,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	// contingent on there being other demand.
 	const int ceilNeed = CeilingConsNeed();
 	if ((ceilNeed <= 0) && !gMexOpen && (UpDemand() <= 0.5f) && (BPGap() <= 0.5f)
-		&& (ArmyTarget() - ArmyValue() <= 0.5f))
+		&& (ArmyTarget() - ArmyValue() - ArmyInFlightM() <= 0.5f))
+	{
+		gNoOrder = "all-quiet";
 		return null;
-	// Two in flight per line: one building, one queued, so production is
-	// continuous (one-at-a-time left the line idle between orders).
-	if ((fac.CountQueued(null) + Brain::PendCount(line, null)) > 1)
-		return null;
+	}
 	const int fid = int(fac.circuitDef.id);
 	const array<int>@ prods = Catalog::BuildsOf(fid);
 	// Each product priced, best value ordered. A constructor's gain: the
@@ -185,7 +207,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	const float upD = UpDemand();
 	const float mobileCeil = OwnedMobileCeil();
 	LossDecay();
-	const float armyGap = ArmyTarget() - ArmyValue();
+	const float armyGap = ArmyTarget() - ArmyValue() - ArmyInFlightM();
 	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
 	float roleMul = EcoRoleActive()
 			? ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL) : 1.f;
@@ -233,7 +255,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			|| Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f)
 			|| Catalog::gKamikaze[d])
 			continue;
-		const float ppc = Catalog::gCombat[d] / Catalog::gCostM[d];
+		const float ppc = UnitCore(d);
 		if (ppc > linePPC)
 			linePPC = ppc;
 	}
@@ -352,12 +374,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
 				continue;
-			float ppc = Catalog::gCombat[d] / Catalog::gCostM[d];
-			// FIELD REPORTS OVERRIDE STATS where the stats cannot see the
-			// mechanism (projectile speed, accuracy): the user table in
-			// tunables.as. And amphibious capability is dead weight on a
-			// dry map -- the price paid for swimming buys nothing here.
-			ppc *= UnitWorthMod(Catalog::Def(d).GetName());
+			// The golden metrics, weighted by exponent (market/worth.as).
+			// Carries the by-name worth override, the reach-vs-shield bonus
+			// and the reach-answers-reach response with it.
+			float ppc = UnitPPC(d);
 			// x0 ON DRY MAPS (apexearth: "amphib should be x0" -- and a
 			// tiny pond flips the engine's water flag, so the bar is real
 			// water share of the map, ~15%).
@@ -380,22 +400,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 					qual = 5.f;
 				ppc *= qual;
 			}
-			// RANGE IS INTRINSIC VALUE (apexearth: "more strongly value
-			// range"): reach means free damage before the enemy answers, in
-			// every fight, not only against skirm pressure. A standing
-			// preference on top of the reactive term below.
-			// REACH IS ONLY WORTH WHAT SOMETHING ELSE IS ABSORBING (apexearth:
-			// "low HP units with more range... they are only valuable if we
-			// have tanky units in front of them tanking the damage... on their
-			// own they're garbage"). The bonus is scaled by the share of our
-			// line that can stand in front, so reach pays exactly as much as
-			// we have shield to buy it with, and nothing at all when we have
-			// none. The base combat-per-metal is untouched, so this can never
-			// stop a long-range unit being built -- only stop it being
-			// preferred while it would fight alone.
-			ppc *= 1.f + (Catalog::gMaxRange[d] / 1000.f)
-					* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH)
-					* ShieldShare();
 			// AND THE STANDING COMPOSITION TARGET: tank / middle / reach / dps
 			// as shares of army metal, each class worth more per metal the
 			// further below its share it is. Proportional, never a veto.
@@ -424,6 +428,31 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 			// games). A unit's LOS is therefore worth something on its own.
 			ppc *= 1.f + (Catalog::gLosR[d] / 1000.f)
 					* ai.GetTunable("apex_los_worth", TUNE_LOS_WORTH);
+			// A SCOUT IS NOT A BAD SOLDIER. UnitCore prices dps and hp against
+			// cost, and on that yardstick a Tick -- 60 hp, 50 dps, 21 metal --
+			// scores far below a Pawn, a gap no speed or sight multiplier on
+			// top of it can close because they all multiply that same near-zero
+			// core. What a screen sells is ground seen and fire drawn, neither
+			// of which is combat, so it is priced on its own axis and the unit
+			// is worth the BETTER of the two readings (apexearth: "the arm tick
+			// is actually a better choice than the pawn -- super high speed,
+			// los, and affordability"). Saturates on the same patrol shortfall
+			// the coverage term uses, so the screen stops being bought once the
+			// ground is watched.
+			{
+				WorthMeans();
+				const float mineM = Catalog::gCostM[d];
+				const float kS = ai.GetTunable("apex_screen_worth", TUNE_SCREEN_WORTH);
+				if ((kS > 0.f) && (mineM > 1.f) && (gWMCost > 1.f)
+					&& !Catalog::gFlyer[d])
+				{
+					const float dash = 1.f + Catalog::gSpeed[d] / FoeSpeedCap();
+					const float screen = kS * (Catalog::gLosR[d] / 1000.f)
+							* dash * PatrolShort() / (mineM / gWMCost);
+					if (screen > ppc)
+						ppc = screen;
+				}
+			}
 			// AFFORDABLE NOW BEATS STRONG LATER WHILE WE ARE POOR (apexearth:
 			// "pawns are good early game when we cannot afford much stronger
 			// things"). Seconds of income the unit costs, against the window
@@ -436,26 +465,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 					const float fieldSec = Catalog::gCostM[d] / incA;
 					const float hA = (fillS > 1.f) ? fillS : 60.f;
 					ppc *= hA / (hA + fieldSec);
-				}
-			}
-			// RANGE ANSWERS RANGE (apexearth: banishers outranged and killed
-			// our T1 too easily; snipers/fatboys came too late). Enemy skirm
-			// and arty mass is outranging pressure: reach above 500 gains by
-			// it, reach below fades toward the raider-spam share the role
-			// portfolio already grants. T1 obsolescence emerges from the
-			// same term.
-			{
-				const float outP = (Military::EnemyCostOf(Unit::Role::SKIRM.type)
-						+ Military::EnemyCostOf(Unit::Role::ARTY.type)) / 3000.f;
-				const float oP = (outP > 1.f) ? 1.f : outP;
-				if (oP > 0.05f) {
-					const float rNorm = (Catalog::gMaxRange[d] - 500.f) / 500.f;
-					float rMul = 1.f + rNorm * oP * 1.2f;
-					if (rMul < 0.3f)
-						rMul = 0.3f;
-					if (rMul > 2.5f)
-						rMul = 2.5f;
-					ppc *= rMul;
 				}
 			}
 			const float have = float((int(d) < int(gOwnCount.length()))
@@ -624,10 +633,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 		candGain.insertLast(gain);
 		sumV += v;
 	}
-	if ((candDef.length() == 0) || (sumV <= 0.f))
+	if ((candDef.length() == 0) || (sumV <= 0.f)) {
+		gNoOrder = "no-candidate";
 		return null;
+	}
 	// Deterministic weighted pick: seeded from frame+line so replays hold.
-	uint h = uint(ai.frame) * 2654435761 + uint(fac.id) * 40503;
+	uint h = uint(ai.frame) * 2654435761 + uint(fac.id) * 40503
+			+ uint(slot) * 2246822519;
 	h ^= (h >> 13);
 	float roll = float(h % 10000) / 10000.f * sumV;
 	uint pick = 0;
@@ -654,8 +666,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line)
 	// per-metal compare is right -- metal IS the constraint there.
 	if ((FreeMetalFlow() <= 0.5f) && (gWantEmaV > 0.f)
 		&& (bestV < gWantEmaV
-			* ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR)))
+			* ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR))) {
+		gNoOrder = "line-floor v=" + formatFloat(bestV * 1000.f, "", 0, 2)
+				+ " ema=" + formatFloat(gWantEmaV * 1000.f, "", 0, 2);
 		return null;
+	}
 	AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName() + " #" + fac.id
 		+ " -> produce:" + Catalog::Def(best).GetName()
 		+ " v=" + formatFloat(bestV * 1000.f, "", 0, 2)

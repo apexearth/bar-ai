@@ -179,6 +179,10 @@ bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 const int HALF_GROUND = 0;
 const int HALF_SENSE = 1;
 const int HALF_AIRDEF = 2;
+// Not a half of this market at all: the strategic statics are priced on what
+// the economy can carry, in want_super.as. Listed here so ProposeProtectHalf
+// skips them rather than pricing a silo as a turret.
+const int HALF_SUPER = 3;
 
 int HalfOfClass(int cls)
 {
@@ -186,6 +190,8 @@ int HalfOfClass(int cls)
 		return HALF_SENSE;
 	if (cls == PROT_AA)
 		return HALF_AIRDEF;
+	if ((cls == PROT_ANTINUKE) || (cls == PROT_SUPER))
+		return HALF_SUPER;
 	return HALF_GROUND;
 }
 
@@ -341,7 +347,6 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const float rate = ai.GetTunable("apex_insure_rate", TUNE_INSURE_RATE);
-	const float nukeRate = ai.GetTunable("apex_nuke_risk", TUNE_NUKE_RISK);
 	AIFloat3 core = gFarmPos;
 	if (!gFarmSet) {
 		core = Base::gAnchorSet ? Base::gAnchor : Builder::gHomePos;
@@ -405,10 +410,6 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			at = found ? jat : core;
 			gain = ((indirect < gAssetsM) ? indirect : gAssetsM)
 					* rate * (found ? 0.8f : 0.5f);
-		} else if (cls == PROT_ANTINUKE) {
-			if (ProtCovered(PROT_ANTINUKE, core, 2000.f))
-				continue;
-			gain = gAssetsM * nukeRate;
 		} else if (cls == PROT_SHIELD) {
 			// Shields answer bombardment: worth the arty mass they blank,
 			// covering the interior (the stock feature our gap survey ranked

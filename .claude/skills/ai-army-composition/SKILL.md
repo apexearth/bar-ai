@@ -56,6 +56,55 @@ apex_enemy_prior)` — a **symmetric prior**: pre-contact the census is blind,
 and blind read as safe lost a game with three army units built.
 `ArmyTargetFull()` is the same without eco-role suppression.
 
+## The role gap — how a unit's role earns its weight
+
+Separate from the four line classes, and the term that actually opens or closes
+production of a role. In `production.as`:
+
+```
+rGap  = RoleTarget(role, ArmyTarget()) - RoleValue(role)
+roleW = rGap / rTarget          (floored at 0.05, never exactly zero)
+```
+
+`RoleTarget` = `armyTarget/6` baseline + a **counter** term read off the enemy
+census (riot counters their raiders, skirm/arty counter their static, AA tracks
+fresh enemy air and takes only OUR SHARE of the team's answer). The RAIDER
+counter also carries `EscortMetalAtRisk()` — the constructor metal walking
+around unescorted.
+
+`RoleValue` = metal we own in that role, **minus `RoleCommitted(role)`**.
+
+### Escorts are consumed, not coverage
+
+One escort is assigned per exposed constructor (`EscortNeeded`, registry
+`gEscWorker`/`gEscUnit`/`gEscDef` in `guards.as`). A raider on escort duty is
+out beside a worker and cannot answer anything else.
+
+Both halves of the gap used to ignore this, in opposite directions: pairing a
+raider to a worker dropped `EscortMetalAtRisk()` to zero (demand gone) while
+that same raider stayed counted in `RoleValue` (supply intact). The gap closed
+at exactly the moment the free army emptied — measured `paired=5 risk=0` eight
+minutes in, with nothing left at home. `RoleCommitted` is the fix: only
+uncommitted metal counts as coverage, so escort duty ADDS demand rather than
+cancelling it.
+
+`gEscDef` exists because **there is no unit-by-id lookup bound** — the escort's
+def has to be recorded at pairing time or its cost cannot be recovered later.
+
+Read it in `apex: escort-diag`:
+`workers= short= paired= risk= committed= freeRaid= spdBar=`
+— `risk` is unescorted constructor metal (urgent demand), `committed` is raider
+metal locked on escort duty, `freeRaid` is what is actually left standing.
+
+### What may escort
+
+`EscortWorthy` — cheap (`apex_escort_max_cost`), not SKIRM/ARTY, and either
+FAST (above the ground field's own mean speed) or a RIOT unit. A health bar
+cannot express "tough" here: the tanky cheap T1 bot IS the rocket bot, which
+loses to a Pawn. Same test is used by the military hook that accepts the duty
+and the production floor that orders one, so nothing is built for a job it
+would then refuse.
+
 ## Traps
 
 - **Never cache a zero** in `LineMeans`/`FoeSpeedCap` — availability is
@@ -70,9 +119,10 @@ and blind read as safe lost a game with three army units built.
 `apex_line_tank/mid/reach/dps` (0.30/0.25/0.25/0.20) · `apex_line_edge` (1.15) ·
 `apex_line_bite` (1.5) · `apex_range_worth` (2) · `apex_speed_worth` (0.5) ·
 `apex_cover_worth` (1.5) · `apex_los_worth` (1) · `apex_enemy_prior` (0.25) ·
-`apex_guard_rate` (0.15) · `apex_match_ratio` (1.2) · `apex_army_fill_s` (180)
+`apex_guard_rate` (0.15) · `apex_match_ratio` (1.2) · `apex_army_fill_s` (180) · `apex_expose_r` · `apex_escort_max_cost` ·
+`apex_escort_speed` · `apex_con_escort`
 
 ## Log lines
 
-`apex: facqueue ... quota:` (per-line have/want) · `apex: decide <unit> ->
+`apex: escort-diag ...` (escort accounting) · `apex: facqueue ... quota:` (per-line have/want) · `apex: decide <unit> ->
 <want> v=…` · `apex: rear-elect` / `apex: rear-specialist` (eco-role quality bias)

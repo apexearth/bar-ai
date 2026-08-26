@@ -40,15 +40,47 @@ can place) → `EPrice` (GAIN: stall premium `excess*metal.pull/eInc`) /
 decay premium→floor over `apex_e_response/buildSec`. `EPriceCostAt` returns 0
 outright while the E bank is full and income exceeds pull.
 
+**Then the realizable share.** A price is what one E/s is worth; it is not a
+claim that anyone will use it. `ERealizeShare(addE, buildSec)` multiplies a
+generator's gain by the share of its output something would actually absorb:
+
+    target = max(pull − convUse, slow-decay peak) * apex_e_headroom
+           + convCap + (eStorage − eCurrent)/apex_e_lookahead
+    share  = max(clamp((target − eIncome) / addE, 0, 1), apex_e_waste_worth)
+
+Above the line the gain decays to the `apex_e_waste_worth` floor (0.25) -- NOT
+to zero: energy in the wasted band is worth the conversion floor as soon as a
+converter follows, and that converter's cost is already netted out inside
+`EPriceFloor`, so what is missing is only the wait and the risk. An overflow
+makes a generator LOSE to the converter that realizes it and never makes it
+unbuildable (apexearth's standing ruling: the generator ladder never pauses on
+waste) — and the share lifts by itself the moment
+capacity or demand rises. `ProposeEnergy` and `ProposeGeo` apply it.
+`apex_e_realize=0` restores flat floor pricing and is the control arm.
+
+Three things that formula insists on, each from a way of getting it wrong:
+**demand excludes converter draw** (a converter is the sink for what nothing
+else wants, not a consumer to lead at headroom); **demand is a fast-attack,
+slow-decay peak, not raw pull** (pull is throttled AND drops to nothing between
+jobs — read raw it flipped the share 1.00/0.00 tick to tick); **a bank that is
+not full is a real use** (storage is spent later, and at frame zero it is the
+only consumer there is).
+
 ## EcoPowerM — the shared denominator
 
-`metal.income + (energy.income − StandingConvCap()) * BestConvRatio()`: total
-economic power in metal/s. BOTH growth premiums divide by it. Measured against
+`metal.income + (energy.income − ConvUseE()) * OwnConvCeil()`: total economic
+power in metal/s. Subtract what the converters ACTUALLY chew (their metal is
+already inside `metal.income`), at a rate we can actually place — nameplate
+capacity erased real energy income whenever capacity exceeded income.
+
+BOTH growth premiums divide by it. Measured against
 its own economy each premium saturated differently (a fusion took the full 9x,
 a moho 1.6x) — a denominator artefact, not a fact about the game.
 
 - `apex_mex_growth` (8) in `want_mex.as` and the mexup half of `want_tech.as`
 - `apex_energy_growth` (8) in `want_energy.as`, on `makeE*BestConvRatio`
+  — and on `ProposeConvert`'s own metal gain, so both halves of the
+  generator/converter pair carry it
 - `ConvUpDemand()` = tier's unlock on the ENERGY side, `ConvertibleE * (best
   ratio in game − best ratio we can place)`. `ProposeTech`'s demand is
   `UpDemand + ConvUpDemand`; without the second term a map with no metal spots
@@ -70,6 +102,20 @@ a moho 1.6x) — a denominator artefact, not a fact about the game.
   `EcoPowerM` to metal income. Same shape in `LineMeans`/`FoeSpeedCap`.
 - Do not charge near-free claims (50m mexes) through `UpDemand` — it
   double-counts income `FreeMetalFlow` already frees.
+- **`energy.pull` ALREADY CONTAINS the converters' draw.** BAR's
+  `game_energy_conversion.lua` charges each maker via `SetUnitResourcing
+  "uue"`, which lands in `CTeam::resPull`, so any surplus built from
+  `income − pull` is already net of them. `ProposeConvert` subtracted
+  `StandingConvCap()` from that surplus a second time and so read a saturated
+  fleet with 50 e/s still spilling as −50, proposing nothing: the mechanism
+  behind "we never build enough converters". Subtract only capacity already
+  ORDERED (`ConvCapInFlight`). Ground truth for the fleet is the gadget's own
+  `mmUse`/`mmCapacity` team rules params — `ConvUseE()` / `ConvCapE()`, via
+  `ai.GetTeamRulesParam`.
+- **Price both halves of a pair the same way.** The generator carried the
+  `apex_energy_growth` premium and the converter that realizes its energy did
+  not, so the pair could never be bought in the order that pays off. If one
+  side of a complementary pair gets a premium, the other needs it too.
 - A premium priced at decision time and paid over a 7,000 s build is wrong
   twice; always price the gain through `EPriceAt(buildSec)`.
 
@@ -77,10 +123,12 @@ a moho 1.6x) — a denominator artefact, not a fact about the game.
 
 `apex_space_m` (1.0) · `apex_assist_share` (0.5) · `apex_conv_horizon` (300) ·
 `apex_e_response` (45) · `apex_e_lookahead` (30) · `apex_e_headroom` (1.75) ·
+`apex_e_realize` (1) · `apex_e_waste_worth` (0.25) ·
 `apex_mex_growth` (8) · `apex_energy_growth` (8) · `apex_tech_pipe` (2.0) ·
 `apex_eco_survival` (1) · `apex_join_min_m` (500)
 
 ## Log lines
 
-`apex: efloor` (gate on `apex_efloor_diag`) · `apex: tech-diag ... upD=` ·
+`apex: efloor` (gate on `apex_efloor_diag`, and it carries the overflow state:
+`eInc ePull convUse convCap realize`) · `apex: tech-diag ... upD=` ·
 `apex: mexdiag` · `apex: eco-status` · `apex: decide <unit> -> <want> v=…`

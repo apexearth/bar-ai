@@ -337,12 +337,12 @@ const float TUNE_SITE_COST_PER_WORKER = 300.f;
 //   reaches this fraction of its target share -- a luxury while the army is
 //   starved, unless the enemy actually flies.
 const float TUNE_EXTRA_PLANT_ARMY = 0.85f;
-// manager/brain/facqueue.as [count] -- Orders the facqueue keeps queued ahead
-//   on each driven factory line.
-// manager/factory/hooks.as [count] -- Recruit tasks allowed in flight per
-//   factory before the queue counts as full (CircuitAI's own number, exposed
-//   for A/B).
-const float TUNE_FAC_QUEUE = 0.5f;
+// manager/brain/facqueue.as [ratio] -- How deep the facqueue keeps each driven
+//   line, as a multiple of the line's re-election gap, measured in that
+//   line's own build seconds. Below 1 the plant is idle by construction; the
+//   margin over 1 covers the order lag, which is a window of its own at
+//   benchmark speed.
+const float TUNE_FAC_QUEUE = 1.5f;
 // manager/brain/facqueue.as [toggle 0/1] -- The Brain drives every factory
 //   line (quota-based orders, factory.json bypassed); 0 returns the lines to
 //   stock CircuitAI.
@@ -1204,7 +1204,42 @@ const float TUNE_LINE_TANK = 0.30f;
 const float TUNE_LINE_MID = 0.25f;
 const float TUNE_LINE_REACH = 0.25f;
 const float TUNE_LINE_DPS = 0.20f;
-// How far above the field's mean an axis must stand for a unit to count as
+// WHAT A COMBAT UNIT IS WORTH -- the exponent on each golden metric
+// (apexearth 2026-08-25: "RANGE, DAMAGE, HP... perhaps we can try a variety of
+// algorithms"). Read in manager/brain/market/worth.as; each metric is
+// normalised by the game field's own mean, so these are scale-free.
+// The defaults below reproduce the previous gCombat/costM ranking EXACTLY --
+// dps * sqrt(alpha) * hp / cost is what power^2/cost expands to -- so the
+// first deploy is a no-op and every later setting is a clean A/B against it.
+const float TUNE_WORTH_DPS = 1.f;
+const float TUNE_WORTH_ALPHA = 0.5f;
+const float TUNE_WORTH_HP = 1.f;
+const float TUNE_WORTH_RANGE = 0.f;
+const float TUNE_WORTH_AOE = 0.f;
+// COST IS A CHOICE OF LANCHESTER LAW. The caller divides by cost once more, so
+// the total power of cost is 1 + this: at 1 that is cost^2, the LINEAR law
+// where bodies trade one for one and cheap chaff wins the draw; at 0 it is
+// cost^1, the SQUARE law where a massed army fires at once and quality wins
+// superlinearly. Tzar-and-Banisher armies are the square-law case; 0.5 is the
+// middle. 1 is what this AI has always priced under.
+const float TUNE_WORTH_COST = 1.f;
+// 1 = print the exponents and field means once; 2 = also dump the ranked
+// field. Costs no games to learn what an arm actually prefers.
+const float TUNE_WORTH_DIAG = 0.f;
+// What a weapon's reach is worth when it CANNOT hit a moving target -- a slow
+// un-tracked rocket. 1 = the reach counts in full, as it always has; 0.5 would
+// say half of it only ever lands on buildings. The DLL's own IsAlwaysHit does
+// the detecting (see EffRange in market/worth.as); this is what it costs.
+const float TUNE_AIM_MISS = 1.f;
+// Judge each class axis against the field MEDIAN rather than its mean. 0 = as
+// it always was; see LineRef in market/army.as for why the mean cannot work.
+const float TUNE_LINE_MEDIAN = 1.f;
+// Read the tank and dps axes PER BODY rather than per metal (see LineAbs in
+// market/army.as). 0 = as it always was, which made a Thud tankier than a Tzar.
+const float TUNE_LINE_ABS = 1.f;
+// Exponent on the range axis of the class argmax. 1 = as it always was.
+const float TUNE_LINE_RANGE_EXP = 1.f;
+// How far above the field's REFERENCE an axis must stand for a unit to count as
 // that class rather than as middle.
 const float TUNE_LINE_EDGE = 1.15f;
 // How hard a class below its target share is favoured. Proportional to the
@@ -1345,6 +1380,23 @@ const float TUNE_MEX_GROWTH = 8.f;
 //   on the better one. 0 restores flat per-def pricing.
 const float TUNE_INFERIOR_DISCOUNT = 1.f;
 const float TUNE_ENERGY_GROWTH = 8.f;
+// E_REALIZE [toggle 0/1]: the overflow-aware half of the energy market --
+// generation priced by the share of it anything would actually use (real
+// demand at E_HEADROOM plus standing converter capacity), the converter want
+// reading the true remaining waste, and the same eco-compounding premium on
+// both halves of the generator/converter pair. 0 restores pricing every E/s
+// at the conversion floor whether or not a converter exists to realize it,
+// and is the control arm.
+const float TUNE_E_REALIZE = 1.f;
+// E_WASTE_WORTH: the share of its price that generation KEEPS once nothing
+// would use its output. Not zero -- energy in the wasted band is worth the
+// conversion floor the moment a converter follows, and that converter's cost
+// is already inside the floor; what is missing is only the wait and the risk.
+// So an overflow makes a generator LOSE to the converter that realizes it, and
+// never makes it unbuildable (apexearth 2026-08-26; his standing ruling is
+// that the generator ladder never pauses on waste). Default chosen, not
+// derived -- measure it.
+const float TUNE_E_WASTE_WORTH = 0.25f;
 // Spatial threat prior: 0 at our start box, 1 at theirs. 0 disables it and
 // threat goes spatially flat, which is the control arm.
 const float TUNE_THREAT_GRADIENT = 1.f;
@@ -1356,6 +1408,12 @@ const float TUNE_RANGE_WORTH = 2.f;
 // blind, and EnemyArmyCost logged 0 for entire games (2026-08-24).
 const float TUNE_SPEED_WORTH = 0.5f;
 const float TUNE_LOS_WORTH = 1.f;
+// SCREEN_WORTH: the scout/screen axis in production.as -- sight and dash per
+//   metal, read INSTEAD OF combat worth when it is the larger of the two, so a
+//   unit that is a hopeless soldier can still be a good screen. 0 disables it.
+//   0.2 is calibrated, not derived: it puts a Tick modestly ahead of a Pawn at
+//   a half-covered patrol shortfall while the Pawn still wins on combat.
+const float TUNE_SCREEN_WORTH = 0.2f;
 // MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per
 // minute (apexearth: "3 times more rezbots" -- was 0.04). Named _FRAC:
 // a legacy TUNE_MEDIC_SHARE with other semantics survives at the bottom.
@@ -1390,6 +1448,11 @@ const float TUNE_INTEL_RATE = 0.1f;
 // WATER_PCT: minimum real water share of the map before amphib capability
 // is worth anything -- a tiny pond must not price Platypuses (his ~15%).
 const float TUNE_WATER_PCT = 15.f;
+// WATER_FIRST: MODEL. What land-locked metal is worth ON TOP of its own
+// stream while the water is still uncontested -- the denial half of taking it
+// first ("the earlier you get into the water the more likely you are to own
+// it"). 1.0 prices denial equal to the gain; decays with the enemy's navy.
+const float TUNE_WATER_FIRST = 1.0f;
 // BIG_E: E/s of generation that makes a def "fusion-tier" -- packs in the
 // deep rear, earns a nano ring (fusion ~1000, afus ~3000; advsol ~75 not).
 const float TUNE_BIG_E = 500.f;
@@ -1490,6 +1553,38 @@ const float TUNE_INSURE_RATE = 0.0003f;   // was 5e-5: radar lost to marginal so
 const float TUNE_NUKE_RISK = 0.0005f;
 // TARGFAC_WANT: pinpointers wanted (apexearth 2026-08-23: "3 wanted max").
 const float TUNE_TARGFAC_WANT = 3.f;
+// ---------------------------------------------------------------------------
+// Strategic structures -- manager/brain/market/want_super.as
+// ---------------------------------------------------------------------------
+// SUPER_WANT: master switch for the strategic want (gantry, nuke silo,
+//   anti-nuke, long-range gun, the faction's best turret). 0 disables it.
+const float TUNE_SUPER_WANT = 1.f;
+// SUPER_PUSH: 1 = an affordable strategic want skips the category lottery
+//   rather than taking a proportional share of it. Off, these are priced
+//   normally and drawn about once a game.
+const float TUNE_SUPER_PUSH = 1.f;
+// SUPER_AFFORD_S [seconds] -- the whole affordability test: the bill (metal
+//   plus energy at the conversion floor) must be smaller than what the economy
+//   makes in this many seconds. 60 puts the anti-nuke at ~36 metal/s, the
+//   long-range gun at ~90 and the gantry and silo at ~160 -- his "at 200 m/s
+//   we should eagerly build one".
+const float TUNE_SUPER_AFFORD_S = 60.f;
+// SUPER_PER_INCOME [metal/s] -- income per additional anti-nuke; the offensive
+//   classes (silo, long-range gun) space at twice this. Never a cap: the count
+//   rises with the economy, which is his "at least 1 usually, more if we want
+//   to be safer".
+const float TUNE_SUPER_PER_INCOME = 150.f;
+// SUPER_SHARE: the slice of total economic power the strategic market may
+//   claim as a want's gain. Scaled by how much budget is left after the bill.
+const float TUNE_SUPER_SHARE = 0.25f;
+// SUPER_DEF_RATIO: how many times the faction's own light tower a static
+//   defence must cost before it counts as strategic rather than as an ordinary
+//   turret the defence auction should price per metal. 20 x ~85 puts the line
+//   just under Rattlesnake/Bulwark/Rampart and well above the T2 mediums.
+const float TUNE_SUPER_DEF_RATIO = 20.f;
+// ANTINUKE_R [elmos] -- an anti-nuke's assumed umbrella, for deciding whether
+//   ground is already covered by one we own.
+const float TUNE_ANTINUKE_R = 2000.f;
 // OBSOLETE_RATIO: how many times better the best standing alternative must
 // be (per cell for generators, in power for defences) before a building is
 // scrap -- his "much better".
@@ -1857,4 +1952,4 @@ const float TUNE_ALLY_COVER = 400.f;
 //   enemy expectation that the defence target assumes could arrive at our own
 //   base before anything has been seen. Without it the target is zero until
 //   something actually arrives, which is a strategy of having no defence.
-const float TUNE_DEF_PRIOR_SHARE = 0.25f;
+const float TUNE_DEF_PRIOR_SHARE = 0.35f;

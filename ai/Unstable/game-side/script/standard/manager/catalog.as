@@ -49,6 +49,7 @@ array<bool> gJammer;
 array<float> gRadarR;
 array<float> gJamR;
 array<bool> gAntiNuke;   // carries a nuke interceptor
+array<bool> gStock;      // stockpile weapon (silos, anti-nukes)
 array<bool> gTargFac;    // targeting facility (pinpointer)
 array<float> gMaxRange;  // longest weapon reach (0 = unarmed)
 array<float> gPower;     // CircuitAI threat value -- combat worth
@@ -57,14 +58,27 @@ array<float> gPower;     // CircuitAI threat value -- combat worth
 // dps * (hp + shield) / some_divisor"). The DLL builds
 //   power = sqrt(dps) * dmg^0.25 * sqrt(hp + shield * SHIELD_MOD) / 128
 // so power SQUARED is dps * (hp + shield * SHIELD_MOD) * sqrt(dmg) / 128^2
-// -- his formula, exactly, apart from a sqrt of per-shot damage. dps and
-// dmg are not bound separately, so shedding that last root needs a DLL
-// binding; squaring needs nothing and recovers the shield term too.
+// -- his formula, exactly, apart from a sqrt of per-shot damage. Squaring
+// needs nothing and recovers the shield term too.
 // The scale is arbitrary: every consumer divides by cost and normalizes
 // against the best on the line.
 // gPower itself is left alone -- it is also the threat-map number, and the
 // defence-turret quality terms are calibrated against its scale.
 array<float> gCombat;    // dps * (hp + shield) * sqrt(dmg), i.e. power^2
+// The three terms power fuses, now bound separately, so a score can weigh
+// them independently instead of only in the DLL's fixed combination.
+array<float> gDps;       // sustained damage/s
+array<float> gAlpha;     // per-shot damage
+array<float> gAoe;       // weapon splash radius (NOT gBlastR, the death blast)
+// Can this weapon actually hit something that is MOVING: instant-hit beams and
+// rifles, cannons whose shell is fast for their range, and TRACKING missiles.
+// A slow un-tracked rocket fails it -- reach it cannot land on a mover is reach
+// against buildings only (apexearth: "those reach units were probably the
+// terribly inaccurate rocket launcher dudes... only good vs structures").
+array<bool> gAimTrue;
+// Its longest land weapon is an UNGUIDED rocket -- the precise property; the
+// flag above answers "can hit an aircraft", which is a stricter, different bar.
+array<bool> gDumbFire;
 array<int> gRole;        // CircuitAI main role (raider/riot/assault/...)
 array<bool> gKamikaze;   // suicide unit: ammunition, not army
 array<bool> gShield;     // projectile shield structure
@@ -98,7 +112,10 @@ void Init()
 	gBuildDist.resize(n);
 	gRadar.resize(n); gJammer.resize(n); gRadarR.resize(n); gJamR.resize(n);
 	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n); gPower.resize(n);
+	gStock.resize(n);
 	gCombat.resize(n);
+	gDps.resize(n); gAlpha.resize(n); gAoe.resize(n);
+	gAimTrue.resize(n); gDumbFire.resize(n);
 	gSurfT.resize(n); gAirT.resize(n); gRole.resize(n); gKamikaze.resize(n);
 	gShield.resize(n); gRezzer.resize(n);
 	gAvailable.resize(n);
@@ -150,10 +167,16 @@ void Init()
 		gRadar[i]        = cdef.IsRadarDef() || (gRadarR[i] > 900.f);
 		gJammer[i]       = cdef.IsJammerDef() || (gJamR[i] > 100.f);
 		gAntiNuke[i]     = cdef.IsAntiNukeW();
+		gStock[i]        = cdef.IsAttrAny(Unit::Attr::STOCK.mask);
 		gTargFac[i]      = cdef.IsTargFac();
 		gMaxRange[i]     = cdef.GetMaxRange();
 		gPower[i]        = cdef.power;
 		gCombat[i]       = cdef.power * cdef.power;
+		gDps[i]          = cdef.GetRawDps();
+		gAlpha[i]        = cdef.GetRawDmg();
+		gAoe[i]          = cdef.GetAoe();
+		gAimTrue[i]      = cdef.IsAlwaysHitDef();
+		gDumbFire[i]     = cdef.IsDumbFireDef();
 		gRole[i]         = int(cdef.GetMainRole());
 		gKamikaze[i]     = cdef.IsKamikazeDef();
 		gShield[i]       = cdef.IsShieldDef();
@@ -334,6 +357,12 @@ void Dump()
 			+ " float=" + (gFloater[i] ? 1 : 0)
 			+ " power=" + formatFloat(gPower[i], "", 0, 1)
 			+ " combat=" + formatFloat(gCombat[i], "", 0, 1)
+			+ " dps=" + formatFloat(gDps[i], "", 0, 2)
+			+ " alpha=" + formatFloat(gAlpha[i], "", 0, 1)
+			+ " aoe=" + formatFloat(gAoe[i], "", 0, 1)
+			+ " aim=" + (gAimTrue[i] ? 1 : 0)
+			+ " dumb=" + (gDumbFire[i] ? 1 : 0)
+			+ " rng=" + formatFloat(gMaxRange[i], "", 0, 0)
 			+ " hp=" + formatFloat(gHealth[i], "", 0, 0)
 			+ " role=" + gRole[i]
 			+ " builds=" + gBuildsList[i].length());

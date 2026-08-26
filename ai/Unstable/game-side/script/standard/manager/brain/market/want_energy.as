@@ -62,9 +62,14 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			if ((best > mine) && (mine > 0.f))
 				gain *= mine / best;
 		}
+		// AND ONLY THE PART OF IT ANYTHING WOULD USE. Generation on top of an
+		// already-wasted band makes no metal until a converter chews it, so its
+		// gain decays across the waste line instead of being priced as though a
+		// converter were free and standing. See ERealizeShare in price.as.
+		gain *= ERealizeShare(Catalog::gMakeE[d], bSec);
 		if (gain <= 0.f)
 			continue;
-		ValueOf(d, gain, 0.f, Catalog::gBuildPower[uid], c);
+		ValueOf(d, gain, WalkSecTo(unit, eSite), Catalog::gBuildPower[uid], c);
 		// Rent on the defended ground this footprint would occupy.
 		{
 			const float rent = SpaceRentM(eSite, Catalog::gAreaCells[d]);
@@ -101,6 +106,47 @@ float StandingConvCap()
 	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
 		if (gOwnCount[cd] > 0)
 			cap += float(gOwnCount[cd]) * Catalog::gConvCapacity[int(cd)];
+	}
+	return cap;
+}
+
+// GROUND TRUTH FOR THE CONVERTER FLEET. BAR's own converter gadget
+// (game_energy_conversion.lua) publishes the team's maker capacity and what
+// they are actually chewing as team rules params, and it charges that draw as
+// each maker's unit energy use -- which lands in the team's energy PULL. So
+// pull is already net of standing converters, and anything reading a surplus
+// must not subtract them a second time. Falls back to the catalog when the
+// params are absent (a game without that gadget).
+float ConvCapE()
+{
+	const float cap = ai.GetTeamRulesParam("mmCapacity", -1.f);
+	return (cap >= 0.f) ? cap : StandingConvCap();
+}
+
+float ConvUseE()
+{
+	const float use = ai.GetTeamRulesParam("mmUse", -1.f);
+	if ((use >= 0.f) && (ai.GetTunable("apex_e_realize", TUNE_E_REALIZE) > 0.f))
+		return use;
+	// No param: assume the fleet chews whatever surplus it can hold.
+	const float sur = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	const float cap = StandingConvCap();
+	if (sur <= 0.f)
+		return 0.f;
+	return (sur < cap) ? sur : cap;
+}
+
+// Converter capacity ORDERED and not yet standing: not in pull, not in the
+// rules params, and the only reason a second converter want should read a
+// smaller surplus than the first.
+float ConvCapInFlight()
+{
+	float cap = 0.f;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		cap += Catalog::gConvCapacity[int(t.buildDef.id)];
 	}
 	return cap;
 }
@@ -143,11 +189,9 @@ float EcoPowerM()
 	// Converters run on surplus and idle when energy is tight, so subtracting
 	// full capacity erased real energy income -- with capacity above income it
 	// valued all of our energy at zero, which is the opposite of the intent.
-	const float surplus = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
-	const float cap = StandingConvCap();
-	float chewed = (surplus > 0.f) ? surplus : 0.f;
-	if (chewed > cap)
-		chewed = cap;
+	// The gadget publishes the draw itself; the surplus-vs-capacity estimate
+	// under it is the fallback (ConvUseE).
+	const float chewed = ConvUseE();
 	// And at a rate we can actually REALIZE: the game's best converter is no
 	// use if nothing we own can place it.
 	const float own = OwnConvCeil();
@@ -338,13 +382,21 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// Converters recycle OVERFLOW only: the conversion ratio IS the energy
 	// floor price, so converting non-overflowing E is value-neutral by our
 	// own definitions -- a converter never outbids a slightly-longer mex
-	// walk again (apexearth's call, twice). Overflow = surplus the E bank
-	// cannot absorb; minus what standing converters already chew.
+	// walk again (apexearth's call, twice). Overflow = the surplus the E bank
+	// cannot absorb.
 	const float eStore2 = aiEconomyMgr.energy.storage;
 	if ((eStore2 > 1.f)
 		&& (aiEconomyMgr.energy.current < 0.85f * eStore2))
 		return w;
-	const float eSurplus = gESurplusEma - StandingConvCap();
+	// Energy pull ALREADY carries what standing converters draw (see ConvCapE
+	// above), so the surplus EMA is net of them; subtracting their capacity a
+	// second time hid a saturated fleet's remaining waste entirely and is why
+	// capacity stopped growing while energy overflowed. What is NOT in pull is
+	// the capacity we have already ordered.
+	const bool realize = ai.GetTunable("apex_e_realize", TUNE_E_REALIZE) > 0.f;
+	const float eSurplus = realize
+			? (gESurplusEma - ConvCapInFlight())
+			: (gESurplusEma - StandingConvCap());
 	if (eSurplus <= 1.f)
 		return w;
 	const int uid = int(unit.circuitDef.id);
@@ -359,7 +411,19 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		const float chew = (eSurplus < Catalog::gConvCapacity[d])
 				? eSurplus : Catalog::gConvCapacity[d];
 		Want c;
-		ValueOf(d, chew * Catalog::gConvRatio[d], 0.f, Catalog::gBuildPower[uid], c);
+		// THE SAME ECO-COMPOUNDING PREMIUM THE GENERATOR GETS. A generator is
+		// priced as though its energy were already metal and then multiplied by
+		// what that adds to total economic power; the converter that actually
+		// makes that metal was the only half of the pair paying flat, so the
+		// pair could never be bought in the order that realizes it.
+		float cGain = chew * Catalog::gConvRatio[d];
+		if (realize) {
+			const float base = EcoPowerM();
+			cGain *= 1.f + ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH)
+					* cGain / ((base > cGain) ? base : ((cGain > 0.f) ? cGain : 1.f));
+		}
+		ValueOf(d, cGain, WalkSecTo(unit, cSite),
+				Catalog::gBuildPower[uid], c);
 		// SPACE IS WHAT THE ADVANCED CONVERTER BUYS. Ratio alone says T1 is
 		// nearly as good and far cheaper; what T2 actually buys is ten times
 		// the throughput behind the same guns, and a body that does not die to
@@ -404,6 +468,7 @@ Want@ ProposeStore(CCircuitUnit@ unit)
 	const float fill = 1.f;
 	const float over = (refund - headroom) / ((horizon > 1.f) ? horizon : 60.f);
 	const int uid = int(unit.circuitDef.id);
+	const AIFloat3 sSite = EcoSiteFor(unit);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
@@ -413,12 +478,13 @@ Want@ ProposeStore(CCircuitUnit@ unit)
 			continue;
 		const float capture = fill * Catalog::gStoreM[d] / ((horizon > 1.f) ? horizon : 60.f);
 		Want c;
-		ValueOf(d, (over < capture) ? over : capture, 0.f, Catalog::gBuildPower[uid], c);
+		ValueOf(d, (over < capture) ? over : capture, WalkSecTo(unit, sSite),
+				Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_STORE;
 			@w.def = Catalog::Def(d);
-			w.pos = EcoSiteFor(unit);
+			w.pos = sSite;
 		}
 	}
 	return w;

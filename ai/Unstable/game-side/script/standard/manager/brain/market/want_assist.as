@@ -9,23 +9,21 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 {
 	Want w;
 	const int uid = int(unit.circuitDef.id);
-	// Only lesser cons assist upward; ceiling cons do the T2 work itself.
-	float myCeil = 0.f;
-	const array<int>@ mine = Catalog::BuildsOf(uid);
-	for (uint i = 0; i < mine.length(); ++i) {
-		if (Catalog::gExtractsM[mine[i]] > myCeil)
-			myCeil = Catalog::gExtractsM[mine[i]];
-	}
-	if (myCeil >= BestExtract())
-		return w;
-	// A worker BUILDING BUILD POWER is the best boss there is: BP
-	// compounds, and the first nano crawling up under one lathe delays
-	// everything behind it (apexearth). Then serving cons, then factories.
-	CCircuitUnit@ boss = null;
+	// (The "only lesser cons may assist" gate is gone with the repricing: a
+	// role may change how much, never whether. A ceiling con's own upgrade
+	// work is now priced against the acceleration below and wins on its own
+	// merits, so the ban was deciding an auction the auction can decide.)
+	// THE MOST IMPORTANT JOB IN FLIGHT TAKES THE HELP FIRST (apexearth
+	// 2026-08-26: "if 1 of them is way more important than the rest, I'm
+	// hoping our constructors will assist the building which is the most
+	// important"). What follows it is the fallback for work the market never
+	// priced: build power compounds, so a worker raising a nano outranks one
+	// raising a factory, then serving cons, then a line with a queue.
+	CCircuitUnit@ boss = BestJobBoss(unit);
 	// A worker raising a FACTORY outranks everything -- one con on the T2
 	// plant was the measured bottleneck (apexearth: "we are more efficient
 	// when we assist building some things").
-	for (uint bf = 0; bf < gWorkers.length(); ++bf) {
+	for (uint bf = 0; (boss is null) && (bf < gWorkers.length()); ++bf) {
 		CCircuitUnit@ wf = gWorkers[bf];
 		if ((wf is null) || (wf.task is null) || (wf.id == unit.id))
 			continue;
@@ -104,12 +102,61 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	const float speed = Catalog::gSpeed[uid];
 	const float walkSec = (speed > 1.f)
 			? (unit.GetPos(ai.frame).distance2D(bp) / speed) : 60.f;
+	// THE RETURN ON AN ASSIST IS THE ACCELERATION, NOT THE TRANSFER
+	// (apexearth 2026-08-26). Metal moved into a site is metal the market
+	// already committed -- pricing the drain itself made every assist worth
+	// the same, so helping a fusion and helping a wind turbine bid alike.
+	// What the second lathe actually buys is the building arriving sooner:
+	//
+	//   B  = busy * DRAIN          the flow the site already draws
+	//   d  = my fed drain          what I add on top
+	//   R  = costM * (1-progress)  metal still to go
+	//   dT = R*d / (B*(B+d))       how much sooner it lands
+	//   Tocc = R / (B+d)           how long I am stuck here
+	//   gain = G * dT / H          the one-off, annuitized
+	//
+	// The return scales with the JOB's own return G and falls away as the
+	// site fills -- one hand on a lonely fusion is worth the fusion, the
+	// tenth hand is worth a tenth of it. Unfed drain gives dT = 0 and the
+	// want dies on its own, which is the eFeed/FreeMetalFlow bound above
+	// doing its work rather than a second rule.
+	//
+	// DIVIDING BY THE PAYBACK HORIZON IS WHAT MAKES IT COMPARABLE. Every
+	// other want's gain is a rate that runs forever; an assist buys a
+	// ONE-OFF G*dT metal and then stops. Priced as a rate over its own
+	// stint it read as enormous exactly when the stint was shortest -- a
+	// site seconds from done bid v=446 against a mex at 18 (measured), which
+	// is the arithmetic saying "infinite return for no time" rather than
+	// anything real. Annuitized over the same horizon the rest of the market
+	// pays back against, a nearly-finished site is worth nearly nothing to
+	// join and a lonely reactor is worth a lot.
+	float gainRate = myDrain;              // work nobody priced: the old flat transfer
+	float occupiedSec = 60.f;              // ...and its flat guard stint
+	if ((gBossJob !is null) && (gBossJob.buildDef !is null)) {
+		const float G = JobGain(gBossJob);
+		if (G > 0.f) {
+			const uint hands = Requests::Workers(gBossJob);
+			const float B = float((hands > 0) ? hands : 1) * Requests::DRAIN;
+			float R = gBossJob.buildDef.costM
+					* (1.f - Requests::Progress(gBossJob));
+			if (R < 1.f)
+				R = 1.f;
+			const float savedSec = R * myDrain / (B * (B + myDrain));
+			float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+			if (H < 1.f)
+				H = 900.f;
+			gainRate = G * savedSec / H;
+			occupiedSec = R / (B + myDrain);
+		}
+	}
 	w.kind = WK_ASSIST;
 	w.pos = bp;
 	w.spotId = int(boss.id);
-	w.gain = myDrain;
+	w.gain = gainRate;
 	w.mCost = 1.f;
-	w.tCost = (walkSec + 60.f) * Wage();   // one guard stint
+	// The seconds this actually commits, not a flat stint: a lonely 9,000
+	// metal reactor is a ten-minute posting and has to be priced as one.
+	w.tCost = (walkSec + occupiedSec) * Wage();
 	w.value = w.gain / (w.mCost + w.tCost);
 	@gAssistTarget = boss;
 	return w;

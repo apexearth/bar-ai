@@ -11,6 +11,19 @@ float Wage()
 	return aiEconomyMgr.metal.income / float(workers < 1 ? 1 : workers);
 }
 
+// A builder's walk to a site, in seconds. Straight-line: no path cost query
+// reaches script (CircuitAI's QueryCostMap is unbound), so blocked ground
+// reads as free.
+float WalkSecTo(CCircuitUnit@ unit, const AIFloat3& in to)
+{
+	if ((unit is null) || !OnMap(to))
+		return 0.f;
+	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+	if (speed <= 1.f)
+		return 60.f;
+	return unit.GetPos(ai.frame).distance2D(to) / speed;
+}
+
 // The floor exchange rate for energy: what a standing E/s is worth in metal
 // once the converter that realizes it is paid for.
 float gEPriceFloor = -1.f;
@@ -20,6 +33,7 @@ float gEPullPrev = -1.f;
 int gEPullPrevAt = 0;
 float gEPullGrowth = 0.f;
 float gESurplusEma = 0.f;
+float gEDemandPk = 0.f;
 void TrackEPull()
 {
 	if (ai.frame < gEPullPrevAt + 5 * SECOND)
@@ -37,6 +51,15 @@ void TrackEPull()
 	// third appearance of the temporal-consistency law).
 	const float sur = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
 	gESurplusEma = 0.9f * gESurplusEma + 0.1f * ((sur > 0.f) ? sur : 0.f);
+	// REAL DEMAND, WHICH PULL UNDERSTATES. Pull is throttled demand and it
+	// also dips to nothing whenever the fleet is between jobs -- read raw, it
+	// called a working economy's whole generation wasted one tick and starving
+	// the next. Rises instantly, decays slowly, so a lull does not erase what
+	// the fleet was drawing a minute ago. Converters are excluded: they are
+	// the sink for what nothing else wants, not a consumer to supply.
+	const float dem = aiEconomyMgr.energy.pull - ConvUseE();
+	const float d0 = (dem > 0.f) ? dem : 0.f;
+	gEDemandPk = (d0 > gEDemandPk) ? d0 : (0.97f * gEDemandPk + 0.03f * d0);
 }
 
 // A conversion ratio is not a price until a converter stands (apexearth:
@@ -98,7 +121,12 @@ float EPriceFloor()
 			+ " def=" + ((bestId > 0) ? Catalog::Def(bestId).GetName() : "-")
 			+ " owned=" + ((best > 0.f) ? 1 : 0)
 			+ " bp=" + formatFloat(bp, "", 0, 0)
-			+ " wage=" + formatFloat(wage, "", 0, 2));
+			+ " wage=" + formatFloat(wage, "", 0, 2)
+			+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
+			+ " ePull=" + formatFloat(aiEconomyMgr.energy.pull, "", 0, 0)
+			+ " convUse=" + formatFloat(ConvUseE(), "", 0, 0)
+			+ " convCap=" + formatFloat(ConvCapE(), "", 0, 0)
+			+ " realize=" + formatFloat(ERealizeShare(20.f, 30.f), "", 0, 2));
 	}
 	return gEPriceFloor;
 }
@@ -193,6 +221,65 @@ float EPriceCostAt(float buildSec)
 	if (k > 1.f)
 		k = 1.f;
 	return fl + (spot - fl) * k;
+}
+
+// WHAT A NEW E/s WOULD ACTUALLY TURN INTO METAL. Energy nothing spends and
+// no converter chews makes no metal at all, so a generator added on top of a
+// wasted band is worth nothing until the converter that realizes it stands
+// (apexearth: "if we're already overflowing energy we should understand that
+// adding more energy will not add the metal value"). Demand is pull MINUS
+// what our own converters draw -- a converter is a sink of last resort, not a
+// consumer to lead by a headroom factor -- plus the converter fleet's whole
+// capacity, which is the part of an overflow that does become metal. The
+// share above that line decays to zero, which is what makes the market buy
+// the converter first and the next generator after it; it lifts by itself the
+// moment capacity or real demand rises, so nothing is forbidden.
+float ERealizeShare(float addE, float buildSec)
+{
+	if (addE <= 0.f)
+		return 1.f;
+	if (ai.GetTunable("apex_e_realize", TUNE_E_REALIZE) <= 0.f)
+		return 1.f;
+	TrackEPull();
+	float demand = aiEconomyMgr.energy.pull - ConvUseE();
+	if (demand < gEDemandPk)
+		demand = gEDemandPk;
+	if (demand < 0.f)
+		demand = 0.f;
+	// Anticipation, over the build's own delivery time but never further out
+	// than the price's own lookahead -- the pull EMA is not a forecast.
+	if (gEPullGrowth > 0.f) {
+		const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+		demand += gEPullGrowth * ((buildSec < look) ? buildSec : look);
+	}
+	// A BANK THAT IS NOT FULL IS A REAL USE. Energy going into storage is not
+	// wasted -- it is spent later, and at frame zero it is the only consumer
+	// there is. Charged over the same anticipation window as everything else,
+	// so it dries up exactly as the bank fills.
+	float fill = 0.f;
+	{
+		const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+		const float bankRoom = aiEconomyMgr.energy.storage - aiEconomyMgr.energy.current;
+		if ((bankRoom > 0.f) && (look > 1.f))
+			fill = bankRoom / look;
+	}
+	const float target = demand * ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM)
+			+ ConvCapE() + fill;
+	// NEVER ZERO. Energy in the wasted band is not worthless -- it is worth the
+	// conversion floor as soon as a converter follows, and the floor price
+	// already nets that converter's own cost out. What it is missing is the
+	// wait, and the chance nothing ever converts it. So the band keeps a share
+	// of its value and simply LOSES to the converter that would realize it
+	// (apexearth: "we still should care about energy, so not zero - but we want
+	// converters to be above the energy want"). Generation is never switched
+	// off by an overflow, which is the standing ruling.
+	const float floorShare = ai.GetTunable("apex_e_waste_worth", TUNE_E_WASTE_WORTH);
+	const float room = target - aiEconomyMgr.energy.income;
+	float share = (room <= 0.f) ? 0.f
+			: ((room < addE) ? (room / addE) : 1.f);
+	if (share < floorShare)
+		share = floorShare;
+	return share;
 }
 
 float EPriceAt(float buildSec)
@@ -343,6 +430,14 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 			+ float(Catalog::gAreaCells[defId])
 				* ai.GetTunable("apex_space_m", TUNE_SPACE_M);
 	w.tCost = (walkSec + buildSec) * Wage() + displacedM;
+	// THE INCOME THE WALK ITSELF FORGOES (apexearth: "the cost in that walk
+	// sec is ALSO the amount of metal you'd have lost from all that walk time
+	// you'd make as metal income if you had built the closer one"). Wage above
+	// charges the BUILDER's idle seconds; this charges the ASSET's late start,
+	// which is the far larger number for anything that yields a rate. Scales
+	// with the gain, so it decides extractor siting and is noise for a nano --
+	// no per-kind distance rule anywhere.
+	w.tCost += gain * walkSec;
 	// THE OPTIONS A LONG BUILD COSTS YOU. apexearth: "during that entire time
 	// you're making an AFUS you can afford military better and protect
 	// yourself. You're giving yourself options... you can put a little bit

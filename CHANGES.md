@@ -1,5 +1,345 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-26: energy nothing converts is worth nothing
+
+apexearth: "When we are overflowing energy that energy provides no value in the
+form of metal -- to make that value we need to have enough converters. If we're
+already overflowing energy we should understand that adding more energy will not
+add the metal value. We currently overflow too much and do not prioritize
+converters enough."
+
+Every E/s of new generation was priced at `EPriceFloor()`, which amortizes the
+converter that realizes it -- an honest price for the generator+converter PAIR,
+paid whether or not the converter exists. Nothing else in the market closed that
+gap, so generation could run indefinitely ahead of the capacity to convert it.
+
+Four parts, all behind `apex_e_realize` (default 1; 0 is the control arm):
+
+- **`ERealizeShare` (`market/price.as`)** scales a generator's gain by the share
+  of its output anything would use: real demand at `apex_e_headroom`, plus the
+  converter fleet's capacity, plus the room left in the E bank. Above that line
+  the gain decays to zero and the market buys the converter instead; it lifts
+  by itself the moment capacity or demand rises. Applied to `ProposeEnergy` and
+  `ProposeGeo`.
+- **Demand is not raw pull.** Pull is throttled demand AND dips to nothing
+  between jobs -- measured flipping the share 1.00/0.00 tick to tick. It is now
+  a fast-attack, slow-decay peak of `pull - converter draw`, converters excluded
+  because a converter is the sink for what nothing else wants, not a consumer to
+  supply at headroom.
+- **`ProposeConvert` was double-subtracting its own fleet.** BAR's
+  `game_energy_conversion.lua` charges each maker's draw as unit energy use
+  (`SetUnitResourcing "uue"`), which lands in `CTeam::resPull` -- so
+  `energy.pull` already contains it and the surplus EMA is already net of
+  standing converters. Subtracting `StandingConvCap()` again hid a saturated
+  fleet's remaining waste entirely: capacity 100 chewing everything with 50 e/s
+  still spilling read as -50 and proposed nothing. Now it subtracts only
+  capacity ALREADY ORDERED, and reads the gadget's own `mmUse`/`mmCapacity`
+  team rules params as ground truth (`ConvUseE`/`ConvCapE`) with the old
+  estimate as fallback. The converter want also gets the same eco-compounding
+  premium the generator has always had -- it was the only half of the pair
+  paying flat.
+- **The share never reaches zero** (`apex_e_waste_worth`, 0.25). apexearth's
+  standing ruling is that the generator ladder never pauses on waste, and his
+  call on this change was "we still should care about energy, so not zero - but
+  we want converters to be above the energy want." Energy in the wasted band is
+  worth the conversion floor the moment a converter follows -- and that
+  converter's own cost is already netted out inside `EPriceFloor` -- so what is
+  actually missing is the wait and the risk, which is a discount, not a zero.
+  An overflow now makes a generator LOSE to the converter that realizes it and
+  never makes it unbuildable. The 0.25 is chosen, not derived.
+
+Measured on the benchmark, three arms, seeds 21-32 (n=11-12 each), and they are
+all inside its noise: waste 16.7% / 15.9% / 13.0% by median for control /
+zero-floor / 0.25-floor, metal produced 14.1k / 13.9k / 15.1k. What the floor
+arm does show is the intended shape -- a 20-minute game at 7 standing
+converters, 7.8% of energy wasted, and 51 energy elections against 11 converter
+ones, i.e. generation never stopped.
+
+Measured earlier, 18 pairs, Comet Catcher 16 min vs BARb stable, `apex_e_realize` 0 vs 1
+on one build: energy wasted 17.9% -> 16.9% of production by median and
+21.3% -> 17.2% by mean (the control's tail includes a 74% game; the treated
+arm's worst is 28%), converters 1.89 -> 2.50 per game, with metal produced, eco
+share and army share unchanged. So it removes the overflow blowups and costs
+nothing here. This benchmark barely reaches the overflow regime -- the effect
+belongs to the high-income hosted games the complaint came from, and has not
+been watched there.
+
+## 2026-08-26: no constructor stands still
+
+apexearth: "A lot of our engineers tend to sit idle. Instead of doing nothing
+we should always fall back to doing something useful even if it is just
+assisting."
+
+`Market::Decide` had two exits that returned null. The one with a floor under
+it -- no want priced positive -- fired ZERO times in a measured 20-minute game.
+The one that actually fires had no floor at all: **472 elections in that same
+game ranked wants and had every one refused by the executor** (energy=507,
+sense=276, protect=27 refusals), and each of those left a constructor holding
+nothing. `apex: exec-refused` was reporting it and nothing acted on it.
+
+**`market/floor.as`** is now reached from both exits. It lends the idle lathe
+to work somebody else already commissioned: a worker raising a nano first
+(build power compounds), then one raising a factory, then any other build, then
+a line with something queued; failing all of those, reclaim a nearby feature,
+then patrol the farm. A guard auto-assists whatever its target builds, so this
+is real build power, not a parking spot. The commander is held inside the eco
+leash -- a cross-map assist is the walk that kills him.
+
+The leash is 15 seconds, against the priced assist want's 60: a held builder
+task is never re-elected, so the floor must not lock a lathe out of the market
+it just failed to win in. `GuardSweep` already releases a guard the moment its
+boss stops working.
+
+Measured: fires as designed (`apex: floor ... -> assist:`), always finding a
+boss -- the reclaim and patrol tiers never ran. Composition at 16 minutes,
+Red Comet seed 1, is a wash against a floor-disabled baseline (12.6k / 9.1k
+built against 12.3k), which is what a fallback on a previously-dead path should
+look like; it is a single pair of runs and says nothing stronger than "no
+visible displacement".
+
+### ...and it assists whatever matters most
+
+apexearth: "If we're using all our resources and people are building 5
+different things, but 1 of them is way more important than the rest, then I'm
+hoping our constructors will assist the building which is the most important."
+
+A live builder task carries its def and its progress but not its price, so
+that question was unanswerable and idle hands went to whoever was nearest or
+first in a list. **`Decide` now records the winning Want's value on the task it
+commissions** (`NoteJob`), and `BestLiveJob` ranks what is in flight by it --
+halved per hand already on site (the second lathe doubles a site's speed, the
+tenth adds a tenth) and discounted for the walk. The market's own currency, not
+a second opinion. Work the market never priced -- the engine's own tasks -- is
+ranked against nothing and stays on the old class fallback.
+
+Two rungs, because they answer different questions. **Can a lathe be fed here?**
+decides whether to TAKE the task; **which job matters most?** decides where to
+STAND. Conflating them made the first version dead on arrival: `SiteWorkerCap`
+splits the income's hands EVENLY across live sites, so with thirteen of them
+every site read "full" at a single lathe and the join rung never fired once in a
+25-minute game (`apex: floor-diag ... full=11`). Now a saturated crew is
+overridden while `FreeMetalFlow` has a lathe's drain going unspent -- and that
+is self-limiting, since each hand that joins raises pull and closes the gap
+behind it -- while the "where to stand" ranking ignores the feed test entirely,
+because a hand parked on the top job is the one drawing the instant flow frees.
+
+The priced assist Want takes the same target (`BestJobBoss`), and is now priced
+by what that target is worth.
+
+### The assist is repriced by the acceleration it buys
+
+Pricing the DRAIN made every assist worth the same: helping a reactor and
+helping a wind turbine bid alike, because both move one lathe's metal. What the
+extra lathe actually buys is the building arriving sooner, so with B the flow
+the site already draws, d the joiner's fed drain, R the metal still to go and
+G the job's own recorded return:
+
+	dT   = R*d / (B*(B+d))      how much sooner it lands
+	Tocc = R / (B+d)            how long the joiner is posted there
+	gain = G * dT / H           the one-off, annuitized
+
+The return now scales with the JOB's return and falls away as the site fills --
+one hand on a lonely reactor is worth the reactor, the tenth hand a tenth of
+it. Unfed drain gives dT = 0, so the existing eFeed/FreeMetalFlow bounds kill
+the want by arithmetic instead of by a second rule, and `tCost` charges the
+real posting `(walk + Tocc) * Wage` rather than a flat guard stint.
+
+**Dividing by the payback horizon is what makes it comparable.** Every other
+want's gain is a rate that runs forever; an assist buys a one-off and stops.
+Priced as a rate over its own stint it read as ENORMOUS exactly when the stint
+was shortest -- a site seconds from done bid v=446 against a mex at 18
+(measured), the arithmetic saying "infinite return for no time". Annuitized
+over the horizon the rest of the market pays back against, a nearly-finished
+site is worth nearly nothing to join and a lonely reactor is worth a lot.
+
+The "only lesser cons may assist" gate went with it: a role may change how
+much, never whether. A ceiling con's own upgrade work is now priced against the
+acceleration and wins on its own merits, so the ban was deciding an auction the
+auction can decide.
+
+Measured, 6 runs against 4 of the flat pricing: metal built 22.3k median both
+ways, eco 7.35k against 7.36k -- composition-neutral at this benchmark. What
+changed is behaviour: assist wins fall from 70-107 elections a game to 5, and
+the ones that remain are on the job that matters. The un-annuitized form was
+tried first and is the one real signal here -- 16.8k built, its worst run, with
+the v=446 pathology visible in the log.
+
+
+Measured: idle hands converge on one job at a time and pile onto it --
+`armalab`, then `armadvsol`, then `armfus`, three cons each -- and the join rung
+takes unmanned work outright (`-> join:armnanotc v=13.94 hands=0`). Composition
+over four runs is 22.3k median metal built against 25.3k for the unranked floor,
+with a 20.0-43.6k range: inside the noise, and not a control.
+
+## 2026-08-26: the golden metrics, and the class reference that hid them
+
+apexearth: "We build a lot of the wrong units. We don't seem to value range
+and damage enough... enemies often kick our ass with Tzar and Banisher armies.
+We're making close range units that can't even touch them." Asked how to
+express a force-build lever, he redirected to the formula itself: "Maybe range
+* hp * damage? Perhaps we can try a variety of algorithms."
+
+**The golden metrics were never bound.** `power` fuses them as
+`sqrt(dps)*alpha^0.25*sqrt(hp)`, and script could only recover the product by
+squaring it. `rawDps`/`rawDmg` are now members, and `GetAoe`/`GetRawDps`/
+`GetRawDmg` are registered. Weapon AoE had existed in C++ since forever and
+was simply never exposed. Verified: `combat == dps*sqrt(alpha)*hp / 128^2`
+holds for 205 of 250 armed defs, and all 39 outliers are exactly their
+`behaviour.json` "power" override squared (armvader x100, armthor x0.01,
+corak x0.81).
+
+**`market/worth.as`** replaces the ad-hoc multiplier chain with one score
+weighted by exponent per metric, each normalised by the field's own reference.
+At the shipped defaults it is a *pure rescale* of the old `gCombat/costM` --
+max relative deviation 6.7e-16 across 250 defs, ranking identical -- so it
+ships as a no-op and every setting is a clean A/B. The cost exponent is a
+choice of Lanchester law, not a taste for expensive units: `gCombat` is
+quadratic in quality, so cost^2 is the linear law (bodies trade one for one,
+chaff wins) and cost^1 the square law (a massed army fires at once).
+
+**THE FINDING: the class reference was a mean, and the mean was an outlier
+statistic.** `LineClassOf` judged each axis against the field MEAN. A Korgoth
+(149,000 hp) and a Behemoth (335,000 hp) drag mean hp to 7,741, so a Tzar at
+7,800 reads as 1.008x the field and misses the 1.15 edge; mean range came out
+1,645 elmos, which no ground unit clears. Measured in-game: **127 of 151
+buildable units classified as MID**, leaving the 30/25/25/20 composition
+target five tank units and five reach units in the entire field to select.
+The target could not be expressed at all.
+
+Fixed with the median (`LineRef`), plus reading the hp and dps axes per BODY
+rather than per metal -- range was already absolute, so the argmax had been
+comparing three axes in two different units, which is what made a Thud
+(7.9 hp/m) a tankier unit than a Tzar (4.7). Both halves are needed: the
+median alone still calls a Pawn a TANK and a Tzar a DPS unit. Class split
+5/127/5/14 -> 51/52/23/25; Tzar -> TANK, Banisher -> REACH.
+
+Measured, 10 games each vs BARb stable, per-game median army share of metal
+built (pooled means overstate this -- they weight the longest games):
+
+| arm | median army share | games above baseline median |
+|---|---|---|
+| baseline | 10.1% | 5/10 |
+| median + per-body | **13.2%** | **8/10** |
+| + cost exponent 0.5 | 13.5% | 6/10 |
+
+Shipped: `apex_line_median` and `apex_line_abs` default ON. `apex_worth_cost`
+stays at 1 (today's law) -- 0.5 raised the pooled figures and the IQR ceiling
+(to 21.9%) and put a Behemoth in the top metal sinks, but did not move the
+median, so it needs more games than the noise floor here allows.
+
+**NEGATIVE RESULT: discounting inaccurate rockets does not pay.** apexearth,
+reading the reach class: "those reach units were probably the terribly
+inaccurate rocket launcher dudes... they're only good vs structures. i wish
+you could detect that somehow." It is detectable, and now is: `isDumbFire` is
+true when a unit's longest land weapon is an unguided (non-tracking) rocket.
+It separates the case exactly -- armsptk/corstorm/corvroc true, corban (a
+tracking missile) false, every cannon false. Note `isAlwaysHit` is NOT this
+test: it gates air targeting, so its bar is "can hit an aircraft", which
+condemns a Tzar and blesses a Luger.
+
+But pricing it lost on every counter. As a range discount in the score, 10
+games: army 17.1% -> 12.5% pooled, metal built 142k -> 85k -- the discount
+also drags the field's range reference down, pushing the same units back into
+MID and re-saturating the class the fix had just emptied. Narrowed to
+classification only, still no better (median 13.2%, 6/10). `apex_aim_miss`
+therefore ships at 1.0 (no effect); the detector stays for a future use that
+does not move the reference.
+
+**Also found: `targets.as`'s ROLE_* income-bracket tables are DEAD.**
+`QuotaFor` and `NextForMix` no longer exist and nothing outside `targets.as`
+reads them. `Market::ConOrderFor` is the only path to what gets built --
+CLAUDE.md's "read the facqueue quota lines first" and the `ai-factory-brain`
+skill are stale on this point.
+
+
+## 2026-08-26: nanos serve the factories that are building units
+
+apexearth: "We make nano turrets around buildings we're making, but we
+rarely make them around factories that are building units. Factories need
+more support and we should want to make nanos around them."
+
+Three defects, each measured in an 18-minute Comet Catcher run with the
+nano demand and siting logged:
+
+- **A line was priced on the army shortfall, a build site on free flow.**
+  `NeediestLine` split `LineSpend()` (army gap / fill time) across the
+  lines, which reads 0.6-2.5 m/s whenever the army is near target, while
+  a build frame was priced at the full free metal flow -- 26 m/s. A
+  factory could never outbid a frame. Both now price the same way: what
+  the economy can feed the site, less the lathe already standing on it.
+- **A build site counted its crew as demand.** The frame loop asked "does
+  it have fewer than three turrets", and the sink-siting loop used its
+  crew's drain AS the pull -- so the more hands a site had, the more it
+  bid. Crew and existing turrets are supply now, subtracted on both sides.
+- **The siting loop had no bigness filter.** `ProposeNano` restricts sinks
+  to `apex_nano_sink_m` / `apex_big_e`, but the executor's placement loop
+  walked every live request, so a turret bought by a queued lab got parked
+  at a 50-metal mex: 13 of 14 sink placements in one run were armmex or
+  armmakr, at 1600 elmos from the factory that priced them.
+
+Also: `LineWorking()` -- a line counts as working if `CountQueued > 0` OR
+the facqueue ledger has orders pending for it, because CountQueued lags
+sends by an order window and reads zero for work really on the line.
+
+Before: 9 nanos, 6 sited at eco frames or mexes, labs with a queue running
+on one turret. After: every placement at a working line (distance 0), the
+ring reaching 3 while the queue stays fed.
+
+## 2026-08-26: the strategic structures have a want of their own
+
+apexearth: "The best defenses in the game I rarely see us make. I also
+don't see us making Nuke silos or Anti Nuke... So far in a bunch of games
+recently I haven't seen a Gantry... I prefer not to take a purely
+mathematical approach to this topic. It is more of a 'if I can afford
+this, I'll insert it as a want so we make one'."
+
+Three separate mechanisms were behind it, all measured:
+
+- **The gantry was structurally impossible.** `want_tech.as` Channel 3
+  ends with `if (!unlocksTier) continue`, where unlocking means reaching a
+  better extractor or a better converter. A gantry builds neither -- no
+  constructor at all -- so it was dropped before it was ever priced. Its
+  only other route, `ProposePlant`, prices per metal against a 600-metal
+  lab and never wins.
+- **The nuke silo and the long-range gun were priced as turrets.** Both
+  are static, unarmed of build options and weapon-bearing, so
+  `ProtClassOf` filed them PROT_DEF and the ground-defence auction --
+  which divides gain by cost -- was the only bidder. It buys LLTs.
+- **The anti-nuke shared the defence category's single ticket** with
+  ground turrets and lost its argmax every election, the same failure
+  CAT_SENSE and CAT_AIRDEF were split out for.
+
+New: `WK_SUPER` / `CAT_SUPER` (`brain/market/want_super.as`) covering the
+anti-nuke, nuke silo, long-range gun, the faction's best turret and the
+T3 gantry. Its one question is affordability -- the bill in metal plus
+energy at the conversion floor against what the economy makes in
+`apex_super_afford_s` (60) seconds -- and the gain is the share of that
+budget left over, so the same structure prices at nothing on the income
+that can barely pay for it. That single number produces the ladder: the
+anti-nuke clears at ~36 metal/s, the long-range gun at ~90, the gantry
+and the silo at ~160. Counts rise with income (`apex_super_per_income`),
+one strategic frame stands at a time, and an affordable want skips the
+category lottery (`apex_super_push`) rather than drawing a ticket it
+would win once a game.
+
+Two classification traps found while measuring:
+
+- Detecting a silo by its **stockpile** attribute named `armmercury` one
+  (the long-range AA batteries stockpile too). Range does the job:
+  2,400 elmos against a silo's 72,000, plus an air-threat guard.
+- Detecting a gantry by "its products dwarf what our lines make" named
+  the **T1 bot lab** one in a 4v4, because with no plant standing the
+  ceiling it compares against is the sentinel 1. It now reads the
+  `Factory::Attr::T3` marking `Main::AiMain` already sets.
+
+Measured, bonused 4v4, seed 21, 28 minutes: the four apex players built
+three Citadels and three Rattlesnakes, having previously built none of
+either. Basilica and gantry wants priced and ranked but the game ended
+before their turn -- they sit behind the cheaper classes in the
+category's argmax. Unbonused benchmark 4v4 proposes nothing at all,
+which is the design: 4-9 metal/s buys no strategic structure.
+
+
 ## 2026-08-24: the economy is legible over time
 
 dev_stats_export samples GetTeamResources twice a second and dumps the

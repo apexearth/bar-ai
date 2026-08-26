@@ -11,6 +11,34 @@ void OwnAdd(int defId, int delta)
 	}
 }
 
+// Assist build power standing over the plants, as a fraction of the plants'
+// own. A factory line's throughput is its workertime plus whatever nano
+// turrets reach it; which turret serves which line is not tracked, so the
+// pool is shared evenly -- the queue only has to outlast the re-election gap,
+// and an even share is enough to size one with.
+int gAssistShareAt = -1;
+float gAssistShare = 0.f;
+float AssistBPShare()
+{
+	if (gAssistShareAt == ai.frame)
+		return gAssistShare;
+	gAssistShareAt = ai.frame;
+	float plant = 0.f;
+	float assist = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int n = gOwnCount[d];
+		if ((n <= 0) || Catalog::gMobile[int(d)] || !Catalog::gBuilder[int(d)])
+			continue;
+		const float bp = Catalog::gBuildPower[int(d)] * float(n);
+		if (Catalog::BuildsOf(int(d)).length() > 0)
+			plant += bp;
+		else
+			assist += bp;
+	}
+	gAssistShare = (plant > 0.f) ? (assist / plant) : 0.f;
+	return gAssistShare;
+}
+
 // The extraction our standing capability can already reach: any owned mobile
 // builder directly, or any owned factory through the builders it can make.
 // This is what the tech want measures unlock against -- the ASKER's own
@@ -211,7 +239,11 @@ const int PROT_TARGFAC = 3;
 const int PROT_DEF = 4;
 const int PROT_SHIELD = 5;
 const int PROT_AA = 6;
-const int PROT_N = 7;
+// Strategic statics: nuke silos and long-range guns. Kept out of PROT_DEF
+// because the ground-defence auction reads a class member's gMaxRange as a
+// coverage radius, and a silo reports 72,000 elmos.
+const int PROT_SUPER = 7;
+const int PROT_N = 8;
 array<array<AIFloat3>> gProtPos(PROT_N);
 array<array<Id>> gProtIds(PROT_N);
 array<array<CCircuitUnit@>> gProtUnit(PROT_N);
@@ -243,6 +275,7 @@ int ProtClassOf(int defId)
 {
 	if (Catalog::gShield[defId] && !Catalog::gMobile[defId]) return PROT_SHIELD;
 	if (Catalog::gAntiNuke[defId]) return PROT_ANTINUKE;
+	if (IsSuperWeapon(defId)) return PROT_SUPER;
 	if (Catalog::gTargFac[defId]) return PROT_TARGFAC;
 	if (Catalog::gRadar[defId]) return PROT_RADAR;
 	if (Catalog::gJammer[defId]) return PROT_JAM;

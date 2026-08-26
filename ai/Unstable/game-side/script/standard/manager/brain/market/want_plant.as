@@ -24,8 +24,11 @@ Want@ ProposeGeo(CCircuitUnit@ unit)
 		return w;
 	const float speed = Catalog::gSpeed[uid];
 	const float walkSec = (speed > 1.f) ? (here.distance2D(pos) / speed) : 60.f;
-	const float gain = Catalog::gMakeE[geoId]
-			* EPriceAt(Catalog::BuildSecondsAt(geoId, EffBP(Catalog::gBuildPower[uid])));
+	const float geoSec = Catalog::BuildSecondsAt(geoId, EffBP(Catalog::gBuildPower[uid]));
+	// Only the share anything would use: a vent on top of a wasted band makes
+	// no metal either (see ERealizeShare).
+	const float gain = Catalog::gMakeE[geoId] * EPriceAt(geoSec)
+			* ERealizeShare(Catalog::gMakeE[geoId], geoSec);
 	w.kind = WK_GEO;
 	@w.def = Catalog::Def(geoId);
 	w.pos = pos;
@@ -66,6 +69,204 @@ float PipeLatencyMult(int plantId, float askerBP)
 	return h / (h + PipeLatencySec(plantId, askerBP));
 }
 
+// Real water share, the same bar amphib capability is priced against: the
+// engine's water flag trips on a pond, which must not buy a shipyard.
+bool MapHasWater()
+{
+	if (aiTerrainMgr.IsWaterAVoid())
+		return false;
+	float lp = aiTerrainMgr.GetLandPercent();
+	if (lp <= 1.5f)
+		lp *= 100.f;   // scale-proof: fraction or percent
+	return lp <= 100.f - ai.GetTunable("apex_water_pct", TUNE_WATER_PCT);
+}
+
+// A floating plant needs water it can actually stand in, within the same
+// radius the rear prices every other build against. FindBuildSiteNear is not
+// free and this is asked per builder election, so it is cached; an off-map
+// result means no reachable water.
+AIFloat3 gWetPlantSite(-1.f, 0.f, -1.f);
+int gNextWetCheck = 0;
+
+AIFloat3 WetPlantSite(CCircuitDef@ plant, const AIFloat3& in anchor)
+{
+	if (ai.frame < gNextWetCheck)
+		return gWetPlantSite;
+	gNextWetCheck = ai.frame + 10 * SECOND;
+	const float near = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
+	const AIFloat3 wet = ai.FindBuildSiteNear(plant, anchor, near);
+	gWetPlantSite = (OnMap(wet) && (wet.distance2D(anchor) <= near))
+			? wet : AIFloat3(-1.f, 0.f, -1.f);
+	return gWetPlantSite;
+}
+
+// A plant's DOMAIN: land, air or water. Two plants are parallel capacity only
+// within one domain -- a shipyard is the only door into the water, so land
+// lines neither price it out nor divide its value.
+const int PC_LAND = 0;
+const int PC_AIR = 1;
+const int PC_WATER = 2;
+
+int PlantClass(int plantId)
+{
+	if (Catalog::gFloater[plantId] || Catalog::gSub[plantId])
+		return PC_WATER;
+	const array<int>@ pr = Catalog::gBuildsList[plantId];
+	for (uint i = 0; i < pr.length(); ++i) {
+		if (Catalog::gMobile[pr[i]] && Catalog::gBuilder[pr[i]]
+			&& Catalog::gFlyer[pr[i]])
+			return PC_AIR;
+	}
+	return PC_LAND;
+}
+
+// A plant's expansion stream is only the spots ITS OWN constructors can walk
+// to. A shipyard's cons reach the water spots and nothing else, so on a map
+// whose metal is ashore its expansion term collapses and the land line wins;
+// where the metal is in the water it is the land line that is worth little.
+// LAND-LOCKED is the sharper of the two: ground this plant's cons reach and
+// the ASKER cannot. Where water splits a map that is the half of the economy
+// no land line will ever touch, whatever the water share of the map says.
+// Sector-area lookups, cached on a slow tick.
+array<float> gPlantReach;    // share of open spots this plant's cons reach
+array<float> gPlantLocked;   // ...and the share the asker cannot reach at all
+array<int> gPlantOpenReach;  // count reached, so water can see its own ground
+array<int> gPlantReachAt;
+
+void MeasureReach(int plantId, int conId, const AIFloat3& in from,
+		CCircuitUnit@ asker)
+{
+	if (gPlantReach.length() != Catalog::gMobile.length()) {
+		gPlantReach.resize(Catalog::gMobile.length());
+		gPlantLocked.resize(Catalog::gMobile.length());
+		gPlantOpenReach.resize(Catalog::gMobile.length());
+		gPlantReachAt.resize(Catalog::gMobile.length());
+		for (uint i = 0; i < gPlantReach.length(); ++i) {
+			gPlantReach[i] = 1.f;
+			gPlantLocked[i] = 0.f;
+			gPlantOpenReach[i] = 0;
+			gPlantReachAt[i] = 0;
+		}
+	}
+	if (ai.frame < gPlantReachAt[plantId])
+		return;
+	gPlantReachAt[plantId] = ai.frame + 30 * SECOND;
+	CacheSpots();
+	CCircuitDef@ con = Catalog::Def(conId);
+	CCircuitDef@ ask = Catalog::Def(int(asker.circuitDef.id));
+	const AIFloat3 askAt = asker.GetPos(ai.frame);
+	int open = 0;
+	int reach = 0;
+	int locked = 0;
+	for (uint si = 0; si < gAllSpots.length(); ++si) {
+		if (LedgerFind(int(si)) >= 0)
+			continue;
+		if (!OnMap(gAllSpots[si]))
+			continue;
+		++open;
+		if (!ai.CanDefReach(con, from, gAllSpots[si]))
+			continue;
+		++reach;
+		if (!ai.CanDefReach(ask, askAt, gAllSpots[si]))
+			++locked;
+	}
+	gPlantReach[plantId] = (open > 0) ? (float(reach) / float(open)) : 1.f;
+	gPlantLocked[plantId] = (open > 0) ? (float(locked) / float(open)) : 0.f;
+	gPlantOpenReach[plantId] = reach;
+}
+
+// EARLY WATER IS OWNED WATER (apexearth: "the earlier you get into the water
+// the more likely you are to own it"). The premium on land-locked ground is
+// full while nobody holds it and decays as the enemy's own navy appears --
+// their naval cost against our army, so this is a contest reading, not a
+// clock.
+float WaterUncontested()
+{
+	const float foe = Military::EnemyCostOf(Unit::Role::SUB.type);
+	if (foe <= 0.f)
+		return 1.f;
+	const float ours = ArmyValue();
+	return 1.f / (1.f + foe / ((ours > 1.f) ? ours : 1.f));
+}
+
+int OwnedWaterPlants()
+{
+	int n = 0;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || Catalog::gMobile[int(d)]
+			|| (Catalog::gBuildsList[int(d)].length() == 0))
+			continue;
+		if (PlantClass(int(d)) == PC_WATER)
+			n += gOwnCount[d];
+	}
+	return n;
+}
+
+// A plant's TIER, in the only currency that separates a T1 lab from its
+// advanced version: the best extractor its own constructors can reach.
+float PlantReachOf(int plantId)
+{
+	float best = 0.f;
+	const array<int>@ prods = Catalog::gBuildsList[plantId];
+	for (uint p = 0; p < prods.length(); ++p) {
+		if (!Catalog::gMobile[prods[p]] || !Catalog::gBuilder[prods[p]])
+			continue;
+		const array<int>@ pb = Catalog::gBuildsList[prods[p]];
+		for (uint q = 0; q < pb.length(); ++q) {
+			if (Catalog::gExtractsM[pb[q]] > best)
+				best = Catalog::gExtractsM[pb[q]];
+		}
+	}
+	return best;
+}
+
+// The best tier a domain offers -- what a copy of an outgrown tier is being
+// bought INSTEAD OF. Catalog-wide, so refreshed on a slow tick.
+array<float> gDomReach(3, 0.f);
+int gDomReachAt = 0;
+
+float BestDomainReach(int dClass)
+{
+	if (ai.frame >= gDomReachAt) {
+		gDomReachAt = ai.frame + 30 * SECOND;
+		for (uint c = 0; c < gDomReach.length(); ++c)
+			gDomReach[c] = 0.f;
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			if (!Catalog::gAvailable[d] || Catalog::gMobile[d])
+				continue;
+			if (Catalog::gBuildsList[d].length() == 0)
+				continue;
+			const float r = PlantReachOf(d);
+			const int c = PlantClass(d);
+			if (r > gDomReach[c])
+				gDomReach[c] = r;
+		}
+	}
+	return ((dClass >= 0) && (dClass < int(gDomReach.length())))
+			? gDomReach[dClass] : 0.f;
+}
+
+// Does this plant make anything no plant we own can make? The flexibility
+// case (apexearth: "you're a vehicle producer but want access to rezbots").
+// A line that only repeats what we already offer is a pure duplicate.
+bool UnlocksProduct(int plantId)
+{
+	const array<int>@ prods = Catalog::gBuildsList[plantId];
+	for (uint p = 0; p < prods.length(); ++p) {
+		bool made = false;
+		const array<int>@ by = Catalog::gBuiltBy[prods[p]];
+		for (uint b = 0; b < by.length(); ++b) {
+			if ((by[b] < int(gOwnCount.length())) && (gOwnCount[by[b]] > 0)) {
+				made = true;
+				break;
+			}
+		}
+		if (!made)
+			return true;
+	}
+	return false;
+}
+
 // MODEL: a plant's return is its constructor pipeline -- each con carries
 // roughly one open spot's stream while expansion ground remains, plus the
 // overflow the pipeline would capture (arithmetic, see OverflowM). One named
@@ -79,10 +280,22 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// past what the economy can feed, of any lab type.
 	TrackIncome();
 	const float per = ai.GetTunable("apex_plant_income_per", TUNE_PLANT_INCOME_PER);
-	const float structInc = (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
+	// Metal nothing is spending counts as spare line capacity on top of the
+	// income estimate: it is the direct proof the lines we hold cannot eat
+	// what we make (apexearth: "if you are super wealthy, always overflowing
+	// metal, make more Gantries... or adv air labs too").
+	const float structInc = ((gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income)
+			+ OverflowM();
 	const int supported = 1 + int(structInc / ((per > 1.f) ? per : 50.f));
-	if (Factory::gFactoryCount
-			+ Requests::LiveCountOf(int(Task::BuildType::FACTORY)) >= supported)
+	const bool overLine = (Factory::gFactoryCount
+			+ Requests::LiveCountOf(int(Task::BuildType::FACTORY)) >= supported);
+	// ...except the FIRST way into the water. A shipyard is not a second copy
+	// of a land line -- it is the only production that reaches water mexes and
+	// the water half of the map, so owning a T1 lab must not price it out
+	// (apexearth). A second shipyard is parallel capacity like anything else,
+	// and pays the marginal-line price again.
+	const bool waterOnly = overLine;
+	if (overLine && !(MapHasWater() && (OwnedWaterPlants() == 0)))
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
@@ -96,125 +309,146 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			? (aGap / ((fillS0 > 1.f) ? fillS0 : 180.f))
 				/ float(1 + lines0)
 			: 0.f;
-	const float gain = ((gMexOpen ? SpotM() : 0.f) + BPGap() + prodTerm)
-			* ai.GetTunable("apex_plant_pipe", TUNE_PLANT_PIPE)
+	const float pipe = ai.GetTunable("apex_plant_pipe", TUNE_PLANT_PIPE)
 			* Utilization();
-	if (gain <= 0.05f)
+	// The expansion half is per-plant: it is worth the share of open ground
+	// this plant's own cons can reach (MeasureReach, applied below).
+	const float stream = SpotM() * pipe;
+	// The two halves are priced apart because only one of them is a TIER
+	// question: the pipeline half (build power and expansion) is worth what
+	// this plant's constructors reach, while the production half is worth
+	// what the line can put on the field whatever tier it is.
+	const float pipeTerm = BPGap() * pipe;
+	const float prodHalf = prodTerm * pipe;
+	if (stream + pipeTerm + prodHalf <= 0.05f)
 		return w;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
-		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
-			continue;   // floaters need water; land-base v1 (see armfmkr churn)
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
+			continue;   // submerged plants have no placement model
 		if (Catalog::gBuildsList[d].length() == 0)
 			continue;   // not a factory
+		const int dClass = PlantClass(d);
+		if (waterOnly && (dClass != PC_WATER))
+			continue;
+		const AIFloat3 here = unit.GetPos(ai.frame);
+		// A floating plant stands in water, not at the base anchor, and is
+		// worth nothing on a map without real water to stand in.
+		AIFloat3 site(-1.f, 0.f, -1.f);
+		if (Catalog::gFloater[d]) {
+			if (!MapHasWater())
+				continue;
+			site = WetPlantSite(Catalog::Def(d),
+					Builder::gHomeSet ? Builder::gHomePos : here);
+			if (!OnMap(site))
+				continue;
+		}
 		// A plant that cannot produce a mobile builder buys no expansion --
-		// and the builder must be able to EXIST here: a shipyard's ship-cons
-		// have no connected area at a land base (measured: armsy chosen on
-		// Comet Catcher, a game-long placement failure).
+		// and the builder must be able to EXIST where the plant will stand: a
+		// shipyard's ship-cons have no connected area at a land base (measured:
+		// armsy chosen on Comet Catcher, a game-long placement failure).
 		// The plant inherits its best product's MOBILITY: an air lab's cons
 		// fly, which is what lets it compete once the base packs.
-		const AIFloat3 here = unit.GetPos(ai.frame);
+		const AIFloat3 at = OnMap(site) ? site : here;
 		float bestMob = 0.f;
+		int bestCon = -1;
 		const array<int>@ prods = Catalog::gBuildsList[d];
 		for (uint p = 0; p < prods.length(); ++p) {
 			const int pd = prods[p];
 			if (Catalog::gMobile[pd] && Catalog::gBuilder[pd]
-				&& ai.CanDefReach(Catalog::Def(pd), here, here))
+				&& ai.CanDefReach(Catalog::Def(pd), at, at))
 			{
 				const float m = MobilityMult(pd);
-				if (m > bestMob)
+				if (m > bestMob) {
 					bestMob = m;
+					bestCon = pd;
+				}
 			}
 		}
 		if (bestMob <= 0.f)
+			continue;
+		MeasureReach(d, bestCon, at, unit);
+		// gMexOpen is the LAND asker's own probe and cannot see water ground,
+		// so a water line asks its own reach whether any is open.
+		const bool anyOpen = (dClass == PC_WATER)
+				? (gPlantOpenReach[d] > 0) : gMexOpen;
+		// Land-locked ground pays its stream AND a denial premium: taking it
+		// first is also the enemy not taking it. Water only -- a shipyard's
+		// ships hold the ground they claim, where air cons hold nothing.
+		const float first = (dClass == PC_WATER)
+				? ai.GetTunable("apex_water_first", TUNE_WATER_FIRST)
+					* WaterUncontested()
+				: 0.f;
+		const float expTerm = anyOpen
+				? stream * (gPlantReach[d] + gPlantLocked[d] * first) : 0.f;
+		const float conHalf = pipeTerm + expTerm;
+		const float gain = conHalf + prodHalf;
+		if (gain <= 0.05f)
 			continue;
 		// A DUPLICATE line is only parallel capacity: value divides per
 		// copy owned (watched: T1 air labs multiplying). And a plant whose
 		// cons reach the extraction ceiling outranks a T1 copy -- "we want
 		// multiple T2 air labs, not T1 air labs."
 		// ...and a "copy" is any plant of the SAME REACH from the same
-		// ground/air class, not the same def -- a T2 bot lab and a T2
+		// DOMAIN (land/air/water), not the same def -- a T2 bot lab and a T2
 		// vehicle lab are parallel capacity of one tier (watched: both
-		// bought when one was barely affordable).
+		// bought when one was barely affordable), while a shipyard beside a
+		// bot lab is not a copy of anything.
+		const float myReach = PlantReachOf(d);
 		int reachKin = Catalog::Def(d).count;
-		{
-			float myReach = 0.f;
-			bool myAir = false;
-			for (uint pr0 = 0; pr0 < prods.length(); ++pr0) {
-				if (!Catalog::gMobile[prods[pr0]] || !Catalog::gBuilder[prods[pr0]])
-					continue;
-				if (Catalog::gFlyer[prods[pr0]])
-					myAir = true;
-				const array<int>@ pr0b = Catalog::gBuildsList[prods[pr0]];
-				for (uint rz = 0; rz < pr0b.length(); ++rz) {
-					if (Catalog::gExtractsM[pr0b[rz]] > myReach)
-						myReach = Catalog::gExtractsM[pr0b[rz]];
-				}
-			}
-			for (uint kd2 = 1; kd2 < gOwnCount.length(); ++kd2) {
-				if ((gOwnCount[kd2] <= 0) || (int(kd2) == d)
-					|| Catalog::gMobile[int(kd2)]
-					|| (Catalog::gBuildsList[int(kd2)].length() == 0))
-					continue;
-				const array<int>@ kb2 = Catalog::gBuildsList[int(kd2)];
-				float kReach = 0.f;
-				bool kAir = false;
-				for (uint kq2 = 0; kq2 < kb2.length(); ++kq2) {
-					if (!Catalog::gMobile[kb2[kq2]] || !Catalog::gBuilder[kb2[kq2]])
-						continue;
-					if (Catalog::gFlyer[kb2[kq2]])
-						kAir = true;
-					const array<int>@ kpb2 = Catalog::gBuildsList[kb2[kq2]];
-					for (uint kz2 = 0; kz2 < kpb2.length(); ++kz2) {
-						if (Catalog::gExtractsM[kpb2[kz2]] > kReach)
-							kReach = Catalog::gExtractsM[kpb2[kz2]];
-					}
-				}
-				if ((kReach >= myReach) && (kAir == myAir))
-					reachKin += gOwnCount[kd2];
-			}
+		for (uint kd2 = 1; kd2 < gOwnCount.length(); ++kd2) {
+			if ((gOwnCount[kd2] <= 0) || (int(kd2) == d)
+				|| Catalog::gMobile[int(kd2)]
+				|| (Catalog::gBuildsList[int(kd2)].length() == 0))
+				continue;
+			if ((PlantReachOf(int(kd2)) >= myReach)
+				&& (PlantClass(int(kd2)) == dClass))
+				reachKin += gOwnCount[kd2];
 		}
-		float dupGain = gain / float(1 + reachKin);
+		// A COPY OF A TIER WE HAVE OUTGROWN buys the outgrown tier's
+		// pipeline, not the one we would get for the same metal. apexearth:
+		// "T1 air labs are mostly only useful for creating T1 air
+		// constructors... we shouldn't want more than 1 of them. If our
+		// economy is big enough to support multiple T1 air labs, we're better
+		// off making T2 aircraft instead" -- and the same for T1 labs
+		// generally. So the second line in a domain prices its CONSTRUCTOR
+		// half at the share of the domain's best tier its own cons deliver,
+		// which is what makes the money go to the advanced plant. Its
+		// PRODUCTION half is untouched: a cheap line is still a line, and
+		// what it puts on the field is the market's question, not the tier's.
+		// Exempt while it unlocks a product nothing we own can make.
+		float subMul = 1.f;
+		if ((reachKin > 0) && !UnlocksProduct(d)) {
+			const float bestDom = BestDomainReach(dClass);
+			if ((myReach > 0.f) && (bestDom > myReach))
+				subMul = myReach / bestDom;
+		}
+		float dupGain = (conHalf * subMul + prodHalf) / float(1 + reachKin);
 		{
-			float prodReach = 0.f;
-			for (uint pr = 0; pr < prods.length(); ++pr) {
-				if (!Catalog::gMobile[prods[pr]] || !Catalog::gBuilder[prods[pr]])
-					continue;
-				const array<int>@ prb = Catalog::gBuildsList[prods[pr]];
-				for (uint rr = 0; rr < prb.length(); ++rr) {
-					if (Catalog::gExtractsM[prb[rr]] > prodReach)
-						prodReach = Catalog::gExtractsM[prb[rr]];
-				}
-			}
 			const float ceilX = BestExtract();
 			if (ceilX > 0.f)
-				dupGain *= 1.f + prodReach / ceilX;
+				dupGain *= 1.f + myReach / ceilX;
 		}
 		// The quiet rear's expansion is AIR (apexearth: "the goal should be
 		// air cons... stop making ground labs"): flying cons don't jam the
-		// packed farm, and its army era is gantry-only. Ground plants stop
-		// pricing once one stands; air keeps its full value.
-		if (EcoQuiet() && (Factory::gFactoryCount >= 1)) {
-			bool airLab = false;
-			for (uint p4 = 0; p4 < prods.length(); ++p4) {
-				if (Catalog::gMobile[prods[p4]] && Catalog::gBuilder[prods[p4]]
-					&& Catalog::gFlyer[prods[p4]]) {
-					airLab = true;
-					break;
-				}
-			}
-			if (!airLab)
-				continue;
-		}
+		// packed farm, and its army era is gantry-only. GROUND plants stop
+		// pricing once one stands; air and water keep their full value --
+		// neither one's cons compete for the packed farm's ground.
+		if (EcoQuiet() && (Factory::gFactoryCount >= 1) && (dClass == PC_LAND))
+			continue;
+		// Plants stand at the base anchor -- the middle of what we own;
+		// a floating one stands at the water it was priced against. Priced
+		// against the walk THERE, not from where the asker happens to stand.
+		const AIFloat3 lands = OnMap(site) ? site
+				: InteriorSite(EcoSiteFor(unit), Catalog::Def(int(unit.circuitDef.id)));
 		Want c;
 		ValueOf(d, dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
-				0.f, Catalog::gBuildPower[uid], c);
+				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_PLANT;
 			@w.def = Catalog::Def(d);
-			// Plants stand at the base anchor -- the middle of what we own.
-			w.pos = InteriorSite(EcoSiteFor(unit), Catalog::Def(int(unit.circuitDef.id)));
+			w.pos = lands;
 		}
 	}
 	return w;
