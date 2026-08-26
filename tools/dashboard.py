@@ -21,6 +21,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
+import dashboard_guide
+
 REPO = Path(__file__).resolve().parent.parent
 TOOLS = REPO / "tools"
 MATCHES = REPO / "matches"
@@ -1247,6 +1249,8 @@ class Handler(BaseHTTPRequestHandler):
                     j = JOBS.get(q.get("id"))
                 self.send_json(job_state(q["id"], j) if j
                                else {"error": "unknown job"}, 200 if j else 404)
+            elif u.path == "/api/guide":
+                self.send_json(dashboard_guide.build(parse_tunables()))
             elif u.path == "/api/tunables":
                 secs = parse_tunables()
                 cpp = cpp_tunables()

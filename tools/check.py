@@ -22,6 +22,9 @@ understood, and each is mechanically detectable in under a second.
                 unreachable from the lobby.
   parity        work done for Armada/Cortex gets forgotten for Legion. A missing
                 _leg twin means the change does not exist on Legion.
+  dashboard     a tunable added to the AI does not appear on the dashboard by
+                itself, and one renamed away leaves the guide pointing at
+                nothing. See tools/dashboard_audit.py.
 
 Exit status is 1 if anything at ERROR level failed, so this is usable as a
 pre-deploy gate.
@@ -483,6 +486,20 @@ def check_spend_census(script_root: Path, rep: Report) -> None:
                               f"(docs/20-brain-overhaul.md par.4.1) forbids this")
 
 
+def check_dashboard(rep: Report) -> None:
+    """Is the dashboard still describing this AI? See tools/dashboard_audit.py --
+    the guide is hand-written, so nothing keeps it in step on its own."""
+    try:
+        import dashboard_audit
+    except Exception as e:                       # pragma: no cover
+        rep.note(f"dashboard audit unavailable: {e}")
+        return
+    try:
+        dashboard_audit.report(dashboard_audit.audit(), rep)
+    except Exception as e:
+        rep.warn(f"dashboard audit failed to run: {e}")
+
+
 def check_variant(variant: str, units: set[str]) -> Report:
     rep = Report()
     vdir = AI_DIR / variant
@@ -561,6 +578,12 @@ def main() -> int:
         p.name for p in AI_DIR.iterdir() if (p / "game-side").is_dir()
     )
     failed = 0
+    dash = Report()
+    check_dashboard(dash)
+    if dash.errors or dash.warnings or args.all:
+        dash.dump("dashboard", show_notes=args.all)
+        failed += bool(dash.errors)
+
     for v in names:
         if not (AI_DIR / v / "game-side").is_dir():
             print(f"\n{v}\n  ERROR   no such variant in {AI_DIR}")

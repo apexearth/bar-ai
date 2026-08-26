@@ -160,6 +160,15 @@ answers: what owns which decision, the decision chain, the log lines that
 expose it, and its tunables. Load the matching one BEFORE diagnosing a
 domain — it is cheaper than rediscovering the chain from the code.
 
+**A new tunable or mechanism is not finished until the dashboard shows it.**
+`tools/dashboard.py` is apexearth's interface to this AI — he does not run
+the CLI tools — so a knob that exists only in `tunables.as` is a knob he
+cannot reach, and a modoption missing from `dev_tunables.lua` is silently
+ignored in game. Load the **`dashboard-ui`** skill before adding one.
+`check.py` runs `tools/dashboard_audit.py`, which reports any tunable the
+guided view has never seen, any it names that no longer exists, and any it
+offers that nothing reads.
+
 See **`CHANGES.md`** for everything this AI does differently from stock BARb,
 which layer each change lives in, and how well each is actually measured.
 
