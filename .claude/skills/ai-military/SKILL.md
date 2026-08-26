@@ -24,6 +24,66 @@ fighter/` (mirrored in `cpp/`, see the cpp-dll skill).
 | Standoff/kite in squads | rows + kite; SIEGE-attr rows fear proximity (back off at 0.9 range, reopen to full) | C++ SquadTask.cpp |
 | Front position | posture publishes the lane via `ai.SetFrontPos` — consumed by C++ roam | `military/posture.as` |
 
+## How much army — and why it is an ECONOMY quantity
+
+`market/army.as`. Read this before touching anything that feeds it.
+
+```
+EconAssetsM = gAssetsM - gProtM - gBPM                    (census.as)
+ArmyTarget  = EconAssetsM * guard_rate
+            + max(seenEnemy, (EconAssetsM + ArmyValue) * enemy_prior) * match_ratio
+ArmyValue   = sum of MOBILE, non-builder, power>1 units
+```
+
+**LAW 1 — anything in the target's basis that cannot appear in `ArmyValue` is a
+positive feedback loop.** Defence (`gProtM`) and standing lathe (`gBPM`) are
+subtracted for exactly that reason: both are answers to demand, neither is
+wealth that invites an attack, and neither can ever count as army. A new
+structure class that answers demand must be subtracted here too.
+
+Growing the ECONOMY raising the target is the intended coupling — a richer base
+needs a bigger army. Growing the ANSWER raising it is the bug.
+
+## The army gap has three suppliers, not one
+
+`gap = ArmyTarget - ArmyValue`. Three things close it, and they are amplifiers
+of each other, not alternatives:
+
+| Supplier | What it raises | Where the gap is read |
+|---|---|---|
+| build power (nano, cons) | rate metal converts to units | `ProposeNano` army branch |
+| tech (T2/T3) | combat value per metal | `want_tech` `funded` |
+| economy (mex, energy) | metal/s there is to convert | `ArmyGapStream` (want_mex), as a COST |
+
+**LAW 2 — every demand term that buys a supplier must subtract the supply
+already standing**, or the demand never closes. `NeediestLine` and
+`UnservedLineSpend` subtract `nanosNear * NANO_ABSORB` (17.5 m/s a turret);
+the army branch subtracted nothing and bought the same turret forever.
+
+**LAW 3 — `funded` runs opposite to tech's job.** `want_tech` discounts the tech
+want by `ArmyValue/ArmyTarget`, so a short army forbids the one thing that
+raises combat value per metal. It is a real COST heuristic (do not tech before
+you can crew it), but it means anything inflating `ArmyTarget` also vetoes the
+tech that would close it. Counterweights already there: the out-teched floor
+(`GetEnemyMaxMobileCostM`) and the `EcoQuiet` exemption.
+
+### The cycle that was live until 2026-08-25
+
+> nano built → `gAssetsM` ↑ → `ArmyTarget` ↑ → `funded` ↓ → no T2 →
+> army stays weak → gap stays open → another nano
+
+Measured: 30 turrets, 6,300 of 16,905 metal (37% of everything built) on lathe,
+T2 reached in 3 of 8 games. After Law 2 in the army branch and Law 1 in the
+basis: nano metal median 3,045 → 1,155, metal built median 13,210 → 17,708,
+T2 in 5 of 8.
+
+### Telling a healthy loop from a vicious one
+
+Safe when the thing bought is subtracted from the demand that bought it —
+`BPGap()` subtracts `BPCapacity()`, so arriving hands close the gap. Vicious
+when the purchase lands in the demand's own BASIS instead. Check every new term
+against that one question.
+
 ## Sensors that lie
 
 - Threat map reads ~0 almost everywhere (3% nonzero) — never build a trigger

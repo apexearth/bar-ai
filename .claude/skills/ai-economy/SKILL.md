@@ -32,6 +32,28 @@ allocation pressure; `AlwaysEco` is the floor that guarantees never-zero.
 Both halves funnel through `HomeEnergy`/`Requests::Take`, whose dedup makes a
 second asker JOIN the standing build.
 
+## The economy is coupled to the ARMY TARGET — in both directions
+
+The full statement and its three laws are in the `ai-military` skill
+("How much army"). What the economy side has to know:
+
+- **Economy is the basis of the army target.** `ArmyTarget` is built from
+  `EconAssetsM = gAssetsM - gProtM - gBPM` (`market/army.as`, `census.as`).
+  Every mex, generator and converter that finishes raises the army the AI
+  thinks it needs. That coupling is deliberate.
+- **Defence and lathe are NOT in that basis, on purpose.** Both answer demand
+  rather than create wealth, and neither can ever count toward `ArmyValue`
+  (which is mobile non-builder units only), so leaving them in made each one
+  raise the target that bought the next. If you add a structure class that is
+  an ANSWER to demand, subtract it in `EconAssetsM` as well.
+- **Eco growth is a way to SATISFY an army shortfall, not just a cause of it.**
+  Metal/s is one of the three amplifiers (with build power and tech). A gap
+  answered only by more lathe is the failure mode measured on 2026-08-25 —
+  37% of all metal in nano turrets and no T2 in 5 of 8 games.
+- **`ArmyGapStream()` (`want_mex.as`) is how the gap prices as a COST**: a slow
+  eco build is charged for the army production it postpones. It is the same
+  quantity, entering the other side of the ledger — do not add a second one.
+
 ## Log lines to read first
 
 - `apex: energy pipeline -- eInc N below forecast M` — the lane firing, with the live target

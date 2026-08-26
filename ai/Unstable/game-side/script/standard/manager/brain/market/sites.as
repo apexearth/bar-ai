@@ -38,6 +38,13 @@ float NanoRange()
 // row make a block, where the next slot is always adjacent to the last
 // (apexearth: "those winds are a little bit too far on both sides, so we have
 // to walk - should make tighter, less walking").
+// What one nano turret absorbs of a line's production appetite, metal/s.
+// Every demand term that buys lathe subtracts the lathe already standing --
+// that subtraction is the only thing that closes the loop, since a turret is a
+// standing structure and so RAISES ArmyTarget through gAssetsM while never
+// counting toward ArmyValue.
+const float NANO_ABSORB = 17.5f;
+
 float FarmRowW()
 {
 	const float w = ai.GetTunable("apex_farm_row_w", TUNE_FARM_ROW_W);
@@ -544,7 +551,7 @@ float NeediestLine(AIFloat3& out at)
 			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
 				++nanosNear;
 		}
-		const float u = share - float(nanosNear) * 17.5f;
+		const float u = share - float(nanosNear) * NANO_ABSORB;
 		if (u > worst) {
 			worst = u;
 			at = fp;
@@ -555,7 +562,11 @@ float NeediestLine(AIFloat3& out at)
 
 // A working line at all, worst-served first -- the site an ARMY shortfall
 // wants a lathe at even when the line's own spend is already served.
-bool AnyLineSite(AIFloat3& out at)
+// The line with the least lathe on it, and HOW MUCH is already there. The
+// count is an out param because the caller has to net it off its own demand:
+// an army shortfall that ignores the turrets already serving the line asks for
+// the same turret forever.
+bool AnyLineSite(AIFloat3& out at, float& out lathe)
 {
 	float fewest = -1.f;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
@@ -575,6 +586,7 @@ bool AnyLineSite(AIFloat3& out at)
 			at = fp;
 		}
 	}
+	lathe = (fewest > 0.f) ? fewest : 0.f;
 	return fewest >= 0.f;
 }
 
@@ -601,7 +613,7 @@ float UnservedLineSpend()
 			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
 				++nanosNear;
 		}
-		const float u = share - float(nanosNear) * 17.5f;
+		const float u = share - float(nanosNear) * NANO_ABSORB;
 		if (u > 0.f)
 			unserved += u;
 	}

@@ -66,8 +66,18 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			const float free4 = FreeMetalFlow();
 			if (wantRate > free4)
 				wantRate = free4;
-			if ((wantRate > 0.f) && AnyLineSite(armyPos))
-				armyNeed = wantRate;
+			// NET OFF THE LATHE ALREADY THERE. Every other demand term here
+			// subtracts the hands already serving the site; this one did not, so
+			// an army below target bought a turret however many were standing --
+			// and the turret, being a structure, raised gAssetsM and so raised
+			// ArmyTarget, while builders are excluded from ArmyValue and so can
+			// never close the gap. Build power demanding build power.
+			float lathe = 0.f;
+			if ((wantRate > 0.f) && AnyLineSite(armyPos, lathe)) {
+				armyNeed = wantRate - lathe * NANO_ABSORB;
+				if (armyNeed < 0.f)
+					armyNeed = 0.f;
+			}
 		}
 	}
 	float over = (sinkNeed > lineNeed) ? sinkNeed : lineNeed;

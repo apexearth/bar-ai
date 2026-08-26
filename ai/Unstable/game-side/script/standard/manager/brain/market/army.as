@@ -629,6 +629,19 @@ void EcoStatusLog()
 			+ " inc=" + aiEconomyMgr.metal.income);
 }
 
+// THE WEALTH AN ARMY EXISTS FOR. Not everything standing: defence and lathe
+// are answers to demand, not wealth that invites an attack, and both were in
+// this basis while NEITHER counts toward ArmyValue. So a nano turret raised
+// the army target, the wider gap bought another nano, and the same widening
+// gap drove want_tech's `funded` discount toward zero -- which is the veto on
+// the T2 that would actually have closed it. coverage.as and want_protect.as
+// already read the economy this way; the army target did not.
+float EconAssetsM()
+{
+	const float e = gAssetsM - gProtM - gBPM;
+	return (e > 0.f) ? e : 0.f;
+}
+
 float ArmyTarget()
 {
 	// The SYMMETRIC PRIOR: pre-contact the census is blind, and blind read
@@ -636,11 +649,11 @@ float ArmyTarget()
 	// enemy's economy mirrors ours from the same start, so expect their
 	// army to be a share of OUR total value until seen otherwise; the
 	// observed census takes over as it grows past the prior.
-	const float ourTotal = gAssetsM + ArmyValue();
+	const float ourTotal = EconAssetsM() + ArmyValue();
 	const float prior = ourTotal * ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
 	const float seen = Military::EnemyArmyCost();
 	const float expectedEnemy = (seen > prior) ? seen : prior;
-	const float t = gAssetsM * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
+	const float t = EconAssetsM() * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
 		+ expectedEnemy * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
 	return EcoRoleActive()
 			? (t * ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL)) : t;
@@ -650,11 +663,11 @@ float ArmyTarget()
 // The gantry want reads this one -- T3 is exactly what the eco role is FOR.
 float ArmyTargetFull()
 {
-	const float ourTotal = gAssetsM + ArmyValue();
+	const float ourTotal = EconAssetsM() + ArmyValue();
 	const float prior = ourTotal * ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
 	const float seen = Military::EnemyArmyCost();
 	const float expectedEnemy = (seen > prior) ? seen : prior;
-	return gAssetsM * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
+	return EconAssetsM() * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
 		+ expectedEnemy * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
 }
 

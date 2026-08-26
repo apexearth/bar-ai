@@ -101,7 +101,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
 					++nanosNear;
 			}
-			const float u = per - float(nanosNear) * 17.5f;
+			const float u = per - float(nanosNear) * NANO_ABSORB;
 			if (u > worst) {
 				worst = u;
 				slot = fp;
@@ -138,7 +138,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					if (sp.distance2D(gOwnNanoPos[ni]) < 350.f)
 						++nanosAt;
 				}
-				const float u2 = drain - float(nanosAt) * 17.5f;
+				const float u2 = drain - float(nanosAt) * NANO_ABSORB;
 				if (u2 > worst) {
 					worst = u2;
 					slot = sp;

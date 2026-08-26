@@ -223,6 +223,21 @@ float gAssetsM = 0.f;   // summed costM of standing structures
 // (apexearth: "our entire defence lineup is probably also going into that? So
 // defences required even more defences to protect the defences").
 float gProtM = 0.f;
+// ...and of which this much is standing LATHE. Same law as gProtM one line up,
+// for the same reason: build power is an answer to demand, not wealth that
+// attracts an attack, and counting it made every nano turret raise the army
+// target that bought the next one -- while builders are excluded from
+// ArmyValue, so a turret can never close the gap it widens.
+float gBPM = 0.f;
+
+// A standing structure whose whole job is build power: immobile, has worker
+// time, builds nothing of its own (a factory has build options, a nano does
+// not).
+bool IsLatheDef(int defId)
+{
+	return !Catalog::gMobile[defId] && (Catalog::gBuildPower[defId] > 0.f)
+			&& (Catalog::gBuildsList[defId].length() == 0);
+}
 
 int ProtClassOf(int defId)
 {
@@ -271,6 +286,8 @@ void NoteFinished(CCircuitUnit@ unit)
 		gAssetsM += Catalog::gCostM[defId];
 		if (ProtClassOf(defId) >= 0)
 			gProtM += Catalog::gCostM[defId];
+		if (IsLatheDef(defId))
+			gBPM += Catalog::gCostM[defId];
 	}
 	if (!Catalog::gMobile[defId] && (Catalog::gCostM[defId] >= 1200.f)) {
 		gOwnBig.insertLast(unit);
@@ -365,6 +382,8 @@ void NoteDead(CCircuitUnit@ unit)
 		gAssetsM -= Catalog::gCostM[int(unit.circuitDef.id)];
 		if (ProtClassOf(int(unit.circuitDef.id)) >= 0)
 			gProtM -= Catalog::gCostM[int(unit.circuitDef.id)];
+		if (IsLatheDef(int(unit.circuitDef.id)))
+			gBPM -= Catalog::gCostM[int(unit.circuitDef.id)];
 	}
 	for (uint bb = 0; bb < gOwnBigIds.length(); ++bb) {
 		if (gOwnBigIds[bb] == unit.id) {
