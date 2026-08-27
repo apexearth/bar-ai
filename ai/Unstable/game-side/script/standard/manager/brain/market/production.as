@@ -154,6 +154,38 @@ string gNoOrder = "";
 // `slot` is the position in the line's batch: the facqueue asks repeatedly
 // until the queue is deep enough, and every ask is priced against a ledger
 // that already carries the slots before it.
+// Every mobile radar we own and every mobile jammer, whatever def. The demand
+// is a pair per squad; counting per def multiplied it by however many sensor
+// types the labs happened to offer.
+int gSupHaveAt = -1;
+int gSupRadarN = 0;
+int gSupJamN = 0;
+void SupportCensus()
+{
+	if (gSupHaveAt == ai.frame)
+		return;
+	gSupHaveAt = ai.frame;
+	gSupRadarN = 0;
+	gSupJamN = 0;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if (!Catalog::gMobile[di] || Catalog::gBuilder[di])
+			continue;
+		if (!Catalog::gRadar[di] && !Catalog::gJammer[di])
+			continue;
+		if (Catalog::gSurfT[di] + Catalog::gAirT[di] > 0.01f)
+			continue;
+		// What we OWN plus what we have already SENT for: gOwnCount only counts
+		// finished units, so topping up against it re-orders for the whole walk
+		// window.
+		const int nHave = gOwnCount[d] + Brain::PendAnyOf(di);
+		if (Catalog::gRadar[di])
+			gSupRadarN += nHave;
+		else
+			gSupJamN += nHave;
+	}
+}
+
 CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 {
 	if (fac is null)
@@ -274,35 +306,66 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
 			continue;
-		// SUPPORT: mobile eyes and static-cover. One radar and one jammer
-		// per ~squad's worth of fielded army (apexearth: "ideally we attach
-		// 1 of each to each squad"); attachment is the military layer's,
+		// SUPPORT: mobile eyes and static-cover. One radar and one jammer per
+		// squad that can actually take one (apexearth: "we only need up to 2 of
+		// these per squad that we have"); attachment is the military layer's,
 		// production is ours.
+		//
+		// AN ARMED UNIT IS ARMY. gRadar/gJammer also flag anything carrying
+		// radarDistance > 900 or jam > 100, which is a Commando, a Phantom and
+		// a battleship -- priced here they never entered the army market at
+		// all, and each one drew its own copy of the demand below.
 		if (Catalog::gMobile[d] && !Catalog::gBuilder[d]
+			&& (Catalog::gSurfT[d] + Catalog::gAirT[d] < 0.01f)
 			&& (Catalog::gRadar[d] || Catalog::gJammer[d]))
 		{
-			const int haveS = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
-			if (ai.frame >= gSupportDiagAt) {
-				gSupportDiagAt = ai.frame + 120 * SECOND;
-				AiLog("apex: support-diag t=" + ai.teamId + " def="
-					+ Catalog::Def(d).GetName() + " have=" + haveS
-					+ " army=" + formatFloat(ArmyValue(), "", 0, 0)
-					+ " adv=" + formatFloat(AdvArmyValue(), "", 0, 0)
-					+ " land=" + formatFloat(aiTerrainMgr.GetLandPercent(), "", 0, 2));
-			}
-			// One radar + one jammer per squad's worth of army (apexearth:
-			// "those should have boosted priority... support squads which
-			// are ~2k metal value or higher"). Counted over the T2+ army
-			// only: a squad of T1 units gets no support attached, so
-			// producing for it buys nothing. A pair's worth is a fraction of
-			// the squad value it serves per minute -- which prices them just
-			// behind constructors, scaling with the army, no caps.
+			SupportCensus();
+			const bool isJamS = !Catalog::gRadar[d];
+			const int haveS = isJamS ? gSupJamN : gSupRadarN;
+			// THE DEMAND IS SQUADS, AND IT IS ONE QUESTION PER CLASS.
+			// It was AdvArmyValue/squadM asked once per DEF: eight sensor defs
+			// each targeting the same fifteen "squads" is a hundred and twenty
+			// units, which is what he counted. EscortSquadCount is the live
+			// number of groups CSupportTask will actually attach one to.
 			const float squadM = ai.GetTunable("apex_squad_m", TUNE_SQUAD_M);
-			const float squads = AdvArmyValue() / ((squadM > 1.f) ? squadM : 2000.f);
-			if (float(haveS) < squads) {
-				const float gainS = (squads - float(haveS)) * squadM
+			const float squads = float(int(Military::EscortSquadCount()));
+			float need = AdvArmyValue() / ((squadM > 1.f) ? squadM : 2000.f);
+			if (squads < need)
+				need = squads;
+			if ((need < 1.f) && (squads >= 1.f))
+				need = 1.f;
+			if (ai.frame >= gSupportDiagAt) {
+				gSupportDiagAt = ai.frame + 60 * SECOND;
+				AiLog("apex: support-diag t=" + ai.teamId + " def="
+					+ Catalog::Def(d).GetName()
+					+ " cls=" + (isJamS ? "jam" : "radar")
+					+ " have=" + haveS
+					+ " own=" + gOwnCount[d]
+					+ " pend=" + Brain::PendAnyOf(int(d))
+					+ " R=" + gSupRadarN + "/J=" + gSupJamN
+					+ " need=" + formatFloat(need, "", 0, 2)
+					+ " squads=" + int(squads)
+					+ " adv=" + formatFloat(AdvArmyValue(), "", 0, 0));
+			}
+			if (need <= 0.f)
+				continue;
+			// WHAT THE NEXT ONE IS WORTH IS THE SQUAD IT FINDS WITHOUT ONE.
+			// The old form paid the full shortfall rate below the line and
+			// nothing above it, so the tenth bid as hard as the first. Priced
+			// per unit on the share of squads still uncovered, it falls with
+			// every one bought and reaches zero when every squad has one --
+			// not a limit: an escort with no squad to attach to escorts
+			// nothing. `need` is the live squad count, so this grows with the
+			// army like everything else.
+			float uncov = (need - float(haveS)) / need;
+			if (uncov > 1.f)
+				uncov = 1.f;
+			const float gainS = (uncov > 0.f)
+					? (uncov * squadM
 						* ai.GetTunable("apex_intel_rate", TUNE_INTEL_RATE)
-						/ 60.f * roleMul;
+						/ 60.f * roleMul)
+					: 0.f;
+			if (gainS > 0.f) {
 				const float vS = gainS / Catalog::gCostM[d];
 				candDef.insertLast(d);
 				candV.insertLast(vS);

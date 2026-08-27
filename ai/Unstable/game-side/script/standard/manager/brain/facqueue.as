@@ -57,6 +57,20 @@ int PendCount(int line, CCircuitDef@ d)
 	return n;
 }
 
+// Orders SENT for this def on any line and not yet visible as a unit. The
+// count of what we own lags a send by the whole walk window, so any "read what
+// we have, top it up" demand issues one order per tick for that window --
+// measured as nine jammers against a demand of two.
+int PendAnyOf(int defId)
+{
+	int n = 0;
+	for (uint i = 0; i < gFQPendDef.length(); ++i) {
+		if ((gFQPendDef[i] !is null) && (int(gFQPendDef[i].id) == defId))
+			++n;
+	}
+	return n;
+}
+
 // Drop the OLDEST n entries for this line: the queue is FIFO, so the orders that
 // have become visible are the ones we sent first.
 void PendDrop(int line, int n)
