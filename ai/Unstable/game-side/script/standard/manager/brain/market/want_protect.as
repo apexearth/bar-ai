@@ -19,6 +19,15 @@ int gNextDefPriceLog = 0;
 float gDbgFrontBest = 0.f;
 float gDbgAssetBest = 0.f;
 int gDbgLineN = 0;
+// The defence auction's own ranking, so "why did we never build a Pulsar" is
+// read rather than argued: every turret this builder could place, with what
+// the market thinks it is worth.
+array<int> gDefRankDef;
+array<float> gDefRankV;
+// Per BUILDER DEF, not one clock for the fleet: a single global throttle
+// samples whichever constructor happened to elect, and reads as "the advanced
+// constructor never proposes defence" when it simply was not sampled.
+array<int> gNextDefRankOf;
 // COMPLETED, not won. gDefSiteFront counts auction wins, and a re-election
 // counts again; a want whose builder dies or whose site is blocked never
 // becomes a standing gun. Placement is Military::OnBorder -- the same ray
@@ -522,6 +531,15 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	// not strong enough"). The farm is only ever a DEFAULT POSITION; the
 	// anchor serves before it exists, and PROT_DEF/PROT_RADAR pick their own
 	// sites anyway.
+	const int ruid = int(unit.circuitDef.id);
+	if (int(gNextDefRankOf.length()) <= Catalog::gDefCount)
+		gNextDefRankOf.resize(Catalog::gDefCount + 1);
+	const bool rankNow = (half == HALF_GROUND)
+			&& (ai.frame >= gNextDefRankOf[ruid]);
+	if (rankNow) {
+		gDefRankDef.resize(0);
+		gDefRankV.resize(0);
+	}
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const float rate = ai.GetTunable("apex_insure_rate", TUNE_INSURE_RATE);
@@ -547,6 +565,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			continue;
 		if (HalfOfClass(cls) != half)
 			continue;
+		// Recorded HERE, before any gate: a candidate that never reaches the
+		// price is exactly the one worth seeing, and a list built at the end
+		// cannot show it. -1 means "classed as a turret and then dropped".
+		if (rankNow && (cls == PROT_DEF)) {
+			gDefRankDef.insertLast(d);
+			gDefRankV.insertLast(-1.f);
+		}
 		float gain = 0.f;
 		AIFloat3 at = core;
 		if (cls == PROT_RADAR) {
@@ -714,6 +739,18 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					? Catalog::gMaxRange[d] : 500.f;
 			const float adds = PfTowerKill(d);
 			const float mexFloorWave = MexCoverFloorM() * trade;
+			// THE WAVE A POST MUST BEAT IS THE ONE THAT ARRIVES TOGETHER, not
+			// the reading at this instant. Under that floor one cheap tower
+			// saturates the shortfall -- measured, `short=1.00->0.00` off a
+			// single Beamer -- and everything a heavy gun brings past it is
+			// discarded by the clip below while its full metal and energy bill
+			// is charged, so the auction can only ever buy the cheapest turret
+			// in the list. Same symmetric expectation DefenceTarget already
+			// floors on, apportioned by the share of our worth standing in
+			// this post's reach: near zero early, and it grows with the army.
+			const float siteWave = ArmyTargetFull()
+					* ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE)
+					* TeamExposure();
 			const double _tSites = Perf::T0();
 			array<AIFloat3> sites;
 			// GUARD SITES COME FROM THE BUILDINGS. The two ring generators this
@@ -794,6 +831,19 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						&& (mexFloorWave > threat);
 				if (floored)
 					threat = mexFloorWave;
+				// ...and the share of the expected wave this post's own ground
+				// is worth. gPfTotal is everything we own, so a post covering a
+				// tenth of the base faces a tenth of the wave.
+				if ((siteWave > 0.f) && (gPfTotal > 1.f)) {
+					const float sStake = isFront
+							? FrontedStakeAt(s, reach) : PfSiteStake(si);
+					float shr = sStake / gPfTotal;
+					if (shr > 1.f)
+						shr = 1.f;
+					const float wHere = siteWave * shr;
+					if (wHere > threat)
+						threat = wHere;
+				}
 				if (threat <= 1.f)
 					continue;
 				// FRONT AND GUARD ARE PRICED, NOT RANKED (apexearth: front and
@@ -996,6 +1046,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		const float walkSec = (speed > 1.f)
 				? (unit.GetPos(ai.frame).distance2D(at) / speed) : 60.f;
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
+		if (rankNow && (cls == PROT_DEF) && (gDefRankDef.length() > 0))
+			gDefRankV[gDefRankV.length() - 1] = c.value;
 		if (c.value > w.value) {
 			w = c;
 			w.kind = (half == HALF_SENSE) ? WK_SENSE
@@ -1004,6 +1056,33 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			w.pos = at;
 			w.spotId = cls;
 		}
+	}
+	if (rankNow && (gDefRankDef.length() > 0)) {
+		gNextDefRankOf[ruid] = ai.frame + 60 * SECOND;
+		string r = "";
+		for (uint q = 0; q < gDefRankDef.length(); ++q) {
+			r += " " + Catalog::Def(gDefRankDef[q]).GetName()
+				+ "=" + formatFloat(gDefRankV[q], "", 0, 4);
+		}
+		// ...and what this builder could offer but never did. A candidate list
+		// of two out of a T2 constructor is a filter question, not a price one.
+		string dropped = "";
+		for (uint q2 = 0; q2 < builds.length(); ++q2) {
+			const int dq = builds[q2];
+			if (Catalog::gMobile[dq] || (Catalog::gMaxRange[dq] <= 1.f))
+				continue;
+			if (Catalog::gAvailable[dq] && !Catalog::gFloater[dq]
+				&& !Catalog::gSub[dq] && (ProtClassOf(dq) == PROT_DEF))
+				continue;
+			dropped += " " + Catalog::Def(dq).GetName()
+				+ ":avail=" + (Catalog::gAvailable[dq] ? 1 : 0)
+				+ ",float=" + (Catalog::gFloater[dq] ? 1 : 0)
+				+ ",sub=" + (Catalog::gSub[dq] ? 1 : 0)
+				+ ",cls=" + ProtClassOf(dq);
+		}
+		AiLog(Factory::T() + "apex: defrank by="
+			+ unit.circuitDef.GetName() + " n=" + gDefRankDef.length() + r
+			+ " | dropped:" + dropped);
 	}
 	return w;
 }

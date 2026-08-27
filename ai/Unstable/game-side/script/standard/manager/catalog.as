@@ -164,8 +164,15 @@ void Init()
 		// mobile radar and jammer reads false there forever (the reason
 		// no Compass was ever produced). A real radar's radius dwarfs any
 		// unit's incidental sensor suite.
-		gRadar[i]        = cdef.IsRadarDef() || (gRadarR[i] > 900.f);
-		gJammer[i]       = cdef.IsJammerDef() || (gJamR[i] > 100.f);
+		// ...but A DEF WITH A GUN IS AN EYE FOR ITSELF, NOT A SENSOR. Pulsar
+		// carries a 1500-range dish and Bulwark 1200, so both read as radar
+		// towers, went to the radar branch instead of the turret auction, and
+		// could never be bought as guns at all -- which is exactly the two
+		// heavy defences we were asked why we never build. Same threshold also
+		// filed Commandos, Phantoms and battleships as squad escorts.
+		const bool armedI = (cdef.GetSurfThreat() + cdef.GetAirThreat()) > 0.01f;
+		gRadar[i]        = !armedI && (cdef.IsRadarDef() || (gRadarR[i] > 900.f));
+		gJammer[i]       = !armedI && (cdef.IsJammerDef() || (gJamR[i] > 100.f));
 		gAntiNuke[i]     = cdef.IsAntiNukeW();
 		gStock[i]        = cdef.IsAttrAny(Unit::Attr::STOCK.mask);
 		gTargFac[i]      = cdef.IsTargFac();
