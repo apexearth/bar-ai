@@ -7,6 +7,13 @@ array<IUnitTask@> gQTask;
 
 void AiTaskAdded(IUnitTask@ task)
 {
+	const double _t = Perf::T0();
+	TaskAddedInner(task);
+	Perf::Add("hk.taskadd.fac", _t);
+}
+
+void TaskAddedInner(IUnitTask@ task)
+{
 	if ((task is null) || (task.GetType() != Task::Type::FACTORY))
 		return;
 	if (task.GetBuildType() != Task::BuildType::RECRUIT)
@@ -15,6 +22,13 @@ void AiTaskAdded(IUnitTask@ task)
 }
 
 void AiTaskRemoved(IUnitTask@ task, bool done)
+{
+	const double _t = Perf::T0();
+	TaskRemovedInner(task, done);
+	Perf::Add("hk.taskdel.fac", _t);
+}
+
+void TaskRemovedInner(IUnitTask@ task, bool done)
 {
 	for (uint i = 0; i < gQTask.length(); ++i) {
 		if (gQTask[i] is task) {
@@ -36,6 +50,13 @@ array<CCircuitUnit@> gFacUnits;
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	const double _t = Perf::T0();
+	UnitAddedInner(unit, usage);
+	Perf::Add("hk.unitadd.fac", _t);
+}
+
+void UnitAddedInner(CCircuitUnit@ unit, Unit::UseAs usage)
+{
 	Brain::NoteSpend(unit, usage);
 	if (usage == Unit::UseAs::FACTORY) {
 		++gFactoryCount;
@@ -55,6 +76,13 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 }
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
+{
+	const double _t = Perf::T0();
+	UnitRemovedInner(unit, usage);
+	Perf::Add("hk.unitdel.fac", _t);
+}
+
+void UnitRemovedInner(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	if (usage == Unit::UseAs::FACTORY) {
 		// ONLY WHAT WAS COUNTED MAY BE UNCOUNTED. gFacUnits is the record of

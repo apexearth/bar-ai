@@ -1324,13 +1324,6 @@ const float TUNE_FRONT_LINE = 1.f;
 // observed weapon range), taking the weakest bearing, instead of asking
 // only whether a turret reaches the target itself. 0 restores the old test.
 const float TUNE_STANDOFF_COVER = 1.f;
-// A layered NET of defence posts around the whole perimeter. OFF by default:
-// it floods the auction with perimeter candidates, and with the commitment
-// rule holding walks, builders lock onto long treks to the map edge -- metal
-// 27,444 -> 14,910 and cons 14 -> 3 over 6 games. The generator is kept; it
-// needs the site list bounded to what a builder can reach before it earns
-// its place.
-const float TUNE_DEF_NET = 1.f;
 // Let the commander fight while he still outclasses the field. CommCaution is
 // the "heavies are out" sense, so this only ever fires before that. 0 = the
 // old flee-only commander.
@@ -1592,7 +1585,7 @@ const float TUNE_TARGFAC_WANT = 3.f;
 // Strategic structures -- manager/brain/market/want_super.as
 // ---------------------------------------------------------------------------
 // SUPER_WANT: master switch for the strategic want (gantry, nuke silo,
-//   anti-nuke, long-range gun, the faction's best turret). 0 disables it.
+//   anti-nuke, long-range gun). 0 disables it.
 const float TUNE_SUPER_WANT = 1.f;
 // SUPER_PUSH: 1 = an affordable strategic want skips the category lottery
 //   rather than taking a proportional share of it. Off, these are priced
@@ -1612,11 +1605,6 @@ const float TUNE_SUPER_PER_INCOME = 150.f;
 // SUPER_SHARE: the slice of total economic power the strategic market may
 //   claim as a want's gain. Scaled by how much budget is left after the bill.
 const float TUNE_SUPER_SHARE = 0.25f;
-// SUPER_DEF_RATIO: how many times the faction's own light tower a static
-//   defence must cost before it counts as strategic rather than as an ordinary
-//   turret the defence auction should price per metal. 20 x ~85 puts the line
-//   just under Rattlesnake/Bulwark/Rampart and well above the T2 mediums.
-const float TUNE_SUPER_DEF_RATIO = 20.f;
 // ANTINUKE_R [elmos] -- an anti-nuke's assumed umbrella, for deciding whether
 //   ground is already covered by one we own.
 const float TUNE_ANTINUKE_R = 2000.f;
@@ -1658,6 +1646,26 @@ const float TUNE_DEF_TRADE = 3.f;
 // Agitator at 17400); 0 restores the old behaviour, where build time reached
 // the price only through the builder's wage.
 const float TUNE_DEF_TTD_H = 120.f;
+
+// How often the protection field is rebuilt, in game seconds. It walks every
+// team unit once and every defence price reads it, so this is the knob between
+// a stale stake and a stalled sim -- want.protect was measured at 9.2 ms per
+// call and growing before the field existed.
+const float TUNE_PROTECT_FIELD_S = 2.f;
+
+// WHAT A BUILDING IS WORTH WHILE NOTHING GUARDS IT (apexearth: "give buildings
+// a ~20% reduced value when they are unprotected. And the more powerful we
+// create defense around those buildings the more they become worth"). The share
+// of a structure's worth that is withheld over ground our cover does not beat
+// the local wave on, and that a turret covering it gives back.
+const float TUNE_UNPROT_DISCOUNT = 0.20f;
+
+// A TURRET ONLY SHOOTS WHILE IT IS ALIVE. Weights each turret's cover by
+// hp/(hp+alpha) against the punch of the biggest mobile unit the enemy fields,
+// derived through our own unit table. Near 1 for everything while they field
+// raiders; it is what separates a 1,670-hp Twin Guard from a 9,400-hp Bulwark
+// once they field something that erases the former in one pass. 0 disables it.
+const float TUNE_DEF_ALPHA_W = 1.f;
 // ECO_RAID_TAU: seconds of memory in the structure-loss field. Matches the
 // death ledger's BLEED_TAU so both risk senses forget at the same speed.
 const float TUNE_ECO_RAID_TAU = 180.f;

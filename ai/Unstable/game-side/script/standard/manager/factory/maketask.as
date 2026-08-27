@@ -16,7 +16,10 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		return null;
 	if (Catalog::BuildsOf(int(unit.circuitDef.id)).length() == 0)
 		return aiFactoryMgr.DefaultMakeTask(unit);
-	return Brain::FactoryQueueTask(unit);
+	const double _mt = Perf::T0();
+	IUnitTask@ _r = Brain::FactoryQueueTask(unit);
+	Perf::Add("hk.maketask.factory", _mt);
+	return _r;
 }
 
 }  // namespace Factory

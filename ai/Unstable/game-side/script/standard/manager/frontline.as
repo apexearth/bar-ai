@@ -530,17 +530,17 @@ void DrawDefenseZone()
 
 void Update()
 {
-	Gather();
-	ApplyDefenseZone();
-	DrawFrontLine();
-	DrawDefenseZone();
-	DrawDiagnostics();
-	PumpDraw();   // every tick, not every rescan -- see DRAW_PER_TICK
+	{ double _t = Perf::T0(); Gather(); Perf::Add("front.gather", _t); }
+	{ double _t = Perf::T0(); ApplyDefenseZone(); Perf::Add("front.defzone", _t); }
+	{ double _t = Perf::T0(); DrawFrontLine(); Perf::Add("front.drawline", _t); }
+	{ double _t = Perf::T0(); DrawDefenseZone(); Perf::Add("front.drawzone", _t); }
+	{ double _t = Perf::T0(); DrawDiagnostics(); Perf::Add("front.drawdiag", _t); }
+	{ double _t = Perf::T0(); PumpDraw(); Perf::Add("front.pumpdraw", _t); }   // every tick, not every rescan -- see DRAW_PER_TICK
 	if (ai.frame < gNextClassify)
 		return;
 	gNextClassify = ai.frame + RECLASSIFY;
 
-	Scan();
+	{ double _t = Perf::T0(); Scan(); Perf::Add("front.scan", _t); }
 	for (uint k = 0; k < gIdx.length(); ++k)
 		gOwner[k] = Classify(ai.GetChokePointPos(gIdx[k]));
 

@@ -109,20 +109,13 @@ float LightTowerCostM()
 	return gLightTowerM;
 }
 
-// A ground turret so far above the light tower that the defence auction, which
-// divides gain by cost, will never reach it: the faction's real gun.
-bool IsHeavyDef(int d)
-{
-	if (ProtClassOf(d) != PROT_DEF)
-		return false;
-	if (Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
-		return false;
-	const float light = LightTowerCostM();
-	if (light <= 0.f)
-		return false;
-	return Catalog::gCostM[d] > light
-			* ai.GetTunable("apex_super_def_ratio", TUNE_SUPER_DEF_RATIO);
-}
+// (THE HEAVY-GUN CLASS IS GONE. It priced a ground turret on AFFORDABILITY --
+// (budget-bill)/budget -- which falls as cost rises, so the cheapest member of
+// the class won every ticket: measured over 54 games, Persecutor took the
+// heavy-gun want 8 times and Bulwark never once. With cover now read as killing
+// power rather than as a price tag, the turret auction in want_protect.as can
+// reach a T3 gun on its own merits, and it does so without a class target or a
+// one-frame-at-a-time gate standing in the way.)
 
 int SuperClassOf(int d)
 {
@@ -132,8 +125,6 @@ int SuperClassOf(int d)
 		return SC_ANTINUKE;
 	if (IsSuperWeapon(d))
 		return Catalog::gStock[d] ? SC_SILO : SC_LRPC;
-	if (IsHeavyDef(d))
-		return SC_HEAVY;
 	if (IsGantryDef(d))
 		return SC_GANTRY;
 	return -1;

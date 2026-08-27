@@ -571,18 +571,18 @@ void UpdatePosture()
 	if (gAttackBase < 0.f)
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
-	UpdateStance();     // enemy stance: budget lean + scout demand
-	ReleaseHeldSupers();   // held titans re-join the army when the wait ends
-	UpdateApproach();   // is a visible enemy group closing on our home?
-	PublishDefence();   // our front-tower count and income, for the team budget
-	LogAidState();      // read-only: what an ally-aid response would do
-	Brain::BudgetLog();
-	IntelDiag();       // read-only: the enemy reading every gate above consumed
-	UpdateKillingBlow();
-	UpdateRaidCaution();
-	UpdateMassing();
+	{ double _t = Perf::T0(); UpdateStance(); Perf::Add("post.stance", _t); }     // enemy stance: budget lean + scout demand
+	{ double _t = Perf::T0(); ReleaseHeldSupers(); Perf::Add("post.supers", _t); }   // held titans re-join the army when the wait ends
+	{ double _t = Perf::T0(); UpdateApproach(); Perf::Add("post.approach", _t); }   // is a visible enemy group closing on our home?
+	{ double _t = Perf::T0(); PublishDefence(); Perf::Add("post.pubdef", _t); }   // our front-tower count and income, for the team budget
+	{ double _t = Perf::T0(); LogAidState(); Perf::Add("post.aidlog", _t); }      // read-only: what an ally-aid response would do
+	{ double _t = Perf::T0(); Brain::BudgetLog(); Perf::Add("post.budgetlog", _t); }
+	{ double _t = Perf::T0(); IntelDiag(); Perf::Add("post.inteldiag", _t); }       // read-only: the enemy reading every gate above consumed
+	{ double _t = Perf::T0(); UpdateKillingBlow(); Perf::Add("post.killblow", _t); }
+	{ double _t = Perf::T0(); UpdateRaidCaution(); Perf::Add("post.raidcaution", _t); }
+	{ double _t = Perf::T0(); UpdateMassing(); Perf::Add("post.massing", _t); }
 	// Last, so it is the final word on the quota and the posture.
-	UpdateTeamPush();
+	{ double _t = Perf::T0(); UpdateTeamPush(); Perf::Add("post.teampush", _t); }
 	// After massing and both role rules, so it is the last word on the quota.
 	// Not for the eco lead: it holds almost no army by design, and sending that
 	// at a base is throwing it away rather than ending anything.

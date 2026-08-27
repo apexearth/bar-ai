@@ -183,6 +183,18 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	CacheSpots();
 	array<int> cand;
 	array<float> score;
+	// The two vetoes below ask the same question of every spot on the map, and
+	// everything in them except the spot itself is fixed for the sweep: the
+	// enemy bearing, our home, the role and the leash. Read once -- on an 8v8
+	// map this loop runs over a hundred spots per election per builder.
+	const bool foeKnown = Front::FoeKnown();
+	const AIFloat3 foeAt = aiEnemyMgr.GetEnemyPos();
+	const float fex = foeAt.x - Builder::gHomePos.x;
+	const float fez = foeAt.z - Builder::gHomePos.z;
+	const float fspan = fex * fex + fez * fez;
+	const bool pastOn = foeKnown && Builder::gHomeSet && (fspan >= 1.f);
+	const bool ecoOn = EcoQuiet() && Builder::gHomeSet;
+	const float ecoLeash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
 		if (LedgerFind(int(si)) >= 0)
 			continue;
@@ -202,12 +214,14 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// evaluations in one 60s window and we held FOUR of ninety
 		// (apexearth's Supreme Isthmus game). The spot is still priced for
 		// risk after this -- StreamSurvival and the exposure charge both bite.
-		if (Front::FoeKnown()
-			&& Builder::PastFrontFrac(sp, Builder::MEX_FAR_FRAC)) {
+		if (pastOn
+			&& ((((sp.x - Builder::gHomePos.x) * fex
+				+ (sp.z - Builder::gHomePos.z) * fez) / fspan)
+				> Builder::MEX_FAR_FRAC)) {
 			++gMexPastFront;
 			continue;
 		}
-		if (EcoFar(sp)) {
+		if (ecoOn && (sp.distance2D(Builder::gHomePos) > ecoLeash)) {
 			++gMexEcoFar;
 			continue;
 		}

@@ -1,5 +1,149 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-27: defence was a circle around the start, and cover was a price tag
+
+apexearth: "I think our base defense only builds in a circle around where we
+started... we should be interested in defending any/all buildings that we have.
+We could give buildings a ~20% reduced value when they are unprotected. And the
+more powerful we create defense around those buildings the more they become
+worth." And: "I have not been seeing us produce any of the T3 defenses."
+
+Both complaints were literally true, for four separate reasons.
+
+**The circle was real.** `ShieldArcSpots` offered posts on a ring of radius
+(metal-centroid extent + turret range) about the centroid; `NetSpots` layered
+polar rings inward around `gFrontHome`. Both are circles about the start, and
+they were the only guard-site generators the defence auction had.
+
+**What we defended was three classes of building.** `StakeAt` counted mexes,
+structures over 1200 metal, and energy generators -- so a lab, a nano, a
+converter, a radar or a storage was worth exactly zero to defend.
+
+**Cover was counted in metal** (`costM * apex_def_trade`), which makes every
+turret in the game identically strong per metal by construction. Off the
+engine's own threat numbers that is false in both directions: surface threat per
+metal is 0.103 for corhllt and 0.013 for corpun, an eight-fold spread the
+auction could not see -- and we placed 88 Agitators across 54 games.
+
+Now: `market/protect_field.as` holds every standing structure of ours (via
+`ai.GetOwnStructsNear`, extractors still valued at capitalized income) and every
+standing tower with its reach and killing power resolved, rebuilt once per
+`apex_protect_field_s`. Guard sites are the value-weighted centres of that
+field, grid-bucketed at the faction's own light-tower reach -- so a post is
+offered wherever our metal stands and nowhere else, and moving the base moves
+the sites. Cover is `surfT` reported in light-tower metal, so an LLT scores
+exactly what it scored before and everything else scores what it is.
+
+**Front and guard are priced, not ranked** (his choice): a line post keeps the
+shielded credit for everything behind it, to the extent it closes the net; a
+guard post is worth only what stands in its own reach. So the line wins while it
+still shields something and a guard post wins once something inside is at risk,
+without either being forbidden.
+
+**The 20% is one function, read twice.** `PfWorthMult` withholds
+`apex_unprot_discount` of a building's worth over ground our cover does not beat
+the local wave on; the defence want's gain includes exactly the share it gives
+back.
+
+**Why no Pulsar or Bulwark.** `want_super.as`'s SC_HEAVY class priced a heavy
+ground turret on AFFORDABILITY, `(budget - bill)/budget`, which FALLS as cost
+rises -- so the cheapest member of the class won every ticket. Measured over 54
+games: `heavygun:cortoast` (Persecutor, 2500) took it 8 times, Bulwark never
+once, and `SuperTarget(SC_HEAVY) = 1 + income/300` closed the class after one.
+The class is deleted; the turret auction prices heavy guns like everything else.
+
+That alone is not enough: per metal a Bulwark (0.082 surfT/M) is no better than
+a Guard (0.082) and worse than a Twin Guard (0.103). What separates them is
+durability -- 9,400 hit points against 1,670 -- and no per-metal ratio expresses
+it. `apex_def_alpha_w` weights each turret's cover by `hp/(hp + alpha)`, where
+alpha is the punch of the biggest mobile unit the enemy fields
+(`ai.GetEnemyMaxMobileCostM` converted through the median alpha-per-metal of our
+own unit table). Near 1 for everything while they field raiders; it is what
+stops twelve Twin Guards reading as one Bulwark once they field something that
+erases a Twin Guard in a pass. Derived, not chosen.
+
+### Measured
+
+Three 12-game batches, same map (Altair), map-matched to each other but NOT
+to the pre-change baseline, which ran three maps -- so the cross-batch numbers
+below are honest and the comparison to before this change is not clean.
+
+| Apex | per-def pitch, no cache | single pitch | pitch-keyed cache |
+|---|---|---|---|
+| metal produced | 30,575 | 25,567 | 32,807 |
+| metal built | 18,570 | 16,458 | 20,468 |
+| static defence share | 12.6% | 8.2% | 9.3% |
+| T2 spend | 8,178 | 8,673 | 9,785 |
+| wiped out | 3/12 | 3/12 | 1/12 |
+
+Win rate against stock BARb is 0% of decided games in every batch INCLUDING the
+pre-change baseline. This change did not touch that and must not be read as
+having caused or cured it.
+
+The heavy gun is reachable now: corbhmth (Cerberus, 3,100 metal) was placed 11
+times in 12 games, against 10 times in 54 games before. Bulwark and Pulsar
+still do not appear at benchmark income (median 34 metal/s) -- at that income
+they are correctly unaffordable, and the claim to test is in a hosted game.
+
+NOT FIXED, and the opposite of what was expected: the Agitator. It is the worst
+turret in the game per metal by killing power (0.013 surfT/M against a Twin
+Guard's 0.103) and placements went UP, 1.6 per game to 2.5. It wins on REACH --
+1,245 elmos, so it raises the weakest bearing of the standoff ring that CoverAt
+takes the minimum over, and range is not priced against damage anywhere. Whether
+denying ground should outrank killing what walks onto it is an open question,
+not a bug to patch blind.
+
+### The perf work alongside it
+
+`Perf::` existed with two call sites. Every `AiUpdate` section, every market
+proposer, every engine unit/task hook and each `AiMakeTask` is now timed, plus
+the internals of `UpdatePosture` and `Front::Update`. `tools/frametime.py`
+reads the lines.
+
+The defence price was the single most expensive thing in the AI and it grew
+superlinearly with base size -- 0.4 ms per call at minute 4, 9.2 ms by minute
+19, 14.7 ms peak in one sim frame, on a 22-minute 1v1 where the market ran 117
+times out of 13,276 builder elections and was 88% of all election time. Cause
+was structural: per turret def per candidate site it recomputed `LineClosure`
+(16 rays x every tower), `CoverAt` AND `CoverWith` (16 rays x every tower each),
+`StakeAt`, `HazardAt`, `SiegeExpect` and `OpenFraction` -- none cached, most not
+builder-dependent, and the ring generators handed it ~60 sites to do it over.
+
+Three fixes, in order of what they bought:
+
+1. The field, the site list and the def-independent senses at each site
+   (`cover`, `threat`, `hazard`, `siege`) are computed once per rebuild.
+2. The cluster cache is keyed BY PITCH. Forcing one grid for every defence
+   def made the cache trivial and cost real behaviour -- a Bulwark's cluster is
+   not a Guard's, and pitching everything at the light tower fragmented the
+   base into buckets too small to hold stake: over two 12-game batches on one
+   map, defence share 12.6% -> 8.2% and metal produced 30,575 -> 25,567. Keyed
+   by pitch, each def's set is built once per field rebuild instead of once per
+   election, and the site list stays the one the auction wants.
+3. `CoverAddsAt` replaces the second full ray sweep. `CoverWith` takes the
+   worst of the standoff ring and a turret at the centre reaches every point of
+   that ring or none, so its contribution is the same constant on every ray and
+   the minimum shifts by exactly that constant. Exact, not an approximation.
+
+Measured on one map, per call to the defence price: 4719 us before, 2735 with
+the single grid (which cost the behaviour above), 3845 with the pitch-keyed
+cache that keeps it. Worst single call 15.3 -> 16.5 ms -- the spike is NOT
+fixed, only the average is. Chasing it is the next perf job.
+
+STILL HOT, in order, from a 25-minute Cortex 1v1 on Altair:
+`want.protect` 637 ms, `up.posture` 615 ms (of which `post.pubdef` 368),
+`want.tech` 406 ms, `up.front` 328 ms (of which `front.scan` 244),
+`up.think` 310 ms with a 14.9 ms worst single call,
+`hk.maketask.factory` 234 ms at 1760 us per call.
+
+NOT DONE: shoreline defence. apexearth: "T3 epic units can often walk through
+all water. So late game you may end up with huge surprises at the side of your
+base." There is no per-position water test bound to AngelScript --
+`CTerrainManager` exposes only `IsWaterAVoid` and `GetLandPercent`, and the
+front ring is built from influence, not terrain. `ai.FindBuildSiteNear` with a
+land-only def and a small radius is the candidate probe; it has not been tried.
+
+
 ## 2026-08-26: rez bots stood around, and had not resurrected anything in weeks
 
 apexearth: "I see a lot of rezbots standing around doing nothing when they

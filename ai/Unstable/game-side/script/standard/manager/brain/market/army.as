@@ -873,10 +873,11 @@ void StallWatch()
 	if (ai.frame < gNextStallSweep)
 		return;
 	gNextStallSweep = ai.frame + 5 * SECOND;
-	RetreatRefresh();
-	GuardSweep();
+	{ double _t = Perf::T0(); RetreatRefresh(); Perf::Add("think.retreat", _t); }
+	{ double _t = Perf::T0(); GuardSweep(); Perf::Add("think.guard", _t); }
 	if (!HardEStall())
 		return;
+	const double _tDry = Perf::T0();
 	CCircuitUnit@ pick = null;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ u = gWorkers[i];
@@ -913,6 +914,7 @@ void StallWatch()
 		if (u.circuitDef.GetName() == "armcom" || u.circuitDef.GetName() == "corcom")
 			break;   // the commander first when present
 	}
+	Perf::Add("think.stalldry", _tDry);
 	if (pick is null)
 		return;
 	AiLog("apex: STALL interrupt -- " + pick.circuitDef.GetName() + " #" + pick.id

@@ -93,31 +93,31 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	// Ahead of the ApexActive gate: a unit walled in by our own buildings is
 	// broken in a solo game exactly as it is in a team one, and freeing it is a
 	// fix rather than a piece of the team machinery that gate exists for.
-	Military::UpdateUnblock();
-	Military::UpdateMoveTests();
+	{ double _t = Perf::T0(); Military::UpdateUnblock(); Perf::Add("up.unblock", _t); }
+	{ double _t = Perf::T0(); Military::UpdateMoveTests(); Perf::Add("up.movetests", _t); }
 
 	if (!ApexActive())
 		return;
 
-	Builder::SampleWreckField();
-	Requests::PeelSurplus();
-	Role::Resolve();
-	Brain::UpdateFacQueues();
-	Brain::LogFacQueues();
-	Military::UpdateLanePos();
-	Military::UpdateDeathLedger();
-	Military::UpdateWithdraw();
-	Military::UpdateGifts();
-	Air::UpdateFighterStations();
-	Air::RecycleOldFighters();
-	Brain::UpdateNukes();
-	Military::UpdateSpamPosture();
-	Military::UpdatePosture();
-	Air::Update();
-	Front::Update();
-	Brain::Think();
-	Base::Update();
-	Lattice::Update();
+	{ double _t = Perf::T0(); Builder::SampleWreckField(); Perf::Add("up.wreck", _t); }
+	{ double _t = Perf::T0(); Requests::PeelSurplus(); Perf::Add("up.peel", _t); }
+	{ double _t = Perf::T0(); Role::Resolve(); Perf::Add("up.role", _t); }
+	{ double _t = Perf::T0(); Brain::UpdateFacQueues(); Perf::Add("up.facqueue", _t); }
+	{ double _t = Perf::T0(); Brain::LogFacQueues(); Perf::Add("up.facqueuelog", _t); }
+	{ double _t = Perf::T0(); Military::UpdateLanePos(); Perf::Add("up.lanepos", _t); }
+	{ double _t = Perf::T0(); Military::UpdateDeathLedger(); Perf::Add("up.deathledger", _t); }
+	{ double _t = Perf::T0(); Military::UpdateWithdraw(); Perf::Add("up.withdraw", _t); }
+	{ double _t = Perf::T0(); Military::UpdateGifts(); Perf::Add("up.gifts", _t); }
+	{ double _t = Perf::T0(); Air::UpdateFighterStations(); Perf::Add("up.airstations", _t); }
+	{ double _t = Perf::T0(); Air::RecycleOldFighters(); Perf::Add("up.airrecycle", _t); }
+	{ double _t = Perf::T0(); Brain::UpdateNukes(); Perf::Add("up.nukes", _t); }
+	{ double _t = Perf::T0(); Military::UpdateSpamPosture(); Perf::Add("up.spamposture", _t); }
+	{ double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
+	{ double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
+	{ double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
+	{ double _t = Perf::T0(); Brain::Think(); Perf::Add("up.think", _t); }
+	{ double _t = Perf::T0(); Base::Update(); Perf::Add("up.base", _t); }
+	{ double _t = Perf::T0(); Lattice::Update(); Perf::Add("up.lattice", _t); }
 	Perf::TickSpeed();
 	Perf::Flush();
 }
@@ -146,6 +146,13 @@ bool WasFinished(int id)
 }
 
 void AiUnitFinished(CCircuitUnit@ unit)
+{
+	const double _t = Perf::T0();
+	UnitFinishedInner(unit);
+	Perf::Add("hk.finished", _t);
+}
+
+void UnitFinishedInner(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
@@ -241,6 +248,13 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 // variants' scripts keep their unchanged AiUnitDestroyed. Same combat filter
 // as the loss ledger: nanoframes and builders say nothing about the army.
 void AiUnitDestroyedBy(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
+{
+	const double _t = Perf::T0();
+	UnitDestroyedByInner(unit, attackerDef);
+	Perf::Add("hk.destroyedby", _t);
+}
+
+void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 {
 	if ((unit is null) || (attackerDef is null))
 		return;

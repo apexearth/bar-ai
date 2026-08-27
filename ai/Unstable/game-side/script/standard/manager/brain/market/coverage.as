@@ -34,18 +34,17 @@ namespace Market {
 // turret priced exactly like the first (measured: cover=0 at protM=3450).
 const int COVER_RAYS = 6;
 
+// COVER IS KILLING POWER, NOT A PRICE TAG. Summing costM made every turret in
+// the game identically strong per metal by construction, so ten Guards read as
+// one Bulwark and the auction -- which divides by cost -- could never reach a
+// heavy gun. PfTowerKill reports the same quantity in light-tower metal, so an
+// LLT scores exactly what it used to and everything else scores what it is.
+// `trade` is folded in there; the parameter stays for the callers that pass it.
 float CoverPointM(const AIFloat3& in at, float trade,
 		const AIFloat3& in extraAt, float extraReach, float extraM)
 {
-	float m = 0.f;
-	for (uint i = 0; i < gProtPos[PROT_DEF].length(); ++i) {
-		const int d = gProtDefId[PROT_DEF][i];
-		if (gProtPos[PROT_DEF][i].distance2D(at) <= Catalog::gMaxRange[d])
-			m += Catalog::gCostM[d] * trade;
-	}
-	if ((extraReach > 0.f) && (extraAt.distance2D(at) <= extraReach))
-		m += extraM;
-	return m;
+	PfRebuild();
+	return PfCoverPoint(at, extraAt, extraReach, extraM);
 }
 
 float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
@@ -72,6 +71,29 @@ float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 			? CoverPointM(pos, trade, extraAt, extraReach, extraM) : worst;
 }
 
+// WHAT ONE MORE TURRET AT `pos` WOULD ADD TO THE COVER READ AT `pos`.
+//
+// CoverWith takes the WORST of the standoff ring, and a turret standing at the
+// centre either reaches every point of that ring or none of them -- so its
+// contribution is the same constant on every ray and the minimum shifts by
+// exactly that constant. Reading it directly saves a second full ray sweep per
+// candidate site per turret def, which was half of what made the defence price
+// the most expensive thing in the market.
+float CoverAddsAt(const AIFloat3& in pos, float reach, float adds)
+{
+	const float standoff = (ai.GetTunable("apex_standoff_cover", TUNE_STANDOFF_COVER) > 0.f)
+			? Military::FoeReach() : 0.f;
+	if (standoff <= 1.f)
+		return adds;   // the point path: the turret stands on the point it covers
+	for (int b = 0; b < COVER_RAYS; ++b) {
+		const float ang = 6.2831853f * float(b) / float(COVER_RAYS);
+		const AIFloat3 fp = pos + AIFloat3(cos(ang), 0.f, sin(ang)) * standoff;
+		if (OnMap(fp))
+			return (standoff <= reach) ? adds : 0.f;
+	}
+	return adds;   // no ray on the map: CoverWith falls back to the point path
+}
+
 float CoverAt(const AIFloat3& in pos)
 {
 	return CoverWith(pos, pos, -1.f, 0.f);
@@ -86,22 +108,7 @@ float CoverAt(const AIFloat3& in pos)
 // into one number.
 float StakeAt(const AIFloat3& in pos, float r)
 {
-	const float horiz = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
-	const float h = (horiz > 1.f) ? horiz : 300.f;
-	float m = 0.f;
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if ((gLExtract[i] > 0.f) && (gLPos[i].distance2D(pos) < r))
-			m += gLIncome[i] * gLExtract[i] * h;
-	}
-	for (uint i = 0; i < gOwnBig.length(); ++i) {
-		if ((gOwnBig[i] !is null) && (gOwnBig[i].GetPos(ai.frame).distance2D(pos) < r))
-			m += Catalog::gCostM[int(gOwnBig[i].circuitDef.id)];
-	}
-	for (uint i = 0; i < gOwnGen.length(); ++i) {
-		if ((gOwnGen[i] !is null) && (gOwnGen[i].GetPos(ai.frame).distance2D(pos) < r))
-			m += Catalog::gCostM[int(gOwnGen[i].circuitDef.id)];
-	}
-	return m;
+	return PfStakeAt(pos, r);
 }
 
 // WHAT A POST SHIELDS RATHER THAN WHAT IT STANDS ON.
@@ -129,43 +136,16 @@ float ShieldedStakeAt(const AIFloat3& in pos, float reach)
 		return 0.f;
 	dir.SafeNormalize2D();
 	const AIFloat3 across(-dir.z, 0.f, dir.x);
-	const float horiz = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
-	const float h = (horiz > 1.f) ? horiz : 300.f;
+	PfRebuild();
 	float m = 0.f;
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if (gLExtract[i] <= 0.f)
-			continue;
-		const AIFloat3 rel = gLPos[i] - pos;
+	for (uint i = 0; i < gPfPos.length(); ++i) {
+		const AIFloat3 rel = gPfPos[i] - pos;
 		if ((rel.x * dir.x + rel.z * dir.z) > 0.f)
 			continue;   // in front of the post: it shields nothing there
 		const float lat = abs(rel.x * across.x + rel.z * across.z);
-		if ((lat > reach) || (gLPos[i].distance2D(pos) < reach))
+		if ((lat > reach) || (gPfPos[i].distance2D(pos) < reach))
 			continue;   // nearer than reach is FrontedStakeAt's to count
-		m += gLIncome[i] * gLExtract[i] * h;
-	}
-	for (uint i = 0; i < gOwnBig.length(); ++i) {
-		if (gOwnBig[i] is null)
-			continue;
-		const AIFloat3 bp = gOwnBig[i].GetPos(ai.frame);
-		const AIFloat3 rel = bp - pos;
-		if ((rel.x * dir.x + rel.z * dir.z) > 0.f)
-			continue;
-		const float lat = abs(rel.x * across.x + rel.z * across.z);
-		if ((lat > reach) || (bp.distance2D(pos) < reach))
-			continue;
-		m += Catalog::gCostM[int(gOwnBig[i].circuitDef.id)];
-	}
-	for (uint i = 0; i < gOwnGen.length(); ++i) {
-		if (gOwnGen[i] is null)
-			continue;
-		const AIFloat3 gp = gOwnGen[i].GetPos(ai.frame);
-		const AIFloat3 rel = gp - pos;
-		if ((rel.x * dir.x + rel.z * dir.z) > 0.f)
-			continue;
-		const float lat = abs(rel.x * across.x + rel.z * across.z);
-		if ((lat > reach) || (gp.distance2D(pos) < reach))
-			continue;
-		m += Catalog::gCostM[int(gOwnGen[i].circuitDef.id)];
+		m += gPfWorth[i];
 	}
 	return m;
 }
@@ -275,15 +255,20 @@ float TeamExposure()
 	return gExposure;
 }
 
-float ShortfallAt(const AIFloat3& in pos)
+float ShortWith(const AIFloat3& in pos, float cover, float threat)
 {
-	const float threat = ThreatM(pos);
 	if (threat <= 1.f)
 		return 0.f;
-	const float gap = threat - (CoverAt(pos) + AllyCoverAt(pos));
+	const float gap = threat - (cover + AllyCoverAt(pos));
 	if (gap <= 0.f)
 		return 0.f;
 	return gap / threat;
+}
+
+float ShortfallAt(const AIFloat3& in pos)
+{
+	RiskFill();
+	return ShortWith(pos, CoverAt(pos), ThreatAt(pos));
 }
 
 //------------------------------------------------------------------------------
@@ -371,6 +356,102 @@ float ExposureAt(const AIFloat3& in pos)
 	return e;
 }
 
+//------------------------------------------------------------------------------
+// THE PART OF A RISK READING THAT DOES NOT DEPEND ON WHERE YOU ASK.
+//
+// Threat, hazard and the siege prior each mix a local term (what is seen at
+// pos, what stands there, what has died there) with side-wide aggregates --
+// their raiding force, their army, ours, the enemy bearing. The aggregates
+// were recomputed per call, and the protect market asks all three at every
+// candidate site of every defence def of every builder election. ArmyValue
+// alone walks the whole def table.
+//
+// RiskFill() reads the aggregates into these globals; the *At/*With forms take
+// them from there. A caller with one position still pays exactly what it paid
+// before -- the wrappers below fill unconditionally, so nothing is ever read a
+// frame stale -- while a loop over sites fills once and keeps the arithmetic
+// identical.
+//------------------------------------------------------------------------------
+float gRkThreatR = 0.f;
+float gRkTau = 180.f;
+float gRkAnchor = 0.f;
+float gRkFloorP = 0.f;
+float gRkRaid = 0.f;
+float gRkHost = 0.f;
+float gRkOurArmy = 0.f;
+float gRkFoeMass = 0.f;
+float gRkEconM = 0.f;
+float gRkArmyV = 0.f;
+float gRkSeen = 0.f;
+// 0 = gradient disabled (flat 1.0), 1 = no usable bearing (0.0), 2 = project.
+int   gRkGrad = 0;
+float gRkGHx = 0.f, gRkGHz = 0.f, gRkGDx = 0.f, gRkGDz = 0.f, gRkGSpan = 1.f;
+
+void RiskFill()
+{
+	gRkThreatR = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
+	gRkTau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
+	const float horiz = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
+	gRkAnchor = 1.f / ((horiz > 1.f) ? horiz : 120.f);
+	gRkFloorP = ai.GetTunable("apex_risk_floor", TUNE_RISK_FLOOR);
+	gRkOurArmy = Military::OurArmyNow();
+	const float pr = gRkOurArmy
+			* ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
+	gRkRaid = Military::EnemyCostOf(Unit::Role::RAIDER.type);
+	float host = Military::EnemyArmyCost();
+	if (host < pr)
+		host = pr;
+	if (host < gRkRaid)
+		host = gRkRaid;
+	gRkHost = host;
+	float foe = Military::FoeMobileMassing();
+	if (pr > foe)
+		foe = pr;
+	gRkFoeMass = foe;
+	if (ai.GetTunable("apex_threat_gradient", TUNE_THREAT_GRADIENT) <= 0.f) {
+		gRkGrad = 0;
+		return;
+	}
+	if (!Builder::gHomeSet) {
+		gRkGrad = 1;
+		return;
+	}
+	const AIFloat3 home = Builder::gHomePos;
+	AIFloat3 foeP = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(foeP)) {
+		foeP = AIFloat3(float(AiTerrainWidth()) - home.x, 0.f,
+				float(AiTerrainHeight()) - home.z);
+	}
+	const float dx = foeP.x - home.x;
+	const float dz = foeP.z - home.z;
+	const float span = dx * dx + dz * dz;
+	if (span < NEAR_ZERO) {
+		gRkGrad = 1;
+		return;
+	}
+	gRkGrad = 2;
+	gRkGHx = home.x;
+	gRkGHz = home.z;
+	gRkGDx = dx;
+	gRkGDz = dz;
+	gRkGSpan = span;
+}
+
+// The siege prior's own aggregates: our economy, our army and what we have
+// seen of theirs. Split from RiskFill because ArmyValue walks the def table
+// and only this reading needs it.
+void RiskFillSiege()
+{
+	float econM = gAssetsM - gProtM;
+	if (econM < 0.f)
+		econM = 0.f;
+	gRkEconM = econM;
+	gRkArmyV = ArmyValue();
+	gRkSeen = Military::EnemyArmyCost();
+	gRkOurArmy = Military::OurArmyNow();
+	gRkTau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
+}
+
 // HOW FAR TOWARD THEM THIS GROUND IS: 0 at our start, 1 at theirs.
 //
 // apexearth: "preload some measure of threat at a gradient towards the enemy's
@@ -380,26 +461,13 @@ float ExposureAt(const AIFloat3& in pos)
 // games. ForwardFraction is the projection when the enemy centroid is known;
 // before contact the MIRRORED start is the stable answer, where the centroid is
 // noise.
-float ThreatGradient(const AIFloat3& in pos)
+float GradAt(const AIFloat3& in pos)
 {
-	// 0 disables the gradient: threat becomes spatially flat again, which is
-	// what shipped before it and is the control arm for measuring it.
-	if (ai.GetTunable("apex_threat_gradient", TUNE_THREAT_GRADIENT) <= 0.f)
+	if (gRkGrad == 0)
 		return 1.f;
-	if (!Builder::gHomeSet)
+	if (gRkGrad != 2)
 		return 0.f;
-	const AIFloat3 home = Builder::gHomePos;
-	AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
-	if (!OnMap(foe)) {
-		foe = AIFloat3(float(AiTerrainWidth()) - home.x, 0.f,
-				float(AiTerrainHeight()) - home.z);
-	}
-	const float dx = foe.x - home.x;
-	const float dz = foe.z - home.z;
-	const float span = dx * dx + dz * dz;
-	if (span < NEAR_ZERO)
-		return 0.f;
-	float t = ((pos.x - home.x) * dx + (pos.z - home.z) * dz) / span;
+	float t = ((pos.x - gRkGHx) * gRkGDx + (pos.z - gRkGHz) * gRkGDz) / gRkGSpan;
 	if (t < 0.f) t = 0.f;
 	if (t > 1.f) t = 1.f;
 	return t;
@@ -416,43 +484,22 @@ float ThreatGradient(const AIFloat3& in pos)
 // turret as though it had to defeat the enemy's entire mobile mass -- which
 // made every single tower look 70% useless. Army scale belongs in HazardAt,
 // where it says how OFTEN something arrives.
-float ThreatM(const AIFloat3& in pos)
+//
+// THE PRIOR IS A GRADIENT, not one number for the whole map. At our own start
+// the credible wave is a RAID that leaked through; at theirs it is their whole
+// mobile army, because that is what stands there. Both ends are measured, and
+// the enemy end is floored by the symmetric prior so an unscouted enemy is not
+// assumed absent -- "if we don't know the enemy strength then we shouldn't be
+// making a T2 lab".
+float ThreatAt(const AIFloat3& in pos)
 {
 	if (!OnMap(pos))
 		return 0.f;
-	float t = ai.GetEnemyCostAt(pos, ai.GetTunable("apex_threat_r", TUNE_THREAT_R));
-	const float implied = LossRateAt(pos)
-			* ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
+	float t = ai.GetEnemyCostAt(pos, gRkThreatR);
+	const float implied = LossRateAt(pos) * gRkTau;
 	if (implied > t)
 		t = implied;
-	// Cold start: before anything has been lost or seen here, the wave to
-	// expect is the enemy's RAIDING force -- the class that actually visits
-	// an outlying mex. Measured, and raid-sized rather than army-sized.
-	//
-	// NOT scaled by ExposureAt any more. That factor is zero AT HOME by
-	// construction (distance to home over a radius), so the base -- the thing
-	// the enemy most wants dead -- priced as the safest ground on the map:
-	// threat 0 gives shortfall 0, which zeroes every turret's gain there AND
-	// makes the tech survival discount exactly 1.0. Watched: "2 enemy units
-	// just destroyed our entire base. We made 0 defenses"; "we made a T2 lab
-	// REALLY EARLY... all this tells me the threat/danger sense is tuned low".
-	// Wave SIZE is the same wherever it goes; how OFTEN it arrives is
-	// HazardAt's job, which is what this file's own header says.
-	// THE PRIOR IS A GRADIENT, not one number for the whole map. At our own
-	// start the credible wave is a RAID that leaked through; at theirs it is
-	// their whole mobile army, because that is what stands there. Both ends are
-	// measured, and the enemy end is floored by the symmetric prior so an
-	// unscouted enemy is not assumed absent -- "if we don't know the enemy
-	// strength then we shouldn't be making a T2 lab".
-	const float raid = Military::EnemyCostOf(Unit::Role::RAIDER.type);
-	float host = Military::EnemyArmyCost();
-	const float prior = Military::OurArmyNow()
-			* ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
-	if (host < prior)
-		host = prior;
-	if (host < raid)
-		host = raid;
-	const float baseline = raid + (host - raid) * ThreatGradient(pos);
+	const float baseline = gRkRaid + (gRkHost - gRkRaid) * GradAt(pos);
 	return (baseline > t) ? baseline : t;
 }
 
@@ -465,62 +512,39 @@ float ThreatM(const AIFloat3& in pos)
 // stake we have recently lost, and how their army compares to everything
 // defending this ground. A quiet rear sits at the floor; ground being raided
 // with nothing covering it approaches certainty within the anchor horizon.
-float HazardAt(const AIFloat3& in pos)
+//
+// `cover` is CoverAt(pos); the caller passes it because the protect market
+// already has it and it is the second most expensive read in the market.
+float HazardWith(const AIFloat3& in pos, float cover)
 {
-	const float horiz = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
-	const float anchor = 1.f / ((horiz > 1.f) ? horiz : 120.f);
-	const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
-	const float tau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
-	// What we have actually been losing here, against what is standing here.
-	const float stake = StakeAt(pos, r);
+	const float stake = StakeAt(pos, gRkThreatR);
 	float p = 0.f;
 	if (stake > 1.f)
-		p = LossRateAt(pos) * tau / stake;
-	// Their army against everything that defends this ground -- our own
-	// mobile army plus the turrets that reach, scaled by how far out it is.
-	const float defended = Military::OurArmyNow() + CoverAt(pos);
-	float foe = Military::FoeMobileMassing();
-	{
-		// Unscouted is not absent: the same symmetric prior the gradient uses.
-		const float pr = Military::OurArmyNow()
-				* ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
-		if (pr > foe)
-			foe = pr;
-	}
-	if (foe > 0.f) {
-		// Their mobile mass against everything that defends THIS ground. The
-		// ExposureAt factor that used to multiply this is gone for the same
-		// reason as in ThreatM: it is zero at home, so the one place with
-		// everything to lose reported the floor hazard all game. Position
-		// still matters here -- through CoverAt, which is what actually
-		// differs between a guarded core and an outlying mex.
-		// ARRIVAL RATE RISES TOWARD THEM. Their strength against what defends
-		// this ground says how badly it goes; the gradient says how OFTEN it
-		// happens at all. Without this the charge on a mex at their doorstep
-		// matched one in our own base, and the opening constructors walked to
-		// depth 1.00 inside six minutes (measured) -- apexearth: "stop our
-		// initial constructors from taking... mexes or geos in the center of
-		// the map - highly contested areas."
-		//
-		// Safe at home for the right reason, not by accident: this term goes to
-		// zero at our start, but the loss-field term above and apex_risk_floor
-		// still stand there, and the DEF-panic emergency covers a naked base.
-		// That is what made this unsafe to do this morning and safe now.
-		const float pres = ThreatGradient(pos)
-				* foe / (foe + ((defended > 0.f) ? defended : 0.f));
+		p = LossRateAt(pos) * gRkTau / stake;
+	// Their mobile mass against everything that defends THIS ground. The
+	// ExposureAt factor that used to multiply this is gone for the same
+	// reason as in ThreatAt: it is zero at home, so the one place with
+	// everything to lose reported the floor hazard all game. Position
+	// still matters here -- through cover, which is what actually differs
+	// between a guarded core and an outlying mex. ARRIVAL RATE RISES TOWARD
+	// THEM: their strength against what defends this ground says how badly
+	// it goes; the gradient says how OFTEN it happens at all.
+	const float defended = gRkOurArmy + cover;
+	if (gRkFoeMass > 0.f) {
+		const float pres = GradAt(pos) * gRkFoeMass
+				/ (gRkFoeMass + ((defended > 0.f) ? defended : 0.f));
 		if (pres > p)
 			p = pres;
 	}
-	const float floorP = ai.GetTunable("apex_risk_floor", TUNE_RISK_FLOOR);
-	if (p < floorP)
-		p = floorP;
+	if (p < gRkFloorP)
+		p = gRkFloorP;
 	if (p > 1.f)
 		p = 1.f;
-	return anchor * p;
+	return gRkAnchor * p;
 }
 
 // THEY ARE COMING WHETHER WE HAVE SEEN THEM OR NOT. HazardAt is deliberately
-// zero at our own start -- its pressure term is scaled by ThreatGradient, and
+// zero at our own start -- its pressure term is scaled by the gradient, and
 // its unscouted prior is a share of OUR ARMY, which is near zero exactly when
 // we are teching instead of arming. So a base with a large economy and no
 // units priced a long build as almost risk-free (apexearth: "the issue is you
@@ -528,10 +552,7 @@ float HazardAt(const AIFloat3& in pos)
 // they're coming. We didn't see it yet, but we should know - they are
 // coming"). The honest mirror is their ECONOMY, which started equal to ours
 // and is what ArmyTarget already expects to fight, measured against what
-// actually defends this ground. Rises as we build economy without an army and
-// falls the moment army or turrets exist -- and it is SCOPED to the survival
-// discount: the same prior inside HazardAt itself repriced every want in the
-// game and cost 87% of our standing army (measured, 6 games).
+// actually defends this ground.
 // TWO DIFFERENT QUESTIONS, TWO DIFFERENT PRIORS. Whether a long bet has time
 // to pay is a worst-case question -- assume they spent everything on army. How
 // much defence to BUY is an expectation, and buying against the worst case is
@@ -541,30 +562,41 @@ float HazardAt(const AIFloat3& in pos)
 // We stopped eco at around ~15-19m/s... our want for defense is outweighing
 // our interest in more eco, and we aren't making any T2"). The expectation is
 // apex_enemy_prior, the same share ArmyTarget sizes production against.
-float SiegeRiskAt(const AIFloat3& in pos, float priorFrac)
+// Turrets are excluded from our own total, or defence becomes its own
+// justification and the loop runs away.
+float SiegeWith(const AIFloat3& in pos, float cover, float priorFrac)
 {
-	// WHAT COULD WE AFFORD RIGHT NOW IF WE HAD BOUGHT ONLY ARMY -- they had the
-	// same start and the same minutes, so that is what may be walking at us
-	// (apexearth: "if they didn't go for an afus, and came at us with 4k+ worth
-	// of T2 vehicles... thats a tzar and multiple banishers and we'll have
-	// nothing that can match it"). Our whole economy, not a share of it: the
-	// share belongs in ArmyTarget, which decides what to BUILD; this decides
-	// whether a long bet has time to pay.
-	// ECONOMY, not everything we own: our own turrets are excluded, or defence
-	// becomes its own justification and the loop runs away.
-	float econM = gAssetsM - gProtM;
-	if (econM < 0.f)
-		econM = 0.f;
-	const float ourTotal = econM + ArmyValue();
-	const float prior = ourTotal * priorFrac;
-	const float seen = Military::EnemyArmyCost();
-	const float foe = (seen > prior) ? seen : prior;
+	const float prior = (gRkEconM + gRkArmyV) * priorFrac;
+	const float foe = (gRkSeen > prior) ? gRkSeen : prior;
 	if (foe <= 0.f)
 		return 0.f;
-	const float defended = Military::OurArmyNow() + CoverAt(pos);
-	const float tau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
+	const float defended = gRkOurArmy + cover;
 	return (foe / (foe + ((defended > 0.f) ? defended : 0.f)))
-			/ ((tau > 1.f) ? tau : 180.f);
+			/ ((gRkTau > 1.f) ? gRkTau : 180.f);
+}
+
+float ThreatGradient(const AIFloat3& in pos)
+{
+	RiskFill();
+	return GradAt(pos);
+}
+
+float ThreatM(const AIFloat3& in pos)
+{
+	RiskFill();
+	return ThreatAt(pos);
+}
+
+float HazardAt(const AIFloat3& in pos)
+{
+	RiskFill();
+	return HazardWith(pos, CoverAt(pos));
+}
+
+float SiegeRiskAt(const AIFloat3& in pos, float priorFrac)
+{
+	RiskFillSiege();
+	return SiegeWith(pos, CoverAt(pos), priorFrac);
 }
 
 // The worst case: what a deferred bet is measured against.
@@ -601,9 +633,15 @@ float StreamSurvival(const AIFloat3& in pos)
 		return 1.f;
 	if (!OnMap(pos))
 		return 1.f;
-	const float shortP = ShortfallAt(pos);
-	float risk = HazardAt(pos) * shortP;
-	const float siege = SiegeRisk(pos) * shortP;
+	// Shortfall, hazard and the siege prior all read the cover at this one
+	// point and all three side-wide fills. Read each once.
+	RiskFill();
+	RiskFillSiege();
+	const float cover = CoverAt(pos);
+	const float shortP = ShortWith(pos, cover, ThreatAt(pos));
+	float risk = HazardWith(pos, cover) * shortP;
+	const float siege = SiegeWith(pos, cover,
+			ai.GetTunable("apex_siege_prior", TUNE_SIEGE_PRIOR)) * shortP;
 	if (siege > risk)
 		risk = siege;
 	if (risk <= 0.f)
@@ -653,7 +691,10 @@ float ExpectedLossAt(const AIFloat3& in pos, float valueM)
 {
 	if (valueM <= 0.f)
 		return 0.f;
-	return valueM * HazardAt(pos) * ShortfallAt(pos);
+	RiskFill();
+	const float cover = CoverAt(pos);
+	return valueM * HazardWith(pos, cover)
+			* ShortWith(pos, cover, ThreatAt(pos));
 }
 
 // The risk field as the AI sees it: the most exposed standing mex, and the

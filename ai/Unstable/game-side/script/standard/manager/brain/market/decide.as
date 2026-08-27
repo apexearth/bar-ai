@@ -106,14 +106,23 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 	}
 
-	array<Want@> wants = {
-		ProposeMex(unit), ProposeEnergy(unit), ProposeGeo(unit),
-		ProposePlant(unit), ProposeConvert(unit), ProposeStore(unit),
-		ProposeMexUp(unit), ProposeTech(unit), ProposeNano(unit),
-		ProposeReclaimObsolete(unit), ProposeReclaimBlocker(unit), ProposeAssist(unit),
-		ProposeProtect(unit), ProposeSense(unit), ProposeAirDef(unit),
-		ProposeSuper(unit)
-	};
+	array<Want@> wants;
+	{ double _t = Perf::T0(); wants.insertLast(ProposeMex(unit)); Perf::Add("want.mex", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeEnergy(unit)); Perf::Add("want.energy", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeGeo(unit)); Perf::Add("want.geo", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposePlant(unit)); Perf::Add("want.plant", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeConvert(unit)); Perf::Add("want.convert", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeStore(unit)); Perf::Add("want.store", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeMexUp(unit)); Perf::Add("want.mexup", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeTech(unit)); Perf::Add("want.tech", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeNano(unit)); Perf::Add("want.nano", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimObsolete(unit)); Perf::Add("want.reclobs", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimBlocker(unit)); Perf::Add("want.reclblk", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeAssist(unit)); Perf::Add("want.assist", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeProtect(unit)); Perf::Add("want.protect", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeSense(unit)); Perf::Add("want.sense", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeAirDef(unit)); Perf::Add("want.airdef", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeSuper(unit)); Perf::Add("want.super", _t); }
 	// EXPOSURE IS A COST THE ASSET ITSELF PAYS. A want's return is reduced by
 	// the rate at which the thing is expected to be destroyed where it would
 	// stand, so an expensive structure on uninsured ground prices itself down

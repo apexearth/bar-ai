@@ -11,6 +11,14 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return null;
+	const double _mt = Perf::T0();
+	IUnitTask@ _r = MakeTaskInner(unit);
+	Perf::Add("hk.maketask.builder", _mt);
+	return _r;
+}
+
+IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
+{
 
 	// Unit thoughts for rez bots: safety first, then opportunism.
 	IUnitTask@ t = RezzerFlee(unit);

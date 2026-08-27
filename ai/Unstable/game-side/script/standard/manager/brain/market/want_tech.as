@@ -58,11 +58,18 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	const float speed = Catalog::gSpeed[uid];
+	// Neither the economy nor a spot's survival odds depend on WHICH extractor
+	// is being priced, and the survival read is three risk sweeps. Each is taken
+	// at most once, on first use, so the call order is unchanged.
+	float inc1 = 0.f;
+	bool  incOk = false;
+	const float growK = ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH);
 	for (uint li = 0; li < gLSpot.length(); ++li) {
 		if (gLExtract[li] <= 0.f)
 			continue;   // not finished (or already being replaced)
 		if (DeathWalk(unit, gLPos[li]))
 			continue;   // a forward mex we hold can still be a lethal walk
+		float surv = -1.f;
 		for (uint i = 0; i < builds.length(); ++i) {
 			const int d = builds[i];
 			if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= gLExtract[li]))
@@ -71,13 +78,18 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			{
 				// Share of TOTAL economic power, the same denominator the
 				// energy premium uses -- see want_energy.as.
-				const float inc1 = EcoPowerM();
-				delta *= 1.f + ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH)
+				if (!incOk) {
+					inc1 = EcoPowerM();
+					incOk = true;
+				}
+				delta *= 1.f + growK
 						* delta / ((inc1 > delta) ? inc1 : delta);
 			}
 			// Quadrupling the yield of a spot we cannot hold quadruples
 			// nothing -- the same discount the claim itself takes.
-			delta *= StreamSurvival(gLPos[li]);
+			if (surv < 0.f)
+				surv = StreamSurvival(gLPos[li]);
+			delta *= surv;
 			const float walkSec = (speed > 1.f)
 					? (here.distance2D(gLPos[li]) / speed) : 60.f;
 			Want c;

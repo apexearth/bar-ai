@@ -54,7 +54,9 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (!ApexActive())
 		return aiMilitaryMgr.DefaultMakeTask(unit);
 	// One wrapper so every return below is recorded -- see NoteFightElection.
+	const double _mt = Perf::T0();
 	IUnitTask@ elected = MakeTaskInner(unit);
+	Perf::Add("hk.maketask.military", _mt);
 	NoteFightElection(unit, elected);
 	return elected;
 }
@@ -286,12 +288,26 @@ array<IUnitTask@> gSquads;
 
 void AiTaskAdded(IUnitTask@ task)
 {
+	const double _t = Perf::T0();
+	TaskAddedInner(task);
+	Perf::Add("hk.taskadd.mil", _t);
+}
+
+void TaskAddedInner(IUnitTask@ task)
+{
 	if ((task is null) || (task.GetType() != Task::Type::FIGHTER))
 		return;
 	gSquads.insertLast(task);
 }
 
 void AiTaskRemoved(IUnitTask@ task, bool done)
+{
+	const double _t = Perf::T0();
+	TaskRemovedInner(task, done);
+	Perf::Add("hk.taskdel.mil", _t);
+}
+
+void TaskRemovedInner(IUnitTask@ task, bool done)
 {
 	for (uint i = 0; i < gSquads.length(); ++i) {
 		if (gSquads[i] is task) {
@@ -476,6 +492,13 @@ float FenceLostNear(const AIFloat3& in pos, float radius)
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	const double _t = Perf::T0();
+	UnitAddedInner(unit, usage);
+	Perf::Add("hk.unitadd.mil", _t);
+}
+
+void UnitAddedInner(CCircuitUnit@ unit, Unit::UseAs usage)
+{
 	Brain::NoteSpend(unit, usage);
 	// A Karganeth arrives as SUPER, not COMBAT, so the walled-in detector never
 	// saw the units most likely to be walled in unless SUPER is registered too.
@@ -489,6 +512,13 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 }
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
+{
+	const double _t = Perf::T0();
+	UnitRemovedInner(unit, usage);
+	Perf::Add("hk.unitdel.mil", _t);
+}
+
+void UnitRemovedInner(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	if (usage == Unit::UseAs::COMBAT)
 		ForgetPenned(unit.id);

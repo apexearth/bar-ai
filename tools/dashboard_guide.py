@@ -417,12 +417,33 @@ GROUPS = [
              "knobs": [
                  ("TUNE_FRONT_LINE", "offer the spaced front posts to the "
                   "defence auction at all"),
-                 ("TUNE_DEF_NET", "a layered net around the whole perimeter — "
-                  "floods the auction with candidates when on"),
+                 ("TUNE_UNPROT_DISCOUNT", "how much less a building is "
+                  "worth to us while nothing guards it — and so how much a "
+                  "turret covering it is worth. This is what makes the AI care "
+                  "about defending buildings rather than a radius: 0 goes back "
+                  "to pricing defence purely on the loss it prevents"),
+                 ("TUNE_DEF_ALPHA_W", "weighs a turret's cover by whether it "
+                  "SURVIVES the biggest thing the enemy fields. Near 1 for "
+                  "everything while they field raiders; it is what lets a "
+                  "9,400-hp Bulwark out-cover twelve 1,670-hp Twin Guards once "
+                  "they field something that erases the latter in one pass. "
+                  "0 prices every turret on raw damage per metal, which is why "
+                  "the T3 guns were never built"),
                  ("TUNE_STANDOFF_COVER", "measure cover on the ring the enemy "
                   "can shoot from, not just whether a turret reaches"),
                  ("TUNE_DEFZONE_DYNAMIC", "the base-defence ring follows the "
                   "built base instead of a fixed radius"),
+             ]},
+            {"title": "Cost of thinking",
+             "what": "The protection field is rebuilt on a timer and every "
+                     "defence price reads it. Rebuilding it more often tracks "
+                     "the base more closely and costs sim time.",
+             "reads": "brain/market/protect_field.as",
+             "knobs": [
+                 ("TUNE_PROTECT_FIELD_S", "seconds between rebuilds of the "
+                  "list of what we own and what guards it. Lower is fresher "
+                  "and slower; measured 2026-08-27, the defence price cost "
+                  "3.6 ms per call before this field existed and 0.6 ms after"),
              ]},
             {"title": "Anti-air",
              "what": "AA is bought against air actually seen, plus a baseline.",
@@ -710,6 +731,10 @@ GOALS = [
                      "so static defence is asked to answer more"},
             {"ref": "TUNE_DEF_TRADE", "dir": "up",
              "note": "credits a turret with stopping more enemy metal"},
+            {"ref": "TUNE_UNPROT_DISCOUNT", "dir": "up",
+             "note": "makes every unguarded building worth measurably less "
+                     "until something covers it, so the auction chases the "
+                     "buildings we actually own rather than a perimeter"},
         ],
         "watch": "python tools/deaths.py <run> — where our buildings died. If "
                  "losses move from mexes to the front line, it worked.",

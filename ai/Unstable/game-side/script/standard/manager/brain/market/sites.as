@@ -475,48 +475,26 @@ AIFloat3 FarmSlot(int defId)
 // value is rather than on the start position, and it MOVES as the base grows.
 bool BaseCentroid(AIFloat3& out c, float& out extent)
 {
+	PfRebuild();
 	float wsum = 0.f;
 	float cx = 0.f, cz = 0.f;
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if (gLExtract[i] <= 0.f)
-			continue;
-		const float w = 620.f;   // an extractor's own footprint of value
-		cx += gLPos[i].x * w; cz += gLPos[i].z * w; wsum += w;
-	}
-	for (uint i = 0; i < gOwnBig.length(); ++i) {
-		if (gOwnBig[i] is null) continue;
-		const AIFloat3 p = gOwnBig[i].GetPos(ai.frame);
-		const float w = Catalog::gCostM[int(gOwnBig[i].circuitDef.id)];
-		cx += p.x * w; cz += p.z * w; wsum += w;
-	}
-	for (uint i = 0; i < gOwnGen.length(); ++i) {
-		if (gOwnGen[i] is null) continue;
-		const AIFloat3 p = gOwnGen[i].GetPos(ai.frame);
-		const float w = Catalog::gCostM[int(gOwnGen[i].circuitDef.id)];
-		cx += p.x * w; cz += p.z * w; wsum += w;
+	for (uint i = 0; i < gPfPos.length(); ++i) {
+		cx += gPfPos[i].x * gPfWorth[i];
+		cz += gPfPos[i].z * gPfWorth[i];
+		wsum += gPfWorth[i];
 	}
 	if (wsum <= 1.f)
 		return false;
 	c = AIFloat3(cx / wsum, 0.f, cz / wsum);
 	if (!OnMap(c))
 		return false;
-	// How far the base actually reaches, so the ring sits just outside it
-	// instead of at some radius nobody chose.
+	// How far the base actually reaches, so the closure ring sits just outside
+	// it instead of at some radius nobody chose.
 	extent = 0.f;
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if (gLExtract[i] <= 0.f) continue;
-		const float dd = c.distance2D(gLPos[i]);
-		if (dd > extent) extent = dd;
-	}
-	for (uint i = 0; i < gOwnGen.length(); ++i) {
-		if (gOwnGen[i] is null) continue;
-		const float dd = c.distance2D(gOwnGen[i].GetPos(ai.frame));
-		if (dd > extent) extent = dd;
-	}
-	for (uint i = 0; i < gOwnBig.length(); ++i) {
-		if (gOwnBig[i] is null) continue;
-		const float dd = c.distance2D(gOwnBig[i].GetPos(ai.frame));
-		if (dd > extent) extent = dd;
+	for (uint i = 0; i < gPfPos.length(); ++i) {
+		const float dd = c.distance2D(gPfPos[i]);
+		if (dd > extent)
+			extent = dd;
 	}
 	return true;
 }

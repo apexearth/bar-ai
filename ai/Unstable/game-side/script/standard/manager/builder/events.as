@@ -30,6 +30,13 @@ string TakeHistFor(int id)
 
 void AiTaskAdded(IUnitTask@ task)
 {
+	const double _t = Perf::T0();
+	TaskAddedInner(task);
+	Perf::Add("hk.taskadd.bld", _t);
+}
+
+void TaskAddedInner(IUnitTask@ task)
+{
 	if (task.GetType() != Task::Type::BUILDER)
 		return;
 	Requests::Register(task);
@@ -47,6 +54,13 @@ int gNextGoneLog = 0;
 int gAbortLog = 0;
 
 void AiTaskRemoved(IUnitTask@ task, bool done)
+{
+	const double _t = Perf::T0();
+	TaskRemovedInner(task, done);
+	Perf::Add("hk.taskdel.bld", _t);
+}
+
+void TaskRemovedInner(IUnitTask@ task, bool done)
 {
 	if (task.GetType() != Task::Type::BUILDER)
 		return;
@@ -129,6 +143,13 @@ bool gHomeSet = false;
 
 void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 {
+	const double _t = Perf::T0();
+	UnitAddedInner(unit, usage);
+	Perf::Add("hk.unitadd.bld", _t);
+}
+
+void UnitAddedInner(CCircuitUnit@ unit, Unit::UseAs usage)
+{
 	Brain::NoteSpend(unit, usage);
 	if (IsFusion(unit.circuitDef))
 		gFusions.insertLast(unit);
@@ -151,6 +172,13 @@ void AiUnitAdded(CCircuitUnit@ unit, Unit::UseAs usage)
 }
 
 void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
+{
+	const double _t = Perf::T0();
+	UnitRemovedInner(unit, usage);
+	Perf::Add("hk.unitdel.bld", _t);
+}
+
+void UnitRemovedInner(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	if ((usage == Unit::UseAs::BUILDER) || (usage == Unit::UseAs::REZZER))
 		Military::ForgetPenned(unit.id);
