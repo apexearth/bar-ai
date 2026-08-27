@@ -12,7 +12,19 @@ single largest sink in the game -- larger than fusions, larger than any unit.
 That is the same shape as the old `cornanotc` finding. Three Pulsars and a Big
 Bertha also appear, which is the thing that was asked for, so this is a real
 trade and not obviously wrong -- but nobody has measured where the number
-should sit. Lower `apex_def_eco_s` on the Balance tab is the knob.
+should sit.
+
+Attributed, by reading defence share off each step's own run: the site
+wave-threat floor did NOT do it (8.1%, inside the 7.1-9.4% baseline range);
+the target rebase did (13.4%).
+
+**`apex_def_eco_s` is only half the knob.** A/B at 30s vs 10s over four seeds
+moved defence share 14.2% -> 13.3%, i.e. barely, because `DefenceTarget` takes
+the MAX of the economic hold and the per-mex floor -- and with 27-47 mexes the
+floor is the binding term at both settings. Anyone tuning defence down has to
+move `apex_mex_cover_floor` as well, or nothing happens. (Those four seeds
+also showed built 37.8k -> 65.4k and mex 24 -> 30 at 10s, but two of the 30s
+games collapsed early and this bench cannot resolve that at n=4.)
 
 ## 2026-08-27 -- the enemy-tier fade has never actually fired on T3
 
