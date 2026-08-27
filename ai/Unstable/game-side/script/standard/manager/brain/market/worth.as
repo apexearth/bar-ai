@@ -127,6 +127,19 @@ float OutrangeMul(int d)
 	return rMul;
 }
 
+// A LOWER TIER IS WORTH LESS AGAINST A HIGHER ONE (apexearth: "T3 units make
+// T2 units much less useful. We should want less and less T2 units and labs
+// when enemy has higher tier units"). Continuous in the share of identified
+// enemy metal that outranks this def's own tier, and it never reaches zero --
+// a fielded T1 still shoots. 0 is the control arm.
+float FoeTierMul(int d)
+{
+	const float k = ai.GetTunable("apex_foe_tier_fade", TUNE_FOE_TIER_FADE);
+	if (k <= 0.f)
+		return 1.f;
+	return 1.f / (1.f + k * Military::FoeTierAbove(DefTier(d)));
+}
+
 // The score. Raw, before any of the situational multipliers -- this is what
 // normalizes the line, so it must not carry anything that varies per election.
 //
@@ -178,6 +191,7 @@ float UnitPPC(int d)
 	v *= 1.f + (Catalog::gMaxRange[d] / gWMRng)
 			* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH) * ShieldShare();
 	v *= OutrangeMul(d);
+	v *= FoeTierMul(d);
 	return v;
 }
 

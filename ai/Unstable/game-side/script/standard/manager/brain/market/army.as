@@ -232,6 +232,32 @@ bool IsAdvancedDef(int d)
 	return adv > 0;
 }
 
+// ...and its TIER, off the same build graph. Tier attributes are assigned by
+// name for arm, cor AND leg in Main::AiMain, so this reads an ENEMY def as
+// readily as one of ours -- which is the only tier knowledge script has.
+array<int> gTierKnown;
+
+int DefTier(int d)
+{
+	if (!Catalog::ValidId(d))
+		return 1;
+	if (int(gTierKnown.length()) <= Catalog::gDefCount)
+		gTierKnown.resize(Catalog::gDefCount + 1);
+	if (gTierKnown[d] != 0)
+		return gTierKnown[d];
+	int t = 1;
+	const array<int>@ by = Catalog::gBuiltBy[d];
+	for (uint i = 0; i < by.length(); ++i) {
+		const int at = Factory::userData[by[i]].attr;
+		if (((at & Factory::Attr::T3) != 0) && (t < 3))
+			t = 3;
+		else if (((at & Factory::Attr::T2) != 0) && (t < 2))
+			t = 2;
+	}
+	gTierKnown[d] = t;
+	return t;
+}
+
 // The share of the fielded army that is T2 or better -- what mobile support
 // is bought against (apexearth: support units only for squads that hold T2
 // or greater).

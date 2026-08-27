@@ -204,6 +204,27 @@ int OwnedWaterPlants()
 
 // A plant's TIER, in the only currency that separates a T1 lab from its
 // advanced version: the best extractor its own constructors can reach.
+// A plant's own tier, from its attribute rather than from its extraction reach
+// -- the enemy comparison is about what the LINE fields, not what its
+// constructors dig.
+int PlantTier(int plantId)
+{
+	const int at = Factory::userData[plantId].attr;
+	if ((at & Factory::Attr::T3) != 0)
+		return 3;
+	if ((at & Factory::Attr::T2) != 0)
+		return 2;
+	return 1;
+}
+
+float FoeTierPlantMul(int plantId)
+{
+	const float k = ai.GetTunable("apex_foe_tier_fade", TUNE_FOE_TIER_FADE);
+	if (k <= 0.f)
+		return 1.f;
+	return 1.f / (1.f + k * Military::FoeTierAbove(PlantTier(plantId)));
+}
+
 float PlantReachOf(int plantId)
 {
 	float best = 0.f;
@@ -394,7 +415,12 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const float expTerm = anyOpen
 				? stream * (gPlantReach[d] + gPlantLocked[d] * first) : 0.f;
 		const float conHalf = pipeTerm + expTerm;
-		const float gain = conHalf + prodHalf;
+		// Only the PRODUCTION half is a tier question against THEM: what this
+		// line would field is worth less while they field a tier above it. Its
+		// constructor half buys mohos and build power, which their tier does
+		// not devalue -- so a T2 lab is still bought for its cons.
+		const float prodOwn = prodHalf * FoeTierPlantMul(d);
+		const float gain = conHalf + prodOwn;
 		if (gain <= 0.05f)
 			continue;
 		// A DUPLICATE line is only parallel capacity: value divides per
@@ -435,7 +461,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if ((myReach > 0.f) && (bestDom > myReach))
 				subMul = myReach / bestDom;
 		}
-		float dupGain = (conHalf * subMul + prodHalf) / float(1 + reachKin);
+		float dupGain = (conHalf * subMul + prodOwn) / float(1 + reachKin);
 		{
 			const float ceilX = BestExtract();
 			if (ceilX > 0.f)

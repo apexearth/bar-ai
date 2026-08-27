@@ -269,6 +269,9 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 {
 	if ((unit is null) || (attackerDef is null))
 		return;
+	// The tier census FIRST: it is about what THEY field, so it must not sit
+	// behind the filters that ask what WE lost.
+	Military::NoteFoeDef(attackerDef.costM, attackerDef);
 	const CCircuitDef@ cdef = unit.circuitDef;
 	if ((cdef is null) || !cdef.IsMobile() || !WasFinished(int(unit.id)))
 		return;
@@ -283,6 +286,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 {
 	if (edef is null)
 		return;
+	Military::NoteFoeDef(edef.costM, edef);
 	double hkT = Perf::T0();
 	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs);
 	Perf::Add("hk.enemydead", hkT);

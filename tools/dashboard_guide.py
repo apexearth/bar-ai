@@ -86,6 +86,10 @@ PANELS = [
              "of the ground it has to watch"),
             ("TUNE_RANGE_WORTH", "standing weight on weapon reach when picking "
              "what to build"),
+            ("TUNE_FOE_TIER_FADE", "fades a unit -- and a lab's production "
+             "value -- as more of the enemy metal we have MET outranks its "
+             "tier. Higher abandons the lower tier faster once they field T3; "
+             "0 ignores their tier entirely"),
             ("TUNE_SPEED_WORTH", "standing weight on speed"),
         ],
     },

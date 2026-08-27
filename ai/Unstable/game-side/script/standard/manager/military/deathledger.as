@@ -27,6 +27,12 @@ float gKillAll   = 0.f;          // decayed metal: ALL kills by our own units
 float gDeadToStatic = 0.f;
 float gDeadToAir    = 0.f;
 float gDeadToMobile = 0.f;
+// WHAT TIER THEY ARE FIELDING. The only enemy DEFS script ever holds are the
+// ones the two death hooks hand us -- there is no per-def enemy enumeration
+// binding, only role-aggregated cost -- so this is contact-attested and reads
+// zero in a game where the fronts never meet. That is the honest no-change
+// case: we learn they have T3 by meeting it, which is also when it matters.
+array<float> gFoeTierM(4, 0.f);
 int   gBleedLast = 0;
 int   gNextBleedLog = 0;
 
@@ -48,6 +54,27 @@ void NoteEnemyKill(float costM, float fwd, bool byUs)
 	gKillAll += costM;
 	if (fwd >= FWD_DEEP)
 		gKillFwd += costM;
+}
+
+void NoteFoeDef(float costM, const CCircuitDef@ edef)
+{
+	if ((edef is null) || (costM <= 0.f) || !edef.IsMobile())
+		return;
+	const int t = Market::DefTier(int(edef.id));
+	if ((t >= 1) && (t < int(gFoeTierM.length())))
+		gFoeTierM[t] += costM;
+}
+
+// Share of the enemy metal we have IDENTIFIED that outranks this tier.
+float FoeTierAbove(int tier)
+{
+	float tot = 0.f, above = 0.f;
+	for (uint i = 1; i < gFoeTierM.length(); ++i) {
+		tot += gFoeTierM[i];
+		if (int(i) > tier)
+			above += gFoeTierM[i];
+	}
+	return (tot > 1.f) ? (above / tot) : 0.f;
 }
 
 void NoteDeathSource(float costM, const CCircuitDef@ attackerDef)
@@ -167,8 +194,16 @@ void UpdateDeathLedger()
 	gDeadToStatic *= k;
 	gDeadToAir *= k;
 	gDeadToMobile *= k;
+	for (uint fi = 0; fi < gFoeTierM.length(); ++fi)
+		gFoeTierM[fi] *= k;
 	if ((ai.frame >= gNextBleedLog) && (gBleedFwd + gBleedHome + gKillFwd > 50.f)) {
 		gNextBleedLog = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: foetier t1="
+			+ formatFloat(gFoeTierM[1], "", 0, 0)
+			+ " t2=" + formatFloat(gFoeTierM[2], "", 0, 0)
+			+ " t3=" + formatFloat(gFoeTierM[3], "", 0, 0)
+			+ " above1=" + formatFloat(FoeTierAbove(1), "", 0, 2)
+			+ " above2=" + formatFloat(FoeTierAbove(2), "", 0, 2));
 		AiLog(Factory::T() + "apex: bleed fwd=" + formatFloat(gBleedFwd, "", 0, 0)
 			+ " kill=" + formatFloat(gKillFwd, "", 0, 0)
 			+ " home=" + formatFloat(gBleedHome, "", 0, 0)

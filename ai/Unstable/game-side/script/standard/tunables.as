@@ -2029,6 +2029,13 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 //   collapsed the target to a mex floor exactly as the army grew. Chosen to
 //   clear one heavy gun at hosted-game income, not derived -- measure it.
 const float TUNE_DEF_ECO_S = 30.f;
+// manager/brain/market/worth.as, want_plant.as [ratio] -- How fast a unit's --
+//   and a plant's PRODUCTION -- value fades as the share of identified enemy
+//   metal above its own tier rises. Priced as 1/(1 + this * shareAbove): at 1
+//   an enemy fielding nothing but a higher tier halves what a lower-tier unit
+//   or line is worth. Never zero, because a fielded T1 still shoots; 0 is the
+//   control arm. Chosen, not derived -- measure it.
+const float TUNE_FOE_TIER_FADE = 1.f;
 // manager/brain/market/want_protect.as [ratio] -- The rear eco specialist's
 //   defence and army targets, as a share of a normal player's. Its threat is
 //   already near zero by position, so this only holds the tail down; it is a
