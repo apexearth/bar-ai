@@ -9,6 +9,30 @@ const float BLOCKER_REACH = 160.f;
 // E economy is structurally in surplus (removing the candidate keeps it so)
 // and the bank has room for the burst, a weak generator's banked metal
 // beats its trickle. Weakest first (lowest makeE per metal).
+// WHAT RETIRING ONE OF OUR OWN STRUCTURES IS WORTH -- one price, so a solar,
+// a dominated turret and a superseded lab compare on the same scale. The metal
+// back plus the defended ground it stops renting, minus the output it still
+// makes. Ground is SpaceRentM, the same rent every eco placement already pays,
+// so a building inside our own cover has to earn its cells.
+float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
+{
+	const int cells = (Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1;
+	return (Catalog::gCostM[d] + SpaceRentM(tgt.GetPos(ai.frame), cells)) / hz
+			- Catalog::gMakeE[d] * ePM;
+}
+
+float RetireValue(CCircuitUnit@ unit, CCircuitUnit@ tgt, int d, float ePM,
+		float wage, float hz)
+{
+	const float gain = RetireGain(tgt, d, ePM, hz);
+	if (gain <= 0.f)
+		return 0.f;
+	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+	const float walkSec = (speed > 1.f)
+			? (unit.GetPos(ai.frame).distance2D(tgt.GetPos(ai.frame)) / speed) : 60.f;
+	return gain / (1.f + (walkSec + Catalog::gCostM[d] / 90.f) * wage);
+}
+
 Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 {
 	Want w;
@@ -105,11 +129,20 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	// already priced below (gain minus the generation given up), and the
 	// energy-surplus test guards the stall the floor was reaching for.
 	const float ratio = ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO);
-	const float eFree = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	const float hzR = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	const float hz = (hzR > 1.f) ? hzR : 300.f;
+	const float ePM = EPriceFloor();
+	const float wageR = Wage();
+	// Converters are an elastic sink, not demand -- they are sized against
+	// income by construction, so counting their chew as pull made a structural
+	// surplus read as fully spent: measured over a 43-minute game, eFree sat at
+	// -435, +3 and -1463 E/s while energy EXCESS reached 1,084,434.
+	const float eFree = aiEconomyMgr.energy.income
+			- (aiEconomyMgr.energy.pull - ConvUseE());
 	CCircuitUnit@ best = null;
 	int bestDef = -1;
-	float bestScore = 1e9f;
-	// Generators, worst E-per-cell first, only when dwarfed by the best.
+	float bestValue = 0.f;
+	// Generators, best-priced retirement first, only when dwarfed by the best.
 	float ownBestEcell = 0.f;
 	for (uint i = 0; i < gOwnGen.length(); ++i) {
 		if (gOwnGen[i] is null)
@@ -126,14 +159,23 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			continue;
 		const int d = int(g.circuitDef.id);
 		// Removing it must LEAVE a surplus -- reclaim never causes a stall.
-		if (eFree - Catalog::gMakeE[d] <= 0.1f * aiEconomyMgr.energy.income)
+		// The margin is a share of the CANDIDATE'S own output, not of income:
+		// scaled to income it grew with the economy, so the bigger we got the
+		// less we could retire.
+		if (eFree - Catalog::gMakeE[d] <= 0.1f * Catalog::gMakeE[d])
 			continue;
 		const float ec = Catalog::gMakeE[d]
 				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 		if (ownBestEcell < ratio * ec)
 			continue;   // not dwarfed: still pulling its weight per cell
-		if (ec < bestScore) {
-			bestScore = ec;
+		// PRICED, not ranked by E-per-cell. An argmin on that metric put the
+		// worst generator we own permanently in front: a solar reads 0.80 and
+		// an advanced solar 4.69, so while one T1 panel stood the advanced
+		// solar could never even be the candidate. Measured over a 43-minute
+		// game: 24 reclaim decisions, every one armsolar, zero armadvsol.
+		const float v = RetireValue(unit, g, d, ePM, wageR, hz);
+		if (v > bestValue) {
+			bestValue = v;
 			@best = g;
 			bestDef = d;
 		}
@@ -159,10 +201,9 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		}
 		if (!dominated)
 			continue;
-		// Dominated defence outranks a weak generator at equal ground value.
-		const float ec = Catalog::gCostM[d] * 0.001f;
-		if (ec < bestScore) {
-			bestScore = ec;
+		const float v = RetireValue(unit, g, d, ePM, wageR, hz);
+		if (v > bestValue) {
+			bestValue = v;
 			@best = g;
 			bestDef = d;
 		}
@@ -237,10 +278,13 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 					}
 				}
 			}
-			if (succeeded && (Catalog::gCostM[fd] * 0.001f < bestScore)) {
-				bestScore = Catalog::gCostM[fd] * 0.001f;
-				@best = f;
-				bestDef = fd;
+			if (succeeded) {
+				const float v = RetireValue(unit, f, fd, ePM, wageR, hz);
+				if (v > bestValue) {
+					bestValue = v;
+					@best = f;
+					bestDef = fd;
+				}
 			}
 		}
 	}
@@ -248,8 +292,6 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		return w;
 	// One-shot metal amortized at the market's payback scale -- 60s priced a
 	// single refund like a perpetual stream and it outbid every mex.
-	const float horizon = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
-	const float gain = Catalog::gCostM[bestDef] / ((horizon > 1.f) ? horizon : 300.f);
 	const AIFloat3 gp = best.GetPos(ai.frame);
 	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
 	const float walkSec = (speed > 1.f)
@@ -258,10 +300,10 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	@w.def = Catalog::Def(bestDef);
 	w.pos = gp;
 	w.spotId = int(best.id);
-	w.gain = gain - Catalog::gMakeE[bestDef] * EPriceFloor();
+	w.gain = RetireGain(best, bestDef, ePM, hz);
 	w.mCost = 1.f;
-	w.tCost = (walkSec + Catalog::gCostM[bestDef] / 90.f) * Wage();
-	w.value = (w.gain > 0.f) ? (w.gain / (w.mCost + w.tCost)) : 0.f;
+	w.tCost = (walkSec + Catalog::gCostM[bestDef] / 90.f) * wageR;
+	w.value = bestValue;
 	@w.target = best;
 	@gReclaimTarget = best;
 	return w;
