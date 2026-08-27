@@ -27,6 +27,13 @@ namespace Market {
 array<AIFloat3> gPfPos;     // every standing asset of ours worth defending
 array<float>    gPfWorth;   // ...and what losing it costs, in metal
 float           gPfTotal = 0.f;
+// Build cells our own structures stand on, every class of them. The rim below
+// gives the base's AREA; this gives how much of it is used, and the ratio is
+// the only honest answer to "is there room?" -- which SpaceRentM cannot give,
+// because it prices ground by the turret cover over it and reads ~0 in a base
+// with few turrets (apexearth 2026-08-27: "we have wind, advanced solar, and
+// T1 converters all over the place not being reclaimed... we have no space").
+float           gPfCells = 0.f;
 int             gPfAt = -999999;
 
 // Towers, flattened out of gProtPos[PROT_DEF] with their reach and kill power
@@ -84,6 +91,36 @@ float PfRimDist(const AIFloat3& in p)
 	if (!gPfRimOk)
 		return 0.f;
 	return p.distance2D(gPfMid) - gPfRimR[PfRayOf(p)];
+}
+
+// The base's own footprint in build cells, from the measured rim: a fan of
+// PF_RAYS wedges about the asset centroid.
+float PfBaseCells()
+{
+	if (!gPfRimOk)
+		return 0.f;
+	float area = 0.f;
+	for (int b = 0; b < PF_RAYS; ++b)
+		area += (3.14159f / float(PF_RAYS)) * gPfRimR[b] * gPfRimR[b];
+	return area / 256.f;   // 16-elmo build cells
+}
+
+// How full the base is, 0..1. Ground is only worth freeing when it is scarce,
+// so every scarcity price is scaled by this and vanishes on an empty map.
+float PfCrowd()
+{
+	const float cells = PfBaseCells();
+	if (cells <= 1.f)
+		return 0.f;
+	const float f = gPfCells / cells;
+	return (f > 1.f) ? 1.f : f;
+}
+
+// What one build cell of our base is worth, in metal of standing assets. The
+// price of the room an obsolete building is sitting on.
+float PfMetalPerCell()
+{
+	return (gPfCells > 1.f) ? (gPfTotal / gPfCells) : 0.f;
 }
 
 float PfHorizon()
@@ -247,6 +284,7 @@ void PfRebuild()
 	gPfPos.resize(0);
 	gPfWorth.resize(0);
 	gPfTotal = 0.f;
+	gPfCells = 0.f;
 	const float h = PfHorizon();
 
 	// EVERY STANDING BUILDING, not a hand-picked three classes. Extractors are
@@ -259,6 +297,10 @@ void PfRebuild()
 			if ((u is null) || (u.circuitDef is null))
 				continue;
 			const int d = int(u.circuitDef.id);
+			// Counted before the worth filters below: extractors and towers
+			// take up ground exactly like everything else.
+			gPfCells += float((Catalog::gAreaCells[d] > 0)
+					? Catalog::gAreaCells[d] : 1);
 			if (Catalog::gExtractsM[d] > 0.f)
 				continue;
 			if (ProtClassOf(d) >= 0)

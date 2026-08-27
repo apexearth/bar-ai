@@ -643,6 +643,9 @@ GROUPS = [
                   "base anchor"),
                  ("TUNE_SLOT_TRIES", "lattice slots tried before a placement "
                   "gives up"),
+                 ("TUNE_ROOM_WORTH", "what the ground under an obsolete "
+                  "building is worth once the base is full — raise it to "
+                  "reclaim old wind, solar and converters to make room"),
                  ("TUNE_MEX_TRIES", "how many metal spots a builder offers to "
                   "the engine before giving up on expanding this tick"),
                  ("TUNE_NANO_SITE_SHARE", "how much of the metal nothing is "

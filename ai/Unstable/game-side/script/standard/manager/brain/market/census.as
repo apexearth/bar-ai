@@ -224,6 +224,13 @@ float OwnedMobileCeil()
 // every entry MUST leave via NoteDead.
 array<CCircuitUnit@> gOwnGen;
 array<Id> gOwnGenIds;
+// Converters are ECO STRUCTURES THAT OCCUPY GROUND, and gOwnGen holds only
+// things that MAKE energy -- so a T1 converter was never a reclaim candidate
+// at all, whatever stood next to it (apexearth 2026-08-27: "we have wind,
+// advanced solar, and T1 converters all over the place not being reclaimed...
+// we have no space").
+array<CCircuitUnit@> gOwnConv;
+array<Id> gOwnConvIds;
 // High-value structures (labs, fusions, gantries...): each deserves its
 // own turret ring (apexearth: "so shit at protecting important buildings
 // like T2 -- 2700 metal investment dying").
@@ -315,6 +322,10 @@ void NoteFinished(CCircuitUnit@ unit)
 		gOwnGen.insertLast(unit);
 		gOwnGenIds.insertLast(unit.id);
 	}
+	if (!Catalog::gMobile[defId] && (Catalog::gConvCapacity[defId] > 1.f)) {
+		gOwnConv.insertLast(unit);
+		gOwnConvIds.insertLast(unit.id);
+	}
 	if (!Catalog::gMobile[defId]) {
 		gAssetsM += Catalog::gCostM[defId];
 		if (ProtClassOf(defId) >= 0)
@@ -396,6 +407,13 @@ void NoteDead(CCircuitUnit@ unit)
 		if (gOwnGenIds[gi] == unit.id) {
 			gOwnGen.removeAt(gi);
 			gOwnGenIds.removeAt(gi);
+			break;
+		}
+	}
+	for (uint ci = 0; ci < gOwnConvIds.length(); ++ci) {
+		if (gOwnConvIds[ci] == unit.id) {
+			gOwnConv.removeAt(ci);
+			gOwnConvIds.removeAt(ci);
 			break;
 		}
 	}

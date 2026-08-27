@@ -1588,6 +1588,12 @@ const float TUNE_NANO_SITE_SHARE = 1.f;
 //   all, which reads as "no ground left". A bound on WORK (one engine probe
 //   each), never on how far we may expand.
 const float TUNE_MEX_TRIES = 10.f;
+// manager/brain/market/want_reclaim.as [multiplier] -- What the ROOM under an
+//   obsolete building is worth, as a multiple of (base fill x metal per build
+//   cell x the building's own cells). SpaceRentM prices ground by the turret
+//   cover over it and reads ~0 in a lightly defended base, so nothing charged a
+//   wind farm for the space it occupied. 0 disables scarcity pricing.
+const float TUNE_ROOM_WORTH = 1.f;
 // MOBILE_BP_EFF: fraction of a mobile builder's workertime that is real
 // lathing rather than transit; nanos and other statics count at 1.0.
 const float TUNE_MOBILE_BP_EFF = 0.6f;

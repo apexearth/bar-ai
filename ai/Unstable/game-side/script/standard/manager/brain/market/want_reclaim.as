@@ -75,7 +75,16 @@ float ReclaimHandMul(CCircuitUnit@ unit)
 float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
 {
 	const int cells = (Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1;
-	return (Catalog::gCostM[d] + SpaceRentM(tgt.GetPos(ai.frame), cells)) / hz
+	// ROOM IS WORTH SOMETHING ONLY WHEN IT IS SCARCE. SpaceRentM prices ground
+	// by the turret cover standing over it, which is ~0 in a base with few
+	// turrets -- so an obsolete wind farm paid nothing for the ground it was
+	// squatting on and its trickle of energy always outweighed its refund.
+	// PfCrowd is the measured fill of the base's own rim, and PfMetalPerCell
+	// what a cell of it carries, so the freed ground is priced at what the base
+	// actually puts on a cell, and the whole term vanishes on an empty map.
+	const float room = PfCrowd() * PfMetalPerCell() * float(cells)
+			* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
+	return (Catalog::gCostM[d] + SpaceRentM(tgt.GetPos(ai.frame), cells) + room) / hz
 			- Catalog::gMakeE[d] * ePM;
 }
 
@@ -240,6 +249,41 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		if (v > bestValue) {
 			bestValue = v;
 			@best = g;
+			bestDef = d;
+		}
+	}
+	// Converters, on the SAME LAW as generators: output per cell of ground,
+	// against the best converter we own. A T1 converter beside a T2 one is
+	// paying rent on ground its successor uses far better -- and the ground is
+	// the point (apexearth 2026-08-27: "we have wind, advanced solar, and T1
+	// converters all over the place not being reclaimed. That's a huge issue,
+	// we have no space"). Removing one must leave the metal it was making
+	// affordable to lose, which is what its own gain term already prices.
+	float ownBestMcell = 0.f;
+	for (uint i = 0; i < gOwnConv.length(); ++i) {
+		if (gOwnConv[i] is null)
+			continue;
+		const int d = int(gOwnConv[i].circuitDef.id);
+		const float mc = Catalog::gConvCapacity[d]
+				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+		if (mc > ownBestMcell)
+			ownBestMcell = mc;
+	}
+	for (uint i = 0; i < gOwnConv.length(); ++i) {
+		CCircuitUnit@ cv = gOwnConv[i];
+		if (cv is null)
+			continue;
+		const int d = int(cv.circuitDef.id);
+		const float mc = Catalog::gConvCapacity[d]
+				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+		if (mc <= 0.f)
+			continue;
+		if (ownBestMcell < ratio * mc)
+			continue;   // not dwarfed: still earning its cells
+		const float v = RetireValue(unit, cv, d, ePM, wageR, hz);
+		if (v > bestValue) {
+			bestValue = v;
+			@best = cv;
 			bestDef = d;
 		}
 	}
