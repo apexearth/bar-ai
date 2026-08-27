@@ -1,5 +1,40 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-27 -- the stall answer is too SMALL, and serializing it is not why
+
+apexearth, watching: "when we run out of energy we'll make 1 or 2 more wind...
+and we keep running out of energy."
+
+The obvious suspect was the request fold -- energy asks join one standing
+request unless the bank overflows, and during a stall it never does, so a
+300/s deficit is answered 35/s at a time. Opening parallel sites while ordered
+generation fails to cover the shortfall was tried and MEASURED WORSE, three
+paired 20-minute Carrot Mountains seeds, medians:
+
+    parallel OFF   built 25,500   mex 42   eStall 444
+    parallel ON    built 19,555   mex 33   eStall 352
+
+It buys the smaller stall with a quarter of the economy, by splitting build
+power across several frames at once -- the same thing this AI penalises a
+second lab for, and against his own rule to "focus as much build power as we
+can on just the one building". `apex_e_parallel` is defaulted OFF. The fold is
+that focus rule working; it is not the bug.
+
+**So the complaint is unexplained.** If one generator at a time is right, the
+answer to a large deficit is a BIGGER generator, and the question is why the
+market keeps picking small ones. `apex_inferior_discount` already scales a
+generator's gain by its energy-per-metal against the best one we could build
+(`want_energy.as`, OwnedBestEPerM) -- it is supposed to do exactly this job.
+Either it is not biting at the moment the stall lands, or the gain
+`gMakeE * EPriceAt(bSec)` favours the cheap fast build through the build-time
+term. Not investigated.
+
+Worth carrying into that investigation: of the energy-side changes tried this
+session, the ACCOUNTING fixes survived measurement (counting committed draw,
+counting in-flight lines) and every attempt to change POLICY did not (parallel
+sites; the 2.79x mex-upgrade boost). Suspect the model, not the ordering.
+
+
 ## 2026-08-27 -- "always be expanding the economy" HAS BEEN LOST AGAIN
 
 `grep -rn "always_eco\|AlwaysEco" ai/` returns NOTHING, in any variant. The
