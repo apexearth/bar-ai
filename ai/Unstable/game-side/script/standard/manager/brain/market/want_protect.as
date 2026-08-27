@@ -438,49 +438,31 @@ float DefenceTarget()
 {
 	if (!Builder::gHomeSet)
 		return 0.f;
-	// A CREDIBLE WAVE BEFORE ANYTHING IS SEEN. ThreatM at our own base is what
-	// has actually arrived there, which is nothing until it is -- and a target
-	// of zero until the first raider lands is a strategy of owning no defence.
-	// The floor is the same symmetric expectation ArmyTarget already uses (they
-	// had our start and our minutes), taking the share of it that could reach
-	// this base. Defence is excluded from that basis, so it cannot buy itself.
-	float threat = ThreatM(Builder::gHomePos);
-	{
-		const float expected = ArmyTargetFull();
-		// ...scaled by how exposed WE are of the team. The wave reaches the
-		// front players first; the rear player is answered by the four in
-		// front of it, not by turrets it has not built.
-		const float floorM = expected
-				* ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE)
-				* TeamExposure();
-		if (floorM > threat)
-			threat = floorM;
-	}
-	// The per-mex floor is a target too. The site loop below will not buy a
-	// turret the global target says we already have enough of, so the two must
-	// agree about the floor or it never gets built.
-	const float mexFloor = MexCoverFloorM() * float(OwnMexCount());
-	if (threat <= 1.f)
-		return mexFloor;
-	const float share = ai.GetTunable("apex_def_army_share", TUNE_DEF_ARMY_SHARE);
-	// ...and what the TEAM already holds here. Same reason ShortfallAt counts
-	// ally influence: the rear player's ground is answered by four teammates,
-	// not by turrets it has not built.
-	// OUR OWN ARMY, not the team's. Military::OurArmyNow() sums the whole
-	// alliance, so every player subtracted all eight players' army from its own
-	// local wave and every defence target came out zero (measured: threat 2550,
-	// ourArmy 11003, target 0 on all eight).
-	float unanswered = threat - ArmyValue() * share;
-	if (unanswered <= 0.f)
-		return mexFloor;
-	const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
-	float t = unanswered / ((trade > 0.f) ? trade : 2.f);
+	// HOW MUCH DEFENCE WE MAY OWN IS AN ECONOMIC QUESTION. Where a post goes
+	// and whether it is worth building is the threat question, and it is asked
+	// per site below; this is only the size of the standing holding.
+	//
+	// It used to be (expected wave - our own army x share) / trade, which made
+	// our own army cancel the target: measured at 400 metal/s with a 38k army,
+	// the whole static-defence budget came to 2,817 metal -- less than one
+	// Pulsar -- and TargetFill then returned a hard zero, so ground defence
+	// switched off for the rest of the game. That is also backwards about
+	// where the army is: a fielded army is out on the line, which is precisely
+	// why the base needs guns of its own.
+	//
+	// apexearth chose the economy as the basis (2026-08-27), the same one
+	// ProposeSuper already budgets against. Seconds of economic power, so it
+	// scales with income at every stage and needs no cap: at 40 metal/s it is
+	// a handful of light towers, at 400 it can carry a heavy gun.
+	const float hold = ai.GetTunable("apex_def_eco_s", TUNE_DEF_ECO_S);
+	float t = EcoPowerM() * ((hold > 0.f) ? hold : 30.f);
 	if (EcoRoleActive())
 		t *= ai.GetTunable("apex_eco_def_mul", TUNE_ECO_DEF_MUL);
-	// ...and the floor applies to the rear specialist as well. apex_eco_def_mul
-	// defaults to 0 on the argument that four teammates stand in front of it --
-	// which is true of the wave and not of a raider that walked around them,
-	// and the rear is where the economy lives.
+	// ...and the per-mex floor is a target too. The site loop will not buy a
+	// turret the global target says we already have enough of, so the two must
+	// agree about the floor or it never gets built -- and the floor applies to
+	// the rear specialist as well, whose ground is where the economy lives.
+	const float mexFloor = MexCoverFloorM() * float(OwnMexCount());
 	if (mexFloor > t)
 		t = mexFloor;
 	return (t > 0.f) ? t : 0.f;

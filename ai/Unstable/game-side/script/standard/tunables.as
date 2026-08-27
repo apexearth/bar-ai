@@ -2021,11 +2021,14 @@ const float TUNE_FARM_ROWS = 28.f;
 //   and the C++ blocked-slot signal stay for a cheaper retry: the want has to
 //   compete against a mex, and clearing ground is not worth a mex.
 const float TUNE_RECLAIM_BLOCKER = 0.f;
-// manager/brain/market/want_protect.as [ratio] -- Share of the local threat
-//   our MOBILE army is assumed to answer, leaving the rest for static
-//   defence. The defence target is what is left over, converted to turret
-//   metal at apex_def_trade.
-const float TUNE_DEF_ARMY_SHARE = 0.2f;
+// manager/brain/market/want_protect.as [seconds] -- HOW MUCH STATIC DEFENCE WE
+//   MAY OWN, as seconds of total economic power (EcoPowerM, metal/s incl.
+//   realizable energy). The whole basis of DefenceTarget: at 40 metal/s this
+//   is ~1,200 metal, a handful of light towers; at 400 it is ~12,000, enough
+//   to carry a Pulsar. Replaced (expected wave - our own army) / trade, which
+//   collapsed the target to a mex floor exactly as the army grew. Chosen to
+//   clear one heavy gun at hosted-game income, not derived -- measure it.
+const float TUNE_DEF_ECO_S = 30.f;
 // manager/brain/market/want_protect.as [ratio] -- The rear eco specialist's
 //   defence and army targets, as a share of a normal player's. Its threat is
 //   already near zero by position, so this only holds the tail down; it is a

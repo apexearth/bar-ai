@@ -136,6 +136,7 @@ local NAMES = {
 	"apex_coward_rear_mod",
 	"apex_def_reach_cap",
 	"apex_def_site_walk",
+	"apex_def_eco_s",
 	"apex_def_ttd_h",
 	"apex_defend_home",
 	"apex_dive_eco_cost",

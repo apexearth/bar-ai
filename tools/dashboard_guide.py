@@ -396,8 +396,10 @@ GROUPS = [
                   "turrets: a 2500-buildtime Guard over a 17400-buildtime "
                   "Agitator, which is what stops defences dying half-built on "
                   "the front line. 0 removes the pressure entirely"),
-                 ("TUNE_DEF_ARMY_SHARE", "assumes the mobile army answers more "
-                  "of the local threat, so fewer towers are wanted"),
+                 ("TUNE_DEF_ECO_S", "seconds of total economic power we may "
+                  "hold in static defence -- the whole size of the standing "
+                  "holding. RAISE for a turtle that can carry a Pulsar, LOWER "
+                  "to spend the metal on army instead"),
                  ("TUNE_DEF_PRIOR_SHARE", "how much of the symmetric enemy "
                   "guess the defence target assumes before contact"),
                  ("TUNE_GUARD_RATE", "standing army wanted per metal of "
@@ -737,9 +739,10 @@ GOALS = [
                      "makes covering it pay"},
             {"ref": "TUNE_SPACE_RENT", "dir": "up",
              "note": "rewards building on ground our turrets already cover"},
-            {"ref": "TUNE_DEF_ARMY_SHARE", "dir": "down",
-             "note": "assume the mobile army answers LESS of the local threat, "
-                     "so static defence is asked to answer more"},
+            {"ref": "TUNE_DEF_ECO_S", "dir": "up",
+             "note": "lets the standing defence holding grow -- it is a share "
+                     "of economic power, so this is how much turtle the "
+                     "economy buys"},
             {"ref": "TUNE_DEF_TRADE", "dir": "up",
              "note": "credits a turret with stopping more enemy metal"},
             {"ref": "TUNE_UNPROT_DISCOUNT", "dir": "up",
