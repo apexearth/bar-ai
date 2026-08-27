@@ -1653,6 +1653,20 @@ const float TUNE_DEF_TTD_H = 120.f;
 // call and growing before the field existed.
 const float TUNE_PROTECT_FIELD_S = 2.f;
 
+// How often the energy-stall answer re-asks which worker should drop what it is
+// doing. Split from the 5-second housekeeping tick it used to share: a stall
+// costs income every second it holds, so the answer wants the fast cadence,
+// while the retreat table and the guard sweep do not. The scan stops at the
+// first worker whose top want is energy (commander first), so a faster tick
+// costs less per call rather than more.
+const float TUNE_STALL_ANSWER_S = 1.f;
+
+// Energy income above which the stall answer stops asking at all. apexearth's
+// number: past this the economy is big enough that an energy stall is a
+// transient in the pull rather than something worth pulling a constructor off
+// its task for. 0 disables the gate and asks at every income.
+const float TUNE_STALL_ANSWER_MAX_E = 400.f;
+
 // WHAT A BUILDING IS WORTH WHILE NOTHING GUARDS IT (apexearth: "give buildings
 // a ~20% reduced value when they are unprotected. And the more powerful we
 // create defense around those buildings the more they become worth"). The share

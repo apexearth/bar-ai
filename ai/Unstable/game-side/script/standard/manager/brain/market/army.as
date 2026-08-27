@@ -868,19 +868,66 @@ void RetreatRefresh()
 	}
 }
 
+// TWO CADENCES, NOT ONE. The retreat table and the guard sweep are periodic
+// housekeeping and want the slow tick; the stall answer wants the fast one --
+// an energy stall is costing income every second it holds. Sharing one timer
+// meant speeding the answer up also re-derived every unit's retreat threshold
+// five times as often, which is not what apex_stall_answer_s is for.
+int gNextStallDry = 0;
+bool gStallHadAnswer = false;
+
 void StallWatch()
 {
-	if (ai.frame < gNextStallSweep)
+	if (ai.frame >= gNextStallSweep) {
+		gNextStallSweep = ai.frame + 5 * SECOND;
+		{ double _t = Perf::T0(); RetreatRefresh(); Perf::Add("think.retreat", _t); }
+		{ double _t = Perf::T0(); GuardSweep(); Perf::Add("think.guard", _t); }
+	}
+	if (ai.frame < gNextStallDry)
 		return;
-	gNextStallSweep = ai.frame + 5 * SECOND;
-	{ double _t = Perf::T0(); RetreatRefresh(); Perf::Add("think.retreat", _t); }
-	{ double _t = Perf::T0(); GuardSweep(); Perf::Add("think.guard", _t); }
+	const float everyS = ai.GetTunable("apex_stall_answer_s", TUNE_STALL_ANSWER_S);
+	const int fast = int(((everyS > 0.1f) ? everyS : 1.f) * 30.f);
+	// BACK OFF WHEN THERE IS NO ANSWER. Stopping at the first qualifying worker
+	// only helps when one exists; a scan that finds nobody still dry-runs every
+	// candidate, and that is the EXPENSIVE case -- measured, the worst single
+	// call did not improve at all (18.3 -> 20.2 ms) while running it five times
+	// as often nearly doubled the total. Nothing about a miss changes second to
+	// second, so a miss waits for the slow tick and only a hit earns the fast
+	// one.
+	gNextStallDry = ai.frame + (gStallHadAnswer ? fast : (5 * SECOND));
+	gStallHadAnswer = false;
+	// NOT WORTH ASKING ONCE THE ENERGY ECONOMY IS REAL (apexearth: "late in the
+	// game that doesn't even matter... above 400 we probably don't need it").
+	// Interrupting a builder mid-task to go put down a generator answers a
+	// scarcity that stops existing: at this income a stall is a transient in
+	// the pull, not something a constructor should abandon work over. It is
+	// also where the scan costs most -- the worker list is longest late.
+	const float eBar = ai.GetTunable("apex_stall_answer_max_e", TUNE_STALL_ANSWER_MAX_E);
+	if ((eBar > 0.f) && (aiEconomyMgr.energy.income > eBar))
+		return;
 	if (!HardEStall())
 		return;
 	const double _tDry = Perf::T0();
 	CCircuitUnit@ pick = null;
+	// COMMANDER FIRST, THEN STOP AT THE FIRST ANSWER. The scan used to dry-run
+	// the market for EVERY worker and keep the last one that qualified, which
+	// is the same interrupt at N times the price -- 74 ms in one call across 8
+	// instances, the largest single spike the AI had. Ordering the candidates
+	// commander-first costs one name check each and keeps the preference the
+	// old loop's `break` expressed, so only the cost changes.
+	array<CCircuitUnit@> cand;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ u = gWorkers[i];
+		if ((u is null) || (u.circuitDef is null))
+			continue;
+		const string nm = u.circuitDef.GetName();
+		if ((nm == "armcom") || (nm == "corcom") || (nm == "legcom"))
+			cand.insertAt(0, u);
+		else
+			cand.insertLast(u);
+	}
+	for (uint i = 0; i < cand.length(); ++i) {
+		CCircuitUnit@ u = cand[i];
 		if (u is null)
 			continue;
 		IUnitTask@ t = u.task;
@@ -911,12 +958,12 @@ void StallWatch()
 		if ((mx !is null) && (mx.value > e.value))
 			continue;
 		@pick = u;
-		if (u.circuitDef.GetName() == "armcom" || u.circuitDef.GetName() == "corcom")
-			break;   // the commander first when present
+		break;
 	}
 	Perf::Add("think.stalldry", _tDry);
 	if (pick is null)
 		return;
+	gStallHadAnswer = true;
 	AiLog("apex: STALL interrupt -- " + pick.circuitDef.GetName() + " #" + pick.id
 		+ " leaves its build to answer the energy stall");
 	pick.task.Abort();

@@ -45,6 +45,8 @@ local NAMES = {
 	"apex_build_threat_bar",
 	"apex_catalog_dump",
 	"apex_protect_field_s",
+	"apex_stall_answer_s",
+	"apex_stall_answer_max_e",
 	"apex_unprot_discount",
 	"apex_def_alpha_w",
 	"apex_spot_m",

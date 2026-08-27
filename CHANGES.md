@@ -1,5 +1,73 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-27: the ten-second hitch was the front rescan, and the stall answer
+
+apexearth, playing: "I noticed a lag moment in the game every ~10 seconds it
+seemed. Maybe thats just the StallWatch?"
+
+Not StallWatch -- that only runs while an energy stall holds. `Front::Scan` runs
+on `RECLASSIFY = 10 * SECOND` and sweeps a 40x40 = 1600-cell grid, reading the
+ally and enemy influence fields per cell in the max pass, the enemy field again
+in the main pass, and the ally field again inside the `ours[]` test: about 6,400
+engine influence reads per rescan, per instance. And `AiUpdate`'s per-instance
+offset is the skirmish AI id -- a handful of frames -- so in an 8v8 all eight
+instances ran that sweep within a quarter of a second of each other. One
+synchronised spike every ten seconds rather than eight small ones spread
+through it.
+
+Each cell is now sampled once and read from arrays, and the rescan is phased per
+instance (same period, same work, different frame). Note the phase change cannot
+show up in section timers at all -- it moves which frame the work lands on, not
+how long it takes -- so it needs a frame-time measurement to confirm, which has
+not been done.
+
+### The stall answer
+
+`StallWatch` dry-ran the market for EVERY worker and kept the last that
+qualified, which is the same interrupt at N times the price. Three changes, in
+the order they were tried, because the first two were not enough:
+
+1. Stop at the first qualifying worker, commander first. Cut the AVERAGE
+   in half and did nothing for the spike (18.3 -> 20.2 ms), because a scan that
+   finds NOBODY still dry-runs every candidate and that is the expensive case.
+2. Back off to the slow tick after a miss. Nothing about a miss changes second
+   to second, so only a hit earns the fast cadence.
+3. `apex_stall_answer_max_e` (default 400) -- apexearth: "That check is for
+   energy stalling right? Late in the game that doesn't even matter... above 400
+   we probably don't need it." Past that income a stall is a transient in the
+   pull, not something to abandon a build over, and it is exactly where the scan
+   costs most because the worker list is longest.
+
+Also split `apex_stall_answer_s` (default 1s) from the 5-second housekeeping
+tick it shared with `RetreatRefresh` and `GuardSweep`, which have no reason to
+speed up with it.
+
+Measured, 8 apex instances, All That Glitters Extended, 26 min, seed 11:
+
+| | worst call | total |
+|---|---|---|
+| think.stalldry | 63.7 -> **4.7 ms** | 3406 -> 347 ms |
+| up.think | 63.8 -> **4.8 ms** | 3579 -> 509 ms |
+
+CONFOUNDED, do not attribute: `want.protect` (44.5 -> 20.9 s total) and
+`hk.maketask.builder` (118.9 -> 71.8 s) also moved, but the two runs are
+different games -- election counts differ by 27% -- and nothing in this change
+touches those paths. They moved; why is not established.
+
+UNRESOLVED: median `mDefence` over the 8 players fell 7,122 -> 3,550 and
+metalProduced 84,129 -> 78,685 between these two runs. One run each, games
+diverge, and the identical-build spread on this benchmark is wide -- so this is
+neither confirmed nor dismissed. The plausible mechanism is the rescan PHASE:
+territory is reclassified at a different moment per instance, which moves front
+spots and the territory radius the defence siting reads. A matched batch is
+needed before believing either number.
+
+ALSO LEARNED: the fine-grained `prot.cover` / `prot.frontstake` timers cost
+~64,000 `Perf::Add` calls per 15 minutes, and `Perf::Add` linear-scans its
+section list. Per-site timers are an observer effect; use them to locate a
+hotspot, then take them out before measuring it.
+
+
 ## 2026-08-27: defence was a circle around the start, and cover was a price tag
 
 apexearth: "I think our base defense only builds in a circle around where we

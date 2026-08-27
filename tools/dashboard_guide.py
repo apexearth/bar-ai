@@ -440,6 +440,17 @@ GROUPS = [
                      "the base more closely and costs sim time.",
              "reads": "brain/market/protect_field.as",
              "knobs": [
+                 ("TUNE_STALL_ANSWER_S", "seconds between asks of \"who "
+                  "should drop what they are doing to answer this energy "
+                  "stall\". Lower answers a stall sooner and costs a little "
+                  "more thinking; the scan stops at the first worker whose top "
+                  "want is energy, commander first, so it is cheap either way"),
+                 ("TUNE_STALL_ANSWER_MAX_E", "energy income above which the "
+                  "AI stops interrupting builders to answer an energy stall "
+                  "at all. Past this the economy is big enough that a stall is "
+                  "a transient in the pull, not something worth pulling a "
+                  "constructor off its task for -- and it is where the scan "
+                  "costs most. 0 asks at every income"),
                  ("TUNE_PROTECT_FIELD_S", "seconds between rebuilds of the "
                   "list of what we own and what guards it. Lower is fresher "
                   "and slower; measured 2026-08-27, the defence price cost "

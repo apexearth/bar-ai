@@ -31,6 +31,7 @@ const float CHOKE_NEAR = 600.f;
 // a different arc as either side's holdings changed.
 const float FRONT_BAND_FRAC = 1.0f;
 const int RECLASSIFY = 10 * SECOND;
+bool gClassifyPhased = false;
 const int SEAM_N = 40;
 
 // Blackboard keys for pooling the enemy bearing across the team.
@@ -271,12 +272,22 @@ void Scan()
 	gDbgFoe = 0;
 	ReadMates();
 
+	// SAMPLE EACH CELL ONCE. The 1600-cell grid used to be read three times
+	// over -- both fields for the max pass, the enemy field again in the main
+	// pass, and the ally field again inside the ours[] test -- about 6,400
+	// engine influence reads per rescan, every ten seconds, per AI instance.
+	// The values cannot change inside one Scan, so they are sampled here and
+	// read from the arrays below.
+	array<float> cellAlly(SEAM_N * SEAM_N);
+	array<float> cellFoe(SEAM_N * SEAM_N);
 	float maxAlly = 0.f, maxFoe = 0.f;
 	for (int i = 0; i < SEAM_N; ++i) {
 		for (int j = 0; j < SEAM_N; ++j) {
 			const AIFloat3 p = GridPos(i, j);
 			const float a = ai.GetAllyInflAt(p);
 			const float f = ai.GetEnemyInflAt(p);
+			cellAlly[i * SEAM_N + j] = a;
+			cellFoe[i * SEAM_N + j] = f;
 			if (a > maxAlly) maxAlly = a;
 			if (f > maxFoe) maxFoe = f;
 		}
@@ -295,11 +306,11 @@ void Scan()
 		for (int j = 0; j < SEAM_N; ++j) {
 			const int me = i * SEAM_N + j;
 			const AIFloat3 p = GridPos(i, j);
-			const float fv = ai.GetEnemyInflAt(p);
+			const float fv = cellFoe[me];
 			// Ground they hold more strongly than we do is not ours, however
 			// many of our buildings stand on it -- that is the state a base
 			// being overrun is actually in.
-			if (ours[me] && (fv > ai.GetAllyInflAt(p)))
+			if (ours[me] && (fv > cellAlly[me]))
 				ours[me] = false;
 			const bool a = ours[me];
 			if (a) {
@@ -538,6 +549,16 @@ void Update()
 	{ double _t = Perf::T0(); PumpDraw(); Perf::Add("front.pumpdraw", _t); }   // every tick, not every rescan -- see DRAW_PER_TICK
 	if (ai.frame < gNextClassify)
 		return;
+	// PHASE THE RESCAN PER INSTANCE. AiUpdate's own offset is the skirmish AI
+	// id, a handful of frames, so in an 8v8 all eight instances ran this sweep
+	// within a quarter of a second of each other -- one synchronised spike
+	// every ten seconds rather than eight small ones spread through it. Same
+	// period and same work; only which frame it lands on changes.
+	if (!gClassifyPhased) {
+		gClassifyPhased = true;
+		gNextClassify = ai.frame + (ai.teamId % 10) * (RECLASSIFY / 10);
+		return;
+	}
 	gNextClassify = ai.frame + RECLASSIFY;
 
 	{ double _t = Perf::T0(); Scan(); Perf::Add("front.scan", _t); }
