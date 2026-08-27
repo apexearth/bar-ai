@@ -183,6 +183,8 @@ float EMakeInFlight()
 // in-flight request cap still bounds how many.
 bool EnergyShortOfOrdered()
 {
+	if (ai.GetTunable("apex_e_parallel", TUNE_E_PARALLEL) <= 0.f)
+		return false;
 	const float eInc = aiEconomyMgr.energy.income;
 	const float need = (aiEconomyMgr.energy.pull + EDrainInFlight())
 			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);

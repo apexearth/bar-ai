@@ -504,7 +504,9 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// genuinely wanted air line still wins once it is worth twice a
 		// half-built ground one.
 		int liveOther = 0;
-		for (uint fo = 0; fo < Requests::gLive.length(); ++fo) {
+		const bool inflOn =
+				(ai.GetTunable("apex_plant_inflight", TUNE_PLANT_INFLIGHT) > 0.f);
+		for (uint fo = 0; inflOn && (fo < Requests::gLive.length()); ++fo) {
 			IUnitTask@ ot = Requests::gLive[fo];
 			if ((ot is null) || ot.IsDead() || (ot.buildDef is null))
 				continue;

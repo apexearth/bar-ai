@@ -2037,6 +2037,26 @@ const float TUNE_DEF_ECO_S = 30.f;
 //   pricing on realized pull alone -- which is where the first energy decision
 //   lands 73 seconds and one full stall after pull passed income.
 const float TUNE_E_COMMITTED = 1.f;
+// manager/brain/market/want_energy.as, execute.as [toggle 0/1] -- Let a STALL
+//   open parallel energy sites, not only an overflowing bank. Energy asks fold
+//   onto one standing request unless the bank spills, and during a stall it
+//   never does -- so a 300/s deficit was answered 35/s at a time, serially.
+//   Opens exactly while ordered generation still fails to cover the shortfall.
+//
+//   MEASURED AND DEFAULTED OFF. Three paired 20-minute Carrot Mountains seeds:
+//   with it on, metal built 25,500 -> 19,555 and mexes 42 -> 33, for a stall
+//   reduction of 444 -> 352. It buys the smaller stall by splitting build
+//   power across several frames at once -- which is the same thing this AI
+//   penalises a second lab for, and against apexearth's own rule to "focus as
+//   much build power as we can on just the one building". The serialized fold
+//   is not the bug; it is that focus rule working.
+const float TUNE_E_PARALLEL = 0.f;
+// manager/brain/market/want_plant.as [toggle 0/1] -- Discount a plant want by
+//   the plants of ANOTHER domain already under construction. reachKin is per
+//   domain, so bot -> vehicle -> air rotated freely: each new class priced as
+//   though nothing were in flight, and the same income split across three
+//   frames finishes none of them.
+const float TUNE_PLANT_INFLIGHT = 1.f;
 // manager/brain/market/decide.as [seconds of economic power] -- The mex-cover
 //   QUEUE JUMP only fires once the tower costs less than this many seconds of
 //   total economic power. The jump overrides the auction outright (measured:

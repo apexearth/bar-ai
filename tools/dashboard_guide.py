@@ -138,6 +138,8 @@ GROUPS = [
                  ("TUNE_E_LOOKAHEAD", "prices in energy demand that has not "
                   "arrived yet"),
                  ("TUNE_E_COMMITTED", "counts the energy draw of work already ORDERED into the pull that prices energy, so a generator is worth buying BEFORE the stall rather than after it"),
+                 ("TUNE_E_PARALLEL", "lets a STALL open parallel energy sites, not only an overflowing bank -- otherwise a big deficit is answered one small turbine at a time"),
+                 ("TUNE_PLANT_INFLIGHT", "discounts a new lab by the labs of other domains already under construction -- stops the bot/vehicle/air rotation leaving three unfinished frames"),
                  ("TUNE_COVER_PUSH_S", "how affordable a mex sentry must be before it may JUMP the auction queue -- seconds of economic power. Lower delays the first turrets further"),
                  ("TUNE_INFERIOR_DISCOUNT", "stops building a generator tier "
                   "once a better one is available"),
