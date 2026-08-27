@@ -151,6 +151,37 @@ float ConvCapInFlight()
 	return cap;
 }
 
+// ENERGY WE HAVE ALREADY ORDERED AND ARE NOT YET DRAWING. energy.pull is what
+// the fleet draws NOW, so the bill for work already committed is invisible
+// until its frames are placed -- which is why the first energy want cannot
+// price above the converter floor until the stall it should have prevented has
+// already arrived (measured: first energy decision 73 seconds in, with pull
+// already 2.5x income at two minutes). Same shape as ConvCapInFlight above:
+// live requests, remaining cost over remaining time.
+float EDrainInFlight()
+{
+	if (ai.GetTunable("apex_e_committed", TUNE_E_COMMITTED) <= 0.f)
+		return 0.f;
+	float e = 0.f;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		const int d = int(t.buildDef.id);
+		if (Catalog::gCostE[d] <= 1.f)
+			continue;
+		float left = 1.f - Requests::Progress(t);
+		if (left <= 0.f)
+			continue;
+		if (left > 1.f)
+			left = 1.f;
+		const float sec = Catalog::BuildSecondsAt(d, EffBP(0.f));
+		if (sec > 1.f)
+			e += Catalog::gCostE[d] * left / sec;
+	}
+	return e;
+}
+
 // Best metal-per-energy any converter we could actually build reaches.
 float gBestConvRatio = -1.f;
 float BestConvRatio()

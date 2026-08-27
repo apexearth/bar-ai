@@ -2029,6 +2029,14 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 //   collapsed the target to a mex floor exactly as the army grew. Chosen to
 //   clear one heavy gun at hosted-game income, not derived -- measure it.
 const float TUNE_DEF_ECO_S = 30.f;
+// manager/brain/market/want_energy.as, price.as [toggle 0/1] -- Count the
+//   energy draw of work already ORDERED into the pull that prices energy.
+//   Not a magnitude: the quantity added is arithmetic off the catalog
+//   (remaining E cost over remaining build seconds), exactly as
+//   ConvCapInFlight already does for converter capacity. 0 is the control arm,
+//   pricing on realized pull alone -- which is where the first energy decision
+//   lands 73 seconds and one full stall after pull passed income.
+const float TUNE_E_COMMITTED = 1.f;
 // manager/brain/market/want_tech.as [multiplier] -- What a mex UPGRADE'S extra
 //   metal stream is worth, over its honest arithmetic. 2.79 is the measured
 //   median ratio by which energy was beating mex upgrades head to head when

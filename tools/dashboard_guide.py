@@ -137,6 +137,7 @@ GROUPS = [
                   "everything else, so generators win more auctions"),
                  ("TUNE_E_LOOKAHEAD", "prices in energy demand that has not "
                   "arrived yet"),
+                 ("TUNE_E_COMMITTED", "counts the energy draw of work already ORDERED into the pull that prices energy, so a generator is worth buying BEFORE the stall rather than after it"),
                  ("TUNE_INFERIOR_DISCOUNT", "stops building a generator tier "
                   "once a better one is available"),
              ]},

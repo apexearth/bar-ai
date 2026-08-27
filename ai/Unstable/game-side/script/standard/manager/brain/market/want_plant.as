@@ -472,7 +472,27 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// bought when one was barely affordable), while a shipyard beside a
 		// bot lab is not a copy of anything.
 		const float myReach = PlantReachOf(d);
+		// A LINE ORDERED IS A LINE. This counted only what STANDS, so while
+		// the first lab was still a nanoframe a corvp and a corap each priced
+		// themselves as the FIRST land line -- dividing by (1+0) instead of
+		// (1+1), and skipping subMul and dupSubst entirely since both are
+		// guarded on reachKin > 0. That is the flip-flop between T1 labs
+		// apexearth watched. Same in-flight accounting ConvCapInFlight already
+		// does for converters; the engine's own def.count covers a live
+		// request of the SAME def, this adds the same-reach, same-domain
+		// siblings the request fold never catches.
 		int reachKin = Catalog::Def(d).count;
+		for (uint fi = 0; fi < Requests::gLive.length(); ++fi) {
+			IUnitTask@ ft = Requests::gLive[fi];
+			if ((ft is null) || ft.IsDead() || (ft.buildDef is null))
+				continue;
+			const int fd = int(ft.buildDef.id);
+			if ((fd == d) || Catalog::gMobile[fd]
+				|| (Catalog::gBuildsList[fd].length() == 0))
+				continue;
+			if ((PlantReachOf(fd) >= myReach) && (PlantClass(fd) == dClass))
+				++reachKin;
+		}
 		for (uint kd2 = 1; kd2 < gOwnCount.length(); ++kd2) {
 			if ((gOwnCount[kd2] <= 0) || (int(kd2) == d)
 				|| Catalog::gMobile[int(kd2)]

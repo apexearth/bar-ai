@@ -148,7 +148,10 @@ float EPrice()
 	// lack of energy a little better"): price against where pull is HEADED
 	// within the lookahead, not where it is.
 	TrackEPull();
-	float ePull = aiEconomyMgr.energy.pull;
+	// ...plus what we have ORDERED and are not yet drawing: committed work is
+	// invisible to energy.pull, so the price could not rise until the stall
+	// had already happened.
+	float ePull = aiEconomyMgr.energy.pull + EDrainInFlight();
 	if (gEPullGrowth > 0.f)
 		ePull += gEPullGrowth * ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
 	// Supply LEADS demand (apexearth 2026-08-23: "we shouldn't even let
@@ -183,7 +186,7 @@ float EPrice()
 float ECostSpot()
 {
 	const float eInc = aiEconomyMgr.energy.income;
-	const float ePull = aiEconomyMgr.energy.pull;
+	const float ePull = aiEconomyMgr.energy.pull + EDrainInFlight();
 	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
 	if (excess > 2.f)
 		excess = 2.f;
