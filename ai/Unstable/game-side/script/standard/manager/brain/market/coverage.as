@@ -120,18 +120,18 @@ float StakeAt(const AIFloat3& in pos, float r)
 // inside its own weapon reach passes through its corridor, so it is what the
 // post is bought to protect. Beyond `reach` only -- nearer value is already
 // counted by StakeAt, and adding both would count it twice.
-float ShieldedStakeAt(const AIFloat3& in pos, float reach)
+// ...along an EXPLICIT bearing. A front post faces the enemy; a perimeter post
+// faces outward from the middle of our own footprint, which is not the same
+// direction and on a flank is nowhere near it. Without the second form only
+// front posts could ever collect the credit, so the price's argmax sat at the
+// centroid of the base by construction and a rim post was worth its own disc
+// and nothing more.
+float ShieldedStakeAlong(const AIFloat3& in pos, float reach,
+		const AIFloat3& in dirIn)
 {
 	if (reach < 1.f)
 		return 0.f;
-	// The TRUE enemy bearing, not Base::gFwd. gFwd is snapped to a cardinal, so
-	// on a map where the enemy sits diagonally the "is it behind me" test was
-	// wrong by up to 45 degrees and rejected the entire base -- forward posts
-	// priced at exactly 0.00 gain and never won an auction.
-	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
-	if (!OnMap(foe))
-		return 0.f;
-	AIFloat3 dir = foe - pos;
+	AIFloat3 dir = dirIn;
 	if (dir.SqLength2D() < NEAR_ZERO)
 		return 0.f;
 	dir.SafeNormalize2D();
@@ -148,6 +148,19 @@ float ShieldedStakeAt(const AIFloat3& in pos, float reach)
 		m += gPfWorth[i];
 	}
 	return m;
+}
+
+// The enemy-facing form, unchanged for every existing caller. The TRUE enemy
+// bearing, not Base::gFwd: gFwd is snapped to a cardinal, so on a map where
+// the enemy sits diagonally the "is it behind me" test was wrong by up to 45
+// degrees and rejected the entire base -- forward posts priced at exactly 0.00
+// gain and never won an auction.
+float ShieldedStakeAt(const AIFloat3& in pos, float reach)
+{
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(foe))
+		return 0.f;
+	return ShieldedStakeAlong(pos, reach, foe - pos);
 }
 
 // STAKE A POST ACTUALLY DEFENDS.

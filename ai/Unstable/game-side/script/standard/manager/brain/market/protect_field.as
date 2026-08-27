@@ -35,6 +35,57 @@ array<AIFloat3> gPfTwPos;
 array<float>    gPfTwReach;
 array<float>    gPfTwKill;
 
+//------------------------------------------------------------------------------
+// THE RIM: the star-shaped hull of our own buildings.
+//
+// apexearth: "I still see us making a lot of defenses just around our starting
+// position... Create a perimeter of defenses around our base. As our base
+// grows, reclaim old defenses as needed and extend defense outwards."
+//
+// The cluster centroids below put a post in the MIDDLE of each blob of our
+// metal, and the densest blob is always the spawn. The rim is the other half:
+// the furthest thing we own on each bearing from the worth-weighted centre of
+// the footprint. Nothing is chosen by hand -- gPfPos is rebuilt from
+// GetOwnStructsNear every couple of seconds, so a new mex out to one side
+// pushes that bearing's rim out on the next rebuild, and the perimeter grows
+// with the base for free.
+const int PF_RAYS = 24;
+AIFloat3     gPfMid;
+array<float> gPfRimR;
+bool         gPfRimOk = false;
+
+int PfRayOf(const AIFloat3& in p)
+{
+	const float dx = p.x - gPfMid.x;
+	const float dz = p.z - gPfMid.z;
+	float a = atan2(dz, dx);
+	if (a < 0.f)
+		a += 6.2831853f;
+	int b = int(a / (6.2831853f / float(PF_RAYS)));
+	if (b < 0)
+		b = 0;
+	if (b >= PF_RAYS)
+		b = PF_RAYS - 1;
+	return b;
+}
+
+// Rim radius on this position's own bearing.
+float PfRimAt(const AIFloat3& in p)
+{
+	if (!gPfRimOk)
+		return 0.f;
+	return gPfRimR[PfRayOf(p)];
+}
+
+// How far OUTSIDE the perimeter this position is. Negative is inside; the
+// magnitude is how deep.
+float PfRimDist(const AIFloat3& in p)
+{
+	if (!gPfRimOk)
+		return 0.f;
+	return p.distance2D(gPfMid) - gPfRimR[PfRayOf(p)];
+}
+
 float PfHorizon()
 {
 	const float h = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
@@ -188,6 +239,42 @@ void PfRebuild()
 		gPfTotal += w;
 	}
 
+	// The rim, over the assets just gathered. One extra O(n) pass.
+	gPfRimOk = false;
+	if (gPfPos.length() > 0) {
+		float sx = 0.f, sz = 0.f, sw = 0.f;
+		for (uint i = 0; i < gPfPos.length(); ++i) {
+			sx += gPfPos[i].x * gPfWorth[i];
+			sz += gPfPos[i].z * gPfWorth[i];
+			sw += gPfWorth[i];
+		}
+		if (sw > 1.f) {
+			gPfMid = AIFloat3(sx / sw, 0.f, sz / sw);
+			gPfRimR.resize(PF_RAYS);
+			for (int b = 0; b < PF_RAYS; ++b)
+				gPfRimR[b] = 0.f;
+			for (uint i = 0; i < gPfPos.length(); ++i) {
+				const int b = PfRayOf(gPfPos[i]);
+				const float rr = gPfPos[i].distance2D(gPfMid);
+				if (rr > gPfRimR[b])
+					gPfRimR[b] = rr;
+			}
+			// One smoothing pass, so a bearing that happens to hold nothing
+			// does not punch a notch into the perimeter.
+			array<float> sm = gPfRimR;
+			for (int b = 0; b < PF_RAYS; ++b) {
+				const int lo = (b + PF_RAYS - 1) % PF_RAYS;
+				const int hi = (b + 1) % PF_RAYS;
+				float nb = (gPfRimR[lo] > gPfRimR[hi]) ? gPfRimR[lo] : gPfRimR[hi];
+				nb *= 0.85f;
+				if (nb > sm[b])
+					sm[b] = nb;
+			}
+			gPfRimR = sm;
+			gPfRimOk = true;
+		}
+	}
+
 	gPfTwPos.resize(0);
 	gPfTwReach.resize(0);
 	gPfTwKill.resize(0);
@@ -333,14 +420,16 @@ int PfSlotFor(float pitch)
 		const AIFloat3 c(sx[k] / sw[k], 0.f, sz[k] / sw[k]);
 		if (!OnMap(c))
 			continue;
-		const float cv = CoverAt(c);
-		site.insertLast(c);
-		worth.insertLast(sw[k]);
-		cover.insertLast(cv);
-		threat.insertLast(ThreatAt(c));
-		hz.insertLast(HazardWith(c, cv));
-		siege.insertLast(SiegeWith(c, cv, expFrac));
-		stake.insertLast(PfStakeAt(c, pitch));
+		{
+			const float cv = CoverAt(c);
+			site.insertLast(c);
+			worth.insertLast(sw[k]);
+			cover.insertLast(cv);
+			threat.insertLast(ThreatAt(c));
+			hz.insertLast(HazardWith(c, cv));
+			siege.insertLast(SiegeWith(c, cv, expFrac));
+			stake.insertLast(PfStakeAt(c, pitch));
+		}
 	}
 	gPfPitch.insertLast(pitch);
 	gPfSiteOf.insertLast(site);

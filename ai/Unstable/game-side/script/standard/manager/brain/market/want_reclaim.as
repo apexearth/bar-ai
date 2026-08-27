@@ -199,7 +199,28 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 				break;
 			}
 		}
-		if (!dominated)
+		// ...or the PERIMETER HAS GROWN PAST IT. apexearth: "as our base grows,
+		// reclaim old defenses as needed and extend defense outwards." The
+		// defence sites are already chosen on the rim of what we own -- the
+		// measured problem is that the base then grows around them, so a tower
+		// sited on the edge ends up 150-300 elmos inside it and is guarding
+		// ground that is now interior. Retiring it is what funds the post at
+		// the new edge; the auction picks that site on its own.
+		//
+		// "Whenever the rim has moved past it" is his ruling (2026-08-27), so
+		// there is no still-covers-something clause. Depth is measured in the
+		// tower's OWN reach, so a long gun has to be far deeper in than a
+		// light one before it counts as stranded, and it is a share of the
+		// rim as well so it means the same thing on a small base and a large.
+		bool stranded = false;
+		if (!dominated && gPfRimOk) {
+			const float rimHere = PfRimAt(gProtPos[PROT_DEF][i]);
+			const float deep = -PfRimDist(gProtPos[PROT_DEF][i]);
+			const float rr = (Catalog::gMaxRange[d] > 1.f)
+					? Catalog::gMaxRange[d] : 500.f;
+			stranded = (rimHere > rr) && (deep > rr);
+		}
+		if (!dominated && !stranded)
 			continue;
 		const float v = RetireValue(unit, g, d, ePM, wageR, hz);
 		if (v > bestValue) {

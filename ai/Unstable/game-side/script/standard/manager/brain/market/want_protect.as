@@ -39,9 +39,24 @@ int gBackTowerLost = 0;
 float gFrontTowerM = 0.f;
 float gBackTowerM = 0.f;
 int gNextFrontTowerLog = 0;
+// ...and where it stood relative to the PERIMETER, which is the question the
+// front/back split cannot answer: a tower can be nowhere near the enemy and
+// still be on the outer edge of what we own.
+int gRimTowerBuilt = 0;
+int gCoreTowerBuilt = 0;
+float gRimDSum = 0.f;
 
 void NoteTowerBuilt(const AIFloat3& in at, float costM)
 {
+	{
+		const float rd = PfRimDist(at);
+		gRimDSum += rd;
+		// Within half a light tower's reach of the rim counts as ON it.
+		if (rd > -Brain::LightTowerRange() * 0.5f)
+			++gRimTowerBuilt;
+		else
+			++gCoreTowerBuilt;
+	}
 	if (Military::OnBorder(at)) {
 		++gFrontTowerBuilt;
 		gFrontTowerM += costM;
@@ -73,7 +88,12 @@ void LogFrontTowers()
 		+ " backStanding=" + (gBackTowerBuilt - gBackTowerLost)
 		+ " backM=" + int(gBackTowerM)
 		+ " wonFront=" + gDefSiteFront
-		+ " wonAsset=" + gDefSiteAsset);
+		+ " wonAsset=" + gDefSiteAsset
+		+ " rim=" + gRimTowerBuilt
+		+ " core=" + gCoreTowerBuilt
+		+ " rimDAvg=" + int(gRimDSum
+			/ float((gRimTowerBuilt + gCoreTowerBuilt > 0)
+				? (gRimTowerBuilt + gCoreTowerBuilt) : 1)));
 }
 
 void NoteDefSite(bool isFront)
@@ -841,9 +861,23 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				// without either being forbidden.
 				float stake = (isFront || (reach < 64.f))
 						? FrontedStakeAt(s, reach) : PfSiteStake(si);
-				if (isFront) {
+				// A GUARD POST GETS THE SAME CREDIT, ON ITS OWN OUTWARD
+				// BEARING. Gated on isFront, only line posts could ever collect
+				// it, so the price's argmax sat at the centroid of our own
+				// footprint by construction: an interior post's disc catches
+				// assets on every bearing while a perimeter post's catches
+				// about half, and nothing paid the perimeter back for the base
+				// standing behind it. This is the term that makes value peak at
+				// the edge and fall off inside -- an interior post has most of
+				// the base IN FRONT of it on its outward bearing and so
+				// collects almost nothing, and a redundant rim post beside an
+				// existing one is still zeroed by ClosureAdds.
+				{
 					const float dClose = ClosureAdds(s, reach);
-					stake += ShieldedStakeAt(s, reach) * dClose;
+					AIFloat3 outDir = isFront
+							? (aiEnemyMgr.GetEnemyPos() - s) : (s - gPfMid);
+					if (isFront || gPfRimOk)
+						stake += ShieldedStakeAlong(s, reach, outDir) * dClose;
 				}
 				if (stake <= 1.f)
 					continue;
@@ -1018,6 +1052,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					// approach that is real map there. The wall used to PAY.
 					+ " edgeD=" + int(EdgeDist(bestAt))
 					+ " open=" + formatFloat(Military::OpenFraction(bestAt, 500.f), "", 0, 2)
+					+ " rimD=" + int(PfRimDist(bestAt))
+					+ " rimR=" + int(PfRimAt(bestAt))
 					+ " gain=" + formatFloat(bestGain, "", 0, 2));
 			}
 		}

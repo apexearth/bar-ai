@@ -731,7 +731,10 @@ function renderMatch(d) {
       tower that FINISHED, placed by Military::OnBorder; "wants won" is a
       defence want the auction priced at a front site, recounted on every
       re-election. Completed far below won is constructor time spent on
-      towers that never arrived.</div></div>
+      towers that never arrived. The last two rows are the PERIMETER split:
+      "rim" finished on the outer edge of what we own, "core" finished inside
+      it, and rimDAvg is the mean signed distance to that edge — negative
+      means the base has grown out past its own guns.</div></div>
   <div class="card"><h2>Final snapshot per player</h2>
     <table><thead><tr><th>team</th><th>metal prod</th><th>army</th><th>mex/T2</th>
     <th>mT2/mT3</th><th>kill/loss</th><th>tech@</th><th>top spend</th></tr></thead>
@@ -1248,7 +1251,9 @@ function drawFrontTowers() {
                 ["lost", "lost", "backLost"],
                 ["standing", "standing", "backStanding"],
                 ["metal completed", "metal", "backMetal"],
-                ["wants won", "wonFront", "wonAsset"]];
+                ["wants won", "wonFront", "wonAsset"],
+                ["on perimeter / inside it", "rim", "core"],
+                ["mean elmos outside the perimeter", "rimDAvg", "rimDAvg"]];
   $("#ft-table").innerHTML = rows.map(r =>
     `<tr><td>${r[0]}</td><td>${t[r[1]][i]}</td><td>${t[r[2]][i]}</td></tr>`).join("");
   $("#ft-note").textContent = `at ${t.min[i]}m, ${t.min.length} samples`;

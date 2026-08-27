@@ -347,10 +347,11 @@ def crew_roles(d):
 FRONTTOWER_RE = re.compile(
     r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: fronttowers built=(\d+) lost=(\d+) "
     r"standing=(-?\d+) m=(\d+) backBuilt=(\d+) backLost=(\d+) "
-    r"backStanding=(-?\d+) backM=(\d+) wonFront=(\d+) wonAsset=(\d+)")
+    r"backStanding=(-?\d+) backM=(\d+) wonFront=(\d+) wonAsset=(\d+) "
+    r"rim=(\d+) core=(\d+) rimDAvg=(-?\d+)")
 FRONTTOWER_KEYS = ["built", "lost", "standing", "metal",
                    "backBuilt", "backLost", "backStanding", "backMetal",
-                   "wonFront", "wonAsset"]
+                   "wonFront", "wonAsset", "rim", "core", "rimDAvg"]
 
 
 def front_towers(d):
