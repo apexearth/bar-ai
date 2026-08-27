@@ -2239,3 +2239,89 @@ escort cap, so the riot clause cannot fire today -- escorts are fast units
 until `apex_escort_max_cost` is raised. 20-min smoke after the change: 4 floor
 orders, 3 pairings, all fast units (armpw from a bot lab, armflash from a
 vehicle plant), zero rocket bots.
+
+## 2026-08-27 — five reported issues: anti-nuke priority, lines vs blobs, penned units, obsolete buildings
+
+**Anti-nuke jumped the whole auction.** `decide.as`'s `superPush` hoists any
+`WK_SUPER` want to rank 0 and then skips the category roulette outright. It was
+written for gantries and silos ("if I can afford this, insert it as a want"),
+but the anti-nuke is the cheapest super class, so it cleared
+`SuperBill < SuperBudget` first and took every push. Measured, 4-per-side
+Nuclear Winter (`matches/20260827-205755`): `corfmd` won 20 of 24 super
+elections, the first at 8.4 game-minutes at value **0.47**, beating an energy
+want valued **11.11**; mex upgrades won 26 all game. `Policy::AntinukeIncome()`
+(60 m/s) existed and was referenced by nothing. Now wired as a floor on the
+anti-nuke class only, overridden by a SIGHTED enemy silo. NOTE: income on that
+benchmark was 51 m/s at the 8.4-minute election and crossed 60 at ~9 minutes, so
+the floor as chosen delays it about one minute there — it does not change the
+ordering against a mex upgrade once income clears. The push itself is untouched.
+
+**Long lines instead of blobs: the farm scan window is a corridor.**
+`sites.as` derived the scan's lateral half-width as
+`int((FarmRowW() * .5) / pitch)` — an ABSOLUTE 320 elmos divided by the def's
+own footprint — against 28 rows of depth. So a solar (pitch 64) got 5 columns,
+an advanced solar or fusion 3, and any footprint above 160 elmos exactly ONE
+column by 28 rows. `Lattice::ClusterSide()` asks for a 4x4 block and could not
+fit in the window, so the grow scoring had no candidate but to extend the line
+it was standing on. The window is now at least one cluster wide whatever the
+footprint.
+
+**Units penned by our own base: the action half was dead code.**
+`military/unblock.as` detects the pen correctly (motionless, ordered to walk,
+still motionless) but `TryUnblock` ended in `IUnitTask@ task = null; if (task
+is null) return false;` — both the wall-eating branch and the terrain-penned
+branch only logged. The verdict is now published (`NotePenVerdict`) and priced
+by a new `Market::ProposeReclaimPenned`: apexearth 2026-08-27, "prevention is
+good, and then reclaim whichever is worth less", so the choice between eating
+the wall and eating the trapped unit is made on cost, and only the gain differs
+(clearing the wall also puts the unit back in service). Prevention: rule 3's
+aisle was enforced on SEED slots only, so growth filled the street back in;
+`apex_aisle_grow` (default 1) makes a grow slot keep it too. That knob trades
+against sprawl and is on the dashboard for exactly that reason.
+NOT YET EXERCISED: zero `apex: stuck`/`apex: unblock` lines in the validation
+game, so the new want compiled and wired but has never fired.
+
+**Obsolete buildings.** Two gaps closed. (1) The dominated-defence test used a
+flat 400 elmos for "covers the same ground"; a T2 gun out-ranges a T1 tower by
+more than that, so the successor stood over ground the radius said it did not
+cover. Now measured in the BETTER tower's own reach — apexearth's ruling for
+"reclaim <T2 defences once we can build T2+" was "only where a better one
+already stands". (2) Ground-lab retirement was gated on `EcoQuiet()`, which is
+`EcoRoleActive() && !EcoDangerNear()` — so only whichever player held the eco
+role could ever retire a superseded lab, a role deciding WHETHER rather than
+how often. Now gated on danger alone.
+
+**Paired validation**, same seed/map/side, 30 min, 4-per-side Nuclear Winter
+(control `matches/20260827-213837`, new `matches/20260827-213543`), medians over
+the four apex players:
+
+| | control | new |
+|---|---|---|
+| metal built | 11,708 | **14,198** |
+| eco | 3,114 | **5,214** |
+| army | 11,860 | 10,936 |
+| mex | 8 | 10 |
+| defence | 382 | 1,008 |
+| reclaim decisions | 5 (3 armsolar, 2 armllt) | 10 (**5 armlab, 4 armvp**, 1 armsolar) |
+| mReclaim | 259 | 130 |
+| tiling %touching | 57/72/58/60 | 82/48/62/64 |
+
+Reclaim now retires LABS, which it never did before — the role-gate removal.
+UNRESOLVED: reclaim DECISIONS doubled while mReclaim METAL halved, so the lab
+retirements are being elected and apparently not completing. Neither run built
+a single moho (`t2mex` 0 both sides), so "anti-nuke over mex upgrades" is not
+tested by this pair — the anti-nuke evidence is the earlier Cortex game.
+ONE SEED, five changes at once, and `FixedRNGSeed` does not make runs
+reproducible: read the direction, not the deltas.
+
+**Amendment, same day — lab retirement was retiring the last source of a unit.**
+apexearth: "we need to keep at least 1 t1 lab so we can make rezbots, spam
+units... Cortex's best spam unit is the rascal from vehicle lab, so we shouldn't
+be dropping all of them. Just don't need so many extras." The `succeeded` test
+compared plants on CONSTRUCTOR extraction reach, which says nothing about the
+rest of a plant's product list: the Rascal is `corfav` and `corvp` (the T1
+vehicle plant) is its only builder, so a deeper-reaching T2 or air plant
+"superseded" it and the unit went with the building. Retirement now also
+requires that the plants which would REMAIN STANDING build everything this one
+does -- duplicates and true supersets retire, the last source of anything never
+does. No unit is named in the rule.

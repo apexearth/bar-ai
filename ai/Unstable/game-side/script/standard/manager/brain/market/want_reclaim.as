@@ -14,6 +14,64 @@ const float BLOCKER_REACH = 160.f;
 // back plus the defended ground it stops renting, minus the output it still
 // makes. Ground is SpaceRentM, the same rent every eco placement already pays,
 // so a building inside our own cover has to earn its cells.
+// Do we own a dedicated reclaimer at all? Cached per frame -- the hand
+// multiplier below is asked once per reclaim proposer per election.
+bool gOwnRez = false;
+int gOwnRezAt = -1;
+
+bool OwnAnyRezzer()
+{
+	if (gOwnRezAt == ai.frame)
+		return gOwnRez;
+	gOwnRezAt = ai.frame;
+	gOwnRez = false;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] > 0) && Catalog::gRezzer[int(d)]
+			&& Catalog::gMobile[int(d)])
+		{
+			gOwnRez = true;
+			break;
+		}
+	}
+	return gOwnRez;
+}
+
+// WHOSE HANDS THESE ARE. apexearth 2026-08-27: "we aren't expanding enough...
+// can we prefer reclaims through rezbots instead of our cons which should be
+// expanding?" A PREFERENCE, not a rule about who is allowed to reclaim -- a
+// constructor still takes the job when nothing better is on its list, which is
+// the only reason tidying ever happens on a map with no rezbot on it.
+//
+// A dedicated reclaimer is one that builds NOTHING: cornecro and armrectr have
+// empty build lists, so they have no expansion to be pulled off. The penalty
+// side applies only while there is ground left to claim -- once gMexOpen is
+// false the con is not being distracted from anything.
+float ReclaimHandMul(CCircuitUnit@ unit)
+{
+	const float bias = ai.GetTunable("apex_reclaim_rez_bias", TUNE_RECLAIM_REZ_BIAS);
+	if (bias <= 1.f)
+		return 1.f;
+	const int uid = int(unit.circuitDef.id);
+	if (Catalog::gRezzer[uid] || (Catalog::gBuildsList[uid].length() == 0))
+		return bias;
+	if (!gMexOpen)
+		return 1.f;
+	// NOBODY IS DISPLACED BEFORE THEIR REPLACEMENT EXISTS -- the same law the
+	// generator, lab and con retirements here already follow. Penalising the
+	// constructor while we own no rezbot hands the work to nothing: measured
+	// 2026-08-27, reclaim decisions went 31 -> 0 in a game that produced zero
+	// rezbots, so obsolete solars and duplicate plants stood untouched.
+	if (!OwnAnyRezzer())
+		return 1.f;
+	// Only a hand that could be claiming ground instead pays the penalty.
+	const array<int>@ mine = Catalog::BuildsOf(uid);
+	for (uint i = 0; i < mine.length(); ++i) {
+		if (Catalog::gExtractsM[mine[i]] > 0.f)
+			return 1.f / bias;
+	}
+	return 1.f;
+}
+
 float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
 {
 	const int cells = (Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1;
@@ -109,6 +167,11 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			w.mCost = 1.f;
 			w.tCost = (Catalog::gCostM[rcDef] / 90.f) * Wage();
 			w.value = w.gain / (w.mCost + w.tCost);
+			{
+				const float hm = ReclaimHandMul(unit);
+				w.gain *= hm;
+				w.value *= hm;
+			}
 			@w.target = rc;
 			@gReclaimTarget = rc;
 			return w;
@@ -191,9 +254,18 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			if (i == j)
 				continue;
 			const int d2 = gProtDefId[PROT_DEF][j];
-			if ((Catalog::Def(d2) !is null)
-				&& (Catalog::Def(d2).power >= ratio * Catalog::Def(d).power)
-				&& (gProtPos[PROT_DEF][i].distance2D(gProtPos[PROT_DEF][j]) < 400.f))
+			// COVERS THE SAME GROUND, in the BETTER tower's own reach rather
+			// than a flat 400 elmos. apexearth 2026-08-27: reclaim the lesser
+			// defence "only where a better one already stands". A T2 gun
+			// out-ranges a T1 tower by more than 400, so the successor was
+			// standing over ground the flat radius said it did not cover and
+			// the T1 underneath it never retired.
+			if (Catalog::Def(d2) is null)
+				continue;
+			const float reach2 = (Catalog::gMaxRange[d2] > 400.f)
+					? Catalog::gMaxRange[d2] : 400.f;
+			if ((Catalog::Def(d2).power >= ratio * Catalog::Def(d).power)
+				&& (gProtPos[PROT_DEF][i].distance2D(gProtPos[PROT_DEF][j]) < reach2))
 			{
 				dominated = true;
 				break;
@@ -253,7 +325,11 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	// go for T1 and T2 air labs... then make the huge T3"). Successor-first,
 	// same law as everything else here: nothing is obsolete before its
 	// better is standing.
-	if (EcoQuiet()) {
+	//
+	// DANGER, not the eco ROLE. EcoQuiet() is EcoRoleActive() && !EcoDangerNear(),
+	// so a superseded lab could only ever be retired by whichever player held
+	// the eco role -- a role deciding WHETHER rather than how often.
+	if (!EcoDangerNear()) {
 		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 			CCircuitUnit@ f = Factory::gFacUnits[fi];
 			if (f is null)
@@ -318,7 +394,40 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 					}
 				}
 			}
-			if (succeeded) {
+			// ...AND NOTHING IS LOST WITH IT. Reach compares CONSTRUCTORS, which
+			// says nothing about what else a plant makes: a T2 or air plant
+			// does not build the Rascal (corfav, T1 vehicle plant only), so
+			// retiring on reach alone threw the faction's best spam unit away
+			// with the building. apexearth 2026-08-27: "we need to keep at
+			// least 1 t1 lab so we can make rezbots, spam units... we shouldn't
+			// be dropping all of them. Just don't need so many extras."
+			//
+			// So a plant retires only when the plants that would REMAIN
+			// standing build everything it does. That retires duplicates and
+			// true supersets -- the extras -- and never the last plant that is
+			// the only source of something.
+			bool covered = succeeded;
+			for (uint pi = 0; covered && (pi < Catalog::gBuildsList[fd].length()); ++pi) {
+				const int prod = Catalog::gBuildsList[fd][pi];
+				if (!Catalog::gMobile[prod])
+					continue;
+				bool elsewhere = false;
+				for (uint oi = 0; !elsewhere && (oi < Factory::gFacUnits.length()); ++oi) {
+					CCircuitUnit@ o = Factory::gFacUnits[oi];
+					if ((o is null) || (o is f) || (o.circuitDef is null))
+						continue;
+					const array<int>@ op = Catalog::gBuildsList[int(o.circuitDef.id)];
+					for (uint oq = 0; oq < op.length(); ++oq) {
+						if (op[oq] == prod) {
+							elsewhere = true;
+							break;
+						}
+					}
+				}
+				if (!elsewhere)
+					covered = false;
+			}
+			if (covered) {
 				const float v = RetireValue(unit, f, fd, ePM, wageR, hz);
 				if (v > bestValue) {
 					bestValue = v;
@@ -344,6 +453,104 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	w.mCost = 1.f;
 	w.tCost = (walkSec + Catalog::gCostM[bestDef] / 90.f) * wageR;
 	w.value = bestValue;
+	{
+		const float hm = ReclaimHandMul(unit);
+		w.gain *= hm;
+		w.value *= hm;
+	}
+	@w.target = best;
+	@gReclaimTarget = best;
+	return w;
+}
+
+// FREE A UNIT OUR OWN BASE HAS SEALED IN. Military::UpdateMoveTests proves the
+// pen (motionless, then ordered to walk, then still motionless) and publishes
+// the verdict; this prices it. apexearth 2026-08-27: "prevention is good, and
+// then reclaim whichever is worth less" -- so the CHOICE between eating the
+// wall and eating the trapped unit is made on cost, and only the gain differs:
+// eating the wall puts the unit back in service, eating the unit does not.
+//
+// Terrain-penned units have no wall to blame (gPenWall 0) and are the unit case
+// by construction -- a builder's lathe reaches over the lip the unit cannot
+// walk over, so the metal comes home either way.
+Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
+{
+	Want w;
+	if (ai.GetTunable("apex_unblock", TUNE_UNBLOCK) <= 0.f)
+		return w;
+	const float hzP = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	const float hz = (hzP > 1.f) ? hzP : 300.f;
+	const float wageP = Wage();
+	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	float bestValue = 0.f;
+	CCircuitUnit@ best = null;
+	int bestDef = -1;
+	float bestFree = 0.f;
+	for (uint i = 0; i < Military::gPenVictim.length(); ++i) {
+		CCircuitUnit@ victim = ai.GetTeamUnit(Military::gPenVictim[i]);
+		if ((victim is null) || (victim.circuitDef is null))
+			continue;
+		// Never the commander, on either side of the trade.
+		if (victim.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		const int vd = int(victim.circuitDef.id);
+		CCircuitUnit@ wall = null;
+		int wd = -1;
+		if (Military::gPenWall[i] != 0) {
+			@wall = ai.GetTeamUnit(Military::gPenWall[i]);
+			if ((wall !is null) && (wall.circuitDef !is null))
+				wd = int(wall.circuitDef.id);
+			else
+				@wall = null;
+		}
+		// WHICHEVER IS WORTH LESS. The unit is the only candidate when nothing
+		// of ours is to blame, and the wall is never chosen when it costs more
+		// than the unit it is trapping.
+		CCircuitUnit@ eat = victim;
+		int eatDef = vd;
+		float freed = 0.f;   // metal put back in service by clearing the wall
+		if ((wall !is null) && (Catalog::gCostM[wd] < Catalog::gCostM[vd])) {
+			@eat = wall;
+			eatDef = wd;
+			freed = Catalog::gCostM[vd];
+		}
+		const AIFloat3 ep = eat.GetPos(ai.frame);
+		if (!OnMap(ep))
+			continue;
+		// Metal back plus, when the wall goes, the unit that starts working
+		// again -- both one-shot, so both amortized the same way every other
+		// reclaim here is.
+		const float gain = (Catalog::gCostM[eatDef] + freed) / hz;
+		if (gain <= 0.f)
+			continue;
+		const float walkSec = (speed > 1.f) ? (here.distance2D(ep) / speed) : 60.f;
+		const float v = gain
+				/ (1.f + (walkSec + Catalog::gCostM[eatDef] / 90.f) * wageP);
+		if (v > bestValue) {
+			bestValue = v;
+			@best = eat;
+			bestDef = eatDef;
+			bestFree = freed;
+		}
+	}
+	if (best is null)
+		return w;
+	const AIFloat3 bp = best.GetPos(ai.frame);
+	const float walkSec = (speed > 1.f) ? (here.distance2D(bp) / speed) : 60.f;
+	w.kind = WK_RECLAIM;
+	@w.def = Catalog::Def(bestDef);
+	w.pos = bp;
+	w.spotId = int(best.id);
+	w.gain = (Catalog::gCostM[bestDef] + bestFree) / hz;
+	w.mCost = 1.f;
+	w.tCost = (walkSec + Catalog::gCostM[bestDef] / 90.f) * wageP;
+	w.value = bestValue;
+	{
+		const float hm = ReclaimHandMul(unit);
+		w.gain *= hm;
+		w.value *= hm;
+	}
 	@w.target = best;
 	@gReclaimTarget = best;
 	return w;
@@ -432,6 +639,11 @@ Want@ ProposeReclaimBlocker(CCircuitUnit@ unit)
 	w.mCost = 1.f;
 	w.tCost = (walkSec + Catalog::gCostM[blkDef] / 90.f) * Wage();
 	w.value = (w.gain > 0.f) ? (w.gain / (w.mCost + w.tCost)) : 0.f;
+	{
+		const float hm = ReclaimHandMul(unit);
+		w.gain *= hm;
+		w.value *= hm;
+	}
 	@w.target = blk;
 	return w;
 }

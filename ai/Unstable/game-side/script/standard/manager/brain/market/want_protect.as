@@ -22,6 +22,36 @@ int gDbgLineN = 0;
 // The defence auction's own ranking, so "why did we never build a Pulsar" is
 // read rather than argued: every turret this builder could place, with what
 // the market thinks it is worth.
+// The strongest ground turret any constructor WE OWN could place. Cached on a
+// slow tick: it walks every owned def's build list.
+float gTeamTowerP = 0.f;
+int gTeamTowerAt = -1;
+
+float TeamBestTowerPower()
+{
+	if (ai.frame < gTeamTowerAt)
+		return gTeamTowerP;
+	gTeamTowerAt = ai.frame + 15 * SECOND;
+	gTeamTowerP = 0.f;
+	for (uint u = 1; u < gOwnCount.length(); ++u) {
+		if ((gOwnCount[u] <= 0) || !Catalog::gMobile[int(u)]
+			|| !Catalog::gBuilder[int(u)])
+			continue;
+		const array<int>@ bl = Catalog::BuildsOf(int(u));
+		for (uint b = 0; b < bl.length(); ++b) {
+			const int bd = bl[b];
+			if (!Catalog::gAvailable[bd] || Catalog::gMobile[bd])
+				continue;
+			if (ProtClassOf(bd) != PROT_DEF)
+				continue;
+			CCircuitDef@ cd = Catalog::Def(bd);
+			if ((cd !is null) && (cd.power > gTeamTowerP))
+				gTeamTowerP = cd.power;
+		}
+	}
+	return gTeamTowerP;
+}
+
 array<int> gDefRankDef;
 array<float> gDefRankV;
 // Per BUILDER DEF, not one clock for the fleet: a single global throttle
@@ -329,6 +359,34 @@ bool RimGapSite(int cls, AIFloat3& out at)
 	if (found)
 		at = best;
 	return found;
+}
+
+// ANYTHING OF THIS CLASS STANDING *OR COMING*, anywhere. The emergency in
+// decide.as asked gProtPos alone, which is written at AiUnitFinished -- so
+// while the first AA tower was still a nanoframe every other builder read
+// "zero AA standing" and panicked too. Each panic hoists AA to the front and
+// skips the draw, so 5 metal of enemy scout produced 35 AA requests and 51 of
+// the first 168 elections, while metal took 23 (apexearth, watching: "we don't
+// care enough about capturing mexes early on... we end up trying to do other
+// things even though we're out of metal"). The emergency is meant to end at
+// the FIRST tower, which is what this counts.
+bool ProtAnyComing(int cls)
+{
+	if (gProtPos[cls].length() > 0)
+		return true;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		if (ProtClassOf(int(t.buildDef.id)) == cls)
+			return true;
+	}
+	Requests::PendSweep();
+	for (uint i = 0; i < Requests::gPendId.length(); ++i) {
+		if (ProtClassOf(Requests::gPendDef[i]) == cls)
+			return true;
+	}
+	return false;
 }
 
 bool ProtCovered(int cls, const AIFloat3& in pos, float r)
@@ -1127,6 +1185,26 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " rimR=" + int(PfRimAt(bestAt))
 					+ " gain=" + formatFloat(bestGain, "", 0, 2));
 			}
+		}
+		// ROUTE THE WANT TO A HAND THAT CAN FULFIL IT. apexearth 2026-08-27:
+		// "if our defence want is for T3 we should *not* be routing it through
+		// T1 cons. It should only get to the cons which could potentially
+		// fulfill it." The candidate list is this unit's OWN build options, so
+		// a T1 con can only ever answer a defence want with a light tower --
+		// measured over one game, 187 of 201 defence elections were run by T1
+		// constructors and 32 of 36 defence wins were armllt, while the Pulsar
+		// reached the ranking 9 times in the whole match. Scaling the T1
+		// answer by how far short of the team's best tower it falls stops the
+		// budget being spent on light towers before the heavy gun is ever
+		// asked for. Continuous, and 1 while nothing better is owned -- early
+		// game, and any faction/con that already holds the best option.
+		if (cls == PROT_DEF) {
+			const float mine = Catalog::Def(d).power;
+			const float team = TeamBestTowerPower();
+			if ((team > 0.f) && (mine > 0.f) && (team > mine))
+				gain *= mine / team;
+			if (gain <= 0.f)
+				continue;
 		}
 		if (gain <= 0.f)
 			continue;

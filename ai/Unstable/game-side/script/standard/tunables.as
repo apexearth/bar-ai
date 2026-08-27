@@ -1569,6 +1569,25 @@ const float TUNE_ECO_ARMY_MIN_M = 1500.f;
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it
 // competes with perpetual streams (the market's typical payback scale).
 const float TUNE_RECLAIM_AMORT = 300.f;
+// manager/brain/market/want_reclaim.as [multiplier] -- How much more a reclaim
+//   is worth in the hands of a dedicated reclaimer (rezbot: builds nothing, so
+//   it has no expansion to be pulled off) than in the hands of a constructor
+//   that could be claiming open ground instead. A PREFERENCE, applied both ways
+//   around 1: the con still reclaims when its list holds nothing better, and
+//   the penalty lifts entirely once no metal spot is open. 1 disables.
+const float TUNE_RECLAIM_REZ_BIAS = 3.f;
+// manager/brain/market/want_nano.as [share] -- How much of the metal nothing is
+//   spending one build site may claim as nano demand. Replaced a bare 35 m/s
+//   clamp that two turrets saturated at any income, which is why factories and
+//   gantries stood on 2-5 nanos while an enemy gantry ran 38. Demand still nets
+//   off the crew and the turrets already there, so the count self-limits.
+const float TUNE_NANO_SITE_SHARE = 1.f;
+// manager/brain/market/want_mex.as [count] -- Ranked metal spots offered to the
+//   engine per election before extraction gives up for that tick. Was a bare 3:
+//   a builder whose three best spots were all claimed proposed no mex want at
+//   all, which reads as "no ground left". A bound on WORK (one engine probe
+//   each), never on how far we may expand.
+const float TUNE_MEX_TRIES = 10.f;
 // MOBILE_BP_EFF: fraction of a mobile builder's workertime that is real
 // lathing rather than transit; nanos and other statics count at 1.0.
 const float TUNE_MOBILE_BP_EFF = 0.6f;
@@ -2004,6 +2023,12 @@ const float TUNE_STUCK_RETRY = 120.f;
 //   before a placement gives up on growing a cluster and seeds a new one. A
 //   bound on WORK per placement: each try is one FindBuildSiteNear.
 const float TUNE_SLOT_TRIES = 12.f;
+// manager/brain/market/sites.as [toggle 0/1] -- A GROW slot must keep the
+//   cluster aisle to a foreign def, not just avoid touching it. Rule 3 parted
+//   clusters by an aisle on the SEED only, so growth filled the street back in
+//   and sealed units into the pocket. Trades against sprawl: a cluster that
+//   cannot grow toward its neighbour seeds another one further out.
+const float TUNE_AISLE_GROW = 1.f;
 // manager/lattice.as [count] -- How many of one def stand together before the
 //   next starts a fresh cluster elsewhere, so the whole economy is not in one
 //   spot. 16 is a 4x4 block; the aisle between clusters is derived from the

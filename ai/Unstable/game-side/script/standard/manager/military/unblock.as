@@ -61,6 +61,57 @@ int  gPennedSeen = 0;
 // that already exists -- the same trap Builder::gReclaimAsked exists for.
 array<Id> gUnblockAsked;
 
+// THE VERDICT, for the Brain to act on. Reclaiming is a build choice and the
+// Brain is the only thing that may spend a constructor, so this half only
+// records what the move test proved: this unit cannot walk, and this building
+// of ours is what stands in its way (0 when terrain holds it and there is
+// nothing of ours to blame). apexearth 2026-08-27: "prevention is good, and
+// then reclaim whichever is worth less" -- the choice between the two is made
+// in the market, on price, where every other reclaim is priced.
+array<Id>  gPenVictim;
+array<Id>  gPenWall;
+array<int> gPenVerdictAt;
+const int PEN_VERDICT_TTL = 120 * SECOND;
+
+void NotePenVerdict(Id victim, Id wall)
+{
+	for (uint i = 0; i < gPenVictim.length(); ++i) {
+		if (gPenVictim[i] == victim) {
+			gPenWall[i] = wall;
+			gPenVerdictAt[i] = ai.frame;
+			return;
+		}
+	}
+	gPenVictim.insertLast(victim);
+	gPenWall.insertLast(wall);
+	gPenVerdictAt.insertLast(ai.frame);
+}
+
+void DropPenVerdict(Id victim)
+{
+	for (uint i = 0; i < gPenVictim.length(); ++i) {
+		if (gPenVictim[i] == victim) {
+			gPenVictim.removeAt(i);
+			gPenWall.removeAt(i);
+			gPenVerdictAt.removeAt(i);
+			return;
+		}
+	}
+}
+
+void SweepPenVerdicts()
+{
+	for (uint i = 0; i < gPenVictim.length(); ) {
+		if (ai.frame - gPenVerdictAt[i] > PEN_VERDICT_TTL) {
+			gPenVictim.removeAt(i);
+			gPenWall.removeAt(i);
+			gPenVerdictAt.removeAt(i);
+			continue;
+		}
+		++i;
+	}
+}
+
 bool UnblockOn()
 {
 	return ai.GetTunable("apex_unblock", TUNE_UNBLOCK) > 0.f;
@@ -282,31 +333,25 @@ bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in di
 		if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
 			&& !StuckAskedFor(unit.id))
 		{
-			// KILL PHASE: reclaiming our own stuck unit is a build choice
-			// and goes through the Brain in the rebuild. Log the pen only.
 			gStuckAsked.insertLast(int(unit.id));
 			gStuckAskedFrame.insertLast(ai.frame);
+			NotePenVerdict(unit.id, 0);
 			AiLog(Factory::T() + "apex: stuck " + unit.circuitDef.GetName()
-				+ " #" + unit.id + " terrain-penned (no reclaim in the kill phase)");
+				+ " #" + unit.id + " terrain-penned -> offered to the market");
 		}
 		return false;
 	}
 	if (eat is null)
 		return false;
 
-	// KILL PHASE: eating our own blocking building is a build choice and goes
-	// through the Brain in the rebuild. Note it and stand down.
-	IUnitTask@ task = null;
-	if (task is null)
-		return false;
-
+	NotePenVerdict(unit.id, eat.id);
 	gUnblockAsked.insertLast(eat.id);
 	if (gUnblockAsked.length() > 64)
 		gUnblockAsked.removeAt(0);
 	gNextUnblockOrder = ai.frame + UNBLOCK_ORDER_PERIOD;
 	++gUnblockOrders;
 	AiLog(Factory::T() + "apex: unblock " + unit.circuitDef.GetName() + " #" + unit.id
-		+ " walled in (" + wall + " of ours in the ring) -> reclaim "
+		+ " walled in (" + wall + " of ours in the ring) -> offered "
 		+ eat.circuitDef.GetName() + " #" + eat.id
 		+ " cost=" + formatFloat(eat.circuitDef.costM, "", 0, 0)
 		+ " (order " + gUnblockOrders + " of " + gPennedSeen + " penned)");
@@ -315,6 +360,7 @@ bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in di
 
 void UpdateUnblock()
 {
+	SweepPenVerdicts();
 	if (!UnblockOn() || (gPenId.length() == 0))
 		return;
 

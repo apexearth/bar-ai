@@ -177,7 +177,17 @@ void MexDiag()
 // against the walk, and let the engine confirm what is actually open near the
 // best of them. The engine keeps sole authority over occupancy, reachability
 // and buildability; the ranking only chooses where to ask.
-const int MEX_TRIES = 3;
+// HOW MANY RANKED SPOTS GET OFFERED TO THE ENGINE before the election gives up
+// on extraction entirely. At 3, a builder whose three best spots are all taken
+// or unbuildable proposes NO mex want at all that tick -- with `claimed=29` in
+// one diag window that is a routine outcome, and it reads as "no ground left"
+// rather than "we did not look far enough". A bound on WORK (each try is one
+// FindOpenMexSpot probe), not on how much we may expand.
+int MexTries()
+{
+	const int n = int(ai.GetTunable("apex_mex_tries", TUNE_MEX_TRIES));
+	return (n < 1) ? 1 : n;
+}
 int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 {
 	CacheSpots();
@@ -229,7 +239,8 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		cand.insertLast(int(si));
 		score.insertLast(inc / (walk + 1.f));
 	}
-	for (int k = 0; k < MEX_TRIES; ++k) {
+	const int tries = MexTries();
+	for (int k = 0; k < tries; ++k) {
 		int bi = -1;
 		float bs = 0.f;
 		for (uint i = 0; i < score.length(); ++i) {

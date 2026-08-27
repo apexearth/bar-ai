@@ -57,9 +57,17 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 							* (7.f / 80.f);
 			}
 		}
-		const float free3 = FreeMetalFlow();
-		const float need = ((free3 < 35.f) ? free3 : 35.f)
-				- crew3 - float(nAt) * NANO_ABSORB;
+		// WHAT THE SITE CAN BE FED, NOT A NUMBER. This clamped demand at a
+		// bare 35 metal/s, and one nano absorbs NANO_ABSORB (17.5) -- so TWO
+		// turrets zeroed the demand at any income, forever. Measured in a
+		// watched game: five T2 bot labs with at most four nanos between them
+		// and a gantry on five, against an enemy gantry running 38 (apexearth:
+		// "they're going to kick our ass"). Spare metal flow is the honest
+		// bound and it already scales with the economy and the bank, so the
+		// turret count rises with income on its own and needs no ceiling.
+		const float free3 = FreeMetalFlow()
+				* ai.GetTunable("apex_nano_site_share", TUNE_NANO_SITE_SHARE);
+		const float need = free3 - crew3 - float(nAt) * NANO_ABSORB;
 		if (need > sinkNeed) {
 			sinkNeed = need;
 			sinkPos = sp3;

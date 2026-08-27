@@ -45,6 +45,14 @@ float NanoRange()
 // counting toward ArmyValue.
 const float NANO_ABSORB = 17.5f;
 
+// Whether growth honours the aisle as well as the seed. A tunable because it
+// trades directly against base sprawl: a cluster that may not grow toward its
+// neighbour seeds another one further out instead.
+bool AisleOnGrow()
+{
+	return ai.GetTunable("apex_aisle_grow", TUNE_AISLE_GROW) > 0.f;
+}
+
 float FarmRowW()
 {
 	const float w = ai.GetTunable("apex_farm_row_w", TUNE_FARM_ROW_W);
@@ -317,7 +325,19 @@ AIFloat3 FarmSlot(int defId)
 	Base::Coords(gFarmPos, depth0, lat0);
 	depth0 = Lattice::Snap(depth0, pitch);
 	lat0 = Lattice::Snap(lat0, pitch);
-	const int lat = int((FarmRowW() * .5f) / pitch);
+	// AT LEAST ONE CLUSTER WIDE, whatever the footprint. apex_farm_row_w is an
+	// absolute width, so dividing it by the def's pitch left big footprints a
+	// corridor: at 320 elmos a solar (pitch 64) gets 5 columns, an advanced
+	// solar or a fusion 3, and anything wider than 160 elmos exactly ONE --
+	// against 28 rows of depth. A one-column window cannot hold the square
+	// block ClusterSide() is asking for, so the grow scoring had no choice but
+	// to extend the line it was standing on.
+	int lat = int((FarmRowW() * .5f) / pitch);
+	{
+		const int half = (Lattice::ClusterSide() + 1) / 2;
+		if (lat < half)
+			lat = half;
+	}
 	const int rows = int(ai.GetTunable("apex_farm_rows", TUNE_FARM_ROWS));
 
 	// GROW slots (beside kin, cluster not yet full) and the best SEED slot
@@ -401,6 +421,14 @@ AIFloat3 FarmSlot(int defId)
 				continue;
 			if (near > 0) {
 				if (full)
+					continue;
+				// KEEP THE STREET THE SEED LEFT. Rule 3 parts clusters by an
+				// aisle, but only the SEED test enforced it -- growth was free
+				// to fill toward a foreign cluster until the two were flush,
+				// which is how a walkable gap becomes a pocket with a unit in
+				// it. A grow slot may not close the gap below the aisle; the
+				// cluster simply grows the other way.
+				if (AisleOnGrow() && (foreignGap >= 0.f) && (foreignGap < aisle))
 					continue;
 				// Prefer the slot with the MOST kin around it: that fills the
 				// concave corner of a block rather than extending a line, which

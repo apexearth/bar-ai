@@ -54,7 +54,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// builder. AA coverage is cheap and easy"). The panic below only reorders
 	// an election, and a builder with progress on a frame returns under this
 	// and never has one. Ends the moment the first tower stands.
-	bool aaEmerg = (gProtPos[PROT_AA].length() == 0)
+	bool aaEmerg = !ProtAnyComing(PROT_AA)
 			&& (Military::AirSeenEver() > 0.f);
 	if (aaEmerg) {
 		const bool stale = (ai.frame - gAaClaimAt) > 20 * SECOND;
@@ -118,6 +118,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	{ double _t = Perf::T0(); wants.insertLast(ProposeNano(unit)); Perf::Add("want.nano", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimObsolete(unit)); Perf::Add("want.reclobs", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimBlocker(unit)); Perf::Add("want.reclblk", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimPenned(unit)); Perf::Add("want.reclpen", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeAssist(unit)); Perf::Add("want.assist", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeProtect(unit)); Perf::Add("want.protect", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeSense(unit)); Perf::Add("want.sense", _t); }
@@ -215,7 +216,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// zero ground defence AND something is actually killing our structures --
 	// so it cannot fire on a hunch and it ends the moment the first tower
 	// stands. Ranked ahead of the lottery rather than given a share of it.
-	if (!aaPanic && (gProtPos[PROT_DEF].length() == 0)
+	if (!aaPanic && !ProtAnyComing(PROT_DEF)
 		&& (LossRateAt(Builder::gHomePos) > 0.f))
 	{
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
@@ -313,7 +314,16 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				ranked.removeAt(ri);
 				ranked.insertAt(0, cw);
 			}
-			coverPush = true;
+			// HOISTED, NOT EXEMPTED. This used to set coverPush and skip the
+			// draw outright, which turned every finished mex into a tower: 96
+			// pushes in one game and all 99 early ground-defence decisions were
+			// armllt, while metal took 28 of 265 (apexearth, watching: "we
+			// don't care enough about capturing mexes early on... the obvious
+			// accelerator would be to just capture more mexes, they only cost
+			// 30 metal"). A ~100-metal tower on every 30-metal claim halves the
+			// expansion rate. Putting it at rank 0 still makes it ground
+			// defence's argmax -- and its zero walk is a real price advantage
+			// the draw already reads -- but metal keeps its ticket.
 			AiLog("apex: cover-push t=" + ai.teamId + " "
 				+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
 				+ " by " + unit.circuitDef.GetName() + " #" + unit.id

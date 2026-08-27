@@ -317,6 +317,19 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			continue;   // cannot afford it; nothing else about it matters
 		AIFloat3 at;
 		if (sc == SC_ANTINUKE) {
+			// INSURANCE HAS AN INCOME FLOOR, and the queue-jump below is what
+			// made it the first strategic build of every game: the anti-nuke is
+			// the cheapest class here, so it clears the affordability test long
+			// before a gantry or a silo and took every super-push. A SEEN enemy
+			// silo overrides the bar -- being poor does not make the warhead
+			// cheaper.
+			if (Brain::EnemyNukeSilos() <= 0) {
+				TrackIncome();
+				const float incNow = (gIncEma > 0.f)
+						? gIncEma : aiEconomyMgr.metal.income;
+				if (incNow < Policy::AntinukeIncome())
+					continue;
+			}
 			if (!AntiNukeSite(unit, at))
 				continue;
 		} else {

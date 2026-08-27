@@ -643,6 +643,17 @@ GROUPS = [
                   "base anchor"),
                  ("TUNE_SLOT_TRIES", "lattice slots tried before a placement "
                   "gives up"),
+                 ("TUNE_MEX_TRIES", "how many metal spots a builder offers to "
+                  "the engine before giving up on expanding this tick"),
+                 ("TUNE_NANO_SITE_SHARE", "how much of the metal nothing is "
+                  "spending one factory or big build may claim as nano demand "
+                  "— raise it for more turrets around labs and gantries"),
+                 ("TUNE_RECLAIM_REZ_BIAS", "how much more a reclaim is worth "
+                  "to a rezbot than to a constructor that could be claiming "
+                  "ground — raise it to keep cons expanding"),
+                 ("TUNE_AISLE_GROW", "a growing cluster must keep the walking "
+                  "street to its neighbours instead of filling it in — fewer "
+                  "units sealed into pockets, at the cost of more sprawl"),
              ]},
         ],
     },

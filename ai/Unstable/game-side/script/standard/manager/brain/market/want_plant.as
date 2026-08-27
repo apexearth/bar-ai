@@ -320,6 +320,21 @@ bool UnlocksProduct(int plantId)
 				made = true;
 				break;
 			}
+			// A PLANT ALREADY ORDERED UNLOCKS ITS PRODUCTS TOO. Standing-only
+			// would let two copies of the same new lab each read as the
+			// unlocker while the first is still a nanoframe -- the same
+			// in-flight blindness reachKin already carries below.
+			for (uint fq = 0; fq < Requests::gLive.length(); ++fq) {
+				IUnitTask@ qt = Requests::gLive[fq];
+				if ((qt is null) || qt.IsDead() || (qt.buildDef is null))
+					continue;
+				if (int(qt.buildDef.id) == by[b]) {
+					made = true;
+					break;
+				}
+			}
+			if (made)
+				break;
 		}
 		if (!made)
 			return true;
@@ -453,6 +468,9 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				: 0.f;
 		const float expTerm = anyOpen
 				? stream * (gPlantReach[d] + gPlantLocked[d] * first) : 0.f;
+		// NOTE: dupSubst is applied to the BUILD-POWER half below, not just to
+		// production -- see the duplicate block. Expansion is not substitutable
+		// (a nano claims no ground), so only pipeTerm is.
 		const float conHalf = pipeTerm + expTerm;
 		// Only the PRODUCTION half is a tier question against THEM: what this
 		// line would field is worth less while they field a tier above it. Its
@@ -559,8 +577,33 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				&& (NeediestLine(nlp) > 0.f))
 				dupSubst = DupBpSubstMul(d);
 		}
-		float dupGain = (conHalf * subMul + prodOwn * dupSubst)
-				/ float(1 + reachKin);
+		// A DIFFERENT LAB IS NOT A COPY. The divisor counted every same-reach
+		// plant of the domain, so a T2 vehicle lab was halved by a standing T2
+		// bot lab despite fielding entirely different units -- and a SECOND T2
+		// bot lab, which fields nothing new, was halved by exactly the same
+		// amount. Nothing preferred the variety; which one got built was a coin
+		// flip. apexearth 2026-08-27: a second lab of a type we already run is
+		// the bad buy ("1 lab = 300 build power, 1 nano = 200... you can back 1
+		// lab with 14 nanos... a second T2 lab gives you 600 total" -- a fifth
+		// of the production for the same metal), while a lab that opens new
+		// units "would be OK". So only a plant that fields nothing new pays the
+		// parallel-capacity divisor; the BP-substitution price below is what
+		// keeps the real duplicate honest.
+		const int dupKin = UnlocksProduct(d) ? 0 : reachKin;
+		// BUILD POWER IS THE HALF THE NANO ACTUALLY REPLACES, and it was the
+		// half left undiscounted: dupSubst only touched production, while
+		// pipeTerm (BPGap) went in at full price. So a duplicate lab was the
+		// market's answer to a build-power shortfall -- and with nano demand
+		// clamped at 35 m/s there was no other answer available, which is how
+		// five T2 bot labs stand with four nanos between them (apexearth
+		// 2026-08-27, and his arithmetic: "1 lab = 300 build power, 1 nano =
+		// 200... you can back 1 lab with 14 nanos for a total of 3100 build
+		// power. To spend about the same metal on a second T2 lab would give
+		// you 600" -- a fifth of the throughput). Expansion is NOT substituted:
+		// a nano claims no ground, so expTerm keeps its full value.
+		const float conSub = pipeTerm * subMul * dupSubst + expTerm * subMul;
+		float dupGain = (conSub + prodOwn * dupSubst)
+				/ float(1 + dupKin);
 		if (liveOther > 0)
 			dupGain /= float(1 + liveOther);
 		// The duplicate decision, in one line, so the audit can assert it
@@ -570,6 +613,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			AIFloat3 nlp2;
 			AiLog(Factory::T() + "apex: plantdup " + Catalog::Def(d).GetName()
 				+ " kin=" + reachKin
+				+ " dupKin=" + dupKin
+				+ " unlocks=" + (UnlocksProduct(d) ? 1 : 0)
 				+ " liveOther=" + liveOther
 				+ " subst=" + formatFloat(dupSubst, "", 0, 3)
 				+ " lineNeed=" + formatFloat(NeediestLine(nlp2), "", 0, 2)
