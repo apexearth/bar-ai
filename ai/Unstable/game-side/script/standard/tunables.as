@@ -2029,6 +2029,17 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 //   collapsed the target to a mex floor exactly as the army grew. Chosen to
 //   clear one heavy gun at hosted-game income, not derived -- measure it.
 const float TUNE_DEF_ECO_S = 30.f;
+// manager/brain/market/want_plant.as [toggle 0/1] -- Price a DUPLICATE line's
+//   throughput against the cheaper way to buy the same build power. An
+//   advanced lab is 300 workertime for 2900 metal and a construction turret
+//   200 for 210, so the turret is nine times the build power per metal
+//   (apexearth: "the right choice is to add more nanos to the lab instead of
+//   making another lab"). Applied only while a line is actually short of
+//   hands, which is his "unless you ran out of room" clause. UNMEASURED and
+//   off by default: the first game with it on finished at 72k metal against
+//   1.47M, which is either variance or this suppressing parallel capacity
+//   outright. Turn on to A/B.
+const float TUNE_DUP_BP_SUBST = 0.f;
 // manager/brain/market/worth.as, want_plant.as [ratio] -- How fast a unit's --
 //   and a plant's PRODUCTION -- value fades as the share of identified enemy
 //   metal above its own tier rises. Priced as 1/(1 + this * shareAbove): at 1

@@ -1,5 +1,46 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-27 -- the strategic market buys whatever is CHEAPEST, and that is the LRPC
+
+apexearth, watching: "I see we make the LRPC cannons - but those are not great
+for defense, they're more like long range offense."
+
+`ProposeSuper` prices every strategic structure as AFFORDABILITY:
+`gain = EcoPowerM * share * (budget - bill) / budget`. That term falls as cost
+rises, so the cheapest member of the list wins the CAT_SUPER ticket every time,
+whatever it does. Confirmed on Carrot Mountains: `apex: super fire corint` --
+an Intimidator, at 246 super elections in one game.
+
+The file's own comment already identifies this defect and fixed it for ONE
+class: the gantry was given a real return (overflow + the army gap its
+products fill) precisely because affordability "rewards being CHEAP". The same
+correction was never made for the LRPC, the silo, or the anti-nuke, so three of
+the five classes are still bought for being affordable rather than for what
+they do.
+
+NOT the reason heavy turrets lose, and worth saying so: `CoverWith` sums only
+`gProtPos[PROT_DEF]`, so an LRPC is never credited as base cover and never
+suppresses a real turret. It is a separate category with its own ticket. What
+it costs is metal and constructor time.
+
+An LRPC's honest return is the enemy metal it destroys at range without
+exposure. Pricing it that way is a four-class job and was deliberately not
+bundled into the defence session.
+
+## 2026-08-27 -- we never reach T3 at all, at 880 metal/s
+
+Carrot Mountains, 60 minutes, Cortex self-play: 959,380 metal built, 880
+metal/s income, 218 mexes -- and `mT3 = 0`. The word "gantry" appears NINE
+times in the whole infolog. No gantry means no T3 units, which is a different
+problem from the T3 DEFENCES (cordoom/armanni need only an advanced
+constructor, no gantry).
+
+Also from that game, unexamined and large: `buildpower/nano` won **10,291**
+elections, more than every other want combined, against `metal/mex` 349 and
+`metal/mexup` 380. `cornanotc` was historically the single largest metal sink
+in this AI and this looks like the same shape returning.
+
+
 ## 2026-08-27 -- static defence share jumped 7% -> 13-23% and is UNTUNED
 
 `apex_def_eco_s` (30 seconds of EcoPowerM) is the whole size of the standing

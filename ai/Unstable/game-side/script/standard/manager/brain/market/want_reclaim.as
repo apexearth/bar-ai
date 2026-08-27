@@ -214,11 +214,30 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		// rim as well so it means the same thing on a small base and a large.
 		bool stranded = false;
 		if (!dominated && gPfRimOk) {
-			const float rimHere = PfRimAt(gProtPos[PROT_DEF][i]);
-			const float deep = -PfRimDist(gProtPos[PROT_DEF][i]);
+			const AIFloat3 tp = gProtPos[PROT_DEF][i];
+			const float rimHere = PfRimAt(tp);
+			const float deep = -PfRimDist(tp);
 			const float rr = (Catalog::gMaxRange[d] > 1.f)
 					? Catalog::gMaxRange[d] : 500.f;
-			stranded = (rimHere > rr) && (deep > rr);
+			// ...AND IT MUST BE GUARDING NOTHING. A heavy gun is the most
+			// attractive candidate here by construction -- the refund rises
+			// with cost -- so an interior test on its own retires the base's
+			// main weapon and the auction re-sites it wherever it next scores,
+			// which can be deeper in than it started (apexearth: "just saw us
+			// reclaim a doomsday gun and then make one further behind in our
+			// base"). Measured over two 60-minute games: 1,694 and 1,645
+			// decisions to reclaim a cordoom.
+			//
+			// A cover-versus-threat test does NOT catch this: threat in a quiet
+			// interior reads ~0, so removing the gun trivially "leaves the
+			// ground covered". The honest question is whether the turret is
+			// doing work, and the measure of that is the metal standing inside
+			// its reach. Compared against its own price, so nothing is chosen:
+			// a turret guarding less than it is worth is not paying for
+			// itself; one standing over the base is, wherever the rim has got
+			// to.
+			stranded = (rimHere > rr) && (deep > rr)
+					&& (PfStakeAt(tp, rr) <= Catalog::gCostM[d]);
 		}
 		if (!dominated && !stranded)
 			continue;

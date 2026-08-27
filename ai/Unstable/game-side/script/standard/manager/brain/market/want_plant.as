@@ -207,6 +207,45 @@ int OwnedWaterPlants()
 // A plant's own tier, from its attribute rather than from its extraction reach
 // -- the enemy comparison is about what the LINE fields, not what its
 // constructors dig.
+// A SECOND LINE IS THE DEAR WAY TO BUY THROUGHPUT.
+//
+// apexearth 2026-08-27: "2900 metal buys 300bp and the ability to build T2
+// units. 1 nano turret adds 200bp to that factory for just ~200 metal. So the
+// right choice is to add more nanos to the lab instead of making another lab.
+// You'd only want a second lab if you ran out of room to make nanos."
+//
+// Read off the defs rather than his numbers: an advanced lab is 300 workertime
+// for 2900 metal, a construction turret 200 for 210 -- 0.103 against 0.952 BP
+// per metal, so the turret is NINE TIMES the build power for the same spend.
+// A duplicate line's production half is exactly that purchase, and it was
+// priced as if the cheaper way to buy it did not exist. Returned as the ratio
+// between the two, so nothing is forbidden and no number is chosen: the second
+// lab wins whenever the substitute genuinely is not available.
+int gNextPlantDupLog = 0;
+
+float DupBpSubstMul(int d)
+{
+	const float pm = Catalog::gCostM[d];
+	if (pm <= 1.f)
+		return 1.f;
+	const float pbp = Catalog::gBuildPower[d] / pm;
+	float nbp = 0.f;
+	for (int n = 1; n <= Catalog::gDefCount; ++n) {
+		if (!Catalog::gAvailable[n] || Catalog::gMobile[n])
+			continue;
+		// A standing lathe that builds nothing of its own: a nano, not a plant.
+		if ((Catalog::gBuildPower[n] <= 0.f) || (Catalog::gCostM[n] <= 1.f)
+			|| (Catalog::gBuildsList[n].length() > 0))
+			continue;
+		const float r = Catalog::gBuildPower[n] / Catalog::gCostM[n];
+		if (r > nbp)
+			nbp = r;
+	}
+	if ((nbp <= 0.f) || (pbp >= nbp))
+		return 1.f;
+	return pbp / nbp;
+}
+
 int PlantTier(int plantId)
 {
 	const int at = Factory::userData[plantId].attr;
@@ -461,7 +500,36 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if ((myReach > 0.f) && (bestDom > myReach))
 				subMul = myReach / bestDom;
 		}
-		float dupGain = (conHalf * subMul + prodOwn) / float(1 + reachKin);
+		// ...and the throughput half of a DUPLICATE is priced against the
+		// cheaper way to buy the same build power. Only while that way is
+		// actually open: NeediestLine is a line short of hands, so if no line
+		// wants hands there is nothing for a nano to do and a second line is
+		// the honest purchase -- which is his "unless you ran out of room"
+		// clause, expressed as demand rather than as geometry. A plant that
+		// unlocks something nothing we own can make is exempt: it is not a
+		// copy, it is a new capability.
+		float dupSubst = 1.f;
+		if ((reachKin > 0) && !UnlocksProduct(d)) {
+			AIFloat3 nlp;
+			if ((ai.GetTunable("apex_dup_bp_subst", TUNE_DUP_BP_SUBST) > 0.f)
+				&& (NeediestLine(nlp) > 0.f))
+				dupSubst = DupBpSubstMul(d);
+		}
+		float dupGain = (conHalf * subMul + prodOwn * dupSubst)
+				/ float(1 + reachKin);
+		// The duplicate decision, in one line, so the audit can assert it
+		// rather than infer it from two labs standing.
+		if ((reachKin > 0) && (ai.frame >= gNextPlantDupLog)) {
+			gNextPlantDupLog = ai.frame + 30 * SECOND;
+			AIFloat3 nlp2;
+			AiLog(Factory::T() + "apex: plantdup " + Catalog::Def(d).GetName()
+				+ " kin=" + reachKin
+				+ " subst=" + formatFloat(dupSubst, "", 0, 3)
+				+ " lineNeed=" + formatFloat(NeediestLine(nlp2), "", 0, 2)
+				+ " prod=" + formatFloat(prodOwn, "", 0, 2)
+				+ " con=" + formatFloat(conHalf, "", 0, 2)
+				+ " dupGain=" + formatFloat(dupGain, "", 0, 2));
+		}
 		{
 			const float ceilX = BestExtract();
 			if (ceilX > 0.f)

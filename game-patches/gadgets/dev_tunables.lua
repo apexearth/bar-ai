@@ -137,6 +137,7 @@ local NAMES = {
 	"apex_def_reach_cap",
 	"apex_def_site_walk",
 	"apex_def_eco_s",
+	"apex_dup_bp_subst",
 	"apex_foe_tier_fade",
 	"apex_def_ttd_h",
 	"apex_defend_home",

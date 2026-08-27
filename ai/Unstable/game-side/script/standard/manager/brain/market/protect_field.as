@@ -164,12 +164,49 @@ float PfAlphaPerMetal()
 	return gPfAlphaPerM;
 }
 
+// A LOS READING IS NOT A THREAT MODEL. GetEnemyMaxMobileCostM is the costliest
+// enemy mobile currently VISIBLE, and it was measured bouncing between 0, 26
+// and 120 metal across whole games -- whichever raider happened to be on
+// screen. So the reference blow was ~0, hp/(hp+a) read ~1.0 for every turret,
+// and the durability term above -- the entire reason a Bulwark is not twelve
+// Beamers -- was inert. The auction fell back to threat-per-metal, where the
+// cheap tower wins by construction, which is why the big guns were never
+// bought and why a Juggernaut walks in (apexearth: "we lost because we
+// couldn't stop a Juggernaut fast enough").
+//
+// Two corrections, both from quantities this AI already owns:
+//
+// A HIGH-WATER MARK, because a Korgoth seen once means they own a gantry and
+// that does not go away when it leaves our line of sight. Nothing about their
+// capability gets cheaper.
+//
+// ...and OUR OWN best buildable mobile as the floor: the same symmetric
+// expectation ArmyTarget and DefenceTarget already use (they had our start and
+// our minutes). This is the term that matters for his complaint, because it
+// needs no contact -- the big gun can be STANDING when the Juggernaut arrives
+// instead of being priced correctly just after it lands.
+float gPfAlphaHi = 0.f;
+
 float PfAlphaRef()
 {
-	const float best = ai.GetEnemyMaxMobileCostM();
-	if (best <= 0.f)
+	float best = ai.GetEnemyMaxMobileCostM();
+	const float mine = OwnedBestMobileCostM();
+	if (mine > best)
+		best = mine;
+	if (best > gPfAlphaHi)
+		gPfAlphaHi = best;
+	if (gPfAlphaHi <= 0.f)
 		return 0.f;
-	return best * PfAlphaPerMetal();
+	return gPfAlphaHi * PfAlphaPerMetal();
+}
+
+// The heaviest single attacker a post should expect, in METAL -- the same
+// currency the stake and the wave are already in. High-water, and floored by
+// our own best buildable mobile, exactly as PfAlphaRef.
+float PfHeavyRef()
+{
+	PfAlphaRef();   // refreshes the high-water mark
+	return gPfAlphaHi;
 }
 
 // Cover this def contributes at a point it reaches, in light-tower metal.
@@ -179,10 +216,14 @@ float PfTowerKill(int d)
 	if (ref <= 0.f)
 		return 0.f;
 	float m = Catalog::gSurfT[d] / ref;
-	if (ai.GetTunable("apex_def_alpha_w", TUNE_DEF_ALPHA_W) > 0.f) {
-		const float a = PfAlphaRef();
+	// apex_def_alpha_w is a WEIGHT on the reference blow, not just a switch:
+	// it was only ever tested > 0, so the dashboard knob could turn durability
+	// off and could not tune it.
+	{
+		const float w = ai.GetTunable("apex_def_alpha_w", TUNE_DEF_ALPHA_W);
+		const float a = PfAlphaRef() * w;
 		const float hp = Catalog::gHealth[d];
-		if ((a > 0.f) && (hp > 0.f))
+		if ((w > 0.f) && (a > 0.f) && (hp > 0.f))
 			m *= hp / (hp + a);
 	}
 	return m * ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);

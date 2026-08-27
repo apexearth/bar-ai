@@ -39,7 +39,8 @@ class Report:
 
     def show(self):
         flags = 0
-        for section in ("HEALTH", "ECONOMY", "MILITARY", "EFFICIENCY", "VS-ENEMY"):
+        for section in ("HEALTH", "PRIORITY", "ECONOMY", "MILITARY",
+                        "EFFICIENCY", "VS-ENEMY"):
             rows = [r for r in self.rows if r[0] == section]
             if not rows:
                 continue
@@ -387,7 +388,93 @@ def check_vs_enemy(text, rep):
                 f"ours {last[my]} vs theirs {last[foe]}")
 
 
-CHECKS = [check_health, check_economy, check_military, check_efficiency, check_vs_enemy]
+# --------------------------------------------------------------- priority --
+# apexearth, 2026-08-27: "Our audit script should check and fail if the
+# priority for our advanced cons isn't upgrading mexes before the other things.
+# Mex upgrade is the right choice."
+#
+# WHICH cons those are comes from the AI, not from a def name: `apex: upcons`
+# lists every builder whose build options contain a better-than-basic
+# extractor, read off the build graph at init. A naming guess would be wrong on
+# one of the three factions and silently wrong on a unit BAR adds later.
+UPCONS_RE = re.compile(r"apex: upcons ([a-z0-9,]+)")
+DECIDE_RE = re.compile(
+    r"apex: decide t=\d+ ([a-z0-9]+) #\d+ -> ([a-z]+)/([a-z]+)"
+    r"(?:[^|]*? over ([a-z]+)/([a-z]+))?")
+
+
+def check_priority(text, rep):
+    cons = set()
+    for m in UPCONS_RE.finditer(text):
+        cons.update(m.group(1).split(","))
+    if not cons:
+        rep.add("PRIORITY", True, "upgrade-capable cons",
+                "no `apex: upcons` line -- nothing that can upgrade a mex "
+                "existed, or the variant predates the census")
+        return
+
+    picks = defaultdict(int)
+    # docs/18-brain.md: the arbiter's ranking IS a log line, so the useful
+    # assertion is "a moho was available and something beat it" rather than
+    # inferring starvation from outcomes three layers downstream.
+    beat = defaultdict(int)
+    total = 0
+    for m in DECIDE_RE.finditer(text):
+        if m.group(1) not in cons:
+            continue
+        won = f"{m.group(2)}/{m.group(3)}"
+        picks[won] += 1
+        total += 1
+        if m.group(4) and f"{m.group(4)}/{m.group(5)}" == "metal/mexup":
+            beat[won] += 1
+    if not total:
+        rep.add("PRIORITY", True, "advanced con elections",
+                f"cons {sorted(cons)} never elected -- none was ever built")
+        return
+
+    up = picks.get("metal/mexup", 0)
+    ranked = sorted(picks.items(), key=lambda kv: -kv[1])
+    top, topN = ranked[0]
+    share = 100.0 * up / total
+    detail = (f"{up}/{total} ({share:.0f}%) of advanced-con decisions were "
+              f"metal/mexup; most-chosen was {top} ({topN}). "
+              + " ".join(f"{k}={v}" for k, v in ranked[:5]))
+    # His rule, stated as he stated it: the upgrade should be what these cons
+    # do FIRST. Anything else winning more of their elections is the flag.
+    rep.add("PRIORITY", top == "metal/mexup", "advanced cons upgrade mexes",
+            detail)
+
+    # apexearth 2026-08-27: "how we keep making 2 T2 labs one after another...
+    # 2900 metal buys 300bp; 1 nano turret adds 200bp for ~200 metal." A
+    # duplicate line is the dear way to buy throughput, and it is only the
+    # right buy when no line is short of hands.
+    dups = re.findall(
+        r"apex: plantdup ([a-z0-9]+) kin=(\d+) subst=([\d.]+) "
+        r"lineNeed=([\d.]+)", text)
+    if dups:
+        hot = [d for d in dups if float(d[3]) > 0.0]
+        worst = sorted(dups, key=lambda d: -int(d[1]))[0]
+        rep.add("PRIORITY", not hot, "duplicate line over nanos",
+                f"{len(dups)} duplicate-plant prices, {len(hot)} of them while "
+                f"a line was short of hands (nanos were the cheaper build "
+                f"power); worst kin={worst[1]} on {worst[0]} "
+                f"subst={worst[2]}")
+
+    lost = sum(beat.values())
+    if lost:
+        who = sorted(beat.items(), key=lambda kv: -kv[1])[:4]
+        rep.add("PRIORITY", False, "a moho was available and lost",
+                f"{lost}x an advanced con ranked metal/mexup second and built "
+                "something else: "
+                + " ".join(f"{k}={v}" for k, v in who))
+    else:
+        rep.add("PRIORITY", True, "a moho was available and lost",
+                "never -- mexup was not the runner-up in any advanced-con "
+                "election")
+
+
+CHECKS = [check_health, check_priority, check_economy, check_military,
+          check_efficiency, check_vs_enemy]
 
 
 def main():
@@ -418,8 +505,10 @@ def main():
     rep = Report()
     for chk in CHECKS:
         chk(text, rep)
-    rep.show()
+    # FAIL, not just report: he asked for a script that can find issues on its
+    # own, which means a non-zero exit a runner can act on.
+    return 1 if rep.show() else 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main() or 0)

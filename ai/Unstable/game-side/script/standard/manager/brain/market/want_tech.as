@@ -51,9 +51,59 @@ float TechSurvival(int defId, float askerBP)
 
 // Upgrade a spot we hold: gain is the extraction delta on the spot's real
 // income. Pure arithmetic; capability comes free from BuildsOf.
+// WHICH OF OUR CONSTRUCTORS CAN UPGRADE AN EXTRACTOR AT ALL, named once so a
+// tool never has to guess it from a def name. apexearth wants the audit to
+// fail when the cons that COULD be upgrading mexes are doing something else,
+// and "which cons are those" is a build-graph question, not a naming one.
+bool gUpConsLogged = false;
+void LogUpgradeCons()
+{
+	if (gUpConsLogged || (Catalog::gDefCount <= 0))
+		return;
+	// The BASIC extractor's yield, read off the defs -- an "upgrade" is any
+	// extractor that beats it. gExtractsM is the engine's extractsMetal, a
+	// small float (a T1 mex is thousandths), not a multiplier, so a hardcoded
+	// bar of 1.0 matched nothing and this line never printed once.
+	float baseYield = -1.f;
+	for (int e = 1; e <= Catalog::gDefCount; ++e) {
+		if (!Catalog::gAvailable[e] || (Catalog::gExtractsM[e] <= 0.f))
+			continue;
+		if ((baseYield < 0.f) || (Catalog::gExtractsM[e] < baseYield))
+			baseYield = Catalog::gExtractsM[e];
+	}
+	if (baseYield < 0.f)
+		return;
+	string names = "";
+	int n = 0;
+	for (int b = 1; b <= Catalog::gDefCount; ++b) {
+		if (!Catalog::gMobile[b] || !Catalog::gBuilder[b])
+			continue;
+		const array<int>@ bl = Catalog::gBuildsList[b];
+		bool canUp = false;
+		for (uint q = 0; q < bl.length(); ++q) {
+			// An extractor that outyields the basic one is an UPGRADE.
+			if (Catalog::gExtractsM[bl[q]] > baseYield) {
+				canUp = true;
+				break;
+			}
+		}
+		if (!canUp)
+			continue;
+		if (n > 0)
+			names += ",";
+		names += Catalog::Def(b).GetName();
+		++n;
+	}
+	if (n <= 0)
+		return;
+	gUpConsLogged = true;
+	AiLog(Factory::T() + "apex: upcons " + names);
+}
+
 Want@ ProposeMexUp(CCircuitUnit@ unit)
 {
 	Want w;
+	LogUpgradeCons();
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const AIFloat3 here = unit.GetPos(ai.frame);

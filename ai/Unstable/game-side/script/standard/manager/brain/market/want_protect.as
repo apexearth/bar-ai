@@ -288,6 +288,49 @@ float ClosureAdds(const AIFloat3& in extraAt, float extraReach)
 	return float(add) / float(CLOSE_RAYS);
 }
 
+// THE OUTSKIRTS, AND SPREAD AROUND THEM. apexearth: "we put our AA defense in
+// the center of our base, but if the enemy bombers reached that place then
+// bombs are already dropped. Need AA around the outskirts."
+//
+// AA never set a position at all -- it fell through to `core`, the anchor,
+// which is the start position -- so every battery of every kind landed on the
+// same spot. This walks the perimeter the protection field already computes and
+// returns the rim bearing FURTHEST from anything of this class we already own,
+// so the ring fills itself out one gap at a time and widens as the base does.
+// No radius and no count: the geometry is the rim, and the auction decides how
+// many are worth buying.
+bool RimGapSite(int cls, AIFloat3& out at)
+{
+	PfRebuild();
+	if (!gPfRimOk)
+		return false;
+	float bestD = -1.f;
+	AIFloat3 best;
+	bool found = false;
+	for (int b = 0; b < PF_RAYS; ++b) {
+		const float ang = (6.2831853f / float(PF_RAYS)) * (float(b) + 0.5f);
+		const AIFloat3 dir(cos(ang), 0.f, sin(ang));
+		const AIFloat3 p = gPfMid + dir * gPfRimR[b];
+		const AIFloat3 q(p.x, 0.f, p.z);
+		if (!OnMap(q))
+			continue;
+		float near = 1e9f;
+		for (uint i = 0; i < gProtPos[cls].length(); ++i) {
+			const float dd = q.distance2D(gProtPos[cls][i]);
+			if (dd < near)
+				near = dd;
+		}
+		if (near > bestD) {
+			bestD = near;
+			best = q;
+			found = true;
+		}
+	}
+	if (found)
+		at = best;
+	return found;
+}
+
 bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 {
 	for (uint i = 0; i < gProtPos[cls].length(); ++i) {
@@ -640,6 +683,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				continue;
 			gain = ((artyS < gAssetsM) ? artyS : gAssetsM) * rate * 4.f;
 		} else if (cls == PROT_AA) {
+			// On the perimeter, not the anchor: AA set no position at all, so
+			// every battery landed on the start position.
+			{
+				AIFloat3 aat;
+				if (RimGapSite(PROT_AA, aat))
+					at = aat;
+			}
 			// AS SOON AS WE HAVE SEEN ANY (apexearth: "just make the AA if
 			// we've seen enemy air... it doesn't have to be a ton"). Sized off
 			// AirSeenEver, which has no AA_IGNORE floor and no freshness
@@ -845,6 +895,27 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					const float wHere = siteWave * shr;
 					if (wHere > threat)
 						threat = wHere;
+					// ONE OF THEIR BEST UNITS ARRIVES WHOLE, AT ONE PLACE.
+					// Apportioning the wave by stake share is right for an army
+					// -- it spreads -- and wrong for a single heavy: a
+					// Juggernaut does not send a tenth of itself to a tenth of
+					// the base. Under this floor a cheap turret saturates the
+					// shortfall on its own, the clip discards everything a big
+					// gun brings past it, and the auction cannot tell a
+					// Bulwark from a Toaster (measured: cordoom kill 7,927
+					// against cortoast 1,565, and cortoast priced FOUR TIMES
+					// higher). apexearth: "we made the longer range T2 guns
+					// which are good but they can't take down T3 fast enough."
+					//
+					// Bounded by the stake itself, so nothing invents a
+					// threshold: they bring the heavy where there is something
+					// worth killing, and a post guarding 500 metal never faces
+					// a 20,000-metal attacker.
+					float heavy = PfHeavyRef();
+					if (heavy > sStake)
+						heavy = sStake;
+					if (heavy > threat)
+						threat = heavy;
 				}
 				if (threat <= 1.f)
 					continue;
@@ -1080,7 +1151,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		string r = "";
 		for (uint q = 0; q < gDefRankDef.length(); ++q) {
 			r += " " + Catalog::Def(gDefRankDef[q]).GetName()
-				+ "=" + formatFloat(gDefRankV[q], "", 0, 4);
+				+ "=" + formatFloat(gDefRankV[q], "", 0, 4)
+				+ "/kill" + formatFloat(PfTowerKill(gDefRankDef[q]), "", 0, 1);
 		}
 		// ...and what this builder could offer but never did. A candidate list
 		// of two out of a T2 constructor is a filter question, not a price one.
@@ -1099,7 +1171,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				+ ",cls=" + ProtClassOf(dq);
 		}
 		AiLog(Factory::T() + "apex: defrank by="
-			+ unit.circuitDef.GetName() + " n=" + gDefRankDef.length() + r
+			+ unit.circuitDef.GetName() + " n=" + gDefRankDef.length()
+			+ " aRef=" + int(PfAlphaRef())
+			+ " foeSeen=" + int(ai.GetEnemyMaxMobileCostM())
+			+ " ourBest=" + int(OwnedBestMobileCostM()) + r
 			+ " | dropped:" + dropped);
 	}
 	return w;
