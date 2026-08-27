@@ -30,7 +30,6 @@ const float WRECK_RICH    = 400.f;   // total reclaimable within WRECK_RICH_R
 const float WRECK_RICH_R  = 1400.f;
 const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
 const int   WRECK_TIMEOUT = 1 * MINUTE;
-int gNextWreck = 0;
 int gNextMetalEmptyDiag = 0;  // temporary diagnostic, see ScavengeWrecks
 // Spacing on the safe-mex grab. Short: an unclaimed spot is income we are not
 // earning, and the check itself is one lookup.
@@ -223,7 +222,6 @@ IUnitTask@ IdleFeatureReclaim(CCircuitUnit@ unit, bool isComm)
 // resurrect task with a 300-second timeout and is out of the metal business
 // until it expires, which costs far more than the feature scan does.
 const int REZ_WRECK_PERIOD = 1 * SECOND;
-int gNextRezWreck = 0;
 int gNextRezFleeLog = 0;
 
 // Which defs resurrect, learned from the engine rather than named: BuilderManager

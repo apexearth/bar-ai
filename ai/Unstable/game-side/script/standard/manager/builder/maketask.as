@@ -26,10 +26,13 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 		@t = RezzerEatCorpse(unit);
 		if (t !is null)
 			return t;
+		@t = RezzerRezOrEat(unit);
+		if (t !is null)
+			return t;
 		@t = RezzerRepairNearby(unit);
 		if (t !is null)
 			return t;
-		return IdleFeatureReclaim(unit, false);
+		return RezzerIdle(unit);
 	}
 
 	// Hold work already in progress: a task the unit is on stays its task.

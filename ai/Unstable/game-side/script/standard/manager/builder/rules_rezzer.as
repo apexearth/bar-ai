@@ -5,11 +5,24 @@ namespace Builder {
 
 // Per-bot ledger: last seen health and a trouble window (something shot us,
 // HERE), plus the repair-scan throttle. Replaces the dead fortify machinery.
-const int REZ_TROUBLE_WINDOW = 90 * SECOND;
 array<int>   gConSlotId;
 array<float> gConHp;
 array<int>   gConHitUntil;
 array<int>   gConNextRepair;
+array<int>   gConNextWreck;
+
+// How long one hit keeps a rez bot in flight, and how far apart its own wreck
+// scans sit. Both were fixed numbers, and both read as idling on screen.
+int RezFleeWindow()
+{
+	return int(ai.GetTunable("apex_rez_flee_s", TUNE_REZ_FLEE_S)) * SECOND;
+}
+
+int RezScanPeriod()
+{
+	const int s = int(ai.GetTunable("apex_rez_scan_s", TUNE_REZ_SCAN_S) + 0.5f);
+	return (s <= 0) ? 1 : (s * SECOND);
+}
 
 int ConSlot(CCircuitUnit@ unit)
 {
@@ -22,6 +35,7 @@ int ConSlot(CCircuitUnit@ unit)
 	gConHp.insertLast(unit.GetHealthPercent());
 	gConHitUntil.insertLast(0);
 	gConNextRepair.insertLast(0);
+	gConNextWreck.insertLast(0);
 	return int(gConSlotId.length()) - 1;
 }
 
@@ -31,7 +45,7 @@ void ConDugIn(CCircuitUnit@ unit)
 	const int s = ConSlot(unit);
 	const float hp = unit.GetHealthPercent();
 	if (hp < gConHp[s] - 0.001f)
-		gConHitUntil[s] = ai.frame + REZ_TROUBLE_WINDOW;
+		gConHitUntil[s] = ai.frame + RezFleeWindow();
 	gConHp[s] = hp;
 }
 
@@ -84,6 +98,7 @@ bool MedicBot(CCircuitUnit@ unit)
 }
 
 int gNextMedicLog = 0;
+int gNextRezLog = 0;
 
 IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 {
@@ -146,6 +161,18 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 	if (here.distance2D(lane) > reach)
 		return aiBuilderMgr.Enqueue(TaskB::Reclaim(
 				Task::Priority::NORMAL, lane, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+	// Already on station and nobody is hurt: the aftermath underfoot is the
+	// work. Returning null here left medics standing in a corpse field, because
+	// every rule below is gated on being behind, exposed, or short of metal.
+	// Bounded to the station radius rather than EnqueueWreckReclaim's own
+	// 2200-elmo reach, which would walk the medic off the army it serves.
+	const AIFloat3 spoil = ai.GetBestWreckPos(here, reach, WRECK_MIN);
+	if ((spoil.x >= 0.f) && (spoil.distance2D(lane) <= reach)
+		&& (ThreatFor(unit, spoil) <= CON_THREAT_VETO))
+	{
+		return aiBuilderMgr.Enqueue(TaskB::Reclaim(
+				Task::Priority::NORMAL, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+	}
 	return null;
 }
 
@@ -161,9 +188,15 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 	// is worth eating -- a LosingGround()-only gate left rez bots entirely
 	// home-bound while winning, which is exactly when the front piles up the
 	// most corpses.
-	if (IsRezzer(unit) && (ai.frame >= gNextRezWreck)
+	// PER BOT, not one team-wide clock. A single shared gate handed out one
+	// salvage assignment per period for the whole fleet, so with several bots
+	// idle most of them lost the race every period and stood still.
+	if (!IsRezzer(unit))
+		return null;
+	const int slot = ConSlot(unit);
+	if (ai.frame >= gConNextWreck[slot]
 			&& (Military::LosingGround() || (ai.GetBestWreckPos(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN).x < 0.f))) {
-		gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
+		gConNextWreck[slot] = ai.frame + RezScanPeriod();
 		// THE WHOLE LINE, NOT ONE POINT -- and blind where vision is missing.
 		// A single FrontLinePos search per period left most of a 10k-elmo
 		// front untouched, and wreck queries are LOS-gated (a corpse field
@@ -218,9 +251,12 @@ IUnitTask@ RezzerEatCorpse(CCircuitUnit@ unit)
 {
 	// Eat the corpse rather than rebuild it, before the engine gets the chance
 	// to queue a resurrect for this bot.
-	if (IsRezzer(unit) && (ai.frame >= gNextRezWreck)
+	if (!IsRezzer(unit))
+		return null;
+	const int slot = ConSlot(unit);
+	if ((ai.frame >= gConNextWreck[slot])
 			&& (PreferReclaim() || RezSpotHot(unit) || RezBotExposed(unit))) {
-		gNextRezWreck = ai.frame + REZ_WRECK_PERIOD;
+		gConNextWreck[slot] = ai.frame + RezScanPeriod();
 		IUnitTask@ eat = EnqueueWreckReclaim(unit, Task::Priority::HIGH);
 		if (eat !is null)
 			return eat;
@@ -246,11 +282,11 @@ IUnitTask@ RezzerEatCorpse(CCircuitUnit@ unit)
 // competes with real work above it in the pipeline.
 //
 // Gated PER BOT (via ConSlot), not by one shared clock. A single global gate
-// here (as gNextRezWreck/gNextWreck use, correctly, for their own expensive
-// scans) caps the whole team to one new repair assignment per REZ_WRECK_PERIOD
-// regardless of how many rez bots are idle -- during a fight where several
-// units take chip damage at once, that serializes response across the whole
-// squad instead of each idle bot claiming its own nearest target immediately.
+// caps the whole team to one new assignment per period regardless of how many
+// rez bots are idle -- during a fight where several units take chip damage at
+// once, that serializes response across the whole squad instead of each idle
+// bot claiming its own nearest target immediately. The wreck scans above were
+// moved off their shared clock for the same reason.
 
 IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 {
@@ -286,51 +322,64 @@ IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 	return aiBuilderMgr.Enqueue(TaskB::Repair(Task::Priority::NORMAL, best));
 }
 
-IUnitTask@ RezzerPreemptReclaim(CCircuitUnit@ unit, bool isComm, IUnitTask@ task)
+// The rez half of the job. NOTHING ELSE IN THE PIPELINE EVER ISSUES A
+// RESURRECT: the kill-phase rewrite of AiMakeTask dropped the only caller of
+// this rule and there is no fall-through to DefaultMakeTask any more, so from
+// then until now a rez bot could only ever reclaim. Wired back in as an
+// ordinary rule.
+//
+// Reclaim versus resurrect is a question about what the metal is FOR. Before
+// the advanced reactor exists a field of corpses is the fastest way to it;
+// after it stands the corpse is worth more back on its feet (apexearth: "if
+// they feel safe they should prefer to resurrect"). And only where the bot can
+// afford the time: an interrupted resurrect returns nothing at all, where a
+// reclaim banks metal continuously as it goes.
+IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 {
-	// Reached by an idle builder, and by one whose only offer was refused above.
-	// Rate-limited so a field of them does not each run their own scan every tick.
-	// isComm-gated same as the rest of the pipeline's wreck-chasing -- this
-	// was the one remaining ungated path that could hand a self-initiated
-	// reclaim task back to a commander whose real task was rejected above.
-	//
-	// Rez bots only. For every other constructor this path was pure pre-emption:
-	// DefaultMakeTask offers them a RECLAIM anyway (isResurrect is false for
-	// them -- see the REZ_WRECK_PERIOD comment), so returning one HERE does not
-	// add reclaim, it just jumps the queue ahead of the mex expansion that lives
-	// in DefaultMakeTask. Rez bots still need the pre-empt, because for them the
-	// engine's offer is a RESURRECT with a 300s timeout.
-	if (isComm || !IsRezzer(unit) || (ai.frame < gNextWreck))
-		return task;
-	// Stop pre-empting once the reactor the metal was for is already standing.
-	// The choice is not reclaim-versus-resurrect in the abstract -- it is what
-	// the metal is FOR. Before the advanced reactor exists a field of corpses is
-	// the fastest way to it; after it exists the corpse is worth more standing
-	// back up than melted. Falling through hands the bot to DefaultMakeTask,
-	// which gives a rezzer a RESURRECT unconditionally (UpdateReclaimTasks takes
-	// isResurrect straight from IsAbleToResurrect).
-	//
-	// ...and only where the bot can afford the time: a resurrect that is
-	// interrupted returns nothing at all, where a reclaim banks metal
-	// continuously as it goes, so under threat the slow option is a total loss.
-	if (!(unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine())
+	if (!IsRezzer(unit))
+		return null;
+	const int slot = ConSlot(unit);
+	if (ai.frame < gConNextWreck[slot])
+		return null;
+	gConNextWreck[slot] = ai.frame + RezScanPeriod();
+
+	if (!PreferReclaim()
+		&& !(unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine())
 		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
 	{
 		CCircuitDef@ afus = SideDef3("armafus", "corafus", "legafus");
-		if ((afus !is null) && (afus.count > 0)) {
-			// The old fall-through here reached DefaultMakeTask's engine
-			// resurrect -- severed in the overhaul, so bots stood AFK next
-			// to wrecks (watched). Resurrect explicitly: safe + the reactor
-			// standing = the corpse is worth more on its feet (apexearth:
-			// "if they feel safe they should prefer to resurrect").
-			gNextWreck = ai.frame + 3 * SECOND;
-			return aiBuilderMgr.Enqueue(TaskB::Resurrect(Task::Priority::NORMAL,
-					unit.GetPos(ai.frame), 100.f, 60 * SECOND, 500.f));
+		// Centred on a corpse we can actually see, not on the bot's own feet.
+		// A resurrect pays out only on completion, so an area order over empty
+		// ground is 60 seconds of standing still with nothing to show.
+		const AIFloat3 body = ai.GetBestWreckPos(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN);
+		if ((afus !is null) && (afus.count > 0) && (body.x >= 0.f)
+			&& (ThreatFor(unit, body) <= CON_THREAT_VETO))
+		{
+			IUnitTask@ rez = aiBuilderMgr.Enqueue(TaskB::Resurrect(Task::Priority::NORMAL,
+					body, 100.f, 60 * SECOND, WRECK_RADIUS));
+			if (rez !is null) {
+				if (ai.frame >= gNextRezLog) {
+					gNextRezLog = ai.frame + 60 * SECOND;
+					AiLog(Factory::T() + "apex: rez bot resurrecting, reactor is up");
+				}
+				return rez;
+			}
 		}
 	}
-	gNextWreck = ai.frame + 3 * SECOND;   // corpses decay; do not dawdle
-
 	return EnqueueWreckReclaim(unit, Task::Priority::NORMAL);
+}
+
+// A rez bot with nothing to do standing on hot ground is the worst of both:
+// it is not working and it is being shot. Every rule above vetoes hot work,
+// but a veto only refuses the job -- it never moved the bot. Leave instead.
+IUnitTask@ RezzerIdle(CCircuitUnit@ unit)
+{
+	IUnitTask@ scrap = IdleFeatureReclaim(unit, false);
+	if (scrap !is null)
+		return scrap;
+	if (ThreatFor(unit, unit.GetPos(ai.frame)) > CON_THREAT_VETO)
+		return Retreat(unit);
+	return null;
 }
 
 }  // namespace Builder

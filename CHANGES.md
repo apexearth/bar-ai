@@ -1,5 +1,41 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-26: rez bots stood around, and had not resurrected anything in weeks
+
+apexearth: "I see a lot of rezbots standing around doing nothing when they
+should be resurrecting or reclaiming wrecks which are nearby."
+
+`apex_medic_share` was NOT the cause -- the medic rule is the first of six in
+the rez branch of `Builder::AiMakeTask` and returns null to pass, so a medic
+falls through to salvage/reclaim like any other bot. Four separate mechanisms
+were:
+
+- **Nothing in the pipeline could resurrect at all.** `RezzerPreemptReclaim`
+  held the only `TaskB::Resurrect` call site in the whole variant, and the
+  kill-phase rewrite of `AiMakeTask` dropped its last caller -- verified by
+  grep: no reference outside its own definition. With no fall-through to
+  `DefaultMakeTask` either, a rez bot could only ever reclaim. Rewired as
+  `RezzerRezOrEat`, and the resurrect is now centred on a corpse from
+  `GetBestWreckPos` rather than the bot's own feet, so an area order can no
+  longer sit over empty ground for its 60s timeout.
+- **One team-wide clock served the whole fleet.** `gNextRezWreck` gated both
+  `RezzerFrontSalvage` and `RezzerEatCorpse`, so of N idle bots at most one per
+  period got an assignment and the rest lost the race. Now per bot via
+  `ConSlot`, spaced by `apex_rez_scan_s`.
+- **One hit parked a bot for 90 seconds.** `REZ_TROUBLE_WINDOW` is now
+  `apex_rez_flee_s`, default 20s. The threat vetoes on every rule above still
+  refuse hot work on the way back, so the shorter hold does not walk it back
+  into the fire.
+- **A veto refuses a job; it never moved the bot.** A rez bot standing on hot
+  ground had every rule decline and then just stood there. `RezzerIdle` retreats
+  in that case instead.
+
+Also: a medic on station with nobody hurt returned null and stood in the
+aftermath, because every rule below it is gated on being behind, exposed or
+short of metal. It now eats what is within `apex_medic_r` of its station.
+
+Not yet measured -- landed 2026-08-26, awaiting a watched game.
+
 ## 2026-08-26: a nanoframe outlives its request, so we built the same thing twice
 
 apexearth: "Sometimes we decide that we want to build something like an anti
