@@ -288,6 +288,27 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				continue;
 			if (CoverAt(cw.pos) >= floorWave)
 				continue;
+			// ...AND ONLY ONCE THE BASE CAN AFFORD IT (apexearth 2026-08-27:
+			// "turrets aren't bad to have but usually thats made after we have
+			// our basic base set up. mexes/energy -> T1 lab -> more energy ->
+			// 1 or 2 turrets to guard", ruling that the jump should be gated
+			// on economic power rather than deleted).
+			//
+			// This is a QUEUE JUMP, not a price -- it hands the election to a
+			// want the market scored at 0.03 against a mex at 88.17, measured
+			// -- so at opening income it spends the whole economy on sentries
+			// before there is an economy. Affordability is the tower's cost
+			// against what we earn: at 4 metal/s a 90-metal LLT is twenty
+			// seconds of everything we make, at 20 it is four. The jump waits
+			// until that bill is small enough to be worth overriding the
+			// auction for; below it the tower still competes on price like
+			// anything else, so nothing is forbidden.
+			if (cw.def !is null) {
+				const float aff = ai.GetTunable("apex_cover_push_s",
+						TUNE_COVER_PUSH_S);
+				if (Catalog::gCostM[int(cw.def.id)] > EcoPowerM() * aff)
+					continue;
+			}
 			if (ri > 0) {
 				ranked.removeAt(ri);
 				ranked.insertAt(0, cw);

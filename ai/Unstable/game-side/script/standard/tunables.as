@@ -2037,6 +2037,16 @@ const float TUNE_DEF_ECO_S = 30.f;
 //   pricing on realized pull alone -- which is where the first energy decision
 //   lands 73 seconds and one full stall after pull passed income.
 const float TUNE_E_COMMITTED = 1.f;
+// manager/brain/market/decide.as [seconds of economic power] -- The mex-cover
+//   QUEUE JUMP only fires once the tower costs less than this many seconds of
+//   total economic power. The jump overrides the auction outright (measured:
+//   an LLT priced 0.03 built ahead of a mex priced 88.17), so at opening
+//   income it buys sentries before there is a base. 10s means a 90-metal light
+//   tower waits until roughly 9 metal/s of economic power -- past the first
+//   mexes and the first lab, which is the order apexearth asked for -- while a
+//   1,250-metal Gauntlet has to wait for 125. Below the bar the tower still
+//   competes on price like anything else.
+const float TUNE_COVER_PUSH_S = 10.f;
 // manager/brain/market/want_tech.as [multiplier] -- What a mex UPGRADE'S extra
 //   metal stream is worth, over its honest arithmetic. 2.79 is the measured
 //   median ratio by which energy was beating mex upgrades head to head when

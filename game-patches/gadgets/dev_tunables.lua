@@ -139,6 +139,7 @@ local NAMES = {
 	"apex_def_eco_s",
 	"apex_dup_bp_subst",
 	"apex_e_committed",
+	"apex_cover_push_s",
 	"apex_mexup_boost",
 	"apex_foe_tier_fade",
 	"apex_def_ttd_h",
