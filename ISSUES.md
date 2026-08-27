@@ -1,5 +1,81 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-27 -- "always be expanding the economy" HAS BEEN LOST AGAIN
+
+`grep -rn "always_eco\|AlwaysEco" ai/` returns NOTHING, in any variant. The
+rule apexearth set early, lost once, and had restored on 2026-08-21 -- with
+the explicit instruction "treat any future gate that can silence ALL eco lanes
+at once as a violation of this rule" -- did not survive the Brain overhaul.
+USER-FEEDBACK.md still documents it as a STANDING RULE.
+
+What that looks like in a game, Carrot Mountains, Cortex, from the opening
+decision trace:
+
+    f=25    mex        v=210   (over produce/plant v=28)
+    f=313   LLT        v=21    at walk=119, on a mex
+    f=633   mex        v=59
+    f=873   mex        v=31
+    f=1289  lab        v=39    (mex had finally decayed to v=14)
+    f=2185  FIRST ENERGY, 73 seconds in
+
+By minute 2 the economy pulls 114 energy against 45 income, and `eStall`
+climbs from there for the rest of the game. apexearth, watching: "we are
+walking out to make a mex and a turret far away before we even make our first
+lab... when we run out of energy we need to do the e-stall logic to make
+energy. but it seems like these mechanisms are just stepping on each other."
+
+They are, and this is the order: nothing buys energy in the opening, so the
+stall machinery runs permanently, and the stall's answer is to ABORT a
+builder's task -- which is where the 890 abandoned nanoframes come from. The
+stall interrupt is now much cheaper (it takes a walker before anyone
+mid-build, measured 69 of 74) and abandoned frames are adopted rather than
+re-founded, but both are treatments. The cause is that energy is never bought
+until it is already too late.
+
+The fix is NOT another ladder rule -- the overhaul mandate says every build is
+a priced Want. It is that energy's value must not be able to read ~zero while
+nothing energy-side is in flight. That is a design decision about the eco
+pricing and has not been made.
+
+
+## 2026-08-27 -- 890 nanoframes abandoned in one game, and nothing adopts them
+
+`tools/audit.py`'s new "finish before founding" check, first run: **890**
+abandoned nanoframes in one 60-minute Carrot Mountains game, 32 defs abandoned
+more than once -- cormex 206, cornanotc 144, corrad 86, cormoho 78.
+
+apexearth reported the visible tip of it: "when we e-stall we think to do
+something else... instead of choosing to finish the original lab afterwards we
+just start making a new one." The plant half is FIXED (WK_PLANT and WK_TECH
+were missing from the position-independent orphan adoption in execute.as, and
+an abort leaves a frame with no request at all, which now redirects the new
+request onto the frame). The other 800 are not, and this is the same metal as
+the standing "27-45% of everything we lose dies as an unfinished nanoframe"
+entry -- they are one problem seen from two ends.
+
+## 2026-08-27 -- boosting mex-upgrade priority makes FEWER mex upgrades
+
+apexearth: "We need to boost the priority on building upgraded metal
+extractors." The audit measured the gap precisely -- of 10,139 decisions by
+cons that could upgrade a mex, 505 (5%) were upgrades, and 785 times an
+upgrade ranked second and lost, 394 of those to energy at a median value ratio
+of 2.79.
+
+Setting `apex_mexup_boost` to that measured 2.79 does exactly what it says and
+is WORSE: upgrades rise to 33% of advanced-con decisions and become the
+most-chosen want, while upgrades actually standing fall 94 -> 69, mexes held
+243 -> 182, metal built 863k -> 358k and income 1001 -> 377. It displaces the
+energy that pays for expansion, so fewer mexes exist to upgrade.
+
+Left at 1. The open question is the one this does not answer: whether energy is
+overpriced against extraction, which would be a fix to energy's gain rather
+than a thumb on extraction's. One game per arm, so treat the direction only.
+
+**And a warning about the audit itself:** the "advanced cons upgrade mexes"
+check went GREEN in the arm that performed worse. A decision share is not an
+outcome; read it against t2Mex.
+
+
 ## 2026-08-27 -- the strategic market buys whatever is CHEAPEST, and that is the LRPC
 
 apexearth, watching: "I see we make the LRPC cannons - but those are not great

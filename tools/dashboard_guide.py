@@ -86,6 +86,9 @@ PANELS = [
              "of the ground it has to watch"),
             ("TUNE_RANGE_WORTH", "standing weight on weapon reach when picking "
              "what to build"),
+            ("TUNE_MEXUP_BOOST", "what a mex UPGRADE's extra metal stream is "
+             "worth over its honest arithmetic -- raise to make advanced cons "
+             "upgrade extractors before energy and assist"),
             ("TUNE_DUP_BP_SUBST", "prices a SECOND lab's throughput against "
              "nano turrets on the first, which are ~9x the build power per "
              "metal. On, a duplicate line only wins when no line is short of "

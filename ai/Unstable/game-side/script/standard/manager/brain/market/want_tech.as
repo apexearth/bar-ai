@@ -140,6 +140,20 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			if (surv < 0.f)
 				surv = StreamSurvival(gLPos[li]);
 			delta *= surv;
+			// HIS STATED PREFERENCE, PRICED TO THE MEASURED GAP. apexearth:
+			// "We need to boost the priority on building upgraded metal
+			// extractors. we go for doomsday and afus first... and that's not
+			// good. Mex upgrade is the right choice."
+			//
+			// The audit says how far off it was: over one 60-minute game, of
+			// 10,139 decisions by cons that COULD upgrade a mex, 505 (5%) were
+			// upgrades, and 785 times an upgrade ranked second and lost --
+			// 394 of those to energy, at a median winning/losing value ratio
+			// of 2.79. So this is the size of the gap, not a number anybody
+			// liked. It is a PREFERENCE expressed as a multiplier, not a
+			// derived law: the honest alternative is that energy is overpriced
+			// against extraction, which nobody has established.
+			delta *= ai.GetTunable("apex_mexup_boost", TUNE_MEXUP_BOOST);
 			const float walkSec = (speed > 1.f)
 					? (here.distance2D(gLPos[li]) / speed) : 60.f;
 			Want c;

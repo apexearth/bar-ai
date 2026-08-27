@@ -511,6 +511,35 @@ CCircuitUnit@ PendNear(const CCircuitDef@ want, const AIFloat3& in spot, float r
 	return best;
 }
 
+// ...and the same frame WHEREVER it stands. PendNear answers "is one already
+// here", which is the right question when the market has picked a site; it is
+// the wrong one when the market has picked a DIFFERENT site, because the
+// abandoned frame is then never near anything and is orphaned for good
+// (apexearth: "when we e-stall we think to do something else... instead of
+// choosing to finish the original lab afterwards we just start making a new
+// one"). Nearest to `from` so a fleet of frames is worked in a sane order.
+CCircuitUnit@ PendAnyOfDef(const CCircuitDef@ want, const AIFloat3& in from)
+{
+	if (want is null)
+		return null;
+	PendSweep();
+	CCircuitUnit@ best = null;
+	float bestDist = -1.f;
+	for (uint i = 0; i < gPendId.length(); ++i) {
+		if (gPendDef[i] != int(want.id))
+			continue;
+		CCircuitUnit@ u = ai.GetTeamUnit(gPendId[i]);
+		if (u is null)
+			continue;
+		const float d = OnMap(from) ? from.distance2D(gPendPos[i]) : 0.f;
+		if ((best is null) || (d < bestDist)) {
+			@best = u;
+			bestDist = d;
+		}
+	}
+	return best;
+}
+
 // The same job, for matching purposes. Same def always; and one reactor rung
 // counts as another, because HomeEnergy re-ranks fusion against advanced fusion
 // every call and each rung was otherwise blind to the other rung's work. Only a

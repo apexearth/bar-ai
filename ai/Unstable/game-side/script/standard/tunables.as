@@ -2029,6 +2029,23 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 //   collapsed the target to a mex floor exactly as the army grew. Chosen to
 //   clear one heavy gun at hosted-game income, not derived -- measure it.
 const float TUNE_DEF_ECO_S = 30.f;
+// manager/brain/market/want_tech.as [multiplier] -- What a mex UPGRADE'S extra
+//   metal stream is worth, over its honest arithmetic. 2.79 is the measured
+//   median ratio by which energy was beating mex upgrades head to head when
+//   an upgrade ranked second (394 such losses in one 60-minute game), so at
+//   this value the two are level at the median rather than extraction always
+//   losing. 1 is the arithmetic with no thumb on it.
+//
+//   MEASURED AT 2.79 AND LEFT AT 1. Paired 60-minute Carrot Mountains games:
+//   the boost does exactly what it claims -- mex upgrades go from 7% of
+//   advanced-con decisions to 33% and become the most-chosen want -- and the
+//   OUTCOME is worse. Upgrades actually standing fell 94 -> 69, mexes held
+//   243 -> 182, metal built 863k -> 358k, income 1001 -> 377. It displaces the
+//   energy that pays for expansion, so there are fewer mexes left to upgrade.
+//   One game per arm on a bench that does not reproduce, so treat the
+//   direction and not the size -- but nothing here supports shipping it above
+//   1 (apexearth's own rule: validate outcomes, not log lines).
+const float TUNE_MEXUP_BOOST = 1.f;
 // manager/brain/market/want_plant.as [toggle 0/1] -- Price a DUPLICATE line's
 //   throughput against the cheaper way to buy the same build power. An
 //   advanced lab is 300 workertime for 2900 metal and a construction turret

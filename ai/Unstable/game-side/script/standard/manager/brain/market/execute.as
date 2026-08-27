@@ -222,12 +222,32 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	// Finish before founding: any unmanned unfinished site of this def is
 	// THE want, wherever it stands (slot cursors never reuse ground, so an
 	// abandoned frame would otherwise be orphaned forever).
+	// A PLANT IS THE MOST EXPENSIVE THING THIS LIST FORGOT. The kinds below
+	// were the four the rule was written for; a half-built lab was never
+	// adopted, so an e-stall that pulled the con off it left the frame
+	// standing and the next election founded a SECOND lab elsewhere
+	// (apexearth: "instead of choosing to finish the original lab afterwards
+	// we just start making a new one. We should be finishing the first lab we
+	// started if it is still present/partially built").
 	if ((w.kind == WK_ENERGY) || (w.kind == WK_CONVERT)
-		|| (w.kind == WK_STORE) || (w.kind == WK_NANO))
+		|| (w.kind == WK_STORE) || (w.kind == WK_NANO)
+		|| (w.kind == WK_PLANT) || (w.kind == WK_TECH))
 	{
 		IUnitTask@ orph = Requests::OrphanOf(w.def);
 		if (orph !is null)
 			return orph;
+		// ...and a frame whose REQUEST is gone too, which is what an abort
+		// leaves behind. Requests::Take already refuses to start a second
+		// building on top of a standing frame, but only one that is near the
+		// site it was handed -- so aim the request at the frame and its own
+		// guard adopts it.
+		CCircuitUnit@ pf = Requests::PendAnyOfDef(w.def, unit.GetPos(ai.frame));
+		if (pf !is null) {
+			w.pos = pf.GetPos(ai.frame);
+			AiLog(Factory::T() + "apex: frame-adopt " + w.def.GetName()
+				+ " done=" + formatFloat(pf.GetHealthPercent(), "", 0, 2)
+				+ " at=" + int(w.pos.x) + "," + int(w.pos.z));
+		}
 	}
 	// A LATTICE SLOT IS COVERED ONLY BY ITS OWN CELL. Requests::Take joins any
 	// live request for the same def inside the cover radius, and at 96 elmos

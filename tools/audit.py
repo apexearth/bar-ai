@@ -441,8 +441,13 @@ def check_priority(text, rep):
               + " ".join(f"{k}={v}" for k, v in ranked[:5]))
     # His rule, stated as he stated it: the upgrade should be what these cons
     # do FIRST. Anything else winning more of their elections is the flag.
+    # A DECISION SHARE IS NOT AN OUTCOME, and this check can be gamed by one:
+    # measured 2026-08-27, raising apex_mexup_boost to 2.79 took this from 7%
+    # to 33% and turned the flag green, while the upgrades actually STANDING
+    # fell 94 -> 69 and metal built fell 863k -> 358k. Read it with t2Mex from
+    # result.json, never on its own.
     rep.add("PRIORITY", top == "metal/mexup", "advanced cons upgrade mexes",
-            detail)
+            detail + " -- decision share, NOT upgrades standing; check t2Mex")
 
     # apexearth 2026-08-27: "how we keep making 2 T2 labs one after another...
     # 2900 metal buys 300bp; 1 nano turret adds 200bp for ~200 metal." A
@@ -459,6 +464,24 @@ def check_priority(text, rep):
                 f"a line was short of hands (nanos were the cheaper build "
                 f"power); worst kin={worst[1]} on {worst[0]} "
                 f"subst={worst[2]}")
+
+    # apexearth 2026-08-27: "when we e-stall we think to do something else...
+    # instead of choosing to finish the original lab afterwards we just start
+    # making a new one." A frame abandoned once is an interrupted job; the SAME
+    # def abandoned repeatedly means nothing is adopting it before founding.
+    orph = defaultdict(int)
+    for m in re.finditer(r"apex: frame-orphan ([a-z0-9]+) ", text):
+        orph[m.group(1)] += 1
+    repeat = {k: v for k, v in orph.items() if v > 1}
+    if orph:
+        top = sorted(orph.items(), key=lambda kv: -kv[1])[:5]
+        rep.add("PRIORITY", not repeat, "finish before founding",
+                f"{sum(orph.values())} nanoframes abandoned, "
+                f"{len(repeat)} def(s) abandoned more than once: "
+                + " ".join(f"{k}={v}" for k, v in top))
+    else:
+        rep.add("PRIORITY", True, "finish before founding",
+                "no abandoned nanoframes")
 
     lost = sum(beat.values())
     if lost:

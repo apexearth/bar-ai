@@ -952,6 +952,19 @@ void StallWatch()
 		else
 			cand.insertLast(u);
 	}
+	// A WALKER FIRST, AND ONLY THEN SOMEBODY MID-BUILD. Abort() ends the
+	// request, which leaves the nanoframe standing with nobody bound to it --
+	// measured, 890 abandoned frames in one 60-minute game, cormex 206 of them
+	// (apexearth: "we abandon things because we are *out of energy*... we
+	// should be finishing the first lab we started if it is still
+	// present/partially built"). A builder still walking to its site has
+	// nothing sunk and is the free interrupt; one with metal already in a frame
+	// is the expensive one. Same 0.01 progress law decide.as uses to hold a
+	// task through re-election, applied to the interrupt that outranks it.
+	//
+	// Two passes rather than a veto, so a stall is still always answerable:
+	// if every candidate is mid-build, the second pass takes one anyway.
+	for (uint pass = 0; pass < 2; ++pass) {
 	for (uint i = 0; i < cand.length(); ++i) {
 		CCircuitUnit@ u = cand[i];
 		if (u is null)
@@ -960,6 +973,8 @@ void StallWatch()
 		if ((t is null) || (t.GetType() != Task::Type::BUILDER))
 			continue;
 		if (int(t.GetBuildType()) == int(Task::BuildType::ENERGY))
+			continue;
+		if ((pass == 0) && (Requests::Progress(t) > 0.01f))
 			continue;
 		// (guard/patrol holders pass straight through: their work is worth
 		// ~nothing mid-stall, so the dry-run below decides.)
@@ -986,11 +1001,15 @@ void StallWatch()
 		@pick = u;
 		break;
 	}
+	if (pick !is null)
+		break;
+	}
 	Perf::Add("think.stalldry", _tDry);
 	if (pick is null)
 		return;
 	gStallHadAnswer = true;
 	AiLog("apex: STALL interrupt -- " + pick.circuitDef.GetName() + " #" + pick.id
+		+ " progress=" + formatFloat(Requests::Progress(pick.task), "", 0, 2)
 		+ " leaves its build to answer the energy stall");
 	pick.task.Abort();
 }
