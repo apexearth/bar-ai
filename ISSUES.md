@@ -1,5 +1,39 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-27 -- static defence share jumped 7% -> 13-23% and is UNTUNED
+
+`apex_def_eco_s` (30 seconds of EcoPowerM) is the whole size of the standing
+defence holding since DefenceTarget was rebased on the economy. It was chosen
+to let one heavy gun clear at hosted-game income, not derived.
+
+Measured consequence: defence share of metal built 7.1% -> 13.4% against
+BARb, and **22.6% in self-play**, where `armguard` at 15,000 metal was the
+single largest sink in the game -- larger than fusions, larger than any unit.
+That is the same shape as the old `cornanotc` finding. Three Pulsars and a Big
+Bertha also appear, which is the thing that was asked for, so this is a real
+trade and not obviously wrong -- but nobody has measured where the number
+should sit. Lower `apex_def_eco_s` on the Balance tab is the knob.
+
+## 2026-08-27 -- the enemy-tier fade has never actually fired on T3
+
+`apex: foetier` reads `t3=0` in every game measured: BARb fields no T3 on this
+bench and self-play did not reach it in 44 minutes. The T1 half works (T1
+share of unit metal, median 45.9% -> 33.0% over three paired seeds), but the
+half apexearth asked for -- fewer T2 units and labs when the enemy has T3 --
+is wired and unobserved. It also learns only from the two death hooks, so it
+reads zero until we meet them; there is no per-def enemy enumeration binding
+to fix that without a DLL change.
+
+## 2026-08-27 -- front-line towers are still barely built
+
+The new `apex: fronttowers` counter says what `defsite` could not: over an
+18.7-minute 1v1, 104 defence wants were WON at front sites and **zero towers
+finished there**. Later runs reach 1-4. Every other defence structure lands
+behind the line. Front sites are proposed constantly and almost never become a
+standing gun -- builder killed, site blocked, or re-elected away mid-walk
+(walks of 700-3,400 elmos are logged). Not investigated.
+
+
 ## 2026-08-26 (2) -- front line FIXED; defence mix improved; win rate did not move
 
 Five paired 54-game runs, same three small 1v1 maps (Altair Crossing, Red Comet,
