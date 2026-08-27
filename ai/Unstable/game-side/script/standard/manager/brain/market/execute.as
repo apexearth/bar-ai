@@ -217,7 +217,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	// every asker onto one standing request, and one fusion at a time was
 	// the 45%-excess bottleneck. parallel skips the fold; the wealth cap
 	// (EffectiveCap) still bounds it.
-	bool par = (MCostScale() < 1.f);
+	// ...and a stall opens them too. Overflow is not the only reason to build
+	// two things at once: a deficit nothing in flight will cover is the other,
+	// and it is the one that mattered, because a stall guarantees the bank is
+	// NOT overflowing and so guaranteed the answer was serialized.
+	bool par = (MCostScale() < 1.f)
+			|| ((w.kind == WK_ENERGY) && EnergyShortOfOrdered());
 	bool crtd = false;
 	// Finish before founding: any unmanned unfinished site of this def is
 	// THE want, wherever it stands (slot cursors never reuse ground, so an

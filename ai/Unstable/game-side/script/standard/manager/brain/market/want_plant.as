@@ -493,6 +493,28 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if ((PlantReachOf(fd) >= myReach) && (PlantClass(fd) == dClass))
 				++reachKin;
 		}
+		// A LINE UNDER CONSTRUCTION IS A COMMITMENT WHATEVER ITS DOMAIN.
+		// reachKin is a parallel-CAPACITY question and so is rightly per
+		// domain, which left the rotation apexearth watched wide open: a bot
+		// lab, then a vehicle plant, then an AIR plant, each one a different
+		// class and so each priced as though nothing were in flight. Splitting
+		// the same income across three unfinished frames finishes none of
+		// them. Counted separately from reachKin because this is about the
+		// FEED, not about capacity -- and it is a divisor, not a veto, so a
+		// genuinely wanted air line still wins once it is worth twice a
+		// half-built ground one.
+		int liveOther = 0;
+		for (uint fo = 0; fo < Requests::gLive.length(); ++fo) {
+			IUnitTask@ ot = Requests::gLive[fo];
+			if ((ot is null) || ot.IsDead() || (ot.buildDef is null))
+				continue;
+			const int od = int(ot.buildDef.id);
+			if ((od == d) || Catalog::gMobile[od]
+				|| (Catalog::gBuildsList[od].length() == 0))
+				continue;
+			if (PlantClass(od) != dClass)
+				++liveOther;
+		}
 		for (uint kd2 = 1; kd2 < gOwnCount.length(); ++kd2) {
 			if ((gOwnCount[kd2] <= 0) || (int(kd2) == d)
 				|| Catalog::gMobile[int(kd2)]
@@ -537,6 +559,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		}
 		float dupGain = (conHalf * subMul + prodOwn * dupSubst)
 				/ float(1 + reachKin);
+		if (liveOther > 0)
+			dupGain /= float(1 + liveOther);
 		// The duplicate decision, in one line, so the audit can assert it
 		// rather than infer it from two labs standing.
 		if ((reachKin > 0) && (ai.frame >= gNextPlantDupLog)) {
@@ -544,6 +568,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			AIFloat3 nlp2;
 			AiLog(Factory::T() + "apex: plantdup " + Catalog::Def(d).GetName()
 				+ " kin=" + reachKin
+				+ " liveOther=" + liveOther
 				+ " subst=" + formatFloat(dupSubst, "", 0, 3)
 				+ " lineNeed=" + formatFloat(NeediestLine(nlp2), "", 0, 2)
 				+ " prod=" + formatFloat(prodOwn, "", 0, 2)

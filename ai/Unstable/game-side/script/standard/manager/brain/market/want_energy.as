@@ -158,6 +158,37 @@ float ConvCapInFlight()
 // already arrived (measured: first energy decision 73 seconds in, with pull
 // already 2.5x income at two minutes). Same shape as ConvCapInFlight above:
 // live requests, remaining cost over remaining time.
+// ENERGY WE HAVE ALREADY ORDERED AND WILL SOON MAKE. The mirror of the drain
+// above, and the number that says whether the answer to a stall is big enough
+// yet.
+float EMakeInFlight()
+{
+	float e = 0.f;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		e += Catalog::gMakeE[int(t.buildDef.id)];
+	}
+	return e;
+}
+
+// IS THE ANSWER TO THIS STALL BIG ENOUGH? Energy asks fold onto one standing
+// request unless the bank is overflowing -- and during a stall it never is, so
+// every builder that wanted energy joined the SAME turbine and we answered a
+// three-hundred-a-second deficit thirty-five at a time (apexearth: "when we run
+// out of energy we'll make 1 or 2 more wind... and we keep running out of
+// energy"). Parallel sites open exactly while what we have ordered still does
+// not cover the shortfall, and close by themselves the moment it does. The
+// in-flight request cap still bounds how many.
+bool EnergyShortOfOrdered()
+{
+	const float eInc = aiEconomyMgr.energy.income;
+	const float need = (aiEconomyMgr.energy.pull + EDrainInFlight())
+			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);
+	return (need - eInc) > EMakeInFlight();
+}
+
 float EDrainInFlight()
 {
 	if (ai.GetTunable("apex_e_committed", TUNE_E_COMMITTED) <= 0.f)
