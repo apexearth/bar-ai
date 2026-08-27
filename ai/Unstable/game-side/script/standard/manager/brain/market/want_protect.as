@@ -19,6 +19,54 @@ int gNextDefPriceLog = 0;
 float gDbgFrontBest = 0.f;
 float gDbgAssetBest = 0.f;
 int gDbgLineN = 0;
+// COMPLETED, not won. gDefSiteFront counts auction wins, and a re-election
+// counts again; a want whose builder dies or whose site is blocked never
+// becomes a standing gun. Placement is Military::OnBorder -- the same ray
+// model the front sites are drawn from, so won and built are comparable.
+int gFrontTowerBuilt = 0;
+int gFrontTowerLost = 0;
+int gBackTowerBuilt = 0;
+int gBackTowerLost = 0;
+float gFrontTowerM = 0.f;
+float gBackTowerM = 0.f;
+int gNextFrontTowerLog = 0;
+
+void NoteTowerBuilt(const AIFloat3& in at, float costM)
+{
+	if (Military::OnBorder(at)) {
+		++gFrontTowerBuilt;
+		gFrontTowerM += costM;
+	} else {
+		++gBackTowerBuilt;
+		gBackTowerM += costM;
+	}
+}
+
+void NoteTowerLost(const AIFloat3& in at)
+{
+	if (Military::OnBorder(at))
+		++gFrontTowerLost;
+	else
+		++gBackTowerLost;
+}
+
+void LogFrontTowers()
+{
+	if (ai.frame < gNextFrontTowerLog)
+		return;
+	gNextFrontTowerLog = ai.frame + 30 * SECOND;
+	AiLog(Factory::T() + "apex: fronttowers built=" + gFrontTowerBuilt
+		+ " lost=" + gFrontTowerLost
+		+ " standing=" + (gFrontTowerBuilt - gFrontTowerLost)
+		+ " m=" + int(gFrontTowerM)
+		+ " backBuilt=" + gBackTowerBuilt
+		+ " backLost=" + gBackTowerLost
+		+ " backStanding=" + (gBackTowerBuilt - gBackTowerLost)
+		+ " backM=" + int(gBackTowerM)
+		+ " wonFront=" + gDefSiteFront
+		+ " wonAsset=" + gDefSiteAsset);
+}
+
 void NoteDefSite(bool isFront)
 {
 	if (isFront)

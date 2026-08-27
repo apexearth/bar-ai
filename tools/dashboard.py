@@ -344,6 +344,41 @@ def crew_roles(d):
     return {"roles": CREW_ROLES, "teams": teams}
 
 
+FRONTTOWER_RE = re.compile(
+    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: fronttowers built=(\d+) lost=(\d+) "
+    r"standing=(-?\d+) m=(\d+) backBuilt=(\d+) backLost=(\d+) "
+    r"backStanding=(-?\d+) backM=(\d+) wonFront=(\d+) wonAsset=(\d+)")
+FRONTTOWER_KEYS = ["built", "lost", "standing", "metal",
+                   "backBuilt", "backLost", "backStanding", "backMetal",
+                   "wonFront", "wonAsset"]
+
+
+def front_towers(d):
+    """Defence towers COMPLETED on the front line, against wants WON there.
+
+    `wonFront` counts auction wins, and a re-election counts again; `built`
+    counts AiUnitFinished events placed by Military::OnBorder. built far
+    under wonFront is constructor time paid for towers that never arrived.
+    """
+    f = d / "infolog.txt"
+    if not f.is_file():
+        return {"error": "no infolog"}
+    teams = {}
+    with f.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "apex: fronttowers " not in line:
+                continue
+            m = FRONTTOWER_RE.search(line)
+            if not m:
+                continue
+            t = teams.setdefault(m.group(2),
+                                 {"min": [], **{k: [] for k in FRONTTOWER_KEYS}})
+            t["min"].append(float(m.group(1)))
+            for i, k in enumerate(FRONTTOWER_KEYS):
+                t[k].append(int(m.group(3 + i)))
+    return {"keys": FRONTTOWER_KEYS, "teams": teams}
+
+
 # Cumulative metal by destination, straight from dev_stats_export's exclusive
 # buckets. Runs from before those fields existed simply read zero everywhere,
 # which is what an absent counter should look like.
@@ -1232,6 +1267,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(brain_metrics(safe_run_dir(q["dir"])))
             elif u.path == "/api/crew":
                 self.send_json(crew_roles(safe_run_dir(q["dir"])))
+            elif u.path == "/api/fronttowers":
+                self.send_json(front_towers(safe_run_dir(q["dir"])))
             elif u.path == "/api/launchmeta":
                 self.send_json({"maps": known_maps(), "specs": known_ai_specs(),
                                 "tunables": tunable_names(),

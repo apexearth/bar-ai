@@ -115,6 +115,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	{ double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
 	{ double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
 	{ double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
+	{ double _t = Perf::T0(); Market::LogFrontTowers(); Perf::Add("up.fronttowers", _t); }
 	{ double _t = Perf::T0(); Brain::Think(); Perf::Add("up.think", _t); }
 	{ double _t = Perf::T0(); Base::Update(); Perf::Add("up.base", _t); }
 	{ double _t = Perf::T0(); Lattice::Update(); Perf::Add("up.lattice", _t); }
@@ -163,6 +164,14 @@ void UnitFinishedInner(CCircuitUnit@ unit)
 	Brain::NoteSiloFinished(unit);
 	if ((int(unit.id) >= 0) && (int(unit.id) < int(gFinished.length())))
 		gFinished[int(unit.id)] = true;
+	// A tower that actually FINISHED on the front line. The defsite counters are
+	// auction wins, which a killed builder or a blocked site never turns into a
+	// standing gun.
+	if ((unit.circuitDef !is null) && !unit.circuitDef.IsMobile()
+		&& (Market::ProtClassOf(int(unit.circuitDef.id)) == Market::PROT_DEF))
+	{
+		Market::NoteTowerBuilt(unit.GetPos(ai.frame), unit.circuitDef.costM);
+	}
 	// The defense zone follows the BUILT base: every finished rear structure
 	// can stretch the ring, forward fences and mex guards never do (a front
 	// tower at fwd 0.6 must not turn half the map into fight-at-any-odds
@@ -227,6 +236,8 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		// ledger above drops everything past FWD_HOME, which is where the
 		// outlying mexes die.
 		Market::NoteEcoLoss(at, cdef.costM);
+		if (Market::ProtClassOf(int(cdef.id)) == Market::PROT_DEF)
+			Market::NoteTowerLost(at);
 	}
 	const string hist = Builder::TakeHistFor(int(unit.id));
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")

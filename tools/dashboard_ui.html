@@ -524,6 +524,7 @@ async function openGame(dir, isRefresh) {
     if ((changed || !isRefresh) && !d.matches && d.chart) loadEcon(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadBrain(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadCrew(dir);
+    if ((changed || !isRefresh) && !d.matches && d.chart) loadFrontTowers(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadUnits(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadIntel(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadBudget(dir);
@@ -719,6 +720,18 @@ function renderMatch(d) {
       role (Crew::Enlist; a role never changes once set). The white line is
       cumulative constructor deaths. Assist bots are not enrolled, so this is
       the working crew rather than every unit with a build menu.</div></div>
+  <div class="card"><h2>Front-line towers — completed vs won</h2>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <label class="f">team<select id="ft-team"></select></label>
+      <label class="f">&nbsp;<span class="dim" id="ft-note"></span></label>
+    </div>
+    <table style="margin-top:8px"><thead><tr><th>metric</th><th>front</th>
+      <th>back / asset</th></tr></thead><tbody id="ft-table"></tbody></table>
+    <div class="dim" style="font-size:12px;margin-top:4px">"completed" is a
+      tower that FINISHED, placed by Military::OnBorder; "wants won" is a
+      defence want the auction priced at a front site, recounted on every
+      re-election. Completed far below won is constructor time spent on
+      towers that never arrived.</div></div>
   <div class="card"><h2>Final snapshot per player</h2>
     <table><thead><tr><th>team</th><th>metal prod</th><th>army</th><th>mex/T2</th>
     <th>mT2/mT3</th><th>kill/loss</th><th>tech@</th><th>top spend</th></tr></thead>
@@ -1210,6 +1223,35 @@ function drawBrain() {
       <td>${pickCount[l] || 0}</td><td>${meanC.toFixed(1)}%</td>
       <td>${Math.max(0, ...c).toFixed(1)}%</td><td>${meanS.toFixed(3)}</td></tr>`;
   }).join("");
+}
+
+/* ---------- front-line towers ---------- */
+let FTOW = null;
+async function loadFrontTowers(dir) {
+  const sel = $("#ft-team"); if (!sel) return;
+  try { FTOW = await api("/api/fronttowers?dir=" + encodeURIComponent(dir)); }
+  catch (e) { FTOW = null; }
+  const teams = FTOW && FTOW.teams ? Object.keys(FTOW.teams) : [];
+  if (!teams.length) {
+    $("#ft-note").textContent = "no `apex: fronttowers` lines in this infolog";
+    $("#ft-table").innerHTML = ""; return;
+  }
+  sel.innerHTML = teams.map(t => `<option value="${t}">team ${t}</option>`).join("");
+  sel.onchange = drawFrontTowers;
+  drawFrontTowers();
+}
+function drawFrontTowers() {
+  if (!FTOW) return;
+  const t = FTOW.teams[$("#ft-team").value]; if (!t) return;
+  const i = t.min.length - 1;
+  const rows = [["completed", "built", "backBuilt"],
+                ["lost", "lost", "backLost"],
+                ["standing", "standing", "backStanding"],
+                ["metal completed", "metal", "backMetal"],
+                ["wants won", "wonFront", "wonAsset"]];
+  $("#ft-table").innerHTML = rows.map(r =>
+    `<tr><td>${r[0]}</td><td>${t[r[1]][i]}</td><td>${t[r[2]][i]}</td></tr>`).join("");
+  $("#ft-note").textContent = `at ${t.min[i]}m, ${t.min.length} samples`;
 }
 
 /* ---------- constructor crew ---------- */
