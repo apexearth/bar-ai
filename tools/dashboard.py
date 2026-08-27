@@ -39,6 +39,7 @@ PY = sys.executable
 # whether it accepts --control.
 ANALYSIS_TOOLS = {
     "review": ("review.py", True),
+    "diagnose": ("diagnose.py", False),
     "composition": ("composition.py", False),
     "tl": ("tl.py", False),
     "fight1v1": ("fight1v1.py", False),

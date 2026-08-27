@@ -31,6 +31,9 @@ class Want {
 	float mCost = 0.f;
 	float tCost = 0.f;
 	float value = 0.f;
+	// How long this want stands as a defenceless nanoframe. Set by ValueOf,
+	// read by the construction-risk charge in Decide.
+	float buildSec = 0.f;
 }
 
 // Wants compete as CATEGORIES, not as kinds. A kind is one proposer; a

@@ -418,6 +418,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 	// compounding argument for it was checked and does not hold at fixed build
 	// power, where the small-step route is lathe-bound and grows linearly.)
 	w.gain = gain;
+	w.buildSec = buildSec;
 	// The E bill at what it actually forgoes (duration-priced, forgiven in
 	// overflow) -- pricing it at the spot spike structurally banned every
 	// big-E build (advsol, fusion) exactly when they were wanted.

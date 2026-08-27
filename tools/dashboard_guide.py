@@ -164,6 +164,29 @@ GROUPS = [
                  ("TUNE_OBSOLETE_RATIO", "a replacement must be further ahead "
                   "before the old one is torn down"),
              ]},
+            {"title": "Rez bots",
+             "what": "The bots that eat the battlefield and put units back on "
+                     "their feet. A share of them stay with the army as "
+                     "medics; the rest work the corpse geometry. They "
+                     "resurrect once an advanced reactor stands and metal is "
+                     "not the binding constraint, and reclaim otherwise.",
+             "reads": "builder/rules_rezzer.as",
+             "knobs": [
+                 ("TUNE_MEDIC_SHARE", "more of the fleet follows the army "
+                  "repairing the wounded instead of working wrecks; 0 "
+                  "disables medics"),
+                 ("TUNE_MEDIC_R", "how far around the staging anchor a medic "
+                  "looks for wounded, and how close it holds station"),
+                 ("TUNE_MEDIC_SETBACK", "holds the medic this far behind the "
+                  "line, so the wounded step back to it instead of it "
+                  "standing in the fight"),
+                 ("TUNE_REZ_FLEE_S", "how long one hit keeps a rez bot "
+                  "retreating — lower gets it back to work sooner and eats "
+                  "more chip damage"),
+                 ("TUNE_REZ_SCAN_S", "how often ONE bot looks for its next "
+                  "wreck; lower is more responsive, at one feature query per "
+                  "bot per period"),
+             ]},
         ],
     },
     {
@@ -363,13 +386,30 @@ GROUPS = [
                   "finished a mex covers THAT mex; 0 is the old distance-blind "
                   "choice that sent it across the base"),
                  ("TUNE_DEF_TRADE", "credits a turret with stopping more enemy "
-                  "metal, so towers win more auctions"),
+                  "metal, so towers win more auctions. Measured 2026-08-26: "
+                  "raising it 3 -> 8 moved defence share only 0.071 -> 0.087 "
+                  "and cut total metal built by a third — defence is NOT gated "
+                  "by this. Find what is before turning it up"),
+                 ("TUNE_DEF_TTD_H", "TIME TO DEFENCE. The window a turret has "
+                  "to be standing in to earn its gain — it keeps only "
+                  "H/(H+buildtime) of what it prevents. LOWER buys quicker "
+                  "turrets: a 2500-buildtime Guard over a 17400-buildtime "
+                  "Agitator, which is what stops defences dying half-built on "
+                  "the front line. 0 removes the pressure entirely"),
                  ("TUNE_DEF_ARMY_SHARE", "assumes the mobile army answers more "
                   "of the local threat, so fewer towers are wanted"),
                  ("TUNE_DEF_PRIOR_SHARE", "how much of the symmetric enemy "
                   "guess the defence target assumes before contact"),
                  ("TUNE_GUARD_RATE", "standing army wanted per metal of "
                   "structures owned"),
+                 ("TUNE_FRAME_RISK", "charges every building for the chance it "
+                  "is killed BEFORE it finishes, at the local hazard rate "
+                  "across its own build time. Raise it and the AI stops "
+                  "starting slow expensive things on contested ground — a "
+                  "1300m Agitator over a 450m light tower, a fusion at the "
+                  "front — because a nanoframe that dies bought nothing. "
+                  "0 restores the old behaviour, where build duration carried "
+                  "no risk at all"),
              ]},
             {"title": "Where defence goes",
              "what": "The front fence versus local guards on mexes.",

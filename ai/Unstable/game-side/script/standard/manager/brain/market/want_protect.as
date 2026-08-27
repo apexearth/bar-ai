@@ -416,6 +416,12 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const float rate = ai.GetTunable("apex_insure_rate", TUNE_INSURE_RATE);
+	// (Normalising the TTD discount against the quickest buildable turret --
+	// so defence as a category paid nothing and only the ordering inside it
+	// moved -- was tried and REVERTED: it raised defence's share of spend but
+	// bought MORE of the slow turret, not less (Agitator 24% -> 38% of defence
+	// metal, quick turrets 57% -> 46%, over 54 games each). The absolute
+	// discount below is what actually moves the mix.)
 	AIFloat3 core = gFarmPos;
 	if (!gFarmSet) {
 		core = Base::gAnchorSet ? Base::gAnchor : Builder::gHomePos;
@@ -830,6 +836,33 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// turrets simply tracked the economy: 175% of it, against stock's 52%.
 			// This is the same shape the AA branch above already uses against
 			// AirSeenEver, and the same shape ArmyTarget has always had.
+			// TIME TO DEFENCE (apexearth: "we need to build the quicker
+			// defenses there on the front line. TTD can be very important").
+			// A turret prevents nothing while it is still a nanoframe, so its
+			// gain is worth only the share of the threat window it will
+			// actually be standing for -- the same temporal-consistency
+			// discount ProposePlant applies to a lab's first constructor and
+			// EPriceAt applies to energy.
+			//
+			// Build time barely reached the price before this: it entered only
+			// as BuildSecondsAt * Wage, about 116 metal against an Agitator's
+			// 1300, so a turret taking seven times as long as a Guard paid
+			// about nine percent for the privilege. Measured, 94% of the
+			// Agitators we lost died unfinished.
+			//
+			// The horizon is apex_exposed_loss_s -- the window this AI already
+			// uses for "an exposed asset is expected to be lost" -- so a turret
+			// that takes as long to build as the thing it guards takes to die
+			// is worth half. Reused rather than invented; apex_def_ttd_h
+			// separates the two if the front wants sharper pressure than the
+			// rear.
+			{
+				const float ttdH = ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
+				const float bSec = Catalog::BuildSecondsAt(d,
+						EffBP(Catalog::gBuildPower[uid]));
+				if ((ttdH > 1.f) && (bSec > 0.f))
+					bestGain *= ttdH / (ttdH + bSec);
+			}
 			gain = bestGain * TargetFill(DefenceValue(), DefenceTarget());
 			if (gain <= 0.f)
 				continue;

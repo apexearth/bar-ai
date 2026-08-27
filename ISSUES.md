@@ -1,5 +1,138 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-26 (2) -- front line FIXED; defence mix improved; win rate did not move
+
+Five paired 54-game runs, same three small 1v1 maps (Altair Crossing, Red Comet,
+Avalanche), Apex vs BARb:stable:hard, 30 min cap.
+
+| run | head-to-head | front-geometry fires | Agitator share of defence metal | quick turrets |
+|---|---|---|---|---|
+| baseline | 3-21 | 26/54 | 32% | 48% |
+| plant fix | 2-18 | 28/54 | 27% | 62% |
+| front fix | 1-23 | **0/54** | 33% | 55% |
+| + TTD (absolute) | 1-23 | 0/54 | **24%** | 57% |
+| + TTD (normalised) | 0-27 | 3/54 | 38% | 46% |
+
+**The front line is fixed.** `frontline.as` now stamps territory from our own
+buildings (`ai.GetOwnStructsNear`, already bound -- no DLL rebuild) instead of
+from the influence map, which fed mobile army into it. TerritoryRadius fell
+2673 -> ~1000 (a real base rather than most of the map), `ourMid` is stable, the
+front/back split went from front~=back to 19 front against 87 back, and the
+band trim became active for the first time. The `front-geometry` check fires in
+**0 of 54** games, from 26.
+
+**TTD works, in its absolute form.** A defence's gain is discounted by
+`H/(H+buildSec)` (`apex_def_ttd_h`, default 120 s = the same window
+`apex_exposed_loss_s` uses). Agitator share of defence metal 32% -> 24%,
+Dragon's Maw +46%, Warden +47%.
+
+**Normalising it BACKFIRED and is reverted.** Dividing every defence by the
+quickest buildable turret's multiplier -- so the category paid no tax and only
+the internal ordering moved -- raised defence share (def/built 0.077 -> 0.089)
+but bought MORE Agitators, not fewer (24% -> 38%). The within-defence ordering
+is mathematically unchanged by a common factor, so this is a second-order effect
+of defence winning more auctions overall; not chased further.
+
+**Win rate did not improve and this benchmark cannot resolve it.** 3-21, 2-18,
+1-23, 1-23, 0-27 across ~24 decided games each: every interval overlaps, and
+CLAUDE.md already records this bench swinging 60% -> 10% on an unchanged AI. We
+lose ~90% of these games in every configuration. Judge these changes on the
+composition columns, which are the same answer in every game; do not read the
+head-to-head column as a ranking.
+
+**CORRECTION to the 2026-08-26 frame-waste entry:** the per-game "e.g." lines
+printed by `diagnose.py --agg` are the FIRST game of the run, not a summary.
+Reading them as a trend suggested nanoframe waste fell 45% -> 29% across these
+runs. Pooled over all 54 games it did not: 27%, 30%, 31%, 34%, 33%. Nanoframe
+waste is unchanged. Always pool before claiming a trend.
+
+
+## 2026-08-26 -- the front line is drawn through enemy territory
+
+apexearth, watching: "During my games I see lines drawn through enemy
+territory. Is that where we think the frontline is?" It is, and it is wrong.
+
+`tools/diagnose.py` reports it over any run. Measured over 54 paired 1v1 games
+on three small maps, and again over a 10-game Comet Catcher set: the mean FRONT
+edge sits at **0.87-0.96 of the distance from our own territory centroid to the
+enemy's**, and in 33% of samples it is PAST their centroid entirely (max 3.15x).
+
+Mechanism, `manager/frontline.as`:
+
+1. **The near-them trim never trims.** `FrontBand()` is
+   `TerritoryRadius() * apex_front_band_frac`, and `apex_front_band_frac` is
+   **1.0**, so the band equals the mean radius of our whole perimeter -- larger
+   than the distance to the enemy in **97% of samples**. The trim at line 352
+   (`dist(cell, foeMid) > ref + band -> BACK`) therefore demotes nothing, and
+   every enemy-facing perimeter cell is FRONT regardless of how far back it is.
+2. **Territory follows the army, not our holdings.** `ours[]` (line ~236) is
+   `av >= gPresAlly && av > fv` where `av` is `GetAllyInflAt`, and CircuitAI's
+   `CInfluenceMap::Apply` feeds that from `AddMobileArmed` as well as
+   structures. `TERRITORY_FRAC` is **0.03** -- three percent of peak ally
+   influence counts as ours -- against `FOE_FRAC` **0.10** for theirs. The
+   asymmetry plus mobile influence paints ground our army is merely standing on
+   as our territory. Centroids fully collapse in only 2% of samples, so this is
+   secondary to (1), but it is why our territory radius exceeds the distance to
+   the enemy at all.
+
+Everything downstream inherits it: `Military::LanePos()` (where the army is told
+to stage), `Builder::PastFront()` (the eco veto), and defence siting. Consistent
+with `deep-deaths` firing in 32/54 games -- 41-56% of army metal dying past the
+halfway line.
+
+**Not yet fixed.** `apex_front_band_frac` is already a tunable and already in
+`dev_tunables.lua`, so the trim can be tightened with a modoption and no code
+change; `TERRITORY_FRAC` is a bare const and would need one adding. Untested
+either way -- tightening the band alone may make it WORSE, because the trim is
+relative to `closeMine`, the closest front cell to the enemy: if that cell is
+one our army is standing on inside their base, a tight band keeps only cells
+near THAT and discards our real border.
+
+## 2026-08-26 -- 27-45% of everything we lose dies as an unfinished nanoframe
+
+`tools/diagnose.py`'s `frame-waste` check fires in **54/54** games. Pooled over
+that run, 235,962 of 877,704 metal lost (27%) died before the building finished;
+per-game the median share is 45%. By def, share of that def's losses that were
+still nanoframes:
+
+    corfus     58500m over 13   100%      corfmd     9000m over  6  100%
+    corpun     22100m over 17    94%      cortoast   7500m over  3  100%
+    coralab    20300m over  7    58%      corhlt     4320m over  9  100%
+    corgeo     15660m over 29    71%      cormoho   14080m over 22   81%
+
+`corpun` is the Agitator, 1300 metal against a light tower's ~450, and it is
+apexearth's own report: "I see us trying to make Gauntlet defense a lot... it
+takes too long to build and enemies usually shut down the build attempt."
+
+Cause identified: `decide.as` charged `ExpectedLossAt` only to NON-protect
+wants, and never scaled it by how long the thing spends as a defenceless frame.
+So build duration carried no risk at all, and defence carried none whatsoever.
+
+**A fix was implemented, measured, and priced out.** `apex_frame_risk` charges
+`exposed * buildSec / apex_exposed_loss_s` to every want including protect.
+At 1.0 it made things clearly worse -- head-to-head 3-21 -> **0-30**, total
+metal built 38.6k -> 17.6k -- because the charge is a whole standing
+expected-loss multiplied by buildSec/120, which for a several-hundred-second
+structure exceeds the want's entire gain. It suppresses building instead of
+reordering it. **Default is now 0** (mechanism wired, inert). Likely
+precondition: a hazard field that is not saturated everywhere, which is the
+front-geometry entry above.
+
+## 2026-08-26 -- defence share does not respond to its own price
+
+def/built is **0.071-0.095 against stock BARb's 0.210-0.237** in every run
+measured, alongside kill/loss **0.30-0.35 against their 1.23-1.46**. This is the
+same gap recorded on 2026-08-24 and it has not moved.
+
+Raising `apex_def_trade` from 3 to 8 -- nearly tripling the metal a turret is
+credited with stopping -- moved def/built only **0.071 -> 0.087** and cut total
+metal built from 38.8k to 22.4k (54 paired games). **Defence is not gated by its
+price in the auction.** Whatever holds it down is upstream of the credit: the
+category lottery, or a protect gain that reads near-zero because observed threat
+is zero at a position nobody has attacked yet. Do not sweep `apex_def_trade`
+again without first establishing which.
+
+
 ## STATUS 2026-08-25 -- read this first
 
 ### CORRECTION: the compounding argument for apex_payback_h does NOT hold

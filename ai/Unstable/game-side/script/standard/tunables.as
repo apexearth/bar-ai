@@ -1632,10 +1632,32 @@ const float TUNE_EXPOSE_R = 1200.f;
 // 300 priced sentries below the NEXT mex claim, so every spot was claimed
 // naked and died to BARb inside the window; 120 flips to claim-then-guard.
 const float TUNE_EXPOSED_LOSS_S = 120.f;
+// FRAME_RISK: weight on the loss expected DURING a build, charged at the same
+// hazard rate as a standing asset but across the build's own duration. 1.0 is
+// "a nanoframe is exactly as likely to be lost per second as the finished
+// thing"; higher says a defenceless frame is worse than that. This is the only
+// term that separates a slow expensive structure from a fast cheap one.
+// DEFAULT 0 -- the mechanism is wired but priced out. At 1.0 it suppressed
+// building outright rather than reordering it: total metal built fell 38.6k ->
+// 17.6k and the head-to-head went 3-21 to 0-30 over 54 paired games. The charge
+// is a full standing expected-loss multiplied by buildSec/120, which for a
+// several-hundred-second structure exceeds its whole gain. Re-enable only with
+// a hazard field that is not saturated everywhere (see the front-geometry
+// entry in ISSUES.md).
+const float TUNE_FRAME_RISK = 0.0f;
 // DEF_TRADE: metal of enemy wave a standing turret is expected to stop, per
 // metal of its own cost. The exchange rate that puts coverage and threat in
 // one currency so a shortfall can be subtracted.
 const float TUNE_DEF_TRADE = 3.f;
+// DEF_TTD_H: the window a turret has to be STANDING in to be worth its gain.
+// A defence is discounted by H/(H+buildSec), so a slow turret keeps only the
+// share of the threat window it will actually cover. Defaults to the same 120 s
+// EXPOSED_LOSS_S uses -- a turret that takes as long to build as the asset it
+// guards takes to die is worth half of one that lands instantly. LOWER means
+// sharper pressure toward quick defences (a Guard at 2500 buildtime over an
+// Agitator at 17400); 0 restores the old behaviour, where build time reached
+// the price only through the builder's wage.
+const float TUNE_DEF_TTD_H = 120.f;
 // ECO_RAID_TAU: seconds of memory in the structure-loss field. Matches the
 // death ledger's BLEED_TAU so both risk senses forget at the same speed.
 const float TUNE_ECO_RAID_TAU = 180.f;
@@ -1928,6 +1950,16 @@ const float TUNE_MEDIC_R = 1200.f;
 //   holds station. The lane is where the army is fighting; a medic parked on it
 //   is in the fight. 0 keeps the old on-the-lane behaviour.
 const float TUNE_MEDIC_SETBACK = 0.f;
+// manager/builder/rules_rezzer.as [seconds] -- how long one hit keeps a rez bot
+//   retreating. A rez bot cannot dig in, only leave, but the hold was 90s: one
+//   stray shell parked it for a minute and a half. Lower works sooner and eats
+//   more chip damage; the threat vetoes still refuse hot work on the way back.
+const float TUNE_REZ_FLEE_S = 20.f;
+// manager/builder/rules_rezzer.as [seconds] -- spacing on ONE bot's own wreck
+//   and resurrect scans. Was a single team-wide clock, so with several bots
+//   idle most of them lost the race every period and stood still. Lower is
+//   more responsive and costs one feature query per bot per period.
+const float TUNE_REZ_SCAN_S = 1.f;
 // manager/builder/mexguard.as [toggle 0/1] -- a mex past MEX_GUARD_FWD_FRAC of
 //   the way to the enemy gets a heavy gun rather than the light/mid sentry.
 //   The tier then scales with exposure the same way the guard COUNT already

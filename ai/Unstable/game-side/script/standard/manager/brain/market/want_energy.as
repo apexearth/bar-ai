@@ -289,6 +289,7 @@ float gIncPrev = -1.f;
 int gIncPrevAt = 0;
 float gIncGrowth = 0.f;
 float gIncEma = -1.f;
+float gMSpareEma = 0.f;
 void TrackIncome()
 {
 	if (ai.frame < gIncPrevAt + 10 * SECOND)
@@ -302,8 +303,21 @@ void TrackIncome()
 		const float g = (inc - gIncPrev) / ((dt > 1.f) ? dt : 1.f);
 		gIncGrowth = 0.7f * gIncGrowth + 0.3f * g;
 	}
+	// Metal nothing is already spending, smoothed. Raw pull dips to nothing
+	// whenever the fleet is between jobs, so an instantaneous read calls a
+	// fully committed economy idle one tick and starving the next -- the same
+	// trap TrackEPull documents on the energy side.
+	const float sur = inc - aiEconomyMgr.metal.pull;
+	gMSpareEma = 0.85f * gMSpareEma + 0.15f * ((sur > 0.f) ? sur : 0.f);
 	gIncPrev = inc;
 	gIncPrevAt = ai.frame;
+}
+
+// The metal rate a NEW consumer could actually be fed at: what nothing is
+// spending, plus what we are already throwing away.
+float SpareMetalRate()
+{
+	return gMSpareEma + OverflowM();
 }
 
 // Lathe capacity still worth buying: income x headroom minus the fleet --

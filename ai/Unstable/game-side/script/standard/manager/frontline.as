@@ -95,6 +95,70 @@ AIFloat3 GridPos(int i, int j)
 	return p;
 }
 
+// TERRITORY IS WHAT WE HOLD, NOT WHERE THE ARMY IS STANDING.
+//
+// `ours[]` used to be `GetAllyInflAt(p) >= 3% of peak && > enemy influence`,
+// and CircuitAI's influence map feeds AddMobileArmed into that alongside
+// structures. So a squad raiding their base painted their ground as our
+// territory, our perimeter followed the army rather than our holdings, and the
+// mean FRONT edge came out at 0.87-0.96 of the way to the enemy centroid --
+// past it entirely in a third of samples (apexearth, watching: "I see lines
+// drawn through enemy territory").
+//
+// A structure cannot walk, so a structure is what owning ground means. Held
+// cells are stamped from our own buildings and nothing else; an army excursion
+// no longer moves the border, and TerritoryRadius becomes the real size of the
+// base instead of most of the map.
+//
+// HOLD_CELLS is a grid-resolution choice, not a claim about the game: a
+// building holds the cell it stands in and the ring of neighbours around it, so
+// adjacent buildings merge into one region and an outlying mex stays the island
+// it actually is. It scales with the map because the grid does.
+const float HOLD_CELLS = 1.5f;
+
+float HoldRadius()
+{
+	const float cw = float(AiTerrainWidth()) / float(SEAM_N);
+	const float ch = float(AiTerrainHeight()) / float(SEAM_N);
+	return sqrt(cw * cw + ch * ch) * HOLD_CELLS;
+}
+
+void StampHeld(array<bool>@ ours)
+{
+	for (uint k = 0; k < ours.length(); ++k)
+		ours[k] = false;
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	AIFloat3 mid;
+	mid.x = w * .5f;
+	mid.z = h * .5f;
+	// One sweep of everything we own: the radius spans the map, so this is
+	// "our structures", not a neighbourhood query.
+	array<CCircuitUnit@>@ held = ai.GetOwnStructsNear(mid, sqrt(w * w + h * h));
+	if (held is null)
+		return;
+	const float r = HoldRadius();
+	const float cw = w / float(SEAM_N);
+	const float ch = h / float(SEAM_N);
+	for (uint u = 0; u < held.length(); ++u) {
+		if (held[u] is null)
+			continue;
+		const AIFloat3 p = held[u].GetPos(ai.frame);
+		if (!OnMap(p))
+			continue;
+		const int i0 = int((p.x - r) / cw);
+		const int i1 = int((p.x + r) / cw);
+		const int j0 = int((p.z - r) / ch);
+		const int j1 = int((p.z + r) / ch);
+		for (int i = (i0 < 0 ? 0 : i0); (i <= i1) && (i < SEAM_N); ++i) {
+			for (int j = (j0 < 0 ? 0 : j0); (j <= j1) && (j < SEAM_N); ++j) {
+				if (GridPos(i, j).distance2D(p) <= r)
+					ours[i * SEAM_N + j] = true;
+			}
+		}
+	}
+}
+
 int Classify(const AIFloat3& in pos)
 {
 	const float ally = ai.GetAllyInflAt(pos);
@@ -223,20 +287,21 @@ void Scan()
 	if (gPresFoe < FOE_FLOOR) gPresFoe = FOE_FLOOR;
 
 	array<bool> ours(SEAM_N * SEAM_N);
+	// Held ground, stamped from our own buildings -- see StampHeld.
+	StampHeld(ours);
 	float ox = 0.f, oz = 0.f, ow = 0.f;
 	float fx = 0.f, fz = 0.f, fw = 0.f;
 	for (int i = 0; i < SEAM_N; ++i) {
 		for (int j = 0; j < SEAM_N; ++j) {
 			const int me = i * SEAM_N + j;
 			const AIFloat3 p = GridPos(i, j);
-			// Territory is where we are ON TOP, not merely where we are present.
-			// Ally influence counts mobile units, so an army pushing into enemy
-			// ground would paint that ground as ours and the front would follow
-			// the army instead of our holdings -- gated on av > fv too.
-			const float av = ai.GetAllyInflAt(p);
 			const float fv = ai.GetEnemyInflAt(p);
-			const bool a = (av >= gPresAlly) && (av > fv);
-			ours[me] = a;
+			// Ground they hold more strongly than we do is not ours, however
+			// many of our buildings stand on it -- that is the state a base
+			// being overrun is actually in.
+			if (ours[me] && (fv > ai.GetAllyInflAt(p)))
+				ours[me] = false;
+			const bool a = ours[me];
 			if (a) {
 				++gDbgAlly;
 				ox += p.x; oz += p.z; ow += 1.f;

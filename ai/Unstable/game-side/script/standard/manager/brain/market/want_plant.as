@@ -305,10 +305,22 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	const float fillS0 = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
 	const float aGap = ArmyTarget() - ArmyValue();
 	const int lines0 = (Factory::gFactoryCount > 0) ? Factory::gFactoryCount : 0;
-	const float prodTerm = (aGap > 0.f)
+	float prodTerm = (aGap > 0.f)
 			? (aGap / ((fillS0 > 1.f) ? fillS0 : 180.f))
 				/ float(1 + lines0)
 			: 0.f;
+	// A LINE WE CANNOT FEED ADDS NO THROUGHPUT (apexearth: "no point buying a
+	// new lab if we cannot fully utilize the first one"). The army gap above
+	// is DEMAND, and demand alone was the whole production case for another
+	// plant -- so the further behind we fell, the more attractive a second lab
+	// became, even while the lines we owned were already spending every metal
+	// we made. What a new line can actually serve is bounded by metal nothing
+	// is spending; at zero spare it is a slower copy of the queue we have.
+	{
+		const float spare = SpareMetalRate();
+		if (prodTerm > spare)
+			prodTerm = spare;
+	}
 	const float pipe = ai.GetTunable("apex_plant_pipe", TUNE_PLANT_PIPE)
 			* Utilization();
 	// The expansion half is per-plant: it is worth the share of open ground

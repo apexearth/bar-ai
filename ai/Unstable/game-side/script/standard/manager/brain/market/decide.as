@@ -122,13 +122,26 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// two decisions are independent and a fusion can win every auction while
 	// nothing on the map protects it (apexearth). Same law decide.as already
 	// applies to the commander, generalized past him.
-	// Protect wants are exempt: their gain is already the loss they prevent,
-	// so charging them again would price a turret for its own exposure twice.
+	// Protect wants are exempt from the STANDING charge: their gain is already
+	// the loss they prevent, so charging them again would price a turret for
+	// its own exposure twice.
+	//
+	// They are NOT exempt from the CONSTRUCTION charge below. A nanoframe has
+	// no weapon and a sliver of its final hitpoints, so the gain above -- which
+	// assumes the thing ends up standing -- is only collected if the build
+	// survives. HazardAt is a loss rate over apex_exposed_loss_s, so the same
+	// rate across the build's own duration is what separates a turret that
+	// lands in forty seconds from one that spends minutes as a frame. This is
+	// the whole difference between a 450m HLT and a 1300m Agitator, and
+	// nothing priced it: measured over 54 games, 94% of the Agitators we lost
+	// and 100% of the fusions died unfinished, 27% of all metal we ever lost.
+	const float lossH = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
+	const float frameK = ai.GetTunable("apex_frame_risk", TUNE_FRAME_RISK);
 	for (uint i = 0; i < wants.length(); ++i) {
 		Want@ c = wants[i];
 		if ((c is null) || (c.value <= 0.f) || (c.def is null))
 			continue;
-		if ((c.kind == WK_PROTECT) || c.def.IsMobile() || !OnMap(c.pos))
+		if (c.def.IsMobile() || !OnMap(c.pos))
 			continue;
 		// An unset pos is the origin, and the origin reads as maximally
 		// exposed ground -- charging it would quietly suppress every want
@@ -138,7 +151,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		const float exposed = ExpectedLossAt(c.pos, c.def.costM);
 		if (exposed <= 0.f)
 			continue;
-		c.gain -= exposed;
+		float charge = (c.kind == WK_PROTECT) ? 0.f : exposed;
+		if ((frameK > 0.f) && (c.buildSec > 0.f) && (lossH > 1.f))
+			charge += exposed * frameK * (c.buildSec / lossH);
+		if (charge <= 0.f)
+			continue;
+		c.gain -= charge;
 		c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
 	}
 	// Highest value first; a want the executor refuses (ground taken, request
