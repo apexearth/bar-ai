@@ -307,6 +307,16 @@ GROUPS = [
                   "slice of total economic power"),
                  ("TUNE_SUPER_AFFORD_S", "a strategic build must be payable "
                   "within more seconds of income — more gets built"),
+                 ("TUNE_GANTRY_AFFORD_S", "the gantry's own horizon, over "
+                  "TEAM income (one shared line, one team purse) — at 100 "
+                  "the bill clears near 100 team metal/s"),
+                 ("TUNE_GANTRY_INSURE", "the gantry is worth this share of "
+                  "team income as T3 insurance even with no army gap — "
+                  "higher means the answer to a Behemoth stands earlier"),
+                 ("TUNE_OFFENSE_DEF_FLOOR", "raise toward 1 and the silo/LRPC "
+                  "stop caring whether the base is defended; at the default "
+                  "0.1 an undefended base all but silences the big gun until "
+                  "the defence target fills"),
                  ("TUNE_SUPER_PUSH", "an affordable strategic want skips the "
                   "category lottery and goes straight through"),
                  ("TUNE_ANTINUKE_INCOME", "the income at which insurance "

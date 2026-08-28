@@ -15,6 +15,31 @@ When an entry is completed (landed + he has seen it work, or confirmed live),
 MOVE it to `feedback/<date>.md` — date of the original request. This file
 holds only unresolved asks and standing preferences.
 
+## UNRESOLVED (landed, awaiting his eyes) — Gantry by ~100 team metal/s (2026-08-28)
+
+"We do not create Gantry buildings soon enough. If the enemy comes at us
+with a Behemoth and we do not have one we are in big trouble... I saw a
+team with 400m/s income and no gantry - we can have a gantry at like 100
+m/s." Reproduced (first corgant ELECTION 27.8-28.6 min on ~400 team m/s,
+none finished): the super budget read ONE player's income (needs ~155 m/s
+each) and the gain read the share-scaled army gap. Landed: the gantry's
+affordability reads TEAM income over apex_gantry_afford_s (100s -- bill
+clears at ~100 team m/s), its gap is the TEAM's (full census vs team army),
+and apex_gantry_insure (0.5) prices T3 insurance even with no gap on the
+books. Close on a watched game with a gantry standing by mid-game wealth.
+
+## UNRESOLVED (landed, awaiting his eyes) — Defence before Basilisk; shields vs LRPC (2026-08-28)
+
+"We consistently make Basilisk before T3 or even T2 defense - we need
+better defense esp when we're losing. Also if enemy has LRPC we need to
+build shields." (Basilisk = corint, the Cortex LRPC.) Landed: (1) silo and
+LRPC gains scale with the defence target's fill (apex_offense_def_floor
+0.1) -- an under-defended or losing base all but silences the big gun,
+antinuke and gantry untouched; (2) a seen enemy LRPC (derived def set, any
+faction) joins the shield want's bombardment basis and waives its
+1800-elmo nearness gate, which a cross-map gun never trips. Logs:
+`apex: enemy LRPC seen`.
+
 ## UNRESOLVED — 4v4 resource efficiency (2026-08-28)
 
 Watching Aethermoor Creek +100%: "At +100% bonus 1v1 we do really well...

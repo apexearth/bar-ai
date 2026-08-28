@@ -311,7 +311,22 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			&& (DupBpSubstMul(d) < 1.f))
 			continue;
 		const float bill = SuperBill(d);
-		if (bill >= budget)
+		// ONE LINE, THE TEAM'S PURSE (apexearth 2026-08-28: "I saw a team
+		// with 400m/s income and no gantry -- we can have a gantry at like
+		// 100 m/s"). The copy law keeps the gantry one per side and ally
+		// nanos man it, so its affordability reads the TEAM's income over
+		// its own horizon -- the per-player budget needed ~155 m/s EACH,
+		// which a 4v4 sharing 400 never reaches (measured same day: first
+		// corgant election 27.8-28.6 min, gain 6-9.5, none ever finished).
+		float teamInc = (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
+		float classBudget = budget;
+		if (sc == SC_GANTRY) {
+			teamInc = Military::TeamSum(Military::TV_MINC, teamInc);
+			const float gsec = ai.GetTunable("apex_gantry_afford_s",
+					TUNE_GANTRY_AFFORD_S);
+			classBudget = teamInc * ((gsec > 1.f) ? gsec : 100.f);
+		}
+		if (bill >= classBudget)
 			continue;   // cannot afford it; nothing else about it matters
 		AIFloat3 at;
 		if (sc == SC_ANTINUKE) {
@@ -340,7 +355,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// market may speak for -- so the same structure is worth nothing at the
 		// income that can barely pay for it and nearly the full slice at the
 		// income that shrugs it off.
-		const float afford = (budget - bill) / budget;
+		const float afford = (classBudget - bill) / classBudget;
 		float gain = power * share * afford
 				* Persona::WantMult(SuperName(sc));
 		// THE GANTRY IS A PRODUCTION LINE, NOT A GUN. Affordability alone
@@ -351,11 +366,50 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// still ramped by how comfortably we can pay for it.
 		if (sc == SC_GANTRY) {
 			const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
-			const float gapF = ArmyTargetFull() - ArmyValue();
-			const float gapStream = (gapF > 0.f)
-					? gapF / ((fillS > 1.f) ? fillS : 60.f) : 0.f;
+			// TEAM GAP for the one team-scoped want: the ally-share division
+			// that fixed the 4v4 economy reads each player its slice of the
+			// census, but ONE shared line answers the census whole -- full
+			// enemy army at match ratio against the team's whole standing.
+			float gapF = Military::EnemyArmyCost()
+					* ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO)
+					- Military::TeamArmyCost();
+			if (gapF < 0.f)
+				gapF = 0.f;
+			const float gapStream = gapF / ((fillS > 1.f) ? fillS : 60.f);
 			gain = (OverflowM() + gapStream) * afford
 					* Persona::WantMult(SuperName(sc));
+			// CAPABILITY INSURANCE (apexearth: "If the enemy comes at us
+			// with a Behemoth and we do not have one we are in big
+			// trouble"): the answer to enemy T3 has to exist BEFORE one is
+			// seen -- a gantry plus its first heavy is minutes of build
+			// time nothing can compress once the Behemoth is already on the
+			// lawn. Worth a share of the team income that could field T3,
+			// even with no gap and no waste on the books.
+			const float insure = teamInc
+					* ai.GetTunable("apex_gantry_insure", TUNE_GANTRY_INSURE)
+					* afford * Persona::WantMult(SuperName(sc));
+			if (insure > gain)
+				gain = insure;
+		}
+		// DEFENCE BEFORE THE BIG GUN (apexearth 2026-08-28: "We consistently
+		// make Basilisk before T3 or even T2 defense - we need better
+		// defense esp when we're losing"). An offensive super is a luxury a
+		// covered base earns: its gain scales with the fill of the standing
+		// defence target, which sinks exactly when we are losing (towers
+		// dying faster than they are replaced). A discount, never a gate --
+		// at zero standing defence the gun keeps the floor share -- and the
+		// antinuke (insurance) and gantry (production) are untouched.
+		if ((sc == SC_SILO) || (sc == SC_LRPC)) {
+			const float dt = DefenceTarget();
+			float fill = 1.f;
+			if (dt > 1.f) {
+				fill = DefenceValue() / dt;
+				if (fill > 1.f)
+					fill = 1.f;
+			}
+			const float dfloor = ai.GetTunable("apex_offense_def_floor",
+					TUNE_OFFENSE_DEF_FLOOR);
+			gain *= dfloor + (1.f - dfloor) * fill;
 		}
 		if (gain <= 0.f)
 			continue;
@@ -412,7 +466,10 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		AiLog("apex: super t=" + ai.teamId + " " + SuperName(w.spotId)
 			+ ":" + w.def.GetName()
 			+ " bill=" + int(SuperBill(int(w.def.id)))
-			+ " budget=" + int(budget)
+			+ " budget=" + int((w.spotId == SC_GANTRY)
+				? (Military::TeamSum(Military::TV_MINC, aiEconomyMgr.metal.income)
+					* ai.GetTunable("apex_gantry_afford_s", TUNE_GANTRY_AFFORD_S))
+				: budget)
 			+ " have=" + SuperHave(w.spotId) + "/" + SuperTarget(w.spotId)
 			+ " at=" + int(w.pos.x) + "," + int(w.pos.z)
 			+ " v=" + formatFloat(w.value * 1000.f, "", 0, 2));

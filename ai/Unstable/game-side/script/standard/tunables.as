@@ -1652,6 +1652,21 @@ const float TUNE_SUPER_PER_INCOME = 150.f;
 // SUPER_SHARE: the slice of total economic power the strategic market may
 //   claim as a want's gain. Scaled by how much budget is left after the bill.
 const float TUNE_SUPER_SHARE = 0.25f;
+// GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
+//   income: one shared line the whole team's nanos man, so one team purse.
+//   At 100s the ~9.3k bill clears right at ~100 team metal/s, his stated
+//   mark ("we can have a gantry at like 100 m/s").
+const float TUNE_GANTRY_AFFORD_S = 100.f;
+// GANTRY_INSURE: the gantry's capability-insurance gain as a share of team
+//   income ("if the enemy comes at us with a Behemoth and we do not have one
+//   we are in big trouble") -- the answer to enemy T3 is worth this even with
+//   no army gap and no overflow on the books.
+const float TUNE_GANTRY_INSURE = 0.5f;
+// OFFENSE_DEF_FLOOR: the share of its gain an offensive super (silo, LRPC)
+//   keeps at ZERO standing defence; the rest scales in with the defence
+//   target's fill ("we consistently make Basilisk before T3 or even T2
+//   defense"). 1 disables the coupling.
+const float TUNE_OFFENSE_DEF_FLOOR = 0.1f;
 // ANTINUKE_R [elmos] -- an anti-nuke's assumed umbrella, for deciding whether
 //   ground is already covered by one we own.
 const float TUNE_ANTINUKE_R = 2000.f;

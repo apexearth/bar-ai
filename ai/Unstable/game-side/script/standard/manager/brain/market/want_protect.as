@@ -580,6 +580,47 @@ float TargetFill(float have, float target)
 	return (gap > target) ? 1.f : (gap / target);
 }
 
+// ENEMY LRPCs SEEN, whole map, cached -- his ruling: "if enemy has LRPC we
+// need to build shields." The def set is derived, not named: every
+// non-stockpile superweapon of any faction (IsSuperWeapon), counted by
+// CountEnemyDefNear from map center -- the silo detector's pattern
+// (nukes.as EnemyNukeSilos). Not cached across frames beyond 10s: the
+// availability-derived range threshold inside IsSuperWeapon must not latch.
+int gFoeLrpcN = 0;
+int gFoeLrpcNext = 0;
+float gFoeLrpcCost = 0.f;
+
+int EnemyLRPCs()
+{
+	if (ai.frame < gFoeLrpcNext)
+		return gFoeLrpcN;
+	gFoeLrpcNext = ai.frame + 10 * SECOND;
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	AIFloat3 mid(w * 0.5f, 0.f, h * 0.5f);
+	const float r = sqrt(w * w + h * h) * 0.5f + 1.f;
+	int n = 0;
+	float cost = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!IsSuperWeapon(d) || Catalog::gStock[d])
+			continue;
+		CCircuitDef@ cd = Catalog::Def(d);
+		if (cd is null)
+			continue;
+		const int k = ai.CountEnemyDefNear(cd.id, mid, r);
+		if (k > 0) {
+			n += k;
+			cost += float(k) * Catalog::gCostM[d];
+		}
+	}
+	if ((n > 0) && (gFoeLrpcN == 0))
+		AiLog("apex: enemy LRPC seen t=" + ai.teamId + " n=" + n
+			+ " cost=" + int(cost));
+	gFoeLrpcN = n;
+	gFoeLrpcCost = cost;
+	return n;
+}
+
 int gNextTargetLog = 0;
 void TargetLog()
 {
@@ -879,16 +920,25 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// Shields answer bombardment: worth the arty mass they blank,
 			// covering the interior (the stock feature our gap survey ranked
 			// first; their arty ground our statics 38k:7k).
+			// An enemy LRPC is bombardment too -- it is STATIC, so the
+			// mobile-role census above never counts it, and it fires from
+			// across the map, so "no threat within 1800" is exactly what
+			// its presence looks like (apexearth: "if enemy has LRPC we
+			// need to build shields"). Its seen mass joins the basis and
+			// waives the nearness gate.
+			const int lrpc = EnemyLRPCs();
 			const float artyS = Military::EnemyCostOf(Unit::Role::ARTY.type)
-					+ Military::EnemyCostOf(Unit::Role::SKIRM.type) * 0.5f;
+					+ Military::EnemyCostOf(Unit::Role::SKIRM.type) * 0.5f
+					+ gFoeLrpcCost;
 			if (artyS < 200.f)
 				continue;
 			// ...and only when a threat is actually NEAR: a global arty
 			// census bought shield stacks in a base nothing could reach
 			// (apexearth: "too many shields while theres still no threat
 			// very close"). The bombardier must be within twice its reach
-			// of what the shield would cover.
-			if (ai.GetEnemyCostAt(core, 1800.f) < 200.f)
+			// of what the shield would cover -- unless it is an LRPC, whose
+			// reach covers everything.
+			if ((lrpc <= 0) && (ai.GetEnemyCostAt(core, 1800.f) < 200.f))
 				continue;
 			if (ProtCovered(PROT_SHIELD, core, 400.f))
 				continue;

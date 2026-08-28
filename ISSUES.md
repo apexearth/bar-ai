@@ -1,5 +1,22 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-28 (evening) — T3 production pacing: the early gantry's products eat the mid-game
+
+The gantry-by-100-team-m/s change works as asked (elections 27.8-28.6min ->
+7.4-10.9min, gantries FINISHED on both apex teams, T3 fielded 50-55k vs
+8.4k) and costs nothing through minute 10 (income tracks the control
+exactly). The damage is 15-25min: the standing T3 line pulls Juggernauts
+(20k) and Demons (12k) into the mid-game, the army flatlines at 20m while
+BARb masses 43 Goliaths, and s21's side income collapsed 1045->212 while
+the control compounded 1836->2537 (side metal 776k -> 393k; s23 640k ->
+543k). BARb won the same game fielding 3 KORGOTHS — T3 is not the sin,
+SEQUENCING is: they bought mass first and T3 from surplus; we bought T3
+instead of mass. The lever is production-side (what a T3 unit bid may cost
+against income mid-game — an affordability ramp like the supers carry),
+NOT the gantry want. Decide with apexearth before wiring: it is his
+composition philosophy. Evidence: matches/gantry-on-s21 vs
+matches/allyshare-on-s21 (same seed, same day, one change).
+
 ## 2026-08-28 — 4v4 economic collapse: ArmyTarget charges one player the whole enemy team
 
 His report (Aethermoor Creek, +100%): strong in 1v1, "a lot worse" in 4v4 —
