@@ -1,5 +1,35 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-27 (late): the plant zoo, nano demand from waste, adjacent factories
+
+From his quick 1v1 (`matches/20260828-023315`): 16 plants of TEN different
+defs in 24 minutes against 13 nanos (10 died), and factories placed flush
+("two factories choose to make at spots right next to each other. So during
+placement the issue happens").
+
+- **The plant zoo**: every different-def plant "unlocks product," which
+  exempted it from EVERY duplicate discount -- the market walked the catalog
+  buying one of each while its build-power hunger persisted. The tier
+  discount (subMul) and the nano substitution (dupSubst) now apply to the
+  CONSTRUCTOR half of every plant, unlock or not; unlock keeps exempting
+  only the copy-terms (dupKin, replant memory).
+- **Nano demand from waste** (his ruling: "we'd need 20x the amount... make
+  sure we don't have any cooldown or backoff"): `OverflowM()` -- the measured
+  failure to spend -- is now nano demand in its own right, unbounded, fading
+  to zero the moment the economy actually spends. No cooldown or backoff
+  exists in the nano path (verified); the exec sink-scorer's leftover 35 m/s
+  clamp is removed.
+- **Adjacent factories**: both asks resolve in the same window, before
+  either block-map yard stands, so the yards that keep STANDING factories
+  apart never see the pair. Every factory ask (plant, tech, gantry, air
+  plant) now steps 560 elmos clear of any factory request already in flight
+  (`ClearOfLiveFactories`).
+- 8v8 validation of the previous round (`matches/20260828-021756`): NINE
+  advanced air plants (was 1), grid-tightness 77% (first pass), 232 nanos
+  standing, front-tower churn gone (151 spam wins -> 18 real ones). Still
+  open there: 0 front towers FINISHED, T1-eco reclaim pace (297 standing
+  with AFUS), armmakr 1-metal rebuild churn (81).
+
 ## 2026-08-27 (night): his watch list -- the DLL abort gate, the air mandate, tier fades
 
 Evidence: his own watched 8v8 (`matches/20260828-013543`, Supreme Isthmus

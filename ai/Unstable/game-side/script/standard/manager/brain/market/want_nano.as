@@ -106,6 +106,17 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	float over = (sinkNeed > lineNeed) ? sinkNeed : lineNeed;
 	if (armyNeed > over)
 		over = armyNeed;
+	// METAL WE FAIL TO SPEND IS NANO DEMAND IN ITS OWN RIGHT (apexearth
+	// 2026-08-27: "We didn't have nearly enough nano turrets to spend the
+	// amount of metal we were making... we'd need 20x the amount"). Overflow
+	// is the measured failure to spend, so the lathe fleet grows until the
+	// waste stops -- no count, no cooldown, and it reads zero the moment the
+	// economy is actually being spent. Sited by the fallback chain below.
+	{
+		const float wasted = OverflowM();
+		if (wasted > over)
+			over = wasted;
+	}
 	if (over <= 0.5f)
 		return w;
 	// The turret STANDS where the demand is. A nano bought to serve a line was

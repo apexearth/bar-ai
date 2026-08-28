@@ -583,8 +583,14 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// PRODUCTION half is untouched: a cheap line is still a line, and
 		// what it puts on the field is the market's question, not the tier's.
 		// Exempt while it unlocks a product nothing we own can make.
+		// The tier discount applies to the CON half of EVERY plant, unlock or
+		// not: a hover platform's cons are still T1 cons beside a standing T2
+		// lab, whatever its products unlock. The unlock exemption stays where
+		// it belongs -- on dupKin and the replant memory, the terms about
+		// being a COPY. (One watched 1v1 bought 16 plants of ten different
+		// defs in 24 minutes; every def change dodged every discount.)
 		float subMul = 1.f;
-		if ((reachKin > 0) && !UnlocksProduct(d)) {
+		{
 			const float bestDom = BestDomainReach(dClass);
 			if ((myReach > 0.f) && (bestDom > myReach))
 				subMul = myReach / bestDom;
@@ -597,8 +603,12 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// clause, expressed as demand rather than as geometry. A plant that
 		// unlocks something nothing we own can make is exempt: it is not a
 		// copy, it is a new capability.
+		// ...and so does the BP substitution: build power is build power, and
+		// while any line is short of hands a nano is the cheaper way to buy it
+		// whatever def the plant is (his arithmetic: 300 BP for 2,900 vs 200
+		// BP for 210).
 		float dupSubst = 1.f;
-		if ((reachKin > 0) && !UnlocksProduct(d)) {
+		if (Factory::gFactoryCount > 0) {
 			AIFloat3 nlp;
 			if ((ai.GetTunable("apex_dup_bp_subst", TUNE_DUP_BP_SUBST) > 0.f)
 				&& (NeediestLine(nlp) > 0.f))

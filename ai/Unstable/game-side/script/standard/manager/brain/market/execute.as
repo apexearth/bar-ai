@@ -4,6 +4,51 @@ AIFloat3 gNanoSite(-1.f, 0.f, -1.f);
 int gNanoSiteKey = 0;
 int gNanoSiteAt = -999999;
 
+// TWO FACTORIES THAT CHOOSE ADJACENT SPOTS WALL EACH OTHER IN. Both asks
+// resolve in the same window, before either blocker map entry stands, so the
+// block_map yards that keep STANDING factories apart never see the pair
+// (apexearth, watching: "two factories choose to make at spots right next to
+// each other. So during placement the issue happens"). The ask itself steps
+// away from any factory request already in flight; the engine's own search
+// still handles the standing world.
+AIFloat3 ClearOfLiveFactories(const AIFloat3& in pos)
+{
+	AIFloat3 p = pos;
+	for (uint tries = 0; tries < 4; ++tries) {
+		bool near = false;
+		AIFloat3 at;
+		for (uint i = 0; i < Requests::gLive.length(); ++i) {
+			IUnitTask@ t = Requests::gLive[i];
+			if ((t is null) || t.IsDead()
+				|| (t.GetBuildType() != Task::BuildType::FACTORY))
+				continue;
+			at = t.GetBuildPos();
+			if (OnMap(at) && (p.distance2D(at) < 512.f)) {
+				near = true;
+				break;
+			}
+		}
+		if (!near)
+			return p;
+		AIFloat3 dir = p - at;
+		const float len = sqrt(dir.x * dir.x + dir.z * dir.z);
+		if (len > 1.f) {
+			dir.x /= len;
+			dir.z /= len;
+		} else if (Base::gAxisSet) {
+			dir.x = -Base::gFwd.x;   // straight back into the base
+			dir.z = -Base::gFwd.z;
+		} else {
+			dir.x = 1.f;
+			dir.z = 0.f;
+		}
+		p = at + dir * 560.f;
+		if (!OnMap(p))
+			return pos;
+	}
+	return p;
+}
+
 IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 {
 	// FINISH BEFORE FOUNDING, for EVERY static kind. The adoption block used
@@ -67,7 +112,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if (jt !is null)
 			return jt;
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
-				Task::Priority::NORMAL, ClearOfSpots(w.pos, 180.f), 256.f,
+				Task::Priority::NORMAL,
+				ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)), 256.f,
 				SQUARE_SIZE * 16.f);
 	}
 	if ((w.kind == WK_PROTECT) || (w.kind == WK_SENSE)
@@ -113,7 +159,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			if (jg !is null)
 				return jg;
 			return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
-					Task::Priority::NORMAL, ClearOfSpots(w.pos, 180.f), 256.f,
+					Task::Priority::NORMAL,
+					ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)), 256.f,
 					SQUARE_SIZE * 16.f);
 		}
 		const int sbt = (w.spotId == SC_HEAVY) ? int(Task::BuildType::DEFENCE)
@@ -204,9 +251,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				}
 				// The crew is SUPPLY, not demand: a frame whose cons already
 				// eat the free flow earns nothing from another turret.
+				// FreeMetalFlow unclamped -- the 35 here was the same bare
+				// floor the want side already removed, quietly capping which
+				// sink could ever look hungry.
 				const float feed2 = FreeMetalFlow();
-				const float u2 = ((feed2 < 35.f) ? feed2 : 35.f)
-						- drain - float(nanosAt) * NANO_ABSORB;
+				const float u2 = feed2 - drain - float(nanosAt) * NANO_ABSORB;
 				if (u2 > worst) {
 					worst = u2;
 					slot = sp;
@@ -341,7 +390,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// A floating plant keeps the water it was priced against -- the
 		// spot-clearance nudge walks the base axis and puts a shipyard inland.
 		const AIFloat3 at = Catalog::gFloater[int(w.def.id)]
-				? w.pos : ClearOfSpots(w.pos, 180.f);
+				? w.pos : ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f));
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, at, 256.f, SQUARE_SIZE * 16.f);
 	}
