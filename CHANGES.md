@@ -1,5 +1,62 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-27 (evening): the churn session -- his complaint list, root causes, first measurements
+
+Baseline: his own 16:47 Supreme Isthmus +100% 1v1 (`matches/20260827-234730`,
+44 min, LOST). Validation: same setup seed 3 after round one
+(`matches/20260828-003959`, 40 min, WON). Both games audited with the new
+`tools/audit.py` STRUCTURES/GEOMETRY/PERF sections; single games, so read the
+composition columns, not the result.
+
+What landed, and the paired numbers where the first validation already
+measured them:
+
+- **Orphan adoption for every static kind** (execute.as -- the old block sat
+  below the early-return branches, so its WK_NANO/WK_TECH entries were dead
+  and mex/mexup/sense/protect never reached it). Constructor deaths 220 -> 6;
+  frame orphans 236 -> 82.
+- **`apex_dup_bp_subst` ON** (the game that turned it off predates nano
+  adoption) and a **retirement memory**: an obsolete-reclaim EXECUTION on any
+  static def prices that def at `apex_replant_discount` (0.15) for
+  `apex_replant_window_s` (600 s), applied centrally in decide.as; plus an
+  age gate in RetireValue -- a structure younger than the window is never
+  obsolete. Plants 144.5k metal (armalab x15) -> 89.3k (x4); round two (the
+  age gate + all-defs memory) targets the residue (armavp x6, armshltx x5,
+  armamb rebuild x8).
+- **ProposeStore deleted** (his ruling). Storage 31 -> 0. This UNMASKED the
+  real problem: metal-wasted 6% -> 45% -- the spend engine cannot move 1.35M
+  metal at +100%. Now the top open eco item.
+- **`IncomeMult()`**: `GetMexSpotIncome` is raw map income, handicap-blind,
+  so at +100% every extraction gain priced HALF its truth against energy's
+  real income. The gadget already published `ai_handicap_<team>`; five read
+  sites now multiply. Mexup share of advanced-con decisions 4% -> 19%; mex
+  race 108-vs-126 -> 107-vs-65.
+- **Radar gap sites take the tower safety veto** (past-front / hot ground).
+  Sense elections 2,069 -> 411 executions; radar frames died 84 -> fewer;
+  still churny, price is the next lever if `sense-churn` keeps flagging.
+- **`apex_front_band_frac` 1.0 -> 0.35** (the +/-90-degree arc made half the
+  perimeter "front"). Front share of perimeter 0.45-0.52 -> 0.11.
+- **The defence site auction cached per def per 2 s** (DefSiteFill; identical
+  arithmetic, election keeps the walk-weighted argmax) and StreamSurvival
+  memoized. hk.maketask.builder 194 s of a 686 s game -> 56 s of 260 s; spike
+  69 -> 62 ms (still flagged; first-fill is the suspect).
+- **`apex: exec` line** -- what actually became a task (the decide line
+  prints the drawn rank-0 even when the executor refuses it), plus audit
+  checks that count executions and structures, not decides: no-storage,
+  reclaim-rebuild loop, plant-count, nanos-standing, sense-churn,
+  defence-tier, front-band, front-towers, grid-tightness, ai-time. The old
+  `duplicate line over nanos` audit regex never matched the real plantdup
+  line -- fixed.
+- **Approach-hold releases on TWO consecutive non-closing checks** (round
+  two): releasing on the first blocked tick re-elected walkers mid-jostle --
+  826 nano tasks, zero finished; 74 front sites won, zero towers.
+
+Still open from his list, with the audit check that watches each: nanos
+still do not accumulate (nanos-standing), front towers still never finish
+(front-towers), 45% metal waste (metal-wasted), the grid's 42-56% touching
+(grid-tightness), the strategic market's cheapest-wins pricing, and the
+62 ms first-fill spike (ai-time).
+
 ## 2026-08-27: the ten-second hitch was the front rescan, and the stall answer
 
 apexearth, playing: "I noticed a lag moment in the game every ~10 seconds it

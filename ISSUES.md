@@ -1,5 +1,72 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-27 (evening) -- the churn session: root causes behind his complaint list
+
+Evidence run: `matches/20260827-234730-...` (his own 16:47 Supreme Isthmus
++100% 1v1, 44 min, lost to BARb). What it showed, and what landed against
+each. Every fix below is LANDED, NOT MEASURED -- `tools/audit.py` grew a
+STRUCTURES / GEOMETRY / PERF section whose checks are the closing measurement
+for each one; run it on his next game.
+
+- **15 T2 bot labs, 12 T2 veh, 7 T2 air, 13 T1 veh built (144,510 metal into
+  plants); 14 of the 15 armalabs died `built=1` ~30s after our own reclaim
+  elections.** The loop: nanos won 1,350 elections and finished ZERO in 44
+  minutes, so the build-power gap (`plantdup ... con=89`) could only be
+  answered by duplicate labs; duplicates make each other "covered", reclaim
+  retires one, plant re-buys. Landed: (1) ExecuteWant's orphan/frame adoption
+  hoisted to the TOP for every static kind -- it sat below the early-return
+  branches, so its WK_NANO and WK_TECH entries were dead code and mex, mexup,
+  sense and protect never reached it at all (armrad 48, armmex 43, armmoho 35,
+  armnanotc 24 orphans, none adopted); (2) `apex_dup_bp_subst` defaulted ON
+  (the one bad game that turned it off predates nano completion); (3) a
+  replant memory: a plant def we reclaimed on purpose prices at
+  `apex_replant_discount` (0.15) for `apex_replant_window_s` (600s), noted at
+  reclaim EXECUTION in execute.as. Audit: `reclaim-rebuild loop`,
+  `plant-count`, `nanos-standing`.
+- **31 metal storages (15,690m).** ProposeStore was gated on `gReclaimTarget`
+  -- a global set by every reclaim PROPOSAL, so the lab churn kept it armed
+  forever. His ruling "Stop making storage" -- ProposeStore now proposes
+  nothing; the global and `TUNE_STORE_HORIZON` are deleted. Audit:
+  `no-storage`.
+- **Fusion/AFUS before mex upgrades.** `GetMexSpotIncome` returns the MAP's
+  raw spot income with no handicap anywhere in CircuitAI, while energy prices
+  off real (doubled) income and pull -- at his +100% every extraction gain
+  read HALF its true value. `dev_team_income.lua` already published
+  `ai_handicap_<team>`; `IncomeMult()` (ledger.as) now multiplies the five
+  extraction read sites (UpDemand, mexup delta, PickSpot, ProposeMex gain,
+  protect stake). Hosted games without the gadget read 1 and price as before.
+  Audit: existing mexup checks + t2Mex.
+- **2,069 sense elections, 33 radars finished, 84 radar frames died.** Radar
+  gap sites are now vetoed past the front and on hot ground (same rule as
+  every other static build); orphan adoption finishes the frames. The
+  wealth-scaled insurance gain `(assets+army)*rate*unseen` is UNTOUCHED and
+  still suspect -- if `sense-churn` keeps flagging, price is the next lever.
+- **band=R in every frontline line** -- the near-enemy trim was still inert
+  (`apex_front_band_frac` 1.0 = a +/-90 degree arc; front 45-52% of
+  perimeter all game). Defaulted to 0.35 (+/-49 degrees). The ISSUES caution
+  about closeMine predates territory being stamped from structures. Audit:
+  `front-band`.
+- **0 front towers finished all game vs 27 rear (rimDAvg -1366).** Not
+  directly fixed; adoption + radar vetoes should help the con-death half
+  (220 cons lost vs their 85). Audit: `front-towers` -- if it still flags,
+  the walk distance to front sites is the next suspect.
+- **28% of the game's wall clock inside hk.maketask.builder (194s of 686s,
+  single calls to 69ms).** The defence site auction (prot.loop, 61s) now
+  fills a per-def cache at most every 2s (DefSiteFill; arithmetic unchanged,
+  the election keeps only the walk-weighted argmax); StreamSurvival memoized
+  on a 256-elmo/3s grid. Audit: `ai-time`.
+- **The decide line lies about execution** -- it prints the drawn ranked[0]
+  even when the executor refuses it and the runner-up runs. New
+  `apex: exec t=.. kind:def pick=N` line records what actually became a task;
+  the new audit checks count THOSE. Also fixed: the `duplicate line over
+  nanos` audit regex never matched the real plantdup line (dead check).
+
+Known-NOT-addressed from the same complaint list, still open below/elsewhere:
+the strategic market buying the cheapest LRPC (want_super affordability
+pricing), the grid's 42% touching (`grid-tightness` now measures it; the
+`apex: base` module logs all zeros -- one of the two placement systems is
+dead and needs its own session), and the sense insurance price itself.
+
 ## 2026-08-27 -- the stall answer is too SMALL, and serializing it is not why
 
 apexearth, watching: "when we run out of energy we'll make 1 or 2 more wind...
