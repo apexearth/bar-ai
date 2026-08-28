@@ -18,6 +18,9 @@ array<int> gApproachMiss(32001, 0);
 // base is not.
 int gAaClaim   = -1;
 int gAaClaimAt = -30000;
+// Same one-at-a-time claim for the ground-defence panic.
+int gDefClaim   = -1;
+int gDefClaimAt = -30000;
 
 // Why a builder ends an election holding nothing: per-kind count of wants
 // that ranked but could not be turned into a task.
@@ -242,7 +245,25 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// zero ground defence AND something is actually killing our structures --
 	// so it cannot fire on a hunch and it ends the moment the first tower
 	// stands. Ranked ahead of the lottery rather than given a share of it.
+	// ...and ONE CLAIMANT AT A TIME, exactly like the AA claim above it: with
+	// every electing builder hoisted, a stuck builder re-bought the tower each
+	// re-election and each new task killed the last -- 117 armguard tasks, 115
+	// same-frame aborts, 2 built, in one watched 8v8.
+	bool defClaimOk = true;
 	if (!aaPanic && !ProtAnyComing(PROT_DEF)
+		&& (LossRateAt(Builder::gHomePos) > 0.f))
+	{
+		const bool dStale = (ai.frame - gDefClaimAt) > 20 * SECOND;
+		if ((gDefClaim == int(unit.id)) || (gDefClaim < 0) || dStale) {
+			gDefClaim = int(unit.id);
+			gDefClaimAt = ai.frame;
+		} else {
+			defClaimOk = false;
+		}
+	} else {
+		gDefClaim = -1;
+	}
+	if (!aaPanic && defClaimOk && !ProtAnyComing(PROT_DEF)
 		&& (LossRateAt(Builder::gHomePos) > 0.f))
 	{
 		for (uint ri = 0; ri < ranked.length(); ++ri) {

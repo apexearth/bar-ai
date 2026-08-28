@@ -4175,7 +4175,7 @@ index 193efa9..91d88ba 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..b47f403 100644
+index 2839b72..6803cd8 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,11 +10,14 @@
@@ -4913,7 +4913,7 @@ index 2839b72..b47f403 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -556,6 +1203,52 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +1203,57 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4940,6 +4940,11 @@ index 2839b72..b47f403 100644
 +	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFootX() const", asMETHOD(CCircuitDef, GetFootX), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFootZ() const", asMETHOD(CCircuitDef, GetFootZ), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetHealth() const", asMETHOD(CCircuitDef, GetHealth), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAoe() const", asMETHOD(CCircuitDef, GetAoe), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAlwaysHitDef() const", asMETHOD(CCircuitDef, IsAlwaysHit), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsDumbFireDef() const", asMETHOD(CCircuitDef, IsDumbFire), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRawDps() const", asMETHOD(CCircuitDef, GetRawDps), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRawDmg() const", asMETHOD(CCircuitDef, GetRawDmg), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBlastRadius() const", asMETHOD(CCircuitDef, GetBlastRadius), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBlastDamage() const", asMETHOD(CCircuitDef, GetBlastDamage), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBlastEdge() const", asMETHOD(CCircuitDef, GetBlastEdge), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4966,7 +4971,7 @@ index 2839b72..b47f403 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +1257,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +1262,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4990,7 +4995,7 @@ index 2839b72..b47f403 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +1283,42 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +1288,42 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5033,7 +5038,7 @@ index 2839b72..b47f403 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +1331,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +1336,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -5043,7 +5048,7 @@ index 2839b72..b47f403 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +1452,18 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +1457,18 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5062,7 +5067,7 @@ index 2839b72..b47f403 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -724,6 +1485,8 @@ bool CInitScript::Init()
+@@ -724,6 +1490,8 @@ bool CInitScript::Init()
  	mainInfo.receiveMessage = script->GetFunc(mod, "void AiMessage(const string& in, int)");
  	mainInfo.unitFinished = script->GetFunc(mod, "void AiUnitFinished(CCircuitUnit@)");
  	mainInfo.unitDestroyed = script->GetFunc(mod, "void AiUnitDestroyed(CCircuitUnit@)");
@@ -5071,7 +5076,7 @@ index 2839b72..b47f403 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +1503,28 @@ void CInitScript::Update()
+@@ -740,9 +1508,28 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -5100,7 +5105,7 @@ index 2839b72..b47f403 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -779,6 +1561,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +1566,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -6412,7 +6417,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..2ed7988 100644
+index bc8ff11..031b300 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -31,6 +31,7 @@
@@ -6632,7 +6637,24 @@ index bc8ff11..2ed7988 100644
  	}
  }
  
-@@ -542,7 +650,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -447,8 +555,15 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+ 	CCircuitAI* circuit = manager->GetCircuit();
+ 
+ 	// FIXME: Replace const 1000.0f with build time?
++	// apex: default OFF. Stock aborts any >1000-metal task without a started
++	// frame the moment average income dips to 60% of its creation-time read
++	// during a stall -- which is every expensive walk in a spiky economy, and
++	// exactly why heavy front turrets never finished while 85-metal LLTs did.
++	// The script market already prices stalls (MCostScale, EPriceCostAt); a
++	// second, hidden veto underneath it is the AI fighting itself.
+ 	CEconomyManager* ecoMgr = circuit->GetEconomyManager();
+-	if ((cost.metal > 1000.f)
++	if ((circuit->GetTunable("apex_stock_stall_abort", 0.f) > 0.f)
++		&& (cost.metal > 1000.f)
+ 		&& (target == nullptr)
+ 		&& (((ecoMgr->GetAvgMetalIncome() < savedIncome.metal * 0.6f) && (ecoMgr->GetAvgMetalIncome() * 2.0f < ecoMgr->GetMetalPull()))
+ 			|| ((ecoMgr->GetAvgEnergyIncome() < savedIncome.energy * 0.6f) && (ecoMgr->GetAvgEnergyIncome() * 2.0f < ecoMgr->GetEnergyPull())))
+@@ -542,7 +657,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6643,7 +6665,7 @@ index bc8ff11..2ed7988 100644
  		return;
  	}
  
-@@ -565,11 +675,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +682,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6667,7 +6689,7 @@ index bc8ff11..2ed7988 100644
  	}
  }
  
-@@ -637,14 +757,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +764,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6724,7 +6746,7 @@ index bc8ff11..2ed7988 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +820,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +827,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
@@ -7336,7 +7358,7 @@ index c3f5e98..e02338a 100644
  		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..f14a107 100644
+index cd063e4..a00c0f6 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -8000,7 +8022,7 @@ index cd063e4..f14a107 100644
  	}
  
  	if (units.find(unit) != units.end()) {
-@@ -238,29 +756,155 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,29 +756,166 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -8072,6 +8094,17 @@ index cd063e4..f14a107 100644
 +	// CCircuitUnit::Attack already walks a melee unit onto its target rather
 +	// than firing from range, so only the DECISION needed changing.
 +	const bool isJuggernaut = (cdef != nullptr) && cdef->IsCharger();
++	// apex: a COLOSSUS is any leader past the super cost bar, charger or not
++	// (armthor and armlun carry no melee attribute). Its targeting rule:
++	// chaff far below its own cost is not worth walking to (the gun still
++	// fires at whatever is in range on the way), and fat economy outranks the
++	// field EVERYWHERE, not only once already inside their base (apexearth:
++	// "Our big T3 units get distracted by small units. They should ignore
++	// those and attack bases... and kill enemy economy").
++	const bool isColossus = isJuggernaut || ((cdef != nullptr)
++			&& (cdef->GetCostM() >= circuit->GetTunable("apex_super_cost", 7000.f)));
++	const float chaffFrac = circuit->GetTunable("apex_colossus_prey_frac", 0.08f);
++	const float chaffPen = circuit->GetTunable("apex_colossus_chaff_pen", 0.15f);
 +	// apex: see DIVE_ECO_PRIORITY. Enemy influence at the SQUAD's own position
 +	// is "we are standing on their ground" -- the same field isHome reads from
 +	// the other side.
@@ -8159,7 +8192,7 @@ index cd063e4..f14a107 100644
  	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
  	for (unsigned i = 0; i < groups.size(); ++i) {
  		const CEnemyManager::SEnemyGroup& group = groups[i];
-@@ -269,10 +913,55 @@ void CAttackTask::FindTarget()
+@@ -269,10 +924,55 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -8219,7 +8252,7 @@ index cd063e4..f14a107 100644
  			continue;
  		}
  
-@@ -319,18 +1008,202 @@ void CAttackTask::FindTarget()
+@@ -319,18 +1019,212 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -8288,11 +8321,21 @@ index cd063e4..f14a107 100644
 +			}
 +			// THE DIVE: inside their base, a fat unarmed structure outranks
 +			// everything whether it is guarded or not -- see DIVE_ECO_PRIORITY.
-+			const bool isDive = inTheirBase && (edef != nullptr)
++			// A colossus dives from ANYWHERE: its whole trip is the dive.
++			const bool isDive = (inTheirBase || isColossus) && (edef != nullptr)
 +					&& !edef->IsMobile() && !edef->IsAttacker()
 +					&& (edef->GetCostM() >= diveCost);
 +			if (isDive) {
 +				prio *= DIVE_ECO_PRIORITY;
++			}
++			// apex: a colossus does not WALK to chaff. Penalty, not a veto --
++			// a Pawn standing beside it still dies to fire-at-will; a Pawn
++			// across the field no longer steers a 20,000-metal walker.
++			if (isColossus && (edef != nullptr) && edef->IsMobile()
++				&& (cdef != nullptr)
++				&& (edef->GetCostM() < cdef->GetCostM() * chaffFrac))
++			{
++				prio *= chaffPen;
 +			}
 +			if ((groupWeak || wornOut) && !isDive) {
 +				++skippedWeak;
@@ -8423,7 +8466,7 @@ index cd063e4..f14a107 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -340,6 +1213,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +1234,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -8494,7 +8537,7 @@ index cd063e4..f14a107 100644
  		ActivePath(lowestSpeed);
  	} else {
  		FallbackFrontPos();
-@@ -349,11 +1286,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -349,11 +1307,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -8537,7 +8580,7 @@ index cd063e4..f14a107 100644
  
  	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
  	const float pathRange = DEFAULT_SLACK * 4;
-@@ -387,8 +1354,28 @@ void CAttackTask::FallbackBasePos()
+@@ -387,8 +1375,28 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -8567,7 +8610,7 @@ index cd063e4..f14a107 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -421,7 +1408,9 @@ void CAttackTask::Fallback()
+@@ -421,7 +1429,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -12299,7 +12342,7 @@ index 5eebb71..d41d22b 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882..7264638 100644
+index a1ac882..8ecc216 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -12310,7 +12353,23 @@ index a1ac882..7264638 100644
  
  #include "WeaponMount.h"
  #include "WeaponDef.h"
-@@ -164,6 +165,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -127,6 +128,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 		, surfThrDmg(.0f), surfThrMod(1.f)
+ 		, waterThrDmg(.0f), waterThrMod(1.f)
+ 		, aoe(.0f)
++		, rawDps(.0f), rawDmg(.0f)
+ 		, power(.0f)
+ 		, defThreat(.0f)
+ 		, minRange(.0f)
+@@ -141,6 +143,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 		, isIgnore(false)
+ 		, isAttacker(false)
+ 		, isAlwaysHit(false)
++		, isDumbFire(false)
+ 		, hasSurfToAir(false)
+ 		, hasSurfToLand(false)
+ 		, hasSurfToWater(false)
+@@ -164,6 +167,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		, isPylon(false)
  		, isAssist(false)
  		, isRadar(false)
@@ -12318,7 +12377,7 @@ index a1ac882..7264638 100644
  		, isSonar(false)
  		, isDecoy(false)
  		, isOnSlow(false)
-@@ -201,6 +203,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -201,6 +205,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	speed        = def->GetSpeed();  // elmos per second
  	losRadius    = def->GetLosRadius();
  	sonarRadius  = def->GetSonarRadius();
@@ -12327,7 +12386,7 @@ index a1ac882..7264638 100644
  	costM        = def->GetCost(resM);
  	costE        = def->GetCost(resE);
  	upkeepM      = def->GetUpkeep(resM);
-@@ -240,9 +244,65 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -240,9 +246,65 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	isCapturable      = def->IsCapturable();
  
  	const std::map<std::string, std::string>& customParams = def->GetCustomParams();
@@ -12384,18 +12443,18 @@ index a1ac882..7264638 100644
 +	}
 +
 +	it = customParams.find("energyconv_capacity");
-+	if (it != customParams.end()) {
+ 	if (it != customParams.end()) {
+-		upkeepE += utils::string_to_float(it->second);
 +		convCapacityE = utils::string_to_float(it->second);
 +		upkeepE += convCapacityE;
 +	}
 +	it = customParams.find("energyconv_efficiency");
- 	if (it != customParams.end()) {
--		upkeepE += utils::string_to_float(it->second);
++	if (it != customParams.end()) {
 +		convRatioM = utils::string_to_float(it->second);
  	}
  
  	it = customParams.find("canjump");
-@@ -252,8 +312,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -252,8 +314,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		jumpRange = (it != customParams.end()) ? utils::string_to_float(it->second) : 400.0f;
  	}
  
@@ -12419,7 +12478,7 @@ index a1ac882..7264638 100644
  		category |= circuit->GetBadCategory();
  		costM *= 0.1f;  // avoid threat metal
  	}
-@@ -303,6 +378,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -303,6 +380,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		delete stockDef;
  	}
  
@@ -12439,8 +12498,57 @@ index a1ac882..7264638 100644
  	if (!def->IsAbleToAttack()) {
  		if (isShield) {
  			auto mounts = def->GetWeaponMounts();
+@@ -334,6 +424,11 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 	float surfDmg = .0f;
+ 	float waterDps = .0f;
+ 	float waterDmg = .0f;
++	// apex: the LONGEST land weapon decides whether this unit's reach is real.
++	// isAlwaysHit answers a different question -- it gates air targeting, so its
++	// bar is "can hit an aircraft", which condemns a Tzar and blesses a Luger.
++	float longestLandRange = .0f;
++	bool longestLandDumb = false;
+ 	CWeaponDef* bestDGunDef = nullptr;
+ 	CWeaponDef* bestWpDef = nullptr;
+ 	WeaponMount* bestDGunMnt = nullptr;
+@@ -485,6 +580,15 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 				maxRangeType = RangeType::AIR;
+ 			}
+ 		}
++		if ((weaponCat & circuit->GetLandCategory()) && isLandWeapon && (range > longestLandRange)) {
++			longestLandRange = range;
++			// An unguided rocket flies where it was pointed; a cannon shell is
++			// aimed with lead and a tracking missile steers. Only the first
++			// misses a mover as a matter of course, which is why its reach is
++			// reach against buildings.
++			longestLandDumb = ((wt == "MissileLauncher") || (wt == "StarburstLauncher")
++					|| (wt == "TorpedoLauncher")) && !wd->IsTracks();
++		}
+ 		if ((weaponCat & circuit->GetLandCategory()) && isLandWeapon) {
+ 			float& mr = maxRange[static_cast<RangeT>(RangeType::LAND)];
+ 			mr = std::max(mr, (isAbleToFly && (wt == "Cannon")) ? range * 1.25f : range);  // 1.25 - gunship height hax
+@@ -566,6 +670,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 		weaponMount = bestWpMnt;
+ 	}
+ 
++	isDumbFire = longestLandDumb;
++
+ 	isAttacker = (airDps > .1f) || (surfDps > .1f) || (waterDps > .1f);
+ 	if (IsMobile() && !IsAttacker()) {  // mobile bomb?
+ 		WeaponDef* wd = def->GetDeathExplosion();
+@@ -618,6 +724,11 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 	//       health /= def->GetArmoredMultiple();
+ 	const float dmg = std::max(std::max(waterDmg, surfDmg), airDmg);
+ 	const float dps = std::max(std::max(waterDps, surfDps), airDps);
++	// Captured here, after the mobile-bomb substitution above, so the identity
++	// power == sqrt(rawDps)*rawDmg^0.25*THREAT_MOD*sqrt(hp+shield) holds by
++	// construction for any def whose power is not later modded.
++	rawDps = dps;
++	rawDmg = dmg;
+ 	defThrDmg = pwrDmg = sqrtf(dps) * std::pow(dmg, 0.25f) * THREAT_MOD;
+ 	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
+ 	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a..a34380c 100644
+index cd0b54a..db4287a 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
 @@ -165,6 +165,13 @@ public:
@@ -12457,7 +12565,29 @@ index cd0b54a..a34380c 100644
  	bool IsAttrMelee()    const { return attr & AttrMask::MELEE; }
  	bool IsAttrBoost()    const { return attr & AttrMask::BOOST; }
  	bool IsAttrNoJump()   const { return attr & AttrMask::NO_JUMP; }
-@@ -326,6 +333,12 @@ public:
+@@ -239,6 +246,11 @@ public:
+ 	float GetSurfDmg(RoleT type) const { return surfThrDmg * thrDmgMod[type]; }  // enemy
+ 	float GetWaterDmg(RoleT type) const { return waterThrDmg * thrDmgMod[type]; }  // enemy
+ 	float GetAoe() const { return aoe; }
++	// The un-fused inputs to `power`, which folds them into
++	// sqrt(dps)*dmg^0.25*sqrt(hp) -- script can otherwise only recover the
++	// product by squaring, never the terms.
++	float GetRawDps() const { return rawDps; }
++	float GetRawDmg() const { return rawDmg; }
+ 	float GetPower() const { return power; }
+ 	float GetDefThreat() const { return defThreat; }
+ 	void SetRange(float range);
+@@ -277,6 +289,9 @@ public:
+ 
+ 	bool IsAttacker()  const { return isAttacker; }
+ 	bool IsAlwaysHit() const { return isAlwaysHit; }
++	// Its longest land weapon is an unguided rocket: reach it cannot land on
++	// anything that moves.
++	bool IsDumbFire() const { return isDumbFire; }
+ 	bool HasSurfToAir()   const { return hasSurfToAir; }
+ 	bool HasSurfToLand()  const { return hasSurfToLand; }
+ 	bool HasSurfToWater() const { return hasSurfToWater; }
+@@ -326,6 +341,12 @@ public:
  	bool IsAssist() const { return isAssist; }
  	void SetIsRadar(bool value) { isRadar = value; }
  	bool IsRadar() const { return isRadar; }
@@ -12470,7 +12600,7 @@ index cd0b54a..a34380c 100644
  	void SetIsSonar(bool value) { isSonar = value ; }
  	bool IsSonar() const { return isSonar; }
  	void SetIsDecoy(bool value) { isDecoy = value; }
-@@ -339,6 +352,13 @@ public:
+@@ -339,6 +360,13 @@ public:
  	float GetSpeed()        const { return speed; }
  	float GetLosRadius()    const { return losRadius; }
  	float GetSonarRadius()  const { return sonarRadius; }
@@ -12484,7 +12614,7 @@ index cd0b54a..a34380c 100644
  	float GetCostM()        const { return costM; }
  	float GetCostE()        const { return costE; }
  	float GetUpkeepM()      const { return upkeepM; }
-@@ -347,6 +367,39 @@ public:
+@@ -347,6 +375,39 @@ public:
  	float GetExtrRangeM()   const { return extrRangeM; }
  	float GetCloakCost()    const { return cloakCost; }
  	float GetBuildTime()    const { return buildTime; }
@@ -12524,7 +12654,24 @@ index cd0b54a..a34380c 100644
  	float GetCaptureSpeed() const { return captureSpeed; }
  //	float GetAltitude()     const { return altitude; }
  	float GetJumpRange()    const { return jumpRange; }
-@@ -478,6 +531,7 @@ private:
+@@ -411,6 +472,8 @@ private:
+ 	float waterThrDmg, waterThrMod;  // underwater enemy damage
+ 	ThrDmgArray thrDmgMod;  // mod by role
+ 	float aoe;  // radius
++	float rawDps;  // sustained damage/s, before power fuses it
++	float rawDmg;  // per-shot alpha, likewise
+ 	float power;  // ally max threat
+ 	float defThreat;  // enemy max threat
+ 	float minRange;
+@@ -435,6 +498,7 @@ private:
+ 
+ 	bool isAttacker : 1;
+ 	bool isAlwaysHit : 1;  // FIXME: calc per weapon
++	bool isDumbFire : 1;
+ 	bool hasDGun : 1;
+ 
+ 	// TODO: std::bitset<2>
+@@ -478,6 +542,7 @@ private:
  	bool isPylon : 1;
  	bool isAssist : 1;
  	bool isRadar : 1;
@@ -12532,7 +12679,7 @@ index cd0b54a..a34380c 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
-@@ -488,11 +542,32 @@ private:
+@@ -488,11 +553,32 @@ private:
  	float speed;
  	float losRadius;
  	float sonarRadius;

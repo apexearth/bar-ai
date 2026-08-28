@@ -1,5 +1,32 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-27 (night) -- open residue from the watch-list session
+
+Fixes for the night's list are in CHANGES.md; these are the halves NOT yet
+closed, each with its measurement:
+
+- **The stock DLL stall-abort is now tunable-gated OFF but unvalidated.** If
+  heavy turrets still die unfinished with `apex_stock_stall_abort=0`, the
+  next suspect is the same Reevaluate's reassignment path. Audit:
+  `front-towers` + frame-waste by def.
+- **Front-tower completion past the panic fix**: the DEF-panic claim and the
+  600-elmo fold stop the same-frame task churn, but nothing yet proves a
+  2,000-elmo walk to a front site completes. Audit: `front-towers`.
+- **Wind/converter reclaim PACE** (apexearth: "the pace of reclaim is
+  probably far too low"): the buy-side room rent stops the REMAKING; the
+  standing stock still drains one obsolete-reclaim election at a time.
+  If `t1-eco-with-afus` keeps flagging with rebuilds at zero, pace is the
+  half to tune (apex_reclaim_amort / rez bias / more rezbots).
+- **"Walk AROUND defenses" for colossi** is only as good as the existing
+  charger risk-tier pathing; not re-measured. His eyes are the test.
+- **Nano latency on POOR teams**: median 0.8m team-pooled hides the thin
+  tail he watched (t0 owned 7 nanos at minute 40 vs t5's 148). The demand
+  law scales with income by design; whether the floor for a working factory
+  should be higher at low income is an OPEN pricing question, not wired.
+- **8v8 pooled audit thresholds are first guesses** (nanos-standing,
+  t1-eco-with-afus divide by team count crudely); tighten once two or three
+  8v8 games exist.
+
 ## 2026-08-27 (evening) -- the churn session: root causes behind his complaint list
 
 Evidence run: `matches/20260827-234730-...` (his own 16:47 Supreme Isthmus

@@ -1,5 +1,56 @@
 # What this AI does that stock BARb does not
 
+## 2026-08-27 (night): his watch list -- the DLL abort gate, the air mandate, tier fades
+
+Evidence: his own watched 8v8 (`matches/20260828-013543`, Supreme Isthmus
++100%, 8 Apex teams). What the audit measured there, and what landed against
+each of his reports:
+
+- **"Only 2 pulsars at 25m."** Front sites won 151 times, ONE tower built.
+  Two mechanisms: (1) our DEF panic hoisted defence for EVERY electing
+  builder with no claim -- a stuck builder re-bought the same tower every 64
+  frames, each new task killing the last SAME-FRAME (117 armguard tasks, 115
+  aborts, 2 built); it now claims one builder for 20s exactly like the AA
+  panic, and the protect fold radius went 300 -> 600 so auction jitter joins
+  the standing request instead of replacing it. (2) THE DLL ITSELF aborts any
+  task costing >1,000 metal whose frame has not started the moment avg income
+  dips to 60% of its creation-time read during a stall
+  (`IBuilderTask::Reevaluate`, stock CircuitAI) -- which is every heavy
+  turret's walk in a spiky +100% economy, and why 85-metal LLTs finish and
+  Pulsars do not. Gated behind `apex_stock_stall_abort` (default OFF) in our
+  DLL: the script market already prices stalls; a hidden second veto is the
+  AI fighting itself.
+- **"0 advanced air" at 2,168 metal/s.** `Air::IntelPlantToBuild` -- the
+  whole mandatory-air + adv-air-per-income ruling -- had ZERO consumers
+  since the Brain overhaul. It now feeds a strategic ticket (SC_AIRPLANT,
+  priced like the gantry's class, executed as a factory).
+- **"Wind reclaimed but also remade" (116 rebuilds-after-reclaim: armwin 45,
+  armmakr 43) and "T1 energy everywhere, no building room."** The buy side
+  priced wind on E-per-METAL (where wind wins) while the reclaim side
+  retired it on E-per-CELL (where it loses badly) -- the pair could never
+  converge. ProposeEnergy and ProposeConvert now charge the same
+  PfCrowd-room rent RetireGain charges: one law, both halves; crowding taxes
+  the small stuff off the buy list.
+- **"T1 hover/fighters late; late game is T3 + advanced air + spam."**
+  `OwnTierMul` in worth.as: units fade 1/(1+apex_own_tier_fade x tiersBelow)
+  against the best line WE field, spam under apex_spam_cost (150) exempt by
+  his ruling. Same shape as the enemy-tier fade beside it.
+- **"Big T3 units get distracted by small units."** C++ AttackTask: a
+  colossus (charger, or leader >= apex_super_cost) now applies the eco-dive
+  priority EVERYWHERE (not only inside their base) and pays
+  apex_colossus_chaff_pen on mobiles under apex_colossus_prey_frac of its
+  own cost -- a penalty, not a veto; fire-at-will still kills adjacent
+  chaff. The walk-around-defences half already existed (charger risk-tier
+  threat pathing).
+- **"More nukes."** SC_SILO now uses the anti-nuke's income spacing (was
+  2x), doubling the silo target at any income.
+- Audit grew `nano-latency` (median plant->first-nano: 0.8m in his 8v8,
+  passing -- the slow cases he saw are the poor teams' income gating) and
+  `t1-eco-with-afus`. The stats gadget now logs every immobile unit, so
+  nanos and dragon's teeth are finally countable.
+- Workflow ruling recorded in CLAUDE.md: deploy foreground-verified, run in
+  background, keep coding.
+
 ## 2026-08-27 (evening): the churn session -- his complaint list, root causes, first measurements
 
 Baseline: his own 16:47 Supreme Isthmus +100% 1v1 (`matches/20260827-234730`,

@@ -70,9 +70,19 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		if (gain <= 0.f)
 			continue;
 		ValueOf(d, gain, WalkSecTo(unit, eSite), Catalog::gBuildPower[uid], c);
-		// Rent on the defended ground this footprint would occupy.
+		// Rent on the defended ground this footprint would occupy -- PLUS the
+		// measured scarcity of base room, the same term RetireGain charges.
+		// Priced only on the reclaim side, the pair could not converge: the
+		// buy side kept placing wind (best E per METAL) on ground the retire
+		// side was clearing for being worst E per CELL -- 232 winds built
+		// across one watched 8v8 whose players already owned AFUS and had
+		// "run out of building room" (apexearth). One law, both halves.
 		{
-			const float rent = SpaceRentM(eSite, Catalog::gAreaCells[d]);
+			const float cellsE = float((Catalog::gAreaCells[d] > 0)
+					? Catalog::gAreaCells[d] : 1);
+			const float rent = SpaceRentM(eSite, Catalog::gAreaCells[d])
+					+ PfCrowd() * PfMetalPerCell() * cellsE
+						* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
 			if (rent > 0.f) {
 				c.mCost += rent;
 				c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
@@ -508,7 +518,11 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		// one hit (apexearth). The rent prices the first; the second is the
 		// stream's own survival, which cover already raises.
 		{
-			const float rent = SpaceRentM(cSite, Catalog::gAreaCells[d]);
+			const float cellsC = float((Catalog::gAreaCells[d] > 0)
+					? Catalog::gAreaCells[d] : 1);
+			const float rent = SpaceRentM(cSite, Catalog::gAreaCells[d])
+					+ PfCrowd() * PfMetalPerCell() * cellsC
+						* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
 			if (rent > 0.f) {
 				c.mCost += rent;
 				c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;

@@ -596,6 +596,42 @@ def check_structures(text, rep):
                 f"{nanos_up} nano(s) standing vs {plants_up} plant(s) at "
                 f"{last_min:.0f}m (want >= 1 per 2 plants)")
 
+    # "Some factories are very slow to receive nano turret support"
+    # (apexearth 2026-08-27): minutes from each plant finishing to the next
+    # nano finishing on the same team. Needs the widened gadget (nanos were
+    # invisible to BARAI_BUILD before 2026-08-27).
+    lat = []
+    for t in ours:
+        seq = [(float(m.group(3)), m.group(4)) for m in builds
+               if m.group(1) == t]
+        for i, (mn, d) in enumerate(seq):
+            if d not in PLANT_DEFS:
+                continue
+            nxt = next((m2 for m2, d2 in seq[i:] if "nanotc" in d2), None)
+            if nxt is not None:
+                lat.append(nxt - mn)
+    if lat:
+        lat.sort()
+        med = lat[len(lat) // 2]
+        rep.add("STRUCTURES", med <= 4.0, "nano-latency",
+                f"median {med:.1f}m from plant finished to next nano "
+                f"finished ({len(lat)} plants measured)")
+
+    # "Some players still have T1 energy and converters despite having AFUS"
+    # (apexearth 2026-08-27): T1 generators standing late while an AFUS
+    # stands. built - destroyed is standing; needs per-team destroyed, which
+    # unit-destroyed lines do not carry, so this is team-pooled.
+    t1eco = {"armwin", "armsolar", "armmakr", "corwin", "corsolar", "cormakr",
+             "legwin", "legsolar", "legmakr"}
+    afus = {"armafus", "corafus", "legafus", "armuwadves", "coruwadves"}
+    if any(m.group(4) in afus for m in builds):
+        t1_up = sum(1 for m in builds if m.group(4) in t1eco) \
+            - sum(n for d, n in dead.items() if d in t1eco)
+        rep.add("STRUCTURES", t1_up <= 10 * len(ours), "t1-eco-with-afus",
+                f"~{t1_up} T1 generators/converters standing with AFUS "
+                f"fielded ({len(ours)} team(s); reclaim should be clearing "
+                "these)")
+
     # Radar churn: executions against radars actually finished.
     sense_exec = sum(1 for m in EXEC_RE.finditer(text)
                      if m.group(1) in ours and m.group(3) == "sense")

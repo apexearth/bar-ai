@@ -96,14 +96,19 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					? int(Task::BuildType::DEFENCE)
 				: (w.spotId == PROT_ANTINUKE) ? int(Task::BuildType::BIG_GUN)
 				: int(Task::BuildType::ENERGY);
+		// 600, not 300: the defence auction's best site jitters between
+		// neighbouring cluster centres as the 2s cache refills, and at 300 the
+		// re-elected want missed the standing request next door -- a new task
+		// per election, each killing the last (117 tasks, 2 towers, watched).
 		return Requests::Take(unit, w.def, Task::BuildType(bt),
-				Task::Priority::NORMAL, w.pos, 300.f, SQUARE_SIZE * 16.f);
+				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 16.f);
 	}
 	if (w.kind == WK_SUPER) {
 		// A gantry is a factory and goes through the plant's own siting and
 		// join; everything else here is a static weapon. BIG_GUN is the
 		// engine's own build type for one, which the anti-nuke already used.
-		if (w.spotId == SC_GANTRY) {
+		// The mandated air plant is a factory the same way.
+		if ((w.spotId == SC_GANTRY) || (w.spotId == SC_AIRPLANT)) {
 			IUnitTask@ jg = JoinBig(w.def);
 			if (jg !is null)
 				return jg;

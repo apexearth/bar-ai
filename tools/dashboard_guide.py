@@ -103,6 +103,11 @@ PANELS = [
              "value -- as more of the enemy metal we have MET outranks its "
              "tier. Higher abandons the lower tier faster once they field T3; "
              "0 ignores their tier entirely"),
+            ("TUNE_OWN_TIER_FADE", "fades lower-tier units once OUR OWN "
+             "higher-tier line stands -- late game buys T3 and advanced air, "
+             "not more T1. 0 keeps every tier at full price forever"),
+            ("TUNE_SPAM_COST", "units cheaper than this stay exempt from the "
+             "own-tier fade -- the spam that is still worth making late"),
             ("TUNE_SPEED_WORTH", "standing weight on speed"),
         ],
     },

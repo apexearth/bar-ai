@@ -140,6 +140,47 @@ float FoeTierMul(int d)
 	return 1.f / (1.f + k * Military::FoeTierAbove(DefTier(d)));
 }
 
+// ...AND AGAINST OUR OWN ECONOMY'S TIER (apexearth 2026-08-27: "In late game,
+// aside from spam we should mostly only be putting our resources into T3
+// units and advanced air units. I still see us making T1 hover units and they
+// aren't worth the time/effort. If anything they just make more lag").
+// Continuous in how far the best line we FIELD outranks this def's tier --
+// once a gantry stands, T1 metal is metal the T3 line wanted. Spam is exempt
+// by his ruling: cheap fast bodies keep their coverage job at any stage.
+int gTopTier = 1;
+int gTopTierAt = -1;
+int TopOwnPlantTier()
+{
+	if (ai.frame < gTopTierAt)
+		return gTopTier;
+	gTopTierAt = ai.frame + 10 * SECOND;
+	gTopTier = 1;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.circuitDef is null))
+			continue;
+		const int at = Factory::userData[int(f.circuitDef.id)].attr;
+		if (((at & Factory::Attr::T3) != 0) && (gTopTier < 3))
+			gTopTier = 3;
+		else if (((at & Factory::Attr::T2) != 0) && (gTopTier < 2))
+			gTopTier = 2;
+	}
+	return gTopTier;
+}
+
+float OwnTierMul(int d)
+{
+	const float k = ai.GetTunable("apex_own_tier_fade", TUNE_OWN_TIER_FADE);
+	if (k <= 0.f)
+		return 1.f;
+	if (Catalog::gCostM[d] < ai.GetTunable("apex_spam_cost", TUNE_SPAM_COST))
+		return 1.f;
+	const int above = TopOwnPlantTier() - DefTier(d);
+	if (above <= 0)
+		return 1.f;
+	return 1.f / (1.f + k * float(above));
+}
+
 // The score. Raw, before any of the situational multipliers -- this is what
 // normalizes the line, so it must not carry anything that varies per election.
 //
@@ -192,6 +233,7 @@ float UnitPPC(int d)
 			* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH) * ShieldShare();
 	v *= OutrangeMul(d);
 	v *= FoeTierMul(d);
+	v *= OwnTierMul(d);
 	return v;
 }
 

@@ -610,12 +610,16 @@ skipping it produced a confident wrong answer at least once).
 - **Run Python with `-u` when redirecting to a log.** Without it the log stays
   empty for the whole run and looks exactly like a dead process.
 - **Tournament output lands in `tournaments/<stamp>-<name>/`, not `matches/`.**
-- **Never chain a deploy into a backgrounded run.** `deploy && run_tournament &`
-  hides the deploy's failure: the run proceeds against a half-written AI folder
-  and every match reports `FetchSkirmishAILibrary: unknown skirmish AI`, which
-  shows up in telemetry as the variant scoring zero on everything. That reads
-  exactly like a catastrophic regression and is not one. Deploy, verify, then
-  launch.
+- **Deploy in the foreground, then background the run.** Deploy → background
+  run → keep coding is the sanctioned workflow (apexearth 2026-08-27: "It
+  should be ok to deploy, run a background run to see how that change went,
+  and continue to work on the code in the meantime"). The one rule inside it:
+  the deploy's success must be VERIFIED before the run leans on it — a
+  backgrounded `deploy && run &` hides a failed deploy, the run proceeds
+  against a half-written AI folder, and `FetchSkirmishAILibrary: unknown
+  skirmish AI` reads in telemetry as a catastrophic regression that is not
+  one. Deploy and check the output (or `deploy_ai.py status`), THEN launch
+  the run in the background.
 - **Deploying while BAR is open fails with `WinError 5`** and leaves the AI
   folder half-written (`FetchSkirmishAILibrary: unknown skirmish AI`). Check for
   `spring.exe` / `Beyond-All-Reason.exe` first, and redeploy after closing.

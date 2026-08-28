@@ -555,8 +555,15 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 	CCircuitAI* circuit = manager->GetCircuit();
 
 	// FIXME: Replace const 1000.0f with build time?
+	// apex: default OFF. Stock aborts any >1000-metal task without a started
+	// frame the moment average income dips to 60% of its creation-time read
+	// during a stall -- which is every expensive walk in a spiky economy, and
+	// exactly why heavy front turrets never finished while 85-metal LLTs did.
+	// The script market already prices stalls (MCostScale, EPriceCostAt); a
+	// second, hidden veto underneath it is the AI fighting itself.
 	CEconomyManager* ecoMgr = circuit->GetEconomyManager();
-	if ((cost.metal > 1000.f)
+	if ((circuit->GetTunable("apex_stock_stall_abort", 0.f) > 0.f)
+		&& (cost.metal > 1000.f)
 		&& (target == nullptr)
 		&& (((ecoMgr->GetAvgMetalIncome() < savedIncome.metal * 0.6f) && (ecoMgr->GetAvgMetalIncome() * 2.0f < ecoMgr->GetMetalPull()))
 			|| ((ecoMgr->GetAvgEnergyIncome() < savedIncome.energy * 0.6f) && (ecoMgr->GetAvgEnergyIncome() * 2.0f < ecoMgr->GetEnergyPull())))

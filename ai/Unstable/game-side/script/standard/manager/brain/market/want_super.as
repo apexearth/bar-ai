@@ -23,6 +23,7 @@ const int SC_SILO = 1;
 const int SC_LRPC = 2;
 const int SC_HEAVY = 3;
 const int SC_GANTRY = 4;
+const int SC_AIRPLANT = 5;
 
 string SuperName(int sc)
 {
@@ -31,6 +32,7 @@ string SuperName(int sc)
 	if (sc == SC_LRPC)     return "lrpc";
 	if (sc == SC_HEAVY)    return "heavygun";
 	if (sc == SC_GANTRY)   return "gantry";
+	if (sc == SC_AIRPLANT) return "airplant";
 	return "?";
 }
 
@@ -161,8 +163,10 @@ int SuperTarget(int sc)
 	if (per < 1.f)
 		per = 150.f;
 	// The anti-nuke is the one whose first copy is not optional: an uncovered
-	// nuke is the whole base. The offensive classes double the spacing.
-	if (sc == SC_ANTINUKE)
+	// nuke is the whole base. Silos share its spacing (apexearth 2026-08-27,
+	// watching: "I like our use of nukes - we could use more"); the other
+	// offensive classes double it.
+	if ((sc == SC_ANTINUKE) || (sc == SC_SILO))
 		return 1 + int(inc / per);
 	return 1 + int(inc / (per * 2.f));
 }
@@ -370,6 +374,43 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			@w.def = Catalog::Def(d);
 			w.pos = at;
 			w.spotId = sc;
+		}
+	}
+	// THE AIR MANDATE HAS NO OTHER BUYER. Air::IntelPlantToBuild carries
+	// apexearth's whole ruling -- one basic plant past the mandatory income,
+	// advanced plants scaling one per apex_adv_air_income, army-fed gate --
+	// and the Brain overhaul left it with ZERO consumers: a watched 8v8 had a
+	// player at 2,168 metal/s with two T1 air labs and no advanced plant.
+	// Priced here as what it is, a strategic line the economy can carry, on
+	// the same affordability shape as the rest of this market.
+	{
+		CCircuitDef@ ap = Air::IntelPlantToBuild();
+		if ((ap !is null) && unit.circuitDef.CanBuild(ap)
+			&& !Requests::LiveOfDef(ap))
+		{
+			const float bill = SuperBill(int(ap.id));
+			if (bill < budget) {
+				const AIFloat3 at3 = SuperSite(unit, SC_AIRPLANT);
+				if (OnMap(at3)) {
+					const float afford = (budget - bill) / budget;
+					const float gain = power * share * afford
+							* Persona::WantMult(SuperName(SC_AIRPLANT));
+					if (gain > 0.f) {
+						const float wSec3 = (speed > 1.f)
+								? (here.distance2D(at3) / speed) : 60.f;
+						Want c3;
+						ValueOf(int(ap.id), gain, wSec3,
+								Catalog::gBuildPower[uid], c3);
+						if (c3.value > w.value) {
+							w = c3;
+							w.kind = WK_SUPER;
+							@w.def = ap;
+							w.pos = at3;
+							w.spotId = SC_AIRPLANT;
+						}
+					}
+				}
+			}
 		}
 	}
 	if ((w.def !is null) && (ai.frame >= gNextSuperLog)) {

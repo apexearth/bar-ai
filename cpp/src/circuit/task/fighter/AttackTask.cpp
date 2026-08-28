@@ -821,6 +821,17 @@ void CAttackTask::FindTarget()
 	// CCircuitUnit::Attack already walks a melee unit onto its target rather
 	// than firing from range, so only the DECISION needed changing.
 	const bool isJuggernaut = (cdef != nullptr) && cdef->IsCharger();
+	// apex: a COLOSSUS is any leader past the super cost bar, charger or not
+	// (armthor and armlun carry no melee attribute). Its targeting rule:
+	// chaff far below its own cost is not worth walking to (the gun still
+	// fires at whatever is in range on the way), and fat economy outranks the
+	// field EVERYWHERE, not only once already inside their base (apexearth:
+	// "Our big T3 units get distracted by small units. They should ignore
+	// those and attack bases... and kill enemy economy").
+	const bool isColossus = isJuggernaut || ((cdef != nullptr)
+			&& (cdef->GetCostM() >= circuit->GetTunable("apex_super_cost", 7000.f)));
+	const float chaffFrac = circuit->GetTunable("apex_colossus_prey_frac", 0.08f);
+	const float chaffPen = circuit->GetTunable("apex_colossus_chaff_pen", 0.15f);
 	// apex: see DIVE_ECO_PRIORITY. Enemy influence at the SQUAD's own position
 	// is "we are standing on their ground" -- the same field isHome reads from
 	// the other side.
@@ -1072,11 +1083,21 @@ void CAttackTask::FindTarget()
 			}
 			// THE DIVE: inside their base, a fat unarmed structure outranks
 			// everything whether it is guarded or not -- see DIVE_ECO_PRIORITY.
-			const bool isDive = inTheirBase && (edef != nullptr)
+			// A colossus dives from ANYWHERE: its whole trip is the dive.
+			const bool isDive = (inTheirBase || isColossus) && (edef != nullptr)
 					&& !edef->IsMobile() && !edef->IsAttacker()
 					&& (edef->GetCostM() >= diveCost);
 			if (isDive) {
 				prio *= DIVE_ECO_PRIORITY;
+			}
+			// apex: a colossus does not WALK to chaff. Penalty, not a veto --
+			// a Pawn standing beside it still dies to fire-at-will; a Pawn
+			// across the field no longer steers a 20,000-metal walker.
+			if (isColossus && (edef != nullptr) && edef->IsMobile()
+				&& (cdef != nullptr)
+				&& (edef->GetCostM() < cdef->GetCostM() * chaffFrac))
+			{
+				prio *= chaffPen;
 			}
 			if ((groupWeak || wornOut) && !isDive) {
 				++skippedWeak;

@@ -2144,6 +2144,16 @@ const float TUNE_REPLANT_WINDOW_S = 600.f;
 //   or line is worth. Never zero, because a fielded T1 still shoots; 0 is the
 //   control arm. Chosen, not derived -- measure it.
 const float TUNE_FOE_TIER_FADE = 1.f;
+// manager/brain/market/worth.as [ratio] -- The same fade against OUR OWN
+//   fielded tier: once a T2 lab or gantry stands, lower-tier units lose
+//   1/(1+this*tiersBelow) of their worth ("in late game, aside from spam we
+//   should mostly only be putting our resources into T3 units and advanced
+//   air"). 0 disables.
+const float TUNE_OWN_TIER_FADE = 0.8f;
+// manager/brain/market/worth.as [metal] -- Units cheaper than this are SPAM
+//   and exempt from the own-tier fade (his ruling names spam as the late-game
+//   exception). Chosen, not derived: Pawn 54, Rascal 30, Flash ~110.
+const float TUNE_SPAM_COST = 150.f;
 // manager/brain/market/want_protect.as [ratio] -- The rear eco specialist's
 //   defence and army targets, as a share of a normal player's. Its threat is
 //   already near zero by position, so this only holds the tail down; it is a
