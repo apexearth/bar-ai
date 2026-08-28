@@ -15,6 +15,37 @@ When an entry is completed (landed + he has seen it work, or confirmed live),
 MOVE it to `feedback/<date>.md` — date of the original request. This file
 holds only unresolved asks and standing preferences.
 
+## UNRESOLVED — Kill their economy, not just their army (2026-08-27)
+
+Watching, after the ledger campaign ("It works pretty good now"): "we only
+were fighting the enemy army and defence. I never saw us specifically try to
+take our enemy build power or economy." His priority order, stated: enemy
+converters and fusions FIRST, build power (nano turrets) second. Related in
+the same breath: "I don't know if I remember seeing us make scouts. Maybe we
+didn't know where enemy stuff was (?)" — he connected the intel gap himself.
+The audit agrees: `raids-exist` flags zero raid tasks in every recent game.
+Three linked halves: scouts get made, intel finds the eco, the army (raids)
+spends kills on it in his priority order.
+
+## UNRESOLVED — Mass air before attacking with air (2026-08-27)
+
+"I want to see us massing more air before attacking with air." Note the
+standing C++ finding (air-grouping constant, bar-ai-air-grouping memory):
+air squads cannot group beyond the DLL's cap, so massing may need the C++
+layer, not another ratio.
+
+## UNRESOLVED — Not enough build power on the gantry, again (2026-08-27)
+
+"We had more eco than our enemies, but they kept producing a great many
+Titans. We were much slower because we didn't make enough build power around
+our gantry. (a recurring theme there which we still need to improve.)"
+Same complaint as the 2026-08-27 five-labs-four-nanos finding; the demand
+law scaled with income but the T3 line's spend rate is another scale up.
+
+## NICE TO HAVE — Artillery on hilltops (2026-08-27)
+
+"We should build artillery on hilltops to attack enemies below."
+
 ## STANDING RULE — Always be expanding the economy (restored 2026-08-21)
 
 His words, 2026-08-21: "Are we generally making sure that we are always

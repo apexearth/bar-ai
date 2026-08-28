@@ -299,6 +299,17 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			continue;
 		if (SuperHave(sc) >= SuperTarget(sc))
 			continue;
+		// HIS RULING, the same law as the plant and tech lanes: a super that
+		// is a PRODUCTION LINE (gantry, advanced air plant) and already
+		// stands manned gets nanos, not a twin -- this lane kept electing a
+		// second armshltx into the door 155 times in one 44-minute game.
+		// GUNS (nukes, annihilators, big berthas) are untouched: owning more
+		// of those is legitimate scaling, and SuperTarget already governs it.
+		if ((Catalog::gBuildsList[d].length() > 0)
+			&& ((ComCountOf(d, CS_FINISHED)
+				+ ComCountManned(d, CS_FRAMED | CS_ORDERED)) >= 1)
+			&& (DupBpSubstMul(d) < 1.f))
+			continue;
 		const float bill = SuperBill(d);
 		if (bill >= budget)
 			continue;   // cannot afford it; nothing else about it matters
