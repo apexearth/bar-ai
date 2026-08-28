@@ -404,25 +404,10 @@ float Progress(IUnitTask@ t)
 //
 // Ids, not handles: every entry is re-read through ai.GetTeamUnit, so a frame
 // that dies between events cannot leave a dangling pointer behind.
-array<Id>       gPendId;
-array<int>      gPendDef;
-array<AIFloat3> gPendPos;
-int gPendSweptAt = -1;
-
-void PendDrop(Id id)
-{
-	for (uint i = 0; i < gPendId.length(); ++i) {
-		if (gPendId[i] == id) {
-			gPendId.removeAt(i);
-			gPendDef.removeAt(i);
-			gPendPos.removeAt(i);
-			return;
-		}
-	}
-}
-
-// A request is leaving unfinished with its nanoframe already up: remember the
-// frame, which is the thing that is actually in progress.
+// The orphan register LIVES IN THE COMMITMENT LEDGER now (a frame whose
+// request died is a FRAMED row with no task -- Market::ComIsOrphan). These
+// keep the Requests:: API surface; PendNote keeps only the frame-orphan log
+// line the audit reads.
 void PendNote(IUnitTask@ task)
 {
 	if (task is null)
@@ -432,46 +417,10 @@ void PendNote(IUnitTask@ task)
 		return;
 	if (frame.circuitDef.IsMobile())
 		return;
-	for (uint i = 0; i < gPendId.length(); ++i) {
-		if (gPendId[i] == frame.id)
-			return;
-	}
-	gPendId.insertLast(frame.id);
-	gPendDef.insertLast(int(frame.circuitDef.id));
-	gPendPos.insertLast(frame.GetPos(ai.frame));
+	const AIFloat3 at = frame.GetPos(ai.frame);
 	AiLog(Factory::T() + "apex: frame-orphan " + frame.circuitDef.GetName()
-		+ " at=" + int(gPendPos[gPendPos.length() - 1].x)
-		+ "," + int(gPendPos[gPendPos.length() - 1].z)
-		+ " done=" + formatFloat(frame.GetHealthPercent(), "", 0, 2)
-		+ " standing=" + gPendId.length());
-}
-
-// Entries leave on AiUnitFinished/AiUnitDestroyed; this is the backstop for an
-// event we never saw. GetTeamUnit answers null for an id the AI no longer
-// holds, and a frame some live request has since bound as its target is that
-// request's business again rather than an orphan.
-void PendSweep()
-{
-	if (gPendSweptAt == ai.frame)
-		return;
-	gPendSweptAt = ai.frame;
-	for (uint i = 0; i < gPendId.length(); ) {
-		CCircuitUnit@ u = ai.GetTeamUnit(gPendId[i]);
-		bool gone = (u is null) || (u.circuitDef is null);
-		for (uint k = 0; !gone && (k < gLive.length()); ++k) {
-			IUnitTask@ t = gLive[k];
-			if ((t !is null) && !t.IsDead() && (t.target !is null)
-				&& (t.target.id == gPendId[i]))
-				gone = true;
-		}
-		if (gone) {
-			gPendId.removeAt(i);
-			gPendDef.removeAt(i);
-			gPendPos.removeAt(i);
-		} else {
-			++i;
-		}
-	}
+		+ " at=" + int(at.x) + "," + int(at.z)
+		+ " done=" + formatFloat(frame.GetHealthPercent(), "", 0, 2));
 }
 
 // How many of this def stand unfinished with no request of their own.
@@ -479,13 +428,7 @@ uint PendCount(const CCircuitDef@ want)
 {
 	if (want is null)
 		return 0;
-	PendSweep();
-	uint n = 0;
-	for (uint i = 0; i < gPendId.length(); ++i) {
-		if (gPendDef[i] == int(want.id))
-			++n;
-	}
-	return n;
+	return Market::ComOrphanCount(int(want.id));
 }
 
 // The abandoned frame of this def nearest `spot`, within `reach`.
@@ -493,22 +436,7 @@ CCircuitUnit@ PendNear(const CCircuitDef@ want, const AIFloat3& in spot, float r
 {
 	if ((want is null) || !OnMap(spot))
 		return null;
-	PendSweep();
-	CCircuitUnit@ best = null;
-	float bestDist = reach;
-	for (uint i = 0; i < gPendId.length(); ++i) {
-		if (gPendDef[i] != int(want.id))
-			continue;
-		const float d = spot.distance2D(gPendPos[i]);
-		if (d > bestDist)
-			continue;
-		CCircuitUnit@ u = ai.GetTeamUnit(gPendId[i]);
-		if (u is null)
-			continue;
-		@best = u;
-		bestDist = d;
-	}
-	return best;
+	return Market::ComOrphanUnit(int(want.id), spot, reach);
 }
 
 // ...and the same frame WHEREVER it stands. PendNear answers "is one already
@@ -522,22 +450,7 @@ CCircuitUnit@ PendAnyOfDef(const CCircuitDef@ want, const AIFloat3& in from)
 {
 	if (want is null)
 		return null;
-	PendSweep();
-	CCircuitUnit@ best = null;
-	float bestDist = -1.f;
-	for (uint i = 0; i < gPendId.length(); ++i) {
-		if (gPendDef[i] != int(want.id))
-			continue;
-		CCircuitUnit@ u = ai.GetTeamUnit(gPendId[i]);
-		if (u is null)
-			continue;
-		const float d = OnMap(from) ? from.distance2D(gPendPos[i]) : 0.f;
-		if ((best is null) || (d < bestDist)) {
-			@best = u;
-			bestDist = d;
-		}
-	}
-	return best;
+	return Market::ComOrphanUnit(int(want.id), from, -1.f);
 }
 
 // The same job, for matching purposes. Same def always; and one reactor rung

@@ -621,6 +621,23 @@ def run(args) -> int:
     }
     (outdir / "result.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
+    # The audit is the acceptance test, so every game carries its verdict:
+    # printed here, and persisted as audit.json so later runs can be diffed
+    # against it. Never let an audit failure eat the match result.
+    try:
+        import audit as audit_mod
+        text = audit_mod.load(outdir)
+        rep = audit_mod.Report()
+        for check in audit_mod.CHECKS:
+            check(text, rep)
+        print()
+        rep.show()
+        (outdir / "audit.json").write_text(
+            json.dumps({"rows": [list(r) for r in rep.rows]}, indent=2),
+            encoding="utf-8")
+    except Exception as e:  # noqa: BLE001 -- the match result stands regardless
+        print(f"audit    failed to run: {e}")
+
     print()
     print(f"out      {outdir}")
     print(f"reason   {result.reason}")

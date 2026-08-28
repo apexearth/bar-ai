@@ -450,40 +450,6 @@ def check_priority(text, rep):
     rep.add("PRIORITY", top == "metal/mexup", "advanced cons upgrade mexes",
             detail + " -- decision share, NOT upgrades standing; check t2Mex")
 
-    # apexearth 2026-08-27: "how we keep making 2 T2 labs one after another...
-    # 2900 metal buys 300bp; 1 nano turret adds 200bp for ~200 metal." A
-    # duplicate line is the dear way to buy throughput, and it is only the
-    # right buy when no line is short of hands.
-    dups = re.findall(
-        r"apex: plantdup ([a-z0-9]+) kin=(\d+) dupKin=\d+ unlocks=\d+ "
-        r"liveOther=\d+ subst=([\d.]+) lineNeed=([\d.]+)", text)
-    if dups:
-        hot = [d for d in dups if float(d[3]) > 0.0]
-        worst = sorted(dups, key=lambda d: -int(d[1]))[0]
-        rep.add("PRIORITY", not hot, "duplicate line over nanos",
-                f"{len(dups)} duplicate-plant prices, {len(hot)} of them while "
-                f"a line was short of hands (nanos were the cheaper build "
-                f"power); worst kin={worst[1]} on {worst[0]} "
-                f"subst={worst[2]}")
-
-    # apexearth 2026-08-27: "when we e-stall we think to do something else...
-    # instead of choosing to finish the original lab afterwards we just start
-    # making a new one." A frame abandoned once is an interrupted job; the SAME
-    # def abandoned repeatedly means nothing is adopting it before founding.
-    orph = defaultdict(int)
-    for m in re.finditer(r"apex: frame-orphan ([a-z0-9]+) ", text):
-        orph[m.group(1)] += 1
-    repeat = {k: v for k, v in orph.items() if v > 1}
-    if orph:
-        top = sorted(orph.items(), key=lambda kv: -kv[1])[:5]
-        rep.add("PRIORITY", not repeat, "finish before founding",
-                f"{sum(orph.values())} nanoframes abandoned, "
-                f"{len(repeat)} def(s) abandoned more than once: "
-                + " ".join(f"{k}={v}" for k, v in top))
-    else:
-        rep.add("PRIORITY", True, "finish before founding",
-                "no abandoned nanoframes")
-
     lost = sum(beat.values())
     if lost:
         who = sorted(beat.items(), key=lambda kv: -kv[1])[:4]
@@ -724,6 +690,50 @@ def check_perf(text, rep):
             + " ".join(f"{k}={v/1000:.0f}s" for k, v in worst_tot))
 
 
+def check_commitments(text, rep):
+    """The duplicate-plant and abandoned-frame laws. Own function so the
+    income gates in check_priority can never silently skip them (they used to
+    sit below two early returns -- a low-income game reported green by never
+    running the checks that mattered)."""
+    # apexearth 2026-08-27: a copy of an owned plant prices ZERO and forwards
+    # its demand to the nano. A copy still PRICED is the sanctioned residue
+    # (no-nano escape, or orphan-only kin being finished); a copy priced
+    # UNDISCOUNTED (dupKin>0, subst=1.0) is the violation -- note the no-nano
+    # escape logs subst=1.000 legitimately on maps/factions without a nano
+    # def, which no current 1v1 map is.
+    fwd = re.findall(r"apex: plantdup ([a-z0-9]+) kin=\d+ copy=1 dupGain=0",
+                     text)
+    dups = re.findall(
+        r"apex: plantdup ([a-z0-9]+) kin=(\d+) dupKin=(\d+) unlocks=\d+ "
+        r"liveOther=\d+ subst=([\d.]+) lineNeed=([\d.]+)", text)
+    naked = [d for d in dups if int(d[2]) > 0 and float(d[3]) >= 1.0]
+    detail = (f"{len(fwd)} copy want(s) zeroed -> nano; "
+              f"{len(dups)} discounted dup price(s)")
+    if naked:
+        worst = sorted(naked, key=lambda d: -int(d[1]))[0]
+        detail += (f"; {len(naked)} UNdiscounted copy price(s), worst "
+                   f"kin={worst[1]} {worst[0]}")
+    rep.add("PRIORITY", not naked, "duplicate line over nanos", detail)
+
+    # apexearth 2026-08-27: "when we e-stall we think to do something else...
+    # instead of choosing to finish the original lab afterwards we just start
+    # making a new one." A frame abandoned once is an interrupted job; the SAME
+    # def abandoned repeatedly means nothing is adopting it before founding.
+    orph = defaultdict(int)
+    for m in re.finditer(r"apex: frame-orphan ([a-z0-9]+) ", text):
+        orph[m.group(1)] += 1
+    repeat = {k: v for k, v in orph.items() if v > 1}
+    if orph:
+        top = sorted(orph.items(), key=lambda kv: -kv[1])[:5]
+        rep.add("PRIORITY", not repeat, "finish before founding",
+                f"{sum(orph.values())} nanoframes abandoned, "
+                f"{len(repeat)} def(s) abandoned more than once: "
+                + " ".join(f"{k}={v}" for k, v in top))
+    else:
+        rep.add("PRIORITY", True, "finish before founding",
+                "no abandoned nanoframes")
+
+
 def check_ledger(text, rep):
     """The commitment ledger holds truth: drift means a missed event, an
     INVARIANT line means the pricing let a stated law reach the door."""
@@ -748,7 +758,8 @@ def check_ledger(text, rep):
             else f"{len(inv)} refusal(s): " + " ".join(sorted(set(inv))))
 
 
-CHECKS = [check_health, check_ledger, check_priority, check_economy,
+CHECKS = [check_health, check_ledger, check_commitments, check_priority,
+          check_economy,
           check_military, check_efficiency, check_vs_enemy, check_structures,
           check_geometry, check_perf]
 

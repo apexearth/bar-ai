@@ -224,12 +224,12 @@ float ConvCapInFlight()
 // yet.
 float EMakeInFlight()
 {
+	// Ledger COMING rows (flipped 2026-08-27): an orphaned generator frame
+	// is energy on the way exactly as an ordered one is -- nanos finish it.
 	float e = 0.f;
-	for (uint i = 0; i < Requests::gLive.length(); ++i) {
-		IUnitTask@ t = Requests::gLive[i];
-		if ((t is null) || t.IsDead() || (t.buildDef is null))
-			continue;
-		e += Catalog::gMakeE[int(t.buildDef.id)];
+	for (uint i = 0; i < ComLen(); ++i) {
+		if (gComState[i] != CS_FINISHED)
+			e += Catalog::gMakeE[gComDef[i]];
 	}
 	return e;
 }
@@ -256,15 +256,16 @@ float EDrainInFlight()
 {
 	if (ai.GetTunable("apex_e_committed", TUNE_E_COMMITTED) <= 0.f)
 		return 0.f;
+	// Ledger COMING rows (flipped 2026-08-27): orphaned frames carry their
+	// remaining E bill exactly as live requests do.
 	float e = 0.f;
-	for (uint i = 0; i < Requests::gLive.length(); ++i) {
-		IUnitTask@ t = Requests::gLive[i];
-		if ((t is null) || t.IsDead() || (t.buildDef is null))
+	for (uint i = 0; i < ComLen(); ++i) {
+		if (gComState[i] == CS_FINISHED)
 			continue;
-		const int d = int(t.buildDef.id);
+		const int d = gComDef[i];
 		if (Catalog::gCostE[d] <= 1.f)
 			continue;
-		float left = 1.f - Requests::Progress(t);
+		float left = 1.f - ComProgress(i);
 		if (left <= 0.f)
 			continue;
 		if (left > 1.f)
@@ -454,15 +455,16 @@ float SpareMetalRate()
 // hands rather than as nothing at all.
 float BacklogM()
 {
+	// Ledger COMING rows (flipped 2026-08-27): the orphaned-frame mass is
+	// backlog too -- it is exactly the committed work gLive forgot.
 	float m = 0.f;
-	for (uint i = 0; i < Requests::gLive.length(); ++i) {
-		IUnitTask@ t = Requests::gLive[i];
-		if ((t is null) || t.IsDead() || (t.buildDef is null))
+	for (uint i = 0; i < ComLen(); ++i) {
+		if (gComState[i] == CS_FINISHED)
 			continue;
-		const float left = 1.f - Requests::Progress(t);
+		const float left = 1.f - ComProgress(i);
 		if (left <= 0.f)
 			continue;
-		m += Catalog::gCostM[int(t.buildDef.id)] * left;
+		m += Catalog::gCostM[gComDef[i]] * left;
 	}
 	return m;
 }

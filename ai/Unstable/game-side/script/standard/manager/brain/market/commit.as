@@ -193,16 +193,18 @@ int ComCountOf(int defId, int mask)
 	return n;
 }
 
-// ORDERED rows count only with hands on them: an unmanned order is a held
-// placeholder the engine may sit on forever (the async-sim-orders law), and
-// counting it re-creates the factory-wedge class of bug.
+// Unfinished rows count only with hands on them: an unmanned order or frame
+// is a held placeholder (the async-sim-orders law) whose manning path IS the
+// def's own want -- counting it as satisfied strangles that path (measured
+// seed 8: both opening factories ordered, zeroed as their own copies, and
+// unreachable for 11 minutes).
 int ComCountManned(int defId, int mask)
 {
 	int n = 0;
 	for (uint i = 0; i < gComDef.length(); ++i) {
 		if ((gComDef[i] != defId) || ((gComState[i] & mask) == 0))
 			continue;
-		if (gComState[i] == CS_ORDERED) {
+		if (gComState[i] != CS_FINISHED) {
 			if ((gComTask[i] is null) || (Requests::Workers(gComTask[i]) == 0))
 				continue;
 		}
@@ -251,6 +253,61 @@ float ComLeftM(uint i)
 			return cost * (1.f - u.GetHealthPercent());
 	}
 	return cost;
+}
+
+float ComProgress(uint i)
+{
+	if (i >= gComDef.length())
+		return 0.f;
+	if (gComState[i] == CS_FINISHED)
+		return 1.f;
+	if (gComTask[i] !is null)
+		return Requests::Progress(gComTask[i]);
+	if (int(gComId[i]) >= 0) {
+		CCircuitUnit@ u = ai.GetTeamUnit(gComId[i]);
+		if (u !is null) {
+			const float h = u.GetHealthPercent();
+			return (h < 0.f) ? 0.f : ((h > 1.f) ? 1.f : h);
+		}
+	}
+	return 0.f;
+}
+
+// The orphan register: a frame whose request died is FRAMED with no task.
+bool ComIsOrphan(uint i)
+{
+	return (gComState[i] == CS_FRAMED) && (gComTask[i] is null);
+}
+
+uint ComOrphanCount(int defId)
+{
+	uint n = 0;
+	for (uint i = 0; i < gComDef.length(); ++i) {
+		if ((gComDef[i] == defId) && ComIsOrphan(i))
+			++n;
+	}
+	return n;
+}
+
+// The orphaned frame of `defId` nearest `from` (reach < 0 = anywhere),
+// resolved to the live unit; a row whose unit is gone is ComSweep's business.
+CCircuitUnit@ ComOrphanUnit(int defId, const AIFloat3 &in from, float reach)
+{
+	CCircuitUnit@ best = null;
+	float bestD = (reach < 0.f) ? 1.0e9f : reach;
+	for (uint i = 0; i < gComDef.length(); ++i) {
+		if ((gComDef[i] != defId) || !ComIsOrphan(i))
+			continue;
+		const float dd = OnMap(from) ? from.distance2D(gComPos[i]) : 0.f;
+		if (dd > bestD)
+			continue;
+		CCircuitUnit@ u = ai.GetTeamUnit(gComId[i]);
+		if (u is null)
+			continue;
+		@best = u;
+		bestD = dd;
+	}
+	return best;
 }
 
 // Shadow reads: a consumer computes its old answer and the ledger's answer,

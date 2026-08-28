@@ -250,6 +250,15 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			continue;
 		if (Requests::LiveOfDef(Catalog::Def(d)))
 			continue;   // this def is already requested: help it, not double it
+		// HIS RULING, same law as ProposePlant's copy-zero: a tech plant we
+		// already run unlocks nothing, and its throughput is the nano's job.
+		// The door guard caught exactly this (a second armavp with one
+		// finished) coming through the tech lane the plant lane had closed.
+		if (!UnlocksProduct(d)
+			&& ((ComCountOf(d, CS_FINISHED)
+				+ ComCountManned(d, CS_FRAMED | CS_ORDERED)) >= 1)
+			&& (DupBpSubstMul(d) < 1.f))
+			continue;
 		// The plant's best feasible mobile builder, and the extraction IT
 		// reaches; the plant unlocks only what exceeds our own ceiling.
 		float prodCeil = 0.f;

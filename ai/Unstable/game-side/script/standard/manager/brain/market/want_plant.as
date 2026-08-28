@@ -383,52 +383,9 @@ float BestDomainReach(int dClass)
 // A line that only repeats what we already offer is a pure duplicate.
 bool UnlocksProduct(int plantId)
 {
-	const array<int>@ prods = Catalog::gBuildsList[plantId];
-	for (uint p = 0; p < prods.length(); ++p) {
-		bool made = false;
-		const array<int>@ by = Catalog::gBuiltBy[prods[p]];
-		for (uint b = 0; b < by.length(); ++b) {
-			if ((by[b] < int(gOwnCount.length())) && (gOwnCount[by[b]] > 0)) {
-				made = true;
-				break;
-			}
-			// A standing NANOFRAME whose request was abandoned is invisible
-			// to gOwnCount (finished only) AND to gLive -- def.count is the
-			// read that still sees it, and it unlocks its products the same
-			// as a live order does.
-			if (Catalog::Def(by[b]).count > 0) {
-				made = true;
-				break;
-			}
-			// A PLANT ALREADY ORDERED UNLOCKS ITS PRODUCTS TOO. Standing-only
-			// would let two copies of the same new lab each read as the
-			// unlocker while the first is still a nanoframe -- the same
-			// in-flight blindness reachKin already carries below.
-			for (uint fq = 0; fq < Requests::gLive.length(); ++fq) {
-				IUnitTask@ qt = Requests::gLive[fq];
-				if ((qt is null) || qt.IsDead() || (qt.buildDef is null))
-					continue;
-				if (int(qt.buildDef.id) == by[b]) {
-					made = true;
-					break;
-				}
-			}
-			if (made)
-				break;
-		}
-		if (!made) {
-			ComShadowNote("unlocks", 1, ComUnlocksProduct(plantId) ? 1 : 0);
-			return true;
-		}
-	}
-	ComShadowNote("unlocks", 0, ComUnlocksProduct(plantId) ? 1 : 0);
-	return false;
-}
-
-// The ledger's answer to the same question, for the Session-1 shadow: a
-// product is made if any of its producers is in the ledger in any state.
-bool ComUnlocksProduct(int plantId)
-{
+	// A product is made if any of its producers is in the commitment ledger
+	// in any state -- standing, half-built, orphaned frame or on order
+	// (flipped 2026-08-27, shadow clean across the proving games).
 	const array<int>@ prods = Catalog::gBuildsList[plantId];
 	for (uint p = 0; p < prods.length(); ++p) {
 		bool made = false;
@@ -593,29 +550,28 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// bought when one was barely affordable), while a shipyard beside a
 		// bot lab is not a copy of anything.
 		const float myReach = PlantReachOf(d);
-		// A LINE ORDERED IS A LINE. This counted only what STANDS, so while
-		// the first lab was still a nanoframe a corvp and a corap each priced
-		// themselves as the FIRST land line -- dividing by (1+0) instead of
-		// (1+1), and skipping subMul and dupSubst entirely since both are
-		// guarded on reachKin > 0. That is the flip-flop between T1 labs
-		// apexearth watched. Same in-flight accounting ConvCapInFlight already
-		// does for converters. SAME-def orders are counted here too:
-		// def.count only sees a PLACED frame (RegisterTeamUnit fires on
-		// UnitCreated), so for the whole walk to the site a second copy of
-		// the same def read reachKin=0 and priced as the first of its kind.
-		// Once the frame stands, frame + live order read as 2 -- which only
-		// deepens a copy's divisor, never touches the first of a def.
-		int reachKin = Catalog::Def(d).count;
-		for (uint fi = 0; fi < Requests::gLive.length(); ++fi) {
-			IUnitTask@ ft = Requests::gLive[fi];
-			if ((ft is null) || ft.IsDead() || (ft.buildDef is null))
+		// A LINE ORDERED IS A LINE, whoever remembers it -- one ledger read
+		// (flipped 2026-08-27, shadow-measured first), one membership rule:
+		// FINISHED, or hands on it. A builder walking to the site is
+		// assigned, so the walk window (no frame yet, engine count 0) still
+		// counts -- that was the second-copy hole. An UNMANNED order or
+		// frame does not: its manning path is this def's own want (the fold
+		// dedups the site), and counting it priced the resume as a
+		// duplicate -- measured seed 8, both opening factories unreachable
+		// for 11 minutes.
+		int reachKin = 0;
+		for (uint ci = 0; ci < ComLen(); ++ci) {
+			const int rd = gComDef[ci];
+			if (Catalog::gBuildsList[rd].length() == 0)
 				continue;
-			const int fd = int(ft.buildDef.id);
-			if (Catalog::gMobile[fd]
-				|| (Catalog::gBuildsList[fd].length() == 0))
+			if ((rd != d)
+				&& ((PlantReachOf(rd) < myReach) || (PlantClass(rd) != dClass)))
 				continue;
-			if ((PlantReachOf(fd) >= myReach) && (PlantClass(fd) == dClass))
-				++reachKin;
+			if ((gComState[ci] != CS_FINISHED)
+				&& ((gComTask[ci] is null)
+					|| (Requests::Workers(gComTask[ci]) == 0)))
+				continue;
+			++reachKin;
 		}
 		// A LINE UNDER CONSTRUCTION IS A COMMITMENT WHATEVER ITS DOMAIN.
 		// reachKin is a parallel-CAPACITY question and so is rightly per
@@ -640,37 +596,6 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				continue;
 			if (PlantClass(od) != dClass)
 				++liveOther;
-		}
-		for (uint kd2 = 1; kd2 < gOwnCount.length(); ++kd2) {
-			if ((gOwnCount[kd2] <= 0) || (int(kd2) == d)
-				|| Catalog::gMobile[int(kd2)]
-				|| (Catalog::gBuildsList[int(kd2)].length() == 0))
-				continue;
-			if ((PlantReachOf(int(kd2)) >= myReach)
-				&& (PlantClass(int(kd2)) == dClass))
-				reachKin += gOwnCount[kd2];
-		}
-		// Ledger shadow (flip when clean): kin = same-def rows in any state
-		// (ORDERED only when manned), plus same-domain same-or-better-reach
-		// plant rows. Mismatches against the frame+order double count above
-		// are EXPECTED -- they are the measurement the flip ships with.
-		{
-			int nKin = 0;
-			for (uint ci = 0; ci < ComLen(); ++ci) {
-				const int rd = gComDef[ci];
-				if (Catalog::gBuildsList[rd].length() == 0)
-					continue;
-				if ((rd != d)
-					&& ((PlantReachOf(rd) < myReach)
-						|| (PlantClass(rd) != dClass)))
-					continue;
-				if ((gComState[ci] == CS_ORDERED)
-					&& ((gComTask[ci] is null)
-						|| (Requests::Workers(gComTask[ci]) == 0)))
-					continue;
-				++nKin;
-			}
-			ComShadowNote("reachkin", reachKin, nKin);
 		}
 		// A COPY OF A TIER WE HAVE OUTGROWN buys the outgrown tier's
 		// pipeline, not the one we would get for the same metal. apexearth:
@@ -716,6 +641,37 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// when no nano def exists to substitute, the one case a second line
 		// is the only way to buy throughput.
 		const bool isCopy = (reachKin > 0) && !UnlocksProduct(d);
+		// HIS RULING (2026-08-27): a copy of a lab we already run is
+		// INELIGIBLE, not discounted -- "the want ... should come out as 0
+		// ... we forward our want over to the nano." A zero never enters the
+		// ranking, so neither the roulette's residual ticket nor the
+		// executor's same-frame fall-through can buy it. The kin must be
+		// FINISHED or have hands on it: an unmanned order or frame is manned
+		// BY this def's own want (the fold/adoption path), so zeroing on it
+		// strangles the very build it defers to -- measured seed 8, both
+		// opening factories ordered and then unreachable for 11 minutes.
+		// The other escape is a substitute that cannot exist
+		// (DupBpSubstMul == 1).
+		bool dupUsable = false;
+		for (uint ci = 0; isCopy && (ci < ComLen()); ++ci) {
+			if (gComDef[ci] != d)
+				continue;
+			if ((gComState[ci] == CS_FINISHED)
+				|| ((gComTask[ci] !is null)
+					&& (Requests::Workers(gComTask[ci]) > 0)))
+			{
+				dupUsable = true;
+				break;
+			}
+		}
+		if (isCopy && dupUsable && (DupBpSubstMul(d) < 1.f)) {
+			if (ai.frame >= gNextPlantDupLog) {
+				gNextPlantDupLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: plantdup " + Catalog::Def(d).GetName()
+					+ " kin=" + reachKin + " copy=1 dupGain=0 forwarded-to-nano");
+			}
+			continue;
+		}
 		// (No finished-factory guard: a copy of a lab still in its nanoframe
 		// is the earliest and cheapest moment to refuse the duplicate.)
 		float dupSubst = 1.f;

@@ -18,13 +18,14 @@ AIFloat3 ClearOfLiveFactories(const AIFloat3& in pos)
 	for (uint tries = 0; tries < 4; ++tries) {
 		bool near = false;
 		AIFloat3 at;
-		for (uint i = 0; i < Requests::gLive.length(); ++i) {
-			IUnitTask@ t = Requests::gLive[i];
-			if ((t is null) || t.IsDead()
-				|| (t.GetBuildType() != Task::BuildType::FACTORY))
+		// Ledger COMING plant rows (flipped 2026-08-27): an orphaned factory
+		// frame blocks its ground exactly as an ordered one does.
+		for (uint i = 0; i < ComLen(); ++i) {
+			if ((gComState[i] == CS_FINISHED)
+				|| (Catalog::gBuildsList[gComDef[i]].length() == 0))
 				continue;
-			at = t.GetBuildPos();
-			if (OnMap(at) && (p.distance2D(at) < 512.f)) {
+			if (OnMap(gComPos[i]) && (p.distance2D(gComPos[i]) < 512.f)) {
+				at = gComPos[i];
 				near = true;
 				break;
 			}
@@ -85,6 +86,26 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				return g0;
 			}
 		}
+	}
+	// THE DOOR. His stated laws, checked where the metal is spent -- a logged
+	// backstop, never the mechanism: the pricing above is supposed to make
+	// these fire ZERO times, and the audit asserts exactly that. Placed AFTER
+	// the adoption block so finishing a standing frame is never refused.
+	// Law 1: no founding a copy of a plant we already run (the escape is a
+	// substitute that cannot exist -- see DupBpSubstMul).
+	if ((w.def !is null) && !w.def.IsMobile()
+		&& (w.kind != WK_RECLAIM) && (w.kind != WK_ASSIST)
+		&& (Catalog::gBuildsList[int(w.def.id)].length() > 0)
+		&& !UnlocksProduct(int(w.def.id))
+		&& (ComCountOf(int(w.def.id), CS_FINISHED)
+			+ ComCountManned(int(w.def.id), CS_FRAMED | CS_ORDERED) >= 1)
+		&& (DupBpSubstMul(int(w.def.id)) < 1.f))
+	{
+		AiLog("apex: INVARIANT plant-copy refused t=" + ai.teamId + " "
+			+ w.def.GetName()
+			+ " fin=" + ComCountOf(int(w.def.id), CS_FINISHED)
+			+ " coming=" + ComCountManned(int(w.def.id), CS_FRAMED | CS_ORDERED));
+		return null;
 	}
 	if (w.kind == WK_MEX) {
 		// Help the one already going before opening another, exactly as every
@@ -424,9 +445,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				crtd, par);
 	}
 	if (w.kind == WK_STORE) {
-		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
-		return Requests::Take(unit, w.def, Task::BuildType::STORE,
-				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f);
+		// Law 2, a tripwire: his ruling is "Stop making storage" and
+		// ProposeStore proposes nothing -- anything reaching this branch is a
+		// regression re-arming storage from some other path.
+		AiLog("apex: INVARIANT no-storage refused t=" + ai.teamId + " "
+			+ w.def.GetName());
+		return null;
 	}
 	if (w.kind == WK_PLANT) {
 		IUnitTask@ jt = JoinBig(w.def);
