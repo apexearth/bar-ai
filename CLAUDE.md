@@ -169,8 +169,11 @@ ignored in game. Load the **`dashboard-ui`** skill before adding one.
 guided view has never seen, any it names that no longer exists, and any it
 offers that nothing reads.
 
-See **`CHANGES.md`** for everything this AI does differently from stock BARb,
-which layer each change lives in, and how well each is actually measured.
+**`CHANGES.md` is FROZEN (apexearth 2026-08-27: "stop putting changes in
+CHANGES.md... you can instead look at git history").** What changed and what
+was measured goes in the COMMIT MESSAGE, next to the diff it justifies; open
+or unresolved findings go in `ISSUES.md`. The frozen file remains as history
+for everything before 2026-08-28.
 
 **`ISSUES.md` is the live list of what is wrong** — each entry with the
 evidence for it and, where known, the mechanism in our own code. Add to it
@@ -181,7 +184,7 @@ what apexearth actually wants, in one place, with the still-unresolved items
 marked. Several entries there have been raised three or four times without being
 fixed — base sprawl and never reclaiming old buildings, army not being positioned
 on the front line, naval players going idle. Re-reading it costs a minute; being
-told the same thing again costs his session. `CHANGES.md` says what was done,
+told the same thing again costs his session. Git history says what was done,
 `USER-FEEDBACK.md` says what was asked for.
 
 ## Commands
@@ -543,13 +546,12 @@ three exchanges is the normal ceiling.
 That only works if findings live in the repo rather than in transcripts, which
 makes the next rule load-bearing rather than tidy:
 
-**Write the finding down before the agent ends.** `CHANGES.md` for what changed
-and what was measured, `ISSUES.md` for what is wrong and not yet fixed. A
-finding left in a transcript is one you will pay to rediscover, and it forces
-the long-running-agent pattern that costs the tokens. When several agents run
-at once they will all decline to edit `CHANGES.md` to avoid colliding — so the
-ORGANIZER writes it, not them. Ask each agent for the one paragraph it would
-have written, and land them together.
+**Write the finding down before the agent ends.** The commit message for what
+changed and what was measured, `ISSUES.md` for what is wrong and not yet
+fixed. A finding left in a transcript is one you will pay to rediscover, and
+it forces the long-running-agent pattern that costs the tokens. When several
+agents run at once, the ORGANIZER lands the commits with each agent's
+one-paragraph summary in the message, not the agents themselves.
 
 Corollary for dispatch: put the distilled context in the PROMPT. A fresh agent
 given the three facts it needs outperforms a stale one carrying three hundred.
@@ -691,20 +693,21 @@ to add more of them. Four rules, each from a real mistake:
   narrated the fix history: "quit flooding our comments with events of our
   work, just state a concise 'why' and let that be it." One line: what this
   code does that looks wrong otherwise, and the reason. Not what was reported,
-  not what was measured, not the session's timeline — those go in `CHANGES.md`
-  (see the next rule) or nowhere.
+  not what was measured, not the session's timeline — those go in the commit
+  message (see the next rule) or nowhere.
 - **Never state a cause you did not measure.** A spacing fix was annotated "that
   is how a cap of 6 produced 15-20 constructors" — the cap holding at ≤6 had
   been measured; the claim about the overshoot never was. If it was reasoning,
   say so or leave it out. Wrong comments are worse than none.
 - **Don't inline the commit message.** What was tried, what it scored, why it
-  was reverted goes in `CHANGES.md`. A comment earns its place by explaining a
+  was reverted goes in the commit message. A comment earns its place by explaining a
   mechanism that is not visible in the code — a NOCOUNT handle, a jsoncpp
   parsing quirk, an engine gate that returns before the check you are reading.
 - **Change the code, change the comment.** A declaration still read "cleared on
   a handover" after the clearing was removed. Re-read every comment attached to
   a line you touch.
-- **Never write a finding into a comment. Findings go in `CHANGES.md`.** A
+- **Never write a finding into a comment. Findings go in the commit message
+  or `ISSUES.md`.** A
   comment saying "Legion has legsy but no advanced shipyard" was written from a
   single failed `glob legasy.lua`. It was false — Legion builds `corasy`, listed
   in `legnavyconship`/`legcs`/`legch` buildoptions — and it sat in the code
@@ -712,8 +715,8 @@ to add more of them. Four rules, each from a real mistake:
   drawn once, frozen in a comment, and then believed by the next reader
   (including the next session) long after it stopped being true. Measurements,
   unit costs, timings, "X never happens", "Y does not exist" are all findings.
-  They belong in `CHANGES.md`, where they are dated and sit next to the run that
-  produced them, or in nothing at all.
+  They belong in the commit message — dated, next to the diff — or in
+  `ISSUES.md` while unresolved, or in nothing at all.
 
   What may stay in a comment is a **mechanism you can see in the code being
   read** — an engine gate that returns early, an index that is shared between

@@ -312,6 +312,44 @@ float PlantReachOf(int plantId)
 array<float> gDomReach(3, 0.f);
 int gDomReachAt = 0;
 
+// The best constructor reach among plants we OWN or have ordered, per domain.
+// The tier discount compares against this: the catalog's best (below) says
+// what the game offers, not what we field.
+array<float> gOwnDomReach(3, 0.f);
+int gOwnDomReachAt = -1;
+float OwnedDomainReach(int dClass)
+{
+	if (ai.frame >= gOwnDomReachAt) {
+		gOwnDomReachAt = ai.frame + 10 * SECOND;
+		for (uint c = 0; c < gOwnDomReach.length(); ++c)
+			gOwnDomReach[c] = 0.f;
+		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+			CCircuitUnit@ f = Factory::gFacUnits[fi];
+			if ((f is null) || (f.circuitDef is null))
+				continue;
+			const int fd = int(f.circuitDef.id);
+			const float r = PlantReachOf(fd);
+			const int c = PlantClass(fd);
+			if (r > gOwnDomReach[c])
+				gOwnDomReach[c] = r;
+		}
+		for (uint li = 0; li < Requests::gLive.length(); ++li) {
+			IUnitTask@ t = Requests::gLive[li];
+			if ((t is null) || t.IsDead() || (t.buildDef is null))
+				continue;
+			const int td = int(t.buildDef.id);
+			if (Catalog::gMobile[td] || (Catalog::gBuildsList[td].length() == 0))
+				continue;
+			const float r = PlantReachOf(td);
+			const int c = PlantClass(td);
+			if (r > gOwnDomReach[c])
+				gOwnDomReach[c] = r;
+		}
+	}
+	return ((dClass >= 0) && (dClass < int(gOwnDomReach.length())))
+			? gOwnDomReach[dClass] : 0.f;
+}
+
 float BestDomainReach(int dClass)
 {
 	if (ai.frame >= gDomReachAt) {
@@ -589,11 +627,17 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// it belongs -- on dupKin and the replant memory, the terms about
 		// being a COPY. (One watched 1v1 bought 16 plants of ten different
 		// defs in 24 minutes; every def change dodged every discount.)
+		//
+		// Against what we OWN or have in flight, never the catalog:
+		// gAvailable is not tier-gated, so the catalog's T2 reach is "best"
+		// from frame zero and comparing against it priced the OPENING lab at
+		// a third -- first factory at minute nine, a floating hover plant
+		// (seed 31). Nothing is outgrown before its better exists.
 		float subMul = 1.f;
 		{
-			const float bestDom = BestDomainReach(dClass);
-			if ((myReach > 0.f) && (bestDom > myReach))
-				subMul = myReach / bestDom;
+			const float bestOwn = OwnedDomainReach(dClass);
+			if ((myReach > 0.f) && (bestOwn > myReach))
+				subMul = myReach / bestOwn;
 		}
 		// ...and the throughput half of a DUPLICATE is priced against the
 		// cheaper way to buy the same build power. Only while that way is
