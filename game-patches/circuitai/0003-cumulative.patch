@@ -10612,7 +10612,7 @@ index b4b43c1..d2e258e 100644
  		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..d8fcf7b 100644
+index 0d59b65..3ef48f2 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,23 @@
@@ -10724,7 +10724,7 @@ index 0d59b65..d8fcf7b 100644
  
  	const std::map<float, std::set<CCircuitUnit*>>& rangers = task->GetRangeUnits();
  	for (const auto& kv : rangers) {
-@@ -123,6 +165,138 @@ void ISquadTask::Merge(ISquadTask* task)
+@@ -123,6 +165,150 @@ void ISquadTask::Merge(ISquadTask* task)
  	FindLeader(rookies.begin(), rookies.end());
  }
  
@@ -10807,16 +10807,21 @@ index 0d59b65..d8fcf7b 100644
 +	return true;
 +}
 +
-+// EVERYONE LOW, NOBODY TRIGGERED (apexearth 2026-08-28: "sometimes our squad
-+// is only a few people and they're all low. Whole squad should fall back if
-+// they're all too low... stop them from getting targeted by having them move
-+// back"). The per-unit thresholds sit at 8-50% hp, so a squad hovering at
-+// 30-50% across the board never enters TrySquadRetreat at all -- it stands
-+// and is focused down one unit at a time. Checked per update: when every
-+// member is under apex_squad_fall_hp the squad leaves together on ONE
-+// retreat task, same group pathing as the wounded-power vote. Committed
-+// pushes, dives and charger deliveries keep pressing, and defended home
-+// ground stands -- the same exemptions the vote and the attack-break carry.
++// THE SQUAD'S TOTAL HP IS THE TRIGGER, NOT EACH UNIT'S (apexearth
++// 2026-08-28: "if the squad's total HP is less than some %, like if total
++// squad health below 50% or something we pull back. (not each individual
++// unit)" -- refining "whole squad should fall back if they're all too
++// low... stop them from getting targeted by having them move back"). The
++// per-unit thresholds sit at 8-50% hp, so a mauled squad never enters
++// TrySquadRetreat at all -- it stands and is focused down one unit at a
++// time. Checked per update: when the squad's power-weighted health falls
++// under apex_squad_fall_hp the squad leaves together on ONE retreat task,
++// same group pathing as the wounded-power vote. Power-weighted so a swarm
++// of scratched Ticks cannot outvote a dying Mammoth; cowards COUNT here,
++// unlike GetHealthScale -- his rule reads the HP that exists, not the HP
++// still pressing. Committed pushes, dives and charger deliveries keep
++// pressing, and defended home ground stands -- the same exemptions the
++// vote and the attack-break carry.
 +bool ISquadTask::TryAllLowFallback()
 +{
 +	if ((units.size() < 2) || IsDiveCommit()) {
@@ -10828,14 +10833,21 @@ index 0d59b65..d8fcf7b 100644
 +	{
 +		return false;
 +	}
-+	const float bar = circuit->GetTunable("apex_squad_fall_hp", 0.6f);
++	const float bar = circuit->GetTunable("apex_squad_fall_hp", 0.5f);
 +	if (bar <= 0.f) {
 +		return false;
 +	}
++	float total = .0f;
++	float alive = .0f;
 +	for (CCircuitUnit* u : units) {
-+		if (u->GetHealthPercent() >= bar) {
-+			return false;
-+		}
++		const float power = u->GetCircuitDef()->GetPower();
++		total += power;
++		float hp = u->GetHealthPercent();
++		hp = std::max(.0f, std::min(1.f, hp));  // capture progress drives it negative
++		alive += power * hp;
++	}
++	if ((total <= .0f) || (alive >= total * bar)) {
++		return false;
 +	}
 +	if (leader != nullptr) {
 +		const AIFloat3& lp = leader->GetPos(circuit->GetLastFrame());
@@ -10851,8 +10863,8 @@ index 0d59b65..d8fcf7b 100644
 +	if (task == nullptr) {
 +		return false;
 +	}
-+	circuit->LOG("apex: squad all-low fallback units=%d bar=%.2f",
-+			(int)units.size(), bar);
++	circuit->LOG("apex: squad all-low fallback units=%d hp=%.2f bar=%.2f",
++			(int)units.size(), alive / total, bar);
 +	decltype(units) tmpUnits = units;
 +	for (CCircuitUnit* u : tmpUnits) {
 +		manager->AssignTask(u, task);
@@ -10863,7 +10875,7 @@ index 0d59b65..d8fcf7b 100644
  const AIFloat3& ISquadTask::GetLeaderPos(int frame) const
  {
  	return (leader != nullptr) ? leader->GetPos(frame) : GetPosition();
-@@ -185,6 +359,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -185,6 +371,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
  	std::shared_ptr<CQueryLineMap> query = std::static_pointer_cast<CQueryLineMap>(
  			pathfinder->CreateLineMapQuery(leader, circuit->GetThreatMap(), pos));
  
@@ -10878,7 +10890,7 @@ index 0d59b65..d8fcf7b 100644
  	const std::set<IFighterTask*>& tasks = static_cast<CMilitaryManager*>(manager)->GetTasks(fightType);
  	for (const IFighterTask* candidate : tasks) {
  		if ((candidate == this)
-@@ -193,6 +375,11 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -193,6 +387,11 @@ ISquadTask* ISquadTask::CheckMergeTask()
  		{
  			continue;
  		}
@@ -10890,7 +10902,7 @@ index 0d59b65..d8fcf7b 100644
  		const ISquadTask* candy = static_cast<const ISquadTask*>(candidate);
  
  		const AIFloat3& tp = candy->GetLeaderPos(frame);
-@@ -202,7 +389,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -202,7 +401,14 @@ ISquadTask* ISquadTask::CheckMergeTask()
  			continue;
  		}
  
@@ -10906,7 +10918,7 @@ index 0d59b65..d8fcf7b 100644
  			continue;
  		}
  
-@@ -219,19 +413,118 @@ ISquadTask* ISquadTask::CheckMergeTask()
+@@ -219,19 +425,118 @@ ISquadTask* ISquadTask::CheckMergeTask()
  
  ISquadTask* ISquadTask::GetMergeTask()
  {
@@ -11027,7 +11039,7 @@ index 0d59b65..d8fcf7b 100644
  		state = State::ROAM;
  		return false;
  	}
-@@ -296,6 +589,10 @@ bool ISquadTask::IsMustRegroup()
+@@ -296,6 +601,10 @@ bool ISquadTask::IsMustRegroup()
  		return false;
  	}
  
@@ -11038,7 +11050,7 @@ index 0d59b65..d8fcf7b 100644
  	if (threatMap->GetThreatAt(groupPos) >= THREAT_MIN) {
  		validUnits.clear();
  		state = State::ROAM;
-@@ -305,7 +602,12 @@ bool ISquadTask::IsMustRegroup()
+@@ -305,7 +614,12 @@ bool ISquadTask::IsMustRegroup()
  	bool wasRegroup = (State::REGROUP == state);
  	state = State::ROAM;
  
@@ -11052,7 +11064,7 @@ index 0d59b65..d8fcf7b 100644
  	for (CCircuitUnit* unit : validUnits) {
  		const float sqDist = groupPos.SqDistance2D(unit->GetLastPos());
  		if (sqDist > sqMaxDist) {
-@@ -332,9 +634,76 @@ bool ISquadTask::IsMustRegroup()
+@@ -332,9 +646,76 @@ bool ISquadTask::IsMustRegroup()
  
  void ISquadTask::ActivePath(float speed)
  {
@@ -11130,7 +11142,7 @@ index 0d59b65..d8fcf7b 100644
  }
  
  NSMicroPather::HitFunc ISquadTask::GetHitTest() const
-@@ -390,9 +759,22 @@ void ISquadTask::Attack(const int frame)
+@@ -390,9 +771,22 @@ void ISquadTask::Attack(const int frame)
  void ISquadTask::Attack(const int frame, const bool isGround)
  {
  	const AIFloat3& tPos = GetTarget()->GetPos();
@@ -11154,7 +11166,7 @@ index 0d59b65..d8fcf7b 100644
  	auto it = rangeUnits.begin()->second.begin();
  	std::advance(it, rangeUnits.begin()->second.size() / 2);  // TODO: Optimize
  	AIFloat3 dir = (*it)->GetPos(frame) - tPos;
-@@ -403,7 +785,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -403,7 +797,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				if (unit->Blocker() != nullptr) {
  					continue;  // Do not interrupt current action
  				}
@@ -11165,7 +11177,7 @@ index 0d59b65..d8fcf7b 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -418,51 +802,554 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -418,51 +814,554 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -11730,7 +11742,7 @@ index 0d59b65..d8fcf7b 100644
  			}
  
  			beta += delta;
-@@ -478,7 +1365,9 @@ void ISquadTask::Log()
+@@ -478,7 +1377,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,

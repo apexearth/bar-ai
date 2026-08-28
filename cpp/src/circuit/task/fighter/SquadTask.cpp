@@ -244,16 +244,21 @@ bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
 	return true;
 }
 
-// EVERYONE LOW, NOBODY TRIGGERED (apexearth 2026-08-28: "sometimes our squad
-// is only a few people and they're all low. Whole squad should fall back if
-// they're all too low... stop them from getting targeted by having them move
-// back"). The per-unit thresholds sit at 8-50% hp, so a squad hovering at
-// 30-50% across the board never enters TrySquadRetreat at all -- it stands
-// and is focused down one unit at a time. Checked per update: when every
-// member is under apex_squad_fall_hp the squad leaves together on ONE
-// retreat task, same group pathing as the wounded-power vote. Committed
-// pushes, dives and charger deliveries keep pressing, and defended home
-// ground stands -- the same exemptions the vote and the attack-break carry.
+// THE SQUAD'S TOTAL HP IS THE TRIGGER, NOT EACH UNIT'S (apexearth
+// 2026-08-28: "if the squad's total HP is less than some %, like if total
+// squad health below 50% or something we pull back. (not each individual
+// unit)" -- refining "whole squad should fall back if they're all too
+// low... stop them from getting targeted by having them move back"). The
+// per-unit thresholds sit at 8-50% hp, so a mauled squad never enters
+// TrySquadRetreat at all -- it stands and is focused down one unit at a
+// time. Checked per update: when the squad's power-weighted health falls
+// under apex_squad_fall_hp the squad leaves together on ONE retreat task,
+// same group pathing as the wounded-power vote. Power-weighted so a swarm
+// of scratched Ticks cannot outvote a dying Mammoth; cowards COUNT here,
+// unlike GetHealthScale -- his rule reads the HP that exists, not the HP
+// still pressing. Committed pushes, dives and charger deliveries keep
+// pressing, and defended home ground stands -- the same exemptions the
+// vote and the attack-break carry.
 bool ISquadTask::TryAllLowFallback()
 {
 	if ((units.size() < 2) || IsDiveCommit()) {
@@ -265,14 +270,21 @@ bool ISquadTask::TryAllLowFallback()
 	{
 		return false;
 	}
-	const float bar = circuit->GetTunable("apex_squad_fall_hp", 0.6f);
+	const float bar = circuit->GetTunable("apex_squad_fall_hp", 0.5f);
 	if (bar <= 0.f) {
 		return false;
 	}
+	float total = .0f;
+	float alive = .0f;
 	for (CCircuitUnit* u : units) {
-		if (u->GetHealthPercent() >= bar) {
-			return false;
-		}
+		const float power = u->GetCircuitDef()->GetPower();
+		total += power;
+		float hp = u->GetHealthPercent();
+		hp = std::max(.0f, std::min(1.f, hp));  // capture progress drives it negative
+		alive += power * hp;
+	}
+	if ((total <= .0f) || (alive >= total * bar)) {
+		return false;
 	}
 	if (leader != nullptr) {
 		const AIFloat3& lp = leader->GetPos(circuit->GetLastFrame());
@@ -288,8 +300,8 @@ bool ISquadTask::TryAllLowFallback()
 	if (task == nullptr) {
 		return false;
 	}
-	circuit->LOG("apex: squad all-low fallback units=%d bar=%.2f",
-			(int)units.size(), bar);
+	circuit->LOG("apex: squad all-low fallback units=%d hp=%.2f bar=%.2f",
+			(int)units.size(), alive / total, bar);
 	decltype(units) tmpUnits = units;
 	for (CCircuitUnit* u : tmpUnits) {
 		manager->AssignTask(u, task);

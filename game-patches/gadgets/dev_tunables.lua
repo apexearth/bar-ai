@@ -326,7 +326,7 @@ local NAMES = {
 	"apex_bomb_revisit_s",    -- BombTask: seconds a committed target stays discounted for other squads (90)
 	"apex_bomb_revisit_disc", -- BombTask: score multiplier at 0s since commit, fading to 1 (0.2)
 	"apex_coward_hp",         -- FighterTask: hp fraction where a squad member takes the rear ring (0.6; 0=sliver only)
-	"apex_squad_fall_hp",     -- SquadTask: if EVERY member is under this hp the squad falls back together (0.6; 0=off)
+	"apex_squad_fall_hp",     -- SquadTask: squad falls back together when its power-weighted TOTAL hp drops under this (0.5; 0=off)
 	"apex_brain_nuke",        -- 1 = script nuke director owns silo targeting, 0 = C++ auto-fire
 	"apex_trade_vol",         -- deathledger.as: seconds of income lost before the trade is judged (20)
 	"apex_trade_bad",         -- deathledger.as: kill/loss ratio below which posture turns defensive (0.6)
@@ -383,6 +383,9 @@ local NAMES = {
 	"apex_e_per_metal",
 	"apex_fusion_min_energy",
 	"apex_super_self_frac",
+	"apex_gantry_afford_s",
+	"apex_gantry_insure",
+	"apex_offense_def_floor",
 	"apex_shield_income",
 	"apex_local_edge",
 	"apex_local_edge_on",
