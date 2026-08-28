@@ -15,6 +15,35 @@ When an entry is completed (landed + he has seen it work, or confirmed live),
 MOVE it to `feedback/<date>.md` — date of the original request. This file
 holds only unresolved asks and standing preferences.
 
+## UNRESOLVED — 4v4 resource efficiency (2026-08-28)
+
+Watching Aethermoor Creek +100%: "At +100% bonus 1v1 we do really well...
+But when its a 4v4 we do a lot worse... we're generally inefficient with our
+resources... likely just buying expensive stuff a little too early instead
+of devoting that metal into economy." Root cause traced same day (ISSUES.md
+2026-08-28 ArmyTarget entry): each player answered the whole enemy team's
+census. `apex_ally_share` landed against it; measurement in flight.
+
+## UNRESOLVED — Units retreat at a very low HP % (2026-08-28)
+
+"I have noticed in recent games our units tend to retreat on a very low
+HP %." The curve is retreat = 0.08 + costM/apex_retreat_cost_scale (cap
+~0.5), so most T1 retreats at ~10-15% HP. History cuts both ways: stock's
+0.6 was measured losing 93% of combat metal to died-retreating, and his own
+earlier ruling was "we stay in the fight until death" + rez heals. The bad
+middle is what he is seeing: units that DO flee only start at a sliver and
+die anyway. Fix must be measured on deaths.py died-retreating share and
+trade, not just landed.
+
+## UNRESOLVED — Air keeps re-bombing the same target (2026-08-28)
+
+"Our air tends to repeatedly try bombing the same thing, need a bit more
+variance in targets." Mechanism found: `CBombTask::FindTarget`
+(vendor/circuitai src/circuit/task/fighter/BombTask.cpp) picks the
+minimum-health enemy in range — deterministic, so every wave re-picks the
+same target, including one whose AA just drove the last wave off. C++ fix
+(recency penalty or scoring jitter); script cannot reach the scoring.
+
 ## UNRESOLVED — Kill their economy, not just their army (2026-08-27)
 
 Watching, after the ledger campaign ("It works pretty good now"): "we only

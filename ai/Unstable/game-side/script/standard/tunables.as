@@ -1748,6 +1748,10 @@ const float TUNE_GUARD_RATE = 0.2f;
 const float TUNE_ENEMY_PRIOR = 0.25f;   // 0.35 + a continuous line drained the bank into army (watched: out of metal)
 // MATCH_RATIO: army fielded per metal of enemy army SEEN.
 const float TUNE_MATCH_RATIO = 1.2f;
+// ALLY_SHARE: 1 = scale the SEEN census in ArmyTarget by our income share of
+// the team (the census is side-wide; the answer is split by the roster).
+// 0 = every player answers the whole enemy team (the pre-2026-08-28 form).
+const float TUNE_ALLY_SHARE = 1.f;
 // ARMY_FILL_S: seconds over which an army-value gap counts as a stream.
 const float TUNE_ARMY_FILL_S = 180.f;   // the 120 compensation was fighting the Wait throttle, not the price; with the line continuous, 180 shares honestly
 // REZ_HORIZON: seconds to recover the field's wreck pool; rez production
@@ -1756,9 +1760,15 @@ const float TUNE_REZ_HORIZON = 120.f;
 // AA_MATCH: our AA value per metal of enemy air seen.
 const float TUNE_AA_MATCH = 0.7f;
 // RETREAT_COST_SCALE: metal at which a unit's retreat threshold reaches
-// ~+0.33 over the 0.08 floor (retreat = 0.08 + cost/this, cap 0.5) -- cheap
+// ~+0.33 over the floor (retreat = floor + cost/this, cap 0.5) -- cheap
 // units fight to the end, expensive ones preserve.
 const float TUNE_RETREAT_COST_SCALE = 3000.f;
+// RETREAT_FLOOR: the HP fraction where the cheapest unit starts to flee.
+// 0.08 was set against stock's 0.6 (93% of combat metal died retreating);
+// his 2026-08-28 report is the other rail ("units retreat on a very low
+// HP %" -- a sliver-HP flee dies anyway). Raise only with a deaths.py
+// died-retreating measurement beside it.
+const float TUNE_RETREAT_FLOOR = 0.08f;
 // STAKE_WEIGHT: how strongly an army DEFICIT borrows urgency from the
 // total value at risk (expected loss = everything x defeat probability).
 const float TUNE_STAKE_WEIGHT = 1.f;

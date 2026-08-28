@@ -101,6 +101,7 @@ local NAMES = {
 	"apex_guard_rate",
 	"apex_enemy_prior",
 	"apex_match_ratio",
+	"apex_ally_share",
 	"apex_army_fill_s",
 	"apex_rez_horizon",
 	"apex_eco_rear_margin",
@@ -127,6 +128,7 @@ local NAMES = {
 	"apex_eco_army_min_m",
 	"apex_aa_match",
 	"apex_retreat_cost_scale",
+	"apex_retreat_floor",
 	"apex_stake_weight",
 	"apex_static_guard",
 	"apex_wave_meet",
@@ -321,6 +323,8 @@ local NAMES = {
 	"apex_air_home_wave",     -- air: non-lead aircraft mass at home, strike as a wave (1)
 	"apex_bomb_defend_aa",    -- air: enemy AA metal below which home defense may bomb armies (1000)
 	"apex_bomb_fat_mobile",   -- BombTask: heavy-role mobile above this metal is always bombable (4000)
+	"apex_bomb_revisit_s",    -- BombTask: seconds a committed target stays discounted for other squads (90)
+	"apex_bomb_revisit_disc", -- BombTask: score multiplier at 0s since commit, fading to 1 (0.2)
 	"apex_brain_nuke",        -- 1 = script nuke director owns silo targeting, 0 = C++ auto-fire
 	"apex_trade_vol",         -- deathledger.as: seconds of income lost before the trade is judged (20)
 	"apex_trade_bad",         -- deathledger.as: kill/loss ratio below which posture turns defensive (0.6)

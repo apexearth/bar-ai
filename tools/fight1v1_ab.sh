@@ -31,10 +31,14 @@ MINUTES="${FIGHT_MINUTES:-20}"
 # FIGHT_SIDES to check a result carries to another faction.
 SIDES="${FIGHT_SIDES:-Armada,Armada}"
 WD_ROOT="${FIGHT_WRITE_ROOT:-$PWD/matches/.wd}"
+# The deployed variant moved to Apex:Unstable:standard; the old
+# Apex:apex:hard_aggressive spec resolves to NO installed AI and scores zero
+# silently (the unknown-skirmish-AI trap).
+SPEC_A="${FIGHT_SPEC_A:-Apex:Unstable:standard}"
 
 for s in $SEEDS; do
     python -u tools/run_match.py \
-        --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+        --a "$SPEC_A" --b BARb:stable:hard \
         --map "$MAP" --per-side 1 --minutes "$MINUTES" --seed "$s" \
         --sides "$SIDES" "$@" \
         --write-dir "$WD_ROOT/$TAG-$s" \

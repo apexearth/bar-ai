@@ -96,9 +96,19 @@ def check_economy(text, rep):
         detail = "first lab past 4min: " + ", ".join(
             f"{t}@{first_lab[t]:.1f}m" for t in late)
     rep.add("ECONOMY", ok, "first-factory", detail)
-    # first fusion ask + first standing, per team
+    # first fusion ask, per team. Two spellings: the market election
+    # (`decide ... energy/energy:corfus`) is the live one; the old EcoFusion
+    # `eco fusion <name> standing=` line is kept for pre-market infologs --
+    # matching only the dead spelling read every 2026-08-28 game as "never"
+    # while corfus/corafus elections were in the same log.
     asks = [(minute_of(l), l) for l in
             re.findall(r".*eco fusion \w+ standing=.*", text)]
+    # decide lines have no [Nm tN] prefix; their minute comes off the
+    # engine frame stamp.
+    asks += [(int(fm.group(1)) / FRAMES_PER_MIN, l) for l in
+             re.findall(r".*apex: decide .*-> energy/energy:"
+                        r"(?:cor|arm|leg)\w*fus\w* .*", text)
+             for fm in [re.search(r"\[f=(\d+)\]", l)] if fm]
     if asks:
         first = min(m for m, _ in asks if m is not None)
         rep.add("ECONOMY", first <= 18, "first-fusion-ask",

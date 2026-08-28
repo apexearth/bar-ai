@@ -1,5 +1,73 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-28 — 4v4 economic collapse: ArmyTarget charges one player the whole enemy team
+
+His report (Aethermoor Creek, +100%): strong in 1v1, "a lot worse" in 4v4 —
+"we're generally inefficient with our resources... buying expensive stuff a
+little too early instead of devoting that metal into economy."
+
+Mechanism, verified in his own watched games (matches/20260828-171323 4v4 vs
+20260828-170422 1v1, same map/bonus): `ArmyTarget()` (army.as) sets
+`expectedEnemy = max(Military::EnemyArmyCost(), prior)` with **no ally-share
+division** — and `EnemyArmyCost` is the side-wide census. Each of 4 players
+targets 1.2x the ENTIRE enemy team's army on 1/4 the income. Measured: 4v4
+`army=6866/42554` (funded 0.16, gap never closes, end-state census 91,159 vs
+one player's 16,851); 1v1 `army=37717/49027` rising past 1.0 by ~30 min.
+
+The codebase states the missing law THREE times and applies it elsewhere:
+mobile-AA RoleTarget (army.as: "the census sums all enemies while every ally
+instance would otherwise build the full answer"), static-AA want
+(want_protect.as:912, divides by `AllyCount`), and `Military::AllyCount`'s own
+comment (massing.as: "any bar derived from the whole enemy side has to be
+divided by the roster before it is charged to one pool"). ArmyTarget — the
+single most consumed demand figure — never got it.
+
+Downstream of the permanently-saturated gap (audit.json, 4v4 vs 1v1):
+- production.as: `stakeMul` (deficit-scaled, cap 8x) + armyGap keep every
+  line pumping — metal-wasted 2% vs 28%; all income becomes units, thrown
+  away at 60% hopeless-attacks, so ArmyValue never accumulates (feedback loop).
+- want_plant prodTerm: plants ate 8.6% of team metal (32,830/382,106 at 27m)
+  vs 1.2% in the 1v1 (16,880/1,431,145 at 45m).
+- want_protect siteWave/floor (`ArmyTargetFull*0.35`): heavy-tower share 55%
+  at 27m (18,600 heavy vs 14,910 T1) — big guns bought early on 1/4 income.
+- want_tech fundedMul = ArmyValue/ArmyTarget = 0.16 → tech/T2 discounted 6x
+  exactly when falling behind (floorMul partially rescues it).
+- want_super gantry gain reads the same inflated gapF.
+
+Second finding, same 4v4: **the eco-role election never fired** — 0 of 92
+`apex: targets` samples show `eco=1`. `EcoRoleActive` (army.as) requires
+rear-most with margin 1.15 over the median; on line-abreast starts nobody
+clears it, so the rear-economist design built FOR team games elected no one,
+and all four players played front-line-matching-the-world.
+
+Standing inefficiencies visible in BOTH formats (masked by map wealth in 1v1):
+mohos available and lost the auction 51x (4v4) / 212x (1v1) — in the 4v4
+mostly to fusion/AFUS elections with huge stall-priced gains (corafus
+gain=459 at ~25m on quarter income) and to advanced radar. Whether those
+elections stay inflated must be re-judged AFTER the ally-share fix, since
+the army pump is what stalls the energy. (The audit's `first-fusion-ask:
+never` in these games was FALSE — the check grepped the dead pre-market
+`eco fusion ... standing=` spelling; fixed 2026-08-28 to read the market's
+`decide ... energy/energy:*fus` election, which says ~10 min.)
+
+FIX LANDED 2026-08-28 (`AnswerShare()` in army.as, tunable
+`apex_ally_share`): the seen census is scaled by our income share of the
+team (blackboard `minc`, silent allies imputed at the publishers' mean;
+solo = 1.0 so 1v1 arithmetic unchanged). Measured, 3 seeds vs 3 baselines,
+same map/setup: funded @20m 0.25-0.47 -> 0.68-0.86; team metal at 30m
+~420k -> 639k-775k (+65-85%); end army 0.22x enemy census -> 0.76-1.15x;
+mex race won 2/3. AWAITING his watched game before deleting this entry.
+
+Residue to watch, NOT yet attributed:
+- energy-race-10m dipped in the ON arm (46/57/21% vs 68/81%) — early
+  energy build may lag the bigger early expansion; re-read after his game.
+- duplicate ADVANCED AIR plants in the ON arm (coraapx x3-4 per team, plus
+  coravpx x3 in one seed) — each player buys its own advanced plant; the
+  per-player-vs-team disease in another organ (air lead election exists;
+  the plant want doesn't consult it). Separate change.
+- eco-role election still never fires on line-abreast starts (0/92 samples
+  his game) — decide after the above, the deflated target may be enough.
+
 ## 2026-08-28 — nano turrets cannot be told to reclaim (mechanism gap)
 
 His ask: "We have a lot of constructor units & turrets which could be doing

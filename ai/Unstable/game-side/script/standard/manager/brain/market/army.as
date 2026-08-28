@@ -769,6 +769,52 @@ float EconAssetsM()
 	return (e > 0.f) ? e : 0.f;
 }
 
+// MY SHARE OF THE TEAM'S ANSWER. EnemyArmyCost is the SIDE-WIDE census, and a
+// bar derived from the whole enemy side has to be divided by the roster before
+// it is charged to one player -- the law the AA role target, the static-AA
+// want and Military::AllyCount already carry, which this target never got:
+// each of N allies matched the entire enemy team on 1/N of the income, so the
+// gap saturated and every gap consumer (production stake, plants, nanos, the
+// tech discount, siege sizing) overrode the economy for the whole game.
+// Income share, off the blackboard the front budget publishes: metal is what
+// closes an army gap. A silent ally (a human, another AI) is imputed at the
+// mean of those who publish, which makes the no-ally-publishes case an equal
+// split by seats and the solo case exactly 1 -- the 1v1 arithmetic unchanged.
+float gAnswerShare = 1.f;
+int gAnswerShareAt = -999999;
+float AnswerShare()
+{
+	if (ai.frame < gAnswerShareAt + 5 * SECOND)
+		return gAnswerShare;
+	gAnswerShareAt = ai.frame;
+	gAnswerShare = 1.f;
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() <= 1))
+		return gAnswerShare;
+	if (ai.GetTunable("apex_ally_share", TUNE_ALLY_SHARE) < 0.5f)
+		return gAnswerShare;
+	const float mine = aiEconomyMgr.metal.income;
+	float team = 0.f;
+	int pubs = 0;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const float v = ai.ReadTeamValue(int(mates[i]), Military::TV_MINC, 0.f);
+		if (v <= 0.f)
+			continue;
+		team += v;
+		++pubs;
+	}
+	if ((pubs <= 0) || (team <= 0.f) || (mine <= 0.f)) {
+		gAnswerShare = 1.f / float(mates.length());
+		return gAnswerShare;
+	}
+	team *= float(mates.length()) / float(pubs);
+	if (team < mine)
+		team = mine;
+	float s = mine / team;
+	gAnswerShare = (s > 1.f) ? 1.f : s;
+	return gAnswerShare;
+}
+
 float ArmyTarget()
 {
 	// The SYMMETRIC PRIOR: pre-contact the census is blind, and blind read
@@ -778,7 +824,7 @@ float ArmyTarget()
 	// observed census takes over as it grows past the prior.
 	const float ourTotal = EconAssetsM() + ArmyValue();
 	const float prior = ourTotal * ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
-	const float seen = Military::EnemyArmyCost();
+	const float seen = Military::EnemyArmyCost() * AnswerShare();
 	const float expectedEnemy = (seen > prior) ? seen : prior;
 	const float t = EconAssetsM() * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
 		+ expectedEnemy * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
@@ -792,7 +838,7 @@ float ArmyTargetFull()
 {
 	const float ourTotal = EconAssetsM() + ArmyValue();
 	const float prior = ourTotal * ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
-	const float seen = Military::EnemyArmyCost();
+	const float seen = Military::EnemyArmyCost() * AnswerShare();
 	const float expectedEnemy = (seen > prior) ? seen : prior;
 	return EconAssetsM() * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
 		+ expectedEnemy * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
@@ -877,6 +923,7 @@ void RetreatRefresh()
 	if (healBonus > 0.25f)
 		healBonus = 0.25f;
 	const float scale = ai.GetTunable("apex_retreat_cost_scale", TUNE_RETREAT_COST_SCALE);
+	const float rfloor = ai.GetTunable("apex_retreat_floor", TUNE_RETREAT_FLOOR);
 	for (Id rd = 1; rd <= Id(Catalog::gDefCount); ++rd) {
 		const int ri = int(rd);
 		if (!Catalog::gMobile[ri] || Catalog::gBuilder[ri]
@@ -886,7 +933,7 @@ void RetreatRefresh()
 		CCircuitDef@ rdef = ai.GetCircuitDef(rd);
 		if (rdef is null)
 			continue;
-		float rt = 0.08f + Catalog::gCostM[ri] / ((scale > 1.f) ? scale : 3000.f)
+		float rt = rfloor + Catalog::gCostM[ri] / ((scale > 1.f) ? scale : 3000.f)
 				+ healBonus;
 		if (rt > 0.55f)
 			rt = 0.55f;

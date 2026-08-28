@@ -228,7 +228,8 @@ void Init()
 		CCircuitDef@ rdef = ai.GetCircuitDef(rd);
 		if (rdef is null)
 			continue;
-		float rt = 0.08f + gCostM[ri]
+		float rt = ai.GetTunable("apex_retreat_floor", TUNE_RETREAT_FLOOR)
+				+ gCostM[ri]
 				/ ai.GetTunable("apex_retreat_cost_scale", TUNE_RETREAT_COST_SCALE);
 		if (rt > 0.5f)
 			rt = 0.5f;

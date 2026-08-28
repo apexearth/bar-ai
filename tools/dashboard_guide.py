@@ -366,6 +366,13 @@ GROUPS = [
                   "our front while a hold is on"),
                  ("TUNE_DEFEND_LEASH", "lets a defending unit chase further "
                   "forward before it is recalled"),
+                 ("TUNE_RETREAT_FLOOR", "units start fleeing at a higher HP "
+                  "fraction — the cheapest unit's threshold; each unit adds "
+                  "cost/apex_retreat_cost_scale on top. Stock's 0.6 lost 93% "
+                  "of combat metal died-retreating; too low and a sliver-HP "
+                  "flee dies anyway"),
+                 ("TUNE_RETREAT_COST_SCALE", "lower = expensive units flee "
+                  "earlier (threshold adds cost divided by this)"),
              ]},
             {"title": "Where the army stands",
              "what": "The staging anchor: the point the army gathers on and "
@@ -572,6 +579,10 @@ GROUPS = [
                   "field at least this multiple of our army"),
                  ("TUNE_MATCH_RATIO", "army fielded per metal of enemy army "
                   "actually seen"),
+                 ("TUNE_ALLY_SHARE", "at 1, each ally answers only its income "
+                  "share of the enemy team's army; at 0 every ally answers "
+                  "all of it, which in a 4v4 had each player chasing 4x its "
+                  "own economy"),
                  ("TUNE_GHOST_WEIGHT", "stale sightings count for more against "
                   "fresh ones"),
              ]},

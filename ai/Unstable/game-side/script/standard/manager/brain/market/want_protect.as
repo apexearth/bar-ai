@@ -594,6 +594,7 @@ void TargetLog()
 		+ " floor=" + int(ArmyTargetFull() * ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE))
 		+ " expo=" + formatFloat(TeamExposure(), "", 0, 2)
 		+ " ourArmy=" + int(ArmyValue())
+		+ " share=" + formatFloat(AnswerShare(), "", 0, 2)
 		+ " eco=" + (EcoRoleActive() ? 1 : 0));
 }
 
