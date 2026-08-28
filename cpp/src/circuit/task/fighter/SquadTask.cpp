@@ -215,7 +215,12 @@ bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
 	}
 	float woundedPower = unit->GetCircuitDef()->GetPower();
 	for (CCircuitUnit* u : cowards) {
-		if ((u != unit) && (u->GetCircuitDef() != nullptr)) {
+		// SLIVER-HP ONLY. Cowards now also hold rear-standers that entered at
+		// apex_coward_hp (~60%) with plenty of fight left; counting them here
+		// would trip the 35% vote on a squad that is merely scuffed.
+		if ((u != unit) && (u->GetCircuitDef() != nullptr)
+			&& (u->GetHealthPercent() <= u->GetCircuitDef()->GetRetreat()))
+		{
 			woundedPower += u->GetCircuitDef()->GetPower();
 		}
 	}
@@ -232,6 +237,59 @@ bool ISquadTask::TrySquadRetreat(CCircuitUnit* unit)
 	NoteSquadVote(circuit);
 	circuit->LOG("apex: squad retreat units=%d wounded=%.0f/%.0f",
 			(int)units.size(), woundedPower, attackPower);
+	decltype(units) tmpUnits = units;
+	for (CCircuitUnit* u : tmpUnits) {
+		manager->AssignTask(u, task);
+	}
+	return true;
+}
+
+// EVERYONE LOW, NOBODY TRIGGERED (apexearth 2026-08-28: "sometimes our squad
+// is only a few people and they're all low. Whole squad should fall back if
+// they're all too low... stop them from getting targeted by having them move
+// back"). The per-unit thresholds sit at 8-50% hp, so a squad hovering at
+// 30-50% across the board never enters TrySquadRetreat at all -- it stands
+// and is focused down one unit at a time. Checked per update: when every
+// member is under apex_squad_fall_hp the squad leaves together on ONE
+// retreat task, same group pathing as the wounded-power vote. Committed
+// pushes, dives and charger deliveries keep pressing, and defended home
+// ground stands -- the same exemptions the vote and the attack-break carry.
+bool ISquadTask::TryAllLowFallback()
+{
+	if ((units.size() < 2) || IsDiveCommit()) {
+		return false;
+	}
+	CCircuitAI* circuit = manager->GetCircuit();
+	if (circuit->IsCommitted()
+		|| ((leader != nullptr) && IsChargeDef(leader->GetCircuitDef())))
+	{
+		return false;
+	}
+	const float bar = circuit->GetTunable("apex_squad_fall_hp", 0.6f);
+	if (bar <= 0.f) {
+		return false;
+	}
+	for (CCircuitUnit* u : units) {
+		if (u->GetHealthPercent() >= bar) {
+			return false;
+		}
+	}
+	if (leader != nullptr) {
+		const AIFloat3& lp = leader->GetPos(circuit->GetLastFrame());
+		const float defInfl = circuit->GetInflMap()->GetAllyDefendInflAt(lp);
+		if ((defInfl > INFL_EPS)
+			&& (defInfl >= circuit->GetInflMap()->GetEnemyInflAt(lp)
+				* circuit->GetTunable("apex_home_stand_ratio", 0.f)))
+		{
+			return false;  // defended home ground stands, as in the vote above
+		}
+	}
+	CRetreatTask* task = manager->EnqueueRetreat();
+	if (task == nullptr) {
+		return false;
+	}
+	circuit->LOG("apex: squad all-low fallback units=%d bar=%.2f",
+			(int)units.size(), bar);
 	decltype(units) tmpUnits = units;
 	for (CCircuitUnit* u : tmpUnits) {
 		manager->AssignTask(u, task);
@@ -1172,6 +1230,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				// safe enough not to need a full retreat.
 				if (cowards.find(unit) != cowards.end()) {
 					r *= manager->GetCircuit()->GetTunable("apex_coward_rear_mod", COWARD_REAR_MOD);
+					// REAR BUT STILL FIRING for the 60%-band stander: 1.35x
+					// the 90% standoff is ~1.22x the row's own weapon range,
+					// a slot that contributes nothing -- and parking every
+					// sub-60% unit there halved the A/B's K/D ratio twice.
+					// Capped inside the row's reach it screens by angle and
+					// margin, not by silence. A sliver coward (at or under
+					// its own retreat bar) keeps the full out-of-range
+					// screen: at 8-15% hp survival outweighs its DPS.
+					if (unit->GetHealthPercent() > unit->GetCircuitDef()->GetRetreat()) {
+						r = std::min(r, kv.first * 0.98f);
+					}
 				}
 				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
 				CTerrainManager::CorrectPosition(newPos);

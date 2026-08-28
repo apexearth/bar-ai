@@ -24,6 +24,24 @@ of devoting that metal into economy." Root cause traced same day (ISSUES.md
 2026-08-28 ArmyTarget entry): each player answered the whole enemy team's
 census. `apex_ally_share` landed against it; measurement in flight.
 
+## UNRESOLVED (landed, awaiting his eyes) — Squad falls back together; rear at 60% (2026-08-28)
+
+His clarification of the retreat complaint: "I'd mentioned in the past
+pulling to back of the pack when under 60% but I think sometimes our squad
+is only a few people and they're all low. Whole squad should fall back if
+they're all too low. The goal is to keep people in the fight but maybe
+stop them from getting targeted by the enemy by having them move back."
+Landed same day in C++: (1) squad members enter the rear ring at
+apex_coward_hp (0.6) instead of at the 8-50% retreat threshold — screened
+behind healthier squadmates, STILL FIGHTING, rejoining the line when
+repaired above ~69%; (2) when EVERY member is under apex_squad_fall_hp
+(0.6) the squad leaves together on one retreat task (nobody's individual
+threshold ever fired while all hovered at 30-50%, so the squad stood and
+was focused down). Committed pushes, dives, charger deliveries and
+defended home ground are exempt, same as the existing vote. The
+wounded-power vote still counts only sliver-HP units so it does not trip
+on a merely scuffed squad.
+
 ## UNRESOLVED — Units retreat at a very low HP % (2026-08-28)
 
 "I have noticed in recent games our units tend to retreat on a very low

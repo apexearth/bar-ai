@@ -150,6 +150,24 @@ void IFighterTask::RemoveAssignee(CCircuitUnit* unit)
 void IFighterTask::Update()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
+	// Healed rear-standers rejoin the line -- mid-fight repair exists exactly
+	// so a unit comes back. Exit above 1.15x the entry bar (hysteresis, no
+	// flapping at the boundary); gated on the tunable so the OFF arm keeps
+	// the shipped sliver-coward behavior untouched.
+	const float cowardHp = circuit->GetTunable("apex_coward_hp", 0.6f);
+	if (cowardHp > 0.f) {
+		const float rejoinHp = cowardHp * 1.15f;
+		for (auto it = cowards.begin(); it != cowards.end(); ) {
+			CCircuitUnit* u = *it;
+			if ((u->GetCircuitDef() != nullptr)
+				&& (u->GetHealthPercent() > rejoinHp))
+			{
+				it = cowards.erase(it);
+			} else {
+				++it;
+			}
+		}
+	}
 	const float minShield = circuit->GetSetupManager()->GetEmptyShield();
 	decltype(units) tmpUnits = shields;
 	for (CCircuitUnit* unit : tmpUnits) {
@@ -179,6 +197,12 @@ void IFighterTask::OnUnitIdle(CCircuitUnit* unit)
 			return;
 		}
 		cowards.erase(it);
+		// A rear-stander above its own retreat bar still has a fight in it;
+		// only sliver-HP cowards leave for repair when the squad's fight ends.
+		if (unit->GetHealthPercent() > unit->GetCircuitDef()->GetRetreat()) {
+			unit->SetTaskFrame(manager->GetCircuit()->GetLastFrame());
+			return;
+		}
 		++sRetreatSrc.idleCoward;
 		LogRetreatSrc(manager->GetCircuit());
 		CRetreatTask* task = manager->EnqueueRetreat();
@@ -262,6 +286,18 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 
 	const float healthPerc = unit->GetHealthPercent();
 
+	// REAR AT 60%, NOT AT THE SLIVER (apexearth: "pulling to back of the pack
+	// when under 60%"). Entry to the rear ring used to coincide with the
+	// retreat threshold (8-50% by cost), so a unit held the front row until it
+	// was nearly dead. Marked here, the ring code screens it behind healthier
+	// squadmates while it KEEPS FIGHTING; the retreat votes below still key on
+	// the real thresholds. Squads only -- a lone fighter has no pack.
+	if ((units.size() >= 2) && (healthPerc > cdef->GetRetreat())
+		&& (healthPerc < circuit->GetTunable("apex_coward_hp", 0.6f)))
+	{
+		cowards.insert(unit);
+	}
+
 	if (unit->HasShield()) {
 		const float minShield = circuit->GetSetupManager()->GetEmptyShield();
 		if ((healthPerc > cdef->GetRetreat()) && unit->IsShieldCharged(minShield)) {
@@ -279,6 +315,16 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		}
 		return;
 	} else if (healthPerc < 0.2f) {  // stuck units workaround: they don't shoot and don't see distant threat
+		// SQUAD FIRST. Nearly every T1 unit's retreat bar sits at 8-15%, so
+		// this blanket sub-0.2 branch intercepted the whole cheap army before
+		// the vote below could run -- measured retreat-src stuck=26-33 with
+		// squadStand=squadVote=homeStand=0 in every game of a 12-game A/B:
+		// the solo-retreat deaths the collective disengage exists to prevent
+		// were all coming from here. The workaround remains the fallback for
+		// units the vote does not handle.
+		if (TrySquadRetreat(unit)) {
+			return;
+		}
 		++sRetreatSrc.stuck;
 		LogRetreatSrc(circuit);
 		CRetreatTask* task = manager->EnqueueRetreat();

@@ -454,6 +454,12 @@ void CAttackTask::Update()
 		}
 	}
 
+	// Everyone low with nobody under their own bar: leave together before the
+	// enemy finishes the set. See ISquadTask::TryAllLowFallback.
+	if (TryAllLowFallback()) {
+		return;
+	}
+
 	/*
 	 * Regroup if required
 	 */

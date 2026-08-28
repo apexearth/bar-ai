@@ -61,10 +61,10 @@ mex race won 2/3. AWAITING his watched game before deleting this entry.
 Residue to watch, NOT yet attributed:
 - energy-race-10m dipped in the ON arm (46/57/21% vs 68/81%) — early
   energy build may lag the bigger early expansion; re-read after his game.
-- duplicate ADVANCED AIR plants in the ON arm (coraapx x3-4 per team, plus
-  coravpx x3 in one seed) — each player buys its own advanced plant; the
-  per-player-vs-team disease in another organ (air lead election exists;
-  the plant want doesn't consult it). Separate change.
+- duplicate ADVANCED AIR plants in the ON arm (coraapx x3-4 per team) —
+  RULED ACCEPTABLE by apexearth 2026-08-28: "Multiple adv air are ok if we
+  are crazy wealthy," and those games ran ~350-430 team metal/s. Only a
+  problem if it appears on a POOR team; do not add a team-wide ban.
 - eco-role election still never fires on line-abreast starts (0/92 samples
   his game) — decide after the above, the deflated target may be enough.
 
