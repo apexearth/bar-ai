@@ -40,6 +40,7 @@ void TaskAddedInner(IUnitTask@ task)
 	if (task.GetType() != Task::Type::BUILDER)
 		return;
 	Requests::Register(task);
+	Market::ComTaskAdded(task);
 }
 
 // WHY A TASK DIES. Requests counts what is CREATED; nothing counted what left,
@@ -117,6 +118,7 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 	// record anywhere: hand it to the ledger before the task goes.
 	if (!done)
 		Requests::PendNote(task);
+	Market::ComTaskRemoved(task, done);
 	Requests::Forget(task);
 }
 

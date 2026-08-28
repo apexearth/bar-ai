@@ -101,6 +101,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 
 	{ double _t = Perf::T0(); Builder::SampleWreckField(); Perf::Add("up.wreck", _t); }
 	{ double _t = Perf::T0(); Requests::PeelSurplus(); Perf::Add("up.peel", _t); }
+	{ double _t = Perf::T0(); Market::ComSweep(); Perf::Add("up.comsweep", _t); }
 	{ double _t = Perf::T0(); Role::Resolve(); Perf::Add("up.role", _t); }
 	{ double _t = Perf::T0(); Brain::UpdateFacQueues(); Perf::Add("up.facqueue", _t); }
 	{ double _t = Perf::T0(); Brain::LogFacQueues(); Perf::Add("up.facqueuelog", _t); }
@@ -159,6 +160,7 @@ void UnitFinishedInner(CCircuitUnit@ unit)
 		return;
 	Brain::NoteProduced(unit);
 	Market::NoteFinished(unit);
+	Market::ComUnitFinished(unit);
 	Requests::PendDrop(unit.id);
 	Market::NoteFarm(unit);
 	Brain::NoteSiloFinished(unit);
@@ -199,6 +201,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	Market::NoteDead(unit);
 	if (unit is null)
 		return;
+	Market::ComUnitDead(unit);
 	Requests::PendDrop(unit.id);
 	// The PREVIOUS death's flag is cleared now, so this id can be reused
 	// cleanly, while AiUnitDestroyedBy (which follows this call) still read it.

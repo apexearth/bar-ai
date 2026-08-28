@@ -1,5 +1,40 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-27 (late night) -- the commitment-ledger campaign, in flight
+
+The approved velocity plan (plan file `okay-i-want-you-partitioned-toucan.md`,
+summarized in the bar-ai-velocity-plan memory) is mid-execution. Session 1
+(ledger plumbing + census fix) is landing now. Open halves:
+
+- **Shadow reads accumulate until the flip.** ProtAnyComing/ProtCovered,
+  SuperCensus, UnlocksProduct and reachKin each log `apex: ledger shadow`
+  on disagreement with the ledger. Flip each to ledger-only ONLY when its
+  shadow is clean across several games including one of his; a mismatching
+  one flips as its own measured change. First smoke: shadow=0.
+- **reachkin flip note (from seed-6 shadow data, 25 mismatches, all
+  reachkin; the other three spellings were clean over two games)**: the
+  persistent `old=1 new=0` arm is an UNMANNED held order gLive counts but
+  the ledger's manned rule skips. For DUPLICATE-detection the flip must
+  count unmanned same-def ORDERED rows too (a commitment is a commitment);
+  the manned rule stays only for parallel-capacity counting. The `old=0
+  new=1` arm is the walk window -- the ledger is right and the old read is
+  the duplicate-lab hole.
+- **armmex `why=unit-gone` drift, ~1/game, sweep-corrected in <=5s**: a
+  framed mex vanished without its death event reaching the ledger. Under
+  observation; if it grows, hunt the removal path (mexup replacement is the
+  suspect).
+- **Session 3 carries his headline ruling**: copy-plant wants price 0 (not
+  discounted) with demand forwarded to nanos, plus the `apex: INVARIANT`
+  door guard and audit-on-his-games observability (auto-audit + persisted
+  audit.json + un-gating audit.py's income-sensitive checks).
+- **decide.as:82-123 is unreachable dead code** (maketask.as:48-50 returns
+  any held BUILDER task first, so the 0.01-progress hold and the whole
+  gApproach* machinery never run; the effective hold is unconditional at any
+  progress). Deletion scheduled Session 5 — do NOT build on it meanwhile.
+- **`enginediff` in the ledger summary is log-only** — it counts
+  ledger-vs-Def().count disagreement (gifts/captures legitimate); if it
+  grows steadily in a game with no gifts, hunt a ledger writer hole.
+
 ## 2026-08-27 (night) -- open residue from the watch-list session
 
 Fixes for the night's list are in CHANGES.md; these are the halves NOT yet

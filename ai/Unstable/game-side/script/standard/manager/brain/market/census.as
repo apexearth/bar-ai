@@ -475,7 +475,12 @@ void NoteDead(CCircuitUnit@ unit)
 			}
 		}
 	}
-	OwnAdd(int(unit.circuitDef.id), -1);
+	// Same WasFinished guard as the aggregates above: gOwnCount is "finished
+	// units we own", and a nanoframe that dies unfinished was never in it --
+	// the unconditional debit made per-def counts read LOW (invisible under
+	// the 0-clamp; the ledger's engine cross-check is its regression test).
+	if (Main::WasFinished(int(unit.id)))
+		OwnAdd(int(unit.circuitDef.id), -1);
 	if (Catalog::gExtractsM[int(unit.circuitDef.id)] <= 0.f)
 		return;
 	const int i = LedgerNearest(unit.GetPos(ai.frame));

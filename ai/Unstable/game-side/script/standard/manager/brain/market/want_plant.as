@@ -416,6 +416,29 @@ bool UnlocksProduct(int plantId)
 			if (made)
 				break;
 		}
+		if (!made) {
+			ComShadowNote("unlocks", 1, ComUnlocksProduct(plantId) ? 1 : 0);
+			return true;
+		}
+	}
+	ComShadowNote("unlocks", 0, ComUnlocksProduct(plantId) ? 1 : 0);
+	return false;
+}
+
+// The ledger's answer to the same question, for the Session-1 shadow: a
+// product is made if any of its producers is in the ledger in any state.
+bool ComUnlocksProduct(int plantId)
+{
+	const array<int>@ prods = Catalog::gBuildsList[plantId];
+	for (uint p = 0; p < prods.length(); ++p) {
+		bool made = false;
+		const array<int>@ by = Catalog::gBuiltBy[prods[p]];
+		for (uint b = 0; b < by.length(); ++b) {
+			if (ComAny(by[b], CS_ANY)) {
+				made = true;
+				break;
+			}
+		}
 		if (!made)
 			return true;
 	}
@@ -626,6 +649,28 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if ((PlantReachOf(int(kd2)) >= myReach)
 				&& (PlantClass(int(kd2)) == dClass))
 				reachKin += gOwnCount[kd2];
+		}
+		// Ledger shadow (flip when clean): kin = same-def rows in any state
+		// (ORDERED only when manned), plus same-domain same-or-better-reach
+		// plant rows. Mismatches against the frame+order double count above
+		// are EXPECTED -- they are the measurement the flip ships with.
+		{
+			int nKin = 0;
+			for (uint ci = 0; ci < ComLen(); ++ci) {
+				const int rd = gComDef[ci];
+				if (Catalog::gBuildsList[rd].length() == 0)
+					continue;
+				if ((rd != d)
+					&& ((PlantReachOf(rd) < myReach)
+						|| (PlantClass(rd) != dClass)))
+					continue;
+				if ((gComState[ci] == CS_ORDERED)
+					&& ((gComTask[ci] is null)
+						|| (Requests::Workers(gComTask[ci]) == 0)))
+					continue;
+				++nKin;
+			}
+			ComShadowNote("reachkin", reachKin, nKin);
 		}
 		// A COPY OF A TIER WE HAVE OUTGROWN buys the outgrown tier's
 		// pipeline, not the one we would get for the same metal. apexearth:

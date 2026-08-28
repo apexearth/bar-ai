@@ -21,6 +21,7 @@
 #include "market/price.as"          // the two live prices, and ValueOf
 #include "market/ledger.as"         // spot-value senses; the claimed-spot ledger
 #include "market/census.as"         // what we own: counts, protection classes, unit events
+#include "market/commit.as"         // the commitment ledger: ordered/framed/finished structures
 #include "market/coverage.as"       // measured risk: what reaches an asset, what is dying
 #include "market/protect_field.as"  // what we own, what guards it, where a guard could go
 #include "market/want_mex.as"       // upgrade demand, walk safety, the mex Want

@@ -214,6 +214,23 @@ void SuperCensus()
 		++gSuperHave[sc];
 		++gSuperFlight;
 	}
+	// Ledger shadow (flip when clean): have = any state, flight = coming.
+	{
+		int nHave = 0;
+		int nFlight = 0;
+		for (uint ci = 0; ci < ComLen(); ++ci) {
+			if (SuperClassOf(gComDef[ci]) < 0)
+				continue;
+			++nHave;
+			if (gComState[ci] != CS_FINISHED)
+				++nFlight;
+		}
+		int oHave = 0;
+		for (uint c = 0; c < gSuperHave.length(); ++c)
+			oHave += gSuperHave[c];
+		ComShadowNote("superhave", oHave, nHave);
+		ComShadowNote("superflight", gSuperFlight, nFlight);
+	}
 }
 
 int SuperHave(int sc)

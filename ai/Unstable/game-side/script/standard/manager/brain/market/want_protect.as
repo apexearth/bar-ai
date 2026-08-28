@@ -371,21 +371,33 @@ bool RimGapSite(int cls, AIFloat3& out at)
 // the FIRST tower, which is what this counts.
 bool ProtAnyComing(int cls)
 {
-	if (gProtPos[cls].length() > 0)
-		return true;
-	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+	bool old = (gProtPos[cls].length() > 0);
+	for (uint i = 0; !old && (i < Requests::gLive.length()); ++i) {
 		IUnitTask@ t = Requests::gLive[i];
 		if ((t is null) || t.IsDead() || (t.buildDef is null))
 			continue;
 		if (ProtClassOf(int(t.buildDef.id)) == cls)
-			return true;
+			old = true;
 	}
-	Requests::PendSweep();
-	for (uint i = 0; i < Requests::gPendId.length(); ++i) {
-		if (ProtClassOf(Requests::gPendDef[i]) == cls)
-			return true;
+	if (!old) {
+		Requests::PendSweep();
+		for (uint i = 0; i < Requests::gPendId.length(); ++i) {
+			if (ProtClassOf(Requests::gPendDef[i]) == cls) {
+				old = true;
+				break;
+			}
+		}
 	}
-	return false;
+	// Ledger shadow (flip when clean): the same question, one source.
+	bool nu = false;
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		if (ProtClassOf(gComDef[ci]) == cls) {
+			nu = true;
+			break;
+		}
+	}
+	ComShadowNote("protany", old ? 1 : 0, nu ? 1 : 0);
+	return old;
 }
 
 bool ProtCovered(int cls, const AIFloat3& in pos, float r)
@@ -409,14 +421,30 @@ bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 	}
 	// ...and so does one nobody is working: the frame is standing whether or
 	// not a request still remembers it.
+	bool old = false;
 	Requests::PendSweep();
 	for (uint i = 0; i < Requests::gPendId.length(); ++i) {
 		if (ProtClassOf(Requests::gPendDef[i]) != cls)
 			continue;
-		if (pos.distance2D(Requests::gPendPos[i]) < r)
-			return true;
+		if (pos.distance2D(Requests::gPendPos[i]) < r) {
+			old = true;
+			break;
+		}
 	}
-	return false;
+	// Ledger shadow (flip when clean). The two standing/live passes above
+	// return true directly, so a shadow note here only covers the old=false
+	// and orphan-frame answers -- enough to prove the frame/order half.
+	bool nu = false;
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		if (ProtClassOf(gComDef[ci]) != cls)
+			continue;
+		if (pos.distance2D(gComPos[ci]) < r) {
+			nu = true;
+			break;
+		}
+	}
+	ComShadowNote("protcov", old ? 1 : 0, nu ? 1 : 0);
+	return old;
 }
 
 // Insurance pricing: protection is worth a fraction of the assets it

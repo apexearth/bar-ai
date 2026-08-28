@@ -724,9 +724,33 @@ def check_perf(text, rep):
             + " ".join(f"{k}={v/1000:.0f}s" for k, v in worst_tot))
 
 
-CHECKS = [check_health, check_priority, check_economy, check_military,
-          check_efficiency, check_vs_enemy, check_structures, check_geometry,
-          check_perf]
+def check_ledger(text, rep):
+    """The commitment ledger holds truth: drift means a missed event, an
+    INVARIANT line means the pricing let a stated law reach the door."""
+    summaries = re.findall(
+        r"apex: ledger t=\d+ rows=(\d+) ord=(\d+) frm=(\d+) fin=(\d+) "
+        r"drift=(\d+) enginediff=(\d+) shadow=(\d+)", text)
+    if not summaries:
+        rep.add("HEALTH", True, "ledger", "no ledger telemetry (older AI build)")
+        return
+    rows, ord_, frm, fin, drift, ediff, shadow = (int(x) for x in summaries[-1])
+    drifts = re.findall(r"apex: ledger drift .* why=(\S+)", text)
+    bad = [w for w in drifts if w in ("unit-gone", "task-gone")]
+    rep.add("HEALTH", not bad, "ledger-drift",
+            f"{len(bad)} missed-event drift(s); last summary rows={rows} "
+            f"ord={ord_} frm={frm} fin={fin} enginediff={ediff}")
+    rep.add("HEALTH", True, "ledger-shadow",
+            f"{shadow} shadow mismatch(es) recorded (data for the flip, "
+            "not a failure)")
+    inv = re.findall(r"apex: INVARIANT (\S+)", text)
+    rep.add("HEALTH", not inv, "invariants",
+            "none reached the door" if not inv
+            else f"{len(inv)} refusal(s): " + " ".join(sorted(set(inv))))
+
+
+CHECKS = [check_health, check_ledger, check_priority, check_economy,
+          check_military, check_efficiency, check_vs_enemy, check_structures,
+          check_geometry, check_perf]
 
 
 def main():
