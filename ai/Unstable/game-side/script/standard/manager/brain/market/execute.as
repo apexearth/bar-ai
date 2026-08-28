@@ -51,6 +51,31 @@ AIFloat3 ClearOfLiveFactories(const AIFloat3& in pos)
 	return p;
 }
 
+// A detour to finish existing work must pay for itself: the EXTRA walk (past
+// the site the want was priced for) at the wage, against the metal already
+// standing in the work. Adoption used to be distance-blind -- "the same frame
+// WHEREVER it stands" -- which re-aimed a winner across the map on a want
+// priced for the site beside him (his report: the commander pulled all the
+// way home for work his election never priced).
+bool AdoptWorthDetour(CCircuitUnit@ unit, Want@ w, const AIFloat3 &in at,
+		float done)
+{
+	if (!OnMap(at))
+		return false;
+	const AIFloat3 up = unit.GetPos(ai.frame);
+	const float dFrame = up.distance2D(at);
+	const float dSite = OnMap(w.pos) ? up.distance2D(w.pos) : dFrame;
+	const float extra = dFrame - dSite;
+	if (extra <= 0.f)
+		return true;   // on the way, or closer than the priced site
+	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+	const float extraSec = (speed > 1.f) ? (extra / speed) : 60.f;
+	float d0 = done;
+	if (d0 < 0.f) d0 = 0.f;
+	else if (d0 > 1.f) d0 = 1.f;
+	return extraSec * Wage() <= d0 * ((w.def is null) ? 0.f : w.def.costM);
+}
+
 IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 {
 	// FINISH BEFORE FOUNDING, for EVERY static kind. The adoption block used
@@ -62,12 +87,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		&& (w.kind != WK_RECLAIM) && (w.kind != WK_ASSIST))
 	{
 		IUnitTask@ orph0 = Requests::OrphanOf(w.def);
-		if (orph0 !is null)
+		if ((orph0 !is null) && AdoptWorthDetour(unit, w,
+				orph0.GetBuildPos(), Requests::Progress(orph0)))
 			return orph0;
 		CCircuitUnit@ pf0 = Requests::PendAnyOfDef(w.def, unit.GetPos(ai.frame));
 		if ((pf0 !is null)
 			&& (Builder::ThreatFor(unit, pf0.GetPos(ai.frame))
-				<= Builder::CON_THREAT_VETO))
+				<= Builder::CON_THREAT_VETO)
+			&& AdoptWorthDetour(unit, w, pf0.GetPos(ai.frame),
+				pf0.GetHealthPercent()))
 		{
 			float done0 = pf0.GetHealthPercent();
 			if (done0 < 0.f)

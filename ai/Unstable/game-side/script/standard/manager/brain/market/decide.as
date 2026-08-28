@@ -236,6 +236,28 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;
 		}
 	}
+	// A HARD E-STALL IS NOT A LOTTERY (apexearth: "if we are e-stalling...
+	// MAKE A BASIC SOLAR. There's no question about it"). The stall interrupt
+	// aborts a builder on the strength of a dry-run that says his top want is
+	// energy -- and then the roulette re-rolled the freed builder onto
+	// whatever else held a ticket: measured, a commander pulled off a
+	// nearly-finished mex walk who then bought an armllt at home six times in
+	// a row while the stall kept re-interrupting him (the tower is not an
+	// ENERGY task, so it was never exempt). Mid-HARD-stall the energy want
+	// takes the election outright; the roulette resumes when the bank does.
+	if (!aaPanic && HardEStall()) {
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if ((ranked[ri].kind != WK_ENERGY) && (ranked[ri].kind != WK_GEO))
+				continue;
+			if (ri > 0) {
+				Want@ ew = ranked[ri];
+				ranked.removeAt(ri);
+				ranked.insertAt(0, ew);
+			}
+			aaPanic = true;   // reuse the skip-the-lottery flag
+			break;
+		}
+	}
 	// AFFORDABILITY IS THE WHOLE TEST FOR A STRATEGIC BUILD. apexearth: "it is
 	// more of a 'if I can afford this, I'll insert it as a want so we make
 	// one'." A gantry or a silo returns destruction rather than metal/s, so it

@@ -1007,6 +1007,20 @@ void StallWatch()
 		Want@ e = ProposeEnergy(u);
 		if ((e is null) || (e.value <= 0.f))
 			continue;
+		// A walker CLOSER TO HIS OWN SITE than to the stall answer is not the
+		// free interrupt: what he has left to pay is smaller than the walk
+		// the answer demands, so finishing the trip is the cheaper path to
+		// both builds (measured: a commander pulled off a nearly-finished
+		// mex walk and round-tripped the map). The second pass may still
+		// take him -- a stall stays answerable.
+		if (pass == 0) {
+			const AIFloat3 tp0 = t.GetBuildPos();
+			if (OnMap(tp0) && OnMap(e.pos)) {
+				const AIFloat3 up0 = u.GetPos(ai.frame);
+				if (up0.distance2D(tp0) < up0.distance2D(e.pos))
+					continue;
+			}
+		}
 		Want@ mx = ProposeMex(u);
 		if ((mx !is null) && (mx.value > e.value))
 			continue;
