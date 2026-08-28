@@ -36,6 +36,46 @@ bool OwnAnyRezzer()
 	return gOwnRez;
 }
 
+// IN-FLIGHT RETIREMENTS, so reclaim runs in PARALLEL (apexearth: "We can do
+// more than 1 at a time"). Without this every electing hand converged on the
+// one argmax victim while its neighbours stood. A victim another worker has
+// claimed is skipped, so the second con takes the next-best; a worker's own
+// claim is not a skip, which keeps its re-elections stable. Claims expire on
+// a walk-plus-eat clock so a dead worker frees its victim.
+array<Id> gReclaimTgt;
+array<Id> gReclaimBy;
+array<int> gReclaimUntil;
+
+bool ReclaimClaimed(Id tgt, Id worker)
+{
+	for (uint i = 0; i < gReclaimTgt.length(); ) {
+		if (ai.frame >= gReclaimUntil[i]) {
+			gReclaimTgt.removeAt(i);
+			gReclaimBy.removeAt(i);
+			gReclaimUntil.removeAt(i);
+			continue;
+		}
+		if ((gReclaimTgt[i] == tgt) && (gReclaimBy[i] != worker))
+			return true;
+		++i;
+	}
+	return false;
+}
+
+void NoteReclaimClaim(Id tgt, Id worker, int untilFrame)
+{
+	for (uint i = 0; i < gReclaimTgt.length(); ++i) {
+		if (gReclaimTgt[i] == tgt) {
+			gReclaimBy[i] = worker;
+			gReclaimUntil[i] = untilFrame;
+			return;
+		}
+	}
+	gReclaimTgt.insertLast(tgt);
+	gReclaimBy.insertLast(worker);
+	gReclaimUntil.insertLast(untilFrame);
+}
+
 // WHOSE HANDS THESE ARE. apexearth 2026-08-27: "we aren't expanding enough...
 // can we prefer reclaims through rezbots instead of our cons which should be
 // expanding?" A PREFERENCE, not a rule about who is allowed to reclaim -- a
@@ -153,6 +193,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			// we paid buildtime for minutes ago is churn, not tidying.
 			if (Catalog::gFlyer[wd])
 				continue;
+			if (ReclaimClaimed(wu.id, unit.id))
+				continue;
 			if ((wi < gWorkerBorn.length()) && (ai.frame - gWorkerBorn[wi]
 					< int(ai.GetTunable("apex_reclaim_age_s", TUNE_RECLAIM_AGE_S)) * SECOND))
 				continue;
@@ -241,6 +283,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		CCircuitUnit@ g = gOwnGen[i];
 		if (g is null)
 			continue;
+		if (ReclaimClaimed(g.id, unit.id))
+			continue;
 		const int d = int(g.circuitDef.id);
 		// Removing it must LEAVE a surplus -- reclaim never causes a stall.
 		// The margin is a share of the CANDIDATE'S own output, not of income:
@@ -285,6 +329,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		CCircuitUnit@ cv = gOwnConv[i];
 		if (cv is null)
 			continue;
+		if (ReclaimClaimed(cv.id, unit.id))
+			continue;
 		const int d = int(cv.circuitDef.id);
 		const float mc = Catalog::gConvCapacity[d]
 				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
@@ -303,6 +349,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	for (uint i = 0; i < gProtUnit[PROT_DEF].length(); ++i) {
 		CCircuitUnit@ g = gProtUnit[PROT_DEF][i];
 		if (g is null)
+			continue;
+		if (ReclaimClaimed(g.id, unit.id))
 			continue;
 		const int d = gProtDefId[PROT_DEF][i];
 		bool dominated = false;
@@ -389,6 +437,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 			CCircuitUnit@ f = Factory::gFacUnits[fi];
 			if (f is null)
+				continue;
+			if (ReclaimClaimed(f.id, unit.id))
 				continue;
 			const int fd = int(f.circuitDef.id);
 			float fReach = 0.f;

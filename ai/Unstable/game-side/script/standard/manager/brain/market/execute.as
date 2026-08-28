@@ -241,6 +241,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			const int td = int(tgt.circuitDef.id);
 			if (w.retire && !Catalog::gMobile[td])
 				NoteDefRetired(td);
+			// The claim's clock is the eat time (cost/90, the same arithmetic
+			// tCost uses) plus a walk pad; expiry frees a dead worker's victim.
+			NoteReclaimClaim(tgt.id, unit.id,
+					ai.frame + int((60.f + Catalog::gCostM[td] / 90.f) * SECOND));
+			if (gReclaimTgt.length() > 1)
+				AiLog("apex: reclaim-parallel t=" + ai.teamId
+						+ " victims=" + gReclaimTgt.length());
 		}
 		return rt;
 	}
@@ -253,6 +260,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// The line's pull is priced ONCE, in NeediestLine, so the turret is
 		// sited by the same arithmetic that bought it.
 		float worst = 0.f;
+		bool lineSited = false;
 		{
 			AIFloat3 lp;
 			const float ln = NeediestLine(lp);
@@ -260,6 +268,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				worst = ln;
 				slot = lp;
 				sited = true;
+				lineSited = true;
 			}
 		}
 		// NEAR THE METAL SINKS (apexearth: "if we are not empty on metal...
@@ -301,15 +310,28 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				}
 				// The crew is SUPPLY, not demand: a frame whose cons already
 				// eat the free flow earns nothing from another turret.
-				// FreeMetalFlow unclamped -- the 35 here was the same bare
-				// floor the want side already removed, quietly capping which
-				// sink could ever look hungry.
-				const float feed2 = FreeMetalFlow();
-				const float u2 = feed2 - drain - float(nanosAt) * NANO_ABSORB;
+				// Priced in the want side's currency (site_share) -- unshared
+				// feed here let a sink outbid the line that won the want.
+				const float feed2 = FreeMetalFlow()
+						* ai.GetTunable("apex_nano_site_share", TUNE_NANO_SITE_SHARE);
+				float u2 = feed2 - drain - float(nanosAt) * NANO_ABSORB;
+				// Same remaining-life scale as the want side (see
+				// want_nano.as): a frame's stream dies at completion, a
+				// line's does not.
+				{
+					const float eat2 = drain + float(nanosAt) * NANO_ABSORB;
+					const float H2 = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+					float life2 = Catalog::gCostM[bd3]
+							/ ((eat2 > NANO_ABSORB) ? eat2 : NANO_ABSORB);
+					float sh2 = life2 / ((H2 > 1.f) ? H2 : 900.f);
+					if (sh2 < 1.f)
+						u2 *= sh2;
+				}
 				if (u2 > worst) {
 					worst = u2;
 					slot = sp;
 					sited = true;
+					lineSited = false;
 					AiLog("apex: nano-to-sink t=" + ai.teamId + " at "
 							+ lt.buildDef.GetName()
 							+ " drain=" + formatFloat(u2, "", 0, 1));
@@ -348,6 +370,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		if (!sited)
 			return null;
+		if (lineSited)
+			AiLog("apex: nano-to-line t=" + ai.teamId
+					+ " need=" + formatFloat(worst, "", 0, 1));
 		// THE SINK'S OWN CENTER IS OCCUPIED GROUND. Every branch above names
 		// the factory's or the frame's exact position, and the ask went out
 		// with zero shake -- so the engine could not place the turret and the

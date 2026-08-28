@@ -23,7 +23,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	AIFloat3 linePos;
 	const float lineNeed = NeediestLine(linePos);
 	bool haveLine = (lineNeed > 0.f) && OnMap(linePos);
-	AIFloat3 sinkPos;
+	AIFloat3 sinkPos = AIFloat3(-1.f, 0.f, -1.f);
 	float sinkNeed = 0.f;
 	for (uint si = 0; si < Requests::gLive.length(); ++si) {
 		IUnitTask@ st = Requests::gLive[si];
@@ -67,7 +67,23 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// turret count rises with income on its own and needs no ceiling.
 		const float free3 = FreeMetalFlow()
 				* ai.GetTunable("apex_nano_site_share", TUNE_NANO_SITE_SHARE);
-		const float need = free3 - crew3 - float(nAt) * NANO_ABSORB;
+		float need = free3 - crew3 - float(nAt) * NANO_ABSORB;
+		// A FRAME'S STREAM DIES AT COMPLETION where a line's runs forever, so
+		// the sink's need is scaled by its remaining life over the payback
+		// horizon: cost over what the crew already eats. A bare afus reads
+		// minutes of life and takes its first turrets (his ruling); a crewed
+		// frame reads seconds and stops outbidding every working lab with the
+		// whole feed -- measured 2074 sink sitings against 2 line sitings,
+		// mean priced need 389 m/s, while 46% of income overflowed.
+		{
+			const float eat = crew3 + float(nAt) * NANO_ABSORB;
+			const float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+			float life = Catalog::gCostM[bd]
+					/ ((eat > NANO_ABSORB) ? eat : NANO_ABSORB);
+			float sh = life / ((H > 1.f) ? H : 900.f);
+			if (sh < 1.f)
+				need *= sh;
+		}
 		if (need > sinkNeed) {
 			sinkNeed = need;
 			sinkPos = sp3;
@@ -123,9 +139,15 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// sited at the eco farm, which is behind the anchor and outside assist
 	// reach -- so it could never touch the line that priced it.
 	AIFloat3 site = EcoSiteFor(unit);
+	// The line takes the tie: a factory converts lathe into army for the rest
+	// of the game where a frame stops paying at completion, and the >= the
+	// other way sent every overflow-bought turret to a sink. An unset sinkPos
+	// is (-1,-1), so the zero-vs-zero case no longer reads as an on-map sink.
 	if ((armyNeed >= over) && OnMap(armyPos))
 		site = armyPos;
-	else if ((sinkNeed >= lineNeed) && OnMap(sinkPos))
+	else if (haveLine && (lineNeed >= sinkNeed))
+		site = linePos;
+	else if ((sinkNeed > 0.f) && OnMap(sinkPos))
 		site = sinkPos;
 	else if (haveLine)
 		site = linePos;

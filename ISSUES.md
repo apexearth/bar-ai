@@ -1,5 +1,19 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-28 — nano turrets cannot be told to reclaim (mechanism gap)
+
+His ask: "We have a lot of constructor units & turrets which could be doing
+this [reclaiming old buildings]." Turrets is the blocked half. Verified in the
+DLL source: `CmdReclaimUnit` exists in C++ (`common/ReclaimTask.cpp:83`) but
+has no AngelScript binding, and the static-task route (`TaskS::Reclaim` →
+`CSReclaimTask`, `task/static/ReclaimTask.cpp`) is area-only AND aborts
+whenever `IsMetalFull()` — exactly the overflowing-bank state where space
+reclaim matters most. So idle nano lathe cannot be pointed at an obsolete
+neighbour from script today. Fix is C++: either bind `CmdReclaimUnit` on
+`CCircuitUnit` or a unit-target static reclaim task without the metal-full
+abort. Until then reclaim parallelism is constructors only (the claim
+registry in `want_reclaim.as`, 2026-08-28).
+
 ## 2026-08-28 — the +100% spend bottleneck (his Titan complaint, half-closed)
 
 At his regime the AI banks a third of its metal (his game 31%, seeds 14-15:

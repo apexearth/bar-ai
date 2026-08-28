@@ -728,6 +728,11 @@ float NeediestLine(AIFloat3& out at)
 {
 	float worst = 0.f;
 	const float feed = FreeMetalFlow();
+	// The army want floors every working line's share: the ceiling weight
+	// alone let one standing gantry (ceil 29000) starve a T2 lab to ~2% of
+	// feed, below its own lathe -- so labs priced zero nano demand while
+	// metal overflowed. LineSpend is the per-line army/overflow appetite.
+	const float spendFloor = LineSpend();
 	float sumCeil = 0.f;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		if ((Factory::gFacUnits[fi] !is null) && LineWorking(Factory::gFacUnits[fi]))
@@ -737,9 +742,11 @@ float NeediestLine(AIFloat3& out at)
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
 		if ((f is null) || !LineWorking(f))
 			continue;
-		const float share = (sumCeil > 1.f)
+		float share = (sumCeil > 1.f)
 				? (feed * LineCostCeil(f) / sumCeil)
 				: feed;
+		if (spendFloor > share)
+			share = spendFloor;
 		const AIFloat3 fp = f.GetPos(ai.frame);
 		if (!OnMap(fp))
 			continue;
