@@ -118,6 +118,17 @@ public:
 		guardTasks[vip] = task;
 	}
 
+	// Bomb-target memory: last frame any bomb task committed to this enemy.
+	// CBombTask::FindTarget discounts recently-committed targets so waves
+	// spread instead of every squad re-electing the same argmax winner.
+	void NoteBombTarget(int enemyId, int frame) {
+		bombTargetFrame[enemyId] = frame;
+	}
+	int LastBombFrame(int enemyId) const {
+		auto it = bombTargetFrame.find(enemyId);
+		return (it == bombTargetFrame.end()) ? -1 : it->second;
+	}
+
 	void MakeDefence(const springai::AIFloat3& pos);
 	void MakeDefence(int cluster);
 	void MakeDefence(int cluster, const springai::AIFloat3& pos);
@@ -252,6 +263,7 @@ private:
 	// and script-enqueued towers alike. Positions are cached rather than read per
 	// query because these units never move.
 	std::map<CCircuitUnit*, springai::AIFloat3> fencePos;
+	std::map<int, int> bombTargetFrame;  // enemyId: last bomb-commit frame
 	springai::AIFloat3 defStand;
 	int defStandFrame;
 

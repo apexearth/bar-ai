@@ -3714,10 +3714,25 @@ index a44c20b..67c29d6 100644
  		if (unit->GetTask()->GetType() == IUnitTask::Type::PLAYER) {
  			continue;
 diff --git a/src/circuit/module/MilitaryManager.h b/src/circuit/module/MilitaryManager.h
-index c167603..0a510d0 100644
+index c167603..e3f8d82 100644
 --- a/src/circuit/module/MilitaryManager.h
 +++ b/src/circuit/module/MilitaryManager.h
-@@ -122,6 +122,11 @@ public:
+@@ -118,10 +118,26 @@ public:
+ 		guardTasks[vip] = task;
+ 	}
+ 
++	// Bomb-target memory: last frame any bomb task committed to this enemy.
++	// CBombTask::FindTarget discounts recently-committed targets so waves
++	// spread instead of every squad re-electing the same argmax winner.
++	void NoteBombTarget(int enemyId, int frame) {
++		bombTargetFrame[enemyId] = frame;
++	}
++	int LastBombFrame(int enemyId) const {
++		auto it = bombTargetFrame.find(enemyId);
++		return (it == bombTargetFrame.end()) ? -1 : it->second;
++	}
++
+ 	void MakeDefence(const springai::AIFloat3& pos);
  	void MakeDefence(int cluster);
  	void MakeDefence(int cluster, const springai::AIFloat3& pos);
  	void DefaultMakeDefence(int cluster, const springai::AIFloat3& pos);
@@ -3729,7 +3744,7 @@ index c167603..0a510d0 100644
  	void MarkPorc(CCircuitUnit* unit, int defPointId);
  	void UnmarkPorc(CCircuitUnit* unit);
  	void AbortDefence(const CBDefenceTask* task, int defPointId);
-@@ -129,7 +134,16 @@ public:
+@@ -129,7 +145,16 @@ public:
  	void ProcessHubDefence(CBDefenceTask* task);
  	springai::AIFloat3 GetScoutPosition(CCircuitUnit* unit);
  	void ClearScoutPosition(IUnitTask* task);
@@ -3746,7 +3761,7 @@ index c167603..0a510d0 100644
  	void FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions);
  	void FillStaticSafePos(CCircuitUnit* unit, F3Vec& outPositions);
  	void FillSafePos(CCircuitUnit* unit, F3Vec& outPositions);
-@@ -181,17 +195,44 @@ public:
+@@ -181,17 +206,44 @@ public:
  
  	float GetRangeUnitCountCompensatorScale();
  
@@ -3791,7 +3806,7 @@ index c167603..0a510d0 100644
  
  	Handlers2 createdHandler;
  	Handlers1 finishedHandler;
-@@ -203,8 +244,17 @@ private:
+@@ -203,8 +255,18 @@ private:
  
  	CDefenceData* defence;
  	unsigned int defenceIdx;
@@ -3803,6 +3818,7 @@ index c167603..0a510d0 100644
 +	// and script-enqueued towers alike. Positions are cached rather than read per
 +	// query because these units never move.
 +	std::map<CCircuitUnit*, springai::AIFloat3> fencePos;
++	std::map<int, int> bombTargetFrame;  // enemyId: last bomb-commit frame
 +	springai::AIFloat3 defStand;
 +	int defStandFrame;
 +
@@ -8692,7 +8708,7 @@ index 8585fc2..ae22475 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
-index 9e6bfd8..bd6450c 100644
+index 9e6bfd8..5461b39 100644
 --- a/src/circuit/task/fighter/BombTask.cpp
 +++ b/src/circuit/task/fighter/BombTask.cpp
 @@ -5,6 +5,7 @@
@@ -8703,7 +8719,15 @@ index 9e6bfd8..bd6450c 100644
  #include "task/fighter/BombTask.h"
  #include "map/ThreatMap.h"
  #include "module/MilitaryManager.h"
-@@ -39,13 +40,22 @@ CBombTask::~CBombTask()
+@@ -23,6 +24,7 @@
+ #include "spring/SpringMap.h"
+ 
+ #include "AISCommands.h"
++#include "Log.h"
+ 
+ namespace circuit {
+ 
+@@ -39,13 +41,22 @@ CBombTask::~CBombTask()
  
  bool CBombTask::CanAssignTo(CCircuitUnit* unit) const
  {
@@ -8730,7 +8754,7 @@ index 9e6bfd8..bd6450c 100644
  		return false;
  	}
  	return true;
-@@ -58,7 +68,7 @@ void CBombTask::AssignTo(CCircuitUnit* unit)
+@@ -58,7 +69,7 @@ void CBombTask::AssignTo(CCircuitUnit* unit)
  	int squareSize = manager->GetCircuit()->GetPathfinder()->GetSquareSize();
  	CCircuitDef* cdef = unit->GetCircuitDef();
  	ITravelAction* travelAction;
@@ -8739,7 +8763,7 @@ index 9e6bfd8..bd6450c 100644
  		travelAction = new CFightAction(unit, squareSize);
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
-@@ -82,7 +92,9 @@ void CBombTask::Start(CCircuitUnit* unit)
+@@ -82,7 +93,9 @@ void CBombTask::Start(CCircuitUnit* unit)
  		return;
  	}
  	if (!pPath->posPath.empty()) {
@@ -8750,7 +8774,7 @@ index 9e6bfd8..bd6450c 100644
  	}
  }
  
-@@ -133,7 +145,9 @@ void CBombTask::Update()
+@@ -133,7 +146,9 @@ void CBombTask::Update()
  			CCircuitAI* circuit = manager->GetCircuit();
  			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
  			for (CCircuitUnit* unit : units) {
@@ -8761,7 +8785,7 @@ index 9e6bfd8..bd6450c 100644
  				TRY_UNIT(circuit, unit,
  					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
  				)
-@@ -200,10 +214,7 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -200,10 +215,7 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
  	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
  		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
@@ -8773,7 +8797,7 @@ index 9e6bfd8..bd6450c 100644
  	}
  
  	if (units.find(unit) != units.end()) {
-@@ -245,6 +256,7 @@ void CBombTask::FindTarget()
+@@ -245,6 +257,7 @@ void CBombTask::FindTarget()
  //								 cdef->GetLosRadius()) * 2;
  	const float sqRange = (GetTarget() != nullptr) ? pos.SqDistance2D(GetTarget()->GetPos()) + 1.f : SQUARE(2000.0f);
  	float minHealth = std::numeric_limits<float>::max();
@@ -8781,7 +8805,15 @@ index 9e6bfd8..bd6450c 100644
  
  	COOAICallback* callback = circuit->GetCallback();
  	const float trueAoe = cdef->GetAoe() + SQUARE_SIZE;
-@@ -281,8 +293,19 @@ void CBombTask::FindTarget()
+@@ -258,6 +271,7 @@ void CBombTask::FindTarget()
+ 		};
+ 	}
+ 
++	CEnemyInfo* curTarget = GetTarget();  // exempt from the revisit discount below
+ 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
+ 	CEnemyInfo* bestTarget = nullptr;
+ 	position = -RgtVector;
+@@ -281,8 +295,19 @@ void CBombTask::FindTarget()
  //		float altitude;
  		CCircuitDef* edef = enemy->GetCircuitDef();
  		if (edef != nullptr) {
@@ -8802,7 +8834,7 @@ index 9e6bfd8..bd6450c 100644
  				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore())
  			{
  				continue;
-@@ -318,9 +341,40 @@ void CBombTask::FindTarget()
+@@ -318,9 +343,57 @@ void CBombTask::FindTarget()
  //                }
  //				cost += ei->GetCost();
  //			}
@@ -8838,6 +8870,23 @@ index 9e6bfd8..bd6450c 100644
 +			if (value < minValue) {
 +				score *= 0.1f;   // still allowed, but only if nothing else offers
 +			}
++			// TARGET VARIANCE (apexearth: "our air tends to repeatedly try
++			// bombing the same thing"). A target another squad committed to
++			// within apex_bomb_revisit_s is discounted, fading back to full
++			// score linearly -- it is still alive, so the last run failed, and
++			// the AA that beat it is still there. The task's OWN target is
++			// exempt: a run in progress must never swerve off its own note.
++			if (enemy != curTarget) {
++				const int lastF = circuit->GetMilitaryManager()->LastBombFrame(kv.first);
++				if (lastF >= 0) {
++					const float revisitS = circuit->GetTunable("apex_bomb_revisit_s", 90.f);
++					const float sinceS = float(circuit->GetLastFrame() - lastF) / float(FRAMES_PER_SEC);
++					if ((revisitS > 1.f) && (sinceS < revisitS)) {
++						const float disc = circuit->GetTunable("apex_bomb_revisit_disc", 0.2f);
++						score *= disc + (1.f - disc) * (sinceS / revisitS);
++					}
++				}
++			}
 +			if (score > bestScore) {
 +				bestScore = score;
  				minHealth = health;
@@ -8845,7 +8894,25 @@ index 9e6bfd8..bd6450c 100644
  				if (sqDist < sqRange) {
  					bestTarget = enemy;
  				} else {
-@@ -388,7 +442,9 @@ void CBombTask::Fallback()
+@@ -334,6 +407,17 @@ void CBombTask::FindTarget()
+ 	if (bestTarget != nullptr) {
+ 		SetTarget(bestTarget);
+ 		position = bestTarget->GetPos();
++		CMilitaryManager* milMgr = circuit->GetMilitaryManager();
++		// Fresh commits only: FindTarget re-runs through a sortie, and logging
++		// the re-pick of the task's own target would read as fixation.
++		if (bestTarget != curTarget) {
++			const CCircuitDef* bd = bestTarget->GetCircuitDef();
++			circuit->LOG("apex: bomb-commit id=%d def=%s last=%d",
++					bestTarget->GetId(),
++					(bd != nullptr) ? bd->GetDef()->GetName() : "?",
++					milMgr->LastBombFrame(bestTarget->GetId()));
++		}
++		milMgr->NoteBombTarget(bestTarget->GetId(), circuit->GetLastFrame());
+ 	}
+ 	// Return: target, startPos=leader->pos, endPos=position
+ }
+@@ -388,7 +472,9 @@ void CBombTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {

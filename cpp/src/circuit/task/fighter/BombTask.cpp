@@ -24,6 +24,7 @@
 #include "spring/SpringMap.h"
 
 #include "AISCommands.h"
+#include "Log.h"
 
 namespace circuit {
 
@@ -270,6 +271,7 @@ void CBombTask::FindTarget()
 		};
 	}
 
+	CEnemyInfo* curTarget = GetTarget();  // exempt from the revisit discount below
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
 	CEnemyInfo* bestTarget = nullptr;
 	position = -RgtVector;
@@ -372,6 +374,23 @@ void CBombTask::FindTarget()
 			if (value < minValue) {
 				score *= 0.1f;   // still allowed, but only if nothing else offers
 			}
+			// TARGET VARIANCE (apexearth: "our air tends to repeatedly try
+			// bombing the same thing"). A target another squad committed to
+			// within apex_bomb_revisit_s is discounted, fading back to full
+			// score linearly -- it is still alive, so the last run failed, and
+			// the AA that beat it is still there. The task's OWN target is
+			// exempt: a run in progress must never swerve off its own note.
+			if (enemy != curTarget) {
+				const int lastF = circuit->GetMilitaryManager()->LastBombFrame(kv.first);
+				if (lastF >= 0) {
+					const float revisitS = circuit->GetTunable("apex_bomb_revisit_s", 90.f);
+					const float sinceS = float(circuit->GetLastFrame() - lastF) / float(FRAMES_PER_SEC);
+					if ((revisitS > 1.f) && (sinceS < revisitS)) {
+						const float disc = circuit->GetTunable("apex_bomb_revisit_disc", 0.2f);
+						score *= disc + (1.f - disc) * (sinceS / revisitS);
+					}
+				}
+			}
 			if (score > bestScore) {
 				bestScore = score;
 				minHealth = health;
@@ -388,6 +407,17 @@ void CBombTask::FindTarget()
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
 		position = bestTarget->GetPos();
+		CMilitaryManager* milMgr = circuit->GetMilitaryManager();
+		// Fresh commits only: FindTarget re-runs through a sortie, and logging
+		// the re-pick of the task's own target would read as fixation.
+		if (bestTarget != curTarget) {
+			const CCircuitDef* bd = bestTarget->GetCircuitDef();
+			circuit->LOG("apex: bomb-commit id=%d def=%s last=%d",
+					bestTarget->GetId(),
+					(bd != nullptr) ? bd->GetDef()->GetName() : "?",
+					milMgr->LastBombFrame(bestTarget->GetId()));
+		}
+		milMgr->NoteBombTarget(bestTarget->GetId(), circuit->GetLastFrame());
 	}
 	// Return: target, startPos=leader->pos, endPos=position
 }
