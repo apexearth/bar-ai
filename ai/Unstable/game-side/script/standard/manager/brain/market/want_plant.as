@@ -392,6 +392,14 @@ bool UnlocksProduct(int plantId)
 				made = true;
 				break;
 			}
+			// A standing NANOFRAME whose request was abandoned is invisible
+			// to gOwnCount (finished only) AND to gLive -- def.count is the
+			// read that still sees it, and it unlocks its products the same
+			// as a live order does.
+			if (Catalog::Def(by[b]).count > 0) {
+				made = true;
+				break;
+			}
 			// A PLANT ALREADY ORDERED UNLOCKS ITS PRODUCTS TOO. Standing-only
 			// would let two copies of the same new lab each read as the
 			// unlocker while the first is still a nanoframe -- the same
@@ -646,23 +654,26 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if ((myReach > 0.f) && (bestOwn > myReach))
 				subMul = myReach / bestOwn;
 		}
-		// ...and the throughput half of a DUPLICATE is priced against the
-		// cheaper way to buy the same build power. Only while that way is
-		// actually open: NeediestLine is a line short of hands, so if no line
-		// wants hands there is nothing for a nano to do and a second line is
-		// the honest purchase -- which is his "unless you ran out of room"
-		// clause, expressed as demand rather than as geometry. A plant that
-		// unlocks something nothing we own can make is exempt: it is not a
-		// copy, it is a new capability.
-		// ...and so does the BP substitution: build power is build power, and
-		// while any line is short of hands a nano is the cheaper way to buy it
-		// whatever def the plant is (his arithmetic: 300 BP for 2,900 vs 200
-		// BP for 210).
+		// ...and the throughput half of a COPY is ALWAYS priced against the
+		// cheaper way to buy the same build power (his arithmetic: 300 BP for
+		// 2,900 vs 200 BP for 210). Whether that throughput is NEEDED is the
+		// demand terms' question (pipeTerm, prodOwn); this price used to be
+		// gated on a momentary NeediestLine read, so every flicker to zero
+		// let a copy price at full gain -- backwards, since no line short of
+		// hands means the copy has even less to do. A plant that UNLOCKS
+		// products no nano can deliver keeps the old rule -- substituted only
+		// while an existing line is short of hands (feed the starving line
+		// before founding a new domain) -- because nanos on a T1 lab cannot
+		// make what a first T2 lab would. DupBpSubstMul already returns 1
+		// when no nano def exists to substitute, the one case a second line
+		// is the only way to buy throughput.
+		const bool isCopy = (reachKin > 0) && !UnlocksProduct(d);
+		// (No finished-factory guard: a copy of a lab still in its nanoframe
+		// is the earliest and cheapest moment to refuse the duplicate.)
 		float dupSubst = 1.f;
-		if (Factory::gFactoryCount > 0) {
+		if (ai.GetTunable("apex_dup_bp_subst", TUNE_DUP_BP_SUBST) > 0.f) {
 			AIFloat3 nlp;
-			if ((ai.GetTunable("apex_dup_bp_subst", TUNE_DUP_BP_SUBST) > 0.f)
-				&& (NeediestLine(nlp) > 0.f))
+			if (isCopy || (NeediestLine(nlp) > 0.f))
 				dupSubst = DupBpSubstMul(d);
 		}
 		// A DIFFERENT LAB IS NOT A COPY. The divisor counted every same-reach
@@ -677,7 +688,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// units "would be OK". So only a plant that fields nothing new pays the
 		// parallel-capacity divisor; the BP-substitution price below is what
 		// keeps the real duplicate honest.
-		const int dupKin = UnlocksProduct(d) ? 0 : reachKin;
+		const int dupKin = isCopy ? reachKin : 0;
 		// BUILD POWER IS THE HALF THE NANO ACTUALLY REPLACES, and it was the
 		// half left undiscounted: dupSubst only touched production, while
 		// pipeTerm (BPGap) went in at full price. So a duplicate lab was the
@@ -687,9 +698,12 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// 2026-08-27, and his arithmetic: "1 lab = 300 build power, 1 nano =
 		// 200... you can back 1 lab with 14 nanos for a total of 3100 build
 		// power. To spend about the same metal on a second T2 lab would give
-		// you 600" -- a fifth of the throughput). Expansion is NOT substituted:
-		// a nano claims no ground, so expTerm keeps its full value.
-		const float conSub = pipeTerm * subMul * dupSubst + expTerm * subMul;
+		// you 600" -- a fifth of the throughput). A COPY's expansion half is
+		// substituted too: the cons claim the ground, not the plant, and
+		// nanos on the standing kin deliver the same cons cheaper. A new
+		// capability keeps its expansion at full value.
+		const float conSub = pipeTerm * subMul * dupSubst
+				+ expTerm * subMul * (isCopy ? dupSubst : 1.f);
 		float dupGain = (conSub + prodOwn * dupSubst)
 				/ float(1 + dupKin);
 		if (liveOther > 0)
