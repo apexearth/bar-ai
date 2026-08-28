@@ -250,6 +250,18 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			continue;
 		if (Requests::LiveOfDef(Catalog::Def(d)))
 			continue;   // this def is already requested: help it, not double it
+		// ONE ADVANCED PLANT AT A TIME, PER PLAYER -- the kin division below
+		// only sees the extract/convert axes, so a T2 AIR lab in flight was
+		// invisible to a T2 vehicle candidate and Purple raised both at once
+		// ("a huge 'no no'"). Market::AdvPlantInFlight is the shared read the
+		// air mandate defers on too.
+		if (((Factory::userData[d].attr
+			& (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
+			&& AdvPlantInFlight())
+		{
+			AdvDeferLog("tech:" + Catalog::Def(d).GetName());
+			continue;
+		}
 		// HIS RULING, same law as ProposePlant's copy-zero: a tech plant we
 		// already run unlocks nothing, and its throughput is the nano's job.
 		// The door guard caught exactly this (a second armavp with one

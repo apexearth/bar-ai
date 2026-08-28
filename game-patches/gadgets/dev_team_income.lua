@@ -54,6 +54,30 @@ local ALPHA = 0.03
 local avg = {}   -- teamID -> smoothed metal income
 local next_at = 0
 
+-- Cumulative metal gained from reclaiming wrecks, per team. Published as a
+-- TEAM rules param so the AI can subtract the reclaim RATE from its income
+-- anchors: labs and gantries are licensed off STRUCTURAL income (mex +
+-- converters), not off a post-battle wreck feast (apexearth 2026-08-28:
+-- "Make sure we aren't tricked by reclaim events which temporarily boost
+-- our income"). Same callin as dev_stats_export's mReclaim.
+local mRec = {}
+local featMetalCache = {}
+
+function gadget:AllowFeatureBuildStep(builderID, builderTeam, featureID, featureDefID, part)
+	if part < 0 then
+		local m = featMetalCache[featureDefID]
+		if m == nil then
+			local fd = FeatureDefs[featureDefID]
+			m = (fd and fd.metal) or 0
+			featMetalCache[featureDefID] = m
+		end
+		if m > 0 then
+			mRec[builderTeam] = (mRec[builderTeam] or 0) - part * m
+		end
+	end
+	return true
+end
+
 -- Cumulative waste ledger. resPrevExcess is the per-second overflow the engine
 -- threw away after storage and sharing -- income that bought nothing. Summed at
 -- 1s samples it approximates total wasted units; cumulative income is summed
@@ -213,6 +237,7 @@ function gadget:GameFrame(frame)
 			Spring.SetGameRulesParam("ai_minc_" .. teamID, avg[teamID])
 			-- Raw value kept alongside for diagnostics.
 			Spring.SetGameRulesParam("ai_mincraw_" .. teamID, income)
+			Spring.SetTeamRulesParam(teamID, "apexReclaimM", mRec[teamID] or 0)
 
 			local _, _, _, eIncome, _, _, _, _, eExcess =
 				Spring.GetTeamResources(teamID, "energy")

@@ -270,6 +270,40 @@ bool AntiNukeSite(CCircuitUnit@ unit, AIFloat3& out at)
 	return found;
 }
 
+// ONE ADVANCED PLANT AT A TIME, PER PLAYER (apexearth 2026-08-28, watching
+// Purple raise a T2 vehicle plant and a T2 air lab at once: "a huge 'no
+// no'"). The tech lane and the air mandate each checked only their own
+// def, so neither saw the other's commitment. An advanced plant in flight
+// is the tier unlock already coming; a second simultaneous one doubles the
+// drain and delivers nothing sooner -- sequential is strictly faster even
+// rich. Standing copies stay governed by wealth (his adv-air ruling); this
+// serializes STARTS only.
+bool AdvPlantInFlight()
+{
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		if (gComState[ci] == CS_FINISHED)
+			continue;
+		const int d = gComDef[ci];
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d]
+			|| (Catalog::gBuildsList[d].length() == 0))
+			continue;
+		if ((Factory::userData[d].attr
+			& (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
+			return true;
+	}
+	return false;
+}
+
+int gNextAdvDeferLog = 0;
+void AdvDeferLog(const string& in what)
+{
+	if (ai.frame < gNextAdvDeferLog)
+		return;
+	gNextAdvDeferLog = ai.frame + 30 * SECOND;
+	AiLog("apex: adv-plant defer t=" + ai.teamId + " " + what
+		+ " -- an advanced plant is already in flight");
+}
+
 int gNextSuperLog = 0;
 
 Want@ ProposeSuper(CCircuitUnit@ unit)
@@ -321,7 +355,21 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		float teamInc = (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
 		float classBudget = budget;
 		if (sc == SC_GANTRY) {
-			teamInc = Military::TeamSum(Military::TV_MINC, teamInc);
+			if (AdvPlantInFlight()) {
+				AdvDeferLog("gantry");
+				continue;
+			}
+			// WHO hosts, not WHETHER: below 60% of the host anchor this
+			// player defers and a richer teammate proposes instead. The
+			// squared discount alone was not binding -- at team ~400 the
+			// insure gain won elections through a x0.25 discount, and hosts
+			// at 47-59 m/s kept ordering gantries (audited, advserial-s21).
+			if (((gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income)
+				< ai.GetTunable("apex_gantry_host_inc", TUNE_GANTRY_HOST_INC)
+					* 0.6f)
+				continue;
+			// The NET lane: teammates' reclaim feasts do not license it.
+			teamInc = Military::TeamSum(Military::TV_MINC_NET, teamInc);
 			const float gsec = ai.GetTunable("apex_gantry_afford_s",
 					TUNE_GANTRY_AFFORD_S);
 			classBudget = teamInc * ((gsec > 1.f) ? gsec : 100.f);
@@ -390,6 +438,21 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 					* afford * Persona::WantMult(SuperName(sc));
 			if (insure > gain)
 				gain = insure;
+			// THE HOST MUST BE ABLE TO FEED IT (apexearth, watching green
+			// start one at 50 m/s own income: "that is too early" -- against
+			// his 100 m/s anchor). The team purse makes the CASE; the
+			// proposing player's own smoothed income times it: at half the
+			// anchor the gain quarters, at the anchor it is whole.
+			const float hostInc = (gIncEma > 0.f)
+					? gIncEma : aiEconomyMgr.metal.income;
+			const float anchor = ai.GetTunable("apex_gantry_host_inc",
+					TUNE_GANTRY_HOST_INC);
+			if (anchor > 1.f) {
+				float hm = hostInc / anchor;
+				if (hm > 1.f)
+					hm = 1.f;
+				gain *= hm * hm;
+			}
 		}
 		// DEFENCE BEFORE THE BIG GUN (apexearth 2026-08-28: "We consistently
 		// make Basilisk before T3 or even T2 defense - we need better
@@ -433,6 +496,17 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 	// the same affordability shape as the rest of this market.
 	{
 		CCircuitDef@ ap = Air::IntelPlantToBuild();
+		// An ADVANCED air plant waits its turn behind any advanced plant
+		// already in flight -- see AdvPlantInFlight above (Purple's
+		// simultaneous T2 vehicle + T2 air, "a huge 'no no'").
+		if ((ap !is null)
+			&& ((Factory::userData[int(ap.id)].attr
+				& (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
+			&& AdvPlantInFlight())
+		{
+			AdvDeferLog("air:" + ap.GetName());
+			@ap = null;
+		}
 		if ((ap !is null) && unit.circuitDef.CanBuild(ap)
 			&& !Requests::LiveOfDef(ap))
 		{
@@ -467,7 +541,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			+ ":" + w.def.GetName()
 			+ " bill=" + int(SuperBill(int(w.def.id)))
 			+ " budget=" + int((w.spotId == SC_GANTRY)
-				? (Military::TeamSum(Military::TV_MINC, aiEconomyMgr.metal.income)
+				? (Military::TeamSum(Military::TV_MINC_NET,
+						aiEconomyMgr.metal.income)
 					* ai.GetTunable("apex_gantry_afford_s", TUNE_GANTRY_AFFORD_S))
 				: budget)
 			+ " have=" + SuperHave(w.spotId) + "/" + SuperTarget(w.spotId)

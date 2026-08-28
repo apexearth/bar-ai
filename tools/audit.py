@@ -784,8 +784,185 @@ def check_ledger(text, rep):
             else f"{len(inv)} refusal(s): " + " ".join(sorted(set(inv))))
 
 
+def check_lab_timing(text, rep):
+    """Labs at the appropriate times, on RECLAIM-CORRECTED income.
+
+    Spring's team income (mInc, metalProduced) folds reclaim in with mex and
+    converter income, so eating a dead Korgoth reads as a 500 m/s economy for
+    a minute and both the AI and a naive audit call a lab "affordable". The
+    stats gadget accumulates mReclaim (metal gained from wrecks) exactly so
+    the two can be separated: corrected rate over a window is
+    (d metalProduced - d mReclaim) / d seconds. Every judgment below uses it,
+    and every flag prints raw-vs-corrected so a reclaim trick shows on its
+    face (apexearth 2026-08-28: "Make sure we aren't tricked by reclaim
+    events which temporarily boost our income").
+
+    The bars are the AI's OWN: T2 wants apex_t2_metal (30 m/s) sustained; the
+    gantry wants ~apex_gantry_host_inc (100) from its host and ~100 team
+    (apex_gantry_afford_s at the 9.2k bill). Advanced plants serialize per
+    player ("a huge 'no no'", 2026-08-28)."""
+    T2_BAR = 30.0          # apex_t2_metal
+    GANTRY_TEAM = 100.0    # bill / apex_gantry_afford_s
+    GANTRY_HOST = 60.0     # 0.6 x apex_gantry_host_inc -- green's 50 flags
+    ADV_PLANTS = {         # T2/T3 factories, all three factions
+        "coralab", "armalab", "legalab", "coravp", "armavp", "legavp",
+        "coraap", "armaap", "legaap", "corasy", "armasy", "legasy",
+        "corgant", "armshltx", "leggant", "legsplab"}
+    GANTRIES = {"corgant", "armshltx", "leggant"}
+
+    apex_teams = set(re.findall(r"apex: targets t=(\d+)", text))
+    if not apex_teams:
+        return
+    # periodic stats rows -> per-team (frame, metalProduced, mReclaim, mInc)
+    series = defaultdict(dict)   # team -> frame -> (mp, mrec, minc)
+    for m in re.finditer(
+            r"\[BARAI_STATS\] team=(\d+) ally=\d+ reason=\w+ frame=(\d+)"
+            r".*? mReclaim=(-?[\d.]+).*? mInc=([\d.]+)"
+            r".*?metalProduced=([\d.]+)", text):
+        t, f = m.group(1), int(m.group(2))
+        if t in apex_teams and f not in series[t]:
+            series[t][f] = (float(m.group(5)), float(m.group(3)),
+                            float(m.group(4)))
+
+    def windows(t):
+        fs = sorted(series[t])
+        out = []
+        for a, b in zip(fs, fs[1:]):
+            sec = (b - a) / 30.0
+            if sec < 30:
+                continue
+            mp0, mr0, _ = series[t][a]
+            mp1, mr1, _ = series[t][b]
+            corr = (mp1 - mp0 - (mr1 - mr0)) / sec
+            raw = (mp1 - mp0) / sec
+            out.append((a, b, corr, raw))
+        return out
+
+    def rate_at(t, frame):
+        for a, b, corr, raw in windows(t):
+            if a <= frame <= b:
+                return corr, raw
+        return None, None
+
+    # T2 under its own bar / too late
+    early, late = [], []
+    t2at = {}
+    for m in re.finditer(r"\[BARAI_T2START\] team=(\d+) ally=\d+ frame=(\d+)"
+                         r" min=([\d.]+) unit=(\S+)", text):
+        t, f, mn, unit = m.group(1), int(m.group(2)), m.group(3), m.group(4)
+        if t not in apex_teams:
+            continue
+        t2at[t] = f
+        corr, raw = rate_at(t, f)
+        if (corr is not None) and (corr < T2_BAR * 0.75):
+            early.append(f"t{t} {unit}@{mn}m corrected={corr:.0f}"
+                         f" raw={raw:.0f} (bar {T2_BAR:.0f})")
+    for t in apex_teams:
+        run = 0
+        for a, b, corr, raw in windows(t):
+            run = run + 1 if corr >= T2_BAR * 2 else 0
+            if run >= 2 and t2at.get(t, 10**9) > b:
+                late.append(f"t{t} corrected>={T2_BAR*2:.0f} by"
+                            f" {b/1800:.1f}m, T2 placed "
+                            + (f"{t2at[t]/1800:.1f}m" if t in t2at
+                               else "never"))
+                break
+    rep.add("ECONOMY", not early, "t2-under-its-own-bar",
+            "all T2 placements above the corrected-income bar" if not early
+            else "; ".join(early))
+    rep.add("ECONOMY", not late, "t2-too-late",
+            "no team sat rich without teching" if not late
+            else "; ".join(late))
+
+    # gantry too early (the host cannot feed it) / too late (team rich, none)
+    greq = [(m.group(2), int(m.group(1)))
+            for m in re.finditer(r"\[f=(\d+)\][^\n]*\[[\d.]+m t(\d+)\] apex:"
+                                 r" request new (?:corgant|armshltx|leggant)",
+                                 text)]
+    greq = [(t, f) for t, f in greq if t in apex_teams]
+    gearly = []
+    for t, f in greq:
+        corr, raw = rate_at(t, f)
+        # 0.9x: the AI's floor reads a ~65s EMA at order time, this check a
+        # 2-min window mean -- a player crossing the floor upward reads a few
+        # m/s lower here. Green's 50 flags; an edge-crossing 57 does not.
+        if (corr is not None) and (corr < GANTRY_HOST * 0.9):
+            gearly.append(f"t{t}@{f/1800:.1f}m host corrected={corr:.0f}"
+                          f" raw={raw:.0f} (floor {GANTRY_HOST:.0f})")
+    rep.add("ECONOMY", not gearly, "gantry-host-too-poor",
+            "every gantry request had a fed host" if not gearly
+            else "; ".join(gearly))
+    # team corrected income, summed per window boundary pair
+    allf = sorted({f for t in apex_teams for f in series[t]})
+    team_run = 0
+    glate = None
+    first_greq = min((f for _, f in greq), default=None)
+    for a, b in zip(allf, allf[1:]):
+        tc = 0.0
+        n = 0
+        for t in apex_teams:
+            for wa, wb, corr, raw in windows(t):
+                if wa <= a and b <= wb + 1:
+                    tc += corr
+                    n += 1
+                    break
+        if n < len(apex_teams):
+            continue
+        # A VIABLE HOST must exist before "late" counts: the host floor
+        # (0.6 x apex_gantry_host_inc) holds every player below it back by
+        # design, so a team at 130 split four ways owes no gantry yet.
+        host_ok = any(
+            corr >= GANTRY_HOST
+            for t in apex_teams
+            for wa, wb, corr, raw in windows(t)
+            if wa <= a and b <= wb + 1)
+        team_run = team_run + 1 if (tc >= GANTRY_TEAM and host_ok) else 0
+        if team_run >= 2 and (first_greq is None or first_greq > b + 9000):
+            glate = (f"team corrected {tc:.0f} m/s with a fed host by"
+                     f" {b/1800:.1f}m, first gantry request "
+                     + (f"{first_greq/1800:.1f}m" if first_greq else "never"))
+            break
+    rep.add("ECONOMY", glate is None, "gantry-too-late",
+            "a gantry request follows team wealth promptly" if glate is None
+            else glate)
+
+    # advanced plants serialize per player: a second DIFFERENT adv plant
+    # requested before the first one finished (or within 5 min if it never
+    # did) is the simultaneous-start "no no".
+    fins = defaultdict(list)   # (team, unit) -> [finish frames]
+    for m in re.finditer(r"\[BARAI_BUILD\] team=(\d+) ally=\d+ frame=(\d+)"
+                         r" min=[\d.]+ unit=(\S+)", text):
+        if m.group(3) in ADV_PLANTS:
+            fins[(m.group(1), m.group(3))].append(int(m.group(2)))
+    reqs = defaultdict(list)   # team -> [(frame, unit)]
+    for m in re.finditer(r"\[f=(\d+)\][^\n]*\[[\d.]+m t(\d+)\] apex:"
+                         r" request new (\S+)", text):
+        if m.group(3) in ADV_PLANTS and m.group(2) in apex_teams:
+            reqs[m.group(2)].append((int(m.group(1)), m.group(3)))
+    overlaps = []
+    seen_pairs = set()
+    for t, rl in reqs.items():
+        rl.sort()
+        for (f1, u1), (f2, u2) in zip(rl, rl[1:]):
+            if (u1 == u2) or ((t, u1, u2) in seen_pairs):
+                continue
+            fin = min((ff for ff in fins.get((t, u1), []) if ff > f1),
+                      default=None)
+            bound = fin if fin is not None else f1 + 9000
+            if f2 < bound:
+                seen_pairs.add((t, u1, u2))
+                overlaps.append(f"t{t} {u1}@{f1/1800:.1f}m +"
+                                f" {u2}@{f2/1800:.1f}m")
+    rep.add("ECONOMY", not overlaps, "adv-plant-overlap",
+            "advanced plant starts serialized" if not overlaps
+            else (f"{len(overlaps)} pair(s) where the first never finished"
+                  " before the second started -- simultaneous build OR the"
+                  " first order died (cross-check finish-before-founding): "
+                  + "; ".join(overlaps[:4])))
+
+
 CHECKS = [check_health, check_ledger, check_commitments, check_priority,
-          check_economy,
+          check_economy, check_lab_timing,
           check_military, check_efficiency, check_vs_enemy, check_structures,
           check_geometry, check_perf]
 

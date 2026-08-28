@@ -33,6 +33,11 @@ bool NearFront(const AIFloat3& in pos)
 // mechanism the killing blow already uses for army value.
 const string TV_FFENCE = "ffence";
 const string TV_MINC   = "minc";
+// Reclaim-netted structural income (Market::StructuralIncomeEma) -- the lane
+// team-purse anchors read (the gantry budget), so a teammate's wreck feast
+// does not license a lab. TV_MINC stays raw for the front budget and the
+// census share: reclaimed metal really does buy units.
+const string TV_MINC_NET = "mincnet";
 // A budget denominated in towers cannot bound a share of metal: it let the same
 // allowance buy a Sentry and a Pulsar. These two carry the front line's METAL
 // and the player's TOTAL metal spend, so the bound is a share, as targets.as
@@ -113,6 +118,7 @@ void PublishDefence()
 	}
 	ai.PublishTeamValue(TV_FFENCE, float(front));
 	ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
+	ai.PublishTeamValue(TV_MINC_NET, Market::StructuralIncomeEma());
 	ai.PublishTeamValue(TV_FMETAL, OwnFrontMetal());
 	ai.PublishTeamValue(TV_MSPEND, Brain::gSpentTotal);
 	ai.PublishTeamValue(TV_AA, float(OwnStaticAA()));

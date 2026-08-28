@@ -416,13 +416,32 @@ int gIncPrevAt = 0;
 float gIncGrowth = 0.f;
 float gIncEma = -1.f;
 float gMSpareEma = 0.f;
+float gReclaimCumPrev = -1.f;
+
 void TrackIncome()
 {
 	if (ai.frame < gIncPrevAt + 10 * SECOND)
 		return;
-	const float inc = aiEconomyMgr.metal.income;
-	// Structural income: a reclaim burst is a spike, not a standard of
-	// living -- labs must not be licensed off it (apexearth).
+	float inc = aiEconomyMgr.metal.income;
+	// STRUCTURAL income: a reclaim burst is a spike, not a standard of
+	// living -- labs must not be licensed off it (apexearth). The EMA alone
+	// still followed a minutes-long post-battle wreck feast, so the reclaim
+	// RATE (dev_team_income's cumulative apexReclaimM, differentiated over
+	// this same sample) is subtracted before smoothing. Param absent (a
+	// hosted game without our gadgets) reads -1 and the raw income stands.
+	const float recCum = ai.GetTeamRulesParam("apexReclaimM", -1.f);
+	if ((recCum >= 0.f) && (gReclaimCumPrev >= 0.f)
+		&& (recCum > gReclaimCumPrev))
+	{
+		const float dts = float(ai.frame - gIncPrevAt) / float(SECOND);
+		const float recRate = (recCum - gReclaimCumPrev)
+				/ ((dts > 1.f) ? dts : 1.f);
+		inc -= recRate;
+		if (inc < 0.f)
+			inc = 0.f;
+	}
+	if (recCum >= 0.f)
+		gReclaimCumPrev = recCum;
 	gIncEma = (gIncEma < 0.f) ? inc : (0.85f * gIncEma + 0.15f * inc);
 	if (gIncPrev >= 0.f) {
 		const float dt = float(ai.frame - gIncPrevAt) / float(SECOND);
@@ -467,6 +486,15 @@ float BacklogM()
 		m += Catalog::gCostM[gComDef[i]] * left;
 	}
 	return m;
+}
+
+// The structural-income EMA, for callers outside this file (the front
+// budget publishes it as the team's minc-net lane; the gantry budget sums
+// that lane). Functions are module-wide, market globals are not.
+float StructuralIncomeEma()
+{
+	TrackIncome();
+	return (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
 }
 
 float BPGap()

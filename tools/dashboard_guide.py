@@ -317,6 +317,10 @@ GROUPS = [
                   "stop caring whether the base is defended; at the default "
                   "0.1 an undefended base all but silences the big gun until "
                   "the defence target fills"),
+                 ("TUNE_GANTRY_HOST_INC", "the builder's OWN income at which "
+                  "the gantry gain is whole — lower lets a poorer player "
+                  "host it earlier (a 50 m/s host at the 100 default gets a "
+                  "quarter of the gain)"),
                  ("TUNE_SUPER_PUSH", "an affordable strategic want skips the "
                   "category lottery and goes straight through"),
                  ("TUNE_ANTINUKE_INCOME", "the income at which insurance "

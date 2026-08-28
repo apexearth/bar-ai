@@ -1662,6 +1662,11 @@ const float TUNE_GANTRY_AFFORD_S = 100.f;
 //   we are in big trouble") -- the answer to enemy T3 is worth this even with
 //   no army gap and no overflow on the books.
 const float TUNE_GANTRY_INSURE = 0.5f;
+// GANTRY_HOST_INC [metal/s] -- the proposing player's OWN income at which the
+//   gantry gain is whole; below it the gain scales by (own/anchor)^2. The team
+//   purse makes the case, the host's feed times it (apexearth, watching green
+//   start one at 50 m/s: "that is too early").
+const float TUNE_GANTRY_HOST_INC = 100.f;
 // OFFENSE_DEF_FLOOR: the share of its gain an offensive super (silo, LRPC)
 //   keeps at ZERO standing defence; the rest scales in with the defence
 //   target's fill ("we consistently make Basilisk before T3 or even T2

@@ -15,6 +15,37 @@ When an entry is completed (landed + he has seen it work, or confirmed live),
 MOVE it to `feedback/<date>.md` — date of the original request. This file
 holds only unresolved asks and standing preferences.
 
+## DONE 2026-08-28 (validated on 6 games) — Lab-timing audit on reclaim-corrected income
+
+"Update the audit script so we ensure we make our labs at the appropriate
+times. Make sure we aren't tricked by reclaim events which temporarily
+boost our income. Work until fixed." Landed: `check_lab_timing` in
+audit.py (t2-under-its-own-bar / t2-too-late / gantry-host-too-poor /
+gantry-too-late / adv-plant-overlap), all on (dMetalProduced - dMReclaim)
+per stats window, every flag printing corrected-vs-raw. Validated: flags
+his 17:13 game (gantry 24.2m against team-211-with-fed-host by 14m, plant
+overlaps) and passes the fixed build (netinc-s24). AI side hardened too:
+dev_team_income publishes cumulative apexReclaimM; TrackIncome nets the
+reclaim rate before its EMA, so every income anchor (T2 gate, gantry
+budget/host floor, antinuke floor) is structural income; the gantry team
+budget reads the new TV_MINC_NET lane. Move to feedback/ archive once he
+confirms live.
+
+## UNRESOLVED (landed, awaiting his eyes) — One advanced plant at a time; gantry host anchor (2026-08-28, late)
+
+Watching his game: "I am seeing Purple in my game make a T2 vehicle plant
+and a T2 air lab at the same time. This is a huge 'no no'. I also see
+green making a gantry at just 50m/s, that is too early." Landed:
+(1) `Market::AdvPlantInFlight()` — the tech lane, the air mandate and the
+gantry all defer while THIS player already has any advanced plant in
+flight (the two lanes only checked their own defs; the kin division only
+sees extract/convert axes, so a T2 air lab was invisible to a T2 vehicle
+candidate). Logs `apex: adv-plant defer`. Serializes STARTS only; standing
+copies stay wealth-governed per his adv-air ruling. (2) the gantry's gain
+scales by (host's own income / apex_gantry_host_inc)^2, anchor 100 — the
+team purse makes the case, the host's own feed times it; green at 50 gets
+a quarter gain and loses the election.
+
 ## UNRESOLVED (landed, awaiting his eyes) — Gantry by ~100 team metal/s (2026-08-28)
 
 "We do not create Gantry buildings soon enough. If the enemy comes at us

@@ -386,6 +386,7 @@ local NAMES = {
 	"apex_gantry_afford_s",
 	"apex_gantry_insure",
 	"apex_offense_def_floor",
+	"apex_gantry_host_inc",
 	"apex_shield_income",
 	"apex_local_edge",
 	"apex_local_edge_on",

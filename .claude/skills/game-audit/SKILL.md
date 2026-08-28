@@ -81,6 +81,27 @@ with none standing).
   `GetMexSpotIncome` — economics read off spot income must go through
   `Market::IncomeMult()`.
 
+## Lab timing runs on RECLAIM-CORRECTED income (2026-08-28)
+
+`check_lab_timing` judges T2/gantry timing and advanced-plant
+serialization. Its income basis is `(d metalProduced - d mReclaim) / d sec`
+between periodic BARAI_STATS rows -- Spring's income folds reclaim in, so a
+wreck feast reads as a rich economy and both the AI and a naive audit call
+a lab "licensed" (apexearth: "Make sure we aren't tricked by reclaim
+events"). Every flag prints corrected AND raw so the reclaim share shows on
+its face. The bars are the AI's own (apex_t2_metal 30; gantry team ~100 via
+apex_gantry_afford_s, host floor 0.6 x apex_gantry_host_inc with a 0.9x
+window-vs-EMA tolerance); `gantry-too-late` requires a FED HOST to have
+existed, because the host floor holds a poor-split team back by design.
+`adv-plant-overlap` counts a second advanced plant requested before the
+first finished -- a flag is simultaneous build OR a died first order;
+cross-check `finish-before-founding` before treating it as the former.
+The AI-side counterpart: dev_team_income publishes cumulative
+`apexReclaimM` per team, and `TrackIncome` subtracts the reclaim rate
+before its EMA, so gIncEma (every super/lab anchor) and the TV_MINC_NET
+team lane are structural income; TV_MINC stays raw for the front budget
+and the census share.
+
 ## The standing rule
 
 **A reported behaviour is not fixed until a check would catch its
