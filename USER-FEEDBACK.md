@@ -27,22 +27,29 @@ census. `apex_ally_share` landed against it; measurement in flight.
 ## UNRESOLVED — Units retreat at a very low HP % (2026-08-28)
 
 "I have noticed in recent games our units tend to retreat on a very low
-HP %." The curve is retreat = 0.08 + costM/apex_retreat_cost_scale (cap
-~0.5), so most T1 retreats at ~10-15% HP. History cuts both ways: stock's
-0.6 was measured losing 93% of combat metal to died-retreating, and his own
-earlier ruling was "we stay in the fight until death" + rez heals. The bad
-middle is what he is seeing: units that DO flee only start at a sliver and
-die anyway. Fix must be measured on deaths.py died-retreating share and
-trade, not just landed.
+HP %." Confirmed real: deaths.py shows retreat(auto) switches at 6-10% hp.
+The obvious lever is MEASURED BAD (2026-08-28 A/B, 6 seeds/arm, Altair):
+raising the floor to 0.18 (`apex_retreat_floor`, now tunable) moved the
+switch to ~20% hp as intended and made everything worse -- army K/D ratio
+0.202 -> 0.065, metal lost +51%, units still died RETREATING, just with
+more HP donated. Both arms' combat deaths are dominated by
+`->retreat(auto)` deaths: units die on the way out regardless of when they
+start. The real problem is retreat SURVIVAL (where the unit runs, whether
+anything covers it -- C++ retreat pathing), or not retreating at all for
+cheap units, not the threshold. Default stays 0.08; the knob is on the
+dashboard for his own experiments.
 
-## UNRESOLVED — Air keeps re-bombing the same target (2026-08-28)
+## UNRESOLVED (landed, awaiting his eyes) — Air keeps re-bombing the same target (2026-08-28)
 
 "Our air tends to repeatedly try bombing the same thing, need a bit more
-variance in targets." Mechanism found: `CBombTask::FindTarget`
-(vendor/circuitai src/circuit/task/fighter/BombTask.cpp) picks the
-minimum-health enemy in range — deterministic, so every wave re-picks the
-same target, including one whose AA just drove the last wave off. C++ fix
-(recency penalty or scoring jitter); script cannot reach the scoring.
+variance in targets." Mechanism: `CBombTask::FindTarget` is a
+deterministic argmax, so every squad re-elected the same winner. C++ fix
+LANDED same day: a target any squad committed to inside
+`apex_bomb_revisit_s` (90s) is discounted 5x fading back to full
+(`apex_bomb_revisit_disc`), own current target exempt so runs never
+swerve. Smoke: 12 commits spread over 9 distinct targets. Observability:
+`apex: bomb-commit` log line + the `air-target-fixation` audit check.
+Close when he watches a game and the fixation is gone.
 
 ## UNRESOLVED — Kill their economy, not just their army (2026-08-27)
 

@@ -230,6 +230,22 @@ def check_military(text, rep):
                 f"max {max(skips)} groups skipped in one pass"
                 + ("" if max(skips) < 30 else " -- squads refusing and"
                    " wandering"))
+    # air target fixation: `apex: bomb-commit id= def= last=` logs FRESH
+    # commits only (a task re-electing its own target does not log), so
+    # many commits funneling into few ids is real fixation, the thing the
+    # revisit discount exists to stop ("our air tends to repeatedly try
+    # bombing the same thing").
+    bombs = re.findall(r"apex: bomb-commit id=(\d+)", text)
+    if len(bombs) >= 8:
+        counts = defaultdict(int)
+        for b in bombs:
+            counts[b] += 1
+        top = max(counts.values())
+        ratio = len(bombs) / len(counts)
+        rep.add("MILITARY", (ratio <= 4.0) and (top <= max(6, len(bombs) // 3)),
+                "air-target-fixation",
+                f"{len(bombs)} commits over {len(counts)} targets"
+                f" (max one target {top}x)")
     # near-miss refusals: bestRef close to 1.0 means one merge or a small
     # margin change would have taken the target; low means hopeless anyway.
     refs = [float(r) for r in re.findall(r"bestRef=([\d.]+)", text)

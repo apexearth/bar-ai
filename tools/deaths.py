@@ -30,6 +30,7 @@ BUILD = ["factory", "nano", "store", "pylon", "energy", "geo", "geoup",
 
 LINE = re.compile(
     r"\[(?P<min>[\d.]+)m t(?P<team>\d+)\] apex: unit-destroyed (?P<name>\S+)"
+    r"(?: acts=(?P<acts>\S*))?"
     r" id=(?P<id>\d+) frame=(?P<frame>\d+) at=(?P<x>-?\d+),(?P<z>-?\d+)"
     r" curTask=t(?P<tt>-?\d+)b(?P<bt>-?\d+)f(?P<ft>-?\d+)"
     r" cost=(?P<cost>\d+) fwd=(?P<fwd>-?[\d.]+)(?: built=(?P<built>\d))?"
