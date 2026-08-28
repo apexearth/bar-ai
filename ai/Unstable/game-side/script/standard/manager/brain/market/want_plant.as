@@ -576,16 +576,19 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// (1+1), and skipping subMul and dupSubst entirely since both are
 		// guarded on reachKin > 0. That is the flip-flop between T1 labs
 		// apexearth watched. Same in-flight accounting ConvCapInFlight already
-		// does for converters; the engine's own def.count covers a live
-		// request of the SAME def, this adds the same-reach, same-domain
-		// siblings the request fold never catches.
+		// does for converters. SAME-def orders are counted here too:
+		// def.count only sees a PLACED frame (RegisterTeamUnit fires on
+		// UnitCreated), so for the whole walk to the site a second copy of
+		// the same def read reachKin=0 and priced as the first of its kind.
+		// Once the frame stands, frame + live order read as 2 -- which only
+		// deepens a copy's divisor, never touches the first of a def.
 		int reachKin = Catalog::Def(d).count;
 		for (uint fi = 0; fi < Requests::gLive.length(); ++fi) {
 			IUnitTask@ ft = Requests::gLive[fi];
 			if ((ft is null) || ft.IsDead() || (ft.buildDef is null))
 				continue;
 			const int fd = int(ft.buildDef.id);
-			if ((fd == d) || Catalog::gMobile[fd]
+			if (Catalog::gMobile[fd]
 				|| (Catalog::gBuildsList[fd].length() == 0))
 				continue;
 			if ((PlantReachOf(fd) >= myReach) && (PlantClass(fd) == dClass))
