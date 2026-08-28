@@ -222,7 +222,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// contingent on there being other demand.
 	const int ceilNeed = CeilingConsNeed();
 	if ((ceilNeed <= 0) && !gMexOpen && (UpDemand() <= 0.5f) && (BPGap() <= 0.5f)
-		&& (ArmyTarget() - ArmyValue() - ArmyInFlightM() <= 0.5f))
+		&& (ArmyTarget() - ArmyValue() - ArmyInFlightM() <= 0.5f)
+		&& (OverflowM() <= 0.5f))
 	{
 		gNoOrder = "all-quiet";
 		return null;
@@ -239,8 +240,18 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const float upD = UpDemand();
 	const float mobileCeil = OwnedMobileCeil();
 	LossDecay();
-	const float armyGap = ArmyTarget() - ArmyValue() - ArmyInFlightM();
+	float armyGap = ArmyTarget() - ArmyValue() - ArmyInFlightM();
 	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	// METAL WE FAIL TO SPEND IS ARMY DEMAND (his standing law: the economy
+	// is for spending; waste is free army). The same overflow signal that
+	// buys nanos floors the gap, so a satisfied target never idles the lines
+	// while metal rots -- measured: lines at buf0s with 31% of a 44-minute
+	// game's metal overflowing.
+	{
+		const float waste = OverflowM() * ((fillS > 1.f) ? fillS : 180.f);
+		if (waste > armyGap)
+			armyGap = waste;
+	}
 	float roleMul = EcoRoleActive()
 			? ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL) : 1.f;
 	if ((roleMul < 1.f) && EcoDangerNear())

@@ -1,5 +1,18 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-28 — the +100% spend bottleneck (his Titan complaint, half-closed)
+
+At his regime the AI banks a third of its metal (his game 31%, seeds 14-15:
+27%/34%). The all-quiet gate half is FIXED (overflow floors the army gap;
+milreq 1,665 -> 4,412 and demand now flows). The remaining half: the lines
+only SENT 948 orders against 4,637 requested (seed 15) — the spend cap is
+now the facqueue's 15s-per-line buffer (LineWindow = FQ_WAIT x
+apex_fac_queue) and/or the line count at high income (9 lines; the overLine
+income-supported count). Next lever: scale LineWindow with the overflow, or
+let plant demand read the overflow the same way. Measure on metal-wasted at
++100%, 35 min. Related singles: our gantry hit 21.1m (seed 14) vs 30.2m in
+his game after the super-lane copy law — directional, one seed each.
+
 ## 2026-08-27 (late night) -- the commitment-ledger campaign, in flight
 
 The approved velocity plan (plan file `okay-i-want-you-partitioned-toucan.md`,
