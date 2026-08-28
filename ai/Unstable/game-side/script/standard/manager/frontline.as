@@ -28,8 +28,9 @@ const float CHOKE_NEAR = 600.f;
 // rather than an absolute distance, because the arc half-angle
 // acos(1 - band/R) depends only on band/R, not on distance to the enemy --
 // an absolute band or a fraction of home-to-enemy separation would each cover
-// a different arc as either side's holdings changed.
-const float FRONT_BAND_FRAC = 1.0f;
+// a different arc as either side's holdings changed. 0.35 is +/-49 degrees;
+// at 1.0 the arc was +/-90 and half the perimeter classified as front.
+const float FRONT_BAND_FRAC = 0.35f;
 const int RECLASSIFY = 10 * SECOND;
 bool gClassifyPhased = false;
 const int SEAM_N = 40;

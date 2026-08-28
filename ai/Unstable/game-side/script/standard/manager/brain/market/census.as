@@ -309,12 +309,25 @@ int ProtClassOf(int defId)
 	return -1;
 }
 
+// When each of our STRUCTURES finished, by unit id -- the age gate that stops
+// obsolete-reclaim eating a thing the market paid for minutes ago. 0 = unknown
+// (born before this record, or id past the cap), which reads as old enough.
+array<int> gBuiltFrame(32001, 0);
+int BuiltFrameOf(CCircuitUnit@ u)
+{
+	const int id = int(u.id);
+	return ((id >= 0) && (id < int(gBuiltFrame.length()))) ? gBuiltFrame[id] : 0;
+}
+
 void NoteFinished(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
 	const int defId = int(unit.circuitDef.id);
 	OwnAdd(defId, 1);
+	if (!Catalog::gMobile[defId] && (int(unit.id) >= 0)
+		&& (int(unit.id) < int(gBuiltFrame.length())))
+		gBuiltFrame[int(unit.id)] = (ai.frame > 0) ? ai.frame : 1;
 	Lattice::NotePlaced(defId, unit.GetPos(ai.frame), unit.id);
 	if (!Catalog::gMobile[defId] && (Catalog::gMakeE[defId] > 1.f)
 		&& !Catalog::gNeedGeo[defId])

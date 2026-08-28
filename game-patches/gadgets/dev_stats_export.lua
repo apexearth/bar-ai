@@ -297,7 +297,10 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	-- fires every 2 game-minutes, so "what did we build in the first N minutes"
 	-- for an arbitrary N had to be read off the nearest snapshot. One line per
 	-- building gives an exact frame, so any window can be answered precisely.
-	if ud.isBuilding then
+	-- speed==0 too: isBuilding is false for immobile BUILDERS, so construction
+	-- turrets (and dragon's teeth) never appeared here at all -- "0 nanos
+	-- built" was unmeasurable, not zero.
+	if ud.isBuilding or ((ud.speed or 0) == 0) then
 		local f = Spring.GetGameFrame()
 		Spring.Echo(string.format("[BARAI_BUILD] team=%d ally=%d frame=%d min=%.2f unit=%s cost=%d",
 			unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,

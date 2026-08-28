@@ -1,4 +1,31 @@
 namespace Market {
+// A RETIREMENT IS A DECISION, NOT A VACANCY. Reclaiming a structure and
+// re-buying the same def minutes later is the market arguing with itself
+// (14 of 15 T2 bot labs in one 1v1 died to our own reclaim; the next game
+// did it to Ambushers and converters); a def we chose to retire keeps a
+// discount for a window so the retirement can mean something. Noted at
+// reclaim EXECUTION, and only for the OBSOLETE proposer's wants -- eating a
+// wall that pens a unit says nothing about wanting the def again.
+array<int> gDefRetiredAt;
+void NoteDefRetired(int d)
+{
+	// resize() zero-fills, so 0 is the "never retired" sentinel.
+	if (int(gDefRetiredAt.length()) <= Catalog::gDefCount)
+		gDefRetiredAt.resize(uint(Catalog::gDefCount + 1));
+	if ((d > 0) && (d < int(gDefRetiredAt.length())))
+		gDefRetiredAt[d] = (ai.frame > 0) ? ai.frame : 1;
+}
+float RetiredDefMul(int d)
+{
+	if ((d <= 0) || (d >= int(gDefRetiredAt.length()))
+		|| (gDefRetiredAt[d] <= 0))
+		return 1.f;
+	const float win = ai.GetTunable("apex_replant_window_s", TUNE_REPLANT_WINDOW_S);
+	if (float(ai.frame - gDefRetiredAt[d]) >= win * float(SECOND))
+		return 1.f;
+	return ai.GetTunable("apex_replant_discount", TUNE_REPLANT_DISCOUNT);
+}
+
 // Geothermal: same shape as mex -- a def that must stand on its own spot.
 Want@ ProposeGeo(CCircuitUnit@ unit)
 {

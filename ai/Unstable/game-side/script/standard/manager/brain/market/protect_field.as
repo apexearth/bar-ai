@@ -316,7 +316,7 @@ void PfRebuild()
 	for (uint i = 0; i < gLPos.length(); ++i) {
 		if (gLExtract[i] <= 0.f)
 			continue;
-		const float w = gLIncome[i] * gLExtract[i] * h;
+		const float w = gLIncome[i] * IncomeMult() * gLExtract[i] * h;
 		gPfPos.insertLast(gLPos[i]);
 		gPfWorth.insertLast(w);
 		gPfTotal += w;

@@ -27,6 +27,11 @@ class Want {
 	// same election overwrote the first's target and the executor -- which
 	// checks the global against spotId -- silently dropped whichever won.
 	CCircuitUnit@ target;
+	// Set only by the OBSOLETE reclaim proposer: this reclaim is a
+	// RETIREMENT decision, so its execution arms the rebuy discount. A
+	// blocker or penned reclaim eats a thing that is in the way, which says
+	// nothing about wanting the def again elsewhere.
+	bool retire = false;
 	float gain = 0.f;
 	float mCost = 0.f;
 	float tCost = 0.f;

@@ -25,7 +25,7 @@ float UpDemand()
 	float d = 0.f;
 	for (uint i = 0; i < gLSpot.length(); ++i) {
 		if (gLExtract[i] > 0.f)
-			d += gLIncome[i] * (ceil - gLExtract[i]);
+			d += gLIncome[i] * IncomeMult() * (ceil - gLExtract[i]);
 	}
 	return (d > 0.f) ? d : 0.f;
 }
@@ -211,7 +211,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		const AIFloat3 sp = gAllSpots[si];
 		if (!OnMap(sp))
 			continue;
-		const float inc = aiEconomyMgr.GetMexSpotIncome(int(si));
+		const float inc = aiEconomyMgr.GetMexSpotIncome(int(si)) * IncomeMult();
 		if (inc <= 0.f)
 			continue;
 		// Geometry-only vetoes are applied here so a refused spot does not
@@ -316,7 +316,7 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		}
 	}
 	++gMexPriced;
-	const float spotIncome = aiEconomyMgr.GetMexSpotIncome(spot);
+	const float spotIncome = aiEconomyMgr.GetMexSpotIncome(spot) * IncomeMult();
 	const float speed = Catalog::gSpeed[uid];
 	const float dist = here.distance2D(pos);
 	gAvgWalkDist = 0.8f * gAvgWalkDist + 0.2f * dist;

@@ -38,6 +38,27 @@ float MobilityMult(int defId)
 	return mob;
 }
 
+// THE HANDICAP THE ENGINE APPLIES AND THE SPOT INCOME OMITS. The engine
+// multiplies every income stream by the team handicap, but GetMexSpotIncome
+// returns the MAP's raw spot income -- so at his +100% every extraction gain
+// priced HALF its real value while energy priced off true (doubled)
+// income/pull, which is "all our T2 cons are going for a fusion" seen from
+// the arithmetic. dev_team_income.lua publishes the multiplier as
+// ai_handicap_<team>; without the gadget this reads 1 and prices as before.
+// Re-read on a clock, never latched -- the param lands a few frames in.
+float gIncomeMult = 1.f;
+int gIncomeMultAt = -999999;
+float IncomeMult()
+{
+	if (ai.frame - gIncomeMultAt < 30 * SECOND)
+		return gIncomeMult;
+	gIncomeMultAt = ai.frame;
+	const float m = ai.GetGameRulesParam("ai_handicap_" + ai.teamId, -1.f);
+	if (m > 0.f)
+		gIncomeMult = m;
+	return gIncomeMult;
+}
+
 // The last probed open spot's real yield (income x extraction); the tunable
 // is only the pre-probe fallback. This was a MODEL term until the
 // GetMexSpotIncome binding landed.

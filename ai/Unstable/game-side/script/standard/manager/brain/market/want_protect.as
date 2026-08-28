@@ -1,5 +1,4 @@
 namespace Market {
-CCircuitUnit@ gReclaimTarget = null;
 CCircuitUnit@ gAssistTarget = null;
 
 // Which kind of ground the defence auction keeps choosing. Without this the
@@ -620,6 +619,171 @@ void TargetLog()
 		+ " eco=" + (EcoRoleActive() ? 1 : 0));
 }
 
+// THE SITE AUCTION, CACHED PER DEF. Everything in the per-site loop except
+// the walk is unit-independent (threat, stake, cover, hazard move on their
+// own clocks), yet it re-ran for every defence def of every builder on every
+// election: measured 61s of one 686s game inside prot.loop alone, and the
+// 37-69ms spikes he can feel at 5x speed. The fill computes each site's
+// PREVENTED loss at most once per def per two seconds; the election keeps
+// only the walk-weighted argmax. The arithmetic inside is unchanged.
+array<array<float>@> gDsPrev;
+array<array<float>@> gDsX;
+array<array<float>@> gDsZ;
+array<array<bool>@> gDsFront;
+array<int> gDsAt;
+array<int> gDsLineN;
+void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
+		float siteWave, float siegeFrac)
+{
+	if (int(gDsAt.length()) <= Catalog::gDefCount) {
+		gDsPrev.resize(uint(Catalog::gDefCount + 1));
+		gDsX.resize(uint(Catalog::gDefCount + 1));
+		gDsZ.resize(uint(Catalog::gDefCount + 1));
+		gDsFront.resize(uint(Catalog::gDefCount + 1));
+		gDsAt.resize(uint(Catalog::gDefCount + 1));
+		gDsLineN.resize(uint(Catalog::gDefCount + 1));
+	}
+	if ((gDsAt[d] > 0) && (ai.frame - gDsAt[d] < 2 * SECOND))
+		return;
+	gDsAt[d] = (ai.frame > 0) ? ai.frame : 1;
+	const double _tSites = Perf::T0();
+	array<AIFloat3> sites;
+	PfGuardSites(reach, sites);
+	const uint nAsset = sites.length();
+	if (Base::gAnchorSet) {
+		AIFloat3 cp;
+		if (Front::FrontChoke(Base::gAnchor, cp)) {
+			AIFloat3 site;
+			if (!Front::BehindChoke(cp, 180.f, site))
+				site = cp;
+			sites.insertLast(site);
+		}
+	}
+	if (ai.GetTunable("apex_front_line", TUNE_FRONT_LINE) > 0.f) {
+		array<AIFloat3> line;
+		if (Military::FrontBuildSpots(line)) {
+			for (uint fi = 0; fi < line.length(); ++fi)
+				sites.insertLast(line[fi]);
+		}
+	}
+	Perf::Add("prot.sites", _tSites);
+	const double _tLoop = Perf::T0();
+	array<float> prevA(sites.length(), 0.f);
+	array<float> xA(sites.length(), 0.f);
+	array<float> zA(sites.length(), 0.f);
+	array<bool> frontA(sites.length(), false);
+	ClosurePrep();
+	RiskFill();
+	RiskFillSiege();
+	float fillBest = 0.f;
+	for (uint si = 0; si < sites.length(); ++si) {
+		const AIFloat3 s = sites[si];
+		if (!OnMap(s))
+			continue;
+		const bool isFront = (si >= nAsset);
+		xA[si] = s.x;
+		zA[si] = s.z;
+		frontA[si] = isFront;
+		float threat = isFront ? ThreatAt(s) : PfSiteThreat(si);
+		const bool floored = !isFront && MexInReach(s, reach)
+				&& (mexFloorWave > threat);
+		if (floored)
+			threat = mexFloorWave;
+		if ((siteWave > 0.f) && (gPfTotal > 1.f)) {
+			const float sStake = isFront
+					? FrontedStakeAt(s, reach) : PfSiteStake(si);
+			float shr = sStake / gPfTotal;
+			if (shr > 1.f)
+				shr = 1.f;
+			const float wHere = siteWave * shr;
+			if (wHere > threat)
+				threat = wHere;
+			float heavy = PfHeavyRef();
+			if (heavy > sStake)
+				heavy = sStake;
+			if (heavy > threat)
+				threat = heavy;
+		}
+		if (threat <= 1.f)
+			continue;
+		float stake = (isFront || (reach < 64.f))
+				? FrontedStakeAt(s, reach) : PfSiteStake(si);
+		{
+			const float dClose = ClosureAdds(s, reach);
+			AIFloat3 outDir = isFront
+					? (aiEnemyMgr.GetEnemyPos() - s) : (s - gPfMid);
+			if (isFront || gPfRimOk)
+				stake += ShieldedStakeAlong(s, reach, outDir) * dClose;
+		}
+		if (stake <= 1.f)
+			continue;
+		const float cover0 = isFront ? CoverAt(s) : PfSiteCover(si);
+		const float cover1 = cover0 + CoverAddsAt(s, reach, adds);
+		float short0 = (threat - cover0) / threat;
+		if (short0 < 0.f)
+			short0 = 0.f;
+		float short1 = (threat - cover1) / threat;
+		if (short1 < 0.f)
+			short1 = 0.f;
+		float stopped = short0 - short1;
+		if (floored) {
+			const float gained = cover1 - cover0;
+			float step = mexFloorWave - cover0;
+			if (step > gained)
+				step = gained;
+			stopped = (gained > 0.f) ? (step / gained) : 0.f;
+		}
+		if (stopped <= 0.f)
+			continue;
+		const float hazard = isFront ? HazardWith(s, cover0) : PfSiteHz(si);
+		float hz = hazard;
+		const float sg = isFront ? SiegeWith(s, cover0, siegeFrac)
+				: PfSiteSiege(si);
+		if (sg > hz)
+			hz = sg;
+		float prevented = stake * hz * stopped;
+		prevented *= Military::OpenFraction(s, reach);
+		{
+			const float k = ai.GetTunable("apex_unprot_discount",
+					TUNE_UNPROT_DISCOUNT);
+			if (k > 0.f) {
+				const float f0 = (cover0 < threat)
+						? (cover0 / threat) : 1.f;
+				const float f1 = (cover1 < threat)
+						? (cover1 / threat) : 1.f;
+				if (f1 > f0)
+					prevented += stake * k * (f1 - f0) * hz;
+			}
+		}
+		prevA[si] = prevented;
+		if (isFront) {
+			if (prevented > gDbgFrontBest) gDbgFrontBest = prevented;
+		} else if (prevented > gDbgAssetBest) {
+			gDbgAssetBest = prevented;
+		}
+		// The defprice diag follows the fill's own argmax; the walk-adjusted
+		// winner can differ slightly.
+		if (prevented > fillBest) {
+			fillBest = prevented;
+			gDbgStake = stake;
+			gDbgHz = hz;
+			gDbgSiege = sg;
+			gDbgHazard = hazard;
+			gDbgShort0 = short0;
+			gDbgShort1 = short1;
+			gDbgThreat = threat;
+			gDbgCover0 = cover0;
+			gDbgCover1 = cover1;
+		}
+	}
+	@gDsPrev[d] = prevA;
+	@gDsX[d] = xA;
+	@gDsZ[d] = zA;
+	@gDsFront[d] = frontA;
+	gDsLineN[d] = int(sites.length() - nAsset);
+	Perf::Add("prot.loop", _tLoop);
+}
+
 Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 {
 	Want w;
@@ -681,6 +845,16 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			AIFloat3 gapAt;
 			float unseenFrac = 0.f;
 			if (!RadarGap(unit.GetPos(ai.frame), gapAt, unseenFrac))
+				continue;
+			// The gap is watched FROM SAFETY, never stood in. Gap sites past
+			// the front or on hot ground ate constructors all game (2,069
+			// sense elections, 33 radars standing at once never; 84 radar
+			// frames died) -- the same "never send a con to build a tower in a
+			// dangerous place" ruling every other static build already obeys.
+			if (Front::FoeKnown() && Builder::PastFront(gapAt))
+				continue;
+			if (ai.GetEnemyCostAt(gapAt, 900.f)
+				> Catalog::gCostM[int(unit.circuitDef.id)])
 				continue;
 			at = gapAt;
 			// Eyes for the army too: blind units chase shadows (apexearth:
@@ -861,52 +1035,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			const float siteWave = ArmyTargetFull()
 					* ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE)
 					* TeamExposure();
-			const double _tSites = Perf::T0();
-			array<AIFloat3> sites;
-			// GUARD SITES COME FROM THE BUILDINGS. The two ring generators this
-			// replaced -- a circle of radius (base extent + turret reach) about
-			// the metal centroid, and polar rings layered inward around home --
-			// both described the start position rather than what we own
-			// (apexearth: "our base defense only builds in a circle around
-			// where we started... we should be interested in defending any/all
-			// buildings that we have"). PfGuardSites buckets every standing
-			// structure at the turret's own reach and returns the value-
-			// weighted centre of each cluster, so a post is offered wherever
-			// our metal actually stands and nowhere else.
-			PfGuardSites(reach, sites);
-			// Sites below this index guard something of ours; sites at or above
-			// it are the line. The two are priced differently -- see below.
-			const uint nAsset = sites.length();
-			// THE LINE ITSELF, and the choke behind it. FrontBuildSpots is the
-			// measured territory edge per bearing, already set back so the
-			// builder is not standing in the fight -- not a ring about home.
-			if (Base::gAnchorSet) {
-				AIFloat3 cp;
-				if (Front::FrontChoke(Base::gAnchor, cp)) {
-					AIFloat3 site;
-					if (!Front::BehindChoke(cp, 180.f, site))
-						site = cp;
-					sites.insertLast(site);
-				}
-			}
-			if (ai.GetTunable("apex_front_line", TUNE_FRONT_LINE) > 0.f) {
-				array<AIFloat3> line;
-				if (Military::FrontBuildSpots(line)) {
-					for (uint fi = 0; fi < line.length(); ++fi)
-						sites.insertLast(line[fi]);
-				}
-			}
-			// WHAT THE PRICE WILL CHARGE FOR GETTING THERE.
-			//
-			// The loop below used to rank sites on the raw loss a turret
-			// prevents and hand the winner to ValueOf, which only then charged
-			// the walk. So the builder standing on the mex it had just finished
-			// was sent across the base to whichever site scored marginally
-			// higher, and the tower it should have put down where it stood was
-			// never proposed at all -- apexearth: "units making mex and then
-			// not immediately making the light tower to cover it".
-			Perf::Add("prot.sites", _tSites);
-			const double _tLoop = Perf::T0();
+			DefSiteFill(d, reach, adds, mexFloorWave, siteWave,
+					ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR));
 			const float wage = Wage();
 			const float walkW = ai.GetTunable("apex_def_site_walk",
 					TUNE_DEF_SITE_WALK);
@@ -919,190 +1049,26 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			float bestGain = 0.f;
 			float bestScore = 0.f;
 			bool bestIsFront = false;
-			// Closure as it stands, computed once: it does not depend on which
-			// candidate site we are pricing.
-			ClosurePrep();
-			// Same as the field sweep: the side-wide half of threat, hazard
-			// and the siege prior does not depend on the site being priced.
-			RiskFill();
-			RiskFillSiege();
-			const float siegeFrac = ai.GetTunable("apex_enemy_prior",
-					TUNE_ENEMY_PRIOR);
-			for (uint si = 0; si < sites.length(); ++si) {
-				const AIFloat3 s = sites[si];
-				if (!OnMap(s))
-					continue;
-				const bool isFront = (si >= nAsset);
-				float threat = isFront ? ThreatAt(s) : PfSiteThreat(si);
-				// A mex nothing has attacked yet still has to be able to meet
-				// the floor. Judged by whether one stands in this post's reach,
-				// since a guard site is a cluster centre rather than the mex.
-				const bool floored = !isFront && MexInReach(s, reach)
-						&& (mexFloorWave > threat);
-				if (floored)
-					threat = mexFloorWave;
-				// ...and the share of the expected wave this post's own ground
-				// is worth. gPfTotal is everything we own, so a post covering a
-				// tenth of the base faces a tenth of the wave.
-				if ((siteWave > 0.f) && (gPfTotal > 1.f)) {
-					const float sStake = isFront
-							? FrontedStakeAt(s, reach) : PfSiteStake(si);
-					float shr = sStake / gPfTotal;
-					if (shr > 1.f)
-						shr = 1.f;
-					const float wHere = siteWave * shr;
-					if (wHere > threat)
-						threat = wHere;
-					// ONE OF THEIR BEST UNITS ARRIVES WHOLE, AT ONE PLACE.
-					// Apportioning the wave by stake share is right for an army
-					// -- it spreads -- and wrong for a single heavy: a
-					// Juggernaut does not send a tenth of itself to a tenth of
-					// the base. Under this floor a cheap turret saturates the
-					// shortfall on its own, the clip discards everything a big
-					// gun brings past it, and the auction cannot tell a
-					// Bulwark from a Toaster (measured: cordoom kill 7,927
-					// against cortoast 1,565, and cortoast priced FOUR TIMES
-					// higher). apexearth: "we made the longer range T2 guns
-					// which are good but they can't take down T3 fast enough."
-					//
-					// Bounded by the stake itself, so nothing invents a
-					// threshold: they bring the heavy where there is something
-					// worth killing, and a post guarding 500 metal never faces
-					// a 20,000-metal attacker.
-					float heavy = PfHeavyRef();
-					if (heavy > sStake)
-						heavy = sStake;
-					if (heavy > threat)
-						threat = heavy;
-				}
-				if (threat <= 1.f)
-					continue;
-				// FRONT AND GUARD ARE PRICED, NOT RANKED (apexearth: front and
-				// shoreline defence preferred, "these structure guarding
-				// defenses are just backup if the frontline fails or leaks
-				// enemy units inside"). A line post keeps the shielded credit
-				// for everything standing behind it -- to the extent it CLOSES
-				// the net, so plugging the last hole is worth the whole base
-				// and a redundant post beside an existing one is worth nothing.
-				// A guard post is worth only what stands in its own reach. So
-				// the line wins wherever it still shields something, and a
-				// guard post wins once something inside is actually at risk,
-				// without either being forbidden.
-				float stake = (isFront || (reach < 64.f))
-						? FrontedStakeAt(s, reach) : PfSiteStake(si);
-				// A GUARD POST GETS THE SAME CREDIT, ON ITS OWN OUTWARD
-				// BEARING. Gated on isFront, only line posts could ever collect
-				// it, so the price's argmax sat at the centroid of our own
-				// footprint by construction: an interior post's disc catches
-				// assets on every bearing while a perimeter post's catches
-				// about half, and nothing paid the perimeter back for the base
-				// standing behind it. This is the term that makes value peak at
-				// the edge and fall off inside -- an interior post has most of
-				// the base IN FRONT of it on its outward bearing and so
-				// collects almost nothing, and a redundant rim post beside an
-				// existing one is still zeroed by ClosureAdds.
-				{
-					const float dClose = ClosureAdds(s, reach);
-					AIFloat3 outDir = isFront
-							? (aiEnemyMgr.GetEnemyPos() - s) : (s - gPfMid);
-					if (isFront || gPfRimOk)
-						stake += ShieldedStakeAlong(s, reach, outDir) * dClose;
-				}
-				if (stake <= 1.f)
-					continue;
-				// BOTH READINGS THROUGH ONE FUNCTION. short1 asks CoverWith
-				// what the field would measure with this turret standing at s,
-				// so a post that cannot raise the weakest bearing prevents
-				// nothing -- which is what makes an in-base carpet price itself
-				// out while a forward post or an out-ranging turret does not.
-				// Both reads come out of the field for a guard site: cover
-				// at a place does not depend on which turret is being priced,
-				// and what one more turret standing there would ADD is a
-				// constant across the standoff ring rather than a second sweep.
-				const float cover0 = isFront ? CoverAt(s) : PfSiteCover(si);
-				const float cover1 = cover0 + CoverAddsAt(s, reach, adds);
-				float short0 = (threat - cover0) / threat;
-				if (short0 < 0.f)
-					short0 = 0.f;
-				float short1 = (threat - cover1) / threat;
-				if (short1 < 0.f)
-					short1 = 0.f;
-				float stopped = short0 - short1;
-				// A FLOOR IS FILLED IN STEPS, NOT MET IN ONE JUMP. Against a
-				// wave we can see, the share a turret newly stops is the right
-				// price and it falls as cover rises. Against the floor -- a
-				// wave nobody has seen -- that same arithmetic made each turret
-				// worth LESS the higher the floor was set, because one tower is
-				// a smaller fraction of a bigger assumed wave.
-				if (floored) {
-					const float gained = cover1 - cover0;
-					float step = mexFloorWave - cover0;
-					if (step > gained)
-						step = gained;
-					stopped = (gained > 0.f) ? (step / gained) : 0.f;
-				}
-				if (stopped <= 0.f)
-					continue;
-				// The siege prior BUYS THE ANSWER, it does not only forbid the
-				// bet. Self-limiting: SiegeRisk falls as CoverAt rises, so each
-				// turret lowers the price of the next.
-				const float hazard = isFront ? HazardWith(s, cover0) : PfSiteHz(si);
-				float hz = hazard;
-				const float sg = isFront ? SiegeWith(s, cover0, siegeFrac)
-						: PfSiteSiege(si);
-				if (sg > hz)
-					hz = sg;
-				// A post against the map edge faces FEWER approaches, so the
-				// wave it must beat is smaller in proportion.
-				float prevented = stake * hz * stopped;
-				prevented *= Military::OpenFraction(s, reach);
-				// ...AND THE WORTH IT GIVES BACK. A building nothing guards is
-				// worth apex_unprot_discount less to us than the same building
-				// behind a gun, and covering it restores that share. Same
-				// function the discount itself is read from, so the two halves
-				// of "unprotected buildings are worth less, defence makes them
-				// worth more" cannot drift apart.
-				{
-					const float k = ai.GetTunable("apex_unprot_discount",
-							TUNE_UNPROT_DISCOUNT);
-					if (k > 0.f) {
-						const float f0 = (cover0 < threat)
-								? (cover0 / threat) : 1.f;
-						const float f1 = (cover1 < threat)
-								? (cover1 / threat) : 1.f;
-						if (f1 > f0)
-							prevented += stake * k * (f1 - f0) * hz;
+			const array<float>@ prevs = gDsPrev[d];
+			if (prevs !is null) {
+				for (uint si = 0; si < prevs.length(); ++si) {
+					const float prev = prevs[si];
+					if (prev <= 0.f)
+						continue;
+					const AIFloat3 s = AIFloat3(gDsX[d][si], 0.f, gDsZ[d][si]);
+					const float wSec = ((uSpeed > 1.f)
+							? (uPos.distance2D(s) / uSpeed) : 60.f) * walkW;
+					const float score = prev
+							/ (kCost + wSec * wage + prev * wSec);
+					if (score > bestScore) {
+						bestScore = score;
+						bestGain = prev;
+						bestAt = s;
+						bestIsFront = gDsFront[d][si];
 					}
 				}
-				if (isFront) {
-					if (prevented > gDbgFrontBest) gDbgFrontBest = prevented;
-				} else if (prevented > gDbgAssetBest) {
-					gDbgAssetBest = prevented;
-				}
-				// The same denominator ValueOf builds: the builder's idle
-				// seconds, plus the income the asset forgoes by starting late.
-				const float wSec = ((uSpeed > 1.f)
-						? (uPos.distance2D(s) / uSpeed) : 60.f) * walkW;
-				const float score = prevented
-						/ (kCost + wSec * wage + prevented * wSec);
-				if (score > bestScore) {
-					bestScore = score;
-					bestGain = prevented;
-					bestAt = s;
-					bestIsFront = isFront;
-					gDbgStake = stake;
-					gDbgHz = hz;
-					gDbgSiege = sg;
-					gDbgHazard = hazard;
-					gDbgShort0 = short0;
-					gDbgShort1 = short1;
-					gDbgThreat = threat;
-					gDbgCover0 = cover0;
-					gDbgCover1 = cover1;
-				}
 			}
-			Perf::Add("prot.loop", _tLoop);
-			gDbgLineN = int(sites.length() - nAsset);
+			gDbgLineN = gDsLineN[d];
 			if (bestGain <= 0.f)
 				continue;
 			// SATURATE. Every other major want has a target it reaches and then

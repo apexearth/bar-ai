@@ -1,6 +1,45 @@
 namespace Market {
+// The nano placement probe's cache (see the WK_NANO branch).
+AIFloat3 gNanoSite(-1.f, 0.f, -1.f);
+int gNanoSiteKey = 0;
+int gNanoSiteAt = -999999;
+
 IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 {
+	// FINISH BEFORE FOUNDING, for EVERY static kind. The adoption block used
+	// to sit below the branches that return early, so mex, mexup, tech, nano,
+	// sense and protect never reached it -- their orphans (armrad 48, armmex
+	// 43, armmoho 35, armnanotc 24 in one game) rotted while fresh sites
+	// opened beside them.
+	if ((w.def !is null) && !w.def.IsMobile()
+		&& (w.kind != WK_RECLAIM) && (w.kind != WK_ASSIST))
+	{
+		IUnitTask@ orph0 = Requests::OrphanOf(w.def);
+		if (orph0 !is null)
+			return orph0;
+		CCircuitUnit@ pf0 = Requests::PendAnyOfDef(w.def, unit.GetPos(ai.frame));
+		if ((pf0 !is null)
+			&& (Builder::ThreatFor(unit, pf0.GetPos(ai.frame))
+				<= Builder::CON_THREAT_VETO))
+		{
+			float done0 = pf0.GetHealthPercent();
+			if (done0 < 0.f)
+				done0 = 0.f;
+			else if (done0 > 1.f)
+				done0 = 1.f;
+			const float left0 = w.def.costM * (1.f - done0);
+			const int hold0 = int(left0 / Requests::DRAIN) + 10;
+			IUnitTask@ g0 = aiBuilderMgr.Enqueue(TaskB::Guard(
+					Task::Priority::NORMAL, pf0, false, hold0 * SECOND));
+			if (g0 !is null) {
+				AiLog(Factory::T() + "apex: frame-adopt " + w.def.GetName()
+					+ " done=" + formatFloat(done0, "", 0, 2)
+					+ " at=" + int(pf0.GetPos(ai.frame).x)
+					+ "," + int(pf0.GetPos(ai.frame).z));
+				return g0;
+			}
+		}
+	}
 	if (w.kind == WK_MEX) {
 		// Help the one already going before opening another, exactly as every
 		// other build type does -- the metal path used to skip this rung.
@@ -95,7 +134,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// chase it across the base (apexearth).
 		if (tgt.circuitDef.IsMobile())
 			tgt.CmdMoveTo(unit.GetPos(ai.frame));
-		return aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, tgt));
+		IUnitTask@ rt = aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, tgt));
+		if (rt !is null) {
+			const int td = int(tgt.circuitDef.id);
+			if (w.retire && !Catalog::gMobile[td])
+				NoteDefRetired(td);
+		}
+		return rt;
 	}
 	if (w.kind == WK_NANO) {
 		// Nanos serve factories and big frames only (apexearth): the
@@ -199,6 +244,28 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		if (!sited)
 			return null;
+		// THE SINK'S OWN CENTER IS OCCUPIED GROUND. Every branch above names
+		// the factory's or the frame's exact position, and the ask went out
+		// with zero shake -- so the engine could not place the turret and the
+		// task died unbuilt: measured 447 nano executions, FOUR frames ever
+		// created, zero finished, in one 37-minute game. Probe for the
+		// nearest legal cell inside assist reach instead -- cached on a 2s
+		// clock per sink cell, because FindBuildSiteNear is an engine search
+		// (same caution as WetPlantSite) and per-exec probing spiked one
+		// election to 271ms.
+		{
+			const AIFloat3 raw = OnMap(slot) ? slot : w.pos;
+			const int nk = (int(raw.x) >> 8) * 4096 + (int(raw.z) >> 8) + 1;
+			if ((nk != gNanoSiteKey)
+				|| (ai.frame - gNanoSiteAt >= 2 * SECOND))
+			{
+				gNanoSiteKey = nk;
+				gNanoSiteAt = ai.frame;
+				gNanoSite = ai.FindBuildSiteNear(w.def, raw, 300.f);
+			}
+			if (OnMap(gNanoSite))
+				slot = gNanoSite;
+		}
 		// PARALLEL on purpose: the default Take folds every nano ask onto
 		// the one standing request -- "burst=1 forever" (requests.as's own
 		// measurement) -- the root of every "not enough nanos" report. Each
@@ -224,36 +291,6 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	bool par = (MCostScale() < 1.f)
 			|| ((w.kind == WK_ENERGY) && EnergyShortOfOrdered());
 	bool crtd = false;
-	// Finish before founding: any unmanned unfinished site of this def is
-	// THE want, wherever it stands (slot cursors never reuse ground, so an
-	// abandoned frame would otherwise be orphaned forever).
-	// A PLANT IS THE MOST EXPENSIVE THING THIS LIST FORGOT. The kinds below
-	// were the four the rule was written for; a half-built lab was never
-	// adopted, so an e-stall that pulled the con off it left the frame
-	// standing and the next election founded a SECOND lab elsewhere
-	// (apexearth: "instead of choosing to finish the original lab afterwards
-	// we just start making a new one. We should be finishing the first lab we
-	// started if it is still present/partially built").
-	if ((w.kind == WK_ENERGY) || (w.kind == WK_CONVERT)
-		|| (w.kind == WK_STORE) || (w.kind == WK_NANO)
-		|| (w.kind == WK_PLANT) || (w.kind == WK_TECH))
-	{
-		IUnitTask@ orph = Requests::OrphanOf(w.def);
-		if (orph !is null)
-			return orph;
-		// ...and a frame whose REQUEST is gone too, which is what an abort
-		// leaves behind. Requests::Take already refuses to start a second
-		// building on top of a standing frame, but only one that is near the
-		// site it was handed -- so aim the request at the frame and its own
-		// guard adopts it.
-		CCircuitUnit@ pf = Requests::PendAnyOfDef(w.def, unit.GetPos(ai.frame));
-		if (pf !is null) {
-			w.pos = pf.GetPos(ai.frame);
-			AiLog(Factory::T() + "apex: frame-adopt " + w.def.GetName()
-				+ " done=" + formatFloat(pf.GetHealthPercent(), "", 0, 2)
-				+ " at=" + int(w.pos.x) + "," + int(w.pos.z));
-		}
-	}
 	// A LATTICE SLOT IS COVERED ONLY BY ITS OWN CELL. Requests::Take joins any
 	// live request for the same def inside the cover radius, and at 96 elmos
 	// that swallowed every NEIGHBOUR: a converter tiles on 48, so the slot next

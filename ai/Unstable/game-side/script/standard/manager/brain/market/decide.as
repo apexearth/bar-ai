@@ -12,6 +12,7 @@ array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 // "still closing" can be distinguished from "stalled".
 array<float> gApproachD(32001, -1.f);
 array<int> gApproachAt(32001, -30000);
+array<int> gApproachMiss(32001, 0);
 // Which builder may drop its work for the first AA tower, and when it claimed
 // that. One at a time: the tower is 80 metal, abandoning every frame in the
 // base is not.
@@ -100,8 +101,20 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				const bool stale = (ai.frame - gApproachAt[uw]) > 30 * SECOND;
 				gApproachD[uw] = dNow;
 				gApproachAt[uw] = ai.frame;
-				if (!stale && (prev > 0.f) && (dNow < prev - 1.f))
-					return null;
+				if (!stale && (prev > 0.f)) {
+					if (dNow < prev - 1.f) {
+						gApproachMiss[uw] = 0;
+						return null;
+					}
+					// ONE bad tick is traffic, not a stall: releasing on the
+					// first non-closing check re-elected walkers mid-jostle,
+					// and a released cheap walk rarely resumes -- 826 nano
+					// tasks created and zero finished in one 40-minute game,
+					// zero front towers from 74 won sites in another.
+					if (++gApproachMiss[uw] < 2)
+						return null;
+					gApproachMiss[uw] = 0;
+				}
 			}
 		}
 	}
@@ -153,6 +166,19 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			continue;
 		if (c.def.IsMobile() || !OnMap(c.pos))
 			continue;
+		// A def we RETIRED ON PURPOSE is not re-bought at full price while
+		// the window runs -- applied here so every buyer (plant, tech, super,
+		// protect, energy) honors the same memory, not only the one proposer
+		// that happened to learn it.
+		if (c.kind != WK_RECLAIM) {
+			const float rm = RetiredDefMul(int(c.def.id));
+			if (rm < 1.f) {
+				c.gain *= rm;
+				c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
+				if (c.value <= 0.f)
+					continue;
+			}
+		}
 		// An unset pos is the origin, and the origin reads as maximally
 		// exposed ground -- charging it would quietly suppress every want
 		// that forgot to name a site.
@@ -494,11 +520,22 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if (fwdDist > 400.f)
 				continue;
 		}
+		const double _tExec = Perf::T0();
 		IUnitTask@ t = ExecuteWant(unit, ranked[i]);
+		Perf::Add("exec.want", _tExec);
 		if (t !is null) {
 			// Price tag on the job, so idle hands can later rank what is in
 			// flight by what the market paid for it (floor.as).
 			NoteJob(t, ranked[i]);
+			// What was EXECUTED, not what was drawn -- the decide line above
+			// prints ranked[0] even when the executor refuses it, so audits
+			// counting decides overcount every refused want. pick>0 is a
+			// fallthrough past the drawn winner.
+			AiLog("apex: exec t=" + ai.teamId + " " + unit.circuitDef.GetName()
+				+ " #" + unit.id + " " + KindName(ranked[i].kind) + ":"
+				+ ((ranked[i].def is null) ? "-" : ranked[i].def.GetName())
+				+ " pick=" + i
+				+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z));
 			return t;
 		}
 		if (uint(ranked[i].kind) < gExecFail.length())

@@ -640,12 +640,21 @@ float SiegeExpect(const AIFloat3& in pos)
 // so a tower within reach of the spot RAISES this directly -- which is the
 // coupling he is asking for: cover makes the next claim beside it worth more,
 // and expansion clusters behind the line instead of scattering.
+// Memoized on a 256-elmo grid with a 3s clock: three field sweeps per call,
+// and the mexup proposer asks per held spot per election.
+array<float> gSsVal(64, 1.f);
+array<int> gSsAt(64, 0);
+array<int> gSsKey(64, 0);
 float StreamSurvival(const AIFloat3& in pos)
 {
 	if (ai.GetTunable("apex_stream_survival", TUNE_STREAM_SURVIVAL) <= 0.f)
 		return 1.f;
 	if (!OnMap(pos))
 		return 1.f;
+	const int key = (int(pos.x) >> 8) * 4096 + (int(pos.z) >> 8) + 1;
+	const uint slot = uint(key) & 63;
+	if ((gSsKey[slot] == key) && (ai.frame - gSsAt[slot] < 3 * SECOND))
+		return gSsVal[slot];
 	// Shortfall, hazard and the siege prior all read the cover at this one
 	// point and all three side-wide fills. Read each once.
 	RiskFill();
@@ -657,10 +666,15 @@ float StreamSurvival(const AIFloat3& in pos)
 			ai.GetTunable("apex_siege_prior", TUNE_SIEGE_PRIOR)) * shortP;
 	if (siege > risk)
 		risk = siege;
-	if (risk <= 0.f)
-		return 1.f;
-	const float T = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
-	return 1.f / (1.f + risk * ((T > 1.f) ? T : 300.f));
+	float r = 1.f;
+	if (risk > 0.f) {
+		const float T = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
+		r = 1.f / (1.f + risk * ((T > 1.f) ? T : 300.f));
+	}
+	gSsKey[slot] = key;
+	gSsAt[slot] = ai.frame;
+	gSsVal[slot] = r;
+	return r;
 }
 
 // DEFENDED GROUND IS A SCARCE RESOURCE. A turret protects an AREA, and the same

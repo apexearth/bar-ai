@@ -1166,8 +1166,12 @@ const float TUNE_ESCORT_SQUAD_VALUE = 2000.f;
 //   position's bearing.
 const float TUNE_FRONT_BAND = 0.18f;
 // manager/frontline.as [ratio] -- Width of the front band as a fraction of the
-//   territory radius (floored at one influence- grid cell).
-const float TUNE_FRONT_BAND_FRAC = 1.0f;
+//   territory radius (floored at one influence-grid cell). The arc it keeps is
+//   acos(1 - frac) each side of the enemy bearing: 1.0 was +/-90 degrees --
+//   HALF the perimeter read as front, every game (band=R in every frontline
+//   log line), which is a "front" through the middle of the base. 0.35 is a
+//   +/-49 degree arc.
+const float TUNE_FRONT_BAND_FRAC = 0.35f;
 // manager/brain.as [ratio] -- Site-search radius for a front tower as a
 //   fraction of its counted reach (min 400 elmos).
 // manager/military/posture.as [elmos] -- Step size of the staging anchor's
@@ -1328,9 +1332,6 @@ const float TUNE_STANDOFF_COVER = 1.f;
 // the "heavies are out" sense, so this only ever fires before that. 0 = the
 // old flee-only commander.
 const float TUNE_COMM_FIGHT = 1.f;
-// STORE_HORIZON: seconds over which a storage's volume counts as captured
-// overflow (its gain = min(overflow, storeM/horizon)).
-const float TUNE_STORE_HORIZON = 60.f;
 // TECH_PIPE: discount on a tech plant's unlock demand. The pipeline DELAY
 // is priced by PipeLatencyMult -- a second 0.5 here double-counted it and,
 // stacked with the funded discount, priced the T2 lab ~100x under a nano
@@ -2121,11 +2122,21 @@ const float TUNE_MEXUP_BOOST = 1.f;
 //   200 for 210, so the turret is nine times the build power per metal
 //   (apexearth: "the right choice is to add more nanos to the lab instead of
 //   making another lab"). Applied only while a line is actually short of
-//   hands, which is his "unless you ran out of room" clause. UNMEASURED and
-//   off by default: the first game with it on finished at 72k metal against
-//   1.47M, which is either variance or this suppressing parallel capacity
-//   outright. Turn on to A/B.
-const float TUNE_DUP_BP_SUBST = 0.f;
+//   hands, which is his "unless you ran out of room" clause. The one bad game
+//   that got this defaulted off predates nano frames actually completing --
+//   with nanos never finishing, this discount removed the only build-power
+//   purchase that ever completed. 0 is the control arm.
+const float TUNE_DUP_BP_SUBST = 1.f;
+// manager/brain/market/want_plant.as [multiplier] -- What a plant def we
+//   RECLAIMED ON PURPOSE prices at while the window below runs. 14 of 15 T2
+//   bot labs in one 1v1 died to our own reclaim and were re-bought; a
+//   retirement the market can immediately reverse decides nothing. 1 disables.
+const float TUNE_REPLANT_DISCOUNT = 0.15f;
+// manager/brain/market/want_plant.as [seconds] -- How long the retirement
+//   memory above holds. Chosen, not derived -- long enough to outlive the
+//   walk-and-rebuild cycle it exists to break (~90s), short enough that a
+//   genuinely needed line returns inside a game phase.
+const float TUNE_REPLANT_WINDOW_S = 600.f;
 // manager/brain/market/worth.as, want_plant.as [ratio] -- How fast a unit's --
 //   and a plant's PRODUCTION -- value fades as the share of identified enemy
 //   metal above its own tier rises. Priced as 1/(1 + this * shareAbove): at 1

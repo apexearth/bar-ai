@@ -524,47 +524,14 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	return w;
 }
 
-// Storage. MODEL: a store captures overflow up to its volume spread over a
-// horizon (apex_store_horizon seconds) -- overflow beyond a full bank is
-// lost forever, so the store's return is the loss it absorbs while spending
-// catches up. Only defs whose storage dominates their cost propose here;
-// incidental storage on other defs is not double-counted.
 Want@ ProposeStore(CCircuitUnit@ unit)
 {
+	// Storage is never proposed (apexearth 2026-08-27: "We make tons of metal
+	// storage - we don't need it. Stop making storage."). The reclaim-headroom
+	// niche it served read gReclaimTarget, a global every reclaim PROPOSAL
+	// set, so the lab-reclaim churn kept it armed and 31 storages stood in
+	// one 44-minute 1v1. A refund past headroom just overflows.
 	Want w;
-	// Storage exists ONLY to enable a planned expensive reclaim that will
-	// not fit in current headroom (apexearth 2026-08-23, final form: "not
-	// important unless we're about to reclaim something expensive"). No
-	// overflow purchases, no stock target.
-	if ((gReclaimTarget is null) || (gReclaimTarget.circuitDef is null))
-		return w;
-	const float refund = Catalog::gCostM[int(gReclaimTarget.circuitDef.id)];
-	const float headroom = aiEconomyMgr.metal.storage - aiEconomyMgr.metal.current;
-	if (refund <= headroom)
-		return w;
-	const float horizon = ai.GetTunable("apex_store_horizon", TUNE_STORE_HORIZON);
-	const float fill = 1.f;
-	const float over = (refund - headroom) / ((horizon > 1.f) ? horizon : 60.f);
-	const int uid = int(unit.circuitDef.id);
-	const AIFloat3 sSite = EcoSiteFor(unit);
-	const array<int>@ builds = Catalog::BuildsOf(uid);
-	for (uint i = 0; i < builds.length(); ++i) {
-		const int d = builds[i];
-		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
-			continue;   // floaters need water; land-base v1 (see armfmkr churn)
-		if (Catalog::gStoreM[d] <= Catalog::gCostM[d])
-			continue;
-		const float capture = fill * Catalog::gStoreM[d] / ((horizon > 1.f) ? horizon : 60.f);
-		Want c;
-		ValueOf(d, (over < capture) ? over : capture, WalkSecTo(unit, sSite),
-				Catalog::gBuildPower[uid], c);
-		if (c.value > w.value) {
-			w = c;
-			w.kind = WK_STORE;
-			@w.def = Catalog::Def(d);
-			w.pos = sSite;
-		}
-	}
 	return w;
 }
 

@@ -124,7 +124,8 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			const int d = builds[i];
 			if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= gLExtract[li]))
 				continue;
-			float delta = gLIncome[li] * (Catalog::gExtractsM[d] - gLExtract[li]);
+			float delta = gLIncome[li] * IncomeMult()
+					* (Catalog::gExtractsM[d] - gLExtract[li]);
 			{
 				// Share of TOTAL economic power, the same denominator the
 				// energy premium uses -- see want_energy.as.

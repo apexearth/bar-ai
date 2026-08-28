@@ -91,6 +91,18 @@ float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
 float RetireValue(CCircuitUnit@ unit, CCircuitUnit@ tgt, int d, float ePM,
 		float wage, float hz)
 {
+	// A JUST-BUILT STRUCTURE IS NEVER OBSOLETE -- same law the con path
+	// already applies via apex_reclaim_age_s, at the window the rebuy
+	// discount runs for. Without it the market ate 149 reclaim assignments
+	// into one vehicle plant and 75 into a gantry it had built minutes
+	// before, in one 40-minute game.
+	{
+		const int born = BuiltFrameOf(tgt);
+		const float win = ai.GetTunable("apex_replant_window_s",
+				TUNE_REPLANT_WINDOW_S);
+		if ((born > 0) && (float(ai.frame - born) < win * float(SECOND)))
+			return 0.f;
+	}
 	const float gain = RetireGain(tgt, d, ePM, hz);
 	if (gain <= 0.f)
 		return 0.f;
@@ -182,7 +194,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 				w.value *= hm;
 			}
 			@w.target = rc;
-			@gReclaimTarget = rc;
+			w.retire = true;
 			return w;
 		}
 	}
@@ -503,7 +515,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		w.value *= hm;
 	}
 	@w.target = best;
-	@gReclaimTarget = best;
+	w.retire = true;
 	return w;
 }
 
@@ -596,7 +608,6 @@ Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
 		w.value *= hm;
 	}
 	@w.target = best;
-	@gReclaimTarget = best;
 	return w;
 }
 
