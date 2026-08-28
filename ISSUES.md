@@ -31,6 +31,19 @@ summarized in the bar-ai-velocity-plan memory) is mid-execution. Session 1
   any held BUILDER task first, so the 0.01-progress hold and the whole
   gApproach* machinery never run; the effective hold is unconditional at any
   progress). Deletion scheduled Session 5 — do NOT build on it meanwhile.
+- **The AA "interrupt the job" promise may be dead code's casualty.** The
+  aaEmerg election hold-breaker in decide.as was unreachable (deleted
+  Session 5); the maketask.as hold returns a working builder's task before
+  any election, so aaEmerg only reorders FREE builders' elections. Whether
+  a WORKING builder is ever interrupted for the first AA tower (his
+  explicit ask) is unverified — check AA PANIC behavior in a game with
+  enemy air while all builders are busy. If nothing interrupts, the fix is
+  an explicit Abort like StallWatch's, not a revival of the dead hold.
+- **gOwnCount immobile reads not yet routed through the ledger**
+  (Session 5's optional half, consciously deferred): gOwnCount is correct
+  now (WasFinished guard) and equivalence with ledger FINISHED is watched
+  by the engine cross-check; wholesale rerouting of ~30 read sites is churn
+  without a driving bug. Revisit if `enginediff` ever grows steadily.
 - **`enginediff` in the ledger summary is log-only** — it counts
   ledger-vs-Def().count disagreement (gifts/captures legitimate); if it
   grows steadily in a game with no gifts, hunt a ledger writer hole.

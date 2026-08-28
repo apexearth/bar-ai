@@ -8,11 +8,6 @@ int gNextAuctionDiag = 0;
 int gNextAaPanicLog = 0;
 int gNextDefPanicLog = 0;
 array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
-// Per-unit approach tracking: how far its site was at the last election, so
-// "still closing" can be distinguished from "stalled".
-array<float> gApproachD(32001, -1.f);
-array<int> gApproachAt(32001, -30000);
-array<int> gApproachMiss(32001, 0);
 // Which builder may drop its work for the first AA tower, and when it claimed
 // that. One at a time: the tower is 80 metal, abandoning every frame in the
 // base is not.
@@ -71,56 +66,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	} else {
 		gAaClaim = -1;
 	}
-	// FINISH WHAT'S STARTED (his rule: "focus as much build power as we
-	// can on just the one building"): a builder whose current frame has
-	// real progress holds it -- the roulette explores at the next FREE
-	// election, never by abandoning work. Without this, re-election
-	// re-rolled every ~2s and the engine reassigns on build-type change:
-	// 61 sentry requests, 850 metal into nanoframes, zero finished
-	// (measured, 25-minute game). The stall sweep still aborts held tasks
-	// explicitly when the economy demands it.
-	if (!aaEmerg && (unit.task !is null) && (unit.task.GetType() == Task::Type::BUILDER)) {
-		if (Requests::Progress(unit.task) > 0.01f)
-			return null;
-		// ...and the FINAL APPROACH counts as started: a walker near its
-		// site finishes the trip (walk-phase re-rolls left sentry sites
-		// nobody ever arrived at). Far walkers may still reconsider --
-		// a long walk is a real opportunity cost worth re-asking about.
-		const AIFloat3 tp0 = unit.task.GetBuildPos();
-		if (OnMap(tp0)) {
-			const float dNow = unit.GetPos(ai.frame).distance2D(tp0);
-			if (dNow < 600.f)
-				return null;
-			// A WALK IN PROGRESS IS WORK IN PROGRESS. Re-rolling every 2s while
-			// still approaching meant a distant site was never reached: measured
-			// in one 1v1, 461 decisions to build an LLT, 21 requests created and
-			// ZERO defences standing at the end -- 46% of all constructor
-			// elections spent walking away from the last one. So a builder that
-			// is genuinely CLOSING on its site holds; one that has stopped
-			// closing (blocked, or the site moved) re-elects as before.
-			const int uw = int(unit.id);
-			if ((uw >= 0) && (uw < int(gApproachD.length()))) {
-				const float prev = gApproachD[uw];
-				const bool stale = (ai.frame - gApproachAt[uw]) > 30 * SECOND;
-				gApproachD[uw] = dNow;
-				gApproachAt[uw] = ai.frame;
-				if (!stale && (prev > 0.f)) {
-					if (dNow < prev - 1.f) {
-						gApproachMiss[uw] = 0;
-						return null;
-					}
-					// ONE bad tick is traffic, not a stall: releasing on the
-					// first non-closing check re-elected walkers mid-jostle,
-					// and a released cheap walk rarely resumes -- 826 nano
-					// tasks created and zero finished in one 40-minute game,
-					// zero front towers from 74 won sites in another.
-					if (++gApproachMiss[uw] < 2)
-						return null;
-					gApproachMiss[uw] = 0;
-				}
-			}
-		}
-	}
+	// (The in-election "finish what's started" hold that lived here was
+	// UNREACHABLE: MakeTaskInner returns any held BUILDER task before Decide
+	// is ever called, so maketask.as's hold -- at ANY progress -- is the live
+	// rule. The aaEmerg claim above stays: it serializes which FREE builder
+	// answers the panic.)
 
 	array<Want@> wants;
 	{ double _t = Perf::T0(); wants.insertLast(ProposeMex(unit)); Perf::Add("want.mex", _t); }
