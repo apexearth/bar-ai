@@ -92,7 +92,13 @@ PANELS = [
             ("TUNE_DUP_BP_SUBST", "prices a SECOND lab's throughput against "
              "nano turrets on the first, which are ~9x the build power per "
              "metal. On, a duplicate line only wins when no line is short of "
-             "hands. UNMEASURED"),
+             "hands. 0 is how one 1v1 built 15 T2 bot labs"),
+            ("TUNE_REPLANT_DISCOUNT", "what a plant def we RECLAIMED ON "
+             "PURPOSE prices at while the window runs -- lower makes a "
+             "retirement harder to reverse; 1 lets the market re-buy the lab "
+             "it just ate"),
+            ("TUNE_REPLANT_WINDOW_S", "how long that retirement memory holds, "
+             "in seconds"),
             ("TUNE_FOE_TIER_FADE", "fades a unit -- and a lab's production "
              "value -- as more of the enemy metal we have MET outranks its "
              "tier. Higher abandons the lower tier faster once they field T3; "

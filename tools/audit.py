@@ -39,8 +39,9 @@ class Report:
 
     def show(self):
         flags = 0
-        for section in ("HEALTH", "PRIORITY", "ECONOMY", "MILITARY",
-                        "EFFICIENCY", "VS-ENEMY"):
+        for section in ("HEALTH", "PRIORITY", "STRUCTURES", "GEOMETRY",
+                        "ECONOMY", "MILITARY", "EFFICIENCY", "VS-ENEMY",
+                        "PERF"):
             rows = [r for r in self.rows if r[0] == section]
             if not rows:
                 continue
@@ -454,8 +455,8 @@ def check_priority(text, rep):
     # duplicate line is the dear way to buy throughput, and it is only the
     # right buy when no line is short of hands.
     dups = re.findall(
-        r"apex: plantdup ([a-z0-9]+) kin=(\d+) subst=([\d.]+) "
-        r"lineNeed=([\d.]+)", text)
+        r"apex: plantdup ([a-z0-9]+) kin=(\d+) dupKin=\d+ unlocks=\d+ "
+        r"liveOther=\d+ subst=([\d.]+) lineNeed=([\d.]+)", text)
     if dups:
         hot = [d for d in dups if float(d[3]) > 0.0]
         worst = sorted(dups, key=lambda d: -int(d[1]))[0]
@@ -496,8 +497,200 @@ def check_priority(text, rep):
                 "election")
 
 
+# ------------------------------------------------------------- structures --
+# The 2026-08-27 complaint list, each as an assertion over what actually got
+# BUILT ([BARAI_BUILD] events carry def and cost) rather than over decides.
+BUILD_RE = re.compile(
+    r"\[BARAI_BUILD\] team=(\d+) ally=\d+ frame=(\d+) min=([\d.]+) "
+    r"unit=(\S+) cost=(\d+)")
+EXEC_RE = re.compile(
+    r"apex: exec t=(\d+) (\S+) #\d+ ([a-z]+):(\S+) pick=(\d+)")
+PLANT_DEFS = {
+    "armlab", "armvp", "armap", "armhp", "armfhp", "armsy", "armplat",
+    "armalab", "armavp", "armaap", "armasy", "armshltx", "armshltxuw",
+    "corlab", "corvp", "corap", "corhp", "corfhp", "corsy", "corplat",
+    "coralab", "coravp", "coraap", "corasy", "corgant", "corgantuw",
+    "leglab", "legvp", "legap", "leghp", "legfhp", "legsy",
+    "legalab", "legavp", "legaap", "leggant",
+}
+T1_DEF_TOWERS = {
+    "armllt", "armbeamer", "armhlt", "armguard", "armrl", "armdl",
+    "corllt", "corhllt", "corhlt", "corpun", "correfrac", "corrl",
+    "legllt", "legmg", "leglht", "legdtf", "legdtl", "legrl",
+}
+
+
+def check_structures(text, rep):
+    ours = set(re.findall(r"apex: decide t=(\d+) ", text))
+    if not ours:
+        return
+    builds = [m for m in BUILD_RE.finditer(text) if m.group(1) in ours]
+    if not builds:
+        rep.add("STRUCTURES", True, "structure telemetry",
+                "no [BARAI_BUILD] events -- gadget absent, checks skipped")
+        return
+    last_min = max(float(m.group(3)) for m in builds)
+
+    # "Stop making storage." (apexearth 2026-08-27) -- zero is the target.
+    stor = [m for m in builds
+            if any(k in m.group(4)
+                   for k in ("stor", "uwms", "uwes", "uwadvms", "uwadves"))]
+    stor_m = sum(int(m.group(5)) for m in stor)
+    rep.add("STRUCTURES", not stor, "no-storage",
+            f"{len(stor)} storage(s) built, {stor_m} metal"
+            + ("" if not stor else " -- ProposeStore should be dead"))
+
+    # "We reclaim our T2 labs and then rebuild them." A successful reclaim
+    # exec on a def followed by a NEW build of the same def is the loop
+    # itself, whatever the def.
+    recl_n = sum(1 for m in EXEC_RE.finditer(text)
+                 if m.group(1) in ours and m.group(3) == "reclaim")
+    # order-scan: walk the file once, tracking last reclaim exec per def
+    loops = defaultdict(int)
+    last_recl = {}
+    for m in re.finditer(
+            r"apex: exec t=(\d+) \S+ #\d+ reclaim:(\S+) pick=\d+"
+            r"|\[BARAI_BUILD\] team=(\d+) ally=\d+ frame=\d+ min=[\d.]+ "
+            r"unit=(\S+) cost=\d+", text):
+        if m.group(1) is not None:
+            if m.group(1) in ours:
+                last_recl[m.group(2)] = True
+        elif m.group(3) in ours:
+            d = m.group(4)
+            if last_recl.pop(d, False):
+                loops[d] += 1
+    if recl_n or loops:
+        worst = sorted(loops.items(), key=lambda kv: -kv[1])[:4]
+        rep.add("STRUCTURES", not loops, "reclaim-rebuild loop",
+                (f"{sum(loops.values())} rebuild(s) after our own reclaim: "
+                 + " ".join(f"{k}={v}" for k, v in worst)) if loops
+                else f"{recl_n} reclaim exec(s), none followed by a "
+                     "same-def rebuild")
+
+    # "We still make multiple of the same type of T2 lab." Count per plant
+    # def; two of one def can be a rebuilt loss, so the bar is three.
+    per_def = defaultdict(int)
+    per_def_m = defaultdict(int)
+    for m in builds:
+        per_def[m.group(4)] += 1
+        per_def_m[m.group(4)] += int(m.group(5))
+    dup_plants = {d: n for d, n in per_def.items()
+                  if d in PLANT_DEFS and n >= 3 and per_def_m[d] >= 4000}
+    plants_m = sum(v for d, v in per_def_m.items() if d in PLANT_DEFS)
+    rep.add("STRUCTURES", not dup_plants, "plant-count",
+            (f"{plants_m} metal into plants; "
+             + (" ".join(f"{d}x{n}" for d, n in
+                         sorted(dup_plants.items(), key=lambda kv: -kv[1]))
+                if dup_plants else "no def built 3+ times")))
+
+    # "Not enough nanos around factories." Standing at end vs plants standing.
+    dead = defaultdict(int)
+    for m in re.finditer(r"apex: unit-destroyed (\S+) ", text):
+        dead[m.group(1)] += 1
+    nanos_up = sum(n for d, n in per_def.items() if "nanotc" in d) \
+        - sum(n for d, n in dead.items() if "nanotc" in d)
+    plants_up = sum(n for d, n in per_def.items() if d in PLANT_DEFS) \
+        - sum(n for d, n in dead.items() if d in PLANT_DEFS)
+    if last_min >= 12 and plants_up > 0:
+        rep.add("STRUCTURES", nanos_up * 2 >= plants_up, "nanos-standing",
+                f"{nanos_up} nano(s) standing vs {plants_up} plant(s) at "
+                f"{last_min:.0f}m (want >= 1 per 2 plants)")
+
+    # Radar churn: executions against radars actually finished.
+    sense_exec = sum(1 for m in EXEC_RE.finditer(text)
+                     if m.group(1) in ours and m.group(3) == "sense")
+    radars = sum(n for d, n in per_def.items() if "rad" in d and "radl" not in d)
+    if sense_exec >= 20:
+        rep.add("STRUCTURES", sense_exec <= max(1, radars) * 8, "sense-churn",
+                f"{sense_exec} sense executions for {radars} radar(s) built")
+
+    # Gauntlet-class towers after an advanced con exists: T1 towers should
+    # stop dominating defence metal once a T2 hand can answer the want.
+    adv_cons = any(
+        m.group(1) in ours and m.group(2) in (
+            "armack", "armacv", "armaca", "corack", "coracv", "coraca",
+            "legack", "legacv", "legaca")
+        for m in EXEC_RE.finditer(text))
+    if adv_cons:
+        t1m = sum(int(m.group(5)) for m in builds
+                  if m.group(4) in T1_DEF_TOWERS)
+        # T2+ defence metal, by the known heavy set.
+        heavy = {"armanni", "armamb", "armpb", "armgate", "armbrtha",
+                 "cordoom", "cortoast", "corvipe", "corbhmth", "corint",
+                 "legbastion", "leglupara", "legrampart"}
+        t2m = sum(int(m.group(5)) for m in builds if m.group(4) in heavy)
+        if t1m + t2m >= 2000:
+            share = 100.0 * t1m / (t1m + t2m)
+            rep.add("STRUCTURES", share <= 60.0, "defence-tier",
+                    f"T1-tower share of defence metal {share:.0f}% "
+                    f"({t1m} vs heavy {t2m}) with advanced cons fielded")
+
+
+# ------------------------------------------------------------------ geometry --
+FRONTLINE_RE = re.compile(
+    r"apex: frontline perim=(\d+) front=(\d+) back=(\d+).*R=(\d+) band=(\d+)")
+
+
+def check_geometry(text, rep):
+    rows = FRONTLINE_RE.findall(text)
+    if rows:
+        fr_share = sorted(int(f) / max(1, int(f) + int(b))
+                          for _, f, b, _, _ in rows)
+        band_r = sorted(int(bd) / max(1, int(r)) for _, _, _, r, bd in rows)
+        med_share = fr_share[len(fr_share) // 2]
+        med_band = band_r[len(band_r) // 2]
+        rep.add("GEOMETRY", med_band < 0.99 and med_share <= 0.55,
+                "front-band",
+                f"median front share {med_share:.2f} of perimeter, "
+                f"band/R {med_band:.2f} -- band/R ~1.0 means the near-enemy "
+                "trim is inert and the 'front' wraps the base")
+    m = None
+    for m in re.finditer(
+            r"apex: fronttowers built=(\d+) lost=\d+ standing=(-?\d+) "
+            r"m=\d+ .*wonFront=(\d+)", text):
+        pass
+    if m:
+        built, standing, won = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        rep.add("GEOMETRY", not (won >= 10 and standing <= 0),
+                "front-towers",
+                f"front sites won {won}x, {built} built, {standing} standing")
+    tiles = re.findall(r"apex: tiling flush=\d+ apart=\d+ cluster=\d+ "
+                       r"of (\d+) \((\d+)% touching\)", text)
+    if tiles:
+        n, pct = tiles[-1]
+        rep.add("GEOMETRY", int(pct) >= 60 or int(n) < 20, "grid-tightness",
+                f"{pct}% of {n} eco structures touching a neighbor at game "
+                "end (grid target: tight rows)")
+
+
+# ---------------------------------------------------------------- performance --
+PERF_RE = re.compile(
+    r"apex: perf sec (\S+) calls=(\d+) totalMs=([\d.]+) maxMs=([\d.]+)")
+
+
+def check_perf(text, rep):
+    tot = defaultdict(float)
+    mx = defaultdict(float)
+    for m in PERF_RE.finditer(text):
+        tot[m.group(1)] += float(m.group(3))
+        if float(m.group(4)) > mx[m.group(1)]:
+            mx[m.group(1)] = float(m.group(4))
+    if not tot:
+        return
+    worst_tot = sorted(tot.items(), key=lambda kv: -kv[1])[:3]
+    worst_max = sorted(mx.items(), key=lambda kv: -kv[1])[:3]
+    spike = worst_max[0]
+    heavy = worst_tot[0]
+    # A 30ms single call is a visible hitch at watch speed; a section
+    # burning >60s of one game is the slow-1v1 complaint.
+    rep.add("PERF", spike[1] <= 30.0 and heavy[1] <= 60000.0, "ai-time",
+            f"max single call {spike[1]:.0f}ms ({spike[0]}); busiest "
+            + " ".join(f"{k}={v/1000:.0f}s" for k, v in worst_tot))
+
+
 CHECKS = [check_health, check_priority, check_economy, check_military,
-          check_efficiency, check_vs_enemy]
+          check_efficiency, check_vs_enemy, check_structures, check_geometry,
+          check_perf]
 
 
 def main():
