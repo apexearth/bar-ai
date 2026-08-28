@@ -186,50 +186,16 @@ void SuperCensus()
 	gSuperFlight = 0;
 	for (uint c = 0; c < gSuperHave.length(); ++c)
 		gSuperHave[c] = 0;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
-		if (gOwnCount[d] <= 0)
-			continue;
-		const int sc = SuperClassOf(int(d));
-		if (sc >= 0)
-			gSuperHave[sc] += gOwnCount[d];
-	}
-	for (uint i = 0; i < Requests::gLive.length(); ++i) {
-		IUnitTask@ t = Requests::gLive[i];
-		if ((t is null) || (t.buildDef is null))
-			continue;
-		const int sc = SuperClassOf(int(t.buildDef.id));
+	// One source: standing, half-built, orphaned frame and outstanding order
+	// are all rows of the commitment ledger (flipped 2026-08-27, shadow
+	// clean across the proving games).
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		const int sc = SuperClassOf(gComDef[ci]);
 		if (sc < 0)
 			continue;
 		++gSuperHave[sc];
-		++gSuperFlight;
-	}
-	// A frame nobody is working still counts as one we are getting: its
-	// request is gone but the building is half up, and a nano turret in range
-	// will finish it.
-	Requests::PendSweep();
-	for (uint i = 0; i < Requests::gPendId.length(); ++i) {
-		const int sc = SuperClassOf(Requests::gPendDef[i]);
-		if (sc < 0)
-			continue;
-		++gSuperHave[sc];
-		++gSuperFlight;
-	}
-	// Ledger shadow (flip when clean): have = any state, flight = coming.
-	{
-		int nHave = 0;
-		int nFlight = 0;
-		for (uint ci = 0; ci < ComLen(); ++ci) {
-			if (SuperClassOf(gComDef[ci]) < 0)
-				continue;
-			++nHave;
-			if (gComState[ci] != CS_FINISHED)
-				++nFlight;
-		}
-		int oHave = 0;
-		for (uint c = 0; c < gSuperHave.length(); ++c)
-			oHave += gSuperHave[c];
-		ComShadowNote("superhave", oHave, nHave);
-		ComShadowNote("superflight", gSuperFlight, nFlight);
+		if (gComState[ci] != CS_FINISHED)
+			++gSuperFlight;
 	}
 }
 

@@ -371,79 +371,29 @@ bool RimGapSite(int cls, AIFloat3& out at)
 // the FIRST tower, which is what this counts.
 bool ProtAnyComing(int cls)
 {
-	bool old = (gProtPos[cls].length() > 0);
-	for (uint i = 0; !old && (i < Requests::gLive.length()); ++i) {
-		IUnitTask@ t = Requests::gLive[i];
-		if ((t is null) || t.IsDead() || (t.buildDef is null))
-			continue;
-		if (ProtClassOf(int(t.buildDef.id)) == cls)
-			old = true;
-	}
-	if (!old) {
-		Requests::PendSweep();
-		for (uint i = 0; i < Requests::gPendId.length(); ++i) {
-			if (ProtClassOf(Requests::gPendDef[i]) == cls) {
-				old = true;
-				break;
-			}
-		}
-	}
-	// Ledger shadow (flip when clean): the same question, one source.
-	bool nu = false;
+	// One source: the commitment ledger holds standing, framed and ordered
+	// alike (flipped 2026-08-27, shadow clean across the proving games).
 	for (uint ci = 0; ci < ComLen(); ++ci) {
-		if (ProtClassOf(gComDef[ci]) == cls) {
-			nu = true;
-			break;
-		}
+		if (ProtClassOf(gComDef[ci]) == cls)
+			return true;
 	}
-	ComShadowNote("protany", old ? 1 : 0, nu ? 1 : 0);
-	return old;
+	return false;
 }
 
 bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 {
-	for (uint i = 0; i < gProtPos[cls].length(); ++i) {
-		if (pos.distance2D(gProtPos[cls][i]) < r)
-			return true;
-	}
-	// ONE ALREADY COMING COVERS THIS GROUND. gProtPos is written at
-	// AiUnitFinished, so ground a half-built anti-nuke already answers read as
-	// answered by nothing and the market sited a second one beside it.
-	for (uint i = 0; i < Requests::gLive.length(); ++i) {
-		IUnitTask@ t = Requests::gLive[i];
-		if ((t is null) || t.IsDead() || (t.buildDef is null))
-			continue;
-		if (ProtClassOf(int(t.buildDef.id)) != cls)
-			continue;
-		const AIFloat3 where = t.GetBuildPos();
-		if (OnMap(where) && (pos.distance2D(where) < r))
-			return true;
-	}
-	// ...and so does one nobody is working: the frame is standing whether or
-	// not a request still remembers it.
+	// ONE ALREADY COMING COVERS THIS GROUND, whoever remembers it: standing,
+	// half-built, orphaned frame and outstanding order are all one ledger
+	// (flipped 2026-08-27). The OnMap guard skips orders not yet sited.
 	bool old = false;
-	Requests::PendSweep();
-	for (uint i = 0; i < Requests::gPendId.length(); ++i) {
-		if (ProtClassOf(Requests::gPendDef[i]) != cls)
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		if (ProtClassOf(gComDef[ci]) != cls)
 			continue;
-		if (pos.distance2D(Requests::gPendPos[i]) < r) {
+		if (OnMap(gComPos[ci]) && (pos.distance2D(gComPos[ci]) < r)) {
 			old = true;
 			break;
 		}
 	}
-	// Ledger shadow (flip when clean). The two standing/live passes above
-	// return true directly, so a shadow note here only covers the old=false
-	// and orphan-frame answers -- enough to prove the frame/order half.
-	bool nu = false;
-	for (uint ci = 0; ci < ComLen(); ++ci) {
-		if (ProtClassOf(gComDef[ci]) != cls)
-			continue;
-		if (pos.distance2D(gComPos[ci]) < r) {
-			nu = true;
-			break;
-		}
-	}
-	ComShadowNote("protcov", old ? 1 : 0, nu ? 1 : 0);
 	return old;
 }
 
