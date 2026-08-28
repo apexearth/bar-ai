@@ -54,7 +54,12 @@ for each one; run it on his next game.
   single calls to 69ms).** The defence site auction (prot.loop, 61s) now
   fills a per-def cache at most every 2s (DefSiteFill; arithmetic unchanged,
   the election keeps only the walk-weighted argmax); StreamSurvival memoized
-  on a 256-elmo/3s grid. Audit: `ai-time`.
+  on a 256-elmo/3s grid. Totals fell (194s -> 37-56s per game) but a SINGLE
+  ELECTION still spikes: `exec.want` (new timer around ExecuteWant) hit 271ms
+  then 424ms in the validation games -- something inside execution, not
+  pricing. The nano `FindBuildSiteNear` probe is instrumented separately
+  (`exec.nanoprobe`) to convict or clear it; if it is not the probe, suspect
+  the Requests::Take scan chain. Audit: `ai-time`.
 - **The decide line lies about execution** -- it prints the drawn ranked[0]
   even when the executor refuses it and the runner-up runs. New
   `apex: exec t=.. kind:def pick=N` line records what actually became a task;

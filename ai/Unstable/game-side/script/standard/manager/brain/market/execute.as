@@ -261,7 +261,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			{
 				gNanoSiteKey = nk;
 				gNanoSiteAt = ai.frame;
+				const double _tProbe = Perf::T0();
 				gNanoSite = ai.FindBuildSiteNear(w.def, raw, 300.f);
+				Perf::Add("exec.nanoprobe", _tProbe);
 			}
 			if (OnMap(gNanoSite))
 				slot = gNanoSite;
