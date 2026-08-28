@@ -6417,7 +6417,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..031b300 100644
+index bc8ff11..0f2c680 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -31,6 +31,7 @@
@@ -6654,7 +6654,30 @@ index bc8ff11..031b300 100644
  		&& (target == nullptr)
  		&& (((ecoMgr->GetAvgMetalIncome() < savedIncome.metal * 0.6f) && (ecoMgr->GetAvgMetalIncome() * 2.0f < ecoMgr->GetMetalPull()))
  			|| ((ecoMgr->GetAvgEnergyIncome() < savedIncome.energy * 0.6f) && (ecoMgr->GetAvgEnergyIncome() * 2.0f < ecoMgr->GetEnergyPull())))
-@@ -542,7 +657,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -492,12 +607,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+ 		if ((buildType != BuildType::GUARD)
+ 			&& ((executors.size() < 2) || !unit->IsAttrBase()))
+ 		{
++			// apex: default OFF. Stock answers an empty E bank by parking every
++			// non-energy builder in range on a literal Wait order; the parked
++			// fleet stops pulling, so from outside the stall reads "healthy"
++			// while nothing builds. The script market prices the stall and
++			// answers it with a zero-E solar instead (want_energy.as); with the
++			// gate off this same call actively releases any unit still waiting.
++			const bool stallWait = (circuit->GetTunable("apex_stock_stall_wait", 0.f) > 0.f)
++					&& ecoMgr->IsEnergyEmpty() && (buildType != BuildType::ENERGY) && (buildType != BuildType::GEO)
++					&& (buildType != BuildType::STORE) && (buildType != BuildType::RECLAIM);
+ 			TRY_UNIT(circuit, unit,
+ 				const bool prio = !ecoMgr->IsEnergyStalling() || (buildType == BuildType::ENERGY) || (buildType == BuildType::GEO);
+ 				unit->CmdBARPriority(prio ? 1.f : 0.f);
+ 				if (unit->GetTravelAct()->IsFinished()) {
+-					unit->CmdWait(ecoMgr->IsEnergyEmpty() && (buildType != BuildType::ENERGY) && (buildType != BuildType::GEO)
+-							&& (buildType != BuildType::STORE) && (buildType != BuildType::RECLAIM));
++					unit->CmdWait(stallWait);
+ 				}
+ 			)
+ 			return true;
+@@ -542,7 +665,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6665,7 +6688,7 @@ index bc8ff11..031b300 100644
  		return;
  	}
  
-@@ -565,11 +682,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +690,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6689,7 +6712,7 @@ index bc8ff11..031b300 100644
  	}
  }
  
-@@ -637,14 +764,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +772,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6746,7 +6769,7 @@ index bc8ff11..031b300 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +827,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +835,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);

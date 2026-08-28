@@ -210,7 +210,7 @@ float ECostSpot()
 // full and income exceeds pull, the spent energy was being wasted -- its
 // cost is forgiven outright (apexearth 2026-08-23: "you can forgive cost
 // when we have extra of something like energy").
-float EPriceCostAt(float buildSec)
+float EPriceCostAt(float buildSec, float costE)
 {
 	if (aiEconomyMgr.isEnergyFull
 		&& (aiEconomyMgr.energy.income > aiEconomyMgr.energy.pull))
@@ -219,8 +219,29 @@ float EPriceCostAt(float buildSec)
 	}
 	const float fl = EPriceFloor();
 	const float spot = ECostSpot();
-	const float resp = ai.GetTunable("apex_e_response", TUNE_E_RESPONSE);
-	float k = ((resp > 1.f) ? resp : 45.f) / ((buildSec > 1.f) ? buildSec : 1.f);
+	// AN E BILL IS A DRAIN, AND WHAT MAKES IT AFFORDABLE IS INCOME. The
+	// build-length decay below knows only how long the build runs, so a 5,000 E
+	// advanced solar was charged at ~the conversion floor whatever the economy
+	// earned -- and the market bought one while stalled at 100 E/s, where its
+	// 63 E/s of draw is most of everything we make (apexearth: "an advanced
+	// solar is hardly affordable at 100e/s income. And it costs a lot of energy
+	// to make. So income restrictions must apply"). Charge the share of income
+	// the build's own drain eats at the scarcity price, the rest at the floor:
+	// the same building is cheap at 400 E/s and unaffordable at 100, on income
+	// alone. ONLY WHILE STALLED (apexearth: "it only matters when we're
+	// e-stalling"): with energy in hand, what a build's E bill competes with is
+	// nothing, and the build-length decay is the right price for it.
+	float k;
+	if ((ai.GetTunable("apex_e_bill_share", TUNE_E_BILL_SHARE) > 0.f)
+		&& HardEStall() && (costE > 0.f) && (buildSec > 1.f))
+	{
+		const float eInc = aiEconomyMgr.energy.income;
+		const float drain = costE / buildSec;
+		k = (eInc > 0.01f) ? (drain / eInc) : 1.f;
+	} else {
+		const float resp = ai.GetTunable("apex_e_response", TUNE_E_RESPONSE);
+		k = ((resp > 1.f) ? resp : 45.f) / ((buildSec > 1.f) ? buildSec : 1.f);
+	}
 	if (k > 1.f)
 		k = 1.f;
 	return fl + (spot - fl) * k;
@@ -430,7 +451,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 	// price it dynamically. This is what makes dense energy (advsol) beat a
 	// field of solars at equal payback.
 	w.mCost = Catalog::gCostM[defId] * MCostScale()
-			+ Catalog::gCostE[defId] * EPriceCostAt(buildSec)
+			+ Catalog::gCostE[defId] * EPriceCostAt(buildSec, Catalog::gCostE[defId])
 			+ float(Catalog::gAreaCells[defId])
 				* ai.GetTunable("apex_space_m", TUNE_SPACE_M);
 	w.tCost = (walkSec + buildSec) * Wage() + displacedM;

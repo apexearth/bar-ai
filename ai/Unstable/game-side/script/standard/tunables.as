@@ -1341,6 +1341,27 @@ const float TUNE_TECH_PIPE = 2.0f;
 // scarcity spike (~one solar build); long builds earn the floor, not the
 // spike.
 const float TUNE_E_RESPONSE = 45.f;
+// E_BILL_SHARE [toggle 0/1] -- WHILE E-STALLED, price a build's ENERGY bill by
+//   the share of energy INCOME its own drain eats, instead of by how long the
+//   build runs. Inert with energy in hand: outside a stall the bill competes
+//   with nothing (apexearth: "it only matters when we're e-stalling").
+//   costE/buildSec against income: an advanced solar's 5,000 E is 63 E/s, most
+//   of a 100 E/s economy and a sixth of a 400 E/s one, so the same building is
+//   unaffordable at the first and cheap at the second (apexearth: "an advanced
+//   solar is hardly affordable at 100e/s income. And it costs a lot of energy
+//   to make. So income restrictions must apply"). The scarcity premium is
+//   still zero while the economy is healthy, so this only bites in a stall.
+//   0 restores the build-length decay (apex_e_response), which was blind to
+//   income and priced a 5,000 E bill at the conversion floor.
+const float TUNE_E_BILL_SHARE = 1.f;
+// STALL_SOLAR_E [energy/second] -- while HARD e-stalled below this income, the
+//   energy want is restricted to generators that cost NO energy to build, i.e.
+//   the basic solar (apexearth: "if we are e-stalling and we have less than 300
+//   energy per second, MAKE A BASIC SOLAR"). His number, stated as a rule, not
+//   derived: an advanced solar's 5,000 E bill and wind's 175 are both paid out
+//   of an economy that has none. 0 disables the rule and leaves the ladder to
+//   the auction.
+const float TUNE_STALL_SOLAR_E = 300.f;
 // CONV_HORIZON: seconds of operation a converter is assumed to amortize its
 // own metal, energy and build time over, when netting the energy floor price.
 // CHOSEN, not derived. Short on purpose (apexearth: "it pays off eventually

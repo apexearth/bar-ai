@@ -934,11 +934,19 @@ void StallWatch()
 	if (!HardEStall())
 		return;
 	const double _tDry = Perf::T0();
-	CCircuitUnit@ pick = null;
-	// COMMANDER FIRST, THEN STOP AT THE FIRST ANSWER. The scan used to dry-run
-	// the market for EVERY worker and keep the last one that qualified, which
-	// is the same interrupt at N times the price -- 74 ms in one call across 8
-	// instances, the largest single spike the AI had. Ordering the candidates
+	// HOW MANY WORKERS THE STALL IS WORTH, NOT ONE. The shortfall the answer
+	// has to cover is the same number EnergyShortOfOrdered prices against:
+	// headroom-scaled pull, less income, less what is already ordered. Each
+	// interrupt is charged the generation its own dry-run names, so a 35/s
+	// turbine against a 300/s deficit pulls the next worker too, and a fusion
+	// pulls nobody else.
+	float deficit = (aiEconomyMgr.energy.pull + EDrainInFlight())
+			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM)
+			- aiEconomyMgr.energy.income - EMakeInFlight();
+	array<CCircuitUnit@> picks;
+	// COMMANDER FIRST. The scan used to dry-run the market for EVERY worker and
+	// keep the last one that qualified -- 74 ms in one call across 8 instances,
+	// the largest single spike the AI had. Ordering the candidates
 	// commander-first costs one name check each and keeps the preference the
 	// old loop's `break` expressed, so only the cost changes.
 	array<CCircuitUnit@> cand;
@@ -963,7 +971,8 @@ void StallWatch()
 	// task through re-election, applied to the interrupt that outranks it.
 	//
 	// Two passes rather than a veto, so a stall is still always answerable:
-	// if every candidate is mid-build, the second pass takes one anyway.
+	// if every candidate is mid-build, the second pass takes one anyway -- and
+	// only one, because that interrupt abandons a frame.
 	for (uint pass = 0; pass < 2; ++pass) {
 	for (uint i = 0; i < cand.length(); ++i) {
 		CCircuitUnit@ u = cand[i];
@@ -972,7 +981,10 @@ void StallWatch()
 		IUnitTask@ t = u.task;
 		if ((t is null) || (t.GetType() != Task::Type::BUILDER))
 			continue;
-		if (int(t.GetBuildType()) == int(Task::BuildType::ENERGY))
+		// GEO counts as an energy answer too, or the interrupt aborts the
+		// very build it elected (WK_GEO executes as BuildType::GEO).
+		if ((int(t.GetBuildType()) == int(Task::BuildType::ENERGY))
+			|| (int(t.GetBuildType()) == int(Task::BuildType::GEO)))
 			continue;
 		if ((pass == 0) && (Requests::Progress(t) > 0.01f))
 			continue;
@@ -998,20 +1010,27 @@ void StallWatch()
 		Want@ mx = ProposeMex(u);
 		if ((mx !is null) && (mx.value > e.value))
 			continue;
-		@pick = u;
-		break;
+		picks.insertLast(u);
+		if (e.def !is null)
+			deficit -= Catalog::gMakeE[int(e.def.id)];
+		if ((deficit <= 0.f) || (pass == 1))
+			break;
 	}
-	if (pick !is null)
+	if (picks.length() > 0)
 		break;
 	}
 	Perf::Add("think.stalldry", _tDry);
-	if (pick is null)
+	if (picks.length() == 0)
 		return;
 	gStallHadAnswer = true;
-	AiLog("apex: STALL interrupt -- " + pick.circuitDef.GetName() + " #" + pick.id
-		+ " progress=" + formatFloat(Requests::Progress(pick.task), "", 0, 2)
-		+ " leaves its build to answer the energy stall");
-	pick.task.Abort();
+	for (uint i = 0; i < picks.length(); ++i) {
+		CCircuitUnit@ p = picks[i];
+		AiLog("apex: STALL interrupt -- " + p.circuitDef.GetName() + " #" + p.id
+			+ " progress=" + formatFloat(Requests::Progress(p.task), "", 0, 2)
+			+ " (" + (i + 1) + "/" + picks.length() + ")"
+			+ " leaves its build to answer the energy stall");
+		p.task.Abort();
+	}
 }
 
 

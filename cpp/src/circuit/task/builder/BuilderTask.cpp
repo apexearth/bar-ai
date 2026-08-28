@@ -607,12 +607,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 		if ((buildType != BuildType::GUARD)
 			&& ((executors.size() < 2) || !unit->IsAttrBase()))
 		{
+			// apex: default OFF. Stock answers an empty E bank by parking every
+			// non-energy builder in range on a literal Wait order; the parked
+			// fleet stops pulling, so from outside the stall reads "healthy"
+			// while nothing builds. The script market prices the stall and
+			// answers it with a zero-E solar instead (want_energy.as); with the
+			// gate off this same call actively releases any unit still waiting.
+			const bool stallWait = (circuit->GetTunable("apex_stock_stall_wait", 0.f) > 0.f)
+					&& ecoMgr->IsEnergyEmpty() && (buildType != BuildType::ENERGY) && (buildType != BuildType::GEO)
+					&& (buildType != BuildType::STORE) && (buildType != BuildType::RECLAIM);
 			TRY_UNIT(circuit, unit,
 				const bool prio = !ecoMgr->IsEnergyStalling() || (buildType == BuildType::ENERGY) || (buildType == BuildType::GEO);
 				unit->CmdBARPriority(prio ? 1.f : 0.f);
 				if (unit->GetTravelAct()->IsFinished()) {
-					unit->CmdWait(ecoMgr->IsEnergyEmpty() && (buildType != BuildType::ENERGY) && (buildType != BuildType::GEO)
-							&& (buildType != BuildType::STORE) && (buildType != BuildType::RECLAIM));
+					unit->CmdWait(stallWait);
 				}
 			)
 			return true;

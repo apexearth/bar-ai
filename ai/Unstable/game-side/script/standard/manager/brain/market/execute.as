@@ -1,4 +1,5 @@
 namespace Market {
+int gNextELadderLog = 0;   // the mid-stall energy fallback, 10s apart
 // The nano placement probe's cache (see the WK_NANO branch).
 AIFloat3 gNanoSite(-1.f, 0.f, -1.f);
 int gNanoSiteKey = 0;
@@ -368,9 +369,53 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		if (Catalog::gCostM[int(w.def.id)] > 500.f)
 			w.pos = ClearOfSpots(w.pos, 150.f);
-		return Requests::Take(unit, w.def, Task::BuildType::ENERGY,
+		IUnitTask@ et = Requests::Take(unit, w.def, Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f,
 				crtd, par);
+		if (et !is null)
+			return et;
+		// REFUSED IS NOT "NOTHING TO DO" WHILE WE ARE STALLED. The rung the
+		// proposer picked can be unstartable on its own terms -- an advanced
+		// solar is strictly serial, a def at its in-flight cap answers "full"
+		// -- and the asker then idles through the very stall it was elected to
+		// answer (apexearth, watching: the commander "could be making a basic
+		// solar" and instead "sits around waiting for the energy situation to
+		// get fixed"). So walk down the same ladder the proposer already priced
+		// and take the best rung that will actually start. Only while HARD
+		// stalled: outside one, the serialization is the rule that stops a base
+		// of wind turbines, and a builder with no energy job has other work.
+		if (!HardEStall() || (unit is null) || (gEAltFor != int(unit.id)))
+			return null;
+		// Zero-E rungs first whatever they priced: mid-stall the cheap solar is
+		// the answer even when a dearer generator outranks it, and the dear one
+		// is only reached if no solar can be placed at all.
+		for (uint pass = 0; pass < 2; ++pass) {
+		for (uint k = 0; k < gEAlt.length(); ++k) {
+			const int ad = gEAlt[k];
+			if ((w.def !is null) && (ad == int(w.def.id)))
+				continue;
+			if ((pass == 0) && (Catalog::gCostE[ad] > 0.f))
+				continue;
+			CCircuitDef@ adef = Catalog::Def(ad);
+			if (adef is null)
+				continue;
+			const AIFloat3 aslot = gFarmSet ? FarmSlot(ad) : BigEnergySite();
+			bool acrtd = false;
+			IUnitTask@ at = Requests::Take(unit, adef, Task::BuildType::ENERGY,
+					Task::Priority::NORMAL, OnMap(aslot) ? aslot : w.pos,
+					Lattice::StrideOf(ad), 0.f, acrtd, par);
+			if (at is null)
+				continue;
+			if (ai.frame >= gNextELadderLog) {
+				gNextELadderLog = ai.frame + 10 * SECOND;
+				AiLog("apex: e-ladder " + unit.circuitDef.GetName() + " #" + unit.id
+					+ " refused " + w.def.GetName() + " mid-stall -> "
+					+ adef.GetName());
+			}
+			return at;
+		}
+		}
+		return null;
 	}
 	if (w.kind == WK_CONVERT) {
 		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;

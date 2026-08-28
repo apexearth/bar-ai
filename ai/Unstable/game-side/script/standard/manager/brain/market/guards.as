@@ -1,6 +1,7 @@
 namespace Market {
-// A hard stall re-opens held decisions: abort ONE non-energy build per
-// sweep (the commander first) so its holder falls back into the market,
+// A hard stall re-opens held decisions: abort non-energy builds (the
+// commander first), as many as the shortfall needs, so their holders fall
+// back into the market,
 // where the stall-priced solar now wins. Held tasks are otherwise never
 // re-asked -- the engine stops re-electing once a builder is in range
 // (apexearth 2026-08-23: "interrupt that commander's action and switch to
@@ -245,13 +246,27 @@ void GuardSweep()
 	}
 }
 
+// A PAUSE HIDES THE STALL FROM THE ONLY TEST THAT LOOKS FOR IT. pull > income
+// is what a stall looks like from the outside, but the moment the throttle
+// parks the fleet, pull falls BELOW income while the bank sits empty --
+// measured live: cur=203/1250 (16%), income 102, pull 76, and every gate here
+// read "healthy" while nothing could be built (apexearth: "there is some logic
+// which puts units in 'wait' mode when e gets low, i wonder if the e-stall
+// isn't triggering because of the pausing"). The drained bank is the stall
+// whatever the pull says -- isEnergyStalling is the engine's own reading of it
+// (empty bank, or income under pull with the bank low), and it is the same
+// signal that pauses the work, so our answer now fires exactly when the
+// throttle engages instead of never.
 bool HardEStall()
 {
 	const float eInc = aiEconomyMgr.energy.income;
 	const float eCur = aiEconomyMgr.energy.current;
 	const float eStore = aiEconomyMgr.energy.storage;
-	return (aiEconomyMgr.energy.pull > eInc)
-		&& (eStore > 1.f) && (eCur < 0.25f * eStore);
+	if (eStore <= 1.f)
+		return false;
+	if (aiEconomyMgr.isEnergyStalling)
+		return true;
+	return (aiEconomyMgr.energy.pull > eInc) && (eCur < 0.25f * eStore);
 }
 
 // Builders known to the market: upserted as they pass through Decide (the

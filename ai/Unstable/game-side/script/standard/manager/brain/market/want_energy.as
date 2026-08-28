@@ -1,16 +1,60 @@
 namespace Market {
+// EVERY GENERATOR THIS ASKER PRICED, best value first. The proposer returns one
+// rung, and the executor can be refused exactly that rung -- an advanced solar
+// is strictly serial, a def at its in-flight cap is "full" -- with nothing to
+// fall back on, so the asker ends the election holding nothing. Recorded per
+// asker id, because StallWatch dry-runs this for other units.
+array<int> gEAlt;
+array<float> gEAltV;
+int gEAltFor = -1;
+
 Want@ ProposeEnergy(CCircuitUnit@ unit)
 {
 	Want w;
 	const int uid = int(unit.circuitDef.id);
 	const AIFloat3 eSite = EcoSiteFor(unit);
+	gEAlt.resize(0);
+	gEAltV.resize(0);
+	gEAltFor = int(unit.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
+	// STALLED AND SMALL MEANS SOLAR, FULL STOP (apexearth: "the best thing to
+	// build for energy when you have 100e/s income is a basic solar because it
+	// costs no energy to make. There's no question about it... if we are
+	// e-stalling and we have less than 300 energy per second, MAKE A BASIC
+	// SOLAR"). Identified by the property that decides it -- a generator whose
+	// own build costs no energy -- not by name, so it holds for all three
+	// factions (armsolar/corsolar/legsolar are 0 E; wind is 175, advanced solar
+	// 5,000). Nothing else can be paid for out of an economy that has no energy.
+	// Above the bar, or with no zero-E generator in this builder's options, the
+	// whole ladder competes on price as before.
+	bool solarOnly = false;
+	if (HardEStall()
+		&& (aiEconomyMgr.energy.income
+			< ai.GetTunable("apex_stall_solar_e", TUNE_STALL_SOLAR_E)))
+	{
+		for (uint z = 0; z < builds.length(); ++z) {
+			const int zd = builds[z];
+			if (!Catalog::gAvailable[zd] || Catalog::gMobile[zd]
+				|| Catalog::gFloater[zd] || Catalog::gSub[zd]
+				|| Catalog::gNeedGeo[zd])
+				continue;
+			if ((Catalog::gMakeE[zd] > 1.f) && (Catalog::gCostE[zd] <= 0.f)) {
+				solarOnly = true;
+				break;
+			}
+		}
+	}
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
 			continue;   // floaters need water; land-base v1 (see armfmkr churn)
 		if (Catalog::gMakeE[d] <= 1.f)
 			continue;
+		// A PREFERENCE THAT STILL LEAVES AN ANSWER. The zero-E rung cannot win
+		// ground it has none of -- on a water base solar has nowhere to stand --
+		// so the dearer rungs stay in the ladder below as fallbacks and only
+		// lose their claim on the WINNER.
+		const bool barred = solarOnly && (Catalog::gCostE[d] > 0.f);
 		if (Catalog::gNeedGeo[d])
 			continue;   // vents are the geo want's ground, not free placement
 		Want c;
@@ -88,7 +132,14 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 				c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
 			}
 		}
-		if (c.value > w.value) {
+		if (c.value > 0.f) {
+			uint at = 0;
+			while ((at < gEAltV.length()) && (gEAltV[at] >= c.value))
+				++at;
+			gEAlt.insertAt(at, d);
+			gEAltV.insertAt(at, c.value);
+		}
+		if (!barred && (c.value > w.value)) {
 			w = c;
 			w.kind = WK_ENERGY;
 			@w.def = Catalog::Def(d);

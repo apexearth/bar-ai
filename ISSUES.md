@@ -5,6 +5,16 @@
 Fixes for the night's list are in CHANGES.md; these are the halves NOT yet
 closed, each with its measurement:
 
+- **The stock DLL stall-WAIT (pause) is now tunable-gated OFF but only
+  smoke-validated.** `BuilderTask.cpp` Reevaluate answered an empty E bank by
+  CmdWait-parking every non-energy builder in build range; parked units pull
+  nothing, which is why the fleet "stands around" through a stall
+  (apexearth: "Our units instead pause what they're doing and stand around
+  doing nothing"). Gated behind `apex_stock_stall_wait` (default 0; the same
+  call now actively releases a unit still holding a Wait). Closing
+  measurement: his next watched Supreme Isthmus 1v1 -- during an e-stall,
+  builders keep lathing and a basic solar goes down; nobody idles with a
+  wait icon.
 - **The stock DLL stall-abort is now tunable-gated OFF but unvalidated.** If
   heavy turrets still die unfinished with `apex_stock_stall_abort=0`, the
   next suspect is the same Reevaluate's reassignment path. Audit:
