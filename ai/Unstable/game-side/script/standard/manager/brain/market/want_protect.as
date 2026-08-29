@@ -699,7 +699,22 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	array<AIFloat3> sites;
 	PfGuardSites(reach, sites);
 	const uint nAsset = sites.length();
-	if (Base::gAnchorSet) {
+	// THE DOORWAYS FIRST. apexearth 2026-08-29: "defend chokepoints ahead of
+	// where the mexes are... prevent the enemy from getting in there." Every
+	// gate of our held ground is a candidate; the fill's own pricing
+	// (FrontedStakeAt + ShieldedStakeAlong on the enemy-away axis) already
+	// values what a doorway shields, so gates win elections exactly where
+	// something real stands behind them. The old single near-anchor choke
+	// stays as the fallback while influence is too thin to own any ground.
+	uint nGates = 0;
+	if (ai.GetTunable("apex_choke_gates", TUNE_CHOKE_GATES) > 0.f)
+		{
+			array<AIFloat3> gates;
+			nGates = Front::GateChokes(gates);
+			for (uint gi = 0; gi < gates.length(); ++gi)
+				sites.insertLast(gates[gi]);
+		}
+	if ((nGates == 0) && Base::gAnchorSet) {
 		AIFloat3 cp;
 		if (Front::FrontChoke(Base::gAnchor, cp)) {
 			AIFloat3 site;

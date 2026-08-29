@@ -566,7 +566,9 @@ void Update()
 	for (uint k = 0; k < gIdx.length(); ++k)
 		gOwner[k] = Classify(ai.GetChokePointPos(gIdx[k]));
 
+	array<AIFloat3> _gates;
 	AiLog("apex: frontline perim=" + gPerim.length()
+			+ " gates=" + GateChokes(_gates)
 			+ " front=" + CountEdge(FRONT) + " back=" + CountEdge(BACK)
 			+ " mine=" + MineEdge(FRONT) + " sectors=" + (gSectored ? int(gMateX.length()) + 1 : 1)
 			+ " foeKnown=" + (gFoeKnown ? 1 : 0)
@@ -683,6 +685,44 @@ bool BehindChoke(const AIFloat3& in cp, float back, AIFloat3& out at)
 	toHome *= (1.f / len);
 	at = cp + toHome * back;
 	return OnMap(at);
+}
+
+// THE DOORWAYS OF OUR TERRITORY. apexearth 2026-08-29: "We want to gain
+// control of mexes and then defend chokepoints ahead of where the mexes are.
+// We want to prevent the enemy from getting in there." A gate is a choke whose
+// home side is ours and whose far side is not: the corridor an attack on our
+// ground has to come through. Each is returned a step behind the gap, toward
+// home, so the gun shoots into the doorway rather than standing in it. The
+// sample step is HoldRadius() -- the territory grid's own resolution, so the
+// two probes straddle the door at the same scale ownership is known at.
+uint GateChokes(array<AIFloat3>& out gates)
+{
+	gates.resize(0);
+	if (!Builder::gHomeSet)
+		return 0;
+	const float step = HoldRadius();
+	const float back = 180.f;
+	for (uint c = 0; c < gIdx.length(); ++c) {
+		const AIFloat3 cp = ai.GetChokePointPos(gIdx[c]);
+		if (!OnMap(cp))
+			continue;
+		AIFloat3 toHome = Builder::gHomePos - cp;
+		const float len = sqrt(toHome.SqLength2D());
+		if (len < 1.f)
+			continue;
+		toHome *= (1.f / len);
+		AIFloat3 pBack = cp + toHome * step;
+		AIFloat3 pFwd = cp - toHome * step;
+		if (!OnMap(pBack) || !OnMap(pFwd))
+			continue;
+		if ((Classify(pBack) != OURS) || (Classify(pFwd) == OURS))
+			continue;
+		AIFloat3 at = cp + toHome * back;
+		if (!OnMap(at))
+			at = cp;
+		gates.insertLast(at);
+	}
+	return gates.length();
 }
 
 uint MineEdge(int kind)

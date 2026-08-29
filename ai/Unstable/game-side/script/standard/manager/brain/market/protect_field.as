@@ -497,12 +497,34 @@ int PfSlotFor(float pitch)
 	RiskFill();
 	RiskFillSiege();
 	const float expFrac = ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
+	// THE GUN STANDS IN FRONT OF WHAT IT GUARDS. The raw candidate is the
+	// asset cell's worth centroid, which puts the tower AMONG the buildings --
+	// and the site search then lands it on whichever side has room, behind
+	// them as often as not (apexearth 2026-08-29: "i often see us putting the
+	// defenses behind what we want to protect instead of in front of it").
+	// Shift each candidate enemy-ward by a fraction of the tower's own reach
+	// (pitch IS the def's reach here): the asset cell stays covered, and the
+	// approach is met before it reaches the buildings. Pricing below runs on
+	// the shifted point, so threat/cover/stake describe where the gun really
+	// stands.
+	const float fwdFrac = ai.GetTunable("apex_guard_forward", TUNE_GUARD_FORWARD);
+	const AIFloat3 foeAt = aiEnemyMgr.GetEnemyPos();
 	for (uint k = 0; k < sw.length(); ++k) {
 		if (sw[k] <= 1.f)
 			continue;
-		const AIFloat3 c(sx[k] / sw[k], 0.f, sz[k] / sw[k]);
+		AIFloat3 c(sx[k] / sw[k], 0.f, sz[k] / sw[k]);
 		if (!OnMap(c))
 			continue;
+		if ((fwdFrac > 0.f) && OnMap(foeAt)) {
+			AIFloat3 toFoe = foeAt - c;
+			const float len = sqrt(toFoe.SqLength2D());
+			if (len > 1.f) {
+				toFoe *= (1.f / len);
+				const AIFloat3 cf = c + toFoe * (pitch * fwdFrac);
+				if (OnMap(cf))
+					c = cf;
+			}
+		}
 		{
 			const float cv = CoverAt(c);
 			site.insertLast(c);

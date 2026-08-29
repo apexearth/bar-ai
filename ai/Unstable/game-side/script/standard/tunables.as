@@ -1936,6 +1936,14 @@ const float TUNE_BUDGET = 1.f;
 const float TUNE_BUILD_THREAT_BAR = 1.f;
 // manager/military/hooks.as [toggle 0/1] -- T3 CHARGERS GO FOR THE BASE.
 const float TUNE_CHARGER_STRIKE = 1.f;
+// manager/brain/market/want_protect.as [toggle 0/1] -- Every gate of our held
+//   territory (choke with our side ours, far side not) is a defence-site
+//   candidate, priced by what it shields; 0 keeps only the near-anchor choke.
+const float TUNE_CHOKE_GATES = 1.f;
+// manager/brain/market/protect_field.as [fraction of tower reach] -- Asset
+//   guard sites stand this far enemy-ward of the asset centroid, between the
+//   buildings and the approach; 0 sites the gun amid the buildings.
+const float TUNE_GUARD_FORWARD = 0.5f;
 // manager/builder/obsolete.as -- A perf bound, not policy: each pick walks
 //   full unit lists, and an unbounded sweep burned 277-475ms single frames
 //   (seed 200,...

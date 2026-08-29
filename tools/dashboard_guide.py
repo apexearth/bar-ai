@@ -534,6 +534,17 @@ GROUPS = [
                   "can shoot from, not just whether a turret reaches"),
                  ("TUNE_DEFZONE_DYNAMIC", "the base-defence ring follows the "
                   "built base instead of a fixed radius"),
+                 ("TUNE_CHOKE_GATES", "ON offers every doorway of our held "
+                  "ground — chokepoints with our side ours and the far side "
+                  "not — to the defence auction, so towers land at the "
+                  "perimeter gates ahead of the mexes instead of inside the "
+                  "base; OFF keeps only the single choke nearest the base "
+                  "anchor"),
+                 ("TUNE_GUARD_FORWARD", "how far in FRONT of the buildings "
+                  "an asset-guard tower stands, as a fraction of its own "
+                  "reach — between the assets and the enemy approach; 0 "
+                  "sites it amid the buildings, where it as often ends up "
+                  "behind them"),
              ]},
             {"title": "Cost of thinking",
              "what": "The protection field is rebuilt on a timer and every "
