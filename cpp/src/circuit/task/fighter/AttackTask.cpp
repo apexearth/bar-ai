@@ -650,15 +650,32 @@ void CAttackTask::Update()
 		if (!utils::is_valid(flankVia)) {
 			AIFloat3 dir = position - startPos;
 			const float dist = sqrtf(dir.SqLength2D());
-			if (dist > circuit->GetTunable("apex_flank_min_dist", 1200.f)) {
+			// apex: FLANKS WORK ON SMALL MAPS TOO (apexearth 2026-08-29:
+			// "Make flanks more flexible in math... I'd say it's still
+			// feasible"). The old gate demanded a 1200-elmo approach and the
+			// swing scaled with approach LENGTH, so a close front produced a
+			// pointless wiggle and the gate killed it -- zero flanks in his
+			// Glacier games against 13 on Isthmus. The floor is now the
+			// squad's own engagement envelope: flank whenever the target sits
+			// beyond our reach, and swing at least two weapon-ranges wide so
+			// the lane passes OUTSIDE the direct corridor's firing arc
+			// whatever the approach length. CorrectPosition clamps the swing
+			// on-map, so a small map degrades into the deep side lane rather
+			// than into no flank at all.
+			const float minDist = std::max(
+					circuit->GetTunable("apex_flank_min_dist", 0.f),
+					highestRange);
+			if (dist > minDist) {
 				dir.SafeNormalize2D();
 				const AIFloat3 perp = (flankRoll == 1)
 						? AIFloat3(-dir.z, 0.f, dir.x)
 						: AIFloat3(dir.z, 0.f, -dir.x);
 				const AIFloat3 mid = (startPos + position) * 0.5f;
+				const float swing = std::max(
+						dist * circuit->GetTunable("apex_flank_frac", 0.45f),
+						highestRange * 2.f);
 				AIFloat3 via = mid
-						+ perp * (flankDeep ? 100000.f
-							: dist * circuit->GetTunable("apex_flank_frac", 0.45f));
+						+ perp * (flankDeep ? 100000.f : swing);
 				CTerrainManager::CorrectPosition(via);  // a deep via clamps to the border
 				if (flankDeep) {
 					AIFloat3 in_ = mid - via;

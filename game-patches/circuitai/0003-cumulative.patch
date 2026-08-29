@@ -7631,7 +7631,7 @@ index c3f5e98..e02338a 100644
  		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..0c73dcf 100644
+index cd063e4..0080e36 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -8157,7 +8157,7 @@ index cd063e4..0c73dcf 100644
  				state = State::ENGAGE;
  				Attack(frame);
  				return;
-@@ -196,19 +617,140 @@ void CAttackTask::Update()
+@@ -196,19 +617,157 @@ void CAttackTask::Update()
  	}
  
  	if (GetTarget() == nullptr) {
@@ -8195,15 +8195,32 @@ index cd063e4..0c73dcf 100644
 +		if (!utils::is_valid(flankVia)) {
 +			AIFloat3 dir = position - startPos;
 +			const float dist = sqrtf(dir.SqLength2D());
-+			if (dist > circuit->GetTunable("apex_flank_min_dist", 1200.f)) {
++			// apex: FLANKS WORK ON SMALL MAPS TOO (apexearth 2026-08-29:
++			// "Make flanks more flexible in math... I'd say it's still
++			// feasible"). The old gate demanded a 1200-elmo approach and the
++			// swing scaled with approach LENGTH, so a close front produced a
++			// pointless wiggle and the gate killed it -- zero flanks in his
++			// Glacier games against 13 on Isthmus. The floor is now the
++			// squad's own engagement envelope: flank whenever the target sits
++			// beyond our reach, and swing at least two weapon-ranges wide so
++			// the lane passes OUTSIDE the direct corridor's firing arc
++			// whatever the approach length. CorrectPosition clamps the swing
++			// on-map, so a small map degrades into the deep side lane rather
++			// than into no flank at all.
++			const float minDist = std::max(
++					circuit->GetTunable("apex_flank_min_dist", 0.f),
++					highestRange);
++			if (dist > minDist) {
 +				dir.SafeNormalize2D();
 +				const AIFloat3 perp = (flankRoll == 1)
 +						? AIFloat3(-dir.z, 0.f, dir.x)
 +						: AIFloat3(dir.z, 0.f, -dir.x);
 +				const AIFloat3 mid = (startPos + position) * 0.5f;
++				const float swing = std::max(
++						dist * circuit->GetTunable("apex_flank_frac", 0.45f),
++						highestRange * 2.f);
 +				AIFloat3 via = mid
-+						+ perp * (flankDeep ? 100000.f
-+							: dist * circuit->GetTunable("apex_flank_frac", 0.45f));
++						+ perp * (flankDeep ? 100000.f : swing);
 +				CTerrainManager::CorrectPosition(via);  // a deep via clamps to the border
 +				if (flankDeep) {
 +					AIFloat3 in_ = mid - via;
@@ -8301,7 +8318,7 @@ index cd063e4..0c73dcf 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -225,12 +767,15 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -225,12 +784,15 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
@@ -8322,7 +8339,7 @@ index cd063e4..0c73dcf 100644
  	}
  
  	if (units.find(unit) != units.end()) {
-@@ -238,29 +783,166 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,29 +800,166 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -8492,7 +8509,7 @@ index cd063e4..0c73dcf 100644
  	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
  	for (unsigned i = 0; i < groups.size(); ++i) {
  		const CEnemyManager::SEnemyGroup& group = groups[i];
-@@ -269,10 +951,55 @@ void CAttackTask::FindTarget()
+@@ -269,10 +968,55 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -8552,7 +8569,7 @@ index cd063e4..0c73dcf 100644
  			continue;
  		}
  
-@@ -319,18 +1046,212 @@ void CAttackTask::FindTarget()
+@@ -319,18 +1063,212 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -8766,7 +8783,7 @@ index cd063e4..0c73dcf 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -340,6 +1261,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +1278,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -8837,7 +8854,7 @@ index cd063e4..0c73dcf 100644
  		ActivePath(lowestSpeed);
  	} else {
  		FallbackFrontPos();
-@@ -349,11 +1334,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -349,11 +1351,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -8880,7 +8897,7 @@ index cd063e4..0c73dcf 100644
  
  	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
  	const float pathRange = DEFAULT_SLACK * 4;
-@@ -387,8 +1402,28 @@ void CAttackTask::FallbackBasePos()
+@@ -387,8 +1419,28 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -8910,7 +8927,7 @@ index cd063e4..0c73dcf 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -421,7 +1456,9 @@ void CAttackTask::Fallback()
+@@ -421,7 +1473,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
