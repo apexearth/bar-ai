@@ -687,7 +687,11 @@ GROUPS = [
                  ("TUNE_INTEL_RATE", "share of a squad's value per minute "
                   "spent on its own sensors"),
                  ("TUNE_TARGFAC_WANT", "pinpointers wanted"),
-             ]},
+                              ("TUNE_RADAR_OVERLAP", "how much of a standing radar's "
+                  "reach blocks a NEW mast — lower = more overlapping "
+                  "radars, so one radar dying no longer opens a dark zone "
+                  "mid-fight; the threat map only counts what radar sees"),
+]},
         ],
     },
     {

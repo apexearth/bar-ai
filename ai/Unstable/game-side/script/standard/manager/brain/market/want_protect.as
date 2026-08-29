@@ -173,10 +173,20 @@ float DefCrowdM(const AIFloat3& in pos, float r)
 // partial").
 bool RadarSees(const AIFloat3& in pos)
 {
+	// apexearth 2026-08-29: "radar might just be set wrong so you can tweak
+	// it." 0.8 of a standing radar's own radius blocked any second radar
+	// inside a 1,700-elmo circle (corrad 2100): coverage with ZERO
+	// redundancy, so one radar death opened a dark zone mid-fight -- and the
+	// threat map holds only radar/LOS contacts, so the engage logic then
+	// accepted fights against armies it could not count (foeMass read 3-6k
+	// of stock's ~15k standing; trades 0.2). Stock stands 26 T1 radars to
+	// our 13. The overlap fraction buys depth: a gap must sit outside this
+	// share of every standing radar's reach before a new mast is blocked.
+	const float overlap = ai.GetTunable("apex_radar_overlap", TUNE_RADAR_OVERLAP);
 	for (uint i = 0; i < gProtPos[PROT_RADAR].length(); ++i) {
 		const int rd = gProtDefId[PROT_RADAR][i];
 		const float rr = Catalog::gRadarR[rd];
-		if ((rr > 1.f) && (pos.distance2D(gProtPos[PROT_RADAR][i]) < rr * 0.8f))
+		if ((rr > 1.f) && (pos.distance2D(gProtPos[PROT_RADAR][i]) < rr * overlap))
 			return true;
 	}
 	return false;

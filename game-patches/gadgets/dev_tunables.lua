@@ -346,7 +346,8 @@ local NAMES = {
 	"apex_choke_gates",       -- want_protect.as: 1 = every gate of our territory is a defence-site candidate, 0 = near-anchor choke only
 	"apex_guard_forward",     -- protect_field.as: asset guard sites stand this fraction of tower reach enemy-ward of the assets (0.5)
 	"apex_con_scratch_gate",  -- BuilderTask.cpp: 1 = a scratched builder above the stand floor retreats only where danger is read, 0 = always
-	"apex_t1_def_late",       -- want_protect.as: a T1 tower's gain multiplier once a standing T2 builder can make defence (0.15)
+	"apex_t1_def_late",
+	"apex_radar_overlap",    -- want_protect.as: fraction of a standing radar's radius that blocks a new mast (0.45; was hardcoded 0.8)       -- want_protect.as: a T1 tower's gain multiplier once a standing T2 builder can make defence (0.15)
 	"apex_behemoth_threat",   -- main.as: threat multiplier on corjugg so everything keeps its distance (2)
 	"apex_charge_threat_mod", -- AttackTask.cpp: charge-path threat weight; bends the route around Behemoths only (0.1)
 	"apex_retreat_threat_mod",-- RetreatTask.cpp: threat weight on a wounded unit's path home (4; attack squads use 2)

@@ -1948,6 +1948,11 @@ const float TUNE_GUARD_FORWARD = 0.5f;
 //   standing advanced builder can produce ground defence; 1 prices tiers
 //   equally.
 const float TUNE_T1_DEF_LATE = 0.15f;
+// manager/brain/market/want_protect.as [fraction of radar radius] -- A gap
+//   must sit outside this share of every standing radar's reach before a new
+//   mast is blocked; lower = more overlapping radars, sturdier intel. Was a
+//   hardcoded 0.8 (no redundancy; one death = a dark zone mid-fight).
+const float TUNE_RADAR_OVERLAP = 0.45f;
 // manager/builder/obsolete.as -- A perf bound, not policy: each pick walks
 //   full unit lists, and an unbounded sweep burned 277-475ms single frames
 //   (seed 200,...
