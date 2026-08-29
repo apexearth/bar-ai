@@ -166,7 +166,8 @@ const float JOIN_MIN_COST = 200.f;
 // true buildSpeed, which script cannot read either.
 const float ASSUMED_CON_SPEED = 40.f;  // elmos/s; armck/corck are 36, armcv/corcv 54 (unit defs, 2026-08-14)
 
-bool WorthJoining(float dist, float progress, float costM, uint busy)
+bool WorthJoining(float dist, float progress, float costM, uint busy,
+		float speed = 0.f)
 {
 	if (dist <= 0.f)
 		return true;
@@ -175,7 +176,12 @@ bool WorthJoining(float dist, float progress, float costM, uint busy)
 		return false;   // effectively done; nothing left for another builder to add
 	const float buildRate = DRAIN * float((busy > 0) ? busy : 1);
 	const float remainingTime = remainingMetal / buildRate;
-	const float travelTime = dist / ASSUMED_CON_SPEED;
+	// THE ASKER'S OWN LEGS (apexearth: "our T1 air cons should be making
+	// tons of those" -- a flying con at ~5x ASSUMED_CON_SPEED was refused
+	// joins it could make in seconds, 78k tooFar refusals in one watched
+	// game, its elections wasted on re-asking).
+	const float v = (speed > 1.f) ? speed : ASSUMED_CON_SPEED;
+	const float travelTime = dist / v;
 	return travelTime <= remainingTime;
 }
 
@@ -904,7 +910,8 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		// remaining lathe as not worth a forty-second walk.
 		if (!WorthJoining(dist, progress,
 				(cand.buildDef !is null) ? cand.buildDef.costM : want.costM,
-				busy)) {
+				busy,
+				(unit !is null) ? Catalog::gSpeed[int(unit.circuitDef.id)] : 0.f)) {
 			++gTooFar;
 			continue;
 		}
@@ -1155,7 +1162,8 @@ IUnitTask@ Redirect(CCircuitUnit@ unit, bool isComm, IUnitTask@ offer)
 		if (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO)
 			continue;
 		const float progress = Progress(cand);
-		if (!WorthJoining(dist, progress, want.costM, busy)) {
+		if (!WorthJoining(dist, progress, want.costM, busy,
+				(unit !is null) ? Catalog::gSpeed[int(unit.circuitDef.id)] : 0.f)) {
 			++gTooFar;
 			continue;
 		}

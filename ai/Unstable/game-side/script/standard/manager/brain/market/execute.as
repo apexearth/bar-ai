@@ -596,6 +596,29 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	// NOT overflowing and so guaranteed the answer was serialized.
 	bool par = (MCostScale() < 1.f)
 			|| ((w.kind == WK_ENERGY) && EnergyShortOfOrdered());
+	// GIANTS MULTIPLY ONLY ON A BANK THAT PAYS FOR ALL OF THEM (apexearth,
+	// watching a fusion and two AFUS rise beside 1-2 standing fusions: "it
+	// was bad scaling. We would have done better early on without that").
+	// The wealth-parallel branch opened big-energy frames the bank could
+	// not cover -- 24k of parallel bills on a 14k bank. His own test,
+	// applied to the giants: parallel only while the bank could pay the
+	// whole in-flight big-energy fleet plus this one outright; otherwise
+	// the ask folds onto the frame already rising.
+	if (par && (w.kind == WK_ENERGY) && (w.def !is null)
+		&& (Catalog::gCostM[int(w.def.id)] >= 2500.f)) {
+		float gBill = Catalog::gCostM[int(w.def.id)];
+		for (uint gi = 0; gi < ComLen(); ++gi) {
+			if (gComState[gi] == CS_FINISHED)
+				continue;
+			const int gd = gComDef[gi];
+			if (!Catalog::ValidId(gd) || Catalog::gMobile[gd])
+				continue;
+			if ((Catalog::gCostM[gd] >= 2500.f) && (Catalog::gMakeE[gd] >= 400.f))
+				gBill += Catalog::gCostM[gd];
+		}
+		if (aiEconomyMgr.metal.current < gBill)
+			par = false;
+	}
 	bool crtd = false;
 	// A LATTICE SLOT IS COVERED ONLY BY ITS OWN CELL. Requests::Take joins any
 	// live request for the same def inside the cover radius, and at 96 elmos
