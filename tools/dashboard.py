@@ -48,6 +48,7 @@ ANALYSIS_TOOLS = {
     "deaths": ("deaths.py", False),
     "scaling": ("scaling.py", False),
     "wdeaths": ("wdeaths.py", False),
+    "arena": ("arena.py", False),
 }
 
 DEPLOY_ACTIONS = {
