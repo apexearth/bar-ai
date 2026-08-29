@@ -65,6 +65,19 @@ CAMPAIGN LOG:
   the mechanism that let the day's fight-caution changes read as a mex
   regression with no single culprit: deeper enemy presence, earlier,
   shrank the claimable world. Measurement: winrate4 arms.
+- Iter 4 (apex_radar_overlap 0.45): WORKED — seen army doubled (11.8k),
+  trades day-best (0.43-0.60), 4W-10L.
+- Iter 5 (fight-abort): measured 1W-11L, Glacier trade 0.60->0.35 with 37
+  aborts — reverted to opt-in (apex_fight_abort=0).
+- Iter 6 (static always kiteable): tower-fed deaths -19% (48.6k->39.4k),
+  trades held. Kept (his "we don't want to tower dive" endorsement).
+- INSTRUMENT NOTE: W-L at 12-14 decided games swings ±3 on nothing (1-11
+  vs 4-10 across arms with identical trades). Steer on mechanism metrics
+  (trades, tower-death share, income@fixed-time, wdeaths); read W-L only
+  at 20+ decided or on a compounding effect. Arms widened to 12/map.
+- Iter 7 (concentration part 1: apex_gate_depth=2 floor, mex spread floor
+  halved): his ruling verbatim in USER-FEEDBACK. Measurement: winrate8.
+  Queued: teeth line across the gate span; long-range free-shot posting.
 
 ## 2026-08-29 — perf spikes attributed: the builder election, protect stack inside it
 
