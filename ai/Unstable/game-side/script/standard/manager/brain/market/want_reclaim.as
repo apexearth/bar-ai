@@ -598,6 +598,15 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			}
 			if (fFlies)
 				continue;   // air labs are the successors, never the retired
+			// A plant that fields no mex-capable constructor reads fReach=0,
+			// and zero is "superseded" by ANY air lab below -- which is how a
+			// GANTRY became this law's victim (apexearth, watching: "Someone
+			// in this game I'm watching is reclaiming our Gantry. That is a
+			// silly thing to do" -- 7 reclaim-rebuild loops in one game).
+			// Constructor reach is this law's whole jurisdiction; a plant
+			// outside it is never retired by it.
+			if (fReach <= 0.f)
+				continue;
 			bool succeeded = false;
 			// A strictly deeper-reaching plant, standing OR under
 			// construction, retires this one (apexearth: "reclaiming the

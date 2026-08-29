@@ -51,6 +51,30 @@ ladder, overflow-scaled strategic parallelism, wealth waiver on the copy
 laws, T1-air mute) landed with three audits; validation run next, then his
 eyes. Eco-cluster split and nano-reclaim C++ still open.
 
+## UNRESOLVED — The 2026-08-29 midday batch (watching Glacier/Isthmus)
+
+1. **No Gauntlets past T2**: "We have to stop making Gauntlet turrets.
+   Those T1 defenses are not worth making when we have T2 available."
+2. **An ally reclaimed our GANTRY**: "That is a silly thing to do" — the
+   obsolete-victim election must never eat a strategic plant.
+3. **Flanking never actually happens**: "we still just walk straight into
+   enemy army and 'duke it out' brute forcing ourselves through the front
+   door. In this particular game 1 titan walking around the side would
+   have been very successful."
+4. **Feature bloat worry**: "We keep adding features, new tunes, etc...
+   not sure if any of them are useful or just bloat... you'd maybe have
+   to test them on a very large dataset of runs."
+5. **Performance spikes still unfixed.**
+6. **Misstep detection wish**: "I do wish you could detect missteps in a
+   game" — example given: a geo con was attacked and abandoned the build
+   while our army stood idle in base nearby; they could have defended it.
+   Also: "defenses in the right places" — on Glacier, guard the northern
+   or southern pass well and nothing gets in (except spiders).
+7. Standing insight: "We survive on these really big maps just because
+   we are aggressive with capturing mexes... on maps where it is tighter
+   we do much much worse." And: "We were doing quite well at one point
+   yesterday, some small bits went wrong along the way."
+
 ## UNRESOLVED — The 2026-08-29 watch batch: defence is the loss cause now
 
 He confirmed the long-range fix live (archived, feedback/2026-08-29.md:
