@@ -161,6 +161,16 @@ local function restun(frame)
 	if frame % 30 ~= 7 then
 		return
 	end
+	-- "give each team energy so all units have energy to fire": with the
+	-- economy parked, laser weapons would starve and misreport the fight.
+	-- Topping the pools to storage each second is a fusion farm with nothing
+	-- on the map to target.
+	for _, teamID in ipairs(Spring.GetTeamList() or {}) do
+		local _, eMax = Spring.GetTeamResources(teamID, "energy")
+		Spring.SetTeamResource(teamID, "e", eMax or 1000)
+		local _, mMax = Spring.GetTeamResources(teamID, "metal")
+		Spring.SetTeamResource(teamID, "m", mMax or 500)
+	end
 	for uID in pairs(parked) do
 		if Spring.ValidUnitID(uID) then
 			local maxH = select(2, Spring.GetUnitHealth(uID)) or 1000
