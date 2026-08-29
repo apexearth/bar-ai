@@ -68,6 +68,14 @@ def infologs(root: Path):
     return sorted(root.rglob("infolog.txt"))
 
 
+def medge(r):
+    """Survival-fraction edge: fair for mixed and asymmetric rosters.
+    Falls back to the unit-count edge for logs without spawnM fields."""
+    if r.get("spawnM0", 0) and r.get("spawnM1", 0):
+        return r["metal0"] / r["spawnM0"] - r["metal1"] / r["spawnM1"]
+    return r["alive0"] - r["alive1"]
+
+
 def report(rounds, label):
     if not rounds:
         print(f"  {label}: no rounds")
@@ -76,10 +84,17 @@ def report(rounds, label):
     w0 = sum(1 for r in rounds if r["winner"] == 0)
     w1 = sum(1 for r in rounds if r["winner"] == 1)
     draw = n - w0 - w1
-    edge = sum(r["alive0"] - r["alive1"] for r in rounds) / n
+    edge = sum(medge(r) for r in rounds) / n
     frames = sum(r["frames"] for r in rounds) / n
+    frac = any(r.get("spawnM0") for r in rounds)
+    unit = "frac" if frac else "units"
+    reasons = {}
+    for r in rounds:
+        k = r.get("reason", "?")
+        reasons[k] = reasons.get(k, 0) + 1
+    rs = " ".join(f"{k}={v}" for k, v in sorted(reasons.items()))
     print(f"  {label:14} rounds={n:3d}  us={w0:3d} them={w1:3d} draw={draw:3d}"
-          f"   edge={edge:+5.2f}   mean {frames / 30:5.1f}s")
+          f"   edge={edge:+6.3f} {unit}   mean {frames / 30:5.1f}s  [{rs}]")
 
 
 def edge(rounds):

@@ -25,6 +25,11 @@
 --   dev_arena_round   max frames per round              (default 1800)
 --   dev_arena_gap     frames between rounds             (default 150)
 --   dev_arena_sep     elmos between the two lines       (default 700)
+--   dev_arena_random  "1": random rosters each round PAIR (rezbots ~30%,
+--                     1-4 def types, 3-10 each, one round in three
+--                     asymmetric with the short side swapping inside the
+--                     pair), rounds also end on mutual disengagement, and
+--                     wreckage is cleared between rounds.
 --   dev_arena_pure    "1": park the commanders in the corners, paralyzed and
 --                     neutral -- no economy, no building, ONLY the arena
 --                     armies act. The game cannot end (they stay alive).
@@ -109,6 +114,21 @@ local anchorA, anchorB  -- {x, z} spawn centres, before flip
 -- cannot end, invisible to targeting, building nothing. The arena armies are
 -- the only actors left.
 local PURE       = tostring(opt("dev_arena_pure", "")) == "1"
+-- RANDOM MODE (apexearth 2026-08-29): "pick random unit defs and have them
+-- fight until both sides are out of LOS of each other. Make sure to clear
+-- wreckage each time. Include rezbots in some of the fights, have lots of
+-- variety... don't limit to just 20v20, sometimes have one team be smaller
+-- than the other, but keep it fair so it happens to both sides."
+-- Rosters are generated per PAIR of rounds; the handicapped side and the
+-- spawn side both swap inside the pair, so every asymmetry is mirrored.
+local RANDOM     = tostring(opt("dev_arena_random", "")) == "1"
+local rndPool, rezPool = {}, {}
+local pairRoster, pairTotal, pairSight = nil, 0, 300
+local hcFactor = 1.0
+local curRoster, curTotal = {}, {}   -- ally -> roster/total this round
+local spawnM = { [0] = 0, [1] = 0 }  -- metal spawned per side this round
+local apartSince = -1
+local roundReason = "cap"
 local pureDone = false
 local parked = {}   -- unitID -> true, re-stunned every second
 
@@ -166,6 +186,54 @@ end
 -- both sides.
 local rosterOf = {}   -- ally -> { {id, n, name}... }
 local sideTotal = {}  -- ally -> units per spawn
+
+local function buildPools()
+	for id, ud in pairs(UnitDefs) do
+		if ud.speed and ud.speed > 0 and not ud.canFly then
+			if ud.canResurrect then
+				rezPool[#rezPool + 1] = id
+			elseif ud.canAttack and ud.weapons and #ud.weapons > 0
+				and not ud.isBuilder and (ud.metalCost or 0) >= 30
+				and (ud.metalCost or 0) <= 2500 then
+				rndPool[#rndPool + 1] = id
+			end
+		end
+	end
+	Spring.Echo(string.format("[BARAI_ARENA] random pools: %d combat, %d rez",
+		#rndPool, #rezPool))
+end
+
+local function genPairRoster()
+	local roster, total, minSight = {}, 0, 1e9
+	local k = math.random(1, 4)
+	for _ = 1, k do
+		local id = rndPool[math.random(#rndPool)]
+		local ud = UnitDefs[id]
+		local n = math.random(3, 10)
+		roster[#roster + 1] = { id = id, n = n, name = ud.name }
+		total = total + n
+		local los = ud.losRadius or 300
+		if los < minSight then minSight = los end
+	end
+	if #rezPool > 0 and math.random() < 0.3 then
+		local id = rezPool[math.random(#rezPool)]
+		roster[#roster + 1] = { id = id, n = math.random(1, 3),
+			name = UnitDefs[id].name }
+	end
+	-- one round in three is asymmetric; the short side swaps inside the pair
+	local f = 1.0
+	local r = math.random()
+	if r < 0.18 then f = 0.5 elseif r < 0.33 then f = 0.75 end
+	return roster, total, minSight, f
+end
+
+local function rosterString(roster)
+	local parts = {}
+	for _, e in ipairs(roster) do
+		parts[#parts + 1] = e.name .. "*" .. e.n
+	end
+	return table.concat(parts, "+")
+end
 
 local function parseRoster(spec)
 	local roster, total, metal, minSight = {}, 0, 0, 1e9
@@ -256,9 +324,10 @@ local function spawnSide(ally, anchor, facingAway)
 	px, pz = landNear(px, pz)
 
 	local n = 0
-	local total = sideTotal[ally]
+	local total = curTotal[ally]
 	local i = 0
-	for _, entry in ipairs(rosterOf[ally]) do
+	spawnM[ally] = 0
+	for _, entry in ipairs(curRoster[ally]) do
 		for _ = 1, entry.n do
 			-- Centre the line on the anchor, roster order along it.
 			local off = (i - (total - 1) / 2) * PITCH
@@ -274,6 +343,7 @@ local function spawnSide(ally, anchor, facingAway)
 					Spring.SetUnitRulesParam(id, "disableAiControl", 1)
 				end
 				spawned[ally][id] = true
+				spawnM[ally] = spawnM[ally] + (UnitDefs[entry.id].metalCost or 0)
 				n = n + 1
 			end
 		end
@@ -296,6 +366,17 @@ local function aliveCount(ally)
 	return n
 end
 
+local function aliveMetal(ally)
+	local m = 0
+	for id in pairs(spawned[ally]) do
+		if Spring.ValidUnitID(id) and not Spring.GetUnitIsDead(id) then
+			local d = Spring.GetUnitDefID(id)
+			m = m + ((d and UnitDefs[d].metalCost) or 0)
+		end
+	end
+	return m
+end
+
 local function clearRound()
 	for ally = 0, 1 do
 		for id in pairs(spawned[ally]) do
@@ -305,13 +386,51 @@ local function clearRound()
 		end
 		spawned[ally] = {}
 	end
+	-- "Make sure to clear wreckage each time" -- corpses from the last round
+	-- feed rezbots and reclaim, and block the next spawn line.
+	if anchorA and anchorB then
+		local cx = (anchorA[1] + anchorB[1]) / 2
+		local cz = (anchorA[2] + anchorB[2]) / 2
+		local R = SEP + 1800
+		for _, fid in ipairs(Spring.GetFeaturesInRectangle(
+				cx - R, cz - R, cx + R, cz + R) or {}) do
+			Spring.DestroyFeature(fid)
+		end
+	end
 end
 
 local function beginRound(frame)
 	roundNo = roundNo + 1
 	roundStart = frame
 	dirty = false
+	apartSince = -1
+	roundReason = "cap"
 	flip = (roundNo % 2 == 0)
+	if RANDOM then
+		if (roundNo % 2 == 1) or (pairRoster == nil) then
+			pairRoster, pairTotal, pairSight, hcFactor = genPairRoster()
+			SEP = math.max(200, pairSight * 0.85)
+			computeAnchors()
+		end
+		-- the short side swaps inside the pair, mirroring every asymmetry
+		local shortAlly = (roundNo % 2 == 1) and 0 or 1
+		for ally = 0, 1 do
+			if (hcFactor < 1.0) and (ally == shortAlly) then
+				local scaled, tot = {}, 0
+				for _, e in ipairs(pairRoster) do
+					local n = math.max(1, math.floor(e.n * hcFactor))
+					scaled[#scaled + 1] = { id = e.id, n = n, name = e.name }
+					tot = tot + n
+				end
+				curRoster[ally], curTotal[ally] = scaled, tot
+			else
+				curRoster[ally], curTotal[ally] = pairRoster, pairTotal
+			end
+		end
+	else
+		curRoster[0], curTotal[0] = rosterOf[0], sideTotal[0]
+		curRoster[1], curTotal[1] = rosterOf[1], sideTotal[1]
+	end
 	local a = flip and anchorB or anchorA
 	local b = flip and anchorA or anchorB
 	local n0 = spawnSide(0, a, flip)
@@ -331,12 +450,18 @@ local function endRound(frame)
 	elseif a1 > 0 and a0 == 0 then
 		winner = 1
 	end
+	if a0 == 0 or a1 == 0 then
+		roundReason = "wipe"
+	end
 	Spring.Echo(string.format(
 		"[BARAI_ARENA_END] round=%d frames=%d winner=%d alive0=%d alive1=%d "
-		.. "metal0=%.0f metal1=%.0f spawn0=%d spawn1=%d flip=%d clean=%d",
+		.. "metal0=%.0f metal1=%.0f spawn0=%d spawn1=%d flip=%d clean=%d "
+		.. "reason=%s hc=%.2f spawnM0=%.0f spawnM1=%.0f def=%s",
 		roundNo, frame - roundStart, winner, a0, a1,
-		a0 * metalOf[0], a1 * metalOf[1], sideTotal[0], sideTotal[1], flip and 1 or 0,
-		dirty and 0 or 1))
+		aliveMetal(0), aliveMetal(1), curTotal[0] or 0, curTotal[1] or 0,
+		flip and 1 or 0, dirty and 0 or 1,
+		roundReason, hcFactor, spawnM[0], spawnM[1],
+		RANDOM and rosterString(pairRoster) or DEF_A))
 	clearRound()
 	active = false
 	waitUntil = frame + GAP
@@ -353,6 +478,13 @@ function gadget:Initialize()
 	end
 	rosterOf[0], sideTotal[0], metalOf[0] = rosterA, totalA, avgA
 	rosterOf[1], sideTotal[1], metalOf[1] = rosterB, totalB, avgB
+	if RANDOM then
+		buildPools()
+		if #rndPool == 0 then
+			gadgetHandler:RemoveGadget(self)
+			return
+		end
+	end
 	-- WITHIN LOS OF EACH OTHER (apexearth: "Important to make sure each side
 	-- is within LOS of each other" -- blind spawns wandered instead of
 	-- fighting). Unless the sep option is set explicitly, the lines stand
@@ -401,6 +533,36 @@ function gadget:GameFrame(frame)
 		end
 	end
 	if active then
+		-- "fight until both sides are out of LOS of each other": when the
+		-- nearest pair of survivors has been out of the fight's own sight
+		-- range for five seconds, the round is over as a disengagement.
+		if (frame % 15 == 3) and RANDOM then
+			local minD2 = 1e18
+			for idA in pairs(spawned[0]) do
+				if Spring.ValidUnitID(idA) then
+					local ax, _, az = Spring.GetUnitPosition(idA)
+					for idB in pairs(spawned[1]) do
+						if Spring.ValidUnitID(idB) then
+							local bx, _, bz = Spring.GetUnitPosition(idB)
+							local dx, dz = ax - bx, az - bz
+							local d2 = dx * dx + dz * dz
+							if d2 < minD2 then minD2 = d2 end
+						end
+					end
+				end
+			end
+			local apartAt = (pairSight * 1.15 + 100)
+			if minD2 > apartAt * apartAt then
+				if apartSince < 0 then apartSince = frame end
+			else
+				apartSince = -1
+			end
+			if (apartSince > 0) and (frame - apartSince > 150) then
+				roundReason = "apart"
+				endRound(frame)
+				return
+			end
+		end
 		if aliveCount(0) == 0 or aliveCount(1) == 0 or (frame - roundStart) >= ROUND then
 			endRound(frame)
 		end
