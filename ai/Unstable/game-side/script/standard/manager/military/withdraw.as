@@ -32,6 +32,7 @@ array<int> gCombatId;
 array<int> gCombatSent;      // frame we last ordered this unit back
 array<int> gCombatBucket;    // last observed task bucket, for transition tags
 int gNextWithdraw = 0;
+int gNextTaskAbort = 0;
 int gWithdrawn = 0;
 int gNextWithdrawLog = 0;
 int gNextCensusLog = 0;
@@ -395,8 +396,30 @@ void UpdateWithdraw()
 		const bool outgunned = OutgunnedHere(u, p, allyPos, allyPow, odds);
 		float tLost = 0.f;
 		float tKilled = 0.f;
-		const bool losingFight = (!outgunned)
-			&& LosingFightHere(p, tLost, tKilled);
+		const bool losingFight = LosingFightHere(p, tLost, tKilled);
+		// A LOST FIGHT ENDS AS A TASK, NOT AS A CROWD OF ORDERS. The per-unit
+		// pull-back measurably fails: the W order is one-shot and the task
+		// re-asserts every tick, so units died in place ping-ponging or
+		// walking the wrong way (wdeaths: 43% in place, 34% wrong-way,
+		// median 15s from order to death at FULL hp). Aborting the task is
+		// the C++ attack-break's own shape -- every member re-elects at once,
+		// pools at home behind the massing bar, and leaves together with the
+		// next real group. ATTACK/RAID only: a home DEFEND pool must keep
+		// fighting, and chargers/colossi were already exempted above.
+		if (losingFight
+			&& ((ft == Task::FightType::ATTACK) || (ft == Task::FightType::RAID))
+			&& (ai.frame >= gNextTaskAbort))
+		{
+			gNextTaskAbort = ai.frame + 5 * SECOND;
+			AppendFightHist(int(u.id), "A", FightCtx(u));
+			AiLog(Factory::T() + "apex: fight-abort "
+				+ ((u.circuitDef !is null) ? u.circuitDef.GetName() : "?")
+				+ " at=" + int(p.x) + "," + int(p.z)
+				+ " trade=" + int(tLost) + ":" + int(tKilled)
+				+ " -- task re-pools");
+			t.Abort();
+			continue;
+		}
 		if (!leash && !recallHome && !outgunned && !losingFight && !LosingHere(p))
 			continue;
 		if (ai.frame - gCombatSent[i] < reissue)
