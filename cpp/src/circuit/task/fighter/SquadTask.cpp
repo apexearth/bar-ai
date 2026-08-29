@@ -1071,7 +1071,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// surround the enemy units, form a circle... ideally... our banishers
 		// would stay at a distance." Rows are already keyed by weapon range, so
 		// the second half of that is done; this is the first half.
-		const float maxDelta = (M_PI * ARC_SPAN) / kv.second.size();
+		const float maxDelta = (M_PI
+				* manager->GetCircuit()->GetTunable("apex_arc_span", ARC_SPAN))
+				/ kv.second.size();
 		// NOTE: float delta = asinf(cdef->GetRadius() / range);
 		//       but sin of a small angle is similar to that angle, omit asinf() call
 		float delta = (3.0f * (rowDef->GetRadius() + aoe)) / (range + DIV0_SLACK);

@@ -195,6 +195,7 @@ local NAMES = {
 	"apex_kill_off_frac",    -- killingblow.as: disarm fraction of KILL_EDGE; wide band survives the retreat-zeroing dip (0.35)
 	"apex_focus_finish",     -- SquadTask.cpp: 1 = rows set-target the lowest-HP enemy in reach (finish the wounded)
 	"apex_brawl_pass",       -- SquadTask.cpp: 1 = rows without a range edge hand the brawl to engine auto-fight
+	"apex_arc_span",         -- SquadTask.cpp: ring arc width as a fraction of pi; small = the squad fights as a fist (0.9)
 	"apex_line_adapt",       -- army.as: enemy static share bends the reach composition target up (1)
 	"apex_mex_expose",       -- want_protect.as: per-mex floor grows with forwardness, floor*(1+fwd*this) (1.5)
 	"apex_rezzer_fwd",       -- rules_rezzer.as: idle rezzer past this forward fraction retires to the haven (0.25)
