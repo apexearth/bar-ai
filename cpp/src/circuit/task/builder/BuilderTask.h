@@ -97,6 +97,9 @@ public:
 	const springai::AIFloat3& GetTaskPos() const { return position; }
 	CCircuitDef* GetBuildDef() const { return buildDef; }
 	int GetBuildFails() const { return buildFails; }
+	// apex: which code path killed this task; printed by the task-die line.
+	const char* GetDeathNote() const { return deathNote; }
+	void SetDeathNote(const char* n) { deathNote = n; }
 
 	virtual bool IsGeneric() const { return false; }
 	BuildType GetBuildType() const { return buildType; }
@@ -156,6 +159,7 @@ protected:
 
 	SResource savedIncome;
 	int buildFails;
+	const char* deathNote = "?";
 
 	// apexearth: "We're totally out of metal and we have three construction
 	// turrets helping to build something, but we don't even have the metal to

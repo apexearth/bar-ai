@@ -390,6 +390,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 		}
 
 		// Fallback to Guard/Assist/Patrol
+		SetDeathNote("no-site");
 		manager->FallbackTask(unit);
 		return false;
 	}
@@ -403,6 +404,7 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
 	} else if (buildFails <= TASK_RETRIES) {
 		RemoveAssignee(unit);
 	} else if (target == nullptr) {
+		SetDeathNote("retries");
 		// ABORTING NO LONGER POISONS THE GROUND.
 		//
 		// Upstream stamped a permanent blocker at buildPos here, with its own
@@ -438,6 +440,7 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 	manager->AssignTask(unit, task);
 
 	if (target == nullptr) {
+		SetDeathNote("hurt-retreat");
 		manager->AbortTask(this);  // Doesn't call RemoveAssignee
 	}
 }
@@ -447,6 +450,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 	RemoveAssignee(unit);
 	// NOTE: AbortTask usually does not call RemoveAssignee for each unit
 	if (((target == nullptr) || units.empty()) && !unit->IsMorphing()) {
+		SetDeathNote("builder-gone");
 		manager->AbortTask(this);
 	}
 }
@@ -569,6 +573,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 			|| ((ecoMgr->GetAvgEnergyIncome() < savedIncome.energy * 0.6f) && (ecoMgr->GetAvgEnergyIncome() * 2.0f < ecoMgr->GetEnergyPull())))
 		)
 	{
+		SetDeathNote("stall-abort");
 		manager->AbortTask(this);
 		return false;
 	}
@@ -655,6 +660,13 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 	if ((target == nullptr)
 		&& !circuit->GetTerrainManager()->CanReachAtSafe(unit, endPos, range, cdef->GetPower()))
 	{
+		// The chooser tested reachability from HOME (CanDefReach); this
+		// stricter per-unit test disagreeing is exactly the loop where a
+		// deterministic site is re-elected and aborted forever (t5's no-lab
+		// pocket, SI 8v8 s106). Mark the ground so ProbedSite steps around
+		// it on the next election.
+		circuit->NoteBuildBlocked(endPos);
+		SetDeathNote("unreach-safe");
 		manager->AbortTask(this);
 		return;
 	}

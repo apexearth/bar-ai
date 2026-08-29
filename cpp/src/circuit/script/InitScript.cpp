@@ -336,10 +336,15 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 // targeted half of obsolete-building reclaim; policy stays in script.
 static void CCircuitUnit_CmdReclaimUnit(CCircuitUnit* unit, CCircuitUnit* target)
 {
-	if (target == nullptr) {
+	if ((unit == nullptr) || unit->IsDead()
+		|| (target == nullptr) || target->IsDead()) {
 		return;
 	}
-	unit->CmdReclaimUnit(target);
+	try {
+		unit->CmdReclaimUnit(target);
+	} catch (const std::exception&) {
+		// a unit killed between the script's census and this command
+	}
 }
 
 // apex: the Brain's nuke director. Attack-ground is a netted order (safe);

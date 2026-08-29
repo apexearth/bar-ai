@@ -1566,7 +1566,7 @@ index 54e3ac7..f3aac15 100644
  #endif
  };
 diff --git a/src/circuit/module/BuilderManager.cpp b/src/circuit/module/BuilderManager.cpp
-index a62be4f..b61b5d7 100644
+index a62be4f..365e3d9 100644
 --- a/src/circuit/module/BuilderManager.cpp
 +++ b/src/circuit/module/BuilderManager.cpp
 @@ -621,10 +621,16 @@ const std::set<IBuilderTask*>& CBuilderManager::GetTasks(IBuilderTask::BuildType
@@ -1630,7 +1630,7 @@ index a62be4f..b61b5d7 100644
  }
  
  void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
-@@ -795,26 +803,66 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
+@@ -795,26 +803,67 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
  			if (taskB->GetBuildType() >= IBuilderTask::BuildType::_SIZE_) {
  				break;
  			}
@@ -1648,12 +1648,13 @@ index a62be4f..b61b5d7 100644
 +					|| !taskB->GetAssignees().empty()))
 +			{
 +				const springai::AIFloat3& tp = taskB->GetPosition();
-+				circuit->LOG("apex: task-die t=%i %s bt=%i at=%.0f,%.0f fails=%i crew=%i framed=%i id=%p",
++				circuit->LOG("apex: task-die t=%i %s bt=%i at=%.0f,%.0f fails=%i crew=%i framed=%i why=%s id=%p",
 +						circuit->GetTeamId(), taskB->GetBuildDef()->GetDef()->GetName(),
 +						static_cast<int>(taskB->GetBuildType()), tp.x, tp.z,
 +						taskB->GetBuildFails(),
 +						static_cast<int>(taskB->GetAssignees().size()),
 +						(taskB->GetTarget() != nullptr) ? 1 : 0,
++						taskB->GetDeathNote(),
 +						static_cast<void*>(taskB));
  			}
 +			// The target-keyed maps are erased UNCONDITIONALLY, before the
@@ -1704,7 +1705,7 @@ index a62be4f..b61b5d7 100644
  		} break;
  		default: break;
  	}
-@@ -860,6 +908,42 @@ bool CBuilderManager::HasFreeAssists(CCircuitUnit* builder) const
+@@ -860,6 +909,42 @@ bool CBuilderManager::HasFreeAssists(CCircuitUnit* builder) const
  			&& (!conDef->IsRoleComm() || ((int)assistCount <= circuit->GetSetupManager()->GetAssistFac()));
  }
  
@@ -1747,7 +1748,7 @@ index a62be4f..b61b5d7 100644
  SBuildChain* CBuilderManager::GetBuildChain(IBuilderTask::BuildType buildType, CCircuitDef* cdef) const
  {
  	auto it1 = buildChains.find(static_cast<IBuilderTask::BT>(buildType));
-@@ -934,6 +1018,9 @@ bool CBuilderManager::CanUpGeo(CCircuitDef* cdef) const
+@@ -934,6 +1019,9 @@ bool CBuilderManager::CanUpGeo(CCircuitDef* cdef) const
  
  IUnitTask* CBuilderManager::DefaultMakeTask(CCircuitUnit* unit)
  {
@@ -1757,7 +1758,7 @@ index a62be4f..b61b5d7 100644
  	const int frame = circuit->GetLastFrame();
  	const AIFloat3& pos = unit->GetPos(frame);
  
-@@ -1624,9 +1711,8 @@ void CBuilderManager::Watchdog()
+@@ -1624,9 +1712,8 @@ void CBuilderManager::Watchdog()
  				CCircuitDef* cdef = unit->GetCircuitDef();
  				if ((cdef->GetBuildTime() * buildPercent < maxCost) || cdef->IsMex() || (*cdef == *terraDef)) {
  					Enqueue(TaskB::Repair(IBuilderTask::Priority::NORMAL, unit));
@@ -1768,7 +1769,15 @@ index a62be4f..b61b5d7 100644
  //			} else if (u->GetHealth() < u->GetMaxHealth()) {
  //				Enqueue(TaskB::Repair(IBuilderTask::Priority::NORMAL, unit));
  			}
-@@ -1745,8 +1831,9 @@ void CBuilderManager::Load(std::istream& is)
+@@ -1662,6 +1749,7 @@ void CBuilderManager::UpdateAreaUsers()
+ 		}
+ 	}
+ 	for (IBuilderTask* task : removeTasks) {
++		task->SetDeathNote("out-of-area");
+ 		AbortTask(task);
+ 	}
+ }
+@@ -1745,8 +1833,9 @@ void CBuilderManager::Load(std::istream& is)
  			if (task != nullptr) {
  				const bool isValid = is >> *task;
  				buildTasks[i].insert(task);
@@ -4222,7 +4231,7 @@ index 193efa9..91d88ba 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..72908d7 100644
+index 2839b72..0b0a580 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,11 +10,14 @@
@@ -4401,7 +4410,7 @@ index 2839b72..72908d7 100644
  	asUINT i = 0;
  	for (CAllyTeam::Id teamId : allyTeam->GetTeamIds()) {
  		*(CAllyTeam::Id*)arr->At(i++) = teamId;
-@@ -195,6 +327,465 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +327,470 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
@@ -4414,10 +4423,15 @@ index 2839b72..72908d7 100644
 +// targeted half of obsolete-building reclaim; policy stays in script.
 +static void CCircuitUnit_CmdReclaimUnit(CCircuitUnit* unit, CCircuitUnit* target)
 +{
-+	if (target == nullptr) {
++	if ((unit == nullptr) || unit->IsDead()
++		|| (target == nullptr) || target->IsDead()) {
 +		return;
 +	}
-+	unit->CmdReclaimUnit(target);
++	try {
++		unit->CmdReclaimUnit(target);
++	} catch (const std::exception&) {
++		// a unit killed between the script's census and this command
++	}
 +}
 +
 +// apex: the Brain's nuke director. Attack-ground is a netted order (safe);
@@ -4867,7 +4881,7 @@ index 2839b72..72908d7 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -240,6 +831,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -240,6 +836,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -4886,7 +4900,7 @@ index 2839b72..72908d7 100644
  static CScriptArray* IUnitTask_GetUnits(IUnitTask* task)
  {
  	// Without caching arrayType can be extracted by:
-@@ -472,12 +1075,18 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -472,12 +1080,18 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectBehaviour("IUnitTask", asBEHAVE_RELEASE, "void f()", asMETHODPR(IRefCounter, Release, (), int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "int GetRefCount() const", asMETHODPR(IRefCounter, GetRefCount, () const, int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "Type GetType() const", asMETHODPR(IUnitTask, GetType, () const, IUnitTask::Type), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4905,7 +4919,7 @@ index 2839b72..72908d7 100644
  	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
  
-@@ -490,15 +1099,63 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -490,15 +1104,63 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -4970,7 +4984,7 @@ index 2839b72..72908d7 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -556,6 +1213,57 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +1218,57 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5028,7 +5042,7 @@ index 2839b72..72908d7 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +1272,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +1277,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5052,7 +5066,7 @@ index 2839b72..72908d7 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +1298,43 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +1303,43 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5096,7 +5110,7 @@ index 2839b72..72908d7 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +1347,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +1352,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -5106,7 +5120,7 @@ index 2839b72..72908d7 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +1468,18 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +1473,18 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5125,7 +5139,7 @@ index 2839b72..72908d7 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -724,6 +1501,8 @@ bool CInitScript::Init()
+@@ -724,6 +1506,8 @@ bool CInitScript::Init()
  	mainInfo.receiveMessage = script->GetFunc(mod, "void AiMessage(const string& in, int)");
  	mainInfo.unitFinished = script->GetFunc(mod, "void AiUnitFinished(CCircuitUnit@)");
  	mainInfo.unitDestroyed = script->GetFunc(mod, "void AiUnitDestroyed(CCircuitUnit@)");
@@ -5134,7 +5148,7 @@ index 2839b72..72908d7 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +1519,28 @@ void CInitScript::Update()
+@@ -740,9 +1524,28 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -5163,7 +5177,7 @@ index 2839b72..72908d7 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -779,6 +1577,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +1582,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -6475,7 +6489,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..0f2c680 100644
+index bc8ff11..f38d73c 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -31,6 +31,7 @@
@@ -6639,10 +6653,19 @@ index bc8ff11..0f2c680 100644
  	if (utils::is_valid(buildPos)) {
  		TRY_UNIT(circuit, unit,
  			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
-@@ -315,8 +403,21 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -302,6 +390,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+ 		}
+ 
+ 		// Fallback to Guard/Assist/Patrol
++		SetDeathNote("no-site");
+ 		manager->FallbackTask(unit);
+ 		return false;
+ 	}
+@@ -315,8 +404,22 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
  	} else if (buildFails <= TASK_RETRIES) {
  		RemoveAssignee(unit);
  	} else if (target == nullptr) {
++		SetDeathNote("retries");
 +		// ABORTING NO LONGER POISONS THE GROUND.
 +		//
 +		// Upstream stamped a permanent blocker at buildPos here, with its own
@@ -6662,7 +6685,23 @@ index bc8ff11..0f2c680 100644
  	}
  }
  
-@@ -427,18 +528,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -337,6 +440,7 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+ 	manager->AssignTask(unit, task);
+ 
+ 	if (target == nullptr) {
++		SetDeathNote("hurt-retreat");
+ 		manager->AbortTask(this);  // Doesn't call RemoveAssignee
+ 	}
+ }
+@@ -346,6 +450,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+ 	RemoveAssignee(unit);
+ 	// NOTE: AbortTask usually does not call RemoveAssignee for each unit
+ 	if (((target == nullptr) || units.empty()) && !unit->IsMorphing()) {
++		SetDeathNote("builder-gone");
+ 		manager->AbortTask(this);
+ 	}
+ }
+@@ -427,18 +532,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -6695,7 +6734,7 @@ index bc8ff11..0f2c680 100644
  	}
  }
  
-@@ -447,8 +555,15 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -447,13 +559,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  	CCircuitAI* circuit = manager->GetCircuit();
  
  	// FIXME: Replace const 1000.0f with build time?
@@ -6712,7 +6751,13 @@ index bc8ff11..0f2c680 100644
  		&& (target == nullptr)
  		&& (((ecoMgr->GetAvgMetalIncome() < savedIncome.metal * 0.6f) && (ecoMgr->GetAvgMetalIncome() * 2.0f < ecoMgr->GetMetalPull()))
  			|| ((ecoMgr->GetAvgEnergyIncome() < savedIncome.energy * 0.6f) && (ecoMgr->GetAvgEnergyIncome() * 2.0f < ecoMgr->GetEnergyPull())))
-@@ -492,12 +607,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+ 		)
+ 	{
++		SetDeathNote("stall-abort");
+ 		manager->AbortTask(this);
+ 		return false;
+ 	}
+@@ -492,12 +612,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  		if ((buildType != BuildType::GUARD)
  			&& ((executors.size() < 2) || !unit->IsAttrBase()))
  		{
@@ -6735,7 +6780,21 @@ index bc8ff11..0f2c680 100644
  				}
  			)
  			return true;
-@@ -542,7 +665,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -532,6 +660,13 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+ 	if ((target == nullptr)
+ 		&& !circuit->GetTerrainManager()->CanReachAtSafe(unit, endPos, range, cdef->GetPower()))
+ 	{
++		// The chooser tested reachability from HOME (CanDefReach); this
++		// stricter per-unit test disagreeing is exactly the loop where a
++		// deterministic site is re-elected and aborted forever (t5's no-lab
++		// pocket, SI 8v8 s106). Mark the ground so ProbedSite steps around
++		// it on the next election.
++		circuit->NoteBuildBlocked(endPos);
++		SetDeathNote("unreach-safe");
+ 		manager->AbortTask(this);
+ 		return;
+ 	}
+@@ -542,7 +677,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6746,7 +6805,7 @@ index bc8ff11..0f2c680 100644
  		return;
  	}
  
-@@ -565,11 +690,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +702,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6770,7 +6829,7 @@ index bc8ff11..0f2c680 100644
  	}
  }
  
-@@ -637,14 +772,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +784,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6827,7 +6886,7 @@ index bc8ff11..0f2c680 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +835,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +847,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
@@ -6838,22 +6897,28 @@ index bc8ff11..0f2c680 100644
  
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 diff --git a/src/circuit/task/builder/BuilderTask.h b/src/circuit/task/builder/BuilderTask.h
-index 13ced8d..a4fd3e5 100644
+index 13ced8d..fac5188 100644
 --- a/src/circuit/task/builder/BuilderTask.h
 +++ b/src/circuit/task/builder/BuilderTask.h
-@@ -96,6 +96,7 @@ public:
+@@ -96,6 +96,10 @@ public:
  
  	const springai::AIFloat3& GetTaskPos() const { return position; }
  	CCircuitDef* GetBuildDef() const { return buildDef; }
 +	int GetBuildFails() const { return buildFails; }
++	// apex: which code path killed this task; printed by the task-die line.
++	const char* GetDeathNote() const { return deathNote; }
++	void SetDeathNote(const char* n) { deathNote = n; }
  
  	virtual bool IsGeneric() const { return false; }
  	BuildType GetBuildType() const { return buildType; }
-@@ -156,7 +157,21 @@ protected:
+@@ -155,8 +159,23 @@ protected:
+ 
  	SResource savedIncome;
  	int buildFails;
- 
+-
 -	decltype(units)::const_iterator unitIt;  // update iterator
++	const char* deathNote = "?";
++
 +	// apexearth: "We're totally out of metal and we have three construction
 +	// turrets helping to build something, but we don't even have the metal to
 +	// build it. One of those conturrets could have been reclaiming... Ideally

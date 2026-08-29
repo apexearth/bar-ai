@@ -251,10 +251,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		IUnitTask@ jt = JoinBig(w.def);
 		if (jt !is null)
 			return jt;
+		// Probed last: the C++ reach-safe veto marks refused ground, and a
+		// deterministic site would otherwise be re-elected into it forever.
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL,
-				OffFactoryExit(ClearExitLane(
-					ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)))),
+				ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)),
+					OffFactoryExit(ClearExitLane(
+						ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f))))),
 				256.f, SQUARE_SIZE * 16.f);
 	}
 	if ((w.kind == WK_PROTECT) || (w.kind == WK_SENSE)
@@ -337,7 +340,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			// The claim's clock is the eat time (cost/90, the same arithmetic
 			// tCost uses) plus a walk pad; expiry frees a dead worker's victim.
 			NoteReclaimClaim(tgt.id, unit.id,
-					ai.frame + int((60.f + Catalog::gCostM[td] / 90.f) * SECOND));
+					ai.frame + int((60.f + Catalog::gCostM[td] / 90.f) * SECOND),
+					tgt, tgt.GetPos(ai.frame));
 			if (gReclaimTgt.length() > 1)
 				AiLog("apex: reclaim-parallel t=" + ai.teamId
 						+ " victims=" + gReclaimTgt.length());
@@ -609,8 +613,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// "a t1 vehicle lab blocked by a T2 vehicle lab").
 		const AIFloat3 at = Catalog::gFloater[int(w.def.id)]
 				? w.pos
-				: OffFactoryExit(ClearExitLane(
-					ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f))));
+				: ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)),
+					OffFactoryExit(ClearExitLane(
+						ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)))));
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, at, 256.f, SQUARE_SIZE * 16.f);
 	}

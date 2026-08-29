@@ -674,17 +674,27 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 {
 	if ((def is null) || !OnMap(primary))
 		return primary;
+	// C++ refusals mark the ground (site-search failure, and OnTravelEnd's
+	// reach-safe veto -- the loop where a deterministic site was re-elected
+	// and aborted forever). A candidate near the mark is skipped, and a
+	// cached answer that has since been marked is re-probed, not served.
+	AIFloat3 blocked(-1.f, 0.f, -1.f);
+	const bool haveBlocked = ai.GetBlockedBuildPos(blocked) && OnMap(blocked);
 	const int did = int(def.id);
 	for (uint i = 0; i < gProbeDefs.length(); ++i) {
-		if ((gProbeDefs[i] == did) && (ai.frame - gProbeAt[i] < 30 * SECOND))
+		if ((gProbeDefs[i] == did) && (ai.frame - gProbeAt[i] < 30 * SECOND)) {
+			if (haveBlocked && (gProbePos[i].distance2D(blocked) < 250.f))
+				break;
 			return gProbePos[i];
+		}
 	}
 	const float seek = 600.f;
 	AIFloat3 found = primary;
 	bool ok = false;
 	{
 		const AIFloat3 s = ai.FindBuildSiteNear(def, primary, seek);
-		if (OnMap(s) && (s.distance2D(primary) <= seek)) {
+		if (OnMap(s) && (s.distance2D(primary) <= seek)
+			&& !(haveBlocked && (s.distance2D(blocked) < 250.f))) {
 			found = s;
 			ok = true;
 		}
@@ -703,6 +713,8 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 					continue;
 				const AIFloat3 s2 = ai.FindBuildSiteNear(def, cand, seek);
 				if (!OnMap(s2) || (s2.distance2D(cand) > seek))
+					continue;
+				if (haveBlocked && (s2.distance2D(blocked) < 250.f))
 					continue;
 				const float fwd = Military::ForwardFraction(s2);
 				if (fwd < bestFwd) {

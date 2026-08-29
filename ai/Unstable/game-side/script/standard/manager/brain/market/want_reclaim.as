@@ -45,6 +45,11 @@ bool OwnAnyRezzer()
 array<Id> gReclaimTgt;
 array<Id> gReclaimBy;
 array<int> gReclaimUntil;
+// The victim's handle and its ground, for the nano pile-on below. The pos is
+// stored at claim time so nothing ever calls GetPos on a stored handle -- a
+// deferred-dead unit read is the access-violation class fixed 2026-08-28.
+array<CCircuitUnit@> gReclaimHand;
+array<AIFloat3> gReclaimPos;
 
 bool ReclaimClaimed(Id tgt, Id worker)
 {
@@ -53,6 +58,8 @@ bool ReclaimClaimed(Id tgt, Id worker)
 			gReclaimTgt.removeAt(i);
 			gReclaimBy.removeAt(i);
 			gReclaimUntil.removeAt(i);
+			gReclaimHand.removeAt(i);
+			gReclaimPos.removeAt(i);
 			continue;
 		}
 		if ((gReclaimTgt[i] == tgt) && (gReclaimBy[i] != worker))
@@ -62,18 +69,80 @@ bool ReclaimClaimed(Id tgt, Id worker)
 	return false;
 }
 
-void NoteReclaimClaim(Id tgt, Id worker, int untilFrame)
+void NoteReclaimClaim(Id tgt, Id worker, int untilFrame,
+		CCircuitUnit@ hand = null, const AIFloat3& in at = AIFloat3(-1.f, 0.f, -1.f))
 {
 	for (uint i = 0; i < gReclaimTgt.length(); ++i) {
 		if (gReclaimTgt[i] == tgt) {
 			gReclaimBy[i] = worker;
 			gReclaimUntil[i] = untilFrame;
+			@gReclaimHand[i] = hand;
+			gReclaimPos[i] = at;
 			return;
 		}
 	}
 	gReclaimTgt.insertLast(tgt);
 	gReclaimBy.insertLast(worker);
 	gReclaimUntil.insertLast(untilFrame);
+	gReclaimHand.insertLast(hand);
+	gReclaimPos.insertLast(at);
+}
+
+// TURRETS PILE ONTO THE RECLAIM (apexearth: "We have a lot of constructor
+// units & turrets which could be doing this"; 2026-08-28 night: "those guys
+// are great for reclaiming old buildings"). An idle nano in range of a
+// claimed victim is handed the same target with CmdReclaimUnit -- raw on
+// purpose: nanos are factory-manager units and cannot take builder tasks.
+// The victim already sits in the reclaim registry through the constructor's
+// own task, so nothing repairs it back; queue==0 keeps working assisters on
+// their build.
+array<int> gNanoDefs;
+bool gNanoDefsSet = false;
+int gNanoAssistNext = 0;
+
+void NanoReclaimAssist()
+{
+	if (ai.frame < gNanoAssistNext)
+		return;
+	gNanoAssistNext = ai.frame + 15 * SECOND;
+	if (!gNanoDefsSet) {
+		gNanoDefsSet = true;
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			if (Catalog::gMobile[d] || (Catalog::gBuildPower[d] <= 0.f)
+				|| (Catalog::gCostM[d] <= 1.f)
+				|| (Catalog::gBuildsList[d].length() > 0))
+				continue;
+			gNanoDefs.insertLast(d);
+		}
+	}
+	if (gNanoDefs.length() == 0)
+		return;
+	const float reach = NanoRange();
+	int sent = 0;
+	for (uint i = 0; (i < gReclaimTgt.length()) && (sent < 6); ++i) {
+		if (ai.frame >= gReclaimUntil[i])
+			continue;
+		CCircuitUnit@ v = gReclaimHand[i];
+		if (v is null)
+			continue;
+		const AIFloat3 vp = gReclaimPos[i];
+		if (!OnMap(vp))
+			continue;
+		for (uint n = 0; (n < gNanoDefs.length()) && (sent < 6); ++n) {
+			array<CCircuitUnit@>@ ns = ai.GetOwnUnitsOfDef(
+					Catalog::Def(gNanoDefs[n]), vp, reach);
+			if (ns is null)
+				continue;
+			for (uint k = 0; (k < ns.length()) && (sent < 6); ++k) {
+				if ((ns[k] is null) || (ns[k].CmdQueueSize() > 0))
+					continue;
+				ns[k].CmdReclaimUnit(v);
+				++sent;
+			}
+		}
+	}
+	if (sent > 0)
+		AiLog("apex: nano-assist reclaim x" + sent);
 }
 
 // WHOSE HANDS THESE ARE. apexearth 2026-08-27: "we aren't expanding enough...
