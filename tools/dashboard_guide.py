@@ -335,6 +335,9 @@ GROUPS = [
                   "this metal/s lifts the plant-copy ban and the one-advanced-"
                   "plant-at-a-time rule — lower and a wasteful economy earns "
                   "its second gantry (or parallel T2 plants) earlier"),
+                 ("TUNE_BLAST_AISLE", "gap in elmos between a big generator's "
+                  "own clusters — bigger keeps more of the farm outside one "
+                  "chain explosion, at the cost of longer walks"),
                  ("TUNE_ANTINUKE_INCOME", "the income at which insurance "
                   "(antinuke, shields) starts being worth buying"),
              ]},

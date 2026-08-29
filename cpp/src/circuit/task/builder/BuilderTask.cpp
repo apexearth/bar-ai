@@ -657,8 +657,18 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 	CCircuitDef* cdef = unit->GetCircuitDef();
 	const float range = cdef->GetBuildDistance();
 	const AIFloat3& endPos = GetPosition();
+	// A DEFENCE IS BUILT INTO THE THREAT IT ANSWERS. The safe-reach veto
+	// killed every front tower task ever created (s43: all bt=7 deaths
+	// why=unreach-safe; 960 front elections won, 0 towers built) -- the
+	// ground a tower is for is exactly the ground this refused. Defence
+	// types test pure reachability; everything else keeps the threat term.
+	const bool intoThreat = (buildType == BuildType::DEFENCE)
+			|| (buildType == BuildType::BUNKER)
+			|| (buildType == BuildType::BIG_GUN);
 	if ((target == nullptr)
-		&& !circuit->GetTerrainManager()->CanReachAtSafe(unit, endPos, range, cdef->GetPower()))
+		&& !(intoThreat
+			? circuit->GetTerrainManager()->CanReachAt(unit, endPos, range)
+			: circuit->GetTerrainManager()->CanReachAtSafe(unit, endPos, range, cdef->GetPower())))
 	{
 		// The chooser tested reachability from HOME (CanDefReach); this
 		// stricter per-unit test disagreeing is exactly the loop where a

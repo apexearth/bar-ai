@@ -1662,6 +1662,10 @@ const float TUNE_SUPER_FLIGHT_PER = 140.f;
 //   ("make more nanos around our gantry and if we can't do that then make
 //   another gantry"; "multiple adv air are ok if we are crazy wealthy").
 const float TUNE_COPY_OVERFLOW_M = 140.f;
+// BLAST_AISLE [elmos] -- gap between a BIG generator's own clusters, so one
+//   death explosion cannot chain the whole farm ("better if only half our
+//   economy blows up"). Chosen, not derived from the defs' blast radii.
+const float TUNE_BLAST_AISLE = 500.f;
 // GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
 //   income: one shared line the whole team's nanos man, so one team purse.
 //   At 100s the ~9.3k bill clears right at ~100 team metal/s, his stated

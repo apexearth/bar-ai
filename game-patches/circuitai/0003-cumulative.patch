@@ -6489,7 +6489,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..f38d73c 100644
+index bc8ff11..b6ca6ef 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -31,6 +31,7 @@
@@ -6780,9 +6780,23 @@ index bc8ff11..f38d73c 100644
  				}
  			)
  			return true;
-@@ -532,6 +660,13 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -529,9 +657,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+ 	CCircuitDef* cdef = unit->GetCircuitDef();
+ 	const float range = cdef->GetBuildDistance();
+ 	const AIFloat3& endPos = GetPosition();
++	// A DEFENCE IS BUILT INTO THE THREAT IT ANSWERS. The safe-reach veto
++	// killed every front tower task ever created (s43: all bt=7 deaths
++	// why=unreach-safe; 960 front elections won, 0 towers built) -- the
++	// ground a tower is for is exactly the ground this refused. Defence
++	// types test pure reachability; everything else keeps the threat term.
++	const bool intoThreat = (buildType == BuildType::DEFENCE)
++			|| (buildType == BuildType::BUNKER)
++			|| (buildType == BuildType::BIG_GUN);
  	if ((target == nullptr)
- 		&& !circuit->GetTerrainManager()->CanReachAtSafe(unit, endPos, range, cdef->GetPower()))
+-		&& !circuit->GetTerrainManager()->CanReachAtSafe(unit, endPos, range, cdef->GetPower()))
++		&& !(intoThreat
++			? circuit->GetTerrainManager()->CanReachAt(unit, endPos, range)
++			: circuit->GetTerrainManager()->CanReachAtSafe(unit, endPos, range, cdef->GetPower())))
  	{
 +		// The chooser tested reachability from HOME (CanDefReach); this
 +		// stricter per-unit test disagreeing is exactly the loop where a
@@ -6794,7 +6808,7 @@ index bc8ff11..f38d73c 100644
  		manager->AbortTask(this);
  		return;
  	}
-@@ -542,7 +677,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -542,7 +687,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6805,7 +6819,7 @@ index bc8ff11..f38d73c 100644
  		return;
  	}
  
-@@ -565,11 +702,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +712,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6829,7 +6843,7 @@ index bc8ff11..f38d73c 100644
  	}
  }
  
-@@ -637,14 +784,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +794,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6886,7 +6900,7 @@ index bc8ff11..f38d73c 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +847,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +857,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);

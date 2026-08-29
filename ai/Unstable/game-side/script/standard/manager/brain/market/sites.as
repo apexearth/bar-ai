@@ -296,6 +296,30 @@ AIFloat3 FarmSlot(int defId)
 	const float link = pitch * 1.45f;    // same cluster: orthogonal or diagonal
 	const float aisle = Lattice::AisleW();
 	const int cluN = Lattice::ClusterN();
+	// HALF THE ECONOMY MUST SURVIVE ONE BLAST (apexearth 2026-08-28:
+	// "Better if only half our economy blows up instead of the entire
+	// thing"). A big generator's cluster caps at half its standing fleet
+	// -- never under 2 -- and its clusters part by a blast-scale aisle
+	// instead of a walkway. Same-def only; the foreign-def lattice
+	// spacing is untouched.
+	int cluCap = cluN;
+	float sameAisle = aisle;
+	{
+		const bool bigEco = (Catalog::gCostM[defId] >= 2500.f)
+				|| (Catalog::gMakeE[defId] >= 400.f);
+		if (bigEco) {
+			const int own = (uint(defId) < gOwnCount.length())
+					? gOwnCount[defId] : 0;
+			int half = (own + 1) / 2;
+			if (half < 2)
+				half = 2;
+			if (half < cluCap)
+				cluCap = half;
+			const float bg = ai.GetTunable("apex_blast_aisle", TUNE_BLAST_AISLE);
+			if (bg > sameAisle)
+				sameAisle = bg;
+		}
+	}
 
 	array<AIFloat3> kin;
 	KinNear(def, kin);
@@ -398,7 +422,7 @@ AIFloat3 FarmSlot(int defId)
 					++adj;
 				if (d < link) {
 					++near;
-					if (csize[k] >= cluN)
+					if (csize[k] >= cluCap)
 						full = true;
 				}
 			}
@@ -440,8 +464,10 @@ AIFloat3 FarmSlot(int defId)
 				continue;
 			}
 			// Rule 3: a new cluster starts on ground an aisle clear of
-			// everything, so big units keep a street between the blocks.
-			if ((kinGap >= 0.f) && (kinGap < aisle))
+			// everything, so big units keep a street between the blocks --
+			// and a BIG generator's next cluster starts a blast away from
+			// its own kind.
+			if ((kinGap >= 0.f) && (kinGap < sameAisle))
 				continue;
 			if ((foreignGap >= 0.f) && (foreignGap < aisle))
 				continue;
