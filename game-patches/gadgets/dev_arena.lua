@@ -189,7 +189,11 @@ local sideTotal = {}  -- ally -> units per spawn
 
 local function buildPools()
 	for id, ud in pairs(UnitDefs) do
-		if ud.speed and ud.speed > 0 and not ud.canFly then
+		-- No ships and no subs: anything that REQUIRES water depth beaches
+		-- itself at a land spawn ("it is very funny when boats spawn").
+		-- Hovers and amphibians keep their invitations -- they can walk.
+		if ud.speed and ud.speed > 0 and not ud.canFly
+			and (ud.minWaterDepth or 0) <= 0 then
 			if ud.canResurrect then
 				rezPool[#rezPool + 1] = id
 			elseif ud.canAttack and ud.weapons and #ud.weapons > 0
