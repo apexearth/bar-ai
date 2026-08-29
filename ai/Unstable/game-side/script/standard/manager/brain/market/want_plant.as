@@ -401,6 +401,27 @@ bool WealthWaiver()
 	return OverflowM() >= ((bar > 1.f) ? bar : 140.f);
 }
 
+// A copy bought under the waiver is SAFE FROM THE RETIRE LAW for the replant
+// window: the squeezed-economy test alone still flapped during spend bursts
+// (armshltx reclaimed and rebuilt 5x/game after the first damping), because
+// buying the copy is itself what drains the bank below the squeeze bar.
+array<int> gCopyWaivedAt;
+
+void NoteCopyWaived(int d)
+{
+	while (int(gCopyWaivedAt.length()) <= d)
+		gCopyWaivedAt.insertLast(-1000000);
+	gCopyWaivedAt[d] = ai.frame;
+}
+
+bool RecentCopyWaiver(int d)
+{
+	if ((d < 0) || (d >= int(gCopyWaivedAt.length())))
+		return false;
+	const float win = ai.GetTunable("apex_replant_window_s", TUNE_REPLANT_WINDOW_S);
+	return (ai.frame - gCopyWaivedAt[d]) < int(((win > 1.f) ? win : 600.f) * SECOND);
+}
+
 int PlantTier(int plantId)
 {
 	const int at = Factory::userData[plantId].attr;

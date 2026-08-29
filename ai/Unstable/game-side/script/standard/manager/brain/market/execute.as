@@ -224,6 +224,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		AiLog("apex: copy waived t=" + ai.teamId + " " + w.def.GetName()
 			+ " overflow=" + int(OverflowM()));
+		NoteCopyWaived(int(w.def.id));
 	}
 	if (w.kind == WK_MEX) {
 		// Help the one already going before opening another, exactly as every

@@ -686,7 +686,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 				const bool squeezed = (st3 > 1.f)
 					&& (aiEconomyMgr.metal.current < 0.5f * st3)
 					&& (aiEconomyMgr.metal.income <= aiEconomyMgr.metal.pull);
-				if (!squeezed)
+				if (!squeezed || RecentCopyWaiver(fd))
 					covered = false;
 			}
 			if (covered) {

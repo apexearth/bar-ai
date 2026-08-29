@@ -3,50 +3,75 @@
 ## 2026-08-28 (night) — THE OVERFLOW CAMPAIGN: his goal list, status ledger
 
 Goal set tonight: "Fix and validate (through auditing) the mentioned issues
-until all the ones I've mentioned are complete." The list, each with status:
+until all the ones I've mentioned are complete." Status after four waves
+(commits 709e550, 1d1f1b8, 224a8c4, 6bb4561):
 
-1. **Super sites never relocate** (his watched 2v2, Archsimkats +100%: t1
-   elected the gantry from 40.0m and failed the SAME site 484,3922 for 3
-   minutes; t0's armaap x6 the same; audit `super-site-stuck` flags all
-   four). WAVE 1 LANDED: `ProbedSite` (sites.as) probes the chosen spot with
-   the engine's own search and walks rings outward (700/1400/2800/5600,
-   rearmost valid candidate wins), cached 30s/def; `apex: site-widen` logs
-   it. VALIDATE: super-site-stuck quiet + gantries FINISH.
-2. **Strategic market too serial when rich** (his hunch "thinks too slowly
-   because we're always full on metal" -- confirmed: SuperInFlight() was
-   one-frame-at-a-time regardless of wealth; t1 threw away 46% of 1.27M
-   metal at 1,430 m/s). WAVE 1 LANDED: SuperFlightCap = 1 +
-   OverflowM/apex_super_flight_per (140). VALIDATE: `wealth-unspent` audit
-   (flags >30% excess at >200 m/s).
-3. **The overflow ladder: nanos -> second gantry -> nukes/LRPC/endgame**
-   (his ruling; 189 nanos standing = the forwarding ladder saturated, and
-   the copy ban refused 247 copies in that game). WAVE 1 LANDED:
-   WealthWaiver (overflow >= apex_copy_overflow_m 140) lifts the plant-copy
-   ban and the one-advanced-plant-at-a-time serialization; `apex: copy
-   waived` logs each. VALIDATE: a rich team fields a second gantry / more
-   supers; invariants check stays meaningful (waived copies log separately).
-4. **T1 air army after T2 air** ("stop making T1 air army when we have T2
-   available"). WAVE 1 LANDED: production.as mutes armed fliers from a T1
-   air plant once an own T2+ air plant stands (builders/scouts keep
-   flowing). VALIDATE: `t1-air-after-t2` audit.
-5. **Mex guards materialize** + **front towers** -- the orders-that-don't-
-   stick family below; his added observations: "our builders easily get
-   interrupted during their walk to the front... we don't have many cons
-   near the front line, they usually star near the base." OPEN, next after
-   wave-1 validation; re-measure completion on the exception-fixed build
-   first.
-6. **The 156x exec loop** -- "sounds like a bug in some core mechanism -
-   maybe the root of many of our issues hidden in there?" OPEN (trace one
-   exec through Requests::Take branch logging).
-7. **Eco player AFK second half** (rear economist poorest at 13m). OPEN.
-8. **Nano turret reclaim** -- see the mechanism-gap entry below (C++: drop
-   the IsMetalFull abort or bind CmdReclaimUnit). OPEN, needs a DLL build.
-9. **Split the economy into separate clusters** ("Better if only half our
-   economy blows up instead of the entire thing"). OPEN, undesigned --
-   placement change, relates to the farm/lattice.
+1. **Super sites never relocate** -- LANDED + MEASURED. ProbedSite ring
+   search + blocked-ground feedback; site-widen fired 34-67x/game, s106
+   rerun super-site-stuck quiet. Residue: armaap/armamsub still stick
+   occasionally (facing/exit test invisible to the probe; the blocked-pos
+   note now breaks the repeats).
+2. **Strategic market too serial when rich** -- LANDED + MEASURED.
+   SuperFlightCap = 1 + overflow/140. wealth-unspent audit OK in all four
+   validation games (pre-fix: 46% thrown away); team metal-wasted 34->17%.
+3. **The overflow ladder (nanos -> second gantry -> supers)** -- LANDED +
+   MEASURED. WealthWaiver; 13-14 gantries + silo fleets fielded per 2v2;
+   the retire law keeps waiver-bought copies unless the economy is
+   squeezed, plus a per-def no-retire window for apex_replant_window_s
+   after a waived buy (the squeeze test alone flapped: armshltx rebuilds
+   7 -> 5 -> 0 in s45/s107 with the window).
+4. **T1 air army after T2** -- LANDED + MEASURED. t1-air-after-t2 audit OK
+   in every game since.
+5. **Front towers / mex guards** -- THE SILENT KILLER IS FIXED; the next
+   face is now visible. Pre-fix every bt=7 task death was
+   why=unreach-safe (OnTravelEnd's safe-reach veto refuses threatened
+   ground -- exactly where a tower is wanted; s43: 960 front elections
+   won, 0 built, all defence task deaths unreach-safe).
+   DEFENCE/BUNKER/BIG_GUN now test pure reachability. Post-fix (s45, a
+   contested 2v2 loss): guard-tower FRAMES now start at the front --
+   armguard=54 in finish-before-founding, hurt-retreat=42 -- and die to
+   enemy fire, with Take's ThreatFor veto refusing to re-man a hot frame.
+   So the family's mechanical half is closed and the remaining half is
+   POLICY: how far forward towers are sited and whether their builders
+   get escorts. That is a design question for apexearth, not a bug.
+   Mex-guard tower share of orders rose 32% -> 67% (s43 -> s44).
+6. **The 156x exec loop** -- ROOT-CAUSED + FIXED. His "bug in some core
+   mechanism" was IBuilderTask::OnTravelEnd aborting BEFORE Execute (no
+   site-fail, fails=0) on CanReachAtSafe, with a deterministic site
+   re-elected into the veto forever. Fixed by feedback (NoteBuildBlocked
+   + ProbedSite skip + plant/tech lanes probed). s106 rerun: plant exec
+   loops 21 -> 2.
+7. **Eco player AFK** -- FIXED BY #6, awaiting his eyes. t5 (the rear
+   pocket): income 13.2 -> 114.6 m/s, factories 0 -> 3, worst commIdle
+   36% -> 16%.
+8. **Nano turret reclaim** -- LANDED + FIRING. C++: metal-full abort and
+   metal-empty gate behind apex_nano_space_reclaim (default on; engine
+   truth checked -- area reclaim eats features only, META_KEY not
+   CONTROL_KEY takes units); CmdReclaimUnit bound; script NanoReclaimAssist
+   piles idle nanos onto claimed reclaim victims (nano-assist x38 in s43).
+9. **Eco cluster split** -- LANDED, AWAITING s44: big generators cap their
+   cluster at half their standing fleet and part clusters by
+   apex_blast_aisle (500).
 
 ArmyTarget ally-share: CONFIRMED FIXED by him tonight ("our game
 performances did a lot better") -- entry deleted per the lifecycle rule.
+
+Open residue, this campaign:
+- armmex unreach-safe churn (156-228/game): mex claims elected at spots
+  the walker cannot safely reach. Correct refusals, wasteful elections --
+  election-side threat pricing is the lever if it grows.
+- s43 (a loss) abandoned 719 nanoframes vs 87-312 elsewhere -- a losing
+  base abandons everything; do not read it as a regression without a
+  same-outcome control.
+- The task-die why= distribution is the family's instrument now; any new
+  face shows up there first.
+- armmakr (T1 converter) reclaim-rebuild loop, 11-16/game: the converter
+  obsolete law eats makers the convert want then re-buys. Same shape the
+  plant retire law had; needs its own waiver/window pass.
+- Radar at the front still dies why=unreach-safe (sense-churn 290 execs
+  for 29 radars) -- deliberately NOT exempted: walking a builder into
+  fire for an unarmed radar is a real loss. If forward intel matters
+  more than that, it is a pricing question.
 
 ## 2026-08-28 (night) — THE ORDERS-THAT-DON'T-STICK FAMILY (next campaign, top priority)
 
