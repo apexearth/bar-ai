@@ -13,19 +13,17 @@ session: candidates are memoizing RiskFill across defs in one pass, and
 capping DefSiteFill's per-tick def count. Do not add more candidate
 generators to the protect stack before this.
 
-## 2026-08-29 — flanking exists but never where he watches (his call needed)
+## 2026-08-29 — flanking: charger question RULED, two structural gaps remain
 
-"we still just walk straight into enemy army and 'duke it out'... 1 titan
-walking around the side would have been very successful." Attributed:
-AttackTask.cpp rolls a flank via on 35% of ATTACK tasks (apex_flank_pct,
-logged `apex: flank`) -- 13 rolls in the 43-min Isthmus win, ZERO in the
-tight Glacier games he watched. Three gaps: (1) the via needs an approach
-over apex_flank_min_dist=1200, and tight-map targets sit closer; (2)
-DEFEND-pool fights (most of a defensive game) have no flank concept at
-all; (3) chargers NEVER flank -- his own Behemoth ruling ("terribly slow
-so its less good for them"), which today's Titan wish contradicts. Needs
-his ruling on the charger exception and whether defend-promoted pushes
-should flank; not a tuning knob.
+His ruling (same day): Behemoths through the middle (slow), Titans may take
+the side — and the classes were never actually conflated in code (armthor
+has no melee attr; it is a colossus by cost and already rolls the flank
+via). The charge doctrine (never recalled, richest-in-reach set-target)
+landed in 0ab7ded. Still open, structural: (1) the flank via needs an
+approach over apex_flank_min_dist=1200 — tight-map targets sit closer, so
+his Glacier games saw zero flanks (vs 13 on Isthmus); (2) DEFEND-pool
+fights, most of a defensive game, have no flank concept at all. Both are
+design work, not knobs.
 
 The geo-abandonment check (his ask: con abandoned a damaged build while
 allied combat idled nearby) needs the `apex: con-retreat` line to carry
