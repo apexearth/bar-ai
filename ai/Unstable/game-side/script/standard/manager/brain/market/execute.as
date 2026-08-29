@@ -540,12 +540,29 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				if (wantN > 1) {
 					int opened = 0;
 					const int baseSpoke = int(unit.id) & 7;
+					// ACROSS EVERY LINE, NOT ONE RING (his watch at 46m: one
+					// cluster of 217 turrets, bare gantries, batch +1 with
+					// covered=662 and tooFar=77k -- the extras all aimed at
+					// one site whose 8 spokes fill instantly, at a ring step
+					// tighter than the cover radius). Round-robin over the
+					// standing factories, ring step wider than cover, so the
+					// bank turns into lathe AROUND the lines everywhere.
+					const uint nFacs = Factory::gFacUnits.length();
 					for (int k = 1; k < wantN; ++k) {
+						AIFloat3 baseK = nSlot;
+						if (nFacs > 0) {
+							CCircuitUnit@ fK = Factory::gFacUnits[uint(k) % nFacs];
+							if (fK !is null) {
+								const AIFloat3 fp = fK.GetPos(ai.frame);
+								if (OnMap(fp))
+									baseK = fp;
+							}
+						}
 						const float angK = float((baseSpoke + k) & 7)
 								* 0.785398f + 0.3926991f;
-						const AIFloat3 pk = nSlot
+						const AIFloat3 pk = baseK
 								+ AIFloat3(cos(angK), 0.f, sin(angK))
-								* (96.f + 40.f * float((k >> 3) + 1));
+								* (110.f + 80.f * float(k >> 3));
 						if (!OnMap(pk))
 							continue;
 						bool mk = false;
