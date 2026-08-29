@@ -74,9 +74,18 @@ s46 (57.9m loss, the wave-6 validation) then localized what remains:
   verbatim, at 2% waste. The spend PLUMBING is done; WHAT the overflow
   may buy mid-game is his reserved composition decision (affordability
   ramp on T3 unit bids: mass first, T3 from surplus).
-- Audit gap, cosmetic: waived PARALLEL plant starts (non-copy) print no
-  'copy waived' line, so adv-plant-overlap cannot exempt them; add an
-  'apex: plant-par waived' log next deploy.
+- Audit gap CLOSED (860e8f0): plant-par waived logs + audit exemption.
+
+BOTH RESERVED RULINGS TAKEN AND LANDED (2026-08-29, 860e8f0):
+- T3 pacing: "Ramp T3 bids" -- apex_unit_afford_s (60s of income) fades
+  every unit bid toward zero at the full bill, no tier table. Validated
+  s47 (won): armyReal 124k/159k standing (vs 97k/0.4k in the s46 loss),
+  T3 fielded only by 390-1055 m/s economies, overlap pairs 16 -> 2.
+- Front towers: "Both" -- apex_def_setback (250) steps front sites back
+  toward home inside tower range; escorts already cover tower builders
+  (EscortShortfall counts every worker away from the farm). s47 landed
+  its first standing front tower; a DEFENSIVE game or his watching is
+  the real proof -- wins generate little front pressure to measure.
 
 Open residue, this campaign:
 - armmex unreach-safe churn (156-228/game): mex claims elected at spots
