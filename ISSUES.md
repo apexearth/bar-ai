@@ -1,5 +1,22 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 (arena) — amphibious units act cowardly (OPEN)
+
+apexearth, watching arena rounds: "Not sure why but our amphibious tanks
+act very very cowardly. Same with platypus, maybe it is an amphibious
+behavior we have." Suspects, unattributed: (1) the standoff-row system
+holding short-range brawlers at max range (apex_brawl_pass=0 default --
+the arm built for exactly this measured neutral at the OLD noise floor,
+re-test with the big-battle instrument); (2) amph-specific role/terrain
+logic in CircuitAI (diver/submarine gates, water threat layer). Attribute
+before touching either.
+ATTRIBUTION 1: retreat threshold is NOT it (floor 0.08 + cost/3000 caps
+Platypus at 17% hp, Triton at 50%); no amph gate exists in fight logic
+(grep: amph only affects squad grouping affinity). Remaining suspect is
+the standoff ring holding short-range rows at the squad's longest range
+-- apex_brawl_pass is the existing arm, re-test with the big-battle
+instrument; if positive, flip its default.
+
 ## 2026-08-29 — THE ARENA SURVEY: close-fight micro is engine-bound at parity
 
 His instrument (dev_arena pure/random), his +15% target, six mechanisms

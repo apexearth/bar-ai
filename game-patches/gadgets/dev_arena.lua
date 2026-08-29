@@ -566,13 +566,25 @@ end
 -- its resurrector's side, or its kills mark the round dirty and the rez
 -- rounds all get dropped.
 function gadget:UnitCreated(unitID, unitDefID, teamID, builderID)
-	if not active or not builderID then
+	if not active then
 		return
 	end
-	if spawned[0][builderID] then
+	if builderID and spawned[0][builderID] then
 		spawned[0][unitID] = true
-	elseif spawned[1][builderID] then
+		return
+	end
+	if builderID and spawned[1][builderID] then
 		spawned[1][unitID] = true
+		return
+	end
+	-- No builder attribution (some engines pass none for resurrection):
+	-- in pure mode a unit created mid-round on an arena ally can only be
+	-- a resurrection product; count it for its side.
+	if PURE then
+		local _, _, _, _, _, aa = Spring.GetTeamInfo(teamID, false)
+		if aa == 0 or aa == 1 then
+			spawned[aa][unitID] = true
+		end
 	end
 end
 
@@ -587,6 +599,23 @@ function gadget:UnitDestroyed(unitID, unitDefID, teamID, attackerID)
 		return  -- terrain, self-destruct, or our own end-of-round cleanup
 	end
 	if not (spawned[0][attackerID] or spawned[1][attackerID]) then
+		-- Pure mode has exactly three unit sources: the spawns, the parked
+		-- starters, and resurrection. A live non-parked attacker on an arena
+		-- ally can only be a resurrection the create-hook missed -- adopt it.
+		if PURE and not parked[attackerID] then
+			local at = Spring.GetUnitTeam(attackerID)
+			local aa = at and select(6, Spring.GetTeamInfo(at, false))
+			if aa == 0 or aa == 1 then
+				spawned[aa][attackerID] = true
+				return
+			end
+		end
+		local adid = Spring.GetUnitDefID(attackerID)
+		Spring.Echo(string.format(
+			"[BARAI_ARENA] dirty round=%d atk=%s team=%s parked=%s",
+			roundNo, (adid and UnitDefs[adid].name) or "?",
+			tostring(Spring.GetUnitTeam(attackerID)),
+			tostring(parked[attackerID] ~= nil)))
 		dirty = true
 	end
 end

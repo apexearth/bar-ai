@@ -1,5 +1,15 @@
 # What apexearth wants from this AI
 
+**2026-08-29 (arena watching) — encirclement doctrine.** "We tend to push into
+enemies which are backing up and forming an encirclement around us. This game
+gives a damage bonuses when you encircle your enemies. So if we push in and let
+them spread out and go around us, we're going to take more damage. Preferably
+we all shift to one side and try to wrap around the edge of their line and then
+swallow them." (BAR's flankingBonus is the mechanic: off-facing hits do bonus
+damage, so being wrapped multiplies incoming DPS.) Squad engagements should
+bias to one END of the enemy line and roll it up, never press the centre of a
+spreading line.
+
 ## OPEN HINT (2026-08-29): "Remember radar might just be set wrong so you
 can tweak it." First instrumentation: builds 10-13 T1 + 1-3 advanced per
 game (stock: up to 26 T1), median farthest radar 3,248 elmos from home —
