@@ -1686,6 +1686,10 @@ const float TUNE_DEF_SETBACK = 250.f;
 //   base"). 0 disables the overflight and stock mex-cluster scouting is all
 //   that remains.
 const float TUNE_SCOUT_OVER_S = 45.f;
+// ECO_ROLE -- master switch for the rear-specialist election and everything
+//   behind it (army suppression, quality bias). OFF by his ruling
+//   2026-08-29: "it does *not* work"; 1 re-arms the experiment.
+const float TUNE_ECO_ROLE = 0.f;
 // GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
 //   income: one shared line the whole team's nanos man, so one team purse.
 //   At 100s the ~9.3k bill clears right at ~100 team metal/s, his stated

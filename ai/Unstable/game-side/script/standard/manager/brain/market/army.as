@@ -628,6 +628,14 @@ bool gEcoDiagDone = false;
 int gEcoRoleAt = -999999;
 bool EcoRoleActive()
 {
+	// DISABLED BY HIS RULING (2026-08-29, watching: "Let's disable the eco
+	// role for now because it does *not* work"). The election, the army
+	// suppression and the quality bias all sit behind this one gate;
+	// apex_eco_role=1 re-arms the whole machinery for a future experiment.
+	if (ai.GetTunable("apex_eco_role", TUNE_ECO_ROLE) < 0.5f) {
+		gEcoRole = false;
+		return false;
+	}
 	if (ai.frame < gEcoRoleAt + 10 * SECOND)
 		return gEcoRole;
 	gEcoRoleAt = ai.frame;

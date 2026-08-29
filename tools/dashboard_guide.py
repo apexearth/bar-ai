@@ -353,6 +353,9 @@ GROUPS = [
                  ("TUNE_SCOUT_OVER_S", "how often an idle air scout overflies "
                   "the enemy base — lower is fresher intel and more dead "
                   "Peepers; 0 disables the overflight"),
+                 ("TUNE_ECO_ROLE", "master switch for the rear-specialist "
+                  "role — 0 (current) means every player plays the full "
+                  "game; 1 re-arms the eco-specialist experiment"),
                  ("TUNE_ANTINUKE_INCOME", "the income at which insurance "
                   "(antinuke, shields) starts being worth buying"),
              ]},

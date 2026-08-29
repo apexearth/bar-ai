@@ -392,6 +392,7 @@ local NAMES = {
 	"apex_unit_afford_s",
 	"apex_aid_respond",
 	"apex_scout_over_s",
+	"apex_eco_role",
 	"apex_flank_deep_pct",    -- AttackTask: share of flanking squads whose via sits at the MAP EDGE (35)
 	"apex_def_setback",
 	"apex_gantry_insure",
