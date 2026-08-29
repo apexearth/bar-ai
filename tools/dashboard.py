@@ -47,6 +47,7 @@ ANALYSIS_TOOLS = {
     "trace_flow": ("trace_flow.py", False),
     "deaths": ("deaths.py", False),
     "scaling": ("scaling.py", False),
+    "wdeaths": ("wdeaths.py", False),
 }
 
 DEPLOY_ACTIONS = {
