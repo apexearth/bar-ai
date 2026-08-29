@@ -1,5 +1,28 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 — perf spikes attributed: the builder election, protect stack inside it
+
+His standing complaint ("We still have performance spikes in the game which
+we need to fix"), measured on the 43-min Isthmus win (20260829-161430):
+`hk.maketask.builder` 107.4s total, WORST SINGLE CALL 126ms (a visible
+hitch); inside it the protect stack sums ~66s (want.protect 30.2s +
+prot.loop 16.2s + prot.sites 10.2s + prot.slot 9.8s). DefSiteFill runs per
+tower def with RiskFill each pass, and the 2026-08-29 choke-gate and
+guard-forward candidates feed this exact path. Optimization is its own
+session: candidates are memoizing RiskFill across defs in one pass, and
+capping DefSiteFill's per-tick def count. Do not add more candidate
+generators to the protect stack before this.
+
+## 2026-08-29 — planned misstep checks needing one C++ log field
+
+The geo-abandonment check (his ask: con abandoned a damaged build while
+allied combat idled nearby) needs the `apex: con-retreat` line to carry
+POSITION and the def under construction — both in scope at the log site
+(BuilderTask.cpp OnUnitDamaged). Add on the next DLL build cycle, then the
+audit joins it against BARAI_ARMY snapshots (idle = position-stable combat
+units within ~800). The flank detector (every attack entered the enemy's
+front arc) reads BARAI_ARMY tracks alone — no new field needed.
+
 ## 2026-08-29 — long-range survival: two residues after the walk-in fix
 
 The walk-in orders themselves are fixed (radar-aware `prefer` gate + long-gun

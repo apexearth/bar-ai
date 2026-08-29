@@ -559,6 +559,23 @@ def check_structures(text, rep):
             f"{len(stor)} storage(s) built, {stor_m} metal"
             + ("" if not stor else " -- ProposeStore should be dead"))
 
+    # "We have to stop making Gauntlet turrets. Those T1 defenses are not
+    # worth making when we have T2 available." (apexearth 2026-08-29) --
+    # T1 tower metal BUILT after our own T2 start. apex_t1_def_late is the
+    # knob that is supposed to keep this near zero.
+    t2at = {}
+    for m in re.finditer(
+            r"\[BARAI_T2START\] team=(\d+) ally=\d+ frame=(\d+)", text):
+        t2at.setdefault(m.group(1), int(m.group(2)))
+    late = [m for m in builds
+            if m.group(4) in T1_DEF_TOWERS
+            and m.group(1) in t2at and int(m.group(2)) > t2at[m.group(1)]]
+    late_m = sum(int(m.group(5)) for m in late)
+    rep.add("STRUCTURES", late_m <= 500, "t1-towers-after-t2",
+            f"{len(late)} T1 tower(s), {late_m} metal built after T2 start"
+            + ("" if late_m <= 500
+               else " -- the newer guns should have won (apex_t1_def_late)"))
+
     # "We reclaim our T2 labs and then rebuild them." A successful reclaim
     # exec on a def followed by a NEW build of the same def is the loop
     # itself, whatever the def.
