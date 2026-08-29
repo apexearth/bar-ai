@@ -1200,10 +1200,72 @@ def check_overflow_spend(text, rep):
                 "T1 air army stops once T2 air stands")
 
 
+CONRETREAT_RE = re.compile(
+    r"apex: con-retreat t=(\d+) (\S+) hp=([\d.]+) walk=[-\d.]+ "
+    r"at=(\d+),(\d+) job=(\S+)")
+ARMY_RE = re.compile(r"\[BARAI_ARMY\] frame=(\d+) team=(\d+) n=\d+ (.*)")
+ARMY_UNIT_RE = re.compile(r"(\d+):[^:\s]+:([\d.-]+):([\d.-]+):[\d.]+")
+
+
+def check_missteps(text, rep):
+    # "I do wish you could detect missteps in a game. Like ... we started a
+    # geothermal, our con was attacked, so he stopped making it - we had army
+    # standing around in our base and that geo location was not far. They
+    # could have easily been defending that con." (apexearth 2026-08-29)
+    # A build abandoned to damage, above the retreat floor, while >=3 of our
+    # own combat units sat position-stable within 800 elmos. Needs the
+    # position-carrying con-retreat line (DLL builds from 2026-08-29 on).
+    retreats = [m for m in CONRETREAT_RE.finditer(text)
+                if m.group(6) != "-" and float(m.group(3)) >= 0.5]
+    if not retreats:
+        return
+    ours = set(re.findall(r"apex: decide t=(\d+) ", text))
+    snaps = {}   # team -> [(frame, {id: (x, z)})]
+    for m in ARMY_RE.finditer(text):
+        if m.group(2) not in ours:
+            continue
+        units = {u.group(1): (float(u.group(2)), float(u.group(3)))
+                 for u in ARMY_UNIT_RE.finditer(m.group(3))}
+        snaps.setdefault(m.group(2), []).append((int(m.group(1)), units))
+    events = []
+    for m in retreats:
+        team = m.group(1)
+        if team not in snaps:
+            continue
+        # frame of the retreat, from the log line's own [f=...] prefix
+        fm = re.search(r"\[f=(\d+)\][^\n]*" + re.escape(m.group(0)[:60]), text)
+        if not fm:
+            continue
+        frame = int(fm.group(1))
+        rows = snaps[team]
+        before = [r for r in rows if r[0] <= frame]
+        after = [r for r in rows if r[0] >= frame]
+        if not before or not after:
+            continue
+        s0, s1 = before[-1], after[0]
+        rx, rz = float(m.group(4)), float(m.group(5))
+        idle = 0
+        for uid, (x, z) in s0[1].items():
+            if uid not in s1[1]:
+                continue
+            x1, z1 = s1[1][uid]
+            if (x - x1) ** 2 + (z - z1) ** 2 > 60 * 60:
+                continue
+            if (x - rx) ** 2 + (z - rz) ** 2 <= 800 * 800:
+                idle += 1
+        if idle >= 3:
+            events.append(f"{m.group(2)}@{frame // 1800}m job={m.group(6)} "
+                          f"idle={idle}")
+    rep.add("MILITARY", not events, "build-abandoned-army-idle",
+            f"{len(events)} damaged build(s) abandoned with >=3 combat units "
+            f"idle within 800: {'; '.join(events[:4])}"
+            if events else "no damaged build abandoned beside an idle army")
+
+
 CHECKS = [check_health, check_ledger, check_commitments, check_priority,
           check_economy, check_lab_timing, check_placement_sanity,
-          check_military, check_efficiency, check_vs_enemy, check_structures,
-          check_geometry, check_perf, check_overflow_spend]
+          check_military, check_missteps, check_efficiency, check_vs_enemy,
+          check_structures, check_geometry, check_perf, check_overflow_spend]
 
 
 def main():

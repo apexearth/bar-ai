@@ -6489,7 +6489,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..271e21e 100644
+index bc8ff11..07220af 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -6693,7 +6693,7 @@ index bc8ff11..271e21e 100644
  	}
  }
  
-@@ -333,10 +437,82 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -333,10 +437,87 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		return;
  	}
  
@@ -6766,9 +6766,14 @@ index bc8ff11..271e21e 100644
 +	{
 +		const AIFloat3& pos = unit->GetPos(frame);
 +		const AIFloat3 hav = circuit->GetFactoryManager()->GetClosestHaven(pos);
-+		circuit->LOG("apex: con-retreat t=%i %s hp=%.2f walk=%.0f",
++		// Position and the def under construction ride along so the audit can
++		// join this against the army snapshots: a build abandoned to damage
++		// with idle allied combat in reach is the misstep he wants flagged.
++		circuit->LOG("apex: con-retreat t=%i %s hp=%.2f walk=%.0f at=%.0f,%.0f job=%s",
 +				circuit->GetTeamId(), cdef->GetDef()->GetName(), healthPerc,
-+				utils::is_valid(hav) ? sqrtf(pos.SqDistance2D(hav)) : -1.f);
++				utils::is_valid(hav) ? sqrtf(pos.SqDistance2D(hav)) : -1.f,
++				pos.x, pos.z,
++				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "-");
 +	}
  
  	if (target == nullptr) {
@@ -6776,7 +6781,7 @@ index bc8ff11..271e21e 100644
  		manager->AbortTask(this);  // Doesn't call RemoveAssignee
  	}
  }
-@@ -346,6 +522,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -346,6 +527,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  	RemoveAssignee(unit);
  	// NOTE: AbortTask usually does not call RemoveAssignee for each unit
  	if (((target == nullptr) || units.empty()) && !unit->IsMorphing()) {
@@ -6784,7 +6789,7 @@ index bc8ff11..271e21e 100644
  		manager->AbortTask(this);
  	}
  }
-@@ -427,18 +604,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -427,18 +609,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -6817,7 +6822,7 @@ index bc8ff11..271e21e 100644
  	}
  }
  
-@@ -447,13 +631,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -447,13 +636,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  	CCircuitAI* circuit = manager->GetCircuit();
  
  	// FIXME: Replace const 1000.0f with build time?
@@ -6840,7 +6845,7 @@ index bc8ff11..271e21e 100644
  		manager->AbortTask(this);
  		return false;
  	}
-@@ -492,12 +684,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -492,12 +689,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  		if ((buildType != BuildType::GUARD)
  			&& ((executors.size() < 2) || !unit->IsAttrBase()))
  		{
@@ -6863,7 +6868,7 @@ index bc8ff11..271e21e 100644
  				}
  			)
  			return true;
-@@ -529,9 +729,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -529,9 +734,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  	CCircuitDef* cdef = unit->GetCircuitDef();
  	const float range = cdef->GetBuildDistance();
  	const AIFloat3& endPos = GetPosition();
@@ -6891,7 +6896,7 @@ index bc8ff11..271e21e 100644
  		manager->AbortTask(this);
  		return;
  	}
-@@ -542,7 +759,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -542,7 +764,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6902,7 +6907,7 @@ index bc8ff11..271e21e 100644
  		return;
  	}
  
-@@ -565,11 +784,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +789,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6926,7 +6931,7 @@ index bc8ff11..271e21e 100644
  	}
  }
  
-@@ -637,14 +866,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +871,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6983,7 +6988,7 @@ index bc8ff11..271e21e 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +929,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +934,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);

@@ -506,9 +506,14 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 	{
 		const AIFloat3& pos = unit->GetPos(frame);
 		const AIFloat3 hav = circuit->GetFactoryManager()->GetClosestHaven(pos);
-		circuit->LOG("apex: con-retreat t=%i %s hp=%.2f walk=%.0f",
+		// Position and the def under construction ride along so the audit can
+		// join this against the army snapshots: a build abandoned to damage
+		// with idle allied combat in reach is the misstep he wants flagged.
+		circuit->LOG("apex: con-retreat t=%i %s hp=%.2f walk=%.0f at=%.0f,%.0f job=%s",
 				circuit->GetTeamId(), cdef->GetDef()->GetName(), healthPerc,
-				utils::is_valid(hav) ? sqrtf(pos.SqDistance2D(hav)) : -1.f);
+				utils::is_valid(hav) ? sqrtf(pos.SqDistance2D(hav)) : -1.f,
+				pos.x, pos.z,
+				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "-");
 	}
 
 	if (target == nullptr) {

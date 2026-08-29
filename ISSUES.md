@@ -61,16 +61,23 @@ stand floor a builder retreats only when the known attacker's gun reaches
 its spot or the threat map covers it; below 0.5 hp always retreats. Awaiting
 a measured `con-scratch` vs `con-retreat` count on his maps to close.
 
-## 2026-08-29 — Callisto mex@15m halved (21 -> 10) between last night and today
+## 2026-08-29 — Callisto mex@15m regression: bisected to "distributed", ruled kept
 
-Same map, same mode, 6 games each end. The scratch-retreat was active in
-BOTH ends, so it is NOT the cause of this particular drop; the delta window
-holds today's fight changes (ring-hold/radar prefer, arty massing, trade
-withdraw, kite fix, choke gates, guard-forward siting). Most plausible
-shape: the army yields ground more readily now, the enemy roams, expansion
-follows the army. NOT attributed to a single change yet -- his Supreme
-Isthmus watch (eco-vs-military question) and a per-change A/B are the next
-instruments. Do not stack more military caution until this is resolved.
+Full bisect story (all Callisto 1v1 25m, apex-vs-stock mex@15m medians):
+last night 21v16 | today all-off 16v12 | all-on 11v12 and 11v9 (n=10, with
+the eco fixes) | each single member off 11-12 | fight-caution pair off
+12v8. No single member of {arty_mass, losing_floor, choke_gates,
+guard_forward} explains the ~5-mex gap; each costs ~1-2 inside a noise
+floor of +/-3. Exonerated by direct measurement: protect-stack perf
+(0.3-0.4ms/election both arms), army forward position (0.17 vs 0.16),
+defence spend share (6.5% vs 5.8%). Correlated but insufficient: techStart
+2m later on-arm (16.3 -> 18.3m). Trade ratio runs the OTHER way: all-off
+0.36, all-on 0.41, defence-only 0.52 -- the features buy better trades.
+
+apexearth's ruling 2026-08-29: "Keep all on" -- the survival/defence gains
+are what he watched working; grind the map-control cost down mechanism by
+mechanism. Next instrument is the fixed battery trend (proper N across
+days), NOT more one-off arms; stop re-litigating this with 6-game medians.
 
 ## 2026-08-28 (night) — THE OVERFLOW CAMPAIGN: his goal list, status ledger
 
