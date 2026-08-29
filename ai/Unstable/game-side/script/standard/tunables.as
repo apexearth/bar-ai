@@ -2190,9 +2190,13 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 //   realizable energy). The whole basis of DefenceTarget: at 40 metal/s this
 //   is ~1,200 metal, a handful of light towers; at 400 it is ~12,000, enough
 //   to carry a Pulsar. Replaced (expected wave - our own army) / trade, which
-//   collapsed the target to a mex floor exactly as the army grew. Chosen to
-//   clear one heavy gun at hosted-game income, not derived -- measure it.
-const float TUNE_DEF_ECO_S = 30.f;
+//   collapsed the target to a mex floor exactly as the army grew. 30 was
+//   chosen to clear one heavy gun at hosted-game income and starved the low
+//   end: at benchmark's ~25 m/s it budgeted 750 metal of defence for a whole
+//   game while stock stood 11,700-17,800 in the same matches -- the naked
+//   rear the death ledgers measured everywhere. 120 is the measured
+//   recalibration, still far under the pre-target 175%-of-eco runaway.
+const float TUNE_DEF_ECO_S = 120.f;
 // manager/brain/market/want_energy.as, price.as [toggle 0/1] -- Count the
 //   energy draw of work already ORDERED into the pull that prices energy.
 //   Not a magnitude: the quantity added is arithmetic off the catalog
