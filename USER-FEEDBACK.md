@@ -15,6 +15,21 @@ When an entry is completed (landed + he has seen it work, or confirmed live),
 MOVE it to `feedback/<date>.md` — date of the original request. This file
 holds only unresolved asks and standing preferences.
 
+## DONE 2026-08-28 (validated, awaiting his eyes live) — Cross-tier join: T1 cons help the fusion
+
+"I often see a fusion being built and our T1 cons will then go make an
+advanced solar instead of going to help the T2 fusion being made. Our join
+logic seems to only care about assisting our own tier." Three join doors
+all keyed on the WANT's def instead of the standing JOB's: JoinBig (the
+live blocker — want-cost gate + same-def match, and Take runs parallel
+during energy stalls so the downstream fold never ran), JoinFor's CanBuild
+veto even against a standing frame, and SameJob's fusion-only cross-def
+clause. JoinBigEnergy is the new energy-lane door: biggest manned live
+energy job >= apex_join_min_m takes the asker, capability needed only to
+PLACE, walk priced against the job's own bill. Validated: 10 cross-tier
+assists in the seed-91 game (corck/corca -> corfus/corafus frames), zero
+before. Log: `apex: join assist`.
+
 ## DONE 2026-08-28 (validated on 6 games) — Lab-timing audit on reclaim-corrected income
 
 "Update the audit script so we ensure we make our labs at the appropriate
