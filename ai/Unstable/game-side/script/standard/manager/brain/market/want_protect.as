@@ -933,6 +933,9 @@ bool T2DefHandsStanding()
 // enough that the walk is the real cost.
 int gTeethNextScan = 0;
 AIFloat3 gTeethPoint(-1.f, 0.f, -1.f);
+int gDEnds = 0;
+int gDLen = 0;
+int gDBlocked = 0;
 
 Want@ ProposeTeeth(CCircuitUnit@ unit)
 {
@@ -951,11 +954,6 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 		gTeethPoint = AIFloat3(-1.f, 0.f, -1.f);
 		array<int> gidx;
 		Front::GateChokeIdxs(gidx);
-		if (diag || (ai.frame % (60 * SECOND) < 10 * SECOND))
-			AiLog(Factory::T() + "apex: teeth-scan wall=" + wd
-				+ " gates=" + gidx.length()
-				+ " towers=" + gProtPos[PROT_DEF].length()
-				+ " point=" + int(gTeethPoint.x) + "," + int(gTeethPoint.z));
 		// Nearest gate to home first -- his ruling puts the walls BEFORE the
 		// push arrives, so teeth do not wait for the gate's towers (that
 		// prerequisite deadlocked: 14 minutes, 3 towers, none at a gate,
@@ -981,12 +979,16 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 			gidx[gi] = -1;   // consumed for this scan pass
 			AIFloat3 e1;
 			AIFloat3 e2;
-			if (!ai.GetChokePointEnds(gateIdx, e1, e2))
+			if (!ai.GetChokePointEnds(gateIdx, e1, e2)) {
+				++gDEnds;
 				continue;
+			}
 			AIFloat3 span = e2 - e1;
 			const float len = sqrt(span.SqLength2D());
-			if ((len < 32.f) || (len > 1400.f))
+			if ((len < 32.f) || (len > 1400.f)) {
+				++gDLen;
 				continue;
+			}
 			span *= (1.f / len);
 			AIFloat3 outDir = cp - Builder::gHomePos;
 			const float olen = sqrt(outDir.SqLength2D());
@@ -997,17 +999,27 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 			const int nT = int(len / pitch) + 1;
 			for (int k = 0; k < nT; ++k) {
 				AIFloat3 p = e1 + span * (pitch * float(k)) + outDir * 140.f;
-				if (!OnMap(p))
+				if (!OnMap(p)) {
+					++gDBlocked;
 					continue;
+				}
 				array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(p, 40.f);
-				if ((near !is null) && (near.length() > 0))
+				if ((near !is null) && (near.length() > 0)) {
+					++gDBlocked;
 					continue;
+				}
 				gTeethPoint = p;
 				break;
 			}
 			if (OnMap(gTeethPoint))
 				break;
 		}
+		if (diag || (ai.frame % (60 * SECOND) < 10 * SECOND))
+			AiLog(Factory::T() + "apex: teeth-scan wall=" + wd
+				+ " gates=" + gidx.length()
+				+ " towers=" + gProtPos[PROT_DEF].length()
+				+ " point=" + int(gTeethPoint.x) + "," + int(gTeethPoint.z)
+				+ " endsF=" + gDEnds + " lenF=" + gDLen + " blkF=" + gDBlocked);
 	}
 	if (!OnMap(gTeethPoint))
 		return w;

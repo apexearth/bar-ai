@@ -849,9 +849,12 @@ const float TUNE_GATE_DEPTH = 2.f;
 //   outside").
 const float TUNE_TEETH = 1.f;
 // manager/brain/market/want_protect.as [gain] -- What one tooth's share of
-//   breaking a push is worth, a preference priced like apex_mexup_boost;
-//   his ruling is the basis.
-const float TUNE_TEETH_GAIN = 2.f;
+//   breaking a push is worth, on the auction's own value scale: winning
+//   wants carry v>=3 and a tooth's costs price near 70, so 2 gave v=0.03
+//   and lost every election in 24 games; 200 overshot to v~20 and had the
+//   COMMANDER placing teeth at 1.8m over a mex claim. 40 lands a tooth at
+//   v~4: it wins idle nearby hands and loses to real economy.
+const float TUNE_TEETH_GAIN = 40.f;
 // manager/brain/market/want_protect.as [ratio] -- HOW HARD A BUILDER PREFERS
 //   THE GROUND IT IS ALREADY STANDING ON. The defence auction picks a site,
 //   then ValueOf charges the walk to it -- so the choice never saw the cost of
