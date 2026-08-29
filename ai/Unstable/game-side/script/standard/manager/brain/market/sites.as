@@ -658,6 +658,86 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback, CCircuitDef@ mover)
 	return fallback;
 }
 
+// KEEP LOOKING (apexearth, watching a 2v2: a player at 1,400 metal/s held
+// the same failing gantry site for minutes -- "he should keep looking and
+// trying. I actually see a ton of available spots right near home").
+// InteriorSite is a pure function of the farm and axis, so when its answer
+// cannot fit the footprint the C++ search fails at the same anchor forever.
+// Probe the chosen spot with the engine's own site search; when it cannot
+// deliver, walk rings outward around the base -- further out is allowed,
+// unreachable ground is not, and the most rearward candidate on a ring wins.
+array<int> gProbeDefs;
+array<AIFloat3> gProbePos;
+array<int> gProbeAt;
+
+AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in primary)
+{
+	if ((def is null) || !OnMap(primary))
+		return primary;
+	const int did = int(def.id);
+	for (uint i = 0; i < gProbeDefs.length(); ++i) {
+		if ((gProbeDefs[i] == did) && (ai.frame - gProbeAt[i] < 30 * SECOND))
+			return gProbePos[i];
+	}
+	const float seek = 600.f;
+	AIFloat3 found = primary;
+	bool ok = false;
+	{
+		const AIFloat3 s = ai.FindBuildSiteNear(def, primary, seek);
+		if (OnMap(s) && (s.distance2D(primary) <= seek)) {
+			found = s;
+			ok = true;
+		}
+	}
+	if (!ok) {
+		const AIFloat3 c = gFarmSet ? gFarmPos
+				: (Base::gAnchorSet ? Base::gAnchor : primary);
+		float ring = 700.f;
+		for (uint r = 0; !ok && (r < 4); ++r) {
+			float bestFwd = 1e9f;
+			for (int b = 0; b < 8; ++b) {
+				const float ang = float(b) * 0.7853981f;
+				const AIFloat3 cand = c
+						+ AIFloat3(cos(ang), 0.f, sin(ang)) * ring;
+				if (!OnMap(cand) || !ReachableBy(mover, cand))
+					continue;
+				const AIFloat3 s2 = ai.FindBuildSiteNear(def, cand, seek);
+				if (!OnMap(s2) || (s2.distance2D(cand) > seek))
+					continue;
+				const float fwd = Military::ForwardFraction(s2);
+				if (fwd < bestFwd) {
+					bestFwd = fwd;
+					found = s2;
+					ok = true;
+				}
+			}
+			if (ok)
+				AiLog("apex: site-widen t=" + ai.teamId + " " + def.GetName()
+					+ " from=" + int(primary.x) + "," + int(primary.z)
+					+ " to=" + int(found.x) + "," + int(found.z)
+					+ " ring=" + int(ring));
+			ring *= 2.f;
+		}
+	}
+	// Cache even a failed probe: re-running the same arithmetic every
+	// election is the loop this exists to break.
+	bool cached = false;
+	for (uint i = 0; i < gProbeDefs.length(); ++i) {
+		if (gProbeDefs[i] == did) {
+			gProbePos[i] = found;
+			gProbeAt[i] = ai.frame;
+			cached = true;
+			break;
+		}
+	}
+	if (!cached) {
+		gProbeDefs.insertLast(did);
+		gProbePos.insertLast(found);
+		gProbeAt.insertLast(ai.frame);
+	}
+	return found;
+}
+
 AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 {
 	if (!gFarmSet && Base::gAnchorSet && Base::gAxisSet) {

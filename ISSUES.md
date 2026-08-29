@@ -1,5 +1,53 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-28 (night) — THE OVERFLOW CAMPAIGN: his goal list, status ledger
+
+Goal set tonight: "Fix and validate (through auditing) the mentioned issues
+until all the ones I've mentioned are complete." The list, each with status:
+
+1. **Super sites never relocate** (his watched 2v2, Archsimkats +100%: t1
+   elected the gantry from 40.0m and failed the SAME site 484,3922 for 3
+   minutes; t0's armaap x6 the same; audit `super-site-stuck` flags all
+   four). WAVE 1 LANDED: `ProbedSite` (sites.as) probes the chosen spot with
+   the engine's own search and walks rings outward (700/1400/2800/5600,
+   rearmost valid candidate wins), cached 30s/def; `apex: site-widen` logs
+   it. VALIDATE: super-site-stuck quiet + gantries FINISH.
+2. **Strategic market too serial when rich** (his hunch "thinks too slowly
+   because we're always full on metal" -- confirmed: SuperInFlight() was
+   one-frame-at-a-time regardless of wealth; t1 threw away 46% of 1.27M
+   metal at 1,430 m/s). WAVE 1 LANDED: SuperFlightCap = 1 +
+   OverflowM/apex_super_flight_per (140). VALIDATE: `wealth-unspent` audit
+   (flags >30% excess at >200 m/s).
+3. **The overflow ladder: nanos -> second gantry -> nukes/LRPC/endgame**
+   (his ruling; 189 nanos standing = the forwarding ladder saturated, and
+   the copy ban refused 247 copies in that game). WAVE 1 LANDED:
+   WealthWaiver (overflow >= apex_copy_overflow_m 140) lifts the plant-copy
+   ban and the one-advanced-plant-at-a-time serialization; `apex: copy
+   waived` logs each. VALIDATE: a rich team fields a second gantry / more
+   supers; invariants check stays meaningful (waived copies log separately).
+4. **T1 air army after T2 air** ("stop making T1 air army when we have T2
+   available"). WAVE 1 LANDED: production.as mutes armed fliers from a T1
+   air plant once an own T2+ air plant stands (builders/scouts keep
+   flowing). VALIDATE: `t1-air-after-t2` audit.
+5. **Mex guards materialize** + **front towers** -- the orders-that-don't-
+   stick family below; his added observations: "our builders easily get
+   interrupted during their walk to the front... we don't have many cons
+   near the front line, they usually star near the base." OPEN, next after
+   wave-1 validation; re-measure completion on the exception-fixed build
+   first.
+6. **The 156x exec loop** -- "sounds like a bug in some core mechanism -
+   maybe the root of many of our issues hidden in there?" OPEN (trace one
+   exec through Requests::Take branch logging).
+7. **Eco player AFK second half** (rear economist poorest at 13m). OPEN.
+8. **Nano turret reclaim** -- see the mechanism-gap entry below (C++: drop
+   the IsMetalFull abort or bind CmdReclaimUnit). OPEN, needs a DLL build.
+9. **Split the economy into separate clusters** ("Better if only half our
+   economy blows up instead of the entire thing"). OPEN, undesigned --
+   placement change, relates to the farm/lattice.
+
+ArmyTarget ally-share: CONFIRMED FIXED by him tonight ("our game
+performances did a lot better") -- entry deleted per the lifecycle rule.
+
 ## 2026-08-28 (night) — THE ORDERS-THAT-DON'T-STICK FAMILY (next campaign, top priority)
 
 One disease, four faces, all measured today:
@@ -41,7 +89,9 @@ trace ONE of those execs through Requests::Take's branch logging (which
 Log(want,...) label fires 156x) and the C++ task lifecycle. Also open:
 WHY the rear economist is the poorest player at 13m -- its pocket runs
 out of T1 work and nothing routes it to T2/mohos/assist; the commIdle
-number on the tell is the regression check.
+number on the tell is the regression check. (Residue moved from the deleted
+ArmyTarget entry, same player: the eco-role election never fires on
+line-abreast starts -- 0 of 92 targets samples showed eco=1.)
 
 ## 2026-08-28 (late) — army TRADING, not army production, on the 15m tell
 
@@ -69,74 +119,6 @@ NOT the gantry want. Decide with apexearth before wiring: it is his
 composition philosophy. Evidence: matches/gantry-on-s21 vs
 matches/allyshare-on-s21 (same seed, same day, one change).
 
-## 2026-08-28 — 4v4 economic collapse: ArmyTarget charges one player the whole enemy team
-
-His report (Aethermoor Creek, +100%): strong in 1v1, "a lot worse" in 4v4 —
-"we're generally inefficient with our resources... buying expensive stuff a
-little too early instead of devoting that metal into economy."
-
-Mechanism, verified in his own watched games (matches/20260828-171323 4v4 vs
-20260828-170422 1v1, same map/bonus): `ArmyTarget()` (army.as) sets
-`expectedEnemy = max(Military::EnemyArmyCost(), prior)` with **no ally-share
-division** — and `EnemyArmyCost` is the side-wide census. Each of 4 players
-targets 1.2x the ENTIRE enemy team's army on 1/4 the income. Measured: 4v4
-`army=6866/42554` (funded 0.16, gap never closes, end-state census 91,159 vs
-one player's 16,851); 1v1 `army=37717/49027` rising past 1.0 by ~30 min.
-
-The codebase states the missing law THREE times and applies it elsewhere:
-mobile-AA RoleTarget (army.as: "the census sums all enemies while every ally
-instance would otherwise build the full answer"), static-AA want
-(want_protect.as:912, divides by `AllyCount`), and `Military::AllyCount`'s own
-comment (massing.as: "any bar derived from the whole enemy side has to be
-divided by the roster before it is charged to one pool"). ArmyTarget — the
-single most consumed demand figure — never got it.
-
-Downstream of the permanently-saturated gap (audit.json, 4v4 vs 1v1):
-- production.as: `stakeMul` (deficit-scaled, cap 8x) + armyGap keep every
-  line pumping — metal-wasted 2% vs 28%; all income becomes units, thrown
-  away at 60% hopeless-attacks, so ArmyValue never accumulates (feedback loop).
-- want_plant prodTerm: plants ate 8.6% of team metal (32,830/382,106 at 27m)
-  vs 1.2% in the 1v1 (16,880/1,431,145 at 45m).
-- want_protect siteWave/floor (`ArmyTargetFull*0.35`): heavy-tower share 55%
-  at 27m (18,600 heavy vs 14,910 T1) — big guns bought early on 1/4 income.
-- want_tech fundedMul = ArmyValue/ArmyTarget = 0.16 → tech/T2 discounted 6x
-  exactly when falling behind (floorMul partially rescues it).
-- want_super gantry gain reads the same inflated gapF.
-
-Second finding, same 4v4: **the eco-role election never fired** — 0 of 92
-`apex: targets` samples show `eco=1`. `EcoRoleActive` (army.as) requires
-rear-most with margin 1.15 over the median; on line-abreast starts nobody
-clears it, so the rear-economist design built FOR team games elected no one,
-and all four players played front-line-matching-the-world.
-
-Standing inefficiencies visible in BOTH formats (masked by map wealth in 1v1):
-mohos available and lost the auction 51x (4v4) / 212x (1v1) — in the 4v4
-mostly to fusion/AFUS elections with huge stall-priced gains (corafus
-gain=459 at ~25m on quarter income) and to advanced radar. Whether those
-elections stay inflated must be re-judged AFTER the ally-share fix, since
-the army pump is what stalls the energy. (The audit's `first-fusion-ask:
-never` in these games was FALSE — the check grepped the dead pre-market
-`eco fusion ... standing=` spelling; fixed 2026-08-28 to read the market's
-`decide ... energy/energy:*fus` election, which says ~10 min.)
-
-FIX LANDED 2026-08-28 (`AnswerShare()` in army.as, tunable
-`apex_ally_share`): the seen census is scaled by our income share of the
-team (blackboard `minc`, silent allies imputed at the publishers' mean;
-solo = 1.0 so 1v1 arithmetic unchanged). Measured, 3 seeds vs 3 baselines,
-same map/setup: funded @20m 0.25-0.47 -> 0.68-0.86; team metal at 30m
-~420k -> 639k-775k (+65-85%); end army 0.22x enemy census -> 0.76-1.15x;
-mex race won 2/3. AWAITING his watched game before deleting this entry.
-
-Residue to watch, NOT yet attributed:
-- energy-race-10m dipped in the ON arm (46/57/21% vs 68/81%) — early
-  energy build may lag the bigger early expansion; re-read after his game.
-- duplicate ADVANCED AIR plants in the ON arm (coraapx x3-4 per team) —
-  RULED ACCEPTABLE by apexearth 2026-08-28: "Multiple adv air are ok if we
-  are crazy wealthy," and those games ran ~350-430 team metal/s. Only a
-  problem if it appears on a POOR team; do not add a team-wide ban.
-- eco-role election still never fires on line-abreast starts (0/92 samples
-  his game) — decide after the above, the deflated target may be enough.
-
 ## 2026-08-28 — nano turrets cannot be told to reclaim (mechanism gap)
 
 His ask: "We have a lot of constructor units & turrets which could be doing
@@ -150,6 +132,13 @@ neighbour from script today. Fix is C++: either bind `CmdReclaimUnit` on
 `CCircuitUnit` or a unit-target static reclaim task without the metal-full
 abort. Until then reclaim parallelism is constructors only (the claim
 registry in `want_reclaim.as`, 2026-08-28).
+His note 2026-08-28 (night): "nano turrets were able to reclaim prior to
+us doing the big reimagining of the AI so maybe it really is there but we
+just didn't see it" -- consistent with the mechanism above: the stock
+static reclaim task exists but aborts on IsMetalFull(), and at his +100%
+regime the bank is pinned full, so it aborts always. The C++ fix is the
+same either way: drop/gate the metal-full abort (space reclaim matters
+most exactly when full) or bind CmdReclaimUnit.
 
 ## 2026-08-28 — the +100% spend bottleneck (his Titan complaint, half-closed)
 

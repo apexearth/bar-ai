@@ -290,6 +290,23 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				stakeMul = 8.f;
 		}
 	}
+	// T1 AIR ARMY ENDS AT T2 (apexearth: "We need to stop making T1 air army
+	// when we have T2 available"): armed fliers from a basic air plant price
+	// out once our own advanced air plant stands -- the same metal buys the
+	// advanced airframe. Builders and unarmed scouts keep flowing.
+	bool t1AirMute = false;
+	if ((PlantClass(fid) == PC_AIR) && (PlantTier(fid) == 1)) {
+		for (uint ad = 1; ad < gOwnCount.length(); ++ad) {
+			const int adi = int(ad);
+			if ((gOwnCount[ad] <= 0) || Catalog::gMobile[adi]
+				|| (Catalog::gBuildsList[adi].length() == 0))
+				continue;
+			if ((PlantClass(adi) == PC_AIR) && (PlantTier(adi) >= 2)) {
+				t1AirMute = true;
+				break;
+			}
+		}
+	}
 	// Best power-per-cost this line can produce, for normalizing army bids.
 	float linePPC = 0.f;
 	for (uint i = 0; i < prods.length(); ++i) {
@@ -316,6 +333,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
+			continue;
+		if (t1AirMute && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
 			continue;
 		// SUPPORT: mobile eyes and static-cover. One radar and one jammer per
 		// squad that can actually take one (apexearth: "we only need up to 2 of

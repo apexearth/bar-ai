@@ -1652,6 +1652,16 @@ const float TUNE_SUPER_PER_INCOME = 150.f;
 // SUPER_SHARE: the slice of total economic power the strategic market may
 //   claim as a want's gain. Scaled by how much budget is left after the bill.
 const float TUNE_SUPER_SHARE = 0.25f;
+// SUPER_FLIGHT_PER [metal/s of overflow] -- one strategic frame may stand
+//   half-built per this much structural overflow, on top of the base one.
+//   The single-frame focus law is for an economy that must choose; one
+//   throwing metal away has already chosen.
+const float TUNE_SUPER_FLIGHT_PER = 140.f;
+// COPY_OVERFLOW_M [metal/s] -- the wealth waiver: overflow above this lifts
+//   the plant-copy ban and the one-advanced-plant-at-a-time serialization
+//   ("make more nanos around our gantry and if we can't do that then make
+//   another gantry"; "multiple adv air are ok if we are crazy wealthy").
+const float TUNE_COPY_OVERFLOW_M = 140.f;
 // GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
 //   income: one shared line the whole team's nanos man, so one team purse.
 //   At 100s the ~9.3k bill clears right at ~100 team metal/s, his stated

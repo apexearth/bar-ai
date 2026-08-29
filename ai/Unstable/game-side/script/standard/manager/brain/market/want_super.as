@@ -210,13 +210,20 @@ int SuperHave(int sc)
 	return ((sc >= 0) && (sc < int(gSuperHave.length()))) ? gSuperHave[sc] : 0;
 }
 
-// ONE STRATEGIC FRAME AT A TIME. Not a cap on how many we own -- a cap on how
-// many stand half-finished at once, which is the rule the base already follows
-// for everything expensive: put the build power on the one frame.
+// STRATEGIC FRAMES AT ONCE: one, plus one per apex_super_flight_per m/s of
+// structural overflow. The single-frame law is the focus rule for an economy
+// that must choose; overflow is the economy saying it has nothing to focus
+// FROM ("gotta go somewhere - gotta do something").
+int SuperFlightCap()
+{
+	const float per = ai.GetTunable("apex_super_flight_per", TUNE_SUPER_FLIGHT_PER);
+	return 1 + int(OverflowM() / ((per > 1.f) ? per : 140.f));
+}
+
 bool SuperInFlight()
 {
 	SuperCensus();
-	return gSuperFlight > 0;
+	return gSuperFlight >= SuperFlightCap();
 }
 
 // Where a strategic static goes. Silos, gantries and anti-nukes go as deep in
@@ -347,7 +354,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		if ((Catalog::gBuildsList[d].length() > 0)
 			&& ((ComCountOf(d, CS_FINISHED)
 				+ ComCountManned(d, CS_FRAMED | CS_ORDERED)) >= 1)
-			&& (DupBpSubstMul(d) < 1.f))
+			&& (DupBpSubstMul(d) < 1.f)
+			&& !WealthWaiver())
 			continue;
 		const float bill = SuperBill(d);
 		// ONE LINE, THE TEAM'S PURSE (apexearth 2026-08-28: "I saw a team
@@ -360,7 +368,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		float teamInc = (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
 		float classBudget = budget;
 		if (sc == SC_GANTRY) {
-			if (AdvPlantInFlight()) {
+			if (AdvPlantInFlight() && !WealthWaiver()) {
 				AdvDeferLog("gantry");
 				continue;
 			}
@@ -401,6 +409,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		} else {
 			at = SuperSite(unit, sc);
 		}
+		at = ProbedSite(Catalog::Def(d), unit.circuitDef, at);
 		if (!OnMap(at))
 			continue;
 		// AFFORDABILITY IS THE GAIN. What is left of the budget once the bill
@@ -498,7 +507,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		if ((ap !is null)
 			&& ((Factory::userData[int(ap.id)].attr
 				& (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
-			&& AdvPlantInFlight())
+			&& AdvPlantInFlight() && !WealthWaiver())
 		{
 			AdvDeferLog("air:" + ap.GetName());
 			@ap = null;
@@ -508,7 +517,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		{
 			const float bill = SuperBill(int(ap.id));
 			if (bill < budget) {
-				const AIFloat3 at3 = SuperSite(unit, SC_AIRPLANT);
+				const AIFloat3 at3 = ProbedSite(ap, unit.circuitDef,
+						SuperSite(unit, SC_AIRPLANT));
 				if (OnMap(at3)) {
 					const float afford = (budget - bill) / budget;
 					const float gain = power * share * afford

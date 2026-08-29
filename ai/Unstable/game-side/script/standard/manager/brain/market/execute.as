@@ -215,11 +215,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			+ ComCountManned(int(w.def.id), CS_FRAMED | CS_ORDERED) >= 1)
 		&& (DupBpSubstMul(int(w.def.id)) < 1.f))
 	{
-		AiLog("apex: INVARIANT plant-copy refused t=" + ai.teamId + " "
-			+ w.def.GetName()
-			+ " fin=" + ComCountOf(int(w.def.id), CS_FINISHED)
-			+ " coming=" + ComCountManned(int(w.def.id), CS_FRAMED | CS_ORDERED));
-		return null;
+		if (!WealthWaiver()) {
+			AiLog("apex: INVARIANT plant-copy refused t=" + ai.teamId + " "
+				+ w.def.GetName()
+				+ " fin=" + ComCountOf(int(w.def.id), CS_FINISHED)
+				+ " coming=" + ComCountManned(int(w.def.id), CS_FRAMED | CS_ORDERED));
+			return null;
+		}
+		AiLog("apex: copy waived t=" + ai.teamId + " " + w.def.GetName()
+			+ " overflow=" + int(OverflowM()));
 	}
 	if (w.kind == WK_MEX) {
 		// Help the one already going before opening another, exactly as every

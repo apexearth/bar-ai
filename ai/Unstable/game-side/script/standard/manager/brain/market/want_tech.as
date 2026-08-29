@@ -257,7 +257,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// air mandate defers on too.
 		if (((Factory::userData[d].attr
 			& (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
-			&& AdvPlantInFlight())
+			&& AdvPlantInFlight() && !WealthWaiver())
 		{
 			AdvDeferLog("tech:" + Catalog::Def(d).GetName());
 			continue;

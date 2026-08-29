@@ -214,6 +214,10 @@ GROUPS = [
                  ("TUNE_REZ_SCAN_S", "how often ONE bot looks for its next "
                   "wreck; lower is more responsive, at one feature query per "
                   "bot per period"),
+                 ("TUNE_REZ_RICH_M", "a corpse at least this rich is "
+                  "resurrected even while the eat-everything doctrine runs — "
+                  "lower resurrects more of the battlefield instead of "
+                  "eating it"),
              ]},
         ],
     },
@@ -323,6 +327,14 @@ GROUPS = [
                   "quarter of the gain)"),
                  ("TUNE_SUPER_PUSH", "an affordable strategic want skips the "
                   "category lottery and goes straight through"),
+                 ("TUNE_SUPER_FLIGHT_PER", "one MORE strategic frame may stand "
+                  "half-built per this much overflowing metal/s — lower and a "
+                  "rich, wasteful economy starts gantries, silos and guns in "
+                  "parallel sooner"),
+                 ("TUNE_COPY_OVERFLOW_M", "the wealth waiver: overflow above "
+                  "this metal/s lifts the plant-copy ban and the one-advanced-"
+                  "plant-at-a-time rule — lower and a wasteful economy earns "
+                  "its second gantry (or parallel T2 plants) earlier"),
                  ("TUNE_ANTINUKE_INCOME", "the income at which insurance "
                   "(antinuke, shields) starts being worth buying"),
              ]},

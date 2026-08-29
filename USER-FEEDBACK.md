@@ -31,6 +31,26 @@ budget/host floor, antinuke floor) is structural income; the gantry team
 budget reads the new TV_MINC_NET lane. Move to feedback/ archive once he
 confirms live.
 
+## IN PROGRESS — Spend the overflow: keep looking, escalate the ladder (2026-08-28, night)
+
+Watching a 2v2 he won (Archsimkats Valley +100%): "1 of our guys never made
+a Gantry... he should keep looking and trying. I actually see a ton of
+available spots right near home... We make 600+m/s but only use ~100. If we
+aren't going to make gantry then we should be spamming nukes, making tons
+of LRPC, end game weapons, etc... Gotta go somewhere - gotta do something."
+Rulings attached: "make more nanos around our gantry and if we can't do
+that then make another gantry"; "Blue... could certainly afford a second
+gantry. They made some LRPC, could just keep going and making more"; "We
+need to stop making T1 air army when we have T2 available"; "we need to be
+willing to build further outside our base/current location"; "separat[e]
+out where we put our economy so it isn't all in one spot. Better if only
+half our economy blows up instead of the entire thing."
+
+Status ledger: ISSUES.md "THE OVERFLOW CAMPAIGN" entry. Wave 1 (site probe
+ladder, overflow-scaled strategic parallelism, wealth waiver on the copy
+laws, T1-air mute) landed with three audits; validation run next, then his
+eyes. Eco-cluster split and nano-reclaim C++ still open.
+
 ## UNRESOLVED (landed, awaiting his eyes) — Exit lanes and pooled advsols (2026-08-28, watching live)
 
 Two observations from the NullAI watch game, both landed same hour:
@@ -141,15 +161,6 @@ antinuke and gantry untouched; (2) a seen enemy LRPC (derived def set, any
 faction) joins the shield want's bombardment basis and waives its
 1800-elmo nearness gate, which a cross-map gun never trips. Logs:
 `apex: enemy LRPC seen`.
-
-## UNRESOLVED — 4v4 resource efficiency (2026-08-28)
-
-Watching Aethermoor Creek +100%: "At +100% bonus 1v1 we do really well...
-But when its a 4v4 we do a lot worse... we're generally inefficient with our
-resources... likely just buying expensive stuff a little too early instead
-of devoting that metal into economy." Root cause traced same day (ISSUES.md
-2026-08-28 ArmyTarget entry): each player answered the whole enemy team's
-census. `apex_ally_share` landed against it; measurement in flight.
 
 ## UNRESOLVED (landed, awaiting his eyes) — Squad falls back together; rear at 60% (2026-08-28)
 

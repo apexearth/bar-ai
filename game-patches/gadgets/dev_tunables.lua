@@ -384,6 +384,8 @@ local NAMES = {
 	"apex_fusion_min_energy",
 	"apex_super_self_frac",
 	"apex_gantry_afford_s",
+	"apex_super_flight_per",
+	"apex_copy_overflow_m",
 	"apex_gantry_insure",
 	"apex_offense_def_floor",
 	"apex_gantry_host_inc",

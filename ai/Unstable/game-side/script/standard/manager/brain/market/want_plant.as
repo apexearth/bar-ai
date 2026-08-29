@@ -390,6 +390,17 @@ float DupBpSubstMul(int d)
 	return pbp / nbp;
 }
 
+// THE WEALTH WAIVER. The copy ban and the one-advanced-plant-at-a-time
+// serialization both argue "the cheaper substitute exists"; structural
+// overflow above the drain of a whole extra line is that argument already
+// falsified (watched 2v2: 189 nanos standing, 46% of 1.27M metal thrown
+// away, no second line permitted anywhere).
+bool WealthWaiver()
+{
+	const float bar = ai.GetTunable("apex_copy_overflow_m", TUNE_COPY_OVERFLOW_M);
+	return OverflowM() >= ((bar > 1.f) ? bar : 140.f);
+}
+
 int PlantTier(int plantId)
 {
 	const int at = Factory::userData[plantId].attr;

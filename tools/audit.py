@@ -1053,10 +1053,106 @@ def check_placement_sanity(text, rep):
                     + ("" if med <= 200 else " -- the farm is on the lawn"))
 
 
+
+def check_overflow_spend(text, rep):
+    """The overflow campaign (apexearth 2026-08-28, watching a 2v2 he won):
+    a player at 1,430 m/s spent 466 and threw 46% of 1.27M metal away; its
+    gantry election failed the same site for 3 minutes; T1 fighters kept
+    rolling after T2 air stood. Three symptoms, three checks, all on logs
+    the game already writes."""
+    apex_teams = set(re.findall(r"apex: targets t=(\d+)", text))
+    if not apex_teams:
+        return
+
+    # 1. wealth-unspent: final stats row per team.
+    final = {}
+    for m in re.finditer(
+            r"\[BARAI_STATS\] team=(\d+) ally=\d+ reason=\w+ frame=(\d+)"
+            r".*? mInc=([\d.]+)"
+            r".*?metalProduced=([\d.]+) metalUsed=([\d.]+)"
+            r" metalExcess=([\d.]+)", text):
+        t = m.group(1)
+        if t in apex_teams:
+            final[t] = (int(m.group(2)), float(m.group(3)), float(m.group(4)),
+                        float(m.group(6)))
+    bad = []
+    for t, (fr, minc, mp, mex) in sorted(final.items()):
+        if mp > 1 and minc > 200 and mex / mp > 0.30:
+            bad.append(f"t{t} threw away {mex / mp:.0%} of {mp / 1000:.0f}k"
+                       f" at {minc:.0f} m/s")
+    if final:
+        rep.add("ECONOMY", not bad, "wealth-unspent",
+                "; ".join(bad) if bad else
+                "every rich team spent >=70% of what it made")
+
+    # 2. super-site-stuck: the same def failing the site search at the same
+    # want position. The probe ladder (sites.as ProbedSite) exists to move
+    # the anchor; site-widen lines are it working.
+    fails = defaultdict(list)
+    for m in re.finditer(
+            r"apex: site-fail t=(\d+) (\w+) bt=-?\d+ want=(-?\d+),(-?\d+)",
+            text):
+        fails[(m.group(1), m.group(2))].append(
+            (int(m.group(3)), int(m.group(4))))
+    widen = len(re.findall(r"apex: site-widen ", text))
+    stuck = []
+    for (t, d), pos in fails.items():
+        if len(pos) < 3:
+            continue
+        cx = sum(p[0] for p in pos) / len(pos)
+        cz = sum(p[1] for p in pos) / len(pos)
+        near = sum(1 for p in pos
+                   if abs(p[0] - cx) + abs(p[1] - cz) < 250)
+        if near >= 3:
+            stuck.append(f"t{t} {d} x{near} at {cx:.0f},{cz:.0f}")
+    if fails or widen:
+        rep.add("STRUCTURES", not stuck, "super-site-stuck",
+                ("; ".join(stuck) + f" -- site never relocates"
+                 f" (site-widen fired {widen}x)") if stuck else
+                f"no repeated same-spot site failure"
+                f" (site-widen fired {widen}x)")
+
+    # 3. T1 air army after T2 air stands (apexearth: "We need to stop making
+    # T1 air army when we have T2 available"). Sets derived from the pinned
+    # game tree 2026-08-28 (canfly+weapondefs+techlevel, tools session):
+    # production.as mutes armed T1 fliers once an own advanced air plant is
+    # finished.
+    T2_AIR_PLANTS = {
+        "armaap", "coraap", "legaap", "armsaap", "corsaap",
+        "armapt3", "corapt3", "legapt3", "armhaap", "corhaap", "leghaap",
+        "armhaapuw", "corhaapuw"}
+    T1_AIR_ARMY = {
+        "armfig", "armkam", "armsaber", "armsb", "armseap", "armsfig",
+        "armsfig2", "armthund", "armminebomber",
+        "corbw", "corcut", "cords", "corsb", "corseap", "corsfig",
+        "corsfig2", "corshad", "corveng",
+        "legcib", "legfig", "legkam", "legmineb", "legmos"}
+    t2air_at = {}
+    late = defaultdict(int)
+    for m in re.finditer(
+            r"\[BARAI_BUILD\] team=(\d+) ally=\d+ frame=(\d+)"
+            r" min=[\d.]+ unit=(\w+)", text):
+        t, fr, u = m.group(1), int(m.group(2)), m.group(3)
+        if t not in apex_teams:
+            continue
+        if u in T2_AIR_PLANTS and t not in t2air_at:
+            t2air_at[t] = fr
+        # a minute of grace: orders already rolling down the line
+        elif (u in T1_AIR_ARMY and t in t2air_at
+                and fr > t2air_at[t] + 1800):
+            late[t] += 1
+    if t2air_at:
+        bad2 = [f"t{t} built {n} T1 air army units after its T2 air plant"
+                for t, n in sorted(late.items()) if n > 2]
+        rep.add("PRIORITY", not bad2, "t1-air-after-t2",
+                "; ".join(bad2) if bad2 else
+                "T1 air army stops once T2 air stands")
+
+
 CHECKS = [check_health, check_ledger, check_commitments, check_priority,
           check_economy, check_lab_timing, check_placement_sanity,
           check_military, check_efficiency, check_vs_enemy, check_structures,
-          check_geometry, check_perf]
+          check_geometry, check_perf, check_overflow_spend]
 
 
 def main():
