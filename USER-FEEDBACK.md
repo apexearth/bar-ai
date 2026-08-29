@@ -1,5 +1,13 @@
 # What apexearth wants from this AI
 
+## STANDING PRIORITY (2026-08-29): win 1v1 reliably FIRST
+
+"I suggest you get us winning 1v1 games fairly reliably and then go to
+2v2, and then on to larger team games." The campaign order follows: the
+1v1 conversion failure (ISSUES.md — retreat deaths, commander dying at
+home on a won economy, Glacier's even-eco grind) is the work queue until
+1v1 decided results flip; team formats after.
+
 My understanding of the feedback he has given, in my words. This is a standing
 brief, not a changelog — `CHANGES.md` records what was done and measured, this
 records what he actually asked for and why.

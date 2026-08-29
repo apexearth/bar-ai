@@ -28,16 +28,22 @@ bool CommCaution(CCircuitUnit@ unit)
 	const float mine = unit.circuitDef.costM;
 	if (mine <= 0.f)
 		return false;
+	// Our OWN T2 standing is caution enough, unconditionally. The enemy
+	// readings below are LOS-accumulated and read "safe" exactly when blind:
+	// a Glacier 1v1 logged ZERO caution/flee events in 27 minutes against a
+	// T2 enemy, and the commander died walking to a mid-map job at fwd 0.35.
+	// By our own T2 his build share has collapsed while his death still ends
+	// the game -- progression-anchored, no clock, no sensing required. The
+	// enemy clauses remain as PRE-T2 escalators (a heavy rush earns caution
+	// before we tech).
+	if (Factory::gHaveT2)
+		return true;
 	const float heavies = aiEnemyMgr.GetEnemyCost(RT::HEAVY)
 			+ aiEnemyMgr.GetEnemyCost(RT::SUPER);
 	if (heavies >= mine * ai.GetTunable("apex_comm_heavy_frac", TUNE_COMM_HEAVY_FRAC))
 		return true;
-	// The original read Factory::gEnemyT2Seen here; that sense died with the
-	// leaf rules, so the progression split is our own T2 -- the repo's
-	// established early/late marker.
-	return Factory::gHaveT2
-		&& (Military::FoeMobileMassing()
-			>= mine * ai.GetTunable("apex_comm_mass_mult", TUNE_COMM_MASS_MULT));
+	return Military::FoeMobileMassing()
+			>= mine * ai.GetTunable("apex_comm_mass_mult", TUNE_COMM_MASS_MULT);
 }
 
 // Influence at the position AND four compass points around it: a cautious

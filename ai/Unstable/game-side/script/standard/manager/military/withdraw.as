@@ -54,16 +54,29 @@ void NoteCombatUnit(int id)
 // Behind our own doorway first -- everything coming at us has to come through
 // it, and it is a short walk from the fighting -- then the nearest point on the
 // front, and home only when we have no idea where the front is.
+// A pull-back must never RAISE the unit's forward fraction. FallbackSpot
+// picks the nearest own gun in any direction, and since the choke-gate work
+// our guns stand at forward doorways -- so "retreat" marched units TOWARD
+// the fight (measured on the first --teams battery: of 492 deaths within
+// 2min of a W order, 165 had moved AWAY from home and 210 died in place
+// ping-ponging, median hp at the order 100%). Rearward-only is the
+// constraint that was implicit in his ruling all along: hide BEHIND our
+// defenses, not under the front's.
+bool Rearward(const AIFloat3& in from, const AIFloat3& in to)
+{
+	return Military::ForwardFraction(to) < Military::ForwardFraction(from);
+}
+
 bool RallySpot(const AIFloat3& in from, AIFloat3& out at)
 {
 	AIFloat3 cp;
 	if (Front::FrontChoke(from, cp)
 		&& Front::BehindChoke(cp, ai.GetTunable("apex_withdraw_behind", TUNE_WITHDRAW_BEHIND), at)
-		&& OnMap(at))
+		&& OnMap(at) && Rearward(from, at))
 	{
 		return true;
 	}
-	if (Front::FrontNear(from, at) && OnMap(at))
+	if (Front::FrontNear(from, at) && OnMap(at) && Rearward(from, at))
 		return true;
 	if (!Builder::gHomeSet)
 		return false;
@@ -78,6 +91,7 @@ bool FallbackSpot(const AIFloat3& in from, AIFloat3& out at)
 {
 	float best = -1.f;
 	AIFloat3 tower;
+	const float fromFwd = Military::ForwardFraction(from);
 	for (uint i = 0; i < gFencePos.length(); ++i) {
 		if (!OnMap(gFencePos[i]))
 			continue;
@@ -87,6 +101,11 @@ bool FallbackSpot(const AIFloat3& in from, AIFloat3& out at)
 			if ((d !is null) && (d.GetSurfThreat() <= 0.f))
 				continue;
 		}
+		// Rearward guns only -- see Rearward(). The nearest gun is often a
+		// forward gate tower now, and sheltering "behind" it walks the unit
+		// deeper into the fight it is leaving.
+		if (Military::ForwardFraction(gFencePos[i]) >= fromFwd)
+			continue;
 		const float d2 = gFencePos[i].distance2D(from);
 		if ((best < 0.f) || (d2 < best)) {
 			best = d2;
