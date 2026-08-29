@@ -1455,7 +1455,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				// the nearest armed foe hands the brawl to the engine (plain
 				// attack, auto-targeting); rows that outrange something keep
 				// the standoff machinery, which is their whole value.
-				const bool rowBrawls = (manager->GetCircuit()->GetTunable("apex_brawl_pass", 1.f) > 0.f)
+				const bool rowBrawls = (manager->GetCircuit()->GetTunable("apex_brawl_pass", 0.f) > 0.f)
 						&& !rowColossus && !kiteFoeStatic
 						&& (kiteFoeRange > 0.f)
 						&& (kv.first < kiteFoeRange + 60.f);

@@ -1,5 +1,28 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 — THE ARENA SURVEY: close-fight micro is engine-bound at parity
+
+His instrument (dev_arena pure/random), his +15% target, six mechanisms
+measured in paired ~90-round arms (noise floor sigma~0.05/run, calibrated
+on identical-logic arms reading -0.055 and +0.035):
+- kiting OFF: -0.123 (kiting earns its keep; the only clear signal)
+- range_mod 1.0 / kite pad 40: ~+0.05 each, at one-sigma -- unproven
+- focus-fire v1 (lowest abs HP): harmful; v2 (+sticky, fraction): harmful
+  (-0.068 paired, 3/3); v3 (set-target only, lethal-dose portions, his
+  refinement): neutral mean, strikingly low variance
+- brawl passthrough (no orders without a range edge): neutral (default 0)
+- fist vs arc (apex_arc_span 0.3 vs 0.9): +0.012 net -- unresolved
+- no-control diagnostic: units STRIPPED of our orders beat stock
+  consistently (+0.047); commanded units same mean, wilder variance
+
+CONCLUSION: mirrored equal-army fights at mutual LOS are decided by the
+engine; the AI order layer (ours or stock's) moves the outcome at most
+~±0.02. The +15% arena margin cannot come from order tweaks. Where an
+edge that size CAN come from: information (radar), arrival concentration
+(operational, not tactical), composition (reach vs their mix), and the
+economy behind the army. The arena's standing role: a REGRESSION GUARD --
+fight logic must never fall below parity -- not a gain mine.
+
 ## 2026-08-29 — THE CONVERSION FAILURE: a 3.5x economy loses the 1v1 anyway
 
 Measured on decision-length games (50m caps, 8 per map, winrate-comet /
