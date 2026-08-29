@@ -702,9 +702,16 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	if (!Positional(type)) {
 		// Somewhere else in reach, one of these is already going up.
 		// Serializing onto it is the point for an unsaturated site: the metal
-		// starts flowing sooner. A `parallel` caller has already decided the
-		// economy wants ANOTHER site, so only the caps below apply to it.
-		if (!parallel) {
+		// starts flowing sooner. POOL FIRST EVEN WHEN RICH (apexearth,
+		// watching: "we have 3 separate T1 cons all starting an advanced
+		// solar at the same time. They should each work on 1 together.
+		// They'll see rewards faster and that'll compound") -- `parallel`
+		// used to skip this fold entirely, which is how a filling bank
+		// opened three solo advsol sites in two minutes. JoinFor's crew cap
+		// already answers "full": a saturated site returns null here and
+		// falls through to the parallel Create below, which is the one case
+		// parallel was ever for.
+		{
 			IUnitTask@ near = JoinFor(unit, want, at);
 			if (near !is null) {
 				++gJoined;
@@ -712,7 +719,7 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 				return near;
 			}
 		}
-		if (InFlight(want) >= EffectiveCap(want)) {
+		if (!parallel && InFlight(want) >= EffectiveCap(want)) {
 			// FULL MEANS TAKE ONE OFF THE QUEUE, NOT STAND STILL. A request
 			// nobody is working is available by definition -- that is the whole
 			// of "if the building is cancelled by whoever took the order then it

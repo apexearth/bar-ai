@@ -31,6 +31,21 @@ budget/host floor, antinuke floor) is structural income; the gantry team
 budget reads the new TV_MINC_NET lane. Move to feedback/ archive once he
 confirms live.
 
+## UNRESOLVED (landed, awaiting his eyes) — Exit lanes and pooled advsols (2026-08-28, watching live)
+
+Two observations from the NullAI watch game, both landed same hour:
+(1) "we just built a lab with a turret right in front of it - this is a
+great example of that bug where labs are built too close behind other
+things" — caught in the log (LLT 2480,2880; lab 13s later 114 elmos
+behind it). ClearExitLane pushes a plant site back until no own committed
+static sits in the lane ahead; OffFactoryExit slides a ground-defence
+site sideways out of any factory's doorway. (2) "we have 3 separate T1
+cons all starting an advanced solar at the same time. They should each
+work on 1 together. They'll see rewards faster and that'll compound" —
+the rich-bank `parallel` flag skipped the join fold entirely; it now only
+bypasses the site CAP, so hands pool onto an unsaturated site first and a
+new site opens only once the crew cap answers "full".
+
 ## UNRESOLVED — Building pace, spread, and honest reclaim (2026-08-28, evening)
 
 Four asks and a protocol: (1) "How can we spread our some of out buildings

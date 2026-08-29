@@ -12,6 +12,92 @@ int gNanoSiteAt = -999999;
 // each other. So during placement the issue happens"). The ask itself steps
 // away from any factory request already in flight; the engine's own search
 // still handles the standing world.
+// THE EXIT LANE IS PART OF THE FACTORY (apexearth, watching live: "we just
+// built a lab with a turret right in front of it - this is a great example
+// of that bug where labs are built too close behind other things"). The
+// engine's FindBuildSite proves the FOOTPRINT is legal and says nothing
+// about the ground units must roll OUT across -- measured in that game: LLT
+// at 2480,2880, the lab 13s later at 2376,2926, 114 elmos apart. Any of our
+// own committed statics (ordered, framed or standing) inside the lane ahead
+// of the site pushes the site one lattice pitch BACK, twice at most -- the
+// engine's shake still owns the final legal square.
+AIFloat3 ClearExitLane(const AIFloat3& in pos)
+{
+	if (!Base::Ready())
+		return pos;
+	AIFloat3 fwd = Base::gFwd;
+	if (Base::AxisIsRearward()) {
+		fwd.x = -fwd.x;
+		fwd.z = -fwd.z;
+	}
+	AIFloat3 p = pos;
+	for (uint tries = 0; tries < 3; ++tries) {
+		bool blocked = false;
+		for (uint i = 0; i < ComLen(); ++i) {
+			const int d = gComDef[i];
+			if (!Catalog::ValidId(d) || Catalog::gMobile[d]
+				|| !OnMap(gComPos[i]))
+				continue;
+			const float rx = gComPos[i].x - p.x;
+			const float rz = gComPos[i].z - p.z;
+			const float ahead = rx * fwd.x + rz * fwd.z;
+			if ((ahead < 40.f) || (ahead > 220.f))
+				continue;   // behind or far enough ahead to drive around
+			const float side = rx * fwd.z - rz * fwd.x;
+			if ((side > -100.f) && (side < 100.f)) {
+				blocked = true;
+				break;
+			}
+		}
+		if (!blocked)
+			return p;
+		p.x -= fwd.x * 96.f;
+		p.z -= fwd.z * 96.f;
+	}
+	return p;
+}
+
+// The same lane, read the other way: is THIS site standing in the doorway
+// of a factory we own or have coming? Towers took the ground in front of
+// labs (his LLT at 114 elmos), so a ground-defence site inside any
+// factory's exit lane slides sideways, across the axis, until clear.
+AIFloat3 OffFactoryExit(const AIFloat3& in pos)
+{
+	if (!Base::Ready())
+		return pos;
+	AIFloat3 fwd = Base::gFwd;
+	if (Base::AxisIsRearward()) {
+		fwd.x = -fwd.x;
+		fwd.z = -fwd.z;
+	}
+	AIFloat3 p = pos;
+	for (uint tries = 0; tries < 3; ++tries) {
+		bool inLane = false;
+		for (uint i = 0; i < ComLen(); ++i) {
+			const int d = gComDef[i];
+			if (!Catalog::ValidId(d) || Catalog::gMobile[d]
+				|| (Catalog::gBuildsList[d].length() == 0)
+				|| !OnMap(gComPos[i]))
+				continue;
+			const float rx = p.x - gComPos[i].x;
+			const float rz = p.z - gComPos[i].z;
+			const float ahead = rx * fwd.x + rz * fwd.z;
+			if ((ahead < 40.f) || (ahead > 220.f))
+				continue;
+			const float side = rx * fwd.z - rz * fwd.x;
+			if ((side > -100.f) && (side < 100.f)) {
+				inLane = true;
+				break;
+			}
+		}
+		if (!inLane)
+			return p;
+		p.x += fwd.z * 140.f;   // across the axis, out of the doorway
+		p.z -= fwd.x * 140.f;
+	}
+	return p;
+}
+
 AIFloat3 ClearOfLiveFactories(const AIFloat3& in pos)
 {
 	AIFloat3 p = pos;
@@ -163,8 +249,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			return jt;
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL,
-				ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)), 256.f,
-				SQUARE_SIZE * 16.f);
+				ClearExitLane(ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f))),
+				256.f, SQUARE_SIZE * 16.f);
 	}
 	if ((w.kind == WK_PROTECT) || (w.kind == WK_SENSE)
 		|| (w.kind == WK_AIRDEF)) {
@@ -197,7 +283,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// re-elected want missed the standing request next door -- a new task
 		// per election, each killing the last (117 tasks, 2 towers, watched).
 		return Requests::Take(unit, w.def, Task::BuildType(bt),
-				Task::Priority::NORMAL, w.pos, 600.f, SQUARE_SIZE * 16.f);
+				Task::Priority::NORMAL,
+				groundDef ? OffFactoryExit(w.pos) : w.pos,
+				600.f, SQUARE_SIZE * 16.f);
 	}
 	if (w.kind == WK_SUPER) {
 		// A gantry is a factory and goes through the plant's own siting and
@@ -513,7 +601,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// A floating plant keeps the water it was priced against -- the
 		// spot-clearance nudge walks the base axis and puts a shipyard inland.
 		const AIFloat3 at = Catalog::gFloater[int(w.def.id)]
-				? w.pos : ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f));
+				? w.pos
+				: ClearExitLane(ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)));
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, at, 256.f, SQUARE_SIZE * 16.f);
 	}
