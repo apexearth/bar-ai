@@ -1290,10 +1290,12 @@ const float TUNE_LINE_MID = 0.20f;
 const float TUNE_LINE_REACH = 0.35f;
 const float TUNE_LINE_DPS = 0.17f;
 // manager/brain/market/army.as [ratio] -- How hard the enemy's observed
-//   STATIC share of fielded metal bends the reach target up (renormalized);
-//   his ruling: "Im ok with composition adapting to the needs in the game".
-//   0 freezes the base split.
-const float TUNE_LINE_ADAPT = 1.f;
+//   STATIC share of fielded metal bends the reach target up (renormalized).
+//   MEASURED WORSE at 1.0 (winrate14: 0W-11L, trade 0.372 vs 0.53-0.65
+//   refs) -- reach at ~48% left no screen and corridors deny it standoff
+//   room. Experiment arm, default off; his adapting-composition ruling
+//   stands as direction, this term's shape or scale is wrong.
+const float TUNE_LINE_ADAPT = 0.f;
 // WHAT A COMBAT UNIT IS WORTH -- the exponent on each golden metric
 // (apexearth 2026-08-25: "RANGE, DAMAGE, HP... perhaps we can try a variety of
 // algorithms"). Read in manager/brain/market/worth.as; each metric is
