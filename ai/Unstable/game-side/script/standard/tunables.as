@@ -740,6 +740,10 @@ const float TUNE_FODDER_COST = 100.f;
 //   value is this multiple of theirs, attack continuously and release any
 //   turtle -- even a partial commitment outnumbers everything they field.
 const float TUNE_KILL_EDGE = 1.8f;
+// manager/military/killingblow.as [fraction] -- The blow disarms below
+//   KILL_EDGE times this. Wide enough to survive the push's own measurement
+//   dip (retreating units read zero power); 0.6 flapped 15x in one game.
+const float TUNE_KILL_OFF_FRAC = 0.35f;
 // manager/military/killingblow.as [seconds] -- killing blow: earliest the
 //   normal (non-T1-commit) gate may arm. A clock, not an economy reading, and
 //   the only one left in the blow -- it exists so a fog-driven army estimate

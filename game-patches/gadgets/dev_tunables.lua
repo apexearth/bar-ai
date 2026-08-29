@@ -192,6 +192,7 @@ local NAMES = {
 	"apex_incoming_notice_r",
 	"apex_intel_air_income",
 	"apex_kill_edge",
+	"apex_kill_off_frac",    -- killingblow.as: disarm fraction of KILL_EDGE; wide band survives the retreat-zeroing dip (0.35)
 	"apex_kill_from",
 	"apex_seen_halflife",
 	"apex_budget_live",

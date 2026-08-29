@@ -65,8 +65,14 @@ bool KillingBlow()
 	if (theirs <= 0.f)
 		return false;
 	// Hysteresis, so a single lost engagement does not flip us back to massing
-	// half way through the push that is winning the game.
-	return gKilling ? (ours > theirs * (KILL_EDGE() * 0.6f))
+	// half way through the push that is winning the game. The band must
+	// survive the push's own measurement dip: retreating units contribute
+	// ZERO power, so OurArmyNow halves the moment the committed army starts
+	// taking damage -- at the old 0.6 fraction one truncated-win game armed
+	// and disarmed the blow FIFTEEN times (winrate10 t006, 16k vs 10k), the
+	// army about-facing mid-push each cycle.
+	return gKilling ? (ours > theirs * (KILL_EDGE()
+				* ai.GetTunable("apex_kill_off_frac", TUNE_KILL_OFF_FRAC)))
 	                : (ours > theirs * KILL_EDGE());
 }
 

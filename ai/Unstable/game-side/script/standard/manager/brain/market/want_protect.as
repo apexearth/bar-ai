@@ -954,7 +954,8 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 		if (diag || (ai.frame % (60 * SECOND) < 10 * SECOND))
 			AiLog(Factory::T() + "apex: teeth-scan wall=" + wd
 				+ " gates=" + gidx.length()
-				+ " towers=" + gProtPos[PROT_DEF].length());
+				+ " towers=" + gProtPos[PROT_DEF].length()
+				+ " point=" + int(gTeethPoint.x) + "," + int(gTeethPoint.z));
 		// Nearest gate to home first -- his ruling puts the walls BEFORE the
 		// push arrives, so teeth do not wait for the gate's towers (that
 		// prerequisite deadlocked: 14 minutes, 3 towers, none at a gate,
