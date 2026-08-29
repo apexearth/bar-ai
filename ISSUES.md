@@ -1,5 +1,27 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 — long-range survival: two residues after the walk-in fix
+
+The walk-in orders themselves are fixed (radar-aware `prefer` gate + long-gun
+hold in `CCircuitUnit::Attack`; `apex_arty_mass` routes mobile arty into the
+squads — see the commit). Left open:
+
+1. **The ride to the squad is still a raw fight order.** `CSupportTask`
+   (snipers via the `anti_heavy_ass`→SUPPORT binding, mobile radar/jammer)
+   walks recruits to the nearest squad with `CmdFightTo` straight-line to the
+   path end (`SupportTask.cpp` Start/ApplyPath). A 455-sight sniper crossing
+   contested ground on a fight order can still stop-and-trade on its own
+   acquisitions until it arrives. Squads reposition it on arrival, so the
+   exposure is the trip only.
+2. **`apex_arty_mass=0` arm keeps the old CArtilleryTask** — statics-only
+   FindTarget, raw engine attack, CFightAction travel. If the A/B retires the
+   OFF arm, nothing runs that code; until then it is the control, not a fix
+   target.
+3. **"Build up their numbers"** (his 2026-08-29 ask) — long-range composition
+   share untouched; the army market prices ARTY off enemy static cost only
+   (`market/army.as` counter). Judge after survival beds in: units that stop
+   dying compound on their own before any pricing change.
+
 ## 2026-08-29 — builder retreat trigger is a hair trigger (his policy call pending)
 
 Every builder retreats at 80-89% health (`behaviour.json` `retreat.builder

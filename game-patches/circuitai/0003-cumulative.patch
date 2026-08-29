@@ -13176,7 +13176,7 @@ index cd0b54a..db4287a 100644
  	float cloakCost;
  	float buildTime;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index 2f597be..b9d0efc 100644
+index 2f597be..cd2e35c 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -6,6 +6,7 @@
@@ -13341,7 +13341,7 @@ index 2f597be..b9d0efc 100644
  	target = enemy;
  	TRY_UNIT(manager->GetCircuit(), this,
  		const AIFloat3& pos = enemy->GetPos();
-@@ -508,23 +589,62 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -508,23 +589,63 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  
  void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
  {
@@ -13361,20 +13361,21 @@ index 2f597be..b9d0efc 100644
 +	// yields to a user target only while that target can actually be hit
 +	// (CWeapon::AllowWeaponAutoTarget).
 +	//
-+	// Three cases keep the old orders, because set-target cannot express them:
-+	// a cloaked target must be attacked as ground, a contact held on radar only
-+	// is dropped by the gadget within 15 frames and the fight order IS the
-+	// walk-in that gains LOS, and melee delivers its damage by arriving.
-+	// A static target's position never changes, so it needs no fresh LOS to
-+	// stay accurate the way a mobile radar-only contact does -- the "walk to
-+	// its actual position to confirm it" fallback below exists for ghosts,
-+	// not towers. A weapon range that exceeds sight radius (e.g. Hound: 650
-+	// range, ~400 sight -- see the squad-path fix in SquadTask.cpp) reads
-+	// IsInLOS()==false while correctly holding standoff, so without this the
-+	// fallback sent the unit walking to the tower's own ground position,
-+	// straight past the standoff ring it had just reached.
++	// Two cases keep the old orders, because set-target cannot express them:
++	// a cloaked target must be attacked as ground, and melee delivers its
++	// damage by arriving. A radar-only contact does NOT need them: the gadget
++	// drops a set-target only when the contact leaves radar AND los
++	// (unit_target_on_the_move's removeUnseenTarget: los % 4 == 0), so it
++	// tracks the dot on its own and the engine fires at it from the ring.
++	// The engine-attack fallback below survives only for a fully dark ghost,
++	// and only for a unit whose own sight covers its weapon reach: a long gun
++	// (range > sight -- Hound 650/400, Sharpshooter 900/455) cannot gain its
++	// own los without standing inside enemy fire, so it holds the ring at the
++	// last known position and waits for allied vision instead of chasing.
++	const bool longGun = circuitDef->GetMaxRange() > circuitDef->GetLosRadius();
 +	const bool prefer = (manager->GetCircuit()->GetTunable("apex_prefer_target", 1.f) > 0.f)
-+			&& !isGround && !circuitDef->IsAttrMelee() && (isStatic || enemy->IsInLOS());
++			&& !isGround && !circuitDef->IsAttrMelee()
++			&& (isStatic || enemy->IsInRadarOrLOS() || longGun);
  	TRY_UNIT(manager->GetCircuit(), this,
 -		if (circuitDef->IsAttrMelee()) {
 -			if (IsJumpReady()) {

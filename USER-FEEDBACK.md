@@ -51,14 +51,33 @@ ladder, overflow-scaled strategic parallelism, wealth waiver on the copy
 laws, T1-air mute) landed with three audits; validation run next, then his
 eyes. Eco-cluster split and nano-reclaim C++ still open.
 
-## UNRESOLVED — Snipers step too close and die (2026-08-29, watching)
+## UNRESOLVED (landed, awaiting his eyes) — Long-range units walk up blind and die (2026-08-29)
 
-"We tend to move our snipers too close as a small example... they step
-really close and get killed for no great reason." The standoff machinery
-(C++ SquadTask rows + kite; SIEGE-attr rows fear proximity) either does
-not class snipers as standoff units or the kite range is under their
-weapon range. Not yet attributed — check armsnipe's attr/kite numbers
-against its 750 range before touching anything.
+Raised twice today: "they step really close and get killed for no great
+reason", then in full: "We don't want them walking up blind getting into
+LOS range of enemies... they should depend on allied vision... applying
+'set target' and staying at around their maximum range. We don't want
+them standing in the front where they'll get shot. We want to build up
+these guys in unit numbers so our army can grow very powerful."
+
+Attributed, two mechanisms, both landed 2026-08-29:
+(1) The squad ring order's fallback (`CCircuitUnit::Attack(pos,...)`)
+issued a raw engine attack whenever a mobile target was not in LOS — the
+exact moment vision flickers is the moment the walk-in order goes out.
+Built on a misreading of the set-target gadget: it keeps a radar-only
+target (`los % 4 == 0` is its only drop rule). Now radar counts, and a
+long gun (weapon range > own sight: Sharpshooter 900/455, Hound 650/400)
+never takes the walk-in fallback at all — it holds the ring and waits
+for allied vision.
+(2) The 2026-08-16 "Hound is artillery" ruling silently moved Hounds (and
+the whole mobile arty family) out of the massing squads into solo
+CArtilleryTask — statics-only targeting, raw attack orders, travelling
+alone with no ally to see for them. `apex_arty_mass` (default ON) puts
+mobile artillery back into the squad pool as the back row.
+
+Still open: the "build up their numbers" half — composition pricing for
+the long-range classes was not touched; judge after the survival fix
+beds in.
 
 ## UNRESOLVED (landed, awaiting his eyes) — Exit lanes and pooled advsols (2026-08-28, watching live)
 

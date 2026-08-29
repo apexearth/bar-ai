@@ -1901,6 +1901,11 @@ const float TUNE_AID_RESPOND = 1000.f;
 //   -1 follows the measured base separation live (a fixed default would freeze
 //   before home is set).
 const float TUNE_AID_REACH = -1.f;
+// manager/military/hooks.as [toggle 0/1] -- Mobile artillery masses into the
+//   squad pool (long-range back row, allied vision, kite/set-target) instead
+//   of soloing on CArtilleryTask, which only elects static targets and walks
+//   in blind (weapon range exceeds own sight for the whole family).
+const float TUNE_ARTY_MASS = 1.f;
 // main.as [ratio] -- Threat-map multiplier on the Behemoth's def power, so
 //   squads respect it; our own read stronger too (they are chargers and ignore
 //   the margin anyway).

@@ -386,6 +386,11 @@ GROUPS = [
                   "expires and the group goes anyway"),
                  ("TUNE_FODDER_COST", "more units count as fodder and are "
                   "sent immediately without waiting to mass"),
+                 ("TUNE_ARTY_MASS", "ON puts mobile artillery (Hound, "
+                  "Pillager, Catapult…) into the squads as the back row, "
+                  "standing at its own weapon range behind the front's "
+                  "vision; OFF returns them to solo artillery tasks that "
+                  "only shoot buildings and travel alone"),
              ]},
             {"title": "The push and the killing blow",
              "what": "The all-in: everything goes forward at once.",
@@ -874,6 +879,10 @@ GOALS = [
             {"ref": "TUNE_LANE_FORWARD", "dir": "down",
              "note": "stage the army further back, so a losing fight is fought "
                      "closer to our own guns"},
+            {"ref": "TUNE_ARTY_MASS", "dir": "up",
+             "note": "long-range units (snipers, Hounds, artillery) fight from "
+                     "the squads' back row on the front rows' vision instead of "
+                     "walking up blind on their own"},
         ],
         "watch": "python tools/fight1v1.py <run-dir> — army trade efficiency in "
                  "metal. Read a single game deeply; win rate will not tell you.",

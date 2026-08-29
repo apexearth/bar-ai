@@ -44,8 +44,16 @@ bool WantsMassing(const CCircuitDef@ cdef)
 	// split; before it, raiding pays, after it the flanks are walled.
 	if (role == RT::RAIDER)
 		return Factory::gHaveT2;
-	return (role != RT::ARTY)
-		&& (role != RT::AH) && (role != RT::BOMBER) && (role != RT::MINE)
+	// Mobile artillery fights as the squads' back row: rows stand each def at
+	// its own weapon range, siege attr fears proximity, and the front rows ARE
+	// the allied vision a long gun needs (the whole family outranges its own
+	// sight -- Hound 650/400, Sharpshooter 900/455). Solo CArtilleryTask can
+	// elect only STATIC targets and travels alone, so a Hound crossed the map
+	// blind and died acquiring its own los (apexearth 2026-08-29: "we don't
+	// want them walking up blind getting into LOS range").
+	if (role == RT::ARTY)
+		return ai.GetTunable("apex_arty_mass", TUNE_ARTY_MASS) > 0.f;
+	return (role != RT::AH) && (role != RT::BOMBER) && (role != RT::MINE)
 		&& (role != RT::SUPER) && (role != RT::SCOUT) && (role != RT::SUPPORT);
 }
 
