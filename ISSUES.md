@@ -56,6 +56,28 @@ until all the ones I've mentioned are complete." Status after four waves
 ArmyTarget ally-share: CONFIRMED FIXED by him tonight ("our game
 performances did a lot better") -- entry deleted per the lifecycle rule.
 
+AFTER HIS WATCHED LOSS (2026-08-29 late, matches/20260829-045437) two
+more mechanisms landed (commit d3fe925): AnyPlantInFlight serializes
+plant STARTS at every tier (armlab+armhp had been elected 8 frames
+apart), and feedRoom scales a constructor's priced gain by the hands
+income can feed (armacv v=146 at 52 m/s income; more metal stood in
+cons than in living army at his game's end). Audits: con-glut +
+all-tier adv-plant-overlap (flags his loss 6x).
+
+s46 (57.9m loss, the wave-6 validation) then localized what remains:
+- Tower COMPLETION is fixed (47 towers finished, 4 bt=7 deaths all
+  game) -- the front-towers flag now measures SITING only: elections
+  win front sites, towers land rear/mid. That is the pending policy
+  ruling (siting depth / escorts), not a bug.
+- t0 spent 267,850 metal on T3 UNITS (vs 76k defence, 55k eco) while
+  BARb massed cheaper and won -- the T3-pacing entry's prediction
+  verbatim, at 2% waste. The spend PLUMBING is done; WHAT the overflow
+  may buy mid-game is his reserved composition decision (affordability
+  ramp on T3 unit bids: mass first, T3 from surplus).
+- Audit gap, cosmetic: waived PARALLEL plant starts (non-copy) print no
+  'copy waived' line, so adv-plant-overlap cannot exempt them; add an
+  'apex: plant-par waived' log next deploy.
+
 Open residue, this campaign:
 - armmex unreach-safe churn (156-228/game): mex claims elected at spots
   the walker cannot safely reach. Correct refusals, wasteful elections --
