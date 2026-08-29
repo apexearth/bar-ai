@@ -1681,6 +1681,11 @@ const float TUNE_UNIT_AFFORD_S = 60.f;
 //   contested edge toward home, so the frame survives building; most tower
 //   ranges (430+) still cover the edge it stepped back from.
 const float TUNE_DEF_SETBACK = 250.f;
+// SCOUT_OVER_S [seconds] -- one idle cheap air scout is sent across the
+//   enemy position this often ("I don't see any scouts flying over their
+//   base"). 0 disables the overflight and stock mex-cluster scouting is all
+//   that remains.
+const float TUNE_SCOUT_OVER_S = 45.f;
 // GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
 //   income: one shared line the whole team's nanos man, so one team purse.
 //   At 100s the ~9.3k bill clears right at ~100 team metal/s, his stated

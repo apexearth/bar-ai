@@ -116,6 +116,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	{ double _t = Perf::T0(); Military::UpdateSpamPosture(); Perf::Add("up.spamposture", _t); }
 	{ double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
 	{ double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
+	{ double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
 	{ double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
 	{ double _t = Perf::T0(); Market::LogFrontTowers(); Perf::Add("up.fronttowers", _t); }
 	{ double _t = Perf::T0(); Brain::Think(); Perf::Add("up.think", _t); }

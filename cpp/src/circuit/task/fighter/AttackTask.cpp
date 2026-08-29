@@ -637,6 +637,13 @@ void CAttackTask::Update()
 	if (flankRoll < 0) {
 		const int pct = (int)circuit->GetTunable("apex_flank_pct", 35.f);
 		flankRoll = (rand() % 100 < pct) ? ((rand() % 2 == 0) ? 1 : 2) : 0;
+		// apex: a share of flanks go DEEP -- the via sits at the map edge
+		// abeam the approach, his "took some Titans and walked them down
+		// the side of the map at the enemy".
+		if (flankRoll > 0) {
+			const int dpct = (int)circuit->GetTunable("apex_flank_deep_pct", 35.f);
+			flankDeep = (rand() % 100 < dpct);
+		}
 	}
 	AIFloat3 endPos = position;
 	if (flankRoll > 0) {
@@ -648,10 +655,24 @@ void CAttackTask::Update()
 				const AIFloat3 perp = (flankRoll == 1)
 						? AIFloat3(-dir.z, 0.f, dir.x)
 						: AIFloat3(dir.z, 0.f, -dir.x);
-				AIFloat3 via = (startPos + position) * 0.5f
-						+ perp * (dist * circuit->GetTunable("apex_flank_frac", 0.45f));
-				CTerrainManager::CorrectPosition(via);
+				const AIFloat3 mid = (startPos + position) * 0.5f;
+				AIFloat3 via = mid
+						+ perp * (flankDeep ? 100000.f
+							: dist * circuit->GetTunable("apex_flank_frac", 0.45f));
+				CTerrainManager::CorrectPosition(via);  // a deep via clamps to the border
+				if (flankDeep) {
+					AIFloat3 in_ = mid - via;
+					in_.SafeNormalize2D();
+					via += in_ * 400.f;  // off the border seam, still the side lane
+					CTerrainManager::CorrectPosition(via);
+				}
 				flankVia = via;
+				// The intent ping was this path's only witness and it is off
+				// in his games; one line per task makes flanking visible in
+				// the infolog.
+				circuit->LOG("apex: flank t=%i %s via=%.0f,%.0f dist=%.0f",
+						circuit->GetTeamId(), flankDeep ? "deep" : "side",
+						via.x, via.z, dist);
 			}
 		}
 		if (utils::is_valid(flankVia)) {

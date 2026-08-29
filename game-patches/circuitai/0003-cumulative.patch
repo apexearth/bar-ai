@@ -7543,7 +7543,7 @@ index c3f5e98..e02338a 100644
  		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..b17b046 100644
+index cd063e4..0c73dcf 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -8069,7 +8069,7 @@ index cd063e4..b17b046 100644
  				state = State::ENGAGE;
  				Attack(frame);
  				return;
-@@ -196,19 +617,119 @@ void CAttackTask::Update()
+@@ -196,19 +617,140 @@ void CAttackTask::Update()
  	}
  
  	if (GetTarget() == nullptr) {
@@ -8094,6 +8094,13 @@ index cd063e4..b17b046 100644
 +	if (flankRoll < 0) {
 +		const int pct = (int)circuit->GetTunable("apex_flank_pct", 35.f);
 +		flankRoll = (rand() % 100 < pct) ? ((rand() % 2 == 0) ? 1 : 2) : 0;
++		// apex: a share of flanks go DEEP -- the via sits at the map edge
++		// abeam the approach, his "took some Titans and walked them down
++		// the side of the map at the enemy".
++		if (flankRoll > 0) {
++			const int dpct = (int)circuit->GetTunable("apex_flank_deep_pct", 35.f);
++			flankDeep = (rand() % 100 < dpct);
++		}
 +	}
 +	AIFloat3 endPos = position;
 +	if (flankRoll > 0) {
@@ -8105,10 +8112,24 @@ index cd063e4..b17b046 100644
 +				const AIFloat3 perp = (flankRoll == 1)
 +						? AIFloat3(-dir.z, 0.f, dir.x)
 +						: AIFloat3(dir.z, 0.f, -dir.x);
-+				AIFloat3 via = (startPos + position) * 0.5f
-+						+ perp * (dist * circuit->GetTunable("apex_flank_frac", 0.45f));
-+				CTerrainManager::CorrectPosition(via);
++				const AIFloat3 mid = (startPos + position) * 0.5f;
++				AIFloat3 via = mid
++						+ perp * (flankDeep ? 100000.f
++							: dist * circuit->GetTunable("apex_flank_frac", 0.45f));
++				CTerrainManager::CorrectPosition(via);  // a deep via clamps to the border
++				if (flankDeep) {
++					AIFloat3 in_ = mid - via;
++					in_.SafeNormalize2D();
++					via += in_ * 400.f;  // off the border seam, still the side lane
++					CTerrainManager::CorrectPosition(via);
++				}
 +				flankVia = via;
++				// The intent ping was this path's only witness and it is off
++				// in his games; one line per task makes flanking visible in
++				// the infolog.
++				circuit->LOG("apex: flank t=%i %s via=%.0f,%.0f dist=%.0f",
++						circuit->GetTeamId(), flankDeep ? "deep" : "side",
++						via.x, via.z, dist);
 +			}
 +		}
 +		if (utils::is_valid(flankVia)) {
@@ -8192,7 +8213,7 @@ index cd063e4..b17b046 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -225,12 +746,15 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -225,12 +767,15 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
@@ -8213,7 +8234,7 @@ index cd063e4..b17b046 100644
  	}
  
  	if (units.find(unit) != units.end()) {
-@@ -238,29 +762,166 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,29 +783,166 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -8383,7 +8404,7 @@ index cd063e4..b17b046 100644
  	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
  	for (unsigned i = 0; i < groups.size(); ++i) {
  		const CEnemyManager::SEnemyGroup& group = groups[i];
-@@ -269,10 +930,55 @@ void CAttackTask::FindTarget()
+@@ -269,10 +951,55 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -8443,7 +8464,7 @@ index cd063e4..b17b046 100644
  			continue;
  		}
  
-@@ -319,18 +1025,212 @@ void CAttackTask::FindTarget()
+@@ -319,18 +1046,212 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -8657,7 +8678,7 @@ index cd063e4..b17b046 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -340,6 +1240,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +1261,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -8728,7 +8749,7 @@ index cd063e4..b17b046 100644
  		ActivePath(lowestSpeed);
  	} else {
  		FallbackFrontPos();
-@@ -349,11 +1313,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -349,11 +1334,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -8771,7 +8792,7 @@ index cd063e4..b17b046 100644
  
  	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
  	const float pathRange = DEFAULT_SLACK * 4;
-@@ -387,8 +1381,28 @@ void CAttackTask::FallbackBasePos()
+@@ -387,8 +1402,28 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -8801,7 +8822,7 @@ index cd063e4..b17b046 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -421,7 +1435,9 @@ void CAttackTask::Fallback()
+@@ -421,7 +1456,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -8813,7 +8834,7 @@ index cd063e4..b17b046 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
 diff --git a/src/circuit/task/fighter/AttackTask.h b/src/circuit/task/fighter/AttackTask.h
-index 8585fc2..ae22475 100644
+index 8585fc2..da9e138 100644
 --- a/src/circuit/task/fighter/AttackTask.h
 +++ b/src/circuit/task/fighter/AttackTask.h
 @@ -26,6 +26,8 @@ public:
@@ -8825,7 +8846,7 @@ index 8585fc2..ae22475 100644
  private:
  	void FindTarget();
  	void ApplyTargetPath(const CQueryPathSingle* query);
-@@ -36,6 +38,33 @@ private:
+@@ -36,6 +38,34 @@ private:
  	void Fallback();
  
  	float minPower;
@@ -8843,6 +8864,7 @@ index 8585fc2..ae22475 100644
 +	// apex: flanking. Rolled once per task; a flanking squad walks via a
 +	// lateral waypoint before turning onto its target.
 +	int flankRoll = -1;
++	bool flankDeep = false;
 +
 +	// apex: pre-contact assembly budget. -1 = not assembling; otherwise the
 +	// frame past which the squad engages regardless of stragglers.

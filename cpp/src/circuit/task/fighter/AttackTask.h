@@ -52,6 +52,7 @@ private:
 	// apex: flanking. Rolled once per task; a flanking squad walks via a
 	// lateral waypoint before turning onto its target.
 	int flankRoll = -1;
+	bool flankDeep = false;
 
 	// apex: pre-contact assembly budget. -1 = not assembling; otherwise the
 	// frame past which the squad engages regardless of stragglers.

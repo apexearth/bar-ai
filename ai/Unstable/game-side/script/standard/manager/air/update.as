@@ -204,6 +204,55 @@ void ReArm()
 		+ " for the next run");
 }
 
+// EYES OVER THEIR BASE (apexearth, watching carefully: "I don't see any
+// scouts flying over their base"). Stock scout tasks chase unscouted MEX
+// clusters and go quiet once the map is claimed -- the enemy BASE is never
+// their destination, so the peep fleet stood at home while EnemyArmyCost
+// read blind. Every apex_scout_over_s an idle cheap air scout is sent
+// across the enemy position; at 39 metal a pass, dying there is a fair
+// price for the army target reading something real. The move order is raw
+// on purpose: when it completes (or the scout dies) the unit goes idle and
+// stock scouting takes it back.
+int gNextOverflight = 0;
+
+void ScoutOverflight()
+{
+	const float per = ai.GetTunable("apex_scout_over_s", TUNE_SCOUT_OVER_S);
+	if (per <= 0.f)
+		return;
+	if (ai.frame < gNextOverflight)
+		return;
+	gNextOverflight = ai.frame + int(per) * SECOND;
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(foe))
+		return;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d]
+			|| !Catalog::gFlyer[d] || Catalog::gBuilder[d]
+			|| (Catalog::gPower[d] > 1.f)
+			|| (Catalog::gCostM[d] > 100.f))
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(d),
+				foe, 0.f);
+		if (us is null)
+			continue;
+		for (uint i = 0; i < us.length(); ++i) {
+			if ((us[i] is null) || (us[i].CmdQueueSize() > 0))
+				continue;
+			// A jittered pass so consecutive flights cross different ground.
+			const float ang = float((ai.frame / SECOND) % 8) * 0.785398f;
+			AIFloat3 over = foe
+					+ AIFloat3(cos(ang), 0.f, sin(ang)) * 500.f;
+			if (!OnMap(over))
+				over = foe;
+			us[i].CmdMoveTo(over);
+			AiLog("apex: overflight " + Catalog::Def(d).GetName()
+				+ " #" + us[i].id + " -> " + int(over.x) + "," + int(over.z));
+			return;
+		}
+	}
+}
+
 void Update()
 {
 	SettleStrike();
