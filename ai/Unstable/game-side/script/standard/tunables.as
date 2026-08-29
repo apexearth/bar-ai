@@ -1277,14 +1277,18 @@ const float TUNE_ECO_SURVIVAL = 1.f;
 // 1.0 = they had our start and our minutes and spent it all on units. Used
 // only by the survival discount on long builds, never to size production.
 const float TUNE_SIEGE_PRIOR = 1.f;
-// ARMY COMPOSITION TARGET, shares of army metal (apexearth 2026-08-24, asked
-// and answered: 30/25/25/20). tank = health per metal, reach = weapon range,
-// dps = damage per metal, mid = nothing clearly dominant. Classes are read off
-// unit data against the game's own mobile combat units; see army.as.
-const float TUNE_LINE_TANK = 0.30f;
-const float TUNE_LINE_MID = 0.25f;
-const float TUNE_LINE_REACH = 0.25f;
-const float TUNE_LINE_DPS = 0.20f;
+// ARMY COMPOSITION TARGET, shares of army metal (apexearth 2026-08-24:
+// 30/25/25/20; re-ruled 2026-08-29 to 28/20/35/17 -- "build up these guys
+// [snipers/hounds/arty] in unit numbers so our army can grow very
+// powerful", "Rocket bots, artillery... they get free shots sometimes so
+// we should leverage that"). tank = health per metal, reach = weapon
+// range, dps = damage per metal, mid = nothing clearly dominant. Classes
+// are read off unit data against the game's own mobile combat units; see
+// army.as.
+const float TUNE_LINE_TANK = 0.28f;
+const float TUNE_LINE_MID = 0.20f;
+const float TUNE_LINE_REACH = 0.35f;
+const float TUNE_LINE_DPS = 0.17f;
 // WHAT A COMBAT UNIT IS WORTH -- the exponent on each golden metric
 // (apexearth 2026-08-25: "RANGE, DAMAGE, HP... perhaps we can try a variety of
 // algorithms"). Read in manager/brain/market/worth.as; each metric is
