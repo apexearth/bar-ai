@@ -517,9 +517,53 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// decider opens its OWN slot; FarmSlot's rows make the block
 		// rectangular; the income-derived InFlight cap still bounds it.
 		bool made = false;
-		return Requests::Take(unit, w.def, Task::BuildType::NANO,
-				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, 64.f, 0.f,
+		const AIFloat3 nSlot = OnMap(slot) ? slot : w.pos;
+		IUnitTask@ nFirst = Requests::Take(unit, w.def, Task::BuildType::NANO,
+				Task::Priority::NORMAL, nSlot, 64.f, 0.f,
 				made, true);
+		// HOW MANY, NOT WHETHER (apexearth: "the single build request could
+		// expand out into 2, 5, 10, 20, whatever we can afford" -- and, on
+		// the first draft's flow arithmetic: "your logic of 'each nano
+		// absorbs 17.5m/s' is not the right mentality... if we have 2000
+		// metal in the bank and we are surplus metal income then just go
+		// ahead and make 10 easy"). So: BANKED METAL DIVIDED BY THE PRICE,
+		// whenever income runs surplus -- no absorption model, no full-bank
+		// gate. The extras stand as unmanned requests adopt-orphan hands to
+		// the next askers; the ring bearings keep them off each other's
+		// ground. No cap: the bank is the bound and surplus refills it.
+		if (nFirst !is null) {
+			const float bankN = aiEconomyMgr.metal.current;
+			if (aiEconomyMgr.metal.income > aiEconomyMgr.metal.pull) {
+				const float perM = Catalog::gCostM[int(w.def.id)];
+				int wantN = int((bankN / ((perM > 1.f) ? perM : 200.f)) + 0.5f);
+				wantN -= int(Requests::InFlight(w.def));
+				if (wantN > 1) {
+					int opened = 0;
+					const int baseSpoke = int(unit.id) & 7;
+					for (int k = 1; k < wantN; ++k) {
+						const float angK = float((baseSpoke + k) & 7)
+								* 0.785398f + 0.3926991f;
+						const AIFloat3 pk = nSlot
+								+ AIFloat3(cos(angK), 0.f, sin(angK))
+								* (96.f + 40.f * float((k >> 3) + 1));
+						if (!OnMap(pk))
+							continue;
+						bool mk = false;
+						IUnitTask@ tk = Requests::Take(null, w.def,
+								Task::BuildType::NANO, Task::Priority::NORMAL,
+								pk, 64.f, float(SQUARE_SIZE) * 4.f, mk, true);
+						if (mk)
+							++opened;
+					}
+					if (opened > 0)
+						AiLog("apex: nano batch t=" + ai.teamId
+							+ " +" + opened
+							+ " over=" + int(OverflowM())
+							+ " bank=" + int(bankN));
+				}
+			}
+		}
+		return nFirst;
 	}
 	if (w.kind == WK_GEO) {
 		return aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::GEO,
