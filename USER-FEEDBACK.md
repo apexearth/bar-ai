@@ -56,27 +56,43 @@ eyes. Eco-cluster split and nano-reclaim C++ still open.
 He confirmed the long-range fix live (archived, feedback/2026-08-29.md:
 "we are losing due to other issues") and named the other issues, watching:
 
-1. **Perimeter, not interior**: "We make defenses inside of our base
-   instead of at a nice perimeter around it."
-2. **T2 transition is a death window**: "We're almost always light on
-   units when we transition to T2 so this is a risky 'we might die' time
-   of the game."
-3. **Mex encampments undefended; frontline logic has failed at this**:
-   "our frontline logic is a complete failure when it comes to defenses.
-   This logic has been unreliable for a long time so I'm wondering if
-   we're better off leveraging our choke-point logic. We want to gain
-   control of mexes and then defend chokepoints ahead of where the mexes
-   are. We want to prevent the enemy from getting in there."
-4. **Squads screen expansion**: "Perhaps when a constructor leaves a base
+1. **Perimeter, not interior** (LANDED 2fbf491, awaiting his eyes):
+   "We make defenses inside of our base instead of at a nice perimeter."
+   Escalated live after a lone Pyro gutted the rear eco: "6 turrets all
+   clustered in one area near a mex, but nothing was guarding our economy
+   in the back - so the enemy just ***walked around*** our defenses...
+   i often see us putting the defenses behind what we want to protect
+   instead of in front of it." Landed: Front::GateChokes offers every
+   doorway of held territory to the defence auction (apex_choke_gates);
+   asset-guard sites stand half their reach enemy-ward of the assets
+   (apex_guard_forward). Open residue: the 6-in-one-cluster crowding and
+   the open-flank (no-choke) rear approach — watch whether gates+forward
+   siting redistribute before touching the crowd gate.
+2. **T2 transition is a death window** (MEASURED, ruling pending):
+   "We're almost always light on units when we transition to T2." 14 of
+   17 tech events today started with the enemy's fielded army above ours;
+   worst: lab sited at armyOurs=120 armyFoe=700 funded=0.11 — the funded
+   discount applied and the lab still won the auction. His direction so
+   far: "We should be careful with our army if we're fielding less than
+   the enemy" (posture, not necessarily a tech delay). Asked whether to
+   harden the gate vs fund army through the window; he answered with the
+   defence priority instead — re-ask when defence lands.
+3. **Mex encampments undefended; use choke logic** (LANDED with #1):
+   "defend chokepoints ahead of where the mexes are. We want to prevent
+   the enemy from getting in there."
+4. **Squads screen expansion** (OPEN): "when a constructor leaves a base
    to make mexes further away the brain can tell the squad to guard the
    area where that constructor is going."
-5. **Standing to die when outnumbered**: "I just saw our army fight an
-   enemy vehicles army and we just stood there while they surrounded us
-   with a superior army - we didn't even try to move or pull back...
-   pathetic fight logic honestly." Suspects: OutgunnedHere never firing,
-   and the ring code's threat-veto (backing off reads more threat when
-   surrounded, so newPos = curPos = stand still) — possibly aggravated by
-   the 2026-08-29 ring-hold change. Attribution in progress same hour.
+5. **Standing to die when outnumbered** (LANDED f928ef0, awaiting his
+   eyes): "we just stood there while they surrounded us... If we sense
+   too many enemies can shoot at us we should immediately back up instead
+   of waiting to be hit." Attributed on his Boreal Falls game: (a) the
+   withdraw sensors both missed a fight lost 1796:31 — the casualty
+   scoreboard (LosingFightHere, trade=lost:killed log tag) now pulls
+   squads back on observed local deaths; (b) mayKite forbade a Rocko
+   (475) from kiting a Stumpy (350) — outranging now always permits the
+   backstep. "Maneuvering / forcing the enemy to move" beyond backstep +
+   ring orbit is still open.
 
 Also still queued from the morning ask: "build up these guys [snipers/
 hounds/arty] in unit numbers so our army can grow very powerful" —
