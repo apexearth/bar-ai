@@ -21,6 +21,20 @@ in ENEMY territory at 27-31m. Either the flee destination sent him the
 wrong way ("toward home only if home is safer" picking the enemy side) or
 a job election walked him there. One game's fhist would attribute it.
 
+TEAM CONFIRMATION (first --teams battery, 2026-08-29): 0W-9L decided
+across 2v2/4v4/8v8, trade 0.22-0.25 everywhere, mex parity-to-lead
+(30v26 in 4v4). The death ledgers name the shape in both team sizes
+sampled: the army barely dies ATTACKING — it dies RETREATING (36%/28% of
+lost metal, 374-400 units per game), and the rest is structures and
+nanoframes at deep-rear forward fractions (4v4: 55% at fwd -0.2; 8v8:
+structures 37% at fwd -0.99, idle deaths at -0.84). The enemy is inside
+our base in every format while our units flee-and-die on our own ground.
+The campaign's two fronts, in order: (1) retreat deaths — the flee
+threshold/haven walk turns damaged units into free kills mid-map ("look
+at the action before the retreat"); (2) the rear is reachable — the
+perimeter/gate defence work has not yet turned this ledger. Instrument:
+decision-length games + deaths.py fhist, never 6-game win counts.
+
 ## 2026-08-29 — perf spikes attributed: the builder election, protect stack inside it
 
 His standing complaint ("We still have performance spikes in the game which
