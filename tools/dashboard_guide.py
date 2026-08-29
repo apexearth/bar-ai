@@ -540,6 +540,10 @@ GROUPS = [
                   "perimeter gates ahead of the mexes instead of inside the "
                   "base; OFF keeps only the single choke nearest the base "
                   "anchor"),
+                 ("TUNE_GATE_DEPTH", "how far past parity a choke gate keeps "
+                  "deepening — its cover target as a multiple of the wave "
+                  "that arrives together. His concentration ruling: the gate "
+                  "overwhelms the push or it is a speed bump"),
                  ("TUNE_GUARD_FORWARD", "how far in FRONT of the buildings "
                   "an asset-guard tower stands, as a fraction of its own "
                   "reach — between the assets and the enemy approach; 0 "

@@ -829,8 +829,16 @@ const float TUNE_ANTINUKE_INCOME = 60.f;
 //   a metal number. It is a FLOOR and nothing more: once a mex has this much
 //   cover the shortfall is zero and the next turret there prices itself out,
 //   and a mex under real threat is still sized by the threat. 0 restores the
-//   observed-threat-only behaviour, which is how the A/B is run.
-const float TUNE_MEX_COVER_FLOOR = 1.f;
+//   observed-threat-only behaviour, which is how the A/B is run. Halved
+//   2026-08-29 under his concentration ruling ("Move 8 spread out defenses
+//   from mexes into less choke points which overwhelm the attack") -- the
+//   freed budget flows to the gate depth floor under the same DefenceTarget.
+const float TUNE_MEX_COVER_FLOOR = 0.5f;
+// manager/brain/market/want_protect.as [ratio] -- A choke-gate site's threat
+//   floor as a multiple of the arriving wave: the gate keeps deepening until
+//   its cover OVERWHELMS the push, not merely matches it ("Have an unusual
+//   amount of tower at some spots. Try to deeply cover those choke points").
+const float TUNE_GATE_DEPTH = 2.f;
 // manager/brain/market/want_protect.as [ratio] -- HOW HARD A BUILDER PREFERS
 //   THE GROUND IT IS ALREADY STANDING ON. The defence auction picks a site,
 //   then ValueOf charges the walk to it -- so the choice never saw the cost of

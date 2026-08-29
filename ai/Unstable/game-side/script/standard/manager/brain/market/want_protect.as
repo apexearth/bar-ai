@@ -773,10 +773,25 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		if (!OnMap(s))
 			continue;
 		const bool isFront = (si >= nAsset);
+		const bool isGate = isFront && (si < nAsset + nGates);
 		xA[si] = s.x;
 		zA[si] = s.z;
 		frontA[si] = isFront;
 		float threat = isFront ? ThreatAt(s) : PfSiteThreat(si);
+		// THE GATE OVERWHELMS OR IT IS A SPEED BUMP (apexearth 2026-08-29:
+		// "Have an unusual amount of tower at some spots. Try to deeply
+		// cover those choke points. Easy wins there... It matches
+		// concentration with concentration"). A gate's threat is floored at
+		// a multiple of the wave that arrives together, so it keeps
+		// deepening past parity -- the winrate6 ledger showed thin gates
+		// dying WITH the base (81% of tower metal destroyed, K/D 0.65,
+		// against stock's concentrated 1.04).
+		if (isGate) {
+			const float gateFloor = siteWave
+					* ai.GetTunable("apex_gate_depth", TUNE_GATE_DEPTH);
+			if (gateFloor > threat)
+				threat = gateFloor;
+		}
 		const bool floored = !isFront && MexInReach(s, reach)
 				&& (mexFloorWave > threat);
 		if (floored)

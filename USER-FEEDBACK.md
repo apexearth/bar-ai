@@ -10,6 +10,25 @@ intel numbers on the winrate4 arms; if still blind, the tweak targets are
 RadarSees' one-radar-per-coverage rule (no redundancy — stock builds 2x)
 and apex_insure_rate.
 
+## RULING (2026-08-29): the concentration doctrine for defence
+
+"So we know they push hard, we can make them pay for it … slow them down
+with some walls outside so enemy army is broken up before they get to us.
+Have an unusual amount of tower at some spots. Try to deeply cover those
+choke points. Easy wins there. Move 8 spread out defenses from mexes into
+less choke points which overwhelm the attack. It matches concentration
+with concentration…. I do agree we don't want to tower dive so much that
+we have no good army left. Rocket bots, artillery… they get free shots
+sometimes so we should leverage that. We need to ensure that enemies
+cannot walk past our choke points and get a free path to our economy."
+
+Implementation order: (1) gate concentration — the crowd gate must not
+refuse depth at a choke gate, and a covered gate keeps deepening until it
+overwhelms; (2) the per-mex spread floor shifts its budget into gates;
+(3) a teeth line across the choke span ahead of the gate towers;
+(4) long-range class leverages free shots at the gates. The static-kite
+fix (no tower diving) he endorsed here is measuring in winrate7.
+
 ## STANDING PRIORITY (2026-08-29): win 1v1 reliably FIRST
 
 "I suggest you get us winning 1v1 games fairly reliably and then go to

@@ -345,6 +345,7 @@ local NAMES = {
 	"apex_charger_strike",    -- hooks.as: 1 = T3 chargers take solo base-strike tasks, 0 = massing pool
 	"apex_arty_mass",         -- hooks.as: 1 = mobile artillery masses into squads as the back row, 0 = solo ArtilleryTask
 	"apex_choke_gates",       -- want_protect.as: 1 = every gate of our territory is a defence-site candidate, 0 = near-anchor choke only
+	"apex_gate_depth",       -- want_protect.as: gate threat floor as a multiple of the arriving wave (2)
 	"apex_guard_forward",     -- protect_field.as: asset guard sites stand this fraction of tower reach enemy-ward of the assets (0.5)
 	"apex_con_scratch_gate",  -- BuilderTask.cpp: 1 = a scratched builder above the stand floor retreats only where danger is read, 0 = always
 	"apex_t1_def_late",
