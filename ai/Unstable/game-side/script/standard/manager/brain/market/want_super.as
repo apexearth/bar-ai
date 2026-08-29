@@ -359,14 +359,14 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				AdvDeferLog("gantry");
 				continue;
 			}
-			// WHO hosts, not WHETHER: below 60% of the host anchor this
-			// player defers and a richer teammate proposes instead. The
-			// squared discount alone was not binding -- at team ~400 the
-			// insure gain won elections through a x0.25 discount, and hosts
-			// at 47-59 m/s kept ordering gantries (audited, advserial-s21).
+			// WHO hosts, not WHETHER: below the host anchor this player
+			// defers and a richer teammate proposes instead. Was 0.6x the
+			// anchor; apexearth, next day: "We went from making no gantry
+			// at 400m/s to making it at 80m/s - it is too early now" -- the
+			// gate is the FULL anchor, his original "we can have a gantry
+			// at like 100 m/s".
 			if (((gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income)
-				< ai.GetTunable("apex_gantry_host_inc", TUNE_GANTRY_HOST_INC)
-					* 0.6f)
+				< ai.GetTunable("apex_gantry_host_inc", TUNE_GANTRY_HOST_INC))
 				continue;
 			// The NET lane: teammates' reclaim feasts do not license it.
 			teamInc = Military::TeamSum(Military::TV_MINC_NET, teamInc);
@@ -433,26 +433,17 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			// time nothing can compress once the Behemoth is already on the
 			// lawn. Worth a share of the team income that could field T3,
 			// even with no gap and no waste on the books.
-			const float insure = teamInc
+			// Insurance keyed to the HOST's own structural income, not the
+			// team's: 0.5x a team of eight read 150+ gain at minute five and
+			// out-bid everything the moment the host gate opened ("making it
+			// at 80m/s - it is too early now"). The team purse still decides
+			// affordability above; the host's economy sizes the urgency.
+			const float insure = ((gIncEma > 0.f)
+						? gIncEma : aiEconomyMgr.metal.income)
 					* ai.GetTunable("apex_gantry_insure", TUNE_GANTRY_INSURE)
 					* afford * Persona::WantMult(SuperName(sc));
 			if (insure > gain)
 				gain = insure;
-			// THE HOST MUST BE ABLE TO FEED IT (apexearth, watching green
-			// start one at 50 m/s own income: "that is too early" -- against
-			// his 100 m/s anchor). The team purse makes the CASE; the
-			// proposing player's own smoothed income times it: at half the
-			// anchor the gain quarters, at the anchor it is whole.
-			const float hostInc = (gIncEma > 0.f)
-					? gIncEma : aiEconomyMgr.metal.income;
-			const float anchor = ai.GetTunable("apex_gantry_host_inc",
-					TUNE_GANTRY_HOST_INC);
-			if (anchor > 1.f) {
-				float hm = hostInc / anchor;
-				if (hm > 1.f)
-					hm = 1.f;
-				gain *= hm * hm;
-			}
 		}
 		// DEFENCE BEFORE THE BIG GUN (apexearth 2026-08-28: "We consistently
 		// make Basilisk before T3 or even T2 defense - we need better

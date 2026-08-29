@@ -119,6 +119,7 @@ void PublishDefence()
 	ai.PublishTeamValue(TV_FFENCE, float(front));
 	ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
 	ai.PublishTeamValue(TV_MINC_NET, Market::StructuralIncomeEma());
+	Market::NavalPublish();
 	ai.PublishTeamValue(TV_FMETAL, OwnFrontMetal());
 	ai.PublishTeamValue(TV_MSPEND, Brain::gSpentTotal);
 	ai.PublishTeamValue(TV_AA, float(OwnStaticAA()));

@@ -31,6 +31,36 @@ budget/host floor, antinuke floor) is structural income; the gantry team
 budget reads the new TV_MINC_NET lane. Move to feedback/ archive once he
 confirms live.
 
+## UNRESOLVED — The 2026-08-28 rebalance campaign (his test protocol attached)
+
+"Our balance is generally off now in the game so we need to take a careful
+look at some things." Four asks, one instrument:
+
+1. **Army production feels down** — "I think in general we aren't making
+   as much army but I'm having a hard time seeing why." Diagnose, don't
+   guess: prime suspects are the ally-share census division at 8v8 scale
+   (1/8 shares) and T3/gantry displacement.
+2. **Gantry too early now** — "We went from making no gantry at 400m/s to
+   making it at 80m/s - it is too early now." The team-purse budget scales
+   with roster (8 x small = clears at minute ~5); re-anchor on the HOST.
+3. **Hover plants are not navy** — "commanders walking all over the place
+   to make hover factories on the water... I mentioned we needed to make
+   navies in the past and that turned into us making hovers - oops - not
+   what I meant. That walk probably kills a lot of the performance of our
+   commanders... We really just [need] 1 or 2 teams to make some navy in
+   the game... Ensure our economies remain strong." So: no commander
+   treks to shore for hover plants; a naval ELECTION (like the air lead)
+   picks 1-2 teams to build real shipyards; everyone else stays on land
+   economy.
+4. **Eco player goes AFK** — "They'll make mexes and some energy and then
+   they go AFK. This is seen on Supreme Isthmus 8v8 maps." Diagnose from
+   the idle telemetry.
+
+**His test protocol:** "run 10m long supreme isthmus 8v8 games, and then
+once we believe we are OK in performance we can start looking at 15m, 20m,
+etc..." — 10-minute Supreme Isthmus v2.1 8v8 is THE tell; extend the
+horizon only after the short one reads healthy.
+
 ## UNRESOLVED (landed, awaiting his eyes) — One advanced plant at a time; gantry host anchor (2026-08-28, late)
 
 Watching his game: "I am seeing Purple in my game make a T2 vehicle plant

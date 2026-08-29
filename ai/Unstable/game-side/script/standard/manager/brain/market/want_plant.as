@@ -141,6 +141,108 @@ const int PC_LAND = 0;
 const int PC_AIR = 1;
 const int PC_WATER = 2;
 
+// -- The naval election ------------------------------------------------------
+//
+// apexearth 2026-08-28: "commanders walking all over the place to make hover
+// factories on the water... I mentioned we needed to make navies in the past
+// and that turned into us making hovers - oops - not what I meant... We
+// really just [need] 1 or 2 teams to make some navy in the game... Ensure
+// our economies remain strong." So: the water mandate is HELD, like the air
+// lead -- the one or two teams whose shore is closest build REAL shipyards;
+// everyone else never proposes a water plant and never marches a commander
+// to the beach. Deterministic from the blackboard (same data, same answer,
+// the AnswerShare pattern): each team publishes its distance to a usable
+// shipyard site; the closest quota holds the mandate.
+
+const string TV_NAVDIST = "navdist";
+
+// A REAL navy floats: a plant counts only if something it builds is a ship
+// or a sub. The hover platform floats but its products do not -- it is the
+// "oops - not what I meant".
+bool PlantMakesShips(int d)
+{
+	const array<int>@ pr = Catalog::gBuildsList[d];
+	for (uint i = 0; i < pr.length(); ++i) {
+		if (Catalog::gFloater[pr[i]] || Catalog::gSub[pr[i]])
+			return true;
+	}
+	return false;
+}
+
+// The faction's cheapest buildable real shipyard, for the site probe.
+// NEVER latch a miss: gAvailable is frame-dependent (the catalog trap), so
+// an empty scan re-runs on a 30s throttle instead of caching -1 forever.
+int gNavShipDef = -1;
+int gNavShipAt = -999999;
+
+int NavShipyardDef()
+{
+	if ((gNavShipDef > 0) || (ai.frame < gNavShipAt + 30 * SECOND))
+		return gNavShipDef;
+	gNavShipAt = ai.frame;
+	int best = -1;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+			|| !Catalog::gFloater[d]
+			|| (Catalog::gBuildsList[d].length() == 0))
+			continue;
+		if (!PlantMakesShips(d))
+			continue;
+		if ((best < 0) || (Catalog::gCostM[d] < Catalog::gCostM[best]))
+			best = d;
+	}
+	gNavShipDef = best;
+	return best;
+}
+
+// Published on the defence-line cadence (Military::PublishDefence calls this).
+void NavalPublish()
+{
+	float dist = 1e9f;
+	const int sd = NavShipyardDef();
+	if ((sd > 0) && MapHasWater() && Builder::gHomeSet) {
+		const AIFloat3 wet = WetPlantSite(Catalog::Def(sd), Builder::gHomePos);
+		if (OnMap(wet))
+			dist = Builder::gHomePos.distance2D(wet);
+	}
+	ai.PublishTeamValue(TV_NAVDIST, dist);
+}
+
+bool gNavLead = false;
+int gNavLeadAt = -999999;
+
+bool NavalLead()
+{
+	if (ai.frame < gNavLeadAt + 10 * SECOND)
+		return gNavLead;
+	gNavLeadAt = ai.frame;
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates is null) || (mates.length() <= 1)) {
+		gNavLead = true;   // solo: the mandate is yours if the map has water
+		return gNavLead;
+	}
+	// HIS NUMBER: "we really just [need] 1 or 2 teams to make some navy".
+	const uint quota = (mates.length() >= 6) ? 2 : 1;
+	const float mine = ai.ReadTeamValue(ai.teamId, TV_NAVDIST, 1e9f);
+	if (mine >= 8e8f) {
+		gNavLead = false;   // no usable shore of our own
+		return gNavLead;
+	}
+	uint ahead = 0;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		if (t == ai.teamId)
+			continue;
+		const float d = ai.ReadTeamValue(t, TV_NAVDIST, 1e9f);
+		if (d >= 8e8f)
+			continue;
+		if ((d < mine) || ((d == mine) && (t < ai.teamId)))
+			++ahead;
+	}
+	gNavLead = ahead < quota;
+	return gNavLead;
+}
+
 int PlantClass(int plantId)
 {
 	if (Catalog::gFloater[plantId] || Catalog::gSub[plantId])
@@ -430,7 +532,9 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// (apexearth). A second shipyard is parallel capacity like anything else,
 	// and pays the marginal-line price again.
 	const bool waterOnly = overLine;
-	if (overLine && !(MapHasWater() && (OwnedWaterPlants() == 0)))
+	// The first-way-into-the-water exemption belongs to the NAVAL LEAD only:
+	// per-player it marched eight commanders to eight beaches.
+	if (overLine && !(MapHasWater() && (OwnedWaterPlants() == 0) && NavalLead()))
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
@@ -478,6 +582,20 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const int dClass = PlantClass(d);
 		if (waterOnly && (dClass != PC_WATER))
 			continue;
+		// The water mandate is held, ships-only, and never the commander's
+		// errand -- see the naval election above. The backoff kills the
+		// elect-order-abort churn (34 dead shipyard orders in one 10-minute
+		// game) for every def alike.
+		if (Builder::AbortBackoff(d))
+			continue;
+		if (dClass == PC_WATER) {
+			if (!NavalLead())
+				continue;
+			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+				continue;
+			if (!PlantMakesShips(d) && (NavShipyardDef() > 0))
+				continue;   // a hover platform is not a navy
+		}
 		const AIFloat3 here = unit.GetPos(ai.frame);
 		// A floating plant stands in water, not at the base anchor, and is
 		// worth nothing on a map without real water to stand in.

@@ -54,6 +54,23 @@ array<int> gGoneBadNoPos(0);
 int gNextGoneLog = 0;
 int gAbortLog = 0;
 
+// INSTANT-ABORT BACKOFF. A def whose task dies unfinished several times in
+// quick succession is stuck in an elect-order-abort loop -- measured on
+// Supreme Isthmus 8v8: a shipyard elected, ordered, and killed by the DLL's
+// site check THE SAME FRAME, 34 times in 10 minutes, burning the vehicle
+// con's walk each round. Three fast deaths hold that def's proposals for
+// two minutes; a finished build clears the streak.
+array<int> gAbortStreak;
+array<int> gAbortAt;
+
+bool AbortBackoff(int d)
+{
+	if ((d <= 0) || (d >= int(gAbortStreak.length())))
+		return false;
+	return (gAbortStreak[d] >= 3)
+		&& (ai.frame < gAbortAt[d] + 120 * SECOND);
+}
+
 void AiTaskRemoved(IUnitTask@ task, bool done)
 {
 	const double _t = Perf::T0();
@@ -69,12 +86,22 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 		gGoneOk.resize(Catalog::gDefCount + 1);
 		gGoneBad.resize(Catalog::gDefCount + 1);
 		gGoneBadNoPos.resize(Catalog::gDefCount + 1);
+		gAbortStreak.resize(Catalog::gDefCount + 1);
+		gAbortAt.resize(Catalog::gDefCount + 1);
 	}
 	const int d = (task.buildDef !is null) ? int(task.buildDef.id) : 0;
 	if ((d >= 0) && (d < int(gGoneOk.length()))) {
 		if (done) {
 			++gGoneOk[d];
+			gAbortStreak[d] = 0;
 		} else {
+			gAbortStreak[d] = (ai.frame < gAbortAt[d] + 30 * SECOND)
+					? (gAbortStreak[d] + 1) : 1;
+			gAbortAt[d] = ai.frame;
+			if ((gAbortStreak[d] == 3) && (gAbortLog < 30))
+				AiLog("apex: abort-backoff t=" + ai.teamId + " "
+					+ Catalog::Def(d).GetName()
+					+ " -- 3 fast aborts, held 120s");
 			++gGoneBad[d];
 			if (!OnMap(task.GetBuildPos()))
 				++gGoneBadNoPos[d];

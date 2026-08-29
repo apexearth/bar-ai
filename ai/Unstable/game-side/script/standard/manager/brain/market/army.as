@@ -676,6 +676,14 @@ bool EcoRoleActive()
 	const float mine = mx * mx + mz * mz;
 	const float margin = ai.GetTunable("apex_eco_rear_margin", TUNE_ECO_REAR_MARGIN);
 	gEcoRole = (mine >= d1) && (dmed > 1.f) && (mine >= dmed * margin * margin);
+	// LINE-ABREAST STARTS ELECT NOBODY under the margin, and a big team with
+	// no rear economist is every player playing front-line (measured
+	// 2026-08-28: eco=1 in 0 of 92 samples across an entire 4v4, and again
+	// on Supreme Isthmus 8v8). With four or more allies the rear-most takes
+	// the role regardless of margin -- someone is always hindmost, and a
+	// team that size can spare its most protected seat.
+	if (!gEcoRole && (hx.length() >= 4) && (mine >= d1) && (dmed > 1.f))
+		gEcoRole = true;
 	if (!gEcoDiagDone) {
 		gEcoDiagDone = true;
 		AiLog("apex: rear-elect homes=" + hx.length() + " mine=" + sqrt(mine)
