@@ -209,8 +209,18 @@ bool RadarGap(const AIFloat3& in from, AIFloat3& out at, float& out unseenFrac)
 	int unseen = 0;
 	float bestD = -1.f;
 	bool found = false;
+	const bool foeKnown = Front::FoeKnown();
 	for (uint i = 0; i < pts.length(); ++i) {
 		if (!OnMap(pts[i]) || RadarSees(pts[i]))
+			continue;
+		// A GAP WE MAY NOT SAFELY BUILD AT IS NOT DEMAND (apexearth,
+		// watching sense outbid nanos at v=108: "that seems a bit crazy...
+		// they probably already have all the radar they can make in any
+		// safe area"). Hot gaps kept unseenFrac -- and with it the
+		// wealth-scaled gain -- above zero forever, for radars the safety
+		// gate then refused or the enemy ate. Cover every SAFE gap and
+		// this want now prices itself out, as its own comment promises.
+		if (foeKnown && Builder::PastFront(pts[i]))
 			continue;
 		++unseen;
 		const float dd = from.distance2D(pts[i]);

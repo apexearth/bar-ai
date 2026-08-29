@@ -51,6 +51,15 @@ ladder, overflow-scaled strategic parallelism, wealth waiver on the copy
 laws, T1-air mute) landed with three audits; validation run next, then his
 eyes. Eco-cluster split and nano-reclaim C++ still open.
 
+## UNRESOLVED — Snipers step too close and die (2026-08-29, watching)
+
+"We tend to move our snipers too close as a small example... they step
+really close and get killed for no great reason." The standoff machinery
+(C++ SquadTask rows + kite; SIEGE-attr rows fear proximity) either does
+not class snipers as standoff units or the kite range is under their
+weapon range. Not yet attributed — check armsnipe's attr/kite numbers
+against its 750 range before touching anything.
+
 ## UNRESOLVED (landed, awaiting his eyes) — Exit lanes and pooled advsols (2026-08-28, watching live)
 
 Two observations from the NullAI watch game, both landed same hour:

@@ -482,14 +482,30 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// election to 271ms.
 		{
 			const AIFloat3 raw = OnMap(slot) ? slot : w.pos;
-			const int nk = (int(raw.x) >> 8) * 4096 + (int(raw.z) >> 8) + 1;
+			// EACH ASKER PROBES ITS OWN BEARING. Every decider converges on
+			// the argmax site, the shared 2s cache handed them all the SAME
+			// legal cell, and every ask after the first died "covered" at it
+			// -- covered=304 vs new=274 in his 3v3 while 74k overflowed
+			// ("we have tons of room to build nanos and we aren't making
+			// them"). A per-asker radial origin spreads the ring around the
+			// line; the 64-elmo cover radius still stops true doubles, and
+			// the probe stays cached per bearing (exec.nanoprobe watches
+			// the cost).
+			const int spoke = int(unit.id) & 7;
+			const float angN = float(spoke) * 0.785398f;
+			const AIFloat3 rawN = raw
+					+ AIFloat3(cos(angN), 0.f, sin(angN))
+					* (96.f + 48.f * float(int(unit.id) % 3));
+			const int nk = (int(raw.x) >> 8) * 4096 + (int(raw.z) >> 8) + 1
+					+ (spoke + 1) * 16777216;
 			if ((nk != gNanoSiteKey)
 				|| (ai.frame - gNanoSiteAt >= 2 * SECOND))
 			{
 				gNanoSiteKey = nk;
 				gNanoSiteAt = ai.frame;
 				const double _tProbe = Perf::T0();
-				gNanoSite = ai.FindBuildSiteNear(w.def, raw, 300.f);
+				gNanoSite = ai.FindBuildSiteNear(w.def,
+						OnMap(rawN) ? rawN : raw, 300.f);
 				Perf::Add("exec.nanoprobe", _tProbe);
 			}
 			if (OnMap(gNanoSite))
