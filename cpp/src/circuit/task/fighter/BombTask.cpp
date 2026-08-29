@@ -355,6 +355,18 @@ void CBombTask::FindTarget()
 			// equal worth. The floor stops a bomber committing to anything under
 			// apex_bomb_min_value metal while something better exists.
 			float value = (edef != nullptr) ? edef->GetCostM() : 0.f;
+			// apex: KILLING ENERGY IS WORTH MORE THAN THE BUILDING (apexearth
+			// 2026-08-29: "Killing energy economy is even better than
+			// metal"). A dead generator costs them its metal PLUS the stream
+			// it was making, capitalized over apex_bomb_eco_h seconds at the
+			// game's ~70:1 conversion -- a fusion's +1000 E/s adds ~4,300 to
+			// its price at the 300s default, doubling it against any tower of
+			// equal armor. Derived from the def's own make rate; no class
+			// list.
+			if (edef != nullptr) {
+				const float ecoH = circuit->GetTunable("apex_bomb_eco_h", 300.f);
+				value += edef->GetMakeE() * (ecoH / 70.f);
+			}
 			// A NANOFRAME IS NOT THE BUILDING. GetCostM prices the finished
 			// def, and a frame's low health then made it the best-looking
 			// target on the map -- apexearth, watching a raid: "we bombed the

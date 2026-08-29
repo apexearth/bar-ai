@@ -42,6 +42,7 @@ local NAMES = {
 	"apex_base_attack_infl",
 	"apex_bomb_dist_scale",
 	"apex_bomb_min_value",
+	"apex_bomb_eco_h",       -- BombTask.cpp: seconds of a generator's energy stream added to its bomb value (300)
 	"apex_build_threat_bar",
 	"apex_catalog_dump",
 	"apex_protect_field_s",
