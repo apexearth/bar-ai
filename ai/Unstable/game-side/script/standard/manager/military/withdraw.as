@@ -34,6 +34,8 @@ array<int> gCombatBucket;    // last observed task bucket, for transition tags
 int gNextWithdraw = 0;
 int gNextTaskAbort = 0;
 int gWithdrawn = 0;
+int gHeldCommitted = 0;
+int gNextHoldLog = 0;
 int gNextWithdrawLog = 0;
 int gNextCensusLog = 0;
 // gTrackedCost (see state.as) is refreshed by the pass below.
@@ -460,6 +462,26 @@ void UpdateWithdraw()
 		if (!leash && !recallHome && !outgunned && !losingFight
 			&& !consolidate && !LosingHere(p))
 			continue;
+		// COMMIT COHERENCE. A unit whose ground the enemy's guns already
+		// cover does not get a solo pull-out: the order is a rout, not a
+		// retreat (wdeaths: 43% die in place ping-ponging the re-asserting
+		// task, 34% die walking away rear-shot, median 15s order-to-death
+		// at full hp), and each leaver strands the ones still firing.
+		// apexearth, watching the arena: "some of our units keep fighting
+		// while others are running away... this splits our forces and we
+		// get clobbered because of it." Strategic recalls (leash, recall,
+		// consolidate) keep working where they work: out of contact.
+		if ((ai.GetTunable("apex_hold_committed", TUNE_HOLD_COMMITTED) > 0.f)
+			&& (ai.GetUnitThreatAt(u, p) > 0.f))
+		{
+			++gHeldCommitted;
+			if (ai.frame >= gNextHoldLog) {
+				gNextHoldLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: withdraw-hold in-contact -- "
+					+ gHeldCommitted + " held, " + gWithdrawn + " ordered");
+			}
+			continue;
+		}
 		if (ai.frame - gCombatSent[i] < reissue)
 			continue;
 		AIFloat3 back;

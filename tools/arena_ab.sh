@@ -24,6 +24,7 @@ OPPONENT="${ARENA_OPPONENT:-BARb:stable:hard}"
 common=(--map "${ARENA_MAP:-Comet Catcher Remake 1.8}"
         --per-side 1 --sides Armada,Armada
         --minutes "${ARENA_MINUTES:-20}" --seed "${ARENA_SEED:-7}"
+        --modoption deathmode=neverend
         --modoption dev_arena=1
         --modoption "dev_arena_def=${ARENA_DEF:-armpw}"
         --modoption "dev_arena_round=${ARENA_ROUND:-5400}")

@@ -904,6 +904,11 @@ const float TUNE_DEFEND_HOME = 1.f;
 //   wrong place by the task's own meaning. 0.35 was tried against the
 //   midfield-grind deaths and lost MORE (ceded the corridor's mexes).
 const float TUNE_DEFEND_LEASH = 0.55f;
+
+// apex_hold_committed: units standing on ground the enemy's guns cover are
+//   never given solo pull-out orders -- the split (half fights, half runs)
+//   loses the fight twice. 0 restores per-unit withdrawal everywhere.
+const float TUNE_HOLD_COMMITTED = 1.f;
 // manager/builder/statics.as [seconds] -- Front towers pick the dearest gun
 //   costing at most this many seconds of metal income; the basic tower stays
 //   the unconditional floor.

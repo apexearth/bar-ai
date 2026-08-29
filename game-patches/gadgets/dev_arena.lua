@@ -562,6 +562,20 @@ end
 -- dropped by tools/arena.py. Without this the instrument reported a 0.72
 -- unit/round gap even with BOTH sides' units removed from AI control, which is a
 -- fight neither AI was steering.
+-- A resurrected unit belongs to the fight that raised it: adopt it into
+-- its resurrector's side, or its kills mark the round dirty and the rez
+-- rounds all get dropped.
+function gadget:UnitCreated(unitID, unitDefID, teamID, builderID)
+	if not active or not builderID then
+		return
+	end
+	if spawned[0][builderID] then
+		spawned[0][unitID] = true
+	elseif spawned[1][builderID] then
+		spawned[1][unitID] = true
+	end
+end
+
 function gadget:UnitDestroyed(unitID, unitDefID, teamID, attackerID)
 	if not active then
 		return

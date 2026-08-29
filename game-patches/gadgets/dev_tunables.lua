@@ -324,7 +324,8 @@ local NAMES = {
 	"apex_persona",           -- persona.as: -1 roll freely, 0..5 force a Kind
 	"apex_withdraw_odds",     -- withdraw.as: enemy-threat/our-power ratio that pulls a unit back (1.5)
 	"apex_withdraw",          -- withdraw.as: master switch (1)
-	"apex_defend_leash",      -- withdraw.as: forward fraction past which a DEFEND unit on enemy ground is recalled (0.55)
+	"apex_defend_leash",
+	"apex_hold_committed",      -- withdraw.as: forward fraction past which a DEFEND unit on enemy ground is recalled (0.55)
 	"apex_recall_home",       -- withdraw.as: master switch, ATTACK/RAID squads come home while base is under attack and no killing blow is armed (1)
 	"apex_recall_home_fwd",   -- withdraw.as: forward fraction past which an ATTACK/RAID squad is recalled home (0.5)
 	"apex_assemble",          -- AttackTask.cpp: pre-contact assembly gate master switch (1)

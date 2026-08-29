@@ -424,6 +424,10 @@ GROUPS = [
                   "our front while a hold is on"),
                  ("TUNE_DEFEND_LEASH", "lets a defending unit chase further "
                   "forward before it is recalled"),
+                 ("TUNE_HOLD_COMMITTED", "units already under enemy fire are "
+                  "never given solo pull-out orders — the force stands or was "
+                  "never engaged. OFF restores per-unit withdrawal everywhere, "
+                  "the split (half fights, half runs) that loses both halves"),
                  ("TUNE_RETREAT_FLOOR", "units start fleeing at a higher HP "
                   "fraction — the cheapest unit's threshold; each unit adds "
                   "cost/apex_retreat_cost_scale on top. Stock's 0.6 lost 93% "
