@@ -803,6 +803,24 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
 			if (taskB->GetBuildType() >= IBuilderTask::BuildType::_SIZE_) {
 				break;
 			}
+			// WHY A TASK NEVER BECAME A BUILDING, part two: Execute's
+			// site-fail line covers the search; this line covers every other
+			// death. Only tasks somebody actually worked (a frame, a crew, or
+			// a failed execute) -- proposed-and-never-claimed churn is the
+			// request log's job.
+			if (!done && (taskB->GetBuildDef() != nullptr)
+				&& ((taskB->GetTarget() != nullptr) || (taskB->GetBuildFails() > 0)
+					|| !taskB->GetAssignees().empty()))
+			{
+				const springai::AIFloat3& tp = taskB->GetPosition();
+				circuit->LOG("apex: task-die t=%i %s bt=%i at=%.0f,%.0f fails=%i crew=%i framed=%i id=%p",
+						circuit->GetTeamId(), taskB->GetBuildDef()->GetDef()->GetName(),
+						static_cast<int>(taskB->GetBuildType()), tp.x, tp.z,
+						taskB->GetBuildFails(),
+						static_cast<int>(taskB->GetAssignees().size()),
+						(taskB->GetTarget() != nullptr) ? 1 : 0,
+						static_cast<void*>(taskB));
+			}
 			// The target-keyed maps are erased UNCONDITIONALLY, before the
 			// buildTasks membership branch: a task dequeued while not listed
 			// there (the break below) used to leave a stale repairUnits entry

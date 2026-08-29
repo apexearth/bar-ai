@@ -1566,7 +1566,7 @@ index 54e3ac7..f3aac15 100644
  #endif
  };
 diff --git a/src/circuit/module/BuilderManager.cpp b/src/circuit/module/BuilderManager.cpp
-index a62be4f..23d025e 100644
+index a62be4f..b61b5d7 100644
 --- a/src/circuit/module/BuilderManager.cpp
 +++ b/src/circuit/module/BuilderManager.cpp
 @@ -621,10 +621,16 @@ const std::set<IBuilderTask*>& CBuilderManager::GetTasks(IBuilderTask::BuildType
@@ -1630,7 +1630,7 @@ index a62be4f..23d025e 100644
  }
  
  void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
-@@ -795,26 +803,48 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
+@@ -795,26 +803,66 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
  			if (taskB->GetBuildType() >= IBuilderTask::BuildType::_SIZE_) {
  				break;
  			}
@@ -1638,7 +1638,24 @@ index a62be4f..23d025e 100644
 -			auto it = tasks.find(taskB);
 -			if (it == tasks.end()) {
 -				break;
--			}
++			// WHY A TASK NEVER BECAME A BUILDING, part two: Execute's
++			// site-fail line covers the search; this line covers every other
++			// death. Only tasks somebody actually worked (a frame, a crew, or
++			// a failed execute) -- proposed-and-never-claimed churn is the
++			// request log's job.
++			if (!done && (taskB->GetBuildDef() != nullptr)
++				&& ((taskB->GetTarget() != nullptr) || (taskB->GetBuildFails() > 0)
++					|| !taskB->GetAssignees().empty()))
++			{
++				const springai::AIFloat3& tp = taskB->GetPosition();
++				circuit->LOG("apex: task-die t=%i %s bt=%i at=%.0f,%.0f fails=%i crew=%i framed=%i id=%p",
++						circuit->GetTeamId(), taskB->GetBuildDef()->GetDef()->GetName(),
++						static_cast<int>(taskB->GetBuildType()), tp.x, tp.z,
++						taskB->GetBuildFails(),
++						static_cast<int>(taskB->GetAssignees().size()),
++						(taskB->GetTarget() != nullptr) ? 1 : 0,
++						static_cast<void*>(taskB));
+ 			}
 +			// The target-keyed maps are erased UNCONDITIONALLY, before the
 +			// buildTasks membership branch: a task dequeued while not listed
 +			// there (the break below) used to leave a stale repairUnits entry
@@ -1687,7 +1704,7 @@ index a62be4f..23d025e 100644
  		} break;
  		default: break;
  	}
-@@ -860,6 +890,42 @@ bool CBuilderManager::HasFreeAssists(CCircuitUnit* builder) const
+@@ -860,6 +908,42 @@ bool CBuilderManager::HasFreeAssists(CCircuitUnit* builder) const
  			&& (!conDef->IsRoleComm() || ((int)assistCount <= circuit->GetSetupManager()->GetAssistFac()));
  }
  
@@ -1730,7 +1747,7 @@ index a62be4f..23d025e 100644
  SBuildChain* CBuilderManager::GetBuildChain(IBuilderTask::BuildType buildType, CCircuitDef* cdef) const
  {
  	auto it1 = buildChains.find(static_cast<IBuilderTask::BT>(buildType));
-@@ -934,6 +1000,9 @@ bool CBuilderManager::CanUpGeo(CCircuitDef* cdef) const
+@@ -934,6 +1018,9 @@ bool CBuilderManager::CanUpGeo(CCircuitDef* cdef) const
  
  IUnitTask* CBuilderManager::DefaultMakeTask(CCircuitUnit* unit)
  {
@@ -1740,7 +1757,7 @@ index a62be4f..23d025e 100644
  	const int frame = circuit->GetLastFrame();
  	const AIFloat3& pos = unit->GetPos(frame);
  
-@@ -1624,9 +1693,8 @@ void CBuilderManager::Watchdog()
+@@ -1624,9 +1711,8 @@ void CBuilderManager::Watchdog()
  				CCircuitDef* cdef = unit->GetCircuitDef();
  				if ((cdef->GetBuildTime() * buildPercent < maxCost) || cdef->IsMex() || (*cdef == *terraDef)) {
  					Enqueue(TaskB::Repair(IBuilderTask::Priority::NORMAL, unit));
@@ -1751,7 +1768,7 @@ index a62be4f..23d025e 100644
  //			} else if (u->GetHealth() < u->GetMaxHealth()) {
  //				Enqueue(TaskB::Repair(IBuilderTask::Priority::NORMAL, unit));
  			}
-@@ -1745,8 +1813,9 @@ void CBuilderManager::Load(std::istream& is)
+@@ -1745,8 +1831,9 @@ void CBuilderManager::Load(std::istream& is)
  			if (task != nullptr) {
  				const bool isValid = is >> *task;
  				buildTasks[i].insert(task);
@@ -2748,7 +2765,7 @@ index 2925da7..0789473 100644
  	struct SConvertExt {
  		float energyUse;
 diff --git a/src/circuit/module/FactoryManager.cpp b/src/circuit/module/FactoryManager.cpp
-index dda9b5a..ca2a1d6 100644
+index dda9b5a..0c8dae7 100644
 --- a/src/circuit/module/FactoryManager.cpp
 +++ b/src/circuit/module/FactoryManager.cpp
 @@ -816,7 +816,7 @@ CRecruitTask* CFactoryManager::Enqueue(const TaskS::SRecruitTask& ti)
@@ -2804,7 +2821,21 @@ index dda9b5a..ca2a1d6 100644
  	const bool isActive = (noT1FacCount <= 0) || !IsT1Factory(unit->GetCircuitDef());
  
  	IUnitTask* task = UpdateBuildPower(unit, isActive);
-@@ -1706,7 +1706,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
+@@ -1513,8 +1513,11 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+ 		// Repair task
+ 		return Enqueue(TaskS::Repair(IBuilderTask::Priority::NORMAL, repairTarget));
+ 	}
+-	if (isMetalEmpty) {
+-		// Reclaim task
++	if (isMetalEmpty
++		|| (circuit->GetTunable("apex_nano_space_reclaim", 1.f) > 0.5f)) {
++		// Reclaim task. Engine truth (BuilderCAI ExecuteReclaim): area
++		// reclaim takes UNITS only under META_KEY, so this eats features
++		// only -- CONTROL_KEY merely ignores the autoreclaimable flag.
+ 		if (circuit->GetCallback()->IsFeaturesIn(pos, radius) && !builderMgr->IsResurrect(pos, radius)) {
+ 			return Enqueue(TaskS::Reclaim(IBuilderTask::Priority::NORMAL, pos, radius));
+ 		}
+@@ -1706,7 +1709,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
  const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& facDef) const
  {
  	CEconomyManager* economyMgr = circuit->GetEconomyManager();
@@ -2841,7 +2872,7 @@ index dda9b5a..ca2a1d6 100644
  	const bool isWaterMap = circuit->GetTerrainManager()->IsWaterMap();
  	const float enemyTotalAirCost = circuit->GetEnemyManager()->GetEnemyCost(ROLE_TYPE(AIR));
  	const float allyAACost = circuit->GetMilitaryManager()->GetRoleCost(ROLE_TYPE(AA)) * circuit->GetAllyTeam()->GetAliveSize();
-@@ -1717,7 +1745,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
+@@ -1717,7 +1748,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
  	tierDbg = 0;
  #endif
  	auto facIt = tiers.begin();
@@ -4191,7 +4222,7 @@ index 193efa9..91d88ba 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72..6803cd8 100644
+index 2839b72..72908d7 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,11 +10,14 @@
@@ -4370,13 +4401,23 @@ index 2839b72..6803cd8 100644
  	asUINT i = 0;
  	for (CAllyTeam::Id teamId : allyTeam->GetTeamIds()) {
  		*(CAllyTeam::Id*)arr->At(i++) = teamId;
-@@ -195,6 +327,455 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +327,465 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
 +static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 +{
 +	unit->CmdMoveTo(pos);
++}
++
++// apex: point a lathe (nano or constructor) at ONE unit to reclaim -- the
++// targeted half of obsolete-building reclaim; policy stays in script.
++static void CCircuitUnit_CmdReclaimUnit(CCircuitUnit* unit, CCircuitUnit* target)
++{
++	if (target == nullptr) {
++		return;
++	}
++	unit->CmdReclaimUnit(target);
 +}
 +
 +// apex: the Brain's nuke director. Attack-ground is a netted order (safe);
@@ -4826,7 +4867,7 @@ index 2839b72..6803cd8 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -240,6 +821,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -240,6 +831,18 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -4845,7 +4886,7 @@ index 2839b72..6803cd8 100644
  static CScriptArray* IUnitTask_GetUnits(IUnitTask* task)
  {
  	// Without caching arrayType can be extracted by:
-@@ -472,12 +1065,18 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -472,12 +1075,18 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectBehaviour("IUnitTask", asBEHAVE_RELEASE, "void f()", asMETHODPR(IRefCounter, Release, (), int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "int GetRefCount() const", asMETHODPR(IRefCounter, GetRefCount, () const, int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "Type GetType() const", asMETHODPR(IUnitTask, GetType, () const, IUnitTask::Type), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4864,7 +4905,7 @@ index 2839b72..6803cd8 100644
  	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
  
-@@ -490,15 +1089,63 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -490,15 +1099,63 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -4929,7 +4970,7 @@ index 2839b72..6803cd8 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
  	// Lua<-->AI communications [in Spring 0.83+]
-@@ -556,6 +1203,57 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +1213,57 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -4987,7 +5028,7 @@ index 2839b72..6803cd8 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +1262,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +1272,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5011,7 +5052,7 @@ index 2839b72..6803cd8 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +1288,42 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +1298,43 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5021,6 +5062,7 @@ index 2839b72..6803cd8 100644
 +	// retreat task substitutes for everything it would otherwise build. A raw
 +	// command moves the unit without consuming its task slot.
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdReclaimUnit(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdReclaimUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdAttackGround(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdAttackGround), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetStockpile()", asFUNCTION(CCircuitUnit_GetStockpile), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdStop()", asFUNCTION(CCircuitUnit_CmdStop), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -5054,7 +5096,7 @@ index 2839b72..6803cd8 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +1336,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +1347,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -5064,7 +5106,7 @@ index 2839b72..6803cd8 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +1457,18 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +1468,18 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -5083,7 +5125,7 @@ index 2839b72..6803cd8 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -724,6 +1490,8 @@ bool CInitScript::Init()
+@@ -724,6 +1501,8 @@ bool CInitScript::Init()
  	mainInfo.receiveMessage = script->GetFunc(mod, "void AiMessage(const string& in, int)");
  	mainInfo.unitFinished = script->GetFunc(mod, "void AiUnitFinished(CCircuitUnit@)");
  	mainInfo.unitDestroyed = script->GetFunc(mod, "void AiUnitDestroyed(CCircuitUnit@)");
@@ -5092,7 +5134,7 @@ index 2839b72..6803cd8 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +1508,28 @@ void CInitScript::Update()
+@@ -740,9 +1519,28 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -5121,7 +5163,7 @@ index 2839b72..6803cd8 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -779,6 +1566,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +1577,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -6796,10 +6838,18 @@ index bc8ff11..0f2c680 100644
  
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 diff --git a/src/circuit/task/builder/BuilderTask.h b/src/circuit/task/builder/BuilderTask.h
-index 13ced8d..7e9d23e 100644
+index 13ced8d..a4fd3e5 100644
 --- a/src/circuit/task/builder/BuilderTask.h
 +++ b/src/circuit/task/builder/BuilderTask.h
-@@ -156,7 +156,21 @@ protected:
+@@ -96,6 +96,7 @@ public:
+ 
+ 	const springai::AIFloat3& GetTaskPos() const { return position; }
+ 	CCircuitDef* GetBuildDef() const { return buildDef; }
++	int GetBuildFails() const { return buildFails; }
+ 
+ 	virtual bool IsGeneric() const { return false; }
+ 	BuildType GetBuildType() const { return buildType; }
+@@ -156,7 +157,21 @@ protected:
  	SResource savedIncome;
  	int buildFails;
  
@@ -11991,6 +12041,25 @@ index 8a50bc2..1616caf 100644
  		manager->AssignTask(unit, task);
  //		manager->DoneTask(this);  // NOTE: RemoveAssignee will abort task
  	} else {
+diff --git a/src/circuit/task/static/ReclaimTask.cpp b/src/circuit/task/static/ReclaimTask.cpp
+index 6408f28..509088f 100644
+--- a/src/circuit/task/static/ReclaimTask.cpp
++++ b/src/circuit/task/static/ReclaimTask.cpp
+@@ -55,7 +55,13 @@ void CSReclaimTask::Start(CCircuitUnit* unit)
+ void CSReclaimTask::Update()
+ {
+ 	CCircuitAI* circuit = manager->GetCircuit();
+-	if (circuit->GetEconomyManager()->IsMetalFull()) {
++	// A full bank used to abort this task -- and at a hosted game's +100%
++	// the bank is pinned full, so nano reclaim never ran at all ("nano
++	// turrets were able to reclaim prior..."). Space reclaim matters most
++	// exactly when metal is worthless; the emergency metal read is only the
++	// stock behavior at apex_nano_space_reclaim=0.
++	if (circuit->GetEconomyManager()->IsMetalFull()
++		&& (circuit->GetTunable("apex_nano_space_reclaim", 1.f) < 0.5f)) {
+ 		manager->AbortTask(this);
+ 	} else if ((++updCount % 4 == 0) && !units.empty()) {
+ 		// Check for damaged units
 diff --git a/src/circuit/task/static/SuperTask.cpp b/src/circuit/task/static/SuperTask.cpp
 index e19de07..971d3c6 100644
 --- a/src/circuit/task/static/SuperTask.cpp

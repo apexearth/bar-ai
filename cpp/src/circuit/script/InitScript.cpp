@@ -332,6 +332,16 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 	unit->CmdMoveTo(pos);
 }
 
+// apex: point a lathe (nano or constructor) at ONE unit to reclaim -- the
+// targeted half of obsolete-building reclaim; policy stays in script.
+static void CCircuitUnit_CmdReclaimUnit(CCircuitUnit* unit, CCircuitUnit* target)
+{
+	if (target == nullptr) {
+		return;
+	}
+	unit->CmdReclaimUnit(target);
+}
+
 // apex: the Brain's nuke director. Attack-ground is a netted order (safe);
 // stockpile is an engine read on the host's own unit (safe).
 static void CCircuitUnit_CmdAttackGround(CCircuitUnit* unit, const AIFloat3& pos)
@@ -1294,6 +1304,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// retreat task substitutes for everything it would otherwise build. A raw
 	// command moves the unit without consuming its task slot.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdReclaimUnit(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdReclaimUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdAttackGround(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdAttackGround), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetStockpile()", asFUNCTION(CCircuitUnit_GetStockpile), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdStop()", asFUNCTION(CCircuitUnit_CmdStop), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

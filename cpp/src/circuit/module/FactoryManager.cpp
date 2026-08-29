@@ -1513,8 +1513,11 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
 		// Repair task
 		return Enqueue(TaskS::Repair(IBuilderTask::Priority::NORMAL, repairTarget));
 	}
-	if (isMetalEmpty) {
-		// Reclaim task
+	if (isMetalEmpty
+		|| (circuit->GetTunable("apex_nano_space_reclaim", 1.f) > 0.5f)) {
+		// Reclaim task. Engine truth (BuilderCAI ExecuteReclaim): area
+		// reclaim takes UNITS only under META_KEY, so this eats features
+		// only -- CONTROL_KEY merely ignores the autoreclaimable flag.
 		if (circuit->GetCallback()->IsFeaturesIn(pos, radius) && !builderMgr->IsResurrect(pos, radius)) {
 			return Enqueue(TaskS::Reclaim(IBuilderTask::Priority::NORMAL, pos, radius));
 		}

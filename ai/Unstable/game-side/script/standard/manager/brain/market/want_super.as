@@ -409,7 +409,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		} else {
 			at = SuperSite(unit, sc);
 		}
-		at = ProbedSite(Catalog::Def(d), unit.circuitDef, at);
+		at = ProbedSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)), at);
 		if (!OnMap(at))
 			continue;
 		// AFFORDABILITY IS THE GAIN. What is left of the budget once the bill
@@ -517,7 +517,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		{
 			const float bill = SuperBill(int(ap.id));
 			if (bill < budget) {
-				const AIFloat3 at3 = ProbedSite(ap, unit.circuitDef,
+				const AIFloat3 at3 = ProbedSite(ap,
+						Catalog::Def(int(unit.circuitDef.id)),
 						SuperSite(unit, SC_AIRPLANT));
 				if (OnMap(at3)) {
 					const float afford = (budget - bill) / budget;

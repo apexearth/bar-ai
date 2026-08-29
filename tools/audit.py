@@ -966,12 +966,21 @@ def check_lab_timing(text, rep):
                          r" request new (\S+)", text):
         if m.group(3) in ADV_PLANTS and m.group(2) in apex_teams:
             reqs[m.group(2)].append((int(m.group(1)), m.group(3)))
+    # The wealth waiver (apex: copy waived) deliberately parallelizes
+    # advanced-plant starts while metal overflows; a second start within
+    # 2 min of a waiver on that team is sanctioned, not a "no no".
+    waived = defaultdict(list)   # team -> [frames]
+    for m in re.finditer(r"\[f=(\d+)\][^\n]*apex: copy waived t=(\d+)", text):
+        waived[m.group(2)].append(int(m.group(1)))
     overlaps = []
     seen_pairs = set()
     for t, rl in reqs.items():
         rl.sort()
         for (f1, u1), (f2, u2) in zip(rl, rl[1:]):
             if (u1 == u2) or ((t, u1, u2) in seen_pairs):
+                continue
+            if any(f2 - 3600 <= wf <= f2 for wf in waived.get(t, [])):
+                continue
                 continue
             fin = min((ff for ff in fins.get((t, u1), []) if ff > f1),
                       default=None)

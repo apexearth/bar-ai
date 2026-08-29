@@ -327,6 +327,7 @@ local NAMES = {
 	"apex_bomb_revisit_disc", -- BombTask: score multiplier at 0s since commit, fading to 1 (0.2)
 	"apex_coward_hp",         -- FighterTask: hp fraction where a squad member takes the rear ring (0.6; 0=sliver only)
 	"apex_squad_fall_hp",     -- SquadTask: squad falls back together when its power-weighted TOTAL hp drops under this (0.5; 0=off)
+	"apex_nano_space_reclaim", -- C++: idle nanos area-reclaim features and the static reclaim task survives a full bank (1=on, 0=stock emergency-only)
 	"apex_brain_nuke",        -- 1 = script nuke director owns silo targeting, 0 = C++ auto-fire
 	"apex_trade_vol",         -- deathledger.as: seconds of income lost before the trade is judged (20)
 	"apex_trade_bad",         -- deathledger.as: kill/loss ratio below which posture turns defensive (0.6)

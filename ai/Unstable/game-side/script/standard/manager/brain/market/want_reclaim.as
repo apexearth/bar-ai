@@ -605,6 +605,21 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 				if (!elsewhere)
 					covered = false;
 			}
+			// A COPY BOUGHT FOR OVERFLOW IS KEPT FOR OVERFLOW. The wealth
+			// waiver licenses duplicate lines, and this law then read the
+			// copy as an extra and ate it -- the market re-bought it and the
+			// audit counted armshltx rebuilt 7x in one game. A pure duplicate
+			// (no deeper successor) retires only in a SQUEEZED economy: bank
+			// under half and income not covering pull. A tier successor still
+			// retires its predecessor whatever the bank says.
+			if (covered && !succeeded) {
+				const float st3 = aiEconomyMgr.metal.storage;
+				const bool squeezed = (st3 > 1.f)
+					&& (aiEconomyMgr.metal.current < 0.5f * st3)
+					&& (aiEconomyMgr.metal.income <= aiEconomyMgr.metal.pull);
+				if (!squeezed)
+					covered = false;
+			}
 			if (covered) {
 				const float v = RetireValue(unit, f, fd, ePM, wageR, hz);
 				if (v > bestValue) {

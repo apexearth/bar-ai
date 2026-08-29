@@ -96,6 +96,7 @@ public:
 
 	const springai::AIFloat3& GetTaskPos() const { return position; }
 	CCircuitDef* GetBuildDef() const { return buildDef; }
+	int GetBuildFails() const { return buildFails; }
 
 	virtual bool IsGeneric() const { return false; }
 	BuildType GetBuildType() const { return buildType; }
