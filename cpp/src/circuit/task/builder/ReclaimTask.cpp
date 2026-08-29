@@ -171,6 +171,16 @@ bool CBReclaimTask::Reevaluate(CCircuitUnit* unit)
 					delete featDef;
 					continue;
 				}
+				// apex: A COMMANDER CORPSE IS NEVER FOOD (apexearth: "make
+				// sure we resurrect our commanders instead of reclaiming
+				// them"). The fresh corpse (*com_dead) can be resurrected --
+				// a whole commander for the rez cost -- so no reclaim task
+				// may pick it; the burnt _heap stage cannot and stays edible.
+				const std::string fname = featDef->GetName();
+				if (fname.find("com_dead") != std::string::npos) {
+					delete featDef;
+					continue;
+				}
 				float reclaimValue = featDef->GetContainedResource(metalRes)/* * feature->GetReclaimLeft()*/;
 				delete featDef;
 				if (reclaimValue < 1.0f) {

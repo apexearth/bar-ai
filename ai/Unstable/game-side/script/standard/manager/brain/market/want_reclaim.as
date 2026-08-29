@@ -152,6 +152,76 @@ float RetireValue(CCircuitUnit@ unit, CCircuitUnit@ tgt, int d, float ePM,
 	return gain / (1.f + (walkSec + Catalog::gCostM[d] / 90.f) * wage);
 }
 
+// ONE LAW, BOTH SIDES (apexearth 2026-08-28: "When we reclaim obsolete
+// buildings - we often recreate them in the exact same spot. We should never
+// want to create obsolete buildings."): the per-cell dwarf test the victim
+// election applies below is exactly the test a NEW build must pass first --
+// a def our own best already dwarfs is obsolete ON ARRIVAL, and the energy
+// and converter ladders refuse to propose it. Derived, no memory of what was
+// eaten; the moment an AFUS stands, wind is unproposable by the same number
+// that makes wind edible.
+float gBestEcell = 0.f;
+float gBestMcell = 0.f;
+int gBestCellAt = -999999;
+
+void RefreshBestCells()
+{
+	if (ai.frame < gBestCellAt + 5 * SECOND)
+		return;
+	gBestCellAt = ai.frame;
+	gBestEcell = 0.f;
+	gBestMcell = 0.f;
+	for (uint i = 0; i < gOwnGen.length(); ++i) {
+		if (gOwnGen[i] is null)
+			continue;
+		const int d = int(gOwnGen[i].circuitDef.id);
+		const float ec = Catalog::gMakeE[d]
+				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+		if (ec > gBestEcell)
+			gBestEcell = ec;
+	}
+	for (uint i = 0; i < gOwnConv.length(); ++i) {
+		if (gOwnConv[i] is null)
+			continue;
+		const int d = int(gOwnConv[i].circuitDef.id);
+		const float mc = Catalog::gConvCapacity[d]
+				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+		if (mc > gBestMcell)
+			gBestMcell = mc;
+	}
+}
+
+bool GenObsoleteOnArrival(int d)
+{
+	RefreshBestCells();
+	const float ec = Catalog::gMakeE[d]
+			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+	return (ec > 0.f) && (gBestEcell
+			>= ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO) * ec);
+}
+
+bool ConvObsoleteOnArrival(int d)
+{
+	RefreshBestCells();
+	const float mc = Catalog::gConvCapacity[d]
+			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+	return (mc > 0.f) && (gBestMcell
+			>= ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO) * mc);
+}
+
+// GROUND HANDS EAT WHAT THEY CAN REACH (apexearth 2026-08-28: "we build so
+// tightly packed that oftentimes the buildings we want to reclaim aren't
+// accessible by ground units so we need to get the ones which are closer"):
+// a victim a ground con's movetype cannot stand at quarter-prices, so the
+// accessible ring wins the election; flyers see no walls.
+float ReachVictimMul(CCircuitUnit@ unit, const AIFloat3& in at)
+{
+	const int uid = int(unit.circuitDef.id);
+	if (Catalog::gFlyer[uid])
+		return 1.f;
+	return ai.CanDefReach(Catalog::Def(uid), at, at) ? 1.f : 0.25f;
+}
+
 Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 {
 	Want w;
@@ -301,7 +371,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		// an advanced solar 4.69, so while one T1 panel stood the advanced
 		// solar could never even be the candidate. Measured over a 43-minute
 		// game: 24 reclaim decisions, every one armsolar, zero armadvsol.
-		const float v = RetireValue(unit, g, d, ePM, wageR, hz);
+		const float v = RetireValue(unit, g, d, ePM, wageR, hz)
+				* ReachVictimMul(unit, g.GetPos(ai.frame));
 		if (v > bestValue) {
 			bestValue = v;
 			@best = g;
@@ -338,7 +409,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			continue;
 		if (ownBestMcell < ratio * mc)
 			continue;   // not dwarfed: still earning its cells
-		const float v = RetireValue(unit, cv, d, ePM, wageR, hz);
+		const float v = RetireValue(unit, cv, d, ePM, wageR, hz)
+				* ReachVictimMul(unit, cv.GetPos(ai.frame));
 		if (v > bestValue) {
 			bestValue = v;
 			@best = cv;

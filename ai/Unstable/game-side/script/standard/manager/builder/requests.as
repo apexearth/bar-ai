@@ -555,6 +555,13 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// game, all guard-nulled after the orphan already existed.
 	if ((unit !is null) && !unit.circuitDef.CanBuild(want))
 		return null;
+	// A def dying fast on repeat is held HERE, the door every lane walks
+	// through -- the plant lane checked AbortBackoff and the convert lane did
+	// not, so an eco commander re-elected the same doomed converter on the
+	// same occupied square 156 times in one game (t7, si8-fix2-15m-s104)
+	// while its energy gate sat unbuilt. See Builder::AbortBackoff.
+	if (Builder::AbortBackoff(int(want.id)))
+		return null;
 
 	// A FACTORY IS NEVER A FORK -- enforced at THE chokepoint, because the
 	// per-path guards kept losing: PlantApproved covers every rule that asks

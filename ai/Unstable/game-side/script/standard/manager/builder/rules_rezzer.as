@@ -328,6 +328,52 @@ IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 // then until now a rez bot could only ever reclaim. Wired back in as an
 // ordinary rule.
 //
+// A FALLEN COMMANDER OUTRANKS EVERYTHING A REZ BOT COULD DO (apexearth:
+// "make sure we resurrect our commanders instead of reclaiming them"). Each
+// ally publishes where its commander fell (comwx/comwz/comwf, main.as); any
+// rez bot within reach races there and resurrects, whatever the AFUS
+// doctrine says -- a commander back on its feet is worth more than any
+// reactor sequencing. The window is short: BAR corpses decay to _heap and a
+// battlefield gets eaten, so a record older than 4 minutes is a memorial,
+// not a job. Threat still vetoes -- a rez bot dying on the corpse rescues
+// nobody.
+const int COM_WRECK_FRESH_S = 240;
+int gNextComRezLog = 0;
+
+IUnitTask@ RezzerComRescue(CCircuitUnit@ unit)
+{
+	if (!IsRezzer(unit))
+		return null;
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return null;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		const float wf = ai.ReadTeamValue(t, "comwf", -1.f);
+		if ((wf < 0.f) || (ai.frame > int(wf) + COM_WRECK_FRESH_S * SECOND))
+			continue;
+		const AIFloat3 at(ai.ReadTeamValue(t, "comwx", -1.f), 0.f,
+				ai.ReadTeamValue(t, "comwz", -1.f));
+		if (!OnMap(at))
+			continue;
+		if (ThreatFor(unit, at) > CON_THREAT_VETO)
+			continue;
+		IUnitTask@ rez = aiBuilderMgr.Enqueue(TaskB::Resurrect(
+				Task::Priority::HIGH, at, 100.f, 120 * SECOND, WRECK_RADIUS));
+		if (rez !is null) {
+			if (ai.frame >= gNextComRezLog) {
+				gNextComRezLog = ai.frame + 30 * SECOND;
+				AiLog("apex: com rescue t=" + ai.teamId + " "
+					+ unit.circuitDef.GetName() + " #" + unit.id
+					+ " -> resurrect commander of t" + t
+					+ " at " + int(at.x) + "," + int(at.z));
+			}
+			return rez;
+		}
+	}
+	return null;
+}
+
 // Reclaim versus resurrect is a question about what the metal is FOR. Before
 // the advanced reactor exists a field of corpses is the fastest way to it;
 // after it stands the corpse is worth more back on its feet (apexearth: "if

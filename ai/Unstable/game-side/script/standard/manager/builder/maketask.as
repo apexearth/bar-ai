@@ -25,6 +25,11 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 	if (IsRezzer(unit)) {
+		// A fallen commander outranks every other rez job -- flee alone
+		// comes first (a dead rez bot rescues nobody).
+		@t = RezzerComRescue(unit);
+		if (t !is null)
+			return t;
 		@t = RezzerMedic(unit);
 		if (t !is null)
 			return t;

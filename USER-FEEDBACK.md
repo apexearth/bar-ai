@@ -31,6 +31,32 @@ budget/host floor, antinuke floor) is structural income; the gantry team
 budget reads the new TV_MINC_NET lane. Move to feedback/ archive once he
 confirms live.
 
+## UNRESOLVED — Building pace, spread, and honest reclaim (2026-08-28, evening)
+
+Four asks and a protocol: (1) "How can we spread our some of out buildings
+into smaller groupings so chained exposions/death isn't so huge when it
+happens?" — base-layout design work, the lattice's chain-explosion model is
+the tool, NOT yet implemented. (2) "When we reclaim obsolete buildings -
+we often recreate them in the exact same spot. We should never want to
+create obsolete buildings." — LANDED: obsolete-on-arrival law shared
+between the ladders and the victim election (GenObsoleteOnArrival /
+ConvObsoleteOnArrival). (3) "the buildings we want to reclaim aren't
+accessible by ground units so we need to get the ones which are closer" —
+LANDED: unreachable victims quarter-price for ground cons
+(ReachVictimMul). (4) protocol: "run 1v1 games vs inactive AI to work out
+our building and obsolete reclaim" — NullAI 1v1 on Comet Catcher is the
+instrument for build/reclaim behavior.
+
+## UNRESOLVED (landed, awaiting his eyes) — Resurrect commanders, never reclaim them (2026-08-28, evening)
+
+"Can we make sure we resurrect our commanders instead of reclaiming them?"
+LANDED: (a) C++ ReclaimTask never picks a *com_dead corpse (the burnt
+_heap stays edible); (b) a dying commander publishes its corpse position
+(comwx/comwz/comwf) and every ally rez bot's TOP rule races to resurrect
+it (RezzerComRescue, above the medic, threat-vetoed, 4-min freshness);
+an active resurrect already marks the area so area-reclaims steer off.
+Logs: `apex: commander fell`, `apex: com rescue`.
+
 ## UNRESOLVED — The 2026-08-28 rebalance campaign (his test protocol attached)
 
 "Our balance is generally off now in the game so we need to take a careful

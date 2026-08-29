@@ -228,6 +228,19 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	{
 		Military::NoteCombatLoss(cdef.costM, Military::ForwardFraction(at));
 	}
+	// OUR COMMANDER'S CORPSE IS A RESURRECTION JOB, not food (apexearth:
+	// "make sure we resurrect our commanders instead of reclaiming them").
+	// Publish where it fell so every ally's rez bots can race to it -- the
+	// ReclaimTask filter refuses to eat *com_dead either way, and an active
+	// resurrect marks the area so area reclaims steer off it.
+	if ((cdef !is null) && cdef.IsRoleAny(Unit::Role::COMM.mask) && OnMap(at)) {
+		ai.PublishTeamValue("comwx", at.x);
+		ai.PublishTeamValue("comwz", at.z);
+		ai.PublishTeamValue("comwf", float(ai.frame));
+		AiLog("apex: commander fell t=" + ai.teamId
+			+ " at=" + int(at.x) + "," + int(at.z)
+			+ " -- corpse published for resurrection");
+	}
 	// A BUILDING OF OURS DYING ON OUR OWN GROUND IS THE INVASION SIGNAL.
 	// Filtered out of the combat ledger above (mobile only) and read by nothing
 	// else, so an enemy could level the base without any defence rule noticing.

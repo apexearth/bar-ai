@@ -50,6 +50,14 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			continue;   // floaters need water; land-base v1 (see armfmkr churn)
 		if (Catalog::gMakeE[d] <= 1.f)
 			continue;
+		// NEVER BUILD WHAT WE WOULD EAT: a rung the per-cell dwarf test
+		// already marks edible is obsolete ON ARRIVAL (his "we should never
+		// want to create obsolete buildings" -- the reclaim-rebuild loop was
+		// this ladder re-placing the wind the reclaim side had just eaten).
+		// The hard-stall basic solar keeps its "full stop" ruling.
+		if (GenObsoleteOnArrival(d)
+			&& !(solarOnly && (Catalog::gCostE[d] <= 0.f)))
+			continue;
 		// A PREFERENCE THAT STILL LEAVES AN ANSWER. The zero-E rung cannot win
 		// ground it has none of -- on a water base solar has nowhere to stand --
 		// so the dearer rungs stay in the ladder below as fallbacks and only
@@ -576,6 +584,10 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
 			continue;   // floaters need water; land-base v1 (see armfmkr churn)
 		if (Catalog::gConvCapacity[d] <= 0.f)
+			continue;
+		// Same law as the generator ladder: never build a converter the
+		// per-cell dwarf test already marks edible.
+		if (ConvObsoleteOnArrival(d))
 			continue;
 		const float chew = (eSurplus < Catalog::gConvCapacity[d])
 				? eSurplus : Catalog::gConvCapacity[d];
