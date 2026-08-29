@@ -1454,7 +1454,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 						unit->CmdSetTarget(valFoe);
 					)
 				} else if ((finishFoe != nullptr)
-					&& (manager->GetCircuit()->GetTunable("apex_focus_finish", 1.f) > 0.f))
+					&& (manager->GetCircuit()->GetTunable("apex_focus_finish", 0.f) > 0.f))
 				{
 					finishId = (int)finishFoe->GetId();
 					TRY_UNIT(manager->GetCircuit(), unit,
