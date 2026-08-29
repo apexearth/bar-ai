@@ -158,8 +158,31 @@ string gNoOrder = "";
 // is a pair per squad; counting per def multiplied it by however many sensor
 // types the labs happened to offer.
 int gSupHaveAt = -1;
-int gSupRadarN = 0;
-int gSupJamN = 0;
+float gSupRadarN = 0.f;
+float gSupJamN = 0.f;
+// The strongest mobile radar/jammer radius in the game -- static def data,
+// so caching is safe (availability plays no part in a reference).
+float gSupRadarRef = -1.f;
+float gSupJamRef = -1.f;
+
+float SupRef(bool jam)
+{
+	if (jam ? (gSupJamRef > 0.f) : (gSupRadarRef > 0.f))
+		return jam ? gSupJamRef : gSupRadarRef;
+	float best = 1.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gMobile[d] || Catalog::gBuilder[d])
+			continue;
+		const float r = jam ? Catalog::gJamR[d] : Catalog::gRadarR[d];
+		if (r > best)
+			best = r;
+	}
+	if (jam)
+		gSupJamRef = best;
+	else
+		gSupRadarRef = best;
+	return best;
+}
 void SupportCensus()
 {
 	if (gSupHaveAt == ai.frame)
@@ -178,11 +201,17 @@ void SupportCensus()
 		// What we OWN plus what we have already SENT for: gOwnCount only counts
 		// finished units, so topping up against it re-orders for the whole walk
 		// window.
-		const int nHave = gOwnCount[d] + Brain::PendAnyOf(di);
+		// CAPABILITY, NOT WARM BODIES (apexearth: "take one more look at the
+		// radar planes - i don't see them still... we lack vision"). A
+		// Peeper's 730-elmo set counted as one full radar, so three scouts
+		// read the quota as filled and the Oracle's demand priced zero
+		// forever. Each unit now counts as its share of the best mobile
+		// set's radius.
+		const float nHave = float(gOwnCount[d] + Brain::PendAnyOf(di));
 		if (Catalog::gRadar[di])
-			gSupRadarN += nHave;
+			gSupRadarN += nHave * (Catalog::gRadarR[di] / SupRef(false));
 		else
-			gSupJamN += nHave;
+			gSupJamN += nHave * (Catalog::gJamR[di] / SupRef(true));
 	}
 }
 
@@ -376,7 +405,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		{
 			SupportCensus();
 			const bool isJamS = !Catalog::gRadar[d];
-			const int haveS = isJamS ? gSupJamN : gSupRadarN;
+			const float haveS = isJamS ? gSupJamN : gSupRadarN;
 			// THE DEMAND IS SQUADS, AND IT IS ONE QUESTION PER CLASS.
 			// It was AdvArmyValue/squadM asked once per DEF: eight sensor defs
 			// each targeting the same fifteen "squads" is a hundred and twenty
@@ -394,7 +423,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				AiLog("apex: support-diag t=" + ai.teamId + " def="
 					+ Catalog::Def(d).GetName()
 					+ " cls=" + (isJamS ? "jam" : "radar")
-					+ " have=" + haveS
+					+ " have=" + formatFloat(haveS, "", 0, 2)
 					+ " own=" + gOwnCount[d]
 					+ " pend=" + Brain::PendAnyOf(int(d))
 					+ " R=" + gSupRadarN + "/J=" + gSupJamN
@@ -412,13 +441,20 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// not a limit: an escort with no squad to attach to escorts
 			// nothing. `need` is the live squad count, so this grows with the
 			// army like everything else.
-			float uncov = (need - float(haveS)) / need;
+			float uncov = (need - haveS) / need;
 			if (uncov > 1.f)
 				uncov = 1.f;
+			// ...and the candidate EARNS its own share: an Oracle covering
+			// three times the ground earns three times the gain, so per
+			// cost the real set competes with the scout instead of losing
+			// to its price tag.
+			const float capW = isJamS
+					? (Catalog::gJamR[d] / SupRef(true))
+					: (Catalog::gRadarR[d] / SupRef(false));
 			const float gainS = (uncov > 0.f)
 					? (uncov * squadM
 						* ai.GetTunable("apex_intel_rate", TUNE_INTEL_RATE)
-						/ 60.f * roleMul)
+						/ 60.f * roleMul * capW)
 					: 0.f;
 			if (gainS > 0.f) {
 				const float vS = gainS / Catalog::gCostM[d];

@@ -226,6 +226,38 @@ void ScoutOverflight()
 	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
 	if (!OnMap(foe))
 		return;
+	// The radar plane stations FORWARD, not over the farm: its set reaches
+	// ~2,300 elmos, so 45% of the way to the enemy paints their approaches
+	// and the ground the silo wants lit ("our nukes don't land in smart
+	// places because we haven't seen those smart places").
+	if (Builder::gHomeSet) {
+		for (int rd = 1; rd <= Catalog::gDefCount; ++rd) {
+			if (!Catalog::gAvailable[rd] || !Catalog::gMobile[rd]
+				|| !Catalog::gFlyer[rd] || Catalog::gBuilder[rd]
+				|| !Catalog::gRadar[rd]
+				|| (Catalog::gCostM[rd] <= 100.f))
+				continue;
+			array<CCircuitUnit@>@ rs = ai.GetOwnUnitsOfDef(Catalog::Def(rd),
+					foe, 0.f);
+			if (rs is null)
+				continue;
+			for (uint ri = 0; ri < rs.length(); ++ri) {
+				if ((rs[ri] is null) || (rs[ri].CmdQueueSize() > 0))
+					continue;
+				AIFloat3 post = Builder::gHomePos
+						+ (foe - Builder::gHomePos) * 0.45f;
+				const float angR = float((ai.frame / SECOND + int(ri) * 3) % 8)
+						* 0.785398f;
+				post += AIFloat3(cos(angR), 0.f, sin(angR)) * 400.f;
+				if (!OnMap(post))
+					continue;
+				rs[ri].CmdMoveTo(post);
+				AiLog("apex: radar-post " + Catalog::Def(rd).GetName()
+					+ " #" + rs[ri].id + " -> " + int(post.x) + "," + int(post.z));
+				break;
+			}
+		}
+	}
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d]
 			|| !Catalog::gFlyer[d] || Catalog::gBuilder[d]
