@@ -1156,6 +1156,14 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// while the unit walks. Same class test as the colossus election.
 		CEnemyInfo* valFoe = nullptr;
 		float valFoeCost = 0.f;
+		// apex: FINISH THE WOUNDED (apexearth 2026-08-29, watching arena
+		// rounds: "have our units concentrate their firing on enemies which
+		// are lowest HP to 'finish' them sooner"). The row's set-target
+		// becomes the lowest-health enemy in its own reach, so the whole row
+		// focuses one kill at a time and enemy DPS leaves the field fastest.
+		// Colossi keep the richest-target rule instead.
+		CEnemyInfo* finishFoe = nullptr;
+		float finishHp = 1e18f;
 		const bool rowColossus = (rowDef != nullptr)
 				&& (rowDef->IsCharger() || (rowDef->GetCostM()
 					>= manager->GetCircuit()->GetTunable("apex_super_cost", 7000.f)));
@@ -1202,6 +1210,12 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					{
 						valFoeCost = ed->GetCostM();
 						valFoe = e;
+					}
+					if (!rowColossus && (sq < SQUARE(kv.first))
+						&& (e->GetHealth() > 0.f) && (e->GetHealth() < finishHp))
+					{
+						finishHp = e->GetHealth();
+						finishFoe = e;
 					}
 					if (!kiteOk || !ed->IsAttacker()) {
 						continue;
@@ -1420,6 +1434,12 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				if (rowColossus && (valFoe != nullptr)) {
 					TRY_UNIT(manager->GetCircuit(), unit,
 						unit->CmdSetTarget(valFoe);
+					)
+				} else if ((finishFoe != nullptr)
+					&& (manager->GetCircuit()->GetTunable("apex_focus_finish", 1.f) > 0.f))
+				{
+					TRY_UNIT(manager->GetCircuit(), unit,
+						unit->CmdSetTarget(finishFoe);
 					)
 				}
 			}

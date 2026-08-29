@@ -153,12 +153,19 @@ local function parkStarters()
 			end
 		end
 	end
+	-- "I hope we have enough storage": the only storage left is the parked
+	-- commander's ~500E, and a dozen lasers drain that between top-ups.
+	-- Storage itself goes huge, once.
+	for _, teamID in ipairs(Spring.GetTeamList() or {}) do
+		Spring.SetTeamResource(teamID, "es", 200000)
+		Spring.SetTeamResource(teamID, "ms", 50000)
+	end
 	pureDone = true
 	Spring.Echo("[BARAI_ARENA] pure mode: starters parked and neutralized")
 end
 
 local function restun(frame)
-	if frame % 30 ~= 7 then
+	if frame % 10 ~= 7 then
 		return
 	end
 	-- "give each team energy so all units have energy to fire": with the

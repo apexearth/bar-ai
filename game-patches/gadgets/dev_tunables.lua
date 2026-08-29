@@ -193,6 +193,7 @@ local NAMES = {
 	"apex_intel_air_income",
 	"apex_kill_edge",
 	"apex_kill_off_frac",    -- killingblow.as: disarm fraction of KILL_EDGE; wide band survives the retreat-zeroing dip (0.35)
+	"apex_focus_finish",     -- SquadTask.cpp: 1 = rows set-target the lowest-HP enemy in reach (finish the wounded)
 	"apex_line_adapt",       -- army.as: enemy static share bends the reach composition target up (1)
 	"apex_mex_expose",       -- want_protect.as: per-mex floor grows with forwardness, floor*(1+fwd*this) (1.5)
 	"apex_rezzer_fwd",       -- rules_rezzer.as: idle rezzer past this forward fraction retires to the haven (0.25)

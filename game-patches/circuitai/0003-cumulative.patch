@@ -10897,7 +10897,7 @@ index b4b43c1..d2e258e 100644
  		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..5c32530 100644
+index 0d59b65..59503a9 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,23 @@
@@ -11462,7 +11462,7 @@ index 0d59b65..5c32530 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -418,51 +814,614 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -418,51 +814,634 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -11814,6 +11814,14 @@ index 0d59b65..5c32530 100644
 +		// while the unit walks. Same class test as the colossus election.
 +		CEnemyInfo* valFoe = nullptr;
 +		float valFoeCost = 0.f;
++		// apex: FINISH THE WOUNDED (apexearth 2026-08-29, watching arena
++		// rounds: "have our units concentrate their firing on enemies which
++		// are lowest HP to 'finish' them sooner"). The row's set-target
++		// becomes the lowest-health enemy in its own reach, so the whole row
++		// focuses one kill at a time and enemy DPS leaves the field fastest.
++		// Colossi keep the richest-target rule instead.
++		CEnemyInfo* finishFoe = nullptr;
++		float finishHp = 1e18f;
 +		const bool rowColossus = (rowDef != nullptr)
 +				&& (rowDef->IsCharger() || (rowDef->GetCostM()
 +					>= manager->GetCircuit()->GetTunable("apex_super_cost", 7000.f)));
@@ -11860,6 +11868,12 @@ index 0d59b65..5c32530 100644
 +					{
 +						valFoeCost = ed->GetCostM();
 +						valFoe = e;
++					}
++					if (!rowColossus && (sq < SQUARE(kv.first))
++						&& (e->GetHealth() > 0.f) && (e->GetHealth() < finishHp))
++					{
++						finishHp = e->GetHealth();
++						finishFoe = e;
 +					}
 +					if (!kiteOk || !ed->IsAttacker()) {
 +						continue;
@@ -12083,11 +12097,17 @@ index 0d59b65..5c32530 100644
 +					TRY_UNIT(manager->GetCircuit(), unit,
 +						unit->CmdSetTarget(valFoe);
 +					)
++				} else if ((finishFoe != nullptr)
++					&& (manager->GetCircuit()->GetTunable("apex_focus_finish", 1.f) > 0.f))
++				{
++					TRY_UNIT(manager->GetCircuit(), unit,
++						unit->CmdSetTarget(finishFoe);
++					)
 +				}
  			}
  
  			beta += delta;
-@@ -478,7 +1437,9 @@ void ISquadTask::Log()
+@@ -478,7 +1457,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
