@@ -54,6 +54,17 @@ CAMPAIGN LOG:
   0.6k-18k, because 30s of eco budgets 750 metal of towers at benchmark
   income (the tunable's own comment said "not derived -- measure it").
   Explains front-sites-won-26x-built-0. Measurement: winrate3 arms.
+- Iter 2 verdict: defence CONVERTED (9.6k standing median) but W-L stayed
+  2-11. Necessary, not sufficient. The trail it opened: apex income 46-50
+  vs stock 160-192 in the same losses; the mex counters that said we led
+  were CUMULATIVE builds, flattered by our mexes dying.
+- Iter 3 (Front::FoeAnchor): PastFront's axis endpoint was the k-means
+  centroid of enemy PRESENCE — their army in our half collapsed the axis
+  and vetoed the map (pastFront=225/sweep, held 4-6 of 80). Re-anchored on
+  the structure-dominated gFoeMid. Smoke: held 17-18 at 20m. This is also
+  the mechanism that let the day's fight-caution changes read as a mex
+  regression with no single culprit: deeper enemy presence, earlier,
+  shrank the claimable world. Measurement: winrate4 arms.
 
 ## 2026-08-29 — perf spikes attributed: the builder election, protect stack inside it
 
