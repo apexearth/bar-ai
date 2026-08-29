@@ -30,40 +30,66 @@ MINUTES = 25
 SPEC_A = "Apex:Unstable:standard"
 SPEC_B = "BARb:stable:hard"
 
+# Team rounds (--teams): the AI's coordination layer -- eco roles, tech-lead
+# election, metal slinging, team pushes -- only runs in these. His maps for
+# each size. Fewer games and longer caps: team games are heavier and slower
+# to decide.
+TEAM_ROUNDS = [
+    (2, "Archsimkats_Valley_V1"),
+    (4, "Aethermoor Creek 1.0"),
+    (8, "Supreme Isthmus v2.1"),
+]
+TEAM_GAMES = 4
+TEAM_MINUTES = 40
+
 STATS_RE = re.compile(
-    r"BARAI_STATS\] team=(\d+) .*?frame=(\d+).*?"
+    r"BARAI_STATS\] team=(\d+) ally=(\d+) \S+ frame=(\d+).*?"
     r"mLostReal=(\d+) .*?mKillReal=(\d+).*? mex=(\d+)")
-T2_RE = re.compile(r"\[BARAI_T2START\] team=(\d+) ally=\d+ frame=(\d+)")
+T2_RE = re.compile(r"\[BARAI_T2START\] team=\d+ ally=(\d+) frame=(\d+)")
 
 
 def harvest(tour_dir):
-    """Structural metrics for one tournament directory."""
+    """Structural metrics for one tournament directory.
+
+    Aggregated per SIDE (the ally field): each spec's players share the
+    allyteam equal to its spec index, which is the only anchor that survives
+    side-swapped and per-side games (the result.json team-index trap).
+    """
     mex_a, mex_s, tech, kills, losses, conret = [], [], [], 0, 0, 0
     for match in sorted(os.listdir(os.path.join(tour_dir, "matches"))):
         log = os.path.join(tour_dir, "matches", match, "infolog.txt")
         if not os.path.isfile(log):
             continue
         text = open(log, encoding="utf-8", errors="replace").read()
-        apex = "1" if "hard_vs_Apex" in match else "0"
-        best = {}
-        last = {}
+        apex_ally = 1 if "hard_vs_Apex" in match else 0
+        best = {}    # team -> (frame, mex, ally)
+        last = {}    # team -> (lost, killed, ally)
         for m in STATS_RE.finditer(text):
-            t, fr = m.group(1), int(m.group(2))
+            t, ally, fr = m.group(1), int(m.group(2)), int(m.group(3))
             if fr <= 28800 and (t not in best
                                 or abs(fr - 27000) < abs(best[t][0] - 27000)):
-                best[t] = (fr, int(m.group(5)))
-            last[t] = (int(m.group(3)), int(m.group(4)))
-        if apex in best and str(1 - int(apex)) in best:
-            mex_a.append(best[apex][1])
-            mex_s.append(best[str(1 - int(apex))][1])
-        if apex in last:
-            losses += last[apex][0]
-            kills += last[apex][1]
+                best[t] = (fr, int(m.group(6)), ally)
+            last[t] = (int(m.group(4)), int(m.group(5)), ally)
+        side_mex = {0: 0, 1: 0}
+        seen = {0: False, 1: False}
+        for fr, mex, ally in best.values():
+            side_mex[ally] += mex
+            seen[ally] = True
+        if seen[0] and seen[1]:
+            mex_a.append(side_mex[apex_ally])
+            mex_s.append(side_mex[1 - apex_ally])
+        for lost, killed, ally in last.values():
+            if ally == apex_ally:
+                losses += lost
+                kills += killed
+        # The rusher's own time, not a side-wide average -- a team strategy
+        # that treats one player differently cannot be judged by the mean.
         ts = [int(m.group(2)) for m in T2_RE.finditer(text)
-              if m.group(1) == apex]
+              if int(m.group(1)) == apex_ally]
         if ts:
             tech.append(min(ts) / 1800.0)
-        conret += len(re.findall(r"apex: con-retreat t=" + apex, text))
+        # Every apex: line in an Apex-vs-BARb game is ours, whichever side.
+        conret += len(re.findall(r"apex: con-retreat t=", text))
     return {
         "games": len(mex_a),
         "mex15_apex": statistics.median(mex_a) if mex_a else None,
@@ -74,25 +100,35 @@ def harvest(tour_dir):
     }
 
 
-def run_battery():
+def run_round(row, key, mp, games, minutes, per_side, stamp):
+    name = f"battery-{key.split()[0].lower().replace('v', '')}-{stamp}"
+    cmd = [sys.executable, "-u", os.path.join(HERE, "run_tournament.py"),
+           "--a", SPEC_A, "--b", SPEC_B, "--maps", mp,
+           "--games", str(games), "--minutes", str(minutes),
+           "--name", name]
+    if per_side > 1:
+        cmd += ["--per-side", str(per_side)]
+    print(f"battery: {key} x{games} ...", flush=True)
+    out = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+    m = re.search(r"output: (\S+)", out.stdout)
+    if not m:
+        print(f"  FAILED to launch {key}:\n{out.stdout[-500:]}")
+        return
+    tour = m.group(1)
+    row["maps"][key] = harvest(tour)
+    row["maps"][key]["dir"] = os.path.basename(tour)
+    print(f"  {key}: {row['maps'][key]}")
+
+
+def run_battery(teams=False):
     stamp = time.strftime("%Y%m%d-%H%M%S")
     row = {"at": stamp, "maps": {}}
     for mp in MAPS:
-        name = f"battery-{mp.split()[0].lower()}-{stamp}"
-        cmd = [sys.executable, "-u", os.path.join(HERE, "run_tournament.py"),
-               "--a", SPEC_A, "--b", SPEC_B, "--maps", mp,
-               "--games", str(GAMES), "--minutes", str(MINUTES),
-               "--name", name]
-        print(f"battery: {mp} x{GAMES} ...", flush=True)
-        out = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
-        m = re.search(r"output: (\S+)", out.stdout)
-        if not m:
-            print(f"  FAILED to launch on {mp}:\n{out.stdout[-500:]}")
-            continue
-        tour = m.group(1)
-        row["maps"][mp] = harvest(tour)
-        row["maps"][mp]["dir"] = os.path.basename(tour)
-        print(f"  {mp}: {row['maps'][mp]}")
+        run_round(row, mp, mp, GAMES, MINUTES, 1, stamp)
+    if teams:
+        for size, mp in TEAM_ROUNDS:
+            run_round(row, f"{size}v{size}", mp, TEAM_GAMES, TEAM_MINUTES,
+                      size, stamp)
     with open(TREND, "a", encoding="utf-8") as f:
         f.write(json.dumps(row) + "\n")
     print(f"\nappended to {TREND}")
@@ -105,13 +141,18 @@ def report():
         return
     rows = [json.loads(l) for l in open(TREND, encoding="utf-8")
             if l.strip()]
+    cols = []
+    for r in rows:
+        for k in r["maps"]:
+            if k not in cols:
+                cols.append(k)
     print(f"\n{'when':17}", end="")
-    for mp in MAPS:
+    for mp in cols:
         print(f"  {mp.split()[0]:>22}", end="")
-    print("\n" + " " * 17 + f"  {'mex a/s trade t2':>22}" * len(MAPS))
+    print("\n" + " " * 17 + f"  {'mex a/s trade t2':>22}" * len(cols))
     for r in rows[-12:]:
         print(f"{r['at']:17}", end="")
-        for mp in MAPS:
+        for mp in cols:
             d = r["maps"].get(mp)
             if not d or d.get("mex15_apex") is None:
                 print(f"  {'-':>22}", end="")
@@ -126,5 +167,14 @@ def report():
 if __name__ == "__main__":
     if "--report" in sys.argv:
         report()
+    elif "--teams-only" in sys.argv:
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        row = {"at": stamp, "maps": {}}
+        for size, mp in TEAM_ROUNDS:
+            run_round(row, f"{size}v{size}", mp, TEAM_GAMES, TEAM_MINUTES,
+                      size, stamp)
+        with open(TREND, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row) + "\n")
+        report()
     else:
-        run_battery()
+        run_battery(teams="--teams" in sys.argv)

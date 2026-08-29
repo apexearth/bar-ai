@@ -1,5 +1,26 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 — THE CONVERSION FAILURE: a 3.5x economy loses the 1v1 anyway
+
+Measured on decision-length games (50m caps, 8 per map, winrate-comet /
+winrate-glacier): decided results 2-10 vs stock overall. On Comet we led
+the mex race 18v14 @15m, 45v29 @25m, 102v29 @35m — three and a half times
+their economy — and went 2-6. Five of those six losses ended with OUR
+COMMANDER dying at fwd 0.00-0.18 (AT HOME) between 18.7m and 32.7m: the
+economy never killed them, the game ran long, and one breach decapitated
+us. The eco lead converts into mexes, not into finishing power or into
+commander safety. Suspects, unattributed: the killing blow not firing or
+not finishing on a won economy; home defence + army-at-home losing to the
+late push despite wealth; overflow (12% metal wasted flag) meaning the
+lead is partly paper. This is the next campaign; do not chase it with
+6-game arms — use decision-length games and the death ledger.
+
+Glacier is a SEPARATE disease: eco dead-even (5v5 @15m, 14v17 @35m), 0-4
+decided, and two commander deaths at fwd 0.99 and 0.71 — a commander deep
+in ENEMY territory at 27-31m. Either the flee destination sent him the
+wrong way ("toward home only if home is safer" picking the enemy side) or
+a job election walked him there. One game's fhist would attribute it.
+
 ## 2026-08-29 — perf spikes attributed: the builder election, protect stack inside it
 
 His standing complaint ("We still have performance spikes in the game which
