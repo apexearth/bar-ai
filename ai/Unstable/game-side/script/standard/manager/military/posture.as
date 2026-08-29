@@ -284,7 +284,7 @@ AIFloat3 gLanePinged;
 float LANE_STICKY() { return ai.GetTunable("apex_lane_sticky", TUNE_LANE_STICKY); }
 bool gTradeHold = false;    // the anchor is pulled back while the trade is bad
 int gNextLaneLostLog = 0;
-int gNextAidLog = 0;
+int gNextAidLaneLog = 0;
 
 // THE LIGHT T1 STOPS BEING A RAIDER AND BECOMES EYES, BUT ONLY IN T2 PHASE.
 //
@@ -548,8 +548,8 @@ void UpdateLanePos()
 				AIFloat3 go;
 				if (AidClampToContested(Builder::gHomePos, aidAt, go)) {
 					lane = go;
-					if (ai.frame >= gNextAidLog) {
-						gNextAidLog = ai.frame + 30 * SECOND;
+					if (ai.frame >= gNextAidLaneLog) {
+						gNextAidLaneLog = ai.frame + 30 * SECOND;
 						AiLog(Factory::T() + "apex: aid lane -> ally t=" + aidWho
 							+ " w=" + int(aidW)
 							+ " at=" + int(go.x) + "," + int(go.z));
