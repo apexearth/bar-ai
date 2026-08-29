@@ -1162,18 +1162,16 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// becomes the lowest-health enemy in its own reach, so the whole row
 		// focuses one kill at a time and enemy DPS leaves the field fastest.
 		// Colossi keep the richest-target rule instead.
-		CEnemyInfo* finishFoe = nullptr;
-		float finishFrac = 1e18f;
-		// v2 after a measured v1 failure (paired arena, no gain): rank by HP
-		// FRACTION so "wounded" means wounded rather than cheap, and hold the
-		// squad's finisher STICKY until it dies or leaves reach -- v1 flipped
-		// targets every tick as the hp order shuffled, resetting weapon aim.
-		CEnemyInfo* held = (finishId != 0)
-				? manager->GetCircuit()->GetEnemyInfo((ICoreUnit::Id)finishId) : nullptr;
-		if ((held != nullptr) && (held->GetHealth() <= 0.f || held->IsHidden())) {
-			held = nullptr;
-			finishId = 0;
-		}
+		// v3 (apexearth: "Focus fire should be a set target thing only, and
+		// overkill volleys should be thought about some"): a LIST of wounded
+		// targets, lowest absolute HP first, and the row's units are dealt
+		// across it in LETHAL DOSES -- each target gets ~enough dps-seconds
+		// to die, then the next unit aims at the next target. Set-target
+		// only; the engine still overrides when it cannot hit. v1/v2 dumped
+		// the whole row on one target and measured harmful (overkill).
+		const int FIN_N = 6;
+		CEnemyInfo* finCand[FIN_N] = { nullptr };
+		float finHp[FIN_N];
 		const bool rowColossus = (rowDef != nullptr)
 				&& (rowDef->IsCharger() || (rowDef->GetCostM()
 					>= manager->GetCircuit()->GetTunable("apex_super_cost", 7000.f)));
@@ -1225,14 +1223,19 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 						&& (e->GetHealth() > 0.f))
 					{
 						const float maxH = (ed->GetHealth() > 1.f) ? ed->GetHealth() : 1.f;
-						const float frac = e->GetHealth() / maxH;
-						if (e == held) {
-							// the standing finisher stays unless truly healed
-							finishFoe = e;
-							finishFrac = frac * 0.5f;
-						} else if ((frac < 0.85f) && (frac < finishFrac)) {
-							finishFrac = frac;
-							finishFoe = e;
+						if (e->GetHealth() / maxH < 0.9f) {
+							const float hp = e->GetHealth();
+							for (int fi = 0; fi < FIN_N; ++fi) {
+								if ((finCand[fi] == nullptr) || (hp < finHp[fi])) {
+									for (int fj = FIN_N - 1; fj > fi; --fj) {
+										finCand[fj] = finCand[fj - 1];
+										finHp[fj] = finHp[fj - 1];
+									}
+									finCand[fi] = e;
+									finHp[fi] = hp;
+									break;
+								}
+							}
 						}
 					}
 					if (!kiteOk || !ed->IsAttacker()) {
@@ -1248,6 +1251,8 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 			}
 		}
 
+		int finIdx = 0;
+		float finDosed = 0.f;
 		int iterNum = 0;
 		for (CCircuitUnit* unit : kv.second) {
 			if (unit->Blocker() != nullptr) {
@@ -1468,13 +1473,20 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					TRY_UNIT(manager->GetCircuit(), unit,
 						unit->CmdSetTarget(valFoe);
 					)
-				} else if ((finishFoe != nullptr)
+				} else if ((finCand[0] != nullptr) && (finIdx < FIN_N)
+					&& (finCand[finIdx] != nullptr)
 					&& (manager->GetCircuit()->GetTunable("apex_focus_finish", 0.f) > 0.f))
 				{
-					finishId = (int)finishFoe->GetId();
 					TRY_UNIT(manager->GetCircuit(), unit,
-						unit->CmdSetTarget(finishFoe);
+						unit->CmdSetTarget(finCand[finIdx]);
 					)
+					const float dose = ((rowDef != nullptr)
+							? rowDef->GetRawDps() : 10.f) * 2.5f;
+					finDosed += dose;
+					if (finDosed >= finHp[finIdx] * 1.15f) {
+						++finIdx;
+						finDosed = 0.f;
+					}
 				}
 			}
 
