@@ -116,6 +116,20 @@ CAMPAIGN LOG:
   grind is the open 1v1 front, then 2v2 per his ladder. t010's shape
   (rich but out-massed 27k-59k, blow never armed) is the other open
   thread: high-income army conversion.
+- Iter 11 -- FULL LADDER CHECKPOINT (winrate16 x2 + battery --teams-only,
+  2026-08-29 night, all defaults: focus_finish=0 brawl_pass=0 line_adapt=0):
+  1v1 Comet 5W-6L(1T) trade 0.72 -- parity holds. 1v1 Glacier 1W-8L(3T)
+  trade 0.44. 2v2 0-1(3T) trade 0.459. 4v4 0-4 trade 0.289. 8v8 0-2(2T)
+  trade 0.199. Every team trade roughly DOUBLED from pre-doctrine
+  (2v2 was 0.248) and 5 of 7 team games now reach the cap undecided --
+  survival landed, wins have not. Glacier death anatomy MOVED: rear
+  structure loss down to 17%; fight:defend 34% + retreat 28% of lost
+  metal, BOTH at fwd 0.59 -- the war is now lost grinding the corridor
+  MIDFIELD past center while gate towers (standing 83% of samples) fight
+  nothing. Commander death 23-41m still ends every decided loss.
+- Iter 12 (defend leash 0.55 -> 0.35): recall the DEFEND pool to the
+  fortified line instead of letting it grind at 0.59 -- the concentration
+  doctrine's own fight. Measurement: winrate17-glacier.
 
 ## 2026-08-29 — perf spikes attributed: the builder election, protect stack inside it
 

@@ -40,7 +40,7 @@ TEAM_ROUNDS = [
     (8, "Supreme Isthmus v2.1"),
 ]
 TEAM_GAMES = 4
-TEAM_MINUTES = 40
+TEAM_MINUTES = 75
 
 STATS_RE = re.compile(
     r"BARAI_STATS\] team=(\d+) ally=(\d+) \S+ frame=(\d+).*?"
