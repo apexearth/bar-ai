@@ -79,7 +79,7 @@ local COUNT      = math.floor(optNum("dev_arena_count", 8))
 -- enough for both AIs to finish init, and in pure mode nothing else needs
 -- the warm-up.
 local START      = math.floor(optNum("dev_arena_start", 120))
-local ROUND      = math.floor(optNum("dev_arena_round", 1800))
+local ROUND      = math.floor(optNum("dev_arena_round", 5400))
 local GAP        = math.floor(optNum("dev_arena_gap", 150))
 -- 500, was 700: "They need to start a little closer to each other so
 -- they'll start fighting. Sometimes they just run away from each other."
@@ -229,11 +229,11 @@ end
 
 local function genPairRoster()
 	local roster, total, minSight = {}, 0, 1e9
-	local k = math.random(1, 4)
+	local k = math.random(2, 6)
 	for _ = 1, k do
 		local id = rndPool[math.random(#rndPool)]
 		local ud = UnitDefs[id]
-		local n = math.random(3, 10)
+		local n = math.random(6, 20)
 		roster[#roster + 1] = { id = id, n = n, name = ud.name }
 		total = total + n
 		local los = ud.losRadius or 300
@@ -241,7 +241,7 @@ local function genPairRoster()
 	end
 	if #rezPool > 0 and math.random() < 0.3 then
 		local id = rezPool[math.random(#rezPool)]
-		roster[#roster + 1] = { id = id, n = math.random(1, 3),
+		roster[#roster + 1] = { id = id, n = math.random(2, 5),
 			name = UnitDefs[id].name }
 	end
 	-- one round in three is asymmetric; the short side swaps inside the pair
@@ -317,8 +317,10 @@ local function computeAnchors()
 		dx, dz = 0, 1
 	end
 	local h = SEP / 2
-	anchorA = { cx - dx * h, cz - dz * h, -dz, dx }  -- x, z, and the perpendicular
-	anchorB = { cx + dx * h, cz + dz * h, -dz, dx }
+	-- x, z, the perpendicular, and the away-from-centre axis (ranks stack
+	-- along it, behind the front line)
+	anchorA = { cx - dx * h, cz - dz * h, -dz, dx, -dx, -dz }
+	anchorB = { cx + dx * h, cz + dz * h, -dz, dx, dx, dz }
 end
 
 -- Nudge a spawn point off water or off the map edge. Units created underwater
@@ -345,19 +347,25 @@ local function spawnSide(ally, anchor, facingAway)
 		return 0
 	end
 	local px, pz, perpX, perpZ = anchor[1], anchor[2], anchor[3], anchor[4]
+	local awayX, awayZ = anchor[5] or 0, anchor[6] or 0
 	px, pz = landNear(px, pz)
 
 	local n = 0
 	local total = curTotal[ally]
 	local i = 0
 	spawnM[ally] = 0
+	-- Ranked formation ("more columns of units"): roster order fills the
+	-- front rank first, later ranks stack behind it away from the enemy,
+	-- so the spec's first defs are the ones that meet the fight.
+	local rowW = math.max(4, math.ceil(math.sqrt(total * 2.5)))
 	for _, entry in ipairs(curRoster[ally]) do
 		for _ = 1, entry.n do
-			-- Centre the line on the anchor, roster order along it.
-			local off = (i - (total - 1) / 2) * PITCH
+			local rank = math.floor(i / rowW)
+			local col = i % rowW
+			local off = (col - (math.min(total, rowW) - 1) / 2) * PITCH
 			i = i + 1
-			local ux = px + perpX * off
-			local uz = pz + perpZ * off
+			local ux = px + perpX * off + awayX * rank * PITCH
+			local uz = pz + perpZ * off + awayZ * rank * PITCH
 			ux = math.max(64, math.min(mapX - 64, ux))
 			uz = math.max(64, math.min(mapZ - 64, uz))
 			local y = Spring.GetGroundHeight(ux, uz)

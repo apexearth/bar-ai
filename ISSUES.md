@@ -127,9 +127,20 @@ CAMPAIGN LOG:
   metal, BOTH at fwd 0.59 -- the war is now lost grinding the corridor
   MIDFIELD past center while gate towers (standing 83% of samples) fight
   nothing. Commander death 23-41m still ends every decided loss.
-- Iter 12 (defend leash 0.55 -> 0.35): recall the DEFEND pool to the
-  fortified line instead of letting it grind at 0.59 -- the concentration
-  doctrine's own fight. Measurement: winrate17-glacier.
+- Iter 12 (defend leash 0.55 -> 0.35): FAILED -- winrate17-glacier
+  1W-10L(1T) trade 0.53. Trade improved (0.44 -> 0.53) but wins fell:
+  holding defenders home cedes the corridor's middle mexes. REVERTED to
+  0.55. Lesson pairs with the fight-abort result: on Glacier, declining
+  the midfield in EITHER direction loses; the corridor demands winning
+  the grind, not avoiding it.
+- ARENA REBUILT BIGGER (his ruling, 2026-08-29 night: "Try letting the
+  battles last longer. Try having more units in them. Trying to have more
+  columns of units." + "you are not running long enough tests"): random
+  rosters k 2-6 defs x 6-20 each (was 1-4 x 3-10), rez 2-5, round cap
+  1800 -> 5400 frames, and spawns are RANKED FORMATIONS (rowW ~
+  sqrt(2.5*total), later ranks stack behind the front along the away
+  axis) instead of one thin 64-pitch line. A/B arms now run 60
+  game-minutes x 3 seeds x both orientations. Baseline: arena-bigbase-*.
 
 ## 2026-08-29 — perf spikes attributed: the builder election, protect stack inside it
 
