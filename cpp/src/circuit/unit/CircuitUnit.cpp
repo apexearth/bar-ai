@@ -315,7 +315,20 @@ float CCircuitUnit::GetDGunRange()
 
 float CCircuitUnit::GetHealthPercent()
 {
-	return unit->GetHealth() / unit->GetMaxHealth() - unit->GetCaptureProgress() * 16.f;
+	// apex: script handles are NOCOUNT and death is deferred (the garbage
+	// list collects one unit per update), so a script call can land on a
+	// unit marked dead whose engine wrapper no longer answers -- crashed a
+	// live watched game 2026-08-28 (AV in this frame via CallX64, script
+	// Progress() reading a joined task's just-killed nanoframe). Dead reads
+	// as 0% -- every caller treats that as "no progress / retreat now".
+	if (isDead) {
+		return 0.f;
+	}
+	const float maxHealth = unit->GetMaxHealth();
+	if (maxHealth <= 0.f) {
+		return 0.f;
+	}
+	return unit->GetHealth() / maxHealth - unit->GetCaptureProgress() * 16.f;
 }
 
 /*

@@ -117,7 +117,14 @@ IUnitTask@ JoinBig(CCircuitDef@ def)
 // WorthJoining still prices the walk against the job's own remaining bill.
 IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 {
-	const float minM = ai.GetTunable("apex_join_min_m", TUNE_JOIN_MIN_M);
+	// 150, not apex_join_min_m: the 500 bar excluded the 370m advanced
+	// solar, and three cons opened three solo advsols in one screen
+	// (apexearth, watching twice: "wasteful spending... They should each
+	// work on 1 together"). Solars and wind stay below the bar; the crew
+	// cap and WorthJoining's walk-vs-remaining still bound every fold.
+	float minM = ai.GetTunable("apex_join_min_m", TUNE_JOIN_MIN_M);
+	if (minM > 150.f)
+		minM = 150.f;
 	IUnitTask@ best = null;
 	float bestCost = 0.f;
 	for (uint i = 0; i < Requests::gLive.length(); ++i) {

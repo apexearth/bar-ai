@@ -93,15 +93,23 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 	if ((d >= 0) && (d < int(gGoneOk.length()))) {
 		if (done) {
 			++gGoneOk[d];
-			gAbortStreak[d] = 0;
+			if (d > 0)
+				gAbortStreak[d] = 0;
 		} else {
-			gAbortStreak[d] = (ai.frame < gAbortAt[d] + 30 * SECOND)
-					? (gAbortStreak[d] + 1) : 1;
-			gAbortAt[d] = ai.frame;
-			if ((gAbortStreak[d] == 3) && (gAbortLog < 30))
-				AiLog("apex: abort-backoff t=" + ai.teamId + " "
-					+ Catalog::Def(d).GetName()
-					+ " -- 3 fast aborts, held 120s");
+			// d==0 is a builder task with NO buildDef (reclaim, repair):
+			// those removals are normal churn, and Catalog::Def(0) is null
+			// -- counting them crashed the script here on every third
+			// reclaim-task removal (his live game, 2026-08-28 19:0x:
+			// "Exception: Null pointer access ... TaskRemovedInner").
+			if (d > 0) {
+				gAbortStreak[d] = (ai.frame < gAbortAt[d] + 30 * SECOND)
+						? (gAbortStreak[d] + 1) : 1;
+				gAbortAt[d] = ai.frame;
+				if ((gAbortStreak[d] == 3) && (gAbortLog < 30))
+					AiLog("apex: abort-backoff t=" + ai.teamId + " "
+						+ Catalog::Def(d).GetName()
+						+ " -- 3 fast aborts, held 120s");
+			}
 			++gGoneBad[d];
 			if (!OnMap(task.GetBuildPos()))
 				++gGoneBadNoPos[d];
@@ -119,7 +127,10 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 				if ((nw > 0) && (ws[0] !is null))
 					dMan = ws[0].GetPos(ai.frame).distance2D(task.GetBuildPos());
 			}
-			if (gAbortLog < 30) {
+			// d==0 (no buildDef: reclaim/repair) has no Def to name --
+			// Catalog::Def(0) is null and .GetName() on it is the script
+			// exception that stormed his 2026-08-28 crashed game.
+			if ((d > 0) && (gAbortLog < 30)) {
 				++gAbortLog;
 				AiLog("apex: abort t=" + ai.teamId + " "
 					+ Catalog::Def(d).GetName() + " workers=" + nw

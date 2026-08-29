@@ -12956,7 +12956,7 @@ index cd0b54a..db4287a 100644
  	float cloakCost;
  	float buildTime;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index 2f597be..c70ef2c 100644
+index 2f597be..b9d0efc 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -6,6 +6,7 @@
@@ -13040,7 +13040,29 @@ index 2f597be..c70ef2c 100644
  	SetTaskFrame(manager->GetCircuit()->GetLastFrame());
  	taskState = ETaskState::NONE;
  }
-@@ -285,11 +329,19 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
+@@ -271,7 +315,20 @@ float CCircuitUnit::GetDGunRange()
+ 
+ float CCircuitUnit::GetHealthPercent()
+ {
+-	return unit->GetHealth() / unit->GetMaxHealth() - unit->GetCaptureProgress() * 16.f;
++	// apex: script handles are NOCOUNT and death is deferred (the garbage
++	// list collects one unit per update), so a script call can land on a
++	// unit marked dead whose engine wrapper no longer answers -- crashed a
++	// live watched game 2026-08-28 (AV in this frame via CallX64, script
++	// Progress() reading a joined task's just-killed nanoframe). Dead reads
++	// as 0% -- every caller treats that as "no progress / retreat now".
++	if (isDead) {
++		return 0.f;
++	}
++	const float maxHealth = unit->GetMaxHealth();
++	if (maxHealth <= 0.f) {
++		return 0.f;
++	}
++	return unit->GetHealth() / maxHealth - unit->GetCaptureProgress() * 16.f;
+ }
+ 
+ /*
+@@ -285,11 +342,19 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
  
  void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout)
  {
@@ -13060,7 +13082,7 @@ index 2f597be..c70ef2c 100644
  void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
  {
  //	assert(utils::is_in_map(pos));
-@@ -298,6 +350,7 @@ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
+@@ -298,6 +363,7 @@ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
  
  void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout)
  {
@@ -13068,7 +13090,7 @@ index 2f597be..c70ef2c 100644
  	assert(utils::is_in_map(pos));
  	unit->Fight(pos, options, timeout);
  }
-@@ -328,7 +381,21 @@ void CCircuitUnit::CmdStop(short options, int timeout)
+@@ -328,7 +394,21 @@ void CCircuitUnit::CmdStop(short options, int timeout)
  
  void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
  {
@@ -13091,7 +13113,7 @@ index 2f597be..c70ef2c 100644
  }
  
  void CCircuitUnit::CmdCloak(bool state)
-@@ -474,6 +541,7 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
+@@ -474,6 +554,7 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
  
  void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  {
@@ -13099,7 +13121,7 @@ index 2f597be..c70ef2c 100644
  	target = enemy;
  	TRY_UNIT(manager->GetCircuit(), this,
  		const AIFloat3& pos = enemy->GetPos();
-@@ -508,23 +576,62 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -508,23 +589,62 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  
  void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
  {

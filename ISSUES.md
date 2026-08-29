@@ -1,5 +1,31 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-28 (night) — THE ORDERS-THAT-DON'T-STICK FAMILY (next campaign, top priority)
+
+One disease, four faces, all measured today:
+1. **Mex guards never materialize** (his report: "we turned off the logic to
+   make sure we build defensive turrets on our mexes... we lose them all").
+   NOT the pricing: in his watched game (watch-vsmedium-s125) asset sites
+   WON the defence election **677 times and 14 towers were built** (10
+   standing, all in the base core; mexFloor 1,890 and the target lifted
+   correctly). 98% completion failure.
+2. **Front towers**: wonFront=63, built 2, standing 0 (same game; standing
+   ISSUES item since 2026-08-27).
+3. **The eco commander's 156x exec loop** (same converter, same occupied
+   square, engine refusing every order — fixed at the Take door by the
+   backoff, but the PLACEMENT that returns occupied ground is unfixed).
+4. **The abandonment class**: 42 nanoframes abandoned in one game
+   (cormex=22), 'finish before founding' flagging all day.
+The common shape: an election is won, an order is issued, and between the
+executor and a standing building the order dies -- placement on occupied
+ground, task killed same-frame, builder peeled/re-elected, frame never
+resumed. The dig is the task lifecycle from `apex: exec` to BARAI_BUILD:
+pick ONE won defence election from s125 and trace its task id to its
+death. Note: the TaskRemovedInner exception storm (fixed tonight) was
+ABORTING the removal hook mid-flight all day, so ledger drift and Forget
+misses may have been feeding this family -- re-measure completion rates
+FIRST on the fixed build before digging deeper.
+
 ## 2026-08-28 (late) — the eco commander's 156-exec loop IS the AFK
 
 His "eco player goes AFK" reproduced on the 15m SI 8v8 tell
