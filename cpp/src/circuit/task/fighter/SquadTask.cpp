@@ -1286,9 +1286,24 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 							: kiteFrac;
 					const float openTo = siegeRow ? kv.first : (kv.first * rangeMod);
 					const float trigger = std::max(kv.first * rowFrac, foeReach);
+					// apex: OUTRANGING THE FOE ALWAYS PERMITS THE BACKSTEP. The
+					// yo-yo guard compared foeReach (their range + the pad)
+					// against our SHAVED standoff (range * rangeMod), so a pad
+					// plus the 10% shave ate a real range advantage whole: a
+					// Rocko (475) was forbidden to kite a Stumpy (350) --
+					// 470 !< 427 -- and the row stood trading at the shorter
+					// gun's range (apexearth, watching exactly this fight:
+					// "we just stood there while they surrounded us... If we
+					// sense too many enemies can shoot at us we should
+					// immediately back up instead of waiting to be hit").
+					// Raw range against raw range is the yo-yo question; the
+					// old shaved test stays only as the fallback that lets a
+					// row back off from a short-armed chaser it cannot
+					// out-stand.
 					const bool mayKite = siegeRow
 							? (foeReach < kv.first)
-							: (trigger < kv.first * rangeMod);
+							: ((kiteFoeRange < kv.first)
+								|| (trigger < kv.first * rangeMod));
 					if ((sqFoe < SQUARE(trigger)) && mayKite) {
 						AIFloat3 away = kcur - kiteFoe;
 						if (away.SqLength2D() > 1.f) {

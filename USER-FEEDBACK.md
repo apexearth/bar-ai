@@ -51,33 +51,36 @@ ladder, overflow-scaled strategic parallelism, wealth waiver on the copy
 laws, T1-air mute) landed with three audits; validation run next, then his
 eyes. Eco-cluster split and nano-reclaim C++ still open.
 
-## UNRESOLVED (landed, awaiting his eyes) — Long-range units walk up blind and die (2026-08-29)
+## UNRESOLVED — The 2026-08-29 watch batch: defence is the loss cause now
 
-Raised twice today: "they step really close and get killed for no great
-reason", then in full: "We don't want them walking up blind getting into
-LOS range of enemies... they should depend on allied vision... applying
-'set target' and staying at around their maximum range. We don't want
-them standing in the front where they'll get shot. We want to build up
-these guys in unit numbers so our army can grow very powerful."
+He confirmed the long-range fix live (archived, feedback/2026-08-29.md:
+"we are losing due to other issues") and named the other issues, watching:
 
-Attributed, two mechanisms, both landed 2026-08-29:
-(1) The squad ring order's fallback (`CCircuitUnit::Attack(pos,...)`)
-issued a raw engine attack whenever a mobile target was not in LOS — the
-exact moment vision flickers is the moment the walk-in order goes out.
-Built on a misreading of the set-target gadget: it keeps a radar-only
-target (`los % 4 == 0` is its only drop rule). Now radar counts, and a
-long gun (weapon range > own sight: Sharpshooter 900/455, Hound 650/400)
-never takes the walk-in fallback at all — it holds the ring and waits
-for allied vision.
-(2) The 2026-08-16 "Hound is artillery" ruling silently moved Hounds (and
-the whole mobile arty family) out of the massing squads into solo
-CArtilleryTask — statics-only targeting, raw attack orders, travelling
-alone with no ally to see for them. `apex_arty_mass` (default ON) puts
-mobile artillery back into the squad pool as the back row.
+1. **Perimeter, not interior**: "We make defenses inside of our base
+   instead of at a nice perimeter around it."
+2. **T2 transition is a death window**: "We're almost always light on
+   units when we transition to T2 so this is a risky 'we might die' time
+   of the game."
+3. **Mex encampments undefended; frontline logic has failed at this**:
+   "our frontline logic is a complete failure when it comes to defenses.
+   This logic has been unreliable for a long time so I'm wondering if
+   we're better off leveraging our choke-point logic. We want to gain
+   control of mexes and then defend chokepoints ahead of where the mexes
+   are. We want to prevent the enemy from getting in there."
+4. **Squads screen expansion**: "Perhaps when a constructor leaves a base
+   to make mexes further away the brain can tell the squad to guard the
+   area where that constructor is going."
+5. **Standing to die when outnumbered**: "I just saw our army fight an
+   enemy vehicles army and we just stood there while they surrounded us
+   with a superior army - we didn't even try to move or pull back...
+   pathetic fight logic honestly." Suspects: OutgunnedHere never firing,
+   and the ring code's threat-veto (backing off reads more threat when
+   surrounded, so newPos = curPos = stand still) — possibly aggravated by
+   the 2026-08-29 ring-hold change. Attribution in progress same hour.
 
-Still open: the "build up their numbers" half — composition pricing for
-the long-range classes was not touched; judge after the survival fix
-beds in.
+Also still queued from the morning ask: "build up these guys [snipers/
+hounds/arty] in unit numbers so our army can grow very powerful" —
+long-range composition share untouched (ISSUES.md).
 
 ## UNRESOLVED (landed, awaiting his eyes) — Exit lanes and pooled advsols (2026-08-28, watching live)
 

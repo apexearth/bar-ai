@@ -698,6 +698,18 @@ const float TUNE_WITHDRAW_ODDS = 1.5f;
 // manager/military/withdraw.as [seconds] -- A withdrawing unit's pull-back
 //   order is re-issued at most once per this interval.
 const float TUNE_WITHDRAW_REISSUE = 6.f;
+// manager/military/withdraw.as [seconds] -- How far back the local-trade
+//   ledger looks: combat deaths older than this no longer say who is winning
+//   the spot.
+const float TUNE_TRADE_WINDOW = 15.f;
+// manager/military/withdraw.as [ratio] -- The trade trigger: pull back when
+//   our combat metal dead nearby exceeds theirs times this (0 disables via
+//   the floor).
+const float TUNE_LOSING_TRADE = 3.f;
+// manager/military/withdraw.as [metal] -- Ignore the trade trigger until at
+//   least this much of OUR combat metal died nearby -- one cheap death is
+//   noise, not a verdict.
+const float TUNE_LOSING_FLOOR = 250.f;
 
 // COMBAT BEHAVIOUR -- promoted from hardcoded constants 2026-08-21 so the
 // engagement maths is tunable. Same defaults as the constants they replace.

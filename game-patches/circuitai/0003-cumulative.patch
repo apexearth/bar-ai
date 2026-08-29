@@ -10830,7 +10830,7 @@ index b4b43c1..d2e258e 100644
  		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..3ef48f2 100644
+index 0d59b65..6ff5978 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,23 @@
@@ -11395,7 +11395,7 @@ index 0d59b65..3ef48f2 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -418,51 +814,554 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -418,51 +814,569 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -11881,9 +11881,24 @@ index 0d59b65..3ef48f2 100644
 +							: kiteFrac;
 +					const float openTo = siegeRow ? kv.first : (kv.first * rangeMod);
 +					const float trigger = std::max(kv.first * rowFrac, foeReach);
++					// apex: OUTRANGING THE FOE ALWAYS PERMITS THE BACKSTEP. The
++					// yo-yo guard compared foeReach (their range + the pad)
++					// against our SHAVED standoff (range * rangeMod), so a pad
++					// plus the 10% shave ate a real range advantage whole: a
++					// Rocko (475) was forbidden to kite a Stumpy (350) --
++					// 470 !< 427 -- and the row stood trading at the shorter
++					// gun's range (apexearth, watching exactly this fight:
++					// "we just stood there while they surrounded us... If we
++					// sense too many enemies can shoot at us we should
++					// immediately back up instead of waiting to be hit").
++					// Raw range against raw range is the yo-yo question; the
++					// old shaved test stays only as the fallback that lets a
++					// row back off from a short-armed chaser it cannot
++					// out-stand.
 +					const bool mayKite = siegeRow
 +							? (foeReach < kv.first)
-+							: (trigger < kv.first * rangeMod);
++							: ((kiteFoeRange < kv.first)
++								|| (trigger < kv.first * rangeMod));
 +					if ((sqFoe < SQUARE(trigger)) && mayKite) {
 +						AIFloat3 away = kcur - kiteFoe;
 +						if (away.SqLength2D() > 1.f) {
@@ -11960,7 +11975,7 @@ index 0d59b65..3ef48f2 100644
  			}
  
  			beta += delta;
-@@ -478,7 +1377,9 @@ void ISquadTask::Log()
+@@ -478,7 +1392,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,

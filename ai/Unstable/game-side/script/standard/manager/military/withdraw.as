@@ -120,6 +120,63 @@ bool LosingHere(const AIFloat3& in pos)
 	return ai.GetNetInflAt(pos) < -ai.GetTunable("apex_withdraw_infl", TUNE_WITHDRAW_INFL);
 }
 
+// THE SCOREBOARD OUTRANKS THE MAP. Both sensors above model strength --
+// OutgunnedHere from the threat map, LosingHere from influence -- and both can
+// call a fight fine while it is being lost in observed fact: a streaming enemy
+// reads weak at every instant, influence lags until our units are already
+// dying. Recent deaths are ground truth with no lag and nothing hidden. This
+// keeps a short ledger of combat deaths on both sides, with position, and
+// calls a spot lost when OUR combat metal is dying there and theirs is not.
+// Ours counts mobile combat only -- a building dying while the army stands is
+// the army's cue to fight, not to leave.
+array<AIFloat3> gTradeAt;
+array<float> gTradeM;
+array<bool> gTradeOurs;
+array<int> gTradeFrame;
+
+void NoteLocalDeath(const AIFloat3& in at, float costM, bool ours)
+{
+	if (!OnMap(at) || (costM <= 0.f))
+		return;
+	const int keep = int(ai.GetTunable("apex_trade_window", TUNE_TRADE_WINDOW)) * SECOND;
+	for (int i = int(gTradeFrame.length()) - 1; i >= 0; --i) {
+		if (ai.frame - gTradeFrame[i] > keep) {
+			gTradeAt.removeAt(i);
+			gTradeM.removeAt(i);
+			gTradeOurs.removeAt(i);
+			gTradeFrame.removeAt(i);
+		}
+	}
+	gTradeAt.insertLast(at);
+	gTradeM.insertLast(costM);
+	gTradeOurs.insertLast(ours);
+	gTradeFrame.insertLast(ai.frame);
+}
+
+bool LosingFightHere(const AIFloat3& in p, float& out lost, float& out killed)
+{
+	lost = 0.f;
+	killed = 0.f;
+	const float floor = ai.GetTunable("apex_losing_floor", TUNE_LOSING_FLOOR);
+	if (floor <= 0.f)
+		return false;
+	const int keep = int(ai.GetTunable("apex_trade_window", TUNE_TRADE_WINDOW)) * SECOND;
+	const float r = ai.GetTunable("apex_withdraw_ally_r", TUNE_WITHDRAW_ALLY_R);
+	const float r2 = r * r;
+	for (uint i = 0; i < gTradeAt.length(); ++i) {
+		if (ai.frame - gTradeFrame[i] > keep)
+			continue;
+		if (gTradeAt[i].SqDistance2D(p) > r2)
+			continue;
+		if (gTradeOurs[i])
+			lost += gTradeM[i];
+		else
+			killed += gTradeM[i];
+	}
+	return (lost >= floor)
+		&& (lost > killed * ai.GetTunable("apex_losing_trade", TUNE_LOSING_TRADE));
+}
+
 // The influence test above LAGS: influence is built from standing presence, so
 // at the contact line it reads ~0 until our units are already dying (measured
 // 2026-08-20: a 9-unit squad fed itself to a commander over 36 seconds and the
@@ -305,7 +362,11 @@ void UpdateWithdraw()
 		}
 		float odds = 0.f;
 		const bool outgunned = OutgunnedHere(u, p, allyPos, allyPow, odds);
-		if (!leash && !recallHome && !outgunned && !LosingHere(p))
+		float tLost = 0.f;
+		float tKilled = 0.f;
+		const bool losingFight = (!outgunned)
+			&& LosingFightHere(p, tLost, tKilled);
+		if (!leash && !recallHome && !outgunned && !losingFight && !LosingHere(p))
 			continue;
 		if (ai.frame - gCombatSent[i] < reissue)
 			continue;
@@ -334,12 +395,14 @@ void UpdateWithdraw()
 			// largest unexplained movement on the map.
 			if (ai.GetTunable("apex_ping", TUNE_PING) > 0.f)
 				AiAddPoint(p, "WDRAW " + (leash ? "leash" : (recallHome ? "recall"
-					: (outgunned ? ("odds " + formatFloat(odds, "", 0, 1)) : "infl"))));
+					: (outgunned ? ("odds " + formatFloat(odds, "", 0, 1))
+					: (losingFight ? "trade" : "infl")))));
 			AiLog(Factory::T() + "apex: withdraw "
 				+ ((u.circuitDef !is null) ? u.circuitDef.GetName() : "?")
 				+ " at=" + int(p.x) + "," + int(p.z)
 				+ (leash ? " leash" : (recallHome ? " recall-home"
-					: (outgunned ? (" odds=" + formatFloat(odds, "", 0, 2)) : " infl")))
+					: (outgunned ? (" odds=" + formatFloat(odds, "", 0, 2))
+					: (losingFight ? (" trade=" + int(tLost) + ":" + int(tKilled)) : " infl"))))
 				+ " -- " + gWithdrawn + " orders so far, "
 				+ gCombatId.length() + " tracked");
 		}

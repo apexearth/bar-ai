@@ -428,6 +428,15 @@ GROUPS = [
                   "flee dies anyway"),
                  ("TUNE_RETREAT_COST_SCALE", "lower = expensive units flee "
                   "earlier (threshold adds cost divided by this)"),
+                 ("TUNE_LOSING_TRADE", "the casualty-scoreboard pull-back: "
+                  "lower = leave a fight sooner once our dead outweigh "
+                  "theirs nearby; the map sensors both lag, dead units "
+                  "don't"),
+                 ("TUNE_LOSING_FLOOR", "our combat metal that must die "
+                  "nearby before the scoreboard speaks — lower = more "
+                  "trigger-happy on the first losses"),
+                 ("TUNE_TRADE_WINDOW", "seconds the casualty scoreboard "
+                  "remembers — longer = slower to forgive a bad spot"),
              ]},
             {"title": "Where the army stands",
              "what": "The staging anchor: the point the army gathers on and "

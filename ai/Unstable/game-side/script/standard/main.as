@@ -229,6 +229,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		&& (Military::WantsMassing(cdef) || Military::IsFodder(cdef)))
 	{
 		Military::NoteCombatLoss(cdef.costM, Military::ForwardFraction(at));
+		Military::NoteLocalDeath(at, cdef.costM, true);
 	}
 	// OUR COMMANDER'S CORPSE IS A RESURRECTION JOB, not food (apexearth:
 	// "make sure we resurrect our commanders instead of reclaiming them").
@@ -305,6 +306,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	Military::NoteFoeDef(edef.costM, edef);
 	double hkT = Perf::T0();
 	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs);
+	Military::NoteLocalDeath(pos, edef.costM, false);
 	Perf::Add("hk.enemydead", hkT);
 }
 
