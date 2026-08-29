@@ -945,22 +945,42 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 	if (wd <= 0)
 		return w;
 	if (ai.frame >= gTeethNextScan) {
+		const bool diag = (gTeethNextScan > 0)
+			&& (ai.frame >= gTeethNextScan + 50 * SECOND);   // ~once a minute
 		gTeethNextScan = ai.frame + 10 * SECOND;
 		gTeethPoint = AIFloat3(-1.f, 0.f, -1.f);
 		array<int> gidx;
 		Front::GateChokeIdxs(gidx);
-		for (uint g = 0; g < gidx.length(); ++g) {
-			const AIFloat3 cp = ai.GetChokePointPos(gidx[g]);
-			bool covered = false;
-			for (uint i = 0; i < gProtPos[PROT_DEF].length() && !covered; ++i) {
-				if (gProtPos[PROT_DEF][i].distance2D(cp) < 500.f)
-					covered = true;
+		if (diag || (ai.frame % (60 * SECOND) < 10 * SECOND))
+			AiLog(Factory::T() + "apex: teeth-scan wall=" + wd
+				+ " gates=" + gidx.length()
+				+ " towers=" + gProtPos[PROT_DEF].length());
+		// Nearest gate to home first -- his ruling puts the walls BEFORE the
+		// push arrives, so teeth do not wait for the gate's towers (that
+		// prerequisite deadlocked: 14 minutes, 3 towers, none at a gate,
+		// zero teeth in 24 tournament games). A cheap wall unbacked by guns
+		// still slows and splits; the guns follow it.
+		for (uint pass = 0; pass < gidx.length(); ++pass) {
+			int gi = -1;
+			float bestD = 1e12f;
+			for (uint g = 0; g < gidx.length(); ++g) {
+				if (gidx[g] < 0)
+					continue;
+				const float dd = ai.GetChokePointPos(gidx[g])
+						.distance2D(Builder::gHomePos);
+				if (dd < bestD) {
+					bestD = dd;
+					gi = int(g);
+				}
 			}
-			if (!covered)
-				continue;
+			if (gi < 0)
+				break;
+			const AIFloat3 cp = ai.GetChokePointPos(gidx[gi]);
+			const int gateIdx = gidx[gi];
+			gidx[gi] = -1;   // consumed for this scan pass
 			AIFloat3 e1;
 			AIFloat3 e2;
-			if (!ai.GetChokePointEnds(gidx[g], e1, e2))
+			if (!ai.GetChokePointEnds(gateIdx, e1, e2))
 				continue;
 			AIFloat3 span = e2 - e1;
 			const float len = sqrt(span.SqLength2D());
