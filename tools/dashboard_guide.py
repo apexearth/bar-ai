@@ -341,6 +341,12 @@ GROUPS = [
                  ("TUNE_CON_FEED_HEADROOM", "how many constructors the lines "
                   "may pay for, as a multiple of what income keeps fed — "
                   "lower means army sooner once the hands are hired"),
+                 ("TUNE_UNIT_AFFORD_S", "seconds of income a unit may cost "
+                  "before its bid dies — lower means mass-first harder and "
+                  "T3 waits for a richer economy"),
+                 ("TUNE_DEF_SETBACK", "how far behind the contested edge a "
+                  "front tower is sited — bigger survives building more "
+                  "often but covers less forward ground"),
                  ("TUNE_ANTINUKE_INCOME", "the income at which insurance "
                   "(antinuke, shields) starts being worth buying"),
              ]},

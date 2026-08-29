@@ -1672,6 +1672,15 @@ const float TUNE_BLAST_AISLE = 500.f;
 //   52 m/s economy stops paying for its eleventh builder ("I have a hunch
 //   we make too many constructors").
 const float TUNE_CON_FEED_HEADROOM = 1.5f;
+// UNIT_AFFORD_S [seconds of income] -- a mobile unit's bid fades as its cost
+//   approaches this much income, dying at the full bill (mass first, T3 from
+//   surplus -- the supers' 60s affordability bar applied to units). At 60 a
+//   Juggernaut needs 333 m/s to bid at all.
+const float TUNE_UNIT_AFFORD_S = 60.f;
+// DEF_SETBACK [elmos] -- front defence sites step this far back from the
+//   contested edge toward home, so the frame survives building; most tower
+//   ranges (430+) still cover the edge it stepped back from.
+const float TUNE_DEF_SETBACK = 250.f;
 // GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
 //   income: one shared line the whole team's nanos man, so one team purse.
 //   At 100s the ~9.3k bill clears right at ~100 team metal/s, his stated

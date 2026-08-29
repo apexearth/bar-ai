@@ -585,6 +585,21 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					ppc *= hA / (hA + fieldSec);
 				}
 			}
+			// MASS FIRST, T3 FROM SURPLUS (his ruling, after 267,850 metal
+			// of T3 lost a massing war at 254 m/s): a unit's bid fades as
+			// its bill approaches what income makes in apex_unit_afford_s
+			// seconds -- the supers' own affordability shape, applied to
+			// the unit line. A pawn barely notices; a Juggernaut needs the
+			// income that shrugs it off. No tier table: cost is the tier.
+			{
+				const float uBudget = aiEconomyMgr.metal.income
+						* ai.GetTunable("apex_unit_afford_s", TUNE_UNIT_AFFORD_S);
+				const float uBill = Catalog::gCostM[d];
+				if ((uBudget > 1.f) && (uBill >= uBudget))
+					continue;
+				if (uBudget > 1.f)
+					ppc *= (uBudget - uBill) / uBudget;
+			}
 			const float have = float((int(d) < int(gOwnCount.length()))
 					? gOwnCount[d] : 0);
 			// The gap is a STREAM the line fills; clamping the gain to one

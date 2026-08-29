@@ -973,7 +973,7 @@ def check_lab_timing(text, rep):
     # advanced-plant starts while metal overflows; a second start within
     # 2 min of a waiver on that team is sanctioned, not a "no no".
     waived = defaultdict(list)   # team -> [frames]
-    for m in re.finditer(r"\[f=(\d+)\][^\n]*apex: copy waived t=(\d+)", text):
+    for m in re.finditer(r"\[f=(\d+)\][^\n]*apex: (?:copy|plant-par) waived t=(\d+)", text):
         waived[m.group(2)].append(int(m.group(1)))
     overlaps = []
     seen_pairs = set()

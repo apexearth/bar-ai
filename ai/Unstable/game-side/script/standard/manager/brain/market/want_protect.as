@@ -701,8 +701,26 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	if (ai.GetTunable("apex_front_line", TUNE_FRONT_LINE) > 0.f) {
 		array<AIFloat3> line;
 		if (Military::FrontBuildSpots(line)) {
-			for (uint fi = 0; fi < line.length(); ++fi)
-				sites.insertLast(line[fi]);
+			// BUILT A STEP BEHIND THE EDGE (his ruling: "both" -- setback
+			// and escorts): a tower ON the contested edge dies as a frame
+			// (s43: all defence task-deaths hurt-retreat/unreach); a few
+			// hundred elmos back it finishes and still ranges the approach.
+			const float back = ai.GetTunable("apex_def_setback", TUNE_DEF_SETBACK);
+			for (uint fi = 0; fi < line.length(); ++fi) {
+				AIFloat3 fp = line[fi];
+				if (back > 1.f) {
+					const AIFloat3 haven = gFarmSet ? gFarmPos
+							: (Base::gAnchorSet ? Base::gAnchor : fp);
+					AIFloat3 dirB = haven - fp;
+					if (dirB.SqLength2D() > 1.f) {
+						dirB.SafeNormalize2D();
+						const AIFloat3 fp2 = fp + dirB * back;
+						if (OnMap(fp2))
+							fp = fp2;
+					}
+				}
+				sites.insertLast(fp);
+			}
 		}
 	}
 	Perf::Add("prot.sites", _tSites);

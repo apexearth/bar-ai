@@ -389,6 +389,8 @@ local NAMES = {
 	"apex_copy_overflow_m",
 	"apex_blast_aisle",
 	"apex_con_feed_headroom",
+	"apex_unit_afford_s",
+	"apex_def_setback",
 	"apex_gantry_insure",
 	"apex_offense_def_floor",
 	"apex_gantry_host_inc",

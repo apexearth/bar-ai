@@ -549,6 +549,8 @@ bool UnlocksProduct(int plantId)
 // overflow the pipeline would capture (arithmetic, see OverflowM). One named
 // discount (apex_plant_pipe) prices the pipeline's losses; no spot ground
 // left means no plant value at all.
+int gNextPlantParLog = 0;
+
 Want@ ProposePlant(CCircuitUnit@ unit)
 {
 	Want w;
@@ -556,9 +558,19 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// armhp elected 8 frames apart at 16.7m; only T2/T3 were serialized).
 	// Starts only -- standing copies stay governed by wealth, and the
 	// waiver lifts this exactly like the advanced rule.
-	if (AnyPlantInFlight() && !WealthWaiver()) {
-		AdvDeferLog("plant-any");
-		return w;
+	if (AnyPlantInFlight()) {
+		if (!WealthWaiver()) {
+			AdvDeferLog("plant-any");
+			return w;
+		}
+		// Logged so the audit can tell a sanctioned parallel start from the
+		// simultaneous-start bug it hunts (non-copy starts print no 'copy
+		// waived' line).
+		if (ai.frame >= gNextPlantParLog) {
+			gNextPlantParLog = ai.frame + 30 * SECOND;
+			AiLog("apex: plant-par waived t=" + ai.teamId
+				+ " overflow=" + int(OverflowM()));
+		}
 	}
 	// The MARGINAL plant: worth anything only if income supports another
 	// line (~50 m/s each, apexearth's number). Not a cap -- a price of zero
