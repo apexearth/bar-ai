@@ -1147,8 +1147,20 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// absolutely creamed." Melee/charge rows are already excluded by role.
 		const float kiteMin = manager->GetCircuit()->GetTunable("apex_kite_min_range", 250.f);
 		const float kiteFrac = manager->GetCircuit()->GetTunable("apex_kite_frac", 0.7f);
-		if ((kiteFrac > 0.f) && (kv.first >= kiteMin)
-			&& !IsChargeDef(rowDef) && !squadOverwhelms)
+		// apex: A COLOSSUS SHOOTS THE MOST VALUABLE THING IN REACH WHILE IT
+		// MARCHES. apexearth 2026-08-29: "They should focus on shooting the
+		// most valuable target within range while continuing to move into the
+		// enemy base." Engine auto-targeting picks by its own heuristics;
+		// set-target overrides it and unit_target_on_the_move keeps it live
+		// while the unit walks. Same class test as the colossus election.
+		CEnemyInfo* valFoe = nullptr;
+		float valFoeCost = 0.f;
+		const bool rowColossus = (rowDef != nullptr)
+				&& (rowDef->IsCharger() || (rowDef->GetCostM()
+					>= manager->GetCircuit()->GetTunable("apex_super_cost", 7000.f)));
+		const bool kiteOk = (kiteFrac > 0.f) && (kv.first >= kiteMin)
+				&& !IsChargeDef(rowDef) && !squadOverwhelms;
+		if (kiteOk || rowColossus)
 		{
 			// Individual armed enemies, NOT group centroids -- but never a
 			// walk of the whole enemy registry: ghosts of units killed out
@@ -1178,10 +1190,21 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 						continue;
 					}
 					CCircuitDef* ed = e->GetCircuitDef();
-					if ((ed == nullptr) || !ed->IsAttacker() || ed->IsAbleToFly()) {
+					if ((ed == nullptr) || ed->IsAbleToFly()) {
 						continue;
 					}
 					const float sq = e->GetPos().SqDistance2D(testPos);
+					// The value pick has no armed filter: an enemy fusion in
+					// reach IS the most valuable target in range.
+					if (rowColossus && (sq < SQUARE(kv.first))
+						&& (ed->GetCostM() > valFoeCost))
+					{
+						valFoeCost = ed->GetCostM();
+						valFoe = e;
+					}
+					if (!kiteOk || !ed->IsAttacker()) {
+						continue;
+					}
 					if (sq < bestSq) {
 						bestSq = sq;
 						kiteFoe = e->GetPos();
@@ -1376,6 +1399,14 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
 				} else {
 					unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60);
+				}
+				// Attack() set-targeted the ELECTED target; for a colossus the
+				// preference is overridden to the richest thing in reach right
+				// now, while the move above keeps carrying it at the objective.
+				if (rowColossus && (valFoe != nullptr)) {
+					TRY_UNIT(manager->GetCircuit(), unit,
+						unit->CmdSetTarget(valFoe);
+					)
 				}
 			}
 

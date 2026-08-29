@@ -330,6 +330,18 @@ void UpdateWithdraw()
 		{
 			continue;
 		}
+		// CHARGERS AND COLOSSI ARE NEVER PULLED BACK. apexearth 2026-08-29:
+		// "they try to charge in on the enemy and break through defenses...
+		// they shouldn't be distracted by every little unit that comes up on
+		// them. They should just keep moving forward." They deliver value by
+		// arriving; a local-odds recall mid-march is the distraction in
+		// reverse. Same class test as the C++ colossus targeting.
+		if ((u.circuitDef !is null)
+			&& (IsChargerDef(u.circuitDef)
+				|| (u.circuitDef.costM >= ai.GetTunable("apex_super_cost", TUNE_SUPER_COST))))
+		{
+			continue;
+		}
 		const AIFloat3 p = allyPos[j];
 		// THE DEFEND LEASH. Every suicide poke this project has reconstructed
 		// is a DEFEND-pool member that waded to the enemy base (deaths at
