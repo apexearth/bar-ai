@@ -390,6 +390,7 @@ local NAMES = {
 	"apex_blast_aisle",
 	"apex_con_feed_headroom",
 	"apex_unit_afford_s",
+	"apex_aid_respond",
 	"apex_def_setback",
 	"apex_gantry_insure",
 	"apex_offense_def_floor",

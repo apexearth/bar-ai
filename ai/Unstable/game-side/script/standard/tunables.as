@@ -1884,6 +1884,10 @@ const float TUNE_AID_FRESH = 60.f;
 // manager/military/defenceline.as [metal] -- Minimum fresh ally loss value
 //   before defence aid moves.
 const float TUNE_AID_MIN_LOSS = 300.f;
+// AID_RESPOND [metal lost at an ally's hotspot] -- above this the staging
+//   lane moves to that fight (clamped to contested ground). 0 disables the
+//   response and leaves the hotspot publish-only, as it was.
+const float TUNE_AID_RESPOND = 1000.f;
 // manager/military/defenceline.as [elmos] -- How far defence aid will travel;
 //   -1 follows the measured base separation live (a fixed default would freeze
 //   before home is set).

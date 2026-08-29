@@ -284,6 +284,7 @@ AIFloat3 gLanePinged;
 float LANE_STICKY() { return ai.GetTunable("apex_lane_sticky", TUNE_LANE_STICKY); }
 bool gTradeHold = false;    // the anchor is pulled back while the trade is bad
 int gNextLaneLostLog = 0;
+int gNextAidLog = 0;
 
 // THE LIGHT T1 STOPS BEING A RAIDER AND BECOMES EYES, BUT ONLY IN T2 PHASE.
 //
@@ -522,6 +523,38 @@ void UpdateLanePos()
 				gNextLaneLostLog = ai.frame + 30 * SECOND;
 				AiLog(Factory::T() + "apex: forward lane is lost -- anchor pulled back "
 					+ int(float(steps) * step) + " toward home");
+			}
+		}
+	}
+	// GO WHERE THE TEAM IS BLEEDING (his watch, 3v3: the enemy massed a 54k
+	// fist on one doorstep while three allied armies stood near-parity in
+	// aggregate and apart in fact -- "it reads us as having more. feels
+	// absurd"). The aid hotspot has been PUBLISHED since the 4v4 work and
+	// nothing consumed it: gating the defend POOL on it was measured
+	// permanently-defensive, but the LANE is a position, which is exactly
+	// what that experiment lacked. Stage at the worst allied fight in
+	// reach, clamped to contested ground (the attacker's flank, never
+	// ground already lost), when its losses clear the respond bar. Our own
+	// base under attack keeps the lane ours; the sticky-commit below is
+	// the dwell that stops ping-ponging.
+	{
+		const float bar = ai.GetTunable("apex_aid_respond", TUNE_AID_RESPOND);
+		if ((bar > 0.f) && Builder::gHomeSet && !Builder::BaseUnderAttack()) {
+			AIFloat3 aidAt;
+			float aidW = 0.f;
+			int aidWho = -1;
+			if (AllyAidPos(Builder::gHomePos, aidAt, aidW, aidWho)
+				&& (aidW >= bar)) {
+				AIFloat3 go;
+				if (AidClampToContested(Builder::gHomePos, aidAt, go)) {
+					lane = go;
+					if (ai.frame >= gNextAidLog) {
+						gNextAidLog = ai.frame + 30 * SECOND;
+						AiLog(Factory::T() + "apex: aid lane -> ally t=" + aidWho
+							+ " w=" + int(aidW)
+							+ " at=" + int(go.x) + "," + int(go.z));
+					}
+				}
 			}
 		}
 	}

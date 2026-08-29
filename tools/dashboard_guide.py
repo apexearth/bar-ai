@@ -347,6 +347,9 @@ GROUPS = [
                  ("TUNE_DEF_SETBACK", "how far behind the contested edge a "
                   "front tower is sited — bigger survives building more "
                   "often but covers less forward ground"),
+                 ("TUNE_AID_RESPOND", "metal an ally must be losing at one "
+                  "hotspot before our army's staging lane moves to that "
+                  "fight — lower helps sooner, 0 never helps"),
                  ("TUNE_ANTINUKE_INCOME", "the income at which insurance "
                   "(antinuke, shields) starts being worth buying"),
              ]},
