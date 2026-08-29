@@ -545,6 +545,10 @@ GROUPS = [
                   "reach — between the assets and the enemy approach; 0 "
                   "sites it amid the buildings, where it as often ends up "
                   "behind them"),
+                 ("TUNE_T1_DEF_LATE", "how much of its value a T1 tower "
+                  "(Gauntlet, LLT — anything a T1 con can build) keeps once "
+                  "a standing T2 builder can make defence. Low = the newer "
+                  "guns win the auction; 1 prices tiers equally"),
              ]},
             {"title": "Cost of thinking",
              "what": "The protection field is rebuilt on a timer and every "

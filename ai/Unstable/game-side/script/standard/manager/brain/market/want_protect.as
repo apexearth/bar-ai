@@ -870,6 +870,45 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	Perf::Add("prot.loop", _tLoop);
 }
 
+// Does any STANDING advanced builder of ours (mobile, not a T1 hand) produce
+// ground defence? 5s memo -- read once per candidate loop, not per def.
+int gT2HandAt = -999999;
+bool gT2HandUp = false;
+bool T2DefHandsStanding()
+{
+	if (ai.frame - gT2HandAt < 5 * SECOND)
+		return gT2HandUp;
+	gT2HandAt = ai.frame;
+	gT2HandUp = false;
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		const int ci = int(c);
+		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[ci])
+			continue;
+		if ((ci < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[ci])
+			continue;
+		const array<int>@ bl = Catalog::gBuildsList[ci];
+		for (uint q = 0; q < bl.length(); ++q) {
+			if (!Catalog::gMobile[bl[q]] && (Catalog::gSurfT[bl[q]] > 0.f)) {
+				gT2HandUp = true;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+// A T1 tower is one a T1 hand can build.
+bool T1Tower(int d)
+{
+	const array<int>@ bb = Catalog::gBuiltBy[d];
+	for (uint q = 0; q < bb.length(); ++q) {
+		const int b = bb[q];
+		if ((b < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[b])
+			return true;
+	}
+	return false;
+}
+
 Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 {
 	Want w;
@@ -1199,6 +1238,17 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						EffBP(Catalog::gBuildPower[uid]));
 				if ((ttdH > 1.f) && (bSec > 0.f))
 					bestGain *= ttdH / (ttdH + bSec);
+			}
+			// apexearth 2026-08-29: "We have to stop making Gauntlet turrets.
+			// Those T1 defenses are not worth making when we have T2
+			// available." A T1 tower (one a T1 hand can build -- see
+			// Catalog::gT1Hand) loses most of its gain the moment any
+			// standing advanced builder can produce ground defence. A
+			// discount rather than a veto: the asker's own catalog cannot
+			// hold the newer gun, and a lone busy T2 hand must not leave a
+			// live threat unanswered forever.
+			if (T1Tower(d) && T2DefHandsStanding()) {
+				bestGain *= ai.GetTunable("apex_t1_def_late", TUNE_T1_DEF_LATE);
 			}
 			gain = bestGain * TargetFill(DefenceValue(), DefenceTarget());
 			if (gain <= 0.f)

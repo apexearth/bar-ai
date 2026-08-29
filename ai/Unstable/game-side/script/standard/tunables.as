@@ -1944,6 +1944,10 @@ const float TUNE_CHOKE_GATES = 1.f;
 //   guard sites stand this far enemy-ward of the asset centroid, between the
 //   buildings and the approach; 0 sites the gun amid the buildings.
 const float TUNE_GUARD_FORWARD = 0.5f;
+// manager/brain/market/want_protect.as [ratio] -- A T1 tower's gain once any
+//   standing advanced builder can produce ground defence; 1 prices tiers
+//   equally.
+const float TUNE_T1_DEF_LATE = 0.15f;
 // manager/builder/obsolete.as -- A perf bound, not policy: each pick walks
 //   full unit lists, and an unbounded sweep burned 277-475ms single frames
 //   (seed 200,...

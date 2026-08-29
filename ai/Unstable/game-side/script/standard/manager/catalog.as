@@ -89,6 +89,7 @@ array<bool> gAvailable;
 
 array<array<int>> gBuildsList;  // builder def id -> def ids it can build
 array<array<int>> gBuiltBy;     // def id -> builder def ids able to build it
+array<bool> gT1Hand;            // def is the commander or a builder its factories produce
 
 bool gInited = false;
 
@@ -234,6 +235,30 @@ void Init()
 		if (rt > 0.5f)
 			rt = 0.5f;
 		rdef.SetRetreat(rt);
+	}
+
+	// T1 HANDS, derived rather than listed: the commander, plus every mobile
+	// builder produced by a factory the commander can place. Tier taxonomy
+	// without a tier table -- what the opening's own production line can
+	// field is the whole meaning of "T1" here.
+	gT1Hand.resize(uint(gDefCount + 1));
+	for (int i = 0; i <= gDefCount; ++i)
+		gT1Hand[i] = false;
+	for (int i = 1; i <= gDefCount; ++i) {
+		const CCircuitDef@ cd = Def(i);
+		if ((cd is null) || !cd.IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		gT1Hand[i] = true;
+		const array<int>@ facs = gBuildsList[i];
+		for (uint f = 0; f < facs.length(); ++f) {
+			if (gMobile[facs[f]])
+				continue;
+			const array<int>@ made = gBuildsList[facs[f]];
+			for (uint u2 = 0; u2 < made.length(); ++u2) {
+				if (gMobile[made[u2]] && (gBuildsList[made[u2]].length() > 0))
+					gT1Hand[made[u2]] = true;
+			}
+		}
 	}
 
 	int nAvail = 0;
