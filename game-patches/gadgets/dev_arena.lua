@@ -75,7 +75,10 @@ local DEF_A      = tostring(opt("dev_arena_def", "armpw"))
 local DEF_B      = tostring(opt("dev_arena_def_b", ""))
 if DEF_B == "" then DEF_B = DEF_A end
 local COUNT      = math.floor(optNum("dev_arena_count", 8))
-local START      = math.floor(optNum("dev_arena_start", 900))
+-- 120, was 900: "Make the first wave spawn at ~0s" -- four seconds is
+-- enough for both AIs to finish init, and in pure mode nothing else needs
+-- the warm-up.
+local START      = math.floor(optNum("dev_arena_start", 120))
 local ROUND      = math.floor(optNum("dev_arena_round", 1800))
 local GAP        = math.floor(optNum("dev_arena_gap", 150))
 -- 500, was 700: "They need to start a little closer to each other so
