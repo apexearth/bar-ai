@@ -453,10 +453,33 @@ void TrackLine()
 
 float LineTarget(int cls)
 {
-	if (cls == LC_TANK)  return ai.GetTunable("apex_line_tank", TUNE_LINE_TANK);
-	if (cls == LC_MID)   return ai.GetTunable("apex_line_mid", TUNE_LINE_MID);
-	if (cls == LC_REACH) return ai.GetTunable("apex_line_reach", TUNE_LINE_REACH);
-	return ai.GetTunable("apex_line_dps", TUNE_LINE_DPS);
+	float tank = ai.GetTunable("apex_line_tank", TUNE_LINE_TANK);
+	float mid = ai.GetTunable("apex_line_mid", TUNE_LINE_MID);
+	float reach = ai.GetTunable("apex_line_reach", TUNE_LINE_REACH);
+	float dps = ai.GetTunable("apex_line_dps", TUNE_LINE_DPS);
+	// COMPOSITION ADAPTS TO WHAT THEY FIELD (apexearth 2026-08-29: "Im ok
+	// with composition adapting to the needs in the game"). The shares above
+	// are the BASE; the enemy's observed STATIC share of fielded metal bends
+	// reach up -- porc is farmed from beyond its reach, and the more of
+	// their metal stands still, the more of ours should outrange it.
+	// Renormalized, so a tilt is never a cap on any other class. More terms
+	// follow this shape as they earn their measurements.
+	const float adapt = ai.GetTunable("apex_line_adapt", TUNE_LINE_ADAPT);
+	if (adapt > 0.f) {
+		const float fs = aiEnemyMgr.GetEnemyCost(RT::STATIC);
+		const float fm = Military::EnemyArmyCost();
+		if (fs + fm > 1.f)
+			reach *= 1.f + adapt * (fs / (fs + fm));
+	}
+	const float tot = tank + mid + reach + dps;
+	float v = dps;
+	if (cls == LC_TANK)
+		v = tank;
+	else if (cls == LC_MID)
+		v = mid;
+	else if (cls == LC_REACH)
+		v = reach;
+	return (tot > 0.f) ? (v / tot) : 0.25f;
 }
 
 // How far below its target a class is, 0..1. Proportional, never a veto

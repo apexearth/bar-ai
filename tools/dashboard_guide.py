@@ -60,6 +60,9 @@ PANELS = [
              "count as a class at all, so more units land in 'mid'"),
             ("TUNE_LINE_MEDIAN", "judge each axis against the field's median "
              "rather than its mean"),
+            ("TUNE_LINE_ADAPT", "how hard the enemy's SEEN static share bends "
+             "the reach target up — the more of their metal stands still, the "
+             "more of ours outranges it; 0 freezes the base split"),
         ],
     },
     {

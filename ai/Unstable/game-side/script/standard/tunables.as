@@ -1289,6 +1289,11 @@ const float TUNE_LINE_TANK = 0.28f;
 const float TUNE_LINE_MID = 0.20f;
 const float TUNE_LINE_REACH = 0.35f;
 const float TUNE_LINE_DPS = 0.17f;
+// manager/brain/market/army.as [ratio] -- How hard the enemy's observed
+//   STATIC share of fielded metal bends the reach target up (renormalized);
+//   his ruling: "Im ok with composition adapting to the needs in the game".
+//   0 freezes the base split.
+const float TUNE_LINE_ADAPT = 1.f;
 // WHAT A COMBAT UNIT IS WORTH -- the exponent on each golden metric
 // (apexearth 2026-08-25: "RANGE, DAMAGE, HP... perhaps we can try a variety of
 // algorithms"). Read in manager/brain/market/worth.as; each metric is
