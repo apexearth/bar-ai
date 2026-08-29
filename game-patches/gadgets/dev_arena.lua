@@ -17,7 +17,8 @@
 -- the start script sets dev_arena, so it cannot affect a normal game.
 --
 --   dev_arena         "1" to enable
---   dev_arena_def     unit def to spawn on both sides   (default armpw)
+--   dev_arena_def     unit def, or a mixed list "armrock*8,armham*6"
+--                     (default armpw; bare names use dev_arena_count)
 --   dev_arena_def_b   override for ally 1 only; blank = same as dev_arena_def
 --   dev_arena_count   units per side per round          (default 8)
 --   dev_arena_start   first spawn frame                 (default 900)
@@ -72,7 +73,9 @@ local COUNT      = math.floor(optNum("dev_arena_count", 8))
 local START      = math.floor(optNum("dev_arena_start", 900))
 local ROUND      = math.floor(optNum("dev_arena_round", 1800))
 local GAP        = math.floor(optNum("dev_arena_gap", 150))
-local SEP        = optNum("dev_arena_sep", 700)
+-- 500, was 700: "They need to start a little closer to each other so
+-- they'll start fighting. Sometimes they just run away from each other."
+local SEP        = optNum("dev_arena_sep", 500)
 -- 0 none, 1 ally 0, 2 ally 1, 3 both. CircuitAI drops a unit carrying
 -- disableAiControl from its own control, so the engine's default auto-fight is
 -- all that remains. Setting 3 asks whether the two AIs' ORDERS explain the
@@ -156,6 +159,44 @@ local function resolveDef(name)
 	return ud.id, ud.metalCost
 end
 
+-- MIXED ARMIES (apexearth: "would be good if it is a variety of unit types
+-- in the fights"). The def option accepts "armrock*8,armham*6,armwar*6";
+-- a bare name keeps the old one-def behaviour at dev_arena_count. The line
+-- spawns in the order given, so the spec controls the layout, mirrored on
+-- both sides.
+local rosterOf = {}   -- ally -> { {id, n, name}... }
+local sideTotal = {}  -- ally -> units per spawn
+
+local function parseRoster(spec)
+	local roster, total, metal, minSight = {}, 0, 0, 1e9
+	for part in tostring(spec):gmatch("[^,]+") do
+		local name, cnt = part:match("^%s*([%w_]+)%s*%*%s*(%d+)%s*$")
+		if not name then
+			name = part:match("^%s*([%w_]+)%s*$")
+			cnt = COUNT
+		end
+		if not name then
+			return nil
+		end
+		local id, m = resolveDef(name)
+		if not id then
+			return nil
+		end
+		local los = UnitDefs[id].losRadius or 300
+		if los < minSight then
+			minSight = los
+		end
+		cnt = math.floor(tonumber(cnt) or COUNT)
+		roster[#roster + 1] = { id = id, n = cnt, name = name }
+		total = total + cnt
+		metal = metal + m * cnt
+	end
+	if total == 0 then
+		return nil
+	end
+	return roster, total, metal / total, minSight
+end
+
 -- The two spawn centres, offset from the map middle along the line joining the
 -- start positions. Falls back to the map's long axis when start positions are
 -- unavailable, which happens with some box configurations.
@@ -215,21 +256,26 @@ local function spawnSide(ally, anchor, facingAway)
 	px, pz = landNear(px, pz)
 
 	local n = 0
-	for i = 0, COUNT - 1 do
-		-- Centre the line on the anchor.
-		local off = (i - (COUNT - 1) / 2) * PITCH
-		local ux = px + perpX * off
-		local uz = pz + perpZ * off
-		ux = math.max(64, math.min(mapX - 64, ux))
-		uz = math.max(64, math.min(mapZ - 64, uz))
-		local y = Spring.GetGroundHeight(ux, uz)
-		local id = Spring.CreateUnit(defIDs[ally], ux, y, uz, facingAway and 2 or 0, team)
-		if id then
-			if (NOCTRL == 3) or (NOCTRL == ally + 1) then
-				Spring.SetUnitRulesParam(id, "disableAiControl", 1)
+	local total = sideTotal[ally]
+	local i = 0
+	for _, entry in ipairs(rosterOf[ally]) do
+		for _ = 1, entry.n do
+			-- Centre the line on the anchor, roster order along it.
+			local off = (i - (total - 1) / 2) * PITCH
+			i = i + 1
+			local ux = px + perpX * off
+			local uz = pz + perpZ * off
+			ux = math.max(64, math.min(mapX - 64, ux))
+			uz = math.max(64, math.min(mapZ - 64, uz))
+			local y = Spring.GetGroundHeight(ux, uz)
+			local id = Spring.CreateUnit(entry.id, ux, y, uz, facingAway and 2 or 0, team)
+			if id then
+				if (NOCTRL == 3) or (NOCTRL == ally + 1) then
+					Spring.SetUnitRulesParam(id, "disableAiControl", 1)
+				end
+				spawned[ally][id] = true
+				n = n + 1
 			end
-			spawned[ally][id] = true
-			n = n + 1
 		end
 	end
 	Spring.Echo(string.format(
@@ -289,7 +335,7 @@ local function endRound(frame)
 		"[BARAI_ARENA_END] round=%d frames=%d winner=%d alive0=%d alive1=%d "
 		.. "metal0=%.0f metal1=%.0f spawn0=%d spawn1=%d flip=%d clean=%d",
 		roundNo, frame - roundStart, winner, a0, a1,
-		a0 * metalOf[0], a1 * metalOf[1], COUNT, COUNT, flip and 1 or 0,
+		a0 * metalOf[0], a1 * metalOf[1], sideTotal[0], sideTotal[1], flip and 1 or 0,
 		dirty and 0 or 1))
 	clearRound()
 	active = false
@@ -299,18 +345,26 @@ end
 --------------------------------------------------------------------------------
 
 function gadget:Initialize()
-	local idA, mA = resolveDef(DEF_A)
-	local idB, mB = resolveDef(DEF_B)
-	if not idA or not idB then
+	local rosterA, totalA, avgA, sightA = parseRoster(DEF_A)
+	local rosterB, totalB, avgB, sightB = parseRoster(DEF_B)
+	if not rosterA or not rosterB then
 		gadgetHandler:RemoveGadget(self)
 		return
 	end
-	defIDs[0], metalOf[0] = idA, mA
-	defIDs[1], metalOf[1] = idB, mB
+	rosterOf[0], sideTotal[0], metalOf[0] = rosterA, totalA, avgA
+	rosterOf[1], sideTotal[1], metalOf[1] = rosterB, totalB, avgB
+	-- WITHIN LOS OF EACH OTHER (apexearth: "Important to make sure each side
+	-- is within LOS of each other" -- blind spawns wandered instead of
+	-- fighting). Unless the sep option is set explicitly, the lines stand
+	-- just inside the SHORTEST sight range in the fight.
+	if tostring(modOptions.dev_arena_sep or "") == "" then
+		local sight = math.min(sightA, sightB)
+		SEP = math.max(200, math.min(SEP, sight * 0.85))
+	end
 	computeAnchors()
 	Spring.Echo(string.format(
-		"[BARAI_ARENA] init defA=%s defB=%s count=%d sep=%d round=%d",
-		DEF_A, DEF_B, COUNT, SEP, ROUND))
+		"[BARAI_ARENA] init defA=%s defB=%s count=%d/%d sep=%d round=%d",
+		DEF_A, DEF_B, totalA, totalB, SEP, ROUND))
 end
 
 -- The arena sits at the map centre of a live match, so each AI's real army can
