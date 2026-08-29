@@ -901,8 +901,12 @@ const float TUNE_BOMB_DEFEND_AA = 1000.f;
 const float TUNE_DEFEND_HOME = 1.f;
 // manager/military/withdraw.as [fraction 0-1] -- A DEFEND-task unit farther
 //   forward than this (on losing ground) is recalled first -- it is in the
-//   wrong place by the task's own meaning.
-const float TUNE_DEFEND_LEASH = 0.55f;
+//   wrong place by the task's own meaning. 0.55 let defenders grind the
+//   corridor midfield at fwd 0.59, where 62% of Glacier's lost metal died
+//   (winrate16: fight:defend 34% + retreat 28%, both at fwd 0.59) while
+//   the gate towers stood behind them; 0.35 holds the pool at the
+//   fortified line -- his concentration doctrine's own fight.
+const float TUNE_DEFEND_LEASH = 0.35f;
 // manager/builder/statics.as [seconds] -- Front towers pick the dearest gun
 //   costing at most this many seconds of metal income; the basic tower stays
 //   the unconditional floor.
