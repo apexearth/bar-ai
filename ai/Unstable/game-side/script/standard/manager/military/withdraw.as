@@ -406,7 +406,14 @@ void UpdateWithdraw()
 		// pools at home behind the massing bar, and leaves together with the
 		// next real group. ATTACK/RAID only: a home DEFEND pool must keep
 		// fighting, and chargers/colossi were already exempted above.
-		if (losingFight
+		// MEASURED AND REVERTED TO OPT-IN (winrate6, 8+8 decision-length
+		// games): 37 aborts, combined 1W-11L against iteration 4's 4W-10L,
+		// Glacier trade 0.597 -> 0.348. The ledger reads "losing" transiently
+		// in any bloody attrition fight, and aborting mid-commitment throws
+		// away units already engaged -- the retreat-death shape at squad
+		// scale. Default 0; the arm stays for A/B.
+		if ((ai.GetTunable("apex_fight_abort", TUNE_FIGHT_ABORT) > 0.f)
+			&& losingFight
 			&& ((ft == Task::FightType::ATTACK) || (ft == Task::FightType::RAID))
 			&& (ai.frame >= gNextTaskAbort))
 		{

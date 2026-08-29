@@ -710,6 +710,12 @@ const float TUNE_LOSING_TRADE = 3.f;
 //   least this much of OUR combat metal died nearby -- one cheap death is
 //   noise, not a verdict.
 const float TUNE_LOSING_FLOOR = 250.f;
+// manager/military/withdraw.as [toggle 0/1] -- Abort a losing ATTACK/RAID
+//   task outright so the squad re-pools together. Measured 1W-11L vs 4W-10L
+//   with it on (winrate6): the ledger reads "losing" transiently in bloody
+//   fights and mid-commitment aborts throw engaged units away. Experiment
+//   arm, default off.
+const float TUNE_FIGHT_ABORT = 0.f;
 
 // COMBAT BEHAVIOUR -- promoted from hardcoded constants 2026-08-21 so the
 // engagement maths is tunable. Same defaults as the constants they replace.

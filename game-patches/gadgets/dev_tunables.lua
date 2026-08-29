@@ -271,6 +271,7 @@ local NAMES = {
 	"apex_trade_window",      -- withdraw.as: seconds the local-trade death ledger remembers (15)
 	"apex_losing_trade",      -- withdraw.as: pull back when our combat metal dead nearby > theirs times this (3)
 	"apex_losing_floor",      -- withdraw.as: our combat metal that must die nearby before the trade trigger speaks (250)
+	"apex_fight_abort",       -- withdraw.as: 1 = abort losing attack/raid tasks (measured worse; experiment arm, default 0)
 	"apex_withdraw_near",
 	"apex_withdraw_reissue",
 	"apex_range_mod",
