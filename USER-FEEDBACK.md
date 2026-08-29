@@ -1,5 +1,15 @@
 # What apexearth wants from this AI
 
+## OPEN HINT (2026-08-29): "Remember radar might just be set wrong so you
+can tweak it." First instrumentation: builds 10-13 T1 + 1-3 advanced per
+game (stock: up to 26 T1), median farthest radar 3,248 elmos from home —
+count and reach look sane, BUT we see under half of stock's real army
+(foeMass 3-6k vs ~15k actual), and radar-gap sites were among the things
+the collapsed PastFront axis vetoed (fixed in FoeAnchor). Re-read the
+intel numbers on the winrate4 arms; if still blind, the tweak targets are
+RadarSees' one-radar-per-coverage rule (no redundancy — stock builds 2x)
+and apex_insure_rate.
+
 ## STANDING PRIORITY (2026-08-29): win 1v1 reliably FIRST
 
 "I suggest you get us winning 1v1 games fairly reliably and then go to
