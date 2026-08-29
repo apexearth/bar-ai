@@ -196,6 +196,8 @@ local NAMES = {
 	"apex_line_adapt",       -- army.as: enemy static share bends the reach composition target up (1)
 	"apex_mex_expose",       -- want_protect.as: per-mex floor grows with forwardness, floor*(1+fwd*this) (1.5)
 	"apex_rezzer_fwd",       -- rules_rezzer.as: idle rezzer past this forward fraction retires to the haven (0.25)
+	"apex_consolidate_r",    -- withdraw.as: tracked-pack distance that starts pre-contact consolidation (2000)
+	"apex_consolidate_edge", -- withdraw.as: local ally metal must meet pack metal times this or fall back (1)
 	"apex_kill_from",
 	"apex_seen_halflife",
 	"apex_budget_live",

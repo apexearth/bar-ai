@@ -248,6 +248,7 @@ void UpdateWithdraw()
 	// pass 2 sums local strength around each candidate from this cache.
 	array<AIFloat3> allyPos;
 	array<float> allyPow;
+	array<float> allyCost;
 	array<CCircuitUnit@> alive;
 	array<int> aliveSlot;
 	// Census: what task the army is actually on, split home/field. The
@@ -269,6 +270,7 @@ void UpdateWithdraw()
 			continue;
 		allyPos.insertLast(p);
 		allyPow.insertLast((u.circuitDef !is null) ? u.circuitDef.GetSurfThreat() : 0.f);
+		allyCost.insertLast((u.circuitDef !is null) ? u.circuitDef.costM : 0.f);
 		alive.insertLast(u);
 		aliveSlot.insertLast(i);
 		if (u.circuitDef !is null)
@@ -397,6 +399,34 @@ void UpdateWithdraw()
 		float tLost = 0.f;
 		float tKilled = 0.f;
 		const bool losingFight = LosingFightHere(p, tLost, tKilled);
+		// PRE-CONTACT CONSOLIDATION. apexearth, watching a mace and a rocket
+		// bot die to four thugs: "a 2v4 wasn't a winning fight and we took
+		// it anyways." The log's verdict on that fight: every unit died ON
+		// the retreat task, W'd at FULL health -- once a pack is in weapon
+		// range no order disengages you. The only working answer is before
+		// contact: while the approach tracker holds a group carrying more
+		// metal than stands beside this defender, fall back to the rally NOW
+		// and meet them as a group or behind guns. Metal against metal, the
+		// tracker's own currency.
+		bool consolidate = false;
+		if ((ft == Task::FightType::DEFEND)
+			&& (ai.frame - Military::gIncomingAt < 15 * SECOND)
+			&& OnMap(Military::gIncomingPos))
+		{
+			const float packD = p.distance2D(Military::gIncomingPos);
+			if (packD < ai.GetTunable("apex_consolidate_r", TUNE_CONSOLIDATE_R)) {
+				const float rA2 = ai.GetTunable("apex_withdraw_ally_r",
+						TUNE_WITHDRAW_ALLY_R);
+				float nearM = 0.f;
+				for (uint i2 = 0; i2 < allyPos.length(); ++i2) {
+					if (allyPos[i2].SqDistance2D(p) <= rA2 * rA2)
+						nearM += allyCost[i2];
+				}
+				consolidate = nearM
+						* ai.GetTunable("apex_consolidate_edge", TUNE_CONSOLIDATE_EDGE)
+						< Military::gIncomingCost;
+			}
+		}
 		// A LOST FIGHT ENDS AS A TASK, NOT AS A CROWD OF ORDERS. The per-unit
 		// pull-back measurably fails: the W order is one-shot and the task
 		// re-asserts every tick, so units died in place ping-ponging or
@@ -427,7 +457,8 @@ void UpdateWithdraw()
 			t.Abort();
 			continue;
 		}
-		if (!leash && !recallHome && !outgunned && !losingFight && !LosingHere(p))
+		if (!leash && !recallHome && !outgunned && !losingFight
+			&& !consolidate && !LosingHere(p))
 			continue;
 		if (ai.frame - gCombatSent[i] < reissue)
 			continue;
@@ -436,7 +467,7 @@ void UpdateWithdraw()
 		// each unit happens to stand near, so it does not arrive piecemeal. That
 		// point is the doorway we hold, not the base: home is a long walk on a
 		// big map and the walk is what splits the army.
-		if (recallHome) {
+		if (recallHome || consolidate) {
 			if (!RallySpot(p, back))
 				continue;
 		} else if (!FallbackSpot(p, back)) {
@@ -457,13 +488,14 @@ void UpdateWithdraw()
 			if (ai.GetTunable("apex_ping", TUNE_PING) > 0.f)
 				AiAddPoint(p, "WDRAW " + (leash ? "leash" : (recallHome ? "recall"
 					: (outgunned ? ("odds " + formatFloat(odds, "", 0, 1))
-					: (losingFight ? "trade" : "infl")))));
+					: (losingFight ? "trade" : (consolidate ? "pack" : "infl"))))));
 			AiLog(Factory::T() + "apex: withdraw "
 				+ ((u.circuitDef !is null) ? u.circuitDef.GetName() : "?")
 				+ " at=" + int(p.x) + "," + int(p.z)
 				+ (leash ? " leash" : (recallHome ? " recall-home"
 					: (outgunned ? (" odds=" + formatFloat(odds, "", 0, 2))
-					: (losingFight ? (" trade=" + int(tLost) + ":" + int(tKilled)) : " infl"))))
+					: (losingFight ? (" trade=" + int(tLost) + ":" + int(tKilled))
+					: (consolidate ? " pack" : " infl")))))
 				+ " -- " + gWithdrawn + " orders so far, "
 				+ gCombatId.length() + " tracked");
 		}

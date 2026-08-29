@@ -1305,6 +1305,14 @@ const float TUNE_MEX_EXPOSE = 1.5f;
 //   this retires to the haven regardless of the threat read (the sensor is
 //   the documented liar); working rezzers are untouched.
 const float TUNE_REZZER_FWD = 0.25f;
+// manager/military/withdraw.as [elmos] -- Pre-contact consolidation: a
+//   DEFEND unit within this of a tracked incoming group compares local ally
+//   metal against the pack and falls back to the rally BEFORE contact.
+const float TUNE_CONSOLIDATE_R = 2000.f;
+// manager/military/withdraw.as [ratio] -- Local ally metal times this must
+//   meet the tracked pack's metal or the defender consolidates; 1 = meet
+//   them at even strength or from behind the guns.
+const float TUNE_CONSOLIDATE_EDGE = 1.f;
 // WHAT A COMBAT UNIT IS WORTH -- the exponent on each golden metric
 // (apexearth 2026-08-25: "RANGE, DAMAGE, HP... perhaps we can try a variety of
 // algorithms"). Read in manager/brain/market/worth.as; each metric is
