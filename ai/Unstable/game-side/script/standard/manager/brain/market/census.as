@@ -371,6 +371,7 @@ void NoteFinished(CCircuitUnit@ unit)
 // Fallback anchor: the first finished nano, only if no plan latched first.
 array<AIFloat3> gOwnNanoPos;
 array<Id> gOwnNanoIds;
+array<float> gOwnNanoReach;
 
 void NoteFarm(CCircuitUnit@ unit)
 {
@@ -401,6 +402,7 @@ void NoteFarm(CCircuitUnit@ unit)
 	unit.CmdPatrolTo(p);
 	gOwnNanoPos.insertLast(unit.GetPos(ai.frame));
 	gOwnNanoIds.insertLast(unit.id);
+	gOwnNanoReach.insertLast(Catalog::gBuildDist[d]);
 	if (gFarmSet)
 		return;
 	gFarmPos = unit.GetPos(ai.frame);
@@ -461,6 +463,8 @@ void NoteDead(CCircuitUnit@ unit)
 		if (gOwnNanoIds[nn] == unit.id) {
 			gOwnNanoPos.removeAt(nn);
 			gOwnNanoIds.removeAt(nn);
+			if (nn < gOwnNanoReach.length())
+				gOwnNanoReach.removeAt(nn);
 			break;
 		}
 	}

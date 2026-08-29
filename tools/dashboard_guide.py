@@ -258,6 +258,9 @@ GROUPS = [
                   "back into the auction"),
                  ("TUNE_PEEL_ECO_KEEP", "eco builds keep more hands before "
                   "any are peeled"),
+                 ("TUNE_NANO_FED_S", "cons stop assisting sites that standing "
+                  "nano turrets will finish anyway and go found new buildings "
+                  "instead — raise to free them sooner; 0 turns the gate off"),
                  ("TUNE_REQUEST_DRAIN", "FEWER builds in flight at once — a "
                   "higher number means one request per more income"),
              ]},

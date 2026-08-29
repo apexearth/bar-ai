@@ -2061,6 +2061,12 @@ const float TUNE_ASSIST_RELEASE = 1.f;
 // ETA-derived crew before the peeler calls them over-staffed -- income
 // finishing fast outranks a perfectly even build-power spread.
 const float TUNE_PEEL_ECO_KEEP = 2.f;
+// NANO_FED_S [seconds] -- a join is refused when standing-nano lathe alone
+// clears the site's remaining bill within the joiner's walk plus this many
+// seconds; the freed constructor founds a new frame instead (a nano can
+// assist a frame but never place one). Sized to the walk-and-found time of
+// the next ring spoke. 0 disables the gate.
+const float TUNE_NANO_FED_S = 15.f;
 // manager/brain/market/decide.as -- how sharply the category draw follows
 // value. Odds go as (value/leader)^this: 1 is the old straight-proportional
 // draw, 2 makes a six-fold value gap one election in thirty-six, large

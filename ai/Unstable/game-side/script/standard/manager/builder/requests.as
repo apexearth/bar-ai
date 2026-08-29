@@ -324,6 +324,50 @@ uint FeedableCrew(const CCircuitDef@ want)
 	return (n < 1.f) ? 1 : uint(n);
 }
 
+// LATHE IS CREW (apexearth: "avoid having cons assist making nanos which are
+// near other nanos which can already assist it. This should help us get more
+// individual builders creating more nanos"). A standing nano finishes any
+// frame its reach covers -- the patrol auto-assist plus the C++ repair
+// fallback -- but only a mobile constructor can FOUND the next frame, so a
+// join here spends the one thing the cluster cannot supply and parks the
+// builder out of the auction for the whole build. Refused when the lathe
+// already on the site clears the remaining bill within the joiner's walk
+// plus apex_nano_fed_s; a fusion's long middle still takes hands, only the
+// covered tail sheds them. Founders are exempt: a site with no workers has
+// nobody to raise or guard the frame, whatever lathe stands nearby.
+bool NanoFed(IUnitTask@ cand, uint busy, float dist, float speed)
+{
+	if ((cand is null) || (busy == 0) || (cand.target is null))
+		return false;
+	const float fedS = ai.GetTunable("apex_nano_fed_s", TUNE_NANO_FED_S);
+	if (fedS <= 0.f)
+		return false;
+	const AIFloat3 where = cand.GetBuildPos();
+	if (!OnMap(where))
+		return false;
+	float lathe = Market::NanoLatheReaching(where);
+	if (lathe <= 0.f)
+		return false;
+	// One nano works one frame at a time: share the lathe across the frames
+	// standing in the same cluster, or five frames would each claim the same
+	// two turrets.
+	uint frames = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.target is null))
+			continue;
+		const AIFloat3 tp = t.GetBuildPos();
+		if (OnMap(tp) && (where.distance2D(tp) < 400.f))
+			++frames;
+	}
+	if (frames > 1)
+		lathe /= float(frames);
+	const float costM = (cand.buildDef !is null) ? cand.buildDef.costM : 0.f;
+	const float remainM = costM * (1.f - Progress(cand));
+	const float v = (speed > 1.f) ? speed : ASSUMED_CON_SPEED;
+	return remainM / lathe <= dist / v + fedS;
+}
+
 int gDupLog = 0;
 int gCreated = 0;
 int gJoined = 0;
@@ -663,6 +707,15 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 			Log(want, "adopt-orphan");
 			return cover;
 		}
+		if (NanoFed(cover, Workers(cover),
+			(unit !is null)
+				? unit.GetPos(ai.frame).distance2D(cover.GetBuildPos()) : 0.f,
+			(unit !is null) ? Catalog::gSpeed[int(unit.circuitDef.id)] : 0.f))
+		{
+			++gCovered;
+			Log(want, "nano-fed");
+			return null;
+		}
 		if ((want.costM >= JOIN_MIN_COST) && (Workers(cover) < SiteWorkerCap(want))) {
 			++gJoined;
 			Log(want, "join-site");
@@ -834,6 +887,8 @@ IUnitTask@ JoinSpot(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in sp
 			continue;
 		if (Workers(cand) >= cap)
 			continue;
+		if (NanoFed(cand, Workers(cand), 0.f, 0.f))
+			continue;
 		if ((unit !is null) && !unit.circuitDef.CanBuild(want))
 			continue;
 		const AIFloat3 where = cand.GetBuildPos();
@@ -903,6 +958,9 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		if (dist >= reach)
 			continue;
 		if ((unit !is null) && (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO))
+			continue;
+		if (NanoFed(cand, busy, dist,
+			(unit !is null) ? Catalog::gSpeed[int(unit.circuitDef.id)] : 0.f))
 			continue;
 		const float progress = Progress(cand);
 		// Remaining work is the CANDIDATE's bill, not the want's: pricing a
@@ -1160,6 +1218,9 @@ IUnitTask@ Redirect(CCircuitUnit@ unit, bool isComm, IUnitTask@ offer)
 		if (dist >= REACH)
 			continue;
 		if (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO)
+			continue;
+		if (NanoFed(cand, busy, dist,
+			Catalog::gSpeed[int(unit.circuitDef.id)]))
 			continue;
 		const float progress = Progress(cand);
 		if (!WorthJoining(dist, progress, want.costM, busy,

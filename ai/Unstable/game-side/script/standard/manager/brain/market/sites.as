@@ -914,6 +914,19 @@ bool AnyLineSite(AIFloat3& out at, float& out lathe)
 	return fewest >= 0.f;
 }
 
+// Lathe [m/s] from standing nanos whose own build reach covers this ground.
+// Finished nanos only (the census registry); each contributes NANO_ABSORB.
+float NanoLatheReaching(const AIFloat3& in at)
+{
+	float lathe = 0.f;
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+		if (at.distance2D(gOwnNanoPos[i]) < r)
+			lathe += NANO_ABSORB;
+	}
+	return lathe;
+}
+
 float UnservedLineSpend()
 {
 	float unserved = 0.f;
