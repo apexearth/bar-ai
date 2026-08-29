@@ -465,7 +465,21 @@ bool SameJob(const CCircuitDef@ has, const CCircuitDef@ want, uint busy)
 		return false;
 	if (has.id == want.id)
 		return true;
-	return (busy > 0) && Builder::IsFusion(has) && Builder::IsFusion(want);
+	if (busy == 0)
+		return false;
+	if (Builder::IsFusion(has) && Builder::IsFusion(want))
+		return true;
+	// AN ENERGY JOB IS AN ENERGY JOB once hands are on it (apexearth
+	// 2026-08-28: T1 cons "go make an advanced solar instead of going to
+	// help the T2 fusion being made. Our join logic seems to only care
+	// about assisting our own tier"). A T1 con's energy want is the advsol
+	// it can place; the standing fusion is the better home for those hands.
+	// One direction only -- the standing job must be at least as big as the
+	// want it absorbs, or a T2 con's fusion want would downgrade into
+	// assisting someone's solar.
+	return (has.costM >= want.costM)
+		&& (aiEconomyMgr.GetEnergyMake(has) > 1.f)
+		&& (aiEconomyMgr.GetEnergyMake(want) > 1.f);
 }
 
 // -- the one question a caller asks ------------------------------------------
@@ -811,11 +825,20 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		if (cand is null)
 			continue;
 		const uint busy = Workers(cand);
-		if ((busy >= cap) || !SameJob(cand.buildDef, want, busy))
+		// The site's crew cap belongs to the def actually being BUILT there:
+		// pricing a fusion's crew off the advsol want that walked in read a
+		// 2-hand cap against a job that feeds many more.
+		const uint candCap = ((cand.buildDef is null) || (cand.buildDef is want))
+				? cap : SiteWorkerCap(cand.buildDef);
+		if ((busy >= candCap) || !SameJob(cand.buildDef, want, busy))
 			continue;
 		if ((unit !is null) && (cand.buildDef !is null)
-			&& !unit.circuitDef.CanBuild(cand.buildDef))
-			continue;   // cross-def match the asker cannot build; see Redirect
+			&& !unit.circuitDef.CanBuild(cand.buildDef)
+			&& (cand.target is null))
+			continue;   // cannot place the def and no frame stands yet; a
+			            // standing nanoframe takes ANY hands (repair) -- the
+			            // law SameJob already states for the commander's
+			            // fusion rungs, now honored here too
 		const AIFloat3 where = cand.GetBuildPos();
 		if (!OnMap(where))
 			continue;
@@ -849,7 +872,12 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		if ((unit !is null) && (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO))
 			continue;
 		const float progress = Progress(cand);
-		if (!WorthJoining(dist, progress, want.costM, busy)) {
+		// Remaining work is the CANDIDATE's bill, not the want's: pricing a
+		// fusion's join by the 320m advsol that walked in read minutes of
+		// remaining lathe as not worth a forty-second walk.
+		if (!WorthJoining(dist, progress,
+				(cand.buildDef !is null) ? cand.buildDef.costM : want.costM,
+				busy)) {
 			++gTooFar;
 			continue;
 		}
@@ -863,6 +891,14 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		@best = cand;
 		bestProgress = progress;
 		bestDist = dist;
+	}
+	if ((best !is null) && (unit !is null) && (best.buildDef !is null)
+		&& !unit.circuitDef.CanBuild(best.buildDef))
+	{
+		AiLog("apex: join assist t=" + ai.teamId + " "
+			+ unit.circuitDef.GetName() + " #" + unit.id
+			+ " -> " + best.buildDef.GetName()
+			+ " (cross-tier: wanted " + want.GetName() + ")");
 	}
 	return best;
 }

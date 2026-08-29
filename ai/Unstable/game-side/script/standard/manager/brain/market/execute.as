@@ -437,7 +437,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// the rear of the base axis, which is that ground.
 		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : BigEnergySite();
 		{
-			IUnitTask@ jt = JoinBig(w.def);
+			// Cross-def: an elected advsol joins the fusion being built.
+			IUnitTask@ jt = JoinBigEnergy(unit, w.def);
 			if (jt !is null)
 				return jt;
 		}

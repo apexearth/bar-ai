@@ -106,6 +106,61 @@ IUnitTask@ JoinBig(CCircuitDef@ def)
 	return Requests::LiveTaskOf(def);
 }
 
+// CROSS-TIER: the gate above reads the WANT's cost and LiveTaskOf matches
+// the same def only, so a T1 con that elected a 370m advsol never saw the
+// 9,000m fusion being built beside it and went to place the advsol instead
+// (apexearth 2026-08-28: "our T1 cons will then go make an advanced solar
+// instead of going to help the T2 fusion being made. Our join logic seems
+// to only care about assisting our own tier"). Any MANNED live energy job
+// at least apex_join_min_m big takes the asker: capability is needed to
+// PLACE a def, not to lathe a standing frame. Biggest job wins;
+// WorthJoining still prices the walk against the job's own remaining bill.
+IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
+{
+	const float minM = ai.GetTunable("apex_join_min_m", TUNE_JOIN_MIN_M);
+	IUnitTask@ best = null;
+	float bestCost = 0.f;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ cand = Requests::gLive[i];
+		if ((cand is null) || cand.IsDead() || (cand.buildDef is null))
+			continue;
+		const float cost = cand.buildDef.costM;
+		if ((cost < minM) || (cost <= bestCost))
+			continue;
+		if (aiEconomyMgr.GetEnergyMake(cand.buildDef) <= 1.f)
+			continue;
+		if ((want !is null) && (cost < want.costM))
+			continue;   // never downgrade a bigger want into assisting
+		const uint busy = Requests::Workers(cand);
+		if (busy == 0)
+			continue;   // unmanned is orphan/claim business, not a join
+		if (busy >= Requests::SiteWorkerCap(cand.buildDef))
+			continue;
+		if ((unit !is null) && !unit.circuitDef.CanBuild(cand.buildDef)
+			&& (cand.target is null))
+			continue;   // cannot place it and no frame stands yet
+		const AIFloat3 where = cand.GetBuildPos();
+		if (!OnMap(where))
+			continue;
+		if ((unit !is null) && !Requests::WorthJoining(
+				unit.GetPos(ai.frame).distance2D(where),
+				Requests::Progress(cand), cost, busy))
+			continue;
+		bestCost = cost;
+		@best = cand;
+	}
+	if ((best !is null) && (unit !is null) && (best.buildDef !is null)
+		&& !unit.circuitDef.CanBuild(best.buildDef))
+	{
+		AiLog("apex: join assist t=" + ai.teamId + " "
+			+ unit.circuitDef.GetName() + " #" + unit.id
+			+ " -> " + best.buildDef.GetName()
+			+ " (cross-tier: wanted "
+			+ ((want !is null) ? want.GetName() : "?") + ")");
+	}
+	return best;
+}
+
 // THE WALK IS THE RISK, not just the destination (apexearth, after a fresh
 // T2 con marched into the enemy army while 4 home mexes sat unupgraded):
 // known enemy mass along the corridor above the walker's own metal cost is
