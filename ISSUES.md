@@ -78,6 +78,21 @@ CAMPAIGN LOG:
 - Iter 7 (concentration part 1: apex_gate_depth=2 floor, mex spread floor
   halved): his ruling verbatim in USER-FEEDBACK. Measurement: winrate8.
   Queued: teeth line across the gate span; long-range free-shot posting.
+- Iter 8 (teeth + bomber energy pricing): bombers killed 25k of Glacier's
+  generators in one arm (the energy ruling delivers); teeth needed a FOUR
+  step attribution (ignore flag, tower deadlock, gain 3 orders low, gain
+  overshot) and now elect at v~16 but complete ZERO -- the walk-churn
+  abandonment (velocity plan territory). 8 of 24 games reached the cap
+  with the commander alive; Comet's cap games were TRUNCATED WINS
+  (income 479-vs-4).
+- Iter 9 (apex_kill_off_frac 0.35): the blow flapped 15x in one game
+  because the push's own casualties retreat and read zero power, halving
+  OurArmyNow into the 0.6 disarm band. Widened.
+- Iter 10 verdict (winrate11): COMET FLIPPED -- 6W-4L + 2 ahead-at-cap,
+  trade 0.867. Glacier 1-8 (trade 0.648, its day-best): the corridor
+  grind is the open 1v1 front, then 2v2 per his ladder. t010's shape
+  (rich but out-massed 27k-59k, blow never armed) is the other open
+  thread: high-income army conversion.
 
 ## 2026-08-29 — perf spikes attributed: the builder election, protect stack inside it
 
