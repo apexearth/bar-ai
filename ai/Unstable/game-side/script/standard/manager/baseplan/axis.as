@@ -52,11 +52,30 @@ bool Frame()
 
 	if (!gAxisSet) {
 		AIFloat3 toward;
+		string axisSrc = "front";
 		bool have = Front::FrontNear(gAnchor, toward);
 		// Every other GetEnemyPos() caller in this AI waits for gHomeSet first;
 		// this was the one spot that didn't, and it runs as early as frame 0.
 		if (!have && Builder::gHomeSet) {
 			toward = aiEnemyMgr.GetEnemyPos();
+			// (0,0,0) is GetEnemyPos's "nobody seen yet", and it IS on-map
+			// (the standing uninitialized-AIFloat3 trap) -- the axis aimed
+			// at the MAP CORNER and every band, exit lane and fusion marched
+			// enemy-ward off it (his game 2026-08-28: anchor 581,396,
+			// fwd -1,0, front=0, "we're building this stuff towards the
+			// enemy base - fusions included").
+			have = OnMap(toward)
+				&& ((toward.x > 1.f) || (toward.z > 1.f));
+			if (have)
+				axisSrc = "enemy";
+		}
+		if (!have && Builder::gHomeSet) {
+			axisSrc = "mirror";
+			// NO INFORMATION MEANS THE MIRROR -- the same symmetric-start
+			// prior GradAt already stands on: the enemy is at the map-center
+			// reflection of our own anchor until seen otherwise.
+			toward = AIFloat3(float(AiTerrainWidth()) - gAnchor.x, 0.f,
+					float(AiTerrainHeight()) - gAnchor.z);
 			have = OnMap(toward);
 		}
 		if (!have)
@@ -110,7 +129,7 @@ bool Frame()
 		gAxisSet = true;
 		AiLog("apex: base frame anchor=" + int(gAnchor.x) + "," + int(gAnchor.z)
 			+ " fwd=" + formatFloat(gFwd.x, "", 0, 2) + "," + formatFloat(gFwd.z, "", 0, 2)
-			+ " axis front=" + front + " kept=" + best);
+			+ " axis front=" + front + " kept=" + best + " src=" + axisSrc);
 	}
 
 	// Hand the frame down to C++, which snaps every non-fixed placement onto it,

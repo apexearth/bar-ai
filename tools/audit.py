@@ -988,8 +988,69 @@ def check_lab_timing(text, rep):
                   + "; ".join(overlaps[:4])))
 
 
+def check_placement_sanity(text, rep):
+    """The three live-watch symptoms of 2026-08-28, measured directly and
+    faction-blind: parallel same-def eco sites (pooling law), a base axis
+    elected without enemy information (fusions marched enemy-ward off a
+    corner-aimed axis), and eco standing forward of the anchor."""
+    # parallel eco sites: the highest simultaneous in-flight count any
+    # advsol/fusion request line ever reported, per team
+    worst = {}
+    for m in re.finditer(r"t(\d+)\] apex: request \S+ (\w*advsol|\w*fus\w*)"
+                         r" inFlight=(\d+)", text):
+        k = (m.group(1), m.group(2))
+        worst[k] = max(worst.get(k, 0), int(m.group(3)))
+    bad = {k: v for k, v in worst.items() if v >= 3}
+    # HIS AGGRESSION RULE: parallel eco while metal is overflowing is
+    # intended ("we should be willing to create a whole bunch of them at
+    # the same time"); parallel eco while every metal is spent is sprawl.
+    wasted = re.findall(r"\[BARAI_WASTE\] frame=\d+ team=\d+ mWaste=(\d+)"
+                        r" mMade=(\d+)", text)
+    w_share = 0.0
+    if wasted:
+        mW = sum(int(a) for a, b in wasted)
+        mM = sum(int(b) for a, b in wasted)
+        w_share = mW / mM if mM else 0.0
+    if worst:
+        ok = (not bad) or (w_share > 0.03)
+        rep.add("ECONOMY", ok, "parallel-eco-sites",
+                ("eco sites pooled (max in-flight "
+                 + str(max(worst.values())) + ")") if not bad
+                else ("; ".join(f"t{t} {d} x{v}" for (t, d), v in
+                                sorted(bad.items())[:5])
+                      + f" simultaneous at {w_share:.0%} waste"
+                      + ("" if ok else
+                         " -- every metal was spent; hands should pool")))
+    # axis elected blind: front=0 with a kept perpendicular is the signature
+    # that laid a base sideways or corner-ward before the mirror fallback
+    blind = re.findall(r"apex: base frame [^\n]*axis front=0 kept=[1-9]\d*"
+                       r"(?! src=mirror)[^\n]*", text)
+    rep.add("ECONOMY", not blind, "axis-blind",
+            "every axis had an enemy reference or the mirror" if not blind
+            else f"{len(blind)} axis election(s) with zero enemy info and no"
+                 " mirror: " + blind[0][-70:])
+    # eco forwardness: fusions/advsols standing enemy-ward of the anchor
+    frames = re.findall(r"apex: base frame anchor=(-?\d+),(-?\d+)"
+                        r" fwd=(-?[\d.]+),(-?[\d.]+)", text)
+    if frames:
+        ax, az, fx, fz = (float(v) for v in frames[0])
+        fwd_d = []
+        for m in re.finditer(r"apex: exec t=\d+ \S+ #\d+ energy:"
+                             r"(\w*advsol|\w*fus\w*) pick=\S+"
+                             r" at=(\d+),(\d+)", text):
+            fwd_d.append((int(m.group(2)) - ax) * fx
+                         + (int(m.group(3)) - az) * fz)
+        if fwd_d:
+            fwd_d.sort()
+            med = fwd_d[len(fwd_d) // 2]
+            rep.add("ECONOMY", med <= 200, "eco-forwardness",
+                    f"median big-eco offset {med:.0f} elmos along the enemy"
+                    f" axis ({len(fwd_d)} sites)"
+                    + ("" if med <= 200 else " -- the farm is on the lawn"))
+
+
 CHECKS = [check_health, check_ledger, check_commitments, check_priority,
-          check_economy, check_lab_timing,
+          check_economy, check_lab_timing, check_placement_sanity,
           check_military, check_efficiency, check_vs_enemy, check_structures,
           check_geometry, check_perf]
 

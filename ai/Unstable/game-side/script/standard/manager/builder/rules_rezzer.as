@@ -389,6 +389,32 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 		return null;
 	gConNextWreck[slot] = ai.frame + RezScanPeriod();
 
+	// A RICH CORPSE IS RESURRECTED WHATEVER THE DOCTRINE SAYS (apexearth,
+	// watching: "I just saw us reclaim our T3 artillery unit which we made
+	// from the gantry - we shouldn't be reclaiming something like that").
+	// The pre-AFUS eat-everything rule was written for solar-and-pawn
+	// fields; a 3,300m Vanguard corpse is a unit for the rez cost, at any
+	// stage of the economy. GetBestWreckPos with a high floor finds only
+	// such corpses; threat still vetoes.
+	if (!(unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine())
+		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
+	{
+		const AIFloat3 rich = ai.GetBestWreckPos(unit.GetPos(ai.frame),
+				WRECK_SEARCH, ai.GetTunable("apex_rez_rich_m", TUNE_REZ_RICH_M));
+		if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO)) {
+			IUnitTask@ rr = aiBuilderMgr.Enqueue(TaskB::Resurrect(
+					Task::Priority::HIGH, rich, 100.f, 90 * SECOND, WRECK_RADIUS));
+			if (rr !is null) {
+				if (ai.frame >= gNextRezLog) {
+					gNextRezLog = ai.frame + 60 * SECOND;
+					AiLog("apex: rez rich corpse t=" + ai.teamId
+						+ " at " + int(rich.x) + "," + int(rich.z));
+				}
+				return rr;
+			}
+		}
+	}
+
 	if (!PreferReclaim()
 		&& !(unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine())
 		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))

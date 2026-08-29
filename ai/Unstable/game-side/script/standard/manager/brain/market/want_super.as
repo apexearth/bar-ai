@@ -166,7 +166,12 @@ int SuperTarget(int sc)
 	// nuke is the whole base. Silos share its spacing (apexearth 2026-08-27,
 	// watching: "I like our use of nukes - we could use more"); the other
 	// offensive classes double it.
-	if ((sc == SC_ANTINUKE) || (sc == SC_SILO))
+	// The gantry left the doubled spacing 2026-08-28 (apexearth: "We should
+	// be more willing to make more gantries too if we're at something like
+	// 500m/s - i often see us lose games because we aren't aggressive
+	// enough in building in late game") -- at 500 own income the tight
+	// spacing wants 4, the doubled one 2.
+	if ((sc == SC_ANTINUKE) || (sc == SC_SILO) || (sc == SC_GANTRY))
 		return 1 + int(inc / per);
 	return 1 + int(inc / (per * 2.f));
 }

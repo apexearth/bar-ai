@@ -251,6 +251,19 @@ uint SiteWorkerCap(const CCircuitDef@ want)
 		return MIN_INFLIGHT;
 	const float per = ai.GetTunable("apex_site_cost_per_worker", TUNE_SITE_COST_PER_WORKER);
 	uint n = (per > 0.f) ? uint(1.f + want.costM / per) : MIN_INFLIGHT;
+	// OVERFLOW FEEDS HANDS (apexearth 2026-08-28: "If we're overflowing
+	// metal our *want* ... should increase even more, we should be willing
+	// to create a whole bunch of them at the same time ... I have a hunch
+	// that we only think about making more buildings every ~N seconds, and
+	// often just 1 or 2 at a time"). His hunch was the CREW: cost/300 caps
+	// an advanced solar at ~2 hands, so "3 cons on one build" was
+	// arithmetically impossible -- joins refused as full, the parallel
+	// opener the only outlet, and metal rotting anyway. Wasted metal is
+	// exactly the feed for more hands: every DRAIN of overflow funds one
+	// more worker on any site.
+	n += uint(Market::OverflowM()
+			/ ((ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN) > 1.f)
+				? ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN) : 7.f));
 	if (n < MIN_INFLIGHT)
 		n = MIN_INFLIGHT;
 	const uint pool = InFlightCap();

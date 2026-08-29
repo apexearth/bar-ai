@@ -1777,6 +1777,10 @@ const float TUNE_ARMY_FILL_S = 180.f;   // the 120 compensation was fighting the
 // REZ_HORIZON: seconds to recover the field's wreck pool; rez production
 // scales with losses and diminishes per bot.
 const float TUNE_REZ_HORIZON = 120.f;
+// REZ_RICH_M [metal]: a corpse at least this rich is RESURRECTED whatever
+// the pre-AFUS eat-the-field doctrine says -- a unit for the rez cost
+// ("we shouldn't be reclaiming something like that", on a Vanguard corpse).
+const float TUNE_REZ_RICH_M = 900.f;
 // AA_MATCH: our AA value per metal of enemy air seen.
 const float TUNE_AA_MATCH = 0.7f;
 // RETREAT_COST_SCALE: metal at which a unit's retreat threshold reaches

@@ -249,7 +249,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			return jt;
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL,
-				ClearExitLane(ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f))),
+				OffFactoryExit(ClearExitLane(
+					ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)))),
 				256.f, SQUARE_SIZE * 16.f);
 	}
 	if ((w.kind == WK_PROTECT) || (w.kind == WK_SENSE)
@@ -600,9 +601,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			return jt;
 		// A floating plant keeps the water it was priced against -- the
 		// spot-clearance nudge walks the base axis and puts a shipyard inland.
+		// ...and never in ANOTHER factory's doorway either (his live catch:
+		// "a t1 vehicle lab blocked by a T2 vehicle lab").
 		const AIFloat3 at = Catalog::gFloater[int(w.def.id)]
 				? w.pos
-				: ClearExitLane(ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)));
+				: OffFactoryExit(ClearExitLane(
+					ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f))));
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, at, 256.f, SQUARE_SIZE * 16.f);
 	}
