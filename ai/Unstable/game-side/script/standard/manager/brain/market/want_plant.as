@@ -552,6 +552,14 @@ bool UnlocksProduct(int plantId)
 Want@ ProposePlant(CCircuitUnit@ unit)
 {
 	Want w;
+	// ONE PLANT START AT A TIME, ANY TIER (his watched loss: armlab and
+	// armhp elected 8 frames apart at 16.7m; only T2/T3 were serialized).
+	// Starts only -- standing copies stay governed by wealth, and the
+	// waiver lifts this exactly like the advanced rule.
+	if (AnyPlantInFlight() && !WealthWaiver()) {
+		AdvDeferLog("plant-any");
+		return w;
+	}
 	// The MARGINAL plant: worth anything only if income supports another
 	// line (~50 m/s each, apexearth's number). Not a cap -- a price of zero
 	// past what the economy can feed, of any lab type.

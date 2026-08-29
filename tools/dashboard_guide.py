@@ -338,6 +338,9 @@ GROUPS = [
                  ("TUNE_BLAST_AISLE", "gap in elmos between a big generator's "
                   "own clusters — bigger keeps more of the farm outside one "
                   "chain explosion, at the cost of longer walks"),
+                 ("TUNE_CON_FEED_HEADROOM", "how many constructors the lines "
+                  "may pay for, as a multiple of what income keeps fed — "
+                  "lower means army sooner once the hands are hired"),
                  ("TUNE_ANTINUKE_INCOME", "the income at which insurance "
                   "(antinuke, shields) starts being worth buying"),
              ]},

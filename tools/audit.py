@@ -956,15 +956,18 @@ def check_lab_timing(text, rep):
     # advanced plants serialize per player: a second DIFFERENT adv plant
     # requested before the first one finished (or within 5 min if it never
     # did) is the simultaneous-start "no no".
+    PLANTS_ALL = ADV_PLANTS | {
+        "armlab", "armvp", "armap", "armhp", "corlab", "corvp", "corap",
+        "corhp", "leglab", "legvp", "legap"}
     fins = defaultdict(list)   # (team, unit) -> [finish frames]
     for m in re.finditer(r"\[BARAI_BUILD\] team=(\d+) ally=\d+ frame=(\d+)"
                          r" min=[\d.]+ unit=(\S+)", text):
-        if m.group(3) in ADV_PLANTS:
+        if m.group(3) in PLANTS_ALL:
             fins[(m.group(1), m.group(3))].append(int(m.group(2)))
     reqs = defaultdict(list)   # team -> [(frame, unit)]
     for m in re.finditer(r"\[f=(\d+)\][^\n]*\[[\d.]+m t(\d+)\] apex:"
                          r" request new (\S+)", text):
-        if m.group(3) in ADV_PLANTS and m.group(2) in apex_teams:
+        if m.group(3) in PLANTS_ALL and m.group(2) in apex_teams:
             reqs[m.group(2)].append((int(m.group(1)), m.group(3)))
     # The wealth waiver (apex: copy waived) deliberately parallelizes
     # advanced-plant starts while metal overflows; a second start within
@@ -1093,6 +1096,28 @@ def check_overflow_spend(text, rep):
         rep.add("ECONOMY", not bad, "wealth-unspent",
                 "; ".join(bad) if bad else
                 "every rich team spent >=70% of what it made")
+
+    # 1b. con-glut (his watched loss: "more than half of the T2 cons in the
+    # entire 2v2 game but our overall army size is small" -- at the end more
+    # metal stood in constructors than in living army). Standing cons vs
+    # standing army, on each team's last row.
+    glut = []
+    for m in re.finditer(
+            r"\[BARAI_STATS\] team=(\d+) ally=\d+ reason=\w+ frame=\d+"
+            r".*? mCon=(\d+).*? armyReal=(\d+)"
+            r".*? mInc=([\d.]+)", text):
+        t, mcon, army, minc = (m.group(1), int(m.group(2)), int(m.group(3)),
+                               float(m.group(4)))
+        if t not in apex_teams or minc < 30:
+            continue
+        glut = [g for g in glut if not g.startswith("t%s " % t)]
+        if mcon > max(army, 1):
+            glut.append("t%s %sm standing in cons vs %sm army at %.0f m/s"
+                        % (t, mcon, army, minc))
+    if final:
+        rep.add("PRIORITY", not glut, "con-glut",
+                "; ".join(glut) if glut else
+                "standing army outweighs standing constructors")
 
     # 2. super-site-stuck: the same def failing the site search at the same
     # want position. The probe ladder (sites.as ProbedSite) exists to move

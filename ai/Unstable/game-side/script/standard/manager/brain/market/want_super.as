@@ -306,6 +306,23 @@ bool AdvPlantInFlight()
 	return false;
 }
 
+// ANY tier. T1 starts had no serialization at all, and his watched loss
+// bought plant:armlab and plant:armhp EIGHT FRAMES apart at 16.7 min while
+// losing -- the same "huge no no" one tier down. Same law, same waiver.
+bool AnyPlantInFlight()
+{
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		if (gComState[ci] == CS_FINISHED)
+			continue;
+		const int d = gComDef[ci];
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d]
+			|| (Catalog::gBuildsList[d].length() == 0))
+			continue;
+		return true;
+	}
+	return false;
+}
+
 int gNextAdvDeferLog = 0;
 void AdvDeferLog(const string& in what)
 {

@@ -1666,6 +1666,12 @@ const float TUNE_COPY_OVERFLOW_M = 140.f;
 //   death explosion cannot chain the whole farm ("better if only half our
 //   economy blows up"). Chosen, not derived from the defs' blast radii.
 const float TUNE_BLAST_AISLE = 500.f;
+// CON_FEED_HEADROOM -- how many hands the production draw may price toward,
+//   as a multiple of income/apex_request_drain (the hands income keeps fed).
+//   A new con's gain scales with the room left under that line; at 1.5 a
+//   52 m/s economy stops paying for its eleventh builder ("I have a hunch
+//   we make too many constructors").
+const float TUNE_CON_FEED_HEADROOM = 1.5f;
 // GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
 //   income: one shared line the whole team's nanos man, so one team purse.
 //   At 100s the ~9.3k bill clears right at ~100 team metal/s, his stated

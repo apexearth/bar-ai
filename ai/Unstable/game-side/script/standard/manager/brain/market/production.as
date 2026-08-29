@@ -290,6 +290,31 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				stakeMul = 8.f;
 		}
 	}
+	// BUILD POWER IS A CLOSED LOOP (his standing ruling, unapplied here):
+	// a new pair of hands is worth the feed it can get, and the upgrade
+	// stream a con unlocks queues behind the same starved feed once the
+	// fleet outnumbers what income keeps fed. Measured (his watched loss):
+	// armacv v=146 at income 52 m/s -- the line spent 9 of 25 orders on
+	// T2 cons while the army was funded at 0.15, and at the end more metal
+	// stood in constructors than in living army.
+	float feedRoom = 1.f;
+	{
+		const float drainR = ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN);
+		const float hands = aiEconomyMgr.metal.income
+				/ ((drainR > 1.f) ? drainR : 7.f)
+				* ai.GetTunable("apex_con_feed_headroom", TUNE_CON_FEED_HEADROOM);
+		float ownedHands = 0.f;
+		for (uint hd = 1; hd < gOwnCount.length(); ++hd) {
+			if ((gOwnCount[hd] > 0) && Catalog::gMobile[int(hd)]
+				&& Catalog::gBuilder[int(hd)] && !Catalog::gRezzer[int(hd)])
+				ownedHands += float(gOwnCount[hd]);
+		}
+		if (hands > 0.5f) {
+			feedRoom = (hands - ownedHands) / hands;
+			if (feedRoom < 0.f)
+				feedRoom = 0.f;
+		}
+	}
 	// T1 AIR ARMY ENDS AT T2 (apexearth: "We need to stop making T1 air army
 	// when we have T2 available"): armed fliers from a basic air plant price
 	// out once our own advanced air plant stands -- the same metal buys the
@@ -718,6 +743,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// the same metal (EscortMetalAtRisk), so the two trade against each
 		// other honestly instead of both being flat.
 		gain *= BPProtectedFrac();
+		// Rez bots eat the field, not the feed; every other builder pays
+		// the closed-loop room. The tier floors above already guarantee
+		// the minimums, so zero here starves nothing essential.
+		if (!Catalog::gRezzer[d])
+			gain *= feedRoom;
 		if (gain <= 0.5f)
 			continue;
 		const float v = gain / Catalog::gCostM[d];

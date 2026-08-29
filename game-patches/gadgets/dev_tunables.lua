@@ -388,6 +388,7 @@ local NAMES = {
 	"apex_super_flight_per",
 	"apex_copy_overflow_m",
 	"apex_blast_aisle",
+	"apex_con_feed_headroom",
 	"apex_gantry_insure",
 	"apex_offense_def_floor",
 	"apex_gantry_host_inc",
