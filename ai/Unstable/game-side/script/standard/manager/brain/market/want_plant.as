@@ -200,7 +200,15 @@ void NavalPublish()
 {
 	float dist = 1e9f;
 	const int sd = NavShipyardDef();
-	if ((sd > 0) && MapHasWater() && Builder::gHomeSet) {
+	if ((sd > 0) && MapHasWater() && Builder::gHomeSet
+		// A shore that keeps killing the order is not a usable shore: while
+		// the shipyard sits in abort-backoff this team reads itself
+		// ineligible and the mandate ROTATES to the next-closest -- measured
+		// (SI 8v8 15m probe): the elected team executed 9 shipyard orders
+		// against a same-frame-rejecting site and built none while holding
+		// the mandate the whole game.
+		&& !Builder::AbortBackoff(sd))
+	{
 		const AIFloat3 wet = WetPlantSite(Catalog::Def(sd), Builder::gHomePos);
 		if (OnMap(wet))
 			dist = Builder::gHomePos.distance2D(wet);

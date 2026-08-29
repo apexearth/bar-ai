@@ -1,5 +1,31 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-28 (late) — the eco commander's 156-exec loop IS the AFK
+
+His "eco player goes AFK" reproduced on the 15m SI 8v8 tell
+(matches/si8-fix2-15m-s104): t7 (rear specialist) commander idle 49% vs
+10-20% line teams, income 32 m/s at 13m (POORER than the line players).
+Mechanism pinned: corcom #20590 elected AND EXECUTED the same
+convert:cormakr at the same position (367,9665) **156 times**, one per
+task update, gain=1.17 -- the order never becomes a task that sticks and
+nothing logs an abort (so the abort-backoff never trips; suspect the exec
+returns an existing covered/held task the unit never walks to, or a
+same-frame silent rejection below the TaskRemoved hook). Next session:
+trace ONE of those execs through Requests::Take's branch logging (which
+Log(want,...) label fires 156x) and the C++ task lifecycle. Also open:
+WHY the rear economist is the poorest player at 13m -- its pocket runs
+out of T1 work and nothing routes it to T2/mohos/assist; the commIdle
+number on the tell is the regression check.
+
+## 2026-08-28 (late) — army TRADING, not army production, on the 15m tell
+
+s103: apex mArmy 76.5k vs barb 77.5k (equal spend) but standing army
+32.4k vs 40.3k -- we lose more of what we build. s104 reversed it (59.8k
+vs 34.2k standing on equal spend), so it is seed-noisy; watch the pair on
+every future tell before believing either direction. His "we aren't
+making as much army" reads as TRADING variance at this horizon, not a
+production deficit -- production and mArmy share track BARb.
+
 ## 2026-08-28 (evening) — T3 production pacing: the early gantry's products eat the mid-game
 
 The gantry-by-100-team-m/s change works as asked (elections 27.8-28.6min ->
