@@ -230,6 +230,33 @@ def check_military(text, rep):
                 f"max {max(skips)} groups skipped in one pass"
                 + ("" if max(skips) < 30 else " -- squads refusing and"
                    " wandering"))
+    # mex guards: his "we run around building a lot of mexes but we lose
+    # them all to enemies". Two reads: how much mex metal died, and whether
+    # tower orders landed near mex ground at all. Positions come from exec
+    # lines (ours) and BARAI_DEATH (which carries x/z); a lead, not a
+    # verdict -- exec != standing.
+    apex_t = min((int(t) for t in re.findall(r"apex: targets t=(\d+)", text)),
+                 default=None)
+    if apex_t is not None:
+        t = str(apex_t)
+        mex_deaths = re.findall(
+            r"\[BARAI_DEATH\] frame=\d+ team=" + t +
+            r" unit=\w*mex\w* cost=(\d+)", text)
+        mexes = [(int(x), int(z)) for x, z in re.findall(
+            r"apex: exec t=" + t + r" \S+ #\d+ \S*mex\S* pick=\S+"
+            r" at=(\d+),(\d+)", text)]
+        guards = [(int(x), int(z)) for x, z in re.findall(
+            r"apex: exec t=" + t + r" \S+ #\d+ (?:defence|protect):\S+"
+            r" pick=\S+ at=(\d+),(\d+)", text)]
+        near = sum(1 for gx, gz in guards
+                   if any((gx-mx)**2 + (gz-mz)**2 < 300**2
+                          for mx, mz in mexes))
+        lost_m = sum(int(c) for c in mex_deaths)
+        ok = (len(mex_deaths) < 12) or (near >= len(mex_deaths) // 4)
+        rep.add("ECONOMY", ok, "mex-guards",
+                f"{len(mex_deaths)} mexes died ({lost_m:,}m); {near} tower"
+                f" order(s) near mex ground of {len(guards)} total"
+                + ("" if ok else " -- mexes die faster than guards arrive"))
     # air target fixation: `apex: bomb-commit id= def= last=` logs FRESH
     # commits only (a task re-electing its own target does not log), so
     # many commits funneling into few ids is real fixation, the thing the

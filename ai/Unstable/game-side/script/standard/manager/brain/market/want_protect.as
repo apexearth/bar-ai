@@ -484,6 +484,25 @@ float MexCoverFloorM()
 			* LightTowerCostM();
 }
 
+// THE MEX'S VALUE IS ITS STREAM, not its 50-metal shell (apexearth
+// 2026-08-28: "we run around building a lot of mexes but we lose them all
+// to enemies" -- the guard want priced insurance on the shell, came out at
+// v=0.01-2.7, and lost every decide roulette: 677 site-auction wins, zero
+// decide wins, 14 towers, none at a mex, in one watched game). The
+// extraction in reach, capitalized over the same amortization horizon
+// reclaim uses, is what a guard actually protects.
+float MexStreamM(const AIFloat3& in s, float reach)
+{
+	const float hzS = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	const float hz = (hzS > 1.f) ? hzS : 300.f;
+	float m = 0.f;
+	for (uint i = 0; i < gLPos.length(); ++i) {
+		if ((gLExtract[i] > 0.f) && (gLPos[i].distance2D(s) < reach))
+			m += gLIncome[i] * IncomeMult() * gLExtract[i] * hz;
+	}
+	return m;
+}
+
 // How many mexes of ours are standing. A claim that has not finished has no
 // extraction and is not one.
 int OwnMexCount()
@@ -728,6 +747,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			continue;
 		float stake = (isFront || (reach < 64.f))
 				? FrontedStakeAt(s, reach) : PfSiteStake(si);
+		// The stream the tower keeps flowing -- see MexStreamM above. Rear
+		// sites only: a front site's stake is the fight, not the farm.
+		if (!isFront)
+			stake += MexStreamM(s, reach);
 		{
 			const float dClose = ClosureAdds(s, reach);
 			AIFloat3 outDir = isFront
