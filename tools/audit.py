@@ -1021,12 +1021,16 @@ def check_placement_sanity(text, rep):
                       + f" simultaneous at {w_share:.0%} waste"
                       + ("" if ok else
                          " -- every metal was spent; hands should pool")))
-    # axis elected blind: front=0 with a kept perpendicular is the signature
-    # that laid a base sideways or corner-ward before the mirror fallback
-    blind = re.findall(r"apex: base frame [^\n]*axis front=0 kept=[1-9]\d*"
-                       r"(?! src=mirror)[^\n]*", text)
+    # axis elected blind: front=0 with a kept perpendicular laid a base
+    # sideways or corner-ward -- unless the mirror had the last word (the
+    # sign veto logs mir=ok/flip; both mean the final fwd agrees with the
+    # symmetric-start prior). Logs predating the mir field still flag.
+    blind = [l for l in re.findall(
+        r"apex: base frame [^\n]*axis front=0 kept=[1-9]\d*[^\n]*", text)
+        if (" src=mirror" not in l) and (" mir=" not in l)]
     rep.add("ECONOMY", not blind, "axis-blind",
-            "every axis had an enemy reference or the mirror" if not blind
+            "every axis had an enemy reference, the mirror, or the sign veto"
+            if not blind
             else f"{len(blind)} axis election(s) with zero enemy info and no"
                  " mirror: " + blind[0][-70:])
     # eco forwardness: fusions/advsols standing enemy-ward of the anchor

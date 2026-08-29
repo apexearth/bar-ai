@@ -124,12 +124,36 @@ bool Frame()
 			}
 		}
 
+		// THE MIRROR HAS THE LAST WORD ON SIGN. An edge start zeroes the
+		// true rear's band score and a PERPENDICULAR wins -- and its sign is
+		// arbitrary, so the base laid sideways with its bands opening
+		// enemy-ward (Prismatic 2v2: anchor 671,7674, front=0 kept=31,
+		// src=front, fwd=-1,0 pointing at the west wall). Whatever candidate
+		// wins, fwd must not point AWAY from where a symmetric start puts
+		// the enemy; if it does, the flip of the winner is the same band
+		// geometry with the bands opening rearward, so take it.
+		string mir = "ok";
+		{
+			const float mx = float(AiTerrainWidth()) * 0.5f;
+			const float mz = float(AiTerrainHeight()) * 0.5f;
+			const float ex2 = (mx - gAnchor.x) * 2.f + gAnchor.x;
+			const float ez2 = (mz - gAnchor.z) * 2.f + gAnchor.z;
+			const float dot = bf.x * (ex2 - gAnchor.x) + bf.z * (ez2 - gAnchor.z);
+			if (dot < 0.f) {
+				bf.x = -bf.x;
+				bf.z = -bf.z;
+				ba.x = -ba.x;
+				ba.z = -ba.z;
+				mir = "flip";
+			}
+		}
 		gFwd = bf;
 		gAcross = ba;
 		gAxisSet = true;
 		AiLog("apex: base frame anchor=" + int(gAnchor.x) + "," + int(gAnchor.z)
 			+ " fwd=" + formatFloat(gFwd.x, "", 0, 2) + "," + formatFloat(gFwd.z, "", 0, 2)
-			+ " axis front=" + front + " kept=" + best + " src=" + axisSrc);
+			+ " axis front=" + front + " kept=" + best + " src=" + axisSrc
+			+ " mir=" + mir);
 	}
 
 	// Hand the frame down to C++, which snaps every non-fixed placement onto it,
