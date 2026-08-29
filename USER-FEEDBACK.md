@@ -53,23 +53,31 @@ eyes. Eco-cluster split and nano-reclaim C++ still open.
 
 ## UNRESOLVED — The 2026-08-29 midday batch (watching Glacier/Isthmus)
 
-1. **No Gauntlets past T2**: "We have to stop making Gauntlet turrets.
-   Those T1 defenses are not worth making when we have T2 available."
-2. **An ally reclaimed our GANTRY**: "That is a silly thing to do" — the
-   obsolete-victim election must never eat a strategic plant.
-3. **Flanking never actually happens**: "we still just walk straight into
-   enemy army and 'duke it out' brute forcing ourselves through the front
-   door. In this particular game 1 titan walking around the side would
-   have been very successful."
-4. **Feature bloat worry**: "We keep adding features, new tunes, etc...
-   not sure if any of them are useful or just bloat... you'd maybe have
-   to test them on a very large dataset of runs."
-5. **Performance spikes still unfixed.**
-6. **Misstep detection wish**: "I do wish you could detect missteps in a
-   game" — example given: a geo con was attacked and abandoned the build
-   while our army stood idle in base nearby; they could have defended it.
-   Also: "defenses in the right places" — on Glacier, guard the northern
-   or southern pass well and nothing gets in (except spiders).
+1. **No Gauntlets past T2** (LANDED c7bc9df, awaiting measurement): T1
+   towers keep apex_t1_def_late (0.15) of their value once a standing T2
+   builder can make defence; tier derived (Catalog::gT1Hand), no name
+   lists. The audit's t1-towers-after-t2 check scores it — his Isthmus
+   game read 27,580 metal into 23 post-T2 T1 towers as the baseline.
+2. **Gantry reclaimed** (LANDED 81d8a0a): a plant with no mex-capable
+   constructors (reach 0) is outside the lab-retirement law; 7
+   reclaim-rebuild loops in the Isthmus game were this.
+3. **Flanking** (ATTRIBUTED, his ruling needed — ISSUES.md): the flank
+   via exists and fired 13x on Isthmus, zero in his tight games; DEFEND
+   fights have no flank concept, and chargers are excluded by his own
+   Behemoth ruling, which the Titan wish contradicts.
+4. **Feature bloat** (ANSWERED with an instrument): tools/battery.py —
+   fixed 3-map battery, structural metrics to tournaments/battery.jsonl,
+   run after each behavior session; first baseline row 2026-08-29. Plus
+   his same-day ruling on the bisected regression: "Keep all on", costs
+   ground down by mechanism, not switches.
+5. **Performance spikes** (ATTRIBUTED — ISSUES.md): the builder
+   election's protect stack, 126ms worst call on the 43-min game; no new
+   candidate generators until it is optimized.
+6. **Misstep detection** (LANDED 61e7d1b): audit check
+   build-abandoned-army-idle joins the position-carrying con-retreat
+   line against army snapshots — his geo example is a permanent flag now.
+   Still queued from the same message: pass-guarding on Glacier (the
+   choke-gate work is the foundation; watch where towers land).
 7. Standing insight: "We survive on these really big maps just because
    we are aggressive with capturing mexes... on maps where it is tighter
    we do much much worse." And: "We were doing quite well at one point
