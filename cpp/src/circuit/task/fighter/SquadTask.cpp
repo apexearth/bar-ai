@@ -1141,6 +1141,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// overwhelming a static does not back off mid-dive.
 		AIFloat3 kiteFoe = -RgtVector;
 		float kiteFoeRange = 0.f;
+		bool kiteFoeStatic = false;
 		// 250, was 400: the 400 floor excluded every mid-range riot/skirm row
 		// (~300 range) from kiting entirely -- apexearth 2026-08-19: "us walk
 		// up close with units like thugs and maces, and they just get
@@ -1209,6 +1210,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 						bestSq = sq;
 						kiteFoe = e->GetPos();
 						kiteFoeRange = ed->GetMaxRange();
+						kiteFoeStatic = !ed->IsMobile();
 					}
 				}
 			}
@@ -1323,9 +1325,21 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					// old shaved test stays only as the fallback that lets a
 					// row back off from a short-armed chaser it cannot
 					// out-stand.
+					// apex: A TOWER CANNOT CHASE, SO IT IS ALWAYS KITED.
+					// Backing off from an equal-range MOBILE loses DPS to a
+					// chaser forever; backing beyond a STATIC's reach is a
+					// pure win -- it stops hitting us and gains nothing.
+					// Measured (winrate6, 16 games): 48,582 metal of our
+					// mobiles died to enemy towers, 58% of it MID-MAP --
+					// stock creeps forward porc and our rows stood inside
+					// tower reach trading with guns they could not
+					// outrange, because this veto only allowed the backstep
+					// when we outranged the foe. The dive exemption above
+					// (squadOverwhelms) still lets a committed overwhelm
+					// press through.
 					const bool mayKite = siegeRow
-							? (foeReach < kv.first)
-							: ((kiteFoeRange < kv.first)
+							? (kiteFoeStatic || (foeReach < kv.first))
+							: (kiteFoeStatic || (kiteFoeRange < kv.first)
 								|| (trigger < kv.first * rangeMod));
 					if ((sqFoe < SQUARE(trigger)) && mayKite) {
 						AIFloat3 away = kcur - kiteFoe;
