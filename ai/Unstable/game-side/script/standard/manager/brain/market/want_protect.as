@@ -922,6 +922,88 @@ bool T2DefHandsStanding()
 	return false;
 }
 
+// THE TEETH LINE. apexearth's concentration ruling, 2026-08-29: "slow them
+// down with some walls outside so enemy army is broken up before they get
+// to us... We need to ensure that enemies cannot walk past our choke
+// points and get a free path to our economy." One tooth per election,
+// across the span of the strongest DEFENDED gate (a wall only works inside
+// our own fire), offset a step enemy-ward of the doorway. The def is
+// derived (Catalog::WallDef), the gain is a preference priced like
+// apex_mexup_boost -- his ruling is the basis -- and each tooth is cheap
+// enough that the walk is the real cost.
+int gTeethNextScan = 0;
+AIFloat3 gTeethPoint(-1.f, 0.f, -1.f);
+
+Want@ ProposeTeeth(CCircuitUnit@ unit)
+{
+	Want w;
+	if (ai.GetTunable("apex_teeth", TUNE_TEETH) <= 0.f)
+		return w;
+	if (!Builder::gHomeSet)
+		return w;
+	const int wd = Catalog::WallDef();
+	if (wd <= 0)
+		return w;
+	if (ai.frame >= gTeethNextScan) {
+		gTeethNextScan = ai.frame + 10 * SECOND;
+		gTeethPoint = AIFloat3(-1.f, 0.f, -1.f);
+		array<int> gidx;
+		Front::GateChokeIdxs(gidx);
+		for (uint g = 0; g < gidx.length(); ++g) {
+			const AIFloat3 cp = ai.GetChokePointPos(gidx[g]);
+			bool covered = false;
+			for (uint i = 0; i < gProtPos[PROT_DEF].length() && !covered; ++i) {
+				if (gProtPos[PROT_DEF][i].distance2D(cp) < 500.f)
+					covered = true;
+			}
+			if (!covered)
+				continue;
+			AIFloat3 e1;
+			AIFloat3 e2;
+			if (!ai.GetChokePointEnds(gidx[g], e1, e2))
+				continue;
+			AIFloat3 span = e2 - e1;
+			const float len = sqrt(span.SqLength2D());
+			if ((len < 32.f) || (len > 1400.f))
+				continue;
+			span *= (1.f / len);
+			AIFloat3 outDir = cp - Builder::gHomePos;
+			const float olen = sqrt(outDir.SqLength2D());
+			if (olen < 1.f)
+				continue;
+			outDir *= (1.f / olen);
+			const float pitch = 48.f;
+			const int nT = int(len / pitch) + 1;
+			for (int k = 0; k < nT; ++k) {
+				AIFloat3 p = e1 + span * (pitch * float(k)) + outDir * 140.f;
+				if (!OnMap(p))
+					continue;
+				array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(p, 40.f);
+				if ((near !is null) && (near.length() > 0))
+					continue;
+				gTeethPoint = p;
+				break;
+			}
+			if (OnMap(gTeethPoint))
+				break;
+		}
+	}
+	if (!OnMap(gTeethPoint))
+		return w;
+	const int uid = int(unit.circuitDef.id);
+	const float speed = Catalog::gSpeed[uid];
+	const float walkSec = (speed > 1.f)
+			? (unit.GetPos(ai.frame).distance2D(gTeethPoint) / speed) : 60.f;
+	Want c;
+	ValueOf(wd, ai.GetTunable("apex_teeth_gain", TUNE_TEETH_GAIN), walkSec,
+			Catalog::gBuildPower[uid], c);
+	w = c;
+	w.kind = WK_TEETH;
+	@w.def = Catalog::Def(wd);
+	w.pos = gTeethPoint;
+	return w;
+}
+
 // A T1 tower is one a T1 hand can build.
 bool T1Tower(int d)
 {

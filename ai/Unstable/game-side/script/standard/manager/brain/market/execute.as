@@ -316,6 +316,10 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				Task::Priority::NORMAL, ClearOfSpots(w.pos, 120.f), 300.f,
 				SQUARE_SIZE * 16.f);
 	}
+	if (w.kind == WK_TEETH) {
+		return Requests::Take(unit, w.def, Task::BuildType::DEFENCE,
+				Task::Priority::LOW, w.pos, 300.f, SQUARE_SIZE * 4.f);
+	}
 	if (w.kind == WK_ASSIST) {
 		if ((gAssistTarget is null) || (int(gAssistTarget.id) != w.spotId))
 			return null;

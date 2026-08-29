@@ -87,6 +87,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimPenned(unit)); Perf::Add("want.reclpen", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeAssist(unit)); Perf::Add("want.assist", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeProtect(unit)); Perf::Add("want.protect", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(ProposeTeeth(unit)); Perf::Add("want.teeth", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeSense(unit)); Perf::Add("want.sense", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeAirDef(unit)); Perf::Add("want.airdef", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeSuper(unit)); Perf::Add("want.super", _t); }

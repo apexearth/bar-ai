@@ -16,6 +16,7 @@ const int WK_PROTECT = 12;
 const int WK_SENSE = 13;
 const int WK_AIRDEF = 14;
 const int WK_SUPER = 15;
+const int WK_TEETH = 16;
 
 class Want {
 	int kind = WK_NONE;
@@ -86,7 +87,7 @@ int CategoryOf(int k)
 		return CAT_ENERGY;
 	if ((k == WK_PLANT) || (k == WK_TECH)) return CAT_PRODUCE;
 	if ((k == WK_NANO) || (k == WK_ASSIST)) return CAT_BP;
-	if (k == WK_PROTECT) return CAT_DEFENCE;
+	if ((k == WK_PROTECT) || (k == WK_TEETH)) return CAT_DEFENCE;
 	if (k == WK_SENSE) return CAT_SENSE;
 	if (k == WK_AIRDEF) return CAT_AIRDEF;
 	if (k == WK_SUPER) return CAT_SUPER;

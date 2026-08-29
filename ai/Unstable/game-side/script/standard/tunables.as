@@ -839,6 +839,15 @@ const float TUNE_MEX_COVER_FLOOR = 0.5f;
 //   its cover OVERWHELMS the push, not merely matches it ("Have an unusual
 //   amount of tower at some spots. Try to deeply cover those choke points").
 const float TUNE_GATE_DEPTH = 2.f;
+// manager/brain/market/want_protect.as [toggle 0/1] -- The teeth line: one
+//   wall piece per election across the strongest defended gate's span, a
+//   step enemy-ward of the doorway ("slow them down with some walls
+//   outside").
+const float TUNE_TEETH = 1.f;
+// manager/brain/market/want_protect.as [gain] -- What one tooth's share of
+//   breaking a push is worth, a preference priced like apex_mexup_boost;
+//   his ruling is the basis.
+const float TUNE_TEETH_GAIN = 2.f;
 // manager/brain/market/want_protect.as [ratio] -- HOW HARD A BUILDER PREFERS
 //   THE GROUND IT IS ALREADY STANDING ON. The defence auction picks a site,
 //   then ValueOf charges the walk to it -- so the choice never saw the cost of

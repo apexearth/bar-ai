@@ -284,6 +284,42 @@ bool ValidId(int defId)
 	return (defId >= 1) && (defId <= gDefCount);
 }
 
+// The faction's wall piece, derived rather than named: an unarmed immobile
+// def whose health per metal is an order of magnitude past any building
+// (armdrag 3200hp/12m; a solar is ~2 hp/m), buildable by a T1 hand. Lazy,
+// and NEVER caches a miss -- availability is frame-dependent.
+int gWallDef = -1;
+int WallDef()
+{
+	if ((gWallDef > 0) && gAvailable[gWallDef])
+		return gWallDef;
+	gWallDef = -1;
+	float best = 0.f;
+	for (int d = 1; d <= gDefCount; ++d) {
+		if (!gAvailable[d] || gMobile[d] || (gSurfT[d] > 0.f)
+			|| (gAirT[d] > 0.f) || (gCostM[d] <= 0.f)
+			|| (gBuildsList[d].length() > 0)
+			|| (gMakeE[d] > 0.f) || (gExtractsM[d] > 0.f))
+		{
+			continue;
+		}
+		const float hpm = gHealth[d] / gCostM[d];
+		if (hpm < 50.f)
+			continue;
+		bool t1 = false;
+		const array<int>@ bb = gBuiltBy[d];
+		for (uint q = 0; q < bb.length() && !t1; ++q) {
+			if ((bb[q] < int(gT1Hand.length())) && gT1Hand[bb[q]])
+				t1 = true;
+		}
+		if (t1 && (hpm > best)) {
+			best = hpm;
+			gWallDef = d;
+		}
+	}
+	return gWallDef;
+}
+
 CCircuitDef@ Def(int defId)
 {
 	if (!ValidId(defId))

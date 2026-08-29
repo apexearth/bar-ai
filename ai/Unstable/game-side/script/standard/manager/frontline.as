@@ -695,6 +695,34 @@ bool BehindChoke(const AIFloat3& in cp, float back, AIFloat3& out at)
 // home, so the gun shoots into the doorway rather than standing in it. The
 // sample step is HoldRadius() -- the territory grid's own resolution, so the
 // two probes straddle the door at the same scale ownership is known at.
+// The gate test with the choke INDEX kept, for callers that need the gap's
+// own geometry (the teeth line reads GetChokePointEnds).
+uint GateChokeIdxs(array<int>& out idxs)
+{
+	idxs.resize(0);
+	if (!Builder::gHomeSet)
+		return 0;
+	const float step = HoldRadius();
+	for (uint c = 0; c < gIdx.length(); ++c) {
+		const AIFloat3 cp = ai.GetChokePointPos(gIdx[c]);
+		if (!OnMap(cp))
+			continue;
+		AIFloat3 toHome = Builder::gHomePos - cp;
+		const float len = sqrt(toHome.SqLength2D());
+		if (len < 1.f)
+			continue;
+		toHome *= (1.f / len);
+		AIFloat3 pBack = cp + toHome * step;
+		AIFloat3 pFwd = cp - toHome * step;
+		if (!OnMap(pBack) || !OnMap(pFwd))
+			continue;
+		if ((Classify(pBack) != OURS) || (Classify(pFwd) == OURS))
+			continue;
+		idxs.insertLast(gIdx[c]);
+	}
+	return idxs.length();
+}
+
 uint GateChokes(array<AIFloat3>& out gates)
 {
 	gates.resize(0);

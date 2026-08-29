@@ -10,6 +10,18 @@ intel numbers on the winrate4 arms; if still blind, the tweak targets are
 RadarSees' one-radar-per-coverage rule (no redundancy — stock builds 2x)
 and apex_insure_rate.
 
+## RULING (2026-08-29): economy killing is the win path — ENERGY first
+
+Asked whether hunting the enemy commander should be the 1v1 win condition
+(stock decides every game that way): "Killing economy is usually a better
+way to win. Keep working on the other stuff I mentioned." Then: "Killing
+energy economy is even better than metal." So the offense doctrine:
+strikes prioritize their ENERGY (fusions, advanced solars, converter
+farms — concentrated, chain-explodes, stalls everything they run), then
+metal. The eco-dive already ranks fat energy first; the missing half is
+DELIVERY — the chronic zero-raids flag means their eco is never touched.
+No commander-hunting doctrine.
+
 ## RULING (2026-08-29): the concentration doctrine for defence
 
 "So we know they push hard, we can make them pay for it … slow them down
