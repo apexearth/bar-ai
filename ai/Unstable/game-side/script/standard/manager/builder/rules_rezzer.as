@@ -451,6 +451,16 @@ IUnitTask@ RezzerIdle(CCircuitUnit@ unit)
 		return scrap;
 	if (ThreatFor(unit, unit.GetPos(ai.frame)) > CON_THREAT_VETO)
 		return Retreat(unit);
+	// GEOMETRY, NOT THE THREAT READ. ThreatFor is the documented mostly-zero
+	// sensor, so "standing around dangerous areas" (apexearth, watching,
+	// 2026-08-29) read safe to it. An idle rezzer costs nothing to stand
+	// somewhere safe by construction: forward of rear-crew ground with no
+	// job, it retires to the haven and waits for the next corpse there.
+	if (Military::ForwardFraction(unit.GetPos(ai.frame))
+		> ai.GetTunable("apex_rezzer_fwd", TUNE_REZZER_FWD))
+	{
+		return Retreat(unit);
+	}
 	return null;
 }
 

@@ -1296,6 +1296,15 @@ const float TUNE_LINE_DPS = 0.17f;
 //   room. Experiment arm, default off; his adapting-composition ruling
 //   stands as direction, this term's shape or scale is wrong.
 const float TUNE_LINE_ADAPT = 0.f;
+// manager/brain/market/want_protect.as [ratio] -- The per-mex defence floor
+//   grows with the spot's forward fraction: floor * (1 + fwd * this). His
+//   ruling: "the closer our mex is to the enemy and furthest from our army,
+//   the stronger the defenses should be."
+const float TUNE_MEX_EXPOSE = 1.5f;
+// manager/builder/rules_rezzer.as [forward fraction] -- An IDLE rezzer past
+//   this retires to the haven regardless of the threat read (the sensor is
+//   the documented liar); working rezzers are untouched.
+const float TUNE_REZZER_FWD = 0.25f;
 // WHAT A COMBAT UNIT IS WORTH -- the exponent on each golden metric
 // (apexearth 2026-08-25: "RANGE, DAMAGE, HP... perhaps we can try a variety of
 // algorithms"). Read in manager/brain/market/worth.as; each metric is

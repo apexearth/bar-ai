@@ -10,6 +10,32 @@ intel numbers on the winrate4 arms; if still blind, the tweak targets are
 RadarSees' one-radar-per-coverage rule (no redundancy — stock builds 2x)
 and apex_insure_rate.
 
+## RULING (2026-08-29, evening watch): exposure-scaled mex defence
+
+"The closer our mex is to the enemy and furthest from our army, the
+stronger the defenses should be." The per-mex floor stops being flat:
+it scales with the spot's exposure (forwardness toward the enemy, beyond
+the army's staging reach).
+
+## OPEN (2026-08-29, evening watch): 2 units fought 4 thugs to the death
+
+"I watched 1 mace and 1 rocket bot fight 4 enemy thugs. We didn't run
+away, the rocket bot still was firing and not running when it died. This
+makes me question our combat logic a lot." Candidate mechanisms, to
+attribute from that game's own log: fodder/scout tasks are EXCLUDED from
+the withdraw loop entirely; the C++ base-defence ring is
+fight-at-any-odds ground; or the W order lost to the task's re-asserted
+orders (the known churn). The universal per-unit self-preservation rule
+(leave a locally hopeless fight regardless of task) remains unbuilt.
+
+## OPEN (2026-08-29, evening watch): rez bots loiter in danger
+
+"We also have rez bots standing around dangerous areas rather than moving
+to safety after they do whatever job they had." An idle rezzer's default
+is wherever its last corpse was — battlefield ground. The fallback when
+no job wins should be a safe standby (medic setback / behind the front),
+not standing in the graveyard.
+
 ## RULING (2026-08-29): economy killing is the win path — ENERGY first
 
 Asked whether hunting the enemy commander should be the 1v1 win condition

@@ -792,10 +792,22 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			if (gateFloor > threat)
 				threat = gateFloor;
 		}
+		// THE FLOOR SCALES WITH EXPOSURE (apexearth 2026-08-29: "the closer
+		// our mex is to the enemy and furthest from our army, the stronger
+		// the defenses should be"). A rear mex keeps the base floor; a
+		// forward one wants more before anything has been seen, because its
+		// wave arrives with no army between it and them.
+		float mexFloorHere = mexFloorWave;
+		if (mexFloorWave > 0.f) {
+			const float fwd = Military::ForwardFraction(s);
+			if (fwd > 0.f)
+				mexFloorHere *= 1.f + fwd
+						* ai.GetTunable("apex_mex_expose", TUNE_MEX_EXPOSE);
+		}
 		const bool floored = !isFront && MexInReach(s, reach)
-				&& (mexFloorWave > threat);
+				&& (mexFloorHere > threat);
 		if (floored)
-			threat = mexFloorWave;
+			threat = mexFloorHere;
 		if ((siteWave > 0.f) && (gPfTotal > 1.f)) {
 			const float sStake = isFront
 					? FrontedStakeAt(s, reach) : PfSiteStake(si);
@@ -839,7 +851,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		float stopped = short0 - short1;
 		if (floored) {
 			const float gained = cover1 - cover0;
-			float step = mexFloorWave - cover0;
+			float step = mexFloorHere - cover0;
 			if (step > gained)
 				step = gained;
 			stopped = (gained > 0.f) ? (step / gained) : 0.f;
