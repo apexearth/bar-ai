@@ -10897,7 +10897,7 @@ index b4b43c1..d2e258e 100644
  		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..59503a9 100644
+index 0d59b65..8dede45 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,23 @@
@@ -11377,7 +11377,8 @@ index 0d59b65..59503a9 100644
 +	float span = 0.f;
 +	float cap = SQUAD_FILE_MAX_WIDTH;
 +	const CCircuitDef* prevDef = nullptr;
-+	for (CCircuitUnit* unit : units) {
+ 	for (CCircuitUnit* unit : units) {
+-		unit->GetTravelAct()->SetPath(pPath, speed);
 +		const CCircuitDef* cdef = unit->GetCircuitDef();
 +		const bool isCharge = IsChargeDef(cdef);
 +		if (prevDef != nullptr) {
@@ -11390,7 +11391,7 @@ index 0d59b65..59503a9 100644
 +		}
 +		offset.push_back(span);
 +		prevDef = cdef;
-+	}
+ 	}
 +	const float scale = (span > cap) ? (cap / span) : 1.f;
 +	const float half = span * scale * 0.5f;
 +	int i = 0;
@@ -11409,8 +11410,7 @@ index 0d59b65..59503a9 100644
 +{
 +	float total = .0f;
 +	float alive = .0f;
- 	for (CCircuitUnit* unit : units) {
--		unit->GetTravelAct()->SetPath(pPath, speed);
++	for (CCircuitUnit* unit : units) {
 +		const float power = unit->GetCircuitDef()->GetPower();
 +		total += power;
 +		// apexearth: "A retreating unit should have 0 power. It is no longer
@@ -11422,7 +11422,7 @@ index 0d59b65..59503a9 100644
 +		float hp = unit->GetHealthPercent();
 +		hp = std::max(.0f, std::min(1.f, hp));  // capture progress drives it negative
 +		alive += power * hp;
- 	}
++	}
 +	return (total > .0f) ? (alive / total) : 1.f;
  }
  
@@ -11462,7 +11462,7 @@ index 0d59b65..59503a9 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -418,51 +814,634 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -418,51 +814,653 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -11821,7 +11821,17 @@ index 0d59b65..59503a9 100644
 +		// focuses one kill at a time and enemy DPS leaves the field fastest.
 +		// Colossi keep the richest-target rule instead.
 +		CEnemyInfo* finishFoe = nullptr;
-+		float finishHp = 1e18f;
++		float finishFrac = 1e18f;
++		// v2 after a measured v1 failure (paired arena, no gain): rank by HP
++		// FRACTION so "wounded" means wounded rather than cheap, and hold the
++		// squad's finisher STICKY until it dies or leaves reach -- v1 flipped
++		// targets every tick as the hp order shuffled, resetting weapon aim.
++		CEnemyInfo* held = (finishId != 0)
++				? manager->GetCircuit()->GetEnemyInfo((ICoreUnit::Id)finishId) : nullptr;
++		if ((held != nullptr) && (held->GetHealth() <= 0.f || held->IsHidden())) {
++			held = nullptr;
++			finishId = 0;
++		}
 +		const bool rowColossus = (rowDef != nullptr)
 +				&& (rowDef->IsCharger() || (rowDef->GetCostM()
 +					>= manager->GetCircuit()->GetTunable("apex_super_cost", 7000.f)));
@@ -11870,10 +11880,18 @@ index 0d59b65..59503a9 100644
 +						valFoe = e;
 +					}
 +					if (!rowColossus && (sq < SQUARE(kv.first))
-+						&& (e->GetHealth() > 0.f) && (e->GetHealth() < finishHp))
++						&& (e->GetHealth() > 0.f))
 +					{
-+						finishHp = e->GetHealth();
-+						finishFoe = e;
++						const float maxH = (ed->GetHealth() > 1.f) ? ed->GetHealth() : 1.f;
++						const float frac = e->GetHealth() / maxH;
++						if (e == held) {
++							// the standing finisher stays unless truly healed
++							finishFoe = e;
++							finishFrac = frac * 0.5f;
++						} else if ((frac < 0.85f) && (frac < finishFrac)) {
++							finishFrac = frac;
++							finishFoe = e;
++						}
 +					}
 +					if (!kiteOk || !ed->IsAttacker()) {
 +						continue;
@@ -12100,6 +12118,7 @@ index 0d59b65..59503a9 100644
 +				} else if ((finishFoe != nullptr)
 +					&& (manager->GetCircuit()->GetTunable("apex_focus_finish", 1.f) > 0.f))
 +				{
++					finishId = (int)finishFoe->GetId();
 +					TRY_UNIT(manager->GetCircuit(), unit,
 +						unit->CmdSetTarget(finishFoe);
 +					)
@@ -12107,7 +12126,7 @@ index 0d59b65..59503a9 100644
  			}
  
  			beta += delta;
-@@ -478,7 +1457,9 @@ void ISquadTask::Log()
+@@ -478,7 +1476,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
@@ -12119,10 +12138,10 @@ index 0d59b65..59503a9 100644
  		circuit->GetDrawer()->AddPoint(leader->GetPos(circuit->GetLastFrame()), leader->GetCircuitDef()->GetDef()->GetName());
  	}
 diff --git a/src/circuit/task/fighter/SquadTask.h b/src/circuit/task/fighter/SquadTask.h
-index a058d59..6406ce0 100644
+index a058d59..1e5a03e 100644
 --- a/src/circuit/task/fighter/SquadTask.h
 +++ b/src/circuit/task/fighter/SquadTask.h
-@@ -15,6 +15,93 @@
+@@ -15,8 +15,97 @@
  
  namespace circuit {
  
@@ -12215,8 +12234,12 @@ index a058d59..6406ce0 100644
 +
  class ISquadTask: public IFighterTask {
  protected:
++	// apex: the squad's sticky "finish the wounded" target id (0 = none).
++	int finishId = 0;
  	ISquadTask(ITaskModule* mgr, FightType type, float powerMod);
-@@ -25,11 +112,28 @@ public:
+ public:
+ 	virtual ~ISquadTask();
+@@ -25,11 +114,28 @@ public:
  	virtual void RemoveAssignee(CCircuitUnit* unit) override;
  
  	virtual void Merge(ISquadTask* task);
@@ -12245,7 +12268,7 @@ index a058d59..6406ce0 100644
  
  private:
  	void FindLeader(decltype(units)::iterator itBegin, decltype(units)::iterator itEnd);
-@@ -39,8 +143,16 @@ private:
+@@ -39,8 +145,16 @@ private:
  
  protected:
  	ISquadTask* GetMergeTask();
