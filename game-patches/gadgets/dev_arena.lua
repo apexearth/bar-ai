@@ -207,6 +207,30 @@ end
 local rosterOf = {}   -- ally -> { {id, n, name}... }
 local sideTotal = {}  -- ally -> units per spawn
 
+-- AA-only units are dead weight in an all-ground fight ("Avoid putting AA
+-- into the fights"): a unit joins the combat pool only if some weapon of
+-- its can target ground -- a weapon restricted to a lone air category
+-- (onlyTargets = {vtol}) does not count.
+local function groundCapable(ud)
+	for _, w in ipairs(ud.weapons or {}) do
+		local ot = w.onlyTargets
+		local aaOnly = false
+		if ot then
+			local n, vt = 0, false
+			for cat in pairs(ot) do
+				n = n + 1
+				local c = string.lower(tostring(cat))
+				if c == "vtol" or c == "air" then vt = true end
+			end
+			aaOnly = vt and n == 1
+		end
+		if not aaOnly then
+			return true
+		end
+	end
+	return false
+end
+
 local function buildPools()
 	for id, ud in pairs(UnitDefs) do
 		-- No ships and no subs: anything that REQUIRES water depth beaches
@@ -217,6 +241,7 @@ local function buildPools()
 			if ud.canResurrect then
 				rezPool[#rezPool + 1] = id
 			elseif ud.canAttack and ud.weapons and #ud.weapons > 0
+				and groundCapable(ud)
 				and not ud.isBuilder and (ud.metalCost or 0) >= 30
 				and (ud.metalCost or 0) <= 2500 then
 				rndPool[#rndPool + 1] = id

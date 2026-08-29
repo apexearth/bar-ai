@@ -21,18 +21,18 @@ TAG="$1"; shift
 SUBJECT="${ARENA_SUBJECT:-Apex:apex:hard_aggressive}"
 OPPONENT="${ARENA_OPPONENT:-BARb:stable:hard}"
 
-common=(--map "${ARENA_MAP:-Altair_Crossing_V4.1}"
+common=(--map "${ARENA_MAP:-Comet Catcher Remake 1.8}"
         --per-side 1 --sides Armada,Armada
         --minutes "${ARENA_MINUTES:-20}" --seed "${ARENA_SEED:-7}"
         --modoption dev_arena=1
         --modoption "dev_arena_def=${ARENA_DEF:-armpw}"
-        --modoption "dev_arena_sep=${ARENA_SEP:-240}"
-        --modoption "dev_arena_round=${ARENA_ROUND:-1200}")
+        --modoption "dev_arena_round=${ARENA_ROUND:-5400}")
+if [ -n "${ARENA_SEP:-}" ]; then common+=(--modoption "dev_arena_sep=$ARENA_SEP"); fi
 
 python -u tools/run_match.py --a "$SUBJECT" --b "$OPPONENT" "${common[@]}" "$@" \
     --out "matches/arena-$TAG-fwd" >/dev/null 2>&1
 python -u tools/run_match.py --a "$OPPONENT" --b "$SUBJECT" "${common[@]}" "$@" \
     --out "matches/arena-$TAG-rev" >/dev/null 2>&1
 
-echo "--- $TAG ${*:-} (def=${ARENA_DEF:-armpw} sep=${ARENA_SEP:-240} map=${ARENA_MAP:-Altair_Crossing_V4.1}) ---"
+echo "--- $TAG ${*:-} (def=${ARENA_DEF:-armpw} sep=${ARENA_SEP:-240} map=${ARENA_MAP:-Comet Catcher Remake 1.8}) ---"
 python tools/arena.py --pair "matches/arena-$TAG-fwd" "matches/arena-$TAG-rev"
