@@ -1439,7 +1439,22 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				const bool staticCantReply = isStatic && (edef != nullptr)
 						&& (!edef->IsAttacker() || (edef->GetMaxRange() * 1.05f < r))
 						&& (threatMap->GetThreatAt(unit, newPos) <= THREAT_MIN);
-				if (staticCantReply
+				// apex: MICRO ONLY WHAT HAS A RANGE EDGE. The no-control arena
+				// diagnostic (3 seed-pairs): units stripped of our orders beat
+				// stock CONSISTENTLY (+0.047 mean, tight), while commanded
+				// units averaged the same with wild variance -- the ring adds
+				// nothing to a row that cannot out-stand its enemy, and costs
+				// DPS while it orbits. A row without a real range edge over
+				// the nearest armed foe hands the brawl to the engine (plain
+				// attack, auto-targeting); rows that outrange something keep
+				// the standoff machinery, which is their whole value.
+				const bool rowBrawls = (manager->GetCircuit()->GetTunable("apex_brawl_pass", 1.f) > 0.f)
+						&& !rowColossus && !kiteFoeStatic
+						&& (kiteFoeRange > 0.f)
+						&& (kv.first < kiteFoeRange + 60.f);
+				if (rowBrawls) {
+					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
+				} else if (staticCantReply
 					&& (manager->GetCircuit()->GetTunable("apex_static_plain_attack", 1.f) > 0.f))
 				{
 					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
