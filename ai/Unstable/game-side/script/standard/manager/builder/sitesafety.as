@@ -132,7 +132,10 @@ bool PastFrontFrac(const AIFloat3& in where, float frac)
 {
 	if (!gHomeSet)
 		return false;
-	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	// Front::FoeAnchor, not the mobile enemy centroid -- see its comment:
+	// measured against presence, being raided shrank the claimable world to
+	// the raider's distance (pastFront=225/sweep, 4-6 of 80 spots held).
+	const AIFloat3 foe = Front::FoeAnchor();
 	const float ex = foe.x - gHomePos.x;
 	const float ez = foe.z - gHomePos.z;
 	const float span = ex * ex + ez * ez;
@@ -166,7 +169,7 @@ bool PastFront(const AIFloat3& in where)
 {
 	if (!gHomeSet)
 		return false;
-	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	const AIFloat3 foe = Front::FoeAnchor();
 	const float ex = foe.x - gHomePos.x;
 	const float ez = foe.z - gHomePos.z;
 	const float span = ex * ex + ez * ez;
