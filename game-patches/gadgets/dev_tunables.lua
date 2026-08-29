@@ -196,6 +196,8 @@ local NAMES = {
 	"apex_budget_live",
 	"apex_commit_bail",
 	"apex_retreat_behind",
+	"apex_con_stand_heal",
+	"apex_con_stand_floor",
 	"apex_retreat_healed",
 	"apex_retreat_stand",
 	"apex_medic_setback",

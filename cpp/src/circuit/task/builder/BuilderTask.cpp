@@ -13,6 +13,7 @@
 #include "map/InfluenceMap.h"
 #include "module/EconomyManager.h"
 #include "module/BuilderManager.h"
+#include "module/FactoryManager.h"
 #include "module/MilitaryManager.h"
 #include "resource/MetalManager.h"
 #include "resource/EnergyGrid.h"
@@ -436,8 +437,46 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		return;
 	}
 
+	// apex: STAND AND HEAL (apexearth: "a T1 con started a nano but then
+	// walked away from it to go try to heal a nano which was built in one of
+	// his allies bases... long walk for no big gain"). Retreat's destination
+	// is the crow-flies-closest haven -- a nano cluster, possibly across the
+	// map -- but a wounded builder already inside a cluster's assist reach is
+	// standing in the repair bay: the nanos heal it while it keeps building.
+	// Floored at apex_con_stand_floor: below it the fight here is being lost
+	// and retreat is about survival, not convenience (0.5 is the config's own
+	// fighter retreat line).
+	if (!cdef->IsRoleComm()
+		&& (circuit->GetTunable("apex_con_stand_heal", 1.f) > 0.5f)
+		&& (healthPerc > circuit->GetTunable("apex_con_stand_floor", 0.5f)))
+	{
+		CFactoryManager* facMgr = circuit->GetFactoryManager();
+		const AIFloat3& pos = unit->GetPos(frame);
+		const AIFloat3 hav = facMgr->GetClosestHaven(pos);
+		if (utils::is_valid(hav)
+			&& (pos.SqDistance2D(hav) < SQUARE(facMgr->GetAssistRange() * 0.9f)))
+		{
+			static int standLogFrame = 0;
+			if (frame >= standLogFrame) {
+				standLogFrame = frame + FRAMES_PER_SEC * 10;
+				circuit->LOG("apex: con-stand t=%i %s hp=%.2f -- healing where it works",
+						circuit->GetTeamId(), cdef->GetDef()->GetName(), healthPerc);
+			}
+			return;
+		}
+	}
+
 	CRetreatTask* task = manager->EnqueueRetreat();
 	manager->AssignTask(unit, task);
+	// apex: the walk is now visible -- one line per switch, with how far the
+	// chosen haven is, so "are we doing this a lot" reads from the infolog.
+	{
+		const AIFloat3& pos = unit->GetPos(frame);
+		const AIFloat3 hav = circuit->GetFactoryManager()->GetClosestHaven(pos);
+		circuit->LOG("apex: con-retreat t=%i %s hp=%.2f walk=%.0f",
+				circuit->GetTeamId(), cdef->GetDef()->GetName(), healthPerc,
+				utils::is_valid(hav) ? sqrtf(pos.SqDistance2D(hav)) : -1.f);
+	}
 
 	if (target == nullptr) {
 		SetDeathNote("hurt-retreat");

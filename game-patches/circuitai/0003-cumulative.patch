@@ -6489,10 +6489,18 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..b6ca6ef 100644
+index bc8ff11..e6904c8 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
-@@ -31,6 +31,7 @@
+@@ -13,6 +13,7 @@
+ #include "map/InfluenceMap.h"
+ #include "module/EconomyManager.h"
+ #include "module/BuilderManager.h"
++#include "module/FactoryManager.h"
+ #include "module/MilitaryManager.h"
+ #include "resource/MetalManager.h"
+ #include "resource/EnergyGrid.h"
+@@ -31,6 +32,7 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
@@ -6500,7 +6508,7 @@ index bc8ff11..b6ca6ef 100644
  
  namespace circuit {
  
-@@ -69,7 +70,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
+@@ -69,7 +71,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
  		, nextTask(nullptr)
  		, initiator(nullptr)
  		, buildFails(0)
@@ -6509,7 +6517,7 @@ index bc8ff11..b6ca6ef 100644
  {
  	CEconomyManager* economyMgr = manager->GetCircuit()->GetEconomyManager();
  	savedIncome.metal = economyMgr->GetAvgMetalIncome();
-@@ -91,13 +92,19 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
+@@ -91,13 +93,19 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
  		, initiator(nullptr)
  		, savedIncome({0.f, 0.f})
  		, buildFails(0)
@@ -6531,7 +6539,7 @@ index bc8ff11..b6ca6ef 100644
  }
  
  bool IBuilderTask::CanAssignTo(CCircuitUnit* unit) const
-@@ -134,8 +141,11 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -134,8 +142,11 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  	}
  
  	if (unit->HasDGun()) {
@@ -6545,7 +6553,7 @@ index bc8ff11..b6ca6ef 100644
  	}
  	if (unit->GetCircuitDef()->IsAbleToCapture()) {
  		unit->PushBack(new CCaptureAction(unit, 500.f));
-@@ -157,9 +167,6 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -157,9 +168,6 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  
  void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
  {
@@ -6555,7 +6563,7 @@ index bc8ff11..b6ca6ef 100644
  	if (initiator == unit) {
  		initiator = nullptr;
  	}
-@@ -285,13 +292,94 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -285,13 +293,94 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -6653,7 +6661,7 @@ index bc8ff11..b6ca6ef 100644
  	if (utils::is_valid(buildPos)) {
  		TRY_UNIT(circuit, unit,
  			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
-@@ -302,6 +390,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -302,6 +391,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  
  		// Fallback to Guard/Assist/Patrol
@@ -6661,7 +6669,7 @@ index bc8ff11..b6ca6ef 100644
  		manager->FallbackTask(unit);
  		return false;
  	}
-@@ -315,8 +404,22 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -315,8 +405,22 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
  	} else if (buildFails <= TASK_RETRIES) {
  		RemoveAssignee(unit);
  	} else if (target == nullptr) {
@@ -6685,15 +6693,57 @@ index bc8ff11..b6ca6ef 100644
  	}
  }
  
-@@ -337,6 +440,7 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -333,10 +437,49 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+ 		return;
+ 	}
+ 
++	// apex: STAND AND HEAL (apexearth: "a T1 con started a nano but then
++	// walked away from it to go try to heal a nano which was built in one of
++	// his allies bases... long walk for no big gain"). Retreat's destination
++	// is the crow-flies-closest haven -- a nano cluster, possibly across the
++	// map -- but a wounded builder already inside a cluster's assist reach is
++	// standing in the repair bay: the nanos heal it while it keeps building.
++	// Floored at apex_con_stand_floor: below it the fight here is being lost
++	// and retreat is about survival, not convenience (0.5 is the config's own
++	// fighter retreat line).
++	if (!cdef->IsRoleComm()
++		&& (circuit->GetTunable("apex_con_stand_heal", 1.f) > 0.5f)
++		&& (healthPerc > circuit->GetTunable("apex_con_stand_floor", 0.5f)))
++	{
++		CFactoryManager* facMgr = circuit->GetFactoryManager();
++		const AIFloat3& pos = unit->GetPos(frame);
++		const AIFloat3 hav = facMgr->GetClosestHaven(pos);
++		if (utils::is_valid(hav)
++			&& (pos.SqDistance2D(hav) < SQUARE(facMgr->GetAssistRange() * 0.9f)))
++		{
++			static int standLogFrame = 0;
++			if (frame >= standLogFrame) {
++				standLogFrame = frame + FRAMES_PER_SEC * 10;
++				circuit->LOG("apex: con-stand t=%i %s hp=%.2f -- healing where it works",
++						circuit->GetTeamId(), cdef->GetDef()->GetName(), healthPerc);
++			}
++			return;
++		}
++	}
++
+ 	CRetreatTask* task = manager->EnqueueRetreat();
  	manager->AssignTask(unit, task);
++	// apex: the walk is now visible -- one line per switch, with how far the
++	// chosen haven is, so "are we doing this a lot" reads from the infolog.
++	{
++		const AIFloat3& pos = unit->GetPos(frame);
++		const AIFloat3 hav = circuit->GetFactoryManager()->GetClosestHaven(pos);
++		circuit->LOG("apex: con-retreat t=%i %s hp=%.2f walk=%.0f",
++				circuit->GetTeamId(), cdef->GetDef()->GetName(), healthPerc,
++				utils::is_valid(hav) ? sqrtf(pos.SqDistance2D(hav)) : -1.f);
++	}
  
  	if (target == nullptr) {
 +		SetDeathNote("hurt-retreat");
  		manager->AbortTask(this);  // Doesn't call RemoveAssignee
  	}
  }
-@@ -346,6 +450,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -346,6 +489,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  	RemoveAssignee(unit);
  	// NOTE: AbortTask usually does not call RemoveAssignee for each unit
  	if (((target == nullptr) || units.empty()) && !unit->IsMorphing()) {
@@ -6701,7 +6751,7 @@ index bc8ff11..b6ca6ef 100644
  		manager->AbortTask(this);
  	}
  }
-@@ -427,18 +532,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -427,18 +571,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -6734,7 +6784,7 @@ index bc8ff11..b6ca6ef 100644
  	}
  }
  
-@@ -447,13 +559,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -447,13 +598,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  	CCircuitAI* circuit = manager->GetCircuit();
  
  	// FIXME: Replace const 1000.0f with build time?
@@ -6757,7 +6807,7 @@ index bc8ff11..b6ca6ef 100644
  		manager->AbortTask(this);
  		return false;
  	}
-@@ -492,12 +612,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -492,12 +651,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  		if ((buildType != BuildType::GUARD)
  			&& ((executors.size() < 2) || !unit->IsAttrBase()))
  		{
@@ -6780,7 +6830,7 @@ index bc8ff11..b6ca6ef 100644
  				}
  			)
  			return true;
-@@ -529,9 +657,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -529,9 +696,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  	CCircuitDef* cdef = unit->GetCircuitDef();
  	const float range = cdef->GetBuildDistance();
  	const AIFloat3& endPos = GetPosition();
@@ -6808,7 +6858,7 @@ index bc8ff11..b6ca6ef 100644
  		manager->AbortTask(this);
  		return;
  	}
-@@ -542,7 +687,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -542,7 +726,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6819,7 +6869,7 @@ index bc8ff11..b6ca6ef 100644
  		return;
  	}
  
-@@ -565,11 +712,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +751,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6843,7 +6893,7 @@ index bc8ff11..b6ca6ef 100644
  	}
  }
  
-@@ -637,14 +794,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +833,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6900,7 +6950,7 @@ index bc8ff11..b6ca6ef 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +857,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +896,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
