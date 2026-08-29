@@ -30,11 +30,24 @@ Measured the first game the `apex: con-retreat` line existed (s11 2v2, low
 contact): 8 switches in 20 minutes, armck at hp=0.85-0.86 walking 924, 1475
 and 3218 elmos — his sighting ("long walk for no big gain") exactly.
 Stand-and-heal (ec2913b) removes the walk only when the con is already
-inside a haven's assist reach. The open question, asked and not yet
-answered: should a builder on SAFE OWN GROUND retreat at all on a scratch
-(threat-gate the trigger), or does 80-89% stay? Evidence to collect in his
-next watch: `con-retreat` lines with hp>=0.8 and walk>1000 on uncontested
-ground, and whether `con-stand` fires.
+inside a haven's assist reach. RULED 2026-08-29 ("Threat-gate it"), after
+the eco cost was measured: 43 con-retreats in one Glacier Pass game, corck
+at hp 0.81 walking 2400-2900 elmos, 42 mex elections -> 12 standing mexes
+vs stock's 17. LANDED (apex_con_scratch_gate, BuilderTask.cpp): above the
+stand floor a builder retreats only when the known attacker's gun reaches
+its spot or the threat map covers it; below 0.5 hp always retreats. Awaiting
+a measured `con-scratch` vs `con-retreat` count on his maps to close.
+
+## 2026-08-29 — Callisto mex@15m halved (21 -> 10) between last night and today
+
+Same map, same mode, 6 games each end. The scratch-retreat was active in
+BOTH ends, so it is NOT the cause of this particular drop; the delta window
+holds today's fight changes (ring-hold/radar prefer, arty massing, trade
+withdraw, kite fix, choke gates, guard-forward siting). Most plausible
+shape: the army yields ground more readily now, the enemy roams, expansion
+follows the army. NOT attributed to a single change yet -- his Supreme
+Isthmus watch (eco-vs-military question) and a per-change A/B are the next
+instruments. Do not stack more military caution until this is resolved.
 
 ## 2026-08-28 (night) — THE OVERFLOW CAMPAIGN: his goal list, status ledger
 

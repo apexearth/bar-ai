@@ -466,6 +466,39 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		}
 	}
 
+	// apex: THREAT-GATED SCRATCH RETREAT (apexearth ruling 2026-08-29, after
+	// 43 con-retreats in one Glacier game -- corck at hp 0.81 walking 2400-2900
+	// elmos while 42 mex elections became 12 mexes): above the stand floor a
+	// builder leaves only where danger is actually READ -- the known attacker's
+	// gun genuinely reaches this spot, or the threat map says something covers
+	// it. A stray splash or a ghost shell on safe own ground is not a reason
+	// to walk home. At or below the floor survival wins and it always goes.
+	if (!cdef->IsRoleComm()
+		&& (circuit->GetTunable("apex_con_scratch_gate", 1.f) > 0.5f)
+		&& (healthPerc > circuit->GetTunable("apex_con_stand_floor", 0.5f)))
+	{
+		const AIFloat3& pos = unit->GetPos(frame);
+		bool danger = false;
+		if ((attacker != nullptr) && (attacker->GetCircuitDef() != nullptr)
+			&& attacker->GetCircuitDef()->IsAttacker())
+		{
+			const float reach = attacker->GetCircuitDef()->GetMaxRange() + 300.f;
+			danger = attacker->GetPos().SqDistance2D(pos) < SQUARE(reach);
+		}
+		if (!danger) {
+			danger = circuit->GetThreatMap()->GetThreatAt(unit, pos) > THREAT_MIN;
+		}
+		if (!danger) {
+			static int scratchLogFrame = 0;
+			if (frame >= scratchLogFrame) {
+				scratchLogFrame = frame + FRAMES_PER_SEC * 10;
+				circuit->LOG("apex: con-scratch t=%i %s hp=%.2f -- no danger read, working on",
+						circuit->GetTeamId(), cdef->GetDef()->GetName(), healthPerc);
+			}
+			return;
+		}
+	}
+
 	CRetreatTask* task = manager->EnqueueRetreat();
 	manager->AssignTask(unit, task);
 	// apex: the walk is now visible -- one line per switch, with how far the

@@ -6489,7 +6489,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..e6904c8 100644
+index bc8ff11..271e21e 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -6693,7 +6693,7 @@ index bc8ff11..e6904c8 100644
  	}
  }
  
-@@ -333,10 +437,49 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -333,10 +437,82 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		return;
  	}
  
@@ -6726,6 +6726,39 @@ index bc8ff11..e6904c8 100644
 +		}
 +	}
 +
++	// apex: THREAT-GATED SCRATCH RETREAT (apexearth ruling 2026-08-29, after
++	// 43 con-retreats in one Glacier game -- corck at hp 0.81 walking 2400-2900
++	// elmos while 42 mex elections became 12 mexes): above the stand floor a
++	// builder leaves only where danger is actually READ -- the known attacker's
++	// gun genuinely reaches this spot, or the threat map says something covers
++	// it. A stray splash or a ghost shell on safe own ground is not a reason
++	// to walk home. At or below the floor survival wins and it always goes.
++	if (!cdef->IsRoleComm()
++		&& (circuit->GetTunable("apex_con_scratch_gate", 1.f) > 0.5f)
++		&& (healthPerc > circuit->GetTunable("apex_con_stand_floor", 0.5f)))
++	{
++		const AIFloat3& pos = unit->GetPos(frame);
++		bool danger = false;
++		if ((attacker != nullptr) && (attacker->GetCircuitDef() != nullptr)
++			&& attacker->GetCircuitDef()->IsAttacker())
++		{
++			const float reach = attacker->GetCircuitDef()->GetMaxRange() + 300.f;
++			danger = attacker->GetPos().SqDistance2D(pos) < SQUARE(reach);
++		}
++		if (!danger) {
++			danger = circuit->GetThreatMap()->GetThreatAt(unit, pos) > THREAT_MIN;
++		}
++		if (!danger) {
++			static int scratchLogFrame = 0;
++			if (frame >= scratchLogFrame) {
++				scratchLogFrame = frame + FRAMES_PER_SEC * 10;
++				circuit->LOG("apex: con-scratch t=%i %s hp=%.2f -- no danger read, working on",
++						circuit->GetTeamId(), cdef->GetDef()->GetName(), healthPerc);
++			}
++			return;
++		}
++	}
++
  	CRetreatTask* task = manager->EnqueueRetreat();
  	manager->AssignTask(unit, task);
 +	// apex: the walk is now visible -- one line per switch, with how far the
@@ -6743,7 +6776,7 @@ index bc8ff11..e6904c8 100644
  		manager->AbortTask(this);  // Doesn't call RemoveAssignee
  	}
  }
-@@ -346,6 +489,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -346,6 +522,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  	RemoveAssignee(unit);
  	// NOTE: AbortTask usually does not call RemoveAssignee for each unit
  	if (((target == nullptr) || units.empty()) && !unit->IsMorphing()) {
@@ -6751,7 +6784,7 @@ index bc8ff11..e6904c8 100644
  		manager->AbortTask(this);
  	}
  }
-@@ -427,18 +571,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -427,18 +604,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -6784,7 +6817,7 @@ index bc8ff11..e6904c8 100644
  	}
  }
  
-@@ -447,13 +598,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -447,13 +631,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  	CCircuitAI* circuit = manager->GetCircuit();
  
  	// FIXME: Replace const 1000.0f with build time?
@@ -6807,7 +6840,7 @@ index bc8ff11..e6904c8 100644
  		manager->AbortTask(this);
  		return false;
  	}
-@@ -492,12 +651,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -492,12 +684,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  		if ((buildType != BuildType::GUARD)
  			&& ((executors.size() < 2) || !unit->IsAttrBase()))
  		{
@@ -6830,7 +6863,7 @@ index bc8ff11..e6904c8 100644
  				}
  			)
  			return true;
-@@ -529,9 +696,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -529,9 +729,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  	CCircuitDef* cdef = unit->GetCircuitDef();
  	const float range = cdef->GetBuildDistance();
  	const AIFloat3& endPos = GetPosition();
@@ -6858,7 +6891,7 @@ index bc8ff11..e6904c8 100644
  		manager->AbortTask(this);
  		return;
  	}
-@@ -542,7 +726,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -542,7 +759,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6869,7 +6902,7 @@ index bc8ff11..e6904c8 100644
  		return;
  	}
  
-@@ -565,11 +751,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +784,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6893,7 +6926,7 @@ index bc8ff11..e6904c8 100644
  	}
  }
  
-@@ -637,14 +833,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +866,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -6950,7 +6983,7 @@ index bc8ff11..e6904c8 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +896,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +929,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
