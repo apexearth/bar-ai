@@ -1,5 +1,19 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 — builder retreat trigger is a hair trigger (his policy call pending)
+
+Every builder retreats at 80-89% health (`behaviour.json` `retreat.builder
+[0.80, 0.89]`, per-unit roll) and walks to the crow-flies-closest haven.
+Measured the first game the `apex: con-retreat` line existed (s11 2v2, low
+contact): 8 switches in 20 minutes, armck at hp=0.85-0.86 walking 924, 1475
+and 3218 elmos — his sighting ("long walk for no big gain") exactly.
+Stand-and-heal (ec2913b) removes the walk only when the con is already
+inside a haven's assist reach. The open question, asked and not yet
+answered: should a builder on SAFE OWN GROUND retreat at all on a scratch
+(threat-gate the trigger), or does 80-89% stay? Evidence to collect in his
+next watch: `con-retreat` lines with hp>=0.8 and walk>1000 on uncontested
+ground, and whether `con-stand` fires.
+
 ## 2026-08-28 (night) — THE OVERFLOW CAMPAIGN: his goal list, status ledger
 
 Goal set tonight: "Fix and validate (through auditing) the mentioned issues
