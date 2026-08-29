@@ -24,6 +24,9 @@
 --   dev_arena_round   max frames per round              (default 1800)
 --   dev_arena_gap     frames between rounds             (default 150)
 --   dev_arena_sep     elmos between the two lines       (default 700)
+--   dev_arena_pure    "1": park the commanders in the corners, paralyzed and
+--                     neutral -- no economy, no building, ONLY the arena
+--                     armies act. The game cannot end (they stay alive).
 --
 -- Output, one line per round, parsed by tools/arena.py:
 --   [BARAI_ARENA] round=N ally=A team=T def=D n=K x=.. z=..
@@ -96,6 +99,51 @@ local waitUntil = START
 local active = false
 local flip = false
 local anchorA, anchorB  -- {x, z} spawn centres, before flip
+
+-- PURE MODE (apexearth: "they still have commanders and are building stuff.
+-- So not quite what I want"): every starting unit is teleported to its own
+-- map corner, permanently paralyzed and set neutral -- alive so the game
+-- cannot end, invisible to targeting, building nothing. The arena armies are
+-- the only actors left.
+local PURE       = tostring(opt("dev_arena_pure", "")) == "1"
+local pureDone = false
+local parked = {}   -- unitID -> true, re-stunned every second
+
+local function parkStarters()
+	for ally = 0, 1 do
+		local corner = (ally == 0) and { 96, 96 }
+				or { mapX - 96, mapZ - 96 }
+		local teams = Spring.GetTeamList(ally) or {}
+		for _, teamID in ipairs(teams) do
+			for _, uID in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+				if not (spawned[0][uID] or spawned[1][uID]) then
+					Spring.SetUnitPosition(uID, corner[1], corner[2])
+					Spring.MoveCtrl.Enable(uID)
+					Spring.MoveCtrl.SetPosition(uID, corner[1],
+						Spring.GetGroundHeight(corner[1], corner[2]), corner[2])
+					Spring.SetUnitNeutral(uID, true)
+					parked[uID] = true
+				end
+			end
+		end
+	end
+	pureDone = true
+	Spring.Echo("[BARAI_ARENA] pure mode: starters parked and neutralized")
+end
+
+local function restun(frame)
+	if frame % 30 ~= 7 then
+		return
+	end
+	for uID in pairs(parked) do
+		if Spring.ValidUnitID(uID) then
+			local maxH = select(2, Spring.GetUnitHealth(uID)) or 1000
+			Spring.SetUnitHealth(uID, { paralyze = maxH * 100 })
+		else
+			parked[uID] = nil
+		end
+	end
+end
 
 --------------------------------------------------------------------------------
 
@@ -287,6 +335,17 @@ function gadget:UnitDestroyed(unitID, unitDefID, teamID, attackerID)
 end
 
 function gadget:GameFrame(frame)
+	-- Pure mode parks the starters just before the first spawn: late enough
+	-- that every starting unit exists, early enough that nothing was built.
+	if PURE then
+		-- Frame 90: after every starting unit exists, before anything builds.
+		if (not pureDone) and (frame >= 90) then
+			parkStarters()
+		end
+		if pureDone then
+			restun(frame)
+		end
+	end
 	if active then
 		if aliveCount(0) == 0 or aliveCount(1) == 0 or (frame - roundStart) >= ROUND then
 			endRound(frame)
