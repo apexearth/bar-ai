@@ -42,6 +42,19 @@ rides SCOUT tasks), guard=21 (escorts), aa=16. Front (1)'s first target
 is the W->R->death chain: the pull-back's timing and its route, not the
 existence of pulling back.
 
+CAMPAIGN LOG:
+- Iter 1 (rearward-only W destinations + T2-floored comm caution): W-death
+  metric UNMOVED (40% wrong-way vs 34% baseline, 701 deaths), decided W-L
+  3-9. Verdict: the W order is one-shot and the task fights it every tick;
+  order-level fixes cannot win. Next front-1 shape: TASK-level abort on
+  trade-loss (IUnitTask::Abort is bound; superguard proves it) for
+  ATTACK/RAID only — designed, held until iter 2 reads out.
+- Iter 2 (apex_def_eco_s 30 -> 120): the reframing find — apex army share
+  was FINE (43%); the deficit was DEFENCE, stock 11.7k-52k standing vs our
+  0.6k-18k, because 30s of eco budgets 750 metal of towers at benchmark
+  income (the tunable's own comment said "not derived -- measure it").
+  Explains front-sites-won-26x-built-0. Measurement: winrate3 arms.
+
 ## 2026-08-29 — perf spikes attributed: the builder election, protect stack inside it
 
 His standing complaint ("We still have performance spikes in the game which
