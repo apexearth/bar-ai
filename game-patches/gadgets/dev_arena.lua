@@ -237,6 +237,7 @@ local function buildPools()
 		-- itself at a land spawn ("it is very funny when boats spawn").
 		-- Hovers and amphibians keep their invitations -- they can walk.
 		if ud.speed and ud.speed > 0 and not ud.canFly
+			and not ud.canKamikaze
 			and (ud.minWaterDepth or 0) <= 0 then
 			if ud.canResurrect then
 				rezPool[#rezPool + 1] = id
