@@ -35,6 +35,13 @@ at the action before the retreat"); (2) the rear is reachable — the
 perimeter/gate defence work has not yet turned this ledger. Instrument:
 decision-length games + deaths.py fhist, never 6-game win counts.
 
+Action-before-fatal-retreat, decoded (one 4v4, fhist tags before R):
+W=54 (our own withdraw order preceded the death — too late, or the walk
+is the exposure), bomb=50 (air domain), scout=47 (spam-phase fodder
+rides SCOUT tasks), guard=21 (escorts), aa=16. Front (1)'s first target
+is the W->R->death chain: the pull-back's timing and its route, not the
+existence of pulling back.
+
 ## 2026-08-29 — perf spikes attributed: the builder election, protect stack inside it
 
 His standing complaint ("We still have performance spikes in the game which
