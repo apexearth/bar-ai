@@ -157,6 +157,11 @@ float RoleTarget(int role, float armyTarget)
 				* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH) * share;
 	}
 	const float base = armyTarget / 6.f;   // maximum-entropy prior over combat roles
+	// MY SHARE of every census-derived counter, the division the AA branch
+	// above already applies: the role censuses are SIDE-WIDE, so unshared
+	// they charged each of N allies with countering the whole enemy team.
+	// The escort term is our-anchored and stays whole.
+	const float cShr = AnswerShare();
 	float counter = 0.f;
 	if (role == int(Unit::Role::RAIDER.type))
 		// Escort demand is the CONSTRUCTOR METAL it brings back, not a flat
@@ -164,15 +169,15 @@ float RoleTarget(int role, float armyTarget)
 		// the con it stops us writing off.
 		counter = EscortMetalAtRisk()
 			+ (Military::EnemyCostOf(Unit::Role::SKIRM.type)
-				+ Military::EnemyCostOf(Unit::Role::ARTY.type)) * 0.6f;
+				+ Military::EnemyCostOf(Unit::Role::ARTY.type)) * 0.6f * cShr;
 			// rocket bots die to what closes fast (apexearth's counter-chain)
 	else if (role == int(Unit::Role::RIOT.type))
-		counter = Military::EnemyCostOf(Unit::Role::RAIDER.type);
+		counter = Military::EnemyCostOf(Unit::Role::RAIDER.type) * cShr;
 	else if ((role == int(Unit::Role::SKIRM.type))
 			|| (role == int(Unit::Role::ARTY.type)))
-		counter = aiEnemyMgr.GetEnemyCost(RT::STATIC) * 0.5f;
+		counter = aiEnemyMgr.GetEnemyCost(RT::STATIC) * 0.5f * cShr;
 	else if (role == int(Unit::Role::ASSAULT.type))
-		counter = Military::EnemyCostOf(Unit::Role::ASSAULT.type);
+		counter = Military::EnemyCostOf(Unit::Role::ASSAULT.type) * cShr;
 	return base + counter;
 }
 

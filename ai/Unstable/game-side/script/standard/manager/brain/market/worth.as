@@ -113,8 +113,11 @@ float PowerMod(int d)
 // standing preference apex_worth_range expresses.
 float OutrangeMul(int d)
 {
+	// MY SHARE of the outranging census -- side-wide, it saturated the
+	// pressure at 1.0 for every ally in any team game.
 	const float outP = (Military::EnemyCostOf(Unit::Role::SKIRM.type)
-			+ Military::EnemyCostOf(Unit::Role::ARTY.type)) / 3000.f;
+			+ Military::EnemyCostOf(Unit::Role::ARTY.type))
+			* AnswerShare() / 3000.f;
 	const float oP = (outP > 1.f) ? 1.f : outP;
 	if (oP <= 0.05f)
 		return 1.f;

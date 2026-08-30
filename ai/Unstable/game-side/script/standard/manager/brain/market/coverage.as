@@ -435,7 +435,11 @@ void RiskFill()
 	if (host < gRkRaid)
 		host = gRkRaid;
 	gRkHost = host;
-	float foe = Military::FoeMobileMassing();
+	// Same share on the massing carrier: gRkFoeMass's consumer (the hazard
+	// presence fraction) weighs it against MY defended -- the
+	// one-against-all-of-them comparison the massing code already refuses
+	// ("unreachable by construction").
+	float foe = Military::FoeMobileMassing() * shr;
 	if (pr > foe)
 		foe = pr;
 	gRkFoeMass = foe;
@@ -481,7 +485,9 @@ void RiskFillSiege()
 		econM = 0.f;
 	gRkEconM = econM;
 	gRkArmyV = ArmyValue();
-	gRkSeen = Military::EnemyArmyCost();
+	// MY SHARE of the census, as RiskFill above: SiegeWith weighs this
+	// against MY army plus one site's cover.
+	gRkSeen = Military::EnemyArmyCost() * AnswerShare();
 	gRkOurArmy = Military::OurArmyNow();
 	gRkTau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
 }

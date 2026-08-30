@@ -326,7 +326,10 @@ void MeasureReach(int plantId, int conId, const AIFloat3& in from,
 // clock.
 float WaterUncontested()
 {
-	const float foe = Military::EnemyCostOf(Unit::Role::SUB.type);
+	// MY SHARE of their navy against MY army -- the same one-against-all
+	// shape as the rest of tonight's audit.
+	const float foe = Military::EnemyCostOf(Unit::Role::SUB.type)
+			* AnswerShare();
 	if (foe <= 0.f)
 		return 1.f;
 	const float ours = ArmyValue();

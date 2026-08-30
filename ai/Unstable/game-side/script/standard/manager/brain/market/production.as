@@ -570,7 +570,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// undercount, never zero when the threat is real).
 			if ((Catalog::gSurfT[d] <= 0.01f) && (Catalog::gAirT[d] <= 0.01f)) {
 				const float floatVal = Military::EnemyAfloat()
-						? Military::EnemyCostOf(Unit::Role::SUB.type) : 0.f;
+						? (Military::EnemyCostOf(Unit::Role::SUB.type)
+							* AnswerShare()) : 0.f;
 				if (floatVal <= 1.f) {
 					if (prankNow)
 						prank += " " + Catalog::Def(d).GetName() + ":h2o";
