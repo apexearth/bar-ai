@@ -1128,7 +1128,16 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// The pull keeps an OPEN wall slot alive through the evidence gates
 		// below -- see the wallPull comment above the loop. Threat is floored
 		// to 1 first so the shortfall arithmetic stays finite.
-		const bool pullHere = isWall && (wallPull > 0.f) && WallSlotOpen(si);
+		//
+		// NOT ON GROUND THE ENEMY IS STANDING ON: the pull is no-evidence
+		// demand, and where there IS evidence the evidence-priced terms own
+		// the decision. Without this, line slots deep in the contested
+		// midfield fed frames to the enemy army one at a time -- 7 towers
+		// built, 7 lost, walks past 1,100 (line1v1, 2026-08-30). Same gate
+		// and radius the radar gap uses; the line still advances, because
+		// cleared ground stops reading enemy cost.
+		const bool pullHere = isWall && (wallPull > 0.f) && WallSlotOpen(si)
+				&& (ai.GetEnemyCostAt(s, 900.f) < Catalog::gCostM[d]);
 		if (pullHere && (threat < 1.f))
 			threat = 1.f;
 		if ((threat <= 1.f) && !pullHere)
@@ -1193,7 +1202,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		if (pullHere && (wallPull > 0.f)) {
 			float dirW = 1.f;
 			const AIFloat3 foeP = aiEnemyMgr.GetEnemyPos();
-			if (OnMap(foeP)) {
+			// Line slots ARE the front -- full pull along their whole
+			// lateral run, which is what makes the towers a line across the
+			// lane instead of an arc hugging the base.
+			if (!WallSlotLine(si) && OnMap(foeP)) {
 				AIFloat3 toS = s - gPfMid;
 				AIFloat3 toF = foeP - gPfMid;
 				const float lS = sqrt(toS.SqLength2D());

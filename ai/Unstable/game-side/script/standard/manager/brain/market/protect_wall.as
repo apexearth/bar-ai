@@ -35,11 +35,38 @@ array<float>    gWallCover;
 array<float>    gWallHz;
 array<float>    gWallSiege;
 array<bool>     gWallOpen;     // no standing tower of ours covers this slot
+array<bool>     gWallLine;     // slot belongs to the FRONT LINE, not the ring
 array<float>    gWallR;        // the wall's radius per rim bearing
 bool            gWallROk = false;
+// THE FRONT LINE (apexearth, watching a 2v2: "I'm expecting a clear line of
+// towers across the map"). A ring wraps one base; a front is a LINE: slots
+// along the perpendicular to the home->enemy axis, standing at the wall's
+// forward radius, running laterally until the map edge or an ALLY'S LANE --
+// their line continues ours, which is what joins two allies' walls into one
+// front. The ring stays for the flanks and rear the line does not cover.
+bool            gWallLineOk = false;
+AIFloat3        gWallA;        // the line's anchor point
+AIFloat3        gWallF;        // unit home->enemy direction
 int             gWallAt = -999999;
 const int  WALL_MAX_SLOTS = 64;
 const float WALL_QUANT = 256.f;
+
+void WallEmitSlot(const AIFloat3& in s, bool line, float expFrac)
+{
+	bool open = true;
+	for (uint i = 0; open && (i < gPfTwPos.length()); ++i) {
+		if (gPfTwPos[i].distance2D(s) <= gPfTwReach[i])
+			open = false;
+	}
+	const float cv = CoverAt(s);
+	gWallP.insertLast(s);
+	gWallThreat.insertLast(ThreatAt(s));
+	gWallCover.insertLast(cv);
+	gWallHz.insertLast(HazardWith(s, cv));
+	gWallSiege.insertLast(SiegeWith(s, cv, expFrac));
+	gWallOpen.insertLast(open);
+	gWallLine.insertLast(line);
+}
 
 void WallPrep()
 {
@@ -53,7 +80,9 @@ void WallPrep()
 	gWallHz.resize(0);
 	gWallSiege.resize(0);
 	gWallOpen.resize(0);
+	gWallLine.resize(0);
 	gWallROk = false;
+	gWallLineOk = false;
 	if (!gPfRimOk)
 		return;
 	const double _tWall = Perf::T0();
@@ -135,12 +164,59 @@ void WallPrep()
 	RiskFill();
 	RiskFillSiege();
 	const float expFrac = ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
-	// Slots sit ON each wedge's own radius -- polar, never a chord between
-	// vertices: a chord between a big lobe and a small one cut up to 2,000
-	// elmos inside the lobe (measured, first exercise game: rimD -1026 at
-	// election on wall slots).
+	// THE LINE FIRST -- see the header. Anchored at the wall's forward radius
+	// on the enemy bearing, running along the perpendicular until the map
+	// edge (a wall already) or an ally's lane (a slot closer to their home
+	// than ours is theirs to hold -- their line continues ours).
+	const AIFloat3 foeP = aiEnemyMgr.GetEnemyPos();
+	if (OnMap(foeP)) {
+		AIFloat3 fd = foeP - gPfMid;
+		if (fd.SqLength2D() > 1.f) {
+			fd.SafeNormalize2D();
+			const AIFloat3 anchor = gPfMid
+					+ fd * wr[PfRayOf(gPfMid + fd * 1000.f)];
+			if (OnMap(anchor)) {
+				gWallLineOk = true;
+				gWallA = anchor;
+				gWallF = fd;
+				const AIFloat3 lat(-fd.z, 0.f, fd.x);
+				WallEmitSlot(anchor, true, expFrac);
+				for (int sideK = -1; sideK <= 1; sideK += 2) {
+					for (int k = 1; k <= WALL_MAX_SLOTS; ++k) {
+						const AIFloat3 s = anchor
+								+ lat * (pitch * float(k * sideK));
+						if (!OnMap(s))
+							break;
+						bool allyLane = false;
+						const float dUs = s.distance2D(gPfMid);
+						for (uint m = 0; !allyLane && (m < hx.length()); ++m) {
+							if (s.distance2D(AIFloat3(hx[m], 0.f, hz2[m])) < dUs)
+								allyLane = true;
+						}
+						if (allyLane)
+							break;
+						WallEmitSlot(s, true, expFrac);
+						if (int(gWallP.length()) >= WALL_MAX_SLOTS)
+							break;
+					}
+					if (int(gWallP.length()) >= WALL_MAX_SLOTS)
+						break;
+				}
+			}
+		}
+	}
+	// The ring covers what the line does not: slots sit ON each wedge's own
+	// radius -- polar, never a chord between vertices: a chord between a big
+	// lobe and a small one cut up to 2,000 elmos inside the lobe (measured,
+	// first exercise game: rimD -1026 at election on wall slots).
 	const float wedge = 6.2831853f / float(PF_RAYS);
 	for (int b = 0; b < PF_RAYS; ++b) {
+		if (gWallLineOk) {
+			// Within 60 degrees of the enemy bearing the LINE is the wall.
+			const float angC = wedge * (float(b) + 0.5f);
+			if (cos(angC) * gWallF.x + sin(angC) * gWallF.z > 0.5f)
+				continue;
+		}
 		const float arc = wr[b] * wedge;
 		int nb = int(arc / pitch);
 		if (nb < 1)
@@ -166,18 +242,7 @@ void WallPrep()
 			}
 			if (shielded)
 				continue;   // the ally's wall holds this bearing; ours joins it
-			bool open = true;
-			for (uint i = 0; open && (i < gPfTwPos.length()); ++i) {
-				if (gPfTwPos[i].distance2D(s) <= gPfTwReach[i])
-					open = false;
-			}
-			const float cv = CoverAt(s);
-			gWallP.insertLast(s);
-			gWallThreat.insertLast(ThreatAt(s));
-			gWallCover.insertLast(cv);
-			gWallHz.insertLast(HazardWith(s, cv));
-			gWallSiege.insertLast(SiegeWith(s, cv, expFrac));
-			gWallOpen.insertLast(open);
+			WallEmitSlot(s, false, expFrac);
 			if (int(gWallP.length()) >= WALL_MAX_SLOTS)
 				break;
 		}
@@ -198,6 +263,11 @@ float PfWallThreat(uint i) { return gWallThreat[i]; }
 bool WallSlotOpen(uint i)
 {
 	return (i < gWallOpen.length()) && gWallOpen[i];
+}
+
+bool WallSlotLine(uint i)
+{
+	return (i < gWallLine.length()) && gWallLine[i];
 }
 float PfWallCover(uint i)  { return gWallCover[i]; }
 float PfWallHz(uint i)     { return gWallHz[i]; }
@@ -226,6 +296,19 @@ float WallRimDist(const AIFloat3& in p)
 	WallPrep();
 	if (!gWallROk)
 		return 0.f;
+	// In the line's cone, depth is measured against the LINE: signed
+	// distance along the enemy axis, so the line's advance is what strands
+	// a tower there, not the ring radius behind it.
+	if (gWallLineOk) {
+		AIFloat3 d = p - gPfMid;
+		const float l = sqrt(d.SqLength2D());
+		if ((l > 1.f)
+			&& ((d.x * gWallF.x + d.z * gWallF.z) / l > 0.5f))
+		{
+			return (p.x - gWallA.x) * gWallF.x
+					+ (p.z - gWallA.z) * gWallF.z;
+		}
+	}
 	return p.distance2D(gPfMid) - gWallR[PfRayOf(p)];
 }
 
@@ -243,18 +326,20 @@ bool WallStands()
 bool WallAheadHeld(const AIFloat3& in p)
 {
 	WallPrep();
-	if (!gWallROk)
+	if (!gWallROk || (gWallP.length() == 0))
 		return false;
-	AIFloat3 dir = p - gPfMid;
-	if (dir.SqLength2D() < 1.f)
-		return false;
-	dir.SafeNormalize2D();
-	const AIFloat3 wp = gPfMid + dir * gWallR[PfRayOf(p)];
-	for (uint i = 0; i < gPfTwPos.length(); ++i) {
-		if (gPfTwPos[i].distance2D(wp) <= gPfTwReach[i])
-			return true;
+	// The wall ahead of a tower is its NEAREST slot -- line or ring, the
+	// section it belonged to. Held means a standing tower covers that slot.
+	uint ni = 0;
+	float nd = 1e12f;
+	for (uint i = 0; i < gWallP.length(); ++i) {
+		const float dd = p.distance2D(gWallP[i]);
+		if (dd < nd) {
+			nd = dd;
+			ni = i;
+		}
 	}
-	return false;
+	return !gWallOpen[ni];
 }
 
 // Of the wall segment this candidate's reach spans, how much was open? Full
