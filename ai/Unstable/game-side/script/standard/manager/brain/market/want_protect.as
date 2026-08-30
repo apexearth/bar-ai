@@ -297,13 +297,22 @@ float LineClosure(const AIFloat3& in extraAt, float extraReach)
 array<AIFloat3> gClRingP;
 array<bool>     gClRingOpen;
 bool            gClRingOk = false;
+// The ring's own centre and radius, kept for the candidate generator below --
+// and a memo on the field stamp: the ring is a function of the field and the
+// standing towers, both of which only move on a PfRebuild.
+AIFloat3        gClMid;
+float           gClRingR = 0.f;
+int             gClRingAt = -999999;
 
 void ClosurePrep()
 {
+	PfRebuild();
+	if (gClRingAt == gPfAt)
+		return;
+	gClRingAt = gPfAt;
 	gClRingOk = false;
 	gClRingP.resize(0);
 	gClRingOpen.resize(0);
-	PfRebuild();
 	AIFloat3 c;
 	float extent = 0.f;
 	if (!BaseCentroid(c, extent))
@@ -312,6 +321,8 @@ void ClosurePrep()
 	if (ring <= 1.f)
 		return;
 	gClRingOk = true;
+	gClMid = c;
+	gClRingR = ring;
 	for (int b = 0; b < CLOSE_RAYS; ++b) {
 		const float ang = 6.2831853f * float(b) / float(CLOSE_RAYS);
 		const AIFloat3 p = c + AIFloat3(cos(ang), 0.f, sin(ang)) * ring;
@@ -691,6 +702,8 @@ array<array<float>@> gDsZ;
 array<array<bool>@> gDsFront;
 array<int> gDsAt;
 array<int> gDsLineN;
+int gDsFillFrame = -1;
+int gDsFillN = 0;
 void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		float siteWave, float siegeFrac)
 {
@@ -704,6 +717,17 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	}
 	if ((gDsAt[d] > 0) && (ai.frame - gDsAt[d] < 2 * SECOND))
 		return;
+	// A bound on WORK per frame, not on defence: one frame refreshes at most
+	// two def fills (the worst single builder call was 126ms, most of it
+	// here); a def that already has a cache serves it one election longer.
+	// A def with no cache yet always fills, or it could never enter at all.
+	if (gDsFillFrame != ai.frame) {
+		gDsFillFrame = ai.frame;
+		gDsFillN = 0;
+	}
+	if ((gDsAt[d] > 0) && (gDsFillN >= 2))
+		return;
+	++gDsFillN;
 	gDsAt[d] = (ai.frame > 0) ? ai.frame : 1;
 	const double _tSites = Perf::T0();
 	array<AIFloat3> sites;

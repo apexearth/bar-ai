@@ -400,8 +400,17 @@ float gRkSeen = 0.f;
 int   gRkGrad = 0;
 float gRkGHx = 0.f, gRkGHz = 0.f, gRkGDx = 0.f, gRkGDz = 0.f, gRkGSpan = 1.f;
 
+// Frame memos: every input below moves on event/frame granularity, so within
+// one frame a refill returns the same numbers -- and the protect stack asks
+// per def per builder election.
+int gRkFillAt = -1;
+int gRkSiegeFillAt = -1;
+
 void RiskFill()
 {
+	if (gRkFillAt == ai.frame)
+		return;
+	gRkFillAt = ai.frame;
 	gRkThreatR = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
 	gRkTau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
 	const float horiz = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
@@ -455,6 +464,9 @@ void RiskFill()
 // and only this reading needs it.
 void RiskFillSiege()
 {
+	if (gRkSiegeFillAt == ai.frame)
+		return;
+	gRkSiegeFillAt = ai.frame;
 	float econM = gAssetsM - gProtM;
 	if (econM < 0.f)
 		econM = 0.f;
