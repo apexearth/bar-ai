@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..4d340ad 100644
+index aeea933..4c044b9 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,18 @@
@@ -121,7 +121,32 @@ index aeea933..4d340ad 100644
  	lastFrame = frame;
  	if (isResigned) {
  		Release(RELEASE_RESIGN);
-@@ -850,11 +897,110 @@ int CCircuitAI::Update(int frame)
+@@ -832,16 +879,24 @@ int CCircuitAI::Update(int frame)
+ 		}
+ 	}
+ 
++	const auto tAlly0 = std::chrono::steady_clock::now();
+ 	allyTeam->Update(this);
++	const auto tJobs0 = std::chrono::steady_clock::now();
++	perfAllyUs += std::chrono::duration_cast<std::chrono::microseconds>(tJobs0 - tAlly0).count();
+ 
+ 	scheduler->ProcessJobs(frame);
++	perfJobsUs += std::chrono::duration_cast<std::chrono::microseconds>(
++			std::chrono::steady_clock::now() - tJobs0).count();
+ 	if (frame % TEAM_SLOWUPDATE_RATE == skirmishAIId) {
+ 		// NOTE: Probably should be last in ProcessJobs queue, after all income updates if it was in the same frame.
+ 		//       Hence it is not:
+ 		// scheduler->RunJobEvery(CScheduler::GameJob(&CInitScript::Update, script), TEAM_SLOWUPDATE_RATE, skirmishAIId);
+ 		script->Update();
+ 	}
++	const auto tAct0 = std::chrono::steady_clock::now();
+ 	UpdateActions();
++	perfActUs += std::chrono::duration_cast<std::chrono::microseconds>(
++			std::chrono::steady_clock::now() - tAct0).count();
+ 
+ #ifdef DEBUG_VIS
+ 	if (frame % FRAMES_PER_SEC == 0) {
+@@ -850,11 +905,117 @@ int CCircuitAI::Update(int frame)
  	}
  #endif
  
@@ -190,6 +215,13 @@ index aeea933..4d340ad 100644
 +				perfFrameCalls, perfFrameUs / 1000.f,
 +				(perfFrameCalls > 0) ? float(perfFrameUs) / float(perfFrameCalls) : 0.f,
 +				perfFrameMaxUs / 1000.f);
++		LOG("apex: perf split allyMs=%.1f jobsMs=%.1f actMs=%.1f otherMs=%.1f",
++				perfAllyUs / 1000.f, perfJobsUs / 1000.f, perfActUs / 1000.f,
++				(perfFrameUs > perfAllyUs + perfJobsUs + perfActUs)
++					? (perfFrameUs - perfAllyUs - perfJobsUs - perfActUs) / 1000.f : 0.f);
++		perfAllyUs = 0;
++		perfJobsUs = 0;
++		perfActUs = 0;
 +		perfFrameUs = 0;
 +		perfFrameMaxUs = 0;
 +		perfFrameCalls = 0;
@@ -232,7 +264,7 @@ index aeea933..4d340ad 100644
  #ifdef DEBUG_VIS
  	const char cmdBreak[]   = "~break";
  	const char cmdReload[]  = "~reload";
-@@ -1147,6 +1293,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1147,6 +1308,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int weaponId, AIFloat3 dir)
  {
  	unit->SetDamagedFrame(lastFrame);
@@ -240,7 +272,7 @@ index aeea933..4d340ad 100644
  	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
  
  	if (IsValidWeaponDefId(weaponId)) {
-@@ -1166,14 +1313,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+@@ -1166,14 +1328,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
  
  int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -280,7 +312,7 @@ index aeea933..4d340ad 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1288,6 +1456,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+@@ -1288,6 +1471,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
  
  int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
  {
@@ -288,7 +320,7 @@ index aeea933..4d340ad 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1485,7 +1654,828 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1669,828 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -1119,7 +1151,7 @@ index aeea933..4d340ad 100644
  
  void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..417261a 100644
+index b4f4f40..ee7b209 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
 @@ -16,6 +16,7 @@
@@ -1389,7 +1421,7 @@ index b4f4f40..417261a 100644
  // >>> UnitDefs ---- BEGIN
  public:
  	using CircuitDefs = std::vector<CCircuitDef>;  // UnitDefId=0 is not valid, @see rts/Sim/Units/UnitDefHandler.h
-@@ -317,6 +533,14 @@ private:
+@@ -317,6 +533,19 @@ private:
  	bool isResigned : 1;
  	bool isSlave : 1;
  	int lastFrame;
@@ -1399,6 +1431,11 @@ index b4f4f40..417261a 100644
 +	uint64_t perfFrameMaxUs = 0;
 +	unsigned perfFrameCalls = 0;
 +	int perfFrameNextLog = 0;
++	// apex: the frame's cost split into its four top-level calls, so the
++	// non-script remainder stops being one opaque bucket.
++	uint64_t perfAllyUs = 0;
++	uint64_t perfJobsUs = 0;
++	uint64_t perfActUs = 0;
 +	int squadDiagNextLog = 0;
 +	int ghostPurgeNext = 0;
  	int skirmishAIId;
@@ -10951,7 +10988,7 @@ index b4b43c1..d2e258e 100644
  		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..51fb6b4 100644
+index 0d59b65..a6cba0d 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,23 @@
@@ -11516,7 +11553,85 @@ index 0d59b65..51fb6b4 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -418,51 +814,695 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -413,56 +809,773 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+ 
+ 	const int targetTile = manager->GetCircuit()->GetInflMap()->Pos2Index(tPos);
+ 	const float alpha = std::atan2(dir.z, dir.x);
++	// apex: WRAP THE EDGE AT CONTACT, IN EVERY TASK. The first wrap lived in
++	// AttackTask::FindTarget and never fired once across 104 big arena
++	// rounds -- arena and DEFEND-heavy real fights never route through it
++	// (apexearth: "If your code never fired we should fix it. I doubt there
++	// was *never* a moment when it could have applied."). This is the level
++	// every fight task funnels through: when the engaged enemy group is
++	// wider than our envelope, rotate the squad's arc bearing toward the
++	// group's nearer lateral END, so the formation stands off the flank and
++	// rolls the line up instead of pressing its centre into the wrapped
++	// pocket (his encirclement doctrine; flankingBonus is the mechanic).
++	float wrapAlpha = alpha;
++	{
++		CCircuitAI* wc = manager->GetCircuit();
++		if (wc->GetTunable("apex_wrap_edge", 1.f) > 0.f) {
++			const std::vector<CEnemyManager::SEnemyGroup>& wgroups =
++					wc->GetEnemyManager()->GetEnemyGroups();
++			const CEnemyManager::SEnemyGroup* wg = nullptr;
++			float wbest = SQUARE(1600.f);
++			for (const CEnemyManager::SEnemyGroup& g : wgroups) {
++				const float sq = g.pos.SqDistance2D(tPos);
++				if (sq < wbest) {
++					wbest = sq;
++					wg = &g;
++				}
++			}
++			bool wrapped = false;
++			if ((wg != nullptr) && (wg->units.size() >= 4)) {
++				const AIFloat3 adir(cosf(alpha), 0.f, sinf(alpha));
++				const AIFloat3 wperp(-adir.z, 0.f, adir.x);
++				float wlo = 0.f, whi = 0.f;
++				int wcount = 0;
++				for (const ICoreUnit::Id eId : wg->units) {
++					CEnemyUnit* eu = wc->GetEnemyManager()->GetEnemyUnit(eId);
++					if (eu == nullptr) {
++						continue;
++					}
++					const AIFloat3& ep = eu->GetPos();
++					const float t = wperp.x * (ep.x - tPos.x)
++							+ wperp.z * (ep.z - tPos.z);
++					wlo = std::min(wlo, t);
++					whi = std::max(whi, t);
++					++wcount;
++				}
++				const float wrapMin = highestRange
++						* wc->GetTunable("apex_wrap_min_w", 1.5f);
++				if ((wcount >= 4) && (whi - wlo > wrapMin)) {
++					if (wrapSide == 0) {
++						const AIFloat3& sp = leader->GetPos(frame);
++						const float myT = wperp.x * (sp.x - tPos.x)
++								+ wperp.z * (sp.z - tPos.z);
++						wrapSide = (myT >= 0.f) ? 1 : -1;
++					}
++					const float over = highestRange
++							* wc->GetTunable("apex_wrap_over", 0.75f);
++					const float wend = (wrapSide > 0) ? (whi + over) : (wlo - over);
++					const float wa = atan2f(wperp.z * wend, wperp.x * wend);
++					float wd = wa - alpha;
++					while (wd > M_PI) { wd -= 2.f * M_PI; }
++					while (wd < -M_PI) { wd += 2.f * M_PI; }
++					wrapAlpha = alpha + wd * wc->GetTunable("apex_wrap_arc", 0.6f);
++					wrapped = true;
++					if (frame >= wrapLogFrame + FRAMES_PER_SEC * 20) {
++						wrapLogFrame = frame;
++						wc->LOG("apex: wrap-arc t=%i w=%.0f side=%i shift=%.2f n=%d",
++								wc->GetTeamId(), whi - wlo, wrapSide, wd, wcount);
++					}
++				}
++			}
++			if (!wrapped) {
++				wrapSide = 0;
++			}
++		}
++	}
+ 	CCircuitDef* edef = GetTarget()->GetCircuitDef();
+ 	const bool isStatic = (edef != nullptr) && !edef->IsMobile();
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -12010,7 +12125,7 @@ index 0d59b65..51fb6b4 100644
 +				// vetoes any step into worse ground, so this cannot orbit a unit
 +				// into a second enemy.
 +				const float orbit = ORBIT_RATE * (frame / (float)FRAMES_PER_SEC) * orbitDir;
-+				const float angle = alpha + beta + orbit;
++				const float angle = wrapAlpha + beta + orbit;
 +				float r = (iterNum == 0) ? range0 : range;
 +				// Screened, not withdrawn: a coward stands further out on the
 +				// same ring instead of leaving the fight, so healthier
@@ -12222,7 +12337,7 @@ index 0d59b65..51fb6b4 100644
  			}
  
  			beta += delta;
-@@ -478,7 +1518,9 @@ void ISquadTask::Log()
+@@ -478,7 +1591,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
@@ -12234,10 +12349,10 @@ index 0d59b65..51fb6b4 100644
  		circuit->GetDrawer()->AddPoint(leader->GetPos(circuit->GetLastFrame()), leader->GetCircuitDef()->GetDef()->GetName());
  	}
 diff --git a/src/circuit/task/fighter/SquadTask.h b/src/circuit/task/fighter/SquadTask.h
-index a058d59..1e5a03e 100644
+index a058d59..6bc1ee1 100644
 --- a/src/circuit/task/fighter/SquadTask.h
 +++ b/src/circuit/task/fighter/SquadTask.h
-@@ -15,8 +15,97 @@
+@@ -15,8 +15,99 @@
  
  namespace circuit {
  
@@ -12332,10 +12447,12 @@ index a058d59..1e5a03e 100644
  protected:
 +	// apex: the squad's sticky "finish the wounded" target id (0 = none).
 +	int finishId = 0;
++	int wrapSide = 0;
++	int wrapLogFrame = -1000000;
  	ISquadTask(ITaskModule* mgr, FightType type, float powerMod);
  public:
  	virtual ~ISquadTask();
-@@ -25,11 +114,28 @@ public:
+@@ -25,11 +116,28 @@ public:
  	virtual void RemoveAssignee(CCircuitUnit* unit) override;
  
  	virtual void Merge(ISquadTask* task);
@@ -12364,7 +12481,7 @@ index a058d59..1e5a03e 100644
  
  private:
  	void FindLeader(decltype(units)::iterator itBegin, decltype(units)::iterator itEnd);
-@@ -39,8 +145,16 @@ private:
+@@ -39,8 +147,16 @@ private:
  
  protected:
  	ISquadTask* GetMergeTask();
@@ -14060,6 +14177,94 @@ index 63cd924..f6230d1 100644
  	float speed;
  	int pathIterator;
  	int increment;
+diff --git a/src/circuit/unit/ally/AllyTeam.cpp b/src/circuit/unit/ally/AllyTeam.cpp
+index 48ff00b..ac61405 100644
+--- a/src/circuit/unit/ally/AllyTeam.cpp
++++ b/src/circuit/unit/ally/AllyTeam.cpp
+@@ -28,6 +28,9 @@
+ 
+ #include "AIFloat3.h"
+ #include "Team.h"
++#include "Log.h"
++
++#include <chrono>
+ 
+ namespace circuit {
+ 
+@@ -140,9 +143,10 @@ void CAllyTeam::Release()
+ 	quadField.Kill();
+ }
+ 
++// apex: the throttle below must not defeat the force -- jump clear of it.
+ void CAllyTeam::ForceUpdateFriendlyUnits()
+ {
+-	--lastUpdate;
++	lastUpdate = -1000000;
+ 	UpdateFriendlyUnits();
+ }
+ 
+@@ -153,10 +157,18 @@ void CAllyTeam::UpdateFriendlyUnits()
+ 	// Options:
+ 	//   1) save CCircuitDef::Id instead of pointer. But u->GetCircuitDef() is too spread out to fix it now.
+ 	//   2) Move friendlyUnits from CAllyTeam level to CCircuitAI (and eat more memory and cpu on updates for each ai instance).
+-	if (lastUpdate >= circuit->GetLastFrame()) {
++	// apex: half a second of tolerance, not one frame -- measured 630
++	// rebuilds a minute at 1,151 units (1.8s of every game-minute) because
++	// any task update may demand the list. Consumers already tolerate
++	// intra-frame staleness (a death after the frame's rebuild dangles
++	// until the next one); this is the same contract, wider.
++	// ForceUpdateFriendlyUnits stays the exact path.
++	constexpr int FRIENDLY_REFRESH_FRAMES = 15;
++	if (circuit->GetLastFrame() - lastUpdate < FRIENDLY_REFRESH_FRAMES) {
+ 		return;
+ 	}
+ 
++	const auto tFr0 = std::chrono::steady_clock::now();
+ 	for (auto& kv : friendlyUnits) {
+ 		delete kv.second;
+ 	}
+@@ -170,6 +182,16 @@ void CAllyTeam::UpdateFriendlyUnits()
+ 		friendlyUnits[unitId] = unit;
+ 	}
+ 	lastUpdate = circuit->GetLastFrame();
++	perfFrUs += std::chrono::duration_cast<std::chrono::microseconds>(
++			std::chrono::steady_clock::now() - tFr0).count();
++	++perfFrCalls;
++	if (lastUpdate >= perfFrNextLog) {
++		perfFrNextLog = lastUpdate + 1800;
++		circuit->LOG("apex: perf friendly calls=%u totalMs=%.1f units=%i",
++				perfFrCalls, perfFrUs / 1000.f, (int)friendlyUnits.size());
++		perfFrUs = 0;
++		perfFrCalls = 0;
++	}
+ }
+ 
+ CAllyUnit* CAllyTeam::GetFriendlyUnit(ICoreUnit::Id unitId) const
+diff --git a/src/circuit/unit/ally/AllyTeam.h b/src/circuit/unit/ally/AllyTeam.h
+index 5d4f29e..de38875 100644
+--- a/src/circuit/unit/ally/AllyTeam.h
++++ b/src/circuit/unit/ally/AllyTeam.h
+@@ -15,6 +15,7 @@
+ #include <memory>
+ #include <map>
+ #include <unordered_set>
++#include <cstdint>
+ 
+ namespace springai {
+ 	class AIFloat3;
+@@ -119,6 +120,12 @@ private:
+ 	void ApplyAuthority(CCircuitAI* newOwner);
+ 
+ 	CCircuitAI* circuit;  // authority
++	// apex: friendly-list rebuild cost -- a delete+new of every ally unit
++	// plus an engine call per unit, demanded from task updates up to once
++	// a frame; counted here because no other timer can see it.
++	uint64_t perfFrUs = 0;
++	unsigned perfFrCalls = 0;
++	int perfFrNextLog = 0;
+ 	std::shared_ptr<IMainJob> releaseTask;
+ 	TeamIds teamIds;
+ 	utils::CRegion startBox;
 diff --git a/src/circuit/unit/enemy/EnemyManager.cpp b/src/circuit/unit/enemy/EnemyManager.cpp
 index 091a710..27eaf8d 100644
 --- a/src/circuit/unit/enemy/EnemyManager.cpp

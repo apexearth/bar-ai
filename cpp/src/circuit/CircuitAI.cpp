@@ -879,16 +879,24 @@ int CCircuitAI::Update(int frame)
 		}
 	}
 
+	const auto tAlly0 = std::chrono::steady_clock::now();
 	allyTeam->Update(this);
+	const auto tJobs0 = std::chrono::steady_clock::now();
+	perfAllyUs += std::chrono::duration_cast<std::chrono::microseconds>(tJobs0 - tAlly0).count();
 
 	scheduler->ProcessJobs(frame);
+	perfJobsUs += std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - tJobs0).count();
 	if (frame % TEAM_SLOWUPDATE_RATE == skirmishAIId) {
 		// NOTE: Probably should be last in ProcessJobs queue, after all income updates if it was in the same frame.
 		//       Hence it is not:
 		// scheduler->RunJobEvery(CScheduler::GameJob(&CInitScript::Update, script), TEAM_SLOWUPDATE_RATE, skirmishAIId);
 		script->Update();
 	}
+	const auto tAct0 = std::chrono::steady_clock::now();
 	UpdateActions();
+	perfActUs += std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - tAct0).count();
 
 #ifdef DEBUG_VIS
 	if (frame % FRAMES_PER_SEC == 0) {
@@ -962,6 +970,13 @@ int CCircuitAI::Update(int frame)
 				perfFrameCalls, perfFrameUs / 1000.f,
 				(perfFrameCalls > 0) ? float(perfFrameUs) / float(perfFrameCalls) : 0.f,
 				perfFrameMaxUs / 1000.f);
+		LOG("apex: perf split allyMs=%.1f jobsMs=%.1f actMs=%.1f otherMs=%.1f",
+				perfAllyUs / 1000.f, perfJobsUs / 1000.f, perfActUs / 1000.f,
+				(perfFrameUs > perfAllyUs + perfJobsUs + perfActUs)
+					? (perfFrameUs - perfAllyUs - perfJobsUs - perfActUs) / 1000.f : 0.f);
+		perfAllyUs = 0;
+		perfJobsUs = 0;
+		perfActUs = 0;
 		perfFrameUs = 0;
 		perfFrameMaxUs = 0;
 		perfFrameCalls = 0;

@@ -539,6 +539,11 @@ private:
 	uint64_t perfFrameMaxUs = 0;
 	unsigned perfFrameCalls = 0;
 	int perfFrameNextLog = 0;
+	// apex: the frame's cost split into its four top-level calls, so the
+	// non-script remainder stops being one opaque bucket.
+	uint64_t perfAllyUs = 0;
+	uint64_t perfJobsUs = 0;
+	uint64_t perfActUs = 0;
 	int squadDiagNextLog = 0;
 	int ghostPurgeNext = 0;
 	int skirmishAIId;
