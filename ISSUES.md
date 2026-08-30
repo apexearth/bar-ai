@@ -1,5 +1,28 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 (night) — FIGHT-LOGIC CHAPTER CLOSED (arena campaign)
+
+The stack, each landed with its own commit and A/B arm: hold-committed
+(no solo pull-outs under fire; deaths-with-W 38% -> 5-9%), dry-kite
+cancelled (apex_brawl_stand: no backstep to where our own guns are dry),
+armmar threat surf 0.5 -> 1.0 (Marauders counted as half in every
+strength sum), runner-discount (retreating/ordered-back allies count
+zero in OutgunnedHere), wrap-edge at ring placement (apex_wrap_arc;
+fires in EVERY fight task -- the FindTarget version fired zero times in
+104 rounds). Verification game 710: 0 compile errors, 33 wrap-arc
+fires, zero contaminated rounds. Watch-game survival edges: pre-fix
+-0.09 (his damage-efficiency read) -> +0.013 -> +0.039 -> -0.005
+(single-game sigma ~0.04; pooled paired arms remain the instrument).
+Arena instrument final form: ranked formations, 2-6 defs x 6-20, no AA,
+no kamikaze (selfDCountdown==0 excluded), rez adoption, neverend,
+60-min x 3-seed x both-orientation arms.
+
+His verdict watching a real tournament: "it was clear at this point our
+fighting was not our downfall -- it was a lack of nano turrets around
+our gantries." The gantry-nano saga is EXPLICITLY off-limits without a
+fresh ask (see memory gantry-nano-saga): ~2 dozen failed in-the-box
+attempts; needs a design change, proposed before patched.
+
 ## 2026-08-29 (arena) — amphibious units act cowardly (OPEN)
 
 apexearth, watching arena rounds: "Not sure why but our amphibious tanks
