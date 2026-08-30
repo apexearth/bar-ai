@@ -1164,6 +1164,94 @@ void PeelSurplus()
 	}
 }
 
+// BACKUP CONSOLIDATION (apexearth 2026-08-30, six energy frames rising at
+// once, one at ETA 64m, one abandoned: "if it does happen again, they should
+// all focus their efforts on the most efficient energy project. (taking in
+// to account the TTE efficiency (time to energy))"). The energy fold stops
+// the fan-out at request time; this rung is for the state where several
+// manned energy sites are ALREADY rising. While the best time-to-energy site
+// still has room for hands, workers on every other energy site go back to
+// the auction (RemoveUnit -> idle -> fresh election), where the fold sends
+// them to that best site. The worse frames stand part-paid and unmanned;
+// they are adopted in TTE order once the best one saturates or finishes.
+int gConsolidated = 0;
+int gNextConsLog = 0;
+void ConsolidateEnergy()
+{
+	if (ai.GetTunable("apex_assist_release", TUNE_ASSIST_RELEASE) <= 0.f)
+		return;
+	// Same bar as the fold: wind and other trinkets finish in seconds and
+	// are not worth churning hands over.
+	float minM = ai.GetTunable("apex_join_min_m", TUNE_JOIN_MIN_M);
+	if (minM > 150.f)
+		minM = 150.f;
+	IUnitTask@ bestT = null;
+	float bestScore = 0.f;
+	uint sites = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.GetType() != Task::Type::BUILDER))
+			continue;
+		const CCircuitDef@ d = t.buildDef;
+		if ((d is null) || (t.target is null) || (d.costM < minM))
+			continue;   // walkers re-elect on their own
+		const float makeE = aiEconomyMgr.GetEnergyMake(d);
+		if (makeE <= 1.f)
+			continue;
+		const uint busy = Workers(t);
+		if (busy == 0)
+			continue;
+		++sites;
+		const float score = Market::EnergyTTE(makeE, d.costM, Progress(t), busy);
+		if ((bestT is null) || (score > bestScore)) {
+			bestScore = score;
+			@bestT = t;
+		}
+	}
+	if ((sites < 2) || (bestT is null))
+		return;
+	// Only while the best site can absorb them; otherwise peeled hands
+	// would bounce between sites.
+	if (Workers(bestT) >= SiteWorkerCap(bestT.buildDef))
+		return;
+	int moved = 0;
+	const int PEEL_PER_TICK = 3;
+	for (uint i = 0; (i < gLive.length()) && (moved < PEEL_PER_TICK); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t is bestT)
+			|| (t.GetType() != Task::Type::BUILDER))
+			continue;
+		const CCircuitDef@ d = t.buildDef;
+		if ((d is null) || (t.target is null) || (d.costM < minM)
+			|| (aiEconomyMgr.GetEnergyMake(d) <= 1.f))
+			continue;
+		array<CCircuitUnit@>@ crew = t.GetUnits();
+		while ((crew !is null) && (crew.length() > 0) && (moved < PEEL_PER_TICK)) {
+			CCircuitUnit@ top = null;
+			for (uint c = 0; c < crew.length(); ++c) {
+				CCircuitUnit@ u2 = crew[c];
+				if (u2 is null)
+					continue;
+				if ((top is null) || (int(u2.id) > int(top.id)))
+					@top = u2;
+			}
+			if (top is null)
+				break;
+			t.RemoveUnit(top);
+			++gConsolidated;
+			++moved;
+			@crew = t.GetUnits();
+		}
+	}
+	if ((moved > 0) && (ai.frame >= gNextConsLog)) {
+		gNextConsLog = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: energy consolidate " + moved
+			+ " hand(s) -> " + ((bestT.buildDef !is null)
+				? bestT.buildDef.GetName() : "?")
+			+ " (total " + gConsolidated + ")");
+	}
+}
+
 // The def of a live FACTORY request, if any -- so a joiner helps build what
 // was actually ASKED. Joining with the joiner's own preferred def is not a
 // join: Take() finds no task for that def and creates a second plant.

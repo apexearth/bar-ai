@@ -111,10 +111,27 @@ IUnitTask@ JoinBig(CCircuitDef@ def)
 // 9,000m fusion being built beside it and went to place the advsol instead
 // (apexearth 2026-08-28: "our T1 cons will then go make an advanced solar
 // instead of going to help the T2 fusion being made. Our join logic seems
-// to only care about assisting our own tier"). Any MANNED live energy job
-// at least apex_join_min_m big takes the asker: capability is needed to
-// PLACE a def, not to lathe a standing frame. Biggest job wins;
-// WorthJoining still prices the walk against the job's own remaining bill.
+// to only care about assisting our own tier"). Any live energy job at
+// least ~150m big takes the asker: capability is needed to PLACE a def,
+// not to lathe a standing frame. WorthJoining still prices the walk
+// against the job's own remaining bill.
+//
+// RANKED BY TIME-TO-ENERGY (apexearth 2026-08-30, six energy frames rising
+// at once, one at ETA 64m: "they should all focus their efforts on the most
+// efficient energy project. (taking in to account the TTE efficiency (time
+// to energy))"): e/s per second of remaining build with this asker's hands
+// added, so a 55% fusion outranks an 11% afus however big the afus is.
+float EnergyTTE(float makeE, float costM, float prog, uint busy)
+{
+	const float remainM = costM * (1.f - ((prog < 0.f) ? 0.f : prog));
+	if (remainM <= 1.f)
+		return 0.f;   // effectively done; another pair of hands adds nothing
+	float drain = ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN);
+	if (drain <= 1.f)
+		drain = 7.f;
+	return makeE * float(busy + 1) * drain / remainM;
+}
+
 IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 {
 	// 150, not apex_join_min_m: the 500 bar excluded the 370m advanced
@@ -125,23 +142,35 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 	float minM = ai.GetTunable("apex_join_min_m", TUNE_JOIN_MIN_M);
 	if (minM > 150.f)
 		minM = 150.f;
+	// HANDS BEFORE SITES: while a stall or an overflowing bank licenses
+	// parallel energy, tier discipline yields -- a bigger elected want folds
+	// onto the smaller job already rising, because hands on a standing frame
+	// bring power sooner than a fresh, larger hole in the ground. Outside
+	// that regime the one-direction rule stands (a fusion want must not
+	// babysit a solar and starve the tier climb).
+	const bool handsFirst = HardEStall() || EnergyShortOfOrdered()
+			|| (MCostScale() < 1.f);
 	IUnitTask@ best = null;
-	float bestCost = 0.f;
+	float bestScore = 0.f;
 	for (uint i = 0; i < Requests::gLive.length(); ++i) {
 		IUnitTask@ cand = Requests::gLive[i];
 		if ((cand is null) || cand.IsDead() || (cand.buildDef is null))
 			continue;
 		const float cost = cand.buildDef.costM;
-		if ((cost < minM) || (cost <= bestCost))
+		if (cost < minM)
 			continue;
-		if (aiEconomyMgr.GetEnergyMake(cand.buildDef) <= 1.f)
+		const float makeE = aiEconomyMgr.GetEnergyMake(cand.buildDef);
+		if (makeE <= 1.f)
 			continue;
-		if ((want !is null) && (cost < want.costM))
+		if (!handsFirst && (want !is null) && (cost < want.costM))
 			continue;   // never downgrade a bigger want into assisting
 		const uint busy = Requests::Workers(cand);
-		if (busy == 0)
-			continue;   // unmanned is orphan/claim business, not a join
-		if (busy >= Requests::SiteWorkerCap(cand.buildDef))
+		// An abandoned frame IS a candidate: its bill is part-paid and
+		// nobody else will finish it. Unmanned with no frame yet stays
+		// claim business (placing needs build capability).
+		if ((busy == 0) && (cand.target is null))
+			continue;
+		if ((busy > 0) && (busy >= Requests::SiteWorkerCap(cand.buildDef)))
 			continue;
 		if ((unit !is null) && !unit.circuitDef.CanBuild(cand.buildDef)
 			&& (cand.target is null))
@@ -149,12 +178,15 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 		const AIFloat3 where = cand.GetBuildPos();
 		if (!OnMap(where))
 			continue;
+		const float prog = Requests::Progress(cand);
 		if ((unit !is null) && !Requests::WorthJoining(
-				unit.GetPos(ai.frame).distance2D(where),
-				Requests::Progress(cand), cost, busy))
+				unit.GetPos(ai.frame).distance2D(where), prog, cost, busy))
 			continue;
-		bestCost = cost;
-		@best = cand;
+		const float score = EnergyTTE(makeE, cost, prog, busy);
+		if ((best is null) || (score > bestScore)) {
+			bestScore = score;
+			@best = cand;
+		}
 	}
 	if ((best !is null) && (unit !is null) && (best.buildDef !is null)
 		&& !unit.circuitDef.CanBuild(best.buildDef))
@@ -165,7 +197,60 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 			+ " (cross-tier: wanted "
 			+ ((want !is null) ? want.GetName() : "?") + ")");
 	}
-	return best;
+	if (best !is null)
+		return best;
+	// A frame with NO task at all (the request died with its builder) only
+	// ever came back through the per-def resume in Requests::Take, so an
+	// orphaned fusion frame sat at "ETA ???" while new energy founded beside
+	// it. Adopt the best energy orphan by the same TTE ranking.
+	if (unit is null)
+		return null;
+	const AIFloat3 from = unit.GetPos(ai.frame);
+	CCircuitUnit@ frame = null;
+	float frameScore = 0.f;
+	for (uint i = 0; i < gComDef.length(); ++i) {
+		if (!ComIsOrphan(i))
+			continue;
+		const int d = gComDef[i];
+		if (!Catalog::ValidId(d) || (Catalog::gMakeE[d] <= 1.f)
+			|| (Catalog::gCostM[d] < minM))
+			continue;
+		CCircuitUnit@ f = ai.GetTeamUnit(gComId[i]);
+		if (f is null)
+			continue;
+		const float h = f.GetHealthPercent();
+		const float score = EnergyTTE(Catalog::gMakeE[d], Catalog::gCostM[d],
+				(h < 0.f) ? 0.f : h, 0);
+		if ((frame is null) || (score > frameScore)) {
+			frameScore = score;
+			@frame = f;
+		}
+	}
+	if (frame is null)
+		return null;
+	const AIFloat3 at = frame.GetPos(ai.frame);
+	if (Builder::ThreatFor(unit, at) > Builder::CON_THREAT_VETO)
+		return null;   // abandoned because the ground is hot; still is
+	float done = frame.GetHealthPercent();
+	if (done < 0.f)
+		done = 0.f;
+	else if (done > 1.f)
+		done = 1.f;
+	const float costA = (frame.circuitDef !is null) ? frame.circuitDef.costM : 500.f;
+	if (!Requests::WorthJoining(from.distance2D(at), done, costA, 0))
+		return null;
+	float drain = ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN);
+	if (drain <= 1.f)
+		drain = 7.f;
+	const int hold = int(costA * (1.f - done) / drain) + 10;
+	IUnitTask@ res = aiBuilderMgr.Enqueue(
+			TaskB::Guard(Task::Priority::NORMAL, frame, false, hold * SECOND));
+	if (res !is null)
+		AiLog("apex: adopt energy orphan t=" + ai.teamId + " "
+			+ unit.circuitDef.GetName() + " #" + unit.id + " -> "
+			+ ((frame.circuitDef !is null) ? frame.circuitDef.GetName() : "?")
+			+ " done=" + formatFloat(done, "", 0, 2));
+	return res;
 }
 
 // The walk risk's spatial read, cached: GetEnemyCostAt is an engine sweep
