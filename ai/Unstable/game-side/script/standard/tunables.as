@@ -1042,6 +1042,12 @@ const float TUNE_AIR_CLUSTER_R = 900.f;
 // light bombers need ~67 to reach half through 2.5k -- and the payoff test then
 // declines that as the suicide it is.
 const float TUNE_AIR_AA_SOAK = 0.05f;
+// manager/air/state.as [toggle 0/1] -- The strike sizes against the enemy
+//   AA census divided by their base count (mirrored from our own team size):
+//   a raid overflies ONE base and static AA cannot concentrate. 0 sizes
+//   against the whole map's AA, which read want=125 bombers and held a
+//   50-bomber wing at home forever.
+const float TUNE_AIR_AA_SPLIT = 1.f;
 // [multiple] -- Expected damage a raid must return against its own metal
 // before it is worth mounting.
 const float TUNE_AIR_PAYOFF = 1.5f;

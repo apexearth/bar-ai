@@ -634,6 +634,11 @@ GROUPS = [
                   "before it is launched — fewer, better raids"),
                  ("TUNE_AIR_AA_SOAK", "how much AA a wing's health is assumed "
                   "to absorb"),
+                 ("TUNE_AIR_AA_SPLIT", "ON sizes the strike against the enemy "
+                  "AA census divided by their base count — a raid overflies "
+                  "one base, and static AA cannot concentrate. OFF sizes "
+                  "against the whole map's AA, which demanded a 125-bomber "
+                  "wing and held 50 real bombers at home forever"),
                  ("TUNE_INTERCEPT_MIN_FIGHTERS", "more fighters required "
                   "before an intercept launches"),
                  ("TUNE_AIR_SPREAD", "idle fighters patrol stations instead of "

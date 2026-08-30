@@ -69,6 +69,24 @@ float BomberHP()
 	return hp;
 }
 
+// A STRIKE OVERFLIES ONE BASE. Static AA cannot concentrate the way a field
+// army does -- the exact inverse of the defence market's wave ruling -- so
+// the whole-map census overstates what one raid must soak by the number of
+// bases it is spread across, mirrored from our own team size (TeamExposure's
+// symmetric trick; a 1v1 divides by nothing). Sized on the census, want read
+// 125 bombers off enemyAA=16,670 while 50 real ones hovered ten minutes at
+// home, and STANDING DOWN latched because half of 125 was out of reach.
+float StrikeAACost()
+{
+	float aa = EnemyAACost();
+	if (ai.GetTunable("apex_air_aa_split", TUNE_AIR_AA_SPLIT) > 0.f) {
+		const float bases = Military::AllyCount();
+		if (bases > 1.f)
+			aa /= bases;
+	}
+	return aa;
+}
+
 // WHAT FRACTION OF A STRIKE OF n GETS THROUGH. AA is a rate, not a wall: it
 // engages one target at a time, so wing health dilutes it and enough bombers
 // from enough angles always land some (apexearth: "think 50 or 100 bombers
@@ -77,7 +95,7 @@ float BomberHP()
 // against 2.5k of AA in a game already won.
 float Throughput(int n)
 {
-	const float aa = EnemyAACost();
+	const float aa = StrikeAACost();
 	if (aa <= 0.f)
 		return 1.f;
 	// MEASURED BEATS MODELLED: once a run of this type has been scored, its
@@ -135,7 +153,7 @@ int ScaledBombers()
 	const float perBomber = BomberHP()
 			* ai.GetTunable("apex_air_aa_soak", TUNE_AIR_AA_SOAK);
 	const int forAA = (perBomber > 0.01f)
-			? int(EnemyAACost() / perBomber) : 0;
+			? int(StrikeAACost() / perBomber) : 0;
 	const int capped = want + forAA;
 	// A ONE-SHOT basic bomber (Legion's Martyr): each sortie expends the whole
 	// wing, so a reusable-bomber count buys one alpha strike and a pile of
