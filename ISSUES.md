@@ -36,6 +36,17 @@ standing, 0 self-reclaims, rimDAvg −204, wall closure 0.58 vs 0.20.
    actually meet.
 6. The closure-ring candidates (`apex_def_ring`, entry below) are OFF-path
    while `apex_wall=1`; that entry's "awaiting measurement" is superseded.
+7c. **The line advances faster than it fills** (smoke 20260830-184343,
+   the rez/rent/rear build, a 26-min win): every defence election lands
+   exactly on the wall (wallD=0 throughout), rezbot orders 2 (fix
+   verified), but lineFill sat at 0.00 until minute 14 and towers
+   finished ~2 quanta behind the line -- each newly capped mex steps the
+   anchor forward, so the wall chases the frontier instead of sealing,
+   holding, then stepping. Candidates, untried: quantize the line
+   advance harder (512), or anchor on a robust percentile of forward
+   mex depth instead of the max. Also volume fell 30 -> 10 towers vs
+   the frontier game -- some is the shorter game, some is rear 0.08 +
+   interior rent; judge on his next watched game, not this one.
 7b. **The early seal is late** (his doctrine 2026-08-30: towers exist to
    stop leaks into the backline/mexes; "if we don't guard a mex then it
    will 100% die in the early game... oftentimes its solved by 4 or 5
