@@ -180,6 +180,17 @@ local commCloakFlips = {} -- team -> cloak state changes observed
 local commPrevCloak = {}  -- unitID -> last sampled cloak state
 local commPrevX = {}      -- unitID -> last sampled position
 local commPrevZ = {}
+
+-- FACTORY DUTY CYCLE, both teams. The nano-turret complaint has two competing
+-- mechanisms -- "not enough lathe at the line" vs "the line has no orders" --
+-- and only the engine can tell them apart: a factory with an empty build is
+-- idle whatever the AI's ledgers say. Busy = the engine reports a unit
+-- currently being built by it. Nanos the same, so an over-bought idle farm is
+-- distinguishable from a starved one.
+local facSamp = {}        -- team -> samples over live factories
+local facBusy = {}        -- team -> samples where the factory was building
+local nanoSamp = {}       -- team -> samples over finished nano turrets
+local nanoBusy = {}       -- team -> samples where the nano was lathing
 local CMD_REPAIR = CMD.REPAIR
 local CMD_GUARD = CMD.GUARD
 
@@ -520,6 +531,19 @@ local function sampleCommIdle()
 			for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
 				local udid = Spring.GetUnitDefID(uid)
 				local ud = udid and UnitDefs[udid]
+				if ud ~= nil and not Spring.GetUnitIsBeingBuilt(uid) then
+					if ud.isFactory then
+						bump(facSamp, teamID, 1)
+						if Spring.GetUnitIsBuilding(uid) then
+							bump(facBusy, teamID, 1)
+						end
+					elseif ud.isBuilder and (ud.speed or 0) == 0 then
+						bump(nanoSamp, teamID, 1)
+						if Spring.GetUnitIsBuilding(uid) then
+							bump(nanoBusy, teamID, 1)
+						end
+					end
+				end
 				if ud ~= nil and (ud.customParams or {}).iscommander then
 					bump(commSamp, teamID, 1)
 					local cloaked = Spring.GetUnitIsCloaked(uid) and true or false
@@ -741,6 +765,11 @@ local function dump(reason)
 				end
 			end
 			Spring.Echo("[BARAI_STATS] " .. table.concat(parts, " "))
+			Spring.Echo(string.format(
+				"[BARAI_DUTY] team=%d frame=%d facSamp=%d facBusy=%d nanoSamp=%d nanoBusy=%d",
+				teamID, Spring.GetGameFrame(),
+				facSamp[teamID] or 0, facBusy[teamID] or 0,
+				nanoSamp[teamID] or 0, nanoBusy[teamID] or 0))
 		end
 	end
 end
@@ -755,26 +784,37 @@ local function dumpPositions()
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
 		if isAI then
-			local out = {}
+			-- isBuilding alone excluded nano turrets (immobile UNITS, not
+			-- buildings, in Spring def terms) -- and the nanos-per-factory
+			-- audit needs them. Factories report canMove=true (they pass move
+			-- orders to their units), so the canMove guard must not exclude
+			-- them: without isFactory here no factory ever appeared in
+			-- BARAI_POS and the nanos-at-best-factory audit was silently dead.
+			-- Factories and builders go FIRST: Spring.Echo truncates around
+			-- 4KB, and a truncated tail must lose dragon's teeth, not labs.
+			local head, rest = {}, {}
 			for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
 				local udid = Spring.GetUnitDefID(uid)
 				local ud = udid and UnitDefs[udid]
-				-- isBuilding alone excluded nano turrets (immobile UNITS, not
-			-- buildings, in Spring def terms) -- and the nanos-per-factory
-			-- audit needs them (apexearth: "Enemy T2 lab had 12 nanos
-			-- supporting it. I don't think we had any.")
-			if ud and (ud.isBuilding or (ud.speed or 0) == 0) and not ud.canMove then
+				if ud and (ud.isFactory
+						or ((ud.isBuilding or (ud.speed or 0) == 0) and not ud.canMove)) then
 					local x, _, z = Spring.GetUnitPosition(uid)
 					if x then
-						out[#out + 1] = string.format("%s:%d:%d:%d:%d",
+						local tok = string.format("%s:%d:%d:%d:%d",
 								ud.name, x, z, ud.xsize or 0, ud.zsize or 0)
+						if ud.isFactory or ud.isBuilder then
+							head[#head + 1] = tok
+						else
+							rest[#rest + 1] = tok
+						end
 					end
 				end
 			end
-			if #out > 0 then
+			for i = 1, #rest do head[#head + 1] = rest[i] end
+			if #head > 0 then
 				Spring.Echo(string.format("[BARAI_POS] team=%d ally=%d frame=%d n=%d %s",
 						teamID, select(6, Spring.GetTeamInfo(teamID, false)) or 0,
-						Spring.GetGameFrame(), #out, table.concat(out, ",")))
+						Spring.GetGameFrame(), #head, table.concat(head, ",")))
 			end
 		end
 	end
