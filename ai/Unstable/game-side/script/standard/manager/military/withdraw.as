@@ -270,8 +270,23 @@ void UpdateWithdraw()
 		const AIFloat3 p = u.GetPos(ai.frame);
 		if (!OnMap(p))
 			continue;
+		// A RUNNER IS NOT SUPPORT. apexearth: "Do the units that stay and
+		// fight realize that the runners won't count as part of their army
+		// value/strength?" They did not: the odds sum counted every nearby
+		// body at paper value, so stayers overestimated support exactly
+		// while it evaporated, then the sum collapsed all at once when the
+		// runners cleared the radius. A unit on the engine RETREAT task, or
+		// one this pass ordered back within the last 8s, contributes zero.
+		bool fleeing = (ai.frame - gCombatSent[i] < 8 * SECOND);
+		IUnitTask@ preTask = u.task;
+		if (!fleeing && (preTask !is null)
+			&& (preTask.GetType() == Task::Type::RETREAT))
+		{
+			fleeing = true;
+		}
 		allyPos.insertLast(p);
-		allyPow.insertLast((u.circuitDef !is null) ? u.circuitDef.GetSurfThreat() : 0.f);
+		allyPow.insertLast((!fleeing && (u.circuitDef !is null))
+				? u.circuitDef.GetSurfThreat() : 0.f);
 		allyCost.insertLast((u.circuitDef !is null) ? u.circuitDef.costM : 0.f);
 		alive.insertLast(u);
 		aliveSlot.insertLast(i);
