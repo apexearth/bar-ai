@@ -1,5 +1,15 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 (late) — behaviour.json power overrides leak into production worth (survey open)
+
+The armthor x0.1 case is fixed by counter-mod (commit dac0946), but the
+class remains: 22 defs carry hand-set "power" values written for THREAT
+reading, and UnitCore inherits every one as production worth via PowerMod.
+armvader sits at x100 (produces nothing today — a crawling bomb priced as
+a god is a landmine, not a bug yet); armstil x0.05, corbw x0.1, several
+aircraft at x0.5. Audit the 22 against the worth model's own means before
+the next composition complaint lands on one of them.
+
 ## 2026-08-29 (night) — FIGHT-LOGIC CHAPTER CLOSED (arena campaign)
 
 The stack, each landed with its own commit and A/B arm: hold-committed
