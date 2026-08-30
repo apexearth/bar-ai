@@ -265,6 +265,13 @@ void UpdateWithdraw()
 			gCombatId.removeAt(i);
 			gCombatSent.removeAt(i);
 			gCombatBucket.removeAt(i);
+			// Every slot cached so far came from ABOVE this index (the walk
+			// descends), so this removal shifted each of them down one --
+			// un-shifted, pass 2 reads a neighbour's stamp, writes the wrong
+			// unit's reissue frame, and the highest entry indexes past the
+			// end (the line-500 out-of-bounds that aborts the whole tick).
+			for (uint q = 0; q < aliveSlot.length(); ++q)
+				--aliveSlot[q];
 			continue;
 		}
 		const AIFloat3 p = u.GetPos(ai.frame);
