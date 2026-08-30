@@ -280,8 +280,25 @@ float ComProgress(uint i)
 // them founds another beside them (measured 2026-08-30: peak 7 advanced solars
 // at once with the gLive-based test in place). The ledger is the register that
 // survives the task, so the gate asks it instead.
+// Cached per frame: the founding gate asks this on every big-energy request
+// and the scan walks the whole ledger. Invalidated by hand whenever a
+// big-energy request is registered or forgotten, so a second ask in the SAME
+// frame cannot be answered from a snapshot taken before the first one landed.
+int gBigEFrame = -1;
+uint gBigEN = 0;
+uint gBigERoom = 0;
+
+void ComBigEInvalidate()
+{
+	gBigEFrame = -1;
+}
+
 uint ComBigEnergyRising(uint &out room)
 {
+	if (gBigEFrame == ai.frame) {
+		room = gBigERoom;
+		return gBigEN;
+	}
 	room = 0;
 	uint n = 0;
 	for (uint i = 0; i < gComDef.length(); ++i) {
@@ -299,6 +316,9 @@ uint ComBigEnergyRising(uint &out room)
 		if (busy < Requests::SiteWorkerCap(def))
 			++room;
 	}
+	gBigEFrame = ai.frame;
+	gBigEN = n;
+	gBigERoom = room;
 	return n;
 }
 

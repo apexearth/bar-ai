@@ -1017,6 +1017,57 @@ def check_lab_timing(text, rep):
                   + "; ".join(overlaps[:4])))
 
 
+def _eframe_episodes(text, min_seconds=10.0):
+    """Contiguous runs of 2+ expensive energy buildings under construction on
+    one of OUR teams, from the [BARAI_EFRAMES] census. Returns None when the
+    census is absent (an old log), so its silence is never read as a pass.
+
+    Ours only: stock BARb overlapping its own reactors is not our bug, and
+    only our variant emits "apex:" lines stamped with its team.
+    """
+    if ("[BARAI_EFRAMES]" not in text) and ("[BARAI_EPEAK]" not in text):
+        return None
+    ours = {int(m) for m in re.findall(r"apex: (?:decide|exec) t=(\d+) ", text)}
+    ours |= {int(m) for m in re.findall(r"\[[\d.]+m t(\d+)\] apex: ", text)}
+    rows = defaultdict(list)
+    for m in re.finditer(r"\[BARAI_EFRAMES\] team=(\d+) ally=\d+ frame=(\d+)"
+                         r" min=[\d.]+ n=(\d+) defs=(\S+)", text):
+        team = int(m.group(1))
+        if ours and team not in ours:
+            continue
+        rows[team].append((int(m.group(2)), int(m.group(3)), m.group(4)))
+    SAMPLE, FPS = 90, 30
+    episodes, peak = [], 0
+    for team, rl in rows.items():
+        rl.sort()
+        start = prev = None
+        p_ep, defs = 0, ""
+        for frame, n, names in rl:
+            if start is None or frame - prev > SAMPLE * 2:
+                if start is not None and (prev - start) >= min_seconds * FPS:
+                    episodes.append((team, start, prev - start, p_ep, defs))
+                start, p_ep, defs = frame, n, names
+            if n > p_ep:
+                p_ep, defs = n, names
+            peak = max(peak, n)
+            prev = frame
+        if start is not None and (prev - start) >= min_seconds * FPS:
+            episodes.append((team, start, prev - start, p_ep, defs))
+    # The census only speaks at n>=2, so a clean game has no EFRAMES lines at
+    # all -- its peak comes from the end-of-game [BARAI_EPEAK] summary, which
+    # reports every team including the ones that never doubled up.
+    for m in re.finditer(r"\[BARAI_EPEAK\] team=(\d+) ally=\d+ reason=\w+"
+                         r" peak=(\d+)", text):
+        if (not ours) or int(m.group(1)) in ours:
+            peak = max(peak, int(m.group(2)))
+    episodes.sort(key=lambda e: (-e[3], -e[2]))
+    worst = ""
+    if episodes:
+        team, at, dur, p_ep, defs = episodes[0]
+        worst = f"t{team}@{at/1800:.1f}m for {dur/FPS:.0f}s x{p_ep} {defs}"
+    return len(episodes), peak, worst
+
+
 def check_placement_sanity(text, rep):
     """The three live-watch symptoms of 2026-08-28, measured directly and
     faction-blind: parallel same-def eco sites (pooling law), a base axis
@@ -1040,6 +1091,21 @@ def check_placement_sanity(text, rep):
         mW = sum(int(a) for a, b in wasted)
         mM = sum(int(b) for a, b in wasted)
         w_share = mW / mM if mM else 0.0
+    # GROUND TRUTH FIRST. The request-line reading below is per DEF, so it
+    # reads clean for the failure that actually happens: advsol + fusion +
+    # afus, three defs, three rules, six reactors rising at once (measured
+    # 2026-08-30, peak 6 on one team). [BARAI_EFRAMES] censuses UNFINISHED
+    # energy structures over the cost bar every 3 game-seconds, whoever
+    # ordered them. When it is present it is the answer; the old reading
+    # stays only for logs recorded before the census existed.
+    census = _eframe_episodes(text)
+    if census is not None:
+        n_ep, peak, worst_ep = census
+        rep.add("ECONOMY", n_ep == 0, "parallel-big-energy",
+                "one expensive energy building at a time (peak "
+                f"{peak} standing)" if n_ep == 0
+                else (f"{n_ep} episode(s) of 2+ expensive energy buildings"
+                      f" rising together, peak {peak}: {worst_ep}"))
     if worst:
         ok = (not bad) or (w_share > 0.03)
         rep.add("ECONOMY", ok, "parallel-eco-sites",

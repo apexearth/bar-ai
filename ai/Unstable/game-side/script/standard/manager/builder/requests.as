@@ -516,6 +516,8 @@ void Register(IUnitTask@ task)
 	if (task.buildDef is null)
 		return;
 	gLive.insertLast(task);
+	if (IsBigEnergy(task.buildDef))
+		Market::ComBigEInvalidate();
 }
 
 // Live FACTORY tasks by the synchronous registry -- unlike the builder
@@ -548,6 +550,8 @@ void Forget(IUnitTask@ task)
 {
 	for (uint i = 0; i < gLive.length(); ++i) {
 		if (gLive[i] is task) {
+			if ((gLive[i].buildDef !is null) && IsBigEnergy(gLive[i].buildDef))
+				Market::ComBigEInvalidate();
 			gLive.removeAt(i);
 			return;
 		}
