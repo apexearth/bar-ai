@@ -28,16 +28,27 @@ budget is a backstop).
 Round 3 (C++, DLL rebuilt): `perf split` says ProcessJobs is ~97% of the
 frame; inside it the ally FRIENDLY LIST was rebuilt 630x/min at 1,151
 units (delete+new+engine call each, 1.83s of every game-minute) because
-any task update demands it. Throttled to at most 2/sec -- verified 93-95
-calls/min, 0 exceptions on a won repro; the at-scale saving (~1.5s/min)
-awaits the next LONG game's `perf friendly` line. What remains at the
-647-builder scale (repro-5, f=72000): hk.maketask.builder 4.2s/min
-(election volume scales with the fleet even with the memo; per-call is
-1.4ms), factory hook 0.66s with 69ms max spikes, protect fills ~0.8s,
-and ~0.6s residual C++. Projection after the friendly fix: ~6s/min at
-that scale vs his ~1s bar -- still open; his watched feel on the next
-dashboard game is the acceptance test, `perf AiFrame`/`perf split`/
-`perf friendly` are the instruments.
+any task update demands it. Throttled to at most 2/sec -- verified 113
+calls/283ms at 930 units.
+
+Round 4 (his "do A and B" ruling): (A) IBuilderTask::Reevaluate now asks
+the script market at most every 3s per walking builder (commanders and
+rez bots exempt -- their safety lives inside the election; completion/
+abort still elect immediately). Measured: hook calls 3,047 -> 1,023/min,
+hk.maketask.builder 1.35s/min, AiFrame 2.4-2.7s/min maxMs 47-83 at 444
+builders, 0 exceptions, won. (B, slice 1) DeathWalk's GetEnemyCostAt
+engine sweep cached per cell/3s -- want.mexup per-call halved, mex
+pipeline unharmed (94 mexes / 30 T2 on the validation win).
+
+STILL OPEN toward his <10% bar (~1s/min): the board at 444 builders
+reads want.protect 409 + fills ~500 (the memo-miss fills are now the
+biggest script item), factory hook 262 with 61ms max spikes, and the
+next long 650-builder game must confirm the at-scale total (projection
+~2.5-3s/min there). B's remaining slices, in order: the protect fill/
+election split (core per stamp, walk pricing per asker), then the full
+market snapshot if still over. `perf AiFrame`/`perf split`/
+`perf friendly` + the section board are the instruments; his watched
+feel is the acceptance test.
 
 ## 2026-08-29 (late night) — air release: non-lead home-wave still tracks the live want
 
