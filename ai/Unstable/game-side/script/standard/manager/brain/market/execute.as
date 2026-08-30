@@ -547,6 +547,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				const float perM = Catalog::gCostM[int(w.def.id)];
 				int wantN = int((bankN / ((perM > 1.f) ? perM : 200.f)) + 0.5f);
 				wantN -= int(Requests::InFlight(w.def));
+				// A WORK SLICE, NOT A NANO CAP: each Take below is a ledger
+				// collision scan, and a rich bank asked for 100+ in ONE
+				// execution -- exec.knano measured 11.7ms per call, the
+				// single largest exec cost. Executions recur (56/min in the
+				// same game), InFlight subtracts what stands, so the bank
+				// still converts to the same request total within seconds --
+				// the work just stops landing inside one sim frame.
+				if (wantN > 16)
+					wantN = 16;
 				if (wantN > 1) {
 					int opened = 0;
 					const int baseSpoke = int(unit.id) & 7;
@@ -557,6 +566,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					// tighter than the cover radius). Round-robin over the
 					// standing factories, ring step wider than cover, so the
 					// bank turns into lathe AROUND the lines everywhere.
+					const double _tBatch = Perf::T0();
 					const uint nFacs = Factory::gFacUnits.length();
 					for (int k = 1; k < wantN; ++k) {
 						AIFloat3 baseK = nSlot;
@@ -582,6 +592,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						if (mk)
 							++opened;
 					}
+					Perf::Add("exec.nanobatch", _tBatch);
 					if (opened > 0)
 						AiLog("apex: nano batch t=" + ai.teamId
 							+ " +" + opened

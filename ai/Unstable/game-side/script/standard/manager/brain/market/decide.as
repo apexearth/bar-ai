@@ -98,6 +98,24 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	return WantCopy(fresh);
 }
 
+// THE FRAME'S ELECTION BUDGET. An election is deferrable work -- a builder
+// told "not now" re-asks on its next idle update -- but the sim frame it
+// lands on is not: several full stacks plus their executions landing in one
+// frame IS the 30-146ms hitch he can feel at 5x speed (the task scheduler
+// batches updates, so they cluster). Past the slice, further elections wait.
+// Safety (CommanderSafety, the AA panic claim) sits above the check in
+// Decide and is never deferred. Spend is fed by the caller (maketask.as)
+// so every return path counts without instrumenting each one.
+int gElecFrame = -1;
+double gElecSpentUs = 0.0;
+const double ELEC_FRAME_US = 8000.0;   // a work slice, not policy
+
+void ElecSpend(double us)
+{
+	if (us > 0.0)
+		gElecSpentUs += us;
+}
+
 // An executed want of kind K evicts every cached answer of that kind, for
 // every asker class -- see the memo's header comment.
 void MemoEvictKind(int k)
@@ -162,6 +180,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// is ever called, so maketask.as's hold -- at ANY progress -- is the live
 	// rule. The aaEmerg claim above stays: it serializes which FREE builder
 	// answers the panic.)
+
+	// The frame's election budget -- see ELEC_FRAME_US above. Checked after
+	// the safety paths, before the stack.
+	if (gElecFrame != ai.frame) {
+		gElecFrame = ai.frame;
+		gElecSpentUs = 0.0;
+	}
+	if (gElecSpentUs > ELEC_FRAME_US) {
+		Perf::Note("dec.deferred");
+		return null;
+	}
 
 	array<Want@> wants;
 	{ double _t = Perf::T0(); wants.insertLast(ProposeMex(unit)); Perf::Add("want.mex", _t); }

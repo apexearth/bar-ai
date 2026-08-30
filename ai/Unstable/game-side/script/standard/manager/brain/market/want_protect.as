@@ -740,7 +740,11 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		gDsAt.resize(uint(Catalog::gDefCount + 1));
 		gDsLineN.resize(uint(Catalog::gDefCount + 1));
 	}
-	if ((gDsAt[d] > 0) && (ai.frame - gDsAt[d] < 2 * SECOND))
+	// 4s, not 2: with the election memo in front of this, misses concentrate
+	// the fills -- want.protect still ran 1.2s/min at 1700 m/s on the 2s
+	// clock. Defence siting tolerates 4s staleness; the 2-fills-per-frame
+	// cap below still bounds the worst frame.
+	if ((gDsAt[d] > 0) && (ai.frame - gDsAt[d] < 4 * SECOND))
 		return;
 	// A bound on WORK per frame, not on defence: one frame refreshes at most
 	// two def fills (the worst single builder call was 126ms, most of it

@@ -76,8 +76,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return held;
 
 	// The arbiter. Empty market during the kill phase: Decide returns null
-	// and the constructor idles.
-	return Brain::Decide(unit);
+	// and the constructor idles. The wall time of the whole election feeds
+	// the frame budget (Market::ELEC_FRAME_US) from out here, so every
+	// return path inside counts without instrumenting each one.
+	const double _tD = ai.ClockUs();
+	IUnitTask@ dec = Brain::Decide(unit);
+	Market::ElecSpend(ai.ClockUs() - _tD);
+	return dec;
 }
 
 }  // namespace Builder
