@@ -273,6 +273,35 @@ float ComProgress(uint i)
 	return 0.f;
 }
 
+// EVERY BIG REACTOR THE LEDGER SAYS IS RISING -- and how many of them could
+// still take another pair of hands. The founding gate used to ask gLive, which
+// holds TASKS: a frame whose request died is invisible there, and so were the
+// ones a nano was quietly finishing. Both are sites, and a gate that cannot see
+// them founds another beside them (measured 2026-08-30: peak 7 advanced solars
+// at once with the gLive-based test in place). The ledger is the register that
+// survives the task, so the gate asks it instead.
+uint ComBigEnergyRising(uint &out room)
+{
+	room = 0;
+	uint n = 0;
+	for (uint i = 0; i < gComDef.length(); ++i) {
+		if (gComState[i] == CS_FINISHED)
+			continue;
+		const int d = gComDef[i];
+		if (!Catalog::ValidId(d))
+			continue;
+		CCircuitDef@ def = ai.GetCircuitDef(d);
+		if (!Requests::IsBigEnergy(def))
+			continue;
+		++n;
+		IUnitTask@ t = gComTask[i];
+		const uint busy = ((t is null) || t.IsDead()) ? 0 : Requests::Workers(t);
+		if (busy < Requests::SiteWorkerCap(def))
+			++room;
+	}
+	return n;
+}
+
 // The orphan register: a frame whose request died is FRAMED with no task.
 bool ComIsOrphan(uint i)
 {

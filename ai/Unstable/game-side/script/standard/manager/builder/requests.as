@@ -331,9 +331,70 @@ uint SiteWorkerCap(const CCircuitDef@ want)
 	const uint pool = InFlightCap();
 	if (n > pool)
 		n = pool;
+	// BIG ENERGY TAKES THE WHOLE HAND POOL, on one site. Two numbers were
+	// wrong here at once. FeedableCrew divides the pool by how many sites
+	// stand, so each read "full" the moment a few were open -- and "full" is
+	// what licenses the next one (measured: peak 6 frames, t2 12.6m). And
+	// CostCrew prices a 370m advanced solar at TWO hands, so sites saturated
+	// instantly and wealth then licensed seven at once (measured: peak 7).
+	// Neither number is about the site. What actually bounds useful hands on
+	// one building is metal throughput -- income/DRAIN, InFlightCap -- because
+	// a lathe pulls the same drain whatever it builds. So the whole feedable
+	// pool may work the one reactor, which is the point: apexearth, "putting
+	// all that total build power onto one fusion would make it build that much
+	// faster". Saturation is then genuinely rare, and the class gate below
+	// keeps the second site shut until it happens.
+	if (IsBigEnergy(want))
+		return (n > pool) ? n : pool;
 	const uint fed = FeedableCrew(want);
 	return (n > fed) ? fed : n;
 }
+
+// -- the big-energy class -----------------------------------------------------
+//
+// EVERY GATE ABOVE KEYS ON DEF ID, AND THE ENERGY LADDER IS SIX DEFS. Measured
+// live 2026-08-30 (4v4 Comet, t2 12.6m): "request full armfus" -- the per-def
+// duplicate gate refusing correctly -- followed immediately by "request new
+// armckfus" and "request new armafus", two more four-thousand-metal reactors,
+// because each is a different def with its own cap. apexearth, four times now:
+// "there's no reason we should ever make two identical, really expensive
+// things right next to each other at the same time."
+//
+// So expensive energy is governed as ONE CLASS at the chokepoint every
+// entrance passes through -- the market's rung, the stall ladder's alternate,
+// and C++ build_chain alike.
+const float BIG_E_COST = 300.f;   // above solar (155) and wind; advsol 370 up
+
+bool IsBigEnergy(const CCircuitDef@ d)
+{
+	if (d is null)
+		return false;
+	const int id = int(d.id);
+	if (!Catalog::ValidId(id) || Catalog::gMobile[id])
+		return false;
+	return (Catalog::gCostM[id] >= BIG_E_COST) && (Catalog::gMakeE[id] > 1.f);
+}
+
+// IS ONE ALREADY RISING. Asked of the COMMITMENT LEDGER, not gLive: a frame
+// whose request died holds no task, and a gate blind to it founds another
+// beside it (measured: peak 7 advanced solars with the gLive-based test in).
+//
+// NO WEALTH EXEMPTION. Three were tried in one session -- bank-covers-the-bill,
+// then saturated-or-rich, then saturated-and-rich -- and every one of them was
+// the clause the overlaps came back through, because a cheap-enough class
+// member saturates at whatever crew the arithmetic allows and a mid-game bank
+// covers the rest. The older "more than 1 of any building at one time if we
+// are wealthy enough" ruling stands for buildings at large; it never meant
+// reactors, which is the class he has now objected to four times. Converters,
+// nanos, defence, and the sub-bar generators keep their parallelism.
+bool BigEnergyRising()
+{
+	uint room = 0;
+	return Market::ComBigEnergyRising(room) > 0;
+}
+
+int gBigEFold = 0;   // cross-def folds onto the standing reactor
+int gBigEHeld = 0;   // refusals: something big is rising and has room
 
 // -- the register ------------------------------------------------------------
 
@@ -721,6 +782,31 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 		}
 	}
 
+	// A SECOND EXPENSIVE REACTOR IS NEVER FOUNDED WHILE THE FIRST STILL HAS
+	// ROOM FOR HANDS -- across DEFS. Not skippable by `parallel`: that flag is
+	// a caller saying "open another site", and this is the one question the
+	// caller is not allowed to answer for itself (the same reason the factory
+	// fork test lives here). Wealth is the only exemption, and it must cover
+	// the new bill on top of every bill already rising.
+	if (IsBigEnergy(want) && BigEnergyRising()) {
+		// Hand the asker the best time-to-energy job instead of a hole in the
+		// ground: e/s per second of remaining build, so a half-done fusion beats
+		// a fresh afus (apexearth: "they should all focus their efforts on the
+		// most efficient energy project ... (time to energy)").
+		IUnitTask@ fold = Market::JoinBigEnergy(unit, want);
+		if (fold !is null) {
+			++gBigEFold;
+			Log(want, "bigE-fold");
+			return fold;
+		}
+		// Nothing this unit can reach or lathe. Refusing is still right: the
+		// answer to "I cannot help the reactor" is a cheap generator below the
+		// bar or another want entirely, never a second reactor.
+		++gBigEHeld;
+		Log(want, "bigE-held");
+		return null;
+	}
+
 	const AIFloat3 at = spot;
 
 	const int type = int(bt);
@@ -885,6 +971,8 @@ bool Allowed(CCircuitDef@ want, Task::BuildType bt, const AIFloat3& in spot,
 		return false;
 	if (!Governed(int(bt)))
 		return true;
+	if (IsBigEnergy(want) && BigEnergyRising())
+		return false;
 	if (CoverFor(want, spot, radius) !is null)
 		return false;
 	if (Positional(int(bt)))
@@ -1137,7 +1225,11 @@ void PeelSurplus()
 		// The same feed-derived crew the join rung authorises, so a peeled
 		// worker cannot walk straight back on: peeling against one number
 		// while SiteWorkerCap admitted against another only cycled them.
-		const int wantN = int(FeedableCrew(t.buildDef));
+		// Big energy peels to the SAME number the join rung admits (its
+		// cost-derived crew), or the two rungs cycle the same hands.
+		const int wantN = IsBigEnergy(t.buildDef)
+				? int(SiteWorkerCap(t.buildDef))
+				: int(FeedableCrew(t.buildDef));
 		int surplus = int(crew.length()) - wantN;
 		// A few at a time, largest ids first -- the same stampede guard the
 		// hold rung uses: everyone reads the same pre-order counts.

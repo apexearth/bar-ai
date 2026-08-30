@@ -820,7 +820,78 @@ local function dumpPositions()
 	end
 end
 
+-- PARALLEL BIG-ENERGY CENSUS. The AI's own request log answers "what did one
+-- rule decide"; this answers "how many expensive energy buildings are ACTUALLY
+-- rising at once", which is the thing complained about and is blind to which
+-- layer ordered them (script rule, Brain want, or C++ build_chain). Unfinished
+-- only: buildProgress < 1. The cost bar excludes wind and solar, whose parallel
+-- construction is intended and cheap.
+local EFRAME_COST = tonumber(modOptions.dev_eframe_cost or 0) or 0
+if EFRAME_COST <= 0 then
+	EFRAME_COST = 300
+end
+local EFRAME_SAMPLE = 90        -- frames between censuses (3 game-seconds)
+local nextEFrame = EFRAME_SAMPLE
+local eframePeak = {}           -- team -> most simultaneous ever seen
+local eframeBad = {}            -- team -> samples with 2+ standing at once
+local eframeSamp = {}           -- team -> samples taken
+
+local function isBigEnergy(ud)
+	if ud == nil or (ud.speed or 0) ~= 0 then
+		return false
+	end
+	if (ud.metalCost or 0) < EFRAME_COST then
+		return false
+	end
+	local make = ud.energyMake or 0
+	local wind = ud.windGenerator or 0
+	local tidal = ud.tidalGenerator or 0
+	return (make > 1) or (wind > 1) or (tidal > 1)
+end
+
+local function sampleEFrames(frame)
+	for _, teamID in ipairs(Spring.GetTeamList()) do
+		local n, names = 0, {}
+		for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+			local _, _, _, _, prog = Spring.GetUnitHealth(uid)
+			if prog ~= nil and prog < 1 then
+				local ud = UnitDefs[Spring.GetUnitDefID(uid) or -1]
+				if isBigEnergy(ud) then
+					n = n + 1
+					names[#names + 1] = string.format("%s:%.2f", ud.name, prog)
+				end
+			end
+		end
+		eframeSamp[teamID] = (eframeSamp[teamID] or 0) + 1
+		if n > (eframePeak[teamID] or 0) then
+			eframePeak[teamID] = n
+		end
+		if n >= 2 then
+			eframeBad[teamID] = (eframeBad[teamID] or 0) + 1
+			Spring.Echo(string.format(
+				"[BARAI_EFRAMES] team=%d ally=%d frame=%d min=%.2f n=%d defs=%s",
+				teamID, select(6, Spring.GetTeamInfo(teamID, false)) or 0,
+				frame, frame / 1800, n, table.concat(names, ",")))
+		end
+	end
+end
+
+local function dumpEFrames(reason)
+	for _, teamID in ipairs(Spring.GetTeamList()) do
+		Spring.Echo(string.format(
+			"[BARAI_EPEAK] team=%d ally=%d reason=%s peak=%d badSamples=%d"
+			.. " samples=%d costBar=%d",
+			teamID, select(6, Spring.GetTeamInfo(teamID, false)) or 0, reason,
+			eframePeak[teamID] or 0, eframeBad[teamID] or 0,
+			eframeSamp[teamID] or 0, EFRAME_COST))
+	end
+end
+
 function gadget:GameFrame(frame)
+	if frame >= nextEFrame then
+		nextEFrame = frame + EFRAME_SAMPLE
+		sampleEFrames(frame)
+	end
 	if frame >= nextCommSample then
 		nextCommSample = frame + COMM_SAMPLE
 		sampleCommIdle()
@@ -834,9 +905,11 @@ function gadget:GameFrame(frame)
 end
 
 function gadget:GameOver()
+	dumpEFrames("gameover")
 	dump("gameover")
 end
 
 function gadget:Shutdown()
+	dumpEFrames("shutdown")
 	dump("shutdown")
 end
