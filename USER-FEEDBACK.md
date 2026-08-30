@@ -1,5 +1,37 @@
 # What apexearth wants from this AI
 
+## RULING (2026-08-30): identical expensive builds are SERIAL — all hands on one
+
+Watching four fusions rise side by side: "if we were to build four fusions
+with four constructors, and let's just say that each one took four minutes
+to build, then if we took all four of those constructors, and we had them
+making just one fusion, then it should take only one minute... Unless
+distance is a huge issue, there's no reason we should ever make two
+identical, really expensive things right next to each other at the same
+time." Landed (commit 2066d91): a banked bill exempts a site from the
+income crew clamps (the bank prepays the job), and a duplicate site opens
+only when every manned site of the def is worker-saturated. Awaiting his
+eyes on a watched game.
+
+## OPEN (2026-08-30): the army stands off while the base dies
+
+"Our army will keep distance from an attacking army that is destroying our
+base. We arguably have more than they do... yet we avoid the fight and let
+them kill our base." Mechanism attributed (commit 28acfa1): odds-refused
+DEFEND pools fell back to FRONT posts — out of the intruder's support
+radius, making every other pool's election worse — and the odds sum
+counted no towers on our side. Fixed: refused-at-home pools muster at
+base; allied static defence joins the odds. Soak trade efficiency
+(soak8v8-s1: killed 12.4k vs lost 25.7k with the LARGER army) is the
+before-number; his watched games are the test.
+
+## OPEN (2026-08-30): 8v8 is worse than 1v1 — first measured strands
+
+His report. ISSUES 2026-08-30 entry holds the numbers from the first clean
+Supreme Isthmus soak: trade 0.48, two players frozen at 2 mexes (the
+pastFront centroid-collapse, fixed commit 5918909), all-8 air plants with
+zero bomber damage, defence spend half of stock's and 100% T1.
+
 ## RULING (2026-08-29, late): team defence goes in FRONT of the front ally
 
 He refused to host the 8v8 over it: "I find it too embarrassing how all
