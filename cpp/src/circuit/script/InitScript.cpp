@@ -848,6 +848,48 @@ static int IUnitTask_GetFightType(IUnitTask* task)
 			: int(IFighterTask::FightType::_SIZE_);
 }
 
+// apex: the builder-only members (buildDef, target, GetBuildType, GetBuildPos)
+// were registered on the base IUnitTask type as raw IBuilderTask field
+// offsets and THISCALLs -- so a script read on a FIGHTER, WAIT or IDLE task
+// landed in unrelated memory of that object: a garbage pointer for the two
+// handles (the 8v8 crash at 10.6m -- AV in GetHealthPercent via a garbage
+// unit read through exactly this route), and a garbage reference for
+// GetBuildPos. Every IBuilderTask-derived class carries Type BUILDER or
+// FACTORY (verified: FactoryTask/Reclaim/Repair/Recruit), so the guard is
+// exact -- any other type answers null / NONE / off-map, which is what the
+// script's own guards already treat as "not a build task".
+static IBuilderTask* AsBuilderTask(IUnitTask* task)
+{
+	const IUnitTask::Type t = task->GetType();
+	return ((t == IUnitTask::Type::BUILDER) || (t == IUnitTask::Type::FACTORY))
+			? static_cast<IBuilderTask*>(task) : nullptr;
+}
+
+static CCircuitDef* Task_GetBuildDef(IUnitTask* task)
+{
+	IBuilderTask* bt = AsBuilderTask(task);
+	return (bt != nullptr) ? bt->GetBuildDef() : nullptr;
+}
+
+static CCircuitUnit* Task_GetTarget(IUnitTask* task)
+{
+	IBuilderTask* bt = AsBuilderTask(task);
+	return (bt != nullptr) ? bt->GetTarget() : nullptr;
+}
+
+static IBuilderTask::BuildType Task_GetBuildType(IUnitTask* task)
+{
+	IBuilderTask* bt = AsBuilderTask(task);
+	return (bt != nullptr) ? bt->GetBuildType() : IBuilderTask::BuildType::_SIZE_;
+}
+
+static const springai::AIFloat3& Task_GetBuildPos(IUnitTask* task)
+{
+	static const springai::AIFloat3 offMap(-1.f, 0.f, -1.f);
+	IBuilderTask* bt = AsBuilderTask(task);
+	return (bt != nullptr) ? bt->GetPosition() : offMap;
+}
+
 static CScriptArray* IUnitTask_GetUnits(IUnitTask* task)
 {
 	// Without caching arrayType can be extracted by:
@@ -1084,10 +1126,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// drop dead ones, and a remembered dead task returned from AiMakeTask is
 	// refused by AssignTask -- the unit idles forever on a stale handle.
 	r = engine->RegisterObjectMethod("IUnitTask", "bool IsDead() const", asMETHODPR(IUnitTask, IsDead, () const, bool), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("IUnitTask", "Type GetBuildType() const", asMETHODPR(IBuilderTask, GetBuildType, () const, IBuilderTask::BuildType), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("IUnitTask", "const AIFloat3& GetBuildPos() const", asMETHODPR(IBuilderTask, GetPosition, () const, const AIFloat3&), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectProperty("IUnitTask", "CCircuitDef@ const buildDef", asOFFSET(IBuilderTask, buildDef)); ASSERT(r >= 0);
-	r = engine->RegisterObjectProperty("IUnitTask", "CCircuitUnit@ const target", asOFFSET(IBuilderTask, target)); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "Type GetBuildType() const", asFUNCTION(Task_GetBuildType), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "const AIFloat3& GetBuildPos() const", asFUNCTION(Task_GetBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "CCircuitDef@ get_buildDef() const property", asFUNCTION(Task_GetBuildDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "CCircuitUnit@ get_target() const property", asFUNCTION(Task_GetTarget), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	gUnitArrayType = engine->GetTypeInfoByDecl("array<CCircuitUnit@>");
 	r = engine->RegisterObjectMethod("IUnitTask", "array<CCircuitUnit@>@ GetUnits() const", asFUNCTION(IUnitTask_GetUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void RemoveUnit(CCircuitUnit@)", asMETHOD(IUnitTask, RemoveAssignee), asCALL_THISCALL); ASSERT(r >= 0);

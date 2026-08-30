@@ -1,5 +1,23 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 (late) — 8v8 CRASH: AV in GetHealthPercent via base-type task bindings (FIX LANDED, awaiting team-game soak)
+
+His 8v8 crashed at 10.6 game-min (0xc0000005, stack: GetHealthPercent <-
+script AiUpdate of instance t=4). Mechanism, read from the bindings, not
+raced: `.target`/`.buildDef` were registered on the BASE IUnitTask type as
+raw IBuilderTask FIELD OFFSETS, and GetBuildType/GetBuildPos as IBuilderTask
+THISCALLs -- so any script read on a FIGHTER/WAIT/IDLE task landed in
+unrelated memory of that object: garbage pointers for the handles (this
+crash), a garbage reference for GetBuildPos. Tasks are refcounted and dead
+units leak until shutdown, so this offset abuse is the only freed/garbage
+pointer route in the chain. All four now go through type-guarded wrappers
+(BUILDER|FACTORY -> real read, else null/_SIZE_/off-map; every
+IBuilderTask-derived class carries those two type tags -- verified against
+FactoryTask/Reclaim/Repair/Recruit). The exact script line that read a
+non-builder task was NOT identified -- the guard closes the class, known
+and unknown. Delete this entry after a team-game soak (per-side 4+) runs
+long past 10.6m with zero AVs.
+
 ## 2026-08-29 (late night) — PERF: his target is <10% of tonight's AI cost; campaign open
 
 His ruling, watching a laggy ~1500 m/s 1v1: "to be OK the perf needs to be
