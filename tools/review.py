@@ -64,14 +64,36 @@ def check_ran(run: Path) -> tuple[bool, list[str]]:
         return False, ["no infolog found -- cannot verify the variant ran"]
     bad = [p for p in logs if AS_ERR.search(p.read_text("utf-8", errors="replace"))]
     crash = [p for p in logs if "has crashed" in p.read_text("utf-8", errors="replace")]
+    # Runtime script exceptions are the compile error's sibling: the variant
+    # loads, then every thrown election builds nothing, and the AI reads as
+    # "the script is not running" on screen while the match completes
+    # normally. Measured 2026-08-29: one missed index guard, 1,022 exceptions
+    # per game, mex@15m 2 vs a healthy 12 -- and the compile grep read clean.
+    exc = []
+    for p in logs:
+        n = len(re.findall(r"^\s*Exception: ", p.read_text("utf-8", errors="replace"), re.M))
+        if n:
+            exc.append(n)
     if bad:
         ok = False
         notes.append(f"ANGELSCRIPT ERRORS in {len(bad)}/{len(logs)} match(es) "
                      f"-- the variant did not load; nothing below means anything")
+    if exc:
+        worst = max(exc)
+        # A couple per game is a bug to file; hundreds is a dead AI. The line
+        # sits two orders of magnitude under the measured dead-AI rate.
+        if worst >= 50:
+            ok = False
+            notes.append(f"SCRIPT EXCEPTIONS: {sum(exc)} across {len(exc)}/{len(logs)} "
+                         f"match(es), worst {worst} -- elections are dying; "
+                         f"nothing below means anything")
+        else:
+            notes.append(f"warning: {sum(exc)} script exception(s) in "
+                         f"{len(exc)}/{len(logs)} match(es)")
     if crash:
         notes.append(f"warning: {len(crash)}/{len(logs)} match(es) crashed")
     if ok and not notes:
-        notes.append(f"{len(logs)} match log(s), no compile errors, no crashes")
+        notes.append(f"{len(logs)} match log(s), no compile errors, no exceptions, no crashes")
     return ok, notes
 
 
