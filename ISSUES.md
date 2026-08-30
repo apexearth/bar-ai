@@ -25,12 +25,24 @@ Side sums, us vs stock:
   [2,3,4,4,7,8,11,14] vs stock 63 total. The interval counters aggregate
   many sweeps, so high counts may just be the enemy half of 90 spots
   legitimately refused -- they cannot distinguish "axis collapsed" from
-  "half the map is theirs". STILL OPEN: instrument one sweep (spots
-  refused / total per single PickSpot pass, and the axis span) before
-  touching anything else; the alternative binder is plain spot scarcity
-  and claim distribution at 16 players on 90 spots. Keep 5918909 (it is
-  the documented cure's missing half and strictly more stable) but do not
-  credit it with anything yet.
+  "half the map is theirs". ANSWERED same night by the sweep instrument
+  (soak8v8-s2, seed 2): geometry is NOT the binder. Every player's sweep
+  reads a healthy axis (span 6,680-9,345 elmos) and keeps 40-56 of 90
+  candidates; pastFront refusals are the legitimate enemy half
+  (~35/sweep). The worst player (t6, held=4) PRICED mex wants all game
+  (claimed=0, noOpen~0), WON the auction 35x, EXECUTED 28 claims -- and
+  lost zero cons and zero mexes. The claims CHURN: exec positions scatter
+  map-wide (armcom #19794 sent to 6456,312; spot 4520,7208 claimed twice
+  by different cons), and on a long walk the 3s re-election window lets a
+  local want outbid the mex claim mid-walk -- the abandonment leaves no
+  corpse, no task-die, no log. 1v1 walks are short, so claims complete
+  before churn strikes; 8v8's taken-near/far-remainder geometry makes
+  every claim a long walk. This is the commitment/stale-count bug class
+  the velocity plan's commitment ledger targets -- the likely fix shape
+  is claim stickiness priced by the walk already paid (sunk walk raises
+  the incumbent's price), not a gate. Next instrument if needed:
+  claim->finish conversion by claim distance. Keep 5918909 (the
+  documented cure's missing half, strictly more stable).
 - AIR is a team-scale write-off: all 8 players built an armap; the elected
   assassin (t4) logged "air lead NOT armed" from 11m to end while
   non-leads t5/t6 launched 5-6 bomber home waves scoring dmg/bomber=0 at
