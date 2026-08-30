@@ -168,6 +168,29 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 	return best;
 }
 
+// The walk risk's spatial read, cached: GetEnemyCostAt is an engine sweep
+// (radius 900 over the enemy registry) and DeathWalk asked for it twice
+// per spot per election -- ~200 sweeps per mexup proposal at ~100 held
+// spots, which was the whole of want.mexup's ledger cost. A danger read
+// tolerates cell-and-3-seconds granularity; every other risk cache here
+// (StreamSurvival, RiskFill) already accepts the same contract.
+array<int> gEcKey(128, 0);
+array<int> gEcAt(128, -30000);
+array<float> gEcVal(128, 0.f);
+
+float EnemyCostNear(const AIFloat3& in p)
+{
+	const int key = (int(p.x) >> 8) * 4096 + (int(p.z) >> 8) + 1;
+	const uint slot = uint(key) & 127;
+	if ((gEcKey[slot] == key) && (ai.frame - gEcAt[slot] < 3 * SECOND))
+		return gEcVal[slot];
+	const float v = ai.GetEnemyCostAt(p, 900.f);
+	gEcKey[slot] = key;
+	gEcAt[slot] = ai.frame;
+	gEcVal[slot] = v;
+	return v;
+}
+
 // THE WALK IS THE RISK, not just the destination (apexearth, after a fresh
 // T2 con marched into the enemy army while 4 home mexes sat unupgraded):
 // known enemy mass along the corridor above the walker's own metal cost is
@@ -184,7 +207,7 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 		p.z += (dest.z - here.z) * f;
 		if (!OnMap(p))
 			continue;
-		if (ai.GetEnemyCostAt(p, 900.f) > bar)
+		if (EnemyCostNear(p) > bar)
 			return true;
 	}
 	return false;
