@@ -1,5 +1,40 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-30 — the wall revamp: LANDED (75b2d97), residue open
+
+His ask: towers blobbed at the start area; he wants a wall wrapping the
+base, joining allied walls, advancing with expansion, rear towers
+reclaimed, tiers rising — explicitly NOT built on the front-line or
+base-border models. Landed as `apex_wall` (default on): perimeter slots on
+the building rim (protect_wall.as), the open-slot target pull, and the
+held-ahead stranded retirement. Measured across the exercise loop (45-min
+vs BARb medium, `apex_mass_hold_ratio=0.05` so defence is isolated):
+baseline 10 towers 9 interior rimDAvg −507 → final iteration 19 towers 18
+standing, 0 self-reclaims, rimDAvg −204, wall closure 0.58 vs 0.20.
+`tools/wall_check.py <match>` is the instrument. Open residue:
+
+1. **Displacement unjudged.** The pull spends real constructor time toward
+   DefenceTarget in quiet games that previously spent it on eco/army. A
+   battery run follows the landing commit; read it before believing the
+   feature is free. The last exercise game (wall9) lost to medium with
+   army 2,002 vs 9,150 target at 30 min — could be the hold tune, could be
+   displacement.
+2. **Front::GateChokes returned ZERO candidates in every 1v1 exercise game**
+   (`lineSpots=0` all game). The concentration-doctrine gates are inert in
+   these matchups, so the wall carries everything. Pre-existing, now
+   load-bearing.
+3. **Towers finish ~200 elmos inside the wall** — the wall steps outward
+   during the builder's walk+build. Harmless at one quantum; the at-build
+   rim/core split reads worse than election siting (election wallD≈0).
+4. **Tier progression on the wall is untested** at high economy — the
+   T1-late ×0.15 discount on T1 cons plus full pull on T2 cons should put
+   T2 guns on the wall late; verify in a long game before trusting.
+5. **Ally-join is smoke-tested only** (2v2: candidates priced, no
+   exceptions, no crash) — no visual confirmation that two Apex walls
+   actually meet.
+6. The closure-ring candidates (`apex_def_ring`, entry below) are OFF-path
+   while `apex_wall=1`; that entry's "awaiting measurement" is superseded.
+
 ## 2026-08-30 — 8v8 vs 1v1 gap: the measured deltas from the first clean Supreme Isthmus soak
 
 His report: "We perform worse on 8v8 games than we do 1v1 games." First
