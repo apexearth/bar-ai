@@ -1,5 +1,35 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 (late night) — PERF: his target is <10% of tonight's AI cost; campaign open
+
+His ruling, watching a laggy ~1500 m/s 1v1: "to be OK the perf needs to be
+less than 10% of the impact we currently experience." Baseline measured on
+that game (37 game-min, Archsimkats +150%, 655 builders at the end):
+`apex: perf AiFrame` peaked at 10.6s per 60 game-sec (~18% of sim), with
+30-146ms single-frame spikes every 8 frames continuously. Attribution:
+hk.maketask.builder 7.0s/min of it (~66%) — 407 full want-stack elections
+a minute at ~9.5ms plus exec.want at ~6ms; the C++ remainder (threat maps
+etc.) is ~3s/min and second-order. Landed tonight, unmeasured: the
+election memo (six proposers shared per asker-def for 1.5s, evicted on
+execute), the rezzer-chain 2s gate, exec.orph/exec.pend/exec.k* and
+dec.* attribution timers. STILL UNATTRIBUTED: the exec tail (~6ms/call —
+exec.pend measured 0.02ms, so it is the per-kind Enqueue/dispatch), and
+want.protect's fill residual (~3.3ms/call at scale, cap already 2/frame).
+Compare `perf sec`/`perf AiFrame` on the next long high-income game
+against the numbers above; the 10% bar is AiFrame ≤ ~1s/min at that scale.
+
+## 2026-08-29 (late night) — air release: non-lead home-wave still tracks the live want
+
+The lead's release gates were all indexed to ScaledBombers(), which grows
+with income AND their AA — measured 30/93 held forever, no strike all
+game, then bar=-1 on the next watch because the market built the plants
+and the assassin never "committed" at all. Fixed for the lead (frozen
+commit snapshot + decaying deadline bar + standing-wing clock + the
+stood-down wing still spends at deadline). NOT fixed: the non-lead
+`apex_air_home_wave` release still compares against the LIVE
+ScaledBombers() — same treadmill in team games; give it the same frozen
+bar when a team game shows allied bombers hoarding.
+
 ## 2026-08-29 (late) — deploy_ai.py exits 0 when it REFUSES to deploy (harness trap)
 
 "Close BAR (and any running match) and retry" prints and the process still
@@ -298,14 +328,17 @@ mode — review.py's ran-gate now counts runtime `Exception:` lines too.
 Fixed (all slot-cache reads gated on `cached`), redeployed, verified:
 0 exceptions, held=11, ring=13 auction wins, closure=0.69 at 23 min.
 
-## 2026-08-29 — UpdateWithdraw throws "Index out of bounds" (rare, pre-existing)
+## 2026-08-29 — UpdateWithdraw throws "Index out of bounds" (FIX LANDED, awaiting a clean game)
 
-2 occurrences in one battery game (Function: void UpdateWithdraw(), Line:
-500 — the gCombatSent[i] region, withdraw.as). Not from the ring change
-(zero market-file overlap); most plausibly the 08-29 fight-logic commits'
-squad-parallel arrays racing a removal. Each throw aborts that military
-update tick. Low rate, real bug — attribute by logging i vs array length
-at the site before touching the logic.
+2 occurrences in one battery game, 7 in the first 14 min of the 08-29
+Small_Supreme watch (Function: void UpdateWithdraw(), Line: 500 — the
+gCombatSent[i] region, withdraw.as). ROOT CAUSE READ FROM THE CODE, not
+raced: pass 1 walks the registry descending and removeAt(i) on a dead
+entry shifts every aliveSlot already cached (all recorded from ABOVE i)
+down one — pass 2 then reads a neighbour's reissue stamp, WRITES the
+wrong unit's stamp even in bounds, and the highest cached slot indexes
+past the end. Fix: each removal decrements every cached slot. Delete this
+entry when a long game shows zero UpdateWithdraw exceptions.
 
 ## 2026-08-29 — flanking: charger question RULED, two structural gaps remain
 

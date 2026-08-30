@@ -23,6 +23,95 @@ array<int> gExecFail(32, 0);
 int gExecNone = 0;
 int gNextExecLog = 0;
 
+//------------------------------------------------------------------------------
+// THE ELECTION MEMO. A proposer's answer is the WORLD (site auctions, target
+// scans, ladder rankings -- slow) plus the ASKER (walk time, eligibility --
+// fast, and shared by every builder of one def). The stack re-derived the
+// world for every asking builder: measured on a 37-min 1v1 at ~1700 m/s with
+// 655 builders, 407 full stacks a minute at ~9.5ms each -- the largest single
+// AI cost and the 30-146ms sim hitches. So the six proven-expensive proposers
+// share their answer per ASKING DEF for MEMO_TTL, and an EXECUTED want evicts
+// its kind at once: the execution changes the very counts that priced it, and
+// serving the stale copy to the next builder is the stampede bug in one line.
+// Only proposers whose site is world-anchored may sit here -- mex, geo and
+// mexup pick spots relative to the asker and stay live. The handed-out want
+// is always a COPY: Decide mutates gain/value in place (retire discount,
+// exposure charge), and a shared object would compound those per election.
+//------------------------------------------------------------------------------
+const int   MEMO_TTL = 45;   // frames (1.5s); a freshness bound, not policy
+const uint  MEMO_N = 6;
+array<array<int>@> gMemoAt;     // per slot: per-askerDef frame stamp
+array<array<Want@>@> gMemoW;    // per slot: the pristine cached answer
+
+Want@ WantCopy(Want@ s)
+{
+	if (s is null)
+		return null;
+	Want c;
+	c.kind = s.kind;
+	@c.def = s.def;
+	c.pos = s.pos;
+	c.spotId = s.spotId;
+	@c.target = s.target;
+	c.retire = s.retire;
+	c.gain = s.gain;
+	c.mCost = s.mCost;
+	c.tCost = s.tCost;
+	c.value = s.value;
+	c.buildSec = s.buildSec;
+	return c;
+}
+
+Want@ MemoSlotCall(int slot, CCircuitUnit@ unit)
+{
+	if (slot == 0) return ProposeEnergy(unit);
+	if (slot == 1) return ProposeTech(unit);
+	if (slot == 2) return ProposeNano(unit);
+	if (slot == 3) return ProposeSense(unit);
+	if (slot == 4) return ProposeReclaimObsolete(unit);
+	return ProposeProtect(unit);
+}
+
+Want@ MemoPropose(int slot, CCircuitUnit@ unit)
+{
+	if (gMemoAt.length() == 0) {
+		gMemoAt.resize(MEMO_N);
+		gMemoW.resize(MEMO_N);
+		for (uint s = 0; s < MEMO_N; ++s) {
+			array<int> a(uint(Catalog::gDefCount + 1), -30000);
+			array<Want@> ws(uint(Catalog::gDefCount + 1));
+			@gMemoAt[s] = a;
+			@gMemoW[s] = ws;
+		}
+	}
+	const int ud = int(unit.circuitDef.id);
+	if ((ud < 1) || (ud > Catalog::gDefCount))
+		return MemoSlotCall(slot, unit);
+	if (ai.frame - gMemoAt[slot][ud] < MEMO_TTL) {
+		Perf::Note("memo.hit");
+		return WantCopy(gMemoW[slot][ud]);
+	}
+	Perf::Note("memo.miss");
+	Want@ fresh = MemoSlotCall(slot, unit);
+	gMemoAt[slot][ud] = ai.frame;
+	@gMemoW[slot][ud] = fresh;
+	return WantCopy(fresh);
+}
+
+// An executed want of kind K evicts every cached answer of that kind, for
+// every asker class -- see the memo's header comment.
+void MemoEvictKind(int k)
+{
+	for (uint s = 0; s < gMemoAt.length(); ++s) {
+		array<Want@>@ ws = gMemoW[s];
+		array<int>@ at = gMemoAt[s];
+		for (uint d = 0; d < ws.length(); ++d) {
+			if ((ws[d] !is null) && (ws[d].kind == k))
+				at[d] = -30000;
+		}
+	}
+}
+
 IUnitTask@ Decide(CCircuitUnit@ unit)
 {
 	if ((unit is null) || !unit.circuitDef.IsBuilder() || !unit.circuitDef.IsMobile())
@@ -35,16 +124,18 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			return null;
 		gLastDecideAt[int(unit.id)] = ai.frame;
 	}
-	WorkerSeen(unit);
-	LedgerSweep();
-	RiskDiag();
+	{ double _t = Perf::T0(); WorkerSeen(unit); Perf::Add("dec.worker", _t); }
+	{ double _t = Perf::T0(); LedgerSweep(); Perf::Add("dec.sweep", _t); }
+	{ double _t = Perf::T0(); RiskDiag(); Perf::Add("dec.riskdiag", _t); }
 	// STAYING ALIVE OUTRANKS THE JOB, and it is asked BEFORE the
 	// finish-what's-started return below -- a commander with progress on a
 	// frame would otherwise never reach this at all, which is exactly the
 	// state he dies in (apexearth, watching: "he did *nothing* to protect
 	// himself").
 	{
+		const double _tCs = Perf::T0();
 		IUnitTask@ safe = CommanderSafety(unit);
+		Perf::Add("dec.comsafe", _tCs);
 		if (safe !is null)
 			return safe;
 	}
@@ -74,21 +165,21 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 
 	array<Want@> wants;
 	{ double _t = Perf::T0(); wants.insertLast(ProposeMex(unit)); Perf::Add("want.mex", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeEnergy(unit)); Perf::Add("want.energy", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(0, unit)); Perf::Add("want.energy", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeGeo(unit)); Perf::Add("want.geo", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposePlant(unit)); Perf::Add("want.plant", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeConvert(unit)); Perf::Add("want.convert", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeStore(unit)); Perf::Add("want.store", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeMexUp(unit)); Perf::Add("want.mexup", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeTech(unit)); Perf::Add("want.tech", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeNano(unit)); Perf::Add("want.nano", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimObsolete(unit)); Perf::Add("want.reclobs", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(1, unit)); Perf::Add("want.tech", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(2, unit)); Perf::Add("want.nano", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(4, unit)); Perf::Add("want.reclobs", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimBlocker(unit)); Perf::Add("want.reclblk", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimPenned(unit)); Perf::Add("want.reclpen", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeAssist(unit)); Perf::Add("want.assist", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeProtect(unit)); Perf::Add("want.protect", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(5, unit)); Perf::Add("want.protect", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeTeeth(unit)); Perf::Add("want.teeth", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeSense(unit)); Perf::Add("want.sense", _t); }
+	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(3, unit)); Perf::Add("want.sense", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeAirDef(unit)); Perf::Add("want.airdef", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeSuper(unit)); Perf::Add("want.super", _t); }
 	// EXPOSURE IS A COST THE ASSET ITSELF PAYS. A want's return is reduced by
@@ -517,7 +608,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		const double _tExec = Perf::T0();
 		IUnitTask@ t = ExecuteWant(unit, ranked[i]);
 		Perf::Add("exec.want", _tExec);
+		Perf::Add("exec.k" + KindName(ranked[i].kind), _tExec);
 		if (t !is null) {
+			// The execution just changed the counts that priced this kind --
+			// every cached answer of it is stale now, whoever asked.
+			MemoEvictKind(ranked[i].kind);
 			// Price tag on the job, so idle hands can later rank what is in
 			// flight by what the market paid for it (floor.as).
 			NoteJob(t, ranked[i]);

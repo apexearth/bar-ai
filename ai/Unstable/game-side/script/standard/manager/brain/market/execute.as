@@ -172,11 +172,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	if ((w.def !is null) && !w.def.IsMobile()
 		&& (w.kind != WK_RECLAIM) && (w.kind != WK_ASSIST))
 	{
+		const double _tOr = Perf::T0();
 		IUnitTask@ orph0 = Requests::OrphanOf(w.def);
+		Perf::Add("exec.orph", _tOr);
 		if ((orph0 !is null) && AdoptWorthDetour(unit, w,
 				orph0.GetBuildPos(), Requests::Progress(orph0)))
 			return orph0;
+		const double _tPe = Perf::T0();
 		CCircuitUnit@ pf0 = Requests::PendAnyOfDef(w.def, unit.GetPos(ai.frame));
+		Perf::Add("exec.pend", _tPe);
 		if ((pf0 !is null)
 			&& (Builder::ThreatFor(unit, pf0.GetPos(ai.frame))
 				<= Builder::CON_THREAT_VETO)

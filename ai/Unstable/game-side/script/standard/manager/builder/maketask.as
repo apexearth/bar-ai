@@ -17,35 +17,56 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	return _r;
 }
 
+// The rezzer chain keeps Decide's per-unit cadence: an idle rez bot
+// otherwise re-runs the whole corpse/medic/salvage scan every idle update
+// (flee is not rate-limited -- safety stays live). Spring unit ids cap at
+// 32k, same sizing as Market::gLastDecideAt.
+array<int> gRzDecideAt(32001, -30000);
+
+// A fallen commander outranks every other rez job -- flee alone comes
+// first (a dead rez bot rescues nobody).
+IUnitTask@ RezzerChain(CCircuitUnit@ unit)
+{
+	IUnitTask@ t = RezzerComRescue(unit);
+	if (t !is null)
+		return t;
+	@t = RezzerMedic(unit);
+	if (t !is null)
+		return t;
+	@t = RezzerFrontSalvage(unit);
+	if (t !is null)
+		return t;
+	@t = RezzerEatCorpse(unit);
+	if (t !is null)
+		return t;
+	@t = RezzerRezOrEat(unit);
+	if (t !is null)
+		return t;
+	@t = RezzerRepairNearby(unit);
+	if (t !is null)
+		return t;
+	return RezzerIdle(unit);
+}
+
 IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 {
 
 	// Unit thoughts for rez bots: safety first, then opportunism.
+	const double _tFl = Perf::T0();
 	IUnitTask@ t = RezzerFlee(unit);
+	Perf::Add("bld.flee", _tFl);
 	if (t !is null)
 		return t;
 	if (IsRezzer(unit)) {
-		// A fallen commander outranks every other rez job -- flee alone
-		// comes first (a dead rez bot rescues nobody).
-		@t = RezzerComRescue(unit);
-		if (t !is null)
-			return t;
-		@t = RezzerMedic(unit);
-		if (t !is null)
-			return t;
-		@t = RezzerFrontSalvage(unit);
-		if (t !is null)
-			return t;
-		@t = RezzerEatCorpse(unit);
-		if (t !is null)
-			return t;
-		@t = RezzerRezOrEat(unit);
-		if (t !is null)
-			return t;
-		@t = RezzerRepairNearby(unit);
-		if (t !is null)
-			return t;
-		return RezzerIdle(unit);
+		if ((int(unit.id) >= 0) && (int(unit.id) < int(gRzDecideAt.length()))) {
+			if (ai.frame - gRzDecideAt[int(unit.id)] < 2 * SECOND)
+				return null;
+			gRzDecideAt[int(unit.id)] = ai.frame;
+		}
+		const double _tRz = Perf::T0();
+		IUnitTask@ rz = RezzerChain(unit);
+		Perf::Add("bld.rezzer", _tRz);
+		return rz;
 	}
 
 	// Hold work already in progress: a task the unit is on stays its task.
