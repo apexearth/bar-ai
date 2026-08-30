@@ -36,6 +36,18 @@ standing, 0 self-reclaims, rimDAvg −204, wall closure 0.58 vs 0.20.
    actually meet.
 6. The closure-ring candidates (`apex_def_ring`, entry below) are OFF-path
    while `apex_wall=1`; that entry's "awaiting measurement" is superseded.
+7. **His 2v2 expectation — "a clear line of towers across the map" — is
+   NOT met yet, and the blocker is the army, not the placement.** After
+   the line rework (slots across the lane, joined to ally lanes, full
+   pull, enemy-cost safety gate) the machinery sites correctly: 1v1
+   hold-0.3 win with 26 towers 69% enemy-side; 2v2 team 0 stood 19
+   towers at closure 0.33 by minute 20. But three 2v2s vs BARb medium
+   lost in a row on army/eco, so the front collapses to the base corner
+   and the wall honestly concentrates THERE — which reads on screen as
+   "towers in the middle of our base like always". A midfield line
+   requires the midfield held; that is the standing team-game gap (8v8
+   entry below), not a defence-siting defect. Re-show him a 2v2 after
+   the team-fight work moves.
 
 ## 2026-08-30 — 8v8 vs 1v1 gap: the measured deltas from the first clean Supreme Isthmus soak
 
