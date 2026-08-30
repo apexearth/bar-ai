@@ -6572,7 +6572,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..faacffd 100644
+index bc8ff11..8b9546c 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -6622,7 +6622,7 @@ index bc8ff11..faacffd 100644
  }
  
  bool IBuilderTask::CanAssignTo(CCircuitUnit* unit) const
-@@ -134,8 +142,11 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -134,8 +142,14 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  	}
  
  	if (unit->HasDGun()) {
@@ -6631,12 +6631,15 @@ index bc8ff11..faacffd 100644
 +		// apex: dgun range only, not LOS. At LOS radius the DGun order (queue-
 +		// replacing, no SHIFT) walks a working commander after anything he can
 +		// see -- the chase-and-forget apexearth watched. Close threats his
-+		// regular gun already answers; the D-gun stays point-blank.
-+		unit->PushDGunAct(new CDGunAction(unit, unit->GetDGunRange()));
++		// regular gun already answers; the D-gun stays point-blank -- EXCEPT
++		// for a target worth more than the owner itself (mayClose): a Titan
++		// at laser range one-shots for the price of a short walk, and trading
++		// lasers with it instead is how a commander dies with the dgun ready.
++		unit->PushDGunAct(new CDGunAction(unit, unit->GetDGunRange(), true));
  	}
  	if (unit->GetCircuitDef()->IsAbleToCapture()) {
  		unit->PushBack(new CCaptureAction(unit, 500.f));
-@@ -157,9 +168,6 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -157,9 +171,6 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  
  void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
  {
@@ -6646,7 +6649,7 @@ index bc8ff11..faacffd 100644
  	if (initiator == unit) {
  		initiator = nullptr;
  	}
-@@ -285,13 +293,94 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -285,13 +296,94 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -6744,7 +6747,7 @@ index bc8ff11..faacffd 100644
  	if (utils::is_valid(buildPos)) {
  		TRY_UNIT(circuit, unit,
  			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
-@@ -302,6 +391,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -302,6 +394,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  
  		// Fallback to Guard/Assist/Patrol
@@ -6752,7 +6755,7 @@ index bc8ff11..faacffd 100644
  		manager->FallbackTask(unit);
  		return false;
  	}
-@@ -315,8 +405,22 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -315,8 +408,22 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
  	} else if (buildFails <= TASK_RETRIES) {
  		RemoveAssignee(unit);
  	} else if (target == nullptr) {
@@ -6776,7 +6779,7 @@ index bc8ff11..faacffd 100644
  	}
  }
  
-@@ -333,10 +437,87 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -333,10 +440,87 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		return;
  	}
  
@@ -6864,7 +6867,7 @@ index bc8ff11..faacffd 100644
  		manager->AbortTask(this);  // Doesn't call RemoveAssignee
  	}
  }
-@@ -346,6 +527,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -346,6 +530,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  	RemoveAssignee(unit);
  	// NOTE: AbortTask usually does not call RemoveAssignee for each unit
  	if (((target == nullptr) || units.empty()) && !unit->IsMorphing()) {
@@ -6872,7 +6875,7 @@ index bc8ff11..faacffd 100644
  		manager->AbortTask(this);
  	}
  }
-@@ -427,18 +609,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -427,18 +612,25 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -6905,7 +6908,7 @@ index bc8ff11..faacffd 100644
  	}
  }
  
-@@ -447,13 +636,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -447,13 +639,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  	CCircuitAI* circuit = manager->GetCircuit();
  
  	// FIXME: Replace const 1000.0f with build time?
@@ -6928,7 +6931,7 @@ index bc8ff11..faacffd 100644
  		manager->AbortTask(this);
  		return false;
  	}
-@@ -492,12 +689,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -492,12 +692,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  		if ((buildType != BuildType::GUARD)
  			&& ((executors.size() < 2) || !unit->IsAttrBase()))
  		{
@@ -6951,7 +6954,7 @@ index bc8ff11..faacffd 100644
  				}
  			)
  			return true;
-@@ -508,6 +713,24 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -508,6 +716,24 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  			unit->CmdWait(false);
  		)
  	}
@@ -6976,7 +6979,7 @@ index bc8ff11..faacffd 100644
  	HideAssignee(unit);
  	IUnitTask* task = manager->MakeTask(unit);
  	ShowAssignee(unit);
-@@ -529,9 +752,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -529,9 +755,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  	CCircuitDef* cdef = unit->GetCircuitDef();
  	const float range = cdef->GetBuildDistance();
  	const AIFloat3& endPos = GetPosition();
@@ -7004,7 +7007,7 @@ index bc8ff11..faacffd 100644
  		manager->AbortTask(this);
  		return;
  	}
-@@ -542,7 +782,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -542,7 +785,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -7015,7 +7018,7 @@ index bc8ff11..faacffd 100644
  		return;
  	}
  
-@@ -565,11 +807,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +810,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -7039,7 +7042,7 @@ index bc8ff11..faacffd 100644
  	}
  }
  
-@@ -637,14 +889,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +892,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -7096,7 +7099,7 @@ index bc8ff11..faacffd 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +952,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +955,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
@@ -7185,18 +7188,19 @@ index e49a5b3..4c414a3 100644
  			return false;
  		};
 diff --git a/src/circuit/task/builder/PatrolTask.cpp b/src/circuit/task/builder/PatrolTask.cpp
-index e59dc26..e5c276e 100644
+index e59dc26..66dae2f 100644
 --- a/src/circuit/task/builder/PatrolTask.cpp
 +++ b/src/circuit/task/builder/PatrolTask.cpp
-@@ -31,8 +31,9 @@ void CBPatrolTask::AssignTo(CCircuitUnit* unit)
+@@ -31,8 +31,10 @@ void CBPatrolTask::AssignTo(CCircuitUnit* unit)
  	IPatrolTask::AssignTo(unit);
  
  	if (unit->HasDGun()) {
 -		const float range = std::max(unit->GetDGunRange(), unit->GetCircuitDef()->GetLosRadius());
 -		unit->PushDGunAct(new CDGunAction(unit, range));
 +		// apex: dgun range only, not LOS -- same as BuilderTask; a patrolling
-+		// builder must not pursue everything in sight.
-+		unit->PushDGunAct(new CDGunAction(unit, unit->GetDGunRange()));
++		// builder must not pursue everything in sight. mayClose: a target
++		// worth more than the owner is the one exception (see BuilderTask).
++		unit->PushDGunAct(new CDGunAction(unit, unit->GetDGunRange(), true));
  	}
  //	if (unit->GetCircuitDef()->IsAbleToCapture()) {
  //		unit->PushBack(new CCaptureAction(unit, 500.f));
@@ -14038,6 +14042,126 @@ index 2679aa1..51c3d79 100644
  #if 0
  	for (CCircuitDef::Id facId : availFacs) {
  		circuit->LOG("%s | %f", circuit->GetCircuitDef(facId)->GetDef()->GetName(), percents[facId]);
+diff --git a/src/circuit/unit/action/DGunAction.cpp b/src/circuit/unit/action/DGunAction.cpp
+index b35cc1b..8583d0e 100644
+--- a/src/circuit/unit/action/DGunAction.cpp
++++ b/src/circuit/unit/action/DGunAction.cpp
+@@ -21,9 +21,10 @@ namespace circuit {
+ 
+ using namespace springai;
+ 
+-CDGunAction::CDGunAction(CCircuitUnit* owner, float range)
++CDGunAction::CDGunAction(CCircuitUnit* owner, float range, bool mayClose)
+ 		: IUnitAction(owner, Type::DGUN)
+ 		, range(range)
++		, mayClose(mayClose)
+ 		, updCount(0)
+ {
+ }
+@@ -48,7 +49,16 @@ void CDGunAction::Update(CCircuitAI* circuit)
+ 		return;
+ 	}
+ 	const AIFloat3& pos = unit->GetPos(frame);
+-	auto& enemies = circuit->GetCallback()->GetEnemyUnitIdsIn(pos, range);
++	// apex: THE DGUN SCAN ONLY SAW WHAT WAS ALREADY IN RANGE, and a fighting
++	// commander stands at his LASER range, which is longer -- so he traded
++	// laser-vs-laser with a Titan and died with the dgun ready (apexearth,
++	// watched: "our commander decided to 1v1 a titan *without d-gun*"). The
++	// engine's DGun order on a unit target walks into range, so a target
++	// worth more than the owner itself may be picked slightly beyond range
++	// and walked to. Opt-in per task (mayClose).
++	const float closeMult = mayClose
++			? std::max(1.f, circuit->GetTunable("apex_dgun_close_mult", 2.f)) : 1.f;
++	auto& enemies = circuit->GetCallback()->GetEnemyUnitIdsIn(pos, range * closeMult);
+ 	if (enemies.empty()) {
+ 		return;
+ 	}
+@@ -60,8 +70,15 @@ void CDGunAction::Update(CCircuitAI* circuit)
+ 	const bool IsInWater = cdef->IsInWater(map->GetElevationAt(pos.x, pos.z), pos.y);
+ 	const bool isLowTraj = !unit->IsDGunHigh();
+ 	const bool notByCost = !unit->GetCircuitDef()->IsAttrDGCost();
++	const float sqRange = SQUARE(range);
++	// A walk-in is bought only for a target worth at least the owner: the dgun
++	// one-shots it, so the trade is the target's cost against the walk's risk.
++	const float worthBar = cdef->GetCostM()
++			* std::max(0.1f, circuit->GetTunable("apex_dgun_close_worth", 1.f));
+ 	CEnemyInfo* bestTarget = nullptr;
+ 	float maxScore = 0.f;
++	CEnemyInfo* bestFar = nullptr;
++	float maxFar = 0.f;
+ 
+ 	for (int eId : enemies) {
+ 		CEnemyInfo* enemy = circuit->GetEnemyInfo(eId);
+@@ -93,7 +110,13 @@ void CDGunAction::Update(CCircuitAI* circuit)
+ 			}
+ 		}
+ 
+-		if (isLowTraj) {
++		const bool inRange = pos.SqDistance2D(ePos) <= sqRange;
++		if (!inRange && (edef->GetCostM() < worthBar)) {
++			continue;
++		}
++		// The ray is only meaningful from where the shot would be taken; a
++		// walk-in changes the geometry, so it is checked in range only.
++		if (isLowTraj && inRange) {
+ 			AIFloat3 dir = enemy->GetPos() - pos;
+ 			float rayRange = dir.LengthNormalize();
+ 			// NOTE: TraceRay check is mostly to ensure shot won't go into terrain.
+@@ -106,14 +129,26 @@ void CDGunAction::Update(CCircuitAI* circuit)
+ 		}
+ 
+ 		const float defScore = notByCost ? edef->GetPower() : edef->GetCostM();
+-		if (maxScore < defScore) {
+-			maxScore = defScore;
+-			bestTarget = enemy;
++		if (inRange) {
++			if (maxScore < defScore) {
++				maxScore = defScore;
++				bestTarget = enemy;
++			}
++		} else if (maxFar < defScore) {
++			maxFar = defScore;
++			bestFar = enemy;
+ 		}
+ 	}
+ 
++	// An in-range shot always outranks a walk; the walk gets a longer command
++	// timeout to cover the approach.
++	int timeout = frame + FRAMES_PER_SEC * 5;
++	if (bestTarget == nullptr) {
++		bestTarget = bestFar;
++		timeout = frame + FRAMES_PER_SEC * 10;
++	}
+ 	if (bestTarget != nullptr) {
+-		unit->ManualFire(bestTarget, frame + FRAMES_PER_SEC * 5);
++		unit->ManualFire(bestTarget, timeout);
+ 		unit->ClearTarget();
+ 		isBlocking = true;
+ 	}
+diff --git a/src/circuit/unit/action/DGunAction.h b/src/circuit/unit/action/DGunAction.h
+index 4a6cad0..fc67744 100644
+--- a/src/circuit/unit/action/DGunAction.h
++++ b/src/circuit/unit/action/DGunAction.h
+@@ -14,13 +14,18 @@ namespace circuit {
+ 
+ class CDGunAction: public IUnitAction {
+ public:
+-	CDGunAction(CCircuitUnit* owner, float range);
++	// mayClose: the owner may WALK to a target beyond dgun range when that
++	// target is worth more than the owner itself (see Update). Only tasks
++	// where the owner is free to step out (build/patrol) pass true; a
++	// retreating unit must never turn back for a shot.
++	CDGunAction(CCircuitUnit* owner, float range, bool mayClose = false);
+ 	virtual ~CDGunAction();
+ 
+ 	virtual void Update(CCircuitAI* circuit) override;
+ 
+ private:
+ 	float range;
++	bool mayClose;
+ 	unsigned int updCount;
+ };
+ 
 diff --git a/src/circuit/unit/action/MoveAction.cpp b/src/circuit/unit/action/MoveAction.cpp
 index a01329c..9b0a3d1 100644
 --- a/src/circuit/unit/action/MoveAction.cpp

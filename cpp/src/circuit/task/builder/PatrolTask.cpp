@@ -32,8 +32,9 @@ void CBPatrolTask::AssignTo(CCircuitUnit* unit)
 
 	if (unit->HasDGun()) {
 		// apex: dgun range only, not LOS -- same as BuilderTask; a patrolling
-		// builder must not pursue everything in sight.
-		unit->PushDGunAct(new CDGunAction(unit, unit->GetDGunRange()));
+		// builder must not pursue everything in sight. mayClose: a target
+		// worth more than the owner is the one exception (see BuilderTask).
+		unit->PushDGunAct(new CDGunAction(unit, unit->GetDGunRange(), true));
 	}
 //	if (unit->GetCircuitDef()->IsAbleToCapture()) {
 //		unit->PushBack(new CCaptureAction(unit, 500.f));

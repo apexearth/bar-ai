@@ -296,6 +296,8 @@ local NAMES = {
 	"apex_defend_home_odds",
 	"apex_defend_towers",
 	"apex_home_muster",
+	"apex_dgun_close_mult",
+	"apex_dgun_close_worth",
 	"apex_escort_standoff",
 	"apex_con_energy_reclaim",
 	"apex_ally_aggregate",

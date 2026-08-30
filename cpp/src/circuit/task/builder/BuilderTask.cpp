@@ -145,8 +145,11 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
 		// apex: dgun range only, not LOS. At LOS radius the DGun order (queue-
 		// replacing, no SHIFT) walks a working commander after anything he can
 		// see -- the chase-and-forget apexearth watched. Close threats his
-		// regular gun already answers; the D-gun stays point-blank.
-		unit->PushDGunAct(new CDGunAction(unit, unit->GetDGunRange()));
+		// regular gun already answers; the D-gun stays point-blank -- EXCEPT
+		// for a target worth more than the owner itself (mayClose): a Titan
+		// at laser range one-shots for the price of a short walk, and trading
+		// lasers with it instead is how a commander dies with the dgun ready.
+		unit->PushDGunAct(new CDGunAction(unit, unit->GetDGunRange(), true));
 	}
 	if (unit->GetCircuitDef()->IsAbleToCapture()) {
 		unit->PushBack(new CCaptureAction(unit, 500.f));
