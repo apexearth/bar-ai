@@ -8,6 +8,19 @@ namespace Market {
 AIFloat3 gFarmPos;
 bool gFarmSet = false;
 
+// Safe ground for a healthy unit told to leave the front: the farm when
+// planned, else home. A function so files compiled before this one
+// (Builder::Retreat in sitesafety.as) can read it -- the globals above are
+// not visible there.
+AIFloat3 RetirePos()
+{
+	if (gFarmSet)
+		return gFarmPos;
+	if (Builder::gHomeSet)
+		return Builder::gHomePos;
+	return AIFloat3(-1.f, 0.f, -1.f);
+}
+
 // The best available nano's reach -- the coverage circle everything in the
 // farm must fit inside.
 float gNanoRange = -1.f;

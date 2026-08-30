@@ -16,11 +16,40 @@ namespace Builder {
 // return fire, idk what else they're thinking about... standing around doing
 // nothing." The commander was correctly told to flee every time -- it just
 // never got to finish leaving.
+int gNextRetireLog = 0;
+
 IUnitTask@ Retreat(CCircuitUnit@ unit)
 {
 	IUnitTask@ held = unit.task;
 	if ((held !is null) && (held.GetType() == Task::Type::RETREAT))
 		return held;
+	// CRetreatTask HEALS, it does not reposition: its Update() Recovers
+	// (tears down) any assignee reading >98% health on the first update,
+	// before the first step -- for a healthy unit the retreat is a silent
+	// no-op and it stays exactly where it was told to leave. Send the
+	// healthy home by patrol instead: real movement, and a patrolling
+	// builder still repairs and reclaims whatever it passes.
+	if (unit.GetHealthPercent() > 0.98f) {
+		if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
+			&& (held.GetBuildType() == Task::BuildType::PATROL))
+		{
+			return held;
+		}
+		const AIFloat3 rear = Market::RetirePos();
+		if (OnMap(rear)) {
+			IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(
+					Task::Priority::LOW, rear, 20 * SECOND));
+			if (pt !is null) {
+				if (ai.frame >= gNextRetireLog) {
+					gNextRetireLog = ai.frame + 20 * SECOND;
+					AiLog("apex: retire t=" + ai.teamId + " "
+						+ unit.circuitDef.GetName() + " #" + unit.id
+						+ " -> patrol home");
+				}
+				return pt;
+			}
+		}
+	}
 	return aiBuilderMgr.EnqueueRetreat();
 }
 

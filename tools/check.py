@@ -461,6 +461,9 @@ _SPEND_ALLOWED = {
     # the never-idle floor, reachable only from Decide's two idle exits: it
     # commits no metal, it lends an idle lathe to work already commissioned
     "manager/brain/market/floor.as": {"Enqueue(TaskB::"},
+    # Retreat's healthy-unit path: a patrol to home ground commits no metal,
+    # it moves a unit the heal-up CRetreatTask would tear down where it stands
+    "manager/builder/sitesafety.as": {"Enqueue(TaskB::"},
     # an assist turret commits no metal: it applies build power to work the
     # arbiter already commissioned, and CreateAssistTask (its only route to a
     # target) is reachable from script through DefaultMakeTask alone.
