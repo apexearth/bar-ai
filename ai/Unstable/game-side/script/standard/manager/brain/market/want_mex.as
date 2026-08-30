@@ -283,7 +283,11 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	// enemy bearing, our home, the role and the leash. Read once -- on an 8v8
 	// map this loop runs over a hundred spots per election per builder.
 	const bool foeKnown = Front::FoeKnown();
-	const AIFloat3 foeAt = aiEnemyMgr.GetEnemyPos();
+	// FoeAnchor, NOT aiEnemyMgr.GetEnemyPos(): the centroid walks home with a
+	// raid, the axis collapses, and this sweep reads the whole map as
+	// enemy-side (frontline.as:757 -- the same bug PastFrontFrac was already
+	// cured of; this copy was missed).
+	const AIFloat3 foeAt = Front::FoeAnchor();
 	const float fex = foeAt.x - Builder::gHomePos.x;
 	const float fez = foeAt.z - Builder::gHomePos.z;
 	const float fspan = fex * fex + fez * fez;
