@@ -18,6 +18,18 @@ want.protect's fill residual (~3.3ms/call at scale, cap already 2/frame).
 Compare `perf sec`/`perf AiFrame` on the next long high-income game
 against the numbers above; the 10% bar is AiFrame ≤ ~1s/min at that scale.
 
+Round 1+2 MEASURED (repro-4: Archsimkats +150% seed 2, WON, 1675 m/s,
+395 builders, f=63000 window vs the baseline's same window): AiFrame
+10,054 -> 4,652ms/min (-54%), worst frame 172 -> 69ms,
+hk.maketask.builder 6,975 -> 2,265ms (-68%), full stacks 407 -> 148/min,
+exec.knano 11.7 -> 3.4ms/call. dec.deferred fired 5 times all game (the
+budget is a backstop). What remains at that scale: want.protect 634 +
+fills ~690 (miss cost ~4.3ms), want.mexup 436 (game-shape dependent,
+asker-relative so not memoized), and ~2.1s/min NON-HOOK C++ (threat maps,
+enemy manager, task updates) which no script change reaches -- the next
+2x needs the DLL profiled (cpp-dll skill), or accepting ~2x over his bar.
+His watched feel on the next dashboard game is the acceptance test.
+
 ## 2026-08-29 (late night) — air release: non-lead home-wave still tracks the live want
 
 The lead's release gates were all indexed to ScaledBombers(), which grows
