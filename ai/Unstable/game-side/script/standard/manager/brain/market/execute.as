@@ -399,32 +399,34 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				const AIFloat3 sp = lt.GetBuildPos();
 				if (!OnMap(sp))
 					continue;
+				// The sink's own metal density converts BP on it into m/s,
+				// as the want side prices it.
+				const float sdens2 = (Catalog::gBuildTime[bd3] > 1.f)
+						? (Catalog::gCostM[bd3] / Catalog::gBuildTime[bd3])
+						: (7.f / 80.f);
 				float drain = 0.f;
 				for (uint ci = 0; ci < crew.length(); ++ci) {
 					if (crew[ci] !is null)
 						drain += Catalog::gBuildPower[int(crew[ci].circuitDef.id)]
-								* (7.f / 80.f);
+								* sdens2;
 				}
-				int nanosAt = 0;
-				for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
-					if (sp.distance2D(gOwnNanoPos[ni]) < 350.f)
-						++nanosAt;
-				}
+				const float ringEat2 = RingBPAt(sp) * sdens2;
 				// The crew is SUPPLY, not demand: a frame whose cons already
 				// eat the free flow earns nothing from another turret.
 				// Priced in the want side's currency (site_share) -- unshared
 				// feed here let a sink outbid the line that won the want.
 				const float feed2 = FreeMetalFlow()
 						* ai.GetTunable("apex_nano_site_share", TUNE_NANO_SITE_SHARE);
-				float u2 = feed2 - drain - float(nanosAt) * NANO_ABSORB;
+				float u2 = feed2 - drain - ringEat2;
 				// Same remaining-life scale as the want side (see
 				// want_nano.as): a frame's stream dies at completion, a
 				// line's does not.
 				{
-					const float eat2 = drain + float(nanosAt) * NANO_ABSORB;
+					const float eat2 = drain + ringEat2;
+					const float oneNano2 = 200.f * sdens2;
 					const float H2 = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 					float life2 = Catalog::gCostM[bd3]
-							/ ((eat2 > NANO_ABSORB) ? eat2 : NANO_ABSORB);
+							/ ((eat2 > oneNano2) ? eat2 : oneNano2);
 					float sh2 = life2 / ((H2 > 1.f) ? H2 : 900.f);
 					if (sh2 < 1.f)
 						u2 *= sh2;

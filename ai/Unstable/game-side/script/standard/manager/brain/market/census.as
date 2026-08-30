@@ -372,6 +372,7 @@ void NoteFinished(CCircuitUnit@ unit)
 array<AIFloat3> gOwnNanoPos;
 array<Id> gOwnNanoIds;
 array<float> gOwnNanoReach;
+array<float> gOwnNanoBP;
 
 void NoteFarm(CCircuitUnit@ unit)
 {
@@ -403,6 +404,7 @@ void NoteFarm(CCircuitUnit@ unit)
 	gOwnNanoPos.insertLast(unit.GetPos(ai.frame));
 	gOwnNanoIds.insertLast(unit.id);
 	gOwnNanoReach.insertLast(Catalog::gBuildDist[d]);
+	gOwnNanoBP.insertLast(Catalog::gBuildPower[d]);
 	if (gFarmSet)
 		return;
 	gFarmPos = unit.GetPos(ai.frame);
@@ -465,6 +467,8 @@ void NoteDead(CCircuitUnit@ unit)
 			gOwnNanoIds.removeAt(nn);
 			if (nn < gOwnNanoReach.length())
 				gOwnNanoReach.removeAt(nn);
+			if (nn < gOwnNanoBP.length())
+				gOwnNanoBP.removeAt(nn);
 			break;
 		}
 	}

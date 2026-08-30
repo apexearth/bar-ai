@@ -102,12 +102,19 @@ void PendReindex(int gone)
 // What actually builds on this line: the plant's own workertime plus the share
 // of the assist turrets standing over the base. Which turret serves which line
 // is not tracked; an even share is enough to size a queue with.
+// The line's REAL lathe: its own arm plus the nano ring actually reaching it.
+// The fleet-average AssistBPShare form under-read a ringed gantry ~2.5x, so
+// the batch loop buffered "15 seconds" that drained in six and the line sat
+// dry until the next Wait -- his watched "labs weren't making anything" while
+// the bank pegged full.
 float LineBuildPower(CCircuitUnit@ fac)
 {
 	if ((fac is null) || (fac.circuitDef is null))
 		return 0.f;
 	const float own = Catalog::gBuildPower[int(fac.circuitDef.id)];
-	return (own > 0.f) ? own * (1.f + Market::AssistBPShare()) : 0.f;
+	if (own <= 0.f)
+		return 0.f;
+	return own + Market::RingBPAt(fac.GetPos(ai.frame));
 }
 
 // Work outstanding on a line, in seconds of that line's own build time.

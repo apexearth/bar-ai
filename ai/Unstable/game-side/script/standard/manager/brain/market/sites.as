@@ -817,6 +817,36 @@ float LineCostCeil(CCircuitUnit@ f)
 	return ceil;
 }
 
+// Metal per buildtime-unit of the line's flagship product: converts BP
+// serving this line into the m/s it can actually absorb. The flat 7/80
+// average read a gantry nano at 17.5 m/s when a Vanguard line runs it at
+// 7.3 -- so the supply ledger said "served" at half the ring the line
+// needed, which is the arithmetic behind their 35-nano gantry vs our 6.
+float LineDensity(CCircuitUnit@ f)
+{
+	float dens = 7.f / 80.f;
+	if ((f is null) || (f.circuitDef is null))
+		return dens;
+	float best = 0.f;
+	const array<int>@ pr = Catalog::BuildsOf(int(f.circuitDef.id));
+	for (uint q = 0; q < pr.length(); ++q) {
+		if (!Catalog::gMobile[pr[q]] || (Catalog::gCostM[pr[q]] <= best))
+			continue;
+		best = Catalog::gCostM[pr[q]];
+		if (Catalog::gBuildTime[pr[q]] > 1.f)
+			dens = Catalog::gCostM[pr[q]] / Catalog::gBuildTime[pr[q]];
+	}
+	return dens;
+}
+
+// What the lathe standing at this line actually eats [m/s]: its own arm plus
+// the nano ring, at the line's product density.
+float LineEat(CCircuitUnit@ f, const AIFloat3& in fp)
+{
+	return (Catalog::gBuildPower[int(f.circuitDef.id)] + RingBPAt(fp))
+			* LineDensity(f);
+}
+
 // IS THIS LINE WORKING? CountQueued lags sends by a whole order window and
 // reads zero for work that is really on the line (facqueue.as), so the sent
 // ledger answers too.
@@ -868,14 +898,9 @@ float NeediestLine(AIFloat3& out at)
 		const AIFloat3 fp = f.GetPos(ai.frame);
 		if (!OnMap(fp))
 			continue;
-		int nanosNear = 0;
-		for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
-			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
-				++nanosNear;
-		}
-		// The plant's own lathe counts: it is already eating part of the share.
-		const float own = Catalog::gBuildPower[int(f.circuitDef.id)] * (7.f / 80.f);
-		const float u = share - own - float(nanosNear) * NANO_ABSORB;
+		// The plant's own lathe counts: it is already eating part of the
+		// share -- at the line's own product density, not the 7/80 average.
+		const float u = share - LineEat(f, fp);
 		if (u > worst) {
 			worst = u;
 			at = fp;
@@ -886,10 +911,10 @@ float NeediestLine(AIFloat3& out at)
 
 // A working line at all, worst-served first -- the site an ARMY shortfall
 // wants a lathe at even when the line's own spend is already served.
-// The line with the least lathe on it, and HOW MUCH is already there. The
-// count is an out param because the caller has to net it off its own demand:
-// an army shortfall that ignores the turrets already serving the line asks for
-// the same turret forever.
+// The line with the least lathe on it, and HOW MUCH [m/s] is already there.
+// The eat is an out param because the caller has to net it off its own
+// demand: an army shortfall that ignores the turrets already serving the
+// line asks for the same turret forever.
 bool AnyLineSite(AIFloat3& out at, float& out lathe)
 {
 	float fewest = -1.f;
@@ -900,13 +925,9 @@ bool AnyLineSite(AIFloat3& out at, float& out lathe)
 		const AIFloat3 fp = f.GetPos(ai.frame);
 		if (!OnMap(fp))
 			continue;
-		float nanosNear = 0.f;
-		for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
-			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
-				nanosNear += 1.f;
-		}
-		if ((fewest < 0.f) || (nanosNear < fewest)) {
-			fewest = nanosNear;
+		const float eat = LineEat(f, fp);
+		if ((fewest < 0.f) || (eat < fewest)) {
+			fewest = eat;
 			at = fp;
 		}
 	}
@@ -927,6 +948,18 @@ float NanoLatheReaching(const AIFloat3& in at)
 	return lathe;
 }
 
+// Raw build power [BP] from standing nanos whose reach covers this ground.
+float RingBPAt(const AIFloat3& in at)
+{
+	float bp = 0.f;
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+		if (at.distance2D(gOwnNanoPos[i]) < r)
+			bp += (i < gOwnNanoBP.length()) ? gOwnNanoBP[i] : 200.f;
+	}
+	return bp;
+}
+
 float UnservedLineSpend()
 {
 	float unserved = 0.f;
@@ -944,13 +977,8 @@ float UnservedLineSpend()
 		const float share = (sumCeil > 1.f)
 				? (per * float(Factory::gFactoryCount) * LineCostCeil(f) / sumCeil)
 				: per;
-		int nanosNear = 0;
 		const AIFloat3 fp = f.GetPos(ai.frame);
-		for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
-			if (fp.distance2D(gOwnNanoPos[ni]) < 350.f)
-				++nanosNear;
-		}
-		const float u = share - float(nanosNear) * NANO_ABSORB;
+		const float u = share - LineEat(f, fp);
 		if (u > 0.f)
 			unserved += u;
 	}

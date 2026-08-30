@@ -36,11 +36,13 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		const AIFloat3 sp3 = st.GetBuildPos();
 		if (!OnMap(sp3))
 			continue;
-		int nAt = 0;
-		for (uint ni = 0; ni < gOwnNanoPos.length(); ++ni) {
-			if (sp3.distance2D(gOwnNanoPos[ni]) < 350.f)
-				++nAt;
-		}
+		// The sink's own metal density prices what lathe here can absorb:
+		// an AFUS runs 0.11 m per buildtime-unit where the 7/80 flat said
+		// 0.0875 for everything.
+		const float sdens = (Catalog::gBuildTime[bd] > 1.f)
+				? (Catalog::gCostM[bd] / Catalog::gBuildTime[bd])
+				: (7.f / 80.f);
+		const float ringEat = RingBPAt(sp3) * sdens;
 		// ONE LAW FOR EVERY SITE: demand is what the economy can feed the
 		// site, less the lathe already standing on it. A binary "fewer than
 		// three" priced a frame at full free flow and counted its crew as
@@ -54,7 +56,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			for (uint ci = 0; ci < cu3.length(); ++ci) {
 				if ((cu3[ci] !is null) && (cu3[ci].circuitDef !is null))
 					crew3 += Catalog::gBuildPower[int(cu3[ci].circuitDef.id)]
-							* (7.f / 80.f);
+							* sdens;
 			}
 		}
 		// WHAT THE SITE CAN BE FED, NOT A NUMBER. This clamped demand at a
@@ -67,7 +69,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// turret count rises with income on its own and needs no ceiling.
 		const float free3 = FreeMetalFlow()
 				* ai.GetTunable("apex_nano_site_share", TUNE_NANO_SITE_SHARE);
-		float need = free3 - crew3 - float(nAt) * NANO_ABSORB;
+		float need = free3 - crew3 - ringEat;
 		// A FRAME'S STREAM DIES AT COMPLETION where a line's runs forever, so
 		// the sink's need is scaled by its remaining life over the payback
 		// horizon: cost over what the crew already eats. A bare afus reads
@@ -76,10 +78,11 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// whole feed -- measured 2074 sink sitings against 2 line sitings,
 		// mean priced need 389 m/s, while 46% of income overflowed.
 		{
-			const float eat = crew3 + float(nAt) * NANO_ABSORB;
+			const float eat = crew3 + ringEat;
+			const float oneNano = 200.f * sdens;
 			const float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 			float life = Catalog::gCostM[bd]
-					/ ((eat > NANO_ABSORB) ? eat : NANO_ABSORB);
+					/ ((eat > oneNano) ? eat : oneNano);
 			float sh = life / ((H > 1.f) ? H : 900.f);
 			if (sh < 1.f)
 				need *= sh;
@@ -113,7 +116,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			// never close the gap. Build power demanding build power.
 			float lathe = 0.f;
 			if ((wantRate > 0.f) && AnyLineSite(armyPos, lathe)) {
-				armyNeed = wantRate - lathe * NANO_ABSORB;
+				armyNeed = wantRate - lathe;
 				if (armyNeed < 0.f)
 					armyNeed = 0.f;
 			}

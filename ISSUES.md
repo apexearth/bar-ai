@@ -23,6 +23,33 @@ our gantries." The gantry-nano saga is EXPLICITLY off-limits without a
 fresh ask (see memory gantry-nano-saga): ~2 dozen failed in-the-box
 attempts; needs a design change, proposed before patched.
 
+## 2026-08-29 (night) — nano saga root-caused on the fresh ask; abandonment leak still OPEN
+
+The fresh ask (Archsimkats +100% 1v1: "35+ nanos on their gantry, ~6 on
+ours, not affordability, we can't produce enough military"). Root cause
+was TWO arithmetic lies feeding each other, fixed in the same-day commit
+(see it for the measurements):
+1. facqueue LineBuildPower used a fleet-average assist share, blind to
+   the actual ring — a ringed gantry's "15s" queue drained in ~6s and
+   the line sat dry until the next 10s Wait. His watched symptom: "the
+   labs weren't making anything" while the bank pegged 84-99% full.
+2. The nano demand laws priced every standing nano at a flat 17.5 m/s
+   absorb (7/80 density); a Vanguard line runs 7.3. The supply ledger
+   said "served" at half the ring the line needed, so the market
+   correctly stopped buying turrets for a line that (per lie 1) could
+   not spend them anyway. Equilibrium: ~6-10 turrets at our gantry vs
+   stock's 65-71, army production flat at ~140 m/s vs stock compounding
+   to 306-489, 14% of all metal made overflowed.
+
+STILL OPEN — the completion leak under pressure: 92 armnanotc frames
+abandoned in the control loss (nanoroot-duty-s3; 333 nanoframes of all
+defs), 59 in his watched game, task-die why=unreach-safe 16/30. Post-23m
+in the watched game the market won 30 nano elections, executed 57, and
+net standing rose THREE. When the enemy pushes, the growth trickle dies
+as frames; the fights/defence campaign owns the killed half, but the
+unreach-safe/orphan half is ours. Instrument: [BARAI_DUTY] +
+nanos-at-best-factory audit (both live as of 045fa22).
+
 ## 2026-08-29 (arena) — amphibious units act cowardly (OPEN)
 
 apexearth, watching arena rounds: "Not sure why but our amphibious tanks
