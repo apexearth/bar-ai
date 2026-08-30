@@ -142,14 +142,15 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 	float minM = ai.GetTunable("apex_join_min_m", TUNE_JOIN_MIN_M);
 	if (minM > 150.f)
 		minM = 150.f;
-	// HANDS BEFORE SITES: while a stall or an overflowing bank licenses
-	// parallel energy, tier discipline yields -- a bigger elected want folds
-	// onto the smaller job already rising, because hands on a standing frame
-	// bring power sooner than a fresh, larger hole in the ground. Outside
-	// that regime the one-direction rule stands (a fusion want must not
-	// babysit a solar and starve the tier climb).
-	const bool handsFirst = HardEStall() || EnergyShortOfOrdered()
-			|| (MCostScale() < 1.f);
+	// HANDS BEFORE SITES, unconditionally: a bigger elected want folds onto
+	// the smaller job already rising, because hands on a standing frame bring
+	// power sooner than a fresh, larger hole in the ground. This was first
+	// gated on a stall/overflow regime, and the regime FLICKERED: the moment
+	// two ordered fusions covered the deficit, EnergyShortOfOrdered read
+	// clean, the fold-down switched off, and an afus want founded site #3
+	// beside them (watched live, 20.7m). The trinket case the old
+	// one-direction rule protected against is already bounded: the >=150m
+	// bar, the candidate's own crew cap, and WorthJoining's walk-vs-remaining.
 	IUnitTask@ best = null;
 	float bestScore = 0.f;
 	for (uint i = 0; i < Requests::gLive.length(); ++i) {
@@ -162,8 +163,6 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 		const float makeE = aiEconomyMgr.GetEnergyMake(cand.buildDef);
 		if (makeE <= 1.f)
 			continue;
-		if (!handsFirst && (want !is null) && (cost < want.costM))
-			continue;   // never downgrade a bigger want into assisting
 		const uint busy = Requests::Workers(cand);
 		// An abandoned frame IS a candidate: its bill is part-paid and
 		// nobody else will finish it. Unmanned with no frame yet stays

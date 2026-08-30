@@ -257,7 +257,11 @@ uint EffectiveCap(const CCircuitDef@ want)
 }
 
 // Every manned live site of this def carries its full crew. An unmanned
-// proposal does not block (it is claimable, not a working site).
+// PROPOSAL does not block (it is claimable, not a working site) -- but an
+// unmanned task with a STANDING FRAME does: the consolidation rung strips
+// worse energy sites to zero hands on purpose, and reading those as "not a
+// site" licensed a fresh duplicate beside the stripped frame (watched live
+// 20.0m: `request new armfus inFlight=1` right after consolidation).
 bool SitesSaturated(const CCircuitDef@ want)
 {
 	const uint cap = SiteWorkerCap(want);
@@ -269,7 +273,7 @@ bool SitesSaturated(const CCircuitDef@ want)
 		if ((has is null) || (has.id != want.id))
 			continue;
 		const uint busy = Workers(t);
-		if ((busy > 0) && (busy < cap))
+		if ((busy < cap) && ((busy > 0) || (t.target !is null)))
 			return false;
 	}
 	return true;
