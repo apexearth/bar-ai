@@ -38,6 +38,11 @@ const string TV_MINC   = "minc";
 // does not license a lab. TV_MINC stays raw for the front budget and the
 // census share: reclaimed metal really does buy units.
 const string TV_MINC_NET = "mincnet";
+// The player's standing ECONOMIC assets (Market::EconAssetsM) -- what a
+// teammate's forward guard post is protecting when a back player buys
+// defence at the front ally's door instead of its own (the ally-front
+// candidate in want_protect.as reads this as the site's stake).
+const string TV_ASSETM = "assetm";
 // A budget denominated in towers cannot bound a share of metal: it let the same
 // allowance buy a Sentry and a Pulsar. These two carry the front line's METAL
 // and the player's TOTAL metal spend, so the bound is a share, as targets.as
@@ -119,6 +124,7 @@ void PublishDefence()
 	ai.PublishTeamValue(TV_FFENCE, float(front));
 	ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
 	ai.PublishTeamValue(TV_MINC_NET, Market::StructuralIncomeEma());
+	ai.PublishTeamValue(TV_ASSETM, Market::EconAssetsM());
 	Market::NavalPublish();
 	ai.PublishTeamValue(TV_FMETAL, OwnFrontMetal());
 	ai.PublishTeamValue(TV_MSPEND, Brain::gSpentTotal);

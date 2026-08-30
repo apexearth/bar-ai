@@ -280,6 +280,7 @@ bool RadarGap(const AIFloat3& in from, AIFloat3& out at, float& out unseenFrac)
 const int CLOSE_RAYS = 16;
 array<bool> gClAllyShield;
 array<Id>@  gShieldMates = null;
+int gNextAllyFLog = 0;
 
 float LineClosure(const AIFloat3& in extraAt, float extraReach)
 {
@@ -360,8 +361,8 @@ void ClosurePrep()
 		for (uint m = 0; m < gShieldMates.length(); ++m) {
 			if (int(gShieldMates[m]) == ai.teamId)
 				continue;
-			const float mx = ai.ReadTeamValue(gShieldMates[m], "homex", -1.f);
-			const float mz = ai.ReadTeamValue(gShieldMates[m], "homez", -1.f);
+			const float mx = ai.ReadTeamValue(int(gShieldMates[m]), "homex", -1.f);
+			const float mz = ai.ReadTeamValue(int(gShieldMates[m]), "homez", -1.f);
 			if ((mx < 0.f) || (mz < 0.f))
 				continue;
 			hx.insertLast(mx);
@@ -896,6 +897,62 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			}
 		}
 	}
+	// A BACK PLAYER BUYS ITS DEFENCE AT THE FRONT ALLY'S DOOR (his ruling,
+	// refusing to host the 8v8: turrets belong "in front of their allies
+	// base who is in front of them"). Offered only while an ally actually
+	// shields one of our bearings -- a front player, and every 1v1, adds
+	// nothing here. One candidate: the most exposed teammate's home pushed
+	// one base-edge-plus-reach toward the enemy. Its stake is that ally's
+	// PUBLISHED economy (TV_ASSETM, defenceline.as) times our AnswerShare:
+	// each back player buys its SHARE of the team's front guard -- each
+	// instance sees only its own towers, so an unshared stake would stack
+	// N players' full demand on the same door.
+	const uint allyStart = sites.length();
+	float allyStake = 0.f;
+	if (gClRingOk && (ai.GetTunable("apex_def_ring", TUNE_DEF_RING) > 0.f)) {
+		bool behind = false;
+		for (uint sb = 0; !behind && (sb < gClAllyShield.length()); ++sb)
+			behind = gClAllyShield[sb];
+		AIFloat3 foeAt = aiEnemyMgr.GetEnemyPos();
+		if (behind && OnMap(foeAt) && (gShieldMates !is null)) {
+			int mate = -1;
+			float best = -1.f;
+			AIFloat3 mh;
+			for (uint m = 0; m < gShieldMates.length(); ++m) {
+				if (int(gShieldMates[m]) == ai.teamId)
+					continue;
+				const float mx = ai.ReadTeamValue(int(gShieldMates[m]), "homex", -1.f);
+				const float mz = ai.ReadTeamValue(int(gShieldMates[m]), "homez", -1.f);
+				if ((mx < 0.f) || (mz < 0.f))
+					continue;
+				const AIFloat3 h(mx, 0.f, mz);
+				const float mD = h.distance2D(foeAt);
+				if ((best < 0.f) || (mD < best)) {
+					best = mD;
+					mate = int(gShieldMates[m]);
+					mh = h;
+				}
+			}
+			if (mate >= 0) {
+				const float mAssets = ai.ReadTeamValue(mate,
+						Military::TV_ASSETM, 0.f);
+				AIFloat3 dirF = foeAt - mh;
+				if ((mAssets > 1.f) && (dirF.SqLength2D() > 1.f)) {
+					dirF.SafeNormalize2D();
+					// Their perimeter, proxied by our own base extent (the
+					// only extent a player can read), plus the def's reach.
+					float fwdD = gClRingR - Military::FoeReach() + reach;
+					if (fwdD < 256.f)
+						fwdD = 256.f;
+					const AIFloat3 ap = mh + dirF * fwdD;
+					if (OnMap(ap)) {
+						sites.insertLast(ap);
+						allyStake = mAssets * AnswerShare();
+					}
+				}
+			}
+		}
+	}
 	Perf::Add("prot.sites", _tSites);
 	const double _tLoop = Perf::T0();
 	array<float> prevA(sites.length(), 0.f);
@@ -911,9 +968,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		const AIFloat3 s = sites[si];
 		if (!OnMap(s))
 			continue;
-		const bool isRing = (si >= ringStart);
-		const bool isFront = !isRing && (si >= nAsset);
-		const bool isGate = isFront && (si < nAsset + nGates);
+		const bool isAllyF = (si >= allyStart);
+		const bool isRing = (si >= ringStart) && !isAllyF;
+		const bool isFront = ((si >= nAsset) && !isRing) || isAllyF;
+		const bool isGate = isFront && !isAllyF && (si < nAsset + nGates);
 		// Only the asset prefix is in the field's slot cache; gates, front
 		// spots and ring sites read their senses live.
 		const bool cached = (si < nAsset);
@@ -1000,6 +1058,11 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			if (isFront || gPfRimOk)
 				stake += ShieldedStakeAlong(s, reach, outDir) * dClose;
 		}
+		// The ally-front post guards the ALLY'S holdings: our own stake
+		// reads ~zero at their door, so the site is staked by what the
+		// teammate published -- see the candidate's comment above.
+		if (isAllyF)
+			stake = allyStake;
 		if (stake <= 1.f)
 			continue;
 		const float cover0 = cached ? PfSiteCover(si) : CoverAt(s);
@@ -1041,6 +1104,12 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			}
 		}
 		prevA[si] = prevented;
+		if (isAllyF && (ai.frame >= gNextAllyFLog)) {
+			gNextAllyFLog = ai.frame + 60 * SECOND;
+			AiLog("apex: allyfront cand at=" + int(s.x) + "," + int(s.z)
+				+ " stake=" + int(stake) + " threat=" + int(threat)
+				+ " prev=" + formatFloat(prevented, "", 0, 2));
+		}
 		if (isFront) {
 			if (prevented > gDbgFrontBest) gDbgFrontBest = prevented;
 		} else if (isRing) {
