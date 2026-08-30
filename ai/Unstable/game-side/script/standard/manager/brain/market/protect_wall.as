@@ -173,10 +173,34 @@ void WallPrep()
 	const AIFloat3 foeP = aiEnemyMgr.GetEnemyPos();
 	if (OnMap(foeP)) {
 		AIFloat3 fd = foeP - gPfMid;
-		if (fd.SqLength2D() > 1.f) {
-			fd.SafeNormalize2D();
-			const AIFloat3 anchor = gPfMid
-					+ fd * wr[PfRayOf(gPfMid + fd * 1000.f)];
+		const float foeD = sqrt(fd.SqLength2D());
+		if (foeD > 1.f) {
+			fd *= (1.f / foeD);
+			// THE LINE STANDS AT THE FRONTIER, NOT THE BASE (apexearth
+			// 2026-08-30: "Players often walk up to map halfway point,
+			// capping mexes, and then making the tower wall"). Its distance
+			// is the furthest extractor we have actually CAPPED along the
+			// enemy axis -- claimed ground, the one read here that is never
+			// a model -- bounded by the halfway point so a lone deep claim
+			// cannot drag it into their half. No forward mexes yet means it
+			// hugs the base hull; every capped mex walks it out.
+			float lineR = wr[PfRayOf(gPfMid + fd * 1000.f)];
+			float mexFwd = 0.f;
+			for (uint i = 0; i < gPfPos.length(); ++i) {
+				if ((i >= gPfIsMex.length()) || !gPfIsMex[i])
+					continue;
+				const float df = (gPfPos[i].x - gPfMid.x) * fd.x
+						+ (gPfPos[i].z - gPfMid.z) * fd.z;
+				if (df > mexFwd)
+					mexFwd = df;
+			}
+			if (mexFwd + standoff > lineR)
+				lineR = float(int(mexFwd / WALL_QUANT)) * WALL_QUANT
+						+ standoff;
+			const float halfD = foeD * 0.5f;
+			if (lineR > halfD)
+				lineR = float(int(halfD / WALL_QUANT)) * WALL_QUANT;
+			const AIFloat3 anchor = gPfMid + fd * lineR;
 			if (OnMap(anchor)) {
 				gWallLineOk = true;
 				gWallA = anchor;

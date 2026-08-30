@@ -1133,19 +1133,39 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// to 1 first so the shortfall arithmetic stays finite.
 		//
 		// NOT ON GROUND THE ENEMY IS STANDING ON -- UNLESS THE WALL IS
-		// ALREADY BESIDE IT. The pull is no-evidence demand; ungated, line
-		// slots deep in the contested midfield fed frames to the enemy army
-		// one at a time (7 built, 7 lost, walks past 1,100). But gated on
-		// quiet alone the line only extends where nothing is happening, and
-		// his ruling is completeness: "a wall of towers is useless if the
-		// enemy can just walk around it. So it needs to extend the whole
-		// way." The creep is the resolution: a slot NEXT TO A HELD SECTION
-		// may rise under that tower's fire whatever the ground reads, so
-		// the line extends section by section from the base to the map edge
-		// or the ally's lane, never by lone frames in an open field.
-		const bool pullHere = isWall && (wallPull > 0.f) && WallSlotOpen(si)
-				&& (WallSlotAdjHeld(si)
-					|| (ai.GetEnemyCostAt(s, 900.f) < Catalog::gCostM[d]));
+		// ALREADY BESIDE IT, OR THE BUILDER CAN FIGHT. The pull is
+		// no-evidence demand; ungated, line slots deep in the contested
+		// midfield fed frames to the enemy army one at a time (7 built, 7
+		// lost, walks past 1,100). But gated on quiet alone the line only
+		// extends where nothing is happening, and his ruling is
+		// completeness: "a wall of towers is useless if the enemy can just
+		// walk around it. So it needs to extend the whole way." The creep is
+		// the resolution: a slot NEXT TO A HELD SECTION may rise under that
+		// tower's fire whatever the ground reads, so the line extends
+		// section by section from the base to the map edge or the ally's
+		// lane, never by lone frames in an open field.
+		//
+		// A slot refused ONLY by this danger gate is not dead -- it is
+		// marked with the enemy cost that refused it (negative prevA), and
+		// the per-builder election lifts the mark when THAT builder's own
+		// guns cover the difference (apexearth 2026-08-30: "Commanders are
+		// good early game wall makers here because they can defend
+		// themselves"). The mark lives in the per-def cache; the tolerance
+		// is the asker's, applied outside it, so a con never inherits a
+		// commander's courage from a shared fill.
+		const bool pullBase = isWall && (wallPull > 0.f) && WallSlotOpen(si);
+		float foeHere = -1.f;
+		bool pullHere = false;
+		if (pullBase) {
+			if (WallSlotAdjHeld(si)) {
+				pullHere = true;
+			} else {
+				foeHere = ai.GetEnemyCostAt(s, 900.f);
+				pullHere = (foeHere < Catalog::gCostM[d]);
+			}
+		}
+		if (pullBase && !pullHere && (foeHere >= 0.f))
+			prevA[si] = -foeHere;   // overwritten if evidence prices it below
 		if (pullHere && (threat < 1.f))
 			threat = 1.f;
 		if ((threat <= 1.f) && !pullHere)
@@ -1726,10 +1746,34 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			bool bestIsFront = false;
 			bool bestIsRing = false;
 			bool bestIsWall = false;
+			// THE ASKER'S OWN GUNS ARE TOLERANCE (his ruling: commanders are
+			// good early wall makers because they can defend themselves). A
+			// negative cached prev is a wall slot the danger gate refused,
+			// holding the enemy cost that refused it; this builder may take
+			// it if its kill power -- in the same light-tower-metal currency
+			// cover uses -- covers the difference. Zero for an unarmed con.
+			const float uGuardM = (PfKillRef() > 0.f)
+					? (Catalog::gSurfT[uid] / PfKillRef()) : 0.f;
+			float wallPullP = 0.f;
+			{
+				const float horizP = ai.GetTunable("apex_exposed_loss_s",
+						TUNE_EXPOSED_LOSS_S);
+				const float gapP = DefenceTarget() - DefenceValue();
+				if ((horizP > 1.f) && (gapP > 0.f))
+					wallPullP = gapP / horizP;
+			}
 			const array<float>@ prevs = gDsPrev[d];
 			if (prevs !is null) {
 				for (uint si = 0; si < prevs.length(); ++si) {
-					const float prev = prevs[si];
+					float prev = prevs[si];
+					if (prev < 0.f) {
+						if ((-prev >= Catalog::gCostM[d] + uGuardM)
+							|| (wallPullP <= 0.f))
+							continue;
+						prev = wallPullP * (WallSlotLine(si)
+								? ai.GetTunable("apex_wall_line_w",
+										TUNE_WALL_LINE_W) : 1.f);
+					}
 					if (prev <= 0.f)
 						continue;
 					const AIFloat3 s = AIFloat3(gDsX[d][si], 0.f, gDsZ[d][si]);

@@ -654,9 +654,20 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// 400: the base-front turret post sits at anchor+150 and the old
 			// 150 cutoff banned the commander from it -- mDefence read 0.0
 			// for a whole game (apexearth: "in early game he can provide a
-			// good defense"). Beyond 400 is the con-and-escort frontier.
-			if (fwdDist > 400.f)
-				continue;
+			// good defense"). Beyond 400 is the con-and-escort frontier --
+			// EXCEPT defence work on or behind our own wall (apexearth:
+			// "Commanders are good early game wall makers here because they
+			// can defend themselves", and the human meta walks the commander
+			// up the lane to wall at the frontier). The wall is the edge of
+			// held ground; it and his own guns are what the flat 400 was
+			// standing in for.
+			if (fwdDist > 400.f) {
+				const bool wallWork = (ranked[i].kind == WK_PROTECT)
+						&& WallStands()
+						&& (WallRimDist(ranked[i].pos) <= 64.f);
+				if (!wallWork)
+					continue;
+			}
 		}
 		const double _tExec = Perf::T0();
 		IUnitTask@ t = ExecuteWant(unit, ranked[i]);
