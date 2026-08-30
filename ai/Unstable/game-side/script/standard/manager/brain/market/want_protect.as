@@ -134,7 +134,10 @@ void LogFrontTowers()
 				? (gRimTowerBuilt + gCoreTowerBuilt) : 1))
 		+ " closure=" + formatFloat(
 			(ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)
-				? WallClosureFrac() : ClosureFrac(), "", 0, 2));
+				? WallClosureFrac() : ClosureFrac(), "", 0, 2)
+		+ " lineFill=" + formatFloat(
+			(ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)
+				? WallLineFill() : -1.f, "", 0, 2));
 }
 
 void NoteDefSite(bool isFront, bool isRing, bool isWall)
@@ -1129,15 +1132,20 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// below -- see the wallPull comment above the loop. Threat is floored
 		// to 1 first so the shortfall arithmetic stays finite.
 		//
-		// NOT ON GROUND THE ENEMY IS STANDING ON: the pull is no-evidence
-		// demand, and where there IS evidence the evidence-priced terms own
-		// the decision. Without this, line slots deep in the contested
-		// midfield fed frames to the enemy army one at a time -- 7 towers
-		// built, 7 lost, walks past 1,100 (line1v1, 2026-08-30). Same gate
-		// and radius the radar gap uses; the line still advances, because
-		// cleared ground stops reading enemy cost.
+		// NOT ON GROUND THE ENEMY IS STANDING ON -- UNLESS THE WALL IS
+		// ALREADY BESIDE IT. The pull is no-evidence demand; ungated, line
+		// slots deep in the contested midfield fed frames to the enemy army
+		// one at a time (7 built, 7 lost, walks past 1,100). But gated on
+		// quiet alone the line only extends where nothing is happening, and
+		// his ruling is completeness: "a wall of towers is useless if the
+		// enemy can just walk around it. So it needs to extend the whole
+		// way." The creep is the resolution: a slot NEXT TO A HELD SECTION
+		// may rise under that tower's fire whatever the ground reads, so
+		// the line extends section by section from the base to the map edge
+		// or the ally's lane, never by lone frames in an open field.
 		const bool pullHere = isWall && (wallPull > 0.f) && WallSlotOpen(si)
-				&& (ai.GetEnemyCostAt(s, 900.f) < Catalog::gCostM[d]);
+				&& (WallSlotAdjHeld(si)
+					|| (ai.GetEnemyCostAt(s, 900.f) < Catalog::gCostM[d]));
 		if (pullHere && (threat < 1.f))
 			threat = 1.f;
 		if ((threat <= 1.f) && !pullHere)
@@ -1204,8 +1212,18 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			const AIFloat3 foeP = aiEnemyMgr.GetEnemyPos();
 			// Line slots ARE the front -- full pull along their whole
 			// lateral run, which is what makes the towers a line across the
-			// lane instead of an arc hugging the base.
-			if (!WallSlotLine(si) && OnMap(foeP)) {
+			// lane instead of an arc hugging the base. And MORE than full
+			// while the line is incomplete: his ruling ("a wall of towers
+			// is useless if the enemy can just walk around it. So it needs
+			// to extend the whole way") makes an extending section worth
+			// more than a redundant deepening -- at flat urge the line sat
+			// at fill 0.33 when a 44-minute game timed out.
+			if (WallSlotLine(si)) {
+				const float lw = ai.GetTunable("apex_wall_line_w",
+						TUNE_WALL_LINE_W);
+				if (lw > 1.f)
+					dirW = lw;
+			} else if (OnMap(foeP)) {
 				AIFloat3 toS = s - gPfMid;
 				AIFloat3 toF = foeP - gPfMid;
 				const float lS = sqrt(toS.SqLength2D());

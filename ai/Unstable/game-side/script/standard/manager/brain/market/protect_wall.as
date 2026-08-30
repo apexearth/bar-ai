@@ -36,6 +36,7 @@ array<float>    gWallHz;
 array<float>    gWallSiege;
 array<bool>     gWallOpen;     // no standing tower of ours covers this slot
 array<bool>     gWallLine;     // slot belongs to the FRONT LINE, not the ring
+array<bool>     gWallAdj;      // a neighbouring slot is already held
 array<float>    gWallR;        // the wall's radius per rim bearing
 bool            gWallROk = false;
 // THE FRONT LINE (apexearth, watching a 2v2: "I'm expecting a clear line of
@@ -81,6 +82,7 @@ void WallPrep()
 	gWallSiege.resize(0);
 	gWallOpen.resize(0);
 	gWallLine.resize(0);
+	gWallAdj.resize(0);
 	gWallROk = false;
 	gWallLineOk = false;
 	if (!gPfRimOk)
@@ -249,6 +251,21 @@ void WallPrep()
 		if (int(gWallP.length()) >= WALL_MAX_SLOTS)
 			break;
 	}
+	// Adjacency, for the creep: a slot whose neighbour is already HELD may
+	// rise under that tower's fire even where the enemy stands -- extension
+	// requires the previous section standing, not quiet ground.
+	gWallAdj.resize(gWallP.length());
+	for (uint i = 0; i < gWallP.length(); ++i) {
+		bool adj = false;
+		for (uint j = 0; !adj && (j < gWallP.length()); ++j) {
+			if ((i != j) && !gWallOpen[j]
+				&& (gWallP[i].distance2D(gWallP[j]) <= pitch * 1.6f))
+			{
+				adj = true;
+			}
+		}
+		gWallAdj[i] = adj;
+	}
 	Perf::Add("prot.wall", _tWall);
 }
 
@@ -268,6 +285,30 @@ bool WallSlotOpen(uint i)
 bool WallSlotLine(uint i)
 {
 	return (i < gWallLine.length()) && gWallLine[i];
+}
+
+bool WallSlotAdjHeld(uint i)
+{
+	return (i < gWallAdj.length()) && gWallAdj[i];
+}
+
+// How much of the LINE stands: covered line slots / line slots. -1 without a
+// line. "It needs to extend the whole way" is judged on this number.
+float WallLineFill()
+{
+	WallPrep();
+	if (!gWallLineOk)
+		return -1.f;
+	int n = 0;
+	int held = 0;
+	for (uint i = 0; i < gWallLine.length(); ++i) {
+		if (!gWallLine[i])
+			continue;
+		++n;
+		if (!gWallOpen[i])
+			++held;
+	}
+	return (n > 0) ? (float(held) / float(n)) : -1.f;
 }
 float PfWallCover(uint i)  { return gWallCover[i]; }
 float PfWallHz(uint i)     { return gWallHz[i]; }

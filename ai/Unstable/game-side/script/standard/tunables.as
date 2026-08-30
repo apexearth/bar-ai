@@ -2053,6 +2053,11 @@ const float TUNE_WALL_REACH = 2.5f;
 //   pull, tapering by bearing). Above zero so the ring still closes against
 //   flank and rear attacks once the front is held; 1 makes the pull uniform.
 const float TUNE_WALL_REAR = 0.2f;
+// manager/brain/market/want_protect.as [ratio] -- The front LINE's pull
+//   relative to the ring: his completeness ruling (a wall the enemy can walk
+//   around is useless) makes an extending section worth more than a
+//   redundant deepening. 1 prices line and ring equally.
+const float TUNE_WALL_LINE_W = 2.f;
 // manager/brain/market/protect_field.as [fraction of tower reach] -- Asset
 //   guard sites stand this far enemy-ward of the asset centroid, between the
 //   buildings and the approach; 0 sites the gun amid the buildings.

@@ -593,6 +593,12 @@ GROUPS = [
                   "slots always get the full urge. Low builds the "
                   "enemy-facing arc first and closes the rear late; 1 "
                   "spreads the wall evenly in all directions"),
+                 ("TUNE_WALL_LINE_W", "how hard finishing the FRONT LINE is "
+                  "pushed over everything else the defence budget could buy "
+                  "— an incomplete line can be walked around, so extension "
+                  "outbids deepening until it reaches the map edge or an "
+                  "ally's wall. Watch it in the apex: fronttowers lineFill "
+                  "number"),
                  ("TUNE_GUARD_FORWARD", "how far in FRONT of the buildings "
                   "an asset-guard tower stands, as a fraction of its own "
                   "reach — between the assets and the enemy approach; 0 "
