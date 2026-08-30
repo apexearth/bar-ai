@@ -1596,6 +1596,11 @@ float UnitWorthMod(const string &in name)
 {
 	if (name == "armsnipe") return 1.6f;   // Sharpshooter: hitscan-grade accuracy
 	if (name == "armsptk") return 0.6f;    // Recluse: slow arcing rockets miss
+	// Thor: behaviour.json's power 0.1 is a THREAT statement ("cause of its
+	// paralyzer weaponry" -- paralysis doesn't kill), but UnitCore inherits
+	// it via PowerMod as production worth, so the push experimental priced
+	// at a tenth of its stats. x10 cancels it to net 1.0: trust the stats.
+	if (name == "armthor") return 10.f;
 	return 1.f;
 }
 // AA_URGENCY: multiplier on the insurance rate for anti-air. CHOSEN, matching
