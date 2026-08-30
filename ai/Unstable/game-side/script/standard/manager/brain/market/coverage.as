@@ -419,8 +419,17 @@ void RiskFill()
 	gRkOurArmy = Military::OurArmyNow();
 	const float pr = gRkOurArmy
 			* ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
-	gRkRaid = Military::EnemyCostOf(Unit::Role::RAIDER.type);
-	float host = Military::EnemyArmyCost();
+	// MY SHARE OF THE TEAM'S ANSWER, the same law ArmyTargetFull already
+	// carries: EnemyArmyCost is the SIDE-WIDE census, and pricing every
+	// site of every ally against the whole enemy team bought each of N
+	// players the defence for all of it (apexearth, on the 8v8: "the
+	// number of turrets we are creating is to compensate for the entire
+	// enemy team, not just one eighth of that team... we just spend a
+	// stupid amount of resources on turrets"). The our-anchored prior is
+	// already self-scaled and stays whole; a 1v1's share is exactly 1.
+	const float shr = AnswerShare();
+	gRkRaid = Military::EnemyCostOf(Unit::Role::RAIDER.type) * shr;
+	float host = Military::EnemyArmyCost() * shr;
 	if (host < pr)
 		host = pr;
 	if (host < gRkRaid)
