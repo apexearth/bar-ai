@@ -838,6 +838,12 @@ const float TUNE_ANTINUKE_INCOME = 60.f;
 //   from mexes into less choke points which overwhelm the attack") -- the
 //   freed budget flows to the gate depth floor under the same DefenceTarget.
 const float TUNE_MEX_COVER_FLOOR = 0.5f;
+// manager/brain/market/want_protect.as [metal] -- Fielded army value at which
+//   the mobile screen, not per-mex towers, takes over answering leaks. Below
+//   it every standing mex carries the FULL cover floor whatever its bearing
+//   (the first mexes sit behind the centroid and read forwardness zero).
+//   ~8 ticks' worth; an estimate, not a measurement.
+const float TUNE_LEAK_SCREEN_M = 800.f;
 // manager/brain/market/want_protect.as [ratio] -- A choke-gate site's threat
 //   floor as a multiple of the arriving wave: the gate keeps deepening until
 //   its cover OVERWHELMS the push, not merely matches it ("Have an unusual

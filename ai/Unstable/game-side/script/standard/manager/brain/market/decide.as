@@ -39,6 +39,13 @@ int gNextExecLog = 0;
 // exposure charge), and a shared object would compound those per election.
 //------------------------------------------------------------------------------
 const int   MEMO_TTL = 45;   // frames (1.5s); a freshness bound, not policy
+// A copy this old ALWAYS recomputes, on its own bounded budget. The stack
+// calls the memo slots in one fixed order, so energy+tech drained the whole
+// 2-per-frame budget on every election and protect served its frame-25
+// empty answer for MINUTES (measured 2026-08-30 via prot-enter: first real
+// protect run at 4.4-16 min depending on the game; the commander's never
+// ran at all -- which is why the first mexes stood naked for the tick).
+const int   MEMO_STARVED = 450;   // 15s
 const uint  MEMO_N = 6;
 array<array<int>@> gMemoAt;     // per slot: per-askerDef frame stamp
 array<array<Want@>@> gMemoW;    // per slot: the pristine cached answer
@@ -83,6 +90,7 @@ Want@ MemoSlotCall(int slot, CCircuitUnit@ unit)
 // cached answer was consumed and re-serving it is the stampede bug.
 int gMemoFreshFrame = -1;
 int gMemoFreshN = 0;
+int gMemoStarvN = 0;
 
 Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 {
@@ -106,10 +114,18 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	if (gMemoFreshFrame != ai.frame) {
 		gMemoFreshFrame = ai.frame;
 		gMemoFreshN = 0;
+		gMemoStarvN = 0;
 	}
 	if ((gMemoAt[slot][ud] > -30000) && (gMemoFreshN >= 2)) {
-		Perf::Note("memo.defer");
-		return WantCopy(gMemoW[slot][ud]);
+		// Past the normal budget: only a STARVED copy may still recompute,
+		// and at most two of those a frame -- see MEMO_STARVED above.
+		if ((ai.frame - gMemoAt[slot][ud] <= MEMO_STARVED)
+			|| (gMemoStarvN >= 2))
+		{
+			Perf::Note("memo.defer");
+			return WantCopy(gMemoW[slot][ud]);
+		}
+		++gMemoStarvN;
 	}
 	++gMemoFreshN;
 	Perf::Note("memo.miss");

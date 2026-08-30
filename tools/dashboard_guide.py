@@ -922,6 +922,12 @@ GOALS = [
                "contact, it is a question of what the ground is worth against "
                "the front fence, which is what the rest of these move.",
         "steps": [
+            {"ref": "TUNE_LEAK_SCREEN_M", "dir": "up",
+             "note": "for EARLY deaths — how long every mex keeps its full "
+                     "cover floor before the fielded army is trusted to catch "
+                     "leaks instead. Raise it if early mexes still die to "
+                     "single scouts while the army is tiny; this is the fix "
+                     "for the capped-then-abandoned mex dying to one tick"},
             {"ref": "TUNE_MEX_COVER_FLOOR", "dir": "up",
              "note": "START HERE. A minimum number of light towers' worth of "
                      "cover at every standing mex, whatever we have seen. The "

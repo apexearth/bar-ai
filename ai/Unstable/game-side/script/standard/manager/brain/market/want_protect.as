@@ -17,6 +17,7 @@ float gDbgStake = 0.f, gDbgHz = 0.f, gDbgSiege = 0.f, gDbgHazard = 0.f;
 float gDbgShort0 = 0.f, gDbgShort1 = 0.f, gDbgThreat = 0.f, gDbgCover0 = 0.f;
 float gDbgCover1 = 0.f;
 int gNextDefPriceLog = 0;
+int gNextProtEnterLog = 0;
 float gDbgFrontBest = 0.f;
 float gDbgAssetBest = 0.f;
 float gDbgRingBest = 0.f;
@@ -630,8 +631,27 @@ float MexFloorFactor(const AIFloat3& in pos)
 		fwd = 0.f;
 	if (fwd > 1.f)
 		fwd = 1.f;
-	return fwd * (1.f + fwd
+	float f = fwd * (1.f + fwd
 			* ai.GetTunable("apex_mex_expose", TUNE_MEX_EXPOSE));
+	// EARLY, EVERY MEX IS THE FRONTIER. The forwardness scaling is a
+	// late-game truth -- rear ground is safe because the army screens it.
+	// With no army fielded there is no screen, and the first mexes sit AT
+	// or BEHIND the worth centroid, so their floor read exactly zero: the
+	// commander capped three, walked behind a hill to the factory, and one
+	// enemy scout -- the cheapest unit in the game -- erased ~1,000 metal
+	// of build and income (apexearth, watching, 2026-08-30: "If we know
+	// we're about to leave something unguarded we should defend it").
+	// Until our fielded army reaches the leak screen, every standing mex
+	// carries the full floor whatever its bearing; the term fades as the
+	// army takes over the job.
+	const float screen = ai.GetTunable("apex_leak_screen_m",
+			TUNE_LEAK_SCREEN_M);
+	if (screen > 1.f) {
+		float early = 1.f - ArmyValue() / screen;
+		if (early > f)
+			f = early;
+	}
+	return f;
 }
 
 // THE MEX'S VALUE IS ITS STREAM, not its 50-metal shell (apexearth
@@ -1215,6 +1235,20 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		float hz = hazard;
 		const float sg = cached ? PfSiteSiege(si)
 				: (isWall ? PfWallSiege(si) : SiegeWith(s, cover0, siegeFrac));
+		// AN UNGUARDED MEX IS EXPECTED TO DIE WITHIN THE EXPOSURE WINDOW --
+		// his prior, watched happen again 2026-08-30: "if we don't guard a
+		// mex then it will 100% die in the early game... a tick... costs us
+		// at least 1000 metal". The measured arrival rate at quiet ground
+		// (~1/180s) is a truth about ATTACKS SEEN, not about what happens
+		// to naked extractors; while NOTHING covers a floored mex slot, the
+		// rate floors at once per exposure window. Any cover at all returns
+		// the slot to the measured rates.
+		if (floored && (cover0 <= 0.f)) {
+			const float lossS = ai.GetTunable("apex_exposed_loss_s",
+					TUNE_EXPOSED_LOSS_S);
+			if ((lossS > 1.f) && (hz < 1.f / lossS))
+				hz = 1.f / lossS;
+		}
 		if (sg > hz)
 			hz = sg;
 		float prevented = stake * hz * stopped;
@@ -1489,6 +1523,17 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		gNextDefRankOf.resize(Catalog::gDefCount + 1);
 	const bool rankNow = (half == HALF_GROUND)
 			&& (ai.frame >= gNextDefRankOf[ruid]);
+	// Why is the first defence price MINUTES late? (first defprice measured
+	// at 8.8 and 16.2 min in back-to-back games while targets logged from
+	// frame 25). One line per half-minute: is this function even reached,
+	// and with what candidate list.
+	if ((half == HALF_GROUND) && (ai.frame >= gNextProtEnterLog)) {
+		gNextProtEnterLog = ai.frame + 30 * SECOND;
+		AiLog("apex: prot-enter by=" + unit.circuitDef.GetName()
+			+ " builds=" + Catalog::BuildsOf(ruid).length()
+			+ " assets=" + int(gAssetsM)
+			+ " defsClassed=" + gProtDefId[PROT_DEF].length());
+	}
 	if (rankNow) {
 		gDefRankDef.resize(0);
 		gDefRankV.resize(0);
