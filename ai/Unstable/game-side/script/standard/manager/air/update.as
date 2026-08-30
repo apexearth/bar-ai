@@ -11,6 +11,18 @@ bool HoldsUnit(CCircuitUnit@ unit)
 {
 	ResolveDefs();
 	const int id = unit.circuitDef.id;
+	// A TORPEDO FLYER WITH NO FLOATING TARGET HAS NOTHING TO SHOOT ANYWHERE
+	// ON THE MAP -- its weapons read zero surf and zero air threat -- yet
+	// stock routing gave the ones we owned attack orders against land
+	// armies, a flight into AA with nothing to fire (watched live, 118
+	// lost). Held at home until enemy SUBS are actually seen -- the same
+	// readable signal production prices them on; then stock naval targeting
+	// may have them.
+	if ((Catalog::gPower[id] > 1.f) && (Catalog::gSurfT[id] <= 0.01f)
+		&& (Catalog::gAirT[id] <= 0.01f)
+		&& (!Military::EnemyAfloat()
+			|| (Military::EnemyCostOf(Unit::Role::SUB.type) <= 1.f)))
+		return true;
 	bool strikeDef = false;
 	for (int i = 0; i < 6; ++i) {
 		CCircuitDef@ d = StrikeDef(i);
@@ -164,7 +176,9 @@ bool ReleaseForPush()
 {
 	if (gStrike || !Armed() || !Committed())
 		return false;
-	if (!HalfMassed())
+	// The same frozen bar the deadline uses, not HalfMassed: half of a live
+	// want that tracks income and their AA is a bar the wave never reaches.
+	if (float(Bombers()) < DeadlineBombBar())
 		return false;
 	Release("team push -- hitting the line with the army");
 	return true;
@@ -199,6 +213,11 @@ void ReArm()
 	gWave.resize(0);
 	gWaveBombers = 0;
 	gWaveFighters = 0;
+	// A fresh massing window and a fresh frozen bar for the next run --
+	// without this the deadline is permanently in the past and every rebuild
+	// trickles out at the floor instead of massing.
+	gCommitFrame = ai.frame;
+	gCommitBombers = ScaledBombers();
 	AiLog(Factory::T() + "apex: air strike over -- " + have
 		+ " of the wave home, " + held + " built since; massing them together"
 		+ " for the next run");
@@ -342,8 +361,20 @@ void Update()
 		AiLog(Factory::T() + "apex: air assassin BACK ON -- enemy field army gone, "
 			+ "their AA small next to ours");
 	}
-	if (!IsAirLead() || gStrike || gAbort)
+	if (!IsAirLead() || gStrike)
 		return;
+	if (gAbort) {
+		// Standing down stops BUYING into their AA; it must not strand the
+		// wing already paid for ("a force already paid for is better spent
+		// than abandoned"). The outcome ledger scores the run either way,
+		// and a run that dies prices the next bombers to zero on its own.
+		if (Committed() && (ai.frame > gCommitFrame + AIR_DEADLINE)
+			&& (float(Bombers()) >= DeadlineBombBar()))
+		{
+			Release("deadline -- stood down, spending the standing wing");
+		}
+		return;
+	}
 
 	if (!gAnnounced && Armed()) {
 		gAnnounced = true;
@@ -381,8 +412,19 @@ void Update()
 		CCircuitDef@ first = FactoryToBuild();
 		if (first !is null) {
 			gCommitFrame = ai.frame;
+			gCommitBombers = ScaledBombers();
 			AiLog(Factory::T() + "apex: air assassin committing, first plant "
 				+ first.GetName());
+		} else if (Bombers() > 0) {
+			// The wing can stand without this player ever ASKING for a
+			// plant -- the market builds air plants on its own law, so
+			// FactoryToBuild() reads null and nothing started the clock:
+			// watched, bar=-1 at 32 min with 17 bombers held and 8 plants
+			// standing. A standing bomber commits the deadline.
+			gCommitFrame = ai.frame;
+			gCommitBombers = ScaledBombers();
+			AiLog(Factory::T() + "apex: air clock started -- wing standing, "
+				+ Bombers() + " bombers, sizing " + gCommitBombers);
 		}
 	}
 
@@ -397,7 +439,9 @@ void Update()
 				+ formatFloat(EnemyAACost(), "", 0, 0)
 				+ " with only " + Have(gBomber) + "/" + Have(gFighter) + " built");
 		}
-	} else if (Committed() && (ai.frame > gCommitFrame + AIR_DEADLINE) && HalfMassed()) {
+	} else if (Committed() && (ai.frame > gCommitFrame + AIR_DEADLINE)
+		&& (float(Bombers()) >= DeadlineBombBar()))
+	{
 		Release("deadline");
 	}
 
@@ -419,6 +463,7 @@ void Update()
 		CCircuitDef@ want = FactoryToBuild();
 		AiLog(Factory::T() + "apex: air " + Bombers() + "/" + ScaledBombers()
 			+ " bombers, " + Fighters() + "/" + ScaledFighters() + " fighters"
+			+ " bar=" + (Committed() ? int(DeadlineBombBar()) : -1)
 			+ " plants=" + Have(gPlant1) + "," + Have(gPlant2)
 			+ " cons=" + (HaveAirCon() ? "1" : "0")
 			+ " want=" + ((want is null) ? "-" : want.GetName())

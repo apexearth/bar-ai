@@ -227,6 +227,30 @@ int  gWaveFighters = 0;
 int  gAirLead      = -1;
 int  gLeadCheckedAt = -1000;
 int  gCommitFrame  = -1;
+// The wing size promised when the strike was committed to (and again when a
+// run ends), frozen so the go-anyway bar has a fixed number to be half of.
+// Measured live (37-min 1v1, ~1700 m/s): ScaledBombers tracked income and
+// their growing AA to 93 while 30 bombers stood at home, so every release
+// gate that compared against the LIVE want chased a treadmill and the whole
+// air arm sat out the game.
+int  gCommitBombers = 0;
+
+// The bomber count past which a wave goes anyway: half the force committed
+// to, decaying by half again each further deadline period past the first,
+// never under the floor wing. Frozen at commit (see gCommitBombers) so a
+// want that grows with income and their AA cannot outrun the wave forever.
+float DeadlineBombBar()
+{
+	float bar = 0.5f * float(gCommitBombers);
+	if (gCommitFrame >= 0) {
+		const int past = ai.frame - (gCommitFrame + AIR_DEADLINE);
+		if (past > 0)
+			bar /= 1.f + float(past) / float(AIR_DEADLINE);
+	}
+	if (bar < float(AIR_BOMBERS))
+		bar = float(AIR_BOMBERS);
+	return bar;
+}
 bool gStrike       = false;
 bool gAbort        = false;
 int  gNextAirOrder = 0;
