@@ -36,6 +36,17 @@ standing, 0 self-reclaims, rimDAvg −204, wall closure 0.58 vs 0.20.
    actually meet.
 6. The closure-ring candidates (`apex_def_ring`, entry below) are OFF-path
    while `apex_wall=1`; that entry's "awaiting measurement" is superseded.
+7a. **Frontier line landed** (his "walk to halfway capping mexes, then
+   wall" meta): the line anchors at the furthest capped mex along the
+   enemy axis, midline-bounded; armed builders (commander) may creep
+   slots their own guns cover, and the commander's 400-elmo ban excepts
+   wall work behind the wall. Best game yet: win, 30 towers, 1 lost,
+   lineFill 0.75. OPEN: the commander never actually elected defence
+   (eco wants outbid the pull) — permitted but not price-favoured; ask
+   him whether the commander should carry an explicit early-wall
+   preference before nudging. wall_check's on-wall band still measures
+   the building hull, so frontier towers misread there — lineFill and
+   wall_map are the instruments.
 7. **His 2v2 expectation — "a clear line of towers across the map" — is
    NOT met yet, and the blocker is the army, not the placement.** After
    the line rework (slots across the lane, joined to ally lanes, full
