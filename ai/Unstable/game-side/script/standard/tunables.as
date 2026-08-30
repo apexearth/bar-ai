@@ -2010,6 +2010,12 @@ const float TUNE_CHOKE_GATES = 1.f;
 //   as walls) offers a defence-site candidate, so flanks and the rear are for
 //   sale at every angle; 0 leaves only asset/gate/front candidates.
 const float TUNE_DEF_RING = 1.f;
+// manager/brain/market/want_protect.as [toggle 0/1] -- A defence site prices
+//   against the enemy's whole fielded army (capped by the stake behind the
+//   site), not a per-site share of it: their mass all takes one approach, and
+//   the rate term already says how often. This is what lets a Pulsar-class
+//   gun out-bid a carpet of cheap towers once the enemy fields real weight.
+const float TUNE_WAVE_CONC = 1.f;
 // manager/brain/market/protect_field.as [fraction of tower reach] -- Asset
 //   guard sites stand this far enemy-ward of the asset centroid, between the
 //   buildings and the approach; 0 sites the gun amid the buildings.

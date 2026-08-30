@@ -907,6 +907,24 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 				heavy = sStake;
 			if (heavy > threat)
 				threat = heavy;
+			// THE WAVE DOES NOT SPLIT ITSELF. shr apportions the EXPECTED
+			// wave among sites, but their massed force all takes one
+			// approach -- hz already prices how often, so halving the
+			// magnitude too is a double division, and under a small wave
+			// `stopped` clips everything a heavy gun brings past it while
+			// billing it in full: the cheapest turret wins by construction
+			// (measured: threat 2153 against foeSeen 7420; Bulwark at half
+			// a Toaster's value on 5x the kill; one Pulsar standing on a
+			// massive economy). The wave a site must beat is their fielded
+			// army, capped by the stake actually behind this site -- the
+			// same cap the heaviest-single-attacker floor above uses.
+			if (ai.GetTunable("apex_wave_conc", TUNE_WAVE_CONC) > 0.f) {
+				float conc = gRkHost;
+				if (conc > sStake)
+					conc = sStake;
+				if (conc > threat)
+					threat = conc;
+			}
 		}
 		if (threat <= 1.f)
 			continue;

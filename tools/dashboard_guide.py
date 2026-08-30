@@ -551,6 +551,13 @@ GROUPS = [
                   "deepening — its cover target as a multiple of the wave "
                   "that arrives together. His concentration ruling: the gate "
                   "overwhelms the push or it is a speed bump"),
+                 ("TUNE_WAVE_CONC", "ON prices a defence site against the "
+                  "enemy's whole fielded army (capped by what actually "
+                  "stands behind the site) instead of a per-site share of "
+                  "it. Their mass all takes one approach, and under a small "
+                  "assumed wave the auction can only ever buy the cheapest "
+                  "turret — this is the switch that lets a Pulsar out-bid "
+                  "an LLT carpet once the enemy fields real weight"),
                  ("TUNE_DEF_RING", "ON offers a defence site on every "
                   "approach bearing no standing gun covers yet — flanks and "
                   "the rear included, so a base can close the full circle "
