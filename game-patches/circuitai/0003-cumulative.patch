@@ -6526,7 +6526,7 @@ index 275db3a..0161f8f 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11..07220af 100644
+index bc8ff11..faacffd 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -6905,7 +6905,32 @@ index bc8ff11..07220af 100644
  				}
  			)
  			return true;
-@@ -529,9 +734,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -508,6 +713,24 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+ 			unit->CmdWait(false);
+ 		)
+ 	}
++	// apex: a walking builder's re-election is a CONFIRMATION, not a request
++	// for work -- measured 3,047 hook calls a minute at 647 builders with
++	// only ~318 electing anything new, each confirmation paying the script
++	// crossing plus the ladder preamble (~1s of every game-minute). Ask the
++	// market again at most every few seconds; a finished or aborted task
++	// still elects immediately through the idle path. Commanders keep every
++	// update (their safety check lives inside the election) and so do rez
++	// bots (their flee does too).
++	{
++		constexpr int REELECT_FRAMES = 3 * FRAMES_PER_SEC;
++		CCircuitDef* rdef = unit->GetCircuitDef();
++		if ((rdef != nullptr) && !rdef->IsRoleComm() && !rdef->IsAbleToResurrect()
++			&& (frame - unit->GetElectFrame() < REELECT_FRAMES))
++		{
++			return true;
++		}
++		unit->SetElectFrame(frame);
++	}
+ 	HideAssignee(unit);
+ 	IUnitTask* task = manager->MakeTask(unit);
+ 	ShowAssignee(unit);
+@@ -529,9 +752,26 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  	CCircuitDef* cdef = unit->GetCircuitDef();
  	const float range = cdef->GetBuildDistance();
  	const AIFloat3& endPos = GetPosition();
@@ -6933,7 +6958,7 @@ index bc8ff11..07220af 100644
  		manager->AbortTask(this);
  		return;
  	}
-@@ -542,7 +764,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -542,7 +782,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
  			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
  	{
@@ -6944,7 +6969,7 @@ index bc8ff11..07220af 100644
  		return;
  	}
  
-@@ -565,11 +789,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +807,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -6968,7 +6993,7 @@ index bc8ff11..07220af 100644
  	}
  }
  
-@@ -637,14 +871,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +889,54 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -7025,7 +7050,7 @@ index bc8ff11..07220af 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,6 +934,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,6 +952,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
@@ -13559,7 +13584,7 @@ index cd0b54a..db4287a 100644
  	float cloakCost;
  	float buildTime;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index 2f597be..cd2e35c 100644
+index 2f597be..e733d5f 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -6,6 +6,7 @@
@@ -13578,16 +13603,17 @@ index 2f597be..cd2e35c 100644
  #ifdef DEBUG_VIS
  #include "task/UnitTask.h"
  #endif
-@@ -39,6 +41,8 @@ CCircuitUnit::CCircuitUnit(CCircuitAI* circuit, Id unitId, Unit* unit, CCircuitD
+@@ -39,6 +41,9 @@ CCircuitUnit::CCircuitUnit(CCircuitAI* circuit, Id unitId, Unit* unit, CCircuitD
  		, moveFails(0)
  		, failFrame(-1)
  		, damagedFrame(-1)
++		, electFrame(-1)
 +		, damagedDir(ZeroVector)
 +		, dodgeFrame(-1)
  		, execFrame(-1)
  		, disarmFrame(-1)
  		, ammoFrame(-1)
-@@ -97,6 +101,9 @@ CCircuitUnit::CCircuitUnit(CCircuitAI* circuit, Id unitId, Unit* unit, CCircuitD
+@@ -97,6 +102,9 @@ CCircuitUnit::CCircuitUnit(CCircuitAI* circuit, Id unitId, Unit* unit, CCircuitD
  
  CCircuitUnit::~CCircuitUnit()
  {
@@ -13597,7 +13623,7 @@ index 2f597be..cd2e35c 100644
  	delete command;
  	delete dgun;
  	delete weapon;
-@@ -105,7 +112,44 @@ CCircuitUnit::~CCircuitUnit()
+@@ -105,7 +113,44 @@ CCircuitUnit::~CCircuitUnit()
  
  void CCircuitUnit::SetTask(IUnitTask* task)
  {
@@ -13643,7 +13669,7 @@ index 2f597be..cd2e35c 100644
  	SetTaskFrame(manager->GetCircuit()->GetLastFrame());
  	taskState = ETaskState::NONE;
  }
-@@ -271,7 +315,20 @@ float CCircuitUnit::GetDGunRange()
+@@ -271,7 +316,20 @@ float CCircuitUnit::GetDGunRange()
  
  float CCircuitUnit::GetHealthPercent()
  {
@@ -13665,7 +13691,7 @@ index 2f597be..cd2e35c 100644
  }
  
  /*
-@@ -285,11 +342,19 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
+@@ -285,11 +343,19 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
  
  void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout)
  {
@@ -13685,7 +13711,7 @@ index 2f597be..cd2e35c 100644
  void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
  {
  //	assert(utils::is_in_map(pos));
-@@ -298,6 +363,7 @@ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
+@@ -298,6 +364,7 @@ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
  
  void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout)
  {
@@ -13693,7 +13719,7 @@ index 2f597be..cd2e35c 100644
  	assert(utils::is_in_map(pos));
  	unit->Fight(pos, options, timeout);
  }
-@@ -328,7 +394,21 @@ void CCircuitUnit::CmdStop(short options, int timeout)
+@@ -328,7 +395,21 @@ void CCircuitUnit::CmdStop(short options, int timeout)
  
  void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
  {
@@ -13716,7 +13742,7 @@ index 2f597be..cd2e35c 100644
  }
  
  void CCircuitUnit::CmdCloak(bool state)
-@@ -474,6 +554,7 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
+@@ -474,6 +555,7 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
  
  void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  {
@@ -13724,7 +13750,7 @@ index 2f597be..cd2e35c 100644
  	target = enemy;
  	TRY_UNIT(manager->GetCircuit(), this,
  		const AIFloat3& pos = enemy->GetPos();
-@@ -508,23 +589,63 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -508,23 +590,63 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  
  void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
  {
@@ -13801,7 +13827,7 @@ index 2f597be..cd2e35c 100644
  		CmdSetTarget(target);
  		if (circuitDef->IsAttrOnOff()) {
 diff --git a/src/circuit/unit/CircuitUnit.h b/src/circuit/unit/CircuitUnit.h
-index cfe59bc..491b204 100644
+index cfe59bc..f2d32f8 100644
 --- a/src/circuit/unit/CircuitUnit.h
 +++ b/src/circuit/unit/CircuitUnit.h
 @@ -87,6 +87,12 @@ public:
@@ -13817,7 +13843,7 @@ index cfe59bc..491b204 100644
  	void PushDGunAct(CDGunAction* action);
  	CDGunAction* GetDGunAct() const { return dgunAct; }
  	void PushTravelAct(ITravelAction* action);
-@@ -107,8 +113,27 @@ public:
+@@ -107,8 +113,32 @@ public:
  	void SetIsDead() { isDead = true; }
  	bool IsDead() const { return isDead; }
  
@@ -13842,10 +13868,15 @@ index cfe59bc..491b204 100644
 +	const springai::AIFloat3& GetDamagedDir() const { return damagedDir; }
 +	void SetDodgeFrame(int frame) { dodgeFrame = frame; }
 +	int GetDodgeFrame() const { return dodgeFrame; }
++	// apex: last frame this unit's builder task ran the script re-election
++	// (IBuilderTask::Reevaluate) -- the throttle that keeps a walking
++	// builder from re-running the whole market every task update.
++	void SetElectFrame(int frame) { electFrame = frame; }
++	int GetElectFrame() const { return electFrame; }
  
  	bool HasDGun() const { return dgun != nullptr; }
  	bool HasWeapon() const { return weapon != nullptr; }
-@@ -131,6 +156,7 @@ public:
+@@ -131,6 +161,7 @@ public:
  
  	void CmdRemove(std::vector<float>&& params, short options = 0);
  	void CmdMoveTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
@@ -13853,13 +13884,14 @@ index cfe59bc..491b204 100644
  	void CmdJumpTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
  	void CmdFightTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
  	void CmdPatrolTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
-@@ -207,7 +233,11 @@ private:
+@@ -207,7 +238,12 @@ private:
  
  	int moveFails;
  	int failFrame;
 +	std::string actRing[10];
 +	int actHead = 0;
  	int damagedFrame;
++	int electFrame;
 +	springai::AIFloat3 damagedDir;
 +	int dodgeFrame;
  	int execFrame;  // TODO: Replace by CExecuteAction?

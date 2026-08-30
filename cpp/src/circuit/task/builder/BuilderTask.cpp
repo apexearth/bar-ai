@@ -713,6 +713,24 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 			unit->CmdWait(false);
 		)
 	}
+	// apex: a walking builder's re-election is a CONFIRMATION, not a request
+	// for work -- measured 3,047 hook calls a minute at 647 builders with
+	// only ~318 electing anything new, each confirmation paying the script
+	// crossing plus the ladder preamble (~1s of every game-minute). Ask the
+	// market again at most every few seconds; a finished or aborted task
+	// still elects immediately through the idle path. Commanders keep every
+	// update (their safety check lives inside the election) and so do rez
+	// bots (their flee does too).
+	{
+		constexpr int REELECT_FRAMES = 3 * FRAMES_PER_SEC;
+		CCircuitDef* rdef = unit->GetCircuitDef();
+		if ((rdef != nullptr) && !rdef->IsRoleComm() && !rdef->IsAbleToResurrect()
+			&& (frame - unit->GetElectFrame() < REELECT_FRAMES))
+		{
+			return true;
+		}
+		unit->SetElectFrame(frame);
+	}
 	HideAssignee(unit);
 	IUnitTask* task = manager->MakeTask(unit);
 	ShowAssignee(unit);

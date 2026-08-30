@@ -41,6 +41,7 @@ CCircuitUnit::CCircuitUnit(CCircuitAI* circuit, Id unitId, Unit* unit, CCircuitD
 		, moveFails(0)
 		, failFrame(-1)
 		, damagedFrame(-1)
+		, electFrame(-1)
 		, damagedDir(ZeroVector)
 		, dodgeFrame(-1)
 		, execFrame(-1)

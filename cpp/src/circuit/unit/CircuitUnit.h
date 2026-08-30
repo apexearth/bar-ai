@@ -134,6 +134,11 @@ public:
 	const springai::AIFloat3& GetDamagedDir() const { return damagedDir; }
 	void SetDodgeFrame(int frame) { dodgeFrame = frame; }
 	int GetDodgeFrame() const { return dodgeFrame; }
+	// apex: last frame this unit's builder task ran the script re-election
+	// (IBuilderTask::Reevaluate) -- the throttle that keeps a walking
+	// builder from re-running the whole market every task update.
+	void SetElectFrame(int frame) { electFrame = frame; }
+	int GetElectFrame() const { return electFrame; }
 
 	bool HasDGun() const { return dgun != nullptr; }
 	bool HasWeapon() const { return weapon != nullptr; }
@@ -236,6 +241,7 @@ private:
 	std::string actRing[10];
 	int actHead = 0;
 	int damagedFrame;
+	int electFrame;
 	springai::AIFloat3 damagedDir;
 	int dodgeFrame;
 	int execFrame;  // TODO: Replace by CExecuteAction?
