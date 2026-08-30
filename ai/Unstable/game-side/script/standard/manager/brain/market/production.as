@@ -151,6 +151,13 @@ float ArmyInFlightM()
 // time, and until this existed the reason was invisible.
 string gNoOrder = "";
 
+// The line's own ranking, defrank's pattern (his zero-Titan report at
+// ~500 m/s: which TERM zeroes a candidate is invisible in every log, and a
+// hosted game leaves no infolog to read it from afterwards). One line per
+// factory def per minute: every mobile combat candidate with its draw
+// weight (v x1000, decide's convention) or the reason it never entered.
+array<int> gNextProdRankOf;
+
 // `slot` is the position in the line's batch: the facqueue asks repeatedly
 // until the queue is deep enough, and every ask is priced against a ledger
 // that already carries the slots before it.
@@ -222,6 +229,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	WorthDiag();      // self-gated, once, and only when asked for
 	LineClassDiag();  // likewise: the class split, once the field is known
 	gNoOrder = "";
+	if (int(gNextProdRankOf.length()) <= Catalog::gDefCount)
+		gNextProdRankOf.resize(Catalog::gDefCount + 1);
+	const int prankUid = int(fac.circuitDef.id);
+	const bool prankNow = (ai.frame >= gNextProdRankOf[prankUid]);
+	string prank = "";
 	// Production pays the E-flow discipline too: a factory pumping pawns
 	// through a stall both causes it and starves the opening (watched:
 	// hard e-stall, a minute without a mex). But once METAL is overflowing
@@ -529,12 +541,18 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// the air-con fleet, sized by the AA target below.
 			const bool airGuard = Catalog::gFlyer[d] && (Catalog::gAirT[d] > 0.f);
 			if ((roleMul < 1.f) && !airGuard && (Catalog::gCostM[d]
-					< ai.GetTunable("apex_eco_army_min_m", TUNE_ECO_ARMY_MIN_M)))
+					< ai.GetTunable("apex_eco_army_min_m", TUNE_ECO_ARMY_MIN_M))) {
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":eco";
 				continue;
+			}
 			const float sinkGap = OverflowM() * ((fillS > 1.f) ? fillS : 60.f) * roleMul;
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
-			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f))
+			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":gap0";
 				continue;
+			}
 			// The golden metrics, weighted by exponent (market/worth.as).
 			// Carries the by-name worth override, the reach-vs-shield bonus
 			// and the reach-answers-reach response with it.
@@ -547,8 +565,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				if (lp <= 1.5f)
 					lp *= 100.f;   // scale-proof: fraction or percent
 				if (aiTerrainMgr.IsWaterAVoid()
-					|| (lp > 100.f - ai.GetTunable("apex_water_pct", TUNE_WATER_PCT)))
+					|| (lp > 100.f - ai.GetTunable("apex_water_pct", TUNE_WATER_PCT))) {
+					if (prankNow)
+						prank += " " + Catalog::Def(d).GetName() + ":amph";
 					continue;
+				}
 			}
 			// The rear specialist buys quality: weight by unit size so the
 			// draw lands on the biggest thing the lab offers, not spam that
@@ -634,14 +655,20 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// seconds -- the supers' own affordability shape, applied to
 			// the unit line. A pawn barely notices; a Juggernaut needs the
 			// income that shrugs it off. No tier table: cost is the tier.
+			float affM = 1.f;
 			{
 				const float uBudget = aiEconomyMgr.metal.income
 						* ai.GetTunable("apex_unit_afford_s", TUNE_UNIT_AFFORD_S);
 				const float uBill = Catalog::gCostM[d];
-				if ((uBudget > 1.f) && (uBill >= uBudget))
+				if ((uBudget > 1.f) && (uBill >= uBudget)) {
+					if (prankNow)
+						prank += " " + Catalog::Def(d).GetName() + ":aff0";
 					continue;
-				if (uBudget > 1.f)
-					ppc *= (uBudget - uBill) / uBudget;
+				}
+				if (uBudget > 1.f) {
+					affM = (uBudget - uBill) / uBudget;
+					ppc *= affM;
+				}
 			}
 			const float have = float((int(d) < int(gOwnCount.length()))
 					? gOwnCount[d] : 0);
@@ -678,13 +705,26 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 						/ ((fillS > 1.f) ? fillS : 60.f)
 						* (ppc / linePPC) / (1.f + have * 0.05f) * eFeedA;
 			}
-			if (gainA <= 0.01f)
+			if (gainA <= 0.01f) {
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName()
+						+ "=0(p" + formatFloat(ppc / linePPC, "", 0, 3)
+						+ ",r" + formatFloat(roleW, "", 0, 2)
+						+ ",a" + formatFloat(affM, "", 0, 2) + ")";
 				continue;
+			}
 			const float vA = gainA / Catalog::gCostM[d];
 			candDef.insertLast(d);
 			candV.insertLast(vA);
 			candGain.insertLast(gainA);
 			sumV += vA;
+			if (prankNow)
+				prank += " " + Catalog::Def(d).GetName()
+					+ "=" + formatFloat(vA * 1000.f, "", 0, 2)
+					+ "(g" + formatFloat(gainA, "", 0, 2)
+					+ ",p" + formatFloat(ppc / linePPC, "", 0, 3)
+					+ ",r" + formatFloat(roleW, "", 0, 2)
+					+ ",a" + formatFloat(affM, "", 0, 2) + ")";
 			continue;
 		}
 		// An ARMED producible builder is a decoy-class unit: it pays for a
@@ -813,6 +853,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		candV.insertLast(v);
 		candGain.insertLast(gain);
 		sumV += v;
+	}
+	if (prankNow && (prank.length() > 0)) {
+		gNextProdRankOf[prankUid] = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: prodrank fac=" + fac.circuitDef.GetName()
+			+ " t=" + ai.teamId
+			+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+			+ " gap=" + int(armyGap)
+			+ " n=" + candDef.length() + prank);
 	}
 	if ((candDef.length() == 0) || (sumV <= 0.f)) {
 		gNoOrder = "no-candidate";

@@ -1,5 +1,27 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-29 (late) — deploy_ai.py exits 0 when it REFUSES to deploy (harness trap)
+
+"Close BAR (and any running match) and retry" prints and the process still
+exits 0, so `deploy && run` guards do not guard: a repro game launched
+against the stale build tonight and would have been read as "the change
+did nothing." Check the output text ("Harness spec" = success) until the
+exit code is fixed.
+
+## 2026-08-29 (late) — ZERO Titans at 500 m/s (his report; prodrank instrument landed)
+
+"we have 2 players pulling around 500m/s income and neither one has made
+any titans. We lose these games because we don't make those units. The
+last adaptation didn't seem to change anything at all." At 500 m/s the
+afford window is NOT the binder (x0.78 at 120s, x0.55 even at the old
+60s), and armbanth's core worth ranks #3 in the game — by the visible
+arithmetic (ppc/linePPC ~1 vs Vanguard's ~0.03) it should DOMINATE the
+gantry draw. Something zeroes it upstream that no log shows, and hosted
+games leave no infolog. `apex: prodrank` (production.as, defrank's
+pattern) now prints every candidate per line per minute with draw weight
+or drop reason (:aff0/:gap0/:eco/:amph). Read it on the next high-income
+game; the term it names is the fix.
+
 ## 2026-08-29 (late) — behaviour.json power overrides leak into production worth (survey open)
 
 The armthor x0.1 case is fixed by counter-mod (commit dac0946), but the
