@@ -1,5 +1,37 @@
 # Open issues — what is wrong with this AI right now
 
+## 2026-08-30 — parallel expensive energy: FIXED, two residues open
+
+He raised it four times, the last with a screenshot of a fusion at 55%, a
+second reactor at 50%, an AFUS at 11% (ETA 64 min) and an abandoned frame at
+`ETA ???`, then again live: "we're making 2 fusions and 1 afus all at the same
+time... I feel like giving up." Cause: every duplicate gate keyed on DEF ID and
+the energy ladder is six defs, so the per-def gate refused `armfus` and the
+stall ladder immediately founded `armckfus` and `armafus` instead. Fixed in
+e593ace: expensive energy (>=300m, makes energy, immobile) is one CLASS with
+one site, enforced at the Requests chokepoint every entrance passes.
+Validated over 32 4v4 Comet games (76cd434): zero episodes, peak concurrency 1
+on 144 of 148 team-slots. `python tools/energy_parallel.py <run>` is the
+instrument; the audit carries it as `parallel-big-energy`.
+
+1. **`t1-eco-with-afus` is the price of the rule** — ~54 T1 generators and
+   converters left standing with AFUS fielded, up from clean on the same seed
+   before the gate. Serializing reactors sends more asks down to the sub-bar
+   generators, and obsolete-reclaim is what should be clearing them. Not yet
+   attributed to a reclaim rule; measure before touching one.
+2. **The gate reads a ledger that drifts in team games.** `ledger-drift` fails
+   32/32 in 4v4 (25 missed events; clean in every 1v1) and was already failing
+   in the first 4v4 of the day, BEFORE any of this work — pre-existing, but now
+   load-bearing, because `ComBigEnergyRising` is what decides whether a second
+   reactor may be founded. Validation passed regardless, so the drift does not
+   currently defeat the gate; that is luck, not design.
+3. **No wealth exemption, deliberately.** Three were tried and each was the
+   clause the overlaps returned through. His older "more than 1 of any building
+   at one time if we are wealthy enough" still governs buildings at large; this
+   class is now strictly serial. If he wants reactors to parallelize when rich,
+   that is a policy change and needs a number he agrees with, not a re-derived
+   guess.
+
 ## 2026-08-30 — the wall revamp: LANDED (75b2d97), residue open
 
 His ask: towers blobbed at the start area; he wants a wall wrapping the

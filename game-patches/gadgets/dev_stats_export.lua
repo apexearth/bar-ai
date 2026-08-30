@@ -840,6 +840,14 @@ local function isBigEnergy(ud)
 	if ud == nil or (ud.speed or 0) ~= 0 then
 		return false
 	end
+	-- A GEOTHERMAL IS SPOT WORK, not a duplicate. It can only stand on a vent,
+	-- so two of them are two different things wanted for their own sake -- the
+	-- same reason extractors are exempt from the AI's own duplicate rules. The
+	-- AI founds them through the spot path and the class gate never sees them;
+	-- counting them here reported a violation the rule does not make.
+	if ((ud.customParams or {}).geothermal or 0) ~= 0 then
+		return false
+	end
 	if (ud.metalCost or 0) < EFRAME_COST then
 		return false
 	end

@@ -21,6 +21,11 @@ A finding is one CONTIGUOUS episode of 2+ frames standing, so a 40-second
 overlap is one violation and not thirteen samples. Brief overlaps are real
 but harmless -- one site finishing as the next starts -- so an episode must
 last --min-seconds to count.
+
+Geothermal plants are excluded at the census (dev_stats_export): a vent is a
+specific piece of ground, so two geos are two different things wanted for
+their own sake, exactly like two extractors. The AI founds them through the
+spot path, which the class gate does not govern.
 """
 import argparse
 import os
