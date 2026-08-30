@@ -239,7 +239,40 @@ uint EffectiveCap(const CCircuitDef@ want)
 		if (wealth < cap)
 			cap = wealth;
 	}
+	// SERIAL UNTIL SATURATED (apexearth 2026-08-30: four cons on four fusions
+	// is power in four minutes; the same four on ONE fusion is power in one --
+	// "there's no reason we should ever make two identical, really expensive
+	// things right next to each other at the same time"). The metal is spent
+	// either way; parallel only moves the first completion LATER. So wealth
+	// licenses a duplicate only once every manned site of this def already
+	// holds its full crew -- hands that could still join must join first.
+	// Cheap defs saturate at two or three hands, so converters and nanos still
+	// parallelize freely; "really expensive" falls out of the crew arithmetic.
+	if (!SitesSaturated(want)) {
+		const uint have = InFlight(want);
+		if (have < cap)
+			cap = (have > 0) ? have : 1;
+	}
 	return cap;
+}
+
+// Every manned live site of this def carries its full crew. An unmanned
+// proposal does not block (it is claimable, not a working site).
+bool SitesSaturated(const CCircuitDef@ want)
+{
+	const uint cap = SiteWorkerCap(want);
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.GetType() != Task::Type::BUILDER))
+			continue;
+		const CCircuitDef@ has = t.buildDef;
+		if ((has is null) || (has.id != want.id))
+			continue;
+		const uint busy = Workers(t);
+		if ((busy > 0) && (busy < cap))
+			return false;
+	}
+	return true;
 }
 
 // HOW MANY WORKERS ONE SITE IS WORTH, from the building's own cost. Piling the
@@ -251,27 +284,46 @@ uint EffectiveCap(const CCircuitDef@ want)
 // the next site would; parallel site count stays bounded by InFlightCap, i.e.
 // by income. apexearth: "we should be willing to make more than 1 of any
 // building at one time if we are wealthy enough."
+// The cost-derived arm on its own: how many hands the SITE is worth before
+// another pair shortens the build less than opening the next site would.
+// OVERFLOW FEEDS HANDS (apexearth 2026-08-28: "If we're overflowing
+// metal our *want* ... should increase even more, we should be willing
+// to create a whole bunch of them at the same time ... I have a hunch
+// that we only think about making more buildings every ~N seconds, and
+// often just 1 or 2 at a time"). His hunch was the CREW: cost/300 caps
+// an advanced solar at ~2 hands, so "3 cons on one build" was
+// arithmetically impossible -- joins refused as full, the parallel
+// opener the only outlet, and metal rotting anyway. Wasted metal is
+// exactly the feed for more hands: every DRAIN of overflow funds one
+// more worker on any site.
+uint CostCrew(const CCircuitDef@ want)
+{
+	const float per = ai.GetTunable("apex_site_cost_per_worker", TUNE_SITE_COST_PER_WORKER);
+	uint n = (per > 0.f) ? uint(1.f + want.costM / per) : MIN_INFLIGHT;
+	n += uint(Market::OverflowM()
+			/ ((ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN) > 1.f)
+				? ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN) : 7.f));
+	return (n < MIN_INFLIGHT) ? MIN_INFLIGHT : n;
+}
+
+// THE BANK PREPAYS THE JOB. The two clamps below ration hands by what the
+// INCOME can keep fed -- but a site whose whole bill is already banked draws
+// nothing from income, and every hand it is denied is metal left rotting
+// while the building arrives later (apexearth: "putting all that total build
+// power onto one fusion would make it build that much faster"). With the
+// bill covered, only the cost-derived crew bounds the site.
+bool BankCovers(const CCircuitDef@ want)
+{
+	return (want !is null) && (aiEconomyMgr.metal.current >= want.costM);
+}
+
 uint SiteWorkerCap(const CCircuitDef@ want)
 {
 	if (want is null)
 		return MIN_INFLIGHT;
-	const float per = ai.GetTunable("apex_site_cost_per_worker", TUNE_SITE_COST_PER_WORKER);
-	uint n = (per > 0.f) ? uint(1.f + want.costM / per) : MIN_INFLIGHT;
-	// OVERFLOW FEEDS HANDS (apexearth 2026-08-28: "If we're overflowing
-	// metal our *want* ... should increase even more, we should be willing
-	// to create a whole bunch of them at the same time ... I have a hunch
-	// that we only think about making more buildings every ~N seconds, and
-	// often just 1 or 2 at a time"). His hunch was the CREW: cost/300 caps
-	// an advanced solar at ~2 hands, so "3 cons on one build" was
-	// arithmetically impossible -- joins refused as full, the parallel
-	// opener the only outlet, and metal rotting anyway. Wasted metal is
-	// exactly the feed for more hands: every DRAIN of overflow funds one
-	// more worker on any site.
-	n += uint(Market::OverflowM()
-			/ ((ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN) > 1.f)
-				? ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN) : 7.f));
-	if (n < MIN_INFLIGHT)
-		n = MIN_INFLIGHT;
+	uint n = CostCrew(want);
+	if (BankCovers(want))
+		return n;
 	const uint pool = InFlightCap();
 	if (n > pool)
 		n = pool;
@@ -318,6 +370,11 @@ bool IsEcoDef(const CCircuitDef@ want)
 
 uint FeedableCrew(const CCircuitDef@ want)
 {
+	// Same exemption as SiteWorkerCap, and the same number: a banked job's
+	// crew is bounded by cost, so the peel rung cannot trim what the join
+	// rung admitted (peeling against a different number only cycles them).
+	if (BankCovers(want))
+		return CostCrew(want);
 	float n = float(InFlightCap()) / float(LiveSiteCount());
 	if (IsEcoDef(want))
 		n *= ai.GetTunable("apex_peel_eco_keep", TUNE_PEEL_ECO_KEEP);
@@ -1032,7 +1089,7 @@ IUnitTask@ ClaimFor(CCircuitDef@ want, const AIFloat3& in spot)
 }
 
 // How many requests for this exact def are live, in any state.
-uint InFlight(CCircuitDef@ want)
+uint InFlight(const CCircuitDef@ want)
 {
 	if (want is null)
 		return 0;
