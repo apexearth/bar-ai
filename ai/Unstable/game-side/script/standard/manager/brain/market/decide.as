@@ -448,7 +448,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				continue;
 			if (!SiteIsMex(cw.pos) || (uAt.distance2D(cw.pos) > near))
 				continue;
-			if (CoverAt(cw.pos) >= floorWave)
+			// The same exposure-scaled floor the site loop asks for -- a
+			// rear mex's floor is ~zero and the jump must not out-buy it.
+			const float floorHere = floorWave * MexFloorFactor(cw.pos);
+			if ((floorHere <= 1.f) || (CoverAt(cw.pos) >= floorHere))
 				continue;
 			// ...AND ONLY ONCE THE BASE CAN AFFORD IT (apexearth 2026-08-27:
 			// "turrets aren't bad to have but usually thats made after we have

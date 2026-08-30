@@ -594,6 +594,29 @@ float MexCoverFloorM()
 			* LightTowerCostM();
 }
 
+// THE FLOOR SCALES WITH EXPOSURE BOTH WAYS (his rulings, three times over:
+// "the closer our mex is to the enemy and furthest from our army, the
+// stronger the defenses should be"; "move 8 spread out defenses from mexes
+// into less choke points"; and, watching the team game, "an unusual amount
+// of T1 turrets in bases"). The flat floor bought a light tower per mex
+// across the safe interior -- only the scale-UP half of the ruling was ever
+// built. The no-evidence MINIMUM now runs from ~zero on rear ground to
+// full-plus-apex_mex_expose at the front; the gate-concentration floors
+// carry the interior's protection duty, and threat-priced buys are
+// untouched -- a mex anything real approaches still buys its guard through
+// the auction. Shared by the site loop AND the cover-push queue-jump, so
+// the jump cannot keep buying what the auction's floor no longer asks for.
+float MexFloorFactor(const AIFloat3& in pos)
+{
+	float fwd = Military::ForwardFraction(pos);
+	if (fwd < 0.f)
+		fwd = 0.f;
+	if (fwd > 1.f)
+		fwd = 1.f;
+	return fwd * (1.f + fwd
+			* ai.GetTunable("apex_mex_expose", TUNE_MEX_EXPOSE));
+}
+
 // THE MEX'S VALUE IS ITS STREAM, not its 50-metal shell (apexearth
 // 2026-08-28: "we run around building a lot of mexes but we lose them all
 // to enemies" -- the guard want priced insurance on the shell, came out at
@@ -661,6 +684,9 @@ float DefenceValue()
 // army answers, converted to turret metal at the same exchange rate coverage
 // uses. Everything here is measured at home: a player nothing reaches wants no
 // turrets, which is the whole of the rear specialist's case.
+float gMexFloorSum = 0.f;
+int gMexFloorSumAt = -999999;
+
 float DefenceTarget()
 {
 	if (!Builder::gHomeSet)
@@ -689,9 +715,20 @@ float DefenceTarget()
 	// turret the global target says we already have enough of, so the two must
 	// agree about the floor or it never gets built -- and the floor applies to
 	// the rear specialist as well, whose ground is where the economy lives.
-	const float mexFloor = MexCoverFloorM() * float(OwnMexCount());
-	if (mexFloor > t)
-		t = mexFloor;
+	// SCALED floors summed, not flat-floor x count: the site loop now asks
+	// for MexFloorFactor at each mex, and the global allowance must deflate
+	// with the rear floors or it licenses spend the sites no longer request.
+	if (ai.frame >= gMexFloorSumAt + 5 * SECOND) {
+		gMexFloorSumAt = ai.frame;
+		float fsum = 0.f;
+		for (uint i = 0; i < gLPos.length(); ++i) {
+			if (gLExtract[i] > 0.f)
+				fsum += MexFloorFactor(gLPos[i]);
+		}
+		gMexFloorSum = MexCoverFloorM() * fsum;
+	}
+	if (gMexFloorSum > t)
+		t = gMexFloorSum;
 	return (t > 0.f) ? t : 0.f;
 }
 
@@ -994,18 +1031,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			if (gateFloor > threat)
 				threat = gateFloor;
 		}
-		// THE FLOOR SCALES WITH EXPOSURE (apexearth 2026-08-29: "the closer
-		// our mex is to the enemy and furthest from our army, the stronger
-		// the defenses should be"). A rear mex keeps the base floor; a
-		// forward one wants more before anything has been seen, because its
-		// wave arrives with no army between it and them.
-		float mexFloorHere = mexFloorWave;
-		if (mexFloorWave > 0.f) {
-			const float fwd = Military::ForwardFraction(s);
-			if (fwd > 0.f)
-				mexFloorHere *= 1.f + fwd
-						* ai.GetTunable("apex_mex_expose", TUNE_MEX_EXPOSE);
-		}
+		// Exposure-scaled both ways -- see MexFloorFactor above.
+		const float mexFloorHere = (mexFloorWave > 0.f)
+				? (mexFloorWave * MexFloorFactor(s)) : 0.f;
 		const bool floored = !isFront && MexInReach(s, reach)
 				&& (mexFloorHere > threat);
 		if (floored)
