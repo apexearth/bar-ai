@@ -218,6 +218,10 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 // mexes in a 1v1 then we're losing the game." Each refusal is counted at its
 // own gate so the answer is read, not guessed.
 int gMexNoOpen = 0, gMexPastFront = 0, gMexDeathWalk = 0, gMexEcoFar = 0;
+// Last single sweep (see PickSpot): total spots, on our ledger, refused
+// pastFront, surviving candidates, and the home->FoeAnchor span in elmos.
+int gSwTotal = 0, gSwLedger = 0, gSwPast = 0, gSwCand = 0;
+float gSwSpan = 0.f;
 int gMexEcoQuiet = 0, gMexClaimed = 0, gMexPriced = 0, gNextMexDiag = 0;
 int gMexDeep = 0;
 void MexDiag()
@@ -246,7 +250,9 @@ void MexDiag()
 		+ " pastFront=" + gMexPastFront + " deathWalk=" + gMexDeathWalk
 		+ " ecoFar=" + gMexEcoFar + " ecoQuiet=" + gMexEcoQuiet
 		+ " deep=" + gMexDeep
-		+ " priced=" + gMexPriced);
+		+ " priced=" + gMexPriced
+		+ " | sweep " + gSwPast + "past+" + gSwLedger + "own/" + gSwTotal
+		+ " cand=" + gSwCand + " span=" + int(gSwSpan));
 	gMexNoOpen = 0; gMexPastFront = 0; gMexDeathWalk = 0; gMexEcoFar = 0;
 	gMexEcoQuiet = 0; gMexClaimed = 0; gMexPriced = 0;
 	gMexDeep = 0;
@@ -294,9 +300,18 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	const bool pastOn = foeKnown && Builder::gHomeSet && (fspan >= 1.f);
 	const bool ecoOn = EcoQuiet() && Builder::gHomeSet;
 	const float ecoLeash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
+	// One sweep's composition, kept for mexdiag: the interval counters
+	// aggregate every sweep since the last print and cannot distinguish "the
+	// axis collapsed and the whole map reads enemy-side" from "the enemy
+	// half is legitimately refused". These can.
+	gSwTotal = 0; gSwLedger = 0; gSwPast = 0; gSwCand = 0;
+	gSwSpan = sqrt(fspan);
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
-		if (LedgerFind(int(si)) >= 0)
+		++gSwTotal;
+		if (LedgerFind(int(si)) >= 0) {
+			++gSwLedger;
 			continue;
+		}
 		const AIFloat3 sp = gAllSpots[si];
 		if (!OnMap(sp))
 			continue;
@@ -318,6 +333,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 				+ (sp.z - Builder::gHomePos.z) * fez) / fspan)
 				> Builder::MEX_FAR_FRAC)) {
 			++gMexPastFront;
+			++gSwPast;
 			continue;
 		}
 		if (ecoOn && (sp.distance2D(Builder::gHomePos) > ecoLeash)) {
@@ -328,6 +344,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		cand.insertLast(int(si));
 		score.insertLast(inc / (walk + 1.f));
 	}
+	gSwCand = int(cand.length());
 	const int tries = MexTries();
 	for (int k = 0; k < tries; ++k) {
 		int bi = -1;
