@@ -1,22 +1,31 @@
 # Open issues — what is wrong with this AI right now
 
-## 2026-08-29 (late) — 8v8 CRASH: AV in GetHealthPercent via base-type task bindings (FIX LANDED, awaiting team-game soak)
+## 2026-08-30 — 8v8 vs 1v1 gap: the measured deltas from the first clean Supreme Isthmus soak
 
-His 8v8 crashed at 10.6 game-min (0xc0000005, stack: GetHealthPercent <-
-script AiUpdate of instance t=4). Mechanism, read from the bindings, not
-raced: `.target`/`.buildDef` were registered on the BASE IUnitTask type as
-raw IBuilderTask FIELD OFFSETS, and GetBuildType/GetBuildPos as IBuilderTask
-THISCALLs -- so any script read on a FIGHTER/WAIT/IDLE task landed in
-unrelated memory of that object: garbage pointers for the handles (this
-crash), a garbage reference for GetBuildPos. Tasks are refcounted and dead
-units leak until shutdown, so this offset abuse is the only freed/garbage
-pointer route in the chain. All four now go through type-guarded wrappers
-(BUILDER|FACTORY -> real read, else null/_SIZE_/off-map; every
-IBuilderTask-derived class carries those two type tags -- verified against
-FactoryTask/Reclaim/Repair/Recruit). The exact script line that read a
-non-builder task was NOT identified -- the guard closes the class, known
-and unknown. Delete this entry after a team-game soak (per-side 4+) runs
-long past 10.6m with zero AVs.
+His report: "We perform worse on 8v8 games than we do 1v1 games." First
+instrumented 8v8 since the AV fix (Supreme Isthmus v2.1, per-side 8, +50%,
+16 min, timelimit, matches/soak8v8-s1). One game -- directional, not proof.
+Side sums, us vs stock:
+
+- FIGHTS: we built MORE army (70.5k vs 57.9k) and held more standing
+  (26.9k vs 22.3k) yet traded 0.48 -- killed 12.4k, lost 25.7k; damage
+  101k dealt vs 150k received. His complaint #1 at team scale; the
+  DefendTask home-muster/towers fix (commit 28acfa1) targets this. Re-soak
+  and compare this exact line.
+- INCOME diverges late: final 289 vs 364 m/s on EQUAL mex counts (62 vs
+  61, and we hold MORE mohos 11v8). Two of our eight sat at 2 mexes at 16m
+  (t0, t2) with huge energy grids (t0 eInc 663 at mInc 19) -- expansion
+  stopped, spend went to energy/BP (t0 budget line: bp=0.48 vs target
+  0.17). Their stunted players have causes (t12 comm died); ours look like
+  threat-priced-out mex wants (risk lines: threat 226-259, short=1.00).
+- AIR is a team-scale write-off: all 8 players built an armap; the elected
+  assassin (t4) logged "air lead NOT armed" from 11m to end while
+  non-leads t5/t6 launched 5-6 bomber home waves scoring dmg/bomber=0 at
+  0.20 survival. The non-lead frozen-bar fix (entry below) is now
+  evidenced: waves launch undersized and die, and the lead never commits.
+- DEFENCE: stock spent 20.1k on defence vs our 9.3k, and our defence was
+  100% T1 towers (audit defence-tier flag) with advanced cons fielded.
+  His concentration doctrine wants the opposite lean.
 
 ## 2026-08-29 (late night) — PERF: his target is <10% of tonight's AI cost; campaign open
 
