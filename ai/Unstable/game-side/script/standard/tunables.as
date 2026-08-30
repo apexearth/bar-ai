@@ -846,8 +846,9 @@ const float TUNE_GATE_DEPTH = 2.f;
 // manager/brain/market/want_protect.as [toggle 0/1] -- The teeth line: one
 //   wall piece per election across the strongest defended gate's span, a
 //   step enemy-ward of the doorway ("slow them down with some walls
-//   outside").
-const float TUNE_TEETH = 1.f;
+//   outside"). OFF at his request 2026-08-29 ("the implementation is
+//   terrible") -- the knob stays so a better implementation can be A/B'd.
+const float TUNE_TEETH = 0.f;
 // manager/brain/market/want_protect.as [gain] -- What one tooth's share of
 //   breaking a push is worth, on the auction's own value scale: winning
 //   wants carry v>=3 and a tooth's costs price near 70, so 2 gave v=0.03
