@@ -538,8 +538,8 @@ async function openGame(dir, isRefresh) {
   }
 }
 const TOOL_BTNS = (dir, isTourn) => {
-  const tools = isTourn ? ["diagnose", "review", "composition", "tl", "scaling", "audit"]
-                        : ["diagnose", "review", "audit", "fight1v1", "tl", "trace_flow", "deaths"];
+  const tools = isTourn ? ["diagnose", "review", "composition", "tl", "scaling", "audit", "wallmap"]
+                        : ["diagnose", "review", "audit", "fight1v1", "tl", "trace_flow", "deaths", "wall", "wallmap"];
   return tools.map(t =>
     `<button class="act" onclick="runTool('${esc(dir)}','${t}')">${t}</button>`).join(" ");
 };
@@ -1329,7 +1329,14 @@ async function runTool(dir, tool) {
   out.style.display = ""; out.textContent = `running ${tool}…`;
   try {
     const r = await api("/api/tool", {tool, target: dir});
-    out.textContent = "$ " + r.cmd + "\n\n" + r.output;
+    const body = (r.output || "").trimStart();
+    // wall_map (and anything else that emits a picture) renders inline --
+    // its whole point is being LOOKED at. Local tool output, not user data.
+    if (body.startsWith("<svg")) {
+      out.innerHTML = `<div style="font-family:monospace">$ ${esc(r.cmd)}</div>` + body;
+    } else {
+      out.textContent = "$ " + r.cmd + "\n\n" + r.output;
+    }
   } catch (e) { out.textContent = "error: " + e.message; }
 }
 

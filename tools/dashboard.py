@@ -50,6 +50,7 @@ ANALYSIS_TOOLS = {
     "wdeaths": ("wdeaths.py", False),
     "arena": ("arena.py", False),
     "wall": ("wall_check.py", False),
+    "wallmap": ("wall_map.py", False),
 }
 
 DEPLOY_ACTIONS = {
