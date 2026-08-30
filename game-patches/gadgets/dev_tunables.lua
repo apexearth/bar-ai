@@ -373,6 +373,7 @@ local NAMES = {
 	"apex_wall_reach",        -- protect_wall.as: per-bearing wall radius cap, multiple of the worth-weighted RMS radius of what we own (2.5)
 	"apex_wall_rear",         -- want_protect.as: share of the wall pull a directly-rear slot keeps; enemy-facing slots get full pull, tapering by bearing (0.2)
 	"apex_wall_line_w",       -- want_protect.as: the front line's pull relative to the ring -- completing the line outbids deepening it (2.0)
+	"apex_rez_util",          -- production.as: share of a rez bot's work rate actually delivered; the fleet saturates when have x buildPower x this covers the wreck stream (0.25)
 	"apex_air_aa_split",      -- air/state.as: 1 = strike sizes vs enemy AA divided by their base count (one raid, one base), 0 = whole-map AA census
 	"apex_gate_depth",       -- want_protect.as: gate threat floor as a multiple of the arriving wave (2)
 	"apex_teeth",            -- want_protect.as: 1 = teeth line across defended gates

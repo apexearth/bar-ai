@@ -1905,6 +1905,11 @@ const float TUNE_ARMY_FILL_S = 180.f;   // the 120 compensation was fighting the
 // REZ_HORIZON: seconds to recover the field's wreck pool; rez production
 // scales with losses and diminishes per bot.
 const float TUNE_REZ_HORIZON = 120.f;
+// manager/brain/market/production.as [ratio] -- Share of a rez bot's work
+//   rate it actually delivers (the rest is walking between wrecks). The
+//   fleet saturates when have x buildPower x this covers the recoverable
+//   stream; an ESTIMATE, not a measurement -- raise it to field fewer bots.
+const float TUNE_REZ_UTIL = 0.25f;
 // REZ_RICH_M [metal]: a corpse at least this rich is RESURRECTED whatever
 // the pre-AFUS eat-the-field doctrine says -- a unit for the rez cost
 // ("we shouldn't be reclaiming something like that", on a Vanguard corpse).
@@ -2050,9 +2055,12 @@ const float TUNE_WALL_PITCH = 1.2f;
 const float TUNE_WALL_REACH = 2.5f;
 // manager/brain/market/want_protect.as [ratio] -- Share of the wall pull a
 //   slot DIRECTLY BEHIND the base keeps (enemy-facing slots get the full
-//   pull, tapering by bearing). Above zero so the ring still closes against
-//   flank and rear attacks once the front is held; 1 makes the pull uniform.
-const float TUNE_WALL_REAR = 0.2f;
+//   pull, tapering by bearing). Low is the concentration doctrine (apexearth
+//   2026-08-30: "if we just focus on defending our frontline we don't have
+//   to build so many defenses all around our backline") -- the sealed LINE
+//   is what protects the rear, and a real rear threat still buys towers
+//   through the evidence terms. 1 makes the pull uniform.
+const float TUNE_WALL_REAR = 0.08f;
 // manager/brain/market/want_protect.as [ratio] -- The front LINE's pull
 //   relative to the ring: his completeness ruling (a wall the enemy can walk
 //   around is useless) makes an extending section worth more than a

@@ -283,6 +283,12 @@ GROUPS = [
              "knobs": [
                  ("TUNE_FAC_QUEUE_BRAIN", "OFF hands every line back to stock "
                   "CircuitAI — the single biggest behaviour switch here"),
+                 ("TUNE_REZ_UTIL", "how much real work one rez bot is assumed "
+                  "to deliver — the fleet stops growing once bots × work rate "
+                  "covers the recoverable wreck stream. RAISE it to field "
+                  "FEWER rez bots (each one is credited with more), lower it "
+                  "if wrecks rot uncollected. This is the knob that ended "
+                  "the 256-rezbot fleet"),
                  ("TUNE_FAC_QUEUE", "keeps each line queued deeper, so it "
                   "idles less and reacts slower"),
                  ("TUNE_LINE_FLOOR", "a factory order must be worth more of "

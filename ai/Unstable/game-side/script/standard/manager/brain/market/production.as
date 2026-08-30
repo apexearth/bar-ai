@@ -516,15 +516,29 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// REZ BOTS classify as non-builders (empty build list), so they
 			// land HERE, not the builder branch -- which is why none were
 			// ever made (watched, twice). Their gain: the recoverable loss
-			// pool plus a standing medic share of the army.
+			// pool plus a standing medic share of the army -- LESS WHAT THE
+			// FLEET ALREADY SERVES. The old 1/(1+0.33N) divisor never
+			// saturated: at a big game's pool the cutoff sat at ~48,000
+			// bots, and apexearth counted 256 on the field ("theres not 256
+			// rezbots worth of work to do"). The demand is a STREAM in
+			// metal/s; each standing bot serves its work rate times a
+			// utilization share (walking, spread wrecks), and a new bot is
+			// worth only the remainder, capped by its own rate -- the fleet
+			// sizes itself to the work and stops.
 			if (Catalog::gRezzer[d]) {
 				const int haveRz = (int(d) < int(gOwnCount.length()))
 						? gOwnCount[d] : 0;
 				const float medic = ArmyValue()
 						* ai.GetTunable("apex_medic_frac", TUNE_MEDIC_FRAC) / 60.f;
-				const float gainRz = (gLossPool
+				const float streamRz = gLossPool
 						/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)
-						+ medic) / (1.f + float(haveRz) * 0.33f) * roleMul;
+						+ medic;
+				const float perBot = Catalog::gBuildPower[d]
+						* ai.GetTunable("apex_rez_util", TUNE_REZ_UTIL);
+				float unmet = streamRz - float(haveRz) * perBot;
+				if (unmet > perBot)
+					unmet = perBot;
+				const float gainRz = ((unmet > 0.f) ? unmet : 0.f) * roleMul;
 				if (gainRz > 0.05f) {
 					const float vRz = gainRz / Catalog::gCostM[d];
 					candDef.insertLast(d);
@@ -818,16 +832,21 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// EXCEED what the first one reaches made a second armack impossible
 		// (measured: one T2 con per game, forever).
 		const float mob = MobilityMult(d);
-		// Rez bots: the loss pool is recoverable value on the field; a rez
-		// bot's stream is its share of it, diminishing per bot fielded.
-		// From def DATA, not ownership: the owned-rezzer flag was a
-		// bootstrap deadlock (production waited for a rezzer we could
-		// never have ordered).
+		// Rez bots: the loss pool is recoverable value on the field; a new
+		// bot is worth the UNSERVED remainder of that stream, capped by its
+		// own work rate -- the same saturation the non-builder branch uses
+		// (the per-bot divisor never reached zero and the fleet grew to 256).
 		if (Catalog::gRezzer[d]) {
 			const int haveRez = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
-			gain += gLossPool
+			const float perBotB = Catalog::gBuildPower[d]
+					* ai.GetTunable("apex_rez_util", TUNE_REZ_UTIL);
+			float unmetB = gLossPool
 					/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)
-					/ float(1 + haveRez);
+					- float(haveRez) * perBotB;
+			if (unmetB > perBotB)
+				unmetB = perBotB;
+			if (unmetB > 0.f)
+				gain += unmetB;
 		}
 		if ((upD > 0.5f) && (reach >= BestExtract())) {
 			// The upgrade stream divides among cons who can REACH it -- a

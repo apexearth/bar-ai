@@ -1779,8 +1779,21 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					const AIFloat3 s = AIFloat3(gDsX[d][si], 0.f, gDsZ[d][si]);
 					const float wSec = ((uSpeed > 1.f)
 							? (uPos.distance2D(s) / uSpeed) : 60.f) * walkW;
+					// AN INTERIOR TOWER PAYS FOR ITS GROUND (apexearth:
+					// "we fill our bases up with tons of turrets... while
+					// they're there we have no room to build a lot of
+					// other stuff"). Behind the wall is base interior;
+					// when the base is crowded those cells carry the same
+					// metal-per-cell price the obsolete-reclaim market
+					// puts on ground. Free on the wall, the line and the
+					// open flanks -- an empty base charges nothing.
+					float rentS = 0.f;
+					if (WallStands() && (WallRimDist(s) < 0.f))
+						rentS = PfMetalPerCell() * PfCrowd()
+								* float((Catalog::gAreaCells[d] > 0)
+									? Catalog::gAreaCells[d] : 1);
 					const float score = prev
-							/ (kCost + wSec * wage + prev * wSec);
+							/ (kCost + rentS + wSec * wage + prev * wSec);
 					if (score > bestScore) {
 						bestScore = score;
 						bestGain = prev;
