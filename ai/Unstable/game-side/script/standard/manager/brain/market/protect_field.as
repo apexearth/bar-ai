@@ -26,6 +26,7 @@ namespace Market {
 
 array<AIFloat3> gPfPos;     // every standing asset of ours worth defending
 array<float>    gPfWorth;   // ...and what losing it costs, in metal
+array<bool>     gPfIsMex;   // ledger extractors: stream worth, not a building
 float           gPfTotal = 0.f;
 // Build cells our own structures stand on, every class of them. The rim below
 // gives the base's AREA; this gives how much of it is used, and the ratio is
@@ -283,6 +284,7 @@ void PfRebuild()
 
 	gPfPos.resize(0);
 	gPfWorth.resize(0);
+	gPfIsMex.resize(0);
 	gPfTotal = 0.f;
 	gPfCells = 0.f;
 	const float h = PfHorizon();
@@ -310,6 +312,7 @@ void PfRebuild()
 				continue;
 			gPfPos.insertLast(p);
 			gPfWorth.insertLast(Catalog::gCostM[d]);
+			gPfIsMex.insertLast(false);
 			gPfTotal += Catalog::gCostM[d];
 		}
 	}
@@ -319,6 +322,7 @@ void PfRebuild()
 		const float w = gLIncome[i] * IncomeMult() * gLExtract[i] * h;
 		gPfPos.insertLast(gLPos[i]);
 		gPfWorth.insertLast(w);
+		gPfIsMex.insertLast(true);
 		gPfTotal += w;
 	}
 

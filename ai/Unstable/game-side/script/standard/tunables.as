@@ -2029,6 +2029,25 @@ const float TUNE_DEF_RING = 1.f;
 //   the rate term already says how often. This is what lets a Pulsar-class
 //   gun out-bid a carpet of cheap towers once the enemy fields real weight.
 const float TUNE_WAVE_CONC = 1.f;
+// manager/brain/market/protect_wall.as [toggle 0/1] -- Ground defence sites
+//   are slots along the WALL: the rim of our own buildings plus a standoff,
+//   sampled at tower pitch so filled slots form a contiguous line that grows
+//   with the base. Replaces the asset-cluster, front-line and closure-ring
+//   candidates (gates and the ally-front post stay); 0 restores the old set.
+const float TUNE_WALL = 1.f;
+// manager/brain/market/protect_wall.as [fraction of light-tower range] -- How
+//   far outside the outermost building on each bearing the wall stands, so
+//   the guns meet the approach before it reaches what they guard.
+const float TUNE_WALL_STANDOFF = 0.5f;
+// manager/brain/market/protect_wall.as [fraction of light-tower range] -- Arc
+//   spacing between wall slots. At or below 2.0 adjacent light towers' fields
+//   overlap; lower is a denser wall.
+const float TUNE_WALL_PITCH = 1.2f;
+// manager/brain/market/protect_wall.as [ratio] -- Cap on how far one bearing's
+//   buildings can drag the wall, as a multiple of the worth-weighted RMS
+//   radius of everything we own. A lone far mex stays outside the wall; a
+//   real expansion moves the RMS and the wall follows.
+const float TUNE_WALL_REACH = 2.5f;
 // manager/brain/market/protect_field.as [fraction of tower reach] -- Asset
 //   guard sites stand this far enemy-ward of the asset centroid, between the
 //   buildings and the approach; 0 sites the gun amid the buildings.

@@ -7,6 +7,7 @@ CCircuitUnit@ gAssistTarget = null;
 int gDefSiteFront = 0;
 int gDefSiteAsset = 0;
 int gDefSiteRing = 0;
+int gDefSiteWall = 0;
 int gNextDefSiteLog = 0;
 int gNextDefFwdLog = 0;
 // EVERY TERM OF THE DEFENCE PRICE, so "why so many turrets" is read rather than
@@ -19,6 +20,7 @@ int gNextDefPriceLog = 0;
 float gDbgFrontBest = 0.f;
 float gDbgAssetBest = 0.f;
 float gDbgRingBest = 0.f;
+float gDbgWallBest = 0.f;
 int gDbgLineN = 0;
 // The defence auction's own ranking, so "why did we never build a Pulsar" is
 // read rather than argued: every turret this builder could place, with what
@@ -80,7 +82,12 @@ float gRimDSum = 0.f;
 void NoteTowerBuilt(const AIFloat3& in at, float costM)
 {
 	{
-		const float rd = PfRimDist(at);
+		// Judged against the WALL when it is on: the raw rim balloons with
+		// every far mex claim, and a tower standing exactly on the wall then
+		// reads hundreds of elmos "interior" (measured, first exercise game).
+		const bool vsWall = (ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)
+				&& WallStands();
+		const float rd = vsWall ? WallRimDist(at) : PfRimDist(at);
 		gRimDSum += rd;
 		// Within half a light tower's reach of the rim counts as ON it.
 		if (rd > -Brain::LightTowerRange() * 0.5f)
@@ -125,12 +132,16 @@ void LogFrontTowers()
 		+ " rimDAvg=" + int(gRimDSum
 			/ float((gRimTowerBuilt + gCoreTowerBuilt > 0)
 				? (gRimTowerBuilt + gCoreTowerBuilt) : 1))
-		+ " closure=" + formatFloat(ClosureFrac(), "", 0, 2));
+		+ " closure=" + formatFloat(
+			(ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)
+				? WallClosureFrac() : ClosureFrac(), "", 0, 2));
 }
 
-void NoteDefSite(bool isFront, bool isRing)
+void NoteDefSite(bool isFront, bool isRing, bool isWall)
 {
-	if (isFront)
+	if (isWall)
+		++gDefSiteWall;
+	else if (isFront)
 		++gDefSiteFront;
 	else if (isRing)
 		++gDefSiteRing;
@@ -141,14 +152,17 @@ void NoteDefSite(bool isFront, bool isRing)
 	gNextDefSiteLog = ai.frame + 60 * SECOND;
 	AiLog("apex: defsite front=" + gDefSiteFront + " asset=" + gDefSiteAsset
 		+ " ring=" + gDefSiteRing
+		+ " wall=" + gDefSiteWall
 		+ " lineSpots=" + gDbgLineN
 		+ " foeReach=" + formatFloat(Military::FoeReach(), "", 0, 0)
 		+ " bestFrontGain=" + formatFloat(gDbgFrontBest, "", 0, 2)
 		+ " bestAssetGain=" + formatFloat(gDbgAssetBest, "", 0, 2)
-		+ " bestRingGain=" + formatFloat(gDbgRingBest, "", 0, 2));
+		+ " bestRingGain=" + formatFloat(gDbgRingBest, "", 0, 2)
+		+ " bestWallGain=" + formatFloat(gDbgWallBest, "", 0, 2));
 	gDbgFrontBest = 0.f;
 	gDbgAssetBest = 0.f;
 	gDbgRingBest = 0.f;
+	gDbgWallBest = 0.f;
 }
 
 // Standing defense metal near a point -- the crowding divisor that makes
@@ -817,6 +831,7 @@ array<array<float>@> gDsX;
 array<array<float>@> gDsZ;
 array<array<bool>@> gDsFront;
 array<array<bool>@> gDsRing;
+array<array<bool>@> gDsWall;
 array<int> gDsAt;
 array<int> gDsLineN;
 int gDsFillFrame = -1;
@@ -830,6 +845,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		gDsZ.resize(uint(Catalog::gDefCount + 1));
 		gDsFront.resize(uint(Catalog::gDefCount + 1));
 		gDsRing.resize(uint(Catalog::gDefCount + 1));
+		gDsWall.resize(uint(Catalog::gDefCount + 1));
 		gDsAt.resize(uint(Catalog::gDefCount + 1));
 		gDsLineN.resize(uint(Catalog::gDefCount + 1));
 	}
@@ -852,8 +868,19 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	++gDsFillN;
 	gDsAt[d] = (ai.frame > 0) ? ai.frame : 1;
 	const double _tSites = Perf::T0();
+	// THE WALL REPLACES THE INTERIOR (apexearth 2026-08-30: towers blobbed
+	// "right around our start area"; the asset-cluster candidates concentrate
+	// where the metal is densest, which is always the spawn). With the wall on,
+	// ground defence is offered perimeter slots instead of asset centroids,
+	// front-line spots or closure-ring bearings; gates and the ally-front post
+	// stay -- the concentration doctrine is orthogonal to the wall.
+	const bool wallOn = ai.GetTunable("apex_wall", TUNE_WALL) > 0.f;
 	array<AIFloat3> sites;
-	PfGuardSites(reach, sites);
+	uint nWall = 0;
+	if (wallOn)
+		nWall = PfWallSlots(sites);
+	else
+		PfGuardSites(reach, sites);
 	const uint nAsset = sites.length();
 	// THE DOORWAYS FIRST. apexearth 2026-08-29: "defend chokepoints ahead of
 	// where the mexes are... prevent the enemy from getting in there." Every
@@ -879,7 +906,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			sites.insertLast(site);
 		}
 	}
-	if (ai.GetTunable("apex_front_line", TUNE_FRONT_LINE) > 0.f) {
+	if (!wallOn && (ai.GetTunable("apex_front_line", TUNE_FRONT_LINE) > 0.f)) {
 		array<AIFloat3> line;
 		if (Military::FrontBuildSpots(line)) {
 			// BUILT A STEP BEHIND THE EDGE (his ruling: "both" -- setback
@@ -915,7 +942,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// bearing is a wall, a covered one is closed, and the auction prices the
 	// rest individually -- surrounded means every bearing is for sale.
 	const uint ringStart = sites.length();
-	if (ai.GetTunable("apex_def_ring", TUNE_DEF_RING) > 0.f) {
+	if (!wallOn && (ai.GetTunable("apex_def_ring", TUNE_DEF_RING) > 0.f)) {
 		ClosurePrep();
 		if (gClRingOk) {
 			for (uint rb = 0; rb < gClRingP.length(); ++rb) {
@@ -946,7 +973,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// N players' full demand on the same door.
 	const uint allyStart = sites.length();
 	float allyStake = 0.f;
-	if (gClRingOk && (ai.GetTunable("apex_def_ring", TUNE_DEF_RING) > 0.f)) {
+	if (wallOn)
+		ClosurePrep();   // the ally-front post below reads the ring's ally cones
+	if (gClRingOk && (wallOn
+		|| (ai.GetTunable("apex_def_ring", TUNE_DEF_RING) > 0.f))) {
 		bool behind = false;
 		for (uint sb = 0; !behind && (sb < gClAllyShield.length()); ++sb)
 			behind = gClAllyShield[sb];
@@ -997,6 +1027,25 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	array<float> zA(sites.length(), 0.f);
 	array<bool> frontA(sites.length(), false);
 	array<bool> ringA(sites.length(), false);
+	array<bool> wallA(sites.length(), false);
+	// AN UNMET TARGET IS DEMAND. DefenceTarget is the economic basis he chose
+	// for the standing holding, but insurance pricing alone reads a quiet game
+	// as no demand: threat at an unthreatened slot is ~0, every gate below
+	// zeroes it, and the target sat at 680/20,021 while eight LLTs stood (the
+	// per-def rank read armpb=0.0013 on a T2 hand -- defence could never win a
+	// roulette). A wall standing BEFORE anything arrives is the product being
+	// bought: every OPEN wall slot prices at least the unmet target amortized
+	// over the exposure horizon. Only open slots -- a slot a standing tower
+	// already covers earns nothing from the pull, so the ring completes one
+	// tower per slot and then deepens only where real threat prices it.
+	float wallPull = 0.f;
+	if (wallOn) {
+		const float horizW = ai.GetTunable("apex_exposed_loss_s",
+				TUNE_EXPOSED_LOSS_S);
+		const float gapM = DefenceTarget() - DefenceValue();
+		if ((horizW > 1.f) && (gapM > 0.f))
+			wallPull = gapM / horizW;
+	}
 	ClosurePrep();
 	RiskFill();
 	RiskFillSiege();
@@ -1009,14 +1058,19 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		const bool isRing = (si >= ringStart) && !isAllyF;
 		const bool isFront = ((si >= nAsset) && !isRing) || isAllyF;
 		const bool isGate = isFront && !isAllyF && (si < nAsset + nGates);
+		const bool isWall = wallOn && (si < nWall);
 		// Only the asset prefix is in the field's slot cache; gates, front
-		// spots and ring sites read their senses live.
-		const bool cached = (si < nAsset);
+		// spots and ring sites read their senses live. Wall slots have their
+		// own stamp cache -- with the wall on, PfGuardSites never ran and
+		// gPfSlot is stale, so PfSite* must not be indexed at all.
+		const bool cached = !wallOn && (si < nAsset);
 		xA[si] = s.x;
 		zA[si] = s.z;
 		frontA[si] = isFront;
 		ringA[si] = isRing;
-		float threat = cached ? PfSiteThreat(si) : ThreatAt(s);
+		wallA[si] = isWall;
+		float threat = cached ? PfSiteThreat(si)
+				: (isWall ? PfWallThreat(si) : ThreatAt(s));
 		// THE GATE OVERWHELMS OR IT IS A SPEED BUMP (apexearth 2026-08-29:
 		// "Have an unusual amount of tower at some spots. Try to deeply
 		// cover those choke points. Easy wins there... It matches
@@ -1071,7 +1125,13 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 					threat = conc;
 			}
 		}
-		if (threat <= 1.f)
+		// The pull keeps an OPEN wall slot alive through the evidence gates
+		// below -- see the wallPull comment above the loop. Threat is floored
+		// to 1 first so the shortfall arithmetic stays finite.
+		const bool pullHere = isWall && (wallPull > 0.f) && WallSlotOpen(si);
+		if (pullHere && (threat < 1.f))
+			threat = 1.f;
+		if ((threat <= 1.f) && !pullHere)
 			continue;
 		float stake = (cached && (reach >= 64.f))
 				? PfSiteStake(si) : FrontedStakeAt(s, reach);
@@ -1080,7 +1140,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		if (!isFront)
 			stake += MexStreamM(s, reach);
 		{
-			const float dClose = ClosureAdds(s, reach);
+			const float dClose = wallOn ? WallAdds(s, reach)
+					: ClosureAdds(s, reach);
 			AIFloat3 outDir = isFront
 					? (aiEnemyMgr.GetEnemyPos() - s) : (s - gPfMid);
 			if (isFront || gPfRimOk)
@@ -1091,9 +1152,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// teammate published -- see the candidate's comment above.
 		if (isAllyF)
 			stake = allyStake;
-		if (stake <= 1.f)
+		if ((stake <= 1.f) && !pullHere)
 			continue;
-		const float cover0 = cached ? PfSiteCover(si) : CoverAt(s);
+		const float cover0 = cached ? PfSiteCover(si)
+				: (isWall ? PfWallCover(si) : CoverAt(s));
 		const float cover1 = cover0 + CoverAddsAt(s, reach, adds);
 		float short0 = (threat - cover0) / threat;
 		if (short0 < 0.f)
@@ -1109,15 +1171,18 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 				step = gained;
 			stopped = (gained > 0.f) ? (step / gained) : 0.f;
 		}
-		if (stopped <= 0.f)
+		if ((stopped <= 0.f) && !pullHere)
 			continue;
-		const float hazard = cached ? PfSiteHz(si) : HazardWith(s, cover0);
+		const float hazard = cached ? PfSiteHz(si)
+				: (isWall ? PfWallHz(si) : HazardWith(s, cover0));
 		float hz = hazard;
 		const float sg = cached ? PfSiteSiege(si)
-				: SiegeWith(s, cover0, siegeFrac);
+				: (isWall ? PfWallSiege(si) : SiegeWith(s, cover0, siegeFrac));
 		if (sg > hz)
 			hz = sg;
 		float prevented = stake * hz * stopped;
+		if (pullHere && (prevented < wallPull))
+			prevented = wallPull;
 		prevented *= Military::OpenFraction(s, reach);
 		{
 			const float k = ai.GetTunable("apex_unprot_discount",
@@ -1138,7 +1203,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 				+ " stake=" + int(stake) + " threat=" + int(threat)
 				+ " prev=" + formatFloat(prevented, "", 0, 2));
 		}
-		if (isFront) {
+		if (isWall) {
+			if (prevented > gDbgWallBest) gDbgWallBest = prevented;
+		} else if (isFront) {
 			if (prevented > gDbgFrontBest) gDbgFrontBest = prevented;
 		} else if (isRing) {
 			if (prevented > gDbgRingBest) gDbgRingBest = prevented;
@@ -1165,6 +1232,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	@gDsZ[d] = zA;
 	@gDsFront[d] = frontA;
 	@gDsRing[d] = ringA;
+	@gDsWall[d] = wallA;
 	gDsLineN[d] = int(ringStart - nAsset);
 	Perf::Add("prot.loop", _tLoop);
 }
@@ -1598,6 +1666,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			float bestScore = 0.f;
 			bool bestIsFront = false;
 			bool bestIsRing = false;
+			bool bestIsWall = false;
 			const array<float>@ prevs = gDsPrev[d];
 			if (prevs !is null) {
 				for (uint si = 0; si < prevs.length(); ++si) {
@@ -1615,6 +1684,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						bestAt = s;
 						bestIsFront = gDsFront[d][si];
 						bestIsRing = gDsRing[d][si];
+						bestIsWall = gDsWall[d][si];
 					}
 				}
 			}
@@ -1692,7 +1762,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " defHave=" + int(DefenceValue())
 					+ " defTarget=" + int(DefenceTarget()));
 			}
-			NoteDefSite(bestIsFront, bestIsRing);
+			NoteDefSite(bestIsFront, bestIsRing, bestIsWall);
 			// Is the chosen post in FRONT of the base or behind it? He reports
 			// towers landing behind, which the site list alone cannot show.
 			if (ai.frame >= gNextDefFwdLog) {
@@ -1705,11 +1775,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						? Military::ForwardFraction(Base::gAnchor) : -9.f, "", 0, 2)
 					+ " front=" + (bestIsFront ? 1 : 0)
 					+ " ring=" + (bestIsRing ? 1 : 0)
+					+ " wall=" + (bestIsWall ? 1 : 0)
 					// Distance to the nearest map wall, and the share of the
 					// approach that is real map there. The wall used to PAY.
 					+ " edgeD=" + int(EdgeDist(bestAt))
 					+ " open=" + formatFloat(Military::OpenFraction(bestAt, 500.f), "", 0, 2)
 					+ " rimD=" + int(PfRimDist(bestAt))
+					+ " wallD=" + int(WallStands() ? WallRimDist(bestAt) : -9999.f)
 					+ " rimR=" + int(PfRimAt(bestAt))
 					+ " gain=" + formatFloat(bestGain, "", 0, 2));
 			}

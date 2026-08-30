@@ -530,7 +530,27 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		// light one before it counts as stranded, and it is a share of the
 		// rim as well so it means the same thing on a small base and a large.
 		bool stranded = false;
-		if (!dominated && gPfRimOk) {
+		// WALL MODE: the tower retires when its fire can no longer even REACH
+		// the wall on its own bearing -- it contributes nothing to the
+		// perimeter fight, which is the whole of a wall tower's job
+		// (apexearth 2026-08-30: "older towers in the back can eventually be
+		// reclaimed as we push outwards"). No stake gate: the replacement is
+		// a wall slot by construction, so the reclaim-then-resite-DEEPER loop
+		// that gate was built against cannot recur here.
+		if (!dominated && (ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)) {
+			if (WallStands()) {
+				const float rrW = (Catalog::gMaxRange[d] > 1.f)
+						? Catalog::gMaxRange[d] : 500.f;
+				// A quantum of margin: the wall steps outward in WALL_QUANT
+				// increments, and one ordinary step must not retire a tower
+				// finished on the previous line. And the new line must be
+				// STANDING first (WallAheadHeld) -- without that the wall's
+				// own growth put the guns on a build-reclaim treadmill.
+				stranded = (WallRimDist(gProtPos[PROT_DEF][i])
+						< -(rrW + WALL_QUANT))
+					&& WallAheadHeld(gProtPos[PROT_DEF][i]);
+			}
+		} else if (!dominated && gPfRimOk) {
 			const AIFloat3 tp = gProtPos[PROT_DEF][i];
 			const float rimHere = PfRimAt(tp);
 			const float deep = -PfRimDist(tp);

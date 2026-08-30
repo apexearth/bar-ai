@@ -34,6 +34,7 @@
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
 #include "market/floor.as"          // the job ledger, the value ranking, the never-idle floor
 #include "market/want_protect.as"   // insurance pricing and the protect Want
+#include "market/protect_wall.as"   // the wall: perimeter slots ground defence fills
 #include "market/want_super.as"     // the strategic Want: gantry, silo, anti-nuke, big guns
 #include "market/want_assist.as"    // the assist Want
 #include "market/want_reclaim.as"   // the obsolete-reclaim Want

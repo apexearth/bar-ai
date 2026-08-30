@@ -205,7 +205,7 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 	// it. Adopt the best energy orphan by the same TTE ranking.
 	if (unit is null)
 		return null;
-	const AIFloat3 from = unit.GetPos(ai.frame);
+	const AIFloat3 uAt = unit.GetPos(ai.frame);
 	CCircuitUnit@ frame = null;
 	float frameScore = 0.f;
 	for (uint i = 0; i < gComDef.length(); ++i) {
@@ -237,7 +237,7 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 	else if (done > 1.f)
 		done = 1.f;
 	const float costA = (frame.circuitDef !is null) ? frame.circuitDef.costM : 500.f;
-	if (!Requests::WorthJoining(from.distance2D(at), done, costA, 0))
+	if (!Requests::WorthJoining(uAt.distance2D(at), done, costA, 0))
 		return null;
 	float drain = ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN);
 	if (drain <= 1.f)

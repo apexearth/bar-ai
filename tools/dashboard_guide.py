@@ -565,6 +565,29 @@ GROUPS = [
                   "count as walls and are never bought. OFF leaves only "
                   "asset, gate and front candidates, which is what let flank "
                   "attacks walk in on a cold bearing"),
+                 ("TUNE_WALL", "ON sites every ground turret on THE WALL: "
+                  "slots along the outer edge of our own buildings plus a "
+                  "standoff, spaced so adjacent towers' fire overlaps into a "
+                  "continuous line that wraps the base, grows outward as we "
+                  "expand, and ends where an ally's base takes over the "
+                  "bearing. Replaces the asset-cluster, front-line and "
+                  "closure-ring candidates that piled towers around the "
+                  "start position; gates keep their concentration. OFF "
+                  "restores the old candidate set"),
+                 ("TUNE_WALL_STANDOFF", "how far outside the outermost "
+                  "building the wall stands, as a fraction of light-tower "
+                  "range — higher meets the attack further from the "
+                  "buildings, lower hugs them"),
+                 ("TUNE_WALL_PITCH", "spacing between wall slots as a "
+                  "fraction of light-tower range. Lower is a denser, more "
+                  "expensive wall; above 2.0 adjacent towers' fire no "
+                  "longer overlaps and the wall has holes"),
+                 ("TUNE_WALL_REACH", "how far one bearing's buildings can "
+                  "drag the wall outward, as a multiple of the typical "
+                  "(worth-weighted RMS) radius of everything we own — low "
+                  "keeps the wall tight around the base's mass and leaves a "
+                  "lone far mex outside it; high lets single outposts pull "
+                  "wall segments toward them, where unescorted builders die"),
                  ("TUNE_GUARD_FORWARD", "how far in FRONT of the buildings "
                   "an asset-guard tower stands, as a fraction of its own "
                   "reach — between the assets and the enemy approach; 0 "

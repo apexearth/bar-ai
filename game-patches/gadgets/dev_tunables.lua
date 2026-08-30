@@ -367,6 +367,10 @@ local NAMES = {
 	"apex_choke_gates",       -- want_protect.as: 1 = every gate of our territory is a defence-site candidate, 0 = near-anchor choke only
 	"apex_def_ring",          -- want_protect.as: 1 = every open closure-ring bearing (flanks, rear) is a defence-site candidate, 0 = asset/gate/front only
 	"apex_wave_conc",         -- want_protect.as: 1 = a site prices vs the enemy's whole fielded army capped by the stake behind it, 0 = per-site share only
+	"apex_wall",              -- protect_wall.as: 1 = ground defence sites are wall slots on the base rim (replaces asset/front/ring candidates), 0 = old candidate set
+	"apex_wall_standoff",     -- protect_wall.as: wall stands this fraction of light-tower range outside the outermost building per bearing (0.5)
+	"apex_wall_pitch",        -- protect_wall.as: arc spacing between wall slots, fraction of light-tower range (1.2; <=2 keeps adjacent fields overlapping)
+	"apex_wall_reach",        -- protect_wall.as: per-bearing wall radius cap, multiple of the worth-weighted RMS radius of what we own (2.5)
 	"apex_air_aa_split",      -- air/state.as: 1 = strike sizes vs enemy AA divided by their base count (one raid, one base), 0 = whole-map AA census
 	"apex_gate_depth",       -- want_protect.as: gate threat floor as a multiple of the arriving wave (2)
 	"apex_teeth",            -- want_protect.as: 1 = teeth line across defended gates
