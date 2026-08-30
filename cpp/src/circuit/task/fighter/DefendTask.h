@@ -62,6 +62,9 @@ private:
 	// dragged off by one scout shows which clause let it through.
 	std::string tgtWhy;
 	int noPromoteUntil = 0;              // see HoldPromote
+	// FindTarget refused an enemy at home (or on top of us) on odds this
+	// pass; the no-target fallback musters at base instead of the front.
+	bool refusedHomeOdds = false;
 };
 
 } // namespace circuit

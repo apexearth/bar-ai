@@ -294,6 +294,8 @@ local NAMES = {
 	"apex_defend_solo_deep",
 	"apex_defend_post",
 	"apex_defend_home_odds",
+	"apex_defend_towers",
+	"apex_home_muster",
 	"apex_escort_standoff",
 	"apex_con_energy_reclaim",
 	"apex_ally_aggregate",

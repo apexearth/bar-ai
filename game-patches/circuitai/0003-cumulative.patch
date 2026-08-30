@@ -9377,7 +9377,7 @@ index 9e6bfd8..41c48c1 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
 diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
-index bfc3caf..be2960c 100644
+index bfc3caf..29c800d 100644
 --- a/src/circuit/task/fighter/DefendTask.cpp
 +++ b/src/circuit/task/fighter/DefendTask.cpp
 @@ -18,6 +18,7 @@
@@ -9538,7 +9538,28 @@ index bfc3caf..be2960c 100644
  			state = State::ENGAGE;
  			Attack(frame);
  			return;
-@@ -195,12 +286,37 @@ void CDefendTask::Merge(ISquadTask* task)
+@@ -169,7 +260,19 @@ void CDefendTask::Update()
+ 	}
+ 
+ 	if (!isTargetsFound) {  // enemyPositions.empty()
+-		FallbackFrontPos();
++		// apex: A HOME FIGHT REFUSED ON ODDS MUSTERS AT HOME. The front-post
++		// fallback walked a refusing pool AWAY from the base being killed --
++		// and out of apex_support_radius of the intruder, so no other pool
++		// could borrow its strength either: refusal was self-reinforcing and
++		// the whole army stood off at the posts while the base died. Massing
++		// at the base instead keeps refused pools inside each other's support
++		// radius and between the enemy and what is left, so the combined
++		// election flips as they accumulate.
++		if (refusedHomeOdds && (circuit->GetTunable("apex_home_muster", 1.f) > 0.f)) {
++			FallbackBasePos();
++		} else {
++			FallbackFrontPos();
++		}
+ 		return;
+ 	}
+ 
+@@ -195,12 +298,37 @@ void CDefendTask::Merge(ISquadTask* task)
  	const AIFloat3& leadPos = leader->GetPos(frame);
  	frame += FRAMES_PER_SEC * 60;
  
@@ -9577,7 +9598,7 @@ index bfc3caf..be2960c 100644
  		)
  	}
  	units.insert(rookies.begin(), rookies.end());
-@@ -225,7 +341,7 @@ bool CDefendTask::FindTarget()
+@@ -225,7 +353,7 @@ bool CDefendTask::FindTarget()
  	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
  	SArea* area = leader->GetArea();
  	CCircuitDef* cdef = leader->GetCircuitDef();
@@ -9586,7 +9607,7 @@ index bfc3caf..be2960c 100644
  	const float weaponRange = cdef->GetMaxRange() * 0.9f;
  	const int canTargetCat = cdef->GetTargetCategory();
  	const int noChaseCat = cdef->GetNoChaseCategory();
-@@ -237,9 +353,49 @@ bool CDefendTask::FindTarget()
+@@ -237,9 +365,50 @@ bool CDefendTask::FindTarget()
  	CEnemyInfo* bestTarget = nullptr;
  	float minSqDist = std::numeric_limits<float>::max();
  
@@ -9597,6 +9618,7 @@ index bfc3caf..be2960c 100644
 +	// the pool back to the front.
 +	const bool prevHidden = (GetTarget() != nullptr) && GetTarget()->IsHidden();
 +	int refusedOdds = 0, refusedSmall = 0, refusedSolo = 0;
++	refusedHomeOdds = false;
 +
  	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
  	enemyPositions.clear();
@@ -9636,7 +9658,7 @@ index bfc3caf..be2960c 100644
  	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
  	for (auto& kv : enemies) {
  		CEnemyInfo* enemy = kv.second;
-@@ -248,20 +404,125 @@ bool CDefendTask::FindTarget()
+@@ -248,20 +417,140 @@ bool CDefendTask::FindTarget()
  		}
  
  		const AIFloat3& ePos = enemy->GetPos();
@@ -9701,8 +9723,23 @@ index bfc3caf..be2960c 100644
 +				allyPower += ally.power;
 +			}
 +		}
++		// apex: FIGHT UNDER OUR TOWERS. The odds sum counted only mobile
++		// squads on our side while every enemy group within 800 counted on
++		// theirs -- at home, exactly where our static defence stands, the
++		// election refused near-parity fights the towers would have carried
++		// (apexearth: "hide behind our defenses and fight the enemy under our
++		// towers. We can let the towers take some of the damage while still
++		// shooting"). GetAllyDefendInflAt is written by allied STATIC armed
++		// units at GetPower() -- the same currency as attackPower -- plus a
++		// flat 2 per unarmed building (noise at this scale).
++		if (circuit->GetTunable("apex_defend_towers", 1.f) > 0.f) {
++			allyPower += std::max(.0f, inflMap->GetAllyDefendInflAt(ePos));
++		}
 +		if (checkPower + allyPower <= eThreat) {
 +			++refusedOdds;
++			if ((sqEBDist < sqBaseRange) || atUs) {
++				refusedHomeOdds = true;
++			}
 +			continue;
 +		}
 +		// PROPORTIONAL RESPONSE. Line 355 below rewrites this task's anchor to
@@ -9766,7 +9803,7 @@ index bfc3caf..be2960c 100644
  
  		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
  		const bool IsInWater = cdef->IsPredictInWater(elevation);
-@@ -299,15 +560,34 @@ bool CDefendTask::FindTarget()
+@@ -299,15 +588,34 @@ bool CDefendTask::FindTarget()
  		if (minSqDist > sqDist) {
  			minSqDist = sqDist;
  			bestTarget = enemy;
@@ -9802,7 +9839,7 @@ index bfc3caf..be2960c 100644
  		return false;
  	}
  
-@@ -320,6 +600,43 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
+@@ -320,6 +628,43 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -9846,7 +9883,7 @@ index bfc3caf..be2960c 100644
  		ActivePath(lowestSpeed);
  	} else {
  		Fallback();
-@@ -329,6 +646,10 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
+@@ -329,6 +674,10 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
  void CDefendTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -9857,7 +9894,7 @@ index bfc3caf..be2960c 100644
  	circuit->GetMilitaryManager()->FillFrontPos(leader, urgentPositions);
  	if (urgentPositions.empty()) {
  		FallbackBasePos();
-@@ -355,7 +676,13 @@ void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
+@@ -355,7 +704,13 @@ void CDefendTask::ApplyFrontPos(const CQueryPathMulti* query)
  
  	if (!pPath->path.empty()) {
  		if (pPath->path.size() > 2) {
@@ -9872,7 +9909,7 @@ index bfc3caf..be2960c 100644
  		}
  	} else {
  		FallbackBasePos();
-@@ -367,6 +694,8 @@ void CDefendTask::FallbackBasePos()
+@@ -367,6 +722,8 @@ void CDefendTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -9881,7 +9918,7 @@ index bfc3caf..be2960c 100644
  	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
  	const AIFloat3& endPos = setupMgr->GetBasePos();
  	const float pathRange = DEFAULT_SLACK * 4;
-@@ -401,7 +730,9 @@ void CDefendTask::Fallback()
+@@ -401,7 +758,9 @@ void CDefendTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -9893,7 +9930,7 @@ index bfc3caf..be2960c 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
 diff --git a/src/circuit/task/fighter/DefendTask.h b/src/circuit/task/fighter/DefendTask.h
-index 90c3b71..61aec1c 100644
+index 90c3b71..9943792 100644
 --- a/src/circuit/task/fighter/DefendTask.h
 +++ b/src/circuit/task/fighter/DefendTask.h
 @@ -31,6 +31,13 @@ public:
@@ -9910,7 +9947,7 @@ index 90c3b71..61aec1c 100644
  protected:
  	float GetMaxPower() const { return maxPower; }
  
-@@ -47,6 +54,14 @@ private:
+@@ -47,6 +54,17 @@ private:
  	FightType check;
  	FightType promote;
  	float maxPower;
@@ -9922,6 +9959,9 @@ index 90c3b71..61aec1c 100644
 +	// dragged off by one scout shows which clause let it through.
 +	std::string tgtWhy;
 +	int noPromoteUntil = 0;              // see HoldPromote
++	// FindTarget refused an enemy at home (or on top of us) on odds this
++	// pass; the no-target fallback musters at base instead of the front.
++	bool refusedHomeOdds = false;
  };
  
  } // namespace circuit

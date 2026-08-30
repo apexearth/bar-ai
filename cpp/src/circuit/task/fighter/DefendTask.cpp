@@ -260,7 +260,19 @@ void CDefendTask::Update()
 	}
 
 	if (!isTargetsFound) {  // enemyPositions.empty()
-		FallbackFrontPos();
+		// apex: A HOME FIGHT REFUSED ON ODDS MUSTERS AT HOME. The front-post
+		// fallback walked a refusing pool AWAY from the base being killed --
+		// and out of apex_support_radius of the intruder, so no other pool
+		// could borrow its strength either: refusal was self-reinforcing and
+		// the whole army stood off at the posts while the base died. Massing
+		// at the base instead keeps refused pools inside each other's support
+		// radius and between the enemy and what is left, so the combined
+		// election flips as they accumulate.
+		if (refusedHomeOdds && (circuit->GetTunable("apex_home_muster", 1.f) > 0.f)) {
+			FallbackBasePos();
+		} else {
+			FallbackFrontPos();
+		}
 		return;
 	}
 
@@ -360,6 +372,7 @@ bool CDefendTask::FindTarget()
 	// the pool back to the front.
 	const bool prevHidden = (GetTarget() != nullptr) && GetTarget()->IsHidden();
 	int refusedOdds = 0, refusedSmall = 0, refusedSolo = 0;
+	refusedHomeOdds = false;
 
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
 	enemyPositions.clear();
@@ -461,8 +474,23 @@ bool CDefendTask::FindTarget()
 				allyPower += ally.power;
 			}
 		}
+		// apex: FIGHT UNDER OUR TOWERS. The odds sum counted only mobile
+		// squads on our side while every enemy group within 800 counted on
+		// theirs -- at home, exactly where our static defence stands, the
+		// election refused near-parity fights the towers would have carried
+		// (apexearth: "hide behind our defenses and fight the enemy under our
+		// towers. We can let the towers take some of the damage while still
+		// shooting"). GetAllyDefendInflAt is written by allied STATIC armed
+		// units at GetPower() -- the same currency as attackPower -- plus a
+		// flat 2 per unarmed building (noise at this scale).
+		if (circuit->GetTunable("apex_defend_towers", 1.f) > 0.f) {
+			allyPower += std::max(.0f, inflMap->GetAllyDefendInflAt(ePos));
+		}
 		if (checkPower + allyPower <= eThreat) {
 			++refusedOdds;
+			if ((sqEBDist < sqBaseRange) || atUs) {
+				refusedHomeOdds = true;
+			}
 			continue;
 		}
 		// PROPORTIONAL RESPONSE. Line 355 below rewrites this task's anchor to
