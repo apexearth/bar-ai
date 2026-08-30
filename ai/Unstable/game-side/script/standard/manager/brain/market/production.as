@@ -557,6 +557,28 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// Carries the by-name worth override, the reach-vs-shield bonus
 			// and the reach-answers-reach response with it.
 			float ppc = UnitPPC(d);
+			// A WEAPON THAT ONLY FIRES INTO WATER answers what FLOATS.
+			// Surf/air threat are the DLL's own read of what a def can hit
+			// -- a plain torpedo contributes to neither, so a torpedo
+			// bomber's whole arsenal reads zero here while gPower (which
+			// UnitPPC prices) still counts it at full value: 118 Cormorants
+			// at 400 metal, top of the enemy AA's kill table, on a game
+			// whose afloat latch never fired. Dry, there is no target at
+			// any price; afloat, its gap is the seen floating value, not
+			// the land army gap (ships mostly read as land roles in the
+			// enemy census, so seen SUB value is the readable floor -- an
+			// undercount, never zero when the threat is real).
+			if ((Catalog::gSurfT[d] <= 0.01f) && (Catalog::gAirT[d] <= 0.01f)) {
+				const float floatVal = Military::EnemyAfloat()
+						? Military::EnemyCostOf(Unit::Role::SUB.type) : 0.f;
+				if (floatVal <= 1.f) {
+					if (prankNow)
+						prank += " " + Catalog::Def(d).GetName() + ":h2o";
+					continue;
+				}
+				if (floatVal < effGap)
+					ppc *= floatVal / effGap;
+			}
 			// x0 ON DRY MAPS (apexearth: "amphib should be x0" -- and a
 			// tiny pond flips the engine's water flag, so the bar is real
 			// water share of the map, ~15%).
