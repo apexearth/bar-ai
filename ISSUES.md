@@ -23,12 +23,21 @@ Round 1+2 MEASURED (repro-4: Archsimkats +150% seed 2, WON, 1675 m/s,
 10,054 -> 4,652ms/min (-54%), worst frame 172 -> 69ms,
 hk.maketask.builder 6,975 -> 2,265ms (-68%), full stacks 407 -> 148/min,
 exec.knano 11.7 -> 3.4ms/call. dec.deferred fired 5 times all game (the
-budget is a backstop). What remains at that scale: want.protect 634 +
-fills ~690 (miss cost ~4.3ms), want.mexup 436 (game-shape dependent,
-asker-relative so not memoized), and ~2.1s/min NON-HOOK C++ (threat maps,
-enemy manager, task updates) which no script change reaches -- the next
-2x needs the DLL profiled (cpp-dll skill), or accepting ~2x over his bar.
-His watched feel on the next dashboard game is the acceptance test.
+budget is a backstop).
+
+Round 3 (C++, DLL rebuilt): `perf split` says ProcessJobs is ~97% of the
+frame; inside it the ally FRIENDLY LIST was rebuilt 630x/min at 1,151
+units (delete+new+engine call each, 1.83s of every game-minute) because
+any task update demands it. Throttled to at most 2/sec -- verified 93-95
+calls/min, 0 exceptions on a won repro; the at-scale saving (~1.5s/min)
+awaits the next LONG game's `perf friendly` line. What remains at the
+647-builder scale (repro-5, f=72000): hk.maketask.builder 4.2s/min
+(election volume scales with the fleet even with the memo; per-call is
+1.4ms), factory hook 0.66s with 69ms max spikes, protect fills ~0.8s,
+and ~0.6s residual C++. Projection after the friendly fix: ~6s/min at
+that scale vs his ~1s bar -- still open; his watched feel on the next
+dashboard game is the acceptance test, `perf AiFrame`/`perf split`/
+`perf friendly` are the instruments.
 
 ## 2026-08-29 (late night) — air release: non-lead home-wave still tracks the live want
 
