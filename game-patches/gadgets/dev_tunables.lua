@@ -329,7 +329,8 @@ local NAMES = {
 	"apex_wrap_edge",
 	"apex_wrap_min_w",
 	"apex_wrap_over",
-	"apex_brawl_stand",      -- withdraw.as: forward fraction past which a DEFEND unit on enemy ground is recalled (0.55)
+	"apex_brawl_stand",
+	"apex_wrap_arc",      -- withdraw.as: forward fraction past which a DEFEND unit on enemy ground is recalled (0.55)
 	"apex_recall_home",       -- withdraw.as: master switch, ATTACK/RAID squads come home while base is under attack and no killing blow is armed (1)
 	"apex_recall_home_fwd",   -- withdraw.as: forward fraction past which an ATTACK/RAID squad is recalled home (0.5)
 	"apex_assemble",          -- AttackTask.cpp: pre-contact assembly gate master switch (1)

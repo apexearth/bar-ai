@@ -106,6 +106,8 @@ class ISquadTask: public IFighterTask {
 protected:
 	// apex: the squad's sticky "finish the wounded" target id (0 = none).
 	int finishId = 0;
+	int wrapSide = 0;
+	int wrapLogFrame = -1000000;
 	ISquadTask(ITaskModule* mgr, FightType type, float powerMod);
 public:
 	virtual ~ISquadTask();

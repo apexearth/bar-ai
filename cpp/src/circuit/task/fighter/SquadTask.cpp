@@ -809,6 +809,79 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 
 	const int targetTile = manager->GetCircuit()->GetInflMap()->Pos2Index(tPos);
 	const float alpha = std::atan2(dir.z, dir.x);
+	// apex: WRAP THE EDGE AT CONTACT, IN EVERY TASK. The first wrap lived in
+	// AttackTask::FindTarget and never fired once across 104 big arena
+	// rounds -- arena and DEFEND-heavy real fights never route through it
+	// (apexearth: "If your code never fired we should fix it. I doubt there
+	// was *never* a moment when it could have applied."). This is the level
+	// every fight task funnels through: when the engaged enemy group is
+	// wider than our envelope, rotate the squad's arc bearing toward the
+	// group's nearer lateral END, so the formation stands off the flank and
+	// rolls the line up instead of pressing its centre into the wrapped
+	// pocket (his encirclement doctrine; flankingBonus is the mechanic).
+	float wrapAlpha = alpha;
+	{
+		CCircuitAI* wc = manager->GetCircuit();
+		if (wc->GetTunable("apex_wrap_edge", 1.f) > 0.f) {
+			const std::vector<CEnemyManager::SEnemyGroup>& wgroups =
+					wc->GetEnemyManager()->GetEnemyGroups();
+			const CEnemyManager::SEnemyGroup* wg = nullptr;
+			float wbest = SQUARE(1600.f);
+			for (const CEnemyManager::SEnemyGroup& g : wgroups) {
+				const float sq = g.pos.SqDistance2D(tPos);
+				if (sq < wbest) {
+					wbest = sq;
+					wg = &g;
+				}
+			}
+			bool wrapped = false;
+			if ((wg != nullptr) && (wg->units.size() >= 4)) {
+				const AIFloat3 adir(cosf(alpha), 0.f, sinf(alpha));
+				const AIFloat3 wperp(-adir.z, 0.f, adir.x);
+				float wlo = 0.f, whi = 0.f;
+				int wcount = 0;
+				for (const ICoreUnit::Id eId : wg->units) {
+					CEnemyUnit* eu = wc->GetEnemyManager()->GetEnemyUnit(eId);
+					if (eu == nullptr) {
+						continue;
+					}
+					const AIFloat3& ep = eu->GetPos();
+					const float t = wperp.x * (ep.x - tPos.x)
+							+ wperp.z * (ep.z - tPos.z);
+					wlo = std::min(wlo, t);
+					whi = std::max(whi, t);
+					++wcount;
+				}
+				const float wrapMin = highestRange
+						* wc->GetTunable("apex_wrap_min_w", 1.5f);
+				if ((wcount >= 4) && (whi - wlo > wrapMin)) {
+					if (wrapSide == 0) {
+						const AIFloat3& sp = leader->GetPos(frame);
+						const float myT = wperp.x * (sp.x - tPos.x)
+								+ wperp.z * (sp.z - tPos.z);
+						wrapSide = (myT >= 0.f) ? 1 : -1;
+					}
+					const float over = highestRange
+							* wc->GetTunable("apex_wrap_over", 0.75f);
+					const float wend = (wrapSide > 0) ? (whi + over) : (wlo - over);
+					const float wa = atan2f(wperp.z * wend, wperp.x * wend);
+					float wd = wa - alpha;
+					while (wd > M_PI) { wd -= 2.f * M_PI; }
+					while (wd < -M_PI) { wd += 2.f * M_PI; }
+					wrapAlpha = alpha + wd * wc->GetTunable("apex_wrap_arc", 0.6f);
+					wrapped = true;
+					if (frame >= wrapLogFrame + FRAMES_PER_SEC * 20) {
+						wrapLogFrame = frame;
+						wc->LOG("apex: wrap-arc t=%i w=%.0f side=%i shift=%.2f n=%d",
+								wc->GetTeamId(), whi - wlo, wrapSide, wd, wcount);
+					}
+				}
+			}
+			if (!wrapped) {
+				wrapSide = 0;
+			}
+		}
+	}
 	CCircuitDef* edef = GetTarget()->GetCircuitDef();
 	const bool isStatic = (edef != nullptr) && !edef->IsMobile();
 	// incorrect, it should check aoe in vicinity
@@ -1295,7 +1368,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				// vetoes any step into worse ground, so this cannot orbit a unit
 				// into a second enemy.
 				const float orbit = ORBIT_RATE * (frame / (float)FRAMES_PER_SEC) * orbitDir;
-				const float angle = alpha + beta + orbit;
+				const float angle = wrapAlpha + beta + orbit;
 				float r = (iterNum == 0) ? range0 : range;
 				// Screened, not withdrawn: a coward stands further out on the
 				// same ring instead of leaving the fight, so healthier
