@@ -18,6 +18,19 @@ Side sums, us vs stock:
   stopped, spend went to energy/BP (t0 budget line: bp=0.48 vs target
   0.17). Their stunted players have causes (t12 comm died); ours look like
   threat-priced-out mex wants (risk lines: threat 226-259, short=1.00).
+  UPDATE same night: commit 5918909 aligned the PickSpot sweep on
+  FoeAnchor (it still read the mobile centroid -- the documented collapse
+  frontline.as:757 cures), but the re-soak (soak8v8-s1b, same settings)
+  did NOT move the needle: pastFront intervals 356-1347, apex mex spread
+  [2,3,4,4,7,8,11,14] vs stock 63 total. The interval counters aggregate
+  many sweeps, so high counts may just be the enemy half of 90 spots
+  legitimately refused -- they cannot distinguish "axis collapsed" from
+  "half the map is theirs". STILL OPEN: instrument one sweep (spots
+  refused / total per single PickSpot pass, and the axis span) before
+  touching anything else; the alternative binder is plain spot scarcity
+  and claim distribution at 16 players on 90 spots. Keep 5918909 (it is
+  the documented cure's missing half and strictly more stable) but do not
+  credit it with anything yet.
 - AIR is a team-scale write-off: all 8 players built an armap; the elected
   assassin (t4) logged "air lead NOT armed" from 11m to end while
   non-leads t5/t6 launched 5-6 bomber home waves scoring dmg/bomber=0 at

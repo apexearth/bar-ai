@@ -28,9 +28,10 @@ before-number; his watched games are the test.
 ## OPEN (2026-08-30): 8v8 is worse than 1v1 — first measured strands
 
 His report. ISSUES 2026-08-30 entry holds the numbers from the first clean
-Supreme Isthmus soak: trade 0.48, two players frozen at 2 mexes (the
-pastFront centroid-collapse, fixed commit 5918909), all-8 air plants with
-zero bomber damage, defence spend half of stock's and 100% T1.
+Supreme Isthmus soak: trade 0.48, two players frozen at 2 mexes (a
+pastFront-axis fix landed, commit 5918909, but the re-soak shows the
+starvation persists -- strand still open), all-8 air plants with zero
+bomber damage, defence spend half of stock's and 100% T1.
 
 ## RULING (2026-08-29, late): team defence goes in FRONT of the front ally
 
