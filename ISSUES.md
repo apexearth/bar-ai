@@ -36,6 +36,18 @@ standing, 0 self-reclaims, rimDAvg −204, wall closure 0.58 vs 0.20.
    actually meet.
 6. The closure-ring candidates (`apex_def_ring`, entry below) are OFF-path
    while `apex_wall=1`; that entry's "awaiting measurement" is superseded.
+7b. **The early seal is late** (his doctrine 2026-08-30: towers exist to
+   stop leaks into the backline/mexes; "if we don't guard a mex then it
+   will 100% die in the early game... oftentimes its solved by 4 or 5
+   well placed turrets"). Attributed, not yet fixed: the first defence
+   election lands at a healthy 5.0 min, but the auction takes a 420m HLT
+   (TeamBestTowerPower routing scales the sentry down against it inside
+   T1) and walk+build runs minutes, so nothing STANDS before ~8-10 min.
+   Candidate fixes, untried: sharpen apex_def_ttd_h so short early threat
+   windows favour the 20-second sentry over the 100-second HLT, or scope
+   the power routing to tier gaps only. Rez saturation, interior tower
+   rent, and the thin rear (apex_wall_rear 0.08) landed alongside --
+   awaiting his next watched game.
 7a. **Frontier line landed** (his "walk to halfway capping mexes, then
    wall" meta): the line anchors at the furthest capped mex along the
    enemy axis, midline-bounded; armed builders (commander) may creep
