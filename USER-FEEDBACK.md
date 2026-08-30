@@ -1,5 +1,18 @@
 # What apexearth wants from this AI
 
+## RULING (2026-08-29, late): team defence goes in FRONT of the front ally
+
+He refused to host the 8v8 over it: "I find it too embarrassing how all
+our AI makes tons of turrets in their own base instead of in front of
+their allies base who is in front of them. It looks too stupid." First
+half LANDED: a closure-ring bearing whose corridor passes a teammate's
+home now counts closed (the ally's base is the wall), so back players
+stop ringing themselves. UNRESOLVED second half: a back player should
+push its defence budget forward to the TEAM front -- towers ahead of the
+front ally's base, not merely fewer at home. That needs defence wants
+that may site on ground anchored to an ALLY's holdings, which nothing
+offers today.
+
 **2026-08-29 (night, live watch) — confirmed and asked-for-more.** The
 wave-concentration defence fix he confirmed live: "We are making more
 pulsars now and I'm happy to see that. We need even more :) They're cheap

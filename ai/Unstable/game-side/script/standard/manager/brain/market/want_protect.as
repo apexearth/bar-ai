@@ -266,10 +266,25 @@ bool RadarGap(const AIFloat3& in from, AIFloat3& out at, float& out unseenFrac)
 // many turrets stood.
 //
 // A bearing that runs off the map counts as closed -- the edge is the wall.
+// AN ALLY'S BASE IS A WALL TOO (apexearth, refusing to host the 8v8: "all
+// our AI makes tons of turrets in their own base instead of in front of
+// their allies base who is in front of them. It looks too stupid."): a
+// bearing whose outward corridor passes a TEAMMATE'S HOME is theirs to
+// hold, counted closed exactly as the edge is -- which is what stops a
+// back-line player ringing itself while an ally stands between it and the
+// war. Homes come off the team blackboard (air/update.as publishes
+// homex/homez per player), never GetAllyInflAt: that read counts ourselves
+// (measured 3.71 in a solo game, coverage.as) and would close the
+// enemy-facing bearings on our own massing army. Filled by ClosurePrep on
+// the same field stamp as the ring.
 const int CLOSE_RAYS = 16;
+array<bool> gClAllyShield;
+array<Id>@  gShieldMates = null;
+
 float LineClosure(const AIFloat3& in extraAt, float extraReach)
 {
 	PfRebuild();
+	ClosurePrep();
 	AIFloat3 c;
 	float extent = 0.f;
 	if (!BaseCentroid(c, extent))
@@ -282,6 +297,10 @@ float LineClosure(const AIFloat3& in extraAt, float extraReach)
 		const float ang = 6.2831853f * float(b) / float(CLOSE_RAYS);
 		const AIFloat3 p = c + AIFloat3(cos(ang), 0.f, sin(ang)) * ring;
 		if (!OnMap(p)) {
+			++closed;
+			continue;
+		}
+		if ((b < int(gClAllyShield.length())) && gClAllyShield[b]) {
 			++closed;
 			continue;
 		}
@@ -331,10 +350,46 @@ void ClosurePrep()
 	gClRingOk = true;
 	gClMid = c;
 	gClRingR = ring;
+	// The teammates' homes, read once per stamp -- see the ally-wall comment
+	// above LineClosure. Self is excluded by construction.
+	array<float> hx;
+	array<float> hz;
+	if (gShieldMates is null)
+		@gShieldMates = ai.GetTeamIds();
+	if (gShieldMates !is null) {
+		for (uint m = 0; m < gShieldMates.length(); ++m) {
+			if (int(gShieldMates[m]) == ai.teamId)
+				continue;
+			const float mx = ai.ReadTeamValue(gShieldMates[m], "homex", -1.f);
+			const float mz = ai.ReadTeamValue(gShieldMates[m], "homez", -1.f);
+			if ((mx < 0.f) || (mz < 0.f))
+				continue;
+			hx.insertLast(mx);
+			hz.insertLast(mz);
+		}
+	}
+	gClAllyShield.resize(0);
 	for (int b = 0; b < CLOSE_RAYS; ++b) {
 		const float ang = 6.2831853f * float(b) / float(CLOSE_RAYS);
 		const AIFloat3 p = c + AIFloat3(cos(ang), 0.f, sin(ang)) * ring;
-		bool open = OnMap(p);
+		// A ~17-degree half-cone about the bearing (lateral within 30% of
+		// the along distance): geometry of "roughly this way", not policy.
+		bool shielded = false;
+		const float dxb = (p.x - c.x) / ring;
+		const float dzb = (p.z - c.z) / ring;
+		for (uint m = 0; !shielded && (m < hx.length()); ++m) {
+			const float vx = hx[m] - c.x;
+			const float vz = hz[m] - c.z;
+			const float along = vx * dxb + vz * dzb;
+			if (along <= extent)
+				continue;
+			const float lx = vx - dxb * along;
+			const float lz = vz - dzb * along;
+			if (lx * lx + lz * lz <= 0.09f * along * along)
+				shielded = true;
+		}
+		gClAllyShield.insertLast(shielded);
+		bool open = OnMap(p) && !shielded;
 		for (uint i = 0; open && (i < gPfTwPos.length()); ++i) {
 			if (gPfTwPos[i].distance2D(p) <= gPfTwReach[i])
 				open = false;
