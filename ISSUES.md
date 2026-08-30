@@ -36,6 +36,16 @@ standing, 0 self-reclaims, rimDAvg −204, wall closure 0.58 vs 0.20.
    actually meet.
 6. The closure-ring candidates (`apex_def_ring`, entry below) are OFF-path
    while `apex_wall=1`; that entry's "awaiting measurement" is superseded.
+7d. **Walk churn eats the early sentry** (vs hard, 20260830-190332): the
+   memo-starvation fix (see the commit) got the commander WINNING the
+   sentry election at 2.6 min -- and the re-election roulette then
+   swapped his task for energy/mex six times mid-walk; the first tower
+   stood at 12:00. Same class for every want: a walking builder re-rolls
+   every update and any different-build-type winner replaces the task.
+   The fix is election-to-standing stickiness during a committed short
+   walk -- a measured change on its own, NOT more pricing. Note the
+   starvation fix also un-blinded sense/nano/reclaim-obsolete for every
+   builder; the next battery row is the displacement read for that.
 7c. **The line advances faster than it fills** (smoke 20260830-184343,
    the rez/rent/rear build, a 26-min win): every defence election lands
    exactly on the wall (wallD=0 throughout), rezbot orders 2 (fix
