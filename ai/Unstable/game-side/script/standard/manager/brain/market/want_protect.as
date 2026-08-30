@@ -6,6 +6,7 @@ CCircuitUnit@ gAssistTarget = null;
 // out of the log by hand.
 int gDefSiteFront = 0;
 int gDefSiteAsset = 0;
+int gDefSiteRing = 0;
 int gNextDefSiteLog = 0;
 int gNextDefFwdLog = 0;
 // EVERY TERM OF THE DEFENCE PRICE, so "why so many turrets" is read rather than
@@ -17,6 +18,7 @@ float gDbgCover1 = 0.f;
 int gNextDefPriceLog = 0;
 float gDbgFrontBest = 0.f;
 float gDbgAssetBest = 0.f;
+float gDbgRingBest = 0.f;
 int gDbgLineN = 0;
 // The defence auction's own ranking, so "why did we never build a Pulsar" is
 // read rather than argued: every turret this builder could place, with what
@@ -122,25 +124,31 @@ void LogFrontTowers()
 		+ " core=" + gCoreTowerBuilt
 		+ " rimDAvg=" + int(gRimDSum
 			/ float((gRimTowerBuilt + gCoreTowerBuilt > 0)
-				? (gRimTowerBuilt + gCoreTowerBuilt) : 1)));
+				? (gRimTowerBuilt + gCoreTowerBuilt) : 1))
+		+ " closure=" + formatFloat(ClosureFrac(), "", 0, 2));
 }
 
-void NoteDefSite(bool isFront)
+void NoteDefSite(bool isFront, bool isRing)
 {
 	if (isFront)
 		++gDefSiteFront;
+	else if (isRing)
+		++gDefSiteRing;
 	else
 		++gDefSiteAsset;
 	if (ai.frame < gNextDefSiteLog)
 		return;
 	gNextDefSiteLog = ai.frame + 60 * SECOND;
 	AiLog("apex: defsite front=" + gDefSiteFront + " asset=" + gDefSiteAsset
+		+ " ring=" + gDefSiteRing
 		+ " lineSpots=" + gDbgLineN
 		+ " foeReach=" + formatFloat(Military::FoeReach(), "", 0, 0)
 		+ " bestFrontGain=" + formatFloat(gDbgFrontBest, "", 0, 2)
-		+ " bestAssetGain=" + formatFloat(gDbgAssetBest, "", 0, 2));
+		+ " bestAssetGain=" + formatFloat(gDbgAssetBest, "", 0, 2)
+		+ " bestRingGain=" + formatFloat(gDbgRingBest, "", 0, 2));
 	gDbgFrontBest = 0.f;
 	gDbgAssetBest = 0.f;
+	gDbgRingBest = 0.f;
 }
 
 // Standing defense metal near a point -- the crowding divisor that makes
@@ -334,6 +342,21 @@ void ClosurePrep()
 		gClRingP.insertLast(p);
 		gClRingOpen.insertLast(open);
 	}
+}
+
+// Share of approach bearings something standing already covers; -1 before the
+// field exists. The number the all-angles work is judged on.
+float ClosureFrac()
+{
+	ClosurePrep();
+	if (!gClRingOk || (gClRingOpen.length() == 0))
+		return -1.f;
+	int closed = 0;
+	for (uint b = 0; b < gClRingOpen.length(); ++b) {
+		if (!gClRingOpen[b])
+			++closed;
+	}
+	return float(closed) / float(gClRingOpen.length());
 }
 
 float ClosureAdds(const AIFloat3& in extraAt, float extraReach)
@@ -700,6 +723,7 @@ array<array<float>@> gDsPrev;
 array<array<float>@> gDsX;
 array<array<float>@> gDsZ;
 array<array<bool>@> gDsFront;
+array<array<bool>@> gDsRing;
 array<int> gDsAt;
 array<int> gDsLineN;
 int gDsFillFrame = -1;
@@ -712,6 +736,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		gDsX.resize(uint(Catalog::gDefCount + 1));
 		gDsZ.resize(uint(Catalog::gDefCount + 1));
 		gDsFront.resize(uint(Catalog::gDefCount + 1));
+		gDsRing.resize(uint(Catalog::gDefCount + 1));
 		gDsAt.resize(uint(Catalog::gDefCount + 1));
 		gDsLineN.resize(uint(Catalog::gDefCount + 1));
 	}
@@ -782,12 +807,43 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			}
 		}
 	}
+	// EVERY OPEN APPROACH BEARING IS A CANDIDATE (apexearth: enemies attack
+	// through the side; "our angle of defense has to be really flexible" --
+	// on some maps we are completely surrounded). ClosureAdds already pays a
+	// post for the bearings it newly closes, but the asset sites hug our own
+	// metal and the front spots cover only hot bearings, so a cold flank
+	// never held a site the credit could land on. One candidate per open ring
+	// bearing, pulled inward so the def's own reach still covers the ring
+	// point with margin (ProtCovered's 0.8). No arc constant: an off-map
+	// bearing is a wall, a covered one is closed, and the auction prices the
+	// rest individually -- surrounded means every bearing is for sale.
+	const uint ringStart = sites.length();
+	if (ai.GetTunable("apex_def_ring", TUNE_DEF_RING) > 0.f) {
+		ClosurePrep();
+		if (gClRingOk) {
+			for (uint rb = 0; rb < gClRingP.length(); ++rb) {
+				if (!gClRingOpen[rb])
+					continue;
+				AIFloat3 dirR = gClRingP[rb] - gClMid;
+				if (dirR.SqLength2D() < NEAR_ZERO)
+					continue;
+				dirR.SafeNormalize2D();
+				float rS = gClRingR - reach * 0.8f;
+				if (rS < 64.f)
+					rS = 64.f;
+				const AIFloat3 rp = gClMid + dirR * rS;
+				if (OnMap(rp))
+					sites.insertLast(rp);
+			}
+		}
+	}
 	Perf::Add("prot.sites", _tSites);
 	const double _tLoop = Perf::T0();
 	array<float> prevA(sites.length(), 0.f);
 	array<float> xA(sites.length(), 0.f);
 	array<float> zA(sites.length(), 0.f);
 	array<bool> frontA(sites.length(), false);
+	array<bool> ringA(sites.length(), false);
 	ClosurePrep();
 	RiskFill();
 	RiskFillSiege();
@@ -796,12 +852,17 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		const AIFloat3 s = sites[si];
 		if (!OnMap(s))
 			continue;
-		const bool isFront = (si >= nAsset);
+		const bool isRing = (si >= ringStart);
+		const bool isFront = !isRing && (si >= nAsset);
 		const bool isGate = isFront && (si < nAsset + nGates);
+		// Only the asset prefix is in the field's slot cache; gates, front
+		// spots and ring sites read their senses live.
+		const bool cached = (si < nAsset);
 		xA[si] = s.x;
 		zA[si] = s.z;
 		frontA[si] = isFront;
-		float threat = isFront ? ThreatAt(s) : PfSiteThreat(si);
+		ringA[si] = isRing;
+		float threat = cached ? PfSiteThreat(si) : ThreatAt(s);
 		// THE GATE OVERWHELMS OR IT IS A SPEED BUMP (apexearth 2026-08-29:
 		// "Have an unusual amount of tower at some spots. Try to deeply
 		// cover those choke points. Easy wins there... It matches
@@ -833,8 +894,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		if (floored)
 			threat = mexFloorHere;
 		if ((siteWave > 0.f) && (gPfTotal > 1.f)) {
-			const float sStake = isFront
-					? FrontedStakeAt(s, reach) : PfSiteStake(si);
+			const float sStake = cached
+					? PfSiteStake(si) : FrontedStakeAt(s, reach);
 			float shr = sStake / gPfTotal;
 			if (shr > 1.f)
 				shr = 1.f;
@@ -849,8 +910,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		}
 		if (threat <= 1.f)
 			continue;
-		float stake = (isFront || (reach < 64.f))
-				? FrontedStakeAt(s, reach) : PfSiteStake(si);
+		float stake = (cached && (reach >= 64.f))
+				? PfSiteStake(si) : FrontedStakeAt(s, reach);
 		// The stream the tower keeps flowing -- see MexStreamM above. Rear
 		// sites only: a front site's stake is the fight, not the farm.
 		if (!isFront)
@@ -864,7 +925,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		}
 		if (stake <= 1.f)
 			continue;
-		const float cover0 = isFront ? CoverAt(s) : PfSiteCover(si);
+		const float cover0 = cached ? PfSiteCover(si) : CoverAt(s);
 		const float cover1 = cover0 + CoverAddsAt(s, reach, adds);
 		float short0 = (threat - cover0) / threat;
 		if (short0 < 0.f)
@@ -882,10 +943,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		}
 		if (stopped <= 0.f)
 			continue;
-		const float hazard = isFront ? HazardWith(s, cover0) : PfSiteHz(si);
+		const float hazard = cached ? PfSiteHz(si) : HazardWith(s, cover0);
 		float hz = hazard;
-		const float sg = isFront ? SiegeWith(s, cover0, siegeFrac)
-				: PfSiteSiege(si);
+		const float sg = cached ? PfSiteSiege(si)
+				: SiegeWith(s, cover0, siegeFrac);
 		if (sg > hz)
 			hz = sg;
 		float prevented = stake * hz * stopped;
@@ -905,6 +966,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		prevA[si] = prevented;
 		if (isFront) {
 			if (prevented > gDbgFrontBest) gDbgFrontBest = prevented;
+		} else if (isRing) {
+			if (prevented > gDbgRingBest) gDbgRingBest = prevented;
 		} else if (prevented > gDbgAssetBest) {
 			gDbgAssetBest = prevented;
 		}
@@ -927,7 +990,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	@gDsX[d] = xA;
 	@gDsZ[d] = zA;
 	@gDsFront[d] = frontA;
-	gDsLineN[d] = int(sites.length() - nAsset);
+	@gDsRing[d] = ringA;
+	gDsLineN[d] = int(ringStart - nAsset);
 	Perf::Add("prot.loop", _tLoop);
 }
 
@@ -1359,6 +1423,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			float bestGain = 0.f;
 			float bestScore = 0.f;
 			bool bestIsFront = false;
+			bool bestIsRing = false;
 			const array<float>@ prevs = gDsPrev[d];
 			if (prevs !is null) {
 				for (uint si = 0; si < prevs.length(); ++si) {
@@ -1375,6 +1440,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						bestGain = prev;
 						bestAt = s;
 						bestIsFront = gDsFront[d][si];
+						bestIsRing = gDsRing[d][si];
 					}
 				}
 			}
@@ -1452,7 +1518,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " defHave=" + int(DefenceValue())
 					+ " defTarget=" + int(DefenceTarget()));
 			}
-			NoteDefSite(bestIsFront);
+			NoteDefSite(bestIsFront, bestIsRing);
 			// Is the chosen post in FRONT of the base or behind it? He reports
 			// towers landing behind, which the site list alone cannot show.
 			if (ai.frame >= gNextDefFwdLog) {
@@ -1464,6 +1530,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " anchorFwd=" + formatFloat(Base::gAnchorSet
 						? Military::ForwardFraction(Base::gAnchor) : -9.f, "", 0, 2)
 					+ " front=" + (bestIsFront ? 1 : 0)
+					+ " ring=" + (bestIsRing ? 1 : 0)
 					// Distance to the nearest map wall, and the share of the
 					// approach that is real map there. The wall used to PAY.
 					+ " edgeD=" + int(EdgeDist(bestAt))

@@ -2004,6 +2004,11 @@ const float TUNE_CHARGER_STRIKE = 1.f;
 //   territory (choke with our side ours, far side not) is a defence-site
 //   candidate, priced by what it shields; 0 keeps only the near-anchor choke.
 const float TUNE_CHOKE_GATES = 1.f;
+// manager/brain/market/want_protect.as [toggle 0/1] -- Every OPEN bearing of
+//   the closure ring (approach angles no standing gun covers, map edges count
+//   as walls) offers a defence-site candidate, so flanks and the rear are for
+//   sale at every angle; 0 leaves only asset/gate/front candidates.
+const float TUNE_DEF_RING = 1.f;
 // manager/brain/market/protect_field.as [fraction of tower reach] -- Asset
 //   guard sites stand this far enemy-ward of the asset centroid, between the
 //   buildings and the approach; 0 sites the gun amid the buildings.

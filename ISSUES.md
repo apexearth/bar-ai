@@ -224,6 +224,57 @@ session: candidates are memoizing RiskFill across defs in one pass, and
 capping DefSiteFill's per-tick def count. Do not add more candidate
 generators to the protect stack before this.
 
+2026-08-30: the two prescribed optimizations LANDED (RiskFill/RiskFillSiege
+frame memos, ClosurePrep memoized on the field stamp, DefSiteFill capped at
+two fresh fills per frame) — see the commit. Worst single call on a 12-min
+smoke: 12ms; the 126ms baseline was a 43-min base, so the entry stays OPEN
+until re-measured at that scale (the closure-ring candidates added on top of
+the cap are bounded by it, ≤16 sites per fill).
+
+## 2026-08-30 — all-angle defence: closure-ring candidates (LANDED, awaiting measurement)
+
+His ask: "We often suffer hard from enemy flank attacks to our side... at
+the late game we'll have enough base defenses to guard ourselves properly
+at all angles", and "on some maps you might be completely surrounded. So
+our angle of defense has to be really flexible." The mechanism found: the
+closure ring (ClosureAdds) already PAYS a post for every approach bearing
+it newly closes, but no candidate ever stood on a cold bearing — asset
+guard sites hug our metal and are shifted toward the enemy centroid
+(apex_guard_forward), FrontBuildSpots offers only RayFacesFront (hot)
+bearings, and the two all-angle generators that exist (ShieldArcSpots,
+NetSpots in territory.as) have ZERO callers. So the flank credit existed
+and nothing could collect it. Fix (apex_def_ring): DefSiteFill now offers
+one candidate per OPEN closure-ring bearing, pulled inward so the def's own
+reach still covers the ring point (rS = ring − reach×0.8); map-edge
+bearings are walls and are never offered. No arc constant — a surround
+makes every on-map bearing a candidate, priced individually. Read it via
+`apex: defsite ... ring=N bestRingGain=` (auction wins) and
+`apex: fronttowers ... closure=` (share of bearings covered; should trend
+up late game). Verify on a long high-economy game, not a 15-min benchmark —
+at low income DefenceTarget is a handful of light towers and ring sites
+correctly lose to mex floors.
+
+The first deploy of this SHIPPED A CRASH apexearth caught live ("seems the
+actionscript wasn't running"): the loop's sStake read kept its old
+`isFront ? ... : PfSiteStake(si)` guard, a ring site is not front, and
+PfSiteStake indexed the asset slot cache past its end — 797-1,024 "Index
+out of bounds" exceptions per game, each aborting the whole builder
+election. The AI looked dead while the script loaded fine: mex@15m 2 vs a
+healthy 12, zero towers, no T2 (battery rows 190146/190716 are this bug,
+not a behaviour read). The compile-error grep reads CLEAN on this failure
+mode — review.py's ran-gate now counts runtime `Exception:` lines too.
+Fixed (all slot-cache reads gated on `cached`), redeployed, verified:
+0 exceptions, held=11, ring=13 auction wins, closure=0.69 at 23 min.
+
+## 2026-08-29 — UpdateWithdraw throws "Index out of bounds" (rare, pre-existing)
+
+2 occurrences in one battery game (Function: void UpdateWithdraw(), Line:
+500 — the gCombatSent[i] region, withdraw.as). Not from the ring change
+(zero market-file overlap); most plausibly the 08-29 fight-logic commits'
+squad-parallel arrays racing a removal. Each throw aborts that military
+update tick. Low rate, real bug — attribute by logging i vs array length
+at the site before touching the logic.
+
 ## 2026-08-29 — flanking: charger question RULED, two structural gaps remain
 
 His ruling (same day): Behemoths through the middle (slow), Titans may take

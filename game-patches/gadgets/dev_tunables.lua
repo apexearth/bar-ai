@@ -361,6 +361,7 @@ local NAMES = {
 	"apex_charger_strike",    -- hooks.as: 1 = T3 chargers take solo base-strike tasks, 0 = massing pool
 	"apex_arty_mass",         -- hooks.as: 1 = mobile artillery masses into squads as the back row, 0 = solo ArtilleryTask
 	"apex_choke_gates",       -- want_protect.as: 1 = every gate of our territory is a defence-site candidate, 0 = near-anchor choke only
+	"apex_def_ring",          -- want_protect.as: 1 = every open closure-ring bearing (flanks, rear) is a defence-site candidate, 0 = asset/gate/front only
 	"apex_gate_depth",       -- want_protect.as: gate threat floor as a multiple of the arriving wave (2)
 	"apex_teeth",            -- want_protect.as: 1 = teeth line across defended gates
 	"apex_teeth_gain",       -- want_protect.as: one tooth's gain (2)

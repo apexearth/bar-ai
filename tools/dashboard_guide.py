@@ -551,6 +551,13 @@ GROUPS = [
                   "deepening — its cover target as a multiple of the wave "
                   "that arrives together. His concentration ruling: the gate "
                   "overwhelms the push or it is a speed bump"),
+                 ("TUNE_DEF_RING", "ON offers a defence site on every "
+                  "approach bearing no standing gun covers yet — flanks and "
+                  "the rear included, so a base can close the full circle "
+                  "late game and a surround finds no free angle; map edges "
+                  "count as walls and are never bought. OFF leaves only "
+                  "asset, gate and front candidates, which is what let flank "
+                  "attacks walk in on a cold bearing"),
                  ("TUNE_GUARD_FORWARD", "how far in FRONT of the buildings "
                   "an asset-guard tower stands, as a fraction of its own "
                   "reach — between the assets and the enemy approach; 0 "
