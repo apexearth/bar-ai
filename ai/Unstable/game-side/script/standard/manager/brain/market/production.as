@@ -224,8 +224,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	gNoOrder = "";
 	// Production pays the E-flow discipline too: a factory pumping pawns
 	// through a stall both causes it and starves the opening (watched:
-	// hard e-stall, a minute without a mex).
-	if (HardEStall()) {
+	// hard e-stall, a minute without a mex). But once METAL is overflowing
+	// the mute is upside down: the engine already throttles a fed line to
+	// the energy actually there, while an emptied queue idles the whole
+	// lathe fleet AND stops pulling E, hiding the demand the energy market
+	// prices generators against. Stock produces straight through its
+	// stalls; muted, we read factory duty 38-45% with 28% of all metal
+	// made wasted through the decisive midgame (nanofix-s3). eFeedA below
+	// still prices the stall into every army gain.
+	if (HardEStall() && (OverflowM() <= 0.5f)) {
 		gNoOrder = "e-stall";
 		return null;
 	}
