@@ -72,6 +72,18 @@ Want@ MemoSlotCall(int slot, CCircuitUnit@ unit)
 	return ProposeProtect(unit);
 }
 
+// ONE MORE SERVING OF A STALE ANSWER BEATS TWO HEAVY REFRESHES IN ONE FRAME
+// (his rule: "we don't want to ever do too much in any one frame... we
+// should be distributing operations across multiple frames"). At most two
+// memo cores recompute per sim frame; a stale slot past the cap serves its
+// cached copy one election longer -- DefSiteFill's fills-per-frame shape,
+// lifted to the memo. A slot with nothing cached always computes (it cannot
+// serve what it never had), and an EVICTED slot recomputes too: its stamp
+// is reset to the never-filled marker, because the eviction means the
+// cached answer was consumed and re-serving it is the stampede bug.
+int gMemoFreshFrame = -1;
+int gMemoFreshN = 0;
+
 Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 {
 	if (gMemoAt.length() == 0) {
@@ -91,6 +103,15 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 		Perf::Note("memo.hit");
 		return WantCopy(gMemoW[slot][ud]);
 	}
+	if (gMemoFreshFrame != ai.frame) {
+		gMemoFreshFrame = ai.frame;
+		gMemoFreshN = 0;
+	}
+	if ((gMemoAt[slot][ud] > -30000) && (gMemoFreshN >= 2)) {
+		Perf::Note("memo.defer");
+		return WantCopy(gMemoW[slot][ud]);
+	}
+	++gMemoFreshN;
 	Perf::Note("memo.miss");
 	Want@ fresh = MemoSlotCall(slot, unit);
 	gMemoAt[slot][ud] = ai.frame;
