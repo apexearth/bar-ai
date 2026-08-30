@@ -218,6 +218,7 @@ void ReArm()
 	// trickles out at the floor instead of massing.
 	gCommitFrame = ai.frame;
 	gCommitBombers = ScaledBombers();
+	RollDeadline();
 	AiLog(Factory::T() + "apex: air strike over -- " + have
 		+ " of the wave home, " + held + " built since; massing them together"
 		+ " for the next run");
@@ -368,7 +369,7 @@ void Update()
 		// wing already paid for ("a force already paid for is better spent
 		// than abandoned"). The outcome ledger scores the run either way,
 		// and a run that dies prices the next bombers to zero on its own.
-		if (Committed() && (ai.frame > gCommitFrame + AIR_DEADLINE)
+		if (Committed() && (ai.frame > gCommitFrame + gDeadlineFrames)
 			&& (float(Bombers()) >= DeadlineBombBar()))
 		{
 			Release("deadline -- stood down, spending the standing wing");
@@ -413,6 +414,7 @@ void Update()
 		if (first !is null) {
 			gCommitFrame = ai.frame;
 			gCommitBombers = ScaledBombers();
+			RollDeadline();
 			AiLog(Factory::T() + "apex: air assassin committing, first plant "
 				+ first.GetName());
 		} else if (Bombers() > 0) {
@@ -423,8 +425,10 @@ void Update()
 			// standing. A standing bomber commits the deadline.
 			gCommitFrame = ai.frame;
 			gCommitBombers = ScaledBombers();
+			RollDeadline();
 			AiLog(Factory::T() + "apex: air clock started -- wing standing, "
-				+ Bombers() + " bombers, sizing " + gCommitBombers);
+				+ Bombers() + " bombers, sizing " + gCommitBombers
+				+ ", window " + (gDeadlineFrames / MINUTE) + "m");
 		}
 	}
 
@@ -439,7 +443,7 @@ void Update()
 				+ formatFloat(EnemyAACost(), "", 0, 0)
 				+ " with only " + Have(gBomber) + "/" + Have(gFighter) + " built");
 		}
-	} else if (Committed() && (ai.frame > gCommitFrame + AIR_DEADLINE)
+	} else if (Committed() && (ai.frame > gCommitFrame + gDeadlineFrames)
 		&& (float(Bombers()) >= DeadlineBombBar()))
 	{
 		Release("deadline");

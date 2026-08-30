@@ -234,6 +234,17 @@ int  gCommitFrame  = -1;
 // gate that compared against the LIVE want chased a treadmill and the whole
 // air arm sat out the game.
 int  gCommitBombers = 0;
+// HIS CADENCE (2026-08-29): "Maybe an attack every random between 5 and 10
+// minutes for air attacks? We don't want to be too boring." The massing
+// window before the wave goes with what stands is rolled per cycle -- at
+// commit and again at each ReArm -- so strikes land on that rhythm without
+// being predictable. AIR_DEADLINE remains only as the pre-roll default.
+int  gDeadlineFrames = AIR_DEADLINE;
+
+void RollDeadline()
+{
+	gDeadlineFrames = AiRandom(5 * MINUTE, 10 * MINUTE);
+}
 
 // The bomber count past which a wave goes anyway: half the force committed
 // to, decaying by half again each further deadline period past the first,
@@ -243,9 +254,9 @@ float DeadlineBombBar()
 {
 	float bar = 0.5f * float(gCommitBombers);
 	if (gCommitFrame >= 0) {
-		const int past = ai.frame - (gCommitFrame + AIR_DEADLINE);
+		const int past = ai.frame - (gCommitFrame + gDeadlineFrames);
 		if (past > 0)
-			bar /= 1.f + float(past) / float(AIR_DEADLINE);
+			bar /= 1.f + float(past) / float(gDeadlineFrames);
 	}
 	if (bar < float(AIR_BOMBERS))
 		bar = float(AIR_BOMBERS);
