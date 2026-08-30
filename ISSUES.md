@@ -13,12 +13,14 @@ baseline 10 towers 9 interior rimDAvg −507 → final iteration 19 towers 18
 standing, 0 self-reclaims, rimDAvg −204, wall closure 0.58 vs 0.20.
 `tools/wall_check.py <match>` is the instrument. Open residue:
 
-1. **Displacement unjudged.** The pull spends real constructor time toward
-   DefenceTarget in quiet games that previously spent it on eco/army. A
-   battery run follows the landing commit; read it before believing the
-   feature is free. The last exercise game (wall9) lost to medium with
-   army 2,002 vs 9,150 target at 30 min — could be the hold tune, could be
-   displacement.
+1. **Displacement: battery row 20260830-100042 read, no alarm, watch the
+   next rows.** vs pre-wall row 092154: trade 0.30→0.24 / 0.30→0.59 /
+   0.37→0.58 (up on two of three maps), mex@15 13→11 / 24→18 / 5→6 (down
+   a little on two), t2 median mixed (17.7→14.1, 10.7→16.2, 18.0→14.8).
+   All within one row of historical spread — directional only. In the
+   battery's own normal-play Comet games the wall held: Apex 10–25 towers
+   per game, on-wall share median ~48% vs the baseline blob's 36%, NN
+   spacing 125–600 (bands, not a clump).
 2. **Front::GateChokes returned ZERO candidates in every 1v1 exercise game**
    (`lineSpots=0` all game). The concentration-doctrine gates are inert in
    these matchups, so the wall carries everything. Pre-existing, now
