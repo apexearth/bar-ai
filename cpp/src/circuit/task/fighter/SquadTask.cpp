@@ -1376,15 +1376,28 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					// when we outranged the foe. The dive exemption above
 					// (squadOverwhelms) still lets a committed overwhelm
 					// press through.
-					const bool mayKite = siegeRow
+					// apex: NEVER BACK TO WHERE OUR OWN GUNS ARE DRY.
+					// The open distance is max(standoff, their reach + pad);
+					// for a brawler whose range edge is smaller than the pad
+					// that spot is outside its OWN range -- the row walks
+					// backwards forever, firing nothing, chased the whole
+					// way. apexearth (arena, twice): "our amphibious tanks
+					// act very very cowardly" -- every amph brawler is a
+					// raider-role short gun, exactly this shape. A mobile-foe
+					// kite whose destination is dry is cancelled: stand and
+					// brawl. Statics keep the unconditional back-out -- the
+					// tower stops hitting us and gains nothing.
+					const float open = std::max(openTo, foeReach);
+					const bool wetKite = kiteFoeStatic || (open <= kv.first)
+							|| (manager->GetCircuit()->GetTunable("apex_brawl_stand", 1.f) <= 0.f);
+					const bool mayKite = wetKite && (siegeRow
 							? (kiteFoeStatic || (foeReach < kv.first))
 							: (kiteFoeStatic || (kiteFoeRange < kv.first)
-								|| (trigger < kv.first * rangeMod));
+								|| (trigger < kv.first * rangeMod)));
 					if ((sqFoe < SQUARE(trigger)) && mayKite) {
 						AIFloat3 away = kcur - kiteFoe;
 						if (away.SqLength2D() > 1.f) {
 							away.SafeNormalize2D();
-							const float open = std::max(openTo, foeReach);
 							newPos = kcur + away * (open - sqrtf(sqFoe));
 							CTerrainManager::CorrectPosition(newPos);
 						}

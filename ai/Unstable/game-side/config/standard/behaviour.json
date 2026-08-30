@@ -1045,7 +1045,7 @@
 
 		"armmar": {
 			"role": ["raider", "heavy"],
-			"threat": {"air": 0.5, "water": 0.0, "surf": 0.5}	
+			"threat": {"air": 0.5, "water": 0.0, "surf": 1.0}	
 		},
 		"armlun": {
 			"role": ["skirmish", "heavy"], 

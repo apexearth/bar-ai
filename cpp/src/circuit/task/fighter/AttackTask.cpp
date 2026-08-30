@@ -838,6 +838,7 @@ void CAttackTask::FindTarget()
 	const int noChaseCat = cdef->GetNoChaseCategory();
 
 	CEnemyInfo* bestTarget = nullptr;
+	int bestGroup = -1;
 	bool bestDive = false;
 	diveCommit = false;
 	// Tuning inputs. Every metric in the stats export is an OUTCOME; to choose a
@@ -1228,6 +1229,7 @@ void CAttackTask::FindTarget()
 			if (minSqDist > sqOEDist) {
 				minSqDist = sqOEDist;
 				bestTarget = enemy;
+				bestGroup = (int)i;
 				bestDive = isDive;
 				bestInfl = group.influence;
 				bestNear = localInfl;
@@ -1246,6 +1248,57 @@ void CAttackTask::FindTarget()
 		}
 		SetTarget(bestTarget);
 		position = GetTarget()->GetPos();
+		// apex: WRAP THE EDGE, NOT THE MIDDLE. apexearth, watching arena
+		// fights: "We tend to push into enemies which are backing up and
+		// forming an encirclement around us... Preferably we all shift to
+		// one side and try to wrap around the edge of their line and then
+		// swallow them." Flanking bonus makes the wrapped force take bonus
+		// damage from every wing, so pressing the centre of a wide line is
+		// paying that bonus to them. When the chosen group is wider than
+		// our own engagement envelope, anchor the squad on the group's
+		// nearer lateral END plus an overshoot past the tip -- the whole
+		// squad shifts one way and rolls the line up from its edge.
+		if ((circuit->GetTunable("apex_wrap_edge", 1.f) > 0.f) && (bestGroup >= 0)) {
+			const CEnemyManager::SEnemyGroup& wg = groups[bestGroup];
+			AIFloat3 wdir = wg.pos - pos;
+			if (wdir.SqLength2D() > 1.f) {
+				wdir.SafeNormalize2D();
+				const AIFloat3 wperp(-wdir.z, 0.f, wdir.x);
+				float lo = 0.f, hi = 0.f;
+				int counted = 0;
+				for (const ICoreUnit::Id eId : wg.units) {
+					CEnemyUnit* eu = circuit->GetEnemyManager()->GetEnemyUnit(eId);
+					if (eu == nullptr) {
+						continue;
+					}
+					const AIFloat3& ep = eu->GetPos();
+					const float t = wperp.x * (ep.x - wg.pos.x)
+							+ wperp.z * (ep.z - wg.pos.z);
+					lo = std::min(lo, t);
+					hi = std::max(hi, t);
+					++counted;
+				}
+				const float wrapMin = highestRange
+						* circuit->GetTunable("apex_wrap_min_w", 1.5f);
+				if ((counted >= 4) && (hi - lo > wrapMin)) {
+					const float myT = wperp.x * (pos.x - wg.pos.x)
+							+ wperp.z * (pos.z - wg.pos.z);
+					const float over = highestRange
+							* circuit->GetTunable("apex_wrap_over", 0.75f);
+					const float end = (myT >= 0.f) ? (hi + over) : (lo - over);
+					AIFloat3 wrap = wg.pos + wperp * end;
+					CTerrainManager::CorrectPosition(wrap);
+					position = wrap;
+					if (frame >= lastWrapLog + FRAMES_PER_SEC * 20) {
+						lastWrapLog = frame;
+						circuit->LOG("apex: wrap-edge t=%i w=%.0f end=%s "
+								"at=%.0f,%.0f n=%d", circuit->GetTeamId(),
+								hi - lo, (myT >= 0.f) ? "hi" : "lo",
+								wrap.x, wrap.z, counted);
+					}
+				}
+			}
+		}
 		diveCommit = bestDive;
 	}
 	// Feeds the accelerated merge check: a refusal pass this close to the bar

@@ -7631,7 +7631,7 @@ index c3f5e98..e02338a 100644
  		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4..0080e36 100644
+index cd063e4..e79b4f1 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -8339,7 +8339,7 @@ index cd063e4..0080e36 100644
  	}
  
  	if (units.find(unit) != units.end()) {
-@@ -238,29 +800,166 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,29 +800,167 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -8384,6 +8384,7 @@ index cd063e4..0080e36 100644
  
  	CEnemyInfo* bestTarget = nullptr;
 -	const float sqOBDist = pos.SqDistance2D(basePos);  // Own to Base distance
++	int bestGroup = -1;
 +	bool bestDive = false;
 +	diveCommit = false;
 +	// Tuning inputs. Every metric in the stats export is an OUTCOME; to choose a
@@ -8509,7 +8510,7 @@ index cd063e4..0080e36 100644
  	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
  	for (unsigned i = 0; i < groups.size(); ++i) {
  		const CEnemyManager::SEnemyGroup& group = groups[i];
-@@ -269,10 +968,55 @@ void CAttackTask::FindTarget()
+@@ -269,10 +969,55 @@ void CAttackTask::FindTarget()
  			continue;
  		}
  		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
@@ -8569,7 +8570,7 @@ index cd063e4..0080e36 100644
  			continue;
  		}
  
-@@ -319,18 +1063,212 @@ void CAttackTask::FindTarget()
+@@ -319,18 +1064,264 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -8739,6 +8740,7 @@ index cd063e4..0080e36 100644
  			if (minSqDist > sqOEDist) {
  				minSqDist = sqOEDist;
  				bestTarget = enemy;
++				bestGroup = (int)i;
 +				bestDive = isDive;
 +				bestInfl = group.influence;
 +				bestNear = localInfl;
@@ -8757,6 +8759,57 @@ index cd063e4..0080e36 100644
 +		}
  		SetTarget(bestTarget);
  		position = GetTarget()->GetPos();
++		// apex: WRAP THE EDGE, NOT THE MIDDLE. apexearth, watching arena
++		// fights: "We tend to push into enemies which are backing up and
++		// forming an encirclement around us... Preferably we all shift to
++		// one side and try to wrap around the edge of their line and then
++		// swallow them." Flanking bonus makes the wrapped force take bonus
++		// damage from every wing, so pressing the centre of a wide line is
++		// paying that bonus to them. When the chosen group is wider than
++		// our own engagement envelope, anchor the squad on the group's
++		// nearer lateral END plus an overshoot past the tip -- the whole
++		// squad shifts one way and rolls the line up from its edge.
++		if ((circuit->GetTunable("apex_wrap_edge", 1.f) > 0.f) && (bestGroup >= 0)) {
++			const CEnemyManager::SEnemyGroup& wg = groups[bestGroup];
++			AIFloat3 wdir = wg.pos - pos;
++			if (wdir.SqLength2D() > 1.f) {
++				wdir.SafeNormalize2D();
++				const AIFloat3 wperp(-wdir.z, 0.f, wdir.x);
++				float lo = 0.f, hi = 0.f;
++				int counted = 0;
++				for (const ICoreUnit::Id eId : wg.units) {
++					CEnemyUnit* eu = circuit->GetEnemyManager()->GetEnemyUnit(eId);
++					if (eu == nullptr) {
++						continue;
++					}
++					const AIFloat3& ep = eu->GetPos();
++					const float t = wperp.x * (ep.x - wg.pos.x)
++							+ wperp.z * (ep.z - wg.pos.z);
++					lo = std::min(lo, t);
++					hi = std::max(hi, t);
++					++counted;
++				}
++				const float wrapMin = highestRange
++						* circuit->GetTunable("apex_wrap_min_w", 1.5f);
++				if ((counted >= 4) && (hi - lo > wrapMin)) {
++					const float myT = wperp.x * (pos.x - wg.pos.x)
++							+ wperp.z * (pos.z - wg.pos.z);
++					const float over = highestRange
++							* circuit->GetTunable("apex_wrap_over", 0.75f);
++					const float end = (myT >= 0.f) ? (hi + over) : (lo - over);
++					AIFloat3 wrap = wg.pos + wperp * end;
++					CTerrainManager::CorrectPosition(wrap);
++					position = wrap;
++					if (frame >= lastWrapLog + FRAMES_PER_SEC * 20) {
++						lastWrapLog = frame;
++						circuit->LOG("apex: wrap-edge t=%i w=%.0f end=%s "
++								"at=%.0f,%.0f n=%d", circuit->GetTeamId(),
++								hi - lo, (myT >= 0.f) ? "hi" : "lo",
++								wrap.x, wrap.z, counted);
++					}
++				}
++			}
++		}
 +		diveCommit = bestDive;
 +	}
 +	// Feeds the accelerated merge check: a refusal pass this close to the bar
@@ -8783,7 +8836,7 @@ index cd063e4..0080e36 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -340,6 +1278,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -340,6 +1331,70 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -8854,7 +8907,7 @@ index cd063e4..0080e36 100644
  		ActivePath(lowestSpeed);
  	} else {
  		FallbackFrontPos();
-@@ -349,11 +1351,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+@@ -349,11 +1404,41 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
  void CAttackTask::FallbackFrontPos()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -8897,7 +8950,7 @@ index cd063e4..0080e36 100644
  
  	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
  	const float pathRange = DEFAULT_SLACK * 4;
-@@ -387,8 +1419,28 @@ void CAttackTask::FallbackBasePos()
+@@ -387,8 +1472,28 @@ void CAttackTask::FallbackBasePos()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CSetupManager* setupMgr = circuit->GetSetupManager();
  
@@ -8927,7 +8980,7 @@ index cd063e4..0080e36 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -421,7 +1473,9 @@ void CAttackTask::Fallback()
+@@ -421,7 +1526,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -8939,7 +8992,7 @@ index cd063e4..0080e36 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
 diff --git a/src/circuit/task/fighter/AttackTask.h b/src/circuit/task/fighter/AttackTask.h
-index 8585fc2..da9e138 100644
+index 8585fc2..673e5af 100644
 --- a/src/circuit/task/fighter/AttackTask.h
 +++ b/src/circuit/task/fighter/AttackTask.h
 @@ -26,6 +26,8 @@ public:
@@ -8951,12 +9004,13 @@ index 8585fc2..da9e138 100644
  private:
  	void FindTarget();
  	void ApplyTargetPath(const CQueryPathSingle* query);
-@@ -36,6 +38,34 @@ private:
+@@ -36,6 +38,35 @@ private:
  	void Fallback();
  
  	float minPower;
 +	int lastDetourLog = -1000000;
 +	int lastEngageLog = -1000000;
++	int lastWrapLog = -1000000;
 +	int lastWithdrawLog = -1000000;
 +	// apex: most power this task ever held; the failure break compares against it.
 +	float peakPower = 0.f;
@@ -10897,7 +10951,7 @@ index b4b43c1..d2e258e 100644
  		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..8dede45 100644
+index 0d59b65..51fb6b4 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,23 @@
@@ -11377,8 +11431,7 @@ index 0d59b65..8dede45 100644
 +	float span = 0.f;
 +	float cap = SQUAD_FILE_MAX_WIDTH;
 +	const CCircuitDef* prevDef = nullptr;
- 	for (CCircuitUnit* unit : units) {
--		unit->GetTravelAct()->SetPath(pPath, speed);
++	for (CCircuitUnit* unit : units) {
 +		const CCircuitDef* cdef = unit->GetCircuitDef();
 +		const bool isCharge = IsChargeDef(cdef);
 +		if (prevDef != nullptr) {
@@ -11391,7 +11444,7 @@ index 0d59b65..8dede45 100644
 +		}
 +		offset.push_back(span);
 +		prevDef = cdef;
- 	}
++	}
 +	const float scale = (span > cap) ? (cap / span) : 1.f;
 +	const float half = span * scale * 0.5f;
 +	int i = 0;
@@ -11410,7 +11463,8 @@ index 0d59b65..8dede45 100644
 +{
 +	float total = .0f;
 +	float alive = .0f;
-+	for (CCircuitUnit* unit : units) {
+ 	for (CCircuitUnit* unit : units) {
+-		unit->GetTravelAct()->SetPath(pPath, speed);
 +		const float power = unit->GetCircuitDef()->GetPower();
 +		total += power;
 +		// apexearth: "A retreating unit should have 0 power. It is no longer
@@ -11422,7 +11476,7 @@ index 0d59b65..8dede45 100644
 +		float hp = unit->GetHealthPercent();
 +		hp = std::max(.0f, std::min(1.f, hp));  // capture progress drives it negative
 +		alive += power * hp;
-+	}
+ 	}
 +	return (total > .0f) ? (alive / total) : 1.f;
  }
  
@@ -11462,7 +11516,7 @@ index 0d59b65..8dede45 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -418,51 +814,653 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -418,51 +814,695 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  	// incorrect, it should check aoe in vicinity
  	const float aoe = (edef != nullptr) ? edef->GetAoe() : SQUARE_SIZE;
  
@@ -11727,7 +11781,9 @@ index 0d59b65..8dede45 100644
 +		// surround the enemy units, form a circle... ideally... our banishers
 +		// would stay at a distance." Rows are already keyed by weapon range, so
 +		// the second half of that is done; this is the first half.
-+		const float maxDelta = (M_PI * ARC_SPAN) / kv.second.size();
++		const float maxDelta = (M_PI
++				* manager->GetCircuit()->GetTunable("apex_arc_span", ARC_SPAN))
++				/ kv.second.size();
  		// NOTE: float delta = asinf(cdef->GetRadius() / range);
  		//       but sin of a small angle is similar to that angle, omit asinf() call
  		float delta = (3.0f * (rowDef->GetRadius() + aoe)) / (range + DIV0_SLACK);
@@ -11820,18 +11876,16 @@ index 0d59b65..8dede45 100644
 +		// becomes the lowest-health enemy in its own reach, so the whole row
 +		// focuses one kill at a time and enemy DPS leaves the field fastest.
 +		// Colossi keep the richest-target rule instead.
-+		CEnemyInfo* finishFoe = nullptr;
-+		float finishFrac = 1e18f;
-+		// v2 after a measured v1 failure (paired arena, no gain): rank by HP
-+		// FRACTION so "wounded" means wounded rather than cheap, and hold the
-+		// squad's finisher STICKY until it dies or leaves reach -- v1 flipped
-+		// targets every tick as the hp order shuffled, resetting weapon aim.
-+		CEnemyInfo* held = (finishId != 0)
-+				? manager->GetCircuit()->GetEnemyInfo((ICoreUnit::Id)finishId) : nullptr;
-+		if ((held != nullptr) && (held->GetHealth() <= 0.f || held->IsHidden())) {
-+			held = nullptr;
-+			finishId = 0;
-+		}
++		// v3 (apexearth: "Focus fire should be a set target thing only, and
++		// overkill volleys should be thought about some"): a LIST of wounded
++		// targets, lowest absolute HP first, and the row's units are dealt
++		// across it in LETHAL DOSES -- each target gets ~enough dps-seconds
++		// to die, then the next unit aims at the next target. Set-target
++		// only; the engine still overrides when it cannot hit. v1/v2 dumped
++		// the whole row on one target and measured harmful (overkill).
++		const int FIN_N = 6;
++		CEnemyInfo* finCand[FIN_N] = { nullptr };
++		float finHp[FIN_N];
 +		const bool rowColossus = (rowDef != nullptr)
 +				&& (rowDef->IsCharger() || (rowDef->GetCostM()
 +					>= manager->GetCircuit()->GetTunable("apex_super_cost", 7000.f)));
@@ -11883,14 +11937,19 @@ index 0d59b65..8dede45 100644
 +						&& (e->GetHealth() > 0.f))
 +					{
 +						const float maxH = (ed->GetHealth() > 1.f) ? ed->GetHealth() : 1.f;
-+						const float frac = e->GetHealth() / maxH;
-+						if (e == held) {
-+							// the standing finisher stays unless truly healed
-+							finishFoe = e;
-+							finishFrac = frac * 0.5f;
-+						} else if ((frac < 0.85f) && (frac < finishFrac)) {
-+							finishFrac = frac;
-+							finishFoe = e;
++						if (e->GetHealth() / maxH < 0.9f) {
++							const float hp = e->GetHealth();
++							for (int fi = 0; fi < FIN_N; ++fi) {
++								if ((finCand[fi] == nullptr) || (hp < finHp[fi])) {
++									for (int fj = FIN_N - 1; fj > fi; --fj) {
++										finCand[fj] = finCand[fj - 1];
++										finHp[fj] = finHp[fj - 1];
++									}
++									finCand[fi] = e;
++									finHp[fi] = hp;
++									break;
++								}
++							}
 +						}
 +					}
 +					if (!kiteOk || !ed->IsAttacker()) {
@@ -11906,6 +11965,8 @@ index 0d59b65..8dede45 100644
 +			}
 +		}
 +
++		int finIdx = 0;
++		float finDosed = 0.f;
  		int iterNum = 0;
  		for (CCircuitUnit* unit : kv.second) {
  			if (unit->Blocker() != nullptr) {
@@ -12031,15 +12092,28 @@ index 0d59b65..8dede45 100644
 +					// when we outranged the foe. The dive exemption above
 +					// (squadOverwhelms) still lets a committed overwhelm
 +					// press through.
-+					const bool mayKite = siegeRow
++					// apex: NEVER BACK TO WHERE OUR OWN GUNS ARE DRY.
++					// The open distance is max(standoff, their reach + pad);
++					// for a brawler whose range edge is smaller than the pad
++					// that spot is outside its OWN range -- the row walks
++					// backwards forever, firing nothing, chased the whole
++					// way. apexearth (arena, twice): "our amphibious tanks
++					// act very very cowardly" -- every amph brawler is a
++					// raider-role short gun, exactly this shape. A mobile-foe
++					// kite whose destination is dry is cancelled: stand and
++					// brawl. Statics keep the unconditional back-out -- the
++					// tower stops hitting us and gains nothing.
++					const float open = std::max(openTo, foeReach);
++					const bool wetKite = kiteFoeStatic || (open <= kv.first)
++							|| (manager->GetCircuit()->GetTunable("apex_brawl_stand", 1.f) <= 0.f);
++					const bool mayKite = wetKite && (siegeRow
 +							? (kiteFoeStatic || (foeReach < kv.first))
 +							: (kiteFoeStatic || (kiteFoeRange < kv.first)
-+								|| (trigger < kv.first * rangeMod));
++								|| (trigger < kv.first * rangeMod)));
 +					if ((sqFoe < SQUARE(trigger)) && mayKite) {
 +						AIFloat3 away = kcur - kiteFoe;
 +						if (away.SqLength2D() > 1.f) {
 +							away.SafeNormalize2D();
-+							const float open = std::max(openTo, foeReach);
 +							newPos = kcur + away * (open - sqrtf(sqFoe));
 +							CTerrainManager::CorrectPosition(newPos);
 +						}
@@ -12101,7 +12175,22 @@ index 0d59b65..8dede45 100644
 +				const bool staticCantReply = isStatic && (edef != nullptr)
 +						&& (!edef->IsAttacker() || (edef->GetMaxRange() * 1.05f < r))
 +						&& (threatMap->GetThreatAt(unit, newPos) <= THREAT_MIN);
-+				if (staticCantReply
++				// apex: MICRO ONLY WHAT HAS A RANGE EDGE. The no-control arena
++				// diagnostic (3 seed-pairs): units stripped of our orders beat
++				// stock CONSISTENTLY (+0.047 mean, tight), while commanded
++				// units averaged the same with wild variance -- the ring adds
++				// nothing to a row that cannot out-stand its enemy, and costs
++				// DPS while it orbits. A row without a real range edge over
++				// the nearest armed foe hands the brawl to the engine (plain
++				// attack, auto-targeting); rows that outrange something keep
++				// the standoff machinery, which is their whole value.
++				const bool rowBrawls = (manager->GetCircuit()->GetTunable("apex_brawl_pass", 0.f) > 0.f)
++						&& !rowColossus && !kiteFoeStatic
++						&& (kiteFoeRange > 0.f)
++						&& (kv.first < kiteFoeRange + 60.f);
++				if (rowBrawls) {
++					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
++				} else if (staticCantReply
 +					&& (manager->GetCircuit()->GetTunable("apex_static_plain_attack", 1.f) > 0.f))
 +				{
 +					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
@@ -12115,18 +12204,25 @@ index 0d59b65..8dede45 100644
 +					TRY_UNIT(manager->GetCircuit(), unit,
 +						unit->CmdSetTarget(valFoe);
 +					)
-+				} else if ((finishFoe != nullptr)
-+					&& (manager->GetCircuit()->GetTunable("apex_focus_finish", 1.f) > 0.f))
++				} else if ((finCand[0] != nullptr) && (finIdx < FIN_N)
++					&& (finCand[finIdx] != nullptr)
++					&& (manager->GetCircuit()->GetTunable("apex_focus_finish", 0.f) > 0.f))
 +				{
-+					finishId = (int)finishFoe->GetId();
 +					TRY_UNIT(manager->GetCircuit(), unit,
-+						unit->CmdSetTarget(finishFoe);
++						unit->CmdSetTarget(finCand[finIdx]);
 +					)
++					const float dose = ((rowDef != nullptr)
++							? rowDef->GetRawDps() : 10.f) * 2.5f;
++					finDosed += dose;
++					if (finDosed >= finHp[finIdx] * 1.15f) {
++						++finIdx;
++						finDosed = 0.f;
++					}
 +				}
  			}
  
  			beta += delta;
-@@ -478,7 +1476,9 @@ void ISquadTask::Log()
+@@ -478,7 +1518,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,

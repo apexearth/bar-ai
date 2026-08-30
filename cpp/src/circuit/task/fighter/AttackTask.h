@@ -40,6 +40,7 @@ private:
 	float minPower;
 	int lastDetourLog = -1000000;
 	int lastEngageLog = -1000000;
+	int lastWrapLog = -1000000;
 	int lastWithdrawLog = -1000000;
 	// apex: most power this task ever held; the failure break compares against it.
 	float peakPower = 0.f;
