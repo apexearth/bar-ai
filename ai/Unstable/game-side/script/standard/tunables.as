@@ -1756,9 +1756,11 @@ const float TUNE_BLAST_AISLE = 500.f;
 const float TUNE_CON_FEED_HEADROOM = 1.5f;
 // UNIT_AFFORD_S [seconds of income] -- a mobile unit's bid fades as its cost
 //   approaches this much income, dying at the full bill (mass first, T3 from
-//   surplus -- the supers' 60s affordability bar applied to units). At 60 a
-//   Juggernaut needs 333 m/s to bid at all.
-const float TUNE_UNIT_AFFORD_S = 60.f;
+//   surplus -- the supers' 60s affordability bar applied to units). His call
+//   2026-08-29 ("we need more Titans or Thors so we can push"): 60 -> 120,
+//   so a Thor bids from 75 m/s and a Titan from 112 instead of 150/225,
+//   while mass still out-prices them at any income that can't spare the bill.
+const float TUNE_UNIT_AFFORD_S = 120.f;
 // DEF_SETBACK [elmos] -- front defence sites step this far back from the
 //   contested edge toward home, so the frame survives building; most tower
 //   ranges (430+) still cover the edge it stepped back from.
