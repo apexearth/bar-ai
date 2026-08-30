@@ -7,11 +7,15 @@ our AI makes tons of turrets in their own base instead of in front of
 their allies base who is in front of them. It looks too stupid." First
 half LANDED: a closure-ring bearing whose corridor passes a teammate's
 home now counts closed (the ally's base is the wall), so back players
-stop ringing themselves. UNRESOLVED second half: a back player should
-push its defence budget forward to the TEAM front -- towers ahead of the
-front ally's base, not merely fewer at home. That needs defence wants
-that may site on ground anchored to an ALLY's holdings, which nothing
-offers today.
+stop ringing themselves. Second half LANDED, awaiting his eyes: the
+allyfront candidate sites at the most exposed teammate's door, staked by
+that ally's published economy (TV_ASSETM) times AnswerShare, and the
+defence census terms now price MY SHARE of the enemy team rather than
+all of it (his same-night read: "compensate for the entire enemy team,
+not just one eighth"). Validated mechanically on a 4v4: spend split
+43.5k/27.6k front vs 13.1k/13.3k back, `apex: allyfront cand` pricing
+live. Whether the forward posts WIN often enough to look right on screen
+is his watched call.
 
 **2026-08-29 (night, live watch) — confirmed and asked-for-more.** The
 wave-concentration defence fix he confirmed live: "We are making more
