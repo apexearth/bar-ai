@@ -87,9 +87,9 @@ float AirScale(float share)
 	return s;
 }
 
-// How many heavy static AA the observed air justifies. Factored out so the
-// rule that actually ORDERS them (Builder::HeavyFlak) reads the same number
-// UpdateAirThreat logs -- the two must never disagree.
+// How many heavy static AA the observed air justifies. Consumed only as a
+// maxThisUnit ceiling (CapHeavyAA below); the PURCHASE goes through the
+// protect market's AA branch, which divides the same census by AllyCount.
 int HeavyAAWant()
 {
 	// THE LATE-GAME FLOOR DOES NOT WAIT FOR A SIGHTING. apexearth 2026-08-20:
@@ -110,7 +110,11 @@ int HeavyAAWant()
 		return floorN;
 	const float total = gAirAvg + gGroundAvg;
 	const float share = (total > 0.f) ? gAirAvg / total : 0.f;
-	const float heavyBasis = gAirSeen;
+	// OUR SHARE of a side-wide census: gAirSeen is the WHOLE enemy team's
+	// air, and each ally caps its own flak -- the same division the protect
+	// market's AA branch already applies. The income floor above stays whole
+	// on purpose: it is spatial (flak around THIS base).
+	const float heavyBasis = gAirSeen / AllyCount();
 	const int seen = int(heavyBasis * AirScale(share) / AA_HEAVY_PER);
 	return (seen > floorN) ? seen : floorN;
 }
