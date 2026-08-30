@@ -560,7 +560,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// x0 ON DRY MAPS (apexearth: "amphib should be x0" -- and a
 			// tiny pond flips the engine's water flag, so the bar is real
 			// water share of the map, ~15%).
-			if (Catalog::gAmphib[d]) {
+			// JUDGE LAND WORTH, NOT THE FLAG (his ruling after prodrank's
+			// first catch: the TITAN carries BAR's amphibious flag and was
+			// x0 on every dry map -- zero built at 500 m/s). A unit whose
+			// core worth stands at or above the field reference pays for
+			// its guns, not its waterline; the x0 keeps zeroing only the
+			// dedicated crossers, whose mobility premium drags their
+			// per-metal worth below it.
+			if (Catalog::gAmphib[d] && (UnitCore(d) < 1.f)) {
 				float lp = aiTerrainMgr.GetLandPercent();
 				if (lp <= 1.5f)
 					lp *= 100.f;   // scale-proof: fraction or percent

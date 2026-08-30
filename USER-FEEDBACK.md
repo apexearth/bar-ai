@@ -1,5 +1,11 @@
 # What apexearth wants from this AI
 
+**2026-08-29 (night, live watch) — confirmed and asked-for-more.** The
+wave-concentration defence fix he confirmed live: "We are making more
+pulsars now and I'm happy to see that. We need even more :) They're cheap
+compared to all these T3 we're making." Standing direction: heavy towers
+are cheap relative to T3 army — keep the defence market leaning that way.
+
 **2026-08-29 (arena watching) — encirclement doctrine.** "We tend to push into
 enemies which are backing up and forming an encirclement around us. This game
 gives a damage bonuses when you encircle your enemies. So if we push in and let
