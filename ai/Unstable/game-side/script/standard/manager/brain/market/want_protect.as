@@ -1181,8 +1181,37 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		if (sg > hz)
 			hz = sg;
 		float prevented = stake * hz * stopped;
-		if (pullHere && (prevented < wallPull))
-			prevented = wallPull;
+		// THE PULL FACES THE ENEMY. Uniform, it grew the wall by walk
+		// distance -- toward builder convenience, not the war (measured over
+		// four normal-play games: median tower bearing 45-116 degrees off the
+		// enemy base, vs the old blob's 21). A slot's share of the pull
+		// follows its bearing: full toward the enemy, tapering to
+		// apex_wall_rear directly behind -- his flexible-angle ruling keeps
+		// the rear above zero, so the ring still closes once the front is
+		// held. Real measured threat is untouched; this shapes only the
+		// no-evidence floor.
+		if (pullHere && (wallPull > 0.f)) {
+			float dirW = 1.f;
+			const AIFloat3 foeP = aiEnemyMgr.GetEnemyPos();
+			if (OnMap(foeP)) {
+				AIFloat3 toS = s - gPfMid;
+				AIFloat3 toF = foeP - gPfMid;
+				const float lS = sqrt(toS.SqLength2D());
+				const float lF = sqrt(toF.SqLength2D());
+				if ((lS > 1.f) && (lF > 1.f)) {
+					const float cosA = (toS.x * toF.x + toS.z * toF.z)
+							/ (lS * lF);
+					const float w01 = 0.5f + 0.5f * cosA;
+					float rear = ai.GetTunable("apex_wall_rear",
+							TUNE_WALL_REAR);
+					if (rear < 0.f) rear = 0.f;
+					if (rear > 1.f) rear = 1.f;
+					dirW = rear + (1.f - rear) * w01;
+				}
+			}
+			if (prevented < wallPull * dirW)
+				prevented = wallPull * dirW;
+		}
 		prevented *= Military::OpenFraction(s, reach);
 		{
 			const float k = ai.GetTunable("apex_unprot_discount",

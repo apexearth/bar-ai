@@ -588,6 +588,11 @@ GROUPS = [
                   "keeps the wall tight around the base's mass and leaves a "
                   "lone far mex outside it; high lets single outposts pull "
                   "wall segments toward them, where unescorted builders die"),
+                 ("TUNE_WALL_REAR", "how much of the wall-building urge a "
+                  "slot on the AWAY side of the base keeps — enemy-facing "
+                  "slots always get the full urge. Low builds the "
+                  "enemy-facing arc first and closes the rear late; 1 "
+                  "spreads the wall evenly in all directions"),
                  ("TUNE_GUARD_FORWARD", "how far in FRONT of the buildings "
                   "an asset-guard tower stands, as a fraction of its own "
                   "reach — between the assets and the enemy approach; 0 "

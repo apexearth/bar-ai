@@ -34,17 +34,46 @@ BAND_IN = -300.0
 BAND_OUT = 700.0
 
 
+def parse_units(blob):
+    units = []
+    for tok in blob.split(','):
+        parts = tok.split(':')
+        if len(parts) >= 3:
+            units.append((parts[0], float(parts[1]), float(parts[2])))
+    return units
+
+
 def snapshots(stdout: Path, team: int):
     for line in stdout.read_text(errors="replace").splitlines():
         m = POS_RE.search(line)
         if not m or int(m.group(1)) != team:
             continue
-        units = []
-        for tok in m.group(5).split(','):
-            parts = tok.split(':')
-            if len(parts) >= 3:
-                units.append((parts[0], float(parts[1]), float(parts[2])))
-        yield int(m.group(3)), units
+        yield int(m.group(3)), parse_units(m.group(5))
+
+
+def enemy_start(stdout: Path, team: int):
+    """Centroid of the FIRST snapshot of every team on another allyteam --
+    where the enemy actually started, for the facing columns."""
+    ally_of = {}
+    first = {}
+    for line in stdout.read_text(errors="replace").splitlines():
+        m = POS_RE.search(line)
+        if not m:
+            continue
+        t = int(m.group(1))
+        ally_of[t] = int(m.group(2))
+        if t not in first:
+            first[t] = parse_units(m.group(5))
+    if team not in ally_of:
+        return None
+    pts = []
+    for t, units in first.items():
+        if ally_of[t] == ally_of[team]:
+            continue
+        pts.extend((x, z) for _, x, z in units)
+    if not pts:
+        return None
+    return (sum(x for x, _ in pts) / len(pts), sum(z for _, z in pts) / len(pts))
 
 
 def bearing(cx, cz, x, z):
@@ -55,7 +84,7 @@ def bearing(cx, cz, x, z):
     return min(max(b, 0), RAYS - 1)
 
 
-def analyse(units, ddefs):
+def analyse(units, ddefs, foe=None):
     towers = [(n, x, z) for n, x, z in units if n in ddefs]
     base = [(n, x, z) for n, x, z in units if n not in ddefs]
     if len(base) < 3:
@@ -103,12 +132,29 @@ def analyse(units, ddefs):
     rimd.sort()
     med = rimd[len(rimd) // 2] if rimd else 0.0
     inband = sum(1 for r in rimd if BAND_IN <= r <= BAND_OUT)
+    # Facing: each tower's angular offset from the enemy-start bearing. The
+    # wall must wrap, but the enemy-facing arc has to fill FIRST -- a wall
+    # grown by builder convenience reads fine on every radial metric and
+    # still leaves the war-side open (measured 2026-08-30: median offset
+    # 116 degrees in one normal-play game).
+    med_off = -1.0
+    front_pct = -1.0
+    if foe and towers:
+        ea = math.atan2(foe[1] - cz, foe[0] - cx)
+        offs = sorted(
+            abs((math.atan2(z - cz, x - cx) - ea + math.pi) % (2 * math.pi)
+                - math.pi) * 180.0 / math.pi
+            for _, x, z in towers)
+        med_off = offs[len(offs) // 2]
+        front_pct = 100.0 * sum(1 for o in offs if o <= 90.0) / len(offs)
     return {
         "towers": len(towers),
         "medRimD": med,
         "onWallPct": (100.0 * inband / len(rimd)) if rimd else 0.0,
         "closure": len(onwall_bearings) / RAYS,
         "nnMed": sorted(nn)[len(nn) // 2] if nn else 0.0,
+        "medOff": med_off,
+        "frontPct": front_pct,
     }
 
 
@@ -122,24 +168,28 @@ def main():
     if not stdout.exists():
         sys.exit(f"no stdout.txt under {args.match}")
     ddefs = defence_defs()
+    foe = enemy_start(stdout, args.team)
     step = args.every * 60 * 30
     nxt = step
-    print(f"{'min':>5} {'twr':>4} {'medRimD':>8} {'onWall%':>8} {'closure':>8} {'nnMed':>6}")
+    print(f"{'min':>5} {'twr':>4} {'medRimD':>8} {'onWall%':>8} {'closure':>8} "
+          f"{'nnMed':>6} {'medOff':>7} {'front%':>7}")
+
+    def row(frame, units, tag=""):
+        r = analyse(units, ddefs, foe)
+        if r:
+            print(f"{frame/1800:5.1f} {r['towers']:4d} {r['medRimD']:8.0f} "
+                  f"{r['onWallPct']:8.1f} {r['closure']:8.2f} {r['nnMed']:6.0f} "
+                  f"{r['medOff']:7.0f} {r['frontPct']:7.1f}{tag}")
+
     last = None
     for frame, units in snapshots(stdout, args.team):
         last = (frame, units)
         if frame < nxt:
             continue
         nxt += step
-        r = analyse(units, ddefs)
-        if r:
-            print(f"{frame/1800:5.1f} {r['towers']:4d} {r['medRimD']:8.0f} "
-                  f"{r['onWallPct']:8.1f} {r['closure']:8.2f} {r['nnMed']:6.0f}")
+        row(frame, units)
     if last:
-        r = analyse(last[1], ddefs)
-        if r:
-            print(f"{last[0]/1800:5.1f} {r['towers']:4d} {r['medRimD']:8.0f} "
-                  f"{r['onWallPct']:8.1f} {r['closure']:8.2f} {r['nnMed']:6.0f}  <- final")
+        row(last[0], last[1], "  <- final")
 
 
 if __name__ == "__main__":

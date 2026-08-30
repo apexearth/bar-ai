@@ -2048,6 +2048,11 @@ const float TUNE_WALL_PITCH = 1.2f;
 //   radius of everything we own. A lone far mex stays outside the wall; a
 //   real expansion moves the RMS and the wall follows.
 const float TUNE_WALL_REACH = 2.5f;
+// manager/brain/market/want_protect.as [ratio] -- Share of the wall pull a
+//   slot DIRECTLY BEHIND the base keeps (enemy-facing slots get the full
+//   pull, tapering by bearing). Above zero so the ring still closes against
+//   flank and rear attacks once the front is held; 1 makes the pull uniform.
+const float TUNE_WALL_REAR = 0.2f;
 // manager/brain/market/protect_field.as [fraction of tower reach] -- Asset
 //   guard sites stand this far enemy-ward of the asset centroid, between the
 //   buildings and the approach; 0 sites the gun amid the buildings.
