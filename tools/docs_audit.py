@@ -91,13 +91,25 @@ EXTERNAL = {
 }
 
 
+# The AI is not only AngelScript. A tunable can be read from the C++ DLL
+# (circuit->GetTunable), and the dashboard skill documents JS functions that
+# live in the served page. Scanning only the .as tree reported all of those as
+# dead -- seven false positives across two skills on 2026-08-31, every one of
+# them a correct doc. Absence is only evidence when the search covered the
+# places the thing could be.
 def script_text():
     out = []
-    for p in VARIANT.rglob("*.as"):
-        try:
-            out.append(p.read_text(encoding="utf-8", errors="replace"))
-        except OSError:
-            pass
+    trees = [(VARIANT, "*.as"),
+             (ROOT / "cpp" / "src", "*.cpp"), (ROOT / "cpp" / "src", "*.h"),
+             (ROOT / "tools", "*.html")]
+    for base, pat in trees:
+        if not base.is_dir():
+            continue
+        for p in base.rglob(pat):
+            try:
+                out.append(p.read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                pass
     return "\n".join(out)
 
 
@@ -112,6 +124,10 @@ def main():
     declared = set(re.findall(r"\b(?:void|bool|int|uint|float|double|string)\s+"
                               r"([A-Za-z_][A-Za-z0-9_]*)\s*\(", code))
     declared |= set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", code))
+    # `function foo()` and `const foo = ` both declare a name in the served page.
+    declared |= set(re.findall(r"\bfunction\s+([A-Za-z_$][A-Za-z0-9_$]*)", code))
+    declared |= set(re.findall(r"\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=",
+                               code))
     tunables = set(re.findall(r'GetTunable\("([a-z_0-9]+)"', code))
 
     # Every file that exists, by basename and by tail path.

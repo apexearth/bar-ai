@@ -16,28 +16,67 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
-## 2026-08-31 — `policy.as` is a threshold file, and says so in its own header
+## 2026-08-31 — `policy.as` is 17 knobs and ONE of them is connected
 
-The docs were swept against `docs/23-the-plan.md` on 2026-08-31; the code was
-not, and this is the largest thing the sweep found. `policy.as` opens with "this
-file is it for eco THRESHOLDS -- the numbers that decide when energy is short,
-when a generator is obsolete, when a constructor is worth buying", and that is
-an accurate description of what it holds: `T2Energy`, `T2Metal`,
-`FusionMinEnergy`, `ReclaimSolarE`, `ReclaimGenE` and the rest, each a number
-that decides a WHETHER. The plan forbids exactly this shape.
+The docs were swept against `docs/23-the-plan.md` on 2026-08-31 and this is what
+the sweep found in the code. `policy.as` opens by declaring itself the home of
+eco THRESHOLDS -- "the numbers that decide when energy is short, when a
+generator is obsolete, when a constructor is worth buying" -- which is the shape
+the plan forbids. But the file turns out to be a smaller problem and a stranger
+one than that header implies.
 
-Not a call to delete it blind — centralising the numbers was itself a fix
-(apexearth 2026-08-21, "all of this sort of logic should exist within a central
-config of some sort"), and some entries here are physics rather than policy.
-What the sweep establishes is the direction: each `Policy::` accessor is either
-a quantity the ETA model should PRODUCE (cull it as that lands) or a measured
-constant of the game (keep it, and say which it is at the definition). Nobody
-has been through them one by one.
+MEASURED (grep over the whole of `ai/Unstable/game-side/script/`, verified twice
+-- by `Policy::<name>` and again by the raw `apex_*` tunable string, because
+absence is the least reliable finding here):
 
-Two are already dead prose. Five comments in `policy.as`, `tunables.as` and
-`factory/state.as` still cite `techlead.as RushReady` and
-`manager/factory/phase.as ComputePhase`, both deleted by the brain overhaul —
-`tools/docs_audit.py` does not read `.as` comments, so nothing catches them.
+- **17 accessors. Exactly ONE call site in the entire tree**:
+  `Policy::AntinukeIncome()` at `market/want_super.as:421`.
+- The other 16 are read by nothing. `EnergyHeadroom`, `EPerMetal`, `T2Energy`,
+  `T2Metal`, `T2EnergyFrom`, `T2EnergyReactor`, `FusionMinEnergy`,
+  `ReclaimSolarE`, `ReclaimGenE`, `ReclaimPad`, the four `ConLog*` curve
+  coefficients, `GreedCons`, `ShieldIncome`.
+- All 16 are still registered in `game-patches/gadgets/dev_tunables.lua`, so
+  they are live modoptions a dev game can set, that do nothing. They are NOT on
+  the dashboard's guided page -- they sit in `dashboard_audit.py`'s waived list,
+  which is why nothing has flagged them (see the audit gap below).
+- Their comments name the code that used to read them: `techlead.as`,
+  `manager/factory/phase.as`, `manager/builder/share.as`,
+  `manager/builder/fusion.as`. **None of those files exist.** The brain overhaul
+  deleted them and rebuilt their jobs as priced Wants in `brain/market/`, which
+  read continuous inputs (`EcoPowerM`, `BestConvRatio`, `GenObsoleteOnArrival`'s
+  ratio test) rather than any threshold. So the ETA-shaped replacements already
+  exist and run; `policy.as` is the orphaned old interface sitting beside them.
+
+So this is mostly a CULL, not a redesign, and it is cheap: 16 accessors, their
+`TUNE_` constants, their `dev_tunables.lua` entries, and the stale comments that
+cite deleted files. Do not confuse the cull with the one real issue below it.
+
+### The one live one: an income floor stacked on top of an affordability test
+
+`want_super.as` already refuses what it cannot afford -- `if (bill >=
+classBudget) continue;` at :407, before the antinuke branch. The floor at :421
+is an EXTRA gate, and its own comment says why it was added: the anti-nuke is
+the cheapest class on the list, so it clears a budget-relative affordability
+test long before a gantry or a silo does, and "took every super-push".
+
+That diagnosis is right and the patch is the wrong shape. `afford =
+(classBudget - bill)/classBudget` rewards being cheap by construction -- the
+code says so itself, twenty lines later, where the gantry needed a special gain
+term for exactly this reason. A hand-set 60 m/s bar on one class papers over a
+pricing function that cannot rank a cheap insurance policy against an expensive
+production line. The plan's answer is the comparison the floor replaces: which
+of these makes the target arrive sooner. Fixing `afford` is the change;
+deleting the floor is a consequence of it, not a change on its own.
+
+### Why nothing flagged it
+
+The INSTRUMENT GAP recorded under the T2 entry below, and this is the full
+census of what it hides. `unread` is `bool(tunable) and not sites`
+(`dashboard.py:1056`), and `sites` counts any `GetTunable("apex_x")` anywhere --
+including the one inside the dead accessor itself -- so every knob read only by
+an uncalled `Policy::` wrapper passes clean. A second layer compounds it:
+`dashboard_audit.py:75` only tests `curated` entries for `unread`, and all 16 of
+these are waived, so even a working `unread` would not have reached them.
 
 ## 2026-08-31 — the T2 affordability FLOOR is gone; only a soft price remains
 
@@ -93,7 +132,7 @@ gauntlet style defense... dps per metal and range is usually what my brain
 thinks about", then "So we value range a bit too generously :-P".
 
 Three terms decide a turret's cover, and they were weighted almost exactly
-backwards. Measured off the pinned tree (`/tmp/thr3.py` shape; dps counts
+backwards. Measured off the pinned tree (a scratch script, since deleted; dps counts
 every weapon mount, range is the weapon's own):
 
 | tower | cost | hp | dps | alpha | range | dps/metal | old threat/metal |

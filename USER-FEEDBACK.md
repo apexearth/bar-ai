@@ -948,7 +948,8 @@ The thing he asked for first and has pushed hardest on.
   advanced air plant is "absolutely needed late in game", with plenty of fighter
   coverage (2026-08-16). Air cons and advanced air cons are the efficient way to
   build at that stage — prefer them. (Wired: `apex_air_mandatory_income` 100,
-  `apex_adv_air_income` 150, fighter floor `apex_fighter_per` 40.)
+  `apex_adv_air_income` 150, fighter floor `apex_fighter_per` 40 -- that second
+  one is gone from the tree.)
 - More shields late game — enemy LRPC becomes the problem, and air handles the
   late game better generally (2026-08-16).
 - **Don't limit advanced air plants to one when rich** — count scales with

@@ -38,7 +38,6 @@ description: Where buildings land — base bands, nano gravity, the advsol pack,
 
 `apex_advsol_serial` · `apex_dup_bank` · `apex_reactor_spacing/tight`
 
-(`apex_advsol_home_r`, `apex_advsol_pack_r`, `apex_def_panic`,
-`apex_local_def_share`, `apex_mex_walk_cap` and `apex_nano_pack_r` were listed
-here and are gone from the tree — removed 2026-08-31. `tools/dashboard_audit.py`
-is the live list; do not re-add a name from memory.)
+(Six placement knobs this skill used to list were deleted 2026-08-31 — `git log
+-p` on this file has the names. `tools/dashboard_audit.py` is the live list;
+never re-add a tunable name from memory.)
