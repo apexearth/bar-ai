@@ -1,5 +1,57 @@
 # What apexearth wants from this AI
 
+## 2026-08-31 — A WHOLE LOSS, WATCHED AT 1x, NO BONUS. "We are doing things we
+## cannot afford."
+
+His running commentary of a 1v1 he lost, in order. This is the most complete
+single diagnosis in this file; treat the ordering as causal, because he does.
+
+- **4 min.** Income roughly even. They have a bit more army. We have MORE
+  defence. "We seem to use fight orders a bit too much sometimes."
+- **9 min.** THE FALLING-BACK PATTERN. "As we lose turrets we seem to make the
+  next set of turrets behind a bit... Enemies attack, destroy turrets, then
+  they fall back and we have time to build turrets up further once again - and
+  we do, but we mix with turrets further back too. So with a lack of
+  concentration on turrets up ahead - they don't stand much of a chance."
+- **Throughout.** "I see us attacking with some of our units when we have less
+  than half the army size of our enemies." And: "Our Army hasn't been able to
+  grow at all - we keep sending them out to their deaths... If they were smart
+  they'd stand inside their turret defense - but we're not smart."
+- **The T2 decision.** We go T2 first; the enemy never does. "We should expect
+  our army to be inferior because of where we've been putting our metal."
+  Army disparity widens to under 1/3 of theirs.
+- **The kill.** First T2 con appears and immediately starts a FUSION. "At an
+  income of ~10m/s to build a 4300 metal fusion reactor... yeahhh you do the
+  math." The enemy attacks. "The T2 con is oblivious to his impending doom",
+  and the commander keeps building the fusion instead of answering the attack.
+  A T1 con is starting a solar at the same moment.
+
+**His verdict, verbatim: "I would blame this loss entirely on switching to T2.
+The fusion stuff and not doing mexup first wouldn't have even mattered...
+Trying to go to T2 at a meager income of 15m/s is dumb. Enemy didn't do it and
+they made a massive army compared to what we had and they killed us."**
+
+WHAT IS ACTUALLY IN THE CODE (checked 2026-08-31):
+
+- **There is no T2 gate at all any more.** `RushReady` has ZERO definitions in
+  the tree -- only four stale comments in `policy.as` and `tunables.as` still
+  refer to it, and `apex_t2_energy` (1200), `apex_t2_energy_from` (12) and
+  `apex_t2_energy_reactor` (400) are read by nothing that gates the decision.
+  The advanced plant is PRICED by `ProposeTech`, not gated. So "go T2 at 15
+  m/s" is not a threshold anybody chose badly -- it is the absence of one, and
+  the price is evidently not expressing affordability at low income.
+- The same is true of the fusion: expensive energy is priced, and at 10 m/s a
+  4,300-metal reactor is ~7 minutes of the entire economy. `docs/22` already
+  argues the fix shape -- the decision must be made against what the TEAM can
+  afford, not by whichever constructor happens to ask.
+
+NOT YET FIXED. Four distinct items, and he ranks them:
+  1. T2/fusion affordability at low income (he blames the loss on this alone).
+  2. Army suiciding out instead of holding inside our own turret cover.
+  3. Turret line drifting BACKWARD instead of concentrating forward.
+  4. Fight orders used too freely.
+
+
 ## 2026-08-30 — ARMY COMPOSITION: three reports, one instrument, one dead end
 
 **1. "We need more range." MEASURED AND CONFIRMED — it is a delivery failure,
