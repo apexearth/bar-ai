@@ -25,7 +25,7 @@ reads them; functions are visible module-wide regardless).
 |---|---|---|
 | Air line lifecycle | `Armed()`, air lead election; basic plant → T1 air con → advanced plant chain | `air/election.as`, `air/wing.as` |
 | Which plant to build next | `FactoryToBuild` (strike) and `IntelPlantToBuild` (intel/mandatory air) | `air/wing.as` |
-| Advanced plant output | **T2 air constructors FIRST** — one per `apex_aca_per_income` (200, his "by ~200 metal you should definitely be having one") — then the T2 wing | facqueue / `ai-factory-brain` |
+| Advanced plant output | **T2 air constructors FIRST** — one per `apex_aca_per_income` (200, his "by ~200 metal you should definitely be having one") — then the T2 wing | facqueue |
 | Whether a plane flies at all | `HoldsUnit` | `air/update.as` |
 | Which planes a strike owns | the wave roster | `air/wave.as` |
 | Recycling stale T1 air | station recycle (adv standing vs basic count) | `air/station.as` |

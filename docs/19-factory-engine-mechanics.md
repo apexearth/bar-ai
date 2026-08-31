@@ -3,7 +3,7 @@
 What the engine and CircuitAI actually do when a factory is told to build
 something. Read from source 2026-08-11/12 and cited by file:line so it is not
 re-derived. The *policy* built on top of this — who decides what a line makes —
-lives in the `ai-factory-brain` skill, not here; this file is only the physics.
+lives in `docs/22-macro-demand.md`, not here; this file is only the physics.
 
 **Citation caveat.** `vendor/engine` is at tag **2026.06.12** (commit `01b3161`);
 matches run on **2026.07.04**. The mechanisms below are long-standing and were

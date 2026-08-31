@@ -20,7 +20,7 @@ system (`response.<role>.{vs, ratio, importance, max_percent}`, `_weight_`,
 composition and the facqueue suppresses the DLL's native recruit re-enqueues. The
 same goes for `factory.json`'s `income_tier` ladders and per-tier weight rows
 while a line is driven, which is always. See `docs/20-brain-overhaul.md` §6 and
-the `ai-factory-brain` skill.
+the `ai-auction` skill.
 
 If you are diagnosing "wrong units built", the answer is in
 `Market::ConOrderFor` and the `apex: decide ... -> produce:` lines. It is not in

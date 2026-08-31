@@ -36,7 +36,7 @@ weights."*
 So: if the AI is building the wrong thing, the answer is in
 `manager/brain/market/`, not in a weight. Attribute it to `Market::ConOrderFor`
 (production) or the defence want (`protect_*.as`) before touching any JSON. The
-`ai-factory-brain` and `ai-auction` skills are the entry points.
+The `ai-auction` skill and `docs/22-macro-demand.md` are the entry points.
 
 ## behaviour.json — the one that still matters
 

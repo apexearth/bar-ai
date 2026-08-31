@@ -157,13 +157,22 @@ Files are kept under ~600 lines deliberately: above that, work degenerates into
 grep-an-anchor-and-blind-replace, and a `str.replace` anchor that does not match
 fails silently. That has eaten edits here at least five times.
 
-**Component ownership lives in the `ai-*` skills** (apexearth 2026-08-21:
-"make skills for our ai components so we understand whats in charge of
-what"): `ai-economy`, `ai-build-arbitration`, `ai-factory-brain`,
-`ai-military`, `ai-placement`, `ai-nukes`, `ai-commander`, `ai-air`. Each
-answers: what owns which decision, the decision chain, the log lines that
-expose it, and its tunables. Load the matching one BEFORE diagnosing a
-domain — it is cheaper than rediscovering the chain from the code.
+**Component ownership lives in the `ai-*` skills**: `ai-military`,
+`ai-placement`, `ai-nukes`, `ai-commander`, `ai-air`. Each answers: what owns
+which decision, the decision chain, the log lines that expose it, and its
+tunables.
+
+**`ai-economy`, `ai-build-arbitration`, `ai-factory-brain` and `barb-tuning`
+were DELETED on 2026-08-31.** They described the pre-overhaul AI — ordered
+first-match ladders, the `AlwaysEco` floor, `RushReady` T2 gates, JSON build
+ratios — all of which `docs/20-brain-overhaul.md` records as killed. Every
+file they cited still exists, so `tools/docs_audit.py` could not catch them;
+only the MODEL was stale, which is the kind of rot no checker finds. A
+cold-read agent that hit `ai-build-arbitration` first concluded the AI decides
+by ladder position, the opposite of how it works. Deleted rather than repaired
+because a deletion cannot be subtly wrong. Do not restore them; read
+`value-paradigm`, `docs/21-simplification.md` and `docs/22-macro-demand.md`,
+which carry the current model.
 
 **A new tunable or mechanism is not finished until the dashboard shows it.**
 `tools/dashboard.py` is apexearth's interface to this AI — he does not run
@@ -262,7 +271,7 @@ factory builds. While the Brain drives a line, `factory.json` tier tables and
 fix "only Hounds get built" when the composition was decided elsewhere entirely.
 **Attribute a composition problem to the producing code before touching any
 config table** — read `apex: decide ... -> produce:`, `apex: worth` and
-`apex: lineclass`. Details: the `ai-factory-brain` skill.
+`apex: lineclass`.
 
 ## Failure modes that are SILENT — check for these before believing a result
 
@@ -400,20 +409,24 @@ share a shape: the thing didn't work, and nothing said so.
 
 ## build_chain.json evaluates in ways the config does not suggest
 
-See the `barb-tuning` skill for the full mechanics (hub firing, condition
-evaluation, `prevent` semantics, `energy`/`wind` vocabulary) and the upstream
-bugs found alongside them — verified 2026-07-29 against `BuildChain.cpp`,
-`BuilderTask.cpp`, `BuilderManager.cpp`.
+Hubs fire on parent completion, conditions are sampled once and never
+re-checked, and `prevent` caps preventive defence. The `land` ladder is
+deliberately EMPTY and `AiMakeDefence` only calls `NoteSite`, so this file
+spends nothing on ground defence — the market owns it. Verified 2026-07-29
+against `BuildChain.cpp`, `BuilderTask.cpp`, `BuilderManager.cpp`.
 
 ## T3 affordability is a statement about INCOME, not about the AI
 
 Real costs, read from the unit defs: **corgant 8400, corshiva 1550, corcat 4900,
 armbanth 13500, corjugg 20000, corkorg 29000**. At the 40 metal/s benchmark T3 is
 two or three units a game; in a hosted +40% game a player was observed at **398
-metal/second**, where a gantry is 21 seconds of income. Above ~250 m/s the
-affordability argument inverts completely, which is why `T3Worthwhile()` drops
-its vetoes there. **Read the actual income before calling T3 unaffordable or
-broken** — and note that stock BARb out-T3s us by default on a bonused economy
+metal/second**, where a gantry is 21 seconds of income — so the same unit is
+unaffordable in one game and trivial in another. (A "~250 m/s" inversion bar
+used to be stated here; deleted 2026-08-31 as a threshold masquerading as a
+fact. What inverts the argument is the RATIO of the cost to the income and
+whether cheaper growth is still available, not a line on the income axis --
+see `value-paradigm`.) **Read the actual income before calling T3 unaffordable
+or broken** — and note that stock BARb out-T3s us by default on a bonused economy
 (146,850 metal of T3 on one side of a +40% 40-minute 4v4).
 
 ## "The path fires" is not evidence that the change is good

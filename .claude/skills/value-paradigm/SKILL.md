@@ -143,13 +143,35 @@ for, and can we afford to start it yet. A per-instant price ranks the options
 in front of it; it never asks whether beginning a 4,300-metal reactor at 10 m/s
 delays every other target past the point where we survive to use it.
 
-### The constraint that keeps it honest
+### The constraint that keeps it honest: proportions to OUR OWN economy
 
 A pure minimise-time-to-fusion optimiser builds ZERO army and dies at minute
-12. The objective is time-to-target **subject to surviving**, and the survival
-constraint is the hard half -- it is not simple arithmetic and it is not
-solved. Any first implementation is judged on whether it still defends itself,
-not only on whether it reaches the target sooner.
+12. So the objective is time-to-target SUBJECT TO holding a proportion.
+
+apexearth's ruling, 2026-08-31, asked directly: *"Expect to maintain an army
+and defense ratio based on our economy. Seek to maintain proportions while also
+finding the shortest path to a larger economy."*
+
+Read that carefully, because the obvious alternative is wrong here. The
+proportion is to **our own economy**, NOT to the enemy's army. Army and defence
+are a standing FRACTION of what we have built -- the same "bound everything by
+economic power" law that governs build power, crew size and defence target --
+so the bigger the economy, the more army it owes, automatically and with no
+number to pick. Matching the enemy instead would make our composition a
+function of theirs, which is how a feint or a fog-of-war misread becomes an
+economy that never grows.
+
+So the optimiser has two jobs at once and neither is optional:
+
+    hold   army + defence >= their standing share of economic power
+    then   minimise ETA to the next economic target with what is left
+
+Falling below the share is not "spending on economy", it is borrowing against
+survival, and the 2026-08-31 loss is the bill: a T2 lab and a fusion started
+while army sat under a third of the enemy's and four mexes went un-upgraded.
+
+Not yet implemented. When it is, it is judged on whether the AI still defends
+itself, not only on whether it reaches the target sooner.
 
 ## The frame
 

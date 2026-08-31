@@ -20,12 +20,19 @@ on fixed map spots, and from **reclaiming** wrecks and features.
 2. **T2 constructors** — this is the unlock, not the T2 factory itself. A T2 con
    upgrades a mex to a **Moho**, worth roughly **4x** the metal of a T1 mex.
    *Upgrading every mex is the single biggest economic step in the game.*
-3. **Fusion** at around **1000 energy/s**, with converters already running.
+3. **Fusion**, once converters are already running and cheaper growth is gone.
    Fusion is a "wait for something good" investment — you can die while paying
    for it. **Advanced solar has much faster ROI** and is not a bad choice.
 4. **Advanced fusion (AFUS)**, one or two of them.
-5. **T3** only once you are usually **over 100 metal/s**, which is after those
-   AFUS. Real costs, read from the pinned tree 2026-08-30: gantry `corgant`
+5. **T3**, after those AFUS.
+
+   NO NUMBERS HERE ON PURPOSE. This list used to read "fusion at ~1000
+   energy/s" and "T3 only once over 100 metal/s". Deleted 2026-08-31 on
+   apexearth's ruling: they are exactly the numbers a gate would use, an agent
+   reads them as the bar to code against, and they contradict the objective in
+   `value-paradigm` — which is that a rung is reached when the cheaper growth
+   below it is EXHAUSTED, not when income crosses a line. The ETA model should
+   PRODUCE numbers like these, never be told them. Real costs, read from the pinned tree 2026-08-30: gantry `corgant`
    **8,400**, `corshiva` 1,550, `corcat` 4,900, `armbanth` (Titan) 13,500,
    `corjugg` (Behemoth) 20,000, `corkorg` (Juggernaut) **29,000**. At 40 metal/s
    a Juggernaut is twelve minutes of a whole team's income, so T3 at benchmark
