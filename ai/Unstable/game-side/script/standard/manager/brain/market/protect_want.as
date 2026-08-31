@@ -1,11 +1,15 @@
 namespace Market {
-// A T1 tower is one a T1 hand can build.
+// A T1 tower is one the T1 LINE can build -- gT1Line, not gT1Hand, because
+// gT1Hand includes the commander and a levelled commander reaches well above
+// its tier. corcomlvl5..10 build cordoom (Bulwark, 3000m), so gT1Hand called it
+// a T1 tower and it took the late-T1 discount; the Cerberus, whose builder list
+// has no commander, did not. Same tier, 50x apart on a technicality.
 bool T1Tower(int d)
 {
 	const array<int>@ bb = Catalog::gBuiltBy[d];
 	for (uint q = 0; q < bb.length(); ++q) {
 		const int b = bb[q];
-		if ((b < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[b])
+		if ((b < int(Catalog::gT1Line.length())) && Catalog::gT1Line[b])
 			return true;
 	}
 	return false;
@@ -262,11 +266,11 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// that reached pricing -- the cheaper towers were dropped at
 			// site.nostop, their ground already covered, while a 1245-elmo gun
 			// still found open ground. No multiplier can lose an auction of
-			// one. So once the team fields a hand that can build a better gun,
-			// a T1 tower is not priced at all and the builder spends its time
-			// on something else (apexearth, twice, the second time: "We've
-			// gone over and proved how they are low-value defense... Fix it
-			// with priority").
+			// one -- so what stops a T1 tower now is the team-wide candidate
+			// list plus GATE_DEF_ROUTE, and this term only breaks the tie
+			// between two towers that both reached pricing (apexearth, twice,
+			// the second time: "We've gone over and proved how they are
+			// low-value defense... Fix it with priority").
 			if (T1Tower(d) && (Factory::gHaveT2 || T2DefHandsStanding())) {
 				gDwT1[d] = ai.GetTunable("apex_t1_def_late", TUNE_T1_DEF_LATE);
 				bestGain *= gDwT1[d];
